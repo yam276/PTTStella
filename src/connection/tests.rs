@@ -29,6 +29,190 @@ async fn wait(connection: &Connection, predicate: impl Fn(&View) -> bool) -> Vie
     .expect("expected connection state within deadline")
 }
 
+fn navigation_page(name: &str) -> Vec<u8> {
+    let pages: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/navigation.json")).unwrap();
+    crate::encoding::encode(pages[name].as_str().unwrap()).unwrap()
+}
+
+#[tokio::test]
+async fn navigation_admission_checks_real_frame_input_order_and_one_pending_operation() {
+    let (listener, connection) = local().await;
+    let (updated_tx, updated_rx) = oneshot::channel();
+    let (opened_tx, opened_rx) = oneshot::channel();
+    let server = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        ws.send(Message::Binary(navigation_page("list").into()))
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            b"\x1b[A"
+        );
+        updated_rx.await.unwrap();
+        let mut updated = navigation_page("list");
+        updated.extend_from_slice(b"\x1b[5;1H \x1b[4;1H>\x1b[4;1H");
+        ws.send(Message::Binary(updated.into())).await.unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            b"\x1b[B\x1b[B\r"
+        );
+        opened_rx.await.unwrap();
+        ws.send(Message::Binary(navigation_page("reading_middle").into()))
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            b"\x1b[6~"
+        );
+        ws.send(Message::Binary(navigation_page("reading_last").into()))
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            b"\x1b[D"
+        );
+        ws.send(Message::Binary(navigation_page("list").into()))
+            .await
+            .unwrap();
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+    });
+    connection.connect().unwrap();
+    let old = wait(&connection, |v| v.received > 0).await;
+    connection
+        .input(old.generation, b"\x1b[A".to_vec())
+        .unwrap();
+    assert_eq!(
+        connection
+            .navigate(old.stamp(), Intent::Open { row: 5 })
+            .await
+            .unwrap_err(),
+        navigation::Error::Stale.to_string()
+    );
+    let pending = wait(&connection, |v| v.input_epoch == 1 && v.input_pending).await;
+    assert_eq!(
+        connection
+            .navigate(pending.stamp(), Intent::Open { row: 5 })
+            .await
+            .unwrap_err(),
+        navigation::Error::AwaitingScreen.to_string()
+    );
+    updated_tx.send(()).unwrap();
+    let updated = wait(&connection, |v| v.frame.cursor.1 == 3 && !v.input_pending).await;
+    connection
+        .navigate(updated.stamp(), Intent::Open { row: 5 })
+        .await
+        .unwrap();
+    let pending = wait(&connection, |v| v.input_epoch == 2 && v.input_pending).await;
+    assert_eq!(
+        connection
+            .navigate(pending.stamp(), Intent::Open { row: 5 })
+            .await
+            .unwrap_err(),
+        navigation::Error::AwaitingScreen.to_string()
+    );
+    opened_tx.send(()).unwrap();
+    let reading = wait(&connection, |v| {
+        matches!(
+            navigation::analyze(&v.frame),
+            navigation::Context::ArticleReading { percent: 66, .. }
+        )
+    })
+    .await;
+    connection
+        .navigate(reading.stamp(), Intent::NextPage)
+        .await
+        .unwrap();
+    let last = wait(&connection, |v| {
+        matches!(
+            navigation::analyze(&v.frame),
+            navigation::Context::ArticleReading { percent: 100, .. }
+        )
+    })
+    .await;
+    assert_eq!(
+        connection
+            .navigate(last.stamp(), Intent::NextPage)
+            .await
+            .unwrap_err(),
+        navigation::Error::Unavailable.to_string()
+    );
+    connection
+        .navigate(last.stamp(), Intent::Back)
+        .await
+        .unwrap();
+    let returned = wait(&connection, |v| {
+        matches!(
+            navigation::analyze(&v.frame),
+            navigation::Context::ArticleList { .. }
+        )
+    })
+    .await;
+    assert_eq!(
+        connection
+            .navigate(last.stamp(), Intent::Back)
+            .await
+            .unwrap_err(),
+        navigation::Error::Stale.to_string()
+    );
+    // An already cancelled queued request must not send bytes when it reaches the owner.
+    let (reply, answer) = oneshot::channel();
+    drop(answer);
+    connection
+        .enqueue(Command::Navigate {
+            stamp: returned.stamp(),
+            intent: Intent::Open { row: 4 },
+            reply,
+        })
+        .unwrap();
+    connection.shutdown().await.unwrap();
+    timeout(Duration::from_secs(4), server)
+        .await
+        .unwrap()
+        .unwrap();
+}
+
+#[tokio::test]
+async fn unknown_partial_or_wrong_session_navigation_sends_no_input() {
+    let (listener, connection) = local().await;
+    let server = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        let mut bytes = navigation_page("list");
+        bytes.extend_from_slice(b"\x1b[");
+        ws.send(Message::Binary(bytes.into())).await.unwrap();
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+    });
+    connection.connect().unwrap();
+    let view = wait(&connection, |v| v.received > 0).await;
+    assert_eq!(
+        connection
+            .navigate(view.stamp(), Intent::Open { row: 5 })
+            .await
+            .unwrap_err(),
+        navigation::Error::Unavailable.to_string()
+    );
+    assert_eq!(
+        connection
+            .navigate(
+                Stamp {
+                    generation: view.generation + 1,
+                    ..view.stamp()
+                },
+                Intent::Open { row: 5 }
+            )
+            .await
+            .unwrap_err(),
+        navigation::Error::Disconnected.to_string()
+    );
+    connection.shutdown().await.unwrap();
+    timeout(Duration::from_secs(4), server)
+        .await
+        .unwrap()
+        .unwrap();
+}
+
 #[tokio::test]
 async fn fragmented_binary_reaches_screen_and_input_is_explicit_ordered_and_escaped() {
     let (listener, connection) = local().await;

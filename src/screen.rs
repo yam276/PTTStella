@@ -105,6 +105,9 @@ impl Screen {
     pub fn cursor(&self) -> (usize, usize) {
         (self.x, self.y)
     }
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
     pub fn feed(&mut self, bytes: &[u8]) {
         for &byte in bytes {
             self.byte(byte);

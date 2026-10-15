@@ -1,6 +1,7 @@
 //! One PTT connection owner. No login automation, credentials storage or shell.
 use crate::{
     input::MAX_INPUT_BYTES,
+    navigation::{self, Intent, Stamp},
     screen::{Frame, Screen},
     telnet,
 };
@@ -34,16 +35,35 @@ pub enum Phase {
 }
 #[derive(Clone)]
 pub struct View {
+    pub input_epoch: u64,
+    pub input_pending: bool,
     pub frame: Frame,
     pub generation: u64,
     pub phase: Phase,
     pub message: String,
     pub received: usize,
 }
+impl View {
+    pub fn stamp(&self) -> Stamp {
+        Stamp {
+            generation: self.generation,
+            revision: self.frame.revision,
+            input_epoch: self.input_epoch,
+        }
+    }
+}
 enum Command {
     Connect,
     Disconnect,
-    Input { generation: u64, bytes: Vec<u8> },
+    Input {
+        generation: u64,
+        bytes: Vec<u8>,
+    },
+    Navigate {
+        stamp: Stamp,
+        intent: Intent,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
     Shutdown(oneshot::Sender<()>),
 }
 pub struct Connection {
@@ -60,6 +80,8 @@ impl Connection {
         let runtime = tokio::runtime::Handle::try_current().map_err(|e| e.to_string())?;
         let (commands, receiver) = mpsc::channel(64);
         let initial = View {
+            input_epoch: 0,
+            input_pending: false,
             frame: screen.frame(),
             generation: 0,
             phase: Phase::Disconnected,
@@ -104,6 +126,18 @@ impl Connection {
             return Err("輸入長度超過限制".into());
         }
         self.enqueue(Command::Input { generation, bytes })
+    }
+    pub async fn navigate(&self, stamp: Stamp, intent: Intent) -> Result<(), String> {
+        let (reply, answer) = oneshot::channel();
+        self.enqueue(Command::Navigate {
+            stamp,
+            intent,
+            reply,
+        })?;
+        timeout(Duration::from_secs(6), answer)
+            .await
+            .map_err(|_| "導覽傳送逾時，結果未確認；不會自動重送".to_owned())?
+            .map_err(|_| "連線服務未回報導覽結果".to_owned())?
     }
     fn enqueue(&self, command: Command) -> Result<(), String> {
         self.commands
@@ -232,6 +266,7 @@ async fn run(
     let mut framing = telnet::Framing::default();
     let mut view = updates.borrow().clone();
     let mut dirty = false;
+    let mut pending_input: Option<u64> = None;
     let mut clock = interval(Duration::from_millis(16));
     loop {
         tokio::select! {
@@ -239,12 +274,14 @@ async fn run(
                 Some(Command::Connect) if socket.is_none() && dialing.is_none() => {
                     view.generation = view.generation.saturating_add(1);
                     screen.reset_session(); framing = telnet::Framing::default(); view.received = 0;
+                    pending_input=None;view.input_epoch=0;view.input_pending=false;
                     view.phase = Phase::Connecting; view.message = "正在連線 PTT…".into();
                     dialing = Some(tokio::spawn(dial(endpoint.clone()))); dirty = true;
                 },
                 Some(Command::Connect) => {},
                 Some(Command::Disconnect) => {
                     view.generation = view.generation.saturating_add(1);
+                    pending_input=None;view.input_pending=false;
                     let closed = stop(&mut socket, &mut dialing).await;
                     view.phase = Phase::Disconnected;
                     view.message = if closed { "本機已斷線（已送出關閉訊息）" } else { "本機連線已關閉；遠端關閉未確認" }.into(); dirty = true;
@@ -257,10 +294,29 @@ async fn run(
                     if generation != view.generation || socket.is_none() {
                         view.message = "尚未連線或輸入屬於舊連線；未送出".into(); dirty = true; continue;
                     }
-                    if let Some(connection) = socket.as_mut()
-                        && let Err(error) = send(connection, Message::Binary(telnet::escape(&bytes).into())).await {
-                            socket = None; view.phase = Phase::Error; view.message = error; dirty = true;
+                    if write_input(&mut socket,&mut view,&bytes).await.is_ok() { pending_input=Some(screen.revision()); }
+                    dirty=true;
+                },
+                Some(Command::Navigate {stamp,intent,reply}) => {
+                    // An expired request must never execute later from the command queue.
+                    if reply.is_closed() { continue; }
+                    let result=if stamp.generation!=view.generation || socket.is_none() || view.phase!=Phase::Connected {
+                        Err(navigation::Error::Disconnected.to_string())
+                    } else if stamp.revision!=screen.revision() || stamp.input_epoch!=view.input_epoch {
+                        Err(navigation::Error::Stale.to_string())
+                    } else if pending_input==Some(screen.revision()) {
+                        Err(navigation::Error::AwaitingScreen.to_string())
+                    } else {
+                        match navigation::plan(&navigation::analyze(&screen.frame()),intent) {
+                            Err(error)=>Err(error.to_string()),
+                            Ok(bytes)=> {
+                                let result=write_input(&mut socket,&mut view,&bytes).await;
+                                if result.is_ok() { pending_input=Some(screen.revision()); }
+                                dirty=true;result
+                            },
                         }
+                    };
+                    let _=reply.send(result);
                 },
                 Some(Command::Shutdown(done)) => {
                     stop(&mut socket, &mut dialing).await;
@@ -323,8 +379,30 @@ async fn run(
                 dirty = true;
             },
             _ = clock.tick(), if dirty => {
+                if pending_input.is_some_and(|revision| revision!=screen.revision()) { pending_input=None; }
+                view.input_pending=pending_input.is_some() && view.phase==Phase::Connected;
                 view.frame = screen.frame(); updates.send_replace(view.clone()); dirty = false;
             },
+        }
+    }
+}
+
+async fn write_input(
+    socket: &mut Option<Socket>,
+    view: &mut View,
+    bytes: &[u8],
+) -> Result<(), String> {
+    let Some(connection) = socket.as_mut() else {
+        return Err(navigation::Error::Disconnected.to_string());
+    };
+    view.input_epoch = view.input_epoch.saturating_add(1);
+    match send(connection, Message::Binary(telnet::escape(bytes).into())).await {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            *socket = None;
+            view.phase = Phase::Error;
+            view.message = error.clone();
+            Err(error)
         }
     }
 }

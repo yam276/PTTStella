@@ -5,6 +5,13 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+pub struct Stamp {
+    pub generation: u64,
+    pub revision: u64,
+    pub input_epoch: u64,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Article {
     pub row: usize,
