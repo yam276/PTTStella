@@ -59,7 +59,7 @@ def provenance(root):
                 facts['dirty'] = bool(status.stdout.strip())
         except (OSError, subprocess.TimeoutExpired):
             facts['git_metadata'] = 'unavailable'
-    for name in ('dual-color.json', 'redraw.json'):
+    for name in ('dual-color.json', 'redraw.json', 'navigation.json'):
         path = root / 'tests/fixtures' / name
         if path.is_file():
             facts['fixture_sha256'][name] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -213,7 +213,7 @@ def unavailable(profile):
 
 def run_core(root):
     needed = ('Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'tests/screen.rs',
-              'tests/interaction.rs', 'tests/fixtures/dual-color.json', 'tests/fixtures/redraw.json')
+              'tests/interaction.rs', 'tests/navigation.rs', 'tests/fixtures/dual-color.json', 'tests/fixtures/redraw.json', 'tests/fixtures/navigation.json')
     if any(not (root / path).is_file() for path in needed) or not shutil.which('cargo'):
         return {'profile': 'core', 'status': 'not_ready', 'reason': 'Missing pinned Rust product, corpus or cargo.'}
     try:
