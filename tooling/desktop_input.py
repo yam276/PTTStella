@@ -215,6 +215,22 @@ def run(port, process):
         # Select only the right half of the synthetic dual-colour Chinese glyph.
         bounds = devtools.evaluate('(()=>{const b=document.getElementById("screen").getBoundingClientRect();return {left:b.left,top:b.top,width:b.width,height:b.height};})()')
         col, row = bounds['width'] / 80, bounds['height'] / 24
+        link_x, link_y = bounds['left'] + col * 5.3, bounds['top'] + row * 11.5
+        devtools.call('Input.dispatchMouseEvent', type='mousePressed', x=link_x, y=link_y, button='left', clickCount=1)
+        devtools.call('Input.dispatchMouseEvent', type='mouseMoved', x=link_x+col*2, y=link_y, button='left', buttons=1)
+        devtools.call('Input.dispatchMouseEvent', type='mouseReleased', x=link_x+col*2, y=link_y, button='left', clickCount=1)
+        devtools.wait('!!document.getElementById("surface").dataset.selectionReady', 'URL drag did not select text')
+        if devtools.evaluate('document.getElementById("surface").dataset.linkResult'):
+            raise ValueError('dragging a URL requested a browser launch')
+        for kind in ('mousePressed', 'mouseReleased'):
+            devtools.call('Input.dispatchMouseEvent', type=kind, x=link_x, y=link_y, button='left', clickCount=1)
+        devtools.wait('document.getElementById("surface").dataset.linkResult === "requested"', 'URL click did not reach the opener')
+        for kind in ('mousePressed', 'mouseReleased'):
+            devtools.call('Input.dispatchMouseEvent', type=kind, x=link_x, y=link_y, button='right', clickCount=1)
+        devtools.wait('!!document.getElementById("surface").dataset.selectionReady', 'right-click did not select the URL')
+        devtools.shortcut('c')
+        if not copied_text_matches('https://example.com/pttstella'):
+            raise ValueError('URL clipboard text did not match the displayed URL')
         x, y = bounds['left'] + col * 1.3, bounds['top'] + row * 3.5
         devtools.call('Input.dispatchMouseEvent', type='mousePressed', x=x, y=y, button='left', clickCount=1)
         devtools.call('Input.dispatchMouseEvent', type='mouseMoved', x=x+col*.4, y=y, button='left', buttons=1)
@@ -327,6 +343,7 @@ def run(port, process):
                 'composition_host_position': True,
                 'composition_commit_cancel_repeat': True,
                 'native_paste_preview_and_validation': True,
+                'url_click_drag_copy': True,
                 'peer_close_visible': True,
                 'scope': 'isolated WebView2 browser input; no physical keyboard or PTT authentication'}
     finally:
