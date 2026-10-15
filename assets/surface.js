@@ -4,7 +4,8 @@ const chrome=document.getElementById("chrome"), toolbar=chrome.querySelector("he
 const minus=document.getElementById("zoom-out"), plus=document.getElementById("zoom-in");
 const fit=document.getElementById("zoom-fit"), level=document.getElementById("zoom-level");
 const selectionLayer=document.getElementById("selection"), selectAll=document.getElementById("select-all");
-const selectionNote=document.getElementById("selection-note");
+const surfaceNote=document.getElementById("surface-note");
+const pasteDialog=document.getElementById("paste-dialog"), pasteSend=document.getElementById("paste-send"), pasteCancel=document.getElementById("paste-cancel");
 const ctx=canvas.getContext("2d",{willReadFrequently:true});
 const palette=["#000000","#800000","#008000","#808000","#000080","#800080","#008080","#c0c0c0",
     "#808080","#ff0000","#00ff00","#ffff00","#0000ff","#ff00ff","#00ffff","#ffffff"];
@@ -13,14 +14,17 @@ let generation=0, revision=-1, composing=false, composition=null, beforeEdit=nul
 let latest=null, animation=0, stopped=false, draws=0, zoom=1;
 let grid=null, dragging=null, selectionNext=null, selectionBusy=null, selectionCache=null, selectionSequence=0;
 let selectionActive=false, selectionFingerprint=null;
+let pastePending=false;
 const send=value=>{ sent++; dioxus.send(value); };
 const keys={Enter:[13],Backspace:[8],Tab:[9],Escape:[27],ArrowUp:[27,91,65],ArrowDown:[27,91,66],
     ArrowRight:[27,91,67],ArrowLeft:[27,91,68],Home:[27,91,72],End:[27,91,70],
     PageUp:[27,91,53,126],PageDown:[27,91,54,126],Delete:[27,91,51,126]};
 function keydown(e) {
+    if(pastePending) {e.preventDefault();return;}
     if(e.isComposing||composing||e.key==="Process"||e.metaKey) return;
     // Let the native copy action fire; copy data is already prepared by Rust.
     if(e.ctrlKey&&e.key.toLowerCase()==="c"&&hasSelection()) return;
+    if(e.ctrlKey&&e.key.toLowerCase()==="v") return;
     if(e.key==="Escape"&&hasSelection()) { e.preventDefault(); cancelDrag();clearSelection(); return; }
     if(e.ctrlKey&&["+","=","-","0"].includes(e.key)) {
         e.preventDefault(); zoomTo(e.key==="0"?1:zoom+(e.key==="-"?-.25:.25)); return;
@@ -30,6 +34,7 @@ function keydown(e) {
     if(bytes) { clearSelection(); e.preventDefault(); send({kind:"key",bytes,generation,trusted:e.isTrusted}); }
 }
 function input(e) {
+    if(pastePending) {keyboard.value="";return;}
     if(composing||e.isComposing) {
         if(composition) {composition.editTrusted=e.isTrusted;composition.editText=keyboard.value;}
         return;
@@ -106,7 +111,7 @@ function lostcapture(){dragging=null;}
 function hasSelection(){return selectionActive;}
 function clearSelection() {
     selectionActive=false;selectionFingerprint=null;selectionNext=null;selectionCache=null;selectionLayer.replaceChildren();
-    selectionNote.textContent="";
+    surfaceNote.textContent="";
     delete surface.dataset.selectionReady;
 }
 function requestSelection(selection) {
@@ -125,7 +130,7 @@ function receiveSelection(reply) {
     if(!selectionBusy||selectionBusy.request!==reply.request) return;
     selectionBusy=null;
     if(selectionActive&&!selectionNext&&reply.generation===generation&&reply.revision===revision&&reply.value) {
-        selectionCache=reply;selectionNote.textContent="";surface.dataset.selectionReady=String(reply.request);drawSelection();
+        selectionCache=reply;surfaceNote.textContent="";surface.dataset.selectionReady=String(reply.request);drawSelection();
     }
     flushSelection();
 }
@@ -144,20 +149,42 @@ function drawSelection() {
 function copy(e) {
     if(!hasSelection()||document.activeElement!==keyboard) return;
     e.preventDefault();
-    if(!selectionCache) {selectionNote.textContent="選取尚未準備好，請再複製";return;}
-    if(!e.clipboardData) {selectionNote.textContent="此環境未提供剪貼簿事件資料";return;}
+    if(!selectionCache) {surfaceNote.textContent="選取尚未準備好，請再複製";return;}
+    if(!e.clipboardData) {surfaceNote.textContent="此環境未提供剪貼簿事件資料";return;}
     try {
         e.clipboardData.setData("text/plain",selectionCache.value.text);
         const {generation,revision,request}=selectionCache;
         send({kind:"copied",generation,revision,request,trusted:e.isTrusted});
-    } catch(_) { selectionNote.textContent="無法寫入剪貼簿，請重試"; }
+    } catch(_) { surfaceNote.textContent="無法寫入剪貼簿，請重試"; }
 }
 function doubleclick(e) {
     const point=cellAt(e,false);if(point&&!composing) requestSelection({mode:"line",row:point.row});
 }
 function selectPage(){if(latest&&!composing){requestSelection({mode:"all"});focus();}}
 function activate() { if(!chrome.contains(document.activeElement)) focus(); }
-function paste(e) { e.preventDefault(); }
+function paste(e) {
+    e.preventDefault();
+    if(pastePending||pasteDialog.open) return;
+    const text=e.clipboardData?.getData("text/plain");
+    cancelComposition();cancelDrag();clearSelection();
+    if(text===undefined) {surfaceNote.textContent="此環境無法讀取貼上的文字";return;}
+    if(text.length>16384) {surfaceNote.textContent="貼上文字過長；整段未送出";return;}
+    pastePending=true;surface.dataset.pasteResult="pending";send({kind:"paste",text,generation,trusted:e.isTrusted});
+}
+function confirmPaste(e){send({kind:"paste_confirm",trusted:e.isTrusted});}
+function cancelPaste(e){e.preventDefault();send({kind:"paste_cancel",trusted:e.isTrusted});}
+const pasteObserver=new MutationObserver(()=>{
+    if(pasteDialog.dataset.active==="true") {
+        cancelComposition();cancelDrag();clearSelection();
+        if(!pasteDialog.open) pasteDialog.showModal();
+        pasteCancel.focus();
+    } else if(pasteDialog.open) {
+        pasteDialog.close();pastePending=false;
+        // Restore the editing host, not just the DOM activeElement, after a modal.
+        keyboard.blur();focus();
+    }
+});
+pasteObserver.observe(pasteDialog,{attributes:true,attributeFilter:["data-active"]});
 function showChrome() { chrome.classList.add("open"); }
 function hideChrome() { chrome.classList.remove("open"); }
 function zoomTo(value) {
@@ -177,6 +204,7 @@ const bindings=[
     [viewport,"pointermove",pointermove],[viewport,"pointerup",pointerup],
     [viewport,"pointercancel",pointercancel],[viewport,"lostpointercapture",lostcapture],
     [canvas,"dblclick",doubleclick],[selectAll,"click",selectPage],[document,"copy",copy],
+    [pasteSend,"click",confirmPaste],[pasteCancel,"click",cancelPaste],[pasteDialog,"cancel",cancelPaste],
     [chrome,"pointerenter",showChrome],[chrome,"pointerleave",hideChrome],
     [plus,"click",zoomIn],[minus,"click",zoomOut],[fit,"click",zoomFit],
     [viewport,"wheel",wheel,{passive:false}],[window,"resize",repaint],[window,"focus",activate],
@@ -306,7 +334,7 @@ function paint(packet) {
     if(packet.generation<generation||(packet.generation===generation&&packet.frame.revision<revision)) return;
     if(packet.generation!==generation||packet.frame.revision!==revision) {clearSelection();cancelDrag();}
     if(packet.generation!==generation){
-        cancelComposition();focus();
+        pastePending=false;cancelComposition();focus();
     }
     generation=packet.generation;revision=packet.frame.revision;latest=packet;
     const geometry=draw(packet);send({kind:"painted",revision,generation});if(packet.probe) probe(packet,geometry);
@@ -315,11 +343,18 @@ function paint(packet) {
 focus();
 try {
     await document.fonts.load(font,"中M");await document.fonts.ready;
-    while(true){const packet=await dioxus.recv();if(packet.stop) break;if(packet.selection){receiveSelection(packet.selection);continue;}paint(packet);}
+    while(true){const packet=await dioxus.recv();if(packet.stop) break;
+        if(packet.selection){receiveSelection(packet.selection);continue;}
+        if(packet.paste_result) {surface.dataset.pasteResult=packet.paste_result;pastePending=packet.paste_result==="preview";}
+        if(packet.notice) surfaceNote.textContent=packet.notice;
+        if(packet.paste_result||packet.notice) continue;
+        paint(packet);
+    }
 } catch(e){send({kind:"error",message:String(e)});}
 finally {
-    stopped=true;latest=null;observer.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
+    stopped=true;latest=null;observer.disconnect();pasteObserver.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
     for(const [target,event,callback,options] of bindings) target.removeEventListener(event,callback,options);
+    if(pasteDialog.open) pasteDialog.close();
     cancelComposition();keyboard.blur();hideChrome();cancelDrag();selectionBusy=null;clearSelection();
     const before=sent,beforeDraws=draws,beforeZoom=zoom;
     keyboard.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowUp",bubbles:true}));

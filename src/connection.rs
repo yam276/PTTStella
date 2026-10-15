@@ -1,5 +1,6 @@
 //! One PTT connection owner. No login automation, credentials storage or shell.
 use crate::{
+    input::MAX_INPUT_BYTES,
     screen::{Frame, Screen},
     telnet,
 };
@@ -21,7 +22,6 @@ use tokio_tungstenite::{
 };
 
 pub const PTT_ENDPOINT: &str = "wss://ws.ptt.cc/bbs";
-const INPUT_LIMIT: usize = 4096;
 type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 type Dial = JoinHandle<Result<Socket, String>>;
 
@@ -100,7 +100,7 @@ impl Connection {
         self.enqueue(Command::Disconnect)
     }
     pub fn input(&self, generation: u64, bytes: Vec<u8>) -> Result<(), String> {
-        if bytes.is_empty() || bytes.len() > INPUT_LIMIT {
+        if bytes.is_empty() || bytes.len() > MAX_INPUT_BYTES {
             return Err("輸入長度超過限制".into());
         }
         self.enqueue(Command::Input { generation, bytes })

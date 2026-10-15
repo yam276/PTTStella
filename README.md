@@ -15,6 +15,7 @@ Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Ar
 - 必要鍵盤輸入；斷線或連線失敗時介面仍可操作。
 - 滑鼠拖曳選取、雙擊整行、工具列整頁選取；Ctrl+C／Cmd+C 複製純文字，雙色中文字保留完整字形。選取保留空白，新畫面會清除舊選取；Esc 清除選取，沒有選取時 Ctrl+C 仍送到 PTT。
 - 組字輸入框跟隨 PTT 游標，確認後送出文字，取消不送出；已驗證 WebView 組字路徑，原生 IME 候選窗仍待實機驗收。
+- Ctrl+V／Cmd+V 貼上單行，不附加 Enter；多行先預覽確認。無法編碼、超限或包含不支援控制碼的文字會整段拒絕。
 
 先不做文章清單 UI、畫面語意辨識、板名導航按鈕、圖片、搜尋、書籤、發文介面、自動登入或記住密碼。
 
@@ -32,9 +33,9 @@ Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Ar
 python tooling/check.py docs
 ```
 
-`python tooling/check.py core` 執行 fmt、Clippy、12 個核心測試與 2 個 replay 案例。`desktop` 包含 7 個本機傳輸／TLS 設定測試，並啟動實際視窗驗證雙色字像素、16 色與強度切換、填滿本體、輸入橋接與清理；`all` 跑全部離線 gate，不連 PTT。依賴來源見 [依賴說明](docs/dependencies.md)。
+`python tooling/check.py core` 執行 fmt、Clippy、畫面／互動測試與 2 個 replay 案例。`desktop` 包含本機傳輸／TLS 設定測試，並啟動實際視窗驗證雙色字像素、16 色與強度切換、填滿本體、輸入、剪貼簿與清理；`all` 跑全部離線 gate，不連 PTT。依賴來源見 [依賴說明](docs/dependencies.md)。
 
-啟動：`cargo run --locked --features desktop --bin pttstella`。預設直接開啟 `wss://ws.ptt.cc/bbs` 的 PTT 連線，手動輸入帳號密碼；方向鍵、Enter、Backspace、Tab、Esc、Home／End、PageUp／Down、Delete 與 Ctrl＋字母會送到 PTT。滑鼠移至視窗內容上緣即可顯示連線／斷線及縮放工具，移開即隱藏；鍵盤焦點停在工具列時保持顯示。斷線或錯誤時工具列持續顯示，列出站端提供的關閉代碼與原因；沒有原因時明確標示。斷線後由你決定是否重連，不重送舊輸入，不保存帳密或完整流量。目前停用貼上。
+啟動：`cargo run --locked --features desktop --bin pttstella`。預設直接開啟 `wss://ws.ptt.cc/bbs` 的 PTT 連線，手動輸入帳號密碼；方向鍵、Enter、Backspace、Tab、Esc、Home／End、PageUp／Down、Delete 與 Ctrl＋字母會送到 PTT（複製／貼上的本機快捷鍵另行處理）。滑鼠移至視窗內容上緣即可顯示連線／斷線及縮放工具，移開即隱藏；鍵盤焦點停在工具列時保持顯示。斷線或錯誤時工具列持續顯示，列出站端提供的關閉代碼與原因；沒有原因時明確標示。斷線後由你決定是否重連，不重送舊輸入，不保存帳密或完整流量。
 
 「＋／－」、Ctrl＋加減鍵或 Ctrl＋滾輪以相同比例縮放；「符合視窗」或 Ctrl＋0 還原。放大後可用捲軸查看超出區域。固定 80×24 不重新排字；不同視窗長寬比會留黑邊。方塊／三角形按格線繪製，背景以整數像素共用邊界，避免 ANSI Art 接縫。
 
