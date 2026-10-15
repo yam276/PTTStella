@@ -1,5 +1,5 @@
 //! URLs are mapped from already decoded glyphs, without joining screen rows.
-use crate::screen::Frame;
+use crate::{screen::Frame, text};
 use serde::Serialize;
 use url::Url;
 
@@ -43,25 +43,13 @@ fn trim_end(value: &str) -> &str {
 }
 
 pub fn detect(frame: &Frame) -> Vec<Link> {
-    let mut rows = vec![Vec::new(); frame.rows];
-    for glyph in &frame.glyphs {
-        rows[glyph.row].push(glyph);
-    }
+    let Some(rows) = text::rows(frame) else {
+        return Vec::new();
+    };
     let mut links = Vec::new();
-    for (row, glyphs) in rows.into_iter().enumerate() {
-        let mut text = String::new();
-        let mut mapping = Vec::new();
-        for glyph in glyphs {
-            let start = text.len();
-            text.push_str(&glyph.text);
-            mapping.push((
-                start,
-                text.len(),
-                glyph.col,
-                glyph.col + glyph.width,
-                glyph.unmapped,
-            ));
-        }
+    for (row, line) in rows.into_iter().enumerate() {
+        let text = line.text;
+        let mapping = line.spans;
         let lower = text.to_ascii_lowercase();
         let mut offset = 0;
         while offset < text.len() {
@@ -84,22 +72,22 @@ pub fn detect(frame: &Frame) -> Vec<Link> {
             // A URL touching the right edge may be only the start of a wrapped URL.
             let mapped = !mapping
                 .iter()
-                .any(|(a, b, _, _, unmapped)| *unmapped && *a < end && *b > start);
+                .any(|s| s.glyph.unmapped && s.bytes.start < end && s.bytes.end > start);
             if trimmed_end < text.len()
                 && mapped
                 && let Ok(url) = validate(candidate)
             {
                 let first = mapping
                     .iter()
-                    .find(|(a, b, _, _, _)| *a <= start && start < *b);
+                    .find(|s| s.bytes.start <= start && start < s.bytes.end);
                 let last = mapping
                     .iter()
-                    .find(|(a, b, _, _, _)| *a < trimmed_end && trimmed_end <= *b);
-                if let (Some((_, _, left, _, _)), Some((_, _, _, right, _))) = (first, last) {
+                    .find(|s| s.bytes.start < trimmed_end && trimmed_end <= s.bytes.end);
+                if let (Some(first), Some(last)) = (first, last) {
                     links.push(Link {
                         row,
-                        start: *left,
-                        end: *right,
+                        start: first.glyph.col,
+                        end: last.glyph.col + last.glyph.width,
                         url: url.into(),
                     });
                 }

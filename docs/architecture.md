@@ -19,6 +19,7 @@ manual keyboard input → session-owned send queue → connection
 | terminal | byte/cell、ANSI、cursor、捲動／覆寫、樣式及 revision |
 | encoding | 明確來源的映射與反向輸入編碼；保留未映射／非法狀態 |
 | input | 共用編碼後 bytes 上限；貼上換行、控制字元與完整預檢；預覽保留正規化文字及相同送出 bytes |
+| text／navigation | 共用完整字形到 UTF-8／cell 的投影；保守辨識列表與閱讀畫面，產生 typed 瀏覽意圖及有限的送鍵計畫 |
 | render | 完整字形、固定幾何、左右樣式及 frame ID，不重解 raw stream |
 | transport／session | framing、收送、取消、斷線與 generation；不辨識文章／登入流程 |
 | UI | 連線控制、terminal surface、必要焦點／按鍵、顯示及可見錯誤 |
@@ -31,4 +32,4 @@ UI 正常掛載後只發起一次預設 PTT WSS 連線；合成 probe 只連本�
 
 目前單一路徑為 WSS → 有界 binary frame → Telnet framing → Screen。每則 WebSocket 訊息上限 64 KiB；不把文字 frame 猜成 Big5。輸入上限 4 KiB、佇列 64 項；無法編碼或佇列滿會顯示錯誤。連線、送出與關閉都有逾時，送出失敗不重試；連線 owner 管理並 join 握手／收送工作。UI 只允許一個尚未完成的繪製 frame，其餘保留最新狀態，不堆積 JS 繪製佇列。關閉視窗時先停止 listener 與連線工作，再關閉 host。
 
-沒有文章模型、畫面語意辨識、板名導航按鈕、登入腳本或背景追蹤。文字、排版與雙色字由核心與 renderer 實作。
+滑鼠導覽只建立目前格線畫面的辨識與命中，不建立獨立文章模型、板名導航按鈕、登入腳本或背景追蹤。文字、排版與雙色字由核心與 renderer 實作；操作及視覺契約見 [滑鼠導覽](navigation.md)。
