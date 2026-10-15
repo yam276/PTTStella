@@ -57,6 +57,14 @@ fn main() {
         eprintln!("--probe requires an output directory and loopback debug port");
         std::process::exit(2);
     }
+    let reload_settings = match args.next() {
+        None => false,
+        Some(flag) if probe.is_some() && flag == "--reload-settings" => true,
+        Some(_) => {
+            eprintln!("unexpected arguments");
+            std::process::exit(2);
+        }
+    };
     if args.next().is_some() {
         eprintln!("unexpected arguments");
         std::process::exit(2);
@@ -64,12 +72,19 @@ fn main() {
     let mut config = dioxus::desktop::Config::new();
     if let (Some(path), Some(port)) = (&probe, debug_port) {
         config = config
-            .with_data_directory(path.join("webview"))
+            .with_data_directory(path.join(if reload_settings {
+                "webview-reload"
+            } else {
+                "webview"
+            }))
             .with_windows_browser_args(format!(
                 "--remote-debugging-address=127.0.0.1 --remote-debugging-port={port}"
             ));
     }
-    let props = ui::AppProps { probe };
+    let props = ui::AppProps {
+        probe,
+        reload_settings,
+    };
     let window = dioxus::desktop::WindowBuilder::new()
         .with_title("PTTStella")
         .with_inner_size(dioxus::desktop::LogicalSize::new(1040.0, 740.0));

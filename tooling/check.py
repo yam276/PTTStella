@@ -263,6 +263,9 @@ def run_desktop(root):
         output.mkdir(parents=True, exist_ok=True)
         report_path = output / 'probe.json'
         report_path.unlink(missing_ok=True)
+        # Only the isolated probe's synthetic settings are reset; never user config.
+        for name in ('probe-settings.json', 'probe-settings.json.bak', 'reload.json', 'reloaded-screen.png', 'settings-after.png'):
+            (output / name).unlink(missing_ok=True)
         import desktop_input
         with socket.socket() as listener:
             listener.bind(('127.0.0.1', 0))
@@ -275,6 +278,8 @@ def run_desktop(root):
                 input_report = desktop_input.run(port, process, output)
                 if input_report.get('png_geometry_and_pixels') is not True:
                     raise CheckFailure('independent PNG inspection did not run')
+                if input_report.get('font_preview_save_cancel_validation') is not True:
+                    raise CheckFailure('native settings interaction did not run')
                 process.wait(timeout=15)
             finally:
                 if process.poll() is None:
@@ -283,11 +288,34 @@ def run_desktop(root):
         if process.returncode or not report_path.is_file():
             raise CheckFailure('desktop probe did not produce a successful report')
         report = json.loads(report_path.read_text(encoding='utf-8'))
-        required = ('arrow_input', 'enter_input', 'text_input', 'trusted_webview_input', 'selection_copy', 'ime_composition', 'url_open', 'png_export', 'paste_single', 'paste_confirm', 'paste_cancel', 'paste_rejected', 'loopback_input_roundtrip', 'closed_after_roundtrip', 'listeners_released', 'connection_worker_joined',
+        required = ('arrow_input', 'enter_input', 'text_input', 'trusted_webview_input', 'selection_copy', 'ime_composition', 'url_open', 'png_export', 'settings_saved', 'paste_single', 'paste_confirm', 'paste_cancel', 'paste_rejected', 'loopback_input_roundtrip', 'closed_after_roundtrip', 'listeners_released', 'connection_worker_joined',
                     'fills_body', 'ansi_colours', 'art_geometry', 'hover_controls', 'proportional_zoom')
         if report.get('status') != 'passed' or any(report.get(key) is not True for key in required):
             raise CheckFailure('desktop rendering/input/cleanup probe failed: ' + json.dumps(report))
+        # A second application process uses the first one's persisted preferences.
+        with socket.socket() as listener:
+            listener.bind(('127.0.0.1', 0))
+            port = listener.getsockname()[1]
+        with tempfile.TemporaryFile() as log:
+            process = subprocess.Popen([str(root / 'target/debug/pttstella.exe'), '--probe', str(output), str(port), '--reload-settings'],
+                                       cwd=root, stdout=log, stderr=log,
+                                       creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+            try:
+                process.wait(timeout=25)
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=5)
+        if process.returncode or not (output/'reload.json').is_file():
+            raise CheckFailure('second application did not complete its settings reload probe')
+        reloaded = json.loads((output/'reload.json').read_text(encoding='utf-8'))
+        saved = json.loads((output/'probe-settings.json').read_text(encoding='utf-8'))
+        if reloaded.get('status') != 'passed' or reloaded.get('settings_loaded') != saved:
+            raise CheckFailure('second application did not load persisted settings')
+        if (output/'settings-after.png').read_bytes() != (output/'reloaded-screen.png').read_bytes():
+            raise CheckFailure('restarted application pixels differed from the saved display settings')
         return {'profile': 'desktop', 'status': 'passed', 'probe': report, 'input_driver': input_report,
+                'settings_restart_pixels': True,
                 'artifacts': 'target/verification/desktop', 'scope': 'Windows WebView2; synthetic data, loopback only; no PTT'}
     except (OSError, ValueError, KeyError, CheckFailure, subprocess.TimeoutExpired) as error:
         return {'profile': 'desktop', 'status': 'failed', 'reason': str(error)}

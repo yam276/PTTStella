@@ -7,10 +7,24 @@ const selectionLayer=document.getElementById("selection"), selectAll=document.ge
 const surfaceNote=document.getElementById("surface-note");
 const pasteDialog=document.getElementById("paste-dialog"), pasteSend=document.getElementById("paste-send"), pasteCancel=document.getElementById("paste-cancel");
 const exportButton=document.getElementById("export-png");
+const fontButton=document.getElementById("font-settings"),fontDialog=document.getElementById("font-dialog");
+const fontPreview=document.getElementById("font-preview"),fontNote=document.getElementById("font-note");
+const fontPreset=document.getElementById("font-preset"),fontSave=document.getElementById("font-save"),fontCancel=document.getElementById("font-cancel");
+const fontDefaults=document.getElementById("font-defaults");
+const fontFields={ascii_font:document.getElementById("font-ascii"),cjk_font:document.getElementById("font-cjk"),
+    font_size:document.getElementById("font-size"),baseline:document.getElementById("font-baseline")};
 const ctx=canvas.getContext("2d",{willReadFrequently:true});
 const palette=["#000000","#800000","#008000","#808000","#000080","#800080","#008080","#c0c0c0",
     "#808080","#ff0000","#00ff00","#ffff00","#0000ff","#ff00ff","#00ffff","#ffffff"];
-const family='"Cascadia Mono", "Microsoft JhengHei", monospace', font='20px '+family;
+const fontFamily=name=>JSON.stringify(name)+", monospace";
+const fontDescription=(settings,cjk=false)=>settings.font_size+"px "+fontFamily(cjk?settings.cjk_font:settings.ascii_font);
+let loadedFonts=null,fontDraft=null,fontTimer=0,fontRequest=0,fontPreviewBusy=false,fontPreviewNext=null,fontSaving=false;
+async function loadFonts(settings) {
+    const key=JSON.stringify([settings.ascii_font,settings.cjk_font,settings.font_size]);
+    if(loadedFonts===key) return;
+    await Promise.all([document.fonts.load(fontDescription(settings),"M"),document.fonts.load(fontDescription(settings,true),"中")]);
+    await document.fonts.ready;loadedFonts=key;
+}
 let generation=0, revision=-1, composing=false, composition=null, beforeEdit=null, sent=0;
 let latest=null, animation=0, stopped=false, draws=0, zoom=1;
 let grid=null, dragging=null, selectionNext=null, selectionBusy=null, selectionCache=null, selectionSequence=0;
@@ -72,7 +86,7 @@ function positionKeyboard() {
     const height=(grid.y(row+1)-grid.y(row))/grid.ratio;
     Object.assign(keyboard.style,{left:left+"px",top:top+"px",height:height+"px",
         width:(composing?Math.max(1,Math.min(320,surface.clientWidth-left)):1)+"px",
-        fontSize:height*20/24+"px",fontFamily:family});
+        fontSize:height*latest.settings.font_size/24+"px",fontFamily:fontFamily(latest.settings.cjk_font)});
 }
 function focus() { if(document.activeElement!==keyboard) keyboard.focus({preventScroll:true}); }
 function restoreEditingFocus(){keyboard.blur();focus();}
@@ -187,7 +201,7 @@ function selectLink(e) {
     const link=latest.links[index];
     requestSelection({mode:"range",anchor:{col:link.start,row:link.row},focus:{col:link.end-1,row:link.row}});
 }
-function activate() { if(!chrome.contains(document.activeElement)) focus(); }
+function activate() { if(!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); }
 function paste(e) {
     e.preventDefault();
     if(pastePending||pasteDialog.open) return;
@@ -199,6 +213,35 @@ function paste(e) {
 }
 function confirmPaste(e){send({kind:"paste_confirm",trusted:e.isTrusted});}
 function cancelPaste(e){e.preventDefault();send({kind:"paste_cancel",trusted:e.isTrusted});}
+function openFonts(e){send({kind:"settings_open",trusted:e.isTrusted});}
+function fillFonts(values) {
+    for(const [name,field] of Object.entries(fontFields)) field.value=values[name];
+}
+function readFonts() {
+    return {version:1,ascii_font:fontFields.ascii_font.value,cjk_font:fontFields.cjk_font.value,
+        font_size:Number(fontFields.font_size.value),baseline:Number(fontFields.baseline.value)};
+}
+function flushFontPreview() {
+    if(fontPreviewBusy||!fontPreviewNext||!fontDialog.open||stopped) return;
+    fontPreviewBusy=true;send({kind:"settings_preview",...fontPreviewNext});fontPreviewNext=null;
+}
+function previewFonts() {
+    clearTimeout(fontTimer);fontRequest++;fontNote.textContent="";
+    fontTimer=setTimeout(()=>{fontTimer=0;fontPreviewNext={request:fontRequest,values:readFonts()};flushFontPreview();},150);
+}
+function editFont(){fontPreset.value="custom";previewFonts();}
+function chooseFontPreset(){if(fontDraft?.presets[fontPreset.value]) {fillFonts(fontDraft.presets[fontPreset.value]);previewFonts();}}
+function resetFonts(){if(fontDraft){fillFonts(fontDraft.defaults);fontPreset.value="custom";previewFonts();}}
+function closeFonts(e) {
+    e?.preventDefault();if(fontSaving) return;
+    clearTimeout(fontTimer);fontTimer=0;fontRequest++;fontPreviewNext=null;
+    fontDialog.close();restoreEditingFocus();
+}
+function saveFonts(e) {
+    if(fontSaving) return;
+    fontSaving=true;fontSave.disabled=true;fontCancel.disabled=true;
+    send({kind:"settings_save",values:readFonts(),trusted:e.isTrusted});
+}
 const pasteObserver=new MutationObserver(()=>{
     if(pasteDialog.dataset.active==="true") {
         cancelComposition();cancelDrag();clearSelection();
@@ -253,6 +296,9 @@ const bindings=[
     [canvas,"contextmenu",selectLink],[canvas,"pointerleave",leaveLink],
     [pasteSend,"click",confirmPaste],[pasteCancel,"click",cancelPaste],[pasteDialog,"cancel",cancelPaste],
     [exportButton,"click",exportScreen],
+    [fontButton,"click",openFonts],[fontPreset,"change",chooseFontPreset],
+    ...Object.values(fontFields).map(field=>[field,"input",editFont]),
+    [fontDefaults,"click",resetFonts],[fontCancel,"click",closeFonts],[fontDialog,"cancel",closeFonts],[fontSave,"click",saveFonts],
     [chrome,"pointerenter",showChrome],[chrome,"pointerleave",hideChrome],
     [plus,"click",zoomIn],[minus,"click",zoomOut],[fit,"click",zoomFit],
     [viewport,"wheel",wheel,{passive:false}],[window,"resize",repaint],[window,"focus",activate],
@@ -310,16 +356,17 @@ function render(target,packet,{cursor=true,hovered=-1}={}) {
         const [,bg]=colours(half===0?glyph.left:glyph.right),col=glyph.col+half;
         ctx.fillStyle=bg; ctx.fillRect(x(col),y(glyph.row),x(col+1)-x(col),y(glyph.row+1)-y(glyph.row));
     }
-    ctx.font=(20*scale)+"px "+family; ctx.textBaseline="alphabetic";
+    ctx.textBaseline="alphabetic";
     for(const glyph of frame.glyphs) {
         if(glyph.text===" ") continue;
+        ctx.font=(packet.settings.font_size*scale)+"px "+fontFamily(glyph.width===2?packet.settings.cjk_font:packet.settings.ascii_font);
         const left=x(glyph.col),top=y(glyph.row),span=x(glyph.col+glyph.width)-left,h=y(glyph.row+1)-top;
         const advance=Math.max(ctx.measureText(glyph.text).width,1);
         for(let half=0;half<glyph.width;half++) {
             const [fg]=colours(half===0?glyph.left:glyph.right),col=glyph.col+half;
             ctx.save(); ctx.beginPath(); ctx.rect(x(col),top,x(col+1)-x(col),h); ctx.clip(); ctx.fillStyle=fg;
             if(!graphic(ctx,glyph.text,left,top,span,h)) {
-                ctx.translate(left,top+20*scale); ctx.scale(span/advance,1); ctx.fillText(glyph.text,0,0);
+                ctx.translate(left,top+packet.settings.baseline*scale); ctx.scale(span/advance,1); ctx.fillText(glyph.text,0,0);
             }
             ctx.restore();
         }
@@ -359,16 +406,10 @@ function probe(packet,geometry) {
     }
     const sample=col=>Array.from(ctx.getImageData(x(col)+1,y(3)+1,1,1).data);
     const left_bg=sample(0),right_bg=sample(1);
-    const ink=(col,row,bg)=>{
-        const pixels=ctx.getImageData(x(col),y(row),x(col+2)-x(col),y(row+1)-y(row)).data,counts=new Map();
-        for(let i=0;i<pixels.length;i+=4) {
-            const rgb=Array.from(pixels.slice(i,i+3));if(rgb.every((v,j)=>v===bg[j])) continue;
-            const key=rgb.join(",");counts.set(key,(counts.get(key)||0)+1);
-        }
-        const ordered=[...counts].sort((a,b)=>b[1]-a[1]);return ordered.length?ordered[0][0].split(",").map(Number):[];
-    };
-    const colour_samples=Array.from({length:16},(_,i)=>ink(i*2,15,i===0?[192,192,192]:[0,0,0]));
-    colour_samples.push(...Array.from({length:4},(_,i)=>ink(i*2,16,[0,0,0])));
+    // Probe solid geometry so font-specific antialiasing cannot redefine ANSI RGB.
+    const ink=(col,row)=>Array.from(ctx.getImageData(x(col)+1,y(row)+1,1,1).data).slice(0,3);
+    const colour_samples=Array.from({length:16},(_,i)=>ink(i*2,15));
+    colour_samples.push(...Array.from({length:4},(_,i)=>ink(i*2,16)));
     const bounds=viewport.getBoundingClientRect(),near=(a,b)=>Math.abs(a-b)<1;
     const fills_body=near(bounds.left,0)&&near(bounds.top,0)&&near(bounds.right,innerWidth)&&near(bounds.bottom,innerHeight);
     chrome.dispatchEvent(new PointerEvent("pointerleave"));const hidden=getComputedStyle(toolbar).opacity==="0";
@@ -382,12 +423,13 @@ function probe(packet,geometry) {
     fit.click();
     surface.dataset.probeReady="true";
     send({kind:"probe",png:canvas.toDataURL("image/png"),red_pixels:red,green_pixels:green,left_bg,right_bg,
-        fonts:document.fonts.status,dpr:ratio,pixel_size:[canvas.width,canvas.height],font_stack:font,fills_body,
+        fonts:document.fonts.status,dpr:ratio,pixel_size:[canvas.width,canvas.height],font_stack:fontDescription(packet.settings)+" / "+fontDescription(packet.settings,true),fills_body,
         colour_samples,art_seam_pixels:checks[0].seams,art_zoom_seams:checks.map(c=>c.seams),
         art_geometry:checks.every(c=>c.geometry),hover_controls,proportional_zoom,zoom_samples});
 }
-function paint(packet) {
+async function paint(packet) {
     if(packet.generation<generation||(packet.generation===generation&&packet.frame.revision<revision)) return;
+    await loadFonts(packet.settings);
     if(packet.generation!==generation||packet.frame.revision!==revision) {clearSelection();cancelDrag();setLinkHover(-1,false);}
     if(packet.generation!==generation){
         pastePending=false;cancelComposition();focus();
@@ -395,31 +437,54 @@ function paint(packet) {
     generation=packet.generation;revision=packet.frame.revision;latest=packet;
     const geometry=draw(packet);send({kind:"painted",revision,generation});if(packet.probe) probe(packet,geometry);
     surface.dataset.revision=String(revision);
+    surface.dataset.fontSize=String(packet.settings.font_size);surface.dataset.baseline=String(packet.settings.baseline);
 }
 focus();
 try {
-    await document.fonts.load(font,"中M");await document.fonts.ready;
     while(true){const packet=await dioxus.recv();if(packet.stop) break;
+        if(packet.settings_open) {
+            fontDraft=packet.settings_open;fillFonts(fontDraft.values);fontPreset.value="custom";
+            fontNote.textContent=fontDraft.warning||"";cancelComposition();cancelDrag();clearSelection();
+            if(!fontDialog.open) fontDialog.showModal();
+            await loadFonts(fontDraft.values);render(fontPreview,fontDraft.sample,{cursor:false});
+            fontFields.ascii_font.focus();continue;
+        }
+        if(packet.font_preview) {
+            const preview=packet.font_preview;fontPreviewBusy=false;
+            if(fontDialog.open&&preview.request===fontRequest) {
+                if(preview.packet){await loadFonts(preview.packet.settings);render(fontPreview,preview.packet,{cursor:false});fontPreview.dataset.request=String(preview.request);
+                    fontPreview.dataset.fontSize=String(preview.packet.settings.font_size);fontPreview.dataset.baseline=String(preview.packet.settings.baseline);}
+                if(preview.error) fontNote.textContent=preview.error;
+            }
+            flushFontPreview();continue;
+        }
+        if(typeof packet.settings_saved==="boolean") {
+            fontSaving=false;fontSave.disabled=false;fontCancel.disabled=false;
+            if(packet.settings_saved) closeFonts();
+        }
         if(packet.selection){receiveSelection(packet.selection);continue;}
         if(packet.paste_result) {surface.dataset.pasteResult=packet.paste_result;pastePending=packet.paste_result==="preview";}
         if(packet.link_result) surface.dataset.linkResult=packet.link_result;
         if(packet.export_result) {surface.dataset.exportResult=packet.export_result;exportBusy=false;exportButton.disabled=false;restoreEditingFocus();}
-        if(packet.notice) surfaceNote.textContent=packet.notice;
+        if(packet.notice) (fontDialog.open?fontNote:surfaceNote).textContent=packet.notice;
         if(packet.paste_result||packet.link_result||packet.export_result||packet.notice) continue;
-        paint(packet);
+        await paint(packet);
     }
 } catch(e){send({kind:"error",message:String(e)});}
 finally {
     stopped=true;latest=null;observer.disconnect();pasteObserver.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
+    clearTimeout(fontTimer);fontTimer=0;fontPreviewNext=null;
     for(const [target,event,callback,options] of bindings) target.removeEventListener(event,callback,options);
     if(exportTask) await exportTask;
     if(pasteDialog.open) pasteDialog.close();
+    if(fontDialog.open) fontDialog.close();
     cancelComposition();keyboard.blur();hideChrome();cancelDrag();selectionBusy=null;clearSelection();
     const before=sent,beforeDraws=draws,beforeZoom=zoom;
     keyboard.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowUp",bubbles:true}));
     keyboard.dispatchEvent(new InputEvent("input",{data:"a",inputType:"insertText",bubbles:true}));
     surface.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true}));window.dispatchEvent(new Event("resize"));plus.click();
     chrome.dispatchEvent(new PointerEvent("pointerenter"));
+    fontButton.click();fontFields.font_size.dispatchEvent(new InputEvent("input",{bubbles:true}));
     send({kind:"stopped",clean:sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
-        &&!chrome.classList.contains("open")&&document.activeElement!==keyboard});
+        &&fontTimer===0&&!fontDialog.open&&!chrome.classList.contains("open")&&document.activeElement!==keyboard});
 }

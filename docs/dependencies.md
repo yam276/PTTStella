@@ -10,6 +10,7 @@
 | Dioxus 0.7.10 | Rust 桌面 UI 與系統 WebView | MIT OR Apache-2.0；[上游](https://github.com/DioxusLabs/dioxus) |
 | Tokio／base64 | 非同步橋接、PNG 匯出與合成畫面 probe 的傳輸 | MIT；[Tokio](https://tokio.rs/)，MIT OR Apache-2.0；[base64](https://docs.rs/base64/) |
 | rfd 0.17.2／tempfile 3.27.0 | 原生另存視窗與同目錄原子檔案替換 | MIT；[rfd](https://docs.rs/rfd/0.17.2/)，MIT OR Apache-2.0；[tempfile](https://docs.rs/tempfile/3.27.0/) |
+| directories 6.0.0 | OS 使用者設定目錄 | MIT OR Apache-2.0；[ProjectDirs](https://docs.rs/directories/6.0.0/directories/struct.ProjectDirs.html) |
 | tokio-tungstenite 0.28.0／futures-util | 單一 WebSocket 傳輸與序列化收送 | MIT；[tokio-tungstenite](https://docs.rs/tokio-tungstenite/0.28.0/)，MIT OR Apache-2.0；[futures-util](https://docs.rs/futures-util/) |
 | rustls 0.23／rustls-native-certs 0.8 | TLS、系統信任根與明確指定的 ring provider | Apache-2.0 OR ISC OR MIT；[rustls](https://docs.rs/rustls/0.23.46/)，MIT OR Apache-2.0 OR ISC；[native-certs](https://docs.rs/rustls-native-certs/) |
 

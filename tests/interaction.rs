@@ -185,3 +185,51 @@ fn png_bridge_budget_and_geometry_are_checked_before_saving() {
     assert!(check_export_header(b"not an image").is_err());
     assert!(check_export_header(&vec![0; MAX_PNG_BYTES + 1]).is_err());
 }
+
+#[test]
+fn display_preferences_validate_names_geometry_and_version() {
+    use pttstella::settings::DisplaySettings;
+    assert!(DisplaySettings::default().validate().is_ok());
+    assert!(
+        DisplaySettings {
+            font_size: f64::NAN,
+            ..DisplaySettings::default()
+        }
+        .validate()
+        .is_err()
+    );
+    assert!(
+        DisplaySettings {
+            baseline: 25.0,
+            ..DisplaySettings::default()
+        }
+        .validate()
+        .is_err()
+    );
+    assert!(
+        DisplaySettings {
+            version: 2,
+            ..DisplaySettings::default()
+        }
+        .validate()
+        .is_err()
+    );
+    assert!(
+        DisplaySettings {
+            ascii_font: "bad\nfont".into(),
+            ..DisplaySettings::default()
+        }
+        .validate()
+        .is_err()
+    );
+    assert_eq!(
+        DisplaySettings {
+            ascii_font: "  Mono Font  ".into(),
+            ..DisplaySettings::default()
+        }
+        .validate()
+        .unwrap()
+        .ascii_font,
+        "Mono Font"
+    );
+}
