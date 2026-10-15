@@ -76,7 +76,7 @@ impl Connection {
         })
     }
     /// An isolated browser-to-WebSocket conformance session; no external network.
-    pub fn start_probe(bytes: Vec<u8>) -> Result<Self, String> {
+    pub fn start_probe(bytes: Vec<u8>, reload_settings: bool) -> Result<Self, String> {
         let runtime = tokio::runtime::Handle::try_current().map_err(|e| e.to_string())?;
         let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).map_err(|e| e.to_string())?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
@@ -86,7 +86,7 @@ impl Connection {
         );
         let listener = tokio::net::TcpListener::from_std(listener).map_err(|e| e.to_string())?;
         let connection = Self::start_at(Screen::new(80, 24).map_err(str::to_owned)?, endpoint)?;
-        let peer = runtime.spawn(probe::serve(listener, bytes));
+        let peer = runtime.spawn(probe::serve(listener, bytes, reload_settings));
         *connection
             .probe_peer
             .lock()

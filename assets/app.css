@@ -25,3 +25,8 @@ textarea.composing { opacity: 1; z-index: 1; background: #202020; color: #c0c0c0
 .paste-preview h2 { font-size: 16px; margin: 0 0 12px; }
 .paste-preview pre { overflow: auto; max-height: 50vh; white-space: pre; padding: 12px; background: #000; }
 .dialog-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.font-dialog label { display: grid; grid-template-columns: 100px 1fr; align-items: center; gap: 10px; margin: 8px 0; font-size: 14px; }
+.font-dialog input, .font-dialog select { min-width: 0; width: 100%; background: #222; color: #c0c0c0; border: 1px solid #555; padding: 4px; font: inherit; }
+.font-dialog p, #font-note { font-size: 13px; }
+#font-preview { position: static; width: 100%; height: auto; margin: 12px 0; background: #000; }
+#font-note { display: block; margin-bottom: 10px; }

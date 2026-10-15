@@ -9,7 +9,11 @@ use tokio_tungstenite::tungstenite::{
     protocol::{CloseFrame, frame::coding::CloseCode},
 };
 
-pub(super) async fn serve(listener: TcpListener, bytes: Vec<u8>) -> Result<(), String> {
+pub(super) async fn serve(
+    listener: TcpListener,
+    bytes: Vec<u8>,
+    reload_settings: bool,
+) -> Result<(), String> {
     timeout(Duration::from_secs(35), async {
         let (stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
         let mut socket = tokio_tungstenite::accept_async(stream)
@@ -19,6 +23,12 @@ pub(super) async fn serve(listener: TcpListener, bytes: Vec<u8>) -> Result<(), S
             .send(Message::Binary(bytes.into()))
             .await
             .map_err(|e| e.to_string())?;
+        if reload_settings {
+            return match socket.next().await {
+                Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e| e.to_string()),
+                _ => Err("settings reload probe received unexpected input".into()),
+            };
+        }
         let expected: &[&[u8]] = &[
             b"\x03",
             b"a",

@@ -7,6 +7,7 @@ pub mod input;
 pub mod links;
 pub mod screen;
 pub mod selection;
+pub mod settings;
 #[cfg(feature = "desktop")]
 pub mod storage;
 pub mod telnet;

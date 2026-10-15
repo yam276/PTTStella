@@ -3,7 +3,7 @@
 ## 目前目標
 
 - 第一個交付是一個 Rust／Dioxus 的 PTT 專用圖形介面，外觀像 terminal：連線、手動登入 PTT、正確顯示、必要鍵盤及斷線。Windows 先驗證，架構維持可攜；其他平台後續各自實測。
-- 目前 goal 依 [操作功能研究](docs/feature-research.md) 實作選取／複製、IME／貼上、網址操作、PNG 匯出與字型設定；逐項驗證及提交，進度維護於同一 active plan。登入卡住的實站重試待使用者回報，不以合成測試結案。
+- [操作功能研究](docs/feature-research.md) 的選取／複製、IME／貼上、網址操作、PNG 匯出與字型設定已逐項實作及提交；實測範圍及待人工驗收項目維護於同一 active plan。登入卡住的實站重試待使用者回報，不以合成測試結案。
 - 先讀 [README](README.md)、[交付流程](CONTRIBUTING.md)、[唯一 active plan](docs/active/minimal-browser.md) 與相關程式。字型／欄位／雙色字要求見 [顯示契約](docs/dual-color.md)。
 - 先不實作文章模型、畫面辨識、語意導航、自動登入、密碼儲存、媒體或追蹤。一般 terminal 的手動鍵盤操作不等於整個 session 唯讀。
 - 當前已有 PTT 專用 Rust 畫面核心、replay、Dioxus 畫面及單一 WSS 傳輸；不是系統終端或通用模擬器，不實作 shell／PTY。驗證狀態以 active plan 為準，規劃、編譯、重放、實際畫面及實站登入結果分開報告。

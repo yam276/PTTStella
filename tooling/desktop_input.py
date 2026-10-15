@@ -262,6 +262,60 @@ def run(port, process, output=None):
             image = json.loads(inspection.stdout)
             if image != {'width':960,'height':576,'samples':[[0,0,128,255],[128,0,128,255],[128,0,0,255],[0,0,0,255]]}:
                 raise ValueError('exported PNG pixels, background or cursor exclusion did not match')
+        # Edit actual form controls; cancelled previews must not change the screen/store.
+        initial_pixels = devtools.evaluate('document.getElementById("screen").toDataURL("image/png")')
+        def edit_field(selector, value):
+            devtools.click(selector)
+            devtools.shortcut('a')
+            devtools.call('Input.insertText', text=value)
+        def open_fonts():
+            devtools.call('Input.dispatchMouseEvent', type='mouseMoved', x=20, y=2)
+            devtools.click('#font-settings')
+            devtools.wait('document.getElementById("font-dialog").open', 'font dialog did not open')
+        open_fonts()
+        edit_field('#font-size', '18')
+        edit_field('#font-baseline', '19')
+        devtools.wait('document.getElementById("font-preview").dataset.fontSize === "18" && document.getElementById("font-preview").dataset.baseline === "19"',
+                      'font preview did not render the validated draft')
+        devtools.click('#font-cancel')
+        devtools.wait('!document.getElementById("font-dialog").open', 'font preview did not cancel')
+        if devtools.evaluate('document.getElementById("screen").toDataURL("image/png")') != initial_pixels:
+            raise ValueError('cancelled font preview changed the PTT screen')
+        if output is not None and (Path(output)/'probe-settings.json').exists():
+            raise ValueError('cancelled preview saved preferences')
+        open_fonts()
+        if devtools.evaluate('document.getElementById("font-size").value') != '20':
+            raise ValueError('reopening settings retained an unsaved draft')
+        edit_field('#font-size', '18')
+        edit_field('#font-baseline', '19')
+        edit_field('#font-ascii', 'Courier New')
+        devtools.click('#font-save')
+        devtools.wait('!document.getElementById("font-dialog").open && document.getElementById("surface").dataset.fontSize === "18" && document.getElementById("surface").dataset.baseline === "19"',
+                      'saved font settings did not reach the PTT renderer')
+        changed_pixels = devtools.evaluate('document.getElementById("screen").toDataURL("image/png")')
+        if changed_pixels == initial_pixels:
+            raise ValueError('saved font metrics did not affect rendered glyph pixels')
+        if output is not None:
+            (Path(output)/'settings-after.png').write_bytes(base64.b64decode(changed_pixels.split(',',1)[1], validate=True))
+            saved_bytes = (Path(output)/'probe-settings.json').read_bytes()
+            saved = json.loads(saved_bytes)
+            if saved['font_size'] != 18 or saved['baseline'] != 19 or saved['ascii_font'] != 'Courier New':
+                raise ValueError('saved configuration did not contain the applied settings')
+        open_fonts()
+        edit_field('#font-size', '100')
+        devtools.click('#font-save')
+        devtools.wait('document.getElementById("font-note").textContent.includes("字高需介於")', 'invalid font metrics were not rejected')
+        if not devtools.evaluate('document.getElementById("font-dialog").open'):
+            raise ValueError('failed settings save closed the draft')
+        devtools.click('#font-defaults')
+        devtools.wait('document.getElementById("font-preview").dataset.fontSize === "20" && document.getElementById("font-preview").dataset.baseline === "20"',
+                      'default font metrics were not previewed')
+        devtools.click('#font-cancel')
+        if output is not None and (Path(output)/'probe-settings.json').read_bytes() != saved_bytes:
+            raise ValueError('invalid or cancelled settings replaced saved configuration')
+        # Default preview does not commit until the user saves.
+        if devtools.evaluate('document.getElementById("surface").dataset.fontSize') != '18':
+            raise ValueError('default preview changed the committed settings')
         devtools.call('Input.dispatchMouseEvent', type='mouseMoved', x=20, y=2)
         devtools.click('#select-all')
         deadline = time.monotonic() + 5
@@ -363,6 +417,7 @@ def run(port, process, output=None):
                 'native_paste_preview_and_validation': True,
                 'url_click_drag_copy': True,
                 'png_geometry_and_pixels': output is not None,
+                'font_preview_save_cancel_validation': True,
                 'peer_close_visible': True,
                 'scope': 'isolated WebView2 browser input; no physical keyboard or PTT authentication'}
     finally:

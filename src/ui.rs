@@ -7,6 +7,7 @@ use pttstella::{
     links::{self, Link},
     screen::{Frame, Screen},
     selection::{self, Selection},
+    settings::{DisplaySettings, store::Store},
     storage,
 };
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,7 @@ use tokio::sync::watch;
 #[derive(Clone, PartialEq, Props)]
 pub struct AppProps {
     pub probe: Option<PathBuf>,
+    pub reload_settings: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -24,6 +26,7 @@ struct Paint {
     generation: u64,
     probe: bool,
     links: Vec<Link>,
+    settings: DisplaySettings,
 }
 #[derive(Clone)]
 struct PendingPaste {
@@ -33,6 +36,17 @@ struct PendingPaste {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum SurfaceEvent {
+    SettingsOpen {
+        trusted: bool,
+    },
+    SettingsPreview {
+        request: u64,
+        values: DisplaySettings,
+    },
+    SettingsSave {
+        values: DisplaySettings,
+        trusted: bool,
+    },
     ExportPng {
         generation: u64,
         revision: u64,
@@ -123,6 +137,7 @@ fn preview(probe: bool) -> Result<Vec<u8>, String> {
     bytes.extend_from_slice(b"\x1b[7;1H");
     bytes.extend_from_slice(&encoding::encode("正在連線 PTT…\r\n\r\n連線後，點一下畫面即可輸入帳號密碼。\r\n滑鼠移至上緣可顯示連線與等比例縮放工具。").map_err(|e| e.to_string())?);
     if probe {
+        let solid = encoding::encode("█").map_err(|e| e.to_string())?;
         bytes.extend_from_slice(b"\x1b[12;1Hhttps://example.com/pttstella");
         bytes.extend_from_slice(b"\x1b[15;1H");
         bytes.extend_from_slice(&encoding::encode("一般色 / 亮色").map_err(|e| e.to_string())?);
@@ -134,10 +149,15 @@ fn preview(probe: bool) -> Result<Vec<u8>, String> {
                 90 + colour - 8
             };
             let bg = if colour == 0 { 47 } else { 40 };
-            bytes.extend_from_slice(format!("\x1b[0;{fg};{bg}mMM").as_bytes());
+            bytes.extend_from_slice(format!("\x1b[0;{fg};{bg}m").as_bytes());
+            bytes.extend_from_slice(&solid);
         }
         // Also exercise intensity-on, intensity-off and full reset independently.
-        bytes.extend_from_slice(b"\x1b[17;1H\x1b[0;31mMM\x1b[1mMM\x1b[22mMM\x1b[0mMM\x1b[19;1H");
+        bytes.extend_from_slice(b"\x1b[17;1H");
+        for sgr in ["0;31", "1", "22", "0"] {
+            bytes.extend_from_slice(format!("\x1b[{sgr}m").as_bytes());
+            bytes.extend_from_slice(&solid);
+        }
         bytes.extend_from_slice(b"\x1b[0;31;44m\x1b[20;1H");
         bytes.extend_from_slice(&encoding::encode(&"█".repeat(8)).map_err(|e| e.to_string())?);
         bytes.extend_from_slice(b"\x1b[21;1H");
@@ -153,11 +173,12 @@ fn preview(probe: bool) -> Result<Vec<u8>, String> {
 
 pub fn app(props: AppProps) -> Element {
     let probing = props.probe.is_some();
+    let reload_settings = props.reload_settings;
     let owner = use_hook(move || {
         preview(probing)
             .and_then(|bytes| {
                 if probing {
-                    Connection::start_probe(bytes)
+                    Connection::start_probe(bytes, reload_settings)
                 } else {
                     let mut screen = Screen::new(80, 24).map_err(str::to_owned)?;
                     screen.feed(&bytes);
@@ -231,6 +252,7 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "zoom-fit", "符合視窗" }
                 button { id: "select-all", "整頁選取" }
                 button { id: "export-png", "匯出 PNG" }
+                button { id: "font-settings", "字型" }
             }
             }
             section { class: "workspace",
@@ -240,7 +262,7 @@ pub fn app(props: AppProps) -> Element {
                         started.set(true);
                         let connection = connection.clone(); let probe = probe.clone(); let closing = closing.1.clone();
                         spawn(async move {
-                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste).await;
+                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, reload_settings).await;
                             if let Err(error) = result {
                                 fatal.set(true);
                                 message.set(format!("{error}；請關閉並重新開啟視窗"));
@@ -267,6 +289,29 @@ pub fn app(props: AppProps) -> Element {
                     button { id: "paste-send", "送出文字" }
                 }
             }
+            dialog { id: "font-dialog", class: "paste-preview font-dialog", "aria-labelledby": "font-title",
+                h2 { id: "font-title", "字型與顯示" }
+                label { "字型組合"
+                    select { id: "font-preset",
+                        option { value: "custom", "自訂" }
+                        option { value: "windows", "Windows" }
+                        option { value: "macos", "macOS" }
+                        option { value: "linux", "Linux" }
+                    }
+                }
+                label { "英數字型" input { id: "font-ascii", r#type: "text", maxlength: "128" } }
+                label { "中文字型" input { id: "font-cjk", r#type: "text", maxlength: "128" } }
+                label { "字高" input { id: "font-size", r#type: "number", min: "8", max: "24", step: "1" } }
+                label { "基線位置" input { id: "font-baseline", r#type: "number", min: "0", max: "24", step: "1" } }
+                p { "保持固定格線；找不到指定字型時使用系統替代字型。" }
+                canvas { id: "font-preview", width: "576", height: "192", "aria-label": "中英混排與雙色字預覽" }
+                output { id: "font-note", role: "status" }
+                div { class: "dialog-actions",
+                    button { id: "font-defaults", "恢復預設" }
+                    button { id: "font-cancel", "取消" }
+                    button { id: "font-save", "套用並儲存" }
+                }
+            }
         }
     }
 }
@@ -278,14 +323,31 @@ async fn surface(
     mut message: Signal<String>,
     mut phase: Signal<Phase>,
     mut pending_paste: Signal<Option<PendingPaste>>,
+    reload_settings: bool,
 ) -> Result<(), String> {
     let mut receiver = connection.updates.clone();
+    let store = probe.as_ref().map_or_else(Store::system, |path| {
+        Ok(Store::at(path.join("probe-settings.json")))
+    });
+    let (mut settings, mut settings_warning) =
+        match store.as_ref().map_err(Clone::clone).and_then(Store::load) {
+            Ok(settings) => (settings, None),
+            Err(error) => (
+                DisplaySettings::default(),
+                Some(format!("{error}；目前使用預設顯示")),
+            ),
+        };
+    let font_sample = font_sample()?;
     let mut eval = document::eval(include_str!("../assets/surface.js"));
     let first = receiver.borrow_and_update().clone();
     let mut last_status = first.message.clone();
-    let mut painting = paint(&first, false);
+    let mut painting = paint(&first, false, &settings);
     let mut displayed: Option<Paint> = None;
     eval.send(&painting).map_err(|e| e.to_string())?;
+    if let Some(warning) = &settings_warning {
+        eval.send(serde_json::json!({"notice":warning}))
+            .map_err(|e| e.to_string())?;
+    }
     connection.connect()?;
     let mut in_flight = Some((first.generation, first.frame.revision));
     let mut dirty = false;
@@ -308,6 +370,7 @@ async fn surface(
     let mut composition_checked = false;
     let mut link_requests = 0;
     let mut export_checked = false;
+    let mut settings_saved = false;
     let (mut paste_single, mut paste_confirm, mut paste_cancel, mut paste_rejected) =
         (false, false, false, 0);
     let mut copied_selection = None;
@@ -326,8 +389,7 @@ async fn surface(
                     .collect::<String>()
                     == "INPUT ROUND TRIP COMPLETE"
         };
-        if pending_report.is_some()
-            && arrow_checked
+        let interactions_checked = arrow_checked
             && enter_count == 2
             && input_bytes == expected_input
             && complete
@@ -336,12 +398,17 @@ async fn surface(
             && composition_checked
             && link_requests == 1
             && export_checked
+            && settings_saved
             && paste_single
             && paste_confirm
             && paste_cancel
-            && paste_rejected == 3
-            && !stopping
-        {
+            && paste_rejected == 3;
+        let probe_checked = if reload_settings {
+            probe_started && in_flight.is_none()
+        } else {
+            interactions_checked
+        };
+        if pending_report.is_some() && probe_checked && !stopping {
             eval.send(serde_json::json!({"stop":true}))
                 .map_err(|e| e.to_string())?;
             stopping = true;
@@ -355,13 +422,41 @@ async fn surface(
                 && view.phase == Phase::Connected
                 && view.received > 0;
             probe_started |= run_probe;
-            painting = paint(&view, run_probe);
+            painting = paint(&view, run_probe, &settings);
             eval.send(&painting).map_err(|e| e.to_string())?;
             in_flight = Some((view.generation, view.frame.revision));
             dirty = false;
         }
         tokio::select! {
             event = eval.recv::<SurfaceEvent>() => match event.map_err(|e| e.to_string())? {
+                SurfaceEvent::SettingsOpen { trusted } => {
+                    if stopping || !trusted { continue; }
+                    eval.send(serde_json::json!({"settings_open": {
+                        "values":settings,"defaults":DisplaySettings::default(),"presets":DisplaySettings::presets(),
+                        "warning":settings_warning,
+                        "sample":sample_packet(&font_sample,&settings),
+                    }})).map_err(|e| e.to_string())?;
+                },
+                SurfaceEvent::SettingsPreview { request, values } => {
+                    let reply = match values.validate() {
+                        Ok(values) => serde_json::json!({"font_preview":{"request":request,"packet":sample_packet(&font_sample,&values)}}),
+                        Err(error) => serde_json::json!({"font_preview":{"request":request,"error":error}}),
+                    };
+                    eval.send(reply).map_err(|e| e.to_string())?;
+                },
+                SurfaceEvent::SettingsSave { values, trusted } => {
+                    if stopping || !trusted { continue; }
+                    let result = store.as_ref().map_err(Clone::clone).and_then(|store| store.save(values));
+                    let reply = match result {
+                        Ok(saved) => {
+                            settings_saved |= probe.is_some() && saved.font_size==18.0 && saved.baseline==19.0;
+                            settings=saved;settings_warning=None;dirty=true;
+                            serde_json::json!({"settings_saved":true,"notice":"顯示設定已儲存"})
+                        },
+                        Err(error) => serde_json::json!({"settings_saved":false,"notice":error}),
+                    };
+                    eval.send(reply).map_err(|e| e.to_string())?;
+                },
                 SurfaceEvent::ExportPng { generation, revision, png, trusted } => {
                     if stopping || !trusted { continue; }
                     let result = (|| -> Result<Option<PathBuf>, String> {
@@ -535,7 +630,7 @@ async fn surface(
                     let encoded = png.strip_prefix("data:image/png;base64,").ok_or("invalid PNG response")?;
                     if encoded.len() > 4 * 1024 * 1024 { return Err("probe image exceeds limit".into()); }
                     let pixels = base64::engine::general_purpose::STANDARD.decode(encoded).map_err(|e| e.to_string())?;
-                    std::fs::write(path.join("screen.png"), pixels).map_err(|e| e.to_string())?;
+                    std::fs::write(path.join(if reload_settings {"reloaded-screen.png"} else {"screen.png"}), pixels).map_err(|e| e.to_string())?;
                     let report = serde_json::json!({"status":if valid {"passed"} else {"failed"},
                         "scope":"mounted WebView canvas and input bridge; synthetic data only",
                         "red_pixels":red_pixels,"green_pixels":green_pixels,"left_bg":left_bg,"right_bg":right_bg,
@@ -545,6 +640,7 @@ async fn surface(
                         "art_seam_pixels":art_seam_pixels,
                         "art_zoom_seams":art_zoom_seams,"art_geometry":art_geometry,
                         "hover_controls":hover_controls,"proportional_zoom":proportional_zoom,"zoom_samples":zoom_samples,
+                        "settings_loaded":settings,
                         "font_fallback_per_glyph":"not measured"});
                     pending_report = Some(report);
                     close_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_secs(25));
@@ -563,11 +659,13 @@ async fn surface(
                         report["ime_composition"] = composition_checked.into();
                         report["url_open"] = (link_requests == 1).into();
                         report["png_export"] = export_checked.into();
+                        report["settings_saved"] = settings_saved.into();
                         report["paste_single"] = paste_single.into();report["paste_confirm"] = paste_confirm.into();
                         report["paste_cancel"] = paste_cancel.into();report["paste_rejected"] = (paste_rejected == 3).into();
-                        if !clean || !arrow_checked || enter_count != 2 || input_bytes != expected_input || !complete || !closed_checked || !copy_checked || !composition_checked || link_requests != 1 || !export_checked || !paste_single || !paste_confirm || !paste_cancel || paste_rejected != 3 { report["status"] = "failed".into(); }
+                        if !clean || !probe_checked { report["status"] = "failed".into(); }
+                        if reload_settings { report["scope"]="settings reload in a second application process; synthetic data only".into(); }
                         let path = probe.as_ref().ok_or("missing probe directory")?;
-                        std::fs::write(path.join("probe.json"), report.to_string()).map_err(|e| e.to_string())?;
+                        std::fs::write(path.join(if reload_settings {"reload.json"} else {"probe.json"}), report.to_string()).map_err(|e| e.to_string())?;
                     }
                     let window = dioxus::desktop::window();
                     window.set_close_behavior(dioxus::desktop::WindowCloseBehaviour::WindowCloses);
@@ -602,11 +700,34 @@ async fn surface(
     }
 }
 
-fn paint(view: &View, probe: bool) -> Paint {
+fn paint(view: &View, probe: bool, settings: &DisplaySettings) -> Paint {
     Paint {
+        settings: settings.clone(),
         links: links::detect(&view.frame),
         frame: view.frame.clone(),
         generation: view.generation,
         probe,
     }
+}
+
+fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint {
+    Paint {
+        frame: frame.clone(),
+        generation: 0,
+        probe: false,
+        links: Vec::new(),
+        settings: settings.clone(),
+    }
+}
+
+fn font_sample() -> Result<Frame, String> {
+    let mut sample = Screen::new(24, 4).map_err(str::to_owned)?;
+    sample.feed(b"ASCII xyz 0123456789\r\n\x1b[31;44m\xa4\x1b[32;45m\xa4\x1b[0m ");
+    sample.feed(&encoding::encode("中文字型\r\n").map_err(|e| e.to_string())?);
+    sample.feed(b"\x1b[31;44m");
+    sample.feed(&encoding::encode("█▌◢◣◤◥").map_err(|e| e.to_string())?);
+    sample.feed(b"\x1b[0m\r\n");
+    sample.feed(&encoding::encode("┌──┐ │  │ └──┘").map_err(|e| e.to_string())?);
+    sample.feed(b"\x1b[0m\x1b[?25l");
+    Ok(sample.frame())
 }
