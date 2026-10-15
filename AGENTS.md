@@ -32,6 +32,6 @@
 - 執行 [對應 gate](CONTRIBUTING.md)。缺 runner／案例／backend 回報 not_ready，未執行不算 passed；空 trace、全 skip 或只改 expected 不能結案。
 - 核心測試使用同一生產 reducer 與獨立 expected；顯示問題另用實際 Dioxus host；登入以實站人工流程證明。單平台結果不能冒充跨平台完成。
 - 效能以同一工作量量測自己的基線；區分 cold／warm、wall time、CPU 與 process-family memory，不搬用其他專案的門檻。
-- 一個可獨立驗收的目標完成、驗證後提交，使用 Conventional Commit 加短 body。沒有要求不建立 remote／PR 或公開發佈；不得代替使用者宣稱人工審閱完成。
+- 後續以功能或可獨立驗收的修正為單位提交，完成驗證後使用 Conventional Commit 加短 body；不延續初期整批壓成單一 commit 的做法，只有使用者明確要求才壓縮或改寫歷史。沒有要求不建立 remote／PR 或公開發佈；不得代替使用者宣稱人工審閱完成。
 - 本 repo 的 Git author 與 committer 固定使用 `yam276 <59956724+yam276@users.noreply.github.com>`，由 repo-local Git 設定保存；每次提交前核對身分。歷史整理遵從使用者明確要求，改寫前在 repo 外保存回復備份。
 - 協作遠端以 `origin`（`https://github.com/yam276/PTTStella.git`）為準；提交前確認遠端狀態，完成使用者要求的 push 後核對遠端 commit。
