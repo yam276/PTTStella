@@ -6,6 +6,7 @@ const fit=document.getElementById("zoom-fit"), level=document.getElementById("zo
 const selectionLayer=document.getElementById("selection"), selectAll=document.getElementById("select-all");
 const surfaceNote=document.getElementById("surface-note");
 const pasteDialog=document.getElementById("paste-dialog"), pasteSend=document.getElementById("paste-send"), pasteCancel=document.getElementById("paste-cancel");
+const exportButton=document.getElementById("export-png");
 const ctx=canvas.getContext("2d",{willReadFrequently:true});
 const palette=["#000000","#800000","#008000","#808000","#000080","#800080","#008080","#c0c0c0",
     "#808080","#ff0000","#00ff00","#ffff00","#0000ff","#ff00ff","#00ffff","#ffffff"];
@@ -16,6 +17,7 @@ let grid=null, dragging=null, selectionNext=null, selectionBusy=null, selectionC
 let selectionActive=false, selectionFingerprint=null;
 let pastePending=false;
 let hoveredLink=-1;
+let exportBusy=false, exportTask=null;
 const send=value=>{ sent++; dioxus.send(value); };
 const keys={Enter:[13],Backspace:[8],Tab:[9],Escape:[27],ArrowUp:[27,91,65],ArrowDown:[27,91,66],
     ArrowRight:[27,91,67],ArrowLeft:[27,91,68],Home:[27,91,72],End:[27,91,70],
@@ -73,6 +75,7 @@ function positionKeyboard() {
         fontSize:height*20/24+"px",fontFamily:family});
 }
 function focus() { if(document.activeElement!==keyboard) keyboard.focus({preventScroll:true}); }
+function restoreEditingFocus(){keyboard.blur();focus();}
 function pointerdown(e) {
     if(e.button!==0) return;
     const bounds=viewport.getBoundingClientRect();
@@ -204,10 +207,30 @@ const pasteObserver=new MutationObserver(()=>{
     } else if(pasteDialog.open) {
         pasteDialog.close();pastePending=false;
         // Restore the editing host, not just the DOM activeElement, after a modal.
-        keyboard.blur();focus();
+        restoreEditingFocus();
     }
 });
 pasteObserver.observe(pasteDialog,{attributes:true,attributeFilter:["data-active"]});
+function exportScreen(e) {
+    if(exportBusy||!latest||stopped) return;
+    exportBusy=true;exportButton.disabled=true;surface.dataset.exportResult="pending";
+    const packet=latest;
+    exportTask=(async()=>{
+        const target=document.createElement("canvas");target.width=960;target.height=576;
+        try {
+            render(target,packet,{cursor:false,hovered:-1});
+            const blob=await new Promise((resolve,reject)=>target.toBlob(value=>value?resolve(value):reject(new Error("無法編碼 PNG")),"image/png"));
+            if(blob.size>3*1024*1024) throw new Error("PNG 超過匯出大小上限");
+            const png=await new Promise((resolve,reject)=>{
+                const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("無法準備 PNG"));reader.readAsDataURL(blob);
+            });
+            if(!stopped) send({kind:"export_png",generation:packet.generation,revision:packet.frame.revision,png,trusted:e.isTrusted});
+        } catch(error) {
+            exportBusy=false;exportButton.disabled=false;
+            if(!stopped) {surface.dataset.exportResult="failed";surfaceNote.textContent=String(error);restoreEditingFocus();}
+        } finally {target.width=0;target.height=0;}
+    })();
+}
 function showChrome() { chrome.classList.add("open"); }
 function hideChrome() { chrome.classList.remove("open"); }
 function zoomTo(value) {
@@ -229,6 +252,7 @@ const bindings=[
     [canvas,"dblclick",doubleclick],[selectAll,"click",selectPage],[document,"copy",copy],
     [canvas,"contextmenu",selectLink],[canvas,"pointerleave",leaveLink],
     [pasteSend,"click",confirmPaste],[pasteCancel,"click",cancelPaste],[pasteDialog,"cancel",cancelPaste],
+    [exportButton,"click",exportScreen],
     [chrome,"pointerenter",showChrome],[chrome,"pointerleave",hideChrome],
     [plus,"click",zoomIn],[minus,"click",zoomOut],[fit,"click",zoomFit],
     [viewport,"wheel",wheel,{passive:false}],[window,"resize",repaint],[window,"focus",activate],
@@ -239,7 +263,7 @@ function colours(style) {
     return style.inverse?[palette[bg],palette[fg]]:[palette[fg],palette[bg]];
 }
 // Filled BBS graphics follow the grid, independent of font metrics/fallback.
-function graphic(text,x,y,w,h) {
+function graphic(ctx,text,x,y,w,h) {
     if([...text].length!==1) return false;
     const code=text.codePointAt(0);
     const rect=(l,t,r,b)=>{
@@ -272,9 +296,15 @@ function draw(packet) {
     canvas.width=Math.max(1,Math.floor(width*physical)); canvas.height=Math.max(1,Math.floor(height*physical));
     surface.style.width=canvas.width/ratio+"px"; surface.style.height=canvas.height/ratio+"px";
     level.textContent=Math.round(physical/ratio/fitting*100)+"%";
-    const scale=Math.min(canvas.width/width,canvas.height/height);
+    grid={...render(canvas,packet,{cursor:true,hovered:hoveredLink}),ratio};
+    positionKeyboard();drawSelection();draws++;return grid;
+}
+function render(target,packet,{cursor=true,hovered=-1}={}) {
+    const frame=packet.frame,width=frame.cols*12,height=frame.rows*24;
+    const ctx=target.getContext("2d");
+    const scale=Math.min(target.width/width,target.height/height);
     const x=col=>Math.round(col*12*scale),y=row=>Math.round(row*24*scale);
-    ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle="#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle="#000"; ctx.fillRect(0,0,target.width,target.height);
     // Opaque backgrounds first; both sides of every shared edge use one integer.
     for(const glyph of frame.glyphs) for(let half=0;half<glyph.width;half++) {
         const [,bg]=colours(half===0?glyph.left:glyph.right),col=glyph.col+half;
@@ -288,19 +318,19 @@ function draw(packet) {
         for(let half=0;half<glyph.width;half++) {
             const [fg]=colours(half===0?glyph.left:glyph.right),col=glyph.col+half;
             ctx.save(); ctx.beginPath(); ctx.rect(x(col),top,x(col+1)-x(col),h); ctx.clip(); ctx.fillStyle=fg;
-            if(!graphic(glyph.text,left,top,span,h)) {
+            if(!graphic(ctx,glyph.text,left,top,span,h)) {
                 ctx.translate(left,top+20*scale); ctx.scale(span/advance,1); ctx.fillText(glyph.text,0,0);
             }
             ctx.restore();
         }
     }
-    if(frame.cursor_visible) {
+    if(cursor&&frame.cursor_visible) {
         const [col,row]=frame.cursor,bottom=y(row+1),thickness=Math.max(1,Math.round(2*scale));
         ctx.fillStyle=palette[7]; ctx.fillRect(x(col),bottom-thickness,x(col+1)-x(col),thickness);
     }
-    const link=packet.links[hoveredLink];
+    const link=packet.links[hovered];
     if(link) {ctx.fillStyle=palette[7];ctx.fillRect(x(link.start),y(link.row+1)-1,x(link.end)-x(link.start),1);}
-    grid={x,y,ratio};positionKeyboard();drawSelection();draws++; return grid;
+    return {x,y};
 }
 function repaint() {
     if(stopped||!latest||animation) return;
@@ -373,14 +403,16 @@ try {
         if(packet.selection){receiveSelection(packet.selection);continue;}
         if(packet.paste_result) {surface.dataset.pasteResult=packet.paste_result;pastePending=packet.paste_result==="preview";}
         if(packet.link_result) surface.dataset.linkResult=packet.link_result;
+        if(packet.export_result) {surface.dataset.exportResult=packet.export_result;exportBusy=false;exportButton.disabled=false;restoreEditingFocus();}
         if(packet.notice) surfaceNote.textContent=packet.notice;
-        if(packet.paste_result||packet.link_result||packet.notice) continue;
+        if(packet.paste_result||packet.link_result||packet.export_result||packet.notice) continue;
         paint(packet);
     }
 } catch(e){send({kind:"error",message:String(e)});}
 finally {
     stopped=true;latest=null;observer.disconnect();pasteObserver.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
     for(const [target,event,callback,options] of bindings) target.removeEventListener(event,callback,options);
+    if(exportTask) await exportTask;
     if(pasteDialog.open) pasteDialog.close();
     cancelComposition();keyboard.blur();hideChrome();cancelDrag();selectionBusy=null;clearSelection();
     const before=sent,beforeDraws=draws,beforeZoom=zoom;

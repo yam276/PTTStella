@@ -22,7 +22,7 @@ REQUIRED = (
     'docs/architecture.md', 'docs/roadmap.md',
     'docs/dual-color.md', 'docs/development-harness.md',
     'docs/active/minimal-browser.md',
-    'tooling/check.py', 'tooling/test_check.py', 'tooling/desktop_input.py',
+    'tooling/check.py', 'tooling/test_check.py', 'tooling/desktop_input.py', 'tooling/inspect_png.ps1',
 )
 RESEARCH_PATHS = (
     'research', 'reverse-engineering', 'evidence', 'tools', '.local/evidence',
@@ -243,7 +243,7 @@ def run_core(root):
 
 
 def run_desktop(root):
-    if not (root / 'src/main.rs').is_file() or not (root / 'tooling/desktop_input.py').is_file() or not shutil.which('cargo'):
+    if any(not (root / path).is_file() for path in ('src/main.rs', 'tooling/desktop_input.py', 'tooling/inspect_png.ps1')) or not shutil.which('cargo'):
         return unavailable('desktop')
     if sys.platform != 'win32':
         return {'profile': 'desktop', 'status': 'not_ready', 'reason': 'Physical probe has only been verified on Windows.'}
@@ -272,7 +272,9 @@ def run_desktop(root):
                                        cwd=root, stdout=log, stderr=log,
                                        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             try:
-                input_report = desktop_input.run(port, process)
+                input_report = desktop_input.run(port, process, output)
+                if input_report.get('png_geometry_and_pixels') is not True:
+                    raise CheckFailure('independent PNG inspection did not run')
                 process.wait(timeout=15)
             finally:
                 if process.poll() is None:
@@ -281,7 +283,7 @@ def run_desktop(root):
         if process.returncode or not report_path.is_file():
             raise CheckFailure('desktop probe did not produce a successful report')
         report = json.loads(report_path.read_text(encoding='utf-8'))
-        required = ('arrow_input', 'enter_input', 'text_input', 'trusted_webview_input', 'selection_copy', 'ime_composition', 'url_open', 'paste_single', 'paste_confirm', 'paste_cancel', 'paste_rejected', 'loopback_input_roundtrip', 'closed_after_roundtrip', 'listeners_released', 'connection_worker_joined',
+        required = ('arrow_input', 'enter_input', 'text_input', 'trusted_webview_input', 'selection_copy', 'ime_composition', 'url_open', 'png_export', 'paste_single', 'paste_confirm', 'paste_cancel', 'paste_rejected', 'loopback_input_roundtrip', 'closed_after_roundtrip', 'listeners_released', 'connection_worker_joined',
                     'fills_body', 'ansi_colours', 'art_geometry', 'hover_controls', 'proportional_zoom')
         if report.get('status') != 'passed' or any(report.get(key) is not True for key in required):
             raise CheckFailure('desktop rendering/input/cleanup probe failed: ' + json.dumps(report))

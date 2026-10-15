@@ -8,7 +8,8 @@
 | uao-rs 0.1.0 | Big5-UAO 字元配對／輸入映射 | MIT；[上游](https://github.com/zenixls2/uao-rs)，其 README 記錄 MozTW UAO 來源 |
 | url 2.5.8／webbrowser 1.2.4 | HTTP／HTTPS 網址解析與使用系統瀏覽器開啟 | MIT OR Apache-2.0；[url](https://docs.rs/url/2.5.8/)、[webbrowser](https://docs.rs/webbrowser/1.2.4/) |
 | Dioxus 0.7.10 | Rust 桌面 UI 與系統 WebView | MIT OR Apache-2.0；[上游](https://github.com/DioxusLabs/dioxus) |
-| Tokio／base64 | 非同步橋接與合成畫面 probe 的 PNG 傳輸 | MIT；[Tokio](https://tokio.rs/)，MIT OR Apache-2.0；[base64](https://docs.rs/base64/) |
+| Tokio／base64 | 非同步橋接、PNG 匯出與合成畫面 probe 的傳輸 | MIT；[Tokio](https://tokio.rs/)，MIT OR Apache-2.0；[base64](https://docs.rs/base64/) |
+| rfd 0.17.2／tempfile 3.27.0 | 原生另存視窗與同目錄原子檔案替換 | MIT；[rfd](https://docs.rs/rfd/0.17.2/)，MIT OR Apache-2.0；[tempfile](https://docs.rs/tempfile/3.27.0/) |
 | tokio-tungstenite 0.28.0／futures-util | 單一 WebSocket 傳輸與序列化收送 | MIT；[tokio-tungstenite](https://docs.rs/tokio-tungstenite/0.28.0/)，MIT OR Apache-2.0；[futures-util](https://docs.rs/futures-util/) |
 | rustls 0.23／rustls-native-certs 0.8 | TLS、系統信任根與明確指定的 ring provider | Apache-2.0 OR ISC OR MIT；[rustls](https://docs.rs/rustls/0.23.46/)，MIT OR Apache-2.0 OR ISC；[native-certs](https://docs.rs/rustls-native-certs/) |
 

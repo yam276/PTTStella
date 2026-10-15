@@ -2,11 +2,12 @@ use base64::Engine;
 use dioxus::prelude::*;
 use pttstella::{
     connection::{Connection, Phase, View},
-    encoding,
+    encoding, export,
     input::{self, PreparedPaste},
     links::{self, Link},
     screen::{Frame, Screen},
     selection::{self, Selection},
+    storage,
 };
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::Arc};
@@ -32,6 +33,12 @@ struct PendingPaste {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum SurfaceEvent {
+    ExportPng {
+        generation: u64,
+        revision: u64,
+        png: String,
+        trusted: bool,
+    },
     OpenLink {
         generation: u64,
         revision: u64,
@@ -223,6 +230,7 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "zoom-in", "aria-label": "放大", "＋" }
                 button { id: "zoom-fit", "符合視窗" }
                 button { id: "select-all", "整頁選取" }
+                button { id: "export-png", "匯出 PNG" }
             }
             }
             section { class: "workspace",
@@ -299,6 +307,7 @@ async fn surface(
     let mut copy_checked = false;
     let mut composition_checked = false;
     let mut link_requests = 0;
+    let mut export_checked = false;
     let (mut paste_single, mut paste_confirm, mut paste_cancel, mut paste_rejected) =
         (false, false, false, 0);
     let mut copied_selection = None;
@@ -326,6 +335,7 @@ async fn surface(
             && copy_checked
             && composition_checked
             && link_requests == 1
+            && export_checked
             && paste_single
             && paste_confirm
             && paste_cancel
@@ -352,6 +362,40 @@ async fn surface(
         }
         tokio::select! {
             event = eval.recv::<SurfaceEvent>() => match event.map_err(|e| e.to_string())? {
+                SurfaceEvent::ExportPng { generation, revision, png, trusted } => {
+                    if stopping || !trusted { continue; }
+                    let result = (|| -> Result<Option<PathBuf>, String> {
+                        let encoded = png.strip_prefix("data:image/png;base64,").ok_or("PNG 格式不正確")?;
+                        if encoded.len() > export::MAX_BASE64_BYTES { return Err("PNG 超過匯出大小上限".into()); }
+                        let bytes = base64::engine::general_purpose::STANDARD.decode(encoded).map_err(|_| "PNG 編碼不正確")?;
+                        export::check_export_header(&bytes).map_err(str::to_owned)?;
+                        let path = if let Some(directory) = &probe {
+                            Some(directory.join("export.png"))
+                        } else {
+                            // Parent-owned synchronous dialog: no detached native dialog task.
+                            let window = dioxus::desktop::window();
+                            rfd::FileDialog::new().set_parent(window.window.as_ref())
+                                .set_title("匯出 PTT 畫面").add_filter("PNG", &["png"])
+                                .set_file_name("PTTStella.png").save_file()
+                        };
+                        if let Some(path) = &path {
+                            if !path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("png")) {
+                                return Err("請使用 .png 副檔名；尚未儲存".into());
+                            }
+                            storage::replace(path, &bytes)?;
+                        }
+                        Ok(path)
+                    })();
+                    let reply = match result {
+                        Ok(Some(_)) => {
+                            export_checked |= probe.is_some() && displayed.as_ref().is_some_and(|p| p.generation==generation && p.frame.revision==revision);
+                            serde_json::json!({"export_result":"saved","notice":"PNG 已儲存"})
+                        },
+                        Ok(None) => serde_json::json!({"export_result":"cancelled","notice":"未選擇儲存位置"}),
+                        Err(error) => serde_json::json!({"export_result":"failed","notice":error}),
+                    };
+                    eval.send(reply).map_err(|e| e.to_string())?;
+                },
                 SurfaceEvent::OpenLink { generation, revision, index, trusted } => {
                     if stopping || !trusted { continue; }
                     let link = displayed.as_ref()
@@ -518,9 +562,10 @@ async fn surface(
                         report["selection_copy"] = copy_checked.into();
                         report["ime_composition"] = composition_checked.into();
                         report["url_open"] = (link_requests == 1).into();
+                        report["png_export"] = export_checked.into();
                         report["paste_single"] = paste_single.into();report["paste_confirm"] = paste_confirm.into();
                         report["paste_cancel"] = paste_cancel.into();report["paste_rejected"] = (paste_rejected == 3).into();
-                        if !clean || !arrow_checked || enter_count != 2 || input_bytes != expected_input || !complete || !closed_checked || !copy_checked || !composition_checked || link_requests != 1 || !paste_single || !paste_confirm || !paste_cancel || paste_rejected != 3 { report["status"] = "failed".into(); }
+                        if !clean || !arrow_checked || enter_count != 2 || input_bytes != expected_input || !complete || !closed_checked || !copy_checked || !composition_checked || link_requests != 1 || !export_checked || !paste_single || !paste_confirm || !paste_cancel || paste_rejected != 3 { report["status"] = "failed".into(); }
                         let path = probe.as_ref().ok_or("missing probe directory")?;
                         std::fs::write(path.join("probe.json"), report.to_string()).map_err(|e| e.to_string())?;
                     }
