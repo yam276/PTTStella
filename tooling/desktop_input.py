@@ -9,6 +9,7 @@ import struct
 import subprocess
 import time
 from urllib.parse import urlsplit
+from pathlib import Path
 
 
 def set_clipboard_text(text):
@@ -179,7 +180,7 @@ class DevTools:
             time.sleep(.02)
 
 
-def run(port, process):
+def run(port, process, output=None):
     """No credentials, PTT traffic, arbitrary target selection, or OS-wide input."""
     deadline = time.monotonic() + 15
     address = None
@@ -244,6 +245,23 @@ def run(port, process):
             devtools.call('Input.dispatchKeyEvent', type=kind, key='c', code='KeyC', windowsVirtualKeyCode=67, modifiers=2)
         if not copied_text_matches('中'):
             raise ValueError('system clipboard did not contain the complete selected glyph')
+        before_export = devtools.evaluate('({width:document.getElementById("screen").width,height:document.getElementById("screen").height,left:document.querySelector(".workspace").scrollLeft,top:document.querySelector(".workspace").scrollTop})')
+        devtools.call('Input.dispatchMouseEvent', type='mouseMoved', x=20, y=2)
+        devtools.click('#export-png')
+        devtools.wait('document.getElementById("surface").dataset.exportResult === "saved"', 'PNG export did not complete')
+        after_export = devtools.evaluate('({width:document.getElementById("screen").width,height:document.getElementById("screen").height,left:document.querySelector(".workspace").scrollLeft,top:document.querySelector(".workspace").scrollTop})')
+        if before_export != after_export:
+            raise ValueError('PNG export changed visible geometry or scrolling')
+        if output is not None:
+            inspection = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+                                         '-File', str(Path(__file__).with_name('inspect_png.ps1')),
+                                         '-PngFilePath', str(Path(output)/'export.png')], capture_output=True, timeout=5,
+                                        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+            if inspection.returncode:
+                raise ValueError('PNG could not be independently decoded')
+            image = json.loads(inspection.stdout)
+            if image != {'width':960,'height':576,'samples':[[0,0,128,255],[128,0,128,255],[128,0,0,255],[0,0,0,255]]}:
+                raise ValueError('exported PNG pixels, background or cursor exclusion did not match')
         devtools.call('Input.dispatchMouseEvent', type='mouseMoved', x=20, y=2)
         devtools.click('#select-all')
         deadline = time.monotonic() + 5
@@ -344,6 +362,7 @@ def run(port, process):
                 'composition_commit_cancel_repeat': True,
                 'native_paste_preview_and_validation': True,
                 'url_click_drag_copy': True,
+                'png_geometry_and_pixels': output is not None,
                 'peer_close_visible': True,
                 'scope': 'isolated WebView2 browser input; no physical keyboard or PTT authentication'}
     finally:

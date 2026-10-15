@@ -81,6 +81,8 @@ Rust 唯一持有有版本的設定值，驗證後送給 renderer；一般縮放
 
 原生另存介面可用 lockfile 已有的 `rfd` 0.17.2，但直接使用時需列為直接依賴。優先評估 AsyncFileDialog，取消另存是正常結果；副檔名 filter 在各平台不保證相同行為，實際檔名與 PNG 格式仍須驗證。[rfd FileDialog](https://docs.rs/rfd/0.17.2/rfd/struct.FileDialog.html)
 
+實作選擇：rfd 0.17.2 的 Windows async adapter 以獨立 thread 等待原生對話框，沒有暴露取消 owner；第一版採有 parent 的同步 FileDialog，避免遺留脫離主視窗的對話框工作。選檔期間 WebView 更新暫停，連線 actor 仍由 Tokio 多執行緒管理。選擇檔案後驗證 .png 副檔名，再以同目錄暫存檔完整替換，不偷偷改寫使用者選定的檔名。
+
 不要直接搬用測試探針的 4 MiB base64 限制。既有最大 canvas 為 16M pixels，原始 RGBA 就是 64 MiB；PNG、base64、JSON 與字串傳輸還會增加記憶體。預設 960×576 的 RGBA 約 2.11 MiB，這是尺寸算式，不是峰值量測。實作應在編碼與 IPC 配置前建立大小預算，只允許一個匯出工作，取消或關窗後釋放 Blob、暫存資料與檔案工作。
 
 ## 實作順序與驗收

@@ -171,3 +171,17 @@ fn url_detection_does_not_open_a_destination_with_unmapped_cells() {
     screen.feed(b"https://example.com/\x81 ");
     assert!(pttstella::links::detect(&screen.frame()).is_empty());
 }
+
+#[test]
+fn png_bridge_budget_and_geometry_are_checked_before_saving() {
+    use pttstella::export::{MAX_PNG_BYTES, check_export_header};
+    let mut header = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
+    header.extend(960u32.to_be_bytes());
+    header.extend(576u32.to_be_bytes());
+    header.extend([8, 6, 0, 0, 0, 0, 0, 0, 0]);
+    assert!(check_export_header(&header).is_ok());
+    header[20..24].copy_from_slice(&575u32.to_be_bytes());
+    assert!(check_export_header(&header).is_err());
+    assert!(check_export_header(b"not an image").is_err());
+    assert!(check_export_header(&vec![0; MAX_PNG_BYTES + 1]).is_err());
+}
