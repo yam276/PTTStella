@@ -26,6 +26,8 @@ pub(super) async fn serve(listener: TcpListener, bytes: Vec<u8>) -> Result<(), S
             b"c",
             b"\xa4\xa4",
             b"\xa4\xa4",
+            b"\xa4\xa4",
+            b"A\rB",
             b"\x1b[A",
             b"\r",
             b"n",
@@ -34,9 +36,18 @@ pub(super) async fn serve(listener: TcpListener, bytes: Vec<u8>) -> Result<(), S
         for (index, expected) in expected.iter().enumerate() {
             match socket.next().await {
                 Some(Ok(Message::Binary(bytes))) if bytes.as_ref() == *expected => {}
-                _ => return Err(format!("unexpected loopback input at step {index}")),
+                _ => {
+                    let reason = format!("unexpected loopback input at step {index}");
+                    let _ = socket
+                        .close(Some(CloseFrame {
+                            code: CloseCode::Protocol,
+                            reason: reason.clone().into(),
+                        }))
+                        .await;
+                    return Err(reason);
+                }
             }
-            if index == 7 {
+            if index == 9 {
                 socket
                     .send(Message::Binary(
                         b"\x1b[2J\x1b[22;1HConfirm synthetic action [y/N] n"

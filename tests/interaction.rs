@@ -3,6 +3,45 @@ use pttstella::{
     selection::{self, Position, Selection, Span},
 };
 
+#[test]
+fn paste_line_endings_are_normalized_once_without_adding_enter() {
+    use pttstella::input::prepare_paste;
+    let single = prepare_paste("中").unwrap();
+    assert_eq!(single.bytes, [0xa4, 0xa4]);
+    assert_eq!(single.lines, 1);
+    let multi = prepare_paste("A\r\nB\rC\n").unwrap();
+    assert_eq!(multi.text, "A\nB\nC\n");
+    assert_eq!(multi.bytes, b"A\rB\rC\r");
+    assert_eq!(multi.lines, 4);
+}
+
+#[test]
+fn paste_limits_count_encoded_bytes_and_reject_the_complete_payload() {
+    use pttstella::input::{InputError, prepare_paste};
+    assert_eq!(prepare_paste(&"中".repeat(2048)).unwrap().bytes.len(), 4096);
+    assert_eq!(
+        prepare_paste(&"中".repeat(2049)).unwrap_err(),
+        InputError::TooLong
+    );
+    assert_eq!(
+        prepare_paste("valid🚀").unwrap_err(),
+        InputError::Unencodable
+    );
+}
+
+#[test]
+fn paste_rejects_control_sequences_but_preserves_tabs_and_text() {
+    use pttstella::input::{InputError, prepare_paste};
+    for ch in ['\0', '\x1b', '\x03', '\x7f', '\u{85}'] {
+        assert_eq!(
+            prepare_paste(&format!("A{ch}B")).unwrap_err(),
+            InputError::Control(ch)
+        );
+    }
+    assert_eq!(prepare_paste("A\tB").unwrap().bytes, b"A\tB");
+    assert_eq!(prepare_paste("").unwrap_err(), InputError::Empty);
+}
+
 fn range(a: (usize, usize), b: (usize, usize)) -> Selection {
     Selection::Range {
         anchor: Position { col: a.0, row: a.1 },

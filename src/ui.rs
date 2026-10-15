@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use pttstella::{
     connection::{Connection, Phase, View},
     encoding,
+    input::{self, PreparedPaste},
     screen::{Frame, Screen},
     selection::{self, Selection},
 };
@@ -21,9 +22,25 @@ struct Paint {
     generation: u64,
     probe: bool,
 }
+#[derive(Clone)]
+struct PendingPaste {
+    generation: u64,
+    prepared: PreparedPaste,
+}
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum SurfaceEvent {
+    Paste {
+        text: String,
+        generation: u64,
+        trusted: bool,
+    },
+    PasteConfirm {
+        trusted: bool,
+    },
+    PasteCancel {
+        trusted: bool,
+    },
     Select {
         generation: u64,
         revision: u64,
@@ -154,6 +171,16 @@ pub fn app(props: AppProps) -> Element {
     let phase = use_signal(|| Phase::Disconnected);
     let mut started = use_signal(|| false);
     let mut fatal = use_signal(|| false);
+    let pending_paste = use_signal(|| None::<PendingPaste>);
+    let paste_lines = pending_paste
+        .read()
+        .as_ref()
+        .map_or(0, |p| p.prepared.lines);
+    let paste_text = pending_paste
+        .read()
+        .as_ref()
+        .map(|p| p.prepared.text.clone())
+        .unwrap_or_default();
     let closing = use_hook(|| watch::channel(false));
     let close_sender = closing.0.clone();
     dioxus::desktop::use_wry_event_handler(move |event, _| {
@@ -196,7 +223,7 @@ pub fn app(props: AppProps) -> Element {
                         started.set(true);
                         let connection = connection.clone(); let probe = probe.clone(); let closing = closing.1.clone();
                         spawn(async move {
-                            let result = surface(connection.clone(), closing, probe, message, phase).await;
+                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste).await;
                             if let Err(error) = result {
                                 fatal.set(true);
                                 message.set(format!("{error}；請關閉並重新開啟視窗"));
@@ -209,8 +236,18 @@ pub fn app(props: AppProps) -> Element {
                     },
                     canvas { id: "screen", "aria-label": "PTT 畫面" }
                     div { id: "selection", "aria-hidden": "true" }
-                    output { id: "selection-note", role: "status" }
+                    output { id: "surface-note", role: "status" }
                     textarea { id: "keyboard", "aria-label": "PTT 鍵盤輸入", autocomplete: "off", spellcheck: "false" }
+                }
+            }
+            dialog { id: "paste-dialog", class: "paste-preview",
+                "data-active": if pending_paste.read().is_some() { "true" } else { "false" },
+                "aria-labelledby": "paste-title",
+                h2 { id: "paste-title", "貼上 {paste_lines} 行文字" }
+                pre { "{paste_text}" }
+                div { class: "dialog-actions",
+                    button { id: "paste-cancel", "取消" }
+                    button { id: "paste-send", "送出文字" }
                 }
             }
         }
@@ -223,6 +260,7 @@ async fn surface(
     probe: Option<PathBuf>,
     mut message: Signal<String>,
     mut phase: Signal<Phase>,
+    mut pending_paste: Signal<Option<PendingPaste>>,
 ) -> Result<(), String> {
     let mut receiver = connection.updates.clone();
     let mut eval = document::eval(include_str!("../assets/surface.js"));
@@ -251,6 +289,8 @@ async fn surface(
     let mut probe_started = false;
     let mut copy_checked = false;
     let mut composition_checked = false;
+    let (mut paste_single, mut paste_confirm, mut paste_cancel, mut paste_rejected) =
+        (false, false, false, 0);
     let mut copied_selection = None;
     let mut painted = (first.generation, first.frame.revision);
     let mut pending_report: Option<serde_json::Value> = None;
@@ -275,6 +315,10 @@ async fn surface(
             && closed_checked
             && copy_checked
             && composition_checked
+            && paste_single
+            && paste_confirm
+            && paste_cancel
+            && paste_rejected == 3
             && !stopping
         {
             eval.send(serde_json::json!({"stop":true}))
@@ -297,6 +341,52 @@ async fn surface(
         }
         tokio::select! {
             event = eval.recv::<SurfaceEvent>() => match event.map_err(|e| e.to_string())? {
+                SurfaceEvent::Paste { text, generation, trusted } => {
+                    if stopping { continue; }
+                    let result = input::prepare_paste(&text).map_err(|e| e.to_string()).and_then(|prepared| {
+                        let current = receiver.borrow();
+                        if current.phase != Phase::Connected || current.generation != generation {
+                            return Err("連線已變更；貼上未送出".into());
+                        }
+                        if prepared.lines > 1 {
+                            pending_paste.set(Some(PendingPaste { generation, prepared }));
+                            Ok(false)
+                        } else {
+                            paste_single |= probe.is_some() && trusted && prepared.text == "中";
+                            connection.input(generation, prepared.bytes).map(|()| true)
+                        }
+                    });
+                    let reply = match result {
+                        Ok(queued) => serde_json::json!({"paste_result":if queued {"queued"} else {"preview"}}),
+                        Err(error) => {
+                            if probe.is_some() && trusted { paste_rejected += 1; }
+                            serde_json::json!({"notice":error,"paste_result":"rejected"})
+                        },
+                    };
+                    eval.send(reply).map_err(|e| e.to_string())?;
+                },
+                SurfaceEvent::PasteCancel { trusted } => {
+                    paste_cancel |= probe.is_some() && trusted && pending_paste.read().as_ref().is_some_and(|p| p.prepared.text == "A\nB");
+                    pending_paste.set(None);
+                    eval.send(serde_json::json!({"paste_result":"cancelled"})).map_err(|e| e.to_string())?;
+                },
+                SurfaceEvent::PasteConfirm { trusted } => {
+                    let pending = pending_paste.write().take();
+                    if let Some(pending) = pending {
+                        let current = receiver.borrow();
+                        let result = if current.phase == Phase::Connected && current.generation == pending.generation {
+                            paste_confirm |= probe.is_some() && trusted && pending.prepared.text == "A\nB";
+                            connection.input(pending.generation, pending.prepared.bytes)
+                        } else { Err("連線已變更；貼上未送出".to_owned()) };
+                        let reply = match result {
+                            Ok(()) => serde_json::json!({"paste_result":"queued"}),
+                            Err(error) => serde_json::json!({"notice":error,"paste_result":"rejected"}),
+                        };
+                        eval.send(reply).map_err(|e| e.to_string())?;
+                    } else {
+                        eval.send(serde_json::json!({"paste_result":"cancelled"})).map_err(|e| e.to_string())?;
+                    }
+                },
                 SurfaceEvent::Select { generation, revision, request, selection } => {
                     let selected = displayed.as_ref()
                         .filter(|p| p.generation == generation && p.frame.revision == revision)
@@ -330,13 +420,18 @@ async fn surface(
                         return Err("unexpected probe input".into());
                     }
                     composition_checked |= composition_input && text == "中";
-                    let encoded = if text.len() > 4096 { Err("輸入長度超過限制".to_owned()) }
-                        else { encoding::encode(&text).map_err(|e| e.to_string()) };
+                    let encoded = input::encode(&text).map_err(|e| e.to_string());
                     let result = encoded.and_then(|bytes| {
                         if probe.is_some() { input_bytes.push(bytes.clone()); }
                         connection.input(generation, bytes)
                     });
-                    message.set(match result { Ok(()) => receiver.borrow().message.clone(), Err(error) => error });
+                    message.set(match result {
+                        Ok(()) => receiver.borrow().message.clone(),
+                        Err(error) => {
+                            eval.send(serde_json::json!({"notice":error})).map_err(|e| e.to_string())?;
+                            error
+                        },
+                    });
                 },
                 SurfaceEvent::Painted { revision, generation } => {
                     if in_flight != Some((generation, revision)) {
@@ -392,7 +487,9 @@ async fn surface(
                         report["closed_after_roundtrip"] = closed_checked.into();
                         report["selection_copy"] = copy_checked.into();
                         report["ime_composition"] = composition_checked.into();
-                        if !clean || !arrow_checked || enter_count != 2 || input_bytes != expected_input || !complete || !closed_checked || !copy_checked || !composition_checked { report["status"] = "failed".into(); }
+                        report["paste_single"] = paste_single.into();report["paste_confirm"] = paste_confirm.into();
+                        report["paste_cancel"] = paste_cancel.into();report["paste_rejected"] = (paste_rejected == 3).into();
+                        if !clean || !arrow_checked || enter_count != 2 || input_bytes != expected_input || !complete || !closed_checked || !copy_checked || !composition_checked || !paste_single || !paste_confirm || !paste_cancel || paste_rejected != 3 { report["status"] = "failed".into(); }
                         let path = probe.as_ref().ok_or("missing probe directory")?;
                         std::fs::write(path.join("probe.json"), report.to_string()).map_err(|e| e.to_string())?;
                     }
@@ -405,6 +502,9 @@ async fn surface(
             changed = receiver.changed() => {
                 changed.map_err(|e| e.to_string())?;
                 let view = receiver.borrow_and_update().clone();
+                if view.phase != Phase::Connected || pending_paste.read().as_ref().is_some_and(|p| p.generation != view.generation) {
+                    pending_paste.set(None);
+                }
                 phase.set(view.phase);
                 if last_status != view.message {
                     last_status = view.message.clone(); message.set(view.message);

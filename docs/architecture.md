@@ -18,6 +18,7 @@ manual keyboard input → session-owned send queue → connection
 | --- | --- |
 | terminal | byte/cell、ANSI、cursor、捲動／覆寫、樣式及 revision |
 | encoding | 明確來源的映射與反向輸入編碼；保留未映射／非法狀態 |
+| input | 共用編碼後 bytes 上限；貼上換行、控制字元與完整預檢；預覽保留正規化文字及相同送出 bytes |
 | render | 完整字形、固定幾何、左右樣式及 frame ID，不重解 raw stream |
 | transport／session | framing、收送、取消、斷線與 generation；不辨識文章／登入流程 |
 | UI | 連線控制、terminal surface、必要焦點／按鍵、顯示及可見錯誤 |

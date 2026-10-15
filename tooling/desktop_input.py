@@ -6,8 +6,19 @@ import json
 import os
 import socket
 import struct
+import subprocess
 import time
 from urllib.parse import urlsplit
+
+
+def set_clipboard_text(text):
+    # stdin carries synthetic UTF-8 data as base64; it is never shell source.
+    script = '$value=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Console]::In.ReadToEnd())); Set-Clipboard -Value $value'
+    result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-STA', '-Command', script],
+                            input=base64.b64encode(text.encode('utf-8')), capture_output=True, timeout=5,
+                            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+    if result.returncode:
+        raise ValueError('could not prepare synthetic clipboard data')
 
 
 def copied_text_matches(expected):
@@ -153,6 +164,20 @@ class DevTools:
         for kind in ('mousePressed', 'mouseReleased'):
             self.call('Input.dispatchMouseEvent', type=kind, **position, button='left', clickCount=1)
 
+    def shortcut(self, key):
+        self.call('Input.dispatchKeyEvent', type='keyDown', key='Control', code='ControlLeft', windowsVirtualKeyCode=17, modifiers=2)
+        for kind in ('keyDown', 'keyUp'):
+            self.call('Input.dispatchKeyEvent', type=kind, key=key, code='Key'+key.upper(),
+                      windowsVirtualKeyCode=ord(key.upper()), modifiers=2)
+        self.call('Input.dispatchKeyEvent', type='keyUp', key='Control', code='ControlLeft', windowsVirtualKeyCode=17, modifiers=0)
+
+    def wait(self, expression, reason):
+        deadline = time.monotonic() + 5
+        while not self.evaluate(expression):
+            if time.monotonic() >= deadline:
+                raise TimeoutError(reason)
+            time.sleep(.02)
+
 
 def run(port, process):
     """No credentials, PTT traffic, arbitrary target selection, or OS-wide input."""
@@ -241,6 +266,26 @@ def run(port, process):
         devtools.call('Input.insertText', text='中')
         # A new edit with identical text must not be discarded as a duplicate commit.
         devtools.call('Input.insertText', text='中')
+        set_clipboard_text('A\nB')
+        devtools.shortcut('v')
+        devtools.wait('document.getElementById("paste-dialog").open', 'multiline paste did not open a preview')
+        if devtools.evaluate('document.querySelector("#paste-dialog pre").textContent') != 'A\nB':
+            raise ValueError('paste preview changed the input text')
+        devtools.click('#paste-cancel')
+        devtools.wait('!document.getElementById("paste-dialog").open', 'cancelled paste preview did not close')
+        set_clipboard_text('中')
+        devtools.shortcut('v')
+        devtools.wait('document.getElementById("surface").dataset.pasteResult === "queued"', 'single-line paste was not queued')
+        set_clipboard_text('A\nB')
+        devtools.shortcut('v')
+        devtools.wait('document.getElementById("paste-dialog").open', 'confirmed paste preview did not open')
+        devtools.click('#paste-send')
+        devtools.wait('!document.getElementById("paste-dialog").open', 'confirmed paste preview did not close')
+        for text, expected in [('valid🚀', '無法以 Big5-UAO'), ('X'*4097, '超過 4096'), ('\x1b[31mX', '控制字元')]:
+            set_clipboard_text(text)
+            devtools.shortcut('v')
+            devtools.wait('document.getElementById("surface-note").textContent.includes('+json.dumps(expected)+')',
+                          'invalid paste was not rejected')
         previous = devtools.evaluate('document.getElementById("surface").dataset.revision')
         for key, code in (('ArrowUp', 38), ('Enter', 13)):
             for kind in ('keyDown', 'keyUp'):
@@ -268,7 +313,9 @@ def run(port, process):
                 break
             time.sleep(.02)
         else:
-            raise TimeoutError('peer close reason was not shown')
+            active = devtools.evaluate('document.activeElement?.id')
+            result = devtools.evaluate('document.getElementById("surface").dataset.pasteResult')
+            raise TimeoutError(f'peer close reason was not shown: {status!r}; focus={active!r}; paste={result!r}')
         devtools.call('Input.dispatchMouseEvent', type='mouseMoved', x=20, y=100)
         if devtools.evaluate('getComputedStyle(document.querySelector("header")).opacity') != '1':
             raise ValueError('peer close reason was hidden without hover')
@@ -279,6 +326,7 @@ def run(port, process):
                 'system_clipboard_copy': True,
                 'composition_host_position': True,
                 'composition_commit_cancel_repeat': True,
+                'native_paste_preview_and_validation': True,
                 'peer_close_visible': True,
                 'scope': 'isolated WebView2 browser input; no physical keyboard or PTT authentication'}
     finally:
