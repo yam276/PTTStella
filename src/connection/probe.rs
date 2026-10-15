@@ -19,13 +19,23 @@ pub(super) async fn serve(listener: TcpListener, bytes: Vec<u8>) -> Result<(), S
             .send(Message::Binary(bytes.into()))
             .await
             .map_err(|e| e.to_string())?;
-        let expected: &[&[u8]] = &[b"a", b"b", b"c", b"\xa4\xa4", b"\x1b[A", b"\r", b"n", b"\r"];
+        let expected: &[&[u8]] = &[
+            b"\x03",
+            b"a",
+            b"b",
+            b"c",
+            b"\xa4\xa4",
+            b"\x1b[A",
+            b"\r",
+            b"n",
+            b"\r",
+        ];
         for (index, expected) in expected.iter().enumerate() {
             match socket.next().await {
                 Some(Ok(Message::Binary(bytes))) if bytes.as_ref() == *expected => {}
                 _ => return Err(format!("unexpected loopback input at step {index}")),
             }
-            if index == 5 {
+            if index == 6 {
                 socket
                     .send(Message::Binary(
                         b"\x1b[2J\x1b[22;1HConfirm synthetic action [y/N] n"
