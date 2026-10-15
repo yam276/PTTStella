@@ -24,6 +24,7 @@ Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Ar
 - [文字與排版契約](docs/dual-color.md)
 - [架構](docs/architecture.md)
 - [開發 harness](docs/development-harness.md)
+- [後續操作功能研究](docs/feature-research.md)
 
 ```text
 python tooling/check.py docs
