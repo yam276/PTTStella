@@ -33,3 +33,5 @@ UI 正常掛載後只發起一次預設 PTT WSS 連線；合成 probe 只連本�
 目前單一路徑為 WSS → 有界 binary frame → Telnet framing → Screen。每則 WebSocket 訊息上限 64 KiB；不把文字 frame 猜成 Big5。輸入上限 4 KiB、佇列 64 項；無法編碼或佇列滿會顯示錯誤。連線、送出與關閉都有逾時，送出失敗不重試；連線 owner 管理並 join 握手／收送工作。UI 只允許一個尚未完成的繪製 frame，其餘保留最新狀態，不堆積 JS 繪製佇列。關閉視窗時先停止 listener 與連線工作，再關閉 host。
 
 滑鼠導覽只建立目前格線畫面的辨識與命中，不建立獨立文章模型、板名導航按鈕、登入腳本或背景追蹤。文字、排版與雙色字由核心與 renderer 實作；操作及視覺契約見 [滑鼠導覽](navigation.md)。
+
+`navigation` 唯一產生畫面種類、文章編號 hit region 與 typed intent 的按鍵計畫；UI 管理一筆 pointer 交易，網址優先，拖曳／取消／失焦／畫面或輸入版本變更即取消。UI 帶上 generation、revision、input epoch，Connection 在序列化送出處核對並從目前 Screen 重新規劃。鍵盤輸入會遞增 epoch；新終端 bytes 到達前暫停滑鼠導覽，避免用舊游標連續計算，但不阻擋手動送鍵。這是本機防重入機制，沒有把新 bytes 當成站端完成動作的保證。JS 不解析 BBS 文字，只消費 Rust 的結構化辨識與命中資料。

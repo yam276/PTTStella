@@ -393,6 +393,8 @@ def run(port, process, output=None):
             devtools.call('Input.dispatchKeyEvent', **args)
         for kind in ('keyDown', 'keyUp'):
             devtools.call('Input.dispatchKeyEvent', type=kind, key='Enter', code='Enter', windowsVirtualKeyCode=13)
+        import desktop_navigation
+        navigation_report=desktop_navigation.run(devtools,output)
         deadline = time.monotonic() + 8
         while time.monotonic() < deadline:
             notice = devtools.evaluate('document.getElementById("chrome").dataset.attention')
@@ -418,6 +420,7 @@ def run(port, process, output=None):
                 'url_click_drag_copy': True,
                 'png_geometry_and_pixels': output is not None,
                 'font_preview_save_cancel_validation': True,
+                'mouse_navigation': navigation_report,
                 'peer_close_visible': True,
                 'scope': 'isolated WebView2 browser input; no physical keyboard or PTT authentication'}
     finally:

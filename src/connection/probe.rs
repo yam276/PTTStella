@@ -14,7 +14,7 @@ pub(super) async fn serve(
     bytes: Vec<u8>,
     reload_settings: bool,
 ) -> Result<(), String> {
-    timeout(Duration::from_secs(35), async {
+    timeout(Duration::from_secs(60), async {
         let (stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
         let mut socket = tokio_tungstenite::accept_async(stream)
             .await
@@ -68,6 +68,7 @@ pub(super) async fn serve(
                     .map_err(|e| e.to_string())?;
             }
         }
+        navigation(&mut socket).await?;
         socket
             .send(Message::Binary(
                 b"\x1b[2J\x1b[1;1HINPUT ROUND TRIP COMPLETE".to_vec().into(),
@@ -88,4 +89,59 @@ pub(super) async fn serve(
     })
     .await
     .map_err(|_| "loopback probe timed out".to_owned())?
+}
+
+fn navigation_page(name: &str) -> Result<Vec<u8>, String> {
+    let pages: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/navigation.json"))
+            .map_err(|e| e.to_string())?;
+    crate::encoding::encode(
+        pages[name]
+            .as_str()
+            .ok_or("missing synthetic navigation page")?,
+    )
+    .map_err(|e| e.to_string())
+}
+async fn navigation<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result<(), String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    socket
+        .send(Message::Binary(navigation_page("list")?.into()))
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut shifted = navigation_page("list")?;
+    shifted.extend_from_slice(b"\x1b[5;1H \x1b[4;1H>\x1b[4;1H");
+    let mut next_item = navigation_page("list")?;
+    next_item.extend_from_slice(b"\x1b[5;1H \x1b[6;1H>\x1b[6;1H");
+    let stages: Vec<(&[u8], Vec<u8>)> = vec![
+        (b"\x1b[C", shifted),
+        (b"\x1b[B\x1b[B\r", navigation_page("reading_first")?),
+        (b"\x1b[6~", navigation_page("reading_middle")?),
+        (b"\x1b[5~", navigation_page("reading_first")?),
+        (b"\x1b[6~", navigation_page("reading_middle")?),
+        (b"\x1b[6~", navigation_page("reading_last")?),
+        (b"\x1b[D", navigation_page("list")?),
+        (b"\x1b[B", next_item),
+        (b"\x1b[A", navigation_page("list")?),
+        (
+            b"\x1b[C",
+            b"\x1b[2J\x1b[22;1HConfirm synthetic action [y/N]".to_vec(),
+        ),
+    ];
+    for (index, (expected, page)) in stages.into_iter().enumerate() {
+        if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected)
+        {
+            return Err(format!("unexpected navigation probe input at step {index}"));
+        }
+        socket
+            .send(Message::Binary(page.into()))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"\x1b[C")
+    {
+        return Err("unknown screen received unintended navigation input".into());
+    }
+    Ok(())
 }

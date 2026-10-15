@@ -3,12 +3,16 @@
 html, body { margin: 0; height: 100%; overflow: hidden; }
 main { height: 100vh; position: relative; }
 .chrome { position: absolute; inset: 0 0 auto; height: 8px; z-index: 2; }
-.chrome.open, .chrome[data-attention="true"], .chrome:focus-within { height: 36px; }
-header { height: 36px; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 0 8px; background: #161616; border-bottom: 1px solid #303030; font-size: 12px; opacity: 0; transform: translateY(-100%); pointer-events: none; }
+.chrome.open, .chrome[data-attention="true"], .chrome:focus-within { height: auto; }
+header { min-height: 36px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 4px 8px; background: #161616; border-bottom: 1px solid #303030; font-size: 12px; opacity: 0; transform: translateY(-100%); pointer-events: none; }
 .chrome.open header, .chrome[data-attention="true"] header, .chrome:focus-within header { opacity: 1; transform: none; pointer-events: auto; }
 .chrome[data-attention="true"] .status { color: #d08080; }
 .brand { font-weight: 500; }
-.status { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #909090; }
+.status { flex: 1; min-width: 100px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #909090; }
+#browse-controls { display: inline-flex; gap: 6px; }
+#browse-controls[hidden], #navigation-marker[hidden] { display: none; }
+#browse-hint { color: #a0a0a0; }
+#navigation-marker { position: absolute; pointer-events: none; border-bottom: 1px solid rgba(192,192,192,.75); background: transparent; }
 button { flex-shrink: 0; border: 1px solid #444; background: #222; color: #c0c0c0; padding: 2px 10px; border-radius: 2px; cursor: pointer; font: inherit; }
 button:disabled { opacity: .4; cursor: default; }
 .workspace { position: absolute; inset: 0; display: flex; overflow: auto; background: #000; }

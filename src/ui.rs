@@ -5,6 +5,7 @@ use pttstella::{
     encoding, export,
     input::{self, PreparedPaste},
     links::{self, Link},
+    navigation::{self, Context, Intent, Stamp},
     screen::{Frame, Screen},
     selection::{self, Selection},
     settings::{DisplaySettings, store::Store},
@@ -22,6 +23,10 @@ pub struct AppProps {
 
 #[derive(Clone, Serialize)]
 struct Paint {
+    input_epoch: u64,
+    input_pending: bool,
+    connected: bool,
+    navigation: Context,
     frame: Frame,
     generation: u64,
     probe: bool,
@@ -36,6 +41,11 @@ struct PendingPaste {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum SurfaceEvent {
+    Navigate {
+        stamp: Stamp,
+        intent: Intent,
+        trusted: bool,
+    },
     SettingsOpen {
         trusted: bool,
     },
@@ -253,6 +263,12 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "select-all", "整頁選取" }
                 button { id: "export-png", "匯出 PNG" }
                 button { id: "font-settings", "字型" }
+                div { id: "browse-controls", hidden: true,
+                    button { id: "browse-back", disabled: true, "返回" }
+                    button { id: "browse-previous", disabled: true, "上頁" }
+                    button { id: "browse-next", disabled: true, "下頁" }
+                }
+                span { id: "browse-hint" }
             }
             }
             section { class: "workspace",
@@ -275,6 +291,7 @@ pub fn app(props: AppProps) -> Element {
                     },
                     canvas { id: "screen", "aria-label": "PTT 畫面" }
                     div { id: "selection", "aria-hidden": "true" }
+                    div { id: "navigation-marker", "aria-hidden": "true", hidden: true }
                     output { id: "surface-note", role: "status" }
                     textarea { id: "keyboard", "aria-label": "PTT 鍵盤輸入", autocomplete: "off", spellcheck: "false" }
                 }
@@ -371,6 +388,7 @@ async fn surface(
     let mut link_requests = 0;
     let mut export_checked = false;
     let mut settings_saved = false;
+    let mut navigation_requests = 0;
     let (mut paste_single, mut paste_confirm, mut paste_cancel, mut paste_rejected) =
         (false, false, false, 0);
     let mut copied_selection = None;
@@ -399,6 +417,7 @@ async fn surface(
             && link_requests == 1
             && export_checked
             && settings_saved
+            && navigation_requests == 8
             && paste_single
             && paste_confirm
             && paste_cancel
@@ -429,6 +448,18 @@ async fn surface(
         }
         tokio::select! {
             event = eval.recv::<SurfaceEvent>() => match event.map_err(|e| e.to_string())? {
+                SurfaceEvent::Navigate {stamp,intent,trusted} => {
+                    if stopping || !trusted { continue; }
+                    let shown=displayed.as_ref().is_some_and(|p| p.generation==stamp.generation && p.frame.revision==stamp.revision && p.input_epoch==stamp.input_epoch);
+                    let result=if !shown {Err(navigation::Error::Stale.to_string())}
+                        else if pending_paste.read().is_some() {Err(navigation::Error::Unavailable.to_string())}
+                        else {connection.navigate(stamp,intent).await};
+                    if result.is_ok() && probe.is_some() {navigation_requests+=1;}
+                    eval.send(match result {
+                        Ok(())=>serde_json::json!({"navigation_result":"sent"}),
+                        Err(error)=>serde_json::json!({"navigation_result":"rejected","notice":error}),
+                    }).map_err(|e|e.to_string())?;
+                },
                 SurfaceEvent::SettingsOpen { trusted } => {
                     if stopping || !trusted { continue; }
                     eval.send(serde_json::json!({"settings_open": {
@@ -580,7 +611,11 @@ async fn surface(
                             && receiver.borrow().phase == Phase::Disconnected;
                     }
                     message.set(match connection.input(generation, bytes) {
-                        Ok(()) => receiver.borrow().message.clone(), Err(error) => error,
+                        Ok(()) => receiver.borrow().message.clone(),
+                        Err(error) => {
+                            eval.send(serde_json::json!({"notice":error,"input_result":"rejected"})).map_err(|e| e.to_string())?;
+                            error
+                        },
                     });
                 },
                 SurfaceEvent::Text { text, generation, trusted, composition_input } => {
@@ -597,7 +632,7 @@ async fn surface(
                     message.set(match result {
                         Ok(()) => receiver.borrow().message.clone(),
                         Err(error) => {
-                            eval.send(serde_json::json!({"notice":error})).map_err(|e| e.to_string())?;
+                            eval.send(serde_json::json!({"notice":error,"input_result":"rejected"})).map_err(|e| e.to_string())?;
                             error
                         },
                     });
@@ -643,7 +678,7 @@ async fn surface(
                         "settings_loaded":settings,
                         "font_fallback_per_glyph":"not measured"});
                     pending_report = Some(report);
-                    close_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_secs(25));
+                    close_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_secs(45));
                 },
                 SurfaceEvent::Stopped { clean } => {
                     connection.shutdown().await?;
@@ -660,6 +695,7 @@ async fn surface(
                         report["url_open"] = (link_requests == 1).into();
                         report["png_export"] = export_checked.into();
                         report["settings_saved"] = settings_saved.into();
+                        report["mouse_navigation"] = (navigation_requests==8).into();
                         report["paste_single"] = paste_single.into();report["paste_confirm"] = paste_confirm.into();
                         report["paste_cancel"] = paste_cancel.into();report["paste_rejected"] = (paste_rejected == 3).into();
                         if !clean || !probe_checked { report["status"] = "failed".into(); }
@@ -702,6 +738,10 @@ async fn surface(
 
 fn paint(view: &View, probe: bool, settings: &DisplaySettings) -> Paint {
     Paint {
+        input_epoch: view.input_epoch,
+        input_pending: view.input_pending,
+        connected: view.phase == Phase::Connected,
+        navigation: navigation::analyze(&view.frame),
         settings: settings.clone(),
         links: links::detect(&view.frame),
         frame: view.frame.clone(),
@@ -712,6 +752,10 @@ fn paint(view: &View, probe: bool, settings: &DisplaySettings) -> Paint {
 
 fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint {
     Paint {
+        input_epoch: 0,
+        input_pending: false,
+        connected: false,
+        navigation: navigation::analyze(frame),
         frame: frame.clone(),
         generation: 0,
         probe: false,

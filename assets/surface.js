@@ -7,6 +7,9 @@ const selectionLayer=document.getElementById("selection"), selectAll=document.ge
 const surfaceNote=document.getElementById("surface-note");
 const pasteDialog=document.getElementById("paste-dialog"), pasteSend=document.getElementById("paste-send"), pasteCancel=document.getElementById("paste-cancel");
 const exportButton=document.getElementById("export-png");
+const navigationMarker=document.getElementById("navigation-marker"),browseControls=document.getElementById("browse-controls");
+const browseBack=document.getElementById("browse-back"),browsePrevious=document.getElementById("browse-previous"),browseNext=document.getElementById("browse-next");
+const browseHint=document.getElementById("browse-hint");
 const fontButton=document.getElementById("font-settings"),fontDialog=document.getElementById("font-dialog");
 const fontPreview=document.getElementById("font-preview"),fontNote=document.getElementById("font-note");
 const fontPreset=document.getElementById("font-preset"),fontSave=document.getElementById("font-save"),fontCancel=document.getElementById("font-cancel");
@@ -31,8 +34,15 @@ let grid=null, dragging=null, selectionNext=null, selectionBusy=null, selectionC
 let selectionActive=false, selectionFingerprint=null;
 let pastePending=false;
 let hoveredLink=-1;
+let hoveredArticle=null,released=null,clickSequenceAction=false,navigationLocked=false,navigationRequest=false;
 let exportBusy=false, exportTask=null;
 const send=value=>{ sent++; dioxus.send(value); };
+const stamp=()=>({generation,revision,input_epoch:latest?.input_epoch??0});
+const sameStamp=(a,b)=>a.generation===b.generation&&a.revision===b.revision&&a.input_epoch===b.input_epoch;
+const blocked=()=>composing||pastePending||!!document.querySelector("dialog[open]");
+const canNavigate=()=>!stopped&&!!latest?.connected&&['article_list','article_reading'].includes(latest.navigation.kind)&&!latest.input_pending&&!navigationLocked&&!navigationRequest&&!blocked();
+function invalidateNavigation(){navigationLocked=true;released=null;cancelDrag();setHover(null);refreshNavigation();}
+function sendInput(value){invalidateNavigation();send(value);}
 const keys={Enter:[13],Backspace:[8],Tab:[9],Escape:[27],ArrowUp:[27,91,65],ArrowDown:[27,91,66],
     ArrowRight:[27,91,67],ArrowLeft:[27,91,68],Home:[27,91,72],End:[27,91,70],
     PageUp:[27,91,53,126],PageDown:[27,91,54,126],Delete:[27,91,51,126]};
@@ -48,7 +58,7 @@ function keydown(e) {
     }
     let bytes=keys[e.key];
     if(e.ctrlKey&&/^[a-z]$/i.test(e.key)) bytes=[e.key.toUpperCase().charCodeAt(0)&31];
-    if(bytes) { clearSelection(); e.preventDefault(); send({kind:"key",bytes,generation,trusted:e.isTrusted}); }
+    if(bytes) { clearSelection(); e.preventDefault(); sendInput({kind:"key",bytes,generation,trusted:e.isTrusted}); }
 }
 function input(e) {
     if(pastePending) {keyboard.value="";return;}
@@ -60,7 +70,7 @@ function input(e) {
     // A trailing input for an already committed composition belongs to that edit,
     // while a new beforeinput identifies a new edit even when its text is equal.
     if(beforeEdit?.composition) {beforeEdit=null;return;}
-    if(text) { clearSelection(); send({kind:"text",text,generation,trusted:e.isTrusted}); }
+    if(text) { clearSelection(); sendInput({kind:"text",text,generation,trusted:e.isTrusted}); }
 }
 function beforeinput(e) {
     beforeEdit={composition:composing||e.isComposing||/Composition/.test(e.inputType||"")};
@@ -69,16 +79,19 @@ function compositionstart(e) {
     clearSelection();composing=true;
     composition={generation,startTrusted:e.isTrusted,editTrusted:false,editText:null};
     keyboard.classList.add("composing");positionKeyboard();
+    cancelDrag();released=null;setHover(null);refreshNavigation();
 }
 function compositionend(e) {
     const finished=composition;
     composing=false;composition=null;keyboard.classList.remove("composing");keyboard.value="";positionKeyboard();
-    if(finished&&e.data) send({kind:"text",text:e.data,generation:finished.generation,trusted:e.isTrusted,
+    if(finished&&e.data) sendInput({kind:"text",text:e.data,generation:finished.generation,trusted:e.isTrusted,
         composition_input:finished.startTrusted&&finished.editTrusted&&finished.editText===e.data});
+    refreshNavigation();
 }
 function cancelComposition() {
     // Late composition input is ignored until a fresh beforeinput starts an edit.
     composition=null;composing=false;beforeEdit={composition:true};keyboard.classList.remove("composing");keyboard.value="";positionKeyboard();
+    refreshNavigation();
 }
 function positionKeyboard() {
     if(!grid||!latest) return;
@@ -91,15 +104,18 @@ function positionKeyboard() {
 function focus() { if(document.activeElement!==keyboard) keyboard.focus({preventScroll:true}); }
 function restoreEditingFocus(){keyboard.blur();focus();}
 function pointerdown(e) {
-    if(e.button!==0) return;
+    if(e.button!==0||!e.isPrimary||dragging) return;
+    released=null;
+    if(blocked()) return;
     const bounds=viewport.getBoundingClientRect();
     if(e.clientX>=bounds.left+viewport.clientWidth || e.clientY>=bounds.top+viewport.clientHeight) return;
     // Prevent the scroll container's default focus step from overriding ours.
     e.preventDefault(); focus(); clearSelection();
     const point=cellAt(e,false);
     if(point&&!composing) {
-        dragging={anchor:point,x:e.clientX,y:e.clientY,moved:false,pointer:e.pointerId,link:linkAt(point)};
+        dragging={anchor:point,x:e.clientX,y:e.clientY,moved:false,pointer:e.pointerId,hit:hitAt(point),stamp:stamp()};
         viewport.setPointerCapture(e.pointerId);
+        surface.dataset.pointerId=String(e.pointerId);surface.dataset.pointerActive="true";
     }
 }
 function cellAt(e,clamp) {
@@ -111,25 +127,37 @@ function cellAt(e,clamp) {
     return {col:locate(px,latest.frame.cols,grid.x),row:locate(py,latest.frame.rows,grid.y)};
 }
 function pointermove(e) {
-    if(!dragging) {setLinkHover(linkAt(cellAt(e,false)));return;}
+    if(dragging&&e.pointerId!==dragging.pointer) return;
+    if(!dragging) {setHover(cellAt(e,false));return;}
     dragging.moved ||= Math.hypot(e.clientX-dragging.x,e.clientY-dragging.y)>3;
     if(dragging.moved) requestSelection({mode:"range",anchor:dragging.anchor,focus:cellAt(e,true)});
 }
 function pointerup(e) {
-    if(!dragging) return;
+    if(!dragging||e.pointerId!==dragging.pointer) return;
     pointermove(e);
-    if(!dragging.moved&&dragging.link>=0&&dragging.link===linkAt(cellAt(e,false))) {
-        send({kind:"open_link",generation,revision,index:dragging.link,trusted:e.isTrusted});
+    const hit=hitAt(cellAt(e,false));
+    if(!dragging.moved&&!blocked()&&sameStamp(dragging.stamp,stamp())&&JSON.stringify(dragging.hit)===JSON.stringify(hit)) {
+        released={hit,stamp:dragging.stamp};
     }
     dragging=null;
+    surface.dataset.pointerActive="false";
     if(viewport.hasPointerCapture(e.pointerId)) viewport.releasePointerCapture(e.pointerId);
+}
+function click(e) {
+    if(e.button!==0||e.detail>1) return;
+    const action=released;released=null;clickSequenceAction=!!action?.hit;
+    if(!action?.hit||blocked()||!sameStamp(action.stamp,stamp())) return;
+    if(action.hit.kind==="link") send({kind:"open_link",generation,revision,index:action.hit.index,trusted:e.isTrusted});
+    else navigate({action:"open",row:action.hit.row},e);
 }
 function cancelDrag() {
     if(dragging&&viewport.hasPointerCapture(dragging.pointer)) viewport.releasePointerCapture(dragging.pointer);
     dragging=null;
+    surface.dataset.pointerActive="false";
 }
-function pointercancel(){cancelDrag();clearSelection();}
-function lostcapture(){dragging=null;}
+function pointercancel(){released=null;cancelDrag();clearSelection();}
+function deactivate(){released=null;cancelDrag();setHover(null);cancelComposition();}
+function lostcapture(){if(dragging){dragging=null;released=null;surface.dataset.pointerActive="false";}}
 function hasSelection(){return selectionActive;}
 function clearSelection() {
     selectionActive=false;selectionFingerprint=null;selectionNext=null;selectionCache=null;selectionLayer.replaceChildren();
@@ -137,6 +165,7 @@ function clearSelection() {
     delete surface.dataset.selectionReady;
 }
 function requestSelection(selection) {
+    setHover(null);
     const fingerprint=JSON.stringify({generation,revision,selection});
     if(fingerprint===selectionFingerprint) return;
     selectionFingerprint=fingerprint;selectionActive=true;
@@ -180,20 +209,56 @@ function copy(e) {
     } catch(_) { surfaceNote.textContent="無法寫入剪貼簿，請重試"; }
 }
 function doubleclick(e) {
-    const point=cellAt(e,false);if(point&&!composing) requestSelection({mode:"line",row:point.row});
+    if(clickSequenceAction||blocked()) return;
+    const point=cellAt(e,false);if(point) requestSelection({mode:"line",row:point.row});
 }
 function selectPage(){if(latest&&!composing){requestSelection({mode:"all"});focus();}}
 function linkAt(point) {
     if(!point||!latest) return -1;
     return latest.links.findIndex(link=>link.row===point.row&&link.start<=point.col&&point.col<link.end);
 }
-function setLinkHover(index,redraw=true) {
-    if(index===hoveredLink) return;
-    hoveredLink=index;canvas.style.cursor=index>=0?"pointer":"default";
-    canvas.title=index>=0?latest.links[index].url+"\n點擊開啟；右鍵選取後可複製":"";
-    if(redraw&&latest) draw(latest);
+function hitAt(point) {
+    if(!point||blocked()||dragging?.moved) return null;
+    const index=linkAt(point);if(index>=0) return {kind:"link",index};
+    if(!canNavigate()||latest.navigation.kind!=="article_list") return null;
+    const article=latest.navigation.articles.find(a=>a.row===point.row&&a.start<=point.col&&point.col<a.end);
+    return article?{kind:"article",row:article.row}:null;
 }
-const leaveLink=()=>setLinkHover(-1);
+function setHover(point,redraw=true) {
+    const hit=hitAt(point),index=hit?.kind==="link"?hit.index:-1;
+    const changed=index!==hoveredLink;hoveredLink=index;
+    hoveredArticle=hit?.kind==="article"?latest.navigation.articles.find(a=>a.row===hit.row):null;
+    canvas.style.cursor=hit?"pointer":"default";
+    canvas.title=index>=0?latest.links[index].url+"\n點擊開啟；右鍵選取後可複製":hoveredArticle?"點擊編號開啟文章；拖曳可選字":"";
+    if(changed&&redraw&&latest) draw(latest);else drawNavigationMarker();
+}
+function drawNavigationMarker() {
+    navigationMarker.hidden=!hoveredArticle||!grid||!canNavigate();
+    if(navigationMarker.hidden) {delete navigationMarker.dataset.row;return;}
+    const {row,start,end}=hoveredArticle;navigationMarker.dataset.row=String(row);
+    Object.assign(navigationMarker.style,{left:grid.x(start)/grid.ratio+"px",top:grid.y(row)/grid.ratio+"px",
+        width:(grid.x(end)-grid.x(start))/grid.ratio+"px",height:(grid.y(row+1)-grid.y(row))/grid.ratio+"px"});
+}
+function refreshNavigation() {
+    const context=latest?.navigation,ready=canNavigate();
+    surface.dataset.navigation=context?.kind||"unknown";surface.dataset.navigationReady=String(ready);
+    surface.dataset.readingFirst=String(context?.first_line??0);
+    browseControls.hidden=context?.kind!=="article_reading";
+    browseBack.disabled=!ready||context?.kind!=="article_reading";
+    browsePrevious.disabled=browseBack.disabled||context.first_line===1;
+    browseNext.disabled=browseBack.disabled||context.percent===100;
+    browseHint.textContent=!latest?.connected?"":latest.input_pending||navigationLocked||navigationRequest?"等待畫面更新":
+        context?.kind==="article_list"?"點編號開啟 · 拖曳選字":context?.kind==="article_reading"?"滾輪翻頁 · Ctrl＋滾輪縮放":"";
+    drawNavigationMarker();
+}
+function navigate(intent,e) {
+    if(!canNavigate()||dragging?.moved) return;
+    if(intent.action==="previous_page"&&latest.navigation.first_line===1||intent.action==="next_page"&&latest.navigation.percent===100) return;
+    clearSelection();navigationRequest=true;navigationLocked=true;setHover(null);refreshNavigation();
+    surface.dataset.navigationResult="pending";send({kind:"navigate",stamp:stamp(),intent,trusted:e.isTrusted});focus();
+}
+const browseReturn=e=>navigate({action:"back"},e),browseUp=e=>navigate({action:"previous_page"},e),browseDown=e=>navigate({action:"next_page"},e);
+const leaveLink=()=>setHover(null);
 function selectLink(e) {
     const index=linkAt(cellAt(e,false));
     if(index<0||composing) return;
@@ -209,9 +274,9 @@ function paste(e) {
     cancelComposition();cancelDrag();clearSelection();
     if(text===undefined) {surfaceNote.textContent="此環境無法讀取貼上的文字";return;}
     if(text.length>16384) {surfaceNote.textContent="貼上文字過長；整段未送出";return;}
-    pastePending=true;surface.dataset.pasteResult="pending";send({kind:"paste",text,generation,trusted:e.isTrusted});
+    pastePending=true;surface.dataset.pasteResult="pending";sendInput({kind:"paste",text,generation,trusted:e.isTrusted});
 }
-function confirmPaste(e){send({kind:"paste_confirm",trusted:e.isTrusted});}
+function confirmPaste(e){sendInput({kind:"paste_confirm",trusted:e.isTrusted});}
 function cancelPaste(e){e.preventDefault();send({kind:"paste_cancel",trusted:e.isTrusted});}
 function openFonts(e){send({kind:"settings_open",trusted:e.isTrusted});}
 function fillFonts(values) {
@@ -236,6 +301,7 @@ function closeFonts(e) {
     e?.preventDefault();if(fontSaving) return;
     clearTimeout(fontTimer);fontTimer=0;fontRequest++;fontPreviewNext=null;
     fontDialog.close();restoreEditingFocus();
+    refreshNavigation();
 }
 function saveFonts(e) {
     if(fontSaving) return;
@@ -247,10 +313,11 @@ const pasteObserver=new MutationObserver(()=>{
         cancelComposition();cancelDrag();clearSelection();
         if(!pasteDialog.open) pasteDialog.showModal();
         pasteCancel.focus();
+        refreshNavigation();
     } else if(pasteDialog.open) {
         pasteDialog.close();pastePending=false;
         // Restore the editing host, not just the DOM activeElement, after a modal.
-        restoreEditingFocus();
+        restoreEditingFocus();refreshNavigation();
     }
 });
 pasteObserver.observe(pasteDialog,{attributes:true,attributeFilter:["data-active"]});
@@ -282,7 +349,16 @@ function zoomTo(value) {
     viewport.scrollLeft=Math.max(0,(surface.offsetWidth-viewport.clientWidth)/2);
     viewport.scrollTop=Math.max(0,(surface.offsetHeight-viewport.clientHeight)/2); focus();
 }
-function wheel(e) { if(e.ctrlKey) { e.preventDefault(); zoomTo(zoom+(e.deltaY<0?.25:-.25)); } }
+function wheel(e) {
+    if(!e.deltaY||e.altKey||e.metaKey||e.shiftKey) return;
+    if(e.ctrlKey) {e.preventDefault();zoomTo(zoom+(e.deltaY<0?.25:-.25));return;}
+    if(blocked()||dragging||hasSelection()||viewport.scrollWidth>viewport.clientWidth+1||viewport.scrollHeight>viewport.clientHeight+1) return;
+    const kind=latest?.navigation.kind;
+    if(!latest?.connected||!['article_list','article_reading'].includes(kind)) return;
+    e.preventDefault();
+    const action=kind==="article_reading"?(e.deltaY<0?"previous_page":"next_page"):(e.deltaY<0?"previous_item":"next_item");
+    navigate({action},e);
+}
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
 const bindings=[
     [keyboard,"keydown",keydown],[keyboard,"input",input],
@@ -291,17 +367,19 @@ const bindings=[
     [keyboard,"compositionstart",compositionstart],[keyboard,"compositionend",compositionend],
     [keyboard,"paste",paste],[viewport,"pointerdown",pointerdown],
     [viewport,"pointermove",pointermove],[viewport,"pointerup",pointerup],
+    [viewport,"click",click],[viewport,"dblclick",doubleclick],
     [viewport,"pointercancel",pointercancel],[viewport,"lostpointercapture",lostcapture],
-    [canvas,"dblclick",doubleclick],[selectAll,"click",selectPage],[document,"copy",copy],
+    [selectAll,"click",selectPage],[document,"copy",copy],
     [canvas,"contextmenu",selectLink],[canvas,"pointerleave",leaveLink],
     [pasteSend,"click",confirmPaste],[pasteCancel,"click",cancelPaste],[pasteDialog,"cancel",cancelPaste],
     [exportButton,"click",exportScreen],
+    [browseBack,"click",browseReturn],[browsePrevious,"click",browseUp],[browseNext,"click",browseDown],
     [fontButton,"click",openFonts],[fontPreset,"change",chooseFontPreset],
     ...Object.values(fontFields).map(field=>[field,"input",editFont]),
     [fontDefaults,"click",resetFonts],[fontCancel,"click",closeFonts],[fontDialog,"cancel",closeFonts],[fontSave,"click",saveFonts],
     [chrome,"pointerenter",showChrome],[chrome,"pointerleave",hideChrome],
     [plus,"click",zoomIn],[minus,"click",zoomOut],[fit,"click",zoomFit],
-    [viewport,"wheel",wheel,{passive:false}],[window,"resize",repaint],[window,"focus",activate],
+    [viewport,"wheel",wheel,{passive:false}],[window,"resize",repaint],[window,"focus",activate],[window,"blur",deactivate],
 ];
 for(const [target,event,callback,options] of bindings) target.addEventListener(event,callback,options);
 function colours(style) {
@@ -343,7 +421,7 @@ function draw(packet) {
     surface.style.width=canvas.width/ratio+"px"; surface.style.height=canvas.height/ratio+"px";
     level.textContent=Math.round(physical/ratio/fitting*100)+"%";
     grid={...render(canvas,packet,{cursor:true,hovered:hoveredLink}),ratio};
-    positionKeyboard();drawSelection();draws++;return grid;
+    positionKeyboard();drawSelection();drawNavigationMarker();draws++;return grid;
 }
 function render(target,packet,{cursor=true,hovered=-1}={}) {
     const frame=packet.frame,width=frame.cols*12,height=frame.rows*24;
@@ -430,14 +508,17 @@ function probe(packet,geometry) {
 async function paint(packet) {
     if(packet.generation<generation||(packet.generation===generation&&packet.frame.revision<revision)) return;
     await loadFonts(packet.settings);
-    if(packet.generation!==generation||packet.frame.revision!==revision) {clearSelection();cancelDrag();setLinkHover(-1,false);}
+    const changed=!sameStamp(stamp(),{generation:packet.generation,revision:packet.frame.revision,input_epoch:packet.input_epoch});
+    if(changed) {released=null;clearSelection();cancelDrag();setHover(null,false);navigationLocked=false;}
     if(packet.generation!==generation){
         pastePending=false;cancelComposition();focus();
     }
     generation=packet.generation;revision=packet.frame.revision;latest=packet;
+    refreshNavigation();
     const geometry=draw(packet);send({kind:"painted",revision,generation});if(packet.probe) probe(packet,geometry);
     surface.dataset.revision=String(revision);
     surface.dataset.fontSize=String(packet.settings.font_size);surface.dataset.baseline=String(packet.settings.baseline);
+    surface.dataset.cursorRow=String(packet.frame.cursor[1]);surface.dataset.inputEpoch=String(packet.input_epoch);
 }
 focus();
 try {
@@ -446,6 +527,7 @@ try {
             fontDraft=packet.settings_open;fillFonts(fontDraft.values);fontPreset.value="custom";
             fontNote.textContent=fontDraft.warning||"";cancelComposition();cancelDrag();clearSelection();
             if(!fontDialog.open) fontDialog.showModal();
+            released=null;cancelDrag();setHover(null);refreshNavigation();
             await loadFonts(fontDraft.values);render(fontPreview,fontDraft.sample,{cursor:false});
             fontFields.ascii_font.focus();continue;
         }
@@ -463,11 +545,15 @@ try {
             if(packet.settings_saved) closeFonts();
         }
         if(packet.selection){receiveSelection(packet.selection);continue;}
-        if(packet.paste_result) {surface.dataset.pasteResult=packet.paste_result;pastePending=packet.paste_result==="preview";}
+        if(packet.paste_result) {surface.dataset.pasteResult=packet.paste_result;pastePending=packet.paste_result==="preview";
+            if(["cancelled","rejected"].includes(packet.paste_result)) navigationLocked=false;refreshNavigation();}
+        if(packet.input_result==="rejected") {navigationLocked=false;refreshNavigation();}
+        if(packet.navigation_result) {navigationRequest=false;surface.dataset.navigationResult=packet.navigation_result;
+            if(packet.navigation_result==="rejected") navigationLocked=false;refreshNavigation();}
         if(packet.link_result) surface.dataset.linkResult=packet.link_result;
         if(packet.export_result) {surface.dataset.exportResult=packet.export_result;exportBusy=false;exportButton.disabled=false;restoreEditingFocus();}
         if(packet.notice) (fontDialog.open?fontNote:surfaceNote).textContent=packet.notice;
-        if(packet.paste_result||packet.link_result||packet.export_result||packet.notice) continue;
+        if(packet.paste_result||packet.link_result||packet.export_result||packet.notice||packet.navigation_result||packet.input_result) continue;
         await paint(packet);
     }
 } catch(e){send({kind:"error",message:String(e)});}
@@ -478,6 +564,7 @@ finally {
     if(exportTask) await exportTask;
     if(pasteDialog.open) pasteDialog.close();
     if(fontDialog.open) fontDialog.close();
+    setHover(null);refreshNavigation();
     cancelComposition();keyboard.blur();hideChrome();cancelDrag();selectionBusy=null;clearSelection();
     const before=sent,beforeDraws=draws,beforeZoom=zoom;
     keyboard.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowUp",bubbles:true}));
@@ -485,6 +572,7 @@ finally {
     surface.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true}));window.dispatchEvent(new Event("resize"));plus.click();
     chrome.dispatchEvent(new PointerEvent("pointerenter"));
     fontButton.click();fontFields.font_size.dispatchEvent(new InputEvent("input",{bubbles:true}));
+    browseNext.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     send({kind:"stopped",clean:sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
         &&fontTimer===0&&!fontDialog.open&&!chrome.classList.contains("open")&&document.activeElement!==keyboard});
 }

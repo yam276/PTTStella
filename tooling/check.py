@@ -243,7 +243,7 @@ def run_core(root):
 
 
 def run_desktop(root):
-    if any(not (root / path).is_file() for path in ('src/main.rs', 'tooling/desktop_input.py', 'tooling/inspect_png.ps1')) or not shutil.which('cargo'):
+    if any(not (root / path).is_file() for path in ('src/main.rs', 'tooling/desktop_input.py', 'tooling/desktop_navigation.py', 'tooling/inspect_png.ps1')) or not shutil.which('cargo'):
         return unavailable('desktop')
     if sys.platform != 'win32':
         return {'profile': 'desktop', 'status': 'not_ready', 'reason': 'Physical probe has only been verified on Windows.'}
@@ -280,6 +280,8 @@ def run_desktop(root):
                     raise CheckFailure('independent PNG inspection did not run')
                 if input_report.get('font_preview_save_cancel_validation') is not True:
                     raise CheckFailure('native settings interaction did not run')
+                if input_report.get('mouse_navigation',{}).get('status') != 'passed':
+                    raise CheckFailure('native navigation interaction did not run')
                 process.wait(timeout=15)
             finally:
                 if process.poll() is None:
@@ -288,7 +290,7 @@ def run_desktop(root):
         if process.returncode or not report_path.is_file():
             raise CheckFailure('desktop probe did not produce a successful report')
         report = json.loads(report_path.read_text(encoding='utf-8'))
-        required = ('arrow_input', 'enter_input', 'text_input', 'trusted_webview_input', 'selection_copy', 'ime_composition', 'url_open', 'png_export', 'settings_saved', 'paste_single', 'paste_confirm', 'paste_cancel', 'paste_rejected', 'loopback_input_roundtrip', 'closed_after_roundtrip', 'listeners_released', 'connection_worker_joined',
+        required = ('arrow_input', 'enter_input', 'text_input', 'trusted_webview_input', 'selection_copy', 'ime_composition', 'url_open', 'png_export', 'settings_saved', 'mouse_navigation', 'paste_single', 'paste_confirm', 'paste_cancel', 'paste_rejected', 'loopback_input_roundtrip', 'closed_after_roundtrip', 'listeners_released', 'connection_worker_joined',
                     'fills_body', 'ansi_colours', 'art_geometry', 'hover_controls', 'proportional_zoom')
         if report.get('status') != 'passed' or any(report.get(key) is not True for key in required):
             raise CheckFailure('desktop rendering/input/cleanup probe failed: ' + json.dumps(report))

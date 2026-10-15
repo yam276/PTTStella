@@ -39,6 +39,8 @@ PNG gate 點擊真正匯出按鈕，以相同 renderer 畫出離屏快照，prob
 
 production Connection 的導覽案例以 loopback WebSocket 比對實際 bytes：鍵盤先入列後的舊點擊、等待更新時的重複點擊、翻頁邊界、過期 frame／session、未完成控制碼及已取消的排隊請求均不得混入額外輸入。
 
+`tooling/desktop_navigation.py` 接續同一個真實 Dioxus probe，以 trusted pointer／wheel 驗證編號點擊、標題雙擊／拖曳、鍵盤與畫面更新時取消 held click、原生 lostpointercapture、翻頁按鈕、列表移動及閱讀邊界。本機服務端逐筆比對 bytes，組字／dialog／未知畫面、雙擊延續與放大後本機捲動不能夾帶額外輸入。hover 的獨立細底線另外驗證樣式與 Canvas 逐像素不變，保留列表及閱讀工具列合成截圖。此流程不代表實站文章或實體滑鼠／IME 已驗證。
+
 字型 gate 以實際表單輸入驗證預覽／取消不改主畫面或檔案、保存後修改字形像素、無效值拒絕，以及恢復預設僅預覽。第二個應用程序讀取第一個程序寫出的設定，畫面逐像素相同才通過；probe 設定只在 target/verification/desktop，測試開始只清除該路徑下的合成設定。Rust 案例另涵蓋損壞／超量檔案、備份、無效值與備份寫入失敗。系統字型 fallback、跨 DPI 與 macOS／Linux 的實機結果不包含在此驗證。
 
 ANSI 調色盤以合成完整方塊的實際 RGB 檢查，與獨立 expected 比對；不以文字反鋸齒的最常見顏色推定色值。中文字形仍另測左右紅／綠筆畫與藍／紫背景。
