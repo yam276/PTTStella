@@ -2,7 +2,7 @@
 
 滑鼠操作沿用固定 80×24 格線。畫面辨識與導覽計畫由 Rust 唯一管理；UI 只消費已辨識的內容與命中區域，不解析文章文字，也不增加 shell／PTY。
 
-目前完成：純 Rust 畫面辨識與輸入計畫、12 個合成正反例，以及 production Connection 的版本／輸入競態往返；滑鼠 UI 接續實作中。
+目前完成：純 Rust 畫面辨識與輸入計畫、12 個合成正反例、production Connection 的版本／輸入競態往返，以及 Windows Dioxus／WebView2 的真實 pointer／wheel 往返。實站登入後與其他平台尚未驗證。
 
 ## 範圍與識別
 
@@ -15,7 +15,7 @@
 ## 互動與視覺
 
 - 點文章編號區開啟該列，標題區保留拖曳與雙擊整行選字。編號只在 hover 加細底線、pointer 與文字提示，不重畫整列背景、不發光或動畫。
-- 網址與文章編號使用同一個 pointer 交易擁有者，網址優先；拖曳、取消與失去 capture 不發出導覽。
+- 網址與文章編號使用同一個 pointer 交易擁有者，網址優先；拖曳、取消、失焦與失去 capture 不發出導覽。雙擊編號的延續事件不會再開啟一次或選中新頁面。
 - 已辨識閱讀畫面在既有 hover 工具列提供返回／上頁／下頁。依起訖停用無效翻頁；不在文章上蓋透明點擊區。
 - 普通滾輪在閱讀畫面翻頁，在已辨識列表移動一項。Ctrl＋滾輪保持縮放；放大後優先讓普通滾輪捲動可見畫面，避免與站端翻頁搶操作。字型 dialog、貼上預覽與組字期間不導覽。
 - 原始 Canvas 維持站端 ANSI 色彩；本機提示、選取與工具列各有獨立層，PNG 不包含導覽提示。
@@ -27,3 +27,5 @@
 Connection 在真正傳送處檢查 generation、Screen revision 與 input epoch，重新從當前 Frame 規劃。手動輸入仍可連續送出；在收到新的終端 bytes 前暫停滑鼠導覽。此更新訊號不等於站端已完成特定動作的協定確認；沒有回覆時保留鍵盤操作。已取消的排隊請求不會延後執行，傳輸錯誤保留實際原因。
 
 測試用自己的合成列表／閱讀畫面，包含雙色字、置底文章、反例、舊 frame、輸入競態及實際 WebView pointer／wheel 往返。人工 PTT 登入、各平台 IME 與跨 DPI 結果另列，不能從合成測試推定。
+
+Windows 桌面 gate 以獨立 loopback 服務端比對完整 bytes，確認編號開啟、上下頁、返回及列表移動；另外驗證按住滑鼠時鍵盤／畫面更新取消點擊、原生 capture 丟失、標題整行選取、編號拖曳、雙擊延續，以及縮放、本機捲動、組字、dialog、未知畫面及頁尾不送額外導覽。hover 前後 Canvas PNG 相同，提示層為透明背景與一像素底線；合成截圖位於 `target/verification/desktop/navigation-list-hover.png` 及 `navigation-reading-controls.png`。
