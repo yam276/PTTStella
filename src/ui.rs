@@ -4,6 +4,7 @@ use pttstella::{
     connection::{Connection, Phase, View},
     encoding,
     input::{self, PreparedPaste},
+    links::{self, Link},
     screen::{Frame, Screen},
     selection::{self, Selection},
 };
@@ -21,6 +22,7 @@ struct Paint {
     frame: Frame,
     generation: u64,
     probe: bool,
+    links: Vec<Link>,
 }
 #[derive(Clone)]
 struct PendingPaste {
@@ -30,6 +32,12 @@ struct PendingPaste {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum SurfaceEvent {
+    OpenLink {
+        generation: u64,
+        revision: u64,
+        index: usize,
+        trusted: bool,
+    },
     Paste {
         text: String,
         generation: u64,
@@ -108,6 +116,7 @@ fn preview(probe: bool) -> Result<Vec<u8>, String> {
     bytes.extend_from_slice(b"\x1b[7;1H");
     bytes.extend_from_slice(&encoding::encode("正在連線 PTT…\r\n\r\n連線後，點一下畫面即可輸入帳號密碼。\r\n滑鼠移至上緣可顯示連線與等比例縮放工具。").map_err(|e| e.to_string())?);
     if probe {
+        bytes.extend_from_slice(b"\x1b[12;1Hhttps://example.com/pttstella");
         bytes.extend_from_slice(b"\x1b[15;1H");
         bytes.extend_from_slice(&encoding::encode("一般色 / 亮色").map_err(|e| e.to_string())?);
         bytes.extend_from_slice(b"\x1b[16;1H");
@@ -289,6 +298,7 @@ async fn surface(
     let mut probe_started = false;
     let mut copy_checked = false;
     let mut composition_checked = false;
+    let mut link_requests = 0;
     let (mut paste_single, mut paste_confirm, mut paste_cancel, mut paste_rejected) =
         (false, false, false, 0);
     let mut copied_selection = None;
@@ -315,6 +325,7 @@ async fn surface(
             && closed_checked
             && copy_checked
             && composition_checked
+            && link_requests == 1
             && paste_single
             && paste_confirm
             && paste_cancel
@@ -341,6 +352,25 @@ async fn surface(
         }
         tokio::select! {
             event = eval.recv::<SurfaceEvent>() => match event.map_err(|e| e.to_string())? {
+                SurfaceEvent::OpenLink { generation, revision, index, trusted } => {
+                    if stopping || !trusted { continue; }
+                    let link = displayed.as_ref()
+                        .filter(|p| p.generation == generation && p.frame.revision == revision)
+                        .and_then(|p| p.links.get(index));
+                    let result = match link {
+                        Some(link) if probe.is_some() => {
+                            if link.url != "https://example.com/pttstella" { return Err("unexpected probe URL".into()); }
+                            link_requests += 1;Ok(())
+                        },
+                        Some(link) => webbrowser::open(&link.url).map_err(|e| format!("無法開啟網址：{e}")),
+                        None => Err("畫面已更新，請重新選取網址".to_owned()),
+                    };
+                    let reply = match result {
+                        Ok(()) => serde_json::json!({"link_result":"requested"}),
+                        Err(error) => serde_json::json!({"link_result":"failed","notice":error}),
+                    };
+                    eval.send(reply).map_err(|e| e.to_string())?;
+                },
                 SurfaceEvent::Paste { text, generation, trusted } => {
                     if stopping { continue; }
                     let result = input::prepare_paste(&text).map_err(|e| e.to_string()).and_then(|prepared| {
@@ -487,9 +517,10 @@ async fn surface(
                         report["closed_after_roundtrip"] = closed_checked.into();
                         report["selection_copy"] = copy_checked.into();
                         report["ime_composition"] = composition_checked.into();
+                        report["url_open"] = (link_requests == 1).into();
                         report["paste_single"] = paste_single.into();report["paste_confirm"] = paste_confirm.into();
                         report["paste_cancel"] = paste_cancel.into();report["paste_rejected"] = (paste_rejected == 3).into();
-                        if !clean || !arrow_checked || enter_count != 2 || input_bytes != expected_input || !complete || !closed_checked || !copy_checked || !composition_checked || !paste_single || !paste_confirm || !paste_cancel || paste_rejected != 3 { report["status"] = "failed".into(); }
+                        if !clean || !arrow_checked || enter_count != 2 || input_bytes != expected_input || !complete || !closed_checked || !copy_checked || !composition_checked || link_requests != 1 || !paste_single || !paste_confirm || !paste_cancel || paste_rejected != 3 { report["status"] = "failed".into(); }
                         let path = probe.as_ref().ok_or("missing probe directory")?;
                         std::fs::write(path.join("probe.json"), report.to_string()).map_err(|e| e.to_string())?;
                     }
@@ -528,6 +559,7 @@ async fn surface(
 
 fn paint(view: &View, probe: bool) -> Paint {
     Paint {
+        links: links::detect(&view.frame),
         frame: view.frame.clone(),
         generation: view.generation,
         probe,

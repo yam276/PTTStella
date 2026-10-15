@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | serde／serde_json | 產品 frame 與自己編寫的 replay fixture | MIT OR Apache-2.0；[serde](https://serde.rs/)、[serde_json](https://docs.rs/serde_json/) |
 | uao-rs 0.1.0 | Big5-UAO 字元配對／輸入映射 | MIT；[上游](https://github.com/zenixls2/uao-rs)，其 README 記錄 MozTW UAO 來源 |
+| url 2.5.8／webbrowser 1.2.4 | HTTP／HTTPS 網址解析與使用系統瀏覽器開啟 | MIT OR Apache-2.0；[url](https://docs.rs/url/2.5.8/)、[webbrowser](https://docs.rs/webbrowser/1.2.4/) |
 | Dioxus 0.7.10 | Rust 桌面 UI 與系統 WebView | MIT OR Apache-2.0；[上游](https://github.com/DioxusLabs/dioxus) |
 | Tokio／base64 | 非同步橋接與合成畫面 probe 的 PNG 傳輸 | MIT；[Tokio](https://tokio.rs/)，MIT OR Apache-2.0；[base64](https://docs.rs/base64/) |
 | tokio-tungstenite 0.28.0／futures-util | 單一 WebSocket 傳輸與序列化收送 | MIT；[tokio-tungstenite](https://docs.rs/tokio-tungstenite/0.28.0/)，MIT OR Apache-2.0；[futures-util](https://docs.rs/futures-util/) |

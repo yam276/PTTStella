@@ -281,7 +281,7 @@ def run_desktop(root):
         if process.returncode or not report_path.is_file():
             raise CheckFailure('desktop probe did not produce a successful report')
         report = json.loads(report_path.read_text(encoding='utf-8'))
-        required = ('arrow_input', 'enter_input', 'text_input', 'trusted_webview_input', 'selection_copy', 'ime_composition', 'paste_single', 'paste_confirm', 'paste_cancel', 'paste_rejected', 'loopback_input_roundtrip', 'closed_after_roundtrip', 'listeners_released', 'connection_worker_joined',
+        required = ('arrow_input', 'enter_input', 'text_input', 'trusted_webview_input', 'selection_copy', 'ime_composition', 'url_open', 'paste_single', 'paste_confirm', 'paste_cancel', 'paste_rejected', 'loopback_input_roundtrip', 'closed_after_roundtrip', 'listeners_released', 'connection_worker_joined',
                     'fills_body', 'ansi_colours', 'art_geometry', 'hover_controls', 'proportional_zoom')
         if report.get('status') != 'passed' or any(report.get(key) is not True for key in required):
             raise CheckFailure('desktop rendering/input/cleanup probe failed: ' + json.dumps(report))

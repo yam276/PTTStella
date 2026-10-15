@@ -8,12 +8,14 @@ default-run = "pttstella"
 
 [features]
 default = []
-desktop = ["dep:dioxus", "dep:tokio", "dep:base64", "dep:tokio-tungstenite", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs"]
+desktop = ["dep:dioxus", "dep:tokio", "dep:base64", "dep:tokio-tungstenite", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uao-rs = "=0.1.0"
+url = "=2.5.8"
+webbrowser = { version = "=1.2.4", optional = true }
 dioxus = { version = "=0.7.10", optional = true, default-features = false, features = ["minimal", "document", "desktop"] }
 tokio = { version = "1", optional = true, features = ["rt-multi-thread", "sync", "time", "net", "macros"] }
 base64 = { version = "0.22", optional = true }

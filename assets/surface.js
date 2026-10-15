@@ -15,6 +15,7 @@ let latest=null, animation=0, stopped=false, draws=0, zoom=1;
 let grid=null, dragging=null, selectionNext=null, selectionBusy=null, selectionCache=null, selectionSequence=0;
 let selectionActive=false, selectionFingerprint=null;
 let pastePending=false;
+let hoveredLink=-1;
 const send=value=>{ sent++; dioxus.send(value); };
 const keys={Enter:[13],Backspace:[8],Tab:[9],Escape:[27],ArrowUp:[27,91,65],ArrowDown:[27,91,66],
     ArrowRight:[27,91,67],ArrowLeft:[27,91,68],Home:[27,91,72],End:[27,91,70],
@@ -80,7 +81,7 @@ function pointerdown(e) {
     e.preventDefault(); focus(); clearSelection();
     const point=cellAt(e,false);
     if(point&&!composing) {
-        dragging={anchor:point,x:e.clientX,y:e.clientY,moved:false,pointer:e.pointerId};
+        dragging={anchor:point,x:e.clientX,y:e.clientY,moved:false,pointer:e.pointerId,link:linkAt(point)};
         viewport.setPointerCapture(e.pointerId);
     }
 }
@@ -93,13 +94,17 @@ function cellAt(e,clamp) {
     return {col:locate(px,latest.frame.cols,grid.x),row:locate(py,latest.frame.rows,grid.y)};
 }
 function pointermove(e) {
-    if(!dragging) return;
+    if(!dragging) {setLinkHover(linkAt(cellAt(e,false)));return;}
     dragging.moved ||= Math.hypot(e.clientX-dragging.x,e.clientY-dragging.y)>3;
     if(dragging.moved) requestSelection({mode:"range",anchor:dragging.anchor,focus:cellAt(e,true)});
 }
 function pointerup(e) {
     if(!dragging) return;
-    pointermove(e);dragging=null;
+    pointermove(e);
+    if(!dragging.moved&&dragging.link>=0&&dragging.link===linkAt(cellAt(e,false))) {
+        send({kind:"open_link",generation,revision,index:dragging.link,trusted:e.isTrusted});
+    }
+    dragging=null;
     if(viewport.hasPointerCapture(e.pointerId)) viewport.releasePointerCapture(e.pointerId);
 }
 function cancelDrag() {
@@ -161,6 +166,24 @@ function doubleclick(e) {
     const point=cellAt(e,false);if(point&&!composing) requestSelection({mode:"line",row:point.row});
 }
 function selectPage(){if(latest&&!composing){requestSelection({mode:"all"});focus();}}
+function linkAt(point) {
+    if(!point||!latest) return -1;
+    return latest.links.findIndex(link=>link.row===point.row&&link.start<=point.col&&point.col<link.end);
+}
+function setLinkHover(index,redraw=true) {
+    if(index===hoveredLink) return;
+    hoveredLink=index;canvas.style.cursor=index>=0?"pointer":"default";
+    canvas.title=index>=0?latest.links[index].url+"\n點擊開啟；右鍵選取後可複製":"";
+    if(redraw&&latest) draw(latest);
+}
+const leaveLink=()=>setLinkHover(-1);
+function selectLink(e) {
+    const index=linkAt(cellAt(e,false));
+    if(index<0||composing) return;
+    e.preventDefault();cancelDrag();focus();
+    const link=latest.links[index];
+    requestSelection({mode:"range",anchor:{col:link.start,row:link.row},focus:{col:link.end-1,row:link.row}});
+}
 function activate() { if(!chrome.contains(document.activeElement)) focus(); }
 function paste(e) {
     e.preventDefault();
@@ -204,6 +227,7 @@ const bindings=[
     [viewport,"pointermove",pointermove],[viewport,"pointerup",pointerup],
     [viewport,"pointercancel",pointercancel],[viewport,"lostpointercapture",lostcapture],
     [canvas,"dblclick",doubleclick],[selectAll,"click",selectPage],[document,"copy",copy],
+    [canvas,"contextmenu",selectLink],[canvas,"pointerleave",leaveLink],
     [pasteSend,"click",confirmPaste],[pasteCancel,"click",cancelPaste],[pasteDialog,"cancel",cancelPaste],
     [chrome,"pointerenter",showChrome],[chrome,"pointerleave",hideChrome],
     [plus,"click",zoomIn],[minus,"click",zoomOut],[fit,"click",zoomFit],
@@ -274,6 +298,8 @@ function draw(packet) {
         const [col,row]=frame.cursor,bottom=y(row+1),thickness=Math.max(1,Math.round(2*scale));
         ctx.fillStyle=palette[7]; ctx.fillRect(x(col),bottom-thickness,x(col+1)-x(col),thickness);
     }
+    const link=packet.links[hoveredLink];
+    if(link) {ctx.fillStyle=palette[7];ctx.fillRect(x(link.start),y(link.row+1)-1,x(link.end)-x(link.start),1);}
     grid={x,y,ratio};positionKeyboard();drawSelection();draws++; return grid;
 }
 function repaint() {
@@ -332,7 +358,7 @@ function probe(packet,geometry) {
 }
 function paint(packet) {
     if(packet.generation<generation||(packet.generation===generation&&packet.frame.revision<revision)) return;
-    if(packet.generation!==generation||packet.frame.revision!==revision) {clearSelection();cancelDrag();}
+    if(packet.generation!==generation||packet.frame.revision!==revision) {clearSelection();cancelDrag();setLinkHover(-1,false);}
     if(packet.generation!==generation){
         pastePending=false;cancelComposition();focus();
     }
@@ -346,8 +372,9 @@ try {
     while(true){const packet=await dioxus.recv();if(packet.stop) break;
         if(packet.selection){receiveSelection(packet.selection);continue;}
         if(packet.paste_result) {surface.dataset.pasteResult=packet.paste_result;pastePending=packet.paste_result==="preview";}
+        if(packet.link_result) surface.dataset.linkResult=packet.link_result;
         if(packet.notice) surfaceNote.textContent=packet.notice;
-        if(packet.paste_result||packet.notice) continue;
+        if(packet.paste_result||packet.link_result||packet.notice) continue;
         paint(packet);
     }
 } catch(e){send({kind:"error",message:String(e)});}

@@ -3,6 +3,7 @@
 pub mod connection;
 pub mod encoding;
 pub mod input;
+pub mod links;
 pub mod screen;
 pub mod selection;
 pub mod telnet;

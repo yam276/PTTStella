@@ -3159,6 +3159,8 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "uao-rs",
+ "url",
+ "webbrowser",
 ]
 
 [[package]]

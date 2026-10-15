@@ -120,3 +120,54 @@ fn out_of_bounds_selection_is_rejected() {
         assert!(selection::extract(&screen.frame(), &request).is_err());
     }
 }
+
+#[test]
+fn urls_use_glyph_columns_and_keep_balanced_parentheses() {
+    use pttstella::{encoding, links};
+    let mut screen = Screen::new(80, 2).unwrap();
+    screen.feed(&encoding::encode("中 https://example.com/a(b)). ").unwrap());
+    let links = links::detect(&screen.frame());
+    assert_eq!(links.len(), 1);
+    assert_eq!((links[0].row, links[0].start, links[0].end), (0, 3, 27));
+    assert_eq!(links[0].url, "https://example.com/a(b)");
+}
+
+#[test]
+fn urls_do_not_join_rows_or_accept_other_schemes() {
+    use pttstella::links;
+    let value = "https://example.com/";
+    let mut screen = Screen::new(value.len(), 2).unwrap();
+    screen.feed(value.as_bytes());
+    assert!(links::detect(&screen.frame()).is_empty());
+    for value in [
+        "javascript:alert(1)",
+        "file:///secret",
+        "mailto:a@example.com",
+        "https://",
+    ] {
+        assert!(links::validate(value).is_err());
+    }
+    assert!(links::validate("HTTPS://example.com/path").is_ok());
+}
+
+#[test]
+fn url_detection_handles_case_ports_and_multiple_destinations() {
+    use pttstella::links;
+    let mut screen = Screen::new(80, 2).unwrap();
+    screen.feed(b"HTTP://example.com:8080/a, https://[::1]/b! ");
+    let detected = links::detect(&screen.frame());
+    assert_eq!(
+        detected
+            .iter()
+            .map(|link| link.url.as_str())
+            .collect::<Vec<_>>(),
+        ["http://example.com:8080/a", "https://[::1]/b"]
+    );
+}
+
+#[test]
+fn url_detection_does_not_open_a_destination_with_unmapped_cells() {
+    let mut screen = Screen::new(80, 2).unwrap();
+    screen.feed(b"https://example.com/\x81 ");
+    assert!(pttstella::links::detect(&screen.frame()).is_empty());
+}
