@@ -229,6 +229,17 @@ def run(port, process):
             if active != 'keyboard':
                 raise ValueError(f'PTT input lost focus after {selector}: {active!r}')
             devtools.call('Input.insertText', text=text)
+        devtools.call('Input.imeSetComposition', text='未', selectionStart=1, selectionEnd=1)
+        if devtools.evaluate('getComputedStyle(document.getElementById("keyboard")).opacity') != '1':
+            raise ValueError('composition host did not become visible')
+        placement = devtools.evaluate('(()=>{const k=document.getElementById("keyboard").getBoundingClientRect(),c=document.getElementById("screen").getBoundingClientRect();return {left:k.left-c.left,top:k.top-c.top,frameHeight:c.height};})()')
+        # Synthetic frame parks the cursor at column 0, row 18.
+        if abs(placement['left']) > 1 or abs(placement['top']-18*placement['frameHeight']/24) > 2:
+            raise ValueError('composition host did not follow the PTT cursor')
+        devtools.call('Input.imeSetComposition', text='', selectionStart=0, selectionEnd=0)
+        devtools.call('Input.imeSetComposition', text='中', selectionStart=1, selectionEnd=1)
+        devtools.call('Input.insertText', text='中')
+        # A new edit with identical text must not be discarded as a duplicate commit.
         devtools.call('Input.insertText', text='中')
         previous = devtools.evaluate('document.getElementById("surface").dataset.revision')
         for key, code in (('ArrowUp', 38), ('Enter', 13)):
@@ -266,6 +277,8 @@ def run(port, process):
             devtools.call('Input.dispatchKeyEvent', type=kind, key='ArrowRight', code='ArrowRight', windowsVirtualKeyCode=39)
         return {'status': 'passed', 'focused_after_clicks': focused,
                 'system_clipboard_copy': True,
+                'composition_host_position': True,
+                'composition_commit_cancel_repeat': True,
                 'peer_close_visible': True,
                 'scope': 'isolated WebView2 browser input; no physical keyboard or PTT authentication'}
     finally:

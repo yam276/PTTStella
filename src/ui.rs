@@ -45,6 +45,8 @@ enum SurfaceEvent {
         text: String,
         generation: u64,
         trusted: bool,
+        #[serde(default)]
+        composition_input: bool,
     },
     Painted {
         revision: u64,
@@ -236,12 +238,19 @@ async fn surface(
     let mut close_deadline = None;
     let mut arrow_checked = false;
     let mut input_bytes: Vec<Vec<u8>> = Vec::new();
-    let expected_input: Vec<Vec<u8>> =
-        vec![vec![97], vec![98], vec![99], vec![0xa4, 0xa4], vec![110]];
+    let expected_input: Vec<Vec<u8>> = vec![
+        vec![97],
+        vec![98],
+        vec![99],
+        vec![0xa4, 0xa4],
+        vec![0xa4, 0xa4],
+        vec![110],
+    ];
     let mut enter_count = 0;
     let mut closed_checked = false;
     let mut probe_started = false;
     let mut copy_checked = false;
+    let mut composition_checked = false;
     let mut copied_selection = None;
     let mut painted = (first.generation, first.frame.revision);
     let mut pending_report: Option<serde_json::Value> = None;
@@ -265,6 +274,7 @@ async fn surface(
             && complete
             && closed_checked
             && copy_checked
+            && composition_checked
             && !stopping
         {
             eval.send(serde_json::json!({"stop":true}))
@@ -314,11 +324,12 @@ async fn surface(
                         Ok(()) => receiver.borrow().message.clone(), Err(error) => error,
                     });
                 },
-                SurfaceEvent::Text { text, generation, trusted } => {
+                SurfaceEvent::Text { text, generation, trusted, composition_input } => {
                     if stopping { continue; }
-                    if probe.is_some() && (!trusted || generation != receiver.borrow().generation || input_bytes.len() >= expected_input.len()) {
+                    if probe.is_some() && (!(trusted || composition_input) || generation != receiver.borrow().generation || input_bytes.len() >= expected_input.len()) {
                         return Err("unexpected probe input".into());
                     }
+                    composition_checked |= composition_input && text == "中";
                     let encoded = if text.len() > 4096 { Err("輸入長度超過限制".to_owned()) }
                         else { encoding::encode(&text).map_err(|e| e.to_string()) };
                     let result = encoded.and_then(|bytes| {
@@ -380,7 +391,8 @@ async fn surface(
                         report["loopback_input_roundtrip"] = complete.into();
                         report["closed_after_roundtrip"] = closed_checked.into();
                         report["selection_copy"] = copy_checked.into();
-                        if !clean || !arrow_checked || enter_count != 2 || input_bytes != expected_input || !complete || !closed_checked || !copy_checked { report["status"] = "failed".into(); }
+                        report["ime_composition"] = composition_checked.into();
+                        if !clean || !arrow_checked || enter_count != 2 || input_bytes != expected_input || !complete || !closed_checked || !copy_checked || !composition_checked { report["status"] = "failed".into(); }
                         let path = probe.as_ref().ok_or("missing probe directory")?;
                         std::fs::write(path.join("probe.json"), report.to_string()).map_err(|e| e.to_string())?;
                     }
