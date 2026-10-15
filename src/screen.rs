@@ -39,6 +39,7 @@ pub struct Glyph {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Frame {
+    pub control_complete: bool,
     pub cols: usize,
     pub rows: usize,
     pub cursor: (usize, usize),
@@ -414,6 +415,7 @@ impl Screen {
             }
         }
         Frame {
+            control_complete: matches!(self.parser, Parser::Ground),
             cols: self.cols,
             rows: self.rows,
             cursor: (self.x, self.y),
