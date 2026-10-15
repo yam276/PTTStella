@@ -213,30 +213,31 @@ def unavailable(profile):
 
 def run_core(root):
     needed = ('Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'tests/screen.rs',
-              'tests/fixtures/dual-color.json', 'tests/fixtures/redraw.json')
+              'tests/interaction.rs', 'tests/fixtures/dual-color.json', 'tests/fixtures/redraw.json')
     if any(not (root / path).is_file() for path in needed) or not shutil.which('cargo'):
         return {'profile': 'core', 'status': 'not_ready', 'reason': 'Missing pinned Rust product, corpus or cargo.'}
     try:
         toolchain = tomllib.loads((root / 'rust-toolchain.toml').read_text(encoding='utf-8'))['toolchain']['channel']
         cargo = ['cargo', '+' + toolchain]
         commands = [cargo + ['fmt', '--all', '--', '--check'],
-                    cargo + ['clippy', '--no-default-features', '--all-targets', '--locked', '--', '-D', 'warnings'],
-                    cargo + ['test', '--no-default-features', '--test', 'screen', '--locked']]
+                    cargo + ['clippy', '--no-default-features', '--all-targets', '--locked', '--', '-D', 'warnings']]
+        commands += [cargo + ['test', '--no-default-features', '--test', suite, '--locked']
+                     for suite in ('screen', 'interaction')]
         commands += [cargo + ['run', '--quiet', '--locked', '--no-default-features', '--bin', 'replay', '--',
                               'tests/fixtures/' + name] for name in ('dual-color.json', 'redraw.json')]
-        for index, command in enumerate(commands):
+        for command in commands:
             result = subprocess.run(command, cwd=root, capture_output=True, text=True, encoding='utf-8',
                                     errors='replace', timeout=300)
             if result.returncode:
                 raise CheckFailure(' '.join(command) + '\n' + (result.stdout + result.stderr)[-6000:])
-            if index == 2:
+            if command[len(cargo)] == 'test':
                 require_suite(result.stdout)
-            if index > 2:
+            if command[len(cargo)] == 'run':
                 replay = json.loads(result.stdout)
                 if replay.get('status') != 'passed' or replay.get('glyph_checks', 0) < 1:
                     raise CheckFailure('replay returned no successful glyph checks')
         return {'profile': 'core', 'status': 'passed', 'commands': len(commands),
-                'replay_cases': 2, 'scope': 'PTT-specific screen and Telnet framing; no shell, PTY, GUI or network'}
+                'replay_cases': 2, 'scope': 'PTT screen, selection and Telnet framing; no shell, PTY, GUI or network'}
     except (OSError, ValueError, KeyError, CheckFailure, subprocess.TimeoutExpired) as error:
         return {'profile': 'core', 'status': 'failed', 'reason': str(error)}
 
@@ -280,7 +281,7 @@ def run_desktop(root):
         if process.returncode or not report_path.is_file():
             raise CheckFailure('desktop probe did not produce a successful report')
         report = json.loads(report_path.read_text(encoding='utf-8'))
-        required = ('arrow_input', 'enter_input', 'text_input', 'trusted_webview_input', 'loopback_input_roundtrip', 'closed_after_roundtrip', 'listeners_released', 'connection_worker_joined',
+        required = ('arrow_input', 'enter_input', 'text_input', 'trusted_webview_input', 'selection_copy', 'loopback_input_roundtrip', 'closed_after_roundtrip', 'listeners_released', 'connection_worker_joined',
                     'fills_body', 'ansi_colours', 'art_geometry', 'hover_controls', 'proportional_zoom')
         if report.get('status') != 'passed' or any(report.get(key) is not True for key in required):
             raise CheckFailure('desktop rendering/input/cleanup probe failed: ' + json.dumps(report))

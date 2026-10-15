@@ -4,6 +4,7 @@ use pttstella::{
     connection::{Connection, Phase, View},
     encoding,
     screen::{Frame, Screen},
+    selection::{self, Selection},
 };
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::Arc};
@@ -23,6 +24,18 @@ struct Paint {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum SurfaceEvent {
+    Select {
+        generation: u64,
+        revision: u64,
+        request: u64,
+        selection: Selection,
+    },
+    Copied {
+        generation: u64,
+        revision: u64,
+        request: u64,
+        trusted: bool,
+    },
     Key {
         bytes: Vec<u8>,
         generation: u64,
@@ -171,6 +184,7 @@ pub fn app(props: AppProps) -> Element {
                 span { id: "zoom-level", "100%" }
                 button { id: "zoom-in", "aria-label": "放大", "＋" }
                 button { id: "zoom-fit", "符合視窗" }
+                button { id: "select-all", "整頁選取" }
             }
             }
             section { class: "workspace",
@@ -192,6 +206,8 @@ pub fn app(props: AppProps) -> Element {
                         });
                     },
                     canvas { id: "screen", "aria-label": "PTT 畫面" }
+                    div { id: "selection", "aria-hidden": "true" }
+                    output { id: "selection-note", role: "status" }
                     textarea { id: "keyboard", "aria-label": "PTT 鍵盤輸入", autocomplete: "off", spellcheck: "false" }
                 }
             }
@@ -210,7 +226,9 @@ async fn surface(
     let mut eval = document::eval(include_str!("../assets/surface.js"));
     let first = receiver.borrow_and_update().clone();
     let mut last_status = first.message.clone();
-    eval.send(paint(&first, false)).map_err(|e| e.to_string())?;
+    let mut painting = paint(&first, false);
+    let mut displayed: Option<Paint> = None;
+    eval.send(&painting).map_err(|e| e.to_string())?;
     connection.connect()?;
     let mut in_flight = Some((first.generation, first.frame.revision));
     let mut dirty = false;
@@ -223,6 +241,8 @@ async fn surface(
     let mut enter_count = 0;
     let mut closed_checked = false;
     let mut probe_started = false;
+    let mut copy_checked = false;
+    let mut copied_selection = None;
     let mut painted = (first.generation, first.frame.revision);
     let mut pending_report: Option<serde_json::Value> = None;
     loop {
@@ -244,6 +264,7 @@ async fn surface(
             && input_bytes == expected_input
             && complete
             && closed_checked
+            && copy_checked
             && !stopping
         {
             eval.send(serde_json::json!({"stop":true}))
@@ -259,13 +280,27 @@ async fn surface(
                 && view.phase == Phase::Connected
                 && view.received > 0;
             probe_started |= run_probe;
-            eval.send(paint(&view, run_probe))
-                .map_err(|e| e.to_string())?;
+            painting = paint(&view, run_probe);
+            eval.send(&painting).map_err(|e| e.to_string())?;
             in_flight = Some((view.generation, view.frame.revision));
             dirty = false;
         }
         tokio::select! {
             event = eval.recv::<SurfaceEvent>() => match event.map_err(|e| e.to_string())? {
+                SurfaceEvent::Select { generation, revision, request, selection } => {
+                    let selected = displayed.as_ref()
+                        .filter(|p| p.generation == generation && p.frame.revision == revision)
+                        .and_then(|p| selection::extract(&p.frame, &selection).ok());
+                    if probe.is_some() && selected.as_ref().is_some_and(|s| s.text == "中") {
+                        copied_selection = Some((generation, revision, request));
+                    }
+                    eval.send(serde_json::json!({"selection": {
+                        "generation":generation,"revision":revision,"request":request,"value":selected
+                    }})).map_err(|e| e.to_string())?;
+                },
+                SurfaceEvent::Copied { generation, revision, request, trusted } => {
+                    copy_checked |= trusted && copied_selection == Some((generation, revision, request));
+                },
                 SurfaceEvent::Key { bytes, generation, trusted } => {
                     if stopping { continue; }
                     if probe.is_some() {
@@ -298,6 +333,7 @@ async fn surface(
                     }
                     in_flight = None;
                     painted = (generation,revision);
+                    displayed = Some(painting.clone());
                 },
                 SurfaceEvent::Error { message } => return Err(message),
                 SurfaceEvent::Probe(pixels) => {
@@ -343,7 +379,8 @@ async fn surface(
                         report["trusted_webview_input"] = (arrow_checked && enter_count == 2 && input_bytes == expected_input).into();
                         report["loopback_input_roundtrip"] = complete.into();
                         report["closed_after_roundtrip"] = closed_checked.into();
-                        if !clean || !arrow_checked || enter_count != 2 || input_bytes != expected_input || !complete || !closed_checked { report["status"] = "failed".into(); }
+                        report["selection_copy"] = copy_checked.into();
+                        if !clean || !arrow_checked || enter_count != 2 || input_bytes != expected_input || !complete || !closed_checked || !copy_checked { report["status"] = "failed".into(); }
                         let path = probe.as_ref().ok_or("missing probe directory")?;
                         std::fs::write(path.join("probe.json"), report.to_string()).map_err(|e| e.to_string())?;
                     }

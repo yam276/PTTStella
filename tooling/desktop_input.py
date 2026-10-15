@@ -10,6 +10,40 @@ import time
 from urllib.parse import urlsplit
 
 
+def copied_text_matches(expected):
+    """Read the synthetic selection from Windows; never return clipboard contents."""
+    import ctypes
+    user = ctypes.WinDLL('user32', use_last_error=True)
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    user.GetClipboardData.argtypes = [ctypes.c_uint]
+    user.GetClipboardData.restype = ctypes.c_void_p
+    kernel.GlobalLock.argtypes = [ctypes.c_void_p]
+    kernel.GlobalLock.restype = ctypes.c_void_p
+    kernel.GlobalUnlock.argtypes = [ctypes.c_void_p]
+    kernel.GlobalSize.argtypes = [ctypes.c_void_p]
+    kernel.GlobalSize.restype = ctypes.c_size_t
+    deadline = time.monotonic() + 2
+    while not user.OpenClipboard(None):
+        if time.monotonic() >= deadline:
+            raise TimeoutError('synthetic clipboard could not be opened')
+        time.sleep(.02)
+    try:
+        handle = user.GetClipboardData(13)  # CF_UNICODETEXT
+        size = kernel.GlobalSize(handle) if handle else 0
+        if not 0 < size <= 1024 * 1024:
+            return False
+        pointer = kernel.GlobalLock(handle)
+        if not pointer:
+            raise ValueError('synthetic clipboard could not be read')
+        try:
+            text = ctypes.wstring_at(pointer, size // 2).split(chr(0), 1)[0]
+            return text == expected
+        finally:
+            kernel.GlobalUnlock(handle)
+    finally:
+        user.CloseClipboard()
+
+
 class DevTools:
     def __init__(self, address, port):
         if not isinstance(address, str):
@@ -153,6 +187,33 @@ def run(port, process):
         else:
             raise TimeoutError('synthetic probe did not become ready')
         devtools.call('Page.bringToFront')
+        # Select only the right half of the synthetic dual-colour Chinese glyph.
+        bounds = devtools.evaluate('(()=>{const b=document.getElementById("screen").getBoundingClientRect();return {left:b.left,top:b.top,width:b.width,height:b.height};})()')
+        col, row = bounds['width'] / 80, bounds['height'] / 24
+        x, y = bounds['left'] + col * 1.3, bounds['top'] + row * 3.5
+        devtools.call('Input.dispatchMouseEvent', type='mousePressed', x=x, y=y, button='left', clickCount=1)
+        devtools.call('Input.dispatchMouseEvent', type='mouseMoved', x=x+col*.4, y=y, button='left', buttons=1)
+        devtools.call('Input.dispatchMouseEvent', type='mouseReleased', x=x+col*.4, y=y, button='left', clickCount=1)
+        deadline = time.monotonic() + 5
+        while not devtools.evaluate('!!document.getElementById("surface").dataset.selectionReady'):
+            if time.monotonic() >= deadline:
+                raise TimeoutError('selection text was not prepared')
+            time.sleep(.02)
+        for kind in ('keyDown', 'keyUp'):
+            devtools.call('Input.dispatchKeyEvent', type=kind, key='c', code='KeyC', windowsVirtualKeyCode=67, modifiers=2)
+        if not copied_text_matches('中'):
+            raise ValueError('system clipboard did not contain the complete selected glyph')
+        devtools.call('Input.dispatchMouseEvent', type='mouseMoved', x=20, y=2)
+        devtools.click('#select-all')
+        deadline = time.monotonic() + 5
+        while devtools.evaluate('document.querySelectorAll(".selection-row").length') != 24:
+            if time.monotonic() >= deadline:
+                raise TimeoutError('whole-page selection was not rendered')
+            time.sleep(.02)
+        # Clearing selection restores the original PTT Ctrl+C operation.
+        devtools.click('#screen')
+        for kind in ('keyDown', 'keyUp'):
+            devtools.call('Input.dispatchKeyEvent', type=kind, key='c', code='KeyC', windowsVirtualKeyCode=67, modifiers=2)
         focused = []
         # Real browser mouse defaults and editing, including canvas, letterbox and toolbar.
         for selector, text in (('#screen', 'a'), ('.workspace', 'b'), ('#zoom-in', 'c')):
@@ -204,6 +265,7 @@ def run(port, process):
         for kind in ('keyDown', 'keyUp'):
             devtools.call('Input.dispatchKeyEvent', type=kind, key='ArrowRight', code='ArrowRight', windowsVirtualKeyCode=39)
         return {'status': 'passed', 'focused_after_clicks': focused,
+                'system_clipboard_copy': True,
                 'peer_close_visible': True,
                 'scope': 'isolated WebView2 browser input; no physical keyboard or PTT authentication'}
     finally:

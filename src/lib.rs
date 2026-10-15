@@ -3,4 +3,5 @@
 pub mod connection;
 pub mod encoding;
 pub mod screen;
+pub mod selection;
 pub mod telnet;

@@ -3,30 +3,37 @@ const surface=document.getElementById("surface"), viewport=document.querySelecto
 const chrome=document.getElementById("chrome"), toolbar=chrome.querySelector("header");
 const minus=document.getElementById("zoom-out"), plus=document.getElementById("zoom-in");
 const fit=document.getElementById("zoom-fit"), level=document.getElementById("zoom-level");
+const selectionLayer=document.getElementById("selection"), selectAll=document.getElementById("select-all");
+const selectionNote=document.getElementById("selection-note");
 const ctx=canvas.getContext("2d",{willReadFrequently:true});
 const palette=["#000000","#800000","#008000","#808000","#000080","#800080","#008080","#c0c0c0",
     "#808080","#ff0000","#00ff00","#ffff00","#0000ff","#ff00ff","#00ffff","#ffffff"];
 const family='"Cascadia Mono", "Microsoft JhengHei", monospace', font='20px '+family;
 let generation=0, revision=-1, composing=false, composed=null, sent=0, compositionGeneration=0;
 let latest=null, animation=0, stopped=false, draws=0, zoom=1;
+let grid=null, dragging=null, selectionNext=null, selectionBusy=null, selectionCache=null, selectionSequence=0;
+let selectionActive=false, selectionFingerprint=null;
 const send=value=>{ sent++; dioxus.send(value); };
 const keys={Enter:[13],Backspace:[8],Tab:[9],Escape:[27],ArrowUp:[27,91,65],ArrowDown:[27,91,66],
     ArrowRight:[27,91,67],ArrowLeft:[27,91,68],Home:[27,91,72],End:[27,91,70],
     PageUp:[27,91,53,126],PageDown:[27,91,54,126],Delete:[27,91,51,126]};
 function keydown(e) {
     if(e.isComposing||composing||e.key==="Process"||e.metaKey) return;
+    // Let the native copy action fire; copy data is already prepared by Rust.
+    if(e.ctrlKey&&e.key.toLowerCase()==="c"&&hasSelection()) return;
+    if(e.key==="Escape"&&hasSelection()) { e.preventDefault(); cancelDrag();clearSelection(); return; }
     if(e.ctrlKey&&["+","=","-","0"].includes(e.key)) {
         e.preventDefault(); zoomTo(e.key==="0"?1:zoom+(e.key==="-"?-.25:.25)); return;
     }
     composed=null; let bytes=keys[e.key];
     if(e.ctrlKey&&/^[a-z]$/i.test(e.key)) bytes=[e.key.toUpperCase().charCodeAt(0)&31];
-    if(bytes) { e.preventDefault(); send({kind:"key",bytes,generation,trusted:e.isTrusted}); }
+    if(bytes) { clearSelection(); e.preventDefault(); send({kind:"key",bytes,generation,trusted:e.isTrusted}); }
 }
 function input(e) {
     if(composing||e.isComposing) return;
     const text=e.data||keyboard.value; keyboard.value="";
     if(composed===text) { composed=null; return; }
-    if(text) send({kind:"text",text,generation,trusted:e.isTrusted});
+    if(text) { clearSelection(); send({kind:"text",text,generation,trusted:e.isTrusted}); }
 }
 function compositionstart() { composing=true; compositionGeneration=generation; }
 function compositionend(e) {
@@ -39,8 +46,90 @@ function pointerdown(e) {
     const bounds=viewport.getBoundingClientRect();
     if(e.clientX>=bounds.left+viewport.clientWidth || e.clientY>=bounds.top+viewport.clientHeight) return;
     // Prevent the scroll container's default focus step from overriding ours.
-    e.preventDefault(); focus();
+    e.preventDefault(); focus(); clearSelection();
+    const point=cellAt(e,false);
+    if(point&&!composing) {
+        dragging={anchor:point,x:e.clientX,y:e.clientY,moved:false,pointer:e.pointerId};
+        viewport.setPointerCapture(e.pointerId);
+    }
 }
+function cellAt(e,clamp) {
+    if(!grid||!latest) return null;
+    const bounds=canvas.getBoundingClientRect();
+    if(!clamp&&(e.clientX<bounds.left||e.clientX>=bounds.right||e.clientY<bounds.top||e.clientY>=bounds.bottom)) return null;
+    const px=(e.clientX-bounds.left)*canvas.width/bounds.width,py=(e.clientY-bounds.top)*canvas.height/bounds.height;
+    const locate=(value,count,edge)=>{let at=0;while(at+1<count&&value>=edge(at+1))at++;return at;};
+    return {col:locate(px,latest.frame.cols,grid.x),row:locate(py,latest.frame.rows,grid.y)};
+}
+function pointermove(e) {
+    if(!dragging) return;
+    dragging.moved ||= Math.hypot(e.clientX-dragging.x,e.clientY-dragging.y)>3;
+    if(dragging.moved) requestSelection({mode:"range",anchor:dragging.anchor,focus:cellAt(e,true)});
+}
+function pointerup(e) {
+    if(!dragging) return;
+    pointermove(e);dragging=null;
+    if(viewport.hasPointerCapture(e.pointerId)) viewport.releasePointerCapture(e.pointerId);
+}
+function cancelDrag() {
+    if(dragging&&viewport.hasPointerCapture(dragging.pointer)) viewport.releasePointerCapture(dragging.pointer);
+    dragging=null;
+}
+function pointercancel(){cancelDrag();clearSelection();}
+function lostcapture(){dragging=null;}
+function hasSelection(){return selectionActive;}
+function clearSelection() {
+    selectionActive=false;selectionFingerprint=null;selectionNext=null;selectionCache=null;selectionLayer.replaceChildren();
+    selectionNote.textContent="";
+    delete surface.dataset.selectionReady;
+}
+function requestSelection(selection) {
+    const fingerprint=JSON.stringify({generation,revision,selection});
+    if(fingerprint===selectionFingerprint) return;
+    selectionFingerprint=fingerprint;selectionActive=true;
+    selectionNext={generation,revision,selection}; selectionCache=null;
+    delete surface.dataset.selectionReady;flushSelection();
+}
+function flushSelection() {
+    if(selectionBusy||!selectionNext) return;
+    selectionBusy={...selectionNext,request:++selectionSequence};selectionNext=null;
+    send({kind:"select",...selectionBusy});
+}
+function receiveSelection(reply) {
+    if(!selectionBusy||selectionBusy.request!==reply.request) return;
+    selectionBusy=null;
+    if(selectionActive&&!selectionNext&&reply.generation===generation&&reply.revision===revision&&reply.value) {
+        selectionCache=reply;selectionNote.textContent="";surface.dataset.selectionReady=String(reply.request);drawSelection();
+    }
+    flushSelection();
+}
+function drawSelection() {
+    selectionLayer.replaceChildren();
+    if(!selectionCache||!grid) return;
+    const nodes=document.createDocumentFragment();
+    for(const span of selectionCache.value.spans) {
+        const box=document.createElement("div");box.className="selection-row";
+        Object.assign(box.style,{left:grid.x(span.start)/grid.ratio+"px",top:grid.y(span.row)/grid.ratio+"px",
+            width:(grid.x(span.end)-grid.x(span.start))/grid.ratio+"px",height:(grid.y(span.row+1)-grid.y(span.row))/grid.ratio+"px"});
+        nodes.append(box);
+    }
+    selectionLayer.append(nodes);
+}
+function copy(e) {
+    if(!hasSelection()||document.activeElement!==keyboard) return;
+    e.preventDefault();
+    if(!selectionCache) {selectionNote.textContent="選取尚未準備好，請再複製";return;}
+    if(!e.clipboardData) {selectionNote.textContent="此環境未提供剪貼簿事件資料";return;}
+    try {
+        e.clipboardData.setData("text/plain",selectionCache.value.text);
+        const {generation,revision,request}=selectionCache;
+        send({kind:"copied",generation,revision,request,trusted:e.isTrusted});
+    } catch(_) { selectionNote.textContent="無法寫入剪貼簿，請重試"; }
+}
+function doubleclick(e) {
+    const point=cellAt(e,false);if(point&&!composing) requestSelection({mode:"line",row:point.row});
+}
+function selectPage(){if(latest&&!composing){requestSelection({mode:"all"});focus();}}
 function activate() { if(!chrome.contains(document.activeElement)) focus(); }
 function paste(e) { e.preventDefault(); }
 function showChrome() { chrome.classList.add("open"); }
@@ -57,6 +146,9 @@ const bindings=[
     [keyboard,"keydown",keydown],[keyboard,"input",input],
     [keyboard,"compositionstart",compositionstart],[keyboard,"compositionend",compositionend],
     [keyboard,"paste",paste],[viewport,"pointerdown",pointerdown],
+    [viewport,"pointermove",pointermove],[viewport,"pointerup",pointerup],
+    [viewport,"pointercancel",pointercancel],[viewport,"lostpointercapture",lostcapture],
+    [canvas,"dblclick",doubleclick],[selectAll,"click",selectPage],[document,"copy",copy],
     [chrome,"pointerenter",showChrome],[chrome,"pointerleave",hideChrome],
     [plus,"click",zoomIn],[minus,"click",zoomOut],[fit,"click",zoomFit],
     [viewport,"wheel",wheel,{passive:false}],[window,"resize",repaint],[window,"focus",activate],
@@ -126,7 +218,7 @@ function draw(packet) {
         const [col,row]=frame.cursor,bottom=y(row+1),thickness=Math.max(1,Math.round(2*scale));
         ctx.fillStyle=palette[7]; ctx.fillRect(x(col),bottom-thickness,x(col+1)-x(col),thickness);
     }
-    draws++; return {x,y,ratio};
+    grid={x,y,ratio};drawSelection();draws++; return grid;
 }
 function repaint() {
     if(stopped||!latest||animation) return;
@@ -184,6 +276,7 @@ function probe(packet,geometry) {
 }
 function paint(packet) {
     if(packet.generation<generation||(packet.generation===generation&&packet.frame.revision<revision)) return;
+    if(packet.generation!==generation||packet.frame.revision!==revision) {clearSelection();cancelDrag();}
     if(packet.generation!==generation){keyboard.value="";composed=null;focus();}
     generation=packet.generation;revision=packet.frame.revision;latest=packet;
     const geometry=draw(packet);send({kind:"painted",revision,generation});if(packet.probe) probe(packet,geometry);
@@ -192,12 +285,12 @@ function paint(packet) {
 focus();
 try {
     await document.fonts.load(font,"中M");await document.fonts.ready;
-    while(true){const packet=await dioxus.recv();if(packet.stop) break;paint(packet);}
+    while(true){const packet=await dioxus.recv();if(packet.stop) break;if(packet.selection){receiveSelection(packet.selection);continue;}paint(packet);}
 } catch(e){send({kind:"error",message:String(e)});}
 finally {
     stopped=true;latest=null;observer.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
     for(const [target,event,callback,options] of bindings) target.removeEventListener(event,callback,options);
-    keyboard.value="";keyboard.blur();hideChrome();
+    keyboard.value="";keyboard.blur();hideChrome();cancelDrag();selectionBusy=null;clearSelection();
     const before=sent,beforeDraws=draws,beforeZoom=zoom;
     keyboard.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowUp",bubbles:true}));
     keyboard.dispatchEvent(new InputEvent("input",{data:"a",inputType:"insertText",bubbles:true}));
