@@ -1,0 +1,12 @@
+{
+  "name": "synthetic-cursor-and-line-erase",
+  "cols": 8,
+  "rows": 2,
+  "chunks": [[97,98,99,100,101],[27,91,49,59,51,72,27,91,75,88]],
+  "cursor": [3,0],
+  "checks": [
+    {"col":0,"row":0,"text":"a","width":1,"fg":7,"right_fg":7},
+    {"col":2,"row":0,"text":"X","width":1,"fg":7,"right_fg":7},
+    {"col":3,"row":0,"text":" ","width":1,"fg":7,"right_fg":7}
+  ]
+}

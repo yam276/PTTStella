@@ -1,0 +1,11 @@
+{
+  "name": "synthetic-red-green-Chinese-character",
+  "cols": 8,
+  "rows": 2,
+  "chunks": [[27,91,51,49,109,164],[27,91,51,50],[109,164,33]],
+  "cursor": [3,0],
+  "checks": [
+    {"col":0,"row":0,"text":"中","width":2,"fg":1,"right_fg":2},
+    {"col":2,"row":0,"text":"!","width":1,"fg":2,"right_fg":2}
+  ]
+}
