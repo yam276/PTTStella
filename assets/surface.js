@@ -9,7 +9,7 @@ const ctx=canvas.getContext("2d",{willReadFrequently:true});
 const palette=["#000000","#800000","#008000","#808000","#000080","#800080","#008080","#c0c0c0",
     "#808080","#ff0000","#00ff00","#ffff00","#0000ff","#ff00ff","#00ffff","#ffffff"];
 const family='"Cascadia Mono", "Microsoft JhengHei", monospace', font='20px '+family;
-let generation=0, revision=-1, composing=false, composed=null, sent=0, compositionGeneration=0;
+let generation=0, revision=-1, composing=false, composition=null, beforeEdit=null, sent=0;
 let latest=null, animation=0, stopped=false, draws=0, zoom=1;
 let grid=null, dragging=null, selectionNext=null, selectionBusy=null, selectionCache=null, selectionSequence=0;
 let selectionActive=false, selectionFingerprint=null;
@@ -25,22 +25,48 @@ function keydown(e) {
     if(e.ctrlKey&&["+","=","-","0"].includes(e.key)) {
         e.preventDefault(); zoomTo(e.key==="0"?1:zoom+(e.key==="-"?-.25:.25)); return;
     }
-    composed=null; let bytes=keys[e.key];
+    let bytes=keys[e.key];
     if(e.ctrlKey&&/^[a-z]$/i.test(e.key)) bytes=[e.key.toUpperCase().charCodeAt(0)&31];
     if(bytes) { clearSelection(); e.preventDefault(); send({kind:"key",bytes,generation,trusted:e.isTrusted}); }
 }
 function input(e) {
-    if(composing||e.isComposing) return;
+    if(composing||e.isComposing) {
+        if(composition) {composition.editTrusted=e.isTrusted;composition.editText=keyboard.value;}
+        return;
+    }
     const text=e.data||keyboard.value; keyboard.value="";
-    if(composed===text) { composed=null; return; }
+    // A trailing input for an already committed composition belongs to that edit,
+    // while a new beforeinput identifies a new edit even when its text is equal.
+    if(beforeEdit?.composition) {beforeEdit=null;return;}
     if(text) { clearSelection(); send({kind:"text",text,generation,trusted:e.isTrusted}); }
 }
-function compositionstart() { composing=true; compositionGeneration=generation; }
-function compositionend(e) {
-    composing=false; composed=e.data; keyboard.value="";
-    if(e.data) send({kind:"text",text:e.data,generation:compositionGeneration,trusted:e.isTrusted});
+function beforeinput(e) {
+    beforeEdit={composition:composing||e.isComposing||/Composition/.test(e.inputType||"")};
 }
-function focus() { keyboard.focus({preventScroll:true}); }
+function compositionstart(e) {
+    clearSelection();composing=true;
+    composition={generation,startTrusted:e.isTrusted,editTrusted:false,editText:null};
+    keyboard.classList.add("composing");positionKeyboard();
+}
+function compositionend(e) {
+    const finished=composition;
+    composing=false;composition=null;keyboard.classList.remove("composing");keyboard.value="";positionKeyboard();
+    if(finished&&e.data) send({kind:"text",text:e.data,generation:finished.generation,trusted:e.isTrusted,
+        composition_input:finished.startTrusted&&finished.editTrusted&&finished.editText===e.data});
+}
+function cancelComposition() {
+    // Late composition input is ignored until a fresh beforeinput starts an edit.
+    composition=null;composing=false;beforeEdit={composition:true};keyboard.classList.remove("composing");keyboard.value="";positionKeyboard();
+}
+function positionKeyboard() {
+    if(!grid||!latest) return;
+    const [col,row]=latest.frame.cursor, left=grid.x(col)/grid.ratio, top=grid.y(row)/grid.ratio;
+    const height=(grid.y(row+1)-grid.y(row))/grid.ratio;
+    Object.assign(keyboard.style,{left:left+"px",top:top+"px",height:height+"px",
+        width:(composing?Math.max(1,Math.min(320,surface.clientWidth-left)):1)+"px",
+        fontSize:height*20/24+"px",fontFamily:family});
+}
+function focus() { if(document.activeElement!==keyboard) keyboard.focus({preventScroll:true}); }
 function pointerdown(e) {
     if(e.button!==0) return;
     const bounds=viewport.getBoundingClientRect();
@@ -144,6 +170,8 @@ function wheel(e) { if(e.ctrlKey) { e.preventDefault(); zoomTo(zoom+(e.deltaY<0?
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
 const bindings=[
     [keyboard,"keydown",keydown],[keyboard,"input",input],
+    [keyboard,"beforeinput",beforeinput],
+    [keyboard,"blur",cancelComposition],
     [keyboard,"compositionstart",compositionstart],[keyboard,"compositionend",compositionend],
     [keyboard,"paste",paste],[viewport,"pointerdown",pointerdown],
     [viewport,"pointermove",pointermove],[viewport,"pointerup",pointerup],
@@ -218,7 +246,7 @@ function draw(packet) {
         const [col,row]=frame.cursor,bottom=y(row+1),thickness=Math.max(1,Math.round(2*scale));
         ctx.fillStyle=palette[7]; ctx.fillRect(x(col),bottom-thickness,x(col+1)-x(col),thickness);
     }
-    grid={x,y,ratio};drawSelection();draws++; return grid;
+    grid={x,y,ratio};positionKeyboard();drawSelection();draws++; return grid;
 }
 function repaint() {
     if(stopped||!latest||animation) return;
@@ -277,7 +305,9 @@ function probe(packet,geometry) {
 function paint(packet) {
     if(packet.generation<generation||(packet.generation===generation&&packet.frame.revision<revision)) return;
     if(packet.generation!==generation||packet.frame.revision!==revision) {clearSelection();cancelDrag();}
-    if(packet.generation!==generation){keyboard.value="";composed=null;focus();}
+    if(packet.generation!==generation){
+        cancelComposition();focus();
+    }
     generation=packet.generation;revision=packet.frame.revision;latest=packet;
     const geometry=draw(packet);send({kind:"painted",revision,generation});if(packet.probe) probe(packet,geometry);
     surface.dataset.revision=String(revision);
@@ -290,7 +320,7 @@ try {
 finally {
     stopped=true;latest=null;observer.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
     for(const [target,event,callback,options] of bindings) target.removeEventListener(event,callback,options);
-    keyboard.value="";keyboard.blur();hideChrome();cancelDrag();selectionBusy=null;clearSelection();
+    cancelComposition();keyboard.blur();hideChrome();cancelDrag();selectionBusy=null;clearSelection();
     const before=sent,beforeDraws=draws,beforeZoom=zoom;
     keyboard.dispatchEvent(new KeyboardEvent("keydown",{key:"ArrowUp",bubbles:true}));
     keyboard.dispatchEvent(new InputEvent("input",{data:"a",inputType:"insertText",bubbles:true}));
