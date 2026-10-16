@@ -63,9 +63,16 @@ pub(super) fn window_page(stage: usize) -> Result<Vec<u8>, String> {
         _ => "list_edge_cases",
     };
     let mut bytes = navigation_page(name)?;
+    if stage == 30 {
+        bytes.extend_from_slice(
+            &crate::encoding::encode("\x1b[7;1H  \x1b[4;1H●").map_err(|e| e.to_string())?,
+        );
+    }
     bytes.extend_from_slice(format!("\x1b[1;73Htest{stage:02}").as_bytes());
     bytes.extend_from_slice(if name == "main_menu" {
         b"\x1b[14;22H"
+    } else if name == "boards_caption" && stage == 30 {
+        b"\x1b[4;2H"
     } else if name == "boards_caption" {
         b"\x1b[7;2H"
     } else if name == "list_edge_cases" {
@@ -80,8 +87,12 @@ async fn window<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
-    for step in 0usize..30 {
+    for step in 0usize..34 {
         let expected: &[u8] = match step {
+            30 => b"\x1b[H",
+            31 => b"\x1b[B\x1b[B\x1b[B\x1b[B",
+            32 => b"\r",
+            33 => b"\x1b[D",
             20.. if step.is_multiple_of(2) => b"\r",
             20.. => b"\x1b[D",
             _ => match step % 5 {
@@ -96,6 +107,10 @@ where
         if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref() == expected)
         {
             return Err(format!("native-window Vim bytes differ at step {step}"));
+        }
+        // Home at the first item and consecutive movement may produce no redraw.
+        if matches!(step, 30 | 31) {
+            continue;
         }
         socket
             .send(Message::Binary(window_page(step + 1)?.into()))

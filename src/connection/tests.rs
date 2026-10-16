@@ -255,6 +255,11 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
             ("article_list", ["h"].as_slice()),
         ]);
     }
+    stages.extend([
+        ("board_list", ["g", "g", "4", "j", "l"].as_slice()),
+        ("article_list", ["h"].as_slice()),
+    ]);
+    let mut operations = 0;
     for (profile, values) in stages {
         for &value in values {
             let context = navigation::analyze(&view.frame);
@@ -274,17 +279,21 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
             if let Effect::Browse(intent) = effect {
                 let revision = view.frame.revision;
                 connection.browse_key(view.stamp(), intent).await.unwrap();
-                view = wait(&connection, |v| {
-                    v.frame.revision > revision && !v.input_pending
-                })
-                .await;
+                operations += 1;
+                if !matches!(operations, 31 | 32) {
+                    view = wait(&connection, |v| {
+                        v.frame.revision > revision && !v.input_pending
+                    })
+                    .await;
+                }
             } else {
                 assert_eq!(effect, Effect::None);
             }
             assert_eq!(keyboard.status(&context).mode, "normal");
         }
     }
-    // Peer expects 30 translated operations including five board/article cycles, then
+    assert_eq!(operations, 34);
+    // Peer expects 34 translated operations including five board/article cycles, then
     // Close. Literal Vim letters/control codes or extra input fail the join.
     connection.shutdown().await.unwrap();
 }
@@ -329,6 +338,70 @@ async fn keyboard_noop_streaming_and_unanswered_moves_have_one_owner() {
     });
     connection.shutdown().await.unwrap();
     closing.await.unwrap();
+}
+
+#[tokio::test]
+async fn list_keyboard_moves_continue_without_redraw_but_transitions_and_mouse_wait() {
+    for page in ["main_menu", "boards_caption", "list_edge_cases"] {
+        let (listener, connection) = local().await;
+        connection.connect().unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        ws.send(Message::Binary(navigation_page(page).into()))
+            .await
+            .unwrap();
+        let view = wait(&connection, |v| v.received > 0).await;
+        // PTT need not redraw when Home/End/PgDn is already at a boundary.
+        // Consume every request but deliberately publish no replacement frame.
+        for (intent, expected) in [
+            (Intent::First, b"\x1b[H".as_slice()),
+            (Intent::Last, b"\x1b[F"),
+            (Intent::NextPage, b"\x1b[6~"),
+            (
+                Intent::Lines {
+                    down: true,
+                    count: 2,
+                },
+                b"\x1b[B\x1b[B",
+            ),
+        ] {
+            connection.browse_key(view.stamp(), intent).await.unwrap();
+            assert_eq!(
+                ws.next().await.unwrap().unwrap().into_data().as_ref(),
+                expected
+            );
+            assert!(
+                connection
+                    .navigate(view.stamp(), Intent::Forward)
+                    .await
+                    .is_err()
+            );
+        }
+        connection
+            .browse_key(view.stamp(), Intent::Forward)
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            b"\r"
+        );
+        assert!(
+            connection
+                .browse_key(view.stamp(), Intent::Back)
+                .await
+                .is_err()
+        );
+        assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+        let peer = tokio::spawn(async move {
+            assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+            ws.flush().await.unwrap();
+        });
+        assert_eq!(
+            connection.shutdown().await.unwrap(),
+            CloseOutcome::Acknowledged
+        );
+        peer.await.unwrap();
+    }
 }
 
 async fn local() -> (TcpListener, Connection) {

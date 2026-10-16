@@ -1125,7 +1125,7 @@ async fn surface(
                         let path = probe.as_ref().ok_or("missing window-probe directory")?;
                         std::fs::create_dir_all(path).map_err(|e|e.to_string())?;
                         let report = serde_json::json!({"status":if clean && disconnect==CloseOutcome::Acknowledged {"passed"} else {"failed"},
-                            "scope":"local window probe; exact 30 Vim operations across main menu, board/favorite and article lists, including five switching cycles; no extra station input",
+                            "scope":"local window probe; exact 34 Vim operations across main menu, board/favorite and article lists, including five switching cycles and no-redraw Home/count/enter; no extra station input",
                             "listeners_released":clean,"connection_worker_joined":true,"disconnect":disconnect,
                             "settings":app_settings,"vim_mode":keyboard_policy.status(&navigation::analyze(&receiver.borrow().frame))});
                         std::fs::write(path.join("window-probe.json"),report.to_string()).map_err(|e|e.to_string())?;
