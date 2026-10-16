@@ -4,13 +4,22 @@ use super::{
     loader::{Error, Image, Loaded, Loader},
 };
 use futures_util::future::BoxFuture;
+use serde::Serialize;
 use std::sync::Arc;
+
+#[derive(Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Presentation {
+    Hover,
+    Inspect,
+}
 
 #[derive(Clone)]
 pub struct Active {
     pub request: u64,
     pub generation: u64,
     pub target: Target,
+    pub presentation: Presentation,
 }
 pub struct Update {
     pub request: u64,
@@ -32,6 +41,25 @@ impl Preview {
         self.job.is_some() || self.pending.is_some()
     }
     pub fn open(&mut self, generation: u64, target: Target) -> Result<Active, &'static str> {
+        if let Some(active) = self.active.as_mut()
+            && active.generation == generation
+            && active.target == target
+            && active.presentation == Presentation::Hover
+        {
+            active.presentation = Presentation::Inspect;
+            return Ok(active.clone());
+        }
+        self.start(generation, target, Presentation::Inspect)
+    }
+    pub fn hover(&mut self, generation: u64, target: Target) -> Result<Active, &'static str> {
+        self.start(generation, target, Presentation::Hover)
+    }
+    fn start(
+        &mut self,
+        generation: u64,
+        target: Target,
+        presentation: Presentation,
+    ) -> Result<Active, &'static str> {
         let request = self.sequence.checked_add(1).ok_or("媒體預覽序號已用盡")?;
         self.close();
         self.sequence = request;
@@ -40,6 +68,7 @@ impl Preview {
             request,
             generation,
             target,
+            presentation,
         };
         self.active = Some(active.clone());
         Ok(active)

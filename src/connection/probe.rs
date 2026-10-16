@@ -14,7 +14,7 @@ pub(super) async fn serve(
     bytes: Vec<u8>,
     reload_settings: bool,
 ) -> Result<(), String> {
-    timeout(Duration::from_secs(60), async {
+    timeout(Duration::from_secs(90), async {
         let (stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
         let mut socket = tokio_tungstenite::accept_async(stream)
             .await

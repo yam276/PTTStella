@@ -336,6 +336,8 @@ def run(port, process, output=None, media_server=None):
             raise ValueError('default preview changed the committed settings')
         import desktop_profiles
         profiles_report=desktop_profiles.run(devtools,output,edit_field,open_fonts)
+        import desktop_hover
+        hover_report=desktop_hover.run(devtools,output,media_server)
         devtools.call('Input.dispatchMouseEvent', type='mouseMoved', x=20, y=2)
         devtools.click('#select-all')
         deadline = time.monotonic() + 5
@@ -486,6 +488,7 @@ def run(port, process, output=None, media_server=None):
                 'font_preview_save_cancel_validation': True,
                 'mouse_navigation': navigation_report,
                 'display_profiles':profiles_report,
+                'hover_preview':hover_report,
                 'media': media_report,
                 'peer_close_visible': True,
                 'scope': 'isolated WebView2 browser input; no physical keyboard or PTT authentication'}

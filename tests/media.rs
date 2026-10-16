@@ -1,6 +1,64 @@
 use pttstella::media::{Kind, classify};
 
 #[test]
+fn hover_lease_reauthorizes_only_complete_unchanged_source_without_new_input() {
+    use pttstella::{links::Link, media::hover::Lease, navigation::Stamp};
+    let stamp = Stamp {
+        generation: 1,
+        revision: 2,
+        input_epoch: 0,
+    };
+    let link = Link {
+        row: 3,
+        start: 1,
+        end: 24,
+        url: String::from("https://example.com/a.png"),
+    };
+    let mut lease = Lease {
+        sequence: 1,
+        stamp,
+        index: 0,
+        link: link.clone(),
+    };
+    let fresh = Stamp {
+        revision: 3,
+        ..stamp
+    };
+    assert!(lease.renew(fresh, true, std::slice::from_ref(&link)));
+    assert_eq!(lease.stamp, fresh);
+    for (stamp, complete, links) in [
+        (
+            Stamp {
+                input_epoch: 1,
+                ..fresh
+            },
+            true,
+            vec![link.clone()],
+        ),
+        (
+            Stamp {
+                generation: 2,
+                ..fresh
+            },
+            true,
+            vec![link.clone()],
+        ),
+        (fresh, false, vec![link.clone()]),
+        (
+            fresh,
+            true,
+            vec![Link {
+                row: 4,
+                ..link.clone()
+            }],
+        ),
+        (fresh, true, vec![]),
+    ] {
+        assert!(!lease.renew(stamp, complete, &links));
+    }
+}
+
+#[test]
 fn direct_media_preserves_query_and_does_not_guess_web_pages() {
     let image = classify("https://example.com/A.JpG?token=a%2Fb#view")
         .unwrap()

@@ -14,7 +14,7 @@
 
 三組皆為字高 20、基線 20。沒有既存有效設定時，依編譯平台選初始值；已保存的有效設定直接載入。平台名稱描述字型組合，**不限制使用平台**。
 
-本機保存已有 version 1 JSON、8 KiB 讀取上限、欄位驗證、原始 bytes 備份 `settings.json.bak` 與原子替換。載入失敗使用平台初始值並顯示原因，不自動覆寫壞檔。保存／取消及重啟像素已在 Windows gate 驗證；新增的可攜檔透過明確選檔／另存入口使用。
+本機保存使用 version 2 JSON（保留 v1 讀入遷移）、8 KiB 讀取上限、欄位驗證、原始 bytes 備份 `settings.json.bak` 與原子替換。載入失敗使用平台初始值並顯示原因，不自動覆寫壞檔。保存／取消及重啟像素已在 Windows gate 驗證；新增的可攜檔透過明確選檔／另存入口使用。
 
 設定目錄由 [Store](../src/settings/store.rs) 與鎖定的 directories 6.0.0 決定：Windows `%APPDATA%\PTTStella\config`、macOS `~/Library/Application Support/PTTStella`、Linux `$XDG_CONFIG_HOME/pttstella` 或 `~/.config/pttstella`。macOS／Linux 路徑為庫來源推導，沒有在這台 Windows 主機執行。
 
@@ -42,7 +42,7 @@ Mac 上明確選擇 Windows 組合，重啟與再次匯入仍保留該選擇；�
 
 本機原有 version 1 的明確 family 遷移成 Custom，保留值；不能只因它恰好等於目前平台預設，就推論使用者要跟著 OS 改變。新設定結構須提供一次解析、向前版本辨識、備份與往返案例，移除 superseded 的平行儲存方式。
 
-圖片 hover 的開關與位置也需要保存，見 [媒體方案](media.md#後續圖片-hover-預覽方案尚未實作)。它們屬 app preferences，由同一個設定 Store 管理；顯示 profile 首版只匯出字型與排版。若之後提供「匯出所有偏好」，須明確區別兩種檔案格式及範圍，不能偷偷帶出私人名單。帳密、session、原始流量、快取與暫時防閒置開關均不包含在顯示 profile。
+圖片 hover 的開關與位置也需要保存，見 [媒體方案](media.md#圖片-hover-小預覽)。它們屬 app preferences，由同一個設定 Store 管理；顯示 profile 首版只匯出字型與排版。若之後提供「匯出所有偏好」，須明確區別兩種檔案格式及範圍，不能偷偷帶出私人名單。帳密、session、原始流量、快取與暫時防閒置開關均不包含在顯示 profile。
 
 ## 實作順序與驗收
 
