@@ -26,6 +26,26 @@ manual keyboard input → session-owned send queue → connection
 | media／preview | URL 分類、單一預覽 request／generation、下載 future、解碼確認與有界 LRU；不解讀 BBS 原始 bytes |
 | TLS | 為 WSS 與圖片 HTTP client 建立各自的系統信任根／明確 provider 設定，不安裝全域 provider |
 
+## 程式入口與修改邊界
+
+連線與 UI 已依下列責任拆分；同一個 Session 與同一個 surface 迴圈仍負責序列化操作，沒有增加另一份狀態或後端框架。
+
+| 位置 | 主要責任 |
+| --- | --- |
+| [connection](../src/connection.rs) | 有界命令 API、watch 快照及 worker／probe 的關閉與 join |
+| [connection/worker](../src/connection/worker.rs) | Session 唯一擁有 Screen、socket、登入等待與輸入等待；具名方法處理登入、導覽、保活與發布，select 只分派事件 |
+| [connection/transport](../src/connection/transport.rs) | TLS／WSS 連線、有界寫入及正常關閉握手；不解讀畫面或決定瀏覽動作 |
+| [ui/app](../src/ui/app.rs) | Dioxus 畫面、原生關窗事件與啟動接線 |
+| [ui/protocol](../src/ui/protocol.rs) | WebView 結構化事件與 serde wire 格式，沒有副作用 |
+| [ui/presentation](../src/ui/presentation.rs) | 遮黑後的唯一 Paint、連結／圖片命中、選取及輸出使用的版本核對；字型預覽也使用同一封包 |
+| [ui/preferences](../src/ui/preferences.rs) | 目前生效設定、儲存錯誤與字型 sample 的共同擁有者；草稿預覽／匯入不套用，保存成功後才一起更新生效值 |
+| [ui/probe](../src/ui/probe.rs) | 自製畫面、驗收計數、獨立色彩 expected 與報告建構，不擁有產品的輸入或畫面狀態 |
+| [ui/surface](../src/ui/surface.rs) | 協調事件、信任／版本檢查、單筆繪製與各 feature owner 的停止順序 |
+
+新增瀏覽操作先修改 vim／navigation 的純 Rust 契約，再檢查 Session 的送出許可；JavaScript 不增加 key-to-byte 表。新增偏好先擴充 settings 的格式／驗證，再由 Preferences 統一保存與更新，不在事件分支另存第二份生效值。新增 WebView 事件先定義 protocol，再由 surface 交給對應擁有者，保留 generation／revision／input epoch 與 presentation 的拒絕邊界。
+
+後續仍可按功能縮小 surface 的協調分支，以及 assets/surface.js 中輸入、選取與繪製的共同作用域。這些邊界涉及焦點、組字與取消，應有對應實際 WebView runner 再拆；本輪沒有以增加泛用介面取代現有可驗證的行為。
+
 優先驗證 Dioxus Desktop 與 Canvas 的薄繪製橋接；實際呈現路線以同一 [顯示契約](dual-color.md) 的 probe 決定。若採 JavaScript，只接收結構化 frame，不持有第二份終端狀態。
 
 UI 正常掛載後只發起一次預設 PTT WSS 連線；合成 probe 只連本機 WebSocket。renderer 唯一管理符合視窗／等比例 zoom、hover 工具列及繪製排程；接收的 Screen frame 不因縮放改寫。hover 的 CSS class 由 renderer 管理，Rust 透過獨立 data attribute 要求斷線／錯誤狀態持續可見。尺寸變更合併為一個 animation callback，背景共用整數像素格線，圖形幾何與文字都使用同一格線與左右 clip。所有輸入／縮放／hover listener 由同一 bindings 清單註冊與移除。
