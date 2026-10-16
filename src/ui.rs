@@ -451,8 +451,9 @@ pub fn app(props: AppProps) -> Element {
                         option { value: "platform", "依平台初始值" }
                         option { value: "custom", "自訂" }
                         option { value: "windows", "Windows" }
-                        option { value: "macos", "macOS" }
+                        option { value: "macos", "macOS 黑體" }
                         option { value: "linux", "Linux" }
+                        option { value: "macos_serif", "macOS 宋體" }
                     }
                 }
                 label { "英數字型" input { id: "font-ascii", r#type: "text", maxlength: "128" } }
@@ -467,6 +468,7 @@ pub fn app(props: AppProps) -> Element {
                 }
                 canvas { id: "font-preview", width: "576", height: "192", "aria-label": "中英混排與雙色字預覽" }
                 output { id: "font-note", role: "status" }
+                output { id: "font-availability", role: "status" }
                 div { class: "dialog-actions",
                     button { id: "font-defaults", "恢復預設" }
                     button { id: "font-cancel", "取消" }

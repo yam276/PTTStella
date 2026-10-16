@@ -69,6 +69,20 @@ Windows 真實 pointer＋loopback HTTP 已驗證快掠零請求、同連結一�
 
 ## 技術邊界
 
+### macOS 操作修正與兩層輸入對應
+
+2026-10-16：修正一般列表的空白補齊日期（如 `1/ 9`）、投票／鎖文標記及作者 `-` 的刪文列辨識。新增正常與錯誤日期／提示正反例，仍要求標頭、操作列、合法游標及完整格線。暫停會顯示具體原因；未辨識畫面仍不猜測站端動作。這些合成格式已驗證，使用者原先實站看板仍須重試，沒有據此宣稱實站問題完全結案。
+
+依使用者要求維持兩層對應：`Keyboard` 將按鍵轉為瀏覽 Intent，`navigation::plan` 根據畫面產生 PTT bytes；移除 JS 重複的 key-to-byte 表。Mac 注音輸入來源的實測先重現 j 啟動組字；修正為 Normal／暫停使用 readonly 編輯宿主，Rust 只在瀏覽模式解析 Process／非 ASCII key 的實體碼與 Shift。i／f 原生輸入保留組字 owner；核心案例確認原生組字仍可送出，原生候選窗的完整流程本輪沒有重驗。
+
+macOS 15.7.7／arm64／WKWebView 真實原生事件已確認：包含上述三種特殊文章列的看板維持 VIM NORMAL，j／k／gg／G 由同一 Connection 往返，loopback 逐筆只接受 Down／Up／Home／End。原生選單提供 ⌘W、⌘Q、⌃⌘F 及 Zoom；兩次成功視窗流程分別用 ⌘W 與 ⌘Q 關閉，`window-probe.json` 均確認 listener 移除、worker join 與零額外站端輸入。全螢幕進出及 Zoom 有實際視窗觀察。首次全螢幕測試曾被 UI 自動化的焦點／視窗變動打斷且服務端拒絕額外輸入；該次不算通過，後續獨立流程才通過。
+
+字型視窗新增指定 local face 的載入失敗提示；本機選 Windows 時實際確認 Cascadia Mono／Microsoft JhengHei 無法載入，先前外觀相同是系統替代字型。新增 macOS 宋體組合（Menlo／Songti TC），保留原 macOS 黑體（Menlo／PingFang TC）與明確選擇意圖。真實表單切換、預覽、保存與主畫面 PNG 已驗證：960×576、英數首列全部像素相同，中文區域有 8,051 個像素不同，保存值為 `macos_serif`。只證明這台 Mac 的這兩個 face 與案例，不宣稱逐字 fallback 或跨 DPI 完整驗收。
+
+驗證：桌面 feature 的全 targets Clippy、27 個非空 lib 測試、core gate（fmt／Clippy／六套 suite／兩個 replay）、JS 語法及 docs gate；完整 `desktop` gate 在 Mac 仍為 not_ready，沒有 Windows runner 結果。Mac 的既有 HTTP 取消案例原先因 RST 不等於 EOF 失敗；測試現在共用有限期的 FIN／ConnectionReset 關閉斷言，其他錯誤／額外資料仍失敗，下一筆圖片成功下載也必須通過。所有一般測試只使用合成資料與 loopback，沒有執行實站登入。
+
+本次本機資源 guard 曾以全機磁碟預留超限拒絕預設 16 GiB 的 core invocation，該次未執行、不算通過。檢查本專案 namespace 約 0.8 GiB 後，以 4 GiB ceiling 重新執行，保留全機 60 GiB／free-space 100 GiB 規則，沒有刪除其他 owner 的資料或變更 harness。更新 App 保留於 `dist/macos-fixes/PTTStella.app`，舊產物保留；沒有 push／公開發佈。
+
 ### macOS 本機 App 打包增量
 
 2026-10-16：新增 [macOS App 打包入口](../macos-app.md) 與 `Dioxus.toml` metadata。同一 Rust 1.97.0／Dioxus 0.7.10 package 在 macOS 15.7.7 Apple Silicon 完成原生 arm64 release 編譯，產出約 11 MiB 的 `PTTStella.app`；plist、僅系統動態依賴、ad-hoc 簽署及 strict 驗章通過。腳本從 Cargo JSON 取得 executable，不假設 target 路徑，並在 guard 結束前將 app 保留於 repo 的 dist。

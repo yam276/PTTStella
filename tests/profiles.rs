@@ -14,6 +14,9 @@ fn fixed_presets_and_custom_profiles_roundtrip_without_platform_inference() {
         Fonts::Preset {
             preset: Preset::Linux,
         },
+        Fonts::Preset {
+            preset: Preset::MacosSerif,
+        },
         Fonts::Custom {
             ascii_font: "My Mono".into(),
             cjk_font: "我的字型".into(),
@@ -37,6 +40,10 @@ fn fixed_presets_and_custom_profiles_roundtrip_without_platform_inference() {
     };
     assert_eq!(windows.resolve().unwrap().ascii_font, "Cascadia Mono");
     assert_eq!(windows.resolve().unwrap().cjk_font, "Microsoft JhengHei");
+    let macos = DisplaySettings::presets();
+    assert_eq!(macos["macos"].ascii_font, macos["macos_serif"].ascii_font);
+    assert_eq!(macos["macos"].cjk_font, "PingFang TC");
+    assert_eq!(macos["macos_serif"].cjk_font, "Songti TC");
 }
 #[test]
 fn v1_explicit_names_always_migrate_to_custom_even_when_equal_to_defaults() {
