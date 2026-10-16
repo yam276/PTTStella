@@ -1,4 +1,5 @@
 //! Effective preferences change only after persistence succeeds; previews are drafts.
+use super::outbound::{FontPreview, ImportedProfile, Packet, ProfileResult, SettingsOpen};
 use super::presentation::{font_sample, sample_packet};
 use pttstella::{
     screen::Frame,
@@ -7,7 +8,6 @@ use pttstella::{
     },
     storage,
 };
-use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
 pub(super) struct Preferences {
@@ -75,30 +75,49 @@ impl Preferences {
         Ok(())
     }
 
-    pub(super) fn open_packet(&self) -> Value {
-        json!({"settings_open": {
-            "profile":self.app.display, "values":self.display,
-            "defaults":DisplaySettings::default(), "presets":DisplaySettings::presets(),
-            "warning":self.warning, "sample":sample_packet(&self.sample, &self.display),
-        }})
+    pub(super) fn open_packet(&self) -> Packet<'static> {
+        Packet::SettingsOpen(Box::new(SettingsOpen {
+            profile: self.app.display.clone(),
+            values: self.display.clone(),
+            defaults: DisplaySettings::default(),
+            presets: DisplaySettings::presets(),
+            warning: self.warning.clone(),
+            sample: sample_packet(&self.sample, &self.display),
+        }))
     }
 
-    pub(super) fn preview_packet(&self, request: u64, profile: DisplayProfile) -> Value {
-        match profile.resolve() {
-            Ok(display) => {
-                json!({"font_preview":{"request":request,"packet":sample_packet(&self.sample,&display)}})
-            }
-            Err(error) => json!({"font_preview":{"request":request,"error":error}}),
-        }
+    pub(super) fn preview_packet(&self, request: u64, profile: DisplayProfile) -> Packet<'static> {
+        Packet::FontPreview(match profile.resolve() {
+            Ok(display) => FontPreview::Ready {
+                request,
+                packet: Box::new(sample_packet(&self.sample, &display)),
+            },
+            Err(error) => FontPreview::Rejected {
+                request,
+                error: error.into(),
+            },
+        })
     }
 
     /// Import only builds a preview packet. Export reads the effective profile.
-    pub(super) fn profile_packet(&self, action: &str, name: String, probe: Option<&Path>) -> Value {
-        let result = self.profile(action, name, probe);
-        result.unwrap_or_else(|error| json!({"profile_result":"rejected","notice":error}))
+    pub(super) fn profile_packet(
+        &self,
+        action: &str,
+        name: String,
+        probe: Option<&Path>,
+    ) -> Packet<'static> {
+        Packet::ProfileResult(
+            self.profile(action, name, probe)
+                .unwrap_or_else(|notice| ProfileResult::Rejected { notice }),
+        )
     }
 
-    fn profile(&self, action: &str, name: String, probe: Option<&Path>) -> Result<Value, String> {
+    fn profile(
+        &self,
+        action: &str,
+        name: String,
+        probe: Option<&Path>,
+    ) -> Result<ProfileResult, String> {
         if !matches!(action, "import" | "export") {
             return Err("未知設定檔操作".into());
         }
@@ -107,7 +126,7 @@ impl Preferences {
             None => Self::pick_profile(action),
         };
         let Some(path) = path else {
-            return Ok(json!({"profile_result":"cancelled"}));
+            return Ok(ProfileResult::Cancelled);
         };
         if action == "export" {
             if !path.file_name().is_some_and(|n| {
@@ -119,16 +138,22 @@ impl Preferences {
             }
             let bytes = PortableProfile::new(name, self.app.display.clone())?.encode()?;
             storage::replace(&path, &bytes)?;
-            Ok(
-                json!({"profile_result":"exported","notice":"已匯出目前生效設定；未套用的草稿不包含在內"}),
-            )
+            Ok(ProfileResult::Exported {
+                notice: "已匯出目前生效設定；未套用的草稿不包含在內".into(),
+            })
         } else {
             let bytes = Store::at(path).read()?.ok_or("找不到顯示設定檔")?;
             let profile = PortableProfile::decode(&bytes)?;
             let values = profile.display.resolve().map_err(str::to_owned)?;
-            Ok(
-                json!({"profile_result":"imported","profile_import":{"profile":profile.display,"name":profile.name,"values":values,"sample":sample_packet(&self.sample,&values)},"notice":"設定已載入預覽；套用並儲存後才會生效"}),
-            )
+            Ok(ProfileResult::Imported {
+                profile: Box::new(ImportedProfile {
+                    profile: profile.display,
+                    name: profile.name,
+                    sample: sample_packet(&self.sample, &values),
+                    values,
+                }),
+                notice: "設定已載入預覽；套用並儲存後才會生效".into(),
+            })
         }
     }
 
@@ -166,14 +191,16 @@ mod tests {
             baseline: 19.0,
             ..Default::default()
         };
-        let packet = preferences.preview_packet(7, profile.clone());
-        assert_eq!(
-            packet["font_preview"]["packet"]["settings"]["font_size"],
-            18.0
-        );
+        let packet = serde_json::to_value(preferences.preview_packet(7, profile.clone())).unwrap();
+        assert_eq!(packet["payload"]["packet"]["settings"]["font_size"], 18.0);
         assert_eq!(preferences.app(), &original);
         assert_eq!(
-            preferences.profile_packet("export", "effective".into(), Some(directory.path()))["profile_result"],
+            serde_json::to_value(preferences.profile_packet(
+                "export",
+                "effective".into(),
+                Some(directory.path())
+            ))
+            .unwrap()["payload"]["status"],
             "exported"
         );
         let exported = std::fs::read(directory.path().join("display.pttstella.json")).unwrap();
@@ -182,7 +209,12 @@ mod tests {
             original.display
         );
         assert_eq!(
-            preferences.profile_packet("import", "".into(), Some(directory.path()))["profile_result"],
+            serde_json::to_value(preferences.profile_packet(
+                "import",
+                "".into(),
+                Some(directory.path())
+            ))
+            .unwrap()["payload"]["status"],
             "imported"
         );
         assert_eq!(preferences.app(), &original);

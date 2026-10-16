@@ -30,13 +30,18 @@ pub fn app(props: AppProps) -> Element {
     let filters_probe = props.filters_probe;
     let surface_probe = props.surface_probe.clone();
     let surface_probing = surface_probe.is_some();
+    let dialogs_probing = surface_probe.as_deref() == Some("dialogs");
     let reload_settings = props.reload_settings;
     let media_origin = props.media_origin.clone();
     let owner = use_hook(move || {
         preview(probing, media_origin.as_deref())
             .and_then(|bytes| {
                 if surface_probing {
-                    Connection::start_surface_probe()
+                    if dialogs_probing {
+                        Connection::start_ui_probe(bytes)
+                    } else {
+                        Connection::start_surface_probe()
+                    }
                 } else if filters_probe {
                     Connection::start_filters_probe()
                 } else if login_probe {

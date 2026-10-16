@@ -82,6 +82,10 @@ macOS 本機 `.app` 的建立入口為 `python3 tooling/bundle_macos.py`，細�
 
 UI 准入與生命週期變更另跑 `cargo test --locked --features desktop --bin pttstella` 及 `node --test tooling/test_surface_lifetime.mjs`（Node 18+）。前者檢查單筆命令等待／取消、立即入列與 busy 不執行 factory、事件來源與 session、組字例外及超時保留清理；desktop lib 另用實際 WebSocket 比對 browse 在原始 Enter 之前入列，尚未 poll 回覆也不能改變順序。後者以 fake channel 驗證生產 JS stop owner 的正常接收、資料通道失敗、停止後不新增 receive，以及兩萬個封包不累積 unresolved stop Promise 的 reaction，沒有操作瀏覽器。
 
+UI owner／封包變更再跑 `node --test tooling/test_surface_dialogs.mjs`。使用明確 DOM／clock doubles 核對晚到字型結果、關閉／revoke、舊預覽、登入草稿清除、名單 busy／失敗恢復及 router 拒絕未知／legacy envelope；這些不是原生 trusted 操作證據。[ui-packets](tests/fixtures/ui-packets.json) 是獨立編寫的 synthetic wire expected，Rust bin 比對生產 Packet 的 serde 結果，JS 測試核對分派，沒有用序列化往返當 expected。Paint 與內嵌預覽另檢查結構，完整呈現仍由原生 PNG／畫面驗收。
+
+`--probe-surface OUTPUT_DIRECTORY dialogs --media-origin http://127.0.0.1:PORT` 提供明確本機 UI／媒體 fixture，peer 拒絕輸入 bytes；操作設定預覽／取消／保存、具名設定檔匯出／匯入、整頁及行 PNG、本機圖片與外開 sink 後才檢查報告。媒體 server 必須由 runner 擁有並停止；不能將 sink 宣稱為 OS 瀏覽器實測。對話框拆分另以閱讀畫面逐一開／關名單、字型及登入，確認不用額外點擊或 frame 才恢復瀏覽控制項，再完成原 filters 回歸。
+
 `--probe-surface OUTPUT_DIRECTORY CASE` 是不開 DevTools、不連實站的原生 WebView 探針；CASE 為 `decode`、`painted`、`send`、`renderer_error`、`untrusted`、`confirm` 或 `slow`。前四項分別造成真實事件解碼、版本、Eval 封包序列化及 JS 例外錯誤，應留下 `run_completed=false`、`cleanup_completed=true` 與 acknowledged 的 `cleanup.json`；錯誤畫面之後仍須能 ⌘W／⌘Q 結束。`untrusted` 驗證 JS 合成 paste／按鈕不改狀態，以及 Rust 拒絕三個不可信貼上 wire 事件；`confirm` 由原生貼上 `A\nB` 建立真實預覽，再拒絕合成確認且保留預覽。`slow` 持有 60 秒的合成結果 future，期間以原生按鈕開啟／取消字型設定並關窗，確認命令仍 pending 時就完成清理；它不宣稱模擬了真實網路 backpressure。三者檢查 `surface-probe.json`。所有案例的本機 peer 拒絕任何輸入 bytes，只接受 Close。負面合成事件不當成 trusted 正向輸入證據。
 
 一般黑名單變更須跑 core 的 filters suite、desktop lib store 與 bin presentation admission 案例。`--probe-filters OUTPUT_DIRECTORY` 提供自製推文、獨立名單檔與本機 peer，不開 DevTools port、不連 PTT。原生視窗驗證新增／同 ID 更新／移除、拒絕與保存失敗、遮黑與暫時顯示、系統剪貼簿讀回、整頁／選取行 PNG；獨立解碼確認變更只在命中 cell 範圍、選取行與整頁對應裁切完全相同。peer 僅接受 PageDown／PageUp 往返及 Close，管理名單不能送其他 PTT bytes。檢查 `filters-probe.json`，並另以新程序確認規則保存；不能只以畫面有黑色或 DOM 元素存在當作通過。

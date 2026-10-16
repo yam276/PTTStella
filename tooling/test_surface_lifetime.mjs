@@ -17,8 +17,8 @@ test("out-of-band stop wakes an idle broken data channel and releases its listen
     const waiting=lifetime.receive();
     assert.equal(outstanding,1);
     target.dispatchEvent(new Event("pttstella:stop"));
-    assert.equal((await waiting).stop,true);
-    assert.equal((await lifetime.receive()).stop,true);
+    assert.equal((await waiting).kind,"stop");
+    assert.equal((await lifetime.receive()).kind,"stop");
     assert.equal(outstanding,1); // No retry/extra channel waiter after stop.
     lateReply({frame:"discarded"});
     lifetime.release();assert.equal(target.count,0);
@@ -33,13 +33,33 @@ test("normal packets still arrive once, and receive failure retains explicit cle
     lifetime.release();assert.equal(target.count,0);
 });
 
+test("malformed envelopes reach the router without stranding the receive waiter",{timeout:1000},async()=>{
+    const router=vm.runInNewContext(readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8")+"\ncreateSurfaceRouter");
+    const calls=[],route=router(new Proxy({}, {get:(_,kind)=>payload=>calls.push({kind,payload})}));
+    const packets=[null,undefined,{kind:"notice",payload:"still receiving"},{kind:"stop"}];
+    const target=new Target(),lifetime=create({recv:()=>Promise.resolve(packets.shift())},target);
+    try {
+        for(let index=0;index<2;index++){
+            const packet=await lifetime.receive();
+            assert.throws(()=>route(packet),/Unknown surface packet/);
+            assert.equal(calls.length,0);
+        }
+        route(await lifetime.receive());
+        assert.deepEqual(calls,[{kind:"notice",payload:"still receiving"}]);
+        assert.equal((await lifetime.receive()).kind,"stop");
+        assert.equal(packets.length,0);
+    } finally {
+        lifetime.release();assert.equal(target.count,0);
+    }
+});
+
 test("stop before receive does not start channel work",async()=>{
     const target=new Target();let revocations=0;
     const lifetime=create({recv(){assert.fail("revoked renderer received again");}},target,()=>{revocations++;});
     target.dispatchEvent(new Event("pttstella:stop"));
     assert.equal(revocations,1); // Synchronous admission revocation, before await.
     target.dispatchEvent(new Event("pttstella:stop"));
-    assert.equal((await lifetime.receive()).stop,true);
+    assert.equal((await lifetime.receive()).kind,"stop");
     assert.equal(revocations,1);
     lifetime.release();assert.equal(target.count,0);
 });
@@ -66,6 +86,6 @@ test("twenty thousand packets do not accumulate reactions on an unresolved stop 
         }
     }
     target.dispatchEvent(new Event("pttstella:stop"));
-    assert.equal((await lifetime.receive()).stop,true);
+    assert.equal((await lifetime.receive()).kind,"stop");
     lifetime.release();assert.equal(target.count,0);
 });
