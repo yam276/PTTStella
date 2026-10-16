@@ -499,3 +499,64 @@ fn dense_lists_still_reject_prompt_bad_date_or_missing_forward_command() {
     screen.feed(b"\x1b[4;12H99/99 \x1b[18;2H");
     unknown(&screen.frame());
 }
+
+#[test]
+fn board_description_caption_does_not_disable_frequent_board_switching() {
+    let context = page("boards_caption");
+    assert_eq!(context, Context::BoardList { first_row: 3 });
+    for (intent, expected) in [
+        (
+            Intent::Lines {
+                down: true,
+                count: 3,
+            },
+            b"\x1b[B\x1b[B\x1b[B".as_slice(),
+        ),
+        (Intent::Forward, b"\r"),
+        (Intent::Back, b"\x1b[D"),
+    ] {
+        assert_eq!(navigation::plan(&context, intent).unwrap(), expected);
+    }
+    assert!(!context.allows_keepalive());
+}
+
+#[test]
+fn board_browser_still_requires_stable_columns_and_valid_rows() {
+    for caption in ["中文敘述", "中文測述", "描述", ""] {
+        let mut screen = fixture("boards_caption");
+        replace(
+            &mut screen,
+            2,
+            &format!("編號 看板 類別 {caption} 人氣 板主"),
+            "30;47",
+        );
+        screen.feed(b"\x1b[7;2H");
+        assert_eq!(
+            navigation::analyze(&screen.frame()),
+            Context::BoardList { first_row: 3 }
+        );
+    }
+    for header in [
+        "編號 看板 類別 中文測述 板主",
+        "編號 看板 類別 中文測述 人氣",
+    ] {
+        let mut screen = fixture("boards_caption");
+        replace(&mut screen, 2, header, "30;47");
+        screen.feed(b"\x1b[7;2H");
+        assert_eq!(
+            navigation::analyze(&screen.frame()),
+            Context::Unknown {
+                reason: UnknownReason::BoardHeader
+            }
+        );
+    }
+    let mut screen = fixture("boards_caption");
+    replace(&mut screen, 4, "          是否刪除？", "0");
+    screen.feed(b"\x1b[7;2H");
+    assert_eq!(
+        navigation::analyze(&screen.frame()),
+        Context::Unknown {
+            reason: UnknownReason::BoardRows
+        }
+    );
+}

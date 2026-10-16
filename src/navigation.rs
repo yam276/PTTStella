@@ -26,6 +26,8 @@ pub enum UnknownReason {
     Unmapped,
     Unrecognized,
     InvalidCursor,
+    BoardHeader,
+    BoardRows,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -224,14 +226,22 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
     let first_row = if class_root {
         7
     } else {
-        (1..=2).find(|&row| {
+        let header = (1..=2).find(|&row| {
             let text = compact(&rows[row].text);
-            (text.contains("編號") || text.contains("總數"))
-                && text.contains("看板")
-                && text.contains("類別")
-                && text.contains("中文敘述")
-                && rows[row].bar_text("類別")
-        })? + 1
+            text.contains("看板") && text.contains("類別")
+        })?;
+        let text = compact(&rows[header].text);
+        // The description caption is presentation, not an input contract.
+        // Match stable browser columns plus title/style instead of its wording.
+        if !(rows[0].bar_text("看板列表") || rows[0].bar_text("我的最愛"))
+            || !(text.contains("編號") || text.contains("總數"))
+            || !text.contains("人氣")
+            || !text.contains("板主")
+            || !rows[header].bar_text("類別")
+        {
+            return Some(unknown(UnknownReason::BoardHeader));
+        }
+        header + 1
     };
     if !rows[0].mapped()
         || rows[if class_root { 7 } else { 1 }..]
@@ -265,7 +275,7 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
                     .all(|c| c.is_ascii_alphanumeric() || b"_- .".contains(&c))
         };
         if blank || !valid {
-            return Some(unknown(UnknownReason::Unrecognized));
+            return Some(unknown(UnknownReason::BoardRows));
         }
         items.push(row);
     }

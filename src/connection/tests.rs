@@ -15,15 +15,20 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
     let mut view = wait(&connection, |v| v.received > 0).await;
     let mut keyboard = Keyboard::default();
     keyboard.toggle();
-    for profile in ["main_menu", "board_list", "board_list", "article_list"] {
-        for value in [
-            "j",
-            "k",
-            "g",
-            "g",
-            "G",
-            if profile == "article_list" { "h" } else { "l" },
-        ] {
+    let mut stages: Vec<(&str, &[&str])> = vec![
+        ("main_menu", &["j", "k", "g", "g", "G", "l"]),
+        ("board_list", &["j", "k", "g", "g", "G", "l"]),
+        ("board_list", &["j", "k", "g", "g", "G", "l"]),
+        ("article_list", &["j", "k", "g", "g", "G", "h"]),
+    ];
+    for _ in 0..5 {
+        stages.extend([
+            ("board_list", ["l"].as_slice()),
+            ("article_list", ["h"].as_slice()),
+        ]);
+    }
+    for (profile, values) in stages {
+        for &value in values {
             let context = navigation::analyze(&view.frame);
             assert_eq!(context.kind(), profile);
             keyboard.context(&context);
@@ -51,7 +56,7 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
             assert_eq!(keyboard.status(&context).mode, "normal");
         }
     }
-    // Peer expects 20 translated operations across all four profiles, then
+    // Peer expects 30 translated operations including five board/article cycles, then
     // Close. Literal Vim letters/control codes or extra input fail the join.
     connection.shutdown().await.unwrap();
 }
