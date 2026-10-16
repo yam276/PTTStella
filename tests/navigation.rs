@@ -115,6 +115,52 @@ fn pinned_article_and_complete_dual_colour_title_keep_column_targets() {
     ));
 }
 #[test]
+fn live_empty_article_titles_keep_valid_number_and_author_targets() {
+    let mut screen = fixture("list_dense");
+    replace(
+        &mut screen,
+        14,
+        &article_row("774", "    ", "10/16", "empty_writer", "□"),
+        "0",
+    );
+    screen.feed(b"\x1b[18;2H");
+    let context = navigation::analyze(&screen.frame());
+    assert!(
+        matches!(context, Context::ArticleList { .. }),
+        "{context:?}"
+    );
+    assert_eq!(
+        navigation::plan(&context, Intent::Open { row: 14 }).unwrap(),
+        b"\x1b[A\x1b[A\x1b[A\r"
+    );
+}
+#[test]
+fn live_important_pinned_date_is_not_an_invalid_calendar_date() {
+    let mut screen = fixture("list_dense");
+    replace(
+        &mut screen,
+        19,
+        &article_row("★", " !  ", "重要 ", "announcer", "□ 自製重要公告"),
+        "0",
+    );
+    screen.feed(b"\x1b[18;2H");
+    let context = navigation::analyze(&screen.frame());
+    assert!(
+        matches!(context, Context::ArticleList { .. }),
+        "{context:?}"
+    );
+    for (number, date) in [("774", "重要 "), ("★", "未知 "), ("774", "99/99")] {
+        replace(
+            &mut screen,
+            19,
+            &article_row(number, "    ", date, "announcer", "□ 自製無效日期"),
+            "0",
+        );
+        screen.feed(b"\x1b[18;2H");
+        unknown(&screen.frame());
+    }
+}
+#[test]
 fn padded_dates_votes_locked_and_deleted_rows_remain_browsable() {
     for text in [
         article_row("122", "   8", " 1/ 9", "carol", "□ 補齊日期"),

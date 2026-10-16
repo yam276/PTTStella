@@ -8,7 +8,7 @@
 
 介面依 [主選單輸出／游標](https://github.com/ptt/pttbbs/blob/908bb0631a4a6db41eac85713637adf1a6058fde/mbbsd/menu.c#L534)、[選單命令](https://github.com/ptt/pttbbs/blob/908bb0631a4a6db41eac85713637adf1a6058fde/mbbsd/menu.c#L734)、[看板欄位／目錄](https://github.com/ptt/pttbbs/blob/908bb0631a4a6db41eac85713637adf1a6058fde/mbbsd/board.c#L1587) 及 [上下兩列命令配置](https://github.com/ptt/pttbbs/blob/908bb0631a4a6db41eac85713637adf1a6058fde/mbbsd/psb.c#L1110) 編寫自製 fixture。來源不代表實站部署版本；驗證結果以 active plan 為準。
 
-文章列表按固定 cell 欄位讀日期／作者，接受緊貼人氣與日期、置底與六位數編號；看板列表的「[→][r]閱讀／[←][q]回上層」也沿同一 BoardList 意圖轉譯。這些文字變體不會讓 h/l 恢復送出原始字母。詳見 [辨識契約](navigation.md)。
+文章列表按固定 cell 欄位讀日期／作者，接受緊貼人氣與日期、置底（包含日期欄「重要」）、空白標題與六位數編號；看板列表的「[→][r]閱讀／[←][q]回上層」也沿同一 BoardList 意圖轉譯。這些文字變體不會讓 h/l 恢復送出原始字母。詳見 [辨識契約](navigation.md)。
 
 ## 按鍵衝突的來源
 
