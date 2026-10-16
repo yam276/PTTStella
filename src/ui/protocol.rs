@@ -171,6 +171,136 @@ pub(super) enum SurfaceEvent {
     Stopped {
         clean: bool,
     },
+    SurfaceProbe {
+        clean: bool,
+    },
+}
+
+impl SurfaceEvent {
+    /// Admit user actions before any state change, encoding or station enqueue.
+    /// This is event provenance, not a security boundary against injected code.
+    /// Frame/revision and feature-specific checks still belong to their owners.
+    pub(super) fn admitted(&self, generation: u64) -> bool {
+        use SurfaceEvent::*;
+        match self {
+            Key {
+                trusted,
+                generation: source,
+                ..
+            }
+            | Paste {
+                trusted,
+                generation: source,
+                ..
+            } => *trusted && *source == generation,
+            Text {
+                trusted,
+                composition_input,
+                generation: source,
+                ..
+            } => {
+                // Legacy WebKit/CDP: JS requires matching trusted start/input.
+                (*trusted || *composition_input) && *source == generation
+            }
+            KeyboardState {
+                trusted,
+                action,
+                generation: source,
+                ..
+            } => {
+                // Ending composition only revokes an edit; it grants no input.
+                (*trusted || action == "composition_end") && *source == generation
+            }
+            Navigate { trusted, stamp, .. } | LoginSubmit { trusted, stamp, .. } => {
+                *trusted && stamp.generation == generation
+            }
+            FiltersOpen { trusted }
+            | FiltersEdit { trusted, .. }
+            | FiltersReveal { trusted, .. }
+            | Hover { trusted, .. }
+            | HoverPreference { trusted, .. }
+            | Media { trusted, .. }
+            | KeepAlive { trusted, .. }
+            | SettingsOpen { trusted }
+            | LoginOpen { trusted }
+            | LoginForget { trusted }
+            | LoginCancel { trusted }
+            | SettingsSave { trusted, .. }
+            | SettingsProfile { trusted, .. }
+            | ExportPng { trusted, .. }
+            | OpenLink { trusted, .. }
+            | PasteConfirm { trusted }
+            | PasteCancel { trusted }
+            | Copied { trusted, .. } => *trusted,
+            // Internal notifications and projections do not submit user input.
+            MediaDecoded { .. }
+            | KeepAliveGate { .. }
+            | SettingsPreview { .. }
+            | Select { .. }
+            | Painted { .. }
+            | Probe(_)
+            | Error { .. }
+            | Stopped { .. }
+            | SurfaceProbe { .. } => true,
+        }
+    }
+
+    pub(super) fn discard(mut self) {
+        if let Self::LoginSubmit { password, .. } = &mut self {
+            zeroize::Zeroize::zeroize(password);
+        }
+    }
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use super::*;
+    use serde_json::{Value, json};
+
+    fn admits(mut value: Value, trusted: bool, generation: u64) -> bool {
+        value["trusted"] = trusted.into();
+        serde_json::from_value::<SurfaceEvent>(value)
+            .unwrap()
+            .admitted(generation)
+    }
+
+    #[test]
+    fn all_station_input_paths_reject_synthetic_or_stale_events() {
+        let stamp = json!({"generation":7,"revision":4,"input_epoch":2});
+        let events = [
+            json!({"kind":"key","key":{"key":"Enter","code":"Enter","ctrl":false,"alt":false,"shift":false,"repeat":false},"generation":7}),
+            json!({"kind":"text","text":"a","generation":7}),
+            json!({"kind":"paste","text":"a\nb","generation":7}),
+            json!({"kind":"navigate","stamp":stamp,"intent":{"action":"back"}}),
+            json!({"kind":"login_submit","account":"Synthetic","password":"unused","remember":false,"stamp":stamp}),
+        ];
+        for event in events {
+            assert!(!admits(event.clone(), false, 7), "{event}");
+            assert!(!admits(event.clone(), true, 8), "{event}");
+            assert!(admits(event.clone(), true, 7), "{event}");
+        }
+        for kind in ["paste_confirm", "paste_cancel"] {
+            assert!(!admits(json!({"kind":kind}), false, 7));
+            assert!(admits(json!({"kind":kind}), true, 7));
+        }
+    }
+
+    #[test]
+    fn composition_exception_and_revocation_never_admit_an_old_session() {
+        let legacy = json!({"kind":"text","text":"中","generation":7,"composition_input":true,"composed":true});
+        assert!(admits(legacy.clone(), false, 7));
+        assert!(!admits(legacy, false, 8));
+        let end = json!({"kind":"keyboard_state","action":"composition_end","generation":7});
+        assert!(admits(end.clone(), false, 7));
+        assert!(!admits(end, false, 8));
+        for action in ["composition_start", "toggle", "once", "release", "reset"] {
+            assert!(!admits(
+                json!({"kind":"keyboard_state","action":action,"generation":7}),
+                false,
+                7
+            ));
+        }
+    }
 }
 
 #[derive(Deserialize)]

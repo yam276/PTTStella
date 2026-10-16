@@ -12,6 +12,14 @@
 
 ## 維護性重構
 
+2026-10-17 獨立架構審查後續：使用者授權優先修正共同清理、命令等待不阻塞 UI、統一輸入准入。實作以 Resources／Pending 與 protocol admission 三個具名責任為界，補上錯誤退出、慢回覆、取消排隊請求、不可信貼上／確認、組字例外及清理逾時的案例。正常／錯誤返回都停止並 join renderer、Connection 與 credential owner；超時保留等待、顯示未完成狀態。Connection 回覆失敗仍 join，並保留失敗供重複 shutdown 回報；錯誤畫面也可 ⌘W／⌘Q 結束。貼上在改動預覽前檢查信任，確認通過准入後才取走預覽。
+
+複查先發現兩個新增 P2：共同 pending stop Promise 累積 reaction，以及 lazy 命令 future 讓後到原始按鍵搶先入列。已改為單一可替換 stop waiter；Pending 確認空槽後同步取得已入列的 Connection Reply，只把等待回覆留給 select。新增 WebSocket 測試不 poll browse reply 仍比對先 ArrowDown、後 Enter，busy 測試確認拒絕不執行入列 factory。兩萬筆封包測試確認未完成 stop reaction 不累積；替換回舊 helper 的獨立 mutant 在第 1,000 筆被相同測試拒絕。原 Agent 再次唯讀複查後，確認原三項與兩項 P2 均可關閉、沒有其他有充分依據的阻擋問題；另親自核對 54 個來源檔與產物雜湊相符。這是獨立程式／證據審閱，並非另一人重跑 GUI 或人工產品驗收。
+
+最終 fmt／desktop 全 targets Clippy、core 八套 suite／兩份 replay、42 個 desktop lib、10 個 bin、4 個 JS 測試通過，原 fixture／expected 未改。macOS WKWebView 重新執行九個獨立程序：四種錯誤退出、三筆不可信貼上拒絕、真實多行貼上後拒絕合成確認並保留預覽、60 秒合成命令等待期間開啟／取消字型設定及關窗、40 筆 Vim 操作、按鈕登入合成主選單。九者皆完成清理與 Close acknowledged，退出碼 0；本機負面 peer 不接受任何站端輸入。slow 只證明合成 future 等待期間 UI 仍可運作；send 為實際 Eval API 序列化失敗，資料通道失敗的 stop 喚醒另由 fake-channel JS 測試驗證，沒有宣稱真實網路背壓。
+
+最終 App 為 `dist/macos-boundaries-reviewed/PTTStella.app`（arm64／ad-hoc），前版保留。完整 Mac desktop backend 仍 not_ready；未重跑 Windows／Linux、完整原生 IME／媒體或實站登入，本輪沒有存取使用者帳密、push 或公開發佈。其餘 UI 共同作用域與 Rust→JS 封包型別化留待後續獨立驗收。
+
 2026-10-17：使用者要求檢查與改善可讀性、維護性及擴充性。本輪優先整理連線 worker 的狀態轉移、UI bridge／畫面投影與設定所有權；不新增通用框架、後端或產品功能。驗收為原有輸入 bytes、generation／revision／input epoch、防閒置、登入取消／期限、遮黑及關閉清理行為保持一致，既有 expected 不因重構更改。
 
 重構前 core 與 39 個 desktop lib／2 個 bin 測試通過。第一步將 WSS 連線／關閉／有界傳送移至 connection/transport，單一 session 狀態與登入、導覽、保活、畫面發布移至 connection/worker。事件迴圈只負責選擇事件；手動輸入仍只有一條 epoch／escape／送出路徑，等待狀態及登入期限各有共同擁有者。原本巨型 select 的壓縮分支改為可由 rustfmt 維護的具名方法。此步驟 core、39 個 desktop lib／2 個 bin、desktop 全 targets Clippy 與 docs gate 通過；既有 expected 未改。

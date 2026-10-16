@@ -85,7 +85,22 @@ pub struct Connection {
     pub updates: watch::Receiver<View>,
     worker: Mutex<Option<JoinHandle<()>>>,
     probe_peer: Mutex<Option<JoinHandle<Result<(), String>>>>,
-    shutdown_result: Mutex<Option<CloseOutcome>>,
+    shutdown_result: Mutex<Option<Result<CloseOutcome, String>>>,
+}
+/// Already enqueued in the single writer. Waiting never changes input order.
+pub struct Reply {
+    answer: oneshot::Receiver<Result<(), String>>,
+    deadline: tokio::time::Instant,
+    expired: &'static str,
+    closed: &'static str,
+}
+impl Reply {
+    pub async fn wait(self) -> Result<(), String> {
+        tokio::time::timeout_at(self.deadline, self.answer)
+            .await
+            .map_err(|_| self.expired.to_owned())?
+            .map_err(|_| self.closed.to_owned())?
+    }
 }
 impl Connection {
     pub fn start(screen: Screen) -> Result<Self, String> {
@@ -148,6 +163,12 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    /// Fault/admission regression: local peer rejects every station input byte.
+    pub fn start_surface_probe() -> Result<Self, String> {
+        let connection = Self::start_owned_probe(probe::window_page(0)?, probe::Scenario::Surface)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     fn start_owned_probe(bytes: Vec<u8>, scenario: probe::Scenario) -> Result<Self, String> {
         let runtime = tokio::runtime::Handle::try_current().map_err(|e| e.to_string())?;
         let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).map_err(|e| e.to_string())?;
@@ -185,32 +206,43 @@ impl Connection {
         self.enqueue(Command::Input { generation, bytes })
     }
     pub async fn login(&self, stamp: Stamp, credentials: Credentials) -> Result<(), String> {
+        self.request_login(stamp, credentials)?.wait().await
+    }
+    pub fn request_login(&self, stamp: Stamp, credentials: Credentials) -> Result<Reply, String> {
         let (reply, answer) = oneshot::channel();
         self.enqueue(Command::Login {
             stamp,
             credentials,
             reply,
         })?;
-        timeout(Duration::from_secs(6), answer)
-            .await
-            .map_err(|_| "登入送出結果未確認；不會重試".to_owned())?
-            .map_err(|_| "登入服務未回覆".to_owned())?
+        Ok(Reply {
+            answer,
+            deadline: tokio::time::Instant::now() + Duration::from_secs(6),
+            expired: "登入送出結果未確認；不會重試",
+            closed: "登入服務未回覆",
+        })
     }
     pub fn cancel_login(&self) -> Result<(), String> {
         self.enqueue(Command::CancelLogin)
     }
     pub async fn navigate(&self, stamp: Stamp, intent: Intent) -> Result<(), String> {
-        self.navigate_from(stamp, intent, false).await
+        self.request_navigate(stamp, intent)?.wait().await
     }
     pub async fn browse_key(&self, stamp: Stamp, intent: Intent) -> Result<(), String> {
-        self.navigate_from(stamp, intent, true).await
+        self.request_browse_key(stamp, intent)?.wait().await
     }
-    async fn navigate_from(
+    pub fn request_navigate(&self, stamp: Stamp, intent: Intent) -> Result<Reply, String> {
+        self.request_navigation(stamp, intent, false)
+    }
+    pub fn request_browse_key(&self, stamp: Stamp, intent: Intent) -> Result<Reply, String> {
+        self.request_navigation(stamp, intent, true)
+    }
+    fn request_navigation(
         &self,
         stamp: Stamp,
         intent: Intent,
         keyboard: bool,
-    ) -> Result<(), String> {
+    ) -> Result<Reply, String> {
         let (reply, answer) = oneshot::channel();
         self.enqueue(Command::Navigate {
             stamp,
@@ -218,10 +250,12 @@ impl Connection {
             keyboard,
             reply,
         })?;
-        timeout(Duration::from_secs(6), answer)
-            .await
-            .map_err(|_| "導覽傳送逾時，結果未確認；不會自動重送".to_owned())?
-            .map_err(|_| "連線服務未回報導覽結果".to_owned())?
+        Ok(Reply {
+            answer,
+            deadline: tokio::time::Instant::now() + Duration::from_secs(6),
+            expired: "導覽傳送逾時，結果未確認；不會自動重送",
+            closed: "連線服務未回報導覽結果",
+        })
     }
     fn enqueue(&self, command: Command) -> Result<(), String> {
         self.commands
@@ -239,24 +273,30 @@ impl Connection {
                 .shutdown_result
                 .lock()
                 .map_err(|_| "shutdown result lock failed".to_owned())
-                .map(|result| result.unwrap_or(CloseOutcome::NoConnection));
+                .and_then(|result| result.clone().ok_or("連線清理結果尚未確認".to_owned())?);
         }
         let (done, receiver) = oneshot::channel();
-        self.commands
-            .send(Command::Shutdown(done))
-            .await
-            .map_err(|_| "連線服務已結束".to_owned())?;
-        let outcome = timeout(Duration::from_secs(5), receiver)
-            .await
-            .map_err(|_| "連線清理逾時".to_owned())?
-            .map_err(|_| "連線清理未完成".to_owned())?;
+        // Keep the enqueue alive if the bounded queue is full: canceling it on
+        // a deadline would leave the worker without a shutdown request.
+        let outcome = match self.commands.send(Command::Shutdown(done)).await {
+            Ok(()) => timeout(Duration::from_secs(5), receiver)
+                .await
+                .map_err(|_| "連線清理逾時".to_owned())
+                .and_then(|result| result.map_err(|_| "連線清理未完成".to_owned())),
+            Err(_) => Err("連線服務已結束".to_owned()),
+        };
+        let mut errors = Vec::new();
         let task = self
             .worker
             .lock()
             .map_err(|_| "worker ownership lock failed".to_owned())?
             .take();
         if let Some(task) = task {
-            task.await.map_err(|e| format!("連線工作失敗: {e}"))?;
+            // Preserve the owner even when the acknowledgement failed. Its
+            // bounded transport work still has to finish and join its dial.
+            if let Err(error) = task.await {
+                errors.push(format!("連線工作失敗: {error}"));
+            }
         }
         let peer = self
             .probe_peer
@@ -265,19 +305,29 @@ impl Connection {
             .take();
         if let Some(mut peer) = peer {
             match timeout(Duration::from_secs(5), &mut peer).await {
-                Ok(result) => result.map_err(|e| e.to_string())??,
+                Ok(Ok(Ok(()))) => {}
+                Ok(Ok(Err(error))) => errors.push(error),
+                Ok(Err(error)) => errors.push(error.to_string()),
                 Err(_) => {
                     peer.abort();
                     let _ = peer.await;
-                    return Err("probe peer cleanup timed out".into());
+                    errors.push("probe peer cleanup timed out".into());
                 }
             }
         }
+        if let Err(error) = &outcome {
+            errors.push(error.clone());
+        }
+        let result = if errors.is_empty() {
+            outcome
+        } else {
+            Err(errors.join("；"))
+        };
         *self
             .shutdown_result
             .lock()
-            .map_err(|_| "shutdown result lock failed".to_owned())? = Some(outcome);
-        Ok(outcome)
+            .map_err(|_| "shutdown result lock failed".to_owned())? = Some(result.clone());
+        result
     }
 }
 

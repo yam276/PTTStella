@@ -14,6 +14,7 @@ pub(super) enum Scenario {
     Window,
     Login,
     Filters,
+    Surface,
 }
 
 pub(super) fn filters_page(next: bool) -> Result<Vec<u8>, String> {
@@ -208,6 +209,12 @@ pub(super) async fn serve(
         }
         if matches!(scenario, Scenario::Filters) {
             return filters(&mut socket).await;
+        }
+        if matches!(scenario, Scenario::Surface) {
+            return match socket.next().await {
+                Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e| e.to_string()),
+                _ => Err("surface probe received unexpected station input".into()),
+            };
         }
         if matches!(
             scenario,

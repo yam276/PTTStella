@@ -10,6 +10,7 @@ fn main() {
     let window_probe = flag.as_deref() == Some(std::ffi::OsStr::new("--probe-window"));
     let filters_probe = flag.as_deref() == Some(std::ffi::OsStr::new("--probe-filters"));
     let login_probe = flag.as_deref() == Some(std::ffi::OsStr::new("--probe-login"));
+    let surface_probe_flag = flag.as_deref() == Some(std::ffi::OsStr::new("--probe-surface"));
     if flag.as_deref() == Some(std::ffi::OsStr::new("--probe-live")) {
         let result = (|| -> Result<(), String> {
             let directory = args
@@ -38,7 +39,13 @@ fn main() {
     }
     let probe = match flag {
         None => None,
-        Some(flag) if flag == "--probe" || window_probe || login_probe || filters_probe => {
+        Some(flag)
+            if flag == "--probe"
+                || window_probe
+                || login_probe
+                || filters_probe
+                || surface_probe_flag =>
+        {
             match args.next() {
                 Some(path) => Some(std::path::PathBuf::from(path)),
                 None => {
@@ -49,19 +56,50 @@ fn main() {
         }
         Some(_) => {
             eprintln!(
-                "usage: pttstella [--probe OUTPUT_DIRECTORY DEBUG_PORT | --probe-window OUTPUT_DIRECTORY | --probe-login OUTPUT_DIRECTORY | --probe-filters OUTPUT_DIRECTORY | --probe-live OUTPUT_DIRECTORY]"
+                "usage: pttstella [--probe OUTPUT_DIRECTORY DEBUG_PORT | --probe-window OUTPUT_DIRECTORY | --probe-login OUTPUT_DIRECTORY | --probe-filters OUTPUT_DIRECTORY | --probe-surface OUTPUT_DIRECTORY CASE | --probe-live OUTPUT_DIRECTORY]"
             );
             std::process::exit(2);
         }
     };
-    let debug_port = if probe.is_some() && !window_probe && !login_probe && !filters_probe {
+    let surface_probe = if surface_probe_flag {
+        match args
+            .next()
+            .and_then(|value| value.into_string().ok())
+            .as_deref()
+        {
+            Some(
+                case @ ("decode" | "painted" | "send" | "renderer_error" | "untrusted" | "confirm"
+                | "slow"),
+            ) => Some(case.to_owned()),
+            _ => {
+                eprintln!(
+                    "--probe-surface requires decode, painted, send, renderer_error, untrusted, confirm or slow"
+                );
+                std::process::exit(2);
+            }
+        }
+    } else {
+        None
+    };
+    let debug_port = if probe.is_some()
+        && !window_probe
+        && !login_probe
+        && !filters_probe
+        && !surface_probe_flag
+    {
         args.next()
             .and_then(|p| p.to_str().and_then(|s| s.parse::<u16>().ok()))
             .filter(|p| *p != 0)
     } else {
         None
     };
-    if probe.is_some() && !window_probe && !login_probe && !filters_probe && debug_port.is_none() {
+    if probe.is_some()
+        && !window_probe
+        && !login_probe
+        && !filters_probe
+        && !surface_probe_flag
+        && debug_port.is_none()
+    {
         eprintln!("--probe requires an output directory and loopback debug port");
         std::process::exit(2);
     }
@@ -126,6 +164,7 @@ fn main() {
         window_probe,
         login_probe,
         filters_probe,
+        surface_probe,
         reload_settings,
         media_origin,
     };

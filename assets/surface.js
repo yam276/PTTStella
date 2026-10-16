@@ -11,6 +11,7 @@ const exportRows=document.getElementById("export-rows");
 const keepAlive=document.getElementById("keep-alive");
 const hoverPosition=document.getElementById("hover-position");
 let hoverPreference="top_right",hoverCandidate=null,hoverTimer=0,hoverSequence=0,pointerClient=null;
+let pasteConfirmProbe=false;
 function cancelHover(forget=false) {
     clearTimeout(hoverTimer);hoverTimer=0;
     const candidate=hoverCandidate;hoverCandidate=null;
@@ -420,6 +421,7 @@ function selectLink(e) {
 }
 function activate() { if(!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); }
 function paste(e) {
+    if(!e.isTrusted||stopped)return;
     cancelHover(true);
     e.preventDefault();
     if(pastePending||pasteDialog.open) return;
@@ -430,8 +432,8 @@ function paste(e) {
     if(text.length>16384) {surfaceNote.textContent="貼上文字過長；整段未送出";return;}
     pastePending=true;surface.dataset.pasteResult="pending";sendInput({kind:"paste",text,generation,trusted:e.isTrusted});
 }
-function confirmPaste(e){sendInput({kind:"paste_confirm",trusted:e.isTrusted});}
-function cancelPaste(e){e.preventDefault();send({kind:"paste_cancel",trusted:e.isTrusted});}
+function confirmPaste(e){if(e.isTrusted&&!stopped)sendInput({kind:"paste_confirm",trusted:true});}
+function cancelPaste(e){if(!e.isTrusted||stopped)return;e.preventDefault();send({kind:"paste_cancel",trusted:true});}
 function openFonts(e){cancelHover(true);policy("reset",e);send({kind:"settings_open",trusted:e.isTrusted});}
 function fillFonts(values) {
     for(const [name,field] of Object.entries(fontFields)) field.value=values[name];
@@ -468,6 +470,13 @@ const pasteObserver=new MutationObserver(()=>{
     if(pasteDialog.dataset.active==="true") {
         cancelComposition();cancelDrag();clearSelection();
         if(!pasteDialog.open) pasteDialog.showModal();
+        if(pasteConfirmProbe){
+            pasteConfirmProbe=false;
+            const before=sent;pasteSend.click();
+            const clean=sent===before&&pasteDialog.open&&pastePending;
+            send({kind:"paste_confirm",trusted:false});
+            send({kind:"surface_probe",clean});
+        }
         pasteCancel.focus();
         refreshNavigation();
     } else if(pasteDialog.open) {
@@ -740,8 +749,36 @@ async function paint(packet) {
     loginStop.hidden=!packet.login_pending;
 }
 focus();
+function revokeSurface(){
+    stopped=true;
+    for(const [target,event,callback,options] of bindings)target.removeEventListener(event,callback,options);
+}
+const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
+let cleanupClean=false;
 try {
-    while(true){const packet=await dioxus.recv();if(packet.stop) break;
+    while(true){const packet=await lifetime.receive();if(packet.stop) break;
+        if(packet.surface_probe){
+            const mode=packet.surface_probe;
+            if(mode==="decode")send({kind:"synthetic_invalid_event"});
+            else if(mode==="painted")send({kind:"painted",presentation:latest.presentation,revision:revision+100,generation});
+            else if(mode==="renderer_error")throw new Error("synthetic renderer failure");
+            else if(mode==="slow")surfaceNote.textContent="慢命令探針：結果等待 60 秒；可開啟字型設定或立即關閉視窗";
+            else if(mode==="confirm"){pasteConfirmProbe=true;surfaceNote.textContent="貼上確認探針：請用原生貼上 A、換行、B";}
+            else if(mode==="untrusted"){
+                const before=sent,beforePending=pastePending,beforeDialog=pasteDialog.open;
+                const clipboard=new DataTransfer();clipboard.setData("text/plain","synthetic");
+                const event=new ClipboardEvent("paste",{clipboardData:clipboard,bubbles:true,cancelable:true});
+                keyboard.dispatchEvent(event);pasteSend.click();pasteCancel.click();
+                const clean=sent===before&&pastePending===beforePending&&pasteDialog.open===beforeDialog&&!event.defaultPrevented;
+                // These are deliberately untrusted wire fixtures, not evidence
+                // of native trusted input. The local peer must receive no bytes.
+                send({kind:"paste",text:"synthetic",generation,trusted:false});
+                send({kind:"paste",text:"A\nB",generation,trusted:false});
+                send({kind:"paste_confirm",trusted:false});
+                send({kind:"surface_probe",clean});
+            }
+            continue;
+        }
         if(packet.filters_open){fillFilters(packet.filters_open.entries);filtersMessage.textContent=packet.filters_open.warning||"只有按儲存才變更名單；不會送出 PTT 指令。";filtersId.focus();continue;}
         if(packet.filters_result){const result=packet.filters_result;filtersBusy=false;filtersSave.disabled=false;filtersRemove.disabled=false;
             if(result.entries)fillFilters(result.entries);filtersMessage.textContent=result.message;
@@ -810,11 +847,12 @@ try {
     }
 } catch(e){send({kind:"error",message:String(e)});}
 finally {
+    lifetime.release();
+    revokeSurface();
     cancelHover(true);
     stopped=true;latest=null;observer.disconnect();pasteObserver.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
     const mediaClean=await media.destroy();
     clearTimeout(fontTimer);fontTimer=0;fontPreviewNext=null;
-    for(const [target,event,callback,options] of bindings) target.removeEventListener(event,callback,options);
     if(exportTask) await exportTask;
     if(pasteDialog.open) pasteDialog.close();
     if(fontDialog.open) fontDialog.close();
@@ -830,6 +868,8 @@ finally {
     fontButton.click();fontFields.font_size.dispatchEvent(new InputEvent("input",{bubbles:true}));
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
-    send({kind:"stopped",clean:mediaClean&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
-        &&fontTimer===0&&hoverTimer===0&&hoverCandidate===null&&!fontDialog.open&&!chrome.classList.contains("open")&&document.activeElement!==keyboard});
+    cleanupClean=mediaClean&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
+        &&fontTimer===0&&hoverTimer===0&&hoverCandidate===null&&!fontDialog.open&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
+    try {send({kind:"stopped",clean:cleanupClean});} catch(_) { /* join still acknowledges cleanup */ }
 }
+return {clean:cleanupClean};
