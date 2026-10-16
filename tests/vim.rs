@@ -15,8 +15,54 @@ fn key(value: &str) -> Key {
         code: format!("Key{value}"),
         ctrl: false,
         alt: false,
+        shift: false,
         repeat: false,
     }
+}
+#[test]
+fn cjk_input_source_uses_physical_keys_only_in_normal_mode() {
+    let c = reading(24, 50);
+    let mut p = Keyboard::default();
+    p.toggle();
+    let mut process = key("Process");
+    process.code = "KeyJ".into();
+    assert_eq!(
+        p.key(&process, &c),
+        Effect::Browse(Intent::Lines {
+            down: true,
+            count: 1
+        })
+    );
+    assert!(!p.accept_text(false));
+    process.code = "KeyG".into();
+    process.shift = true;
+    assert_eq!(p.key(&process, &c), Effect::Browse(Intent::Last));
+    process.shift = false;
+    process.code = "Digit3".into();
+    assert_eq!(p.key(&process, &c), Effect::None);
+    process.code = "KeyJ".into();
+    assert_eq!(
+        p.key(&process, &c),
+        Effect::Browse(Intent::Lines {
+            down: true,
+            count: 3
+        })
+    );
+    process.code = "KeyI".into();
+    assert_eq!(p.key(&process, &c), Effect::None);
+    assert_eq!(p.status(&c).mode, "input");
+    process.code = "KeyJ".into();
+    assert_eq!(p.key(&process, &c), Effect::None);
+    p.composition_start();
+    assert!(p.accept_text(true));
+    p.composition_end();
+    press(&mut p, "Escape", &c);
+    press(&mut p, "f", &c);
+    assert_eq!(p.key(&process, &c), Effect::None);
+    p.composition_start();
+    assert!(p.accept_text(true));
+    p.composition_end();
+    assert_eq!(p.status(&c).mode, "normal");
 }
 fn press(policy: &mut Keyboard, value: &str, context: &Context) -> Effect {
     let k = key(value);
@@ -137,6 +183,11 @@ fn counts_prefixes_half_scroll_and_unknown_context_never_leak_text() {
         reason: UnknownReason::Unrecognized,
     };
     assert!(matches!(press(&mut p, "h", &unknown), Effect::Notice(_)));
+    assert_eq!(p.status(&unknown).mode, "suspended");
+    assert_eq!(
+        p.status(&unknown).suspended_reason,
+        Some(UnknownReason::Unrecognized)
+    );
     assert!(!p.accept_text(false));
     press(&mut p, "f", &unknown);
     press(&mut p, "h", &unknown);
