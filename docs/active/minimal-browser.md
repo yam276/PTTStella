@@ -12,6 +12,16 @@
 
 ## 維護性重構
 
+2026-10-17 第二輪 UI 整理：使用者授權整理共同作用域及 Rust→JS 封包。登入、名單與字型設定改由各自 JS owner 持有欄位／草稿／busy／timer／request；主 surface 只接線、分派及協調同一畫面的輸入／選取／繪製。Rust outbound Packet、具型別 payload／status 與薄 Bridge 取代一般送出路徑的臨時 JSON，統一 `{kind,payload}`，未知封包不再落入 paint。設定載入後再次檢查 epoch／request，取消或停止後不重畫、不搶焦點；原有單一送鍵、准入及共同清理不另建第二條路徑。
+
+本輪 12 個 bin、42 個 desktop lib、11 個 JS、fmt／Clippy 與 core 八套 suite／兩份 replay 通過。新增 wire fixture 是獨立手寫 expected；既有核心 fixture／expected 未改。候選包完成 11 個 macOS WKWebView 程序：前輪九種生命週期／Vim／登入情境，加上完整名單與 UI／媒體整合。設定草稿取消保留設定及 PNG bytes；匯出生效 20／20、匯入只預覽，保存 18／19 後 PNG 有 34,503 pixels 改變；整頁選取行等於整頁 PNG。本機 PNG 紅／藍圖像可見，壞圖解碼失敗後重試成功，HTTP 分別一次正常圖、兩次壞圖，外開使用 probe sink。名單遮黑外像素差零、揭露等於原圖、翻頁返回恢復遮黑，且與重構前保留圖逐像素一致。40 筆 Vim 與合成按鈕登入維持原結果；均完成清理與 acknowledged，沒有連 PTT。
+
+候選測試曾發現名單關閉後瀏覽控制項未立即恢復；修改三個 dialog 的共用 changed 回呼，同時刷新 navigation／export。`dist/macos-ui-contract-verified/PTTStella.app` 重新跑單元／Clippy／JS，原生逐一關閉／取消名單、字型與登入，AX 斷言確認不需額外操作便恢復瀏覽；再完成四次 CRUD、兩次揭露、複製事件、兩種 PNG 及翻頁往返，PNG 與候選／前輪相同。
+
+原 Agent 獨立複查確認 owner／typed outbound 改善成立，未發現阻擋問題；另找到 P3：lifetime 的接收 callback 直接讀取 null 封包會拋出例外，留下未完成 waiter。已在 lifetime 與主迴圈以 optional access 將 malformed 值交回 router 拒絕；新增帶 timeout 的 lifetime→router 測試，核對 null／undefined 拒絕、零 handler 呼叫、後續 notice／stop 與 listener 釋放。Agent 再核對後確認原 P3 可關閉。複查包含程式、測試與來源／binary hash 核對，並非另一人重跑 GUI 或人工產品驗收。
+
+交付包為 `dist/macos-ui-contract-delivery/PTTStella.app`（arm64／ad-hoc），前版保留。P3 修正重跑 12 bin／42 lib／Clippy／11 JS，最後主迴圈 optional access 再跑 JS、重新打包，並以最終 App 執行原生 painted 錯誤退出／⌘Q，確認共同清理完成、Close acknowledged 與退出碼 0。其餘候選 11 案與三個 dialog／完整名單針對性回歸沒有在這兩處 optional access 後整批重跑，證據範圍分開保留。完整 Mac desktop backend 仍 not_ready，Windows／Linux、完整原生 IME／codec、OS 外開及本輪實站行為未驗證；沒有 push 或公開發佈。
+
 2026-10-17 獨立架構審查後續：使用者授權優先修正共同清理、命令等待不阻塞 UI、統一輸入准入。實作以 Resources／Pending 與 protocol admission 三個具名責任為界，補上錯誤退出、慢回覆、取消排隊請求、不可信貼上／確認、組字例外及清理逾時的案例。正常／錯誤返回都停止並 join renderer、Connection 與 credential owner；超時保留等待、顯示未完成狀態。Connection 回覆失敗仍 join，並保留失敗供重複 shutdown 回報；錯誤畫面也可 ⌘W／⌘Q 結束。貼上在改動預覽前檢查信任，確認通過准入後才取走預覽。
 
 複查先發現兩個新增 P2：共同 pending stop Promise 累積 reaction，以及 lazy 命令 future 讓後到原始按鍵搶先入列。已改為單一可替換 stop waiter；Pending 確認空槽後同步取得已入列的 Connection Reply，只把等待回覆留給 select。新增 WebSocket 測試不 poll browse reply 仍比對先 ArrowDown、後 Enter，busy 測試確認拒絕不執行入列 factory。兩萬筆封包測試確認未完成 stop reaction 不累積；替換回舊 helper 的獨立 mutant 在第 1,000 筆被相同測試拒絕。原 Agent 再次唯讀複查後，確認原三項與兩項 P2 均可關閉、沒有其他有充分依據的阻擋問題；另親自核對 54 個來源檔與產物雜湊相符。這是獨立程式／證據審閱，並非另一人重跑 GUI 或人工產品驗收。

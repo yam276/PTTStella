@@ -165,7 +165,11 @@ impl Connection {
     }
     /// Fault/admission regression: local peer rejects every station input byte.
     pub fn start_surface_probe() -> Result<Self, String> {
-        let connection = Self::start_owned_probe(probe::window_page(0)?, probe::Scenario::Surface)?;
+        Self::start_ui_probe(probe::window_page(0)?)
+    }
+    /// Explicit synthetic UI fixture; the peer accepts Close and no input bytes.
+    pub fn start_ui_probe(bytes: Vec<u8>) -> Result<Self, String> {
+        let connection = Self::start_owned_probe(bytes, probe::Scenario::Surface)?;
         connection.keep_alive(false)?;
         Ok(connection)
     }

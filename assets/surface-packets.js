@@ -1,0 +1,18 @@
+// The tagged envelope has one destination. Unknown kinds fail visibly instead
+// of falling through to paint and partially mutating an unrelated feature.
+function createSurfaceRouter(handlers) {
+    const kinds=["paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
+        "hover_settings","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error",
+        "media_external","media_reset","settings_open","font_preview","profile_result","settings_saved",
+        "selection","paste_result","input_rejected","navigation_result","link_result","export_result"];
+    const table=new Map(kinds.map(kind=>{
+        if(typeof handlers[kind]!=="function")throw new Error("Missing surface handler: "+kind);
+        return [kind,handlers[kind]];
+    }));
+    return packet=>{
+        if(!packet||typeof packet!=="object"||Array.isArray(packet)||!table.has(packet.kind)
+            ||Object.keys(packet).some(key=>key!=="kind"&&key!=="payload"))throw new Error("Unknown surface packet");
+        if(packet.kind!=="media_reset"&&!Object.hasOwn(packet,"payload"))throw new Error("Missing surface payload: "+packet.kind);
+        return table.get(packet.kind)(packet.payload);
+    };
+}

@@ -20,7 +20,7 @@ function cancelHover(forget=false) {
     if(candidate?.started&&!stopped)send({kind:"hover",presentation:candidate.presentation,sequence:candidate.sequence,stamp:candidate.stamp,index:null,trusted:true});
 }
 function previewHover(index) {
-    if(presentationBlocked||!pointerClient||hoverPreference==="off"||blocked()||dragging||hasSelection()||!latest?.connected||!latest.image_links.includes(index)) {cancelHover();return;}
+    if(filterUi.blocked()||!pointerClient||hoverPreference==="off"||blocked()||dragging||hasSelection()||!latest?.connected||!latest.image_links.includes(index)) {cancelHover();return;}
     const identity=JSON.stringify(latest.links[index]);
     if(hoverCandidate?.identity===identity) {media.locate(pointerClient,hoverPreference);return;}
     cancelHover();
@@ -47,46 +47,7 @@ function receiveKeyboard(state){keyboardState=state;vimToggle.textContent=state.
 const navigationMarker=document.getElementById("navigation-marker"),browseControls=document.getElementById("browse-controls");
 const browseBack=document.getElementById("browse-back"),browsePrevious=document.getElementById("browse-previous"),browseNext=document.getElementById("browse-next");
 const browseHint=document.getElementById("browse-hint");
-const fontButton=document.getElementById("font-settings"),fontDialog=document.getElementById("font-dialog");
-const loginButton=document.getElementById("login-open"),loginDialog=document.getElementById("login-dialog"),loginStop=document.getElementById("login-stop");
-const loginAccount=document.getElementById("login-account"),loginPassword=document.getElementById("login-password"),loginRemember=document.getElementById("login-remember");
-const loginSubmit=document.getElementById("login-submit"),loginForget=document.getElementById("login-forget"),loginCancel=document.getElementById("login-cancel"),loginNote=document.getElementById("login-note");
-let loginBusy=false,loginSaved=false;
-function loginWorking(busy){loginBusy=busy;loginSubmit.disabled=busy;loginForget.disabled=busy||!loginSaved;loginAccount.disabled=busy;loginPassword.disabled=busy;loginRemember.disabled=busy;}
-function openLogin(e){if(loginBusy||stopped)return;cancelHover(true);policy("reset",e);cancelComposition();clearSelection();loginPassword.value="";loginRemember.checked=false;loginNote.textContent="正在讀取鑰匙圈…";loginWorking(true);loginDialog.showModal();refreshNavigation();send({kind:"login_open",trusted:e.isTrusted});}
-function submitLogin(e){if(loginBusy||!loginDialog.open)return;e.preventDefault();const password=loginPassword.value;loginPassword.value="";loginWorking(true);loginNote.textContent="正在準備登入…";send({kind:"login_submit",account:loginAccount.value,password,remember:loginRemember.checked,stamp:stamp(),trusted:e.isTrusted});}
-function forgetLogin(e){if(loginBusy)return;loginPassword.value="";loginWorking(true);send({kind:"login_forget",trusted:e.isTrusted});}
-function closeLogin(e){e?.preventDefault();loginPassword.value="";loginRemember.checked=false;if(loginDialog.open)loginDialog.close();send({kind:"login_cancel",trusted:e?.isTrusted??false});restoreEditingFocus();refreshNavigation();}
-function stopLogin(e){send({kind:"login_cancel",trusted:e.isTrusted});focus();}
-const filtersButton=document.getElementById("filters-open"),filtersDialog=document.getElementById("filters-dialog");
-const filtersList=document.getElementById("filters-list"),filtersId=document.getElementById("filters-id"),filtersNote=document.getElementById("filters-note");
-const filtersSave=document.getElementById("filters-save"),filtersRemove=document.getElementById("filters-remove"),filtersClose=document.getElementById("filters-close");
-const filtersMessage=document.getElementById("filters-note-status"),filtersReveal=document.getElementById("filters-reveal"),filtersStatus=document.getElementById("filters-status");
-let filterEntries=[],filtersBusy=false,presentationBlocked=false;
 function invalidatePresentation(){cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);}
-function openFilters(e){if(stopped)return;invalidatePresentation();policy("reset",e);filtersDialog.showModal();refreshNavigation();send({kind:"filters_open",trusted:e.isTrusted});}
-function closeFilters(e){e?.preventDefault();if(filtersDialog.open)filtersDialog.close();filtersId.value="";filtersNote.value="";filtersList.selectedIndex=-1;restoreEditingFocus();refreshNavigation();}
-function fillFilters(entries){filterEntries=entries;const selected=filtersId.value.toLowerCase();filtersList.replaceChildren();const fresh=document.createElement("option");fresh.value="";fresh.textContent="新增帳號";fresh.selected=!selected;filtersList.append(fresh);
-    for(const entry of entries){const option=document.createElement("option");option.value=entry.id;option.textContent=entry.id+(entry.note?" — "+entry.note:"");option.selected=entry.id.toLowerCase()===selected;filtersList.append(option);}}
-function chooseFilter(){const entry=filterEntries.find(x=>x.id===filtersList.value);filtersId.value=entry?.id??"";filtersNote.value=entry?.note??"";}
-function editFilters(e,remove){if(filtersBusy||!filtersDialog.open)return;filtersBusy=true;filtersSave.disabled=true;filtersRemove.disabled=true;
-    presentationBlocked=true;invalidatePresentation();refreshExportControls();filtersMessage.textContent="正在儲存…";
-    send({kind:"filters_edit",id:filtersId.value,note:filtersNote.value,remove,trusted:e.isTrusted});}
-const saveFilter=e=>editFilters(e,false),removeFilter=e=>editFilters(e,true);
-function revealFilters(e){if(!latest||presentationBlocked)return;presentationBlocked=true;invalidatePresentation();refreshExportControls();
-    send({kind:"filters_reveal",presentation:latest.presentation,generation,revision,reveal:!latest.revealed,trusted:e.isTrusted});}
-const fontPreview=document.getElementById("font-preview"),fontNote=document.getElementById("font-note");
-const fontAvailability=document.getElementById("font-availability");
-const fontPreset=document.getElementById("font-preset"),fontSave=document.getElementById("font-save"),fontCancel=document.getElementById("font-cancel");
-const fontDefaults=document.getElementById("font-defaults");
-const profileImport=document.getElementById("profile-import"),profileExport=document.getElementById("profile-export"),profileName=document.getElementById("font-profile-name");
-let profileBusy=false;
-function profileAction(action,e){if(profileBusy||fontSaving)return;profileBusy=true;profileImport.disabled=true;profileExport.disabled=true;
-    send({kind:"settings_profile",action,name:profileName.value,trusted:e.isTrusted});}
-const importProfile=e=>profileAction("import",e),exportProfile=e=>profileAction("export",e);
-function profileChoice(profile){return profile.fonts.kind==="platform_default"?"platform":profile.fonts.kind==="preset"?profile.fonts.preset:"custom";}
-const fontFields={ascii_font:document.getElementById("font-ascii"),cjk_font:document.getElementById("font-cjk"),
-    font_size:document.getElementById("font-size"),baseline:document.getElementById("font-baseline")};
 const ctx=canvas.getContext("2d",{willReadFrequently:true});
 const palette=["#000000","#800000","#008000","#808000","#000080","#800080","#008080","#c0c0c0",
     "#808080","#ff0000","#00ff00","#ffff00","#0000ff","#ff00ff","#00ffff","#ffffff"];
@@ -97,7 +58,7 @@ const bundledFonts=new Map([
 const bundledLoads=new Map();
 const fontFamily=name=>JSON.stringify(bundledFonts.get(name)?.family??name)+", monospace";
 const fontDescription=(settings,cjk=false)=>settings.font_size+"px "+fontFamily(cjk?settings.cjk_font:settings.ascii_font);
-let loadedFonts=null,fontDraft=null,fontTimer=0,fontRequest=0,fontPreviewBusy=false,fontPreviewNext=null,fontSaving=false;
+let loadedFonts=null;
 async function loadFonts(settings) {
     const key=JSON.stringify([settings.ascii_font,settings.cjk_font,settings.font_size]);
     if(loadedFonts?.key===key&&!loadedFonts.warning) return "";
@@ -329,7 +290,7 @@ function flushSelection() {
 function receiveSelection(reply) {
     if(!selectionBusy||selectionBusy.request!==reply.request) return;
     selectionBusy=null;
-    if(selectionActive&&!selectionNext&&reply.generation===generation&&reply.revision===revision&&reply.presentation===latest?.presentation&&!presentationBlocked&&reply.value) {
+    if(selectionActive&&!selectionNext&&reply.generation===generation&&reply.revision===revision&&reply.presentation===latest?.presentation&&!filterUi.blocked()&&reply.value) {
         selectionCache=reply;surfaceNote.textContent="";surface.dataset.selectionReady=String(reply.request);drawSelection();
     }
     refreshExportControls();
@@ -350,7 +311,7 @@ function drawSelection() {
 function copy(e) {
     if(!hasSelection()||document.activeElement!==keyboard) return;
     e.preventDefault();
-    if(!selectionCache||presentationBlocked||selectionCache.presentation!==latest?.presentation) {surfaceNote.textContent="選取尚未準備好，請再複製";return;}
+    if(!selectionCache||filterUi.blocked()||selectionCache.presentation!==latest?.presentation) {surfaceNote.textContent="選取尚未準備好，請再複製";return;}
     if(!e.clipboardData) {surfaceNote.textContent="此環境未提供剪貼簿事件資料";return;}
     try {
         e.clipboardData.setData("text/plain",selectionCache.value.text);
@@ -434,38 +395,6 @@ function paste(e) {
 }
 function confirmPaste(e){if(e.isTrusted&&!stopped)sendInput({kind:"paste_confirm",trusted:true});}
 function cancelPaste(e){if(!e.isTrusted||stopped)return;e.preventDefault();send({kind:"paste_cancel",trusted:true});}
-function openFonts(e){cancelHover(true);policy("reset",e);send({kind:"settings_open",trusted:e.isTrusted});}
-function fillFonts(values) {
-    for(const [name,field] of Object.entries(fontFields)) field.value=values[name];
-}
-function readFonts() {
-    const selected=fontPreset.value,fonts=selected==="custom"?{kind:"custom",ascii_font:fontFields.ascii_font.value,cjk_font:fontFields.cjk_font.value}:
-        selected==="platform"?{kind:"platform_default"}:{kind:"preset",preset:selected};
-    return {fonts,font_size:Number(fontFields.font_size.value),baseline:Number(fontFields.baseline.value)};
-}
-function flushFontPreview() {
-    if(fontPreviewBusy||!fontPreviewNext||!fontDialog.open||stopped) return;
-    fontPreviewBusy=true;send({kind:"settings_preview",...fontPreviewNext});fontPreviewNext=null;
-}
-function previewFonts() {
-    clearTimeout(fontTimer);fontRequest++;fontNote.textContent="";
-    fontTimer=setTimeout(()=>{fontTimer=0;fontPreviewNext={request:fontRequest,values:readFonts()};flushFontPreview();},150);
-}
-function editFont(e){if(e.target===fontFields.ascii_font||e.target===fontFields.cjk_font)fontPreset.value="custom";previewFonts();}
-function chooseFontPreset(){const values=fontPreset.value==="platform"?fontDraft?.defaults:fontDraft?.presets[fontPreset.value];
-    if(values) {const size=fontFields.font_size.value,baseline=fontFields.baseline.value;fillFonts(values);fontFields.font_size.value=size;fontFields.baseline.value=baseline;previewFonts();}}
-function resetFonts(){if(fontDraft){fillFonts(fontDraft.defaults);fontPreset.value="platform";previewFonts();}}
-function closeFonts(e) {
-    e?.preventDefault();if(fontSaving||profileBusy) return;
-    clearTimeout(fontTimer);fontTimer=0;fontRequest++;fontPreviewNext=null;
-    fontDialog.close();restoreEditingFocus();
-    refreshNavigation();
-}
-function saveFonts(e) {
-    if(fontSaving||profileBusy) return;
-    fontSaving=true;fontSave.disabled=true;fontCancel.disabled=true;
-    send({kind:"settings_save",values:readFonts(),trusted:e.isTrusted});
-}
 const pasteObserver=new MutationObserver(()=>{
     if(pasteDialog.dataset.active==="true") {
         cancelComposition();cancelDrag();clearSelection();
@@ -489,8 +418,8 @@ pasteObserver.observe(pasteDialog,{attributes:true,attributeFilter:["data-active
 function refreshExportControls() {
     refreshKeepAlive();
     const selection=selectionCache;
-    exportButton.disabled=exportBusy||!latest||presentationBlocked;
-    exportRows.disabled=exportBusy||presentationBlocked||blocked()||!selection||selection.generation!==generation||selection.revision!==revision||selection.presentation!==latest?.presentation;
+    exportButton.disabled=exportBusy||!latest||filterUi.blocked();
+    exportRows.disabled=exportBusy||filterUi.blocked()||blocked()||!selection||selection.generation!==generation||selection.revision!==revision||selection.presentation!==latest?.presentation;
     exportRows.title=selection?`匯出第 ${selection.value.rows.start+1}–${selection.value.rows.end} 行（完整 80 欄）`:"先拖曳選取要截圖的行";
 }
 function refreshKeepAlive() {
@@ -504,7 +433,7 @@ function refreshKeepAlive() {
 }
 function toggleKeepAlive(e){if(latest&&!stopped)send({kind:"keep_alive",enabled:!latest.keep_alive,trusted:e.isTrusted});}
 function exportScreen(e, selected=false) {
-    if(exportBusy||!latest||stopped||presentationBlocked) return;
+    if(exportBusy||!latest||stopped||filterUi.blocked()) return;
     const selection=selected?selectionCache:null;
     if(selected&&exportRows.disabled) return;
     exportBusy=true;refreshExportControls();surface.dataset.exportResult="pending";
@@ -554,11 +483,16 @@ function wheel(e) {
 }
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
 const media=installMedia({send,prepare:()=>{cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshNavigation,restore:restoreEditingFocus});
-const bindings=[
-    [filtersButton,"click",openFilters],[filtersClose,"click",closeFilters],[filtersDialog,"cancel",closeFilters],
-    [filtersList,"change",chooseFilter],[filtersSave,"click",saveFilter],[filtersRemove,"click",removeFilter],[filtersReveal,"click",revealFilters],
-    [loginButton,"click",openLogin],[loginSubmit,"click",submitLogin],[loginForget,"click",forgetLogin],
-    [loginCancel,"click",closeLogin],[loginDialog,"cancel",closeLogin],[loginStop,"click",stopLogin],
+function refreshControls(){refreshNavigation();refreshExportControls();}
+const settingsUi=createSettingsDialog({send,
+    beforeRequest:e=>{cancelHover(true);policy("reset",e);},beforeShow:invalidatePresentation,
+    restore:restoreEditingFocus,changed:refreshControls,loadFonts,fontLoadNote,render});
+const loginUi=createLoginDialog({send,stamp,
+    prepare:e=>{cancelHover(true);policy("reset",e);cancelComposition();clearSelection();},
+    restore:restoreEditingFocus,changed:refreshControls,focus});
+const filterUi=createFiltersDialog({send,current:()=>latest,invalidate:invalidatePresentation,
+    reset:e=>policy("reset",e),restore:restoreEditingFocus,changed:refreshControls});
+const bindings=[...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
     [keyboard,"beforeinput",beforeinput],
@@ -575,10 +509,6 @@ const bindings=[
     [keepAlive,"click",toggleKeepAlive],
     [hoverPosition,"change",changeHoverPreference],
     [browseBack,"click",browseReturn],[browsePrevious,"click",browseUp],[browseNext,"click",browseDown],
-    [fontButton,"click",openFonts],[fontPreset,"change",chooseFontPreset],
-    [profileImport,"click",importProfile],[profileExport,"click",exportProfile],
-    ...Object.values(fontFields).map(field=>[field,"input",editFont]),
-    [fontDefaults,"click",resetFonts],[fontCancel,"click",closeFonts],[fontDialog,"cancel",closeFonts],[fontSave,"click",saveFonts],
     [chrome,"pointerenter",showChrome],[chrome,"pointerleave",hideChrome],
     [plus,"click",zoomIn],[minus,"click",zoomOut],[fit,"click",zoomFit],
     [viewport,"wheel",wheel,{passive:false}],[window,"resize",repaint],[window,"focus",activate],[window,"blur",deactivate],
@@ -715,6 +645,7 @@ function probe(packet,geometry) {
 async function paint(packet) {
     if(packet.generation<generation||(packet.generation===generation&&packet.frame.revision<revision)) return;
     await loadFonts(packet.settings);
+    if(stopped)return;
     const presentationChanged=packet.presentation!==latest?.presentation;
     const changed=presentationChanged||!sameStamp(stamp(),{generation:packet.generation,revision:packet.frame.revision,input_epoch:packet.input_epoch});
     if(changed||latest?.input_pending&&!packet.input_pending) {released=null;clearSelection();cancelDrag();setHover(null,false,false);navigationLocked=false;}
@@ -723,10 +654,7 @@ async function paint(packet) {
     }
     const previousFailure=latest?.keep_alive_failure;
     const failureChanged=packet.keep_alive_failure!==previousFailure;
-    generation=packet.generation;revision=packet.frame.revision;latest=packet;presentationBlocked=false;
-    filtersReveal.hidden=!packet.masked_pushes;filtersReveal.textContent=packet.revealed?"恢復遮黑":"暫時顯示推文";
-    filtersStatus.textContent=packet.masked_pushes?`${packet.revealed?"暫時顯示":"已遮黑"} ${packet.masked_pushes} 則推文`:"";
-    filtersStatus.title=packet.filter_reason?"一般黑名單："+packet.filter_reason:"";
+    generation=packet.generation;revision=packet.frame.revision;latest=packet;filterUi.paint(packet);
     surface.dataset.presentation=String(packet.presentation);surface.dataset.maskedPushes=String(packet.masked_pushes);surface.dataset.revealed=String(packet.revealed);
     if(changed&&hoverCandidate) {
         const lease=packet.hover,candidate=hoverCandidate;
@@ -746,23 +674,21 @@ async function paint(packet) {
     surface.dataset.cursorRow=String(packet.frame.cursor[1]);surface.dataset.inputEpoch=String(packet.input_epoch);
     surface.dataset.keepAlive=String(packet.keep_alive);surface.dataset.keepAliveReady=String(packet.keep_alive_ready);
     surface.dataset.keepAliveSent=String(packet.keep_alive_sent);
-    loginStop.hidden=!packet.login_pending;
+    loginUi.update(packet);
 }
 focus();
 function revokeSurface(){
-    stopped=true;
+    stopped=true;settingsUi.revoke();loginUi.revoke();filterUi.revoke();
     for(const [target,event,callback,options] of bindings)target.removeEventListener(event,callback,options);
 }
 const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
 let cleanupClean=false;
-try {
-    while(true){const packet=await lifetime.receive();if(packet.stop) break;
-        if(packet.surface_probe){
-            const mode=packet.surface_probe;
+function runSurfaceProbe(mode){
             if(mode==="decode")send({kind:"synthetic_invalid_event"});
             else if(mode==="painted")send({kind:"painted",presentation:latest.presentation,revision:revision+100,generation});
             else if(mode==="renderer_error")throw new Error("synthetic renderer failure");
             else if(mode==="slow")surfaceNote.textContent="慢命令探針：結果等待 60 秒；可開啟字型設定或立即關閉視窗";
+            else if(mode==="dialogs")surfaceNote.textContent="對話框與媒體封包探針（僅本機合成資料）";
             else if(mode==="confirm"){pasteConfirmProbe=true;surfaceNote.textContent="貼上確認探針：請用原生貼上 A、換行、B";}
             else if(mode==="untrusted"){
                 const before=sent,beforePending=pastePending,beforeDialog=pasteDialog.open;
@@ -777,73 +703,45 @@ try {
                 send({kind:"paste_confirm",trusted:false});
                 send({kind:"surface_probe",clean});
             }
-            continue;
-        }
-        if(packet.filters_open){fillFilters(packet.filters_open.entries);filtersMessage.textContent=packet.filters_open.warning||"只有按儲存才變更名單；不會送出 PTT 指令。";filtersId.focus();continue;}
-        if(packet.filters_result){const result=packet.filters_result;filtersBusy=false;filtersSave.disabled=false;filtersRemove.disabled=false;
-            if(result.entries)fillFilters(result.entries);filtersMessage.textContent=result.message;
-            if(!result.ok){presentationBlocked=false;refreshExportControls();}continue;}
-        if(packet.login_result){const result=packet.login_result;
-            if(typeof result.saved==="boolean")loginSaved=result.saved;
-            loginWorking(!!result.busy);
-            if(!loginDialog.open)continue;
-            if(typeof result.account==="string")loginAccount.value=result.account;
-            if(result.message)loginNote.textContent=result.message;
-            if(result.close){loginPassword.value="";loginDialog.close();restoreEditingFocus();refreshNavigation();}
-            else if(!loginBusy){(loginAccount.value?loginPassword:loginAccount).focus();}
-            continue;}
-        if(packet.keyboard_state){receiveKeyboard(packet.keyboard_state);continue;}
-        if(packet.hover_settings){hoverPreference=packet.hover_settings;hoverPosition.value=hoverPreference;
-            surface.dataset.hoverPosition=hoverPreference;
-            if(hoverPreference==="off")cancelHover(true);else if(pointerClient)media.locate(pointerClient,hoverPreference);continue;}
-        if(packet.media_hover){if(hoverCandidate?.sequence===packet.media_hover.sequence){media.hover(packet.media_hover);media.locate(pointerClient,hoverPreference);}continue;}
-        if(packet.hover_reset){cancelHover();if(packet.media_reset)media.reset();continue;}
-        if(packet.hover_rejected){if(hoverCandidate?.sequence===packet.hover_rejected)cancelHover();continue;}
-        if(packet.media_open){media.open(packet.media_open);continue;}
-        if(packet.media_image){media.receiveImage(packet.media_image);continue;}
-        if(packet.media_error){media.fail(packet.media_error);continue;}
-        if(packet.media_external){media.externalResult(packet.media_external);continue;}
-        if(packet.media_reset){media.reset();continue;}
-        if(packet.settings_open) {
-            fontDraft=packet.settings_open;fillFonts(fontDraft.values);fontPreset.value=profileChoice(fontDraft.profile);
-            fontNote.textContent=fontDraft.warning||"";cancelComposition();cancelDrag();clearSelection();
-            if(!fontDialog.open) fontDialog.showModal();
-            released=null;cancelDrag();setHover(null);refreshNavigation();
-            fontAvailability.textContent=fontLoadNote(fontDraft.values,await loadFonts(fontDraft.values));render(fontPreview,fontDraft.sample,{cursor:false});
-            fontFields.ascii_font.focus();continue;
-        }
-        if(packet.font_preview) {
-            const preview=packet.font_preview;fontPreviewBusy=false;
-            if(fontDialog.open&&preview.request===fontRequest) {
-                if(preview.packet){fontAvailability.textContent=fontLoadNote(preview.packet.settings,await loadFonts(preview.packet.settings));render(fontPreview,preview.packet,{cursor:false});fontPreview.dataset.request=String(preview.request);
-                    fontPreview.dataset.fontSize=String(preview.packet.settings.font_size);fontPreview.dataset.baseline=String(preview.packet.settings.baseline);}
-                if(preview.error) fontNote.textContent=preview.error;
-            }
-            flushFontPreview();continue;
-        }
-        if(packet.profile_result) {
-            profileBusy=false;profileImport.disabled=false;profileExport.disabled=false;fontDialog.dataset.profileResult=packet.profile_result;
-            if(packet.profile_import&&fontDialog.open){const imported=packet.profile_import;clearTimeout(fontTimer);fontTimer=0;fontRequest++;fontPreviewNext=null;
-                fillFonts(imported.values);fontPreset.value=profileChoice(imported.profile);profileName.value=imported.name;
-                fontAvailability.textContent=fontLoadNote(imported.values,await loadFonts(imported.values));render(fontPreview,imported.sample,{cursor:false});}
-            if(packet.notice)fontNote.textContent=packet.notice;
-            if(fontDialog.open)profileName.focus();continue;
-        }
-        if(typeof packet.settings_saved==="boolean") {
-            fontSaving=false;fontSave.disabled=false;fontCancel.disabled=false;
-            if(packet.settings_saved) closeFonts();
-        }
-        if(packet.selection){receiveSelection(packet.selection);continue;}
-        if(packet.paste_result) {surface.dataset.pasteResult=packet.paste_result;pastePending=packet.paste_result==="preview";
-            if(["cancelled","rejected"].includes(packet.paste_result)) navigationLocked=false;refreshNavigation();}
-        if(packet.input_result==="rejected") {navigationLocked=false;refreshNavigation();}
-        if(packet.navigation_result) {navigationRequest=false;surface.dataset.navigationResult=packet.navigation_result;
-            if(packet.navigation_result==="rejected") navigationLocked=false;refreshNavigation();}
-        if(packet.link_result) surface.dataset.linkResult=packet.link_result;
-        if(packet.export_result) {surface.dataset.exportResult=packet.export_result;exportBusy=false;refreshExportControls();restoreEditingFocus();}
-        if(packet.notice) (fontDialog.open?fontNote:surfaceNote).textContent=packet.notice;
-        if(packet.paste_result||packet.link_result||packet.export_result||packet.notice||packet.navigation_result||packet.input_result) continue;
-        await paint(packet);
+
+}
+function showNotice(message){if(!stopped&&message&&!settingsUi.notice(message))surfaceNote.textContent=message;}
+const route=createSurfaceRouter({
+    paint,
+    surface_probe:runSurfaceProbe,
+    filters_open:filterUi.open,filters_result:filterUi.receive,
+    login_result:loginUi.receive,keyboard_state:receiveKeyboard,
+    hover_settings:position=>{hoverPreference=position;hoverPosition.value=position;surface.dataset.hoverPosition=position;
+        if(position==="off")cancelHover(true);else if(pointerClient)media.locate(pointerClient,position);},
+    media_hover:data=>{if(hoverCandidate?.sequence===data.sequence){media.hover(data);media.locate(pointerClient,hoverPreference);}},
+    hover_reset:data=>{cancelHover();if(data.media)media.reset();},
+    hover_rejected:sequence=>{if(hoverCandidate?.sequence===sequence)cancelHover();},
+    media_open:data=>media.open(data),media_image:data=>media.receiveImage(data),media_error:data=>media.fail(data),
+    media_external:data=>media.externalResult(data),media_reset:()=>media.reset(),
+    settings_open:settingsUi.open,font_preview:settingsUi.preview,
+    profile_result:async data=>{await settingsUi.profile(data);showNotice(data.notice);},
+    settings_saved:data=>{settingsUi.saved(data);showNotice(data.notice);},
+    selection:receiveSelection,
+    paste_result:data=>{
+        surface.dataset.pasteResult=data.status;pastePending=data.status==="preview";
+        if(["cancelled","rejected"].includes(data.status))navigationLocked=false;
+        refreshNavigation();showNotice(data.notice);
+    },
+    input_rejected:message=>{navigationLocked=false;refreshNavigation();showNotice(message);},
+    navigation_result:data=>{
+        navigationRequest=false;surface.dataset.navigationResult=data.status;
+        if(data.status==="rejected")navigationLocked=false;
+        refreshNavigation();showNotice(data.notice);
+    },
+    link_result:data=>{surface.dataset.linkResult=data.status;showNotice(data.notice);},
+    export_result:data=>{surface.dataset.exportResult=data.status;exportBusy=false;refreshExportControls();restoreEditingFocus();showNotice(data.notice);},
+    notice:showNotice,
+});
+try {
+    while(true){
+        const packet=await lifetime.receive();
+        if(packet?.kind==="stop")break;
+        await route(packet);
     }
 } catch(e){send({kind:"error",message:String(e)});}
 finally {
@@ -852,12 +750,9 @@ finally {
     cancelHover(true);
     stopped=true;latest=null;observer.disconnect();pasteObserver.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
     const mediaClean=await media.destroy();
-    clearTimeout(fontTimer);fontTimer=0;fontPreviewNext=null;
-    if(exportTask) await exportTask;
-    if(pasteDialog.open) pasteDialog.close();
-    if(fontDialog.open) fontDialog.close();
-    if(filtersDialog.open)filtersDialog.close();filterEntries=[];filtersId.value="";filtersNote.value="";
-    loginPassword.value="";loginAccount.value="";loginRemember.checked=false;if(loginDialog.open)loginDialog.close();
+    settingsUi.destroy();loginUi.destroy();filterUi.destroy();
+    if(exportTask)await exportTask;
+    if(pasteDialog.open)pasteDialog.close();
     setHover(null);refreshNavigation();
     cancelComposition();keyboard.blur();hideChrome();cancelDrag();selectionBusy=null;clearSelection();
     const before=sent,beforeDraws=draws,beforeZoom=zoom;
@@ -865,11 +760,11 @@ finally {
     keyboard.dispatchEvent(new InputEvent("input",{data:"a",inputType:"insertText",bubbles:true}));
     surface.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true}));window.dispatchEvent(new Event("resize"));plus.click();
     chrome.dispatchEvent(new PointerEvent("pointerenter"));
-    fontButton.click();fontFields.font_size.dispatchEvent(new InputEvent("input",{bubbles:true}));
+    document.getElementById("font-settings").click();document.getElementById("font-size").dispatchEvent(new InputEvent("input",{bubbles:true}));
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
     cleanupClean=mediaClean&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
-        &&fontTimer===0&&hoverTimer===0&&hoverCandidate===null&&!fontDialog.open&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
+        &&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
     try {send({kind:"stopped",clean:cleanupClean});} catch(_) { /* join still acknowledges cleanup */ }
 }
 return {clean:cleanupClean};

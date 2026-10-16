@@ -1,0 +1,390 @@
+[
+  {
+    "name": "stop",
+    "packet": {
+      "kind": "stop"
+    }
+  },
+  {
+    "name": "notice",
+    "packet": {
+      "kind": "notice",
+      "payload": "訊息"
+    }
+  },
+  {
+    "name": "surface_probe",
+    "packet": {
+      "kind": "surface_probe",
+      "payload": "decode"
+    }
+  },
+  {
+    "name": "login_idle",
+    "packet": {
+      "kind": "login_result",
+      "payload": {
+        "state": "idle"
+      }
+    }
+  },
+  {
+    "name": "login_opened",
+    "packet": {
+      "kind": "login_result",
+      "payload": {
+        "state": "opened",
+        "account": "Synthetic",
+        "saved": true,
+        "message": "已保存"
+      }
+    }
+  },
+  {
+    "name": "login_message",
+    "packet": {
+      "kind": "login_result",
+      "payload": {
+        "state": "message",
+        "message": "取消"
+      }
+    }
+  },
+  {
+    "name": "login_sent",
+    "packet": {
+      "kind": "login_result",
+      "payload": {
+        "state": "sent"
+      }
+    }
+  },
+  {
+    "name": "filters_open",
+    "packet": {
+      "kind": "filters_open",
+      "payload": {
+        "entries": [],
+        "warning": null
+      }
+    }
+  },
+  {
+    "name": "filters_saved",
+    "packet": {
+      "kind": "filters_result",
+      "payload": {
+        "state": "saved",
+        "entries": [],
+        "message": "已保存"
+      }
+    }
+  },
+  {
+    "name": "filters_rejected",
+    "packet": {
+      "kind": "filters_result",
+      "payload": {
+        "state": "rejected",
+        "message": "失敗"
+      }
+    }
+  },
+  {
+    "name": "hover_settings",
+    "packet": {
+      "kind": "hover_settings",
+      "payload": "off"
+    }
+  },
+  {
+    "name": "hover_reset",
+    "packet": {
+      "kind": "hover_reset",
+      "payload": {
+        "media": true
+      }
+    }
+  },
+  {
+    "name": "hover_rejected",
+    "packet": {
+      "kind": "hover_rejected",
+      "payload": 8
+    }
+  },
+  {
+    "name": "media_reset",
+    "packet": {
+      "kind": "media_reset"
+    }
+  },
+  {
+    "name": "media_error",
+    "packet": {
+      "kind": "media_error",
+      "payload": {
+        "request": 3,
+        "message": "錯誤"
+      }
+    }
+  },
+  {
+    "name": "media_external",
+    "packet": {
+      "kind": "media_external",
+      "payload": {
+        "request": 3,
+        "ok": false,
+        "message": "錯誤"
+      }
+    }
+  },
+  {
+    "name": "media_image",
+    "packet": {
+      "kind": "media_image",
+      "payload": {
+        "request": 3,
+        "data": "AA==",
+        "mime": "image/png",
+        "width": 1,
+        "height": 2,
+        "animated": false,
+        "cached": true
+      }
+    }
+  },
+  {
+    "name": "font_rejected",
+    "packet": {
+      "kind": "font_preview",
+      "payload": {
+        "request": 4,
+        "error": "無效"
+      }
+    }
+  },
+  {
+    "name": "profile_cancelled",
+    "packet": {
+      "kind": "profile_result",
+      "payload": {
+        "status": "cancelled"
+      }
+    }
+  },
+  {
+    "name": "profile_exported",
+    "packet": {
+      "kind": "profile_result",
+      "payload": {
+        "status": "exported",
+        "notice": "完成"
+      }
+    }
+  },
+  {
+    "name": "profile_rejected",
+    "packet": {
+      "kind": "profile_result",
+      "payload": {
+        "status": "rejected",
+        "notice": "無效"
+      }
+    }
+  },
+  {
+    "name": "input_rejected",
+    "packet": {
+      "kind": "input_rejected",
+      "payload": "舊連線"
+    }
+  },
+  {
+    "name": "selection",
+    "packet": {
+      "kind": "selection",
+      "payload": {
+        "presentation": 2,
+        "generation": 7,
+        "revision": 9,
+        "request": 11,
+        "value": null
+      }
+    }
+  },
+  {
+    "name": "settings_saved_saved",
+    "packet": {
+      "kind": "settings_saved",
+      "payload": {
+        "status": "saved",
+        "notice": "回覆"
+      }
+    }
+  },
+  {
+    "name": "settings_saved_rejected",
+    "packet": {
+      "kind": "settings_saved",
+      "payload": {
+        "status": "rejected",
+        "notice": "回覆"
+      }
+    }
+  },
+  {
+    "name": "navigation_result_sent",
+    "packet": {
+      "kind": "navigation_result",
+      "payload": {
+        "status": "sent",
+        "notice": "回覆"
+      }
+    }
+  },
+  {
+    "name": "navigation_result_rejected",
+    "packet": {
+      "kind": "navigation_result",
+      "payload": {
+        "status": "rejected",
+        "notice": "回覆"
+      }
+    }
+  },
+  {
+    "name": "paste_result_queued",
+    "packet": {
+      "kind": "paste_result",
+      "payload": {
+        "status": "queued",
+        "notice": "回覆"
+      }
+    }
+  },
+  {
+    "name": "paste_result_preview",
+    "packet": {
+      "kind": "paste_result",
+      "payload": {
+        "status": "preview",
+        "notice": "回覆"
+      }
+    }
+  },
+  {
+    "name": "paste_result_cancelled",
+    "packet": {
+      "kind": "paste_result",
+      "payload": {
+        "status": "cancelled",
+        "notice": "回覆"
+      }
+    }
+  },
+  {
+    "name": "paste_result_rejected",
+    "packet": {
+      "kind": "paste_result",
+      "payload": {
+        "status": "rejected",
+        "notice": "回覆"
+      }
+    }
+  },
+  {
+    "name": "export_result_saved",
+    "packet": {
+      "kind": "export_result",
+      "payload": {
+        "status": "saved",
+        "notice": "回覆"
+      }
+    }
+  },
+  {
+    "name": "export_result_cancelled",
+    "packet": {
+      "kind": "export_result",
+      "payload": {
+        "status": "cancelled",
+        "notice": "回覆"
+      }
+    }
+  },
+  {
+    "name": "export_result_failed",
+    "packet": {
+      "kind": "export_result",
+      "payload": {
+        "status": "failed",
+        "notice": "回覆"
+      }
+    }
+  },
+  {
+    "name": "link_result_requested",
+    "packet": {
+      "kind": "link_result",
+      "payload": {
+        "status": "requested",
+        "notice": "回覆"
+      }
+    }
+  },
+  {
+    "name": "link_result_failed",
+    "packet": {
+      "kind": "link_result",
+      "payload": {
+        "status": "failed",
+        "notice": "回覆"
+      }
+    }
+  },
+  {
+    "name": "media_open",
+    "packet": {
+      "kind": "media_open",
+      "payload": {
+        "request": 3,
+        "target": {
+          "url": "https://example.com/a.png",
+          "kind": "image",
+          "image_url": null
+        }
+      }
+    }
+  },
+  {
+    "name": "media_hover",
+    "packet": {
+      "kind": "media_hover",
+      "payload": {
+        "sequence": 5,
+        "request": 3,
+        "target": {
+          "url": "https://example.com/a.png",
+          "kind": "image",
+          "image_url": null
+        },
+        "position": "off"
+      }
+    }
+  },
+  {
+    "name": "keyboard_state",
+    "packet": {
+      "kind": "keyboard_state",
+      "payload": {
+        "enabled": true,
+        "mode": "normal",
+        "pending": false,
+        "prefix": "4",
+        "suspended_reason": null
+      }
+    }
+  }
+]

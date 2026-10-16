@@ -187,7 +187,10 @@ pub(super) async fn serve(
 ) -> Result<(), String> {
     let deadline = if matches!(scenario, Scenario::Filters) {
         900
-    } else if matches!(scenario, Scenario::Window | Scenario::Login) {
+    } else if matches!(
+        scenario,
+        Scenario::Window | Scenario::Login | Scenario::Surface
+    ) {
         300
     } else {
         90

@@ -7,7 +7,7 @@ use pttstella::{
 };
 use std::{future::Future, time::Duration};
 
-use super::commands::Pending;
+use super::{commands::Pending, outbound::Packet};
 
 #[derive(Default)]
 pub(super) struct Resources {
@@ -37,7 +37,7 @@ async fn retained_wait<T>(
 }
 
 async fn renderer(mut eval: document::Eval) -> Result<bool, String> {
-    let _ = eval.send(serde_json::json!({"stop":true}));
+    let _ = eval.send(Packet::Stop);
     // A second, static control query does not depend on the surface data channel.
     let interrupt =
         document::eval("window.dispatchEvent(new Event('pttstella:stop')); return null;");

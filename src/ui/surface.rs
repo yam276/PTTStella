@@ -17,8 +17,13 @@ use std::{ops::Range, path::PathBuf, sync::Arc};
 use tokio::sync::watch;
 
 use super::{
+    bridge::Bridge,
     commands::Kind as CommandKind,
     lifecycle::Resources,
+    outbound::{
+        ExportStatus, Feedback, FiltersOpen, FiltersResult, LinkStatus, LoginResult, MediaHover,
+        MediaImage, MediaOpen, NavigationStatus, Packet, PasteStatus, SaveStatus, SelectionReply,
+    },
     preferences::Preferences,
     probe::{self, Checks},
 };
@@ -169,11 +174,15 @@ async fn run(
     let script = [
         include_str!("../../assets/media.js"),
         include_str!("../../assets/surface-lifetime.js"),
+        include_str!("../../assets/surface-packets.js"),
+        include_str!("../../assets/surface-settings.js"),
+        include_str!("../../assets/surface-login.js"),
+        include_str!("../../assets/surface-filters.js"),
         include_str!("../../assets/surface.js"),
     ]
     .concat();
-    let mut eval = document::eval(&script);
-    *owned_eval = Some(eval);
+    let mut eval = Bridge::new(&script);
+    *owned_eval = Some(eval.owner());
     let mut hover_lease: Option<HoverLease> = None;
     let mut keyboard_policy = vim::Keyboard::default();
     let mut keyboard_generation = 0;
@@ -184,15 +193,16 @@ async fn run(
     let mut last_status = first.message.clone();
     let mut painting = paint(&first, false, preferences.display(), &filters);
     let mut displayed: Option<Paint> = None;
-    eval.send(&painting).map_err(|e| e.to_string())?;
-    eval.send(serde_json::json!({"hover_settings":preferences.hover()}))
+    eval.send(Packet::Paint(&painting))
+        .map_err(|e| e.to_string())?;
+    eval.send(Packet::HoverSettings(preferences.hover()))
         .map_err(|e| e.to_string())?;
     if let Some(warning) = preferences.warning() {
-        eval.send(serde_json::json!({"notice":warning}))
+        eval.send(Packet::Notice(warning.into()))
             .map_err(|e| e.to_string())?;
     }
     if let Some(warning) = &filter_warning {
-        eval.send(serde_json::json!({"notice":warning}))
+        eval.send(Packet::Notice(warning.into()))
             .map_err(|e| e.to_string())?;
     }
     connection.connect()?;
@@ -236,17 +246,7 @@ async fn run(
                 .as_deref()
                 .ok_or("missing surface probe case")?;
             if case == "send" {
-                // Exercise the real Eval::send failure exit without replacing
-                // the evaluator or intercepting the shared cleanup path.
-                struct RejectedPacket;
-                impl serde::Serialize for RejectedPacket {
-                    fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
-                        Err(serde::ser::Error::custom(
-                            "synthetic packet serialization failure",
-                        ))
-                    }
-                }
-                eval.send(RejectedPacket).map_err(|e| e.to_string())?;
+                eval.probe_send_failure().map_err(|e| e.to_string())?;
             }
             if case == "slow" {
                 commands.start(CommandKind::Navigate, receiver.borrow().generation, || {
@@ -256,7 +256,7 @@ async fn run(
                     })
                 })?;
             }
-            eval.send(serde_json::json!({"surface_probe":case}))
+            eval.send(Packet::SurfaceProbe(case.into()))
                 .map_err(|e| e.to_string())?;
         }
         if pending_report.is_some() && probe_checked {
@@ -279,7 +279,8 @@ async fn run(
                 .as_ref()
                 .filter(|lease| lease.stamp == view.stamp())
                 .cloned();
-            eval.send(&painting).map_err(|e| e.to_string())?;
+            eval.send(Packet::Paint(&painting))
+                .map_err(|e| e.to_string())?;
             in_flight = Some((view.generation, view.frame.revision, filters.version()));
             dirty = false;
         }
@@ -288,37 +289,37 @@ async fn run(
                 if done.generation != receiver.borrow().generation {continue;}
                 let packet = match done.kind {
                     CommandKind::Login => match done.result {
-                        Ok(()) if login_open => {login_open=false;serde_json::json!({"login_result":{"close":true,"busy":false}})},
+                        Ok(()) if login_open => {login_open=false;Packet::LoginResult(LoginResult::Sent)},
                         Ok(()) => continue,
-                        Err(error) => serde_json::json!({"login_result":{"busy":false,"message":error}}),
+                        Err(error) => Packet::LoginResult(LoginResult::Message{message:error}),
                     },
                     CommandKind::Navigate => match done.result {
-                        Ok(()) => {if probe.is_some(){checks.navigation_requests+=1;}serde_json::json!({"navigation_result":"sent"})},
-                        Err(error) => serde_json::json!({"navigation_result":"rejected","notice":error}),
+                        Ok(()) => {if probe.is_some(){checks.navigation_requests+=1;}Packet::NavigationResult(Feedback::quiet(NavigationStatus::Sent))},
+                        Err(error) => Packet::NavigationResult(Feedback::new(NavigationStatus::Rejected,error)),
                     },
                     CommandKind::Browse => match done.result {
                         Ok(()) => continue,
-                        Err(error) => serde_json::json!({"notice":error}),
+                        Err(error) => Packet::Notice(error),
                     },
                 };
                 eval.send(packet).map_err(|e|e.to_string())?;
             },
             result = async { match login_job.as_mut() {Some(job)=>job.wait().await,None=>std::future::pending().await} } => {
                 *login_job=None;
-                if !login_open {eval.send(serde_json::json!({"login_result":{"busy":false}})).map_err(|e|e.to_string())?;continue;}
+                if !login_open {eval.send(Packet::LoginResult(LoginResult::Idle)).map_err(|e|e.to_string())?;continue;}
                 let packet=match result {
-                    Ok(LoginOutcome::Opened {account,saved})=>serde_json::json!({"login_result":{"account":account,"saved":saved,"busy":false,"message":if saved {"已有密碼保存在鑰匙圈；留空可使用已存密碼"} else {"密碼僅用於此次登入；勾選後才保存至鑰匙圈"}}}),
-                    Ok(LoginOutcome::Forgotten)=>serde_json::json!({"login_result":{"account":"","saved":false,"busy":false,"message":"已移除鑰匙圈中的帳密"}}),
+                    Ok(LoginOutcome::Opened {account,saved})=>Packet::LoginResult(LoginResult::Opened{account,saved,message:if saved {"已有密碼保存在鑰匙圈；留空可使用已存密碼"} else {"密碼僅用於此次登入；勾選後才保存至鑰匙圈"}.into()}),
+                    Ok(LoginOutcome::Forgotten)=>Packet::LoginResult(LoginResult::Opened{account:String::new(),saved:false,message:"已移除鑰匙圈中的帳密".into()}),
                     Ok(LoginOutcome::Ready(credentials))=>{
                         let result=if let Some(stamp)=login_stamp.take() {
                             commands.start(CommandKind::Login,stamp.generation,|| connection.request_login(stamp,credentials).map(|reply|reply.wait()))
                         } else {Err("登入請求已取消".into())};
                         match result {
                             Ok(())=>continue,
-                            Err(error)=>serde_json::json!({"login_result":{"busy":false,"message":error}}),
+                            Err(error)=>Packet::LoginResult(LoginResult::Message{message:error}),
                         }
                     },
-                    Err(error)=>serde_json::json!({"login_result":{"busy":false,"message":error}}),
+                    Err(error)=>Packet::LoginResult(LoginResult::Message{message:error}),
                 };
                 eval.send(packet).map_err(|e|e.to_string())?;
             },
@@ -326,17 +327,17 @@ async fn run(
                 if let Some(update) = update {
                     let reply = match update.result {
                         Ok((image,cached)) => {
-                            serde_json::json!({"media_image": {"request":update.request,
-                                "data":base64::engine::general_purpose::STANDARD.encode(&image.bytes),
-                                "mime":image.mime,"width":image.width,"height":image.height,
-                                "animated":image.animated_format,"cached":cached}})
+                            Packet::MediaImage(MediaImage{request:update.request,
+                                data:base64::engine::general_purpose::STANDARD.encode(&image.bytes),
+                                mime:image.mime,width:image.width,height:image.height,
+                                animated:image.animated_format,cached})
                         },
-                        Err(error) => serde_json::json!({"media_error":{"request":update.request,"message":error.to_string()}}),
+                        Err(error) => Packet::MediaError{request:update.request,message:error.to_string()},
                     };
                     eval.send(reply).map_err(|e| e.to_string())?;
                 }
             },
-            event = eval.recv::<SurfaceEvent>() => {
+            event = eval.recv() => {
                 let event = event.map_err(|e| e.to_string())?;
                 if !event.admitted(receiver.borrow().generation) {
                     rejected_events += 1;
@@ -400,7 +401,7 @@ async fn run(
                         }
                     }
                     SurfaceEvent::FiltersOpen { trusted: _ } => {
-                        eval.send(serde_json::json!({"filters_open":{"entries":filters.rules().entries,"warning":filter_warning}})).map_err(|e|e.to_string())?;
+                        eval.send(Packet::FiltersOpen(FiltersOpen{entries:filters.rules().entries.clone(),warning:filter_warning.clone()})).map_err(|e|e.to_string())?;
                     }
                     SurfaceEvent::FiltersEdit {
                         id,
@@ -423,12 +424,12 @@ async fn run(
                                 dirty = true;
                                 hover_lease = None;
                                 media_preview.close();
-                                eval.send(serde_json::json!({"media_reset":true,"hover_reset":true}))
+                                eval.send(Packet::HoverReset{media:true})
                                     .map_err(|e| e.to_string())?;
-                                eval.send(serde_json::json!({"filters_result":{"ok":true,"entries":filters.rules().entries,"message":"已套用並儲存一般黑名單"}})).map_err(|e|e.to_string())?;
+                                eval.send(Packet::FiltersResult(FiltersResult::Saved{entries:filters.rules().entries.clone(),message:"已套用並儲存一般黑名單".into()})).map_err(|e|e.to_string())?;
                             }
                             Err(error) => eval
-                                .send(serde_json::json!({"filters_result":{"ok":false,"message":error}}))
+                                .send(Packet::FiltersResult(FiltersResult::Rejected{message:error}))
                                 .map_err(|e| e.to_string())?,
                         }
                     }
@@ -451,20 +452,20 @@ async fn run(
                         dirty = true;
                         hover_lease = None;
                         media_preview.close();
-                        eval.send(serde_json::json!({"media_reset":true,"hover_reset":true}))
+                        eval.send(Packet::HoverReset{media:true})
                             .map_err(|e| e.to_string())?;
                     }
                     SurfaceEvent::HoverPreference { position, trusted: _ } => {
                         if let Err(error) = preferences.set_hover(position) {
-                            eval.send(serde_json::json!({"notice":error}))
+                            eval.send(Packet::Notice(error))
                                 .map_err(|e| e.to_string())?;
                         }
                         if preferences.hover() == HoverPosition::Off && hover_lease.take().is_some() {
                             media_preview.close();
-                            eval.send(serde_json::json!({"hover_reset":true}))
+                            eval.send(Packet::HoverReset{media:false})
                                 .map_err(|e| e.to_string())?;
                         }
-                        eval.send(serde_json::json!({"hover_settings":preferences.hover()}))
+                        eval.send(Packet::HoverSettings(preferences.hover()))
                             .map_err(|e| e.to_string())?;
                     }
                     SurfaceEvent::Hover {
@@ -510,14 +511,14 @@ async fn run(
                                 .active()
                                 .is_some_and(|active| active.presentation == Presentation::Inspect)
                         {
-                            eval.send(serde_json::json!({"hover_rejected":sequence}))
+                            eval.send(Packet::HoverRejected(sequence))
                                 .map_err(|e| e.to_string())?;
                             continue;
                         }
                         if let (Some(link), Some(target)) = (link, target) {
                             if filters_probe {
                                 checks.filter_hover_requests += 1;
-                                eval.send(serde_json::json!({"hover_rejected":sequence}))
+                                eval.send(Packet::HoverRejected(sequence))
                                     .map_err(|e| e.to_string())?;
                                 continue;
                             }
@@ -528,7 +529,7 @@ async fn run(
                                 index,
                                 link: link.clone(),
                             });
-                            eval.send(serde_json::json!({"media_hover":{"sequence":sequence,"request":active.request,"target":active.target,"position":preferences.hover()}})).map_err(|e|e.to_string())?;
+                            eval.send(Packet::MediaHover(MediaHover{sequence,request:active.request,target:active.target.clone(),position:preferences.hover()})).map_err(|e|e.to_string())?;
                         }
                     }
                     SurfaceEvent::KeyboardState {
@@ -547,7 +548,7 @@ async fn run(
                             _ => continue,
                         }
                         let context = navigation::analyze(&receiver.borrow().frame);
-                        eval.send(serde_json::json!({"keyboard_state":keyboard_policy.status(&context)}))
+                        eval.send(Packet::KeyboardState(keyboard_policy.status(&context)))
                             .map_err(|e| e.to_string())?;
                     }
                     SurfaceEvent::MediaDecoded { request, success } => {
@@ -555,7 +556,7 @@ async fn run(
                     }
                     SurfaceEvent::KeepAlive { enabled, trusted: _ } => {
                         if let Err(error) = connection.keep_alive(enabled) {
-                            eval.send(serde_json::json!({"notice":error}))
+                            eval.send(Packet::Notice(error))
                                 .map_err(|e| e.to_string())?;
                         }
                     }
@@ -588,7 +589,7 @@ async fn run(
                             })
                         };
                         if let Err(error) = result {
-                            eval.send(serde_json::json!({"navigation_result":"rejected","notice":error}))
+                            eval.send(Packet::NavigationResult(Feedback::new(NavigationStatus::Rejected,error)))
                                 .map_err(|e| e.to_string())?;
                         }
                     }
@@ -607,9 +608,9 @@ async fn run(
                                     && preferences.display().font_size == 18.0
                                     && preferences.display().baseline == 19.0;
                                 dirty = true;
-                                serde_json::json!({"settings_saved":true,"notice":"顯示設定已儲存"})
+                                Packet::SettingsSaved(Feedback::new(SaveStatus::Saved,"顯示設定已儲存"))
                             }
-                            Err(error) => serde_json::json!({"settings_saved":false,"notice":error}),
+                            Err(error) => Packet::SettingsSaved(Feedback::new(SaveStatus::Rejected,error)),
                         };
                         eval.send(reply).map_err(|e| e.to_string())?;
                     }
@@ -705,12 +706,12 @@ async fn run(
                                 checks.export_checked |= probe.is_some() && selection_request.is_none();
                                 checks.rows_export_checked |=
                                     probe.is_some() && selection_request.is_some();
-                                serde_json::json!({"export_result":"saved","notice":"PNG 已儲存"})
+                                Packet::ExportResult(Feedback::new(ExportStatus::Saved,"PNG 已儲存"))
                             }
                             Ok(None) => {
-                                serde_json::json!({"export_result":"cancelled","notice":"未選擇儲存位置"})
+                                Packet::ExportResult(Feedback::new(ExportStatus::Cancelled,"未選擇儲存位置"))
                             }
-                            Err(error) => serde_json::json!({"export_result":"failed","notice":error}),
+                            Err(error) => Packet::ExportResult(Feedback::new(ExportStatus::Failed,error)),
                         };
                         eval.send(reply).map_err(|e| e.to_string())?;
                     }
@@ -750,11 +751,11 @@ async fn run(
                                     }
                                     let active = media_preview.open(generation, target)?;
                                     hover_lease = None;
-                                    eval.send(serde_json::json!({"media_open":{"request":active.request,"target":active.target}})).map_err(|e| e.to_string())?;
+                                    eval.send(Packet::MediaOpen(MediaOpen{request:active.request,target:active.target.clone()})).map_err(|e| e.to_string())?;
                                     continue;
                                 }
                                 Err(error) => {
-                                    eval.send(serde_json::json!({"notice":error,"link_result":"failed"}))
+                                    eval.send(Packet::LinkResult(Feedback::new(LinkStatus::Failed,error)))
                                         .map_err(|e| e.to_string())?;
                                     continue;
                                 }
@@ -775,8 +776,8 @@ async fn run(
                             None => Err("畫面已更新，請重新選取網址".to_owned()),
                         };
                         let reply = match result {
-                            Ok(()) => serde_json::json!({"link_result":"requested"}),
-                            Err(error) => serde_json::json!({"link_result":"failed","notice":error}),
+                            Ok(()) => Packet::LinkResult(Feedback::quiet(LinkStatus::Requested)),
+                            Err(error) => Packet::LinkResult(Feedback::new(LinkStatus::Failed,error)),
                         };
                         eval.send(reply).map_err(|e| e.to_string())?;
                     }
@@ -802,7 +803,7 @@ async fn run(
                                     webbrowser::open(&preview.target.url)
                                         .map_err(|e| format!("無法開啟網址：{e}"))
                                 };
-                                eval.send(serde_json::json!({"media_external":{"request":request,"ok":result.is_ok(),"message":result.err()}})).map_err(|e| e.to_string())?;
+                                eval.send(Packet::MediaExternal{request,ok:result.is_ok(),message:result.err()}).map_err(|e| e.to_string())?;
                             }
                         }
                     }
@@ -832,13 +833,13 @@ async fn run(
                             });
                         let reply = match result {
                             Ok(queued) => {
-                                serde_json::json!({"paste_result":if queued {"queued"} else {"preview"}})
+                                Packet::PasteResult(Feedback::quiet(if queued{PasteStatus::Queued}else{PasteStatus::Preview}))
                             }
                             Err(error) => {
                                 if probe.is_some()  {
                                     checks.paste_rejected += 1;
                                 }
-                                serde_json::json!({"notice":error,"paste_result":"rejected"})
+                                Packet::PasteResult(Feedback::new(PasteStatus::Rejected,error))
                             }
                         };
                         eval.send(reply).map_err(|e| e.to_string())?;
@@ -851,7 +852,7 @@ async fn run(
                                 .as_ref()
                                 .is_some_and(|p| p.prepared.text == "A\nB");
                         pending_paste.set(None);
-                        eval.send(serde_json::json!({"paste_result":"cancelled"}))
+                        eval.send(Packet::PasteResult(Feedback::quiet(PasteStatus::Cancelled)))
                             .map_err(|e| e.to_string())?;
                     }
                     SurfaceEvent::PasteConfirm { trusted: _ } => {
@@ -868,12 +869,12 @@ async fn run(
                                 Err("連線已變更；貼上未送出".to_owned())
                             };
                             let reply = match result {
-                                Ok(()) => serde_json::json!({"paste_result":"queued"}),
-                                Err(error) => serde_json::json!({"notice":error,"paste_result":"rejected"}),
+                                Ok(()) => Packet::PasteResult(Feedback::quiet(PasteStatus::Queued)),
+                                Err(error) => Packet::PasteResult(Feedback::new(PasteStatus::Rejected,error)),
                             };
                             eval.send(reply).map_err(|e| e.to_string())?;
                         } else {
-                            eval.send(serde_json::json!({"paste_result":"cancelled"}))
+                            eval.send(Packet::PasteResult(Feedback::quiet(PasteStatus::Cancelled)))
                                 .map_err(|e| e.to_string())?;
                         }
                     }
@@ -907,9 +908,7 @@ async fn run(
                             request,
                             rows: s.rows.clone(),
                         });
-                        eval.send(serde_json::json!({"selection": {
-                                    "presentation":presentation,"generation":generation,"revision":revision,"request":request,"value":selected
-                                }})).map_err(|e| e.to_string())?;
+                        eval.send(Packet::Selection(SelectionReply{presentation,generation,revision,request,value:selected})).map_err(|e| e.to_string())?;
                     }
                     SurfaceEvent::Copied {
                         presentation,
@@ -947,12 +946,12 @@ async fn run(
                         let view = receiver.borrow().clone();
                         let context = navigation::analyze(&view.frame);
                         let effect = keyboard_policy.key(&key, &context);
-                        eval.send(serde_json::json!({"keyboard_state":keyboard_policy.status(&context)}))
+                        eval.send(Packet::KeyboardState(keyboard_policy.status(&context)))
                             .map_err(|e| e.to_string())?;
                         let bytes = match effect {
                             Effect::None => continue,
                             Effect::Notice(notice) => {
-                                eval.send(serde_json::json!({"notice":notice}))
+                                eval.send(Packet::Notice(notice.into()))
                                     .map_err(|e| e.to_string())?;
                                 continue;
                             }
@@ -968,7 +967,7 @@ async fn run(
                                     })
                                 };
                                 if let Err(error) = result {
-                                    eval.send(serde_json::json!({"notice":error}))
+                                    eval.send(Packet::Notice(error))
                                         .map_err(|e| e.to_string())?;
                                 }
                                 continue;
@@ -989,7 +988,7 @@ async fn run(
                         message.set(match connection.input(generation, bytes) {
                             Ok(()) => receiver.borrow().message.clone(),
                             Err(error) => {
-                                eval.send(serde_json::json!({"notice":error,"input_result":"rejected"}))
+                                eval.send(Packet::InputRejected(error.clone()))
                                     .map_err(|e| e.to_string())?;
                                 error
                             }
@@ -1006,7 +1005,7 @@ async fn run(
                         {
                             continue;
                         }
-                        eval.send(serde_json::json!({"keyboard_state":keyboard_policy.status(&navigation::analyze(&receiver.borrow().frame))})).map_err(|e|e.to_string())?;
+                        eval.send(Packet::KeyboardState(keyboard_policy.status(&navigation::analyze(&receiver.borrow().frame)))).map_err(|e|e.to_string())?;
                         let vim_input = keyboard_policy
                             .status(&navigation::analyze(&receiver.borrow().frame))
                             .enabled;
@@ -1027,7 +1026,7 @@ async fn run(
                         message.set(match result {
                             Ok(()) => receiver.borrow().message.clone(),
                             Err(error) => {
-                                eval.send(serde_json::json!({"notice":error,"input_result":"rejected"}))
+                                eval.send(Packet::InputRejected(error.clone()))
                                     .map_err(|e| e.to_string())?;
                                 error
                             }
@@ -1071,20 +1070,21 @@ async fn run(
                 let filtered=filters.project(view.generation,&view.frame);
                 if hover_lease.as_mut().is_some_and(|lease|!lease.renew(view.stamp(),view.phase==Phase::Connected && view.frame.control_complete,&links::detect(&filtered.frame))) {
                     hover_lease=None;media_preview.close();
-                    eval.send(serde_json::json!({"hover_reset":true})).map_err(|e|e.to_string())?;
+                    eval.send(Packet::HoverReset{media:false}).map_err(|e|e.to_string())?;
                 }
                 if keyboard_generation!=view.generation || view.phase!=Phase::Connected {
                     if commands.busy() {
                         commands.cancel();
-                        eval.send(serde_json::json!({"navigation_result":"rejected","login_result":{"busy":false,"message":"連線已變更；操作結果未確認，不會重送"}})).map_err(|e|e.to_string())?;
+                        eval.send(Packet::NavigationResult(Feedback::quiet(NavigationStatus::Rejected))).map_err(|e|e.to_string())?;
+                        eval.send(Packet::LoginResult(LoginResult::Message{message:"連線已變更；操作結果未確認，不會重送".into()})).map_err(|e|e.to_string())?;
                     }
                     keyboard_policy.reset();keyboard_generation=view.generation;
                 }
                 keyboard_policy.context(&navigation::analyze(&view.frame));
-                eval.send(serde_json::json!({"keyboard_state":keyboard_policy.status(&navigation::analyze(&view.frame))})).map_err(|e|e.to_string())?;
+                eval.send(Packet::KeyboardState(keyboard_policy.status(&navigation::analyze(&view.frame)))).map_err(|e|e.to_string())?;
                 if media_preview.active().is_some_and(|preview| preview.generation != view.generation) {
                     media_preview.close();
-                    eval.send(serde_json::json!({"media_reset":true})).map_err(|e| e.to_string())?;
+                    eval.send(Packet::MediaReset).map_err(|e| e.to_string())?;
                 }
                 if view.phase != Phase::Connected || pending_paste.read().as_ref().is_some_and(|p| p.generation != view.generation) {
                     pending_paste.set(None);
@@ -1111,10 +1111,12 @@ async fn run(
     if let (Some(case), Some(path)) = (surface_probe, probe.as_ref()) {
         reports.push((path.join("surface-probe.json"),serde_json::json!({
             "status":if case=="slow" && commands.busy() || case=="untrusted" && surface_probe_clean && rejected_events==3
-                || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB") {"passed"} else {"failed"},
+                || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB")
+                || case=="dialogs" && checks.settings_saved && checks.export_checked && checks.rows_export_checked && checks.media_external>=1 {"passed"} else {"failed"},
             "scope":"synthetic local surface only; peer rejects all station input",
             "case":case,"command_pending_on_close":commands.busy(),"synthetic_events_rejected":rejected_events,"js_admission":surface_probe_clean,
             "paste_preview_preserved":pending_paste.read().is_some(),
+            "settings_saved":checks.settings_saved,"full_png":checks.export_checked,"rows_png":checks.rows_export_checked,"media_external_requests":checks.media_external,
         })));
     }
     if login_probe {

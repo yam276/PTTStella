@@ -4,12 +4,12 @@ function createSurfaceLifetime(bridge, target, revoke=()=>{}) {
     let stopping=false, waiter=null;
     const stop=()=>{
         if(stopping)return;
-        stopping=true;revoke();waiter?.resolve({stop:true});waiter=null;
+        stopping=true;revoke();waiter?.resolve({kind:"stop"});waiter=null;
     };
     target.addEventListener("pttstella:stop",stop);
     return {
         receive() {
-            if(stopping)return Promise.resolve({stop:true});
+            if(stopping)return Promise.resolve({kind:"stop"});
             if(waiter)return Promise.reject(new Error("surface receive already pending"));
             return new Promise((resolve,reject)=>{
                 const current={resolve,reject};waiter=current;
@@ -19,7 +19,7 @@ function createSurfaceLifetime(bridge, target, revoke=()=>{}) {
                 };
                 try {
                     Promise.resolve(bridge.recv()).then(packet=>{
-                        if(packet.stop)stop();else finish(resolve,packet);
+                        if(packet?.kind==="stop")stop();else finish(resolve,packet);
                     },error=>finish(reject,error));
                 } catch(error){finish(reject,error);}
             });

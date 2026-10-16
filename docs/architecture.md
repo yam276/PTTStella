@@ -37,6 +37,7 @@ manual keyboard input → session-owned send queue → connection
 | [connection/transport](../src/connection/transport.rs) | TLS／WSS 連線、有界寫入及正常關閉握手；不解讀畫面或決定瀏覽動作 |
 | [ui/app](../src/ui/app.rs) | Dioxus 畫面、原生關窗事件與啟動接線 |
 | [ui/protocol](../src/ui/protocol.rs) | WebView 結構化事件、serde wire 格式及共同輸入准入；沒有副作用 |
+| [ui/outbound](../src/ui/outbound.rs)／[ui/bridge](../src/ui/bridge.rs) | Rust→JS 的 tagged Packet 與具型別 payload／結果狀態；一般 bridge 只接受 Packet，原始 Eval 交由 lifecycle join |
 | [ui/commands](../src/ui/commands.rs) | 一筆可取消的命令結果 future，由 surface 的 select 輪詢；不另建送鍵 task 或佇列 |
 | [ui/lifecycle](../src/ui/lifecycle.rs) | renderer、媒體、鑰匙圈及命令等待的共同清理擁有者；正常／錯誤退出都停止並 join |
 | [ui/presentation](../src/ui/presentation.rs) | 遮黑後的唯一 Paint、連結／圖片命中、選取及輸出使用的版本核對；字型預覽也使用同一封包 |
@@ -52,7 +53,11 @@ manual keyboard input → session-owned send queue → connection
 
 surface 所有返回路徑都進入 Resources 清理：先取消命令、撤銷保活與媒體，再並行要求 renderer 停止、Connection shutdown 及等待不可中止的 OS credential 工作。除了資料通道 stop，靜態控制事件也可喚醒 renderer 的單一 receive；JS 先移除互動 listener，再於 finally 釋放其餘資源並回傳清理確認，Rust drain Stopped 並 join eval。五秒未完成只更新可見狀態，保留正在等待的擁有者，不能宣告清理成功。Connection 即使收不到 shutdown 回覆，仍 join worker／probe 並保存失敗結果，重複呼叫不把失敗改報為無連線。
 
-後續仍可按功能縮小 surface 的協調分支，以及 assets/surface.js 中輸入、選取與繪製的共同作用域。這些邊界涉及焦點、組字與取消，應有對應實際 WebView runner 再拆；本輪沒有以增加泛用介面取代現有可驗證的行為。
+Rust→JS 封包使用 `{kind, payload}`；Stop／MediaReset 是沒有 payload 的 unit variant。登入、名單與設定檔回覆使用明確結果 enum；導航、貼上、保存、匯出與外開使用各自的 status enum。Preferences 回傳同一 Packet，診斷報告不走 UI 通道。JS 的 [router](../assets/surface-packets.js) 只分派指定種類，拒絕未知種類、缺 payload 與舊式混合欄位，不再把未知回覆當成 Paint。雙端隨同一 App 編入，沒有額外通訊服務或通用訊息框架。
+
+JS 的 [設定](../assets/surface-settings.js)、[登入](../assets/surface-login.js) 與 [名單](../assets/surface-filters.js) 各自擁有 DOM 欄位、草稿、busy、timer／request 及清理。它們透過具名的 send、prepare／invalidate、restore 與 changed 回呼協作；bindings 交回既有唯一 listener 擁有者統一撤銷。changed 統一刷新瀏覽與輸出控制項，避免關閉一個 dialog 後留著另一功能的暫停狀態。Settings 的 epoch 與 preview request 在 await 字型載入後再次核對；關閉／換草稿／revoke 後的結果不能重畫或搶回焦點。清理先 revoke 三個 owner，再等待工作並 destroy，最後分別核對 clean。
+
+surface 仍共同協調 Rust 版本核對，以及 JS 的輸入、選取、繪製、字型載入快取與 pointer 操作；這些是同一畫面需要共享的資料，不複製為另一個 terminal 模型。後續可再按實際修改需求縮小 Rust 事件分支；拆分涉及焦點、組字與取消時，仍須有實際 WebView runner。
 
 優先驗證 Dioxus Desktop 與 Canvas 的薄繪製橋接；實際呈現路線以同一 [顯示契約](dual-color.md) 的 probe 決定。若採 JavaScript，只接收結構化 frame，不持有第二份終端狀態。
 

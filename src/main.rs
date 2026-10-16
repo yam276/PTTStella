@@ -69,11 +69,11 @@ fn main() {
         {
             Some(
                 case @ ("decode" | "painted" | "send" | "renderer_error" | "untrusted" | "confirm"
-                | "slow"),
+                | "slow" | "dialogs"),
             ) => Some(case.to_owned()),
             _ => {
                 eprintln!(
-                    "--probe-surface requires decode, painted, send, renderer_error, untrusted, confirm or slow"
+                    "--probe-surface requires decode, painted, send, renderer_error, untrusted, confirm, slow or dialogs"
                 );
                 std::process::exit(2);
             }
