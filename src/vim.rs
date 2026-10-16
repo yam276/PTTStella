@@ -213,6 +213,8 @@ impl Keyboard {
                 UnknownReason::Incomplete => "Vim 已暫停：畫面接收未完成；按 i 原始輸入",
                 UnknownReason::Unmapped => "Vim 已暫停：操作區有未映射字格；按 i 原始輸入",
                 UnknownReason::Unrecognized => "Vim 已暫停：未辨識的畫面格式；按 i 原始輸入",
+                UnknownReason::BoardHeader => "Vim 已暫停：看板標頭未確認；按 i 原始輸入",
+                UnknownReason::BoardRows => "Vim 已暫停：看板項目欄位未確認；按 i 原始輸入",
                 UnknownReason::InvalidCursor => {
                     "Vim 已暫停：選取指標或游標位置未確認；按 i 原始輸入"
                 }

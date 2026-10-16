@@ -69,6 +69,14 @@ Windows 真實 pointer＋loopback HTTP 已驗證快掠零請求、同連結一�
 
 ## 技術邊界
 
+### 看板描述欄文字與連續切板修正
+
+2026-10-16：使用者放大截圖顯示描述欄標頭為「中文測述」，原辨識器硬性要求「中文敘述」，使合法看板／最愛列表判成未知畫面。先以自製滿頁 fixture 在舊 reducer 重現 Unknown，再移除描述欄名稱條件；改核對標題色帶與編號／總數、看板、類別、人氣、板主，保留操作列、固定板名欄及選取指標。缺穩定欄位或項目欄位不符仍拒絕，暫停訊息另區分看板標頭／項目，便於後續定位。
+
+24 個 navigation、27 個 desktop lib、8 個 Vim、全 targets desktop Clippy、fmt、core 六套 suite／兩個 replay 通過。新增描述欄名稱變體及缺欄位／非法列反例；同一 production Connection probe 擴充到 30 筆操作，包含五次看板／文章來回。macOS arm64／WKWebView 隔離 App 使用內建字型，實際顯示「中文測述」滿頁並維持 NORMAL；主選單／看板／最愛／文章後連續進出五次，peer 精確比對全部 bytes 且無額外輸入，⌘W 後 listener／worker 清理 passed。
+
+已建立 `dist/macos-board-header/PTTStella.app`，舊包保留。上述為本機合成往返；使用者實站重試及完整 Mac desktop backend 仍待驗收，沒有 Windows runner 或實站帳號操作結果。沒有 push／公開發佈。
+
 ### 實站截圖版面對應修正
 
 2026-10-16：使用者提供滿頁看板／最愛與文章列表截圖，均顯示「未辨識的畫面格式」。確認三個不相容條件：看板前進提示為「閱讀」而非僅「進入」；返回為「回上層」而非僅「回到上層／離開」；文章人氣與日期直接緊貼，原先 whitespace tokenization 會將 `+1610/16` 誤當日期。前一版合成列在這些欄位插入了多餘空白，因此漏掉實站格式。

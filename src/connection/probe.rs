@@ -15,19 +15,20 @@ pub(super) enum Scenario {
 }
 
 pub(super) fn window_page(stage: usize) -> Result<Vec<u8>, String> {
-    let name = match stage / 5 {
-        0 => "main_menu",
-        1 => "boards_reading",
-        2 => "favorites",
-        3 => "list_dense",
-        _ => "favorites",
+    let name = match stage {
+        0..=4 => "main_menu",
+        5..=9 => "boards_caption",
+        10..=14 => "favorites",
+        15..=19 => "list_dense",
+        _ if stage.is_multiple_of(2) => "boards_caption",
+        _ => "list_dense",
     };
     let mut bytes = navigation_page(name)?;
     bytes.extend_from_slice(format!("\x1b[1;73Htest{stage:02}").as_bytes());
     bytes.extend_from_slice(if name == "main_menu" {
         b"\x1b[14;22H"
-    } else if name == "boards_reading" {
-        b"\x1b[4;2H"
+    } else if name == "boards_caption" {
+        b"\x1b[7;2H"
     } else if name == "list_dense" {
         b"\x1b[18;2H"
     } else {
@@ -40,14 +41,18 @@ async fn window<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
-    for step in 0..20 {
-        let expected: &[u8] = match step % 5 {
-            0 => b"\x1b[B",
-            1 => b"\x1b[A",
-            2 => b"\x1b[H",
-            3 => b"\x1b[F",
-            _ if step == 19 => b"\x1b[D",
-            _ => b"\r",
+    for step in 0usize..30 {
+        let expected: &[u8] = match step {
+            20.. if step.is_multiple_of(2) => b"\r",
+            20.. => b"\x1b[D",
+            _ => match step % 5 {
+                0 => b"\x1b[B",
+                1 => b"\x1b[A",
+                2 => b"\x1b[H",
+                3 => b"\x1b[F",
+                _ if step == 19 => b"\x1b[D",
+                _ => b"\r",
+            },
         };
         if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref() == expected)
         {
