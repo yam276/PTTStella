@@ -44,6 +44,8 @@ python tooling/check.py docs
 
 「＋／－」、Ctrl＋加減鍵或 Ctrl＋滾輪以相同比例縮放；「符合視窗」或 Ctrl＋0 還原。放大後可用捲軸查看超出區域。固定 80×24 不重新排字；不同視窗長寬比會留黑邊。方塊／三角形按格線繪製，背景以整數像素共用邊界，避免 ANSI Art 接縫。
 
+一般文字保留字型比例並置中於固定欄位，圓形等窄符號不橫向拉滿。字型設定可預覽符號、雙色字與框線。連線目前只回應站端 WebSocket Ping，沒有主動定時送鍵或 BBS 閒置保活；Ping／Pong 不能作為避免閒置登出的保證。
+
 顯示偏好保存於 OS 使用者設定目錄（Windows 為 `%APPDATA%\PTTStella\config\settings.json`），覆寫前保存 `settings.json.bak`。只保存顯示偏好；載入失敗時使用預設並顯示原因，不自動覆寫原檔。字型名稱由系統解析，缺字可能使用替代字型；沒有宣稱已驗證每個字形的 fallback。
 
 獨立實站檢查：`cargo run --locked --features desktop --bin pttstella -- --probe-live target/verification/live`。這會連至 `wss://ws.ptt.cc/bbs`，只確認登入前提示並斷線，不送帳密；不包含在任何一般 gate。

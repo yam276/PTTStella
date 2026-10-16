@@ -2,12 +2,32 @@ param(
     [Parameter(Mandatory = $true)][string]$PngFilePath,
     [string]$ReferenceFilePath,
     [int]$StartRow = 0,
-    [int]$EndRow = 24
+    [int]$EndRow = 24,
+    [switch]$CheckSymbols
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 $PttImage = [System.Drawing.Bitmap]::new($PngFilePath)
 try {
+    if ($CheckSymbols) {
+        if ($PttImage.Width -ne 960 -or $PttImage.Height -ne 576) { throw 'Unexpected symbol image dimensions' }
+        $PttSymbols = @()
+        for ($PttSymbol = 0; $PttSymbol -lt 4; $PttSymbol++) {
+            $PttLeft = 24; $PttRight = -1; $PttTop = 24; $PttBottom = -1
+            for ($PttY = 0; $PttY -lt 24; $PttY++) {
+                for ($PttX = 0; $PttX -lt 24; $PttX++) {
+                    $PttPixel = $PttImage.GetPixel($PttSymbol * 24 + $PttX, 12 * 24 + $PttY)
+                    if ($PttPixel.R -gt 60 -and $PttPixel.G -gt 60 -and $PttPixel.B -gt 60) {
+                        $PttLeft = [Math]::Min($PttLeft, $PttX); $PttRight = [Math]::Max($PttRight, $PttX)
+                        $PttTop = [Math]::Min($PttTop, $PttY); $PttBottom = [Math]::Max($PttBottom, $PttY)
+                    }
+                }
+            }
+            $PttSymbols += ,@(($PttRight - $PttLeft + 1), ($PttBottom - $PttTop + 1))
+        }
+        @{ symbols = $PttSymbols } | ConvertTo-Json -Compress -Depth 4
+        return
+    }
     if ($ReferenceFilePath) {
         if ($StartRow -lt 0 -or $StartRow -ge $EndRow -or $EndRow -gt 24) { throw 'Invalid row range' }
         $PttReference = [System.Drawing.Bitmap]::new($ReferenceFilePath)

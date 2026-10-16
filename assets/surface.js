@@ -461,11 +461,16 @@ function render(target,packet,{cursor=true,hovered=-1}={}) {
         ctx.font=(packet.settings.font_size*scale)+"px "+fontFamily(glyph.width===2?packet.settings.cjk_font:packet.settings.ascii_font);
         const left=x(glyph.col),top=y(glyph.row),span=x(glyph.col+glyph.width)-left,h=y(glyph.row+1)-top;
         const advance=Math.max(ctx.measureText(glyph.text).width,1);
+        // Text keeps the font's aspect ratio; narrow symbols are centred instead
+        // of stretched into ovals. Connected box/shade glyphs retain grid fitting.
+        const code=glyph.text.codePointAt(0),connected=[...glyph.text].length===1&&code>=0x2500&&code<=0x2593;
+        const fitting=connected?span/advance:Math.min(1,span/advance);
+        const origin=connected?left:left+(span-advance*fitting)/2;
         for(let half=0;half<glyph.width;half++) {
             const [fg]=colours(half===0?glyph.left:glyph.right),col=glyph.col+half;
             ctx.save(); ctx.beginPath(); ctx.rect(x(col),top,x(col+1)-x(col),h); ctx.clip(); ctx.fillStyle=fg;
             if(!graphic(ctx,glyph.text,left,top,span,h)) {
-                ctx.translate(left,top+packet.settings.baseline*scale); ctx.scale(span/advance,1); ctx.fillText(glyph.text,0,0);
+                ctx.translate(origin,top+packet.settings.baseline*scale); ctx.scale(fitting,connected?1:fitting); ctx.fillText(glyph.text,0,0);
             }
             ctx.restore();
         }

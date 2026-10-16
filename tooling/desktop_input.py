@@ -262,6 +262,16 @@ def run(port, process, output=None):
             image = json.loads(inspection.stdout)
             if image != {'width':960,'height':576,'samples':[[0,0,128,255],[128,0,128,255],[128,0,0,255],[0,0,0,255]]}:
                 raise ValueError('exported PNG pixels, background or cursor exclusion did not match')
+            symbols = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+                                      '-File', str(Path(__file__).with_name('inspect_png.ps1')),
+                                      '-PngFilePath', str(Path(output)/'export.png'), '-CheckSymbols'],
+                                     capture_output=True, timeout=5,
+                                     creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+            if symbols.returncode:
+                raise ValueError('symbol PNG inspection did not run')
+            symbol_bounds = json.loads(symbols.stdout)['symbols']
+            if len(symbol_bounds) != 4 or any(min(w,h)<6 or abs(w-h)>2 for w,h in symbol_bounds):
+                raise ValueError('circular symbol ink was distorted: '+repr(symbol_bounds))
         import desktop_capture
         capture_report = desktop_capture.run(devtools, output)
         # Edit actual form controls; cancelled previews must not change the screen/store.
@@ -421,6 +431,7 @@ def run(port, process, output=None):
                 'native_paste_preview_and_validation': True,
                 'url_click_drag_copy': True,
                 'png_geometry_and_pixels': output is not None,
+                'circular_symbol_ink_bounds': symbol_bounds,
                 'selected_rows_png': capture_report,
                 'font_preview_save_cancel_validation': True,
                 'mouse_navigation': navigation_report,

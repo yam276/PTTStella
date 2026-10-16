@@ -156,6 +156,8 @@ fn preview(probe: bool) -> Result<Vec<u8>, String> {
     if probe {
         let solid = encoding::encode("█").map_err(|e| e.to_string())?;
         bytes.extend_from_slice(b"\x1b[12;1Hhttps://example.com/pttstella");
+        bytes.extend_from_slice(b"\x1b[13;1H");
+        bytes.extend_from_slice(&encoding::encode("●○◎⊙").map_err(|e| e.to_string())?);
         bytes.extend_from_slice(b"\x1b[15;1H");
         bytes.extend_from_slice(&encoding::encode("一般色 / 亮色").map_err(|e| e.to_string())?);
         bytes.extend_from_slice(b"\x1b[16;1H");
@@ -794,7 +796,7 @@ fn font_sample() -> Result<Frame, String> {
     sample.feed(b"ASCII xyz 0123456789\r\n\x1b[31;44m\xa4\x1b[32;45m\xa4\x1b[0m ");
     sample.feed(&encoding::encode("中文字型\r\n").map_err(|e| e.to_string())?);
     sample.feed(b"\x1b[31;44m");
-    sample.feed(&encoding::encode("█▌◢◣◤◥").map_err(|e| e.to_string())?);
+    sample.feed(&encoding::encode("█▌◢◣◤◥ ●○◎⊙").map_err(|e| e.to_string())?);
     sample.feed(b"\x1b[0m\r\n");
     sample.feed(&encoding::encode("┌──┐ │  │ └──┘").map_err(|e| e.to_string())?);
     sample.feed(b"\x1b[0m\x1b[?25l");

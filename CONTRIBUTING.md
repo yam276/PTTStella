@@ -47,6 +47,8 @@ production Connection 的導覽案例以 loopback WebSocket 比對實際 bytes�
 
 ANSI 調色盤以合成完整方塊的實際 RGB 檢查，與獨立 expected 比對；不以文字反鋸齒的最常見顏色推定色值。中文字形仍另測左右紅／綠筆畫與藍／紫背景。
 
+符號比例以自製 `●○◎⊙` 合成列，經真正 renderer／PNG 匯出後，由 System.Drawing 獨立解碼量測筆畫 bounds；Windows 預設字型四個樣本的寬高差不得超過兩像素且必須有可見筆畫。這是指定 backend／字型的回歸案例，不宣稱所有符號、字型或 DPI 皆已驗證。字型設定預覽包含相同符號，方便人工對照。
+
 桌面探針另驗證 hover 工具列、實際縮放按鈕、100／125／150% 畫面比例、連續方塊像素及半方塊／三角形幾何。`--probe` 明確停用正常啟動的自動連線，不輸入私人帳密或存取實站文章。
 
 輸入 gate 使用獨立 WebView2 profile 與僅 probe 啟用的 loopback DevTools port，由 `tooling/desktop_input.py` 發送瀏覽器滑鼠點擊與文字／按鍵輸入，驗證畫面、黑邊、縮放控制後的焦點。ASCII／中文編碼、Enter 與方向鍵經同一生產 Connection 送往本機 WebSocket；合成確認提示顯示後，再以 `n`、Enter 完成往返，必須收到完成畫面並確認繪製。服務端接著關閉連線，檢查代碼／原因文字以及移開滑鼠後仍可見的狀態。只接受瀏覽器 trusted input；直接 dispatchEvent 不算通過。這不是實體鍵盤／IME 或實站登入證據。正常執行不開 debug port；runner 持有並等待自己啟動的程序，失敗時終止該 probe。
