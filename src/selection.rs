@@ -1,6 +1,7 @@
 //! Selection consumes mapped glyphs; it never decodes terminal bytes again.
 use crate::screen::Frame;
 use serde::{Deserialize, Serialize};
+use std::ops::Range;
 
 #[derive(Clone, Copy, Debug, Deserialize)]
 pub struct Position {
@@ -27,6 +28,8 @@ pub struct Span {
 pub struct SelectedText {
     pub text: String,
     pub spans: Vec<Span>,
+    /// Complete rows covered by the selection, including blank cells.
+    pub rows: Range<usize>,
 }
 
 /// Inclusive cell endpoints expand to whole glyphs. Text retains all selected spaces.
@@ -64,6 +67,7 @@ pub fn extract(frame: &Frame, selection: &Selection) -> Result<SelectedText, &'s
     let mut result = SelectedText {
         text: String::new(),
         spans: Vec::new(),
+        rows: start.row..end.row + 1,
     };
     for row in start.row..=end.row {
         if row != start.row {

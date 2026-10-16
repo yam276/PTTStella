@@ -35,6 +35,8 @@ IME gate 使用 CDP 的 imeSetComposition，驗證取消不送出、確認送出
 
 PNG gate 點擊真正匯出按鈕，以相同 renderer 畫出離屏快照，probe 使用固定產物路徑代替原生另存視窗。`tooling/inspect_png.ps1` 使用 Windows System.Drawing 獨立解碼檔案，確認尺寸、左右背景、方塊及游標排除；另確認匯出不改變可見畫布與捲動。PNG 標頭檢查只負責橋接尺寸／格式及容量，沒有當作通用 PNG 解碼器。檔案替換另測成功與失敗保留原檔／清理暫存；原生另存、取消及 OS 視窗互動仍需人工驗收。
 
+選取行 PNG 由 Rust 選取結果提供完整行範圍，Rust 核對畫面／選取 request 與 PNG 尺寸後才保存。`tooling/desktop_capture.py` 使用 trusted 滑鼠輸入及實際按鈕，驗證雙色字單行、反向多行、首尾／空白行與整頁；獨立 System.Drawing 解碼後，以對應整頁區域的全部像素雜湊比對，不能只看標頭。另驗證縮放不改輸出、畫布／捲動不變，以及清除選取後停用按鈕。輸出範例位於 `target/verification/desktop/capture-lines-*.png`，只含自製資料。
+
 `navigation` 核心 suite 使用自製列表與閱讀 fixture 驗證多條件辨識、編號 cell 命中、精確送鍵計畫與負面案例。只有 footer 文字相似、沒有指標、列表缺行、彈窗、未映射 byte 或未完成控制碼均不算可導覽畫面。
 
 production Connection 的導覽案例以 loopback WebSocket 比對實際 bytes：鍵盤先入列後的舊點擊、等待更新時的重複點擊、翻頁邊界、過期 frame／session、未完成控制碼及已取消的排隊請求均不得混入額外輸入。

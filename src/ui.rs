@@ -12,7 +12,7 @@ use pttstella::{
     storage,
 };
 use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, sync::Arc};
+use std::{ops::Range, path::PathBuf, sync::Arc};
 use tokio::sync::watch;
 
 #[derive(Clone, PartialEq, Props)]
@@ -38,6 +38,12 @@ struct PendingPaste {
     generation: u64,
     prepared: PreparedPaste,
 }
+struct SelectedRows {
+    generation: u64,
+    revision: u64,
+    request: u64,
+    rows: Range<usize>,
+}
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum SurfaceEvent {
@@ -60,6 +66,7 @@ enum SurfaceEvent {
     ExportPng {
         generation: u64,
         revision: u64,
+        selection_request: Option<u64>,
         png: String,
         trusted: bool,
     },
@@ -262,6 +269,7 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "zoom-fit", "符合視窗" }
                 button { id: "select-all", "整頁選取" }
                 button { id: "export-png", "匯出 PNG" }
+                button { id: "export-rows", disabled: true, title: "先拖曳選取要截圖的行", "選取行 PNG" }
                 button { id: "font-settings", "字型" }
                 div { id: "browse-controls", hidden: true,
                     button { id: "browse-back", disabled: true, "返回" }
@@ -387,6 +395,8 @@ async fn surface(
     let mut composition_checked = false;
     let mut link_requests = 0;
     let mut export_checked = false;
+    let mut rows_export_checked = false;
+    let mut selected_rows: Option<SelectedRows> = None;
     let mut settings_saved = false;
     let mut navigation_requests = 0;
     let (mut paste_single, mut paste_confirm, mut paste_cancel, mut paste_rejected) =
@@ -416,6 +426,7 @@ async fn surface(
             && composition_checked
             && link_requests == 1
             && export_checked
+            && rows_export_checked
             && settings_saved
             && navigation_requests == 8
             && paste_single
@@ -488,21 +499,32 @@ async fn surface(
                     };
                     eval.send(reply).map_err(|e| e.to_string())?;
                 },
-                SurfaceEvent::ExportPng { generation, revision, png, trusted } => {
+                SurfaceEvent::ExportPng { generation, revision, selection_request, png, trusted } => {
                     if stopping || !trusted { continue; }
                     let result = (|| -> Result<Option<PathBuf>, String> {
+                        let shown = displayed.as_ref().filter(|p| p.generation == generation && p.frame.revision == revision)
+                            .ok_or("畫面已更新，請重新選取後匯出")?;
+                        if (shown.frame.cols, shown.frame.rows) != (80, export::ROWS) { return Err("此畫面尺寸不支援 PNG 匯出".into()); }
+                        let rows = match selection_request {
+                            Some(request) => selected_rows.as_ref()
+                                .filter(|s| s.generation == generation && s.revision == revision && s.request == request)
+                                .map(|s| s.rows.clone()).ok_or("選取已變更，請重新選取後匯出")?,
+                            None => 0..export::ROWS,
+                        };
                         let encoded = png.strip_prefix("data:image/png;base64,").ok_or("PNG 格式不正確")?;
                         if encoded.len() > export::MAX_BASE64_BYTES { return Err("PNG 超過匯出大小上限".into()); }
                         let bytes = base64::engine::general_purpose::STANDARD.decode(encoded).map_err(|_| "PNG 編碼不正確")?;
-                        export::check_export_header(&bytes).map_err(str::to_owned)?;
+                        export::check_export_header(&bytes, &rows).map_err(str::to_owned)?;
                         let path = if let Some(directory) = &probe {
-                            Some(directory.join("export.png"))
+                            Some(directory.join(if selection_request.is_some() {"export-rows.png"} else {"export.png"}))
                         } else {
                             // Parent-owned synchronous dialog: no detached native dialog task.
                             let window = dioxus::desktop::window();
                             rfd::FileDialog::new().set_parent(window.window.as_ref())
                                 .set_title("匯出 PTT 畫面").add_filter("PNG", &["png"])
-                                .set_file_name("PTTStella.png").save_file()
+                                .set_file_name(if selection_request.is_some() {
+                                    format!("PTTStella-lines-{}-{}.png", rows.start + 1, rows.end)
+                                } else {"PTTStella.png".into()}).save_file()
                         };
                         if let Some(path) = &path {
                             if !path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("png")) {
@@ -514,7 +536,8 @@ async fn surface(
                     })();
                     let reply = match result {
                         Ok(Some(_)) => {
-                            export_checked |= probe.is_some() && displayed.as_ref().is_some_and(|p| p.generation==generation && p.frame.revision==revision);
+                            export_checked |= probe.is_some() && selection_request.is_none();
+                            rows_export_checked |= probe.is_some() && selection_request.is_some();
                             serde_json::json!({"export_result":"saved","notice":"PNG 已儲存"})
                         },
                         Ok(None) => serde_json::json!({"export_result":"cancelled","notice":"未選擇儲存位置"}),
@@ -594,6 +617,7 @@ async fn surface(
                     if probe.is_some() && selected.as_ref().is_some_and(|s| s.text == "中") {
                         copied_selection = Some((generation, revision, request));
                     }
+                    selected_rows = selected.as_ref().map(|s| SelectedRows { generation, revision, request, rows: s.rows.clone() });
                     eval.send(serde_json::json!({"selection": {
                         "generation":generation,"revision":revision,"request":request,"value":selected
                     }})).map_err(|e| e.to_string())?;
@@ -694,6 +718,7 @@ async fn surface(
                         report["ime_composition"] = composition_checked.into();
                         report["url_open"] = (link_requests == 1).into();
                         report["png_export"] = export_checked.into();
+                        report["rows_png_export"] = rows_export_checked.into();
                         report["settings_saved"] = settings_saved.into();
                         report["mouse_navigation"] = (navigation_requests==8).into();
                         report["paste_single"] = paste_single.into();report["paste_confirm"] = paste_confirm.into();

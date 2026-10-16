@@ -56,6 +56,7 @@ fn either_half_of_a_dual_colour_glyph_copies_the_complete_character_once() {
     for col in [0, 1] {
         let result = selection::extract(&screen.frame(), &range((col, 0), (col, 0))).unwrap();
         assert_eq!(result.text, "中");
+        assert_eq!(result.rows, 0..1);
         assert_eq!(
             result.spans,
             [Span {
@@ -72,6 +73,10 @@ fn reversed_selection_retains_spaces_and_row_boundaries() {
     let mut screen = Screen::new(4, 2).unwrap();
     screen.feed(b" A B\r\n C");
     for request in [range((1, 0), (2, 1)), range((2, 1), (1, 0))] {
+        assert_eq!(
+            selection::extract(&screen.frame(), &request).unwrap().rows,
+            0..2
+        );
         assert_eq!(
             selection::extract(&screen.frame(), &request).unwrap().text,
             "A B\n C "
@@ -179,11 +184,19 @@ fn png_bridge_budget_and_geometry_are_checked_before_saving() {
     header.extend(960u32.to_be_bytes());
     header.extend(576u32.to_be_bytes());
     header.extend([8, 6, 0, 0, 0, 0, 0, 0, 0]);
-    assert!(check_export_header(&header).is_ok());
+    assert!(check_export_header(&header, &(0..24)).is_ok());
     header[20..24].copy_from_slice(&575u32.to_be_bytes());
-    assert!(check_export_header(&header).is_err());
-    assert!(check_export_header(b"not an image").is_err());
-    assert!(check_export_header(&vec![0; MAX_PNG_BYTES + 1]).is_err());
+    assert!(check_export_header(&header, &(0..24)).is_err());
+    assert!(check_export_header(b"not an image", &(0..24)).is_err());
+    assert!(check_export_header(&vec![0; MAX_PNG_BYTES + 1], &(0..24)).is_err());
+    for rows in [0..1, 3..4, 19..23, 23..24] {
+        header[20..24].copy_from_slice(&((rows.end - rows.start) as u32 * 24).to_be_bytes());
+        assert!(check_export_header(&header, &rows).is_ok());
+        assert!(check_export_header(&header, &(0..24)).is_err());
+    }
+    for rows in [0..0, 24..25, usize::MAX..usize::MAX] {
+        assert!(check_export_header(&header, &rows).is_err());
+    }
 }
 
 #[test]

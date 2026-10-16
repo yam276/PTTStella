@@ -262,6 +262,8 @@ def run(port, process, output=None):
             image = json.loads(inspection.stdout)
             if image != {'width':960,'height':576,'samples':[[0,0,128,255],[128,0,128,255],[128,0,0,255],[0,0,0,255]]}:
                 raise ValueError('exported PNG pixels, background or cursor exclusion did not match')
+        import desktop_capture
+        capture_report = desktop_capture.run(devtools, output)
         # Edit actual form controls; cancelled previews must not change the screen/store.
         initial_pixels = devtools.evaluate('document.getElementById("screen").toDataURL("image/png")')
         def edit_field(selector, value):
@@ -419,6 +421,7 @@ def run(port, process, output=None):
                 'native_paste_preview_and_validation': True,
                 'url_click_drag_copy': True,
                 'png_geometry_and_pixels': output is not None,
+                'selected_rows_png': capture_report,
                 'font_preview_save_cancel_validation': True,
                 'mouse_navigation': navigation_report,
                 'peer_close_visible': True,
