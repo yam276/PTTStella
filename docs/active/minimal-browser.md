@@ -1,6 +1,6 @@
 # PTTStella 最簡 terminal 計畫
 
-狀態：**畫面核心、Windows 視窗與 WSS 登入前連線已驗證；手動登入驗收待使用者實測**。第一個驗收平台為 Windows；Rust／Dioxus 維持可攜，macOS／Linux 後續各自驗證。
+狀態：**畫面核心、Windows 視窗與 WSS 登入前連線已驗證；macOS 專用帳號已觀察手動登入與部分實站瀏覽，平台與案例範圍分列如下**。第一個驗收平台為 Windows；Rust／Dioxus 維持可攜，macOS／Linux 後續各自驗證。
 
 ## 目標
 
@@ -68,6 +68,14 @@ Windows 真實 WebView 與模擬舊 WebKit 順序的增量 gate 已通過，包�
 Windows 真實 pointer＋loopback HTTP 已驗證快掠零請求、同連結一次、A→B 的 TCP EOF、已完成及下載中提升不重抓、兩種位置／右下碰邊、關閉偏好、設定重啟及 Canvas／PTT bytes 不變。Rust lease 案例驗證相同來源跨 revision 可續用，新輸入／session／範圍變動／未完成畫面均失效。現有全部離線 gate 通過；真實網站、macOS／Linux、原生 picker 與人工登入仍待驗收。
 
 ## 技術邊界
+
+### 專用帳號實站切板與文章列邊界
+
+2026-10-16：使用者自行登入後，明確授權以專用測試帳號測試切板與 Vim。macOS 原生事件已在實站確認主選單 k／l、最愛 G／gg／4j／l、SYSOP 文章列表 k／l、文章閱讀與 h 返回、再 h 回最愛及 j／l 切換看板。單頁閱讀 Ctrl+f 維持本機邊界拒絕；進板動畫與任意鍵提示維持保守暫停，可用 f＋Space 原生一次通過。沒有發文、推文、寄信、刪文、修改站端設定或記錄原始 session／帳密。
+
+同時在 Test 發現合法空白標題、ID_Problem 發現置底日期欄「重要」，兩者均使舊辨識器暫停。先以各一個自製案例在舊 reducer 重現 Unknown，再修正共用固定欄位解析：標題可只剩已知文章標記，編號／作者與列表錨點仍驗證；「重要」只允許在星號置底列，其餘日期仍須有效。未知日期、一般列的重要標籤、提示與非法作者仍拒絕。沒有複製使用者列表或文章內容進 fixture。
+
+26 個 navigation、core 七套 suite／兩個 replay、desktop 全 targets Clippy 通過。自製滿頁 native fixture 同時加入空白標題與重要置底；兩次 macOS／WKWebView 各 30 筆原生操作與五次切板均為 NORMAL、精確 bytes 且無額外輸入，分別以 ⌘W／⌘Q 結束。這兩種修正的實站重試需要重啟新版；目前已開啟 `dist/macos-live-ready/PTTStella.app` 並由使用者直接重新輸入帳密，完成後繼續驗證。此段未把本機案例當作實站修正後通過。
 
 ### 按鈕登入與 macOS 鑰匙圈
 

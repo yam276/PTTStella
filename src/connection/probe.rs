@@ -58,9 +58,9 @@ pub(super) fn window_page(stage: usize) -> Result<Vec<u8>, String> {
         0..=4 => "main_menu",
         5..=9 => "boards_caption",
         10..=14 => "favorites",
-        15..=19 => "list_dense",
+        15..=19 => "list_edge_cases",
         _ if stage.is_multiple_of(2) => "boards_caption",
-        _ => "list_dense",
+        _ => "list_edge_cases",
     };
     let mut bytes = navigation_page(name)?;
     bytes.extend_from_slice(format!("\x1b[1;73Htest{stage:02}").as_bytes());
@@ -68,7 +68,7 @@ pub(super) fn window_page(stage: usize) -> Result<Vec<u8>, String> {
         b"\x1b[14;22H"
     } else if name == "boards_caption" {
         b"\x1b[7;2H"
-    } else if name == "list_dense" {
+    } else if name == "list_edge_cases" {
         b"\x1b[18;2H"
     } else {
         b"\x1b[5;2H"

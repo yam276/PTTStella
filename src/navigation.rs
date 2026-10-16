@@ -309,21 +309,24 @@ fn article(line: &Row<'_>, row: usize) -> Option<Article> {
     if prefix != "★" && !number(prefix).is_some_and(|n| n > 0 || partial) {
         return None;
     }
-    let (month, day) = line.cells(11, 17)?.trim().split_once('/')?;
-    if !number(month.trim()).is_some_and(|m| (1..=12).contains(&m))
-        || !number(day.trim()).is_some_and(|d| (1..=31).contains(&d))
-    {
-        return None;
+    let date = line.cells(11, 17)?.trim();
+    // Some legacy pinned announcements store this label in the date field.
+    if !(prefix == "★" && date == "重要") {
+        let (month, day) = date.split_once('/')?;
+        if !number(month.trim()).is_some_and(|m| (1..=12).contains(&m))
+            || !number(day.trim()).is_some_and(|d| (1..=31).contains(&d))
+        {
+            return None;
+        }
     }
     let author = line.cells(17, 30)?.trim();
     if author.is_empty() {
         return None;
     }
     let title = line.cells(30, 80)?.trim();
-    let (mark, content) = title.split_once(char::is_whitespace)?;
-    if content.trim().is_empty() {
-        return None;
-    }
+    // A real article can have an empty title; its structural mark is still
+    // required along with number/date/author and the surrounding list anchors.
+    let mark = title.split_whitespace().next()?;
     let deleted = author == "-" && matches!(mark, "╳" | "□");
     if !deleted
         && (author.len() > 16

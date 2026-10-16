@@ -4,7 +4,7 @@ Rust／Dioxus 的 PTT 桌面介面，外觀像 terminal；不嵌入系統終端�
 
 Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Art，搭配公開映射依賴及合成驗收案例。
 
-第一個實測目標為 Windows；macOS 已提供本機 arm64 App 打包與啟動觀察，完整功能及 Linux 仍待各自驗證。畫面核心、離線 replay、Dioxus／WebView2 顯示及 WSS 登入前連線探針已通過；手動登入後的操作仍待使用者實測。
+第一個實測目標為 Windows；macOS 已提供本機 arm64 App 打包與啟動觀察，完整功能及 Linux 仍待各自驗證。畫面核心、離線 replay、Dioxus／WebView2 顯示及 WSS 登入前連線探針已通過；macOS 專用帳號的手動登入與部分瀏覽已實測，案例及待驗收範圍見 active plan。
 
 ## 目前範圍
 
