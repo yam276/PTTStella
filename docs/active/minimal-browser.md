@@ -69,6 +69,16 @@ Windows 真實 pointer＋loopback HTTP 已驗證快掠零請求、同連結一�
 
 ## 技術邊界
 
+### 主選單／看板列表的 Vim 支援增量
+
+2026-10-16：使用者回報原生 Command 操作正常，但主畫面、看板列表／我的最愛及文章列表仍出現暫停。確認前兩類根本沒有 profile；文章列表原先僅在底列尋找完整返回／閱讀命令，未涵蓋上下操作列分配。新增 MainMenu／BoardList（含分類入口）與自製 fixture；命令可分布於上方操作列及底列，底列仍須有正常標記／樣式。提示覆蓋、未完成 ANSI、非法指標與操作區未映射資料仍拒絕，按鍵提示現在保留暫停原因。
+
+主選單、看板／最愛與分類均沿同一 Keyboard → Intent → navigation::plan → Connection；j/k、計數、半頁使用方向鍵，h/l 返回／進入，gg/G 使用 Home／End。半頁依內容高度計算。主選單廣告及分類裝飾區的未映射字不再使操作暫停，標題／狀態／選項仍驗證。新增 profile 不提供文章命中區、不啟用滑鼠／防閒置；Connection 以明確 allows_keepalive 限定文章列表／閱讀，測試強行給新 profile UI permission 也無刷新輸入。
+
+驗證：18 個 navigation、8 個 Vim、27 個 desktop lib（包含 20 筆跨 profile 精確 bytes 及新增防閒置拒絕）通過；全 targets desktop Clippy、core gate 的六套 suite／兩個 replay、fmt 通過。macOS arm64／WKWebView 的隔離 App 使用真正原生事件，依序在主選單、看板列表、最愛、上方閱讀命令的文章列表執行 j/k/gg/G 與 l 或 h；本機 peer 核對 20 筆 bytes，全部維持 NORMAL，⌘W 後 listener 釋放與 worker join，window-probe.json 為 passed。分類入口只有核心合成案例，沒有宣稱 Mac 視窗覆蓋該入口或實站登入後已修復。沒有操作使用者帳號的站端按鍵，也沒有錄製私人流量。
+
+App 保留於 `dist/macos-navigation/PTTStella.app`，ad-hoc 簽署／arm64 打包完成，舊 App 保留。完整 Windows desktop gate 在本機 Mac 維持 not_ready；本輪沒有 Windows runner 或實站登入後結果。使用者須退出舊 App 後開啟這份新版再重試。
+
 ### macOS 操作修正與兩層輸入對應
 
 2026-10-16：修正一般列表的空白補齊日期（如 `1/ 9`）、投票／鎖文標記及作者 `-` 的刪文列辨識。新增正常與錯誤日期／提示正反例，仍要求標頭、操作列、合法游標及完整格線。暫停會顯示具體原因；未辨識畫面仍不猜測站端動作。這些合成格式已驗證，使用者原先實站看板仍須重試，沒有據此宣稱實站問題完全結案。

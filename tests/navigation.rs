@@ -290,3 +290,137 @@ fn malformed_frame_geometry_fails_without_panicking_or_reconstructing_cells() {
         }
     );
 }
+
+#[test]
+fn menu_board_and_favorite_profiles_translate_without_enabling_keepalive_or_article_hits() {
+    for name in ["main_menu", "boards", "favorites"] {
+        let context = page(name);
+        assert_eq!(
+            context.kind(),
+            if name == "main_menu" {
+                "main_menu"
+            } else {
+                "board_list"
+            }
+        );
+        assert!(!context.allows_keepalive());
+        for (intent, expected) in [
+            (
+                Intent::Lines {
+                    down: true,
+                    count: 2,
+                },
+                b"\x1b[B\x1b[B".as_slice(),
+            ),
+            (
+                Intent::Lines {
+                    down: false,
+                    count: 1,
+                },
+                b"\x1b[A",
+            ),
+            (Intent::First, b"\x1b[H"),
+            (Intent::Last, b"\x1b[F"),
+            (Intent::Forward, b"\r"),
+            (Intent::Back, b"\x1b[D"),
+            (Intent::NextPage, b"\x1b[6~"),
+            (Intent::PreviousPage, b"\x1b[5~"),
+        ] {
+            assert_eq!(
+                navigation::plan(&context, intent).unwrap(),
+                expected,
+                "{name}"
+            );
+        }
+        assert_eq!(
+            navigation::plan(&context, Intent::Open { row: 4 }),
+            Err(Error::Unavailable)
+        );
+    }
+    assert_eq!(page("main_menu").content_rows(), 4);
+    assert_eq!(page("boards").content_rows(), 20);
+}
+#[test]
+fn commands_split_between_subheader_and_footer_recognize_article_list() {
+    let context = page("list_subheader");
+    assert!(matches!(
+        context,
+        Context::ArticleList { cursor_row: 4, .. }
+    ));
+    assert!(context.allows_keepalive());
+    assert_eq!(navigation::plan(&context, Intent::Forward).unwrap(), b"\r");
+    let mut screen = fixture("list_subheader");
+    replace(&mut screen, 23, "請輸入密碼:", "30;47");
+    screen.feed(b"\x1b[5;2H");
+    unknown(&screen.frame());
+}
+#[test]
+fn menu_and_board_profiles_reject_prompts_stale_pointers_and_missing_anchors() {
+    for name in ["main_menu", "boards", "favorites"] {
+        let cursor = if name == "main_menu" {
+            b"\x1b[14;22H".as_slice()
+        } else {
+            b"\x1b[5;2H"
+        };
+        for (row, value) in [(23, "是否刪除？[Y/n]"), (2, "請輸入帳號:")] {
+            // Main menu has no table header; corrupt its title instead.
+            let row = if name == "main_menu" && row == 2 {
+                0
+            } else {
+                row
+            };
+            let mut screen = fixture(name);
+            replace(&mut screen, row, value, "30;47");
+            screen.feed(cursor);
+            unknown(&screen.frame());
+        }
+        let mut screen = fixture(name);
+        screen.feed(b"\x1b[24;1H");
+        unknown(&screen.frame());
+        let mut screen = fixture(name);
+        screen.feed(if name == "main_menu" {
+            b"\x1b[14;21H  "
+        } else {
+            b"\x1b[5;1H  "
+        });
+        screen.feed(cursor);
+        unknown(&screen.frame());
+    }
+}
+
+#[test]
+fn menu_banner_and_class_decoration_are_not_input_context() {
+    for (name, cursor, first_row) in [
+        ("main_menu", b"\x1b[14;22H".as_slice(), 12),
+        ("classes", b"\x1b[9;2H", 7),
+    ] {
+        let mut screen = fixture(name);
+        screen.feed(b"\x1b[3;1H\x81 ");
+        screen.feed(cursor);
+        let context = navigation::analyze(&screen.frame());
+        assert_eq!(
+            context.kind(),
+            if name == "main_menu" {
+                "main_menu"
+            } else {
+                "board_list"
+            }
+        );
+        assert_eq!(
+            context.content_rows(),
+            if name == "main_menu" {
+                4
+            } else {
+                23 - first_row
+            }
+        );
+        assert!(!context.allows_keepalive());
+        screen.feed(if name == "main_menu" {
+            b"\x1b[14;40H\x81 "
+        } else {
+            b"\x1b[9;40H\x81 "
+        });
+        screen.feed(cursor);
+        unknown(&screen.frame());
+    }
+}

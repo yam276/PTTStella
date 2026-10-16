@@ -252,3 +252,28 @@ fn reading_edges_are_local_noops_and_repeat_bytes_are_bounded() {
         .is_err()
     );
 }
+
+#[test]
+fn main_menu_and_board_half_pages_use_their_content_height() {
+    for (context, count) in [
+        (
+            Context::MainMenu {
+                first_row: 12,
+                last_row: 15,
+            },
+            2,
+        ),
+        (Context::BoardList { first_row: 3 }, 10),
+    ] {
+        let mut policy = Keyboard::default();
+        policy.toggle();
+        policy.context(&context);
+        let mut control = key("d");
+        control.ctrl = true;
+        assert_eq!(
+            policy.key(&control, &context),
+            Effect::Browse(Intent::Lines { down: true, count })
+        );
+        assert_eq!(policy.status(&context).mode, "normal");
+    }
+}

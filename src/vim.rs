@@ -206,9 +206,17 @@ impl Keyboard {
             self.text = Some(false);
             return Effect::None;
         }
-        if matches!(context, Context::Unknown { .. }) {
+        if let Context::Unknown { reason } = context {
             self.reset();
-            return Effect::Notice("Vim 已暫停：此畫面請按 i 使用 PTT 原始輸入");
+            return Effect::Notice(match reason {
+                UnknownReason::UnsupportedGrid => "Vim 已暫停：不支援的格線；按 i 原始輸入",
+                UnknownReason::Incomplete => "Vim 已暫停：畫面接收未完成；按 i 原始輸入",
+                UnknownReason::Unmapped => "Vim 已暫停：操作區有未映射字格；按 i 原始輸入",
+                UnknownReason::Unrecognized => "Vim 已暫停：未辨識的畫面格式；按 i 原始輸入",
+                UnknownReason::InvalidCursor => {
+                    "Vim 已暫停：選取指標或游標位置未確認；按 i 原始輸入"
+                }
+            });
         }
         if !key.ctrl && !key.alt && key.key.len() == 1 && key.key.as_bytes()[0].is_ascii_digit() {
             if self.invalid_count {
@@ -253,12 +261,7 @@ impl Keyboard {
         let action = if key.ctrl {
             match key.key.to_ascii_lowercase().as_str() {
                 "d" | "u" => {
-                    let rows = match context {
-                        Context::ArticleList { articles, .. } => {
-                            23 - articles.first().map_or(3, |a| a.row)
-                        }
-                        _ => 23,
-                    };
+                    let rows = context.content_rows();
                     if counted {
                         self.scroll = Some(count);
                     }

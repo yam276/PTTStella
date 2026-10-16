@@ -2,6 +2,12 @@
 
 2026-10-16。狀態：**主要瀏覽操作已實作；Windows 本機往返通過**。使用者選定先做模式切換、`hjkl`、`gg/G`、計數與翻頁，並納入 `Ctrl+d/u`，另要求類似 Vimium 的暫時原生熱鍵按鈕，並提出使用 f 作切換入口；本方案將 f 定義為「原生一次」。本輪只處理瀏覽。以下列出已接入的操作與後續驗收邊界。
 
+目前辨識主功能表、分類看板、看板列表／我的最愛、有日期欄的文章列表與一般閱讀頁。主選單及看板／最愛使用相同瀏覽意圖：j/k、計數與半頁送上下方向鍵，h/l 返回／進入，gg/G 送 Home／End，Ctrl+f/b 送 PgDn／PgUp；主選單的 PgDn／PgUp 由 PTT 解釋為尾項／首項。半頁依各畫面的內容高度計算。這些新增 profile 只開放鍵盤，不擴大滑鼠點擊或防閒置範圍。
+
+主功能表要求標題、底列狀態、連續選項與第 20 欄的指標；看板／最愛要求欄位標頭、操作列、固定板名欄與選取游標。分類看板使用自己的標題、七列上方區域及編號欄；主選單廣告與分類裝飾的未映射字不參與輸入決策，操作區仍須完整可映射。文章列表的命令提示可分散在上方操作列與底列，不能只在底列尋找「閱讀」。提示窗、非法游標、未完成 ANSI 等仍暫停；按鍵後的訊息會保留具體原因。
+
+介面依 [主選單輸出／游標](https://github.com/ptt/pttbbs/blob/908bb0631a4a6db41eac85713637adf1a6058fde/mbbsd/menu.c#L534)、[選單命令](https://github.com/ptt/pttbbs/blob/908bb0631a4a6db41eac85713637adf1a6058fde/mbbsd/menu.c#L734)、[看板欄位／目錄](https://github.com/ptt/pttbbs/blob/908bb0631a4a6db41eac85713637adf1a6058fde/mbbsd/board.c#L1587) 及 [上下兩列命令配置](https://github.com/ptt/pttbbs/blob/908bb0631a4a6db41eac85713637adf1a6058fde/mbbsd/psb.c#L1110) 編寫自製 fixture。來源不代表實站部署版本；驗證結果以 active plan 為準。
+
 ## 按鍵衝突的來源
 
 核對公開 ptt/pttbbs commit `908bb0631a4a6db41eac85713637adf1a6058fde`；沒有登入實站或確認實站部署版本。公開原檔與 digest 保存在 repo 外的功能研究目錄；產品只記錄介面事實與自己的設計。
