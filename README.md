@@ -4,7 +4,7 @@ Rust／Dioxus 的 PTT 桌面介面，外觀像 terminal；不嵌入系統終端�
 
 Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Art，搭配公開映射依賴及合成驗收案例。
 
-第一個實測目標為 Windows；macOS／Linux 保留為後續平台目標。畫面核心、離線 replay、Dioxus／WebView2 顯示及 WSS 登入前連線探針已通過；手動登入後的操作仍待使用者實測。
+第一個實測目標為 Windows；macOS 已提供本機 arm64 App 打包與啟動觀察，完整功能及 Linux 仍待各自驗證。畫面核心、離線 replay、Dioxus／WebView2 顯示及 WSS 登入前連線探針已通過；手動登入後的操作仍待使用者實測。
 
 ## 目前範圍
 
@@ -42,6 +42,7 @@ Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Ar
 - [字型組合與可攜設定檔](docs/preferences-and-profiles.md)
 - [本機名單與內容過濾方案（尚未實作）](docs/content-filters.md)
 - [媒體預覽規格](docs/media.md)
+- [macOS App 打包](docs/macos-app.md)
 
 ```text
 python tooling/check.py docs
@@ -60,3 +61,14 @@ python tooling/check.py docs
 顯示偏好保存於 OS 使用者設定目錄（Windows 為 `%APPDATA%\PTTStella\config\settings.json`），覆寫前保存 `settings.json.bak`。本機設定使用 version 2，舊 v1 明確字型名稱遷移成自訂，明確套用後才寫入新版；載入失敗時使用預設並顯示原因，不自動覆寫原檔。字型名稱由系統解析，缺字可能使用替代字型；沒有宣稱已驗證每個字形的 fallback。
 
 獨立實站檢查：`cargo run --locked --features desktop --bin pttstella -- --probe-live target/verification/live`。這會連至 `wss://ws.ptt.cc/bbs`，只確認登入前提示並斷線，不送帳密；不包含在任何一般 gate。
+
+## macOS App
+
+在 Mac 安裝鎖定的 Rust 工具鏈、Python 3.11+ 與 Xcode Command Line Tools 後，執行：
+
+```text
+python3 tooling/bundle_macos.py
+open dist/macos/PTTStella.app
+```
+
+有本機資源 harness 的環境，須依工作規則將打包腳本放在 build wrapper 內執行。產物使用本機架構及 ad-hoc 簽章，可移至 Applications；開啟後會自動連上 PTT，仍須手動登入。既有 `.app` 不覆寫，可用 `--out-dir dist/macos-next` 保留另一份。這不是 Developer ID 簽署／Apple 公證的發佈版本，也不代表 macOS 完整功能驗收。細節見 [macOS App 打包](docs/macos-app.md)。
