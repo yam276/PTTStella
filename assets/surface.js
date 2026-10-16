@@ -62,23 +62,46 @@ const fontFields={ascii_font:document.getElementById("font-ascii"),cjk_font:docu
 const ctx=canvas.getContext("2d",{willReadFrequently:true});
 const palette=["#000000","#800000","#008000","#808000","#000080","#800080","#008080","#c0c0c0",
     "#808080","#ff0000","#00ff00","#ffff00","#0000ff","#ff00ff","#00ffff","#ffffff"];
-const fontFamily=name=>JSON.stringify(name)+", monospace";
+const bundledFonts=new Map([
+    ["Cascadia Mono",{family:"PTTStella Cascadia Mono",file:"CascadiaMono.ttf"}],
+    ["Noto Sans CJK TC",{family:"PTTStella Noto Sans CJK TC",file:"NotoSansCJKtc-Regular.otf"}]
+]);
+const bundledLoads=new Map();
+const fontFamily=name=>JSON.stringify(bundledFonts.get(name)?.family??name)+", monospace";
 const fontDescription=(settings,cjk=false)=>settings.font_size+"px "+fontFamily(cjk?settings.cjk_font:settings.ascii_font);
 let loadedFonts=null,fontDraft=null,fontTimer=0,fontRequest=0,fontPreviewBusy=false,fontPreviewNext=null,fontSaving=false;
 async function loadFonts(settings) {
     const key=JSON.stringify([settings.ascii_font,settings.cjk_font,settings.font_size]);
-    if(loadedFonts?.key===key) return loadedFonts.warning;
+    if(loadedFonts?.key===key&&!loadedFonts.warning) return "";
+    const missing=await Promise.all([["英數",settings.ascii_font],["中文",settings.cjk_font]].map(async([role,name])=>{
+        const bundled=bundledFonts.get(name);
+        try {
+            if(bundled) {
+                if(!bundledLoads.has(name)) {
+                    const url=new URL("/pttstella-fonts/"+bundled.file,document.baseURI);
+                    bundledLoads.set(name,new FontFace(bundled.family,"url("+JSON.stringify(url.href)+")").load()
+                        .then(face=>{document.fonts.add(face);return face;})
+                        .catch(error=>{bundledLoads.delete(name);throw error;}));
+                }
+                await bundledLoads.get(name);
+            } else {
+                // fonts.load/check can succeed via fallback; local() verifies
+                // the selected system face independently of bundled aliases.
+                await new FontFace("PTTStella font check","local("+JSON.stringify(name)+")").load();
+            }
+            return "";
+        } catch {return role+"字型「"+name+"」"+(bundled?"內建載入失敗":"無法由本機載入");}
+    }));
     await Promise.all([document.fonts.load(fontDescription(settings),"M"),document.fonts.load(fontDescription(settings,true),"中")]);
     await document.fonts.ready;
-    // fonts.load/check can succeed using fallback even when the requested family
-    // is absent. A local FontFace load checks the explicitly selected font.
-    const missing=await Promise.all([["英數",settings.ascii_font],["中文",settings.cjk_font]].map(async([role,name])=>{
-        try {await new FontFace("PTTStella font check","local("+JSON.stringify(name)+")").load();return "";}
-        catch {return role+"字型「"+name+"」無法由本機載入";}
-    }));
     const warning=missing.filter(Boolean).join("；");
-    loadedFonts={key,warning:warning?warning+"；目前使用系統替代字型，切換組合可能看起來相同。請選本機字型或先安裝指定字型。":""};
+    loadedFonts={key,warning:warning?warning+"；目前使用系統替代字型。可改選「內建跨平台」，或安裝所選字型。":""};
     return loadedFonts.warning;
+}
+function fontLoadNote(settings,warning) {
+    if(warning)return warning;
+    const names=[...new Set([settings.ascii_font,settings.cjk_font])].filter(name=>bundledFonts.has(name));
+    return names.length?"已載入 App 內建字型："+names.join("、")+"；無須另行安裝。":"本機字型已載入；請以預覽檢查字形。";
 }
 let generation=0, revision=-1, composing=false, composition=null, beforeEdit=null, sent=0;
 let inputKey=false;
@@ -699,13 +722,13 @@ try {
             fontNote.textContent=fontDraft.warning||"";cancelComposition();cancelDrag();clearSelection();
             if(!fontDialog.open) fontDialog.showModal();
             released=null;cancelDrag();setHover(null);refreshNavigation();
-            fontAvailability.textContent=await loadFonts(fontDraft.values);render(fontPreview,fontDraft.sample,{cursor:false});
+            fontAvailability.textContent=fontLoadNote(fontDraft.values,await loadFonts(fontDraft.values));render(fontPreview,fontDraft.sample,{cursor:false});
             fontFields.ascii_font.focus();continue;
         }
         if(packet.font_preview) {
             const preview=packet.font_preview;fontPreviewBusy=false;
             if(fontDialog.open&&preview.request===fontRequest) {
-                if(preview.packet){fontAvailability.textContent=await loadFonts(preview.packet.settings);render(fontPreview,preview.packet,{cursor:false});fontPreview.dataset.request=String(preview.request);
+                if(preview.packet){fontAvailability.textContent=fontLoadNote(preview.packet.settings,await loadFonts(preview.packet.settings));render(fontPreview,preview.packet,{cursor:false});fontPreview.dataset.request=String(preview.request);
                     fontPreview.dataset.fontSize=String(preview.packet.settings.font_size);fontPreview.dataset.baseline=String(preview.packet.settings.baseline);}
                 if(preview.error) fontNote.textContent=preview.error;
             }
@@ -715,7 +738,7 @@ try {
             profileBusy=false;profileImport.disabled=false;profileExport.disabled=false;fontDialog.dataset.profileResult=packet.profile_result;
             if(packet.profile_import&&fontDialog.open){const imported=packet.profile_import;clearTimeout(fontTimer);fontTimer=0;fontRequest++;fontPreviewNext=null;
                 fillFonts(imported.values);fontPreset.value=profileChoice(imported.profile);profileName.value=imported.name;
-                fontAvailability.textContent=await loadFonts(imported.values);render(fontPreview,imported.sample,{cursor:false});}
+                fontAvailability.textContent=fontLoadNote(imported.values,await loadFonts(imported.values));render(fontPreview,imported.sample,{cursor:false});}
             if(packet.notice)fontNote.textContent=packet.notice;
             if(fontDialog.open)profileName.focus();continue;
         }

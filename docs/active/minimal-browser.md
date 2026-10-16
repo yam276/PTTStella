@@ -69,6 +69,18 @@ Windows 真實 pointer＋loopback HTTP 已驗證快掠零請求、同連結一�
 
 ## 技術邊界
 
+### 隨 App 附帶與載入字型
+
+2026-10-16：使用者希望缺少的字型能隨設定直接套用。加入 `bundled`「內建跨平台」組合：Cascadia Mono 2407.024＋Noto Sans CJK TC Regular 2.004，兩份未修改的官方字型共約 16.4 MiB，OFL 1.1、來源／SHA-256／著作權隨產品保存。Windows 組合也可使用附帶的 Cascadia；Microsoft JhengHei 沒有隨 App 散布，不會靜默替換成 Noto。已保存的設定與平台初始值保留，需明確選擇新組合。
+
+字型只編入 desktop executable，經 Dioxus 同 origin 的固定資產路由提供；沒有字型下載、外部 URL、任意檔案路徑或系統安裝。選取時 FontFace 載入 App 專用 family，預覽／主畫面／組字宿主／PNG 使用同一對應；最多兩個內建載入 promise，失敗可重試並顯示來源，其他字型仍核對 local face。來源與兩份授權可在設定視窗展開閱讀，也附於 macOS Resources／FontLicenses。設定視窗提高可用高度，實際 Mac 畫面確認載入訊息及儲存按鈕可見。
+
+驗證：27 個 desktop lib、1 個 bin 字型資產路由案例、3 個可攜設定案例、全 targets desktop Clippy、fmt、core gate（六套 suite／兩個 replay）、docs 19 個 gate 回歸、JS／Python 語法通過。固定路由核對 MIME／原始 TTF／OTF 標頭、HEAD，以及未知路徑／方法拒絕；下載字型的來源 blob／SHA-256 與 byte 數核對，App notices 與來源相同，ad-hoc strict 驗章通過。
+
+macOS arm64／WKWebView 隔離流程實際確認：未安裝 Cascadia 的 Mac 選 Windows 後只剩正黑體缺失訊息；選內建跨平台兩 face 載入成功。取消預覽的整頁 PNG 與原圖完全相同；保存後 960×576 中英字形均改變（ASCII 標題區 768 像素、中文選單區 5,163 像素），第二個程序讀取 `bundled` 後 PNG bytes 完全一致。兩次流程各跑 20 筆跨 profile 原生 Vim 事件，peer 沒有額外輸入，分別 ⌘W／⌘Q 退出，listener／worker 清理報告 passed。
+
+最終 App 約 27.6 MiB，位於 `dist/macos-fonts/PTTStella.app`；舊包及驗證產物保留。完整 desktop gate 的本機 backend 仍是 not_ready，Windows 選單 gate 的選擇索引改由 option 位置取得以容納新增組合，但本輪沒有 Windows runner／Linux／跨 DPI／所有 glyph 或原生 IME 的實測結果。未輸入實站帳密或操作使用者站端 session。
+
 ### 主選單／看板列表的 Vim 支援增量
 
 2026-10-16：使用者回報原生 Command 操作正常，但主畫面、看板列表／我的最愛及文章列表仍出現暫停。確認前兩類根本沒有 profile；文章列表原先僅在底列尋找完整返回／閱讀命令，未涵蓋上下操作列分配。新增 MainMenu／BoardList（含分類入口）與自製 fixture；命令可分布於上方操作列及底列，底列仍須有正常標記／樣式。提示覆蓋、未完成 ANSI、非法指標與操作區未映射資料仍拒絕，按鍵提示現在保留暫停原因。

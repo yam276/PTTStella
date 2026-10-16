@@ -48,7 +48,7 @@ def build():
 
 
 def check_dependencies(executable):
-    # This package embeds JS/CSS using include_str! and has no sidecars. Fail
+    # This package embeds JS/CSS/fonts and has no binary sidecars. Fail
     # rather than ship an app that depends on a developer's Homebrew/Rust paths.
     libraries = [line.strip().split(' (compatibility version', 1)[0]
                  for line in run('otool', '-L', str(executable)).splitlines()[1:]]
@@ -99,7 +99,12 @@ def bundle(output):
         app = Path(staging) / destination.name
         binary = app / 'Contents' / 'MacOS' / package['name']
         binary.parent.mkdir(parents=True)
-        (app / 'Contents' / 'Resources').mkdir()
+        resources = app / 'Contents' / 'Resources'
+        resources.mkdir()
+        notices = resources / 'FontLicenses'
+        notices.mkdir()
+        for name in ('NOTICE.txt', 'Cascadia-OFL.txt', 'NotoSansCJK-OFL.txt', 'sources.json'):
+            shutil.copy2(ROOT / 'assets' / 'fonts' / name, notices / name)
         shutil.copy2(executable, binary)
         binary.chmod(0o755)
         plist = app / 'Contents' / 'Info.plist'

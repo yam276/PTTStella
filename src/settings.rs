@@ -14,6 +14,7 @@ pub enum Preset {
     Macos,
     Linux,
     MacosSerif,
+    Bundled,
 }
 impl Preset {
     fn name(&self) -> &'static str {
@@ -22,6 +23,7 @@ impl Preset {
             Self::Macos => "macos",
             Self::Linux => "linux",
             Self::MacosSerif => "macos_serif",
+            Self::Bundled => "bundled",
         }
     }
 }
@@ -224,6 +226,7 @@ impl Default for DisplaySettings {
 impl DisplaySettings {
     fn preset(name: &str) -> Self {
         let (ascii, cjk) = match name {
+            "bundled" => ("Cascadia Mono", "Noto Sans CJK TC"),
             "windows" => ("Cascadia Mono", "Microsoft JhengHei"),
             "macos" => ("Menlo", "PingFang TC"),
             "macos_serif" => ("Menlo", "Songti TC"),
@@ -238,7 +241,7 @@ impl DisplaySettings {
         }
     }
     pub fn presets() -> BTreeMap<&'static str, Self> {
-        ["windows", "macos", "linux", "macos_serif"]
+        ["windows", "macos", "linux", "macos_serif", "bundled"]
             .into_iter()
             .map(|name| (name, Self::preset(name)))
             .collect()

@@ -17,6 +17,9 @@ fn fixed_presets_and_custom_profiles_roundtrip_without_platform_inference() {
         Fonts::Preset {
             preset: Preset::MacosSerif,
         },
+        Fonts::Preset {
+            preset: Preset::Bundled,
+        },
         Fonts::Custom {
             ascii_font: "My Mono".into(),
             cjk_font: "我的字型".into(),
@@ -44,6 +47,8 @@ fn fixed_presets_and_custom_profiles_roundtrip_without_platform_inference() {
     assert_eq!(macos["macos"].ascii_font, macos["macos_serif"].ascii_font);
     assert_eq!(macos["macos"].cjk_font, "PingFang TC");
     assert_eq!(macos["macos_serif"].cjk_font, "Songti TC");
+    assert_eq!(macos["bundled"].ascii_font, "Cascadia Mono");
+    assert_eq!(macos["bundled"].cjk_font, "Noto Sans CJK TC");
 }
 #[test]
 fn v1_explicit_names_always_migrate_to_custom_even_when_equal_to_defaults() {

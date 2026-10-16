@@ -272,6 +272,9 @@ fn preview(probe: bool, media_origin: Option<&str>) -> Result<Vec<u8>, String> {
 }
 
 pub fn app(props: AppProps) -> Element {
+    dioxus::desktop::use_asset_handler("pttstella-fonts", |request, responder| {
+        responder.respond(crate::fonts::response(&request));
+    });
     let probing = props.probe.is_some();
     let window_probe = props.window_probe;
     let reload_settings = props.reload_settings;
@@ -450,6 +453,7 @@ pub fn app(props: AppProps) -> Element {
                     select { id: "font-preset",
                         option { value: "platform", "依平台初始值" }
                         option { value: "custom", "自訂" }
+                        option { value: "bundled", "內建跨平台（隨 App 附帶）" }
                         option { value: "windows", "Windows" }
                         option { value: "macos", "macOS 黑體" }
                         option { value: "linux", "Linux" }
@@ -460,7 +464,13 @@ pub fn app(props: AppProps) -> Element {
                 label { "中文字型" input { id: "font-cjk", r#type: "text", maxlength: "128" } }
                 label { "字高" input { id: "font-size", r#type: "number", min: "8", max: "24", step: "1" } }
                 label { "基線位置" input { id: "font-baseline", r#type: "number", min: "0", max: "24", step: "1" } }
-                p { "各平台皆可選任一組合；字型檔須另行安裝。實際替代字型未確認，請以預覽檢查。" }
+                p { "內建跨平台組合可直接載入，無須安裝字型。其他組合使用本機字型；Windows 正黑體須另有合法安裝。" }
+                details {
+                    summary { "內建字型來源與授權（SIL OFL 1.1）" }
+                    pre { class: "font-license", {include_str!("../assets/fonts/NOTICE.txt")} }
+                    pre { class: "font-license", {include_str!("../assets/fonts/Cascadia-OFL.txt")} }
+                    pre { class: "font-license", {include_str!("../assets/fonts/NotoSansCJK-OFL.txt")} }
+                }
                 label { "設定檔名稱" input { id: "font-profile-name", r#type: "text", maxlength: "128", value: "我的顯示設定" } }
                 div { class: "dialog-actions",
                     button { id: "profile-import", "載入設定檔至預覽" }

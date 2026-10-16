@@ -14,7 +14,9 @@ def run(d,output,edit_field,open_fonts):
     def choose_windows():
         # Focus a closed select; CDP cannot reliably drive the OS popup it opens.
         d.evaluate('document.getElementById("font-preset").focus()')
-        for value,vk in [('Home',36),('ArrowDown',40),('ArrowDown',40)]:
+        index=d.evaluate('Array.from(document.getElementById("font-preset").options).findIndex(option=>option.value==="windows")')
+        if not isinstance(index,int) or not 0<=index<16:raise ValueError('Windows preset option missing')
+        for value,vk in [('Home',36)]+[('ArrowDown',40)]*index:
             for kind in ('keyDown','keyUp'):
                 d.call('Input.dispatchKeyEvent',type=kind,key=value,code=value,windowsVirtualKeyCode=vk)
         d.wait('document.getElementById("font-preset").value === "windows"','Windows preset could not be selected')
