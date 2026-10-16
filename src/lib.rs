@@ -3,6 +3,7 @@
 pub mod connection;
 pub mod encoding;
 pub mod export;
+pub mod filters;
 pub mod input;
 pub mod links;
 pub mod login;

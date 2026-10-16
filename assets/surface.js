@@ -16,17 +16,17 @@ function cancelHover(forget=false) {
     const candidate=hoverCandidate;hoverCandidate=null;
     if(forget)pointerClient=null;
     media.hideHover();
-    if(candidate?.started&&!stopped)send({kind:"hover",sequence:candidate.sequence,stamp:candidate.stamp,index:null,trusted:true});
+    if(candidate?.started&&!stopped)send({kind:"hover",presentation:candidate.presentation,sequence:candidate.sequence,stamp:candidate.stamp,index:null,trusted:true});
 }
 function previewHover(index) {
-    if(!pointerClient||hoverPreference==="off"||blocked()||dragging||hasSelection()||!latest?.connected||!latest.image_links.includes(index)) {cancelHover();return;}
+    if(presentationBlocked||!pointerClient||hoverPreference==="off"||blocked()||dragging||hasSelection()||!latest?.connected||!latest.image_links.includes(index)) {cancelHover();return;}
     const identity=JSON.stringify(latest.links[index]);
     if(hoverCandidate?.identity===identity) {media.locate(pointerClient,hoverPreference);return;}
     cancelHover();
-    const candidate={identity,index,sequence:++hoverSequence,stamp:stamp(),started:false,trusted:pointerClient.trusted};hoverCandidate=candidate;
+    const candidate={identity,index,sequence:++hoverSequence,stamp:stamp(),presentation:latest.presentation,started:false,trusted:pointerClient.trusted};hoverCandidate=candidate;
     hoverTimer=setTimeout(()=>{hoverTimer=0;
-        if(stopped||hoverCandidate!==candidate||blocked()||dragging||!document.hasFocus()||!sameStamp(candidate.stamp,stamp()))return;
-        candidate.started=true;send({kind:"hover",sequence:candidate.sequence,stamp:candidate.stamp,index:candidate.index,trusted:candidate.trusted});
+        if(stopped||hoverCandidate!==candidate||blocked()||dragging||!document.hasFocus()||!sameStamp(candidate.stamp,stamp())||candidate.presentation!==latest?.presentation)return;
+        candidate.started=true;send({kind:"hover",presentation:candidate.presentation,sequence:candidate.sequence,stamp:candidate.stamp,index:candidate.index,trusted:candidate.trusted});
     },350);
 }
 function changeHoverPreference(e){send({kind:"hover_preference",position:hoverPosition.value,trusted:e.isTrusted});}
@@ -57,6 +57,23 @@ function submitLogin(e){if(loginBusy||!loginDialog.open)return;e.preventDefault(
 function forgetLogin(e){if(loginBusy)return;loginPassword.value="";loginWorking(true);send({kind:"login_forget",trusted:e.isTrusted});}
 function closeLogin(e){e?.preventDefault();loginPassword.value="";loginRemember.checked=false;if(loginDialog.open)loginDialog.close();send({kind:"login_cancel",trusted:e?.isTrusted??false});restoreEditingFocus();refreshNavigation();}
 function stopLogin(e){send({kind:"login_cancel",trusted:e.isTrusted});focus();}
+const filtersButton=document.getElementById("filters-open"),filtersDialog=document.getElementById("filters-dialog");
+const filtersList=document.getElementById("filters-list"),filtersId=document.getElementById("filters-id"),filtersNote=document.getElementById("filters-note");
+const filtersSave=document.getElementById("filters-save"),filtersRemove=document.getElementById("filters-remove"),filtersClose=document.getElementById("filters-close");
+const filtersMessage=document.getElementById("filters-note-status"),filtersReveal=document.getElementById("filters-reveal"),filtersStatus=document.getElementById("filters-status");
+let filterEntries=[],filtersBusy=false,presentationBlocked=false;
+function invalidatePresentation(){cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);}
+function openFilters(e){if(stopped)return;invalidatePresentation();policy("reset",e);filtersDialog.showModal();refreshNavigation();send({kind:"filters_open",trusted:e.isTrusted});}
+function closeFilters(e){e?.preventDefault();if(filtersDialog.open)filtersDialog.close();filtersId.value="";filtersNote.value="";filtersList.selectedIndex=-1;restoreEditingFocus();refreshNavigation();}
+function fillFilters(entries){filterEntries=entries;const selected=filtersId.value.toLowerCase();filtersList.replaceChildren();const fresh=document.createElement("option");fresh.value="";fresh.textContent="新增帳號";fresh.selected=!selected;filtersList.append(fresh);
+    for(const entry of entries){const option=document.createElement("option");option.value=entry.id;option.textContent=entry.id+(entry.note?" — "+entry.note:"");option.selected=entry.id.toLowerCase()===selected;filtersList.append(option);}}
+function chooseFilter(){const entry=filterEntries.find(x=>x.id===filtersList.value);filtersId.value=entry?.id??"";filtersNote.value=entry?.note??"";}
+function editFilters(e,remove){if(filtersBusy||!filtersDialog.open)return;filtersBusy=true;filtersSave.disabled=true;filtersRemove.disabled=true;
+    presentationBlocked=true;invalidatePresentation();refreshExportControls();filtersMessage.textContent="正在儲存…";
+    send({kind:"filters_edit",id:filtersId.value,note:filtersNote.value,remove,trusted:e.isTrusted});}
+const saveFilter=e=>editFilters(e,false),removeFilter=e=>editFilters(e,true);
+function revealFilters(e){if(!latest||presentationBlocked)return;presentationBlocked=true;invalidatePresentation();refreshExportControls();
+    send({kind:"filters_reveal",presentation:latest.presentation,generation,revision,reveal:!latest.revealed,trusted:e.isTrusted});}
 const fontPreview=document.getElementById("font-preview"),fontNote=document.getElementById("font-note");
 const fontAvailability=document.getElementById("font-availability");
 const fontPreset=document.getElementById("font-preset"),fontSave=document.getElementById("font-save"),fontCancel=document.getElementById("font-cancel");
@@ -273,7 +290,7 @@ function click(e) {
     if(e.button!==0||e.detail>1) {released=null;refreshKeepAlive();return;}
     const action=released;released=null;clickSequenceAction=!!action?.hit;
     if(!action?.hit||blocked()||!sameStamp(action.stamp,stamp())) {refreshKeepAlive();return;}
-    if(action.hit.kind==="link") send({kind:"open_link",generation,revision,index:action.hit.index,trusted:e.isTrusted});
+    if(action.hit.kind==="link") send({kind:"open_link",presentation:latest.presentation,generation,revision,index:action.hit.index,trusted:e.isTrusted});
     else navigate({action:"open",row:action.hit.row},e);
     refreshKeepAlive();
 }
@@ -296,10 +313,10 @@ function clearSelection() {
 function requestSelection(selection) {
     cancelHover(true);
     setHover(null);
-    const fingerprint=JSON.stringify({generation,revision,selection});
+    const fingerprint=JSON.stringify({generation,revision,presentation:latest?.presentation,selection});
     if(fingerprint===selectionFingerprint) return;
     selectionFingerprint=fingerprint;selectionActive=true;
-    selectionNext={generation,revision,selection}; selectionCache=null;
+    selectionNext={presentation:latest.presentation,generation,revision,selection}; selectionCache=null;
     delete surface.dataset.selectionReady;flushSelection();
     refreshExportControls();
 }
@@ -311,7 +328,7 @@ function flushSelection() {
 function receiveSelection(reply) {
     if(!selectionBusy||selectionBusy.request!==reply.request) return;
     selectionBusy=null;
-    if(selectionActive&&!selectionNext&&reply.generation===generation&&reply.revision===revision&&reply.value) {
+    if(selectionActive&&!selectionNext&&reply.generation===generation&&reply.revision===revision&&reply.presentation===latest?.presentation&&!presentationBlocked&&reply.value) {
         selectionCache=reply;surfaceNote.textContent="";surface.dataset.selectionReady=String(reply.request);drawSelection();
     }
     refreshExportControls();
@@ -332,12 +349,12 @@ function drawSelection() {
 function copy(e) {
     if(!hasSelection()||document.activeElement!==keyboard) return;
     e.preventDefault();
-    if(!selectionCache) {surfaceNote.textContent="選取尚未準備好，請再複製";return;}
+    if(!selectionCache||presentationBlocked||selectionCache.presentation!==latest?.presentation) {surfaceNote.textContent="選取尚未準備好，請再複製";return;}
     if(!e.clipboardData) {surfaceNote.textContent="此環境未提供剪貼簿事件資料";return;}
     try {
         e.clipboardData.setData("text/plain",selectionCache.value.text);
-        const {generation,revision,request}=selectionCache;
-        send({kind:"copied",generation,revision,request,trusted:e.isTrusted});
+        const {presentation,generation,revision,request}=selectionCache;
+        send({kind:"copied",presentation,generation,revision,request,trusted:e.isTrusted});
     } catch(_) { surfaceNote.textContent="無法寫入剪貼簿，請重試"; }
 }
 function doubleclick(e) {
@@ -463,8 +480,8 @@ pasteObserver.observe(pasteDialog,{attributes:true,attributeFilter:["data-active
 function refreshExportControls() {
     refreshKeepAlive();
     const selection=selectionCache;
-    exportButton.disabled=exportBusy||!latest;
-    exportRows.disabled=exportBusy||blocked()||!selection||selection.generation!==generation||selection.revision!==revision;
+    exportButton.disabled=exportBusy||!latest||presentationBlocked;
+    exportRows.disabled=exportBusy||presentationBlocked||blocked()||!selection||selection.generation!==generation||selection.revision!==revision||selection.presentation!==latest?.presentation;
     exportRows.title=selection?`匯出第 ${selection.value.rows.start+1}–${selection.value.rows.end} 行（完整 80 欄）`:"先拖曳選取要截圖的行";
 }
 function refreshKeepAlive() {
@@ -478,7 +495,7 @@ function refreshKeepAlive() {
 }
 function toggleKeepAlive(e){if(latest&&!stopped)send({kind:"keep_alive",enabled:!latest.keep_alive,trusted:e.isTrusted});}
 function exportScreen(e, selected=false) {
-    if(exportBusy||!latest||stopped) return;
+    if(exportBusy||!latest||stopped||presentationBlocked) return;
     const selection=selected?selectionCache:null;
     if(selected&&exportRows.disabled) return;
     exportBusy=true;refreshExportControls();surface.dataset.exportResult="pending";
@@ -498,7 +515,7 @@ function exportScreen(e, selected=false) {
             const png=await new Promise((resolve,reject)=>{
                 const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("無法準備 PNG"));reader.readAsDataURL(blob);
             });
-            if(!stopped) send({kind:"export_png",generation:packet.generation,revision:packet.frame.revision,
+            if(!stopped) send({kind:"export_png",presentation:packet.presentation,generation:packet.generation,revision:packet.frame.revision,
                 selection_request:selection?.request??null,png,trusted:e.isTrusted});
         } catch(error) {
             exportBusy=false;refreshExportControls();
@@ -529,6 +546,8 @@ function wheel(e) {
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
 const media=installMedia({send,prepare:()=>{cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshNavigation,restore:restoreEditingFocus});
 const bindings=[
+    [filtersButton,"click",openFilters],[filtersClose,"click",closeFilters],[filtersDialog,"cancel",closeFilters],
+    [filtersList,"change",chooseFilter],[filtersSave,"click",saveFilter],[filtersRemove,"click",removeFilter],[filtersReveal,"click",revealFilters],
     [loginButton,"click",openLogin],[loginSubmit,"click",submitLogin],[loginForget,"click",forgetLogin],
     [loginCancel,"click",closeLogin],[loginDialog,"cancel",closeLogin],[loginStop,"click",stopLogin],
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
@@ -687,17 +706,22 @@ function probe(packet,geometry) {
 async function paint(packet) {
     if(packet.generation<generation||(packet.generation===generation&&packet.frame.revision<revision)) return;
     await loadFonts(packet.settings);
-    const changed=!sameStamp(stamp(),{generation:packet.generation,revision:packet.frame.revision,input_epoch:packet.input_epoch});
+    const presentationChanged=packet.presentation!==latest?.presentation;
+    const changed=presentationChanged||!sameStamp(stamp(),{generation:packet.generation,revision:packet.frame.revision,input_epoch:packet.input_epoch});
     if(changed||latest?.input_pending&&!packet.input_pending) {released=null;clearSelection();cancelDrag();setHover(null,false,false);navigationLocked=false;}
     if(packet.generation!==generation){
         pastePending=false;cancelComposition();focus();
     }
     const previousFailure=latest?.keep_alive_failure;
     const failureChanged=packet.keep_alive_failure!==previousFailure;
-    generation=packet.generation;revision=packet.frame.revision;latest=packet;
+    generation=packet.generation;revision=packet.frame.revision;latest=packet;presentationBlocked=false;
+    filtersReveal.hidden=!packet.masked_pushes;filtersReveal.textContent=packet.revealed?"恢復遮黑":"暫時顯示推文";
+    filtersStatus.textContent=packet.masked_pushes?`${packet.revealed?"暫時顯示":"已遮黑"} ${packet.masked_pushes} 則推文`:"";
+    filtersStatus.title=packet.filter_reason?"一般黑名單："+packet.filter_reason:"";
+    surface.dataset.presentation=String(packet.presentation);surface.dataset.maskedPushes=String(packet.masked_pushes);surface.dataset.revealed=String(packet.revealed);
     if(changed&&hoverCandidate) {
         const lease=packet.hover,candidate=hoverCandidate;
-        if(candidate.started&&lease?.sequence===candidate.sequence&&sameStamp(lease.stamp,stamp())&&JSON.stringify(lease.link)===candidate.identity&&linkAt(cellAt(pointerClient,false))===lease.index) {
+        if(!presentationChanged&&candidate.started&&lease?.sequence===candidate.sequence&&sameStamp(lease.stamp,stamp())&&JSON.stringify(lease.link)===candidate.identity&&linkAt(cellAt(pointerClient,false))===lease.index) {
             candidate.stamp=lease.stamp;candidate.index=lease.index;
         } else cancelHover();
     }
@@ -707,7 +731,7 @@ async function paint(packet) {
         else if(surfaceNote.textContent===previousFailure) surfaceNote.textContent="";
     }
     refreshNavigation();
-    const geometry=draw(packet);send({kind:"painted",revision,generation});if(packet.probe) probe(packet,geometry);
+    const geometry=draw(packet);send({kind:"painted",presentation:packet.presentation,revision,generation});if(packet.probe) probe(packet,geometry);
     surface.dataset.revision=String(revision);
     surface.dataset.fontSize=String(packet.settings.font_size);surface.dataset.baseline=String(packet.settings.baseline);
     surface.dataset.cursorRow=String(packet.frame.cursor[1]);surface.dataset.inputEpoch=String(packet.input_epoch);
@@ -718,6 +742,10 @@ async function paint(packet) {
 focus();
 try {
     while(true){const packet=await dioxus.recv();if(packet.stop) break;
+        if(packet.filters_open){fillFilters(packet.filters_open.entries);filtersMessage.textContent=packet.filters_open.warning||"只有按儲存才變更名單；不會送出 PTT 指令。";filtersId.focus();continue;}
+        if(packet.filters_result){const result=packet.filters_result;filtersBusy=false;filtersSave.disabled=false;filtersRemove.disabled=false;
+            if(result.entries)fillFilters(result.entries);filtersMessage.textContent=result.message;
+            if(!result.ok){presentationBlocked=false;refreshExportControls();}continue;}
         if(packet.login_result){const result=packet.login_result;
             if(typeof result.saved==="boolean")loginSaved=result.saved;
             loginWorking(!!result.busy);
@@ -732,7 +760,7 @@ try {
             surface.dataset.hoverPosition=hoverPreference;
             if(hoverPreference==="off")cancelHover(true);else if(pointerClient)media.locate(pointerClient,hoverPreference);continue;}
         if(packet.media_hover){if(hoverCandidate?.sequence===packet.media_hover.sequence){media.hover(packet.media_hover);media.locate(pointerClient,hoverPreference);}continue;}
-        if(packet.hover_reset){cancelHover();continue;}
+        if(packet.hover_reset){cancelHover();if(packet.media_reset)media.reset();continue;}
         if(packet.hover_rejected){if(hoverCandidate?.sequence===packet.hover_rejected)cancelHover();continue;}
         if(packet.media_open){media.open(packet.media_open);continue;}
         if(packet.media_image){media.receiveImage(packet.media_image);continue;}
@@ -790,6 +818,7 @@ finally {
     if(exportTask) await exportTask;
     if(pasteDialog.open) pasteDialog.close();
     if(fontDialog.open) fontDialog.close();
+    if(filtersDialog.open)filtersDialog.close();filterEntries=[];filtersId.value="";filtersNote.value="";
     loginPassword.value="";loginAccount.value="";loginRemember.checked=false;if(loginDialog.open)loginDialog.close();
     setHover(null);refreshNavigation();
     cancelComposition();keyboard.blur();hideChrome();cancelDrag();selectionBusy=null;clearSelection();

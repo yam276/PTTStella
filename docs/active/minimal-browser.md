@@ -50,7 +50,7 @@ Windows 真實 WebView 與模擬舊 WebKit 順序的增量 gate 已通過，包�
 | 建議 | 決定與入口 | 現況 |
 | --- | --- | --- |
 | 圖片小預覽 | [hover 方案](../media.md#圖片-hover-小預覽)：跟隨游標／右上固定可切換，單一 request、首幀、點擊升級、不搶焦點 | 已實作；Windows pointer／HTTP、取消、定位與提升驗證通過；其他平台待驗收 |
-| 本機黑白名單 | [名單方案](../content-filters.md)：完整 ID、標題字面條件、備註、例外與可揭露遮罩；共享辨識及輸出，保留固定格線 | repo 外原生靜態 Evidence 已取得；未執行目標或讀出私人名單。舊格式完整遷移／所有效果尚未驗證 |
+| 本機黑白名單 | [名單方案](../content-filters.md)：完整 ID、標題字面條件、備註、例外與可揭露遮罩；共享辨識及輸出，保留固定格線 | 一般推文遮黑已實作並完成有限 Mac 原生及實站驗證；封鎖消失、白名單／關鍵字與舊格式匯入仍待設計／驗證 |
 | 預設組合與自訂檔 | [設定方案](../preferences-and-profiles.md)：任何平台均可選 Windows／Mac／Linux 組合，自訂另存、載入與匯出／匯入，保留明確選擇 | 已實作選擇意圖、具名可攜檔與 v1 遷移；Windows 保存／重啟像素通過 |
 
 使用者已指定名單分一般遮黑與移除推文兩級，本輪不實作名單；詳見名單方案。先完成設定意圖與保存邊界，再實作 hover 呈現；名單須先補 Rust 的作者／推文範圍與共享呈現結果。Vim、設定檔及 hover 的實作與驗收分列如下；名單本輪保持設計階段。
@@ -66,6 +66,14 @@ Windows 真實 WebView 與模擬舊 WebKit 順序的增量 gate 已通過，包�
 2026-10-16：已實作 350ms dwell、右上／跟隨游標／關閉及本機保存；單一 Preview、HTTP future、decoder ACK 與 LRU 共用，hover 到完整預覽只提升呈現、不重開下載。hover 不取得焦點、攔截滑鼠、播放影片或更動 ANSI 格線；圖片首幀等比縮小，邊緣轉向並限制在 viewport。
 
 Windows 真實 pointer＋loopback HTTP 已驗證快掠零請求、同連結一次、A→B 的 TCP EOF、已完成及下載中提升不重抓、兩種位置／右下碰邊、關閉偏好、設定重啟及 Canvas／PTT bytes 不變。Rust lease 案例驗證相同來源跨 revision 可續用，新輸入／session／範圍變動／未完成畫面均失效。現有全部離線 gate 通過；真實網站、macOS／Linux、原生 picker 與人工登入仍待驗收。
+
+## 一般黑名單交付
+
+2026-10-16 使用者授權實作第一級：標準推文完整 ID 比對、名單新增／修改／移除與備註、獨立本機保存、遮黑與暫時顯示，以及複製／PNG／連結的一致處理。驗收目標：相似 ID 與引用文字保留；來源 Frame、站端行列與送鍵不變；保存失敗不改生效規則；同一來源 revision 的規則／揭露變更也使舊選取、匯出與媒體授權失效。封鎖後移除推文、白名單與關鍵字仍是後續設計，不在本輪實作。狀態：第一級已完成。5 個 filters 核心、core 八套 suite／兩個 replay、38 個 desktop lib、2 個 bin、全 targets desktop Clippy 與 docs 通過。
+
+macOS／WKWebView 完成名單 CRUD／備註、非法 ID、保存失敗保留原規則、未儲存草稿、新程序重載、系統剪貼簿、遮黑／揭露／翻頁後重設及兩種 PNG。獨立解碼確認命中內容區全黑、其餘像素不變、揭露與原圖一致、選取行等於整頁裁切。最終 filter probe 為 passed，僅兩筆翻頁與 Close，⌘Q 後 ACK／worker／listener 清理；相同 executable 的 34 筆既有 Vim 回歸及 ⌘W 通過。一次中途點到揭露網址使 probe 中止，不算通過；重跑完成。座標滑鼠曾受 CUA 限制，完整流程改用工具列選取，前一候選包的單行選取子案例另已驗證。完整範圍見 [過濾契約](../content-filters.md)。
+
+正常 App 實站 SYSOP 公開公告已確認兩則同作者標準推文遮黑、作者／時間保留、揭露及 Ctrl+b／Ctrl+f 往返恢復遮黑，Vim NORMAL；測後暫時規則與本次新建的檔案／備份已移除，還原原先不存在的名單狀態。⌘Q 回報站端結束連線但未回覆 Close，退出碼 0。未保存實站內容／流量或帳密。產物為 `dist/macos-filters-final/PTTStella.app`，內建字型、arm64／ad-hoc 簽章；舊包保留。完整 Mac desktop backend 仍 not_ready，沒有本輪 Windows／Linux 結果；沒有 push／公開發佈。
 
 ## 技術邊界
 

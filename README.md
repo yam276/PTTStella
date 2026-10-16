@@ -15,6 +15,7 @@ Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Ar
 - 工具列可開啟 Vim 瀏覽，支援主選單、分類／看板／我的最愛列表、文章列表與閱讀：hjkl、gg/G、計數、Ctrl+d/u/f/b/e/y；f 或「原生一次」只放行下一個完整按鍵／組字，i 持續原始輸入。未知畫面暫停 Vim，登入預設原始輸入；範圍與限制見 [Vim 瀏覽](docs/vim-browsing.md)。
 - macOS 工具列「登入」可選擇將一個預設帳號與密碼存入系統鑰匙圈；按登入才送出，密碼不寫入設定檔或回填畫面，提供移除已存帳密。啟動／重連不自動登入，後續確認由使用者操作。見 [登入與保存](docs/login.md)。
 - 關窗／⌘Q 會送正常 WebSocket 關閉通知並有界等待站端結束；工具列斷線區分 Close 回覆、站端直接結束與未確認。
+- 一般黑名單可新增／修改／移除完整 ID 與備註，明確儲存於本機；遮黑已辨識的標準推文內容並保留原行列、作者與時間。可暫時顯示目前畫面；複製、PNG 及連結使用相同過濾結果。截斷、無作者續行與非標準格式保留原樣，範圍見 [本機過濾](docs/content-filters.md)。
 - 必要鍵盤輸入；斷線或連線失敗時介面仍可操作。
 - 滑鼠拖曳選取、雙擊整行、工具列整頁選取；Ctrl+C／Cmd+C 複製純文字，雙色中文字保留完整字形。選取保留空白，新畫面會清除舊選取；Esc 清除選取，沒有選取時 Ctrl+C 仍送到 PTT。
 - 組字文字以無框樣式跟隨 PTT 游標，確認後送出文字，取消不送出；確認候選字的 Enter 不當作 PTT 的 Enter，接著再按 Enter 才送站端。已驗證 Windows WebView 組字路徑及模擬的 WebKit 事件順序，macOS 原生 IME 候選窗仍待實機驗收。
@@ -42,7 +43,7 @@ Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Ar
 - [後續操作功能研究](docs/feature-research.md)
 - [Vim 瀏覽模式](docs/vim-browsing.md)
 - [字型組合與可攜設定檔](docs/preferences-and-profiles.md)
-- [本機名單與內容過濾方案（尚未實作）](docs/content-filters.md)
+- [本機名單與內容過濾](docs/content-filters.md)
 - [媒體預覽規格](docs/media.md)
 - [macOS App 打包](docs/macos-app.md)
 

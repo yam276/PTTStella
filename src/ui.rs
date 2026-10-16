@@ -2,7 +2,7 @@ use base64::Engine;
 use dioxus::prelude::*;
 use pttstella::{
     connection::{CloseOutcome, Connection, Phase, View},
-    encoding, export,
+    encoding, export, filters,
     input::{self, PreparedPaste},
     links::{self, Link},
     login::vault::{Action as LoginAction, Job as LoginJob, Outcome as LoginOutcome, Vault},
@@ -29,12 +29,17 @@ pub struct AppProps {
     pub probe: Option<PathBuf>,
     pub window_probe: bool,
     pub login_probe: bool,
+    pub filters_probe: bool,
     pub reload_settings: bool,
     pub media_origin: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
 struct Paint {
+    presentation: u64,
+    masked_pushes: usize,
+    revealed: bool,
+    filter_reason: String,
     image_links: Vec<usize>,
     hover: Option<HoverLease>,
     keep_alive: bool,
@@ -58,6 +63,7 @@ struct PendingPaste {
     prepared: PreparedPaste,
 }
 struct SelectedRows {
+    presentation: u64,
     generation: u64,
     revision: u64,
     request: u64,
@@ -73,7 +79,24 @@ enum MediaAction {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum SurfaceEvent {
+    FiltersOpen {
+        trusted: bool,
+    },
+    FiltersEdit {
+        id: String,
+        note: String,
+        remove: bool,
+        trusted: bool,
+    },
+    FiltersReveal {
+        presentation: u64,
+        generation: u64,
+        revision: u64,
+        reveal: bool,
+        trusted: bool,
+    },
     Hover {
+        presentation: u64,
         sequence: u64,
         stamp: Stamp,
         index: Option<usize>,
@@ -145,6 +168,7 @@ enum SurfaceEvent {
         trusted: bool,
     },
     ExportPng {
+        presentation: u64,
         generation: u64,
         revision: u64,
         selection_request: Option<u64>,
@@ -152,6 +176,7 @@ enum SurfaceEvent {
         trusted: bool,
     },
     OpenLink {
+        presentation: u64,
         generation: u64,
         revision: u64,
         index: usize,
@@ -169,12 +194,14 @@ enum SurfaceEvent {
         trusted: bool,
     },
     Select {
+        presentation: u64,
         generation: u64,
         revision: u64,
         request: u64,
         selection: Selection,
     },
     Copied {
+        presentation: u64,
         generation: u64,
         revision: u64,
         request: u64,
@@ -195,6 +222,7 @@ enum SurfaceEvent {
         composed: bool,
     },
     Painted {
+        presentation: u64,
         revision: u64,
         generation: u64,
     },
@@ -297,12 +325,15 @@ pub fn app(props: AppProps) -> Element {
     let probing = props.probe.is_some();
     let window_probe = props.window_probe;
     let login_probe = props.login_probe;
+    let filters_probe = props.filters_probe;
     let reload_settings = props.reload_settings;
     let media_origin = props.media_origin.clone();
     let owner = use_hook(move || {
         preview(probing, media_origin.as_deref())
             .and_then(|bytes| {
-                if login_probe {
+                if filters_probe {
+                    Connection::start_filters_probe()
+                } else if login_probe {
                     Connection::start_login_probe()
                 } else if window_probe {
                     Connection::start_window_probe()
@@ -394,6 +425,9 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "export-png", "匯出 PNG" }
                 button { id: "export-rows", disabled: true, title: "先拖曳選取要截圖的行", "選取行 PNG" }
                 button { id: "font-settings", "字型" }
+                button { id: "filters-open", "一般黑名單" }
+                button { id: "filters-reveal", hidden: true, "暫時顯示推文" }
+                output { id: "filters-status", role: "status" }
                 label { title: "滑過圖片連結會載入小預覽",
                     "圖片預覽 "
                     select { id: "hover-position", "aria-label": "滑過圖片連結時的預覽位置",
@@ -423,7 +457,7 @@ pub fn app(props: AppProps) -> Element {
                         started.set(true);
                         let connection = connection.clone(); let probe = probe.clone(); let closing = closing.1.clone(); let media_origin = media_origin.clone();
                         spawn(async move {
-                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, (reload_settings, media_origin, window_probe, login_probe)).await;
+                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, (reload_settings, media_origin, window_probe, login_probe, filters_probe)).await;
                             if let Err(error) = result {
                                 fatal.set(true);
                                 message.set(format!("{error}；請關閉並重新開啟視窗"));
@@ -439,6 +473,23 @@ pub fn app(props: AppProps) -> Element {
                     div { id: "navigation-marker", "aria-hidden": "true", hidden: true }
                     output { id: "surface-note", role: "status" }
                     textarea { id: "keyboard", "aria-label": "PTT 鍵盤輸入", autocomplete: "off", autocapitalize: "off", "autocorrect": "off", wrap: "off", spellcheck: "false" }
+                }
+            }
+            dialog { id: "filters-dialog", class: "paste-preview font-dialog", "aria-labelledby": "filters-title",
+                h2 { id: "filters-title", "一般黑名單" }
+                p { "遮黑已辨識的標準推文內容，保留作者與時間。ID 完整比對，忽略英文字母大小寫。" }
+                p { "截斷、換行但沒有完整作者或時間的推文會保留原樣；關閉視窗不保存未送出的編輯。" }
+                label { "已儲存帳號" select { id: "filters-list", size: "5", "aria-label": "已儲存帳號" } }
+                label { "帳號 ID" input { id: "filters-id", maxlength: "12", autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
+                label { "備註" input { id: "filters-note", maxlength: "128", autocomplete: "off" } }
+                output { id: "filters-note-status", role: "status" }
+                if filters_probe {
+                    label { "測試剪貼簿讀回" textarea { id: "filters-copy-check", "aria-label": "測試剪貼簿讀回" } }
+                }
+                div { class: "dialog-actions",
+                    button { id: "filters-remove", "移除並儲存" }
+                    button { id: "filters-save", "新增／更新並儲存" }
+                    button { id: "filters-close", "關閉" }
                 }
             }
             dialog { id: "login-dialog", class: "paste-preview font-dialog", "aria-labelledby": "login-title",
@@ -533,9 +584,27 @@ async fn surface(
     mut message: Signal<String>,
     mut phase: Signal<Phase>,
     mut pending_paste: Signal<Option<PendingPaste>>,
-    options: (bool, Option<String>, bool, bool),
+    options: (bool, Option<String>, bool, bool, bool),
 ) -> Result<(), String> {
-    let (reload_settings, media_origin, window_probe, login_probe) = options;
+    let (reload_settings, media_origin, window_probe, login_probe, filters_probe) = options;
+    let filter_store = probe
+        .as_ref()
+        .map_or_else(filters::store::Store::system, |path| {
+            Ok(filters::store::Store::at(path.join("probe-filters.json")))
+        });
+    let (rules, mut filter_warning) = match filter_store
+        .as_ref()
+        .map_err(Clone::clone)
+        .and_then(filters::store::Store::load)
+    {
+        Ok(rules) => (rules, None),
+        Err(error) => (filters::Rules::default(), Some(error)),
+    };
+    let mut filters = filters::State::new(rules);
+    let mut filter_edits = 0;
+    let mut filter_reveals = 0;
+    let mut filter_copies = 0;
+    let mut filter_hover_requests = 0;
     let mut receiver = connection.updates.clone();
     let store = probe.as_ref().map_or_else(Store::system, |path| {
         Ok(Store::at(path.join("probe-settings.json")))
@@ -566,7 +635,7 @@ async fn surface(
     let mut media_external = 0;
     let first = receiver.borrow_and_update().clone();
     let mut last_status = first.message.clone();
-    let mut painting = paint(&first, false, &settings);
+    let mut painting = paint(&first, false, &settings, &filters);
     let mut displayed: Option<Paint> = None;
     eval.send(&painting).map_err(|e| e.to_string())?;
     eval.send(serde_json::json!({"hover_settings":app_settings.hover}))
@@ -575,8 +644,12 @@ async fn surface(
         eval.send(serde_json::json!({"notice":warning}))
             .map_err(|e| e.to_string())?;
     }
+    if let Some(warning) = &filter_warning {
+        eval.send(serde_json::json!({"notice":warning}))
+            .map_err(|e| e.to_string())?;
+    }
     connection.connect()?;
-    let mut in_flight = Some((first.generation, first.frame.revision));
+    let mut in_flight = Some((first.generation, first.frame.revision, filters.version()));
     let mut dirty = false;
     let mut stopping = false;
     let mut close_deadline = None;
@@ -654,17 +727,18 @@ async fn surface(
             let run_probe = probe.is_some()
                 && !window_probe
                 && !login_probe
+                && !filters_probe
                 && !probe_started
                 && view.phase == Phase::Connected
                 && view.received > 0;
             probe_started |= run_probe;
-            painting = paint(&view, run_probe, &settings);
+            painting = paint(&view, run_probe, &settings, &filters);
             painting.hover = hover_lease
                 .as_ref()
                 .filter(|lease| lease.stamp == view.stamp())
                 .cloned();
             eval.send(&painting).map_err(|e| e.to_string())?;
-            in_flight = Some((view.generation, view.frame.revision));
+            in_flight = Some((view.generation, view.frame.revision, filters.version()));
             dirty = false;
         }
         tokio::select! {
@@ -724,6 +798,31 @@ async fn surface(
                     login_open=false;login_stamp=None;
                     if let Err(error)=connection.cancel_login() {message.set(error);}
                 },
+                SurfaceEvent::FiltersOpen {trusted} => {
+                    if stopping || !trusted {continue;}
+                    eval.send(serde_json::json!({"filters_open":{"entries":filters.rules().entries,"warning":filter_warning}})).map_err(|e|e.to_string())?;
+                },
+                SurfaceEvent::FiltersEdit {id,note,remove,trusted} => {
+                    if stopping || !trusted {continue;}
+                    let result=filters.rules().edit(&id,&note,remove).and_then(|rules|filter_store.as_ref().map_err(Clone::clone).and_then(|store|store.save(rules)));
+                    match result {
+                        Ok(rules)=>{
+                            filters.replace(rules);filter_warning=None;filter_edits+=1;selected_rows=None;dirty=true;
+                            hover_lease=None;media_preview.close();
+                            eval.send(serde_json::json!({"media_reset":true,"hover_reset":true})).map_err(|e|e.to_string())?;
+                            eval.send(serde_json::json!({"filters_result":{"ok":true,"entries":filters.rules().entries,"message":"已套用並儲存一般黑名單"}})).map_err(|e|e.to_string())?;
+                        },
+                        Err(error)=>eval.send(serde_json::json!({"filters_result":{"ok":false,"message":error}})).map_err(|e|e.to_string())?,
+                    }
+                },
+                SurfaceEvent::FiltersReveal {presentation,generation,revision,reveal,trusted} => {
+                    if stopping || !trusted {continue;}
+                    let view=receiver.borrow();
+                    if filters.version()!=presentation || (view.generation,view.frame.revision)!=(generation,revision) {continue;}
+                    filters.reveal(generation,revision,reveal);filter_reveals+=1;selected_rows=None;dirty=true;
+                    hover_lease=None;media_preview.close();
+                    eval.send(serde_json::json!({"media_reset":true,"hover_reset":true})).map_err(|e|e.to_string())?;
+                },
                 SurfaceEvent::HoverPreference {position,trusted} => {
                     if stopping || !trusted {continue;}
                     let mut draft=app_settings.clone();draft.hover=position;
@@ -734,20 +833,21 @@ async fn surface(
                     if app_settings.hover==HoverPosition::Off && hover_lease.take().is_some() {media_preview.close();eval.send(serde_json::json!({"hover_reset":true})).map_err(|e|e.to_string())?;}
                     eval.send(serde_json::json!({"hover_settings":app_settings.hover})).map_err(|e|e.to_string())?;
                 },
-                SurfaceEvent::Hover {sequence,stamp,index,trusted} => {
+                SurfaceEvent::Hover {presentation,sequence,stamp,index,trusted} => {
                     if stopping {continue;}
                     let Some(index)=index else {
                         if hover_lease.as_ref().is_some_and(|lease|lease.sequence==sequence) {hover_lease=None;media_preview.close();}
                         continue;
                     };
                     let view=receiver.borrow().clone();
-                    let link=displayed.as_ref().filter(|p|p.generation==stamp.generation && p.frame.revision==stamp.revision && p.input_epoch==stamp.input_epoch).and_then(|p|p.links.get(index));
+                    let link=displayed.as_ref().filter(|p|current_presentation(p,presentation,stamp.generation,stamp.revision,&filters,&view) && p.input_epoch==stamp.input_epoch).and_then(|p|p.links.get(index));
                     let target=link.and_then(|link|media::classify(&link.url).ok().flatten()).filter(|target|target.kind==media::Kind::Image);
                     if !trusted || app_settings.hover==HoverPosition::Off || view.stamp()!=stamp || view.phase!=Phase::Connected || !view.frame.control_complete || target.is_none()
                         || media_preview.active().is_some_and(|active|active.presentation==Presentation::Inspect) {
                         eval.send(serde_json::json!({"hover_rejected":sequence})).map_err(|e|e.to_string())?;continue;
                     }
                     if let (Some(link),Some(target))=(link,target) {
+                        if filters_probe {filter_hover_requests+=1;eval.send(serde_json::json!({"hover_rejected":sequence})).map_err(|e|e.to_string())?;continue;}
                         let active=media_preview.hover(stamp.generation,target)?;
                         hover_lease=Some(HoverLease{sequence,stamp,index,link:link.clone()});
                         eval.send(serde_json::json!({"media_hover":{"sequence":sequence,"request":active.request,"target":active.target,"position":app_settings.hover}})).map_err(|e|e.to_string())?;
@@ -849,15 +949,15 @@ async fn surface(
                     })();
                     eval.send(result.unwrap_or_else(|error|serde_json::json!({"profile_result":"rejected","notice":error}))).map_err(|e|e.to_string())?;
                 },
-                SurfaceEvent::ExportPng { generation, revision, selection_request, png, trusted } => {
+                SurfaceEvent::ExportPng { presentation, generation, revision, selection_request, png, trusted } => {
                     if stopping || !trusted { continue; }
                     let result = (|| -> Result<Option<PathBuf>, String> {
-                        let shown = displayed.as_ref().filter(|p| p.generation == generation && p.frame.revision == revision)
+                        let shown = displayed.as_ref().filter(|p| current_presentation(p,presentation,generation,revision,&filters,&receiver.borrow()))
                             .ok_or("畫面已更新，請重新選取後匯出")?;
                         if (shown.frame.cols, shown.frame.rows) != (80, export::ROWS) { return Err("此畫面尺寸不支援 PNG 匯出".into()); }
                         let rows = match selection_request {
                             Some(request) => selected_rows.as_ref()
-                                .filter(|s| s.generation == generation && s.revision == revision && s.request == request)
+                                .filter(|s| s.presentation==presentation && s.generation == generation && s.revision == revision && s.request == request)
                                 .map(|s| s.rows.clone()).ok_or("選取已變更，請重新選取後匯出")?,
                             None => 0..export::ROWS,
                         };
@@ -895,10 +995,10 @@ async fn surface(
                     };
                     eval.send(reply).map_err(|e| e.to_string())?;
                 },
-                SurfaceEvent::OpenLink { generation, revision, index, trusted } => {
+                SurfaceEvent::OpenLink { presentation, generation, revision, index, trusted } => {
                     if stopping || !trusted { continue; }
                     let link = displayed.as_ref()
-                        .filter(|p| p.generation == generation && p.frame.revision == revision)
+                        .filter(|p| current_presentation(p,presentation,generation,revision,&filters,&receiver.borrow()))
                         .and_then(|p| p.links.get(index)).cloned();
                     if let Some(link) = &link {
                         match media::classify(&link.url) {
@@ -997,19 +1097,20 @@ async fn surface(
                         eval.send(serde_json::json!({"paste_result":"cancelled"})).map_err(|e| e.to_string())?;
                     }
                 },
-                SurfaceEvent::Select { generation, revision, request, selection } => {
+                SurfaceEvent::Select { presentation, generation, revision, request, selection } => {
                     let selected = displayed.as_ref()
-                        .filter(|p| p.generation == generation && p.frame.revision == revision)
+                        .filter(|p| current_presentation(p,presentation,generation,revision,&filters,&receiver.borrow()))
                         .and_then(|p| selection::extract(&p.frame, &selection).ok());
                     if probe.is_some() && selected.as_ref().is_some_and(|s| s.text == "中") {
                         copied_selection = Some((generation, revision, request));
                     }
-                    selected_rows = selected.as_ref().map(|s| SelectedRows { generation, revision, request, rows: s.rows.clone() });
+                    selected_rows = selected.as_ref().map(|s| SelectedRows { presentation, generation, revision, request, rows: s.rows.clone() });
                     eval.send(serde_json::json!({"selection": {
-                        "generation":generation,"revision":revision,"request":request,"value":selected
+                        "presentation":presentation,"generation":generation,"revision":revision,"request":request,"value":selected
                     }})).map_err(|e| e.to_string())?;
                 },
-                SurfaceEvent::Copied { generation, revision, request, trusted } => {
+                SurfaceEvent::Copied { presentation, generation, revision, request, trusted } => {
+                    if filters_probe && trusted && selected_rows.as_ref().is_some_and(|s|s.presentation==presentation && s.request==request) && displayed.as_ref().is_some_and(|p|current_presentation(p,presentation,generation,revision,&filters,&receiver.borrow())) {filter_copies+=1;}
                     copy_checked |= trusted && copied_selection == Some((generation, revision, request));
                 },
                 SurfaceEvent::Key { key, generation, trusted } => {
@@ -1067,8 +1168,8 @@ async fn surface(
                         },
                     });
                 },
-                SurfaceEvent::Painted { revision, generation } => {
-                    if in_flight != Some((generation, revision)) {
+                SurfaceEvent::Painted { presentation, revision, generation } => {
+                    if in_flight != Some((generation, revision, presentation)) {
                         return Err("畫面回報未知版本".into());
                     }
                     in_flight = None;
@@ -1121,6 +1222,10 @@ async fn surface(
                         std::fs::create_dir_all(path).map_err(|e|e.to_string())?;
                         std::fs::write(path.join("login-probe.json"),serde_json::json!({"status":if clean && disconnect==CloseOutcome::Acknowledged {"passed"} else {"failed"},"scope":"synthetic login only; peer checked one account and password, no extra input","disconnect":disconnect,"listeners_released":clean,"connection_worker_joined":true,"credential_worker_joined":true}).to_string()).map_err(|e|e.to_string())?;
                     }
+                    if filters_probe {
+                        let path=probe.as_ref().ok_or("missing filters probe directory")?;
+                        std::fs::write(path.join("filters-probe.json"),serde_json::json!({"status":if clean && disconnect==CloseOutcome::Acknowledged && filter_edits>=4 && filter_reveals>=2 && filter_copies>=1 && filter_hover_requests==0 && export_checked && rows_export_checked {"passed"} else {"failed"},"scope":"synthetic local push masking and explicit CRUD, reveal, copy and PNG; no extra station bytes","disconnect":disconnect,"listeners_released":clean,"connection_worker_joined":true,"filter_edits":filter_edits,"filter_reveals":filter_reveals,"copies":filter_copies,"hover_requests":filter_hover_requests,"full_png":export_checked,"rows_png":rows_export_checked}).to_string()).map_err(|e|e.to_string())?;
+                    }
                     if window_probe {
                         let path = probe.as_ref().ok_or("missing window-probe directory")?;
                         std::fs::create_dir_all(path).map_err(|e|e.to_string())?;
@@ -1165,7 +1270,10 @@ async fn surface(
             changed = receiver.changed(), if !stopping => {
                 changed.map_err(|e| e.to_string())?;
                 let view = receiver.borrow_and_update().clone();
-                if hover_lease.as_mut().is_some_and(|lease|!lease.renew(view.stamp(),view.phase==Phase::Connected && view.frame.control_complete,&links::detect(&view.frame))) {
+                let policy=filters.version();filters.sync(view.generation,view.frame.revision);
+                if filters.version()!=policy {selected_rows=None;}
+                let filtered=filters.project(view.generation,&view.frame);
+                if hover_lease.as_mut().is_some_and(|lease|!lease.renew(view.stamp(),view.phase==Phase::Connected && view.frame.control_complete,&links::detect(&filtered.frame))) {
                     hover_lease=None;media_preview.close();
                     eval.send(serde_json::json!({"hover_reset":true})).map_err(|e|e.to_string())?;
                 }
@@ -1209,8 +1317,23 @@ async fn surface(
     }
 }
 
-fn paint(view: &View, probe: bool, settings: &DisplaySettings) -> Paint {
-    let links = links::detect(&view.frame);
+fn current_presentation(
+    p: &Paint,
+    presentation: u64,
+    generation: u64,
+    revision: u64,
+    filters: &filters::State,
+    current: &View,
+) -> bool {
+    p.presentation == presentation
+        && filters.version() == presentation
+        && (p.generation, p.frame.revision) == (generation, revision)
+        && (current.generation, current.frame.revision) == (generation, revision)
+}
+
+fn paint(view: &View, probe: bool, settings: &DisplaySettings, filters: &filters::State) -> Paint {
+    let projection = filters.project(view.generation, &view.frame);
+    let links = links::detect(&projection.frame);
     let image_links = links
         .iter()
         .enumerate()
@@ -1223,6 +1346,15 @@ fn paint(view: &View, probe: bool, settings: &DisplaySettings) -> Paint {
         })
         .collect();
     Paint {
+        presentation: filters.version(),
+        masked_pushes: projection.matches.len(),
+        revealed: projection.revealed,
+        filter_reason: projection
+            .matches
+            .iter()
+            .map(|p| p.id.as_str())
+            .collect::<Vec<_>>()
+            .join("、"),
         image_links,
         hover: None,
         keep_alive: view.keep_alive,
@@ -1236,7 +1368,7 @@ fn paint(view: &View, probe: bool, settings: &DisplaySettings) -> Paint {
         navigation: navigation::analyze(&view.frame),
         settings: settings.clone(),
         links,
-        frame: view.frame.clone(),
+        frame: projection.frame,
         generation: view.generation,
         probe,
     }
@@ -1244,6 +1376,10 @@ fn paint(view: &View, probe: bool, settings: &DisplaySettings) -> Paint {
 
 fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint {
     Paint {
+        presentation: 0,
+        masked_pushes: 0,
+        revealed: false,
+        filter_reason: String::new(),
         image_links: Vec::new(),
         hover: None,
         keep_alive: false,
@@ -1273,4 +1409,84 @@ fn font_sample() -> Result<Frame, String> {
     sample.feed(&encoding::encode("┌──┐ │  │ └──┘").map_err(|e| e.to_string())?);
     sample.feed(b"\x1b[0m\x1b[?25l");
     Ok(sample.frame())
+}
+
+#[cfg(test)]
+mod filter_tests {
+    use super::*;
+    #[test]
+    fn presentation_consumers_reject_old_rules_reveal_session_and_frame() {
+        let pages: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/filters.json")).unwrap();
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&encoding::encode(pages["reading"].as_str().unwrap()).unwrap());
+        let view = View {
+            frame: screen.frame(),
+            generation: 4,
+            input_epoch: 0,
+            input_pending: false,
+            login_pending: false,
+            phase: Phase::Connected,
+            message: String::new(),
+            received: 1,
+            keep_alive: false,
+            keep_alive_ready: false,
+            keep_alive_sent: 0,
+            keep_alive_failure: None,
+        };
+        let mut filters =
+            filters::State::new(filters::Rules::default().edit("Alice", "", false).unwrap());
+        let p = paint(&view, false, &DisplaySettings::default(), &filters);
+        assert_eq!(p.masked_pushes, 2);
+        assert_eq!(p.links.len(), 1);
+        assert!(current_presentation(
+            &p,
+            p.presentation,
+            view.generation,
+            view.frame.revision,
+            &filters,
+            &view
+        ));
+        filters.reveal(view.generation, view.frame.revision, true);
+        assert!(!current_presentation(
+            &p,
+            p.presentation,
+            view.generation,
+            view.frame.revision,
+            &filters,
+            &view
+        ));
+        let shown = paint(&view, false, &DisplaySettings::default(), &filters);
+        assert_eq!(shown.links.len(), 2);
+        filters.replace(filters.rules().clone());
+        assert!(!current_presentation(
+            &shown,
+            shown.presentation,
+            view.generation,
+            view.frame.revision,
+            &filters,
+            &view
+        ));
+        let p = paint(&view, false, &DisplaySettings::default(), &filters);
+        let mut current = view.clone();
+        current.generation += 1;
+        assert!(!current_presentation(
+            &p,
+            p.presentation,
+            view.generation,
+            view.frame.revision,
+            &filters,
+            &current
+        ));
+        current = view.clone();
+        current.frame.revision += 1;
+        assert!(!current_presentation(
+            &p,
+            p.presentation,
+            view.generation,
+            view.frame.revision,
+            &filters,
+            &current
+        ));
+    }
 }
