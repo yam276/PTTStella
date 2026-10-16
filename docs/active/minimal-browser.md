@@ -16,6 +16,12 @@
 
 重構前 core 與 39 個 desktop lib／2 個 bin 測試通過。第一步將 WSS 連線／關閉／有界傳送移至 connection/transport，單一 session 狀態與登入、導覽、保活、畫面發布移至 connection/worker。事件迴圈只負責選擇事件；手動輸入仍只有一條 epoch／escape／送出路徑，等待狀態及登入期限各有共同擁有者。原本巨型 select 的壓縮分支改為可由 rustfmt 維護的具名方法。此步驟 core、39 個 desktop lib／2 個 bin、desktop 全 targets Clippy 與 docs gate 通過；既有 expected 未改。
 
+UI 接著拆為 app／protocol／presentation／preferences／probe／surface：畫面、事件格式、投影與版本檢查、設定所有權及驗收計數各有位置。位置布林 tuple 改為具名 Options；設定預覽／匯入只產生封包，成功保存才更新生效設定及 resolved display，失敗仍保留舊值與來源。新增兩個狀態契約測試，核對預覽／匯入／匯出、備份失敗與錯誤載入的保留行為；沒有新增依賴、改動 JS wire keys 或修改既有 fixture／expected。模組及後續修改入口見 [架構](../architecture.md)。
+
+最終 core（八套 suite／兩個 replay）、39 個 desktop lib、4 個 bin、desktop 全 targets Clippy 與 docs gate 通過。macOS／WKWebView 的獨立 window probe 完成 40 筆原生 Vim 操作，含無重繪連按、長按通過進板圖及六位數列表；設定草稿取消後設定檔與 PNG bytes 不變，明確保存後 18／19 的字高／基線同時寫入檔案與畫面。filter probe 通過四次 CRUD、四次揭露切換、複製事件、兩種 PNG 與 Vim 翻頁；獨立 Pillow 解碼確認遮黑外像素差為零、揭露等於原圖、整頁選取行 PNG 等於整頁、翻頁返回恢復遮黑，且與重構前保留的相同合成案例逐像素一致。合成 login probe 逐筆比對一次帳號／密碼、碎片化提示及無額外輸入，已到達合成主選單。三個程序分別 ⌘W／⌘Q 結束，均 acknowledged／listener released／worker joined；登入的 credential worker 亦 join。
+
+重構 App 保留於 `dist/macos-refactor/PTTStella.app`（arm64／ad-hoc），舊包保留。一般測試與本輪視窗均使用本機合成服務，沒有重新登入 PTT 或碰觸使用者帳密。完整 Mac desktop backend 仍 not_ready；未重跑 Windows／Linux 實機、原生 IME 與媒體完整 gate。沒有效能改善宣稱、push 或公開發佈。
+
 ## 增量：進板圖與六位數文章列表的 Vim 操作
 
 2026-10-17：使用者回報 C_Chat 進板圖停在「請按任意鍵繼續」，原先未知 profile 使 Vim 暫停。新增獨立 ContinuePrompt／Continue，要求完整格線、底列提示／色帶與最後一欄游標；只送一個空白。Normal 可用空白鍵、Enter、l／右方向鍵通過並維持 Vim；按住的繼續鍵跨畫面仍持有到 keyup，不誤開下一個項目。圖案區未映射字不參與決策，提示區仍須可映射；確認、輸入及其他未知畫面不放寬。沒有自動跳圖、跨頁補送、滑鼠導覽或保活。
