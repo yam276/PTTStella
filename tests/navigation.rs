@@ -106,6 +106,41 @@ fn pinned_article_and_complete_dual_colour_title_keep_column_targets() {
     ));
 }
 #[test]
+fn padded_dates_votes_locked_and_deleted_rows_remain_browsable() {
+    for text in [
+        "     122   8  1/ 9 carol        □ 補齊日期",
+        "     122     10/ 9 carol        鎖 鎖定文章",
+        "     122   8  1/19 carol        ˇ 合成投票",
+        "     122      1/ 9 -            ╳ (本文已被刪除)",
+        "     122      1/ 9 -            □ (本文已被刪除)",
+    ] {
+        let mut screen = fixture("list");
+        replace(&mut screen, 5, text, "0");
+        screen.feed(b"\x1b[5;1H");
+        let context = navigation::analyze(&screen.frame());
+        assert!(matches!(context, Context::ArticleList { .. }), "{text}");
+        assert_eq!(
+            navigation::plan(&context, Intent::Open { row: 5 }).unwrap(),
+            b"\x1b[B\r"
+        );
+    }
+}
+#[test]
+fn invalid_padded_dates_and_deleted_author_prompts_remain_unknown() {
+    for text in [
+        "     122      1/ 0 carol        □ 日期錯誤",
+        "     122     13/ 9 carol        □ 日期錯誤",
+        "     122      1/99 carol        □ 日期錯誤",
+        "     122      1/ 9 -            是否刪除？[Y/n]",
+        "     122      1/ 9 -            R: 非刪文格式",
+    ] {
+        let mut screen = fixture("list");
+        replace(&mut screen, 5, text, "0");
+        screen.feed(b"\x1b[5;1H");
+        unknown(&screen.frame());
+    }
+}
+#[test]
 fn missing_or_inconsistent_anchors_fail_closed() {
     for (row, value, sgr) in [
         (2, "編號 日期 作者 標題", "0"),

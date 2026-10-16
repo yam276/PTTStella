@@ -145,24 +145,32 @@ fn article(line: &Row<'_>, row: usize) -> Option<Article> {
     // Date, author and a non-empty title independently constrain an item row.
     let rest = line.cells(8, 80)?;
     let tokens: Vec<_> = rest.split_whitespace().collect();
-    let date = tokens.iter().position(|s| {
-        s.split_once('/').is_some_and(|(m, d)| {
-            number(m).is_some_and(|m| (1..=12).contains(&m))
-                && number(d).is_some_and(|d| (1..=31).contains(&d))
-        })
+    // PTT's five-column date pads a single-digit day: " 1/ 9".
+    // Whitespace tokenization splits that date, but not its following author.
+    let (date, date_tokens) = tokens.iter().take(3).enumerate().find_map(|(i, s)| {
+        let (month, day) = s.split_once('/')?;
+        let padded = day.is_empty();
+        let day = if padded { *tokens.get(i + 1)? } else { day };
+        (number(month).is_some_and(|m| (1..=12).contains(&m))
+            && number(day).is_some_and(|d| (1..=31).contains(&d)))
+        .then_some((i, if padded { 2 } else { 1 }))
     })?;
-    if date > 2 || tokens.len() < date + 4 {
+    let author_index = date + date_tokens;
+    if tokens.len() < author_index + 3 {
         return None;
     }
-    let author = tokens[date + 1];
-    if author.len() > 16
-        || !author
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+    let author = tokens[author_index];
+    let mark = tokens[author_index + 1];
+    let deleted = author == "-" && matches!(mark, "╳" | "□");
+    if !deleted
+        && (author.len() > 16
+            || !author
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_'))
     {
         return None;
     }
-    if !matches!(tokens[date + 2], "□" | "◇" | "R:" | "轉" | "Re:") {
+    if !matches!(mark, "□" | "◇" | "R:" | "轉" | "Re:" | "鎖" | "ˇ") && !deleted {
         return None;
     }
     Some(Article {
