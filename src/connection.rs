@@ -18,6 +18,7 @@ use tokio::{
     task::JoinHandle,
     time::{MissedTickBehavior, interval, timeout},
 };
+use tokio_tungstenite::tungstenite::protocol::{CloseFrame, frame::coding::CloseCode};
 use tokio_tungstenite::{
     Connector, MaybeTlsStream, WebSocketStream, connect_async_tls_with_config,
     tungstenite::{Message, client::IntoClientRequest, protocol::WebSocketConfig},
@@ -33,6 +34,14 @@ pub enum Phase {
     Connecting,
     Connected,
     Error,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CloseOutcome {
+    NoConnection,
+    Acknowledged,
+    PeerClosedWithoutReply,
+    Unconfirmed,
 }
 #[derive(Clone)]
 pub struct View {
@@ -78,7 +87,7 @@ enum Command {
         keyboard: bool,
         reply: oneshot::Sender<Result<(), String>>,
     },
-    Shutdown(oneshot::Sender<()>),
+    Shutdown(oneshot::Sender<CloseOutcome>),
 }
 enum PendingInput {
     Manual {
@@ -109,6 +118,7 @@ pub struct Connection {
     pub updates: watch::Receiver<View>,
     worker: Mutex<Option<JoinHandle<()>>>,
     probe_peer: Mutex<Option<JoinHandle<Result<(), String>>>>,
+    shutdown_result: Mutex<Option<CloseOutcome>>,
 }
 impl Connection {
     pub fn start(screen: Screen) -> Result<Self, String> {
@@ -147,6 +157,7 @@ impl Connection {
             updates,
             worker: Mutex::new(Some(worker)),
             probe_peer: Mutex::new(None),
+            shutdown_result: Mutex::new(None),
         })
     }
     /// An isolated browser-to-WebSocket conformance session; no external network.
@@ -242,21 +253,25 @@ impl Connection {
             .try_send(command)
             .map_err(|_| "操作佇列已滿或連線服務已結束".into())
     }
-    pub async fn shutdown(&self) -> Result<(), String> {
+    pub async fn shutdown(&self) -> Result<CloseOutcome, String> {
         if self
             .worker
             .lock()
             .map_err(|_| "worker ownership lock failed")?
             .is_none()
         {
-            return Ok(());
+            return self
+                .shutdown_result
+                .lock()
+                .map_err(|_| "shutdown result lock failed".to_owned())
+                .map(|result| result.unwrap_or(CloseOutcome::NoConnection));
         }
         let (done, receiver) = oneshot::channel();
         self.commands
             .send(Command::Shutdown(done))
             .await
             .map_err(|_| "連線服務已結束".to_owned())?;
-        timeout(Duration::from_secs(5), receiver)
+        let outcome = timeout(Duration::from_secs(5), receiver)
             .await
             .map_err(|_| "連線清理逾時".to_owned())?
             .map_err(|_| "連線清理未完成".to_owned())?;
@@ -283,7 +298,11 @@ impl Connection {
                 }
             }
         }
-        Ok(())
+        *self
+            .shutdown_result
+            .lock()
+            .map_err(|_| "shutdown result lock failed".to_owned())? = Some(outcome);
+        Ok(outcome)
     }
 }
 
@@ -317,18 +336,62 @@ fn tls_connector() -> Result<Connector, String> {
     Ok(Connector::Rustls(Arc::new(crate::tls::client_config()?)))
 }
 
-async fn stop(socket: &mut Option<Socket>, dialing: &mut Option<Dial>) -> bool {
+async fn stop(socket: &mut Option<Socket>, dialing: &mut Option<Dial>) -> CloseOutcome {
     if let Some(task) = dialing.take() {
         task.abort();
-        let _ = task.await;
+        if let Ok(Ok(connected)) = task.await {
+            // Dial and connected socket never coexist in this owner.
+            *socket = Some(connected);
+        }
     }
     if let Some(mut connection) = socket.take() {
-        return matches!(
-            timeout(Duration::from_secs(2), connection.close(None)).await,
-            Ok(Ok(()))
-        );
+        let close = async {
+            connection
+                .close(Some(CloseFrame {
+                    code: CloseCode::Normal,
+                    reason: "PTTStella disconnect".into(),
+                }))
+                .await
+                .map_err(|_| CloseOutcome::Unconfirmed)?;
+            let mut acknowledged = false;
+            // close() only queues/flushes Close. Keep reading until the server
+            // answers and closes its transport; never send BBS keys while closing.
+            loop {
+                match connection.next().await {
+                    Some(Ok(Message::Close(_))) => acknowledged = true,
+                    Some(Ok(_)) => {}
+                    None => {
+                        return Ok(if acknowledged {
+                            CloseOutcome::Acknowledged
+                        } else {
+                            CloseOutcome::PeerClosedWithoutReply
+                        });
+                    }
+                    Some(Err(error)) => {
+                        use tokio_tungstenite::tungstenite::{Error, error::ProtocolError};
+                        let ended = matches!(
+                            &error,
+                            Error::Protocol(ProtocolError::ResetWithoutClosingHandshake)
+                        ) || matches!(&error,Error::Io(e) if matches!(e.kind(),std::io::ErrorKind::UnexpectedEof|std::io::ErrorKind::ConnectionReset|std::io::ErrorKind::ConnectionAborted));
+                        return if ended {
+                            Ok(if acknowledged {
+                                CloseOutcome::Acknowledged
+                            } else {
+                                CloseOutcome::PeerClosedWithoutReply
+                            })
+                        } else {
+                            Err(CloseOutcome::Unconfirmed)
+                        };
+                    }
+                }
+            }
+        };
+        return match timeout(Duration::from_secs(2), close).await {
+            Ok(Ok(outcome)) => outcome,
+            _ => CloseOutcome::Unconfirmed,
+        };
     }
-    true
+    CloseOutcome::NoConnection
 }
 
 async fn send(socket: &mut Socket, message: Message) -> Result<(), String> {
@@ -353,6 +416,7 @@ async fn run(
     let mut dirty = false;
     let mut pending_input: Option<PendingInput> = None;
     let mut login_attempt: Option<(Credentials, Instant)> = None;
+    let mut last_close = CloseOutcome::NoConnection;
     let mut clock = interval(Duration::from_millis(16));
     let mut idle = liveness::Idle::new(Instant::now(), timing);
     let mut idle_clock = interval(timing.poll);
@@ -368,6 +432,7 @@ async fn run(
                     if matches!(pending_input,Some(PendingInput::Refresh {..})) {pending_input=None;}
                 },
                 Some(Command::Connect) if socket.is_none() && dialing.is_none() => {
+                    last_close=CloseOutcome::NoConnection;
                     login_attempt=None;
                     view.generation = view.generation.saturating_add(1);
                     idle.activity(Instant::now());view.keep_alive_sent=0;
@@ -383,9 +448,14 @@ async fn run(
                     idle.activity(Instant::now());
                     view.generation = view.generation.saturating_add(1);
                     pending_input=None;view.input_pending=false;
-                    let closed = stop(&mut socket, &mut dialing).await;
+                    last_close = stop(&mut socket, &mut dialing).await;
                     view.phase = Phase::Disconnected;
-                    view.message = if closed { "本機已斷線（已送出關閉訊息）" } else { "本機連線已關閉；遠端關閉未確認" }.into(); dirty = true;
+                    view.message = match last_close {
+                        CloseOutcome::Acknowledged=>"本機已斷線（站端已回覆關閉）",
+                        CloseOutcome::PeerClosedWithoutReply=>"已送出關閉通知；站端已結束連線（未回覆 Close）",
+                        CloseOutcome::NoConnection=>"本機已斷線（沒有使用中的連線）",
+                        CloseOutcome::Unconfirmed=>"本機連線已關閉；站端回覆未確認",
+                    }.into(); dirty = true;
                 },
                 Some(Command::Input { generation, bytes }) => {
                     login_attempt=None;
@@ -446,8 +516,9 @@ async fn run(
                     let _=reply.send(result);
                 },
                 Some(Command::Shutdown(done)) => {
-                    stop(&mut socket, &mut dialing).await;
-                    let _ = done.send(()); break;
+                    let outcome=stop(&mut socket, &mut dialing).await;
+                    let outcome=if outcome==CloseOutcome::NoConnection {last_close} else {outcome};
+                    let _ = done.send(outcome); break;
                 },
                 None => { stop(&mut socket, &mut dialing).await; break; },
             },

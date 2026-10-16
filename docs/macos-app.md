@@ -44,3 +44,5 @@ macOS 保留原生 PTTStella／Edit／Window 選單：`⌘W` 關窗、`⌘Q` 結
 產生 `.app`、簽章有效、視窗啟動及完整功能驗收是不同證據。既有 `tooling/check.py desktop` 仍只有 Windows backend；macOS 尚不能靠打包成功宣稱 IME、媒體 codec、剪貼簿、像素或實站登入通過。實際狀態只維護在 [active plan](active/minimal-browser.md)。
 
 `--probe-window OUTPUT_DIRECTORY` 是另外的原生視窗回歸入口，不開 DevTools port，不連 PTT，設定與 PNG 僅存指定目錄。真實視窗內開啟 Vim，依序 j、k、gg、G；本機 WebSocket 逐筆核對 Down／Up／Home／End。其後以原生關窗／結束快捷鍵退出；有額外站端輸入、序列未完成或 owner 清理失敗就不產生通過報告。`window-probe.json` 只表示這個有限流程的 listener／worker 與輸入檢查通過，並非完整 desktop gate。
+
+關閉視窗／⌘Q 會先送 WebSocket 正常關閉通知，最多等候兩秒讓站端完成關閉握手，再清理視窗。工具列「斷線」也使用同一流程，並區分站端已回覆 Close、未回覆即結束連線、逾時／錯誤未確認；不以 BBS 選單腳本或登出按鍵代替協定關閉。

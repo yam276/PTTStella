@@ -75,7 +75,15 @@ Windows 真實 pointer＋loopback HTTP 已驗證快掠零請求、同連結一�
 
 同時在 Test 發現合法空白標題、ID_Problem 發現置底日期欄「重要」，兩者均使舊辨識器暫停。先以各一個自製案例在舊 reducer 重現 Unknown，再修正共用固定欄位解析：標題可只剩已知文章標記，編號／作者與列表錨點仍驗證；「重要」只允許在星號置底列，其餘日期仍須有效。未知日期、一般列的重要標籤、提示與非法作者仍拒絕。沒有複製使用者列表或文章內容進 fixture。
 
-26 個 navigation、core 七套 suite／兩個 replay、desktop 全 targets Clippy 通過。自製滿頁 native fixture 同時加入空白標題與重要置底；兩次 macOS／WKWebView 各 30 筆原生操作與五次切板均為 NORMAL、精確 bytes 且無額外輸入，分別以 ⌘W／⌘Q 結束。這兩種修正的實站重試需要重啟新版；目前已開啟 `dist/macos-live-ready/PTTStella.app` 並由使用者直接重新輸入帳密，完成後繼續驗證。此段未把本機案例當作實站修正後通過。
+26 個 navigation、core 七套 suite／兩個 replay、desktop 全 targets Clippy 通過。自製滿頁 native fixture 同時加入空白標題與重要置底；兩次 macOS／WKWebView 各 30 筆原生操作與五次切板均為 NORMAL、精確 bytes 且無額外輸入，分別以 ⌘W／⌘Q 結束。使用者直接在 `dist/macos-live-ready/PTTStella.app` 重新登入後，實站 Test 空白標題列表已為 NORMAL，k／j／h 可操作；ID_Problem 重要置底列表也為 NORMAL，2j／l 可開啟重要置底文章，Ctrl+f／Ctrl+b 在 1／7 與 2／7 間往返，h 返回列表、最愛與主選單。此為實站修正後驗證，沒有保存文章內容。按鈕登入已由站端登入後畫面確認成功，帳密未經聊天或檔案。
+
+### 關窗的正常斷線握手
+
+2026-10-16：使用者確認要求關閉 App 時正常通知 PTT 斷線。舊 stop 已呼叫 close，但 close 只排入／送出 WebSocket Close，沒有持續讀取完成對端握手。改為明確 1000 Normal close、固定無帳密原因、持續讀取至對端回覆與底層關閉，總期限兩秒；站端未回覆 Close 即結束底層連線另標 peer_closed_without_reply；逾時或其他傳輸錯誤標為 unconfirmed，本機仍釋放 socket。重複 shutdown 沿用已完成結果，沒有把送出成功當作對端已確認。
+
+關窗／⌘Q 在停止新互動後立即 shutdown／join 網路 owner，再等待 renderer 清理回報；不依賴 JavaScript 清理先完成才通知站端。已停止後不再讀取關閉的 view channel。工具列斷線沿同一路徑顯示確認／未確認。worker、Keychain 與 listener 仍清理完成才結束；沒有自動送 BBS 登出指令或回答確認問題。
+
+斷線案例包含獨立 loopback 對端核對正常 Close 碼／固定原因、延遲回覆＋TCP FIN／客戶端 EOF，未回覆即結束底層連線，以及不回覆時兩秒內標為未確認並釋放。兩次原生 ⌘W／⌘Q 報告均為 disconnect=acknowledged、worker join 與 listener released，同時通過 30 筆導覽。實站最終包的工具列斷線顯示「已送出關閉通知；站端已結束連線（未回覆 Close）」；再次從正常 App 取用已存帳密、確認主選單登入後按 ⌘Q，owner 回報 PeerClosedWithoutReply，程序正常退出碼 0，沒有殘留程序。這是站端結束底層連線的結果，不是完整 Close ACK，也未直接驗證 PTT 線上名單更新。完整 Mac desktop backend 維持 not_ready，沒有 Windows／Linux 實機結果。舊 App 與中間產物保留，沒有 push／公開發佈。
 
 ### 按鈕登入與 macOS 鑰匙圈
 
