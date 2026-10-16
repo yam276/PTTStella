@@ -21,6 +21,84 @@ fn unknown(frame: &Frame) {
         Context::Unknown { .. }
     ));
 }
+
+#[test]
+fn ascii_pointer_touching_six_digit_number_is_a_valid_selected_article() {
+    let mut screen = fixture("list_dense");
+    // Restore the old legacy marker's covered digit, then select a dense row
+    // using the normal one-cell marker. No separating blank follows the >.
+    screen.feed(b"\x1b[18;1H 3\x1b[4;1H>\x1b[4;1H");
+    let context = navigation::analyze(&screen.frame());
+    assert!(
+        matches!(context, Context::ArticleList { cursor_row: 3, .. }),
+        "{context:?}"
+    );
+    assert_eq!(navigation::plan(&context, Intent::Forward).unwrap(), b"\r");
+    assert_eq!(
+        navigation::plan(&context, Intent::Open { row: 4 }).unwrap(),
+        b"\x1b[B\r"
+    );
+    screen.feed(b"\x1b[4;1H \x1b[4;1H");
+    unknown(&screen.frame());
+    screen.feed(b"\x1b[4;1Hx\x1b[4;1H");
+    unknown(&screen.frame());
+}
+
+#[test]
+fn board_entry_pause_uses_only_the_complete_styled_footer() {
+    let mut screen = fixture("board_entry");
+    assert_eq!(screen.frame().cursor, (79, 23));
+    assert_eq!(
+        navigation::analyze(&screen.frame()),
+        Context::ContinuePrompt
+    );
+    // Unmapped artwork outside the decision region must not suspend the prompt.
+    screen.feed(b"\x1b[4;1H\xa4 \x1b[24;80H");
+    assert!(screen.frame().glyphs.iter().any(|g| g.unmapped));
+    let context = navigation::analyze(&screen.frame());
+    assert_eq!(context, Context::ContinuePrompt);
+    assert_eq!(navigation::plan(&context, Intent::Continue).unwrap(), b" ");
+    assert!(!context.allows_keepalive());
+    for intent in [
+        Intent::Forward,
+        Intent::Back,
+        Intent::NextPage,
+        Intent::First,
+    ] {
+        assert_eq!(navigation::plan(&context, intent), Err(Error::Unavailable));
+    }
+    for name in ["list", "reading_middle", "main_menu", "favorites"] {
+        assert_eq!(
+            navigation::plan(&page(name), Intent::Continue),
+            Err(Error::Unavailable)
+        );
+    }
+}
+
+#[test]
+fn pause_text_in_body_partial_footer_or_other_prompt_is_not_admitted() {
+    for edit in [
+        "\x1b[8;1H", // body cursor, even with the old pause footer present
+        "\x1b[24;1H\x1b[0m\x1b[2K請按任意鍵繼續\x1b[24;80H",
+        "\x1b[24;1H\x1b[37;44m\x1b[2K是否繼續？(y/N)\x1b[24;80H",
+        "\x1b[24;1H\x1b[37;44m\x1b[2K請按任意鍵繼續 請輸入密碼:\x1b[24;80H",
+        "\x1b[24;1H\x1b[37;44mX\x1b[24;80H",
+        "\x1b[31;", // incomplete control sequence
+    ] {
+        let mut screen = fixture("board_entry");
+        screen.feed(&encoding::encode(edit).unwrap());
+        unknown(&screen.frame());
+    }
+    let mut body = fixture("reading_middle");
+    body.feed(&encoding::encode("\x1b[8;1H\x1b[37;44m請按任意鍵繼續\x1b[0m\x1b[24;80H").unwrap());
+    assert!(matches!(
+        navigation::analyze(&body.frame()),
+        Context::ArticleReading { .. }
+    ));
+    let mut footer = fixture("board_entry");
+    footer.feed(b"\x1b[24;1H\xa4 \x1b[24;80H");
+    unknown(&footer.frame());
+}
 fn replace(screen: &mut Screen, row: usize, text: &str, sgr: &str) {
     screen.feed(
         &encoding::encode(&format!(

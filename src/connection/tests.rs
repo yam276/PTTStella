@@ -259,6 +259,12 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
         ("board_list", ["g", "g", "4", "j", "l"].as_slice()),
         ("article_list", ["h"].as_slice()),
     ]);
+    stages.extend([
+        ("continue_prompt", ["l"].as_slice()),
+        ("continue_prompt", ["Enter"].as_slice()),
+        ("continue_prompt", [" "].as_slice()),
+        ("article_list", ["j", "k", "h"].as_slice()),
+    ]);
     let mut operations = 0;
     for (profile, values) in stages {
         for &value in values {
@@ -292,10 +298,80 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
             assert_eq!(keyboard.status(&context).mode, "normal");
         }
     }
-    assert_eq!(operations, 34);
-    // Peer expects 34 translated operations including five board/article cycles, then
+    assert_eq!(operations, 40);
+    // Peer expects 40 translated operations including pause-to-dense-list browsing, then
     // Close. Literal Vim letters/control codes or extra input fail the join.
     connection.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn continue_prompt_rejects_duplicate_stale_and_wrong_context_requests() {
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(navigation_page("board_entry").into()))
+        .await
+        .unwrap();
+    let view = wait(&connection, |v| v.received > 0).await;
+    let stamp = view.stamp();
+    connection
+        .browse_key(stamp, Intent::Continue)
+        .await
+        .unwrap();
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b" ");
+    let pending = wait(&connection, |v| v.input_pending).await;
+    assert_eq!(
+        connection
+            .browse_key(stamp, Intent::Continue)
+            .await
+            .unwrap_err(),
+        navigation::Error::Stale.to_string()
+    );
+    assert_eq!(
+        connection
+            .browse_key(pending.stamp(), Intent::Continue)
+            .await
+            .unwrap_err(),
+        navigation::Error::AwaitingScreen.to_string()
+    );
+    assert!(timeout(Duration::from_millis(30), ws.next()).await.is_err());
+    ws.send(Message::Binary(navigation_page("list").into()))
+        .await
+        .unwrap();
+    let list = wait(&connection, |v| {
+        v.frame.revision > view.frame.revision && !v.input_pending
+    })
+    .await;
+    assert_eq!(
+        connection
+            .browse_key(stamp, Intent::Continue)
+            .await
+            .unwrap_err(),
+        navigation::Error::Stale.to_string()
+    );
+    assert_eq!(
+        connection
+            .browse_key(list.stamp(), Intent::Continue)
+            .await
+            .unwrap_err(),
+        navigation::Error::Unavailable.to_string()
+    );
+    assert!(timeout(Duration::from_millis(30), ws.next()).await.is_err());
+    connection
+        .browse_key(list.stamp(), Intent::Forward)
+        .await
+        .unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"\r"
+    );
+    let peer = tokio::spawn(async move {
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+        ws.flush().await.unwrap();
+    });
+    connection.shutdown().await.unwrap();
+    peer.await.unwrap();
 }
 
 #[tokio::test]

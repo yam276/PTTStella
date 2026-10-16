@@ -94,6 +94,8 @@ pub(super) fn window_page(stage: usize) -> Result<Vec<u8>, String> {
         5..=9 => "boards_caption",
         10..=14 => "favorites",
         15..=19 => "list_edge_cases",
+        34..=36 => "board_entry",
+        37..=39 => "list_edge_cases",
         _ if stage.is_multiple_of(2) => "boards_caption",
         _ => "list_edge_cases",
     };
@@ -103,8 +105,19 @@ pub(super) fn window_page(stage: usize) -> Result<Vec<u8>, String> {
             &crate::encoding::encode("\x1b[7;1H  \x1b[4;1H●").map_err(|e| e.to_string())?,
         );
     }
+    if (37..=39).contains(&stage) {
+        bytes.extend_from_slice(
+            format!("\x1b[18;1H 3\x1b[{};1H>", if stage == 38 { 5 } else { 4 }).as_bytes(),
+        );
+    }
     bytes.extend_from_slice(format!("\x1b[1;73Htest{stage:02}").as_bytes());
-    bytes.extend_from_slice(if name == "main_menu" {
+    bytes.extend_from_slice(if stage == 38 {
+        b"\x1b[5;1H"
+    } else if matches!(stage, 37 | 39) {
+        b"\x1b[4;1H"
+    } else if name == "board_entry" {
+        b"\x1b[24;80H"
+    } else if name == "main_menu" {
         b"\x1b[14;22H"
     } else if name == "boards_caption" && stage == 30 {
         b"\x1b[4;2H"
@@ -122,8 +135,12 @@ async fn window<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
-    for step in 0usize..34 {
+    for step in 0usize..40 {
         let expected: &[u8] = match step {
+            37 => b"\x1b[B",
+            38 => b"\x1b[A",
+            39 => b"\x1b[D",
+            34..=36 => b" ",
             30 => b"\x1b[H",
             31 => b"\x1b[B\x1b[B\x1b[B\x1b[B",
             32 => b"\r",

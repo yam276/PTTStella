@@ -19,6 +19,59 @@ fn key(value: &str) -> Key {
         repeat: false,
     }
 }
+
+#[test]
+fn continue_prompt_translates_once_and_holds_the_key_across_screen_changes() {
+    for value in [" ", "Enter", "l", "ArrowRight"] {
+        let mut keyboard = Keyboard::default();
+        keyboard.toggle();
+        let mut k = key(value);
+        assert_eq!(
+            keyboard.key(&k, &Context::ContinuePrompt),
+            Effect::Browse(Intent::Continue)
+        );
+        assert_eq!(keyboard.status(&Context::ContinuePrompt).mode, "normal");
+        assert!(!keyboard.accept_text(false));
+        assert_eq!(keyboard.key(&k, &Context::ContinuePrompt), Effect::None);
+        k.repeat = true;
+        assert_eq!(keyboard.key(&k, &Context::ContinuePrompt), Effect::None);
+        let list = Context::BoardList { first_row: 3 };
+        assert_eq!(keyboard.key(&k, &list), Effect::None);
+        assert!(!keyboard.accept_text(false));
+        keyboard.release(&k.code);
+        k.repeat = false;
+        assert_eq!(
+            keyboard.key(&k, &Context::ContinuePrompt),
+            Effect::Browse(Intent::Continue)
+        );
+    }
+    let mut keyboard = Keyboard::default();
+    keyboard.toggle();
+    for value in ["j", "k", "h", "g", "3", "y", "n"] {
+        assert!(matches!(
+            press(&mut keyboard, value, &Context::ContinuePrompt),
+            Effect::Notice(_)
+        ));
+        assert!(!keyboard.accept_text(false));
+    }
+    let mut control = key("l");
+    control.ctrl = true;
+    assert!(matches!(
+        keyboard.key(&control, &Context::ContinuePrompt),
+        Effect::Notice(_)
+    ));
+    let mut repeated = key("Enter");
+    repeated.repeat = true;
+    assert_eq!(
+        keyboard.key(&repeated, &Context::ContinuePrompt),
+        Effect::None
+    );
+    press(&mut keyboard, "i", &Context::ContinuePrompt);
+    assert_eq!(
+        press(&mut keyboard, "Enter", &Context::ContinuePrompt),
+        Effect::Native(vec![13])
+    );
+}
 #[test]
 fn cjk_input_source_uses_physical_keys_only_in_normal_mode() {
     let c = reading(24, 50);
