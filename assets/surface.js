@@ -9,6 +9,27 @@ const pasteDialog=document.getElementById("paste-dialog"), pasteSend=document.ge
 const exportButton=document.getElementById("export-png");
 const exportRows=document.getElementById("export-rows");
 const keepAlive=document.getElementById("keep-alive");
+const hoverPosition=document.getElementById("hover-position");
+let hoverPreference="top_right",hoverCandidate=null,hoverTimer=0,hoverSequence=0,pointerClient=null;
+function cancelHover(forget=false) {
+    clearTimeout(hoverTimer);hoverTimer=0;
+    const candidate=hoverCandidate;hoverCandidate=null;
+    if(forget)pointerClient=null;
+    media.hideHover();
+    if(candidate?.started&&!stopped)send({kind:"hover",sequence:candidate.sequence,stamp:candidate.stamp,index:null,trusted:true});
+}
+function previewHover(index) {
+    if(!pointerClient||hoverPreference==="off"||blocked()||dragging||hasSelection()||!latest?.connected||!latest.image_links.includes(index)) {cancelHover();return;}
+    const identity=JSON.stringify(latest.links[index]);
+    if(hoverCandidate?.identity===identity) {media.locate(pointerClient,hoverPreference);return;}
+    cancelHover();
+    const candidate={identity,index,sequence:++hoverSequence,stamp:stamp(),started:false,trusted:pointerClient.trusted};hoverCandidate=candidate;
+    hoverTimer=setTimeout(()=>{hoverTimer=0;
+        if(stopped||hoverCandidate!==candidate||blocked()||dragging||!document.hasFocus()||!sameStamp(candidate.stamp,stamp()))return;
+        candidate.started=true;send({kind:"hover",sequence:candidate.sequence,stamp:candidate.stamp,index:candidate.index,trusted:candidate.trusted});
+    },350);
+}
+function changeHoverPreference(e){send({kind:"hover_preference",position:hoverPosition.value,trusted:e.isTrusted});}
 const vimToggle=document.getElementById("vim-toggle"),vimOnce=document.getElementById("vim-once"),vimStatus=document.getElementById("vim-status");
 let keyboardState={enabled:false,mode:"input",pending:false,prefix:""};
 function policy(action,e,code="") {send({kind:"keyboard_state",action,code,generation,trusted:e?.isTrusted??true});}
@@ -68,6 +89,7 @@ const keys={Enter:[13],Backspace:[8],Tab:[9],Escape:[27],ArrowUp:[27,91,65],Arro
     ArrowRight:[27,91,67],ArrowLeft:[27,91,68],Home:[27,91,72],End:[27,91,70],
     PageUp:[27,91,53,126],PageDown:[27,91,54,126],Delete:[27,91,51,126]};
 function keydown(e) {
+    cancelHover(true);
     if(pastePending) {e.preventDefault();return;}
     // Older WebKit can end composition before its confirming keydown. That
     // event still carries 229 even though isComposing is already false.
@@ -89,6 +111,7 @@ function keydown(e) {
     }
 }
 function input(e) {
+    cancelHover(true);
     if(pastePending) {keyboard.value="";return;}
     if(composing||e.isComposing) {
         if(composition) {composition.editTrusted=e.isTrusted;composition.editText=keyboard.value;}
@@ -112,6 +135,7 @@ function beforeinput(e) {
     if(lineBreak(e)&&!composing&&!e.isComposing) e.preventDefault();
 }
 function compositionstart(e) {
+    cancelHover(true);
     inputKey=false;
     policy("composition_start",e);
     clearSelection();composing=true;
@@ -161,6 +185,9 @@ function pointerdown(e) {
     // Prevent the scroll container's default focus step from overriding ours.
     e.preventDefault(); focus(); clearSelection();
     const point=cellAt(e,false);
+    const hit=hitAt(point);
+    if(hit?.kind!=="link"||hoverCandidate?.index!==hit.index)cancelHover();
+    else if(!hoverCandidate.started)cancelHover();
     if(point&&!composing) {
         dragging={anchor:point,x:e.clientX,y:e.clientY,moved:false,pointer:e.pointerId,hit:hitAt(point),stamp:stamp()};
         viewport.setPointerCapture(e.pointerId);
@@ -177,9 +204,11 @@ function cellAt(e,clamp) {
     return {col:locate(px,latest.frame.cols,grid.x),row:locate(py,latest.frame.rows,grid.y)};
 }
 function pointermove(e) {
+    pointerClient={x:e.clientX,y:e.clientY,clientX:e.clientX,clientY:e.clientY,trusted:e.isTrusted};media.locate(pointerClient,hoverPreference);
     if(dragging&&e.pointerId!==dragging.pointer) return;
     if(!dragging) {setHover(cellAt(e,false));return;}
     dragging.moved ||= Math.hypot(e.clientX-dragging.x,e.clientY-dragging.y)>3;
+    if(dragging.moved)cancelHover();
     if(dragging.moved) requestSelection({mode:"range",anchor:dragging.anchor,focus:cellAt(e,true)});
 }
 function pointerup(e) {
@@ -208,9 +237,9 @@ function cancelDrag() {
     surface.dataset.pointerActive="false";
     refreshKeepAlive();
 }
-function pointercancel(){released=null;cancelDrag();clearSelection();}
-function deactivate(e){policy("reset",e);released=null;cancelDrag();setHover(null);cancelComposition();}
-function lostcapture(){if(dragging){dragging=null;released=null;surface.dataset.pointerActive="false";refreshKeepAlive();}}
+function pointercancel(){cancelHover(true);released=null;cancelDrag();clearSelection();}
+function deactivate(e){cancelHover(true);policy("reset",e);released=null;cancelDrag();setHover(null);cancelComposition();}
+function lostcapture(){if(dragging){cancelHover();dragging=null;released=null;surface.dataset.pointerActive="false";refreshKeepAlive();}}
 function hasSelection(){return selectionActive;}
 function clearSelection() {
     selectionActive=false;selectionFingerprint=null;selectionNext=null;selectionCache=null;selectionLayer.replaceChildren();
@@ -219,6 +248,7 @@ function clearSelection() {
     refreshExportControls();
 }
 function requestSelection(selection) {
+    cancelHover(true);
     setHover(null);
     const fingerprint=JSON.stringify({generation,revision,selection});
     if(fingerprint===selectionFingerprint) return;
@@ -280,12 +310,13 @@ function hitAt(point) {
     const article=latest.navigation.articles.find(a=>a.row===point.row&&a.start<=point.col&&point.col<a.end);
     return article?{kind:"article",row:article.row}:null;
 }
-function setHover(point,redraw=true) {
+function setHover(point,redraw=true,preview=true) {
     const hit=hitAt(point),index=hit?.kind==="link"?hit.index:-1;
     const changed=index!==hoveredLink;hoveredLink=index;
     hoveredArticle=hit?.kind==="article"?latest.navigation.articles.find(a=>a.row===hit.row):null;
     canvas.style.cursor=hit?"pointer":"default";
     canvas.title=index>=0?latest.links[index].url+"\n點擊開啟；右鍵選取後可複製":hoveredArticle?"點擊編號開啟文章；拖曳可選字":"";
+    if(preview)previewHover(index);
     if(changed&&redraw&&latest) draw(latest);else drawNavigationMarker();
 }
 function drawNavigationMarker() {
@@ -316,7 +347,7 @@ function navigate(intent,e) {
     surface.dataset.navigationResult="pending";send({kind:"navigate",stamp:stamp(),intent,trusted:e.isTrusted});focus();
 }
 const browseReturn=e=>navigate({action:"back"},e),browseUp=e=>navigate({action:"previous_page"},e),browseDown=e=>navigate({action:"next_page"},e);
-const leaveLink=()=>setHover(null);
+const leaveLink=()=>{if(!dragging){cancelHover(true);setHover(null);}};
 function selectLink(e) {
     const index=linkAt(cellAt(e,false));
     if(index<0||composing) return;
@@ -326,6 +357,7 @@ function selectLink(e) {
 }
 function activate() { if(!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); }
 function paste(e) {
+    cancelHover(true);
     e.preventDefault();
     if(pastePending||pasteDialog.open) return;
     if(keyboardState.enabled&&keyboardState.mode!=="input") {policy("reset",e);surfaceNote.textContent="請先按 i 切換原始輸入再貼上";return;}
@@ -337,7 +369,7 @@ function paste(e) {
 }
 function confirmPaste(e){sendInput({kind:"paste_confirm",trusted:e.isTrusted});}
 function cancelPaste(e){e.preventDefault();send({kind:"paste_cancel",trusted:e.isTrusted});}
-function openFonts(e){policy("reset",e);send({kind:"settings_open",trusted:e.isTrusted});}
+function openFonts(e){cancelHover(true);policy("reset",e);send({kind:"settings_open",trusted:e.isTrusted});}
 function fillFonts(values) {
     for(const [name,field] of Object.entries(fontFields)) field.value=values[name];
 }
@@ -438,6 +470,7 @@ function zoomTo(value) {
     viewport.scrollTop=Math.max(0,(surface.offsetHeight-viewport.clientHeight)/2); focus();
 }
 function wheel(e) {
+    cancelHover(true);
     if(!e.deltaY||e.altKey||e.metaKey||e.shiftKey) return;
     if(e.ctrlKey) {e.preventDefault();zoomTo(zoom+(e.deltaY<0?.25:-.25));return;}
     if(blocked()||dragging||hasSelection()||viewport.scrollWidth>viewport.clientWidth+1||viewport.scrollHeight>viewport.clientHeight+1) return;
@@ -448,7 +481,7 @@ function wheel(e) {
     navigate({action},e);
 }
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
-const media=installMedia({send,prepare:()=>{cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshNavigation,restore:restoreEditingFocus});
+const media=installMedia({send,prepare:()=>{cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshNavigation,restore:restoreEditingFocus});
 const bindings=[
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
@@ -464,6 +497,7 @@ const bindings=[
     [pasteSend,"click",confirmPaste],[pasteCancel,"click",cancelPaste],[pasteDialog,"cancel",cancelPaste],
     [exportButton,"click",exportScreen],[exportRows,"click",exportSelected],
     [keepAlive,"click",toggleKeepAlive],
+    [hoverPosition,"change",changeHoverPreference],
     [browseBack,"click",browseReturn],[browsePrevious,"click",browseUp],[browseNext,"click",browseDown],
     [fontButton,"click",openFonts],[fontPreset,"change",chooseFontPreset],
     [profileImport,"click",importProfile],[profileExport,"click",exportProfile],
@@ -556,7 +590,7 @@ function render(target,packet,{cursor=true,hovered=-1}={}) {
 }
 function repaint() {
     if(stopped||!latest||animation) return;
-    animation=requestAnimationFrame(()=>{animation=0;if(!stopped) draw(latest);});
+    animation=requestAnimationFrame(()=>{animation=0;if(!stopped) {draw(latest);if(pointerClient)setHover(cellAt(pointerClient,false),false);}});
 }
 const observer=new ResizeObserver(repaint); observer.observe(viewport);
 function checkArt({x,y}) {
@@ -606,13 +640,20 @@ async function paint(packet) {
     if(packet.generation<generation||(packet.generation===generation&&packet.frame.revision<revision)) return;
     await loadFonts(packet.settings);
     const changed=!sameStamp(stamp(),{generation:packet.generation,revision:packet.frame.revision,input_epoch:packet.input_epoch});
-    if(changed||latest?.input_pending&&!packet.input_pending) {released=null;clearSelection();cancelDrag();setHover(null,false);navigationLocked=false;}
+    if(changed||latest?.input_pending&&!packet.input_pending) {released=null;clearSelection();cancelDrag();setHover(null,false,false);navigationLocked=false;}
     if(packet.generation!==generation){
         pastePending=false;cancelComposition();focus();
     }
     const previousFailure=latest?.keep_alive_failure;
     const failureChanged=packet.keep_alive_failure!==previousFailure;
     generation=packet.generation;revision=packet.frame.revision;latest=packet;
+    if(changed&&hoverCandidate) {
+        const lease=packet.hover,candidate=hoverCandidate;
+        if(candidate.started&&lease?.sequence===candidate.sequence&&sameStamp(lease.stamp,stamp())&&JSON.stringify(lease.link)===candidate.identity&&linkAt(cellAt(pointerClient,false))===lease.index) {
+            candidate.stamp=lease.stamp;candidate.index=lease.index;
+        } else cancelHover();
+    }
+    if(pointerClient)setHover(cellAt(pointerClient,false),false);
     if(failureChanged) {
         if(packet.keep_alive_failure) surfaceNote.textContent=packet.keep_alive_failure;
         else if(surfaceNote.textContent===previousFailure) surfaceNote.textContent="";
@@ -629,6 +670,12 @@ focus();
 try {
     while(true){const packet=await dioxus.recv();if(packet.stop) break;
         if(packet.keyboard_state){receiveKeyboard(packet.keyboard_state);continue;}
+        if(packet.hover_settings){hoverPreference=packet.hover_settings;hoverPosition.value=hoverPreference;
+            surface.dataset.hoverPosition=hoverPreference;
+            if(hoverPreference==="off")cancelHover(true);else if(pointerClient)media.locate(pointerClient,hoverPreference);continue;}
+        if(packet.media_hover){if(hoverCandidate?.sequence===packet.media_hover.sequence){media.hover(packet.media_hover);media.locate(pointerClient,hoverPreference);}continue;}
+        if(packet.hover_reset){cancelHover();continue;}
+        if(packet.hover_rejected){if(hoverCandidate?.sequence===packet.hover_rejected)cancelHover();continue;}
         if(packet.media_open){media.open(packet.media_open);continue;}
         if(packet.media_image){media.receiveImage(packet.media_image);continue;}
         if(packet.media_error){media.fail(packet.media_error);continue;}
@@ -677,6 +724,7 @@ try {
     }
 } catch(e){send({kind:"error",message:String(e)});}
 finally {
+    cancelHover(true);
     stopped=true;latest=null;observer.disconnect();pasteObserver.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
     const mediaClean=await media.destroy();
     clearTimeout(fontTimer);fontTimer=0;fontPreviewNext=null;
@@ -695,5 +743,5 @@ finally {
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
     send({kind:"stopped",clean:mediaClean&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
-        &&fontTimer===0&&!fontDialog.open&&!chrome.classList.contains("open")&&document.activeElement!==keyboard});
+        &&fontTimer===0&&hoverTimer===0&&hoverCandidate===null&&!fontDialog.open&&!chrome.classList.contains("open")&&document.activeElement!==keyboard});
 }

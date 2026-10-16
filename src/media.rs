@@ -1,6 +1,7 @@
 //! Media is derived from validated links, never from a second BBS parser.
 use serde::Serialize;
 use url::Url;
+pub mod hover;
 
 #[cfg(feature = "desktop")]
 pub mod loader;

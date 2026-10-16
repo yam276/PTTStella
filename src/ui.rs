@@ -5,11 +5,17 @@ use pttstella::{
     encoding, export,
     input::{self, PreparedPaste},
     links::{self, Link},
-    media::{self, preview::Preview},
+    media::{
+        self,
+        hover::Lease as HoverLease,
+        preview::{Presentation, Preview},
+    },
     navigation::{self, Context, Intent, Stamp},
     screen::{Frame, Screen},
     selection::{self, Selection},
-    settings::{AppSettings, DisplayProfile, DisplaySettings, PortableProfile, store::Store},
+    settings::{
+        AppSettings, DisplayProfile, DisplaySettings, HoverPosition, PortableProfile, store::Store,
+    },
     storage,
     vim::{self, Effect},
 };
@@ -26,6 +32,8 @@ pub struct AppProps {
 
 #[derive(Clone, Serialize)]
 struct Paint {
+    image_links: Vec<usize>,
+    hover: Option<HoverLease>,
     keep_alive: bool,
     keep_alive_ready: bool,
     keep_alive_sent: u64,
@@ -61,6 +69,16 @@ enum MediaAction {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum SurfaceEvent {
+    Hover {
+        sequence: u64,
+        stamp: Stamp,
+        index: Option<usize>,
+        trusted: bool,
+    },
+    HoverPreference {
+        position: HoverPosition,
+        trusted: bool,
+    },
     KeyboardState {
         action: String,
         #[serde(default)]
@@ -201,6 +219,8 @@ fn preview(probe: bool, media_origin: Option<&str>) -> Result<Vec<u8>, String> {
     if probe {
         if let Some(origin) = media_origin {
             for (row, path) in [
+                (1, "hover.png"),
+                (2, "hover-slow.png"),
                 (5, "colours.jpg"),
                 (6, "colours.webp"),
                 (8, "colours.png"),
@@ -212,6 +232,7 @@ fn preview(probe: bool, media_origin: Option<&str>) -> Result<Vec<u8>, String> {
                 bytes.extend_from_slice(format!("\x1b[{row};1H\x1b[2K{origin}/{path} ").as_bytes());
             }
             bytes.extend_from_slice(b"\x1b[18;1Hhttps://youtu.be/Abc_12-dEF0 ");
+            bytes.extend_from_slice(format!("\x1b[23;45H{origin}/hover.png ").as_bytes());
         }
         let solid = encoding::encode("█").map_err(|e| e.to_string())?;
         bytes.extend_from_slice(b"\x1b[12;1Hhttps://example.com/pttstella");
@@ -334,6 +355,14 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "export-png", "匯出 PNG" }
                 button { id: "export-rows", disabled: true, title: "先拖曳選取要截圖的行", "選取行 PNG" }
                 button { id: "font-settings", "字型" }
+                label { title: "滑過圖片連結會載入小預覽",
+                    "圖片預覽 "
+                    select { id: "hover-position", "aria-label": "滑過圖片連結時的預覽位置",
+                        option { value: "top_right", "右上" }
+                        option { value: "follow_cursor", "跟隨游標" }
+                        option { value: "off", "關閉" }
+                    }
+                }
                 button { id: "vim-toggle", "aria-pressed": "false", "Vim：關" }
                 button { id: "vim-once", hidden: true, "原生一次 (f)" }
                 output { id: "vim-status", role: "status" }
@@ -396,6 +425,10 @@ pub fn app(props: AppProps) -> Element {
                 p { id: "media-url" }
                 output { id: "media-status", role: "status" }
                 div { id: "media-viewport" }
+            }
+            aside { id: "media-hover", hidden:true, "aria-hidden":"true",
+                output { id: "media-hover-status" }
+                div { id: "media-hover-viewport" }
             }
             dialog { id: "font-dialog", class: "paste-preview font-dialog", "aria-labelledby": "font-title",
                 h2 { id: "font-title", "字型與顯示" }
@@ -461,6 +494,7 @@ async fn surface(
     .concat();
     let mut eval = document::eval(&script);
     let mut media_preview = Preview::default();
+    let mut hover_lease: Option<HoverLease> = None;
     let mut keyboard_policy = vim::Keyboard::default();
     let mut keyboard_generation = 0;
     let mut media_external = 0;
@@ -469,6 +503,8 @@ async fn surface(
     let mut painting = paint(&first, false, &settings);
     let mut displayed: Option<Paint> = None;
     eval.send(&painting).map_err(|e| e.to_string())?;
+    eval.send(serde_json::json!({"hover_settings":app_settings.hover}))
+        .map_err(|e| e.to_string())?;
     if let Some(warning) = &settings_warning {
         eval.send(serde_json::json!({"notice":warning}))
             .map_err(|e| e.to_string())?;
@@ -555,6 +591,10 @@ async fn surface(
                 && view.received > 0;
             probe_started |= run_probe;
             painting = paint(&view, run_probe, &settings);
+            painting.hover = hover_lease
+                .as_ref()
+                .filter(|lease| lease.stamp == view.stamp())
+                .cloned();
             eval.send(&painting).map_err(|e| e.to_string())?;
             in_flight = Some((view.generation, view.frame.revision));
             dirty = false;
@@ -575,6 +615,35 @@ async fn surface(
                 }
             },
             event = eval.recv::<SurfaceEvent>() => match event.map_err(|e| e.to_string())? {
+                SurfaceEvent::HoverPreference {position,trusted} => {
+                    if stopping || !trusted {continue;}
+                    let mut draft=app_settings.clone();draft.hover=position;
+                    match store.as_ref().map_err(Clone::clone).and_then(|store|store.save(draft)) {
+                        Ok(saved)=>{app_settings=saved;},
+                        Err(error)=>{eval.send(serde_json::json!({"notice":error})).map_err(|e|e.to_string())?;},
+                    }
+                    if app_settings.hover==HoverPosition::Off && hover_lease.take().is_some() {media_preview.close();eval.send(serde_json::json!({"hover_reset":true})).map_err(|e|e.to_string())?;}
+                    eval.send(serde_json::json!({"hover_settings":app_settings.hover})).map_err(|e|e.to_string())?;
+                },
+                SurfaceEvent::Hover {sequence,stamp,index,trusted} => {
+                    if stopping {continue;}
+                    let Some(index)=index else {
+                        if hover_lease.as_ref().is_some_and(|lease|lease.sequence==sequence) {hover_lease=None;media_preview.close();}
+                        continue;
+                    };
+                    let view=receiver.borrow().clone();
+                    let link=displayed.as_ref().filter(|p|p.generation==stamp.generation && p.frame.revision==stamp.revision && p.input_epoch==stamp.input_epoch).and_then(|p|p.links.get(index));
+                    let target=link.and_then(|link|media::classify(&link.url).ok().flatten()).filter(|target|target.kind==media::Kind::Image);
+                    if !trusted || app_settings.hover==HoverPosition::Off || view.stamp()!=stamp || view.phase!=Phase::Connected || !view.frame.control_complete || target.is_none()
+                        || media_preview.active().is_some_and(|active|active.presentation==Presentation::Inspect) {
+                        eval.send(serde_json::json!({"hover_rejected":sequence})).map_err(|e|e.to_string())?;continue;
+                    }
+                    if let (Some(link),Some(target))=(link,target) {
+                        let active=media_preview.hover(stamp.generation,target)?;
+                        hover_lease=Some(HoverLease{sequence,stamp,index,link:link.clone()});
+                        eval.send(serde_json::json!({"media_hover":{"sequence":sequence,"request":active.request,"target":active.target,"position":app_settings.hover}})).map_err(|e|e.to_string())?;
+                    }
+                },
                 SurfaceEvent::KeyboardState {action,code,generation,trusted} => {
                     // Ending an owned edit only revokes permission; WebView CDP can
                     // report its compositionend as untrusted, including cancellation.
@@ -734,6 +803,7 @@ async fn surface(
                                     }
                                 }
                                 let active = media_preview.open(generation,target)?;
+                                hover_lease=None;
                                 eval.send(serde_json::json!({"media_open":{"request":active.request,"target":active.target}})).map_err(|e| e.to_string())?;
                                 continue;
                             },
@@ -968,6 +1038,10 @@ async fn surface(
             changed = receiver.changed() => {
                 changed.map_err(|e| e.to_string())?;
                 let view = receiver.borrow_and_update().clone();
+                if hover_lease.as_mut().is_some_and(|lease|!lease.renew(view.stamp(),view.phase==Phase::Connected && view.frame.control_complete,&links::detect(&view.frame))) {
+                    hover_lease=None;media_preview.close();
+                    eval.send(serde_json::json!({"hover_reset":true})).map_err(|e|e.to_string())?;
+                }
                 if keyboard_generation!=view.generation {keyboard_policy.reset();keyboard_generation=view.generation;}
                 keyboard_policy.context(&navigation::analyze(&view.frame));
                 eval.send(serde_json::json!({"keyboard_state":keyboard_policy.status(&navigation::analyze(&view.frame))})).map_err(|e|e.to_string())?;
@@ -1002,7 +1076,21 @@ async fn surface(
 }
 
 fn paint(view: &View, probe: bool, settings: &DisplaySettings) -> Paint {
+    let links = links::detect(&view.frame);
+    let image_links = links
+        .iter()
+        .enumerate()
+        .filter_map(|(index, link)| {
+            media::classify(&link.url)
+                .ok()
+                .flatten()
+                .filter(|target| target.kind == media::Kind::Image)
+                .map(|_| index)
+        })
+        .collect();
     Paint {
+        image_links,
+        hover: None,
         keep_alive: view.keep_alive,
         keep_alive_ready: view.keep_alive_ready,
         keep_alive_sent: view.keep_alive_sent,
@@ -1012,7 +1100,7 @@ fn paint(view: &View, probe: bool, settings: &DisplaySettings) -> Paint {
         connected: view.phase == Phase::Connected,
         navigation: navigation::analyze(&view.frame),
         settings: settings.clone(),
-        links: links::detect(&view.frame),
+        links,
         frame: view.frame.clone(),
         generation: view.generation,
         probe,
@@ -1021,6 +1109,8 @@ fn paint(view: &View, probe: bool, settings: &DisplaySettings) -> Paint {
 
 fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint {
     Paint {
+        image_links: Vec::new(),
+        hover: None,
         keep_alive: false,
         keep_alive_ready: false,
         keep_alive_sent: 0,

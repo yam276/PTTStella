@@ -12,8 +12,9 @@ def run(d,output,edit_field,open_fonts):
         d.click('#profile-'+name)
         d.wait('document.getElementById("font-dialog").dataset.profileResult === '+repr(result),'profile '+name+' did not '+result)
     def choose_windows():
-        d.click('#font-preset')
-        for value,vk in [('Home',36),('ArrowDown',40),('ArrowDown',40),('Enter',13)]:
+        # Focus a closed select; CDP cannot reliably drive the OS popup it opens.
+        d.evaluate('document.getElementById("font-preset").focus()')
+        for value,vk in [('Home',36),('ArrowDown',40),('ArrowDown',40)]:
             for kind in ('keyDown','keyUp'):
                 d.call('Input.dispatchKeyEvent',type=kind,key=value,code=value,windowsVirtualKeyCode=vk)
         d.wait('document.getElementById("font-preset").value === "windows"','Windows preset could not be selected')

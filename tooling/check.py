@@ -213,7 +213,7 @@ def unavailable(profile):
 
 def run_core(root):
     needed = ('Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'tests/screen.rs',
-              'tests/interaction.rs', 'tests/navigation.rs', 'tests/media.rs', 'tests/fixtures/dual-color.json', 'tests/fixtures/redraw.json', 'tests/fixtures/navigation.json')
+              'tests/interaction.rs', 'tests/navigation.rs', 'tests/media.rs', 'tests/vim.rs', 'tests/profiles.rs', 'tests/fixtures/dual-color.json', 'tests/fixtures/redraw.json', 'tests/fixtures/navigation.json')
     if any(not (root / path).is_file() for path in needed) or not shutil.which('cargo'):
         return {'profile': 'core', 'status': 'not_ready', 'reason': 'Missing pinned Rust product, corpus or cargo.'}
     try:
@@ -243,7 +243,7 @@ def run_core(root):
 
 
 def run_desktop(root):
-    if any(not (root / path).is_file() for path in ('src/main.rs', 'tooling/desktop_input.py', 'tooling/desktop_media.py', 'assets/media.js', 'tests/fixtures/media/colours.png', 'tests/fixtures/media/motion.gif', 'tooling/desktop_capture.py', 'tooling/desktop_navigation.py', 'tooling/inspect_png.ps1')) or not shutil.which('cargo'):
+    if any(not (root / path).is_file() for path in ('src/main.rs', 'tooling/desktop_input.py', 'tooling/desktop_media.py', 'tooling/desktop_hover.py', 'tooling/desktop_profiles.py', 'tooling/desktop_vim.py', 'assets/media.js', 'tests/fixtures/media/colours.png', 'tests/fixtures/media/motion.gif', 'tooling/desktop_capture.py', 'tooling/desktop_navigation.py', 'tooling/inspect_png.ps1')) or not shutil.which('cargo'):
         return unavailable('desktop')
     if sys.platform != 'win32':
         return {'profile': 'desktop', 'status': 'not_ready', 'reason': 'Physical probe has only been verified on Windows.'}
@@ -279,6 +279,11 @@ def run_desktop(root):
                 input_report = desktop_input.run(port, process, output, media_server)
                 if input_report.get('media',{}).get('status') != 'passed':
                     raise CheckFailure('real media interaction did not run')
+                for feature in ('display_profiles','hover_preview'):
+                    if input_report.get(feature,{}).get('status')!='passed':
+                        raise CheckFailure('real '+feature+' interaction did not run')
+                if input_report.get('mouse_navigation',{}).get('vim',{}).get('status')!='passed':
+                    raise CheckFailure('real Vim browsing interaction did not run')
                 if input_report.get('png_geometry_and_pixels') is not True:
                     raise CheckFailure('independent PNG inspection did not run')
                 if input_report.get('selected_rows_png', {}).get('status') != 'passed':

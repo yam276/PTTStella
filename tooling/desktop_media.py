@@ -26,7 +26,7 @@ class FixtureServer:
                 with owner.lock:
                     owner.counts[path] = owner.counts.get(path, 0) + 1
                     count = owner.counts[path]
-                if path == '/slow.png':
+                if path in ('/slow.png','/hover-slow.png'):
                     self.send_response(200)
                     self.send_header('Content-Length', '100000')
                     self.end_headers()
@@ -40,6 +40,7 @@ class FixtureServer:
                     return
                 body, mime = {
                     '/colours.png': ((FIXTURES / 'colours.png').read_bytes(), 'image/png'),
+                    '/hover.png': ((FIXTURES / 'colours.png').read_bytes(), 'image/png'),
                     '/motion.gif': ((FIXTURES / 'motion.gif').read_bytes(), 'image/gif'),
                     '/movie.webm': (owner.video, 'video/webm'),
                     '/colours.jpg': (owner.jpeg, 'image/jpeg'),
