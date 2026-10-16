@@ -12,6 +12,45 @@ use tokio_tungstenite::tungstenite::{
 pub(super) enum Scenario {
     Desktop { reload_settings: bool },
     Window,
+    Login,
+}
+
+pub(super) fn login_page() -> Result<Vec<u8>, String> {
+    crate::encoding::encode("\x1b[2J\x1b[1;1HPTTStella 合成登入頁（本機測試）\x1b[21;1H請輸入代號，或以 guest 參觀，或以 new 註冊: ").map_err(|e|e.to_string())
+}
+
+pub(super) fn password_page() -> Result<Vec<u8>, String> {
+    crate::encoding::encode("\x1b[21;1H請輸入代號，或以 guest 參觀，或以 new 註冊: StellaTest\x1b[22;1H請輸入您的密碼: ").map_err(|e|e.to_string())
+}
+
+async fn login<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result<(), String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"StellaTest\r")
+    {
+        return Err("synthetic login account mismatch".into());
+    }
+    let bytes = password_page()?;
+    for chunk in bytes.chunks(3) {
+        socket
+            .send(Message::Binary(chunk.to_vec().into()))
+            .await
+            .map_err(|e| e.to_string())?;
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"synthetic+42\r")
+    {
+        return Err("synthetic login password mismatch".into());
+    }
+    socket
+        .send(Message::Binary(navigation_page("main_menu")?.into()))
+        .await
+        .map_err(|e| e.to_string())?;
+    match socket.next().await {
+        Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e| e.to_string()),
+        _ => Err("synthetic login received extra input instead of Close".into()),
+    }
 }
 
 pub(super) fn window_page(stage: usize) -> Result<Vec<u8>, String> {
@@ -78,7 +117,7 @@ pub(super) async fn serve(
     bytes: Vec<u8>,
     scenario: Scenario,
 ) -> Result<(), String> {
-    let deadline = if matches!(scenario, Scenario::Window) {
+    let deadline = if matches!(scenario, Scenario::Window | Scenario::Login) {
         300
     } else {
         90
@@ -94,6 +133,9 @@ pub(super) async fn serve(
             .map_err(|e| e.to_string())?;
         if matches!(scenario, Scenario::Window) {
             return window(&mut socket).await;
+        }
+        if matches!(scenario, Scenario::Login) {
+            return login(&mut socket).await;
         }
         if matches!(
             scenario,

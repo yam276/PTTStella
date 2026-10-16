@@ -76,6 +76,8 @@ ANSI 調色盤以合成完整方塊的實際 RGB 檢查，與獨立 expected 比
 
 macOS 本機 `.app` 的建立入口為 `python3 tooling/bundle_macos.py`，細節見 [打包說明](docs/macos-app.md)。打包變更須跑 docs、diff 檢查並在 Mac 實際建立 release app，確認 plist、系統依賴與 ad-hoc 簽章；本機資源政策仍包住整個腳本。`bundled` 只代表產物完成，不能當作 desktop gate 或人工登入通過。
 
+登入變更須跑 core login suite、desktop lib 的精確收送／取消／期限／重連案例，並在 macOS 以 `--probe-login OUTPUT_DIRECTORY` 操作自製帳密，驗證鑰匙圈保存、第二程序取用與移除；probe 只使用獨立的 synthetic service，不得放入私人帳密。關閉後檢查 `login-probe.json` 及 worker／listener 清理。實站登入由使用者直接在 App 輸入，另行驗收，不能以本機往返結案。
+
 ## 資產與提交
 
 資產與依賴須有來源、授權與版本；合成 fixture 保存獨立 expected。提交前檢查實際 diff，維持獨立 checkout 可建置及驗證。

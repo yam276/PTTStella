@@ -21,7 +21,7 @@ manual keyboard input → session-owned send queue → connection
 | input | 共用編碼後 bytes 上限；貼上換行、控制字元與完整預檢；預覽保留正規化文字及相同送出 bytes |
 | text／navigation | 共用完整字形到 UTF-8／cell 的投影；保守辨識列表與閱讀畫面，產生 typed 瀏覽意圖及有限的送鍵計畫 |
 | render | 完整字形、固定幾何、左右樣式及 frame ID，不重解 raw stream |
-| transport／session | framing、收送、取消、斷線與 generation；不辨識文章／登入流程 |
+| transport／session | framing、收送、取消、斷線與 generation；Connection owner 依共享 reducer 規劃導覽及明確單次登入，傳輸本身不解析畫面 |
 | UI | 連線控制、terminal surface、必要焦點／按鍵、顯示及可見錯誤 |
 | media／preview | URL 分類、單一預覽 request／generation、下載 future、解碼確認與有界 LRU；不解讀 BBS 原始 bytes |
 | TLS | 為 WSS 與圖片 HTTP client 建立各自的系統信任根／明確 provider 設定，不安裝全域 provider |
@@ -43,3 +43,5 @@ UI 正常掛載後只發起一次預設 PTT WSS 連線；合成 probe 只連本�
 Connection 同時擁有防閒置的單調時鐘、預設開啟狀態、UI watch 許可及自動刷新等待。UI 僅回報本機操作是否允許，不建立自己的 timer；owner 核對當前 Screen、session／輸入版本及等待狀態後才送一次刷新。手動輸入與自動刷新以不同 PendingInput 變體管理，只有自動等待會因無回應而逾時釋放並停用保活。規則與公開站端來源推論見 [保活契約](keepalive.md)。
 
 媒體依 [預覽契約](media.md) 在 dialog 內顯示。Rust Preview 擁有可取消的 HTTP future 與待解碼內容，關閉／換 session 只有一個清理入口；沒有 detached 下載 task。JS 收到通過格式／尺寸／動畫容量檢查的 bytes 後建立 Blob URL，由 WebView 解碼，成功回報後才保留快取；失敗內容不得造成重試一直命中壞圖。JS owner 註冊／移除自己的 listener 與 ResizeObserver，關閉時撤銷 Blob URL、停止 video、移除來源並清空 canvas；本機轉換／播放 promise 在結束時等待完成。影片使用獨立串流來源，不塞進圖片 cache。BBS canvas、輸入、PNG 與媒體渲染不共用解碼鎖或排版狀態。
+
+按鈕登入的 prompt／容量屬 login 核心，Connection 擁有單次等待與送出，Keychain worker 擁有 OS 存取與清理；UI 不接收已存密碼。安全儲存與驗證邊界見 [登入契約](login.md)。

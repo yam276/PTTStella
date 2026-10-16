@@ -1,6 +1,7 @@
-//! One PTT connection owner. No login automation, credentials storage or shell.
+//! One PTT connection owner, including explicit single-attempt login. No shell.
 use crate::{
     input::MAX_INPUT_BYTES,
+    login::{self, Credentials, Prompt},
     navigation::{self, Intent, Stamp},
     screen::{Frame, Screen},
     telnet,
@@ -41,6 +42,7 @@ pub struct View {
     pub keep_alive_failure: Option<String>,
     pub input_epoch: u64,
     pub input_pending: bool,
+    pub login_pending: bool,
     pub frame: Frame,
     pub generation: u64,
     pub phase: Phase,
@@ -64,6 +66,12 @@ enum Command {
         generation: u64,
         bytes: Vec<u8>,
     },
+    Login {
+        stamp: Stamp,
+        credentials: Credentials,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
+    CancelLogin,
     Navigate {
         stamp: Stamp,
         intent: Intent,
@@ -123,6 +131,7 @@ impl Connection {
             keep_alive_failure: None,
             input_epoch: 0,
             input_pending: false,
+            login_pending: false,
             frame: screen.frame(),
             generation: 0,
             phase: Phase::Disconnected,
@@ -149,6 +158,9 @@ impl Connection {
         let connection = Self::start_owned_probe(probe::window_page(0)?, probe::Scenario::Window)?;
         connection.keep_alive(false)?;
         Ok(connection)
+    }
+    pub fn start_login_probe() -> Result<Self, String> {
+        Self::start_owned_probe(probe::login_page()?, probe::Scenario::Login)
     }
     fn start_owned_probe(bytes: Vec<u8>, scenario: probe::Scenario) -> Result<Self, String> {
         let runtime = tokio::runtime::Handle::try_current().map_err(|e| e.to_string())?;
@@ -185,6 +197,21 @@ impl Connection {
             return Err("輸入長度超過限制".into());
         }
         self.enqueue(Command::Input { generation, bytes })
+    }
+    pub async fn login(&self, stamp: Stamp, credentials: Credentials) -> Result<(), String> {
+        let (reply, answer) = oneshot::channel();
+        self.enqueue(Command::Login {
+            stamp,
+            credentials,
+            reply,
+        })?;
+        timeout(Duration::from_secs(6), answer)
+            .await
+            .map_err(|_| "登入送出結果未確認；不會重試".to_owned())?
+            .map_err(|_| "登入服務未回覆".to_owned())?
+    }
+    pub fn cancel_login(&self) -> Result<(), String> {
+        self.enqueue(Command::CancelLogin)
     }
     pub async fn navigate(&self, stamp: Stamp, intent: Intent) -> Result<(), String> {
         self.navigate_from(stamp, intent, false).await
@@ -325,6 +352,7 @@ async fn run(
     let mut view = updates.borrow().clone();
     let mut dirty = false;
     let mut pending_input: Option<PendingInput> = None;
+    let mut login_attempt: Option<(Credentials, Instant)> = None;
     let mut clock = interval(Duration::from_millis(16));
     let mut idle = liveness::Idle::new(Instant::now(), timing);
     let mut idle_clock = interval(timing.poll);
@@ -340,6 +368,7 @@ async fn run(
                     if matches!(pending_input,Some(PendingInput::Refresh {..})) {pending_input=None;}
                 },
                 Some(Command::Connect) if socket.is_none() && dialing.is_none() => {
+                    login_attempt=None;
                     view.generation = view.generation.saturating_add(1);
                     idle.activity(Instant::now());view.keep_alive_sent=0;
                     view.keep_alive_failure=None;
@@ -350,6 +379,7 @@ async fn run(
                 },
                 Some(Command::Connect) => {},
                 Some(Command::Disconnect) => {
+                    login_attempt=None;
                     idle.activity(Instant::now());
                     view.generation = view.generation.saturating_add(1);
                     pending_input=None;view.input_pending=false;
@@ -358,6 +388,7 @@ async fn run(
                     view.message = if closed { "本機已斷線（已送出關閉訊息）" } else { "本機連線已關閉；遠端關閉未確認" }.into(); dirty = true;
                 },
                 Some(Command::Input { generation, bytes }) => {
+                    login_attempt=None;
                     // Preserve the peer/transport's last reason when typing after closure.
                     if socket.is_none() && view.generation > 0 {
                         continue;
@@ -369,7 +400,28 @@ async fn run(
                     if write_input(&mut socket,&mut view,&bytes).await.is_ok() { pending_input=Some(PendingInput::Manual {revision:screen.revision(),deadline:Instant::now()+timing.response_timeout,streaming:false}); }
                     dirty=true;
                 },
+                Some(Command::CancelLogin) => {
+                    login_attempt=None;view.message="已取消登入；不會重送帳密".into();dirty=true;
+                },
+                Some(Command::Login {stamp,credentials,reply}) => {
+                    if reply.is_closed() {continue;}
+                    let result=if view.phase!=Phase::Connected || socket.is_none() || stamp!=(Stamp {revision:screen.revision(),..view.stamp()}) {
+                        Err("連線或畫面已改變；未送出登入".into())
+                    } else if login_attempt.is_some() || pending_input.is_some() || login::prompt(&screen.frame())!=Some(Prompt::Account) {
+                        Err("請先回到空白的 PTT 帳號提示；未送出登入".into())
+                    } else {
+                        idle.activity(Instant::now());
+                        let result=write_input(&mut socket,&mut view,&credentials.account_input()).await;
+                        if result.is_ok() {
+                            login_attempt=Some((credentials,Instant::now()+Duration::from_secs(15)));
+                            view.message="已送出帳號，等待密碼提示；任何手動輸入會取消登入".into();
+                        }
+                        result
+                    };
+                    dirty=true;let _=reply.send(result);
+                },
                 Some(Command::Navigate {stamp,intent,keyboard,reply}) => {
+                    login_attempt=None;
                     // An expired request must never execute later from the command queue.
                     if reply.is_closed() { continue; }
                     let streaming=keyboard && matches!(intent,Intent::Lines{..}) && matches!(pending_input,Some(PendingInput::Manual{streaming:true,..}));
@@ -457,19 +509,35 @@ async fn run(
                         && let Err(error) = send(connection, Message::Binary(reply.into())).await {
                             socket = None; view.phase = Phase::Error; view.message = error;
                         }
+                    if login_attempt.as_ref().is_some_and(|(credentials,_)|login::password_prompt(&screen.frame(),&credentials.account)) {
+                        if let Some((credentials,deadline))=login_attempt.take() {
+                            if Instant::now()<deadline && view.phase==Phase::Connected {
+                                if write_input(&mut socket,&mut view,&credentials.password_input()).await.is_ok() {
+                                    view.message="帳密已送出；登入結果請確認站端畫面，不會自動重試".into();
+                                    pending_input=Some(PendingInput::Manual {revision:screen.revision(),deadline:Instant::now()+timing.response_timeout,streaming:false});
+                                }
+                            } else {view.message="登入等待逾時；未送出密碼".into();}
+                        }
+                    } else if login_attempt.is_some() && navigation::analyze(&screen.frame()).kind()!="unknown" {
+                        login_attempt=None;view.message="畫面已離開登入提示；未送出密碼".into();
+                    }
                 }
                 dirty = true;
             },
             _ = clock.tick(), if dirty => {
                 if pending_input.as_ref().is_some_and(|p| p.revision()!=screen.revision()) { pending_input=None; }
                 view.input_pending=pending_input.is_some() && view.phase==Phase::Connected;
+                view.login_pending=login_attempt.is_some();
                 view.keep_alive_ready=idle.ready(Stamp {revision:screen.revision(),..view.stamp()})
-                    && socket.is_some() && !view.input_pending
+                    && socket.is_some() && !view.input_pending && !view.login_pending
                     && navigation::analyze(&screen.frame()).allows_keepalive();
                 view.frame = screen.frame(); updates.send_replace(view.clone()); dirty = false;
             },
             _ = idle_clock.tick() => {
                 let now=Instant::now();idle.tick(now);
+                if login_attempt.as_ref().is_some_and(|(_,deadline)|now>=*deadline) {
+                    login_attempt=None;view.message="登入等待逾時；未送出密碼，不會重試".into();dirty=true;
+                }
                 // Defer automatic work to pending input/UI state without starving
                 // incoming data or frame publication through a biased select.
                 if !commands.is_empty() || !matches!(gates.has_changed(),Ok(false)) {continue;}
@@ -483,7 +551,7 @@ async fn run(
                     pending_input=None;dirty=true;
                 }
                 let stamp=Stamp {revision:screen.revision(),..view.stamp()};
-                if socket.is_some() && view.phase==Phase::Connected && pending_input.is_none()
+                if socket.is_some() && view.phase==Phase::Connected && pending_input.is_none() && login_attempt.is_none()
                     && idle.due(now,stamp)
                     && navigation::analyze(&screen.frame()).allows_keepalive() {
                     idle.activity(now);
@@ -499,6 +567,7 @@ async fn run(
         // replace a later peer close or transport failure with a generic notice.
         if view.phase != Phase::Connected {
             pending_input = None;
+            login_attempt = None;
         }
     }
 }

@@ -47,6 +47,16 @@ const navigationMarker=document.getElementById("navigation-marker"),browseContro
 const browseBack=document.getElementById("browse-back"),browsePrevious=document.getElementById("browse-previous"),browseNext=document.getElementById("browse-next");
 const browseHint=document.getElementById("browse-hint");
 const fontButton=document.getElementById("font-settings"),fontDialog=document.getElementById("font-dialog");
+const loginButton=document.getElementById("login-open"),loginDialog=document.getElementById("login-dialog"),loginStop=document.getElementById("login-stop");
+const loginAccount=document.getElementById("login-account"),loginPassword=document.getElementById("login-password"),loginRemember=document.getElementById("login-remember");
+const loginSubmit=document.getElementById("login-submit"),loginForget=document.getElementById("login-forget"),loginCancel=document.getElementById("login-cancel"),loginNote=document.getElementById("login-note");
+let loginBusy=false,loginSaved=false;
+function loginWorking(busy){loginBusy=busy;loginSubmit.disabled=busy;loginForget.disabled=busy||!loginSaved;loginAccount.disabled=busy;loginPassword.disabled=busy;loginRemember.disabled=busy;}
+function openLogin(e){if(loginBusy||stopped)return;cancelHover(true);policy("reset",e);cancelComposition();clearSelection();loginPassword.value="";loginRemember.checked=false;loginNote.textContent="正在讀取鑰匙圈…";loginWorking(true);loginDialog.showModal();refreshNavigation();send({kind:"login_open",trusted:e.isTrusted});}
+function submitLogin(e){if(loginBusy||!loginDialog.open)return;e.preventDefault();const password=loginPassword.value;loginPassword.value="";loginWorking(true);loginNote.textContent="正在準備登入…";send({kind:"login_submit",account:loginAccount.value,password,remember:loginRemember.checked,stamp:stamp(),trusted:e.isTrusted});}
+function forgetLogin(e){if(loginBusy)return;loginPassword.value="";loginWorking(true);send({kind:"login_forget",trusted:e.isTrusted});}
+function closeLogin(e){e?.preventDefault();loginPassword.value="";loginRemember.checked=false;if(loginDialog.open)loginDialog.close();send({kind:"login_cancel",trusted:e?.isTrusted??false});restoreEditingFocus();refreshNavigation();}
+function stopLogin(e){send({kind:"login_cancel",trusted:e.isTrusted});focus();}
 const fontPreview=document.getElementById("font-preview"),fontNote=document.getElementById("font-note");
 const fontAvailability=document.getElementById("font-availability");
 const fontPreset=document.getElementById("font-preset"),fontSave=document.getElementById("font-save"),fontCancel=document.getElementById("font-cancel");
@@ -519,6 +529,8 @@ function wheel(e) {
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
 const media=installMedia({send,prepare:()=>{cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshNavigation,restore:restoreEditingFocus});
 const bindings=[
+    [loginButton,"click",openLogin],[loginSubmit,"click",submitLogin],[loginForget,"click",forgetLogin],
+    [loginCancel,"click",closeLogin],[loginDialog,"cancel",closeLogin],[loginStop,"click",stopLogin],
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
     [keyboard,"beforeinput",beforeinput],
@@ -701,10 +713,20 @@ async function paint(packet) {
     surface.dataset.cursorRow=String(packet.frame.cursor[1]);surface.dataset.inputEpoch=String(packet.input_epoch);
     surface.dataset.keepAlive=String(packet.keep_alive);surface.dataset.keepAliveReady=String(packet.keep_alive_ready);
     surface.dataset.keepAliveSent=String(packet.keep_alive_sent);
+    loginStop.hidden=!packet.login_pending;
 }
 focus();
 try {
     while(true){const packet=await dioxus.recv();if(packet.stop) break;
+        if(packet.login_result){const result=packet.login_result;
+            if(typeof result.saved==="boolean")loginSaved=result.saved;
+            loginWorking(!!result.busy);
+            if(!loginDialog.open)continue;
+            if(typeof result.account==="string")loginAccount.value=result.account;
+            if(result.message)loginNote.textContent=result.message;
+            if(result.close){loginPassword.value="";loginDialog.close();restoreEditingFocus();refreshNavigation();}
+            else if(!loginBusy){(loginAccount.value?loginPassword:loginAccount).focus();}
+            continue;}
         if(packet.keyboard_state){receiveKeyboard(packet.keyboard_state);continue;}
         if(packet.hover_settings){hoverPreference=packet.hover_settings;hoverPosition.value=hoverPreference;
             surface.dataset.hoverPosition=hoverPreference;
@@ -768,6 +790,7 @@ finally {
     if(exportTask) await exportTask;
     if(pasteDialog.open) pasteDialog.close();
     if(fontDialog.open) fontDialog.close();
+    loginPassword.value="";loginAccount.value="";loginRemember.checked=false;if(loginDialog.open)loginDialog.close();
     setHover(null);refreshNavigation();
     cancelComposition();keyboard.blur();hideChrome();cancelDrag();selectionBusy=null;clearSelection();
     const before=sent,beforeDraws=draws,beforeZoom=zoom;
