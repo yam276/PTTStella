@@ -29,6 +29,8 @@ core 執行 Rust 1.97.0 的 fmt、Clippy、畫面與互動測試 suite 及 2 個
 
 IME gate 使用 CDP 的 imeSetComposition，驗證取消不送出、確認送出一次、接著輸入相同字不被去重，以及組字宿主位於合成游標座標。CDP 完成組字時的 compositionend 可能不是 trusted；此時只接受由 trusted compositionstart 與最後 trusted input 確認、且文字完全相同的組字結果。這不代表已操作原生輸入法候選窗。
 
+另在真正組字確認後，派送負面事件模擬 legacy WebKit 的 `compositionend → keydown(Enter, keyCode=229, isComposing=false)`，以及 textarea 的 `insertLineBreak`／`insertParagraph`。這些事件不得送出 bytes，IME 按鍵也不能 preventDefault；隨後立即由瀏覽器送出一次普通 Enter，loopback 逐筆比對確認只有該次 Enter。合成負面事件只驗證防漏送規則，不算 macOS 原生輸入法通過。組字宿主另驗證無框、內容寬度、行高及游標座標，保留 `ime-inline.png`。
+
 貼上 gate 以背景 PowerShell 設定合成剪貼簿，再由真正 Ctrl+V 觸發 paste 事件。檢查單行不附加 Enter、多行預覽內容、取消與送出，以及不可編碼、超量、ESC 三種拒絕；本機服務端比對完整輸入序列，拒絕／取消不能混入 bytes。原生 dialog 關閉後另驗證正常字母按鍵，不能只檢查 DOM activeElement，避免 native 編輯焦點未恢復的假通過。
 
 網址 gate 以實際滑鼠拖曳、點擊與右鍵選取合成網址，驗證拖曳不發起開啟、點擊恰好發起一次，以及系統剪貼簿的網址文字。一般 probe 的 opener 是確認 sink，不啟動外部瀏覽器；實際 OS 預設瀏覽器另由人工驗收。純 Rust 案例涵蓋字寬映射、標點／括號、大小寫、port、IPv6、行末截斷、未映射字格及非 HTTP scheme。

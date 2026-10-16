@@ -35,6 +35,7 @@ pub(super) async fn serve(
             b"b",
             b"c",
             b"\xa4\xa4",
+            b"\r", // A separate ordinary Enter immediately after the IME commit.
             b"\xa4\xa4",
             b"\xa4\xa4",
             b"A\rB",
@@ -57,7 +58,7 @@ pub(super) async fn serve(
                     return Err(reason);
                 }
             }
-            if index == 9 {
+            if index == 10 {
                 socket
                     .send(Message::Binary(
                         b"\x1b[2J\x1b[22;1HConfirm synthetic action [y/N] n"

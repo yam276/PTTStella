@@ -361,13 +361,52 @@ def run(port, process, output=None, media_server=None):
         devtools.call('Input.imeSetComposition', text='未', selectionStart=1, selectionEnd=1)
         if devtools.evaluate('getComputedStyle(document.getElementById("keyboard")).opacity') != '1':
             raise ValueError('composition host did not become visible')
+        inline_host = devtools.evaluate('''(()=>{
+            const k=document.getElementById("keyboard"),s=getComputedStyle(k),b=k.getBoundingClientRect();
+            return s.outlineStyle==="none" && s.borderTopWidth==="0px" && s.boxShadow==="none"
+                && Math.abs(parseFloat(s.lineHeight)-b.height)<1 && k.wrap==="off"
+                && b.width>1 && b.width<5*b.height;
+        })()''')
+        if not inline_host:
+            raise ValueError('preedit did not use a borderless, content-sized single-line host')
         placement = devtools.evaluate('(()=>{const k=document.getElementById("keyboard").getBoundingClientRect(),c=document.getElementById("screen").getBoundingClientRect();return {left:k.left-c.left,top:k.top-c.top,frameHeight:c.height};})()')
         # Synthetic frame parks the cursor at column 0, row 18.
         if abs(placement['left']) > 1 or abs(placement['top']-18*placement['frameHeight']/24) > 2:
             raise ValueError('composition host did not follow the PTT cursor')
+        if output is not None:
+            screenshot = devtools.call('Page.captureScreenshot', format='png')['data']
+            (Path(output)/'ime-inline.png').write_bytes(base64.b64decode(screenshot, validate=True))
         devtools.call('Input.imeSetComposition', text='', selectionStart=0, selectionEnd=0)
         devtools.call('Input.imeSetComposition', text='中', selectionStart=1, selectionEnd=1)
         devtools.call('Input.insertText', text='中')
+        # Negative regression only: model legacy WebKit's keydown AFTER the real
+        # compositionend, with isComposing=false but keyCode=229. It must neither
+        # cancel native IME defaults nor leak bytes to the loopback server. These
+        # dispatched events do not establish native macOS IME support.
+        ime_tail = devtools.evaluate('''(()=>{
+            const k=document.getElementById("keyboard");
+            const keys=["Enter","Escape","Backspace","ArrowLeft"];
+            const nativeDefaults=keys.every(key=>k.dispatchEvent(new KeyboardEvent("keydown",{
+                key,code:key,keyCode:229,isComposing:false,bubbles:true,cancelable:true
+            })));
+            const breaks=["insertLineBreak","insertParagraph"];
+            const prevented=breaks.every(inputType=>!k.dispatchEvent(new InputEvent("beforeinput",{
+                inputType,data:null,isComposing:false,bubbles:true,cancelable:true
+            })));
+            // Also exercise the input fallback when beforeinput was non-cancelable.
+            for(const inputType of breaks){
+                k.dispatchEvent(new InputEvent("beforeinput",{inputType,bubbles:true}));
+                k.value="\\n";
+                k.dispatchEvent(new InputEvent("input",{inputType,bubbles:true}));
+            }
+            return nativeDefaults && prevented && k.value==="";
+        })()''')
+        if not ime_tail:
+            raise ValueError('legacy IME confirmation leaked a BBS key or textarea line break')
+        # The very next ordinary Enter is a distinct user action and must arrive
+        # exactly once, with no timing window that swallows it after composition.
+        for kind in ('keyDown', 'keyUp'):
+            devtools.call('Input.dispatchKeyEvent', type=kind, key='Enter', code='Enter', windowsVirtualKeyCode=13)
         # A new edit with identical text must not be discarded as a duplicate commit.
         devtools.call('Input.insertText', text='中')
         set_clipboard_text('A\nB')
@@ -432,6 +471,9 @@ def run(port, process, output=None, media_server=None):
                 'system_clipboard_copy': True,
                 'composition_host_position': True,
                 'composition_commit_cancel_repeat': True,
+                'composition_inline_host': True,
+                'legacy_webkit_ime_tail': 'simulated negative events; not native macOS IME',
+                'ordinary_enter_after_composition': True,
                 'native_paste_preview_and_validation': True,
                 'url_click_drag_copy': True,
                 'png_geometry_and_pixels': output is not None,

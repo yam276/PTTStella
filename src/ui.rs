@@ -350,7 +350,7 @@ pub fn app(props: AppProps) -> Element {
                     div { id: "selection", "aria-hidden": "true" }
                     div { id: "navigation-marker", "aria-hidden": "true", hidden: true }
                     output { id: "surface-note", role: "status" }
-                    textarea { id: "keyboard", "aria-label": "PTT 鍵盤輸入", autocomplete: "off", spellcheck: "false" }
+                    textarea { id: "keyboard", "aria-label": "PTT 鍵盤輸入", autocomplete: "off", autocapitalize: "off", "autocorrect": "off", wrap: "off", spellcheck: "false" }
                 }
             }
             dialog { id: "paste-dialog", class: "paste-preview",
@@ -461,6 +461,7 @@ async fn surface(
         vec![0xa4, 0xa4],
         vec![110],
     ];
+    let expected_enter_count = 3;
     let mut enter_count = 0;
     let mut closed_checked = false;
     let mut probe_started = false;
@@ -491,7 +492,7 @@ async fn surface(
                     == "INPUT ROUND TRIP COMPLETE"
         };
         let interactions_checked = arrow_checked
-            && enter_count == 2
+            && enter_count == expected_enter_count
             && input_bytes == expected_input
             && complete
             && closed_checked
@@ -849,9 +850,9 @@ async fn surface(
                         report["media_pending"] = media_preview.pending().into();
                         report["media_preview_open"] = media_preview.active().is_some().into();
                         report["media_external_requests"] = media_external.into();
-                        report["arrow_input"] = arrow_checked.into(); report["enter_input"] = (enter_count == 2).into();
+                        report["arrow_input"] = arrow_checked.into(); report["enter_input"] = (enter_count == expected_enter_count).into();
                         report["text_input"] = (input_bytes == expected_input).into();
-                        report["trusted_webview_input"] = (arrow_checked && enter_count == 2 && input_bytes == expected_input).into();
+                        report["trusted_webview_input"] = (arrow_checked && enter_count == expected_enter_count && input_bytes == expected_input).into();
                         report["loopback_input_roundtrip"] = complete.into();
                         report["closed_after_roundtrip"] = closed_checked.into();
                         report["selection_copy"] = copy_checked.into();
