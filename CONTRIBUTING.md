@@ -72,6 +72,8 @@ ANSI 調色盤以合成完整方塊的實際 RGB 檢查，與獨立 expected 比
 
 第一個 Rust 交付選定實際驗證的版本，啟用對應 gate 並讓 CI 使用同一入口；目前沒有宣稱 MSRV 或 CI 成功。文件修正不必啟動 GUI，產品完成不能只跑 docs。
 
+macOS 本機 `.app` 的建立入口為 `python3 tooling/bundle_macos.py`，細節見 [打包說明](docs/macos-app.md)。打包變更須跑 docs、diff 檢查並在 Mac 實際建立 release app，確認 plist、系統依賴與 ad-hoc 簽章；本機資源政策仍包住整個腳本。`bundled` 只代表產物完成，不能當作 desktop gate 或人工登入通過。
+
 ## 資產與提交
 
 資產與依賴須有來源、授權與版本；合成 fixture 保存獨立 expected。提交前檢查實際 diff，維持獨立 checkout 可建置及驗證。
