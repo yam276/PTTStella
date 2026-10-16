@@ -160,6 +160,7 @@ class DevTools:
         return result.get('result', {}).get('value')
 
     def click(self, selector):
+        self.evaluate('(()=>{const n=document.querySelector('+json.dumps(selector)+');if(n.closest("dialog"))n.scrollIntoView({block:"nearest",inline:"nearest"});})()')
         position = self.evaluate(f'(()=>{{const b=document.querySelector({json.dumps(selector)}).getBoundingClientRect();'
                                  'return {x:b.left+b.width/2,y:b.top+b.height/2};})()')
         for kind in ('mousePressed', 'mouseReleased'):
@@ -176,7 +177,8 @@ class DevTools:
         deadline = time.monotonic() + 5
         while not self.evaluate(expression):
             if time.monotonic() >= deadline:
-                raise TimeoutError(reason)
+                state=self.evaluate('(()=>{const d=document.getElementById("surface"),p=document.getElementById("font-preview");return {surface:{...d?.dataset},font:{...p?.dataset},fontNote:document.getElementById("font-note")?.textContent,preset:document.getElementById("font-preset")?.value,fontSize:document.getElementById("font-size")?.value};})()')
+                raise TimeoutError(reason+'; synthetic probe state: '+json.dumps(state,ensure_ascii=False))
             time.sleep(.02)
 
 
@@ -315,7 +317,7 @@ def run(port, process, output=None, media_server=None):
             (Path(output)/'settings-after.png').write_bytes(base64.b64decode(changed_pixels.split(',',1)[1], validate=True))
             saved_bytes = (Path(output)/'probe-settings.json').read_bytes()
             saved = json.loads(saved_bytes)
-            if saved['font_size'] != 18 or saved['baseline'] != 19 or saved['ascii_font'] != 'Courier New':
+            if saved['display']['font_size'] != 18 or saved['display']['baseline'] != 19 or saved['display']['fonts']['ascii_font'] != 'Courier New':
                 raise ValueError('saved configuration did not contain the applied settings')
         open_fonts()
         edit_field('#font-size', '100')
@@ -332,6 +334,8 @@ def run(port, process, output=None, media_server=None):
         # Default preview does not commit until the user saves.
         if devtools.evaluate('document.getElementById("surface").dataset.fontSize') != '18':
             raise ValueError('default preview changed the committed settings')
+        import desktop_profiles
+        profiles_report=desktop_profiles.run(devtools,output,edit_field,open_fonts)
         devtools.call('Input.dispatchMouseEvent', type='mouseMoved', x=20, y=2)
         devtools.click('#select-all')
         deadline = time.monotonic() + 5
@@ -481,6 +485,7 @@ def run(port, process, output=None, media_server=None):
                 'selected_rows_png': capture_report,
                 'font_preview_save_cancel_validation': True,
                 'mouse_navigation': navigation_report,
+                'display_profiles':profiles_report,
                 'media': media_report,
                 'peer_close_visible': True,
                 'scope': 'isolated WebView2 browser input; no physical keyboard or PTT authentication'}

@@ -27,6 +27,12 @@ const fontButton=document.getElementById("font-settings"),fontDialog=document.ge
 const fontPreview=document.getElementById("font-preview"),fontNote=document.getElementById("font-note");
 const fontPreset=document.getElementById("font-preset"),fontSave=document.getElementById("font-save"),fontCancel=document.getElementById("font-cancel");
 const fontDefaults=document.getElementById("font-defaults");
+const profileImport=document.getElementById("profile-import"),profileExport=document.getElementById("profile-export"),profileName=document.getElementById("font-profile-name");
+let profileBusy=false;
+function profileAction(action,e){if(profileBusy||fontSaving)return;profileBusy=true;profileImport.disabled=true;profileExport.disabled=true;
+    send({kind:"settings_profile",action,name:profileName.value,trusted:e.isTrusted});}
+const importProfile=e=>profileAction("import",e),exportProfile=e=>profileAction("export",e);
+function profileChoice(profile){return profile.fonts.kind==="platform_default"?"platform":profile.fonts.kind==="preset"?profile.fonts.preset:"custom";}
 const fontFields={ascii_font:document.getElementById("font-ascii"),cjk_font:document.getElementById("font-cjk"),
     font_size:document.getElementById("font-size"),baseline:document.getElementById("font-baseline")};
 const ctx=canvas.getContext("2d",{willReadFrequently:true});
@@ -336,8 +342,9 @@ function fillFonts(values) {
     for(const [name,field] of Object.entries(fontFields)) field.value=values[name];
 }
 function readFonts() {
-    return {version:1,ascii_font:fontFields.ascii_font.value,cjk_font:fontFields.cjk_font.value,
-        font_size:Number(fontFields.font_size.value),baseline:Number(fontFields.baseline.value)};
+    const selected=fontPreset.value,fonts=selected==="custom"?{kind:"custom",ascii_font:fontFields.ascii_font.value,cjk_font:fontFields.cjk_font.value}:
+        selected==="platform"?{kind:"platform_default"}:{kind:"preset",preset:selected};
+    return {fonts,font_size:Number(fontFields.font_size.value),baseline:Number(fontFields.baseline.value)};
 }
 function flushFontPreview() {
     if(fontPreviewBusy||!fontPreviewNext||!fontDialog.open||stopped) return;
@@ -347,17 +354,18 @@ function previewFonts() {
     clearTimeout(fontTimer);fontRequest++;fontNote.textContent="";
     fontTimer=setTimeout(()=>{fontTimer=0;fontPreviewNext={request:fontRequest,values:readFonts()};flushFontPreview();},150);
 }
-function editFont(){fontPreset.value="custom";previewFonts();}
-function chooseFontPreset(){if(fontDraft?.presets[fontPreset.value]) {fillFonts(fontDraft.presets[fontPreset.value]);previewFonts();}}
-function resetFonts(){if(fontDraft){fillFonts(fontDraft.defaults);fontPreset.value="custom";previewFonts();}}
+function editFont(e){if(e.target===fontFields.ascii_font||e.target===fontFields.cjk_font)fontPreset.value="custom";previewFonts();}
+function chooseFontPreset(){const values=fontPreset.value==="platform"?fontDraft?.defaults:fontDraft?.presets[fontPreset.value];
+    if(values) {const size=fontFields.font_size.value,baseline=fontFields.baseline.value;fillFonts(values);fontFields.font_size.value=size;fontFields.baseline.value=baseline;previewFonts();}}
+function resetFonts(){if(fontDraft){fillFonts(fontDraft.defaults);fontPreset.value="platform";previewFonts();}}
 function closeFonts(e) {
-    e?.preventDefault();if(fontSaving) return;
+    e?.preventDefault();if(fontSaving||profileBusy) return;
     clearTimeout(fontTimer);fontTimer=0;fontRequest++;fontPreviewNext=null;
     fontDialog.close();restoreEditingFocus();
     refreshNavigation();
 }
 function saveFonts(e) {
-    if(fontSaving) return;
+    if(fontSaving||profileBusy) return;
     fontSaving=true;fontSave.disabled=true;fontCancel.disabled=true;
     send({kind:"settings_save",values:readFonts(),trusted:e.isTrusted});
 }
@@ -458,6 +466,7 @@ const bindings=[
     [keepAlive,"click",toggleKeepAlive],
     [browseBack,"click",browseReturn],[browsePrevious,"click",browseUp],[browseNext,"click",browseDown],
     [fontButton,"click",openFonts],[fontPreset,"change",chooseFontPreset],
+    [profileImport,"click",importProfile],[profileExport,"click",exportProfile],
     ...Object.values(fontFields).map(field=>[field,"input",editFont]),
     [fontDefaults,"click",resetFonts],[fontCancel,"click",closeFonts],[fontDialog,"cancel",closeFonts],[fontSave,"click",saveFonts],
     [chrome,"pointerenter",showChrome],[chrome,"pointerleave",hideChrome],
@@ -626,7 +635,7 @@ try {
         if(packet.media_external){media.externalResult(packet.media_external);continue;}
         if(packet.media_reset){media.reset();continue;}
         if(packet.settings_open) {
-            fontDraft=packet.settings_open;fillFonts(fontDraft.values);fontPreset.value="custom";
+            fontDraft=packet.settings_open;fillFonts(fontDraft.values);fontPreset.value=profileChoice(fontDraft.profile);
             fontNote.textContent=fontDraft.warning||"";cancelComposition();cancelDrag();clearSelection();
             if(!fontDialog.open) fontDialog.showModal();
             released=null;cancelDrag();setHover(null);refreshNavigation();
@@ -641,6 +650,14 @@ try {
                 if(preview.error) fontNote.textContent=preview.error;
             }
             flushFontPreview();continue;
+        }
+        if(packet.profile_result) {
+            profileBusy=false;profileImport.disabled=false;profileExport.disabled=false;fontDialog.dataset.profileResult=packet.profile_result;
+            if(packet.profile_import&&fontDialog.open){const imported=packet.profile_import;clearTimeout(fontTimer);fontTimer=0;fontRequest++;fontPreviewNext=null;
+                fillFonts(imported.values);fontPreset.value=profileChoice(imported.profile);profileName.value=imported.name;
+                await loadFonts(imported.values);render(fontPreview,imported.sample,{cursor:false});}
+            if(packet.notice)fontNote.textContent=packet.notice;
+            if(fontDialog.open)profileName.focus();continue;
         }
         if(typeof packet.settings_saved==="boolean") {
             fontSaving=false;fontSave.disabled=false;fontCancel.disabled=false;
