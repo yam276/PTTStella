@@ -486,6 +486,11 @@ async fn run(
                 } else if view.keep_alive_ready && !idle.ready(stamp) {dirty=true;}
             },
         }
+        // A response wait belongs to a live connection. Its deadline must not
+        // replace a later peer close or transport failure with a generic notice.
+        if view.phase != Phase::Connected {
+            pending_input = None;
+        }
     }
 }
 

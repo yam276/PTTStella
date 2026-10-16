@@ -357,6 +357,32 @@ async fn idle_response_deadline_cannot_clear_a_later_manual_input() {
 }
 
 #[tokio::test]
+async fn pending_input_deadline_never_overwrites_a_later_peer_close_reason() {
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(navigation_page("list").into()))
+        .await
+        .unwrap();
+    let view = wait(&connection, |v| v.received > 0).await;
+    connection.input(view.generation, b"x".to_vec()).unwrap();
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"x");
+    wait(&connection, |v| v.input_pending).await;
+    ws.close(Some(tokio_tungstenite::tungstenite::protocol::CloseFrame {
+        code: tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode::Policy,
+        reason: "synthetic pending close".into(),
+    }))
+    .await
+    .unwrap();
+    let closed = wait(&connection, |v| v.phase == Phase::Disconnected).await;
+    assert!(closed.message.contains("synthetic pending close"));
+    tokio::time::sleep(Duration::from_millis(650)).await;
+    assert_eq!(connection.updates.borrow().message, closed.message);
+    connection.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn navigation_admission_checks_real_frame_input_order_and_one_pending_operation() {
     let (listener, connection) = local().await;
     let (updated_tx, updated_rx) = oneshot::channel();
