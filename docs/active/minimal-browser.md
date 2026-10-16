@@ -69,6 +69,18 @@ Windows 真實 pointer＋loopback HTTP 已驗證快掠零請求、同連結一�
 
 ## 技術邊界
 
+### 實站截圖版面對應修正
+
+2026-10-16：使用者提供滿頁看板／最愛與文章列表截圖，均顯示「未辨識的畫面格式」。確認三個不相容條件：看板前進提示為「閱讀」而非僅「進入」；返回為「回上層」而非僅「回到上層／離開」；文章人氣與日期直接緊貼，原先 whitespace tokenization 會將 `+1610/16` 誤當日期。前一版合成列在這些欄位插入了多餘空白，因此漏掉實站格式。
+
+文章解析已移除 token 日期搜尋，按 1／6／4／6／13 的固定 cell 欄位取編號、狀態人氣、日期、作者及標題。正常、爆文／標記、置底、單位數月日及六位數文章編號共用同一生產解析；legacy 圓形指標蓋住編號首字時，只在指標列接受數字尾段，包含 100000 的 00000。看板仍依自己的標頭及固定板名欄辨識，前進接受進入／閱讀，新增回上層文字。不把「閱讀」一詞當成文章列表判斷，h/l 仍經 Intent／Connection 序列化。
+
+先以兩個自製滿頁案例在舊 reducer 重現失敗，再實作修正；fixture 使用合成作者／標題／板名，不保存私人 session。更新舊合成列到同一欄寬，新增完整 20 列看板與 15 一般＋5 置底的文章頁，原生 probe 也改消費這兩頁。22 個 navigation、27 個 desktop lib、全 targets desktop Clippy、fmt、core 六套 suite／兩個 replay、docs 19 個 gate 回歸通過；非法日期／提示覆蓋／缺前進命令仍暫停。
+
+macOS arm64／WKWebView 的隔離 App 使用內建跨平台字型，在主選單→滿頁看板→最愛→滿頁文章執行原生 j/k/gg/G/l 或 h；兩種問題格式實際觀察均為 NORMAL，peer 比對 20 筆精確 bytes、零額外輸入，⌘W 後 listener 釋放與 worker join 為 passed。這是按截圖格式製作的本機往返，不代表已操作使用者帳號或完成實站重試。完整 desktop gate 的 Mac backend 仍為 not_ready，未取得 Windows runner 結果。
+
+App 重新打包至 `dist/macos-navigation-layout/PTTStella.app`，包含本輪辨識修正與前輪內建字型；保留舊包，需退出舊 App 後開啟新版。沒有 push／公開發佈。
+
 ### 隨 App 附帶與載入字型
 
 2026-10-16：使用者希望缺少的字型能隨設定直接套用。加入 `bundled`「內建跨平台」組合：Cascadia Mono 2407.024＋Noto Sans CJK TC Regular 2.004，兩份未修改的官方字型共約 16.4 MiB，OFL 1.1、來源／SHA-256／著作權隨產品保存。Windows 組合也可使用附帶的 Cascadia；Microsoft JhengHei 沒有隨 App 散布，不會靜默替換成 Noto。已保存的設定與平台初始值保留，需明確選擇新組合。

@@ -31,6 +31,15 @@ fn replace(screen: &mut Screen, row: usize, text: &str, sgr: &str) {
     );
 }
 
+fn article_row(number: &str, flags: &str, date: &str, author: &str, title: &str) -> String {
+    let number = if number == "★" {
+        "   ★ ".to_owned()
+    } else {
+        format!("{number:>6}")
+    };
+    format!(" {number}{flags}{date} {author:13}{title}")
+}
+
 #[test]
 fn list_anchors_and_cursor_produce_only_number_targets() {
     let Context::ArticleList {
@@ -96,7 +105,7 @@ fn pinned_article_and_complete_dual_colour_title_keep_column_targets() {
     replace(
         &mut screen,
         5,
-        "    ★     8 10/16 carol        □ 合成置底文章",
+        &article_row("★", "   8", "10/16", "carol", "□ 合成置底文章"),
         "0",
     );
     screen.feed(b"\x1b[4;40H\x1b[31m\xa4\x1b[32m\xa4\x1b[0m\x1b[5;1H");
@@ -108,14 +117,14 @@ fn pinned_article_and_complete_dual_colour_title_keep_column_targets() {
 #[test]
 fn padded_dates_votes_locked_and_deleted_rows_remain_browsable() {
     for text in [
-        "     122   8  1/ 9 carol        □ 補齊日期",
-        "     122     10/ 9 carol        鎖 鎖定文章",
-        "     122   8  1/19 carol        ˇ 合成投票",
-        "     122      1/ 9 -            ╳ (本文已被刪除)",
-        "     122      1/ 9 -            □ (本文已被刪除)",
+        article_row("122", "   8", " 1/ 9", "carol", "□ 補齊日期"),
+        article_row("122", "    ", "10/ 9", "carol", "鎖 鎖定文章"),
+        article_row("122", "   8", " 1/19", "carol", "ˇ 合成投票"),
+        article_row("122", "    ", " 1/ 9", "-", "╳ (本文已被刪除)"),
+        article_row("122", "    ", " 1/ 9", "-", "□ (本文已被刪除)"),
     ] {
         let mut screen = fixture("list");
-        replace(&mut screen, 5, text, "0");
+        replace(&mut screen, 5, &text, "0");
         screen.feed(b"\x1b[5;1H");
         let context = navigation::analyze(&screen.frame());
         assert!(matches!(context, Context::ArticleList { .. }), "{text}");
@@ -128,14 +137,14 @@ fn padded_dates_votes_locked_and_deleted_rows_remain_browsable() {
 #[test]
 fn invalid_padded_dates_and_deleted_author_prompts_remain_unknown() {
     for text in [
-        "     122      1/ 0 carol        □ 日期錯誤",
-        "     122     13/ 9 carol        □ 日期錯誤",
-        "     122      1/99 carol        □ 日期錯誤",
-        "     122      1/ 9 -            是否刪除？[Y/n]",
-        "     122      1/ 9 -            R: 非刪文格式",
+        article_row("122", "    ", " 1/ 0", "carol", "□ 日期錯誤"),
+        article_row("122", "    ", "13/ 9", "carol", "□ 日期錯誤"),
+        article_row("122", "    ", " 1/99", "carol", "□ 日期錯誤"),
+        article_row("122", "    ", " 1/ 9", "-", "是否刪除？[Y/n]"),
+        article_row("122", "    ", " 1/ 9", "-", "R: 非刪文格式"),
     ] {
         let mut screen = fixture("list");
-        replace(&mut screen, 5, text, "0");
+        replace(&mut screen, 5, &text, "0");
         screen.feed(b"\x1b[5;1H");
         unknown(&screen.frame());
     }
@@ -157,13 +166,13 @@ fn missing_or_inconsistent_anchors_fail_closed() {
 #[test]
 fn broken_item_rows_popups_and_interrupted_control_sequences_are_unknown() {
     for value in [
-        "您想刪除其他重複登入的連線嗎？[Y/n]",
-        "     122     99/99 bob □ 假日期",
-        "     122     10/16 bob 請輸入密碼",
-        "     122     10/16 https://example.com □ 假作者",
+        "您想刪除其他重複登入的連線嗎？[Y/n]".to_owned(),
+        article_row("122", "    ", "99/99", "bob", "□ 假日期"),
+        article_row("122", "    ", "10/16", "bob", "請輸入密碼"),
+        article_row("122", "    ", "10/16", "https://evil", "□ 假作者"),
     ] {
         let mut screen = fixture("list");
-        replace(&mut screen, 5, value, "0");
+        replace(&mut screen, 5, &value, "0");
         screen.feed(b"\x1b[5;1H");
         unknown(&screen.frame());
     }
@@ -423,4 +432,70 @@ fn menu_banner_and_class_decoration_are_not_input_context() {
         screen.feed(cursor);
         unknown(&screen.frame());
     }
+}
+
+#[test]
+fn real_board_reading_command_and_full_page_are_a_board_context() {
+    let context = page("boards_reading");
+    assert_eq!(context, Context::BoardList { first_row: 3 });
+    assert_eq!(navigation::plan(&context, Intent::Forward).unwrap(), b"\r");
+    assert!(!context.allows_keepalive());
+}
+#[test]
+fn real_dense_recommendations_dates_and_pinned_rows_are_an_article_context() {
+    let context = page("list_dense");
+    let Context::ArticleList {
+        articles,
+        cursor_row,
+    } = &context
+    else {
+        panic!("{context:?}")
+    };
+    assert_eq!(*cursor_row, 17);
+    assert_eq!(
+        articles.iter().map(|a| a.row).collect::<Vec<_>>(),
+        (3..23).collect::<Vec<_>>()
+    );
+    assert_eq!(navigation::plan(&context, Intent::Forward).unwrap(), b"\r");
+}
+
+#[test]
+fn legacy_pointer_covering_first_digit_preserves_large_article_navigation() {
+    let mut screen = fixture("list_dense");
+    let row = article_row("100000", " +16", "10/16", "writer", "□ 合成六位數文章");
+    replace(&mut screen, 17, &format!("●{}", &row[2..]), "0");
+    screen.feed(b"\x1b[18;2H");
+    let context = navigation::analyze(&screen.frame());
+    assert!(matches!(
+        context,
+        Context::ArticleList { cursor_row: 17, .. }
+    ));
+    assert_eq!(
+        navigation::plan(&context, Intent::Open { row: 22 }).unwrap(),
+        b"\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\r"
+    );
+}
+#[test]
+fn dense_lists_still_reject_prompt_bad_date_or_missing_forward_command() {
+    for name in ["boards_reading", "list_dense"] {
+        let mut screen = fixture(name);
+        replace(&mut screen, 23, "是否刪除？[Y/n]", "30;47");
+        screen.feed(if name == "boards_reading" {
+            b"\x1b[4;2H"
+        } else {
+            b"\x1b[18;2H"
+        });
+        unknown(&screen.frame());
+        let mut screen = fixture(name);
+        replace(&mut screen, 1, "[←]離開 [h]說明", "0");
+        screen.feed(if name == "boards_reading" {
+            b"\x1b[4;2H"
+        } else {
+            b"\x1b[18;2H"
+        });
+        unknown(&screen.frame());
+    }
+    let mut screen = fixture("list_dense");
+    screen.feed(b"\x1b[4;12H99/99 \x1b[18;2H");
+    unknown(&screen.frame());
 }

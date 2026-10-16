@@ -159,11 +159,12 @@ pub fn analyze(frame: &Frame) -> Context {
 fn commands(rows: &[Row<'_>], forward: &str) -> bool {
     let bars = format!("{} {}", rows[1].text, rows[23].text);
     bars.contains('←')
-        && (bars.contains("離開") || bars.contains("回到上層"))
+        && (bars.contains("離開") || bars.contains("回到上層") || bars.contains("回上層"))
         && bars.contains('→')
         && bars.contains(forward)
         && (rows[23].bar_text("離開")
             || rows[23].bar_text("回到上層")
+            || rows[23].bar_text("回上層")
             || rows[23].bar_text("文章選讀")
             || rows[23].bar_text("選擇看板"))
 }
@@ -239,7 +240,7 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
     {
         return Some(unknown(UnknownReason::Unmapped));
     }
-    if !commands(rows, "進入") {
+    if !commands(rows, "進入") && !commands(rows, "閱讀") {
         return Some(unknown(UnknownReason::Unrecognized));
     }
     let mut items = Vec::new();
@@ -286,29 +287,33 @@ fn number(text: &str) -> Option<usize> {
         .flatten()
 }
 fn article(line: &Row<'_>, row: usize) -> Option<Article> {
-    let prefix = line.cells(2, 8)?.trim();
-    if prefix != "★" && number(prefix).is_none_or(|n| n == 0) {
+    // PTT's columns are gutter(1), number(6), flags/recommendations(4),
+    // date(6), author(13), title. Recommendations may touch the date.
+    // The legacy two-cell pointer covers the first number cell, so only that
+    // selected row may have a partial numeric suffix (including "00000").
+    let (prefix, partial) = match line.cells(1, 7) {
+        Some(prefix) => (prefix.trim(), false),
+        None if pointer(line, 0) => (line.cells(2, 7)?.trim(), true),
+        None => return None,
+    };
+    if prefix != "★" && !number(prefix).is_some_and(|n| n > 0 || partial) {
         return None;
     }
-    // Date, author and a non-empty title independently constrain an item row.
-    let rest = line.cells(8, 80)?;
-    let tokens: Vec<_> = rest.split_whitespace().collect();
-    // PTT's five-column date pads a single-digit day: " 1/ 9".
-    // Whitespace tokenization splits that date, but not its following author.
-    let (date, date_tokens) = tokens.iter().take(3).enumerate().find_map(|(i, s)| {
-        let (month, day) = s.split_once('/')?;
-        let padded = day.is_empty();
-        let day = if padded { *tokens.get(i + 1)? } else { day };
-        (number(month).is_some_and(|m| (1..=12).contains(&m))
-            && number(day).is_some_and(|d| (1..=31).contains(&d)))
-        .then_some((i, if padded { 2 } else { 1 }))
-    })?;
-    let author_index = date + date_tokens;
-    if tokens.len() < author_index + 3 {
+    let (month, day) = line.cells(11, 17)?.trim().split_once('/')?;
+    if !number(month.trim()).is_some_and(|m| (1..=12).contains(&m))
+        || !number(day.trim()).is_some_and(|d| (1..=31).contains(&d))
+    {
         return None;
     }
-    let author = tokens[author_index];
-    let mark = tokens[author_index + 1];
+    let author = line.cells(17, 30)?.trim();
+    if author.is_empty() {
+        return None;
+    }
+    let title = line.cells(30, 80)?.trim();
+    let (mark, content) = title.split_once(char::is_whitespace)?;
+    if content.trim().is_empty() {
+        return None;
+    }
     let deleted = author == "-" && matches!(mark, "╳" | "□");
     if !deleted
         && (author.len() > 16

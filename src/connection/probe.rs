@@ -17,15 +17,19 @@ pub(super) enum Scenario {
 pub(super) fn window_page(stage: usize) -> Result<Vec<u8>, String> {
     let name = match stage / 5 {
         0 => "main_menu",
-        1 => "boards",
+        1 => "boards_reading",
         2 => "favorites",
-        3 => "list_subheader",
+        3 => "list_dense",
         _ => "favorites",
     };
     let mut bytes = navigation_page(name)?;
     bytes.extend_from_slice(format!("\x1b[1;73Htest{stage:02}").as_bytes());
     bytes.extend_from_slice(if name == "main_menu" {
         b"\x1b[14;22H"
+    } else if name == "boards_reading" {
+        b"\x1b[4;2H"
+    } else if name == "list_dense" {
+        b"\x1b[18;2H"
     } else {
         b"\x1b[5;2H"
     });
