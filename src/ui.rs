@@ -9,7 +9,7 @@ use pttstella::{
     navigation::{self, Context, Intent, Stamp},
     screen::{Frame, Screen},
     selection::{self, Selection},
-    settings::{DisplaySettings, store::Store},
+    settings::{AppSettings, DisplayProfile, DisplaySettings, PortableProfile, store::Store},
     storage,
     vim::{self, Effect},
 };
@@ -95,10 +95,15 @@ enum SurfaceEvent {
     },
     SettingsPreview {
         request: u64,
-        values: DisplaySettings,
+        values: DisplayProfile,
     },
     SettingsSave {
-        values: DisplaySettings,
+        values: DisplayProfile,
+        trusted: bool,
+    },
+    SettingsProfile {
+        action: String,
+        name: String,
         trusted: bool,
     },
     ExportPng {
@@ -396,6 +401,7 @@ pub fn app(props: AppProps) -> Element {
                 h2 { id: "font-title", "字型與顯示" }
                 label { "字型組合"
                     select { id: "font-preset",
+                        option { value: "platform", "依平台初始值" }
                         option { value: "custom", "自訂" }
                         option { value: "windows", "Windows" }
                         option { value: "macos", "macOS" }
@@ -406,7 +412,12 @@ pub fn app(props: AppProps) -> Element {
                 label { "中文字型" input { id: "font-cjk", r#type: "text", maxlength: "128" } }
                 label { "字高" input { id: "font-size", r#type: "number", min: "8", max: "24", step: "1" } }
                 label { "基線位置" input { id: "font-baseline", r#type: "number", min: "0", max: "24", step: "1" } }
-                p { "保持固定格線；找不到指定字型時使用系統替代字型。" }
+                p { "各平台皆可選任一組合；字型檔須另行安裝。實際替代字型未確認，請以預覽檢查。" }
+                label { "設定檔名稱" input { id: "font-profile-name", r#type: "text", maxlength: "128", value: "我的顯示設定" } }
+                div { class: "dialog-actions",
+                    button { id: "profile-import", "載入設定檔至預覽" }
+                    button { id: "profile-export", "匯出目前生效設定" }
+                }
                 canvas { id: "font-preview", width: "576", height: "192", "aria-label": "中英混排與雙色字預覽" }
                 output { id: "font-note", role: "status" }
                 div { class: "dialog-actions",
@@ -433,14 +444,15 @@ async fn surface(
     let store = probe.as_ref().map_or_else(Store::system, |path| {
         Ok(Store::at(path.join("probe-settings.json")))
     });
-    let (mut settings, mut settings_warning) =
+    let (mut app_settings, mut settings_warning) =
         match store.as_ref().map_err(Clone::clone).and_then(Store::load) {
             Ok(settings) => (settings, None),
             Err(error) => (
-                DisplaySettings::default(),
+                AppSettings::default(),
                 Some(format!("{error}；目前使用預設顯示")),
             ),
         };
+    let mut settings = app_settings.display.resolve().map_err(str::to_owned)?;
     let font_sample = font_sample()?;
     let script = [
         include_str!("../assets/media.js"),
@@ -605,13 +617,14 @@ async fn surface(
                 SurfaceEvent::SettingsOpen { trusted } => {
                     if stopping || !trusted { continue; }
                     eval.send(serde_json::json!({"settings_open": {
+                        "profile":app_settings.display,
                         "values":settings,"defaults":DisplaySettings::default(),"presets":DisplaySettings::presets(),
                         "warning":settings_warning,
                         "sample":sample_packet(&font_sample,&settings),
                     }})).map_err(|e| e.to_string())?;
                 },
                 SurfaceEvent::SettingsPreview { request, values } => {
-                    let reply = match values.validate() {
+                    let reply = match values.resolve() {
                         Ok(values) => serde_json::json!({"font_preview":{"request":request,"packet":sample_packet(&font_sample,&values)}}),
                         Err(error) => serde_json::json!({"font_preview":{"request":request,"error":error}}),
                     };
@@ -619,16 +632,44 @@ async fn surface(
                 },
                 SurfaceEvent::SettingsSave { values, trusted } => {
                     if stopping || !trusted { continue; }
-                    let result = store.as_ref().map_err(Clone::clone).and_then(|store| store.save(values));
+                    let mut draft=app_settings.clone();draft.display=values;
+                    let result = store.as_ref().map_err(Clone::clone).and_then(|store| store.save(draft));
                     let reply = match result {
                         Ok(saved) => {
-                            settings_saved |= probe.is_some() && saved.font_size==18.0 && saved.baseline==19.0;
-                            settings=saved;settings_warning=None;dirty=true;
+                            let resolved=saved.display.resolve().map_err(str::to_owned)?;
+                            settings_saved |= probe.is_some() && resolved.font_size==18.0 && resolved.baseline==19.0;
+                            app_settings=saved;settings=resolved;settings_warning=None;dirty=true;
                             serde_json::json!({"settings_saved":true,"notice":"顯示設定已儲存"})
                         },
                         Err(error) => serde_json::json!({"settings_saved":false,"notice":error}),
                     };
                     eval.send(reply).map_err(|e| e.to_string())?;
+                },
+                SurfaceEvent::SettingsProfile {action,name,trusted} => {
+                    if stopping || !trusted {continue;}
+                    let result=(||->Result<serde_json::Value,String> {
+                        if !matches!(action.as_str(),"import"|"export") {return Err("未知設定檔操作".into());}
+                        let path=if let Some(directory)=&probe {Some(directory.join("display.pttstella.json"))}
+                            else {
+                                let window=dioxus::desktop::window();
+                                let dialog=rfd::FileDialog::new().set_parent(window.window.as_ref()).add_filter("PTTStella 顯示設定",&["json"]);
+                                if action=="import" {dialog.set_title("載入顯示設定至預覽").pick_file()}
+                                else {dialog.set_title("匯出目前生效的顯示設定").set_file_name("display.pttstella.json").save_file()}
+                            };
+                        let Some(path)=path else {return Ok(serde_json::json!({"profile_result":"cancelled"}));};
+                        if action=="export" {
+                            if !path.file_name().is_some_and(|n|n.to_string_lossy().to_ascii_lowercase().ends_with(".pttstella.json")) {return Err("請使用 .pttstella.json 副檔名".into());}
+                            let bytes=PortableProfile::new(name,app_settings.display.clone())?.encode()?;
+                            storage::replace(&path,&bytes)?;
+                            Ok(serde_json::json!({"profile_result":"exported","notice":"已匯出目前生效設定；未套用的草稿不包含在內"}))
+                        } else {
+                            let bytes=Store::at(path).read()?.ok_or("找不到顯示設定檔")?;
+                            let profile=PortableProfile::decode(&bytes)?;
+                            let values=profile.display.resolve().map_err(str::to_owned)?;
+                            Ok(serde_json::json!({"profile_result":"imported","profile_import":{"profile":profile.display,"name":profile.name,"values":values,"sample":sample_packet(&font_sample,&values)},"notice":"設定已載入預覽；套用並儲存後才會生效"}))
+                        }
+                    })();
+                    eval.send(result.unwrap_or_else(|error|serde_json::json!({"profile_result":"rejected","notice":error}))).map_err(|e|e.to_string())?;
                 },
                 SurfaceEvent::ExportPng { generation, revision, selection_request, png, trusted } => {
                     if stopping || !trusted { continue; }
@@ -885,7 +926,7 @@ async fn surface(
                         "art_seam_pixels":art_seam_pixels,
                         "art_zoom_seams":art_zoom_seams,"art_geometry":art_geometry,
                         "hover_controls":hover_controls,"proportional_zoom":proportional_zoom,"zoom_samples":zoom_samples,
-                        "settings_loaded":settings,
+                        "settings_loaded":app_settings,
                         "font_fallback_per_glyph":"not measured"});
                     pending_report = Some(report);
                     close_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_secs(45));

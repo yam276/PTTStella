@@ -1,6 +1,6 @@
 # 字型組合與可攜設定檔
 
-2026-10-16。狀態：**方案，新增的自訂設定檔管理／匯入／匯出尚未實作**。使用者要求可在任何平台選擇自己喜歡的預設組合，也能保存自己的設定。
+2026-10-16。狀態：**具名檔案、跨平台選擇意圖與匯入／匯出已接入；驗收見 active plan**。使用者要求可在任何平台選擇自己喜歡的預設組合，也能保存自己的設定。
 
 ## 現況
 
@@ -14,7 +14,7 @@
 
 三組皆為字高 20、基線 20。沒有既存有效設定時，依編譯平台選初始值；已保存的有效設定直接載入。平台名稱描述字型組合，**不限制使用平台**。
 
-本機保存已有 version 1 JSON、8 KiB 讀取上限、欄位驗證、原始 bytes 備份 `settings.json.bak` 與原子替換。載入失敗使用平台初始值並顯示原因，不自動覆寫壞檔。保存／取消及重啟像素已在 Windows gate 驗證；新增的匯入／匯出尚不存在。
+本機保存已有 version 1 JSON、8 KiB 讀取上限、欄位驗證、原始 bytes 備份 `settings.json.bak` 與原子替換。載入失敗使用平台初始值並顯示原因，不自動覆寫壞檔。保存／取消及重啟像素已在 Windows gate 驗證；新增的可攜檔透過明確選檔／另存入口使用。
 
 設定目錄由 [Store](../src/settings/store.rs) 與鎖定的 directories 6.0.0 決定：Windows `%APPDATA%\PTTStella\config`、macOS `~/Library/Application Support/PTTStella`、Linux `$XDG_CONFIG_HOME/pttstella` 或 `~/.config/pttstella`。macOS／Linux 路徑為庫來源推導，沒有在這台 Windows 主機執行。
 
@@ -56,4 +56,4 @@ Mac 上明確選擇 Windows 組合，重啟與再次匯入仍保留該選擇；�
 4. 缺字型時保留要求值並可改選，不能以 fonts.load 成功當作安裝證明；固定格線、雙色字、自然比例與 PNG 使用同一 renderer。
 5. 真實原生開檔／另存取消與錯誤、返回 PTT 焦點、IME、選字及不送站端 bytes；Windows、macOS、Linux 分別記錄實測，不以單平台代替。
 
-本輪僅來源研究與文件檢查，沒有執行新增功能的 runtime gate。
+實作採 version 2 AppSettings、DisplayProfile 與 Fonts enum；renderer 只消費一次解析後的 DisplaySettings。舊 v1 讀入不立即寫檔；明確套用後才備份原始 bytes 並改存新格式。匯出只包含目前生效的 display 與使用者名稱，不含 app hover 偏好。核心案例驗證固定組合、自訂值、v1 遷移及重複／未知／無效欄位；原生選檔／另存及其他 OS 尚待人工驗收。
