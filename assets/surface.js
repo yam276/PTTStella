@@ -267,6 +267,7 @@ function deactivate(e){cancelHover(true);policy("reset",e);released=null;cancelD
 function lostcapture(){if(dragging){cancelHover();dragging=null;released=null;surface.dataset.pointerActive="false";refreshKeepAlive();}}
 function hasSelection(){return selectionActive;}
 function clearSelection() {
+    if(!stopped)revokeSurfaceSelection(send,selectionCache,selectionBusy);
     selectionActive=false;selectionFingerprint=null;selectionNext=null;selectionCache=null;selectionLayer.replaceChildren();
     surfaceNote.textContent="";
     delete surface.dataset.selectionReady;
@@ -277,6 +278,7 @@ function requestSelection(selection) {
     setHover(null);
     const fingerprint=JSON.stringify({generation,revision,presentation:latest?.presentation,selection});
     if(fingerprint===selectionFingerprint) return;
+    if(!stopped)revokeSurfaceSelection(send,selectionCache,selectionBusy);
     selectionFingerprint=fingerprint;selectionActive=true;
     selectionNext={presentation:latest.presentation,generation,revision,selection}; selectionCache=null;
     delete surface.dataset.selectionReady;flushSelection();
@@ -688,6 +690,8 @@ function runSurfaceProbe(mode){
             else if(mode==="painted")send({kind:"painted",presentation:latest.presentation,revision:revision+100,generation});
             else if(mode==="renderer_error")throw new Error("synthetic renderer failure");
             else if(mode==="slow")surfaceNote.textContent="慢命令探針：結果等待 60 秒；可開啟字型設定或立即關閉視窗";
+            else if(mode==="files")surfaceNote.textContent="原生選檔探針（本機合成資料）：可匯出 PNG 或匯入／匯出設定檔";
+            else if(mode==="files_slow")surfaceNote.textContent="慢檔案探針：等待本機 runner 釋放；可開啟設定或關閉視窗";
             else if(mode==="dialogs")surfaceNote.textContent="對話框與媒體封包探針（僅本機合成資料）";
             else if(mode==="confirm"){pasteConfirmProbe=true;surfaceNote.textContent="貼上確認探針：請用原生貼上 A、換行、B";}
             else if(mode==="untrusted"){

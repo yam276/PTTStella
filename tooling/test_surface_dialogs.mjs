@@ -22,6 +22,27 @@ function environment(file,factory){
     };
 }
 const display={ascii_font:"ASCII",cjk_font:"中文",font_size:20,baseline:20};
+test("the production clearSelection sends a scoped revocation before dropping its cache",()=>{
+    const packetSource=readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8");
+    const revoke=vm.runInNewContext(packetSource+"\nrevokeSurfaceSelection");
+    const source=readFileSync(new URL("../assets/surface.js",import.meta.url),"utf8");
+    const start=source.indexOf("function clearSelection()"),end=source.indexOf("function requestSelection(",start);
+    assert.ok(start>=0&&end>start);
+    const expected=JSON.parse(readFileSync(new URL("../tests/fixtures/selection-cleared.json",import.meta.url),"utf8"));
+    const events=[],context={stopped:false,selectionActive:true,selectionFingerprint:"selected",selectionNext:null,
+        selectionCache:{...expected,kind:undefined,value:{text:"synthetic"}},selectionBusy:null,
+        selectionLayer:{replaceChildren(){}},surfaceNote:{textContent:""},surface:{dataset:{}},
+        refreshExportControls(){},revokeSurfaceSelection:revoke,send:packet=>events.push(packet)};
+    vm.runInNewContext(source.slice(start,end)+"\nclearSelection();",context);
+    assert.deepEqual(JSON.parse(JSON.stringify(events)),[expected]);
+    assert.equal(context.selectionCache,null);assert.equal(context.selectionActive,false);
+    context.selectionBusy={...expected,request:12};events.length=0;
+    vm.runInNewContext(source.slice(start,end)+"\nclearSelection();",context);
+    assert.equal(events[0].request,12);
+    context.stopped=true;events.length=0;
+    vm.runInNewContext(source.slice(start,end)+"\nclearSelection();",context);
+    assert.equal(events.length,0);
+});
 const openData=()=>({profile:{fonts:{kind:"platform_default"}},values:{...display},defaults:{...display},presets:{},sample:{settings:{...display}},warning:null});
 function deferred(){let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};}
 

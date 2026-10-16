@@ -39,9 +39,11 @@ manual keyboard input → session-owned send queue → connection
 | [ui/protocol](../src/ui/protocol.rs) | WebView 結構化事件、serde wire 格式及共同輸入准入；沒有副作用 |
 | [ui/outbound](../src/ui/outbound.rs)／[ui/bridge](../src/ui/bridge.rs) | Rust→JS 的 tagged Packet 與具型別 payload／結果狀態；一般 bridge 只接受 Packet，原始 Eval 交由 lifecycle join |
 | [ui/commands](../src/ui/commands.rs) | 一筆可取消的命令結果 future，由 surface 的 select 輪詢；不另建送鍵 task 或佇列 |
-| [ui/lifecycle](../src/ui/lifecycle.rs) | renderer、媒體、鑰匙圈及命令等待的共同清理擁有者；正常／錯誤退出都停止並 join |
+| [ui/files](../src/ui/files.rs) | 單筆檔案工作、UI thread 的非同步原生 picker，以及 blocking pool 上的有界讀寫／PNG 解碼；關閉撤銷未開始工作、保留並等待已開始工作 |
+| [ui/lifecycle](../src/ui/lifecycle.rs) | renderer、媒體、鑰匙圈、檔案及命令等待的共同清理擁有者；正常／錯誤退出都停止並 join |
 | [ui/presentation](../src/ui/presentation.rs) | 遮黑後的唯一 Paint、連結／圖片命中、選取及輸出使用的版本核對；字型預覽也使用同一封包 |
-| [ui/preferences](../src/ui/preferences.rs) | 目前生效設定、儲存錯誤與字型 sample 的共同擁有者；草稿預覽／匯入不套用，保存成功後才一起更新生效值 |
+| [ui/preferences](../src/ui/preferences.rs) | 生效設定、草稿建構與成功保存後的 commit；初載只由檔案 worker 呼叫，互動時不自行選檔或讀寫 |
+| [ui/surface_state](../src/ui/surface_state.rs) | 一筆 in-flight Paint、已確認畫面、dirty、名單投影、選取與 hover；集中繪製確認、版本核對、失效及 PNG lease |
 | [ui/probe](../src/ui/probe.rs) | 自製畫面、驗收計數、獨立色彩 expected 與報告建構，不擁有產品的輸入或畫面狀態 |
 | [ui/surface](../src/ui/surface.rs) | 協調事件、信任／版本檢查、單筆繪製與各 feature owner 的停止順序 |
 
@@ -51,7 +53,13 @@ manual keyboard input → session-owned send queue → connection
 
 登入／滑鼠導覽／Vim 瀏覽只各自建立一筆共同 Pending 中的結果 future；等待期間繼續輪詢畫面、媒體、鑰匙圈與關窗。Pending 確認空槽後，同步呼叫 Connection 的 request API 立即入列並取得 Reply，只將等待結果留給 select，避免後續原始輸入搶先；已有等待時連入列 factory 都不執行，不增加第二層佇列。取消登入、換 session 或關窗會丟棄 reply receiver，使 Connection 拒絕尚未執行的排隊命令。已開始的 write 無法回滾，也不會因結果未確認而重送。
 
-surface 所有返回路徑都進入 Resources 清理：先取消命令、撤銷保活與媒體，再並行要求 renderer 停止、Connection shutdown 及等待不可中止的 OS credential 工作。除了資料通道 stop，靜態控制事件也可喚醒 renderer 的單一 receive；JS 先移除互動 listener，再於 finally 釋放其餘資源並回傳清理確認，Rust drain Stopped 並 join eval。五秒未完成只更新可見狀態，保留正在等待的擁有者，不能宣告清理成功。Connection 即使收不到 shutdown 回覆，仍 join worker／probe 並保存失敗結果，重複呼叫不把失敗改報為無連線。
+surface 所有返回路徑都進入 Resources 清理：先取消命令、撤銷保活、媒體及檔案許可，再並行要求 renderer 停止、Connection shutdown 及等待不可中止的 OS credential／已開始檔案工作。除了資料通道 stop，靜態控制事件也可喚醒 renderer 的單一 receive；JS 先移除互動 listener，再於 finally 釋放其餘資源並回傳清理確認，Rust drain Stopped 並 join eval。五秒未完成只更新可見狀態，保留正在等待的擁有者，不能宣告清理成功。Connection 即使收不到 shutdown 回覆，仍 join worker／probe 並保存失敗結果，重複呼叫不把失敗改報為無連線。
+
+Files 同時只接納一個工作，忙碌時不執行第二個 factory，也不建立另一層佇列。設定／名單初載、保存、設定檔匯入匯出及 PNG 解碼／寫入使用 blocking pool；原生 picker 仍在 UI thread 建立及輪詢，明確請求後先聚焦父視窗。UI select 繼續接收畫面、關閉及其他結果，保存成功才 commit 生效設定／規則。關閉許可與 PNG 版本 lease 分開：清理撤銷尚未開始的工作，保留 picker／已開始寫入到完成，五秒後仍顯示等待；取消／過期是正常撤銷，真實失敗會併入清理結果，不能假報成功。
+
+SurfaceState 在 ACK 前保留唯一 in-flight Paint，等待期間只標記 dirty；ACK 後才送最新 watch 的畫面。未知 ACK 不消耗原等待；即使舊 session 的畫面仍在繪製，也要先 drain ACK，舊 snapshot 不能通過目前版本核對。規則／揭露改變同步清除選取、hover 與匯出許可。來源更新可撤銷互動，Vim 無重繪連按仍保留既有的邏輯瀏覽契約。
+
+PNG 開始時核對相同呈現與選取行範圍，再取得可撤銷 ExportLease；解碼後、picker 結果及 worker 開始寫入前再次核對。lease 直接讀最新來源 watch，不等待 UI 消費來源更新；規則／揭露／顯示改變撤銷所有舊 PNG，選取變更與 input epoch 只撤銷相關選取行 PNG。JS clearSelection／新選取在丟舊 cache 前送 SelectionCleared，Rust 按完整 identity／request 撤銷；舊通知不能清掉新選取，整頁 PNG 不因無關清選取而取消。開始寫入後不能假裝回滾，仍等待並回報實際結果。
 
 Rust→JS 封包使用 `{kind, payload}`；Stop／MediaReset 是沒有 payload 的 unit variant。登入、名單與設定檔回覆使用明確結果 enum；導航、貼上、保存、匯出與外開使用各自的 status enum。Preferences 回傳同一 Packet，診斷報告不走 UI 通道。JS 的 [router](../assets/surface-packets.js) 只分派指定種類，拒絕未知種類、缺 payload 與舊式混合欄位，不再把未知回覆當成 Paint。雙端隨同一 App 編入，沒有額外通訊服務或通用訊息框架。
 
