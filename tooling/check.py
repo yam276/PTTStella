@@ -222,7 +222,7 @@ def run_core(root):
         commands = [cargo + ['fmt', '--all', '--', '--check'],
                     cargo + ['clippy', '--no-default-features', '--all-targets', '--locked', '--', '-D', 'warnings']]
         commands += [cargo + ['test', '--no-default-features', '--test', suite, '--locked']
-                     for suite in ('screen', 'interaction', 'navigation', 'media')]
+                     for suite in ('screen', 'interaction', 'navigation', 'media', 'vim')]
         commands += [cargo + ['run', '--quiet', '--locked', '--no-default-features', '--bin', 'replay', '--',
                               'tests/fixtures/' + name] for name in ('dual-color.json', 'redraw.json')]
         for command in commands:

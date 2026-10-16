@@ -16,3 +16,4 @@ pub mod telnet;
 pub mod text;
 #[cfg(feature = "desktop")]
 mod tls;
+pub mod vim;

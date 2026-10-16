@@ -67,22 +67,32 @@ enum Command {
     Navigate {
         stamp: Stamp,
         intent: Intent,
+        keyboard: bool,
         reply: oneshot::Sender<Result<(), String>>,
     },
     Shutdown(oneshot::Sender<()>),
 }
 enum PendingInput {
-    Manual(u64),
-    Refresh { revision: u64, deadline: Instant },
+    Manual {
+        revision: u64,
+        deadline: Instant,
+        streaming: bool,
+    },
+    Refresh {
+        revision: u64,
+        deadline: Instant,
+    },
 }
 impl PendingInput {
     fn revision(&self) -> u64 {
         match self {
-            Self::Manual(revision) | Self::Refresh { revision, .. } => *revision,
+            Self::Manual { revision, .. } | Self::Refresh { revision, .. } => *revision,
         }
     }
     fn expired(&self, now: Instant) -> bool {
-        matches!(self,Self::Refresh {deadline,..} if now>=*deadline)
+        match self {
+            Self::Manual { deadline, .. } | Self::Refresh { deadline, .. } => now >= *deadline,
+        }
     }
 }
 pub struct Connection {
@@ -168,10 +178,22 @@ impl Connection {
         self.enqueue(Command::Input { generation, bytes })
     }
     pub async fn navigate(&self, stamp: Stamp, intent: Intent) -> Result<(), String> {
+        self.navigate_from(stamp, intent, false).await
+    }
+    pub async fn browse_key(&self, stamp: Stamp, intent: Intent) -> Result<(), String> {
+        self.navigate_from(stamp, intent, true).await
+    }
+    async fn navigate_from(
+        &self,
+        stamp: Stamp,
+        intent: Intent,
+        keyboard: bool,
+    ) -> Result<(), String> {
         let (reply, answer) = oneshot::channel();
         self.enqueue(Command::Navigate {
             stamp,
             intent,
+            keyboard,
             reply,
         })?;
         timeout(Duration::from_secs(6), answer)
@@ -335,25 +357,27 @@ async fn run(
                         view.message = "尚未連線或輸入屬於舊連線；未送出".into(); dirty = true; continue;
                     }
                     idle.activity(Instant::now());
-                    if write_input(&mut socket,&mut view,&bytes).await.is_ok() { pending_input=Some(PendingInput::Manual(screen.revision())); }
+                    if write_input(&mut socket,&mut view,&bytes).await.is_ok() { pending_input=Some(PendingInput::Manual {revision:screen.revision(),deadline:Instant::now()+timing.response_timeout,streaming:false}); }
                     dirty=true;
                 },
-                Some(Command::Navigate {stamp,intent,reply}) => {
+                Some(Command::Navigate {stamp,intent,keyboard,reply}) => {
                     // An expired request must never execute later from the command queue.
                     if reply.is_closed() { continue; }
+                    let streaming=keyboard && matches!(intent,Intent::Lines{..}) && matches!(pending_input,Some(PendingInput::Manual{streaming:true,..}));
                     let result=if stamp.generation!=view.generation || socket.is_none() || view.phase!=Phase::Connected {
                         Err(navigation::Error::Disconnected.to_string())
-                    } else if stamp.revision!=screen.revision() || stamp.input_epoch!=view.input_epoch {
+                    } else if stamp.revision!=screen.revision() || (!streaming && stamp.input_epoch!=view.input_epoch) {
                         Err(navigation::Error::Stale.to_string())
-                    } else if pending_input.as_ref().is_some_and(|p|p.revision()==screen.revision()) {
+                    } else if !streaming && pending_input.as_ref().is_some_and(|p|p.revision()==screen.revision()) {
                         Err(navigation::Error::AwaitingScreen.to_string())
                     } else {
                         match navigation::plan(&navigation::analyze(&screen.frame()),intent) {
                             Err(error)=>Err(error.to_string()),
                             Ok(bytes)=> {
+                                if bytes.is_empty() {let _=reply.send(Ok(()));continue;}
                                 idle.activity(Instant::now());
                                 let result=write_input(&mut socket,&mut view,&bytes).await;
-                                if result.is_ok() { pending_input=Some(PendingInput::Manual(screen.revision())); }
+                                if result.is_ok() { pending_input=Some(PendingInput::Manual {revision:screen.revision(),deadline:Instant::now()+timing.response_timeout,streaming:keyboard && matches!(intent,Intent::Lines{..})}); }
                                 dirty=true;result
                             },
                         }
@@ -442,9 +466,12 @@ async fn run(
                 if !commands.is_empty() || !matches!(gates.has_changed(),Ok(false)) {continue;}
                 if pending_input.as_ref().is_some_and(|p|p.revision()!=screen.revision()) {pending_input=None;}
                 if pending_input.as_ref().is_some_and(|p|p.expired(now)) {
-                    pending_input=None;idle.enable(false,now);view.keep_alive=false;
-                    view.message="防閒置未收到畫面更新，已暫停；手動操作仍可使用".into();
-                    view.keep_alive_failure=Some(view.message.clone());dirty=true;
+                    if matches!(pending_input,Some(PendingInput::Refresh{..})) {
+                        idle.enable(false,now);view.keep_alive=false;
+                        view.message="防閒置未收到畫面更新，已暫停；手動操作仍可使用".into();
+                        view.keep_alive_failure=Some(view.message.clone());
+                    } else {view.message="未收到畫面更新，操作結果未確認；可繼續手動操作，不會自動重送".into();}
+                    pending_input=None;dirty=true;
                 }
                 let stamp=Stamp {revision:screen.revision(),..view.stamp()};
                 if socket.is_some() && view.phase==Phase::Connected && pending_input.is_none()

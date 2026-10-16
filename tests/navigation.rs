@@ -80,9 +80,15 @@ fn list_wheel_is_an_item_step_and_reading_actions_are_not_enabled() {
         navigation::plan(&context, Intent::NextItem).unwrap(),
         b"\x1b[B"
     );
-    for intent in [Intent::Back, Intent::NextPage, Intent::PreviousPage] {
-        assert_eq!(navigation::plan(&context, intent), Err(Error::Unavailable));
-    }
+    assert_eq!(navigation::plan(&context, Intent::Back).unwrap(), b"\x1b[D");
+    assert_eq!(
+        navigation::plan(&context, Intent::NextPage).unwrap(),
+        b"\x1b[6~"
+    );
+    assert_eq!(
+        navigation::plan(&context, Intent::PreviousPage).unwrap(),
+        b"\x1b[5~"
+    );
 }
 #[test]
 fn pinned_article_and_complete_dual_colour_title_keep_column_targets() {

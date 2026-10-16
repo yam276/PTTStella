@@ -9,6 +9,17 @@ const pasteDialog=document.getElementById("paste-dialog"), pasteSend=document.ge
 const exportButton=document.getElementById("export-png");
 const exportRows=document.getElementById("export-rows");
 const keepAlive=document.getElementById("keep-alive");
+const vimToggle=document.getElementById("vim-toggle"),vimOnce=document.getElementById("vim-once"),vimStatus=document.getElementById("vim-status");
+let keyboardState={enabled:false,mode:"input",pending:false,prefix:""};
+function policy(action,e,code="") {send({kind:"keyboard_state",action,code,generation,trusted:e?.isTrusted??true});}
+function toggleVim(e){policy("toggle",e);restoreEditingFocus();}
+function armNative(e){policy("once",e);restoreEditingFocus();}
+function keyup(e){if(!e.metaKey)policy("release",e,e.code);}
+function receiveKeyboard(state){keyboardState=state;vimToggle.textContent=state.enabled?"Vim：開":"Vim：關";
+    vimToggle.setAttribute("aria-pressed",String(state.enabled));vimOnce.hidden=!state.enabled||state.mode==="input";
+    vimOnce.setAttribute("aria-pressed",String(state.mode==="once"));
+    vimStatus.textContent=!state.enabled?"":({normal:"VIM NORMAL",input:"PTT INPUT",once:"原生一次",suspended:"VIM 暫停 · i 原始輸入"}[state.mode])+" "+state.prefix;
+    surface.dataset.keyboardMode=state.mode;surface.dataset.vim=String(state.enabled);refreshKeepAlive();}
 const navigationMarker=document.getElementById("navigation-marker"),browseControls=document.getElementById("browse-controls");
 const browseBack=document.getElementById("browse-back"),browsePrevious=document.getElementById("browse-previous"),browseNext=document.getElementById("browse-next");
 const browseHint=document.getElementById("browse-hint");
@@ -31,6 +42,7 @@ async function loadFonts(settings) {
     await document.fonts.ready;loadedFonts=key;
 }
 let generation=0, revision=-1, composing=false, composition=null, beforeEdit=null, sent=0;
+let inputKey=false;
 let latest=null, animation=0, stopped=false, draws=0, zoom=1;
 let grid=null, dragging=null, selectionNext=null, selectionBusy=null, selectionCache=null, selectionSequence=0;
 let selectionActive=false, selectionFingerprint=null;
@@ -64,7 +76,11 @@ function keydown(e) {
     }
     let bytes=keys[e.key];
     if(e.ctrlKey&&/^[a-z]$/i.test(e.key)) bytes=[e.key.toUpperCase().charCodeAt(0)&31];
-    if(bytes) { clearSelection(); e.preventDefault(); sendInput({kind:"key",bytes,generation,trusted:e.isTrusted}); }
+    if(bytes) {clearSelection();e.preventDefault();}
+    if(bytes||e.key.length===1||e.key==="Dead") {
+        inputKey=!bytes;
+        send({kind:"key",key:{key:e.key,code:e.code,ctrl:e.ctrlKey,alt:e.altKey,repeat:e.repeat},generation,trusted:e.isTrusted});
+    }
 }
 function input(e) {
     if(pastePending) {keyboard.value="";return;}
@@ -84,10 +100,14 @@ function input(e) {
 }
 const lineBreak=e=>e.inputType==="insertLineBreak"||e.inputType==="insertParagraph";
 function beforeinput(e) {
+    if(!inputKey&&!composing&&!e.isComposing&&!lineBreak(e)) policy("independent_edit",e);
+    inputKey=false;
     beforeEdit={composition:composing||e.isComposing||/Composition/.test(e.inputType||"")};
     if(lineBreak(e)&&!composing&&!e.isComposing) e.preventDefault();
 }
 function compositionstart(e) {
+    inputKey=false;
+    policy("composition_start",e);
     clearSelection();composing=true;
     composition={generation,startTrusted:e.isTrusted,editTrusted:false,editText:null};
     keyboard.classList.add("composing");positionKeyboard();
@@ -96,8 +116,9 @@ function compositionstart(e) {
 function compositionend(e) {
     const finished=composition;
     composing=false;composition=null;keyboard.classList.remove("composing");keyboard.value="";positionKeyboard();
-    if(finished&&e.data) sendInput({kind:"text",text:e.data,generation:finished.generation,trusted:e.isTrusted,
+    if(finished&&e.data) sendInput({kind:"text",text:e.data,generation:finished.generation,trusted:e.isTrusted,composed:true,
         composition_input:finished.startTrusted&&finished.editTrusted&&finished.editText===e.data});
+    policy("composition_end",e);
     refreshNavigation();
 }
 function cancelComposition() {
@@ -128,6 +149,7 @@ function pointerdown(e) {
     if(e.button!==0||!e.isPrimary||dragging) return;
     released=null;
     if(blocked()) return;
+    policy("reset",e);
     const bounds=viewport.getBoundingClientRect();
     if(e.clientX>=bounds.left+viewport.clientWidth || e.clientY>=bounds.top+viewport.clientHeight) return;
     // Prevent the scroll container's default focus step from overriding ours.
@@ -181,7 +203,7 @@ function cancelDrag() {
     refreshKeepAlive();
 }
 function pointercancel(){released=null;cancelDrag();clearSelection();}
-function deactivate(){released=null;cancelDrag();setHover(null);cancelComposition();}
+function deactivate(e){policy("reset",e);released=null;cancelDrag();setHover(null);cancelComposition();}
 function lostcapture(){if(dragging){dragging=null;released=null;surface.dataset.pointerActive="false";refreshKeepAlive();}}
 function hasSelection(){return selectionActive;}
 function clearSelection() {
@@ -282,6 +304,7 @@ function refreshNavigation() {
 }
 function navigate(intent,e) {
     if(!canNavigate()||dragging?.moved) return;
+    policy("reset",e);
     if(intent.action==="previous_page"&&latest.navigation.first_line===1||intent.action==="next_page"&&latest.navigation.percent===100) return;
     clearSelection();navigationRequest=true;navigationLocked=true;setHover(null);refreshNavigation();
     surface.dataset.navigationResult="pending";send({kind:"navigate",stamp:stamp(),intent,trusted:e.isTrusted});focus();
@@ -299,6 +322,7 @@ function activate() { if(!document.querySelector("dialog[open]")&&!chrome.contai
 function paste(e) {
     e.preventDefault();
     if(pastePending||pasteDialog.open) return;
+    if(keyboardState.enabled&&keyboardState.mode!=="input") {policy("reset",e);surfaceNote.textContent="請先按 i 切換原始輸入再貼上";return;}
     const text=e.clipboardData?.getData("text/plain");
     cancelComposition();cancelDrag();clearSelection();
     if(text===undefined) {surfaceNote.textContent="此環境無法讀取貼上的文字";return;}
@@ -307,7 +331,7 @@ function paste(e) {
 }
 function confirmPaste(e){sendInput({kind:"paste_confirm",trusted:e.isTrusted});}
 function cancelPaste(e){e.preventDefault();send({kind:"paste_cancel",trusted:e.isTrusted});}
-function openFonts(e){send({kind:"settings_open",trusted:e.isTrusted});}
+function openFonts(e){policy("reset",e);send({kind:"settings_open",trusted:e.isTrusted});}
 function fillFonts(values) {
     for(const [name,field] of Object.entries(fontFields)) field.value=values[name];
 }
@@ -358,7 +382,7 @@ function refreshExportControls() {
     exportRows.title=selection?`匯出第 ${selection.value.rows.start+1}–${selection.value.rows.end} 行（完整 80 欄）`:"先拖曳選取要截圖的行";
 }
 function refreshKeepAlive() {
-    const ready=!!latest?.keep_alive&&canNavigate()&&!dragging&&!released&&!hasSelection()&&!exportBusy;
+    const ready=!!latest?.keep_alive&&canNavigate()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
     const current=stamp(),key=JSON.stringify([current,ready,latest?.keep_alive_ready,latest?.keep_alive]);
     keepAlive.textContent=latest?.keep_alive?"防閒置：開":"防閒置：關";
     keepAlive.setAttribute("aria-pressed",String(!!latest?.keep_alive));
@@ -418,7 +442,8 @@ function wheel(e) {
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
 const media=installMedia({send,prepare:()=>{cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshNavigation,restore:restoreEditingFocus});
 const bindings=[
-    [keyboard,"keydown",keydown],[keyboard,"input",input],
+    [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
+    [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
     [keyboard,"beforeinput",beforeinput],
     [keyboard,"blur",cancelComposition],
     [keyboard,"compositionstart",compositionstart],[keyboard,"compositionend",compositionend],
@@ -572,7 +597,7 @@ async function paint(packet) {
     if(packet.generation<generation||(packet.generation===generation&&packet.frame.revision<revision)) return;
     await loadFonts(packet.settings);
     const changed=!sameStamp(stamp(),{generation:packet.generation,revision:packet.frame.revision,input_epoch:packet.input_epoch});
-    if(changed) {released=null;clearSelection();cancelDrag();setHover(null,false);navigationLocked=false;}
+    if(changed||latest?.input_pending&&!packet.input_pending) {released=null;clearSelection();cancelDrag();setHover(null,false);navigationLocked=false;}
     if(packet.generation!==generation){
         pastePending=false;cancelComposition();focus();
     }
@@ -594,6 +619,7 @@ async function paint(packet) {
 focus();
 try {
     while(true){const packet=await dioxus.recv();if(packet.stop) break;
+        if(packet.keyboard_state){receiveKeyboard(packet.keyboard_state);continue;}
         if(packet.media_open){media.open(packet.media_open);continue;}
         if(packet.media_image){media.receiveImage(packet.media_image);continue;}
         if(packet.media_error){media.fail(packet.media_error);continue;}
