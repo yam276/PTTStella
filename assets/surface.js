@@ -7,6 +7,7 @@ const selectionLayer=document.getElementById("selection"), selectAll=document.ge
 const surfaceNote=document.getElementById("surface-note");
 const pasteDialog=document.getElementById("paste-dialog"), pasteSend=document.getElementById("paste-send"), pasteCancel=document.getElementById("paste-cancel");
 const exportButton=document.getElementById("export-png");
+const exportRows=document.getElementById("export-rows");
 const navigationMarker=document.getElementById("navigation-marker"),browseControls=document.getElementById("browse-controls");
 const browseBack=document.getElementById("browse-back"),browsePrevious=document.getElementById("browse-previous"),browseNext=document.getElementById("browse-next");
 const browseHint=document.getElementById("browse-hint");
@@ -163,6 +164,7 @@ function clearSelection() {
     selectionActive=false;selectionFingerprint=null;selectionNext=null;selectionCache=null;selectionLayer.replaceChildren();
     surfaceNote.textContent="";
     delete surface.dataset.selectionReady;
+    refreshExportControls();
 }
 function requestSelection(selection) {
     setHover(null);
@@ -171,6 +173,7 @@ function requestSelection(selection) {
     selectionFingerprint=fingerprint;selectionActive=true;
     selectionNext={generation,revision,selection}; selectionCache=null;
     delete surface.dataset.selectionReady;flushSelection();
+    refreshExportControls();
 }
 function flushSelection() {
     if(selectionBusy||!selectionNext) return;
@@ -183,6 +186,7 @@ function receiveSelection(reply) {
     if(selectionActive&&!selectionNext&&reply.generation===generation&&reply.revision===revision&&reply.value) {
         selectionCache=reply;surfaceNote.textContent="";surface.dataset.selectionReady=String(reply.request);drawSelection();
     }
+    refreshExportControls();
     flushSelection();
 }
 function drawSelection() {
@@ -240,6 +244,7 @@ function drawNavigationMarker() {
         width:(grid.x(end)-grid.x(start))/grid.ratio+"px",height:(grid.y(row+1)-grid.y(row))/grid.ratio+"px"});
 }
 function refreshNavigation() {
+    refreshExportControls();
     const context=latest?.navigation,ready=canNavigate();
     surface.dataset.navigation=context?.kind||"unknown";surface.dataset.navigationReady=String(ready);
     surface.dataset.readingFirst=String(context?.first_line??0);
@@ -321,26 +326,42 @@ const pasteObserver=new MutationObserver(()=>{
     }
 });
 pasteObserver.observe(pasteDialog,{attributes:true,attributeFilter:["data-active"]});
-function exportScreen(e) {
+function refreshExportControls() {
+    const selection=selectionCache;
+    exportButton.disabled=exportBusy||!latest;
+    exportRows.disabled=exportBusy||blocked()||!selection||selection.generation!==generation||selection.revision!==revision;
+    exportRows.title=selection?`匯出第 ${selection.value.rows.start+1}–${selection.value.rows.end} 行（完整 80 欄）`:"先拖曳選取要截圖的行";
+}
+function exportScreen(e, selected=false) {
     if(exportBusy||!latest||stopped) return;
-    exportBusy=true;exportButton.disabled=true;surface.dataset.exportResult="pending";
+    const selection=selected?selectionCache:null;
+    if(selected&&exportRows.disabled) return;
+    exportBusy=true;refreshExportControls();surface.dataset.exportResult="pending";
     const packet=latest;
     exportTask=(async()=>{
-        const target=document.createElement("canvas");target.width=960;target.height=576;
+        const full=document.createElement("canvas");full.width=960;full.height=576;
+        const target=selection?document.createElement("canvas"):full;
         try {
-            render(target,packet,{cursor:false,hovered:-1});
+            render(full,packet,{cursor:false,hovered:-1});
+            if(selection) {
+                const {start,end}=selection.value.rows;
+                target.width=960;target.height=(end-start)*24;
+                target.getContext("2d").drawImage(full,0,start*24,960,target.height,0,0,960,target.height);
+            }
             const blob=await new Promise((resolve,reject)=>target.toBlob(value=>value?resolve(value):reject(new Error("無法編碼 PNG")),"image/png"));
             if(blob.size>3*1024*1024) throw new Error("PNG 超過匯出大小上限");
             const png=await new Promise((resolve,reject)=>{
                 const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("無法準備 PNG"));reader.readAsDataURL(blob);
             });
-            if(!stopped) send({kind:"export_png",generation:packet.generation,revision:packet.frame.revision,png,trusted:e.isTrusted});
+            if(!stopped) send({kind:"export_png",generation:packet.generation,revision:packet.frame.revision,
+                selection_request:selection?.request??null,png,trusted:e.isTrusted});
         } catch(error) {
-            exportBusy=false;exportButton.disabled=false;
+            exportBusy=false;refreshExportControls();
             if(!stopped) {surface.dataset.exportResult="failed";surfaceNote.textContent=String(error);restoreEditingFocus();}
-        } finally {target.width=0;target.height=0;}
+        } finally {target.width=0;target.height=0;full.width=0;full.height=0;}
     })();
 }
+const exportSelected=e=>exportScreen(e,true);
 function showChrome() { chrome.classList.add("open"); }
 function hideChrome() { chrome.classList.remove("open"); }
 function zoomTo(value) {
@@ -372,7 +393,7 @@ const bindings=[
     [selectAll,"click",selectPage],[document,"copy",copy],
     [canvas,"contextmenu",selectLink],[canvas,"pointerleave",leaveLink],
     [pasteSend,"click",confirmPaste],[pasteCancel,"click",cancelPaste],[pasteDialog,"cancel",cancelPaste],
-    [exportButton,"click",exportScreen],
+    [exportButton,"click",exportScreen],[exportRows,"click",exportSelected],
     [browseBack,"click",browseReturn],[browsePrevious,"click",browseUp],[browseNext,"click",browseDown],
     [fontButton,"click",openFonts],[fontPreset,"change",chooseFontPreset],
     ...Object.values(fontFields).map(field=>[field,"input",editFont]),
@@ -551,7 +572,7 @@ try {
         if(packet.navigation_result) {navigationRequest=false;surface.dataset.navigationResult=packet.navigation_result;
             if(packet.navigation_result==="rejected") navigationLocked=false;refreshNavigation();}
         if(packet.link_result) surface.dataset.linkResult=packet.link_result;
-        if(packet.export_result) {surface.dataset.exportResult=packet.export_result;exportBusy=false;exportButton.disabled=false;restoreEditingFocus();}
+        if(packet.export_result) {surface.dataset.exportResult=packet.export_result;exportBusy=false;refreshExportControls();restoreEditingFocus();}
         if(packet.notice) (fontDialog.open?fontNote:surfaceNote).textContent=packet.notice;
         if(packet.paste_result||packet.link_result||packet.export_result||packet.notice||packet.navigation_result||packet.input_result) continue;
         await paint(packet);
@@ -572,7 +593,7 @@ finally {
     surface.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true}));window.dispatchEvent(new Event("resize"));plus.click();
     chrome.dispatchEvent(new PointerEvent("pointerenter"));
     fontButton.click();fontFields.font_size.dispatchEvent(new InputEvent("input",{bubbles:true}));
-    browseNext.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
+    browseNext.click();exportRows.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     send({kind:"stopped",clean:sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
         &&fontTimer===0&&!fontDialog.open&&!chrome.classList.contains("open")&&document.activeElement!==keyboard});
 }
