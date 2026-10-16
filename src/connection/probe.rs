@@ -9,12 +9,56 @@ use tokio_tungstenite::tungstenite::{
     protocol::{CloseFrame, frame::coding::CloseCode},
 };
 
+pub(super) enum Scenario {
+    Desktop { reload_settings: bool },
+    Window,
+}
+
+pub(super) fn window_page(stage: usize) -> Result<Vec<u8>, String> {
+    // Self-authored rows cover padded dates, voting, locking and deleted posts.
+    crate::encoding::encode(&format!(
+        "\x1b[2J\x1b[1;1HPTTStella native-window check {stage}\x1b[3;1H\x1b[30;47m\x1b[2K  編號      日 期  作  者       文 章 標 題\x1b[0m\x1b[4;1H     120   8  1/ 9 alice        ˇ 合成投票文章\x1b[5;1H>    121     10/ 9 bob          鎖 合成鎖定文章\x1b[6;1H     122      1/ 9 -            ╳ (本文已被刪除)\x1b[24;1H\x1b[30;47m\x1b[2K文章選讀 [←]離開 [→]閱讀 [h]說明\x1b[0m\x1b[5;1H"
+    )).map_err(|e| e.to_string())
+}
+
+async fn window<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result<(), String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    for (step, expected) in [b"\x1b[B", b"\x1b[A", b"\x1b[H", b"\x1b[F"]
+        .iter()
+        .enumerate()
+    {
+        if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref() == *expected)
+        {
+            return Err(format!("native-window Vim bytes differ at step {step}"));
+        }
+        socket
+            .send(Message::Binary(window_page(step + 1)?.into()))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    match socket.next().await {
+        Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e| e.to_string()),
+        Some(Ok(Message::Binary(bytes))) => Err(format!(
+            "native-window extra input: {:02x?}",
+            &bytes[..bytes.len().min(16)]
+        )),
+        other => Err(format!("native-window expected Close, received {other:?}")),
+    }
+}
+
 pub(super) async fn serve(
     listener: TcpListener,
     bytes: Vec<u8>,
-    reload_settings: bool,
+    scenario: Scenario,
 ) -> Result<(), String> {
-    timeout(Duration::from_secs(90), async {
+    let deadline = if matches!(scenario, Scenario::Window) {
+        300
+    } else {
+        90
+    };
+    timeout(Duration::from_secs(deadline), async {
         let (stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
         let mut socket = tokio_tungstenite::accept_async(stream)
             .await
@@ -23,7 +67,15 @@ pub(super) async fn serve(
             .send(Message::Binary(bytes.into()))
             .await
             .map_err(|e| e.to_string())?;
-        if reload_settings {
+        if matches!(scenario, Scenario::Window) {
+            return window(&mut socket).await;
+        }
+        if matches!(
+            scenario,
+            Scenario::Desktop {
+                reload_settings: true
+            }
+        ) {
             return match socket.next().await {
                 Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e| e.to_string()),
                 _ => Err("settings reload probe received unexpected input".into()),

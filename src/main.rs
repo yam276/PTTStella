@@ -1,9 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#[cfg(target_os = "macos")]
+mod macos;
 mod ui;
 
 fn main() {
     let mut args = std::env::args_os().skip(1);
     let flag = args.next();
+    let window_probe = flag.as_deref() == Some(std::ffi::OsStr::new("--probe-window"));
     if flag.as_deref() == Some(std::ffi::OsStr::new("--probe-live")) {
         let result = (|| -> Result<(), String> {
             let directory = args
@@ -32,28 +35,28 @@ fn main() {
     }
     let probe = match flag {
         None => None,
-        Some(flag) if flag == "--probe" => match args.next() {
+        Some(flag) if flag == "--probe" || window_probe => match args.next() {
             Some(path) => Some(std::path::PathBuf::from(path)),
             None => {
-                eprintln!("--probe requires an output directory");
+                eprintln!("probe requires an output directory");
                 std::process::exit(2);
             }
         },
         Some(_) => {
             eprintln!(
-                "usage: pttstella [--probe OUTPUT_DIRECTORY DEBUG_PORT | --probe-live OUTPUT_DIRECTORY]"
+                "usage: pttstella [--probe OUTPUT_DIRECTORY DEBUG_PORT | --probe-window OUTPUT_DIRECTORY | --probe-live OUTPUT_DIRECTORY]"
             );
             std::process::exit(2);
         }
     };
-    let debug_port = if probe.is_some() {
+    let debug_port = if probe.is_some() && !window_probe {
         args.next()
             .and_then(|p| p.to_str().and_then(|s| s.parse::<u16>().ok()))
             .filter(|p| *p != 0)
     } else {
         None
     };
-    if probe.is_some() && debug_port.is_none() {
+    if probe.is_some() && !window_probe && debug_port.is_none() {
         eprintln!("--probe requires an output directory and loopback debug port");
         std::process::exit(2);
     }
@@ -86,19 +89,36 @@ fn main() {
         }
     }
     let mut config = dioxus::desktop::Config::new();
-    if let (Some(path), Some(port)) = (&probe, debug_port) {
-        config = config
-            .with_data_directory(path.join(if reload_settings {
-                "webview-reload"
-            } else {
-                "webview"
-            }))
-            .with_windows_browser_args(format!(
+    #[cfg(target_os = "macos")]
+    {
+        let menu = match macos::menu() {
+            Ok(menu) => menu,
+            Err(error) => {
+                eprintln!("cannot create macOS menu: {error}");
+                std::process::exit(1);
+            }
+        };
+        config = config.with_menu(menu);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        config = config.with_menu(None);
+    }
+    if let Some(path) = &probe {
+        config = config.with_data_directory(path.join(if reload_settings {
+            "webview-reload"
+        } else {
+            "webview"
+        }));
+        if let Some(port) = debug_port {
+            config = config.with_windows_browser_args(format!(
                 "--remote-debugging-address=127.0.0.1 --remote-debugging-port={port}"
             ));
+        }
     }
     let props = ui::AppProps {
         probe,
+        window_probe,
         reload_settings,
         media_origin,
     };
@@ -109,7 +129,6 @@ fn main() {
         dioxus::prelude::VirtualDom::new_with_props(ui::app, props),
         config
             .with_window(window)
-            .with_close_behaviour(dioxus::desktop::WindowCloseBehaviour::WindowHides)
-            .with_menu(None),
+            .with_close_behaviour(dioxus::desktop::WindowCloseBehaviour::WindowHides),
     );
 }

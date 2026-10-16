@@ -142,6 +142,15 @@ impl Connection {
     }
     /// An isolated browser-to-WebSocket conformance session; no external network.
     pub fn start_probe(bytes: Vec<u8>, reload_settings: bool) -> Result<Self, String> {
+        Self::start_owned_probe(bytes, probe::Scenario::Desktop { reload_settings })
+    }
+    /// Native-window regression, with a local peer checking translated Vim bytes.
+    pub fn start_window_probe() -> Result<Self, String> {
+        let connection = Self::start_owned_probe(probe::window_page(0)?, probe::Scenario::Window)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    fn start_owned_probe(bytes: Vec<u8>, scenario: probe::Scenario) -> Result<Self, String> {
         let runtime = tokio::runtime::Handle::try_current().map_err(|e| e.to_string())?;
         let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).map_err(|e| e.to_string())?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
@@ -151,7 +160,7 @@ impl Connection {
         );
         let listener = tokio::net::TcpListener::from_std(listener).map_err(|e| e.to_string())?;
         let connection = Self::start_at(Screen::new(80, 24).map_err(str::to_owned)?, endpoint)?;
-        let peer = runtime.spawn(probe::serve(listener, bytes, reload_settings));
+        let peer = runtime.spawn(probe::serve(listener, bytes, scenario));
         *connection
             .probe_peer
             .lock()

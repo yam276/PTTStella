@@ -77,14 +77,7 @@ async fn total_deadline_covers_a_stalled_response_body() {
             .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 10000\r\n\r\n")
             .await
             .unwrap();
-        let mut byte = [0];
-        assert_eq!(
-            timeout(Duration::from_secs(2), socket.read(&mut byte))
-                .await
-                .unwrap()
-                .unwrap(),
-            0
-        );
+        assert_peer_closed(&mut socket).await;
     });
     let mut loader = Loader::new();
     assert_eq!(loader.deadline, Duration::from_secs(20));
@@ -104,6 +97,19 @@ async fn request_path(socket: &mut tokio::net::TcpStream) -> String {
         .nth(1)
         .unwrap()
         .to_owned()
+}
+
+async fn assert_peer_closed(socket: &mut tokio::net::TcpStream) {
+    let mut byte = [0];
+    let closed = timeout(Duration::from_secs(2), socket.read(&mut byte))
+        .await
+        .unwrap();
+    // Cancellation/timeout can produce FIN or RST (observed on macOS).
+    // Data, timeout and other errors still fail; next-load success is separate.
+    assert!(
+        matches!(closed, Ok(0))
+            || matches!(closed, Err(ref error) if error.kind() == std::io::ErrorKind::ConnectionReset)
+    );
 }
 
 #[tokio::test]
@@ -194,14 +200,7 @@ async fn dropping_pending_load_closes_its_request_and_next_load_can_complete() {
             .await
             .unwrap();
         started.send(()).unwrap();
-        let mut byte = [0];
-        assert_eq!(
-            timeout(Duration::from_secs(2), socket.read(&mut byte))
-                .await
-                .unwrap()
-                .unwrap(),
-            0
-        );
+        assert_peer_closed(&mut socket).await;
         let (mut socket, _) = listener.accept().await.unwrap();
         request_path(&mut socket).await;
         socket

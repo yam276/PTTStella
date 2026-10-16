@@ -8,6 +8,45 @@ fn explicit_tls_provider_builds_with_desktop_feature_unification() {
 }
 
 #[tokio::test]
+async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdown() {
+    use crate::vim::{Effect, Key, Keyboard};
+    let connection = Connection::start_window_probe().unwrap();
+    connection.connect().unwrap();
+    let mut view = wait(&connection, |v| v.received > 0).await;
+    let mut keyboard = Keyboard::default();
+    keyboard.toggle();
+    for value in ["j", "k", "g", "g", "G"] {
+        let context = navigation::analyze(&view.frame);
+        assert!(matches!(context, navigation::Context::ArticleList { .. }));
+        let key = Key {
+            key: value.into(),
+            code: format!("Key{value}"),
+            ctrl: false,
+            alt: false,
+            shift: false,
+            repeat: false,
+        };
+        let effect = keyboard.key(&key, &context);
+        keyboard.release(&key.code);
+        assert!(!keyboard.accept_text(false));
+        if let Effect::Browse(intent) = effect {
+            let revision = view.frame.revision;
+            connection.browse_key(view.stamp(), intent).await.unwrap();
+            view = wait(&connection, |v| {
+                v.frame.revision > revision && !v.input_pending
+            })
+            .await;
+        } else {
+            assert_eq!(effect, Effect::None);
+        }
+        assert_eq!(keyboard.status(&context).mode, "normal");
+    }
+    // The peer independently expects Down, Up, Home, End, then Close; neither
+    // literal g/j/k/G nor an extra command can produce a successful join.
+    connection.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn keyboard_noop_streaming_and_unanswered_moves_have_one_owner() {
     let (listener, connection) = idle_local().await;
     connection.connect().unwrap();

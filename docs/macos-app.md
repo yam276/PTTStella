@@ -25,6 +25,8 @@ python3 tooling/bundle_macos.py --out-dir dist/macos-next
 
 ## 打包內容與檢查
 
+macOS 保留原生 PTTStella／Edit／Window 選單：`⌘W` 關窗、`⌘Q` 結束、`⌃⌘F` 切換全螢幕，並提供 Zoom／Minimize。關窗與結束共用原本的 renderer、媒體及 Connection 清理流程，Command 快捷鍵不傳至 PTT。
+
 - `Dioxus.toml` 保存顯示名稱、bundle identifier 與 publisher；Cargo.toml 是產品版本的來源。
 - `Contents/MacOS/pttstella` 是實際 release executable；`Contents/Info.plist` 保存 bundle metadata，`Resources` 目前為空，使用系統預設圖示。
 - plist 版本使用 Cargo 版本的三段數字，例如 `0.1.0-dev.1` 對應 `0.1.0`；這不是發佈 build number 管理。
@@ -40,3 +42,5 @@ python3 tooling/bundle_macos.py --out-dir dist/macos-next
 標準 bundle 結構見 [Apple Bundle Programming Guide](https://developer.apple.com/library/archive/documentation/CoreFoundation/Conceptual/CFBundles/BundleTypes/BundleTypes.html)，正式散布要求見 [Apple notarization 文件](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)。
 
 產生 `.app`、簽章有效、視窗啟動及完整功能驗收是不同證據。既有 `tooling/check.py desktop` 仍只有 Windows backend；macOS 尚不能靠打包成功宣稱 IME、媒體 codec、剪貼簿、像素或實站登入通過。實際狀態只維護在 [active plan](active/minimal-browser.md)。
+
+`--probe-window OUTPUT_DIRECTORY` 是另外的原生視窗回歸入口，不開 DevTools port，不連 PTT，設定與 PNG 僅存指定目錄。真實視窗內開啟 Vim，依序 j、k、gg、G；本機 WebSocket 逐筆核對 Down／Up／Home／End。其後以原生關窗／結束快捷鍵退出；有額外站端輸入、序列未完成或 owner 清理失敗就不產生通過報告。`window-probe.json` 只表示這個有限流程的 listener／worker 與輸入檢查通過，並非完整 desktop gate。
