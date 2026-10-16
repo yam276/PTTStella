@@ -173,6 +173,12 @@ impl Connection {
     pub fn start_login_probe() -> Result<Self, String> {
         Self::start_owned_probe(probe::login_page()?, probe::Scenario::Login)
     }
+    pub fn start_filters_probe() -> Result<Self, String> {
+        let connection =
+            Self::start_owned_probe(probe::filters_page(false)?, probe::Scenario::Filters)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     fn start_owned_probe(bytes: Vec<u8>, scenario: probe::Scenario) -> Result<Self, String> {
         let runtime = tokio::runtime::Handle::try_current().map_err(|e| e.to_string())?;
         let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).map_err(|e| e.to_string())?;

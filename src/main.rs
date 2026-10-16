@@ -8,6 +8,7 @@ fn main() {
     let mut args = std::env::args_os().skip(1);
     let flag = args.next();
     let window_probe = flag.as_deref() == Some(std::ffi::OsStr::new("--probe-window"));
+    let filters_probe = flag.as_deref() == Some(std::ffi::OsStr::new("--probe-filters"));
     let login_probe = flag.as_deref() == Some(std::ffi::OsStr::new("--probe-login"));
     if flag.as_deref() == Some(std::ffi::OsStr::new("--probe-live")) {
         let result = (|| -> Result<(), String> {
@@ -37,28 +38,30 @@ fn main() {
     }
     let probe = match flag {
         None => None,
-        Some(flag) if flag == "--probe" || window_probe || login_probe => match args.next() {
-            Some(path) => Some(std::path::PathBuf::from(path)),
-            None => {
-                eprintln!("probe requires an output directory");
-                std::process::exit(2);
+        Some(flag) if flag == "--probe" || window_probe || login_probe || filters_probe => {
+            match args.next() {
+                Some(path) => Some(std::path::PathBuf::from(path)),
+                None => {
+                    eprintln!("probe requires an output directory");
+                    std::process::exit(2);
+                }
             }
-        },
+        }
         Some(_) => {
             eprintln!(
-                "usage: pttstella [--probe OUTPUT_DIRECTORY DEBUG_PORT | --probe-window OUTPUT_DIRECTORY | --probe-login OUTPUT_DIRECTORY | --probe-live OUTPUT_DIRECTORY]"
+                "usage: pttstella [--probe OUTPUT_DIRECTORY DEBUG_PORT | --probe-window OUTPUT_DIRECTORY | --probe-login OUTPUT_DIRECTORY | --probe-filters OUTPUT_DIRECTORY | --probe-live OUTPUT_DIRECTORY]"
             );
             std::process::exit(2);
         }
     };
-    let debug_port = if probe.is_some() && !window_probe && !login_probe {
+    let debug_port = if probe.is_some() && !window_probe && !login_probe && !filters_probe {
         args.next()
             .and_then(|p| p.to_str().and_then(|s| s.parse::<u16>().ok()))
             .filter(|p| *p != 0)
     } else {
         None
     };
-    if probe.is_some() && !window_probe && !login_probe && debug_port.is_none() {
+    if probe.is_some() && !window_probe && !login_probe && !filters_probe && debug_port.is_none() {
         eprintln!("--probe requires an output directory and loopback debug port");
         std::process::exit(2);
     }
@@ -122,6 +125,7 @@ fn main() {
         probe,
         window_probe,
         login_probe,
+        filters_probe,
         reload_settings,
         media_origin,
     };

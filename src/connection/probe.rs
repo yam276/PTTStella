@@ -13,6 +13,41 @@ pub(super) enum Scenario {
     Desktop { reload_settings: bool },
     Window,
     Login,
+    Filters,
+}
+
+pub(super) fn filters_page(next: bool) -> Result<Vec<u8>, String> {
+    let pages: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/filters.json"))
+            .map_err(|e| e.to_string())?;
+    crate::encoding::encode(
+        pages[if next { "reading_next" } else { "reading" }]
+            .as_str()
+            .ok_or("missing filters fixture")?,
+    )
+    .map_err(|e| e.to_string())
+}
+
+async fn filters<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result<(), String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    for (expected, next) in [
+        (b"\x1b[6~".as_slice(), true),
+        (b"\x1b[5~".as_slice(), false),
+    ] {
+        if !matches!(socket.next().await,Some(Ok(Message::Binary(b))) if b.as_ref()==expected) {
+            return Err("filters probe unexpected station input".into());
+        }
+        socket
+            .send(Message::Binary(filters_page(next)?.into()))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    match socket.next().await {
+        Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e| e.to_string()),
+        _ => Err("filters probe expected Close without extra input".into()),
+    }
 }
 
 pub(super) fn login_page() -> Result<Vec<u8>, String> {
@@ -132,7 +167,9 @@ pub(super) async fn serve(
     bytes: Vec<u8>,
     scenario: Scenario,
 ) -> Result<(), String> {
-    let deadline = if matches!(scenario, Scenario::Window | Scenario::Login) {
+    let deadline = if matches!(scenario, Scenario::Filters) {
+        900
+    } else if matches!(scenario, Scenario::Window | Scenario::Login) {
         300
     } else {
         90
@@ -151,6 +188,9 @@ pub(super) async fn serve(
         }
         if matches!(scenario, Scenario::Login) {
             return login(&mut socket).await;
+        }
+        if matches!(scenario, Scenario::Filters) {
+            return filters(&mut socket).await;
         }
         if matches!(
             scenario,
