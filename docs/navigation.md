@@ -2,7 +2,7 @@
 
 滑鼠操作沿用固定 80×24 格線。畫面辨識與導覽計畫由 Rust 唯一管理；UI 只消費已辨識的內容與命中區域，不解析文章文字，也不增加 shell／PTY。
 
-目前完成：純 Rust 畫面辨識與輸入計畫、12 個合成正反例、production Connection 的版本／輸入競態往返，以及 Windows Dioxus／WebView2 的真實 pointer／wheel 往返。實站登入後與其他平台尚未驗證。
+目前完成：純 Rust 畫面辨識與輸入計畫、14 個合成正反例、production Connection 的版本／輸入競態往返，以及 Windows Dioxus／WebView2 的真實 pointer／wheel 往返。macOS 另驗證本機列表的 Vim／原生視窗流程；實站登入後及其他平台的滑鼠流程尚未驗證。
 
 ## 範圍與識別
 
@@ -11,6 +11,8 @@
 公開站端介面核對於 2026-10-16，來源為 ptt/pttbbs commit `90f07d655b8d7e85298ef26bdb63f40646fd9d17` 的 [列表欄位與操作](https://github.com/ptt/pttbbs/blob/90f07d655b8d7e85298ef26bdb63f40646fd9d17/mbbsd/bbs.c)、[閱讀狀態列](https://github.com/ptt/pttbbs/blob/90f07d655b8d7e85298ef26bdb63f40646fd9d17/mbbsd/pmore.c)。只依可觀察的文字／欄位介面編寫自己的判斷與合成資料，沒有搬入站端程式或私人 session。這不是實站部署版本的證明。
 
 初期不支援價格式列表、所有自訂狀態列、橫向閱讀或所有彈窗。未辨識時保留手動鍵盤；不猜測自動登入、確認、發文、刪文或轉帳。
+
+一般列表接受五欄日期的補齊空白（例如 `1/ 9`）、一般／回覆／轉錄／投票／鎖文標記，以及作者為 `-` 且帶 `╳`／`□` 的刪文列。一列日期或標記不同不應讓合法看板整頁失去 Vim／滑鼠導覽；日期仍須有效、標題非空，提示列、非法作者或未知標記仍拒絕。格式依 [公開列印介面](https://github.com/ptt/pttbbs/blob/908bb0631a4a6db41eac85713637adf1a6058fde/mbbsd/bbs.c#L711) 編寫自製正反例，沒有將實站登入視為已驗收。
 
 ## 互動與視覺
 
