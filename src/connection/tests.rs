@@ -1,8 +1,16 @@
 //! Real production transport against loopback only; never contacts PTT.
+use super::transport::tls_connector;
 use super::*;
+use crate::navigation;
+use futures_util::{SinkExt, StreamExt};
+use std::time::Instant;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
+};
+use tokio_tungstenite::{
+    Connector,
+    tungstenite::{Message, protocol::frame::coding::CloseCode},
 };
 
 #[test]

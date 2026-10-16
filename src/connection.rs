@@ -1,28 +1,18 @@
 //! One PTT connection owner, including explicit single-attempt login. No shell.
 use crate::{
     input::MAX_INPUT_BYTES,
-    login::{self, Credentials, Prompt},
-    navigation::{self, Intent, Stamp},
+    login::Credentials,
+    navigation::{Intent, Stamp},
     screen::{Frame, Screen},
-    telnet,
 };
-use futures_util::{SinkExt, StreamExt};
-use std::{
-    future::pending,
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
-};
+use std::{sync::Mutex, time::Duration};
 use tokio::{
     net::TcpStream,
     sync::{mpsc, oneshot, watch},
     task::JoinHandle,
-    time::{MissedTickBehavior, interval, timeout},
+    time::timeout,
 };
-use tokio_tungstenite::tungstenite::protocol::{CloseFrame, frame::coding::CloseCode};
-use tokio_tungstenite::{
-    Connector, MaybeTlsStream, WebSocketStream, connect_async_tls_with_config,
-    tungstenite::{Message, client::IntoClientRequest, protocol::WebSocketConfig},
-};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 pub const PTT_ENDPOINT: &str = "wss://ws.ptt.cc/bbs";
 type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
@@ -89,29 +79,6 @@ enum Command {
     },
     Shutdown(oneshot::Sender<CloseOutcome>),
 }
-enum PendingInput {
-    Manual {
-        revision: u64,
-        deadline: Instant,
-        streaming: bool,
-    },
-    Refresh {
-        revision: u64,
-        deadline: Instant,
-    },
-}
-impl PendingInput {
-    fn revision(&self) -> u64 {
-        match self {
-            Self::Manual { revision, .. } | Self::Refresh { revision, .. } => *revision,
-        }
-    }
-    fn expired(&self, now: Instant) -> bool {
-        match self {
-            Self::Manual { deadline, .. } | Self::Refresh { deadline, .. } => now >= *deadline,
-        }
-    }
-}
 pub struct Connection {
     commands: mpsc::Sender<Command>,
     keep_alive_ui: watch::Sender<Option<(Stamp, bool)>>,
@@ -150,7 +117,9 @@ impl Connection {
         };
         let (sender, updates) = watch::channel(initial);
         let (keep_alive_ui, gates) = watch::channel(None);
-        let worker = runtime.spawn(run(screen, endpoint, receiver, sender, timing, gates));
+        let worker = runtime.spawn(worker::run(
+            screen, endpoint, receiver, sender, timing, gates,
+        ));
         Ok(Self {
             commands,
             keep_alive_ui,
@@ -312,374 +281,12 @@ impl Connection {
     }
 }
 
-async fn dial(endpoint: String) -> Result<Socket, String> {
-    let mut request = endpoint.into_client_request().map_err(|e| e.to_string())?;
-    let connector = if request.uri().scheme_str() == Some("wss") {
-        Some(tls_connector()?)
-    } else {
-        None
-    };
-    request.headers_mut().insert(
-        "Origin",
-        "https://term.ptt.cc"
-            .parse()
-            .map_err(|_| "invalid fixed origin")?,
-    );
-    let config = WebSocketConfig::default()
-        .max_message_size(Some(64 * 1024))
-        .max_frame_size(Some(64 * 1024));
-    timeout(
-        Duration::from_secs(15),
-        connect_async_tls_with_config(request, Some(config), false, connector),
-    )
-    .await
-    .map_err(|_| "連線逾時".to_owned())?
-    .map(|(socket, _)| socket)
-    .map_err(|e| format!("無法連線: {e}"))
-}
-
-fn tls_connector() -> Result<Connector, String> {
-    Ok(Connector::Rustls(Arc::new(crate::tls::client_config()?)))
-}
-
-async fn stop(socket: &mut Option<Socket>, dialing: &mut Option<Dial>) -> CloseOutcome {
-    if let Some(task) = dialing.take() {
-        task.abort();
-        if let Ok(Ok(connected)) = task.await {
-            // Dial and connected socket never coexist in this owner.
-            *socket = Some(connected);
-        }
-    }
-    if let Some(mut connection) = socket.take() {
-        let close = async {
-            connection
-                .close(Some(CloseFrame {
-                    code: CloseCode::Normal,
-                    reason: "PTTStella disconnect".into(),
-                }))
-                .await
-                .map_err(|_| CloseOutcome::Unconfirmed)?;
-            let mut acknowledged = false;
-            // close() only queues/flushes Close. Keep reading until the server
-            // answers and closes its transport; never send BBS keys while closing.
-            loop {
-                match connection.next().await {
-                    Some(Ok(Message::Close(_))) => acknowledged = true,
-                    Some(Ok(_)) => {}
-                    None => {
-                        return Ok(if acknowledged {
-                            CloseOutcome::Acknowledged
-                        } else {
-                            CloseOutcome::PeerClosedWithoutReply
-                        });
-                    }
-                    Some(Err(error)) => {
-                        use tokio_tungstenite::tungstenite::{Error, error::ProtocolError};
-                        let ended = matches!(
-                            &error,
-                            Error::Protocol(ProtocolError::ResetWithoutClosingHandshake)
-                        ) || matches!(&error,Error::Io(e) if matches!(e.kind(),std::io::ErrorKind::UnexpectedEof|std::io::ErrorKind::ConnectionReset|std::io::ErrorKind::ConnectionAborted));
-                        return if ended {
-                            Ok(if acknowledged {
-                                CloseOutcome::Acknowledged
-                            } else {
-                                CloseOutcome::PeerClosedWithoutReply
-                            })
-                        } else {
-                            Err(CloseOutcome::Unconfirmed)
-                        };
-                    }
-                }
-            }
-        };
-        return match timeout(Duration::from_secs(2), close).await {
-            Ok(Ok(outcome)) => outcome,
-            _ => CloseOutcome::Unconfirmed,
-        };
-    }
-    CloseOutcome::NoConnection
-}
-
-async fn send(socket: &mut Socket, message: Message) -> Result<(), String> {
-    timeout(Duration::from_secs(3), socket.send(message))
-        .await
-        .map_err(|_| "送出逾時；站端結果未知，未自動重送".to_owned())?
-        .map_err(|e| format!("送出失敗，未自動重送: {e}"))
-}
-
-async fn run(
-    mut screen: Screen,
-    endpoint: String,
-    mut commands: mpsc::Receiver<Command>,
-    updates: watch::Sender<View>,
-    timing: liveness::Timing,
-    mut gates: watch::Receiver<Option<(Stamp, bool)>>,
-) {
-    let mut socket: Option<Socket> = None;
-    let mut dialing: Option<Dial> = None;
-    let mut framing = telnet::Framing::default();
-    let mut view = updates.borrow().clone();
-    let mut dirty = false;
-    let mut pending_input: Option<PendingInput> = None;
-    let mut login_attempt: Option<(Credentials, Instant)> = None;
-    let mut last_close = CloseOutcome::NoConnection;
-    let mut clock = interval(Duration::from_millis(16));
-    let mut idle = liveness::Idle::new(Instant::now(), timing);
-    let mut idle_clock = interval(timing.poll);
-    idle_clock.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    loop {
-        tokio::select! {
-            command = commands.recv() => match command {
-                Some(Command::KeepAlive(enabled)) => {
-                    if let Some(failure)=view.keep_alive_failure.take() && view.message==failure && view.phase==Phase::Connected {
-                        view.message=if enabled {"已連線 — 防閒置已開啟"} else {"已連線 — 防閒置已暫停"}.into();
-                    }
-                    idle.enable(enabled,Instant::now());view.keep_alive=enabled;dirty=true;
-                    if matches!(pending_input,Some(PendingInput::Refresh {..})) {pending_input=None;}
-                },
-                Some(Command::Connect) if socket.is_none() && dialing.is_none() => {
-                    last_close=CloseOutcome::NoConnection;
-                    login_attempt=None;
-                    view.generation = view.generation.saturating_add(1);
-                    idle.activity(Instant::now());view.keep_alive_sent=0;
-                    view.keep_alive_failure=None;
-                    screen.reset_session(); framing = telnet::Framing::default(); view.received = 0;
-                    pending_input=None;view.input_epoch=0;view.input_pending=false;
-                    view.phase = Phase::Connecting; view.message = "正在連線 PTT…".into();
-                    dialing = Some(tokio::spawn(dial(endpoint.clone()))); dirty = true;
-                },
-                Some(Command::Connect) => {},
-                Some(Command::Disconnect) => {
-                    login_attempt=None;
-                    idle.activity(Instant::now());
-                    view.generation = view.generation.saturating_add(1);
-                    pending_input=None;view.input_pending=false;
-                    last_close = stop(&mut socket, &mut dialing).await;
-                    view.phase = Phase::Disconnected;
-                    view.message = match last_close {
-                        CloseOutcome::Acknowledged=>"本機已斷線（站端已回覆關閉）",
-                        CloseOutcome::PeerClosedWithoutReply=>"已送出關閉通知；站端已結束連線（未回覆 Close）",
-                        CloseOutcome::NoConnection=>"本機已斷線（沒有使用中的連線）",
-                        CloseOutcome::Unconfirmed=>"本機連線已關閉；站端回覆未確認",
-                    }.into(); dirty = true;
-                },
-                Some(Command::Input { generation, bytes }) => {
-                    login_attempt=None;
-                    // Preserve the peer/transport's last reason when typing after closure.
-                    if socket.is_none() && view.generation > 0 {
-                        continue;
-                    }
-                    if generation != view.generation || socket.is_none() {
-                        view.message = "尚未連線或輸入屬於舊連線；未送出".into(); dirty = true; continue;
-                    }
-                    idle.activity(Instant::now());
-                    if write_input(&mut socket,&mut view,&bytes).await.is_ok() { pending_input=Some(PendingInput::Manual {revision:screen.revision(),deadline:Instant::now()+timing.response_timeout,streaming:false}); }
-                    dirty=true;
-                },
-                Some(Command::CancelLogin) => {
-                    login_attempt=None;view.message="已取消登入；不會重送帳密".into();dirty=true;
-                },
-                Some(Command::Login {stamp,credentials,reply}) => {
-                    if reply.is_closed() {continue;}
-                    let result=if view.phase!=Phase::Connected || socket.is_none() || stamp!=(Stamp {revision:screen.revision(),..view.stamp()}) {
-                        Err("連線或畫面已改變；未送出登入".into())
-                    } else if login_attempt.is_some() || pending_input.is_some() || login::prompt(&screen.frame())!=Some(Prompt::Account) {
-                        Err("請先回到空白的 PTT 帳號提示；未送出登入".into())
-                    } else {
-                        idle.activity(Instant::now());
-                        let result=write_input(&mut socket,&mut view,&credentials.account_input()).await;
-                        if result.is_ok() {
-                            login_attempt=Some((credentials,Instant::now()+Duration::from_secs(15)));
-                            view.message="已送出帳號，等待密碼提示；任何手動輸入會取消登入".into();
-                        }
-                        result
-                    };
-                    dirty=true;let _=reply.send(result);
-                },
-                Some(Command::Navigate {stamp,intent,keyboard,reply}) => {
-                    login_attempt=None;
-                    // An expired request must never execute later from the command queue.
-                    if reply.is_closed() { continue; }
-                    let context=navigation::analyze(&screen.frame());
-                    let list=matches!(context,navigation::Context::MainMenu {..}|navigation::Context::BoardList {..}|navigation::Context::ArticleList {..});
-                    let list_move=list && matches!(intent,Intent::First|Intent::Last|Intent::NextPage|Intent::PreviousPage|Intent::Lines {..});
-                    // List movement may legitimately produce no redraw at a boundary.
-                    // Continue explicit keyboard intents after those moves, but a
-                    // forward/back transition still gates the next operation.
-                    let continuation=matches!(intent,Intent::Lines {..}) || list_move || (list && matches!(intent,Intent::Forward|Intent::Back));
-                    let streaming=keyboard && continuation && matches!(pending_input,Some(PendingInput::Manual{streaming:true,..}));
-                    let result=if stamp.generation!=view.generation || socket.is_none() || view.phase!=Phase::Connected {
-                        Err(navigation::Error::Disconnected.to_string())
-                    } else if stamp.revision!=screen.revision() || (!streaming && stamp.input_epoch!=view.input_epoch) {
-                        Err(navigation::Error::Stale.to_string())
-                    } else if !streaming && pending_input.as_ref().is_some_and(|p|p.revision()==screen.revision()) {
-                        Err(navigation::Error::AwaitingScreen.to_string())
-                    } else {
-                        match navigation::plan(&context,intent) {
-                            Err(error)=>Err(error.to_string()),
-                            Ok(bytes)=> {
-                                if bytes.is_empty() {let _=reply.send(Ok(()));continue;}
-                                idle.activity(Instant::now());
-                                let result=write_input(&mut socket,&mut view,&bytes).await;
-                                if result.is_ok() { pending_input=Some(PendingInput::Manual {revision:screen.revision(),deadline:Instant::now()+timing.response_timeout,streaming:keyboard && (list_move || matches!(intent,Intent::Lines{..}))}); }
-                                dirty=true;result
-                            },
-                        }
-                    };
-                    let _=reply.send(result);
-                },
-                Some(Command::Shutdown(done)) => {
-                    let outcome=stop(&mut socket, &mut dialing).await;
-                    let outcome=if outcome==CloseOutcome::NoConnection {last_close} else {outcome};
-                    let _ = done.send(outcome); break;
-                },
-                None => { stop(&mut socket, &mut dialing).await; break; },
-            },
-            changed = gates.changed() => {
-                if changed.is_err() {stop(&mut socket,&mut dialing).await;break;}
-                if let Some((stamp,ready))=*gates.borrow_and_update() && stamp.generation==view.generation {
-                    let current=Stamp {revision:screen.revision(),..view.stamp()};
-                    idle.gate(stamp,ready && stamp==current,Instant::now());dirty=true;
-                }
-            },
-            result = async { match dialing.as_mut() { Some(task) => task.await, None => pending().await } } => {
-                dialing = None;
-                match result {
-                    Ok(Ok(connection)) => {
-                        socket = Some(connection); view.phase = Phase::Connected;
-                        view.message = "已連線 — 請在畫面內手動登入 PTT".into();
-                    },
-                    Ok(Err(error)) => { view.phase = Phase::Error; view.message = error; },
-                    Err(error) => { view.phase = Phase::Error; view.message = format!("連線工作失敗: {error}"); },
-                }
-                dirty = true;
-            },
-            incoming = async { match socket.as_mut() { Some(connection) => connection.next().await, None => pending().await } } => {
-                let bytes = match incoming {
-                    Some(Ok(Message::Binary(bytes))) => Some(bytes),
-                    Some(Ok(Message::Text(_))) => {
-                        socket = None; view.phase = Phase::Error; view.message = "站端回傳非預期文字 framing；未轉碼猜測".into(); None
-                    },
-                    Some(Ok(Message::Ping(payload))) => {
-                        if let Some(connection) = socket.as_mut()
-                            && let Err(error) = send(connection, Message::Pong(payload)).await {
-                                socket = None; view.phase = Phase::Error; view.message = error;
-                            }
-                        None
-                    },
-                    Some(Ok(Message::Pong(_))) => None,
-                    Some(Ok(Message::Close(frame))) => {
-                        // Tungstenite queues the peer's close acknowledgement during read.
-                        if let Some(mut connection) = socket.take() {
-                            let _ = timeout(Duration::from_secs(2), connection.flush()).await;
-                        }
-                        view.phase = Phase::Disconnected;
-                        view.message = match frame {
-                            Some(frame) if frame.reason.is_empty() => format!("站端已關閉連線（{}）", u16::from(frame.code)),
-                            Some(frame) => format!("站端已關閉連線（{}）：{}", u16::from(frame.code), frame.reason),
-                            None => "站端已關閉連線（未提供原因）".into(),
-                        }; None
-                    },
-                    None => {
-                        socket = None; view.phase = Phase::Disconnected; view.message = "站端連線已結束（未收到關閉原因）".into(); None
-                    },
-                    Some(Err(error)) => { socket = None; view.phase = Phase::Error; view.message = format!("連線中斷: {error}"); None },
-                    Some(Ok(_)) => None,
-                };
-                if let Some(bytes) = bytes {
-                    view.received = view.received.saturating_add(bytes.len());
-                    let (display, reply) = framing.feed(&bytes, 80, 24); screen.feed(&display);
-                    if !reply.is_empty() && let Some(connection) = socket.as_mut()
-                        && let Err(error) = send(connection, Message::Binary(reply.into())).await {
-                            socket = None; view.phase = Phase::Error; view.message = error;
-                        }
-                    if login_attempt.as_ref().is_some_and(|(credentials,_)|login::password_prompt(&screen.frame(),&credentials.account)) {
-                        if let Some((credentials,deadline))=login_attempt.take() {
-                            if Instant::now()<deadline && view.phase==Phase::Connected {
-                                if write_input(&mut socket,&mut view,&credentials.password_input()).await.is_ok() {
-                                    view.message="帳密已送出；登入結果請確認站端畫面，不會自動重試".into();
-                                    pending_input=Some(PendingInput::Manual {revision:screen.revision(),deadline:Instant::now()+timing.response_timeout,streaming:false});
-                                }
-                            } else {view.message="登入等待逾時；未送出密碼".into();}
-                        }
-                    } else if login_attempt.is_some() && navigation::analyze(&screen.frame()).kind()!="unknown" {
-                        login_attempt=None;view.message="畫面已離開登入提示；未送出密碼".into();
-                    }
-                }
-                dirty = true;
-            },
-            _ = clock.tick(), if dirty => {
-                if pending_input.as_ref().is_some_and(|p| p.revision()!=screen.revision()) { pending_input=None; }
-                view.input_pending=pending_input.is_some() && view.phase==Phase::Connected;
-                view.login_pending=login_attempt.is_some();
-                view.keep_alive_ready=idle.ready(Stamp {revision:screen.revision(),..view.stamp()})
-                    && socket.is_some() && !view.input_pending && !view.login_pending
-                    && navigation::analyze(&screen.frame()).allows_keepalive();
-                view.frame = screen.frame(); updates.send_replace(view.clone()); dirty = false;
-            },
-            _ = idle_clock.tick() => {
-                let now=Instant::now();idle.tick(now);
-                if login_attempt.as_ref().is_some_and(|(_,deadline)|now>=*deadline) {
-                    login_attempt=None;view.message="登入等待逾時；未送出密碼，不會重試".into();dirty=true;
-                }
-                // Defer automatic work to pending input/UI state without starving
-                // incoming data or frame publication through a biased select.
-                if !commands.is_empty() || !matches!(gates.has_changed(),Ok(false)) {continue;}
-                if pending_input.as_ref().is_some_and(|p|p.revision()!=screen.revision()) {pending_input=None;}
-                if pending_input.as_ref().is_some_and(|p|p.expired(now)) {
-                    if matches!(pending_input,Some(PendingInput::Refresh{..})) {
-                        idle.enable(false,now);view.keep_alive=false;
-                        view.message="防閒置未收到畫面更新，已暫停；手動操作仍可使用".into();
-                        view.keep_alive_failure=Some(view.message.clone());
-                    } else {view.message="未收到畫面更新，操作結果未確認；可繼續手動操作，不會自動重送".into();}
-                    pending_input=None;dirty=true;
-                }
-                let stamp=Stamp {revision:screen.revision(),..view.stamp()};
-                if socket.is_some() && view.phase==Phase::Connected && pending_input.is_none() && login_attempt.is_none()
-                    && idle.due(now,stamp)
-                    && navigation::analyze(&screen.frame()).allows_keepalive() {
-                    idle.activity(now);
-                    if write_input(&mut socket,&mut view,liveness::REFRESH).await.is_ok() {
-                        pending_input=Some(PendingInput::Refresh {revision:screen.revision(),deadline:Instant::now()+timing.response_timeout});
-                        view.keep_alive_sent=view.keep_alive_sent.saturating_add(1);
-                    }
-                    dirty=true;
-                } else if view.keep_alive_ready && !idle.ready(stamp) {dirty=true;}
-            },
-        }
-        // A response wait belongs to a live connection. Its deadline must not
-        // replace a later peer close or transport failure with a generic notice.
-        if view.phase != Phase::Connected {
-            pending_input = None;
-            login_attempt = None;
-        }
-    }
-}
-
-async fn write_input(
-    socket: &mut Option<Socket>,
-    view: &mut View,
-    bytes: &[u8],
-) -> Result<(), String> {
-    let Some(connection) = socket.as_mut() else {
-        return Err(navigation::Error::Disconnected.to_string());
-    };
-    view.input_epoch = view.input_epoch.saturating_add(1);
-    match send(connection, Message::Binary(telnet::escape(bytes).into())).await {
-        Ok(()) => Ok(()),
-        Err(error) => {
-            *socket = None;
-            view.phase = Phase::Error;
-            view.message = error.clone();
-            Err(error)
-        }
-    }
-}
-
 mod liveness;
 mod probe;
 #[cfg(test)]
 mod tests;
+mod transport;
+mod worker;
 
 /// Explicit no-credential network probe, separate from ordinary gates.
 pub async fn probe_live() -> Result<serde_json::Value, String> {

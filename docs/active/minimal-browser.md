@@ -10,6 +10,12 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。沒有獨立文章 UI、板名導航按鈕、啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)。
 
+## 維護性重構
+
+2026-10-17：使用者要求檢查與改善可讀性、維護性及擴充性。本輪優先整理連線 worker 的狀態轉移、UI bridge／畫面投影與設定所有權；不新增通用框架、後端或產品功能。驗收為原有輸入 bytes、generation／revision／input epoch、防閒置、登入取消／期限、遮黑及關閉清理行為保持一致，既有 expected 不因重構更改。
+
+重構前 core 與 39 個 desktop lib／2 個 bin 測試通過。第一步將 WSS 連線／關閉／有界傳送移至 connection/transport，單一 session 狀態與登入、導覽、保活、畫面發布移至 connection/worker。事件迴圈只負責選擇事件；手動輸入仍只有一條 epoch／escape／送出路徑，等待狀態及登入期限各有共同擁有者。原本巨型 select 的壓縮分支改為可由 rustfmt 維護的具名方法。此步驟 core、39 個 desktop lib／2 個 bin、desktop 全 targets Clippy 與 docs gate 通過；既有 expected 未改。
+
 ## 增量：進板圖與六位數文章列表的 Vim 操作
 
 2026-10-17：使用者回報 C_Chat 進板圖停在「請按任意鍵繼續」，原先未知 profile 使 Vim 暫停。新增獨立 ContinuePrompt／Continue，要求完整格線、底列提示／色帶與最後一欄游標；只送一個空白。Normal 可用空白鍵、Enter、l／右方向鍵通過並維持 Vim；按住的繼續鍵跨畫面仍持有到 keyup，不誤開下一個項目。圖案區未映射字不參與決策，提示區仍須可映射；確認、輸入及其他未知畫面不放寬。沒有自動跳圖、跨頁補送、滑鼠導覽或保活。
