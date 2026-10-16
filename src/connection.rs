@@ -9,13 +9,13 @@ use futures_util::{SinkExt, StreamExt};
 use std::{
     future::pending,
     sync::{Arc, Mutex},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::{
     net::TcpStream,
     sync::{mpsc, oneshot, watch},
     task::JoinHandle,
-    time::{interval, timeout},
+    time::{MissedTickBehavior, interval, timeout},
 };
 use tokio_tungstenite::{
     Connector, MaybeTlsStream, WebSocketStream, connect_async_tls_with_config,
@@ -35,6 +35,10 @@ pub enum Phase {
 }
 #[derive(Clone)]
 pub struct View {
+    pub keep_alive: bool,
+    pub keep_alive_ready: bool,
+    pub keep_alive_sent: u64,
+    pub keep_alive_failure: Option<String>,
     pub input_epoch: u64,
     pub input_pending: bool,
     pub frame: Frame,
@@ -53,6 +57,7 @@ impl View {
     }
 }
 enum Command {
+    KeepAlive(bool),
     Connect,
     Disconnect,
     Input {
@@ -66,8 +71,23 @@ enum Command {
     },
     Shutdown(oneshot::Sender<()>),
 }
+enum PendingInput {
+    Manual(u64),
+    Refresh { revision: u64, deadline: Instant },
+}
+impl PendingInput {
+    fn revision(&self) -> u64 {
+        match self {
+            Self::Manual(revision) | Self::Refresh { revision, .. } => *revision,
+        }
+    }
+    fn expired(&self, now: Instant) -> bool {
+        matches!(self,Self::Refresh {deadline,..} if now>=*deadline)
+    }
+}
 pub struct Connection {
     commands: mpsc::Sender<Command>,
+    keep_alive_ui: watch::Sender<Option<(Stamp, bool)>>,
     pub updates: watch::Receiver<View>,
     worker: Mutex<Option<JoinHandle<()>>>,
     probe_peer: Mutex<Option<JoinHandle<Result<(), String>>>>,
@@ -77,9 +97,20 @@ impl Connection {
         Self::start_at(screen, PTT_ENDPOINT.to_owned())
     }
     fn start_at(screen: Screen, endpoint: String) -> Result<Self, String> {
+        Self::start_with_timing(screen, endpoint, liveness::Timing::default())
+    }
+    fn start_with_timing(
+        screen: Screen,
+        endpoint: String,
+        timing: liveness::Timing,
+    ) -> Result<Self, String> {
         let runtime = tokio::runtime::Handle::try_current().map_err(|e| e.to_string())?;
         let (commands, receiver) = mpsc::channel(64);
         let initial = View {
+            keep_alive: true,
+            keep_alive_ready: false,
+            keep_alive_sent: 0,
+            keep_alive_failure: None,
             input_epoch: 0,
             input_pending: false,
             frame: screen.frame(),
@@ -89,9 +120,11 @@ impl Connection {
             received: 0,
         };
         let (sender, updates) = watch::channel(initial);
-        let worker = runtime.spawn(run(screen, endpoint, receiver, sender));
+        let (keep_alive_ui, gates) = watch::channel(None);
+        let worker = runtime.spawn(run(screen, endpoint, receiver, sender, timing, gates));
         Ok(Self {
             commands,
+            keep_alive_ui,
             updates,
             worker: Mutex::new(Some(worker)),
             probe_peer: Mutex::new(None),
@@ -120,6 +153,13 @@ impl Connection {
     }
     pub fn disconnect(&self) -> Result<(), String> {
         self.enqueue(Command::Disconnect)
+    }
+    pub fn keep_alive(&self, enabled: bool) -> Result<(), String> {
+        self.enqueue(Command::KeepAlive(enabled))
+    }
+    pub fn keep_alive_gate(&self, stamp: Stamp, ready: bool) {
+        // A blocked UI cannot lose its pause request to a full input queue.
+        self.keep_alive_ui.send_replace(Some((stamp, ready)));
     }
     pub fn input(&self, generation: u64, bytes: Vec<u8>) -> Result<(), String> {
         if bytes.is_empty() || bytes.len() > MAX_INPUT_BYTES {
@@ -260,19 +300,33 @@ async fn run(
     endpoint: String,
     mut commands: mpsc::Receiver<Command>,
     updates: watch::Sender<View>,
+    timing: liveness::Timing,
+    mut gates: watch::Receiver<Option<(Stamp, bool)>>,
 ) {
     let mut socket: Option<Socket> = None;
     let mut dialing: Option<Dial> = None;
     let mut framing = telnet::Framing::default();
     let mut view = updates.borrow().clone();
     let mut dirty = false;
-    let mut pending_input: Option<u64> = None;
+    let mut pending_input: Option<PendingInput> = None;
     let mut clock = interval(Duration::from_millis(16));
+    let mut idle = liveness::Idle::new(Instant::now(), timing);
+    let mut idle_clock = interval(timing.poll);
+    idle_clock.set_missed_tick_behavior(MissedTickBehavior::Skip);
     loop {
         tokio::select! {
             command = commands.recv() => match command {
+                Some(Command::KeepAlive(enabled)) => {
+                    if let Some(failure)=view.keep_alive_failure.take() && view.message==failure && view.phase==Phase::Connected {
+                        view.message=if enabled {"已連線 — 防閒置已開啟"} else {"已連線 — 防閒置已暫停"}.into();
+                    }
+                    idle.enable(enabled,Instant::now());view.keep_alive=enabled;dirty=true;
+                    if matches!(pending_input,Some(PendingInput::Refresh {..})) {pending_input=None;}
+                },
                 Some(Command::Connect) if socket.is_none() && dialing.is_none() => {
                     view.generation = view.generation.saturating_add(1);
+                    idle.activity(Instant::now());view.keep_alive_sent=0;
+                    view.keep_alive_failure=None;
                     screen.reset_session(); framing = telnet::Framing::default(); view.received = 0;
                     pending_input=None;view.input_epoch=0;view.input_pending=false;
                     view.phase = Phase::Connecting; view.message = "正在連線 PTT…".into();
@@ -280,6 +334,7 @@ async fn run(
                 },
                 Some(Command::Connect) => {},
                 Some(Command::Disconnect) => {
+                    idle.activity(Instant::now());
                     view.generation = view.generation.saturating_add(1);
                     pending_input=None;view.input_pending=false;
                     let closed = stop(&mut socket, &mut dialing).await;
@@ -294,7 +349,8 @@ async fn run(
                     if generation != view.generation || socket.is_none() {
                         view.message = "尚未連線或輸入屬於舊連線；未送出".into(); dirty = true; continue;
                     }
-                    if write_input(&mut socket,&mut view,&bytes).await.is_ok() { pending_input=Some(screen.revision()); }
+                    idle.activity(Instant::now());
+                    if write_input(&mut socket,&mut view,&bytes).await.is_ok() { pending_input=Some(PendingInput::Manual(screen.revision())); }
                     dirty=true;
                 },
                 Some(Command::Navigate {stamp,intent,reply}) => {
@@ -304,14 +360,15 @@ async fn run(
                         Err(navigation::Error::Disconnected.to_string())
                     } else if stamp.revision!=screen.revision() || stamp.input_epoch!=view.input_epoch {
                         Err(navigation::Error::Stale.to_string())
-                    } else if pending_input==Some(screen.revision()) {
+                    } else if pending_input.as_ref().is_some_and(|p|p.revision()==screen.revision()) {
                         Err(navigation::Error::AwaitingScreen.to_string())
                     } else {
                         match navigation::plan(&navigation::analyze(&screen.frame()),intent) {
                             Err(error)=>Err(error.to_string()),
                             Ok(bytes)=> {
+                                idle.activity(Instant::now());
                                 let result=write_input(&mut socket,&mut view,&bytes).await;
-                                if result.is_ok() { pending_input=Some(screen.revision()); }
+                                if result.is_ok() { pending_input=Some(PendingInput::Manual(screen.revision())); }
                                 dirty=true;result
                             },
                         }
@@ -323,6 +380,13 @@ async fn run(
                     let _ = done.send(()); break;
                 },
                 None => { stop(&mut socket, &mut dialing).await; break; },
+            },
+            changed = gates.changed() => {
+                if changed.is_err() {stop(&mut socket,&mut dialing).await;break;}
+                if let Some((stamp,ready))=*gates.borrow_and_update() && stamp.generation==view.generation {
+                    let current=Stamp {revision:screen.revision(),..view.stamp()};
+                    idle.gate(stamp,ready && stamp==current,Instant::now());dirty=true;
+                }
             },
             result = async { match dialing.as_mut() { Some(task) => task.await, None => pending().await } } => {
                 dialing = None;
@@ -379,9 +443,35 @@ async fn run(
                 dirty = true;
             },
             _ = clock.tick(), if dirty => {
-                if pending_input.is_some_and(|revision| revision!=screen.revision()) { pending_input=None; }
+                if pending_input.as_ref().is_some_and(|p| p.revision()!=screen.revision()) { pending_input=None; }
                 view.input_pending=pending_input.is_some() && view.phase==Phase::Connected;
+                view.keep_alive_ready=idle.ready(Stamp {revision:screen.revision(),..view.stamp()})
+                    && socket.is_some() && !view.input_pending
+                    && !matches!(navigation::analyze(&screen.frame()),navigation::Context::Unknown {..});
                 view.frame = screen.frame(); updates.send_replace(view.clone()); dirty = false;
+            },
+            _ = idle_clock.tick() => {
+                let now=Instant::now();idle.tick(now);
+                // Defer automatic work to pending input/UI state without starving
+                // incoming data or frame publication through a biased select.
+                if !commands.is_empty() || !matches!(gates.has_changed(),Ok(false)) {continue;}
+                if pending_input.as_ref().is_some_and(|p|p.revision()!=screen.revision()) {pending_input=None;}
+                if pending_input.as_ref().is_some_and(|p|p.expired(now)) {
+                    pending_input=None;idle.enable(false,now);view.keep_alive=false;
+                    view.message="防閒置未收到畫面更新，已暫停；手動操作仍可使用".into();
+                    view.keep_alive_failure=Some(view.message.clone());dirty=true;
+                }
+                let stamp=Stamp {revision:screen.revision(),..view.stamp()};
+                if socket.is_some() && view.phase==Phase::Connected && pending_input.is_none()
+                    && idle.due(now,stamp)
+                    && !matches!(navigation::analyze(&screen.frame()),navigation::Context::Unknown {..}) {
+                    idle.activity(now);
+                    if write_input(&mut socket,&mut view,liveness::REFRESH).await.is_ok() {
+                        pending_input=Some(PendingInput::Refresh {revision:screen.revision(),deadline:Instant::now()+timing.response_timeout});
+                        view.keep_alive_sent=view.keep_alive_sent.saturating_add(1);
+                    }
+                    dirty=true;
+                } else if view.keep_alive_ready && !idle.ready(stamp) {dirty=true;}
             },
         }
     }
@@ -407,6 +497,7 @@ async fn write_input(
     }
 }
 
+mod liveness;
 mod probe;
 #[cfg(test)]
 mod tests;

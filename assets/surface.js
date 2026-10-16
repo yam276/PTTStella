@@ -8,6 +8,7 @@ const surfaceNote=document.getElementById("surface-note");
 const pasteDialog=document.getElementById("paste-dialog"), pasteSend=document.getElementById("paste-send"), pasteCancel=document.getElementById("paste-cancel");
 const exportButton=document.getElementById("export-png");
 const exportRows=document.getElementById("export-rows");
+const keepAlive=document.getElementById("keep-alive");
 const navigationMarker=document.getElementById("navigation-marker"),browseControls=document.getElementById("browse-controls");
 const browseBack=document.getElementById("browse-back"),browsePrevious=document.getElementById("browse-previous"),browseNext=document.getElementById("browse-next");
 const browseHint=document.getElementById("browse-hint");
@@ -37,6 +38,7 @@ let pastePending=false;
 let hoveredLink=-1;
 let hoveredArticle=null,released=null,clickSequenceAction=false,navigationLocked=false,navigationRequest=false;
 let exportBusy=false, exportTask=null;
+let keepAliveGate=null;
 const send=value=>{ sent++; dioxus.send(value); };
 const stamp=()=>({generation,revision,input_epoch:latest?.input_epoch??0});
 const sameStamp=(a,b)=>a.generation===b.generation&&a.revision===b.revision&&a.input_epoch===b.input_epoch;
@@ -117,6 +119,7 @@ function pointerdown(e) {
         dragging={anchor:point,x:e.clientX,y:e.clientY,moved:false,pointer:e.pointerId,hit:hitAt(point),stamp:stamp()};
         viewport.setPointerCapture(e.pointerId);
         surface.dataset.pointerId=String(e.pointerId);surface.dataset.pointerActive="true";
+        refreshKeepAlive();
     }
 }
 function cellAt(e,clamp) {
@@ -143,22 +146,25 @@ function pointerup(e) {
     dragging=null;
     surface.dataset.pointerActive="false";
     if(viewport.hasPointerCapture(e.pointerId)) viewport.releasePointerCapture(e.pointerId);
+    refreshKeepAlive();
 }
 function click(e) {
-    if(e.button!==0||e.detail>1) return;
+    if(e.button!==0||e.detail>1) {released=null;refreshKeepAlive();return;}
     const action=released;released=null;clickSequenceAction=!!action?.hit;
-    if(!action?.hit||blocked()||!sameStamp(action.stamp,stamp())) return;
+    if(!action?.hit||blocked()||!sameStamp(action.stamp,stamp())) {refreshKeepAlive();return;}
     if(action.hit.kind==="link") send({kind:"open_link",generation,revision,index:action.hit.index,trusted:e.isTrusted});
     else navigate({action:"open",row:action.hit.row},e);
+    refreshKeepAlive();
 }
 function cancelDrag() {
     if(dragging&&viewport.hasPointerCapture(dragging.pointer)) viewport.releasePointerCapture(dragging.pointer);
     dragging=null;
     surface.dataset.pointerActive="false";
+    refreshKeepAlive();
 }
 function pointercancel(){released=null;cancelDrag();clearSelection();}
 function deactivate(){released=null;cancelDrag();setHover(null);cancelComposition();}
-function lostcapture(){if(dragging){dragging=null;released=null;surface.dataset.pointerActive="false";}}
+function lostcapture(){if(dragging){dragging=null;released=null;surface.dataset.pointerActive="false";refreshKeepAlive();}}
 function hasSelection(){return selectionActive;}
 function clearSelection() {
     selectionActive=false;selectionFingerprint=null;selectionNext=null;selectionCache=null;selectionLayer.replaceChildren();
@@ -327,11 +333,22 @@ const pasteObserver=new MutationObserver(()=>{
 });
 pasteObserver.observe(pasteDialog,{attributes:true,attributeFilter:["data-active"]});
 function refreshExportControls() {
+    refreshKeepAlive();
     const selection=selectionCache;
     exportButton.disabled=exportBusy||!latest;
     exportRows.disabled=exportBusy||blocked()||!selection||selection.generation!==generation||selection.revision!==revision;
     exportRows.title=selection?`匯出第 ${selection.value.rows.start+1}–${selection.value.rows.end} 行（完整 80 欄）`:"先拖曳選取要截圖的行";
 }
+function refreshKeepAlive() {
+    const ready=!!latest?.keep_alive&&canNavigate()&&!dragging&&!released&&!hasSelection()&&!exportBusy;
+    const current=stamp(),key=JSON.stringify([current,ready,latest?.keep_alive_ready,latest?.keep_alive]);
+    keepAlive.textContent=latest?.keep_alive?"防閒置：開":"防閒置：關";
+    keepAlive.setAttribute("aria-pressed",String(!!latest?.keep_alive));
+    keepAlive.title=latest?.keep_alive_failure||(!latest?.keep_alive?"本次啟動暫停防閒置；重新啟動預設開啟":
+        ready?"閒置 60 秒後重繪畫面；不移動閱讀位置":"已開啟；等待可辨識畫面或本機操作結束");
+    if(!stopped&&latest&&key!==keepAliveGate) {keepAliveGate=key;send({kind:"keep_alive_gate",stamp:current,ready});}
+}
+function toggleKeepAlive(e){if(latest&&!stopped)send({kind:"keep_alive",enabled:!latest.keep_alive,trusted:e.isTrusted});}
 function exportScreen(e, selected=false) {
     if(exportBusy||!latest||stopped) return;
     const selection=selected?selectionCache:null;
@@ -394,6 +411,7 @@ const bindings=[
     [canvas,"contextmenu",selectLink],[canvas,"pointerleave",leaveLink],
     [pasteSend,"click",confirmPaste],[pasteCancel,"click",cancelPaste],[pasteDialog,"cancel",cancelPaste],
     [exportButton,"click",exportScreen],[exportRows,"click",exportSelected],
+    [keepAlive,"click",toggleKeepAlive],
     [browseBack,"click",browseReturn],[browsePrevious,"click",browseUp],[browseNext,"click",browseDown],
     [fontButton,"click",openFonts],[fontPreset,"change",chooseFontPreset],
     ...Object.values(fontFields).map(field=>[field,"input",editFont]),
@@ -539,12 +557,20 @@ async function paint(packet) {
     if(packet.generation!==generation){
         pastePending=false;cancelComposition();focus();
     }
+    const previousFailure=latest?.keep_alive_failure;
+    const failureChanged=packet.keep_alive_failure!==previousFailure;
     generation=packet.generation;revision=packet.frame.revision;latest=packet;
+    if(failureChanged) {
+        if(packet.keep_alive_failure) surfaceNote.textContent=packet.keep_alive_failure;
+        else if(surfaceNote.textContent===previousFailure) surfaceNote.textContent="";
+    }
     refreshNavigation();
     const geometry=draw(packet);send({kind:"painted",revision,generation});if(packet.probe) probe(packet,geometry);
     surface.dataset.revision=String(revision);
     surface.dataset.fontSize=String(packet.settings.font_size);surface.dataset.baseline=String(packet.settings.baseline);
     surface.dataset.cursorRow=String(packet.frame.cursor[1]);surface.dataset.inputEpoch=String(packet.input_epoch);
+    surface.dataset.keepAlive=String(packet.keep_alive);surface.dataset.keepAliveReady=String(packet.keep_alive_ready);
+    surface.dataset.keepAliveSent=String(packet.keep_alive_sent);
 }
 focus();
 try {
@@ -598,7 +624,7 @@ finally {
     surface.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true}));window.dispatchEvent(new Event("resize"));plus.click();
     chrome.dispatchEvent(new PointerEvent("pointerenter"));
     fontButton.click();fontFields.font_size.dispatchEvent(new InputEvent("input",{bubbles:true}));
-    browseNext.click();exportRows.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
+    browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     send({kind:"stopped",clean:sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
         &&fontTimer===0&&!fontDialog.open&&!chrome.classList.contains("open")&&document.activeElement!==keyboard});
 }

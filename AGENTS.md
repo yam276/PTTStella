@@ -7,6 +7,7 @@
 - 先讀 [README](README.md)、[交付流程](CONTRIBUTING.md)、[唯一 active plan](docs/active/minimal-browser.md) 與相關程式。字型／欄位／雙色字要求見 [顯示契約](docs/dual-color.md)。
 - 最小滑鼠導覽支援保守辨識列表／閱讀畫面、點文章編號開啟、翻頁與返回。採自己的低干擾 BBS 相容視覺，保留 ANSI 文字對比，不以整列亮色或發光條遮蓋內容。研究資料維持在 repo 外，產品契約見 [滑鼠導覽](docs/navigation.md)。
 - 截圖提供整頁與目前畫面連續行的 PNG，消費 Rust 選取結果的行範圍與同一 renderer；完整行寬、不因縮放改變尺寸，不包含選取、游標或工具列。只在使用者明確點擊時匯出，不自動跨頁或錄製 session。
+- 防閒置依使用者要求預設開啟，僅在已辨識的列表／閱讀畫面、UI 與 connection 的版本及操作狀態均允許時刷新；登入／編輯／組字／貼上／選取等期間暫停。唯一 timer 由 connection 擁有，不補送睡眠或斷線期間操作；開關與驗證邊界見 [保活契約](docs/keepalive.md)。
 - 先不實作獨立文章模型、板名導覽、自動登入、密碼儲存、媒體或追蹤。一般 terminal 的手動鍵盤操作不等於整個 session 唯讀。
 - 當前已有 PTT 專用 Rust 畫面核心、replay、Dioxus 畫面及單一 WSS 傳輸；不是系統終端或通用模擬器，不實作 shell／PTY。驗證狀態以 active plan 為準，規劃、編譯、重放、實際畫面及實站登入結果分開報告。
 - 正常啟動預設連至 PTT WSS；只自動連線，不自動登入或重送輸入。一般 gate 的合成 probe 只連本機服務。連線正常時工具列 hover 才顯示；斷線／錯誤保持狀態可見。畫面縮放維持比例，方塊圖形不依賴字型留白。
