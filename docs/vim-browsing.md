@@ -118,4 +118,4 @@ Vim 指令由 keydown 產生一次；被接管的可列印按鍵必須同步 pre
 
 2026-10-16 已接入 Rust Keyboard policy 與單一 Connection：Vim 開關、模式提示、f／按鈕原生一次、i 原始輸入、計數與表列導覽。原生文字仍由 WebView 的編輯事件送出，按鍵事件只決定該次編輯的歸屬；一般字母不在 keydown 自行編碼。正常模式的文字編輯不送站端，組字必須先 i 或 f。
 
-Windows 真實 WebView＋loopback 已逐筆驗證 f h、f Ctrl+d、3j、Ctrl+u、gg/G、h/l、原生一次中文組字、i/Esc 及既有輸入回歸。核心另涵蓋 modifier、repeat、取消、未知畫面、計數容量與閱讀邊界。未收到畫面更新的手動 pending 最晚在回應期限後釋放並顯示結果未確認；不重送。純行移動可延續同一未更新畫面的送鍵，切換層級需等待畫面，不累積跨頁 macro。實站及 macOS／Linux 原生鍵盤／IME 尚待驗收。後續實作須在 [唯一 active plan](active/minimal-browser.md) 更新實測結果，依功能分別提交。
+Windows 真實 WebView＋loopback 已逐筆驗證 f h、f Ctrl+d、3j、Ctrl+u、gg/G、h/l、原生一次中文組字、i/Esc 及既有輸入回歸。核心另涵蓋 modifier、repeat、取消、未知畫面、計數容量與閱讀邊界。未收到畫面更新的手動 pending 最晚在回應期限後釋放並顯示結果未確認；不重送。已辨識列表的 j/k、gg/G 與翻頁可延續同一未更新畫面的明確鍵盤操作，並允許接著進入／返回一次；進入／返回後需等待新畫面。閱讀頁僅保留純行移動的延續。每筆仍重新驗證 generation／revision 與當前 context，滑鼠不能使用此例外，不累積跨頁 macro。macOS 原生鍵盤與專用帳號的有限切板／閱讀案例已驗證，範圍見 active plan；原生 IME、Linux 及其他實站格式仍待驗收。後續實作須在 [唯一 active plan](active/minimal-browser.md) 更新實測結果，依功能分別提交。

@@ -494,7 +494,14 @@ async fn run(
                     login_attempt=None;
                     // An expired request must never execute later from the command queue.
                     if reply.is_closed() { continue; }
-                    let streaming=keyboard && matches!(intent,Intent::Lines{..}) && matches!(pending_input,Some(PendingInput::Manual{streaming:true,..}));
+                    let context=navigation::analyze(&screen.frame());
+                    let list=matches!(context,navigation::Context::MainMenu {..}|navigation::Context::BoardList {..}|navigation::Context::ArticleList {..});
+                    let list_move=list && matches!(intent,Intent::First|Intent::Last|Intent::NextPage|Intent::PreviousPage|Intent::Lines {..});
+                    // List movement may legitimately produce no redraw at a boundary.
+                    // Continue explicit keyboard intents after those moves, but a
+                    // forward/back transition still gates the next operation.
+                    let continuation=matches!(intent,Intent::Lines {..}) || list_move || (list && matches!(intent,Intent::Forward|Intent::Back));
+                    let streaming=keyboard && continuation && matches!(pending_input,Some(PendingInput::Manual{streaming:true,..}));
                     let result=if stamp.generation!=view.generation || socket.is_none() || view.phase!=Phase::Connected {
                         Err(navigation::Error::Disconnected.to_string())
                     } else if stamp.revision!=screen.revision() || (!streaming && stamp.input_epoch!=view.input_epoch) {
@@ -502,13 +509,13 @@ async fn run(
                     } else if !streaming && pending_input.as_ref().is_some_and(|p|p.revision()==screen.revision()) {
                         Err(navigation::Error::AwaitingScreen.to_string())
                     } else {
-                        match navigation::plan(&navigation::analyze(&screen.frame()),intent) {
+                        match navigation::plan(&context,intent) {
                             Err(error)=>Err(error.to_string()),
                             Ok(bytes)=> {
                                 if bytes.is_empty() {let _=reply.send(Ok(()));continue;}
                                 idle.activity(Instant::now());
                                 let result=write_input(&mut socket,&mut view,&bytes).await;
-                                if result.is_ok() { pending_input=Some(PendingInput::Manual {revision:screen.revision(),deadline:Instant::now()+timing.response_timeout,streaming:keyboard && matches!(intent,Intent::Lines{..})}); }
+                                if result.is_ok() { pending_input=Some(PendingInput::Manual {revision:screen.revision(),deadline:Instant::now()+timing.response_timeout,streaming:keyboard && (list_move || matches!(intent,Intent::Lines{..}))}); }
                                 dirty=true;result
                             },
                         }
