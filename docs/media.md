@@ -23,6 +23,24 @@ Rust 唯一分類 URL 與圖片型態；JS 消費結構化媒體描述並交 Web
 - WebView 確認解碼成功後才存入記憶體 LRU，最多 8 張／24 MiB，最長 5 分鐘，遵守 no-store／no-cache、max-age／Age（上限 5 分鐘）；以精確請求 URL（移除 fragment）為 key，保留 query。關閉 app 清空，沒有背景更新或私人 URL 日誌。
 - 傳輸容量限制以串流累計檢查，不只相信 Content-Length；拒絕超限、損壞、HTML／SVG 回應。載入失敗留在預覽內，不能把媒體錯誤當成 BBS 斷線。
 
+## 後續圖片 hover 預覽方案（尚未實作）
+
+使用者要求小預覽可選「跟隨滑鼠」或「右上固定」。建議初始為右上固定，另提供關閉；位置與啟用偏好由 app settings 保存，既有字型組合與可攜檔的範圍見 [設定方案](preferences-and-profiles.md)。目前仍只有點擊完整預覽，不將此段列為已完成能力。
+
+啟用此功能後，圖片請求將由目前的「明確點擊」擴充為「停留在圖片連結上」觸發；設定文案要清楚表示滑過會載入。仍不預載整篇文章，關閉後恢復只有點擊載入。
+
+- 同一圖片網址停留 350ms 才載入；此值是初始 UX 選擇，需以實測調整。在同一連結內移動只改位置，不重設倒數或發第二個請求；快速掠過不連網。
+- 跟隨位置與游標保留約 16 CSS px 距離，碰邊轉向並限制於內容 viewport；右上固定相對內容 viewport 錨定，避開已展開的工具列。始終等比例、不放大超過原尺寸；初始上限取 360 CSS px 寬、viewport 寬高各 45% 的可容納範圍。
+- 小預覽不攔 pointer、不取得焦點、不清除選取，也不切換 IME 或 Vim 模式；PTT 鍵盤持續可用。它只顯示圖片首幀；影片與 YouTube 保留點擊才載入／播放。
+- 換連結、離開內容區、開始拖曳／組字／貼上、開 dialog、視窗失焦或送鍵，取消倒數及 hover request。切頁或舊 stamp 失效立即取消；任何晚到結果不能復活。失敗不自動重試或外開，點擊後才提供完整錯誤與重試。
+- 仍使用單一 Preview／Loader／cache owner。點擊同一圖片時把 hover 升級為完整預覽，沿用下載中或已解碼的資源；不能再次呼叫目前必定取消前次的 open 而重抓。
+- modal 才執行既有 prepare、showModal、聚焦及關閉後還焦點；hover 的開／關只處理浮層，沿用同一資源 dispose。浮層定位有一個 RAF／resize owner，dwell timer 由 surface 管理，destroy 全部取消。
+- Rust 從當前 displayed links 分類可預覽種類，hover 請求帶 generation／revision／input epoch 與 link identity；不接受 JS 任意 URL 或由非媒體 hover 落入外開 fallback。名單遮罩區不發媒體請求，見 [內容過濾方案](content-filters.md)。
+
+目前 modal 只在 session generation 變化時重置，hover 需要較短的有效期。新 frame 到來時，由同一來源重新核對指標命中、URL、範圍與內容；可重新授權仍有效的同一 hover，避免單純 keepalive／不相關刷新造成閃爍重抓，不能只看 URL 相同就放行舊 stamp。UI 不重解 footer、ANSI 或 Big5。
+
+實作沿用既有 8 MiB payload、尺寸／動畫預算、HTTP 總期限、decoder ACK、no-store 與 LRU；hover 請求同樣可被取消。一般 gate 仍只用本機 HTTP；真實 pointer 測快掠零請求、同連結一次、A→B 取消、切頁晚到、兩種位置與邊界、點擊升級不重抓，以及焦點／PTT bytes／canvas 不變。設定重啟與 macOS／Linux 分別驗證。
+
 ## 驗收
 
 1. 核心：URL host／scheme／query／YouTube ID 正反例，不誤判相似網域，不改寫未知網址。

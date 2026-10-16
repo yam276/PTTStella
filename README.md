@@ -36,6 +36,8 @@ Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Ar
 - [開發 harness](docs/development-harness.md)
 - [後續操作功能研究](docs/feature-research.md)
 - [Vim 瀏覽模式方案（尚未實作）](docs/vim-browsing.md)
+- [字型組合與可攜設定檔方案（尚未實作）](docs/preferences-and-profiles.md)
+- [本機名單與內容過濾方案（尚未實作）](docs/content-filters.md)
 - [媒體預覽規格](docs/media.md)
 
 ```text
