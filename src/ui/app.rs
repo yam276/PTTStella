@@ -15,6 +15,7 @@ pub struct AppProps {
     pub window_probe: bool,
     pub login_probe: bool,
     pub filters_probe: bool,
+    pub surface_probe: Option<String>,
     pub reload_settings: bool,
     pub media_origin: Option<String>,
 }
@@ -27,12 +28,16 @@ pub fn app(props: AppProps) -> Element {
     let window_probe = props.window_probe;
     let login_probe = props.login_probe;
     let filters_probe = props.filters_probe;
+    let surface_probe = props.surface_probe.clone();
+    let surface_probing = surface_probe.is_some();
     let reload_settings = props.reload_settings;
     let media_origin = props.media_origin.clone();
     let owner = use_hook(move || {
         preview(probing, media_origin.as_deref())
             .and_then(|bytes| {
-                if filters_probe {
+                if surface_probing {
+                    Connection::start_surface_probe()
+                } else if filters_probe {
                     Connection::start_filters_probe()
                 } else if login_probe {
                     Connection::start_login_probe()
@@ -98,7 +103,13 @@ pub fn app(props: AppProps) -> Element {
         let close_sender = closing.0.clone();
         dioxus::desktop::use_muda_event_handler(move |event| {
             if event.id().0 == crate::macos::QUIT {
-                close_sender.send_replace(true);
+                if fatal() {
+                    // The common cleanup already joined every owner before
+                    // entering this state, so no surface loop remains to wake.
+                    dioxus::desktop::window().close();
+                } else {
+                    close_sender.send_replace(true);
+                }
             }
         });
     }
@@ -157,12 +168,12 @@ pub fn app(props: AppProps) -> Element {
                         if started() { return; }
                         started.set(true);
                         let connection = connection.clone(); let probe = probe.clone(); let closing = closing.1.clone(); let media_origin = media_origin.clone();
+                        let surface_probe = surface_probe.clone();
                         spawn(async move {
-                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, Options { reload_settings, media_origin, window_probe, login_probe, filters_probe }).await;
+                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, Options { reload_settings, media_origin, window_probe, login_probe, filters_probe, surface_probe:surface_probe.clone() }).await;
                             if let Err(error) = result {
                                 fatal.set(true);
                                 message.set(format!("{error}；請關閉並重新開啟視窗"));
-                                if let Err(cleanup) = connection.shutdown().await { message.set(cleanup); }
                                 let window = dioxus::desktop::window();
                                 window.set_close_behavior(dioxus::desktop::WindowCloseBehaviour::WindowCloses);
                                 window.set_visible(true);

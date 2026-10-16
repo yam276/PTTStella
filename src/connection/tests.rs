@@ -19,6 +19,99 @@ fn explicit_tls_provider_builds_with_desktop_feature_unification() {
 }
 
 #[tokio::test]
+async fn failed_shutdown_still_joins_the_worker_and_keeps_its_failure_on_repeat() {
+    let (_listener, connection) = local().await;
+    connection.worker.lock().unwrap().as_ref().unwrap().abort();
+    tokio::task::yield_now().await;
+    let first = connection.shutdown().await.unwrap_err();
+    assert!(connection.worker.lock().unwrap().is_none());
+    assert!(connection.probe_peer.lock().unwrap().is_none());
+    assert_eq!(connection.shutdown().await.unwrap_err(), first);
+}
+
+#[tokio::test]
+async fn accepted_browse_is_enqueued_before_native_input_without_polling_its_reply() {
+    let (listener, connection) = local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(navigation_page("list").into()))
+        .await
+        .unwrap();
+    let view = wait(&connection, |v| v.received > 0).await;
+    let reply = connection
+        .request_browse_key(
+            view.stamp(),
+            navigation::Intent::Lines {
+                down: true,
+                count: 1,
+            },
+        )
+        .unwrap();
+    connection.input(view.generation, vec![13]).unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"\x1b[B"
+    );
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"\r"
+    );
+    reply.wait().await.unwrap();
+    let peer = tokio::spawn(async move {
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+        ws.flush().await.unwrap();
+    });
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+    peer.await.unwrap();
+}
+
+#[tokio::test]
+async fn dropping_enqueued_ui_waits_revokes_login_and_browse_before_the_writer_runs() {
+    for login in [true, false] {
+        let (listener, connection) = local().await;
+        connection.connect().unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        ws.send(Message::Binary(if login {
+            probe::login_page().unwrap().into()
+        } else {
+            navigation_page("list").into()
+        }))
+        .await
+        .unwrap();
+        let view = wait(&connection, |v| v.received > 0).await;
+        // Poll the real public API once: it enqueues the command then waits for
+        // its oneshot. This current-thread runtime does not poll the writer
+        // between this enqueue and cancellation, making the race deterministic.
+        if login {
+            let mut wait = Box::pin(connection.login(view.stamp(), credentials()));
+            assert!(futures_util::poll!(&mut wait).is_pending());
+            drop(wait);
+        } else {
+            let mut wait = Box::pin(connection.browse_key(view.stamp(), navigation::Intent::Back));
+            assert!(futures_util::poll!(&mut wait).is_pending());
+            drop(wait);
+        }
+        let peer = tokio::spawn(async move {
+            assert!(
+                matches!(ws.next().await, Some(Ok(Message::Close(_)))),
+                "canceled operation sent station bytes"
+            );
+            ws.flush().await.unwrap();
+        });
+        assert_eq!(
+            connection.shutdown().await.unwrap(),
+            CloseOutcome::Acknowledged
+        );
+        peer.await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn shutdown_sends_normal_close_and_waits_for_delayed_peer_ack_and_fin() {
     let (listener, connection) = local().await;
     connection.connect().unwrap();
