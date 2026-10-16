@@ -51,7 +51,10 @@ const keys={Enter:[13],Backspace:[8],Tab:[9],Escape:[27],ArrowUp:[27,91,65],Arro
     PageUp:[27,91,53,126],PageDown:[27,91,54,126],Delete:[27,91,51,126]};
 function keydown(e) {
     if(pastePending) {e.preventDefault();return;}
-    if(e.isComposing||composing||e.key==="Process"||e.metaKey) return;
+    // Older WebKit can end composition before its confirming keydown. That
+    // event still carries 229 even though isComposing is already false.
+    // Leave the native IME action intact; never forward it as a BBS command.
+    if(e.isComposing||composing||e.keyCode===229||e.key==="Process"||e.metaKey) return;
     // Let the native copy action fire; copy data is already prepared by Rust.
     if(e.ctrlKey&&e.key.toLowerCase()==="c"&&hasSelection()) return;
     if(e.ctrlKey&&e.key.toLowerCase()==="v") return;
@@ -67,16 +70,22 @@ function input(e) {
     if(pastePending) {keyboard.value="";return;}
     if(composing||e.isComposing) {
         if(composition) {composition.editTrusted=e.isTrusted;composition.editText=keyboard.value;}
+        positionKeyboard();
         return;
     }
     const text=e.data||keyboard.value; keyboard.value="";
+    // Enter bytes have one owner: keydown. A textarea edit caused by an IME's
+    // confirming Return must not become a second text/newline submission.
+    if(lineBreak(e)) {beforeEdit=null;return;}
     // A trailing input for an already committed composition belongs to that edit,
     // while a new beforeinput identifies a new edit even when its text is equal.
     if(beforeEdit?.composition) {beforeEdit=null;return;}
     if(text) { clearSelection(); sendInput({kind:"text",text,generation,trusted:e.isTrusted}); }
 }
+const lineBreak=e=>e.inputType==="insertLineBreak"||e.inputType==="insertParagraph";
 function beforeinput(e) {
     beforeEdit={composition:composing||e.isComposing||/Composition/.test(e.inputType||"")};
+    if(lineBreak(e)&&!composing&&!e.isComposing) e.preventDefault();
 }
 function compositionstart(e) {
     clearSelection();composing=true;
@@ -100,9 +109,18 @@ function positionKeyboard() {
     if(!grid||!latest) return;
     const [col,row]=latest.frame.cursor, left=grid.x(col)/grid.ratio, top=grid.y(row)/grid.ratio;
     const height=(grid.y(row+1)-grid.y(row))/grid.ratio;
-    Object.assign(keyboard.style,{left:left+"px",top:top+"px",height:height+"px",
-        width:(composing?Math.max(1,Math.min(320,surface.clientWidth-left)):1)+"px",
-        fontSize:height*latest.settings.font_size/24+"px",fontFamily:fontFamily(latest.settings.cjk_font)});
+    const fontSize=height*latest.settings.font_size/24;
+    const font=fontFamily(latest.settings.cjk_font);
+    Object.assign(keyboard.style,{left:left+"px",top:top+"px",height:height+"px",lineHeight:height+"px",
+        width:"1px",fontSize:fontSize+"px",fontFamily:font});
+    if(!composing) return;
+    ctx.save();ctx.font=fontSize+"px "+font;
+    const textWidth=ctx.measureText(keyboard.value).width;ctx.restore();
+    const cellWidth=(grid.x(col+1)-grid.x(col))/grid.ratio;
+    const glyph=latest.frame.glyphs.find(g=>g.row===row&&g.col<=col&&col<g.col+g.width);
+    const [color,background]=glyph?colours(col===glyph.col?glyph.left:glyph.right):[palette[7],palette[0]];
+    Object.assign(keyboard.style,{width:Math.max(1,Math.min(textWidth+cellWidth,surface.clientWidth-left))+"px",
+        color,background});
 }
 function focus() { if(document.activeElement!==keyboard) keyboard.focus({preventScroll:true}); }
 function restoreEditingFocus(){keyboard.blur();focus();}
