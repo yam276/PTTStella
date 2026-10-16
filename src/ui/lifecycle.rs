@@ -7,7 +7,7 @@ use pttstella::{
 };
 use std::{future::Future, time::Duration};
 
-use super::{commands::Pending, outbound::Packet};
+use super::{commands::Pending, files::Files, outbound::Packet};
 
 #[derive(Default)]
 pub(super) struct Resources {
@@ -15,6 +15,7 @@ pub(super) struct Resources {
     pub(super) media: Preview,
     pub(super) login: Option<Job>,
     pub(super) commands: Pending,
+    pub(super) files: Files,
 }
 
 #[derive(serde::Deserialize)]
@@ -82,6 +83,7 @@ impl Resources {
         mut message: Signal<String>,
     ) -> Result<CloseOutcome, String> {
         self.commands.cancel();
+        self.files.revoke();
         self.media.close();
         connection.keep_alive_gate(connection.updates.borrow().stamp(), false);
         // Cancellation is best effort; shutdown below remains the owned, joined
@@ -98,11 +100,11 @@ impl Resources {
                 let _ = job.wait().await; // Late credentials are zeroized on drop.
             }
         };
-        let (renderer, disconnect, ()) = retained_wait(
-            async { tokio::join!(render, connection.shutdown(), credentials) },
+        let (renderer, disconnect, (), files) = retained_wait(
+            async { tokio::join!(render, connection.shutdown(), credentials, self.files.finish()) },
             || {
                 message.set(
-                    "清理尚未完成；仍在等待畫面／連線／鑰匙圈工作結束，請處理可能的系統提示".into(),
+                    "清理尚未完成；仍在等待畫面／連線／鑰匙圈／檔案工作結束，請處理可能的系統提示或選檔視窗".into(),
                 );
                 dioxus::desktop::window().set_visible(true);
             },
@@ -116,6 +118,11 @@ impl Resources {
                 Err("畫面已停止，但監聽器清理驗證失敗".into())
             }
         });
+        let renderer = match (renderer, files) {
+            (Ok(()), result) => result,
+            (Err(error), Ok(())) => Err(error),
+            (Err(error), Err(files)) => Err(format!("{error}；{files}")),
+        };
         match (renderer, disconnect) {
             (Ok(()), result) => result,
             (Err(error), Ok(_)) => Err(error),

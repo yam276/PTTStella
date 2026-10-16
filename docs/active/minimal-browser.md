@@ -12,6 +12,16 @@
 
 ## 維護性重構
 
+2026-10-17 第三輪：使用者授權將檔案操作移出 UI 事件迴圈，並集中 Rust 畫面與互動狀態。Files 持有單一可追蹤工作，設定／名單載入與保存、設定檔處理及 PNG 解碼／寫入交給 blocking pool；原生 picker 仍由 UI thread 擁有。忙碌拒絕不啟動 factory、不另加佇列；保存成功才更新生效設定／規則。關閉撤銷尚未開始工作，已開始的工作保留到 join；五秒未完成顯示等待，真實失敗併入清理結果。SurfaceState 統一持有待 ACK／已顯示畫面、遮黑、選取、hover 與匯出版本，來源或策略變更由同一處撤銷互動。
+
+獨立複查找到 P2：非同步選檔期間的 PNG 可能失去版本約束。已加入可撤銷 ExportLease 及直接觀察最新 Connection view 的檢查，在解碼後、選檔後及開始寫入前驗證；選取 PNG 另綁 input epoch。JS 清除／重選會發出有作用域的 SelectionCleared，Rust 只撤銷相符選取。八種延期選檔案例覆蓋規則、揭露、frame、session、選取、清除、輸入及顯示設定變更：舊 PNG 均不寫入，後續新請求仍實際保存。Agent 再次唯讀複查確認 P2 可關閉，未發現其他具體阻擋問題；這是程式與證據審閱，沒有代替另一人執行 GUI 或人工驗收。
+
+24 個 bin、42 個 desktop lib、12 個 JS、fmt／Clippy 與 core 八套 suite／兩份 replay 通過。新增合成 fixture 有獨立來源說明，既有 expected 未改。macOS WKWebView 的最終產品程式完成真正原生 PNG Save、設定檔 Save／Open、匯出生效 20／20 與匯入只預覽；picker 前聚焦父視窗，修正背景啟動時 Save 無法使用。名單四次保存、兩次揭露、複製事件、兩種 PNG 及翻頁往返通過。獨立 Pillow 解碼確認 6,123 個變動像素全在預定遮黑區、區外差零，揭露等於原圖、整頁選取行等於整頁、返回後恢復遮黑，且與重構前保留圖逐像素一致。另完成 40 筆原生 Vim 精確 bytes 比對。
+
+真 blocking 慢磁碟工作期間可開啟／取消設定，第二筆保存明確拒絕；⌘Q 後 UI 顯示清理等待，runner release 後才 join／Close acknowledged。曾因操作等待超過 120 秒造成一次合成案例逾時，失敗紀錄保留，另一完整程序重跑通過。原生 picker 開啟時 macOS 攔住 ⌘Q，取消後再次 ⌘Q 正常結束；此案沒有送達 pending-picker shutdown，不將它算成該契約的原生證據，延期 chooser 單元測試另驗證關閉後不啟動寫入。各通過程序均清理完成、退出碼 0；一般測試只使用本機合成服務。
+
+本輪交付包為 `dist/macos-file-state-delivery/PTTStella.app`（arm64／ad-hoc），報告與像素證據保留在 `.local/verification/file-state`。早期 dialogs 僅完成設定／PNG，媒體操作未完成，該整合報告保留為失敗而不計入通過。完整 Mac desktop backend 仍 not_ready；Windows／Linux、完整原生 IME／codec、實站登入與 OS 外開未在本輪重驗，沒有存取使用者帳密、push 或公開發佈。
+
 2026-10-17 第二輪 UI 整理：使用者授權整理共同作用域及 Rust→JS 封包。登入、名單與字型設定改由各自 JS owner 持有欄位／草稿／busy／timer／request；主 surface 只接線、分派及協調同一畫面的輸入／選取／繪製。Rust outbound Packet、具型別 payload／status 與薄 Bridge 取代一般送出路徑的臨時 JSON，統一 `{kind,payload}`，未知封包不再落入 paint。設定載入後再次檢查 epoch／request，取消或停止後不重畫、不搶焦點；原有單一送鍵、准入及共同清理不另建第二條路徑。
 
 本輪 12 個 bin、42 個 desktop lib、11 個 JS、fmt／Clippy 與 core 八套 suite／兩份 replay 通過。新增 wire fixture 是獨立手寫 expected；既有核心 fixture／expected 未改。候選包完成 11 個 macOS WKWebView 程序：前輪九種生命週期／Vim／登入情境，加上完整名單與 UI／媒體整合。設定草稿取消保留設定及 PNG bytes；匯出生效 20／20、匯入只預覽，保存 18／19 後 PNG 有 34,503 pixels 改變；整頁選取行等於整頁 PNG。本機 PNG 紅／藍圖像可見，壞圖解碼失敗後重試成功，HTTP 分別一次正常圖、兩次壞圖，外開使用 probe sink。名單遮黑外像素差零、揭露等於原圖、翻頁返回恢復遮黑，且與重構前保留圖逐像素一致。40 筆 Vim 與合成按鈕登入維持原結果；均完成清理與 acknowledged，沒有連 PTT。

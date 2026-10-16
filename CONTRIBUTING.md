@@ -84,6 +84,10 @@ UI 准入與生命週期變更另跑 `cargo test --locked --features desktop --b
 
 UI owner／封包變更再跑 `node --test tooling/test_surface_dialogs.mjs`。使用明確 DOM／clock doubles 核對晚到字型結果、關閉／revoke、舊預覽、登入草稿清除、名單 busy／失敗恢復及 router 拒絕未知／legacy envelope；這些不是原生 trusted 操作證據。[ui-packets](tests/fixtures/ui-packets.json) 是獨立編寫的 synthetic wire expected，Rust bin 比對生產 Packet 的 serde 結果，JS 測試核對分派，沒有用序列化往返當 expected。Paint 與內嵌預覽另檢查結構，完整呈現仍由原生 PNG／畫面驗收。
 
+檔案工作／畫面狀態變更另核對 bin 的 Files 與 SurfaceState 案例：慢 blocking worker 不阻塞事件輪詢、忙碌不啟動第二筆、關閉時保留已開始工作且不吞失敗，以及單筆繪製／ACK、規則／來源／選取的失效。延期 picker 使用同一 production PNG 管線，八種狀態變更後舊 PNG 不寫，新請求仍須確實保存。JS 測試執行實際 clearSelection，以 [selection-cleared](tests/fixtures/selection-cleared.json) 核對直接撤銷通知；DOM doubles 不冒充原生操作。
+
+`--probe-surface OUTPUT_DIRECTORY files` 使用合成主畫面與拒絕站端輸入的本機 peer，但 PNG／設定檔會走真正的原生 picker。確認原生 Save／Open、讀回 PNG／設定檔、取消及關閉清理；固定 probe 路徑不能替代 picker 驗收。`files_slow` 在 blocking worker 等待 runner 建立 OUTPUT_DIRECTORY/file-release（最多 120 秒），先寫 file-started.json，完成寫 file-finished.json。等待中可開啟／取消設定；第二筆保存應拒絕並恢復控制，⌘Q 後須保留 owner、顯示超時等待，release 後才完成清理及 Close。runner 必須收回自己啟動的程序與釋放訊號，不能留下背景工作。
+
 `--probe-surface OUTPUT_DIRECTORY dialogs --media-origin http://127.0.0.1:PORT` 提供明確本機 UI／媒體 fixture，peer 拒絕輸入 bytes；操作設定預覽／取消／保存、具名設定檔匯出／匯入、整頁及行 PNG、本機圖片與外開 sink 後才檢查報告。媒體 server 必須由 runner 擁有並停止；不能將 sink 宣稱為 OS 瀏覽器實測。對話框拆分另以閱讀畫面逐一開／關名單、字型及登入，確認不用額外點擊或 frame 才恢復瀏覽控制項，再完成原 filters 回歸。
 
 `--probe-surface OUTPUT_DIRECTORY CASE` 是不開 DevTools、不連實站的原生 WebView 探針；CASE 為 `decode`、`painted`、`send`、`renderer_error`、`untrusted`、`confirm` 或 `slow`。前四項分別造成真實事件解碼、版本、Eval 封包序列化及 JS 例外錯誤，應留下 `run_completed=false`、`cleanup_completed=true` 與 acknowledged 的 `cleanup.json`；錯誤畫面之後仍須能 ⌘W／⌘Q 結束。`untrusted` 驗證 JS 合成 paste／按鈕不改狀態，以及 Rust 拒絕三個不可信貼上 wire 事件；`confirm` 由原生貼上 `A\nB` 建立真實預覽，再拒絕合成確認且保留預覽。`slow` 持有 60 秒的合成結果 future，期間以原生按鈕開啟／取消字型設定並關窗，確認命令仍 pending 時就完成清理；它不宣稱模擬了真實網路 backpressure。三者檢查 `surface-probe.json`。所有案例的本機 peer 拒絕任何輸入 bytes，只接受 Close。負面合成事件不當成 trusted 正向輸入證據。

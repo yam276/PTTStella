@@ -6,6 +6,7 @@ use std::{
     path::PathBuf,
 };
 
+#[derive(Clone)]
 pub struct Store {
     path: PathBuf,
 }

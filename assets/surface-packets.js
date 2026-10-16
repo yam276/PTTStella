@@ -1,5 +1,10 @@
 // The tagged envelope has one destination. Unknown kinds fail visibly instead
 // of falling through to paint and partially mutating an unrelated feature.
+function revokeSurfaceSelection(send,cache,busy) {
+    const selected=cache??busy;
+    if(selected)send({kind:"selection_cleared",presentation:selected.presentation,generation:selected.generation,
+        revision:selected.revision,request:selected.request});
+}
 function createSurfaceRouter(handlers) {
     const kinds=["paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
         "hover_settings","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error",

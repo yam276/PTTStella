@@ -1,14 +1,11 @@
 //! Effective preferences change only after persistence succeeds; previews are drafts.
-use super::outbound::{FontPreview, ImportedProfile, Packet, ProfileResult, SettingsOpen};
+use super::outbound::{FontPreview, Packet, SettingsOpen};
 use super::presentation::{font_sample, sample_packet};
 use pttstella::{
     screen::Frame,
-    settings::{
-        AppSettings, DisplayProfile, DisplaySettings, HoverPosition, PortableProfile, store::Store,
-    },
-    storage,
+    settings::{AppSettings, DisplayProfile, DisplaySettings, HoverPosition, store::Store},
 };
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub(super) struct Preferences {
     store: Result<Store, String>,
@@ -57,17 +54,24 @@ impl Preferences {
         self.app.hover
     }
 
-    pub(super) fn set_hover(&mut self, position: HoverPosition) -> Result<(), String> {
+    pub(super) fn hover_draft(&self, position: HoverPosition) -> AppSettings {
         let mut draft = self.app.clone();
         draft.hover = position;
-        self.app = self.store.as_ref().map_err(Clone::clone)?.save(draft)?;
-        Ok(())
+        draft
     }
 
-    pub(super) fn save_display(&mut self, profile: DisplayProfile) -> Result<(), String> {
+    pub(super) fn display_draft(&self, profile: DisplayProfile) -> AppSettings {
         let mut draft = self.app.clone();
         draft.display = profile;
-        let saved = self.store.as_ref().map_err(Clone::clone)?.save(draft)?;
+        draft
+    }
+
+    pub(super) fn store(&self) -> Result<Store, String> {
+        self.store.clone()
+    }
+
+    /// Only a successful owned disk operation may commit an effective draft.
+    pub(super) fn commit(&mut self, saved: AppSettings) -> Result<(), String> {
         let display = saved.display.resolve().map_err(str::to_owned)?;
         self.app = saved;
         self.display = display;
@@ -98,84 +102,18 @@ impl Preferences {
             },
         })
     }
-
-    /// Import only builds a preview packet. Export reads the effective profile.
-    pub(super) fn profile_packet(
-        &self,
-        action: &str,
-        name: String,
-        probe: Option<&Path>,
-    ) -> Packet<'static> {
-        Packet::ProfileResult(
-            self.profile(action, name, probe)
-                .unwrap_or_else(|notice| ProfileResult::Rejected { notice }),
-        )
-    }
-
-    fn profile(
-        &self,
-        action: &str,
-        name: String,
-        probe: Option<&Path>,
-    ) -> Result<ProfileResult, String> {
-        if !matches!(action, "import" | "export") {
-            return Err("未知設定檔操作".into());
-        }
-        let path = match probe {
-            Some(directory) => Some(directory.join("display.pttstella.json")),
-            None => Self::pick_profile(action),
-        };
-        let Some(path) = path else {
-            return Ok(ProfileResult::Cancelled);
-        };
-        if action == "export" {
-            if !path.file_name().is_some_and(|n| {
-                n.to_string_lossy()
-                    .to_ascii_lowercase()
-                    .ends_with(".pttstella.json")
-            }) {
-                return Err("請使用 .pttstella.json 副檔名".into());
-            }
-            let bytes = PortableProfile::new(name, self.app.display.clone())?.encode()?;
-            storage::replace(&path, &bytes)?;
-            Ok(ProfileResult::Exported {
-                notice: "已匯出目前生效設定；未套用的草稿不包含在內".into(),
-            })
-        } else {
-            let bytes = Store::at(path).read()?.ok_or("找不到顯示設定檔")?;
-            let profile = PortableProfile::decode(&bytes)?;
-            let values = profile.display.resolve().map_err(str::to_owned)?;
-            Ok(ProfileResult::Imported {
-                profile: Box::new(ImportedProfile {
-                    profile: profile.display,
-                    name: profile.name,
-                    sample: sample_packet(&self.sample, &values),
-                    values,
-                }),
-                notice: "設定已載入預覽；套用並儲存後才會生效".into(),
-            })
-        }
-    }
-
-    fn pick_profile(action: &str) -> Option<PathBuf> {
-        let window = dioxus::desktop::window();
-        let dialog = rfd::FileDialog::new()
-            .set_parent(window.window.as_ref())
-            .add_filter("PTTStella 顯示設定", &["json"]);
-        if action == "import" {
-            dialog.set_title("載入顯示設定至預覽").pick_file()
-        } else {
-            dialog
-                .set_title("匯出目前生效的顯示設定")
-                .set_file_name("display.pttstella.json")
-                .save_file()
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pttstella::settings::PortableProfile;
+    fn save(preferences: &mut Preferences, profile: DisplayProfile) -> Result<(), String> {
+        let saved = preferences
+            .store()?
+            .save(preferences.display_draft(profile))?;
+        preferences.commit(saved)
+    }
 
     #[test]
     fn previews_imports_and_failed_saves_preserve_the_effective_preferences() {
@@ -194,38 +132,40 @@ mod tests {
         let packet = serde_json::to_value(preferences.preview_packet(7, profile.clone())).unwrap();
         assert_eq!(packet["payload"]["packet"]["settings"]["font_size"], 18.0);
         assert_eq!(preferences.app(), &original);
+        let path_profile = directory.path().join("display.pttstella.json");
+        let request = super::super::files::ProfileRequest::Export {
+            name: "effective".into(),
+            display: preferences.app().display.clone(),
+        };
+        let exported =
+            super::super::files::profile_at(request, Some(path_profile.clone())).unwrap();
+        assert!(matches!(
+            exported,
+            super::super::outbound::ProfileResult::Exported { .. }
+        ));
+        let bytes_profile = std::fs::read(&path_profile).unwrap();
         assert_eq!(
-            serde_json::to_value(preferences.profile_packet(
-                "export",
-                "effective".into(),
-                Some(directory.path())
-            ))
-            .unwrap()["payload"]["status"],
-            "exported"
-        );
-        let exported = std::fs::read(directory.path().join("display.pttstella.json")).unwrap();
-        assert_eq!(
-            PortableProfile::decode(&exported).unwrap().display,
+            PortableProfile::decode(&bytes_profile).unwrap().display,
             original.display
         );
-        assert_eq!(
-            serde_json::to_value(preferences.profile_packet(
-                "import",
-                "".into(),
-                Some(directory.path())
-            ))
-            .unwrap()["payload"]["status"],
-            "imported"
-        );
+        let imported = super::super::files::profile_at(
+            super::super::files::ProfileRequest::Import,
+            Some(path_profile),
+        )
+        .unwrap();
+        assert!(matches!(
+            imported,
+            super::super::outbound::ProfileResult::Imported { .. }
+        ));
         assert_eq!(preferences.app(), &original);
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
         std::fs::create_dir(path.with_extension("json.bak")).unwrap();
-        assert!(preferences.save_display(profile.clone()).is_err());
+        assert!(save(&mut preferences, profile.clone()).is_err());
         assert_eq!(preferences.app(), &original);
         assert_eq!(preferences.display().font_size, original.display.font_size);
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
         std::fs::remove_dir(path.with_extension("json.bak")).unwrap();
-        preferences.save_display(profile).unwrap();
+        save(&mut preferences, profile).unwrap();
         assert_eq!(preferences.display().font_size, 18.0);
         assert_eq!(Store::at(path).load().unwrap(), *preferences.app());
     }
@@ -240,7 +180,7 @@ mod tests {
         preferences.preview_packet(1, DisplayProfile::default());
         assert_eq!(std::fs::read(&path).unwrap(), b"broken");
         assert!(preferences.warning().is_some());
-        preferences.save_display(DisplayProfile::default()).unwrap();
+        save(&mut preferences, DisplayProfile::default()).unwrap();
         assert!(preferences.warning().is_none());
         assert_eq!(
             std::fs::read(path.with_extension("json.bak")).unwrap(),

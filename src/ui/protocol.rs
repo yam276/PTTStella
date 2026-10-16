@@ -145,6 +145,12 @@ pub(super) enum SurfaceEvent {
         request: u64,
         trusted: bool,
     },
+    SelectionCleared {
+        presentation: u64,
+        generation: u64,
+        revision: u64,
+        request: u64,
+    },
     Key {
         key: vim::Key,
         generation: u64,
@@ -237,6 +243,7 @@ impl SurfaceEvent {
             | KeepAliveGate { .. }
             | SettingsPreview { .. }
             | Select { .. }
+            | SelectionCleared { .. }
             | Painted { .. }
             | Probe(_)
             | Error { .. }

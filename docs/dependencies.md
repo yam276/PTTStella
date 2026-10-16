@@ -23,6 +23,8 @@ Rust 1.97.0 是本次選定並實測的工具鏈，不是證明可用的最低�
 
 [UI wire 範例](../tests/fixtures/ui-packets.json) 為本專案自行編寫、可隨產品散布的合成 expected；僅含虛構帳號／文字及 example.com 網址，沒有私人流量、帳密或外部產品資料。DOM／clock doubles 與 native UI probe 同樣使用自製資料，沒有新增第三方程式或依賴。
 
+[選取撤銷 wire](../tests/fixtures/selection-cleared.json) 同樣為獨立手寫的合成 expected，供 JS 與 Rust 分別核對。[純黑匯出 PNG](../tests/fixtures/export-black.png) 以 Python 標準函式庫 struct／zlib 依 PNG 格式自行產生：960×576、8-bit RGB、每列 filter 0、全黑 pixels、IHDR／IDAT／IEND。兩份均由本專案製作、可隨產品散布，無外部資產或私人內容；PNG 僅驗證非同步檔案工作及版本撤銷，不替代 renderer 的像素基準。
+
 WSS 使用系統信任根、驗證站端憑證與主機名稱；TLS 設定屬於這條連線，不安裝 process-wide provider。原因是桌面相依套件可能同時啟用兩個 Rustls provider。端點為 `wss://ws.ptt.cc/bbs`；[PTT 官方公告](https://www.ptt.cc/bbs/SYSOP/M.1496571808.A.608.html) 記錄 WebSocket 服務，當前可用性由獨立實站探針驗證。
 
 ## App 附帶字型
