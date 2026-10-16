@@ -48,6 +48,7 @@ const browseBack=document.getElementById("browse-back"),browsePrevious=document.
 const browseHint=document.getElementById("browse-hint");
 const fontButton=document.getElementById("font-settings"),fontDialog=document.getElementById("font-dialog");
 const fontPreview=document.getElementById("font-preview"),fontNote=document.getElementById("font-note");
+const fontAvailability=document.getElementById("font-availability");
 const fontPreset=document.getElementById("font-preset"),fontSave=document.getElementById("font-save"),fontCancel=document.getElementById("font-cancel");
 const fontDefaults=document.getElementById("font-defaults");
 const profileImport=document.getElementById("profile-import"),profileExport=document.getElementById("profile-export"),profileName=document.getElementById("font-profile-name");
@@ -66,9 +67,18 @@ const fontDescription=(settings,cjk=false)=>settings.font_size+"px "+fontFamily(
 let loadedFonts=null,fontDraft=null,fontTimer=0,fontRequest=0,fontPreviewBusy=false,fontPreviewNext=null,fontSaving=false;
 async function loadFonts(settings) {
     const key=JSON.stringify([settings.ascii_font,settings.cjk_font,settings.font_size]);
-    if(loadedFonts===key) return;
+    if(loadedFonts?.key===key) return loadedFonts.warning;
     await Promise.all([document.fonts.load(fontDescription(settings),"M"),document.fonts.load(fontDescription(settings,true),"中")]);
-    await document.fonts.ready;loadedFonts=key;
+    await document.fonts.ready;
+    // fonts.load/check can succeed using fallback even when the requested family
+    // is absent. A local FontFace load checks the explicitly selected font.
+    const missing=await Promise.all([["英數",settings.ascii_font],["中文",settings.cjk_font]].map(async([role,name])=>{
+        try {await new FontFace("PTTStella font check","local("+JSON.stringify(name)+")").load();return "";}
+        catch {return role+"字型「"+name+"」無法由本機載入";}
+    }));
+    const warning=missing.filter(Boolean).join("；");
+    loadedFonts={key,warning:warning?warning+"；目前使用系統替代字型，切換組合可能看起來相同。請選本機字型或先安裝指定字型。":""};
+    return loadedFonts.warning;
 }
 let generation=0, revision=-1, composing=false, composition=null, beforeEdit=null, sent=0;
 let inputKey=false;
@@ -689,13 +699,13 @@ try {
             fontNote.textContent=fontDraft.warning||"";cancelComposition();cancelDrag();clearSelection();
             if(!fontDialog.open) fontDialog.showModal();
             released=null;cancelDrag();setHover(null);refreshNavigation();
-            await loadFonts(fontDraft.values);render(fontPreview,fontDraft.sample,{cursor:false});
+            fontAvailability.textContent=await loadFonts(fontDraft.values);render(fontPreview,fontDraft.sample,{cursor:false});
             fontFields.ascii_font.focus();continue;
         }
         if(packet.font_preview) {
             const preview=packet.font_preview;fontPreviewBusy=false;
             if(fontDialog.open&&preview.request===fontRequest) {
-                if(preview.packet){await loadFonts(preview.packet.settings);render(fontPreview,preview.packet,{cursor:false});fontPreview.dataset.request=String(preview.request);
+                if(preview.packet){fontAvailability.textContent=await loadFonts(preview.packet.settings);render(fontPreview,preview.packet,{cursor:false});fontPreview.dataset.request=String(preview.request);
                     fontPreview.dataset.fontSize=String(preview.packet.settings.font_size);fontPreview.dataset.baseline=String(preview.packet.settings.baseline);}
                 if(preview.error) fontNote.textContent=preview.error;
             }
@@ -705,7 +715,7 @@ try {
             profileBusy=false;profileImport.disabled=false;profileExport.disabled=false;fontDialog.dataset.profileResult=packet.profile_result;
             if(packet.profile_import&&fontDialog.open){const imported=packet.profile_import;clearTimeout(fontTimer);fontTimer=0;fontRequest++;fontPreviewNext=null;
                 fillFonts(imported.values);fontPreset.value=profileChoice(imported.profile);profileName.value=imported.name;
-                await loadFonts(imported.values);render(fontPreview,imported.sample,{cursor:false});}
+                fontAvailability.textContent=await loadFonts(imported.values);render(fontPreview,imported.sample,{cursor:false});}
             if(packet.notice)fontNote.textContent=packet.notice;
             if(fontDialog.open)profileName.focus();continue;
         }
