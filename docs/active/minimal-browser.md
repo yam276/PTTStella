@@ -10,6 +10,18 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。沒有獨立文章 UI、板名導航按鈕、啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)。
 
+## 增量：進板圖與六位數文章列表的 Vim 操作
+
+2026-10-17：使用者回報 C_Chat 進板圖停在「請按任意鍵繼續」，原先未知 profile 使 Vim 暫停。新增獨立 ContinuePrompt／Continue，要求完整格線、底列提示／色帶與最後一欄游標；只送一個空白。Normal 可用空白鍵、Enter、l／右方向鍵通過並維持 Vim；按住的繼續鍵跨畫面仍持有到 keyup，不誤開下一個項目。圖案區未映射字不參與決策，提示區仍須可映射；確認、輸入及其他未知畫面不放寬。沒有自動跳圖、跨頁補送、滑鼠導覽或保活。
+
+第一候選包實站已通過登入後兩個標準提示與 C_Chat 進板圖；長按 l 一秒未開文章。但隨後列表仍暫停：一般單格 > 緊貼六位數編號時，舊判斷把兩格的「>3」當成無效指標。改由共用 pointer 依單格 >／雙格 ● 各自寬度確認，保留其餘欄位、游標與畫面條件；新增自製密接編號正反例。
+
+29 個 navigation、9 個 Vim 案例及其餘 core suite／兩個 replay 通過；39 個 desktop lib、2 個 bin 測試及 desktop 全 targets Clippy 通過。負面案例核對正文假提示、額外密碼／y/N 文字、未完成控制碼、提示區未映射、長按跨 profile、重複 pending、舊 revision／input epoch 與新頁面的無效 Continue，沒有額外 bytes。
+
+最終 macOS／WKWebView window probe passed：40 筆原生操作包含既有四種列表、五次切板、無更新的 Home／4j／進入、三張自製進板圖的空白鍵／Enter／l，以及其後單格指標密接六位數編號的 j／k／h。l 長按一秒後仍停在文章列表，沒有額外開啟；始終 NORMAL。⌘W 後 acknowledged、listener released、worker joined，peer 無額外輸入。前一候選包另有 37 筆 passed；該輪中 CUA 因使用者切換視窗暫停，核對 test10 後續跑完成，沒有重送；最終 40 筆為另一個完整程序。
+
+產物為 `dist/macos-board-entry-final/PTTStella.app`，arm64／ad-hoc 簽章有效，舊 App 保留。最終包在使用者於正常登入視窗完成登入後，實站確認 C_Chat 另一張進板圖可用長按 l 一秒通過；緊貼六位數編號的 > 指標正確辨識，k／j 移動、l 開啟一般文章、h 返回列表並再 h 返回最愛均為 NORMAL，未連開文章。⌘Q 後 owner 回報 PeerClosedWithoutReply、程序退出碼 0；未保存實站圖案／流量或取出密碼到工具。完整 Mac desktop backend 仍 not_ready，未執行本輪 Windows／Linux 實機驗收，沒有 push／公開發佈。
+
 ## 本階段：按需媒體預覽
 
 使用者已授權寫規格後實作。範圍為圖片／動圖、直接影片網址、YouTube 縮圖與外開；一次預覽一個媒體，不提前載入整篇文章。

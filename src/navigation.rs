@@ -35,6 +35,7 @@ pub enum Context {
     Unknown {
         reason: UnknownReason,
     },
+    ContinuePrompt,
     MainMenu {
         first_row: usize,
         last_row: usize,
@@ -56,6 +57,7 @@ impl Context {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::Unknown { .. } => "unknown",
+            Self::ContinuePrompt => "continue_prompt",
             Self::MainMenu { .. } => "main_menu",
             Self::BoardList { .. } => "board_list",
             Self::ArticleList { .. } => "article_list",
@@ -92,6 +94,19 @@ pub fn analyze(frame: &Frame) -> Context {
         return unknown(UnknownReason::Incomplete);
     };
     let footer = &rows[23];
+    // PTT's default vshowmsg(NULL) footer is a standalone blue pause band,
+    // padded with spaces/half blocks, followed by its safe final column.
+    // Art above it need not be mapped: only this footer authorizes one key.
+    if frame.cursor == (79, 23)
+        && footer.mapped()
+        && footer
+            .text
+            .trim_matches(|c: char| c.is_whitespace() || c == '▄')
+            == "請按任意鍵繼續"
+        && footer.bar_text("請按任意鍵繼續")
+    {
+        return Context::ContinuePrompt;
+    }
     if let Some(context) = main_menu(&rows, frame.cursor) {
         return context;
     }
@@ -149,8 +164,7 @@ pub fn analyze(frame: &Frame) -> Context {
     if !articles.iter().any(|a| a.row == frame.cursor.1) || frame.cursor.0 > 2 {
         return unknown(UnknownReason::InvalidCursor);
     }
-    let marker = rows[frame.cursor.1].cells(0, 2).unwrap_or("").trim();
-    if !matches!(marker, ">" | "●") {
+    if !pointer(&rows[frame.cursor.1], 0) {
         return unknown(UnknownReason::InvalidCursor);
     }
     Context::ArticleList {
@@ -171,7 +185,9 @@ fn commands(rows: &[Row<'_>], forward: &str) -> bool {
             || rows[23].bar_text("選擇看板"))
 }
 fn pointer(line: &Row<'_>, col: usize) -> bool {
-    matches!(line.cells(col, col + 2).map(str::trim), Some(">" | "●"))
+    // The one-cell ASCII pointer can touch a six-digit article number. The
+    // legacy circle occupies two cells and may cover the first number digit.
+    line.cells(col, col + 1) == Some(">") || line.cells(col, col + 2) == Some("●")
 }
 fn main_menu(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
     if !compact(&rows[0].text).contains("主功能表")
@@ -375,6 +391,7 @@ fn reading(text: &str) -> Option<(usize, usize, u8)> {
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum Intent {
+    Continue,
     Open { row: usize },
     PreviousPage,
     NextPage,
@@ -428,6 +445,7 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         };
     }
     let bytes = match (context, intent) {
+        (Context::ContinuePrompt, Intent::Continue) => b" ".as_slice(),
         (Context::ArticleReading { first_line: 1, .. }, Intent::First)
         | (Context::ArticleReading { percent: 100, .. }, Intent::Last)
         | (Context::ArticleReading { percent: 100, .. }, Intent::Forward) => b"".as_slice(),

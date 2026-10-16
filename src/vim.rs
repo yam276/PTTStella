@@ -33,6 +33,7 @@ pub struct Keyboard {
     scroll: Option<usize>,
     profile: &'static str,
     hold: Option<String>,
+    continue_hold: Option<String>,
     text: Option<bool>,
     composition: bool,
 }
@@ -68,6 +69,7 @@ impl Keyboard {
                 || self.count > 0
                 || self.invalid_count
                 || self.hold.is_some()
+                || self.continue_hold.is_some()
                 || self.composition,
             prefix: format!(
                 "{}{}",
@@ -98,17 +100,25 @@ impl Keyboard {
         self.g = false;
         self.once = false;
         self.hold = None;
+        self.continue_hold = None;
         self.text = None;
         self.composition = false;
     }
     pub fn context(&mut self, context: &Context) {
         if self.profile != context.kind() {
+            // A continue key belongs to the pause prompt until keyup, even if
+            // the next frame is a list. Holding Enter/l must not open an item.
+            let continue_hold = self.continue_hold.take();
             self.reset();
+            self.continue_hold = continue_hold;
             self.scroll = None;
             self.profile = context.kind();
         }
     }
     pub fn release(&mut self, code: &str) {
+        if self.continue_hold.as_deref() == Some(code) {
+            self.continue_hold = None;
+        }
         if self.hold.as_deref() == Some(code) {
             self.hold = None;
         }
@@ -160,7 +170,9 @@ impl Keyboard {
             return Effect::None;
         }
         self.text = Some(false);
-        if self.hold.as_deref() == Some(&key.code) {
+        if self.hold.as_deref() == Some(&key.code)
+            || self.continue_hold.as_deref() == Some(&key.code)
+        {
             return Effect::None;
         }
         if !self.enabled || self.input || self.once {
@@ -219,6 +231,19 @@ impl Keyboard {
                     "Vim 已暫停：選取指標或游標位置未確認；按 i 原始輸入"
                 }
             });
+        }
+        if matches!(context, Context::ContinuePrompt) {
+            if key.repeat {
+                return Effect::None;
+            }
+            if !key.ctrl
+                && !key.alt
+                && matches!(key.key.as_str(), " " | "Enter" | "l" | "ArrowRight")
+            {
+                self.continue_hold = Some(key.code.clone());
+                return Effect::Browse(Intent::Continue);
+            }
+            return Effect::Notice("進板圖：按空白鍵、Enter 或 l 繼續；i 原始輸入");
         }
         if !key.ctrl && !key.alt && key.key.len() == 1 && key.key.as_bytes()[0].is_ascii_digit() {
             if self.invalid_count {
