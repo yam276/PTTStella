@@ -40,7 +40,7 @@ function receiveKeyboard(state){keyboardState=state;vimToggle.textContent=state.
     keyboard.readOnly=state.enabled&&!["input","once"].includes(state.mode);
     vimToggle.setAttribute("aria-pressed",String(state.enabled));vimOnce.hidden=!state.enabled||state.mode==="input";
     vimOnce.setAttribute("aria-pressed",String(state.mode==="once"));
-    const reason={unsupported_grid:"不支援的格線",incomplete:"畫面接收未完成",unmapped:"畫面有未映射字格",unrecognized:"未辨識的列表或閱讀格式",invalid_cursor:"列表游標未確認"}[state.suspended_reason]||"畫面未確認";
+    const reason={unsupported_grid:"不支援的格線",incomplete:"畫面接收未完成",unmapped:"畫面有未映射字格",unrecognized:"未辨識的選單、列表或閱讀格式",invalid_cursor:"列表游標未確認"}[state.suspended_reason]||"畫面未確認";
     vimStatus.textContent=!state.enabled?"":({normal:"VIM NORMAL",input:"PTT INPUT",once:"原生一次",suspended:"VIM 暫停 · "+reason+" · i 原始輸入"}[state.mode])+" "+state.prefix;
     surface.dataset.keyboardMode=state.mode;surface.dataset.vim=String(state.enabled);refreshKeepAlive();}
 const navigationMarker=document.getElementById("navigation-marker"),browseControls=document.getElementById("browse-controls");

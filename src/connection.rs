@@ -465,7 +465,7 @@ async fn run(
                 view.input_pending=pending_input.is_some() && view.phase==Phase::Connected;
                 view.keep_alive_ready=idle.ready(Stamp {revision:screen.revision(),..view.stamp()})
                     && socket.is_some() && !view.input_pending
-                    && !matches!(navigation::analyze(&screen.frame()),navigation::Context::Unknown {..});
+                    && navigation::analyze(&screen.frame()).allows_keepalive();
                 view.frame = screen.frame(); updates.send_replace(view.clone()); dirty = false;
             },
             _ = idle_clock.tick() => {
@@ -485,7 +485,7 @@ async fn run(
                 let stamp=Stamp {revision:screen.revision(),..view.stamp()};
                 if socket.is_some() && view.phase==Phase::Connected && pending_input.is_none()
                     && idle.due(now,stamp)
-                    && !matches!(navigation::analyze(&screen.frame()),navigation::Context::Unknown {..}) {
+                    && navigation::analyze(&screen.frame()).allows_keepalive() {
                     idle.activity(now);
                     if write_input(&mut socket,&mut view,liveness::REFRESH).await.is_ok() {
                         pending_input=Some(PendingInput::Refresh {revision:screen.revision(),deadline:Instant::now()+timing.response_timeout});

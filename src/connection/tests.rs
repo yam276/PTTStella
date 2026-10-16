@@ -15,34 +15,44 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
     let mut view = wait(&connection, |v| v.received > 0).await;
     let mut keyboard = Keyboard::default();
     keyboard.toggle();
-    for value in ["j", "k", "g", "g", "G"] {
-        let context = navigation::analyze(&view.frame);
-        assert!(matches!(context, navigation::Context::ArticleList { .. }));
-        let key = Key {
-            key: value.into(),
-            code: format!("Key{value}"),
-            ctrl: false,
-            alt: false,
-            shift: false,
-            repeat: false,
-        };
-        let effect = keyboard.key(&key, &context);
-        keyboard.release(&key.code);
-        assert!(!keyboard.accept_text(false));
-        if let Effect::Browse(intent) = effect {
-            let revision = view.frame.revision;
-            connection.browse_key(view.stamp(), intent).await.unwrap();
-            view = wait(&connection, |v| {
-                v.frame.revision > revision && !v.input_pending
-            })
-            .await;
-        } else {
-            assert_eq!(effect, Effect::None);
+    for profile in ["main_menu", "board_list", "board_list", "article_list"] {
+        for value in [
+            "j",
+            "k",
+            "g",
+            "g",
+            "G",
+            if profile == "article_list" { "h" } else { "l" },
+        ] {
+            let context = navigation::analyze(&view.frame);
+            assert_eq!(context.kind(), profile);
+            keyboard.context(&context);
+            let key = Key {
+                key: value.into(),
+                code: format!("Key{value}"),
+                ctrl: false,
+                alt: false,
+                shift: false,
+                repeat: false,
+            };
+            let effect = keyboard.key(&key, &context);
+            keyboard.release(&key.code);
+            assert!(!keyboard.accept_text(false));
+            if let Effect::Browse(intent) = effect {
+                let revision = view.frame.revision;
+                connection.browse_key(view.stamp(), intent).await.unwrap();
+                view = wait(&connection, |v| {
+                    v.frame.revision > revision && !v.input_pending
+                })
+                .await;
+            } else {
+                assert_eq!(effect, Effect::None);
+            }
+            assert_eq!(keyboard.status(&context).mode, "normal");
         }
-        assert_eq!(keyboard.status(&context).mode, "normal");
     }
-    // The peer independently expects Down, Up, Home, End, then Close; neither
-    // literal g/j/k/G nor an extra command can produce a successful join.
+    // Peer expects 20 translated operations across all four profiles, then
+    // Close. Literal Vim letters/control codes or extra input fail the join.
     connection.shutdown().await.unwrap();
 }
 
@@ -271,6 +281,23 @@ async fn idle_refresh_pauses_on_local_activity_unknown_frames_and_reconnect() {
             .is_err(),
         "an unknown prompt must reject even a ready UI"
     );
+    let mut revision = unknown.frame.revision;
+    for name in ["main_menu", "boards", "favorites", "classes"] {
+        ws.send(Message::Binary(navigation_page(name).into()))
+            .await
+            .unwrap();
+        let view = wait(&connection, |v| v.frame.revision > revision).await;
+        revision = view.frame.revision;
+        assert_ne!(navigation::analyze(&view.frame).kind(), "unknown");
+        connection.keep_alive_gate(view.stamp(), true);
+        assert!(
+            timeout(Duration::from_millis(160), ws.next())
+                .await
+                .is_err(),
+            "keyboard-only profile must not admit idle refresh: {name}"
+        );
+        assert!(!connection.updates.borrow().keep_alive_ready);
+    }
     let closing = tokio::spawn(async move {
         assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
     });
