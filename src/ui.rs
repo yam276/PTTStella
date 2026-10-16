@@ -26,6 +26,7 @@ use tokio::sync::watch;
 #[derive(Clone, PartialEq, Props)]
 pub struct AppProps {
     pub probe: Option<PathBuf>,
+    pub window_probe: bool,
     pub reload_settings: bool,
     pub media_origin: Option<String>,
 }
@@ -272,12 +273,15 @@ fn preview(probe: bool, media_origin: Option<&str>) -> Result<Vec<u8>, String> {
 
 pub fn app(props: AppProps) -> Element {
     let probing = props.probe.is_some();
+    let window_probe = props.window_probe;
     let reload_settings = props.reload_settings;
     let media_origin = props.media_origin.clone();
     let owner = use_hook(move || {
         preview(probing, media_origin.as_deref())
             .and_then(|bytes| {
-                if probing {
+                if window_probe {
+                    Connection::start_window_probe()
+                } else if probing {
                     Connection::start_probe(bytes, reload_settings)
                 } else {
                     let mut screen = Screen::new(80, 24).map_err(str::to_owned)?;
@@ -321,16 +325,26 @@ pub fn app(props: AppProps) -> Element {
     let closing = use_hook(|| watch::channel(false));
     let close_sender = closing.0.clone();
     dioxus::desktop::use_wry_event_handler(move |event, _| {
-        if matches!(
+        let close_requested = matches!(
             event,
             dioxus::desktop::tao::event::Event::WindowEvent {
                 event: dioxus::desktop::WindowEvent::CloseRequested,
                 ..
             }
-        ) {
+        );
+        if close_requested {
             close_sender.send_replace(true);
         }
     });
+    #[cfg(target_os = "macos")]
+    {
+        let close_sender = closing.0.clone();
+        dioxus::desktop::use_muda_event_handler(move |event| {
+            if event.id().0 == crate::macos::QUIT {
+                close_sender.send_replace(true);
+            }
+        });
+    }
     let probe = props.probe.clone();
     let media_origin = props.media_origin.clone();
     let connect = connection.clone();
@@ -382,7 +396,7 @@ pub fn app(props: AppProps) -> Element {
                         started.set(true);
                         let connection = connection.clone(); let probe = probe.clone(); let closing = closing.1.clone(); let media_origin = media_origin.clone();
                         spawn(async move {
-                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, (reload_settings, media_origin)).await;
+                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, (reload_settings, media_origin, window_probe)).await;
                             if let Err(error) = result {
                                 fatal.set(true);
                                 message.set(format!("{error}；請關閉並重新開啟視窗"));
@@ -470,9 +484,9 @@ async fn surface(
     mut message: Signal<String>,
     mut phase: Signal<Phase>,
     mut pending_paste: Signal<Option<PendingPaste>>,
-    options: (bool, Option<String>),
+    options: (bool, Option<String>, bool),
 ) -> Result<(), String> {
-    let (reload_settings, media_origin) = options;
+    let (reload_settings, media_origin, window_probe) = options;
     let mut receiver = connection.updates.clone();
     let store = probe.as_ref().map_or_else(Store::system, |path| {
         Ok(Store::at(path.join("probe-settings.json")))
@@ -586,6 +600,7 @@ async fn surface(
         if dirty && in_flight.is_none() && !stopping {
             let view = receiver.borrow().clone();
             let run_probe = probe.is_some()
+                && !window_probe
                 && !probe_started
                 && view.phase == Phase::Connected
                 && view.received > 0;
@@ -1004,6 +1019,15 @@ async fn surface(
                 SurfaceEvent::Stopped { clean } => {
                     media_preview.close();
                     connection.shutdown().await?;
+                    if window_probe {
+                        let path = probe.as_ref().ok_or("missing window-probe directory")?;
+                        std::fs::create_dir_all(path).map_err(|e|e.to_string())?;
+                        let report = serde_json::json!({"status":if clean {"passed"} else {"failed"},
+                            "scope":"local window probe; exact four Vim operations and no extra station input",
+                            "listeners_released":clean,"connection_worker_joined":true,
+                            "settings":app_settings,"vim_mode":keyboard_policy.status(&navigation::analyze(&receiver.borrow().frame))});
+                        std::fs::write(path.join("window-probe.json"),report.to_string()).map_err(|e|e.to_string())?;
+                    }
                     if let Some(mut report) = pending_report.take() {
                         report["listeners_released"] = clean.into();
                         report["connection_worker_joined"] = true.into();
