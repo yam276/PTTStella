@@ -7,6 +7,144 @@ fn explicit_tls_provider_builds_with_desktop_feature_unification() {
     assert!(matches!(tls_connector().unwrap(), Connector::Rustls(_)));
 }
 
+fn credentials() -> Credentials {
+    Credentials::new(
+        "StellaTest".into(),
+        zeroize::Zeroizing::new(b"synthetic+42".to_vec()),
+    )
+    .unwrap()
+}
+
+#[tokio::test]
+async fn login_deadline_drops_password_and_late_prompt_sends_nothing() {
+    let (listener, connection) = local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(probe::login_page().unwrap().into()))
+        .await
+        .unwrap();
+    let view = wait(&connection, |v| v.received > 0).await;
+    connection.login(view.stamp(), credentials()).await.unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"StellaTest\r"
+    );
+    let mut updates = connection.updates.clone();
+    timeout(Duration::from_secs(18), async {
+        loop {
+            if updates.borrow_and_update().message.contains("登入等待逾時") {
+                break;
+            }
+            updates.changed().await.unwrap();
+        }
+    })
+    .await
+    .unwrap();
+    ws.send(Message::Binary(probe::password_page().unwrap().into()))
+        .await
+        .unwrap();
+    assert!(timeout(Duration::from_millis(80), ws.next()).await.is_err());
+    let close = tokio::spawn(async move {
+        let _ = ws.next().await;
+        let _ = ws.flush().await;
+    });
+    connection.shutdown().await.unwrap();
+    close.await.unwrap();
+}
+
+#[tokio::test]
+async fn cancelled_login_does_not_survive_reconnect_or_resume_at_a_password_prompt() {
+    let (listener, connection) = local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(probe::login_page().unwrap().into()))
+        .await
+        .unwrap();
+    let view = wait(&connection, |v| v.received > 0).await;
+    connection.login(view.stamp(), credentials()).await.unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"StellaTest\r"
+    );
+    connection.cancel_login().unwrap();
+    wait(&connection, |v| v.message.contains("已取消登入")).await;
+    ws.send(Message::Binary(probe::password_page().unwrap().into()))
+        .await
+        .unwrap();
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    ws.close(None).await.unwrap();
+    wait(&connection, |v| v.phase == Phase::Disconnected).await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(probe::password_page().unwrap().into()))
+        .await
+        .unwrap();
+    let view = wait(&connection, |v| {
+        v.generation > view.generation && v.received > 0
+    })
+    .await;
+    assert!(!view.login_pending);
+    assert!(connection.login(view.stamp(), credentials()).await.is_err());
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    let close = tokio::spawn(async move {
+        let _ = ws.next().await;
+        let _ = ws.flush().await;
+    });
+    connection.shutdown().await.unwrap();
+    close.await.unwrap();
+}
+#[tokio::test]
+async fn explicit_login_waits_for_fragmented_prompt_and_never_repeats_password() {
+    let connection = Connection::start_login_probe().unwrap();
+    connection.connect().unwrap();
+    let view = wait(&connection, |v| v.received > 0).await;
+    connection.login(view.stamp(), credentials()).await.unwrap();
+    wait(&connection, |v| {
+        navigation::analyze(&v.frame).kind() == "main_menu"
+    })
+    .await;
+    let stamp = connection.updates.borrow().stamp();
+    assert!(connection.login(stamp, credentials()).await.is_err());
+    connection.shutdown().await.unwrap();
+}
+#[tokio::test]
+async fn manual_input_cancels_waiting_login_and_stale_request_sends_nothing() {
+    let (listener, connection) = local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(probe::login_page().unwrap().into()))
+        .await
+        .unwrap();
+    let view = wait(&connection, |v| v.received > 0).await;
+    let stale = Stamp {
+        revision: view.frame.revision + 1,
+        ..view.stamp()
+    };
+    assert!(connection.login(stale, credentials()).await.is_err());
+    assert!(timeout(Duration::from_millis(30), ws.next()).await.is_err());
+    connection.login(view.stamp(), credentials()).await.unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"StellaTest\r"
+    );
+    connection.input(view.generation, b"x".to_vec()).unwrap();
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"x");
+    ws.send(Message::Binary(probe::password_page().unwrap().into()))
+        .await
+        .unwrap();
+    assert!(timeout(Duration::from_millis(80), ws.next()).await.is_err());
+    let close = tokio::spawn(async move {
+        let _ = ws.next().await;
+        let _ = ws.flush().await;
+    });
+    connection.shutdown().await.unwrap();
+    close.await.unwrap();
+}
+
 #[tokio::test]
 async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdown() {
     use crate::vim::{Effect, Key, Keyboard};

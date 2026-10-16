@@ -5,6 +5,7 @@ use pttstella::{
     encoding, export,
     input::{self, PreparedPaste},
     links::{self, Link},
+    login::vault::{Action as LoginAction, Job as LoginJob, Outcome as LoginOutcome, Vault},
     media::{
         self,
         hover::Lease as HoverLease,
@@ -27,6 +28,7 @@ use tokio::sync::watch;
 pub struct AppProps {
     pub probe: Option<PathBuf>,
     pub window_probe: bool,
+    pub login_probe: bool,
     pub reload_settings: bool,
     pub media_origin: Option<String>,
 }
@@ -41,6 +43,7 @@ struct Paint {
     keep_alive_failure: Option<String>,
     input_epoch: u64,
     input_pending: bool,
+    login_pending: bool,
     connected: bool,
     navigation: Context,
     frame: Frame,
@@ -110,6 +113,22 @@ enum SurfaceEvent {
         trusted: bool,
     },
     SettingsOpen {
+        trusted: bool,
+    },
+    LoginOpen {
+        trusted: bool,
+    },
+    LoginSubmit {
+        account: String,
+        password: String,
+        remember: bool,
+        stamp: Stamp,
+        trusted: bool,
+    },
+    LoginForget {
+        trusted: bool,
+    },
+    LoginCancel {
         trusted: bool,
     },
     SettingsPreview {
@@ -277,12 +296,15 @@ pub fn app(props: AppProps) -> Element {
     });
     let probing = props.probe.is_some();
     let window_probe = props.window_probe;
+    let login_probe = props.login_probe;
     let reload_settings = props.reload_settings;
     let media_origin = props.media_origin.clone();
     let owner = use_hook(move || {
         preview(probing, media_origin.as_deref())
             .and_then(|bytes| {
-                if window_probe {
+                if login_probe {
+                    Connection::start_login_probe()
+                } else if window_probe {
                     Connection::start_window_probe()
                 } else if probing {
                     Connection::start_probe(bytes, reload_settings)
@@ -384,6 +406,8 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "vim-once", hidden: true, "原生一次 (f)" }
                 output { id: "vim-status", role: "status" }
                   button { id: "keep-alive", r#type: "button", "aria-pressed": "true", "防閒置：開" }
+                button { id: "login-open", disabled: !cfg!(target_os="macos"), "登入" }
+                button { id: "login-stop", hidden: true, "取消登入" }
                 div { id: "browse-controls", hidden: true,
                     button { id: "browse-back", disabled: true, "返回" }
                     button { id: "browse-previous", disabled: true, "上頁" }
@@ -399,7 +423,7 @@ pub fn app(props: AppProps) -> Element {
                         started.set(true);
                         let connection = connection.clone(); let probe = probe.clone(); let closing = closing.1.clone(); let media_origin = media_origin.clone();
                         spawn(async move {
-                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, (reload_settings, media_origin, window_probe)).await;
+                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, (reload_settings, media_origin, window_probe, login_probe)).await;
                             if let Err(error) = result {
                                 fatal.set(true);
                                 message.set(format!("{error}；請關閉並重新開啟視窗"));
@@ -415,6 +439,19 @@ pub fn app(props: AppProps) -> Element {
                     div { id: "navigation-marker", "aria-hidden": "true", hidden: true }
                     output { id: "surface-note", role: "status" }
                     textarea { id: "keyboard", "aria-label": "PTT 鍵盤輸入", autocomplete: "off", autocapitalize: "off", "autocorrect": "off", wrap: "off", spellcheck: "false" }
+                }
+            }
+            dialog { id: "login-dialog", class: "paste-preview font-dialog", "aria-labelledby": "login-title",
+                h2 { id: "login-title", "登入 PTT" }
+                p { "按登入才送出帳密；只在 PTT 帳號／密碼提示操作。啟動與重連不自動登入。" }
+                label { "帳號" input { id: "login-account", maxlength: "12", autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
+                label { "密碼" input { id: "login-password", r#type: "password", maxlength: "72", autocomplete: "off" } }
+                label { input { id: "login-remember", r#type: "checkbox" } "將此帳號與密碼存入 macOS 鑰匙圈" }
+                p { id: "login-note", role: "status" }
+                div { class: "dialog-actions",
+                    button { id: "login-forget", "移除已存帳密" }
+                    button { id: "login-cancel", "取消" }
+                    button { id: "login-submit", "登入" }
                 }
             }
             dialog { id: "paste-dialog", class: "paste-preview",
@@ -496,9 +533,9 @@ async fn surface(
     mut message: Signal<String>,
     mut phase: Signal<Phase>,
     mut pending_paste: Signal<Option<PendingPaste>>,
-    options: (bool, Option<String>, bool),
+    options: (bool, Option<String>, bool, bool),
 ) -> Result<(), String> {
-    let (reload_settings, media_origin, window_probe) = options;
+    let (reload_settings, media_origin, window_probe, login_probe) = options;
     let mut receiver = connection.updates.clone();
     let store = probe.as_ref().map_or_else(Store::system, |path| {
         Ok(Store::at(path.join("probe-settings.json")))
@@ -523,6 +560,9 @@ async fn surface(
     let mut hover_lease: Option<HoverLease> = None;
     let mut keyboard_policy = vim::Keyboard::default();
     let mut keyboard_generation = 0;
+    let mut login_job: Option<LoginJob> = None;
+    let mut login_stamp = None;
+    let mut login_open = false;
     let mut media_external = 0;
     let first = receiver.borrow_and_update().clone();
     let mut last_status = first.message.clone();
@@ -613,6 +653,7 @@ async fn surface(
             let view = receiver.borrow().clone();
             let run_probe = probe.is_some()
                 && !window_probe
+                && !login_probe
                 && !probe_started
                 && view.phase == Phase::Connected
                 && view.received > 0;
@@ -627,6 +668,24 @@ async fn surface(
             dirty = false;
         }
         tokio::select! {
+            result = async { match login_job.as_mut() {Some(job)=>job.wait().await,None=>std::future::pending().await} } => {
+                login_job=None;
+                if stopping {continue;}
+                if !login_open {eval.send(serde_json::json!({"login_result":{"busy":false}})).map_err(|e|e.to_string())?;continue;}
+                let packet=match result {
+                    Ok(LoginOutcome::Opened {account,saved})=>serde_json::json!({"login_result":{"account":account,"saved":saved,"busy":false,"message":if saved {"已有密碼保存在鑰匙圈；留空可使用已存密碼"} else {"密碼僅用於此次登入；勾選後才保存至鑰匙圈"}}}),
+                    Ok(LoginOutcome::Forgotten)=>serde_json::json!({"login_result":{"account":"","saved":false,"busy":false,"message":"已移除鑰匙圈中的帳密"}}),
+                    Ok(LoginOutcome::Ready(credentials))=>{
+                        let result=if let Some(stamp)=login_stamp.take() {connection.login(stamp,credentials).await} else {Err("登入請求已取消".into())};
+                        match result {
+                            Ok(())=>{login_open=false;serde_json::json!({"login_result":{"close":true,"busy":false}})},
+                            Err(error)=>serde_json::json!({"login_result":{"busy":false,"message":error}}),
+                        }
+                    },
+                    Err(error)=>serde_json::json!({"login_result":{"busy":false,"message":error}}),
+                };
+                eval.send(packet).map_err(|e|e.to_string())?;
+            },
             update = media_preview.update() => {
                 if let Some(update) = update {
                     let reply = match update.result {
@@ -642,6 +701,29 @@ async fn surface(
                 }
             },
             event = eval.recv::<SurfaceEvent>() => match event.map_err(|e| e.to_string())? {
+                SurfaceEvent::LoginOpen {trusted} => {
+                    if !trusted || stopping || login_job.is_some() {continue;}
+                    login_open=true;login_stamp=None;
+                    let vault=Vault::new(probe.is_some());
+                    login_job=Some(LoginJob::start(vault,LoginAction::Open)?);
+                },
+                SurfaceEvent::LoginSubmit {account,password,remember,stamp,trusted} => {
+                    let password=zeroize::Zeroizing::new(password.into_bytes());
+                    if !trusted || stopping || !login_open || login_job.is_some() {continue;}
+                    login_stamp=Some(stamp);
+                    let vault=Vault::new(probe.is_some());
+                    login_job=Some(LoginJob::start(vault,LoginAction::Submit {account,password,remember})?);
+                },
+                SurfaceEvent::LoginForget {trusted} => {
+                    if !trusted || stopping || !login_open || login_job.is_some() {continue;}
+                    let vault=Vault::new(probe.is_some());
+                    login_job=Some(LoginJob::start(vault,LoginAction::Forget)?);
+                },
+                SurfaceEvent::LoginCancel {trusted} => {
+                    if !trusted || stopping {continue;}
+                    login_open=false;login_stamp=None;
+                    if let Err(error)=connection.cancel_login() {message.set(error);}
+                },
                 SurfaceEvent::HoverPreference {position,trusted} => {
                     if stopping || !trusted {continue;}
                     let mut draft=app_settings.clone();draft.hover=position;
@@ -1029,8 +1111,16 @@ async fn surface(
                     close_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_secs(45));
                 },
                 SurfaceEvent::Stopped { clean } => {
+                    // Native Keychain calls cannot be aborted. Keep ownership and
+                    // join the one worker; discard any late secret without sending.
+                    if let Some(mut job)=login_job.take() {let _=job.wait().await;}
                     media_preview.close();
                     connection.shutdown().await?;
+                    if login_probe {
+                        let path=probe.as_ref().ok_or("missing login-probe directory")?;
+                        std::fs::create_dir_all(path).map_err(|e|e.to_string())?;
+                        std::fs::write(path.join("login-probe.json"),serde_json::json!({"status":if clean {"passed"} else {"failed"},"scope":"synthetic login only; peer checked one account and password, no extra input","listeners_released":clean,"connection_worker_joined":true,"credential_worker_joined":true}).to_string()).map_err(|e|e.to_string())?;
+                    }
                     if window_probe {
                         let path = probe.as_ref().ok_or("missing window-probe directory")?;
                         std::fs::create_dir_all(path).map_err(|e|e.to_string())?;
@@ -1097,6 +1187,8 @@ async fn surface(
             changed = closing.changed() => {
                 changed.map_err(|e| e.to_string())?;
                 if *closing.borrow_and_update() && !stopping {
+                    login_open=false;login_stamp=None;
+                    connection.cancel_login()?;
                     media_preview.close();
                     connection.keep_alive_gate(receiver.borrow().stamp(),false);
                     eval.send(serde_json::json!({"stop":true})).map_err(|e| e.to_string())?;
@@ -1133,6 +1225,7 @@ fn paint(view: &View, probe: bool, settings: &DisplaySettings) -> Paint {
         keep_alive_failure: view.keep_alive_failure.clone(),
         input_epoch: view.input_epoch,
         input_pending: view.input_pending,
+        login_pending: view.login_pending,
         connected: view.phase == Phase::Connected,
         navigation: navigation::analyze(&view.frame),
         settings: settings.clone(),
@@ -1153,6 +1246,7 @@ fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint {
         keep_alive_failure: None,
         input_epoch: 0,
         input_pending: false,
+        login_pending: false,
         connected: false,
         navigation: navigation::analyze(frame),
         frame: frame.clone(),

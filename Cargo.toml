@@ -8,11 +8,12 @@ default-run = "pttstella"
 
 [features]
 default = []
-desktop = ["dep:dioxus", "dep:tokio", "dep:base64", "dep:tokio-tungstenite", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser", "dep:rfd", "dep:tempfile", "dep:directories", "dep:reqwest", "dep:imagesize"]
+desktop = ["dep:dioxus", "dep:tokio", "dep:base64", "dep:tokio-tungstenite", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser", "dep:rfd", "dep:tempfile", "dep:directories", "dep:reqwest", "dep:imagesize", "dep:security-framework"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+zeroize = "=1.9.1"
 uao-rs = "=0.1.0"
 url = "=2.5.8"
 webbrowser = { version = "=1.2.4", optional = true }
@@ -28,6 +29,9 @@ rustls = { version = "0.23", optional = true, default-features = false, features
 rustls-native-certs = { version = "0.8", optional = true }
 reqwest = { version = "=0.13.5", default-features = false, features = ["rustls-no-provider", "stream"], optional = true }
 imagesize = { version = "=0.15.0", default-features = false, features = ["jpeg", "png", "gif", "webp"], optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = { version = "=3.7.0", optional = true }
 
 [[bin]]
 name = "pttstella"

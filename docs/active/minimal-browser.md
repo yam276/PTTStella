@@ -8,7 +8,7 @@
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
-初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。沒有獨立文章 UI、板名導航按鈕、登入腳本、自動輸入／記住密碼或背景追蹤。
+初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。沒有獨立文章 UI、板名導航按鈕、啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)。
 
 ## 本階段：按需媒體預覽
 
@@ -68,6 +68,16 @@ Windows 真實 WebView 與模擬舊 WebKit 順序的增量 gate 已通過，包�
 Windows 真實 pointer＋loopback HTTP 已驗證快掠零請求、同連結一次、A→B 的 TCP EOF、已完成及下載中提升不重抓、兩種位置／右下碰邊、關閉偏好、設定重啟及 Canvas／PTT bytes 不變。Rust lease 案例驗證相同來源跨 revision 可續用，新輸入／session／範圍變動／未完成畫面均失效。現有全部離線 gate 通過；真實網站、macOS／Linux、原生 picker 與人工登入仍待驗收。
 
 ## 技術邊界
+
+### 按鈕登入與 macOS 鑰匙圈
+
+2026-10-16：使用者提供專用測試帳號並明確選擇「記住帳密，按登入才送出」。已實作 [登入契約](../login.md)：macOS 工具列登入視窗、預設不保存的勾選、一個預設帳號及移除功能。帳號／密碼全部放在 Keychain generic password，沒有帳密設定檔、明文備份或可攜匯出；已存密碼不回填 WebView。Rust 自有 secret buffer 以 zeroize 清除，不提供 Debug／Clone／Serialize；不宣稱 OS／WebView／TLS 所有暫存都能清除。
+
+送出由同一 Connection owner 序列化：明確按登入，核對當前 stamp 與第 21 列空白帳號提示才送帳號；第 22 列空白密碼提示及前列回顯此次帳號均確認後，才送密碼一次。未完成 ANSI、錯誤提示／畫面、游標／帳號不符拒絕。15 秒到期、取消、手動輸入、導覽及斷線清除等待；啟動／重連不讀取或重送。送出後只報告帳密已送出，後續公告、兩階段驗證、刪除其他連線等確認仍人工操作，沒有宣稱站端接受密碼。Keychain 每次一個 owned native worker，正常關閉與橋接失敗仍 join；OS 權限提示需使用者完成或取消。
+
+驗證：core 七套 suite（新增 3 個 login 案例）／兩個 replay、32 個 desktop lib（含分段提示、過期拒絕、手動取消、真實 15 秒期限與重連不重播）、1 個字型資產 route、全 targets desktop Clippy、fmt 通過。macOS arm64／WKWebView 的獨立 App 使用自製帳密與專用 synthetic Keychain service，兩個程序分別保存／留空取用；peer 精確核對帳號及密碼兩筆輸入、零額外輸入，⌘W／⌘Q 後 worker／listener 清理 passed。另實際確認取消零輸入、錯帳號不能用已存密碼、已登入畫面拒絕再送、移除後重讀不存在。合成項目已移除；正常 Keychain 項目與使用者實站帳號均未操作。
+
+同一最終 executable 再跑主選單／看板／最愛／文章的 30 筆原生 Vim 往返與五次切板，NORMAL、精確 bytes 與清理 passed。最終 App 為 `dist/macos-login-verified/PTTStella.app`，包含前輪切板與內建字型，舊包保留；ad-hoc 簽章有效。完整 Mac desktop backend 仍 not_ready；Windows／Linux credential backend、正式簽署後更新存取、原生 Keychain 拒絕權限與實站登入待各自驗收。使用者將直接在新版 App 輸入真實密碼，聊天及 repo 不接收密碼。沒有 push／公開發佈。
 
 ### 看板描述欄文字與連續切板修正
 

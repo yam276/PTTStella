@@ -5,6 +5,7 @@ pub mod encoding;
 pub mod export;
 pub mod input;
 pub mod links;
+pub mod login;
 pub mod media;
 pub mod navigation;
 pub mod screen;

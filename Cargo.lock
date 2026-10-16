@@ -3287,6 +3287,7 @@ dependencies = [
  "rfd",
  "rustls",
  "rustls-native-certs",
+ "security-framework",
  "serde",
  "serde_json",
  "tempfile",
@@ -3295,6 +3296,7 @@ dependencies = [
  "uao-rs",
  "url",
  "webbrowser",
+ "zeroize",
 ]
 
 [[package]]

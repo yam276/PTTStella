@@ -1,0 +1,31 @@
+# 按鈕登入與帳密保存
+
+使用者明確選擇「記住帳密，按登入才送出」。正常啟動只連到固定的 `wss://ws.ptt.cc/bbs`；不在啟動、重連、失敗或返回帳號提示時自動送帳密。
+
+## 操作
+
+macOS 工具列的「登入」開啟視窗。首次輸入帳號、密碼，預設不保存；明確勾選「將此帳號與密碼存入 macOS 鑰匙圈」才寫入。保存的是一個預設帳號，下一次明確保存會替換這筆帳密。保存只表示鑰匙圈寫入完成，不代表 PTT 已接受密碼。
+
+再次開啟可看見帳號，密碼欄保持空白；留空並按登入才取用已存密碼。改成另一帳號時必須重新輸入密碼，不會沿用其他帳號的密碼。「移除已存帳密」只移除本 App 的這筆鑰匙圈項目，不變更站端密碼，也不登出目前連線。其他平台尚未提供安全儲存，保留原始鍵盤手動登入。
+
+## 儲存與暫存
+
+帳號與密碼一起放入 macOS Keychain 的一筆 generic password；不建立帳密 JSON、明文備份或自製加密檔，也不加入可攜顯示設定、PNG 或診斷報告。Keychain 提供加密儲存及 OS 的存取管理，見 [Apple Keychain 說明](https://developer.apple.com/documentation/security/using-the-keychain-to-manage-user-secrets)。以鎖定的 [security-framework 3.7.0 安全 API](https://docs.rs/security-framework/3.7.0/security_framework/passwords/index.html) 讀、寫及刪除，錯誤只顯示 OS status code，不輸出密碼或 credential payload。
+
+只有開啟登入視窗、按登入或移除時才呼叫 Keychain；啟動不讀取。OS 若要求允許存取，由使用者操作系統提示；拒絕不降級成一般檔案。每次至多一個 native worker，平時不阻塞 BBS 收送，關閉及橋接錯誤仍持有並 join；系統權限提示無法由程式中止，需先完成或取消該提示。
+
+密碼輸入欄使用 password 類型、停用 autocomplete，取消／送出／關閉時清空；已存密碼不回傳 WebView。第一次輸入的密碼經結構化事件送至 Rust，不拼接到 JavaScript。Rust 自有密碼 buffer 以 zeroize 清除，Credentials 不提供 Debug、Clone 或 Serialize。這不能保證清除 OS、WebView、TLS 及傳輸函式庫內的所有副本，也不能防止已遭入侵的使用者環境讀取執行中資料。
+
+## 單次登入流程
+
+Connection 是唯一送出者。按登入時核對 generation、revision、input epoch、連線狀態、沒有等待中的操作，以及目前游標位於空白帳號提示。只送帳號與 CR，等待同一連線第 22 列的空白密碼提示，且前一列已回顯此次帳號，才送密碼與 CR 一次。辨識使用核心已完成的 80×24 Frame，不在 JS 或傳輸 framing 重解原始串流。
+
+帳號提示為第 21 列「請輸入代號，或以 guest 參觀，或以 new 註冊:」，密碼提示為第 22 列「請輸入您的密碼:」。游標前文字須完全符合、後方空白、該列可映射，已辨識的瀏覽畫面不接受；部分輸入、提示文字出現在其他列、未完成 ANSI 均拒絕。依 [PTT 登入列與收送](https://github.com/ptt/pttbbs/blob/908bb0631a4a6db41eac85713637adf1a6058fde/mbbsd/mbbsd.c#L610)、[密碼提示](https://github.com/ptt/pttbbs/blob/908bb0631a4a6db41eac85713637adf1a6058fde/include/common.h) 及 [帳號／密碼容量](https://github.com/ptt/pttbbs/blob/908bb0631a4a6db41eac85713637adf1a6058fde/include/pttstruct.h#L49) 製作自製測試，並非實站部署版本證明。帳號限 2–12 英數且英文開頭；訪客／註冊指令拒絕。密碼限 1–72 個可列印 ASCII，保留空格，不接受換行、ESC 或控制碼；不支援的內容可取消後用原始輸入操作。
+
+等待最多 15 秒；逾時、取消、手動輸入、導覽、斷線或離開登入畫面時清除等待中的密碼，重連不恢復。帳號已送出不能回滾；取消只阻止後續密碼。送出密碼後不自動重試，也不自動回答重複登入、刪除其他連線、兩階段驗證、公告或任何後續確認。介面只報告「帳密已送出」，成功與否由站端畫面確認。
+
+## 驗證邊界
+
+一般 core gate 包含 login suite 的輸入容量／控制碼與提示正反例；desktop lib 用同一 production Connection 核對分段密碼提示、精確兩筆輸入、錯畫面／過期請求拒絕、手動取消、15 秒期限、晚到提示及重連不重播。
+
+`--probe-login OUTPUT_DIRECTORY` 明確使用 owned loopback、獨立 WebView 資料目錄與專用 synthetic Keychain service，從不讀寫正常帳號項目。只使用自製帳密；peer 逐筆比對後必須收到 Close，任何額外輸入失敗。macOS 原生視窗驗證保存、重啟留空取用、錯帳號／非登入畫面拒絕及移除後重讀；產物報告不含帳密。實站、Windows／Linux 安全儲存及正式 Developer ID 更新後的存取結果各自驗收，不能以本機往返宣稱實站登入通過。
