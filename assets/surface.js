@@ -37,9 +37,11 @@ function toggleVim(e){policy("toggle",e);restoreEditingFocus();}
 function armNative(e){policy("once",e);restoreEditingFocus();}
 function keyup(e){if(!e.metaKey)policy("release",e,e.code);}
 function receiveKeyboard(state){keyboardState=state;vimToggle.textContent=state.enabled?"Vim：開":"Vim：關";
+    keyboard.readOnly=state.enabled&&!["input","once"].includes(state.mode);
     vimToggle.setAttribute("aria-pressed",String(state.enabled));vimOnce.hidden=!state.enabled||state.mode==="input";
     vimOnce.setAttribute("aria-pressed",String(state.mode==="once"));
-    vimStatus.textContent=!state.enabled?"":({normal:"VIM NORMAL",input:"PTT INPUT",once:"原生一次",suspended:"VIM 暫停 · i 原始輸入"}[state.mode])+" "+state.prefix;
+    const reason={unsupported_grid:"不支援的格線",incomplete:"畫面接收未完成",unmapped:"畫面有未映射字格",unrecognized:"未辨識的列表或閱讀格式",invalid_cursor:"列表游標未確認"}[state.suspended_reason]||"畫面未確認";
+    vimStatus.textContent=!state.enabled?"":({normal:"VIM NORMAL",input:"PTT INPUT",once:"原生一次",suspended:"VIM 暫停 · "+reason+" · i 原始輸入"}[state.mode])+" "+state.prefix;
     surface.dataset.keyboardMode=state.mode;surface.dataset.vim=String(state.enabled);refreshKeepAlive();}
 const navigationMarker=document.getElementById("navigation-marker"),browseControls=document.getElementById("browse-controls");
 const browseBack=document.getElementById("browse-back"),browsePrevious=document.getElementById("browse-previous"),browseNext=document.getElementById("browse-next");
@@ -85,16 +87,18 @@ const blocked=()=>composing||pastePending||!!document.querySelector("dialog[open
 const canNavigate=()=>!stopped&&!!latest?.connected&&['article_list','article_reading'].includes(latest.navigation.kind)&&!latest.input_pending&&!navigationLocked&&!navigationRequest&&!blocked();
 function invalidateNavigation(){navigationLocked=true;released=null;cancelDrag();setHover(null);refreshNavigation();}
 function sendInput(value){invalidateNavigation();send(value);}
-const keys={Enter:[13],Backspace:[8],Tab:[9],Escape:[27],ArrowUp:[27,91,65],ArrowDown:[27,91,66],
-    ArrowRight:[27,91,67],ArrowLeft:[27,91,68],Home:[27,91,72],End:[27,91,70],
-    PageUp:[27,91,53,126],PageDown:[27,91,54,126],Delete:[27,91,51,126]};
+// Only classify editing vs command events here. Rust owns key translation and
+// the context-dependent conversion from browsing intents to PTT bytes.
+const commandKeys=new Set(["Enter","Backspace","Tab","Escape","ArrowUp","ArrowDown","ArrowRight","ArrowLeft","Home","End","PageUp","PageDown","Delete"]);
 function keydown(e) {
     cancelHover(true);
     if(pastePending) {e.preventDefault();return;}
     // Older WebKit can end composition before its confirming keydown. That
     // event still carries 229 even though isComposing is already false.
     // Leave the native IME action intact; never forward it as a BBS command.
-    if(e.isComposing||composing||e.keyCode===229||e.key==="Process"||e.metaKey) return;
+    const browsing=keyboardState.enabled&&!["input","once"].includes(keyboardState.mode);
+    const physical=browsing&&/^(Key[A-Z]|Digit[0-9])$/.test(e.code);
+    if(e.isComposing||composing||((e.keyCode===229||e.key==="Process")&&!physical)||e.metaKey) return;
     // Let the native copy action fire; copy data is already prepared by Rust.
     if(e.ctrlKey&&e.key.toLowerCase()==="c"&&hasSelection()) return;
     if(e.ctrlKey&&e.key.toLowerCase()==="v") return;
@@ -102,12 +106,11 @@ function keydown(e) {
     if(e.ctrlKey&&["+","=","-","0"].includes(e.key)) {
         e.preventDefault(); zoomTo(e.key==="0"?1:zoom+(e.key==="-"?-.25:.25)); return;
     }
-    let bytes=keys[e.key];
-    if(e.ctrlKey&&/^[a-z]$/i.test(e.key)) bytes=[e.key.toUpperCase().charCodeAt(0)&31];
-    if(bytes) {clearSelection();e.preventDefault();}
-    if(bytes||e.key.length===1||e.key==="Dead") {
-        inputKey=!bytes;
-        send({kind:"key",key:{key:e.key,code:e.code,ctrl:e.ctrlKey,alt:e.altKey,repeat:e.repeat},generation,trusted:e.isTrusted});
+    const command=commandKeys.has(e.key)||(e.ctrlKey&&/^[a-z]$/i.test(e.key));
+    if(command||physical||(browsing&&e.key.length===1)) {clearSelection();e.preventDefault();}
+    if(command||physical||e.key.length===1||e.key==="Dead") {
+        inputKey=!command;
+        send({kind:"key",key:{key:e.key,code:e.code,ctrl:e.ctrlKey,alt:e.altKey,shift:e.shiftKey,repeat:e.repeat},generation,trusted:e.isTrusted});
     }
 }
 function input(e) {

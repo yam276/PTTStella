@@ -1,7 +1,7 @@
 //! Keyboard policy for browsing. Native text still belongs to the editing host.
 use crate::{
     input::MAX_INPUT_BYTES,
-    navigation::{Context, Intent},
+    navigation::{Context, Intent, UnknownReason},
 };
 use serde::{Deserialize, Serialize};
 
@@ -11,6 +11,8 @@ pub struct Key {
     pub code: String,
     pub ctrl: bool,
     pub alt: bool,
+    #[serde(default)]
+    pub shift: bool,
     pub repeat: bool,
 }
 #[derive(Debug, PartialEq, Eq)]
@@ -40,11 +42,18 @@ pub struct Status {
     pub mode: &'static str,
     pub pending: bool,
     pub prefix: String,
+    pub suspended_reason: Option<UnknownReason>,
 }
 impl Keyboard {
     pub fn status(&self, context: &Context) -> Status {
         Status {
             enabled: self.enabled,
+            suspended_reason: match context {
+                Context::Unknown { reason } if self.enabled && !self.input && !self.once => {
+                    Some(*reason)
+                }
+                _ => None,
+            },
             mode: if !self.enabled || self.input {
                 "input"
             } else if self.once {
@@ -132,6 +141,15 @@ impl Keyboard {
     }
     pub fn key(&mut self, key: &Key, context: &Context) -> Effect {
         self.context(context);
+        // Normal mode is a command surface even with a CJK input source active.
+        // WebKit can report Process/229 instead of a Latin key. Use the physical
+        // code only in browsing modes; native text/composition keeps its owner.
+        let normalized = if self.enabled && !self.input && !self.once {
+            normal_key(key)
+        } else {
+            None
+        };
+        let key = normalized.as_ref().unwrap_or(key);
         // Option/Alt may produce an ordinary text edit on some layouts. Let the
         // editing host provide it in native mode instead of discarding the edit.
         let printable = key.key.chars().count() == 1 && !key.ctrl;
@@ -280,6 +298,27 @@ impl Keyboard {
         };
         Effect::Browse(action)
     }
+}
+fn normal_key(key: &Key) -> Option<Key> {
+    if key.key != "Process" && key.key.is_ascii() {
+        return None;
+    }
+    let letter = key
+        .code
+        .strip_prefix("Key")
+        .filter(|s| s.len() == 1 && s.as_bytes()[0].is_ascii_uppercase());
+    let digit = key
+        .code
+        .strip_prefix("Digit")
+        .filter(|s| !key.shift && s.len() == 1 && s.as_bytes()[0].is_ascii_digit());
+    let value = letter.or(digit)?;
+    let mut normalized = key.clone();
+    normalized.key = if key.shift {
+        value.to_ascii_uppercase()
+    } else {
+        value.to_ascii_lowercase()
+    };
+    Some(normalized)
 }
 fn native_key(key: &Key) -> Option<Vec<u8>> {
     if key.alt {
