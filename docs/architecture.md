@@ -37,3 +37,5 @@ UI 正常掛載後只發起一次預設 PTT WSS 連線；合成 probe 只連本�
 `navigation` 唯一產生畫面種類、文章編號 hit region 與 typed intent 的按鍵計畫；UI 管理一筆 pointer 交易，網址優先，拖曳／取消／失焦／畫面或輸入版本變更即取消。UI 帶上 generation、revision、input epoch，Connection 在序列化送出處核對並從目前 Screen 重新規劃。鍵盤輸入會遞增 epoch；新終端 bytes 到達前暫停滑鼠導覽，避免用舊游標連續計算，但不阻擋手動送鍵。這是本機防重入機制，沒有把新 bytes 當成站端完成動作的保證。JS 不解析 BBS 文字，只消費 Rust 的結構化辨識與命中資料。
 
 選取核心同時產生純文字、字形 spans 與完整行範圍；PNG 消費同一行範圍，不從 DOM 選取框反推。匯出先用同一 renderer 畫固定 960×576 的無游標快照，再按完整行裁切；獨立於顯示縮放／捲動，亦不包含本機提示層。Rust 保留選取 request 與行範圍，保存前核對畫面及選取識別、行數對應高度與共用容量限制。每次只允許一筆匯出，停止時等待編碼工作並移除按鈕 listener。
+
+Connection 同時擁有防閒置的單調時鐘、預設開啟狀態、UI watch 許可及自動刷新等待。UI 僅回報本機操作是否允許，不建立自己的 timer；owner 核對當前 Screen、session／輸入版本及等待狀態後才送一次刷新。手動輸入與自動刷新以不同 PendingInput 變體管理，只有自動等待會因無回應而逾時釋放並停用保活。規則與公開站端來源推論見 [保活契約](keepalive.md)。

@@ -33,6 +33,13 @@ def run(devtools, output):
             (Path(output)/name).write_bytes(base64.b64decode(data,validate=True))
 
     wait_page('article_list',cursor=4)
+    d.wait('document.getElementById("surface").dataset.keepAlive === "true" && document.getElementById("surface").dataset.keepAliveReady === "true"',
+           'default-on keepalive did not receive current UI permission')
+    toolbar('#keep-alive')
+    d.wait('document.getElementById("surface").dataset.keepAlive === "false" && document.getElementById("surface").dataset.keepAliveReady === "false"',
+           'keepalive switch did not pause the connection owner')
+    toolbar('#keep-alive')
+    d.wait('document.getElementById("surface").dataset.keepAliveReady === "true"', 'keepalive switch did not resume')
     toolbar('#zoom-fit')
     # A real keyboard event while the pointer is held invalidates its browsing lease.
     held=point(4,5.5);mouse('mousePressed',held)
@@ -45,7 +52,9 @@ def run(devtools, output):
     # inside the canvas capacity. The selected row must cover that actual grid.
     d.wait('document.querySelectorAll(".selection-row").length === 1 && Math.abs(document.querySelector(".selection-row").getBoundingClientRect().width-Math.round(Math.min(document.getElementById("screen").width/960,document.getElementById("screen").height/576)*960)/devicePixelRatio)<.01',
            'title double-click did not retain whole-line selection')
+    d.wait('document.getElementById("surface").dataset.keepAliveReady === "false"', 'selection did not pause keepalive')
     clear_selection()
+    d.wait('document.getElementById("surface").dataset.keepAliveReady === "true"', 'clearing selection did not resume keepalive')
     held=point(4,3.5);mouse('mousePressed',held)
     d.call('Input.dispatchMouseEvent',type='mouseMoved',**point(5,3.5),button='left',buttons=1)
     mouse('mouseReleased',point(5,3.5))
@@ -91,13 +100,17 @@ def run(devtools, output):
 
     d.click('#screen')
     d.call('Input.imeSetComposition',text='未',selectionStart=1,selectionEnd=1)
+    d.wait('document.getElementById("surface").dataset.keepAliveReady === "false"', 'composition did not pause keepalive')
     wheel(120)
     d.call('Input.imeSetComposition',text='',selectionStart=0,selectionEnd=0)
+    d.wait('document.getElementById("surface").dataset.keepAliveReady === "true"', 'composition cancellation did not resume keepalive')
     toolbar('#font-settings')
     d.wait('document.getElementById("font-dialog").open','settings dialog did not open during reading')
+    d.wait('document.getElementById("surface").dataset.keepAliveReady === "false"', 'modal did not pause keepalive')
     wheel(120)
     d.click('#font-cancel')
     d.wait('!document.getElementById("font-dialog").open','settings dialog did not close during reading')
+    d.wait('document.getElementById("surface").dataset.keepAliveReady === "true"', 'closing modal did not resume keepalive')
     toolbar('#browse-next')
     wait_page('article_reading',first=24)
     toolbar('#browse-next')
@@ -110,11 +123,13 @@ def run(devtools, output):
     wheel(120);wait_page('article_list',cursor=5)
     wheel(-120);wait_page('article_list',cursor=4)
     key('ArrowRight',39);wait_page('unknown')
+    d.wait('document.getElementById("surface").dataset.keepAliveReady === "false"', 'unknown prompt did not pause keepalive')
     if not d.evaluate('document.getElementById("browse-controls").hidden && document.getElementById("surface").dataset.navigationReady === "false"'):
         raise ValueError('confirmation prompt retained browsing controls')
     wheel(120);click_cell(4,5.5)
     key('ArrowRight',39)
     return {'status':'passed','number_click_and_title_selection':True,'capture_and_input_cancellation':True,
+            'keepalive_default_switch_and_ui_pause': True,
             'hover_preserves_canvas_pixels':True,'reading_buttons_and_wheel':True,
             'zoom_scroll_composition_modal_and_unknown_exclusions':True,
             'scope':'trusted WebView pointer/wheel and production loopback peer; no authenticated PTT'}

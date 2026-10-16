@@ -45,6 +45,8 @@ production Connection 的導覽案例以 loopback WebSocket 比對實際 bytes�
 
 字型 gate 以實際表單輸入驗證預覽／取消不改主畫面或檔案、保存後修改字形像素、無效值拒絕，以及恢復預設僅預覽。第二個應用程序讀取第一個程序寫出的設定，畫面逐像素相同才通過；probe 設定只在 target/verification/desktop，測試開始只清除該路徑下的合成設定。Rust 案例另涵蓋損壞／超量檔案、備份、無效值與備份寫入失敗。系統字型 fallback、跨 DPI 與 macOS／Linux 的實機結果不包含在此驗證。
 
+防閒置使用 [保活契約](docs/keepalive.md)。時鐘單元案例用明確時間驗證 60 秒與計時缺口；4 個 production Connection loopback 案例縮短同一 timer 的期限，檢查精確 Ctrl+L bytes、UI／畫面／session admission、等待與關閉不重複、無回應後釋放自動等待，以及不能清除較新手動輸入。Windows trusted 操作另檢查預設開啟、切換與選字／組字／dialog／未知畫面對實際 owner 的暫停狀態。短期限測試與來源推論不能冒充實站長時間保活或實機睡眠驗收。
+
 ANSI 調色盤以合成完整方塊的實際 RGB 檢查，與獨立 expected 比對；不以文字反鋸齒的最常見顏色推定色值。中文字形仍另測左右紅／綠筆畫與藍／紫背景。
 
 符號比例以自製 `●○◎⊙` 合成列，經真正 renderer／PNG 匯出後，由 System.Drawing 獨立解碼量測筆畫 bounds；Windows 預設字型四個樣本的寬高差不得超過兩像素且必須有可見筆畫。這是指定 backend／字型的回歸案例，不宣稱所有符號、字型或 DPI 皆已驗證。字型設定預覽包含相同符號，方便人工對照。

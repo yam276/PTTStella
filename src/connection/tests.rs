@@ -35,6 +35,281 @@ fn navigation_page(name: &str) -> Vec<u8> {
     crate::encoding::encode(pages[name].as_str().unwrap()).unwrap()
 }
 
+async fn idle_local() -> (TcpListener, Connection) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("ws://{}/bbs", listener.local_addr().unwrap());
+    let connection = Connection::start_with_timing(
+        Screen::new(80, 24).unwrap(),
+        endpoint,
+        liveness::Timing {
+            idle: Duration::from_millis(120),
+            poll: Duration::from_millis(10),
+            resume_gap: Duration::from_secs(2),
+            response_timeout: Duration::from_millis(500),
+        },
+    )
+    .unwrap();
+    (listener, connection)
+}
+
+#[tokio::test]
+async fn idle_refresh_requires_ui_and_screen_admission_and_waits_for_redraw() {
+    let (listener, connection) = idle_local().await;
+    assert!(connection.updates.borrow().keep_alive);
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(navigation_page("list").into()))
+        .await
+        .unwrap();
+    let first = wait(&connection, |v| v.received > 0).await;
+    assert!(
+        timeout(Duration::from_millis(160), ws.next())
+            .await
+            .is_err()
+    );
+    connection.keep_alive_gate(
+        Stamp {
+            generation: first.generation + 1,
+            ..first.stamp()
+        },
+        true,
+    );
+    assert!(
+        timeout(Duration::from_millis(160), ws.next())
+            .await
+            .is_err()
+    );
+    connection.keep_alive_gate(first.stamp(), true);
+    wait(&connection, |v| v.keep_alive_ready).await;
+    assert_eq!(
+        timeout(Duration::from_secs(3), ws.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap()
+            .into_data()
+            .as_ref(),
+        b"\x0c\x0c"
+    );
+    let pending = wait(&connection, |v| v.keep_alive_sent == 1 && v.input_pending).await;
+    assert_eq!(pending.frame.cursor, first.frame.cursor);
+    assert_eq!(
+        connection
+            .navigate(first.stamp(), Intent::Open { row: 5 })
+            .await
+            .unwrap_err(),
+        navigation::Error::Stale.to_string()
+    );
+    connection.keep_alive_gate(pending.stamp(), true);
+    assert!(
+        timeout(Duration::from_millis(200), ws.next())
+            .await
+            .is_err(),
+        "no reply must not cause another refresh"
+    );
+    connection.keep_alive(false).unwrap();
+    wait(&connection, |v| !v.keep_alive).await;
+    ws.send(Message::Binary(navigation_page("reading_middle").into()))
+        .await
+        .unwrap();
+    let reading = wait(&connection, |v| !v.input_pending && v.frame.cursor.1 == 23).await;
+    connection.keep_alive_gate(reading.stamp(), true);
+    assert!(
+        timeout(Duration::from_millis(160), ws.next())
+            .await
+            .is_err(),
+        "explicit off must suppress writes"
+    );
+    connection.keep_alive(true).unwrap();
+    let enabled = wait(&connection, |v| v.keep_alive).await;
+    connection.keep_alive_gate(enabled.stamp(), true);
+    assert_eq!(
+        timeout(Duration::from_secs(3), ws.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap()
+            .into_data()
+            .as_ref(),
+        b"\x0c\x0c"
+    );
+    let closing = tokio::spawn(async move {
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+    });
+    connection.shutdown().await.unwrap();
+    closing.await.unwrap();
+    assert!(!connection.updates.borrow().keep_alive_ready);
+}
+
+#[tokio::test]
+async fn idle_refresh_pauses_on_local_activity_unknown_frames_and_reconnect() {
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(navigation_page("reading_first").into()))
+        .await
+        .unwrap();
+    let first = wait(&connection, |v| v.received > 0).await;
+    connection.keep_alive_gate(first.stamp(), true);
+    wait(&connection, |v| v.keep_alive_ready).await;
+    connection.input(first.generation, b"x".to_vec()).unwrap();
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"x");
+    ws.send(Message::Binary(navigation_page("reading_middle").into()))
+        .await
+        .unwrap();
+    let updated = wait(&connection, |v| !v.input_pending && v.input_epoch == 1).await;
+    connection.keep_alive_gate(first.stamp(), true);
+    assert!(
+        timeout(Duration::from_millis(160), ws.next())
+            .await
+            .is_err(),
+        "stale UI cannot permit refresh"
+    );
+    connection.keep_alive_gate(updated.stamp(), true);
+    wait(&connection, |v| v.keep_alive_ready).await;
+    connection.keep_alive_gate(updated.stamp(), false);
+    wait(&connection, |v| !v.keep_alive_ready).await;
+    assert!(
+        timeout(Duration::from_millis(160), ws.next())
+            .await
+            .is_err(),
+        "composition/modal/selection gate must pause"
+    );
+    ws.send(Message::Binary(
+        b"\x1b[2J\x1b[22;1HPassword: ".to_vec().into(),
+    ))
+    .await
+    .unwrap();
+    let unknown = wait(&connection, |v| v.frame.revision > updated.frame.revision).await;
+    connection.keep_alive_gate(unknown.stamp(), true);
+    assert!(
+        timeout(Duration::from_millis(160), ws.next())
+            .await
+            .is_err(),
+        "an unknown prompt must reject even a ready UI"
+    );
+    let closing = tokio::spawn(async move {
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+    });
+    connection.disconnect().unwrap();
+    closing.await.unwrap();
+    wait(&connection, |v| v.phase == Phase::Disconnected).await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(navigation_page("list").into()))
+        .await
+        .unwrap();
+    wait(&connection, |v| {
+        v.received > 0 && v.generation > first.generation
+    })
+    .await;
+    connection.keep_alive_gate(first.stamp(), true);
+    assert!(
+        timeout(Duration::from_millis(160), ws.next())
+            .await
+            .is_err(),
+        "reconnect must not reuse a permit"
+    );
+    let closing = tokio::spawn(async move {
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+    });
+    connection.shutdown().await.unwrap();
+    closing.await.unwrap();
+}
+
+#[tokio::test]
+async fn an_unanswered_idle_refresh_pauses_itself_and_releases_mouse_navigation() {
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(navigation_page("reading_first").into()))
+        .await
+        .unwrap();
+    let first = wait(&connection, |v| v.received > 0).await;
+    connection.keep_alive_gate(first.stamp(), true);
+    assert_eq!(
+        timeout(Duration::from_secs(3), ws.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap()
+            .into_data()
+            .as_ref(),
+        b"\x0c\x0c"
+    );
+    let paused = wait(&connection, |v| {
+        !v.keep_alive && v.keep_alive_failure.is_some() && !v.input_pending
+    })
+    .await;
+    assert_eq!(paused.phase, Phase::Connected);
+    assert!(
+        timeout(Duration::from_millis(160), ws.next())
+            .await
+            .is_err()
+    );
+    connection.keep_alive(true).unwrap();
+    let resumed = wait(&connection, |v| {
+        v.keep_alive && v.keep_alive_failure.is_none()
+    })
+    .await;
+    assert_ne!(resumed.message, paused.message);
+    connection
+        .navigate(resumed.stamp(), Intent::NextPage)
+        .await
+        .unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"\x1b[6~"
+    );
+    let closing = tokio::spawn(async move {
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+    });
+    connection.shutdown().await.unwrap();
+    closing.await.unwrap();
+}
+
+#[tokio::test]
+async fn idle_response_deadline_cannot_clear_a_later_manual_input() {
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(navigation_page("list").into()))
+        .await
+        .unwrap();
+    let first = wait(&connection, |v| v.received > 0).await;
+    connection.keep_alive_gate(first.stamp(), true);
+    assert_eq!(
+        timeout(Duration::from_secs(3), ws.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap()
+            .into_data()
+            .as_ref(),
+        b"\x0c\x0c"
+    );
+    connection.input(first.generation, b"x".to_vec()).unwrap();
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"x");
+    wait(&connection, |v| v.input_epoch == 2 && v.input_pending).await;
+    assert!(
+        timeout(Duration::from_millis(600), ws.next())
+            .await
+            .is_err()
+    );
+    let pending = connection.updates.borrow().clone();
+    assert!(pending.keep_alive && pending.input_pending && pending.keep_alive_failure.is_none());
+    let closing = tokio::spawn(async move {
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+    });
+    connection.shutdown().await.unwrap();
+    closing.await.unwrap();
+}
+
 #[tokio::test]
 async fn navigation_admission_checks_real_frame_input_order_and_one_pending_operation() {
     let (listener, connection) = local().await;

@@ -23,6 +23,10 @@ pub struct AppProps {
 
 #[derive(Clone, Serialize)]
 struct Paint {
+    keep_alive: bool,
+    keep_alive_ready: bool,
+    keep_alive_sent: u64,
+    keep_alive_failure: Option<String>,
     input_epoch: u64,
     input_pending: bool,
     connected: bool,
@@ -47,6 +51,14 @@ struct SelectedRows {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum SurfaceEvent {
+    KeepAlive {
+        enabled: bool,
+        trusted: bool,
+    },
+    KeepAliveGate {
+        stamp: Stamp,
+        ready: bool,
+    },
     Navigate {
         stamp: Stamp,
         intent: Intent,
@@ -273,6 +285,7 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "export-png", "匯出 PNG" }
                 button { id: "export-rows", disabled: true, title: "先拖曳選取要截圖的行", "選取行 PNG" }
                 button { id: "font-settings", "字型" }
+                  button { id: "keep-alive", r#type: "button", "aria-pressed": "true", "防閒置：開" }
                 div { id: "browse-controls", hidden: true,
                     button { id: "browse-back", disabled: true, "返回" }
                     button { id: "browse-previous", disabled: true, "上頁" }
@@ -441,6 +454,7 @@ async fn surface(
             interactions_checked
         };
         if pending_report.is_some() && probe_checked && !stopping {
+            connection.keep_alive_gate(receiver.borrow().stamp(), false);
             eval.send(serde_json::json!({"stop":true}))
                 .map_err(|e| e.to_string())?;
             stopping = true;
@@ -461,6 +475,15 @@ async fn surface(
         }
         tokio::select! {
             event = eval.recv::<SurfaceEvent>() => match event.map_err(|e| e.to_string())? {
+                SurfaceEvent::KeepAlive {enabled,trusted} => {
+                    if stopping || !trusted {continue;}
+                    if let Err(error)=connection.keep_alive(enabled) {
+                        eval.send(serde_json::json!({"notice":error})).map_err(|e|e.to_string())?;
+                    }
+                },
+                SurfaceEvent::KeepAliveGate {stamp,ready} => {
+                    if !stopping {connection.keep_alive_gate(stamp,ready);}
+                },
                 SurfaceEvent::Navigate {stamp,intent,trusted} => {
                     if stopping || !trusted { continue; }
                     let shown=displayed.as_ref().is_some_and(|p| p.generation==stamp.generation && p.frame.revision==stamp.revision && p.input_epoch==stamp.input_epoch);
@@ -751,6 +774,7 @@ async fn surface(
             changed = closing.changed() => {
                 changed.map_err(|e| e.to_string())?;
                 if *closing.borrow_and_update() && !stopping {
+                    connection.keep_alive_gate(receiver.borrow().stamp(),false);
                     eval.send(serde_json::json!({"stop":true})).map_err(|e| e.to_string())?;
                     stopping = true;
                     close_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_secs(5));
@@ -765,6 +789,10 @@ async fn surface(
 
 fn paint(view: &View, probe: bool, settings: &DisplaySettings) -> Paint {
     Paint {
+        keep_alive: view.keep_alive,
+        keep_alive_ready: view.keep_alive_ready,
+        keep_alive_sent: view.keep_alive_sent,
+        keep_alive_failure: view.keep_alive_failure.clone(),
         input_epoch: view.input_epoch,
         input_pending: view.input_pending,
         connected: view.phase == Phase::Connected,
@@ -779,6 +807,10 @@ fn paint(view: &View, probe: bool, settings: &DisplaySettings) -> Paint {
 
 fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint {
     Paint {
+        keep_alive: false,
+        keep_alive_ready: false,
+        keep_alive_sent: 0,
+        keep_alive_failure: None,
         input_epoch: 0,
         input_pending: false,
         connected: false,

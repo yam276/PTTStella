@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 REQUIRED = (
     'README.md', 'AGENTS.md', 'CONTRIBUTING.md',
     'docs/architecture.md', 'docs/roadmap.md',
-    'docs/dual-color.md', 'docs/development-harness.md',
+    'docs/dual-color.md', 'docs/keepalive.md', 'docs/development-harness.md',
     'docs/active/minimal-browser.md',
     'tooling/check.py', 'tooling/test_check.py', 'tooling/desktop_input.py', 'tooling/desktop_capture.py', 'tooling/inspect_png.ps1',
 )
@@ -284,6 +284,8 @@ def run_desktop(root):
                     raise CheckFailure('native settings interaction did not run')
                 if input_report.get('mouse_navigation',{}).get('status') != 'passed':
                     raise CheckFailure('native navigation interaction did not run')
+                if input_report.get('mouse_navigation',{}).get('keepalive_default_switch_and_ui_pause') is not True:
+                    raise CheckFailure('native keepalive switch and UI pause interaction did not run')
                 process.wait(timeout=15)
             finally:
                 if process.poll() is None:
