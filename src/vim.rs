@@ -132,7 +132,9 @@ impl Keyboard {
     }
     pub fn key(&mut self, key: &Key, context: &Context) -> Effect {
         self.context(context);
-        let printable = key.key.chars().count() == 1 && !key.ctrl && !key.alt;
+        // Option/Alt may produce an ordinary text edit on some layouts. Let the
+        // editing host provide it in native mode instead of discarding the edit.
+        let printable = key.key.chars().count() == 1 && !key.ctrl;
         if matches!(
             key.key.as_str(),
             "Shift" | "Control" | "Alt" | "Meta" | "CapsLock"

@@ -51,6 +51,23 @@ fn native_once_owns_text_repeats_and_modifiers_and_restores_normal() {
     assert!(p.accept_text(false));
     assert_eq!(p.status(&c).mode, "normal");
 }
+
+#[test]
+fn modified_printable_text_is_owned_by_native_editing_not_vim_commands() {
+    let c = reading(24, 50);
+    let mut p = Keyboard::default();
+    let mut modified = key("a");
+    modified.alt = true;
+    assert_eq!(p.key(&modified, &c), Effect::None);
+    assert!(p.accept_text(false));
+    p.toggle();
+    assert!(matches!(p.key(&modified, &c), Effect::Notice(_)));
+    assert!(!p.accept_text(false));
+    press(&mut p, "f", &c);
+    assert_eq!(p.key(&modified, &c), Effect::None);
+    assert!(p.accept_text(false));
+    assert_eq!(p.status(&c).mode, "normal");
+}
 #[test]
 fn destructive_native_control_is_only_available_in_explicit_native_modes() {
     let c = reading(24, 50);
