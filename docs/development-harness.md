@@ -28,4 +28,6 @@ Fixture 使用自己生成或明確可散布的資料，帶 chunk、grid、來�
 
 每次產品驗證報告記錄 commit／dirty、fixture digest、實際命令、平台、覆蓋／未執行範圍及結果。產物可用 verification 目錄；私人執行診斷保持本機私有。
 
+媒體測試由同一 desktop gate 啟動並清理本機 HTTP server，沒有外網依賴；PNG／GIF 來源及 CC0 聲明在 [fixture 說明](../tests/fixtures/media/README.md)。JPEG／WebP／WebM 由 probe WebView 的 Canvas／MediaRecorder 產生；真實呈現、codec 與生命週期需各自驗證，不能只看 URL 或 media element 存在。報告保存單次小圖的冷載入／記憶體 cache 及取消 wall time，包含 CDP 輸入／輪詢成本；不把它稱為實站速度或改善倍數，CPU／process-family peak memory 尚未量測。
+
 passed＝指定必要項確實通過；failed＝反例／工具失敗；not_ready＝必要 runner／工具／backend 尚缺；not_run＝未執行。空 trace、零案例、全部 skip 或部分成功不可讓整體變綠。

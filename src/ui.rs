@@ -5,6 +5,7 @@ use pttstella::{
     encoding, export,
     input::{self, PreparedPaste},
     links::{self, Link},
+    media::{self, preview::Preview},
     navigation::{self, Context, Intent, Stamp},
     screen::{Frame, Screen},
     selection::{self, Selection},
@@ -19,6 +20,7 @@ use tokio::sync::watch;
 pub struct AppProps {
     pub probe: Option<PathBuf>,
     pub reload_settings: bool,
+    pub media_origin: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -49,8 +51,24 @@ struct SelectedRows {
     rows: Range<usize>,
 }
 #[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum MediaAction {
+    Close,
+    Retry,
+    External,
+}
+#[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum SurfaceEvent {
+    MediaDecoded {
+        request: u64,
+        success: bool,
+    },
+    Media {
+        request: u64,
+        action: MediaAction,
+        trusted: bool,
+    },
     KeepAlive {
         enabled: bool,
         trusted: bool,
@@ -157,7 +175,7 @@ struct ProbePixels {
     zoom_samples: Vec<[u32; 2]>,
 }
 
-fn preview(probe: bool) -> Result<Vec<u8>, String> {
+fn preview(probe: bool, media_origin: Option<&str>) -> Result<Vec<u8>, String> {
     let mut bytes = Vec::new();
     let text = "PTTStella\r\n\r\n尚未連線，歡迎使用 PTTStella。";
     bytes.extend_from_slice(&encoding::encode(text).map_err(|e| e.to_string())?);
@@ -166,6 +184,20 @@ fn preview(probe: bool) -> Result<Vec<u8>, String> {
     bytes.extend_from_slice(b"\x1b[7;1H");
     bytes.extend_from_slice(&encoding::encode("正在連線 PTT…\r\n\r\n連線後，點一下畫面即可輸入帳號密碼。\r\n滑鼠移至上緣可顯示連線與等比例縮放工具。").map_err(|e| e.to_string())?);
     if probe {
+        if let Some(origin) = media_origin {
+            for (row, path) in [
+                (5, "colours.jpg"),
+                (6, "colours.webp"),
+                (8, "colours.png"),
+                (9, "motion.gif"),
+                (10, "movie.webm"),
+                (11, "broken.png"),
+                (14, "slow.png"),
+            ] {
+                bytes.extend_from_slice(format!("\x1b[{row};1H\x1b[2K{origin}/{path} ").as_bytes());
+            }
+            bytes.extend_from_slice(b"\x1b[18;1Hhttps://youtu.be/Abc_12-dEF0 ");
+        }
         let solid = encoding::encode("█").map_err(|e| e.to_string())?;
         bytes.extend_from_slice(b"\x1b[12;1Hhttps://example.com/pttstella");
         bytes.extend_from_slice(b"\x1b[13;1H");
@@ -205,8 +237,9 @@ fn preview(probe: bool) -> Result<Vec<u8>, String> {
 pub fn app(props: AppProps) -> Element {
     let probing = props.probe.is_some();
     let reload_settings = props.reload_settings;
+    let media_origin = props.media_origin.clone();
     let owner = use_hook(move || {
-        preview(probing)
+        preview(probing, media_origin.as_deref())
             .and_then(|bytes| {
                 if probing {
                     Connection::start_probe(bytes, reload_settings)
@@ -263,6 +296,7 @@ pub fn app(props: AppProps) -> Element {
         }
     });
     let probe = props.probe.clone();
+    let media_origin = props.media_origin.clone();
     let connect = connection.clone();
     let disconnect = connection.clone();
     rsx! {
@@ -299,9 +333,9 @@ pub fn app(props: AppProps) -> Element {
                     onmounted: move |_| {
                         if started() { return; }
                         started.set(true);
-                        let connection = connection.clone(); let probe = probe.clone(); let closing = closing.1.clone();
+                        let connection = connection.clone(); let probe = probe.clone(); let closing = closing.1.clone(); let media_origin = media_origin.clone();
                         spawn(async move {
-                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, reload_settings).await;
+                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, (reload_settings, media_origin)).await;
                             if let Err(error) = result {
                                 fatal.set(true);
                                 message.set(format!("{error}；請關閉並重新開啟視窗"));
@@ -328,6 +362,22 @@ pub fn app(props: AppProps) -> Element {
                     button { id: "paste-cancel", "取消" }
                     button { id: "paste-send", "送出文字" }
                 }
+            }
+            dialog { id: "media-dialog", class: "media-dialog", "aria-labelledby": "media-title",
+                div { class: "media-toolbar",
+                    h2 { id: "media-title", "媒體預覽" }
+                    button { id: "media-minus", "aria-label": "縮小媒體", "－" }
+                    button { id: "media-plus", "aria-label": "放大媒體", "＋" }
+                    button { id: "media-fit", "符合" }
+                    button { id: "media-original", "原尺寸" }
+                    button { id: "media-motion", hidden: true, "播放動圖" }
+                    button { id: "media-retry", "重試" }
+                    button { id: "media-external", "瀏覽器開啟" }
+                    button { id: "media-close", "關閉" }
+                }
+                p { id: "media-url" }
+                output { id: "media-status", role: "status" }
+                div { id: "media-viewport" }
             }
             dialog { id: "font-dialog", class: "paste-preview font-dialog", "aria-labelledby": "font-title",
                 h2 { id: "font-title", "字型與顯示" }
@@ -363,8 +413,9 @@ async fn surface(
     mut message: Signal<String>,
     mut phase: Signal<Phase>,
     mut pending_paste: Signal<Option<PendingPaste>>,
-    reload_settings: bool,
+    options: (bool, Option<String>),
 ) -> Result<(), String> {
+    let (reload_settings, media_origin) = options;
     let mut receiver = connection.updates.clone();
     let store = probe.as_ref().map_or_else(Store::system, |path| {
         Ok(Store::at(path.join("probe-settings.json")))
@@ -378,7 +429,14 @@ async fn surface(
             ),
         };
     let font_sample = font_sample()?;
-    let mut eval = document::eval(include_str!("../assets/surface.js"));
+    let script = [
+        include_str!("../assets/media.js"),
+        include_str!("../assets/surface.js"),
+    ]
+    .concat();
+    let mut eval = document::eval(&script);
+    let mut media_preview = Preview::default();
+    let mut media_external = 0;
     let first = receiver.borrow_and_update().clone();
     let mut last_status = first.message.clone();
     let mut painting = paint(&first, false, &settings);
@@ -474,7 +532,24 @@ async fn surface(
             dirty = false;
         }
         tokio::select! {
+            update = media_preview.update() => {
+                if let Some(update) = update {
+                    let reply = match update.result {
+                        Ok((image,cached)) => {
+                            serde_json::json!({"media_image": {"request":update.request,
+                                "data":base64::engine::general_purpose::STANDARD.encode(&image.bytes),
+                                "mime":image.mime,"width":image.width,"height":image.height,
+                                "animated":image.animated_format,"cached":cached}})
+                        },
+                        Err(error) => serde_json::json!({"media_error":{"request":update.request,"message":error.to_string()}}),
+                    };
+                    eval.send(reply).map_err(|e| e.to_string())?;
+                }
+            },
             event = eval.recv::<SurfaceEvent>() => match event.map_err(|e| e.to_string())? {
+                SurfaceEvent::MediaDecoded {request,success} => {
+                    media_preview.decoded(request,success);
+                },
                 SurfaceEvent::KeepAlive {enabled,trusted} => {
                     if stopping || !trusted {continue;}
                     if let Err(error)=connection.keep_alive(enabled) {
@@ -574,7 +649,29 @@ async fn surface(
                     if stopping || !trusted { continue; }
                     let link = displayed.as_ref()
                         .filter(|p| p.generation == generation && p.frame.revision == revision)
-                        .and_then(|p| p.links.get(index));
+                        .and_then(|p| p.links.get(index)).cloned();
+                    if let Some(link) = &link {
+                        match media::classify(&link.url) {
+                            Ok(Some(mut target)) => {
+                                if probe.is_some() {
+                                    let origin = media_origin.as_deref().ok_or("missing media probe origin")?;
+                                    if target.kind == media::Kind::Youtube {
+                                        target.image_url = Some(format!("{origin}/colours.png"));
+                                    } else if !target.url.starts_with(&format!("{origin}/")) {
+                                        return Err("unexpected media probe URL".into());
+                                    }
+                                }
+                                let active = media_preview.open(generation,target)?;
+                                eval.send(serde_json::json!({"media_open":{"request":active.request,"target":active.target}})).map_err(|e| e.to_string())?;
+                                continue;
+                            },
+                            Err(error) => {
+                                eval.send(serde_json::json!({"notice":error,"link_result":"failed"})).map_err(|e| e.to_string())?;
+                                continue;
+                            },
+                            Ok(None) => {},
+                        }
+                    }
                     let result = match link {
                         Some(link) if probe.is_some() => {
                             if link.url != "https://example.com/pttstella" { return Err("unexpected probe URL".into()); }
@@ -588,6 +685,20 @@ async fn surface(
                         Err(error) => serde_json::json!({"link_result":"failed","notice":error}),
                     };
                     eval.send(reply).map_err(|e| e.to_string())?;
+                },
+                SurfaceEvent::Media { request, action, trusted } => {
+                    if stopping || !trusted { continue; }
+                    let Some(preview) = media_preview.active() else { continue; };
+                    if preview.request != request { continue; }
+                    match action {
+                        MediaAction::Close => media_preview.close(),
+                        MediaAction::Retry => media_preview.retry(),
+                        MediaAction::External => {
+                            let result = if probe.is_some() {media_external+=1;Ok(())}
+                                else {webbrowser::open(&preview.target.url).map_err(|e| format!("無法開啟網址：{e}"))};
+                            eval.send(serde_json::json!({"media_external":{"request":request,"ok":result.is_ok(),"message":result.err()}})).map_err(|e| e.to_string())?;
+                        },
+                    }
                 },
                 SurfaceEvent::Paste { text, generation, trusted } => {
                     if stopping { continue; }
@@ -730,10 +841,14 @@ async fn surface(
                     close_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_secs(45));
                 },
                 SurfaceEvent::Stopped { clean } => {
+                    media_preview.close();
                     connection.shutdown().await?;
                     if let Some(mut report) = pending_report.take() {
                         report["listeners_released"] = clean.into();
                         report["connection_worker_joined"] = true.into();
+                        report["media_pending"] = media_preview.pending().into();
+                        report["media_preview_open"] = media_preview.active().is_some().into();
+                        report["media_external_requests"] = media_external.into();
                         report["arrow_input"] = arrow_checked.into(); report["enter_input"] = (enter_count == 2).into();
                         report["text_input"] = (input_bytes == expected_input).into();
                         report["trusted_webview_input"] = (arrow_checked && enter_count == 2 && input_bytes == expected_input).into();
@@ -762,6 +877,10 @@ async fn surface(
             changed = receiver.changed() => {
                 changed.map_err(|e| e.to_string())?;
                 let view = receiver.borrow_and_update().clone();
+                if media_preview.active().is_some_and(|preview| preview.generation != view.generation) {
+                    media_preview.close();
+                    eval.send(serde_json::json!({"media_reset":true})).map_err(|e| e.to_string())?;
+                }
                 if view.phase != Phase::Connected || pending_paste.read().as_ref().is_some_and(|p| p.generation != view.generation) {
                     pending_paste.set(None);
                 }
@@ -774,6 +893,7 @@ async fn surface(
             changed = closing.changed() => {
                 changed.map_err(|e| e.to_string())?;
                 if *closing.borrow_and_update() && !stopping {
+                    media_preview.close();
                     connection.keep_alive_gate(receiver.borrow().stamp(),false);
                     eval.send(serde_json::json!({"stop":true})).map_err(|e| e.to_string())?;
                     stopping = true;

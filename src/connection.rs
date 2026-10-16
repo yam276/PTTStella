@@ -256,22 +256,7 @@ async fn dial(endpoint: String) -> Result<Socket, String> {
 }
 
 fn tls_connector() -> Result<Connector, String> {
-    let mut roots = rustls::RootCertStore::empty();
-    let certificates = rustls_native_certs::load_native_certs();
-    roots.add_parsable_certificates(certificates.certs);
-    if roots.is_empty() {
-        return Err("系統沒有可用的 TLS 信任根憑證".into());
-    }
-    // Desktop dependencies can enable both Rustls providers. Select locally,
-    // without installing a mutable process-wide default or bypassing verification.
-    let config = rustls::ClientConfig::builder_with_provider(Arc::new(
-        rustls::crypto::ring::default_provider(),
-    ))
-    .with_safe_default_protocol_versions()
-    .map_err(|e| e.to_string())?
-    .with_root_certificates(roots)
-    .with_no_client_auth();
-    Ok(Connector::Rustls(Arc::new(config)))
+    Ok(Connector::Rustls(Arc::new(crate::tls::client_config()?)))
 }
 
 async fn stop(socket: &mut Option<Socket>, dialing: &mut Option<Dial>) -> bool {

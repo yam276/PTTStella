@@ -398,6 +398,7 @@ function wheel(e) {
     navigate({action},e);
 }
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
+const media=installMedia({send,prepare:()=>{cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshNavigation,restore:restoreEditingFocus});
 const bindings=[
     [keyboard,"keydown",keydown],[keyboard,"input",input],
     [keyboard,"beforeinput",beforeinput],
@@ -575,6 +576,11 @@ async function paint(packet) {
 focus();
 try {
     while(true){const packet=await dioxus.recv();if(packet.stop) break;
+        if(packet.media_open){media.open(packet.media_open);continue;}
+        if(packet.media_image){media.receiveImage(packet.media_image);continue;}
+        if(packet.media_error){media.fail(packet.media_error);continue;}
+        if(packet.media_external){media.externalResult(packet.media_external);continue;}
+        if(packet.media_reset){media.reset();continue;}
         if(packet.settings_open) {
             fontDraft=packet.settings_open;fillFonts(fontDraft.values);fontPreset.value="custom";
             fontNote.textContent=fontDraft.warning||"";cancelComposition();cancelDrag();clearSelection();
@@ -611,6 +617,7 @@ try {
 } catch(e){send({kind:"error",message:String(e)});}
 finally {
     stopped=true;latest=null;observer.disconnect();pasteObserver.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
+    const mediaClean=await media.destroy();
     clearTimeout(fontTimer);fontTimer=0;fontPreviewNext=null;
     for(const [target,event,callback,options] of bindings) target.removeEventListener(event,callback,options);
     if(exportTask) await exportTask;
@@ -625,6 +632,7 @@ finally {
     chrome.dispatchEvent(new PointerEvent("pointerenter"));
     fontButton.click();fontFields.font_size.dispatchEvent(new InputEvent("input",{bubbles:true}));
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
-    send({kind:"stopped",clean:sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
+    document.getElementById("media-close").click();document.getElementById("media-motion").click();
+    send({kind:"stopped",clean:mediaClean&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
         &&fontTimer===0&&!fontDialog.open&&!chrome.classList.contains("open")&&document.activeElement!==keyboard});
 }

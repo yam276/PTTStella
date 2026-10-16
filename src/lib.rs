@@ -5,6 +5,7 @@ pub mod encoding;
 pub mod export;
 pub mod input;
 pub mod links;
+pub mod media;
 pub mod navigation;
 pub mod screen;
 pub mod selection;
@@ -13,3 +14,5 @@ pub mod settings;
 pub mod storage;
 pub mod telnet;
 pub mod text;
+#[cfg(feature = "desktop")]
+mod tls;
