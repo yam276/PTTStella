@@ -29,6 +29,7 @@ pub fn menu() -> Result<Menu, muda::Error> {
         &PredefinedMenuItem::cut(None),
         &PredefinedMenuItem::copy(None),
         &PredefinedMenuItem::paste(None),
+        &PredefinedMenuItem::select_all(None),
     ])?;
     let window = Submenu::new("Window", true);
     window.append_items(&[
