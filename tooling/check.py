@@ -20,9 +20,9 @@ ROOT = Path(__file__).resolve().parent.parent
 REQUIRED = (
     'README.md', 'AGENTS.md', 'CONTRIBUTING.md',
     'docs/architecture.md', 'docs/roadmap.md',
-    'docs/dual-color.md', 'docs/keepalive.md', 'docs/development-harness.md',
+    'docs/dual-color.md', 'docs/keepalive.md', 'docs/media.md', 'docs/development-harness.md',
     'docs/active/minimal-browser.md',
-    'tooling/check.py', 'tooling/test_check.py', 'tooling/desktop_input.py', 'tooling/desktop_capture.py', 'tooling/inspect_png.ps1',
+    'tooling/check.py', 'tooling/test_check.py', 'tooling/desktop_input.py', 'tooling/desktop_media.py', 'tooling/desktop_capture.py', 'tooling/inspect_png.ps1',
 )
 RESEARCH_PATHS = (
     'research', 'reverse-engineering', 'evidence', 'tools', '.local/evidence',
@@ -59,7 +59,7 @@ def provenance(root):
                 facts['dirty'] = bool(status.stdout.strip())
         except (OSError, subprocess.TimeoutExpired):
             facts['git_metadata'] = 'unavailable'
-    for name in ('dual-color.json', 'redraw.json', 'navigation.json'):
+    for name in ('dual-color.json', 'redraw.json', 'navigation.json', 'media/colours.png', 'media/motion.gif'):
         path = root / 'tests/fixtures' / name
         if path.is_file():
             facts['fixture_sha256'][name] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -213,7 +213,7 @@ def unavailable(profile):
 
 def run_core(root):
     needed = ('Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'tests/screen.rs',
-              'tests/interaction.rs', 'tests/navigation.rs', 'tests/fixtures/dual-color.json', 'tests/fixtures/redraw.json', 'tests/fixtures/navigation.json')
+              'tests/interaction.rs', 'tests/navigation.rs', 'tests/media.rs', 'tests/fixtures/dual-color.json', 'tests/fixtures/redraw.json', 'tests/fixtures/navigation.json')
     if any(not (root / path).is_file() for path in needed) or not shutil.which('cargo'):
         return {'profile': 'core', 'status': 'not_ready', 'reason': 'Missing pinned Rust product, corpus or cargo.'}
     try:
@@ -222,7 +222,7 @@ def run_core(root):
         commands = [cargo + ['fmt', '--all', '--', '--check'],
                     cargo + ['clippy', '--no-default-features', '--all-targets', '--locked', '--', '-D', 'warnings']]
         commands += [cargo + ['test', '--no-default-features', '--test', suite, '--locked']
-                     for suite in ('screen', 'interaction', 'navigation')]
+                     for suite in ('screen', 'interaction', 'navigation', 'media')]
         commands += [cargo + ['run', '--quiet', '--locked', '--no-default-features', '--bin', 'replay', '--',
                               'tests/fixtures/' + name] for name in ('dual-color.json', 'redraw.json')]
         for command in commands:
@@ -243,7 +243,7 @@ def run_core(root):
 
 
 def run_desktop(root):
-    if any(not (root / path).is_file() for path in ('src/main.rs', 'tooling/desktop_input.py', 'tooling/desktop_capture.py', 'tooling/desktop_navigation.py', 'tooling/inspect_png.ps1')) or not shutil.which('cargo'):
+    if any(not (root / path).is_file() for path in ('src/main.rs', 'tooling/desktop_input.py', 'tooling/desktop_media.py', 'assets/media.js', 'tests/fixtures/media/colours.png', 'tests/fixtures/media/motion.gif', 'tooling/desktop_capture.py', 'tooling/desktop_navigation.py', 'tooling/inspect_png.ps1')) or not shutil.which('cargo'):
         return unavailable('desktop')
     if sys.platform != 'win32':
         return {'profile': 'desktop', 'status': 'not_ready', 'reason': 'Physical probe has only been verified on Windows.'}
@@ -267,15 +267,18 @@ def run_desktop(root):
         for name in ('probe-settings.json', 'probe-settings.json.bak', 'reload.json', 'reloaded-screen.png', 'settings-after.png'):
             (output / name).unlink(missing_ok=True)
         import desktop_input
+        import desktop_media
         with socket.socket() as listener:
             listener.bind(('127.0.0.1', 0))
             port = listener.getsockname()[1]
-        with tempfile.TemporaryFile() as log:
-            process = subprocess.Popen([str(root / 'target/debug/pttstella.exe'), '--probe', str(output), str(port)],
+        with desktop_media.FixtureServer() as media_server, tempfile.TemporaryFile() as log:
+            process = subprocess.Popen([str(root / 'target/debug/pttstella.exe'), '--probe', str(output), str(port), '--media-origin', media_server.origin],
                                        cwd=root, stdout=log, stderr=log,
                                        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             try:
-                input_report = desktop_input.run(port, process, output)
+                input_report = desktop_input.run(port, process, output, media_server)
+                if input_report.get('media',{}).get('status') != 'passed':
+                    raise CheckFailure('real media interaction did not run')
                 if input_report.get('png_geometry_and_pixels') is not True:
                     raise CheckFailure('independent PNG inspection did not run')
                 if input_report.get('selected_rows_png', {}).get('status') != 'passed':
@@ -298,12 +301,14 @@ def run_desktop(root):
                     'fills_body', 'ansi_colours', 'art_geometry', 'hover_controls', 'proportional_zoom')
         if report.get('status') != 'passed' or any(report.get(key) is not True for key in required):
             raise CheckFailure('desktop rendering/input/cleanup probe failed: ' + json.dumps(report))
+        if report.get('media_pending') is not False or report.get('media_preview_open') is not False or report.get('media_external_requests') != 1:
+            raise CheckFailure('media owner did not finish conformance/cleanup')
         # A second application process uses the first one's persisted preferences.
         with socket.socket() as listener:
             listener.bind(('127.0.0.1', 0))
             port = listener.getsockname()[1]
         with tempfile.TemporaryFile() as log:
-            process = subprocess.Popen([str(root / 'target/debug/pttstella.exe'), '--probe', str(output), str(port), '--reload-settings'],
+            process = subprocess.Popen([str(root / 'target/debug/pttstella.exe'), '--probe', str(output), str(port), '--reload-settings', '--media-origin', media_server.origin],
                                        cwd=root, stdout=log, stderr=log,
                                        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             try:

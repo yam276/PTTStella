@@ -1,6 +1,6 @@
 # 開發與驗證
 
-目前產品範圍只有 [terminal 外觀的 PTT 介面](docs/active/minimal-browser.md)。核心、Dioxus 視窗及單一 WSS 路徑已實作；手動登入的實測狀態見 active plan。沒有 shell／PTY 或一般系統終端功能。
+目前產品為 [terminal 外觀的 PTT 介面](docs/active/minimal-browser.md)，並有按需的 [媒體預覽](docs/media.md)。核心、Dioxus 視窗及單一 WSS 路徑已實作；手動登入的實測狀態見 active plan。沒有 shell／PTY 或一般系統終端功能。
 
 ## 當前 gate
 
@@ -32,6 +32,8 @@ IME gate 使用 CDP 的 imeSetComposition，驗證取消不送出、確認送出
 貼上 gate 以背景 PowerShell 設定合成剪貼簿，再由真正 Ctrl+V 觸發 paste 事件。檢查單行不附加 Enter、多行預覽內容、取消與送出，以及不可編碼、超量、ESC 三種拒絕；本機服務端比對完整輸入序列，拒絕／取消不能混入 bytes。原生 dialog 關閉後另驗證正常字母按鍵，不能只檢查 DOM activeElement，避免 native 編輯焦點未恢復的假通過。
 
 網址 gate 以實際滑鼠拖曳、點擊與右鍵選取合成網址，驗證拖曳不發起開啟、點擊恰好發起一次，以及系統剪貼簿的網址文字。一般 probe 的 opener 是確認 sink，不啟動外部瀏覽器；實際 OS 預設瀏覽器另由人工驗收。純 Rust 案例涵蓋字寬映射、標點／括號、大小寫、port、IPv6、行末截斷、未映射字格及非 HTTP scheme。
+
+媒體 gate 由 `tooling/desktop_media.py` 的 owned loopback HTTP server 提供自製 PNG／GIF 與實際 WebView 產生的 JPEG／WebP／WebM。trusted 點擊經生產網址分類與 HTTP loader，檢查圖片像素、等比縮放、真實 GIF 紅／藍幀、停止回首幀、WebM `requestVideoFrameCallback` 與播放時間、取消的 TCP EOF、快取命中、解碼失敗後重新抓取、外開 sink、焦點及原 BBS canvas／input epoch 不變。GIF 幀使用螢幕 crop，再由 System.Drawing 獨立解碼；[Canvas 的動畫圖來源只取預設／首幀](https://html.spec.whatwg.org/multipage/canvas.html#image-sources-for-2d-rendering-contexts)，不可用 drawImage 假裝驗證實際動畫。YouTube 縮圖在 probe 換為明確本機來源，沒有接觸網站。HTTP lib 案例另檢查未知長度超限、redirect、no-store／Age、尺寸與動畫上限、總期限涵蓋 body，以及 drop 後的連線關閉。實際網站、MP4／OGV codec、動畫 WebP、外部瀏覽器及其他 OS 尚待實機驗收。
 
 PNG gate 點擊真正匯出按鈕，以相同 renderer 畫出離屏快照，probe 使用固定產物路徑代替原生另存視窗。`tooling/inspect_png.ps1` 使用 Windows System.Drawing 獨立解碼檔案，確認尺寸、左右背景、方塊及游標排除；另確認匯出不改變可見畫布與捲動。PNG 標頭檢查只負責橋接尺寸／格式及容量，沒有當作通用 PNG 解碼器。檔案替換另測成功與失敗保留原檔／清理暫存；原生另存、取消及 OS 視窗互動仍需人工驗收。
 

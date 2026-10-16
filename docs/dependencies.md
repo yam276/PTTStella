@@ -13,6 +13,8 @@
 | directories 6.0.0 | OS 使用者設定目錄 | MIT OR Apache-2.0；[ProjectDirs](https://docs.rs/directories/6.0.0/directories/struct.ProjectDirs.html) |
 | tokio-tungstenite 0.28.0／futures-util | 單一 WebSocket 傳輸與序列化收送 | MIT；[tokio-tungstenite](https://docs.rs/tokio-tungstenite/0.28.0/)，MIT OR Apache-2.0；[futures-util](https://docs.rs/futures-util/) |
 | rustls 0.23／rustls-native-certs 0.8 | TLS、系統信任根與明確指定的 ring provider | Apache-2.0 OR ISC OR MIT；[rustls](https://docs.rs/rustls/0.23.46/)，MIT OR Apache-2.0 OR ISC；[native-certs](https://docs.rs/rustls-native-certs/) |
+| reqwest 0.13.5 | 可取消、有總期限的串流圖片 HTTP，不啟用 cookie／內容解壓縮 | MIT OR Apache-2.0；[上游文件](https://docs.rs/reqwest/0.13.5/)，rustls-no-provider 配合本產品明確 TLS 設定 |
+| imagesize 0.15.0 | PNG／JPEG／GIF／WebP 的尺寸檢查，不解碼 pixels | MIT；[上游文件](https://docs.rs/imagesize/0.15.0/)，只啟用四種所需格式 |
 
 uao-rs 的 decode 只餵固定兩個 bytes；encode 逐字往返核對，避免上游靜默省略無法編碼的內容。測試包含標準中文、UAO 符號與無法編碼的輸入；不宣稱全部映射已獨立驗證。
 

@@ -3,12 +3,18 @@ param(
     [string]$ReferenceFilePath,
     [int]$StartRow = 0,
     [int]$EndRow = 24,
-    [switch]$CheckSymbols
+    [switch]$CheckSymbols,
+    [switch]$CheckMedia
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 $PttImage = [System.Drawing.Bitmap]::new($PngFilePath)
 try {
+    if ($CheckMedia) {
+        $PttPixel = $PttImage.GetPixel([int]($PttImage.Width / 2), [int]($PttImage.Height / 2))
+        @{ rgba = @([int]$PttPixel.R, [int]$PttPixel.G, [int]$PttPixel.B, [int]$PttPixel.A); width = $PttImage.Width; height = $PttImage.Height } | ConvertTo-Json -Compress
+        return
+    }
     if ($CheckSymbols) {
         if ($PttImage.Width -ne 960 -or $PttImage.Height -ne 576) { throw 'Unexpected symbol image dimensions' }
         $PttSymbols = @()

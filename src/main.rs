@@ -57,17 +57,33 @@ fn main() {
         eprintln!("--probe requires an output directory and loopback debug port");
         std::process::exit(2);
     }
-    let reload_settings = match args.next() {
-        None => false,
-        Some(flag) if probe.is_some() && flag == "--reload-settings" => true,
-        Some(_) => {
+    let mut reload_settings = false;
+    let mut media_origin = None;
+    while let Some(flag) = args.next() {
+        if probe.is_some() && flag == "--reload-settings" && !reload_settings {
+            reload_settings = true;
+        } else if probe.is_some() && flag == "--media-origin" && media_origin.is_none() {
+            let value = args.next().and_then(|value| value.into_string().ok());
+            let parsed = value
+                .as_deref()
+                .and_then(|value| pttstella::media::validate(value).ok());
+            if let Some(url) = parsed.filter(|url| {
+                url.scheme() == "http"
+                    && url.host_str() == Some("127.0.0.1")
+                    && url.port().is_some()
+                    && url.path() == "/"
+                    && url.query().is_none()
+                    && url.fragment().is_none()
+            }) {
+                media_origin = Some(url.as_str().trim_end_matches('/').to_owned());
+            } else {
+                eprintln!("media probe requires an explicit loopback HTTP origin");
+                std::process::exit(2);
+            }
+        } else {
             eprintln!("unexpected arguments");
             std::process::exit(2);
         }
-    };
-    if args.next().is_some() {
-        eprintln!("unexpected arguments");
-        std::process::exit(2);
     }
     let mut config = dioxus::desktop::Config::new();
     if let (Some(path), Some(port)) = (&probe, debug_port) {
@@ -84,6 +100,7 @@ fn main() {
     let props = ui::AppProps {
         probe,
         reload_settings,
+        media_origin,
     };
     let window = dioxus::desktop::WindowBuilder::new()
         .with_title("PTTStella")

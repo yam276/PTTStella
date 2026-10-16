@@ -180,7 +180,7 @@ class DevTools:
             time.sleep(.02)
 
 
-def run(port, process, output=None):
+def run(port, process, output=None, media_server=None):
     """No credentials, PTT traffic, arbitrary target selection, or OS-wide input."""
     deadline = time.monotonic() + 15
     address = None
@@ -213,6 +213,10 @@ def run(port, process, output=None):
         else:
             raise TimeoutError('synthetic probe did not become ready')
         devtools.call('Page.bringToFront')
+        if media_server is None or output is None:
+            raise ValueError('media conformance requires the owned loopback fixture server')
+        import desktop_media
+        media_report = desktop_media.run(devtools, output, media_server)
         # Select only the right half of the synthetic dual-colour Chinese glyph.
         bounds = devtools.evaluate('(()=>{const b=document.getElementById("screen").getBoundingClientRect();return {left:b.left,top:b.top,width:b.width,height:b.height};})()')
         col, row = bounds['width'] / 80, bounds['height'] / 24
@@ -435,6 +439,7 @@ def run(port, process, output=None):
                 'selected_rows_png': capture_report,
                 'font_preview_save_cancel_validation': True,
                 'mouse_navigation': navigation_report,
+                'media': media_report,
                 'peer_close_visible': True,
                 'scope': 'isolated WebView2 browser input; no physical keyboard or PTT authentication'}
     finally:
