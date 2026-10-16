@@ -1,0 +1,19 @@
+{
+  "license": "SIL Open Font License 1.1; unmodified upstream binaries",
+  "fonts": [
+    {
+      "file": "NotoSansCJKtc-Regular.otf",
+      "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/TraditionalChinese/NotoSansCJKtc-Regular.otf",
+      "git_blob": "f9376bae1d421520f73a3c6c9d50b22f89548301",
+      "sha256": "dce08bd4fd91aa8aa76ed8fea4b694c2dfb8550f67871e326843212ddbeb88b4",
+      "size": 16435884
+    },
+    {
+      "file": "CascadiaMono.ttf",
+      "url": "https://github.com/microsoft/cascadia-code/releases/download/v2407.24/CascadiaCode-2407.24.zip",
+      "archive_entry": "ttf/CascadiaMono.ttf",
+      "sha256": "08026f617eea315caca59898784e999f6cdb2d0c34d2040deeb042bcdc359fa2",
+      "size": 714804
+    }
+  ]
+}

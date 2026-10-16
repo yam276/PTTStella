@@ -52,3 +52,7 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 .media-image-stage [hidden], .media-toolbar [hidden] { display: none; }
 .media-video-stage { width: 100%; height: 100%; }
 .media-video-stage video { display: block; width: 100%; height: 100%; object-fit: contain; }
+
+.font-dialog pre.font-license { white-space: pre-wrap; overflow: auto; max-height: 10rem; font-size: 12px; text-align: left; }
+
+.font-dialog { max-height: calc(100vh - 48px); overflow-y: auto; }

@@ -21,3 +21,10 @@ uao-rs 的 decode 只餵固定兩個 bytes；encode 逐字往返核對，避免�
 Rust 1.97.0 是本次選定並實測的工具鏈，不是證明可用的最低版本。程式不是系統 terminal，不載入 shell／PTY；只是 PTT 專用的格線與顯示控制碼模型。
 
 WSS 使用系統信任根、驗證站端憑證與主機名稱；TLS 設定屬於這條連線，不安裝 process-wide provider。原因是桌面相依套件可能同時啟用兩個 Rustls provider。端點為 `wss://ws.ptt.cc/bbs`；[PTT 官方公告](https://www.ptt.cc/bbs/SYSOP/M.1496571808.A.608.html) 記錄 WebSocket 服務，當前可用性由獨立實站探針驗證。
+
+## App 附帶字型
+
+- Cascadia Mono 2407.024：Microsoft 官方 v2407.24 release 的 `ttf/CascadiaMono.ttf`，714,804 bytes，未修改；[上游](https://github.com/microsoft/cascadia-code/releases/tag/v2407.24)、[OFL 1.1](../assets/fonts/Cascadia-OFL.txt)。
+- Noto Sans CJK TC Regular 2.004：notofonts 官方 Sans2.004 的繁體中文臺灣 OTF，16,435,884 bytes，未修改；[上游](https://github.com/notofonts/noto-cjk/tree/Sans2.004)、[OFL 1.1](../assets/fonts/NotoSansCJK-OFL.txt)。
+
+來源 URL、Noto Git blob 與兩檔 SHA-256 見 [資產 manifest](../assets/fonts/sources.json)，著作權見 [NOTICE](../assets/fonts/NOTICE.txt)。僅在 desktop 內編入，透過有界的固定資產路由載入；執行時不需下載。Microsoft JhengHei 不包含在產品中；[Microsoft FAQ](https://learn.microsoft.com/en-us/typography/fonts/font-faq) 說明 Windows 一般字型授權不包含隨 App 散布的權利。

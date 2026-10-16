@@ -8,12 +8,13 @@
 
 | 組合 | 英數字型 | 中文字型 |
 | --- | --- | --- |
+| 內建跨平台 | Cascadia Mono | Noto Sans CJK TC |
 | Windows | Cascadia Mono | Microsoft JhengHei |
 | macOS 黑體 | Menlo | PingFang TC |
 | Linux | DejaVu Sans Mono | Noto Sans Mono CJK TC |
 | macOS 宋體 | Menlo | Songti TC |
 
-四組皆為字高 20、基線 20。沒有既存有效設定時，依編譯平台選初始值（macOS 為黑體）；已保存的有效設定直接載入。平台名稱描述字型組合，**不限制使用平台**。兩個 macOS 組合保留相同 Menlo 英數字型，讓中文可明確在黑體／宋體間切換；宋體識別為 `macos_serif`，既有 `macos` 設定不改意圖。
+所有組合皆為字高 20、基線 20。沒有既存有效設定時，依編譯平台選初始值（macOS 為黑體）；已保存的有效設定直接載入。平台名稱描述字型組合，**不限制使用平台**。兩個 macOS 組合保留相同 Menlo 英數字型，讓中文可明確在黑體／宋體間切換；宋體識別為 `macos_serif`，既有 `macos` 設定不改意圖。
 
 本機保存使用 version 2 JSON（保留 v1 讀入遷移）、8 KiB 讀取上限、欄位驗證、原始 bytes 備份 `settings.json.bak` 與原子替換。載入失敗使用平台初始值並顯示原因，不自動覆寫壞檔。保存／取消及重啟像素已在 Windows gate 驗證；新增的可攜檔透過明確選檔／另存入口使用。
 
@@ -21,7 +22,7 @@
 
 ## 使用者操作
 
-在既有顯示設定介面提供「依平台初始值／Windows／macOS 黑體／Linux／macOS 宋體／自訂」及「另存設定檔／載入設定檔」。使用者可將自己的組合另存成有名稱的 `*.pttstella.json`，保留多份檔案並自由搬移；第一版以明確開檔／另存入口使用，不建立雲端同步或字型下載系統。
+在既有顯示設定介面提供「依平台初始值／內建跨平台／Windows／macOS 黑體／Linux／macOS 宋體／自訂」及「另存設定檔／載入設定檔」。使用者可將自己的組合另存成有名稱的 `*.pttstella.json`，保留多份檔案並自由搬移；第一版以明確開檔／另存入口使用，不建立雲端同步或字型下載系統。
 
 Mac 上明確選擇 Windows 組合，重啟與再次匯入仍保留該選擇；不得因執行平台而換回 Menlo。編輯其中一個字型後成為自訂組合，其他欄位保留；按「恢復依平台初始值」才重新依 OS 解析。
 
@@ -29,7 +30,11 @@ Mac 上明確選擇 Windows 組合，重啟與再次匯入仍保留該選擇；�
 
 設定檔保存字型名稱與選擇意圖，不包含字型檔。跨平台不保證有相同字型；畫面顯示要求的 family，並允許預覽及手動改選。既有 WebView 的 fonts.load／ready 只能等待載入，不能證明指定字型存在或每個字都使用它。沒有可靠能力時顯示「實際替代字型未確認」，不能假裝已檢查；不能靜默改寫使用者指定名稱。
 
-字型視窗另以 `FontFace` 的 `local()` 載入檢查所選英數／中文字型。無法本機載入時明確標示目前使用系統替代字型、切換組合可能外觀相同，保留原選擇並讓使用者改選或自行安裝。這只確認指定本機 face 可否載入，不宣稱每個 glyph 都使用同一字型。Mac 未安裝正黑體／Noto 時，切換 Windows／Linux 組合不能憑空產生這些字型；不自動下載、不改寫設定為另一個 family。
+字型視窗先載入 App 附帶的 Cascadia Mono 與 Noto Sans CJK TC（選取時才解碼），其他名稱以 `FontFace local()` 確認指定本機 face。預覽、主畫面、組字宿主及 PNG 經同一 family 對應，成功的內建 face 有獨立 App 名稱，不以系統 fallback 假裝載入。失敗顯示具體名稱及來源，保留設定並提供「內建跨平台」選擇。這只確認 face，沒有宣稱每個 glyph 都存在。
+
+內建兩個原始字型檔合計約 16.4 MiB，直接編進 desktop executable，由同一 Dioxus origin 的固定路徑提供，不下載、不安裝到 OS。Windows 組合的 Cascadia Mono 也可用附帶檔；Microsoft JhengHei 沒有附帶，不會靜默換成 Noto。缺正黑體時保留提示，選「內建跨平台」才明確改用 Noto。平台初始值與已保存的偏好不自動遷移。
+
+來源、版本、SHA-256 與授權保留於 [字型資產](../assets/fonts/sources.json)、[著作權](../assets/fonts/NOTICE.txt) 及兩份 [Cascadia](../assets/fonts/Cascadia-OFL.txt)／[Noto](../assets/fonts/NotoSansCJK-OFL.txt) OFL 1.1；設定視窗可展開閱讀。macOS bundle 的 Resources／FontLicenses 也保留通知及來源，設定檔匯出仍只帶名稱／意圖、不帶字型檔。新 preset 識別為 `bundled`。
 
 ## 格式、遷移與所有權
 

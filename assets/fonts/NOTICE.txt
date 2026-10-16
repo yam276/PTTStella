@@ -1,0 +1,12 @@
+PTTStella bundled fonts — unmodified upstream font binaries.
+
+Cascadia Mono — Microsoft Cascadia Code v2407.24
+Source: https://github.com/microsoft/cascadia-code/releases/tag/v2407.24
+© 2021 Microsoft Corporation. All Rights Reserved.
+
+Noto Sans CJK TC Regular — Sans2.004
+Source: https://github.com/notofonts/noto-cjk/tree/Sans2.004
+© 2014-2021 Adobe (http://www.adobe.com/).
+
+Both fonts use SIL Open Font License 1.1. License texts follow in this dialog and are included with the app.
+Microsoft JhengHei is not included. No fonts are installed into the operating system.
