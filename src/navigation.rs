@@ -207,6 +207,10 @@ pub enum Intent {
     Back,
     PreviousItem,
     NextItem,
+    First,
+    Last,
+    Forward,
+    Lines { down: bool, count: usize },
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
@@ -218,7 +222,7 @@ pub enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::Unavailable => "此畫面或位置未提供滑鼠導覽",
+            Self::Unavailable => "此畫面或位置未提供導覽",
             Self::Stale => "畫面或輸入已變更；導覽未送出",
             Self::AwaitingScreen => "等待站端更新畫面後再導覽",
             Self::Disconnected => "連線已變更；導覽未送出",
@@ -226,7 +230,44 @@ impl std::fmt::Display for Error {
     }
 }
 pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
+    if let Intent::Lines { down, count } = intent {
+        if count == 0 || count > crate::input::MAX_INPUT_BYTES / 3 {
+            return Err(Error::Unavailable);
+        }
+        return match context {
+            Context::ArticleList { .. } => {
+                Ok(if down { b"\x1b[B" } else { b"\x1b[A" }.repeat(count))
+            }
+            Context::ArticleReading {
+                first_line,
+                percent,
+                ..
+            } => {
+                let count = if down {
+                    if *percent == 100 { 0 } else { count }
+                } else {
+                    count.min(first_line - 1)
+                };
+                Ok(if down { b"j" } else { b"k" }.repeat(count))
+            }
+            _ => Err(Error::Unavailable),
+        };
+    }
     let bytes = match (context, intent) {
+        (Context::ArticleReading { first_line: 1, .. }, Intent::First)
+        | (Context::ArticleReading { percent: 100, .. }, Intent::Last)
+        | (Context::ArticleReading { percent: 100, .. }, Intent::Forward) => b"".as_slice(),
+        (Context::ArticleList { .. } | Context::ArticleReading { .. }, Intent::First) => {
+            b"\x1b[H".as_slice()
+        }
+        (Context::ArticleList { .. } | Context::ArticleReading { .. }, Intent::Last) => {
+            b"\x1b[F".as_slice()
+        }
+        (Context::ArticleList { .. }, Intent::Forward) => b"\r".as_slice(),
+        (Context::ArticleReading { .. }, Intent::Forward) => b"\x1b[6~".as_slice(),
+        (Context::ArticleList { .. }, Intent::Back) => b"\x1b[D".as_slice(),
+        (Context::ArticleList { .. }, Intent::PreviousPage) => b"\x1b[5~".as_slice(),
+        (Context::ArticleList { .. }, Intent::NextPage) => b"\x1b[6~".as_slice(),
         (
             Context::ArticleList {
                 articles,

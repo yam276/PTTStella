@@ -128,8 +128,11 @@ def run(devtools, output):
         raise ValueError('confirmation prompt retained browsing controls')
     wheel(120);click_cell(4,5.5)
     key('ArrowRight',39)
+    import desktop_vim
+    vim_report=desktop_vim.run(d)
     return {'status':'passed','number_click_and_title_selection':True,'capture_and_input_cancellation':True,
             'keepalive_default_switch_and_ui_pause': True,
+            'vim':vim_report,
             'hover_preserves_canvas_pixels':True,'reading_buttons_and_wheel':True,
             'zoom_scroll_composition_modal_and_unknown_exclusions':True,
             'scope':'trusted WebView pointer/wheel and production loopback peer; no authenticated PTT'}

@@ -7,6 +7,48 @@ fn explicit_tls_provider_builds_with_desktop_feature_unification() {
     assert!(matches!(tls_connector().unwrap(), Connector::Rustls(_)));
 }
 
+#[tokio::test]
+async fn keyboard_noop_streaming_and_unanswered_moves_have_one_owner() {
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(navigation_page("reading_first").into()))
+        .await
+        .unwrap();
+    let view = wait(&connection, |v| v.received > 0).await;
+    connection
+        .browse_key(view.stamp(), Intent::First)
+        .await
+        .unwrap();
+    assert!(timeout(Duration::from_millis(30), ws.next()).await.is_err());
+    let lines = Intent::Lines {
+        down: true,
+        count: 1,
+    };
+    connection.browse_key(view.stamp(), lines).await.unwrap();
+    connection.browse_key(view.stamp(), lines).await.unwrap();
+    for _ in 0..2 {
+        assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"j");
+    }
+    let pending = wait(&connection, |v| v.input_pending && v.input_epoch == 2).await;
+    assert_eq!(
+        connection
+            .browse_key(pending.stamp(), Intent::Back)
+            .await
+            .unwrap_err(),
+        navigation::Error::AwaitingScreen.to_string()
+    );
+    let released = wait(&connection, |v| !v.input_pending && v.input_epoch == 2).await;
+    assert!(released.message.contains("結果未確認"));
+    assert!(timeout(Duration::from_millis(30), ws.next()).await.is_err());
+    let closing = tokio::spawn(async move {
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+    });
+    connection.shutdown().await.unwrap();
+    closing.await.unwrap();
+}
+
 async fn local() -> (TcpListener, Connection) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let endpoint = format!("ws://{}/bbs", listener.local_addr().unwrap());
@@ -293,16 +335,20 @@ async fn idle_response_deadline_cannot_clear_a_later_manual_input() {
             .as_ref(),
         b"\x0c\x0c"
     );
+    tokio::time::sleep(Duration::from_millis(350)).await;
     connection.input(first.generation, b"x".to_vec()).unwrap();
     assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"x");
     wait(&connection, |v| v.input_epoch == 2 && v.input_pending).await;
     assert!(
-        timeout(Duration::from_millis(600), ws.next())
+        timeout(Duration::from_millis(200), ws.next())
             .await
             .is_err()
     );
     let pending = connection.updates.borrow().clone();
     assert!(pending.keep_alive && pending.input_pending && pending.keep_alive_failure.is_none());
+    let released = wait(&connection, |v| v.input_epoch == 2 && !v.input_pending).await;
+    assert!(released.keep_alive && released.keep_alive_failure.is_none());
+    assert!(released.message.contains("結果未確認"));
     let closing = tokio::spawn(async move {
         assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
     });
@@ -436,6 +482,7 @@ async fn navigation_admission_checks_real_frame_input_order_and_one_pending_oper
     drop(answer);
     connection
         .enqueue(Command::Navigate {
+            keyboard: false,
             stamp: returned.stamp(),
             intent: Intent::Open { row: 4 },
             reply,

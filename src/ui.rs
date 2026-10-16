@@ -11,6 +11,7 @@ use pttstella::{
     selection::{self, Selection},
     settings::{DisplaySettings, store::Store},
     storage,
+    vim::{self, Effect},
 };
 use serde::{Deserialize, Serialize};
 use std::{ops::Range, path::PathBuf, sync::Arc};
@@ -60,6 +61,13 @@ enum MediaAction {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum SurfaceEvent {
+    KeyboardState {
+        action: String,
+        #[serde(default)]
+        code: String,
+        generation: u64,
+        trusted: bool,
+    },
     MediaDecoded {
         request: u64,
         success: bool,
@@ -130,7 +138,7 @@ enum SurfaceEvent {
         trusted: bool,
     },
     Key {
-        bytes: Vec<u8>,
+        key: vim::Key,
         generation: u64,
         trusted: bool,
     },
@@ -140,6 +148,8 @@ enum SurfaceEvent {
         trusted: bool,
         #[serde(default)]
         composition_input: bool,
+        #[serde(default)]
+        composed: bool,
     },
     Painted {
         revision: u64,
@@ -319,6 +329,9 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "export-png", "匯出 PNG" }
                 button { id: "export-rows", disabled: true, title: "先拖曳選取要截圖的行", "選取行 PNG" }
                 button { id: "font-settings", "字型" }
+                button { id: "vim-toggle", "aria-pressed": "false", "Vim：關" }
+                button { id: "vim-once", hidden: true, "原生一次 (f)" }
+                output { id: "vim-status", role: "status" }
                   button { id: "keep-alive", r#type: "button", "aria-pressed": "true", "防閒置：開" }
                 div { id: "browse-controls", hidden: true,
                     button { id: "browse-back", disabled: true, "返回" }
@@ -436,6 +449,8 @@ async fn surface(
     .concat();
     let mut eval = document::eval(&script);
     let mut media_preview = Preview::default();
+    let mut keyboard_policy = vim::Keyboard::default();
+    let mut keyboard_generation = 0;
     let mut media_external = 0;
     let first = receiver.borrow_and_update().clone();
     let mut last_status = first.message.clone();
@@ -548,6 +563,21 @@ async fn surface(
                 }
             },
             event = eval.recv::<SurfaceEvent>() => match event.map_err(|e| e.to_string())? {
+                SurfaceEvent::KeyboardState {action,code,generation,trusted} => {
+                    // Ending an owned edit only revokes permission; WebView CDP can
+                    // report its compositionend as untrusted, including cancellation.
+                    if stopping || (!trusted && action!="composition_end") || generation!=receiver.borrow().generation {continue;}
+                    match action.as_str() {
+                        "toggle"=>keyboard_policy.toggle(), "once"=>keyboard_policy.arm(),
+                        "release"=>keyboard_policy.release(&code),
+                        "composition_start"=>keyboard_policy.composition_start(),
+                        "composition_end"=>keyboard_policy.composition_end(),
+                        "independent_edit"=>keyboard_policy.independent_edit(),
+                        "reset"=>keyboard_policy.reset(), _=>continue,
+                    }
+                    let context=navigation::analyze(&receiver.borrow().frame);
+                    eval.send(serde_json::json!({"keyboard_state":keyboard_policy.status(&context)})).map_err(|e|e.to_string())?;
+                },
                 SurfaceEvent::MediaDecoded {request,success} => {
                     media_preview.decoded(request,success);
                 },
@@ -558,7 +588,7 @@ async fn surface(
                     }
                 },
                 SurfaceEvent::KeepAliveGate {stamp,ready} => {
-                    if !stopping {connection.keep_alive_gate(stamp,ready);}
+                    if !stopping {connection.keep_alive_gate(stamp,ready && !keyboard_policy.status(&navigation::analyze(&receiver.borrow().frame)).pending);}
                 },
                 SurfaceEvent::Navigate {stamp,intent,trusted} => {
                     if stopping || !trusted { continue; }
@@ -762,8 +792,24 @@ async fn surface(
                 SurfaceEvent::Copied { generation, revision, request, trusted } => {
                     copy_checked |= trusted && copied_selection == Some((generation, revision, request));
                 },
-                SurfaceEvent::Key { bytes, generation, trusted } => {
-                    if stopping { continue; }
+                SurfaceEvent::Key { key, generation, trusted } => {
+                    if stopping || !trusted || generation!=receiver.borrow().generation { continue; }
+                    let view=receiver.borrow().clone();
+                    let context=navigation::analyze(&view.frame);
+                    let effect=keyboard_policy.key(&key,&context);
+                    eval.send(serde_json::json!({"keyboard_state":keyboard_policy.status(&context)})).map_err(|e|e.to_string())?;
+                    let bytes=match effect {
+                        Effect::None=>continue,
+                        Effect::Notice(notice)=>{eval.send(serde_json::json!({"notice":notice})).map_err(|e|e.to_string())?;continue;},
+                        Effect::Browse(intent)=>{
+                            let shown=displayed.as_ref().is_some_and(|p|p.generation==generation && p.navigation.kind()==context.kind());
+                            let result=if !shown || pending_paste.read().is_some() {Err(navigation::Error::Stale.to_string())}
+                                else {connection.browse_key(view.stamp(),intent).await};
+                            if let Err(error)=result {eval.send(serde_json::json!({"notice":error})).map_err(|e|e.to_string())?;}
+                            continue;
+                        },
+                        Effect::Native(bytes)=>bytes,
+                    };
                     if probe.is_some() {
                         let current = receiver.borrow().generation;
                         arrow_checked |= trusted && generation == current && bytes == [27,91,65];
@@ -779,15 +825,18 @@ async fn surface(
                         },
                     });
                 },
-                SurfaceEvent::Text { text, generation, trusted, composition_input } => {
+                SurfaceEvent::Text { text, generation, trusted, composition_input, composed } => {
                     if stopping { continue; }
-                    if probe.is_some() && (!(trusted || composition_input) || generation != receiver.borrow().generation || input_bytes.len() >= expected_input.len()) {
+                    if generation!=receiver.borrow().generation || !(trusted||composition_input) || !keyboard_policy.accept_text(composed) {continue;}
+                    eval.send(serde_json::json!({"keyboard_state":keyboard_policy.status(&navigation::analyze(&receiver.borrow().frame))})).map_err(|e|e.to_string())?;
+                    let vim_input=keyboard_policy.status(&navigation::analyze(&receiver.borrow().frame)).enabled;
+                    if probe.is_some() && !vim_input && (!(trusted || composition_input) || generation != receiver.borrow().generation || input_bytes.len() >= expected_input.len()) {
                         return Err("unexpected probe input".into());
                     }
                     composition_checked |= composition_input && text == "中";
                     let encoded = input::encode(&text).map_err(|e| e.to_string());
                     let result = encoded.and_then(|bytes| {
-                        if probe.is_some() { input_bytes.push(bytes.clone()); }
+                        if probe.is_some() && !vim_input { input_bytes.push(bytes.clone()); }
                         connection.input(generation, bytes)
                     });
                     message.set(match result {
@@ -878,6 +927,9 @@ async fn surface(
             changed = receiver.changed() => {
                 changed.map_err(|e| e.to_string())?;
                 let view = receiver.borrow_and_update().clone();
+                if keyboard_generation!=view.generation {keyboard_policy.reset();keyboard_generation=view.generation;}
+                keyboard_policy.context(&navigation::analyze(&view.frame));
+                eval.send(serde_json::json!({"keyboard_state":keyboard_policy.status(&navigation::analyze(&view.frame))})).map_err(|e|e.to_string())?;
                 if media_preview.active().is_some_and(|preview| preview.generation != view.generation) {
                     media_preview.close();
                     eval.send(serde_json::json!({"media_reset":true})).map_err(|e| e.to_string())?;

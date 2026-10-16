@@ -70,6 +70,7 @@ pub(super) async fn serve(
             }
         }
         navigation(&mut socket).await?;
+        vim_navigation(&mut socket).await?;
         socket
             .send(Message::Binary(
                 b"\x1b[2J\x1b[1;1HINPUT ROUND TRIP COMPLETE".to_vec().into(),
@@ -90,6 +91,51 @@ pub(super) async fn serve(
     })
     .await
     .map_err(|_| "loopback probe timed out".to_owned())?
+}
+
+async fn vim_navigation<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result<(), String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    socket
+        .send(Message::Binary(navigation_page("reading_middle")?.into()))
+        .await
+        .map_err(|e| e.to_string())?;
+    let stages: &[(&[u8], &str)] = &[
+        (b"h", "reading_middle"),
+        (b"\x04", "reading_middle"),
+        (b"jjj", "reading_middle"),
+        (b"kkkkkkkkkkk", "reading_middle"),
+        (b"\x1b[H", "reading_first"),
+        (b"\x1b[F", "reading_last"),
+        (b"\x1b[D", "list"),
+        (b"\r", "reading_middle"),
+        (b"\xa4\xa4", "reading_middle"),
+        (b"\x1b[5~", "reading_first"),
+    ];
+    for (index, (expected, page)) in stages.iter().enumerate() {
+        if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==*expected)
+        {
+            return Err(format!("unexpected Vim input at step {index}"));
+        }
+        // Give every stage a distinct revision, even for deliberately stationary replies.
+        let mut bytes = navigation_page(page)?;
+        bytes.extend_from_slice(format!("\x1b[1;75H{index:02}").as_bytes());
+        bytes.extend_from_slice(if *page == "list" {
+            b"\x1b[5;1H"
+        } else {
+            b"\x1b[24;80H"
+        });
+        socket
+            .send(Message::Binary(bytes.into()))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"\x1b[C")
+    {
+        return Err("Vim completion did not restore native input".into());
+    }
+    Ok(())
 }
 
 fn navigation_page(name: &str) -> Result<Vec<u8>, String> {
