@@ -1,10 +1,100 @@
 //! Real production transport against loopback only; never contacts PTT.
 use super::*;
-use tokio::{io::AsyncReadExt, net::TcpListener};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpListener,
+};
 
 #[test]
 fn explicit_tls_provider_builds_with_desktop_feature_unification() {
     assert!(matches!(tls_connector().unwrap(), Connector::Rustls(_)));
+}
+
+#[tokio::test]
+async fn shutdown_sends_normal_close_and_waits_for_delayed_peer_ack_and_fin() {
+    let (listener, connection) = local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    wait(&connection, |v| v.phase == Phase::Connected).await;
+    let peer = tokio::spawn(async move {
+        let Message::Close(Some(frame)) = ws.next().await.unwrap().unwrap() else {
+            panic!("expected explicit close")
+        };
+        assert_eq!(frame.code, CloseCode::Normal);
+        assert_eq!(frame.reason, "PTTStella disconnect");
+        tokio::time::sleep(Duration::from_millis(120)).await;
+        ws.flush().await.unwrap();
+        ws.get_mut().shutdown().await.unwrap();
+        let mut byte = [0u8; 1];
+        assert_eq!(
+            timeout(Duration::from_secs(2), ws.get_mut().read(&mut byte))
+                .await
+                .unwrap()
+                .unwrap(),
+            0
+        );
+    });
+    let start = Instant::now();
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+    assert!(start.elapsed() >= Duration::from_millis(100));
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+    peer.await.unwrap();
+}
+
+#[tokio::test]
+async fn shutdown_without_peer_ack_is_bounded_and_does_not_claim_confirmation() {
+    let (listener, connection) = local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    wait(&connection, |v| v.phase == Phase::Connected).await;
+    let peer = tokio::spawn(async move {
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(Some(_))))));
+        // Deliberately never flush the automatic close reply.
+        let mut byte = [0u8; 1];
+        assert_eq!(
+            timeout(Duration::from_secs(4), ws.get_mut().read(&mut byte))
+                .await
+                .unwrap()
+                .unwrap(),
+            0
+        );
+    });
+    let start = Instant::now();
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Unconfirmed
+    );
+    assert!(start.elapsed() < Duration::from_secs(4));
+    peer.await.unwrap();
+}
+
+#[tokio::test]
+async fn peer_transport_end_without_close_reply_is_not_a_timeout_or_ack() {
+    let (listener, connection) = local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    wait(&connection, |v| v.phase == Phase::Connected).await;
+    let peer = tokio::spawn(async move {
+        assert!(
+            matches!(ws.next().await,Some(Ok(Message::Close(Some(frame)))) if frame.code==CloseCode::Normal)
+        );
+        // Peer ends the transport without flushing its queued Close response.
+        drop(ws);
+    });
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::PeerClosedWithoutReply
+    );
+    peer.await.unwrap();
 }
 
 fn credentials() -> Credentials {

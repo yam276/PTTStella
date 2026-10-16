@@ -4,7 +4,7 @@ Rust／Dioxus 的 PTT 桌面介面，外觀像 terminal；不嵌入系統終端�
 
 Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Art，搭配公開映射依賴及合成驗收案例。
 
-第一個實測目標為 Windows；macOS 已提供本機 arm64 App 打包與啟動觀察，完整功能及 Linux 仍待各自驗證。畫面核心、離線 replay、Dioxus／WebView2 顯示及 WSS 登入前連線探針已通過；macOS 專用帳號的手動登入與部分瀏覽已實測，案例及待驗收範圍見 active plan。
+第一個實測目標為 Windows；macOS 已提供本機 arm64 App 打包與啟動觀察，完整功能及 Linux 仍待各自驗證。畫面核心、離線 replay、Dioxus／WebView2 顯示及 WSS 登入前連線探針已通過；macOS 專用帳號的手動／按鈕登入、Vim 切板／閱讀及關閉斷線已實測，案例及待驗收範圍見 active plan。
 
 ## 目前範圍
 
@@ -14,6 +14,7 @@ Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Ar
 - 畫面維持比例並符合視窗，工具列浮在上緣、hover 才顯示；明暗色依站端指令。
 - 工具列可開啟 Vim 瀏覽，支援主選單、分類／看板／我的最愛列表、文章列表與閱讀：hjkl、gg/G、計數、Ctrl+d/u/f/b/e/y；f 或「原生一次」只放行下一個完整按鍵／組字，i 持續原始輸入。未知畫面暫停 Vim，登入預設原始輸入；範圍與限制見 [Vim 瀏覽](docs/vim-browsing.md)。
 - macOS 工具列「登入」可選擇將一個預設帳號與密碼存入系統鑰匙圈；按登入才送出，密碼不寫入設定檔或回填畫面，提供移除已存帳密。啟動／重連不自動登入，後續確認由使用者操作。見 [登入與保存](docs/login.md)。
+- 關窗／⌘Q 會送正常 WebSocket 關閉通知並有界等待站端結束；工具列斷線區分 Close 回覆、站端直接結束與未確認。
 - 必要鍵盤輸入；斷線或連線失敗時介面仍可操作。
 - 滑鼠拖曳選取、雙擊整行、工具列整頁選取；Ctrl+C／Cmd+C 複製純文字，雙色中文字保留完整字形。選取保留空白，新畫面會清除舊選取；Esc 清除選取，沒有選取時 Ctrl+C 仍送到 PTT。
 - 組字文字以無框樣式跟隨 PTT 游標，確認後送出文字，取消不送出；確認候選字的 Enter 不當作 PTT 的 Enter，接著再按 Enter 才送站端。已驗證 Windows WebView 組字路徑及模擬的 WebKit 事件順序，macOS 原生 IME 候選窗仍待實機驗收。

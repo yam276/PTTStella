@@ -78,6 +78,8 @@ macOS 本機 `.app` 的建立入口為 `python3 tooling/bundle_macos.py`，細�
 
 登入變更須跑 core login suite、desktop lib 的精確收送／取消／期限／重連案例，並在 macOS 以 `--probe-login OUTPUT_DIRECTORY` 操作自製帳密，驗證鑰匙圈保存、第二程序取用與移除；probe 只使用獨立的 synthetic service，不得放入私人帳密。關閉後檢查 `login-probe.json` 及 worker／listener 清理。實站登入由使用者直接在 App 輸入，另行驗收，不能以本機往返結案。
 
+斷線變更另以 production Connection 驗證正常 Close 碼、延遲回覆／TCP FIN、未回覆即結束連線與無回覆時的期限／未確認狀態。原生視窗分別用 ⌘W、⌘Q 檢查停止輸入、關閉握手及 renderer／worker 清理；不能只以程序消失或 Close 已排入佇列當成站端回覆。
+
 ## 資產與提交
 
 資產與依賴須有來源、授權與版本；合成 fixture 保存獨立 expected。提交前檢查實際 diff，維持獨立 checkout 可建置及驗證。

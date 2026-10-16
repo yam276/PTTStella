@@ -45,3 +45,5 @@ Connection 同時擁有防閒置的單調時鐘、預設開啟狀態、UI watch 
 媒體依 [預覽契約](media.md) 在 dialog 內顯示。Rust Preview 擁有可取消的 HTTP future 與待解碼內容，關閉／換 session 只有一個清理入口；沒有 detached 下載 task。JS 收到通過格式／尺寸／動畫容量檢查的 bytes 後建立 Blob URL，由 WebView 解碼，成功回報後才保留快取；失敗內容不得造成重試一直命中壞圖。JS owner 註冊／移除自己的 listener 與 ResizeObserver，關閉時撤銷 Blob URL、停止 video、移除來源並清空 canvas；本機轉換／播放 promise 在結束時等待完成。影片使用獨立串流來源，不塞進圖片 cache。BBS canvas、輸入、PNG 與媒體渲染不共用解碼鎖或排版狀態。
 
 按鈕登入的 prompt／容量屬 login 核心，Connection 擁有單次等待與送出，Keychain worker 擁有 OS 存取與清理；UI 不接收已存密碼。安全儲存與驗證邊界見 [登入契約](login.md)。
+
+關閉視窗／⌘Q 先停止新互動並立即要求 Connection 結束；網路 owner 送 WebSocket 1000 正常關閉碼，持續讀取至站端回覆與底層關閉，總期限兩秒；依 [Tungstenite 關閉契約](https://docs.rs/tungstenite/0.28.0/tungstenite/protocol/struct.WebSocket.html#method.close) 驅動完整握手。回報區分 acknowledged、peer_closed_without_reply（未回覆 Close 即結束底層連線）、unconfirmed 與 no_connection，重複 shutdown 沿用已完成結果；沒有把送出 Close 當成站端已確認。renderer／Keychain 與網路 worker 都 join 後才完成 App 關閉。這表示 WebSocket 對端的關閉結果，不宣稱 PTT 線上名單即時更新。

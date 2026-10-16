@@ -1,7 +1,7 @@
 use base64::Engine;
 use dioxus::prelude::*;
 use pttstella::{
-    connection::{Connection, Phase, View},
+    connection::{CloseOutcome, Connection, Phase, View},
     encoding, export,
     input::{self, PreparedPaste},
     links::{self, Link},
@@ -1115,24 +1115,25 @@ async fn surface(
                     // join the one worker; discard any late secret without sending.
                     if let Some(mut job)=login_job.take() {let _=job.wait().await;}
                     media_preview.close();
-                    connection.shutdown().await?;
+                    let disconnect=connection.shutdown().await?;
                     if login_probe {
                         let path=probe.as_ref().ok_or("missing login-probe directory")?;
                         std::fs::create_dir_all(path).map_err(|e|e.to_string())?;
-                        std::fs::write(path.join("login-probe.json"),serde_json::json!({"status":if clean {"passed"} else {"failed"},"scope":"synthetic login only; peer checked one account and password, no extra input","listeners_released":clean,"connection_worker_joined":true,"credential_worker_joined":true}).to_string()).map_err(|e|e.to_string())?;
+                        std::fs::write(path.join("login-probe.json"),serde_json::json!({"status":if clean && disconnect==CloseOutcome::Acknowledged {"passed"} else {"failed"},"scope":"synthetic login only; peer checked one account and password, no extra input","disconnect":disconnect,"listeners_released":clean,"connection_worker_joined":true,"credential_worker_joined":true}).to_string()).map_err(|e|e.to_string())?;
                     }
                     if window_probe {
                         let path = probe.as_ref().ok_or("missing window-probe directory")?;
                         std::fs::create_dir_all(path).map_err(|e|e.to_string())?;
-                        let report = serde_json::json!({"status":if clean {"passed"} else {"failed"},
+                        let report = serde_json::json!({"status":if clean && disconnect==CloseOutcome::Acknowledged {"passed"} else {"failed"},
                             "scope":"local window probe; exact 30 Vim operations across main menu, board/favorite and article lists, including five switching cycles; no extra station input",
-                            "listeners_released":clean,"connection_worker_joined":true,
+                            "listeners_released":clean,"connection_worker_joined":true,"disconnect":disconnect,
                             "settings":app_settings,"vim_mode":keyboard_policy.status(&navigation::analyze(&receiver.borrow().frame))});
                         std::fs::write(path.join("window-probe.json"),report.to_string()).map_err(|e|e.to_string())?;
                     }
                     if let Some(mut report) = pending_report.take() {
                         report["listeners_released"] = clean.into();
                         report["connection_worker_joined"] = true.into();
+                        report["disconnect"] = serde_json::to_value(disconnect).map_err(|e|e.to_string())?;
                         report["media_pending"] = media_preview.pending().into();
                         report["media_preview_open"] = media_preview.active().is_some().into();
                         report["media_external_requests"] = media_external.into();
@@ -1161,7 +1162,7 @@ async fn surface(
                     return Ok(());
                 },
             },
-            changed = receiver.changed() => {
+            changed = receiver.changed(), if !stopping => {
                 changed.map_err(|e| e.to_string())?;
                 let view = receiver.borrow_and_update().clone();
                 if hover_lease.as_mut().is_some_and(|lease|!lease.renew(view.stamp(),view.phase==Phase::Connected && view.frame.control_complete,&links::detect(&view.frame))) {
@@ -1193,6 +1194,11 @@ async fn surface(
                     connection.keep_alive_gate(receiver.borrow().stamp(),false);
                     eval.send(serde_json::json!({"stop":true})).map_err(|e| e.to_string())?;
                     stopping = true;
+                    // Notify and join the network owner now, rather than leaving
+                    // it alive while waiting for renderer cleanup acknowledgement.
+                    message.set("正在中斷 PTT 連線並關閉視窗…".into());
+                    let disconnect=connection.shutdown().await?;
+                    eprintln!("PTTStella disconnect: {disconnect:?}");
                     close_deadline = Some(tokio::time::Instant::now() + std::time::Duration::from_secs(5));
                 }
             },
