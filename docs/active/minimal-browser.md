@@ -251,6 +251,12 @@ macOS 的兩次往返嘗試均未完成：第一次觀察 AX 回來時已超過�
 
 **持有往返的人工嘗試與可觀測性補強**：使用者在 `package-3` 的 `native-physical-held` 回覆已完成；接手時 AX 為選取第 5–6 行／125%，peer 已中斷。新 failure report 保留一筆左鍵按下、一次取消／複製、零 motion／導覽，但 peer 拒絕第一個 anchor；因舊記錄只有按鈕／動作，不能判斷座標或修飾鍵，也不推定使用者重複了其他手勢。該次仍 failed、cleanup false、exit 0，不算往返通過。接續將唯一有界記錄改存完整 Report，從中衍生原配對及新增 edges 診斷；不記原始鍵入文字、不改准入與送出機制。往返 probe 的同兩格改以黃色 A／B 明示，精確 peer expected 不變，完成後仍還原原 fixture；補獨立標記 cell／樣式及失敗報告保留座標／修飾鍵案例。125 個 lib、45 個 bin、desktop all-targets Clippy 通過，證據保留 `.local/verification/mouse-d-anchors`；新原生補驗接續。
 
+**完整 edge 診斷的原生驗證與清理完成**：`package-4` 的 `mouse`／`mouse_boundary` 兩個嚴格案例通過。前者保留 col 4／row 4 的左／右按下放開、中鍵按下，所有修飾鍵為 false；未支援 1001 的點擊／輪輸入零多送，Shift 雙擊選行後從 OS 剪貼簿貼回原中文行，停用／重新啟用各一次，本機導覽一次，中鍵模式撤銷取消一次且無釋放。後者先點黑邊，再拖起點至格線外，只有同格一次按下／一次取消，沒有釋放、sample 或本機導覽。兩次皆 Close acknowledged、全部 owner join、無 held，獨立解碼 PNG 與 960×576 基準零差異。Shift 雙擊不能代替實體 Shift 拖曳，這兩個案例亦不代替 held motion。
+
+A／B `native-anchors-held` 的五分鐘 peer 期限到達前未收到任何 edges／samples，未收到該題的完成回覆；已收回副本並保存 failed report／cleanup，不能當成手勢失敗或通過。後續需要可用的實體輸入或能維持按住移動的 native backend；不自動重開人工測試。Windows 的新版 WebView2 驗收與其他明列原生邊界仍缺證據，尚未整批結案。
+
+比對原命令的 isolated／4 GiB 預留曾再次被總額 guard 拒絕。本次是只讀 App 與記憶體解碼，量測最大 executable 為 30,828,848 bytes，唯一暫存檔逐次覆寫且加入 64 MiB 輸入上限；因此重新審核該比對的獨立預留為 1 GiB，仍經同一 guard、100 GiB free floor／60 GiB 總額，沒有調低編譯預留或改政策。相同檢查通過、17 份 App 的嚴格簽章／binary manifests 保存在 `.local/verification/mouse-d-anchors/summary.json`。其後在同一獨佔 lease 內重新核對路徑、身分、binary 雜湊與所有 probe 的終止紀錄，移除 16 份本輪副本／中間包；只保留 `package-4` 測試包，所有 dist 交付、來源、報告／失敗與 PNG、shared target／cache 未動。收據在同目錄 `cleanup-apps.json`；舊 package／副本路徑已清除，不應重跑依賴它們的舊 inspector。沒有 push 或取代既有交付 App。
+
 
 
 
