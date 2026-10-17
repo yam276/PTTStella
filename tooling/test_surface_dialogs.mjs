@@ -108,7 +108,7 @@ test("filter edit admission, failure recovery and presentation blocking share on
 
 test("the tagged router delivers independent wire examples once and rejects legacy/unknown envelopes",()=>{
     const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8")+"\ncreateSurfaceRouter");
-    const kinds=["paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
+    const kinds=["station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
         "hover_settings","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error","media_external",
         "media_reset","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","link_result","export_result"];
     const calls=[],handlers=Object.fromEntries(kinds.map(kind=>[kind,payload=>calls.push({kind,payload})]));

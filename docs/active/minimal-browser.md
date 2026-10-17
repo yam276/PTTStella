@@ -4,7 +4,7 @@
 
 ## 目標
 
-目前增量：A／B 的明確子集與 C1／C2／C3 已交付並依下文區分平台與實站邊界；C1 指定 macOS 原生互動已補驗。D 模式核心／SGR 編碼與 Session 交易准入已完成，UI 分流與原生驗收仍進行中。最新可用 App 為 `dist/macos-bookmarks/PTTStella.app`，已驗證文章入口、書籤與完整網址；D 尚未接入該 App。
+目前增量：A／B 的明確子集與 C1／C2／C3 已交付並依下文區分平台與實站邊界；C1 指定 macOS 原生互動已補驗。D 模式核心／SGR 編碼、Session 交易准入與 UI 分流已完成單元驗證，原生驗收仍進行中。最新可用 App 為 `dist/macos-bookmarks/PTTStella.app`，已驗證文章入口、書籤與完整網址；D 尚未接入該 App。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
@@ -190,6 +190,11 @@ macOS 四個獨立程序使用同一 `dist/macos-bookmarks/PTTStella.app`：繁�
 111 個 desktop lib（含八個交易、一個 watch 與七個 Connection 滑鼠案例）、39 個 bin、42 個 JS、core／desktop all-targets Clippy／docs 通過；精確 loopback bytes 覆蓋更新後釋放、queued cancel、off/on 合併、同步期模式改變、原始輸入介入、滿 64 筆控制、重連後舊事件不改狀態、持有時安靜逾時與關窗 Close。最初 no-default-features Clippy 發現 interrupt 只在 desktop 使用，已補運輸中斷的實質 owner 回歸；失敗紀錄保留，無修改 fixture expected。證據 `.local/verification/mouse-d-session`。仍未接 Paint／UI pointer、使用者開關及本機 pointer 導覽來源檢查，尚不能宣稱單一動作分流或原生站端滑鼠完成；最新 App 仍是書籤版，沒有 push。
 
 **D 導覽來源隔離已完成，pointer 接線接續**。以 Source enum 取代 keyboard bool，明確區分 Pointer／Button／Keyboard；JS 的 Navigate 必須標示來源，缺少／未知來源拒絕，也不能在此路徑冒充 Rust Vim。Session 在副作用前核對 Pointer 的當前 route：1000＋1006 與未支援的 1003 均不得再送本機方向鍵，停用後恢復；工具列與鍵盤仍可明確送出。112 個 desktop lib、40 個 bin、43 個 JS、core／desktop all-targets Clippy／docs 通過，證據 `.local/verification/mouse-d-routing`；新增 loopback 獨立核對零 bytes／不改 epoch、按鈕／Vim 的方向鍵及停用後 pointer 回復。這批未接站端 UI pointer，最新交付 App 不變，沒有 push。
+
+**D UI pointer 與分流已接線，原生驗收接續**。Paint 傳同一 Rust Snapshot，獨立 JS owner 管理可信 primary pointer、原始 lease、單調編號與 capture；release 可跨正常畫面更新，模式／policy／世代、失焦、同步／未完成輸出、lost capture、編輯或 modal 撤銷。站端模式不再觸發本機點編號／網址／hover／普通滾輪送鍵，Rust 二次檢查導覽與網址；Shift 在按下時選本機選字，先放開 Shift 仍可結束拖曳，Ctrl＋滾輪保留縮放。工具列可關閉站端回報恢復本機；1003 等未支援模式明示，不當作 1000 支援。press／release 不占用共同命令等待 slot；入列失敗透過 lease 回覆及 watch 撤銷，舊拒絕不能取消新交易。共同 Rust 清理先撤銷 mouse，再停止 UI／connection，JS destroy 清 capture，沒有新 timer。
+
+112 個 desktop lib、42 個 bin、51 個 JS、core／desktop all-targets Clippy／docs 通過；Surface 測試覆蓋顯示 ACK、模式／policy、可信事件、封閉回報型別與獨立 wire expected，八個 JS owner／handler 案例覆蓋三按鈕、跨重繪、取消／capture、Shift、普通滾輪零送鍵與 Ctrl 縮放。初期 router 的獨立 handlers 清單漏列新拒絕封包，已補同一 wire 契約並保留失敗紀錄。證據 `.local/verification/mouse-d-ui`；後續 capture-loss／精確 lease 修正的對應 JS 回歸另跑通過。尚未執行這批 UI 的原生 pointer 或新 App 打包，不宣稱 macOS／Windows、所有 DPR、實站、motion／wheel 已驗收；最新可用 App 仍為書籤版，沒有 push。
+
 
 
 

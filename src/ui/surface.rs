@@ -187,6 +187,7 @@ async fn run(
         include_str!("../../assets/surface-navigation.js"),
         include_str!("../../assets/surface-bookmarks.js"),
         include_str!("../../assets/surface-filters.js"),
+        include_str!("../../assets/surface-mouse.js"),
         include_str!("../../assets/surface.js"),
     ]
     .concat();
@@ -427,6 +428,20 @@ async fn run(
                     continue;
                 }
                 match event {
+                    SurfaceEvent::StationMouse { event, .. } => {
+                        let result = if !screen.mouse_shown(&event) || pending_paste.read().is_some() || keyboard_policy.status(&receiver.borrow().context()).pending {
+                            Err(pttstella::msg!("station-mouse-stale"))
+                        } else {
+                            connection.mouse_report(event)
+                        };
+                        if let Err(error) = result {
+                            connection.cancel_mouse(event.lease);
+                            eval.send(Packet::StationMouseRejected {lease:event.lease,message:error}).map_err(|e|e.to_string())?;
+                        }
+                    }
+                    SurfaceEvent::StationMouseCancel { lease } => connection.cancel_mouse(lease),
+                    SurfaceEvent::StationMouseRevoke { generation } => connection.revoke_mouse(generation),
+                    SurfaceEvent::StationMouseEnabled { generation, enabled, .. } => connection.mouse_enabled(generation, enabled),
                     SurfaceEvent::BookmarksOpen {request,..}=>{
                         checks.bookmark_opens=checks.bookmark_opens.saturating_add(1);
                         eval.send(Packet::BookmarksOpen {request,data:bookmarks.snapshot()}).map_err(|e|e.to_string())?;
@@ -571,6 +586,7 @@ async fn run(
                         if preferences.hover() == HoverPosition::Off
                             || view.stamp() != stamp
                             || view.phase != Phase::Connected
+                            || view.mouse.route != pttstella::mouse::input::Route::Local
                             || !view.frame.control_complete
                             || target.is_none()
                             || media_preview
@@ -729,7 +745,9 @@ async fn run(
                         index,
                         trusted: _,
                     } => {
-                        let link=screen.current(Identity{presentation,generation,revision},&receiver.borrow()).and_then(|p|p.links.get(index)).cloned();
+                        let link=screen.current(Identity{presentation,generation,revision},&receiver.borrow())
+                            .filter(|_|receiver.borrow().mouse.route==pttstella::mouse::input::Route::Local)
+                            .and_then(|p|p.links.get(index)).cloned();
                         if let Some(link) = &link {
                             match media::classify(&link.url) {
                                 Ok(Some(mut target)) => {

@@ -12,6 +12,7 @@ const pasteDialog=document.getElementById("paste-dialog"), pasteSend=document.ge
 const exportButton=document.getElementById("export-png");
 const exportRows=document.getElementById("export-rows");
 const keepAlive=document.getElementById("keep-alive");
+const stationMouseButton=document.getElementById("station-mouse"),stationMouseStatus=document.getElementById("station-mouse-status");
 const hoverPosition=document.getElementById("hover-position");
 let hoverPreference="top_right",hoverCandidate=null,hoverTimer=0,hoverSequence=0,pointerClient=null;
 let pasteConfirmProbe=false;
@@ -50,7 +51,7 @@ function receiveKeyboard(state){keyboardState=state;vimToggle.textContent=state.
 const navigationMarker=document.getElementById("navigation-marker"),browseControls=document.getElementById("browse-controls");
 const browseBack=document.getElementById("browse-back"),browsePrevious=document.getElementById("browse-previous"),browseNext=document.getElementById("browse-next");
 const browseHint=document.getElementById("browse-hint");
-function invalidatePresentation(){cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);}
+function invalidatePresentation(){stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);}
 const ctx=canvas.getContext("2d",{willReadFrequently:true});
 const palette=["#000000","#800000","#008000","#808000","#000080","#800080","#008080","#c0c0c0",
     "#808080","#ff0000","#00ff00","#ffff00","#0000ff","#ff00ff","#00ffff","#ffffff"];
@@ -70,6 +71,22 @@ const send=value=>{ sent++; dioxus.send(value); };
 const stamp=()=>({generation,revision,input_epoch:latest?.input_epoch??0});
 const sameStamp=(a,b)=>a.generation===b.generation&&a.revision===b.revision&&a.input_epoch===b.input_epoch;
 const blocked=()=>composing||pastePending||!!document.querySelector("dialog[open]");
+const stationMouse=createStationMouse({current:()=>latest,point:cellAt,viewport,send,blocked,
+    prepare:()=>{cancelHover(true);policy("reset",{isTrusted:true});released=null;cancelDrag();clearSelection();focus();},
+    changed:()=>{surface.dataset.stationMouseActive=String(stationMouse.active());refreshKeepAlive();}});
+function toggleStationMouse(e){
+    if(!e.isTrusted||stopped||!latest)return;
+    stationMouse.revoke();
+    send({kind:"station_mouse_enabled",generation,enabled:!latest.mouse.enabled,trusted:true});
+    focus();
+}
+function refreshStationMouse(){
+    const state=latest?.mouse;
+    stationMouseButton.textContent=tr(state?.enabled===false?"station-mouse-off":"station-mouse-on");
+    stationMouseButton.setAttribute("aria-pressed",String(state?.enabled!==false));
+    stationMouseStatus.textContent=!latest?.connected||!state?.enabled?"":tr(state.route==="station"?"station-mouse-active":state.route==="blocked"?"station-mouse-blocked":"station-mouse-local");
+    surface.dataset.stationMouseRoute=state?.route??"local";
+}
 const canNavigate=()=>!stopped&&!!latest?.connected&&['article_list','article_reading'].includes(latest.navigation.kind)&&!latest.input_pending&&!navigationLocked&&!navigationRequest&&!blocked();
 function invalidateNavigation(){navigationLocked=true;released=null;cancelDrag();setHover(null);refreshNavigation();}
 function sendInput(value){invalidateNavigation();send(value);}
@@ -77,6 +94,7 @@ function sendInput(value){invalidateNavigation();send(value);}
 // the context-dependent conversion from browsing intents to PTT bytes.
 const commandKeys=new Set(["Enter","Backspace","Tab","Escape","ArrowUp","ArrowDown","ArrowRight","ArrowLeft","Home","End","PageUp","PageDown","Delete"]);
 function keydown(e) {
+    if(e.isTrusted)stationMouse.revoke();
     cancelHover(true);
     if(pastePending) {e.preventDefault();return;}
     // Older WebKit can end composition before its confirming keydown. That
@@ -100,6 +118,7 @@ function keydown(e) {
     }
 }
 function input(e) {
+    if(e.isTrusted)stationMouse.revoke();
     cancelHover(true);
     if(pastePending) {keyboard.value="";return;}
     if(composing||e.isComposing) {
@@ -124,6 +143,7 @@ function beforeinput(e) {
     if(lineBreak(e)&&!composing&&!e.isComposing) e.preventDefault();
 }
 function compositionstart(e) {
+    stationMouse.revoke();
     cancelHover(true);
     inputKey=false;
     policy("composition_start",e);
@@ -165,6 +185,7 @@ function positionKeyboard() {
 function focus() { if(document.activeElement!==keyboard) keyboard.focus({preventScroll:true}); }
 function restoreEditingFocus(){keyboard.blur();focus();}
 function pointerdown(e) {
+    if(stationMouse.down(e))return;
     if(e.button!==0||!e.isPrimary||dragging) return;
     released=null;
     if(blocked()||latest?.output_pending) return;
@@ -195,16 +216,17 @@ function cellAt(e,clamp) {
 function pointermove(e) {
     pointerClient={x:e.clientX,y:e.clientY,clientX:e.clientX,clientY:e.clientY,trusted:e.isTrusted};media.locate(pointerClient,hoverPreference);
     if(dragging&&e.pointerId!==dragging.pointer) return;
-    if(!dragging) {setHover(cellAt(e,false));return;}
+    if(!dragging) {if(stationMouse.local())setHover(cellAt(e,false));else {cancelHover();setHover(null);}return;}
     dragging.moved ||= Math.hypot(e.clientX-dragging.x,e.clientY-dragging.y)>3;
     if(dragging.moved)cancelHover();
     if(dragging.moved) requestSelection({mode:"range",anchor:dragging.anchor,focus:cellAt(e,true)});
 }
 function pointerup(e) {
+    if(!dragging&&stationMouse.up(e))return;
     if(!dragging||e.pointerId!==dragging.pointer) return;
     pointermove(e);
     const hit=hitAt(cellAt(e,false));
-    if(!dragging.moved&&!blocked()&&sameStamp(dragging.stamp,stamp())&&JSON.stringify(dragging.hit)===JSON.stringify(hit)) {
+    if(!dragging.moved&&!e.shiftKey&&stationMouse.local()&&!blocked()&&sameStamp(dragging.stamp,stamp())&&JSON.stringify(dragging.hit)===JSON.stringify(hit)) {
         released={hit,stamp:dragging.stamp};
     }
     dragging=null;
@@ -213,6 +235,7 @@ function pointerup(e) {
     refreshKeepAlive();
 }
 function click(e) {
+    if(!stationMouse.local()){released=null;return;}
     if(e.button!==0||e.detail>1) {released=null;refreshKeepAlive();return;}
     const action=released;released=null;clickSequenceAction=!!action?.hit;
     if(!action?.hit||blocked()||!sameStamp(action.stamp,stamp())) {refreshKeepAlive();return;}
@@ -226,9 +249,9 @@ function cancelDrag() {
     surface.dataset.pointerActive="false";
     refreshKeepAlive();
 }
-function pointercancel(){cancelHover(true);released=null;cancelDrag();clearSelection();}
-function deactivate(e){cancelHover(true);policy("reset",e);released=null;cancelDrag();setHover(null);cancelComposition();}
-function lostcapture(){if(dragging){cancelHover();dragging=null;released=null;surface.dataset.pointerActive="false";refreshKeepAlive();}}
+function pointercancel(){stationMouse.cancel();cancelHover(true);released=null;cancelDrag();clearSelection();}
+function deactivate(e){stationMouse.revoke();cancelHover(true);policy("reset",e);released=null;cancelDrag();setHover(null);cancelComposition();}
+function lostcapture(e){stationMouse.lost(e);if(dragging){cancelHover();dragging=null;released=null;surface.dataset.pointerActive="false";refreshKeepAlive();}}
 function hasSelection(){return selectionActive;}
 function clearSelection() {
     if(!stopped)revokeSurfaceSelection(send,selectionCache,selectionBusy);
@@ -287,16 +310,16 @@ function copy(e) {
     } catch(_) { surfaceNote.textContent=tr("copy-failed"); }
 }
 function doubleclick(e) {
-    if(clickSequenceAction||blocked()) return;
+    if(clickSequenceAction||blocked()||!stationMouse.local()&&!e.shiftKey) return;
     const point=cellAt(e,false);if(point) requestSelection({mode:"line",row:point.row});
 }
-function selectPage(){if(latest&&!composing){requestSelection({mode:"all"});focus();}}
+function selectPage(){stationMouse.revoke();if(latest&&!composing){requestSelection({mode:"all"});focus();}}
 function linkAt(point) {
     if(!point||!latest) return -1;
     return latest.links.findIndex(link=>link.row===point.row&&link.start<=point.col&&point.col<link.end);
 }
 function hitAt(point) {
-    if(!point||blocked()||dragging?.moved) return null;
+    if(!point||blocked()||dragging?.moved||!stationMouse.local()) return null;
     const index=linkAt(point);if(index>=0) return {kind:"link",index};
     if(!canNavigate()||latest.navigation.kind!=="article_list") return null;
     const article=latest.navigation.articles.find(a=>a.row===point.row&&a.start<=point.col&&point.col<a.end);
@@ -332,8 +355,9 @@ function refreshNavigation() {
     drawNavigationMarker();
 }
 function navigate(intent,e,source="pointer") {
+    if(source==="pointer"&&!stationMouse.local())return;
     if(!canNavigate()||dragging?.moved) return;
-    policy("reset",e);
+    stationMouse.revoke();policy("reset",e);
     if(intent.action==="previous_page"&&latest.navigation.first_line===1||intent.action==="next_page"&&latest.navigation.percent===100) return;
     clearSelection();navigationRequest=true;navigationLocked=true;setHover(null);refreshNavigation();
     surface.dataset.navigationResult="pending";send({kind:"navigate",stamp:stamp(),intent,source,trusted:e.isTrusted});focus();
@@ -341,6 +365,7 @@ function navigate(intent,e,source="pointer") {
 const browseReturn=e=>navigate({action:"back"},e,"button"),browseUp=e=>navigate({action:"previous_page"},e,"button"),browseDown=e=>navigate({action:"next_page"},e,"button");
 const leaveLink=()=>{if(!dragging){cancelHover(true);setHover(null);}};
 function selectLink(e) {
+    if(!stationMouse.local()&&!e.shiftKey){e.preventDefault();return;}
     const index=linkAt(cellAt(e,false));
     if(index<0||composing) return;
     e.preventDefault();cancelDrag();focus();
@@ -349,6 +374,7 @@ function selectLink(e) {
 function activate() { if(!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); }
 function paste(e) {
     if(!e.isTrusted||stopped)return;
+    stationMouse.revoke();
     cancelHover(true);
     e.preventDefault();
     if(pastePending||pasteDialog.open) return;
@@ -389,7 +415,7 @@ function refreshExportControls() {
     exportRows.title=selection?tr("export-lines-hint",{start:selection.value.rows.start+1,end:selection.value.rows.end}):tr("export-rows-hint");
 }
 function refreshKeepAlive() {
-    const ready=!!latest?.keep_alive&&canNavigate()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
+    const ready=!!latest?.keep_alive&&canNavigate()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
     const current=stamp(),key=JSON.stringify([current,ready,latest?.keep_alive_ready,latest?.keep_alive]);
     keepAlive.textContent=latest?.keep_alive?tr("keepalive-on"):tr("keepalive-off");
     keepAlive.setAttribute("aria-pressed",String(!!latest?.keep_alive));
@@ -432,6 +458,7 @@ function showChrome() { chrome.classList.add("open"); }
 function hideChrome() { chrome.classList.remove("open"); }
 function zoomTo(value) {
     if(stopped||!latest) return;
+    stationMouse.revoke();
     zoom=Math.max(.25,Math.min(4,value)); draw(latest);
     viewport.scrollLeft=Math.max(0,(surface.offsetWidth-viewport.clientWidth)/2);
     viewport.scrollTop=Math.max(0,(surface.offsetHeight-viewport.clientHeight)/2); focus();
@@ -440,7 +467,7 @@ function wheel(e) {
     cancelHover(true);
     if(!e.deltaY||e.altKey||e.metaKey||e.shiftKey) return;
     if(e.ctrlKey) {e.preventDefault();zoomTo(zoom+(e.deltaY<0?.25:-.25));return;}
-    if(blocked()||dragging||hasSelection()||viewport.scrollWidth>viewport.clientWidth+1||viewport.scrollHeight>viewport.clientHeight+1) return;
+    if(!stationMouse.local()||blocked()||dragging||hasSelection()||viewport.scrollWidth>viewport.clientWidth+1||viewport.scrollHeight>viewport.clientHeight+1) return;
     const kind=latest?.navigation.kind;
     if(!latest?.connected||!['article_list','article_reading'].includes(kind)) return;
     e.preventDefault();
@@ -448,13 +475,13 @@ function wheel(e) {
     navigate({action},e);
 }
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
-const media=installMedia({tr,send,prepare:()=>{cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshNavigation,restore:restoreEditingFocus});
+const media=installMedia({tr,send,prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshNavigation,restore:restoreEditingFocus});
 function refreshControls(){refreshNavigation();refreshExportControls();}
 const settingsUi=createSettingsDialog({send,
-    beforeRequest:e=>{cancelHover(true);policy("reset",e);},beforeShow:invalidatePresentation,
+    beforeRequest:e=>{stationMouse.revoke();cancelHover(true);policy("reset",e);},beforeShow:invalidatePresentation,
     restore:restoreEditingFocus,changed:refreshControls,tr,loadFonts,fontLoadNote,invalidateFonts,render});
 const loginUi=createLoginDialog({tr,send,stamp,
-    prepare:e=>{cancelHover(true);policy("reset",e);cancelComposition();clearSelection();},
+    prepare:e=>{stationMouse.revoke();cancelHover(true);policy("reset",e);cancelComposition();clearSelection();},
     restore:restoreEditingFocus,changed:refreshControls,focus});
 const destinationUi=createNavigationDialog({tr,send,stamp,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,current:()=>latest,isEditing:()=>composing||pastePending});
 const bookmarksUi=createBookmarksDialog({tr,send,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,openDestination:destinationUi.openDraft,current:()=>latest});
@@ -474,7 +501,7 @@ const bindings=[...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,
     [canvas,"contextmenu",selectLink],[canvas,"pointerleave",leaveLink],
     [pasteSend,"click",confirmPaste],[pasteCancel,"click",cancelPaste],[pasteDialog,"cancel",cancelPaste],
     [exportButton,"click",exportScreen],[exportRows,"click",exportSelected],
-    [keepAlive,"click",toggleKeepAlive],
+    [keepAlive,"click",toggleKeepAlive],[stationMouseButton,"click",toggleStationMouse],
     [hoverPosition,"change",changeHoverPreference],
     [browseBack,"click",browseReturn],[browsePrevious,"click",browseUp],[browseNext,"click",browseDown],
     [chrome,"pointerenter",showChrome],[chrome,"pointerleave",hideChrome],
@@ -618,12 +645,14 @@ async function paint(packet) {
     const changed=presentationChanged||!sameStamp(stamp(),{generation:packet.generation,revision:packet.frame.revision,input_epoch:packet.input_epoch});
     if(changed||packet.output_pending||latest?.input_pending&&!packet.input_pending) {released=null;clearSelection();cancelDrag();setHover(null,false,false);navigationLocked=false;}
     if(packet.output_pending)cancelHover();
+    if(packet.mouse?.modes.epoch!==latest?.mouse?.modes.epoch||packet.mouse?.enabled!==latest?.mouse?.enabled){released=null;cancelDrag();cancelHover();setHover(null,false,false);}
     if(packet.generation!==generation){
         pastePending=false;cancelComposition();focus();
     }
     const previousFailure=latest?.keep_alive_failure;
     const failureChanged=packet.keep_alive_failure!==previousFailure;
-    generation=packet.generation;revision=packet.frame.revision;latest=packet;filterUi.paint(packet);
+    stationMouse.update(packet);
+    generation=packet.generation;revision=packet.frame.revision;latest=packet;filterUi.paint(packet);refreshStationMouse();
     surface.dataset.presentation=String(packet.presentation);surface.dataset.maskedPushes=String(packet.masked_pushes);surface.dataset.revealed=String(packet.revealed);
     if(changed&&hoverCandidate) {
         const lease=packet.hover,candidate=hoverCandidate;
@@ -648,7 +677,7 @@ async function paint(packet) {
 }
 focus();
 function revokeSurface(){
-    stopped=true;settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
+    stopped=true;stationMouse.destroy();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
     for(const [target,event,callback,options] of bindings)target.removeEventListener(event,callback,options);
 }
 const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
@@ -690,6 +719,7 @@ function runSurfaceProbe(mode){
 function showNotice(message){if(!stopped&&message&&!settingsUi.notice(message))surfaceNote.textContent=message;}
 const route=createSurfaceRouter({
     paint,
+    station_mouse_rejected:data=>{stationMouse.reject(data.lease);showNotice(data.message);},
     surface_probe:runSurfaceProbe,
     filters_open:filterUi.open,filters_result:filterUi.receive,
     login_result:loginUi.receive,
@@ -747,7 +777,7 @@ finally {
     document.getElementById("font-settings").click();document.getElementById("font-size").dispatchEvent(new InputEvent("input",{bubbles:true}));
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
-    cleanupClean=mediaClean&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
+    cleanupClean=mediaClean&&stationMouse.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
         &&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&destinationUi.clean()&&bookmarksUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
     try {send({kind:"stopped",clean:cleanupClean});} catch(_) { /* join still acknowledges cleanup */ }
 }

@@ -13,6 +13,22 @@ fn outbound_results_match_the_shared_wire_examples() {
     let bookmarks = super::bookmarks::State::load(Some(directory.path()));
     let actual = vec![
         (
+            "station_mouse_rejected",
+            Packet::StationMouseRejected {
+                lease: pttstella::mouse::input::Lease {
+                    stamp: pttstella::navigation::Stamp {
+                        generation: 7,
+                        revision: 4,
+                        input_epoch: 2,
+                    },
+                    mode_epoch: 5,
+                    policy_epoch: 3,
+                    transaction: 9,
+                },
+                message: "滑鼠事件未送出".into(),
+            },
+        ),
+        (
             "bookmarks_open",
             Packet::BookmarksOpen {
                 request: 10,
@@ -288,6 +304,10 @@ fn frame_and_preview_packets_keep_typed_identity_and_data_under_payload() {
     assert_eq!(value["kind"], "paint");
     assert_eq!(value["payload"]["generation"], 0);
     assert_eq!(value["payload"]["output_pending"], false);
+    assert_eq!(
+        value["payload"]["mouse"],
+        serde_json::json!({"enabled":true,"policy_epoch":0,"modes":{"tracking":"off","encoding":"legacy","epoch":0},"ready":false,"route":"local","active":null})
+    );
     assert_eq!(value["payload"]["settings"]["cjk_font"], "中文");
     assert!(value.get("frame").is_none());
     let directory = tempfile::tempdir().unwrap();

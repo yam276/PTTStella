@@ -17,6 +17,21 @@ pub(super) enum MediaAction {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(super) enum SurfaceEvent {
+    StationMouse {
+        event: pttstella::mouse::input::Event,
+        trusted: bool,
+    },
+    StationMouseCancel {
+        lease: pttstella::mouse::input::Lease,
+    },
+    StationMouseRevoke {
+        generation: u64,
+    },
+    StationMouseEnabled {
+        generation: u64,
+        enabled: bool,
+        trusted: bool,
+    },
     BookmarksOpen {
         request: u64,
         trusted: bool,
@@ -223,6 +238,17 @@ impl SurfaceEvent {
     pub(super) fn admitted(&self, generation: u64) -> bool {
         use SurfaceEvent::*;
         match self {
+            StationMouse { event, trusted } => {
+                *trusted && event.lease.stamp.generation == generation
+            }
+            StationMouseEnabled {
+                generation: source,
+                trusted,
+                ..
+            } => *trusted && *source == generation,
+            // Revocation grants no input; it still cannot cross a session.
+            StationMouseCancel { lease } => lease.stamp.generation == generation,
+            StationMouseRevoke { generation: source } => *source == generation,
             Key {
                 trusted,
                 generation: source,
@@ -362,6 +388,38 @@ mod admission_tests {
             assert!(!admits(event.clone(), false, 7));
             assert!(admits(event.clone(), true, 7));
             assert!(admits(event, true, 8)); // Local data survives session changes.
+        }
+    }
+
+    #[test]
+    fn station_mouse_requires_trusted_current_reports_and_closed_structured_types() {
+        let lease = json!({"stamp":{"generation":7,"revision":4,"input_epoch":2},"mode_epoch":5,"policy_epoch":3,"transaction":9});
+        let event = json!({"kind":"station_mouse","event":{"lease":lease,"report":{"col":4,"row":3,"button":"right","action":"press","modifiers":{"shift":false,"alt":true,"ctrl":false}}}});
+        assert!(admits(event.clone(), true, 7));
+        assert!(!admits(event.clone(), false, 7));
+        assert!(!admits(event.clone(), true, 8));
+        for (field, value) in [
+            ("action", json!("wheel")),
+            ("button", json!("unknown")),
+            ("col", json!(-1)),
+            ("raw", json!("\u{001b}[B")),
+        ] {
+            let mut invalid = event.clone();
+            invalid["trusted"] = true.into();
+            invalid["event"]["report"][field] = value;
+            assert!(serde_json::from_value::<SurfaceEvent>(invalid).is_err());
+        }
+        let toggle = json!({"kind":"station_mouse_enabled","generation":7,"enabled":false});
+        assert!(admits(toggle.clone(), true, 7));
+        assert!(!admits(toggle.clone(), false, 7));
+        assert!(!admits(toggle, true, 8));
+        for value in [
+            json!({"kind":"station_mouse_cancel","lease":lease}),
+            json!({"kind":"station_mouse_revoke","generation":7}),
+        ] {
+            // Revocations grant no input and are allowed for internal cleanup.
+            assert!(admits(value.clone(), false, 7));
+            assert!(!admits(value, false, 8));
         }
     }
 

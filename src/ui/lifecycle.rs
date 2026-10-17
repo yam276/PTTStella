@@ -86,6 +86,7 @@ impl Resources {
         self.commands.cancel();
         self.files.revoke();
         self.media.close();
+        connection.revoke_mouse(connection.updates.borrow().generation);
         connection.keep_alive_gate(connection.updates.borrow().stamp(), false);
         // Cancellation is best effort; shutdown below remains the owned, joined
         // operation even if the bounded command queue is already closed/full.
