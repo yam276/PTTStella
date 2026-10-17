@@ -2,6 +2,7 @@
 pub mod article_navigation;
 pub mod article_target;
 pub mod board_navigation;
+pub mod bookmarks;
 #[cfg(feature = "desktop")]
 pub mod connection;
 pub mod encoding;

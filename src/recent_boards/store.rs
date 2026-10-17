@@ -1,10 +1,6 @@
 //! Independent, versioned local history. Invalid data requires explicit recovery.
 use super::{MAX_BYTES, RecentBoards};
-use std::{
-    fs::File,
-    io::{ErrorKind, Read},
-    path::PathBuf,
-};
+use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct Store {
@@ -20,19 +16,10 @@ impl Store {
         Ok(Self::at(dirs.data_local_dir().join("recent-boards.json")))
     }
     fn read(&self) -> Result<Option<Vec<u8>>, String> {
-        let file = match File::open(&self.path) {
-            Ok(file) => file,
-            Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(e.to_string()),
-        };
-        let mut bytes = Vec::new();
-        file.take((MAX_BYTES + 1) as u64)
-            .read_to_end(&mut bytes)
-            .map_err(|e| e.to_string())?;
-        if bytes.len() > MAX_BYTES {
-            return Err(crate::msg!("recent-invalid"));
-        }
-        Ok(Some(bytes))
+        crate::storage::read_bounded(&self.path, MAX_BYTES).map_err(|error| match error {
+            crate::storage::ReadError::Io(error) => error.to_string(),
+            crate::storage::ReadError::TooLarge => crate::msg!("recent-invalid"),
+        })
     }
     pub fn load(&self) -> Result<RecentBoards, String> {
         self.read()?.map_or_else(
@@ -48,16 +35,12 @@ impl Store {
         if let Some(bytes) = &previous {
             RecentBoards::decode(bytes)?;
         }
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
-        let backup = self.path.with_extension("json.bak");
-        if clear {
-            crate::storage::replace(&backup, &RecentBoards::default().encode()?)?;
-        } else if let Some(previous) = previous {
-            crate::storage::replace(&backup, &previous)?;
-        }
-        crate::storage::replace(&self.path, &bytes)
+        let backup = if clear {
+            Some(RecentBoards::default().encode()?)
+        } else {
+            previous
+        };
+        crate::storage::replace_backed_up(&self.path, &bytes, backup.as_deref())
     }
 }
 
