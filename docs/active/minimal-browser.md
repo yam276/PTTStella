@@ -12,6 +12,12 @@
 
 ## 維護性重構
 
+2026-10-17 傳統 BBS 字型：依公開的 PTT 官方終端預設及 Windows 客戶端資源確認 MingLiU／細明體是傳統選項，並非所有客戶端有唯一預設。新增 `windows_classic`（MingLiU／MingLiU）與 `macos_bbs`（Songti TC／Songti TC）；既有 Windows 黑體組合、macOS 黑體／宋體與平台初始值保留。新組合均明確選取，前者缺少時顯示兩角色載入警告及官方取得／授權頁，後者只稱本機宋體替代，不宣稱等同細明體。沒有加入第三方字型檔。
+
+27 個 bin、45 個 desktop lib、23 個 JS、4 個 profile 案例、fmt／Clippy、core 八套 suite／兩個 replay 及 docs 通過。macOS 原生中文程序確認缺 MingLiU 的警告與官方 sink，改選 `macos_bbs` 後英數／中文皆為 Songti TC 並保存；同畫面英數區差 910 pixels、中文區差 2,025，方塊色彩區差零。新英文程序讀回相同 preset，960×576 PNG 與保存前逐像素一致；英文預覽缺 MingLiU 同樣提示，取消保持原檔。兩程序均 acknowledged、worker／listener 清理完成，本機 peer 未收到站端輸入。
+
+交付為 `dist/macos-fonts-delivery/PTTStella.app`（arm64、ad-hoc strict 驗章通過），去除各自簽章後與原生實測 executable 的 SHA-256 相同。報告／PNG 位於 `.local/verification/fonts`。本輪沒有安裝字型、實站登入或跨 OS 像素對照；完整 Mac desktop backend 仍 not_ready，Windows／Linux 字型列舉與顯示需各自實測。已依功能分兩筆提交，沒有 push 或公開發佈。
+
 2026-10-17 字型選擇：新增英數／中文的本機家族選單，font-kit 0.14.3 透過 Files blocking pool 列出名稱、排序去重並限制 4096／256 bytes；清單與載入分開，未知／缺字型不改寫設定。重新讀取保留草稿，晚到或關閉後清單忽略。所選字型有固定 enum 的官方下載／授權／安裝入口，僅 trusted 明確點擊才開 OS 瀏覽器；一般 probe 使用 sink，不下載、安裝或重新散布字型。未知自訂字型向原發行者查詢。
 
 同一 font owner 供預覽／畫面／IME／PNG；雙欄文字先用所選 CJK face，再用所選英數 face，最後 OS monospace，修正缺 CJK 時符號直接落到 OS 的路徑。27 個 bin、45 個 desktop lib、22 個 JS、fmt／Clippy、core 八套 suite／兩份 replay 與 docs 通過。macOS WKWebView 列出 322 個本機家族，可選 Times New Roman／Songti TC，取消後設定與 PNG 原封不動；明確保存後新英文程序讀回相同名稱與相同 960×576 pixels。缺字型警告、重新讀取與中英文官方入口均實際操作。刻意缺 CJK 時 Cascadia／Menlo 的英數區差 768 pixels、圓形符號區差 366，方塊色彩區差零，雙色背景保持藍／紫。兩程序均 Close acknowledged、所有 owner join，沒有站端 bytes。

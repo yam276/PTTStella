@@ -9,7 +9,9 @@
 | 組合 | 英數字型 | 中文字型 |
 | --- | --- | --- |
 | 內建跨平台 | Cascadia Mono | Noto Sans CJK TC |
-| Windows | Cascadia Mono | Microsoft JhengHei |
+| Windows 黑體 | Cascadia Mono | Microsoft JhengHei |
+| Windows 傳統 BBS | MingLiU | MingLiU |
+| macOS 傳統 BBS（宋體替代） | Songti TC | Songti TC |
 | macOS 黑體 | Menlo | PingFang TC |
 | Linux | DejaVu Sans Mono | Noto Sans Mono CJK TC |
 | macOS 宋體 | Menlo | Songti TC |
@@ -73,3 +75,11 @@ Mac 上明確選擇 Windows 組合，重啟與再次匯入仍保留該選擇；�
 所選預設字型提供官方來源：Cascadia、Noto、DejaVu 的下載頁，Microsoft JhengHei 的取得／授權頁，以及 macOS 字體簿的安裝說明。只有使用者點擊才交給 OS 瀏覽器；bridge 傳有限 enum，不接受自訂下載 URL。不下載、安裝、抽取或重新散布字型。未知自訂字型需向發行者查詢；安裝後可重新讀取，WebView 仍未發現時重啟 App。可取得檔案不等於能跨平台使用，應依發行者授權。
 
 同一 renderer 的雙欄文字依序使用所選 CJK face、所選英數 face、OS monospace；單欄使用所選英數 face、OS monospace。缺 CJK face 時，英數字型涵蓋的符號會先使用它；設定名稱與缺字型提示不改寫。字型版本、缺字與 OS 渲染仍可能不同，沒有跨 OS 像素一致的承諾。方塊／三角形仍由格線幾何繪製。
+
+## 傳統 BBS 外觀的依據
+
+2026-10-17 查閱公開來源：[PTT 官方終端的預設值](https://github.com/ptt/ptt-term/blob/90f87d5fe3ec56dbd748962ca22cfb8919c575ee/src/js/pref.js#L72) 以 MingLiu、SymMingLiu 開頭，後接 Noto Sans Mono CJK TC、PingFang TC 及 monospace；[PCMan 預設字型資源](https://github.com/pcman-bbs/pcman-windows/blob/47220e101f09f963f1f2c0216f4dec2e6df26b75/Resource/Common.rc#L823) 指定細明體，[初始化](https://github.com/pcman-bbs/pcman-windows/blob/47220e101f09f963f1f2c0216f4dec2e6df26b75/Lite/AppConfig.h#L292) 消費該資源。因此傳統相容選項選 MingLiU，英數也使用它；沒有把 Times New Roman 或 Windows Terminal 的 Cascadia 預設誤當成 PTT 唯一標準。這是原始碼設定研究，未聲稱已檢查網站當前部署或所有 Windows 客戶端。
+
+`windows_classic` 保留明確 MingLiU／MingLiU 意圖；Mac 不因缺字型而偷偷換成別的組合，也不匯出字型檔。缺少時提供 [官方取得與授權說明](https://learn.microsoft.com/en-us/typography/font-list/mingliu)，Windows 內附授權不因此取得跨機或跨平台散布權。未直接取用網站的 SymMingLiu 檔案。純 Mac 使用者可明確選 `macos_bbs`，使用本機 Songti TC 的英數與中文；宋體替代是外觀方向相近的選項，不宣稱筆形、勾號或像素等同 Windows 細明體。
+
+既有 `windows`、`macos`、`macos_serif`、平台初始值與已保存設定均保持原意；兩個新組合都需使用者明確選取。完整格線、左右顏色、自然比例與 PNG renderer 不改；字型版本／OS rasterizer 及缺字 fallback 仍是跨平台差異來源。

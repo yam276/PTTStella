@@ -266,7 +266,9 @@ pub fn app(props: AppProps) -> Element {
                         option { value: "platform", {pttstella::msg!("font-platform")} }
                         option { value: "custom", {pttstella::msg!("font-custom")} }
                         option { value: "bundled", {pttstella::msg!("font-bundled")} }
-                        option { value: "windows", "Windows" }
+                        option { value: "windows", {pttstella::msg!("font-windows-modern")} }
+                        option { value: "windows_classic", {pttstella::msg!("font-windows-classic")} }
+                        option { value: "macos_bbs", {pttstella::msg!("font-macos-bbs")} }
                         option { value: "macos", {pttstella::msg!("font-macos-sans")} }
                         option { value: "linux", "Linux" }
                         option { value: "macos_serif", {pttstella::msg!("font-macos-serif")} }

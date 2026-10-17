@@ -9,6 +9,12 @@ fn fixed_presets_and_custom_profiles_roundtrip_without_platform_inference() {
             preset: Preset::Windows,
         },
         Fonts::Preset {
+            preset: Preset::WindowsClassic,
+        },
+        Fonts::Preset {
+            preset: Preset::MacosBbs,
+        },
+        Fonts::Preset {
             preset: Preset::Macos,
         },
         Fonts::Preset {
@@ -106,4 +112,31 @@ fn portable_format_rejects_duplicate_unknown_and_invalid_fields_as_a_whole() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn traditional_bbs_presets_keep_latin_and_cjk_together_without_changing_existing_choices() {
+    // Independent portable input, including one saved on a different OS.
+    let bytes=br#"{"format":"PTTStella.DisplayProfile","version":1,"name":"Traditional BBS","display":{"fonts":{"kind":"preset","preset":"windows_classic"},"font_size":22,"baseline":20}}"#;
+    let portable = PortableProfile::decode(bytes).unwrap();
+    let display = portable.display.resolve().unwrap();
+    assert_eq!(
+        (&*display.ascii_font, &*display.cjk_font),
+        ("MingLiU", "MingLiU")
+    );
+    assert_eq!(display.font_size, 22.0);
+    let app = AppSettings {
+        display: portable.display,
+        ..Default::default()
+    };
+    assert_eq!(
+        AppSettings::decode(&serde_json::to_vec(&app).unwrap()).unwrap(),
+        app
+    );
+    let presets = DisplaySettings::presets();
+    assert_eq!(presets["macos_bbs"].ascii_font, "Songti TC");
+    assert_eq!(presets["macos_bbs"].cjk_font, "Songti TC");
+    assert_eq!(presets["macos_serif"].ascii_font, "Menlo");
+    assert_eq!(presets["windows"].ascii_font, "Cascadia Mono");
+    assert_eq!(presets["windows"].cjk_font, "Microsoft JhengHei");
 }

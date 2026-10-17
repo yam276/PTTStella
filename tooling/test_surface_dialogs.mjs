@@ -176,3 +176,19 @@ test("official source buttons match selected families and require an explicit tr
     const count=env.sent.length;env.fire("font-source-microsoft_jhenghei");assert.equal(env.sent.length,count);
     ui.destroy();env.fire("font-source-cascadia");assert.equal(env.sent.length,count);
 });
+
+
+test("traditional preset choices preserve family intent and current size until explicit save",async()=>{
+    const env=environment("surface-settings.js","createSettingsDialog"),ui=env.create(),data=openData();
+    data.presets={windows_classic:{ascii_font:"MingLiU",cjk_font:"MingLiU",font_size:20,baseline:20},macos_bbs:{ascii_font:"Songti TC",cjk_font:"Songti TC",font_size:20,baseline:20}};
+    await ui.open(data);env.node("font-size").value="22";env.node("font-baseline").value="19";
+    for(const [preset,family] of [["windows_classic","MingLiU"],["macos_bbs","Songti TC"]]){
+        env.node("font-preset").value=preset;env.fire("font-preset","change");env.tick();
+        assert.equal(env.node("font-ascii").value,family);assert.equal(env.node("font-cjk").value,family);
+        assert.equal(env.node("font-size").value,"22");assert.equal(env.node("font-baseline").value,"19");
+        const next=env.sent.at(-1);assert.equal(next.kind,"settings_preview");assert.equal(next.values.fonts.preset,preset);
+        await ui.preview({request:next.request,packet:{settings:{...display,ascii_font:family,cjk_font:family,font_size:22,baseline:19}}});
+    }
+    assert.equal(env.sent.some(e=>e.kind==="settings_save"),false);env.fire("font-save");
+    assert.equal(env.sent.at(-1).values.fonts.preset,"macos_bbs");ui.destroy();
+});

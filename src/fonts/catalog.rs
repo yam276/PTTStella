@@ -8,6 +8,7 @@ pub(crate) enum Source {
     Noto,
     Dejavu,
     MicrosoftJhenghei,
+    Mingliu,
     Apple,
 }
 
@@ -18,11 +19,12 @@ pub(crate) struct Help {
     pub label: String,
 }
 impl Source {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Cascadia,
         Self::Noto,
         Self::Dejavu,
         Self::MicrosoftJhenghei,
+        Self::Mingliu,
         Self::Apple,
     ];
     pub fn help(self) -> Help {
@@ -50,6 +52,12 @@ impl Source {
                 &["Microsoft JhengHei"],
                 "https://learn.microsoft.com/en-us/typography/font-list/microsoft-jhenghei",
                 pttstella::msg!("font-source-license", name = "Microsoft JhengHei"),
+            ),
+            Self::Mingliu => (
+                "mingliu",
+                &["MingLiU", "MingLiu", "PMingLiU", "細明體", "新細明體"],
+                "https://learn.microsoft.com/en-us/typography/font-list/mingliu",
+                pttstella::msg!("font-source-license", name = "MingLiU"),
             ),
             Self::Apple => (
                 "apple",
@@ -140,6 +148,7 @@ mod tests {
             "https://github.com/notofonts/noto-cjk/blob/main/Sans/README.md",
             "https://dejavu-fonts.github.io/Download.html",
             "https://learn.microsoft.com/en-us/typography/font-list/microsoft-jhenghei",
+            "https://learn.microsoft.com/en-us/typography/font-list/mingliu",
             "https://support.apple.com/guide/font-book/install-and-validate-fonts-fntbk1000/mac",
         ];
         for (source, url) in Source::ALL.into_iter().zip(urls) {
