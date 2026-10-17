@@ -54,6 +54,12 @@ core 八套 suite／兩份 replay（新增三個 navigation 與一個 Vim 案例
 
 目前 A 階段 App 為 `dist/macos-protocol-a3/PTTStella.app`；arm64／ad-hoc strict 驗章及與實測 App 去簽章後相同 executable 的核對保留 `.local/verification/protocol-a3`，中間測試 App 可清理而保留報告。B1 SGR 66 接續執行，2FA／完整網址／快速切板等仍依後續批次驗收。
 
+**B1 完成 Big5／UAO 的 SGR 66 與原生像素驗證**：Screen 新增單一 next-cell style，66 保存當下樣式、後續參數改一般樣式，下一個可列印 byte-cell 消耗暫存；ESC／C0／DEL 與 reset 撤銷。沒有修改 renderer、字形配對或 UTF-8 decoder。新增兩個核心案例以獨立預期覆蓋左右前景／背景、強度／反相、同一 SGR reset、單寬字、重複 66、控制碼中止、分片、行末、覆寫、捲動及新 session；bin 另核對兩組等價自製畫面的已知 cell。core 八套 suite／兩份 replay、48 個 desktop lib、29 個 bin、desktop 全 targets Clippy 通過。
+
+兩個 macOS WKWebView 程序使用相同 bundled 設定，分別讀舊式雙色與 SGR 66，實際點擊匯出完整 PNG；Pillow 獨立解碼確認 960×576 的全部像素差零，左右底色為藍／紫，亮色反相左底為亮紅、右底紫，皆符合獨立預期。兩者 ⌘W／⌘Q 退出碼 0、Close acknowledged，listener／Connection／credential／file owner join。一次背景視窗擷取暫缺文字，Raise 後恢復；匯出 PNG 一直正確，未以此宣稱背景合成器時序或防撕裂已驗證。新增覆寫測試起初誤用合法 Big5 尾碼 X 期待未映射，已改用無效尾碼空白並通過；原失敗 log 保留，既有 fixture／expected 未改。
+
+最新候選為 `dist/macos-protocol-b1/PTTStella.app`，報告與必要 PNG 基準保留 `.local/verification/protocol-b1`；本輪未連 PTT，未宣稱實站、UTF-8、Windows／Linux 或完整 Mac desktop backend 通過。B2 2FA 手動接續與 C／D 階段尚待執行。
+
 ### 詳細交付計畫
 
 2026-10-17 展開上述研究；本節是待執行計畫，不代表產品已支援。先交付相容性，再交付高頻桌面操作。每一批完成實作與適用驗證即提交，不累積到整個階段結束；不改寫既有歷史、不自動 push。以下為依賴順序與相對工作量，不是日曆工期承諾。
