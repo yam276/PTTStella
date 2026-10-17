@@ -11,6 +11,10 @@ use std::collections::BTreeMap;
 #[derive(Serialize)]
 #[serde(tag = "kind", content = "payload", rename_all = "snake_case")]
 pub(super) enum Packet<'a> {
+    StationMouseRejected {
+        lease: pttstella::mouse::input::Lease,
+        message: String,
+    },
     BookmarksOpen {
         request: u64,
         data: super::bookmarks::Snapshot,

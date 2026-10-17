@@ -12,6 +12,7 @@ use serde::Serialize;
 
 #[derive(Clone, Serialize)]
 pub(super) struct Paint {
+    pub(super) mouse: pttstella::mouse::input::Snapshot,
     pub(super) output_pending: bool,
     pub(super) presentation: u64,
     pub(super) masked_pushes: usize,
@@ -75,6 +76,7 @@ pub(super) fn paint(
         })
         .collect();
     Paint {
+        mouse: view.mouse,
         output_pending: view.output_pending,
         presentation: filters.version(),
         masked_pushes: projection.matches.len(),
@@ -107,6 +109,7 @@ pub(super) fn paint(
 
 pub(super) fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint {
     Paint {
+        mouse: pttstella::mouse::input::Snapshot::default(),
         output_pending: false,
         presentation: 0,
         masked_pushes: 0,

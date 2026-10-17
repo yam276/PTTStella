@@ -229,3 +229,65 @@ fn selection_clear_is_scoped_and_does_not_cancel_a_full_page_export() {
     state.clear_selection(identity, 12);
     assert!(full.check(&view).is_ok());
 }
+
+#[test]
+fn mouse_press_consumes_the_acknowledged_mode_but_owned_release_can_cross_paints() {
+    use pttstella::mouse::{
+        Action, Button, Modifiers, Report,
+        input::{Event, Lease, Route},
+    };
+    let mut view = view();
+    let mut modes = pttstella::screen::Screen::new(80, 24).unwrap();
+    modes.feed(b"\x1b[?1000;1006h");
+    view.mouse.modes = modes.mouse_modes();
+    view.mouse.route = Route::Station;
+    view.mouse.ready = true;
+    let event = Event {
+        lease: Lease {
+            stamp: view.stamp(),
+            mode_epoch: view.mouse.modes.epoch(),
+            policy_epoch: 0,
+            transaction: 1,
+        },
+        report: Report {
+            col: 4,
+            row: 3,
+            button: Button::Left,
+            action: Action::Press,
+            modifiers: Modifiers::default(),
+        },
+    };
+    let mut state = SurfaceState::new(filters::Rules::default());
+    assert!(!state.mouse_shown(&event));
+    displayed(&mut state, &view);
+    assert!(state.mouse_shown(&event));
+    let mut invalid = event;
+    invalid.lease.mode_epoch += 1;
+    assert!(!state.mouse_shown(&invalid));
+    invalid = event;
+    invalid.lease.policy_epoch += 1;
+    assert!(!state.mouse_shown(&invalid));
+    invalid = event;
+    invalid.lease.stamp.input_epoch += 1;
+    assert!(!state.mouse_shown(&invalid));
+    let mut next = view.clone();
+    next.input_epoch += 1;
+    next.frame.revision += 1;
+    state.update(&next);
+    displayed(&mut state, &next);
+    assert!(!state.mouse_shown(&event));
+    let release = Event {
+        report: Report {
+            action: Action::Release,
+            ..event.report
+        },
+        ..event
+    };
+    assert!(state.mouse_shown(&release)); // The Session still verifies this original lease.
+    next.mouse.route = Route::Blocked;
+    state.update(&next);
+    displayed(&mut state, &next);
+    let mut fresh = event;
+    fresh.lease.stamp = next.stamp();
+    assert!(!state.mouse_shown(&fresh));
+}

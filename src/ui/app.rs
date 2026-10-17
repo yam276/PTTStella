@@ -174,6 +174,8 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "vim-once", hidden: true, {pttstella::msg!("vim-once-button")} }
                 output { id: "vim-status", role: "status" }
                   button { id: "keep-alive", r#type: "button", "aria-pressed": "true", {pttstella::msg!("keepalive-on")} }
+                button { id: "station-mouse", r#type: "button", "aria-pressed": "true", title: pttstella::msg!("station-mouse-help"), {pttstella::msg!("station-mouse-on")} }
+                output { id: "station-mouse-status", role: "status" }
                 button { id: "login-open", disabled: !cfg!(target_os="macos"), {pttstella::msg!("login")} }
                 button { id: "login-stop", hidden: true, {pttstella::msg!("login-cancel-attempt")} }
                 button { id: "destination-open", {pttstella::msg!("destination-open")} }
