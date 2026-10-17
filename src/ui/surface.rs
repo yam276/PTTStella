@@ -2,7 +2,7 @@
 use base64::Engine;
 use dioxus::prelude::*;
 use pttstella::{
-    connection::{CloseOutcome, Connection, Phase},
+    connection::{Connection, Phase},
     input::{self, PreparedPaste},
     login::vault::{Action as LoginAction, Job as LoginJob, Outcome as LoginOutcome, Vault},
     media::{self, hover::Lease as HoverLease, preview::Presentation},
@@ -58,7 +58,7 @@ pub(super) async fn surface(
     options: Options,
 ) -> Result<(), String> {
     let mut resources = Resources::default();
-    let reports = run(
+    let mut reports = run(
         connection.clone(),
         closing,
         probe.clone(),
@@ -87,8 +87,23 @@ pub(super) async fn surface(
         )
         .map_err(|e| e.to_string())?;
     }
-    let disconnect = match cleanup {
-        Ok(outcome) => outcome,
+    // Persist collected probe observations even when cleanup or its strict peer
+    // fails. Such a report must never retain a passing status or claim joins.
+    if let Ok(reports) = &mut reports {
+        for (path, report) in reports {
+            super::probe::finish_report(report, cleanup.as_ref().ok().copied());
+            report["file_worker_joined"] =
+                cleanup.is_ok().then_some(!resources.files.busy()).into();
+            report["media_pending"] = resources.media.pending().into();
+            report["media_preview_open"] = resources.media.active().is_some().into();
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            std::fs::write(path, report.to_string()).map_err(|e| e.to_string())?;
+        }
+    }
+    match cleanup {
+        Ok(_) => {}
         Err(cleanup) => {
             return Err(match reports {
                 Ok(_) => cleanup,
@@ -99,23 +114,8 @@ pub(super) async fn surface(
                 ),
             });
         }
-    };
-    for (path, mut report) in reports? {
-        report["listeners_released"] = true.into();
-        report["connection_worker_joined"] = true.into();
-        report["credential_worker_joined"] = true.into();
-        report["file_worker_joined"] = (!resources.files.busy()).into();
-        report["media_pending"] = resources.media.pending().into();
-        report["media_preview_open"] = resources.media.active().is_some().into();
-        report["disconnect"] = serde_json::to_value(disconnect).map_err(|e| e.to_string())?;
-        if disconnect != CloseOutcome::Acknowledged {
-            report["status"] = "failed".into();
-        }
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
-        std::fs::write(path, report.to_string()).map_err(|e| e.to_string())?;
     }
+    reports?;
     let window = dioxus::desktop::window();
     window.set_close_behavior(dioxus::desktop::WindowCloseBehaviour::WindowCloses);
     window.close();

@@ -4,7 +4,7 @@
 
 ## 目標
 
-目前增量：A／B 的明確子集與 C1／C2／C3 已交付並依下文區分平台與實站邊界；C1 指定 macOS 原生互動已補驗。D 點擊路徑及限定 macOS 原生案例通過；D2 移動／wheel 已接線，新增無按鈕移動及垂直 wheel 的兩個 macOS 原生案例通過，held drag、Shift 拖曳／Ctrl＋滾輪及其餘原生邊界仍接續。交付 App 仍為 `dist/macos-mouse-final/PTTStella.app`，尚未以 D2 測試 package 取代；保留前版 `dist/macos-bookmarks/PTTStella.app`。既有交付已重跑 46 筆 Vim 與 C1 完整網址，D2 後續候選仍須各自回歸；其餘平台／手勢邊界分開記錄，不混稱完整 desktop gate 通過。
+目前增量：A／B 的明確子集與 C1／C2／C3 已交付並依下文區分平台與實站邊界；C1 指定 macOS 原生互動已補驗。D 點擊路徑及限定 macOS 原生案例通過；D2 移動／wheel 已接線，無按鈕移動與垂直 wheel 在最新測試 package 再次通過。使用者已確認實體 Shift 拖曳／複製及 Control＋滾輪縮放的可見結果，同次 peer 的零多送仍未證明；held drag 與其餘原生邊界接續。交付 App 仍為 `dist/macos-mouse-final/PTTStella.app`，尚未以 D2 測試 package 取代；保留前版 `dist/macos-bookmarks/PTTStella.app`。D2 最新測試 package 已重跑 46 筆 Vim 與 C1 完整網址；其餘平台／手勢邊界分開記錄，不混稱完整 desktop gate 通過。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
@@ -240,6 +240,14 @@ macOS WKWebView 的 `mouse_motion` 完成 col 4／row 4 左鍵點擊／釋放，
 **D2 持有往返探針**：新增獨立 `mouse_round_trip`，要求 col 4→10→4、途中一般重繪及起點釋放，沿用既有 peer／畫面 owner 與 16 筆上限。raw loopback 正向與缺少返回 motion 的負向案例通過；這只驗探針，不代替原生拖曳。非預期 binary 診斷改為長度／Escape 分類，合成敏感文字與超量 binary 的測試確認內容不外露。125 個 desktop lib、42 個 bin、core／兩份 replay、Clippy 通過；後續 pointercancel 修正另通過 60 個 JS。
 
 macOS 的兩次往返嘗試均未完成：第一次觀察 AX 回來時已超過五秒持有；第二次移除中途 AX 查詢，工具仍在持有完成 5513ms 後才完成去程 5846ms／回程 6156ms。嚴格 peer 拒絕未經必要 motion 的起點釋放，runner 均 failed、cleanup 未確認，exit 0 不算通過；held motion 在此 backend 維持 not_ready。第二次關窗後的 AX 查詢意外重開無 probe 參數的副本，已關閉並確認無剩餘程序，未登入或送帳密。保留 `.local/verification/mouse-d-round-trip` 的各次失敗、時序與 package；不改 expected、不以本機合成事件冒充實體持有，也未取代交付 App。
+
+**實體修飾鍵補驗結果**：使用者在上述 `package-2` 的獨立本機 `mouse` 畫面，以 Shift 拖曳文章 121→122、⌘C，回覆兩列完整中文與英文內容；另確認實體 Control＋滾輪可縮放。接手時 AX 顯示選取第 5–6 行與 125%，與回覆相符。但 peer 已因不符合第一筆 anchor press 的輸入失敗，非預期內容／來源未收集，不能據此宣稱零多送或完整 mouse probe 通過；也不能將原因歸咎於使用者手勢或產品。PNG／人工結果／程序退出與 failed cleanup 各自保留在 `native-manual-physical`，該次只證明可見選字／複製／縮放結果。
+
+`package-2` 另以原生 drag 驗新版按鈕檢查：anchor 通過，但關閉時 peer 仍等待必要 motion，runner failed／cleanup 未確認；不重試同一未知步驟或放寬預期。這暴露既有 probe 在 cleanup／peer 錯誤時丟掉已收集互動報告的診斷缺口。後續改為保留報告、強制 status failed、disconnect 與未證實的 join 欄位 null，成功的 acknowledged 路徑維持原判定，互動失敗也不被成功 cleanup 改成 passed。新增兩個負向 metadata 案例，44 個 bin 與 desktop all-targets Clippy 通過；原生報告保存及成功路徑回歸接續，未改正常輸入機制。
+
+**失敗報告保存與共同回歸完成**：`package-3` 刻意只點擊、不拖曳，peer 拒絕缺少必要 motion；surface report 仍保存兩筆左鍵邊緣、零 sample／導覽／取消及 full PNG，同時 status failed、cleanup false、disconnect／join 為 null。runner 維持 failed，負向檢查才以這些獨立預期判定報告機制正確。相同 executable 的無按鈕移動、上下 wheel、46 筆 Vim 與 C1 完整網址四個原生案例均 passed、Close acknowledged、全部 owner join。C1 兩列 open／copy 為 `[8,9]`，原生剪貼簿貼回均為完整 URL，跨行拖曳成立、兩次解碼且 HTTP 只下載一次；Vim 最終 Normal、無 prefix／pending。
+
+獨立 Pillow 解碼確認移動／wheel／負向／人工選取縮放的完整行 PNG 與同一 960×576 基準均零差異，C1 PNG 與既有 C1 基準亦零差異。六個 App 的嚴格 ad-hoc 驗章及去簽章 executable SHA-256 相同，為 `43a8be3a5ef7d4d460c94d1621e72c199d505561f406cdfd0f560a66914a232f`；證據保留 `.local/verification/mouse-d-failure-reports` 與 `mouse-d-final-regression`。比對命令曾因共用磁碟預留總額被 guard 拒絕；確認一個持有程序結束後，以相同 isolated／4 GiB 命令重跑通過，未清他人快取或改政策。這些結果不補成 held motion、人工那次零多送、其他 OS、所有 DPR／IME／睡眠或實站通過，交付 App 尚未取代。
 
 
 
