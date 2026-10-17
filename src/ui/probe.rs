@@ -5,6 +5,23 @@ use pttstella::{encoding, settings::AppSettings};
 use serde_json::Value;
 use std::path::Path;
 
+/// Cleanup errors preserve observations without asserting unconfirmed joins.
+pub(super) fn finish_report(
+    report: &mut Value,
+    disconnect: Option<pttstella::connection::CloseOutcome>,
+) {
+    use pttstella::connection::CloseOutcome;
+    let joined = disconnect.map(|_| true);
+    report["cleanup_completed"] = disconnect.is_some().into();
+    report["listeners_released"] = joined.into();
+    report["connection_worker_joined"] = joined.into();
+    report["credential_worker_joined"] = joined.into();
+    report["disconnect"] = serde_json::json!(disconnect);
+    if disconnect != Some(CloseOutcome::Acknowledged) {
+        report["status"] = "failed".into();
+    }
+}
+
 pub(super) fn mouse_case(case: Option<&str>) -> bool {
     matches!(
         case,
@@ -476,6 +493,43 @@ pub(super) fn sgr66_sample(modern: bool) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod sample_tests {
     use super::*;
+    #[test]
+    fn failed_cleanup_keeps_observations_and_cannot_claim_a_pass_or_join() {
+        let mut report = serde_json::json!({"status":"passed","mouse":{"reports":[["left","press"]],"cancels":1},"listeners_released":true});
+        finish_report(&mut report, None);
+        assert_eq!(
+            report,
+            serde_json::json!({
+                "status":"failed","mouse":{"reports":[["left","press"]],"cancels":1},
+                "cleanup_completed":false,"listeners_released":null,
+                "connection_worker_joined":null,"credential_worker_joined":null,"disconnect":null
+            })
+        );
+    }
+    #[test]
+    fn acknowledged_cleanup_preserves_interaction_failure_and_other_outcomes_fail() {
+        use pttstella::connection::CloseOutcome;
+        let mut report = serde_json::json!({"status":"failed","case":"mouse_drag"});
+        finish_report(&mut report, Some(CloseOutcome::Acknowledged));
+        assert_eq!(
+            report,
+            serde_json::json!({
+                "status":"failed","case":"mouse_drag","cleanup_completed":true,
+                "listeners_released":true,"connection_worker_joined":true,
+                "credential_worker_joined":true,"disconnect":"acknowledged"
+            })
+        );
+        for outcome in [
+            CloseOutcome::NoConnection,
+            CloseOutcome::PeerClosedWithoutReply,
+            CloseOutcome::Unconfirmed,
+        ] {
+            let mut report = serde_json::json!({"status":"passed"});
+            finish_report(&mut report, Some(outcome));
+            assert_eq!(report["status"], "failed");
+            assert_eq!(report["cleanup_completed"], true);
+        }
+    }
     #[test]
     fn osc8_sample_has_independent_fragment_ranges_and_media_destinations() {
         let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
