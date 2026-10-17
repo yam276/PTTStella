@@ -84,6 +84,8 @@ macOS 本機 `.app` 的建立入口為 `python3 tooling/bundle_macos.py`，細�
 
 斷線變更另以 production Connection 驗證正常 Close 碼、延遲回覆／TCP FIN、未回覆即結束連線與無回覆時的期限／未確認狀態。原生視窗分別用 ⌘W、⌘Q 檢查停止輸入、關閉握手及 renderer／worker 清理；不能只以程序消失或 Close 已排入佇列當成站端回覆。
 
+OSC 8 變更另跑 `node --test tooling/test_surface_links.mjs`；它以事件／狀態 doubles 直接執行生產 handler，核對任一片段選取索引、組字／非連結拒絕及一次 released hit 的版本檢查，不冒充原生拖曳。`--probe-surface OUTPUT_DIRECTORY osc8 --media-origin http://127.0.0.1:PORT` 使用 owned loopback 與自製 HTTP 圖像。原生依序點第 9／10 列各一次、右鍵並複製各一次、跨兩列拖曳、開啟第 15／16 列圖片並分別關閉、匯出 PNG，再正常關窗。嚴格報告要求兩列開啟／複製、跨列 range、兩次圖片解碼及 PNG；缺輸入 backend 為 not_ready，PNG 或正常退出不能代替互動通過。
+
 UI 准入與生命週期變更另跑 `cargo test --locked --features desktop --bin pttstella` 及 `node --test tooling/test_surface_lifetime.mjs`（Node 18+）。前者檢查單筆命令等待／取消、立即入列與 busy 不執行 factory、事件來源與 session、組字例外及超時保留清理；desktop lib 另用實際 WebSocket 比對 browse 在原始 Enter 之前入列，尚未 poll 回覆也不能改變順序。後者以 fake channel 驗證生產 JS stop owner 的正常接收、資料通道失敗、停止後不新增 receive，以及兩萬個封包不累積 unresolved stop Promise 的 reaction，沒有操作瀏覽器。
 
 UI owner／封包變更再跑 `node --test tooling/test_surface_dialogs.mjs`。使用明確 DOM／clock doubles 核對晚到字型結果、關閉／revoke、舊預覽、登入草稿清除、名單 busy／失敗恢復及 router 拒絕未知／legacy envelope；這些不是原生 trusted 操作證據。[ui-packets](tests/fixtures/ui-packets.json) 是獨立編寫的 synthetic wire expected，Rust bin 比對生產 Packet 的 serde 結果，JS 測試核對分派，沒有用序列化往返當 expected。Paint 與內嵌預覽另檢查結構，完整呈現仍由原生 PNG／畫面驗收。

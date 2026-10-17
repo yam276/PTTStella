@@ -344,8 +344,7 @@ function selectLink(e) {
     const index=linkAt(cellAt(e,false));
     if(index<0||composing) return;
     e.preventDefault();cancelDrag();focus();
-    const link=latest.links[index];
-    requestSelection({mode:"range",anchor:{col:link.start,row:link.row},focus:{col:link.end-1,row:link.row}});
+    requestSelection({mode:"link",index});
 }
 function activate() { if(!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); }
 function paste(e) {
@@ -660,6 +659,7 @@ function runSurfaceProbe(mode){
             else if(mode==="files")surfaceNote.textContent="原生選檔探針（本機合成資料）：可匯出 PNG 或匯入／匯出設定檔";
             else if(mode==="files_slow")surfaceNote.textContent="慢檔案探針：等待本機 runner 釋放；可開啟設定或關閉視窗";
             else if(mode==="fonts")surfaceNote.textContent="Font selection probe: local synthetic data and external-page sink";
+            else if(mode==="osc8")surfaceNote.textContent="OSC 8 probe: both wrapped fragments share a complete destination; select/copy, drag and open local media";
             else if(mode==="login_2fa")surfaceNote.textContent="Verification probe: explicit synthetic login, six digits, then eight-character recovery; Esc returns to Vim";
             else if(mode==="sgr66"||mode==="sgr66_legacy")surfaceNote.textContent="Dual-color probe: export PNG, then close; local synthetic data only";
             else if(mode==="dialogs")surfaceNote.textContent="對話框與媒體封包探針（僅本機合成資料）";

@@ -7,6 +7,11 @@ use std::path::Path;
 
 #[derive(Default)]
 pub(super) struct Checks {
+    pub(super) osc8_open_rows: Vec<usize>,
+    pub(super) osc8_copy_rows: Vec<usize>,
+    pub(super) osc8_selected: Option<(u64, u64, u64, usize)>,
+    pub(super) osc8_dragged: bool,
+    pub(super) osc8_media_decoded: usize,
     pub(super) verification_required: bool,
     pub(super) verification_rejected: bool,
     pub(super) verification_browsing: bool,
@@ -252,6 +257,41 @@ pub(super) fn preview(probe: bool, media_origin: Option<&str>) -> Result<Vec<u8>
     Ok(bytes)
 }
 
+pub(super) const OSC8_URL: &str = "https://example.com/pttstella?complete=one-two&tail=both";
+
+pub(super) fn surface_sample(
+    case: Option<&str>,
+    probe: bool,
+    media_origin: Option<&str>,
+) -> Result<Vec<u8>, String> {
+    match case {
+        Some("sgr66") => sgr66_sample(true),
+        Some("sgr66_legacy") => sgr66_sample(false),
+        Some("osc8") => osc8_sample(media_origin),
+        _ => preview(probe, media_origin),
+    }
+}
+
+pub(super) fn osc8_sample(media_origin: Option<&str>) -> Result<Vec<u8>, String> {
+    let mut bytes = encoding::encode("\x1b[2J\x1b[HOSC 8 synthetic wrapped destinations\x1b[4;4HClick each fragment; right-click and copy the complete destination.").map_err(|e|e.to_string())?;
+    for (row, label) in [
+        (9, "https://example.com/pttstella?complete="),
+        (10, "one-two&tail=both"),
+    ] {
+        bytes.extend_from_slice(format!("\x1b[{row};4H\x1b[36m\x1b]8;id=wrapped;{OSC8_URL}\x1b\\{label}\x1b]8;;\x1b\\\x1b[0m").as_bytes());
+    }
+    if let Some(origin) = media_origin {
+        for (row, label) in [
+            (15, "Local image: first fragment"),
+            (16, "image: second fragment"),
+        ] {
+            bytes.extend_from_slice(format!("\x1b[{row};4H\x1b[32m\x1b]8;;{origin}/colours.png?complete=osc8\x07{label}\x1b]8;;\x07\x1b[0m").as_bytes());
+        }
+    }
+    bytes.extend_from_slice(b"\x1b[24;80H\x1b[?25l");
+    Ok(bytes)
+}
+
 /// Equivalent self-authored streams for separate native pixel captures.
 pub(super) fn sgr66_sample(modern: bool) -> Result<Vec<u8>, String> {
     let mut bytes = preview(true, None)?;
@@ -283,6 +323,28 @@ pub(super) fn sgr66_sample(modern: bool) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod sample_tests {
     use super::*;
+    #[test]
+    fn osc8_sample_has_independent_fragment_ranges_and_media_destinations() {
+        let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
+        screen.feed(&surface_sample(Some("osc8"), true, Some("http://127.0.0.1:9876")).unwrap());
+        let links = pttstella::links::detect(&screen.frame());
+        assert_eq!(
+            links
+                .iter()
+                .map(|link| (link.row, link.start, link.end, link.url.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                (8, 3, 42, OSC8_URL),
+                (9, 3, 20, OSC8_URL),
+                (14, 3, 30, "http://127.0.0.1:9876/colours.png?complete=osc8"),
+                (15, 3, 25, "http://127.0.0.1:9876/colours.png?complete=osc8"),
+            ]
+        );
+        assert!(links[2..].iter().all(|link| {
+            pttstella::media::classify(&link.url).unwrap().unwrap().kind
+                == pttstella::media::Kind::Image
+        }));
+    }
     #[test]
     fn sgr66_native_samples_have_independent_cell_expectations_and_equal_glyphs() {
         let mut frames = Vec::new();
