@@ -2,13 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-import vm from "node:vm";
-const read=path=>readFileSync(new URL("../"+path,import.meta.url),"utf8");
-const exports={};
-vm.runInNewContext(read("assets/vendor/fluent/index.js"),{exports,module:{exports},Intl});
-const create=vm.runInNewContext(read("assets/i18n.js")+"\ncreateSurfaceI18n");
-const resources=Object.fromEntries(["zh-TW","en-US"].map(language=>[language,read(`locales/${language}/pttstella.ftl`)]));
-export const translator=language=>create({kind:"localization",payload:{language,resource:resources[language],fallback:resources["zh-TW"]}},exports);
+import {translator,create,runtime as exports} from "./i18n_test_support.mjs";
 test("official Fluent formats independent Chinese and English catalogs and plurals",()=>{
     const zh=translator("zh-TW"),en=translator("en-US");
     assert.equal(zh("connect"),"連線");assert.equal(en("connect"),"Connect");
@@ -27,4 +21,11 @@ test("bootstrap, fallback and formatting errors have explicit boundaries",()=>{
     assert.equal(tr("fallback"),"後備");
     assert.throws(()=>tr("missing"),/Missing Fluent/);
     assert.throws(()=>translator("en-US")("export-lines-hint",{start:1}),/formatting failed/);
+});
+
+test("the independent Rust/JS bootstrap fixture retains the tagged envelope",()=>{
+    const packet=JSON.parse(readFileSync(new URL("../tests/fixtures/localization.json",import.meta.url),"utf8"));
+    assert.equal(create(packet,exports)("connect"),"Connect");
+    packet.payload.language="zh-TW";packet.payload.resource=packet.payload.fallback;
+    assert.equal(create(packet,exports)("connect"),"連線");
 });

@@ -36,7 +36,7 @@ impl ExportLease {
             || (view.generation, view.frame.revision)
                 != (self.identity.generation, self.identity.revision)
         {
-            Err("畫面、規則或選取已變更；PNG 未儲存，請重新匯出".into())
+            Err(pttstella::msg!("export-stale"))
         } else {
             Ok(())
         }
@@ -123,7 +123,7 @@ impl SurfaceState {
     }
     pub(super) fn acknowledge(&mut self, identity: Identity) -> Result<(), String> {
         if self.in_flight.as_ref().map(Identity::of) != Some(identity) {
-            return Err("畫面回報未知版本".into());
+            return Err(pttstella::msg!("paint-unknown-version"));
         }
         self.displayed = self.in_flight.take();
         Ok(())
@@ -251,9 +251,9 @@ impl SurfaceState {
     ) -> Result<Range<usize>, String> {
         let shown = self
             .current(identity, view)
-            .ok_or("畫面已更新，請重新選取後匯出")?;
+            .ok_or(pttstella::msg!("export-screen-changed"))?;
         if (shown.frame.cols, shown.frame.rows) != (80, export::ROWS) {
-            return Err("此畫面尺寸不支援 PNG 匯出".into());
+            return Err(pttstella::msg!("export-grid-unsupported"));
         }
         match request {
             None => Ok(0..export::ROWS),
@@ -266,7 +266,7 @@ impl SurfaceState {
                         && s.input_epoch == view.input_epoch
                 })
                 .map(|s| s.rows.clone())
-                .ok_or_else(|| "選取已變更，請重新選取後匯出".into()),
+                .ok_or_else(|| pttstella::msg!("export-selection-changed")),
         }
     }
     pub(super) fn clear_selection(&mut self, identity: Identity, request: u64) {

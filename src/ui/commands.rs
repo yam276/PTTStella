@@ -34,7 +34,7 @@ impl Pending {
         begin: impl FnOnce() -> Result<F, String>,
     ) -> Result<(), String> {
         if self.busy() {
-            return Err("正在等待上一個操作的結果".into());
+            return Err(pttstella::msg!("command-busy"));
         }
         // Admit and enqueue synchronously, before a later native input event
         // can overtake this command. Only the result wait is deferred.

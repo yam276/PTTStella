@@ -1,3 +1,6 @@
+const localization=await dioxus.recv();
+const tr=createSurfaceI18n(localization,fluent);
+document.documentElement.lang=localization.payload.language;
 const canvas=document.getElementById("screen"), keyboard=document.getElementById("keyboard");
 const surface=document.getElementById("surface"), viewport=document.querySelector(".workspace");
 const chrome=document.getElementById("chrome"), toolbar=chrome.querySelector("header");
@@ -37,12 +40,12 @@ function policy(action,e,code="") {send({kind:"keyboard_state",action,code,gener
 function toggleVim(e){policy("toggle",e);restoreEditingFocus();}
 function armNative(e){policy("once",e);restoreEditingFocus();}
 function keyup(e){if(!e.metaKey)policy("release",e,e.code);}
-function receiveKeyboard(state){keyboardState=state;vimToggle.textContent=state.enabled?"Vim：開":"Vim：關";
+function receiveKeyboard(state){keyboardState=state;vimToggle.textContent=state.enabled?tr("vim-on"):tr("vim-off");
     keyboard.readOnly=state.enabled&&!["input","once"].includes(state.mode);
     vimToggle.setAttribute("aria-pressed",String(state.enabled));vimOnce.hidden=!state.enabled||state.mode==="input";
     vimOnce.setAttribute("aria-pressed",String(state.mode==="once"));
-    const reason={unsupported_grid:"不支援的格線",incomplete:"畫面接收未完成",unmapped:"畫面有未映射字格",unrecognized:"未辨識的選單、列表或閱讀格式",invalid_cursor:"列表游標未確認",board_header:"看板標頭未確認",board_rows:"看板項目欄位未確認"}[state.suspended_reason]||"畫面未確認";
-    vimStatus.textContent=!state.enabled?"":({normal:"VIM NORMAL",input:"PTT INPUT",once:"原生一次",suspended:"VIM 暫停 · "+reason+" · i 原始輸入"}[state.mode])+" "+state.prefix;
+    const reason={unsupported_grid:tr("reason-grid"),incomplete:tr("reason-incomplete"),unmapped:tr("reason-unmapped"),unrecognized:tr("reason-unrecognized"),invalid_cursor:tr("reason-cursor"),board_header:tr("reason-board-header"),board_rows:tr("reason-board-rows")}[state.suspended_reason]||tr("reason-unknown");
+    vimStatus.textContent=!state.enabled?"":({normal:"VIM NORMAL",input:"PTT INPUT",once:tr("vim-once"),suspended:tr("vim-suspended",{reason})}[state.mode])+" "+state.prefix;
     surface.dataset.keyboardMode=state.mode;surface.dataset.vim=String(state.enabled);refreshKeepAlive();}
 const navigationMarker=document.getElementById("navigation-marker"),browseControls=document.getElementById("browse-controls");
 const browseBack=document.getElementById("browse-back"),browsePrevious=document.getElementById("browse-previous"),browseNext=document.getElementById("browse-next");
@@ -62,7 +65,7 @@ let loadedFonts=null;
 async function loadFonts(settings) {
     const key=JSON.stringify([settings.ascii_font,settings.cjk_font,settings.font_size]);
     if(loadedFonts?.key===key&&!loadedFonts.warning) return "";
-    const missing=await Promise.all([["英數",settings.ascii_font],["中文",settings.cjk_font]].map(async([role,name])=>{
+    const missing=await Promise.all([[tr("font-role-ascii"),settings.ascii_font],[tr("font-role-cjk"),settings.cjk_font]].map(async([role,name])=>{
         const bundled=bundledFonts.get(name);
         try {
             if(bundled) {
@@ -79,18 +82,18 @@ async function loadFonts(settings) {
                 await new FontFace("PTTStella font check","local("+JSON.stringify(name)+")").load();
             }
             return "";
-        } catch {return role+"字型「"+name+"」"+(bundled?"內建載入失敗":"無法由本機載入");}
+        } catch {return tr(bundled?"font-face-bundled-failed":"font-face-local-failed",{role,name});}
     }));
     await Promise.all([document.fonts.load(fontDescription(settings),"M"),document.fonts.load(fontDescription(settings,true),"中")]);
     await document.fonts.ready;
     const warning=missing.filter(Boolean).join("；");
-    loadedFonts={key,warning:warning?warning+"；目前使用系統替代字型。可改選「內建跨平台」，或安裝所選字型。":""};
+    loadedFonts={key,warning:warning?tr("font-fallback-warning",{warning}):""};
     return loadedFonts.warning;
 }
 function fontLoadNote(settings,warning) {
     if(warning)return warning;
     const names=[...new Set([settings.ascii_font,settings.cjk_font])].filter(name=>bundledFonts.has(name));
-    return names.length?"已載入 App 內建字型："+names.join("、")+"；無須另行安裝。":"本機字型已載入；請以預覽檢查字形。";
+    return names.length?tr("font-bundled-loaded",{names:names.join(", ")}):tr("font-local-loaded");
 }
 let generation=0, revision=-1, composing=false, composition=null, beforeEdit=null, sent=0;
 let inputKey=false;
@@ -313,13 +316,13 @@ function drawSelection() {
 function copy(e) {
     if(!hasSelection()||document.activeElement!==keyboard) return;
     e.preventDefault();
-    if(!selectionCache||filterUi.blocked()||selectionCache.presentation!==latest?.presentation) {surfaceNote.textContent="選取尚未準備好，請再複製";return;}
-    if(!e.clipboardData) {surfaceNote.textContent="此環境未提供剪貼簿事件資料";return;}
+    if(!selectionCache||filterUi.blocked()||selectionCache.presentation!==latest?.presentation) {surfaceNote.textContent=tr("copy-not-ready");return;}
+    if(!e.clipboardData) {surfaceNote.textContent=tr("copy-event-unavailable");return;}
     try {
         e.clipboardData.setData("text/plain",selectionCache.value.text);
         const {presentation,generation,revision,request}=selectionCache;
         send({kind:"copied",presentation,generation,revision,request,trusted:e.isTrusted});
-    } catch(_) { surfaceNote.textContent="無法寫入剪貼簿，請重試"; }
+    } catch(_) { surfaceNote.textContent=tr("copy-failed"); }
 }
 function doubleclick(e) {
     if(clickSequenceAction||blocked()) return;
@@ -342,7 +345,7 @@ function setHover(point,redraw=true,preview=true) {
     const changed=index!==hoveredLink;hoveredLink=index;
     hoveredArticle=hit?.kind==="article"?latest.navigation.articles.find(a=>a.row===hit.row):null;
     canvas.style.cursor=hit?"pointer":"default";
-    canvas.title=index>=0?latest.links[index].url+"\n點擊開啟；右鍵選取後可複製":hoveredArticle?"點擊編號開啟文章；拖曳可選字":"";
+    canvas.title=index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredArticle?tr("article-open-hint"):"";
     if(preview)previewHover(index);
     if(changed&&redraw&&latest) draw(latest);else drawNavigationMarker();
 }
@@ -362,8 +365,8 @@ function refreshNavigation() {
     browseBack.disabled=!ready||context?.kind!=="article_reading";
     browsePrevious.disabled=browseBack.disabled||context.first_line===1;
     browseNext.disabled=browseBack.disabled||context.percent===100;
-    browseHint.textContent=!latest?.connected?"":latest.input_pending||navigationLocked||navigationRequest?"等待畫面更新":
-        context?.kind==="article_list"?"點編號開啟 · 拖曳選字":context?.kind==="article_reading"?"滾輪翻頁 · Ctrl＋滾輪縮放":"";
+    browseHint.textContent=!latest?.connected?"":latest.input_pending||navigationLocked||navigationRequest?tr("navigation-wait"):
+        context?.kind==="article_list"?tr("article-list-hint"):context?.kind==="article_reading"?tr("article-reading-hint"):"";
     drawNavigationMarker();
 }
 function navigate(intent,e) {
@@ -388,11 +391,11 @@ function paste(e) {
     cancelHover(true);
     e.preventDefault();
     if(pastePending||pasteDialog.open) return;
-    if(keyboardState.enabled&&keyboardState.mode!=="input") {policy("reset",e);surfaceNote.textContent="請先按 i 切換原始輸入再貼上";return;}
+    if(keyboardState.enabled&&keyboardState.mode!=="input") {policy("reset",e);surfaceNote.textContent=tr("paste-native-first");return;}
     const text=e.clipboardData?.getData("text/plain");
     cancelComposition();cancelDrag();clearSelection();
-    if(text===undefined) {surfaceNote.textContent="此環境無法讀取貼上的文字";return;}
-    if(text.length>16384) {surfaceNote.textContent="貼上文字過長；整段未送出";return;}
+    if(text===undefined) {surfaceNote.textContent=tr("paste-unavailable");return;}
+    if(text.length>16384) {surfaceNote.textContent=tr("paste-too-long");return;}
     pastePending=true;surface.dataset.pasteResult="pending";sendInput({kind:"paste",text,generation,trusted:e.isTrusted});
 }
 function confirmPaste(e){if(e.isTrusted&&!stopped)sendInput({kind:"paste_confirm",trusted:true});}
@@ -422,15 +425,15 @@ function refreshExportControls() {
     const selection=selectionCache;
     exportButton.disabled=exportBusy||!latest||filterUi.blocked();
     exportRows.disabled=exportBusy||filterUi.blocked()||blocked()||!selection||selection.generation!==generation||selection.revision!==revision||selection.presentation!==latest?.presentation;
-    exportRows.title=selection?`匯出第 ${selection.value.rows.start+1}–${selection.value.rows.end} 行（完整 80 欄）`:"先拖曳選取要截圖的行";
+    exportRows.title=selection?tr("export-lines-hint",{start:selection.value.rows.start+1,end:selection.value.rows.end}):tr("export-rows-hint");
 }
 function refreshKeepAlive() {
     const ready=!!latest?.keep_alive&&canNavigate()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
     const current=stamp(),key=JSON.stringify([current,ready,latest?.keep_alive_ready,latest?.keep_alive]);
-    keepAlive.textContent=latest?.keep_alive?"防閒置：開":"防閒置：關";
+    keepAlive.textContent=latest?.keep_alive?tr("keepalive-on"):tr("keepalive-off");
     keepAlive.setAttribute("aria-pressed",String(!!latest?.keep_alive));
-    keepAlive.title=latest?.keep_alive_failure||(!latest?.keep_alive?"本次啟動暫停防閒置；重新啟動預設開啟":
-        ready?"閒置 60 秒後重繪畫面；不移動閱讀位置":"已開啟；等待可辨識畫面或本機操作結束");
+    keepAlive.title=latest?.keep_alive_failure||(!latest?.keep_alive?tr("keepalive-disabled-help"):
+        ready?tr("keepalive-ready-help"):tr("keepalive-wait-help"));
     if(!stopped&&latest&&key!==keepAliveGate) {keepAliveGate=key;send({kind:"keep_alive_gate",stamp:current,ready});}
 }
 function toggleKeepAlive(e){if(latest&&!stopped)send({kind:"keep_alive",enabled:!latest.keep_alive,trusted:e.isTrusted});}
@@ -450,10 +453,10 @@ function exportScreen(e, selected=false) {
                 target.width=960;target.height=(end-start)*24;
                 target.getContext("2d").drawImage(full,0,start*24,960,target.height,0,0,960,target.height);
             }
-            const blob=await new Promise((resolve,reject)=>target.toBlob(value=>value?resolve(value):reject(new Error("無法編碼 PNG")),"image/png"));
-            if(blob.size>3*1024*1024) throw new Error("PNG 超過匯出大小上限");
+            const blob=await new Promise((resolve,reject)=>target.toBlob(value=>value?resolve(value):reject(new Error(tr("export-encode-failed"))),"image/png"));
+            if(blob.size>3*1024*1024) throw new Error(tr("export-too-large"));
             const png=await new Promise((resolve,reject)=>{
-                const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("無法準備 PNG"));reader.readAsDataURL(blob);
+                const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error(tr("export-prepare-failed")));reader.readAsDataURL(blob);
             });
             if(!stopped) send({kind:"export_png",presentation:packet.presentation,generation:packet.generation,revision:packet.frame.revision,
                 selection_request:selection?.request??null,png,trusted:e.isTrusted});
@@ -484,15 +487,15 @@ function wheel(e) {
     navigate({action},e);
 }
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
-const media=installMedia({send,prepare:()=>{cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshNavigation,restore:restoreEditingFocus});
+const media=installMedia({tr,send,prepare:()=>{cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshNavigation,restore:restoreEditingFocus});
 function refreshControls(){refreshNavigation();refreshExportControls();}
 const settingsUi=createSettingsDialog({send,
     beforeRequest:e=>{cancelHover(true);policy("reset",e);},beforeShow:invalidatePresentation,
     restore:restoreEditingFocus,changed:refreshControls,loadFonts,fontLoadNote,render});
-const loginUi=createLoginDialog({send,stamp,
+const loginUi=createLoginDialog({tr,send,stamp,
     prepare:e=>{cancelHover(true);policy("reset",e);cancelComposition();clearSelection();},
     restore:restoreEditingFocus,changed:refreshControls,focus});
-const filterUi=createFiltersDialog({send,current:()=>latest,invalidate:invalidatePresentation,
+const filterUi=createFiltersDialog({tr,send,current:()=>latest,invalidate:invalidatePresentation,
     reset:e=>policy("reset",e),restore:restoreEditingFocus,changed:refreshControls});
 const bindings=[...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],

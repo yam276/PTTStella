@@ -324,3 +324,20 @@ filters-count-revealed = { $count ->
         [one] One reply temporarily shown
        *[other] { $count } replies temporarily shown
     }
+profile-import-title = Load display settings into preview
+menu-edit = Edit
+menu-window = Window
+menu-quit = Quit PTTStella
+menu-hide = Hide PTTStella
+menu-hide-others = Hide Others
+menu-show-all = Show All
+menu-undo = Undo
+menu-redo = Redo
+menu-cut = Cut
+menu-copy = Copy
+menu-paste = Paste
+menu-select-all = Select All
+menu-minimize = Minimize
+menu-maximize = Zoom
+menu-fullscreen = Toggle Full Screen
+menu-close = Close Window

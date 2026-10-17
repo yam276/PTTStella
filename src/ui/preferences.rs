@@ -28,10 +28,13 @@ impl Preferences {
             Ok(settings) => (settings, None),
             Err(error) => (
                 AppSettings::default(),
-                Some(format!("{error}；目前使用預設顯示")),
+                Some(pttstella::msg!(
+                    "settings-load-default",
+                    error = error.to_string()
+                )),
             ),
         };
-        let display = app.display.resolve().map_err(str::to_owned)?;
+        let display = app.display.resolve().map_err(|error| error.to_string())?;
         Ok(Self {
             store,
             app,
@@ -72,7 +75,7 @@ impl Preferences {
 
     /// Only a successful owned disk operation may commit an effective draft.
     pub(super) fn commit(&mut self, saved: AppSettings) -> Result<(), String> {
-        let display = saved.display.resolve().map_err(str::to_owned)?;
+        let display = saved.display.resolve().map_err(|error| error.to_string())?;
         self.app = saved;
         self.display = display;
         self.warning = None;
@@ -82,6 +85,7 @@ impl Preferences {
     pub(super) fn open_packet(&self) -> Packet<'static> {
         Packet::SettingsOpen(Box::new(SettingsOpen {
             profile: self.app.display.clone(),
+            language: self.app.language,
             values: self.display.clone(),
             defaults: DisplaySettings::default(),
             presets: DisplaySettings::presets(),
@@ -96,10 +100,7 @@ impl Preferences {
                 request,
                 packet: Box::new(sample_packet(&self.sample, &display)),
             },
-            Err(error) => FontPreview::Rejected {
-                request,
-                error: error.into(),
-            },
+            Err(error) => FontPreview::Rejected { request, error },
         })
     }
 }

@@ -11,6 +11,11 @@ use std::collections::BTreeMap;
 #[derive(Serialize)]
 #[serde(tag = "kind", content = "payload", rename_all = "snake_case")]
 pub(super) enum Packet<'a> {
+    Localization {
+        language: &'static str,
+        resource: &'static str,
+        fallback: &'static str,
+    },
     Paint(&'a Paint),
     Stop,
     Notice(String),
@@ -104,6 +109,7 @@ pub(super) struct MediaImage {
 }
 #[derive(Serialize)]
 pub(super) struct SettingsOpen {
+    pub language: pttstella::i18n::Language,
     pub profile: DisplayProfile,
     pub values: DisplaySettings,
     pub defaults: DisplaySettings,

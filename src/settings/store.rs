@@ -16,22 +16,27 @@ impl Store {
         Self { path }
     }
     pub fn system() -> Result<Self, String> {
-        let dirs =
-            directories::ProjectDirs::from("", "", "PTTStella").ok_or("無法找出使用者設定目錄")?;
+        let dirs = directories::ProjectDirs::from("", "", "PTTStella")
+            .ok_or(crate::msg!("settings-directory-missing"))?;
         Ok(Self::at(dirs.config_dir().join("settings.json")))
     }
     pub fn read(&self) -> Result<Option<Vec<u8>>, String> {
         let file = match File::open(&self.path) {
             Ok(file) => file,
             Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(format!("無法讀取設定：{error}")),
+            Err(error) => {
+                return Err(crate::msg!(
+                    "settings-read-failed",
+                    error = error.to_string()
+                ));
+            }
         };
         let mut bytes = Vec::new();
         file.take((MAX_SETTINGS_BYTES + 1) as u64)
             .read_to_end(&mut bytes)
-            .map_err(|e| format!("無法讀取設定：{e}"))?;
+            .map_err(|e| crate::msg!("settings-read-detail", e = e.to_string()))?;
         if bytes.len() > MAX_SETTINGS_BYTES {
-            return Err("設定檔超過 8 KiB；原檔保留".into());
+            return Err(crate::msg!("settings-too-large"));
         }
         Ok(Some(bytes))
     }
@@ -42,14 +47,15 @@ impl Store {
         }
     }
     pub fn save(&self, draft: AppSettings) -> Result<AppSettings, String> {
-        let settings = draft.validate().map_err(str::to_owned)?;
+        let settings = draft.validate().map_err(|error| error.to_string())?;
         let bytes = serde_json::to_vec_pretty(&settings).map_err(|e| e.to_string())?;
         if bytes.len() > MAX_SETTINGS_BYTES {
-            return Err("設定超過 8 KiB".into());
+            return Err(crate::msg!("settings-save-too-large"));
         }
         let previous = self.read()?;
         if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| format!("無法建立設定目錄：{e}"))?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| crate::msg!("settings-directory-failed", e = e.to_string()))?;
         }
         if let Some(previous) = previous {
             storage::replace(&self.path.with_extension("json.bak"), &previous)?;
@@ -79,6 +85,30 @@ mod tests {
         assert_eq!(store.load().unwrap(), loaded);
         assert_eq!(std::fs::read(path.with_extension("json.bak")).unwrap(), old);
     }
+    #[test]
+    fn v2_migrates_language_only_on_save_and_unknown_languages_preserve_the_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        let store = Store::at(path.clone());
+        let old=br#"{"version":2,"display":{"fonts":{"kind":"platform_default"},"font_size":20,"baseline":20},"hover":"off"}"#;
+        std::fs::write(&path, old).unwrap();
+        let mut draft = store.load().unwrap();
+        assert_eq!(draft.version, 3);
+        assert_eq!(draft.language, crate::i18n::Language::TraditionalChinese);
+        assert_eq!(std::fs::read(&path).unwrap(), old);
+        draft.language = crate::i18n::Language::English;
+        store.save(draft).unwrap();
+        assert_eq!(
+            store.load().unwrap().language,
+            crate::i18n::Language::English
+        );
+        assert_eq!(std::fs::read(path.with_extension("json.bak")).unwrap(), old);
+        let invalid=br#"{"version":3,"display":{"fonts":{"kind":"platform_default"},"font_size":20,"baseline":20},"hover":"off","language":"xx"}"#;
+        std::fs::write(&path, invalid).unwrap();
+        assert!(store.load().is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), invalid);
+    }
+
     #[test]
     fn saves_reload_and_keep_the_previous_bytes_as_backup() {
         let dir = tempfile::tempdir().unwrap();

@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import vm from "node:vm";
+import {translator} from "./i18n_test_support.mjs";
 
 function environment(file,factory){
     const nodes=new Map(),focus=[],sent=[],renders=[],timers=new Map();let nextTimer=0;
@@ -14,7 +15,7 @@ function environment(file,factory){
     const create=vm.runInNewContext(readFileSync(new URL("../assets/"+file,import.meta.url),"utf8")+"\n"+factory,context);
     let ui;
     return {nodes,focus,sent,renders,timers,node:document.getElementById,
-        create(extra={}){ui=create({send:value=>sent.push(value),beforeRequest(){},beforeShow(){},restore(){},changed(){},
+        create(extra={}){ui=create({tr:translator("zh-TW"),send:value=>sent.push(value),beforeRequest(){},beforeShow(){},restore(){},changed(){},
             loadFonts:async()=>"",fontLoadNote:()=>"loaded",render:(...args)=>renders.push(args),
             prepare(){},stamp:()=>({generation:7,revision:9,input_epoch:0}),focus(){},current:()=>null,invalidate(){},reset(){},...extra});return ui;},
         fire(id,event="click"){const binding=ui.bindings.find(([target,type])=>target.id===id&&type===event);assert.ok(binding,id+" "+event);binding[2]({target:document.getElementById(id),isTrusted:true,preventDefault(){}});},
@@ -43,7 +44,7 @@ test("the production clearSelection sends a scoped revocation before dropping it
     vm.runInNewContext(source.slice(start,end)+"\nclearSelection();",context);
     assert.equal(events.length,0);
 });
-const openData=()=>({profile:{fonts:{kind:"platform_default"}},values:{...display},defaults:{...display},presets:{},sample:{settings:{...display}},warning:null});
+const openData=()=>({language:"zh-TW",profile:{fonts:{kind:"platform_default"}},values:{...display},defaults:{...display},presets:{},sample:{settings:{...display}},warning:null});
 function deferred(){let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};}
 
 test("closing a settings dialog while fonts load cannot repaint or steal focus",async()=>{
@@ -119,4 +120,19 @@ test("the tagged router delivers independent wire examples once and rejects lega
         const before=calls.length;assert.throws(()=>route(packet));assert.equal(calls.length,before);
     }
     assert.throws(()=>create({}));
+});
+
+
+test("language is a settings draft: cancel sends no save, failure retains the draft, success commits once",async()=>{
+    const env=environment("surface-settings.js","createSettingsDialog"),ui=env.create();
+    await ui.open(openData());env.node("interface-language").value="en-US";
+    env.fire("font-cancel");assert.equal(env.sent.length,0);
+    await ui.open(openData());assert.equal(env.node("interface-language").value,"zh-TW");
+    env.node("interface-language").value="en-US";env.fire("font-save");env.fire("font-save");
+    assert.equal(env.sent.length,1);assert.equal(env.sent[0].language,"en-US");
+    ui.saved({status:"rejected"});assert.equal(env.node("font-dialog").open,true);
+    assert.equal(env.node("interface-language").value,"en-US");
+    env.fire("font-save");assert.equal(env.sent.length,2);
+    ui.saved({status:"saved"});assert.equal(env.node("font-dialog").open,false);
+    ui.destroy();assert.equal(ui.clean(),true);
 });

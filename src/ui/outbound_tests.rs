@@ -241,3 +241,15 @@ fn frame_and_preview_packets_keep_typed_identity_and_data_under_payload() {
     assert_eq!(preview["payload"]["request"], 41);
     assert!(preview["payload"]["packet"]["frame"].is_object());
 }
+
+#[test]
+fn localization_bootstrap_matches_the_independent_wire_example() {
+    let packet = Packet::Localization {
+        language: "en-US",
+        resource: "connect = Connect\n",
+        fallback: "connect = 連線\n",
+    };
+    let expected: Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/localization.json")).unwrap();
+    assert_eq!(serde_json::to_value(packet).unwrap(), expected);
+}
