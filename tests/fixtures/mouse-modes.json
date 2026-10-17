@@ -1,0 +1,19 @@
+{
+  "source": "Self-authored synthetic mode changes and independent expected states; no session data.",
+  "steps": [
+    {"input":"\u001b[?1000h","state":{"tracking":"click","encoding":"legacy","epoch":1}},
+    {"input":"\u001b[?1006h","state":{"tracking":"click","encoding":"sgr","epoch":2}},
+    {"input":"\u001b[?1000h","state":{"tracking":"click","encoding":"sgr","epoch":2}},
+    {"input":"\u001b[?1003h","state":{"tracking":"motion","encoding":"sgr","epoch":3}},
+    {"input":"\u001b[?1000l","state":{"tracking":"off","encoding":"sgr","epoch":4}},
+    {"input":"\u001b[?1000h","state":{"tracking":"click","encoding":"sgr","epoch":5}},
+    {"input":"\u001b[?1016h","state":{"tracking":"click","encoding":"pixels","epoch":6}},
+    {"input":"\u001b[?1006l","state":{"tracking":"click","encoding":"pixels","epoch":6}},
+    {"input":"\u001b[?1016l","state":{"tracking":"click","encoding":"legacy","epoch":7}},
+    {"input":"\u001b[?1006h","state":{"tracking":"click","encoding":"sgr","epoch":8}},
+    {"input":"\u001b[?1000l","state":{"tracking":"off","encoding":"sgr","epoch":9}},
+    {"input":"\u001bc","state":{"tracking":"off","encoding":"legacy","epoch":10}},
+    {"input":"\u001b[?1006h","state":{"tracking":"off","encoding":"sgr","epoch":11}},
+    {"input":"\u001b[?1000h","state":{"tracking":"click","encoding":"sgr","epoch":12}}
+  ]
+}

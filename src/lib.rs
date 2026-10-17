@@ -13,6 +13,7 @@ pub mod input;
 pub mod links;
 pub mod login;
 pub mod media;
+pub mod mouse;
 pub mod navigation;
 pub mod navigation_job;
 pub mod recent_boards;

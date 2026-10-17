@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 pub mod hyperlinks;
 use hyperlinks::{Hyperlink, Hyperlinks, MAX_OSC_BYTES};
 
-const MAX_CELLS: usize = 80 * 100;
+pub(crate) const MAX_CELLS: usize = 80 * 100;
 const MAX_CSI: usize = 64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -118,6 +118,7 @@ pub struct Screen {
     unsupported: u64,
     synchronized_since: Option<u64>,
     hyperlinks: Hyperlinks,
+    mouse: crate::mouse::Modes,
 }
 impl Screen {
     pub fn new(cols: usize, rows: usize) -> Result<Self, &'static str> {
@@ -143,6 +144,7 @@ impl Screen {
             unsupported: 0,
             synchronized_since: None,
             hyperlinks: Hyperlinks::default(),
+            mouse: crate::mouse::Modes::default(),
         })
     }
     pub fn cell(&self, x: usize, y: usize) -> Option<Cell> {
@@ -153,6 +155,10 @@ impl Screen {
     }
     pub fn revision(&self) -> u64 {
         self.revision
+    }
+    /// Parsed protocol state, separate from the retained display frame.
+    pub fn mouse_modes(&self) -> crate::mouse::Modes {
+        self.mouse
     }
     /// Identifies the first begin marker; repeated begins do not extend a batch.
     pub fn synchronized_since(&self) -> Option<u64> {
@@ -173,6 +179,7 @@ impl Screen {
         self.parser = Parser::Ground;
         self.revision = 0;
         self.unsupported = 0;
+        self.mouse = crate::mouse::Modes::default();
     }
     fn byte(&mut self, byte: u8) {
         self.parse_byte(byte);
@@ -316,6 +323,7 @@ impl Screen {
         self.cursor_visible = true;
         self.synchronized_since = None;
         self.hyperlinks = Hyperlinks::default();
+        self.mouse.reset();
     }
     fn ground(&mut self, byte: u8) {
         match byte {
@@ -414,6 +422,7 @@ impl Screen {
                         self.synchronized_since.get_or_insert(self.revision);
                     }
                     (2026, b'l') => self.release_synchronized_output(),
+                    (mode, b'h' | b'l') if self.mouse.apply(mode, final_byte == b'h') => {}
                     _ => self.unsupported += 1,
                 }
             }

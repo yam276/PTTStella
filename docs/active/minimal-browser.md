@@ -171,6 +171,12 @@ macOS 四個獨立程序使用同一 `dist/macos-bookmarks/PTTStella.app`：繁�
 
 獨立檢查更名保留建立秒數、移除備份為前版、seed 與重啟資料 bytes 相同、空檔與壞檔未自動改寫；四份測試 App 與候選去簽章 executable hash 相同、strict ad-hoc 簽章有效，PNG 獨立解碼完成，未與不同場景假稱像素相等。證據保留 `.local/verification/bookmarks-ui-c3`。C3 第一版完成於明確手動識別及已辨識文章格式，不含自動猜目前 AID／離線文章；本輪未重跑 46 筆 Vim、實站、原生 IME、Windows／Linux。接續 D 站端滑鼠，C1 原生 pointer backend 缺口仍未結案；沒有 push 或公開發佈。
 
+**D 第一批：模式核心與 SGR 編碼完成，送出／UI 接續**。Screen 透過同一有界 CSI parser 持有獨立 Modes，追蹤 9／1000／1001／1002／1003 與 legacy／1005／1006／1015／1016；後者互斥並只重設相符編碼，tracking DECRST 關閉回報。有效變化累加 epoch，off／on 合併仍可觀察；RIS 清模式且保留單調變化，新 session 從 default／0 開始。模式不放進 retained Frame，DEC2026 期間也可由核心觀察；格式支援不等於送出准入。
+
+只有 1000＋1006 可產生三個具名按鈕的 press／release，唯一 encoder 處理 Shift／Alt／Ctrl、零基轉一基與同一 Screen 面積／格線邊界；motion、wheel、其他 tracking／encoding 明確回傳未支援，不產生部分 bytes。公開站端可能在啟動要求 1003，不能當作已支援點擊；協定與後續分流契約見 [站端滑鼠](../station-mouse.md)。六個純核心案例以固定手寫 trace、所有 byte 切分、取消／錯格式／超長／字串、C0、重設／同步、八種修飾鍵與獨立封包 expected 核對。95 個 desktop lib、39 個 bin、core／desktop all-targets Clippy／docs 通過，初期測試內無需 Vec 的 lint 已修正並保留紀錄；證據 `.local/verification/mouse-d-core`。
+
+這批尚未接 Session 的交易 owner／容量／速率、View／Paint、使用者開關、可信 pointer 或本機／站端唯一分流，不宣稱站端滑鼠可用或已原生驗收。最新交付 App 仍是書籤版；接續上述接線與本機 peer，再驗原生 pointer、Shift 選字、Ctrl＋滾輪、黑邊／DPR／模式變更與關窗；C1 pointer backend 缺口一併處理。
+
 ## 維護性重構
 
 2026-10-17 傳統 BBS 字型：依公開的 PTT 官方終端預設及 Windows 客戶端資源確認 MingLiU／細明體是傳統選項，並非所有客戶端有唯一預設。新增 `windows_classic`（MingLiU／MingLiU）與 `macos_bbs`（Songti TC／Songti TC）；既有 Windows 黑體組合、macOS 黑體／宋體與平台初始值保留。新組合均明確選取，前者缺少時顯示兩角色載入警告及官方取得／授權頁，後者只稱本機宋體替代，不宣稱等同細明體。沒有加入第三方字型檔。
