@@ -55,6 +55,9 @@ pub fn app(props: AppProps) -> Element {
                     Connection::start_mouse_probe(sample_case.as_deref() == Some("mouse_boundary"))
                 } else if let Some(case) = match sample_case.as_deref() {
                     Some("mouse_drag") => Some(pttstella::connection::MouseSampleProbe::Drag),
+                    Some("mouse_round_trip") => {
+                        Some(pttstella::connection::MouseSampleProbe::RoundTrip)
+                    }
                     Some("mouse_motion") => Some(pttstella::connection::MouseSampleProbe::Motion),
                     Some("mouse_wheel") => Some(pttstella::connection::MouseSampleProbe::Wheel),
                     _ => None,

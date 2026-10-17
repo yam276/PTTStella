@@ -237,6 +237,10 @@ macOS WKWebView 的 `mouse_motion` 完成 col 4／row 4 左鍵點擊／釋放，
 
 **D2 未持有 sample 的取消接線修正**：`pointercancel` 從只取消 held 改為既有全域 revoke，讓 Rust watch 同時撤銷尚未開始送出的無按鈕 sample，UI 緩衝／callback 仍立即清理。新增實際 handler＋production pointer owner 的整合案例，先觀察缺少撤銷 wire 而失敗，修正後確認 generation 正確的 revoke、舊 queued sample 不再延續與新 pending cell 丟棄；Rust 對 queued sample 的 watch 優先案例沿用同一送出 owner。不是已送 bytes 的回滾，也沒有新增 worker 或 timer。證據保留 `.local/verification/mouse-d-cancel`；42 個 desktop bin、60 個 JS（含 17 個 pointer owner／handler 案例）、desktop all-targets Clippy 與 docs 通過。尚未以此版本重跑原生案例，沒有換交付 App 或 push。
 
+**D2 持有往返探針**：新增獨立 `mouse_round_trip`，要求 col 4→10→4、途中一般重繪及起點釋放，沿用既有 peer／畫面 owner 與 16 筆上限。raw loopback 正向與缺少返回 motion 的負向案例通過；這只驗探針，不代替原生拖曳。非預期 binary 診斷改為長度／Escape 分類，合成敏感文字與超量 binary 的測試確認內容不外露。125 個 desktop lib、42 個 bin、core／兩份 replay、Clippy 通過；後續 pointercancel 修正另通過 60 個 JS。
+
+macOS 的兩次往返嘗試均未完成：第一次觀察 AX 回來時已超過五秒持有；第二次移除中途 AX 查詢，工具仍在持有完成 5513ms 後才完成去程 5846ms／回程 6156ms。嚴格 peer 拒絕未經必要 motion 的起點釋放，runner 均 failed、cleanup 未確認，exit 0 不算通過；held motion 在此 backend 維持 not_ready。第二次關窗後的 AX 查詢意外重開無 probe 參數的副本，已關閉並確認無剩餘程序，未登入或送帳密。保留 `.local/verification/mouse-d-round-trip` 的各次失敗、時序與 package；不改 expected、不以本機合成事件冒充實體持有，也未取代交付 App。
+
 
 
 

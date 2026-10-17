@@ -26,8 +26,17 @@ pub(super) enum Scenario {
 #[derive(Clone, Copy)]
 pub enum MouseSampleProbe {
     Drag,
+    RoundTrip,
     Motion,
     Wheel,
+}
+
+fn input_summary(bytes: &[u8]) -> String {
+    if bytes == b"\x1b" {
+        "Escape key".to_owned()
+    } else {
+        format!("{} bytes", bytes.len())
+    }
 }
 
 async fn mouse_samples<S>(
@@ -38,7 +47,7 @@ where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
     match case {
-        MouseSampleProbe::Drag | MouseSampleProbe::Motion => {
+        MouseSampleProbe::Drag | MouseSampleProbe::RoundTrip | MouseSampleProbe::Motion => {
             if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"\x1b[<0;5;5M")
             {
                 return Err("sample probe expected the anchor left press".into());
@@ -55,49 +64,66 @@ where
             }
             // Independent allowed coordinates for one horizontal native gesture.
             // The final cell is mandatory; intermediate cadence is OS dependent.
-            let allowed: &[&[u8]] = if matches!(case, MouseSampleProbe::Drag) {
-                &[
-                    b"\x1b[<32;5;5M",
-                    b"\x1b[<32;6;5M",
-                    b"\x1b[<32;7;5M",
-                    b"\x1b[<32;8;5M",
-                    b"\x1b[<32;9;5M",
-                    b"\x1b[<32;10;5M",
-                    b"\x1b[<32;11;5M",
-                ]
-            } else {
-                &[
-                    b"\x1b[<35;5;5M",
-                    b"\x1b[<35;6;5M",
-                    b"\x1b[<35;7;5M",
-                    b"\x1b[<35;8;5M",
-                    b"\x1b[<35;9;5M",
-                    b"\x1b[<35;10;5M",
-                    b"\x1b[<35;11;5M",
-                ]
-            };
+            let allowed: &[&[u8]] =
+                if matches!(case, MouseSampleProbe::Drag | MouseSampleProbe::RoundTrip) {
+                    &[
+                        b"\x1b[<32;5;5M",
+                        b"\x1b[<32;6;5M",
+                        b"\x1b[<32;7;5M",
+                        b"\x1b[<32;8;5M",
+                        b"\x1b[<32;9;5M",
+                        b"\x1b[<32;10;5M",
+                        b"\x1b[<32;11;5M",
+                    ]
+                } else {
+                    &[
+                        b"\x1b[<35;5;5M",
+                        b"\x1b[<35;6;5M",
+                        b"\x1b[<35;7;5M",
+                        b"\x1b[<35;8;5M",
+                        b"\x1b[<35;9;5M",
+                        b"\x1b[<35;10;5M",
+                        b"\x1b[<35;11;5M",
+                    ]
+                };
             let mut final_cell = false;
+            let mut returned = false;
             let mut completed = false;
             for _ in 0..16 {
                 let Some(Ok(Message::Binary(bytes))) = socket.next().await else {
                     return Err("sample probe expected bounded native cell motion".into());
                 };
                 if allowed.contains(&bytes.as_ref()) {
+                    if !final_cell
+                        && bytes.as_ref() == allowed[6]
+                        && matches!(case, MouseSampleProbe::RoundTrip)
+                    {
+                        socket
+                            .send(Message::Binary(
+                                b"\x1b[2;1H\x1b[2KHOLD: return to anchor".to_vec().into(),
+                            ))
+                            .await
+                            .map_err(|e| e.to_string())?;
+                    }
+                    returned |= final_cell && bytes.as_ref() == allowed[0];
                     final_cell |= bytes.as_ref() == allowed[6];
                     if final_cell && matches!(case, MouseSampleProbe::Motion) {
                         completed = true;
                         break;
                     }
                 } else if final_cell
-                    && matches!(case, MouseSampleProbe::Drag)
-                    && bytes.as_ref() == b"\x1b[<0;11;5m"
+                    && (matches!(case, MouseSampleProbe::Drag)
+                        && bytes.as_ref() == b"\x1b[<0;11;5m"
+                        || matches!(case, MouseSampleProbe::RoundTrip)
+                            && returned
+                            && bytes.as_ref() == b"\x1b[<0;5;5m")
                 {
                     completed = true;
                     break;
                 } else {
                     return Err(format!(
-                        "sample probe rejected unexpected input: {:02x?}",
-                        bytes.as_ref()
+                        "sample probe rejected unexpected input ({})",
+                        input_summary(&bytes)
                     ));
                 }
             }
@@ -105,6 +131,12 @@ where
                 return Err(
                     "sample probe never completed its final native cell and required edge".into(),
                 );
+            }
+            if matches!(case, MouseSampleProbe::RoundTrip) {
+                socket
+                    .send(Message::Binary(article_page("articles")?.into()))
+                    .await
+                    .map_err(|e| e.to_string())?;
             }
         }
         MouseSampleProbe::Wheel => {
@@ -589,8 +621,8 @@ where
     match socket.next().await {
         Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e| e.to_string()),
         Some(Ok(Message::Binary(bytes))) => Err(format!(
-            "native-window extra input: {:02x?}",
-            &bytes[..bytes.len().min(16)]
+            "native-window extra input ({})",
+            input_summary(&bytes)
         )),
         other => Err(format!("native-window expected Close, received {other:?}")),
     }
@@ -833,6 +865,12 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn native_probe_diagnostics_do_not_echo_unexpected_text_or_binary_input() {
+        assert_eq!(input_summary(b"synthetic-secret"), "16 bytes");
+        assert_eq!(input_summary(&[0xff; 32768]), "32768 bytes");
+        assert_eq!(input_summary(b"\x1b"), "Escape key");
+    }
     #[tokio::test]
     async fn article_probe_close_during_delayed_query_does_not_wait_for_another_frame() {
         use tokio_tungstenite::{WebSocketStream, tungstenite::protocol::Role};

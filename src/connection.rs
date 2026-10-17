@@ -224,7 +224,7 @@ impl Connection {
         Self::start_mouse_scene(1000, probe::Scenario::Mouse { boundary })
     }
     pub fn start_mouse_samples_probe(case: MouseSampleProbe) -> Result<Self, String> {
-        let tracking = if matches!(case, MouseSampleProbe::Drag) {
+        let tracking = if matches!(case, MouseSampleProbe::Drag | MouseSampleProbe::RoundTrip) {
             1002
         } else {
             1000
