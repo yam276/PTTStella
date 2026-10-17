@@ -207,6 +207,27 @@ pub fn project(frame: &Frame, rules: &Rules, revealed: bool) -> Projection {
     };
     let mut output = frame.clone();
     if !revealed {
+        let mut redacted = Vec::new();
+        output.hyperlinks.retain_mut(|link| {
+            link.spans.retain(|span| {
+                let hidden = matches.iter().any(|push| {
+                    push.row == span.row && span.start < push.end && span.end > push.start
+                });
+                if hidden {
+                    redacted.push(span.clone());
+                }
+                !hidden
+            });
+            !link.spans.is_empty()
+        });
+        if !redacted.is_empty() {
+            output
+                .hyperlinks
+                .push(crate::screen::hyperlinks::Hyperlink {
+                    target: None,
+                    spans: redacted,
+                });
+        }
         output.glyphs = frame
             .glyphs
             .iter()

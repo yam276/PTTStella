@@ -362,3 +362,5 @@ login-code-checking = 已送出手動確認；請等候站端驗證結果
 login-browsing = 已進入可辨識的瀏覽畫面；Vim 已開啟時可按 Esc 回到瀏覽模式
 login-manual-followup = 已返回登入提示；請自行確認，不會自動重送帳密
 login-followup-expired = 登入引導已逾時；仍可使用 PTT 原始輸入，不會重送帳密
+
+selection-link-missing = 目前已沒有此連結，請重新選取

@@ -246,3 +246,313 @@ fn display_preferences_validate_names_geometry_and_version() {
         "Mono Font"
     );
 }
+
+fn hyperlink(uri: &str, label: &str, terminator: &str) -> Vec<u8> {
+    let mut bytes = format!("\x1b]8;;{uri}{terminator}").into_bytes();
+    bytes.extend(pttstella::encoding::encode(label).unwrap());
+    bytes.extend(format!("\x1b]8;;{terminator}").as_bytes());
+    bytes
+}
+
+#[test]
+fn osc8_wrapping_keeps_the_complete_target_for_click_and_copy_across_all_splits() {
+    use pttstella::links::{self, Link};
+    let uri = "https://example.com/a?complete=destination&tail=1";
+    let expected = vec![
+        Link {
+            row: 0,
+            start: 0,
+            end: 10,
+            url: uri.into(),
+        },
+        Link {
+            row: 1,
+            start: 0,
+            end: 3,
+            url: uri.into(),
+        },
+    ];
+    for ending in ["\x07", "\x1b\\"] {
+        let bytes = hyperlink(uri, "ABCDEFGH中文Z", ending);
+        for split in 0..=bytes.len() {
+            let mut screen = Screen::new(10, 3).unwrap();
+            screen.feed(&bytes[..split]);
+            screen.feed(&bytes[split..]);
+            assert_eq!(screen.cursor(), (3, 1));
+            assert_eq!(links::detect(&screen.frame()), expected);
+            assert_eq!(
+                pttstella::text::rows(&screen.frame())
+                    .unwrap()
+                    .iter()
+                    .map(|row| row.text.as_str())
+                    .collect::<Vec<_>>(),
+                ["ABCDEFGH中", "文Z       ", "          "]
+            );
+            for index in 0..2 {
+                let selected =
+                    selection::extract(&screen.frame(), &Selection::Link { index }).unwrap();
+                assert_eq!(selected.text, uri);
+                assert_eq!(selected.rows, index..index + 1);
+            }
+            assert!(selection::extract(&screen.frame(), &Selection::Link { index: 2 }).is_err());
+        }
+        let mut screen = Screen::new(10, 3).unwrap();
+        for byte in bytes {
+            screen.feed(&[byte]);
+        }
+        assert_eq!(links::detect(&screen.frame()), expected);
+    }
+}
+
+#[test]
+fn osc8_replaces_targets_without_duplicate_guesses_or_exposing_invalid_schemes() {
+    use pttstella::links;
+    let mut screen = Screen::new(80, 3).unwrap();
+    screen.feed(b"\x1b]8;id=first;https://example.com/actual\x07https://example.com/shown \x1b]8;;https://example.org/next\x1b\\NEXT\x1b]8;;\x07 https://example.net/plain ");
+    let found = links::detect(&screen.frame());
+    assert_eq!(
+        found.iter().map(|l| l.url.as_str()).collect::<Vec<_>>(),
+        [
+            "https://example.com/actual",
+            "https://example.org/next",
+            "https://example.net/plain"
+        ]
+    );
+    assert_eq!((found[0].start, found[0].end), (0, 26));
+    for uri in [
+        "javascript:alert(1)",
+        "file:///secret",
+        "https://example.com/a\nb",
+        "https://example.com/a b",
+    ] {
+        let mut screen = Screen::new(80, 2).unwrap();
+        screen.feed(&hyperlink(uri, "https://example.com/shown ", "\x07"));
+        assert!(links::detect(&screen.frame()).is_empty(), "{uri:?}");
+        assert!(
+            !serde_json::to_string(&screen.frame())
+                .unwrap()
+                .contains(uri)
+        );
+    }
+    for bad in [
+        "https://example.com/a\nb",
+        "https://example.com/a\tb",
+        "https://example.com/\u{85}",
+    ] {
+        assert!(links::validate(bad).is_err());
+    }
+}
+
+#[test]
+fn osc8_attributes_follow_cell_edits_and_never_attach_to_erased_cells() {
+    use pttstella::links;
+    let mut screen = Screen::new(8, 3).unwrap();
+    screen.feed(&hyperlink("https://example.com/a", "ABC", "\x07"));
+    screen.feed(b"\x1b[1;2H\x1b[@");
+    let found = links::detect(&screen.frame());
+    assert_eq!(
+        found
+            .iter()
+            .map(|l| (l.row, l.start, l.end))
+            .collect::<Vec<_>>(),
+        [(0, 0, 1), (0, 2, 4)]
+    );
+    screen.feed(b"\x1b[P");
+    assert_eq!(
+        links::detect(&screen.frame())
+            .iter()
+            .map(|l| (l.start, l.end))
+            .collect::<Vec<_>>(),
+        [(0, 3)]
+    );
+    screen.feed(b"\x1b[X");
+    assert_eq!(
+        links::detect(&screen.frame())
+            .iter()
+            .map(|l| (l.start, l.end))
+            .collect::<Vec<_>>(),
+        [(0, 1), (2, 3)]
+    );
+    screen.feed(b"\x1b[K");
+    assert_eq!(
+        links::detect(&screen.frame())
+            .iter()
+            .map(|l| (l.start, l.end))
+            .collect::<Vec<_>>(),
+        [(0, 1)]
+    );
+    screen.feed(b"\x1b[2K");
+    assert!(links::detect(&screen.frame()).is_empty());
+    screen.feed(b"\x1b]8;;https://example.com/b\x07\x1b[2J");
+    assert!(links::detect(&screen.frame()).is_empty());
+    screen.feed(b"X");
+    assert_eq!(
+        links::detect(&screen.frame())[0].url,
+        "https://example.com/b"
+    );
+    screen.reset_session();
+    screen.feed(b"RESET");
+    assert!(screen.frame().hyperlinks.is_empty());
+}
+
+#[test]
+fn osc8_scroll_regions_overwrites_and_mixed_double_width_cells_have_no_stale_targets() {
+    use pttstella::links;
+    let mut screen = Screen::new(4, 3).unwrap();
+    for (row, name) in [(1, "a"), (2, "b"), (3, "c")] {
+        screen.feed(format!("\x1b[{row};1H").as_bytes());
+        screen.feed(&hyperlink(
+            &format!("https://example.com/{name}"),
+            name,
+            "\x07",
+        ));
+    }
+    screen.feed(b"\x1b[S");
+    assert_eq!(
+        links::detect(&screen.frame())
+            .iter()
+            .map(|l| (l.row, l.url.as_str()))
+            .collect::<Vec<_>>(),
+        [(0, "https://example.com/b"), (1, "https://example.com/c")]
+    );
+    screen.feed(b"\x1b[2;3r\x1b[T");
+    assert_eq!(
+        links::detect(&screen.frame())
+            .iter()
+            .map(|l| (l.row, l.url.as_str()))
+            .collect::<Vec<_>>(),
+        [(0, "https://example.com/b"), (2, "https://example.com/c")]
+    );
+    screen.feed(b"\x1b[3;1HX");
+    assert_eq!(links::detect(&screen.frame()).len(), 1);
+    screen.feed(b"\x1b[1;1HX");
+    assert!(screen.frame().hyperlinks.is_empty());
+    screen.feed(b"\x1b[1;1H\x1b]8;;https://example.com/half\x07\xa4\x1b]8;;\x07\xa4");
+    assert_eq!(
+        pttstella::text::rows(&screen.frame()).unwrap()[0].cells(0, 2),
+        Some("中")
+    );
+    assert!(links::detect(&screen.frame()).is_empty());
+    screen.feed(
+        b"\x1b[1;1H\x1b]8;;https://example.com/whole\x07\x1b[31m\xa4\x1b[32m\xa4\x1b]8;;\x07",
+    );
+    assert_eq!(
+        (
+            links::detect(&screen.frame())[0].start,
+            links::detect(&screen.frame())[0].end
+        ),
+        (0, 2)
+    );
+}
+
+#[test]
+fn osc8_limits_discard_the_control_tail_and_reuse_only_unreferenced_targets() {
+    use pttstella::{
+        links,
+        screen::hyperlinks::{MAX_PARAMETERS, MAX_TARGETS, MAX_URL_BYTES},
+    };
+    for size in [MAX_URL_BYTES, MAX_URL_BYTES + 1, MAX_URL_BYTES * 8] {
+        let uri = format!("https://example.com/{}", "x".repeat(size - 20));
+        assert_eq!(uri.len(), size);
+        let mut screen = Screen::new(80, 2).unwrap();
+        screen.feed(&hyperlink(&uri, "visible", "\x1b\\"));
+        screen.feed(b" DONE");
+        assert!(screen.frame().control_complete);
+        assert_eq!(
+            pttstella::text::rows(&screen.frame()).unwrap()[0]
+                .text
+                .trim_end(),
+            "visible DONE"
+        );
+        assert_eq!(
+            links::detect(&screen.frame()).len(),
+            usize::from(size == MAX_URL_BYTES)
+        );
+    }
+    for size in [MAX_PARAMETERS, MAX_PARAMETERS + 1] {
+        let mut screen = Screen::new(80, 2).unwrap();
+        screen.feed(
+            format!(
+                "\x1b]8;{};https://example.com/a\x07X\x1b]8;;\x07",
+                "p".repeat(size)
+            )
+            .as_bytes(),
+        );
+        assert_eq!(
+            links::detect(&screen.frame()).len(),
+            usize::from(size == MAX_PARAMETERS)
+        );
+    }
+    let mut screen = Screen::new(80, 2).unwrap();
+    for n in 0..=MAX_TARGETS {
+        screen.feed(&hyperlink(&format!("https://example.com/{n}"), "X", "\x07"));
+    }
+    let old = screen.frame();
+    assert_eq!(links::detect(&old).len(), MAX_TARGETS);
+    screen.feed(b"\x1b[1;1H ");
+    screen.feed(&hyperlink("https://example.com/reused", "NEW", "\x07"));
+    let found = links::detect(&screen.frame());
+    assert!(found.iter().any(|l| l.url.ends_with("/reused")));
+    assert!(!found.iter().any(|l| l.url.ends_with("/0")));
+    assert_eq!(links::detect(&old).len(), MAX_TARGETS);
+    let mut screen = Screen::new(80, 2).unwrap();
+    for n in 0..17 {
+        let prefix = format!("https://example.com/{n}/");
+        let uri = format!("{prefix}{}", "a".repeat(MAX_URL_BYTES - prefix.len()));
+        screen.feed(&hyperlink(&uri, "X", "\x07"));
+    }
+    assert_eq!(links::detect(&screen.frame()).len(), 16);
+}
+
+#[test]
+fn osc8_incomplete_cancelled_and_repeated_controls_remain_bounded_and_recoverable() {
+    use pttstella::links;
+    let mut screen = Screen::new(80, 2).unwrap();
+    screen.feed(&hyperlink("https://example.com/a", "A", "\x07"));
+    screen.feed(b"\x1b]8;;https://incomplete.example/");
+    assert!(links::detect(&screen.frame()).is_empty());
+    screen.feed(b"\x18B");
+    assert!(screen.frame().control_complete);
+    assert_eq!(links::detect(&screen.frame()).len(), 1);
+    for n in 0..512 {
+        screen.feed(b"\x1b[H");
+        screen.feed(&hyperlink(&format!("https://example.com/{n}"), "X", "\x07"));
+    }
+    assert_eq!(screen.frame().hyperlinks.len(), 1);
+    assert_eq!(
+        links::detect(&screen.frame())[0].url,
+        "https://example.com/511"
+    );
+    screen.feed(b"\x1bc\x1b[HRESET");
+    assert!(screen.frame().hyperlinks.is_empty());
+}
+
+#[test]
+fn osc8_projected_link_count_and_url_bytes_are_admitted_by_complete_target() {
+    use pttstella::{links, screen::hyperlinks::MAX_URL_BYTES};
+    for count in [64, 65] {
+        let uri = format!("https://example.com/{}", "x".repeat(MAX_URL_BYTES - 20));
+        let mut screen = Screen::new(80, 2).unwrap();
+        for _ in 0..count {
+            screen.feed(&hyperlink(&uri, "X", "\x07"));
+            screen.feed(b" ");
+        }
+        let found = links::detect(&screen.frame());
+        assert_eq!(found.len(), if count == 64 { 64 } else { 0 });
+        assert!(
+            found.iter().map(|link| link.url.len()).sum::<usize>()
+                <= links::MAX_PROJECTED_URL_BYTES
+        );
+    }
+    for count in [links::MAX_LINKS, links::MAX_LINKS + 1] {
+        let mut screen = Screen::new(80, 20).unwrap();
+        for _ in 0..count {
+            screen.feed(&hyperlink("https://example.com/a", "X", "\x07"));
+            screen.feed(b" ");
+        }
+        assert_eq!(
+            links::detect(&screen.frame()).len(),
+            if count == links::MAX_LINKS { count } else { 0 }
+        );
+    }
+}
