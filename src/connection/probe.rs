@@ -17,8 +17,46 @@ pub(super) enum Scenario {
     Boards,
     Articles,
     Bookmarks,
+    Mouse,
     Filters,
     Surface,
+}
+
+// Handwritten grid coordinates and exact SGR edges. The native runner also
+// performs local-only selection and blocked clicks between these inputs.
+async fn mouse<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result<(), String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    for (expected, reply) in [
+        (b"\x1b[<0;5;5M".as_slice(), b"".as_slice()),
+        (b"\x1b[<0;5;5m", b"\x1b[?1003h"),
+        (b"\r", b"\x1b[?1000h"),
+        (b"\x1b[<2;5;5M", b""),
+        (b"\x1b[<2;5;5m", b""),
+        (
+            b"\x1b[<1;5;5M",
+            b"\x1b[?2026h\x1b[?1000l\x1b[?1000h\x1b[?2026l",
+        ),
+    ] {
+        if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected)
+        {
+            return Err(format!("native mouse input differs from {expected:02x?}"));
+        }
+        if !reply.is_empty() {
+            socket
+                .send(Message::Binary(reply.to_vec().into()))
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    match socket.next().await {
+        Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e| e.to_string()),
+        _ => Err(
+            "native mouse expected Close without a cancelled release or duplicate local input"
+                .into(),
+        ),
+    }
 }
 
 pub(super) fn filters_page(next: bool) -> Result<Vec<u8>, String> {
@@ -422,6 +460,7 @@ pub(super) async fn serve(
             | Scenario::Boards
             | Scenario::Articles
             | Scenario::Bookmarks
+            | Scenario::Mouse
     ) {
         300
     } else {
@@ -438,6 +477,9 @@ pub(super) async fn serve(
             .map_err(|e| e.to_string())?;
         if matches!(scenario, Scenario::Window) {
             return window(&mut socket).await;
+        }
+        if matches!(scenario, Scenario::Mouse) {
+            return mouse(&mut socket).await;
         }
         if matches!(scenario, Scenario::Boards) {
             return boards(&mut socket).await;

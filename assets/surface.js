@@ -350,7 +350,7 @@ function refreshNavigation() {
     browseBack.disabled=!ready||context?.kind!=="article_reading";
     browsePrevious.disabled=browseBack.disabled||context.first_line===1;
     browseNext.disabled=browseBack.disabled||context.percent===100;
-    browseHint.textContent=!latest?.connected?"":latest.input_pending||navigationLocked||navigationRequest?tr("navigation-wait"):
+    browseHint.textContent=!latest?.connected||!stationMouse.local()?"":latest.input_pending||navigationLocked||navigationRequest?tr("navigation-wait"):
         context?.kind==="article_list"?tr("article-list-hint"):context?.kind==="article_reading"?tr("article-reading-hint"):"";
     drawNavigationMarker();
 }

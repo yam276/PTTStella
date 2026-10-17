@@ -4,7 +4,7 @@
 
 ## 目標
 
-目前增量：A／B 的明確子集與 C1／C2／C3 已交付並依下文區分平台與實站邊界；C1 指定 macOS 原生互動已補驗。D 模式核心／SGR 編碼、Session 交易准入與 UI 分流已完成單元驗證，原生驗收仍進行中。最新可用 App 為 `dist/macos-bookmarks/PTTStella.app`，已驗證文章入口、書籤與完整網址；D 尚未接入該 App。
+目前增量：A／B 的明確子集與 C1／C2／C3 已交付並依下文區分平台與實站邊界；C1 指定 macOS 原生互動已補驗。D 模式核心／SGR 編碼、Session 交易准入與 UI 分流已完成，限定 macOS 原生點擊案例通過，Shift 拖曳／Ctrl＋滾輪及其餘原生邊界仍接續。新滑鼠候選 App 為 `dist/macos-mouse-final/PTTStella.app`；保留前版 `dist/macos-bookmarks/PTTStella.app` 的文章入口、書籤與完整網址驗證。新候選尚未重跑所有前版原生案例，不能將兩者範圍混稱。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
@@ -194,6 +194,13 @@ macOS 四個獨立程序使用同一 `dist/macos-bookmarks/PTTStella.app`：繁�
 **D UI pointer 與分流已接線，原生驗收接續**。Paint 傳同一 Rust Snapshot，獨立 JS owner 管理可信 primary pointer、原始 lease、單調編號與 capture；release 可跨正常畫面更新，模式／policy／世代、失焦、同步／未完成輸出、lost capture、編輯或 modal 撤銷。站端模式不再觸發本機點編號／網址／hover／普通滾輪送鍵，Rust 二次檢查導覽與網址；Shift 在按下時選本機選字，先放開 Shift 仍可結束拖曳，Ctrl＋滾輪保留縮放。工具列可關閉站端回報恢復本機；1003 等未支援模式明示，不當作 1000 支援。press／release 不占用共同命令等待 slot；入列失敗透過 lease 回覆及 watch 撤銷，舊拒絕不能取消新交易。共同 Rust 清理先撤銷 mouse，再停止 UI／connection，JS destroy 清 capture，沒有新 timer。
 
 112 個 desktop lib、42 個 bin、51 個 JS、core／desktop all-targets Clippy／docs 通過；Surface 測試覆蓋顯示 ACK、模式／policy、可信事件、封閉回報型別與獨立 wire expected，八個 JS owner／handler 案例覆蓋三按鈕、跨重繪、取消／capture、Shift、普通滾輪零送鍵與 Ctrl 縮放。初期 router 的獨立 handlers 清單漏列新拒絕封包，已補同一 wire 契約並保留失敗紀錄。證據 `.local/verification/mouse-d-ui`；後續 capture-loss／精確 lease 修正的對應 JS 回歸另跑通過。尚未執行這批 UI 的原生 pointer 或新 App 打包，不宣稱 macOS／Windows、所有 DPR、實站、motion／wheel 已驗收；最新可用 App 仍為書籤版，沒有 push。
+
+**D 限定 macOS 原生點擊案例通過，完整原生邊界接續**。新增 `mouse` 本機 peer：精確要求 col 4／row 4 左／右鍵各一對、使用者停用後點文章編號的一次 CR，以及中鍵按下；中鍵保持 1,200ms 時，peer 送同步 off／on，後續只接受 Close，拒絕已取消的釋放／額外本機 bytes。實際 CUA 視窗依序完成 Shift 雙擊第 5 行、Cmd-C 後在未保存書籤草稿 Cmd-V 讀回同一合成文字、左鍵、1003 不可用提示下點擊／普通滾輪零送出、鍵盤 100→125→100% 縮放、關閉回報點編號、重新開啟、右鍵及中鍵取消。UI 恰好五筆 reports／一次取消／一次複製、開關 `[false,true]`、一次本機導覽；peer 精確 bytes 通過，結束前 mode epoch 6／無 active lease。
+
+嚴格 surface-probe.json passed、Close acknowledged、全部四個 owner join／listeners released、程序退出 0；runner 同時要求有效報告與完整 cleanup，不以退出碼單獨判定。兩次實際匯出的 960×576 PNG 經獨立解碼全部像素相同。`dist/macos-mouse-final/PTTStella.app` 為 arm64 strict ad-hoc 簽章，與測試副本去簽章 executable SHA-256 均 `2e9b55c185c940daf288ac9ba116a494f2b5259e0aacb13fb26ecd5c9ac61e3b`；證據 `.local/verification/mouse-d-native`。112 個 desktop lib、42 個 bin、51 個 JS、core／desktop all-targets Clippy／docs 通過，最後只改 probe CR expected／提示後的對應 gate 另跑。報告擴增時曾超過 json! 遞迴上限，已將 mouse report 分組，不提高全域 limit；最初失敗 log 保留。
+
+第一次原生程序 native-1 的 peer 誤要求本機點編號送 ESC[C，既有獨立導覽測試的契約是 CR；cleanup false 且缺報告，保留為失敗，退出 0 沒有冒算通過。修正手寫 peer 後 native-2 從頭重跑，未改產品送鍵遷就測試。Shift 拖曳尚未實測（只有 Shift 雙擊選字）；Ctrl＋滾輪的工具輸入嘗試未能保持修飾鍵並形成縮放，仍是 not_ready，不能以鍵盤縮放或 handler 單元代替。原生 blur／lost capture／重連、黑邊與所有 DPR、Windows／Linux、實站、motion／station wheel，以及新候選的前版 C1／46 筆 Vim 原生回歸亦未在本案例結案；D 尚有驗收工作，不標記整體 goal 完成，沒有 push。本輪兩份測試副本與第一份中間 App 已在 exclusive build lease 內核對身分及無存活程序後清除；保留新候選、前版／B2 回復版本、全部失敗／驗證報告與必要 PNG，清理 receipt completed。
+
 
 
 

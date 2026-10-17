@@ -1,6 +1,6 @@
 # 站端滑鼠
 
-對應 active plan 的 D，與既有 [本機滑鼠導覽](navigation.md) 分開。Screen 模式追蹤、純 SGR 編碼、Session 交易准入與 UI pointer 已接線；目前只有合成／單元驗證，原生操作及新 App 交付尚待完成。
+對應 active plan 的 D，與既有 [本機滑鼠導覽](navigation.md) 分開。Screen 模式追蹤、純 SGR 編碼、Session 交易准入與 UI pointer 已接線；1000＋1006 的限定 macOS 原生點擊案例通過，Shift 拖曳／Ctrl＋滾輪及其他平台仍待驗收，不宣稱完整站端滑鼠模式支援。
 
 ## 協定與範圍
 
@@ -34,4 +34,8 @@ Paint 傳遞同一 Rust Snapshot，獨立 pointer owner 只消費 route，不重
 
 UI 不等待 press 的命令回覆才處理 release；只透過同一有界命令佇列送結構化事件。入列失敗會發有界單筆取消並回覆精確 lease，晚到拒絕不能取消新交易。Rust 共同清理先撤銷 mouse controls，再並行停止 renderer／connection；JS destroy 清 capture、移除既有共同 bindings，沒有新增 timer 或背景送出工作。座標／可信事件／選字／縮放的真正原生驗收仍待獨立程序完成，不以這些單元測試當作 macOS／Windows 或所有 DPR 已通過。
 
-自製 [模式 trace](../tests/fixtures/mouse-modes.json) 是獨立手寫狀態 expected，逐 byte／所有兩段切分核對；另測無私有標記、錯格式、取消、字串與超長 CSI 不改模式，C0 中斷、重設、同步批次、非支援格式拒絕、格線邊界及獨立按鈕 bytes。八個交易 owner 與一個 control snapshot 案例核對租約、速率、逾時及撤銷；八個 production Connection loopback 案例獨立核對精確 SGR bytes、更新後釋放、重複零送出、佇列滿時控制、同步模式變化、重連隔離、保活暫停及導覽來源。Surface 測試核對顯示 ACK／模式／policy、可信准入、封閉型別及獨立 wire expected；八個 JS pointer／handler 案例核對原 lease、Shift 選字、滾輪分流、取消／capture／重放及清理。一般測試只用合成資料，不連 PTT。仍需真正 trusted pointer／選字／縮放與清理，才能宣稱站端滑鼠已原生驗收。
+自製 [模式 trace](../tests/fixtures/mouse-modes.json) 是獨立手寫狀態 expected，逐 byte／所有兩段切分核對；另測無私有標記、錯格式、取消、字串與超長 CSI 不改模式，C0 中斷、重設、同步批次、非支援格式拒絕、格線邊界及獨立按鈕 bytes。八個交易 owner 與一個 control snapshot 案例核對租約、速率、逾時及撤銷；八個 production Connection loopback 案例獨立核對精確 SGR bytes、更新後釋放、重複零送出、佇列滿時控制、同步模式變化、重連隔離、保活暫停及導覽來源。Surface 測試核對顯示 ACK／模式／policy、可信准入、封閉型別及獨立 wire expected；八個 JS pointer／handler 案例核對原 lease、Shift 選字、滾輪分流、取消／capture／重放及清理。一般測試只用合成資料，不連 PTT。這些單元結果不能代替下述限定原生案例或尚未驗收的邊界。
+
+macOS `mouse` probe 已以真正視窗完成 col 4／row 4 的左／右鍵精確按下釋放、未支援 1003 的點擊／滾輪零輸出、Shift 雙擊選行及 OS 剪貼簿讀回、停用後一次本機文章編號 CR、重新啟用及中鍵按住時的模式撤銷；peer 沒有收到中鍵釋放或額外本機 bytes。最後 mode epoch 6、無 held lease，正常 Close acknowledged 並 join renderer、connection、credential 及 file owners。前後 PNG 獨立解碼 960×576、全部像素相同；鍵盤縮放 100→125→100% 通過。
+
+此案例不是 Shift 拖曳或 Ctrl＋滾輪的原生證據：工具拒絕單獨保持修飾鍵，並行按鍵／滾輪沒有形成縮放，因此後者保留 not_ready，只能引用 handler 單元結果。原生失焦／lost capture／重連、跨 DPR、實站與其他 OS 也沒有在本案例冒算通過。第一次原生 probe 誤將既有本機點編號的 CR 契約寫成方向右，cleanup false／缺 surface 報告，保留為失敗；修正測試服務後從頭重跑，沒有改產品送鍵去遷就 probe。證據及候選 App 身分在 active plan。

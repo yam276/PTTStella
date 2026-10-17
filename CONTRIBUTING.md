@@ -27,6 +27,8 @@ core 執行 Rust 1.97.0 的 fmt、Clippy、畫面與互動測試 suite 及 2 個
 
 站端滑鼠另跑 `cargo test --locked --features desktop --lib mouse`：同一 Screen／CSI parser 的每個分片、固定模式 trace／epoch、RIS／session reset、同步期間模式、取消與超長拒絕，以及純 encoder 的獨立 SGR bytes／修飾鍵／格線邊界；交易 owner 與 production Connection loopback 核對更新後釋放、舊租約／取消、滿佇列控制、速率、模式／重連及保活。UI 另跑 desktop bin 與 `node --test tooling/test_surface_mouse.mjs tooling/test_surface_links.mjs tooling/test_surface_dialogs.mjs`，涵蓋顯示 ACK、封包型別、pointer 交易與分流；不以單元或現有本機滑鼠 gate 代替新的站端原生互動驗收，需求見 [站端滑鼠](docs/station-mouse.md)。
 
+`--probe-surface OUTPUT_DIRECTORY mouse` 使用固定自製文章列表及真正 production Connection；peer 精確要求零基 col 4／row 4 的左鍵 press／release，切成未支援 1003 後拒絕站端滑鼠與滾輪，只有明確停用後點同一文章編號可送一次 CR。重新啟用後要求同座標右鍵一對，再要求中鍵按下；此時 peer 送同步 off／on 撤銷交易，只接受 Close，不能補送中鍵釋放。以原生 Shift 雙擊選行、Cmd-C／草稿 Cmd-V 讀回系統剪貼簿，草稿不保存；另外核對開關、PNG、一次本機導覽、單筆取消、Close acknowledged 與全部 owner join。中鍵使用可保持 1,200ms 的真正按下，以便模式更新先於釋放。不能只看程序退出碼，缺報告或 cleanup false 必須失敗。原生 Shift 拖曳與 Ctrl＋滾輪、所有 DPI／其他平台仍須另驗，不能用這個限定案例冒充通過。
+
 內建字型／桌面資產路由變更另跑 `cargo test --locked --features desktop --bin pttstella`，檢查固定路由的 MIME、原始字型標頭及未知路徑／方法拒絕；主畫面、預覽、保存及 PNG 仍須實際 WebView 驗證。新字型來源、SHA-256、著作權及授權需記錄於 assets/fonts。
 
 2FA 引導另用 `--probe-surface OUTPUT_DIRECTORY login_2fa`，開啟 Vim 後按鈕登入合成帳密；原始輸入六位錯碼、八位救援碼，進入主選單後明確 Esc 回 Normal，再正常關窗。peer 精確核對一次帳密與兩次手動碼，額外輸入失敗；報告需包含提示／錯碼／瀏覽三個狀態、Close acknowledged 與 owner join。不代替實站 2FA 或原生 IME 驗收。
