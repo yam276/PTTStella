@@ -396,3 +396,7 @@ recent-cleared = 最近看板與備份已清除。
 recent-failed = 最近看板保存失敗：{ $error }。切板結果不受影響。
 recent-load-failed = 最近看板載入失敗：{ $error }。本次只保留於記憶體；清除清單後才能重新保存。
 recent-clear-failed = 最近看板尚未完整清除：{ $error }。請重試。
+
+article-aid-invalid = 文章 AID 須為有效的八碼識別子，可加上開頭 #。
+article-url-invalid = 文章網址須為支援的 www.ptt.cc /bbs 文章網址，不接受額外參數或轉址。
+article-target-invalid = 請提供板名與 AID，或完整的 #AID@板名／PTT 文章網址。

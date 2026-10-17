@@ -402,3 +402,7 @@ recent-cleared = Recent boards and their backup have been cleared.
 recent-failed = Could not save recent boards: { $error }. The board navigation result is unchanged.
 recent-load-failed = Could not load recent boards: { $error }. Visits remain in memory for this session; clear the list to resume saving.
 recent-clear-failed = Recent boards were not fully cleared: { $error }. Please retry.
+
+article-aid-invalid = Enter a valid eight-character article AID, optionally prefixed with #.
+article-url-invalid = Enter a supported www.ptt.cc /bbs article URL without extra parameters or redirects.
+article-target-invalid = Provide a board and AID, or a complete #AID@Board / PTT article URL.
