@@ -207,6 +207,10 @@ C1 依序開啟及複製片段 rows `[8,9]`，兩次 Cmd-C 後在未保存書籤
 
 另一次只作工具能力診斷的 gestures 程序保留失敗：並行 Ctrl＋F20／滾輪仍 100%，不能證明 Ctrl＋滾輪；並行 Shift＋F20／拖曳雖顯示第 5–6 行選取，peer 在等待本機 CR 時收到不符輸入，cleanup false／runner failed。沒有據此宣稱兩項實體手勢驗收通過，也未修改產品或放寬 expected 來接受輔助功能鍵；已詢問使用者是否方便實體補驗。本輪三份測試副本已在 exclusive lease 內核對退出及身分後移除，保留另開的正常 App 程序、交付 App、所有報告（含失敗）及 PNG；receipt completed。這是最新候選的兩項原生回歸，不代替 D 原生手勢、黑邊／DPR、失焦／lost capture／重連、Windows／Linux 或實站；整體 goal 持續。
 
+**D 原生黑邊／格線外釋放補驗**：新增 `mouse_boundary` 嚴格合成探針，共用既有格線、模式與 production Connection，不改產品 pointer 分流。macOS 全螢幕符合視窗時先點左側黑邊，再從零基 col 4／row 4 拖到黑邊放開；peer 精確收到一次 `ESC[<0;5;5M`，之後僅接受 Close。報告只有左鍵按下、一次取消、零本機導覽／開關／連結，最後 active 為空；PNG 匯出、Close acknowledged、全部 owner join／listeners released、退出 0 與嚴格 runner 均通過。這只證明本次尺寸的黑邊與格線外放開，不算離開視窗、失焦、所有 DPR 或實體修飾鍵手勢驗收。
+
+證據保留 `.local/verification/mouse-d-boundary/native`；探針版本的 112 個 desktop lib、42 個 bin、51 個 JS、core／desktop all-targets Clippy／docs 通過。交付 App 仍為 `dist/macos-mouse-final/PTTStella.app`，沒有以新增測試副本取代。使用者已答覆可補驗，另開只連 loopback 的 `mouse` 畫面等待 Shift 拖曳／複製及 Ctrl＋滾輪結果；尚未收到結果，不先記通過，沒有 push。
+
 
 
 

@@ -218,13 +218,13 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
-    pub fn start_mouse_probe() -> Result<Self, String> {
+    pub fn start_mouse_probe(boundary: bool) -> Result<Self, String> {
         let bytes = [
             probe::article_page("articles")?,
             b"\x1b[?1000;1006h".to_vec(),
         ]
         .concat();
-        let connection = Self::start_owned_probe(bytes, probe::Scenario::Mouse)?;
+        let connection = Self::start_owned_probe(bytes, probe::Scenario::Mouse { boundary })?;
         connection.keep_alive(false)?;
         Ok(connection)
     }

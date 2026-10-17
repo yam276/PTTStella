@@ -17,28 +17,36 @@ pub(super) enum Scenario {
     Boards,
     Articles,
     Bookmarks,
-    Mouse,
+    Mouse { boundary: bool },
     Filters,
     Surface,
 }
 
 // Handwritten grid coordinates and exact SGR edges. The native runner also
 // performs local-only selection and blocked clicks between these inputs.
-async fn mouse<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result<(), String>
+async fn mouse<S>(
+    socket: &mut tokio_tungstenite::WebSocketStream<S>,
+    boundary: bool,
+) -> Result<(), String>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
-    for (expected, reply) in [
-        (b"\x1b[<0;5;5M".as_slice(), b"".as_slice()),
-        (b"\x1b[<0;5;5m", b"\x1b[?1003h"),
-        (b"\r", b"\x1b[?1000h"),
-        (b"\x1b[<2;5;5M", b""),
-        (b"\x1b[<2;5;5m", b""),
-        (
-            b"\x1b[<1;5;5M",
-            b"\x1b[?2026h\x1b[?1000l\x1b[?1000h\x1b[?2026l",
-        ),
-    ] {
+    let steps: &[(&[u8], &[u8])] = if boundary {
+        &[(b"\x1b[<0;5;5M", b"")]
+    } else {
+        &[
+            (b"\x1b[<0;5;5M".as_slice(), b"".as_slice()),
+            (b"\x1b[<0;5;5m", b"\x1b[?1003h"),
+            (b"\r", b"\x1b[?1000h"),
+            (b"\x1b[<2;5;5M", b""),
+            (b"\x1b[<2;5;5m", b""),
+            (
+                b"\x1b[<1;5;5M",
+                b"\x1b[?2026h\x1b[?1000l\x1b[?1000h\x1b[?2026l",
+            ),
+        ]
+    };
+    for &(expected, reply) in steps {
         if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected)
         {
             return Err(format!("native mouse input differs from {expected:02x?}"));
@@ -460,7 +468,7 @@ pub(super) async fn serve(
             | Scenario::Boards
             | Scenario::Articles
             | Scenario::Bookmarks
-            | Scenario::Mouse
+            | Scenario::Mouse { .. }
     ) {
         300
     } else {
@@ -478,8 +486,8 @@ pub(super) async fn serve(
         if matches!(scenario, Scenario::Window) {
             return window(&mut socket).await;
         }
-        if matches!(scenario, Scenario::Mouse) {
-            return mouse(&mut socket).await;
+        if let Scenario::Mouse { boundary } = scenario {
+            return mouse(&mut socket, boundary).await;
         }
         if matches!(scenario, Scenario::Boards) {
             return boards(&mut socket).await;
