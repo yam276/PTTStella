@@ -232,11 +232,17 @@ impl Connection {
         Self::start_mouse_scene(tracking, probe::Scenario::MouseSamples(case))
     }
     fn start_mouse_scene(tracking: usize, scenario: probe::Scenario) -> Result<Self, String> {
-        let bytes = [
+        let mut bytes = [
             probe::article_page("articles")?,
             format!("\x1b[?{tracking};1006h").into_bytes(),
         ]
         .concat();
+        if matches!(
+            scenario,
+            probe::Scenario::MouseSamples(MouseSampleProbe::RoundTrip)
+        ) {
+            bytes.extend_from_slice(b"\x1b[2;1H\x1b[2KHold A -> B -> A; no Shift\x1b[5;1H\x1b[2K\x1b[5;5H\x1b[1;33mA     B\x1b[0m\x1b[24;80H");
+        }
         let connection = Self::start_owned_probe(bytes, scenario)?;
         connection.keep_alive(false)?;
         Ok(connection)

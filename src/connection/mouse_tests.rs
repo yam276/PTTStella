@@ -60,6 +60,23 @@ async fn native_sample_peers_require_their_exact_final_gesture_and_acknowledge_c
             view.received > 0 && !view.output_pending
         })
         .await;
+        if matches!(case, MouseSampleProbe::RoundTrip) {
+            let anchors = start
+                .frame
+                .glyphs
+                .iter()
+                .filter(|glyph| glyph.row == 4 && matches!(glyph.text.as_str(), "A" | "B"))
+                .map(|glyph| {
+                    (
+                        glyph.col,
+                        glyph.text.as_str(),
+                        glyph.left.fg,
+                        glyph.left.bright,
+                    )
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(anchors, [(4, "A", 3, true), (10, "B", 3, true)]);
+        }
         let sequence: &[&[u8]] = match case {
             MouseSampleProbe::Drag => &[b"\x1b[<0;5;5M", b"\x1b[<32;11;5M", b"\x1b[<0;11;5m"],
             MouseSampleProbe::RoundTrip => &[

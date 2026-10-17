@@ -429,7 +429,7 @@ async fn run(
                 }
                 match event {
                     SurfaceEvent::StationMouse { event, .. } => {
-                        if super::probe::mouse_case(surface_probe.as_deref()) && checks.mouse_reports.len()<16 {checks.mouse_reports.push((event.report.button,event.report.action));}
+                        if super::probe::mouse_case(surface_probe.as_deref()) && checks.mouse_edges.len()<16 {checks.mouse_edges.push(event.report);}
                         let result = if !screen.mouse_shown(&event) || pending_paste.read().is_some() || keyboard_policy.status(&receiver.borrow().context()).pending {
                             Err(pttstella::msg!("station-mouse-stale"))
                         } else {
@@ -1116,7 +1116,8 @@ async fn run(
     };
     let mut reports = Vec::new();
     if let (Some(case), Some(path)) = (surface_probe, probe.as_ref()) {
-        let mouse_report = serde_json::json!({"reports":checks.mouse_reports,"samples":checks.mouse_samples,"sample_overflow":checks.mouse_sample_overflow,"cancels":checks.mouse_cancels,"copies":checks.mouse_copies,"toggles":checks.mouse_toggles,"final":receiver.borrow().mouse,"navigation_requests":checks.navigation_requests});
+        let mut mouse_report = checks.mouse_observations();
+        mouse_report["final"] = serde_json::json!(receiver.borrow().mouse);
         reports.push((path.join("surface-probe.json"),serde_json::json!({
             "status":if case=="slow" && commands.busy() || case=="files_slow" && files.busy() || case=="files" && checks.export_checked || case=="untrusted" && surface_probe_clean && rejected_events==3
                 || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB")

@@ -249,6 +249,8 @@ macOS 的兩次往返嘗試均未完成：第一次觀察 AX 回來時已超過�
 
 獨立 Pillow 解碼確認移動／wheel／負向／人工選取縮放的完整行 PNG 與同一 960×576 基準均零差異，C1 PNG 與既有 C1 基準亦零差異。六個 App 的嚴格 ad-hoc 驗章及去簽章 executable SHA-256 相同，為 `43a8be3a5ef7d4d460c94d1621e72c199d505561f406cdfd0f560a66914a232f`；證據保留 `.local/verification/mouse-d-failure-reports` 與 `mouse-d-final-regression`。比對命令曾因共用磁碟預留總額被 guard 拒絕；確認一個持有程序結束後，以相同 isolated／4 GiB 命令重跑通過，未清他人快取或改政策。這些結果不補成 held motion、人工那次零多送、其他 OS、所有 DPR／IME／睡眠或實站通過，交付 App 尚未取代。
 
+**持有往返的人工嘗試與可觀測性補強**：使用者在 `package-3` 的 `native-physical-held` 回覆已完成；接手時 AX 為選取第 5–6 行／125%，peer 已中斷。新 failure report 保留一筆左鍵按下、一次取消／複製、零 motion／導覽，但 peer 拒絕第一個 anchor；因舊記錄只有按鈕／動作，不能判斷座標或修飾鍵，也不推定使用者重複了其他手勢。該次仍 failed、cleanup false、exit 0，不算往返通過。接續將唯一有界記錄改存完整 Report，從中衍生原配對及新增 edges 診斷；不記原始鍵入文字、不改准入與送出機制。往返 probe 的同兩格改以黃色 A／B 明示，精確 peer expected 不變，完成後仍還原原 fixture；補獨立標記 cell／樣式及失敗報告保留座標／修飾鍵案例。125 個 lib、45 個 bin、desktop all-targets Clippy 通過，證據保留 `.local/verification/mouse-d-anchors`；新原生補驗接續。
+
 
 
 
