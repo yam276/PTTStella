@@ -91,7 +91,13 @@ where
             return Err(format!("board switch probe input differs at step {step}"));
         }
         if step == 7 {
-            tokio::time::sleep(Duration::from_secs(3)).await;
+            tokio::select! {
+                _=tokio::time::sleep(Duration::from_secs(3))=>{},
+                incoming=socket.next()=>return match incoming {
+                    Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
+                    _=>Err("board switch probe expected cancellation or Close while waiting".into()),
+                },
+            }
         }
         socket
             .send(Message::Binary(board_page(scene)?.into()))

@@ -390,3 +390,15 @@ board-go = Go
 board-dialog-hint = Enter a board name, then choose Go. Handle entry screens and server prompts manually.
 board-dialog-starting = Starting switch…
 board-dialog-disconnected = Connect to PTT before switching boards.
+
+recent-invalid = Recent board data is invalid or over capacity. The original file is preserved; clear the list to resume saving.
+recent-directory-missing = The local recent-board data directory is unavailable.
+recent-title = Recent boards
+recent-empty = No confirmed board visits yet.
+recent-clear = Clear recent boards
+recent-saving = Saving recent boards.
+recent-saved = Recent boards saved locally.
+recent-cleared = Recent boards and their backup have been cleared.
+recent-failed = Could not save recent boards: { $error }. The board navigation result is unchanged.
+recent-load-failed = Could not load recent boards: { $error }. Visits remain in memory for this session; clear the list to resume saving.
+recent-clear-failed = Recent boards were not fully cleared: { $error }. Please retry.

@@ -660,6 +660,8 @@ function runSurfaceProbe(mode){
             else if(mode==="files")surfaceNote.textContent="原生選檔探針（本機合成資料）：可匯出 PNG 或匯入／匯出設定檔";
             else if(mode==="files_slow")surfaceNote.textContent="慢檔案探針：等待本機 runner 釋放；可開啟設定或關閉視窗";
             else if(mode==="fonts")surfaceNote.textContent="Font selection probe: local synthetic data and external-page sink";
+            else if(mode==="recent")surfaceNote.textContent="Recent-board probe: inspect the restored list, clear it, wait for saved feedback, then close";
+            else if(mode==="boards_close")surfaceNote.textContent="Board close probe: visit Stella and Other, start Beta, then close while waiting";
             else if(mode==="boards")surfaceNote.textContent="Board probe: cancel a draft, visit Stella and Other, reject an invalid name, then start Beta and stop before the delayed board list";
             else if(mode==="osc8")surfaceNote.textContent="OSC 8 probe: both wrapped fragments share a complete destination; select/copy, drag and open local media";
             else if(mode==="login_2fa")surfaceNote.textContent="Verification probe: explicit synthetic login, six digits, then eight-character recovery; Esc returns to Vim";
@@ -687,7 +689,7 @@ const route=createSurfaceRouter({
     surface_probe:runSurfaceProbe,
     filters_open:filterUi.open,filters_result:filterUi.receive,
     login_result:loginUi.receive,
-    board_result:boardUi.receive,keyboard_state:receiveKeyboard,
+    recent_boards:boardUi.receiveRecent,board_result:boardUi.receive,keyboard_state:receiveKeyboard,
     hover_settings:position=>{hoverPreference=position;hoverPosition.value=position;surface.dataset.hoverPosition=position;
         if(position==="off")cancelHover(true);else if(pointerClient)media.locate(pointerClient,position);},
     media_hover:data=>{if(hoverCandidate?.sequence===data.sequence){media.hover(data);media.locate(pointerClient,hoverPreference);}},

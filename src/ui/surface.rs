@@ -154,11 +154,14 @@ async fn run(
         changed=closing.changed()=>{changed.map_err(|e|e.to_string())?;return Ok(Vec::new());}
     };
     let files::Initial {
+        mut recent,
         mut preferences,
         filter_store,
         rules,
         mut filter_warning,
     } = *loaded;
+    let initial_recent = recent.packet().boards;
+    let mut recent_clears = 0usize;
     let mut screen = SurfaceState::new(rules);
     let mut receiver = connection.updates.clone();
     let Resources {
@@ -208,6 +211,8 @@ async fn run(
     eval.send(Packet::Paint(painting))
         .map_err(|e| e.to_string())?;
     eval.send(Packet::HoverSettings(preferences.hover()))
+        .map_err(|e| e.to_string())?;
+    eval.send(Packet::RecentBoards(recent.packet()))
         .map_err(|e| e.to_string())?;
     if let Some(warning) = preferences.warning() {
         eval.send(Packet::Notice(warning.into()))
@@ -304,6 +309,7 @@ async fn run(
             },
             done=files.next(), if !*closing.borrow()=>{
                 let packet=match done {
+                    FileCompletion::Recent(done)=>{recent.complete(done);Packet::RecentBoards(recent.packet())},
                     FileCompletion::Probe(result)=>{pending_report=Some(result.map_err(|e|e.to_string())?);close_deadline=Some(tokio::time::Instant::now()+std::time::Duration::from_secs(45));continue;},
                     FileCompletion::Fonts{request,result}=>{
                         if result.is_ok(){checks.font_catalog_reads+=1;}
@@ -420,11 +426,16 @@ async fn run(
                         })();
                         match result {
                             Ok(())=>board_request=Some((request,stamp)),
-                            Err(error)=>{if surface_probe.as_deref()==Some("boards"){checks.board_rejected=checks.board_rejected.saturating_add(1);}eval.send(Packet::BoardResult {request,feedback:Feedback::new(BoardStatus::Rejected,error)}).map_err(|error|error.to_string())?;},
+                            Err(error)=>{if matches!(surface_probe.as_deref(),Some("boards"|"boards_close")){checks.board_rejected=checks.board_rejected.saturating_add(1);}eval.send(Packet::BoardResult {request,feedback:Feedback::new(BoardStatus::Rejected,error)}).map_err(|error|error.to_string())?;},
                         }
                     },
+                    SurfaceEvent::RecentBoardsClear { .. } => {
+                        if surface_probe.as_deref()==Some("recent") {recent_clears=recent_clears.saturating_add(1);}
+                        recent.clear(files);
+                        eval.send(Packet::RecentBoards(recent.packet())).map_err(|e|e.to_string())?;
+                    },
                     SurfaceEvent::BoardCancel {operation,trusted:_} => {
-                        checks.board_cancelled |= surface_probe.as_deref()==Some("boards") && matches!(&receiver.borrow().board_navigation,pttstella::board_navigation::Progress::Active{operation:owner,..} if *owner==operation);
+                        checks.board_cancelled |= matches!(surface_probe.as_deref(),Some("boards"|"boards_close")) && matches!(&receiver.borrow().board_navigation,pttstella::board_navigation::Progress::Active{operation:owner,..} if *owner==operation);
                         if board_request.is_some_and(|(_,stamp)|stamp==operation) {
                             if commands.is(CommandKind::Board) {commands.cancel();}
                             board_request=None;
@@ -994,6 +1005,9 @@ async fn run(
             changed = receiver.changed() => {
                 changed.map_err(|e| e.to_string())?;
                 let view = receiver.borrow_and_update().clone();
+                if recent.observe(&view, files) {
+                    eval.send(Packet::RecentBoards(recent.packet())).map_err(|e|e.to_string())?;
+                }
                 if screen.update(&view) {
                     media_preview.close();
                     eval.send(Packet::HoverReset{media:false}).map_err(|e|e.to_string())?;
@@ -1012,7 +1026,7 @@ async fn run(
                 if view.login_guidance != login_guidance && view.login_guidance.needs_input() {
                     keyboard_policy.use_native_input();
                 }
-                if surface_probe.as_deref()==Some("boards") && checks.board_reached.len()<3 && let pttstella::board_navigation::Progress::Reached{serial,board}=&view.board_navigation && checks.board_reached.last().is_none_or(|(seen,_)|seen!=serial) {checks.board_reached.push((*serial,board.as_str().to_owned()));}
+                if matches!(surface_probe.as_deref(),Some("boards"|"boards_close")) && checks.board_reached.len()<3 && let pttstella::board_navigation::Progress::Reached{serial,board}=&view.board_navigation && checks.board_reached.last().is_none_or(|(seen,_)|seen!=serial) {checks.board_reached.push((*serial,board.as_str().to_owned()));}
                 login_guidance = view.login_guidance;
                 checks.verification_required |= login_guidance == pttstella::login::Guidance::CodeRequired;
                 checks.verification_rejected |= login_guidance == pttstella::login::Guidance::CodeRejected;
@@ -1041,14 +1055,17 @@ async fn run(
         reports.push((path.join("surface-probe.json"),serde_json::json!({
             "status":if case=="slow" && commands.busy() || case=="files_slow" && files.busy() || case=="files" && checks.export_checked || case=="untrusted" && surface_probe_clean && rejected_events==3
                 || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB")
+                || case=="recent" && recent_clears>=1 && recent.packet().boards.is_empty() && recent.packet().notice==Some(pttstella::msg!("recent-cleared"))
+                || case=="boards_close" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && matches!(&receiver.borrow().board_navigation,pttstella::board_navigation::Progress::Active{target,..} if target.as_str()=="Beta")
                 || case=="boards" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && checks.board_cancelled && checks.board_rejected>=1
                 || case=="osc8" && checks.osc8_open_rows==[8,9] && checks.osc8_copy_rows==[8,9] && checks.osc8_dragged && checks.osc8_media_decoded>=2 && checks.export_checked
                 || case=="login_2fa" && checks.verification_required && checks.verification_rejected && checks.verification_browsing && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
                 || case=="fonts" && checks.font_catalog_reads>=2 && !checks.font_sources.is_empty() && checks.export_checked
                 || matches!(case.as_str(),"sgr66"|"sgr66_legacy") && checks.export_checked
                 || case=="dialogs" && checks.settings_saved && checks.export_checked && checks.rows_export_checked && checks.media_external>=1 {"passed"} else {"failed"},
+            "recent_initial":initial_recent,"recent_final":recent.packet().boards,"recent_clears":recent_clears,
             "board_reached":checks.board_reached,"board_rejected":checks.board_rejected,"board_cancelled":checks.board_cancelled,
-            "scope":if case=="boards" {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
+            "scope":if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
             "osc8_dragged":checks.osc8_dragged,"osc8_media_decoded":checks.osc8_media_decoded,
             "osc8_open_rows":checks.osc8_open_rows,"osc8_copy_rows":checks.osc8_copy_rows,
             "verification_required":checks.verification_required,"verification_rejected":checks.verification_rejected,"verification_browsing":checks.verification_browsing,

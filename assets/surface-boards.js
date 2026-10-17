@@ -3,12 +3,13 @@ function createBoardDialog({tr,send,stamp,prepare,restore,changed,current,isEdit
     const openButton=document.getElementById("board-open"),stopButton=document.getElementById("board-stop");
     const dialog=document.getElementById("board-dialog"),name=document.getElementById("board-name");
     const submitButton=document.getElementById("board-submit"),cancelButton=document.getElementById("board-cancel"),note=document.getElementById("board-note");
+    const recentList=document.getElementById("board-recent"),recentEmpty=document.getElementById("board-recent-empty"),recentNote=document.getElementById("board-recent-note"),clearButton=document.getElementById("board-recent-clear");
     let disposed=false,composing=false,pending=null,active=null,sequence=0;
-    function working(){const busy=!!pending||!!active;name.disabled=busy;submitButton.disabled=busy;}
+    function working(){const busy=!!pending||!!active;name.disabled=busy;submitButton.disabled=busy;for(const button of recentList.querySelectorAll("button"))button.disabled=busy;}
     function open(e){
         if(disposed||!e.isTrusted||document.querySelector("dialog[open]")&&!dialog.open)return;
         if(dialog.open){name.focus();return;}
-        prepare(e);name.value=active?.target||"";note.textContent=active?tr("board-switch-active",{board:active.target}):tr("board-dialog-hint");
+        prepare(e);name.value=active?.target||"";note.textContent=active?tr("board-switch-active",{board:active.target}):"";
         composing=false;dialog.showModal();working();changed();name.focus();
     }
     function shortcut(e){
@@ -24,9 +25,23 @@ function createBoardDialog({tr,send,stamp,prepare,restore,changed,current,isEdit
         send({kind:"board_submit",request:pending.request,stamp:pending.operation,name:name.value,trusted:true});
     }
     function keys(e){
-        if(e.key!=="Enter"||e.isComposing||composing||e.keyCode===229||e.key==="Process")return;
+        if(e.target!==name||e.key!=="Enter"||e.isComposing||composing||e.keyCode===229||e.key==="Process")return;
         e.preventDefault();if(!e.repeat)submit(e);
     }
+    function receiveRecent(packet){
+        if(disposed)return;
+        const rows=packet.boards.map(board=>{
+            const item=document.createElement("li"),button=document.createElement("button");
+            button.type="button";button.dataset.board=board;button.textContent=board;item.append(button);return item;
+        });
+        recentList.replaceChildren(...rows);recentEmpty.hidden=rows.length>0;recentNote.textContent=packet.notice||"";working();
+    }
+    function chooseRecent(e){
+        if(disposed||!e.isTrusted||!dialog.open||pending||active||composing)return;
+        const button=e.target.closest("button[data-board]");if(!button||!recentList.contains(button))return;
+        e.preventDefault();name.value=button.dataset.board;note.textContent="";name.focus();
+    }
+    function clearRecent(e){if(disposed||!e.isTrusted||!dialog.open)return;e.preventDefault();send({kind:"recent_boards_clear",trusted:true});}
     function cancel(e){
         if(disposed||!e?.isTrusted)return;e.preventDefault();
         const operation=pending?.operation||active?.operation;
@@ -43,9 +58,9 @@ function createBoardDialog({tr,send,stamp,prepare,restore,changed,current,isEdit
     }
     function update(packet){if(disposed)return;if(pending&&(!packet.connected||pending.operation.generation!==packet.generation)){pending=null;if(dialog.open)note.textContent=tr("board-switch-stale");}active=packet.board_navigation?.state==="active"?packet.board_navigation:null;stopButton.hidden=!active;working();}
     function revoke(){disposed=true;pending=null;active=null;composing=false;name.value="";}
-    function destroy(){revoke();if(dialog.open)dialog.close();}
-    return {receive,update,revoke,destroy,clean:()=>disposed&&!dialog.open&&!pending&&!active&&!composing&&!name.value,
-        bindings:[[openButton,"click",open],[stopButton,"click",stop],[submitButton,"click",submit],[cancelButton,"click",cancel],
+    function destroy(){revoke();recentList.replaceChildren();recentNote.textContent="";if(dialog.open)dialog.close();}
+    return {receive,receiveRecent,update,revoke,destroy,clean:()=>disposed&&!dialog.open&&!pending&&!active&&!composing&&!name.value,
+        bindings:[[recentList,"click",chooseRecent],[clearButton,"click",clearRecent],[openButton,"click",open],[stopButton,"click",stop],[submitButton,"click",submit],[cancelButton,"click",cancel],
             [dialog,"cancel",cancel],[dialog,"keydown",keys],[name,"compositionstart",()=>{composing=true;}],[name,"compositionend",()=>{composing=false;}],
             [document,"keydown",shortcut,{capture:true}]]};
 }

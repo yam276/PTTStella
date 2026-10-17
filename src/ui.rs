@@ -3,12 +3,14 @@ mod app;
 mod bridge;
 mod commands;
 mod files;
+mod files_recent;
 mod lifecycle;
 mod outbound;
 mod preferences;
 mod presentation;
 mod probe;
 mod protocol;
+mod recent;
 mod surface;
 mod surface_state;
 

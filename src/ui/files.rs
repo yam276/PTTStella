@@ -25,6 +25,7 @@ use std::{
 };
 
 pub(super) struct Initial {
+    pub recent: super::recent::State,
     pub preferences: Preferences,
     pub filter_store: Result<filters::store::Store, String>,
     pub rules: filters::Rules,
@@ -47,6 +48,7 @@ impl std::fmt::Display for Error {
 }
 type FileResult<T> = Result<T, Error>;
 pub(super) enum Completion {
+    Recent(super::files_recent::Completed),
     Loaded(FileResult<Box<Initial>>),
     Fonts {
         request: u64,
@@ -65,6 +67,7 @@ pub(super) enum Completion {
 impl Completion {
     fn failure(self) -> Option<Error> {
         match self {
+            Self::Recent(done) => done.result.err().map(Error::Failed),
             Self::Loaded(result) => result.err(),
             Self::Fonts { result, .. } => result.err(),
             Self::Display(result) | Self::Hover(result) => result.err(),
@@ -91,10 +94,11 @@ impl Permit {
 pub(super) struct Files {
     work: Option<Work>,
     permit: Permit,
+    recent: super::files_recent::Writer,
 }
 impl Files {
     pub(super) fn busy(&self) -> bool {
-        self.work.is_some()
+        self.work.is_some() || self.recent.busy()
     }
     /// Admission is synchronous; a rejected request never opens another picker.
     pub(super) fn start<F: Future<Output = Completion> + 'static>(
@@ -102,33 +106,43 @@ impl Files {
         begin: impl FnOnce(Permit) -> F,
     ) -> Result<(), String> {
         self.permit.check().map_err(|e| e.to_string())?;
-        if self.busy() {
+        if self.work.is_some() {
             return Err(pttstella::msg!("file-busy"));
         }
         self.work = Some(Box::pin(begin(self.permit.clone())));
         Ok(())
     }
     pub(super) async fn next(&mut self) -> Completion {
-        let result = match self.work.as_mut() {
-            Some(work) => work.await,
-            None => std::future::pending().await,
-        };
-        self.work = None;
-        result
+        tokio::select! {
+            result=async { match self.work.as_mut() { Some(work)=>work.await, None=>std::future::pending().await } }=>{
+                self.work=None; result
+            },
+            done=self.recent.next()=>Completion::Recent(done),
+        }
+    }
+    pub(super) fn save_recent(&mut self, write: super::files_recent::Write) -> Result<(), String> {
+        self.permit.check().map_err(|e| e.to_string())?;
+        self.recent.enqueue(write);
+        Ok(())
     }
     pub(super) fn revoke(&self) {
         self.permit.0.store(true, Ordering::Release);
     }
     pub(super) async fn finish(&mut self) -> Result<(), String> {
         self.revoke();
-        let error = if self.busy() {
-            self.next().await.failure()
+        let mut errors = Vec::new();
+        while self.busy() {
+            if let Some(Error::Failed(error)) = self.next().await.failure() {
+                errors.push(error);
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
         } else {
-            None
-        };
-        match error {
-            None | Some(Error::Cancelled | Error::Stale) => Ok(()),
-            Some(Error::Failed(error)) => Err(pttstella::msg!("file-close-failed", error = error)),
+            Err(pttstella::msg!(
+                "file-close-failed",
+                error = errors.join("；")
+            ))
         }
     }
 }
@@ -168,6 +182,7 @@ pub(super) async fn load(permit: Permit, probe: Option<PathBuf>) -> Completion {
                 Err(error) => (filters::Rules::default(), Some(error)),
             };
             Ok(Box::new(Initial {
+                recent: super::recent::State::load(probe.as_deref()),
                 preferences: Preferences::load(probe.as_deref())?,
                 filter_store,
                 rules,

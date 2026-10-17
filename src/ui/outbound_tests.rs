@@ -106,6 +106,13 @@ fn outbound_results_match_the_shared_wire_examples() {
                 notice: "無效".into(),
             }),
         ),
+        (
+            "recent_boards",
+            Packet::RecentBoards(RecentBoardsPacket {
+                boards: vec![pttstella::board_navigation::BoardName::parse("Stella").unwrap()],
+                notice: None,
+            }),
+        ),
         ("input_rejected", Packet::InputRejected("舊連線".into())),
         (
             "selection",
