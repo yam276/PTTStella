@@ -38,6 +38,8 @@ UI 不等待 press 的命令回覆才處理 release；只透過同一有界命�
 
 移動與 wheel 使用一筆 owned animation-frame callback，每 34ms 最多送一個最新 sample，wheel 優先；按鈕釋放前可沖出原交易最後一筆 sample。UI 只保留一筆 motion、一筆 wheel 與不足 40px 的垂直餘量；line 按 40px、page 按畫面行數換算，一次 callback 最多一個垂直 tick，超量／慣性沒有延後回放的佇列。Shift 選字、Ctrl 縮放、已選文字、modal、viewport 已放大可本機捲動時不產生 station wheel。模式／policy／來源改變、黑邊、取消及 destroy 會清 callback 與舊 sample；不新增 timer 或送出 worker。
 
+可信的同一 primary 指標移動另核對 [Pointer Events 的 buttons 狀態](https://www.w3.org/TR/2026/REC-pointerevents3-20260630/#the-buttons-property)：持有按鈕必須仍有對應位元（左 1／中 4／右 2）。位元消失或狀態缺失即取消原交易、清 pending，不合成 release；此檢查先於黑邊及修飾鍵忽略，漏掉 up 後也能結束持有。外來 pointer ID 不影響原交易或其已排定移動；未持有時只接受 buttons 為 0 的無按鈕 motion，按在格線外再移入不冒充 hover。這是 UI 對原始 pointer 事件的驗證，Rust 仍核對 transaction／button／模式與版本。
+
 所有 bytes 仍共用同一序列化 send／Telnet escape 路徑。被動 motion 不增加命令 input epoch，也不建立／延長畫面回應等待，避免游標剛移過就把後續有效點擊判為過期；畫面／模式／policy 的失效檢查仍保留。點擊與 wheel 照常增加命令 epoch，wheel 只在尚無等待時建立有界等待，不建立 held／release 交易。新 sample 在共同佇列剩餘容量不超過 8 時拒絕，保留 explicit input／release／Close 的餘量；取消控制仍由既有 watch 優先套用。
 
 自製 [模式 trace](../tests/fixtures/mouse-modes.json) 是獨立手寫狀態 expected，逐 byte／所有兩段切分核對；另測無私有標記、錯格式、取消、字串與超長 CSI 不改模式，C0 中斷、重設、同步批次、非支援格式拒絕、格線邊界及獨立按鈕 bytes。八個交易 owner 與一個 control snapshot 案例核對租約、速率、逾時及撤銷；八個 production Connection loopback 案例獨立核對精確 SGR bytes、更新後釋放、重複零送出、佇列滿時控制、同步模式變化、重連隔離、保活暫停及導覽來源。Surface 測試核對顯示 ACK／模式／policy、可信准入、封閉型別及獨立 wire expected；八個 JS pointer／handler 案例核對原 lease、Shift 選字、滾輪分流、取消／capture／重放及清理。一般測試只用合成資料，不連 PTT。這些單元結果不能代替下述限定原生案例或尚未驗收的邊界。

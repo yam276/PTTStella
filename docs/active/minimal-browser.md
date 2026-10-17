@@ -231,6 +231,10 @@ macOS WKWebView 的 `mouse_motion` 完成 col 4／row 4 左鍵點擊／釋放，
 
 本輪四份 native App 副本及舊 boundary App 已在 exclusive build lease 內核對身分、終止 receipt 與無存活程序後移除；保留本次 package、交付／回復 App、全部成功與失敗報告及必要 PNG，cleanup receipt completed。沒有 push，也沒有將尚未回歸的 D2 package 宣稱為最新交付。
 
+**D2 實際按鈕狀態補強，原生驗證接續**：新增三組獨立 pointer doubles，先在原實作重現漏 up 未取消、外來指標清掉合法 pending，以及 unowned buttons 被編成無按鈕 motion。UI 現在依 W3C buttons 位元核對原交易的左／中／右鍵，缺失時取消並丟棄 pending，不合成 release；先隔離外來 pointer，再處理格線及修飾鍵，未持有只接受 buttons=0。原有 held 正例補上實際按下位元，按鈕／wire expected 不改。三組回歸先失敗、修正後通過；第一輪修正後有一個舊正例未填 held 按鈕狀態，補正 fixture 後通過，兩份失敗 log 保留 `.local/verification/mouse-d-buttons`。這批尚無新的原生結果，前述原生 motion／wheel 的既有 binary 證據保留原範圍。
+
+本批 42 個 desktop bin、59 個 JS（含 16 個 pointer owner／handler 案例）、desktop all-targets Clippy／docs／diff 通過；Rust session 核心未改，後續實際按鈕與新 binary 的原生回歸接續，沒有換交付 App 或 push。
+
 
 
 

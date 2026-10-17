@@ -13,7 +13,7 @@ function environment(){
     const owner=create({current:()=>packet,point:e=>e.cell??null,viewport,send:v=>sent.push(plain(v)),blocked:()=>block,prepare(){},changed(){},
         requestFrame:callback=>{const id=++nextFrame;frames.set(id,callback);return id;},cancelFrame:id=>frames.delete(id)});
     return {owner,sent,captures,viewport,get packet(){return packet;},set packet(value){packet=value;},set blocked(value){block=value;},
-        event(extra={}){return {button:0,pointerId:9,isTrusted:true,isPrimary:true,cell:{col:4,row:3},preventDefault(){},...extra};},
+        event(extra={}){return {button:0,buttons:0,pointerId:9,isTrusted:true,isPrimary:true,cell:{col:4,row:3},preventDefault(){},...extra};},
         update(extra){packet={...packet,...extra};owner.update(packet);},
         flush(time){const callbacks=[...frames.values()];frames.clear();for(const callback of callbacks)callback(time);},frames};
 }
@@ -122,14 +122,44 @@ test("1002 motion is held and ordered before release; foreign or untrusted moves
     env.owner.down(env.event());const lease=reports(env)[0].event.lease;
     assert.equal(env.owner.down(env.event({shiftKey:true})),true);
     assert.equal(env.owner.active(),true);assert.equal(reports(env).length,1);
-    for(const extra of [{isTrusted:false},{isPrimary:false},{pointerId:10},{metaKey:true}])env.owner.move(env.event(extra));
+    for(const extra of [{isTrusted:false},{isPrimary:false},{pointerId:10},{metaKey:true}])env.owner.move(env.event({buttons:1,...extra}));
     env.flush();assert.equal(samples(env).length,0);
-    env.owner.move(env.event({cell:{col:6,row:4},shiftKey:true}));
+    env.owner.move(env.event({cell:{col:6,row:4},shiftKey:true,buttons:1}));
     env.owner.up(env.event({cell:{col:7,row:4}}));
     assert.deepEqual(env.sent.map(value=>value.kind),["station_mouse","station_mouse_sample","station_mouse"]);
     assert.deepEqual(samples(env)[0].sample.lease,lease);
     assert.equal(samples(env)[0].sample.report.button,"left");assert.equal(samples(env)[0].sample.report.modifiers.shift,true);
     assert.equal(env.frames.size,0);env.flush();assert.equal(samples(env).length,1);
+});
+test("missing physical up cancels the owned button and drops its buffered motion without a release",()=>{
+    const env=environment();env.update({mouse:{...env.packet.mouse,modes:{epoch:5,tracking:"drag"}}});
+    env.owner.down(env.event());
+    env.owner.move(env.event({cell:{col:6,row:3},buttons:1}));
+    assert.equal(env.frames.size,1);
+    env.owner.move(env.event({cell:null,buttons:0,metaKey:true}));
+    env.flush();env.owner.up(env.event());
+    assert.equal(env.owner.active(),false);assert.equal(env.captures.size,0);assert.equal(env.frames.size,0);
+    assert.equal(cancels(env).length,1);assert.equal(samples(env).length,0);assert.equal(reports(env).length,1);
+});
+test("drag motion verifies each owned physical button mask and ignores foreign pointer state",()=>{
+    for(const [button,buttons,name] of [[0,1,"left"],[1,4,"middle"],[2,2,"right"]]){
+        const env=environment();env.update({mouse:{...env.packet.mouse,modes:{epoch:5,tracking:"drag"}}});
+        env.owner.down(env.event({button}));
+        env.owner.move(env.event({cell:{col:6,row:3},buttons}));
+        env.owner.move(env.event({pointerId:10,cell:null,buttons:0}));
+        env.flush();assert.equal(samples(env).length,1);assert.equal(samples(env)[0].sample.report.button,name);
+        assert.equal(env.owner.active(),true);
+        env.owner.move(env.event({buttons:buttons===1?2:1}));env.flush();
+        assert.equal(cancels(env).length,1);assert.equal(env.owner.active(),false);assert.equal(samples(env).length,1);
+    }
+});
+test("unowned physical buttons cannot masquerade as no-button motion or flush an older hover",()=>{
+    for(const buttons of [1,2,4,3,undefined,NaN]){
+        const env=environment();env.update({mouse:{...env.packet.mouse,modes:{epoch:5,tracking:"motion"}}});
+        env.owner.move(env.event({buttons:0}));assert.equal(env.frames.size,1);
+        env.owner.move(env.event({buttons}));env.flush();
+        assert.equal(samples(env).length,0);assert.equal(env.frames.size,0);assert.equal(cancels(env).length,0);
+    }
 });
 test("wheel normalization has one bounded latest tick, no release, and no old fractional source",()=>{
     const env=environment();
