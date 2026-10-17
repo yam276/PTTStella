@@ -4,6 +4,8 @@
 
 ## 目標
 
+目前增量：A／B 的明確子集與 C1／C2／C3 已交付並依下文區分平台與實站邊界；C1 指定 macOS 原生互動已補驗。D 模式核心／SGR 編碼已提交，Session／UI 分流與原生驗收仍進行中。最新可用 App 為 `dist/macos-bookmarks/PTTStella.app`，已驗證文章入口、書籤與完整網址；D 尚未接入該 App。
+
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
@@ -66,7 +68,7 @@ core 八套 suite／兩份 replay（login 新增逐切點、錯碼、假提示�
 
 最新候選為 `dist/macos-protocol-b2-delivery/PTTStella.app`，strict ad-hoc 驗章與實測 executable 去簽章 SHA 核對一致；報告保留 `.local/verification/protocol-b2`。未連 PTT、未操作真實帳密或 2FA 設定；實站驗證碼、原生 IME、Windows／Linux 與完整 Mac desktop backend 尚未驗收。C1 OSC 8 完整網址接續執行。
 
-**C1 核心與使用入口已實作，原生滑鼠互動仍未驗收**：Screen 解析有界 OSC 8，目的地由 Cell 擁有，Frame 只在 Rust 保留 metadata；`links` 在過濾後驗證 HTTP／HTTPS 並投影可點範圍，沒有 metadata 時保留原單列偵測。覆寫、擦除、插入／刪除、區域捲動及 reset 同時更新，混合雙寬字與無效／超限 metadata 不改猜文字；右鍵完整目的地的 Rust 選取契約已加入。限制與行為見 [完整網址](../links.md)。
+**C1 核心與使用入口：當時原生缺口，後續補驗已完成**：Screen 解析有界 OSC 8，目的地由 Cell 擁有，Frame 只在 Rust 保留 metadata；`links` 在過濾後驗證 HTTP／HTTPS 並投影可點範圍，沒有 metadata 時保留原單列偵測。覆寫、擦除、插入／刪除、區域捲動及 reset 同時更新，混合雙寬字與無效／超限 metadata 不改猜文字；右鍵完整目的地的 Rust 選取契約已加入。限制與行為見 [完整網址](../links.md)。
 
 core 八套 suite／兩份 replay 新增七個 interaction 與一個 filters 案例，獨立 expected 核對跨行目的地、全部切點、逐 byte、BEL／ST、錯誤 scheme、控制字元、最大長度／參數／目標數／bytes 預算、slot 回收、混合雙寬、編輯／捲動及遮黑。50 個 desktop lib、29 個 bin、全 targets desktop Clippy 通過，舊 fixture／expected 未修改。紀錄保留 `.local/verification/protocol-c1`；右鍵入口、原生互動探針與驗證結果另記如下，沒有宣稱實站通過。
 
@@ -176,6 +178,12 @@ macOS 四個獨立程序使用同一 `dist/macos-bookmarks/PTTStella.app`：繁�
 只有 1000＋1006 可產生三個具名按鈕的 press／release，唯一 encoder 處理 Shift／Alt／Ctrl、零基轉一基與同一 Screen 面積／格線邊界；motion、wheel、其他 tracking／encoding 明確回傳未支援，不產生部分 bytes。公開站端可能在啟動要求 1003，不能當作已支援點擊；協定與後續分流契約見 [站端滑鼠](../station-mouse.md)。六個純核心案例以固定手寫 trace、所有 byte 切分、取消／錯格式／超長／字串、C0、重設／同步、八種修飾鍵與獨立封包 expected 核對。95 個 desktop lib、39 個 bin、core／desktop all-targets Clippy／docs 通過，初期測試內無需 Vec 的 lint 已修正並保留紀錄；證據 `.local/verification/mouse-d-core`。
 
 這批尚未接 Session 的交易 owner／容量／速率、View／Paint、使用者開關、可信 pointer 或本機／站端唯一分流，不宣稱站端滑鼠可用或已原生驗收。最新交付 App 仍是書籤版；接續上述接線與本機 peer，再驗原生 pointer、Shift 選字、Ctrl＋滾輪、黑邊／DPR／模式變更與關窗；C1 pointer backend 缺口一併處理。
+
+**C1 macOS 原生互動補驗完成，指定案例 not_ready 已解除**。使用已驗證的書籤交付 App（19efa34，包含完整網址；不含其後 0545a47 的 D 核心）建立獨立 probe。直接 ⌃⌘F／符合視窗後，CUA 原生座標事件可到達 WebView；以選取行提示確認截圖／輸入間垂直偏移，最後完整程序依序各開啟與複製兩段，嚴格 rows 均為 `[8,9]`。每次 Cmd-C 後在本機書籤草稿用 Cmd-V 貼回，AX 均可見同一完整合成目的地；未保存資料。跨列拖曳為第 9–10 行，沒有額外外開；兩段圖片都由真正 WebView 解碼，第二次記憶體快取，HTTP 只有 `/colours.png` 一次。完整 screenshot 確認紅／藍兩半，差分圖不當作缺像素。
+
+嚴格 surface-probe.json passed、PNG 獨立解碼 960×576 且與原先相同場景基準逐像素相同；⌘Q／Close acknowledged、全部 owner join、退出碼 0。去簽章 executable hash 與 `dist/macos-bookmarks/PTTStella.app` 相同，strict 簽章有效。兩次前置試驗保留為失敗：native-menu Escape 送到 BBS 而被 peer 拒絕（cleanup false），以及座標校對先命中第 10 行使嚴格順序失敗；均未改 expected 或冒算通過。證據在 `.local/verification/osc8-pointer-recovery`，先前 `.local/verification/protocol-c1` 的失敗／not_ready 亦保留。
+
+本次只解除指定 OSC 8 片段開啟／剪貼簿／拖曳／PNG 媒體案例的原生缺口，不宣稱完整 macOS desktop gate、一般視窗所有座標、所有 DPI、影片／GIF、OS 真正外開、原生 IME、實站或其他 OS 通過。A／B／C 的本階段明確子集已交付，D 仍須接 Session 與 UI 並獨立驗收；沒有 push 或公開發佈。
 
 ## 維護性重構
 
