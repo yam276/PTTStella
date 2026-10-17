@@ -1958,3 +1958,5 @@ async fn invalid_and_offline_input_is_rejected_without_connecting() {
 }
 #[path = "article_tests.rs"]
 mod article_tests;
+#[path = "mouse_tests.rs"]
+mod mouse_tests;

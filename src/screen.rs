@@ -160,6 +160,12 @@ impl Screen {
     pub fn mouse_modes(&self) -> crate::mouse::Modes {
         self.mouse
     }
+    pub fn control_complete(&self) -> bool {
+        matches!(self.parser, Parser::Ground) && self.synchronized_since.is_none()
+    }
+    pub fn dimensions(&self) -> (usize, usize) {
+        (self.cols, self.rows)
+    }
     /// Identifies the first begin marker; repeated begins do not extend a batch.
     pub fn synchronized_since(&self) -> Option<u64> {
         self.synchronized_since
@@ -569,8 +575,7 @@ impl Screen {
         }
         let hyperlinks = self.hyperlinks.project(&glyphs, &self.cells, self.cols);
         Frame {
-            control_complete: matches!(self.parser, Parser::Ground)
-                && self.synchronized_since.is_none(),
+            control_complete: self.control_complete(),
             cols: self.cols,
             rows: self.rows,
             cursor: (self.x, self.y),

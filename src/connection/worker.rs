@@ -1,5 +1,7 @@
 //! The single session owner. Event polling stays separate from state transitions.
-use super::{CloseOutcome, Command, Dial, Phase, Socket, View, liveness, output, transport};
+use super::{
+    CloseOutcome, Command, Dial, Phase, Socket, View, liveness, mouse_control, output, transport,
+};
 use crate::{
     login::{self, Credentials, Prompt},
     navigation::{self, Context, Intent, Stamp},
@@ -19,6 +21,10 @@ use tokio::{
 use tokio_tungstenite::tungstenite::{Error as SocketError, Message};
 
 enum PendingInput {
+    Mouse {
+        revision: u64,
+        deadline: Instant,
+    },
     Manual {
         revision: u64,
         deadline: Instant,
@@ -32,12 +38,16 @@ enum PendingInput {
 impl PendingInput {
     fn revision(&self) -> u64 {
         match self {
-            Self::Manual { revision, .. } | Self::Refresh { revision, .. } => *revision,
+            Self::Manual { revision, .. }
+            | Self::Refresh { revision, .. }
+            | Self::Mouse { revision, .. } => *revision,
         }
     }
     fn expired(&self, now: Instant) -> bool {
         match self {
-            Self::Manual { deadline, .. } | Self::Refresh { deadline, .. } => now >= *deadline,
+            Self::Manual { deadline, .. }
+            | Self::Refresh { deadline, .. }
+            | Self::Mouse { deadline, .. } => now >= *deadline,
         }
     }
 }
@@ -55,6 +65,7 @@ struct NavigationJob {
 }
 
 struct Session {
+    mouse: crate::mouse::input::State,
     screen: Screen,
     endpoint: String,
     socket: Option<Socket>,
@@ -83,6 +94,7 @@ pub(super) async fn run(
     updates: watch::Sender<View>,
     timing: liveness::Timing,
     mut gates: watch::Receiver<Option<(Stamp, bool)>>,
+    mut mouse_gates: watch::Receiver<mouse_control::Controls>,
 ) {
     let mut session = Session::new(screen, endpoint, updates, timing);
     let mut clock = interval(Duration::from_millis(16));
@@ -91,7 +103,12 @@ pub(super) async fn run(
     loop {
         tokio::select! {
             command = commands.recv() => {
+                if matches!(mouse_gates.has_changed(),Ok(true)) {session.mouse_controls(*mouse_gates.borrow_and_update());}
                 if session.command(command).await { break; }
+            }
+            changed=mouse_gates.changed()=>{
+                if changed.is_err() {session.stop().await;break;}
+                session.mouse_controls(*mouse_gates.borrow_and_update());
             }
             changed = gates.changed() => {
                 if changed.is_err() { session.stop().await; break; }
@@ -131,6 +148,7 @@ pub(super) async fn run(
         }
         // A response wait cannot outlive its connection or replace its close reason.
         if session.view.phase != Phase::Connected {
+            session.mouse.interrupt();
             session.pending_input = None;
             session.login_attempt = None;
             session.login_followup = None;
@@ -152,6 +170,7 @@ impl Session {
     ) -> Self {
         let view = updates.borrow().clone();
         Self {
+            mouse: crate::mouse::input::State::default(),
             screen,
             endpoint,
             view,
@@ -181,10 +200,90 @@ impl Session {
             ..self.view.stamp()
         }
     }
+    fn mouse_context(&self) -> crate::mouse::input::Context {
+        let connected = self.view.phase == Phase::Connected && self.socket.is_some();
+        let (cols, rows) = self.screen.dimensions();
+        crate::mouse::input::Context {
+            stamp: self.stamp(),
+            modes: if connected {
+                self.screen.mouse_modes()
+            } else {
+                crate::mouse::Modes::default()
+            },
+            ready: connected
+                && self.screen.control_complete()
+                && self.login_attempt.is_none()
+                && self.login_followup.is_none()
+                && self.navigation_job.is_none()
+                && matches!(self.pending_input, None | Some(PendingInput::Mouse { .. })),
+            cols,
+            rows,
+        }
+    }
+    fn sync_mouse(&mut self) {
+        let context = self.mouse_context();
+        self.mouse.observe(context, Instant::now());
+        self.view.mouse = self.mouse.snapshot(context);
+    }
+    fn mouse_controls(&mut self, controls: mouse_control::Controls) {
+        self.sync_mouse();
+        if let Some(preference) = controls
+            .preference
+            .filter(|p| p.generation == self.view.generation)
+        {
+            self.mouse.enable(preference.serial, preference.enabled);
+        }
+        if let Some(revoke) = controls
+            .revoke
+            .filter(|r| r.generation == self.view.generation)
+        {
+            self.mouse.revoke(revoke.serial, None);
+        }
+        if let Some(cancel) = controls
+            .cancel
+            .filter(|c| c.lease.stamp.generation == self.view.generation)
+        {
+            self.mouse.revoke(cancel.serial, Some(cancel.lease));
+        }
+        self.sync_mouse();
+        self.dirty = true;
+    }
+    async fn mouse_report(&mut self, event: crate::mouse::input::Event) {
+        // Like manual keys, late pointer events cannot overwrite a close reason.
+        if self.view.phase != Phase::Connected
+            || self.socket.is_none()
+            || event.lease.stamp.generation != self.view.generation
+        {
+            return;
+        }
+        self.clear_answered_input();
+        match self
+            .mouse
+            .accept(self.mouse_context(), event, Instant::now())
+        {
+            Ok(bytes) => {
+                self.idle.activity(Instant::now());
+                self.sync_mouse();
+                if self.write_input(&bytes).await.is_ok()
+                    && event.report.action == crate::mouse::Action::Press
+                {
+                    // The station discards KEY_MOUSE_RELEASE; it does not owe
+                    // a redraw for an up edge. Preserve, never extend, a press wait.
+                    self.pending_input = Some(PendingInput::Mouse {
+                        revision: self.screen.revision(),
+                        deadline: Instant::now() + self.timing.response_timeout,
+                    });
+                }
+            }
+            Err(error) => self.view.message = error.message(),
+        }
+        self.dirty = true;
+    }
 
     /// Returns true only when the command closes this worker.
     async fn command(&mut self, command: Option<Command>) -> bool {
         match command {
+            Some(Command::Mouse(event)) => self.mouse_report(event).await,
             Some(Command::KeepAlive(enabled)) => self.keep_alive(enabled),
             Some(Command::Connect) => self.connect(),
             Some(Command::Disconnect) => self.disconnect().await,
@@ -273,12 +372,22 @@ impl Session {
         self.view.input_epoch = 0;
         self.view.input_pending = false;
         self.view.phase = Phase::Connecting;
+        self.sync_mouse();
         self.view.message = crate::msg!("status-connecting");
         self.dialing = Some(tokio::spawn(transport::dial(self.endpoint.clone())));
         self.dirty = true;
     }
 
     async fn stop(&mut self) -> CloseOutcome {
+        self.mouse.interrupt();
+        let context = crate::mouse::input::Context {
+            ready: false,
+            modes: crate::mouse::Modes::default(),
+            ..self.mouse_context()
+        };
+        self.mouse.observe(context, Instant::now());
+        self.view.mouse = self.mouse.snapshot(context);
+        self.updates.send_replace(self.view.clone());
         transport::stop(&mut self.socket, &mut self.dialing).await
     }
 
@@ -323,6 +432,7 @@ impl Session {
     }
 
     fn fail(&mut self, error: String) {
+        self.mouse.interrupt();
         self.socket = None;
         self.view.phase = Phase::Error;
         self.view.message = error;
@@ -330,6 +440,7 @@ impl Session {
 
     /// The only path for application input: increment epoch once, escape once, never retry.
     async fn write_input(&mut self, bytes: &[u8]) -> Result<(), String> {
+        self.sync_mouse();
         let Some(socket) = self.socket.as_mut() else {
             return Err(navigation::Error::Disconnected.to_string());
         };
@@ -366,6 +477,7 @@ impl Session {
             self.dirty = true;
             return;
         }
+        self.mouse.intervene();
         if self.navigation_job.is_some() {
             self.stop_navigation(crate::msg!("navigation-job-cancelled"));
         }
@@ -396,6 +508,7 @@ impl Session {
             return Err(crate::msg!("login-not-account-prompt"));
         }
         self.idle.activity(Instant::now());
+        self.mouse.intervene();
         self.write_input(&credentials.account_input()).await?;
         self.login_followup = None;
         self.view.login_guidance = login::Guidance::Idle;
@@ -422,6 +535,7 @@ impl Session {
             return Err(navigation::Error::AwaitingScreen.to_string());
         }
         let start = Flow::begin(&self.screen.frame(), target.clone(), Instant::now())?;
+        self.mouse.intervene();
         self.navigation_serial = self.navigation_serial.saturating_add(1);
         match start {
             navigation_job::Start::Reached(target) => {
@@ -600,6 +714,8 @@ impl Session {
             return Err(navigation::Error::AwaitingScreen.to_string());
         }
         let bytes = navigation::plan(&context, intent).map_err(|e| e.to_string())?;
+        self.mouse.intervene();
+        self.dirty = true;
         if bytes.is_empty() {
             return Ok(());
         }
@@ -660,6 +776,7 @@ impl Session {
         self.view.received = self.view.received.saturating_add(bytes.len());
         let (display, reply) = self.framing.feed(bytes, 80, 24);
         self.screen.feed(&display);
+        self.sync_mouse();
         self.output
             .track(self.screen.synchronized_since(), Instant::now());
         if !display.is_empty() {
@@ -667,7 +784,14 @@ impl Session {
             // this change. The retained frame may still be visible until flush.
             self.view.output_pending = true;
             if !self.updates.borrow().output_pending {
-                self.updates.send_modify(|view| view.output_pending = true);
+                let mouse = self.view.mouse;
+                self.updates.send_modify(|view| {
+                    view.output_pending = true;
+                    view.mouse = mouse;
+                });
+            } else {
+                let mouse = self.view.mouse;
+                self.updates.send_modify(|view| view.mouse = mouse);
             }
         }
         if !reply.is_empty()
@@ -776,6 +900,7 @@ impl Session {
 
     fn publish(&mut self) {
         self.clear_answered_input();
+        self.sync_mouse();
         self.view.input_pending = (self.pending_input.is_some() || self.navigation_job.is_some())
             && self.view.phase == Phase::Connected;
         self.view.login_pending = self.login_attempt.is_some() || self.login_followup.is_some();
@@ -797,6 +922,7 @@ impl Session {
             && self.socket.is_some()
             && !self.view.input_pending
             && !self.view.login_pending
+            && !self.mouse.active()
             && self.view.context().allows_keepalive();
         self.updates.send_replace(self.view.clone());
         self.dirty = false;
@@ -817,6 +943,9 @@ impl Session {
 
     async fn refresh(&mut self, now: Instant) {
         self.clear_answered_input();
+        if self.mouse.expire(now) {
+            self.dirty = true;
+        }
         if self.navigation_job.is_none()
             && self.pending_input.as_ref().is_some_and(|p| p.expired(now))
         {
@@ -825,7 +954,7 @@ impl Session {
                 self.view.keep_alive = false;
                 self.view.message = crate::msg!("keepalive-unanswered");
                 self.view.keep_alive_failure = Some(self.view.message.clone());
-            } else {
+            } else if !matches!(self.pending_input, Some(PendingInput::Mouse { .. })) {
                 self.view.message = crate::msg!("input-unanswered");
             }
             self.pending_input = None;
@@ -838,6 +967,7 @@ impl Session {
             && self.login_attempt.is_none()
             && self.login_followup.is_none()
             && self.navigation_job.is_none()
+            && !self.mouse.active()
             && self.idle.due(now, stamp)
             && navigation::analyze(&self.screen.frame()).allows_keepalive()
         {

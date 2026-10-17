@@ -25,7 +25,7 @@ core 執行 Rust 1.97.0 的 fmt、Clippy、畫面與互動測試 suite 及 2 個
 
 ## 實作後的驗證
 
-站端滑鼠第一批另跑 `cargo test --locked --lib mouse::tests`：同一 Screen／CSI parser 的每個分片、固定模式 trace／epoch、RIS／session reset、同步期間模式、取消與超長拒絕，以及純 encoder 的獨立 SGR bytes／修飾鍵／格線邊界。這批尚無送出 owner 或 UI pointer，只能宣稱解析與編碼，不以現有本機滑鼠 gate 代替新的站端互動驗收；接線及原生需求見 [站端滑鼠](docs/station-mouse.md)。
+站端滑鼠另跑 `cargo test --locked --features desktop --lib mouse`：同一 Screen／CSI parser 的每個分片、固定模式 trace／epoch、RIS／session reset、同步期間模式、取消與超長拒絕，以及純 encoder 的獨立 SGR bytes／修飾鍵／格線邊界；交易 owner 與 production Connection loopback 核對更新後釋放、舊租約／取消、滿佇列控制、速率、模式／重連及保活。尚無 UI pointer，不以現有本機滑鼠 gate 代替新的站端互動驗收；接線及原生需求見 [站端滑鼠](docs/station-mouse.md)。
 
 內建字型／桌面資產路由變更另跑 `cargo test --locked --features desktop --bin pttstella`，檢查固定路由的 MIME、原始字型標頭及未知路徑／方法拒絕；主畫面、預覽、保存及 PNG 仍須實際 WebView 驗證。新字型來源、SHA-256、著作權及授權需記錄於 assets/fonts。
 

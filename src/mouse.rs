@@ -1,6 +1,7 @@
 //! Station mouse negotiation and bounded SGR button encoding only.
 //! The Session must still admit trusted, current, owned pointer transactions.
 use serde::{Deserialize, Serialize};
+pub mod input;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]

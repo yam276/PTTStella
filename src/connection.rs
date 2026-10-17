@@ -37,6 +37,7 @@ pub enum CloseOutcome {
 }
 #[derive(Clone)]
 pub struct View {
+    pub mouse: crate::mouse::input::Snapshot,
     /// The retained frame is not an admissible source for interactions yet.
     pub output_pending: bool,
     pub keep_alive: bool,
@@ -74,6 +75,7 @@ impl View {
     }
 }
 enum Command {
+    Mouse(crate::mouse::input::Event),
     KeepAlive(bool),
     Connect,
     Disconnect,
@@ -106,6 +108,7 @@ enum Command {
 pub struct Connection {
     commands: mpsc::Sender<Command>,
     keep_alive_ui: watch::Sender<Option<(Stamp, bool)>>,
+    mouse_ui: watch::Sender<mouse_control::Controls>,
     pub updates: watch::Receiver<View>,
     worker: Mutex<Option<JoinHandle<()>>>,
     probe_peer: Mutex<Option<JoinHandle<Result<(), String>>>>,
@@ -141,6 +144,7 @@ impl Connection {
         let runtime = tokio::runtime::Handle::try_current().map_err(|e| e.to_string())?;
         let (commands, receiver) = mpsc::channel(64);
         let initial = View {
+            mouse: crate::mouse::input::Snapshot::default(),
             output_pending: false,
             keep_alive: true,
             keep_alive_ready: false,
@@ -160,12 +164,20 @@ impl Connection {
         };
         let (sender, updates) = watch::channel(initial);
         let (keep_alive_ui, gates) = watch::channel(None);
+        let (mouse_ui, mouse_gates) = watch::channel(mouse_control::Controls::default());
         let worker = runtime.spawn(worker::run(
-            screen, endpoint, receiver, sender, timing, gates,
+            screen,
+            endpoint,
+            receiver,
+            sender,
+            timing,
+            gates,
+            mouse_gates,
         ));
         Ok(Self {
             commands,
             keep_alive_ui,
+            mouse_ui,
             updates,
             worker: Mutex::new(Some(worker)),
             probe_peer: Mutex::new(None),
@@ -260,6 +272,24 @@ impl Connection {
             return Err(crate::msg!("input-too-large"));
         }
         self.enqueue(Command::Input { generation, bytes })
+    }
+    pub fn mouse_report(&self, event: crate::mouse::input::Event) -> Result<(), String> {
+        // Keep capacity for an admitted release, manual keys and shutdown.
+        if event.report.action == crate::mouse::Action::Press && self.commands.capacity() <= 8 {
+            return Err(crate::msg!("connection-queue-full"));
+        }
+        self.enqueue(Command::Mouse(event))
+    }
+    pub fn mouse_enabled(&self, generation: u64, enabled: bool) {
+        self.mouse_ui
+            .send_modify(|controls| controls.enable(generation, enabled));
+    }
+    pub fn cancel_mouse(&self, lease: crate::mouse::input::Lease) {
+        self.mouse_ui.send_modify(|controls| controls.cancel(lease));
+    }
+    pub fn revoke_mouse(&self, generation: u64) {
+        self.mouse_ui
+            .send_modify(|controls| controls.revoke(generation));
     }
     pub async fn login(&self, stamp: Stamp, credentials: Credentials) -> Result<(), String> {
         self.request_login(stamp, credentials)?.wait().await
@@ -425,6 +455,7 @@ impl Connection {
 }
 
 mod liveness;
+mod mouse_control;
 mod output;
 mod probe;
 #[cfg(test)]
