@@ -1,8 +1,8 @@
 //! Real Session/transport, independent exact mouse bytes, loopback only.
 use super::*;
 use crate::mouse::{
-    Action, Button, Modifiers, Report, Tracking,
-    input::{Event, Lease, Route},
+    Action, Button, Modifiers, MotionReport, Report, Tracking, WheelDirection, WheelReport,
+    input::{Event, Lease, Route, Sample, SampleReport},
 };
 type Peer = tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>;
 fn event(view: &View, id: u64, action: Action) -> Event {
@@ -31,9 +31,147 @@ fn release(event: Event) -> Event {
         ..event
     }
 }
+fn motion(view: &View, id: u64, col: usize) -> Sample {
+    Sample {
+        lease: event(view, id, Action::Press).lease,
+        sequence: id,
+        report: SampleReport::Motion(MotionReport {
+            col,
+            row: 3,
+            button: None,
+            modifiers: Modifiers::default(),
+        }),
+    }
+}
+#[tokio::test]
+async fn mouse_motion_preserves_a_following_click_and_owned_drag_across_redraw() {
+    let (_listener, connection, mut peer, _) = ready().await;
+    peer.send(Message::Binary(b"\x1b[?1003h".to_vec().into()))
+        .await
+        .unwrap();
+    let current = wait(&connection, |view| {
+        view.mouse.modes.tracking() == Tracking::Motion
+            && view.mouse.route == Route::Station
+            && !view.output_pending
+    })
+    .await;
+    connection.mouse_sample(motion(&current, 1, 4)).unwrap();
+    expect(&mut peer, b"\x1b[<35;5;4M").await;
+    assert_eq!(connection.updates.borrow().input_epoch, current.input_epoch);
+    assert!(!connection.updates.borrow().input_pending);
+    assert!(connection.updates.borrow().mouse.active.is_none());
+    connection.mouse_sample(motion(&current, 2, 4)).unwrap();
+    let press = event(&current, 3, Action::Press);
+    connection.mouse_report(press).unwrap();
+    expect(&mut peer, b"\x1b[<0;5;4M").await; // duplicate motion sent no bytes
+    let held = wait(&connection, |view| view.mouse.active == Some(press.lease)).await;
+    let drag = Sample {
+        lease: press.lease,
+        sequence: 3,
+        report: SampleReport::Motion(MotionReport {
+            col: 6,
+            row: 3,
+            button: Some(Button::Left),
+            modifiers: Modifiers::default(),
+        }),
+    };
+    connection.mouse_sample(drag).unwrap();
+    expect(&mut peer, b"\x1b[<32;7;4M").await;
+    peer.send(Message::Binary(navigation_page("reading_middle").into()))
+        .await
+        .unwrap();
+    let redraw = wait(&connection, |view| {
+        view.frame.revision > held.frame.revision && !view.output_pending
+    })
+    .await;
+    assert_eq!(redraw.mouse.active, Some(press.lease));
+    connection.mouse_report(release(press)).unwrap();
+    expect(&mut peer, b"\x1b[<0;5;4m").await;
+    let released = wait(&connection, |view| {
+        view.mouse.active.is_none() && view.input_epoch == current.input_epoch + 2
+    })
+    .await;
+    let tick = Sample {
+        report: SampleReport::Wheel(WheelReport {
+            col: 4,
+            row: 3,
+            direction: WheelDirection::Up,
+            modifiers: Modifiers::default(),
+        }),
+        ..motion(&released, 4, 4)
+    };
+    connection.mouse_sample(tick).unwrap();
+    expect(&mut peer, b"\x1b[<64;5;4M").await;
+    let wheeled = wait(&connection, |view| {
+        view.input_epoch == released.input_epoch + 1 && view.input_pending
+    })
+    .await;
+    assert!(wheeled.mouse.active.is_none());
+    connection.mouse_sample(motion(&wheeled, 5, 8)).unwrap();
+    expect(&mut peer, b"\x1b[<35;9;4M").await;
+    quiet(&mut peer).await; // no wheel release or local navigation
+    finish_board_peer(&connection, peer).await;
+}
+#[tokio::test]
+async fn mouse_samples_are_revoked_before_queued_work_and_remain_blocked_during_sync() {
+    let (_listener, connection, mut peer, _) = ready().await;
+    peer.send(Message::Binary(b"\x1b[?1003h".to_vec().into()))
+        .await
+        .unwrap();
+    let current = wait(&connection, |view| {
+        view.mouse.modes.tracking() == Tracking::Motion && !view.output_pending
+    })
+    .await;
+    connection.mouse_sample(motion(&current, 1, 4)).unwrap();
+    connection.revoke_mouse(current.generation);
+    quiet(&mut peer).await;
+    let revoked = connection.updates.borrow().clone();
+    assert!(revoked.mouse.policy_epoch > current.mouse.policy_epoch);
+    connection.input(revoked.generation, b"x".to_vec()).unwrap();
+    connection.mouse_sample(motion(&revoked, 2, 5)).unwrap();
+    expect(&mut peer, b"x").await;
+    quiet(&mut peer).await;
+    peer.send(Message::Binary(
+        [navigation_page("list"), b"\x1b[?1002h".to_vec()]
+            .concat()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    let drag_only = wait(&connection, |view| {
+        view.mouse.modes.tracking() == Tracking::Drag && !view.input_pending && !view.output_pending
+    })
+    .await;
+    connection.mouse_sample(motion(&drag_only, 3, 6)).unwrap();
+    quiet(&mut peer).await; // 1002 cannot report an unheld pointer
+    peer.send(Message::Binary(b"\x1b[?2026h".to_vec().into()))
+        .await
+        .unwrap();
+    let pending = wait(&connection, |view| view.output_pending).await;
+    connection
+        .mouse_sample(Sample {
+            report: SampleReport::Wheel(WheelReport {
+                col: 4,
+                row: 3,
+                direction: WheelDirection::Down,
+                modifiers: Modifiers::default(),
+            }),
+            ..motion(&pending, 4, 4)
+        })
+        .unwrap();
+    quiet(&mut peer).await;
+    peer.send(Message::Ping(b"sample-sync".to_vec().into()))
+        .await
+        .unwrap();
+    assert_eq!(
+        peer.next().await.unwrap().unwrap(),
+        Message::Pong(b"sample-sync".to_vec().into())
+    );
+    finish_board_peer(&connection, peer).await;
+}
 async fn expect(peer: &mut Peer, bytes: &[u8]) {
     assert!(
-        matches!(timeout(Duration::from_secs(2),peer.next()).await.unwrap(),Some(Ok(Message::Binary(actual))) if actual.as_ref()==bytes),
+        matches!(timeout(Duration::from_secs(2),peer.next()).await.unwrap_or_else(|_|panic!("timed out waiting for {bytes:02x?}")),Some(Ok(Message::Binary(actual))) if actual.as_ref()==bytes),
         "expected {bytes:?}"
     );
 }
@@ -191,11 +329,11 @@ async fn station_mouse_format_bounds_and_manual_intervention_never_send_late_edg
     connection.mouse_report(release(press)).unwrap();
     expect(&mut peer, b"x").await;
     quiet(&mut peer).await;
-    peer.send(Message::Binary(b"\x1b[?1003h".to_vec().into()))
+    peer.send(Message::Binary(b"\x1b[?1001h".to_vec().into()))
         .await
         .unwrap();
     let unsupported = wait(&connection, |v| {
-        v.mouse.modes.tracking() == Tracking::Motion && !v.output_pending
+        v.mouse.modes.tracking() == Tracking::Highlight && !v.output_pending
     })
     .await;
     assert_eq!(unsupported.mouse.route, Route::Blocked);
@@ -241,6 +379,7 @@ async fn station_mouse_reconnect_resets_modes_and_old_controls_cannot_change_new
     connection.revoke_mouse(initial.generation);
     connection.cancel_mouse(old.lease);
     connection.mouse_report(release(old)).unwrap();
+    connection.mouse_sample(motion(&initial, 2, 4)).unwrap();
     quiet(&mut peer).await;
     assert!(connection.updates.borrow().mouse.enabled);
     peer.send(Message::Binary(b"\x1b[?1000;1006h".to_vec().into()))
@@ -258,6 +397,7 @@ async fn station_mouse_reconnect_resets_modes_and_old_controls_cannot_change_new
     connection.revoke_mouse(initial.generation);
     connection.cancel_mouse(old.lease);
     connection.mouse_report(release(old)).unwrap();
+    connection.mouse_sample(motion(&initial, 2, 4)).unwrap();
     quiet(&mut peer).await;
     assert_eq!(connection.updates.borrow().mouse.active, Some(press.lease));
     assert_eq!(connection.updates.borrow().message, held.message);
@@ -277,6 +417,7 @@ async fn station_mouse_queue_reserves_manual_capacity_and_controls_bypass_full_i
         connection.input(initial.generation, b"x".to_vec()).unwrap();
     }
     assert_eq!(connection.commands.capacity(), 8);
+    assert!(connection.mouse_sample(motion(&initial, 1, 4)).is_err());
     assert!(
         connection
             .mouse_report(event(&initial, 1, Action::Press))
@@ -345,7 +486,11 @@ async fn station_mouse_hold_pauses_keepalive_even_after_no_response_wait_expires
 #[tokio::test]
 async fn station_mouse_owns_pointer_navigation_but_explicit_buttons_and_keys_remain_available() {
     let (_listener, connection, mut peer, _initial) = ready().await;
-    for mode in [b"\x1b[?1000h".as_slice(), b"\x1b[?1003h".as_slice()] {
+    for mode in [
+        b"\x1b[?1000h".as_slice(),
+        b"\x1b[?1003h".as_slice(),
+        b"\x1b[?1001h".as_slice(),
+    ] {
         let previous = connection.updates.borrow().received;
         peer.send(Message::Binary(mode.to_vec().into()))
             .await

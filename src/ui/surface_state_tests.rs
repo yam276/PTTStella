@@ -259,8 +259,20 @@ fn mouse_press_consumes_the_acknowledged_mode_but_owned_release_can_cross_paints
     };
     let mut state = SurfaceState::new(filters::Rules::default());
     assert!(!state.mouse_shown(&event));
+    let sample = pttstella::mouse::input::Sample {
+        lease: event.lease,
+        sequence: 1,
+        report: pttstella::mouse::input::SampleReport::Wheel(pttstella::mouse::WheelReport {
+            col: 4,
+            row: 3,
+            direction: pttstella::mouse::WheelDirection::Up,
+            modifiers: Modifiers::default(),
+        }),
+    };
+    assert!(!state.mouse_sample_shown(&sample));
     displayed(&mut state, &view);
     assert!(state.mouse_shown(&event));
+    assert!(state.mouse_sample_shown(&sample));
     let mut invalid = event;
     invalid.lease.mode_epoch += 1;
     assert!(!state.mouse_shown(&invalid));
@@ -276,6 +288,19 @@ fn mouse_press_consumes_the_acknowledged_mode_but_owned_release_can_cross_paints
     state.update(&next);
     displayed(&mut state, &next);
     assert!(!state.mouse_shown(&event));
+    assert!(!state.mouse_sample_shown(&sample));
+    next.mouse.active = Some(event.lease);
+    state.update(&next);
+    displayed(&mut state, &next);
+    assert!(state.mouse_sample_shown(&sample));
+    let mut invalid_sample = sample;
+    invalid_sample.lease.mode_epoch += 1;
+    assert!(!state.mouse_sample_shown(&invalid_sample));
+    next.output_pending = true;
+    state.update(&next);
+    displayed(&mut state, &next);
+    assert!(!state.mouse_sample_shown(&sample));
+    next.output_pending = false;
     let release = Event {
         report: Report {
             action: Action::Release,

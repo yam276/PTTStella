@@ -64,6 +64,12 @@ struct NavigationJob {
     epoch: u64,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum InputEffect {
+    Command,
+    PointerMotion,
+}
+
 struct Session {
     mouse: crate::mouse::input::State,
     screen: Screen,
@@ -280,10 +286,49 @@ impl Session {
         self.dirty = true;
     }
 
+    async fn mouse_sample(&mut self, sample: crate::mouse::input::Sample) {
+        use crate::mouse::input::{SampleOutcome, SampleReport};
+        if self.view.phase != Phase::Connected
+            || self.socket.is_none()
+            || sample.lease.stamp.generation != self.view.generation
+        {
+            return;
+        }
+        self.clear_answered_input();
+        match self
+            .mouse
+            .accept_sample(self.mouse_context(), sample, Instant::now())
+        {
+            Ok(SampleOutcome::Bytes(bytes)) => {
+                self.idle.activity(Instant::now());
+                self.sync_mouse();
+                let effect = match sample.report {
+                    SampleReport::Motion(_) => InputEffect::PointerMotion,
+                    SampleReport::Wheel(_) => InputEffect::Command,
+                };
+                if self.send_input(&bytes, effect).await.is_ok()
+                    && matches!(sample.report, SampleReport::Wheel(_))
+                    && self.pending_input.is_none()
+                {
+                    // Hover/motion need not redraw. Wheel may wait for a reply,
+                    // but neither sample extends an existing press/wheel wait.
+                    self.pending_input = Some(PendingInput::Mouse {
+                        revision: self.screen.revision(),
+                        deadline: Instant::now() + self.timing.response_timeout,
+                    });
+                }
+            }
+            Ok(SampleOutcome::SameCell | SampleOutcome::RateLimited) => {}
+            Err(error) => self.view.message = error.message(),
+        }
+        self.dirty = true;
+    }
+
     /// Returns true only when the command closes this worker.
     async fn command(&mut self, command: Option<Command>) -> bool {
         match command {
             Some(Command::Mouse(event)) => self.mouse_report(event).await,
+            Some(Command::MouseSample(sample)) => self.mouse_sample(sample).await,
             Some(Command::KeepAlive(enabled)) => self.keep_alive(enabled),
             Some(Command::Connect) => self.connect(),
             Some(Command::Disconnect) => self.disconnect().await,
@@ -437,16 +482,25 @@ impl Session {
         self.view.message = error;
     }
 
-    /// The only path for application input: increment epoch once, escape once, never retry.
+    /// Explicit input advances the command epoch once; passive cell motion does
+    /// not invalidate the next click on the same painted frame.
     async fn write_input(&mut self, bytes: &[u8]) -> Result<(), String> {
+        self.send_input(bytes, InputEffect::Command).await
+    }
+
+    /// One serialized socket path, one escaping pass, no retry.
+    async fn send_input(&mut self, bytes: &[u8], effect: InputEffect) -> Result<(), String> {
         self.sync_mouse();
         let Some(socket) = self.socket.as_mut() else {
             return Err(navigation::Error::Disconnected.to_string());
         };
-        self.view.input_epoch = self.view.input_epoch.saturating_add(1);
-        self.view.input_pending = true;
-        self.view.keep_alive_ready = false;
-        // Revoke direct file/hover leases before awaiting the transport write.
+        if effect == InputEffect::Command {
+            self.view.input_epoch = self.view.input_epoch.saturating_add(1);
+            self.view.input_pending = true;
+            self.view.keep_alive_ready = false;
+        }
+        // Publish explicit-command lease invalidation before the write. Passive
+        // motion retains the command epoch and cannot steal a following click.
         self.updates.send_replace(self.view.clone());
         match transport::send(socket, Message::Binary(telnet::escape(bytes).into())).await {
             Ok(()) => Ok(()),

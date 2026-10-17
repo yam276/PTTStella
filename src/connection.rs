@@ -76,6 +76,7 @@ impl View {
 }
 enum Command {
     Mouse(crate::mouse::input::Event),
+    MouseSample(crate::mouse::input::Sample),
     KeepAlive(bool),
     Connect,
     Disconnect,
@@ -289,6 +290,14 @@ impl Connection {
             return Err(crate::msg!("connection-queue-full"));
         }
         self.enqueue(Command::Mouse(event))
+    }
+    pub fn mouse_sample(&self, sample: crate::mouse::input::Sample) -> Result<(), String> {
+        // Continuous input cannot consume the capacity reserved for owned up
+        // edges, explicit keyboard input and shutdown.
+        if self.commands.capacity() <= 8 {
+            return Err(crate::msg!("connection-queue-full"));
+        }
+        self.enqueue(Command::MouseSample(sample))
     }
     pub fn mouse_enabled(&self, generation: u64, enabled: bool) {
         self.mouse_ui

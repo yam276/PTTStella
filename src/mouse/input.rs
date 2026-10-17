@@ -10,6 +10,7 @@ use std::time::Instant;
 
 pub const HOLD_LIMIT: Duration = Duration::from_secs(30);
 pub const PRESSES_PER_SECOND: u8 = 20;
+pub const SAMPLES_PER_SECOND: u8 = 30;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -24,6 +25,26 @@ pub struct Lease {
 pub struct Event {
     pub lease: Lease,
     pub report: Report,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SampleReport {
+    Motion(super::MotionReport),
+    Wheel(super::WheelReport),
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Sample {
+    pub lease: Lease,
+    pub sequence: u64,
+    pub report: SampleReport,
+}
+#[cfg(any(feature = "desktop", test))]
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum SampleOutcome {
+    Bytes(Vec<u8>),
+    SameCell,
+    RateLimited,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct Snapshot {
@@ -99,6 +120,10 @@ pub(crate) struct State {
     held: Option<Held>,
     window: Option<Instant>,
     presses: u8,
+    last_sample: u64,
+    last_motion: Option<(usize, usize)>,
+    sample_window: Option<Instant>,
+    samples: u8,
 }
 #[cfg(any(feature = "desktop", test))]
 impl Default for State {
@@ -114,6 +139,10 @@ impl Default for State {
             held: None,
             window: None,
             presses: 0,
+            last_sample: 0,
+            last_motion: None,
+            sample_window: None,
+            samples: 0,
         }
     }
 }
@@ -127,16 +156,22 @@ impl State {
             self.window = None;
             self.presses = 0;
             self.held = None;
+            self.last_sample = 0;
+            self.last_motion = None;
+            self.sample_window = None;
+            self.samples = 0;
         }
         if self.mode_epoch != context.modes.epoch() {
             self.mode_epoch = context.modes.epoch();
             self.held = None;
+            self.last_motion = None;
         }
         self.expire(now);
     }
     pub(crate) fn expire(&mut self, now: Instant) -> bool {
         if self.held.as_ref().is_some_and(|held| now >= held.deadline) {
             self.held = None;
+            self.last_motion = None;
             true
         } else {
             false
@@ -148,6 +183,7 @@ impl State {
             self.control_serial = serial;
             self.policy_epoch = self.policy_epoch.saturating_add(1);
             self.held = None;
+            self.last_motion = None;
         }
     }
     pub(crate) fn revoke(&mut self, serial: u64, lease: Option<Lease>) {
@@ -171,13 +207,16 @@ impl State {
             self.control_serial = serial;
             self.policy_epoch = self.policy_epoch.saturating_add(1);
             self.held = None;
+            self.last_motion = None;
         }
     }
     pub(crate) fn interrupt(&mut self) {
         self.held = None;
+        self.last_motion = None;
     }
     pub(crate) fn intervene(&mut self) {
         self.held = None;
+        self.last_motion = None;
         self.policy_epoch = self.policy_epoch.saturating_add(1);
     }
     pub(crate) fn active(&self) -> bool {
@@ -205,23 +244,8 @@ impl State {
         event: Event,
         now: Instant,
     ) -> Result<Vec<u8>, Error> {
-        self.observe(context, now);
         let lease = event.lease;
-        if lease.stamp.generation != context.stamp.generation
-            || lease.mode_epoch != context.modes.epoch()
-            || lease.policy_epoch != self.policy_epoch
-        {
-            return Err(Error::Stale);
-        }
-        if !self.enabled {
-            return Err(Error::Disabled);
-        }
-        if !context.ready {
-            if self.held.as_ref().is_some_and(|held| held.lease == lease) {
-                self.held = None;
-            }
-            return Err(Error::Busy);
-        }
+        self.prepare(context, lease, now)?;
         match event.report.action {
             Action::Press => {
                 if lease.stamp != context.stamp
@@ -246,6 +270,7 @@ impl State {
                 }
                 self.presses += 1;
                 self.last_transaction = lease.transaction;
+                self.last_motion = Some((event.report.col, event.report.row));
                 self.held = Some(Held {
                     lease,
                     button: event.report.button,
@@ -264,10 +289,97 @@ impl State {
                 // Ending this transaction does not require its old frame to be
                 // current. The generation, modes, policy and button still must be.
                 self.held = None;
-                encode(context.modes, &event.report, context.cols, context.rows)
-                    .map_err(Error::Format)
+                let bytes = encode(context.modes, &event.report, context.cols, context.rows)
+                    .map_err(Error::Format)?;
+                self.last_motion = Some((event.report.col, event.report.row));
+                Ok(bytes)
             }
         }
+    }
+
+    fn prepare(&mut self, context: Context, lease: Lease, now: Instant) -> Result<(), Error> {
+        self.observe(context, now);
+        if lease.stamp.generation != context.stamp.generation
+            || lease.mode_epoch != context.modes.epoch()
+            || lease.policy_epoch != self.policy_epoch
+        {
+            return Err(Error::Stale);
+        }
+        if !self.enabled {
+            return Err(Error::Disabled);
+        }
+        if !context.ready {
+            if self.held.as_ref().is_some_and(|held| held.lease == lease) {
+                self.held = None;
+                self.last_motion = None;
+            }
+            return Err(Error::Busy);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn accept_sample(
+        &mut self,
+        context: Context,
+        sample: Sample,
+        now: Instant,
+    ) -> Result<SampleOutcome, Error> {
+        let lease = sample.lease;
+        self.prepare(context, lease, now)?;
+        if sample.sequence == 0 || sample.sequence <= self.last_sample {
+            return Err(Error::Stale);
+        }
+        let held = self.held.as_ref();
+        match held {
+            Some(held) if held.lease != lease => return Err(Error::Stale),
+            Some(_) => {}
+            None => {
+                if lease.stamp != context.stamp
+                    || lease.transaction == 0
+                    || lease.transaction <= self.last_transaction.max(self.cancelled_through)
+                {
+                    return Err(Error::Stale);
+                }
+            }
+        }
+        let (bytes, position) = match sample.report {
+            SampleReport::Motion(report) => {
+                if report.button != held.map(|held| held.button) {
+                    return Err(Error::Stale);
+                }
+                (
+                    super::encode_motion(context.modes, &report, context.cols, context.rows),
+                    Some((report.col, report.row)),
+                )
+            }
+            SampleReport::Wheel(report) => (
+                super::encode_wheel(context.modes, &report, context.cols, context.rows),
+                None,
+            ),
+        };
+        let bytes = bytes.map_err(Error::Format)?;
+        if held.is_none() {
+            self.last_transaction = lease.transaction;
+        }
+        self.last_sample = sample.sequence;
+        if position.is_some() && position == self.last_motion {
+            return Ok(SampleOutcome::SameCell);
+        }
+        if self
+            .sample_window
+            .is_none_or(|start| now.saturating_duration_since(start) >= Duration::from_secs(1))
+        {
+            self.sample_window = Some(now);
+            self.samples = 0;
+        }
+        if self.samples >= SAMPLES_PER_SECOND {
+            return Ok(SampleOutcome::RateLimited);
+        }
+        self.samples += 1;
+        if let Some(position) = position {
+            self.last_motion = Some(position);
+        }
+        Ok(SampleOutcome::Bytes(bytes))
     }
 }
 
@@ -306,6 +418,233 @@ mod tests {
                 modifiers: Modifiers::default(),
             },
         }
+    }
+    fn tracking(code: usize) -> Context {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(format!("\x1b[?{code};1006h").as_bytes());
+        Context {
+            modes: screen.mouse_modes(),
+            ..context()
+        }
+    }
+    fn motion(context: Context, id: u64, col: usize) -> Sample {
+        Sample {
+            lease: event(context, id, Action::Press).lease,
+            sequence: id,
+            report: SampleReport::Motion(super::super::MotionReport {
+                col,
+                row: 3,
+                button: None,
+                modifiers: Modifiers::default(),
+            }),
+        }
+    }
+    fn wheel(context: Context, id: u64) -> Sample {
+        Sample {
+            report: SampleReport::Wheel(super::super::WheelReport {
+                col: 4,
+                row: 3,
+                direction: super::super::WheelDirection::Down,
+                modifiers: Modifiers::default(),
+            }),
+            ..motion(context, id, 4)
+        }
+    }
+    #[test]
+    fn unheld_samples_are_current_ordered_and_deduplicated_without_a_release_lease() {
+        let mut owner = State::default();
+        let context = tracking(1003);
+        let now = Instant::now();
+        let first = motion(context, 1, 4);
+        assert_eq!(
+            owner.accept_sample(context, first, now),
+            Ok(SampleOutcome::Bytes(b"\x1b[<35;5;4M".to_vec()))
+        );
+        assert!(!owner.active());
+        assert_eq!(owner.accept_sample(context, first, now), Err(Error::Stale));
+        let same = motion(context, 2, 4);
+        assert_eq!(
+            owner.accept_sample(context, same, now),
+            Ok(SampleOutcome::SameCell)
+        );
+        assert_eq!(owner.accept_sample(context, same, now), Err(Error::Stale));
+        assert_eq!(
+            owner.accept_sample(context, motion(context, 3, 5), now),
+            Ok(SampleOutcome::Bytes(b"\x1b[<35;6;4M".to_vec()))
+        );
+        assert_eq!(
+            owner.accept_sample(context, wheel(context, 4), now),
+            Ok(SampleOutcome::Bytes(b"\x1b[<65;5;4M".to_vec()))
+        );
+        assert!(!owner.active());
+        let stale = motion(context, 5, 6);
+        let newer = Context {
+            stamp: Stamp {
+                revision: 21,
+                ..context.stamp
+            },
+            ..context
+        };
+        assert_eq!(owner.accept_sample(newer, stale, now), Err(Error::Stale));
+        assert_eq!(
+            owner.accept_sample(newer, motion(newer, 5, 6), now),
+            Ok(SampleOutcome::Bytes(b"\x1b[<35;7;4M".to_vec()))
+        );
+    }
+    #[test]
+    fn held_motion_uses_the_original_transaction_across_redraw_and_never_extends_expiry() {
+        for code in [1002, 1003] {
+            let mut owner = State::default();
+            let context = tracking(code);
+            let now = Instant::now();
+            let press = event(context, 1, Action::Press);
+            owner.accept(context, press, now).unwrap();
+            let fresh = Context {
+                stamp: Stamp {
+                    revision: 40,
+                    input_epoch: 3,
+                    ..context.stamp
+                },
+                ..context
+            };
+            let mut sample = motion(context, 1, 5);
+            if let SampleReport::Motion(report) = &mut sample.report {
+                report.button = Some(Button::Left);
+            }
+            assert_eq!(
+                owner.accept_sample(fresh, sample, now),
+                Ok(SampleOutcome::Bytes(b"\x1b[<32;6;4M".to_vec()))
+            );
+            assert!(owner.active());
+            sample.sequence = 2;
+            if let SampleReport::Motion(report) = &mut sample.report {
+                report.button = Some(Button::Right);
+            }
+            assert_eq!(owner.accept_sample(fresh, sample, now), Err(Error::Stale));
+            let mut tick = wheel(context, 2);
+            tick.lease = press.lease;
+            assert_eq!(
+                owner.accept_sample(fresh, tick, now),
+                Ok(SampleOutcome::Bytes(b"\x1b[<65;5;4M".to_vec()))
+            );
+            assert!(owner.active());
+            sample.sequence = 3;
+            if let SampleReport::Motion(report) = &mut sample.report {
+                report.button = Some(Button::Left);
+                report.col = 6;
+            }
+            assert_eq!(
+                owner.accept_sample(fresh, sample, now + HOLD_LIMIT),
+                Err(Error::Stale)
+            );
+            assert!(!owner.active());
+            assert_eq!(
+                owner.accept(
+                    fresh,
+                    Event {
+                        report: Report {
+                            action: Action::Release,
+                            ..press.report
+                        },
+                        ..press
+                    },
+                    now + HOLD_LIMIT
+                ),
+                Err(Error::Stale)
+            );
+        }
+    }
+    #[test]
+    fn sample_rate_is_bounded_without_spending_release_capacity_or_resetting_on_toggles() {
+        let mut owner = State::default();
+        let context = tracking(1003);
+        let now = Instant::now();
+        let press = event(context, 1, Action::Press);
+        owner.accept(context, press, now).unwrap();
+        for id in 1..=u64::from(SAMPLES_PER_SECOND) {
+            let mut tick = wheel(context, id);
+            tick.lease = press.lease;
+            assert!(matches!(
+                owner.accept_sample(context, tick, now),
+                Ok(SampleOutcome::Bytes(_))
+            ));
+        }
+        let mut overflow = wheel(context, 31);
+        overflow.lease = press.lease;
+        assert_eq!(
+            owner.accept_sample(context, overflow, now),
+            Ok(SampleOutcome::RateLimited)
+        );
+        assert_eq!(
+            owner.accept_sample(context, overflow, now),
+            Err(Error::Stale)
+        );
+        assert_eq!(
+            owner
+                .accept(
+                    context,
+                    Event {
+                        report: Report {
+                            action: Action::Release,
+                            ..press.report
+                        },
+                        ..press
+                    },
+                    now
+                )
+                .unwrap(),
+            b"\x1b[<0;5;4m"
+        );
+        owner.enable(1, false);
+        owner.enable(2, true);
+        let mut next = wheel(context, 32);
+        next.lease.policy_epoch = 2;
+        assert_eq!(
+            owner.accept_sample(context, next, now),
+            Ok(SampleOutcome::RateLimited)
+        );
+        let mut next = wheel(context, 33);
+        next.lease.policy_epoch = 2;
+        assert_eq!(
+            owner.accept_sample(context, next, now + Duration::from_secs(1)),
+            Ok(SampleOutcome::Bytes(b"\x1b[<65;5;4M".to_vec()))
+        );
+        assert!(!owner.active());
+    }
+    #[test]
+    fn samples_cannot_borrow_another_button_or_survive_cancellation_and_manual_input() {
+        let mut owner = State::default();
+        let context = tracking(1003);
+        let now = Instant::now();
+        owner.observe(context, now);
+        let queued = motion(context, 1, 4);
+        owner.revoke(1, Some(queued.lease));
+        assert_eq!(owner.accept_sample(context, queued, now), Err(Error::Stale));
+        let mut forged = motion(context, 2, 4);
+        if let SampleReport::Motion(report) = &mut forged.report {
+            report.button = Some(Button::Left);
+        }
+        assert_eq!(owner.accept_sample(context, forged, now), Err(Error::Stale));
+        let fresh = motion(context, 2, 4);
+        owner.intervene();
+        assert_eq!(owner.accept_sample(context, fresh, now), Err(Error::Stale));
+        let next_generation = Context {
+            stamp: Stamp {
+                generation: 8,
+                ..context.stamp
+            },
+            ..context
+        };
+        assert_eq!(
+            owner.accept_sample(next_generation, fresh, now),
+            Err(Error::Stale)
+        );
+        let mut new = motion(next_generation, 1, 4);
+        new.lease.policy_epoch = 1;
+        assert!(matches!(
+            owner.accept_sample(next_generation, new, now),
+            Ok(SampleOutcome::Bytes(_))
+        ));
     }
     #[test]
     fn one_press_and_owned_release_survive_redraw_but_replays_do_not() {

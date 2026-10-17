@@ -27,7 +27,7 @@ core 執行 Rust 1.97.0 的 fmt、Clippy、畫面與互動測試 suite 及 2 個
 
 站端滑鼠另跑 `cargo test --locked --features desktop --lib mouse`：同一 Screen／CSI parser 的每個分片、固定模式 trace／epoch、RIS／session reset、同步期間模式、取消與超長拒絕，以及純 encoder 的獨立 SGR bytes／修飾鍵／格線邊界；交易 owner 與 production Connection loopback 核對更新後釋放、舊租約／取消、滿佇列控制、速率、模式／重連及保活。UI 另跑 desktop bin 與 `node --test tooling/test_surface_mouse.mjs tooling/test_surface_links.mjs tooling/test_surface_dialogs.mjs`，涵蓋顯示 ACK、封包型別、pointer 交易與分流；不以單元或現有本機滑鼠 gate 代替新的站端原生互動驗收，需求見 [站端滑鼠](docs/station-mouse.md)。
 
-`--probe-surface OUTPUT_DIRECTORY mouse` 使用固定自製文章列表及真正 production Connection；peer 精確要求零基 col 4／row 4 的左鍵 press／release，切成未支援 1003 後拒絕站端滑鼠與滾輪，只有明確停用後點同一文章編號可送一次 CR。重新啟用後要求同座標右鍵一對，再要求中鍵按下；此時 peer 送同步 off／on 撤銷交易，只接受 Close，不能補送中鍵釋放。以原生 Shift 雙擊選行、Cmd-C／草稿 Cmd-V 讀回系統剪貼簿，草稿不保存；另外核對開關、PNG、一次本機導覽、單筆取消、Close acknowledged 與全部 owner join。中鍵使用可保持 1,200ms 的真正按下，以便模式更新先於釋放。不能只看程序退出碼，缺報告或 cleanup false 必須失敗。原生 Shift 拖曳與 Ctrl＋滾輪、所有 DPI／其他平台仍須另驗，不能用這個限定案例冒充通過。
+`--probe-surface OUTPUT_DIRECTORY mouse` 使用固定自製文章列表及真正 production Connection；peer 精確要求零基 col 4／row 4 的左鍵 press／release，切成未支援 1001 後拒絕站端滑鼠與滾輪，只有明確停用後點同一文章編號可送一次 CR。重新啟用後要求同座標右鍵一對，再要求中鍵按下；此時 peer 送同步 off／on 撤銷交易，只接受 Close，不能補送中鍵釋放。以原生 Shift 雙擊選行、Cmd-C／草稿 Cmd-V 讀回系統剪貼簿，草稿不保存；另外核對開關、PNG、一次本機導覽、單筆取消、Close acknowledged 與全部 owner join。中鍵使用可保持 1,200ms 的真正按下，以便模式更新先於釋放。不能只看程序退出碼，缺報告或 cleanup false 必須失敗。原生 Shift 拖曳與 Ctrl＋滾輪、所有 DPI／其他平台仍須另驗，不能用這個限定案例冒充通過。
 
 `--probe-surface OUTPUT_DIRECTORY mouse_boundary` 共用同一格線與模式，但 peer 只接受 col 4／row 4 的一次左鍵按下及 Close。先點格線外的黑邊，再從該格拖曳到黑邊放開；黑邊點擊不得送出任何 bytes，離開格線不得合成座標或釋放／本機導覽。報告必須只有一筆按下、至少一次交易取消、沒有本機導覽／連結／開關操作、沒有殘留交易，另需匯出 PNG、Close acknowledged 及全部 owner 清理。這個案例只驗同一原生尺寸的黑邊與格線外放開，不代替離窗、失焦、所有 DPR 或實體修飾鍵手勢。
 

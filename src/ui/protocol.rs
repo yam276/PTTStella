@@ -21,6 +21,10 @@ pub(super) enum SurfaceEvent {
         event: pttstella::mouse::input::Event,
         trusted: bool,
     },
+    StationMouseSample {
+        sample: pttstella::mouse::input::Sample,
+        trusted: bool,
+    },
     StationMouseCancel {
         lease: pttstella::mouse::input::Lease,
     },
@@ -241,6 +245,9 @@ impl SurfaceEvent {
             StationMouse { event, trusted } => {
                 *trusted && event.lease.stamp.generation == generation
             }
+            StationMouseSample { sample, trusted } => {
+                *trusted && sample.lease.stamp.generation == generation
+            }
             StationMouseEnabled {
                 generation: source,
                 trusted,
@@ -398,6 +405,19 @@ mod admission_tests {
         assert!(admits(event.clone(), true, 7));
         assert!(!admits(event.clone(), false, 7));
         assert!(!admits(event.clone(), true, 8));
+        for report in [
+            json!({"kind":"motion","col":4,"row":3,"button":null,"modifiers":{"shift":false,"alt":true,"ctrl":false}}),
+            json!({"kind":"wheel","col":4,"row":3,"direction":"up","modifiers":{"shift":false,"alt":false,"ctrl":false}}),
+        ] {
+            let sample = json!({"kind":"station_mouse_sample","sample":{"lease":lease,"sequence":10,"report":report}});
+            assert!(admits(sample.clone(), true, 7));
+            assert!(!admits(sample.clone(), false, 7));
+            assert!(!admits(sample.clone(), true, 8));
+            let mut invalid = sample.clone();
+            invalid["trusted"] = true.into();
+            invalid["sample"]["report"]["raw"] = json!("\u{001b}[B");
+            assert!(serde_json::from_value::<SurfaceEvent>(invalid).is_err());
+        }
         for (field, value) in [
             ("action", json!("wheel")),
             ("button", json!("unknown")),

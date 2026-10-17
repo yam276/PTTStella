@@ -44,7 +44,10 @@ impl Modes {
     /// Format capability, not input admission. Incomplete/synchronized output,
     /// old sessions and unowned releases must be rejected by the caller.
     pub fn supports_click_reports(self) -> bool {
-        self.tracking == Tracking::Click && self.encoding == Encoding::Sgr
+        matches!(
+            self.tracking,
+            Tracking::Click | Tracking::Drag | Tracking::Motion
+        ) && self.encoding == Encoding::Sgr
     }
     pub(crate) fn apply(&mut self, mode: usize, enabled: bool) -> bool {
         let tracking = match mode {
@@ -151,7 +154,7 @@ pub enum Error {
 pub fn encode(modes: Modes, report: &Report, cols: usize, rows: usize) -> Result<Vec<u8>, Error> {
     match modes.tracking {
         Tracking::Off => return Err(Error::NotNegotiated),
-        Tracking::Click => {}
+        Tracking::Click | Tracking::Drag | Tracking::Motion => {}
         _ => return Err(Error::UnsupportedTracking),
     }
     encode_sgr(
@@ -338,12 +341,17 @@ mod tests {
         ] {
             let mode = negotiated(format!("\x1b[?1006;{code}h").as_bytes());
             assert_eq!(mode.tracking(), tracking);
-            assert_eq!(mode.supports_click_reports(), code == 1000);
-            if code != 1000 {
+            assert_eq!(
+                mode.supports_click_reports(),
+                matches!(code, 1000 | 1002 | 1003)
+            );
+            if matches!(code, 9 | 1001) {
                 assert_eq!(
                     encode(mode, &report(), 80, 24),
                     Err(Error::UnsupportedTracking)
                 );
+            } else {
+                assert_eq!(encode(mode, &report(), 80, 24).unwrap(), b"\x1b[<0;1;1M");
             }
         }
         for (code, encoding) in [
