@@ -440,6 +440,16 @@ async fn run(
                             eval.send(Packet::StationMouseRejected {lease:event.lease,message:error}).map_err(|e|e.to_string())?;
                         }
                     }
+                    SurfaceEvent::StationMouseSample { sample, .. } => {
+                        let result = if !screen.mouse_sample_shown(&sample) || pending_paste.read().is_some() || keyboard_policy.status(&receiver.borrow().context()).pending {
+                            Err(pttstella::msg!("station-mouse-stale"))
+                        } else {
+                            connection.mouse_sample(sample)
+                        };
+                        if let Err(error) = result {
+                            eval.send(Packet::Notice(error)).map_err(|e|e.to_string())?;
+                        }
+                    }
                     SurfaceEvent::StationMouseCancel { lease } => {
                         if matches!(surface_probe.as_deref(),Some("mouse"|"mouse_boundary")) {checks.mouse_cancels+=1;}
                         connection.cancel_mouse(lease);

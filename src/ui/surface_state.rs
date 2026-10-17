@@ -165,6 +165,17 @@ impl SurfaceState {
                         && p.mouse.policy_epoch == event.lease.policy_epoch
                 })
     }
+    pub(super) fn mouse_sample_shown(&self, sample: &pttstella::mouse::input::Sample) -> bool {
+        self.displayed.as_ref().is_some_and(|p| {
+            !p.output_pending
+                && p.mouse.route == pttstella::mouse::input::Route::Station
+                && p.generation == sample.lease.stamp.generation
+                && p.mouse.modes.epoch() == sample.lease.mode_epoch
+                && p.mouse.policy_epoch == sample.lease.policy_epoch
+                && (self.navigation_shown(sample.lease.stamp)
+                    || p.mouse.active == Some(sample.lease))
+        })
+    }
     /// Vim may advance its logical cursor before the next terminal redraw.
     pub(super) fn browse_shown(&self, generation: u64, context: &Context) -> bool {
         self.displayed.as_ref().is_some_and(|p| {

@@ -217,6 +217,12 @@ C1 依序開啟及複製片段 rows `[8,9]`，兩次 Cmd-C 後在未保存書籤
 
 本批 115 個 desktop lib、42 個 bin、51 個 JS、core／desktop all-targets Clippy／docs 通過，證據 `.local/verification/mouse-d-motion-format`；沒有實站、新原生操作或其他平台的完成宣稱，也沒有 push。
 
+**D2 移動／垂直 wheel 接線增量（2026-10-18），原生視窗接續**：1000／1002／1003＋1006 的按鈕回報沿用原交易；新增 typed Sample／SampleReport 與 trusted／generation／已繪製來源准入，持有時核對原 lease 與按鈕、無持有時要求當前 stamp 與新 transaction。Rust 去除同格 motion，sample sequence 防重放，motion／wheel 合計每秒 30 筆；按鈕釋放不吃 sample 額度，移動不延長持有期限，取消／人工輸入／重連撤銷。共同 64 筆佇列保留 8 筆餘量，沒有新增送出 worker。被動 motion 共用原 socket／Telnet escape 路徑，但不推進命令 epoch 或建立畫面等待，避免移動剛送出就拒絕同圖下一次點擊；wheel 推進 epoch，只在尚無等待時建立期限。
+
+UI 只有一個可取消的 animation-frame callback，每 34ms 送一個最新 sample，wheel 優先；只保留一筆 motion、一筆 wheel 與不足 40px 的垂直餘量，line／page 正規化，沒有慣性尾巴或斷線後補送。Shift、Ctrl 縮放、已選文字、modal 與放大後本機捲動保留；來源／模式／policy 變化、黑邊及 destroy 清 pending。中英文狀態與說明一起更新。原 `mouse` 負面探針改要求仍不支援的 1001，保留相同精確按鈕／本機 CR 序列，沒有將已支援的 1003 繼續當成負例。
+
+新增四個純 owner 案例、兩個 production Connection loopback 與五個 JS 案例，並擴充重連、滿佇列、typed event／顯示 ACK 的正反例。121 個 desktop lib、42 個 bin、56 個 JS、core／desktop all-targets Clippy／docs 通過，原生 D2 還未執行，交付 App 仍保留前版。首次完整 lib run 有新 motion 案例逾時；原 helper 沒有顯示具體等待哪筆 bytes，檢查發現新 mode wait 可讀到 output_pending 的中間 View，已要求完整來源並改善 timeout 診斷後整套通過，沒有放寬 bytes 或產品准入；原失敗與一次新增測試後漏 fmt 的失敗保留於 `.local/verification/mouse-d-continuous`。後補的重連／重複 Shift 按下邊界另重跑對應測試。沒有實站、其他平台或兩項實體修飾手勢的完成宣稱，沒有 push。
+
 
 
 

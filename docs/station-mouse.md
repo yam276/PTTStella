@@ -1,6 +1,6 @@
 # 站端滑鼠
 
-對應 active plan 的 D，與既有 [本機滑鼠導覽](navigation.md) 分開。Screen 模式追蹤、純 SGR 編碼、Session 交易准入與 UI pointer 已接線；1000＋1006 的限定 macOS 原生點擊案例通過，Shift 拖曳／Ctrl＋滾輪及其他平台仍待驗收，不宣稱完整站端滑鼠模式支援。
+對應 active plan 的 D，與既有 [本機滑鼠導覽](navigation.md) 分開。Screen 模式追蹤、SGR 編碼、Session 交易准入與 UI pointer 已接線；1000＋1006 的限定 macOS 原生點擊案例通過。新增 1002／1003 移動與垂直 wheel 接線的核心／本機傳輸／JS 案例通過，原生視窗接續；Shift 拖曳／Ctrl＋滾輪、實站及其他平台仍待驗收，不宣稱所有滑鼠模式已完成。
 
 ## 協定與範圍
 
@@ -8,13 +8,13 @@
 
 依 [XTerm Mouse Tracking](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-Mouse-Tracking)，追蹤模式與座標編碼分成兩組互斥狀態；[模式設定／重設](https://github.com/ThomasDickey/xterm-snapshots/blob/5c75ead9a75d4b2e666ca06fa94503b5766ed93f/charproc.c#L7071) 明列 tracking 重設關閉回報，encoding 重設只在目前模式相符時生效。產品只實作這個明確協定子集，不嵌入該實作。
 
-Screen 由相同有界 CSI parser 管理 Modes，只有完整 private h／l 才更新。追蹤記錄 off、9、1000、1001、1002、1003；編碼記錄 legacy、1005、1006、1015、1016。追蹤任一 DECRST 關閉 tracking；編碼採最後啟用，重設其他編碼不改變目前值。知道控制碼格式不代表支援其互動：第一版只有 **1000 click + 1006 SGR** 可以編碼三個按鈕的 press／release；9／1001／1002／1003、其他編碼、motion／wheel 不輸出。
+Screen 由相同有界 CSI parser 管理 Modes，只有完整 private h／l 才更新。追蹤記錄 off、9、1000、1001、1002、1003；編碼記錄 legacy、1005、1006、1015、1016。追蹤任一 DECRST 關閉 tracking；編碼採最後啟用，重設其他編碼不改變目前值。知道控制碼格式不代表支援其互動：目前支援 **1000／1002／1003 + 1006 SGR** 的三個按鈕 press／release，以及垂直 wheel；1002 加上持有按鈕的 motion，1003 加上無按鈕 motion。9／1001 與其他編碼仍拒絕，沒有新增水平 wheel／像素座標支援。
 
 每次有效模式變化增加 epoch，同一批 off／on 即使最後狀態相同也可撤銷舊 pointer。重複設定同一模式不增加；RIS 清模式並保留遞增 epoch，新 session 則從 default／epoch 0 開始，由 connection generation 區隔。模式獨立於 retained Frame，所以 DEC2026 期間的變更可以立即觀察；但格式支援本身不是送出許可，後續 Session 還必須拒絕同步／未完成控制碼、舊世代與未擁有的釋放。
 
 Report 使用零基 row／col、具名 button／action 與 Shift／Alt／Ctrl；Alt 對應協定的 Meta bit，macOS Command 不在此格式。唯一 encoder 將座標加一、修飾碼加入按鈕，產生 `CSI < button ; col ; row M/m`；不加舊 X10 的 32，也不將原始 JS 字串當封包。座標與面積遵從 Screen 同一上限，非法格線／溢位／越界整筆回傳錯誤，沒有部分 bytes。
 
-D2 的純格式層另新增 MotionReport／WheelReport，與原按鈕共用同一 SGR 座標／修飾碼／容量驗證。1002 只接受有按鈕的 motion，1003 可接受無按鈕 motion；wheel 接受 1000／1002／1003，只有上／下方向，不存在 wheel release。其他 tracking／encoding 仍拒絕。這些是尚未接到 Session／UI 的 encoder，**不改目前 route 或開放送出**；接線時仍須加入交易所有權、格線去重、有界合併與速率，不能直接把每個 pointermove 排入按鈕佇列。
+D2 的純格式層另新增 MotionReport／WheelReport，與原按鈕共用同一 SGR 座標／修飾碼／容量驗證。1002 只接受有按鈕的 motion，1003 可接受無按鈕 motion；wheel 接受 1000／1002／1003，只有上／下方向，不存在 wheel release。其他 tracking／encoding 仍拒絕。Session／UI 接線沿用相同有界命令佇列及送出 owner。每筆 sample 有獨立遞增 sequence、原畫面／模式／policy lease；持有按鈕時核對原交易及按鈕，無按鈕則要求完整當前 stamp 與新的 transaction。Rust 對同格 motion 去重，motion／wheel 合計每秒最多 30 筆，不消耗按鈕釋放額度；切換偏好不重置速率，也不延長持有期限。被合併的 sequence 仍被消費，不能事後重送。
 
 ## Session 交易與容量
 
@@ -32,9 +32,13 @@ Session 持有一筆最長 30 秒的按鈕交易，沿用單一 write_input。�
 
 Paint 傳遞同一 Rust Snapshot，獨立 pointer owner 只消費 route，不重解協定。工具列開關只在 trusted click 改變本次啟動的偏好，顯示目前回報／本機／不可用狀態。新按下必須 trusted、primary、在 renderer 同一格線內，使用單調交易編號及 pointer capture；畫面已繪製且 mode／policy 相符才由 Surface 接受按下，Session 再核對當前狀態。釋放保留原 lease 並取當前座標，可以跨正常重繪；同步／不完整畫面、模式／policy／世代改變、失焦、lost capture、人工編輯或 modal 會取消，不重試、不合成釋放。舊 capture-loss 若同一 pointer 已重新 capture，不撤銷新交易。
 
-站端接管時不執行本機點編號、網址開啟、hover 圖片或普通滾輪送鍵；Rust 同時拒絕非 Local 的 pointer 導覽與連結開啟。Shift **在按下時** 選擇本機選字路徑，之後放開 Shift 仍能結束同一選取；Shift 右鍵可選取完整網址以複製，但不外開。Ctrl＋滾輪維持本機縮放；放大時仍可捲動本機 viewport，沒有偽裝成站端 wheel／motion。未協商／使用者停用沿用本機，1003 等未支援模式顯示不可用與停用入口。正常按下引起的完整重繪不只因 revision／input epoch 改變就取消；同步或不完整輸出則由 Rust 的 Blocked 撤銷。
+站端接管時不執行本機點編號、網址開啟、hover 圖片或普通滾輪送鍵；Rust 同時拒絕非 Local 的 pointer 導覽與連結開啟。Shift **在按下時** 選擇本機選字路徑，之後放開 Shift 仍能結束同一選取；Shift 右鍵可選取完整網址以複製，但不外開。Ctrl＋滾輪維持本機縮放；放大時仍可捲動本機 viewport，沒有偽裝成站端 wheel／motion。未協商／使用者停用沿用本機，1001 等未支援模式顯示不可用與停用入口。正常按下引起的完整重繪不只因 revision／input epoch 改變就取消；同步或不完整輸出則由 Rust 的 Blocked 撤銷。
 
 UI 不等待 press 的命令回覆才處理 release；只透過同一有界命令佇列送結構化事件。入列失敗會發有界單筆取消並回覆精確 lease，晚到拒絕不能取消新交易。Rust 共同清理先撤銷 mouse controls，再並行停止 renderer／connection；JS destroy 清 capture、移除既有共同 bindings，沒有新增 timer 或背景送出工作。座標／可信事件／選字／縮放的真正原生驗收仍待獨立程序完成，不以這些單元測試當作 macOS／Windows 或所有 DPR 已通過。
+
+移動與 wheel 使用一筆 owned animation-frame callback，每 34ms 最多送一個最新 sample，wheel 優先；按鈕釋放前可沖出原交易最後一筆 sample。UI 只保留一筆 motion、一筆 wheel 與不足 40px 的垂直餘量；line 按 40px、page 按畫面行數換算，一次 callback 最多一個垂直 tick，超量／慣性沒有延後回放的佇列。Shift 選字、Ctrl 縮放、已選文字、modal、viewport 已放大可本機捲動時不產生 station wheel。模式／policy／來源改變、黑邊、取消及 destroy 會清 callback 與舊 sample；不新增 timer 或送出 worker。
+
+所有 bytes 仍共用同一序列化 send／Telnet escape 路徑。被動 motion 不增加命令 input epoch，也不建立／延長畫面回應等待，避免游標剛移過就把後續有效點擊判為過期；畫面／模式／policy 的失效檢查仍保留。點擊與 wheel 照常增加命令 epoch，wheel 只在尚無等待時建立有界等待，不建立 held／release 交易。新 sample 在共同佇列剩餘容量不超過 8 時拒絕，保留 explicit input／release／Close 的餘量；取消控制仍由既有 watch 優先套用。
 
 自製 [模式 trace](../tests/fixtures/mouse-modes.json) 是獨立手寫狀態 expected，逐 byte／所有兩段切分核對；另測無私有標記、錯格式、取消、字串與超長 CSI 不改模式，C0 中斷、重設、同步批次、非支援格式拒絕、格線邊界及獨立按鈕 bytes。八個交易 owner 與一個 control snapshot 案例核對租約、速率、逾時及撤銷；八個 production Connection loopback 案例獨立核對精確 SGR bytes、更新後釋放、重複零送出、佇列滿時控制、同步模式變化、重連隔離、保活暫停及導覽來源。Surface 測試核對顯示 ACK／模式／policy、可信准入、封閉型別及獨立 wire expected；八個 JS pointer／handler 案例核對原 lease、Shift 選字、滾輪分流、取消／capture／重放及清理。一般測試只用合成資料，不連 PTT。這些單元結果不能代替下述限定原生案例或尚未驗收的邊界。
 

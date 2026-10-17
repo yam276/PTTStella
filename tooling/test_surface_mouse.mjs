@@ -7,12 +7,15 @@ const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-mouse.js
 const plain=v=>JSON.parse(JSON.stringify(v));
 function environment(){
     let packet={generation:7,frame:{revision:4},input_epoch:2,connected:true,output_pending:false,
-        mouse:{route:"station",enabled:true,policy_epoch:3,modes:{epoch:5},active:null}},block=false;
+        mouse:{route:"station",enabled:true,policy_epoch:3,modes:{epoch:5,tracking:"click"},active:null}},block=false;
     const sent=[],captures=new Set(),viewport={hasPointerCapture:id=>captures.has(id),setPointerCapture:id=>captures.add(id),releasePointerCapture:id=>captures.delete(id)};
-    const owner=create({current:()=>packet,point:e=>e.cell??null,viewport,send:v=>sent.push(plain(v)),blocked:()=>block,prepare(){},changed(){}});
+    const frames=new Map();let nextFrame=0;
+    const owner=create({current:()=>packet,point:e=>e.cell??null,viewport,send:v=>sent.push(plain(v)),blocked:()=>block,prepare(){},changed(){},
+        requestFrame:callback=>{const id=++nextFrame;frames.set(id,callback);return id;},cancelFrame:id=>frames.delete(id)});
     return {owner,sent,captures,viewport,get packet(){return packet;},set packet(value){packet=value;},set blocked(value){block=value;},
         event(extra={}){return {button:0,pointerId:9,isTrusted:true,isPrimary:true,cell:{col:4,row:3},preventDefault(){},...extra};},
-        update(extra){packet={...packet,...extra};owner.update(packet);}};
+        update(extra){packet={...packet,...extra};owner.update(packet);},
+        flush(time){const callbacks=[...frames.values()];frames.clear();for(const callback of callbacks)callback(time);},frames};
 }
 const reports=env=>env.sent.filter(v=>v.kind==="station_mouse");
 const cancels=env=>env.sent.filter(v=>v.kind==="station_mouse_cancel");
@@ -85,13 +88,73 @@ const surface=readFileSync(new URL("../assets/surface.js",import.meta.url),"utf8
 function handler(name,next,context){vm.createContext(context);vm.runInContext(surface.slice(surface.indexOf(`function ${name}(`),surface.indexOf(`function ${next}(`)),context);return context[name];}
 test("station wheel produces no local navigation while Ctrl+wheel still zooms",()=>{
     for(const local of [false,true]){
-        const actions=[],context={stationMouse:{local:()=>local},cancelHover(){},blocked:()=>false,dragging:null,hasSelection:()=>false,
+        const actions=[],context={stationMouse:{local:()=>local,wheel:()=>!local},cancelHover(){},blocked:()=>false,dragging:null,hasSelection:()=>false,
             viewport:{scrollWidth:100,clientWidth:100,scrollHeight:100,clientHeight:100},latest:{connected:true,navigation:{kind:"article_list"}},
             navigate:intent=>actions.push(intent.action),zoom:1,zoomTo:zoom=>actions.push(zoom)};
         vm.createContext(context);vm.runInContext(surface.slice(surface.indexOf("function wheel("),surface.indexOf("const zoomIn=")),context);
         const event={deltaY:120,preventDefault(){}};context.wheel(event);context.wheel({...event,ctrlKey:true});
         assert.deepEqual(actions,local?["next_item",0.75]:[0.75]);
     }
+});
+
+const samples=env=>env.sent.filter(value=>value.kind==="station_mouse_sample");
+test("1003 coalesces a burst to one latest cell with an independent sample sequence",()=>{
+    const env=environment();env.update({mouse:{...env.packet.mouse,modes:{epoch:5,tracking:"motion"}}});
+    for(let col=0;col<80;col++)env.owner.move(env.event({cell:{col,row:3}}));
+    assert.equal(samples(env).length,0);assert.equal(env.frames.size,1);env.flush();
+    assert.equal(samples(env).length,1);
+    assert.deepEqual(samples(env)[0],{kind:"station_mouse_sample",trusted:true,sample:{lease:{stamp:{generation:7,revision:4,input_epoch:2},mode_epoch:5,policy_epoch:3,transaction:80},
+        sequence:1,report:{kind:"motion",col:79,row:3,button:null,modifiers:{shift:false,alt:false,ctrl:false}}}});
+    assert.equal(env.owner.active(),false);
+});
+test("animation-frame pacing retains one latest cell rather than a half-second burst backlog",()=>{
+    const env=environment();env.update({mouse:{...env.packet.mouse,modes:{epoch:5,tracking:"motion"}}});
+    env.owner.move(env.event());env.flush(0);assert.equal(samples(env).length,1);
+    for(let col=0;col<20;col++)env.owner.move(env.event({cell:{col,row:4}}));
+    env.flush(16);assert.equal(samples(env).length,1);assert.equal(env.frames.size,1);
+    env.owner.move(env.event({cell:{col:79,row:4}}));env.flush(34);
+    assert.equal(samples(env).length,2);assert.equal(samples(env).at(-1).sample.report.col,79);
+    assert.equal(env.frames.size,0);
+});
+test("1002 motion is held and ordered before release; foreign or untrusted moves never enter the buffer",()=>{
+    const env=environment();env.update({mouse:{...env.packet.mouse,modes:{epoch:5,tracking:"drag"}}});
+    env.owner.move(env.event());env.flush();assert.equal(samples(env).length,0);
+    env.owner.down(env.event());const lease=reports(env)[0].event.lease;
+    assert.equal(env.owner.down(env.event({shiftKey:true})),true);
+    assert.equal(env.owner.active(),true);assert.equal(reports(env).length,1);
+    for(const extra of [{isTrusted:false},{isPrimary:false},{pointerId:10},{metaKey:true}])env.owner.move(env.event(extra));
+    env.flush();assert.equal(samples(env).length,0);
+    env.owner.move(env.event({cell:{col:6,row:4},shiftKey:true}));
+    env.owner.up(env.event({cell:{col:7,row:4}}));
+    assert.deepEqual(env.sent.map(value=>value.kind),["station_mouse","station_mouse_sample","station_mouse"]);
+    assert.deepEqual(samples(env)[0].sample.lease,lease);
+    assert.equal(samples(env)[0].sample.report.button,"left");assert.equal(samples(env)[0].sample.report.modifiers.shift,true);
+    assert.equal(env.frames.size,0);env.flush();assert.equal(samples(env).length,1);
+});
+test("wheel normalization has one bounded latest tick, no release, and no old fractional source",()=>{
+    const env=environment();
+    env.owner.wheel(env.event({deltaY:20}));env.flush();assert.equal(samples(env).length,0);
+    env.owner.wheel(env.event({deltaY:20}));env.flush();assert.equal(samples(env)[0].sample.report.direction,"down");
+    for(let count=0;count<1000;count++)env.owner.wheel(env.event({deltaY:-120,altKey:true}));
+    assert.equal(env.frames.size,1);env.flush();assert.equal(samples(env).length,2);
+    assert.deepEqual(samples(env)[1].sample.report,{kind:"wheel",col:4,row:3,direction:"up",modifiers:{shift:false,alt:true,ctrl:false}});
+    assert.equal(reports(env).length,0);assert.equal(env.owner.active(),false);
+    env.owner.wheel(env.event({deltaY:20}));env.update({frame:{revision:5}});
+    env.owner.wheel(env.event({deltaY:20}));env.flush();assert.equal(samples(env).length,2);
+    env.owner.wheel(env.event({deltaY:1,deltaMode:1}));env.flush();assert.equal(samples(env).length,3);
+    env.owner.wheel(env.event({deltaY:-1,deltaMode:2}));env.flush();assert.equal(samples(env).at(-1).sample.report.direction,"up");
+});
+test("samples are revoked on cancellation, source changes, black margins and destruction",()=>{
+    for(const stop of [env=>env.owner.revoke(),env=>env.update({generation:8}),env=>env.update({frame:{revision:5}}),
+        env=>env.update({mouse:{...env.packet.mouse,policy_epoch:4}}),env=>env.owner.move(env.event({cell:null})),env=>env.owner.destroy()]){
+        const env=environment();env.update({mouse:{...env.packet.mouse,modes:{epoch:5,tracking:"motion"}}});
+        env.owner.move(env.event());env.owner.wheel(env.event({deltaY:120}));stop(env);env.flush();
+        assert.equal(samples(env).length,0);assert.equal(env.frames.size,0);
+    }
+    const env=environment();
+    for(const extra of [{isTrusted:false},{ctrlKey:true},{shiftKey:true},{metaKey:true},{deltaY:Infinity},{cell:null}])env.owner.wheel(env.event({deltaY:120,...extra}));
+    env.flush();assert.equal(samples(env).length,0);
+    env.owner.destroy();assert.equal(env.owner.clean(),true);
 });
 
 test("a local Shift drag completes even if Shift is released before pointerup",()=>{
