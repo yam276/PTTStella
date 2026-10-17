@@ -88,6 +88,8 @@ OSC 8 變更另跑 `node --test tooling/test_surface_links.mjs`；它以事件�
 
 UI 准入與生命週期變更另跑 `cargo test --locked --features desktop --bin pttstella` 及 `node --test tooling/test_surface_lifetime.mjs`（Node 18+）。前者檢查單筆命令等待／取消、立即入列與 busy 不執行 factory、事件來源與 session、組字例外及超時保留清理；desktop lib 另用實際 WebSocket 比對 browse 在原始 Enter 之前入列，尚未 poll 回覆也不能改變順序。後者以 fake channel 驗證生產 JS stop owner 的正常接收、資料通道失敗、停止後不新增 receive，以及兩萬個封包不累積 unresolved stop Promise 的 reaction，沒有操作瀏覽器。
 
+快速切板 UI 另跑 `node --test tooling/test_surface_boards.mjs`，檢查本機快捷鍵、IME Enter／229、取消／晚到回覆、session 改變、草稿及 dispose。`--probe-surface OUTPUT_DIRECTORY boards` 由 owned peer 核對 Stella／Other 兩次完整流程，再等待 Beta 的返回並延遲 3 秒；應在同一次 UI 自動化呼叫內觀察最新 AX「停止切板」並立即點擊，以免人與工具回合超過延遲。另需取消未確認草稿、輸入超長名稱確認完整保留並被拒絕，最後等晚到列表、正常關窗。嚴格結果須為兩個正式到達、至少一次拒絕、有效取消及無額外 bytes；若超過測試間隔而續送，保留失敗，不調整 expected 放行。
+
 UI owner／封包變更再跑 `node --test tooling/test_surface_dialogs.mjs`。使用明確 DOM／clock doubles 核對晚到字型結果、關閉／revoke、舊預覽、登入草稿清除、名單 busy／失敗恢復及 router 拒絕未知／legacy envelope；這些不是原生 trusted 操作證據。[ui-packets](tests/fixtures/ui-packets.json) 是獨立編寫的 synthetic wire expected，Rust bin 比對生產 Packet 的 serde 結果，JS 測試核對分派，沒有用序列化往返當 expected。Paint 與內嵌預覽另檢查結構，完整呈現仍由原生 PNG／畫面驗收。
 
 檔案工作／畫面狀態變更另核對 bin 的 Files 與 SurfaceState 案例：慢 blocking worker 不阻塞事件輪詢、忙碌不啟動第二筆、關閉時保留已開始工作且不吞失敗，以及單筆繪製／ACK、規則／來源／選取的失效。延期 picker 使用同一 production PNG 管線，八種狀態變更後舊 PNG 不寫，新請求仍須確實保存。JS 測試執行實際 clearSelection，以 [selection-cleared](tests/fixtures/selection-cleared.json) 核對直接撤銷通知；DOM doubles 不冒充原生操作。

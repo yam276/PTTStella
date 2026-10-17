@@ -7,6 +7,9 @@ use std::path::Path;
 
 #[derive(Default)]
 pub(super) struct Checks {
+    pub(super) board_reached: Vec<(u64, String)>,
+    pub(super) board_rejected: usize,
+    pub(super) board_cancelled: bool,
     pub(super) osc8_open_rows: Vec<usize>,
     pub(super) osc8_copy_rows: Vec<usize>,
     pub(super) osc8_selected: Option<(u64, u64, u64, usize)>,

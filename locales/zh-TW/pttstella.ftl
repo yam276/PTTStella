@@ -375,3 +375,12 @@ board-switch-cancelled = 已停止後續切板步驟；已送出內容無法撤�
 board-switch-stale = 畫面或操作狀態已改變，未啟動切板；請重新確認
 board-switch-busy = 目前有待完成的登入或切板操作，請先完成或取消
 board-switch-start-timeout = 未能確認切板是否已啟動；請查看站端畫面，不會自動重試
+
+board-open = 快速切板 (⌘K／Ctrl+K)
+board-stop = 停止切板
+board-title = 快速切板
+board-name = 看板名稱
+board-go = 前往
+board-dialog-hint = 輸入英文板名，按「前往」才切換；進板圖及站端提示仍由你操作。
+board-dialog-starting = 正在啟動切板…
+board-dialog-disconnected = 尚未連線，請先連上 PTT 再切板

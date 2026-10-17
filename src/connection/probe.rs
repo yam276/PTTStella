@@ -14,6 +14,7 @@ pub(super) enum Scenario {
     Window,
     Login,
     Login2fa,
+    Boards,
     Filters,
     Surface,
 }
@@ -54,6 +55,53 @@ where
 
 pub(super) fn login_page() -> Result<Vec<u8>, String> {
     crate::encoding::encode("\x1b[2J\x1b[1;1HPTTStella 合成登入頁（本機測試）\x1b[21;1H請輸入代號，或以 guest 參觀，或以 new 註冊: ").map_err(|e|e.to_string())
+}
+
+pub(super) fn board_page(name: &str) -> Result<Vec<u8>, String> {
+    let data: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/board-switch.json"))
+            .map_err(|error| error.to_string())?;
+    crate::encoding::encode(
+        data["screens"][name]
+            .as_str()
+            .ok_or("missing board-switch scene")?,
+    )
+    .map_err(|error| error.to_string())
+}
+
+async fn boards<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result<(), String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    for (step, (expected, scene)) in [
+        (b"f".as_slice(), "boards"),
+        (b"s", "prompt"),
+        (b"Stella\r", "selected"),
+        (b"\x1b[C", "articles"),
+        (b"\x1b[D", "boards"),
+        (b"s", "prompt"),
+        (b"Other\r", "other_articles"),
+        (b"\x1b[D", "boards"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected)
+        {
+            return Err(format!("board switch probe input differs at step {step}"));
+        }
+        if step == 7 {
+            tokio::time::sleep(Duration::from_secs(3)).await;
+        }
+        socket
+            .send(Message::Binary(board_page(scene)?.into()))
+            .await
+            .map_err(|error| error.to_string())?;
+    }
+    match socket.next().await {
+        Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|error| error.to_string()),
+        _ => Err("board switch probe expected Close without extra steps".into()),
+    }
 }
 
 pub(super) fn password_page() -> Result<Vec<u8>, String> {
@@ -269,7 +317,11 @@ pub(super) async fn serve(
         900
     } else if matches!(
         scenario,
-        Scenario::Window | Scenario::Login | Scenario::Login2fa | Scenario::Surface
+        Scenario::Window
+            | Scenario::Login
+            | Scenario::Login2fa
+            | Scenario::Surface
+            | Scenario::Boards
     ) {
         300
     } else {
@@ -286,6 +338,9 @@ pub(super) async fn serve(
             .map_err(|e| e.to_string())?;
         if matches!(scenario, Scenario::Window) {
             return window(&mut socket).await;
+        }
+        if matches!(scenario, Scenario::Boards) {
+            return boards(&mut socket).await;
         }
         if matches!(scenario, Scenario::Login | Scenario::Login2fa) {
             return login(&mut socket, matches!(scenario, Scenario::Login2fa)).await;

@@ -110,7 +110,7 @@ test("the tagged router delivers independent wire examples once and rejects lega
     const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8")+"\ncreateSurfaceRouter");
     const kinds=["paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
         "hover_settings","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error","media_external",
-        "media_reset","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","link_result","export_result"];
+        "media_reset","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","board_result","link_result","export_result"];
     const calls=[],handlers=Object.fromEntries(kinds.map(kind=>[kind,payload=>calls.push({kind,payload})]));
     const route=create(handlers),examples=JSON.parse(readFileSync(new URL("../tests/fixtures/ui-packets.json",import.meta.url),"utf8"));
     for(const {packet} of examples){

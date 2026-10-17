@@ -130,6 +130,20 @@ fn outbound_results_match_the_shared_wire_examples() {
             Packet::NavigationResult(Feedback::new(NavigationStatus::Sent, "回覆")),
         ),
         (
+            "board_result_started",
+            Packet::BoardResult {
+                request: 7,
+                feedback: Feedback::quiet(BoardStatus::Started),
+            },
+        ),
+        (
+            "board_result_rejected",
+            Packet::BoardResult {
+                request: 8,
+                feedback: Feedback::new(BoardStatus::Rejected, "回覆"),
+            },
+        ),
+        (
             "navigation_result_rejected",
             Packet::NavigationResult(Feedback::new(NavigationStatus::Rejected, "回覆")),
         ),

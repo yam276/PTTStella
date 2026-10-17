@@ -381,3 +381,12 @@ board-switch-cancelled = Remaining switch steps stopped. Sent input cannot be wi
 board-switch-stale = The screen or operation state changed. Switching did not start; check it again.
 board-switch-busy = A login or board switch is pending. Complete or cancel it first.
 board-switch-start-timeout = Could not confirm whether switching started. Check the server screen; nothing will be retried automatically.
+
+board-open = Switch board (⌘K / Ctrl+K)
+board-stop = Stop switching
+board-title = Switch board
+board-name = Board name
+board-go = Go
+board-dialog-hint = Enter a board name, then choose Go. Handle entry screens and server prompts manually.
+board-dialog-starting = Starting switch…
+board-dialog-disconnected = Connect to PTT before switching boards.

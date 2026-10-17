@@ -59,7 +59,7 @@ def provenance(root):
                 facts['dirty'] = bool(status.stdout.strip())
         except (OSError, subprocess.TimeoutExpired):
             facts['git_metadata'] = 'unavailable'
-    for name in ('dual-color.json', 'redraw.json', 'navigation.json', 'board-switch.json', 'filters.json', 'media/colours.png', 'media/motion.gif'):
+    for name in ('dual-color.json', 'redraw.json', 'navigation.json', 'board-switch.json', 'ui-packets.json', 'filters.json', 'media/colours.png', 'media/motion.gif'):
         path = root / 'tests/fixtures' / name
         if path.is_file():
             facts['fixture_sha256'][name] = hashlib.sha256(path.read_bytes()).hexdigest()

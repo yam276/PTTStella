@@ -456,9 +456,10 @@ const settingsUi=createSettingsDialog({send,
 const loginUi=createLoginDialog({tr,send,stamp,
     prepare:e=>{cancelHover(true);policy("reset",e);cancelComposition();clearSelection();},
     restore:restoreEditingFocus,changed:refreshControls,focus});
+const boardUi=createBoardDialog({tr,send,stamp,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,current:()=>latest,isEditing:()=>composing||pastePending});
 const filterUi=createFiltersDialog({tr,send,current:()=>latest,invalidate:invalidatePresentation,
     reset:e=>policy("reset",e),restore:restoreEditingFocus,changed:refreshControls});
-const bindings=[...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,
+const bindings=[...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...boardUi.bindings,
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
     [keyboard,"beforeinput",beforeinput],
@@ -642,11 +643,11 @@ async function paint(packet) {
     surface.dataset.outputPending=String(!!packet.output_pending);
     surface.dataset.keepAlive=String(packet.keep_alive);surface.dataset.keepAliveReady=String(packet.keep_alive_ready);
     surface.dataset.keepAliveSent=String(packet.keep_alive_sent);
-    loginUi.update(packet);
+    loginUi.update(packet);boardUi.update(packet);
 }
 focus();
 function revokeSurface(){
-    stopped=true;settingsUi.revoke();loginUi.revoke();filterUi.revoke();
+    stopped=true;settingsUi.revoke();loginUi.revoke();filterUi.revoke();boardUi.revoke();
     for(const [target,event,callback,options] of bindings)target.removeEventListener(event,callback,options);
 }
 const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
@@ -659,6 +660,7 @@ function runSurfaceProbe(mode){
             else if(mode==="files")surfaceNote.textContent="原生選檔探針（本機合成資料）：可匯出 PNG 或匯入／匯出設定檔";
             else if(mode==="files_slow")surfaceNote.textContent="慢檔案探針：等待本機 runner 釋放；可開啟設定或關閉視窗";
             else if(mode==="fonts")surfaceNote.textContent="Font selection probe: local synthetic data and external-page sink";
+            else if(mode==="boards")surfaceNote.textContent="Board probe: cancel a draft, visit Stella and Other, reject an invalid name, then start Beta and stop before the delayed board list";
             else if(mode==="osc8")surfaceNote.textContent="OSC 8 probe: both wrapped fragments share a complete destination; select/copy, drag and open local media";
             else if(mode==="login_2fa")surfaceNote.textContent="Verification probe: explicit synthetic login, six digits, then eight-character recovery; Esc returns to Vim";
             else if(mode==="sgr66"||mode==="sgr66_legacy")surfaceNote.textContent="Dual-color probe: export PNG, then close; local synthetic data only";
@@ -684,7 +686,8 @@ const route=createSurfaceRouter({
     paint,
     surface_probe:runSurfaceProbe,
     filters_open:filterUi.open,filters_result:filterUi.receive,
-    login_result:loginUi.receive,keyboard_state:receiveKeyboard,
+    login_result:loginUi.receive,
+    board_result:boardUi.receive,keyboard_state:receiveKeyboard,
     hover_settings:position=>{hoverPreference=position;hoverPosition.value=position;surface.dataset.hoverPosition=position;
         if(position==="off")cancelHover(true);else if(pointerClient)media.locate(pointerClient,position);},
     media_hover:data=>{if(hoverCandidate?.sequence===data.sequence){media.hover(data);media.locate(pointerClient,hoverPreference);}},
@@ -724,7 +727,7 @@ finally {
     cancelHover(true);
     stopped=true;latest=null;observer.disconnect();pasteObserver.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
     const mediaClean=await media.destroy();
-    settingsUi.destroy();loginUi.destroy();filterUi.destroy();
+    settingsUi.destroy();loginUi.destroy();filterUi.destroy();boardUi.destroy();
     if(exportTask)await exportTask;
     if(pasteDialog.open)pasteDialog.close();
     setHover(null);refreshNavigation();
@@ -738,7 +741,7 @@ finally {
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
     cleanupClean=mediaClean&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
-        &&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
+        &&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&boardUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
     try {send({kind:"stopped",clean:cleanupClean});} catch(_) { /* join still acknowledges cleanup */ }
 }
 return {clean:cleanupClean};

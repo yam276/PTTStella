@@ -1,6 +1,6 @@
 # 有界快速切板
 
-本契約對應使用者授權的快速切板與本機最近清單。Rust 的單一切板流程已實作；UI、保存與原生驗收進度見 [active plan](active/minimal-browser.md)。
+本契約對應使用者授權的快速切板與本機最近清單。Rust 單一流程與快速切板 UI 已實作；最近清單保存與完整驗收進度見 [active plan](active/minimal-browser.md)。
 
 ## 板名與辨識
 
@@ -20,6 +20,14 @@ Connection 持有唯一工作，UI 不持有鍵串、站端狀態機或 timer。
 每步最長 5 秒、整體最多 30 秒，不因片段或錯誤畫面重設期限，不重送同一步。未收到預期畫面會停止；進板圖、說明頁與登入提示立即交還手動，不自動按任意鍵或回答確認。取消、有效的手動輸入／導覽、斷線與新 session 停止後續步驟；已送 bytes 不能撤回，重連不恢復。
 
 新步驟前先讓已排入的手動操作及 UI 准入更新執行。唯一 write_input 在 await 傳輸前更新 input epoch 與等待狀態，撤銷直接讀 watch 的舊匯出／hover lease；切板期間暫停保活，不增加另一個送鍵 task。清理仍由原 Connection／UI owner 負責。
+
+## 本機視窗
+
+工具列或 ⌘K／Ctrl+K 開啟草稿視窗；這組快捷鍵保留給客戶端，不送 PTT。輸入或組字本身不送站端，按「前往」或非組字中的 Enter 才要求 Rust 啟動。保留超過 12 字元的草稿讓 Rust 拒絕，不將貼上內容截成另一個有效板名。來源未知或待回應時明確拒絕，錯誤保留草稿。
+
+Esc／取消清空草稿，未確認前零站端輸入；已要求開始則取消尚未完成的步驟。工具列「停止切板」對應該工作的原始 operation，不以現在游標位置猜取消對象。UI 有自己的 request ID，取消／重新開啟後的舊回覆不會關閉新草稿，session 改變會釋放等待。清理時先撤銷事件與工作，再由同一 renderer、Connection 與 file owner join。
+
+IME 的 composition、isComposing 與 legacy 229 都不兼任送出；下一個普通 Enter 可明確確認。JS doubles 覆蓋此界線，不冒充原生候選窗驗收。
 
 ## 測試與邊界
 
