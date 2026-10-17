@@ -52,10 +52,20 @@ pub struct Frame {
 enum Parser {
     #[default]
     Ground,
-    Escape,
-    Csi(Vec<u8>),
-    String,
-    StringEscape,
+    Escape {
+        intermediate: bool,
+    },
+    Csi {
+        data: Vec<u8>,
+        intermediate: bool,
+    },
+    CsiDiscard,
+    String {
+        osc: bool,
+    },
+    StringEscape {
+        osc: bool,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -121,61 +131,125 @@ impl Screen {
         self.unsupported = 0;
     }
     fn byte(&mut self, byte: u8) {
+        self.parse_byte(byte);
+        self.revision = self.revision.saturating_add(1);
+    }
+    fn parse_byte(&mut self, byte: u8) {
+        // Only 7-bit controls are recognized: 0x80..=0x9f are Big5/UAO data.
+        if matches!(byte, 0x18 | 0x1a) {
+            self.parser = Parser::Ground;
+            return;
+        }
+        if byte == 0x1b {
+            self.parser = match self.parser {
+                Parser::String { osc } | Parser::StringEscape { osc } => {
+                    Parser::StringEscape { osc }
+                }
+                _ => Parser::Escape {
+                    intermediate: false,
+                },
+            };
+            return;
+        }
+        if !matches!(
+            self.parser,
+            Parser::String { .. } | Parser::StringEscape { .. }
+        ) {
+            // C0 controls execute without ending an escape/CSI; DEL is ignored.
+            if byte <= 0x1f {
+                self.ground(byte);
+                return;
+            }
+            if byte == 0x7f {
+                return;
+            }
+        }
         let parser = std::mem::take(&mut self.parser);
         match parser {
             Parser::Ground => self.ground(byte),
-            Parser::Escape => match byte {
-                b'[' => self.parser = Parser::Csi(Vec::new()),
-                b']' | b'P' | b'^' | b'_' => self.parser = Parser::String,
-                b'7' => self.saved = (self.x, self.y),
-                b'8' => {
-                    (self.x, self.y) = self.saved;
-                    self.wrap = false;
-                }
-                b'D' => self.linefeed(),
-                b'M' => {
-                    if self.y == self.top {
-                        self.scroll_down(1);
-                    } else {
-                        self.y = self.y.saturating_sub(1);
-                    }
-                }
-                b'E' => {
-                    self.x = 0;
-                    self.linefeed();
-                }
-                b'c' => self.reset(),
-                0x1b => self.parser = Parser::Escape,
-                _ => self.unsupported += 1,
-            },
-            Parser::Csi(mut data) => {
-                if byte == 0x1b {
-                    self.parser = Parser::Escape;
-                } else if (0x40..=0x7e).contains(&byte) {
+            Parser::Escape { intermediate } => self.escape(byte, intermediate),
+            Parser::Csi {
+                mut data,
+                intermediate,
+            } => {
+                if (0x40..=0x7e).contains(&byte) {
                     self.csi(&data, byte);
-                } else if data.len() < MAX_CSI && (0x20..=0x3f).contains(&byte) {
+                } else if data.len() < MAX_CSI
+                    && ((0x20..=0x2f).contains(&byte)
+                        || (!intermediate && (0x30..=0x3f).contains(&byte)))
+                {
                     data.push(byte);
-                    self.parser = Parser::Csi(data);
+                    self.parser = Parser::Csi {
+                        data,
+                        intermediate: intermediate || byte < 0x30,
+                    };
                 } else {
                     self.unsupported += 1;
+                    // Do not render an oversized/malformed sequence's tail.
+                    self.parser = Parser::CsiDiscard;
                 }
             }
-            Parser::String => {
-                self.parser = match byte {
-                    7 => Parser::Ground,
-                    0x1b => Parser::StringEscape,
-                    _ => Parser::String,
+            Parser::CsiDiscard => {
+                if !(0x40..=0x7e).contains(&byte) {
+                    self.parser = Parser::CsiDiscard;
                 }
             }
-            Parser::StringEscape => {
-                self.parser = if byte == b'\\' {
+            Parser::String { osc } => {
+                self.parser = if osc && byte == 7 {
                     Parser::Ground
                 } else {
-                    Parser::String
+                    Parser::String { osc }
+                }
+            }
+            Parser::StringEscape { .. } => {
+                if byte != b'\\' {
+                    // ESC aborts the string when it starts another command.
+                    self.parser = Parser::Escape {
+                        intermediate: false,
+                    };
+                    self.parse_byte(byte);
                 }
             }
         }
-        self.revision = self.revision.saturating_add(1);
+    }
+    fn escape(&mut self, byte: u8, intermediate: bool) {
+        if (0x20..=0x2f).contains(&byte) {
+            self.parser = Parser::Escape { intermediate: true };
+            return;
+        }
+        if intermediate || !(0x30..=0x7e).contains(&byte) {
+            self.unsupported += 1;
+            return;
+        }
+        match byte {
+            b'[' => {
+                self.parser = Parser::Csi {
+                    data: Vec::new(),
+                    intermediate: false,
+                }
+            }
+            b']' => self.parser = Parser::String { osc: true },
+            b'P' | b'X' | b'^' | b'_' => self.parser = Parser::String { osc: false },
+            b'7' => self.saved = (self.x, self.y),
+            b'8' => {
+                (self.x, self.y) = self.saved;
+                self.wrap = false;
+            }
+            b'D' => self.linefeed(),
+            b'M' => {
+                if self.y == self.top {
+                    self.scroll_down(1);
+                } else {
+                    self.y = self.y.saturating_sub(1);
+                }
+            }
+            b'E' => {
+                self.x = 0;
+                self.linefeed();
+            }
+            b'c' => self.reset(),
+            _ => self.unsupported += 1,
+        }
     }
     fn reset(&mut self) {
         self.cells.fill(Cell::default());
@@ -191,7 +265,11 @@ impl Screen {
     }
     fn ground(&mut self, byte: u8) {
         match byte {
-            0x1b => self.parser = Parser::Escape,
+            0x1b => {
+                self.parser = Parser::Escape {
+                    intermediate: false,
+                }
+            }
             b'\r' => {
                 self.x = 0;
                 self.wrap = false;
