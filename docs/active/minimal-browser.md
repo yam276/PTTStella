@@ -48,6 +48,12 @@ core 八套 suite／兩份 replay、48 個 desktop lib、28 個 bin 及 desktop 
 
 macOS WKWebView 的最終候選完成 40 筆原生 Vim 操作，每次換頁均含兩段相隔 120ms 的同步更新、未知 ESC intermediate 與超長 CSI；五次切板、無重繪 gg／4j、三次進板圖及六位數指標列表通過，長按 l 一秒只通過一次，最終 NORMAL。⌘Q 退出碼 0、Close acknowledged，listener／Connection／credential／file owner 清理完成。這是可操作性回歸，未宣稱逐像素防撕裂、極速連發、完整原生 IME、實站或其他 OS 通過；完整 Mac desktop backend 仍 not_ready。App 為 `dist/macos-protocol-a2/PTTStella.app`（arm64／ad-hoc strict 驗章），與測試 App 移除各自簽章後的 executable 雜湊相同。報告保留 `.local/verification/protocol-a2`；一次新增測試引用不存在的 fixture 名稱，修正後全套通過，原失敗 log 保留。A3 畫面辨識接續執行。
 
+**A3 完成新操作列回歸與獨立說明／空列表 profile**：以自製 `navigation-actions.json` 確認新主選單、看板／最愛、文章與閱讀操作列沿用既有辨識條件即可通過，沒有放寬一般列表的欄位／指標／色帶要求。新增 CommandHelp 要求 Help 標頭、欄位、連續命令與指標，僅開放移動／翻頁／返回；l／Enter／Open 回報 RequiresNativeInput，具中英文原生一次提示。EmptyList 只在精確空目錄／沒有文章、底列 caption、原欄位、無其他內容及右下游標時允許返回；不開放其他操作、滑鼠或保活。未知、未映射、半張畫面、假提示、游標不符與有輸入提示的負例仍拒絕。
+
+core 八套 suite／兩份 replay（新增三個 navigation 與一個 Vim 案例）、48 個 desktop lib、28 個 bin、desktop 全 targets Clippy 通過；Connection 的 window probe 擴充至 46 筆，額外拒絕 Help Forward／Open，peer 仍只接受指定方向鍵序列。macOS WKWebView 重驗同一 46 筆，包含全部同步分片、進板圖長按、Help j/k／gg/G／h 及空列表返回；另在普通與「刪除」Help 項目按 l／Enter 共四次，在空列表按 j／Enter 兩次，均沒有站端輸入，畫面與原生一次提示正確，最後 NORMAL。⌘W 退出碼 0、Close acknowledged，各 owner join；沒有實站、Windows／Linux、原生 IME 或逐像素防撕裂的完成宣稱。
+
+目前 A 階段 App 為 `dist/macos-protocol-a3/PTTStella.app`；arm64／ad-hoc strict 驗章及與實測 App 去簽章後相同 executable 的核對保留 `.local/verification/protocol-a3`，中間測試 App 可清理而保留報告。B1 SGR 66 接續執行，2FA／完整網址／快速切板等仍依後續批次驗收。
+
 ### 詳細交付計畫
 
 2026-10-17 展開上述研究；本節是待執行計畫，不代表產品已支援。先交付相容性，再交付高頻桌面操作。每一批完成實作與適用驗證即提交，不累積到整個階段結束；不改寫既有歷史、不自動 push。以下為依賴順序與相對工作量，不是日曆工期承諾。

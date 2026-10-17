@@ -1012,7 +1012,7 @@ async fn run(
     if window_probe {
         let path = probe.as_ref().ok_or("missing window-probe directory")?;
         let report = serde_json::json!({"status":"passed",
-                                "scope":"local window probe; exact 40 Vim operations across main menu, board/favorite and article lists, including five switching cycles, no-redraw Home/count/enter and three continue prompts followed by dense ASCII-pointer article browsing; no extra station input",
+                                "scope":"local window probe; exact 46 Vim operations across main menu, board/favorite and article lists, including five switching cycles, no-redraw Home/count/enter, three continue prompts, dense ASCII-pointer articles, command help and empty-list return; split synchronized output and no extra station input",
 
                                 "settings":preferences.app(),"vim_mode":keyboard_policy.status(&receiver.borrow().context())});
         reports.push((path.join("window-probe.json"), report));

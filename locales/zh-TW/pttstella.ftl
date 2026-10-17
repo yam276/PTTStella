@@ -224,6 +224,7 @@ link-invalid = 網址格式不正確
 link-scheme = 只支援 HTTP／HTTPS 網址
 tls-no-roots = 系統沒有可用的 TLS 信任根憑證
 navigation-unavailable = 此畫面或位置未提供導覽
+navigation-help-native = 此說明頁可執行命令；請按 f，再使用 PTT 原始按鍵確認
 navigation-stale = 畫面或輸入已變更；導覽未送出
 navigation-awaiting = 等待站端更新畫面後再導覽
 navigation-disconnected = 連線已變更；導覽未送出
