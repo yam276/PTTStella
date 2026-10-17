@@ -185,6 +185,12 @@ impl Connection {
     pub fn start_verification_probe() -> Result<Self, String> {
         Self::start_owned_probe(probe::login_page()?, probe::Scenario::Login2fa)
     }
+    pub fn start_board_probe() -> Result<Self, String> {
+        let connection =
+            Self::start_owned_probe(probe::board_page("main")?, probe::Scenario::Boards)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     pub fn start_filters_probe() -> Result<Self, String> {
         let connection =
             Self::start_owned_probe(probe::filters_page(false)?, probe::Scenario::Filters)?;

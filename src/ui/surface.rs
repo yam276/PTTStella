@@ -20,8 +20,9 @@ use super::{
     files::{self, Completion as FileCompletion, ProfileRequest},
     lifecycle::Resources,
     outbound::{
-        ExportStatus, Feedback, FiltersOpen, FiltersResult, LinkStatus, LoginResult, MediaHover,
-        MediaImage, MediaOpen, NavigationStatus, Packet, PasteStatus, SaveStatus, SelectionReply,
+        BoardStatus, ExportStatus, Feedback, FiltersOpen, FiltersResult, LinkStatus, LoginResult,
+        MediaHover, MediaImage, MediaOpen, NavigationStatus, Packet, PasteStatus, SaveStatus,
+        SelectionReply,
     },
     probe::Checks,
     surface_state::{Identity, SurfaceState},
@@ -178,6 +179,7 @@ async fn run(
         include_str!("../../assets/surface-fonts.js"),
         include_str!("../../assets/surface-settings.js"),
         include_str!("../../assets/surface-login.js"),
+        include_str!("../../assets/surface-boards.js"),
         include_str!("../../assets/surface-filters.js"),
         include_str!("../../assets/surface.js"),
     ]
@@ -196,6 +198,7 @@ async fn run(
     let mut login_guidance = pttstella::login::Guidance::Idle;
 
     let mut login_stamp: Option<navigation::Stamp> = None;
+    let mut board_request: Option<(u64, navigation::Stamp)> = None;
     let mut login_open = false;
     let first = receiver.borrow_and_update().clone();
     let mut last_status = first.message.clone();
@@ -359,6 +362,13 @@ async fn run(
                         Ok(()) => continue,
                         Err(error) => Packet::Notice(error),
                     },
+                    CommandKind::Board => {
+                        let Some((request,_))=board_request.take() else {continue;};
+                        Packet::BoardResult {request,feedback:match done.result {
+                            Ok(())=>Feedback::quiet(BoardStatus::Started),
+                            Err(error)=>Feedback::new(BoardStatus::Rejected,error),
+                        }}
+                    },
                 };
                 eval.send(packet).map_err(|e|e.to_string())?;
             },
@@ -403,6 +413,24 @@ async fn run(
                     continue;
                 }
                 match event {
+                    SurfaceEvent::BoardSubmit {request,stamp,name,trusted:_} => {
+                        let result=(|| {
+                            let board=pttstella::board_navigation::BoardName::parse(&name).map_err(|error|error.to_string())?;
+                            commands.start(CommandKind::Board,stamp.generation,||connection.request_switch_board(stamp,board).map(|reply|reply.wait()))
+                        })();
+                        match result {
+                            Ok(())=>board_request=Some((request,stamp)),
+                            Err(error)=>{if surface_probe.as_deref()==Some("boards"){checks.board_rejected=checks.board_rejected.saturating_add(1);}eval.send(Packet::BoardResult {request,feedback:Feedback::new(BoardStatus::Rejected,error)}).map_err(|error|error.to_string())?;},
+                        }
+                    },
+                    SurfaceEvent::BoardCancel {operation,trusted:_} => {
+                        checks.board_cancelled |= surface_probe.as_deref()==Some("boards") && matches!(&receiver.borrow().board_navigation,pttstella::board_navigation::Progress::Active{operation:owner,..} if *owner==operation);
+                        if board_request.is_some_and(|(_,stamp)|stamp==operation) {
+                            if commands.is(CommandKind::Board) {commands.cancel();}
+                            board_request=None;
+                        }
+                        if let Err(error)=connection.cancel_switch_board(operation) {eval.send(Packet::Notice(error)).map_err(|error|error.to_string())?;}
+                    },
                     SurfaceEvent::SurfaceProbe { clean } => {
                         if !matches!(surface_probe.as_deref(), Some("untrusted" | "confirm")) {
                             return Err("unexpected surface probe result".into());
@@ -971,6 +999,9 @@ async fn run(
                     eval.send(Packet::HoverReset{media:false}).map_err(|e|e.to_string())?;
                 }
                 if keyboard_generation!=view.generation || view.phase!=Phase::Connected {
+                    if let Some((request,_))=board_request.take() {
+                        eval.send(Packet::BoardResult {request,feedback:Feedback::new(BoardStatus::Rejected,pttstella::msg!("command-stale"))}).map_err(|error|error.to_string())?;
+                    }
                     if commands.busy() {
                         commands.cancel();
                         eval.send(Packet::NavigationResult(Feedback::quiet(NavigationStatus::Rejected))).map_err(|e|e.to_string())?;
@@ -981,6 +1012,7 @@ async fn run(
                 if view.login_guidance != login_guidance && view.login_guidance.needs_input() {
                     keyboard_policy.use_native_input();
                 }
+                if surface_probe.as_deref()==Some("boards") && checks.board_reached.len()<3 && let pttstella::board_navigation::Progress::Reached{serial,board}=&view.board_navigation && checks.board_reached.last().is_none_or(|(seen,_)|seen!=serial) {checks.board_reached.push((*serial,board.as_str().to_owned()));}
                 login_guidance = view.login_guidance;
                 checks.verification_required |= login_guidance == pttstella::login::Guidance::CodeRequired;
                 checks.verification_rejected |= login_guidance == pttstella::login::Guidance::CodeRejected;
@@ -1009,12 +1041,14 @@ async fn run(
         reports.push((path.join("surface-probe.json"),serde_json::json!({
             "status":if case=="slow" && commands.busy() || case=="files_slow" && files.busy() || case=="files" && checks.export_checked || case=="untrusted" && surface_probe_clean && rejected_events==3
                 || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB")
+                || case=="boards" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && checks.board_cancelled && checks.board_rejected>=1
                 || case=="osc8" && checks.osc8_open_rows==[8,9] && checks.osc8_copy_rows==[8,9] && checks.osc8_dragged && checks.osc8_media_decoded>=2 && checks.export_checked
                 || case=="login_2fa" && checks.verification_required && checks.verification_rejected && checks.verification_browsing && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
                 || case=="fonts" && checks.font_catalog_reads>=2 && !checks.font_sources.is_empty() && checks.export_checked
                 || matches!(case.as_str(),"sgr66"|"sgr66_legacy") && checks.export_checked
                 || case=="dialogs" && checks.settings_saved && checks.export_checked && checks.rows_export_checked && checks.media_external>=1 {"passed"} else {"failed"},
-            "scope":if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
+            "board_reached":checks.board_reached,"board_rejected":checks.board_rejected,"board_cancelled":checks.board_cancelled,
+            "scope":if case=="boards" {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
             "osc8_dragged":checks.osc8_dragged,"osc8_media_decoded":checks.osc8_media_decoded,
             "osc8_open_rows":checks.osc8_open_rows,"osc8_copy_rows":checks.osc8_copy_rows,
             "verification_required":checks.verification_required,"verification_rejected":checks.verification_rejected,"verification_browsing":checks.verification_browsing,

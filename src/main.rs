@@ -70,11 +70,11 @@ fn main() {
             Some(
                 case @ ("decode" | "painted" | "send" | "renderer_error" | "untrusted" | "confirm"
                 | "slow" | "dialogs" | "files" | "files_slow" | "fonts" | "sgr66"
-                | "sgr66_legacy" | "login_2fa" | "osc8"),
+                | "sgr66_legacy" | "login_2fa" | "osc8" | "boards"),
             ) => Some(case.to_owned()),
             _ => {
                 eprintln!(
-                    "--probe-surface requires decode, painted, send, renderer_error, untrusted, confirm, slow, dialogs, files, files_slow, fonts, sgr66, sgr66_legacy, login_2fa or osc8"
+                    "--probe-surface requires decode, painted, send, renderer_error, untrusted, confirm, slow, dialogs, files, files_slow, fonts, sgr66, sgr66_legacy, login_2fa, osc8 or boards"
                 );
                 std::process::exit(2);
             }

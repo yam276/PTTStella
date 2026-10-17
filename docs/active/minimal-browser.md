@@ -8,7 +8,7 @@
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
-初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。沒有獨立文章 UI、板名導航按鈕、啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)。
+初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。沒有獨立文章 UI、啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
 ## 下一階段：站端相容性與桌面操作
 
@@ -77,6 +77,12 @@ macOS 原生顯示正確的兩段網址及兩段本機圖片標籤，AX 匯出 P
 **C2 第一批：單一有界切板流程已實作，UI／最近清單接續**。新增具驗證的 BoardName 與純 Rust Switch，由 Session 持有工作、operation Stamp、送出 epoch 與有界期限；主選單→最愛列表、閱讀→文章→板列表、固定搜尋提示、列表已選目標後進入，以及直接進空／一般文章列表分開確認。每步 5 秒、總計 30 秒，進板圖／登入／說明交還手動；原始輸入、有效導覽、取消、逾時與 session 變更停止後續，沒有重試或回滾宣稱。開始 Reply 僅是啟動確認，Reached 狀態才表示讀到正式目標名稱。見 [快速切板契約](../quick-boards.md)。
 
 新增五個 navigation 與六個 production Connection 測試，core 八套 suite／兩份 replay、56 個 desktop lib、30 個 bin 與全 targets desktop Clippy 通過。peer 核對精確步驟、同步分片期間零板名輸入與 Pong、工作期間零保活、舊取消不影響新工作、手動介入、晚到提示、5 秒逾時、重連零重播與工作中 Close acknowledged。write_input 在 await 前更新 watch 的 input epoch／等待狀態；既有檔案 lease 的 input 失效、Vim／登入／清理回歸維持通過。fixture 是自製場景與手寫 expected，原有 expected 未改。證據保留 `.local/verification/boards-c2`；這批只交付 Rust 流程，尚無新的快速切板 UI／最近清單或對應原生／實站完成宣稱。
+
+**C2 第二批：快速切板 UI 與 macOS 鍵盤驗證已完成；最近清單接續**。獨立 JS owner 管理草稿、IME、request ID、快捷鍵與取消；Rust typed event／Packet 沿用統一准入與單一命令等待。⌘K／Ctrl+K 不送到 PTT，未確認草稿取消零 bytes；超長名稱保留完整內容並拒絕，不默默截成另一個板名。舊回覆不能關閉新草稿；session 改變／關閉撤銷等待及後續工作，關窗清理由共同 owner 接手。
+
+56 個 desktop lib、30 個 bin、31 個 JS、全 targets Clippy、docs／diff 通過；新 BoardResult 使用獨立手寫 wire expected，事件正反例納入原先准入 suite，fixture 摘要加入 board-switch 與 UI packets。macOS 真正 WKWebView 啟用 Vim，驗證 ⌘K／Ctrl+K、草稿取消、Enter／按鈕確認、Stella（列表選中後進入）與 Other（不在列表直接到達）、13 字元草稿完整保留及拒絕、第三次工作有效停止、晚到列表零續送與 PNG；⌘W／Close acknowledged、全部 owner join、退出碼 0。首次取消分開工具回合超過 peer 3 秒間隔，工作已續送，該次 cleanup 為 failed 並保留；相同 binary、相同預期，改為在同一次呼叫讀最新 AX 後立即停止，第二次嚴格探針通過。一次 snapshot 暫缺部分文字，匯出／Raise 後恢復，沒有據此宣稱原生合成器或逐像素防撕裂已驗證。
+
+同一候選 App 重跑全部 46 筆原生 Vim 操作（53 個實體鍵），包含同步分片、無重繪、三種進板圖繼續、密集文章、Help 與空列表；最後 Normal，⌘Q／Close acknowledged 與各 owner join。候選為 `dist/macos-boards-ui/PTTStella.app`，strict ad-hoc 與已測 executable 去簽章 hash 核對保留 `.local/verification/boards-c2`。本輪未連 PTT，原生 IME 候選窗、Windows／Linux、實站切板與完整 Mac desktop backend 未驗收；最近清單仍待實作，C1 原生滑鼠工具缺口也未結案。
 
 ### 詳細交付計畫
 

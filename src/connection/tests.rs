@@ -832,9 +832,7 @@ async fn local() -> (TcpListener, Connection) {
 }
 
 fn board_page(name: &str) -> Vec<u8> {
-    let data: serde_json::Value =
-        serde_json::from_str(include_str!("../../tests/fixtures/board-switch.json")).unwrap();
-    crate::encoding::encode(data["screens"][name].as_str().unwrap()).unwrap()
+    probe::board_page(name).unwrap()
 }
 
 async fn finish_board_peer(

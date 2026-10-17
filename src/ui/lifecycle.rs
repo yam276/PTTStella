@@ -90,6 +90,13 @@ impl Resources {
         // Cancellation is best effort; shutdown below remains the owned, joined
         // operation even if the bounded command queue is already closed/full.
         let _ = connection.cancel_login();
+        let operation = match connection.updates.borrow().board_navigation {
+            pttstella::board_navigation::Progress::Active { operation, .. } => Some(operation),
+            _ => None,
+        };
+        if let Some(operation) = operation {
+            let _ = connection.cancel_switch_board(operation);
+        }
         let render = async {
             match self.eval.take() {
                 Some(eval) => renderer(eval).await,

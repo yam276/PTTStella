@@ -30,6 +30,7 @@ pub fn app(props: AppProps) -> Element {
     let surface_probe = props.surface_probe.clone();
     let surface_probing = surface_probe.is_some();
     let sample_case = surface_probe.clone();
+    let boards_probing = surface_probe.as_deref() == Some("boards");
     let verification_probing = surface_probe.as_deref() == Some("login_2fa");
     let dialogs_probing = matches!(
         surface_probe.as_deref(),
@@ -40,7 +41,9 @@ pub fn app(props: AppProps) -> Element {
     let owner = use_hook(move || {
         super::probe::surface_sample(sample_case.as_deref(), probing, media_origin.as_deref())
             .and_then(|bytes| {
-                if verification_probing {
+                if boards_probing {
+                    Connection::start_board_probe()
+                } else if verification_probing {
                     Connection::start_verification_probe()
                 } else if surface_probing {
                     if dialogs_probing {
@@ -165,6 +168,8 @@ pub fn app(props: AppProps) -> Element {
                   button { id: "keep-alive", r#type: "button", "aria-pressed": "true", {pttstella::msg!("keepalive-on")} }
                 button { id: "login-open", disabled: !cfg!(target_os="macos"), {pttstella::msg!("login")} }
                 button { id: "login-stop", hidden: true, {pttstella::msg!("login-cancel-attempt")} }
+                button { id: "board-open", {pttstella::msg!("board-open")} }
+                button { id: "board-stop", hidden: true, {pttstella::msg!("board-stop")} }
                 div { id: "browse-controls", hidden: true,
                     button { id: "browse-back", disabled: true, {pttstella::msg!("browse-back")} }
                     button { id: "browse-previous", disabled: true, {pttstella::msg!("browse-previous")} }
@@ -226,6 +231,16 @@ pub fn app(props: AppProps) -> Element {
                     button { id: "login-forget", {pttstella::msg!("login-forget")} }
                     button { id: "login-cancel", {pttstella::msg!("cancel")} }
                     button { id: "login-submit", {pttstella::msg!("login")} }
+                }
+            }
+            dialog { id: "board-dialog", class: "paste-preview", "aria-labelledby": "board-title",
+                h2 { id: "board-title", {pttstella::msg!("board-title")} }
+                p { {pttstella::msg!("board-dialog-hint")} }
+                label { {pttstella::msg!("board-name")} input { id: "board-name", maxlength: "64", autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
+                p { id: "board-note", role: "status" }
+                div { class: "dialog-actions",
+                    button { id: "board-cancel", {pttstella::msg!("cancel")} }
+                    button { id: "board-submit", {pttstella::msg!("board-go")} }
                 }
             }
             dialog { id: "paste-dialog", class: "paste-preview",

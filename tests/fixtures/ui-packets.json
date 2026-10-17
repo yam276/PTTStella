@@ -159,7 +159,14 @@
     "name": "font_catalog",
     "packet": {
       "kind": "font_catalog",
-      "payload": {"request": 12, "families": ["Menlo", "Songti TC"], "notice": null}
+      "payload": {
+        "request": 12,
+        "families": [
+          "Menlo",
+          "Songti TC"
+        ],
+        "notice": null
+      }
     }
   },
   {
@@ -248,6 +255,32 @@
       "payload": {
         "status": "sent",
         "notice": "回覆"
+      }
+    }
+  },
+  {
+    "name": "board_result_started",
+    "packet": {
+      "kind": "board_result",
+      "payload": {
+        "request": 7,
+        "feedback": {
+          "status": "started",
+          "notice": null
+        }
+      }
+    }
+  },
+  {
+    "name": "board_result_rejected",
+    "packet": {
+      "kind": "board_result",
+      "payload": {
+        "request": 8,
+        "feedback": {
+          "status": "rejected",
+          "notice": "回覆"
+        }
       }
     }
   },

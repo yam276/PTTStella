@@ -73,6 +73,16 @@ pub(super) enum SurfaceEvent {
         intent: Intent,
         trusted: bool,
     },
+    BoardSubmit {
+        request: u64,
+        stamp: Stamp,
+        name: String,
+        trusted: bool,
+    },
+    BoardCancel {
+        operation: Stamp,
+        trusted: bool,
+    },
     SettingsOpen {
         trusted: bool,
     },
@@ -226,9 +236,10 @@ impl SurfaceEvent {
                 // Ending composition only revokes an edit; it grants no input.
                 (*trusted || action == "composition_end") && *source == generation
             }
-            Navigate { trusted, stamp, .. } | LoginSubmit { trusted, stamp, .. } => {
-                *trusted && stamp.generation == generation
-            }
+            Navigate { trusted, stamp, .. }
+            | LoginSubmit { trusted, stamp, .. }
+            | BoardSubmit { trusted, stamp, .. } => *trusted && stamp.generation == generation,
+            BoardCancel { trusted, operation } => *trusted && operation.generation == generation,
             FiltersOpen { trusted }
             | FiltersEdit { trusted, .. }
             | FiltersReveal { trusted, .. }
@@ -290,6 +301,8 @@ mod admission_tests {
             json!({"kind":"text","text":"a","generation":7}),
             json!({"kind":"paste","text":"a\nb","generation":7}),
             json!({"kind":"navigate","stamp":stamp,"intent":{"action":"back"}}),
+            json!({"kind":"board_submit","request":1,"stamp":stamp,"name":"Stella"}),
+            json!({"kind":"board_cancel","operation":stamp}),
             json!({"kind":"login_submit","account":"Synthetic","password":"unused","remember":false,"stamp":stamp}),
         ];
         for event in events {
