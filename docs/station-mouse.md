@@ -26,6 +26,8 @@ Session 持有一筆最長 30 秒的按鈕交易，沿用單一 write_input。�
 
 ## 接續 UI 與原生驗收
 
+導覽命令已用封閉 Source 區分 Pointer／Button／Keyboard。Surface 的 Navigate 必須明確提供 pointer 或 button，不能透過這個封包冒充 Vim；Vim 仍由 Rust key policy 發出 Keyboard。Session 在任何導覽副作用前，拒絕非 Local route 的 Pointer，涵蓋尚未支援的站端模式；明確工具列與鍵盤命令保留，只有 Keyboard 可沿用無重繪的移動許可。使用者停用站端滑鼠後 Pointer 可回到本機導覽。
+
 UI 一次操作只走站端回報或本機導覽之一。未協商／使用者停用可沿用本機；未支援的站端模式需明示，不能把 1003 假稱成已支援 1000。Shift 保留選字覆寫，原生複製、Ctrl＋滾輪縮放與 dialog 仍可用；座標從 renderer 同一格線換算，排除黑邊並驗證縮放／DPR。這些為下一批契約，尚未當成實作或通過。
 
-自製 [模式 trace](../tests/fixtures/mouse-modes.json) 是獨立手寫狀態 expected，逐 byte／所有兩段切分核對；另測無私有標記、錯格式、取消、字串與超長 CSI 不改模式，C0 中斷、重設、同步批次、非支援格式拒絕、格線邊界及獨立按鈕 bytes。八個交易 owner 與一個 control snapshot 案例核對租約、速率、逾時及撤銷；七個 production Connection loopback 案例獨立核對精確 SGR bytes、更新後釋放、重複零送出、佇列滿時控制、同步模式變化、重連隔離及保活暫停。一般測試只用合成資料，不連 PTT。仍需 View／Paint、可信事件、使用者開關、本機導覽來源的 Rust 二次檢查，以及真正 trusted pointer／選字／縮放與清理，才能宣稱站端滑鼠可操作。
+自製 [模式 trace](../tests/fixtures/mouse-modes.json) 是獨立手寫狀態 expected，逐 byte／所有兩段切分核對；另測無私有標記、錯格式、取消、字串與超長 CSI 不改模式，C0 中斷、重設、同步批次、非支援格式拒絕、格線邊界及獨立按鈕 bytes。八個交易 owner 與一個 control snapshot 案例核對租約、速率、逾時及撤銷；八個 production Connection loopback 案例獨立核對精確 SGR bytes、更新後釋放、重複零送出、佇列滿時控制、同步模式變化、重連隔離、保活暫停及導覽來源。一般測試只用合成資料，不連 PTT。仍需 View／Paint、可信事件、使用者開關，以及真正 trusted pointer／選字／縮放與清理，才能宣稱站端滑鼠可操作。

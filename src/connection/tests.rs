@@ -1698,7 +1698,7 @@ async fn navigation_admission_checks_real_frame_input_order_and_one_pending_oper
     drop(answer);
     connection
         .enqueue(Command::Navigate {
-            keyboard: false,
+            source: navigation::Source::Pointer,
             stamp: returned.stamp(),
             intent: Intent::Open { row: 4 },
             reply,

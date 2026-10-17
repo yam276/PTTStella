@@ -331,14 +331,14 @@ function refreshNavigation() {
         context?.kind==="article_list"?tr("article-list-hint"):context?.kind==="article_reading"?tr("article-reading-hint"):"";
     drawNavigationMarker();
 }
-function navigate(intent,e) {
+function navigate(intent,e,source="pointer") {
     if(!canNavigate()||dragging?.moved) return;
     policy("reset",e);
     if(intent.action==="previous_page"&&latest.navigation.first_line===1||intent.action==="next_page"&&latest.navigation.percent===100) return;
     clearSelection();navigationRequest=true;navigationLocked=true;setHover(null);refreshNavigation();
-    surface.dataset.navigationResult="pending";send({kind:"navigate",stamp:stamp(),intent,trusted:e.isTrusted});focus();
+    surface.dataset.navigationResult="pending";send({kind:"navigate",stamp:stamp(),intent,source,trusted:e.isTrusted});focus();
 }
-const browseReturn=e=>navigate({action:"back"},e),browseUp=e=>navigate({action:"previous_page"},e),browseDown=e=>navigate({action:"next_page"},e);
+const browseReturn=e=>navigate({action:"back"},e,"button"),browseUp=e=>navigate({action:"previous_page"},e,"button"),browseDown=e=>navigate({action:"next_page"},e,"button");
 const leaveLink=()=>{if(!dragging){cancelHover(true);setHover(null);}};
 function selectLink(e) {
     const index=linkAt(cellAt(e,false));

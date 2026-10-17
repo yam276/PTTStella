@@ -3,7 +3,7 @@ use crate::{
     board_navigation::BoardName,
     input::MAX_INPUT_BYTES,
     login::Credentials,
-    navigation::{Intent, Stamp},
+    navigation::{self, Intent, Stamp},
     navigation_job::{Destination, Progress as NavigationProgress},
     screen::{Frame, Screen},
 };
@@ -100,7 +100,7 @@ enum Command {
     Navigate {
         stamp: Stamp,
         intent: Intent,
-        keyboard: bool,
+        source: navigation::Source,
         reply: oneshot::Sender<Result<(), String>>,
     },
     Shutdown(oneshot::Sender<CloseOutcome>),
@@ -340,28 +340,27 @@ impl Connection {
         self.enqueue(Command::CancelNavigation { operation })
     }
     pub async fn navigate(&self, stamp: Stamp, intent: Intent) -> Result<(), String> {
-        self.request_navigate(stamp, intent)?.wait().await
+        self.request_navigate(stamp, intent, navigation::Source::Pointer)?
+            .wait()
+            .await
     }
     pub async fn browse_key(&self, stamp: Stamp, intent: Intent) -> Result<(), String> {
         self.request_browse_key(stamp, intent)?.wait().await
     }
-    pub fn request_navigate(&self, stamp: Stamp, intent: Intent) -> Result<Reply, String> {
-        self.request_navigation(stamp, intent, false)
-    }
     pub fn request_browse_key(&self, stamp: Stamp, intent: Intent) -> Result<Reply, String> {
-        self.request_navigation(stamp, intent, true)
+        self.request_navigate(stamp, intent, navigation::Source::Keyboard)
     }
-    fn request_navigation(
+    pub fn request_navigate(
         &self,
         stamp: Stamp,
         intent: Intent,
-        keyboard: bool,
+        source: navigation::Source,
     ) -> Result<Reply, String> {
         let (reply, answer) = oneshot::channel();
         self.enqueue(Command::Navigate {
             stamp,
             intent,
-            keyboard,
+            source,
             reply,
         })?;
         Ok(Reply {

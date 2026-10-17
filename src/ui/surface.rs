@@ -639,6 +639,7 @@ async fn run(
                     SurfaceEvent::Navigate {
                         stamp,
                         intent,
+                        source,
                         trusted: _,
                     } => {
                         let shown=screen.navigation_shown(stamp);
@@ -648,7 +649,7 @@ async fn run(
                             Err(navigation::Error::Unavailable.to_string())
                         } else {
                             commands.start(CommandKind::Navigate, stamp.generation, || {
-                                connection.request_navigate(stamp, intent).map(|reply|reply.wait())
+                                connection.request_navigate(stamp, intent, source).map(|reply|reply.wait())
                             })
                         };
                         if let Err(error) = result {

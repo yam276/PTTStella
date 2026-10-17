@@ -12,6 +12,16 @@ pub struct Stamp {
     pub input_epoch: u64,
 }
 
+/// Pointer navigation competes with station reports; buttons and keys are
+/// explicit commands. Only keys may continue a movement without a redraw.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Source {
+    Pointer,
+    Button,
+    Keyboard,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Article {
     pub row: usize,

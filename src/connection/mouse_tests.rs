@@ -341,3 +341,68 @@ async fn station_mouse_hold_pauses_keepalive_even_after_no_response_wait_expires
     expect(&mut peer, b"\x1b[<0;5;4m").await;
     finish_board_peer(&connection, peer).await;
 }
+
+#[tokio::test]
+async fn station_mouse_owns_pointer_navigation_but_explicit_buttons_and_keys_remain_available() {
+    let (_listener, connection, mut peer, _initial) = ready().await;
+    for mode in [b"\x1b[?1000h".as_slice(), b"\x1b[?1003h".as_slice()] {
+        let previous = connection.updates.borrow().received;
+        peer.send(Message::Binary(mode.to_vec().into()))
+            .await
+            .unwrap();
+        let view = wait(&connection, |v| {
+            v.received >= previous + mode.len() && !v.output_pending
+        })
+        .await;
+        let epoch = view.input_epoch;
+        let policy = view.mouse.policy_epoch;
+        let error = connection
+            .navigate(view.stamp(), Intent::NextItem)
+            .await
+            .unwrap_err();
+        assert_eq!(error, crate::msg!("station-mouse-local-blocked"));
+        quiet(&mut peer).await;
+        assert_eq!(connection.updates.borrow().input_epoch, epoch);
+        assert_eq!(connection.updates.borrow().mouse.policy_epoch, policy);
+    }
+    // A toolbar action is an explicit command, even with an unsupported station mode.
+    let current = connection.updates.borrow().clone();
+    connection
+        .request_navigate(
+            current.stamp(),
+            Intent::NextItem,
+            navigation::Source::Button,
+        )
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    expect(&mut peer, b"\x1b[B").await;
+    peer.send(Message::Binary(navigation_page("list").into()))
+        .await
+        .unwrap();
+    let moved = wait(&connection, |v| {
+        v.frame.revision > current.frame.revision && !v.output_pending && !v.input_pending
+    })
+    .await;
+    connection
+        .browse_key(moved.stamp(), Intent::NextItem)
+        .await
+        .unwrap();
+    expect(&mut peer, b"\x1b[B").await;
+    peer.send(Message::Binary(navigation_page("list").into()))
+        .await
+        .unwrap();
+    let keyed = wait(&connection, |v| {
+        v.frame.revision > moved.frame.revision && !v.output_pending && !v.input_pending
+    })
+    .await;
+    connection.mouse_enabled(keyed.generation, false);
+    let disabled = wait(&connection, |v| !v.mouse.enabled).await;
+    connection
+        .navigate(disabled.stamp(), Intent::NextItem)
+        .await
+        .unwrap();
+    expect(&mut peer, b"\x1b[B").await;
+    finish_board_peer(&connection, peer).await;
+}

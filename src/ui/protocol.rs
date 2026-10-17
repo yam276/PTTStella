@@ -85,6 +85,7 @@ pub(super) enum SurfaceEvent {
     Navigate {
         stamp: Stamp,
         intent: Intent,
+        source: pttstella::navigation::Source,
         trusted: bool,
     },
     DestinationSubmit {
@@ -250,9 +251,17 @@ impl SurfaceEvent {
                 // Ending composition only revokes an edit; it grants no input.
                 (*trusted || action == "composition_end") && *source == generation
             }
-            Navigate { trusted, stamp, .. }
-            | LoginSubmit { trusted, stamp, .. }
-            | DestinationSubmit { trusted, stamp, .. } => {
+            Navigate {
+                trusted,
+                stamp,
+                source,
+                ..
+            } => {
+                *trusted
+                    && stamp.generation == generation
+                    && *source != pttstella::navigation::Source::Keyboard
+            }
+            LoginSubmit { trusted, stamp, .. } | DestinationSubmit { trusted, stamp, .. } => {
                 *trusted && stamp.generation == generation
             }
             DestinationCancel { trusted, operation } => {
@@ -321,7 +330,8 @@ mod admission_tests {
             json!({"kind":"key","key":{"key":"Enter","code":"Enter","ctrl":false,"alt":false,"shift":false,"repeat":false},"generation":7}),
             json!({"kind":"text","text":"a","generation":7}),
             json!({"kind":"paste","text":"a\nb","generation":7}),
-            json!({"kind":"navigate","stamp":stamp,"intent":{"action":"back"}}),
+            json!({"kind":"navigate","stamp":stamp,"intent":{"action":"back"},"source":"pointer"}),
+            json!({"kind":"navigate","stamp":stamp,"intent":{"action":"back"},"source":"button"}),
             json!({"kind":"destination_submit","request":1,"stamp":stamp,"value":"Stella"}),
             json!({"kind":"destination_cancel","operation":stamp}),
             json!({"kind":"login_submit","account":"Synthetic","password":"unused","remember":false,"stamp":stamp}),
@@ -369,6 +379,22 @@ mod admission_tests {
                 false,
                 7
             ));
+        }
+    }
+
+    #[test]
+    fn local_navigation_requires_a_closed_source_and_cannot_impersonate_vim() {
+        let event = json!({"kind":"navigate","stamp":{"generation":7,"revision":4,"input_epoch":2},"intent":{"action":"back"},"trusted":true});
+        assert!(serde_json::from_value::<SurfaceEvent>(event.clone()).is_err());
+        let mut invalid = event.clone();
+        invalid["source"] = "unspecified".into();
+        assert!(serde_json::from_value::<SurfaceEvent>(invalid).is_err());
+        for source in ["pointer", "button", "keyboard"] {
+            let mut value = event.clone();
+            value["source"] = source.into();
+            assert_eq!(admits(value.clone(), true, 7), source != "keyboard");
+            assert!(!admits(value.clone(), false, 7));
+            assert!(!admits(value, true, 8));
         }
     }
 }
