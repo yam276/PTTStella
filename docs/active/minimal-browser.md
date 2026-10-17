@@ -159,6 +159,10 @@ macOS 同一候選 `dist/macos-article-core/PTTStella.app` 通過既有 C2 UI �
 
 第三程序回歸純板名 Stella／Other、最近項目只填草稿、超長拒絕、Beta 停止與晚到列表，最近清單維持 Other／Stella，Vim Normal 及正常清理。候選 `dist/macos-article-ui/PTTStella.app` 的嚴格 ad-hoc 簽章、去簽章 executable hash 與 PNG 檢查保留 `.local/verification/aid-ui-c3`。以上均為本機合成服務，實站、Windows／Linux 及原生 IME 未驗收；書籤、D 與 C1 原生滑鼠缺口仍未結案。
 
+**C3 書籤資料核心與保存已完成，UI 接續**。新增封裝的 Bookmarks／Entry：只持有明確 ArticleTarget、可選名稱與建立秒數；板名忽略大小寫、AID 區分大小寫去重，更新保留位置／建立時間，最多 500 筆。名稱在 trim 前限制 128 字元／512 bytes、拒絕控制字元；獨立 version 1／512 KiB 文件整份驗證，固定手寫 fixture 核對身分、名稱、時間與序列化。正常新增／更新／刪除返回草稿，不改動原模型。
+
+獨立本機 store 只在既有主檔有效時備份與替換；壞檔／超量／未知版本、備份或主檔失敗均明確拒絕並保留資料。與最近清單共用有界讀取及逐檔原子替換，最近的明確清除／損壞恢復政策維持原契約。88 個 desktop lib（含六個書籤與兩個 storage 案例）、36 個 bin、Fluent JS、core／desktop all-targets Clippy／docs 通過；涵蓋 500 筆邊界、長 Unicode 名稱、重複及非法文件、重啟與刪除備份、壞檔雙副本保留、實際目錄造成的保存失敗與暫存清理。證據在 `.local/verification/bookmarks-c3`。這批尚未接 UI／Files，不宣稱書籤原生操作或新 App；接續手動新增、刪除、選取前往及重啟驗收。
+
 ## 維護性重構
 
 2026-10-17 傳統 BBS 字型：依公開的 PTT 官方終端預設及 Windows 客戶端資源確認 MingLiU／細明體是傳統選項，並非所有客戶端有唯一預設。新增 `windows_classic`（MingLiU／MingLiU）與 `macos_bbs`（Songti TC／Songti TC）；既有 Windows 黑體組合、macOS 黑體／宋體與平台初始值保留。新組合均明確選取，前者缺少時顯示兩角色載入警告及官方取得／授權頁，後者只稱本機宋體替代，不宣稱等同細明體。沒有加入第三方字型檔。

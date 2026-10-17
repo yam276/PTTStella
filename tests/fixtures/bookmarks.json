@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "entries": [
+    { "board": "Stella", "aid": "00000101", "label": "自製合成書籤", "created_at": 100 },
+    { "board": "Other", "aid": "1AbCdE-_", "label": null, "created_at": 200 }
+  ]
+}

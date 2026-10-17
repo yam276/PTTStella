@@ -42,3 +42,5 @@ WSS 使用系統信任根、驗證站端憑證與主機名稱；TLS 設定屬於
 附帶未修改的官方 `@fluent/bundle` 0.19.1 standalone runtime，Apache-2.0；[上游](https://github.com/projectfluent/fluent.js)、[授權](../assets/vendor/fluent/LICENSE)、[下載來源／npm integrity／檔案 SHA-256](../assets/vendor/fluent/SOURCE.json)。僅隨程式離線載入，執行時沒有 CDN 或翻譯服務請求。`locales` 的繁體中文及英文文案為本專案自行編寫，Rust 與 JS 消費同一份 Fluent 資源。
 
 [語言 bootstrap wire](../tests/fixtures/localization.json) 為獨立手寫的最小中英文例子，Rust 比對 serialization，JS 分別消費相同資源；不是由 serializer 產生 expected。
+
+[書籤資料](../tests/fixtures/bookmarks.json) 為本專案獨立手寫、可隨產品散布的 synthetic expected，只有虛構板名、手算 AID、中文標籤與固定時間，不含私人文章或帳號；供資料核心及後續 UI wire 核對。
