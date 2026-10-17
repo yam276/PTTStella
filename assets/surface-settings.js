@@ -1,5 +1,5 @@
 // Draft fields, preview requests and timers belong to this dialog only.
-function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,loadFonts,fontLoadNote,render}) {
+function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,loadFonts,fontLoadNote,invalidateFonts,render}) {
     const fontButton=document.getElementById("font-settings"),fontDialog=document.getElementById("font-dialog");
     let disposed=false,epoch=0,fontDraft=null,fontTimer=0,fontRequest=0,fontPreviewBusy=false,fontPreviewNext=null,fontSaving=false;
     const fontPreview=document.getElementById("font-preview"),fontNote=document.getElementById("font-note");
@@ -8,6 +8,47 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,loa
     const fontDefaults=document.getElementById("font-defaults");
     const profileImport=document.getElementById("profile-import"),profileExport=document.getElementById("profile-export"),profileName=document.getElementById("font-profile-name");
     const language=document.getElementById("interface-language");
+    const localChoices={ascii_font:document.getElementById("font-local-ascii"),cjk_font:document.getElementById("font-local-cjk")};
+    const localStatus=document.getElementById("font-local-status"),fontRefresh=document.getElementById("font-refresh");
+    const sourceButtons=[...document.querySelectorAll("[data-font-source]")];
+    const sources=document.getElementById("font-sources");
+    let catalogRequest=0;
+    function syncChoices(){
+        for(const [name,field] of Object.entries(localChoices)){
+            const selected=fontFields[name].value;
+            field.value=[...field.children].some(option=>option.value===selected)?selected:"";
+        }
+        const names=[fontFields.ascii_font.value,fontFields.cjk_font.value];
+        for(const button of sourceButtons)button.hidden=!button.dataset.fontFamilies.split("\n").some(name=>names.includes(name));
+    }
+    function requestCatalog(){
+        catalogRequest++;fontRefresh.disabled=true;localStatus.textContent=tr("font-local-loading");
+        for(const field of Object.values(localChoices))field.disabled=true;
+        send({kind:"settings_fonts",request:catalogRequest});
+    }
+    function refreshFonts(e){if(!e.isTrusted||disposed||!fontDialog.open)return;invalidateFonts();requestCatalog();previewFonts();}
+    function chooseLocal(e){
+        if(!e.isTrusted||disposed||!fontDialog.open||!e.target.value)return;
+        const name=Object.keys(localChoices).find(name=>localChoices[name]===e.target);
+        if(!name)return;
+        fontFields[name].value=e.target.value;fontPreset.value="custom";syncChoices();previewFonts();
+    }
+    function catalog(data){
+        if(disposed||!fontDialog.open||data.request!==catalogRequest)return;
+        fontRefresh.disabled=false;
+        for(const field of Object.values(localChoices)){
+            const placeholder=document.createElement("option");placeholder.value="";placeholder.textContent=tr("font-local-choose");
+            field.replaceChildren(placeholder);
+            for(const name of data.families){const option=document.createElement("option");option.value=name;option.textContent=name;field.append(option);}
+            field.disabled=data.families.length===0;
+        }
+        syncChoices();
+        localStatus.textContent=data.notice??tr("font-local-count",{count:data.families.length});
+    }
+    function openSource(button,e){
+        if(disposed||!fontDialog.open||button.hidden||!e.isTrusted)return;
+        send({kind:"font_source",source:button.dataset.fontSource,trusted:e.isTrusted});
+    }
     let profileBusy=false;
     function profileAction(action,e){if(profileBusy||fontSaving)return;profileBusy=true;profileImport.disabled=true;profileExport.disabled=true;
         send({kind:"settings_profile",action,name:profileName.value,trusted:e.isTrusted});}
@@ -18,6 +59,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,loa
     function openFonts(e){beforeRequest(e);send({kind:"settings_open",trusted:e.isTrusted});}
     function fillFonts(values) {
         for(const [name,field] of Object.entries(fontFields)) field.value=values[name];
+        syncChoices();
     }
     function readFonts() {
         const selected=fontPreset.value,fonts=selected==="custom"?{kind:"custom",ascii_font:fontFields.ascii_font.value,cjk_font:fontFields.cjk_font.value}:
@@ -29,7 +71,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,loa
         fontPreviewBusy=true;send({kind:"settings_preview",...fontPreviewNext});fontPreviewNext=null;
     }
     function previewFonts() {
-        clearTimeout(fontTimer);fontRequest++;fontNote.textContent="";
+        clearTimeout(fontTimer);fontRequest++;fontNote.textContent="";syncChoices();
         fontTimer=setTimeout(()=>{fontTimer=0;fontPreviewNext={request:fontRequest,values:readFonts()};flushFontPreview();},150);
     }
     function editFont(e){if(e.target===fontFields.ascii_font||e.target===fontFields.cjk_font)fontPreset.value="custom";previewFonts();}
@@ -39,7 +81,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,loa
     function closeFonts(e) {
         e?.preventDefault();if(fontSaving||profileBusy) return;
         clearTimeout(fontTimer);fontTimer=0;fontRequest++;fontPreviewNext=null;
-        fontDialog.close();epoch++;restore();
+        fontDialog.close();epoch++;catalogRequest++;fontRefresh.disabled=false;restore();
         changed();
     }
     function saveFonts(e) {
@@ -52,13 +94,14 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,loa
         const warning=await loadFonts(settings);
         if(disposed||!valid())return;
         fontAvailability.textContent=fontLoadNote(settings,warning);
+        if(warning)sources.open=true;
         render(fontPreview,packet,{cursor:false});
     }
     async function open(data){
         if(disposed)return;
         const opening=++epoch;
         fontDraft=data;language.value=data.language;fillFonts(data.values);fontPreset.value=profileChoice(data.profile);fontNote.textContent=data.warning||"";
-        beforeShow();if(!fontDialog.open)fontDialog.showModal();changed();
+        beforeShow();if(!fontDialog.open)fontDialog.showModal();changed();requestCatalog();
         await preview(data.values,data.sample,()=>fontDialog.open&&opening===epoch);
         if(!disposed&&fontDialog.open&&opening===epoch)fontFields.ascii_font.focus();
     }
@@ -93,13 +136,15 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,loa
         fontSaving=false;fontSave.disabled=false;fontCancel.disabled=false;
         if(data.status==="saved")closeFonts();
     }
-    function revoke(){disposed=true;epoch++;clearTimeout(fontTimer);fontTimer=0;fontPreviewNext=null;}
+    function revoke(){disposed=true;epoch++;catalogRequest++;clearTimeout(fontTimer);fontTimer=0;fontPreviewNext=null;}
     function destroy(){revoke();fontDraft=null;fontPreviewBusy=false;profileBusy=false;fontSaving=false;if(fontDialog.open)fontDialog.close();}
-    return {open,preview:receivePreview,profile,saved,revoke,destroy,
+    return {open,preview:receivePreview,catalog,profile,saved,revoke,destroy,
         notice(message){if(!fontDialog.open)return false;fontNote.textContent=message;return true;},
         clean:()=>disposed&&fontTimer===0&&fontPreviewNext===null&&!fontDialog.open,
         bindings:[
             [fontButton,"click",openFonts],[fontPreset,"change",chooseFontPreset],
+            [fontRefresh,"click",refreshFonts],...Object.values(localChoices).map(field=>[field,"change",chooseLocal]),
+            ...sourceButtons.map(button=>[button,"click",e=>openSource(button,e)]),
             [profileImport,"click",importProfile],[profileExport,"click",exportProfile],
             ...Object.values(fontFields).map(field=>[field,"input",editFont]),
             [fontDefaults,"click",resetFonts],[fontCancel,"click",closeFonts],[fontDialog,"cancel",closeFonts],[fontSave,"click",saveFonts],

@@ -54,47 +54,8 @@ function invalidatePresentation(){cancelHover(true);cancelComposition();cancelDr
 const ctx=canvas.getContext("2d",{willReadFrequently:true});
 const palette=["#000000","#800000","#008000","#808000","#000080","#800080","#008080","#c0c0c0",
     "#808080","#ff0000","#00ff00","#ffff00","#0000ff","#ff00ff","#00ffff","#ffffff"];
-const bundledFonts=new Map([
-    ["Cascadia Mono",{family:"PTTStella Cascadia Mono",file:"CascadiaMono.ttf"}],
-    ["Noto Sans CJK TC",{family:"PTTStella Noto Sans CJK TC",file:"NotoSansCJKtc-Regular.otf"}]
-]);
-const bundledLoads=new Map();
-const fontFamily=name=>JSON.stringify(bundledFonts.get(name)?.family??name)+", monospace";
-const fontDescription=(settings,cjk=false)=>settings.font_size+"px "+fontFamily(cjk?settings.cjk_font:settings.ascii_font);
-let loadedFonts=null;
-async function loadFonts(settings) {
-    const key=JSON.stringify([settings.ascii_font,settings.cjk_font,settings.font_size]);
-    if(loadedFonts?.key===key&&!loadedFonts.warning) return "";
-    const missing=await Promise.all([[tr("font-role-ascii"),settings.ascii_font],[tr("font-role-cjk"),settings.cjk_font]].map(async([role,name])=>{
-        const bundled=bundledFonts.get(name);
-        try {
-            if(bundled) {
-                if(!bundledLoads.has(name)) {
-                    const url=new URL("/pttstella-fonts/"+bundled.file,document.baseURI);
-                    bundledLoads.set(name,new FontFace(bundled.family,"url("+JSON.stringify(url.href)+")").load()
-                        .then(face=>{document.fonts.add(face);return face;})
-                        .catch(error=>{bundledLoads.delete(name);throw error;}));
-                }
-                await bundledLoads.get(name);
-            } else {
-                // fonts.load/check can succeed via fallback; local() verifies
-                // the selected system face independently of bundled aliases.
-                await new FontFace("PTTStella font check","local("+JSON.stringify(name)+")").load();
-            }
-            return "";
-        } catch {return tr(bundled?"font-face-bundled-failed":"font-face-local-failed",{role,name});}
-    }));
-    await Promise.all([document.fonts.load(fontDescription(settings),"M"),document.fonts.load(fontDescription(settings,true),"中")]);
-    await document.fonts.ready;
-    const warning=missing.filter(Boolean).join("；");
-    loadedFonts={key,warning:warning?tr("font-fallback-warning",{warning}):""};
-    return loadedFonts.warning;
-}
-function fontLoadNote(settings,warning) {
-    if(warning)return warning;
-    const names=[...new Set([settings.ascii_font,settings.cjk_font])].filter(name=>bundledFonts.has(name));
-    return names.length?tr("font-bundled-loaded",{names:names.join(", ")}):tr("font-local-loaded");
-}
+const {family:fontFamily,description:fontDescription,load:loadFonts,note:fontLoadNote,invalidate:invalidateFonts}=
+    createSurfaceFonts({document,FontFace,tr});
 let generation=0, revision=-1, composing=false, composition=null, beforeEdit=null, sent=0;
 let inputKey=false;
 let latest=null, animation=0, stopped=false, draws=0, zoom=1;
@@ -189,7 +150,7 @@ function positionKeyboard() {
     const [col,row]=latest.frame.cursor, left=grid.x(col)/grid.ratio, top=grid.y(row)/grid.ratio;
     const height=(grid.y(row+1)-grid.y(row))/grid.ratio;
     const fontSize=height*latest.settings.font_size/24;
-    const font=fontFamily(latest.settings.cjk_font);
+    const font=fontFamily(latest.settings.cjk_font,latest.settings.ascii_font);
     Object.assign(keyboard.style,{left:left+"px",top:top+"px",height:height+"px",lineHeight:height+"px",
         width:"1px",fontSize:fontSize+"px",fontFamily:font});
     if(!composing) return;
@@ -491,7 +452,7 @@ const media=installMedia({tr,send,prepare:()=>{cancelHover(true);cancelCompositi
 function refreshControls(){refreshNavigation();refreshExportControls();}
 const settingsUi=createSettingsDialog({send,
     beforeRequest:e=>{cancelHover(true);policy("reset",e);},beforeShow:invalidatePresentation,
-    restore:restoreEditingFocus,changed:refreshControls,loadFonts,fontLoadNote,render});
+    restore:restoreEditingFocus,changed:refreshControls,tr,loadFonts,fontLoadNote,invalidateFonts,render});
 const loginUi=createLoginDialog({tr,send,stamp,
     prepare:e=>{cancelHover(true);policy("reset",e);cancelComposition();clearSelection();},
     restore:restoreEditingFocus,changed:refreshControls,focus});
@@ -574,7 +535,7 @@ function render(target,packet,{cursor=true,hovered=-1}={}) {
     ctx.textBaseline="alphabetic";
     for(const glyph of frame.glyphs) {
         if(glyph.text===" ") continue;
-        ctx.font=(packet.settings.font_size*scale)+"px "+fontFamily(glyph.width===2?packet.settings.cjk_font:packet.settings.ascii_font);
+        ctx.font=fontDescription(packet.settings,glyph.width===2,scale);
         const left=x(glyph.col),top=y(glyph.row),span=x(glyph.col+glyph.width)-left,h=y(glyph.row+1)-top;
         const advance=Math.max(ctx.measureText(glyph.text).width,1);
         // Text keeps the font's aspect ratio; narrow symbols are centred instead
@@ -695,6 +656,7 @@ function runSurfaceProbe(mode){
             else if(mode==="slow")surfaceNote.textContent="慢命令探針：結果等待 60 秒；可開啟字型設定或立即關閉視窗";
             else if(mode==="files")surfaceNote.textContent="原生選檔探針（本機合成資料）：可匯出 PNG 或匯入／匯出設定檔";
             else if(mode==="files_slow")surfaceNote.textContent="慢檔案探針：等待本機 runner 釋放；可開啟設定或關閉視窗";
+            else if(mode==="fonts")surfaceNote.textContent="Font selection probe: local synthetic data and external-page sink";
             else if(mode==="dialogs")surfaceNote.textContent="對話框與媒體封包探針（僅本機合成資料）";
             else if(mode==="confirm"){pasteConfirmProbe=true;surfaceNote.textContent="貼上確認探針：請用原生貼上 A、換行、B";}
             else if(mode==="untrusted"){
@@ -725,7 +687,7 @@ const route=createSurfaceRouter({
     hover_rejected:sequence=>{if(hoverCandidate?.sequence===sequence)cancelHover();},
     media_open:data=>media.open(data),media_image:data=>media.receiveImage(data),media_error:data=>media.fail(data),
     media_external:data=>media.externalResult(data),media_reset:()=>media.reset(),
-    settings_open:settingsUi.open,font_preview:settingsUi.preview,
+    settings_open:settingsUi.open,font_catalog:settingsUi.catalog,font_preview:settingsUi.preview,
     profile_result:async data=>{await settingsUi.profile(data);showNotice(data.notice);},
     settings_saved:data=>{settingsUi.saved(data);showNotice(data.notice);},
     selection:receiveSelection,

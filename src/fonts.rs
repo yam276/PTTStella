@@ -1,6 +1,8 @@
 //! Fixed, application-owned font assets; never resolves arbitrary local paths.
 use dioxus::desktop::wry::http::{Method, Request, Response, StatusCode, header};
 use std::borrow::Cow;
+mod catalog;
+pub(crate) use catalog::{Catalog, Source, installed};
 
 pub fn response(request: &Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
     let mut response = Response::new(Cow::Borrowed(b"".as_slice()));

@@ -61,3 +61,6 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 
 #filters-note-status { display:block; margin:10px 0; font-size:13px; }
 #filters-copy-check { position:static; width:100%; min-height:70px; resize:vertical; }
+
+.font-sources { flex-wrap: wrap; justify-content: flex-start; }
+#font-local-status { display: block; font-size: 13px; margin: 8px 0; }

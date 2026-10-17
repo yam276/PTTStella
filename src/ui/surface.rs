@@ -175,6 +175,7 @@ async fn run(
         include_str!("../../assets/media.js"),
         include_str!("../../assets/surface-lifetime.js"),
         include_str!("../../assets/surface-packets.js"),
+        include_str!("../../assets/surface-fonts.js"),
         include_str!("../../assets/surface-settings.js"),
         include_str!("../../assets/surface-login.js"),
         include_str!("../../assets/surface-filters.js"),
@@ -300,6 +301,11 @@ async fn run(
             done=files.next(), if !*closing.borrow()=>{
                 let packet=match done {
                     FileCompletion::Probe(result)=>{pending_report=Some(result.map_err(|e|e.to_string())?);close_deadline=Some(tokio::time::Instant::now()+std::time::Duration::from_secs(45));continue;},
+                    FileCompletion::Fonts{request,result}=>{
+                        if result.is_ok(){checks.font_catalog_reads+=1;}
+                        let catalog=result.unwrap_or_else(|error|crate::fonts::Catalog{families:Vec::new(),notice:Some(error.to_string())});
+                        Packet::FontCatalog{request,families:catalog.families,notice:catalog.notice}
+                    },
                     FileCompletion::Loaded(_)=>return Err(pttstella::msg!("file-load-duplicate")),
                     FileCompletion::Display(result)=>match result.map_err(|e|e.to_string()).and_then(|saved|preferences.commit(saved)) {
                         Ok(())=>{
@@ -592,6 +598,23 @@ async fn run(
                     SurfaceEvent::SettingsOpen { trusted: _ } => {
                         eval.send(preferences.open_packet())
                             .map_err(|e| e.to_string())?;
+                    }
+                    SurfaceEvent::SettingsFonts { request } => {
+                        if let Err(error)=files.start(|permit|files::font_catalog(permit,request)) {
+                            eval.send(Packet::FontCatalog{request,families:Vec::new(),notice:Some(error)}).map_err(|e|e.to_string())?;
+                        }
+                    }
+                    SurfaceEvent::FontSource { source, trusted: _ } => {
+                        let help=source.help();
+                        let result=if probe.is_some() {
+                            if !checks.font_sources.iter().any(|id|id==help.id){checks.font_sources.push(help.id.to_owned());}
+                            Ok(())
+                        } else {webbrowser::open(help.url)};
+                        let notice=match result {
+                            Ok(())=>pttstella::msg!("font-source-opened"),
+                            Err(error)=>pttstella::msg!("link-open-failed",e=error.to_string()),
+                        };
+                        eval.send(Packet::Notice(notice)).map_err(|e|e.to_string())?;
                     }
                     SurfaceEvent::SettingsPreview { request, values } => {
                         eval.send(preferences.preview_packet(request, values))
@@ -969,8 +992,10 @@ async fn run(
         reports.push((path.join("surface-probe.json"),serde_json::json!({
             "status":if case=="slow" && commands.busy() || case=="files_slow" && files.busy() || case=="files" && checks.export_checked || case=="untrusted" && surface_probe_clean && rejected_events==3
                 || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB")
+                || case=="fonts" && checks.font_catalog_reads>=2 && !checks.font_sources.is_empty() && checks.export_checked
                 || case=="dialogs" && checks.settings_saved && checks.export_checked && checks.rows_export_checked && checks.media_external>=1 {"passed"} else {"failed"},
             "scope":"synthetic local surface only; peer rejects all station input",
+            "font_sources":checks.font_sources,"font_catalog_reads":checks.font_catalog_reads,
             "case":case,"command_pending_on_close":commands.busy(),"file_pending_on_close":files.busy(),"synthetic_events_rejected":rejected_events,"js_admission":surface_probe_clean,
             "paste_preview_preserved":pending_paste.read().is_some(),
             "settings_saved":checks.settings_saved,"full_png":checks.export_checked,"rows_png":checks.rows_export_checked,"media_external_requests":checks.media_external,

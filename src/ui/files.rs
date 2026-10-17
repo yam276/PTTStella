@@ -48,6 +48,10 @@ impl std::fmt::Display for Error {
 type FileResult<T> = Result<T, Error>;
 pub(super) enum Completion {
     Loaded(FileResult<Box<Initial>>),
+    Fonts {
+        request: u64,
+        result: FileResult<crate::fonts::Catalog>,
+    },
     Display(FileResult<AppSettings>),
     Hover(FileResult<AppSettings>),
     Filters(FileResult<filters::Rules>),
@@ -62,6 +66,7 @@ impl Completion {
     fn failure(self) -> Option<Error> {
         match self {
             Self::Loaded(result) => result.err(),
+            Self::Fonts { result, .. } => result.err(),
             Self::Display(result) | Self::Hover(result) => result.err(),
             Self::Filters(result) => result.err(),
             Self::Profile(result) => result.err(),
@@ -171,6 +176,12 @@ pub(super) async fn load(permit: Permit, probe: Option<PathBuf>) -> Completion {
         })
         .await,
     )
+}
+pub(super) async fn font_catalog(permit: Permit, request: u64) -> Completion {
+    Completion::Fonts {
+        request,
+        result: blocking(permit, crate::fonts::installed).await,
+    }
 }
 pub(super) async fn save_display(
     permit: Permit,

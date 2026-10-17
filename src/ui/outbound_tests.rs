@@ -76,6 +76,14 @@ fn outbound_results_match_the_shared_wire_examples() {
             }),
         ),
         (
+            "font_catalog",
+            Packet::FontCatalog {
+                request: 12,
+                families: vec!["Menlo".into(), "Songti TC".into()],
+                notice: None,
+            },
+        ),
+        (
             "font_rejected",
             Packet::FontPreview(FontPreview::Rejected {
                 request: 4,

@@ -65,3 +65,11 @@ Mac 上明確選擇 Windows 組合，重啟與再次匯入仍保留該選擇；�
 5. 真實原生開檔／另存取消與錯誤、返回 PTT 焦點、IME、選字及不送站端 bytes；Windows、macOS、Linux 分別記錄實測，不以單平台代替。
 
 實作採 version 2 AppSettings、DisplayProfile 與 Fonts enum；renderer 只消費一次解析後的 DisplaySettings。舊 v1 讀入不立即寫檔；明確套用後才備份原始 bytes 並改存新格式。匯出只包含目前生效的 display 與使用者名稱，不含 app hover 偏好。核心案例驗證固定組合、自訂值、v1 遷移及重複／未知／無效欄位；原生選檔／另存及其他 OS 尚待人工驗收。
+
+## 本機字型與官方來源
+
+英數及中文字型可分別從 OS 字型家族清單選取，或手動輸入。選單由 font-kit 的系統 source 列出名稱（macOS Core Text、Windows DirectWrite、Linux Fontconfig），工作由既有 Files owner 的 blocking pool 持有；不在 UI 迴圈掃描檔案，不複製或上傳字型。清單排序／去重、排除隱藏與無效名稱，最多 4096 個、每個 256 bytes；超限有提示，仍能手動輸入。WebView `local()` 的實際載入失敗獨立顯示，清單不保證逐字涵蓋。讀取失敗保留草稿，可重新讀取；取消及晚到的清單不更改生效設定。
+
+所選預設字型提供官方來源：Cascadia、Noto、DejaVu 的下載頁，Microsoft JhengHei 的取得／授權頁，以及 macOS 字體簿的安裝說明。只有使用者點擊才交給 OS 瀏覽器；bridge 傳有限 enum，不接受自訂下載 URL。不下載、安裝、抽取或重新散布字型。未知自訂字型需向發行者查詢；安裝後可重新讀取，WebView 仍未發現時重啟 App。可取得檔案不等於能跨平台使用，應依發行者授權。
+
+同一 renderer 的雙欄文字依序使用所選 CJK face、所選英數 face、OS monospace；單欄使用所選英數 face、OS monospace。缺 CJK face 時，英數字型涵蓋的符號會先使用它；設定名稱與缺字型提示不改寫。字型版本、缺字與 OS 渲染仍可能不同，沒有跨 OS 像素一致的承諾。方塊／三角形仍由格線幾何繪製。

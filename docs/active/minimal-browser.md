@@ -12,6 +12,12 @@
 
 ## 維護性重構
 
+2026-10-17 字型選擇：新增英數／中文的本機家族選單，font-kit 0.14.3 透過 Files blocking pool 列出名稱、排序去重並限制 4096／256 bytes；清單與載入分開，未知／缺字型不改寫設定。重新讀取保留草稿，晚到或關閉後清單忽略。所選字型有固定 enum 的官方下載／授權／安裝入口，僅 trusted 明確點擊才開 OS 瀏覽器；一般 probe 使用 sink，不下載、安裝或重新散布字型。未知自訂字型向原發行者查詢。
+
+同一 font owner 供預覽／畫面／IME／PNG；雙欄文字先用所選 CJK face，再用所選英數 face，最後 OS monospace，修正缺 CJK 時符號直接落到 OS 的路徑。27 個 bin、45 個 desktop lib、22 個 JS、fmt／Clippy、core 八套 suite／兩份 replay 與 docs 通過。macOS WKWebView 列出 322 個本機家族，可選 Times New Roman／Songti TC，取消後設定與 PNG 原封不動；明確保存後新英文程序讀回相同名稱與相同 960×576 pixels。缺字型警告、重新讀取與中英文官方入口均實際操作。刻意缺 CJK 時 Cascadia／Menlo 的英數區差 768 pixels、圓形符號區差 366，方塊色彩區差零，雙色背景保持藍／紫。兩程序均 Close acknowledged、所有 owner join，沒有站端 bytes。
+
+原生回饋修正內建 face 不在 OS 清單時的空白選項，並將預覽移近字型欄位；修正後英文程序確認選擇提示與預覽。報告／PNG 保留 `.local/verification/fonts`；OS 外開用 sink 驗證目的地，沒有宣稱瀏覽器實際啟動、下載、逐字 glyph 來源或 Windows／Linux 實機通過。完整 Mac desktop backend 維持 not_ready。使用者另要求研究傳統 Windows PTT 字型，接續獨立提交；本批不改既有 preset。
+
 2026-10-17 i18n 基礎：使用者授權採用 Fluent，並要求依功能分批提交。第一批建立繁體中文／英文共用資源、Rust i18n-embed 載入器、fl! key／參數編譯檢查與官方 JS runtime 的 bootstrap helper；尚未串接產品 UI，沒有宣稱中英文視窗已完成。以僅含本批 staged 內容的獨立來源快照驗證：兩個 Rust catalog 測試、兩個 JS 測試、非 desktop 全 targets Clippy 及 docs 通過。兩語 key／參數由官方 Fluent AST 比較，另驗證插值、複數及獨立 loader。語言偏好／UI 串接、核心狀態／錯誤文案及原生回歸繼續進行。
 
 第二批完成 UI／偏好串接：工具列、各對話框、媒體／字型動態提示、原生選單與選檔標題共用翻譯；Localization 為獨立的啟動封包，FTL 不拼入 JavaScript。設定 version 3 保存 language，舊 v1／v2 載入不改檔案，明確保存才備份及遷移；取消／保存失敗不改生效偏好，切換下次啟動套用。僅含本批 staged 內容的獨立來源快照通過 25 個 bin、45 個 desktop lib、16 個 JS、desktop 全 targets Clippy 與 docs。核心狀態／錯誤尚在下一批，原生兩語／重啟與整合回歸仍待完成，不以這次單元檢查宣稱視窗驗收。
