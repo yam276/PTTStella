@@ -1,0 +1,3 @@
+fallback_language = "zh-TW"
+[fluent]
+assets_dir = "locales"

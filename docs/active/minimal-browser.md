@@ -12,6 +12,8 @@
 
 ## 維護性重構
 
+2026-10-17 i18n 基礎：使用者授權採用 Fluent，並要求依功能分批提交。第一批建立繁體中文／英文共用資源、Rust i18n-embed 載入器、fl! key／參數編譯檢查與官方 JS runtime 的 bootstrap helper；尚未串接產品 UI，沒有宣稱中英文視窗已完成。以僅含本批 staged 內容的獨立來源快照驗證：兩個 Rust catalog 測試、兩個 JS 測試、非 desktop 全 targets Clippy 及 docs 通過。兩語 key／參數由官方 Fluent AST 比較，另驗證插值、複數及獨立 loader。語言偏好／UI 串接、核心狀態／錯誤文案及原生回歸繼續進行。
+
 2026-10-17 第三輪：使用者授權將檔案操作移出 UI 事件迴圈，並集中 Rust 畫面與互動狀態。Files 持有單一可追蹤工作，設定／名單載入與保存、設定檔處理及 PNG 解碼／寫入交給 blocking pool；原生 picker 仍由 UI thread 擁有。忙碌拒絕不啟動 factory、不另加佇列；保存成功才更新生效設定／規則。關閉撤銷尚未開始工作，已開始的工作保留到 join；五秒未完成顯示等待，真實失敗併入清理結果。SurfaceState 統一持有待 ACK／已顯示畫面、遮黑、選取、hover 與匯出版本，來源或策略變更由同一處撤銷互動。
 
 獨立複查找到 P2：非同步選檔期間的 PNG 可能失去版本約束。已加入可撤銷 ExportLease 及直接觀察最新 Connection view 的檢查，在解碼後、選檔後及開始寫入前驗證；選取 PNG 另綁 input epoch。JS 清除／重選會發出有作用域的 SelectionCleared，Rust 只撤銷相符選取。八種延期選檔案例覆蓋規則、揭露、frame、session、選取、清除、輸入及顯示設定變更：舊 PNG 均不寫入，後續新請求仍實際保存。Agent 再次唯讀複查確認 P2 可關閉，未發現其他具體阻擋問題；這是程式與證據審閱，沒有代替另一人執行 GUI 或人工驗收。

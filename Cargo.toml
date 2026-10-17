@@ -13,6 +13,9 @@ desktop = ["dep:dioxus", "dep:tokio", "dep:base64", "dep:tokio-tungstenite", "de
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+i18n-embed = { version = "=0.16.0", default-features = false, features = ["fluent-system", "rust-embed"] }
+i18n-embed-fl = "=0.10.1"
+rust-embed = { version = "=8.13.0", features = ["debug-embed"] }
 zeroize = "=1.9.1"
 uao-rs = "=0.1.0"
 url = "=2.5.8"
@@ -41,3 +44,6 @@ required-features = ["desktop"]
 [[bin]]
 name = "replay"
 path = "src/bin/replay.rs"
+
+[dev-dependencies]
+fluent-syntax = "=0.12.0"
