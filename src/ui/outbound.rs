@@ -44,6 +44,11 @@ pub(super) enum Packet<'a> {
     MediaReset,
     SettingsOpen(Box<SettingsOpen>),
     FontPreview(FontPreview),
+    FontCatalog {
+        request: u64,
+        families: Vec<String>,
+        notice: Option<String>,
+    },
     SettingsSaved(Feedback<SaveStatus>),
     ProfileResult(ProfileResult),
     NavigationResult(Feedback<NavigationStatus>),

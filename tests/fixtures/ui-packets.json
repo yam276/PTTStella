@@ -156,6 +156,13 @@
     }
   },
   {
+    "name": "font_catalog",
+    "packet": {
+      "kind": "font_catalog",
+      "payload": {"request": 12, "families": ["Menlo", "Songti TC"], "notice": null}
+    }
+  },
+  {
     "name": "font_rejected",
     "packet": {
       "kind": "font_preview",

@@ -22,6 +22,8 @@ pub(super) struct Checks {
     pub(super) copy_checked: bool,
     pub(super) composition_checked: bool,
     pub(super) link_requests: usize,
+    pub(super) font_sources: Vec<String>,
+    pub(super) font_catalog_reads: usize,
     pub(super) export_checked: bool,
     pub(super) rows_export_checked: bool,
     pub(super) settings_saved: bool,

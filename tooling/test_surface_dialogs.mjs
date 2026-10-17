@@ -9,16 +9,18 @@ function environment(file,factory){
     const nodes=new Map(),focus=[],sent=[],renders=[],timers=new Map();let nextTimer=0;
     function element(id){return {id,value:"",checked:false,disabled:false,open:false,dataset:{},children:[],textContent:"",
         showModal(){this.open=true;},close(){this.open=false;},focus(){focus.push(id);},
-        replaceChildren(){this.children=[];},append(value){this.children.push(value);}};}
-    const document={getElementById(id){if(!nodes.has(id))nodes.set(id,element(id));return nodes.get(id);},createElement:()=>element("option")};
+        replaceChildren(...values){this.children=values;},append(value){this.children.push(value);}};}
+    const document={getElementById(id){if(!nodes.has(id))nodes.set(id,element(id));return nodes.get(id);},querySelectorAll:()=>[document.getElementById("font-source-cascadia"),document.getElementById("font-source-microsoft_jhenghei")],createElement:()=>element("option")};
+    document.getElementById("font-source-cascadia").dataset={fontSource:"cascadia",fontFamilies:"Cascadia Mono"};
+    document.getElementById("font-source-microsoft_jhenghei").dataset={fontSource:"microsoft_jhenghei",fontFamilies:"Microsoft JhengHei"};
     const context={document,setTimeout:fn=>{const id=++nextTimer;timers.set(id,fn);return id;},clearTimeout:id=>timers.delete(id)};
     const create=vm.runInNewContext(readFileSync(new URL("../assets/"+file,import.meta.url),"utf8")+"\n"+factory,context);
     let ui;
     return {nodes,focus,sent,renders,timers,node:document.getElementById,
         create(extra={}){ui=create({tr:translator("zh-TW"),send:value=>sent.push(value),beforeRequest(){},beforeShow(){},restore(){},changed(){},
-            loadFonts:async()=>"",fontLoadNote:()=>"loaded",render:(...args)=>renders.push(args),
+            loadFonts:async()=>"",fontLoadNote:()=>"loaded",invalidateFonts(){},render:(...args)=>renders.push(args),
             prepare(){},stamp:()=>({generation:7,revision:9,input_epoch:0}),focus(){},current:()=>null,invalidate(){},reset(){},...extra});return ui;},
-        fire(id,event="click"){const binding=ui.bindings.find(([target,type])=>target.id===id&&type===event);assert.ok(binding,id+" "+event);binding[2]({target:document.getElementById(id),isTrusted:true,preventDefault(){}});},
+        fire(id,event="click",trusted=true){const binding=ui.bindings.find(([target,type])=>target.id===id&&type===event);assert.ok(binding,id+" "+event);binding[2]({target:document.getElementById(id),isTrusted:trusted,preventDefault(){}});},
         tick(){const work=[...timers.values()];timers.clear();for(const fn of work)fn();},
     };
 }
@@ -108,7 +110,7 @@ test("the tagged router delivers independent wire examples once and rejects lega
     const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8")+"\ncreateSurfaceRouter");
     const kinds=["paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
         "hover_settings","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error","media_external",
-        "media_reset","settings_open","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","link_result","export_result"];
+        "media_reset","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","link_result","export_result"];
     const calls=[],handlers=Object.fromEntries(kinds.map(kind=>[kind,payload=>calls.push({kind,payload})]));
     const route=create(handlers),examples=JSON.parse(readFileSync(new URL("../tests/fixtures/ui-packets.json",import.meta.url),"utf8"));
     for(const {packet} of examples){
@@ -125,9 +127,9 @@ test("the tagged router delivers independent wire examples once and rejects lega
 
 test("language is a settings draft: cancel sends no save, failure retains the draft, success commits once",async()=>{
     const env=environment("surface-settings.js","createSettingsDialog"),ui=env.create();
-    await ui.open(openData());env.node("interface-language").value="en-US";
+    await ui.open(openData());env.sent.length=0;env.node("interface-language").value="en-US";
     env.fire("font-cancel");assert.equal(env.sent.length,0);
-    await ui.open(openData());assert.equal(env.node("interface-language").value,"zh-TW");
+    await ui.open(openData());env.sent.length=0;assert.equal(env.node("interface-language").value,"zh-TW");
     env.node("interface-language").value="en-US";env.fire("font-save");env.fire("font-save");
     assert.equal(env.sent.length,1);assert.equal(env.sent[0].language,"en-US");
     ui.saved({status:"rejected"});assert.equal(env.node("font-dialog").open,true);
@@ -135,4 +137,42 @@ test("language is a settings draft: cancel sends no save, failure retains the dr
     env.fire("font-save");assert.equal(env.sent.length,2);
     ui.saved({status:"saved"});assert.equal(env.node("font-dialog").open,false);
     ui.destroy();assert.equal(ui.clean(),true);
+});
+
+
+test("local font selection changes only a draft, ignores stale catalogs and refresh does not save",async()=>{
+    const env=environment("surface-settings.js","createSettingsDialog");let refreshed=0;
+    const ui=env.create({invalidateFonts(){refreshed++;}});await ui.open(openData());
+    const request=env.sent.at(-1).request;
+    ui.catalog({request,families:["Menlo","Songti TC",'<img src=x onerror=alert(1)>'],notice:null});
+    assert.equal(env.node("font-local-ascii").disabled,false);
+    assert.equal(env.node("font-local-ascii").value,"");
+    assert.equal(env.node("font-local-ascii").children[3].textContent,'<img src=x onerror=alert(1)>');
+    env.node("font-local-ascii").value="Menlo";env.fire("font-local-ascii","change");
+    assert.equal(env.node("font-ascii").value,"Menlo");assert.equal(env.node("font-preset").value,"custom");
+    env.node("font-local-cjk").value="Songti TC";env.fire("font-local-cjk","change");env.tick();
+    assert.equal(env.sent.at(-1).values.fonts.cjk_font,"Songti TC");
+    assert.equal(env.sent.at(-1).values.fonts.ascii_font,"Menlo");
+    env.fire("font-refresh","click",false);assert.equal(refreshed,0);
+    env.fire("font-refresh");assert.equal(refreshed,1);const next=env.sent.at(-1).request;
+    ui.catalog({request,families:["Stale"],notice:null});assert.notEqual(env.node("font-local-ascii").children[1].textContent,"Stale");
+    ui.catalog({request:next,families:[],notice:"scan failed"});assert.equal(env.node("font-local-ascii").disabled,true);
+    assert.equal(env.node("font-local-status").textContent,"scan failed");
+    assert.equal(env.node("font-ascii").value,"Menlo");assert.equal(env.sent.some(e=>e.kind==="settings_save"),false);
+    env.fire("font-cancel");ui.catalog({request:next,families:["Late"],notice:null});
+    assert.equal(env.node("font-dialog").open,false);ui.destroy();
+});
+
+test("official source buttons match selected families and require an explicit trusted click",async()=>{
+    const env=environment("surface-settings.js","createSettingsDialog"),ui=env.create();
+    const data=openData();Object.assign(data.values,{ascii_font:"Cascadia Mono",cjk_font:"Microsoft JhengHei"});
+    await ui.open(data);assert.equal(env.node("font-source-microsoft_jhenghei").hidden,false);
+    assert.equal(env.sent.some(e=>e.kind==="font_source"),false);
+    env.fire("font-source-microsoft_jhenghei","click",false);assert.equal(env.sent.some(e=>e.kind==="font_source"),false);
+    env.fire("font-source-microsoft_jhenghei");assert.equal(env.sent.at(-1).source,"microsoft_jhenghei");
+    assert.equal(Object.hasOwn(env.sent.at(-1),"url"),false);
+    env.node("font-cjk").value="Unknown";env.fire("font-cjk","input");
+    assert.equal(env.node("font-source-microsoft_jhenghei").hidden,true);
+    const count=env.sent.length;env.fire("font-source-microsoft_jhenghei");assert.equal(env.sent.length,count);
+    ui.destroy();env.fire("font-source-cascadia");assert.equal(env.sent.length,count);
 });

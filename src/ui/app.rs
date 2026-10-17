@@ -30,7 +30,7 @@ pub fn app(props: AppProps) -> Element {
     let filters_probe = props.filters_probe;
     let surface_probe = props.surface_probe.clone();
     let surface_probing = surface_probe.is_some();
-    let dialogs_probing = surface_probe.as_deref() == Some("dialogs");
+    let dialogs_probing = matches!(surface_probe.as_deref(), Some("dialogs" | "fonts"));
     let reload_settings = props.reload_settings;
     let media_origin = props.media_origin.clone();
     let owner = use_hook(move || {
@@ -273,10 +273,37 @@ pub fn app(props: AppProps) -> Element {
                     }
                 }
                 label { {pttstella::msg!("font-ascii")} input { id: "font-ascii", r#type: "text", maxlength: "128" } }
+                label { {pttstella::msg!("font-local-ascii")} select { id: "font-local-ascii", disabled: true,
+                    option { value: "", {pttstella::msg!("font-local-choose")} }
+                } }
                 label { {pttstella::msg!("font-cjk")} input { id: "font-cjk", r#type: "text", maxlength: "128" } }
+                label { {pttstella::msg!("font-local-cjk")} select { id: "font-local-cjk", disabled: true,
+                    option { value: "", {pttstella::msg!("font-local-choose")} }
+                } }
+                div { class: "dialog-actions", button { id: "font-refresh", {pttstella::msg!("font-refresh")} } }
+                output { id: "font-local-status", role: "status" }
                 label { {pttstella::msg!("font-size")} input { id: "font-size", r#type: "number", min: "8", max: "24", step: "1" } }
                 label { {pttstella::msg!("font-baseline")} input { id: "font-baseline", r#type: "number", min: "0", max: "24", step: "1" } }
+                canvas { id: "font-preview", width: "576", height: "192", "aria-label": pttstella::msg!("font-preview-label") }
+                output { id: "font-note", role: "status" }
+                output { id: "font-availability", role: "status" }
                 p { {pttstella::msg!("font-help")} }
+                details { id: "font-sources",
+                    summary { {pttstella::msg!("font-source-title")} }
+                    p { {pttstella::msg!("font-windows-explained")} }
+                    p { {pttstella::msg!("font-source-help")} }
+                    div { class: "dialog-actions font-sources",
+                        for source in crate::fonts::Source::ALL {
+                            { let help=source.help(); rsx! { button {
+                                id: "font-source-{help.id}",
+                                "data-font-source": help.id,
+                                "data-font-families": help.families.join("\n"),
+                                hidden: true,
+                                {help.label}
+                            } } }
+                        }
+                    }
+                }
                 details {
                     summary { {pttstella::msg!("font-license")} }
                     pre { class: "font-license", {include_str!("../../assets/fonts/NOTICE.txt")} }
@@ -288,9 +315,6 @@ pub fn app(props: AppProps) -> Element {
                     button { id: "profile-import", {pttstella::msg!("profile-import")} }
                     button { id: "profile-export", {pttstella::msg!("profile-export")} }
                 }
-                canvas { id: "font-preview", width: "576", height: "192", "aria-label": pttstella::msg!("font-preview-label") }
-                output { id: "font-note", role: "status" }
-                output { id: "font-availability", role: "status" }
                 div { class: "dialog-actions",
                     button { id: "font-defaults", {pttstella::msg!("settings-defaults")} }
                     button { id: "font-cancel", {pttstella::msg!("cancel")} }

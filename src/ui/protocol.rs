@@ -92,6 +92,13 @@ pub(super) enum SurfaceEvent {
     LoginCancel {
         trusted: bool,
     },
+    SettingsFonts {
+        request: u64,
+    },
+    FontSource {
+        source: crate::fonts::Source,
+        trusted: bool,
+    },
     SettingsPreview {
         request: u64,
         values: DisplayProfile,
@@ -230,6 +237,7 @@ impl SurfaceEvent {
             | Media { trusted, .. }
             | KeepAlive { trusted, .. }
             | SettingsOpen { trusted }
+            | FontSource { trusted, .. }
             | LoginOpen { trusted }
             | LoginForget { trusted }
             | LoginCancel { trusted }
@@ -243,6 +251,7 @@ impl SurfaceEvent {
             // Internal notifications and projections do not submit user input.
             MediaDecoded { .. }
             | KeepAliveGate { .. }
+            | SettingsFonts { .. }
             | SettingsPreview { .. }
             | Select { .. }
             | SelectionCleared { .. }
@@ -288,6 +297,16 @@ mod admission_tests {
             assert!(!admits(event.clone(), true, 8), "{event}");
             assert!(admits(event.clone(), true, 7), "{event}");
         }
+        assert!(!admits(
+            json!({"kind":"font_source","source":"microsoft_jhenghei"}),
+            false,
+            7
+        ));
+        assert!(admits(
+            json!({"kind":"font_source","source":"microsoft_jhenghei"}),
+            true,
+            7
+        ));
         for kind in ["paste_confirm", "paste_cancel"] {
             assert!(!admits(json!({"kind":kind}), false, 7));
             assert!(admits(json!({"kind":kind}), true, 7));
