@@ -6,7 +6,7 @@ pub(super) enum Kind {
     Login,
     Navigate,
     Browse,
-    Board,
+    Destination,
 }
 pub(super) struct Completion {
     pub(super) kind: Kind,

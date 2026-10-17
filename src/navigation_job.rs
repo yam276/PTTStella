@@ -16,6 +16,23 @@ pub enum Destination {
     Article(ArticleTarget),
 }
 impl Destination {
+    /// Local draft grammar; length is checked before trimming so a truncated
+    /// over-limit paste cannot become a different valid destination.
+    pub fn parse(value: &str) -> Result<Self, String> {
+        if value.len() > crate::article_target::MAX_INPUT || value.chars().any(char::is_control) {
+            return Err(crate::msg!("destination-input-invalid"));
+        }
+        let value = value.trim();
+        if value.starts_with('#') || value.contains('@') || value.contains("://") {
+            ArticleTarget::parse(value)
+                .map(Self::Article)
+                .map_err(|error| error.to_string())
+        } else {
+            BoardName::parse(value)
+                .map(|board| Self::Board { board })
+                .map_err(|error| error.to_string())
+        }
+    }
     pub fn board(&self) -> &BoardName {
         match self {
             Self::Board { board } => board,
@@ -120,6 +137,41 @@ impl Flow {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn local_drafts_distinguish_boards_and_articles_without_losing_invalid_tails() {
+        assert_eq!(
+            Destination::parse(" Stella ").unwrap(),
+            Destination::Board {
+                board: BoardName::parse("Stella").unwrap()
+            }
+        );
+        for draft in [
+            "#00000101@Stella",
+            "https://www.ptt.cc/bbs/Stella/M.1.A.001.html",
+        ] {
+            assert_eq!(
+                Destination::parse(draft).unwrap(),
+                Destination::Article(ArticleTarget::new("Stella", "00000101").unwrap())
+            );
+        }
+        for draft in [
+            "Stella_Test04",
+            "#00000101",
+            "Stella\r",
+            "#00000101@Stella\n",
+            "https://www.ptt.cc.evil.example/bbs/Stella/M.1.A.001.html",
+        ] {
+            assert!(Destination::parse(draft).is_err(), "{draft:?}");
+        }
+        let padded = format!("Stella{}x", " ".repeat(crate::article_target::MAX_INPUT));
+        assert!(Destination::parse(&padded).is_err());
+        // HTML caps the draft at 257 UTF-16 units, strictly above Rust's byte
+        // limit. Even a cap before the invalid suffix cannot admit the prefix.
+        assert!(Destination::parse(&padded[..257]).is_err());
+        let maximum = format!("Stella{}", " ".repeat(crate::article_target::MAX_INPUT - 6));
+        assert!(Destination::parse(&maximum).is_ok());
+        assert!(Destination::parse(&(maximum + " ")).is_err());
+    }
     #[test]
     fn typed_destination_progress_matches_independent_wire_examples() {
         let operation = Stamp {

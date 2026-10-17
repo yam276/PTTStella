@@ -194,6 +194,12 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    pub fn start_article_probe() -> Result<Self, String> {
+        let connection =
+            Self::start_owned_probe(probe::article_page("main")?, probe::Scenario::Articles)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     pub fn start_filters_probe() -> Result<Self, String> {
         let connection =
             Self::start_owned_probe(probe::filters_page(false)?, probe::Scenario::Filters)?;
@@ -280,7 +286,7 @@ impl Connection {
     ) -> Result<Reply, String> {
         self.request_go_to(stamp, Destination::Article(target))
     }
-    fn request_go_to(&self, stamp: Stamp, destination: Destination) -> Result<Reply, String> {
+    pub fn request_go_to(&self, stamp: Stamp, destination: Destination) -> Result<Reply, String> {
         let (reply, answer) = oneshot::channel();
         self.enqueue(Command::GoTo {
             stamp,

@@ -263,9 +263,9 @@
     }
   },
   {
-    "name": "board_result_started",
+    "name": "destination_result_started",
     "packet": {
-      "kind": "board_result",
+      "kind": "destination_result",
       "payload": {
         "request": 7,
         "feedback": {
@@ -276,9 +276,9 @@
     }
   },
   {
-    "name": "board_result_rejected",
+    "name": "destination_result_rejected",
     "packet": {
-      "kind": "board_result",
+      "kind": "destination_result",
       "payload": {
         "request": 8,
         "feedback": {

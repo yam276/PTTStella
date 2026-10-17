@@ -1,6 +1,6 @@
 # AID 與指定文章
 
-本契約對應 active plan 的 C3。已實作文章識別、網址驗證與 Session 導覽核心；使用者入口、書籤與 AID 原生驗收仍待接續，不把解析成功當成已開啟文章。
+本契約對應 active plan 的 C3。已實作文章識別、網址驗證與 Session 導覽核心；使用者入口亦已實作；書籤與其他平台／實站驗收仍待接續，不把解析成功當成已開啟文章。
 
 ## 識別與輸入
 
@@ -29,4 +29,12 @@
 
 Session 另發布帶 generation／serial 的最後一筆已確認 BoardVisit，供最近清單消費；這個事實可跨後續搜尋／錯誤畫面與 watch 合併保留，即使新操作仍在等待也不漏記。新連線先清除舊事實，UI 不把新 generation 套在舊紀錄上；清單清除不重置已消費序號。
 
-自製 article-open fixture 與 production Connection 本機 peer 核對每步 bytes、同步資訊框零繼續與 Pong、五個等待階段的取消／原始輸入、過期輸入不取消現行工作、錯誤後晚到資訊框零操作、真實五秒逾時、重連零重播及關閉 join。現階段尚無 AID 使用者入口或 AID 原生操作完成宣稱；這些仍須下一批驗證。
+自製 article-open fixture 與 production Connection 本機 peer 核對每步 bytes、同步資訊框零繼續與 Pong、五個等待階段的取消／原始輸入、過期輸入不取消現行工作、錯誤後晚到資訊框零操作、真實五秒逾時、重連零重播及關閉 join。macOS 的使用者入口與合成原生操作範圍見下節；實站及其他平台另行驗收。
+
+## 快速前往入口
+
+工具列「快速前往」、⌘K／Ctrl+K 開啟同一個本機草稿，可輸入板名、#AID@板名或支援的完整文章網址。Rust Destination::parse 選擇明確目的地，再交給既有 Connection；JS 不轉譯按鍵串、不依標題猜 AID。按「前往」或輸入欄的普通 Enter 才送出；IME／legacy 229、清單按鈕的 Enter、取消、舊 request 回覆及 session 改變維持同一准入與生命週期。最近項目只填入草稿。
+
+Rust 在 trim 之前檢查 256-byte 上限與控制字元；HTML maxlength 由同一常數加一產生。即使超長貼上先被 WebView 截為 257 UTF-16 units，仍會超過 Rust 的 byte 上限而拒絕，不會將合法板名加大量空白／非法尾段裁成另一個可送出的目的地。錯誤保留草稿；正在執行時重開會顯示原板名或 #AID@板名，不能把 typed target 物件顯示成字串。
+
+原生合成 probe 驗證網址與明確 AID 的兩次開啟、缺文停止與手動空白恢復、混淆主機／過長草稿拒絕、取消後晚到資訊框零續送，以及查詢等待中 ⌘Q。peer 核對所有 bytes，Close acknowledged、各 owner join 與正常退出必須同時成立；不是原生 IME 候選窗或實站登入驗收。

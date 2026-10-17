@@ -15,6 +15,7 @@ pub(super) enum Scenario {
     Login,
     Login2fa,
     Boards,
+    Articles,
     Filters,
     Surface,
 }
@@ -67,6 +68,69 @@ pub(super) fn board_page(name: &str) -> Result<Vec<u8>, String> {
             .ok_or("missing board-switch scene")?,
     )
     .map_err(|error| error.to_string())
+}
+
+pub(super) fn article_page(name: &str) -> Result<Vec<u8>, String> {
+    let data: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/article-open.json"))
+            .map_err(|e| e.to_string())?;
+    crate::encoding::encode(
+        data["screens"][name]
+            .as_str()
+            .ok_or("missing article-open scene")?,
+    )
+    .map_err(|e| e.to_string())
+}
+async fn articles<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result<(), String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    for (expected, scene) in [
+        (b"f".as_slice(), "boards"),
+        (b"s", "board_prompt"),
+        (b"Stella\r", "selected"),
+        (b"\x1b[C", "articles"),
+        (b"#", "aid_prompt"),
+        (b"00000101\r", "articles"),
+        (b"Q", "information"),
+        (b" ", "articles"),
+        (b"\x1b[C", "reading"),
+        (b"\x1b[D", "articles"),
+        (b"#", "aid_prompt"),
+        (b"00000102\r", "articles"),
+        (b"Q", "information_two"),
+        (b" ", "articles"),
+        (b"\x1b[C", "reading_two"),
+        (b"\x1b[D", "articles"),
+        (b"#", "aid_prompt"),
+        (b"00000103\r", "missing"),
+        (b" ", "articles"), // Only the user's explicit pause recovery is accepted.
+        (b"#", "aid_prompt"),
+        (b"00000104\r", "articles"),
+        (b"Q", "information_four"),
+    ] {
+        if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected)
+        {
+            return Err(format!("article probe input differs before {scene}"));
+        }
+        if scene == "information_four" {
+            tokio::select! {
+                _=tokio::time::sleep(Duration::from_secs(3))=>{},
+                incoming=socket.next()=>return match incoming {
+                    Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
+                    _=>Err("article probe expected Close while query was delayed".into()),
+                },
+            }
+        }
+        socket
+            .send(Message::Binary(article_page(scene)?.into()))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    match socket.next().await {
+        Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e| e.to_string()),
+        _ => Err("article probe expected Close without a late query continuation".into()),
+    }
 }
 
 async fn boards<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result<(), String>
@@ -328,6 +392,7 @@ pub(super) async fn serve(
             | Scenario::Login2fa
             | Scenario::Surface
             | Scenario::Boards
+            | Scenario::Articles
     ) {
         300
     } else {
@@ -347,6 +412,9 @@ pub(super) async fn serve(
         }
         if matches!(scenario, Scenario::Boards) {
             return boards(&mut socket).await;
+        }
+        if matches!(scenario, Scenario::Articles) {
+            return articles(&mut socket).await;
         }
         if matches!(scenario, Scenario::Login | Scenario::Login2fa) {
             return login(&mut socket, matches!(scenario, Scenario::Login2fa)).await;

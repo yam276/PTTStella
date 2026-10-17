@@ -997,7 +997,8 @@ async fn board_switch_from_reading_pauses_keepalive_and_waits_for_each_back_befo
 }
 
 #[tokio::test]
-async fn board_cancel_is_owned_by_its_request_and_raw_input_retires_later_steps_across_reconnect() {
+async fn destination_cancel_is_owned_by_its_request_and_raw_input_retires_later_steps_across_reconnect()
+ {
     let (listener, connection) = local().await;
     connection.connect().unwrap();
     let (stream, _) = listener.accept().await.unwrap();

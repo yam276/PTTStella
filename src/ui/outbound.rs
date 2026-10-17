@@ -52,9 +52,9 @@ pub(super) enum Packet<'a> {
     SettingsSaved(Feedback<SaveStatus>),
     ProfileResult(ProfileResult),
     NavigationResult(Feedback<NavigationStatus>),
-    BoardResult {
+    DestinationResult {
         request: u64,
-        feedback: Feedback<BoardStatus>,
+        feedback: Feedback<DestinationStatus>,
     },
     InputRejected(String),
     RecentBoards(RecentBoardsPacket),
@@ -189,7 +189,7 @@ macro_rules! statuses {
 }
 statuses! {
     NavigationStatus { Sent, Rejected },
-    BoardStatus { Started, Rejected },
+    DestinationStatus { Started, Rejected },
     PasteStatus { Queued, Preview, Cancelled, Rejected },
     ExportStatus { Saved, Cancelled, Failed },
     LinkStatus { Requested, Failed },

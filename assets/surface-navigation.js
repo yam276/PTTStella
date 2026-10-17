@@ -1,15 +1,15 @@
 // Owns the local draft and request identity; Rust owns board names and navigation.
-function createBoardDialog({tr,send,stamp,prepare,restore,changed,current,isEditing}) {
-    const openButton=document.getElementById("board-open"),stopButton=document.getElementById("board-stop");
-    const dialog=document.getElementById("board-dialog"),name=document.getElementById("board-name");
-    const submitButton=document.getElementById("board-submit"),cancelButton=document.getElementById("board-cancel"),note=document.getElementById("board-note");
+function createNavigationDialog({tr,send,stamp,prepare,restore,changed,current,isEditing}) {
+    const openButton=document.getElementById("destination-open"),stopButton=document.getElementById("destination-stop");
+    const dialog=document.getElementById("destination-dialog"),name=document.getElementById("destination-name");
+    const submitButton=document.getElementById("destination-submit"),cancelButton=document.getElementById("destination-cancel"),note=document.getElementById("destination-note");
     const recentList=document.getElementById("board-recent"),recentEmpty=document.getElementById("board-recent-empty"),recentNote=document.getElementById("board-recent-note"),clearButton=document.getElementById("board-recent-clear");
     let disposed=false,composing=false,pending=null,active=null,sequence=0;
     function working(){const busy=!!pending||!!active;name.disabled=busy;submitButton.disabled=busy;for(const button of recentList.querySelectorAll("button"))button.disabled=busy;}
     function open(e){
         if(disposed||!e.isTrusted||document.querySelector("dialog[open]")&&!dialog.open)return;
         if(dialog.open){name.focus();return;}
-        prepare(e);name.value=active?.target.board||"";note.textContent=active?tr(active.target.kind==="article"?"article-open-active":"board-switch-active",{board:active.target.board,aid:active.target.aid}):"";
+        prepare(e);name.value=active?(active.target.kind==="article"?"#"+active.target.aid+"@"+active.target.board:active.target.board):"";note.textContent=active?tr(active.target.kind==="article"?"article-open-active":"board-switch-active",{board:active.target.board,aid:active.target.aid}):"";
         composing=false;dialog.showModal();working();changed();name.focus();
     }
     function shortcut(e){
@@ -20,9 +20,9 @@ function createBoardDialog({tr,send,stamp,prepare,restore,changed,current,isEdit
     function submit(e){
         if(disposed||!e.isTrusted||!dialog.open||pending||active||composing)return;
         e.preventDefault();
-        if(!current()?.connected){note.textContent=tr("board-dialog-disconnected");return;}
-        pending={request:++sequence,operation:stamp()};working();note.textContent=tr("board-dialog-starting");
-        send({kind:"board_submit",request:pending.request,stamp:pending.operation,name:name.value,trusted:true});
+        if(!current()?.connected){note.textContent=tr("destination-dialog-disconnected");return;}
+        pending={request:++sequence,operation:stamp()};working();note.textContent=tr("destination-dialog-starting");
+        send({kind:"destination_submit",request:pending.request,stamp:pending.operation,value:name.value,trusted:true});
     }
     function keys(e){
         if(e.target!==name||e.key!=="Enter"||e.isComposing||composing||e.keyCode===229||e.key==="Process")return;
@@ -45,18 +45,18 @@ function createBoardDialog({tr,send,stamp,prepare,restore,changed,current,isEdit
     function cancel(e){
         if(disposed||!e?.isTrusted)return;e.preventDefault();
         const operation=pending?.operation||active?.operation;
-        if(operation)send({kind:"board_cancel",operation,trusted:true});
+        if(operation)send({kind:"destination_cancel",operation,trusted:true});
         pending=null;name.value="";composing=false;if(dialog.open)dialog.close();restore();changed();
     }
-    function stop(e){if(disposed||!e.isTrusted||!active)return;send({kind:"board_cancel",operation:active.operation,trusted:true});restore();}
+    function stop(e){if(disposed||!e.isTrusted||!active)return;send({kind:"destination_cancel",operation:active.operation,trusted:true});restore();}
     function receive(result){
         if(disposed||!pending||result.request!==pending.request)return;
         pending=null;working();
         if(!dialog.open)return;
         if(result.feedback.status==="started"){name.value="";dialog.close();restore();changed();}
-        else {note.textContent=result.feedback.notice||tr("board-switch-stale");name.focus();}
+        else {note.textContent=result.feedback.notice||tr("destination-stale");name.focus();}
     }
-    function update(packet){if(disposed)return;if(pending&&(!packet.connected||pending.operation.generation!==packet.generation)){pending=null;if(dialog.open)note.textContent=tr("board-switch-stale");}active=packet.destination?.state==="active"?packet.destination:null;stopButton.hidden=!active;working();}
+    function update(packet){if(disposed)return;if(pending&&(!packet.connected||pending.operation.generation!==packet.generation)){pending=null;if(dialog.open)note.textContent=tr("destination-stale");}active=packet.destination?.state==="active"?packet.destination:null;stopButton.hidden=!active;working();}
     function revoke(){disposed=true;pending=null;active=null;composing=false;name.value="";}
     function destroy(){revoke();recentList.replaceChildren();recentNote.textContent="";if(dialog.open)dialog.close();}
     return {receive,receiveRecent,update,revoke,destroy,clean:()=>disposed&&!dialog.open&&!pending&&!active&&!composing&&!name.value,
