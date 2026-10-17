@@ -153,6 +153,12 @@ Session 只持有一個 NavigationJob，Board／Article 是封閉 Destination，
 
 macOS 同一候選 `dist/macos-article-core/PTTStella.app` 通過既有 C2 UI 的兩次到達、超長拒絕與 Beta 取消，最近清單仍為 Other／Stella；同一版本重跑 46 筆 Vim／53 實體鍵保持 Normal，⌘W／⌘Q Close acknowledged 與全部 owner join。PNG 與上一份相同合成板列表基準逐像素相同；這些只證明共同封包／UI 回歸，**不算 AID 原生操作完成**。證據在 `.local/verification/aid-c3/workflow`。最新先前交付 App 仍保留，下一批接 AID 使用者入口及其原生探針，再做書籤；C1 滑鼠缺口、D、實站、原生 IME 及其他 OS 仍未結案。
 
+**C3 指定文章入口與 macOS 原生驗收已完成，書籤接續**。快速前往共用板名、#AID@板名及支援的官方文章網址，事件／結果／命令等待改為 Destination，移除舊 board-only owner 路徑。Rust 先檢查 256 bytes／控制字元再 trim，HTML 上限由常數加一（257 units）產生；合法板名加大量空白與非法尾段即使被截尾也整段拒絕。草稿、IME Enter／229、取消、request ID、session 變更與清理維持共用 owner；最近項目只填草稿。中英標籤與錯誤走 Fluent，獨立 wire expected 一併更新。
+
+80 個 desktop lib、36 個 bin、35 個 JS、core／Clippy／docs 通過。macOS 三個獨立程序使用同一候選 App：兩個 AID 探針均經真正 ⌘K／Ctrl+K 及 Enter／按鈕開啟網址與 AID 目標，觀察缺文後手動空白恢復、混淆主機與 257-unit 長草稿拒絕；第一輪有效取消，晚到 #00000104 資訊框零續送，第二輪在同一工作等待中 ⌘Q，均 Close acknowledged、全部 owner join、正常退出。第一輪長字串快照尚在輸入中（142 units），未將中途快照算成結果；完整 257-unit 值確認後拒絕，重按一次普通 Enter 亦只增加拒絕、未送站端 bytes。第二輪先確認完整值再送 Enter，恰好兩次拒絕。原生輸入時序觀察不冒充 IME 候選窗驗收。
+
+第三程序回歸純板名 Stella／Other、最近項目只填草稿、超長拒絕、Beta 停止與晚到列表，最近清單維持 Other／Stella，Vim Normal 及正常清理。候選 `dist/macos-article-ui/PTTStella.app` 的嚴格 ad-hoc 簽章、去簽章 executable hash 與 PNG 檢查保留 `.local/verification/aid-ui-c3`。以上均為本機合成服務，實站、Windows／Linux 及原生 IME 未驗收；書籤、D 與 C1 原生滑鼠缺口仍未結案。
+
 ## 維護性重構
 
 2026-10-17 傳統 BBS 字型：依公開的 PTT 官方終端預設及 Windows 客戶端資源確認 MingLiU／細明體是傳統選項，並非所有客戶端有唯一預設。新增 `windows_classic`（MingLiU／MingLiU）與 `macos_bbs`（Songti TC／Songti TC）；既有 Windows 黑體組合、macOS 黑體／宋體與平台初始值保留。新組合均明確選取，前者缺少時顯示兩角色載入警告及官方取得／授權頁，後者只稱本機宋體替代，不宣稱等同細明體。沒有加入第三方字型檔。

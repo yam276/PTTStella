@@ -23,9 +23,9 @@ Connection 持有唯一工作，UI 不持有鍵串、站端狀態機或 timer。
 
 ## 本機視窗
 
-工具列或 ⌘K／Ctrl+K 開啟草稿視窗；這組快捷鍵保留給客戶端，不送 PTT。輸入或組字本身不送站端，按「前往」或非組字中的 Enter 才要求 Rust 啟動。保留超過 12 字元的草稿讓 Rust 拒絕，不將貼上內容截成另一個有效板名。來源未知或待回應時明確拒絕，錯誤保留草稿。
+工具列「快速前往」或 ⌘K／Ctrl+K 開啟草稿視窗；這組快捷鍵保留給客戶端，不送 PTT。輸入或組字本身不送站端，按「前往」或非組字中的 Enter 才要求 Rust 啟動。保留超過 12 字元的板名草稿讓 Rust 拒絕，不將貼上內容截成另一個有效板名。來源未知或待回應時明確拒絕，錯誤保留草稿。
 
-Esc／取消清空草稿，未確認前零站端輸入；已要求開始則取消尚未完成的步驟。工具列「停止切板」對應該工作的原始 operation，不以現在游標位置猜取消對象。UI 有自己的 request ID，取消／重新開啟後的舊回覆不會關閉新草稿，session 改變會釋放等待。清理時先撤銷事件與工作，再由同一 renderer、Connection 與 file owner join。
+Esc／取消清空草稿，未確認前零站端輸入；已要求開始則取消尚未完成的步驟。工具列「停止導覽」對應該工作的原始 operation，不以現在游標位置猜取消對象。UI 有自己的 request ID，取消／重新開啟後的舊回覆不會關閉新草稿，session 改變會釋放等待。清理時先撤銷事件與工作，再由同一 renderer、Connection 與 file owner join。
 
 IME 的 composition、isComposing 與 legacy 229 都不兼任送出；下一個普通 Enter 可明確確認。JS doubles 覆蓋此界線，不冒充原生候選窗驗收。
 
@@ -44,3 +44,5 @@ Files 在 blocking worker 載入及保存獨立的 OS local-data `recent-boards.
 自製 board-switch fixture 沒有站端 session 記錄；navigation suite 的獨立 expected 核對板名、空列表、固定提示、正式名稱欄位、主選單／閱讀多步、列表選中後進入與直接到達、假提示、同步分片、相同 revision 不重送及可控制時鐘期限。
 
 production Connection 的 loopback 逐筆比對完整步驟，檢查同步中不送板名但 Ping／Pong 正常、工作期間保活暫停、重複與過期請求、取消所有權、原始輸入介入、晚到提示、逾時、重連不重播及工作中正常關閉。一般測試不連 PTT。平台、原生 IME、實站格式與部署各自驗收，合成到達不表示實站操作已通過。
+
+這個視窗亦可輸入 [指定文章](article-navigation.md)，共用 DestinationSubmit／DestinationResult 及同一個 request／operation 取消。輸入總上限在 trim 前檢查，不因 HTML 截尾變成不同的有效板名；純板名仍用原有 BoardName 規則。

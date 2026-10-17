@@ -7,6 +7,10 @@ use std::path::Path;
 
 #[derive(Default)]
 pub(super) struct Checks {
+    pub(super) article_reached: Vec<(u64, String)>,
+    pub(super) article_rejected: usize,
+    pub(super) article_missing: bool,
+    pub(super) article_cancelled: bool,
     pub(super) board_reached: Vec<(u64, String)>,
     pub(super) board_rejected: usize,
     pub(super) board_cancelled: bool,
@@ -46,6 +50,17 @@ pub(super) struct Checks {
     pub(super) copied_selection: Option<(u64, u64, u64)>,
 }
 impl Checks {
+    pub(super) fn destination_rejected(&mut self, case: Option<&str>) {
+        match case {
+            Some("boards" | "boards_close") => {
+                self.board_rejected = self.board_rejected.saturating_add(1)
+            }
+            Some("articles" | "articles_close") => {
+                self.article_rejected = self.article_rejected.saturating_add(1)
+            }
+            _ => {}
+        }
+    }
     pub(super) fn new() -> Self {
         Self {
             expected_input: vec![

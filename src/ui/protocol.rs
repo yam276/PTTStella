@@ -76,13 +76,13 @@ pub(super) enum SurfaceEvent {
         intent: Intent,
         trusted: bool,
     },
-    BoardSubmit {
+    DestinationSubmit {
         request: u64,
         stamp: Stamp,
-        name: String,
+        value: String,
         trusted: bool,
     },
-    BoardCancel {
+    DestinationCancel {
         operation: Stamp,
         trusted: bool,
     },
@@ -241,8 +241,12 @@ impl SurfaceEvent {
             }
             Navigate { trusted, stamp, .. }
             | LoginSubmit { trusted, stamp, .. }
-            | BoardSubmit { trusted, stamp, .. } => *trusted && stamp.generation == generation,
-            BoardCancel { trusted, operation } => *trusted && operation.generation == generation,
+            | DestinationSubmit { trusted, stamp, .. } => {
+                *trusted && stamp.generation == generation
+            }
+            DestinationCancel { trusted, operation } => {
+                *trusted && operation.generation == generation
+            }
             FiltersOpen { trusted }
             | RecentBoardsClear { trusted }
             | FiltersEdit { trusted, .. }
@@ -305,8 +309,8 @@ mod admission_tests {
             json!({"kind":"text","text":"a","generation":7}),
             json!({"kind":"paste","text":"a\nb","generation":7}),
             json!({"kind":"navigate","stamp":stamp,"intent":{"action":"back"}}),
-            json!({"kind":"board_submit","request":1,"stamp":stamp,"name":"Stella"}),
-            json!({"kind":"board_cancel","operation":stamp}),
+            json!({"kind":"destination_submit","request":1,"stamp":stamp,"value":"Stella"}),
+            json!({"kind":"destination_cancel","operation":stamp}),
             json!({"kind":"login_submit","account":"Synthetic","password":"unused","remember":false,"stamp":stamp}),
         ];
         for event in events {
