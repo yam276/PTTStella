@@ -235,6 +235,8 @@ macOS WKWebView 的 `mouse_motion` 完成 col 4／row 4 左鍵點擊／釋放，
 
 本批 42 個 desktop bin、59 個 JS（含 16 個 pointer owner／handler 案例）、desktop all-targets Clippy／docs／diff 通過；Rust session 核心未改，後續實際按鈕與新 binary 的原生回歸接續，沒有換交付 App 或 push。
 
+**D2 未持有 sample 的取消接線修正**：`pointercancel` 從只取消 held 改為既有全域 revoke，讓 Rust watch 同時撤銷尚未開始送出的無按鈕 sample，UI 緩衝／callback 仍立即清理。新增實際 handler＋production pointer owner 的整合案例，先觀察缺少撤銷 wire 而失敗，修正後確認 generation 正確的 revoke、舊 queued sample 不再延續與新 pending cell 丟棄；Rust 對 queued sample 的 watch 優先案例沿用同一送出 owner。不是已送 bytes 的回滾，也沒有新增 worker 或 timer。證據保留 `.local/verification/mouse-d-cancel`；42 個 desktop bin、60 個 JS（含 17 個 pointer owner／handler 案例）、desktop all-targets Clippy 與 docs 通過。尚未以此版本重跑原生案例，沒有換交付 App 或 push。
+
 
 
 

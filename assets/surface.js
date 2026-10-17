@@ -250,7 +250,7 @@ function cancelDrag() {
     surface.dataset.pointerActive="false";
     refreshKeepAlive();
 }
-function pointercancel(){stationMouse.cancel();cancelHover(true);released=null;cancelDrag();clearSelection();}
+function pointercancel(){stationMouse.revoke();cancelHover(true);released=null;cancelDrag();clearSelection();}
 function deactivate(e){stationMouse.revoke();cancelHover(true);policy("reset",e);released=null;cancelDrag();setHover(null);cancelComposition();}
 function lostcapture(e){stationMouse.lost(e);if(dragging){cancelHover();dragging=null;released=null;surface.dataset.pointerActive="false";refreshKeepAlive();}}
 function hasSelection(){return selectionActive;}

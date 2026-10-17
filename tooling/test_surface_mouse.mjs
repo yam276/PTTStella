@@ -161,6 +161,15 @@ test("unowned physical buttons cannot masquerade as no-button motion or flush an
         assert.equal(samples(env).length,0);assert.equal(env.frames.size,0);assert.equal(cancels(env).length,0);
     }
 });
+test("pointer cancellation revokes an already queued unheld sample and drops the next buffered cell",()=>{
+    const env=environment();env.update({mouse:{...env.packet.mouse,modes:{epoch:5,tracking:"motion"}}});
+    env.owner.move(env.event());env.flush();assert.equal(samples(env).length,1);
+    env.owner.move(env.event({cell:{col:6,row:3}}));assert.equal(env.frames.size,1);
+    const context={stationMouse:env.owner,cancelHover(){},released:null,cancelDrag(){},clearSelection(){}};
+    handler("pointercancel","deactivate",context)();env.flush();
+    assert.deepEqual(env.sent.at(-1),{kind:"station_mouse_revoke",generation:7});
+    assert.equal(samples(env).length,1);assert.equal(env.frames.size,0);assert.equal(env.owner.active(),false);
+});
 test("wheel normalization has one bounded latest tick, no release, and no old fractional source",()=>{
     const env=environment();
     env.owner.wheel(env.event({deltaY:20}));env.flush();assert.equal(samples(env).length,0);

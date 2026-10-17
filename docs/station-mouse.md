@@ -42,6 +42,8 @@ UI 不等待 press 的命令回覆才處理 release；只透過同一有界命�
 
 所有 bytes 仍共用同一序列化 send／Telnet escape 路徑。被動 motion 不增加命令 input epoch，也不建立／延長畫面回應等待，避免游標剛移過就把後續有效點擊判為過期；畫面／模式／policy 的失效檢查仍保留。點擊與 wheel 照常增加命令 epoch，wheel 只在尚無等待時建立有界等待，不建立 held／release 交易。新 sample 在共同佇列剩餘容量不超過 8 時拒絕，保留 explicit input／release／Close 的餘量；取消控制仍由既有 watch 優先套用。
 
+`pointercancel` 會全域撤銷本 generation 的 mouse policy，涵蓋尚未開始的無按鈕 sample；同時清 UI callback／緩衝與本機選取。只清 held transaction 無法涵蓋已排入 Rust 的 hover，因此取消走既有 revoke watch。已開始寫入的 bytes 不宣稱回滾，新事件仍須取得更新後的 policy。
+
 自製 [模式 trace](../tests/fixtures/mouse-modes.json) 是獨立手寫狀態 expected，逐 byte／所有兩段切分核對；另測無私有標記、錯格式、取消、字串與超長 CSI 不改模式，C0 中斷、重設、同步批次、非支援格式拒絕、格線邊界及獨立按鈕 bytes。八個交易 owner 與一個 control snapshot 案例核對租約、速率、逾時及撤銷；八個 production Connection loopback 案例獨立核對精確 SGR bytes、更新後釋放、重複零送出、佇列滿時控制、同步模式變化、重連隔離、保活暫停及導覽來源。Surface 測試核對顯示 ACK／模式／policy、可信准入、封閉型別及獨立 wire expected；八個 JS pointer／handler 案例核對原 lease、Shift 選字、滾輪分流、取消／capture／重放及清理。一般測試只用合成資料，不連 PTT。這些單元結果不能代替下述限定原生案例或尚未驗收的邊界。
 
 macOS `mouse` probe 已以真正視窗完成 col 4／row 4 的左／右鍵精確按下釋放、未支援 1003 的點擊／滾輪零輸出、Shift 雙擊選行及 OS 剪貼簿讀回、停用後一次本機文章編號 CR、重新啟用及中鍵按住時的模式撤銷；peer 沒有收到中鍵釋放或額外本機 bytes。最後 mode epoch 6、無 held lease，正常 Close acknowledged 並 join renderer、connection、credential 及 file owners。前後 PNG 獨立解碼 960×576、全部像素相同；鍵盤縮放 100→125→100% 通過。
