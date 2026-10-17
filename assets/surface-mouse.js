@@ -4,6 +4,7 @@ function createStationMouse({current,point,viewport,send,blocked,prepare,changed
     let held=null,sequence=0,sampleSequence=0,disposed=false,frame=0,pendingMotion=null,pendingWheel=null,wheelRemainder=0,wheelContext=null,lastFrameTime=null;
     const route=()=>current()?.mouse?.route??"local";
     const local=()=>route()==="local";
+    const buttonNames=["left","middle","right"],buttonMask={left:1,middle:4,right:2};
     const modifiers=e=>({shift:!!e.shiftKey,alt:!!e.altKey,ctrl:!!e.ctrlKey});
     const sameLease=(a,b)=>!!a&&!!b&&a.transaction===b.transaction&&a.mode_epoch===b.mode_epoch
         &&a.policy_epoch===b.policy_epoch&&a.stamp.generation===b.stamp.generation
@@ -59,7 +60,7 @@ function createStationMouse({current,point,viewport,send,blocked,prepare,changed
         if(local()||e.shiftKey)return false;
         e.preventDefault();
         if(disposed||!e.isTrusted||!e.isPrimary||held||e.metaKey||blocked()||route()!=="station")return true;
-        const packet=current(),cell=point(e,false),button=["left","middle","right"][e.button];
+        const packet=current(),cell=point(e,false),button=buttonNames[e.button];
         if(!packet?.connected||packet.output_pending||!cell||!button||sequence>=Number.MAX_SAFE_INTEGER)return true;
         prepare();
         const source=lease(packet);
@@ -73,17 +74,21 @@ function createStationMouse({current,point,viewport,send,blocked,prepare,changed
         if(e.pointerId!==held.pointer)return true;
         e.preventDefault();
         const cell=point(e,false);
-        if(!e.isTrusted||["left","middle","right"][e.button]!==held.button||e.metaKey||blocked()||route()!=="station"||!cell){cancel();return true;}
+        if(!e.isTrusted||buttonNames[e.button]!==held.button||e.metaKey||blocked()||route()!=="station"||!cell){cancel();return true;}
         flushSamples();
         const event={lease:held.lease,report:{...cell,button:held.button,action:"release",modifiers:modifiers(e)}};
         finish(false);send({kind:"station_mouse",event,trusted:true});return true;
     }
     function move(e) {
         if(local())return false;
-        if(disposed||!e.isTrusted||!e.isPrimary||e.metaKey||!held&&e.shiftKey||blocked()||route()!=="station")return true;
+        if(disposed||!e.isTrusted||!e.isPrimary)return true;
+        if(held&&held.pointer!==e.pointerId)return true;
+        const physical=Number.isInteger(e.buttons)&&e.buttons>=0?e.buttons:null;
+        if(held&&(physical===null||!(physical&buttonMask[held.button]))){cancel();return true;}
+        if(!held&&physical!==0){clearSamples();return true;}
+        if(e.metaKey||!held&&e.shiftKey||blocked()||route()!=="station")return true;
         const packet=current(),tracking=packet?.mouse?.modes?.tracking,cell=point(e,false);
         if(!cell){clearSamples();return true;}
-        if(held&&held.pointer!==e.pointerId)return true;
         if(tracking!=="motion"&&!(tracking==="drag"&&held))return true;
         const source=held?.lease??lease(packet);
         if(!source)return true;
