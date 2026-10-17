@@ -66,9 +66,13 @@ core 八套 suite／兩份 replay（login 新增逐切點、錯碼、假提示�
 
 最新候選為 `dist/macos-protocol-b2-delivery/PTTStella.app`，strict ad-hoc 驗章與實測 executable 去簽章 SHA 核對一致；報告保留 `.local/verification/protocol-b2`。未連 PTT、未操作真實帳密或 2FA 設定；實站驗證碼、原生 IME、Windows／Linux 與完整 Mac desktop backend 尚未驗收。C1 OSC 8 完整網址接續執行。
 
-**C1 核心與生命週期完成，原生互動接續驗證**：Screen 解析有界 OSC 8，目的地由 Cell 擁有，Frame 只在 Rust 保留 metadata；`links` 在過濾後驗證 HTTP／HTTPS 並投影可點範圍，沒有 metadata 時保留原單列偵測。覆寫、擦除、插入／刪除、區域捲動及 reset 同時更新，混合雙寬字與無效／超限 metadata 不改猜文字；右鍵完整目的地的 Rust 選取契約已加入。限制與行為見 [完整網址](../links.md)。
+**C1 核心與使用入口已實作，原生滑鼠互動仍未驗收**：Screen 解析有界 OSC 8，目的地由 Cell 擁有，Frame 只在 Rust 保留 metadata；`links` 在過濾後驗證 HTTP／HTTPS 並投影可點範圍，沒有 metadata 時保留原單列偵測。覆寫、擦除、插入／刪除、區域捲動及 reset 同時更新，混合雙寬字與無效／超限 metadata 不改猜文字；右鍵完整目的地的 Rust 選取契約已加入。限制與行為見 [完整網址](../links.md)。
 
-core 八套 suite／兩份 replay 新增七個 interaction 與一個 filters 案例，獨立 expected 核對跨行目的地、全部切點、逐 byte、BEL／ST、錯誤 scheme、控制字元、最大長度／參數／目標數／bytes 預算、slot 回收、混合雙寬、編輯／捲動及遮黑。50 個 desktop lib、29 個 bin、全 targets desktop Clippy 通過，舊 fixture／expected 未修改。紀錄保留 `.local/verification/protocol-c1`；原生跨行點擊／右鍵複製／拖曳與媒體仍在本批後續執行，尚未交付 C1 App 或宣稱實站通過。
+core 八套 suite／兩份 replay 新增七個 interaction 與一個 filters 案例，獨立 expected 核對跨行目的地、全部切點、逐 byte、BEL／ST、錯誤 scheme、控制字元、最大長度／參數／目標數／bytes 預算、slot 回收、混合雙寬、編輯／捲動及遮黑。50 個 desktop lib、29 個 bin、全 targets desktop Clippy 通過，舊 fixture／expected 未修改。紀錄保留 `.local/verification/protocol-c1`；右鍵入口、原生互動探針與驗證結果另記如下，沒有宣稱實站通過。
+
+C1 使用入口已接上同一 Rust 選取契約：右鍵任一片段後 Ctrl+C／Cmd+C 取得正規化完整目的地，普通拖曳仍為畫面文字；原有版本與過濾准入不另建第二條路徑。新增三個 JS handler 案例與一個 bin 樣本範圍／媒體分類案例，30 個 bin、全 targets Clippy、26 個 JS 與 docs 通過。第一次探針漏匯入 selection、整理後殘留 unused import，以及誤選舊雙色樣本均保留失敗紀錄；樣本選擇改為單一生產 helper，bin 直接測實際分派路徑後通過，沒有更改舊 fixture／expected。
+
+macOS 原生顯示正確的兩段網址及兩段本機圖片標籤，AX 匯出 PNG、開啟設定／Esc 取消、⌘W 與 Close acknowledged／全部 owner join 已驗證。CUA 格線座標點擊在 Raise、啟用視窗及新 screenshot 後仍回 `noWindowsAvailable`，因此跨行兩段命中、兩次原生剪貼簿、跨列拖曳零誤開與兩段媒體預覽 **not_ready**；嚴格 surface-probe.json 保留 `failed`，不把 exit 0 或 PNG 當互動通過。待可用原生輸入 backend 或人工執行同一合成探針，不需真實帳密。候選 App 為 `dist/macos-protocol-c1-verified/PTTStella.app`，上一份 B2 交付仍保留；C1 未整批結案，C2 有界切板流程可獨立接續。證據在 `.local/verification/protocol-c1`，Windows／Linux、OS 真正外開與實站仍未驗證。
 
 ### 詳細交付計畫
 

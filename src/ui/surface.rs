@@ -6,7 +6,7 @@ use pttstella::{
     input::{self, PreparedPaste},
     login::vault::{Action as LoginAction, Job as LoginJob, Outcome as LoginOutcome, Vault},
     media::{self, hover::Lease as HoverLease, preview::Presentation},
-    navigation,
+    navigation, selection,
     settings::HoverPosition,
     vim::{self, Effect},
 };
@@ -559,6 +559,7 @@ async fn run(
                             .map_err(|e| e.to_string())?;
                     }
                     SurfaceEvent::MediaDecoded { request, success } => {
+                        if surface_probe.as_deref()==Some("osc8") && success {checks.osc8_media_decoded+=1;}
                         media_preview.decoded(request, success);
                     }
                     SurfaceEvent::KeepAlive { enabled, trusted: _ } => {
@@ -697,10 +698,11 @@ async fn run(
                         }
                         let result = match link {
                             Some(link) if probe.is_some() => {
-                                if link.url != "https://example.com/pttstella" {
+                                if link.url != "https://example.com/pttstella" && !(surface_probe.as_deref()==Some("osc8") && link.url==super::probe::OSC8_URL) {
                                     return Err("unexpected probe URL".into());
                                 }
                                 checks.link_requests += 1;
+                                if surface_probe.as_deref()==Some("osc8") {checks.osc8_open_rows.push(link.row);}
                                 Ok(())
                             }
                             Some(link) => {
@@ -822,6 +824,10 @@ async fn run(
                         if probe.is_some() && selected.as_ref().is_some_and(|s| s.text == "中") {
                             checks.copied_selection = Some((generation, revision, request));
                         }
+                        if surface_probe.as_deref()==Some("osc8") && matches!(selection,selection::Selection::Range{..}) && selected.as_ref().is_some_and(|value|value.rows==(8..10) && value.text.contains('\n')) {checks.osc8_dragged=true;}
+                        if surface_probe.as_deref()==Some("osc8") && matches!(selection,selection::Selection::Link{..}) && let Some(value)=selected.as_ref().filter(|value|value.text==super::probe::OSC8_URL) {
+                            checks.osc8_selected=Some((generation,revision,request,value.rows.start));
+                        }
                         eval.send(Packet::Selection(SelectionReply{presentation,generation,revision,request,value:selected})).map_err(|e| e.to_string())?;
                     }
                     SurfaceEvent::SelectionCleared {presentation,generation,revision,request}=>{
@@ -836,6 +842,9 @@ async fn run(
                     } => {
                         if filters_probe && screen.copied(Identity{presentation,generation,revision},request,&receiver.borrow()) {
                             checks.filter_copies += 1;
+                        }
+                        if surface_probe.as_deref()==Some("osc8") && screen.copied(Identity{presentation,generation,revision},request,&receiver.borrow()) && let Some((_,_,_,row))=checks.osc8_selected.filter(|(g,r,q,_)|(*g,*r,*q)==(generation,revision,request)) {
+                            checks.osc8_copy_rows.push(row);
                         }
                         checks.copy_checked |=
                             checks.copied_selection == Some((generation, revision, request));
@@ -1000,11 +1009,14 @@ async fn run(
         reports.push((path.join("surface-probe.json"),serde_json::json!({
             "status":if case=="slow" && commands.busy() || case=="files_slow" && files.busy() || case=="files" && checks.export_checked || case=="untrusted" && surface_probe_clean && rejected_events==3
                 || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB")
+                || case=="osc8" && checks.osc8_open_rows==[8,9] && checks.osc8_copy_rows==[8,9] && checks.osc8_dragged && checks.osc8_media_decoded>=2 && checks.export_checked
                 || case=="login_2fa" && checks.verification_required && checks.verification_rejected && checks.verification_browsing && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
                 || case=="fonts" && checks.font_catalog_reads>=2 && !checks.font_sources.is_empty() && checks.export_checked
                 || matches!(case.as_str(),"sgr66"|"sgr66_legacy") && checks.export_checked
                 || case=="dialogs" && checks.settings_saved && checks.export_checked && checks.rows_export_checked && checks.media_external>=1 {"passed"} else {"failed"},
             "scope":if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
+            "osc8_dragged":checks.osc8_dragged,"osc8_media_decoded":checks.osc8_media_decoded,
+            "osc8_open_rows":checks.osc8_open_rows,"osc8_copy_rows":checks.osc8_copy_rows,
             "verification_required":checks.verification_required,"verification_rejected":checks.verification_rejected,"verification_browsing":checks.verification_browsing,
             "font_sources":checks.font_sources,"font_catalog_reads":checks.font_catalog_reads,
             "case":case,"command_pending_on_close":commands.busy(),"file_pending_on_close":files.busy(),"synthetic_events_rejected":rejected_events,"js_admission":surface_probe_clean,

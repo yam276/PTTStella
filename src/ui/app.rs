@@ -1,5 +1,4 @@
 //! Dioxus view and native window lifecycle wiring.
-use super::probe::preview;
 use super::surface::{Options, PendingPaste, surface};
 use dioxus::prelude::*;
 use pttstella::{
@@ -30,47 +29,40 @@ pub fn app(props: AppProps) -> Element {
     let filters_probe = props.filters_probe;
     let surface_probe = props.surface_probe.clone();
     let surface_probing = surface_probe.is_some();
+    let sample_case = surface_probe.clone();
     let verification_probing = surface_probe.as_deref() == Some("login_2fa");
     let dialogs_probing = matches!(
         surface_probe.as_deref(),
-        Some("dialogs" | "fonts" | "sgr66" | "sgr66_legacy")
+        Some("dialogs" | "fonts" | "sgr66" | "sgr66_legacy" | "osc8")
     );
-    let sgr66_probe = match surface_probe.as_deref() {
-        Some("sgr66") => Some(true),
-        Some("sgr66_legacy") => Some(false),
-        _ => None,
-    };
     let reload_settings = props.reload_settings;
     let media_origin = props.media_origin.clone();
     let owner = use_hook(move || {
-        (match sgr66_probe {
-            Some(modern) => super::probe::sgr66_sample(modern),
-            None => preview(probing, media_origin.as_deref()),
-        })
-        .and_then(|bytes| {
-            if verification_probing {
-                Connection::start_verification_probe()
-            } else if surface_probing {
-                if dialogs_probing {
-                    Connection::start_ui_probe(bytes)
+        super::probe::surface_sample(sample_case.as_deref(), probing, media_origin.as_deref())
+            .and_then(|bytes| {
+                if verification_probing {
+                    Connection::start_verification_probe()
+                } else if surface_probing {
+                    if dialogs_probing {
+                        Connection::start_ui_probe(bytes)
+                    } else {
+                        Connection::start_surface_probe()
+                    }
+                } else if filters_probe {
+                    Connection::start_filters_probe()
+                } else if login_probe {
+                    Connection::start_login_probe()
+                } else if window_probe {
+                    Connection::start_window_probe()
+                } else if probing {
+                    Connection::start_probe(bytes, reload_settings)
                 } else {
-                    Connection::start_surface_probe()
+                    let mut screen = Screen::new(80, 24).map_err(|error| error.to_string())?;
+                    screen.feed(&bytes);
+                    Connection::start(screen)
                 }
-            } else if filters_probe {
-                Connection::start_filters_probe()
-            } else if login_probe {
-                Connection::start_login_probe()
-            } else if window_probe {
-                Connection::start_window_probe()
-            } else if probing {
-                Connection::start_probe(bytes, reload_settings)
-            } else {
-                let mut screen = Screen::new(80, 24).map_err(|error| error.to_string())?;
-                screen.feed(&bytes);
-                Connection::start(screen)
-            }
-        })
-        .map(Arc::new)
+            })
+            .map(Arc::new)
     });
     let connection = match owner {
         Ok(connection) => connection,
