@@ -102,4 +102,4 @@ UI owner／封包變更再跑 `node --test tooling/test_surface_dialogs.mjs`。�
 
 作者與提交者使用 `yam276 <59956724+yam276@users.noreply.github.com>`；提交前檢查 repo-local Git identity。依使用者要求將初期開發歷史整理為一個提交，回復備份保存在 repo 外。
 
-介面翻譯變更另跑 `cargo test --locked --lib i18n::tests` 與 `node --test tooling/test_i18n.mjs tooling/test_surface_dialogs.mjs tooling/test_surface_lifetime.mjs`。比較兩語的 key 與參數，核對完整訊息與複數、不可信內容仍為文字，並操作兩語原生視窗驗證保存／取消／重啟。語言偏好失敗不改生效設定，不能重連或重送輸入；原生選檔視窗的系統按鈕由 OS 決定語言。
+介面翻譯變更另跑 `cargo test --locked --lib i18n::tests` 與 `node --test tooling/test_i18n.mjs tooling/test_media_i18n.mjs tooling/test_surface_dialogs.mjs tooling/test_surface_lifetime.mjs`。比較兩語的 key 與參數，核對完整訊息與複數、不可信內容仍為文字，並操作兩語原生視窗驗證保存／取消／重啟。媒體控制器的 DOM／network doubles 檢查中英文回饋、晚到結果與資源清理，不能當成 WebView 圖片解碼或 codec 驗收。語言偏好失敗不改生效設定，不能重連或重送輸入；原生選檔視窗的系統按鈕由 OS 決定語言。

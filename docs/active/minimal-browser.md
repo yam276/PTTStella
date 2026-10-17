@@ -18,6 +18,12 @@
 
 第三批將 Connection 狀態、登入／導覽／Vim notice、媒體／輸入／儲存等使用者可見錯誤改為具名 Fluent 訊息。需要擁有翻譯結果的錯誤／notice 由靜態字串改為 String；命令、bytes、辨識文字及既有 fixture／expected 未改。整合來源的 45 個 desktop lib、25 個 bin、desktop 全 targets Clippy 與 core 八套 suite／兩份 replay 通過，並完成候選 arm64 App 打包；原生兩語／重啟、PNG 與 Vim 回歸接續執行。CLI 探針診斷與第三方／OS 錯誤細節不當作可翻譯的站端文字。
 
+本輪整合驗證：18 個 JS 測試通過，包含真正生產媒體控制器配合 DOM／network doubles 的中英文圖片回饋、影片事件、失敗與清理。macOS WKWebView 中文程序確認取消英文草稿不寫檔，明確保存才將 v2 備份並遷移成 v3／en-US；當前 UI 保留中文並提示下次套用。另一程序讀回相同保存 bytes，工具列、設定、合成鑰匙圈登入／取消、原生選單與 PNG 面板標題均為英文。兩程序實際保存的 960×576 PTT PNG 逐像素相同，沒有站端輸入。
+
+英文 window probe 以 80／100ms 短按、轉頁後觀察畫面的節奏完成精確 40 筆 Vim 操作，包含五次切板、無重繪 gg／4j、三次進板圖及長按 l 一秒，保持 NORMAL、無額外 bytes。另三個嘗試分別使用 shift+g 或快速批次呼叫，在 step 3／22／8 未完成預期序列，保留為失敗、不計入通過，也不宣稱極速連發已驗證。英文 filters probe 完成四次保存、兩次揭露、原生複製事件、整頁／行 PNG 及翻頁往返，英文複數與行範圍可見。Pillow 核對遮黑區外像素差零、揭露等於原圖、選取行等於整頁，且返回圖與 i18n 前基準完全相同；上述四個通過程序均正常清理與 Close acknowledged。
+
+原生英文媒體案例因 CUA 座標點擊持續回報 noWindowsAvailable，提升視窗後仍無法操作，HTTP 請求為零，整合報告保留 failed／互動能力 not_ready；沒有以 DOM doubles 宣稱原生解碼／播放通過。完整 Mac desktop backend 亦保留 not_ready，未重驗 Windows／Linux、原生 IME／codec、實站登入與 OS 外開。最終 `dist/macos-i18n-delivery/PTTStella.app` 與實測候選 executable 的 SHA-256 相同、arm64／ad-hoc strict 驗章通過。功能分成三個提交，另以測試／驗證提交收尾；報告與像素保留於 `.local/verification/i18n`，未 push 或公開發佈。
+
 2026-10-17 第三輪：使用者授權將檔案操作移出 UI 事件迴圈，並集中 Rust 畫面與互動狀態。Files 持有單一可追蹤工作，設定／名單載入與保存、設定檔處理及 PNG 解碼／寫入交給 blocking pool；原生 picker 仍由 UI thread 擁有。忙碌拒絕不啟動 factory、不另加佇列；保存成功才更新生效設定／規則。關閉撤銷尚未開始工作，已開始的工作保留到 join；五秒未完成顯示等待，真實失敗併入清理結果。SurfaceState 統一持有待 ACK／已顯示畫面、遮黑、選取、hover 與匯出版本，來源或策略變更由同一處撤銷互動。
 
 獨立複查找到 P2：非同步選檔期間的 PNG 可能失去版本約束。已加入可撤銷 ExportLease 及直接觀察最新 Connection view 的檢查，在解碼後、選檔後及開始寫入前驗證；選取 PNG 另綁 input epoch。JS 清除／重選會發出有作用域的 SelectionCleared，Rust 只撤銷相符選取。八種延期選檔案例覆蓋規則、揭露、frame、session、選取、清除、輸入及顯示設定變更：舊 PNG 均不寫入，後續新請求仍實際保存。Agent 再次唯讀複查確認 P2 可關閉，未發現其他具體阻擋問題；這是程式與證據審閱，沒有代替另一人執行 GUI 或人工驗收。
