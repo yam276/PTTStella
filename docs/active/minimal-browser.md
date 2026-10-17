@@ -143,6 +143,8 @@ macOS 原生顯示正確的兩段網址及兩段本機圖片標籤，AX 匯出 P
 
 62 個 desktop lib、36 個 bin、33 個 JS、desktop all-targets Clippy 通過。新增案例涵蓋資料版本／格式／容量、大小寫去重、正式到達、同步／待輸入拒絕、重啟、損壞保留及明確恢復、備份與主檔清除失敗、慢 worker 合併不丟清除、picker 期間保存、關閉 drain 與失敗不假報成功。macOS 原生候選 App 完成兩次到達、草稿取消、最近項目只填草稿、超長拒絕、Beta 取消後晚到列表零續送；新程序還原 Other／Stella，清除後主檔及備份皆空，第三程序仍空。另在 Beta 等待中直接 ⌘Q，Close acknowledged、所有 owner join、無額外 bytes；同一候選重跑 46 筆 Vim／53 實體鍵維持 Normal 並正常結束。證據在 `.local/verification/recent-c2`，最新候選為 `dist/macos-recent-boards/PTTStella.app`；本輪仍只使用本機合成服務，不宣稱原生 IME、實站、其他 OS 或 C1 滑鼠驗收完成。接續 C3 AID／書籤。
 
+**C3 識別驗證已實作，導覽與入口接續**。新增 ArticleTarget／Aid，驗證八碼 raw identity、板名、M／G 及新舊文章檔名，將明確支援的 www.ptt.cc 文章網址與 #AID@Board 正規化為同一型別；拒絕控制碼、保留位元、時間超限、非預期 authority、顯式 port、query／fragment、編碼／dot path 與多餘路徑。四個純 Rust 案例使用手寫 expected，另跑 Fluent、core／Clippy／文件 gate；無新 UI 或 App 交付宣稱。站端 # 搜尋只移動選取，已核對資訊框提供 AID／板名的來源，下一批沿用有界工作逐步確認再開啟。契約見 [AID 與指定文章](../article-navigation.md)，證據保留 `.local/verification/aid-c3`；Session 接線、原生操作、書籤與 D 尚未完成。
+
 ## 維護性重構
 
 2026-10-17 傳統 BBS 字型：依公開的 PTT 官方終端預設及 Windows 客戶端資源確認 MingLiU／細明體是傳統選項，並非所有客戶端有唯一預設。新增 `windows_classic`（MingLiU／MingLiU）與 `macos_bbs`（Songti TC／Songti TC）；既有 Windows 黑體組合、macOS 黑體／宋體與平台初始值保留。新組合均明確選取，前者缺少時顯示兩角色載入警告及官方取得／授權頁，後者只稱本機宋體替代，不宣稱等同細明體。沒有加入第三方字型檔。
