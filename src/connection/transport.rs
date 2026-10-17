@@ -33,9 +33,9 @@ pub(super) async fn dial(endpoint: String) -> Result<Socket, String> {
         connect_async_tls_with_config(request, Some(config), false, connector),
     )
     .await
-    .map_err(|_| "連線逾時".to_owned())?
+    .map_err(|_| crate::msg!("connection-timeout").to_owned())?
     .map(|(socket, _)| socket)
-    .map_err(|e| format!("無法連線: {e}"))
+    .map_err(|e| crate::msg!("connection-failed", e = e.to_string()))
 }
 
 pub(super) fn tls_connector() -> Result<Connector, String> {
@@ -103,6 +103,6 @@ pub(super) async fn stop(socket: &mut Option<Socket>, dialing: &mut Option<Dial>
 pub(super) async fn send(socket: &mut Socket, message: Message) -> Result<(), String> {
     timeout(Duration::from_secs(3), socket.send(message))
         .await
-        .map_err(|_| "送出逾時；站端結果未知，未自動重送".to_owned())?
-        .map_err(|e| format!("送出失敗，未自動重送: {e}"))
+        .map_err(|_| crate::msg!("input-send-timeout").to_owned())?
+        .map_err(|e| crate::msg!("input-send-failed", e = e.to_string()))
 }

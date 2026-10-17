@@ -91,8 +91,8 @@ pub struct Connection {
 pub struct Reply {
     answer: oneshot::Receiver<Result<(), String>>,
     deadline: tokio::time::Instant,
-    expired: &'static str,
-    closed: &'static str,
+    expired: String,
+    closed: String,
 }
 impl Reply {
     pub async fn wait(self) -> Result<(), String> {
@@ -127,7 +127,7 @@ impl Connection {
             frame: screen.frame(),
             generation: 0,
             phase: Phase::Disconnected,
-            message: "尚未連線 — 點選連線後手動登入 PTT".into(),
+            message: crate::msg!("status-offline"),
             received: 0,
         };
         let (sender, updates) = watch::channel(initial);
@@ -182,7 +182,10 @@ impl Connection {
             listener.local_addr().map_err(|e| e.to_string())?
         );
         let listener = tokio::net::TcpListener::from_std(listener).map_err(|e| e.to_string())?;
-        let connection = Self::start_at(Screen::new(80, 24).map_err(str::to_owned)?, endpoint)?;
+        let connection = Self::start_at(
+            Screen::new(80, 24).map_err(|error| error.to_string())?,
+            endpoint,
+        )?;
         let peer = runtime.spawn(probe::serve(listener, bytes, scenario));
         *connection
             .probe_peer
@@ -205,7 +208,7 @@ impl Connection {
     }
     pub fn input(&self, generation: u64, bytes: Vec<u8>) -> Result<(), String> {
         if bytes.is_empty() || bytes.len() > MAX_INPUT_BYTES {
-            return Err("輸入長度超過限制".into());
+            return Err(crate::msg!("input-too-large"));
         }
         self.enqueue(Command::Input { generation, bytes })
     }
@@ -222,8 +225,8 @@ impl Connection {
         Ok(Reply {
             answer,
             deadline: tokio::time::Instant::now() + Duration::from_secs(6),
-            expired: "登入送出結果未確認；不會重試",
-            closed: "登入服務未回覆",
+            expired: crate::msg!("login-send-unconfirmed"),
+            closed: crate::msg!("login-service-unavailable"),
         })
     }
     pub fn cancel_login(&self) -> Result<(), String> {
@@ -257,14 +260,14 @@ impl Connection {
         Ok(Reply {
             answer,
             deadline: tokio::time::Instant::now() + Duration::from_secs(6),
-            expired: "導覽傳送逾時，結果未確認；不會自動重送",
-            closed: "連線服務未回報導覽結果",
+            expired: crate::msg!("navigation-timeout"),
+            closed: crate::msg!("navigation-service-unavailable"),
         })
     }
     fn enqueue(&self, command: Command) -> Result<(), String> {
         self.commands
             .try_send(command)
-            .map_err(|_| "操作佇列已滿或連線服務已結束".into())
+            .map_err(|_| crate::msg!("connection-queue-full"))
     }
     pub async fn shutdown(&self) -> Result<CloseOutcome, String> {
         if self
@@ -277,7 +280,11 @@ impl Connection {
                 .shutdown_result
                 .lock()
                 .map_err(|_| "shutdown result lock failed".to_owned())
-                .and_then(|result| result.clone().ok_or("連線清理結果尚未確認".to_owned())?);
+                .and_then(|result| {
+                    result
+                        .clone()
+                        .ok_or(crate::msg!("connection-cleanup-unconfirmed").to_owned())?
+                });
         }
         let (done, receiver) = oneshot::channel();
         // Keep the enqueue alive if the bounded queue is full: canceling it on
@@ -285,9 +292,11 @@ impl Connection {
         let outcome = match self.commands.send(Command::Shutdown(done)).await {
             Ok(()) => timeout(Duration::from_secs(5), receiver)
                 .await
-                .map_err(|_| "連線清理逾時".to_owned())
-                .and_then(|result| result.map_err(|_| "連線清理未完成".to_owned())),
-            Err(_) => Err("連線服務已結束".to_owned()),
+                .map_err(|_| crate::msg!("connection-cleanup-timeout").to_owned())
+                .and_then(|result| {
+                    result.map_err(|_| crate::msg!("connection-cleanup-incomplete").to_owned())
+                }),
+            Err(_) => Err(crate::msg!("connection-service-stopped").to_owned()),
         };
         let mut errors = Vec::new();
         let task = self
@@ -299,7 +308,10 @@ impl Connection {
             // Preserve the owner even when the acknowledgement failed. Its
             // bounded transport work still has to finish and join its dial.
             if let Err(error) = task.await {
-                errors.push(format!("連線工作失敗: {error}"));
+                errors.push(crate::msg!(
+                    "connection-task-failed",
+                    error = error.to_string()
+                ));
             }
         }
         let peer = self
@@ -344,7 +356,7 @@ mod worker;
 
 /// Explicit no-credential network probe, separate from ordinary gates.
 pub async fn probe_live() -> Result<serde_json::Value, String> {
-    let connection = Connection::start(Screen::new(80, 24).map_err(str::to_owned)?)?;
+    let connection = Connection::start(Screen::new(80, 24).map_err(|error| error.to_string())?)?;
     let mut updates = connection.updates.clone();
     connection.connect()?;
     let observed = timeout(Duration::from_secs(20), async {

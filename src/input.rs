@@ -15,14 +15,13 @@ pub enum InputError {
 impl fmt::Display for InputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Empty => f.write_str("剪貼簿沒有文字"),
-            Self::TooLong => f.write_str("輸入超過 4096 個 Big5-UAO bytes；整段未送出"),
-            Self::Unencodable => f.write_str("文字含無法以 Big5-UAO 傳送的字元；整段未送出"),
-            Self::Control(ch) => write!(
-                f,
-                "一般貼上不接受控制字元 U+{:04X}；整段未送出",
-                u32::from(*ch)
-            ),
+            Self::Empty => f.write_str(&crate::msg!("input-empty")),
+            Self::TooLong => f.write_str(&crate::msg!("input-bytes-limit")),
+            Self::Unencodable => f.write_str(&crate::msg!("input-unencodable")),
+            Self::Control(code) => f.write_str(&crate::msg!(
+                "input-control",
+                value1 = format!("{:04X}", u32::from(*code))
+            )),
         }
     }
 }

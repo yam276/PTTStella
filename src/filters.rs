@@ -39,40 +39,41 @@ pub fn valid_id(id: &str) -> bool {
         && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 impl Rules {
-    pub fn validate(&self) -> Result<(), &'static str> {
+    pub fn validate(&self) -> Result<(), String> {
         if self.version != 1 {
-            return Err("不支援的名單版本；原檔保留");
+            return Err(crate::msg!("filters-version"));
         }
         if self.entries.len() > MAX_ENTRIES {
-            return Err("一般黑名單最多 512 筆");
+            return Err(crate::msg!("filters-capacity"));
         }
         for (i, entry) in self.entries.iter().enumerate() {
             if !valid_id(&entry.id) {
-                return Err("ID 須為 1–12 個英數或底線，並以英文字母開頭");
+                return Err(crate::msg!("filters-id-invalid"));
             }
             if entry.note.chars().count() > 128 || entry.note.chars().any(char::is_control) {
-                return Err("備註最多 128 字，不能包含控制字元");
+                return Err(crate::msg!("filters-note-invalid"));
             }
             if self.entries[..i]
                 .iter()
                 .any(|e| e.id.eq_ignore_ascii_case(&entry.id))
             {
-                return Err("名單含重複 ID；原檔保留");
+                return Err(crate::msg!("filters-duplicate"));
             }
         }
         Ok(())
     }
     pub fn decode(bytes: &[u8]) -> Result<Self, String> {
         if bytes.len() > MAX_BYTES {
-            return Err("名單超過 256 KiB；原檔保留".into());
+            return Err(crate::msg!("filters-too-large"));
         }
-        let rules: Self = serde_json::from_slice(bytes).map_err(|_| "名單格式不正確；原檔保留")?;
-        rules.validate().map_err(str::to_owned)?;
+        let rules: Self =
+            serde_json::from_slice(bytes).map_err(|_| crate::msg!("filters-invalid"))?;
+        rules.validate().map_err(|error| error.to_string())?;
         Ok(rules)
     }
     pub fn edit(&self, id: &str, note: &str, remove: bool) -> Result<Self, String> {
         if !valid_id(id) {
-            return Err("ID 須為 1–12 個英數或底線，並以英文字母開頭".into());
+            return Err(crate::msg!("filters-id-invalid"));
         }
         let mut next = self.clone();
         let existing = next
@@ -83,7 +84,7 @@ impl Rules {
             (Some(i), true) => {
                 next.entries.remove(i);
             }
-            (None, true) => return Err("找不到這個 ID；名單未變更".into()),
+            (None, true) => return Err(crate::msg!("filters-id-missing")),
             (Some(i), false) => {
                 next.entries[i] = Entry {
                     id: id.into(),
@@ -95,7 +96,7 @@ impl Rules {
                 note: note.into(),
             }),
         }
-        next.validate().map_err(str::to_owned)?;
+        next.validate().map_err(|error| error.to_string())?;
         Ok(next)
     }
 }

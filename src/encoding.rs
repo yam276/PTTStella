@@ -5,7 +5,7 @@ use std::fmt;
 pub struct Unencodable;
 impl fmt::Display for Unencodable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("文字無法以目前的 Big5-UAO 映射送出")
+        f.write_str(&crate::msg!("encoding-unencodable"))
     }
 }
 impl std::error::Error for Unencodable {}

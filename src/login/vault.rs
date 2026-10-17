@@ -16,7 +16,7 @@ impl Job {
             .spawn(move || {
                 let _ = sender.send(vault.perform(action));
             })
-            .map_err(|_| "無法啟動鑰匙圈工作".to_owned())?;
+            .map_err(|_| crate::msg!("vault-start-failed").to_owned())?;
         Ok(Self {
             worker: Some(worker),
             result,
@@ -25,7 +25,7 @@ impl Job {
     pub async fn wait(&mut self) -> Result<Outcome, String> {
         (&mut self.result)
             .await
-            .map_err(|_| "鑰匙圈工作未完成".to_owned())?
+            .map_err(|_| crate::msg!("vault-incomplete").to_owned())?
     }
 }
 impl Drop for Job {
@@ -82,13 +82,13 @@ impl Vault {
                 remember,
             } => {
                 let credentials = if password.is_empty() {
-                    let credentials = self.load()?.ok_or("沒有已存密碼；請輸入密碼")?;
+                    let credentials = self.load()?.ok_or(crate::msg!("vault-password-missing"))?;
                     if credentials.account != account {
-                        return Err("帳號與已存密碼不符；請輸入此帳號的密碼".into());
+                        return Err(crate::msg!("vault-account-mismatch"));
                     }
                     credentials
                 } else {
-                    Credentials::new(account, password).map_err(str::to_owned)?
+                    Credentials::new(account, password).map_err(|error| error.to_string())?
                 };
                 if remember {
                     self.save(&credentials)?;
@@ -111,14 +111,14 @@ impl Vault {
             Ok(bytes) => {
                 let bytes = Zeroizing::new(bytes);
                 if bytes.len() > 128 {
-                    return Err("鑰匙圈資料超過限制；請移除後重設".into());
+                    return Err(crate::msg!("vault-record-too-large"));
                 }
                 Credentials::from_stored(bytes)
                     .map(Some)
-                    .map_err(str::to_owned)
+                    .map_err(|error| error.to_string())
             }
             Err(e) if e.code() == -25300 => Ok(None),
-            Err(e) => Err(format!("無法讀取鑰匙圈（{}）；可取消並手動登入", e.code())),
+            Err(e) => Err(crate::msg!("vault-read-failed", value1 = e.code())),
         }
     }
     #[cfg(target_os = "macos")]
@@ -128,27 +128,27 @@ impl Vault {
             "default",
             &credentials.stored(),
         )
-        .map_err(|e| format!("密碼未保存：鑰匙圈拒絕寫入（{}）；未送出登入", e.code()))
+        .map_err(|e| crate::msg!("vault-save-failed", value1 = e.code()))
     }
     #[cfg(target_os = "macos")]
     fn forget(&self) -> Result<(), String> {
         match security_framework::passwords::delete_generic_password(&self.service, "default") {
             Ok(()) => Ok(()),
             Err(e) if e.code() == -25300 => Ok(()),
-            Err(e) => Err(format!("鑰匙圈移除失敗（{}）；已存資料保留", e.code())),
+            Err(e) => Err(crate::msg!("vault-remove-failed", value1 = e.code())),
         }
     }
     #[cfg(not(target_os = "macos"))]
     fn load(&self) -> Result<Option<Credentials>, String> {
         let _ = &self.service;
-        Err("此平台尚未提供安全儲存；請使用原始輸入手動登入".into())
+        Err(crate::msg!("vault-manual-only").into())
     }
     #[cfg(not(target_os = "macos"))]
     fn save(&self, _: &Credentials) -> Result<(), String> {
-        Err("此平台尚未提供安全儲存".into())
+        Err(crate::msg!("vault-unavailable").into())
     }
     #[cfg(not(target_os = "macos"))]
     fn forget(&self) -> Result<(), String> {
-        Err("此平台尚未提供安全儲存".into())
+        Err(crate::msg!("vault-unavailable").into())
     }
 }

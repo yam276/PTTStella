@@ -143,7 +143,7 @@ impl Session {
             Some(Command::Input { generation, bytes }) => self.input(generation, &bytes).await,
             Some(Command::CancelLogin) => {
                 self.login_attempt = None;
-                self.view.message = "已取消登入；不會重送帳密".into();
+                self.view.message = crate::msg!("login-cancelled");
                 self.dirty = true;
             }
             Some(Command::Login {
@@ -203,7 +203,7 @@ impl Session {
         self.view.input_epoch = 0;
         self.view.input_pending = false;
         self.view.phase = Phase::Connecting;
-        self.view.message = "正在連線 PTT…".into();
+        self.view.message = crate::msg!("status-connecting");
         self.dialing = Some(tokio::spawn(transport::dial(self.endpoint.clone())));
         self.dirty = true;
     }
@@ -221,14 +221,13 @@ impl Session {
         self.last_close = self.stop().await;
         self.view.phase = Phase::Disconnected;
         self.view.message = match self.last_close {
-            CloseOutcome::Acknowledged => "本機已斷線（站端已回覆關閉）",
+            CloseOutcome::Acknowledged => crate::msg!("disconnect-acknowledged"),
             CloseOutcome::PeerClosedWithoutReply => {
-                "已送出關閉通知；站端已結束連線（未回覆 Close）"
+                crate::msg!("disconnect-peer-ended")
             }
-            CloseOutcome::NoConnection => "本機已斷線（沒有使用中的連線）",
-            CloseOutcome::Unconfirmed => "本機連線已關閉；站端回覆未確認",
-        }
-        .into();
+            CloseOutcome::NoConnection => crate::msg!("disconnect-no-connection"),
+            CloseOutcome::Unconfirmed => crate::msg!("disconnect-unconfirmed"),
+        };
         self.dirty = true;
     }
 
@@ -238,10 +237,13 @@ impl Session {
             Ok(Ok(connection)) => {
                 self.socket = Some(connection);
                 self.view.phase = Phase::Connected;
-                self.view.message = "已連線 — 請在畫面內手動登入 PTT".into();
+                self.view.message = crate::msg!("status-connected");
             }
             Ok(Err(error)) => self.fail(error),
-            Err(error) => self.fail(format!("連線工作失敗: {error}")),
+            Err(error) => self.fail(crate::msg!(
+                "connection-task-failed",
+                error = error.to_string()
+            )),
         }
         self.dirty = true;
     }
@@ -282,7 +284,7 @@ impl Session {
             return;
         }
         if generation != self.view.generation || self.socket.is_none() {
-            self.view.message = "尚未連線或輸入屬於舊連線；未送出".into();
+            self.view.message = crate::msg!("input-stale");
             self.dirty = true;
             return;
         }
@@ -295,13 +297,13 @@ impl Session {
 
     async fn login(&mut self, stamp: Stamp, credentials: Credentials) -> Result<(), String> {
         if self.view.phase != Phase::Connected || self.socket.is_none() || stamp != self.stamp() {
-            return Err("連線或畫面已改變；未送出登入".into());
+            return Err(crate::msg!("login-stale"));
         }
         if self.login_attempt.is_some()
             || self.pending_input.is_some()
             || login::prompt(&self.screen.frame()) != Some(Prompt::Account)
         {
-            return Err("請先回到空白的 PTT 帳號提示；未送出登入".into());
+            return Err(crate::msg!("login-not-account-prompt"));
         }
         self.idle.activity(Instant::now());
         self.write_input(&credentials.account_input()).await?;
@@ -309,7 +311,7 @@ impl Session {
             credentials,
             deadline: Instant::now() + Duration::from_secs(15),
         });
-        self.view.message = "已送出帳號，等待密碼提示；任何手動輸入會取消登入".into();
+        self.view.message = crate::msg!("login-await-password");
         Ok(())
     }
 
@@ -382,9 +384,7 @@ impl Session {
     async fn receive(&mut self, incoming: Option<Result<Message, SocketError>>) {
         match incoming {
             Some(Ok(Message::Binary(bytes))) => self.receive_bytes(&bytes).await,
-            Some(Ok(Message::Text(_))) => {
-                self.fail("站端回傳非預期文字 framing；未轉碼猜測".into())
-            }
+            Some(Ok(Message::Text(_))) => self.fail(crate::msg!("connection-text-frame")),
             Some(Ok(Message::Ping(payload))) => {
                 if let Some(socket) = self.socket.as_mut()
                     && let Err(error) = transport::send(socket, Message::Pong(payload)).await
@@ -401,22 +401,25 @@ impl Session {
                 self.view.phase = Phase::Disconnected;
                 self.view.message = match frame {
                     Some(frame) if frame.reason.is_empty() => {
-                        format!("站端已關閉連線（{}）", u16::from(frame.code))
+                        crate::msg!("peer-closed-code", value1 = u16::from(frame.code))
                     }
-                    Some(frame) => format!(
-                        "站端已關閉連線（{}）：{}",
-                        u16::from(frame.code),
-                        frame.reason
+                    Some(frame) => crate::msg!(
+                        "peer-closed-reason",
+                        value1 = u16::from(frame.code),
+                        value2 = frame.reason.to_string()
                     ),
-                    None => "站端已關閉連線（未提供原因）".into(),
+                    None => crate::msg!("peer-closed-no-reason"),
                 };
             }
             None => {
                 self.socket = None;
                 self.view.phase = Phase::Disconnected;
-                self.view.message = "站端連線已結束（未收到關閉原因）".into();
+                self.view.message = crate::msg!("peer-ended");
             }
-            Some(Err(error)) => self.fail(format!("連線中斷: {error}")),
+            Some(Err(error)) => self.fail(crate::msg!(
+                "connection-interrupted",
+                error = error.to_string()
+            )),
             Some(Ok(_)) => {}
         }
         self.dirty = true;
@@ -446,12 +449,11 @@ impl Session {
                         .await
                         .is_ok()
                     {
-                        self.view.message =
-                            "帳密已送出；登入結果請確認站端畫面，不會自動重試".into();
+                        self.view.message = crate::msg!("login-sent");
                         self.wait_for_input(false);
                     }
                 } else {
-                    self.view.message = "登入等待逾時；未送出密碼".into();
+                    self.view.message = crate::msg!("login-password-timeout");
                 }
             }
         } else if self.login_attempt.is_some()
@@ -461,7 +463,7 @@ impl Session {
             )
         {
             self.login_attempt = None;
-            self.view.message = "畫面已離開登入提示；未送出密碼".into();
+            self.view.message = crate::msg!("login-left-prompt");
         }
     }
 
@@ -479,11 +481,10 @@ impl Session {
             && self.view.phase == Phase::Connected
         {
             self.view.message = if enabled {
-                "已連線 — 防閒置已開啟"
+                crate::msg!("status-keepalive-on")
             } else {
-                "已連線 — 防閒置已暫停"
-            }
-            .into();
+                crate::msg!("status-keepalive-off")
+            };
         }
         self.idle.enable(enabled, Instant::now());
         self.view.keep_alive = enabled;
@@ -525,7 +526,7 @@ impl Session {
             .is_some_and(|attempt| now >= attempt.deadline)
         {
             self.login_attempt = None;
-            self.view.message = "登入等待逾時；未送出密碼，不會重試".into();
+            self.view.message = crate::msg!("login-expired");
             self.dirty = true;
         }
     }
@@ -536,11 +537,10 @@ impl Session {
             if matches!(self.pending_input, Some(PendingInput::Refresh { .. })) {
                 self.idle.enable(false, now);
                 self.view.keep_alive = false;
-                self.view.message = "防閒置未收到畫面更新，已暫停；手動操作仍可使用".into();
+                self.view.message = crate::msg!("keepalive-unanswered");
                 self.view.keep_alive_failure = Some(self.view.message.clone());
             } else {
-                self.view.message =
-                    "未收到畫面更新，操作結果未確認；可繼續手動操作，不會自動重送".into();
+                self.view.message = crate::msg!("input-unanswered");
             }
             self.pending_input = None;
             self.dirty = true;

@@ -15,22 +15,22 @@ impl Store {
         Self { path }
     }
     pub fn system() -> Result<Self, String> {
-        let dirs =
-            directories::ProjectDirs::from("", "", "PTTStella").ok_or("無法找出名單設定目錄")?;
+        let dirs = directories::ProjectDirs::from("", "", "PTTStella")
+            .ok_or(crate::msg!("filters-directory-missing"))?;
         Ok(Self::at(dirs.config_dir().join("filters.json")))
     }
     fn read(&self) -> Result<Option<Vec<u8>>, String> {
         let file = match File::open(&self.path) {
             Ok(f) => f,
             Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(format!("無法讀取名單：{e}")),
+            Err(e) => return Err(crate::msg!("filters-read-failed", e = e.to_string())),
         };
         let mut bytes = Vec::new();
         file.take((MAX_BYTES + 1) as u64)
             .read_to_end(&mut bytes)
-            .map_err(|e| format!("無法讀取名單：{e}"))?;
+            .map_err(|e| crate::msg!("filters-read-failed", e = e.to_string()))?;
         if bytes.len() > MAX_BYTES {
-            return Err("名單超過 256 KiB；原檔保留".into());
+            return Err(crate::msg!("filters-too-large"));
         }
         Ok(Some(bytes))
     }
@@ -39,14 +39,15 @@ impl Store {
             .map_or_else(|| Ok(Rules::default()), |b| Rules::decode(&b))
     }
     pub fn save(&self, rules: Rules) -> Result<Rules, String> {
-        rules.validate().map_err(str::to_owned)?;
+        rules.validate().map_err(|error| error.to_string())?;
         let bytes = serde_json::to_vec_pretty(&rules).map_err(|e| e.to_string())?;
         if bytes.len() > MAX_BYTES {
-            return Err("名單超過 256 KiB".into());
+            return Err(crate::msg!("filters-save-too-large"));
         }
         let previous = self.read()?;
         if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| format!("無法建立名單目錄：{e}"))?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| crate::msg!("filters-directory-failed", e = e.to_string()))?;
         }
         if let Some(previous) = previous {
             crate::storage::replace(&self.path.with_extension("json.bak"), &previous)?;

@@ -10,17 +10,17 @@ pub struct Credentials {
     password: Zeroizing<Vec<u8>>,
 }
 impl Credentials {
-    pub fn new(account: String, password: Zeroizing<Vec<u8>>) -> Result<Self, &'static str> {
+    pub fn new(account: String, password: Zeroizing<Vec<u8>>) -> Result<Self, String> {
         if !(2..=12).contains(&account.len())
             || !account.as_bytes()[0].is_ascii_alphabetic()
             || !account.bytes().all(|b| b.is_ascii_alphanumeric())
             || ["guest", "new", "register", "recover"]
                 .contains(&account.to_ascii_lowercase().as_str())
         {
-            return Err("帳號須為 2–12 個英數字、英文開頭，且不可為訪客或註冊指令");
+            return Err(crate::msg!("login-account-invalid"));
         }
         if !(1..=72).contains(&password.len()) || !password.iter().all(|b| (32..=126).contains(b)) {
-            return Err("密碼須為 1–72 個可列印的英數符號，不可包含換行或控制碼");
+            return Err(crate::msg!("login-password-invalid"));
         }
         Ok(Self { account, password })
     }
@@ -42,12 +42,13 @@ impl Credentials {
         bytes
     }
     #[cfg(all(feature = "desktop", target_os = "macos"))]
-    fn from_stored(bytes: Zeroizing<Vec<u8>>) -> Result<Self, &'static str> {
+    fn from_stored(bytes: Zeroizing<Vec<u8>>) -> Result<Self, String> {
         let Some(separator) = bytes.iter().position(|b| *b == 0) else {
-            return Err("鑰匙圈資料格式不符；請重新輸入");
+            return Err(crate::msg!("vault-record-invalid"));
         };
         let (account, password) = (&bytes[..separator], &bytes[separator + 1..]);
-        let account = std::str::from_utf8(account).map_err(|_| "鑰匙圈帳號格式不符")?;
+        let account =
+            std::str::from_utf8(account).map_err(|_| crate::msg!("vault-account-invalid"))?;
         Self::new(account.to_owned(), Zeroizing::new(password.to_vec()))
     }
 }

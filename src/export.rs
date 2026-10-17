@@ -9,13 +9,13 @@ pub const MAX_PNG_BYTES: usize = 3 * 1024 * 1024;
 pub const MAX_BASE64_BYTES: usize = MAX_PNG_BYTES.div_ceil(3) * 4;
 
 /// This checks bridge shape/budget, not arbitrary PNG image validity.
-pub fn check_export_header(bytes: &[u8], rows: &Range<usize>) -> Result<(), &'static str> {
+pub fn check_export_header(bytes: &[u8], rows: &Range<usize>) -> Result<(), String> {
     if rows.start >= rows.end || rows.end > ROWS {
-        return Err("PNG 行範圍不正確");
+        return Err(crate::msg!("export-rows-invalid"));
     }
     let height = (rows.end - rows.start) as u32 * ROW_HEIGHT;
     if bytes.len() > MAX_PNG_BYTES {
-        return Err("PNG 超過匯出大小上限");
+        return Err(crate::msg!("export-too-large"));
     }
     if bytes.len() < 33
         || &bytes[..8] != b"\x89PNG\r\n\x1a\n"
@@ -27,7 +27,7 @@ pub fn check_export_header(bytes: &[u8], rows: &Range<usize>) -> Result<(), &'st
         || !matches!(bytes[25], 2 | 6)
         || bytes[26..29] != [0, 0, 0]
     {
-        return Err("PNG 匯出標頭或尺寸不正確");
+        return Err(crate::msg!("export-header-invalid"));
     }
     Ok(())
 }

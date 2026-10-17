@@ -33,7 +33,7 @@ pub struct SelectedText {
 }
 
 /// Inclusive cell endpoints expand to whole glyphs. Text retains all selected spaces.
-pub fn extract(frame: &Frame, selection: &Selection) -> Result<SelectedText, &'static str> {
+pub fn extract(frame: &Frame, selection: &Selection) -> Result<SelectedText, String> {
     let (anchor, focus) = match *selection {
         Selection::Range { anchor, focus } => (anchor, focus),
         Selection::Line { row } => (
@@ -57,7 +57,7 @@ pub fn extract(frame: &Frame, selection: &Selection) -> Result<SelectedText, &'s
             .iter()
             .any(|p| p.col >= frame.cols || p.row >= frame.rows)
     {
-        return Err("選取範圍超出畫面");
+        return Err(crate::msg!("selection-outside"));
     }
     let (start, end) = if (anchor.row, anchor.col) <= (focus.row, focus.col) {
         (anchor, focus)

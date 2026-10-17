@@ -23,15 +23,15 @@ pub struct Target {
     pub image_url: Option<String>,
 }
 
-pub fn validate(value: &str) -> Result<Url, &'static str> {
+pub fn validate(value: &str) -> Result<Url, String> {
     let url = crate::links::validate(value)?;
     if !url.username().is_empty() || url.password().is_some() {
-        return Err("媒體網址不能包含帳號密碼");
+        return Err(crate::msg!("media-url-credentials"));
     }
     Ok(url)
 }
 
-pub fn classify(value: &str) -> Result<Option<Target>, &'static str> {
+pub fn classify(value: &str) -> Result<Option<Target>, String> {
     let url = validate(value)?;
     let path = url.path().to_ascii_lowercase();
     let extension = path.rsplit('.').next().unwrap_or_default();
