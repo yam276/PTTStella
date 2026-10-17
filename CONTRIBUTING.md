@@ -88,6 +88,10 @@ macOS 本機 `.app` 的建立入口為 `python3 tooling/bundle_macos.py`，細�
 
 OSC 8 變更另跑 `node --test tooling/test_surface_links.mjs`；它以事件／狀態 doubles 直接執行生產 handler，核對任一片段選取索引、組字／非連結拒絕及一次 released hit 的版本檢查，不冒充原生拖曳。`--probe-surface OUTPUT_DIRECTORY osc8 --media-origin http://127.0.0.1:PORT` 使用 owned loopback 與自製 HTTP 圖像。原生依序點第 9／10 列各一次、右鍵並複製各一次、跨兩列拖曳、開啟第 15／16 列圖片並分別關閉、匯出 PNG，再正常關窗。嚴格報告要求兩列開啟／複製、跨列 range、兩次圖片解碼及 PNG；缺輸入 backend 為 not_ready，PNG 或正常退出不能代替互動通過。
 
+macOS CUA 若一般視窗座標不可用，可在獨立 probe 直接用 ⌃⌘F 進全螢幕，再按「符合視窗」並取得新 screenshot。截圖可能帶原生視窗的垂直偏移；先以右鍵選取的「選取行 PNG」第 9／10 行提示確認實際命中，再執行嚴格順序，不固定沿用其他視窗座標。以 DOM dialog 的關閉按鈕離開預覽／草稿可保留全螢幕；Escape 可能同時離開全螢幕。不要在原生視窗選單中透過 App 的按鍵介面按 Escape 當作關單，應用當前 AX 暴露的 Cancel 動作，避免送入 BBS。完整圖片判讀使用完整 screenshot；差分圖不能當作缺像素。
+
+原生剪貼簿可在各次右鍵／Cmd-C 後，開啟本機書籤草稿並用 Cmd-V 貼回，核對 `https://example.com/pttstella?complete=one-two&tail=both`，再關閉、不保存。兩次必須相同完整 URL；嚴格資料仍需 open／copy rows `[8,9]`、dragged、兩次 decoded、PNG、HTTP `/colours.png` 一次及所有清理。此流程只替代 OS 外開為 probe sink，不連第三方網站；與先前失敗報告分開保留。
+
 UI 准入與生命週期變更另跑 `cargo test --locked --features desktop --bin pttstella` 及 `node --test tooling/test_surface_lifetime.mjs`（Node 18+）。前者檢查單筆命令等待／取消、立即入列與 busy 不執行 factory、事件來源與 session、組字例外及超時保留清理；desktop lib 另用實際 WebSocket 比對 browse 在原始 Enter 之前入列，尚未 poll 回覆也不能改變順序。後者以 fake channel 驗證生產 JS stop owner 的正常接收、資料通道失敗、停止後不新增 receive，以及兩萬個封包不累積 unresolved stop Promise 的 reaction，沒有操作瀏覽器。
 
 快速切板 UI 另跑 `node --test tooling/test_surface_navigation.mjs`，檢查本機快捷鍵、IME Enter／229、取消／晚到回覆、session 改變、草稿及 dispose。`--probe-surface OUTPUT_DIRECTORY boards` 由 owned peer 核對 Stella／Other 兩次完整流程，再等待 Beta 的返回並延遲 3 秒；應在同一次 UI 自動化呼叫內觀察最新 AX「停止導覽」並立即點擊，以免人與工具回合超過延遲。另需取消未確認草稿、輸入超長名稱確認完整保留並被拒絕，最後等晚到列表、正常關窗。嚴格結果須為兩個正式到達、至少一次拒絕、有效取消及無額外 bytes；若超過測試間隔而續送，保留失敗，不調整 expected 放行。

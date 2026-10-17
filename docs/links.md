@@ -20,3 +20,7 @@ Frame 保留 Rust 專用 metadata，不序列化到 WebView；UI 只收到通過
 連結 hover 顯示完整實際目的地；點擊沿用 Rust 的媒體分類或明確外開。一般拖曳複製畫面文字；右鍵選取連結後複製完整目的地，任一跨行片段都對應同一網址。選取與點擊仍核對同一 presentation、generation、revision；過期索引不作用於新畫面。選取行 PNG 仍匯出畫面行，不把完整目的地另畫進圖片。
 
 核心在 interaction／filters suite 使用自製串流與獨立 expected，覆蓋逐切點、逐 byte、BEL／ST、跨行雙寬字、替換／關閉、混合屬性、惡意 scheme／控制字元、覆寫／擦除／插入／刪除／捲動、容量與 slot 回收、遮黑及 reset。原生互動、平台與實站驗收狀態見 [active plan](active/minimal-browser.md)，核心通過不代表各平台點擊與剪貼簿已驗收。
+
+2026-10-17 macOS 補驗：在已交付書籤 App 的獨立 probe 程序，以全螢幕／符合視窗取得可用原生座標事件。嚴格報告核對兩段依序各開啟／複製一次、跨行拖曳無額外外開、兩個 PNG 預覽真正解碼且第二次命中快取，HTTP 只下載一次。兩次 Cmd-C 後以 Cmd-V 貼回本機草稿，均觀察到同一完整合成 URL；未保存書籤或送站端 bytes。整頁 PNG 與先前相同場景基準逐像素相同，⌘Q Close acknowledged、所有 owner join、退出碼 0。
+
+先前 `noWindowsAvailable` 與兩次校對試驗的失敗仍保留；本次只解除這個指定 OSC 8 原生案例的 not_ready。沒有宣稱一般視窗的所有座標、任意 DPI、其他 OS、影片／GIF、真正 OS 外開或實站全部驗收。重跑方式見 CONTRIBUTING，報告與基準保留 `.local/verification/osc8-pointer-recovery`。
