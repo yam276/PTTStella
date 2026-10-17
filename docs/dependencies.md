@@ -44,3 +44,5 @@ WSS 使用系統信任根、驗證站端憑證與主機名稱；TLS 設定屬於
 [語言 bootstrap wire](../tests/fixtures/localization.json) 為獨立手寫的最小中英文例子，Rust 比對 serialization，JS 分別消費相同資源；不是由 serializer 產生 expected。
 
 [書籤資料](../tests/fixtures/bookmarks.json) 為本專案獨立手寫、可隨產品散布的 synthetic expected，只有虛構板名、手算 AID、中文標籤與固定時間，不含私人文章或帳號；供資料核心及後續 UI wire 核對。
+
+[滑鼠模式 trace](../tests/fixtures/mouse-modes.json) 同樣為本專案自行編寫、可隨產品散布的合成控制碼與獨立 expected；只有模式／編碼／epoch，不含站端內容或外部資產。協定依據與未支援範圍見 [站端滑鼠](station-mouse.md)。

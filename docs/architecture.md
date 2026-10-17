@@ -36,6 +36,7 @@ manual keyboard input → session-owned send queue → connection
 | [connection/worker](../src/connection/worker.rs) | Session 唯一擁有 Screen、socket、登入等待、單一目的地導覽與輸入等待；具名方法處理登入、導覽、保活與發布，select 只分派事件 |
 | [navigation_job](../src/navigation_job.rs)／[article_navigation](../src/article_navigation.rs) | Board／Article 的封閉目的地型別及純導覽 reducer；文章組合既有切板、AID 搜尋與資訊核對，Session 唯一排程及發鍵 |
 | [bookmarks](../src/bookmarks.rs)／[bookmarks/store](../src/bookmarks/store.rs) | 明確文章識別的有界本機資料、名稱／建立時間、版本驗證、備份與原子替換；不讀取畫面或送鍵 |
+| [mouse](../src/mouse.rs) | Screen 擁有的站端模式／epoch 與有界 SGR press／release encoder；只有格式子集，送出 owner／UI 尚待接線 |
 | [connection/transport](../src/connection/transport.rs) | TLS／WSS 連線、有界寫入及正常關閉握手；不解讀畫面或決定瀏覽動作 |
 | [ui/app](../src/ui/app.rs) | Dioxus 畫面、原生關窗事件與啟動接線 |
 | [ui/protocol](../src/ui/protocol.rs) | WebView 結構化事件、serde wire 格式及共同輸入准入；沒有副作用 |
