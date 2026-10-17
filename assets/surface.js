@@ -167,7 +167,7 @@ function restoreEditingFocus(){keyboard.blur();focus();}
 function pointerdown(e) {
     if(e.button!==0||!e.isPrimary||dragging) return;
     released=null;
-    if(blocked()) return;
+    if(blocked()||latest?.output_pending) return;
     policy("reset",e);
     const bounds=viewport.getBoundingClientRect();
     if(e.clientX>=bounds.left+viewport.clientWidth || e.clientY>=bounds.top+viewport.clientHeight) return;
@@ -238,6 +238,7 @@ function clearSelection() {
     refreshExportControls();
 }
 function requestSelection(selection) {
+    if(latest?.output_pending)return;
     cancelHover(true);
     setHover(null);
     const fingerprint=JSON.stringify({generation,revision,presentation:latest?.presentation,selection});
@@ -256,7 +257,7 @@ function flushSelection() {
 function receiveSelection(reply) {
     if(!selectionBusy||selectionBusy.request!==reply.request) return;
     selectionBusy=null;
-    if(selectionActive&&!selectionNext&&reply.generation===generation&&reply.revision===revision&&reply.presentation===latest?.presentation&&!filterUi.blocked()&&reply.value) {
+    if(selectionActive&&!latest?.output_pending&&!selectionNext&&reply.generation===generation&&reply.revision===revision&&reply.presentation===latest?.presentation&&!filterUi.blocked()&&reply.value) {
         selectionCache=reply;surfaceNote.textContent="";surface.dataset.selectionReady=String(reply.request);drawSelection();
     }
     refreshExportControls();
@@ -277,7 +278,7 @@ function drawSelection() {
 function copy(e) {
     if(!hasSelection()||document.activeElement!==keyboard) return;
     e.preventDefault();
-    if(!selectionCache||filterUi.blocked()||selectionCache.presentation!==latest?.presentation) {surfaceNote.textContent=tr("copy-not-ready");return;}
+    if(!selectionCache||latest?.output_pending||filterUi.blocked()||selectionCache.presentation!==latest?.presentation) {surfaceNote.textContent=tr("copy-not-ready");return;}
     if(!e.clipboardData) {surfaceNote.textContent=tr("copy-event-unavailable");return;}
     try {
         e.clipboardData.setData("text/plain",selectionCache.value.text);
@@ -384,8 +385,8 @@ pasteObserver.observe(pasteDialog,{attributes:true,attributeFilter:["data-active
 function refreshExportControls() {
     refreshKeepAlive();
     const selection=selectionCache;
-    exportButton.disabled=exportBusy||!latest||filterUi.blocked();
-    exportRows.disabled=exportBusy||filterUi.blocked()||blocked()||!selection||selection.generation!==generation||selection.revision!==revision||selection.presentation!==latest?.presentation;
+    exportButton.disabled=exportBusy||!latest||latest.output_pending||filterUi.blocked();
+    exportRows.disabled=exportBusy||latest?.output_pending||filterUi.blocked()||blocked()||!selection||selection.generation!==generation||selection.revision!==revision||selection.presentation!==latest?.presentation;
     exportRows.title=selection?tr("export-lines-hint",{start:selection.value.rows.start+1,end:selection.value.rows.end}):tr("export-rows-hint");
 }
 function refreshKeepAlive() {
@@ -614,7 +615,8 @@ async function paint(packet) {
     if(stopped)return;
     const presentationChanged=packet.presentation!==latest?.presentation;
     const changed=presentationChanged||!sameStamp(stamp(),{generation:packet.generation,revision:packet.frame.revision,input_epoch:packet.input_epoch});
-    if(changed||latest?.input_pending&&!packet.input_pending) {released=null;clearSelection();cancelDrag();setHover(null,false,false);navigationLocked=false;}
+    if(changed||packet.output_pending||latest?.input_pending&&!packet.input_pending) {released=null;clearSelection();cancelDrag();setHover(null,false,false);navigationLocked=false;}
+    if(packet.output_pending)cancelHover();
     if(packet.generation!==generation){
         pastePending=false;cancelComposition();focus();
     }
@@ -638,6 +640,7 @@ async function paint(packet) {
     surface.dataset.revision=String(revision);
     surface.dataset.fontSize=String(packet.settings.font_size);surface.dataset.baseline=String(packet.settings.baseline);
     surface.dataset.cursorRow=String(packet.frame.cursor[1]);surface.dataset.inputEpoch=String(packet.input_epoch);
+    surface.dataset.outputPending=String(!!packet.output_pending);
     surface.dataset.keepAlive=String(packet.keep_alive);surface.dataset.keepAliveReady=String(packet.keep_alive_ready);
     surface.dataset.keepAliveSent=String(packet.keep_alive_sent);
     loginUi.update(packet);

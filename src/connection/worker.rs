@@ -1,5 +1,5 @@
 //! The single session owner. Event polling stays separate from state transitions.
-use super::{CloseOutcome, Command, Dial, Phase, Socket, View, liveness, transport};
+use super::{CloseOutcome, Command, Dial, Phase, Socket, View, liveness, output, transport};
 use crate::{
     login::{self, Credentials, Prompt},
     navigation::{self, Context, Intent, Stamp},
@@ -59,6 +59,7 @@ struct Session {
     last_close: CloseOutcome,
     idle: liveness::Idle,
     timing: liveness::Timing,
+    output: output::Deadline,
 }
 
 pub(super) async fn run(
@@ -89,8 +90,15 @@ pub(super) async fn run(
             } => session.connected(result),
             incoming = async {
                 match session.socket.as_mut() { Some(socket) => socket.next().await, None => pending().await }
-            } => session.receive(incoming).await,
-            _ = clock.tick(), if session.dirty => session.publish(&updates),
+            } => session.receive(incoming, &updates).await,
+            _ = clock.tick(), if session.dirty || session.output.active() => {
+                if session.output.expire(Instant::now()) {
+                    session.screen.release_synchronized_output();
+                    session.continue_login().await;
+                    session.dirty = true;
+                }
+                if session.dirty { session.publish(&updates); }
+            },
             _ = idle_clock.tick() => {
                 let now = Instant::now();
                 session.idle.tick(now);
@@ -104,6 +112,8 @@ pub(super) async fn run(
         if session.view.phase != Phase::Connected {
             session.pending_input = None;
             session.login_attempt = None;
+            session.screen.release_synchronized_output();
+            session.output.track(None, Instant::now());
         }
     }
 }
@@ -123,6 +133,7 @@ impl Session {
             login_attempt: None,
             last_close: CloseOutcome::NoConnection,
             idle: liveness::Idle::new(Instant::now(), timing),
+            output: output::Deadline::default(),
         }
     }
 
@@ -197,6 +208,7 @@ impl Session {
         self.view.keep_alive_sent = 0;
         self.view.keep_alive_failure = None;
         self.screen.reset_session();
+        self.output.track(None, Instant::now());
         self.framing = telnet::Framing::default();
         self.view.received = 0;
         self.pending_input = None;
@@ -381,9 +393,13 @@ impl Session {
         result
     }
 
-    async fn receive(&mut self, incoming: Option<Result<Message, SocketError>>) {
+    async fn receive(
+        &mut self,
+        incoming: Option<Result<Message, SocketError>>,
+        updates: &watch::Sender<View>,
+    ) {
         match incoming {
-            Some(Ok(Message::Binary(bytes))) => self.receive_bytes(&bytes).await,
+            Some(Ok(Message::Binary(bytes))) => self.receive_bytes(&bytes, updates).await,
             Some(Ok(Message::Text(_))) => self.fail(crate::msg!("connection-text-frame")),
             Some(Ok(Message::Ping(payload))) => {
                 if let Some(socket) = self.socket.as_mut()
@@ -425,10 +441,20 @@ impl Session {
         self.dirty = true;
     }
 
-    async fn receive_bytes(&mut self, bytes: &[u8]) {
+    async fn receive_bytes(&mut self, bytes: &[u8], updates: &watch::Sender<View>) {
         self.view.received = self.view.received.saturating_add(bytes.len());
         let (display, reply) = self.framing.feed(bytes, 80, 24);
         self.screen.feed(&display);
+        self.output
+            .track(self.screen.synchronized_since(), Instant::now());
+        if !display.is_empty() {
+            // Revoke leases before awaiting any write and before the UI reads
+            // this change. The retained frame may still be visible until flush.
+            self.view.output_pending = true;
+            if !updates.borrow().output_pending {
+                updates.send_modify(|view| view.output_pending = true);
+            }
+        }
         if !reply.is_empty()
             && let Some(socket) = self.socket.as_mut()
             && let Err(error) = transport::send(socket, Message::Binary(reply.into())).await
@@ -495,6 +521,9 @@ impl Session {
     }
 
     fn clear_answered_input(&mut self) {
+        if self.screen.synchronized_since().is_some() {
+            return;
+        }
         if self
             .pending_input
             .as_ref()
@@ -509,12 +538,15 @@ impl Session {
         self.view.input_pending =
             self.pending_input.is_some() && self.view.phase == Phase::Connected;
         self.view.login_pending = self.login_attempt.is_some();
-        self.view.frame = self.screen.frame();
+        self.view.output_pending = self.screen.synchronized_since().is_some();
+        if !self.view.output_pending {
+            self.view.frame = self.screen.frame();
+        }
         self.view.keep_alive_ready = self.idle.ready(self.stamp())
             && self.socket.is_some()
             && !self.view.input_pending
             && !self.view.login_pending
-            && navigation::analyze(&self.view.frame).allows_keepalive();
+            && self.view.context().allows_keepalive();
         updates.send_replace(self.view.clone());
         self.dirty = false;
     }

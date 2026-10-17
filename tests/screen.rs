@@ -159,7 +159,7 @@ fn assert_control_chunks(bytes: &[u8], expected: impl Fn(&Screen)) {
 #[test]
 fn unknown_control_families_consume_their_complete_sequence() {
     for bytes in [
-        b"\x1b[?2026hX".as_slice(),
+        b"\x1b[?2027hX".as_slice(),
         b"\x1b[>1;2cX",
         b"\x1b[1:2mX",
         b"\x1b[1 qX",
@@ -270,4 +270,46 @@ fn cancel_restart_and_session_reset_recover_incomplete_controls() {
         assert_eq!(screen.frame().glyphs[0].text, "♥");
         assert_eq!(screen.cursor(), (2, 0));
     });
+}
+
+#[test]
+fn synchronized_output_tracks_the_first_begin_without_stopping_byte_processing() {
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(b"\x1b[?2026hA");
+    let begin = screen.synchronized_since().unwrap();
+    assert!(!screen.frame().control_complete);
+    assert_eq!(screen.cell(0, 0).unwrap().byte, b'A');
+    screen.feed(b"\x1b[?2026h\x1b[31mB");
+    assert_eq!(screen.synchronized_since(), Some(begin));
+    assert_eq!(screen.cell(1, 0).unwrap().style.fg, 1);
+    screen.feed(b"\x1b[?2026l");
+    assert!(screen.frame().control_complete);
+    assert_eq!(screen.frame().unsupported, 0);
+    screen.feed(b"\x1b[?2026h");
+    assert!(screen.synchronized_since().unwrap() > begin);
+    screen.release_synchronized_output();
+    assert!(screen.frame().control_complete);
+    screen.feed(b"\x1b[?2026h\x1bc");
+    assert!(screen.synchronized_since().is_none());
+    screen.feed(b"\x1b[?2026h");
+    screen.reset_session();
+    assert!(screen.frame().control_complete);
+    assert_eq!(screen.revision(), 0);
+}
+
+#[test]
+fn synchronized_modes_and_multiple_batches_are_independent_of_packet_boundaries() {
+    assert_control_chunks(
+        b"\x1b[?2026l\x1b[?7;2026;25hA\x1b[?2026l\x1b[?2026h\x1b[32mB\x1b[?2026l",
+        |screen| {
+            assert!(screen.synchronized_since().is_none());
+            assert!(screen.frame().control_complete);
+            assert!(screen.frame().cursor_visible);
+            assert_eq!(screen.cursor(), (2, 0));
+            assert_eq!(screen.cell(0, 0).unwrap().byte, b'A');
+            assert_eq!(screen.cell(1, 0).unwrap().byte, b'B');
+            assert_eq!(screen.cell(1, 0).unwrap().style.fg, 2);
+            assert_eq!(screen.frame().unsupported, 0);
+        },
+    );
 }

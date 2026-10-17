@@ -35,6 +35,8 @@ pub enum CloseOutcome {
 }
 #[derive(Clone)]
 pub struct View {
+    /// The retained frame is not an admissible source for interactions yet.
+    pub output_pending: bool,
     pub keep_alive: bool,
     pub keep_alive_ready: bool,
     pub keep_alive_sent: u64,
@@ -49,6 +51,15 @@ pub struct View {
     pub received: usize,
 }
 impl View {
+    pub fn context(&self) -> crate::navigation::Context {
+        if self.output_pending {
+            crate::navigation::Context::Unknown {
+                reason: crate::navigation::UnknownReason::Incomplete,
+            }
+        } else {
+            crate::navigation::analyze(&self.frame)
+        }
+    }
     pub fn stamp(&self) -> Stamp {
         Stamp {
             generation: self.generation,
@@ -117,6 +128,7 @@ impl Connection {
         let runtime = tokio::runtime::Handle::try_current().map_err(|e| e.to_string())?;
         let (commands, receiver) = mpsc::channel(64);
         let initial = View {
+            output_pending: false,
             keep_alive: true,
             keep_alive_ready: false,
             keep_alive_sent: 0,
@@ -348,6 +360,7 @@ impl Connection {
 }
 
 mod liveness;
+mod output;
 mod probe;
 #[cfg(test)]
 mod tests;

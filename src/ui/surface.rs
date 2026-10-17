@@ -553,7 +553,7 @@ async fn run(
                             "reset" => keyboard_policy.reset(),
                             _ => continue,
                         }
-                        let context = navigation::analyze(&receiver.borrow().frame);
+                        let context = receiver.borrow().context();
                         eval.send(Packet::KeyboardState(keyboard_policy.status(&context)))
                             .map_err(|e| e.to_string())?;
                     }
@@ -571,7 +571,7 @@ async fn run(
                             stamp,
                             ready
                                 && !keyboard_policy
-                                    .status(&navigation::analyze(&receiver.borrow().frame))
+                                    .status(&receiver.borrow().context())
                                     .pending,
                         );
                     }
@@ -845,7 +845,7 @@ async fn run(
                         trusted: _,
                     } => {
                         let view = receiver.borrow().clone();
-                        let context = navigation::analyze(&view.frame);
+                        let context = view.context();
                         let effect = keyboard_policy.key(&key, &context);
                         eval.send(Packet::KeyboardState(keyboard_policy.status(&context)))
                             .map_err(|e| e.to_string())?;
@@ -904,9 +904,9 @@ async fn run(
                         {
                             continue;
                         }
-                        eval.send(Packet::KeyboardState(keyboard_policy.status(&navigation::analyze(&receiver.borrow().frame)))).map_err(|e|e.to_string())?;
+                        eval.send(Packet::KeyboardState(keyboard_policy.status(&receiver.borrow().context()))).map_err(|e|e.to_string())?;
                         let vim_input = keyboard_policy
-                            .status(&navigation::analyze(&receiver.borrow().frame))
+                            .status(&receiver.borrow().context())
                             .enabled;
                         if probe.is_some()
                             && !vim_input
@@ -968,8 +968,8 @@ async fn run(
                     }
                     keyboard_policy.reset();keyboard_generation=view.generation;
                 }
-                keyboard_policy.context(&navigation::analyze(&view.frame));
-                eval.send(Packet::KeyboardState(keyboard_policy.status(&navigation::analyze(&view.frame)))).map_err(|e|e.to_string())?;
+                keyboard_policy.context(&view.context());
+                eval.send(Packet::KeyboardState(keyboard_policy.status(&view.context()))).map_err(|e|e.to_string())?;
                 if media_preview.active().is_some_and(|preview| preview.generation != view.generation) {
                     media_preview.close();
                     eval.send(Packet::MediaReset).map_err(|e| e.to_string())?;
@@ -1014,7 +1014,7 @@ async fn run(
         let report = serde_json::json!({"status":"passed",
                                 "scope":"local window probe; exact 40 Vim operations across main menu, board/favorite and article lists, including five switching cycles, no-redraw Home/count/enter and three continue prompts followed by dense ASCII-pointer article browsing; no extra station input",
 
-                                "settings":preferences.app(),"vim_mode":keyboard_policy.status(&navigation::analyze(&receiver.borrow().frame))});
+                                "settings":preferences.app(),"vim_mode":keyboard_policy.status(&receiver.borrow().context())});
         reports.push((path.join("window-probe.json"), report));
     }
     if let Some(mut report) = pending_report.take() {

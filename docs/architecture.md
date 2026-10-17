@@ -73,6 +73,8 @@ UI 正常掛載後只發起一次預設 PTT WSS 連線；合成 probe 只連本�
 
 不丟原始 bytes；UI 可合併最新 frame，帶 generation／revision 防止晚到更新。手動送鍵序列化，連線關閉時停止對應擁有者，重連是新 session。
 
+DEC2026 的開始／結束由 Screen 解析；同步期間仍完整作用所有 bytes，但 Frame 不算可導覽的完整控制狀態。Session 以原有發布時鐘持有最長一秒的同步等待，重複開始不延長同一批；缺結束碼時釋放顯示，再依 parser／navigation 判定是否可操作。期限屬產品恢復選擇，並非協定規定。Connection View 的 output_pending 與保留的完整 Frame 分開：新終端資料先更新 watch 的失效狀態，再等待傳輸回覆或發布畫面，讓檔案 worker 能直接拒絕過期 PNG。同步中保留舊圖但不准入導覽、選取、連結、hover 或新匯出；Rust／JS 同時撤銷舊互動，UI 不解讀原始控制碼。原始輸入、協商、Ping／Pong、取消與關閉仍由同一 Session 處理；斷線／重連清除同步等待，不重送操作。
+
 目前單一路徑為 WSS → 有界 binary frame → Telnet framing → Screen。每則 WebSocket 訊息上限 64 KiB；不把文字 frame 猜成 Big5。輸入上限 4 KiB、佇列 64 項；無法編碼或佇列滿會顯示錯誤。連線、送出與關閉都有逾時，送出失敗不重試；連線 owner 管理並 join 握手／收送工作。UI 只允許一個尚未完成的繪製 frame，其餘保留最新狀態，不堆積 JS 繪製佇列。關閉視窗時先停止 listener 與連線工作，再關閉 host。
 
 滑鼠導覽只建立目前格線畫面的辨識與命中，不建立獨立文章模型、板名導航按鈕、登入腳本或背景追蹤。文字、排版與雙色字由核心與 renderer 實作；操作及視覺契約見 [滑鼠導覽](navigation.md)。

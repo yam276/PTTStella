@@ -12,6 +12,7 @@ use serde::Serialize;
 
 #[derive(Clone, Serialize)]
 pub(super) struct Paint {
+    pub(super) output_pending: bool,
     pub(super) presentation: u64,
     pub(super) masked_pushes: usize,
     pub(super) revealed: bool,
@@ -41,7 +42,9 @@ pub(super) fn current_presentation(
     filters: &filters::State,
     current: &View,
 ) -> bool {
-    p.presentation == presentation
+    !current.output_pending
+        && !p.output_pending
+        && p.presentation == presentation
         && filters.version() == presentation
         && (p.generation, p.frame.revision) == (generation, revision)
         && (current.generation, current.frame.revision) == (generation, revision)
@@ -54,7 +57,11 @@ pub(super) fn paint(
     filters: &filters::State,
 ) -> Paint {
     let projection = filters.project(view.generation, &view.frame);
-    let links = links::detect(&projection.frame);
+    let links = if view.output_pending {
+        Vec::new()
+    } else {
+        links::detect(&projection.frame)
+    };
     let image_links = links
         .iter()
         .enumerate()
@@ -67,6 +74,7 @@ pub(super) fn paint(
         })
         .collect();
     Paint {
+        output_pending: view.output_pending,
         presentation: filters.version(),
         masked_pushes: projection.matches.len(),
         revealed: projection.revealed,
@@ -83,10 +91,10 @@ pub(super) fn paint(
         keep_alive_sent: view.keep_alive_sent,
         keep_alive_failure: view.keep_alive_failure.clone(),
         input_epoch: view.input_epoch,
-        input_pending: view.input_pending,
+        input_pending: view.input_pending || view.output_pending,
         login_pending: view.login_pending,
         connected: view.phase == Phase::Connected,
-        navigation: navigation::analyze(&view.frame),
+        navigation: view.context(),
         settings: settings.clone(),
         links,
         frame: projection.frame,
@@ -97,6 +105,7 @@ pub(super) fn paint(
 
 pub(super) fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint {
     Paint {
+        output_pending: false,
         presentation: 0,
         masked_pushes: 0,
         revealed: false,
@@ -142,6 +151,7 @@ mod filter_tests {
         let mut screen = Screen::new(80, 24).unwrap();
         screen.feed(&encoding::encode(pages["reading"].as_str().unwrap()).unwrap());
         let view = View {
+            output_pending: false,
             frame: screen.frame(),
             generation: 4,
             input_epoch: 0,

@@ -7,6 +7,7 @@ fn view() -> View {
     let mut screen = Screen::new(80, 24).unwrap();
     screen.feed(&pttstella::encoding::encode(fixture["reading"].as_str().unwrap()).unwrap());
     View {
+        output_pending: false,
         frame: screen.frame(),
         generation: 7,
         input_epoch: 0,
@@ -20,6 +21,42 @@ fn view() -> View {
         keep_alive_sent: 0,
         keep_alive_failure: None,
     }
+}
+
+#[test]
+fn retained_frame_cannot_authorize_interactions_during_an_output_batch() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let identity = displayed(&mut state, &view);
+    hover(&mut state, identity, &view);
+    state.select(identity, 5, &Selection::All, &view).unwrap();
+    let lease = state.lease_export(identity, None, view.input_epoch);
+    assert!(lease.check(&view).is_ok());
+    // Direct worker/watch observation must revoke a write even before update().
+    view.output_pending = true;
+    assert!(lease.check(&view).is_err());
+    assert!(!state.painted(&view));
+    assert!(state.current(identity, &view).is_none());
+    assert!(state.export_rows(identity, None, &view).is_err());
+    assert!(!state.copied(identity, 5, &view));
+    assert!(state.update(&view));
+    let packet = state
+        .queue(&view, false, &DisplaySettings::default())
+        .unwrap();
+    assert!(packet.output_pending && packet.input_pending);
+    assert_eq!(packet.frame, view.frame); // Never the half-written source.
+    assert!(packet.links.is_empty() && packet.hover.is_none());
+    assert_eq!(packet.navigation.kind(), "unknown");
+    state.acknowledge(identity).unwrap();
+    assert!(!state.navigation_shown(view.stamp()));
+    assert!(!state.browse_shown(view.generation, &view.context()));
+    view.output_pending = false;
+    view.frame.revision += 1;
+    state.update(&view);
+    let resumed = displayed(&mut state, &view);
+    assert!(state.current(resumed, &view).is_some());
+    assert!(state.export_rows(resumed, None, &view).is_ok());
+    assert!(lease.check(&view).is_err());
 }
 fn displayed(state: &mut SurfaceState, view: &View) -> Identity {
     let identity = Identity::of(
