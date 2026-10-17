@@ -368,3 +368,5 @@ login-code-checking = Manual confirmation sent. Wait for the server's verificati
 login-browsing = A recognized browsing screen is available. If Vim is enabled, press Esc to return to browsing mode.
 login-manual-followup = The login prompt returned. Check it manually; credentials will not be resent.
 login-followup-expired = Login guidance timed out. Native PTT input remains available; credentials will not be resent.
+
+selection-link-missing = This link is no longer available. Select it again.

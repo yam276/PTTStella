@@ -67,6 +67,46 @@ fn one_projection_preserves_source_and_cells_for_copy_links_and_renderer() {
     assert_eq!(shown.frame, source);
     assert_eq!(links::detect(&shown.frame).len(), 2);
 }
+
+#[test]
+fn hidden_pushes_remove_osc8_destinations_from_every_projected_consumer() {
+    let data: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/filters.json")).unwrap();
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(&encoding::encode(data["reading"].as_str().unwrap()).unwrap());
+    let secret_target = "https://example.com/hidden-metadata.png?complete=1";
+    screen.feed(
+        format!("\x1b[6;11H\x1b[0m\x1b]8;;{secret_target}\x07LINK\x1b]8;;\x07\x1b[24;80H")
+            .as_bytes(),
+    );
+    let source = screen.frame();
+    assert!(
+        links::detect(&source)
+            .iter()
+            .any(|link| link.url == secret_target)
+    );
+    let rules = Rules::default().edit("Alice", "", false).unwrap();
+    let hidden = filters::project(&source, &rules, false).frame;
+    assert!(hidden.hyperlinks.iter().all(|link| link.target.is_none()));
+    assert!(
+        !links::detect(&hidden)
+            .iter()
+            .any(|link| link.url == secret_target)
+    );
+    assert!(
+        !selection::extract(&hidden, &Selection::All)
+            .unwrap()
+            .text
+            .contains("LINK")
+    );
+    let shown = filters::project(&source, &rules, true).frame;
+    assert!(
+        links::detect(&shown)
+            .iter()
+            .any(|link| link.url == secret_target)
+    );
+    assert_eq!(shown, source);
+}
 #[test]
 fn unknown_unmapped_partial_and_wrapped_records_are_not_guessed() {
     let source = frame();

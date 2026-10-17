@@ -66,6 +66,10 @@ core 八套 suite／兩份 replay（login 新增逐切點、錯碼、假提示�
 
 最新候選為 `dist/macos-protocol-b2-delivery/PTTStella.app`，strict ad-hoc 驗章與實測 executable 去簽章 SHA 核對一致；報告保留 `.local/verification/protocol-b2`。未連 PTT、未操作真實帳密或 2FA 設定；實站驗證碼、原生 IME、Windows／Linux 與完整 Mac desktop backend 尚未驗收。C1 OSC 8 完整網址接續執行。
 
+**C1 核心與生命週期完成，原生互動接續驗證**：Screen 解析有界 OSC 8，目的地由 Cell 擁有，Frame 只在 Rust 保留 metadata；`links` 在過濾後驗證 HTTP／HTTPS 並投影可點範圍，沒有 metadata 時保留原單列偵測。覆寫、擦除、插入／刪除、區域捲動及 reset 同時更新，混合雙寬字與無效／超限 metadata 不改猜文字；右鍵完整目的地的 Rust 選取契約已加入。限制與行為見 [完整網址](../links.md)。
+
+core 八套 suite／兩份 replay 新增七個 interaction 與一個 filters 案例，獨立 expected 核對跨行目的地、全部切點、逐 byte、BEL／ST、錯誤 scheme、控制字元、最大長度／參數／目標數／bytes 預算、slot 回收、混合雙寬、編輯／捲動及遮黑。50 個 desktop lib、29 個 bin、全 targets desktop Clippy 通過，舊 fixture／expected 未修改。紀錄保留 `.local/verification/protocol-c1`；原生跨行點擊／右鍵複製／拖曳與媒體仍在本批後續執行，尚未交付 C1 App 或宣稱實站通過。
+
 ### 詳細交付計畫
 
 2026-10-17 展開上述研究；本節是待執行計畫，不代表產品已支援。先交付相容性，再交付高頻桌面操作。每一批完成實作與適用驗證即提交，不累積到整個階段結束；不改寫既有歷史、不自動 push。以下為依賴順序與相對工作量，不是日曆工期承諾。

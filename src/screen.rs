@@ -1,6 +1,9 @@
 use crate::encoding;
 use serde::{Deserialize, Serialize};
 
+pub mod hyperlinks;
+use hyperlinks::{Hyperlink, Hyperlinks, MAX_OSC_BYTES};
+
 const MAX_CELLS: usize = 80 * 100;
 const MAX_CSI: usize = 64;
 
@@ -25,6 +28,8 @@ impl Default for Style {
 pub struct Cell {
     pub byte: u8,
     pub style: Style,
+    #[serde(skip)]
+    hyperlink: u8,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -46,6 +51,9 @@ pub struct Frame {
     pub cursor_visible: bool,
     pub revision: u64,
     pub glyphs: Vec<Glyph>,
+    /// Rust-only metadata; the UI receives validated, filtered link projections.
+    #[serde(skip)]
+    pub hyperlinks: Vec<Hyperlink>,
     pub unsupported: u64,
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -60,12 +68,34 @@ enum Parser {
         intermediate: bool,
     },
     CsiDiscard,
-    String {
-        osc: bool,
-    },
-    StringEscape {
-        osc: bool,
-    },
+    String(ControlString),
+    StringEscape(ControlString),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ControlString {
+    osc: bool,
+    data: Vec<u8>,
+    overflow: bool,
+}
+impl ControlString {
+    fn new(osc: bool) -> Self {
+        Self {
+            osc,
+            data: Vec::new(),
+            overflow: false,
+        }
+    }
+    fn push(&mut self, byte: u8) {
+        if !self.osc {
+            return;
+        }
+        if self.data.len() < MAX_OSC_BYTES {
+            self.data.push(byte);
+        } else {
+            self.overflow = true;
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -87,6 +117,7 @@ pub struct Screen {
     revision: u64,
     unsupported: u64,
     synchronized_since: Option<u64>,
+    hyperlinks: Hyperlinks,
 }
 impl Screen {
     pub fn new(cols: usize, rows: usize) -> Result<Self, &'static str> {
@@ -111,6 +142,7 @@ impl Screen {
             revision: 0,
             unsupported: 0,
             synchronized_since: None,
+            hyperlinks: Hyperlinks::default(),
         })
     }
     pub fn cell(&self, x: usize, y: usize) -> Option<Cell> {
@@ -158,20 +190,15 @@ impl Screen {
             return;
         }
         if byte == 0x1b {
-            self.parser = match self.parser {
-                Parser::String { osc } | Parser::StringEscape { osc } => {
-                    Parser::StringEscape { osc }
-                }
+            self.parser = match std::mem::take(&mut self.parser) {
+                Parser::String(value) | Parser::StringEscape(value) => Parser::StringEscape(value),
                 _ => Parser::Escape {
                     intermediate: false,
                 },
             };
             return;
         }
-        if !matches!(
-            self.parser,
-            Parser::String { .. } | Parser::StringEscape { .. }
-        ) {
+        if !matches!(self.parser, Parser::String(_) | Parser::StringEscape(_)) {
             // C0 controls execute without ending an escape/CSI; DEL is ignored.
             if byte <= 0x1f {
                 self.ground(byte);
@@ -211,15 +238,22 @@ impl Screen {
                     self.parser = Parser::CsiDiscard;
                 }
             }
-            Parser::String { osc } => {
-                self.parser = if osc && byte == 7 {
-                    Parser::Ground
+            Parser::String(mut value) => {
+                if value.osc && byte == 7 {
+                    self.hyperlinks
+                        .finish(&value.data, value.overflow, &self.cells);
                 } else {
-                    Parser::String { osc }
+                    value.push(byte);
+                    self.parser = Parser::String(value);
                 }
             }
-            Parser::StringEscape { .. } => {
-                if byte != b'\\' {
+            Parser::StringEscape(value) => {
+                if byte == b'\\' {
+                    if value.osc {
+                        self.hyperlinks
+                            .finish(&value.data, value.overflow, &self.cells);
+                    }
+                } else {
                     // ESC aborts the string when it starts another command.
                     self.parser = Parser::Escape {
                         intermediate: false,
@@ -245,8 +279,8 @@ impl Screen {
                     intermediate: false,
                 }
             }
-            b']' => self.parser = Parser::String { osc: true },
-            b'P' | b'X' | b'^' | b'_' => self.parser = Parser::String { osc: false },
+            b']' => self.parser = Parser::String(ControlString::new(true)),
+            b'P' | b'X' | b'^' | b'_' => self.parser = Parser::String(ControlString::new(false)),
             b'7' => self.saved = (self.x, self.y),
             b'8' => {
                 (self.x, self.y) = self.saved;
@@ -281,6 +315,7 @@ impl Screen {
         self.auto_wrap = true;
         self.cursor_visible = true;
         self.synchronized_since = None;
+        self.hyperlinks = Hyperlinks::default();
     }
     fn ground(&mut self, byte: u8) {
         match byte {
@@ -311,6 +346,7 @@ impl Screen {
                 self.cells[self.y * self.cols + self.x] = Cell {
                     byte,
                     style: self.next_cell_style.take().unwrap_or(self.style),
+                    hyperlink: self.hyperlinks.active,
                 };
                 self.wrap = self.x == self.cols - 1;
                 if !self.wrap {
@@ -323,6 +359,7 @@ impl Screen {
         Cell {
             byte: 0,
             style: self.style,
+            hyperlink: 0,
         }
     }
     fn linefeed(&mut self) {
@@ -521,6 +558,7 @@ impl Screen {
                 col += width;
             }
         }
+        let hyperlinks = self.hyperlinks.project(&glyphs, &self.cells, self.cols);
         Frame {
             control_complete: matches!(self.parser, Parser::Ground)
                 && self.synchronized_since.is_none(),
@@ -530,6 +568,7 @@ impl Screen {
             cursor_visible: self.cursor_visible,
             revision: self.revision,
             glyphs,
+            hyperlinks,
             unsupported: self.unsupported,
         }
     }

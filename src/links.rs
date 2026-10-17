@@ -1,4 +1,4 @@
-//! URLs are mapped from already decoded glyphs, without joining screen rows.
+//! One validation and projection for explicit cell metadata and plain-text URLs.
 use crate::{screen::Frame, text};
 use serde::Serialize;
 use url::Url;
@@ -11,9 +11,22 @@ pub struct Link {
     pub url: String,
 }
 
+pub const MAX_LINKS: usize = 512;
+pub const MAX_PROJECTED_URL_BYTES: usize = 256 * 1024;
+
 pub fn validate(value: &str) -> Result<Url, String> {
+    if value.len() > crate::screen::hyperlinks::MAX_URL_BYTES
+        || value
+            .chars()
+            .any(|ch| ch.is_control() || ch.is_whitespace())
+    {
+        return Err(crate::msg!("link-invalid"));
+    }
     let url = Url::parse(value).map_err(|_| crate::msg!("link-invalid"))?;
-    if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
+    if !matches!(url.scheme(), "http" | "https")
+        || url.host_str().is_none()
+        || url.as_str().len() > crate::screen::hyperlinks::MAX_URL_BYTES
+    {
         return Err(crate::msg!("link-scheme"));
     }
     Ok(url)
@@ -43,10 +56,41 @@ fn trim_end(value: &str) -> &str {
 }
 
 pub fn detect(frame: &Frame) -> Vec<Link> {
+    if !frame.control_complete {
+        return Vec::new();
+    }
     let Some(rows) = text::rows(frame) else {
         return Vec::new();
     };
     let mut links = Vec::new();
+    let mut bytes = 0;
+    for explicit in &frame.hyperlinks {
+        let Some(url) = explicit
+            .target
+            .as_deref()
+            .and_then(|value| validate(value).ok())
+        else {
+            continue;
+        };
+        // Admit a complete target together, so a long wrapped link is never partial.
+        let cost = url.as_str().len().saturating_mul(explicit.spans.len());
+        if links.len() + explicit.spans.len() > MAX_LINKS || cost > MAX_PROJECTED_URL_BYTES - bytes
+        {
+            continue;
+        }
+        for span in &explicit.spans {
+            if span.row >= frame.rows || span.start >= span.end || span.end > frame.cols {
+                continue;
+            }
+            links.push(Link {
+                row: span.row,
+                start: span.start,
+                end: span.end,
+                url: url.as_str().to_owned(),
+            });
+        }
+        bytes += cost;
+    }
     for (row, line) in rows.into_iter().enumerate() {
         let text = line.text;
         let mapping = line.spans;
@@ -84,10 +128,25 @@ pub fn detect(frame: &Frame) -> Vec<Link> {
                     .iter()
                     .find(|s| s.bytes.start < trimmed_end && trimmed_end <= s.bytes.end);
                 if let (Some(first), Some(last)) = (first, last) {
+                    let (left, right) = (first.glyph.col, last.glyph.col + last.glyph.width);
+                    if frame.hyperlinks.iter().any(|link| {
+                        link.spans
+                            .iter()
+                            .any(|span| span.row == row && span.start < right && span.end > left)
+                    }) {
+                        offset = end.max(start + "http://".len());
+                        continue;
+                    }
+                    if links.len() == MAX_LINKS
+                        || url.as_str().len() > MAX_PROJECTED_URL_BYTES - bytes
+                    {
+                        return links;
+                    }
+                    bytes += url.as_str().len();
                     links.push(Link {
                         row,
-                        start: first.glyph.col,
-                        end: last.glyph.col + last.glyph.width,
+                        start: left,
+                        end: right,
                         url: url.into(),
                     });
                 }

@@ -12,6 +12,7 @@ pub struct Position {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "mode", rename_all = "snake_case")]
 pub enum Selection {
+    Link { index: usize },
     Range { anchor: Position, focus: Position },
     Line { row: usize },
     All,
@@ -35,6 +36,21 @@ pub struct SelectedText {
 /// Inclusive cell endpoints expand to whole glyphs. Text retains all selected spaces.
 pub fn extract(frame: &Frame, selection: &Selection) -> Result<SelectedText, String> {
     let (anchor, focus) = match *selection {
+        Selection::Link { index } => {
+            let link = crate::links::detect(frame)
+                .into_iter()
+                .nth(index)
+                .ok_or_else(|| crate::msg!("selection-link-missing"))?;
+            return Ok(SelectedText {
+                text: link.url,
+                spans: vec![Span {
+                    row: link.row,
+                    start: link.start,
+                    end: link.end,
+                }],
+                rows: link.row..link.row + 1,
+            });
+        }
         Selection::Range { anchor, focus } => (anchor, focus),
         Selection::Line { row } => (
             Position { col: 0, row },
