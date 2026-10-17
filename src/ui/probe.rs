@@ -57,11 +57,19 @@ pub(super) struct Checks {
     pub(super) copied_selection: Option<(u64, u64, u64)>,
 }
 impl Checks {
-    pub(super) fn mouse_passed(&self) -> bool {
+    pub(super) fn mouse_passed(&self, boundary: bool) -> bool {
         use pttstella::mouse::{
             Action::{Press, Release},
             Button::{Left, Middle, Right},
         };
+        if boundary {
+            return self.mouse_reports == [(Left, Press)]
+                && self.mouse_cancels >= 1
+                && self.mouse_toggles.is_empty()
+                && self.navigation_requests == 0
+                && self.link_requests == 0
+                && self.export_checked;
+        }
         self.mouse_reports
             == [
                 (Left, Press),
