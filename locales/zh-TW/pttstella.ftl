@@ -355,3 +355,10 @@ font-windows-explained = 傳統 Windows BBS 使用 MingLiU 細明體，英數也
 font-windows-modern = Windows 黑體（Cascadia／正黑體）
 font-windows-classic = Windows 傳統 BBS（細明體）
 font-macos-bbs = macOS 傳統 BBS（宋體替代）
+
+login-code-required = 請在 PTT 原始輸入中輸入六位驗證碼或八位救援碼；不保存驗證碼
+login-code-rejected = 站端回報驗證碼錯誤；請自行重試，不會自動重送
+login-code-checking = 已送出手動確認；請等候站端驗證結果
+login-browsing = 已進入可辨識的瀏覽畫面；Vim 已開啟時可按 Esc 回到瀏覽模式
+login-manual-followup = 已返回登入提示；請自行確認，不會自動重送帳密
+login-followup-expired = 登入引導已逾時；仍可使用 PTT 原始輸入，不會重送帳密

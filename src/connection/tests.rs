@@ -318,6 +318,122 @@ fn credentials() -> Credentials {
 }
 
 #[tokio::test]
+async fn verification_is_manual_and_checks_wrong_code_then_recovery_without_resending_credentials()
+{
+    use crate::login::Guidance;
+    let connection = Connection::start_verification_probe().unwrap();
+    connection.connect().unwrap();
+    let view = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
+    connection.login(view.stamp(), credentials()).await.unwrap();
+    let view = wait(&connection, |v| {
+        v.login_guidance == Guidance::CodeRequired && !v.output_pending
+    })
+    .await;
+    assert!(view.login_pending);
+    assert!(!view.keep_alive_ready);
+    // A stale raw input cannot advance guidance or reach the peer.
+    connection
+        .input(view.generation + 1, b"000000\r".to_vec())
+        .unwrap();
+    wait(&connection, |v| v.message == crate::msg!("input-stale")).await;
+    assert_eq!(
+        connection.updates.borrow().login_guidance,
+        Guidance::CodeRequired
+    );
+    connection
+        .input(view.generation, b"123456\r".to_vec())
+        .unwrap();
+    let view = wait(&connection, |v| {
+        v.login_guidance == Guidance::CodeRejected && !v.output_pending
+    })
+    .await;
+    assert!(view.login_pending);
+    connection
+        .input(view.generation, b"ABCDEFGH\r".to_vec())
+        .unwrap();
+    let view = wait(&connection, |v| {
+        v.login_guidance == Guidance::Browsing && !v.output_pending
+    })
+    .await;
+    assert_eq!(view.context().kind(), "main_menu");
+    assert!(!view.login_pending);
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+}
+
+#[tokio::test]
+async fn cancelling_verification_retires_guidance_and_reconnect_never_resumes_it() {
+    use crate::login::Guidance;
+    let (listener, connection) = local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(probe::login_page().unwrap().into()))
+        .await
+        .unwrap();
+    let view = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
+    connection.login(view.stamp(), credentials()).await.unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"StellaTest\r"
+    );
+    ws.send(Message::Binary(probe::password_page().unwrap().into()))
+        .await
+        .unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"synthetic+42\r"
+    );
+    ws.send(Message::Binary(
+        probe::verification_page(false).unwrap().into(),
+    ))
+    .await
+    .unwrap();
+    wait(&connection, |v| v.login_guidance == Guidance::CodeRequired).await;
+    connection.cancel_login().unwrap();
+    wait(&connection, |v| {
+        !v.login_pending && v.login_guidance == Guidance::Idle
+    })
+    .await;
+    ws.send(Message::Binary(
+        probe::verification_page(true).unwrap().into(),
+    ))
+    .await
+    .unwrap();
+    let view = wait(&connection, |v| {
+        crate::login::verification(&v.frame) == Some(Guidance::CodeRejected) && !v.output_pending
+    })
+    .await;
+    assert_eq!(view.login_guidance, Guidance::Idle);
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    ws.close(None).await.unwrap();
+    wait(&connection, |v| v.phase == Phase::Disconnected).await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(
+        probe::verification_page(false).unwrap().into(),
+    ))
+    .await
+    .unwrap();
+    let view = wait(&connection, |v| {
+        v.generation > view.generation && v.received > 0 && !v.output_pending
+    })
+    .await;
+    assert_eq!(view.login_guidance, Guidance::Idle);
+    assert!(!view.login_pending);
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    let close = tokio::spawn(async move {
+        let _ = ws.next().await;
+        let _ = ws.flush().await;
+    });
+    connection.shutdown().await.unwrap();
+    close.await.unwrap();
+}
+
+#[tokio::test]
 async fn login_deadline_drops_password_and_late_prompt_sends_nothing() {
     let (listener, connection) = local().await;
     connection.connect().unwrap();

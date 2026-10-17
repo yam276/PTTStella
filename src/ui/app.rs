@@ -30,6 +30,7 @@ pub fn app(props: AppProps) -> Element {
     let filters_probe = props.filters_probe;
     let surface_probe = props.surface_probe.clone();
     let surface_probing = surface_probe.is_some();
+    let verification_probing = surface_probe.as_deref() == Some("login_2fa");
     let dialogs_probing = matches!(
         surface_probe.as_deref(),
         Some("dialogs" | "fonts" | "sgr66" | "sgr66_legacy")
@@ -47,7 +48,9 @@ pub fn app(props: AppProps) -> Element {
             None => preview(probing, media_origin.as_deref()),
         })
         .and_then(|bytes| {
-            if surface_probing {
+            if verification_probing {
+                Connection::start_verification_probe()
+            } else if surface_probing {
                 if dialogs_probing {
                     Connection::start_ui_probe(bytes)
                 } else {

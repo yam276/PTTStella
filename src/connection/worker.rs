@@ -56,6 +56,7 @@ struct Session {
     dirty: bool,
     pending_input: Option<PendingInput>,
     login_attempt: Option<LoginAttempt>,
+    login_followup: Option<login::FollowUp>,
     last_close: CloseOutcome,
     idle: liveness::Idle,
     timing: liveness::Timing,
@@ -112,6 +113,8 @@ pub(super) async fn run(
         if session.view.phase != Phase::Connected {
             session.pending_input = None;
             session.login_attempt = None;
+            session.login_followup = None;
+            session.view.login_guidance = login::Guidance::Idle;
             session.screen.release_synchronized_output();
             session.output.track(None, Instant::now());
         }
@@ -131,6 +134,7 @@ impl Session {
             dirty: false,
             pending_input: None,
             login_attempt: None,
+            login_followup: None,
             last_close: CloseOutcome::NoConnection,
             idle: liveness::Idle::new(Instant::now(), timing),
             output: output::Deadline::default(),
@@ -154,6 +158,8 @@ impl Session {
             Some(Command::Input { generation, bytes }) => self.input(generation, &bytes).await,
             Some(Command::CancelLogin) => {
                 self.login_attempt = None;
+                self.login_followup = None;
+                self.view.login_guidance = login::Guidance::Idle;
                 self.view.message = crate::msg!("login-cancelled");
                 self.dirty = true;
             }
@@ -203,6 +209,8 @@ impl Session {
         }
         self.last_close = CloseOutcome::NoConnection;
         self.login_attempt = None;
+        self.login_followup = None;
+        self.view.login_guidance = login::Guidance::Idle;
         self.view.generation = self.view.generation.saturating_add(1);
         self.idle.activity(Instant::now());
         self.view.keep_alive_sent = 0;
@@ -226,6 +234,8 @@ impl Session {
 
     async fn disconnect(&mut self) {
         self.login_attempt = None;
+        self.login_followup = None;
+        self.view.login_guidance = login::Guidance::Idle;
         self.idle.activity(Instant::now());
         self.view.generation = self.view.generation.saturating_add(1);
         self.pending_input = None;
@@ -303,6 +313,14 @@ impl Session {
         self.idle.activity(Instant::now());
         if self.write_input(bytes).await.is_ok() {
             self.wait_for_input(false);
+            if bytes.contains(&b'\r')
+                && let Some(state) = self
+                    .login_followup
+                    .as_mut()
+                    .and_then(|followup| followup.submitted_code(self.screen.revision()))
+            {
+                self.show_login_guidance(state);
+            }
         }
         self.dirty = true;
     }
@@ -319,6 +337,8 @@ impl Session {
         }
         self.idle.activity(Instant::now());
         self.write_input(&credentials.account_input()).await?;
+        self.login_followup = None;
+        self.view.login_guidance = login::Guidance::Idle;
         self.login_attempt = Some(LoginAttempt {
             credentials,
             deadline: Instant::now() + Duration::from_secs(15),
@@ -478,7 +498,11 @@ impl Session {
                         .await
                         .is_ok()
                     {
-                        self.view.message = crate::msg!("login-sent");
+                        self.login_followup = Some(login::FollowUp::after_password(
+                            self.screen.revision(),
+                            Instant::now(),
+                        ));
+                        self.show_login_guidance(login::Guidance::Waiting);
                         self.wait_for_input(false);
                     }
                 } else {
@@ -493,6 +517,28 @@ impl Session {
         {
             self.login_attempt = None;
             self.view.message = crate::msg!("login-left-prompt");
+        }
+        self.observe_login(Instant::now());
+    }
+
+    fn show_login_guidance(&mut self, state: login::Guidance) {
+        self.view.login_guidance = state;
+        if let Some(message) = state.message() {
+            self.view.message = message;
+        }
+        self.dirty = true;
+    }
+
+    fn observe_login(&mut self, now: Instant) {
+        if let Some(state) = self
+            .login_followup
+            .as_mut()
+            .and_then(|followup| followup.observe(&self.screen.frame(), now))
+        {
+            if !state.active() {
+                self.login_followup = None;
+            }
+            self.show_login_guidance(state);
         }
     }
 
@@ -540,7 +586,7 @@ impl Session {
         self.clear_answered_input();
         self.view.input_pending =
             self.pending_input.is_some() && self.view.phase == Phase::Connected;
-        self.view.login_pending = self.login_attempt.is_some();
+        self.view.login_pending = self.login_attempt.is_some() || self.login_followup.is_some();
         self.view.output_pending = self.screen.synchronized_since().is_some();
         if !self.view.output_pending {
             self.view.frame = self.screen.frame();
@@ -555,6 +601,7 @@ impl Session {
     }
 
     fn expire_login(&mut self, now: Instant) {
+        self.observe_login(now);
         if self
             .login_attempt
             .as_ref()
@@ -585,6 +632,7 @@ impl Session {
             && self.view.phase == Phase::Connected
             && self.pending_input.is_none()
             && self.login_attempt.is_none()
+            && self.login_followup.is_none()
             && self.idle.due(now, stamp)
             && navigation::analyze(&self.screen.frame()).allows_keepalive()
         {
