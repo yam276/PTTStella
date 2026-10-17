@@ -53,6 +53,13 @@ pub fn app(props: AppProps) -> Element {
                     Connection::start_bookmarks_probe()
                 } else if matches!(sample_case.as_deref(), Some("mouse" | "mouse_boundary")) {
                     Connection::start_mouse_probe(sample_case.as_deref() == Some("mouse_boundary"))
+                } else if let Some(case) = match sample_case.as_deref() {
+                    Some("mouse_drag") => Some(pttstella::connection::MouseSampleProbe::Drag),
+                    Some("mouse_motion") => Some(pttstella::connection::MouseSampleProbe::Motion),
+                    Some("mouse_wheel") => Some(pttstella::connection::MouseSampleProbe::Wheel),
+                    _ => None,
+                } {
+                    Connection::start_mouse_samples_probe(case)
                 } else if verification_probing {
                     Connection::start_verification_probe()
                 } else if surface_probing {

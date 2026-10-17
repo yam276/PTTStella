@@ -43,6 +43,61 @@ fn motion(view: &View, id: u64, col: usize) -> Sample {
         }),
     }
 }
+
+// These inputs validate the synthetic peer itself. They are not trusted GUI
+// acceptance; the native runner still has to exercise the actual pointer path.
+#[tokio::test]
+async fn native_sample_peers_require_their_exact_final_gesture_and_acknowledge_close() {
+    for case in [
+        MouseSampleProbe::Drag,
+        MouseSampleProbe::Motion,
+        MouseSampleProbe::Wheel,
+    ] {
+        let connection = Connection::start_mouse_samples_probe(case).unwrap();
+        connection.connect().unwrap();
+        let start = wait(&connection, |view| {
+            view.received > 0 && !view.output_pending
+        })
+        .await;
+        let sequence: &[&[u8]] = match case {
+            MouseSampleProbe::Drag => &[b"\x1b[<0;5;5M", b"\x1b[<32;11;5M", b"\x1b[<0;11;5m"],
+            MouseSampleProbe::Motion => &[b"\x1b[<0;5;5M", b"\x1b[<0;5;5m", b"\x1b[<35;11;5M"],
+            MouseSampleProbe::Wheel => &[b"\x1b[<65;5;5M", b"\x1b[<64;5;5M"],
+        };
+        for bytes in sequence {
+            connection.input(start.generation, bytes.to_vec()).unwrap();
+        }
+        wait(&connection, |view| {
+            view.mouse.modes.tracking() == Tracking::Highlight && !view.output_pending
+        })
+        .await;
+        assert_eq!(
+            connection.shutdown().await.unwrap(),
+            CloseOutcome::Acknowledged
+        );
+    }
+}
+
+#[tokio::test]
+async fn native_drag_peer_cannot_pass_after_its_bound_without_the_required_release() {
+    let connection = Connection::start_mouse_samples_probe(MouseSampleProbe::Drag).unwrap();
+    connection.connect().unwrap();
+    let start = wait(&connection, |view| {
+        view.received > 0 && !view.output_pending
+    })
+    .await;
+    connection
+        .input(start.generation, b"\x1b[<0;5;5M".to_vec())
+        .unwrap();
+    for _ in 0..16 {
+        connection
+            .input(start.generation, b"\x1b[<32;11;5M".to_vec())
+            .unwrap();
+    }
+    wait(&connection, |view| view.phase == Phase::Error).await;
+    let error = connection.shutdown().await.unwrap_err();
+    assert!(error.contains("never completed"), "{error}");
+}
 #[tokio::test]
 async fn mouse_motion_preserves_a_following_click_and_owned_drag_across_redraw() {
     let (_listener, connection, mut peer, _) = ready().await;

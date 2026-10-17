@@ -45,3 +45,7 @@ UI 不等待 press 的命令回覆才處理 release；只透過同一有界命�
 macOS `mouse` probe 已以真正視窗完成 col 4／row 4 的左／右鍵精確按下釋放、未支援 1003 的點擊／滾輪零輸出、Shift 雙擊選行及 OS 剪貼簿讀回、停用後一次本機文章編號 CR、重新啟用及中鍵按住時的模式撤銷；peer 沒有收到中鍵釋放或額外本機 bytes。最後 mode epoch 6、無 held lease，正常 Close acknowledged 並 join renderer、connection、credential 及 file owners。前後 PNG 獨立解碼 960×576、全部像素相同；鍵盤縮放 100→125→100% 通過。
 
 此案例不是 Shift 拖曳或 Ctrl＋滾輪的原生證據：工具拒絕單獨保持修飾鍵，並行按鍵／滾輪沒有形成縮放，因此後者保留 not_ready，只能引用 handler 單元結果。原生失焦／lost capture／重連、跨 DPR、實站與其他 OS 也沒有在本案例冒算通過。第一次原生 probe 誤將既有本機點編號的 CR 契約寫成方向右，cleanup false／缺 surface 報告，保留為失敗；修正測試服務後從頭重跑，沒有改產品送鍵去遷就 probe。證據及候選 App 身分在 active plan。
+
+D2 另以兩個 macOS 原生程序通過指定增量：`mouse_motion` 的 anchor 左鍵點擊／釋放後開啟 1003，原生水平滾動將無按鈕指標移至 col 10／row 4，只收到 `ESC[<35;11;5M`，水平輪沒有送出站端輸入；`mouse_wheel` 在 col 4／row 4 收到向下、向上各一筆，沒有按鈕邊緣或本機導覽。兩者完成後 mode 為 1001、無 held，PNG 與前版相同合成場景全像素相同，Close acknowledged 與全部 owner join。這是兩個限定原生案例，不包括 held drag 或兩項實體修飾手勢。
+
+`mouse_drag` 第一次在 anchor 後收到額外 raw Esc 而失敗，未確認該 Esc 的來源；第二次座標工具在全螢幕／一般視窗都回 noWindowsAvailable，只有 AX／截圖可讀，沒有完成 anchor。兩者 cleanup false／缺 surface report，退出 0 沒有算通過。保留嚴格 expected 與所有失敗紀錄，原生 held drag 繼續待驗。探針另以 raw synthetic 單元驗證三種正例與「到上限仍缺釋放必須失敗」，不將這些單元混稱 trusted GUI 驗收。

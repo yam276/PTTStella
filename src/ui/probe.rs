@@ -5,9 +5,18 @@ use pttstella::{encoding, settings::AppSettings};
 use serde_json::Value;
 use std::path::Path;
 
+pub(super) fn mouse_case(case: Option<&str>) -> bool {
+    matches!(
+        case,
+        Some("mouse" | "mouse_boundary" | "mouse_drag" | "mouse_motion" | "mouse_wheel")
+    )
+}
+
 #[derive(Default)]
 pub(super) struct Checks {
     pub(super) mouse_reports: Vec<(pttstella::mouse::Button, pttstella::mouse::Action)>,
+    pub(super) mouse_samples: Vec<pttstella::mouse::input::SampleReport>,
+    pub(super) mouse_sample_overflow: bool,
     pub(super) mouse_cancels: usize,
     pub(super) mouse_copies: usize,
     pub(super) mouse_toggles: Vec<bool>,
@@ -57,6 +66,38 @@ pub(super) struct Checks {
     pub(super) copied_selection: Option<(u64, u64, u64)>,
 }
 impl Checks {
+    pub(super) fn mouse_samples_passed(&self, case: &str) -> bool {
+        use pttstella::mouse::{
+            Action::{Press, Release},
+            Button::Left,
+            Modifiers, WheelDirection,
+            input::SampleReport,
+        };
+        if self.mouse_samples.is_empty()
+            || self.mouse_sample_overflow
+            || self.mouse_cancels != 0
+            || !self.mouse_toggles.is_empty()
+            || self.navigation_requests != 0
+            || self.link_requests != 0
+            || !self.export_checked
+        {
+            return false;
+        }
+        if case == "mouse_wheel" {
+            return self.mouse_reports.is_empty()
+                && self.mouse_samples.iter().all(|sample|matches!(sample,SampleReport::Wheel(r) if r.col==4 && r.row==4 && r.modifiers==Modifiers::default()))
+                && self.mouse_samples.iter().any(|sample|matches!(sample,SampleReport::Wheel(r) if r.direction==WheelDirection::Up))
+                && self.mouse_samples.iter().any(|sample|matches!(sample,SampleReport::Wheel(r) if r.direction==WheelDirection::Down));
+        }
+        let button = match case {
+            "mouse_drag" => Some(Left),
+            "mouse_motion" => None,
+            _ => return false,
+        };
+        self.mouse_reports==[(Left,Press),(Left,Release)]
+            && self.mouse_samples.iter().all(|sample|matches!(sample,SampleReport::Motion(r) if (4..=10).contains(&r.col) && r.row==4 && r.button==button && r.modifiers==Modifiers::default()))
+            && self.mouse_samples.iter().any(|sample|matches!(sample,SampleReport::Motion(r) if r.col==10))
+    }
     pub(super) fn mouse_passed(&self, boundary: bool) -> bool {
         use pttstella::mouse::{
             Action::{Press, Release},
