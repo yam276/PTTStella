@@ -400,3 +400,12 @@ recent-clear-failed = 最近看板尚未完整清除：{ $error }。請重試。
 article-aid-invalid = 文章 AID 須為有效的八碼識別子，可加上開頭 #。
 article-url-invalid = 文章網址須為支援的 www.ptt.cc /bbs 文章網址，不接受額外參數或轉址。
 article-target-invalid = 請提供板名與 AID，或完整的 #AID@板名／PTT 文章網址。
+
+article-open-manual = 文章導覽已停止；此畫面需要你手動操作。
+article-open-identity = 無法確認指定文章身分，已停止後續操作。
+article-open-missing = 指定文章不存在、已刪除或目前無法開啟；已停止後續操作。
+article-open-timeout = 等待指定文章畫面逾時，已停止後續操作。
+article-open-active = 正在開啟 { $board } 的 #{ $aid }；可停止後續步驟。
+article-open-reached = 已開啟 { $board } 的 #{ $aid }。
+navigation-job-cancelled = 已停止後續導覽步驟；已送出內容無法撤回。
+navigation-job-busy = 已有登入或導覽工作進行中，請先完成或停止。

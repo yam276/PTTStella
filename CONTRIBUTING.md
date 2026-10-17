@@ -92,6 +92,8 @@ UI 准入與生命週期變更另跑 `cargo test --locked --features desktop --b
 
 UI owner／封包變更再跑 `node --test tooling/test_surface_dialogs.mjs`。使用明確 DOM／clock doubles 核對晚到字型結果、關閉／revoke、舊預覽、登入草稿清除、名單 busy／失敗恢復及 router 拒絕未知／legacy envelope；這些不是原生 trusted 操作證據。[ui-packets](tests/fixtures/ui-packets.json) 是獨立編寫的 synthetic wire expected，Rust bin 比對生產 Packet 的 serde 結果，JS 測試核對分派，沒有用序列化往返當 expected。Paint 與內嵌預覽另檢查結構，完整呈現仍由原生 PNG／畫面驗收。
 
+AID 核心另核對 article_navigation 的自製 article-open fixture 與 navigation_job typed progress。production Connection 的 article_tests 需精確比對切板、# 提示、八碼／CR、Q 資訊、空白返回及方向右；錯誤、權限提示、過期輸入、所有取消階段與晚到正確資訊不得續送。同步資訊框保持零空白且可 Pong，整體／每步期限不被碎片延長，重連零重播。BoardVisit 另證明導覽仍待輸入時已發布原 session 的到達事實，重連不得重貼舊 generation。既有 boards／window 原生結果只算共同 consumer 回歸，不能代替待接 AID 入口的原生驗收。
+
 最近清單另核對 lib 的 recent_boards model／store 與 bin 的 Files writer／recent state 測試：正式到達、大小寫去重、20 筆上限、損壞／超量保留、備份、清除失敗、慢寫入合併、picker 期間保存與關閉 drain。`boards` 原生結果須保留 `[Other, Stella]` 並排除取消的 Beta；將該合成資料複製至新程序的 probe-recent-boards.json，用 `--probe-surface OUTPUT_DIRECTORY recent` 開啟切板視窗、確認順序、清除、等待完成後關閉，再以清除後檔案啟動第三個程序確認仍空。獨立讀取主檔與 .bak 均須為空；peer 拒絕所有站端 bytes。`boards_close` 另在第二次到達後開始 Beta，同一次 UI 呼叫確認「停止切板」可見後立即 ⌘Q，檢查等待中的工作停止、Close acknowledged、各 owner join 與只保留兩個正式到達。兩個新 probe 不取用正式帳號／本機真實清單。
 
 檔案工作／畫面狀態變更另核對 bin 的 Files 與 SurfaceState 案例：慢 blocking worker 不阻塞事件輪詢、忙碌不啟動第二筆、關閉時保留已開始工作且不吞失敗，以及單筆繪製／ACK、規則／來源／選取的失效。延期 picker 使用同一 production PNG 管線，八種狀態變更後舊 PNG 不寫，新請求仍須確實保存。JS 測試執行實際 clearSelection，以 [selection-cleared](tests/fixtures/selection-cleared.json) 核對直接撤銷通知；DOM doubles 不冒充原生操作。

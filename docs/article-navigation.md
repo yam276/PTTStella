@@ -1,6 +1,6 @@
 # AID 與指定文章
 
-本契約對應 active plan 的 C3。已實作文章識別與網址驗證；Session 導覽、使用者入口、書籤與原生驗收仍待接續，不把解析成功當成已開啟文章。
+本契約對應 active plan 的 C3。已實作文章識別、網址驗證與 Session 導覽核心；使用者入口、書籤與 AID 原生驗收仍待接續，不把解析成功當成已開啟文章。
 
 ## 識別與輸入
 
@@ -15,12 +15,18 @@
 
 這些格式依公開 [文章網址產生](https://github.com/ptt/pttbbs/blob/68b88d8753d69000033037a0c84a4ee3596b937a/mbbsd/bbs.c#L455)；不是去任意頁面取尾段。輸入上限 256 bytes，板名及 AID 欄各自也有界；外圍非控制空白可清除，但不接受控制字元。網址只接受明確的 www.ptt.cc authority，拒絕帳密、顯式 port、其他主機、百分比編碼、反斜線、空白、dot path、query、fragment 與多餘路徑。不連網、跟隨轉址、取得文章或送出站端 bytes。
 
-## 接續導覽的確認點
+## 單一有界導覽的確認點
 
-公開 [列表的 AID 搜尋](https://github.com/ptt/pttbbs/blob/68b88d8753d69000033037a0c84a4ee3596b937a/mbbsd/read.c#L502) 只選中文章，不能直接視為已閱讀。接續實作需沿用 Session 唯一有界工作及 C2 切板流程：等目標板文章列表、送 #、核對空白搜尋提示、送 AID 與 CR 一次，再確認站端選取結果。不存在、刪除、無權限或未知格式均停止，保留手動操作，不自動確認錯誤提示。
+公開 [列表的 AID 搜尋](https://github.com/ptt/pttbbs/blob/68b88d8753d69000033037a0c84a4ee3596b937a/mbbsd/read.c#L502) 只選中文章，不能直接視為已閱讀。導覽已沿用 Session 唯一有界工作及 C2 切板流程：等目標板文章列表、送 #、核對空白搜尋提示、送 AID 與 CR 一次，再確認站端選取結果。不存在、刪除、無權限或未知格式均停止，保留手動操作，不自動確認錯誤提示。
 
-站端的 [文章資訊查詢](https://github.com/ptt/pttbbs/blob/68b88d8753d69000033037a0c84a4ee3596b937a/mbbsd/bbs.c#L3584) 可回傳 AID 與板名；後續以已辨識列表來源、選取列與完整資訊框核對身分，不能只在文章內文找到相同文字就放行。只有已確認的資訊框可繼續，需等返回相同選取列後才開啟，最後確認閱讀畫面。這些確認／取消／期限與原生測試尚未實作完成。
+站端的 [文章資訊查詢](https://github.com/ptt/pttbbs/blob/68b88d8753d69000033037a0c84a4ee3596b937a/mbbsd/bbs.c#L3584) 可回傳 AID 與板名；以已辨識列表來源、選取列與完整資訊框核對身分，不能只在文章內文找到相同文字就放行。只有已確認的資訊框可繼續，需等返回相同選取列後才開啟，最後確認閱讀畫面。只有資訊框身分匹配才送空白關閉；核對回到原選取列後才送方向右，最後需看到一般閱讀起頁、作者行與正確板名。文章不存在、刪除、權限提示、錯碼／錯板及非預期說明會停止；未知片段不延長期限。每步 5 秒、整體 30 秒，包含前面的切板步驟。取消、原始輸入、有效手動導覽、session 改變或關閉停止後續，不重試。M／G 身分使用同一核對流程，仍只准入已辨識列表與閱讀格式，不宣稱所有文摘版面已驗收。
 
 ## 驗證
 
 純 Rust 使用獨立手算向量核對 timestamp、HEX、M／G 與舊檔名，不用自己的 encode／decode round trip 作唯一證據。另測大小寫、輸入上限、保留位元、時間範圍、格式錯誤、混淆主機／路徑與控制字元；中英錯誤走 Fluent。一般測試不連 PTT，不使用帳號或私人文章。
+
+`navigation_job::Destination` 明列 Board／Article，對應一個 Session NavigationJob 與同一 write_input、input epoch、保活閘及清理；UI 只等啟動回覆，View.destination 的 Reached 才是完成。原有 C2 UI 消費相同 typed destination，沒有第二條發鍵管線或 timer。
+
+Session 另發布帶 generation／serial 的最後一筆已確認 BoardVisit，供最近清單消費；這個事實可跨後續搜尋／錯誤畫面與 watch 合併保留，即使新操作仍在等待也不漏記。新連線先清除舊事實，UI 不把新 generation 套在舊紀錄上；清單清除不重置已消費序號。
+
+自製 article-open fixture 與 production Connection 本機 peer 核對每步 bytes、同步資訊框零繼續與 Pong、五個等待階段的取消／原始輸入、過期輸入不取消現行工作、錯誤後晚到資訊框零操作、真實五秒逾時、重連零重播及關閉 join。現階段尚無 AID 使用者入口或 AID 原生操作完成宣稱；這些仍須下一批驗證。

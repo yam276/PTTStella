@@ -145,6 +145,14 @@ macOS 原生顯示正確的兩段網址及兩段本機圖片標籤，AX 匯出 P
 
 **C3 識別驗證已實作，導覽與入口接續**。新增 ArticleTarget／Aid，驗證八碼 raw identity、板名、M／G 及新舊文章檔名，將明確支援的 www.ptt.cc 文章網址與 #AID@Board 正規化為同一型別；拒絕控制碼、保留位元、時間超限、非預期 authority、顯式 port、query／fragment、編碼／dot path 與多餘路徑。四個純 Rust 案例使用手寫 expected，另跑 Fluent、core／Clippy／文件 gate；無新 UI 或 App 交付宣稱。站端 # 搜尋只移動選取，已核對資訊框提供 AID／板名的來源，下一批沿用有界工作逐步確認再開啟。契約見 [AID 與指定文章](../article-navigation.md)，證據保留 `.local/verification/aid-c3`；Session 接線、原生操作、書籤與 D 尚未完成。
 
+**C3 導覽核心與單一工作接線已完成，文章入口接續**。新增 Open reducer，組合既有 Switch；從已確認板頁送 #，核對精確空白提示後送八碼 AID／CR 一次。搜尋回到列表後先保留選取列、送 Q，核對完整資訊框幾何、加粗 AID、板名與原列；只有匹配的已請求資訊框可送空白，再等同列返回才送方向右，最後確認首行作者／板名及一般閱讀起頁。不存在／已刪除、權限提示、錯 AID／錯板與選取列變更停止；同步期間零繼續，未知片段不延長每步 5 秒／總計 30 秒。M／G 在同一已辨識格式核對，不宣稱涵蓋所有文摘／閱讀版面。
+
+Session 只持有一個 NavigationJob，Board／Article 是封閉 Destination，沿用同一 write_input、epoch、手動操作優先、保活暫停、取消與清理。原 BoardProgress 改為 View.destination 的 typed progress，Paint.navigation 仍是畫面 context，UI 消費者與獨立 wire expected 已一併核對。開始 Reply 仍僅確認啟動；Reached 才是完成。為免 AID 等待期間漏掉切板到達，Session 發布帶原 generation／serial 的最後 BoardVisit，UI 最近清單只消費一次；錯誤／閱讀／watch 合併保留確認事實，新連線先清舊來源，清單清除不重置消費序號。
+
+六個純文章流程與六個 production Connection 案例、共同進度 wire case，合計 79 個 desktop lib、36 個 bin、34 個 JS，以及 core／Clippy／docs 通過。測試核對每筆獨立 expected bytes、M／G、所有提示分片、同步資訊框與 Pong、五階段取消／原始輸入、舊 generation 不取消目前工作、錯誤與晚到資訊框零續送、真實五秒逾時、重連零重播、工作中 shutdown，以及待回應中仍保存板到達與原 generation。兩個新增負面案例的初期測試問題保留於證據：無效游標未構成合法換列、實際 Other 板的確認事實不應斷言為 Stella；均改用明確正反輸入與獨立預期，沒有放行錯誤頁。
+
+macOS 同一候選 `dist/macos-article-core/PTTStella.app` 通過既有 C2 UI 的兩次到達、超長拒絕與 Beta 取消，最近清單仍為 Other／Stella；同一版本重跑 46 筆 Vim／53 實體鍵保持 Normal，⌘W／⌘Q Close acknowledged 與全部 owner join。PNG 與上一份相同合成板列表基準逐像素相同；這些只證明共同封包／UI 回歸，**不算 AID 原生操作完成**。證據在 `.local/verification/aid-c3/workflow`。最新先前交付 App 仍保留，下一批接 AID 使用者入口及其原生探針，再做書籤；C1 滑鼠缺口、D、實站、原生 IME 及其他 OS 仍未結案。
+
 ## 維護性重構
 
 2026-10-17 傳統 BBS 字型：依公開的 PTT 官方終端預設及 Windows 客戶端資源確認 MingLiU／細明體是傳統選項，並非所有客戶端有唯一預設。新增 `windows_classic`（MingLiU／MingLiU）與 `macos_bbs`（Songti TC／Songti TC）；既有 Windows 黑體組合、macOS 黑體／宋體與平台初始值保留。新組合均明確選取，前者缺少時顯示兩角色載入警告及官方取得／授權頁，後者只稱本機宋體替代，不宣稱等同細明體。沒有加入第三方字型檔。

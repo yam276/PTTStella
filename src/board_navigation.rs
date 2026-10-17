@@ -55,22 +55,6 @@ impl fmt::Display for Error {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
-#[serde(tag = "state", rename_all = "snake_case")]
-pub enum Progress {
-    #[default]
-    Idle,
-    Active {
-        serial: u64,
-        target: BoardName,
-        operation: navigation::Stamp,
-    },
-    Reached {
-        serial: u64,
-        board: BoardName,
-    },
-}
-
 pub fn browser(frame: &Frame) -> bool {
     match navigation::analyze(frame) {
         Context::BoardList { .. } => true,

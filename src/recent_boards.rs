@@ -7,6 +7,14 @@ pub mod store;
 pub const LIMIT: usize = 20;
 pub const MAX_BYTES: usize = 4096;
 
+/// Persistent confirmation from the Session, consumed once despite watch coalescing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BoardVisit {
+    pub generation: u64,
+    pub serial: u64,
+    pub board: BoardName,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct RecentBoards {
     boards: Vec<BoardName>,

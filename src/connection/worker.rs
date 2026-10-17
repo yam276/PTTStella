@@ -1,9 +1,9 @@
 //! The single session owner. Event polling stays separate from state transitions.
 use super::{CloseOutcome, Command, Dial, Phase, Socket, View, liveness, output, transport};
 use crate::{
-    board_navigation::{self, BoardName, Progress as BoardProgress, Switch},
     login::{self, Credentials, Prompt},
     navigation::{self, Context, Intent, Stamp},
+    navigation_job::{self, Destination, Flow, Progress as NavigationProgress},
     screen::Screen,
     telnet,
 };
@@ -47,8 +47,8 @@ struct LoginAttempt {
     deadline: Instant,
 }
 
-struct BoardSwitch {
-    flow: Switch,
+struct NavigationJob {
+    flow: Flow,
     operation: Stamp,
     serial: u64,
     epoch: u64,
@@ -66,8 +66,10 @@ struct Session {
     pending_input: Option<PendingInput>,
     login_attempt: Option<LoginAttempt>,
     login_followup: Option<login::FollowUp>,
-    board_switch: Option<BoardSwitch>,
-    switch_serial: u64,
+    navigation_job: Option<NavigationJob>,
+    navigation_serial: u64,
+    visits: crate::recent_boards::Visits,
+    visit_serial: u64,
     last_close: CloseOutcome,
     idle: liveness::Idle,
     timing: liveness::Timing,
@@ -103,18 +105,18 @@ pub(super) async fn run(
             incoming = async {
                 match session.socket.as_mut() { Some(socket) => socket.next().await, None => pending().await }
             } => session.receive(incoming).await,
-            _ = clock.tick(), if session.dirty || session.output.active() || session.board_switch.is_some() => {
+            _ = clock.tick(), if session.dirty || session.output.active() || session.navigation_job.is_some() => {
                 if session.output.expire(Instant::now()) {
                     session.screen.release_synchronized_output();
                     session.continue_login().await;
                     session.dirty = true;
                 }
-                if session.board_switch.as_ref().is_some_and(|job| job.flow.expired(Instant::now())) {
-                    session.stop_switch(board_navigation::Error::Timeout.to_string());
+                if let Some(message) = session.navigation_job.as_ref().filter(|job|job.flow.expired(Instant::now())).map(|job|job.flow.timeout_message()) {
+                    session.stop_navigation(message);
                 }
                 // Automatic steps yield to already queued manual input/UI state.
                 if commands.is_empty() && matches!(gates.has_changed(),Ok(false)) {
-                    session.advance_switch(Instant::now()).await;
+                    session.advance_navigation(Instant::now()).await;
                 }
                 if session.dirty { session.publish(); }
             },
@@ -133,8 +135,8 @@ pub(super) async fn run(
             session.login_attempt = None;
             session.login_followup = None;
             session.view.login_guidance = login::Guidance::Idle;
-            session.board_switch = None;
-            session.view.board_navigation = BoardProgress::Idle;
+            session.navigation_job = None;
+            session.view.destination = NavigationProgress::Idle;
             session.screen.release_synchronized_output();
             session.output.track(None, Instant::now());
         }
@@ -162,8 +164,10 @@ impl Session {
             pending_input: None,
             login_attempt: None,
             login_followup: None,
-            board_switch: None,
-            switch_serial: 0,
+            navigation_job: None,
+            navigation_serial: 0,
+            visits: crate::recent_boards::Visits::default(),
+            visit_serial: 0,
             last_close: CloseOutcome::NoConnection,
             idle: liveness::Idle::new(Instant::now(), timing),
             output: output::Deadline::default(),
@@ -192,20 +196,20 @@ impl Session {
                 self.view.message = crate::msg!("login-cancelled");
                 self.dirty = true;
             }
-            Some(Command::SwitchBoard {
+            Some(Command::GoTo {
                 stamp,
-                board,
+                destination,
                 reply,
             }) => {
                 if !reply.is_closed() {
-                    let result = self.switch_board(stamp, board).await;
+                    let result = self.go_to(stamp, destination).await;
                     let started = result.is_ok();
                     if reply.send(result).is_err() && started {
-                        self.cancel_switch(stamp);
+                        self.cancel_navigation(stamp);
                     }
                 }
             }
-            Some(Command::CancelSwitchBoard { operation }) => self.cancel_switch(operation),
+            Some(Command::CancelNavigation { operation }) => self.cancel_navigation(operation),
             Some(Command::Login {
                 stamp,
                 credentials,
@@ -254,9 +258,10 @@ impl Session {
         self.login_attempt = None;
         self.login_followup = None;
         self.view.login_guidance = login::Guidance::Idle;
-        self.board_switch = None;
-        self.view.board_navigation = BoardProgress::Idle;
+        self.navigation_job = None;
+        self.view.destination = NavigationProgress::Idle;
         self.view.generation = self.view.generation.saturating_add(1);
+        self.view.board_visit = None;
         self.idle.activity(Instant::now());
         self.view.keep_alive_sent = 0;
         self.view.keep_alive_failure = None;
@@ -281,8 +286,8 @@ impl Session {
         self.login_attempt = None;
         self.login_followup = None;
         self.view.login_guidance = login::Guidance::Idle;
-        self.board_switch = None;
-        self.view.board_navigation = BoardProgress::Idle;
+        self.navigation_job = None;
+        self.view.destination = NavigationProgress::Idle;
         self.idle.activity(Instant::now());
         self.view.generation = self.view.generation.saturating_add(1);
         self.pending_input = None;
@@ -361,8 +366,8 @@ impl Session {
             self.dirty = true;
             return;
         }
-        if self.board_switch.is_some() {
-            self.stop_switch(crate::msg!("board-switch-cancelled"));
+        if self.navigation_job.is_some() {
+            self.stop_navigation(crate::msg!("navigation-job-cancelled"));
         }
         self.idle.activity(Instant::now());
         if self.write_input(bytes).await.is_ok() {
@@ -384,7 +389,7 @@ impl Session {
             return Err(crate::msg!("login-stale"));
         }
         if self.login_attempt.is_some()
-            || self.board_switch.is_some()
+            || self.navigation_job.is_some()
             || self.pending_input.is_some()
             || login::prompt(&self.screen.frame()) != Some(Prompt::Account)
         {
@@ -402,52 +407,60 @@ impl Session {
         Ok(())
     }
 
-    async fn switch_board(&mut self, stamp: Stamp, target: BoardName) -> Result<(), String> {
+    async fn go_to(&mut self, stamp: Stamp, target: Destination) -> Result<(), String> {
         if self.view.phase != Phase::Connected || self.socket.is_none() || stamp != self.stamp() {
-            return Err(crate::msg!("board-switch-stale"));
+            return Err(navigation::Error::Stale.to_string());
         }
-        if self.board_switch.is_some()
+        if self.navigation_job.is_some()
             || self.login_attempt.is_some()
             || self.login_followup.is_some()
         {
-            return Err(crate::msg!("board-switch-busy"));
+            return Err(crate::msg!("navigation-job-busy"));
         }
         self.clear_answered_input();
         if self.pending_input.is_some() {
             return Err(navigation::Error::AwaitingScreen.to_string());
         }
-        let start = Switch::begin(&self.screen.frame(), target.clone(), Instant::now())
-            .map_err(|error| error.to_string())?;
-        self.switch_serial = self.switch_serial.saturating_add(1);
+        let start = Flow::begin(&self.screen.frame(), target.clone(), Instant::now())?;
+        self.navigation_serial = self.navigation_serial.saturating_add(1);
         match start {
-            board_navigation::Start::Reached(board) => {
-                self.reached_board(self.switch_serial, board)
+            navigation_job::Start::Reached(target) => {
+                self.reached_destination(self.navigation_serial, target)
             }
-            board_navigation::Start::Run { switch, bytes } => {
-                self.view.board_navigation = BoardProgress::Active {
-                    serial: self.switch_serial,
+            navigation_job::Start::Run { flow, bytes } => {
+                self.view.destination = NavigationProgress::Active {
+                    serial: self.navigation_serial,
                     target: target.clone(),
                     operation: stamp,
                 };
-                self.view.message = crate::msg!("board-switch-active", board = target.as_str());
-                self.board_switch = Some(BoardSwitch {
-                    flow: switch,
+                self.view.message = match &target {
+                    Destination::Board { board } => {
+                        crate::msg!("board-switch-active", board = board.as_str())
+                    }
+                    Destination::Article(article) => crate::msg!(
+                        "article-open-active",
+                        board = article.board().as_str(),
+                        aid = article.aid().as_str()
+                    ),
+                };
+                self.navigation_job = Some(NavigationJob {
+                    flow,
                     operation: stamp,
-                    serial: self.switch_serial,
+                    serial: self.navigation_serial,
                     epoch: self.view.input_epoch,
                 });
-                self.send_switch_step(&bytes).await?;
+                self.send_navigation_step(&bytes).await?;
             }
         }
         self.dirty = true;
         Ok(())
     }
 
-    async fn send_switch_step(&mut self, bytes: &[u8]) -> Result<(), String> {
+    async fn send_navigation_step(&mut self, bytes: &[u8]) -> Result<(), String> {
         self.idle.activity(Instant::now());
         match self.write_input(bytes).await {
             Ok(()) => {
-                if let Some(job) = self.board_switch.as_mut() {
+                if let Some(job) = self.navigation_job.as_mut() {
                     job.epoch = self.view.input_epoch;
                 }
                 self.wait_for_input(false);
@@ -455,18 +468,18 @@ impl Session {
                 Ok(())
             }
             Err(error) => {
-                self.stop_switch(error.clone());
+                self.stop_navigation(error.clone());
                 Err(error)
             }
         }
     }
 
-    async fn advance_switch(&mut self, now: Instant) {
-        let Some(job) = self.board_switch.as_mut() else {
+    async fn advance_navigation(&mut self, now: Instant) {
+        let Some(job) = self.navigation_job.as_mut() else {
             return;
         };
         if job.operation.generation != self.view.generation || job.epoch != self.view.input_epoch {
-            self.stop_switch(crate::msg!("board-switch-cancelled"));
+            self.stop_navigation(crate::msg!("navigation-job-cancelled"));
             return;
         }
         if self.screen.synchronized_since().is_some()
@@ -476,35 +489,46 @@ impl Session {
         }
         let serial = job.serial;
         match job.flow.observe(&self.screen.frame(), now) {
-            Ok(board_navigation::Advance::Wait) => {}
-            Ok(board_navigation::Advance::Send(bytes)) => {
-                let _ = self.send_switch_step(&bytes).await;
+            Ok(navigation_job::Advance::Wait) => {}
+            Ok(navigation_job::Advance::Send(bytes)) => {
+                let _ = self.send_navigation_step(&bytes).await;
             }
-            Ok(board_navigation::Advance::Reached(board)) => self.reached_board(serial, board),
-            Err(error) => self.stop_switch(error.to_string()),
+            Ok(navigation_job::Advance::Reached(target)) => {
+                self.reached_destination(serial, target)
+            }
+            Err(error) => self.stop_navigation(error.to_string()),
         }
     }
 
-    fn reached_board(&mut self, serial: u64, board: BoardName) {
-        self.board_switch = None;
-        self.view.message = crate::msg!("board-switch-reached", board = board.as_str());
-        self.view.board_navigation = BoardProgress::Reached { serial, board };
+    fn reached_destination(&mut self, serial: u64, target: Destination) {
+        self.navigation_job = None;
+        self.view.message = match &target {
+            Destination::Board { board } => {
+                crate::msg!("board-switch-reached", board = board.as_str())
+            }
+            Destination::Article(article) => crate::msg!(
+                "article-open-reached",
+                board = article.board().as_str(),
+                aid = article.aid().as_str()
+            ),
+        };
+        self.view.destination = NavigationProgress::Reached { serial, target };
         self.dirty = true;
     }
 
-    fn cancel_switch(&mut self, operation: Stamp) {
-        if self.board_switch.as_ref().is_some_and(|job| {
+    fn cancel_navigation(&mut self, operation: Stamp) {
+        if self.navigation_job.as_ref().is_some_and(|job| {
             job.operation == operation && operation.generation == self.view.generation
         }) {
-            self.stop_switch(crate::msg!("board-switch-cancelled"));
+            self.stop_navigation(crate::msg!("navigation-job-cancelled"));
         }
     }
 
-    fn stop_switch(&mut self, message: String) {
-        if self.board_switch.take().is_none() {
+    fn stop_navigation(&mut self, message: String) {
+        if self.navigation_job.take().is_none() {
             return;
         }
-        self.view.board_navigation = BoardProgress::Idle;
+        self.view.destination = NavigationProgress::Idle;
         self.view.message = message;
         if self
             .pending_input
@@ -522,8 +546,8 @@ impl Session {
         intent: Intent,
         keyboard: bool,
     ) -> Result<(), String> {
-        if stamp == self.stamp() && self.board_switch.is_some() {
-            self.stop_switch(crate::msg!("board-switch-cancelled"));
+        if stamp == self.stamp() && self.navigation_job.is_some() {
+            self.stop_navigation(crate::msg!("navigation-job-cancelled"));
         }
         let context = navigation::analyze(&self.screen.frame());
         let list = matches!(
@@ -752,12 +776,22 @@ impl Session {
 
     fn publish(&mut self) {
         self.clear_answered_input();
-        self.view.input_pending = (self.pending_input.is_some() || self.board_switch.is_some())
+        self.view.input_pending = (self.pending_input.is_some() || self.navigation_job.is_some())
             && self.view.phase == Phase::Connected;
         self.view.login_pending = self.login_attempt.is_some() || self.login_followup.is_some();
         self.view.output_pending = self.screen.synchronized_since().is_some();
         if !self.view.output_pending {
             self.view.frame = self.screen.frame();
+            if self.view.phase == Phase::Connected
+                && let Some(board) = self.visits.observe(self.view.generation, &self.view.frame)
+            {
+                self.visit_serial = self.visit_serial.saturating_add(1);
+                self.view.board_visit = Some(crate::recent_boards::BoardVisit {
+                    generation: self.view.generation,
+                    serial: self.visit_serial,
+                    board,
+                });
+            }
         }
         self.view.keep_alive_ready = self.idle.ready(self.stamp())
             && self.socket.is_some()
@@ -783,7 +817,7 @@ impl Session {
 
     async fn refresh(&mut self, now: Instant) {
         self.clear_answered_input();
-        if self.board_switch.is_none()
+        if self.navigation_job.is_none()
             && self.pending_input.as_ref().is_some_and(|p| p.expired(now))
         {
             if matches!(self.pending_input, Some(PendingInput::Refresh { .. })) {
@@ -803,7 +837,7 @@ impl Session {
             && self.pending_input.is_none()
             && self.login_attempt.is_none()
             && self.login_followup.is_none()
-            && self.board_switch.is_none()
+            && self.navigation_job.is_none()
             && self.idle.due(now, stamp)
             && navigation::analyze(&self.screen.frame()).allows_keepalive()
         {

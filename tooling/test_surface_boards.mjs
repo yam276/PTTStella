@@ -11,7 +11,7 @@ function environment(){
     const node=id=>{if(!nodes.has(id))nodes.set(id,{...element(id),id,value:"",disabled:false,hidden:true,open:false,textContent:"",focus(){focus.push(id);},showModal(){this.open=true;},close(){this.open=false;}});return nodes.get(id);};
     const document={createElement:element,getElementById:node,querySelector:()=>foreign?{}:[...nodes.values()].find(node=>node.open)};
     const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-boards.js",import.meta.url),"utf8")+"\ncreateBoardDialog",{document});
-    let packet={connected:true,generation:7,input_epoch:2,frame:{revision:4},board_navigation:{state:"idle"}};
+    let packet={connected:true,generation:7,input_epoch:2,frame:{revision:4},destination:{state:"idle"}};
     const ui=create({tr:translator("en-US"),send:value=>sent.push(JSON.parse(JSON.stringify(value))),stamp:()=>({generation:packet.generation,revision:packet.frame.revision,input_epoch:packet.input_epoch}),
         prepare:()=>focus.push("prepare"),restore:()=>focus.push("restore"),changed(){},current:()=>packet,isEditing:()=>editing});
     function fire(id,event,extra={}){
@@ -63,10 +63,10 @@ test("cancel revokes one request, late replies cannot close a newer draft, and e
 
 test("active cancellation uses its original operation, and session changes release local waits",()=>{
     const env=environment();const operation={generation:7,revision:4,input_epoch:2};
-    env.update({input_epoch:9,board_navigation:{state:"active",serial:1,target:"Stella",operation}});
+    env.update({input_epoch:9,destination:{state:"active",serial:1,target:{kind:"board",board:"Stella"},operation}});
     assert.equal(env.node("board-stop").hidden,false);env.fire("board-stop","click");
     assert.deepEqual(env.sent.at(-1),{kind:"board_cancel",operation,trusted:true});
-    env.update({board_navigation:{state:"idle"}});env.fire("board-open","click");env.node("board-name").value="Other";env.fire("board-submit","click");
+    env.update({destination:{state:"idle"}});env.fire("board-open","click");env.node("board-name").value="Other";env.fire("board-submit","click");
     env.update({generation:8,connected:false});assert.equal(env.node("board-name").disabled,false);
     env.ui.receive({request:1,feedback:{status:"started"}});assert.equal(env.node("board-dialog").open,true);
     const before=env.sent.length;env.fire("board-submit","click");assert.equal(env.sent.length,before);assert.match(env.node("board-note").textContent,/Connect/);
@@ -107,4 +107,17 @@ test("Enter on cancellation and recent controls does not submit a stale draft",(
         const event=env.fire("board-dialog","keydown",{key:"Enter",target:env.node(id)});assert.equal(event.prevented,false);
     }
     assert.deepEqual(env.sent,[]);
+});
+
+
+test("opening during a typed destination job displays its board and optional AID, never an object",()=>{
+    for(const target of [{kind:"board",board:"Stella"},{kind:"article",board:"Stella",aid:"00000101"}]){
+        const env=environment(),operation={generation:7,revision:4,input_epoch:2};
+        env.update({destination:{state:"active",serial:1,target,operation}});env.fire("board-open","click");
+        assert.equal(env.node("board-name").value,"Stella");assert.equal(env.node("board-name").disabled,true);
+        assert.match(env.node("board-note").textContent,/Stella/);assert.doesNotMatch(env.node("board-note").textContent,/object Object/);
+        if(target.kind==="article")assert.match(env.node("board-note").textContent,/#00000101/);
+        assert.deepEqual(env.sent,[]);env.fire("board-cancel","click");
+        assert.deepEqual(env.sent,[{kind:"board_cancel",operation,trusted:true}]);
+    }
 });
