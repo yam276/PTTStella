@@ -38,7 +38,7 @@ pub(super) fn mouse_case(case: Option<&str>) -> bool {
 
 #[derive(Default)]
 pub(super) struct Checks {
-    pub(super) mouse_reports: Vec<(pttstella::mouse::Button, pttstella::mouse::Action)>,
+    pub(super) mouse_edges: Vec<pttstella::mouse::Report>,
     pub(super) mouse_samples: Vec<pttstella::mouse::input::SampleReport>,
     pub(super) mouse_sample_overflow: bool,
     pub(super) mouse_cancels: usize,
@@ -90,6 +90,18 @@ pub(super) struct Checks {
     pub(super) copied_selection: Option<(u64, u64, u64)>,
 }
 impl Checks {
+    fn mouse_reports(&self) -> Vec<(pttstella::mouse::Button, pttstella::mouse::Action)> {
+        self.mouse_edges
+            .iter()
+            .map(|edge| (edge.button, edge.action))
+            .collect()
+    }
+    pub(super) fn mouse_observations(&self) -> Value {
+        serde_json::json!({"reports":self.mouse_reports(),"edges":self.mouse_edges,
+            "samples":self.mouse_samples,"sample_overflow":self.mouse_sample_overflow,
+            "cancels":self.mouse_cancels,"copies":self.mouse_copies,
+            "toggles":self.mouse_toggles,"navigation_requests":self.navigation_requests})
+    }
     pub(super) fn mouse_samples_passed(&self, case: &str) -> bool {
         use pttstella::mouse::{
             Action::{Press, Release},
@@ -108,7 +120,7 @@ impl Checks {
             return false;
         }
         if case == "mouse_wheel" {
-            return self.mouse_reports.is_empty()
+            return self.mouse_edges.is_empty()
                 && self.mouse_samples.iter().all(|sample|matches!(sample,SampleReport::Wheel(r) if r.col==4 && r.row==4 && r.modifiers==Modifiers::default()))
                 && self.mouse_samples.iter().any(|sample|matches!(sample,SampleReport::Wheel(r) if r.direction==WheelDirection::Up))
                 && self.mouse_samples.iter().any(|sample|matches!(sample,SampleReport::Wheel(r) if r.direction==WheelDirection::Down));
@@ -128,7 +140,7 @@ impl Checks {
                         .iter()
                         .any(|sample| matches!(sample,SampleReport::Motion(r) if r.col==4))
                 });
-        returned && self.mouse_reports==[(Left,Press),(Left,Release)]
+        returned && self.mouse_reports()==[(Left,Press),(Left,Release)]
             && self.mouse_samples.iter().all(|sample|matches!(sample,SampleReport::Motion(r) if (4..=10).contains(&r.col) && r.row==4 && r.button==button && r.modifiers==Modifiers::default()))
             && self.mouse_samples.iter().any(|sample|matches!(sample,SampleReport::Motion(r) if r.col==10))
     }
@@ -138,14 +150,14 @@ impl Checks {
             Button::{Left, Middle, Right},
         };
         if boundary {
-            return self.mouse_reports == [(Left, Press)]
+            return self.mouse_reports() == [(Left, Press)]
                 && self.mouse_cancels >= 1
                 && self.mouse_toggles.is_empty()
                 && self.navigation_requests == 0
                 && self.link_requests == 0
                 && self.export_checked;
         }
-        self.mouse_reports
+        self.mouse_reports()
             == [
                 (Left, Press),
                 (Left, Release),
@@ -493,6 +505,33 @@ pub(super) fn sgr66_sample(modern: bool) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod sample_tests {
     use super::*;
+    #[test]
+    fn mouse_observations_preserve_grid_coordinates_and_modifiers_in_failed_reports() {
+        use pttstella::mouse::{Action, Button, Modifiers, Report};
+        let mut checks = Checks::default();
+        checks.mouse_edges.push(Report {
+            col: 17,
+            row: 8,
+            button: Button::Left,
+            action: Action::Press,
+            modifiers: Modifiers {
+                shift: false,
+                alt: true,
+                ctrl: false,
+            },
+        });
+        let mut report = serde_json::json!({"status":"passed","mouse":checks.mouse_observations()});
+        finish_report(&mut report, None);
+        assert_eq!(report["status"], "failed");
+        assert_eq!(
+            report["mouse"],
+            serde_json::json!({
+                "reports":[["left","press"]],
+                "edges":[{"col":17,"row":8,"button":"left","action":"press","modifiers":{"shift":false,"alt":true,"ctrl":false}}],
+                "samples":[],"sample_overflow":false,"cancels":0,"copies":0,"toggles":[],"navigation_requests":0
+            })
+        );
+    }
     #[test]
     fn failed_cleanup_keeps_observations_and_cannot_claim_a_pass_or_join() {
         let mut report = serde_json::json!({"status":"passed","mouse":{"reports":[["left","press"]],"cancels":1},"listeners_released":true});

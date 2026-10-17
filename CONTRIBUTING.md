@@ -33,9 +33,11 @@ core 執行 Rust 1.97.0 的 fmt、Clippy、畫面與互動測試 suite 及 2 個
 
 `mouse_drag` 使用同一自製場景與 1002＋1006，要求零基 col 4／row 4 左鍵按下，沿同列移至 col 10 後釋放。peer 只接受獨立手寫的該水平區間 SGR motion，最多 16 筆，必須抵達終格並收到精確釋放；達到筆數上限仍缺釋放時必須失敗。`mouse_motion` 先在 col 4／row 4 點擊、釋放，再由 peer 開啟 1003；之後只接受同一水平區間的無按鈕 motion，終格 col 10 必須到達。原生工具可用指向終格的水平滾動移動指標；水平輪本身應零站端 bytes，不能改用合成 DOM 事件通過。
 
-`mouse_round_trip` 同樣使用 1002＋1006，但要求按住左鍵由 col 4 移到 col 10，再回 col 4 才放開。抵達遠端格時 peer 只重繪第二列 `HOLD: return to anchor`，核對持有交易跨一般重繪仍有效；回到起格的釋放不能代替必要的返回 motion。仍限制同一水平區間、最多 16 筆，完成後還原 fixture、切到 1001，另需 PNG 與正常清理。若工具把移動排到釋放之後，保留失敗與實際時間，標示該 backend 尚未證明 held motion；不得改 expected 放行。探針的非預期 binary 診斷只顯示長度或單獨 Escape 的分類，不輸出任意輸入內容。
+`mouse_round_trip` 同樣使用 1002＋1006，但要求按住左鍵由 col 4 移到 col 10，再回 col 4 才放開；初始畫面以同列黃色 A／B 明示這兩格，獨立 cell expected 核對標記與樣式，peer 座標／bytes 不變。抵達遠端格時 peer 只重繪第二列 `HOLD: return to anchor`，核對持有交易跨一般重繪仍有效；回到起格的釋放不能代替必要的返回 motion。仍限制同一水平區間、最多 16 筆，完成後還原 fixture、切到 1001，另需 PNG 與正常清理。若工具把移動排到釋放之後，保留失敗與實際時間，標示該 backend 尚未證明 held motion；不得改 expected 放行。探針的非預期 binary 診斷只顯示長度或單獨 Escape 的分類，不輸出任意輸入內容。
 
 probe 已收集的互動報告在 cleanup／peer 失敗時仍保存，強制 `status=failed`、`cleanup_completed=false`，未知 disconnect／join 欄位為 null；不能因可讀到報告或程序退出碼 0 而判通過。成功 cleanup 仍須 Close acknowledged，並保留原先互動判定。若 run 本身在建立報告前失敗，`cleanup.json` 仍獨立記錄，不虛構缺少的互動。
+
+mouse report 的 `edges` 保留至多 16 筆已准入事件的格線座標、按鈕、動作與修飾鍵；原 `reports` 的按鈕／動作配對從同一份有界記錄衍生，沒有第二份事件 owner。這些是 UI 觀察，peer 的獨立精確 bytes 判定仍為必要證據；只出現 UI press 不能證明 socket 已接受，亦不包含原始鍵入文字。
 
 `mouse_wheel` 從 1000＋1006 開始，要求 col 4／row 4 的向下 tick；畫面顯示 `WHEEL: now scroll UP` 並切到 1002，再要求同格向上 tick，允許有限筆同方向原生重複。完成後還原原場景。三個案例完成時都切到未支援 1001 停止回報，接著匯出 PNG、正常關窗；UI report 需非空且不超量、正確按鈕／motion／方向、零本機導覽／連結／偏好切換、沒有 held、Close acknowledged 與所有 owner 清理。每次原生執行的成功／失敗各自保留，raw input 單元僅驗證探針本身，不算原生操作。
 
