@@ -429,6 +429,7 @@ async fn run(
                 }
                 match event {
                     SurfaceEvent::StationMouse { event, .. } => {
+                        if surface_probe.as_deref()==Some("mouse") && checks.mouse_reports.len()<16 {checks.mouse_reports.push((event.report.button,event.report.action));}
                         let result = if !screen.mouse_shown(&event) || pending_paste.read().is_some() || keyboard_policy.status(&receiver.borrow().context()).pending {
                             Err(pttstella::msg!("station-mouse-stale"))
                         } else {
@@ -439,9 +440,15 @@ async fn run(
                             eval.send(Packet::StationMouseRejected {lease:event.lease,message:error}).map_err(|e|e.to_string())?;
                         }
                     }
-                    SurfaceEvent::StationMouseCancel { lease } => connection.cancel_mouse(lease),
+                    SurfaceEvent::StationMouseCancel { lease } => {
+                        if surface_probe.as_deref()==Some("mouse") {checks.mouse_cancels+=1;}
+                        connection.cancel_mouse(lease);
+                    },
                     SurfaceEvent::StationMouseRevoke { generation } => connection.revoke_mouse(generation),
-                    SurfaceEvent::StationMouseEnabled { generation, enabled, .. } => connection.mouse_enabled(generation, enabled),
+                    SurfaceEvent::StationMouseEnabled { generation, enabled, .. } => {
+                        if surface_probe.as_deref()==Some("mouse") && checks.mouse_toggles.len()<8 {checks.mouse_toggles.push(enabled);}
+                        connection.mouse_enabled(generation, enabled);
+                    },
                     SurfaceEvent::BookmarksOpen {request,..}=>{
                         checks.bookmark_opens=checks.bookmark_opens.saturating_add(1);
                         eval.send(Packet::BookmarksOpen {request,data:bookmarks.snapshot()}).map_err(|e|e.to_string())?;
@@ -924,6 +931,9 @@ async fn run(
                         if surface_probe.as_deref()==Some("osc8") && screen.copied(Identity{presentation,generation,revision},request,&receiver.borrow()) && let Some((_,_,_,row))=checks.osc8_selected.filter(|(g,r,q,_)|(*g,*r,*q)==(generation,revision,request)) {
                             checks.osc8_copy_rows.push(row);
                         }
+                        if surface_probe.as_deref()==Some("mouse") && screen.copied(Identity{presentation,generation,revision},request,&receiver.borrow()) {
+                            checks.mouse_copies+=1;
+                        }
                         checks.copy_checked |=
                             checks.copied_selection == Some((generation, revision, request));
                     }
@@ -1095,6 +1105,7 @@ async fn run(
     };
     let mut reports = Vec::new();
     if let (Some(case), Some(path)) = (surface_probe, probe.as_ref()) {
+        let mouse_report = serde_json::json!({"reports":checks.mouse_reports,"cancels":checks.mouse_cancels,"copies":checks.mouse_copies,"toggles":checks.mouse_toggles,"final":receiver.borrow().mouse,"navigation_requests":checks.navigation_requests});
         reports.push((path.join("surface-probe.json"),serde_json::json!({
             "status":if case=="slow" && commands.busy() || case=="files_slow" && files.busy() || case=="files" && checks.export_checked || case=="untrusted" && surface_probe_clean && rejected_events==3
                 || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB")
@@ -1105,6 +1116,7 @@ async fn run(
                     && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
                     && (case=="articles" && checks.article_cancelled || case=="articles_close" && matches!(&receiver.borrow().destination,pttstella::navigation_job::Progress::Active{serial:4,target:pttstella::navigation_job::Destination::Article(target),..} if target.aid().as_str()=="00000104"))
                 || case=="boards" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && checks.board_cancelled && checks.board_rejected>=1
+                || case=="mouse" && checks.mouse_passed() && receiver.borrow().mouse.active.is_none()
                 || case=="osc8" && checks.osc8_open_rows==[8,9] && checks.osc8_copy_rows==[8,9] && checks.osc8_dragged && checks.osc8_media_decoded>=2 && checks.export_checked
                 || case=="login_2fa" && checks.verification_required && checks.verification_rejected && checks.verification_browsing && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
                 || case=="fonts" && checks.font_catalog_reads>=2 && !checks.font_sources.is_empty() && checks.export_checked
@@ -1114,7 +1126,8 @@ async fn run(
             "bookmarks_initial":initial_bookmarks,"bookmarks_final":bookmarks.snapshot(),"bookmark_opens":checks.bookmark_opens,"bookmark_saves":checks.bookmark_saves,"bookmark_rejected":checks.bookmark_rejected,
             "article_reached":checks.article_reached,"article_missing":checks.article_missing,"article_rejected":checks.article_rejected,"article_cancelled":checks.article_cancelled,
             "board_reached":checks.board_reached,"board_rejected":checks.board_rejected,"board_cancelled":checks.board_cancelled,
-            "scope":if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
+            "scope":if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
+            "mouse":mouse_report,
             "osc8_dragged":checks.osc8_dragged,"osc8_media_decoded":checks.osc8_media_decoded,
             "osc8_open_rows":checks.osc8_open_rows,"osc8_copy_rows":checks.osc8_copy_rows,
             "verification_required":checks.verification_required,"verification_rejected":checks.verification_rejected,"verification_browsing":checks.verification_browsing,

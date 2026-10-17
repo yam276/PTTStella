@@ -51,6 +51,8 @@ pub fn app(props: AppProps) -> Element {
                     Connection::start_article_probe()
                 } else if sample_case.as_deref() == Some("bookmarks") {
                     Connection::start_bookmarks_probe()
+                } else if sample_case.as_deref() == Some("mouse") {
+                    Connection::start_mouse_probe()
                 } else if verification_probing {
                     Connection::start_verification_probe()
                 } else if surface_probing {

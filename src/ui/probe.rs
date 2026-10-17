@@ -7,6 +7,10 @@ use std::path::Path;
 
 #[derive(Default)]
 pub(super) struct Checks {
+    pub(super) mouse_reports: Vec<(pttstella::mouse::Button, pttstella::mouse::Action)>,
+    pub(super) mouse_cancels: usize,
+    pub(super) mouse_copies: usize,
+    pub(super) mouse_toggles: Vec<bool>,
     pub(super) bookmark_opens: usize,
     pub(super) bookmark_saves: usize,
     pub(super) bookmark_rejected: usize,
@@ -53,6 +57,26 @@ pub(super) struct Checks {
     pub(super) copied_selection: Option<(u64, u64, u64)>,
 }
 impl Checks {
+    pub(super) fn mouse_passed(&self) -> bool {
+        use pttstella::mouse::{
+            Action::{Press, Release},
+            Button::{Left, Middle, Right},
+        };
+        self.mouse_reports
+            == [
+                (Left, Press),
+                (Left, Release),
+                (Right, Press),
+                (Right, Release),
+                (Middle, Press),
+            ]
+            && self.mouse_toggles == [false, true]
+            && self.mouse_cancels >= 1
+            && self.mouse_copies >= 1
+            && self.link_requests == 0
+            && self.navigation_requests == 1
+            && self.export_checked
+    }
     pub(super) fn bookmarks_passed(
         &self,
         case: &str,

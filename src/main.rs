@@ -72,11 +72,11 @@ fn main() {
                 | "slow" | "dialogs" | "files" | "files_slow" | "fonts" | "sgr66"
                 | "sgr66_legacy" | "login_2fa" | "osc8" | "boards" | "boards_close"
                 | "recent" | "articles" | "articles_close" | "bookmarks"
-                | "bookmarks_restart" | "bookmarks_empty" | "bookmarks_corrupt"),
+                | "bookmarks_restart" | "bookmarks_empty" | "bookmarks_corrupt" | "mouse"),
             ) => Some(case.to_owned()),
             _ => {
                 eprintln!(
-                    "--probe-surface requires decode, painted, send, renderer_error, untrusted, confirm, slow, dialogs, files, files_slow, fonts, sgr66, sgr66_legacy, login_2fa, osc8, boards, boards_close, recent, articles, articles_close, bookmarks, bookmarks_restart, bookmarks_empty or bookmarks_corrupt"
+                    "--probe-surface requires decode, painted, send, renderer_error, untrusted, confirm, slow, dialogs, files, files_slow, fonts, sgr66, sgr66_legacy, login_2fa, osc8, boards, boards_close, recent, articles, articles_close, bookmarks, bookmarks_restart, bookmarks_empty, bookmarks_corrupt or mouse"
                 );
                 std::process::exit(2);
             }
