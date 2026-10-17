@@ -9,7 +9,7 @@ function createBoardDialog({tr,send,stamp,prepare,restore,changed,current,isEdit
     function open(e){
         if(disposed||!e.isTrusted||document.querySelector("dialog[open]")&&!dialog.open)return;
         if(dialog.open){name.focus();return;}
-        prepare(e);name.value=active?.target||"";note.textContent=active?tr("board-switch-active",{board:active.target}):"";
+        prepare(e);name.value=active?.target.board||"";note.textContent=active?tr(active.target.kind==="article"?"article-open-active":"board-switch-active",{board:active.target.board,aid:active.target.aid}):"";
         composing=false;dialog.showModal();working();changed();name.focus();
     }
     function shortcut(e){
@@ -56,7 +56,7 @@ function createBoardDialog({tr,send,stamp,prepare,restore,changed,current,isEdit
         if(result.feedback.status==="started"){name.value="";dialog.close();restore();changed();}
         else {note.textContent=result.feedback.notice||tr("board-switch-stale");name.focus();}
     }
-    function update(packet){if(disposed)return;if(pending&&(!packet.connected||pending.operation.generation!==packet.generation)){pending=null;if(dialog.open)note.textContent=tr("board-switch-stale");}active=packet.board_navigation?.state==="active"?packet.board_navigation:null;stopButton.hidden=!active;working();}
+    function update(packet){if(disposed)return;if(pending&&(!packet.connected||pending.operation.generation!==packet.generation)){pending=null;if(dialog.open)note.textContent=tr("board-switch-stale");}active=packet.destination?.state==="active"?packet.destination:null;stopButton.hidden=!active;working();}
     function revoke(){disposed=true;pending=null;active=null;composing=false;name.value="";}
     function destroy(){revoke();recentList.replaceChildren();recentNote.textContent="";if(dialog.open)dialog.close();}
     return {receive,receiveRecent,update,revoke,destroy,clean:()=>disposed&&!dialog.open&&!pending&&!active&&!composing&&!name.value,

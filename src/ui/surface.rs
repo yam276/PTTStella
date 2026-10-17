@@ -435,12 +435,12 @@ async fn run(
                         eval.send(Packet::RecentBoards(recent.packet())).map_err(|e|e.to_string())?;
                     },
                     SurfaceEvent::BoardCancel {operation,trusted:_} => {
-                        checks.board_cancelled |= matches!(surface_probe.as_deref(),Some("boards"|"boards_close")) && matches!(&receiver.borrow().board_navigation,pttstella::board_navigation::Progress::Active{operation:owner,..} if *owner==operation);
+                        checks.board_cancelled |= matches!(surface_probe.as_deref(),Some("boards"|"boards_close")) && matches!(&receiver.borrow().destination,pttstella::navigation_job::Progress::Active{operation:owner,..} if *owner==operation);
                         if board_request.is_some_and(|(_,stamp)|stamp==operation) {
                             if commands.is(CommandKind::Board) {commands.cancel();}
                             board_request=None;
                         }
-                        if let Err(error)=connection.cancel_switch_board(operation) {eval.send(Packet::Notice(error)).map_err(|error|error.to_string())?;}
+                        if let Err(error)=connection.cancel_navigation(operation) {eval.send(Packet::Notice(error)).map_err(|error|error.to_string())?;}
                     },
                     SurfaceEvent::SurfaceProbe { clean } => {
                         if !matches!(surface_probe.as_deref(), Some("untrusted" | "confirm")) {
@@ -1026,7 +1026,7 @@ async fn run(
                 if view.login_guidance != login_guidance && view.login_guidance.needs_input() {
                     keyboard_policy.use_native_input();
                 }
-                if matches!(surface_probe.as_deref(),Some("boards"|"boards_close")) && checks.board_reached.len()<3 && let pttstella::board_navigation::Progress::Reached{serial,board}=&view.board_navigation && checks.board_reached.last().is_none_or(|(seen,_)|seen!=serial) {checks.board_reached.push((*serial,board.as_str().to_owned()));}
+                if matches!(surface_probe.as_deref(),Some("boards"|"boards_close")) && checks.board_reached.len()<3 && let pttstella::navigation_job::Progress::Reached{serial,target}=&view.destination && checks.board_reached.last().is_none_or(|(seen,_)|seen!=serial) {checks.board_reached.push((*serial,target.board().as_str().to_owned()));}
                 login_guidance = view.login_guidance;
                 checks.verification_required |= login_guidance == pttstella::login::Guidance::CodeRequired;
                 checks.verification_rejected |= login_guidance == pttstella::login::Guidance::CodeRejected;
@@ -1056,7 +1056,7 @@ async fn run(
             "status":if case=="slow" && commands.busy() || case=="files_slow" && files.busy() || case=="files" && checks.export_checked || case=="untrusted" && surface_probe_clean && rejected_events==3
                 || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB")
                 || case=="recent" && recent_clears>=1 && recent.packet().boards.is_empty() && recent.packet().notice==Some(pttstella::msg!("recent-cleared"))
-                || case=="boards_close" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && matches!(&receiver.borrow().board_navigation,pttstella::board_navigation::Progress::Active{target,..} if target.as_str()=="Beta")
+                || case=="boards_close" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && matches!(&receiver.borrow().destination,pttstella::navigation_job::Progress::Active{target,..} if target.board().as_str()=="Beta")
                 || case=="boards" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && checks.board_cancelled && checks.board_rejected>=1
                 || case=="osc8" && checks.osc8_open_rows==[8,9] && checks.osc8_copy_rows==[8,9] && checks.osc8_dragged && checks.osc8_media_decoded>=2 && checks.export_checked
                 || case=="login_2fa" && checks.verification_required && checks.verification_rejected && checks.verification_browsing && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"

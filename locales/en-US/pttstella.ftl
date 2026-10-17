@@ -406,3 +406,12 @@ recent-clear-failed = Recent boards were not fully cleared: { $error }. Please r
 article-aid-invalid = Enter a valid eight-character article AID, optionally prefixed with #.
 article-url-invalid = Enter a supported www.ptt.cc /bbs article URL without extra parameters or redirects.
 article-target-invalid = Provide a board and AID, or a complete #AID@Board / PTT article URL.
+
+article-open-manual = Article navigation stopped. This screen needs manual input.
+article-open-identity = The requested article identity could not be confirmed. No further steps were sent.
+article-open-missing = The requested article is missing, deleted or unavailable. No further steps were sent.
+article-open-timeout = Timed out waiting for the requested article screen. No further steps were sent.
+article-open-active = Opening #{ $aid } on { $board }. You can stop the remaining steps.
+article-open-reached = Opened #{ $aid } on { $board }.
+navigation-job-cancelled = Remaining navigation steps stopped. Already-sent input cannot be withdrawn.
+navigation-job-busy = A login or navigation operation is already running. Finish or stop it first.

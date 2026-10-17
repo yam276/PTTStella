@@ -1,15 +1,15 @@
 //! Local list state; Files owns every load/write and Connection owns navigation.
 use super::{files::Files, files_recent, outbound::RecentBoardsPacket};
 use pttstella::{
-    connection::{Phase, View},
-    recent_boards::{RecentBoards, Visits, store::Store},
+    connection::View,
+    recent_boards::{RecentBoards, store::Store},
 };
 use std::path::Path;
 
 pub(super) struct State {
     store: Result<Store, String>,
     history: RecentBoards,
-    visits: Visits,
+    observed: Option<(u64, u64)>,
     writable: bool,
     revision: u64,
     notice: Option<String>,
@@ -34,7 +34,7 @@ impl State {
             history,
             writable,
             notice,
-            visits: Visits::default(),
+            observed: None,
             revision: 0,
         }
     }
@@ -60,13 +60,18 @@ impl State {
         });
     }
     pub(super) fn observe(&mut self, view: &View, files: &mut Files) -> bool {
-        if view.phase != Phase::Connected || view.output_pending || view.input_pending {
-            return false;
-        }
-        let Some(board) = self.visits.observe(view.generation, &view.frame) else {
+        let Some(visit) = &view.board_visit else {
             return false;
         };
-        if !self.history.visit(board) {
+        let identity = (visit.generation, visit.serial);
+        if self
+            .observed
+            .is_some_and(|seen| seen.0 > identity.0 || seen.0 == identity.0 && seen.1 >= identity.1)
+        {
+            return false;
+        }
+        self.observed = Some(identity);
+        if !self.history.visit(visit.board.clone()) {
             return false;
         }
         if self.writable {
@@ -97,6 +102,7 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pttstella::connection::Phase;
     fn view(scene: &str) -> View {
         let fixture: serde_json::Value =
             serde_json::from_str(include_str!("../../tests/fixtures/board-switch.json")).unwrap();
@@ -112,7 +118,20 @@ mod tests {
             input_pending: false,
             login_pending: false,
             login_guidance: pttstella::login::Guidance::Idle,
-            board_navigation: pttstella::board_navigation::Progress::Idle,
+            destination: pttstella::navigation_job::Progress::Idle,
+            board_visit: match scene {
+                "articles" => Some(pttstella::recent_boards::BoardVisit {
+                    generation: 7,
+                    serial: 1,
+                    board: pttstella::board_navigation::BoardName::parse("Stella").unwrap(),
+                }),
+                "other_articles" => Some(pttstella::recent_boards::BoardVisit {
+                    generation: 7,
+                    serial: 2,
+                    board: pttstella::board_navigation::BoardName::parse("Other").unwrap(),
+                }),
+                _ => None,
+            },
             phase: Phase::Connected,
             message: String::new(),
             received: 1,
@@ -131,20 +150,21 @@ mod tests {
         }
     }
     #[tokio::test]
-    async fn only_ready_arrivals_persist_and_clear_does_not_readd_an_unchanged_board() {
+    async fn confirmed_facts_persist_and_clear_does_not_readd_an_unchanged_board() {
         let dir = tempfile::tempdir().unwrap();
         let mut state = State::load(Some(dir.path()));
         let mut files = Files::default();
         for scene in ["main", "boards", "prompt", "selected", "entry"] {
             assert!(!state.observe(&view(scene), &mut files));
         }
-        let mut held = view("articles");
+        let mut held = view("entry");
         held.output_pending = true;
-        assert!(!state.observe(&held, &mut files));
-        held.output_pending = false;
         held.input_pending = true;
         assert!(!state.observe(&held, &mut files));
-        assert!(state.observe(&view("articles"), &mut files));
+        // A previously confirmed arrival survives later pending input/old pixels.
+        held.board_visit = view("articles").board_visit;
+        assert!(state.observe(&held, &mut files));
+        assert!(!state.observe(&view("articles"), &mut files));
         assert!(state.observe(&view("other_articles"), &mut files));
         drain(&mut state, &mut files).await;
         let reloaded = State::load(Some(dir.path()));

@@ -96,6 +96,9 @@ impl ArticleTarget {
     pub fn aid(&self) -> &Aid {
         &self.aid
     }
+    pub(crate) fn confirm_board(&mut self, board: BoardName) {
+        self.board = board;
+    }
     /// Supported forms: #AID@Board, or an exact www.ptt.cc /bbs article URL.
     /// Bare AIDs need the separate explicit board input supplied to `new`.
     pub fn parse(value: &str) -> Result<Self, Error> {

@@ -872,8 +872,8 @@ async fn board_switch_serializes_confirmed_steps_and_never_uses_a_synchronized_p
     assert_eq!(active.input_epoch, initial.input_epoch + 1);
     assert!(active.input_pending && !active.keep_alive_ready);
     assert!(matches!(
-        active.board_navigation,
-        BoardProgress::Active { .. }
+        active.destination,
+        NavigationProgress::Active { .. }
     ));
     assert!(
         connection
@@ -884,8 +884,8 @@ async fn board_switch_serializes_confirmed_steps_and_never_uses_a_synchronized_p
             .is_err()
     );
     assert!(matches!(
-        connection.updates.borrow().board_navigation,
-        BoardProgress::Active { .. }
+        connection.updates.borrow().destination,
+        NavigationProgress::Active { .. }
     ));
     ws.send(Message::Binary(board_page("boards").into()))
         .await
@@ -926,7 +926,7 @@ async fn board_switch_serializes_confirmed_steps_and_never_uses_a_synchronized_p
     ws.send(Message::Binary(board_page("articles").into()))
         .await
         .unwrap();
-    let reached=wait(&connection,|v|matches!(&v.board_navigation,BoardProgress::Reached{board,..} if board.as_str()=="Stella")).await;
+    let reached=wait(&connection,|v|matches!(&v.destination,NavigationProgress::Reached{target,..} if target.board().as_str()=="Stella")).await;
     assert!(!reached.input_pending);
     connection
         .request_switch_board(reached.stamp(), BoardName::parse("STELLA").unwrap())
@@ -935,7 +935,7 @@ async fn board_switch_serializes_confirmed_steps_and_never_uses_a_synchronized_p
         .await
         .unwrap();
     wait(&connection, |v| {
-        matches!(v.board_navigation, BoardProgress::Reached { serial: 2, .. })
+        matches!(v.destination, NavigationProgress::Reached { serial: 2, .. })
     })
     .await;
     assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
@@ -991,7 +991,7 @@ async fn board_switch_from_reading_pauses_keepalive_and_waits_for_each_back_befo
     ws.send(Message::Binary(board_page("empty_articles").into()))
         .await
         .unwrap();
-    wait(&connection,|v|matches!(&v.board_navigation,BoardProgress::Reached{board,..} if board.as_str()=="Stella")).await;
+    wait(&connection,|v|matches!(&v.destination,NavigationProgress::Reached{target,..} if target.board().as_str()=="Stella")).await;
     assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
     finish_board_peer(&connection, ws).await;
 }
@@ -1017,19 +1017,19 @@ async fn board_cancel_is_owned_by_its_request_and_raw_input_retires_later_steps_
         .input(initial.generation + 1, b"stale".to_vec())
         .unwrap();
     connection
-        .cancel_switch_board(Stamp {
+        .cancel_navigation(Stamp {
             generation: initial.generation + 1,
             ..initial.stamp()
         })
         .unwrap();
     assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
     assert!(matches!(
-        connection.updates.borrow().board_navigation,
-        BoardProgress::Active { .. }
+        connection.updates.borrow().destination,
+        NavigationProgress::Active { .. }
     ));
-    connection.cancel_switch_board(initial.stamp()).unwrap();
+    connection.cancel_navigation(initial.stamp()).unwrap();
     wait(&connection, |v| {
-        matches!(v.board_navigation, BoardProgress::Idle)
+        matches!(v.destination, NavigationProgress::Idle)
     })
     .await;
     ws.send(Message::Binary(board_page("prompt").into()))
@@ -1052,7 +1052,7 @@ async fn board_cancel_is_owned_by_its_request_and_raw_input_retires_later_steps_
         .await
         .unwrap();
     assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"s");
-    connection.cancel_switch_board(initial.stamp()).unwrap(); // Cannot cancel this newer operation.
+    connection.cancel_navigation(initial.stamp()).unwrap(); // Cannot cancel this newer operation.
     ws.send(Message::Binary(board_page("prompt").into()))
         .await
         .unwrap();
@@ -1067,8 +1067,8 @@ async fn board_cancel_is_owned_by_its_request_and_raw_input_retires_later_steps_
         .unwrap();
     assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
     assert!(matches!(
-        connection.updates.borrow().board_navigation,
-        BoardProgress::Idle
+        connection.updates.borrow().destination,
+        NavigationProgress::Idle
     ));
     ws.close(None).await.unwrap();
     wait(&connection, |v| v.phase == Phase::Disconnected).await;
@@ -1084,8 +1084,8 @@ async fn board_cancel_is_owned_by_its_request_and_raw_input_retires_later_steps_
     .await;
     assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
     assert!(matches!(
-        connection.updates.borrow().board_navigation,
-        BoardProgress::Idle
+        connection.updates.borrow().destination,
+        NavigationProgress::Idle
     ));
     finish_board_peer(&connection, ws).await;
 }
@@ -1122,8 +1122,8 @@ async fn board_switch_stops_at_entry_without_ever_pressing_continue() {
     })
     .await;
     assert!(matches!(
-        connection.updates.borrow().board_navigation,
-        BoardProgress::Idle
+        connection.updates.borrow().destination,
+        NavigationProgress::Idle
     ));
     assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
     finish_board_peer(&connection, ws).await;
@@ -1955,3 +1955,5 @@ async fn invalid_and_offline_input_is_rejected_without_connecting() {
     assert_eq!(view.received, 0);
     connection.shutdown().await.unwrap();
 }
+#[path = "article_tests.rs"]
+mod article_tests;

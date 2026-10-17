@@ -1,9 +1,10 @@
 //! One PTT connection owner, including explicit single-attempt login. No shell.
 use crate::{
-    board_navigation::{BoardName, Progress as BoardProgress},
+    board_navigation::BoardName,
     input::MAX_INPUT_BYTES,
     login::Credentials,
     navigation::{Intent, Stamp},
+    navigation_job::{Destination, Progress as NavigationProgress},
     screen::{Frame, Screen},
 };
 use std::{sync::Mutex, time::Duration};
@@ -46,7 +47,8 @@ pub struct View {
     pub input_pending: bool,
     pub login_pending: bool,
     pub login_guidance: crate::login::Guidance,
-    pub board_navigation: BoardProgress,
+    pub destination: NavigationProgress,
+    pub board_visit: Option<crate::recent_boards::BoardVisit>,
     pub frame: Frame,
     pub generation: u64,
     pub phase: Phase,
@@ -85,12 +87,12 @@ enum Command {
         reply: oneshot::Sender<Result<(), String>>,
     },
     CancelLogin,
-    SwitchBoard {
+    GoTo {
         stamp: Stamp,
-        board: BoardName,
+        destination: Destination,
         reply: oneshot::Sender<Result<(), String>>,
     },
-    CancelSwitchBoard {
+    CancelNavigation {
         operation: Stamp,
     },
     Navigate {
@@ -148,7 +150,8 @@ impl Connection {
             input_pending: false,
             login_pending: false,
             login_guidance: crate::login::Guidance::Idle,
-            board_navigation: BoardProgress::Idle,
+            destination: NavigationProgress::Idle,
+            board_visit: None,
             frame: screen.frame(),
             generation: 0,
             phase: Phase::Disconnected,
@@ -266,12 +269,22 @@ impl Connection {
     pub fn cancel_login(&self) -> Result<(), String> {
         self.enqueue(Command::CancelLogin)
     }
-    /// Acknowledges starting one workflow. Only View::board_navigation reports arrival.
+    /// Acknowledges starting one workflow. Only View::destination reports arrival.
     pub fn request_switch_board(&self, stamp: Stamp, board: BoardName) -> Result<Reply, String> {
+        self.request_go_to(stamp, Destination::Board { board })
+    }
+    pub fn request_open_article(
+        &self,
+        stamp: Stamp,
+        target: crate::article_target::ArticleTarget,
+    ) -> Result<Reply, String> {
+        self.request_go_to(stamp, Destination::Article(target))
+    }
+    fn request_go_to(&self, stamp: Stamp, destination: Destination) -> Result<Reply, String> {
         let (reply, answer) = oneshot::channel();
-        self.enqueue(Command::SwitchBoard {
+        self.enqueue(Command::GoTo {
             stamp,
-            board,
+            destination,
             reply,
         })?;
         Ok(Reply {
@@ -281,8 +294,8 @@ impl Connection {
             closed: crate::msg!("navigation-service-unavailable"),
         })
     }
-    pub fn cancel_switch_board(&self, operation: Stamp) -> Result<(), String> {
-        self.enqueue(Command::CancelSwitchBoard { operation })
+    pub fn cancel_navigation(&self, operation: Stamp) -> Result<(), String> {
+        self.enqueue(Command::CancelNavigation { operation })
     }
     pub async fn navigate(&self, stamp: Stamp, intent: Intent) -> Result<(), String> {
         self.request_navigate(stamp, intent)?.wait().await
