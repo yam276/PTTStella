@@ -248,3 +248,68 @@ pub(super) fn preview(probe: bool, media_origin: Option<&str>) -> Result<Vec<u8>
     }
     Ok(bytes)
 }
+
+/// Equivalent self-authored streams for separate native pixel captures.
+pub(super) fn sgr66_sample(modern: bool) -> Result<Vec<u8>, String> {
+    let mut bytes = preview(true, None)?;
+    for (row, legacy, modern_bytes) in [
+        (
+            4,
+            b"\x1b[0;31;44m\xa4\x1b[32;45m\xa4".as_slice(),
+            b"\x1b[0;31;44;66;32;45m\xa4\xa4".as_slice(),
+        ),
+        (
+            18,
+            b"\x1b[0;31;44mA\x1b[32;45mB",
+            b"\x1b[0;31;44;66;32;45mAB",
+        ),
+        (
+            19,
+            b"\x1b[1;7;31;44m\xa4\x1b[22;27;32;45m\xa4",
+            b"\x1b[1;7;31;44;66;22;27;32;45m\xa4\xa4",
+        ),
+    ] {
+        bytes.extend_from_slice(format!("\x1b[{row};1H").as_bytes());
+        bytes.extend_from_slice(if modern { modern_bytes } else { legacy });
+        bytes.extend_from_slice(b"\x1b[0m");
+    }
+    bytes.extend_from_slice(b"\x1b[24;80H\x1b[?25l");
+    Ok(bytes)
+}
+
+#[cfg(test)]
+mod sample_tests {
+    use super::*;
+    #[test]
+    fn sgr66_native_samples_have_independent_cell_expectations_and_equal_glyphs() {
+        let mut frames = Vec::new();
+        for modern in [false, true] {
+            let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
+            screen.feed(&sgr66_sample(modern).unwrap());
+            let left = screen.cell(0, 3).unwrap();
+            let right = screen.cell(1, 3).unwrap();
+            assert_eq!(
+                (left.style.fg, left.style.bg, right.style.fg, right.style.bg),
+                (1, 4, 2, 5)
+            );
+            assert_eq!(
+                (
+                    screen.cell(0, 17).unwrap().byte,
+                    screen.cell(1, 17).unwrap().byte
+                ),
+                (b'A', b'B')
+            );
+            assert!(
+                screen.cell(0, 18).unwrap().style.inverse
+                    && screen.cell(0, 18).unwrap().style.bright
+            );
+            assert!(
+                !screen.cell(1, 18).unwrap().style.inverse
+                    && !screen.cell(1, 18).unwrap().style.bright
+            );
+            assert_eq!(screen.frame().unsupported, 0);
+            frames.push(screen.frame());
+        }
+        assert_eq!(frames[0].glyphs, frames[1].glyphs);
+    }
+}

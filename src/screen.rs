@@ -77,6 +77,7 @@ pub struct Screen {
     y: usize,
     saved: (usize, usize),
     style: Style,
+    next_cell_style: Option<Style>,
     parser: Parser,
     top: usize,
     bottom: usize,
@@ -100,6 +101,7 @@ impl Screen {
             y: 0,
             saved: (0, 0),
             style: Style::default(),
+            next_cell_style: None,
             parser: Parser::Ground,
             top: 0,
             bottom: rows - 1,
@@ -145,6 +147,11 @@ impl Screen {
         self.revision = self.revision.saturating_add(1);
     }
     fn parse_byte(&mut self, byte: u8) {
+        // SGR 66 latches one byte-cell's previous style. A subsequent control
+        // cancels that latch; high Big5/UAO bytes remain printable data.
+        if byte <= 0x1f || byte == 0x7f {
+            self.next_cell_style = None;
+        }
         // Only 7-bit controls are recognized: 0x80..=0x9f are Big5/UAO data.
         if matches!(byte, 0x18 | 0x1a) {
             self.parser = Parser::Ground;
@@ -269,6 +276,7 @@ impl Screen {
         self.top = 0;
         self.bottom = self.rows - 1;
         self.style = Style::default();
+        self.next_cell_style = None;
         self.wrap = false;
         self.auto_wrap = true;
         self.cursor_visible = true;
@@ -302,7 +310,7 @@ impl Screen {
                 }
                 self.cells[self.y * self.cols + self.x] = Cell {
                     byte,
-                    style: self.style,
+                    style: self.next_cell_style.take().unwrap_or(self.style),
                 };
                 self.wrap = self.x == self.cols - 1;
                 if !self.wrap {
@@ -478,6 +486,7 @@ impl Screen {
                 100..=107 => self.style.bg = (p - 100 + 8) as u8,
                 39 => self.style.fg = 7,
                 49 => self.style.bg = 0,
+                66 => self.next_cell_style = Some(self.style),
                 _ => self.unsupported += 1,
             }
         }

@@ -313,3 +313,89 @@ fn synchronized_modes_and_multiple_batches_are_independent_of_packet_boundaries(
         },
     );
 }
+
+#[test]
+fn sgr66_preserves_the_first_cell_then_uses_the_new_style_for_the_right_half() {
+    assert_control_chunks(b"\x1b[1;31;44;66;22;32;45m\xa4\xa4X", |screen| {
+        let frame = screen.frame();
+        let glyph = &frame.glyphs[0];
+        assert_eq!((&*glyph.text, glyph.width), ("中", 2));
+        assert_eq!(
+            (glyph.left.fg, glyph.left.bg, glyph.left.bright),
+            (1, 4, true)
+        );
+        assert_eq!(
+            (glyph.right.fg, glyph.right.bg, glyph.right.bright),
+            (2, 5, false)
+        );
+        assert_eq!(
+            (frame.glyphs[1].text.as_str(), frame.glyphs[1].left.fg),
+            ("X", 2)
+        );
+        assert_eq!(frame.unsupported, 0);
+        assert_eq!(screen.cursor(), (3, 0));
+    });
+    // Inverse and a reset later in the same SGR belong to different halves.
+    assert_control_chunks(b"\x1b[7;31;44;66;0m\xa4\xa4X", |screen| {
+        let frame = screen.frame();
+        let glyph = &frame.glyphs[0];
+        assert!(glyph.left.inverse);
+        assert_eq!((glyph.left.fg, glyph.left.bg), (1, 4));
+        assert_eq!(glyph.right, pttstella::screen::Style::default());
+        assert_eq!(frame.glyphs[1].left, pttstella::screen::Style::default());
+    });
+}
+
+#[test]
+fn sgr66_latch_is_one_cell_not_a_sticky_character_or_second_screen_model() {
+    for bytes in [b"\x1b[31;66;32mAB".as_slice(), b"\x1b[1;66;31;66;32mAB"] {
+        assert_control_chunks(bytes, |screen| {
+            let a = screen.cell(0, 0).unwrap();
+            let b = screen.cell(1, 0).unwrap();
+            assert_eq!((a.byte, a.style.fg, b.byte, b.style.fg), (b'A', 1, b'B', 2));
+        });
+    }
+    for control in [
+        b"\r".as_slice(),
+        b"\x07",
+        b"\x7f",
+        b"\x1b[1;1H",
+        b"\x1b[32m",
+    ] {
+        let bytes = [b"\x1b[31;66;32m".as_slice(), control, b"\xa4\xa4"].concat();
+        assert_control_chunks(&bytes, |screen| {
+            let glyph = &screen.frame().glyphs[0];
+            assert_eq!((glyph.left.fg, glyph.right.fg), (2, 2));
+        });
+    }
+    let mut reset = Screen::new(80, 24).unwrap();
+    reset.feed(b"\x1b[31;66;32m");
+    reset.reset_session();
+    reset.feed(b"\xa4\xa4");
+    assert_eq!(
+        reset.frame().glyphs[0].left,
+        pttstella::screen::Style::default()
+    );
+    let mut overwrite = Screen::new(80, 24).unwrap();
+    overwrite.feed(b"\x1b[31;66;32m\xa4\xa4\x1b[1;2H ");
+    assert!(overwrite.frame().glyphs[0].unmapped);
+    assert_eq!(overwrite.cell(0, 0).unwrap().style.fg, 1);
+    assert_eq!(overwrite.cell(1, 0).unwrap().style.fg, 2);
+    let mut wrap = Screen::new(2, 2).unwrap();
+    wrap.feed(b"XX\x1b[31;66;32m\xa4\xa4");
+    assert_eq!(
+        (
+            wrap.cell(0, 1).unwrap().style.fg,
+            wrap.cell(1, 1).unwrap().style.fg
+        ),
+        (1, 2)
+    );
+    wrap.feed(b"\r\n");
+    assert_eq!(
+        (
+            wrap.cell(0, 0).unwrap().style.fg,
+            wrap.cell(1, 0).unwrap().style.fg
+        ),
+        (1, 2)
+    );
+}
