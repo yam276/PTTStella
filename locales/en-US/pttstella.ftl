@@ -370,3 +370,14 @@ login-manual-followup = The login prompt returned. Check it manually; credential
 login-followup-expired = Login guidance timed out. Native PTT input remains available; credentials will not be resent.
 
 selection-link-missing = This link is no longer available. Select it again.
+
+board-name-invalid = Board names need 2–12 ASCII letters, digits or _-., starting with a letter.
+board-switch-unsupported = Quick switching is unavailable here. Return to the main menu, a board list or article browsing.
+board-switch-manual = Switching stopped. Handle the entry screen, login or other prompt manually; no further steps will be sent.
+board-switch-timeout = The expected screen did not arrive in time. Further steps stopped; check the server screen manually.
+board-switch-active = Switching to { $board }. You can cancel remaining steps; sent input cannot be withdrawn.
+board-switch-reached = Reached board { $board }.
+board-switch-cancelled = Remaining switch steps stopped. Sent input cannot be withdrawn.
+board-switch-stale = The screen or operation state changed. Switching did not start; check it again.
+board-switch-busy = A login or board switch is pending. Complete or cancel it first.
+board-switch-start-timeout = Could not confirm whether switching started. Check the server screen; nothing will be retried automatically.

@@ -831,6 +831,405 @@ async fn local() -> (TcpListener, Connection) {
     (listener, connection)
 }
 
+fn board_page(name: &str) -> Vec<u8> {
+    let data: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/board-switch.json")).unwrap();
+    crate::encoding::encode(data["screens"][name].as_str().unwrap()).unwrap()
+}
+
+async fn finish_board_peer(
+    connection: &Connection,
+    mut ws: tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
+) {
+    let peer = tokio::spawn(async move {
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+        ws.flush().await.unwrap();
+    });
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+    peer.await.unwrap();
+}
+
+#[tokio::test]
+async fn board_switch_serializes_confirmed_steps_and_never_uses_a_synchronized_partial_prompt() {
+    let (listener, connection) = local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(board_page("main").into()))
+        .await
+        .unwrap();
+    let initial = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
+    connection
+        .request_switch_board(initial.stamp(), BoardName::parse("stella").unwrap())
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"f");
+    let active = connection.updates.borrow().clone();
+    assert_eq!(active.frame.revision, initial.frame.revision);
+    assert_eq!(active.input_epoch, initial.input_epoch + 1);
+    assert!(active.input_pending && !active.keep_alive_ready);
+    assert!(matches!(
+        active.board_navigation,
+        BoardProgress::Active { .. }
+    ));
+    assert!(
+        connection
+            .request_switch_board(active.stamp(), BoardName::parse("Beta").unwrap())
+            .unwrap()
+            .wait()
+            .await
+            .is_err()
+    );
+    assert!(matches!(
+        connection.updates.borrow().board_navigation,
+        BoardProgress::Active { .. }
+    ));
+    ws.send(Message::Binary(board_page("boards").into()))
+        .await
+        .unwrap();
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"s");
+    let prompt = board_page("prompt");
+    let middle = prompt.len() / 2;
+    ws.send(Message::Binary(
+        [b"\x1b[?2026h".as_slice(), &prompt[..middle]]
+            .concat()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    wait(&connection, |v| v.output_pending).await;
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    ws.send(Message::Ping(vec![7, 8].into())).await.unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap(),
+        Message::Pong(vec![7, 8].into())
+    );
+    ws.send(Message::Binary(
+        [&prompt[middle..], b"\x1b[?2026l"].concat().into(),
+    ))
+    .await
+    .unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"stella\r"
+    );
+    ws.send(Message::Binary(board_page("selected").into()))
+        .await
+        .unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"\x1b[C"
+    );
+    ws.send(Message::Binary(board_page("articles").into()))
+        .await
+        .unwrap();
+    let reached=wait(&connection,|v|matches!(&v.board_navigation,BoardProgress::Reached{board,..} if board.as_str()=="Stella")).await;
+    assert!(!reached.input_pending);
+    connection
+        .request_switch_board(reached.stamp(), BoardName::parse("STELLA").unwrap())
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    wait(&connection, |v| {
+        matches!(v.board_navigation, BoardProgress::Reached { serial: 2, .. })
+    })
+    .await;
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    finish_board_peer(&connection, ws).await;
+}
+
+#[tokio::test]
+async fn board_switch_from_reading_pauses_keepalive_and_waits_for_each_back_before_direct_empty_arrival()
+ {
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(board_page("reading").into()))
+        .await
+        .unwrap();
+    let view = wait(&connection, |v| {
+        v.context().kind() == "article_reading" && !v.output_pending
+    })
+    .await;
+    connection
+        .request_switch_board(view.stamp(), BoardName::parse("Stella").unwrap())
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"\x1b[D"
+    );
+    let active = connection.updates.borrow().clone();
+    connection.keep_alive_gate(active.stamp(), true);
+    assert!(
+        timeout(Duration::from_millis(180), ws.next())
+            .await
+            .is_err()
+    );
+    assert!(connection.updates.borrow().keep_alive);
+    assert_eq!(connection.updates.borrow().keep_alive_sent, 0);
+    for (scene, expected) in [
+        ("other_articles", b"\x1b[D".as_slice()),
+        ("empty_boards", b"s"),
+        ("prompt", b"Stella\r"),
+    ] {
+        ws.send(Message::Binary(board_page(scene).into()))
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            expected
+        );
+    }
+    ws.send(Message::Binary(board_page("empty_articles").into()))
+        .await
+        .unwrap();
+    wait(&connection,|v|matches!(&v.board_navigation,BoardProgress::Reached{board,..} if board.as_str()=="Stella")).await;
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    finish_board_peer(&connection, ws).await;
+}
+
+#[tokio::test]
+async fn board_cancel_is_owned_by_its_request_and_raw_input_retires_later_steps_across_reconnect() {
+    let (listener, connection) = local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(board_page("boards").into()))
+        .await
+        .unwrap();
+    let initial = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
+    connection
+        .request_switch_board(initial.stamp(), BoardName::parse("Stella").unwrap())
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"s");
+    connection
+        .input(initial.generation + 1, b"stale".to_vec())
+        .unwrap();
+    connection
+        .cancel_switch_board(Stamp {
+            generation: initial.generation + 1,
+            ..initial.stamp()
+        })
+        .unwrap();
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    assert!(matches!(
+        connection.updates.borrow().board_navigation,
+        BoardProgress::Active { .. }
+    ));
+    connection.cancel_switch_board(initial.stamp()).unwrap();
+    wait(&connection, |v| {
+        matches!(v.board_navigation, BoardProgress::Idle)
+    })
+    .await;
+    ws.send(Message::Binary(board_page("prompt").into()))
+        .await
+        .unwrap();
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    ws.send(Message::Binary(board_page("boards").into()))
+        .await
+        .unwrap();
+    let next = wait(&connection, |v| {
+        v.context().kind() == "board_list"
+            && v.frame.revision > initial.frame.revision
+            && !v.output_pending
+    })
+    .await;
+    connection
+        .request_switch_board(next.stamp(), BoardName::parse("Stella").unwrap())
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"s");
+    connection.cancel_switch_board(initial.stamp()).unwrap(); // Cannot cancel this newer operation.
+    ws.send(Message::Binary(board_page("prompt").into()))
+        .await
+        .unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"Stella\r"
+    );
+    connection.input(next.generation, b"x".to_vec()).unwrap();
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"x");
+    ws.send(Message::Binary(board_page("selected").into()))
+        .await
+        .unwrap();
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    assert!(matches!(
+        connection.updates.borrow().board_navigation,
+        BoardProgress::Idle
+    ));
+    ws.close(None).await.unwrap();
+    wait(&connection, |v| v.phase == Phase::Disconnected).await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(board_page("prompt").into()))
+        .await
+        .unwrap();
+    wait(&connection, |v| {
+        v.generation > next.generation && v.received > 0 && !v.output_pending
+    })
+    .await;
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    assert!(matches!(
+        connection.updates.borrow().board_navigation,
+        BoardProgress::Idle
+    ));
+    finish_board_peer(&connection, ws).await;
+}
+
+#[tokio::test]
+async fn board_switch_stops_at_entry_without_ever_pressing_continue() {
+    let (listener, connection) = local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(board_page("boards").into()))
+        .await
+        .unwrap();
+    let view = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
+    connection
+        .request_switch_board(view.stamp(), BoardName::parse("Stella").unwrap())
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"s");
+    ws.send(Message::Binary(board_page("prompt").into()))
+        .await
+        .unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"Stella\r"
+    );
+    ws.send(Message::Binary(board_page("entry").into()))
+        .await
+        .unwrap();
+    wait(&connection, |v| {
+        v.message == crate::msg!("board-switch-manual")
+    })
+    .await;
+    assert!(matches!(
+        connection.updates.borrow().board_navigation,
+        BoardProgress::Idle
+    ));
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    finish_board_peer(&connection, ws).await;
+}
+
+#[tokio::test]
+async fn board_switch_timeout_and_shutdown_do_not_resume_queued_steps() {
+    for expire in [false, true] {
+        let (listener, connection) = local().await;
+        connection.connect().unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        ws.send(Message::Binary(board_page("boards").into()))
+            .await
+            .unwrap();
+        let view = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
+        connection
+            .request_switch_board(view.stamp(), BoardName::parse("Stella").unwrap())
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+        assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"s");
+        if expire {
+            let mut updates = connection.updates.clone();
+            timeout(Duration::from_secs(7), async {
+                loop {
+                    if updates.borrow_and_update().message == crate::msg!("board-switch-timeout") {
+                        break;
+                    }
+                    updates.changed().await.unwrap();
+                }
+            })
+            .await
+            .unwrap();
+            ws.send(Message::Binary(board_page("prompt").into()))
+                .await
+                .unwrap();
+            assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+        }
+        finish_board_peer(&connection, ws).await;
+    }
+}
+
+#[tokio::test]
+async fn board_switch_rejects_stale_unknown_and_held_source_frames_before_any_write() {
+    let (listener, connection) = local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(board_page("boards").into()))
+        .await
+        .unwrap();
+    let view = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
+    assert!(
+        connection
+            .request_switch_board(
+                Stamp {
+                    input_epoch: view.input_epoch + 1,
+                    ..view.stamp()
+                },
+                BoardName::parse("Stella").unwrap()
+            )
+            .unwrap()
+            .wait()
+            .await
+            .is_err()
+    );
+    ws.send(Message::Binary(b"\x1b[?2026h\x1b[Hpartial".to_vec().into()))
+        .await
+        .unwrap();
+    wait(&connection, |v| v.output_pending).await;
+    assert!(
+        connection
+            .request_switch_board(view.stamp(), BoardName::parse("Stella").unwrap())
+            .unwrap()
+            .wait()
+            .await
+            .is_err()
+    );
+    ws.send(Message::Binary(
+        [board_page("prompt"), b"\x1b[?2026l".to_vec()]
+            .concat()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    let unknown = wait(&connection, |v| {
+        v.context().kind() == "unknown" && !v.output_pending
+    })
+    .await;
+    assert!(
+        connection
+            .request_switch_board(unknown.stamp(), BoardName::parse("Stella").unwrap())
+            .unwrap()
+            .wait()
+            .await
+            .is_err()
+    );
+    assert_eq!(connection.updates.borrow().input_epoch, 0);
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    finish_board_peer(&connection, ws).await;
+}
+
 async fn wait(connection: &Connection, predicate: impl Fn(&View) -> bool) -> View {
     let mut updates = connection.updates.clone();
     timeout(Duration::from_secs(4), async {

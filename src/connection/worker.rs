@@ -1,6 +1,7 @@
 //! The single session owner. Event polling stays separate from state transitions.
 use super::{CloseOutcome, Command, Dial, Phase, Socket, View, liveness, output, transport};
 use crate::{
+    board_navigation::{self, BoardName, Progress as BoardProgress, Switch},
     login::{self, Credentials, Prompt},
     navigation::{self, Context, Intent, Stamp},
     screen::Screen,
@@ -46,6 +47,13 @@ struct LoginAttempt {
     deadline: Instant,
 }
 
+struct BoardSwitch {
+    flow: Switch,
+    operation: Stamp,
+    serial: u64,
+    epoch: u64,
+}
+
 struct Session {
     screen: Screen,
     endpoint: String,
@@ -53,10 +61,13 @@ struct Session {
     dialing: Option<Dial>,
     framing: telnet::Framing,
     view: View,
+    updates: watch::Sender<View>,
     dirty: bool,
     pending_input: Option<PendingInput>,
     login_attempt: Option<LoginAttempt>,
     login_followup: Option<login::FollowUp>,
+    board_switch: Option<BoardSwitch>,
+    switch_serial: u64,
     last_close: CloseOutcome,
     idle: liveness::Idle,
     timing: liveness::Timing,
@@ -71,7 +82,7 @@ pub(super) async fn run(
     timing: liveness::Timing,
     mut gates: watch::Receiver<Option<(Stamp, bool)>>,
 ) {
-    let mut session = Session::new(screen, endpoint, updates.borrow().clone(), timing);
+    let mut session = Session::new(screen, endpoint, updates, timing);
     let mut clock = interval(Duration::from_millis(16));
     let mut idle_clock = interval(timing.poll);
     idle_clock.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -91,14 +102,21 @@ pub(super) async fn run(
             } => session.connected(result),
             incoming = async {
                 match session.socket.as_mut() { Some(socket) => socket.next().await, None => pending().await }
-            } => session.receive(incoming, &updates).await,
-            _ = clock.tick(), if session.dirty || session.output.active() => {
+            } => session.receive(incoming).await,
+            _ = clock.tick(), if session.dirty || session.output.active() || session.board_switch.is_some() => {
                 if session.output.expire(Instant::now()) {
                     session.screen.release_synchronized_output();
                     session.continue_login().await;
                     session.dirty = true;
                 }
-                if session.dirty { session.publish(&updates); }
+                if session.board_switch.as_ref().is_some_and(|job| job.flow.expired(Instant::now())) {
+                    session.stop_switch(board_navigation::Error::Timeout.to_string());
+                }
+                // Automatic steps yield to already queued manual input/UI state.
+                if commands.is_empty() && matches!(gates.has_changed(),Ok(false)) {
+                    session.advance_switch(Instant::now()).await;
+                }
+                if session.dirty { session.publish(); }
             },
             _ = idle_clock.tick() => {
                 let now = Instant::now();
@@ -115,6 +133,8 @@ pub(super) async fn run(
             session.login_attempt = None;
             session.login_followup = None;
             session.view.login_guidance = login::Guidance::Idle;
+            session.board_switch = None;
+            session.view.board_navigation = BoardProgress::Idle;
             session.screen.release_synchronized_output();
             session.output.track(None, Instant::now());
         }
@@ -122,11 +142,18 @@ pub(super) async fn run(
 }
 
 impl Session {
-    fn new(screen: Screen, endpoint: String, view: View, timing: liveness::Timing) -> Self {
+    fn new(
+        screen: Screen,
+        endpoint: String,
+        updates: watch::Sender<View>,
+        timing: liveness::Timing,
+    ) -> Self {
+        let view = updates.borrow().clone();
         Self {
             screen,
             endpoint,
             view,
+            updates,
             timing,
             socket: None,
             dialing: None,
@@ -135,6 +162,8 @@ impl Session {
             pending_input: None,
             login_attempt: None,
             login_followup: None,
+            board_switch: None,
+            switch_serial: 0,
             last_close: CloseOutcome::NoConnection,
             idle: liveness::Idle::new(Instant::now(), timing),
             output: output::Deadline::default(),
@@ -163,6 +192,20 @@ impl Session {
                 self.view.message = crate::msg!("login-cancelled");
                 self.dirty = true;
             }
+            Some(Command::SwitchBoard {
+                stamp,
+                board,
+                reply,
+            }) => {
+                if !reply.is_closed() {
+                    let result = self.switch_board(stamp, board).await;
+                    let started = result.is_ok();
+                    if reply.send(result).is_err() && started {
+                        self.cancel_switch(stamp);
+                    }
+                }
+            }
+            Some(Command::CancelSwitchBoard { operation }) => self.cancel_switch(operation),
             Some(Command::Login {
                 stamp,
                 credentials,
@@ -211,6 +254,8 @@ impl Session {
         self.login_attempt = None;
         self.login_followup = None;
         self.view.login_guidance = login::Guidance::Idle;
+        self.board_switch = None;
+        self.view.board_navigation = BoardProgress::Idle;
         self.view.generation = self.view.generation.saturating_add(1);
         self.idle.activity(Instant::now());
         self.view.keep_alive_sent = 0;
@@ -236,6 +281,8 @@ impl Session {
         self.login_attempt = None;
         self.login_followup = None;
         self.view.login_guidance = login::Guidance::Idle;
+        self.board_switch = None;
+        self.view.board_navigation = BoardProgress::Idle;
         self.idle.activity(Instant::now());
         self.view.generation = self.view.generation.saturating_add(1);
         self.pending_input = None;
@@ -282,6 +329,10 @@ impl Session {
             return Err(navigation::Error::Disconnected.to_string());
         };
         self.view.input_epoch = self.view.input_epoch.saturating_add(1);
+        self.view.input_pending = true;
+        self.view.keep_alive_ready = false;
+        // Revoke direct file/hover leases before awaiting the transport write.
+        self.updates.send_replace(self.view.clone());
         match transport::send(socket, Message::Binary(telnet::escape(bytes).into())).await {
             Ok(()) => Ok(()),
             Err(error) => {
@@ -310,6 +361,9 @@ impl Session {
             self.dirty = true;
             return;
         }
+        if self.board_switch.is_some() {
+            self.stop_switch(crate::msg!("board-switch-cancelled"));
+        }
         self.idle.activity(Instant::now());
         if self.write_input(bytes).await.is_ok() {
             self.wait_for_input(false);
@@ -330,6 +384,7 @@ impl Session {
             return Err(crate::msg!("login-stale"));
         }
         if self.login_attempt.is_some()
+            || self.board_switch.is_some()
             || self.pending_input.is_some()
             || login::prompt(&self.screen.frame()) != Some(Prompt::Account)
         {
@@ -347,12 +402,129 @@ impl Session {
         Ok(())
     }
 
+    async fn switch_board(&mut self, stamp: Stamp, target: BoardName) -> Result<(), String> {
+        if self.view.phase != Phase::Connected || self.socket.is_none() || stamp != self.stamp() {
+            return Err(crate::msg!("board-switch-stale"));
+        }
+        if self.board_switch.is_some()
+            || self.login_attempt.is_some()
+            || self.login_followup.is_some()
+        {
+            return Err(crate::msg!("board-switch-busy"));
+        }
+        self.clear_answered_input();
+        if self.pending_input.is_some() {
+            return Err(navigation::Error::AwaitingScreen.to_string());
+        }
+        let start = Switch::begin(&self.screen.frame(), target.clone(), Instant::now())
+            .map_err(|error| error.to_string())?;
+        self.switch_serial = self.switch_serial.saturating_add(1);
+        match start {
+            board_navigation::Start::Reached(board) => {
+                self.reached_board(self.switch_serial, board)
+            }
+            board_navigation::Start::Run { switch, bytes } => {
+                self.view.board_navigation = BoardProgress::Active {
+                    serial: self.switch_serial,
+                    target: target.clone(),
+                    operation: stamp,
+                };
+                self.view.message = crate::msg!("board-switch-active", board = target.as_str());
+                self.board_switch = Some(BoardSwitch {
+                    flow: switch,
+                    operation: stamp,
+                    serial: self.switch_serial,
+                    epoch: self.view.input_epoch,
+                });
+                self.send_switch_step(&bytes).await?;
+            }
+        }
+        self.dirty = true;
+        Ok(())
+    }
+
+    async fn send_switch_step(&mut self, bytes: &[u8]) -> Result<(), String> {
+        self.idle.activity(Instant::now());
+        match self.write_input(bytes).await {
+            Ok(()) => {
+                if let Some(job) = self.board_switch.as_mut() {
+                    job.epoch = self.view.input_epoch;
+                }
+                self.wait_for_input(false);
+                self.dirty = true;
+                Ok(())
+            }
+            Err(error) => {
+                self.stop_switch(error.clone());
+                Err(error)
+            }
+        }
+    }
+
+    async fn advance_switch(&mut self, now: Instant) {
+        let Some(job) = self.board_switch.as_mut() else {
+            return;
+        };
+        if job.operation.generation != self.view.generation || job.epoch != self.view.input_epoch {
+            self.stop_switch(crate::msg!("board-switch-cancelled"));
+            return;
+        }
+        if self.screen.synchronized_since().is_some()
+            || !job.flow.needs_frame(self.screen.revision())
+        {
+            return;
+        }
+        let serial = job.serial;
+        match job.flow.observe(&self.screen.frame(), now) {
+            Ok(board_navigation::Advance::Wait) => {}
+            Ok(board_navigation::Advance::Send(bytes)) => {
+                let _ = self.send_switch_step(&bytes).await;
+            }
+            Ok(board_navigation::Advance::Reached(board)) => self.reached_board(serial, board),
+            Err(error) => self.stop_switch(error.to_string()),
+        }
+    }
+
+    fn reached_board(&mut self, serial: u64, board: BoardName) {
+        self.board_switch = None;
+        self.view.message = crate::msg!("board-switch-reached", board = board.as_str());
+        self.view.board_navigation = BoardProgress::Reached { serial, board };
+        self.dirty = true;
+    }
+
+    fn cancel_switch(&mut self, operation: Stamp) {
+        if self.board_switch.as_ref().is_some_and(|job| {
+            job.operation == operation && operation.generation == self.view.generation
+        }) {
+            self.stop_switch(crate::msg!("board-switch-cancelled"));
+        }
+    }
+
+    fn stop_switch(&mut self, message: String) {
+        if self.board_switch.take().is_none() {
+            return;
+        }
+        self.view.board_navigation = BoardProgress::Idle;
+        self.view.message = message;
+        if self
+            .pending_input
+            .as_ref()
+            .is_some_and(|pending| pending.expired(Instant::now()))
+        {
+            self.pending_input = None;
+        }
+        self.dirty = true;
+    }
+
     async fn navigate(
         &mut self,
         stamp: Stamp,
         intent: Intent,
         keyboard: bool,
     ) -> Result<(), String> {
+        if stamp == self.stamp() && self.board_switch.is_some() {
+            self.stop_switch(crate::msg!("board-switch-cancelled"));
+        }
         let context = navigation::analyze(&self.screen.frame());
         let list = matches!(
             context,
@@ -416,13 +588,9 @@ impl Session {
         result
     }
 
-    async fn receive(
-        &mut self,
-        incoming: Option<Result<Message, SocketError>>,
-        updates: &watch::Sender<View>,
-    ) {
+    async fn receive(&mut self, incoming: Option<Result<Message, SocketError>>) {
         match incoming {
-            Some(Ok(Message::Binary(bytes))) => self.receive_bytes(&bytes, updates).await,
+            Some(Ok(Message::Binary(bytes))) => self.receive_bytes(&bytes).await,
             Some(Ok(Message::Text(_))) => self.fail(crate::msg!("connection-text-frame")),
             Some(Ok(Message::Ping(payload))) => {
                 if let Some(socket) = self.socket.as_mut()
@@ -464,7 +632,7 @@ impl Session {
         self.dirty = true;
     }
 
-    async fn receive_bytes(&mut self, bytes: &[u8], updates: &watch::Sender<View>) {
+    async fn receive_bytes(&mut self, bytes: &[u8]) {
         self.view.received = self.view.received.saturating_add(bytes.len());
         let (display, reply) = self.framing.feed(bytes, 80, 24);
         self.screen.feed(&display);
@@ -474,8 +642,8 @@ impl Session {
             // Revoke leases before awaiting any write and before the UI reads
             // this change. The retained frame may still be visible until flush.
             self.view.output_pending = true;
-            if !updates.borrow().output_pending {
-                updates.send_modify(|view| view.output_pending = true);
+            if !self.updates.borrow().output_pending {
+                self.updates.send_modify(|view| view.output_pending = true);
             }
         }
         if !reply.is_empty()
@@ -582,10 +750,10 @@ impl Session {
         }
     }
 
-    fn publish(&mut self, updates: &watch::Sender<View>) {
+    fn publish(&mut self) {
         self.clear_answered_input();
-        self.view.input_pending =
-            self.pending_input.is_some() && self.view.phase == Phase::Connected;
+        self.view.input_pending = (self.pending_input.is_some() || self.board_switch.is_some())
+            && self.view.phase == Phase::Connected;
         self.view.login_pending = self.login_attempt.is_some() || self.login_followup.is_some();
         self.view.output_pending = self.screen.synchronized_since().is_some();
         if !self.view.output_pending {
@@ -596,7 +764,7 @@ impl Session {
             && !self.view.input_pending
             && !self.view.login_pending
             && self.view.context().allows_keepalive();
-        updates.send_replace(self.view.clone());
+        self.updates.send_replace(self.view.clone());
         self.dirty = false;
     }
 
@@ -615,7 +783,9 @@ impl Session {
 
     async fn refresh(&mut self, now: Instant) {
         self.clear_answered_input();
-        if self.pending_input.as_ref().is_some_and(|p| p.expired(now)) {
+        if self.board_switch.is_none()
+            && self.pending_input.as_ref().is_some_and(|p| p.expired(now))
+        {
             if matches!(self.pending_input, Some(PendingInput::Refresh { .. })) {
                 self.idle.enable(false, now);
                 self.view.keep_alive = false;
@@ -633,6 +803,7 @@ impl Session {
             && self.pending_input.is_none()
             && self.login_attempt.is_none()
             && self.login_followup.is_none()
+            && self.board_switch.is_none()
             && self.idle.due(now, stamp)
             && navigation::analyze(&self.screen.frame()).allows_keepalive()
         {

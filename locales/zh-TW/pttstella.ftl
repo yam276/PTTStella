@@ -364,3 +364,14 @@ login-manual-followup = 已返回登入提示；請自行確認，不會自動�
 login-followup-expired = 登入引導已逾時；仍可使用 PTT 原始輸入，不會重送帳密
 
 selection-link-missing = 目前已沒有此連結，請重新選取
+
+board-name-invalid = 看板名稱須為 2–12 個英數字或 _-.，並以英文字母開頭
+board-switch-unsupported = 目前畫面不能快速切板；請先回到主選單、看板列表或文章瀏覽
+board-switch-manual = 切板已停止；進板圖、登入或其他提示請自行操作，之後不會自動續送
+board-switch-timeout = 切板等待逾時或未辨識到預期畫面；已停止後續送出，請自行確認站端畫面
+board-switch-active = 正在切換至 { $board }；可取消後續步驟，已送出內容無法撤回
+board-switch-reached = 已到達看板 { $board }
+board-switch-cancelled = 已停止後續切板步驟；已送出內容無法撤回
+board-switch-stale = 畫面或操作狀態已改變，未啟動切板；請重新確認
+board-switch-busy = 目前有待完成的登入或切板操作，請先完成或取消
+board-switch-start-timeout = 未能確認切板是否已啟動；請查看站端畫面，不會自動重試
