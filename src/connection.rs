@@ -17,6 +17,7 @@ use tokio::{
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 pub const PTT_ENDPOINT: &str = "wss://ws.ptt.cc/bbs";
+pub use probe::MouseSampleProbe;
 type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 type Dial = JoinHandle<Result<Socket, String>>;
 
@@ -220,12 +221,23 @@ impl Connection {
         Ok(connection)
     }
     pub fn start_mouse_probe(boundary: bool) -> Result<Self, String> {
+        Self::start_mouse_scene(1000, probe::Scenario::Mouse { boundary })
+    }
+    pub fn start_mouse_samples_probe(case: MouseSampleProbe) -> Result<Self, String> {
+        let tracking = if matches!(case, MouseSampleProbe::Drag) {
+            1002
+        } else {
+            1000
+        };
+        Self::start_mouse_scene(tracking, probe::Scenario::MouseSamples(case))
+    }
+    fn start_mouse_scene(tracking: usize, scenario: probe::Scenario) -> Result<Self, String> {
         let bytes = [
             probe::article_page("articles")?,
-            b"\x1b[?1000;1006h".to_vec(),
+            format!("\x1b[?{tracking};1006h").into_bytes(),
         ]
         .concat();
-        let connection = Self::start_owned_probe(bytes, probe::Scenario::Mouse { boundary })?;
+        let connection = Self::start_owned_probe(bytes, scenario)?;
         connection.keep_alive(false)?;
         Ok(connection)
     }

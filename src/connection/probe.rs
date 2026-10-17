@@ -18,8 +18,152 @@ pub(super) enum Scenario {
     Articles,
     Bookmarks,
     Mouse { boundary: bool },
+    MouseSamples(MouseSampleProbe),
     Filters,
     Surface,
+}
+
+#[derive(Clone, Copy)]
+pub enum MouseSampleProbe {
+    Drag,
+    Motion,
+    Wheel,
+}
+
+async fn mouse_samples<S>(
+    socket: &mut tokio_tungstenite::WebSocketStream<S>,
+    case: MouseSampleProbe,
+) -> Result<(), String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    match case {
+        MouseSampleProbe::Drag | MouseSampleProbe::Motion => {
+            if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"\x1b[<0;5;5M")
+            {
+                return Err("sample probe expected the anchor left press".into());
+            }
+            if matches!(case, MouseSampleProbe::Motion) {
+                if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"\x1b[<0;5;5m")
+                {
+                    return Err("motion probe expected the anchor release".into());
+                }
+                socket
+                    .send(Message::Binary(b"\x1b[?1003h".to_vec().into()))
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
+            // Independent allowed coordinates for one horizontal native gesture.
+            // The final cell is mandatory; intermediate cadence is OS dependent.
+            let allowed: &[&[u8]] = if matches!(case, MouseSampleProbe::Drag) {
+                &[
+                    b"\x1b[<32;5;5M",
+                    b"\x1b[<32;6;5M",
+                    b"\x1b[<32;7;5M",
+                    b"\x1b[<32;8;5M",
+                    b"\x1b[<32;9;5M",
+                    b"\x1b[<32;10;5M",
+                    b"\x1b[<32;11;5M",
+                ]
+            } else {
+                &[
+                    b"\x1b[<35;5;5M",
+                    b"\x1b[<35;6;5M",
+                    b"\x1b[<35;7;5M",
+                    b"\x1b[<35;8;5M",
+                    b"\x1b[<35;9;5M",
+                    b"\x1b[<35;10;5M",
+                    b"\x1b[<35;11;5M",
+                ]
+            };
+            let mut final_cell = false;
+            let mut completed = false;
+            for _ in 0..16 {
+                let Some(Ok(Message::Binary(bytes))) = socket.next().await else {
+                    return Err("sample probe expected bounded native cell motion".into());
+                };
+                if allowed.contains(&bytes.as_ref()) {
+                    final_cell |= bytes.as_ref() == allowed[6];
+                    if final_cell && matches!(case, MouseSampleProbe::Motion) {
+                        completed = true;
+                        break;
+                    }
+                } else if final_cell
+                    && matches!(case, MouseSampleProbe::Drag)
+                    && bytes.as_ref() == b"\x1b[<0;11;5m"
+                {
+                    completed = true;
+                    break;
+                } else {
+                    return Err(format!(
+                        "sample probe rejected unexpected input: {:02x?}",
+                        bytes.as_ref()
+                    ));
+                }
+            }
+            if !completed {
+                return Err(
+                    "sample probe never completed its final native cell and required edge".into(),
+                );
+            }
+        }
+        MouseSampleProbe::Wheel => {
+            if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"\x1b[<65;5;5M")
+            {
+                return Err("wheel probe expected a downward native tick at its anchor".into());
+            }
+            socket
+                .send(Message::Binary(
+                    b"\x1b[?1002h\x1b[2;1H\x1b[2KWHEEL: now scroll UP"
+                        .to_vec()
+                        .into(),
+                ))
+                .await
+                .map_err(|e| e.to_string())?;
+            let mut up = false;
+            for _ in 0..8 {
+                match socket.next().await {
+                    Some(Ok(Message::Binary(bytes))) if bytes.as_ref() == b"\x1b[<64;5;5M" => {
+                        up = true;
+                        break;
+                    }
+                    Some(Ok(Message::Binary(bytes))) if bytes.as_ref() == b"\x1b[<65;5;5M" => {}
+                    _ => return Err("wheel probe expected bounded vertical ticks only".into()),
+                }
+            }
+            if !up {
+                return Err("wheel probe never received its upward tick".into());
+            }
+            socket
+                .send(Message::Binary(article_page("articles")?.into()))
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    socket
+        .send(Message::Binary(b"\x1b[?1001h".to_vec().into()))
+        .await
+        .map_err(|e| e.to_string())?;
+    // A single native wheel gesture can already have a few ticks in flight.
+    // Permit only bounded exact upward repeats; never a synthetic release.
+    let mut repeats = 0;
+    loop {
+        match socket.next().await {
+            Some(Ok(Message::Close(_))) => return socket.flush().await.map_err(|e| e.to_string()),
+            Some(Ok(Message::Binary(bytes)))
+                if matches!(case, MouseSampleProbe::Wheel)
+                    && repeats < 7
+                    && bytes.as_ref() == b"\x1b[<64;5;5M" =>
+            {
+                repeats += 1
+            }
+            _ => {
+                return Err(
+                    "sample probe expected Close without local keys or extra mouse edges".into(),
+                );
+            }
+        }
+    }
 }
 
 // Handwritten grid coordinates and exact SGR edges. The native runner also
@@ -469,6 +613,7 @@ pub(super) async fn serve(
             | Scenario::Articles
             | Scenario::Bookmarks
             | Scenario::Mouse { .. }
+            | Scenario::MouseSamples(_)
     ) {
         300
     } else {
@@ -488,6 +633,9 @@ pub(super) async fn serve(
         }
         if let Scenario::Mouse { boundary } = scenario {
             return mouse(&mut socket, boundary).await;
+        }
+        if let Scenario::MouseSamples(case) = scenario {
+            return mouse_samples(&mut socket, case).await;
         }
         if matches!(scenario, Scenario::Boards) {
             return boards(&mut socket).await;

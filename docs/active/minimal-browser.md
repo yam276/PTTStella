@@ -4,7 +4,7 @@
 
 ## 目標
 
-目前增量：A／B 的明確子集與 C1／C2／C3 已交付並依下文區分平台與實站邊界；C1 指定 macOS 原生互動已補驗。D 模式核心／SGR 編碼、Session 交易准入與 UI 分流已完成，限定 macOS 原生點擊案例通過，Shift 拖曳／Ctrl＋滾輪及其餘原生邊界仍接續。新滑鼠候選 App 為 `dist/macos-mouse-final/PTTStella.app`；保留前版 `dist/macos-bookmarks/PTTStella.app` 的文章入口、書籤與完整網址驗證。新候選已重跑 46 筆 Vim 與 C1 完整網址的指定 macOS 原生案例；其餘平台／手勢邊界仍分開記錄，不混稱完整 desktop gate 通過。
+目前增量：A／B 的明確子集與 C1／C2／C3 已交付並依下文區分平台與實站邊界；C1 指定 macOS 原生互動已補驗。D 點擊路徑及限定 macOS 原生案例通過；D2 移動／wheel 已接線，新增無按鈕移動及垂直 wheel 的兩個 macOS 原生案例通過，held drag、Shift 拖曳／Ctrl＋滾輪及其餘原生邊界仍接續。交付 App 仍為 `dist/macos-mouse-final/PTTStella.app`，尚未以 D2 測試 package 取代；保留前版 `dist/macos-bookmarks/PTTStella.app`。既有交付已重跑 46 筆 Vim 與 C1 完整網址，D2 後續候選仍須各自回歸；其餘平台／手勢邊界分開記錄，不混稱完整 desktop gate 通過。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
@@ -222,6 +222,14 @@ C1 依序開啟及複製片段 rows `[8,9]`，兩次 Cmd-C 後在未保存書籤
 UI 只有一個可取消的 animation-frame callback，每 34ms 送一個最新 sample，wheel 優先；只保留一筆 motion、一筆 wheel 與不足 40px 的垂直餘量，line／page 正規化，沒有慣性尾巴或斷線後補送。Shift、Ctrl 縮放、已選文字、modal 與放大後本機捲動保留；來源／模式／policy 變化、黑邊及 destroy 清 pending。中英文狀態與說明一起更新。原 `mouse` 負面探針改要求仍不支援的 1001，保留相同精確按鈕／本機 CR 序列，沒有將已支援的 1003 繼續當成負例。
 
 新增四個純 owner 案例、兩個 production Connection loopback 與五個 JS 案例，並擴充重連、滿佇列、typed event／顯示 ACK 的正反例。121 個 desktop lib、42 個 bin、56 個 JS、core／desktop all-targets Clippy／docs 通過，原生 D2 還未執行，交付 App 仍保留前版。首次完整 lib run 有新 motion 案例逾時；原 helper 沒有顯示具體等待哪筆 bytes，檢查發現新 mode wait 可讀到 output_pending 的中間 View，已要求完整來源並改善 timeout 診斷後整套通過，沒有放寬 bytes 或產品准入；原失敗與一次新增測試後漏 fmt 的失敗保留於 `.local/verification/mouse-d-continuous`。後補的重連／重複 Shift 按下邊界另重跑對應測試。沒有實站、其他平台或兩項實體修飾手勢的完成宣稱，沒有 push。
+
+**D2 指定 macOS 無按鈕移動／垂直 wheel 原生通過，held drag 待驗**：新增三個有界 `mouse_drag`／`mouse_motion`／`mouse_wheel` loopback 探針，獨立手寫 SGR 允許座標與必要終格／釋放；原生 cadence 可有有限中間格或 wheel 重複，其他輸入拒絕。UI 記錄最多 64 筆 typed sample，超量明確失敗；peer 另限制網路筆數與完成條件。兩個新 raw synthetic 單元驗證三條正例與「達上限仍缺釋放」拒絕，不把 raw 單元當作原生證據。123 個 desktop lib、42 個 bin、56 個 JS、core／desktop all-targets Clippy／docs 通過；首次 bin 編譯漏 helper 模組限定名稱，修正後通過，原 log 保留。
+
+macOS WKWebView 的 `mouse_motion` 完成 col 4／row 4 左鍵點擊／釋放，再以原生指向 col 10／row 4 的水平滾動移動指標；實際只有一筆無按鈕 motion `ESC[<35;11;5M`，水平 wheel 零站端 bytes。`mouse_wheel` 於 col 4／row 4 收到向下 `ESC[<65;5;5M`、向上 `ESC[<64;5;5M` 各一筆，沒有按鈕邊緣、本機導覽或額外釋放。兩者嚴格 surface／runner passed、final mode 1001／無 held、Close acknowledged、全部 owner join／listeners released、退出 0。兩張實際 PNG 各 960×576，獨立解碼後與前版相同自製場景全部像素相同。
+
+這兩個原生程序及兩個失敗拖曳副本、原始 package 的 strict ad-hoc 驗章與去簽章 executable SHA-256 均為 `8e58cdab8fab8d855b0891c3bebc296f6810a94675dc7bb01f7fddf8e8aea2f0`，來源為接線 commit `6d3dd8a` 加本次探針；證據保留 `.local/verification/mouse-d-samples-native`。原生拖曳第一次 anchor 後收到額外 raw Esc `[1b]`，來源未確認；第二次座標工具在全螢幕與一般視窗回 noWindowsAvailable，只有 AX／截圖可用，沒有輸入 anchor。兩次 runner failed／cleanup false／缺 surface report，退出 0 沒有列為通過，不改 expected 放行。held drag、實體 Shift 拖曳／Ctrl＋滾輪、DPR／失焦等其餘邊界、實站與其他平台仍待驗，整體 goal 持續。
+
+本輪四份 native App 副本及舊 boundary App 已在 exclusive build lease 內核對身分、終止 receipt 與無存活程序後移除；保留本次 package、交付／回復 App、全部成功與失敗報告及必要 PNG，cleanup receipt completed。沒有 push，也沒有將尚未回歸的 D2 package 宣稱為最新交付。
 
 
 

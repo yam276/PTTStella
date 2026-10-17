@@ -31,6 +31,10 @@ core 執行 Rust 1.97.0 的 fmt、Clippy、畫面與互動測試 suite 及 2 個
 
 `--probe-surface OUTPUT_DIRECTORY mouse_boundary` 共用同一格線與模式，但 peer 只接受 col 4／row 4 的一次左鍵按下及 Close。先點格線外的黑邊，再從該格拖曳到黑邊放開；黑邊點擊不得送出任何 bytes，離開格線不得合成座標或釋放／本機導覽。報告必須只有一筆按下、至少一次交易取消、沒有本機導覽／連結／開關操作、沒有殘留交易，另需匯出 PNG、Close acknowledged 及全部 owner 清理。這個案例只驗同一原生尺寸的黑邊與格線外放開，不代替離窗、失焦、所有 DPR 或實體修飾鍵手勢。
 
+`mouse_drag` 使用同一自製場景與 1002＋1006，要求零基 col 4／row 4 左鍵按下，沿同列移至 col 10 後釋放。peer 只接受獨立手寫的該水平區間 SGR motion，最多 16 筆，必須抵達終格並收到精確釋放；達到筆數上限仍缺釋放時必須失敗。`mouse_motion` 先在 col 4／row 4 點擊、釋放，再由 peer 開啟 1003；之後只接受同一水平區間的無按鈕 motion，終格 col 10 必須到達。原生工具可用指向終格的水平滾動移動指標；水平輪本身應零站端 bytes，不能改用合成 DOM 事件通過。
+
+`mouse_wheel` 從 1000＋1006 開始，要求 col 4／row 4 的向下 tick；畫面顯示 `WHEEL: now scroll UP` 並切到 1002，再要求同格向上 tick，允許有限筆同方向原生重複。完成後還原原場景。三個案例完成時都切到未支援 1001 停止回報，接著匯出 PNG、正常關窗；UI report 需非空且不超量、正確按鈕／motion／方向、零本機導覽／連結／偏好切換、沒有 held、Close acknowledged 與所有 owner 清理。每次原生執行的成功／失敗各自保留，raw input 單元僅驗證探針本身，不算原生操作。
+
 內建字型／桌面資產路由變更另跑 `cargo test --locked --features desktop --bin pttstella`，檢查固定路由的 MIME、原始字型標頭及未知路徑／方法拒絕；主畫面、預覽、保存及 PNG 仍須實際 WebView 驗證。新字型來源、SHA-256、著作權及授權需記錄於 assets/fonts。
 
 2FA 引導另用 `--probe-surface OUTPUT_DIRECTORY login_2fa`，開啟 Vim 後按鈕登入合成帳密；原始輸入六位錯碼、八位救援碼，進入主選單後明確 Esc 回 Normal，再正常關窗。peer 精確核對一次帳密與兩次手動碼，額外輸入失敗；報告需包含提示／錯碼／瀏覽三個狀態、Close acknowledged 與 owner join。不代替實站 2FA 或原生 IME 驗收。
