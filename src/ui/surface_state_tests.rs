@@ -14,6 +14,7 @@ fn view() -> View {
         input_pending: false,
         login_pending: false,
         login_guidance: pttstella::login::Guidance::Idle,
+        board_navigation: pttstella::board_navigation::Progress::Idle,
         phase: Phase::Connected,
         message: String::new(),
         received: 1,

@@ -74,6 +74,10 @@ C1 使用入口已接上同一 Rust 選取契約：右鍵任一片段後 Ctrl+C�
 
 macOS 原生顯示正確的兩段網址及兩段本機圖片標籤，AX 匯出 PNG、開啟設定／Esc 取消、⌘W 與 Close acknowledged／全部 owner join 已驗證。CUA 格線座標點擊在 Raise、啟用視窗及新 screenshot 後仍回 `noWindowsAvailable`，因此跨行兩段命中、兩次原生剪貼簿、跨列拖曳零誤開與兩段媒體預覽 **not_ready**；嚴格 surface-probe.json 保留 `failed`，不把 exit 0 或 PNG 當互動通過。待可用原生輸入 backend 或人工執行同一合成探針，不需真實帳密。候選 App 為 `dist/macos-protocol-c1-verified/PTTStella.app`，上一份 B2 交付仍保留；C1 未整批結案，C2 有界切板流程可獨立接續。證據在 `.local/verification/protocol-c1`，Windows／Linux、OS 真正外開與實站仍未驗證。
 
+**C2 第一批：單一有界切板流程已實作，UI／最近清單接續**。新增具驗證的 BoardName 與純 Rust Switch，由 Session 持有工作、operation Stamp、送出 epoch 與有界期限；主選單→最愛列表、閱讀→文章→板列表、固定搜尋提示、列表已選目標後進入，以及直接進空／一般文章列表分開確認。每步 5 秒、總計 30 秒，進板圖／登入／說明交還手動；原始輸入、有效導覽、取消、逾時與 session 變更停止後續，沒有重試或回滾宣稱。開始 Reply 僅是啟動確認，Reached 狀態才表示讀到正式目標名稱。見 [快速切板契約](../quick-boards.md)。
+
+新增五個 navigation 與六個 production Connection 測試，core 八套 suite／兩份 replay、56 個 desktop lib、30 個 bin 與全 targets desktop Clippy 通過。peer 核對精確步驟、同步分片期間零板名輸入與 Pong、工作期間零保活、舊取消不影響新工作、手動介入、晚到提示、5 秒逾時、重連零重播與工作中 Close acknowledged。write_input 在 await 前更新 watch 的 input epoch／等待狀態；既有檔案 lease 的 input 失效、Vim／登入／清理回歸維持通過。fixture 是自製場景與手寫 expected，原有 expected 未改。證據保留 `.local/verification/boards-c2`；這批只交付 Rust 流程，尚無新的快速切板 UI／最近清單或對應原生／實站完成宣稱。
+
 ### 詳細交付計畫
 
 2026-10-17 展開上述研究；本節是待執行計畫，不代表產品已支援。先交付相容性，再交付高頻桌面操作。每一批完成實作與適用驗證即提交，不累積到整個階段結束；不改寫既有歷史、不自動 push。以下為依賴順序與相對工作量，不是日曆工期承諾。

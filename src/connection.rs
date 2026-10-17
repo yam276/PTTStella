@@ -1,5 +1,6 @@
 //! One PTT connection owner, including explicit single-attempt login. No shell.
 use crate::{
+    board_navigation::{BoardName, Progress as BoardProgress},
     input::MAX_INPUT_BYTES,
     login::Credentials,
     navigation::{Intent, Stamp},
@@ -45,6 +46,7 @@ pub struct View {
     pub input_pending: bool,
     pub login_pending: bool,
     pub login_guidance: crate::login::Guidance,
+    pub board_navigation: BoardProgress,
     pub frame: Frame,
     pub generation: u64,
     pub phase: Phase,
@@ -83,6 +85,14 @@ enum Command {
         reply: oneshot::Sender<Result<(), String>>,
     },
     CancelLogin,
+    SwitchBoard {
+        stamp: Stamp,
+        board: BoardName,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
+    CancelSwitchBoard {
+        operation: Stamp,
+    },
     Navigate {
         stamp: Stamp,
         intent: Intent,
@@ -138,6 +148,7 @@ impl Connection {
             input_pending: false,
             login_pending: false,
             login_guidance: crate::login::Guidance::Idle,
+            board_navigation: BoardProgress::Idle,
             frame: screen.frame(),
             generation: 0,
             phase: Phase::Disconnected,
@@ -248,6 +259,24 @@ impl Connection {
     }
     pub fn cancel_login(&self) -> Result<(), String> {
         self.enqueue(Command::CancelLogin)
+    }
+    /// Acknowledges starting one workflow. Only View::board_navigation reports arrival.
+    pub fn request_switch_board(&self, stamp: Stamp, board: BoardName) -> Result<Reply, String> {
+        let (reply, answer) = oneshot::channel();
+        self.enqueue(Command::SwitchBoard {
+            stamp,
+            board,
+            reply,
+        })?;
+        Ok(Reply {
+            answer,
+            deadline: tokio::time::Instant::now() + Duration::from_secs(6),
+            expired: crate::msg!("board-switch-start-timeout"),
+            closed: crate::msg!("navigation-service-unavailable"),
+        })
+    }
+    pub fn cancel_switch_board(&self, operation: Stamp) -> Result<(), String> {
+        self.enqueue(Command::CancelSwitchBoard { operation })
     }
     pub async fn navigate(&self, stamp: Stamp, intent: Intent) -> Result<(), String> {
         self.request_navigate(stamp, intent)?.wait().await

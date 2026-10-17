@@ -1,4 +1,5 @@
 //! PTT-specific screen state. This is not a shell, PTY or general terminal emulator.
+pub mod board_navigation;
 #[cfg(feature = "desktop")]
 pub mod connection;
 pub mod encoding;

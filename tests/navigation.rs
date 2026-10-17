@@ -12,6 +12,243 @@ fn fixture(name: &str) -> Screen {
     screen.feed(&encoding::encode(pages[name].as_str().unwrap()).unwrap());
     screen
 }
+
+fn switch_scene(name: &str) -> Vec<u8> {
+    let data: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/board-switch.json")).unwrap();
+    encoding::encode(data["screens"][name].as_str().unwrap()).unwrap()
+}
+
+#[test]
+fn board_names_and_search_prompts_are_bounded_and_exact() {
+    use pttstella::board_navigation::{self as board, BoardName};
+    for name in ["Stella", "C_Chat", "Ab.c-0_", "a01234567890"] {
+        assert_eq!(BoardName::parse(name).unwrap().as_str(), name);
+    }
+    assert_eq!(BoardName::parse(" Stella ").unwrap().as_str(), "Stella");
+    for name in [
+        "",
+        "a",
+        "1abc",
+        "中文",
+        "a123456789012",
+        "bad\rname",
+        "abc def",
+        "a/b",
+        "a\\b",
+    ] {
+        assert!(BoardName::parse(name).is_err(), "{name:?}");
+    }
+    let bytes = switch_scene("prompt");
+    for split in 0..=bytes.len() {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&bytes[..split]);
+        screen.feed(&bytes[split..]);
+        assert!(board::search_prompt(&screen.frame()));
+    }
+    for suffix in [b"x".as_slice(), b"\x1b[", b"\x1b[?2026h", b"\x1b[3;1H"] {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&bytes);
+        screen.feed(suffix);
+        assert!(!board::search_prompt(&screen.frame()));
+    }
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(&bytes);
+    let (col, row) = screen.cursor();
+    screen.feed(
+        &encoding::encode(&format!(
+            "\x1b[H\x1b[0m【 搜尋全站看板 】\x1b[{};{}H",
+            row + 1,
+            col + 1
+        ))
+        .unwrap(),
+    );
+    assert!(!board::search_prompt(&screen.frame()));
+}
+
+#[test]
+fn board_identity_uses_the_actual_header_suffix_and_distinguishes_empty_lists_and_folders() {
+    use pttstella::board_navigation as board;
+    for (name, browser, current, selected) in [
+        ("boards", true, None, Some("Alpha")),
+        ("selected", true, None, Some("Stella")),
+        ("empty_boards", true, None, None),
+        ("articles", false, Some("Stella"), None),
+        ("empty_articles", false, Some("Stella"), None),
+        ("reading", false, None, None),
+    ] {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&switch_scene(name));
+        assert_eq!(board::browser(&screen.frame()), browser, "{name}");
+        assert_eq!(
+            board::current_board(&screen.frame())
+                .as_ref()
+                .map(|name| name.as_str()),
+            current,
+            "{name}"
+        );
+        assert_eq!(
+            board::selected_board(&screen.frame())
+                .as_ref()
+                .map(|name| name.as_str()),
+            selected,
+            "{name}"
+        );
+    }
+    assert_eq!(
+        board::current_board(&fixture("list").frame())
+            .unwrap()
+            .as_str(),
+        "Stella"
+    );
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(&switch_scene("articles"));
+    screen.feed(
+        &encoding::encode(
+            "\x1b[H\x1b[37;44m\x1b[2K描述中的看板《Other》 模擬敘述 看板《Stella》\x1b[0m\x1b[5;1H",
+        )
+        .unwrap(),
+    );
+    assert_eq!(
+        board::current_board(&screen.frame()).unwrap().as_str(),
+        "Stella"
+    );
+    screen.feed(&switch_scene("selected"));
+    screen.feed(&encoding::encode("\x1b[5;24H目錄\x1b[5;1H").unwrap());
+    assert!(board::browser(&screen.frame()));
+    assert!(board::selected_board(&screen.frame()).is_none());
+}
+
+#[test]
+fn switch_from_main_waits_for_prompt_then_selected_target_before_entering_once() {
+    use pttstella::board_navigation::{Advance, BoardName, Start, Switch};
+    let now = std::time::Instant::now();
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(&switch_scene("main"));
+    let Start::Run { mut switch, bytes } =
+        Switch::begin(&screen.frame(), BoardName::parse("stella").unwrap(), now).unwrap()
+    else {
+        panic!("expected workflow")
+    };
+    assert_eq!(bytes, b"f");
+    assert_eq!(switch.observe(&screen.frame(), now).unwrap(), Advance::Wait);
+    for (name, expected) in [
+        ("boards", b"s".as_slice()),
+        ("prompt", b"stella\r"),
+        ("selected", b"\x1b[C"),
+    ] {
+        screen.feed(&switch_scene(name));
+        assert_eq!(
+            switch.observe(&screen.frame(), now).unwrap(),
+            Advance::Send(expected.to_vec())
+        );
+        assert_eq!(switch.observe(&screen.frame(), now).unwrap(), Advance::Wait);
+    }
+    screen.feed(&switch_scene("articles"));
+    assert_eq!(
+        switch.observe(&screen.frame(), now).unwrap(),
+        Advance::Reached(BoardName::parse("Stella").unwrap())
+    );
+}
+
+#[test]
+fn switch_from_reading_waits_for_each_back_step_and_accepts_direct_or_empty_target_arrival() {
+    use pttstella::board_navigation::{Advance, BoardName, Start, Switch};
+    for destination in ["articles", "empty_articles"] {
+        let now = std::time::Instant::now();
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&switch_scene("reading"));
+        let Start::Run { mut switch, bytes } =
+            Switch::begin(&screen.frame(), BoardName::parse("Stella").unwrap(), now).unwrap()
+        else {
+            panic!("expected workflow")
+        };
+        assert_eq!(bytes, b"\x1b[D");
+        for (name, expected) in [
+            ("other_articles", b"\x1b[D".as_slice()),
+            ("empty_boards", b"s"),
+            ("prompt", b"Stella\r"),
+        ] {
+            screen.feed(&switch_scene(name));
+            assert_eq!(
+                switch.observe(&screen.frame(), now).unwrap(),
+                Advance::Send(expected.to_vec())
+            );
+        }
+        screen.feed(&switch_scene(destination));
+        assert_eq!(
+            switch.observe(&screen.frame(), now).unwrap(),
+            Advance::Reached(BoardName::parse("Stella").unwrap())
+        );
+        assert!(
+            matches!(Switch::begin(&screen.frame(),BoardName::parse("stella").unwrap(),now),Ok(Start::Reached(name)) if name.as_str()=="Stella")
+        );
+    }
+}
+
+#[test]
+fn switch_never_answers_entry_or_login_prompts_and_partial_or_wrong_frames_do_not_extend_waits() {
+    use pttstella::board_navigation::{self as board, Advance, BoardName, Start, Switch};
+    use std::time::{Duration, Instant};
+    let now = Instant::now();
+    for name in ["entry", "help", "prompt"] {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&switch_scene(name));
+        assert!(matches!(
+            Switch::begin(&screen.frame(), BoardName::parse("Stella").unwrap(), now),
+            Err(board::Error::Unsupported)
+        ));
+    }
+    for name in ["entry", "help", "login"] {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&switch_scene("boards"));
+        let Start::Run { mut switch, .. } =
+            Switch::begin(&screen.frame(), BoardName::parse("Stella").unwrap(), now).unwrap()
+        else {
+            panic!("workflow")
+        };
+        if name == "login" {
+            screen.feed(
+                &encoding::encode("\x1b[2J\x1b[21;1H請輸入代號，或以 guest 參觀，或以 new 註冊: ")
+                    .unwrap(),
+            );
+        } else {
+            screen.feed(&switch_scene(name));
+        }
+        assert_eq!(
+            switch.observe(&screen.frame(), now),
+            Err(board::Error::Manual)
+        );
+    }
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(&switch_scene("boards"));
+    let Start::Run { mut switch, .. } =
+        Switch::begin(&screen.frame(), BoardName::parse("Stella").unwrap(), now).unwrap()
+    else {
+        panic!("workflow")
+    };
+    screen.feed(b"\x1b[?2026h");
+    screen.feed(&switch_scene("prompt"));
+    assert_eq!(switch.observe(&screen.frame(), now).unwrap(), Advance::Wait);
+    screen.feed(b"\x1b[?2026l");
+    assert_eq!(
+        switch.observe(&screen.frame(), now).unwrap(),
+        Advance::Send(b"Stella\r".to_vec())
+    );
+    for elapsed in [1, 2, 3, 4] {
+        screen.feed(&switch_scene("boards")); // Still points at Alpha, not Stella.
+        assert_eq!(
+            switch
+                .observe(&screen.frame(), now + Duration::from_secs(elapsed))
+                .unwrap(),
+            Advance::Wait
+        );
+    }
+    assert_eq!(
+        switch.observe(&screen.frame(), now + board::STEP_LIMIT),
+        Err(board::Error::Timeout)
+    );
+}
 fn page(name: &str) -> Context {
     navigation::analyze(&fixture(name).frame())
 }
