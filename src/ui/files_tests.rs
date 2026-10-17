@@ -10,6 +10,56 @@ use pttstella::{
 use std::time::Duration;
 use tokio::sync::oneshot;
 
+#[tokio::test]
+async fn bookmark_files_keep_request_identity_commit_only_on_delivery_and_revoke_unstarted_saves() {
+    use super::super::bookmarks::State;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("probe-bookmarks.json");
+    let mut state = State::load(Some(dir.path()));
+    let write = state.edit("#00000101@Stella", "自製", false).unwrap();
+    let mut files = Files::default();
+    files
+        .start(|permit| save_bookmarks(permit, 17, write))
+        .unwrap();
+    files.finish().await.unwrap();
+    assert!(!path.exists());
+    let mut files = Files::default();
+    let write = state.edit("#00000101@Stella", "自製", false).unwrap();
+    files
+        .start(|permit| save_bookmarks(permit, 18, write))
+        .unwrap();
+    let Completion::Bookmarks {
+        request,
+        result: Ok(saved),
+    } = files.next().await
+    else {
+        panic!("bookmark save failed")
+    };
+    assert_eq!(request, 18);
+    assert!(state.snapshot().entries.is_empty());
+    state.complete(Ok(saved));
+    assert_eq!(state.snapshot().entries.len(), 1);
+    let old = std::fs::read(&path).unwrap();
+    std::fs::create_dir(path.with_extension("json.bak")).unwrap();
+    let write = state.edit("#00000101@Stella", "", true).unwrap();
+    files
+        .start(|permit| save_bookmarks(permit, 19, write))
+        .unwrap();
+    let Completion::Bookmarks {
+        request,
+        result: Err(error),
+    } = files.next().await
+    else {
+        panic!("backup failure was swallowed")
+    };
+    assert_eq!(request, 19);
+    state.complete(Err(error.to_string()));
+    assert_eq!(state.snapshot().entries.len(), 1);
+    assert_eq!(std::fs::read(path).unwrap(), old);
+    files.finish().await.unwrap();
+    assert!(!files.busy());
+}
+
 fn snapshot() -> (
     SurfaceState,
     tokio::sync::watch::Sender<View>,

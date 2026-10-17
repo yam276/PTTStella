@@ -16,6 +16,7 @@ pub(super) enum Scenario {
     Login2fa,
     Boards,
     Articles,
+    Bookmarks,
     Filters,
     Surface,
 }
@@ -81,34 +82,26 @@ pub(super) fn article_page(name: &str) -> Result<Vec<u8>, String> {
     )
     .map_err(|e| e.to_string())
 }
-async fn articles<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result<(), String>
+const ARTICLE_FIRST_OPEN: &[(&[u8], &str)] = &[
+    (b"f", "boards"),
+    (b"s", "board_prompt"),
+    (b"Stella\r", "selected"),
+    (b"\x1b[C", "articles"),
+    (b"#", "aid_prompt"),
+    (b"00000101\r", "articles"),
+    (b"Q", "information"),
+    (b" ", "articles"),
+    (b"\x1b[C", "reading"),
+];
+/// True means the peer already completed Close while the delayed reply waited.
+async fn article_steps<S>(
+    socket: &mut tokio_tungstenite::WebSocketStream<S>,
+    steps: &[(&[u8], &str)],
+) -> Result<bool, String>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
-    for (expected, scene) in [
-        (b"f".as_slice(), "boards"),
-        (b"s", "board_prompt"),
-        (b"Stella\r", "selected"),
-        (b"\x1b[C", "articles"),
-        (b"#", "aid_prompt"),
-        (b"00000101\r", "articles"),
-        (b"Q", "information"),
-        (b" ", "articles"),
-        (b"\x1b[C", "reading"),
-        (b"\x1b[D", "articles"),
-        (b"#", "aid_prompt"),
-        (b"00000102\r", "articles"),
-        (b"Q", "information_two"),
-        (b" ", "articles"),
-        (b"\x1b[C", "reading_two"),
-        (b"\x1b[D", "articles"),
-        (b"#", "aid_prompt"),
-        (b"00000103\r", "missing"),
-        (b" ", "articles"), // Only the user's explicit pause recovery is accepted.
-        (b"#", "aid_prompt"),
-        (b"00000104\r", "articles"),
-        (b"Q", "information_four"),
-    ] {
+    for &(expected, scene) in steps {
         if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected)
         {
             return Err(format!("article probe input differs before {scene}"));
@@ -117,7 +110,7 @@ where
             tokio::select! {
                 _=tokio::time::sleep(Duration::from_secs(3))=>{},
                 incoming=socket.next()=>return match incoming {
-                    Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
+                    Some(Ok(Message::Close(_)))=>socket.flush().await.map(|()|true).map_err(|e|e.to_string()),
                     _=>Err("article probe expected Close while query was delayed".into()),
                 },
             }
@@ -126,6 +119,41 @@ where
             .send(Message::Binary(article_page(scene)?.into()))
             .await
             .map_err(|e| e.to_string())?;
+    }
+    Ok(false)
+}
+async fn articles<S>(
+    socket: &mut tokio_tungstenite::WebSocketStream<S>,
+    bookmarks: bool,
+) -> Result<(), String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    if article_steps(socket, ARTICLE_FIRST_OPEN).await? {
+        return Ok(());
+    }
+    if !bookmarks
+        && article_steps(
+            socket,
+            &[
+                (b"\x1b[D", "articles"),
+                (b"#", "aid_prompt"),
+                (b"00000102\r", "articles"),
+                (b"Q", "information_two"),
+                (b" ", "articles"),
+                (b"\x1b[C", "reading_two"),
+                (b"\x1b[D", "articles"),
+                (b"#", "aid_prompt"),
+                (b"00000103\r", "missing"),
+                (b" ", "articles"), // Only the user's explicit pause recovery is accepted.
+                (b"#", "aid_prompt"),
+                (b"00000104\r", "articles"),
+                (b"Q", "information_four"),
+            ],
+        )
+        .await?
+    {
+        return Ok(());
     }
     match socket.next().await {
         Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e| e.to_string()),
@@ -393,6 +421,7 @@ pub(super) async fn serve(
             | Scenario::Surface
             | Scenario::Boards
             | Scenario::Articles
+            | Scenario::Bookmarks
     ) {
         300
     } else {
@@ -413,8 +442,8 @@ pub(super) async fn serve(
         if matches!(scenario, Scenario::Boards) {
             return boards(&mut socket).await;
         }
-        if matches!(scenario, Scenario::Articles) {
-            return articles(&mut socket).await;
+        if matches!(scenario, Scenario::Articles | Scenario::Bookmarks) {
+            return articles(&mut socket, matches!(scenario, Scenario::Bookmarks)).await;
         }
         if matches!(scenario, Scenario::Login | Scenario::Login2fa) {
             return login(&mut socket, matches!(scenario, Scenario::Login2fa)).await;
@@ -601,4 +630,69 @@ where
         return Err("unknown screen received unintended navigation input".into());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn article_probe_close_during_delayed_query_does_not_wait_for_another_frame() {
+        use tokio_tungstenite::{WebSocketStream, tungstenite::protocol::Role};
+        let (server, client) = tokio::io::duplex(64 * 1024);
+        let mut server = WebSocketStream::from_raw_socket(server, Role::Server, None).await;
+        let mut client = WebSocketStream::from_raw_socket(client, Role::Client, None).await;
+        let owner = tokio::spawn(async move { articles(&mut server, false).await });
+        // This case tests the close lifetime, independently of reducer identity
+        // tests. The peer still validates each input before replying.
+        for bytes in [
+            b"f".as_slice(),
+            b"s",
+            b"Stella\r",
+            b"\x1b[C",
+            b"#",
+            b"00000101\r",
+            b"Q",
+            b" ",
+            b"\x1b[C",
+            b"\x1b[D",
+            b"#",
+            b"00000102\r",
+            b"Q",
+            b" ",
+            b"\x1b[C",
+            b"\x1b[D",
+            b"#",
+            b"00000103\r",
+            b" ",
+            b"#",
+            b"00000104\r",
+        ] {
+            client
+                .send(Message::Binary(bytes.to_vec().into()))
+                .await
+                .unwrap();
+            assert!(matches!(
+                timeout(Duration::from_secs(1), client.next())
+                    .await
+                    .unwrap(),
+                Some(Ok(Message::Binary(_)))
+            ));
+        }
+        client
+            .send(Message::Binary(b"Q".to_vec().into()))
+            .await
+            .unwrap();
+        client.send(Message::Close(None)).await.unwrap();
+        assert!(matches!(
+            timeout(Duration::from_secs(1), client.next())
+                .await
+                .unwrap(),
+            Some(Ok(Message::Close(_)))
+        ));
+        timeout(Duration::from_secs(1), owner)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+    }
 }

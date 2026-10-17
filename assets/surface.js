@@ -457,9 +457,10 @@ const loginUi=createLoginDialog({tr,send,stamp,
     prepare:e=>{cancelHover(true);policy("reset",e);cancelComposition();clearSelection();},
     restore:restoreEditingFocus,changed:refreshControls,focus});
 const destinationUi=createNavigationDialog({tr,send,stamp,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,current:()=>latest,isEditing:()=>composing||pastePending});
+const bookmarksUi=createBookmarksDialog({tr,send,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,openDestination:destinationUi.openDraft,current:()=>latest});
 const filterUi=createFiltersDialog({tr,send,current:()=>latest,invalidate:invalidatePresentation,
     reset:e=>policy("reset",e),restore:restoreEditingFocus,changed:refreshControls});
-const bindings=[...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,
+const bindings=[...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
     [keyboard,"beforeinput",beforeinput],
@@ -643,11 +644,11 @@ async function paint(packet) {
     surface.dataset.outputPending=String(!!packet.output_pending);
     surface.dataset.keepAlive=String(packet.keep_alive);surface.dataset.keepAliveReady=String(packet.keep_alive_ready);
     surface.dataset.keepAliveSent=String(packet.keep_alive_sent);
-    loginUi.update(packet);destinationUi.update(packet);
+    loginUi.update(packet);destinationUi.update(packet);bookmarksUi.update();
 }
 focus();
 function revokeSurface(){
-    stopped=true;settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();
+    stopped=true;settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
     for(const [target,event,callback,options] of bindings)target.removeEventListener(event,callback,options);
 }
 const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
@@ -661,6 +662,8 @@ function runSurfaceProbe(mode){
             else if(mode==="files_slow")surfaceNote.textContent="慢檔案探針：等待本機 runner 釋放；可開啟設定或關閉視窗";
             else if(mode==="fonts")surfaceNote.textContent="Font selection probe: local synthetic data and external-page sink";
             else if(mode==="recent")surfaceNote.textContent="Recent-board probe: inspect the restored list, clear it, wait for saved feedback, then close";
+            else if(mode==="bookmarks")surfaceNote.textContent="Bookmark probe: add two entries, rename the first, remove the second, reject a bare board, then open #00000101@Stella through Go to";
+            else if(mode.startsWith("bookmarks_"))surfaceNote.textContent="Bookmark restart probe: inspect restored/empty/corrupt data, remove restored entry explicitly, then close without station input";
             else if(mode==="articles"||mode==="articles_close")surfaceNote.textContent="Article probe: enable Vim, open URL 00000101 and AID 00000102, fail 00000103 and recover manually, reject foreign URL and long draft, then cancel/close during 00000104";
             else if(mode==="boards_close")surfaceNote.textContent="Board close probe: visit Stella and Other, start Beta, then close while waiting";
             else if(mode==="boards")surfaceNote.textContent="Board probe: cancel a draft, visit Stella and Other, reject an invalid name, then start Beta and stop before the delayed board list";
@@ -691,6 +694,7 @@ const route=createSurfaceRouter({
     filters_open:filterUi.open,filters_result:filterUi.receive,
     login_result:loginUi.receive,
     recent_boards:destinationUi.receiveRecent,destination_result:destinationUi.receive,keyboard_state:receiveKeyboard,
+    bookmarks_open:bookmarksUi.receiveOpen,bookmarks_result:bookmarksUi.receive,
     hover_settings:position=>{hoverPreference=position;hoverPosition.value=position;surface.dataset.hoverPosition=position;
         if(position==="off")cancelHover(true);else if(pointerClient)media.locate(pointerClient,position);},
     media_hover:data=>{if(hoverCandidate?.sequence===data.sequence){media.hover(data);media.locate(pointerClient,hoverPreference);}},
@@ -730,7 +734,7 @@ finally {
     cancelHover(true);
     stopped=true;latest=null;observer.disconnect();pasteObserver.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
     const mediaClean=await media.destroy();
-    settingsUi.destroy();loginUi.destroy();filterUi.destroy();destinationUi.destroy();
+    settingsUi.destroy();loginUi.destroy();filterUi.destroy();destinationUi.destroy();bookmarksUi.destroy();
     if(exportTask)await exportTask;
     if(pasteDialog.open)pasteDialog.close();
     setHover(null);refreshNavigation();
@@ -744,7 +748,7 @@ finally {
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
     cleanupClean=mediaClean&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
-        &&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&destinationUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
+        &&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&destinationUi.clean()&&bookmarksUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
     try {send({kind:"stopped",clean:cleanupClean});} catch(_) { /* join still acknowledges cleanup */ }
 }
 return {clean:cleanupClean};

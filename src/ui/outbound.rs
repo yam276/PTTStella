@@ -11,6 +11,15 @@ use std::collections::BTreeMap;
 #[derive(Serialize)]
 #[serde(tag = "kind", content = "payload", rename_all = "snake_case")]
 pub(super) enum Packet<'a> {
+    BookmarksOpen {
+        request: u64,
+        data: super::bookmarks::Snapshot,
+    },
+    BookmarksResult {
+        request: u64,
+        data: super::bookmarks::Snapshot,
+        feedback: Feedback<SaveStatus>,
+    },
     Localization {
         language: &'static str,
         resource: &'static str,

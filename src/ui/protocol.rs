@@ -17,6 +17,17 @@ pub(super) enum MediaAction {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(super) enum SurfaceEvent {
+    BookmarksOpen {
+        request: u64,
+        trusted: bool,
+    },
+    BookmarksEdit {
+        request: u64,
+        value: String,
+        label: String,
+        remove: bool,
+        trusted: bool,
+    },
     RecentBoardsClear {
         trusted: bool,
     },
@@ -247,7 +258,9 @@ impl SurfaceEvent {
             DestinationCancel { trusted, operation } => {
                 *trusted && operation.generation == generation
             }
-            FiltersOpen { trusted }
+            BookmarksOpen { trusted, .. }
+            | BookmarksEdit { trusted, .. }
+            | FiltersOpen { trusted }
             | RecentBoardsClear { trusted }
             | FiltersEdit { trusted, .. }
             | FiltersReveal { trusted, .. }
@@ -331,6 +344,14 @@ mod admission_tests {
         for kind in ["paste_confirm", "paste_cancel", "recent_boards_clear"] {
             assert!(!admits(json!({"kind":kind}), false, 7));
             assert!(admits(json!({"kind":kind}), true, 7));
+        }
+        for event in [
+            json!({"kind":"bookmarks_open","request":1}),
+            json!({"kind":"bookmarks_edit","request":2,"value":"#00000101@Stella","label":"","remove":false}),
+        ] {
+            assert!(!admits(event.clone(), false, 7));
+            assert!(admits(event.clone(), true, 7));
+            assert!(admits(event, true, 8)); // Local data survives session changes.
         }
     }
 

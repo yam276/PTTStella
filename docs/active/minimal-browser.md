@@ -163,6 +163,14 @@ macOS 同一候選 `dist/macos-article-core/PTTStella.app` 通過既有 C2 UI �
 
 獨立本機 store 只在既有主檔有效時備份與替換；壞檔／超量／未知版本、備份或主檔失敗均明確拒絕並保留資料。與最近清單共用有界讀取及逐檔原子替換，最近的明確清除／損壞恢復政策維持原契約。88 個 desktop lib（含六個書籤與兩個 storage 案例）、36 個 bin、Fluent JS、core／desktop all-targets Clippy／docs 通過；涵蓋 500 筆邊界、長 Unicode 名稱、重複及非法文件、重啟與刪除備份、壞檔雙副本保留、實際目錄造成的保存失敗與暫存清理。證據在 `.local/verification/bookmarks-c3`。這批尚未接 UI／Files，不宣稱書籤原生操作或新 App；接續手動新增、刪除、選取前往及重啟驗收。
 
+**C3 手動書籤 UI／Files 與 macOS 重啟驗收完成**。工具列新增「文章書籤」，明確輸入 AID／文章網址及選填名稱、選取更新／移除；前往先交給同一快速前往 owner 填草稿，再確認才走既有 Session。Rust State 只在 Files 保存成功後 commit，JS 持有獨立 request／草稿／busy／IME／對話框生命週期；晚到讀取、關閉及重新開啟不重開視窗、不搶焦點或覆蓋新草稿。已開始保存不因關閉 dialog 遺失追蹤；主視窗關閉沿用 Files drain／join，未開始工作可撤銷。壞檔保存／移除停用，普通 Enter 同樣拒絕；已存標籤以 textContent 顯示。
+
+89 個 desktop lib、39 個 bin、42 個 JS、core／desktop all-targets Clippy／Fluent／docs 通過；包含保存前不 commit、錯誤保留、request 回傳、撤銷未開始寫入、晚到與重開競態、readonly／不可信事件、IME／229、選取移除、共用快速前往及清理。共享的合成文章 probe 步驟沒有改 expected，新增 Close 在延遲查詢中已完成後不能再等第二個 frame 的實際 duplex WebSocket 回歸。最初 SaveStatus／參考型別接線編譯錯誤已修正，初期失敗紀錄保留而不計入通過。
+
+macOS 四個獨立程序使用同一 `dist/macos-bookmarks/PTTStella.app`：繁中新增兩筆、中文更名、移除一筆、無 AID 草稿拒絕與取消，重開選取後經快速前往開啟正確文章，畫面可見 Normal，匯出 960×576 PNG；英文重啟還原同一中文名稱及識別，移除最後一筆；第三程序載入空檔仍空；第四程序載入自製壞檔顯示英文警告、保存停用，合法目標加 Enter 亦零修改。第一程序中文 typeText 未填入，改為原生貼上並確認 AX 值後保存，因此共有五次保存／一次拒絕；不把這項工具輸入觀察算成 IME 候選窗驗收。四者皆 Close acknowledged、全部 owner join、退出碼 0，後三個 peer 拒絕所有站端 bytes。
+
+獨立檢查更名保留建立秒數、移除備份為前版、seed 與重啟資料 bytes 相同、空檔與壞檔未自動改寫；四份測試 App 與候選去簽章 executable hash 相同、strict ad-hoc 簽章有效，PNG 獨立解碼完成，未與不同場景假稱像素相等。證據保留 `.local/verification/bookmarks-ui-c3`。C3 第一版完成於明確手動識別及已辨識文章格式，不含自動猜目前 AID／離線文章；本輪未重跑 46 筆 Vim、實站、原生 IME、Windows／Linux。接續 D 站端滑鼠，C1 原生 pointer backend 缺口仍未結案；沒有 push 或公開發佈。
+
 ## 維護性重構
 
 2026-10-17 傳統 BBS 字型：依公開的 PTT 官方終端預設及 Windows 客戶端資源確認 MingLiU／細明體是傳統選項，並非所有客戶端有唯一預設。新增 `windows_classic`（MingLiU／MingLiU）與 `macos_bbs`（Songti TC／Songti TC）；既有 Windows 黑體組合、macOS 黑體／宋體與平台初始值保留。新組合均明確選取，前者缺少時顯示兩角色載入警告及官方取得／授權頁，後者只稱本機宋體替代，不宣稱等同細明體。沒有加入第三方字型檔。

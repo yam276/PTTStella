@@ -154,6 +154,7 @@ async fn run(
         changed=closing.changed()=>{changed.map_err(|e|e.to_string())?;return Ok(Vec::new());}
     };
     let files::Initial {
+        mut bookmarks,
         mut recent,
         mut preferences,
         filter_store,
@@ -161,6 +162,7 @@ async fn run(
         mut filter_warning,
     } = *loaded;
     let initial_recent = recent.packet().boards;
+    let initial_bookmarks = bookmarks.snapshot();
     let mut recent_clears = 0usize;
     let mut screen = SurfaceState::new(rules);
     let mut receiver = connection.updates.clone();
@@ -183,6 +185,7 @@ async fn run(
         include_str!("../../assets/surface-settings.js"),
         include_str!("../../assets/surface-login.js"),
         include_str!("../../assets/surface-navigation.js"),
+        include_str!("../../assets/surface-bookmarks.js"),
         include_str!("../../assets/surface-filters.js"),
         include_str!("../../assets/surface.js"),
     ]
@@ -309,6 +312,11 @@ async fn run(
             },
             done=files.next(), if !*closing.borrow()=>{
                 let packet=match done {
+                    FileCompletion::Bookmarks {request,result}=>{
+                        if result.is_ok() {checks.bookmark_saves=checks.bookmark_saves.saturating_add(1);} else {checks.bookmark_rejected=checks.bookmark_rejected.saturating_add(1);}
+                        let feedback=bookmarks.complete(result.map_err(|e|e.to_string()));
+                        Packet::BookmarksResult {request, data:bookmarks.snapshot(), feedback}
+                    },
                     FileCompletion::Recent(done)=>{recent.complete(done);Packet::RecentBoards(recent.packet())},
                     FileCompletion::Probe(result)=>{pending_report=Some(result.map_err(|e|e.to_string())?);close_deadline=Some(tokio::time::Instant::now()+std::time::Duration::from_secs(45));continue;},
                     FileCompletion::Fonts{request,result}=>{
@@ -419,6 +427,17 @@ async fn run(
                     continue;
                 }
                 match event {
+                    SurfaceEvent::BookmarksOpen {request,..}=>{
+                        checks.bookmark_opens=checks.bookmark_opens.saturating_add(1);
+                        eval.send(Packet::BookmarksOpen {request,data:bookmarks.snapshot()}).map_err(|e|e.to_string())?;
+                    },
+                    SurfaceEvent::BookmarksEdit {request,value,label,remove,..}=>{
+                        let result=bookmarks.edit(&value,&label,remove).and_then(|write|files.start(|permit|files::save_bookmarks(permit,request,write)));
+                        if let Err(error)=result {
+                            checks.bookmark_rejected=checks.bookmark_rejected.saturating_add(1);
+                            eval.send(Packet::BookmarksResult {request,data:bookmarks.snapshot(),feedback:Feedback::new(SaveStatus::Rejected,error)}).map_err(|e|e.to_string())?;
+                        }
+                    },
                     SurfaceEvent::DestinationSubmit {request,stamp,value,trusted:_} => {
                         let result=(|| {
                             let target=pttstella::navigation_job::Destination::parse(&value)?;
@@ -1061,6 +1080,7 @@ async fn run(
             "status":if case=="slow" && commands.busy() || case=="files_slow" && files.busy() || case=="files" && checks.export_checked || case=="untrusted" && surface_probe_clean && rejected_events==3
                 || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB")
                 || case=="recent" && recent_clears>=1 && recent.packet().boards.is_empty() && recent.packet().notice==Some(pttstella::msg!("recent-cleared"))
+                || checks.bookmarks_passed(&case,&initial_bookmarks,&bookmarks.snapshot(),&receiver.borrow().destination)
                 || case=="boards_close" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && matches!(&receiver.borrow().destination,pttstella::navigation_job::Progress::Active{target,..} if target.board().as_str()=="Beta")
                 || matches!(case.as_str(),"articles"|"articles_close") && checks.article_reached==[(1,"00000101".to_owned()),(2,"00000102".to_owned())] && checks.article_missing && checks.article_rejected>=2
                     && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
@@ -1072,9 +1092,10 @@ async fn run(
                 || matches!(case.as_str(),"sgr66"|"sgr66_legacy") && checks.export_checked
                 || case=="dialogs" && checks.settings_saved && checks.export_checked && checks.rows_export_checked && checks.media_external>=1 {"passed"} else {"failed"},
             "recent_initial":initial_recent,"recent_final":recent.packet().boards,"recent_clears":recent_clears,
+            "bookmarks_initial":initial_bookmarks,"bookmarks_final":bookmarks.snapshot(),"bookmark_opens":checks.bookmark_opens,"bookmark_saves":checks.bookmark_saves,"bookmark_rejected":checks.bookmark_rejected,
             "article_reached":checks.article_reached,"article_missing":checks.article_missing,"article_rejected":checks.article_rejected,"article_cancelled":checks.article_cancelled,
             "board_reached":checks.board_reached,"board_rejected":checks.board_rejected,"board_cancelled":checks.board_cancelled,
-            "scope":if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
+            "scope":if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
             "osc8_dragged":checks.osc8_dragged,"osc8_media_decoded":checks.osc8_media_decoded,
             "osc8_open_rows":checks.osc8_open_rows,"osc8_copy_rows":checks.osc8_copy_rows,
             "verification_required":checks.verification_required,"verification_rejected":checks.verification_rejected,"verification_browsing":checks.verification_browsing,

@@ -1,5 +1,17 @@
 [
   {
+    "name": "bookmarks_open",
+    "packet": {"kind":"bookmarks_open","payload":{"request":10,"data":{"entries":[{"board":"Stella","aid":"00000101","label":"自製合成書籤","created_at":100},{"board":"Other","aid":"1AbCdE-_","label":null,"created_at":200}],"writable":true,"warning":null}}}
+  },
+  {
+    "name": "bookmarks_saved",
+    "packet": {"kind":"bookmarks_result","payload":{"request":11,"data":{"entries":[{"board":"Stella","aid":"00000101","label":"自製合成書籤","created_at":100},{"board":"Other","aid":"1AbCdE-_","label":null,"created_at":200}],"writable":true,"warning":null},"feedback":{"status":"saved","notice":"已保存"}}}
+  },
+  {
+    "name": "bookmarks_rejected",
+    "packet": {"kind":"bookmarks_result","payload":{"request":12,"data":{"entries":[{"board":"Stella","aid":"00000101","label":"自製合成書籤","created_at":100},{"board":"Other","aid":"1AbCdE-_","label":null,"created_at":200}],"writable":true,"warning":null},"feedback":{"status":"rejected","notice":"失敗"}}}
+  },
+  {
     "name": "stop",
     "packet": {
       "kind": "stop"

@@ -35,6 +35,7 @@ manual keyboard input → session-owned send queue → connection
 | [connection](../src/connection.rs) | 有界命令 API、watch 快照及 worker／probe 的關閉與 join |
 | [connection/worker](../src/connection/worker.rs) | Session 唯一擁有 Screen、socket、登入等待、單一目的地導覽與輸入等待；具名方法處理登入、導覽、保活與發布，select 只分派事件 |
 | [navigation_job](../src/navigation_job.rs)／[article_navigation](../src/article_navigation.rs) | Board／Article 的封閉目的地型別及純導覽 reducer；文章組合既有切板、AID 搜尋與資訊核對，Session 唯一排程及發鍵 |
+| [bookmarks](../src/bookmarks.rs)／[bookmarks/store](../src/bookmarks/store.rs) | 明確文章識別的有界本機資料、名稱／建立時間、版本驗證、備份與原子替換；不讀取畫面或送鍵 |
 | [connection/transport](../src/connection/transport.rs) | TLS／WSS 連線、有界寫入及正常關閉握手；不解讀畫面或決定瀏覽動作 |
 | [ui/app](../src/ui/app.rs) | Dioxus 畫面、原生關窗事件與啟動接線 |
 | [ui/protocol](../src/ui/protocol.rs) | WebView 結構化事件、serde wire 格式及共同輸入准入；沒有副作用 |
@@ -44,6 +45,7 @@ manual keyboard input → session-owned send queue → connection
 | [ui/lifecycle](../src/ui/lifecycle.rs) | renderer、媒體、鑰匙圈、檔案及命令等待的共同清理擁有者；正常／錯誤退出都停止並 join |
 | [ui/presentation](../src/ui/presentation.rs) | 遮黑後的唯一 Paint、連結／圖片命中、選取及輸出使用的版本核對；字型預覽也使用同一封包 |
 | [ui/preferences](../src/ui/preferences.rs) | 生效設定、草稿建構與成功保存後的 commit；初載只由檔案 worker 呼叫，互動時不自行選檔或讀寫 |
+| [ui/bookmarks](../src/ui/bookmarks.rs)／[surface-bookmarks](../assets/surface-bookmarks.js) | Rust 保存後 commit 與壞檔保留；JS 草稿、選取、單筆 request、晚到結果及 dialog 清理。前往只填既有目的地草稿 |
 | [ui/surface_state](../src/ui/surface_state.rs) | 一筆 in-flight Paint、已確認畫面、dirty、名單投影、選取與 hover；集中繪製確認、版本核對、失效及 PNG lease |
 | [ui/probe](../src/ui/probe.rs) | 自製畫面、驗收計數、獨立色彩 expected 與報告建構，不擁有產品的輸入或畫面狀態 |
 | [ui/surface](../src/ui/surface.rs) | 協調事件、信任／版本檢查、單筆繪製與各 feature owner 的停止順序 |

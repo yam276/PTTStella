@@ -4,7 +4,37 @@ use pttstella::{media, settings::HoverPosition, vim};
 use serde_json::Value;
 #[test]
 fn outbound_results_match_the_shared_wire_examples() {
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(
+        directory.path().join("probe-bookmarks.json"),
+        include_bytes!("../../tests/fixtures/bookmarks.json"),
+    )
+    .unwrap();
+    let bookmarks = super::bookmarks::State::load(Some(directory.path()));
     let actual = vec![
+        (
+            "bookmarks_open",
+            Packet::BookmarksOpen {
+                request: 10,
+                data: bookmarks.snapshot(),
+            },
+        ),
+        (
+            "bookmarks_saved",
+            Packet::BookmarksResult {
+                request: 11,
+                data: bookmarks.snapshot(),
+                feedback: Feedback::new(SaveStatus::Saved, "已保存"),
+            },
+        ),
+        (
+            "bookmarks_rejected",
+            Packet::BookmarksResult {
+                request: 12,
+                data: bookmarks.snapshot(),
+                feedback: Feedback::new(SaveStatus::Rejected, "失敗"),
+            },
+        ),
         ("stop", Packet::Stop),
         ("notice", Packet::Notice("訊息".into())),
         ("surface_probe", Packet::SurfaceProbe("decode".into())),
