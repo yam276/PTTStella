@@ -1,0 +1,11 @@
+{
+  "name": "@fluent/bundle",
+  "version": "0.19.1",
+  "tarball": "https://registry.npmjs.org/@fluent/bundle/-/bundle-0.19.1.tgz",
+  "integrity": "sha512-SWJLZrPamDPsJlFFOW1nkgN0j0rbPbmSdmK0XAoXlyqKieLtMVl4vzng3aR5pwKoUx0scug8+YY2oct3fdfy9A==",
+  "license": "Apache-2.0",
+  "files": {
+    "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "index.js": "08fc26d9b0d7e43c8c96eeb4757a94cc48ce2b4c36b5547ebc415dc7dc94f39c"
+  }
+}

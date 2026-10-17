@@ -8,6 +8,8 @@
 | zeroize 1.9.1／security-framework 3.7.0 | Rust 自有密碼 buffer 清除／macOS Keychain 安全 API | Apache-2.0 OR MIT；[zeroize](https://docs.rs/zeroize/1.9.1/)，MIT OR Apache-2.0；[security-framework](https://docs.rs/security-framework/3.7.0/) |
 | uao-rs 0.1.0 | Big5-UAO 字元配對／輸入映射 | MIT；[上游](https://github.com/zenixls2/uao-rs)，其 README 記錄 MozTW UAO 來源 |
 | url 2.5.8／webbrowser 1.2.4 | HTTP／HTTPS 網址解析與使用系統瀏覽器開啟 | MIT OR Apache-2.0；[url](https://docs.rs/url/2.5.8/)、[webbrowser](https://docs.rs/webbrowser/1.2.4/) |
+| i18n-embed 0.16.0／i18n-embed-fl 0.10.1／rust-embed 8.13.0 | Fluent 翻譯載入、編譯期訊息／參數檢查及離線資源內嵌 | MIT；[i18n-embed](https://github.com/kellpossible/cargo-i18n)，MIT；[rust-embed](https://github.com/pyros2097/rust-embed) |
+| fluent-syntax 0.12.0（dev） | 以官方 AST 驗證兩語訊息／參數一致，不自行剖析 Fluent 語法 | Apache-2.0 OR MIT；[上游](https://github.com/projectfluent/fluent-rs) |
 | Dioxus 0.7.10 | Rust 桌面 UI 與系統 WebView | MIT OR Apache-2.0；[上游](https://github.com/DioxusLabs/dioxus) |
 | Tokio／base64 | 非同步橋接、PNG 匯出與合成畫面 probe 的傳輸 | MIT；[Tokio](https://tokio.rs/)，MIT OR Apache-2.0；[base64](https://docs.rs/base64/) |
 | rfd 0.17.2／tempfile 3.27.0 | 原生另存視窗與同目錄原子檔案替換 | MIT；[rfd](https://docs.rs/rfd/0.17.2/)，MIT OR Apache-2.0；[tempfile](https://docs.rs/tempfile/3.27.0/) |
@@ -33,3 +35,7 @@ WSS 使用系統信任根、驗證站端憑證與主機名稱；TLS 設定屬於
 - Noto Sans CJK TC Regular 2.004：notofonts 官方 Sans2.004 的繁體中文臺灣 OTF，16,435,884 bytes，未修改；[上游](https://github.com/notofonts/noto-cjk/tree/Sans2.004)、[OFL 1.1](../assets/fonts/NotoSansCJK-OFL.txt)。
 
 來源 URL、Noto Git blob 與兩檔 SHA-256 見 [資產 manifest](../assets/fonts/sources.json)，著作權見 [NOTICE](../assets/fonts/NOTICE.txt)。僅在 desktop 內編入，透過有界的固定資產路由載入；執行時不需下載。Microsoft JhengHei 不包含在產品中；[Microsoft FAQ](https://learn.microsoft.com/en-us/typography/fonts/font-faq) 說明 Windows 一般字型授權不包含隨 App 散布的權利。
+
+## Fluent JavaScript
+
+附帶未修改的官方 `@fluent/bundle` 0.19.1 standalone runtime，Apache-2.0；[上游](https://github.com/projectfluent/fluent.js)、[授權](../assets/vendor/fluent/LICENSE)、[下載來源／npm integrity／檔案 SHA-256](../assets/vendor/fluent/SOURCE.json)。僅隨程式離線載入，執行時沒有 CDN 或翻譯服務請求。`locales` 的繁體中文及英文文案為本專案自行編寫，Rust 與 JS 消費同一份 Fluent 資源。
