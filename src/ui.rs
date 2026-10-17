@@ -1,5 +1,6 @@
 //! Desktop UI boundaries: view, bridge, presentation, preferences and event coordination.
 mod app;
+mod bookmarks;
 mod bridge;
 mod commands;
 mod files;

@@ -200,6 +200,12 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    pub fn start_bookmarks_probe() -> Result<Self, String> {
+        let connection =
+            Self::start_owned_probe(probe::article_page("main")?, probe::Scenario::Bookmarks)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     pub fn start_filters_probe() -> Result<Self, String> {
         let connection =
             Self::start_owned_probe(probe::filters_page(false)?, probe::Scenario::Filters)?;

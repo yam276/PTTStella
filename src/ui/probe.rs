@@ -7,6 +7,9 @@ use std::path::Path;
 
 #[derive(Default)]
 pub(super) struct Checks {
+    pub(super) bookmark_opens: usize,
+    pub(super) bookmark_saves: usize,
+    pub(super) bookmark_rejected: usize,
     pub(super) article_reached: Vec<(u64, String)>,
     pub(super) article_rejected: usize,
     pub(super) article_missing: bool,
@@ -50,6 +53,48 @@ pub(super) struct Checks {
     pub(super) copied_selection: Option<(u64, u64, u64)>,
 }
 impl Checks {
+    pub(super) fn bookmarks_passed(
+        &self,
+        case: &str,
+        initial: &super::bookmarks::Snapshot,
+        final_state: &super::bookmarks::Snapshot,
+        destination: &pttstella::navigation_job::Progress,
+    ) -> bool {
+        if self.bookmark_opens == 0 {
+            return false;
+        }
+        match case {
+            "bookmarks" => {
+                initial.entries.is_empty()
+                    && final_state.entries.len() == 1
+                    && self.bookmark_saves >= 4
+                    && self.bookmark_rejected >= 1
+                    && final_state.entries[0].target().board().as_str() == "Stella"
+                    && final_state.entries[0].target().aid().as_str() == "00000101"
+                    && final_state.entries[0].label() == Some("自製更新")
+                    && matches!(destination,pttstella::navigation_job::Progress::Reached {target:pttstella::navigation_job::Destination::Article(target),..} if target.board().as_str()=="Stella" && target.aid().as_str()=="00000101")
+            }
+            "bookmarks_restart" => {
+                initial.entries.len() == 1
+                    && final_state.entries.is_empty()
+                    && self.bookmark_saves >= 1
+            }
+            "bookmarks_empty" => {
+                initial.entries.is_empty()
+                    && final_state.entries.is_empty()
+                    && self.bookmark_saves == 0
+                    && final_state.writable
+            }
+            "bookmarks_corrupt" => {
+                initial.entries.is_empty()
+                    && final_state.entries.is_empty()
+                    && self.bookmark_saves == 0
+                    && !initial.writable
+                    && !final_state.writable
+            }
+            _ => false,
+        }
+    }
     pub(super) fn destination_rejected(&mut self, case: Option<&str>) {
         match case {
             Some("boards" | "boards_close") => {

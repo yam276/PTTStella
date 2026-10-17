@@ -132,3 +132,13 @@ test("article URLs and AIDs remain local drafts until one explicit confirmation"
         assert.equal(env.node("destination-name").value,value);assert.equal(env.node("destination-name").disabled,false);
     }
 });
+
+test("a bookmark target opens the same local draft without sending, and active navigation refuses it",()=>{
+    const env=environment();const event={isTrusted:true};
+    assert.equal(env.ui.openDraft(event,"#00000101@Stella"),true);
+    assert.equal(env.node("destination-name").value,"#00000101@Stella");assert.deepEqual(env.sent,[]);
+    env.fire("destination-dialog","cancel");
+    env.update({destination:{state:"active",serial:1,target:{kind:"article",board:"Stella",aid:"00000102"},operation:{generation:7,revision:4,input_epoch:2}}});
+    assert.equal(env.ui.openDraft(event,"#00000101@Stella"),false);assert.equal(env.node("destination-dialog").open,false);
+    env.ui.destroy();assert.equal(env.ui.openDraft(event,"#00000101@Stella"),false);
+});

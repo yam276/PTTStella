@@ -25,6 +25,7 @@ use std::{
 };
 
 pub(super) struct Initial {
+    pub bookmarks: super::bookmarks::State,
     pub recent: super::recent::State,
     pub preferences: Preferences,
     pub filter_store: Result<filters::store::Store, String>,
@@ -48,6 +49,10 @@ impl std::fmt::Display for Error {
 }
 type FileResult<T> = Result<T, Error>;
 pub(super) enum Completion {
+    Bookmarks {
+        request: u64,
+        result: FileResult<pttstella::bookmarks::Bookmarks>,
+    },
     Recent(super::files_recent::Completed),
     Loaded(FileResult<Box<Initial>>),
     Fonts {
@@ -67,6 +72,7 @@ pub(super) enum Completion {
 impl Completion {
     fn failure(self) -> Option<Error> {
         match self {
+            Self::Bookmarks { result, .. } => result.err(),
             Self::Recent(done) => done.result.err().map(Error::Failed),
             Self::Loaded(result) => result.err(),
             Self::Fonts { result, .. } => result.err(),
@@ -182,6 +188,7 @@ pub(super) async fn load(permit: Permit, probe: Option<PathBuf>) -> Completion {
                 Err(error) => (filters::Rules::default(), Some(error)),
             };
             Ok(Box::new(Initial {
+                bookmarks: super::bookmarks::State::load(probe.as_deref()),
                 recent: super::recent::State::load(probe.as_deref()),
                 preferences: Preferences::load(probe.as_deref())?,
                 filter_store,
@@ -218,6 +225,16 @@ pub(super) async fn save_filters(
     rules: Result<filters::Rules, String>,
 ) -> Completion {
     Completion::Filters(blocking(permit, move || store?.save(rules?)).await)
+}
+pub(super) async fn save_bookmarks(
+    permit: Permit,
+    request: u64,
+    write: super::bookmarks::Write,
+) -> Completion {
+    Completion::Bookmarks {
+        request,
+        result: blocking(permit, move || write.store.save(write.draft)).await,
+    }
 }
 pub(super) async fn probe_report(
     permit: Permit,

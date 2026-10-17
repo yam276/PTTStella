@@ -49,6 +49,8 @@ pub fn app(props: AppProps) -> Element {
                     Connection::start_board_probe()
                 } else if articles_probing {
                     Connection::start_article_probe()
+                } else if sample_case.as_deref() == Some("bookmarks") {
+                    Connection::start_bookmarks_probe()
                 } else if verification_probing {
                     Connection::start_verification_probe()
                 } else if surface_probing {
@@ -175,6 +177,7 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "login-open", disabled: !cfg!(target_os="macos"), {pttstella::msg!("login")} }
                 button { id: "login-stop", hidden: true, {pttstella::msg!("login-cancel-attempt")} }
                 button { id: "destination-open", {pttstella::msg!("destination-open")} }
+                button { id: "bookmarks-open", {pttstella::msg!("bookmarks-title")} }
                 button { id: "destination-stop", hidden: true, {pttstella::msg!("destination-stop")} }
                 div { id: "browse-controls", hidden: true,
                     button { id: "browse-back", disabled: true, {pttstella::msg!("browse-back")} }
@@ -252,6 +255,21 @@ pub fn app(props: AppProps) -> Element {
                 div { class: "dialog-actions",
                     button { id: "destination-cancel", {pttstella::msg!("cancel")} }
                     button { id: "destination-submit", {pttstella::msg!("destination-go")} }
+                }
+            }
+            dialog { id: "bookmarks-dialog", class: "paste-preview font-dialog", "aria-labelledby": "bookmarks-title",
+                h2 { id: "bookmarks-title", {pttstella::msg!("bookmarks-title")} }
+                p { {pttstella::msg!("bookmarks-description")} }
+                label { {pttstella::msg!("bookmarks-list")} select { id: "bookmarks-list", size: "6", "aria-label": pttstella::msg!("bookmarks-list") } }
+                button { id: "bookmarks-new", {pttstella::msg!("bookmarks-new")} }
+                label { {pttstella::msg!("bookmarks-target")} input { id: "bookmarks-target", maxlength: (pttstella::article_target::MAX_INPUT+1).to_string(), autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
+                label { {pttstella::msg!("bookmarks-label")} input { id: "bookmarks-label", maxlength: (pttstella::bookmarks::LABEL_LIMIT*2+1).to_string(), autocomplete: "off" } }
+                p { id: "bookmarks-note", role: "status" }
+                div { class: "dialog-actions",
+                    button { id: "bookmarks-remove", {pttstella::msg!("bookmarks-remove")} }
+                    button { id: "bookmarks-save", {pttstella::msg!("bookmarks-save")} }
+                    button { id: "bookmarks-go", {pttstella::msg!("bookmarks-go")} }
+                    button { id: "bookmarks-close", {pttstella::msg!("close")} }
                 }
             }
             dialog { id: "paste-dialog", class: "paste-preview",
