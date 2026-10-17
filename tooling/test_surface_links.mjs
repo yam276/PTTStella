@@ -41,3 +41,15 @@ test("link activation uses the released hit and exact frame stamp once",()=>{
     context.released=null; // A moved/cancelled pointer transaction cannot activate.
     click({button:0,detail:1,isTrusted:true});assert.equal(sent.length,1);
 });
+
+
+test("local navigation sends an explicit pointer or toolbar source",()=>{
+    const sent=[],context={canNavigate:()=>true,dragging:null,policy(){},latest:{navigation:{}},clearSelection(){},setHover(){},refreshNavigation(){},
+        surface:{dataset:{}},stamp:()=>({generation:7,revision:4,input_epoch:2}),send:v=>sent.push(JSON.parse(JSON.stringify(v))),focus(){}};
+    vm.createContext(context);
+    vm.runInContext(source.slice(source.indexOf("function navigate("),source.indexOf("const leaveLink="))+"\nglobalThis.buttons=[browseReturn,browseUp,browseDown];",context);
+    context.navigate({action:"next_item"},{isTrusted:true});
+    for(const button of context.buttons)button({isTrusted:true});
+    assert.deepEqual(sent.map(v=>[v.intent.action,v.source]),[["next_item","pointer"],["back","button"],["previous_page","button"],["next_page","button"]]);
+    assert.ok(sent.every(v=>v.kind==="navigate"&&v.trusted&&v.stamp.generation===7));
+});

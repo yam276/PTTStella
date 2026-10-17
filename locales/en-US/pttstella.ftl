@@ -441,3 +441,4 @@ station-mouse-stale = The mouse transaction expired or its screen, mode or input
 station-mouse-busy = The screen or another operation is not ready for station mouse input.
 station-mouse-rate = Too many station mouse presses. This press was not sent; try again shortly.
 station-mouse-format = This mouse mode, report or coordinate is unsupported. No mouse input was sent.
+station-mouse-local-blocked = Station mouse mode owns this pointer action. Turn it off to use local navigation.

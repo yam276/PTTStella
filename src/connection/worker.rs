@@ -323,13 +323,12 @@ impl Session {
             Some(Command::Navigate {
                 stamp,
                 intent,
-                keyboard,
+                source,
                 reply,
             }) => {
-                self.login_attempt = None;
                 // An expired request must never execute later from the queue.
                 if !reply.is_closed() {
-                    let _ = reply.send(self.navigate(stamp, intent, keyboard).await);
+                    let _ = reply.send(self.navigate(stamp, intent, source).await);
                 }
             }
             Some(Command::Shutdown(done)) => {
@@ -658,8 +657,15 @@ impl Session {
         &mut self,
         stamp: Stamp,
         intent: Intent,
-        keyboard: bool,
+        source: navigation::Source,
     ) -> Result<(), String> {
+        if source == navigation::Source::Pointer
+            && self.mouse.snapshot(self.mouse_context()).route != crate::mouse::input::Route::Local
+        {
+            return Err(crate::msg!("station-mouse-local-blocked"));
+        }
+        self.login_attempt = None;
+        let keyboard = source == navigation::Source::Keyboard;
         if stamp == self.stamp() && self.navigation_job.is_some() {
             self.stop_navigation(crate::msg!("navigation-job-cancelled"));
         }

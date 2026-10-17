@@ -189,6 +189,9 @@ macOS 四個獨立程序使用同一 `dist/macos-bookmarks/PTTStella.app`：繁�
 
 111 個 desktop lib（含八個交易、一個 watch 與七個 Connection 滑鼠案例）、39 個 bin、42 個 JS、core／desktop all-targets Clippy／docs 通過；精確 loopback bytes 覆蓋更新後釋放、queued cancel、off/on 合併、同步期模式改變、原始輸入介入、滿 64 筆控制、重連後舊事件不改狀態、持有時安靜逾時與關窗 Close。最初 no-default-features Clippy 發現 interrupt 只在 desktop 使用，已補運輸中斷的實質 owner 回歸；失敗紀錄保留，無修改 fixture expected。證據 `.local/verification/mouse-d-session`。仍未接 Paint／UI pointer、使用者開關及本機 pointer 導覽來源檢查，尚不能宣稱單一動作分流或原生站端滑鼠完成；最新 App 仍是書籤版，沒有 push。
 
+**D 導覽來源隔離已完成，pointer 接線接續**。以 Source enum 取代 keyboard bool，明確區分 Pointer／Button／Keyboard；JS 的 Navigate 必須標示來源，缺少／未知來源拒絕，也不能在此路徑冒充 Rust Vim。Session 在副作用前核對 Pointer 的當前 route：1000＋1006 與未支援的 1003 均不得再送本機方向鍵，停用後恢復；工具列與鍵盤仍可明確送出。112 個 desktop lib、40 個 bin、43 個 JS、core／desktop all-targets Clippy／docs 通過，證據 `.local/verification/mouse-d-routing`；新增 loopback 獨立核對零 bytes／不改 epoch、按鈕／Vim 的方向鍵及停用後 pointer 回復。這批未接站端 UI pointer，最新交付 App 不變，沒有 push。
+
+
 
 ## 維護性重構
 

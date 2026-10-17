@@ -435,3 +435,4 @@ station-mouse-stale = 滑鼠交易已逾時，或畫面、模式、輸入狀態�
 station-mouse-busy = 畫面或其他操作尚未就緒，無法送出站端滑鼠輸入。
 station-mouse-rate = 站端滑鼠按下過於頻繁，這次未送出；請稍後再試。
 station-mouse-format = 不支援這個滑鼠模式、回報或座標，未送出滑鼠輸入。
+station-mouse-local-blocked = 此滑鼠操作已由站端模式接管；可關閉站端滑鼠以使用本機導覽。
