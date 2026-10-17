@@ -131,3 +131,143 @@ fn oversized_subnegotiation_is_discarded_until_its_terminator() {
         assert_eq!(text, b"OK", "split at {split}");
     }
 }
+
+// Each layout is checked against hand-written facts, not just another feed of
+// the same parser. Multiple deterministic partitions complement single splits.
+fn assert_control_chunks(bytes: &[u8], expected: impl Fn(&Screen)) {
+    for split in 0..=bytes.len() {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&bytes[..split]);
+        screen.feed(&bytes[split..]);
+        expected(&screen);
+    }
+    for seed in 0..8 {
+        let mut screen = Screen::new(80, 24).unwrap();
+        let mut offset = 0;
+        let mut random = seed + 1usize;
+        while offset < bytes.len() {
+            random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            let size = if seed == 0 { 1 } else { random % 13 + 1 };
+            let end = (offset + size).min(bytes.len());
+            screen.feed(&bytes[offset..end]);
+            offset = end;
+        }
+        expected(&screen);
+    }
+}
+
+#[test]
+fn unknown_control_families_consume_their_complete_sequence() {
+    for bytes in [
+        b"\x1b[?2026hX".as_slice(),
+        b"\x1b[>1;2cX",
+        b"\x1b[1:2mX",
+        b"\x1b[1 qX",
+        b"\x1b[!pX",
+        b"\x1b(0X",
+        b"\x1b#8X",
+        b"\x1b]52;c;not-a-clipboard-write\x07X",
+        b"\x1b]8;;https://example.invalid\x1b\\X",
+        b"\x1bPignored\x07still-ignored\x1b\\X",
+        b"\x1bXignored\x1b\\X",
+        b"\x1b^ignored\x1b\\X",
+        b"\x1b_ignored\x1b\\X",
+    ] {
+        assert_control_chunks(bytes, |screen| {
+            assert_eq!(screen.cursor(), (1, 0));
+            assert_eq!(screen.cell(0, 0).unwrap().byte, b'X');
+            assert_eq!(screen.cell(1, 0).unwrap().byte, 0);
+            assert_eq!(screen.cell(0, 0).unwrap().style.fg, 7);
+            assert!(screen.frame().control_complete);
+        });
+    }
+}
+
+#[test]
+fn csi_overflow_and_invalid_parameter_order_never_leak_the_tail() {
+    for size in [64, 65, 200] {
+        let bytes = [b"\x1b[".as_slice(), &vec![b'1'; size], b";32mX"].concat();
+        assert_control_chunks(&bytes, |screen| {
+            assert_eq!(screen.cursor(), (1, 0));
+            let cell = screen.cell(0, 0).unwrap();
+            assert_eq!((cell.byte, cell.style.fg), (b'X', 7));
+            assert_eq!(screen.frame().unsupported, 1);
+            assert!(screen.frame().control_complete);
+        });
+    }
+    for bytes in [b"\x1b[1$2;32mX".as_slice(), b"\x1b[1\x80;32mX"] {
+        assert_control_chunks(bytes, |screen| {
+            assert_eq!(screen.cursor(), (1, 0));
+            assert_eq!(screen.cell(0, 0).unwrap().byte, b'X');
+            assert_eq!(screen.cell(0, 0).unwrap().style.fg, 7);
+            assert_eq!(screen.frame().unsupported, 1);
+        });
+    }
+    // Exactly 64 parameter bytes remain accepted; the 65th is discarded.
+    let bytes = [b"\x1b[".as_slice(), &[b'0'; 62], b"31mR"].concat();
+    assert_control_chunks(&bytes, |screen| {
+        assert_eq!(screen.cell(0, 0).unwrap().style.fg, 1);
+        assert_eq!(screen.frame().unsupported, 0);
+    });
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(b"\x1b[");
+    screen.feed(&[b'1'; 4096]);
+    assert!(!screen.frame().control_complete);
+    assert_eq!(screen.cursor(), (0, 0));
+    screen.feed(b"mOK");
+    assert_eq!(screen.cursor(), (2, 0));
+    assert_eq!(screen.cell(0, 0).unwrap().byte, b'O');
+}
+
+#[test]
+fn c0_executes_inside_csi_and_del_does_not_finish_it() {
+    assert_control_chunks(b"\x1b[3\n1mR\x1b[3\x7f2mG", |screen| {
+        assert_eq!(screen.cursor(), (2, 1));
+        assert_eq!(screen.cell(0, 1).unwrap().style.fg, 1);
+        assert_eq!(screen.cell(1, 1).unwrap().style.fg, 2);
+        assert_eq!(screen.cell(0, 0).unwrap().byte, 0);
+        assert_eq!(screen.frame().unsupported, 0);
+    });
+    assert_control_chunks(b"\x1b\n(\x7f0X", |screen| {
+        assert_eq!(screen.cursor(), (1, 1));
+        assert_eq!(screen.cell(0, 1).unwrap().byte, b'X');
+        assert_eq!(screen.frame().unsupported, 1);
+    });
+}
+
+#[test]
+fn cancel_restart_and_session_reset_recover_incomplete_controls() {
+    for prefix in [
+        b"\x1b[31".as_slice(),
+        b"\x1b[1$3",
+        b"\x1b(",
+        b"\x1b]ignored",
+        b"\x1bPignored",
+    ] {
+        for cancel in [0x18, 0x1a] {
+            let bytes = [prefix, &[cancel], b"X"].concat();
+            assert_control_chunks(&bytes, |screen| {
+                assert_eq!(screen.cursor(), (1, 0));
+                assert_eq!(screen.cell(0, 0).unwrap().byte, b'X');
+                assert!(screen.frame().control_complete);
+            });
+        }
+        let bytes = [prefix, b"\x1b[31mR"].concat();
+        assert_control_chunks(&bytes, |screen| {
+            assert_eq!(screen.cursor(), (1, 0));
+            assert_eq!(screen.cell(0, 0).unwrap().style.fg, 1);
+        });
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(prefix);
+        assert!(!screen.frame().control_complete);
+        screen.reset_session();
+        screen.feed(b"X");
+        assert_eq!(screen.cursor(), (1, 0));
+        assert_eq!(screen.cell(0, 0).unwrap().byte, b'X');
+        assert_eq!(screen.frame().unsupported, 0);
+    }
+    assert_control_chunks(b"\x9d\xde", |screen| {
+        assert_eq!(screen.frame().glyphs[0].text, "♥");
+        assert_eq!(screen.cursor(), (2, 0));
+    });
+}
