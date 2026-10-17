@@ -85,6 +85,7 @@ pub struct Screen {
     cursor_visible: bool,
     revision: u64,
     unsupported: u64,
+    synchronized_since: Option<u64>,
 }
 impl Screen {
     pub fn new(cols: usize, rows: usize) -> Result<Self, &'static str> {
@@ -107,6 +108,7 @@ impl Screen {
             cursor_visible: true,
             revision: 0,
             unsupported: 0,
+            synchronized_since: None,
         })
     }
     pub fn cell(&self, x: usize, y: usize) -> Option<Cell> {
@@ -117,6 +119,14 @@ impl Screen {
     }
     pub fn revision(&self) -> u64 {
         self.revision
+    }
+    /// Identifies the first begin marker; repeated begins do not extend a batch.
+    pub fn synchronized_since(&self) -> Option<u64> {
+        self.synchronized_since
+    }
+    /// The connection owner may release a batch after its bounded wait.
+    pub fn release_synchronized_output(&mut self) {
+        self.synchronized_since = None;
     }
     pub fn feed(&mut self, bytes: &[u8]) {
         for &byte in bytes {
@@ -262,6 +272,7 @@ impl Screen {
         self.wrap = false;
         self.auto_wrap = true;
         self.cursor_visible = true;
+        self.synchronized_since = None;
     }
     fn ground(&mut self, byte: u8) {
         match byte {
@@ -348,12 +359,18 @@ impl Screen {
         let first = p.first().copied().unwrap_or(0);
         let n = first.max(1);
         if private {
-            match (first, final_byte) {
-                (25, b'h') => self.cursor_visible = true,
-                (25, b'l') => self.cursor_visible = false,
-                (7, b'h') => self.auto_wrap = true,
-                (7, b'l') => self.auto_wrap = false,
-                _ => self.unsupported += 1,
+            for mode in p {
+                match (mode, final_byte) {
+                    (25, b'h') => self.cursor_visible = true,
+                    (25, b'l') => self.cursor_visible = false,
+                    (7, b'h') => self.auto_wrap = true,
+                    (7, b'l') => self.auto_wrap = false,
+                    (2026, b'h') => {
+                        self.synchronized_since.get_or_insert(self.revision);
+                    }
+                    (2026, b'l') => self.release_synchronized_output(),
+                    _ => self.unsupported += 1,
+                }
             }
             return;
         }
@@ -496,7 +513,8 @@ impl Screen {
             }
         }
         Frame {
-            control_complete: matches!(self.parser, Parser::Ground),
+            control_complete: matches!(self.parser, Parser::Ground)
+                && self.synchronized_since.is_none(),
             cols: self.cols,
             rows: self.rows,
             cursor: (self.x, self.y),

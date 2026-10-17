@@ -165,8 +165,26 @@ where
         if matches!(step, 30 | 31) {
             continue;
         }
+        let page = window_page(step + 1)?;
+        let middle = page.len() / 2;
+        // Exercise the actual WebView/session with split synchronized output,
+        // including ignored ESC intermediates and an oversized CSI tail.
+        let begin = [
+            b"\x1b[?2026h\x1b(0\x1b[".as_slice(),
+            &[b'1'; 70],
+            b"m",
+            &page[..middle],
+        ]
+        .concat();
         socket
-            .send(Message::Binary(window_page(step + 1)?.into()))
+            .send(Message::Binary(begin.into()))
+            .await
+            .map_err(|e| e.to_string())?;
+        tokio::time::sleep(Duration::from_millis(120)).await;
+        socket
+            .send(Message::Binary(
+                [&page[middle..], b"\x1b[?2026l"].concat().into(),
+            ))
             .await
             .map_err(|e| e.to_string())?;
     }

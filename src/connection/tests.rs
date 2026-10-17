@@ -19,6 +19,117 @@ fn explicit_tls_provider_builds_with_desktop_feature_unification() {
 }
 
 #[tokio::test]
+async fn synchronized_output_retains_complete_frames_but_accepts_raw_input_and_ping() {
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(navigation_page("list").into()))
+        .await
+        .unwrap();
+    let before = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
+    connection.keep_alive_gate(before.stamp(), true);
+    ws.send(Message::Binary(
+        b"\x1b[?2026h\x1b[2J\x1b[Hpartial".to_vec().into(),
+    ))
+    .await
+    .unwrap();
+    let held = wait(&connection, |v| {
+        v.output_pending && v.received > before.received
+    })
+    .await;
+    assert_eq!(held.frame, before.frame);
+    assert!(!held.keep_alive_ready);
+    assert_eq!(held.context().kind(), "unknown");
+    assert!(
+        connection
+            .browse_key(before.stamp(), navigation::Intent::Forward)
+            .await
+            .is_err()
+    );
+    assert!(
+        connection
+            .navigate(before.stamp(), navigation::Intent::Forward)
+            .await
+            .is_err()
+    );
+    // The idle interval elapses while output is held, without sending a refresh.
+    assert!(
+        timeout(Duration::from_millis(160), ws.next())
+            .await
+            .is_err()
+    );
+    ws.send(Message::Ping(b"sync-alive".to_vec().into()))
+        .await
+        .unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap(),
+        Message::Pong(b"sync-alive".to_vec().into())
+    );
+    connection.input(held.generation, vec![13]).unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"\r"
+    );
+    assert_eq!(connection.updates.borrow().frame, before.frame);
+    let final_page = [navigation_page("reading_middle"), b"\x1b[?2026l".to_vec()].concat();
+    ws.send(Message::Binary(final_page.into())).await.unwrap();
+    let after = wait(&connection, |v| {
+        !v.output_pending && v.frame.revision > before.frame.revision
+    })
+    .await;
+    assert_eq!(after.context().kind(), "article_reading");
+    let mut expected = Screen::new(80, 24).unwrap();
+    expected.feed(&navigation_page("reading_middle"));
+    assert_eq!(after.frame.glyphs, expected.frame().glyphs);
+    let peer = tokio::spawn(async move {
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+        ws.flush().await.unwrap();
+    });
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+    peer.await.unwrap();
+}
+
+#[tokio::test]
+async fn missing_sync_end_recovers_and_close_during_a_new_batch_still_joins() {
+    let (listener, connection) = local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(b"\x1b[?2026hRECOVER".to_vec().into()))
+        .await
+        .unwrap();
+    let held = wait(&connection, |v| v.output_pending && v.received > 0).await;
+    assert!(held.frame.glyphs.iter().all(|g| g.text == " "));
+    let recovered = wait(&connection, |v| !v.output_pending && v.frame.revision > 0).await;
+    assert_eq!(recovered.frame.cursor, (7, 0));
+    assert_eq!(recovered.frame.glyphs[0].text, "R");
+    assert!(recovered.frame.control_complete);
+    assert_eq!(recovered.context().kind(), "unknown");
+    ws.send(Message::Binary(b"\x1b[?2026h\rNEW".to_vec().into()))
+        .await
+        .unwrap();
+    let held = wait(&connection, |v| {
+        v.output_pending && v.received > recovered.received
+    })
+    .await;
+    assert_eq!(held.frame, recovered.frame);
+    let peer = tokio::spawn(async move {
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+        ws.flush().await.unwrap();
+    });
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+    peer.await.unwrap();
+    assert!(connection.worker.lock().unwrap().is_none());
+}
+
+#[tokio::test]
 async fn failed_shutdown_still_joins_the_worker_and_keeps_its_failure_on_repeat() {
     let (_listener, connection) = local().await;
     connection.worker.lock().unwrap().as_ref().unwrap().abort();

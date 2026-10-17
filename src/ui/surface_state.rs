@@ -29,9 +29,10 @@ pub(super) struct ExportLease {
 }
 impl ExportLease {
     pub(super) fn check(&self, view: &View) -> Result<(), String> {
-        if self
-            .input_epoch
-            .is_some_and(|epoch| epoch != view.input_epoch)
+        if view.output_pending
+            || self
+                .input_epoch
+                .is_some_and(|epoch| epoch != view.input_epoch)
             || self.revoked.load(Ordering::Acquire)
             || (view.generation, view.frame.revision)
                 != (self.identity.generation, self.identity.revision)
@@ -129,9 +130,10 @@ impl SurfaceState {
         Ok(())
     }
     pub(super) fn painted(&self, view: &View) -> bool {
-        self.displayed.as_ref().is_some_and(|p| {
-            (p.generation, p.frame.revision) == (view.generation, view.frame.revision)
-        })
+        !view.output_pending
+            && self.displayed.as_ref().is_some_and(|p| {
+                (p.generation, p.frame.revision) == (view.generation, view.frame.revision)
+            })
     }
     pub(super) fn current(&self, identity: Identity, view: &View) -> Option<&Paint> {
         self.displayed.as_ref().filter(|p| {
@@ -147,16 +149,17 @@ impl SurfaceState {
     }
     pub(super) fn navigation_shown(&self, stamp: Stamp) -> bool {
         self.displayed.as_ref().is_some_and(|p| {
-            p.generation == stamp.generation
+            !p.output_pending
+                && p.generation == stamp.generation
                 && p.frame.revision == stamp.revision
                 && p.input_epoch == stamp.input_epoch
         })
     }
     /// Vim may advance its logical cursor before the next terminal redraw.
     pub(super) fn browse_shown(&self, generation: u64, context: &Context) -> bool {
-        self.displayed
-            .as_ref()
-            .is_some_and(|p| p.generation == generation && p.navigation.kind() == context.kind())
+        self.displayed.as_ref().is_some_and(|p| {
+            !p.output_pending && p.generation == generation && p.navigation.kind() == context.kind()
+        })
     }
     fn policy_changed(&mut self) {
         self.revoke_export();
@@ -169,7 +172,8 @@ impl SurfaceState {
         self.policy_changed();
     }
     pub(super) fn reveal(&mut self, identity: Identity, reveal: bool, view: &View) -> bool {
-        if self.filters.version() != identity.presentation
+        if view.output_pending
+            || self.filters.version() != identity.presentation
             || (view.generation, view.frame.revision) != (identity.generation, identity.revision)
         {
             return false;
@@ -190,7 +194,8 @@ impl SurfaceState {
         }) {
             self.revoke_export();
         }
-        if self.filters.version() != version
+        if view.output_pending
+            || self.filters.version() != version
             || self.selected.as_ref().is_some_and(|s| {
                 s.input_epoch != view.input_epoch
                     || (s.identity.generation, s.identity.revision)
@@ -203,7 +208,9 @@ impl SurfaceState {
         let revoked = self.hover.as_mut().is_some_and(|lease| {
             !lease.renew(
                 view.stamp(),
-                view.phase == Phase::Connected && view.frame.control_complete,
+                view.phase == Phase::Connected
+                    && !view.output_pending
+                    && view.frame.control_complete,
                 &links::detect(&filtered.frame),
             )
         });

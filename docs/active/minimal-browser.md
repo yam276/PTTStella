@@ -42,6 +42,12 @@
 
 新增四個核心案例以獨立文字／游標／樣式 expected 覆蓋每個切點、逐 byte、固定亂數多分片、64／65 bytes 邊界、4 KiB 超長、非法順序、C0／DEL、取消／重啟、字串終止與新 session；既有 expected 未修改。core gate（fmt／Clippy、八套 suite、兩份 replay）、desktop lib、desktop 全 targets Clippy、docs 及 diff 檢查通過，紀錄保留 `.local/verification/protocol-a1`。本批沒有修改繪製橋接或打包 App，尚未進行新的原生視窗／實站驗收；A2 同步輸出接續執行。
 
+**A2 完成同步更新與 macOS 原生回歸**：Screen 持有 DEC2026 首次開始 revision，支援同指令的多個 private modes，繼續處理 bytes；Session 使用既有發布時鐘及一秒恢復上限，重複 begin 不延長同批等待，end／reset／斷線清除。View.output_pending 獨立於保留的完整 Frame；收到新終端 bytes 後先更新 watch 撤銷許可，再等待任何網路 write。presentation、SurfaceState、ExportLease 與 JS 一致拒絕過期導覽／選取／複製／連結／hover／PNG；結束後發布新完整圖，原始輸入及關閉保持可用。一秒為本產品選擇；[同步更新規格](https://github.com/contour-terminal/vt-extensions/blob/master/synchronized-output.md) 沒有統一逾時值。
+
+core 八套 suite／兩份 replay、48 個 desktop lib、28 個 bin 及 desktop 全 targets Clippy 通過。新增核心驗證首個 begin、重複 begin、同封包多批次、多 mode、分片、reset；期限測試使用注入的 Instant，不 sleep 等待。production Connection 的 loopback 確認保留批次前完整圖、拒絕舊 Vim／滑鼠、無保活、原始 Enter 與 Ping／Pong 正常、end 後完整閱讀畫面一致、缺 end 恢復，以及新批次中 Close acknowledged／worker join。SurfaceState 案例確認 UI 尚未消費更新時，匯出 lease 已依來源 watch 失效，舊選取／hover 撤銷而新圖可恢復操作。
+
+macOS WKWebView 的最終候選完成 40 筆原生 Vim 操作，每次換頁均含兩段相隔 120ms 的同步更新、未知 ESC intermediate 與超長 CSI；五次切板、無重繪 gg／4j、三次進板圖及六位數指標列表通過，長按 l 一秒只通過一次，最終 NORMAL。⌘Q 退出碼 0、Close acknowledged，listener／Connection／credential／file owner 清理完成。這是可操作性回歸，未宣稱逐像素防撕裂、極速連發、完整原生 IME、實站或其他 OS 通過；完整 Mac desktop backend 仍 not_ready。App 為 `dist/macos-protocol-a2/PTTStella.app`（arm64／ad-hoc strict 驗章），與測試 App 移除各自簽章後的 executable 雜湊相同。報告保留 `.local/verification/protocol-a2`；一次新增測試引用不存在的 fixture 名稱，修正後全套通過，原失敗 log 保留。A3 畫面辨識接續執行。
+
 ### 詳細交付計畫
 
 2026-10-17 展開上述研究；本節是待執行計畫，不代表產品已支援。先交付相容性，再交付高頻桌面操作。每一批完成實作與適用驗證即提交，不累積到整個階段結束；不改寫既有歷史、不自動 push。以下為依賴順序與相對工作量，不是日曆工期承諾。

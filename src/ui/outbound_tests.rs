@@ -236,6 +236,7 @@ fn frame_and_preview_packets_keep_typed_identity_and_data_under_payload() {
     let value = serde_json::to_value(Packet::Paint(&paint)).unwrap();
     assert_eq!(value["kind"], "paint");
     assert_eq!(value["payload"]["generation"], 0);
+    assert_eq!(value["payload"]["output_pending"], false);
     assert_eq!(value["payload"]["settings"]["cjk_font"], "中文");
     assert!(value.get("frame").is_none());
     let directory = tempfile::tempdir().unwrap();

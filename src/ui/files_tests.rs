@@ -17,6 +17,7 @@ fn snapshot() -> (
     Identity,
 ) {
     let view = View {
+        output_pending: false,
         frame: Screen::new(80, 24).unwrap().frame(),
         generation: 7,
         input_epoch: 0,
