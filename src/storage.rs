@@ -9,7 +9,7 @@ pub fn replace(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let mut temporary = tempfile::Builder::new()
         .prefix(".pttstella-")
         .tempfile_in(parent)
-        .map_err(|e| format!("無法建立暫存檔：{e}"))?;
+        .map_err(|e| crate::msg!("storage-temporary-failed", e = e.to_string()))?;
     if let Err(error) = temporary
         .write_all(bytes)
         .and_then(|()| temporary.as_file().sync_all())
@@ -25,10 +25,12 @@ pub fn replace(path: &Path, bytes: &[u8]) -> Result<(), String> {
 fn cleanup_error(file: tempfile::NamedTempFile, error: std::io::Error) -> String {
     let path = file.path().to_path_buf();
     match file.close() {
-        Ok(()) => format!("無法保存檔案：{error}"),
-        Err(cleanup) => format!(
-            "無法保存檔案：{error}；暫存檔 {} 清理失敗：{cleanup}",
-            path.display()
+        Ok(()) => crate::msg!("storage-save-failed", error = error.to_string()),
+        Err(cleanup) => crate::msg!(
+            "storage-cleanup-failed",
+            error = error.to_string(),
+            value1 = path.display().to_string(),
+            cleanup = cleanup.to_string()
         ),
     }
 }

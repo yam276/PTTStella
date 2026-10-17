@@ -27,14 +27,18 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Url => f.write_str("媒體網址或重新導向不受支援"),
-            Self::Network => f.write_str("圖片連線失敗，可重試或在瀏覽器開啟"),
-            Self::Timeout => f.write_str("圖片載入逾時，可重試或在瀏覽器開啟"),
-            Self::Http(status) => write!(f, "圖片伺服器回應 HTTP {status}"),
-            Self::TooLarge => f.write_str("圖片超過 8 MiB 預覽上限，請在瀏覽器開啟"),
-            Self::Format => f.write_str("回應不是支援的圖片，或圖片內容損壞"),
-            Self::Dimensions => f.write_str("圖片超過尺寸上限，請在瀏覽器開啟"),
-            Self::Setup(error) => write!(f, "圖片連線尚未就緒：{error}"),
+            Self::Url => f.write_str(&crate::msg!("media-url-unsupported")),
+            Self::Network => f.write_str(&crate::msg!("image-connect-failed")),
+            Self::Timeout => f.write_str(&crate::msg!("image-timeout")),
+            Self::Http(status) => {
+                f.write_str(&crate::msg!("image-http", status = status.to_string()))
+            }
+            Self::TooLarge => f.write_str(&crate::msg!("image-too-large")),
+            Self::Format => f.write_str(&crate::msg!("image-invalid")),
+            Self::Dimensions => f.write_str(&crate::msg!("image-dimensions")),
+            Self::Setup(error) => {
+                f.write_str(&crate::msg!("image-client-failed", error = error.as_str()))
+            }
         }
     }
 }
@@ -96,7 +100,7 @@ impl Loader {
                         }
                     }))
                     .build()
-                    .map_err(|_| Error::Setup("無法建立 HTTP client".into()))
+                    .map_err(|_| Error::Setup(crate::msg!("http-client-failed")))
             });
         Self {
             client,

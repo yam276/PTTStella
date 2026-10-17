@@ -829,7 +829,7 @@ async fn run(
                         let bytes = match effect {
                             Effect::None => continue,
                             Effect::Notice(notice) => {
-                                eval.send(Packet::Notice(notice.into()))
+                                eval.send(Packet::Notice(notice))
                                     .map_err(|e| e.to_string())?;
                                 continue;
                             }

@@ -412,11 +412,11 @@ pub enum Error {
 }
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::Unavailable => "此畫面或位置未提供導覽",
-            Self::Stale => "畫面或輸入已變更；導覽未送出",
-            Self::AwaitingScreen => "等待站端更新畫面後再導覽",
-            Self::Disconnected => "連線已變更；導覽未送出",
+        f.write_str(&match self {
+            Self::Unavailable => crate::msg!("navigation-unavailable"),
+            Self::Stale => crate::msg!("navigation-stale"),
+            Self::AwaitingScreen => crate::msg!("navigation-awaiting"),
+            Self::Disconnected => crate::msg!("navigation-disconnected"),
         })
     }
 }

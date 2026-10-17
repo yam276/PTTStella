@@ -11,10 +11,10 @@ pub struct Link {
     pub url: String,
 }
 
-pub fn validate(value: &str) -> Result<Url, &'static str> {
-    let url = Url::parse(value).map_err(|_| "網址格式不正確")?;
+pub fn validate(value: &str) -> Result<Url, String> {
+    let url = Url::parse(value).map_err(|_| crate::msg!("link-invalid"))?;
     if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
-        return Err("只支援 HTTP／HTTPS 網址");
+        return Err(crate::msg!("link-scheme"));
     }
     Ok(url)
 }

@@ -20,7 +20,7 @@ pub enum Effect {
     None,
     Native(Vec<u8>),
     Browse(Intent),
-    Notice(&'static str),
+    Notice(String),
 }
 #[derive(Default)]
 pub struct Keyboard {
@@ -206,7 +206,7 @@ impl Keyboard {
         if key.key == "f" && !key.ctrl && !key.alt && !key.repeat {
             if self.count > 0 || self.g {
                 self.reset();
-                return Effect::Notice("原生一次不接受計數或前綴");
+                return Effect::Notice(crate::msg!("vim-once-count"));
             }
             self.once = true;
             self.hold = Some(key.code.clone());
@@ -221,14 +221,14 @@ impl Keyboard {
         if let Context::Unknown { reason } = context {
             self.reset();
             return Effect::Notice(match reason {
-                UnknownReason::UnsupportedGrid => "Vim 已暫停：不支援的格線；按 i 原始輸入",
-                UnknownReason::Incomplete => "Vim 已暫停：畫面接收未完成；按 i 原始輸入",
-                UnknownReason::Unmapped => "Vim 已暫停：操作區有未映射字格；按 i 原始輸入",
-                UnknownReason::Unrecognized => "Vim 已暫停：未辨識的畫面格式；按 i 原始輸入",
-                UnknownReason::BoardHeader => "Vim 已暫停：看板標頭未確認；按 i 原始輸入",
-                UnknownReason::BoardRows => "Vim 已暫停：看板項目欄位未確認；按 i 原始輸入",
+                UnknownReason::UnsupportedGrid => crate::msg!("vim-grid"),
+                UnknownReason::Incomplete => crate::msg!("vim-incomplete"),
+                UnknownReason::Unmapped => crate::msg!("vim-unmapped"),
+                UnknownReason::Unrecognized => crate::msg!("vim-unrecognized"),
+                UnknownReason::BoardHeader => crate::msg!("vim-board-header"),
+                UnknownReason::BoardRows => crate::msg!("vim-board-rows"),
                 UnknownReason::InvalidCursor => {
-                    "Vim 已暫停：選取指標或游標位置未確認；按 i 原始輸入"
+                    crate::msg!("vim-cursor")
                 }
             });
         }
@@ -243,7 +243,7 @@ impl Keyboard {
                 self.continue_hold = Some(key.code.clone());
                 return Effect::Browse(Intent::Continue);
             }
-            return Effect::Notice("進板圖：按空白鍵、Enter 或 l 繼續；i 原始輸入");
+            return Effect::Notice(crate::msg!("vim-continue"));
         }
         if !key.ctrl && !key.alt && key.key.len() == 1 && key.key.as_bytes()[0].is_ascii_digit() {
             if self.invalid_count {
@@ -252,7 +252,7 @@ impl Keyboard {
             let digit = (key.key.as_bytes()[0] - b'0') as usize;
             if self.g {
                 self.reset();
-                return Effect::Notice("不支援此計數指令");
+                return Effect::Notice(crate::msg!("vim-count-unsupported"));
             }
             if let Some(count) = self
                 .count
@@ -265,11 +265,11 @@ impl Keyboard {
             }
             self.reset();
             self.invalid_count = true;
-            return Effect::Notice("導覽計數超過輸入容量；整個指令未送出");
+            return Effect::Notice(crate::msg!("vim-count-capacity"));
         }
         if self.invalid_count {
             self.reset();
-            return Effect::Notice("超限計數的整個指令未送出");
+            return Effect::Notice(crate::msg!("vim-count-rejected"));
         }
         let count = self.count.max(1);
         let counted = self.count > 0;
@@ -279,11 +279,11 @@ impl Keyboard {
             return if key.key == "g" && !key.ctrl && !counted {
                 Effect::Browse(Intent::First)
             } else {
-                Effect::Notice("不支援此 g 指令")
+                Effect::Notice(crate::msg!("vim-g-unsupported"))
             };
         }
         if key.alt {
-            return Effect::Notice("此組合未提供 Vim 瀏覽");
+            return Effect::Notice(crate::msg!("vim-chord-unsupported"));
         }
         let action = if key.ctrl {
             match key.key.to_ascii_lowercase().as_str() {
@@ -303,7 +303,7 @@ impl Keyboard {
                 },
                 "f" if !counted => Intent::NextPage,
                 "b" if !counted => Intent::PreviousPage,
-                _ => return Effect::Notice("此組合或計數未提供 Vim 瀏覽"),
+                _ => return Effect::Notice(crate::msg!("vim-chord-count")),
             }
         } else {
             match key.key.as_str() {
@@ -320,9 +320,7 @@ impl Keyboard {
                 "PageDown" if !counted => Intent::NextPage,
                 "PageUp" if !counted => Intent::PreviousPage,
                 _ => {
-                    return Effect::Notice(
-                        "此按鍵或計數未提供 Vim 瀏覽；按 f 原生一次，或 i 原始輸入",
-                    );
+                    return Effect::Notice(crate::msg!("vim-key-unsupported"));
                 }
             }
         };

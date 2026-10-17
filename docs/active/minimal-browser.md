@@ -16,6 +16,8 @@
 
 第二批完成 UI／偏好串接：工具列、各對話框、媒體／字型動態提示、原生選單與選檔標題共用翻譯；Localization 為獨立的啟動封包，FTL 不拼入 JavaScript。設定 version 3 保存 language，舊 v1／v2 載入不改檔案，明確保存才備份及遷移；取消／保存失敗不改生效偏好，切換下次啟動套用。僅含本批 staged 內容的獨立來源快照通過 25 個 bin、45 個 desktop lib、16 個 JS、desktop 全 targets Clippy 與 docs。核心狀態／錯誤尚在下一批，原生兩語／重啟與整合回歸仍待完成，不以這次單元檢查宣稱視窗驗收。
 
+第三批將 Connection 狀態、登入／導覽／Vim notice、媒體／輸入／儲存等使用者可見錯誤改為具名 Fluent 訊息。需要擁有翻譯結果的錯誤／notice 由靜態字串改為 String；命令、bytes、辨識文字及既有 fixture／expected 未改。整合來源的 45 個 desktop lib、25 個 bin、desktop 全 targets Clippy 與 core 八套 suite／兩份 replay 通過，並完成候選 arm64 App 打包；原生兩語／重啟、PNG 與 Vim 回歸接續執行。CLI 探針診斷與第三方／OS 錯誤細節不當作可翻譯的站端文字。
+
 2026-10-17 第三輪：使用者授權將檔案操作移出 UI 事件迴圈，並集中 Rust 畫面與互動狀態。Files 持有單一可追蹤工作，設定／名單載入與保存、設定檔處理及 PNG 解碼／寫入交給 blocking pool；原生 picker 仍由 UI thread 擁有。忙碌拒絕不啟動 factory、不另加佇列；保存成功才更新生效設定／規則。關閉撤銷尚未開始工作，已開始的工作保留到 join；五秒未完成顯示等待，真實失敗併入清理結果。SurfaceState 統一持有待 ACK／已顯示畫面、遮黑、選取、hover 與匯出版本，來源或策略變更由同一處撤銷互動。
 
 獨立複查找到 P2：非同步選檔期間的 PNG 可能失去版本約束。已加入可撤銷 ExportLease 及直接觀察最新 Connection view 的檢查，在解碼後、選檔後及開始寫入前驗證；選取 PNG 另綁 input epoch。JS 清除／重選會發出有作用域的 SelectionCleared，Rust 只撤銷相符選取。八種延期選檔案例覆蓋規則、揭露、frame、session、選取、清除、輸入及顯示設定變更：舊 PNG 均不寫入，後續新請求仍實際保存。Agent 再次唯讀複查確認 P2 可關閉，未發現其他具體阻擋問題；這是程式與證據審閱，沒有代替另一人執行 GUI 或人工驗收。

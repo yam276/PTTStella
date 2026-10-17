@@ -40,7 +40,7 @@ impl Preview {
     pub fn pending(&self) -> bool {
         self.job.is_some() || self.pending.is_some()
     }
-    pub fn open(&mut self, generation: u64, target: Target) -> Result<Active, &'static str> {
+    pub fn open(&mut self, generation: u64, target: Target) -> Result<Active, String> {
         if let Some(active) = self.active.as_mut()
             && active.generation == generation
             && active.target == target
@@ -51,7 +51,7 @@ impl Preview {
         }
         self.start(generation, target, Presentation::Inspect)
     }
-    pub fn hover(&mut self, generation: u64, target: Target) -> Result<Active, &'static str> {
+    pub fn hover(&mut self, generation: u64, target: Target) -> Result<Active, String> {
         self.start(generation, target, Presentation::Hover)
     }
     fn start(
@@ -59,8 +59,11 @@ impl Preview {
         generation: u64,
         target: Target,
         presentation: Presentation,
-    ) -> Result<Active, &'static str> {
-        let request = self.sequence.checked_add(1).ok_or("媒體預覽序號已用盡")?;
+    ) -> Result<Active, String> {
+        let request = self
+            .sequence
+            .checked_add(1)
+            .ok_or(crate::msg!("media-sequence-exhausted"))?;
         self.close();
         self.sequence = request;
         self.job = target.image_url.as_ref().map(|url| self.loader.load(url));
