@@ -8,7 +8,14 @@ use std::path::Path;
 pub(super) fn mouse_case(case: Option<&str>) -> bool {
     matches!(
         case,
-        Some("mouse" | "mouse_boundary" | "mouse_drag" | "mouse_motion" | "mouse_wheel")
+        Some(
+            "mouse"
+                | "mouse_boundary"
+                | "mouse_drag"
+                | "mouse_round_trip"
+                | "mouse_motion"
+                | "mouse_wheel"
+        )
     )
 }
 
@@ -90,11 +97,21 @@ impl Checks {
                 && self.mouse_samples.iter().any(|sample|matches!(sample,SampleReport::Wheel(r) if r.direction==WheelDirection::Down));
         }
         let button = match case {
-            "mouse_drag" => Some(Left),
+            "mouse_drag" | "mouse_round_trip" => Some(Left),
             "mouse_motion" => None,
             _ => return false,
         };
-        self.mouse_reports==[(Left,Press),(Left,Release)]
+        let returned = case != "mouse_round_trip"
+            || self
+                .mouse_samples
+                .iter()
+                .position(|sample| matches!(sample,SampleReport::Motion(r) if r.col==10))
+                .is_some_and(|at| {
+                    self.mouse_samples[at + 1..]
+                        .iter()
+                        .any(|sample| matches!(sample,SampleReport::Motion(r) if r.col==4))
+                });
+        returned && self.mouse_reports==[(Left,Press),(Left,Release)]
             && self.mouse_samples.iter().all(|sample|matches!(sample,SampleReport::Motion(r) if (4..=10).contains(&r.col) && r.row==4 && r.button==button && r.modifiers==Modifiers::default()))
             && self.mouse_samples.iter().any(|sample|matches!(sample,SampleReport::Motion(r) if r.col==10))
     }

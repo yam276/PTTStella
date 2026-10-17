@@ -73,11 +73,12 @@ fn main() {
                 | "sgr66_legacy" | "login_2fa" | "osc8" | "boards" | "boards_close"
                 | "recent" | "articles" | "articles_close" | "bookmarks"
                 | "bookmarks_restart" | "bookmarks_empty" | "bookmarks_corrupt" | "mouse"
-                | "mouse_boundary" | "mouse_drag" | "mouse_motion" | "mouse_wheel"),
+                | "mouse_boundary" | "mouse_drag" | "mouse_round_trip" | "mouse_motion"
+                | "mouse_wheel"),
             ) => Some(case.to_owned()),
             _ => {
                 eprintln!(
-                    "--probe-surface requires decode, painted, send, renderer_error, untrusted, confirm, slow, dialogs, files, files_slow, fonts, sgr66, sgr66_legacy, login_2fa, osc8, boards, boards_close, recent, articles, articles_close, bookmarks, bookmarks_restart, bookmarks_empty, bookmarks_corrupt, mouse, mouse_boundary, mouse_drag, mouse_motion or mouse_wheel"
+                    "--probe-surface requires decode, painted, send, renderer_error, untrusted, confirm, slow, dialogs, files, files_slow, fonts, sgr66, sgr66_legacy, login_2fa, osc8, boards, boards_close, recent, articles, articles_close, bookmarks, bookmarks_restart, bookmarks_empty, bookmarks_corrupt, mouse, mouse_boundary, mouse_drag, mouse_round_trip, mouse_motion or mouse_wheel"
                 );
                 std::process::exit(2);
             }

@@ -50,6 +50,7 @@ fn motion(view: &View, id: u64, col: usize) -> Sample {
 async fn native_sample_peers_require_their_exact_final_gesture_and_acknowledge_close() {
     for case in [
         MouseSampleProbe::Drag,
+        MouseSampleProbe::RoundTrip,
         MouseSampleProbe::Motion,
         MouseSampleProbe::Wheel,
     ] {
@@ -61,6 +62,12 @@ async fn native_sample_peers_require_their_exact_final_gesture_and_acknowledge_c
         .await;
         let sequence: &[&[u8]] = match case {
             MouseSampleProbe::Drag => &[b"\x1b[<0;5;5M", b"\x1b[<32;11;5M", b"\x1b[<0;11;5m"],
+            MouseSampleProbe::RoundTrip => &[
+                b"\x1b[<0;5;5M",
+                b"\x1b[<32;11;5M",
+                b"\x1b[<32;5;5M",
+                b"\x1b[<0;5;5m",
+            ],
             MouseSampleProbe::Motion => &[b"\x1b[<0;5;5M", b"\x1b[<0;5;5m", b"\x1b[<35;11;5M"],
             MouseSampleProbe::Wheel => &[b"\x1b[<65;5;5M", b"\x1b[<64;5;5M"],
         };
@@ -97,6 +104,26 @@ async fn native_drag_peer_cannot_pass_after_its_bound_without_the_required_relea
     wait(&connection, |view| view.phase == Phase::Error).await;
     let error = connection.shutdown().await.unwrap_err();
     assert!(error.contains("never completed"), "{error}");
+}
+
+#[tokio::test]
+async fn native_round_trip_peer_requires_return_motion_before_its_release() {
+    let connection = Connection::start_mouse_samples_probe(MouseSampleProbe::RoundTrip).unwrap();
+    connection.connect().unwrap();
+    let start = wait(&connection, |view| {
+        view.received > 0 && !view.output_pending
+    })
+    .await;
+    for bytes in [
+        b"\x1b[<0;5;5M".as_slice(),
+        b"\x1b[<32;11;5M",
+        b"\x1b[<0;5;5m",
+    ] {
+        connection.input(start.generation, bytes.to_vec()).unwrap();
+    }
+    wait(&connection, |view| view.phase == Phase::Error).await;
+    let error = connection.shutdown().await.unwrap_err();
+    assert!(error.contains("rejected unexpected input"), "{error}");
 }
 #[tokio::test]
 async fn mouse_motion_preserves_a_following_click_and_owned_drag_across_redraw() {
