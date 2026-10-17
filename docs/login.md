@@ -22,10 +22,16 @@ Connection 是唯一送出者。按登入時核對 generation、revision、input
 
 帳號提示為第 21 列「請輸入代號，或以 guest 參觀，或以 new 註冊:」，密碼提示為第 22 列「請輸入您的密碼:」。游標前文字須完全符合、後方空白、該列可映射，已辨識的瀏覽畫面不接受；部分輸入、提示文字出現在其他列、未完成 ANSI 均拒絕。依 [PTT 登入列與收送](https://github.com/ptt/pttbbs/blob/908bb0631a4a6db41eac85713637adf1a6058fde/mbbsd/mbbsd.c#L610)、[密碼提示](https://github.com/ptt/pttbbs/blob/908bb0631a4a6db41eac85713637adf1a6058fde/include/common.h) 及 [帳號／密碼容量](https://github.com/ptt/pttbbs/blob/908bb0631a4a6db41eac85713637adf1a6058fde/include/pttstruct.h#L49) 製作自製測試，並非實站部署版本證明。帳號限 2–12 英數且英文開頭；訪客／註冊指令拒絕。密碼限 1–72 個可列印 ASCII，保留空格，不接受換行、ESC 或控制碼；不支援的內容可取消後用原始輸入操作。
 
-等待最多 15 秒；逾時、取消、手動輸入、導覽、斷線或離開登入畫面時清除等待中的密碼，重連不恢復。帳號已送出不能回滾；取消只阻止後續密碼。送出密碼後不自動重試，也不自動回答重複登入、刪除其他連線、兩階段驗證、公告或任何後續確認。介面只報告「帳密已送出」，成功與否由站端畫面確認。
+等待最多 15 秒；逾時、取消、手動輸入、導覽、斷線或離開登入畫面時清除等待中的密碼，重連不恢復。帳號已送出不能回滾；取消只阻止後續密碼。送出密碼後不自動重試，也不自動回答重複登入、刪除其他連線、兩階段驗證、公告或任何後續確認。介面先報告「帳密已送出」，成功與否由站端畫面確認。
+
+密碼送出後只保留最長 120 秒、無秘密資料的手動引導。依公開 [logind 提示](https://github.com/ptt/pttbbs/blob/68b88d8753d69000033037a0c84a4ee3596b937a/daemon/logind/logind.c) 與 [mbbsd 流程](https://github.com/ptt/pttbbs/blob/68b88d8753d6/mbbsd/mbbsd.c)，僅在完整 80×24 未辨識畫面、第 22 列精確空白 2FA 提示及對應游標位置時交還原始輸入；相容六位限時數字／八位救援碼的兩種空格格式，前後錯碼訊息須完全符合。此處依公開原始碼製作合成案例，不代表已確認實站部署。
+
+辨識後切到 PTT 原始輸入，驗證碼由使用者輸入並按 Enter，不另建欄位、不保存碼或 TOTP secret，也不代答其他後續確認。錯碼時只提示自行重試；進入已辨識瀏覽畫面就結束引導，可按 Esc 回 Vim。返回帳號／密碼提示、取消、期限到達或斷線也停止引導，重連不恢復。120 秒是本機引導期限，並非站端驗證碼的有效期；逾時／取消後仍可原始操作，已送出內容不能回滾。工具列「取消登入」同時取消等待密碼與後續引導。
 
 ## 驗證邊界
 
 一般 core gate 包含 login suite 的輸入容量／控制碼與提示正反例；desktop lib 用同一 production Connection 核對分段密碼提示、精確兩筆輸入、錯畫面／過期請求拒絕、手動取消、15 秒期限、晚到提示及重連不重播。
 
 `--probe-login OUTPUT_DIRECTORY` 明確使用 owned loopback、獨立 WebView 資料目錄與專用 synthetic Keychain service，從不讀寫正常帳號項目。只使用自製帳密；peer 逐筆比對後必須收到 Close，任何額外輸入失敗。macOS 原生視窗驗證保存、重啟留空取用、錯帳號／非登入畫面拒絕及移除後重讀；產物報告不含帳密。實站、Windows／Linux 安全儲存及正式 Developer ID 更新後的存取結果各自驗收，不能以本機往返宣稱實站登入通過。
+
+`--probe-surface OUTPUT_DIRECTORY login_2fa` 使用相同隔離環境與 production Connection。peer 只接受一次合成帳密、使用者明確輸入的六位錯碼與八位救援碼，接著只接受 Close；報告要求 UI 曾看到驗證／錯碼／瀏覽狀態，且明確 Esc 後回到 Vim Normal。這不代替實站 2FA 或原生 IME 驗收。

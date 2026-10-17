@@ -13,6 +13,7 @@ fn view() -> View {
         input_epoch: 0,
         input_pending: false,
         login_pending: false,
+        login_guidance: pttstella::login::Guidance::Idle,
         phase: Phase::Connected,
         message: String::new(),
         received: 1,

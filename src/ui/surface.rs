@@ -193,6 +193,7 @@ async fn run(
     .map_err(|e| e.to_string())?;
     let mut keyboard_policy = vim::Keyboard::default();
     let mut keyboard_generation = 0;
+    let mut login_guidance = pttstella::login::Guidance::Idle;
 
     let mut login_stamp: Option<navigation::Stamp> = None;
     let mut login_open = false;
@@ -968,6 +969,13 @@ async fn run(
                     }
                     keyboard_policy.reset();keyboard_generation=view.generation;
                 }
+                if view.login_guidance != login_guidance && view.login_guidance.needs_input() {
+                    keyboard_policy.use_native_input();
+                }
+                login_guidance = view.login_guidance;
+                checks.verification_required |= login_guidance == pttstella::login::Guidance::CodeRequired;
+                checks.verification_rejected |= login_guidance == pttstella::login::Guidance::CodeRejected;
+                checks.verification_browsing |= login_guidance == pttstella::login::Guidance::Browsing;
                 keyboard_policy.context(&view.context());
                 eval.send(Packet::KeyboardState(keyboard_policy.status(&view.context()))).map_err(|e|e.to_string())?;
                 if media_preview.active().is_some_and(|preview| preview.generation != view.generation) {
@@ -992,10 +1000,12 @@ async fn run(
         reports.push((path.join("surface-probe.json"),serde_json::json!({
             "status":if case=="slow" && commands.busy() || case=="files_slow" && files.busy() || case=="files" && checks.export_checked || case=="untrusted" && surface_probe_clean && rejected_events==3
                 || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB")
+                || case=="login_2fa" && checks.verification_required && checks.verification_rejected && checks.verification_browsing && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
                 || case=="fonts" && checks.font_catalog_reads>=2 && !checks.font_sources.is_empty() && checks.export_checked
                 || matches!(case.as_str(),"sgr66"|"sgr66_legacy") && checks.export_checked
                 || case=="dialogs" && checks.settings_saved && checks.export_checked && checks.rows_export_checked && checks.media_external>=1 {"passed"} else {"failed"},
-            "scope":"synthetic local surface only; peer rejects all station input",
+            "scope":if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
+            "verification_required":checks.verification_required,"verification_rejected":checks.verification_rejected,"verification_browsing":checks.verification_browsing,
             "font_sources":checks.font_sources,"font_catalog_reads":checks.font_catalog_reads,
             "case":case,"command_pending_on_close":commands.busy(),"file_pending_on_close":files.busy(),"synthetic_events_rejected":rejected_events,"js_admission":surface_probe_clean,
             "paste_preview_preserved":pending_paste.read().is_some(),

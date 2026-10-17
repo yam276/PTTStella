@@ -13,6 +13,7 @@ pub(super) enum Scenario {
     Desktop { reload_settings: bool },
     Window,
     Login,
+    Login2fa,
     Filters,
     Surface,
 }
@@ -59,7 +60,14 @@ pub(super) fn password_page() -> Result<Vec<u8>, String> {
     crate::encoding::encode("\x1b[21;1H請輸入代號，或以 guest 參觀，或以 new 註冊: StellaTest\x1b[22;1H請輸入您的密碼: ").map_err(|e|e.to_string())
 }
 
-async fn login<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result<(), String>
+pub(super) fn verification_page(rejected: bool) -> Result<Vec<u8>, String> {
+    crate::encoding::encode(&format!("\x1b[2J\x1b[HPTTStella synthetic verification{}\x1b[22;1H請輸入兩階段(2FA)驗證碼(6位限時數字 或8位救援碼): ", if rejected { "\x1b[21;1H驗證碼錯誤！請確認後重新輸入。" } else { "" })).map_err(|e|e.to_string())
+}
+
+async fn login<S>(
+    socket: &mut tokio_tungstenite::WebSocketStream<S>,
+    verification: bool,
+) -> Result<(), String>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
@@ -78,6 +86,31 @@ where
     if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"synthetic+42\r")
     {
         return Err("synthetic login password mismatch".into());
+    }
+    if verification {
+        for (rejected, expected) in [(false, b"123456\r".as_slice()), (true, b"ABCDEFGH\r")] {
+            let page = verification_page(rejected)?;
+            for chunk in page.chunks(5) {
+                socket
+                    .send(Message::Binary(chunk.to_vec().into()))
+                    .await
+                    .map_err(|e| e.to_string())?;
+            }
+            let mut received = Vec::new();
+            while received.len() < expected.len() {
+                match socket.next().await {
+                    Some(Ok(Message::Binary(bytes)))
+                        if received.len() + bytes.len() <= expected.len() =>
+                    {
+                        received.extend_from_slice(&bytes)
+                    }
+                    _ => return Err("synthetic verification input mismatch".into()),
+                }
+            }
+            if received != expected {
+                return Err("synthetic verification code mismatch".into());
+            }
+        }
     }
     socket
         .send(Message::Binary(navigation_page("main_menu")?.into()))
@@ -236,7 +269,7 @@ pub(super) async fn serve(
         900
     } else if matches!(
         scenario,
-        Scenario::Window | Scenario::Login | Scenario::Surface
+        Scenario::Window | Scenario::Login | Scenario::Login2fa | Scenario::Surface
     ) {
         300
     } else {
@@ -254,8 +287,8 @@ pub(super) async fn serve(
         if matches!(scenario, Scenario::Window) {
             return window(&mut socket).await;
         }
-        if matches!(scenario, Scenario::Login) {
-            return login(&mut socket).await;
+        if matches!(scenario, Scenario::Login | Scenario::Login2fa) {
+            return login(&mut socket, matches!(scenario, Scenario::Login2fa)).await;
         }
         if matches!(scenario, Scenario::Filters) {
             return filters(&mut socket).await;

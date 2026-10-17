@@ -7,6 +7,9 @@ use std::path::Path;
 
 #[derive(Default)]
 pub(super) struct Checks {
+    pub(super) verification_required: bool,
+    pub(super) verification_rejected: bool,
+    pub(super) verification_browsing: bool,
     pub(super) filter_edits: usize,
     pub(super) filter_reveals: usize,
     pub(super) filter_copies: usize,

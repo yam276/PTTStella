@@ -87,6 +87,11 @@ impl Keyboard {
         self.input = false;
         self.reset();
     }
+    /// Explicit handoff for a recognized authentication challenge.
+    pub fn use_native_input(&mut self) {
+        self.reset();
+        self.input = true;
+    }
     pub fn arm(&mut self) {
         if self.enabled && !self.input {
             let once = !self.once;

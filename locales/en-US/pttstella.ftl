@@ -361,3 +361,10 @@ font-windows-explained = Traditional Windows BBS uses MingLiU for Latin and Chin
 font-windows-modern = Windows sans serif (Cascadia / JhengHei)
 font-windows-classic = Windows traditional BBS (MingLiU)
 font-macos-bbs = macOS traditional BBS (Songti alternative)
+
+login-code-required = Enter a six-digit verification code or eight-character recovery code using native PTT input. Codes are never saved.
+login-code-rejected = The server rejected the code. Retry manually; nothing is resent automatically.
+login-code-checking = Manual confirmation sent. Wait for the server's verification result.
+login-browsing = A recognized browsing screen is available. If Vim is enabled, press Esc to return to browsing mode.
+login-manual-followup = The login prompt returned. Check it manually; credentials will not be resent.
+login-followup-expired = Login guidance timed out. Native PTT input remains available; credentials will not be resent.

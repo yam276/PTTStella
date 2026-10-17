@@ -44,6 +44,7 @@ pub struct View {
     pub input_epoch: u64,
     pub input_pending: bool,
     pub login_pending: bool,
+    pub login_guidance: crate::login::Guidance,
     pub frame: Frame,
     pub generation: u64,
     pub phase: Phase,
@@ -136,6 +137,7 @@ impl Connection {
             input_epoch: 0,
             input_pending: false,
             login_pending: false,
+            login_guidance: crate::login::Guidance::Idle,
             frame: screen.frame(),
             generation: 0,
             phase: Phase::Disconnected,
@@ -168,6 +170,9 @@ impl Connection {
     }
     pub fn start_login_probe() -> Result<Self, String> {
         Self::start_owned_probe(probe::login_page()?, probe::Scenario::Login)
+    }
+    pub fn start_verification_probe() -> Result<Self, String> {
+        Self::start_owned_probe(probe::login_page()?, probe::Scenario::Login2fa)
     }
     pub fn start_filters_probe() -> Result<Self, String> {
         let connection =

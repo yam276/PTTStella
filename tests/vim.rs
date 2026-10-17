@@ -21,6 +21,38 @@ fn key(value: &str) -> Key {
 }
 
 #[test]
+fn authentication_handoff_clears_prefix_and_keeps_native_input_until_explicit_escape() {
+    let mut keyboard = Keyboard::default();
+    keyboard.toggle();
+    let context = Context::Unknown {
+        reason: UnknownReason::Unrecognized,
+    };
+    keyboard.use_native_input();
+    assert!(keyboard.status(&context).enabled);
+    assert_eq!(keyboard.status(&context).mode, "input");
+    assert!(!keyboard.status(&context).pending);
+    for value in ["1", "2", "3", "4", "5", "6"] {
+        assert_eq!(press(&mut keyboard, value, &context), Effect::None);
+        assert!(keyboard.accept_text(false));
+    }
+    assert_eq!(
+        press(&mut keyboard, "Enter", &context),
+        Effect::Native(vec![13])
+    );
+    assert_eq!(
+        press(&mut keyboard, "Escape", &context),
+        Effect::Native(vec![27])
+    );
+    keyboard.context(&reading(1, 50));
+    assert_eq!(keyboard.status(&reading(1, 50)).mode, "input");
+    assert_eq!(
+        press(&mut keyboard, "Escape", &reading(1, 50)),
+        Effect::None
+    );
+    assert_eq!(keyboard.status(&reading(1, 50)).mode, "normal");
+}
+
+#[test]
 fn command_help_keeps_browsing_and_requires_explicit_native_execution() {
     let context = Context::CommandHelp {
         first_row: 2,

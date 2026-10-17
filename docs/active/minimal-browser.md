@@ -60,6 +60,12 @@ core 八套 suite／兩份 replay（新增三個 navigation 與一個 Vim 案例
 
 最新候選為 `dist/macos-protocol-b1/PTTStella.app`，報告與必要 PNG 基準保留 `.local/verification/protocol-b1`；本輪未連 PTT，未宣稱實站、UTF-8、Windows／Linux 或完整 Mac desktop backend 通過。B2 2FA 手動接續與 C／D 階段尚待執行。
 
+**B2 完成手動 2FA 引導與原生往返**：密碼送出後由 Session 保留單一無秘密的 FollowUp，期限 120 秒、不隨分片或錯碼延長。完整固定列精確辨識六位限時數字／八位救援碼提示，以及 logind／mbbsd 的錯碼格式；只在本次明確登入後交還原始輸入，不保存驗證碼、TOTP secret 或再送帳密。手動確認後等待站端結果；已辨識瀏覽畫面、返回登入提示、取消、逾時及斷線都結束引導。原生輸入交接保留 Vim 開關，完成後由使用者按 Esc 返回 Normal，不自動執行瀏覽命令。詳細期限與驗收契約見 [登入](../login.md)。
+
+core 八套 suite／兩份 replay（login 新增逐切點、錯碼、假提示、非空欄位／未完成控制碼及可控制時鐘期限；Vim 新增原始交接案例）、50 個 desktop lib、29 個 bin、全 targets desktop Clippy 通過。兩個新增 Connection 往返核對六位錯碼／八位救援碼、過期輸入拒絕、取消、晚到提示與重連零重播；既有無 2FA 路徑維持通過。macOS WKWebView 實際開啟 Vim、按鈕送合成帳密、原始輸入六位錯碼與八位救援碼、Esc 返回 Normal；peer 僅接受一次帳密與兩次手動碼，之後只接受 Close。候選 ⌘W 與最終包 ⌘Q 皆退出碼 0、acknowledged，listener／Connection／credential／file owner join。
+
+最新候選為 `dist/macos-protocol-b2-delivery/PTTStella.app`，strict ad-hoc 驗章與實測 executable 去簽章 SHA 核對一致；報告保留 `.local/verification/protocol-b2`。未連 PTT、未操作真實帳密或 2FA 設定；實站驗證碼、原生 IME、Windows／Linux 與完整 Mac desktop backend 尚未驗收。C1 OSC 8 完整網址接續執行。
+
 ### 詳細交付計畫
 
 2026-10-17 展開上述研究；本節是待執行計畫，不代表產品已支援。先交付相容性，再交付高頻桌面操作。每一批完成實作與適用驗證即提交，不累積到整個階段結束；不改寫既有歷史、不自動 push。以下為依賴順序與相對工作量，不是日曆工期承諾。
