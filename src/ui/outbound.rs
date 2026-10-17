@@ -57,10 +57,17 @@ pub(super) enum Packet<'a> {
         feedback: Feedback<BoardStatus>,
     },
     InputRejected(String),
+    RecentBoards(RecentBoardsPacket),
     PasteResult(Feedback<PasteStatus>),
     ExportResult(Feedback<ExportStatus>),
     LinkResult(Feedback<LinkStatus>),
     Selection(SelectionReply),
+}
+
+#[derive(Serialize)]
+pub(super) struct RecentBoardsPacket {
+    pub boards: Vec<pttstella::board_navigation::BoardName>,
+    pub notice: Option<String>,
 }
 
 #[derive(Serialize)]

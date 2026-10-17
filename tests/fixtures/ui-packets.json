@@ -209,6 +209,10 @@
     }
   },
   {
+    "name": "recent_boards",
+    "packet": {"kind": "recent_boards", "payload": {"boards": ["Stella"], "notice": null}}
+  },
+  {
     "name": "input_rejected",
     "packet": {
       "kind": "input_rejected",

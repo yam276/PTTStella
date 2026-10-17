@@ -384,3 +384,15 @@ board-go = 前往
 board-dialog-hint = 輸入英文板名，按「前往」才切換；進板圖及站端提示仍由你操作。
 board-dialog-starting = 正在啟動切板…
 board-dialog-disconnected = 尚未連線，請先連上 PTT 再切板
+
+recent-invalid = 最近看板資料無效或超過容量，原檔保留；清除清單後才能重新保存。
+recent-directory-missing = 找不到本機最近看板資料目錄。
+recent-title = 最近看板
+recent-empty = 尚無確認進入的看板。
+recent-clear = 清除最近看板
+recent-saving = 正在保存最近看板。
+recent-saved = 最近看板已保存於本機。
+recent-cleared = 最近看板與備份已清除。
+recent-failed = 最近看板保存失敗：{ $error }。切板結果不受影響。
+recent-load-failed = 最近看板載入失敗：{ $error }。本次只保留於記憶體；清除清單後才能重新保存。
+recent-clear-failed = 最近看板尚未完整清除：{ $error }。請重試。

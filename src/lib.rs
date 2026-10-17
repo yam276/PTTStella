@@ -11,6 +11,7 @@ pub mod links;
 pub mod login;
 pub mod media;
 pub mod navigation;
+pub mod recent_boards;
 pub mod screen;
 pub mod selection;
 pub mod settings;

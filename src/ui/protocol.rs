@@ -17,6 +17,9 @@ pub(super) enum MediaAction {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(super) enum SurfaceEvent {
+    RecentBoardsClear {
+        trusted: bool,
+    },
     FiltersOpen {
         trusted: bool,
     },
@@ -241,6 +244,7 @@ impl SurfaceEvent {
             | BoardSubmit { trusted, stamp, .. } => *trusted && stamp.generation == generation,
             BoardCancel { trusted, operation } => *trusted && operation.generation == generation,
             FiltersOpen { trusted }
+            | RecentBoardsClear { trusted }
             | FiltersEdit { trusted, .. }
             | FiltersReveal { trusted, .. }
             | Hover { trusted, .. }
@@ -320,7 +324,7 @@ mod admission_tests {
             true,
             7
         ));
-        for kind in ["paste_confirm", "paste_cancel"] {
+        for kind in ["paste_confirm", "paste_cancel", "recent_boards_clear"] {
             assert!(!admits(json!({"kind":kind}), false, 7));
             assert!(admits(json!({"kind":kind}), true, 7));
         }

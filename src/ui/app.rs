@@ -30,7 +30,7 @@ pub fn app(props: AppProps) -> Element {
     let surface_probe = props.surface_probe.clone();
     let surface_probing = surface_probe.is_some();
     let sample_case = surface_probe.clone();
-    let boards_probing = surface_probe.as_deref() == Some("boards");
+    let boards_probing = matches!(surface_probe.as_deref(), Some("boards" | "boards_close"));
     let verification_probing = surface_probe.as_deref() == Some("login_2fa");
     let dialogs_probing = matches!(
         surface_probe.as_deref(),
@@ -238,6 +238,11 @@ pub fn app(props: AppProps) -> Element {
                 p { {pttstella::msg!("board-dialog-hint")} }
                 label { {pttstella::msg!("board-name")} input { id: "board-name", maxlength: "64", autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
                 p { id: "board-note", role: "status" }
+                h3 { {pttstella::msg!("recent-title")} }
+                ul { id: "board-recent", "aria-label": pttstella::msg!("recent-title") }
+                p { id: "board-recent-empty", {pttstella::msg!("recent-empty")} }
+                p { id: "board-recent-note", role: "status" }
+                button { id: "board-recent-clear", {pttstella::msg!("recent-clear")} }
                 div { class: "dialog-actions",
                     button { id: "board-cancel", {pttstella::msg!("cancel")} }
                     button { id: "board-submit", {pttstella::msg!("board-go")} }

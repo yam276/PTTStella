@@ -417,3 +417,90 @@ async fn cleanup_reports_a_started_file_failure_instead_of_claiming_success() {
     );
     assert!(!files.busy());
 }
+
+#[tokio::test]
+async fn recent_writes_run_alongside_a_picker_and_close_drains_the_latest_snapshot() {
+    use super::super::files_recent;
+    use pttstella::{
+        board_navigation::BoardName,
+        recent_boards::{RecentBoards, store::Store as RecentStore},
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("recent.json");
+    let store = RecentStore::at(path.clone());
+    let mut files = Files::default();
+    let (started, start) = oneshot::channel();
+    let (release, gate) = std::sync::mpsc::channel();
+    files
+        .start(|permit| async move {
+            Completion::Probe(
+                blocking(permit, move || {
+                    started.send(()).unwrap();
+                    gate.recv_timeout(Duration::from_secs(3)).unwrap();
+                    Ok(serde_json::Value::Null)
+                })
+                .await,
+            )
+        })
+        .unwrap();
+    tokio::select! { _=files.next()=>panic!("picker returned"), _=start=>{} }
+    for (revision, name, clear) in [
+        (1, "First", false),
+        (2, "Middle", true),
+        (3, "Latest", false),
+    ] {
+        let mut history = RecentBoards::default();
+        history.visit(BoardName::parse(name).unwrap());
+        files
+            .save_recent(files_recent::Write {
+                revision,
+                store: store.clone(),
+                history,
+                clear,
+            })
+            .unwrap();
+    }
+    let mut finish = Box::pin(files.finish());
+    tokio::select! { _=&mut finish=>panic!("picker was dropped on close"), _=tokio::time::sleep(Duration::from_millis(10))=>{} }
+    release.send(()).unwrap();
+    finish.await.unwrap();
+    assert!(!files.busy());
+    assert_eq!(store.load().unwrap().boards()[0].as_str(), "Latest");
+    assert!(
+        RecentStore::at(path.with_extension("json.bak"))
+            .load()
+            .unwrap()
+            .boards()
+            .is_empty()
+    );
+    assert!(
+        files
+            .save_recent(files_recent::Write {
+                revision: 4,
+                store,
+                history: RecentBoards::default(),
+                clear: true
+            })
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn recent_failure_during_close_is_reported_and_joined() {
+    use super::super::files_recent;
+    use pttstella::recent_boards::{RecentBoards, store::Store as RecentStore};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("recent.json");
+    std::fs::create_dir(path.with_extension("json.bak")).unwrap();
+    let mut files = Files::default();
+    files
+        .save_recent(files_recent::Write {
+            revision: 1,
+            store: RecentStore::at(path),
+            history: RecentBoards::default(),
+            clear: true,
+        })
+        .unwrap();
+    assert!(files.finish().await.is_err());
+    assert!(!files.busy());
+}

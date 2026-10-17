@@ -39,7 +39,7 @@ manual keyboard input → session-owned send queue → connection
 | [ui/protocol](../src/ui/protocol.rs) | WebView 結構化事件、serde wire 格式及共同輸入准入；沒有副作用 |
 | [ui/outbound](../src/ui/outbound.rs)／[ui/bridge](../src/ui/bridge.rs) | Rust→JS 的 tagged Packet 與具型別 payload／結果狀態；一般 bridge 只接受 Packet，原始 Eval 交由 lifecycle join |
 | [ui/commands](../src/ui/commands.rs) | 一筆可取消的命令結果 future，由 surface 的 select 輪詢；不另建送鍵 task 或佇列 |
-| [ui/files](../src/ui/files.rs) | 單筆檔案工作、UI thread 的非同步原生 picker，以及 blocking pool 上的有界讀寫／PNG 解碼；關閉撤銷未開始工作、保留並等待已開始工作 |
+| [ui/files](../src/ui/files.rs) | 單筆互動式檔案工作及有界最近看板 writer、UI thread 的非同步原生 picker，以及 blocking pool 上的有界讀寫／PNG 解碼；關閉撤銷未開始工作、保留並等待已開始工作 |
 | [ui/lifecycle](../src/ui/lifecycle.rs) | renderer、媒體、鑰匙圈、檔案及命令等待的共同清理擁有者；正常／錯誤退出都停止並 join |
 | [ui/presentation](../src/ui/presentation.rs) | 遮黑後的唯一 Paint、連結／圖片命中、選取及輸出使用的版本核對；字型預覽也使用同一封包 |
 | [ui/preferences](../src/ui/preferences.rs) | 生效設定、草稿建構與成功保存後的 commit；初載只由檔案 worker 呼叫，互動時不自行選檔或讀寫 |
@@ -55,7 +55,7 @@ manual keyboard input → session-owned send queue → connection
 
 surface 所有返回路徑都進入 Resources 清理：先取消命令、撤銷保活、媒體及檔案許可，再並行要求 renderer 停止、Connection shutdown 及等待不可中止的 OS credential／已開始檔案工作。除了資料通道 stop，靜態控制事件也可喚醒 renderer 的單一 receive；JS 先移除互動 listener，再於 finally 釋放其餘資源並回傳清理確認，Rust drain Stopped 並 join eval。五秒未完成只更新可見狀態，保留正在等待的擁有者，不能宣告清理成功。Connection 即使收不到 shutdown 回覆，仍 join worker／probe 並保存失敗結果，重複呼叫不把失敗改報為無連線。
 
-Files 同時只接納一個工作，忙碌時不執行第二個 factory，也不建立另一層佇列。設定／名單初載、保存、設定檔匯入匯出及 PNG 解碼／寫入使用 blocking pool；原生 picker 仍在 UI thread 建立及輪詢，明確請求後先聚焦父視窗。UI select 繼續接收畫面、關閉及其他結果，保存成功才 commit 生效設定／規則。關閉許可與 PNG 版本 lease 分開：清理撤銷尚未開始的工作，保留 picker／已開始寫入到完成，五秒後仍顯示等待；取消／過期是正常撤銷，真實失敗會併入清理結果，不能假報成功。
+Files 同時只接納一個互動式檔案工作，忙碌時不執行第二個 factory。最近看板使用同一 Files 下的專屬 writer，只寫獨立資料路徑，一個進行中 snapshot 與一份合併後最新 snapshot；不與 picker 互相等待，也沒有無界佇列。關閉撤銷新工作後，既有及已接納的最新 snapshot 都需 drain／join，失敗納入共同清理結果。設定／名單初載、保存、設定檔匯入匯出及 PNG 解碼／寫入使用 blocking pool；原生 picker 仍在 UI thread 建立及輪詢，明確請求後先聚焦父視窗。UI select 繼續接收畫面、關閉及其他結果，保存成功才 commit 生效設定／規則。關閉許可與 PNG 版本 lease 分開：清理撤銷尚未開始的工作，保留 picker／已開始寫入到完成，五秒後仍顯示等待；取消／過期是正常撤銷，真實失敗會併入清理結果，不能假報成功。
 
 SurfaceState 在 ACK 前保留唯一 in-flight Paint，等待期間只標記 dirty；ACK 後才送最新 watch 的畫面。未知 ACK 不消耗原等待；即使舊 session 的畫面仍在繪製，也要先 drain ACK，舊 snapshot 不能通過目前版本核對。規則／揭露改變同步清除選取、hover 與匯出許可。來源更新可撤銷互動，Vim 無重繪連按仍保留既有的邏輯瀏覽契約。
 
