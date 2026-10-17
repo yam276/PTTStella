@@ -11,6 +11,8 @@ pub const MAX_SETTINGS_BYTES: usize = 8192;
 #[serde(rename_all = "snake_case")]
 pub enum Preset {
     Windows,
+    WindowsClassic,
+    MacosBbs,
     Macos,
     Linux,
     MacosSerif,
@@ -20,6 +22,8 @@ impl Preset {
     fn name(&self) -> &'static str {
         match self {
             Self::Windows => "windows",
+            Self::WindowsClassic => "windows_classic",
+            Self::MacosBbs => "macos_bbs",
             Self::Macos => "macos",
             Self::Linux => "linux",
             Self::MacosSerif => "macos_serif",
@@ -238,6 +242,8 @@ impl DisplaySettings {
         let (ascii, cjk) = match name {
             "bundled" => ("Cascadia Mono", "Noto Sans CJK TC"),
             "windows" => ("Cascadia Mono", "Microsoft JhengHei"),
+            "windows_classic" => ("MingLiU", "MingLiU"),
+            "macos_bbs" => ("Songti TC", "Songti TC"),
             "macos" => ("Menlo", "PingFang TC"),
             "macos_serif" => ("Menlo", "Songti TC"),
             _ => ("DejaVu Sans Mono", "Noto Sans Mono CJK TC"),
@@ -251,10 +257,18 @@ impl DisplaySettings {
         }
     }
     pub fn presets() -> BTreeMap<&'static str, Self> {
-        ["windows", "macos", "linux", "macos_serif", "bundled"]
-            .into_iter()
-            .map(|name| (name, Self::preset(name)))
-            .collect()
+        [
+            "windows",
+            "windows_classic",
+            "macos_bbs",
+            "macos",
+            "linux",
+            "macos_serif",
+            "bundled",
+        ]
+        .into_iter()
+        .map(|name| (name, Self::preset(name)))
+        .collect()
     }
     pub fn validate(mut self) -> Result<Self, String> {
         if self.version != 1 {
