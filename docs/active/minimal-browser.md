@@ -211,6 +211,12 @@ C1 依序開啟及複製片段 rows `[8,9]`，兩次 Cmd-C 後在未保存書籤
 
 證據保留 `.local/verification/mouse-d-boundary/native`；探針版本的 112 個 desktop lib、42 個 bin、51 個 JS、core／desktop all-targets Clippy／docs 通過。交付 App 仍為 `dist/macos-mouse-final/PTTStella.app`，沒有以新增測試副本取代。使用者已答覆可補驗，另開只連 loopback 的 `mouse` 畫面等待 Shift 拖曳／複製及 Ctrl＋滾輪結果；尚未收到結果，不先記通過，沒有 push。
 
+本次人工補驗程序 `.local/verification/mouse-d-boundary/manual` 在五分鐘 loopback 期限內未收到手勢結果，連線先逾時，後續正常關窗後程序退出。嚴格 runner 為 failed、cleanup false，沒有 surface-probe.json；保留為未完成，不以退出 0 當通過。原黑邊案例的完整有效報告不受此影響。獨立解碼其 PNG 與前版同場景 960×576 基準全部像素相同；第一個圖片檢查 invocation 因系統 Python 沒有 Pillow 未執行成功，改用既有 bundled Python 後才通過，沒有安裝套件或放寬檢查。
+
+**D2 格式層增量，Session／UI 接續**：依 [XTerm motion／wheel](https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-Mouse-Tracking) 與固定公開站端接收器，新增具名 MotionReport／WheelReport；1002 只編碼有按鈕 motion，1003 可含無按鈕 motion，上／下 wheel 沒有 release。三類格式共用座標與 SGR 修飾碼／容量驗證，沒有擴充既有 Session route、按鈕准入或 UI wire，也沒有換交付 App。新增獨立手寫 bytes 核對三按鈕、無按鈕、四組 motion／wheel 的全部八組修飾碼、零基／一基與 8000-cell 邊界，以及不支援 mode／encoding／越界／未知方向／偽 release 拒絕；原按鈕及 mode trace expected 不改。移動去重／有界合併、交易准入、滾輪分流與真正原生操作仍接續，不能以格式測試宣稱 D2 完成。
+
+本批 115 個 desktop lib、42 個 bin、51 個 JS、core／desktop all-targets Clippy／docs 通過，證據 `.local/verification/mouse-d-motion-format`；沒有實站、新原生操作或其他平台的完成宣稱，也沒有 push。
+
 
 
 

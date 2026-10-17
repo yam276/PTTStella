@@ -14,6 +14,8 @@ Screen 由相同有界 CSI parser 管理 Modes，只有完整 private h／l 才�
 
 Report 使用零基 row／col、具名 button／action 與 Shift／Alt／Ctrl；Alt 對應協定的 Meta bit，macOS Command 不在此格式。唯一 encoder 將座標加一、修飾碼加入按鈕，產生 `CSI < button ; col ; row M/m`；不加舊 X10 的 32，也不將原始 JS 字串當封包。座標與面積遵從 Screen 同一上限，非法格線／溢位／越界整筆回傳錯誤，沒有部分 bytes。
 
+D2 的純格式層另新增 MotionReport／WheelReport，與原按鈕共用同一 SGR 座標／修飾碼／容量驗證。1002 只接受有按鈕的 motion，1003 可接受無按鈕 motion；wheel 接受 1000／1002／1003，只有上／下方向，不存在 wheel release。其他 tracking／encoding 仍拒絕。這些是尚未接到 Session／UI 的 encoder，**不改目前 route 或開放送出**；接線時仍須加入交易所有權、格線去重、有界合併與速率，不能直接把每個 pointermove 排入按鈕佇列。
+
 ## Session 交易與容量
 
 Session 持有一筆最長 30 秒的按鈕交易，沿用單一 write_input。按下需要當前 generation／revision／input epoch、mode epoch、policy epoch 與遞增交易編號；釋放核對原交易及按鈕，允許同一交易按下後的畫面／input epoch 更新。座標仍以當前格線驗證。重複、舊世代、舊模式、未擁有的釋放、同步／未完成控制碼、登入或導覽工作期間拒絕，不補送。
