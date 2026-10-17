@@ -46,7 +46,7 @@ UI 不等待 press 的命令回覆才處理 release；只透過同一有界命�
 
 自製 [模式 trace](../tests/fixtures/mouse-modes.json) 是獨立手寫狀態 expected，逐 byte／所有兩段切分核對；另測無私有標記、錯格式、取消、字串與超長 CSI 不改模式，C0 中斷、重設、同步批次、非支援格式拒絕、格線邊界及獨立按鈕 bytes。八個交易 owner 與一個 control snapshot 案例核對租約、速率、逾時及撤銷；八個 production Connection loopback 案例獨立核對精確 SGR bytes、更新後釋放、重複零送出、佇列滿時控制、同步模式變化、重連隔離、保活暫停及導覽來源。Surface 測試核對顯示 ACK／模式／policy、可信准入、封閉型別及獨立 wire expected；八個 JS pointer／handler 案例核對原 lease、Shift 選字、滾輪分流、取消／capture／重放及清理。一般測試只用合成資料，不連 PTT。這些單元結果不能代替下述限定原生案例或尚未驗收的邊界。
 
-macOS `mouse` probe 已以真正視窗完成 col 4／row 4 的左／右鍵精確按下釋放、未支援 1003 的點擊／滾輪零輸出、Shift 雙擊選行及 OS 剪貼簿讀回、停用後一次本機文章編號 CR、重新啟用及中鍵按住時的模式撤銷；peer 沒有收到中鍵釋放或額外本機 bytes。最後 mode epoch 6、無 held lease，正常 Close acknowledged 並 join renderer、connection、credential 及 file owners。前後 PNG 獨立解碼 960×576、全部像素相同；鍵盤縮放 100→125→100% 通過。
+macOS `mouse` probe 已以真正視窗完成 col 4／row 4 的左／右鍵精確按下釋放、未支援 1001 的點擊／滾輪零輸出、Shift 雙擊選行及 OS 剪貼簿讀回、停用後一次本機文章編號 CR、重新啟用及中鍵按住時的模式撤銷；peer 沒有收到中鍵釋放或額外本機 bytes。最後 mode epoch 6、無 held lease，正常 Close acknowledged 並 join renderer、connection、credential 及 file owners。前後 PNG 獨立解碼 960×576、全部像素相同；鍵盤縮放 100→125→100% 曾另驗通過。最新 `package-4` 重跑上述點擊／複製／開關與 `mouse_boundary`，完整 edge 座標／修飾鍵亦核對一致，兩次 PNG 與基準零差異。
 
 此案例不是 Shift 拖曳或 Ctrl＋滾輪的原生證據：工具拒絕單獨保持修飾鍵，並行按鍵／滾輪沒有形成縮放，因此後者保留 not_ready，只能引用 handler 單元結果。原生失焦／lost capture／重連、跨 DPR、實站與其他 OS 也沒有在本案例冒算通過。第一次原生 probe 誤將既有本機點編號的 CR 契約寫成方向右，cleanup false／缺 surface 報告，保留為失敗；修正測試服務後從頭重跑，沒有改產品送鍵去遷就 probe。證據及候選 App 身分在 active plan。
 
