@@ -4,7 +4,7 @@
 
 ## 目標
 
-目前增量：A／B 的明確子集與 C1／C2／C3 已交付並依下文區分平台與實站邊界；C1 指定 macOS 原生互動已補驗。D 模式核心／SGR 編碼已提交，Session／UI 分流與原生驗收仍進行中。最新可用 App 為 `dist/macos-bookmarks/PTTStella.app`，已驗證文章入口、書籤與完整網址；D 尚未接入該 App。
+目前增量：A／B 的明確子集與 C1／C2／C3 已交付並依下文區分平台與實站邊界；C1 指定 macOS 原生互動已補驗。D 模式核心／SGR 編碼與 Session 交易准入已完成，UI 分流與原生驗收仍進行中。最新可用 App 為 `dist/macos-bookmarks/PTTStella.app`，已驗證文章入口、書籤與完整網址；D 尚未接入該 App。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
@@ -184,6 +184,11 @@ macOS 四個獨立程序使用同一 `dist/macos-bookmarks/PTTStella.app`：繁�
 嚴格 surface-probe.json passed、PNG 獨立解碼 960×576 且與原先相同場景基準逐像素相同；⌘Q／Close acknowledged、全部 owner join、退出碼 0。去簽章 executable hash 與 `dist/macos-bookmarks/PTTStella.app` 相同，strict 簽章有效。兩次前置試驗保留為失敗：native-menu Escape 送到 BBS 而被 peer 拒絕（cleanup false），以及座標校對先命中第 10 行使嚴格順序失敗；均未改 expected 或冒算通過。證據在 `.local/verification/osc8-pointer-recovery`，先前 `.local/verification/protocol-c1` 的失敗／not_ready 亦保留。
 
 本次只解除指定 OSC 8 片段開啟／剪貼簿／拖曳／PNG 媒體案例的原生缺口，不宣稱完整 macOS desktop gate、一般視窗所有座標、所有 DPI、影片／GIF、OS 真正外開、原生 IME、實站或其他 OS 通過。A／B／C 的本階段明確子集已交付，D 仍須接 Session 與 UI 並獨立驗收；沒有 push 或公開發佈。
+
+**D 第二批：Session 交易准入完成，UI 分流接續**。Rust 持有單筆 30 秒按鈕交易，以 generation／mode／policy／原始畫面 stamp 驗證按下；同一租約釋放可跨按下引起的重繪，重複／舊事件零輸出。每秒 20 次按下，64 筆共同輸入佇列保留 8 筆新按下餘量；獨立有界 watch 保存偏好／全域撤銷／單筆取消，滿佇列也能撤銷尚未開始的按下。人工操作增加 policy nonce，與控制 serial 分開；斷線／重連／模式切換清交易，不合成 release。View 提供 Rust 推導的 Local／Station／Blocked，DEC2026 期間模式變化不等 retained Frame 才發布。按下等待回應安靜逾時，釋放不重啟等待；持有期間防閒置暫停。
+
+111 個 desktop lib（含八個交易、一個 watch 與七個 Connection 滑鼠案例）、39 個 bin、42 個 JS、core／desktop all-targets Clippy／docs 通過；精確 loopback bytes 覆蓋更新後釋放、queued cancel、off/on 合併、同步期模式改變、原始輸入介入、滿 64 筆控制、重連後舊事件不改狀態、持有時安靜逾時與關窗 Close。最初 no-default-features Clippy 發現 interrupt 只在 desktop 使用，已補運輸中斷的實質 owner 回歸；失敗紀錄保留，無修改 fixture expected。證據 `.local/verification/mouse-d-session`。仍未接 Paint／UI pointer、使用者開關及本機 pointer 導覽來源檢查，尚不能宣稱單一動作分流或原生站端滑鼠完成；最新 App 仍是書籤版，沒有 push。
+
 
 ## 維護性重構
 

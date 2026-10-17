@@ -154,6 +154,7 @@ mod filter_tests {
         let mut screen = Screen::new(80, 24).unwrap();
         screen.feed(&encoding::encode(pages["reading"].as_str().unwrap()).unwrap());
         let view = View {
+            mouse: pttstella::mouse::input::Snapshot::default(),
             output_pending: false,
             frame: screen.frame(),
             generation: 4,

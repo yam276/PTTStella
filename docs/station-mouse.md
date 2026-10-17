@@ -1,6 +1,6 @@
 # 站端滑鼠
 
-對應 active plan 的 D，與既有 [本機滑鼠導覽](navigation.md) 分開。第一批只完成 Screen 模式追蹤與純 SGR 按鈕編碼；尚未接 Session 送出、設定或 UI pointer，不宣稱滑鼠已可用。
+對應 active plan 的 D，與既有 [本機滑鼠導覽](navigation.md) 分開。Screen 模式追蹤、純 SGR 編碼與 Session 交易准入已完成；尚未接 Paint、使用者開關或 UI pointer，不宣稱滑鼠已可用。
 
 ## 協定與範圍
 
@@ -14,10 +14,18 @@ Screen 由相同有界 CSI parser 管理 Modes，只有完整 private h／l 才�
 
 Report 使用零基 row／col、具名 button／action 與 Shift／Alt／Ctrl；Alt 對應協定的 Meta bit，macOS Command 不在此格式。唯一 encoder 將座標加一、修飾碼加入按鈕，產生 `CSI < button ; col ; row M/m`；不加舊 X10 的 32，也不將原始 JS 字串當封包。座標與面積遵從 Screen 同一上限，非法格線／溢位／越界整筆回傳錯誤，沒有部分 bytes。
 
-## 接續准入與原生驗收
+## Session 交易與容量
 
-Session 必須持有一筆 pointer 交易、generation／mode epoch、使用者開關與容量／速率限制，並沿用單一 write_input。模式改變、重連、失焦、lost capture 或人工輸入介入須撤銷後續；不能因按下已送就假稱回滾。按下觸發新畫面時的釋放需有同一交易的規則，不能盲用舊 frame 或把新 session 套在舊事件。
+Session 持有一筆最長 30 秒的按鈕交易，沿用單一 write_input。按下需要當前 generation／revision／input epoch、mode epoch、policy epoch 與遞增交易編號；釋放核對原交易及按鈕，允許同一交易按下後的畫面／input epoch 更新。座標仍以當前格線驗證。重複、舊世代、舊模式、未擁有的釋放、同步／未完成控制碼、登入或導覽工作期間拒絕，不補送。
+
+使用者偏好預設開啟且跨重連保留；模式、單筆交易及編號依 generation 隔離。View 的 Snapshot 由 Rust 推導 Local／Station／Blocked：未協商或使用者停用走 Local，支援的 1000＋1006 且准入有效才走 Station，其餘已協商模式為 Blocked。這是後續 UI 的分流來源，不由 JavaScript 解析控制碼。
+
+同一 64 筆輸入佇列在剩餘容量不超過 8 筆時拒絕新按下，保留釋放空間；每秒最多 20 次按下，配對釋放不另吃速率額度。人工輸入仍可能用滿佇列，因此取消／停用另由有界 watch snapshot 傳遞，保留最新偏好、全域撤銷及單筆取消三項；worker 每次取命令前先套用，未開始的已取消按下也不能稍後執行。控制 serial 與 policy nonce 分開，人工空操作撤銷舊 lease 後不會吞掉下一次開關。這沒有新增送出 worker 或無界佇列。
+
+人工按鍵、成功接受的導覽／登入會撤銷 pointer lease；模式改變、重連、斷線或關窗清除持有交易，不合成 release 或重送。按下可等待畫面回應，逾時安靜釋放等待；釋放不新增或延長等待，因公開站端 [io.c](https://github.com/ptt/pttbbs/blob/68b88d8753d69000033037a0c84a4ee3596b937a/mbbsd/io.c#L312) 會丟棄 KEY_MOUSE_RELEASE，不能要求它必須重繪。持有交易暫停防閒置，沿用既有 connection timer 到期清除。
+
+## 接續 UI 與原生驗收
 
 UI 一次操作只走站端回報或本機導覽之一。未協商／使用者停用可沿用本機；未支援的站端模式需明示，不能把 1003 假稱成已支援 1000。Shift 保留選字覆寫，原生複製、Ctrl＋滾輪縮放與 dialog 仍可用；座標從 renderer 同一格線換算，排除黑邊並驗證縮放／DPR。這些為下一批契約，尚未當成實作或通過。
 
-自製 [模式 trace](../tests/fixtures/mouse-modes.json) 是獨立手寫狀態 expected，逐 byte／所有兩段切分核對；另測無私有標記、錯格式、取消、字串與超長 CSI 不改模式，C0 中斷、重設、同步批次、非支援格式拒絕、格線邊界及獨立按鈕 bytes。一般測試只用合成資料，不連 PTT。接線後還需 production Connection 往返、真正 trusted pointer／選字／縮放與清理，才能宣稱站端滑鼠可操作。
+自製 [模式 trace](../tests/fixtures/mouse-modes.json) 是獨立手寫狀態 expected，逐 byte／所有兩段切分核對；另測無私有標記、錯格式、取消、字串與超長 CSI 不改模式，C0 中斷、重設、同步批次、非支援格式拒絕、格線邊界及獨立按鈕 bytes。八個交易 owner 與一個 control snapshot 案例核對租約、速率、逾時及撤銷；七個 production Connection loopback 案例獨立核對精確 SGR bytes、更新後釋放、重複零送出、佇列滿時控制、同步模式變化、重連隔離及保活暫停。一般測試只用合成資料，不連 PTT。仍需 View／Paint、可信事件、使用者開關、本機導覽來源的 Rust 二次檢查，以及真正 trusted pointer／選字／縮放與清理，才能宣稱站端滑鼠可操作。
