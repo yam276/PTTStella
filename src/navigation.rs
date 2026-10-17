@@ -36,6 +36,11 @@ pub enum Context {
         reason: UnknownReason,
     },
     ContinuePrompt,
+    EmptyList,
+    CommandHelp {
+        first_row: usize,
+        last_row: usize,
+    },
     MainMenu {
         first_row: usize,
         last_row: usize,
@@ -58,6 +63,8 @@ impl Context {
         match self {
             Self::Unknown { .. } => "unknown",
             Self::ContinuePrompt => "continue_prompt",
+            Self::EmptyList => "empty_list",
+            Self::CommandHelp { .. } => "command_help",
             Self::MainMenu { .. } => "main_menu",
             Self::BoardList { .. } => "board_list",
             Self::ArticleList { .. } => "article_list",
@@ -70,6 +77,10 @@ impl Context {
     pub fn content_rows(&self) -> usize {
         match self {
             Self::MainMenu {
+                first_row,
+                last_row,
+            }
+            | Self::CommandHelp {
                 first_row,
                 last_row,
             } => last_row - first_row + 1,
@@ -107,6 +118,9 @@ pub fn analyze(frame: &Frame) -> Context {
     {
         return Context::ContinuePrompt;
     }
+    if let Some(context) = command_help(&rows, frame.cursor) {
+        return context;
+    }
     if let Some(context) = main_menu(&rows, frame.cursor) {
         return context;
     }
@@ -141,6 +155,9 @@ pub fn analyze(frame: &Frame) -> Context {
     let Some(header) = header else {
         return unknown(UnknownReason::Unrecognized);
     };
+    if empty_list(&rows, frame.cursor, header + 1, false) {
+        return Context::EmptyList;
+    }
     // PTT distributes commands across the subheader and footer. The forward
     // command is commonly on row 1, while the caption/return command is below.
     if !commands(&rows, "閱讀") {
@@ -183,6 +200,95 @@ fn commands(rows: &[Row<'_>], forward: &str) -> bool {
             || rows[23].bar_text("回上層")
             || rows[23].bar_text("文章選讀")
             || rows[23].bar_text("選擇看板"))
+}
+
+fn command_help(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
+    if !rows[0].bar_text("操作說明 (Help)") {
+        return None;
+    }
+    let header = compact(&rows[1].text);
+    let footer = compact(&rows[23].text);
+    if rows.iter().any(|row| !row.mapped())
+        || !header.contains("按鍵/標籤")
+        || !rows[1].bar_text("功能說明")
+        || !rows[23].bar_text("操作說明")
+        || !footer.contains("(Enter)執行")
+        || !footer.contains("(q/←)離開")
+    {
+        return Some(unknown(UnknownReason::Unrecognized));
+    }
+    let mut last = None;
+    let mut blank = false;
+    for (row, line) in rows.iter().enumerate().take(23).skip(2) {
+        if line.text.trim().is_empty() {
+            blank = true;
+            continue;
+        }
+        let Some(item) = line.cells(2, 80) else {
+            return Some(unknown(UnknownReason::Unmapped));
+        };
+        let item = item.trim_end();
+        let valid = item
+            .strip_prefix('(')
+            .and_then(|item| item.split_once(')'))
+            .is_some_and(|(key, description)| {
+                !key.is_empty() && key.len() <= 64 && !description.trim().is_empty()
+            });
+        if blank || !valid {
+            return Some(unknown(UnknownReason::Unrecognized));
+        }
+        last = Some(row);
+    }
+    Some(match last {
+        Some(last_row)
+            if cursor.0 <= 2
+                && (2..=last_row).contains(&cursor.1)
+                && pointer(&rows[cursor.1], 0) =>
+        {
+            Context::CommandHelp {
+                first_row: 2,
+                last_row,
+            }
+        }
+        _ => unknown(UnknownReason::InvalidCursor),
+    })
+}
+
+fn empty_list(rows: &[Row<'_>], cursor: (usize, usize), first_row: usize, board: bool) -> bool {
+    if cursor != (79, 23)
+        || first_row != 3
+        || rows.iter().any(|r| !r.mapped())
+        || !rows[1].text.trim().starts_with('[')
+        || ["請輸入", "密碼", "是否"]
+            .iter()
+            .any(|prompt| rows[1].text.contains(prompt))
+    {
+        return false;
+    }
+    let footer = &rows[23];
+    let caption = if board {
+        ["看板列表", "我的最愛"]
+            .iter()
+            .any(|caption| footer.bar_text(caption))
+    } else {
+        rows[0].bar_text("看板") && footer.bar_text("文章列表")
+    };
+    let message = rows[3].text.trim();
+    let message = if board {
+        matches!(
+            message,
+            "--- 本目錄目前尚無看板 ---"
+                | "--- 空目錄，請按 a 新增或用 y 列出全部看板後按 z 增刪 ---"
+                | "--- 註冊的使用者才能新增看板喔 (可按 s 手動選取) ---"
+        )
+    } else {
+        message == "沒有文章..."
+    };
+    caption
+        && message
+        && footer.text.contains('←')
+        && (footer.bar_text("回上層") || footer.bar_text("離開"))
+        && rows[4..23].iter().all(|row| row.text.trim().is_empty())
 }
 fn pointer(line: &Row<'_>, col: usize) -> bool {
     // The one-cell ASCII pointer can touch a six-digit article number. The
@@ -265,6 +371,9 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
             .any(|r| !r.mapped())
     {
         return Some(unknown(UnknownReason::Unmapped));
+    }
+    if empty_list(rows, cursor, first_row, true) {
+        return Some(Context::EmptyList);
     }
     if !commands(rows, "進入") && !commands(rows, "閱讀") {
         return Some(unknown(UnknownReason::Unrecognized));
@@ -406,6 +515,7 @@ pub enum Intent {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     Unavailable,
+    RequiresNativeInput,
     Stale,
     AwaitingScreen,
     Disconnected,
@@ -414,6 +524,7 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&match self {
             Self::Unavailable => crate::msg!("navigation-unavailable"),
+            Self::RequiresNativeInput => crate::msg!("navigation-help-native"),
             Self::Stale => crate::msg!("navigation-stale"),
             Self::AwaitingScreen => crate::msg!("navigation-awaiting"),
             Self::Disconnected => crate::msg!("navigation-disconnected"),
@@ -426,7 +537,10 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
             return Err(Error::Unavailable);
         }
         return match context {
-            Context::MainMenu { .. } | Context::BoardList { .. } | Context::ArticleList { .. } => {
+            Context::MainMenu { .. }
+            | Context::BoardList { .. }
+            | Context::ArticleList { .. }
+            | Context::CommandHelp { .. } => {
                 Ok(if down { b"\x1b[B" } else { b"\x1b[A" }.repeat(count))
             }
             Context::ArticleReading {
@@ -443,6 +557,22 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
             }
             _ => Err(Error::Unavailable),
         };
+    }
+    if matches!(context, Context::EmptyList | Context::CommandHelp { .. }) {
+        let bytes: &[u8] = match (context, intent) {
+            (_, Intent::Back) => b"\x1b[D",
+            (Context::CommandHelp { .. }, Intent::First) => b"\x1b[H",
+            (Context::CommandHelp { .. }, Intent::Last) => b"\x1b[F",
+            (Context::CommandHelp { .. }, Intent::PreviousPage) => b"\x1b[5~",
+            (Context::CommandHelp { .. }, Intent::NextPage) => b"\x1b[6~",
+            (Context::CommandHelp { .. }, Intent::PreviousItem) => b"\x1b[A",
+            (Context::CommandHelp { .. }, Intent::NextItem) => b"\x1b[B",
+            (Context::CommandHelp { .. }, Intent::Forward | Intent::Open { .. }) => {
+                return Err(Error::RequiresNativeInput);
+            }
+            _ => return Err(Error::Unavailable),
+        };
+        return Ok(bytes.to_vec());
     }
     let bytes = match (context, intent) {
         (Context::ContinuePrompt, Intent::Continue) => b" ".as_slice(),

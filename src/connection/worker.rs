@@ -336,7 +336,10 @@ impl Session {
         let context = navigation::analyze(&self.screen.frame());
         let list = matches!(
             context,
-            Context::MainMenu { .. } | Context::BoardList { .. } | Context::ArticleList { .. }
+            Context::MainMenu { .. }
+                | Context::BoardList { .. }
+                | Context::ArticleList { .. }
+                | Context::CommandHelp { .. }
         );
         let list_move = list
             && matches!(

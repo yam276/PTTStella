@@ -15,6 +15,136 @@ fn fixture(name: &str) -> Screen {
 fn page(name: &str) -> Context {
     navigation::analyze(&fixture(name).frame())
 }
+fn action_fixture(name: &str) -> Screen {
+    let data: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/navigation-actions.json")).unwrap();
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(&encoding::encode(data["screens"][name].as_str().unwrap()).unwrap());
+    screen
+}
+
+#[test]
+fn dynamic_action_bars_preserve_existing_list_menu_and_reading_contracts() {
+    for (name, kind) in [
+        ("boards", "board_list"),
+        ("favorites", "board_list"),
+        ("articles", "article_list"),
+        ("main", "main_menu"),
+        ("reading", "article_reading"),
+    ] {
+        let screen = action_fixture(name);
+        let context = navigation::analyze(&screen.frame());
+        assert_eq!(context.kind(), kind, "{name}: {context:?}");
+        assert_eq!(navigation::plan(&context, Intent::Back).unwrap(), b"\x1b[D");
+        let mut wrong = screen.clone();
+        wrong.feed(b"\x1b[1;1H");
+        unknown(&wrong.frame());
+        let mut partial = screen;
+        partial.feed(b"\x1b[?2026h");
+        unknown(&partial.frame());
+    }
+}
+
+#[test]
+fn command_help_is_a_separate_profile_that_cannot_execute_a_command_by_browsing() {
+    let context = navigation::analyze(&action_fixture("help").frame());
+    assert_eq!(
+        context,
+        Context::CommandHelp {
+            first_row: 2,
+            last_row: 4
+        }
+    );
+    assert!(!context.allows_keepalive());
+    for (intent, bytes) in [
+        (
+            Intent::Lines {
+                down: true,
+                count: 2,
+            },
+            b"\x1b[B\x1b[B".as_slice(),
+        ),
+        (
+            Intent::Lines {
+                down: false,
+                count: 1,
+            },
+            b"\x1b[A",
+        ),
+        (Intent::First, b"\x1b[H"),
+        (Intent::Last, b"\x1b[F"),
+        (Intent::PreviousPage, b"\x1b[5~"),
+        (Intent::NextPage, b"\x1b[6~"),
+        (Intent::Back, b"\x1b[D"),
+    ] {
+        assert_eq!(navigation::plan(&context, intent).unwrap(), bytes);
+    }
+    for intent in [Intent::Forward, Intent::Open { row: 3 }] {
+        assert_eq!(
+            navigation::plan(&context, intent),
+            Err(Error::RequiresNativeInput)
+        );
+    }
+    for edit in [
+        "\x1b[1;1H",                 // Cursor outside the recognized items.
+        "\x1b[3;1H \x1b[3;1H",       // Missing selection pointer.
+        "\x1b[4;1H\x1b[2K\x1b[3;1H", // Gap before another item.
+        "\x1b[4;1H請輸入您的密碼: \x1b[3;1H",
+        "\x1b[24;1H\x1b[2K是否執行？(y/N)\x1b[3;1H",
+        "\x1b[2;1H\x1b[0m按鍵 / 標籤                   功能說明\x1b[3;1H",
+    ] {
+        let mut screen = action_fixture("help");
+        screen.feed(&encoding::encode(edit).unwrap());
+        unknown(&screen.frame());
+    }
+    let mut unmapped = action_fixture("help");
+    unmapped.feed(b"\x1b[3;1H\xa4 \x1b[3;1H");
+    unknown(&unmapped.frame());
+    let mut article = fixture("reading_middle");
+    replace(
+        &mut article,
+        8,
+        "操作說明 (Help) 按鍵 / 標籤 功能說明",
+        "37;44",
+    );
+    article.feed(b"\x1b[24;80H");
+    assert!(matches!(
+        navigation::analyze(&article.frame()),
+        Context::ArticleReading { .. }
+    ));
+}
+
+#[test]
+fn empty_lists_only_admit_back_with_exact_empty_body_and_bottom_cursor() {
+    for name in ["empty_boards", "empty_articles"] {
+        let screen = action_fixture(name);
+        let context = navigation::analyze(&screen.frame());
+        assert_eq!(context, Context::EmptyList, "{name}");
+        assert!(!context.allows_keepalive());
+        assert_eq!(navigation::plan(&context, Intent::Back).unwrap(), b"\x1b[D");
+        for intent in [
+            Intent::Forward,
+            Intent::NextPage,
+            Intent::First,
+            Intent::Open { row: 3 },
+            Intent::Lines {
+                down: true,
+                count: 1,
+            },
+        ] {
+            assert_eq!(navigation::plan(&context, intent), Err(Error::Unavailable));
+        }
+        for edit in [
+            "\x1b[4;1H",
+            "\x1b[5;1Hother content\x1b[24;80H",
+            "\x1b[2;1H請輸入您的密碼: \x1b[24;80H",
+        ] {
+            let mut invalid = screen.clone();
+            invalid.feed(&encoding::encode(edit).unwrap());
+            unknown(&invalid.frame());
+        }
+    }
+}
 fn unknown(frame: &Frame) {
     assert!(matches!(
         navigation::analyze(frame),

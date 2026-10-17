@@ -21,6 +21,44 @@ fn key(value: &str) -> Key {
 }
 
 #[test]
+fn command_help_keeps_browsing_and_requires_explicit_native_execution() {
+    let context = Context::CommandHelp {
+        first_row: 2,
+        last_row: 4,
+    };
+    let mut keyboard = Keyboard::default();
+    keyboard.toggle();
+    keyboard.context(&context);
+    assert_eq!(keyboard.status(&context).mode, "normal");
+    assert_eq!(
+        press(&mut keyboard, "j", &context),
+        Effect::Browse(Intent::Lines {
+            down: true,
+            count: 1
+        })
+    );
+    assert_eq!(
+        press(&mut keyboard, "Enter", &context),
+        Effect::Browse(Intent::Forward)
+    );
+    assert_eq!(
+        navigation::plan(&context, Intent::Forward),
+        Err(navigation::Error::RequiresNativeInput)
+    );
+    assert_eq!(press(&mut keyboard, "f", &context), Effect::None);
+    assert_eq!(
+        press(&mut keyboard, "Enter", &context),
+        Effect::Native(vec![13])
+    );
+    assert_eq!(keyboard.status(&context).mode, "normal");
+    keyboard.context(&Context::EmptyList);
+    assert_eq!(
+        press(&mut keyboard, "h", &Context::EmptyList),
+        Effect::Browse(Intent::Back)
+    );
+}
+
+#[test]
 fn continue_prompt_translates_once_and_holds_the_key_across_screen_changes() {
     for value in [" ", "Enter", "l", "ArrowRight"] {
         let mut keyboard = Keyboard::default();

@@ -90,6 +90,30 @@ where
 }
 
 pub(super) fn window_page(stage: usize) -> Result<Vec<u8>, String> {
+    if (40..=45).contains(&stage) {
+        let data: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/navigation-actions.json"))
+                .map_err(|e| e.to_string())?;
+        let name = if stage == 45 { "empty_boards" } else { "help" };
+        let mut bytes = crate::encoding::encode(
+            data["screens"][name]
+                .as_str()
+                .ok_or("missing action fixture")?,
+        )
+        .map_err(|e| e.to_string())?;
+        bytes.extend_from_slice(format!("\x1b[1;73Htest{stage:02}").as_bytes());
+        let row = match stage {
+            41 => 4,
+            44 => 5,
+            _ => 3,
+        };
+        if stage == 45 {
+            bytes.extend_from_slice(b"\x1b[24;80H");
+        } else {
+            bytes.extend_from_slice(format!("\x1b[3;1H \x1b[{row};1H>\x1b[{row};1H").as_bytes());
+        }
+        return Ok(bytes);
+    }
     let name = match stage {
         0..=4 => "main_menu",
         5..=9 => "boards_caption",
@@ -136,8 +160,13 @@ async fn window<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
-    for step in 0usize..40 {
+    for step in 0usize..46 {
         let expected: &[u8] = match step {
+            40 => b"\x1b[B",
+            41 => b"\x1b[A",
+            42 => b"\x1b[H",
+            43 => b"\x1b[F",
+            44 | 45 => b"\x1b[D",
             37 => b"\x1b[B",
             38 => b"\x1b[A",
             39 => b"\x1b[D",

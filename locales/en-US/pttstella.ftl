@@ -224,6 +224,7 @@ link-invalid = Invalid URL format
 link-scheme = Only HTTP / HTTPS URLs are supported
 tls-no-roots = No system TLS trust roots are available
 navigation-unavailable = Navigation is unavailable on this screen or at this position
+navigation-help-native = This help page can execute commands; press f, then confirm with a native PTT key
 navigation-stale = The screen or input changed; navigation was not sent
 navigation-awaiting = Wait for the server to update the screen before navigating
 navigation-disconnected = The connection changed; navigation was not sent

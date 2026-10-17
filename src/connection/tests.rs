@@ -476,6 +476,8 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
         ("continue_prompt", ["Enter"].as_slice()),
         ("continue_prompt", [" "].as_slice()),
         ("article_list", ["j", "k", "h"].as_slice()),
+        ("command_help", ["j", "k", "g", "g", "G", "h"].as_slice()),
+        ("empty_list", ["h"].as_slice()),
     ]);
     let mut operations = 0;
     for (profile, values) in stages {
@@ -483,6 +485,20 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
             let context = navigation::analyze(&view.frame);
             assert_eq!(context.kind(), profile);
             keyboard.context(&context);
+            if profile == "command_help" && operations == 40 {
+                for intent in [
+                    navigation::Intent::Forward,
+                    navigation::Intent::Open { row: 3 },
+                ] {
+                    assert_eq!(
+                        connection
+                            .browse_key(view.stamp(), intent)
+                            .await
+                            .unwrap_err(),
+                        navigation::Error::RequiresNativeInput.to_string()
+                    );
+                }
+            }
             let key = Key {
                 key: value.into(),
                 code: format!("Key{value}"),
@@ -510,8 +526,8 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
             assert_eq!(keyboard.status(&context).mode, "normal");
         }
     }
-    assert_eq!(operations, 40);
-    // Peer expects 40 translated operations including pause-to-dense-list browsing, then
+    assert_eq!(operations, 46);
+    // Peer expects 46 translated operations including help and empty-list browsing, then
     // Close. Literal Vim letters/control codes or extra input fail the join.
     connection.shutdown().await.unwrap();
 }
