@@ -98,6 +98,8 @@ pub(super) enum SurfaceEvent {
     },
     SettingsSave {
         values: DisplayProfile,
+        #[serde(default)]
+        language: pttstella::i18n::Language,
         trusted: bool,
     },
     SettingsProfile {

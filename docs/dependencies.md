@@ -23,7 +23,7 @@ uao-rs 的 decode 只餵固定兩個 bytes；encode 逐字往返核對，避免�
 
 Rust 1.97.0 是本次選定並實測的工具鏈，不是證明可用的最低版本。程式不是系統 terminal，不載入 shell／PTY；只是 PTT 專用的格線與顯示控制碼模型。
 
-[UI wire 範例](../tests/fixtures/ui-packets.json) 為本專案自行編寫、可隨產品散布的合成 expected；僅含虛構帳號／文字及 example.com 網址，沒有私人流量、帳密或外部產品資料。DOM／clock doubles 與 native UI probe 同樣使用自製資料，沒有新增第三方程式或依賴。
+[UI wire 範例](../tests/fixtures/ui-packets.json) 為本專案自行編寫、可隨產品散布的合成 expected；僅含虛構帳號／文字及 example.com 網址，沒有私人流量、帳密或外部產品資料。DOM／clock doubles 與 native UI probe 同樣使用自製資料；翻譯 runtime 的第三方來源另列於本文件。
 
 [選取撤銷 wire](../tests/fixtures/selection-cleared.json) 同樣為獨立手寫的合成 expected，供 JS 與 Rust 分別核對。[純黑匯出 PNG](../tests/fixtures/export-black.png) 以 Python 標準函式庫 struct／zlib 依 PNG 格式自行產生：960×576、8-bit RGB、每列 filter 0、全黑 pixels、IHDR／IDAT／IEND。兩份均由本專案製作、可隨產品散布，無外部資產或私人內容；PNG 僅驗證非同步檔案工作及版本撤銷，不替代 renderer 的像素基準。
 
@@ -39,3 +39,5 @@ WSS 使用系統信任根、驗證站端憑證與主機名稱；TLS 設定屬於
 ## Fluent JavaScript
 
 附帶未修改的官方 `@fluent/bundle` 0.19.1 standalone runtime，Apache-2.0；[上游](https://github.com/projectfluent/fluent.js)、[授權](../assets/vendor/fluent/LICENSE)、[下載來源／npm integrity／檔案 SHA-256](../assets/vendor/fluent/SOURCE.json)。僅隨程式離線載入，執行時沒有 CDN 或翻譯服務請求。`locales` 的繁體中文及英文文案為本專案自行編寫，Rust 與 JS 消費同一份 Fluent 資源。
+
+[語言 bootstrap wire](../tests/fixtures/localization.json) 為獨立手寫的最小中英文例子，Rust 比對 serialization，JS 分別消費相同資源；不是由 serializer 產生 expected。

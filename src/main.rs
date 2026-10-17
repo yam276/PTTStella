@@ -131,6 +131,22 @@ fn main() {
             std::process::exit(2);
         }
     }
+    // This synchronous preflight runs before the native event loop exists.
+    // The retained UI file owner still loads preferences and reports failures.
+    let language = probe
+        .as_ref()
+        .map_or_else(pttstella::settings::store::Store::system, |path| {
+            Ok(pttstella::settings::store::Store::at(
+                path.join("probe-settings.json"),
+            ))
+        })
+        .and_then(|store| store.load())
+        .map(|settings| settings.language)
+        .unwrap_or_default();
+    if let Err(error) = pttstella::i18n::initialize(language) {
+        eprintln!("{error}");
+        std::process::exit(1);
+    }
     let mut config = dioxus::desktop::Config::new();
     #[cfg(target_os = "macos")]
     {

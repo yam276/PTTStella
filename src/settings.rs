@@ -56,7 +56,7 @@ impl Default for DisplayProfile {
     }
 }
 impl DisplayProfile {
-    pub fn resolve(&self) -> Result<DisplaySettings, &'static str> {
+    pub fn resolve(&self) -> Result<DisplaySettings, String> {
         let mut resolved = match &self.fonts {
             Fonts::PlatformDefault {} => DisplaySettings::default(),
             Fonts::Preset { preset } => DisplaySettings::preset(preset.name()),
@@ -73,7 +73,7 @@ impl DisplayProfile {
         resolved.baseline = self.baseline;
         resolved.validate()
     }
-    pub fn validate(mut self) -> Result<Self, &'static str> {
+    pub fn validate(mut self) -> Result<Self, String> {
         let resolved = self.resolve()?;
         if matches!(self.fonts, Fonts::Custom { .. }) {
             self.fonts = Fonts::Custom {
@@ -110,20 +110,29 @@ pub struct AppSettings {
     pub version: u32,
     pub display: DisplayProfile,
     pub hover: HoverPosition,
+    #[serde(default)]
+    pub language: crate::i18n::Language,
 }
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            version: 2,
+            version: 3,
+            language: crate::i18n::Language::default(),
             display: DisplayProfile::default(),
             hover: HoverPosition::default(),
         }
     }
 }
 impl AppSettings {
-    pub fn validate(mut self) -> Result<Self, &'static str> {
-        if self.version != 2 {
-            return Err("不支援此設定版本");
+    fn migrate(mut self) -> Self {
+        if self.version == 2 {
+            self.version = 3;
+        }
+        self
+    }
+    pub fn validate(mut self) -> Result<Self, String> {
+        if self.version != 3 {
+            return Err(crate::msg!("settings-version"));
         }
         self.display = self.display.validate()?;
         Ok(self)
@@ -134,22 +143,23 @@ impl AppSettings {
         struct Header {
             version: u32,
         }
-        let head: Header =
-            serde_json::from_slice(bytes).map_err(|e| format!("設定檔格式不正確：{e}"))?;
+        let head: Header = serde_json::from_slice(bytes)
+            .map_err(|e| crate::msg!("settings-invalid", e = e.to_string()))?;
         match head.version {
             1 => {
                 let old: DisplaySettings =
                     serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
                 Ok(Self {
-                    display: old.validate().map_err(str::to_owned)?.into(),
+                    display: old.validate().map_err(|error| error.to_string())?.into(),
                     ..Self::default()
                 })
             }
-            2 => serde_json::from_slice::<Self>(bytes)
+            2 | 3 => serde_json::from_slice::<Self>(bytes)
                 .map_err(|e| e.to_string())?
+                .migrate()
                 .validate()
-                .map_err(str::to_owned),
-            _ => Err("不支援此設定版本".into()),
+                .map_err(|error| error.to_string()),
+            _ => Err(crate::msg!("settings-version")),
         }
     }
 }
@@ -163,7 +173,7 @@ pub struct PortableProfile {
 }
 fn bounded(bytes: &[u8]) -> Result<(), String> {
     if bytes.len() > MAX_SETTINGS_BYTES {
-        Err("設定檔超過 8 KiB；原檔保留".into())
+        Err(crate::msg!("settings-too-large"))
     } else {
         Ok(())
     }
@@ -180,14 +190,14 @@ impl PortableProfile {
     }
     fn validate(mut self) -> Result<Self, String> {
         if self.format != "PTTStella.DisplayProfile" || self.version != 1 {
-            return Err("不支援此顯示設定檔格式或版本".into());
+            return Err(crate::msg!("profile-version"));
         }
         self.name = self.name.trim().to_owned();
         if self.name.is_empty() || self.name.len() > 256 || self.name.chars().any(char::is_control)
         {
-            return Err("設定檔名稱需為 1 至 256 bytes 且不含控制字元".into());
+            return Err(crate::msg!("profile-name-invalid"));
         }
-        self.display = self.display.validate().map_err(str::to_owned)?;
+        self.display = self.display.validate().map_err(|error| error.to_string())?;
         Ok(self)
     }
     pub fn decode(bytes: &[u8]) -> Result<Self, String> {
@@ -246,14 +256,14 @@ impl DisplaySettings {
             .map(|name| (name, Self::preset(name)))
             .collect()
     }
-    pub fn validate(mut self) -> Result<Self, &'static str> {
+    pub fn validate(mut self) -> Result<Self, String> {
         if self.version != 1 {
-            return Err("不支援此設定版本");
+            return Err(crate::msg!("settings-version"));
         }
         for name in [&mut self.ascii_font, &mut self.cjk_font] {
             *name = name.trim().to_owned();
             if name.is_empty() || name.len() > 256 || name.chars().any(char::is_control) {
-                return Err("字型名稱需為 1 至 256 bytes，且不含控制字元");
+                return Err(crate::msg!("font-name-invalid"));
             }
         }
         if !self.font_size.is_finite()
@@ -261,7 +271,7 @@ impl DisplaySettings {
             || !self.baseline.is_finite()
             || !(0.0..=24.0).contains(&self.baseline)
         {
-            return Err("字高需介於 8 至 24，基線需介於 0 至 24");
+            return Err(crate::msg!("font-geometry-invalid"));
         }
         Ok(self)
     }

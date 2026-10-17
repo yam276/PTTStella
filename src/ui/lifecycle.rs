@@ -50,7 +50,7 @@ async fn renderer(mut eval: document::Eval) -> Result<bool, String> {
         loop {
             tokio::select! {
                 result = &mut joined => {
-                    let result = result.map_err(|e|format!("畫面工作未確認結束：{e}"))?;
+                    let result = result.map_err(|e|pttstella::msg!("cleanup-eval-unconfirmed", e = e.to_string()))?;
                     // The returned value is a second acknowledgement from the
                     // same finally block if joining races its Stopped message.
                     return Ok::<bool, String>(acknowledged.unwrap_or(result.clean) && result.clean);
@@ -65,12 +65,13 @@ async fn renderer(mut eval: document::Eval) -> Result<bool, String> {
     });
     match finished {
         Ok(clean) => Ok(clean),
-        Err(error) => Err(format!(
-            "{error}；停止訊號：{}",
-            if interrupted.is_ok() {
-                "已送出"
+        Err(error) => Err(pttstella::msg!(
+            "cleanup-stop-error",
+            error = error,
+            value1 = if interrupted.is_ok() {
+                pttstella::msg!("sent")
             } else {
-                "未確認"
+                pttstella::msg!("unconfirmed")
             }
         )),
     }
@@ -101,11 +102,16 @@ impl Resources {
             }
         };
         let (renderer, disconnect, (), files) = retained_wait(
-            async { tokio::join!(render, connection.shutdown(), credentials, self.files.finish()) },
+            async {
+                tokio::join!(
+                    render,
+                    connection.shutdown(),
+                    credentials,
+                    self.files.finish()
+                )
+            },
             || {
-                message.set(
-                    "清理尚未完成；仍在等待畫面／連線／鑰匙圈／檔案工作結束，請處理可能的系統提示或選檔視窗".into(),
-                );
+                message.set(pttstella::msg!("cleanup-wait"));
                 dioxus::desktop::window().set_visible(true);
             },
             Duration::from_secs(5),
@@ -115,7 +121,7 @@ impl Resources {
             if clean {
                 Ok(())
             } else {
-                Err("畫面已停止，但監聽器清理驗證失敗".into())
+                Err(pttstella::msg!("cleanup-listeners-stopped"))
             }
         });
         let renderer = match (renderer, files) {

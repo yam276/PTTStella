@@ -9,6 +9,7 @@ Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Ar
 ## 目前範圍
 
 - 一個 terminal 畫面及連線／斷線狀態。
+- 介面支援繁體中文與英文；「字型與顯示」可保存語言偏好，下次啟動套用。PTT 站端內容不翻譯。翻譯資源與契約見 [介面語言](docs/i18n.md)，驗證進度見 active plan。
 - 一種經驗證的加密傳輸，使用者自行輸入帳號密碼。
 - 固定欄位、中文字寬、ANSI 顏色、游標、局部重繪與雙色字。
 - 畫面維持比例並符合視窗，工具列浮在上緣、hover 才顯示；明暗色依站端指令。
@@ -61,7 +62,7 @@ python tooling/check.py docs
 
 防閒置預設開啟：在已辨識的文章列表／閱讀頁閒置 60 秒後刷新，不移動閱讀位置；登入、未知畫面、組字、貼上、選字或 dialog 期間暫停。上緣「防閒置：開／關」可暫停本次啟動的保活，重啟預設開啟。未收到刷新回應時會暫停並顯示原因，不持續重送或卡住手動導覽。這與 WebSocket Ping／Pong 分開，實站長時間效果尚待驗收，詳見 [保活契約](docs/keepalive.md)。
 
-顯示偏好保存於 OS 使用者設定目錄（Windows 為 `%APPDATA%\PTTStella\config\settings.json`），覆寫前保存 `settings.json.bak`。本機設定使用 version 2，舊 v1 明確字型名稱遷移成自訂，明確套用後才寫入新版；載入失敗時使用預設並顯示原因，不自動覆寫原檔。字型名稱由系統解析，缺字可能使用替代字型；沒有宣稱已驗證每個字形的 fallback。
+顯示偏好保存於 OS 使用者設定目錄（Windows 為 `%APPDATA%\PTTStella\config\settings.json`），覆寫前保存 `settings.json.bak`。本機設定使用 version 3，新增介面語言；舊 v2 預設繁體中文，舊 v1 明確字型名稱遷移成自訂，明確套用後才寫入新版；載入失敗時使用預設並顯示原因，不自動覆寫原檔。字型名稱由系統解析，缺字可能使用替代字型；沒有宣稱已驗證每個字形的 fallback。
 
 獨立實站檢查：`cargo run --locked --features desktop --bin pttstella -- --probe-live target/verification/live`。這會連至 `wss://ws.ptt.cc/bbs`，只確認登入前提示並斷線，不送帳密；不包含在任何一般 gate。
 

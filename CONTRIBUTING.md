@@ -101,3 +101,5 @@ UI owner／封包變更再跑 `node --test tooling/test_surface_dialogs.mjs`。�
 後續以功能或可獨立驗收的修正為單位建立 Conventional Commit，body 說明結果、設計與實際檢查。只有使用者明確要求才壓縮或改寫歷史。工作完成更新 active plan；目前不實作板名導覽、文章模型或其他擴充功能。公開 repository、PR、套件出版與桌面發佈各自是另外的動作。
 
 作者與提交者使用 `yam276 <59956724+yam276@users.noreply.github.com>`；提交前檢查 repo-local Git identity。依使用者要求將初期開發歷史整理為一個提交，回復備份保存在 repo 外。
+
+介面翻譯變更另跑 `cargo test --locked --lib i18n::tests` 與 `node --test tooling/test_i18n.mjs tooling/test_surface_dialogs.mjs tooling/test_surface_lifetime.mjs`。比較兩語的 key 與參數，核對完整訊息與複數、不可信內容仍為文字，並操作兩語原生視窗驗證保存／取消／重啟。語言偏好失敗不改生效設定，不能重連或重送輸入；原生選檔視窗的系統按鈕由 OS 決定語言。

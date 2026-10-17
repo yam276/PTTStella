@@ -91,7 +91,11 @@ pub(super) async fn surface(
         Err(cleanup) => {
             return Err(match reports {
                 Ok(_) => cleanup,
-                Err(error) => format!("{error}；清理：{cleanup}"),
+                Err(error) => pttstella::msg!(
+                    "cleanup-with-error",
+                    error = error.to_string(),
+                    cleanup = cleanup.to_string()
+                ),
             });
         }
     };
@@ -145,7 +149,7 @@ async fn run(
         .files
         .start(|permit| files::load(permit, probe.clone()))?;
     let loaded = tokio::select! {
-        result=resources.files.next()=>match result {FileCompletion::Loaded(result)=>result.map_err(|e|e.to_string())?,_=>return Err("檔案載入回覆種類不符".into())},
+        result=resources.files.next()=>match result {FileCompletion::Loaded(result)=>result.map_err(|e|e.to_string())?,_=>return Err(pttstella::msg!("file-load-kind"))},
         changed=closing.changed()=>{changed.map_err(|e|e.to_string())?;return Ok(Vec::new());}
     };
     let files::Initial {
@@ -164,6 +168,10 @@ async fn run(
         files,
     } = resources;
     let script = [
+        "const fluent = (() => {const exports = {}; const module = {exports};\n",
+        include_str!("../../assets/vendor/fluent/index.js"),
+        "\nreturn module.exports;})();\n",
+        include_str!("../../assets/i18n.js"),
         include_str!("../../assets/media.js"),
         include_str!("../../assets/surface-lifetime.js"),
         include_str!("../../assets/surface-packets.js"),
@@ -175,6 +183,13 @@ async fn run(
     .concat();
     let mut eval = Bridge::new(&script);
     *owned_eval = Some(eval.owner());
+    let language = pttstella::i18n::application().language();
+    eval.send(Packet::Localization {
+        language: language.tag(),
+        resource: language.resource(),
+        fallback: pttstella::i18n::Language::TraditionalChinese.resource(),
+    })
+    .map_err(|e| e.to_string())?;
     let mut keyboard_policy = vim::Keyboard::default();
     let mut keyboard_generation = 0;
 
@@ -184,7 +199,7 @@ async fn run(
     let mut last_status = first.message.clone();
     let painting = screen
         .queue(&first, false, preferences.display())
-        .ok_or("缺少初始畫面")?;
+        .ok_or(pttstella::msg!("paint-missing-initial"))?;
     eval.send(Packet::Paint(painting))
         .map_err(|e| e.to_string())?;
     eval.send(Packet::HoverSettings(preferences.hover()))
@@ -278,19 +293,19 @@ async fn run(
             changed = closing.changed() => {
                 changed.map_err(|e| e.to_string())?;
                 if *closing.borrow_and_update() {
-                    message.set("正在中斷 PTT 連線並關閉視窗…".into());
+                    message.set(pttstella::msg!("closing"));
                     break (complete, probe_checked);
                 }
             },
             done=files.next(), if !*closing.borrow()=>{
                 let packet=match done {
                     FileCompletion::Probe(result)=>{pending_report=Some(result.map_err(|e|e.to_string())?);close_deadline=Some(tokio::time::Instant::now()+std::time::Duration::from_secs(45));continue;},
-                    FileCompletion::Loaded(_)=>return Err("重複的檔案載入回覆".into()),
+                    FileCompletion::Loaded(_)=>return Err(pttstella::msg!("file-load-duplicate")),
                     FileCompletion::Display(result)=>match result.map_err(|e|e.to_string()).and_then(|saved|preferences.commit(saved)) {
                         Ok(())=>{
                             checks.settings_saved |= probe.is_some() && preferences.display().font_size==18.0 && preferences.display().baseline==19.0;
                             screen.display_changed();
-                            Packet::SettingsSaved(Feedback::new(SaveStatus::Saved,"顯示設定已儲存"))
+                            Packet::SettingsSaved(Feedback::new(SaveStatus::Saved,if preferences.app().language!=pttstella::i18n::application().language(){pttstella::msg!("settings-language-saved")}else{pttstella::msg!("settings-saved")}))
                         },
                         Err(error)=>Packet::SettingsSaved(Feedback::new(SaveStatus::Rejected,error)),
                     },
@@ -308,14 +323,14 @@ async fn run(
                             screen.replace_rules(rules);filter_warning=None;checks.filter_edits+=1;
                             media_preview.close();
                             eval.send(Packet::HoverReset{media:true}).map_err(|e|e.to_string())?;
-                            Packet::FiltersResult(FiltersResult::Saved{entries:screen.rules().entries.clone(),message:"已套用並儲存一般黑名單".into()})
+                            Packet::FiltersResult(FiltersResult::Saved{entries:screen.rules().entries.clone(),message:pttstella::msg!("filters-saved")})
                         },
                         Err(error)=>Packet::FiltersResult(FiltersResult::Rejected{message:error.to_string()}),
                     },
                     FileCompletion::Profile(result)=>Packet::ProfileResult(result.unwrap_or_else(|error|super::outbound::ProfileResult::Rejected{notice:error.to_string()})),
                     FileCompletion::Export{selected,result}=>match result {
-                        Ok(true)=>{checks.export_checked|=probe.is_some()&&!selected;checks.rows_export_checked|=probe.is_some()&&selected;Packet::ExportResult(Feedback::new(ExportStatus::Saved,"PNG 已儲存"))},
-                        Ok(false)=>Packet::ExportResult(Feedback::new(ExportStatus::Cancelled,"未選擇儲存位置")),
+                        Ok(true)=>{checks.export_checked|=probe.is_some()&&!selected;checks.rows_export_checked|=probe.is_some()&&selected;Packet::ExportResult(Feedback::new(ExportStatus::Saved,pttstella::msg!("export-saved")))},
+                        Ok(false)=>Packet::ExportResult(Feedback::new(ExportStatus::Cancelled,pttstella::msg!("export-cancelled"))),
                         Err(error)=>Packet::ExportResult(Feedback::new(ExportStatus::Failed,error.to_string())),
                     },
                 };
@@ -344,12 +359,12 @@ async fn run(
                 *login_job=None;
                 if !login_open {eval.send(Packet::LoginResult(LoginResult::Idle)).map_err(|e|e.to_string())?;continue;}
                 let packet=match result {
-                    Ok(LoginOutcome::Opened {account,saved})=>Packet::LoginResult(LoginResult::Opened{account,saved,message:if saved {"已有密碼保存在鑰匙圈；留空可使用已存密碼"} else {"密碼僅用於此次登入；勾選後才保存至鑰匙圈"}.into()}),
-                    Ok(LoginOutcome::Forgotten)=>Packet::LoginResult(LoginResult::Opened{account:String::new(),saved:false,message:"已移除鑰匙圈中的帳密".into()}),
+                    Ok(LoginOutcome::Opened {account,saved})=>Packet::LoginResult(LoginResult::Opened{account,saved,message:if saved {pttstella::msg!("login-saved-help")} else {pttstella::msg!("login-unsaved-help")}}),
+                    Ok(LoginOutcome::Forgotten)=>Packet::LoginResult(LoginResult::Opened{account:String::new(),saved:false,message:pttstella::msg!("login-forgotten")}),
                     Ok(LoginOutcome::Ready(credentials))=>{
                         let result=if let Some(stamp)=login_stamp.take() {
                             commands.start(CommandKind::Login,stamp.generation,|| connection.request_login(stamp,credentials).map(|reply|reply.wait()))
-                        } else {Err("登入請求已取消".into())};
+                        } else {Err(pttstella::msg!("login-request-cancelled"))};
                         match result {
                             Ok(())=>continue,
                             Err(error)=>Packet::LoginResult(LoginResult::Message{message:error}),
@@ -582,8 +597,8 @@ async fn run(
                         eval.send(preferences.preview_packet(request, values))
                             .map_err(|e| e.to_string())?;
                     }
-                    SurfaceEvent::SettingsSave { values, trusted: _ } => {
-                        if let Err(error)=files.start(|permit|files::save_display(permit,preferences.store(),preferences.display_draft(values))) {
+                    SurfaceEvent::SettingsSave { values, language, trusted: _ } => {
+                        if let Err(error)=files.start(|permit|files::save_display(permit,preferences.store(),{let mut draft=preferences.display_draft(values);draft.language=language;draft})) {
                             eval.send(Packet::SettingsSaved(Feedback::new(SaveStatus::Rejected,error))).map_err(|e|e.to_string())?;
                         }
                     }
@@ -597,7 +612,7 @@ async fn run(
                             "export"=>Some(ProfileRequest::Export{name,display:preferences.app().display.clone()}),
                             _=>None,
                         };
-                        let result=request.ok_or_else(||"未知設定檔操作".to_owned()).and_then(|request|files.start(|permit|files::profile(permit,request,probe.clone().filter(|_|surface_probe.as_deref()!=Some("files")))));
+                        let result=request.ok_or_else(||pttstella::msg!("profile-unknown-action").to_owned()).and_then(|request|files.start(|permit|files::profile(permit,request,probe.clone().filter(|_|surface_probe.as_deref()!=Some("files")))));
                         if let Err(notice)=result {
                             eval.send(Packet::ProfileResult(super::outbound::ProfileResult::Rejected{notice})).map_err(|e|e.to_string())?;
                         }
@@ -665,9 +680,9 @@ async fn run(
                                 Ok(())
                             }
                             Some(link) => {
-                                webbrowser::open(&link.url).map_err(|e| format!("無法開啟網址：{e}"))
+                                webbrowser::open(&link.url).map_err(|e| pttstella::msg!("link-open-failed", e = e.to_string()))
                             }
-                            None => Err("畫面已更新，請重新選取網址".to_owned()),
+                            None => Err(pttstella::msg!("link-stale").to_owned()),
                         };
                         let reply = match result {
                             Ok(()) => Packet::LinkResult(Feedback::quiet(LinkStatus::Requested)),
@@ -695,7 +710,7 @@ async fn run(
                                     Ok(())
                                 } else {
                                     webbrowser::open(&preview.target.url)
-                                        .map_err(|e| format!("無法開啟網址：{e}"))
+                                        .map_err(|e| pttstella::msg!("link-open-failed", e = e.to_string()))
                                 };
                                 eval.send(Packet::MediaExternal{request,ok:result.is_ok(),message:result.err()}).map_err(|e| e.to_string())?;
                             }
@@ -711,7 +726,7 @@ async fn run(
                             .and_then(|prepared| {
                                 let current = receiver.borrow();
                                 if current.phase != Phase::Connected || current.generation != generation {
-                                    return Err("連線已變更；貼上未送出".into());
+                                    return Err(pttstella::msg!("paste-stale"));
                                 }
                                 if prepared.lines > 1 {
                                     pending_paste.set(Some(PendingPaste {
@@ -760,7 +775,7 @@ async fn run(
                                     probe.is_some() && pending.prepared.text == "A\nB";
                                 connection.input(pending.generation, pending.prepared.bytes)
                             } else {
-                                Err("連線已變更；貼上未送出".to_owned())
+                                Err(pttstella::msg!("paste-stale").to_owned())
                             };
                             let reply = match result {
                                 Ok(()) => Packet::PasteResult(Feedback::quiet(PasteStatus::Queued)),
@@ -908,7 +923,7 @@ async fn run(
                     }
                     SurfaceEvent::Stopped { clean } => {
                         if !clean {
-                            return Err("畫面監聽器清理驗證失敗".into());
+                            return Err(pttstella::msg!("cleanup-listeners-failed"));
                         }
                         break (complete, probe_checked);
                     }
@@ -926,7 +941,7 @@ async fn run(
                     if commands.busy() {
                         commands.cancel();
                         eval.send(Packet::NavigationResult(Feedback::quiet(NavigationStatus::Rejected))).map_err(|e|e.to_string())?;
-                        eval.send(Packet::LoginResult(LoginResult::Message{message:"連線已變更；操作結果未確認，不會重送".into()})).map_err(|e|e.to_string())?;
+                        eval.send(Packet::LoginResult(LoginResult::Message{message:pttstella::msg!("command-stale")})).map_err(|e|e.to_string())?;
                     }
                     keyboard_policy.reset();keyboard_generation=view.generation;
                 }
@@ -945,7 +960,7 @@ async fn run(
                 }
             },
             _ = async { match close_deadline { Some(deadline) => tokio::time::sleep_until(deadline).await, None => std::future::pending().await } } => {
-                return Err("畫面探針等待操作逾時".into());
+                return Err(pttstella::msg!("probe-timeout"));
             },
         }
     };

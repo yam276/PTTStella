@@ -121,7 +121,7 @@ pub(super) fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint 
 }
 
 pub(super) fn font_sample() -> Result<Frame, String> {
-    let mut sample = Screen::new(24, 4).map_err(str::to_owned)?;
+    let mut sample = Screen::new(24, 4).map_err(|error| error.to_string())?;
     sample.feed(b"ASCII xyz 0123456789\r\n\x1b[31;44m\xa4\x1b[32;45m\xa4\x1b[0m ");
     sample.feed(&encoding::encode("中文字型\r\n").map_err(|e| e.to_string())?);
     sample.feed(b"\x1b[31;44m");

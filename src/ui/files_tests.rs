@@ -156,10 +156,11 @@ async fn failed_save_preserves_effective_state_and_the_next_save_can_commit() {
     store.save(original.clone()).unwrap();
     let old = std::fs::read(dir.path().join("probe-settings.json")).unwrap();
     std::fs::create_dir(dir.path().join("probe-settings.json.bak")).unwrap();
-    let draft = preferences.display_draft(DisplayProfile {
+    let mut draft = preferences.display_draft(DisplayProfile {
         font_size: 18.0,
         ..Default::default()
     });
+    draft.language = pttstella::i18n::Language::English;
     let mut files = Files::default();
     files
         .start(|permit| save_display(permit, preferences.store(), draft.clone()))
@@ -190,6 +191,10 @@ async fn failed_save_preserves_effective_state_and_the_next_save_can_commit() {
     preferences.commit(saved).unwrap();
     assert_eq!(store.load().unwrap().display.font_size, 18.0);
     assert_eq!(preferences.hover(), HoverPosition::Off);
+    assert_eq!(
+        store.load().unwrap().language,
+        pttstella::i18n::Language::English
+    );
 }
 
 #[tokio::test]

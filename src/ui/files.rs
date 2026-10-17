@@ -39,8 +39,8 @@ pub(super) enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Cancelled => f.write_str("視窗正在關閉；尚未開始的檔案操作已取消"),
-            Self::Stale => f.write_str("畫面、規則或選取已變更；PNG 未儲存，請重新匯出"),
+            Self::Cancelled => f.write_str(&pttstella::msg!("file-cancelled")),
+            Self::Stale => f.write_str(&pttstella::msg!("export-stale")),
             Self::Failed(message) => f.write_str(message),
         }
     }
@@ -98,7 +98,7 @@ impl Files {
     ) -> Result<(), String> {
         self.permit.check().map_err(|e| e.to_string())?;
         if self.busy() {
-            return Err("正在等待上一個檔案操作；請稍後再試".into());
+            return Err(pttstella::msg!("file-busy"));
         }
         self.work = Some(Box::pin(begin(self.permit.clone())));
         Ok(())
@@ -123,7 +123,7 @@ impl Files {
         };
         match error {
             None | Some(Error::Cancelled | Error::Stale) => Ok(()),
-            Some(Error::Failed(error)) => Err(format!("關閉前的檔案操作失敗：{error}")),
+            Some(Error::Failed(error)) => Err(pttstella::msg!("file-close-failed", error = error)),
         }
     }
 }
@@ -144,7 +144,7 @@ async fn blocking_result<T: Send + 'static>(
         work()
     })
     .await
-    .map_err(|e| Error::Failed(format!("檔案工作未完成：{e}")))?
+    .map_err(|e| Error::Failed(pttstella::msg!("file-worker-failed", e = e.to_string())))?
 }
 pub(super) async fn load(permit: Permit, probe: Option<PathBuf>) -> Completion {
     Completion::Loaded(
@@ -251,17 +251,23 @@ pub(super) fn profile_at(
                     .to_ascii_lowercase()
                     .ends_with(".pttstella.json")
             }) {
-                return Err("請使用 .pttstella.json 副檔名".into());
+                return Err(pttstella::msg!("profile-extension"));
             }
             storage::replace(&path, &PortableProfile::new(name, display)?.encode()?)?;
             Ok(ProfileResult::Exported {
-                notice: "已匯出目前生效設定；未套用的草稿不包含在內".into(),
+                notice: pttstella::msg!("profile-exported"),
             })
         }
         ProfileRequest::Import => {
-            let profile =
-                PortableProfile::decode(&Store::at(path).read()?.ok_or("找不到顯示設定檔")?)?;
-            let values = profile.display.resolve().map_err(str::to_owned)?;
+            let profile = PortableProfile::decode(
+                &Store::at(path)
+                    .read()?
+                    .ok_or(pttstella::msg!("profile-missing"))?,
+            )?;
+            let values = profile
+                .display
+                .resolve()
+                .map_err(|error| error.to_string())?;
             let sample = super::presentation::font_sample()?;
             Ok(ProfileResult::Imported {
                 profile: Box::new(ImportedProfile {
@@ -270,7 +276,7 @@ pub(super) fn profile_at(
                     sample: sample_packet(&sample, &values),
                     values,
                 }),
-                notice: "設定已載入預覽；套用並儲存後才會生效".into(),
+                notice: pttstella::msg!("profile-imported"),
             })
         }
     }
@@ -290,12 +296,17 @@ pub(super) async fn profile(
             window.window.set_focus();
             let dialog = rfd::AsyncFileDialog::new()
                 .set_parent(window.window.as_ref())
-                .add_filter("PTTStella 顯示設定", &["json"]);
+                .add_filter(pttstella::msg!("profile-file-type"), &["json"]);
             let chosen = match &request {
-                ProfileRequest::Import => dialog.set_title("載入顯示設定至預覽").pick_file().await,
+                ProfileRequest::Import => {
+                    dialog
+                        .set_title(pttstella::msg!("profile-import-title"))
+                        .pick_file()
+                        .await
+                }
                 ProfileRequest::Export { .. } => {
                     dialog
-                        .set_title("匯出目前生效的顯示設定")
+                        .set_title(pttstella::msg!("profile-export-title"))
                         .set_file_name("display.pttstella.json")
                         .save_file()
                         .await
@@ -320,14 +331,14 @@ pub(super) struct ExportRequest {
 fn decode_png(png: String, rows: &Range<usize>) -> Result<Vec<u8>, String> {
     let encoded = png
         .strip_prefix("data:image/png;base64,")
-        .ok_or("PNG 格式不正確")?;
+        .ok_or(pttstella::msg!("export-invalid"))?;
     if encoded.len() > export::MAX_BASE64_BYTES {
-        return Err("PNG 超過匯出大小上限".into());
+        return Err(pttstella::msg!("export-too-large"));
     }
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(encoded)
-        .map_err(|_| "PNG 編碼不正確")?;
-    export::check_export_header(&bytes, rows).map_err(str::to_owned)?;
+        .map_err(|_| pttstella::msg!("export-base64-invalid"))?;
+    export::check_export_header(&bytes, rows).map_err(|error| error.to_string())?;
     Ok(bytes)
 }
 async fn pick_export(
@@ -346,7 +357,7 @@ async fn pick_export(
         window.window.set_focus();
         rfd::AsyncFileDialog::new()
             .set_parent(window.window.as_ref())
-            .set_title("匯出 PTT 畫面")
+            .set_title(pttstella::msg!("export-title"))
             .add_filter("PNG", &["png"])
             .set_file_name(if selected {
                 format!("PTTStella-lines-{}-{}.png", rows.start + 1, rows.end)
@@ -395,7 +406,7 @@ async fn export_with_picker<F: Future<Output = Option<PathBuf>>>(
                 .extension()
                 .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
             {
-                return Err(Error::Failed("請使用 .png 副檔名；尚未儲存".into()));
+                return Err(Error::Failed(pttstella::msg!("export-extension")));
             }
             storage::replace(&path, &bytes).map_err(Error::Failed)?;
             Ok(true)

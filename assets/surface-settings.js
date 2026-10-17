@@ -7,6 +7,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,loa
     const fontPreset=document.getElementById("font-preset"),fontSave=document.getElementById("font-save"),fontCancel=document.getElementById("font-cancel");
     const fontDefaults=document.getElementById("font-defaults");
     const profileImport=document.getElementById("profile-import"),profileExport=document.getElementById("profile-export"),profileName=document.getElementById("font-profile-name");
+    const language=document.getElementById("interface-language");
     let profileBusy=false;
     function profileAction(action,e){if(profileBusy||fontSaving)return;profileBusy=true;profileImport.disabled=true;profileExport.disabled=true;
         send({kind:"settings_profile",action,name:profileName.value,trusted:e.isTrusted});}
@@ -44,7 +45,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,loa
     function saveFonts(e) {
         if(fontSaving||profileBusy) return;
         fontSaving=true;fontSave.disabled=true;fontCancel.disabled=true;
-        send({kind:"settings_save",values:readFonts(),trusted:e.isTrusted});
+        send({kind:"settings_save",values:readFonts(),language:language.value,trusted:e.isTrusted});
     }
 
     async function preview(settings,packet,valid){
@@ -56,7 +57,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,loa
     async function open(data){
         if(disposed)return;
         const opening=++epoch;
-        fontDraft=data;fillFonts(data.values);fontPreset.value=profileChoice(data.profile);fontNote.textContent=data.warning||"";
+        fontDraft=data;language.value=data.language;fillFonts(data.values);fontPreset.value=profileChoice(data.profile);fontNote.textContent=data.warning||"";
         beforeShow();if(!fontDialog.open)fontDialog.showModal();changed();
         await preview(data.values,data.sample,()=>fontDialog.open&&opening===epoch);
         if(!disposed&&fontDialog.open&&opening===epoch)fontFields.ascii_font.focus();
