@@ -57,6 +57,10 @@ where
                 };
                 match gesture.accept(&bytes)? {
                     round_trip::Step::Continue => {}
+                    round_trip::Step::Ready => socket
+                        .send(Message::Binary(round_trip::READY.to_vec().into()))
+                        .await
+                        .map_err(|e| e.to_string())?,
                     round_trip::Step::Redraw => socket
                         .send(Message::Binary(round_trip::REDRAW.to_vec().into()))
                         .await
@@ -638,7 +642,10 @@ pub(super) async fn serve(
     bytes: Vec<u8>,
     scenario: Scenario,
 ) -> Result<(), String> {
-    let deadline = if matches!(scenario, Scenario::Filters) {
+    let deadline = if matches!(
+        scenario,
+        Scenario::Filters | Scenario::MouseSamples(MouseSampleProbe::RoundTrip)
+    ) {
         900
     } else if matches!(
         scenario,
@@ -672,7 +679,12 @@ pub(super) async fn serve(
             return mouse(&mut socket, boundary).await;
         }
         if let Scenario::MouseSamples(case) = scenario {
-            return mouse_samples(&mut socket, case).await;
+            let result=mouse_samples(&mut socket, case).await;
+            if result.is_err() && matches!(case,MouseSampleProbe::RoundTrip) {
+                // Failure stays visible immediately; this run still returns its error.
+                let _=socket.send(Message::Binary(b"\x1b[2;1H\x1b[2K\x1b[1;31mFAILED: gesture rejected; close and restart this test\x1b[0m\x1b[24;80H".to_vec().into())).await;
+            }
+            return result;
         }
         if matches!(scenario, Scenario::Boards) {
             return boards(&mut socket).await;
