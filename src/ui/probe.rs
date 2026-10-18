@@ -136,10 +136,12 @@ impl Checks {
             let in_a = |col, row| (8..=23).contains(&col) && (7..=11).contains(&row);
             return self.mouse_return_painted.is_some()
                 && self.mouse_reports()==[(Left,Press),(Left,Release)]
-                && self.mouse_edges.iter().all(|edge| in_a(edge.col,edge.row) && edge.modifiers==Modifiers::default())
+                && self.mouse_edges.iter().all(|edge| (4..=67).contains(&edge.col) && (5..=13).contains(&edge.row) && edge.modifiers==Modifiers::default())
+                && self.mouse_edges.last().is_some_and(|edge|in_a(edge.col,edge.row))
                 && self.mouse_samples.iter().all(|sample| matches!(sample,SampleReport::Motion(r) if (4..=67).contains(&r.col) && (5..=13).contains(&r.row) && r.button==Some(Left) && r.modifiers==Modifiers::default()))
                 && self.mouse_samples.iter().position(|sample| matches!(sample,SampleReport::Motion(r) if (48..=63).contains(&r.col) && (7..=11).contains(&r.row)))
-                    .is_some_and(|at| self.mouse_samples[at+1..].iter().any(|sample| matches!(sample,SampleReport::Motion(r) if in_a(r.col,r.row))))
+                    .is_some_and(|at| (self.mouse_edges.first().is_some_and(|edge|in_a(edge.col,edge.row)) || self.mouse_samples[..at].iter().any(|sample|matches!(sample,SampleReport::Motion(r) if in_a(r.col,r.row))))
+                        && self.mouse_samples[at+1..].iter().any(|sample| matches!(sample,SampleReport::Motion(r) if in_a(r.col,r.row))))
                 && matches!(self.mouse_samples.last(),Some(SampleReport::Motion(r)) if in_a(r.col,r.row));
         }
         self.mouse_reports()==[(Left,Press),(Left,Release)]
@@ -561,6 +563,10 @@ mod sample_tests {
         checks.mouse_cancels = 1;
         assert!(!checks.mouse_samples_passed("mouse_round_trip"));
         checks.mouse_cancels = 0;
+        checks.mouse_edges[0].col = 7;
+        assert!(!checks.mouse_samples_passed("mouse_round_trip")); // near-edge press cannot count as A
+        checks.mouse_samples.insert(0, motion(10, 8));
+        assert!(checks.mouse_samples_passed("mouse_round_trip")); // actual visit to A, then B, then A
         checks.mouse_sample_overflow = true;
         assert!(!checks.mouse_samples_passed("mouse_round_trip"));
     }

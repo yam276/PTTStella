@@ -120,7 +120,15 @@ async fn native_round_trip_peer_requires_return_motion_before_its_release() {
     ] {
         connection.input(start.generation, bytes.to_vec()).unwrap();
     }
-    wait(&connection, |view| view.phase == Phase::Error).await;
+    let failed = wait(&connection, |view| view.phase == Phase::Error).await;
+    let status = failed
+        .frame
+        .glyphs
+        .iter()
+        .filter(|g| g.row == 1)
+        .map(|g| g.text.as_str())
+        .collect::<String>();
+    assert!(status.starts_with("FAILED:"), "{status}");
     let error = connection.shutdown().await.unwrap_err();
     assert!(error.contains("requires held motion"), "{error}");
 }
@@ -142,11 +150,34 @@ async fn native_round_trip_regions_require_redraw_return_and_close_without_extra
             .unwrap();
         assert_eq!(glyph.left.bg, bg);
     }
-    for bytes in [b"\x1b[<0;10;9M".as_slice(), b"\x1b[<32;64;12M"] {
+    for bytes in [b"\x1b[<0;8;9M".as_slice(), b"\x1b[<32;10;9M"] {
         connection.input(start.generation, bytes.to_vec()).unwrap();
     }
+    wait(&connection, |view| {
+        !view.output_pending
+            && view
+                .frame
+                .glyphs
+                .iter()
+                .filter(|g| g.row == 1)
+                .map(|g| g.text.as_str())
+                .collect::<String>()
+                .starts_with("READY:")
+    })
+    .await;
+    connection
+        .input(start.generation, b"\x1b[<32;64;12M".to_vec())
+        .unwrap();
     let redraw = wait(&connection, |view| {
-        view.frame.revision > start.frame.revision && !view.output_pending
+        !view.output_pending
+            && view
+                .frame
+                .glyphs
+                .iter()
+                .filter(|g| g.row == 1)
+                .map(|g| g.text.as_str())
+                .collect::<String>()
+                .starts_with("HOLD:")
     })
     .await;
     let status = redraw

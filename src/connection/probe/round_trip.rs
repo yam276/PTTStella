@@ -2,12 +2,14 @@
 #[derive(Default)]
 pub(super) struct Gesture {
     pressed: bool,
+    started_a: bool,
     far: bool,
     returned: bool,
 }
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum Step {
     Continue,
+    Ready,
     Redraw,
     Complete,
 }
@@ -46,12 +48,23 @@ impl Gesture {
         let a = (9..=24).contains(&col) && (8..=12).contains(&row);
         let b = (49..=64).contains(&col) && (8..=12).contains(&row);
         if !self.pressed {
-            if (button, action, a) != (0, b'M', true) {
-                return Err("round trip must start with one left press inside A".into());
+            if (button, action) != (0, b'M') {
+                return Err("round trip must start with one left press in the corridor".into());
             }
             self.pressed = true;
+            if a {
+                self.started_a = true;
+                return Ok(Step::Ready);
+            }
         } else if (button, action) == (32, b'M') {
-            if !self.far && b {
+            if !self.started_a && b {
+                return Err("round trip requires visiting A before B".into());
+            }
+            if !self.started_a && a {
+                self.started_a = true;
+                return Ok(Step::Ready);
+            }
+            if self.started_a && !self.far && b {
                 self.far = true;
                 return Ok(Step::Redraw);
             }
@@ -65,10 +78,13 @@ impl Gesture {
     }
 }
 
+pub(super) const READY: &[u8] =
+    b"\x1b[2;1H\x1b[2K\x1b[1;32mREADY: keep holding and move to B\x1b[0m\x1b[24;80H";
+
 pub(super) const REDRAW: &[u8] = b"\x1b[2;1H\x1b[2K\x1b[1;32mHOLD: return to A, then release\x1b[0m\x1b[10;12H\x1b[30;43mA RETURN\x1b[0m\x1b[24;80H";
 
 pub(in crate::connection) fn scene() -> Vec<u8> {
-    let mut bytes = b"\x1b[2J\x1b[HHold LEFT in yellow A -> cyan B -> A; no modifiers\x1b[2;1HWAIT: keep holding until HOLD appears\x1b[4;5HStay inside the grey corridor; any point inside each colour is OK".to_vec();
+    let mut bytes = b"\x1b[2J\x1b[HHold LEFT and visit yellow A -> cyan B -> A; no modifiers\x1b[2;1HSTART: enter yellow A while holding; wait for READY\x1b[4;5HStay inside the dotted corridor; any point inside each colour is OK".to_vec();
     for row in 6..=14 {
         bytes.extend_from_slice(format!("\x1b[{row};5H\x1b[40;37m{}", ".".repeat(64)).as_bytes());
     }
@@ -92,7 +108,7 @@ mod tests {
     fn mouse_regions_accept_coalesced_paths_and_different_points_within_targets() {
         let mut gesture = Gesture::default();
         for (bytes, expected) in [
-            (b"\x1b[<0;9;8M".as_slice(), Step::Continue),
+            (b"\x1b[<0;9;8M".as_slice(), Step::Ready),
             (b"\x1b[<32;30;7M", Step::Continue),
             (b"\x1b[<32;64;12M", Step::Redraw),
             (b"\x1b[<32;51;10M", Step::Continue),
@@ -105,7 +121,11 @@ mod tests {
     #[test]
     fn mouse_regions_reject_missing_steps_foreign_buttons_modifiers_and_corridor_exits() {
         for sequence in [
-            vec![b"\x1b[<0;50;9M".as_slice()],        // starts in B
+            vec![
+                b"\x1b[<0;50;9M".as_slice(),
+                b"\x1b[<32;10;9M",
+                b"\x1b[<0;10;9m",
+            ], // starts in B
             vec![b"\x1b[<0;10;9M", b"\x1b[<0;10;9m"], // click only
             vec![b"\x1b[<0;10;9M", b"\x1b[<32;24;9M", b"\x1b[<0;10;9m"], // no B
             vec![b"\x1b[<0;10;9M", b"\x1b[<32;50;9M", b"\x1b[<0;10;9m"], // release cannot replace return motion
@@ -136,6 +156,20 @@ mod tests {
             b"\r",
         ] {
             assert!(Gesture::default().accept(bytes).is_err());
+        }
+    }
+    #[test]
+    fn mouse_corridor_press_needs_a_fresh_visit_to_a_before_b() {
+        let mut gesture = Gesture::default();
+        for (bytes, step) in [
+            (b"\x1b[<0;8;9M".as_slice(), Step::Continue),
+            (b"\x1b[<32;8;9M", Step::Continue),
+            (b"\x1b[<32;10;9M", Step::Ready),
+            (b"\x1b[<32;50;9M", Step::Redraw),
+            (b"\x1b[<32;11;9M", Step::Continue),
+            (b"\x1b[<0;11;9m", Step::Complete),
+        ] {
+            assert_eq!(gesture.accept(bytes).unwrap(), step);
         }
     }
 }

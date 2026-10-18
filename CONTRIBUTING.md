@@ -33,7 +33,7 @@ core 執行 Rust 1.97.0 的 fmt、Clippy、畫面與互動測試 suite 及 2 個
 
 `mouse_drag` 使用同一自製場景與 1002＋1006，要求零基 col 4／row 4 左鍵按下，沿同列移至 col 10 後釋放。peer 只接受獨立手寫的該水平區間 SGR motion，最多 16 筆，必須抵達終格並收到精確釋放；達到筆數上限仍缺釋放時必須失敗。`mouse_motion` 先在 col 4／row 4 點擊、釋放，再由 peer 開啟 1003；之後只接受同一水平區間的無按鈕 motion，終格 col 10 必須到達。原生工具可用指向終格的水平滾動移動指標；水平輪本身應零站端 bytes，不能改用合成 DOM 事件通過。
 
-`mouse_round_trip` 使用 1002＋1006 與可見的大色塊：零基 A 為 col 8–23／row 7–11，B 為 col 48–63／row 7–11；允許在 col 4–67／row 5–13 的點狀走廊內移動，不要求停在單格或收到每一個中間 cell。必須在 A 左鍵按下、保持按住進入 B；peer 重繪第二列 `HOLD: return to A, then release` 後，必須收到返回 A 的 held motion，最後在 A 放開。UI 額外確認返回事件發生時提示 frame 已由 renderer ACK；釋放不能代替返回 motion。peer 獨立解析 canonical SGR bytes，拒絕修飾鍵、其他按鈕、重按、越界、順序缺漏及額外輸入；上限 256 motion 加一對 edge，不改正式輸入佇列／速率／交易期限。完成後還原 fixture、切到 1001，另需 PNG、Close acknowledged 與全部 owner join。測試包含合併取樣、不同區域落點及各個缺步負例；原生人工操作前不宣稱通過。探針的非預期 binary 診斷只顯示長度或單獨 Escape 的分類，不輸出任意輸入內容。
+`mouse_round_trip` 使用 1002＋1006 與可見的大色塊：零基 A 為 col 8–23／row 7–11，B 為 col 48–63／row 7–11；允許在 col 4–67／row 5–13 的點狀走廊內移動，不要求停在單格或收到每一個中間 cell。按下可在走廊內，但只有按下或按住移入 A 才顯示綠色 READY；起點周邊不等於已到 A。之後必須保持按住進入 B；peer 重繪第二列 `HOLD: return to A, then release` 後，必須收到返回 A 的 held motion，最後在 A 放開。UI 額外確認返回事件發生時提示 frame 已由 renderer ACK；釋放不能代替返回 motion。等待人工開始的總期限為 15 分鐘；正式持有交易仍維持原本 30 秒期限。失敗立即重繪紅色 FAILED，不把斷線後的本機反白算作站端操作。peer 獨立解析 canonical SGR bytes，拒絕修飾鍵、其他按鈕、重按、越界、順序缺漏及額外輸入；上限 256 motion 加一對 edge，不改正式輸入佇列／速率／交易期限。完成後還原 fixture、切到 1001，另需 PNG、Close acknowledged 與全部 owner join。測試包含合併取樣、不同區域落點及各個缺步負例；原生人工操作前不宣稱通過。探針的非預期 binary 診斷只顯示長度或單獨 Escape 的分類，不輸出任意輸入內容。
 
 probe 已收集的互動報告在 cleanup／peer 失敗時仍保存，強制 `status=failed`、`cleanup_completed=false`，未知 disconnect／join 欄位為 null；不能因可讀到報告或程序退出碼 0 而判通過。成功 cleanup 仍須 Close acknowledged，並保留原先互動判定。若 run 本身在建立報告前失敗，`cleanup.json` 仍獨立記錄，不虛構缺少的互動。
 
