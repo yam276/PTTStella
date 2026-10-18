@@ -241,7 +241,7 @@ impl Connection {
             scenario,
             probe::Scenario::MouseSamples(MouseSampleProbe::RoundTrip)
         ) {
-            bytes.extend_from_slice(b"\x1b[2;1H\x1b[2KHold A -> B -> A; no Shift\x1b[5;1H\x1b[2K\x1b[5;5H\x1b[1;33mA     B\x1b[0m\x1b[24;80H");
+            bytes.extend_from_slice(&probe::round_trip::scene());
         }
         let connection = Self::start_owned_probe(bytes, scenario)?;
         connection.keep_alive(false)?;

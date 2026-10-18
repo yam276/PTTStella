@@ -441,7 +441,15 @@ async fn run(
                         }
                     }
                     SurfaceEvent::StationMouseSample { sample, .. } => {
-                        if super::probe::mouse_case(surface_probe.as_deref()) {if checks.mouse_samples.len()<64 {checks.mouse_samples.push(sample.report);} else {checks.mouse_sample_overflow=true;}}
+                        if super::probe::mouse_case(surface_probe.as_deref()) {
+                            let round_trip = surface_probe.as_deref()==Some("mouse_round_trip");
+                            if checks.mouse_samples.len()<if round_trip {256} else {64} {checks.mouse_samples.push(sample.report);} else {checks.mouse_sample_overflow=true;}
+                            if round_trip && matches!(sample.report,pttstella::mouse::input::SampleReport::Motion(r) if (8..=23).contains(&r.col) && (7..=11).contains(&r.row) && r.button==Some(pttstella::mouse::Button::Left) && r.modifiers==pttstella::mouse::Modifiers::default()) {
+                                let view=receiver.borrow();
+                                let status=view.frame.glyphs.iter().filter(|g|g.row==1).map(|g|g.text.as_str()).collect::<String>();
+                                if screen.painted(&view) && status.starts_with("HOLD: return to A") {checks.mouse_return_painted=Some(view.frame.revision);}
+                            }
+                        }
                         let result = if !screen.mouse_sample_shown(&sample) || pending_paste.read().is_some() || keyboard_policy.status(&receiver.borrow().context()).pending {
                             Err(pttstella::msg!("station-mouse-stale"))
                         } else {
