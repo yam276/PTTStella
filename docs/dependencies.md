@@ -11,6 +11,7 @@
 | i18n-embed 0.16.0／i18n-embed-fl 0.10.1／rust-embed 8.13.0 | Fluent 翻譯載入、編譯期訊息／參數檢查及離線資源內嵌 | MIT；[i18n-embed](https://github.com/kellpossible/cargo-i18n)，MIT；[rust-embed](https://github.com/pyros2097/rust-embed) |
 | fluent-syntax 0.12.0（dev） | 以官方 AST 驗證兩語訊息／參數一致，不自行剖析 Fluent 語法 | Apache-2.0 OR MIT；[上游](https://github.com/projectfluent/fluent-rs) |
 | font-kit 0.14.3 | 背景列出 OS 已安裝字型家族；不複製字型或替代 WebView renderer | MIT OR Apache-2.0；[上游](https://github.com/servo/font-kit)、[API](https://docs.rs/font-kit/0.14.3/) |
+| dioxus-icons 0.1.0 | Dioxus 的 Lucide SVG 工具圖示 | MIT AND ISC；[上游與圖示授權](https://github.com/DioxusLabs/dioxus-icons) |
 | Dioxus 0.7.10 | Rust 桌面 UI 與系統 WebView | MIT OR Apache-2.0；[上游](https://github.com/DioxusLabs/dioxus) |
 | Tokio／base64 | 非同步橋接、PNG 匯出與合成畫面 probe 的傳輸 | MIT；[Tokio](https://tokio.rs/)，MIT OR Apache-2.0；[base64](https://docs.rs/base64/) |
 | rfd 0.17.2／tempfile 3.27.0 | 原生另存視窗與同目錄原子檔案替換 | MIT；[rfd](https://docs.rs/rfd/0.17.2/)，MIT OR Apache-2.0；[tempfile](https://docs.rs/tempfile/3.27.0/) |

@@ -304,7 +304,7 @@ pub(super) fn pixels_report(
         art_seam_pixels,
         art_zoom_seams,
         art_geometry,
-        hover_controls,
+        floating_tools,
         proportional_zoom,
         zoom_samples,
     } = pixels;
@@ -344,7 +344,7 @@ pub(super) fn pixels_report(
         && art_seam_pixels == 0
         && art_zoom_seams == [0, 0, 0]
         && art_geometry
-        && hover_controls
+        && floating_tools
         && proportional_zoom;
     std::fs::create_dir_all(path).map_err(|e| e.to_string())?;
     let encoded = png
@@ -373,7 +373,7 @@ pub(super) fn pixels_report(
     "fills_body":fills_body,"ansi_colours":ansi_colours,"colour_samples":colour_samples,
     "art_seam_pixels":art_seam_pixels,
     "art_zoom_seams":art_zoom_seams,"art_geometry":art_geometry,
-    "hover_controls":hover_controls,"proportional_zoom":proportional_zoom,"zoom_samples":zoom_samples,
+    "floating_tools":floating_tools,"proportional_zoom":proportional_zoom,"zoom_samples":zoom_samples,
     "settings_loaded":settings,
     "font_fallback_per_glyph":"not measured"});
     Ok(report)
@@ -386,7 +386,13 @@ pub(super) fn preview(probe: bool, media_origin: Option<&str>) -> Result<Vec<u8>
     bytes.extend_from_slice(b"\x1b[4;1H\x1b[31;44m\xa4\x1b[32;45m\xa4\x1b[0m  ");
     bytes.extend_from_slice(&encoding::encode("雙色字顯示預覽").map_err(|e| e.to_string())?);
     bytes.extend_from_slice(b"\x1b[7;1H");
-    bytes.extend_from_slice(&encoding::encode("正在連線 PTT…\r\n\r\n連線後，點一下畫面即可輸入帳號密碼。\r\n滑鼠移至上緣可顯示連線與等比例縮放工具。").map_err(|e| e.to_string())?);
+    bytes.extend_from_slice(
+        &encoding::encode(&format!(
+            "正在連線 PTT…\r\n\r\n連線後，點一下畫面即可輸入帳號密碼。\r\n{}",
+            pttstella::msg!("preview-tools")
+        ))
+        .map_err(|e| e.to_string())?,
+    );
     if probe {
         if let Some(origin) = media_origin {
             for (row, path) in [

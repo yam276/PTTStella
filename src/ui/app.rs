@@ -1,6 +1,7 @@
 //! Dioxus view and native window lifecycle wiring.
 use super::surface::{Options, PendingPaste, surface};
 use dioxus::prelude::*;
+use dioxus_icons::lucide::{Camera, Compass, Keyboard, Menu, Plug, Shield, Type};
 use pttstella::{
     connection::{Connection, Phase},
     screen::Screen,
@@ -156,21 +157,43 @@ pub fn app(props: AppProps) -> Element {
         main {
             div { class: "chrome", id: "chrome",
                 "data-attention": if fatal() || matches!(phase(), Phase::Error | Phase::Disconnected) { "true" } else { "false" },
-            header {
+                button { id: "tools-ball", class: "tools-ball", r#type: "button",
+                    "aria-label": pttstella::msg!("tools-toggle"), "aria-expanded": "false", "aria-controls": "tools-fan",
+                    title: pttstella::msg!("tools-drag-hint"), Menu { size: 26 }
+                }
+                nav { id: "tools-fan", class: "tools-fan", hidden: true, "aria-label": pttstella::msg!("tools-title"),
+                    ToolPetal { group: "navigate", label: pttstella::msg!("tools-navigate"), icon: rsx!{ Compass { size: 22 } } }
+                    ToolPetal { group: "display", label: pttstella::msg!("tools-display"), icon: rsx!{ Type { size: 22 } } }
+                    ToolPetal { group: "capture", label: pttstella::msg!("tools-capture"), icon: rsx!{ Camera { size: 22 } } }
+                    ToolPetal { group: "input", label: pttstella::msg!("tools-input"), icon: rsx!{ Keyboard { size: 22 } } }
+                    ToolPetal { group: "session", label: pttstella::msg!("tools-session"), icon: rsx!{ Plug { size: 22 } } }
+                    ToolPetal { group: "filters", label: pttstella::msg!("tools-filters"), icon: rsx!{ Shield { size: 22 } } }
+                }
+                if fatal() || matches!(phase(), Phase::Error | Phase::Disconnected) {
+                    output { class: "tools-alert", role: "status", "{message}" }
+                }
+            header { id: "tools-panel", hidden: true, "aria-label": pttstella::msg!("tools-title"),
                 div { class: "brand", "PTTStella" }
                 span { class: "status", title: "{message}", "{message}" }
+                section { "data-tools-group": "session",
                 button { disabled: fatal() || props.probe.is_some() || matches!(phase(), Phase::Connecting | Phase::Connected),
                     onclick: move |_| { if let Err(error) = connect.connect() { message.set(error); } }, {pttstella::msg!("connect")} }
                 button { disabled: fatal() || props.probe.is_some() || !matches!(phase(), Phase::Connecting | Phase::Connected),
                     onclick: move |_| { if let Err(error) = disconnect.disconnect() { message.set(error); } }, {pttstella::msg!("disconnect")} }
+                }
+                section { "data-tools-group": "display",
                 button { id: "zoom-out", "aria-label": pttstella::msg!("zoom-out"), "－" }
                 span { id: "zoom-level", "100%" }
                 button { id: "zoom-in", "aria-label": pttstella::msg!("zoom-in"), "＋" }
                 button { id: "zoom-fit", {pttstella::msg!("zoom-fit")} }
+                button { id: "font-settings", {pttstella::msg!("font-settings")} }
+                }
+                section { "data-tools-group": "capture",
                 button { id: "select-all", {pttstella::msg!("select-all")} }
                 button { id: "export-png", {pttstella::msg!("export-png")} }
                 button { id: "export-rows", disabled: true, title: pttstella::msg!("export-rows-hint"), {pttstella::msg!("export-rows")} }
-                button { id: "font-settings", {pttstella::msg!("font-settings")} }
+                }
+                section { "data-tools-group": "filters",
                 button { id: "filters-open", {pttstella::msg!("filters-title")} }
                 button { id: "filters-reveal", hidden: true, {pttstella::msg!("filters-reveal")} }
                 output { id: "filters-status", role: "status" }
@@ -182,14 +205,20 @@ pub fn app(props: AppProps) -> Element {
                         option { value: "off", {pttstella::msg!("close")} }
                     }
                 }
+                }
+                section { "data-tools-group": "input",
                 button { id: "vim-toggle", "aria-pressed": "false", {pttstella::msg!("vim-off")} }
                 button { id: "vim-once", hidden: true, {pttstella::msg!("vim-once-button")} }
                 output { id: "vim-status", role: "status" }
-                  button { id: "keep-alive", r#type: "button", "aria-pressed": "true", {pttstella::msg!("keepalive-on")} }
                 button { id: "station-mouse", r#type: "button", "aria-pressed": "true", title: pttstella::msg!("station-mouse-help"), {pttstella::msg!("station-mouse-on")} }
                 output { id: "station-mouse-status", role: "status" }
+                }
+                section { "data-tools-group": "session",
+                  button { id: "keep-alive", r#type: "button", "aria-pressed": "true", {pttstella::msg!("keepalive-on")} }
                 button { id: "login-open", disabled: !cfg!(target_os="macos"), {pttstella::msg!("login")} }
                 button { id: "login-stop", hidden: true, {pttstella::msg!("login-cancel-attempt")} }
+                }
+                section { "data-tools-group": "navigate",
                 button { id: "destination-open", {pttstella::msg!("destination-open")} }
                 button { id: "bookmarks-open", {pttstella::msg!("bookmarks-title")} }
                 button { id: "destination-stop", hidden: true, {pttstella::msg!("destination-stop")} }
@@ -199,6 +228,7 @@ pub fn app(props: AppProps) -> Element {
                     button { id: "browse-next", disabled: true, {pttstella::msg!("browse-next")} }
                 }
                 span { id: "browse-hint" }
+                }
             }
             }
             section { class: "workspace",
@@ -387,6 +417,16 @@ pub fn app(props: AppProps) -> Element {
                     button { id: "font-save", {pttstella::msg!("settings-save")} }
                 }
             }
+        }
+    }
+}
+
+#[component]
+fn ToolPetal(group: &'static str, label: String, icon: Element) -> Element {
+    rsx! {
+        button { class: "tools-petal", r#type: "button", "data-tools-target": group,
+            "aria-controls": "tools-panel", "aria-expanded": "false",
+            {icon} span { "{label}" }
         }
     }
 }

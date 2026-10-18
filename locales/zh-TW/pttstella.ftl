@@ -442,3 +442,14 @@ station-mouse-help = 依站端要求回報點擊、移動與滾輪；Shift 保�
 station-mouse-active = 滑鼠操作送至 PTT；Shift 可選字，Ctrl＋滾輪縮放。
 station-mouse-blocked = 站端滑鼠暫不可用或模式未支援；Shift 可選字，關閉可用本機導覽。
 station-mouse-local = 站端未要求滑鼠，目前使用本機導覽。
+
+tools-toggle = 開啟或收合工具
+tools-drag-hint = 點擊開啟工具；拖曳移動位置
+tools-title = 工具
+tools-navigate = 導覽
+tools-display = 顯示
+tools-capture = 擷取
+tools-input = 輸入
+tools-session = 連線
+tools-filters = 過濾
+preview-tools = 點擊浮球開啟工具，拖曳可移動位置。

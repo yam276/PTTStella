@@ -2,11 +2,24 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; }
 main { height: 100vh; position: relative; }
-.chrome { position: absolute; inset: 0 0 auto; height: 8px; z-index: 2; }
-.chrome.open, .chrome[data-attention="true"], .chrome:focus-within { height: auto; }
-header { min-height: 36px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 4px 8px; background: #161616; border-bottom: 1px solid #303030; font-size: 12px; opacity: 0; transform: translateY(-100%); pointer-events: none; }
-.chrome.open header, .chrome[data-attention="true"] header, .chrome:focus-within header { opacity: 1; transform: none; pointer-events: auto; }
-.chrome[data-attention="true"] .status { color: #d08080; }
+.chrome { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
+.chrome button, .chrome header, .chrome nav { pointer-events: auto; }
+.tools-ball { position: absolute; left: var(--tools-x, calc(100vw - 80px)); top: var(--tools-y, 65vh); width: 56px; height: 56px; padding: 0; border-radius: 50%; display: grid; place-items: center; color: #e3e5e8; background: rgba(48,51,58,.9); border: 1px solid #777b85; box-shadow: 0 4px 18px #0009, inset 0 0 0 6px #ffffff0a; touch-action: none; user-select: none; cursor: grab; }
+.tools-ball:active { cursor: grabbing; }
+.tools-ball:focus-visible, .tools-petal:focus-visible { outline: 2px solid #a8cef9; outline-offset: 3px; }
+.tools-ball svg, .tools-petal svg { pointer-events: none; }
+.tools-fan { position: absolute; left: var(--tools-x); top: var(--tools-y); width: 56px; height: 56px; }
+.tools-petal { position: absolute; left: var(--petal-x); top: var(--petal-y); width: 62px; min-height: 62px; padding: 7px 3px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 22px; font-size: 11px; background: #23262eee; border-color: #555c69; box-shadow: 0 3px 12px #0008; animation: tools-unfold 160ms ease-out both; }
+.tools-petal[aria-expanded="true"] { border-color: #9bb8dc; background: #354354; }
+.tools-fan[hidden], .chrome header[hidden], .chrome section[hidden] { display: none; }
+.chrome header { position: absolute; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px; background: #191c23f5; border: 1px solid #4a505d; border-radius: 16px; font-size: 13px; overflow: auto; box-shadow: 0 8px 30px #000a; }
+.chrome header section { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; }
+.chrome header button { padding: 7px 10px; border-radius: 7px; }
+.chrome header .brand { width: 100%; }
+.tools-alert { position: absolute; left: 16px; bottom: 16px; max-width: min(600px, calc(100vw - 104px)); font-size: 12px; color: #e5b6a6; background: #27201de8; padding: 8px 12px; border-radius: 8px; overflow-wrap: anywhere; }
+.chrome[data-attention="true"] .tools-ball { border-color: #d09b7b; }
+@keyframes tools-unfold { from { opacity: 0; transform: scale(.75); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .tools-petal { animation: none; } }
 .brand { font-weight: 500; }
 .status { flex: 1; min-width: 100px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #909090; }
 #browse-controls { display: inline-flex; gap: 6px; }
@@ -68,3 +81,7 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 #destination-dialog { overflow-y: auto; }
 #board-recent { display: flex; flex-wrap: wrap; gap: 6px; max-height: 9rem; overflow-y: auto; list-style: none; padding: 0; }
 #board-recent-note { font-size: 13px; }
+
+.chrome[data-tools-layout="compact"] .tools-fan { position: fixed; left: 16px; right: 16px; top: 80px; width: auto; height: min(180px, calc(100vh - 96px)); display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; overflow: auto; padding: 8px; background: #191c23f5; border: 1px solid #4a505d; border-radius: 16px; }
+.chrome[data-tools-layout="compact"] .tools-fan[hidden] { display: none; }
+.chrome[data-tools-layout="compact"] .tools-petal { position: static; width: 100%; }

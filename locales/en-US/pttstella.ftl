@@ -448,3 +448,14 @@ station-mouse-help = Report clicks, movement and wheel input as requested by the
 station-mouse-active = Mouse input goes to PTT. Hold Shift to select; Ctrl+wheel zooms.
 station-mouse-blocked = Station mouse is unavailable or its mode is unsupported. Hold Shift to select, or turn off for local navigation.
 station-mouse-local = The station has not requested mouse reports. Using local navigation.
+
+tools-toggle = Open or close tools
+tools-drag-hint = Click for tools; drag to move
+tools-title = Tools
+tools-navigate = Navigate
+tools-display = Display
+tools-capture = Capture
+tools-input = Input
+tools-session = Session
+tools-filters = Filters
+preview-tools = Click the floating button for tools; drag to move it.
