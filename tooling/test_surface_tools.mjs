@@ -10,22 +10,68 @@ function fixture({width=900,height=700,reduced=false}={}){
     const element=()=>({hidden:true,attrs:{},dataset:{},style:{setProperty(k,v){this[k]=v;}},
         setAttribute(k,v){this.attrs[k]=v;},focus(){document.activeElement=this;},
         contains(target){return target===this;}});
-    const root=element(),ball=element(),fan=element(),panel=element();
+    const root=element(),ball=element(),fan=element(),panel=element(),back=element();
     root.classList={add:v=>classes.add(v),remove:v=>classes.delete(v)};
     const petals=['navigate','display','capture','input','session','filters'].map(group=>{const p=element();p.dataset.toolsTarget=group;return p;});
     const groups=petals.map(p=>{const group=element();group.dataset.toolsGroup=p.dataset.toolsTarget;return group;});
     const document={activeElement:null,hidden:false,querySelector:()=>null},window={innerWidth:width,innerHeight:height};
     const captures=new Set();ball.setPointerCapture=id=>captures.add(id);ball.hasPointerCapture=id=>captures.has(id);ball.releasePointerCapture=id=>captures.delete(id);
     fan.querySelectorAll=()=>petals;fan.contains=target=>petals.includes(target);
-    panel.querySelectorAll=()=>groups;panel.querySelector=()=>null;
-    root.contains=target=>[root,ball,fan,panel,...petals,...groups].includes(target);
+    panel.querySelectorAll=()=>groups;panel.querySelector=selector=>selector==='#tools-back'?back:null;
+    root.contains=target=>[root,ball,fan,panel,back,...petals,...groups].includes(target);
     const menu=create({root,ball,fan,panel,window,document,prepare:()=>prepared++,restore:()=>restored++,
         raf:callback=>{frames.set(++next,callback);return next;},caf:id=>frames.delete(id),now:()=>clock,reduced:()=>reduced});
     function fire(target,type,values={}){const e={pointerId:1,button:0,buttons:1,isPrimary:true,clientX:820,clientY:455,detail:1,preventDefault(){this.prevented=true;},stopPropagation(){this.stopped=true;},...values};
         for(const [node,event,callback] of menu.bindings)if(node===target&&event===type)callback({...e,currentTarget:target});return e;}
     function advance(ms=16){clock+=ms;const queued=[...frames.values()];frames.clear();queued.forEach(fn=>fn(clock));}
-    return {menu,fire,advance,root,ball,fan,panel,petals,groups,window,document,captures,frames,counts:()=>({prepared,restored})};
+    return {menu,fire,advance,root,ball,fan,panel,back,petals,groups,window,document,captures,frames,counts:()=>({prepared,restored})};
 }
+const overlaps=(a,b)=>a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h;
+function openAt(f,x,y){
+    const start=f.menu.snapshot().point;
+    f.fire(f.ball,'pointerdown',{clientX:0,clientY:0});f.advance(40);
+    f.fire(f.ball,'pointerup',{clientX:x-start.x,clientY:y-start.y,buttons:0});f.fire(f.ball,'click');
+    f.fire(f.ball,'pointerdown');f.fire(f.ball,'pointerup');f.fire(f.ball,'click');
+}
+test('all six visible fan hit areas have a real gap rather than overlapping corner buttons',()=>{
+    const f=fixture();f.fire(f.ball,'click');
+    const rects=f.petals.map(p=>({x:Number.parseFloat(p.style['--petal-x']),y:Number.parseFloat(p.style['--petal-y']),w:62,h:62}));
+    for(let i=0;i<rects.length;i++)for(let j=i+1;j<rects.length;j++){
+        const padded={...rects[i],x:rects[i].x-4,y:rects[i].y-4,w:70,h:70};
+        assert.equal(overlaps(padded,rects[j]),false,`categories ${i} and ${j} need a gap`);
+    }
+});
+test('category panels replace the fan and return restores the selected category focus across resizing',()=>{
+    const f=fixture();f.fire(f.ball,'click');f.fire(f.petals[2],'click');
+    assert.equal(f.fan.hidden,true);assert.equal(f.panel.hidden,false);
+    f.ball.focus();f.fire(f.document,'keydown',{key:'ArrowDown'});assert.equal(f.document.activeElement,f.ball);
+    f.window.innerWidth=360;f.window.innerHeight=300;f.fire(f.window,'resize');
+    assert.equal(f.fan.hidden,true);assert.equal(f.panel.hidden,false);
+    f.fire(f.back,'click');assert.equal(f.panel.hidden,true);assert.equal(f.fan.hidden,false);
+    f.fire(f.panel,'click',{target:{closest:()=>f.back}}); // real click also bubbles through the old panel
+    assert.equal(f.document.activeElement,f.petals[2]);assert.ok(f.groups.every(g=>g.hidden));
+    f.fire(f.petals[1],'click');f.window.innerWidth=1040;f.window.innerHeight=740;f.fire(f.window,'resize');
+    assert.equal(f.fan.hidden,true);assert.equal(f.panel.hidden,false);
+    f.fire(f.back,'click');assert.equal(f.fan.hidden,false);assert.equal(f.panel.hidden,true);
+});
+test('visible fan/grid and reserved panel bounds never cover the stationary trigger or leave the viewport',()=>{
+    for(const [width,height] of [[320,240],[360,300],[500,420],[900,700],[1920,1080]]){
+        for(const x of [16,width/2-28,width-72])for(const y of [56,height/2,height-72]){
+            const f=fixture({width,height});openAt(f,x,y);
+            const point=f.menu.snapshot().point,ball={...point,w:56,h:56};
+            function check(rect){
+                assert.ok(rect.x>=16&&rect.y>=48&&rect.x+rect.w<=width-16+.001&&rect.y+rect.h<=height-16+.001,JSON.stringify({width,height,point,rect}));
+                assert.equal(overlaps(ball,rect),false,JSON.stringify({ball,rect}));
+            }
+            if(f.root.dataset.toolsLayout==='fan')for(const p of f.petals)check({x:point.x+Number.parseFloat(p.style['--petal-x']),y:point.y+Number.parseFloat(p.style['--petal-y']),w:62,h:62});
+            else check({x:Number.parseFloat(f.fan.style['--grid-x']),y:Number.parseFloat(f.fan.style['--grid-y']),w:Number.parseFloat(f.fan.style['--grid-width']),h:Number.parseFloat(f.fan.style['--grid-height'])});
+            f.fire(f.petals[0],'click');assert.equal(f.fan.hidden,true);
+            check({x:Number.parseFloat(f.panel.style.left),y:Number.parseFloat(f.panel.style.top),w:Number.parseFloat(f.panel.style.width),h:Number.parseFloat(f.panel.style.maxHeight)});
+            assert.deepEqual(f.menu.snapshot().point,point);
+            f.menu.destroy();assert.equal(f.menu.clean(),true);
+        }
+    }
+});
 test('click toggles a six-way fan, each category exposes its original controls, hover does nothing',()=>{
     const f=fixture();f.fire(f.root,'pointerenter');assert.equal(f.menu.open(),false);
     f.fire(f.ball,'click');assert.equal(f.fan.hidden,false);assert.equal(f.ball.attrs['aria-expanded'],'true');
@@ -113,7 +159,7 @@ test('an outside pointer closes tools and is consumed before the terminal path',
     assert.equal(f.menu.open(),false);assert.equal(prevented,true);assert.equal(stopped,true);
 });
 test('actions keep keyboard focus in chrome, while opening tools never requests selection removal',()=>{
-    const f=fixture();f.fire(f.ball,'click');const button={focus(){f.document.activeElement=this;}};
+    const f=fixture();f.fire(f.ball,'click');f.fire(f.petals[0],'click');const button={focus(){f.document.activeElement=this;}};
     f.fire(f.panel,'click',{target:{closest:()=>button}});assert.equal(f.document.activeElement,button);
     assert.equal(f.counts().prepared,1); // one cancellation hook, no second feature action
 });

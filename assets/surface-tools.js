@@ -4,6 +4,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
     now=()=>performance.now(),reduced=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches}) {
     const petals=[...fan.querySelectorAll('[data-tools-target]')];
     const groups=[...panel.querySelectorAll('[data-tools-group]')];
+    const backButton=panel.querySelector('#tools-back');
     let point={x:window.innerWidth-80,y:window.innerHeight*.65},drag=null,animation=0,stopped=false,opened=false,selected=null;
     let suppressClickUntil=-1,lastFrame=0,coastUntil=0,velocity={x:0,y:0};
     let viewportWidth=window.innerWidth;
@@ -35,24 +36,38 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
     function close(focus=false){opened=false;selected=null;root.classList.remove('open');fan.hidden=true;panel.hidden=true;
         ball.setAttribute('aria-expanded','false');petals.forEach(p=>p.setAttribute('aria-expanded','false'));
         changed();if(focus&&!stopped)restore();}
+    // Largest usable rectangle on one side of the stationary trigger. Both the
+    // grid fallback and the feature page reserve this space, including a gap.
+    function pageArea(){
+        const right=window.innerWidth-16,bottom=window.innerHeight-16;
+        return [
+            {x:16,y:48,w:point.x-28,h:bottom-48},
+            {x:point.x+68,y:48,w:right-point.x-68,h:bottom-48},
+            {x:16,y:48,w:right-16,h:point.y-60},
+            {x:16,y:point.y+68,w:right-16,h:bottom-point.y-68},
+        ].filter(r=>r.w>0&&r.h>0).sort((a,b)=>Math.min(330,b.w)*Math.min(260,b.h)-Math.min(330,a.w)*Math.min(260,a.h))[0];
+    }
     function layout(){
-        const compact=window.innerWidth<500||window.innerHeight<420;
-        root.dataset.toolsLayout=compact?'compact':'fan';
-        if(compact){panel.style.left='16px';panel.style.top='80px';panel.style.width=`${Math.max(1,window.innerWidth-32)}px`;panel.style.maxHeight=`${Math.max(32,window.innerHeight-96)}px`;return;}
-        const radius=Math.min(148,Math.max(92,(window.innerHeight-100)/2));
-        // Keep the trigger stationary so a second tap can close it in place.
-        // Only the fan's origin shifts to keep its 62px petals on screen.
-        const reach=radius*Math.sin(75*Math.PI/180);
-        const fanY=clamp(point.y,48+reach,window.innerHeight-78-reach);
+        const radius=148;
+        const fanY=clamp(point.y,48+radius,window.innerHeight-78-radius);
         const direction=point.x+28<window.innerWidth/2?1:-1;
-        petals.forEach((petal,index)=>{const angle=(-75+index*30)*Math.PI/180;
-            petal.style.setProperty('--petal-x',`${direction*Math.max(72,radius*Math.cos(angle))}px`);
-            petal.style.setProperty('--petal-y',`${fanY-point.y+radius*Math.sin(angle)}px`);});
-        const width=Math.min(330,window.innerWidth-32),height=Math.min(260,window.innerHeight-80);
-        const x=direction===1?point.x+radius+70:point.x-radius-width-14;
-        panel.style.left=`${clamp(x,16,window.innerWidth-width-16)}px`;
-        panel.style.top=`${clamp(fanY-height/2,48,window.innerHeight-height-16)}px`;
+        // A full semicircle gives the rectangular hit areas room at its ends.
+        // Offsetting its origin inward also keeps every category off the ball.
+        const positions=petals.map((_,index)=>{const angle=(-90+index*36)*Math.PI/180;
+            return {x:point.x+direction*(72+radius*Math.cos(angle)),y:fanY+radius*Math.sin(angle)};});
+        const fits=window.innerWidth>=500&&window.innerHeight>=420&&positions.every(p=>p.x>=16&&p.x+62<=window.innerWidth-16&&p.y>=48&&p.y+62<=window.innerHeight-16);
+        root.dataset.toolsLayout=fits?'fan':'compact';
+        petals.forEach((petal,index)=>{
+            petal.style.setProperty('--petal-x',`${positions[index].x-point.x}px`);
+            petal.style.setProperty('--petal-y',`${positions[index].y-point.y}px`);});
+        const area=pageArea();
+        if(!area){close();return;} // No usable content space in a collapsed host.
+        const width=Math.min(330,area.w),height=Math.min(260,area.h);
+        const x=clamp(point.x,area.x,area.x+area.w-width),y=clamp(point.y-height/2,area.y,area.y+area.h-height);
+        for(const [key,value] of Object.entries({x,y,width,height}))fan.style.setProperty(`--grid-${key}`,`${value}px`);
+        panel.style.left=`${x}px`;panel.style.top=`${y}px`;
         panel.style.width=`${width}px`;panel.style.maxHeight=`${height}px`;
+        fan.hidden=selected!==null;panel.hidden=selected===null;
     }
     function toggle(event){if(stopped)return;
         // WebViews may give the drag's generated click detail=0. Do not let it
@@ -60,13 +75,17 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
         // clear this bounded guard; a missing click cannot swallow a later AX action.
         const suppressed=now()<=suppressClickUntil;suppressClickUntil=-1;if(suppressed)return;
         halt();if(opened){close(true);return;}prepare(event);opened=true;layout();
-        root.classList.add('open');fan.hidden=false;ball.setAttribute('aria-expanded','true');ball.focus();changed();}
+        if(!opened)return;root.classList.add('open');ball.setAttribute('aria-expanded','true');ball.focus();changed();}
     function choose(event){if(stopped||!opened)return;
         selected=event.currentTarget.dataset.toolsTarget;
         groups.forEach(group=>group.hidden=group.dataset.toolsGroup!==selected);
         petals.forEach(p=>p.setAttribute('aria-expanded',String(p.dataset.toolsTarget===selected)));
-        panel.hidden=false;layout();if(root.dataset.toolsLayout==='compact')fan.hidden=true;
+        layout();
         panel.querySelector('section:not([hidden]) button:not(:disabled):not([hidden]),section:not([hidden]) select')?.focus();}
+    function back(){if(!opened||selected===null)return;
+        const previous=petals.find(p=>p.dataset.toolsTarget===selected);selected=null;
+        groups.forEach(group=>group.hidden=true);petals.forEach(p=>p.setAttribute('aria-expanded','false'));
+        layout();previous?.focus();changed();}
     function down(event){if(stopped||event.button!==0||!event.isPrimary||drag)return;
         count('presses');
         halt();suppressClickUntil=-1;prepare(event);
@@ -114,6 +133,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
         if(!opened)return;
         if(event.key==='Escape'){event.preventDefault();event.stopPropagation();close();ball.focus();}
         else if(event.key==='ArrowDown'||event.key==='ArrowUp'){
+            if(fan.hidden)return;
             if(!fan.contains(document.activeElement)&&document.activeElement!==ball)return;
             event.preventDefault();event.stopPropagation();const i=petals.indexOf(document.activeElement),step=event.key==='ArrowDown'?1:-1;
             petals[i<0?(step===1?0:petals.length-1):(i+step+petals.length)%petals.length].focus();}
@@ -123,11 +143,12 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
     function visibility(){if(document.hidden)cancel();}
     function panelAction(event){
         const button=event.target.closest?.('button');
-        if(opened&&button&&!document.querySelector('dialog[open]'))button.focus();
+        if(opened&&!panel.hidden&&button&&!document.querySelector('dialog[open]'))button.focus();
     }
     const bindings=[[ball,'pointerdown',down],[ball,'pointermove',move],[ball,'pointerup',up],
         [ball,'pointercancel',cancel],[ball,'lostpointercapture',lost],[ball,'click',toggle],
         ...petals.map(p=>[p,'click',choose]),[document,'pointerdown',outside,true],
+        ...(backButton?[[backButton,'click',back]]:[]),
         [panel,'click',panelAction],
         [document,'keydown',key,true],[window,'resize',resize],[window,'blur',cancel],[document,'visibilitychange',visibility]];
     place();close();
