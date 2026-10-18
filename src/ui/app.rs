@@ -158,7 +158,7 @@ pub fn app(props: AppProps) -> Element {
             div { class: "chrome", id: "chrome",
                 "data-attention": if fatal() || matches!(phase(), Phase::Error | Phase::Disconnected) { "true" } else { "false" },
                 button { id: "tools-ball", class: "tools-ball", r#type: "button",
-                    "aria-label": pttstella::msg!("tools-toggle"), "aria-expanded": "false", "aria-controls": "tools-fan",
+                    "aria-label": pttstella::msg!("tools-toggle"), "aria-expanded": "false", "aria-controls": "tools-fan tools-panel",
                     title: pttstella::msg!("tools-drag-hint"), Menu { size: 26 }
                 }
                 nav { id: "tools-fan", class: "tools-fan", hidden: true, "aria-label": pttstella::msg!("tools-title"),
@@ -173,6 +173,7 @@ pub fn app(props: AppProps) -> Element {
                     output { class: "tools-alert", role: "status", "{message}" }
                 }
             header { id: "tools-panel", hidden: true, "aria-label": pttstella::msg!("tools-title"),
+                button { id: "tools-back", r#type: "button", {pttstella::msg!("tools-back")} }
                 div { class: "brand", "PTTStella" }
                 span { class: "status", title: "{message}", "{message}" }
                 section { "data-tools-group": "session",
