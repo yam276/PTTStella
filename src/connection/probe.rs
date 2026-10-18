@@ -1,4 +1,5 @@
 //! Synthetic round trip through the production connection owner.
+pub(super) mod round_trip;
 use futures_util::{SinkExt, StreamExt};
 use tokio::{
     net::TcpListener,
@@ -47,7 +48,34 @@ where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
     match case {
-        MouseSampleProbe::Drag | MouseSampleProbe::RoundTrip | MouseSampleProbe::Motion => {
+        MouseSampleProbe::RoundTrip => {
+            let mut gesture = round_trip::Gesture::default();
+            let mut completed = false;
+            for _ in 0..258 {
+                let Some(Ok(Message::Binary(bytes))) = socket.next().await else {
+                    return Err("round trip expected bounded mouse input before Close".into());
+                };
+                match gesture.accept(&bytes)? {
+                    round_trip::Step::Continue => {}
+                    round_trip::Step::Redraw => socket
+                        .send(Message::Binary(round_trip::REDRAW.to_vec().into()))
+                        .await
+                        .map_err(|e| e.to_string())?,
+                    round_trip::Step::Complete => {
+                        completed = true;
+                        break;
+                    }
+                }
+            }
+            if !completed {
+                return Err("round trip exceeded its bounded gesture without release".into());
+            }
+            socket
+                .send(Message::Binary(article_page("articles")?.into()))
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+        MouseSampleProbe::Drag | MouseSampleProbe::Motion => {
             if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"\x1b[<0;5;5M")
             {
                 return Err("sample probe expected the anchor left press".into());
@@ -64,59 +92,42 @@ where
             }
             // Independent allowed coordinates for one horizontal native gesture.
             // The final cell is mandatory; intermediate cadence is OS dependent.
-            let allowed: &[&[u8]] =
-                if matches!(case, MouseSampleProbe::Drag | MouseSampleProbe::RoundTrip) {
-                    &[
-                        b"\x1b[<32;5;5M",
-                        b"\x1b[<32;6;5M",
-                        b"\x1b[<32;7;5M",
-                        b"\x1b[<32;8;5M",
-                        b"\x1b[<32;9;5M",
-                        b"\x1b[<32;10;5M",
-                        b"\x1b[<32;11;5M",
-                    ]
-                } else {
-                    &[
-                        b"\x1b[<35;5;5M",
-                        b"\x1b[<35;6;5M",
-                        b"\x1b[<35;7;5M",
-                        b"\x1b[<35;8;5M",
-                        b"\x1b[<35;9;5M",
-                        b"\x1b[<35;10;5M",
-                        b"\x1b[<35;11;5M",
-                    ]
-                };
+            let allowed: &[&[u8]] = if matches!(case, MouseSampleProbe::Drag) {
+                &[
+                    b"\x1b[<32;5;5M",
+                    b"\x1b[<32;6;5M",
+                    b"\x1b[<32;7;5M",
+                    b"\x1b[<32;8;5M",
+                    b"\x1b[<32;9;5M",
+                    b"\x1b[<32;10;5M",
+                    b"\x1b[<32;11;5M",
+                ]
+            } else {
+                &[
+                    b"\x1b[<35;5;5M",
+                    b"\x1b[<35;6;5M",
+                    b"\x1b[<35;7;5M",
+                    b"\x1b[<35;8;5M",
+                    b"\x1b[<35;9;5M",
+                    b"\x1b[<35;10;5M",
+                    b"\x1b[<35;11;5M",
+                ]
+            };
             let mut final_cell = false;
-            let mut returned = false;
             let mut completed = false;
             for _ in 0..16 {
                 let Some(Ok(Message::Binary(bytes))) = socket.next().await else {
                     return Err("sample probe expected bounded native cell motion".into());
                 };
                 if allowed.contains(&bytes.as_ref()) {
-                    if !final_cell
-                        && bytes.as_ref() == allowed[6]
-                        && matches!(case, MouseSampleProbe::RoundTrip)
-                    {
-                        socket
-                            .send(Message::Binary(
-                                b"\x1b[2;1H\x1b[2KHOLD: return to anchor".to_vec().into(),
-                            ))
-                            .await
-                            .map_err(|e| e.to_string())?;
-                    }
-                    returned |= final_cell && bytes.as_ref() == allowed[0];
                     final_cell |= bytes.as_ref() == allowed[6];
                     if final_cell && matches!(case, MouseSampleProbe::Motion) {
                         completed = true;
                         break;
                     }
                 } else if final_cell
-                    && (matches!(case, MouseSampleProbe::Drag)
-                        && bytes.as_ref() == b"\x1b[<0;11;5m"
-                        || matches!(case, MouseSampleProbe::RoundTrip)
-                            && returned
-                            && bytes.as_ref() == b"\x1b[<0;5;5m")
+                    && matches!(case, MouseSampleProbe::Drag)
+                    && bytes.as_ref() == b"\x1b[<0;11;5m"
                 {
                     completed = true;
                     break;
@@ -131,12 +142,6 @@ where
                 return Err(
                     "sample probe never completed its final native cell and required edge".into(),
                 );
-            }
-            if matches!(case, MouseSampleProbe::RoundTrip) {
-                socket
-                    .send(Message::Binary(article_page("articles")?.into()))
-                    .await
-                    .map_err(|e| e.to_string())?;
             }
         }
         MouseSampleProbe::Wheel => {

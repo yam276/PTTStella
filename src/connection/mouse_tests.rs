@@ -50,7 +50,6 @@ fn motion(view: &View, id: u64, col: usize) -> Sample {
 async fn native_sample_peers_require_their_exact_final_gesture_and_acknowledge_close() {
     for case in [
         MouseSampleProbe::Drag,
-        MouseSampleProbe::RoundTrip,
         MouseSampleProbe::Motion,
         MouseSampleProbe::Wheel,
     ] {
@@ -60,23 +59,6 @@ async fn native_sample_peers_require_their_exact_final_gesture_and_acknowledge_c
             view.received > 0 && !view.output_pending
         })
         .await;
-        if matches!(case, MouseSampleProbe::RoundTrip) {
-            let anchors = start
-                .frame
-                .glyphs
-                .iter()
-                .filter(|glyph| glyph.row == 4 && matches!(glyph.text.as_str(), "A" | "B"))
-                .map(|glyph| {
-                    (
-                        glyph.col,
-                        glyph.text.as_str(),
-                        glyph.left.fg,
-                        glyph.left.bright,
-                    )
-                })
-                .collect::<Vec<_>>();
-            assert_eq!(anchors, [(4, "A", 3, true), (10, "B", 3, true)]);
-        }
         let sequence: &[&[u8]] = match case {
             MouseSampleProbe::Drag => &[b"\x1b[<0;5;5M", b"\x1b[<32;11;5M", b"\x1b[<0;11;5m"],
             MouseSampleProbe::RoundTrip => &[
@@ -132,15 +114,60 @@ async fn native_round_trip_peer_requires_return_motion_before_its_release() {
     })
     .await;
     for bytes in [
-        b"\x1b[<0;5;5M".as_slice(),
-        b"\x1b[<32;11;5M",
-        b"\x1b[<0;5;5m",
+        b"\x1b[<0;10;9M".as_slice(),
+        b"\x1b[<32;50;9M",
+        b"\x1b[<0;10;9m",
     ] {
         connection.input(start.generation, bytes.to_vec()).unwrap();
     }
     wait(&connection, |view| view.phase == Phase::Error).await;
     let error = connection.shutdown().await.unwrap_err();
-    assert!(error.contains("rejected unexpected input"), "{error}");
+    assert!(error.contains("requires held motion"), "{error}");
+}
+
+#[tokio::test]
+async fn native_round_trip_regions_require_redraw_return_and_close_without_extra_input() {
+    let connection = Connection::start_mouse_samples_probe(MouseSampleProbe::RoundTrip).unwrap();
+    connection.connect().unwrap();
+    let start = wait(&connection, |view| {
+        view.received > 0 && !view.output_pending
+    })
+    .await;
+    for (col, row, bg) in [(8, 7, 3), (23, 11, 3), (48, 7, 6), (63, 11, 6)] {
+        let glyph = start
+            .frame
+            .glyphs
+            .iter()
+            .find(|g| g.col == col && g.row == row)
+            .unwrap();
+        assert_eq!(glyph.left.bg, bg);
+    }
+    for bytes in [b"\x1b[<0;10;9M".as_slice(), b"\x1b[<32;64;12M"] {
+        connection.input(start.generation, bytes.to_vec()).unwrap();
+    }
+    let redraw = wait(&connection, |view| {
+        view.frame.revision > start.frame.revision && !view.output_pending
+    })
+    .await;
+    let status = redraw
+        .frame
+        .glyphs
+        .iter()
+        .filter(|g| g.row == 1)
+        .map(|g| g.text.as_str())
+        .collect::<String>();
+    assert!(status.starts_with("HOLD: return to A"), "{status}");
+    for bytes in [b"\x1b[<32;24;12M".as_slice(), b"\x1b[<0;10;9m"] {
+        connection.input(start.generation, bytes.to_vec()).unwrap();
+    }
+    wait(&connection, |view| {
+        view.mouse.modes.tracking() == Tracking::Highlight && !view.output_pending
+    })
+    .await;
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
 }
 #[tokio::test]
 async fn mouse_motion_preserves_a_following_click_and_owned_drag_across_redraw() {

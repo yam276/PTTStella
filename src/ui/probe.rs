@@ -41,6 +41,7 @@ pub(super) struct Checks {
     pub(super) mouse_edges: Vec<pttstella::mouse::Report>,
     pub(super) mouse_samples: Vec<pttstella::mouse::input::SampleReport>,
     pub(super) mouse_sample_overflow: bool,
+    pub(super) mouse_return_painted: Option<u64>,
     pub(super) mouse_cancels: usize,
     pub(super) mouse_copies: usize,
     pub(super) mouse_toggles: Vec<bool>,
@@ -99,6 +100,7 @@ impl Checks {
     pub(super) fn mouse_observations(&self) -> Value {
         serde_json::json!({"reports":self.mouse_reports(),"edges":self.mouse_edges,
             "samples":self.mouse_samples,"sample_overflow":self.mouse_sample_overflow,
+            "return_after_redraw":self.mouse_return_painted,
             "cancels":self.mouse_cancels,"copies":self.mouse_copies,
             "toggles":self.mouse_toggles,"navigation_requests":self.navigation_requests})
     }
@@ -130,17 +132,17 @@ impl Checks {
             "mouse_motion" => None,
             _ => return false,
         };
-        let returned = case != "mouse_round_trip"
-            || self
-                .mouse_samples
-                .iter()
-                .position(|sample| matches!(sample,SampleReport::Motion(r) if r.col==10))
-                .is_some_and(|at| {
-                    self.mouse_samples[at + 1..]
-                        .iter()
-                        .any(|sample| matches!(sample,SampleReport::Motion(r) if r.col==4))
-                });
-        returned && self.mouse_reports()==[(Left,Press),(Left,Release)]
+        if case == "mouse_round_trip" {
+            let in_a = |col, row| (8..=23).contains(&col) && (7..=11).contains(&row);
+            return self.mouse_return_painted.is_some()
+                && self.mouse_reports()==[(Left,Press),(Left,Release)]
+                && self.mouse_edges.iter().all(|edge| in_a(edge.col,edge.row) && edge.modifiers==Modifiers::default())
+                && self.mouse_samples.iter().all(|sample| matches!(sample,SampleReport::Motion(r) if (4..=67).contains(&r.col) && (5..=13).contains(&r.row) && r.button==Some(Left) && r.modifiers==Modifiers::default()))
+                && self.mouse_samples.iter().position(|sample| matches!(sample,SampleReport::Motion(r) if (48..=63).contains(&r.col) && (7..=11).contains(&r.row)))
+                    .is_some_and(|at| self.mouse_samples[at+1..].iter().any(|sample| matches!(sample,SampleReport::Motion(r) if in_a(r.col,r.row))))
+                && matches!(self.mouse_samples.last(),Some(SampleReport::Motion(r)) if in_a(r.col,r.row));
+        }
+        self.mouse_reports()==[(Left,Press),(Left,Release)]
             && self.mouse_samples.iter().all(|sample|matches!(sample,SampleReport::Motion(r) if (4..=10).contains(&r.col) && r.row==4 && r.button==button && r.modifiers==Modifiers::default()))
             && self.mouse_samples.iter().any(|sample|matches!(sample,SampleReport::Motion(r) if r.col==10))
     }
@@ -506,6 +508,57 @@ pub(super) fn sgr66_sample(modern: bool) -> Result<Vec<u8>, String> {
 mod sample_tests {
     use super::*;
     #[test]
+    fn round_trip_requires_regions_in_order_painted_return_and_both_edges() {
+        use pttstella::mouse::{
+            Action, Button, Modifiers, MotionReport, Report, input::SampleReport,
+        };
+        let mut checks = Checks {
+            export_checked: true,
+            ..Checks::default()
+        };
+        checks.mouse_edges = vec![
+            Report {
+                col: 9,
+                row: 8,
+                button: Button::Left,
+                action: Action::Press,
+                modifiers: Modifiers::default(),
+            },
+            Report {
+                col: 22,
+                row: 10,
+                button: Button::Left,
+                action: Action::Release,
+                modifiers: Modifiers::default(),
+            },
+        ];
+        let motion = |col, row| {
+            SampleReport::Motion(MotionReport {
+                col,
+                row,
+                button: Some(Button::Left),
+                modifiers: Modifiers::default(),
+            })
+        };
+        checks.mouse_samples = vec![motion(30, 6), motion(63, 11), motion(23, 11)];
+        assert!(!checks.mouse_samples_passed("mouse_round_trip")); // no painted return
+        checks.mouse_return_painted = Some(42);
+        assert!(checks.mouse_samples_passed("mouse_round_trip"));
+        checks.mouse_samples.pop();
+        assert!(!checks.mouse_samples_passed("mouse_round_trip")); // release alone is insufficient
+        checks.mouse_samples = vec![motion(23, 11), motion(63, 11)];
+        assert!(!checks.mouse_samples_passed("mouse_round_trip")); // reversed order
+        checks.mouse_samples = vec![motion(63, 11), motion(23, 11)];
+        checks.mouse_edges[1].col = 48;
+        assert!(!checks.mouse_samples_passed("mouse_round_trip")); // release outside A
+        checks.mouse_edges[1].col = 22;
+        checks.mouse_cancels = 1;
+        assert!(!checks.mouse_samples_passed("mouse_round_trip"));
+        checks.mouse_cancels = 0;
+        checks.mouse_sample_overflow = true;
+        assert!(!checks.mouse_samples_passed("mouse_round_trip"));
+    }
+    #[test]
     fn mouse_observations_preserve_grid_coordinates_and_modifiers_in_failed_reports() {
         use pttstella::mouse::{Action, Button, Modifiers, Report};
         let mut checks = Checks::default();
@@ -528,7 +581,7 @@ mod sample_tests {
             serde_json::json!({
                 "reports":[["left","press"]],
                 "edges":[{"col":17,"row":8,"button":"left","action":"press","modifiers":{"shift":false,"alt":true,"ctrl":false}}],
-                "samples":[],"sample_overflow":false,"cancels":0,"copies":0,"toggles":[],"navigation_requests":0
+                "samples":[],"sample_overflow":false,"return_after_redraw":null,"cancels":0,"copies":0,"toggles":[],"navigation_requests":0
             })
         );
     }

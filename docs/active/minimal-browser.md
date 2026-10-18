@@ -576,3 +576,6 @@ T1 驗證 fmt／Clippy、核心測試及生產 replay；T2 需要真實 backend 
 - 實站：獨立 `--probe-live` 成功連上 WSS，收到 4,397 bytes 並在同一生產 Screen 確認登入前提示，未送帳密，之後關閉並 join worker。報告不保存原始流量；這不是人工登入或登入後操作證據。
 
 使用者下一步：啟動正常視窗 → 自動連上 PTT → 人工登入 → 確認站端登入後畫面 → 斷線。使用者截圖可觀察到文章閱讀畫面與 ANSI Art 接縫；本次修正在自製合成案例驗證，未錄製私人 session。實機 IME、原生關窗操作及 macOS／Linux 尚未人工驗證，跨 DPI 視覺相容性尚無完整判定。沒有宣稱效能改善，CPU／process-family peak memory 與完整任務 token 成本未量測。[依賴來源](../dependencies.md) 為公開套件。
+
+
+2026-10-18 測試改善進行中：兩次人工單格 A/B 往返的 UI 觀察均有左鍵 held motion，但 samples 分別跨過指定 B 格至 col 11，peer 拒絕後未顯示 HOLD；保留各次失敗與 cleanup false，不能以本機反白或 PNG 按鈕可用算通過。改為明示 A/B 區域及有界走廊，仍要求 press A → held B → 提示重繪 → held A → release A；UI 另驗返回時提示已繪製，服務端仍獨立檢查 SGR bytes 與 Close。fmt、desktop lib 128 項、desktop bin 46 項、desktop all-targets Clippy、JS 60 項、core 與 docs 通過。新原生驗證待執行，不取代既有失敗紀錄。
