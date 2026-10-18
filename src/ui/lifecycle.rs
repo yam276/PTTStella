@@ -16,11 +16,20 @@ pub(super) struct Resources {
     pub(super) login: Option<Job>,
     pub(super) commands: Pending,
     pub(super) files: Files,
+    pub(super) tools: Option<super::protocol::ToolsObservation>,
 }
 
 #[derive(serde::Deserialize)]
 struct RendererFinished {
     clean: bool,
+    #[serde(default)]
+    tools: Option<super::protocol::ToolsObservation>,
+}
+impl RendererFinished {
+    fn acknowledge(mut self, stopped: Option<bool>) -> Self {
+        self.clean = stopped.unwrap_or(self.clean) && self.clean;
+        self
+    }
 }
 
 /// Wait without dropping overdue cleanup. OS credential prompts cannot be
@@ -37,7 +46,7 @@ async fn retained_wait<T>(
     }
 }
 
-async fn renderer(mut eval: document::Eval) -> Result<bool, String> {
+async fn renderer(mut eval: document::Eval) -> Result<RendererFinished, String> {
     let _ = eval.send(Packet::Stop);
     // A second, static control query does not depend on the surface data channel.
     let interrupt =
@@ -53,7 +62,7 @@ async fn renderer(mut eval: document::Eval) -> Result<bool, String> {
                     let result = result.map_err(|e|pttstella::msg!("cleanup-eval-unconfirmed", e = e.to_string()))?;
                     // The returned value is a second acknowledgement from the
                     // same finally block if joining races its Stopped message.
-                    return Ok::<bool, String>(acknowledged.unwrap_or(result.clean) && result.clean);
+                    return Ok::<RendererFinished, String>(result.acknowledge(acknowledged));
                 },
                 event = eval.recv::<serde_json::Value>(), if receiving => match event {
                     Ok(value) if value["kind"] == "stopped" => acknowledged = value["clean"].as_bool(),
@@ -64,7 +73,7 @@ async fn renderer(mut eval: document::Eval) -> Result<bool, String> {
         }
     });
     match finished {
-        Ok(clean) => Ok(clean),
+        Ok(finished) => Ok(finished),
         Err(error) => Err(pttstella::msg!(
             "cleanup-stop-error",
             error = error,
@@ -101,7 +110,10 @@ impl Resources {
         let render = async {
             match self.eval.take() {
                 Some(eval) => renderer(eval).await,
-                None => Ok(true), // Preflight failed before JS was created.
+                None => Ok(RendererFinished {
+                    clean: true,
+                    tools: None,
+                }), // Preflight failed before JS was created.
             }
         };
         let credentials = async {
@@ -125,8 +137,9 @@ impl Resources {
             Duration::from_secs(5),
         )
         .await;
-        let renderer = renderer.and_then(|clean| {
-            if clean {
+        let renderer = renderer.and_then(|finished| {
+            self.tools = finished.tools;
+            if finished.clean {
                 Ok(())
             } else {
                 Err(pttstella::msg!("cleanup-listeners-stopped"))
@@ -150,6 +163,22 @@ mod tests {
     use super::*;
     use std::{cell::Cell, rc::Rc};
     use tokio::sync::oneshot;
+    #[test]
+    fn joined_renderer_keeps_probe_observations_when_stopped_notification_races() {
+        let tools = serde_json::json!({"presses":3,"moves":5,"drag_releases":1,"coast_frames":8,"max_coast_distance":92.0,"last_release":null});
+        for (stopped, joined, clean) in [
+            (None, true, true),
+            (Some(true), true, true),
+            (Some(false), true, false),
+            (Some(true), false, false),
+        ] {
+            let result: RendererFinished =
+                serde_json::from_value(serde_json::json!({"clean":joined,"tools":tools})).unwrap();
+            let result = result.acknowledge(stopped);
+            assert_eq!(result.clean, clean);
+            assert_eq!(serde_json::to_value(result.tools).unwrap(), tools);
+        }
+    }
 
     #[tokio::test]
     async fn overdue_cleanup_keeps_ownership_until_acknowledged() {

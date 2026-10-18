@@ -68,6 +68,7 @@ let hoveredArticle=null,released=null,clickSequenceAction=false,navigationLocked
 let exportBusy=false, exportTask=null;
 let keepAliveGate=null;
 let tools=null;
+let toolsProbeEnabled=false;
 const send=value=>{ sent++; dioxus.send(value); };
 const stamp=()=>({generation,revision,input_epoch:latest?.input_epoch??0});
 const sameStamp=(a,b)=>a.generation===b.generation&&a.revision===b.revision&&a.input_epoch===b.input_epoch;
@@ -690,6 +691,7 @@ function revokeSurface(){
 const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
 let cleanupClean=false;
 function runSurfaceProbe(mode){
+            toolsProbeEnabled=true;
             if(mode==="decode")send({kind:"synthetic_invalid_event"});
             else if(mode==="painted")send({kind:"painted",presentation:latest.presentation,revision:revision+100,generation});
             else if(mode==="renderer_error")throw new Error("synthetic renderer failure");
@@ -787,6 +789,6 @@ finally {
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
     cleanupClean=mediaClean&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
         &&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&destinationUi.clean()&&bookmarksUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
-    try {send({kind:"stopped",clean:cleanupClean});} catch(_) { /* join still acknowledges cleanup */ }
+    try {send({kind:"stopped",clean:cleanupClean,...(toolsProbeEnabled?{tools:tools.observations()}:{})});} catch(_) { /* join still acknowledges cleanup */ }
 }
-return {clean:cleanupClean};
+return {clean:cleanupClean,tools:toolsProbeEnabled?tools.observations():null};

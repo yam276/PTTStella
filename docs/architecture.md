@@ -94,3 +94,5 @@ Connection 同時擁有防閒置的單調時鐘、預設開啟狀態、UI watch 
 按鈕登入的 prompt／容量屬 login 核心，Connection 擁有單次等待與送出，Keychain worker 擁有 OS 存取與清理；UI 不接收已存密碼。安全儲存與驗證邊界見 [登入契約](login.md)。
 
 關閉視窗／⌘Q 先停止新互動並立即要求 Connection 結束；網路 owner 送 WebSocket 1000 正常關閉碼，持續讀取至站端回覆與底層關閉，總期限兩秒；依 [Tungstenite 關閉契約](https://docs.rs/tungstenite/0.28.0/tungstenite/protocol/struct.WebSocket.html#method.close) 驅動完整握手。回報區分 acknowledged、peer_closed_without_reply（未回覆 Close 即結束底層連線）、unconfirmed 與 no_connection，重複 shutdown 沿用已完成結果；沒有把送出 Close 當成站端已確認。renderer／Keychain 與網路 worker 都 join 後才完成 App 關閉。這表示 WebSocket 對端的關閉結果，不宣稱 PTT 線上名單即時更新。
+
+合成 probe 的浮球放手觀察附在 renderer finally 的具型別 join 回覆，由同一 Resources 清理 owner 保留；Stopped 通知和 join 的先後不會遺失觀察，也不能把失敗的清理改成成功。正常模式不保存軌跡或觀察檔。

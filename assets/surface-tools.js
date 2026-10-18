@@ -6,6 +6,9 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
     const groups=[...panel.querySelectorAll('[data-tools-group]')];
     let point={x:window.innerWidth-80,y:window.innerHeight*.65},drag=null,animation=0,stopped=false,opened=false,selected=null;
     let suppressClick=false,lastFrame=0,coastUntil=0,velocity={x:0,y:0};
+    let viewportWidth=window.innerWidth;
+    const observations={presses:0,moves:0,drag_releases:0,coast_frames:0,max_coast_distance:0,last_release:null};
+    const count=key=>observations[key]=Math.min(65535,observations[key]+1);
     const bounds=()=>({left:16,right:Math.max(16,window.innerWidth-72),top:Math.min(56,Math.max(0,window.innerHeight-72)),bottom:Math.max(16,window.innerHeight-72)});
     const clamp=(value,min,max)=>Math.max(min,Math.min(Math.max(min,max),value));
     function place(){const b=bounds();point.x=clamp(point.x,b.left,b.right);point.y=clamp(point.y,b.top,b.bottom);
@@ -15,13 +18,16 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
     function frame(time){animation=0;if(stopped||drag)return;
         const dt=Math.min(32,Math.max(0,time-lastFrame));lastFrame=time;
         if(time<coastUntil&&Math.hypot(velocity.x,velocity.y)>.025){
+            count('coast_frames');
             const b=bounds(),next={x:point.x+velocity.x*dt,y:point.y+velocity.y*dt};
             if(next.x<b.left||next.x>b.right)velocity.x=0;
             if(next.y<b.top||next.y>b.bottom)velocity.y=0;
-            point=next;velocity.x*=Math.exp(-dt/140);velocity.y*=Math.exp(-dt/140);place();
+            point=next;velocity.x*=Math.exp(-dt/220);velocity.y*=Math.exp(-dt/220);place();
+            const release=observations.last_release;
+            if(release)observations.max_coast_distance=Math.max(observations.max_coast_distance,Math.hypot(point.x-release.x,point.y-release.y));
         }else{
             const b=bounds(),goal=point.x+28<window.innerWidth/2?b.left:b.right;
-            point.x+=(goal-point.x)*(1-Math.exp(-dt/65));place();
+            point.x+=(goal-point.x)*(1-Math.exp(-dt/110));place();
             if(Math.abs(goal-point.x)<.5){point.x=goal;place();return;}
         }
         animation=raf(frame);
@@ -55,22 +61,43 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
         panel.hidden=false;layout();if(root.dataset.toolsLayout==='compact')fan.hidden=true;
         panel.querySelector('section:not([hidden]) button:not(:disabled):not([hidden]),section:not([hidden]) select')?.focus();}
     function down(event){if(stopped||event.button!==0||!event.isPrimary||drag)return;
+        count('presses');
         halt();suppressClick=false;prepare(event);
-        drag={id:event.pointerId,x:event.clientX,y:event.clientY,start:{...point},last:{x:event.clientX,y:event.clientY,time:now()},moved:false};
+        drag={id:event.pointerId,x:event.clientX,y:event.clientY,start:{...point},history:[{...point,time:now()}],moved:false};
         changed();
         ball.setPointerCapture(event.pointerId);event.preventDefault();event.stopPropagation();}
     function move(event){if(!drag||event.pointerId!==drag.id)return;
         if(!(event.buttons&1)){cancel();return;}
-        const time=now(),elapsed=Math.max(1,time-drag.last.time),dx=event.clientX-drag.x,dy=event.clientY-drag.y;
-        drag.moved ||= Math.hypot(dx,dy)>6;
-        if(drag.moved){close();point={x:drag.start.x+dx,y:drag.start.y+dy};place();
-            velocity={x:clamp((event.clientX-drag.last.x)/elapsed,-1.5,1.5),y:clamp((event.clientY-drag.last.y)/elapsed,-1.5,1.5)};}
-        drag.last={x:event.clientX,y:event.clientY,time};event.preventDefault();event.stopPropagation();}
+        count('moves');
+        track(event);event.preventDefault();event.stopPropagation();}
+    function track(event){
+        const time=now(),dx=event.clientX-drag.x,dy=event.clientY-drag.y;
+        if(!drag.moved&&Math.hypot(dx,dy)>6){drag.moved=true;close();}
+        if(!drag.moved)return;
+        point={x:drag.start.x+dx,y:drag.start.y+dy};place();
+        // Keep recent geometry, including the pointerup endpoint. Equal-time
+        // samples replace their predecessor instead of inventing a 1ms velocity.
+        const history=drag.history;
+        if(history.at(-1).time===time)history.pop();
+        history.push({...point,time});
+        drag.history=history.filter(sample=>time-sample.time<=120).slice(-16);
+    }
+    function launchVelocity(history){
+        if(history.length<2)return {x:0,y:0};
+        const origin=history[0].time,n=history.length;
+        const mean=history.reduce((sum,s)=>({t:sum.t+s.time-origin,x:sum.x+s.x,y:sum.y+s.y}),{t:0,x:0,y:0});
+        mean.t/=n;mean.x/=n;mean.y/=n;
+        let variance=0,x=0,y=0;
+        for(const sample of history){const dt=sample.time-origin-mean.t;variance+=dt*dt;x+=dt*(sample.x-mean.x);y+=dt*(sample.y-mean.y);}
+        return variance>0?{x:clamp(x/variance,-2,2),y:clamp(y/variance,-2,2)}:{x:0,y:0};
+    }
     function releaseCapture(id){if(ball.hasPointerCapture(id))ball.releasePointerCapture(id);}
     function up(event){if(!drag||event.pointerId!==drag.id||event.button!==0)return;
-        const held=drag;drag=null;releaseCapture(held.id);suppressClick=held.moved;
-        if(held.moved){if(now()-held.last.time>100)velocity={x:0,y:0};
-            if(reduced()){dock();}else{lastFrame=now();coastUntil=lastFrame+650;animation=raf(frame);}}
+        track(event);const held=drag;drag=null;releaseCapture(held.id);suppressClick=held.moved;
+        if(held.moved){velocity=launchVelocity(held.history);const reduceMotion=reduced();
+            count('drag_releases');observations.coast_frames=0;observations.max_coast_distance=0;
+            observations.last_release={...point,vx:velocity.x,vy:velocity.y,reduced:reduceMotion,samples:held.history.length};
+            if(reduceMotion){dock();}else{lastFrame=now();coastUntil=lastFrame+900;animation=raf(frame);}}
         changed();event.preventDefault();event.stopPropagation();}
     function cancel(){if(drag){const id=drag.id;drag=null;suppressClick=true;releaseCapture(id);}halt();close();place();}
     function lost(event){if(drag?.id===event.pointerId)cancel();}
@@ -82,7 +109,8 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
             event.preventDefault();event.stopPropagation();const i=petals.indexOf(document.activeElement),step=event.key==='ArrowDown'?1:-1;
             petals[i<0?(step===1?0:petals.length-1):(i+step+petals.length)%petals.length].focus();}
     }
-    function resize(){halt();if(drag)cancel();place();if(opened)layout();}
+    function resize(){const left=point.x+28<viewportWidth/2;viewportWidth=window.innerWidth;
+        halt();if(drag)cancel();place();if(opened)layout();else{const b=bounds();point.x=left?b.left:b.right;place();}}
     function visibility(){if(document.hidden)cancel();}
     function panelAction(event){
         const button=event.target.closest?.('button');
@@ -95,6 +123,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
         [document,'keydown',key,true],[window,'resize',resize],[window,'blur',cancel],[document,'visibilitychange',visibility]];
     place();close();
     return {bindings,close,open:()=>opened,busy:()=>opened||!!drag,destroy(){stopped=true;cancel();},
+        observations:()=>({...observations,last_release:observations.last_release?{...observations.last_release}:null}),
         clean:()=>stopped&&!animation&&!drag&&!opened,
         // Read-only geometry for lifecycle/physics regressions.
         snapshot:()=>({point:{...point},animation:!!animation,dragging:!!drag,opened,selected})};

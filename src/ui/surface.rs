@@ -96,6 +96,9 @@ pub(super) async fn surface(
                 cleanup.is_ok().then_some(!resources.files.busy()).into();
             report["media_pending"] = resources.media.pending().into();
             report["media_preview_open"] = resources.media.active().is_some().into();
+            if report.get("case").is_some() {
+                report["tools"] = serde_json::json!(resources.tools);
+            }
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
@@ -172,6 +175,7 @@ async fn run(
         login: login_job,
         commands,
         files,
+        tools: _,
     } = resources;
     let script = [
         "const fluent = (() => {const exports = {}; const module = {exports};\n",
@@ -1062,7 +1066,8 @@ async fn run(
                         let settings=preferences.app().clone();
                         files.start(|permit|files::probe_report(permit,*pixels,path,reload_settings,settings))?;
                     }
-                    SurfaceEvent::Stopped { clean } => {
+                    SurfaceEvent::Stopped { clean, tools } => {
+                        if surface_probe.is_some() {checks.tools=tools;}
                         if !clean {
                             return Err(pttstella::msg!("cleanup-listeners-failed"));
                         }
@@ -1150,6 +1155,7 @@ async fn run(
             "board_reached":checks.board_reached,"board_rejected":checks.board_rejected,"board_cancelled":checks.board_cancelled,
             "scope":if matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") {"synthetic native pointer samples: bounded independent exact cells, required final gesture, no local keys or duplicate path, PNG and Close"} else if case=="mouse_boundary" {"synthetic station mouse boundary: one exact press, no release or local keys after leaving the grid; owned cancellation and Close"} else if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
             "mouse":mouse_report,
+            "tools":checks.tools,
             "osc8_dragged":checks.osc8_dragged,"osc8_media_decoded":checks.osc8_media_decoded,
             "osc8_open_rows":checks.osc8_open_rows,"osc8_copy_rows":checks.osc8_copy_rows,
             "verification_required":checks.verification_required,"verification_rejected":checks.verification_rejected,"verification_browsing":checks.verification_browsing,
