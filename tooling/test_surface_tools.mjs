@@ -186,16 +186,49 @@ test('coalesced release coordinates contribute to the drag endpoint and launch v
     assert.equal(f.menu.snapshot().animation,true);f.advance();
     assert.ok(f.menu.snapshot().point.x<700&&f.menu.snapshot().point.y<400);
 });
-test('holding still before release drops stale momentum while fresh reversal changes direction',()=>{
+test('pausing before release gives only a gentle continuation while fresh reversal changes direction',()=>{
     const stopped=fixture();stopped.fire(stopped.ball,'pointerdown');stopped.advance(16);
     stopped.fire(stopped.ball,'pointermove',{clientX:600,clientY:350});stopped.advance(160);
     stopped.fire(stopped.ball,'pointerup',{clientX:600,clientY:350,buttons:0});stopped.advance();
-    assert.equal(stopped.menu.snapshot().point.y,350); // docking is horizontal; stale vertical momentum must not replay
+    for(let i=0;i<10;i++)stopped.advance();
+    const continuation=350-stopped.menu.snapshot().point.y;
+    assert.ok(continuation>=4&&continuation<=24,'a pause keeps a small settle, never replays the old fast fling');
     const reversed=fixture();reversed.fire(reversed.ball,'pointerdown');reversed.advance(16);
     reversed.fire(reversed.ball,'pointermove',{clientX:500,clientY:300});reversed.advance(130);
     reversed.fire(reversed.ball,'pointermove',{clientX:550,clientY:330});reversed.advance(16);
     reversed.fire(reversed.ball,'pointerup',{clientX:570,clientY:340,buttons:0});reversed.advance();
     assert.ok(reversed.menu.snapshot().point.x>570&&reversed.menu.snapshot().point.y>340);
+});
+test('slow sparse drags get a small continuation on every release, independently of edge docking',()=>{
+    const f=fixture();
+    for(let attempt=0;attempt<3;attempt++){
+        f.fire(f.ball,'pointerdown',{clientX:0,clientY:0});f.advance(600);
+        f.fire(f.ball,'pointermove',{clientX:0,clientY:-8});f.advance(600);
+        f.fire(f.ball,'pointerup',{clientX:0,clientY:-8,buttons:0});f.fire(f.ball,'click',{detail:0});
+        const released=f.menu.snapshot().point;
+        for(let i=0;i<10;i++)f.advance();
+        const distance=released.y-f.menu.snapshot().point.y;
+        assert.ok(distance>=8&&distance<=22,`slow drag ${attempt} needs a gentle vertical coast, got ${distance}`);
+        assert.ok(f.menu.observations().coast_frames>0);assert.equal(f.menu.open(),false);
+        assert.ok(f.frames.size<=1);
+    }
+    assert.equal(f.menu.observations().drag_releases,3);f.menu.destroy();assert.equal(f.menu.clean(),true);
+});
+test('the minimum glide follows the last actual movement, stays in bounds and does not turn taps into drags',()=>{
+    const tap=fixture();tap.fire(tap.ball,'pointerdown');tap.advance(600);tap.fire(tap.ball,'pointerup');
+    assert.equal(tap.menu.snapshot().animation,false);tap.fire(tap.ball,'click');assert.equal(tap.menu.open(),true);
+    const f=fixture();f.fire(f.ball,'pointerdown');f.advance(600);
+    f.fire(f.ball,'pointermove',{clientX:820,clientY:425});f.advance(600);
+    f.fire(f.ball,'pointermove',{clientX:820,clientY:435});f.advance(600);
+    f.fire(f.ball,'pointerup',{clientX:820,clientY:435,buttons:0});
+    f.advance();assert.ok(f.menu.snapshot().point.y>435&&f.menu.snapshot().point.y<437,'gentle release must use the final downward direction');
+    assert.ok(f.menu.observations().coast_frames>0);
+    for(let i=0;i<160;i++){f.advance();const p=f.menu.snapshot().point;assert.ok(p.x>=16&&p.x<=828&&p.y>=56&&p.y<=628);}
+    assert.equal(f.frames.size,0);
+    const edge=fixture();edge.fire(edge.ball,'pointerdown');edge.advance(600);
+    edge.fire(edge.ball,'pointerup',{clientX:1100,clientY:1000,buttons:0});
+    for(let i=0;i<160;i++){edge.advance();const p=edge.menu.snapshot().point;assert.ok(p.x>=16&&p.x<=828&&p.y>=56&&p.y<=628);}
+    assert.equal(edge.frames.size,0);
 });
 test('resizing keeps the closed floating button docked outside the content centre',()=>{
     const f=fixture();f.window.innerWidth=1800;f.fire(f.window,'resize');

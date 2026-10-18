@@ -89,7 +89,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
     function down(event){if(stopped||event.button!==0||!event.isPrimary||drag)return;
         count('presses');
         halt();suppressClickUntil=-1;prepare(event);
-        drag={id:event.pointerId,x:event.clientX,y:event.clientY,start:{...point},history:[{...point,time:now()}],moved:false};
+        drag={id:event.pointerId,x:event.clientX,y:event.clientY,start:{...point},history:[{...point,time:now()}],direction:null,moved:false};
         changed();
         ball.setPointerCapture(event.pointerId);event.preventDefault();event.stopPropagation();}
     function move(event){if(!drag||event.pointerId!==drag.id)return;
@@ -100,7 +100,10 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
         const time=now(),dx=event.clientX-drag.x,dy=event.clientY-drag.y;
         if(!drag.moved&&Math.hypot(dx,dy)>6){drag.moved=true;close();}
         if(!drag.moved)return;
+        const previous=point;
         point={x:drag.start.x+dx,y:drag.start.y+dy};place();
+        const travel={x:point.x-previous.x,y:point.y-previous.y},distance=Math.hypot(travel.x,travel.y);
+        if(distance>0)drag.direction={x:travel.x/distance,y:travel.y/distance};
         // Keep recent geometry, including the pointerup endpoint. Equal-time
         // samples replace their predecessor instead of inventing a 1ms velocity.
         const history=drag.history;
@@ -118,9 +121,17 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
         return variance>0?{x:clamp(x/variance,-2,2),y:clamp(y/variance,-2,2)}:{x:0,y:0};
     }
     function releaseCapture(id){if(ball.hasPointerCapture(id))ball.releasePointerCapture(id);}
+    function releaseVelocity(held){
+        const measured=launchVelocity(held.history),minimum=.1;
+        // A slow or paused drag still settles about 15px in its last actual
+        // direction. The short coast uses the same decay and boundary handling
+        // as a flick; it never revives the old high speed after a pause.
+        return held.direction&&Math.hypot(measured.x,measured.y)<minimum
+            ?{x:held.direction.x*minimum,y:held.direction.y*minimum}:measured;
+    }
     function up(event){if(!drag||event.pointerId!==drag.id||event.button!==0)return;
         track(event);const held=drag;drag=null;releaseCapture(held.id);suppressClickUntil=held.moved?now()+300:-1;
-        if(held.moved){velocity=launchVelocity(held.history);const reduceMotion=reduced();
+        if(held.moved){velocity=releaseVelocity(held);const reduceMotion=reduced();
             count('drag_releases');observations.coast_frames=0;observations.max_coast_distance=0;
             observations.last_release={...point,vx:velocity.x,vy:velocity.y,reduced:reduceMotion,samples:held.history.length};
             if(reduceMotion){dock();}else{lastFrame=now();coastUntil=lastFrame+900;animation=raf(frame);}}
