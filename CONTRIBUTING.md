@@ -143,3 +143,5 @@ AID 核心另核對 article_navigation 的自製 article-open fixture 與 naviga
 書籤另跑 `node --test tooling/test_surface_bookmarks.mjs tooling/test_surface_navigation.mjs`、desktop lib／bin、core、Clippy 與 Fluent。原生 `--probe-surface OUTPUT_DIRECTORY bookmarks` 從空合成檔開始：保存 `#00000101@Stella` 及 `#00000102@Other`，選第一筆改名為「自製更新」，移除第二筆，拒絕只有 Stella 的草稿並取消；重開確認清單，選第一筆按「前往…」，核對共用快速前往草稿後才確認。peer 精確核對一次完整文章流程，其餘修改／取消不得送站端 bytes；至少四次保存、一次拒絕、唯一正確目標與正式 Reached 必須成立。可匯出文章 PNG 並獨立解碼。
 
 將該程序的 probe-bookmarks.json 原樣複製至新目錄，以英文 probe-settings.json 啟動 `bookmarks_restart`，檢查中文名稱與識別不變，再明確移除最後一筆；複製新空檔到第三目錄啟動 `bookmarks_empty`，確認仍空。第四目錄將 probe-bookmarks.json 設成自製 `broken`，啟動 `bookmarks_corrupt`，確認警告、保存／移除停用、輸入合法目標後 Enter 零修改。後三個 peer 拒絕所有站端 bytes，各程序需 Close acknowledged／所有 owner join／退出碼 0。獨立核對更名保留建立時間、移除後備份為前版 bytes、重啟 seed 相同、空檔及壞檔未自動改寫。只用獨立 probe 路徑，不取用正式書籤；原生貼上中文不代表 IME 候選窗通過。
+
+浮球工具列變更另跑 `node --test tooling/test_surface_tools.mjs`：檢查點擊／拖曳分流、六類功能、慣性與吸邊、有界座標、外來 pointer、實體按鈕遺失、取消／失焦／隱藏／清理、減少動態效果與小視窗。正式功能仍沿用原本的按鈕 ID、Rust 准入及 owner，不新增第二條操作管線。原生驗證需確認扇形／各分類、拖曳後不誤開啟、選取後仍可匯出、沒有額外站端 bytes，以及正常 Close／全部 owner join；單元的模擬事件不算原生驗收。

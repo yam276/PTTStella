@@ -73,7 +73,7 @@ surface 仍共同協調 Rust 版本核對，以及 JS 的輸入、選取、繪�
 
 優先驗證 Dioxus Desktop 與 Canvas 的薄繪製橋接；實際呈現路線以同一 [顯示契約](dual-color.md) 的 probe 決定。若採 JavaScript，只接收結構化 frame，不持有第二份終端狀態。
 
-UI 正常掛載後只發起一次預設 PTT WSS 連線；合成 probe 只連本機 WebSocket。renderer 唯一管理符合視窗／等比例 zoom、hover 工具列及繪製排程；接收的 Screen frame 不因縮放改寫。hover 的 CSS class 由 renderer 管理，Rust 透過獨立 data attribute 要求斷線／錯誤狀態持續可見。尺寸變更合併為一個 animation callback，背景共用整數像素格線，圖形幾何與文字都使用同一格線與左右 clip。所有輸入／縮放／hover listener 由同一 bindings 清單註冊與移除。
+UI 正常掛載後只發起一次預設 PTT WSS 連線；合成 probe 只連本機 WebSocket。renderer 唯一管理符合視窗／等比例 zoom 及繪製排程；接收的 Screen frame 不因縮放改寫。浮球由獨立的 surface-tools owner 管理座標、慣性、吸邊、capture 與收合；六個 Lucide 分類入口消費同一組功能按鈕，不複製業務事件。bindings 仍由同一 UI lifetime 註冊／移除，停止時撤銷 capture 與唯一 animation frame；Rust 透過獨立 data attribute 及狀態提示維持斷線／錯誤可見。尺寸變更合併為一個 animation callback，背景共用整數像素格線，圖形幾何與文字都使用同一格線與左右 clip。所有輸入／縮放／hover listener 由同一 bindings 清單註冊與移除。
 
 不丟原始 bytes；UI 可合併最新 frame，帶 generation／revision 防止晚到更新。手動送鍵序列化，連線關閉時停止對應擁有者，重連是新 session。
 

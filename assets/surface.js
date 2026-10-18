@@ -67,11 +67,12 @@ let hoveredLink=-1;
 let hoveredArticle=null,released=null,clickSequenceAction=false,navigationLocked=false,navigationRequest=false;
 let exportBusy=false, exportTask=null;
 let keepAliveGate=null;
+let tools=null;
 const send=value=>{ sent++; dioxus.send(value); };
 const stamp=()=>({generation,revision,input_epoch:latest?.input_epoch??0});
 const sameStamp=(a,b)=>a.generation===b.generation&&a.revision===b.revision&&a.input_epoch===b.input_epoch;
 const blocked=()=>composing||pastePending||!!document.querySelector("dialog[open]");
-const stationMouse=createStationMouse({current:()=>latest,point:cellAt,viewport,send,blocked,
+const stationMouse=createStationMouse({current:()=>latest,point:cellAt,viewport,send,blocked:()=>blocked()||!!tools?.open(),
     prepare:()=>{cancelHover(true);policy("reset",{isTrusted:true});released=null;cancelDrag();clearSelection();focus();},
     changed:()=>{surface.dataset.stationMouseActive=String(stationMouse.active());refreshKeepAlive();}});
 function toggleStationMouse(e){
@@ -183,7 +184,7 @@ function positionKeyboard() {
         color,background});
 }
 function focus() { if(document.activeElement!==keyboard) keyboard.focus({preventScroll:true}); }
-function restoreEditingFocus(){keyboard.blur();focus();}
+function restoreEditingFocus(){tools?.close();keyboard.blur();focus();}
 function pointerdown(e) {
     if(stationMouse.down(e))return;
     if(e.button!==0||!e.isPrimary||dragging) return;
@@ -416,7 +417,7 @@ function refreshExportControls() {
     exportRows.title=selection?tr("export-lines-hint",{start:selection.value.rows.start+1,end:selection.value.rows.end}):tr("export-rows-hint");
 }
 function refreshKeepAlive() {
-    const ready=!!latest?.keep_alive&&canNavigate()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
+    const ready=!!latest?.keep_alive&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
     const current=stamp(),key=JSON.stringify([current,ready,latest?.keep_alive_ready,latest?.keep_alive]);
     keepAlive.textContent=latest?.keep_alive?tr("keepalive-on"):tr("keepalive-off");
     keepAlive.setAttribute("aria-pressed",String(!!latest?.keep_alive));
@@ -455,8 +456,7 @@ function exportScreen(e, selected=false) {
     })();
 }
 const exportSelected=e=>exportScreen(e,true);
-function showChrome() { chrome.classList.add("open"); }
-function hideChrome() { chrome.classList.remove("open"); }
+function hideChrome() { tools.close(); }
 function zoomTo(value) {
     if(stopped||!latest) return;
     stationMouse.revoke();
@@ -466,6 +466,7 @@ function zoomTo(value) {
 }
 function wheel(e) {
     cancelHover(true);
+    if(tools?.open())return;
     if(!e.deltaY||e.metaKey||e.shiftKey) return;
     if(e.ctrlKey) {e.preventDefault();zoomTo(zoom+(e.deltaY<0?.25:-.25));return;}
     if(blocked()||dragging||hasSelection()||viewport.scrollWidth>viewport.clientWidth+1||viewport.scrollHeight>viewport.clientHeight+1) return;
@@ -490,7 +491,9 @@ const destinationUi=createNavigationDialog({tr,send,stamp,prepare:e=>{policy("re
 const bookmarksUi=createBookmarksDialog({tr,send,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,openDestination:destinationUi.openDraft,current:()=>latest});
 const filterUi=createFiltersDialog({tr,send,current:()=>latest,invalidate:invalidatePresentation,
     reset:e=>policy("reset",e),restore:restoreEditingFocus,changed:refreshControls});
-const bindings=[...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
+tools=createFloatingTools({root:chrome,ball:document.getElementById("tools-ball"),fan:document.getElementById("tools-fan"),panel:toolbar,window,document,
+    prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();released=null;},restore:restoreEditingFocus,changed:refreshKeepAlive});
+const bindings=[...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
     [keyboard,"beforeinput",beforeinput],
@@ -507,7 +510,6 @@ const bindings=[...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,
     [keepAlive,"click",toggleKeepAlive],[stationMouseButton,"click",toggleStationMouse],
     [hoverPosition,"change",changeHoverPreference],
     [browseBack,"click",browseReturn],[browsePrevious,"click",browseUp],[browseNext,"click",browseDown],
-    [chrome,"pointerenter",showChrome],[chrome,"pointerleave",hideChrome],
     [plus,"click",zoomIn],[minus,"click",zoomOut],[fit,"click",zoomFit],
     [viewport,"wheel",wheel,{passive:false}],[window,"resize",repaint],[window,"focus",activate],[window,"blur",deactivate],
 ];
@@ -625,10 +627,12 @@ function probe(packet,geometry) {
     colour_samples.push(...Array.from({length:4},(_,i)=>ink(i*2,16)));
     const bounds=viewport.getBoundingClientRect(),near=(a,b)=>Math.abs(a-b)<1;
     const fills_body=near(bounds.left,0)&&near(bounds.top,0)&&near(bounds.right,innerWidth)&&near(bounds.bottom,innerHeight);
-    chrome.dispatchEvent(new PointerEvent("pointerleave"));const hidden=getComputedStyle(toolbar).opacity==="0";
-    chrome.dispatchEvent(new PointerEvent("pointerenter"));const shown=getComputedStyle(toolbar).opacity==="1";
-    chrome.dispatchEvent(new PointerEvent("pointerleave"));
-    const hover_controls=hidden&&shown&&getComputedStyle(toolbar).opacity==="0"&&near(viewport.getBoundingClientRect().top,0);
+    const ball=document.getElementById("tools-ball"),fan=document.getElementById("tools-fan");
+    const hidden=fan.hidden;
+    ball.click();const shown=!fan.hidden&&ball.getAttribute("aria-expanded")==="true";
+    ball.click();
+    const ballBounds=ball.getBoundingClientRect();
+    const floating_tools=hidden&&shown&&fan.hidden&&toolbar.hidden&&ballBounds.top>=48&&ballBounds.left>=0&&ballBounds.right<=innerWidth&&ballBounds.bottom<=innerHeight&&near(viewport.getBoundingClientRect().top,0);
     const checks=[checkArt(geometry)],zoom_samples=[[canvas.width,canvas.height]];
     for(let i=0;i<2;i++){plus.click();checks.push(checkArt(draw(packet)));zoom_samples.push([canvas.width,canvas.height]);}
     const proportional_zoom=zoom_samples.every(([w,h])=>Math.abs(w*576-h*960)<=960)
@@ -638,7 +642,7 @@ function probe(packet,geometry) {
     send({kind:"probe",png:canvas.toDataURL("image/png"),red_pixels:red,green_pixels:green,left_bg,right_bg,
         fonts:document.fonts.status,dpr:ratio,pixel_size:[canvas.width,canvas.height],font_stack:fontDescription(packet.settings)+" / "+fontDescription(packet.settings,true),fills_body,
         colour_samples,art_seam_pixels:checks[0].seams,art_zoom_seams:checks.map(c=>c.seams),
-        art_geometry:checks.every(c=>c.geometry),hover_controls,proportional_zoom,zoom_samples});
+        art_geometry:checks.every(c=>c.geometry),floating_tools,proportional_zoom,zoom_samples});
 }
 async function paint(packet) {
     if(packet.generation<generation||(packet.generation===generation&&packet.frame.revision<revision)) return;
@@ -768,6 +772,7 @@ finally {
     stopped=true;latest=null;observer.disconnect();pasteObserver.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
     const mediaClean=await media.destroy();
     settingsUi.destroy();loginUi.destroy();filterUi.destroy();destinationUi.destroy();bookmarksUi.destroy();
+    tools.destroy();
     if(exportTask)await exportTask;
     if(pasteDialog.open)pasteDialog.close();
     setHover(null);refreshNavigation();
@@ -780,7 +785,7 @@ finally {
     document.getElementById("font-settings").click();document.getElementById("font-size").dispatchEvent(new InputEvent("input",{bubbles:true}));
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
-    cleanupClean=mediaClean&&stationMouse.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
+    cleanupClean=mediaClean&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
         &&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&destinationUi.clean()&&bookmarksUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
     try {send({kind:"stopped",clean:cleanupClean});} catch(_) { /* join still acknowledges cleanup */ }
 }

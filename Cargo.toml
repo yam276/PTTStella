@@ -8,9 +8,10 @@ default-run = "pttstella"
 
 [features]
 default = []
-desktop = ["dep:dioxus", "dep:tokio", "dep:base64", "dep:tokio-tungstenite", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser", "dep:rfd", "dep:tempfile", "dep:directories", "dep:reqwest", "dep:imagesize", "dep:security-framework", "dep:font-kit"]
+desktop = ["dep:dioxus-icons", "dep:dioxus", "dep:tokio", "dep:base64", "dep:tokio-tungstenite", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser", "dep:rfd", "dep:tempfile", "dep:directories", "dep:reqwest", "dep:imagesize", "dep:security-framework", "dep:font-kit"]
 
 [dependencies]
+dioxus-icons = { version = "=0.1.0", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 i18n-embed = { version = "=0.16.0", default-features = false, features = ["fluent-system", "rust-embed"] }

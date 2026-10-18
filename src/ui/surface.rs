@@ -188,6 +188,7 @@ async fn run(
         include_str!("../../assets/surface-bookmarks.js"),
         include_str!("../../assets/surface-filters.js"),
         include_str!("../../assets/surface-mouse.js"),
+        include_str!("../../assets/surface-tools.js"),
         include_str!("../../assets/surface.js"),
     ]
     .concat();

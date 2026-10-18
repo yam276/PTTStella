@@ -493,7 +493,7 @@ pub(super) struct ProbePixels {
     pub(super) art_seam_pixels: usize,
     pub(super) art_zoom_seams: Vec<usize>,
     pub(super) art_geometry: bool,
-    pub(super) hover_controls: bool,
+    pub(super) floating_tools: bool,
     pub(super) proportional_zoom: bool,
     pub(super) zoom_samples: Vec<[u32; 2]>,
 }

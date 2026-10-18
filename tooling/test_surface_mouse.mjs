@@ -88,12 +88,16 @@ const surface=readFileSync(new URL("../assets/surface.js",import.meta.url),"utf8
 function handler(name,next,context){vm.createContext(context);vm.runInContext(surface.slice(surface.indexOf(`function ${name}(`),surface.indexOf(`function ${next}(`)),context);return context[name];}
 test("station wheel produces no local navigation while Ctrl+wheel still zooms",()=>{
     for(const local of [false,true]){
-        const actions=[],context={stationMouse:{local:()=>local,wheel:()=>!local},cancelHover(){},blocked:()=>false,dragging:null,hasSelection:()=>false,
+        let toolsOpen=false;
+        const actions=[],context={tools:{open:()=>toolsOpen},stationMouse:{local:()=>local,wheel:()=>!local},cancelHover(){},blocked:()=>false,dragging:null,hasSelection:()=>false,
             viewport:{scrollWidth:100,clientWidth:100,scrollHeight:100,clientHeight:100},latest:{connected:true,navigation:{kind:"article_list"}},
             navigate:intent=>actions.push(intent.action),zoom:1,zoomTo:zoom=>actions.push(zoom)};
         vm.createContext(context);vm.runInContext(surface.slice(surface.indexOf("function wheel("),surface.indexOf("const zoomIn=")),context);
         const event={deltaY:120,preventDefault(){}};context.wheel(event);context.wheel({...event,ctrlKey:true});
         assert.deepEqual(actions,local?["next_item",0.75]:[0.75]);
+        actions.length=0;toolsOpen=true;context.wheel(event);context.wheel({...event,ctrlKey:true});
+        assert.deepEqual(actions,[]); // chrome interaction cannot scroll PTT underneath it
+
     }
 });
 
