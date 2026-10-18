@@ -5,7 +5,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
     const petals=[...fan.querySelectorAll('[data-tools-target]')];
     const groups=[...panel.querySelectorAll('[data-tools-group]')];
     let point={x:window.innerWidth-80,y:window.innerHeight*.65},drag=null,animation=0,stopped=false,opened=false,selected=null;
-    let suppressClick=false,lastFrame=0,coastUntil=0,velocity={x:0,y:0};
+    let suppressClickUntil=-1,lastFrame=0,coastUntil=0,velocity={x:0,y:0};
     let viewportWidth=window.innerWidth;
     const observations={presses:0,moves:0,drag_releases:0,coast_frames:0,max_coast_distance:0,last_release:null};
     const count=key=>observations[key]=Math.min(65535,observations[key]+1);
@@ -40,18 +40,25 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
         root.dataset.toolsLayout=compact?'compact':'fan';
         if(compact){panel.style.left='16px';panel.style.top='80px';panel.style.width=`${Math.max(1,window.innerWidth-32)}px`;panel.style.maxHeight=`${Math.max(32,window.innerHeight-96)}px`;return;}
         const radius=Math.min(148,Math.max(92,(window.innerHeight-100)/2));
-        point.y=clamp(point.y,radius+8,window.innerHeight-radius-64);place();
+        // Keep the trigger stationary so a second tap can close it in place.
+        // Only the fan's origin shifts to keep its 62px petals on screen.
+        const reach=radius*Math.sin(75*Math.PI/180);
+        const fanY=clamp(point.y,48+reach,window.innerHeight-78-reach);
         const direction=point.x+28<window.innerWidth/2?1:-1;
         petals.forEach((petal,index)=>{const angle=(-75+index*30)*Math.PI/180;
-            petal.style.setProperty('--petal-x',`${direction*radius*Math.cos(angle)}px`);
-            petal.style.setProperty('--petal-y',`${radius*Math.sin(angle)}px`);});
+            petal.style.setProperty('--petal-x',`${direction*Math.max(72,radius*Math.cos(angle))}px`);
+            petal.style.setProperty('--petal-y',`${fanY-point.y+radius*Math.sin(angle)}px`);});
         const width=Math.min(330,window.innerWidth-32),height=Math.min(260,window.innerHeight-80);
         const x=direction===1?point.x+radius+70:point.x-radius-width-14;
         panel.style.left=`${clamp(x,16,window.innerWidth-width-16)}px`;
-        panel.style.top=`${clamp(point.y-height/2,48,window.innerHeight-height-16)}px`;
+        panel.style.top=`${clamp(fanY-height/2,48,window.innerHeight-height-16)}px`;
         panel.style.width=`${width}px`;panel.style.maxHeight=`${height}px`;
     }
-    function toggle(event){if(stopped)return;if(suppressClick&&event.detail!==0){suppressClick=false;return;}suppressClick=false;
+    function toggle(event){if(stopped)return;
+        // WebViews may give the drag's generated click detail=0. Do not let it
+        // open tools and halt the just-started coast. New taps/keyboard input
+        // clear this bounded guard; a missing click cannot swallow a later AX action.
+        const suppressed=now()<=suppressClickUntil;suppressClickUntil=-1;if(suppressed)return;
         halt();if(opened){close(true);return;}prepare(event);opened=true;layout();
         root.classList.add('open');fan.hidden=false;ball.setAttribute('aria-expanded','true');ball.focus();changed();}
     function choose(event){if(stopped||!opened)return;
@@ -62,7 +69,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
         panel.querySelector('section:not([hidden]) button:not(:disabled):not([hidden]),section:not([hidden]) select')?.focus();}
     function down(event){if(stopped||event.button!==0||!event.isPrimary||drag)return;
         count('presses');
-        halt();suppressClick=false;prepare(event);
+        halt();suppressClickUntil=-1;prepare(event);
         drag={id:event.pointerId,x:event.clientX,y:event.clientY,start:{...point},history:[{...point,time:now()}],moved:false};
         changed();
         ball.setPointerCapture(event.pointerId);event.preventDefault();event.stopPropagation();}
@@ -93,16 +100,18 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
     }
     function releaseCapture(id){if(ball.hasPointerCapture(id))ball.releasePointerCapture(id);}
     function up(event){if(!drag||event.pointerId!==drag.id||event.button!==0)return;
-        track(event);const held=drag;drag=null;releaseCapture(held.id);suppressClick=held.moved;
+        track(event);const held=drag;drag=null;releaseCapture(held.id);suppressClickUntil=held.moved?now()+300:-1;
         if(held.moved){velocity=launchVelocity(held.history);const reduceMotion=reduced();
             count('drag_releases');observations.coast_frames=0;observations.max_coast_distance=0;
             observations.last_release={...point,vx:velocity.x,vy:velocity.y,reduced:reduceMotion,samples:held.history.length};
             if(reduceMotion){dock();}else{lastFrame=now();coastUntil=lastFrame+900;animation=raf(frame);}}
         changed();event.preventDefault();event.stopPropagation();}
-    function cancel(){if(drag){const id=drag.id;drag=null;suppressClick=true;releaseCapture(id);}halt();close();place();}
+    function cancel(){if(drag){const id=drag.id;drag=null;suppressClickUntil=now()+300;releaseCapture(id);}halt();close();place();}
     function lost(event){if(drag?.id===event.pointerId)cancel();}
     function outside(event){if(opened&&!root.contains(event.target)){event.preventDefault();event.stopPropagation();close(true);}}
-    function key(event){if(!opened)return;
+    function key(event){
+        if(event.target===ball&&(event.key==='Enter'||event.key===' '))suppressClickUntil=-1;
+        if(!opened)return;
         if(event.key==='Escape'){event.preventDefault();event.stopPropagation();close();ball.focus();}
         else if(event.key==='ArrowDown'||event.key==='ArrowUp'){
             if(!fan.contains(document.activeElement)&&document.activeElement!==ball)return;

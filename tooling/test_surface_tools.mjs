@@ -37,11 +37,45 @@ test('drag coasts then docks within bounds without opening tools or generating a
     const f=fixture();f.fire(f.ball,'pointerdown');f.advance(16);
     f.fire(f.ball,'pointermove',{clientX:610,clientY:310});f.fire(f.ball,'pointerup',{clientX:610,clientY:310});
     assert.equal(f.captures.size,0);assert.equal(f.menu.snapshot().animation,true);
+    f.fire(f.ball,'click');assert.equal(f.menu.open(),false); // follow-up click belongs to this drag
     const released=f.menu.snapshot().point;f.advance();assert.notEqual(f.menu.snapshot().point.x,released.x);
     for(let i=0;i<140;i++){f.advance();const p=f.menu.snapshot().point;assert.ok(p.x>=16&&p.x<=828&&p.y>=56&&p.y<=628);}
     assert.equal(f.frames.size,0);assert.ok([16,828].includes(f.menu.snapshot().point.x));
-    f.fire(f.ball,'click');assert.equal(f.menu.open(),false); // suppress pointer click after drag
     f.fire(f.ball,'pointerdown');f.fire(f.ball,'pointerup');f.fire(f.ball,'click');assert.equal(f.menu.open(),true);
+});
+test('zero-detail drag click cannot cancel momentum; subsequent physical taps open and close in place',()=>{
+    const f=fixture();f.fire(f.ball,'pointerdown');f.advance(40);
+    f.fire(f.ball,'pointerup',{clientX:640,clientY:80,buttons:0});
+    f.fire(f.ball,'click',{detail:0});
+    assert.equal(f.menu.open(),false);assert.equal(f.menu.snapshot().animation,true);
+    const released=f.menu.snapshot().point;f.advance();assert.ok(f.menu.snapshot().point.x<released.x);
+    for(const expected of [true,false]){
+        const before=f.menu.snapshot().point;
+        const position={clientX:before.x+28,clientY:before.y+28};
+        f.fire(f.ball,'pointerdown',position);f.fire(f.ball,'pointerup',{...position,buttons:0});f.fire(f.ball,'click');
+        assert.equal(f.menu.open(),expected);assert.deepEqual(f.menu.snapshot().point,before);
+    }
+});
+test('opening near either vertical edge moves the fan instead of the ball',()=>{
+    for(const y of [56,628]){
+        const f=fixture({reduced:true});f.fire(f.ball,'pointerdown');f.advance(40);
+        f.fire(f.ball,'pointerup',{clientY:y,buttons:0});f.fire(f.ball,'click');
+        const before=f.menu.snapshot().point;
+        f.fire(f.ball,'pointerdown',{clientY:y});f.fire(f.ball,'pointerup',{clientY:y,buttons:0});f.fire(f.ball,'click');
+        assert.equal(f.menu.open(),true);assert.deepEqual(f.menu.snapshot().point,before);
+        for(const p of f.petals){
+            const top=before.y+Number.parseFloat(p.style['--petal-y']),dx=Number.parseFloat(p.style['--petal-x']);
+            assert.ok(top>=48&&top+62<=684);assert.ok(dx>=72||dx<=-72,'petals cannot cover the close trigger');
+        }
+        f.fire(f.ball,'click');assert.deepEqual(f.menu.snapshot().point,before);assert.equal(f.menu.open(),false);
+    }
+});
+test('keyboard activation and later accessibility clicks are not swallowed by a previous drag',()=>{
+    for(const keyboard of [true,false]){
+        const f=fixture();f.fire(f.ball,'pointerdown');f.advance(40);f.fire(f.ball,'pointerup',{clientX:650,buttons:0});
+        if(keyboard)f.fire(f.document,'keydown',{key:'Enter',target:f.ball});else f.advance(400);
+        f.fire(f.ball,'click',{detail:0});assert.equal(f.menu.open(),true);
+    }
 });
 test('foreign pointers, missing physical button, cancellation and shutdown cannot leave capture or animation',()=>{
     for(const kind of ['pointercancel','blur','visibilitychange','missing-button','destroy']){
