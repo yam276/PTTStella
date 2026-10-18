@@ -58,7 +58,7 @@ test('foreign pointers, missing physical button, cancellation and shutdown canno
 });
 test('blur during momentum cancels the frame; reduced motion docks immediately',()=>{
     for(const reduced of [true,false]){
-        const f=fixture({reduced});f.fire(f.ball,'pointerdown');f.advance();f.fire(f.ball,'pointermove',{clientX:400});f.fire(f.ball,'pointerup');
+        const f=fixture({reduced});f.fire(f.ball,'pointerdown');f.advance();f.fire(f.ball,'pointermove',{clientX:400});f.fire(f.ball,'pointerup',{clientX:400});
         assert.equal(f.menu.snapshot().animation,!reduced);f.fire(f.window,'blur');assert.equal(f.frames.size,0);
     }
 });
@@ -88,4 +88,44 @@ test('returning to terminal editing closes floating tools before restoring keybo
     const body=source.match(/function restoreEditingFocus\(\)\{([^\n]+)\}/)[1];
     const calls=[];vm.runInNewContext(body,{tools:{close:()=>calls.push('close')},keyboard:{blur:()=>calls.push('blur')},focus:()=>calls.push('focus')});
     assert.deepEqual(calls,['close','blur','focus']);
+});
+test('recent drag momentum survives a tiny final movement rather than stopping at release',()=>{
+    const f=fixture();f.fire(f.ball,'pointerdown');f.advance(16);
+    f.fire(f.ball,'pointermove',{clientX:600,clientY:350});f.advance(16);
+    f.fire(f.ball,'pointermove',{clientX:599,clientY:350});
+    f.fire(f.ball,'pointerup',{clientX:599,clientY:350,buttons:0});
+    const released=f.menu.snapshot().point;f.advance(16);
+    assert.ok(f.menu.snapshot().point.x<released.x-10,'a flick must keep moving despite a small final sample');
+    assert.equal(f.menu.observations().drag_releases,1);assert.ok(f.menu.observations().coast_frames>0);
+    assert.ok(f.menu.observations().max_coast_distance>10);assert.equal(f.menu.observations().last_release.reduced,false);
+});
+test('coalesced release coordinates contribute to the drag endpoint and launch velocity',()=>{
+    const f=fixture();f.fire(f.ball,'pointerdown');f.advance(40);
+    f.fire(f.ball,'pointerup',{clientX:700,clientY:400,buttons:0});
+    assert.equal(f.menu.snapshot().point.x,700);assert.equal(f.menu.snapshot().point.y,400);
+    assert.equal(f.menu.snapshot().animation,true);f.advance();
+    assert.ok(f.menu.snapshot().point.x<700&&f.menu.snapshot().point.y<400);
+});
+test('holding still before release drops stale momentum while fresh reversal changes direction',()=>{
+    const stopped=fixture();stopped.fire(stopped.ball,'pointerdown');stopped.advance(16);
+    stopped.fire(stopped.ball,'pointermove',{clientX:600,clientY:350});stopped.advance(160);
+    stopped.fire(stopped.ball,'pointerup',{clientX:600,clientY:350,buttons:0});stopped.advance();
+    assert.equal(stopped.menu.snapshot().point.y,350); // docking is horizontal; stale vertical momentum must not replay
+    const reversed=fixture();reversed.fire(reversed.ball,'pointerdown');reversed.advance(16);
+    reversed.fire(reversed.ball,'pointermove',{clientX:500,clientY:300});reversed.advance(130);
+    reversed.fire(reversed.ball,'pointermove',{clientX:550,clientY:330});reversed.advance(16);
+    reversed.fire(reversed.ball,'pointerup',{clientX:570,clientY:340,buttons:0});reversed.advance();
+    assert.ok(reversed.menu.snapshot().point.x>570&&reversed.menu.snapshot().point.y>340);
+});
+test('resizing keeps the closed floating button docked outside the content centre',()=>{
+    const f=fixture();f.window.innerWidth=1800;f.fire(f.window,'resize');
+    assert.equal(f.menu.snapshot().point.x,1728);
+    assert.equal(f.menu.snapshot().animation,false);
+});
+test('probe observations retain release evidence after cleanup without exposing mutable state',()=>{
+    const f=fixture({reduced:true});f.fire(f.ball,'pointerdown');f.advance(16);
+    f.fire(f.ball,'pointerup',{clientX:700,clientY:400,buttons:0});
+    const observed=f.menu.observations();assert.equal(observed.last_release.reduced,true);assert.equal(observed.coast_frames,0);
+    observed.last_release.x=-100;f.menu.destroy();assert.equal(f.menu.observations().last_release.x,700);
+    assert.equal(f.menu.observations().drag_releases,1);assert.equal(f.menu.clean(),true);
 });

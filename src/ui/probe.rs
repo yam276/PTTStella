@@ -38,6 +38,7 @@ pub(super) fn mouse_case(case: Option<&str>) -> bool {
 
 #[derive(Default)]
 pub(super) struct Checks {
+    pub(super) tools: Option<super::protocol::ToolsObservation>,
     pub(super) mouse_edges: Vec<pttstella::mouse::Report>,
     pub(super) mouse_samples: Vec<pttstella::mouse::input::SampleReport>,
     pub(super) mouse_sample_overflow: bool,

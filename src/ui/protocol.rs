@@ -5,7 +5,27 @@ use pttstella::{
     settings::{DisplayProfile, HoverPosition},
     vim,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+/// Bounded, chrome-only observations returned by synthetic probes at shutdown.
+#[derive(Deserialize, Serialize)]
+pub(super) struct ToolsObservation {
+    presses: u16,
+    moves: u16,
+    drag_releases: u16,
+    coast_frames: u16,
+    max_coast_distance: f64,
+    last_release: Option<ToolsRelease>,
+}
+#[derive(Deserialize, Serialize)]
+struct ToolsRelease {
+    x: f64,
+    y: f64,
+    vx: f64,
+    vy: f64,
+    reduced: bool,
+    samples: u8,
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -229,6 +249,8 @@ pub(super) enum SurfaceEvent {
     },
     Stopped {
         clean: bool,
+        #[serde(default)]
+        tools: Option<ToolsObservation>,
     },
     SurfaceProbe {
         clean: bool,
@@ -348,6 +370,35 @@ impl SurfaceEvent {
 mod admission_tests {
     use super::*;
     use serde_json::{Value, json};
+    #[test]
+    fn shutdown_probe_observations_are_optional_typed_and_bounded() {
+        assert!(matches!(
+            serde_json::from_value::<SurfaceEvent>(json!({"kind":"stopped","clean":true})).unwrap(),
+            SurfaceEvent::Stopped { tools: None, .. }
+        ));
+        let tools = json!({"presses":2,"moves":10,"drag_releases":1,"coast_frames":8,"max_coast_distance":72.5,
+            "last_release":{"x":200.0,"y":300.0,"vx":-0.6,"vy":0.2,"reduced":false,"samples":8}});
+        let event = serde_json::from_value::<SurfaceEvent>(
+            json!({"kind":"stopped","clean":true,"tools":tools}),
+        )
+        .unwrap();
+        let SurfaceEvent::Stopped {
+            tools: Some(observed),
+            ..
+        } = event
+        else {
+            panic!("missing observations")
+        };
+        assert_eq!(serde_json::to_value(observed).unwrap(), tools);
+        let mut oversized = tools;
+        oversized["presses"] = json!(65536);
+        assert!(
+            serde_json::from_value::<SurfaceEvent>(
+                json!({"kind":"stopped","clean":true,"tools":oversized})
+            )
+            .is_err()
+        );
+    }
 
     fn admits(mut value: Value, trusted: bool, generation: u64) -> bool {
         value["trusted"] = trusted.into();
