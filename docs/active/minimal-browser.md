@@ -587,3 +587,5 @@ T1 驗證 fmt／Clippy、核心測試及生產 replay；T2 需要真實 backend 
 2026-10-18 浮球慣性修正：兩個新增案例在舊程式均失敗（快速拖曳後最後 1px 抖動使慣性幾乎歸零；pointerup 才帶來終點時完全忽略）。改用最近 120ms／最多 16 筆實際有界位置做速度估算，納入放手終點，短暫滑行衰減後再吸邊；停住後的舊速度不重播，反向依新軌跡，減少動態效果仍直接吸邊。視窗尺寸改變保留原側邊，避免全螢幕後浮球留在測試走廊中央。實體操作手感仍待新版人工驗證。
 合成探針另外保留定長浮球放手觀察，區分未收到拖曳、零速度、系統減少動態效果與實際滑行；正常模式不寫入紀錄，不包含 PTT 內容或原始按鍵。
 原生合成負例已確認：在 A 單擊（col 16／row 9）缺少 B／返回時立即繪製紅色 FAILED；仍保留 failed、cleanup false。新版本合成 PNG／Close／全部 owner join 通過，typed join 路徑確保即使 Stopped 在主迴圈退出後才抵達，浮球觀察仍由同一清理 owner 保存。原生自動化沒有取得浮球 drag release／coast frame，空 trace 不算慣性通過。fmt、desktop bin 48 項、desktop all-targets Clippy、JS 73 項及 docs 通過；Rust 畫面／Connection 的 129 項 lib、core 與 replay 在前述階段修正 gate 通過。待使用者補驗 A→READY→B→HOLD→A 與實體浮球手感。
+
+2026-10-18 浮球點擊與慣性准入修正：新增回歸在舊版本確認 detail=0 的拖曳補發 click 會開啟選單並取消滑行、邊緣開選單會改變球的座標。改為有期限的拖曳 click 抑制，下一次實體按下或鍵盤啟動立即清除；開選單只調整扇形位置，球保留原位並置於上層，再點一次可收合。測試涵蓋完整 pointerdown/up/click、滑行未中斷、上下邊緣與鍵盤／無障礙後續啟動。76 個 JS 與 49 個 desktop bin 測試、fmt、Clippy、docs 通過；macOS 原生開／關已觀察。前一輪人工紀錄有兩次浮球放手、67 個滑行 frame、最大約 28px 位移，證明曾滑行，不代表後續手感問題已全面解決；新版實體回饋待驗。

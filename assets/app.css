@@ -4,7 +4,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; }
 main { height: 100vh; position: relative; }
 .chrome { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
 .chrome button, .chrome header, .chrome nav { pointer-events: auto; }
-.tools-ball { position: absolute; left: var(--tools-x, calc(100vw - 80px)); top: var(--tools-y, 65vh); width: 56px; height: 56px; padding: 0; border-radius: 50%; display: grid; place-items: center; color: #e3e5e8; background: rgba(48,51,58,.9); border: 1px solid #777b85; box-shadow: 0 4px 18px #0009, inset 0 0 0 6px #ffffff0a; touch-action: none; user-select: none; cursor: grab; }
+.tools-ball { position: absolute; z-index: 2; left: var(--tools-x, calc(100vw - 80px)); top: var(--tools-y, 65vh); width: 56px; height: 56px; padding: 0; border-radius: 50%; display: grid; place-items: center; color: #e3e5e8; background: rgba(48,51,58,.9); border: 1px solid #777b85; box-shadow: 0 4px 18px #0009, inset 0 0 0 6px #ffffff0a; touch-action: none; user-select: none; cursor: grab; }
 .tools-ball:active { cursor: grabbing; }
 .tools-ball:focus-visible, .tools-petal:focus-visible { outline: 2px solid #a8cef9; outline-offset: 3px; }
 .tools-ball svg, .tools-petal svg { pointer-events: none; }
