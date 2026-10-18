@@ -39,7 +39,7 @@ pub fn app(props: AppProps) -> Element {
     let verification_probing = surface_probe.as_deref() == Some("login_2fa");
     let dialogs_probing = matches!(
         surface_probe.as_deref(),
-        Some("dialogs" | "fonts" | "sgr66" | "sgr66_legacy" | "osc8")
+        Some("dialogs" | "tools" | "fonts" | "sgr66" | "sgr66_legacy" | "osc8")
     );
     let reload_settings = props.reload_settings;
     let media_origin = props.media_origin.clone();

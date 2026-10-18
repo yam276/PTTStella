@@ -459,3 +459,5 @@ tools-input = Input
 tools-session = Session
 tools-filters = Filters
 preview-tools = Click the floating button for tools; drag to move it.
+tools-probe-title = Local floating tools playground
+tools-probe-freeplay = Free selection and dragging; no A/B gesture test. No PTT connection.

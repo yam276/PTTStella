@@ -589,3 +589,5 @@ T1 驗證 fmt／Clippy、核心測試及生產 replay；T2 需要真實 backend 
 原生合成負例已確認：在 A 單擊（col 16／row 9）缺少 B／返回時立即繪製紅色 FAILED；仍保留 failed、cleanup false。新版本合成 PNG／Close／全部 owner join 通過，typed join 路徑確保即使 Stopped 在主迴圈退出後才抵達，浮球觀察仍由同一清理 owner 保存。原生自動化沒有取得浮球 drag release／coast frame，空 trace 不算慣性通過。fmt、desktop bin 48 項、desktop all-targets Clippy、JS 73 項及 docs 通過；Rust 畫面／Connection 的 129 項 lib、core 與 replay 在前述階段修正 gate 通過。待使用者補驗 A→READY→B→HOLD→A 與實體浮球手感。
 
 2026-10-18 浮球點擊與慣性准入修正：新增回歸在舊版本確認 detail=0 的拖曳補發 click 會開啟選單並取消滑行、邊緣開選單會改變球的座標。改為有期限的拖曳 click 抑制，下一次實體按下或鍵盤啟動立即清除；開選單只調整扇形位置，球保留原位並置於上層，再點一次可收合。測試涵蓋完整 pointerdown/up/click、滑行未中斷、上下邊緣與鍵盤／無障礙後續啟動。76 個 JS 與 49 個 desktop bin 測試、fmt、Clippy、docs 通過；macOS 原生開／關已觀察。前一輪人工紀錄有兩次浮球放手、67 個滑行 frame、最大約 28px 位移，證明曾滑行，不代表後續手感問題已全面解決；新版實體回饋待驗。
+
+2026-10-18 自由試用與嚴格驗收分開：新 tools probe 僅連本機，沒有啟用站端滑鼠或 A/B 驗收；普通拖曳可作本機選字。macOS 原生視窗已觀察單擊開／再點收合、文字拖曳後匯出 PNG、Close acknowledged 與全部 owner join；報告明示 freeplay_only，passed 範圍只含 PNG／清理，不代替慣性手感或嚴格往返通過。mouse_round_trip 的 A→B→HOLD 繪製→A→release 條件未變。使用者上一輪是 col 10／row 9 按下、只拖到 col 21／row 9 放開，未進入 B；failed／cleanup false 保留，不能以本機反白或 PNG 按鈕可用結案。新版自由試用交由使用者驗證反覆拖球與點擊手感。

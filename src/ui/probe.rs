@@ -458,11 +458,29 @@ pub(super) fn surface_sample(
     media_origin: Option<&str>,
 ) -> Result<Vec<u8>, String> {
     match case {
+        Some("tools") => tools_sample(),
         Some("sgr66") => sgr66_sample(true),
         Some("sgr66_legacy") => sgr66_sample(false),
         Some("osc8") => osc8_sample(media_origin),
         _ => preview(probe, media_origin),
     }
+}
+
+fn tools_sample() -> Result<Vec<u8>, String> {
+    let text = format!(
+        "\x1b[2J\x1b[H{}\r\n{}\r\n{}\x1b[4;1H\x1b[31;44m",
+        pttstella::msg!("tools-probe-title"),
+        pttstella::msg!("preview-tools"),
+        pttstella::msg!("tools-probe-freeplay")
+    );
+    // The split Big5 glyph is written as bytes, never through the text encoder.
+    let mut bytes = encoding::encode(&text).map_err(|e| e.to_string())?;
+    bytes.extend_from_slice(b"\xa4\x1b[32;45m\xa4\x1b[0m\x1b[8;1H");
+    bytes.extend_from_slice(
+        &encoding::encode("121  Alice  自製選取測試第一行\r\n122  Bob    自製選取測試第二行")
+            .map_err(|e| e.to_string())?,
+    );
+    Ok(bytes)
 }
 
 pub(super) fn osc8_sample(media_origin: Option<&str>) -> Result<Vec<u8>, String> {
@@ -634,6 +652,28 @@ mod sample_tests {
             assert_eq!(report["status"], "failed");
             assert_eq!(report["cleanup_completed"], true);
         }
+    }
+    #[test]
+    fn tools_playground_has_no_station_mouse_negotiation() {
+        let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
+        screen.feed(&surface_sample(Some("tools"), true, None).unwrap());
+        assert!(!mouse_case(Some("tools")));
+        assert_eq!(screen.mouse_modes(), pttstella::mouse::Modes::default());
+        assert_eq!(screen.frame().unsupported, 0);
+        assert_eq!(
+            (
+                screen.cell(0, 7).unwrap().byte,
+                screen.cell(0, 8).unwrap().byte
+            ),
+            (b'1', b'1')
+        );
+        assert_eq!(
+            (
+                screen.cell(0, 3).unwrap().style.bg,
+                screen.cell(1, 3).unwrap().style.bg
+            ),
+            (4, 5)
+        );
     }
     #[test]
     fn osc8_sample_has_independent_fragment_ranges_and_media_destinations() {
