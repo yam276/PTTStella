@@ -692,7 +692,8 @@ const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
 let cleanupClean=false;
 function runSurfaceProbe(mode){
             toolsProbeEnabled=true;
-            if(mode==="decode")send({kind:"synthetic_invalid_event"});
+            if(mode==="tools")surfaceNote.textContent=tr("tools-probe-freeplay");
+            else if(mode==="decode")send({kind:"synthetic_invalid_event"});
             else if(mode==="painted")send({kind:"painted",presentation:latest.presentation,revision:revision+100,generation});
             else if(mode==="renderer_error")throw new Error("synthetic renderer failure");
             else if(mode==="slow")surfaceNote.textContent="慢命令探針：結果等待 60 秒；可開啟字型設定或立即關閉視窗";

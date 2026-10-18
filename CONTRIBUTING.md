@@ -37,6 +37,8 @@ core 執行 Rust 1.97.0 的 fmt、Clippy、畫面與互動測試 suite 及 2 個
 
 probe 已收集的互動報告在 cleanup／peer 失敗時仍保存，強制 `status=failed`、`cleanup_completed=false`，未知 disconnect／join 欄位為 null；不能因可讀到報告或程序退出碼 0 而判通過。成功 cleanup 仍須 Close acknowledged，並保留原先互動判定。若 run 本身在建立報告前失敗，`cleanup.json` 仍獨立記錄，不虛構缺少的互動。
 
+`--probe-surface OUTPUT_DIRECTORY tools` 是浮球與本機選字的自由試用，沒有啟用站端滑鼠模式或 A/B 往返驗收；一般拖曳不會觸發該驗收的 FAILED。peer 仍拒絕所有站端輸入。報告的 passed 僅代表明確匯出 PNG 與正常 Close／owner 清理；浮球放手／滑行是有界觀察，不以這個 smoke 結果代替實體手感或 `mouse_round_trip` 的嚴格條件。
+
 mouse report 的 `edges` 保留至多 16 筆已准入事件的格線座標、按鈕、動作與修飾鍵；原 `reports` 的按鈕／動作配對從同一份有界記錄衍生，沒有第二份事件 owner。這些是 UI 觀察，peer 的獨立精確 bytes 判定仍為必要證據；只出現 UI press 不能證明 socket 已接受，亦不包含原始鍵入文字。
 
 `mouse_wheel` 從 1000＋1006 開始，要求 col 4／row 4 的向下 tick；畫面顯示 `WHEEL: now scroll UP` 並切到 1002，再要求同格向上 tick，允許有限筆同方向原生重複。完成後還原原場景。三個案例完成時都切到未支援 1001 停止回報，接著匯出 PNG、正常關窗；UI report 需非空且不超量、正確按鈕／motion／方向、零本機導覽／連結／偏好切換、沒有 held、Close acknowledged 與所有 owner 清理。每次原生執行的成功／失敗各自保留，raw input 單元僅驗證探針本身，不算原生操作。
