@@ -25,6 +25,8 @@ core 執行 Rust 1.97.0 的 fmt、Clippy、畫面與互動測試 suite 及 2 個
 
 ## 實作後的驗證
 
+macOS 打包變更另跑 `python3 -m unittest discover -s tooling -p test_bundle_macos.py`，確認圖示轉換失敗不簽署／交付半成品、既有 App 不被覆寫。原生打包後需核對 ICNS 各尺寸、透明角落、plist 指向與 strict 簽章；這些不代替桌面功能 gate。
+
 站端滑鼠另跑 `cargo test --locked --features desktop --lib mouse`：同一 Screen／CSI parser 的每個分片、固定模式 trace／epoch、RIS／session reset、同步期間模式、取消與超長拒絕，以及純 encoder 的獨立 SGR bytes／修飾鍵／格線邊界；交易 owner 與 production Connection loopback 核對更新後釋放、舊租約／取消、滿佇列控制、速率、模式／重連及保活。UI 另跑 desktop bin 與 `node --test tooling/test_surface_mouse.mjs tooling/test_surface_links.mjs tooling/test_surface_dialogs.mjs`，涵蓋顯示 ACK、封包型別、pointer 交易與分流；不以單元或現有本機滑鼠 gate 代替新的站端原生互動驗收，需求見 [站端滑鼠](docs/station-mouse.md)。
 
 `--probe-surface OUTPUT_DIRECTORY mouse` 使用固定自製文章列表及真正 production Connection；peer 精確要求零基 col 4／row 4 的左鍵 press／release，切成未支援 1001 後拒絕站端滑鼠與滾輪，只有明確停用後點同一文章編號可送一次 CR。重新啟用後要求同座標右鍵一對，再要求中鍵按下；此時 peer 送同步 off／on 撤銷交易，只接受 Close，不能補送中鍵釋放。以原生 Shift 雙擊選行、Cmd-C／草稿 Cmd-V 讀回系統剪貼簿，草稿不保存；另外核對開關、PNG、一次本機導覽、單筆取消、Close acknowledged 與全部 owner join。中鍵使用可保持 1,200ms 的真正按下，以便模式更新先於釋放。不能只看程序退出碼，缺報告或 cleanup false 必須失敗。原生 Shift 拖曳與 Ctrl＋滾輪、所有 DPI／其他平台仍須另驗，不能用這個限定案例冒充通過。

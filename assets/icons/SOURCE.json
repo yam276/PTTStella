@@ -1,0 +1,15 @@
+{
+  "source": "Generated with the built-in image generation tool from the user-selected E gold pixel constellation concept.",
+  "date": "2026-10-19",
+  "role": "App icon master; midnight navy tile, three faceted gold block stars and triangular connecting lines.",
+  "file": "pttstella.png",
+  "sha256": "213b9ae568d12e1cb2cd13cf07c6e861b07c1e24456860af4c37791ca2e2273b",
+  "dimensions": [
+    1254,
+    1254
+  ],
+  "alpha": true,
+  "derivatives": "macOS iconset sizes are generated with Apple sips and packed by iconutil during bundling.",
+  "usage": "Project-generated artwork selected by the user for use in PTTStella; no imported third-party artwork.",
+  "prompt": "prompt.txt"
+}
