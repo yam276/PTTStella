@@ -455,4 +455,5 @@ tools-filters = 過濾
 preview-tools = 點擊浮球開啟工具，拖曳可移動位置。
 tools-probe-title = 本機浮球自由試用
 tools-back = 返回工具分類
+tools-back-drag-hint = 點擊返回工具分類；拖曳移動位置
 tools-probe-freeplay = 可自由選字、拖曳；此畫面不啟用 A/B 驗收，不連線 PTT。

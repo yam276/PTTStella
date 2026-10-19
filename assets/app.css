@@ -18,7 +18,10 @@ main { height: 100vh; position: relative; }
 .tools-ball { position: absolute; z-index: 2; left: var(--tools-x, calc(100vw - 80px)); top: var(--tools-y, 65vh); width: 56px; height: 56px; padding: 0; border-radius: 50%; display: grid; place-items: center; color: var(--ui-gold); background: var(--ui-panel); border: 1px solid var(--ui-border); box-shadow: 0 4px 18px #0009, inset 0 0 0 5px #e7c46a0a; touch-action: none; user-select: none; cursor: grab; }
 .tools-ball:active { cursor: grabbing; }
 .tools-mark { width: 36px; height: 36px; display: block; }
-.tools-ball img, .tools-petal svg { pointer-events: none; }
+.tools-back-mark { display: none; }
+.tools-ball[data-tools-action="back"] .tools-mark { display: none; }
+.tools-ball[data-tools-action="back"] .tools-back-mark { display: grid; place-items: center; }
+.tools-ball img, .tools-ball svg, .tools-back-mark, .tools-petal svg { pointer-events: none; }
 .tools-fan { position: absolute; left: var(--tools-x); top: var(--tools-y); width: 56px; height: 56px; }
 .tools-petal { position: absolute; left: var(--petal-x); top: var(--petal-y); width: 62px; height: 62px; padding: 7px 3px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 22px; font-size: 11px; color: var(--ui-gold); background: var(--ui-control); border-color: var(--ui-border); box-shadow: 0 3px 12px #0008; animation: tools-unfold 160ms ease-out both; }
 .tools-petal[aria-expanded="true"] { border-color: var(--ui-gold); background: var(--ui-control-hover); }
@@ -27,7 +30,6 @@ main { height: 100vh; position: relative; }
 .chrome header section { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; }
 .chrome header button { padding: 7px 10px; border-radius: 7px; max-width: 100%; overflow-wrap: anywhere; }
 .chrome header .status { min-width: 0; flex-basis: 100%; }
-#tools-back { width: 100%; text-align: left; }
 .chrome header .brand { width: 100%; }
 .tools-alert { position: absolute; left: 16px; bottom: 16px; max-width: min(600px, calc(100vw - 104px)); font-size: 12px; color: #e5b6a6; background: #27201de8; padding: 8px 12px; border-radius: 8px; overflow-wrap: anywhere; }
 .chrome[data-attention="true"] .tools-ball { border-color: #d09b7b; }
