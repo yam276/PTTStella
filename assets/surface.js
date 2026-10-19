@@ -735,6 +735,7 @@ const route=createSurfaceRouter({
     login_result:loginUi.receive,
     recent_boards:destinationUi.receiveRecent,destination_result:destinationUi.receive,keyboard_state:receiveKeyboard,
     bookmarks_open:bookmarksUi.receiveOpen,bookmarks_result:bookmarksUi.receive,
+    tools_opacity:percent=>tools.setOpacity(percent),
     hover_settings:position=>{hoverPreference=position;hoverPosition.value=position;surface.dataset.hoverPosition=position;
         if(position==="off")cancelHover(true);else if(pointerClient)media.locate(pointerClient,position);},
     media_hover:data=>{if(hoverCandidate?.sequence===data.sequence){media.hover(data);media.locate(pointerClient,hoverPreference);}},

@@ -13,6 +13,10 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
     const clamp=(value,min,max)=>Math.max(min,Math.min(Math.max(min,max),value));
     function place(){const b=bounds();point.x=clamp(point.x,b.left,b.right);point.y=clamp(point.y,b.top,b.bottom);
         root.style.setProperty('--tools-x',`${point.x}px`);root.style.setProperty('--tools-y',`${point.y}px`);}
+    function setOpacity(percent){
+        if(!Number.isInteger(percent)||percent<20||percent>100)throw new Error("Invalid tool opacity");
+        root.style.setProperty("--tools-opacity",String(percent/100));
+    }
     function halt(){if(animation)caf(animation);animation=0;velocity={x:0,y:0};}
     function updateTrigger(){
         const returning=selected!==null;
@@ -170,7 +174,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
         [panel,'click',panelAction],
         [document,'keydown',key,true],[window,'resize',resize],[window,'blur',cancel],[document,'visibilitychange',visibility]];
     place();close();
-    return {bindings,close,open:()=>opened,busy:()=>opened||!!drag,destroy(){stopped=true;cancel();},
+    return {bindings,close,setOpacity,open:()=>opened,busy:()=>opened||!!drag,destroy(){stopped=true;cancel();},
         observations:()=>({...observations,last_release:observations.last_release?{...observations.last_release}:null}),
         clean:()=>stopped&&!animation&&!drag&&!opened,
         // Read-only geometry for lifecycle/physics regressions.

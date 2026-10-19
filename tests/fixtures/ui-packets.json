@@ -107,6 +107,10 @@
     }
   },
   {
+    "name": "tools_opacity",
+    "packet": {"kind": "tools_opacity", "payload": 65}
+  },
+  {
     "name": "hover_settings",
     "packet": {
       "kind": "hover_settings",

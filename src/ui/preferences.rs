@@ -85,6 +85,7 @@ impl Preferences {
     pub(super) fn open_packet(&self) -> Packet<'static> {
         Packet::SettingsOpen(Box::new(SettingsOpen {
             profile: self.app.display.clone(),
+            tools_opacity: self.app.tools_opacity,
             language: self.app.language,
             values: self.display.clone(),
             defaults: DisplaySettings::default(),

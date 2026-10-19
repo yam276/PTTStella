@@ -46,7 +46,7 @@ test("the production clearSelection sends a scoped revocation before dropping it
     vm.runInNewContext(source.slice(start,end)+"\nclearSelection();",context);
     assert.equal(events.length,0);
 });
-const openData=()=>({language:"zh-TW",profile:{fonts:{kind:"platform_default"}},values:{...display},defaults:{...display},presets:{},sample:{settings:{...display}},warning:null});
+const openData=()=>({language:"zh-TW",tools_opacity:100,profile:{fonts:{kind:"platform_default"}},values:{...display},defaults:{...display},presets:{},sample:{settings:{...display}},warning:null});
 function deferred(){let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};}
 
 test("closing a settings dialog while fonts load cannot repaint or steal focus",async()=>{
@@ -109,7 +109,7 @@ test("filter edit admission, failure recovery and presentation blocking share on
 test("the tagged router delivers independent wire examples once and rejects legacy/unknown envelopes",()=>{
     const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8")+"\ncreateSurfaceRouter");
     const kinds=["station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
-        "hover_settings","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error","media_external",
+        "hover_settings","tools_opacity","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error","media_external",
         "media_reset","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","link_result","export_result"];
     const calls=[],handlers=Object.fromEntries(kinds.map(kind=>[kind,payload=>calls.push({kind,payload})]));
     const route=create(handlers),examples=JSON.parse(readFileSync(new URL("../tests/fixtures/ui-packets.json",import.meta.url),"utf8"));
@@ -191,4 +191,19 @@ test("traditional preset choices preserve family intent and current size until e
     }
     assert.equal(env.sent.some(e=>e.kind==="settings_save"),false);env.fire("font-save");
     assert.equal(env.sent.at(-1).values.fonts.preset,"macos_bbs");ui.destroy();
+});
+
+test("tool opacity remains a settings draft through cancel and failure, and resets explicitly",async()=>{
+    const env=environment("surface-settings.js","createSettingsDialog"),ui=env.create();
+    await ui.open({...openData(),tools_opacity:65});
+    assert.equal(env.node("tools-opacity").value,"65");
+    env.node("tools-opacity").value="35";env.fire("tools-opacity","input");
+    assert.equal(env.node("tools-opacity-value").textContent,"35%");
+    env.fire("font-cancel");assert.equal(env.sent.some(e=>e.kind==="settings_save"),false);
+    await ui.open({...openData(),tools_opacity:65});assert.equal(env.node("tools-opacity").value,"65");
+    env.node("tools-opacity").value="40";env.fire("font-save");
+    assert.equal(env.sent.at(-1).tools_opacity,40);
+    ui.saved({status:"rejected"});assert.equal(env.node("tools-opacity").value,"40");
+    env.fire("font-defaults");assert.equal(env.node("tools-opacity").value,"100");
+    env.fire("font-save");assert.equal(env.sent.at(-1).tools_opacity,100);ui.destroy();
 });

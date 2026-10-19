@@ -268,3 +268,10 @@ test('probe observations retain release evidence after cleanup without exposing 
     observed.last_release.x=-100;f.menu.destroy();assert.equal(f.menu.observations().last_release.x,700);
     assert.equal(f.menu.observations().drag_releases,1);assert.equal(f.menu.clean(),true);
 });
+
+test('opacity updates preserve geometry and navigation and reject malformed bridge values',()=>{
+    const f=fixture();f.fire(f.ball,'click');f.fire(f.petals[1],'click');const before=f.menu.snapshot();
+    f.menu.setOpacity(35);assert.equal(f.root.style['--tools-opacity'],'0.35');assert.deepEqual(f.menu.snapshot(),before);
+    for(const value of [0,19,101,NaN,Infinity,35.5,"35",null]){assert.throws(()=>f.menu.setOpacity(value));assert.equal(f.root.style['--tools-opacity'],'0.35');}
+    f.menu.setOpacity(100);assert.equal(f.root.style['--tools-opacity'],'1');f.menu.destroy();
+});

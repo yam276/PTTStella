@@ -108,6 +108,36 @@ pub enum HoverPosition {
     #[default]
     TopRight,
 }
+/// Keep the tool affordance discoverable even at the lowest saved opacity.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "u8", into = "u8")]
+pub struct ToolOpacity(u8);
+impl Default for ToolOpacity {
+    fn default() -> Self {
+        Self(100)
+    }
+}
+impl ToolOpacity {
+    pub fn percent(self) -> u8 {
+        self.0
+    }
+}
+impl TryFrom<u8> for ToolOpacity {
+    type Error = String;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        if (20..=100).contains(&value) {
+            Ok(Self(value))
+        } else {
+            Err(crate::msg!("settings-opacity-invalid"))
+        }
+    }
+}
+impl From<ToolOpacity> for u8 {
+    fn from(value: ToolOpacity) -> Self {
+        value.0
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AppSettings {
@@ -116,12 +146,15 @@ pub struct AppSettings {
     pub hover: HoverPosition,
     #[serde(default)]
     pub language: crate::i18n::Language,
+    #[serde(default)]
+    pub tools_opacity: ToolOpacity,
 }
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            version: 3,
+            version: 4,
             language: crate::i18n::Language::default(),
+            tools_opacity: ToolOpacity::default(),
             display: DisplayProfile::default(),
             hover: HoverPosition::default(),
         }
@@ -129,13 +162,13 @@ impl Default for AppSettings {
 }
 impl AppSettings {
     fn migrate(mut self) -> Self {
-        if self.version == 2 {
-            self.version = 3;
+        if matches!(self.version, 2 | 3) {
+            self.version = 4;
         }
         self
     }
     pub fn validate(mut self) -> Result<Self, String> {
-        if self.version != 3 {
+        if self.version != 4 {
             return Err(crate::msg!("settings-version"));
         }
         self.display = self.display.validate()?;
@@ -158,7 +191,7 @@ impl AppSettings {
                     ..Self::default()
                 })
             }
-            2 | 3 => serde_json::from_slice::<Self>(bytes)
+            2..=4 => serde_json::from_slice::<Self>(bytes)
                 .map_err(|e| e.to_string())?
                 .migrate()
                 .validate()

@@ -8,6 +8,8 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
     const fontDefaults=document.getElementById("font-defaults");
     const profileImport=document.getElementById("profile-import"),profileExport=document.getElementById("profile-export"),profileName=document.getElementById("font-profile-name");
     const language=document.getElementById("interface-language");
+    const toolsOpacity=document.getElementById("tools-opacity"),opacityValue=document.getElementById("tools-opacity-value");
+    function updateOpacity(){opacityValue.textContent=tr("settings-opacity-value",{percent:Number(toolsOpacity.value)});}
     const localChoices={ascii_font:document.getElementById("font-local-ascii"),cjk_font:document.getElementById("font-local-cjk")};
     const localStatus=document.getElementById("font-local-status"),fontRefresh=document.getElementById("font-refresh");
     const sourceButtons=[...document.querySelectorAll("[data-font-source]")];
@@ -77,7 +79,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
     function editFont(e){if(e.target===fontFields.ascii_font||e.target===fontFields.cjk_font)fontPreset.value="custom";previewFonts();}
     function chooseFontPreset(){const values=fontPreset.value==="platform"?fontDraft?.defaults:fontDraft?.presets[fontPreset.value];
         if(values) {const size=fontFields.font_size.value,baseline=fontFields.baseline.value;fillFonts(values);fontFields.font_size.value=size;fontFields.baseline.value=baseline;previewFonts();}}
-    function resetFonts(){if(fontDraft){fillFonts(fontDraft.defaults);fontPreset.value="platform";previewFonts();}}
+    function resetFonts(){if(fontDraft){toolsOpacity.value="100";updateOpacity();fillFonts(fontDraft.defaults);fontPreset.value="platform";previewFonts();}}
     function closeFonts(e) {
         e?.preventDefault();if(fontSaving||profileBusy) return;
         clearTimeout(fontTimer);fontTimer=0;fontRequest++;fontPreviewNext=null;
@@ -87,7 +89,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
     function saveFonts(e) {
         if(fontSaving||profileBusy) return;
         fontSaving=true;fontSave.disabled=true;fontCancel.disabled=true;
-        send({kind:"settings_save",values:readFonts(),language:language.value,trusted:e.isTrusted});
+        send({kind:"settings_save",values:readFonts(),language:language.value,tools_opacity:Number(toolsOpacity.value),trusted:e.isTrusted});
     }
 
     async function preview(settings,packet,valid){
@@ -100,7 +102,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
     async function open(data){
         if(disposed)return;
         const opening=++epoch;
-        fontDraft=data;language.value=data.language;fillFonts(data.values);fontPreset.value=profileChoice(data.profile);fontNote.textContent=data.warning||"";
+        fontDraft=data;language.value=data.language;toolsOpacity.value=String(data.tools_opacity);updateOpacity();fillFonts(data.values);fontPreset.value=profileChoice(data.profile);fontNote.textContent=data.warning||"";
         beforeShow();if(!fontDialog.open)fontDialog.showModal();changed();requestCatalog();
         await preview(data.values,data.sample,()=>fontDialog.open&&opening===epoch);
         if(!disposed&&fontDialog.open&&opening===epoch)fontFields.ascii_font.focus();
@@ -142,6 +144,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
         notice(message){if(!fontDialog.open)return false;fontNote.textContent=message;return true;},
         clean:()=>disposed&&fontTimer===0&&fontPreviewNext===null&&!fontDialog.open,
         bindings:[
+            [toolsOpacity,"input",updateOpacity],
             [fontButton,"click",openFonts],[fontPreset,"change",chooseFontPreset],
             [fontRefresh,"click",refreshFonts],...Object.values(localChoices).map(field=>[field,"change",chooseLocal]),
             ...sourceButtons.map(button=>[button,"click",e=>openSource(button,e)]),

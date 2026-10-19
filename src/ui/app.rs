@@ -371,6 +371,14 @@ pub fn app(props: AppProps) -> Element {
                         }
                     }
                     p { id: "settings-language-help", class: "settings-help", {pttstella::msg!("language-restart")} }
+                    label {
+                        SettingsCaption { label: pttstella::msg!("settings-opacity"), icon: rsx! { Eye { size: 18 } } }
+                        div { class: "settings-range",
+                            input { id: "tools-opacity", r#type: "range", min: "20", max: "100", step: "1", value: "100", "aria-label": pttstella::msg!("settings-opacity"), "aria-describedby": "settings-opacity-help" }
+                            output { id: "tools-opacity-value", "for": "tools-opacity" }
+                        }
+                    }
+                    p { id: "settings-opacity-help", class: "settings-help", {pttstella::msg!("settings-opacity-help")} }
                 }
                 section { class: "settings-section",
                     label {

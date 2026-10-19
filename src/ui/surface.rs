@@ -219,6 +219,8 @@ async fn run(
         .ok_or(pttstella::msg!("paint-missing-initial"))?;
     eval.send(Packet::Paint(painting))
         .map_err(|e| e.to_string())?;
+    eval.send(Packet::ToolsOpacity(preferences.app().tools_opacity))
+        .map_err(|e| e.to_string())?;
     eval.send(Packet::HoverSettings(preferences.hover()))
         .map_err(|e| e.to_string())?;
     eval.send(Packet::RecentBoards(recent.packet()))
@@ -335,6 +337,7 @@ async fn run(
                         Ok(())=>{
                             checks.settings_saved |= probe.is_some() && preferences.display().font_size==18.0 && preferences.display().baseline==19.0;
                             screen.display_changed();
+                            eval.send(Packet::ToolsOpacity(preferences.app().tools_opacity)).map_err(|e|e.to_string())?;
                             Packet::SettingsSaved(Feedback::new(SaveStatus::Saved,if preferences.app().language!=pttstella::i18n::application().language(){pttstella::msg!("settings-language-saved")}else{pttstella::msg!("settings-saved")}))
                         },
                         Err(error)=>Packet::SettingsSaved(Feedback::new(SaveStatus::Rejected,error)),
@@ -729,8 +732,8 @@ async fn run(
                         eval.send(preferences.preview_packet(request, values))
                             .map_err(|e| e.to_string())?;
                     }
-                    SurfaceEvent::SettingsSave { values, language, trusted: _ } => {
-                        if let Err(error)=files.start(|permit|files::save_display(permit,preferences.store(),{let mut draft=preferences.display_draft(values);draft.language=language;draft})) {
+                    SurfaceEvent::SettingsSave { values, language, tools_opacity, trusted: _ } => {
+                        if let Err(error)=files.start(|permit|files::save_display(permit,preferences.store(),{let mut draft=preferences.display_draft(values);draft.language=language;draft.tools_opacity=tools_opacity;draft})) {
                             eval.send(Packet::SettingsSaved(Feedback::new(SaveStatus::Rejected,error))).map_err(|e|e.to_string())?;
                         }
                     }
