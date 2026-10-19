@@ -16,9 +16,10 @@ use tokio::{
 };
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
-pub const PTT_ENDPOINT: &str = "wss://ws.ptt.cc/bbs";
+pub const PTT_ENDPOINT: &str = crate::sites::PTT;
 pub use probe::MouseSampleProbe;
-type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
+type WebSocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
+use transport::Socket;
 type Dial = JoinHandle<Result<Socket, String>>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -34,10 +35,12 @@ pub enum CloseOutcome {
     NoConnection,
     Acknowledged,
     PeerClosedWithoutReply,
+    TransportClosed,
     Unconfirmed,
 }
 #[derive(Clone)]
 pub struct View {
+    pub site: crate::sites::Target,
     pub mouse: crate::mouse::input::Snapshot,
     /// The retained frame is not an admissible source for interactions yet.
     pub output_pending: bool,
@@ -59,7 +62,11 @@ pub struct View {
 }
 impl View {
     pub fn context(&self) -> crate::navigation::Context {
-        if self.output_pending {
+        if !self.site.ptt_features() {
+            crate::navigation::Context::Unknown {
+                reason: crate::navigation::UnknownReason::DifferentSite,
+            }
+        } else if self.output_pending {
             crate::navigation::Context::Unknown {
                 reason: crate::navigation::UnknownReason::Incomplete,
             }
@@ -80,6 +87,7 @@ enum Command {
     MouseSample(crate::mouse::input::Sample),
     KeepAlive(bool),
     Connect,
+    SwitchSite(crate::sites::Target),
     Disconnect,
     Input {
         generation: u64,
@@ -132,6 +140,10 @@ impl Reply {
     }
 }
 impl Connection {
+    /// The serialized session owner closes the old transport before opening another.
+    pub fn connect_to(&self, target: crate::sites::Target) -> Result<(), String> {
+        self.enqueue(Command::SwitchSite(target))
+    }
     pub fn start(screen: Screen) -> Result<Self, String> {
         Self::start_at(screen, PTT_ENDPOINT.to_owned())
     }
@@ -146,6 +158,7 @@ impl Connection {
         let runtime = tokio::runtime::Handle::try_current().map_err(|e| e.to_string())?;
         let (commands, receiver) = mpsc::channel(64);
         let initial = View {
+            site: crate::sites::Target::default(),
             mouse: crate::mouse::input::Snapshot::default(),
             output_pending: false,
             keep_alive: true,

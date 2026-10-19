@@ -7,6 +7,7 @@ fn view() -> View {
     let mut screen = Screen::new(80, 24).unwrap();
     screen.feed(&pttstella::encoding::encode(fixture["reading"].as_str().unwrap()).unwrap());
     View {
+        site: pttstella::sites::Target::default(),
         mouse: pttstella::mouse::input::Snapshot::default(),
         output_pending: false,
         frame: screen.frame(),

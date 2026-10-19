@@ -28,10 +28,13 @@ impl fmt::Display for InputError {
 impl std::error::Error for InputError {}
 
 pub fn encode(text: &str) -> Result<Vec<u8>, InputError> {
+    encode_with(text, encoding::TextEncoding::Uao)
+}
+pub fn encode_with(text: &str, selected: encoding::TextEncoding) -> Result<Vec<u8>, InputError> {
     if text.len() > MAX_INPUT_TEXT_BYTES {
         return Err(InputError::TooLong);
     }
-    let bytes = encoding::encode(text).map_err(|_| InputError::Unencodable)?;
+    let bytes = selected.encode(text).map_err(|_| InputError::Unencodable)?;
     if bytes.len() > MAX_INPUT_BYTES {
         return Err(InputError::TooLong);
     }
@@ -46,6 +49,12 @@ pub struct PreparedPaste {
 }
 
 pub fn prepare_paste(text: &str) -> Result<PreparedPaste, InputError> {
+    prepare_paste_with(text, encoding::TextEncoding::Uao)
+}
+pub fn prepare_paste_with(
+    text: &str,
+    selected: encoding::TextEncoding,
+) -> Result<PreparedPaste, InputError> {
     if text.is_empty() {
         return Err(InputError::Empty);
     }
@@ -59,7 +68,7 @@ pub fn prepare_paste(text: &str) -> Result<PreparedPaste, InputError> {
     {
         return Err(InputError::Control(ch));
     }
-    let bytes = encode(&text.replace('\n', "\r"))?;
+    let bytes = encode_with(&text.replace('\n', "\r"), selected)?;
     let lines = text.split('\n').count();
     Ok(PreparedPaste { text, bytes, lines })
 }

@@ -1960,3 +1960,103 @@ async fn invalid_and_offline_input_is_rejected_without_connecting() {
 mod article_tests;
 #[path = "mouse_tests.rs"]
 mod mouse_tests;
+
+#[tokio::test]
+async fn telnet_gbk_switch_closes_websocket_before_new_input_and_disables_ptt_commands() {
+    use crate::{encoding::TextEncoding, sites::Target};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(navigation_page("list").into()))
+        .await
+        .unwrap();
+    let original = wait(&connection, |view| {
+        view.phase == Phase::Connected
+            && matches!(view.context(), navigation::Context::ArticleList { .. })
+    })
+    .await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let target = Target::new(
+        format!("telnet://{}", listener.local_addr().unwrap()),
+        TextEncoding::Gbk,
+    )
+    .unwrap();
+    connection.connect_to(target.clone()).unwrap();
+    // The new dial waits for the owned Close handshake. No station logout keys.
+    assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+    ws.flush().await.unwrap();
+    let (mut tcp, _) = timeout(Duration::from_secs(4), listener.accept())
+        .await
+        .unwrap()
+        .unwrap();
+    tcp.write_all(b"\xff\xfd\x00\x1b[31m\xd6\x1b[32m\xd0\xce\xc4")
+        .await
+        .unwrap();
+    let mut negotiation = [0; 3];
+    tcp.read_exact(&mut negotiation).await.unwrap();
+    assert_eq!(negotiation, [255, 251, 0]);
+    let view = wait(&connection, |view| {
+        view.phase == Phase::Connected && view.frame.glyphs.first().is_some_and(|g| g.text == "中")
+    })
+    .await;
+    assert_eq!(view.site, target);
+    assert!(view.generation > original.generation);
+    assert!(!view.keep_alive_ready);
+    assert!(matches!(
+        view.context(),
+        navigation::Context::Unknown {
+            reason: navigation::UnknownReason::DifferentSite
+        }
+    ));
+    assert_eq!(view.frame.glyphs[1].text, "文");
+    assert!(
+        connection
+            .request_switch_board(
+                view.stamp(),
+                crate::board_navigation::BoardName::parse("Stella").unwrap()
+            )
+            .unwrap()
+            .wait()
+            .await
+            .is_err()
+    );
+    assert!(
+        connection
+            .request_login(
+                view.stamp(),
+                crate::login::Credentials::new(
+                    "Synthetic".into(),
+                    zeroize::Zeroizing::new(b"unused".to_vec())
+                )
+                .unwrap()
+            )
+            .unwrap()
+            .wait()
+            .await
+            .is_err()
+    );
+    connection
+        .input(original.generation, b"STALE".to_vec())
+        .unwrap();
+    connection
+        .input(
+            view.generation,
+            crate::input::encode_with("中文", TextEncoding::Gbk).unwrap(),
+        )
+        .unwrap();
+    let mut input = [0; 4];
+    tcp.read_exact(&mut input).await.unwrap();
+    assert_eq!(input, [0xd6, 0xd0, 0xce, 0xc4]);
+    assert!(
+        timeout(Duration::from_millis(50), tcp.read_u8())
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::TransportClosed
+    );
+    assert_eq!(tcp.read(&mut [0; 1]).await.unwrap(), 0);
+}

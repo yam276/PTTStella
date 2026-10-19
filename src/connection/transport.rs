@@ -1,8 +1,12 @@
 //! WSS lifecycle and bounded writes. No screen or browsing policy.
-use super::{CloseOutcome, Dial, Socket};
+use super::{CloseOutcome, Dial, WebSocket};
 use futures_util::{SinkExt, StreamExt};
 use std::{sync::Arc, time::Duration};
 use tokio::time::timeout;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+};
 use tokio_tungstenite::{
     Connector, connect_async_tls_with_config,
     tungstenite::{
@@ -12,7 +16,67 @@ use tokio_tungstenite::{
     },
 };
 
+pub(super) enum Socket {
+    WebSocket(Box<WebSocket>),
+    Telnet(TcpStream),
+}
+impl Socket {
+    pub(super) async fn next(
+        &mut self,
+    ) -> Option<Result<Message, tokio_tungstenite::tungstenite::Error>> {
+        match self {
+            Self::WebSocket(socket) => socket.next().await,
+            Self::Telnet(socket) => {
+                let mut bytes = vec![0; 8192];
+                match socket.read(&mut bytes).await {
+                    Ok(0) => None,
+                    Ok(length) => {
+                        bytes.truncate(length);
+                        Some(Ok(Message::Binary(bytes.into())))
+                    }
+                    Err(error) => Some(Err(error.into())),
+                }
+            }
+        }
+    }
+    pub(super) async fn send(
+        &mut self,
+        message: Message,
+    ) -> Result<(), tokio_tungstenite::tungstenite::Error> {
+        match self {
+            Self::WebSocket(socket) => socket.send(message).await,
+            Self::Telnet(socket) => match message {
+                Message::Binary(bytes) => socket.write_all(&bytes).await.map_err(Into::into),
+                _ => Ok(()),
+            },
+        }
+    }
+    pub(super) async fn flush(&mut self) -> Result<(), tokio_tungstenite::tungstenite::Error> {
+        match self {
+            Self::WebSocket(socket) => socket.flush().await,
+            Self::Telnet(socket) => socket.flush().await.map_err(Into::into),
+        }
+    }
+}
 pub(super) async fn dial(endpoint: String) -> Result<Socket, String> {
+    let endpoint = crate::sites::Endpoint::try_from(endpoint)?;
+    let url = url::Url::parse(endpoint.as_str()).map_err(|e| e.to_string())?;
+    if url.scheme() == "telnet" {
+        let host = url
+            .host_str()
+            .ok_or_else(|| crate::msg!("site-address-invalid"))?
+            .trim_matches(['[', ']']);
+        return timeout(
+            Duration::from_secs(15),
+            TcpStream::connect((host, url.port().unwrap_or(23))),
+        )
+        .await
+        .map_err(|_| crate::msg!("connection-timeout"))?
+        .map(Socket::Telnet)
+        .map_err(|e| crate::msg!("connection-failed", e = e.to_string()));
+    }
+    let origin = endpoint.origin()?;
+    let endpoint = endpoint.as_str();
     let mut request = endpoint.into_client_request().map_err(|e| e.to_string())?;
     let connector = if request.uri().scheme_str() == Some("wss") {
         Some(tls_connector()?)
@@ -21,9 +85,7 @@ pub(super) async fn dial(endpoint: String) -> Result<Socket, String> {
     };
     request.headers_mut().insert(
         "Origin",
-        "https://term.ptt.cc"
-            .parse()
-            .map_err(|_| "invalid fixed origin")?,
+        origin.parse().map_err(|_| "invalid fixed origin")?,
     );
     let config = WebSocketConfig::default()
         .max_message_size(Some(64 * 1024))
@@ -34,7 +96,7 @@ pub(super) async fn dial(endpoint: String) -> Result<Socket, String> {
     )
     .await
     .map_err(|_| crate::msg!("connection-timeout").to_owned())?
-    .map(|(socket, _)| socket)
+    .map(|(socket, _)| Socket::WebSocket(Box::new(socket)))
     .map_err(|e| crate::msg!("connection-failed", e = e.to_string()))
 }
 
@@ -50,9 +112,19 @@ pub(super) async fn stop(socket: &mut Option<Socket>, dialing: &mut Option<Dial>
             *socket = Some(connected);
         }
     }
-    if let Some(mut connection) = socket.take() {
+    if let Some(connection) = socket.take() {
+        let mut connection = match connection {
+            Socket::Telnet(mut stream) => {
+                return match timeout(Duration::from_secs(2), stream.shutdown()).await {
+                    Ok(Ok(())) => CloseOutcome::TransportClosed,
+                    _ => CloseOutcome::Unconfirmed,
+                };
+            }
+            Socket::WebSocket(connection) => connection,
+        };
         let close = async {
             connection
+                .as_mut()
                 .close(Some(CloseFrame {
                     code: CloseCode::Normal,
                     reason: "PTTStella disconnect".into(),
