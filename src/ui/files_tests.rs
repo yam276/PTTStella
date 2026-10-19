@@ -263,7 +263,7 @@ async fn revoked_profile_and_invalid_png_never_write_and_release_the_file_slot()
             export_png(
                 permit,
                 ExportRequest {
-                    lease: state.lease_export(identity, None, 0),
+                    lease: state.lease_output(identity, None, 0),
                     source,
                     png: "data:image/png;base64,AAAA".into(),
                     rows: 0..24,
@@ -330,7 +330,7 @@ async fn deferred_picker_cannot_save_an_old_policy_source_or_selection_but_a_new
             rows,
             selected: true,
             probe: None,
-            lease: state.lease_export(identity, Some(11), 0),
+            lease: state.lease_output(identity, Some(11), 0),
             source: source.clone(),
         };
         files
@@ -423,7 +423,7 @@ async fn deferred_picker_cannot_save_an_old_policy_source_or_selection_but_a_new
             rows: fresh_rows,
             selected: false,
             probe: Some(dir.path().into()),
-            lease: state.lease_export(fresh, None, fresh_epoch),
+            lease: state.lease_output(fresh, None, fresh_epoch),
             source,
         };
         files.start(|permit| export_png(permit, request)).unwrap();
@@ -555,5 +555,73 @@ async fn recent_failure_during_close_is_reported_and_joined() {
         })
         .unwrap();
     assert!(files.finish().await.is_err());
+    assert!(!files.busy());
+}
+
+#[tokio::test]
+async fn clipboard_write_rechecks_revocation_and_source_before_touching_os() {
+    for mode in ["valid", "revised", "filtered", "closed"] {
+        let (mut state, updates, source, identity) = snapshot();
+        let lease = state.lease_output(identity, None, 0);
+        let mut files = Files::default();
+        if mode == "revised" {
+            updates.send_modify(|view| view.frame.revision += 1);
+        }
+        if mode == "filtered" {
+            state.replace_rules(filters::Rules::default());
+        }
+        if mode == "closed" {
+            files.revoke();
+        }
+        let writes = Arc::new(Mutex::new(Vec::new()));
+        let written = writes.clone();
+        let result = copy_with_writer(
+            files.permit.clone(),
+            "完整網址".into(),
+            lease,
+            source,
+            move |text| {
+                written.lock().unwrap().push(text);
+                Ok(())
+            },
+        )
+        .await;
+        assert!(matches!(result, Completion::Clipboard(Ok(()))) == (mode == "valid"));
+        assert_eq!(writes.lock().unwrap().len(), usize::from(mode == "valid"));
+        files.finish().await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn clipboard_worker_is_bounded_nonblocking_and_joined_on_close() {
+    let (mut state, _updates, source, identity) = snapshot();
+    let lease = state.lease_output(identity, None, 0);
+    let (started, start) = oneshot::channel();
+    let (release, gate) = std::sync::mpsc::channel();
+    let mut files = Files::default();
+    files
+        .start(|permit| {
+            copy_with_writer(permit, "text".into(), lease, source, move |_| {
+                started.send(()).unwrap();
+                gate.recv_timeout(Duration::from_secs(3)).unwrap();
+                Err("synthetic clipboard failure".into())
+            })
+        })
+        .unwrap();
+    tokio::select! {_=files.next()=>panic!("worker returned early"),_=start=>{}}
+    assert!(
+        files
+            .start(|_| async { Completion::Clipboard(Ok(())) })
+            .is_err()
+    );
+    let mut finish = Box::pin(files.finish());
+    tokio::select! {_=&mut finish=>panic!("worker was not joined"),_=tokio::time::sleep(Duration::from_millis(10))=>{}}
+    release.send(()).unwrap();
+    assert!(
+        finish
+            .await
+            .unwrap_err()
+            .contains("synthetic clipboard failure")
+    );
     assert!(!files.busy());
 }

@@ -313,7 +313,7 @@ font-face-bundled-failed = { $role }字型「{ $name }」內建載入失敗
 font-face-local-failed = { $role }字型「{ $name }」無法由本機載入
 font-fallback-warning = { $warning }；目前依字型鏈替代，實際替代字形未確認。可改選「內建跨平台」，或查看官方取得與授權說明。
 font-bundled-loaded = 已載入 App 內建字型：{ $names }；無須另行安裝。
-link-hover-hint = { $url } — 點擊開啟；右鍵選取後可複製
+link-hover-hint = { $url } — 點擊開啟；右鍵開啟操作選單
 export-lines-hint = 匯出第 { $start }–{ $end } 行（完整 80 欄）
 image-ready-cached = 圖片已載入 · 記憶體快取
 filters-reason = 一般黑名單：{ $reason }
@@ -503,3 +503,24 @@ sites-unencrypted = Telnet／ws 不加密，輸入的帳密也會以明文傳輸
 sites-help = 「連線切換」會先關閉目前連線；只有「儲存最愛」或「設為預設」才保存資料。預設站於下次啟動連線，不自動登入。每站可選編碼，切換編碼會重新連線；其他站使用原始輸入，不使用 PTT 專用登入與導覽。
 
 sites-remove = 移除最愛
+
+inline-image-budget = 此頁圖片已達容量上限；可點網址個別預覽。
+inline-image-limit = 每頁最多展開 8 張圖片；其他圖片可點網址預覽。
+
+context-title = 畫面操作
+context-copy = 複製選取文字
+context-copy-link = 複製完整網址
+context-open-link = 開啟連結／預覽圖片
+context-select-link = 選取完整網址
+context-select-all = 選取整頁文字
+context-export-rows = 匯出選取行 PNG…
+context-export-page = 匯出整頁 PNG…
+context-inline = 展開本頁圖片
+context-back = 返回
+context-previous = 上一頁
+context-next = 下一頁
+context-bookmarks = 文章書籤…
+context-filters = 黑名單管理…
+context-vim = 切換 Vim 模式
+context-settings = 外觀與設定…
+context-copied = 已複製到剪貼簿

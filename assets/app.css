@@ -134,3 +134,29 @@ button.primary .settings-icon { color: inherit; }
 #sites-dialog p { line-height:1.5; color:var(--ui-muted); }
 #sites-dialog select { text-overflow:ellipsis; }
 @media (max-width:520px) { #sites-dialog label { grid-template-columns:minmax(0,1fr); } }
+
+#inline-images { position:absolute; inset:0; pointer-events:none; }
+#inline-images .inline-text-row { position:absolute; left:0; bottom:auto; }
+.inline-image { position:absolute; left:0; display:flex; align-items:center; justify-content:center; padding:12px; box-sizing:border-box; }
+.inline-image canvas { position:static; flex:none; }
+.inline-image-note { color:var(--ui-muted); font-size:14px; }
+
+/* App-owned context menu stays inside the viewport, independently of zoom. */
+#surface-context-menu {
+    position: fixed; z-index: 80; width: min(270px, calc(100vw - 16px));
+    max-height: calc(100vh - 16px); overflow-y: auto; overscroll-behavior: contain;
+    padding: 6px; box-sizing: border-box; border: 1px solid #8e784a;
+    border-radius: 12px; background: #101d32; color: #eee9dc;
+    box-shadow: 0 8px 28px #0009; user-select: none;
+}
+#surface-context-menu[hidden], #surface-context-menu button[hidden] { display: none; }
+#surface-context-menu button {
+    display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px;
+    padding: 7px 10px; margin: 0; border: 0; border-radius: 6px;
+    text-align: left; background: transparent; color: inherit; font-size: 13px;
+}
+#surface-context-menu button svg { color: #d4b87c; flex-shrink: 0; }
+#surface-context-menu button:hover:not(:disabled), #surface-context-menu button:focus-visible {
+    background: #293b55; outline: 1px solid #d4b87c;
+}
+#surface-context-menu button:disabled { opacity: .42; }

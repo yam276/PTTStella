@@ -35,7 +35,7 @@ fn retained_frame_cannot_authorize_interactions_during_an_output_batch() {
     let identity = displayed(&mut state, &view);
     hover(&mut state, identity, &view);
     state.select(identity, 5, &Selection::All, &view).unwrap();
-    let lease = state.lease_export(identity, None, view.input_epoch);
+    let lease = state.lease_output(identity, None, view.input_epoch);
     assert!(lease.check(&view).is_ok());
     // Direct worker/watch observation must revoke a write even before update().
     view.output_pending = true;
@@ -218,7 +218,7 @@ fn selection_clear_is_scoped_and_does_not_cancel_a_full_page_export() {
     let view = view();
     let identity = displayed(&mut state, &view);
     state.select(identity, 11, &Selection::All, &view).unwrap();
-    let selected = state.lease_export(identity, Some(11), view.input_epoch);
+    let selected = state.lease_output(identity, Some(11), view.input_epoch);
     state.clear_selection(identity, 10);
     assert!(selected.check(&view).is_ok());
     assert!(state.copied(identity, 11, &view));
@@ -226,7 +226,7 @@ fn selection_clear_is_scoped_and_does_not_cancel_a_full_page_export() {
     assert!(selected.check(&view).is_err());
     assert!(!state.copied(identity, 11, &view));
     state.select(identity, 12, &Selection::All, &view).unwrap();
-    let full = state.lease_export(identity, None, view.input_epoch);
+    let full = state.lease_output(identity, None, view.input_epoch);
     state.clear_selection(identity, 12);
     assert!(full.check(&view).is_ok());
 }
@@ -316,4 +316,75 @@ fn mouse_press_consumes_the_acknowledged_mode_but_owned_release_can_cross_paints
     let mut fresh = event;
     fresh.lease.stamp = next.stamp();
     assert!(!state.mouse_shown(&fresh));
+}
+
+#[test]
+fn inline_expansion_requires_current_filtered_acknowledgement_and_input_epoch() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let id = displayed(&mut state, &view);
+    assert!(state.inline_page(id, view.stamp(), &view).is_some());
+    view.input_pending = true;
+    assert!(state.inline_page(id, view.stamp(), &view).is_none());
+    view.input_pending = false;
+    view.phase = Phase::Disconnected;
+    assert!(state.inline_page(id, view.stamp(), &view).is_none());
+    view.phase = Phase::Connected;
+    let old = view.stamp();
+    view.input_epoch += 1;
+    assert!(state.inline_page(id, old, &view).is_none());
+    assert!(state.inline_page(id, view.stamp(), &view).is_none());
+    state.update(&view);
+    let id = displayed(&mut state, &view);
+    state.replace_rules(filters::Rules::default());
+    assert!(state.inline_page(id, view.stamp(), &view).is_none());
+}
+
+#[test]
+fn context_copy_uses_acknowledged_filtered_text_and_exact_selection_request() {
+    use super::super::protocol::CopyTarget;
+    let mut state = SurfaceState::new(filters::Rules::default().edit("Alice", "", false).unwrap());
+    let mut view = view();
+    let identity = displayed(&mut state, &view);
+    state
+        .select(identity, 41, &Selection::Line { row: 5 }, &view)
+        .unwrap();
+    let selected = CopyTarget::Selection { request: 41 };
+    assert!(
+        !state
+            .copy_text(identity, &selected, &view)
+            .unwrap()
+            .contains("機密測試內容")
+    );
+    assert!(
+        state
+            .copy_text(identity, &CopyTarget::Selection { request: 40 }, &view)
+            .is_none()
+    );
+    assert_eq!(
+        state
+            .copy_text(identity, &CopyTarget::Link { index: 0 }, &view)
+            .as_deref(),
+        Some("https://example.com/visible.png")
+    );
+    assert!(
+        state
+            .copy_text(identity, &CopyTarget::Link { index: 1 }, &view)
+            .is_none()
+    );
+    state.clear_selection(identity, 41);
+    assert!(state.copy_text(identity, &selected, &view).is_none());
+    view.frame.revision += 1;
+    assert!(
+        state
+            .copy_text(identity, &CopyTarget::Link { index: 0 }, &view)
+            .is_none()
+    );
+    view.frame.revision -= 1;
+    state.replace_rules(filters::Rules::default());
+    assert!(
+        state
+            .copy_text(identity, &CopyTarget::Link { index: 0 }, &view)
+            .is_none()
+    );
 }

@@ -12,6 +12,16 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。沒有獨立文章 UI、啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## 自訂右鍵選單（2026-10-19）
+
+最新交付更新為 `dist/macos-context-menu/PTTStella.app`（arm64、dev debug=0、ad-hoc 簽章）。啟動明確停用 WebView 預設右鍵選單，BBS／黑邊改用深藍金色本機選單。依選取、網址、插圖與閱讀狀態提供複製、開啟、展圖、PNG、翻頁／返回，以及既有書籤／黑名單／Vim／設定入口；站端滑鼠仍由原交易管理，Shift＋右鍵才開本機選單。詳見 [右鍵操作契約](../context-menu.md)。
+
+右鍵複製由 Rust 按已 ACK、已過濾投影取得文字或完整目的地，使用背景工作序列寫入系統剪貼簿；不接受 UI 任意文字。與 PNG 共用可撤銷的 OutputLease，保留正常快捷鍵複製。現有管理視窗入口不等同於游標下 ID 自動辨識、白名單、全文搜尋或直接加入目前文章書籤。
+
+驗證：desktop lib 135／bin 66、全部 JS 111、core 13 commands／2 replays、Fluent、Clippy 及 docs 通過。macOS 中文原生案例確認右鍵保留選取、複製後原生貼回草稿、兩次選單展圖只一批、PNG 及選單開啟時關窗。最終英文 `context_menu` 案例以自製 OSC 8 頁尾將焦點置於合法閱讀游標與連結交集；兩次成功 Rust 複製，貼回完整本機 URL；右鍵圖片預覽實際解碼，選單展圖後 Enter 不收合／重複載入。預覽與文章內載入各取一次 colours.png，missing.png 只一次；整頁 960×576、頁尾選取行 960×24 與整頁裁切逐像素相同，無插圖／選單／游標／反白。peer 拒絕所有站端輸入，最終報告 passed、Close acknowledged、全部 owner join、程序退出碼 0。
+
+證據保留 `.local/verification/context-menu`，包括未通過的早期 WebKit 複製案例、游標不符閱讀條件的限定網址案例及最終完整報告；沒有靠程序退出碼或單元測試冒充原生通過。座標工具的 noWindowsAvailable 仍未普遍排除，本次使用原生 accessibility 定位合成文字輸入位置；任意 DPI、完整站端 Shift 右鍵、其他 OS 與實站仍須另驗。背景寫入單元注入 writer，不碰系統剪貼簿。正常 PNG 使用系統另存視窗，本機探針固定輸出路徑不冒充另存人工驗收。
+
 ## 下一階段：站端相容性與桌面操作
 
 2026-10-17 研究與排序；下表記錄研究時的缺口，執行結果見本節進度。使用者要求將近期站方功能一併納入桌面功能規劃。依公開公告與官方原始碼確認協定，再用自己的核心、互動意圖與合成案例實作；原始碼合併日期不代表 PTT1／PTT2 已部署。下列風險來自程式檢查，尚未證明是過去實站 Vim 暫停的原因。
@@ -633,3 +643,14 @@ macOS arm64 原生合成案例完成非法 https 位址拒絕、保存／移除�
 Windows 10 22H2 x64（19045）、WebView2 155.0.4283.62、DPR=1 完成 core 13 命令／2 replay、desktop lib 133 項、bin 55 項、完整 99 項 JS、docs 21 個 gate 回歸及完整 desktop gate。debug EXE 的真實 WebView2 包含 16 色／雙色字／方塊、trusted 鍵盤與組字事件、剪貼簿、單行與多行貼上及拒絕、PNG 獨立像素、浮球分類、設定／profile、hover／圖片動圖／影片、滑鼠導覽及 Vim、第二程序設定重啟像素相同；Close acknowledged、listener／connection／credential／file owner 全部 join。原始失敗與修復過程保留 .local/verification/windows-release；新 runner 以實際浮球分類操作、等待對話框初始焦點及 120ms Vim 節奏，typed 貼上拒絕與 peer 獨立 bytes 條件不放寬。ZIP release EXE 的解壓後 gate 接續驗證，結果另列；本機成功不代替乾淨 Windows、Windows 11、其他 DPI、實體 IME 候選窗、最高速按鍵、實站登入或其他平台驗收。
 
 2026-10-19 Windows ZIP 最終交付驗證完成：從乾淨來源提交 2a38e907ea13f27f31c270a47125ad2a8fb79196 打包 dist/windows/PTTStella-0.1.0-dev.1-windows-x64.zip（19,758,723 bytes，SHA-256 bb3632cc66af55e6583ccf1a0a30df15a1481cb718c78e89d425f88795180256）。解壓至 target/verification/windows-zip-final，604 份 manifest 檔案逐一核對、七份嵌入圖示 payload 相同、PE AMD64／Windows GUI／版本資訊符合；Windows 視窗實際有 small 與 big icon handle，兩個 VC++ runtime DLL 確認由解壓資料夾載入。解壓的 release EXE 以本身目錄為 cwd、不重新編譯，完整同一 GUI gate 及第二程序保存重啟像素比對通過；EXE SHA-256 187e4a5021978e215fe290e66f3a86bcd495d25beb809b9a2dd747b20802c243，Close acknowledged、全部 owner join。驗證原始報告留在 .local/verification/windows-release/release-gui.json，產物旁提供 verification.json 摘要及 .zip.sha256；Windows 10 x64／DPR 1／WebView2 155.0.4283.62 的合成結果不冒充乾淨安裝、Windows 11、其他 DPI、實體 IME、實站登入、原生儲存 picker 或其他平台。ZIP 包含圖示、app-local CRT 與授權，WebView2 須另行安裝，未作 Authenticode 簽署。
+
+2026-10-19 Enter 文章內展圖：依使用者選擇，在已辨識 PTT 閱讀頁於圖片網址下方展開，不以再次 Enter 收合。Rust 從目前已繪製且套用名單的 snapshot 准入，保留原生一次／i／IME／前綴與其他站的原輸入；每頁最多 8 個不同網址、合計 24 MiB payload／16M 像素，序列下載，頁面／session／過濾變更撤銷。JS 以原 renderer 的行切片與獨立圖片間隙排版，選取、網址與 PNG 保留原行列；圖片僅顯示首幀，展開時暫停閒置刷新。
+
+macOS arm64 合成原生 App 已確認一般模式兩次 Enter 與 Vim Normal 一次 Enter，共 3 筆明確請求只開 1 個 batch；HTTP peer 記錄 colours.png／missing.png 各 1 個 GET，畫面在網址下方顯示自製紅藍圖片及 HTTP 404，沒有開 modal 或收合。插圖下方拖曳反白對準文字，選取行 PNG 指向原第 4 行。獨立 Pillow 核對整頁 960×576、選取行 960×24 且逐像素等於整頁第 4 行裁切；全圖僅來源灰階，未混入紅藍插圖。站端 peer 拒絕全部 bytes，關閉後 Close acknowledged、renderer listener／connection／credential／file owner 全部 join。證據在 `.local/verification/inline-images`；未操作使用者實站 session。
+
+驗證包含 135 項 desktop lib、61 項 desktop bin、core／兩份 replay、Clippy、JS 幾何／快捷鍵與取消 decoder／舊 batch 回歸、封包與中英文資源。最初合成 footer 缺少離開提示及 wire examples 順序錯誤被測試拒絕，修正 fixture／順序後通過，未放寬辨識規則。獨立瀏覽器 DOM 測試頁已提供，但 browser 工具拒絕 file URL，該測試列 not_ready；原生實測與 JS 回歸各自記錄，沒有據此宣稱所有視窗大小、實站或其他平台已驗收。
+
+最終候選 `dist/macos-inline-images-final/PTTStella.app` 已完成 arm64 dev／debug=0 打包與 strict ad-hoc 簽章。首輪最終候選在開始 UI 觀察時已斷線，操作順序不完整，保留 failed／cleanup false；同一 executable 重新執行後兩次 Enter 僅一個 batch、兩個網址各一個 GET、PNG 與 Close／全部 owner join 通過。未以重跑覆寫失敗紀錄；本輪產生的中間 App／測試副本在正常程序退出後清理，保留報告、來源 helper、產物雜湊與必要像素圖。
+
+2026-10-19 合併 Windows 修正與最新 main：以 origin/main 的 97d0ca9（文章內展圖、情境選單）整合 Windows 分支四個提交，保留浮球 modal 事件修正、peer Close 結果與 Windows 圖示／ZIP 建置。Cargo.toml 衝突合併 arboard 及 winresource desktop 依賴，Cargo.lock 同時保留兩者；active plan 衝突保留兩邊完整紀錄。src/main.rs 同時保留停用 WebView 原生選單與 Windows icon 設定，未改寫歷史。
+合併版 docs、core 13 命令／2 replay、desktop Clippy／lib／bin 66 項／實際 WebView2 gate 通過，另有 113 項 JS 與 8 項 Windows／macOS 打包回歸。初輪 GUI 保留 failed：新版右鍵先開情境選單，舊 Windows driver 仍預期直接選取；改由 trusted pointer 點選「選取完整網址」，再以相同完整 URL 讀回系統剪貼簿，未放寬 bytes 或 pixel expected。重跑 GUI 及第二程序保存重啟像素相同、Close acknowledged、全部 owner join 通過；原始結果留在 .local/verification/merge-main。Mac 原生重打包與互動仍待 Mac 端另驗，本輪未以 Windows 或 Python 的 Mac 打包回歸冒充原生 macOS 驗證；既有 ZIP 是先前來源版本的交付，不冒充此合併版。

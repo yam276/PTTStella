@@ -104,6 +104,12 @@ pub(super) enum SurfaceEvent {
         generation: u64,
         trusted: bool,
     },
+    InlineExpand {
+        presentation: u64,
+        stamp: Stamp,
+        key: vim::Key,
+        trusted: bool,
+    },
     MediaDecoded {
         request: u64,
         success: bool,
@@ -230,6 +236,13 @@ pub(super) enum SurfaceEvent {
         request: u64,
         selection: Selection,
     },
+    CopyText {
+        presentation: u64,
+        generation: u64,
+        revision: u64,
+        target: CopyTarget,
+        trusted: bool,
+    },
     Copied {
         presentation: u64,
         generation: u64,
@@ -315,6 +328,7 @@ impl SurfaceEvent {
             // Revocation grants no input; it still cannot cross a session.
             StationMouseCancel { lease } => lease.stamp.generation == generation,
             StationMouseRevoke { generation: source } => *source == generation,
+            InlineExpand { trusted, stamp, .. } => *trusted && stamp.generation == generation,
             Key {
                 trusted,
                 generation: source,
@@ -383,7 +397,8 @@ impl SurfaceEvent {
             | OpenLink { trusted, .. }
             | PasteConfirm { trusted }
             | PasteCancel { trusted }
-            | Copied { trusted, .. } => *trusted,
+            | Copied { trusted, .. }
+            | CopyText { trusted, .. } => *trusted,
             // Internal notifications and projections do not submit user input.
             MediaDecoded { .. }
             | KeepAliveGate { .. }
@@ -408,6 +423,23 @@ impl SurfaceEvent {
 
 #[cfg(test)]
 mod admission_tests {
+    #[test]
+    fn context_copy_requires_trust_and_closed_targets() {
+        let event = json!({"kind":"copy_text","presentation":3,"generation":7,"revision":4,"target":{"kind":"link","index":0}});
+        assert!(admits(event.clone(), true, 7));
+        assert!(!admits(event.clone(), false, 7));
+        for target in [
+            json!({"kind":"text","text":"arbitrary"}),
+            json!({"kind":"link","index":0,"text":"override"}),
+            json!({"kind":"link","index":-1}),
+        ] {
+            let mut invalid = event.clone();
+            invalid["trusted"] = true.into();
+            invalid["target"] = target;
+            assert!(serde_json::from_value::<SurfaceEvent>(invalid).is_err());
+        }
+    }
+
     use super::*;
     use serde_json::{Value, json};
     #[test]
@@ -481,6 +513,7 @@ mod admission_tests {
     fn all_station_input_paths_reject_synthetic_or_stale_events() {
         let stamp = json!({"generation":7,"revision":4,"input_epoch":2});
         let events = [
+            json!({"kind":"inline_expand","presentation":3,"stamp":stamp,"key":{"key":"Enter","code":"Enter","ctrl":false,"alt":false,"shift":false,"repeat":false}}),
             json!({"kind":"key","key":{"key":"Enter","code":"Enter","ctrl":false,"alt":false,"shift":false,"repeat":false},"generation":7}),
             json!({"kind":"text","text":"a","generation":7}),
             json!({"kind":"paste","text":"a\nb","generation":7}),
@@ -617,4 +650,11 @@ pub(super) struct ProbePixels {
     pub(super) floating_tools: bool,
     pub(super) proportional_zoom: bool,
     pub(super) zoom_samples: Vec<[u32; 2]>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub(super) enum CopyTarget {
+    Selection { request: u64 },
+    Link { index: usize },
 }

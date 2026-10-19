@@ -270,7 +270,9 @@ def run(port, process, output=None, media_server=None):
         devtools.wait('document.getElementById("surface").dataset.linkResult === "requested"', 'URL click did not reach the opener')
         for kind in ('mousePressed', 'mouseReleased'):
             devtools.call('Input.dispatchMouseEvent', type=kind, x=link_x, y=link_y, button='right', clickCount=1)
-        devtools.wait('!!document.getElementById("surface").dataset.selectionReady', 'right-click did not select the URL')
+        devtools.wait('!document.getElementById("surface-context-menu").hidden', 'right-click did not open the context menu')
+        devtools.click('[data-context-action="select-link"]')
+        devtools.wait('!!document.getElementById("surface").dataset.selectionReady', 'context menu did not select the complete URL')
         devtools.shortcut('c')
         if not copied_text_matches('https://example.com/pttstella'):
             raise ValueError('URL clipboard text did not match the displayed URL')
