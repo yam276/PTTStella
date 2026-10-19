@@ -53,3 +53,36 @@ test("local navigation sends an explicit pointer or toolbar source",()=>{
     assert.deepEqual(sent.map(v=>[v.intent.action,v.source]),[["next_item","pointer"],["back","button"],["previous_page","button"],["next_page","button"]]);
     assert.ok(sent.every(v=>v.kind==="navigate"&&v.trusted&&v.stamp.generation===7));
 });
+
+
+function renderedLinks(scale, links, options) {
+    const rectangles=[];
+    const ctx={setTransform(){},fillRect(...bounds){rectangles.push({colour:this.fillStyle,bounds});}};
+    const target={width:960*scale,height:576*scale,getContext:()=>ctx};
+    const context={palette:["#000000","#800000","#008000","#808000","#000080","#800080","#008080","#c0c0c0","#808080"]};
+    const packet={frame:{cols:80,rows:24,glyphs:[],cursor_visible:false},links};
+    handler("render","repaint",context)(target,packet,options);
+    return rectangles.slice(1); // The first rectangle clears the canvas.
+}
+
+test("live links are underlined without hover, with grid-aligned wrapped spans at each scale",()=>{
+    const links=[{row:3,start:8,end:20},{row:4,start:0,end:6}];
+    for(const scale of [.5,1,1.25,2]) {
+        const thickness=Math.max(1,Math.round(scale));
+        assert.deepEqual(renderedLinks(scale,links,{linkHints:true}),[
+            {colour:"#808080",bounds:[96*scale,96*scale-thickness,144*scale,thickness]},
+            {colour:"#808080",bounds:[0,120*scale-thickness,72*scale,thickness]},
+        ]);
+        assert.deepEqual(renderedLinks(scale,[],{linkHints:true}),[]);
+    }
+});
+
+test("hover brightens only its span and exports omit all local link hints",()=>{
+    const links=[{row:3,start:8,end:20},{row:4,start:0,end:6}];
+    assert.deepEqual(renderedLinks(1,links,{linkHints:true,hovered:1}).map(r=>r.colour),["#808080","#c0c0c0"]);
+    assert.deepEqual(renderedLinks(1,links,{cursor:false,hovered:1}),[]);
+    // New paint packets own their spans; removed or masked links leave no decoration.
+    assert.deepEqual(renderedLinks(1,links.slice(1),{linkHints:true}),[
+        {colour:"#808080",bounds:[0,119,72,1]},
+    ]);
+});
