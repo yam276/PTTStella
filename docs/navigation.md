@@ -40,3 +40,12 @@ Connection 在真正傳送處檢查 generation、Screen revision 與 input epoch
 測試用自己的合成列表／閱讀畫面，包含雙色字、置底文章、反例、舊 frame、輸入競態及實際 WebView pointer／wheel 往返。人工 PTT 登入、各平台 IME 與跨 DPI 結果另列，不能從合成測試推定。
 
 Windows 桌面 gate 以獨立 loopback 服務端比對完整 bytes，確認編號開啟、上下頁、返回及列表移動；另外驗證按住滑鼠時鍵盤／畫面更新取消點擊、原生 capture 丟失、標題整行選取、編號拖曳、雙擊延續，以及縮放、本機捲動、組字、dialog、未知畫面及頁尾不送額外導覽。hover 前後 Canvas PNG 相同，提示層為透明背景與一像素底線；合成截圖位於 `target/verification/desktop/navigation-list-hover.png` 及 `navigation-reading-controls.png`。
+
+
+## 整行操作與左緣返回
+
+文章列表的已辨識項目以整行作為點擊開啟區（最左一欄保留返回）。hover 顯示低透明度藍金光棒與 2.4 秒呼吸動畫；不修改 Canvas 格線、複製或 PNG。系統設定減少動態效果時停用動畫。網址命中仍優先開啟連結；拖動超過既有距離即改為選字，Shift 點擊／雙擊／拖曳保留選取。
+
+文章閱讀、文章列表、看板列表、空列表與命令說明頁的最左一欄，第 2–23 行提供返回區；hover 顯示垂直提示與向左箭頭游標。標頭／頁尾、主選單、未知、輸入或非 PTT 畫面不提供此入口。返回沿用 Rust Back intent、原來的畫面／輸入版本與 pointer 准入；站端滑鼠模式不被本機返回劫持。點擊須在相同命中與版本按下／放開，拖曳、取消或過期不送出。
+
+舊版僅編號底線的驗證記錄仍代表當時版本；完整列 hover 與左緣返回的 native 驗證以 active plan 當次結果為準。

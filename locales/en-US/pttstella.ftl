@@ -244,9 +244,9 @@ font-local-loaded = Local fonts loaded; check the preview for glyph appearance.
 copy-not-ready = Selection is not ready; copy again
 copy-event-unavailable = Clipboard event data is unavailable in this environment
 copy-failed = Cannot write to clipboard; try again
-article-open-hint = Click the number to open the article; drag to select text
+article-open-hint = Click the row to open; drag or hold Shift to select text
 navigation-wait = Waiting for a screen update
-article-list-hint = Click numbers to open · drag to select text
+article-list-hint = Click rows to open · left edge to go back · Shift to select
 article-reading-hint = Scroll to turn pages · Ctrl + scroll to zoom
 paste-native-first = Press i to enter native input before pasting
 paste-unavailable = Cannot read pasted text in this environment
@@ -535,6 +535,7 @@ filters-policy = Account policy
 filters-policy-mask = Block (mask content)
 filters-policy-allow = Allow (keep visible)
 
+pointer-back-hint = Click the left edge to go back; hold Shift to select text
 
 filters-import = Import account list…
 filters-import-title = Choose an account list text file

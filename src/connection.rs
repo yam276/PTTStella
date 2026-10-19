@@ -260,6 +260,14 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    pub fn start_pointer_rows_probe() -> Result<Self, String> {
+        let connection = Self::start_owned_probe(
+            probe::navigation_page("list")?,
+            probe::Scenario::PointerRows,
+        )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     pub fn start_filters_probe() -> Result<Self, String> {
         let connection =
             Self::start_owned_probe(probe::filters_page(false)?, probe::Scenario::Filters)?;

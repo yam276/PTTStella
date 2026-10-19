@@ -73,6 +73,8 @@ pub fn app(props: AppProps) -> Element {
                     Connection::start_board_probe()
                 } else if articles_probing {
                     Connection::start_article_probe()
+                } else if sample_case.as_deref() == Some("pointer_rows") {
+                    Connection::start_pointer_rows_probe()
                 } else if sample_case.as_deref() == Some("bookmarks") {
                     Connection::start_bookmarks_probe()
                 } else if matches!(sample_case.as_deref(), Some("mouse" | "mouse_boundary")) {

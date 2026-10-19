@@ -12,6 +12,14 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。沒有獨立文章 UI、啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## 整行滑鼠導覽與左緣返回（2026-10-19）
+
+最新交付為 `dist/macos-account-lists-final/PTTStella.app`（arm64、dev debug=0、ad-hoc 簽章），包含黑白名單匯入與本節滑鼠操作。文章整行可開啟，網址維持優先；最左一欄第 2–23 行提供返回，hover 顯示垂直提示與向左箭頭游標。可返回畫面限閱讀、文章／看板／空列表與命令說明，未知與主選單不猜測。列光棒採低透明度藍金、2.4 秒呼吸動畫，減少動態效果停用；Shift 與拖曳保持選取，所有本機裝飾不進原始 Canvas 或 PNG。
+
+JS 的整行／返回命中、過期及單次事件、光棒幾何與減少動態效果回歸通過（全套 116）；desktop lib 136／bin 67、core、Clippy、Fluent 與 docs 通過。macOS `pointer_rows` 探針在標題區實際點擊文章 122，接著點最左緣返回列表；本機 peer 精確核對 Down＋Enter、Left 共兩筆，沒有額外輸入。匯出 PNG、Close acknowledged、全部 worker join／listener released、退出碼 0。名單原生案例另完成閱讀頁雙擊選取與真實剪貼簿回讀。
+
+原生畫面證據與報告保留 `.local/verification/account-lists/pointer`。工具沒有純 hover API，零距離捲動被拒絕、移入拖曳也沒有可靠取得完整列動畫；因此呼吸動畫觀感、OS 游標形狀、整行 Shift 拖曳與完整 Windows／Linux 流程仍列人工／平台待驗，未把 JS 或兩筆點擊案例當成這些結果。Windows 導覽 gate 已更新為整行與 Shift 預期，但本次沒有 Windows runner。
+
 ## 黑白名單與文字匯入（2026-10-19）
 
 名單新增 Mask／Allow 策略；v1 黑名單載入後遷移至 v2，明確儲存才寫入。UTF-8（可含 BOM）逐行 ID／B:／W: 名單以背景工作讀取，先預覽合併再確認保存；C: 轉為本機遮黑，色碼／底線只保留分類並提示調整數，N: 與未知分類列出略過數。大小寫相同 ID 合併時白名單優先；不載入外部全域顏色或刪行設定。來源檔與本機備份保留，取消與晚到結果不能套用，詳見 [名單契約](../content-filters.md)。
