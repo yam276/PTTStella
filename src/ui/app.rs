@@ -1,7 +1,8 @@
 //! Dioxus view and native window lifecycle wiring.
 use super::surface::{Options, PendingPaste, surface};
+use base64::Engine;
 use dioxus::prelude::*;
-use dioxus_icons::lucide::{Camera, Compass, Keyboard, Menu, Plug, Shield, Type};
+use dioxus_icons::lucide::{Camera, Compass, Keyboard, Plug, Shield, Type};
 use pttstella::{
     connection::{Connection, Phase},
     screen::Screen,
@@ -23,6 +24,13 @@ pub struct AppProps {
 pub fn app(props: AppProps) -> Element {
     dioxus::desktop::use_asset_handler("pttstella-fonts", |request, responder| {
         responder.respond(crate::fonts::response(&request));
+    });
+    let tools_mark = use_hook(|| {
+        format!(
+            "data:image/svg+xml;base64,{}",
+            base64::engine::general_purpose::STANDARD
+                .encode(include_bytes!("../../assets/icons/constellation-flat.svg"))
+        )
     });
     let probing = props.probe.is_some();
     let window_probe = props.window_probe;
@@ -159,7 +167,8 @@ pub fn app(props: AppProps) -> Element {
                 "data-attention": if fatal() || matches!(phase(), Phase::Error | Phase::Disconnected) { "true" } else { "false" },
                 button { id: "tools-ball", class: "tools-ball", r#type: "button",
                     "aria-label": pttstella::msg!("tools-toggle"), "aria-expanded": "false", "aria-controls": "tools-fan tools-panel",
-                    title: pttstella::msg!("tools-drag-hint"), Menu { size: 26 }
+                    title: pttstella::msg!("tools-drag-hint"),
+                    img { class: "tools-mark", src: "{tools_mark}", alt: "", "aria-hidden": "true", draggable: "false" }
                 }
                 nav { id: "tools-fan", class: "tools-fan", hidden: true, "aria-label": pttstella::msg!("tools-title"),
                     ToolPetal { group: "navigate", label: pttstella::msg!("tools-navigate"), icon: rsx!{ Compass { size: 22 } } }
@@ -270,7 +279,7 @@ pub fn app(props: AppProps) -> Element {
                 }
                 div { class: "dialog-actions",
                     button { id: "filters-remove", {pttstella::msg!("filters-remove")} }
-                    button { id: "filters-save", {pttstella::msg!("filters-save")} }
+                    button { id: "filters-save", class: "primary", {pttstella::msg!("filters-save")} }
                     button { id: "filters-close", {pttstella::msg!("close")} }
                 }
             }
@@ -284,7 +293,7 @@ pub fn app(props: AppProps) -> Element {
                 div { class: "dialog-actions",
                     button { id: "login-forget", {pttstella::msg!("login-forget")} }
                     button { id: "login-cancel", {pttstella::msg!("cancel")} }
-                    button { id: "login-submit", {pttstella::msg!("login")} }
+                    button { id: "login-submit", class: "primary", {pttstella::msg!("login")} }
                 }
             }
             dialog { id: "destination-dialog", class: "paste-preview", "aria-labelledby": "destination-title",
@@ -299,7 +308,7 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "board-recent-clear", {pttstella::msg!("recent-clear")} }
                 div { class: "dialog-actions",
                     button { id: "destination-cancel", {pttstella::msg!("cancel")} }
-                    button { id: "destination-submit", {pttstella::msg!("destination-go")} }
+                    button { id: "destination-submit", class: "primary", {pttstella::msg!("destination-go")} }
                 }
             }
             dialog { id: "bookmarks-dialog", class: "paste-preview font-dialog", "aria-labelledby": "bookmarks-title",
@@ -312,8 +321,8 @@ pub fn app(props: AppProps) -> Element {
                 p { id: "bookmarks-note", role: "status" }
                 div { class: "dialog-actions",
                     button { id: "bookmarks-remove", {pttstella::msg!("bookmarks-remove")} }
-                    button { id: "bookmarks-save", {pttstella::msg!("bookmarks-save")} }
-                    button { id: "bookmarks-go", {pttstella::msg!("bookmarks-go")} }
+                    button { id: "bookmarks-save", class: "primary", {pttstella::msg!("bookmarks-save")} }
+                    button { id: "bookmarks-go", class: "primary", {pttstella::msg!("bookmarks-go")} }
                     button { id: "bookmarks-close", {pttstella::msg!("close")} }
                 }
             }
@@ -324,7 +333,7 @@ pub fn app(props: AppProps) -> Element {
                 pre { "{paste_text}" }
                 div { class: "dialog-actions",
                     button { id: "paste-cancel", {pttstella::msg!("cancel")} }
-                    button { id: "paste-send", {pttstella::msg!("paste-send")} }
+                    button { id: "paste-send", class: "primary", {pttstella::msg!("paste-send")} }
                 }
             }
             dialog { id: "media-dialog", class: "media-dialog", "aria-labelledby": "media-title",
@@ -415,7 +424,7 @@ pub fn app(props: AppProps) -> Element {
                 div { class: "dialog-actions",
                     button { id: "font-defaults", {pttstella::msg!("settings-defaults")} }
                     button { id: "font-cancel", {pttstella::msg!("cancel")} }
-                    button { id: "font-save", {pttstella::msg!("settings-save")} }
+                    button { id: "font-save", class: "primary", {pttstella::msg!("settings-save")} }
                 }
             }
         }
