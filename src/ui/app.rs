@@ -3,9 +3,9 @@ use super::surface::{Options, PendingPaste, surface};
 use base64::Engine;
 use dioxus::prelude::*;
 use dioxus_icons::lucide::{
-    ALargeSmall, AlignVerticalJustifyEnd, ArrowLeft, Camera, Compass, ExternalLink, Eye, FileDown,
-    FileText, FolderOpen, Globe, Keyboard, Languages, List, Plug, RefreshCw, RotateCcw, Save,
-    Shield, Star, Trash2, Type, X,
+    ALargeSmall, AlignVerticalJustifyEnd, ArrowDown, ArrowLeft, ArrowUp, Camera, Compass, Copy,
+    ExternalLink, Eye, FileDown, FileText, FolderOpen, Globe, Image, Keyboard, Languages, Link,
+    List, Plug, RefreshCw, RotateCcw, Save, Shield, Star, Trash2, Type, X,
 };
 use pttstella::{
     connection::{Connection, Phase},
@@ -52,7 +52,15 @@ pub fn app(props: AppProps) -> Element {
     let dialogs_probing = matches!(
         surface_probe.as_deref(),
         Some(
-            "dialogs" | "tools" | "sites" | "fonts" | "sgr66" | "sgr66_legacy" | "osc8" | "inline"
+            "dialogs"
+                | "tools"
+                | "sites"
+                | "fonts"
+                | "sgr66"
+                | "sgr66_legacy"
+                | "osc8"
+                | "inline"
+                | "context_menu"
         )
     );
     let reload_settings = props.reload_settings;
@@ -277,6 +285,7 @@ pub fn app(props: AppProps) -> Element {
                     textarea { id: "keyboard", "aria-label": pttstella::msg!("keyboard-label"), autocomplete: "off", autocapitalize: "off", "autocorrect": "off", wrap: "off", spellcheck: "false" }
                 }
             }
+            {context_menu()}
             dialog { id: "filters-dialog", class: "paste-preview font-dialog", "aria-labelledby": "filters-title",
                 h2 { id: "filters-title", {pttstella::msg!("filters-title")} }
                 p { {pttstella::msg!("filters-description")} }
@@ -543,6 +552,60 @@ fn SettingsCaption(label: String, icon: Element) -> Element {
         span { class: "settings-caption",
             span { class: "settings-icon", "aria-hidden": "true", {icon} }
             span { "{label}" }
+        }
+    }
+}
+
+// Static, localized controls; the surface owner supplies context and admission.
+fn context_menu() -> Element {
+    rsx! {
+        div { id: "surface-context-menu", role: "menu", hidden: true,
+            "aria-label": pttstella::msg!("context-title"),
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy",
+                Copy { size: 18 } span { {pttstella::msg!("context-copy")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy-link",
+                Link { size: 18 } span { {pttstella::msg!("context-copy-link")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "open-link",
+                ExternalLink { size: 18 } span { {pttstella::msg!("context-open-link")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "select-link",
+                Link { size: 18 } span { {pttstella::msg!("context-select-link")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "select-all",
+                FileText { size: 18 } span { {pttstella::msg!("context-select-all")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "export-rows",
+                Camera { size: 18 } span { {pttstella::msg!("context-export-rows")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "export-page",
+                Camera { size: 18 } span { {pttstella::msg!("context-export-page")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "inline",
+                Image { size: 18 } span { {pttstella::msg!("context-inline")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "back",
+                ArrowLeft { size: 18 } span { {pttstella::msg!("context-back")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "previous",
+                ArrowUp { size: 18 } span { {pttstella::msg!("context-previous")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "next",
+                ArrowDown { size: 18 } span { {pttstella::msg!("context-next")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "bookmarks",
+                Star { size: 18 } span { {pttstella::msg!("context-bookmarks")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "filters",
+                Shield { size: 18 } span { {pttstella::msg!("context-filters")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "vim",
+                Keyboard { size: 18 } span { {pttstella::msg!("context-vim")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "settings",
+                ALargeSmall { size: 18 } span { {pttstella::msg!("context-settings")} }
+            }
         }
     }
 }

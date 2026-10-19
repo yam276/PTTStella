@@ -34,7 +34,7 @@ function createFiltersDialog({tr,send,current,invalidate,reset,restore,changed})
     }
     function revoke(){disposed=true;}
     function destroy(){revoke();if(filtersDialog.open)filtersDialog.close();filterEntries=[];filtersId.value="";filtersNote.value="";}
-    return {open,receive,paint,revoke,destroy,blocked:()=>presentationBlocked,
+    return {show:openFilters,open,receive,paint,revoke,destroy,blocked:()=>presentationBlocked,
         clean:()=>disposed&&!filtersDialog.open&&filterEntries.length===0&&!filtersId.value&&!filtersNote.value,
         bindings:[[filtersButton,"click",openFilters],[filtersClose,"click",closeFilters],[filtersDialog,"cancel",closeFilters],
             [filtersList,"change",chooseFilter],[filtersSave,"click",saveFilter],[filtersRemove,"click",removeFilter],[filtersReveal,"click",revealFilters]]};

@@ -76,6 +76,7 @@ pub(super) struct Checks {
     pub(super) osc8_media_decoded: usize,
     pub(super) inline_expands: usize,
     pub(super) inline_requests: usize,
+    pub(super) context_copies: usize,
     pub(super) verification_required: bool,
     pub(super) verification_rejected: bool,
     pub(super) verification_browsing: bool,
@@ -507,6 +508,14 @@ pub(super) fn surface_sample(
         Some("sgr66_legacy") => sgr66_sample(false),
         Some("osc8") => osc8_sample(media_origin),
         Some("inline") => inline_sample(media_origin),
+        Some("context_menu") => {
+            let mut bytes = inline_sample(media_origin)?;
+            // Keep the reading cursor on the last row. A synthetic OSC 8
+            // footer provides a real link under the accessibility editing host.
+            let origin = media_origin.ok_or("context menu probe requires a media origin")?;
+            bytes.extend_from_slice(&encoding::encode(&format!("\x1b[24;1H\x1b[7m\x1b]8;;{origin}/colours.png\x07 瀏覽 第 1/2 頁 (50%) 目前顯示: 第 1~23 行 (h)說明 (←)離開\x1b]8;;\x07\x1b[0m\x1b[24;6H")).map_err(|e|e.to_string())?);
+            Ok(bytes)
+        }
         _ => preview(probe, media_origin),
     }
 }
@@ -779,6 +788,25 @@ mod sample_tests {
             (4, 5)
         );
     }
+    #[test]
+    fn context_menu_fixture_preserves_reading_and_links_the_focused_cursor() {
+        let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
+        screen.feed(
+            &surface_sample(Some("context_menu"), true, Some("http://127.0.0.1:9876")).unwrap(),
+        );
+        let frame = screen.frame();
+        assert_eq!(
+            pttstella::navigation::analyze(&frame).kind(),
+            "article_reading"
+        );
+        let links = pttstella::links::detect(&frame);
+        let (col, row) = frame.cursor;
+        assert!(links.iter().any(|link| link.row == row
+            && link.start <= col
+            && col < link.end
+            && link.url == "http://127.0.0.1:9876/colours.png"));
+    }
+
     #[test]
     fn inline_sample_is_a_reading_page_with_two_local_images() {
         let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();

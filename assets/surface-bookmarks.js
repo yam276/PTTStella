@@ -71,7 +71,7 @@ function createBookmarksDialog({tr,send,prepare,restore,changed,openDestination,
     }
     function revoke(){disposed=true;opening=null;pending=null;composing=false;entries=[];value.value="";label.value="";}
     function destroy(){revoke();list.replaceChildren();if(dialog.open)dialog.close();}
-    return {receiveOpen,receive,revoke,destroy,update:()=>{if(!disposed)working();},
+    return {show:open,receiveOpen,receive,revoke,destroy,update:()=>{if(!disposed)working();},
         clean:()=>disposed&&!dialog.open&&!pending&&opening===null&&!composing&&!entries.length&&!value.value&&!label.value,
         bindings:[[button,"click",open],[closeButton,"click",close],[dialog,"cancel",close],[list,"change",choose],
             [fresh,"click",newDraft],[save,"click",e=>edit(e)],[remove,"click",e=>edit(e,true)],[go,"click",goTo],[value,"input",working],

@@ -140,7 +140,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
     }
     function revoke(){disposed=true;epoch++;catalogRequest++;clearTimeout(fontTimer);fontTimer=0;fontPreviewNext=null;}
     function destroy(){revoke();fontDraft=null;fontPreviewBusy=false;profileBusy=false;fontSaving=false;if(fontDialog.open)fontDialog.close();}
-    return {open,preview:receivePreview,catalog,profile,saved,revoke,destroy,
+    return {request:openFonts,open,preview:receivePreview,catalog,profile,saved,revoke,destroy,
         notice(message){if(!fontDialog.open)return false;fontNote.textContent=message;return true;},
         clean:()=>disposed&&fontTimer===0&&fontPreviewNext===null&&!fontDialog.open,
         bindings:[

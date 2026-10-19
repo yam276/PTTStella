@@ -236,6 +236,13 @@ pub(super) enum SurfaceEvent {
         request: u64,
         selection: Selection,
     },
+    CopyText {
+        presentation: u64,
+        generation: u64,
+        revision: u64,
+        target: CopyTarget,
+        trusted: bool,
+    },
     Copied {
         presentation: u64,
         generation: u64,
@@ -390,7 +397,8 @@ impl SurfaceEvent {
             | OpenLink { trusted, .. }
             | PasteConfirm { trusted }
             | PasteCancel { trusted }
-            | Copied { trusted, .. } => *trusted,
+            | Copied { trusted, .. }
+            | CopyText { trusted, .. } => *trusted,
             // Internal notifications and projections do not submit user input.
             MediaDecoded { .. }
             | KeepAliveGate { .. }
@@ -415,6 +423,23 @@ impl SurfaceEvent {
 
 #[cfg(test)]
 mod admission_tests {
+    #[test]
+    fn context_copy_requires_trust_and_closed_targets() {
+        let event = json!({"kind":"copy_text","presentation":3,"generation":7,"revision":4,"target":{"kind":"link","index":0}});
+        assert!(admits(event.clone(), true, 7));
+        assert!(!admits(event.clone(), false, 7));
+        for target in [
+            json!({"kind":"text","text":"arbitrary"}),
+            json!({"kind":"link","index":0,"text":"override"}),
+            json!({"kind":"link","index":-1}),
+        ] {
+            let mut invalid = event.clone();
+            invalid["trusted"] = true.into();
+            invalid["target"] = target;
+            assert!(serde_json::from_value::<SurfaceEvent>(invalid).is_err());
+        }
+    }
+
     use super::*;
     use serde_json::{Value, json};
     #[test]
@@ -625,4 +650,11 @@ pub(super) struct ProbePixels {
     pub(super) floating_tools: bool,
     pub(super) proportional_zoom: bool,
     pub(super) zoom_samples: Vec<[u32; 2]>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub(super) enum CopyTarget {
+    Selection { request: u64 },
+    Link { index: usize },
 }

@@ -22,12 +22,12 @@ use std::{
 
 /// A snapshot may be saved only while its UI policy and source still match.
 #[derive(Clone)]
-pub(super) struct ExportLease {
+pub(super) struct OutputLease {
     identity: Identity,
     revoked: Arc<AtomicBool>,
     input_epoch: Option<u64>,
 }
-impl ExportLease {
+impl OutputLease {
     pub(super) fn check(&self, view: &View) -> Result<(), String> {
         if view.output_pending
             || self
@@ -43,8 +43,8 @@ impl ExportLease {
         }
     }
 }
-struct ActiveExport {
-    lease: ExportLease,
+struct ActiveOutput {
+    lease: OutputLease,
     selection: Option<u64>,
 }
 
@@ -67,6 +67,7 @@ struct SelectedRows {
     identity: Identity,
     request: u64,
     rows: Range<usize>,
+    text: String,
     input_epoch: u64,
 }
 pub(super) struct SurfaceState {
@@ -76,7 +77,7 @@ pub(super) struct SurfaceState {
     dirty: bool,
     selected: Option<SelectedRows>,
     hover: Option<Lease>,
-    export: Option<ActiveExport>,
+    output: Option<ActiveOutput>,
 }
 impl SurfaceState {
     pub(super) fn new(rules: filters::Rules) -> Self {
@@ -87,7 +88,7 @@ impl SurfaceState {
             dirty: true,
             selected: None,
             hover: None,
-            export: None,
+            output: None,
         }
     }
     pub(super) fn rules(&self) -> &filters::Rules {
@@ -100,7 +101,7 @@ impl SurfaceState {
         self.dirty
     }
     pub(super) fn display_changed(&mut self) {
-        self.revoke_export();
+        self.revoke_output();
         self.dirty = true;
     }
     pub(super) fn queue(
@@ -208,7 +209,7 @@ impl SurfaceState {
         })
     }
     fn policy_changed(&mut self) {
-        self.revoke_export();
+        self.revoke_output();
         self.selected = None;
         self.hover = None;
         self.dirty = true;
@@ -234,11 +235,11 @@ impl SurfaceState {
     pub(super) fn update(&mut self, view: &View) -> bool {
         let version = self.filters.version();
         self.filters.sync(view.generation, view.frame.revision);
-        if self.export.as_ref().is_some_and(|active| {
+        if self.output.as_ref().is_some_and(|active| {
             active.lease.identity.presentation != self.filters.version()
                 || active.lease.check(view).is_err()
         }) {
-            self.revoke_export();
+            self.revoke_output();
         }
         if view.output_pending
             || self.filters.version() != version
@@ -277,17 +278,18 @@ impl SurfaceState {
         let selected = self
             .current(identity, view)
             .and_then(|p| selection::extract(&p.frame, selection).ok());
-        if self.export.as_ref().is_some_and(|active| {
+        if self.output.as_ref().is_some_and(|active| {
             active.selection.is_some_and(|old| {
                 old != request || active.lease.identity != identity || selected.is_none()
             })
         }) {
-            self.revoke_export();
+            self.revoke_output();
         }
         self.selected = selected.as_ref().map(|s| SelectedRows {
             identity,
             request,
             rows: s.rows.clone(),
+            text: s.text.clone(),
             input_epoch: view.input_epoch,
         });
         selected
@@ -296,6 +298,24 @@ impl SurfaceState {
         self.selected.as_ref().is_some_and(|s| {
             s.identity == identity && s.request == request && s.input_epoch == view.input_epoch
         }) && self.current(identity, view).is_some()
+    }
+    pub(super) fn copy_text(
+        &self,
+        identity: Identity,
+        target: &super::protocol::CopyTarget,
+        view: &View,
+    ) -> Option<String> {
+        let paint = self.current(identity, view)?;
+        match target {
+            super::protocol::CopyTarget::Selection { request } => self
+                .selected
+                .as_ref()
+                .filter(|_| self.copied(identity, *request, view))
+                .map(|selected| selected.text.clone()),
+            super::protocol::CopyTarget::Link { index } => {
+                paint.links.get(*index).map(|link| link.url.clone())
+            }
+        }
     }
     pub(super) fn export_rows(
         &self,
@@ -330,36 +350,36 @@ impl SurfaceState {
             .is_some_and(|s| s.identity == identity && s.request == request)
         {
             self.selected = None;
-            if self.export.as_ref().is_some_and(|active| {
+            if self.output.as_ref().is_some_and(|active| {
                 active.selection == Some(request) && active.lease.identity == identity
             }) {
-                self.revoke_export();
+                self.revoke_output();
             }
         }
     }
     pub(super) fn begin_hover(&mut self, lease: Lease) {
         self.hover = Some(lease);
     }
-    fn revoke_export(&mut self) {
-        if let Some(active) = self.export.take() {
+    fn revoke_output(&mut self) {
+        if let Some(active) = self.output.take() {
             active.lease.revoked.store(true, Ordering::Release);
         }
     }
     /// Called inside Files' admitted factory, so a busy rejection never revokes
-    /// the already accepted export. export_rows validates identity first.
-    pub(super) fn lease_export(
+    /// the accepted output. Callers validate export rows or copy targets first.
+    pub(super) fn lease_output(
         &mut self,
         identity: Identity,
         selection: Option<u64>,
         input_epoch: u64,
-    ) -> ExportLease {
-        self.revoke_export();
-        let lease = ExportLease {
+    ) -> OutputLease {
+        self.revoke_output();
+        let lease = OutputLease {
             identity,
             revoked: Arc::new(AtomicBool::new(false)),
             input_epoch: selection.map(|_| input_epoch),
         };
-        self.export = Some(ActiveExport {
+        self.output = Some(ActiveOutput {
             lease: lease.clone(),
             selection,
         });
@@ -383,6 +403,6 @@ impl SurfaceState {
 }
 impl Drop for SurfaceState {
     fn drop(&mut self) {
-        self.revoke_export();
+        self.revoke_output();
     }
 }

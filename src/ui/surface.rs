@@ -197,6 +197,7 @@ async fn run(
         include_str!("../../assets/surface-filters.js"),
         include_str!("../../assets/surface-mouse.js"),
         include_str!("../../assets/surface-tools.js"),
+        include_str!("../../assets/surface-context-menu.js"),
         include_str!("../../assets/surface.js"),
     ]
     .concat();
@@ -353,6 +354,7 @@ async fn run(
                         let feedback=bookmarks.complete(result.map_err(|e|e.to_string()));
                         Packet::BookmarksResult {request, data:bookmarks.snapshot(), feedback}
                     },
+                    FileCompletion::Clipboard(result)=>Packet::Notice(result.map(|_|{checks.context_copies+=1;pttstella::msg!("context-copied")}).unwrap_or_else(|e|if e==files::Error::Stale {pttstella::msg!("copy-not-ready")}else{e.to_string()})),
                     FileCompletion::Recent(done)=>{recent.complete(done);Packet::RecentBoards(recent.packet())},
                     FileCompletion::Probe(result)=>{pending_report=Some(result.map_err(|e|e.to_string())?);close_deadline=Some(tokio::time::Instant::now()+std::time::Duration::from_secs(45));continue;},
                     FileCompletion::Fonts{request,result}=>{
@@ -821,7 +823,7 @@ async fn run(
                         let result = (|| -> Result<(),String> {
                             let rows=screen.export_rows(Identity{presentation,generation,revision},selection_request,&receiver.borrow())?;
                             files.start(|permit|{
-                                let lease=screen.lease_export(Identity{presentation,generation,revision},selection_request,receiver.borrow().input_epoch);
+                                let lease=screen.lease_output(Identity{presentation,generation,revision},selection_request,receiver.borrow().input_epoch);
                                 let request=files::ExportRequest{lease,source:receiver.clone(),png,rows,selected:selection_request.is_some(),probe:probe.clone().filter(|_|surface_probe.as_deref()!=Some("files"))};
                                 files::export_png(permit,request)
                             })
@@ -1003,6 +1005,17 @@ async fn run(
                     SurfaceEvent::SelectionCleared {presentation,generation,revision,request}=>{
                         screen.clear_selection(Identity{presentation,generation,revision},request);
                     },
+                    SurfaceEvent::CopyText {presentation,generation,revision,target,trusted:_} => {
+                        let view=receiver.borrow().clone();
+                        let identity=Identity{presentation,generation,revision};
+                        if let Some(text)=screen.copy_text(identity,&target,&view) {
+                            let selected=match target {super::protocol::CopyTarget::Selection{request}=>Some(request),super::protocol::CopyTarget::Link{..}=>None};
+                            let clipboard=files.clipboard();
+                            if let Err(error)=files.start(|permit|files::copy_text(permit,clipboard,text,screen.lease_output(identity,selected,view.input_epoch),receiver.clone())) {
+                                eval.send(Packet::Notice(error)).map_err(|e|e.to_string())?;
+                            }
+                        } else {eval.send(Packet::Notice(pttstella::msg!("copy-not-ready"))).map_err(|e|e.to_string())?;}
+                    }
                     SurfaceEvent::Copied {
                         presentation,
                         generation,
@@ -1023,7 +1036,7 @@ async fn run(
                             checks.copied_selection == Some((generation, revision, request));
                     }
                     SurfaceEvent::InlineExpand {presentation,stamp,key,trusted:_} => {
-                        if surface_probe.as_deref()==Some("inline") {checks.inline_requests+=1;}
+                        if matches!(surface_probe.as_deref(),Some("inline"|"context_menu")) {checks.inline_requests+=1;}
                         let view=receiver.borrow().clone();
                         if !view.site.ptt_features() || !keyboard_policy.inline_images_key(&key,&view.context())
                             || pending_paste.read().is_some() || commands.busy() || login_open {continue;}
@@ -1031,7 +1044,7 @@ async fn run(
                             // Synthetic probes must never reach a public image host.
                             if probe.is_some() && paint.image_links.iter().any(|index|media_origin.as_ref().is_none_or(|origin|!paint.links[*index].url.starts_with(&format!("{origin}/")))) {continue;}
                             if let Some(open)=inline_images.open(paint)? {
-                                if surface_probe.as_deref()==Some("inline") {checks.inline_expands+=1;}
+                                if matches!(surface_probe.as_deref(),Some("inline"|"context_menu")) {checks.inline_expands+=1;}
                                 eval.send(Packet::InlineOpen(open)).map_err(|e|e.to_string())?;
                             }
                         }
@@ -1221,7 +1234,7 @@ async fn run(
                 || case=="boards" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && checks.board_cancelled && checks.board_rejected>=1
                 || matches!(case.as_str(),"mouse"|"mouse_boundary") && checks.mouse_passed(case=="mouse_boundary") && receiver.borrow().mouse.active.is_none()
                 || matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") && checks.mouse_samples_passed(&case) && receiver.borrow().mouse.active.is_none() && receiver.borrow().mouse.modes.tracking()==pttstella::mouse::Tracking::Highlight
-                || case=="inline" && checks.inline_requests>=2 && checks.inline_expands==1 && checks.export_checked
+                || matches!(case.as_str(),"inline"|"context_menu") && checks.inline_requests>=2 && checks.inline_expands==1 && checks.export_checked && (case!="context_menu"||checks.context_copies>=2)
                 || case=="osc8" && checks.osc8_open_rows==[8,9] && checks.osc8_copy_rows==[8,9] && checks.osc8_dragged && checks.osc8_media_decoded>=2 && checks.export_checked
                 || case=="login_2fa" && checks.verification_required && checks.verification_rejected && checks.verification_browsing && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
                 || case=="fonts" && checks.font_catalog_reads>=2 && !checks.font_sources.is_empty() && checks.export_checked
@@ -1245,6 +1258,7 @@ async fn run(
             "paste_preview_preserved":pending_paste.read().is_some(),
             "settings_saved":checks.settings_saved,"full_png":checks.export_checked,"rows_png":checks.rows_export_checked,"media_external_requests":checks.media_external,
         });
+        surface_report["context_copies"] = checks.context_copies.into();
         surface_report["final_site"] = serde_json::json!(receiver.borrow().site);
         surface_report["sites_final"] =
             serde_json::json!(sites.snapshot(receiver.borrow().site.clone()));
