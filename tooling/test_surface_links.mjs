@@ -11,20 +11,24 @@ function handler(name,next,context){
     return context[name];
 }
 
-test("right-click on either wrapped fragment requests its Rust link index",()=>{
+test("right-click uses the Rust link index without replacing the existing selection",()=>{
     for(const index of [0,1]){
-        const calls=[],event={preventDefault(){calls.push("prevent");}};
-        const context={stationMouse:{local:()=>true},linkAt:()=>index,cellAt:()=>({row:8+index,col:4}),composing:false,
-            cancelDrag:()=>calls.push("cancel"),focus:()=>calls.push("focus"),requestSelection:value=>calls.push(JSON.parse(JSON.stringify(value)))};
-        handler("selectLink","activate",context)(event);
-        assert.deepEqual(calls,["prevent","cancel","focus",{mode:"link",index}]);
+        const calls=[],context={stationMouse:{local:()=>true},linkAt:()=>index,cellAt:()=>({row:8+index,col:4}),
+            inlineImages:{linkAtPoint:()=>-1},composing:false,pastePending:false,stopped:false,latest:{output_pending:false},
+            document:{querySelector:()=>null},filterUi:{blocked:()=>false},contextState:i=>i,contextMenuItems:i=>i,
+            contextMenu:{close:()=>calls.push("close"),open:(e,data)=>calls.push(data.index)}};
+        handler("openContextMenu","contextAction",context)({isTrusted:true,preventDefault(){}});
+        assert.deepEqual(calls,["close",index]);
     }
 });
-
-test("right-click outside a link or while composing leaves selection unchanged",()=>{
-    for(const [index,composing] of [[-1,false],[0,true]]){
-        const context={stationMouse:{local:()=>true},linkAt:()=>index,cellAt:()=>null,composing};
-        handler("selectLink","activate",context)({preventDefault(){assert.fail("unexpected interception");}});
+test("station right-click stays remote; Shift opens local menu, and untrusted or composing events cannot",()=>{
+    for(const [shiftKey,isTrusted,composing,expected] of [[false,true,false,0],[true,true,false,1],[true,false,false,0],[true,true,true,0]]){
+        let opened=0;
+        const context={stationMouse:{local:()=>false},linkAt:()=>-1,cellAt:()=>null,inlineImages:{linkAtPoint:()=>-1},
+            composing,pastePending:false,stopped:false,latest:{},document:{querySelector:()=>null},filterUi:{blocked:()=>false},
+            contextState:()=>({}),contextMenuItems:()=>new Map(),contextMenu:{close(){},open(){opened++;}}};
+        handler("openContextMenu","contextAction",context)({shiftKey,isTrusted,preventDefault(){}});
+        assert.equal(opened,expected);
     }
 });
 

@@ -68,3 +68,12 @@ test('decoded stills survive repeated expansion and are released on a new revisi
     assert.equal(e.ui.active(),false);assert.equal(still.width,0);assert.equal(e.canvas.style.visibility,'');
     assert.equal(await e.ui.destroy(),true);
 });
+
+test('context hit testing uses inserted image boxes and drops stale indices on reset',async()=>{
+    const e=ownerEnvironment();e.ui.open({...e.open,entries:[{index:3,row:0}]},e.packet);
+    const box=e.nodes.find(n=>n.className==='inline-image');box.getBoundingClientRect=()=>({left:20,right:220,top:80,bottom:140});
+    assert.equal(e.ui.linkAtPoint({clientX:100,clientY:100}),3);
+    assert.equal(e.ui.linkAtPoint({clientX:220,clientY:100}),-1);
+    assert.equal(e.ui.linkAtPoint({clientX:100,clientY:79}),-1);
+    e.ui.reset();assert.equal(e.ui.linkAtPoint({clientX:100,clientY:100}),-1);await e.ui.destroy();
+});

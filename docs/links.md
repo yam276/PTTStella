@@ -17,7 +17,7 @@ Frame 保留 Rust 專用 metadata，不序列化到 WebView；UI 只收到通過
 
 ## 使用與驗證
 
-連結 hover 顯示完整實際目的地；點擊沿用 Rust 的媒體分類或明確外開。一般拖曳複製畫面文字；右鍵選取連結後複製完整目的地，任一跨行片段都對應同一網址。選取與點擊仍核對同一 presentation、generation、revision；過期索引不作用於新畫面。選取行 PNG 仍匯出畫面行，不把完整目的地另畫進圖片。
+連結 hover 顯示完整實際目的地；點擊沿用 Rust 的媒體分類或明確外開。一般拖曳複製畫面文字；右鍵選單可直接複製完整目的地，或先選「選取完整網址」再用系統複製快捷鍵，任一跨行片段都對應同一網址。選取與點擊仍核對同一 presentation、generation、revision；過期索引不作用於新畫面。選取行 PNG 仍匯出畫面行，不把完整目的地另畫進圖片。
 
 核心在 interaction／filters suite 使用自製串流與獨立 expected，覆蓋逐切點、逐 byte、BEL／ST、跨行雙寬字、替換／關閉、混合屬性、惡意 scheme／控制字元、覆寫／擦除／插入／刪除／捲動、容量與 slot 回收、遮黑及 reset。原生互動、平台與實站驗收狀態見 [active plan](active/minimal-browser.md)，核心通過不代表各平台點擊與剪貼簿已驗收。
 

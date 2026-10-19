@@ -97,6 +97,11 @@ function installInlineImages({surface,canvas,tr,redraw,changed,notice}) {
         surface.style.height=mapping.height/ratio+"px";
         return {...base,...mapping};
     }
-    return {open,receive,fail,reset,layout,active:()=>!!current,
+    function linkAtPoint(event){
+        if(!current||dead)return -1;
+        const item=items.find(item=>{const r=item.box.getBoundingClientRect();return event.clientX>=r.left&&event.clientX<r.right&&event.clientY>=r.top&&event.clientY<r.bottom;});
+        return item?.index??-1;
+    }
+    return {open,receive,fail,reset,layout,linkAtPoint,active:()=>!!current,
         async destroy(){dead=true;clear();await Promise.allSettled([...jobs]);layer.remove();return jobs.size===0;}};
 }

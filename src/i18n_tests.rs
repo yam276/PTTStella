@@ -94,7 +94,7 @@ fn independent_loaders_keep_language_and_named_arguments_without_global_switchin
             "link-hover-hint",
             HashMap::from([("url", "https://example.com/<safe> & x")])
         ),
-        "https://example.com/<safe> & x — 點擊開啟；右鍵選取後可複製"
+        "https://example.com/<safe> & x — 點擊開啟；右鍵開啟操作選單"
     );
     assert_eq!(chinese.loader().get("connect"), "連線");
     assert!(serde_json::from_str::<Language>("\"unsupported\"").is_err());
