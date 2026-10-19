@@ -1,5 +1,7 @@
 # 直接依賴與來源
 
+Windows desktop 建置另使用 winresource 0.1.31（MIT，[上游](https://github.com/BenjaminRi/winresource)）將同源 ICO 與版本資訊編入 PE；只在 Windows target 執行資源編譯。ZIP 由 Microsoft Visual Studio redistributable 目錄複製實際需要的 VC++ runtime DLL，採 app-local 部署；來源版本及每檔雜湊記於 manifest。字型／Fluent 授權、Cargo metadata 的相依清單與套件附帶的 license／notice 檔案隨測試包提供。
+
 下列是直接 Cargo 依賴；精確下載身分由 Cargo.lock 的 registry checksum 記錄。
 
 | 依賴 | 用途 | 上游授權／來源 |

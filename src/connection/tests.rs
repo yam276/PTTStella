@@ -1903,6 +1903,10 @@ async fn peer_close_is_reported_and_worker_can_stop() {
             let (stream, _) = listener.accept().await.unwrap();
             let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
             ws.close(close).await.unwrap();
+            assert!(matches!(
+                timeout(Duration::from_secs(2), ws.next()).await.unwrap(),
+                Some(Ok(Message::Close(_)))
+            ));
         });
         connection.connect().unwrap();
         let closed = wait(&connection, |v| {
@@ -1914,7 +1918,14 @@ async fn peer_close_is_reported_and_worker_can_stop() {
             .input(closed.generation, b"n\r".to_vec())
             .unwrap();
         // Shutdown is queued after input, so a joined worker proves the input was handled.
-        connection.shutdown().await.unwrap();
+        assert_eq!(
+            connection.shutdown().await.unwrap(),
+            CloseOutcome::Acknowledged
+        );
+        assert_eq!(
+            connection.shutdown().await.unwrap(),
+            CloseOutcome::Acknowledged
+        );
         assert_eq!(connection.updates.borrow().message, expected);
         server.await.unwrap();
     }

@@ -53,6 +53,25 @@ test('keyboard Back works while dragging from a category closes it without an ac
     f.menu.destroy();assert.equal(f.menu.clean(),true);
 });
 const overlaps=(a,b)=>a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h;
+test('an open modal receives its first pointer action without tool chrome swallowing it or restoring BBS focus',()=>{
+    const f=fixture();f.fire(f.ball,'click');f.fire(f.petals[1],'click');
+    const field={};f.document.activeElement=field;f.document.querySelector=selector=>selector==='dialog[open]'?{}:null;
+    let prevented=0,stopped=0;
+    f.fire(f.document,'pointerdown',{target:field,preventDefault:()=>prevented++,stopPropagation:()=>stopped++});
+    assert.equal(prevented,0);assert.equal(stopped,0);assert.equal(f.menu.open(),false);
+    assert.equal(f.counts().restored,0);assert.equal(f.document.activeElement,field);
+    const ordinary=fixture();ordinary.fire(ordinary.ball,'click');
+    ordinary.fire(ordinary.document,'pointerdown',{target:{},preventDefault:()=>prevented++,stopPropagation:()=>stopped++});
+    assert.equal(prevented,1);assert.equal(stopped,1);assert.equal(ordinary.counts().restored,1);
+});
+test('Escape in an open modal reaches the dialog handler on the first key',()=>{
+    const f=fixture();f.fire(f.ball,'click');f.fire(f.petals[1],'click');
+    const field={};f.document.activeElement=field;f.document.querySelector=()=>({});
+    let prevented=0,stopped=0;
+    f.fire(f.document,'keydown',{target:field,key:'Escape',preventDefault:()=>prevented++,stopPropagation:()=>stopped++});
+    assert.equal(prevented,0);assert.equal(stopped,0);assert.equal(f.menu.open(),false);
+    assert.equal(f.counts().restored,0);assert.equal(f.document.activeElement,field);
+});
 function openAt(f,x,y){
     const start=f.menu.snapshot().point;
     f.fire(f.ball,'pointerdown',{clientX:0,clientY:0});f.advance(40);
