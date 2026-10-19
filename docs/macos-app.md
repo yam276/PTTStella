@@ -28,7 +28,8 @@ python3 tooling/bundle_macos.py --out-dir dist/macos-next
 macOS 保留原生 PTTStella／Edit／Window 選單：`⌘W` 關窗、`⌘Q` 結束、`⌃⌘F` 切換全螢幕，並提供 Zoom／Minimize。關窗與結束共用原本的 renderer、媒體及 Connection 清理流程，Command 快捷鍵不傳至 PTT。
 
 - `Dioxus.toml` 保存顯示名稱、bundle identifier 與 publisher；Cargo.toml 是產品版本的來源。
-- `Contents/MacOS/pttstella` 是實際 release executable；`Contents/Info.plist` 保存 bundle metadata，`Resources` 目前為空，使用系統預設圖示。
+- `Contents/MacOS/pttstella` 是實際 release executable；`Contents/Info.plist` 保存 bundle metadata，`Resources` 保存 `PTTStella.icns` 與字型授權。圖示使用深藍底金色像素星座。
+- 圖示母檔由 `Dioxus.toml` 的 `bundle.icon` 指定；目前為 [PNG 母檔](../assets/icons/pttstella.png)，[來源記錄](../assets/icons/SOURCE.json) 保留產生方式與 SHA-256。打包使用 macOS 內建 `sips` 產生 16／32／128／256／512 點的 1x、2x PNG，再以 `iconutil` 合成 ICNS，包含最高 1024px 表示。`CFBundleIconFile` 指向同一資源，所有圖示內容在簽章前放入 App；轉換失敗不產生最終 App。
 - plist 版本使用 Cargo 版本的三段數字，例如 `0.1.0-dev.1` 對應 `0.1.0`；這不是發佈 build number 管理。
 - `otool -L` 必須只列出系統函式庫／framework。若未來加入非系統動態函式庫，腳本會拒絕，須先實作 bundle 內依賴與路徑管理。
 - 暫存 app 通過 `plutil -lint`、ad-hoc `codesign`、`codesign --verify --deep --strict` 及 `lipo -archs` 後才移至最終路徑。失敗不會留下被誤認為成功的最終 app。
@@ -37,7 +38,9 @@ macOS 保留原生 PTTStella／Edit／Window 選單：`⌘W` 關窗、`⌘Q` 結
 
 ## 散布與驗收邊界
 
-目前 ad-hoc 簽章供本機測試，不是 Developer ID 簽章，也沒有 Apple 公證。若要提供給其他人的 Mac，另需 Developer ID Application 簽署、hardened runtime、Apple notarization 與實際下載安裝驗證；`.dmg`、自訂圖示、Intel／Universal Binary、App Store 與自動更新不包含在本次打包。
+目前 ad-hoc 簽章供本機測試，不是 Developer ID 簽章，也沒有 Apple 公證。若要提供給其他人的 Mac，另需 Developer ID Application 簽署、hardened runtime、Apple notarization 與實際下載安裝驗證；`.dmg`、Intel／Universal Binary、App Store 與自動更新不包含在本次打包。
+
+圖示資源鍵與轉換方式依 [Apple 圖示 metadata](https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundleiconfile) 與 [高解析圖示指南](https://developer.apple.com/library/archive/documentation/GraphicsAnimation/Conceptual/HighResolutionOSX/Optimizing/Optimizing.html)。
 
 標準 bundle 結構見 [Apple Bundle Programming Guide](https://developer.apple.com/library/archive/documentation/CoreFoundation/Conceptual/CFBundles/BundleTypes/BundleTypes.html)，正式散布要求見 [Apple notarization 文件](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)。
 

@@ -58,10 +58,28 @@ def check_dependencies(executable):
         raise RuntimeError('Unbundled non-system libraries: ' + ', '.join(external))
 
 
+def make_icon(source, resources, staging):
+    """Derive the standard 1x/2x representations from one PNG master."""
+    iconset = staging / 'PTTStella.iconset'
+    iconset.mkdir()
+    for size in (16, 32, 128, 256, 512):
+        for scale in (1, 2):
+            pixels = str(size * scale)
+            suffix = '@2x' if scale == 2 else ''
+            output = iconset / f'icon_{size}x{size}{suffix}.png'
+            run('sips', '-s', 'format', 'png', '-z', pixels, pixels,
+                str(source), '--out', str(output))
+    icon = resources / 'PTTStella.icns'
+    run('iconutil', '--convert', 'icns', '--output', str(icon), str(iconset))
+    if not icon.is_file() or icon.read_bytes()[:4] != b'icns':
+        raise RuntimeError('Icon conversion did not produce an ICNS file')
+    return icon.name
+
+
 def bundle(output):
     if sys.platform != 'darwin':
         raise RuntimeError('Build this app on macOS with Xcode Command Line Tools installed')
-    for tool in ('cargo', 'xcrun', 'otool', 'codesign', 'plutil', 'lipo'):
+    for tool in ('cargo', 'xcrun', 'otool', 'codesign', 'plutil', 'lipo', 'sips', 'iconutil'):
         if shutil.which(tool) is None:
             raise RuntimeError(f'Missing required tool: {tool}')
     run('xcrun', '--find', 'clang')
@@ -75,6 +93,9 @@ def bundle(output):
     # to keep two builds side by side, including when a previous build is open.
     if os.path.lexists(destination):
         raise RuntimeError(f'Output already exists: {destination}; choose another --out-dir')
+    icon_source = ROOT / config['bundle']['icon'][0]
+    if not icon_source.is_file():
+        raise RuntimeError(f'Missing app icon: {icon_source}')
     executable = build()
     check_dependencies(executable)
     version = package['version'].split('-', 1)[0].split('+', 1)[0]
@@ -101,6 +122,7 @@ def bundle(output):
         binary.parent.mkdir(parents=True)
         resources = app / 'Contents' / 'Resources'
         resources.mkdir()
+        info['CFBundleIconFile'] = make_icon(icon_source, resources, Path(staging))
         notices = resources / 'FontLicenses'
         notices.mkdir()
         for name in ('NOTICE.txt', 'Cascadia-OFL.txt', 'NotoSansCJK-OFL.txt', 'sources.json'):
@@ -117,6 +139,7 @@ def bundle(output):
         app.rename(destination)
     return {'status': 'bundled', 'app': str(destination), 'version': package['version'],
             'architecture': architecture, 'signing': 'ad_hoc',
+            'icon': info['CFBundleIconFile'],
             'notarized': False, 'gui_acceptance': 'not_run'}
 
 
