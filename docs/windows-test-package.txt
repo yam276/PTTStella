@@ -1,0 +1,34 @@
+PTTStella Windows x64 測試包
+
+使用方式
+1. 將整個 ZIP 解壓縮到可寫入的資料夾；不要直接在 ZIP 內執行。
+2. 確認已安裝 Microsoft Edge WebView2 Evergreen Runtime：
+   https://developer.microsoft.com/microsoft-edge/webview2/
+3. 雙擊 pttstella.exe。啟動會連至保存的預設站，首次為 PTT WSS。
+4. 在 BBS 畫面手動輸入帳號、密碼。Windows 目前不提供帳密保存。
+
+本包包含 EXE／視窗／工作列圖示、獨立 ICO、所需 Microsoft VC++ runtime
+DLL，以及內建字型和其他依賴的授權資料。使用者不需要安裝 Rust、Python、
+Node 或 Visual Studio。WebView2 Runtime 由系統另外安裝，不包含在 ZIP。
+
+測試目標為 Windows 10/11 x64；目前實測平台與通過範圍以專案 active plan
+及隨交付提供的驗證報告為準，不代表每個 Windows 版本均已驗證。
+本測試包尚未進行 Authenticode 簽署。
+
+基本操作
+- 點擊右側星座浮球，選擇導覽、顯示、擷取、輸入、連線或過濾。
+- Ctrl+C 複製選取文字；Ctrl+V 貼上，多行先預覽確認。
+- Ctrl+0 符合視窗；Ctrl+加減鍵或 Ctrl+滾輪縮放。
+- 「擷取」可匯出整頁或選取行 PNG。
+- 斷線後由使用者決定是否重連；不會自動重送帳密。
+
+顯示設定位置：%APPDATA%\PTTStella\config\settings.json
+本包不包含私人設定、帳密、BBS 流量或測試 fixture。
+manifest.json 記錄版本、來源提交、是否含未提交修改及各檔 SHA-256。
+ZIP 旁的 .sha256 可用於核對下載後檔案完整性。
+
+Microsoft Visual C++ runtime DLL 為 Microsoft Corporation 的元件，
+隨應用程式作 app-local 部署；其權利及條款由 Microsoft 保留。
+https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files
+
+專案：https://github.com/yam276/PTTStella

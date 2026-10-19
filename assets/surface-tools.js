@@ -150,10 +150,15 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
         changed();event.preventDefault();event.stopPropagation();}
     function cancel(){if(drag){const id=drag.id;drag=null;suppressClickUntil=now()+300;releaseCapture(id);}halt();close();place();}
     function lost(event){if(drag?.id===event.pointerId)cancel();}
-    function outside(event){if(opened&&!root.contains(event.target)){event.preventDefault();event.stopPropagation();close(true);}}
+    function outside(event){if(opened&&!root.contains(event.target)){
+        // A modal can open asynchronously after a toolbar action. Its first
+        // pointer event belongs to that dialog, including native input focus.
+        if(document.querySelector('dialog[open]')){close();return;}
+        event.preventDefault();event.stopPropagation();close(true);}}
     function key(event){
         if(event.target===ball&&(event.key==='Enter'||event.key===' '))suppressClickUntil=-1;
         if(!opened)return;
+        if(document.querySelector('dialog[open]')){close();return;}
         if(event.key==='Escape'){event.preventDefault();event.stopPropagation();close();ball.focus();}
         else if(event.key==='ArrowDown'||event.key==='ArrowUp'){
             if(fan.hidden)return;
