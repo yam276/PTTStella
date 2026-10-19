@@ -112,6 +112,11 @@ function keydown(e) {
     if(e.ctrlKey&&["+","=","-","0"].includes(e.key)) {
         e.preventDefault(); zoomTo(e.key==="0"?1:zoom+(e.key==="-"?-.25:.25)); return;
     }
+    if(inlineShortcut(e,keyboardState,latest)) {
+        e.preventDefault();clearSelection();cancelDrag();
+        if(!e.repeat)send({kind:"inline_expand",presentation:latest.presentation,stamp:stamp(),key:{key:e.key,code:e.code,ctrl:e.ctrlKey,alt:e.altKey,shift:e.shiftKey,repeat:e.repeat},trusted:e.isTrusted});
+        return;
+    }
     const command=commandKeys.has(e.key)||(e.ctrlKey&&/^[a-z]$/i.test(e.key));
     if(command||physical||(browsing&&e.key.length===1)) {clearSelection();e.preventDefault();}
     if(command||physical||e.key.length===1||e.key==="Dead") {
@@ -170,7 +175,7 @@ function cancelComposition() {
 function positionKeyboard() {
     if(!grid||!latest) return;
     const [col,row]=latest.frame.cursor, left=grid.x(col)/grid.ratio, top=grid.y(row)/grid.ratio;
-    const height=(grid.y(row+1)-grid.y(row))/grid.ratio;
+    const height=(grid.bottom(row)-grid.y(row))/grid.ratio;
     const fontSize=height*latest.settings.font_size/24;
     const font=fontFamily(latest.settings.cjk_font,latest.settings.ascii_font);
     Object.assign(keyboard.style,{left:left+"px",top:top+"px",height:height+"px",lineHeight:height+"px",
@@ -209,11 +214,12 @@ function pointerdown(e) {
 }
 function cellAt(e,clamp) {
     if(!grid||!latest) return null;
-    const bounds=canvas.getBoundingClientRect();
+    const bounds=surface.getBoundingClientRect();
     if(!clamp&&(e.clientX<bounds.left||e.clientX>=bounds.right||e.clientY<bounds.top||e.clientY>=bounds.bottom)) return null;
-    const px=(e.clientX-bounds.left)*canvas.width/bounds.width,py=(e.clientY-bounds.top)*canvas.height/bounds.height;
+    const px=(e.clientX-bounds.left)*grid.ratio,py=(e.clientY-bounds.top)*grid.ratio;
     const locate=(value,count,edge)=>{let at=0;while(at+1<count&&value>=edge(at+1))at++;return at;};
-    return {col:locate(px,latest.frame.cols,grid.x),row:locate(py,latest.frame.rows,grid.y)};
+    const row=grid.rowAt?grid.rowAt(py,clamp):locate(py,latest.frame.rows,grid.y);
+    return row===null?null:{col:locate(px,latest.frame.cols,grid.x),row};
 }
 function pointermove(e) {
     pointerClient={x:e.clientX,y:e.clientY,clientX:e.clientX,clientY:e.clientY,trusted:e.isTrusted};media.locate(pointerClient,hoverPreference);
@@ -296,7 +302,7 @@ function drawSelection() {
     for(const span of selectionCache.value.spans) {
         const box=document.createElement("div");box.className="selection-row";
         Object.assign(box.style,{left:grid.x(span.start)/grid.ratio+"px",top:grid.y(span.row)/grid.ratio+"px",
-            width:(grid.x(span.end)-grid.x(span.start))/grid.ratio+"px",height:(grid.y(span.row+1)-grid.y(span.row))/grid.ratio+"px"});
+            width:(grid.x(span.end)-grid.x(span.start))/grid.ratio+"px",height:(grid.bottom(span.row)-grid.y(span.row))/grid.ratio+"px"});
         nodes.append(box);
     }
     selectionLayer.append(nodes);
@@ -332,8 +338,8 @@ function setHover(point,redraw=true,preview=true) {
     const hit=hitAt(point),index=hit?.kind==="link"?hit.index:-1;
     const changed=index!==hoveredLink;hoveredLink=index;
     hoveredArticle=hit?.kind==="article"?latest.navigation.articles.find(a=>a.row===hit.row):null;
-    canvas.style.cursor=hit?"pointer":"default";
-    canvas.title=index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredArticle?tr("article-open-hint"):"";
+    surface.style.cursor=hit?"pointer":"default";
+    surface.title=index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredArticle?tr("article-open-hint"):"";
     if(preview)previewHover(index);
     if(changed&&redraw&&latest) draw(latest);else drawNavigationMarker();
 }
@@ -342,7 +348,7 @@ function drawNavigationMarker() {
     if(navigationMarker.hidden) {delete navigationMarker.dataset.row;return;}
     const {row,start,end}=hoveredArticle;navigationMarker.dataset.row=String(row);
     Object.assign(navigationMarker.style,{left:grid.x(start)/grid.ratio+"px",top:grid.y(row)/grid.ratio+"px",
-        width:(grid.x(end)-grid.x(start))/grid.ratio+"px",height:(grid.y(row+1)-grid.y(row))/grid.ratio+"px"});
+        width:(grid.x(end)-grid.x(start))/grid.ratio+"px",height:(grid.bottom(row)-grid.y(row))/grid.ratio+"px"});
 }
 function refreshNavigation() {
     refreshExportControls();
@@ -418,7 +424,7 @@ function refreshExportControls() {
     exportRows.title=selection?tr("export-lines-hint",{start:selection.value.rows.start+1,end:selection.value.rows.end}):tr("export-rows-hint");
 }
 function refreshKeepAlive() {
-    const ready=!!latest?.keep_alive&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
+    const ready=!!latest?.keep_alive&&!inlineImages.active()&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
     const current=stamp(),key=JSON.stringify([current,ready,latest?.keep_alive_ready,latest?.keep_alive]);
     keepAlive.textContent=latest?.keep_alive?tr("keepalive-on"):tr("keepalive-off");
     keepAlive.setAttribute("aria-pressed",String(!!latest?.keep_alive));
@@ -506,7 +512,7 @@ const bindings=[...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...
     [viewport,"click",click],[viewport,"dblclick",doubleclick],
     [viewport,"pointercancel",pointercancel],[viewport,"lostpointercapture",lostcapture],
     [selectAll,"click",selectPage],[document,"copy",copy],
-    [canvas,"contextmenu",selectLink],[canvas,"pointerleave",leaveLink],
+    [surface,"contextmenu",selectLink],[surface,"pointerleave",leaveLink],
     [pasteSend,"click",confirmPaste],[pasteCancel,"click",cancelPaste],[pasteDialog,"cancel",cancelPaste],
     [exportButton,"click",exportScreen],[exportRows,"click",exportSelected],
     [keepAlive,"click",toggleKeepAlive],[stationMouseButton,"click",toggleStationMouse],
@@ -554,7 +560,7 @@ function draw(packet) {
     canvas.width=Math.max(1,Math.floor(width*physical)); canvas.height=Math.max(1,Math.floor(height*physical));
     surface.style.width=canvas.width/ratio+"px"; surface.style.height=canvas.height/ratio+"px";
     level.textContent=Math.round(physical/ratio/fitting*100)+"%";
-    grid={...render(canvas,packet,{cursor:true,hovered:hoveredLink,linkHints:true}),ratio};
+    grid={...inlineImages.layout(packet,render(canvas,packet,{cursor:true,hovered:hoveredLink,linkHints:true}),ratio),ratio};
     positionKeyboard();drawSelection();drawNavigationMarker();draws++;return grid;
 }
 function render(target,packet,{cursor=true,hovered=-1,linkHints=false}={}) {
@@ -698,6 +704,7 @@ function revokeSurface(){
     stopped=true;stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
     for(const [target,event,callback,options] of bindings)target.removeEventListener(event,callback,options);
 }
+const inlineImages=installInlineImages({surface,canvas,tr,redraw:()=>{if(latest)draw(latest);},changed:refreshKeepAlive,notice:text=>{surfaceNote.textContent=text;}});
 const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
 let cleanupClean=false;
 function runSurfaceProbe(mode){
@@ -717,6 +724,7 @@ function runSurfaceProbe(mode){
             else if(mode==="articles"||mode==="articles_close")surfaceNote.textContent="Article probe: enable Vim, open URL 00000101 and AID 00000102, fail 00000103 and recover manually, reject foreign URL and long draft, then cancel/close during 00000104";
             else if(mode==="boards_close")surfaceNote.textContent="Board close probe: visit Stella and Other, start Beta, then close while waiting";
             else if(mode==="boards")surfaceNote.textContent="Board probe: cancel a draft, visit Stella and Other, reject an invalid name, then start Beta and stop before the delayed board list";
+            else if(mode==="inline")surfaceNote.textContent="Inline probe: press Enter twice, inspect inserted images and text, export PNG, then close. Peer rejects every station byte.";
             else if(mode==="osc8")surfaceNote.textContent="OSC 8 probe: both wrapped fragments share a complete destination; select/copy, drag and open local media";
             else if(mode==="login_2fa")surfaceNote.textContent="Verification probe: explicit synthetic login, six digits, then eight-character recovery; Esc returns to Vim";
             else if(mode==="sgr66"||mode==="sgr66_legacy")surfaceNote.textContent="Dual-color probe: export PNG, then close; local synthetic data only";
@@ -753,6 +761,7 @@ const route=createSurfaceRouter({
     media_hover:data=>{if(hoverCandidate?.sequence===data.sequence){media.hover(data);media.locate(pointerClient,hoverPreference);}},
     hover_reset:data=>{cancelHover();if(data.media)media.reset();},
     hover_rejected:sequence=>{if(hoverCandidate?.sequence===sequence)cancelHover();},
+    inline_open:data=>inlineImages.open(data,latest),inline_image:data=>inlineImages.receive(data),inline_error:data=>inlineImages.fail(data),inline_reset:()=>inlineImages.reset(),
     media_open:data=>media.open(data),media_image:data=>media.receiveImage(data),media_error:data=>media.fail(data),
     media_external:data=>media.externalResult(data),media_reset:()=>media.reset(),
     settings_open:settingsUi.open,font_catalog:settingsUi.catalog,font_preview:settingsUi.preview,
@@ -786,7 +795,8 @@ finally {
     revokeSurface();
     cancelHover(true);
     stopped=true;latest=null;observer.disconnect();pasteObserver.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
-    const mediaClean=await media.destroy();
+    const inlineClean=await inlineImages.destroy();
+    const mediaClean=await media.destroy()&&inlineClean;
     sitesUi.destroy();settingsUi.destroy();loginUi.destroy();filterUi.destroy();destinationUi.destroy();bookmarksUi.destroy();
     tools.destroy();
     if(exportTask)await exportTask;

@@ -147,6 +147,31 @@ impl SurfaceState {
             )
         })
     }
+    pub(super) fn inline_page(
+        &self,
+        identity: Identity,
+        stamp: Stamp,
+        view: &View,
+    ) -> Option<&Paint> {
+        self.current(identity, view).filter(|p| {
+            self.inline_identity(view) == Some(identity)
+                && self.navigation_shown(stamp)
+                && stamp == view.stamp()
+                && p.mouse.route == pttstella::mouse::input::Route::Local
+        })
+    }
+    pub(super) fn inline_identity(&self, view: &View) -> Option<Identity> {
+        let p = self.displayed.as_ref()?;
+        self.current(Identity::of(p), view)
+            .filter(|_| {
+                view.phase == Phase::Connected
+                    && !view.input_pending
+                    && !view.login_pending
+                    && view.mouse.route == pttstella::mouse::input::Route::Local
+                    && view.frame.control_complete
+            })
+            .map(Identity::of)
+    }
     pub(super) fn navigation_shown(&self, stamp: Stamp) -> bool {
         self.displayed.as_ref().is_some_and(|p| {
             !p.output_pending

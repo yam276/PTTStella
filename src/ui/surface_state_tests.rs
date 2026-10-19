@@ -317,3 +317,25 @@ fn mouse_press_consumes_the_acknowledged_mode_but_owned_release_can_cross_paints
     fresh.lease.stamp = next.stamp();
     assert!(!state.mouse_shown(&fresh));
 }
+
+#[test]
+fn inline_expansion_requires_current_filtered_acknowledgement_and_input_epoch() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let id = displayed(&mut state, &view);
+    assert!(state.inline_page(id, view.stamp(), &view).is_some());
+    view.input_pending = true;
+    assert!(state.inline_page(id, view.stamp(), &view).is_none());
+    view.input_pending = false;
+    view.phase = Phase::Disconnected;
+    assert!(state.inline_page(id, view.stamp(), &view).is_none());
+    view.phase = Phase::Connected;
+    let old = view.stamp();
+    view.input_epoch += 1;
+    assert!(state.inline_page(id, old, &view).is_none());
+    assert!(state.inline_page(id, view.stamp(), &view).is_none());
+    state.update(&view);
+    let id = displayed(&mut state, &view);
+    state.replace_rules(filters::Rules::default());
+    assert!(state.inline_page(id, view.stamp(), &view).is_none());
+}

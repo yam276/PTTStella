@@ -74,6 +74,8 @@ pub(super) struct Checks {
     pub(super) osc8_selected: Option<(u64, u64, u64, usize)>,
     pub(super) osc8_dragged: bool,
     pub(super) osc8_media_decoded: usize,
+    pub(super) inline_expands: usize,
+    pub(super) inline_requests: usize,
     pub(super) verification_required: bool,
     pub(super) verification_rejected: bool,
     pub(super) verification_browsing: bool,
@@ -504,6 +506,7 @@ pub(super) fn surface_sample(
         Some("sgr66") => sgr66_sample(true),
         Some("sgr66_legacy") => sgr66_sample(false),
         Some("osc8") => osc8_sample(media_origin),
+        Some("inline") => inline_sample(media_origin),
         _ => preview(probe, media_origin),
     }
 }
@@ -523,6 +526,11 @@ fn tools_sample() -> Result<Vec<u8>, String> {
             .map_err(|e| e.to_string())?,
     );
     Ok(bytes)
+}
+
+fn inline_sample(origin: Option<&str>) -> Result<Vec<u8>, String> {
+    let origin = origin.ok_or("inline probe requires a loopback media origin")?;
+    encoding::encode(&format!("\x1b[2J\x1b[HInline image synthetic reading page\x1b[3;1H{origin}/colours.png\x1b[4;1HText below first picture: SELECT THIS ROW\x1b[6;1H{origin}/missing.png\x1b[7;1HText below failed picture\x1b[24;1H\x1b[7m 瀏覽 第 1/2 頁 (50%) 目前顯示: 第 1~23 行 (h)說明 (←)離開\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
 }
 
 pub(super) fn osc8_sample(media_origin: Option<&str>) -> Result<Vec<u8>, String> {
@@ -769,6 +777,25 @@ mod sample_tests {
                 screen.cell(1, 3).unwrap().style.bg
             ),
             (4, 5)
+        );
+    }
+    #[test]
+    fn inline_sample_is_a_reading_page_with_two_local_images() {
+        let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
+        screen.feed(&surface_sample(Some("inline"), true, Some("http://127.0.0.1:9876")).unwrap());
+        assert!(matches!(
+            pttstella::navigation::analyze(&screen.frame()),
+            pttstella::navigation::Context::ArticleReading { .. }
+        ));
+        assert_eq!(
+            pttstella::links::detect(&screen.frame())
+                .iter()
+                .map(|l| (l.row, l.url.clone()))
+                .collect::<Vec<_>>(),
+            vec![
+                (2, "http://127.0.0.1:9876/colours.png".into()),
+                (5, "http://127.0.0.1:9876/missing.png".into())
+            ]
         );
     }
     #[test]

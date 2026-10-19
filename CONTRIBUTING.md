@@ -156,3 +156,5 @@ AID 核心另核對 article_navigation 的自製 article-open fixture 與 naviga
 將該程序的 probe-bookmarks.json 原樣複製至新目錄，以英文 probe-settings.json 啟動 `bookmarks_restart`，檢查中文名稱與識別不變，再明確移除最後一筆；複製新空檔到第三目錄啟動 `bookmarks_empty`，確認仍空。第四目錄將 probe-bookmarks.json 設成自製 `broken`，啟動 `bookmarks_corrupt`，確認警告、保存／移除停用、輸入合法目標後 Enter 零修改。後三個 peer 拒絕所有站端 bytes，各程序需 Close acknowledged／所有 owner join／退出碼 0。獨立核對更名保留建立時間、移除後備份為前版 bytes、重啟 seed 相同、空檔及壞檔未自動改寫。只用獨立 probe 路徑，不取用正式書籤；原生貼上中文不代表 IME 候選窗通過。
 
 浮球工具列變更另跑 `node --test tooling/test_surface_tools.mjs`：檢查點擊／拖曳分流、六類功能、最近 120ms／最多 16 筆軌跡的放手速度、末端小抖動、合併至 pointerup 的位移、停止／反向、慣性與吸邊、有界座標、外來 pointer、實體按鈕遺失、取消／失焦／隱藏／清理、減少動態效果與小視窗。正式功能仍沿用原本的按鈕 ID、Rust 准入及 owner，不新增第二條操作管線。合成 probe 關閉時附帶有型別、定長的浮球觀察（按下／移動／放開計數、最後放手速度、滑行幀數與減少動態效果）；正常模式不保存這些資料。原生驗證需確認扇形／各分類、拖曳後不誤開啟、選取後仍可匯出、沒有額外站端 bytes，以及正常 Close／全部 owner join；單元的模擬事件不算原生驗收。
+
+Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_inline_images.mjs tooling/test_surface_links.mjs tooling/test_surface_dialogs.mjs`、i18n 及 Clippy。原生 inline probe 的 loopback 圖片 peer 應提供 colours.png 和明確 404 的 missing.png，核對兩次 Enter 僅各一個 GET、文章內插圖與錯誤、PNG 不含插圖、零站端 bytes 及 Close／owner join；瀏覽器排版測試不能取代此准入驗收。

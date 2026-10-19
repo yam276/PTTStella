@@ -46,6 +46,18 @@ pub struct Status {
     pub suspended_reason: Option<UnknownReason>,
 }
 impl Keyboard {
+    /// Local reading commands never consume an explicit raw-input handoff or prefix.
+    pub fn inline_images_key(&self, key: &Key, context: &Context) -> bool {
+        key.key == "Enter"
+            && !key.repeat
+            && !key.ctrl
+            && !key.alt
+            && !key.shift
+            && !self.status(context).pending
+            && (!self.enabled || !self.input)
+            && matches!(context, Context::ArticleReading { .. })
+    }
+
     pub fn status(&self, context: &Context) -> Status {
         Status {
             enabled: self.enabled,
@@ -380,4 +392,42 @@ fn native_key(key: &Key) -> Option<Vec<u8>> {
         }
         .to_vec(),
     )
+}
+
+#[cfg(test)]
+mod inline_tests {
+    use super::*;
+    #[test]
+    fn local_images_respect_raw_handoff_prefixes_and_prompt_keys() {
+        let mut keyboard = Keyboard::default();
+        let reading = Context::ArticleReading {
+            first_line: 1,
+            last_line: 23,
+            percent: 50,
+        };
+        let mut enter = Key {
+            key: "Enter".into(),
+            code: "Enter".into(),
+            ctrl: false,
+            alt: false,
+            shift: false,
+            repeat: false,
+        };
+        assert!(keyboard.inline_images_key(&enter, &reading));
+        assert!(!keyboard.inline_images_key(&enter, &Context::ContinuePrompt));
+        keyboard.toggle();
+        assert!(keyboard.inline_images_key(&enter, &reading));
+        keyboard.arm();
+        assert!(!keyboard.inline_images_key(&enter, &reading));
+        keyboard.reset();
+        keyboard.use_native_input();
+        assert!(!keyboard.inline_images_key(&enter, &reading));
+        keyboard.toggle();
+        keyboard.toggle();
+        enter.ctrl = true;
+        assert!(!keyboard.inline_images_key(&enter, &reading));
+        enter.ctrl = false;
+        keyboard.count = 2;
+        assert!(!keyboard.inline_images_key(&enter, &reading));
+    }
 }

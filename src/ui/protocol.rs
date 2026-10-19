@@ -104,6 +104,12 @@ pub(super) enum SurfaceEvent {
         generation: u64,
         trusted: bool,
     },
+    InlineExpand {
+        presentation: u64,
+        stamp: Stamp,
+        key: vim::Key,
+        trusted: bool,
+    },
     MediaDecoded {
         request: u64,
         success: bool,
@@ -315,6 +321,7 @@ impl SurfaceEvent {
             // Revocation grants no input; it still cannot cross a session.
             StationMouseCancel { lease } => lease.stamp.generation == generation,
             StationMouseRevoke { generation: source } => *source == generation,
+            InlineExpand { trusted, stamp, .. } => *trusted && stamp.generation == generation,
             Key {
                 trusted,
                 generation: source,
@@ -481,6 +488,7 @@ mod admission_tests {
     fn all_station_input_paths_reject_synthetic_or_stale_events() {
         let stamp = json!({"generation":7,"revision":4,"input_epoch":2});
         let events = [
+            json!({"kind":"inline_expand","presentation":3,"stamp":stamp,"key":{"key":"Enter","code":"Enter","ctrl":false,"alt":false,"shift":false,"repeat":false}}),
             json!({"kind":"key","key":{"key":"Enter","code":"Enter","ctrl":false,"alt":false,"shift":false,"repeat":false},"generation":7}),
             json!({"kind":"text","text":"a","generation":7}),
             json!({"kind":"paste","text":"a\nb","generation":7}),

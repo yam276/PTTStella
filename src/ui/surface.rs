@@ -173,6 +173,7 @@ async fn run(
     let Resources {
         eval: owned_eval,
         media: media_preview,
+        inline: inline_images,
         login: login_job,
         commands,
         files,
@@ -184,6 +185,7 @@ async fn run(
         "\nreturn module.exports;})();\n",
         include_str!("../../assets/i18n.js"),
         include_str!("../../assets/media.js"),
+        include_str!("../../assets/inline-images.js"),
         include_str!("../../assets/surface-lifetime.js"),
         include_str!("../../assets/surface-packets.js"),
         include_str!("../../assets/surface-fonts.js"),
@@ -379,6 +381,7 @@ async fn run(
                     },
                     FileCompletion::Filters(result)=>match result {
                         Ok(rules)=>{
+                            inline_images.close();eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
                             screen.replace_rules(rules);filter_warning=None;checks.filter_edits+=1;
                             media_preview.close();
                             eval.send(Packet::HoverReset{media:true}).map_err(|e|e.to_string())?;
@@ -437,6 +440,15 @@ async fn run(
                         }
                     },
                     Err(error)=>Packet::LoginResult(LoginResult::Message{message:error}),
+                };
+                eval.send(packet).map_err(|e|e.to_string())?;
+            },
+            update = inline_images.update() => {
+                let packet=match update.result {
+                    Ok(loaded)=>{let image=loaded.image;Packet::InlineImage{batch:update.batch,index:update.index,image:MediaImage{
+                        request:update.batch,data:base64::engine::general_purpose::STANDARD.encode(&image.bytes),
+                        mime:image.mime,width:image.width,height:image.height,animated:image.animated_format,cached:false}}},
+                    Err(message)=>Packet::InlineError{batch:update.batch,index:update.index,message},
                 };
                 eval.send(packet).map_err(|e|e.to_string())?;
             },
@@ -619,6 +631,7 @@ async fn run(
                         let view = receiver.borrow();
                         if !screen.reveal(Identity{presentation,generation,revision},reveal,&view) {continue;}
                         checks.filter_reveals+=1;
+                        inline_images.close();eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
                         media_preview.close();
                         eval.send(Packet::HoverReset{media:true})
                             .map_err(|e| e.to_string())?;
@@ -1009,6 +1022,20 @@ async fn run(
                         checks.copy_checked |=
                             checks.copied_selection == Some((generation, revision, request));
                     }
+                    SurfaceEvent::InlineExpand {presentation,stamp,key,trusted:_} => {
+                        if surface_probe.as_deref()==Some("inline") {checks.inline_requests+=1;}
+                        let view=receiver.borrow().clone();
+                        if !view.site.ptt_features() || !keyboard_policy.inline_images_key(&key,&view.context())
+                            || pending_paste.read().is_some() || commands.busy() || login_open {continue;}
+                        if let Some(paint)=screen.inline_page(Identity{presentation,generation:stamp.generation,revision:stamp.revision},stamp,&view) {
+                            // Synthetic probes must never reach a public image host.
+                            if probe.is_some() && paint.image_links.iter().any(|index|media_origin.as_ref().is_none_or(|origin|!paint.links[*index].url.starts_with(&format!("{origin}/")))) {continue;}
+                            if let Some(open)=inline_images.open(paint)? {
+                                if surface_probe.as_deref()==Some("inline") {checks.inline_expands+=1;}
+                                eval.send(Packet::InlineOpen(open)).map_err(|e|e.to_string())?;
+                            }
+                        }
+                    }
                     SurfaceEvent::Key {
                         key,
                         generation,
@@ -1134,6 +1161,7 @@ async fn run(
                     media_preview.close();
                     eval.send(Packet::HoverReset{media:false}).map_err(|e|e.to_string())?;
                 }
+                if inline_images.invalidate(screen.inline_identity(&view)) {eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;}
                 if keyboard_generation!=view.generation || view.phase!=Phase::Connected {
                     if let Some((request,_))=destination_request.take() {
                         eval.send(Packet::DestinationResult {request,feedback:Feedback::new(DestinationStatus::Rejected,pttstella::msg!("command-stale"))}).map_err(|error|error.to_string())?;
@@ -1193,6 +1221,7 @@ async fn run(
                 || case=="boards" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && checks.board_cancelled && checks.board_rejected>=1
                 || matches!(case.as_str(),"mouse"|"mouse_boundary") && checks.mouse_passed(case=="mouse_boundary") && receiver.borrow().mouse.active.is_none()
                 || matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") && checks.mouse_samples_passed(&case) && receiver.borrow().mouse.active.is_none() && receiver.borrow().mouse.modes.tracking()==pttstella::mouse::Tracking::Highlight
+                || case=="inline" && checks.inline_requests>=2 && checks.inline_expands==1 && checks.export_checked
                 || case=="osc8" && checks.osc8_open_rows==[8,9] && checks.osc8_copy_rows==[8,9] && checks.osc8_dragged && checks.osc8_media_decoded>=2 && checks.export_checked
                 || case=="login_2fa" && checks.verification_required && checks.verification_rejected && checks.verification_browsing && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
                 || case=="fonts" && checks.font_catalog_reads>=2 && !checks.font_sources.is_empty() && checks.export_checked
@@ -1206,6 +1235,7 @@ async fn run(
             "scope":if matches!(case.as_str(),"sites"|"sites_restart") {"synthetic loopback station UI; owned external test peers independently verify Big5/GBK bytes and EOF; explicit TCP shutdown is not a WebSocket acknowledgement"} else if case=="tools" {"local tools playground: PNG and Close smoke only; gestures are observations, not an A/B acceptance test; peer rejects all station input"} else if matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") {"synthetic native pointer samples: bounded independent exact cells, required final gesture, no local keys or duplicate path, PNG and Close"} else if case=="mouse_boundary" {"synthetic station mouse boundary: one exact press, no release or local keys after leaving the grid; owned cancellation and Close"} else if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
             "mouse":mouse_report,
             "tools":checks.tools,
+            "inline_requests":checks.inline_requests,"inline_expands":checks.inline_expands,
             "osc8_dragged":checks.osc8_dragged,"osc8_media_decoded":checks.osc8_media_decoded,
             "osc8_open_rows":checks.osc8_open_rows,"osc8_copy_rows":checks.osc8_copy_rows,
             "verification_required":checks.verification_required,"verification_rejected":checks.verification_rejected,"verification_browsing":checks.verification_browsing,
