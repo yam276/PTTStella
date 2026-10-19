@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Media layout regression</title>
+<body><h1>Media layout regression</h1><pre id="results">Running…</pre>
+<script>
+// Real DOM/CSS and image decoding probe. No Rust bridge, BBS, or trusted-input claim.
+const cases = [
+    [1800, 1100, 1200, 800], [1280, 720, 1200, 800],
+    [800, 300, 800, 1600], [360, 300, 800, 1600],
+    [1280, 720, 64, 32], [1280, 720, 2400, 400],
+];
+const query = new URLSearchParams(location.search);
+if (!query.has("child")) {
+    document.body.style.cssText = "background:#101c2c;color:#eee;font:16px system-ui;padding:20px";
+    const reports = new Map();
+    addEventListener("message", event => {
+        const frame = [...document.querySelectorAll("iframe")].find(node => node.contentWindow === event.source);
+        if (!frame || event.origin !== location.origin || event.data?.kind !== "media-layout") return;
+        reports.set(Number(frame.dataset.case), event.data);
+        const done = reports.size === cases.length;
+        const status = done ? ([...reports.values()].every(value => value.passed) ? "passed" : "failed") : "running";
+        document.body.dataset.result = status;
+        document.getElementById("results").textContent = JSON.stringify({status, scope:"Browser layout and decoding only", reports:[...reports.values()]}, null, 2);
+    });
+    cases.forEach((values, index) => {
+        const frame = document.createElement("iframe");
+        frame.dataset.case = index; frame.width = values[0]; frame.height = values[1];
+        frame.title = "Layout case " + index; frame.style.cssText = "position:absolute;left:-10000px;border:0";
+        frame.src = location.pathname + "?child=" + index;
+        document.body.append(frame);
+    });
+} else {
+    const index = Number(query.get("child")), [vw, vh, width, height] = cases[index];
+    const css = document.createElement("link"); css.rel = "stylesheet"; css.href = "../assets/app.css";
+    document.body.innerHTML = `<main><div id="chrome" class="chrome"></div><div class="workspace"></div></main>
+      <dialog id="media-dialog" class="media-dialog"><div class="media-toolbar"><h2 id="media-title">Image preview</h2>
+      <button id="media-minus">−</button><button id="media-plus">+</button><button id="media-fit">Fit</button>
+      <button id="media-original">Original size</button><button id="media-motion" hidden>Play</button>
+      <button id="media-retry">Retry</button><button id="media-external">Open externally</button><button id="media-close">Close</button></div>
+      <p id="media-url"></p><output id="media-status"></output><div id="media-viewport"></div></dialog>
+      <aside id="media-hover" hidden><output id="media-hover-status"></output><div id="media-hover-viewport"></div></aside>`;
+    const code = document.createElement("script"); code.src = "../assets/media.js";
+    const ready = Promise.all([new Promise((resolve,reject)=>{css.onload=resolve;css.onerror=reject;}),new Promise((resolve,reject)=>{code.onload=resolve;code.onerror=reject;})]);
+    document.head.append(css, code);
+    const tick = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const facts = {kind:"media-layout", case:index, viewport:[vw,vh], image:[width,height], passed:false};
+    const check = (condition, message) => {if (!condition) throw new Error(message);};
+    const rect = id => document.getElementById(id).getBoundingClientRect();
+    const bounded = r => r.left >= -1 && r.top >= -1 && r.right <= vw+1 && r.bottom <= vh+1;
+    let ui;
+    (async () => {
+        await ready;
+        let decoded;
+        const decoding = new Promise(resolve => decoded = resolve);
+        const tr = key => ({"image-ready":"Image ready", "image-loading":"Loading image", "image-decoding":"Decoding image"}[key] || key);
+        ui = installMedia({tr,send:packet=>{if(packet.kind==="media_decoded") decoded(packet.success);},prepare(){},changed(){},restore(){}});
+        const canvas=document.createElement("canvas"); canvas.width=width;canvas.height=height;
+        const context=canvas.getContext("2d");context.fillStyle="#fa2850";context.fillRect(0,0,width/2,height);
+        context.fillStyle="#1464dc";context.fillRect(width/2,0,width/2,height);
+        const packet={request:1,position:"top_right",target:{kind:"image",url:"https://example.invalid/synthetic.png"}};
+        ui.hover(packet);
+        ui.receiveImage({request:1,mime:"image/png",data:canvas.toDataURL().split(",")[1],width,height,animated:false,cached:false});
+        check(await decoding,"Image failed to decode"); await tick();
+        const image=document.querySelector("#media-hover img"), hover=rect("media-hover"), ir=image.getBoundingClientRect();
+        check(bounded(hover),"Hover escaped viewport"); check(Math.abs(hover.top-12)<1,"Fixed hover is not at top");
+        check(hover.width<=Math.min(560,vw*.55)+1 && hover.height<=vh*.6+1,"Whole hover card exceeds budget");
+        check(Math.abs(ir.width/ir.height-width/height)<.02,"Hover aspect ratio changed");
+        check(ir.width<=width+1 && ir.height<=height+1,"Hover upscaled small image");
+        if(index===0)check(ir.width>=500,"Large hover still uses old size cap");
+        facts.hover=[hover.width,hover.height]; facts.hoverImage=[ir.width,ir.height];
+        ui.locate({x:vw-1,y:vh-1},"follow_cursor");await tick();check(bounded(rect("media-hover")),"Follow hover escaped lower-right edge");
+        ui.open(packet); await tick();
+        check(document.querySelector("#media-viewport img")===image,"Promotion recreated image");
+        const dialog=rect("media-dialog"), full=image.getBoundingClientRect();
+        check(bounded(dialog),"Dialog escaped viewport");
+        check(Math.abs(dialog.width-(vw-32))<1 && Math.abs(dialog.height-(vh-32))<1,"Dialog retains old size cap");
+        check(Math.abs(full.width/full.height-width/height)<.02,"Full preview aspect ratio changed");
+        check(bounded(full),"Fitted image escaped viewport");
+        if(index===0)check(full.width>=1199 && full.height>=799,"Large dialog did not show available original size");
+        facts.dialog=[dialog.width,dialog.height];facts.fullImage=[full.width,full.height];
+        // Programmatic clicks check controller behaviour, not trusted admission.
+        document.getElementById("media-original").click();await tick();
+        const original=image.getBoundingClientRect();check(Math.abs(original.width-width)<1&&Math.abs(original.height-height)<1,"Original-size control failed");
+        document.getElementById("media-fit").click();await tick();check(bounded(image.getBoundingClientRect()),"Fit after original failed");
+        check(await ui.destroy(),"Resource cleanup failed");ui=null;facts.passed=true;
+    })().catch(error=>{facts.error=String(error);}).finally(async()=>{if(ui)facts.cleanup=await ui.destroy();parent.postMessage(facts,location.origin);});
+}
+</script></body></html>

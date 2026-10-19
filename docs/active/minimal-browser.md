@@ -618,3 +618,5 @@ macOS arm64 原生合成案例完成非法 https 位址拒絕、保存／移除�
 
 
 **2026-10-19 圖示 B 定稿**：採使用者選定的深藍／淡金三聯星，保留三條兩兩連線、下方小星更向外且略大。以專案自製 SVG 與 Icon Composer 材質渲染，連線獨立關閉玻璃效果並遮罩於星體邊界；1024 單位的線寬由 10 加至 24，維持 38% 不透明度。可編輯 `.icon` 與來源摘要保存在 assets/icons，浮球扁平稿同步幾何。32／64 px 原生匯出已目視確認連線與輪廓；App 使用靜態 ICNS，未整合系統動態材質。本機 arm64 候選 `dist/macos-icon-b/PTTStella.app` 已完成 dev／debug=0 打包，2 個打包回歸測試及 26 個主題／浮球 JS 測試通過；10 個 ICNS 尺寸、透明角落、plist 指向與 strict ad-hoc 簽章核對通過，實際 32px ICNS 已目視確認。證據保留 `.local/verification/icon-b`。本輪未重新驗收原生 App 互動，候選亦含尚待原生驗證的圖片預覽尺寸調整；不把渲染或編譯當作完整 GUI 驗收。
+
+2026-10-19 圖片預覽放大：hover 卡片上限改為 560 CSS px／內容寬 55%／高 60%，計入狀態列、內距與邊框；完整預覽移除 1100×800 上限，四邊各留 16 CSS px。修正右上固定預覽仍參照全視窗浮球容器底緣而落到下方的問題，改以文章區右上角錨定；維持比例、原尺寸上限及同一圖片升級重用。26 項媒體／dialog／生命週期／連結 JS 測試通過；新增實際瀏覽器排版頁的六項自製圖片案例全數通過，涵蓋橫／直／小圖、360×300 至 1800×1100 視窗、碰邊、原尺寸／符合與清理。1800×1100 下 hover 圖片為 550×366.7、完整預覽可顯示原始 1200×800。macOS 原生合成測試 App 可啟動，但座標操作工具回報 noWindowsAvailable，嚴格 dialogs 報告仍為失敗，互動驗收列 not_ready；瀏覽器排版不代替 trusted pointer、Rust 准入或實站驗收。證據保留 `.local/verification/glass-media`，最終 arm64 dev／debug=0 App 為 `dist/macos-media-large/PTTStella.app`，打包、系統依賴及 strict ad-hoc 簽章通過；沒有重啟使用者的實站 session。

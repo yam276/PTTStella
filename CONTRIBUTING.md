@@ -59,6 +59,9 @@ Vim gate 由真正 WebView 編輯／按鍵事件送至 Rust policy，再由本�
 
 圖片 hover gate 以 trusted pointer 與 owned HTTP server 核對快掠零請求、同連結一次、取消 TCP EOF、已完成／下載中提升不重抓、跟隨與固定位置、右下碰邊及停用偏好；Canvas、焦點與站端輸入保持一致。GIF 小預覽檢查靜止首幀，組字開始取消；Rust lease 測試則覆蓋 frame revision 續用與新輸入／session／來源範圍失效。以上實機 backend 為 Windows WebView2；其他 OS、原生輸入法候選窗與實站仍需各自驗證。
 
+媒體尺寸變更另跑 `node --test tooling/test_media_i18n.mjs`。以 `python3 -m http.server 60271 --bind 127.0.0.1` 在 repo 根目錄提供靜態頁，於瀏覽器開啟 `http://127.0.0.1:60271/tooling/media_layout_probe.html`；六個案例均須回報 passed。此頁使用生產 CSS／媒體控制器及自製圖片，核對大／小／橫／直圖、窄視窗、右上與碰邊位置、預覽提升重用圖片、原尺寸／符合及清理。它只驗證實際瀏覽器排版與解碼，程式呼叫的控制項不能代替原生 trusted pointer、Rust 准入或 HTTP gate；結束後關閉本機 server。
+
+
 選取測試以真正拖曳選中合成雙色中文字的右半格，透過瀏覽器 Ctrl+C 觸發 copy 事件，另一個程序只比較系統剪貼簿與預期完整中文字，不輸出剪貼簿內容。另檢查整頁選取有 24 列，清除選取後 Ctrl+C 恢復送出 0x03。此測試會將系統剪貼簿設為合成資料。
 
 IME gate 使用 CDP 的 imeSetComposition，驗證取消不送出、確認送出一次、接著輸入相同字不被去重，以及組字宿主位於合成游標座標。CDP 完成組字時的 compositionend 可能不是 trusted；此時只接受由 trusted compositionstart 與最後 trusted input 確認、且文字完全相同的組字結果。這不代表已操作原生輸入法候選窗。

@@ -38,14 +38,16 @@ function installMedia({tr,send,prepare,changed,restore}) {
     function place() {
         if(presentation!=="hover"||hover.hidden) return;
         const bounds=document.querySelector(".workspace").getBoundingClientRect();
-        const top=document.getElementById("chrome").getBoundingClientRect().bottom;
-        const limitW=Math.min(360,bounds.width*.45),limitH=bounds.height*.45;
-        const scale=width&&height?Math.min(1,limitW/width,limitH/height):1;
-        if(stage) {stage.style.width=(width*scale)+"px";stage.style.height=(height*scale)+"px";}
+        // Budget the whole card, including its status and border, before fitting the image.
+        const limitW=Math.max(1,Math.min(560,bounds.width*.55,bounds.width-24));
+        const limitH=Math.max(1,Math.min(bounds.height*.6,bounds.height-24));
         hover.style.maxWidth=limitW+"px";
+        const imageW=Math.max(1,limitW-10),imageH=Math.max(1,limitH-hoverNote.getBoundingClientRect().height-10);
+        const scale=width&&height?Math.min(1,imageW/width,imageH/height):1;
+        if(stage) {stage.style.width=(width*scale)+"px";stage.style.height=(height*scale)+"px";}
         const box=hover.getBoundingClientRect();
         let x=position==="top_right"?bounds.right-box.width-12:point.x+16;
-        let y=position==="top_right"?Math.max(bounds.top+12,top+12):point.y+16;
+        let y=position==="top_right"?bounds.top+12:point.y+16;
         if(position==="follow_cursor") {if(x+box.width>bounds.right-8)x=point.x-box.width-16;if(y+box.height>bounds.bottom-8)y=point.y-box.height-16;}
         x=Math.max(bounds.left+4,Math.min(x,bounds.right-box.width-4));y=Math.max(bounds.top+4,Math.min(y,bounds.bottom-box.height-4));
         hover.style.left=x+"px";hover.style.top=y+"px";
