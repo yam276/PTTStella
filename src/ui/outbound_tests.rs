@@ -306,6 +306,42 @@ fn outbound_results_match_the_shared_wire_examples() {
                 suspended_reason: None,
             }),
         ),
+        ("inline_reset", Packet::InlineReset(true)),
+        (
+            "inline_open",
+            Packet::InlineOpen(super::inline_images::Open {
+                batch: 2,
+                presentation: 3,
+                generation: 7,
+                revision: 4,
+                entries: vec![super::inline_images::Entry { index: 1, row: 8 }],
+                limited: false,
+            }),
+        ),
+        (
+            "inline_error",
+            Packet::InlineError {
+                batch: 2,
+                index: 1,
+                message: "失敗".into(),
+            },
+        ),
+        (
+            "inline_image",
+            Packet::InlineImage {
+                batch: 2,
+                index: 1,
+                image: MediaImage {
+                    request: 2,
+                    data: "AQID".into(),
+                    mime: "image/png",
+                    width: 2,
+                    height: 1,
+                    animated: false,
+                    cached: false,
+                },
+            },
+        ),
     ];
     let expected: Vec<Value> =
         serde_json::from_str(include_str!("../../tests/fixtures/ui-packets.json")).unwrap();

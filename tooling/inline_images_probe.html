@@ -1,0 +1,45 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Inline image layout regression</title>
+<link rel="stylesheet" href="../assets/app.css">
+<style>#results{position:fixed;right:8px;top:8px;z-index:99;background:#14243a;color:white;max-width:520px;max-height:90vh;overflow:auto;padding:16px;font:14px monospace}</style>
+<div class="workspace"><div id="surface" class="surface"><canvas id="screen"></canvas></div></div><pre id="results">Running…</pre>
+<script src="../assets/inline-images.js"></script><script>
+(async()=>{
+const result=document.getElementById('results'),surface=document.getElementById('surface'),canvas=document.getElementById('screen');
+const checks=[],check=(condition,label)=>{if(!condition)throw new Error(label);checks.push(label);};
+const tick=()=>new Promise(resolve=>requestAnimationFrame(resolve));
+let scale=1,grid,packet={presentation:3,generation:7,frame:{revision:4,rows:4}},ui;
+const redraw=()=>{
+ canvas.width=480*scale;canvas.height=96*scale;surface.style.width=canvas.width+'px';surface.style.height=canvas.height+'px';
+ const ctx=canvas.getContext('2d');for(let row=0;row<4;row++){ctx.fillStyle=['#f00','#0f0','#00f','#fff'][row];ctx.fillRect(0,row*24*scale,canvas.width,24*scale);}
+ grid=ui.layout(packet,{x:c=>c*12*scale,y:r=>r*24*scale},1);
+};
+try {
+ ui=installInlineImages({surface,canvas,tr:k=>k,redraw,changed(){}});redraw();
+ const open={batch:1,presentation:3,generation:7,revision:4,entries:[{index:0,row:0},{index:1,row:2}],limited:false};
+ ui.open(open,packet);
+ const source=document.createElement('canvas');source.width=640;source.height=400;source.getContext('2d').fillRect(0,0,640,400);
+ ui.receive({batch:1,index:0,image:{mime:'image/png',data:source.toDataURL().split(',')[1],width:640,height:400}});
+ for(let n=0;n<120&&!document.querySelector('[data-state="ready"]');n++)await tick();
+ check(!!document.querySelector('[data-state="ready"]'),'Real image decoded');
+ ui.fail({batch:1,index:1,message:'Synthetic 404'});
+ const still=document.querySelector('.inline-image canvas');
+ ui.open(open,packet);check(still===document.querySelector('.inline-image canvas'),'Repeated expansion retains same canvas');
+ for(scale of [.5,1,2]){
+  redraw();await tick();
+  const strips=[...document.querySelectorAll('.inline-text-row')],boxes=[...document.querySelectorAll('.inline-image')];
+  check(strips.length===4,'Four original text rows at scale '+scale);
+  check(Math.abs(still.getBoundingClientRect().width/still.getBoundingClientRect().height-1.6)<.001,'Aspect ratio at '+scale);
+  check(boxes[0].getBoundingClientRect().bottom<=strips[1].getBoundingClientRect().top+.01,'Image does not cover following row at '+scale);
+  check(boxes[1].getBoundingClientRect().bottom<=strips[3].getBoundingClientRect().top+.01,'Error does not cover following row at '+scale);
+  for(let row=0;row<4;row++)check(grid.rowAt(grid.y(row)+12*scale)===row,'Row '+row+' inverse hit at '+scale);
+  check(grid.rowAt(grid.bottom(0)+10)===null,'Picture has no terminal hit at '+scale);
+  check(strips[1].getContext('2d').getImageData(0,0,1,1).data[1]===255,'Original row pixels copied at '+scale);
+ }
+ packet={...packet,frame:{revision:5,rows:4}};redraw();
+ check(!ui.active()&&document.querySelectorAll('.inline-image').length===0,'New revision releases old images');
+ ui.receive({batch:1,index:0,image:{}});check(!ui.active(),'Late old image cannot revive page');
+ check(await ui.destroy(),'Destroy settles owned work');
+ result.textContent=JSON.stringify({status:'passed',scope:'Browser layout/decoder, not native input',checks},null,2);
+}catch(error){if(ui)await ui.destroy();result.textContent=JSON.stringify({status:'failed',error:String(error),checks},null,2);}
+})();
+</script></html>

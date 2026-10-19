@@ -19,7 +19,7 @@ use std::{
     path::PathBuf,
     pin::Pin,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
 };
@@ -50,6 +50,7 @@ impl std::fmt::Display for Error {
 }
 type FileResult<T> = Result<T, Error>;
 pub(super) enum Completion {
+    Clipboard(FileResult<()>),
     Sites {
         action: super::sites::Edit,
         request: u64,
@@ -78,6 +79,7 @@ pub(super) enum Completion {
 impl Completion {
     fn failure(self) -> Option<Error> {
         match self {
+            Self::Clipboard(result) => result.err(),
             Self::Sites { result, .. } => result.err(),
             Self::Bookmarks { result, .. } => result.err(),
             Self::Recent(done) => done.result.err().map(Error::Failed),
@@ -108,8 +110,13 @@ pub(super) struct Files {
     work: Option<Work>,
     permit: Permit,
     recent: super::files_recent::Writer,
+    clipboard: Clipboard,
 }
+pub(super) type Clipboard = Arc<Mutex<Option<arboard::Clipboard>>>;
 impl Files {
+    pub(super) fn clipboard(&self) -> Clipboard {
+        self.clipboard.clone()
+    }
     pub(super) fn busy(&self) -> bool {
         self.work.is_some() || self.recent.busy()
     }
@@ -148,6 +155,20 @@ impl Files {
             if let Some(Error::Failed(error)) = self.next().await.failure() {
                 errors.push(error);
             }
+        }
+        let clipboard = self.clipboard.clone();
+        if let Err(error) = tokio::task::spawn_blocking(move || {
+            let mut owner = clipboard
+                .lock()
+                .map_err(|_| pttstella::msg!("copy-failed"))?;
+            *owner = None;
+            Ok::<_, String>(())
+        })
+        .await
+        .map_err(|e| e.to_string())
+        .and_then(|result| result)
+        {
+            errors.push(error);
         }
         if errors.is_empty() {
             Ok(())
@@ -372,7 +393,7 @@ pub(super) async fn profile(
 }
 
 pub(super) struct ExportRequest {
-    pub lease: super::surface_state::ExportLease,
+    pub lease: super::surface_state::OutputLease,
     pub source: tokio::sync::watch::Receiver<pttstella::connection::View>,
     pub png: String,
     pub rows: Range<usize>,
@@ -478,4 +499,42 @@ pub(super) async fn save_sites(
         request,
         result: blocking(permit, move || write.store.save(write.draft)).await,
     }
+}
+
+pub(super) async fn copy_text(
+    permit: Permit,
+    clipboard: Clipboard,
+    text: String,
+    lease: super::surface_state::OutputLease,
+    source: tokio::sync::watch::Receiver<pttstella::connection::View>,
+) -> Completion {
+    copy_with_writer(permit, text, lease, source, move |text| {
+        let mut owner = clipboard
+            .lock()
+            .map_err(|_| pttstella::msg!("copy-failed"))?;
+        if owner.is_none() {
+            *owner = Some(arboard::Clipboard::new().map_err(|_| pttstella::msg!("copy-failed"))?);
+        }
+        owner
+            .as_mut()
+            .ok_or_else(|| pttstella::msg!("copy-failed"))?
+            .set_text(text)
+            .map_err(|_| pttstella::msg!("copy-failed"))
+    })
+    .await
+}
+async fn copy_with_writer(
+    permit: Permit,
+    text: String,
+    lease: super::surface_state::OutputLease,
+    source: tokio::sync::watch::Receiver<pttstella::connection::View>,
+    write: impl FnOnce(String) -> Result<(), String> + Send + 'static,
+) -> Completion {
+    Completion::Clipboard(
+        blocking_result(permit, move || {
+            lease.check(&source.borrow()).map_err(|_| Error::Stale)?;
+            write(text).map_err(Error::Failed)
+        })
+        .await,
+    )
 }

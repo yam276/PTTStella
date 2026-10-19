@@ -11,7 +11,7 @@ test("official Fluent formats independent Chinese and English catalogs and plura
     assert.equal(zh("filters-count-hidden",{count:2}),"已遮黑 2 則推文");
     assert.equal(en("export-lines-hint",{start:3,end:5}),"Export lines 3–5 (all 80 columns)");
     const unsafe="<img src=x onerror=evil()> & example";
-    assert.equal(en("link-hover-hint",{url:unsafe}),unsafe+" — click to open; right-click to select and copy");
+    assert.equal(en("link-hover-hint",{url:unsafe}),unsafe+" — click to open; right-click for actions");
     assert.equal(zh("connect"),"連線");
 });
 test("bootstrap, fallback and formatting errors have explicit boundaries",()=>{
