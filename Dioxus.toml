@@ -7,4 +7,4 @@ identifier = "io.github.yam276.pttstella"
 publisher = "yam276"
 category = "SocialNetworking"
 short_description = "A PTT desktop client with a terminal-style interface"
-icon = ["assets/icons/pttstella.png"]
+icon = ["assets/icons/pttstella.png", "assets/icons/pttstella.ico"]

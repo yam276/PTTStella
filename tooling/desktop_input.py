@@ -159,12 +159,45 @@ class DevTools:
             raise ValueError('probe DOM evaluation failed')
         return result.get('result', {}).get('value')
 
+    def reveal_tools(self, selector):
+        # Follow the production floating-tools entry using trusted clicks.
+        # Hidden toolbar controls have no clickable rectangle until their
+        # category is selected; moving to the former top hover area does nothing.
+        group = self.evaluate('document.querySelector('+json.dumps(selector)+')?.closest("[data-tools-group]")?.dataset.toolsGroup ?? null')
+        if group:
+            ready = '(()=>{const n=document.querySelector('+json.dumps(selector)+');return !!n && n.getClientRects().length>0 && !!n.closest("[data-tools-group]") && !n.closest("[data-tools-group]").hidden;})()'
+            if not self.evaluate(ready):
+                action = self.evaluate('document.getElementById("tools-ball").dataset.toolsAction')
+                if action == 'back' or self.evaluate('document.getElementById("tools-fan").hidden'):
+                    self.click('#tools-ball')
+                self.wait('!document.getElementById("tools-fan").hidden', 'tool categories did not open')
+                self.click('[data-tools-target="'+group+'"]')
+                self.wait(ready, 'tool category did not reveal '+selector)
+        return group
+
     def click(self, selector):
-        self.evaluate('(()=>{const n=document.querySelector('+json.dumps(selector)+');if(n.closest("dialog"))n.scrollIntoView({block:"nearest",inline:"nearest"});})()')
+        group = self.reveal_tools(selector)
+        self.evaluate('(()=>{const n=document.querySelector('+json.dumps(selector)+');if(n.closest("dialog,[data-tools-group]"))n.scrollIntoView({block:"nearest",inline:"nearest"});})()')
+        self.call('Runtime.evaluate', expression='new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))', awaitPromise=True)
+        self.wait('(()=>{const n=document.querySelector('+json.dumps(selector)+'),b=n.getBoundingClientRect();return n.contains(document.elementFromPoint(b.left+b.width/2,b.top+b.height/2));})()', 'control is not hit-testable: '+selector)
         position = self.evaluate(f'(()=>{{const b=document.querySelector({json.dumps(selector)}).getBoundingClientRect();'
                                  'return {x:b.left+b.width/2,y:b.top+b.height/2};})()')
+        self.call('Input.dispatchMouseEvent', type='mouseMoved', **position, buttons=0)
         for kind in ('mousePressed', 'mouseReleased'):
-            self.call('Input.dispatchMouseEvent', type=kind, **position, button='left', clickCount=1)
+            self.call('Input.dispatchMouseEvent', type=kind, **position, button='left',
+                      buttons=1 if kind == 'mousePressed' else 0, clickCount=1)
+        opens_dialog = selector in ('#font-settings', '#filters-open', '#login-open',
+                                    '#destination-open', '#bookmarks-open', '#sites-open')
+        if group and not opens_dialog and self.evaluate('document.querySelector('+json.dumps(selector)+').tagName === "BUTTON" && !document.querySelector("dialog[open]")'):
+            # A still-open tool page intentionally consumes the next outside
+            # click. Close it through the real trigger before testing the BBS.
+            self.close_tools()
+
+    def close_tools(self):
+        if self.evaluate('document.getElementById("tools-ball").dataset.toolsAction === "back"'):
+            self.click('#tools-ball')
+        if self.evaluate('!document.getElementById("tools-fan").hidden'):
+            self.click('#tools-ball')
 
     def shortcut(self, key):
         self.call('Input.dispatchKeyEvent', type='keyDown', key='Control', code='ControlLeft', windowsVirtualKeyCode=17, modifiers=2)
@@ -177,7 +210,9 @@ class DevTools:
         deadline = time.monotonic() + 5
         while not self.evaluate(expression):
             if time.monotonic() >= deadline:
-                state=self.evaluate('(()=>{const d=document.getElementById("surface"),p=document.getElementById("font-preview");return {surface:{...d?.dataset},font:{...p?.dataset},fontNote:document.getElementById("font-note")?.textContent,preset:document.getElementById("font-preset")?.value,fontSize:document.getElementById("font-size")?.value};})()')
+                if getattr(self, 'artifact_output', None):
+                    (Path(self.artifact_output)/'failure.png').write_bytes(base64.b64decode(self.call('Page.captureScreenshot',format='png')['data'],validate=True))
+                state=self.evaluate('(()=>{const d=document.getElementById("surface"),p=document.getElementById("font-preview");return {surface:{...d?.dataset},font:{...p?.dataset},fontNote:document.getElementById("font-note")?.textContent,preset:document.getElementById("font-preset")?.value,fontSize:document.getElementById("font-size")?.value,rowsTitle:document.getElementById("export-rows")?.title,toolsAction:document.getElementById("tools-ball")?.dataset.toolsAction};})()')
                 raise TimeoutError(reason+'; synthetic probe state: '+json.dumps(state,ensure_ascii=False))
             time.sleep(.02)
 
@@ -207,6 +242,7 @@ def run(port, process, output=None, media_server=None):
     if not address:
         raise TimeoutError('isolated WebView debug target unavailable')
     devtools = DevTools(address, port)
+    devtools.artifact_output = output
     try:
         while time.monotonic() < deadline:
             if devtools.evaluate('document.getElementById("surface")?.dataset.probeReady === "true"'):
@@ -284,12 +320,14 @@ def run(port, process, output=None, media_server=None):
         initial_pixels = devtools.evaluate('document.getElementById("screen").toDataURL("image/png")')
         def edit_field(selector, value):
             devtools.click(selector)
+            devtools.wait('document.activeElement === document.querySelector('+json.dumps(selector)+')', 'field did not receive focus')
             devtools.shortcut('a')
             devtools.call('Input.insertText', text=value)
+            devtools.wait('document.querySelector('+json.dumps(selector)+').value === '+json.dumps(value), 'field did not receive the complete edit')
         def open_fonts():
             devtools.call('Input.dispatchMouseEvent', type='mouseMoved', x=20, y=2)
             devtools.click('#font-settings')
-            devtools.wait('document.getElementById("font-dialog").open', 'font dialog did not open')
+            devtools.wait('document.getElementById("font-dialog").open && document.activeElement.id === "font-ascii"', 'font dialog initial preview and focus did not become ready')
         open_fonts()
         edit_field('#font-size', '18')
         edit_field('#font-baseline', '19')
@@ -430,10 +468,12 @@ def run(port, process, output=None, media_server=None):
         devtools.wait('document.getElementById("paste-dialog").open', 'confirmed paste preview did not open')
         devtools.click('#paste-send')
         devtools.wait('!document.getElementById("paste-dialog").open', 'confirmed paste preview did not close')
-        for text, expected in [('valid🚀', '無法以 Big5-UAO'), ('X'*4097, '超過 4096'), ('\x1b[31mX', '控制字元')]:
+        # The multi-site UI now describes the current site's encoding. Keep the
+        # typed rejection plus reason, and the peer still rejects extra bytes.
+        for text, expected in [('valid🚀', '無法以目前站點編碼'), ('X'*4097, '超過 4096'), ('\x1b[31mX', '控制字元')]:
             set_clipboard_text(text)
             devtools.shortcut('v')
-            devtools.wait('document.getElementById("surface-note").textContent.includes('+json.dumps(expected)+')',
+            devtools.wait('document.getElementById("surface").dataset.pasteResult === "rejected" && document.getElementById("surface-note").textContent.includes('+json.dumps(expected)+')',
                           'invalid paste was not rejected')
         previous = devtools.evaluate('document.getElementById("surface").dataset.revision')
         for key, code in (('ArrowUp', 38), ('Enter', 13)):

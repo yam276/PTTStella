@@ -177,6 +177,23 @@ class RepositoryGateTests(unittest.TestCase):
         self.assertEqual(check.exit_code(results), 2)
         self.assertEqual(check.exit_code(results + [{'status': 'failed'}]), 1)
 
+    def test_packaged_executable_requires_separate_artifacts_and_desktop_scope(self):
+        script = check.ROOT / 'tooling/check.py'
+        for args in (['desktop', '--desktop-executable', 'missing.exe'],
+                     ['docs', '--desktop-executable', 'missing.exe', '--desktop-output', 'unused']):
+            with self.subTest(args=args):
+                result = subprocess.run([sys.executable, str(script), *args],
+                                        capture_output=True, text=True, encoding='utf-8', timeout=10)
+                self.assertEqual(result.returncode, 2)
+                self.assertNotIn('"status": "passed"', result.stdout)
+
+    def test_missing_packaged_executable_cannot_fall_back_to_debug_binary(self):
+        with patch.object(check.sys, 'platform', 'win32'), patch.object(check.shutil, 'which', return_value='cargo'):
+            result = check.run_desktop(check.ROOT, self.root/'missing.exe', self.root/'isolated-output')
+        self.assertEqual(result['status'], 'failed')
+        self.assertIn('executable is missing', result['reason'])
+        self.assertFalse((self.root/'isolated-output').exists())
+
     def test_success_exit_without_real_regression_coverage_fails(self):
         reports = ('', '{}', '[]', '{"status":"passed","tests_run":0,"failures":0,"errors":0,"skipped":0}',
                    '{"status":"passed","tests_run":1,"failures":0,"errors":0,"skipped":1}')
