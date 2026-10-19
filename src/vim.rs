@@ -226,6 +226,7 @@ impl Keyboard {
         if let Context::Unknown { reason } = context {
             self.reset();
             return Effect::Notice(match reason {
+                UnknownReason::DifferentSite => crate::msg!("site-raw-input"),
                 UnknownReason::UnsupportedGrid => crate::msg!("vim-grid"),
                 UnknownReason::Incomplete => crate::msg!("vim-incomplete"),
                 UnknownReason::Unmapped => crate::msg!("vim-unmapped"),

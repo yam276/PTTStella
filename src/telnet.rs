@@ -80,7 +80,7 @@ impl Framing {
     fn negotiate(&mut self, cmd: u8, option: u8, cols: u16, rows: u16, reply: &mut Vec<u8>) {
         let index = usize::from(option);
         match cmd {
-            253 if matches!(option, 3 | 24 | 31) => {
+            253 if matches!(option, 0 | 3 | 24 | 31) => {
                 if !self.local[index] {
                     self.local[index] = true;
                     reply.extend([255, 251, option]);
@@ -92,7 +92,7 @@ impl Framing {
                 }
             }
             253 => reply.extend([255, 252, option]),
-            251 if matches!(option, 1 | 3) => {
+            251 if matches!(option, 0 | 1 | 3) => {
                 if !self.remote[index] {
                     self.remote[index] = true;
                     reply.extend([255, 253, option]);

@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | serde／serde_json | 產品 frame 與自己編寫的 replay fixture | MIT OR Apache-2.0；[serde](https://serde.rs/)、[serde_json](https://docs.rs/serde_json/) |
 | zeroize 1.9.1／security-framework 3.7.0 | Rust 自有密碼 buffer 清除／macOS Keychain 安全 API | Apache-2.0 OR MIT；[zeroize](https://docs.rs/zeroize/1.9.1/)，MIT OR Apache-2.0；[security-framework](https://docs.rs/security-framework/3.7.0/) |
+| encoding_rs 0.8.42 | 標準 Big5 與 GBK 的格線字元／輸入映射 | Apache-2.0 OR MIT；[上游 API 與授權](https://docs.rs/encoding_rs/0.8.42/encoding_rs/) |
 | uao-rs 0.1.0 | Big5-UAO 字元配對／輸入映射 | MIT；[上游](https://github.com/zenixls2/uao-rs)，其 README 記錄 MozTW UAO 來源 |
 | url 2.5.8／webbrowser 1.2.4 | HTTP／HTTPS 網址解析與使用系統瀏覽器開啟 | MIT OR Apache-2.0；[url](https://docs.rs/url/2.5.8/)、[webbrowser](https://docs.rs/webbrowser/1.2.4/) |
 | i18n-embed 0.16.0／i18n-embed-fl 0.10.1／rust-embed 8.13.0 | Fluent 翻譯載入、編譯期訊息／參數檢查及離線資源內嵌 | MIT；[i18n-embed](https://github.com/kellpossible/cargo-i18n)，MIT；[rust-embed](https://github.com/pyros2097/rust-embed) |

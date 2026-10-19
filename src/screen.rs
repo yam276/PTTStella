@@ -100,6 +100,7 @@ impl ControlString {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Screen {
+    encoding: encoding::TextEncoding,
     cols: usize,
     rows: usize,
     cells: Vec<Cell>,
@@ -126,6 +127,7 @@ impl Screen {
             return Err("unsupported screen dimensions");
         }
         Ok(Self {
+            encoding: encoding::TextEncoding::default(),
             cols,
             rows,
             cells: vec![Cell::default(); cols * rows],
@@ -146,6 +148,20 @@ impl Screen {
             hyperlinks: Hyperlinks::default(),
             mouse: crate::mouse::Modes::default(),
         })
+    }
+    pub fn with_encoding(
+        cols: usize,
+        rows: usize,
+        encoding: encoding::TextEncoding,
+    ) -> Result<Self, &'static str> {
+        let mut screen = Self::new(cols, rows)?;
+        screen.encoding = encoding;
+        Ok(screen)
+    }
+    /// Encoding belongs to the session; bytes from an old session are never reinterpreted.
+    pub fn set_encoding(&mut self, encoding: encoding::TextEncoding) {
+        self.reset_session();
+        self.encoding = encoding;
     }
     pub fn cell(&self, x: usize, y: usize) -> Option<Cell> {
         (x < self.cols && y < self.rows).then(|| self.cells[y * self.cols + x])
@@ -550,16 +566,18 @@ impl Screen {
             while col < self.cols {
                 let left = self.cells[row * self.cols + col];
                 let pair = if left.byte >= 0x81 && col + 1 < self.cols {
-                    encoding::pair([left.byte, self.cells[row * self.cols + col + 1].byte])
+                    self.encoding
+                        .pair([left.byte, self.cells[row * self.cols + col + 1].byte])
                 } else {
                     None
                 };
                 let width = if pair.is_some() { 2 } else { 1 };
-                let unmapped = pair.is_none() && left.byte >= 0x80;
-                let text = pair.unwrap_or_else(|| match left.byte {
-                    0 => " ".into(),
-                    0x20..=0x7e => char::from(left.byte).to_string(),
-                    _ => "\u{fffd}".into(),
+                let unmapped = pair.is_none() && self.encoding.single(left.byte).is_none();
+                let text = pair.unwrap_or_else(|| {
+                    self.encoding
+                        .single(left.byte)
+                        .unwrap_or('\u{fffd}')
+                        .to_string()
                 });
                 glyphs.push(Glyph {
                     col,

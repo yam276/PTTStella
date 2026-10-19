@@ -111,6 +111,7 @@ mod tests {
             &pttstella::encoding::encode(fixture["screens"][scene].as_str().unwrap()).unwrap(),
         );
         View {
+            site: pttstella::sites::Target::default(),
             mouse: pttstella::mouse::input::Snapshot::default(),
             frame: screen.frame(),
             output_pending: false,

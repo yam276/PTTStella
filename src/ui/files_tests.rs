@@ -67,6 +67,7 @@ fn snapshot() -> (
     Identity,
 ) {
     let view = View {
+        site: pttstella::sites::Target::default(),
         mouse: pttstella::mouse::input::Snapshot::default(),
         output_pending: false,
         frame: Screen::new(80, 24).unwrap().frame(),

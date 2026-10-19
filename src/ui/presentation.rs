@@ -58,7 +58,15 @@ pub(super) fn paint(
     settings: &DisplaySettings,
     filters: &filters::State,
 ) -> Paint {
-    let projection = filters.project(view.generation, &view.frame);
+    let projection = if view.site.ptt_features() {
+        filters.project(view.generation, &view.frame)
+    } else {
+        filters::Projection {
+            frame: view.frame.clone(),
+            matches: Vec::new(),
+            revealed: false,
+        }
+    };
     let links = if view.output_pending {
         Vec::new()
     } else {
@@ -157,6 +165,7 @@ mod filter_tests {
         let mut screen = Screen::new(80, 24).unwrap();
         screen.feed(&encoding::encode(pages["reading"].as_str().unwrap()).unwrap());
         let view = View {
+            site: pttstella::sites::Target::default(),
             mouse: pttstella::mouse::input::Snapshot::default(),
             output_pending: false,
             frame: screen.frame(),

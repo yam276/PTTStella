@@ -9,7 +9,6 @@ use crate::{
     screen::Screen,
     telnet,
 };
-use futures_util::{SinkExt, StreamExt};
 use std::{
     future::pending,
     time::{Duration, Instant},
@@ -331,6 +330,14 @@ impl Session {
             Some(Command::MouseSample(sample)) => self.mouse_sample(sample).await,
             Some(Command::KeepAlive(enabled)) => self.keep_alive(enabled),
             Some(Command::Connect) => self.connect(),
+            Some(Command::SwitchSite(target)) => {
+                self.disconnect().await;
+                self.endpoint = target.endpoint.as_str().to_owned();
+                self.screen.set_encoding(target.encoding);
+                self.view.site = target;
+                self.keep_alive(self.view.site.ptt_features());
+                self.connect();
+            }
             Some(Command::Disconnect) => self.disconnect().await,
             Some(Command::Input { generation, bytes }) => self.input(generation, &bytes).await,
             Some(Command::CancelLogin) => {
@@ -417,7 +424,14 @@ impl Session {
         self.view.input_pending = false;
         self.view.phase = Phase::Connecting;
         self.sync_mouse();
-        self.view.message = crate::msg!("status-connecting");
+        self.view.message = if self.view.site.ptt_features() {
+            crate::msg!("status-connecting")
+        } else {
+            crate::msg!(
+                "site-connecting",
+                address = self.view.site.endpoint.as_str()
+            )
+        };
         self.dialing = Some(tokio::spawn(transport::dial(self.endpoint.clone())));
         self.dirty = true;
     }
@@ -449,6 +463,7 @@ impl Session {
         self.view.phase = Phase::Disconnected;
         self.view.message = match self.last_close {
             CloseOutcome::Acknowledged => crate::msg!("disconnect-acknowledged"),
+            CloseOutcome::TransportClosed => crate::msg!("disconnect-transport-closed"),
             CloseOutcome::PeerClosedWithoutReply => {
                 crate::msg!("disconnect-peer-ended")
             }
@@ -464,7 +479,11 @@ impl Session {
             Ok(Ok(connection)) => {
                 self.socket = Some(connection);
                 self.view.phase = Phase::Connected;
-                self.view.message = crate::msg!("status-connected");
+                self.view.message = if self.view.site.ptt_features() {
+                    crate::msg!("status-connected")
+                } else {
+                    crate::msg!("site-connected", address = self.view.site.endpoint.as_str())
+                };
             }
             Ok(Err(error)) => self.fail(error),
             Err(error) => self.fail(crate::msg!(
@@ -550,6 +569,9 @@ impl Session {
     }
 
     async fn login(&mut self, stamp: Stamp, credentials: Credentials) -> Result<(), String> {
+        if !self.view.site.ptt_features() {
+            return Err(crate::msg!("site-ptt-only"));
+        }
         if self.view.phase != Phase::Connected || self.socket.is_none() || stamp != self.stamp() {
             return Err(crate::msg!("login-stale"));
         }
@@ -574,6 +596,9 @@ impl Session {
     }
 
     async fn go_to(&mut self, stamp: Stamp, target: Destination) -> Result<(), String> {
+        if !self.view.site.ptt_features() {
+            return Err(crate::msg!("site-ptt-only"));
+        }
         if self.view.phase != Phase::Connected || self.socket.is_none() || stamp != self.stamp() {
             return Err(navigation::Error::Stale.to_string());
         }
@@ -713,6 +738,9 @@ impl Session {
         intent: Intent,
         source: navigation::Source,
     ) -> Result<(), String> {
+        if !self.view.site.ptt_features() {
+            return Err(crate::msg!("site-ptt-only"));
+        }
         if source == navigation::Source::Pointer
             && self.mouse.snapshot(self.mouse_context()).route != crate::mouse::input::Route::Local
         {
@@ -967,7 +995,8 @@ impl Session {
         self.view.output_pending = self.screen.synchronized_since().is_some();
         if !self.view.output_pending {
             self.view.frame = self.screen.frame();
-            if self.view.phase == Phase::Connected
+            if self.view.site.ptt_features()
+                && self.view.phase == Phase::Connected
                 && let Some(board) = self.visits.observe(self.view.generation, &self.view.frame)
             {
                 self.visit_serial = self.visit_serial.saturating_add(1);
@@ -1021,7 +1050,8 @@ impl Session {
             self.dirty = true;
         }
         let stamp = self.stamp();
-        if self.socket.is_some()
+        if self.view.site.ptt_features()
+            && self.socket.is_some()
             && self.view.phase == Phase::Connected
             && self.pending_input.is_none()
             && self.login_attempt.is_none()

@@ -20,6 +20,7 @@ pub mod recent_boards;
 pub mod screen;
 pub mod selection;
 pub mod settings;
+pub mod sites;
 #[cfg(feature = "desktop")]
 pub mod storage;
 pub mod telnet;
