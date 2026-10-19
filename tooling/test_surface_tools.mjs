@@ -2,30 +2,56 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {translator} from './i18n_test_support.mjs';
 
 const create=vm.runInNewContext(readFileSync(new URL('../assets/surface-tools.js',import.meta.url),'utf8')+'\ncreateFloatingTools');
-function fixture({width=900,height=700,reduced=false}={}){
+function fixture({width=900,height=700,reduced=false,language='zh-TW'}={}){
     let clock=0,next=0,prepared=0,restored=0;
     const frames=new Map(),classes=new Set();
     const element=()=>({hidden:true,attrs:{},dataset:{},style:{setProperty(k,v){this[k]=v;}},
-        setAttribute(k,v){this.attrs[k]=v;},focus(){document.activeElement=this;},
+        setAttribute(k,v){this.attrs[k]=v;},removeAttribute(k){delete this.attrs[k];},focus(){document.activeElement=this;},
         contains(target){return target===this;}});
-    const root=element(),ball=element(),fan=element(),panel=element(),back=element();
+    const root=element(),ball=element(),fan=element(),panel=element();
     root.classList={add:v=>classes.add(v),remove:v=>classes.delete(v)};
     const petals=['navigate','display','capture','input','session','filters'].map(group=>{const p=element();p.dataset.toolsTarget=group;return p;});
     const groups=petals.map(p=>{const group=element();group.dataset.toolsGroup=p.dataset.toolsTarget;return group;});
     const document={activeElement:null,hidden:false,querySelector:()=>null},window={innerWidth:width,innerHeight:height};
     const captures=new Set();ball.setPointerCapture=id=>captures.add(id);ball.hasPointerCapture=id=>captures.has(id);ball.releasePointerCapture=id=>captures.delete(id);
     fan.querySelectorAll=()=>petals;fan.contains=target=>petals.includes(target);
-    panel.querySelectorAll=()=>groups;panel.querySelector=selector=>selector==='#tools-back'?back:null;
-    root.contains=target=>[root,ball,fan,panel,back,...petals,...groups].includes(target);
-    const menu=create({root,ball,fan,panel,window,document,prepare:()=>prepared++,restore:()=>restored++,
+    panel.querySelectorAll=()=>groups;panel.querySelector=()=>null;
+    root.contains=target=>[root,ball,fan,panel,...petals,...groups].includes(target);
+    const menu=create({root,ball,fan,panel,window,document,tr:translator(language),prepare:()=>prepared++,restore:()=>restored++,
         raf:callback=>{frames.set(++next,callback);return next;},caf:id=>frames.delete(id),now:()=>clock,reduced:()=>reduced});
     function fire(target,type,values={}){const e={pointerId:1,button:0,buttons:1,isPrimary:true,clientX:820,clientY:455,detail:1,preventDefault(){this.prevented=true;},stopPropagation(){this.stopped=true;},...values};
         for(const [node,event,callback] of menu.bindings)if(node===target&&event===type)callback({...e,currentTarget:target});return e;}
     function advance(ms=16){clock+=ms;const queued=[...frames.values()];frames.clear();queued.forEach(fn=>fn(clock));}
-    return {menu,fire,advance,root,ball,fan,panel,back,petals,groups,window,document,captures,frames,counts:()=>({prepared,restored})};
+    return {menu,fire,advance,root,ball,fan,panel,petals,groups,window,document,captures,frames,counts:()=>({prepared,restored})};
 }
+test('the floating trigger returns from every category before another tap closes the menu',()=>{
+    for(const [language,label] of [['zh-TW','返回工具分類'],['en-US','Back to categories']]){
+        const f=fixture({language});f.fire(f.ball,'click');
+        for(const petal of f.petals){
+            const point=f.menu.snapshot().point;f.fire(petal,'click');
+            assert.equal(f.ball.dataset.toolsAction,'back');assert.equal(f.ball.attrs['aria-label'],label);
+            assert.equal(f.ball.attrs['aria-expanded'],undefined,'Back is navigation, not a disclosure toggle');
+            f.fire(f.ball,'pointerdown');f.fire(f.ball,'pointerup');f.fire(f.ball,'click');
+            assert.equal(f.menu.open(),true);assert.equal(f.panel.hidden,true);assert.equal(f.fan.hidden,false);
+            assert.equal(f.ball.dataset.toolsAction,'toggle');assert.equal(f.document.activeElement,petal);
+            assert.deepEqual(f.menu.snapshot().point,point);
+        }
+        f.fire(f.ball,'click');assert.equal(f.menu.open(),false);assert.equal(f.ball.attrs['aria-expanded'],'false');
+        assert.equal(f.ball.attrs['aria-label'],language==='zh-TW'?'開啟或收合工具':'Open or close tools');
+    }
+});
+test('keyboard Back works while dragging from a category closes it without an accidental return click',()=>{
+    const f=fixture();f.fire(f.ball,'click');f.fire(f.petals[0],'click');
+    f.fire(f.document,'keydown',{key:'Enter',target:f.ball});f.fire(f.ball,'click',{detail:0});
+    assert.equal(f.menu.open(),true);assert.equal(f.fan.hidden,false);assert.equal(f.menu.snapshot().selected,null);
+    f.fire(f.petals[1],'click');f.fire(f.ball,'pointerdown');f.advance(40);
+    f.fire(f.ball,'pointerup',{clientX:700,clientY:400,buttons:0});f.fire(f.ball,'click',{detail:0});
+    assert.equal(f.menu.open(),false);assert.equal(f.ball.dataset.toolsAction,'toggle');assert.equal(f.menu.snapshot().animation,true);
+    f.menu.destroy();assert.equal(f.menu.clean(),true);
+});
 const overlaps=(a,b)=>a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h;
 function openAt(f,x,y){
     const start=f.menu.snapshot().point;
@@ -47,12 +73,11 @@ test('category panels replace the fan and return restores the selected category 
     f.ball.focus();f.fire(f.document,'keydown',{key:'ArrowDown'});assert.equal(f.document.activeElement,f.ball);
     f.window.innerWidth=360;f.window.innerHeight=300;f.fire(f.window,'resize');
     assert.equal(f.fan.hidden,true);assert.equal(f.panel.hidden,false);
-    f.fire(f.back,'click');assert.equal(f.panel.hidden,true);assert.equal(f.fan.hidden,false);
-    f.fire(f.panel,'click',{target:{closest:()=>f.back}}); // real click also bubbles through the old panel
+    f.fire(f.ball,'click');assert.equal(f.panel.hidden,true);assert.equal(f.fan.hidden,false);
     assert.equal(f.document.activeElement,f.petals[2]);assert.ok(f.groups.every(g=>g.hidden));
     f.fire(f.petals[1],'click');f.window.innerWidth=1040;f.window.innerHeight=740;f.fire(f.window,'resize');
     assert.equal(f.fan.hidden,true);assert.equal(f.panel.hidden,false);
-    f.fire(f.back,'click');assert.equal(f.fan.hidden,false);assert.equal(f.panel.hidden,true);
+    f.fire(f.ball,'click');assert.equal(f.fan.hidden,false);assert.equal(f.panel.hidden,true);
 });
 test('visible fan/grid and reserved panel bounds never cover the stationary trigger or leave the viewport',()=>{
     for(const [width,height] of [[320,240],[360,300],[500,420],[900,700],[1920,1080]]){
@@ -77,7 +102,8 @@ test('click toggles a six-way fan, each category exposes its original controls, 
     f.fire(f.ball,'click');assert.equal(f.fan.hidden,false);assert.equal(f.ball.attrs['aria-expanded'],'true');
     f.fire(f.petals[2],'click');assert.equal(f.panel.hidden,false);
     assert.deepEqual(f.groups.map(g=>g.hidden),[true,true,false,true,true,true]);
-    f.fire(f.ball,'click');assert.equal(f.menu.open(),false);assert.equal(f.panel.hidden,true);
+    f.fire(f.ball,'click');assert.equal(f.menu.open(),true);assert.equal(f.panel.hidden,true);
+    f.fire(f.ball,'click');assert.equal(f.menu.open(),false);
 });
 test('drag coasts then docks within bounds without opening tools or generating an action',()=>{
     const f=fixture();f.fire(f.ball,'pointerdown');f.advance(16);

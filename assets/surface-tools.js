@@ -1,10 +1,9 @@
 // Owns only tool chrome geometry and pointer capture; never sends station input.
-function createFloatingTools({root,ball,fan,panel,window,document,prepare,restore,changed=()=>{},
+function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,restore,changed=()=>{},
     raf=window.requestAnimationFrame.bind(window),caf=window.cancelAnimationFrame.bind(window),
     now=()=>performance.now(),reduced=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches}) {
     const petals=[...fan.querySelectorAll('[data-tools-target]')];
     const groups=[...panel.querySelectorAll('[data-tools-group]')];
-    const backButton=panel.querySelector('#tools-back');
     let point={x:window.innerWidth-80,y:window.innerHeight*.65},drag=null,animation=0,stopped=false,opened=false,selected=null;
     let suppressClickUntil=-1,lastFrame=0,coastUntil=0,velocity={x:0,y:0};
     let viewportWidth=window.innerWidth;
@@ -15,6 +14,14 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
     function place(){const b=bounds();point.x=clamp(point.x,b.left,b.right);point.y=clamp(point.y,b.top,b.bottom);
         root.style.setProperty('--tools-x',`${point.x}px`);root.style.setProperty('--tools-y',`${point.y}px`);}
     function halt(){if(animation)caf(animation);animation=0;velocity={x:0,y:0};}
+    function updateTrigger(){
+        const returning=selected!==null;
+        ball.dataset.toolsAction=returning?'back':'toggle';
+        ball.setAttribute('aria-label',tr(returning?'tools-back':'tools-toggle'));
+        ball.setAttribute('title',tr(returning?'tools-back-drag-hint':'tools-drag-hint'));
+        ball.setAttribute('aria-controls',returning?'tools-fan':'tools-fan tools-panel');
+        if(returning)ball.removeAttribute('aria-expanded');else ball.setAttribute('aria-expanded',String(opened));
+    }
     function dock(){const b=bounds();point.x=point.x+28<window.innerWidth/2?b.left:b.right;place();}
     function frame(time){animation=0;if(stopped||drag)return;
         const dt=Math.min(32,Math.max(0,time-lastFrame));lastFrame=time;
@@ -34,7 +41,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
         animation=raf(frame);
     }
     function close(focus=false){opened=false;selected=null;root.classList.remove('open');fan.hidden=true;panel.hidden=true;
-        ball.setAttribute('aria-expanded','false');petals.forEach(p=>p.setAttribute('aria-expanded','false'));
+        updateTrigger();petals.forEach(p=>p.setAttribute('aria-expanded','false'));
         changed();if(focus&&!stopped)restore();}
     // Largest usable rectangle on one side of the stationary trigger. Both the
     // grid fallback and the feature page reserve this space, including a gap.
@@ -68,14 +75,15 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
         panel.style.left=`${x}px`;panel.style.top=`${y}px`;
         panel.style.width=`${width}px`;panel.style.maxHeight=`${height}px`;
         fan.hidden=selected!==null;panel.hidden=selected===null;
+        updateTrigger();
     }
     function toggle(event){if(stopped)return;
         // WebViews may give the drag's generated click detail=0. Do not let it
         // open tools and halt the just-started coast. New taps/keyboard input
         // clear this bounded guard; a missing click cannot swallow a later AX action.
         const suppressed=now()<=suppressClickUntil;suppressClickUntil=-1;if(suppressed)return;
-        halt();if(opened){close(true);return;}prepare(event);opened=true;layout();
-        if(!opened)return;root.classList.add('open');ball.setAttribute('aria-expanded','true');ball.focus();changed();}
+        halt();if(opened){if(selected!==null)back();else close(true);return;}prepare(event);opened=true;layout();
+        if(!opened)return;root.classList.add('open');ball.focus();changed();}
     function choose(event){if(stopped||!opened)return;
         selected=event.currentTarget.dataset.toolsTarget;
         groups.forEach(group=>group.hidden=group.dataset.toolsGroup!==selected);
@@ -159,7 +167,6 @@ function createFloatingTools({root,ball,fan,panel,window,document,prepare,restor
     const bindings=[[ball,'pointerdown',down],[ball,'pointermove',move],[ball,'pointerup',up],
         [ball,'pointercancel',cancel],[ball,'lostpointercapture',lost],[ball,'click',toggle],
         ...petals.map(p=>[p,'click',choose]),[document,'pointerdown',outside,true],
-        ...(backButton?[[backButton,'click',back]]:[]),
         [panel,'click',panelAction],
         [document,'keydown',key,true],[window,'resize',resize],[window,'blur',cancel],[document,'visibilitychange',visibility]];
     place();close();

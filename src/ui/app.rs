@@ -2,7 +2,7 @@
 use super::surface::{Options, PendingPaste, surface};
 use base64::Engine;
 use dioxus::prelude::*;
-use dioxus_icons::lucide::{Camera, Compass, Keyboard, Plug, Shield, Type};
+use dioxus_icons::lucide::{ArrowLeft, Camera, Compass, Keyboard, Plug, Shield, Type};
 use pttstella::{
     connection::{Connection, Phase},
     screen::Screen,
@@ -169,6 +169,7 @@ pub fn app(props: AppProps) -> Element {
                     "aria-label": pttstella::msg!("tools-toggle"), "aria-expanded": "false", "aria-controls": "tools-fan tools-panel",
                     title: pttstella::msg!("tools-drag-hint"),
                     img { class: "tools-mark", src: "{tools_mark}", alt: "", "aria-hidden": "true", draggable: "false" }
+                    span { class: "tools-back-mark", "aria-hidden": "true", ArrowLeft { size: 28 } }
                 }
                 nav { id: "tools-fan", class: "tools-fan", hidden: true, "aria-label": pttstella::msg!("tools-title"),
                     ToolPetal { group: "navigate", label: pttstella::msg!("tools-navigate"), icon: rsx!{ Compass { size: 22 } } }
@@ -182,7 +183,6 @@ pub fn app(props: AppProps) -> Element {
                     output { class: "tools-alert", role: "status", "{message}" }
                 }
             header { id: "tools-panel", hidden: true, "aria-label": pttstella::msg!("tools-title"),
-                button { id: "tools-back", r#type: "button", {pttstella::msg!("tools-back")} }
                 div { class: "brand", "PTTStella" }
                 span { class: "status", title: "{message}", "{message}" }
                 section { "data-tools-group": "session",
