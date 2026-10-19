@@ -111,7 +111,7 @@ macOS 本機 `.app` 的建立入口為 `python3 tooling/bundle_macos.py`，細�
 
 斷線變更另以 production Connection 驗證正常 Close 碼、延遲回覆／TCP FIN、未回覆即結束連線與無回覆時的期限／未確認狀態。原生視窗分別用 ⌘W、⌘Q 檢查停止輸入、關閉握手及 renderer／worker 清理；不能只以程序消失或 Close 已排入佇列當成站端回覆。
 
-OSC 8 變更另跑 `node --test tooling/test_surface_links.mjs`；它以事件／狀態 doubles 直接執行生產 handler，核對任一片段選取索引、組字／非連結拒絕及一次 released hit 的版本檢查，不冒充原生拖曳。`--probe-surface OUTPUT_DIRECTORY osc8 --media-origin http://127.0.0.1:PORT` 使用 owned loopback 與自製 HTTP 圖像。原生依序點第 9／10 列各一次、右鍵並複製各一次、跨兩列拖曳、開啟第 15／16 列圖片並分別關閉、匯出 PNG，再正常關窗。嚴格報告要求兩列開啟／複製、跨列 range、兩次圖片解碼及 PNG；缺輸入 backend 為 not_ready，PNG 或正常退出不能代替互動通過。
+網址標示與 OSC 8 變更另跑 `node --test tooling/test_surface_links.mjs`；renderer double 另核對無 hover 的常駐底線、跨列範圍、50%／100%／125%／200% 比例、hover 加亮、連結消失與 PNG 不含提示。這些不代替原生像素驗收。它以事件／狀態 doubles 直接執行生產 handler，核對任一片段選取索引、組字／非連結拒絕及一次 released hit 的版本檢查，不冒充原生拖曳。`--probe-surface OUTPUT_DIRECTORY osc8 --media-origin http://127.0.0.1:PORT` 使用 owned loopback 與自製 HTTP 圖像。原生依序點第 9／10 列各一次、右鍵並複製各一次、跨兩列拖曳、開啟第 15／16 列圖片並分別關閉、匯出 PNG，再正常關窗。嚴格報告要求兩列開啟／複製、跨列 range、兩次圖片解碼及 PNG；缺輸入 backend 為 not_ready，PNG 或正常退出不能代替互動通過。
 
 macOS CUA 若一般視窗座標不可用，可在獨立 probe 直接用 ⌃⌘F 進全螢幕，再按「符合視窗」並取得新 screenshot。截圖可能帶原生視窗的垂直偏移；先以右鍵選取的「選取行 PNG」第 9／10 行提示確認實際命中，再執行嚴格順序，不固定沿用其他視窗座標。以 DOM dialog 的關閉按鈕離開預覽／草稿可保留全螢幕；Escape 可能同時離開全螢幕。不要在原生視窗選單中透過 App 的按鍵介面按 Escape 當作關單，應用當前 AX 暴露的 Cancel 動作，避免送入 BBS。完整圖片判讀使用完整 screenshot；差分圖不能當作缺像素。
 

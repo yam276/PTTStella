@@ -554,10 +554,10 @@ function draw(packet) {
     canvas.width=Math.max(1,Math.floor(width*physical)); canvas.height=Math.max(1,Math.floor(height*physical));
     surface.style.width=canvas.width/ratio+"px"; surface.style.height=canvas.height/ratio+"px";
     level.textContent=Math.round(physical/ratio/fitting*100)+"%";
-    grid={...render(canvas,packet,{cursor:true,hovered:hoveredLink}),ratio};
+    grid={...render(canvas,packet,{cursor:true,hovered:hoveredLink,linkHints:true}),ratio};
     positionKeyboard();drawSelection();drawNavigationMarker();draws++;return grid;
 }
-function render(target,packet,{cursor=true,hovered=-1}={}) {
+function render(target,packet,{cursor=true,hovered=-1,linkHints=false}={}) {
     const frame=packet.frame,width=frame.cols*12,height=frame.rows*24;
     const ctx=target.getContext("2d");
     const scale=Math.min(target.width/width,target.height/height);
@@ -592,8 +592,15 @@ function render(target,packet,{cursor=true,hovered=-1}={}) {
         const [col,row]=frame.cursor,bottom=y(row+1),thickness=Math.max(1,Math.round(2*scale));
         ctx.fillStyle=palette[7]; ctx.fillRect(x(col),bottom-thickness,x(col+1)-x(col),thickness);
     }
-    const link=packet.links[hovered];
-    if(link) {ctx.fillStyle=palette[7];ctx.fillRect(x(link.start),y(link.row+1)-1,x(link.end)-x(link.start),1);}
+    // Rust supplies the same visible spans used for hit testing, including OSC 8.
+    // Link hints decorate the live view only; PNG exports keep the source pixels.
+    if(linkHints) {
+        const thickness=Math.max(1,Math.round(scale));
+        packet.links.forEach((link,index)=>{
+            ctx.fillStyle=palette[index===hovered?7:8];
+            ctx.fillRect(x(link.start),y(link.row+1)-thickness,x(link.end)-x(link.start),thickness);
+        });
+    }
     return {x,y};
 }
 function repaint() {
