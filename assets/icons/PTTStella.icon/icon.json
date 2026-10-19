@@ -1,0 +1,44 @@
+{
+  "fill": {
+    "solid": "srgb:0.03529,0.07843,0.15686,1.00000"
+  },
+  "groups": [
+    {
+      "name": "Stars",
+      "blur-material": 0.15,
+      "layers": [
+        {
+          "image-name": "stars.svg",
+          "name": "Three stars",
+          "opacity": 1
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.14
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.35
+      }
+    },
+    {
+      "name": "Quiet links",
+      "layers": [
+        {
+          "image-name": "links.svg",
+          "name": "Connecting lines",
+          "opacity": 0.38,
+          "glass": false
+        }
+      ],
+      "shadow": {
+        "kind": "none",
+        "opacity": 0
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}

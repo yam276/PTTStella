@@ -615,3 +615,6 @@ macOS arm64 原生合成案例完成非法 https 位址拒絕、保存／移除�
 新增獨立 --probe-site 的登入前診斷，使用同一 Connection／decoder、無按鍵或帳密，報告不存站端文字或原始流量。新增回歸先確認僅三個 Telnet 協商 bytes 會過早結束，再改為要求可見文字；舊實作的 received_bytes=3 與獨立預期 7 不符，新實作通過。最終候選 dist/macos-sites-ui-r3/PTTStella.app 的變更僅補強該 CLI 診斷，站點 UI 原生案例於前一候選完成；最終 strict 簽章通過。
 
 本機明確公開站診斷（2026-10-19）：PTT2 WSS 收到 3,452 bytes 並辨識登入提示，巴哈 WSS 收到 1,039 bytes 可見文字，兩者 unmapped=0；兩站在關閉時底層結束但未回覆 Close，因此整體診斷均保留 failed／peer_closed_without_reply。水木 telnet://bbs.newsmth.net 連線逾時，沒有宣稱實站 GBK 或登入通過。三站未輸入帳密，也未以本機編碼／UI 成功代替公開站登入驗收。水木網路可達性、兩站關閉握手及三站人工登入是已知後續驗收項目。
+
+
+**2026-10-19 圖示 B 定稿**：採使用者選定的深藍／淡金三聯星，保留三條兩兩連線、下方小星更向外且略大。以專案自製 SVG 與 Icon Composer 材質渲染，連線獨立關閉玻璃效果並遮罩於星體邊界；1024 單位的線寬由 10 加至 24，維持 38% 不透明度。可編輯 `.icon` 與來源摘要保存在 assets/icons，浮球扁平稿同步幾何。32／64 px 原生匯出已目視確認連線與輪廓；App 使用靜態 ICNS，未整合系統動態材質。本機 arm64 候選 `dist/macos-icon-b/PTTStella.app` 已完成 dev／debug=0 打包，2 個打包回歸測試及 26 個主題／浮球 JS 測試通過；10 個 ICNS 尺寸、透明角落、plist 指向與 strict ad-hoc 簽章核對通過，實際 32px ICNS 已目視確認。證據保留 `.local/verification/icon-b`。本輪未重新驗收原生 App 互動，候選亦含尚待原生驗證的圖片預覽尺寸調整；不把渲染或編譯當作完整 GUI 驗收。

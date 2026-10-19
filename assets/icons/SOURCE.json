@@ -1,21 +1,28 @@
 {
-  "source": "Generated with the built-in image generation tool from the user-selected E gold pixel constellation concept.",
+  "source": "Original project-authored SVG layers, rendered by Apple Icon Composer ictool. User-selected variant B with thicker connections.",
   "date": "2026-10-19",
-  "role": "App icon master; midnight navy tile, three faceted gold block stars and triangular connecting lines.",
+  "role": "Three mutually connected smooth gold stars on navy; the lower-right star is larger and farther right.",
   "file": "pttstella.png",
-  "sha256": "213b9ae568d12e1cb2cd13cf07c6e861b07c1e24456860af4c37791ca2e2273b",
+  "sha256": "a235422939781659d8a50f5b83c510e499a3d4f5320b64774e952d711f041ec2",
   "dimensions": [
-    1254,
-    1254
+    1024,
+    1024
   ],
   "alpha": true,
-  "derivatives": "macOS iconset sizes are generated with Apple sips and packed by iconutil during bundling.",
-  "usage": "Project-generated artwork selected by the user for use in PTTStella; no imported third-party artwork.",
-  "prompt": "prompt.txt",
+  "editable_source": "PTTStella.icon/icon.json",
+  "design_specification": "prompt.txt",
+  "render": {
+    "platform": "macOS",
+    "rendition": "Default",
+    "light_angle": -45,
+    "scale": 1
+  },
+  "derivatives": "The bundler uses sips and iconutil to produce a static ICNS. The editable .icon source is retained; dynamic system appearances are not integrated.",
+  "usage": "Original project artwork selected by the user; no imported third-party artwork.",
   "flat_variant": {
     "file": "constellation-flat.svg",
-    "source": "Project-authored flat SVG interpretation of the selected gold pixel constellation for the floating tools button.",
-    "sha256": "f5fee9002863c47c933c32ce89153277d3994ee12898bbb8e3d17b2d7cd57ce2",
+    "source": "Project-authored flat SVG using the same star and connection geometry.",
+    "sha256": "1ebfe793597a506f4f9ee6c54b26d4eafc3420e2b7d83e977f89cd408d8bb010",
     "usage": "Bundled local artwork; no network, font or third-party artwork dependency."
   }
 }

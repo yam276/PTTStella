@@ -28,7 +28,7 @@ python3 tooling/bundle_macos.py --out-dir dist/macos-next
 macOS 保留原生 PTTStella／Edit／Window 選單：`⌘W` 關窗、`⌘Q` 結束、`⌃⌘F` 切換全螢幕，並提供 Zoom／Minimize。關窗與結束共用原本的 renderer、媒體及 Connection 清理流程，Command 快捷鍵不傳至 PTT。
 
 - `Dioxus.toml` 保存顯示名稱、bundle identifier 與 publisher；Cargo.toml 是產品版本的來源。
-- `Contents/MacOS/pttstella` 是實際 release executable；`Contents/Info.plist` 保存 bundle metadata，`Resources` 保存 `PTTStella.icns` 與字型授權。圖示使用深藍底金色像素星座。
+- `Contents/MacOS/pttstella` 是實際 release executable；`Contents/Info.plist` 保存 bundle metadata，`Resources` 保存 `PTTStella.icns` 與字型授權。圖示使用深藍底金色三聯星，由 Icon Composer 渲染玻璃材質，三條連線加粗並置於星體後方。
 - 圖示母檔由 `Dioxus.toml` 的 `bundle.icon` 指定；目前為 [PNG 母檔](../assets/icons/pttstella.png)，[來源記錄](../assets/icons/SOURCE.json) 保留產生方式與 SHA-256。打包使用 macOS 內建 `sips` 產生 16／32／128／256／512 點的 1x、2x PNG，再以 `iconutil` 合成 ICNS，包含最高 1024px 表示。`CFBundleIconFile` 指向同一資源，所有圖示內容在簽章前放入 App；轉換失敗不產生最終 App。
 - plist 版本使用 Cargo 版本的三段數字，例如 `0.1.0-dev.1` 對應 `0.1.0`；這不是發佈 build number 管理。
 - `otool -L` 必須只列出系統函式庫／framework。若未來加入非系統動態函式庫，腳本會拒絕，須先實作 bundle 內依賴與路徑管理。
@@ -49,3 +49,5 @@ macOS 保留原生 PTTStella／Edit／Window 選單：`⌘W` 關窗、`⌘Q` 結
 `--probe-window OUTPUT_DIRECTORY` 是另外的原生視窗回歸入口，不開 DevTools port，不連 PTT，設定與 PNG 僅存指定目錄。真實視窗內開啟 Vim，依序 j、k、gg、G；本機 WebSocket 逐筆核對 Down／Up／Home／End。其後以原生關窗／結束快捷鍵退出；有額外站端輸入、序列未完成或 owner 清理失敗就不產生通過報告。`window-probe.json` 只表示這個有限流程的 listener／worker 與輸入檢查通過，並非完整 desktop gate。
 
 關閉視窗／⌘Q 會先送 WebSocket 正常關閉通知，最多等候兩秒讓站端完成關閉握手，再清理視窗。工具列「斷線」也使用同一流程，並區分站端已回覆 Close、未回覆即結束連線、逾時／錯誤未確認；不以 BBS 選單腳本或登出按鍵代替協定關閉。
+
+圖示的可編輯原稿保留於 [Icon Composer 文件](../assets/icons/PTTStella.icon/icon.json)。目前 App 使用其 Default 外觀的靜態 PNG／ICNS，不宣稱已整合系統動態 Liquid Glass 或不同外觀模式。
