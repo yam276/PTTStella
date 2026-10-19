@@ -17,7 +17,16 @@ pub(super) fn finish_report(
     report["connection_worker_joined"] = joined.into();
     report["credential_worker_joined"] = joined.into();
     report["disconnect"] = serde_json::json!(disconnect);
-    if disconnect != Some(CloseOutcome::Acknowledged) {
+    let tcp_probe = matches!(report["case"].as_str(), Some("sites" | "sites_restart"))
+        && report["final_site"]["endpoint"]
+            .as_str()
+            .is_some_and(|value| value.starts_with("telnet://127.0.0.1:"));
+    let expected = if tcp_probe {
+        CloseOutcome::TransportClosed
+    } else {
+        CloseOutcome::Acknowledged
+    };
+    if disconnect != Some(expected) {
         report["status"] = "failed".into();
     }
 }
@@ -38,6 +47,10 @@ pub(super) fn mouse_case(case: Option<&str>) -> bool {
 
 #[derive(Default)]
 pub(super) struct Checks {
+    pub(super) site_switches: u8,
+    pub(super) site_saves: u8,
+    pub(super) site_removes: u8,
+    pub(super) site_rejections: u8,
     pub(super) tools: Option<super::protocol::ToolsObservation>,
     pub(super) mouse_edges: Vec<pttstella::mouse::Report>,
     pub(super) mouse_samples: Vec<pttstella::mouse::input::SampleReport>,
@@ -92,6 +105,35 @@ pub(super) struct Checks {
     pub(super) copied_selection: Option<(u64, u64, u64)>,
 }
 impl Checks {
+    pub(super) fn sites_passed(
+        &self,
+        case: &str,
+        current: &pttstella::sites::Target,
+        default: &pttstella::sites::Target,
+        frame: &pttstella::screen::Frame,
+    ) -> bool {
+        let actions = match case {
+            "sites" => {
+                self.site_switches >= 3
+                    && self.site_saves >= 4
+                    && self.site_removes >= 1
+                    && self.site_rejections >= 1
+            }
+            "sites_restart" => self.site_switches >= 1,
+            _ => false,
+        };
+        actions
+            && self.export_checked
+            && current.encoding == pttstella::encoding::TextEncoding::Gbk
+            && current == default
+            && frame
+                .glyphs
+                .iter()
+                .take(2)
+                .map(|glyph| glyph.text.as_str())
+                .eq(["中", "文"])
+    }
+
     fn mouse_reports(&self) -> Vec<(pttstella::mouse::Button, pttstella::mouse::Action)> {
         self.mouse_edges
             .iter()
@@ -458,7 +500,7 @@ pub(super) fn surface_sample(
     media_origin: Option<&str>,
 ) -> Result<Vec<u8>, String> {
     match case {
-        Some("tools") => tools_sample(),
+        Some("tools" | "sites" | "sites_restart") => tools_sample(),
         Some("sgr66") => sgr66_sample(true),
         Some("sgr66_legacy") => sgr66_sample(false),
         Some("osc8") => osc8_sample(media_origin),
@@ -653,6 +695,60 @@ mod sample_tests {
             assert_eq!(report["cleanup_completed"], true);
         }
     }
+    #[test]
+    fn station_probe_requires_real_action_markers_selected_glyphs_default_and_png() {
+        let target = pttstella::sites::Target::new(
+            "telnet://127.0.0.1:1234".into(),
+            pttstella::encoding::TextEncoding::Gbk,
+        )
+        .unwrap();
+        let mut screen = pttstella::screen::Screen::with_encoding(80, 24, target.encoding).unwrap();
+        screen.feed(b"\xd6\xd0\xce\xc4");
+        let mut checks = Checks {
+            site_switches: 3,
+            site_saves: 4,
+            site_removes: 1,
+            site_rejections: 1,
+            export_checked: true,
+            ..Default::default()
+        };
+        assert!(checks.sites_passed("sites", &target, &target, &screen.frame()));
+        checks.site_removes = 0;
+        assert!(!checks.sites_passed("sites", &target, &target, &screen.frame()));
+        checks.site_removes = 1;
+        checks.site_rejections = 0;
+        assert!(!checks.sites_passed("sites", &target, &target, &screen.frame()));
+        checks.site_rejections = 1;
+        checks.export_checked = false;
+        assert!(!checks.sites_passed("sites", &target, &target, &screen.frame()));
+        checks.export_checked = true;
+        assert!(!checks.sites_passed(
+            "sites",
+            &target,
+            &pttstella::sites::Target::default(),
+            &screen.frame()
+        ));
+        assert!(!checks.sites_passed("tools", &target, &target, &screen.frame()));
+        screen.reset_session();
+        assert!(!checks.sites_passed("sites", &target, &target, &screen.frame()));
+    }
+
+    #[test]
+    fn tcp_cleanup_is_only_accepted_for_explicit_loopback_station_probes() {
+        use pttstella::connection::CloseOutcome;
+        for (case, endpoint, passed) in [
+            ("sites", "telnet://127.0.0.1:1234", true),
+            ("sites_restart", "telnet://127.0.0.1:1234", true),
+            ("tools", "telnet://127.0.0.1:1234", false),
+            ("sites", "telnet://example.com:1234", false),
+            ("sites", "wss://127.0.0.1:1234/bbs", false),
+        ] {
+            let mut report = serde_json::json!({"status":"passed","case":case,"final_site":{"endpoint":endpoint}});
+            finish_report(&mut report, Some(CloseOutcome::TransportClosed));
+            assert_eq!(report["status"] == "passed", passed);
+        }
+    }
+
     #[test]
     fn tools_playground_has_no_station_mouse_negotiation() {
         let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();

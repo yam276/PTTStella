@@ -7,7 +7,7 @@ function createNavigationDialog({tr,send,stamp,prepare,restore,changed,current,i
     let disposed=false,composing=false,pending=null,active=null,sequence=0;
     function working(){const busy=!!pending||!!active;name.disabled=busy;submitButton.disabled=busy;for(const button of recentList.querySelectorAll("button"))button.disabled=busy;}
     function open(e,draft=""){
-        if(disposed||!e.isTrusted||document.querySelector("dialog[open]")&&!dialog.open)return false;
+        if(disposed||!e.isTrusted||current()?.ptt_features===false||document.querySelector("dialog[open]")&&!dialog.open)return false;
         if(dialog.open){name.focus();return true;}
         prepare(e);name.value=active?(active.target.kind==="article"?"#"+active.target.aid+"@"+active.target.board:active.target.board):draft;note.textContent=active?tr(active.target.kind==="article"?"article-open-active":"board-switch-active",{board:active.target.board,aid:active.target.aid}):"";
         composing=false;dialog.showModal();working();changed();name.focus();

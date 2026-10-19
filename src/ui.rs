@@ -12,6 +12,7 @@ mod presentation;
 mod probe;
 mod protocol;
 mod recent;
+mod sites;
 mod surface;
 mod surface_state;
 

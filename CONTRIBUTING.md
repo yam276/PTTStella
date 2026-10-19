@@ -1,6 +1,6 @@
 # 開發與驗證
 
-目前產品為 [terminal 外觀的 PTT 介面](docs/active/minimal-browser.md)，並有按需的 [媒體預覽](docs/media.md)。核心、Dioxus 視窗及單一 WSS 路徑已實作；手動登入的實測狀態見 active plan。沒有 shell／PTY 或一般系統終端功能。
+目前產品為 [terminal 外觀的 BBS 介面](docs/active/minimal-browser.md)，以 PTT 為預設站，並有按需的 [媒體預覽](docs/media.md)。核心、Dioxus 視窗、WebSocket／Telnet 及 [站點與編碼](docs/sites.md) 已實作；手動登入的實測狀態見 active plan。沒有 shell／PTY 或一般系統終端功能。
 
 ## 當前 gate
 
@@ -22,6 +22,10 @@ python tooling/check.py all
 core 執行 Rust 1.97.0 的 fmt、Clippy、畫面與互動測試 suite 及 2 個獨立 expected replay；desktop 包含本機傳輸／TLS 設定測試，再於 Windows 開真正的 Dioxus／WebView2 視窗，檢查雙色字像素、獨立背景、16 色與強度切換、填滿本體、送鍵橋接、監聽器／resize observer 清理與 connection worker join，產物位於 target/verification/desktop。all 跑離線 gate，不連 PTT。退出碼 0＝指定 scope 全部通過、1＝失敗、2＝必要能力未就緒；其他 OS 的 desktop 尚為 not_ready。腳本輸出 JSON，附 commit／dirty、fixture digest 與平台；root 從腳本位置決定。
 
 `cargo run --locked --features desktop --bin pttstella -- --probe-live target/verification/live` 是另外的實站動作，只接收登入前畫面與回覆協定協商，確認後即斷線；報告只存結果與接收數量，不存畫面、原始流量或帳密。一般 gate 不執行它。真正登入需在正常視窗人工輸入，看到站端登入後畫面才可宣稱登入通過。
+
+`--probe-site OUTPUT_DIRECTORY ADDRESS uao|big5|gbk` 使用同一 production Connection 與選定編碼，最多等待 20 秒取得可見登入前文字，再正常關閉。只有協商 bytes 不能通過；不送鍵或帳密、不讀鑰匙圈，也不保存站端畫面。WebSocket 未收到 Close 回覆仍記失敗；Telnet 僅記 TransportClosed。這也是明確的網路診斷，不包含在一般離線 gate，不能當作實站登入驗收。
+
+站點變更另跑 `cargo test --locked --no-default-features --test sites`、desktop lib／bin、`node --test tooling/test_surface_sites.mjs tooling/test_surface_dialogs.mjs tooling/test_surface_navigation.mjs` 及 i18n／Clippy。`sites` 原生探針需要獨立本機 Telnet peers：以 GBK／UAO 自製中文字驗證雙色格線、精確貼上 bytes 與 EOF；介面需完成無效網址拒絕、最愛保存與移除、預設保存、GBK→UAO→GBK 三次切站、PNG 及全部 owner join。`sites_restart` 原樣複製 probe-sites.json，啟動即連相同 loopback 預設站，驗證 GBK 往返及設定未自動改寫。合成站點只准連 127.0.0.1；僅這兩種 Telnet 案例接受 TransportClosed，不放寬既有 WebSocket Close 或滑鼠往返的條件。
 
 ## 實作後的驗證
 

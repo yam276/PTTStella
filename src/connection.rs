@@ -512,33 +512,57 @@ mod tests;
 mod transport;
 mod worker;
 
-/// Explicit no-credential network probe, separate from ordinary gates.
+/// Explicit no-credential network probes, separate from ordinary gates.
 pub async fn probe_live() -> Result<serde_json::Value, String> {
-    let connection = Connection::start(Screen::new(80, 24).map_err(|error| error.to_string())?)?;
+    probe_prelogin(crate::sites::Target::default(), true).await
+}
+pub async fn probe_site(target: crate::sites::Target) -> Result<serde_json::Value, String> {
+    probe_prelogin(target, false).await
+}
+async fn probe_prelogin(
+    target: crate::sites::Target,
+    require_ptt_prompt: bool,
+) -> Result<serde_json::Value, String> {
+    let connection = Connection::start(Screen::new(80, 24).map_err(str::to_owned)?)?;
     let mut updates = connection.updates.clone();
-    connection.connect()?;
+    connection.connect_to(target.clone())?;
     let observed = timeout(Duration::from_secs(20), async {
+        let mut started = false;
         loop {
             updates.changed().await.map_err(|e| e.to_string())?;
             let view = updates.borrow_and_update().clone();
-            if view.phase == Phase::Error {
+            started |= matches!(view.phase, Phase::Connecting | Phase::Connected);
+            if view.phase == Phase::Error || started && view.phase == Phase::Disconnected {
                 return Err(view.message);
             }
-            if view.received > 0 {
-                let text: String = view.frame.glyphs.iter().map(|g| g.text.as_str()).collect();
-                if text.contains("請輸入代號") {
-                    return Ok(
-                        serde_json::json!({"status":"passed","endpoint":PTT_ENDPOINT,
-                        "received_bytes":view.received,"login_prompt_detected":true,
-                        "credential_input_sent":false,"scope":"pre-login only; no authentication"}),
-                    );
+            let visible = view.frame.glyphs.iter().any(|glyph| !glyph.text.trim().is_empty());
+            if visible && !view.output_pending {
+                let prompt = view.frame.glyphs.iter()
+                    .map(|glyph| glyph.text.as_str()).collect::<String>()
+                    .contains("請輸入代號");
+                if !require_ptt_prompt || prompt {
+                    return Ok(serde_json::json!({
+                        "status": "passed", "endpoint": target.endpoint, "encoding": target.encoding,
+                        "received_bytes": view.received,
+                        "unmapped_glyphs": view.frame.glyphs.iter().filter(|glyph| glyph.unmapped).count(),
+                        "login_prompt_detected": prompt, "credential_input_sent": false,
+                        "scope": "transport banner only; no authentication or raw traffic saved"
+                    }));
                 }
             }
         }
     })
     .await
-    .map_err(|_| "未於期限內確認登入前提示；沒有送出帳密".to_owned())
-    .and_then(|r| r);
-    connection.shutdown().await?;
-    observed
+    .map_err(|_| "No pre-login response within the deadline; no credentials were sent".to_owned())
+    .and_then(|result| result);
+    let close = connection.shutdown().await?;
+    let mut report = observed?;
+    report["disconnect"] = serde_json::json!(close);
+    if !matches!(
+        close,
+        CloseOutcome::Acknowledged | CloseOutcome::TransportClosed
+    ) {
+        report["status"] = "failed".into();
+    }
+    Ok(report)
 }

@@ -2060,3 +2060,37 @@ async fn telnet_gbk_switch_closes_websocket_before_new_input_and_disables_ptt_co
     );
     assert_eq!(tcp.read(&mut [0; 1]).await.unwrap(), 0);
 }
+
+#[tokio::test]
+async fn station_banner_probe_uses_the_selected_decoder_and_closes_without_input() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("telnet://{}", listener.local_addr().unwrap());
+    let peer = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        stream.write_all(&[255, 253, 0]).await.unwrap();
+        let mut negotiation = [0; 3];
+        stream.read_exact(&mut negotiation).await.unwrap();
+        assert_eq!(negotiation, [255, 251, 0]);
+        assert!(
+            timeout(Duration::from_millis(100), stream.read_u8())
+                .await
+                .is_err(),
+            "negotiation alone must not complete the banner probe"
+        );
+        stream.write_all(b"\xd6\xd0\xce\xc4").await.unwrap();
+        assert_eq!(stream.read(&mut [0; 1]).await.unwrap(), 0);
+    });
+    let report = super::probe_site(
+        crate::sites::Target::new(endpoint, crate::encoding::TextEncoding::Gbk).unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(report["status"], "passed");
+    assert_eq!(report["encoding"], "gbk");
+    assert_eq!(report["unmapped_glyphs"], 0);
+    assert_eq!(report["received_bytes"], 7);
+    assert_eq!(report["credential_input_sent"], false);
+    assert_eq!(report["disconnect"], "transport_closed");
+    peer.await.unwrap();
+}

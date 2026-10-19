@@ -607,3 +607,11 @@ T1 驗證 fmt／Clippy、核心測試及生產 replay；T2 需要真實 backend 
 2026-10-19 浮球不透明度：依使用者確認只調整浮球，功能選單與斷線／錯誤提示維持不透明。設定頁提供 20%–100% 滑桿與百分比，明確套用後保存；hover、鍵盤焦點與按下時恢復清晰。version 4 沿用語言／字型意圖，v1–v3 讀入預設 100%，不在載入時改寫原檔；工具外觀不進可攜顯示 profile。新增有界型別驗證、設定草稿／取消／失敗／恢復預設、兩端封包與幾何不變回歸；87 項 JS、50 項 desktop bin、129 項 desktop lib、5 項 profiles、Rust i18n、fmt、Clippy 通過。macOS 本機原生滑桿可用鍵盤調為 50%，取消後重開仍是 100%，明確保存後浮球變淡而選單清晰；獨立重啟同一設定後滑桿仍是 50%。兩程序 PNG、Close acknowledged 與全部 owner join 通過，未操作使用者的實站 session。其他站點與編碼是下一個獨立功能提交，尚未以本項宣稱支援。
 
 2026-10-19 多站底層：新增具驗證的站點／編碼與有界最愛資料核心，預設仍為 PTT。WebSocket 與 Telnet 由同一 session owner 序列化，切站先關閉／取消舊傳輸、增加 generation 並重設格線及編碼，不重播輸入。Big5-UAO 保持既有路徑，encoding_rs 0.8.42 提供標準 Big5／GBK，中文字仍先佔 byte cell 再配對左右樣式；輸入與貼上可選同一編碼並整段拒絕無法映射文字。Telnet 關閉另標 TransportClosed，不冒稱站端 Close 確認；Binary 協商沿用同一 framing owner。其他站停用 PTT 登入、導覽、保活及名單投影。本機整合確認舊 WS Close、GBK 中文／精確輸入、舊 generation 零重播與 PTT 命令零送出；九套 core suite／兩份 replay、132 項 desktop lib、50 項 bin、Clippy 通過。站點 UI 及實站仍未以底層案例宣稱完成，契約見 [站點與編碼](../sites.md)。
+
+2026-10-19 站點管理介面：浮球「連線 → 站點」提供位址、編碼、站點最愛與獨立預設站；保存由檔案 owner 執行，成功才 commit，失敗保留草稿，壞檔只讀。選取最愛只還原草稿，切站明確關閉舊連線，預設於下次啟動連線且不自動登入。PTT 專用 UI 與 Rust 准入共同停用其他站的鑰匙圈、導覽、名單及保活；一般輸入／貼上使用當前編碼。133 項 desktop lib、55 項 bin、93 項 JS、i18n、fmt、Clippy 及 docs 通過。
+
+macOS arm64 原生合成案例完成非法 https 位址拒絕、保存／移除暫時最愛、保存預設、GBK→UAO→GBK 三次切站及 PNG。兩個獨立 Telnet peers 要求「中文」分別精確為 D6 D0 CE C4 與 A4 A4 A4 E5，切回 GBK 後零額外輸入；每條連線均收到 EOF。第二程序原樣載入已保存站點，自動連至 loopback GBK、確認貼上與 PNG，設定 bytes 未被改寫。兩程序均 TransportClosed、listener／connection／credential／file owner join。首輪原生檢查發現重複站點入口，保留 failed 紀錄；移除重複 ID 後才重跑通過。沒有操作使用者的實站 session，其他平台與原生英文站點視窗尚未驗收。
+
+新增獨立 --probe-site 的登入前診斷，使用同一 Connection／decoder、無按鍵或帳密，報告不存站端文字或原始流量。新增回歸先確認僅三個 Telnet 協商 bytes 會過早結束，再改為要求可見文字；舊實作的 received_bytes=3 與獨立預期 7 不符，新實作通過。最終候選 dist/macos-sites-ui-r3/PTTStella.app 的變更僅補強該 CLI 診斷，站點 UI 原生案例於前一候選完成；最終 strict 簽章通過。
+
+本機明確公開站診斷（2026-10-19）：PTT2 WSS 收到 3,452 bytes 並辨識登入提示，巴哈 WSS 收到 1,039 bytes 可見文字，兩者 unmapped=0；兩站在關閉時底層結束但未回覆 Close，因此整體診斷均保留 failed／peer_closed_without_reply。水木 telnet://bbs.newsmth.net 連線逾時，沒有宣稱實站 GBK 或登入通過。三站未輸入帳密，也未以本機編碼／UI 成功代替公開站登入驗收。水木網路可達性、兩站關閉握手及三站人工登入是已知後續驗收項目。

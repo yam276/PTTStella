@@ -11,6 +11,23 @@ fn outbound_results_match_the_shared_wire_examples() {
     )
     .unwrap();
     let bookmarks = super::bookmarks::State::load(Some(directory.path()));
+    let station_snapshot = || {
+        let target = pttstella::sites::Target::new(
+            "telnet://example.com".into(),
+            pttstella::encoding::TextEncoding::Gbk,
+        )
+        .unwrap();
+        super::sites::Snapshot {
+            sites: pttstella::sites::Sites {
+                version: 1,
+                default: target.clone(),
+                favourites: Vec::new(),
+            },
+            current: target,
+            writable: true,
+            warning: None,
+        }
+    };
     let actual = vec![
         (
             "station_mouse_rejected",
@@ -89,6 +106,21 @@ fn outbound_results_match_the_shared_wire_examples() {
             Packet::FiltersResult(FiltersResult::Rejected {
                 message: "失敗".into(),
             }),
+        ),
+        (
+            "sites_open",
+            Packet::SitesOpen {
+                request: 11,
+                data: station_snapshot(),
+            },
+        ),
+        (
+            "sites_result",
+            Packet::SitesResult {
+                request: 12,
+                data: station_snapshot(),
+                feedback: Feedback::new(super::sites::Status::Saved, "已保存"),
+            },
         ),
         (
             "tools_opacity",
