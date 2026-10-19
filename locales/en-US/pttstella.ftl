@@ -473,3 +473,8 @@ settings-licenses = Bundled font licenses
 settings-import = Load
 settings-export = Export
 settings-profile-help = Load updates the preview until you apply and save. Export uses the effective settings, excluding unapplied drafts.
+
+settings-opacity = Floating button opacity
+settings-opacity-value = { $percent }%
+settings-opacity-help = 20% is faint; 100% is opaque. Apply to change the floating button; menus stay opaque. Hover or keyboard focus restores full visibility. Disconnection and error notices stay readable.
+settings-opacity-invalid = Floating button opacity must be between 20% and 100%

@@ -2,7 +2,7 @@
 use super::presentation::Paint;
 use pttstella::{
     filters, media, selection,
-    settings::{DisplayProfile, DisplaySettings, HoverPosition},
+    settings::{DisplayProfile, DisplaySettings, HoverPosition, ToolOpacity},
     vim,
 };
 use serde::Serialize;
@@ -38,6 +38,7 @@ pub(super) enum Packet<'a> {
     FiltersOpen(FiltersOpen),
     FiltersResult(FiltersResult),
     HoverSettings(HoverPosition),
+    ToolsOpacity(ToolOpacity),
     HoverReset {
         media: bool,
     },
@@ -138,6 +139,7 @@ pub(super) struct MediaImage {
 }
 #[derive(Serialize)]
 pub(super) struct SettingsOpen {
+    pub tools_opacity: ToolOpacity,
     pub language: pttstella::i18n::Language,
     pub profile: DisplayProfile,
     pub values: DisplaySettings,

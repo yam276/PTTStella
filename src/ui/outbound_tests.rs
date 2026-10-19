@@ -90,6 +90,10 @@ fn outbound_results_match_the_shared_wire_examples() {
                 message: "失敗".into(),
             }),
         ),
+        (
+            "tools_opacity",
+            Packet::ToolsOpacity(pttstella::settings::ToolOpacity::try_from(65).unwrap()),
+        ),
         ("hover_settings", Packet::HoverSettings(HoverPosition::Off)),
         ("hover_reset", Packet::HoverReset { media: true }),
         ("hover_rejected", Packet::HoverRejected(8)),

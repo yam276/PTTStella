@@ -169,6 +169,7 @@ pub(super) enum SurfaceEvent {
     },
     SettingsSave {
         values: DisplayProfile,
+        tools_opacity: pttstella::settings::ToolOpacity,
         #[serde(default)]
         language: pttstella::i18n::Language,
         trusted: bool,
@@ -405,6 +406,18 @@ mod admission_tests {
         serde_json::from_value::<SurfaceEvent>(value)
             .unwrap()
             .admitted(generation)
+    }
+
+    #[test]
+    fn settings_opacity_requires_a_bounded_integer_and_trusted_save() {
+        let valid = json!({"kind":"settings_save","values":{"fonts":{"kind":"platform_default"},"font_size":20,"baseline":20},"language":"en-US","tools_opacity":65,"trusted":true});
+        assert!(admits(valid.clone(), true, 7));
+        assert!(!admits(valid.clone(), false, 7));
+        for value in [json!(19), json!(101), json!(65.5), json!("65"), Value::Null] {
+            let mut invalid = valid.clone();
+            invalid["tools_opacity"] = value;
+            assert!(serde_json::from_value::<SurfaceEvent>(invalid).is_err());
+        }
     }
 
     #[test]

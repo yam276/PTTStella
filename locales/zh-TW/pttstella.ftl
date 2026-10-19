@@ -467,3 +467,8 @@ settings-licenses = 內建字型授權
 settings-import = 載入
 settings-export = 匯出
 settings-profile-help = 載入只更新預覽，套用儲存後才生效；匯出使用目前已套用的設定，不包含未套用的草稿。
+
+settings-opacity = 浮球不透明度
+settings-opacity-value = { $percent }%
+settings-opacity-help = 20% 最淡，100% 不透明；套用後調整浮球，選單維持不透明，滑鼠移入或鍵盤聚焦時恢復清晰。斷線與錯誤提示不受影響。
+settings-opacity-invalid = 浮球不透明度需介於 20% 至 100%

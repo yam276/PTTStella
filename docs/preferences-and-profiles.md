@@ -83,3 +83,7 @@ Mac 上明確選擇 Windows 組合，重啟與再次匯入仍保留該選擇；�
 `windows_classic` 保留明確 MingLiU／MingLiU 意圖；Mac 不因缺字型而偷偷換成別的組合，也不匯出字型檔。缺少時提供 [官方取得與授權說明](https://learn.microsoft.com/en-us/typography/font-list/mingliu)，Windows 內附授權不因此取得跨機或跨平台散布權。未直接取用網站的 SymMingLiu 檔案。純 Mac 使用者可明確選 `macos_bbs`，使用本機 Songti TC 的英數與中文；宋體替代是外觀方向相近的選項，不宣稱筆形、勾號或像素等同 Windows 細明體。
 
 既有 `windows`、`macos`、`macos_serif`、平台初始值與已保存設定均保持原意；兩個新組合都需使用者明確選取。完整格線、左右顏色、自然比例與 PNG renderer 不改；字型版本／OS rasterizer 及缺字 fallback 仍是跨平台差異來源。
+
+## 浮球外觀
+
+本機設定目前為 version 4，另保存浮球不透明度（20%–100%）；v1–v3 載入時預設 100%，來源檔仍在明確保存後才備份與替換。外觀與顯示草稿一起按「套用並儲存」生效，取消或寫入失敗不改有效值。只有浮球使用透明度，功能選單與狀態提示不變；hover／鍵盤聚焦／按下時恢復完全不透明。可攜顯示 profile 仍只包含字型與排版。

@@ -140,3 +140,48 @@ fn traditional_bbs_presets_keep_latin_and_cjk_together_without_changing_existing
     assert_eq!(presets["windows"].ascii_font, "Cascadia Mono");
     assert_eq!(presets["windows"].cjk_font, "Microsoft JhengHei");
 }
+
+#[test]
+fn opacity_migrates_without_changing_other_preferences_and_rejects_invalid_values() {
+    use pttstella::settings::ToolOpacity;
+    for version in [2, 3] {
+        let bytes = format!(
+            r#"{{"version":{version},"display":{{"fonts":{{"kind":"preset","preset":"bundled"}},"font_size":18,"baseline":19}},"hover":"off","language":"en-US"}}"#
+        );
+        let settings = AppSettings::decode(bytes.as_bytes()).unwrap();
+        assert_eq!(settings.version, 4);
+        assert_eq!(settings.tools_opacity.percent(), 100);
+        assert_eq!(settings.display.font_size, 18.0);
+        assert_eq!(settings.language, pttstella::i18n::Language::English);
+    }
+    for percent in [20, 65, 100] {
+        let settings = AppSettings {
+            tools_opacity: ToolOpacity::try_from(percent).unwrap(),
+            ..Default::default()
+        };
+        assert_eq!(
+            AppSettings::decode(&serde_json::to_vec(&settings).unwrap())
+                .unwrap()
+                .tools_opacity
+                .percent(),
+            percent
+        );
+        let profile = PortableProfile::new("no tools".into(), settings.display)
+            .unwrap()
+            .encode()
+            .unwrap();
+        assert!(!String::from_utf8(profile).unwrap().contains("opacity"));
+    }
+    let settings = serde_json::to_value(AppSettings::default()).unwrap();
+    for bad in [
+        serde_json::json!(0),
+        serde_json::json!(19),
+        serde_json::json!(101),
+        serde_json::json!(40.5),
+        serde_json::json!("40"),
+    ] {
+        let mut value = settings.clone();
+        value["tools_opacity"] = bad;
+        assert!(AppSettings::decode(&serde_json::to_vec(&value).unwrap()).is_err());
+    }
+}
