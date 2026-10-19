@@ -86,13 +86,17 @@ async fn total_deadline_covers_a_stalled_response_body() {
     server.await.unwrap();
 }
 
-async fn request_path(socket: &mut tokio::net::TcpStream) -> String {
+async fn request_headers(socket: &mut tokio::net::TcpStream) -> String {
     let mut bytes = Vec::new();
     while bytes.len() < 4096 && !bytes.ends_with(b"\r\n\r\n") {
         bytes.push(socket.read_u8().await.unwrap());
     }
-    String::from_utf8(bytes)
-        .unwrap()
+    String::from_utf8(bytes).unwrap()
+}
+
+async fn request_path(socket: &mut tokio::net::TcpStream) -> String {
+    request_headers(socket)
+        .await
         .split_whitespace()
         .nth(1)
         .unwrap()
@@ -228,4 +232,73 @@ async fn dropping_pending_load_closes_its_request_and_next_load_can_complete() {
         PNG
     );
     server.await.unwrap();
+}
+
+#[tokio::test]
+async fn image_requests_identify_the_app_through_redirects_without_browsing_context() {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+    let origin = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let mut observed = Vec::new();
+        for step in 0..2 {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let request = request_headers(&mut socket).await;
+            let has_agent = request
+                .lines()
+                .any(|line| line.to_ascii_lowercase().starts_with("user-agent:"));
+            observed.push(request);
+            // Some image hosts close the connection instead of returning HTTP 4xx.
+            if !has_agent {
+                return observed;
+            }
+            if step == 0 {
+                socket.write_all(b"HTTP/1.1 302 Found\r\nLocation: /image.png\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await.unwrap();
+            } else {
+                socket
+                    .write_all(
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            PNG.len()
+                        )
+                        .as_bytes(),
+                    )
+                    .await
+                    .unwrap();
+                socket.write_all(PNG).await.unwrap();
+            }
+        }
+        observed
+    });
+    let mut loader = Loader::new();
+    let loaded = timeout(
+        Duration::from_secs(3),
+        loader.load(&format!("{origin}/redirect.png")),
+    )
+    .await
+    .unwrap();
+    let requests = timeout(Duration::from_secs(3), server)
+        .await
+        .unwrap()
+        .unwrap();
+    for request in &requests {
+        let headers: Vec<_> = request
+            .lines()
+            .filter_map(|line| line.split_once(':'))
+            .map(|(name, value)| (name.to_ascii_lowercase(), value.trim()))
+            .collect();
+        assert_eq!(
+            headers
+                .iter()
+                .find(|(name, _)| name == "user-agent")
+                .map(|(_, value)| *value),
+            Some(concat!("PTTStella/", env!("CARGO_PKG_VERSION")))
+        );
+        assert!(
+            !headers
+                .iter()
+                .any(|(name, _)| matches!(name.as_str(), "referer" | "cookie" | "authorization"))
+        );
+    }
+    assert_eq!(requests.len(), 2);
+    assert_eq!(loaded.unwrap().image.bytes, PNG);
 }

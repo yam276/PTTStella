@@ -17,7 +17,7 @@
 Rust 唯一分類 URL 與圖片型態；JS 消費結構化媒體描述並交 WebView 解碼，不重解 BBS 串流或拼接 HTML。來源文字以 textContent／DOM property 處理。
 
 - 一個預覽 owner，一個可取消圖片 HTTP future；重試／切換／關閉即 drop 舊 future，request id 防止晚到結果覆蓋新預覽。沒有 detached decoder 子程序或跨圖片解碼鎖。
-- 圖片 HTTP 總期限 20 秒、連線 8 秒、最多 5 次 redirect；HTTPS 不降級 HTTP，拒絕媒體 URL 的嵌入帳密。只在點擊或啟用的小預覽停留後發出請求，無 cookies、文章 referrer 或磁碟 cache。
+- 圖片 HTTP 總期限 20 秒、連線 8 秒、最多 5 次 redirect；HTTPS 不降級 HTTP，拒絕媒體 URL 的嵌入帳密。只在點擊或啟用的小預覽停留後發出請求，以 `PTTStella/版本` 識別下載程式，無 cookies、文章 referrer 或磁碟 cache。
 - 單圖 payload 上限 8 MiB；確認 PNG／JPEG／GIF／WebP magic 及尺寸後才送 WebView，單邊最多 8192、總像素最多 16,777,216。GIF／WebP／PNG 動畫紀錄最多 256 幀，畫布像素乘幀數最多 67,108,864；超限提供外開。這是解碼工作量限制，不是實測 decoder 記憶體上限；動畫由 WebView 管理，關閉撤銷 Blob URL。
 - 第一版圖片須完整接收並通過型態／尺寸檢查再交 decoder；明確顯示載入狀態，先保證可取消及輸入回應，未宣稱 progressive decode。
 - WebView 確認解碼成功後才存入記憶體 LRU，最多 8 張／24 MiB，最長 5 分鐘，遵守 no-store／no-cache、max-age／Age（上限 5 分鐘）；以精確請求 URL（移除 fragment）為 key，保留 query。關閉 app 清空，沒有背景更新或私人 URL 日誌。
