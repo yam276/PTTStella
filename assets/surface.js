@@ -89,7 +89,7 @@ function refreshStationMouse(){
     stationMouseStatus.textContent=!latest?.connected||!state?.enabled?"":tr(state.route==="station"?"station-mouse-active":state.route==="blocked"?"station-mouse-blocked":"station-mouse-local");
     surface.dataset.stationMouseRoute=state?.route??"local";
 }
-const canNavigate=()=>!stopped&&!!latest?.connected&&['article_list','article_reading'].includes(latest.navigation.kind)&&!latest.input_pending&&!navigationLocked&&!navigationRequest&&!blocked();
+const canNavigate=()=>!stopped&&!!latest?.connected&&['article_list','article_reading','board_list','empty_list','command_help'].includes(latest.navigation.kind)&&!latest.input_pending&&!navigationLocked&&!navigationRequest&&!blocked();
 function invalidateNavigation(){navigationLocked=true;released=null;cancelDrag();setHover(null);refreshNavigation();}
 function sendInput(value){invalidateNavigation();send(value);}
 // Only classify editing vs command events here. Rust owns key translation and
@@ -206,7 +206,7 @@ function pointerdown(e) {
     if(hit?.kind!=="link"||hoverCandidate?.index!==hit.index)cancelHover();
     else if(!hoverCandidate.started)cancelHover();
     if(point&&!composing) {
-        dragging={anchor:point,x:e.clientX,y:e.clientY,moved:false,pointer:e.pointerId,hit:hitAt(point),stamp:stamp()};
+        dragging={anchor:point,x:e.clientX,y:e.clientY,moved:false,pointer:e.pointerId,hit:e.shiftKey?null:hitAt(point),stamp:stamp()};
         viewport.setPointerCapture(e.pointerId);
         surface.dataset.pointerId=String(e.pointerId);surface.dataset.pointerActive="true";
         refreshKeepAlive();
@@ -225,7 +225,7 @@ function pointermove(e) {
     pointerClient={x:e.clientX,y:e.clientY,clientX:e.clientX,clientY:e.clientY,trusted:e.isTrusted};media.locate(pointerClient,hoverPreference);
     if(dragging&&e.pointerId!==dragging.pointer) return;
     if(!dragging&&stationMouse.move(e)){cancelHover();setHover(null);return;}
-    if(!dragging) {if(stationMouse.local())setHover(cellAt(e,false));else {cancelHover();setHover(null);}return;}
+    if(!dragging) {if(stationMouse.local())setHover(e.shiftKey?null:cellAt(e,false));else {cancelHover();setHover(null);}return;}
     dragging.moved ||= Math.hypot(e.clientX-dragging.x,e.clientY-dragging.y)>3;
     if(dragging.moved)cancelHover();
     if(dragging.moved) requestSelection({mode:"range",anchor:dragging.anchor,focus:cellAt(e,true)});
@@ -249,7 +249,7 @@ function click(e) {
     const action=released;released=null;clickSequenceAction=!!action?.hit;
     if(!action?.hit||blocked()||!sameStamp(action.stamp,stamp())) {refreshKeepAlive();return;}
     if(action.hit.kind==="link") send({kind:"open_link",presentation:latest.presentation,generation,revision,index:action.hit.index,trusted:e.isTrusted});
-    else navigate({action:"open",row:action.hit.row},e);
+    else navigate(action.hit.kind==="back"?{action:"back"}:{action:"open",row:action.hit.row},e);
     refreshKeepAlive();
 }
 function cancelDrag() {
@@ -329,26 +329,30 @@ function linkAt(point) {
 }
 function hitAt(point) {
     if(!point||blocked()||dragging?.moved||!stationMouse.local()) return null;
+    if(canNavigate()&&point.col<1&&point.row>0&&point.row<23)return {kind:"back"};
     const index=linkAt(point);if(index>=0) return {kind:"link",index};
     if(!canNavigate()||latest.navigation.kind!=="article_list") return null;
-    const article=latest.navigation.articles.find(a=>a.row===point.row&&a.start<=point.col&&point.col<a.end);
+    const article=latest.navigation.articles.find(a=>a.row===point.row);
     return article?{kind:"article",row:article.row}:null;
 }
 function setHover(point,redraw=true,preview=true) {
     const hit=hitAt(point),index=hit?.kind==="link"?hit.index:-1;
     const changed=index!==hoveredLink;hoveredLink=index;
     hoveredArticle=hit?.kind==="article"?latest.navigation.articles.find(a=>a.row===hit.row):null;
-    surface.style.cursor=hit?"pointer":"default";
-    surface.title=index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredArticle?tr("article-open-hint"):"";
+    surface.dataset.pointerAction=hit?.kind||"none";
+    surface.style.cursor=hit?.kind==="back"?"":hit?"pointer":"default";
+    surface.title=hit?.kind==="back"?tr("pointer-back-hint"):index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredArticle?tr("article-open-hint"):"";
     if(preview)previewHover(index);
     if(changed&&redraw&&latest) draw(latest);else drawNavigationMarker();
 }
 function drawNavigationMarker() {
-    navigationMarker.hidden=!hoveredArticle||!grid||!canNavigate();
+    const back=surface.dataset.pointerAction==="back";
+    navigationMarker.hidden=(!hoveredArticle&&!back)||!grid||!canNavigate();
     if(navigationMarker.hidden) {delete navigationMarker.dataset.row;return;}
-    const {row,start,end}=hoveredArticle;navigationMarker.dataset.row=String(row);
+    const {row,start,end}=back?{row:1,start:0,end:1}:{row:hoveredArticle.row,start:1,end:latest.frame.cols};
+    navigationMarker.dataset.kind=back?"back":"article";navigationMarker.dataset.row=String(row);
     Object.assign(navigationMarker.style,{left:grid.x(start)/grid.ratio+"px",top:grid.y(row)/grid.ratio+"px",
-        width:(grid.x(end)-grid.x(start))/grid.ratio+"px",height:(grid.bottom(row)-grid.y(row))/grid.ratio+"px"});
+        width:(grid.x(end)-grid.x(start))/grid.ratio+"px",height:((back?grid.y(23):grid.bottom(row))-grid.y(row))/grid.ratio+"px"});
 }
 function refreshNavigation() {
     refreshExportControls();

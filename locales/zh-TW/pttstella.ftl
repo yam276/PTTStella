@@ -244,9 +244,9 @@ font-local-loaded = 本機字型已載入；請以預覽檢查字形。
 copy-not-ready = 選取尚未準備好，請再複製
 copy-event-unavailable = 此環境未提供剪貼簿事件資料
 copy-failed = 無法寫入剪貼簿，請重試
-article-open-hint = 點擊編號開啟文章；拖曳可選字
+article-open-hint = 點擊整行開啟文章；拖曳或 Shift 選字
 navigation-wait = 等待畫面更新
-article-list-hint = 點編號開啟 · 拖曳選字
+article-list-hint = 點整行開啟 · 左緣返回 · Shift 選字
 article-reading-hint = 滾輪翻頁 · Ctrl＋滾輪縮放
 paste-native-first = 請先按 i 切換原始輸入再貼上
 paste-unavailable = 此環境無法讀取貼上的文字
@@ -529,6 +529,7 @@ filters-policy = 名單類型
 filters-policy-mask = 黑名單（遮黑）
 filters-policy-allow = 白名單（保留顯示）
 
+pointer-back-hint = 點擊左緣返回上一層；Shift 可選字
 
 filters-import = 匯入名單…
 filters-import-title = 選擇帳號名單文字檔

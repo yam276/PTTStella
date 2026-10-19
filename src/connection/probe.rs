@@ -22,6 +22,7 @@ pub(super) enum Scenario {
     MouseSamples(MouseSampleProbe),
     Filters,
     Surface,
+    PointerRows,
 }
 
 #[derive(Clone, Copy)]
@@ -653,6 +654,7 @@ pub(super) async fn serve(
             | Scenario::Login
             | Scenario::Login2fa
             | Scenario::Surface
+            | Scenario::PointerRows
             | Scenario::Boards
             | Scenario::Articles
             | Scenario::Bookmarks
@@ -697,6 +699,18 @@ pub(super) async fn serve(
         }
         if matches!(scenario, Scenario::Filters) {
             return filters(&mut socket).await;
+        }
+        if matches!(scenario, Scenario::PointerRows) {
+            for (expected, page) in [(b"\x1b[B\r".as_slice(), "reading_first"), (b"\x1b[D".as_slice(), "list")] {
+                if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected) {
+                    return Err("row/edge probe received unexpected station input".into());
+                }
+                socket.send(Message::Binary(navigation_page(page)?.into())).await.map_err(|e|e.to_string())?;
+            }
+            return match socket.next().await {
+                Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e|e.to_string()),
+                _ => Err("row/edge probe expected Close without extra input".into()),
+            };
         }
         if matches!(scenario, Scenario::Surface) {
             return match socket.next().await {
@@ -824,7 +838,7 @@ where
     Ok(())
 }
 
-fn navigation_page(name: &str) -> Result<Vec<u8>, String> {
+pub(super) fn navigation_page(name: &str) -> Result<Vec<u8>, String> {
     let pages: serde_json::Value =
         serde_json::from_str(include_str!("../../tests/fixtures/navigation.json"))
             .map_err(|e| e.to_string())?;

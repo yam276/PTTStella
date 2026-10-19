@@ -42,7 +42,13 @@ main { height: 100vh; position: relative; }
 #browse-controls { display: inline-flex; gap: 6px; }
 #browse-controls[hidden], #navigation-marker[hidden] { display: none; }
 #browse-hint { color: var(--ui-muted); }
-#navigation-marker { position: absolute; pointer-events: none; border-bottom: 1px solid rgba(192,192,192,.75); background: transparent; }
+#navigation-marker { position: absolute; pointer-events: none; box-sizing: border-box;
+    border: 1px solid rgba(220,185,100,.5); border-radius: 3px;
+    background: rgba(120,151,206,.12); animation: navigation-breathe 2.4s ease-in-out infinite; }
+#navigation-marker[data-kind="back"] { border-right: 2px solid #d9b86c; background: rgba(217,184,108,.18); }
+#surface[data-pointer-action="back"] { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M14 6 4 16l10 10M5 16h23' fill='none' stroke='%2308142a' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M14 6 4 16l10 10M5 16h23' fill='none' stroke='%23efd494' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 4 16, w-resize; }
+@keyframes navigation-breathe { 0%, 100% { opacity: .45; } 50% { opacity: .85; } }
+@media (prefers-reduced-motion: reduce) { #navigation-marker { animation: none; opacity: .65; } }
 button { flex-shrink: 0; border: 1px solid var(--ui-border); background: var(--ui-control); color: var(--ui-text); padding: 6px 10px; border-radius: 7px; cursor: pointer; font: inherit; }
 button:not(:disabled):hover, button[aria-pressed="true"] { background: var(--ui-control-hover); border-color: var(--ui-gold); }
 button:not(:disabled):active { background: var(--ui-control-hover); }

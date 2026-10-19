@@ -1263,6 +1263,7 @@ async fn run(
                 || case=="boards" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && checks.board_cancelled && checks.board_rejected>=1
                 || matches!(case.as_str(),"mouse"|"mouse_boundary") && checks.mouse_passed(case=="mouse_boundary") && receiver.borrow().mouse.active.is_none()
                 || matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") && checks.mouse_samples_passed(&case) && receiver.borrow().mouse.active.is_none() && receiver.borrow().mouse.modes.tracking()==pttstella::mouse::Tracking::Highlight
+                || case=="pointer_rows" && checks.navigation_requests==2 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
                 || case=="account_lists" && checks.filter_edits>=3 && checks.context_copies>=1 && checks.export_checked
                 || matches!(case.as_str(),"inline"|"context_menu") && checks.inline_requests>=2 && checks.inline_expands==1 && checks.export_checked && (case!="context_menu"||checks.context_copies>=2)
                 || case=="osc8" && checks.osc8_open_rows==[8,9] && checks.osc8_copy_rows==[8,9] && checks.osc8_dragged && checks.osc8_media_decoded>=2 && checks.export_checked

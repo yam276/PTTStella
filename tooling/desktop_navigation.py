@@ -15,9 +15,9 @@ def run(devtools, output):
         return d.evaluate('(()=>{const b=document.getElementById("screen").getBoundingClientRect();return {x:b.left+b.width*'+str(col)+'/80,y:b.top+b.height*'+str(row)+'/24};})()')
     def mouse(kind,position,count=1,**kw):
         d.call('Input.dispatchMouseEvent',type=kind,**position,button='left',clickCount=count,**kw)
-    def click_cell(col,row,count=1):
+    def click_cell(col,row,count=1,**kw):
         p=point(col,row)
-        mouse('mousePressed',p,count);mouse('mouseReleased',p,count)
+        mouse('mousePressed',p,count,**kw);mouse('mouseReleased',p,count,**kw)
     def key(name,code):
         for kind in ('keyDown','keyUp'):
             d.call('Input.dispatchKeyEvent',type=kind,key=name,code=name,windowsVirtualKeyCode=code)
@@ -46,8 +46,8 @@ def run(devtools, output):
     key('ArrowRight',39)
     wait_page('article_list',cursor=3)
     mouse('mouseReleased',held)
-    # Titles keep normal click/drag/double-click selection rather than opening rows.
-    click_cell(40,4.5);click_cell(40,4.5,count=2)
+    # Shift keeps title selection while unmodified clicks open complete rows.
+    click_cell(40,4.5,modifiers=8);click_cell(40,4.5,count=2,modifiers=8)
     # Renderer rounds shared grid edges to pixels; its last edge may be one pixel
     # inside the canvas capacity. The selected row must cover that actual grid.
     d.wait('document.querySelectorAll(".selection-row").length === 1 && Math.abs(document.querySelector(".selection-row").getBoundingClientRect().width-Math.round(Math.min(document.getElementById("screen").width/960,document.getElementById("screen").height/576)*960)/devicePixelRatio)<.01',
@@ -70,15 +70,15 @@ def run(devtools, output):
     mouse('mouseReleased',held)
 
     before=d.evaluate('document.getElementById("screen").toDataURL("image/png")')
-    d.call('Input.dispatchMouseEvent',type='mouseMoved',**point(4,5.5))
-    d.wait('document.getElementById("navigation-marker").dataset.row === "5"','article number hover did not display its marker')
+    d.call('Input.dispatchMouseEvent',type='mouseMoved',**point(40,5.5))
+    d.wait('document.getElementById("navigation-marker").dataset.row === "5"','article title hover did not display its row marker')
     marker=d.evaluate('(()=>{const m=document.getElementById("navigation-marker"),s=getComputedStyle(m),b=m.getBoundingClientRect();return {background:s.backgroundColor,border:s.borderBottomWidth,width:b.width,screen:document.getElementById("screen").getBoundingClientRect().width};})()')
-    if marker['background']!='rgba(0, 0, 0, 0)' or marker['border']!='1px' or marker['width']>marker['screen']*.08:
-        raise ValueError('navigation hover obscured the BBS row instead of marking its number')
+    if marker['background']!='rgba(120, 151, 206, 0.12)' or marker['border']!='1px' or abs(marker['width']/marker['screen']-79/80)>.01:
+        raise ValueError('navigation row marker violated its low-opacity full-row bounds')
     if before!=d.evaluate('document.getElementById("screen").toDataURL("image/png")'):
         raise ValueError('article hover recoloured ANSI canvas pixels')
     screenshot('navigation-list-hover.png')
-    click_cell(4,5.5)
+    click_cell(40,5.5)
     # A double-click continuation must not send a second open or select the new page.
     click_cell(4,5.5,count=2)
     wait_page('article_reading',first=1)

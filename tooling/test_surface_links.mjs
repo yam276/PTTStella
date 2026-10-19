@@ -90,3 +90,42 @@ test("hover brightens only its span and exports omit all local link hints",()=>{
         {colour:"#808080",bounds:[0,119,72,1]},
     ]);
 });
+
+
+test("article rows open across their width while the left edge returns; unknown rows remain inert",()=>{
+    const context={blocked:()=>false,dragging:null,stationMouse:{local:()=>true},canNavigate:()=>true,linkAt:()=>-1,
+        latest:{navigation:{kind:"article_list",articles:[{row:4,start:2,end:8}]}}};
+    const hit=handler("hitAt","setHover",context);
+    for(const col of [1,2,7,8,30,79])assert.deepEqual(JSON.parse(JSON.stringify(hit({row:4,col}))),{kind:"article",row:4});
+    assert.equal(hit({row:3,col:40}),null);
+    assert.equal(hit({row:4,col:0}).kind,"back");
+    assert.equal(hit({row:0,col:0}),null);assert.equal(hit({row:23,col:0}),null);
+    context.latest.navigation={kind:"article_reading"};assert.equal(hit({row:10,col:0}).kind,"back");
+    assert.equal(hit({row:10,col:1}),null);
+    context.stationMouse.local=()=>false;assert.equal(hit({row:10,col:0}),null);
+    context.stationMouse.local=()=>true;context.canNavigate=()=>false;assert.equal(hit({row:10,col:0}),null);
+    context.canNavigate=()=>true;context.dragging={moved:true};assert.equal(hit({row:10,col:0}),null);
+});
+
+test("the left edge sends the existing back intent once and refuses a stale gesture",()=>{
+    const calls=[],context={stationMouse:{local:()=>true},released:{hit:{kind:"back"},stamp:{revision:4}},
+        blocked:()=>false,sameStamp:(a,b)=>a.revision===b.revision,stamp:()=>({revision:4}),refreshKeepAlive(){},
+        navigate:(intent,e)=>calls.push([intent.action,e.isTrusted])};
+    const click=handler("click","cancelDrag",context);
+    click({button:0,detail:1,isTrusted:true});click({button:0,detail:1,isTrusted:true});
+    assert.deepEqual(calls,[["back",true]]);
+    context.released={hit:{kind:"back"},stamp:{revision:3}};click({button:0,detail:1,isTrusted:true});assert.equal(calls.length,1);
+});
+
+test("hover marker spans a complete row, and the return marker occupies only the left edge",()=>{
+    const context={surface:{dataset:{}},navigationMarker:{style:{},dataset:{}},hoveredArticle:{row:4,start:2,end:8},
+        latest:{frame:{cols:80}},grid:{ratio:2,x:x=>x*24,y:y=>y*48,bottom:y=>(y+1)*48},canNavigate:()=>true};
+    const draw=handler("drawNavigationMarker","refreshNavigation",context);draw();
+    assert.equal(context.navigationMarker.style.left,"12px");assert.equal(context.navigationMarker.style.width,"948px");
+    assert.equal(context.navigationMarker.style.height,"24px");
+    context.hoveredArticle=null;context.surface.dataset.pointerAction="back";draw();
+    assert.equal(context.navigationMarker.style.width,"12px");assert.equal(context.navigationMarker.style.height,"528px");
+    context.canNavigate=()=>false;draw();assert.equal(context.navigationMarker.hidden,true);
+    const css=readFileSync(new URL("../assets/app.css",import.meta.url),"utf8");
+    assert.match(css,/@media \(prefers-reduced-motion: reduce\) \{ #navigation-marker \{ animation: none/);
+});

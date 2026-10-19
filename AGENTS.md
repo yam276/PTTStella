@@ -5,7 +5,7 @@
 - 第一個交付是一個 Rust／Dioxus 的 PTT 專用圖形介面，外觀像 terminal：連線、手動登入 PTT、正確顯示、必要鍵盤及斷線。Windows 先驗證，架構維持可攜；其他平台後續各自實測。
 - [操作功能研究](docs/feature-research.md) 的選取／複製、IME／貼上、網址操作、PNG 匯出與字型設定已逐項實作及提交；實測範圍及待人工驗收項目維護於同一 active plan。登入卡住的實站重試待使用者回報，不以合成測試結案。
 - 先讀 [README](README.md)、[交付流程](CONTRIBUTING.md)、[唯一 active plan](docs/active/minimal-browser.md) 與相關程式。字型／欄位／雙色字要求見 [顯示契約](docs/dual-color.md)。
-- 最小滑鼠導覽支援保守辨識列表／閱讀畫面、點文章編號開啟、翻頁與返回。採自己的低干擾 BBS 相容視覺，保留 ANSI 文字對比，不以整列亮色或發光條遮蓋內容。研究資料維持在 repo 外，產品契約見 [滑鼠導覽](docs/navigation.md)。
+- 最小滑鼠導覽支援保守辨識列表／閱讀畫面、點文章整行開啟、左緣返回與翻頁。採低透明度藍金呼吸光棒，保留 ANSI 文字對比及原始格線；減少動態效果時停用動畫，視覺提示不進 PNG。研究資料維持在 repo 外，產品契約見 [滑鼠導覽](docs/navigation.md)。
 - 截圖提供整頁與目前畫面連續行的 PNG，消費 Rust 選取結果的行範圍與同一 renderer；完整行寬、不因縮放改變尺寸，不包含選取、游標或工具列。只在使用者明確點擊時匯出，不自動跨頁或錄製 session。
 - 防閒置依使用者要求預設開啟，僅在已辨識的列表／閱讀畫面、UI 與 connection 的版本及操作狀態均允許時刷新；登入／編輯／組字／貼上／選取等期間暫停。唯一 timer 由 connection 擁有，不補送睡眠或斷線期間操作；開關與驗證邊界見 [保活契約](docs/keepalive.md)。
 - 媒體依 [MVP 規格](docs/media.md) 按需預覽，Rust 擁有 URL／下載／容量與快取，WebView 負責顯示及 codec；背景工作不得阻塞 BBS 或污染新預覽。先不實作獨立文章模型、板名導覽、啟動時自動登入或追蹤。使用者後續授權的按鈕登入與鑰匙圈保存依 [登入契約](docs/login.md)，只有明確選擇才保存、按登入才送出。一般 terminal 的手動鍵盤操作不等於整個 session 唯讀。
