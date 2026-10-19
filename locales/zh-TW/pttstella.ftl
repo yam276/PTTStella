@@ -503,3 +503,6 @@ sites-unencrypted = Telnet／ws 不加密，輸入的帳密也會以明文傳輸
 sites-help = 「連線切換」會先關閉目前連線；只有「儲存最愛」或「設為預設」才保存資料。預設站於下次啟動連線，不自動登入。每站可選編碼，切換編碼會重新連線；其他站使用原始輸入，不使用 PTT 專用登入與導覽。
 
 sites-remove = 移除最愛
+
+inline-image-budget = 此頁圖片已達容量上限；可點網址個別預覽。
+inline-image-limit = 每頁最多展開 8 張圖片；其他圖片可點網址預覽。

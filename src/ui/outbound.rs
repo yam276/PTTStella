@@ -65,6 +65,18 @@ pub(super) enum Packet<'a> {
         message: Option<String>,
     },
     MediaReset,
+    InlineOpen(super::inline_images::Open),
+    InlineImage {
+        batch: u64,
+        index: usize,
+        image: MediaImage,
+    },
+    InlineError {
+        batch: u64,
+        index: usize,
+        message: String,
+    },
+    InlineReset(bool),
     SettingsOpen(Box<SettingsOpen>),
     FontPreview(FontPreview),
     FontCatalog {

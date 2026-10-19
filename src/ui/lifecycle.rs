@@ -13,6 +13,7 @@ use super::{commands::Pending, files::Files, outbound::Packet};
 pub(super) struct Resources {
     pub(super) eval: Option<document::Eval>,
     pub(super) media: Preview,
+    pub(super) inline: super::inline_images::InlineImages,
     pub(super) login: Option<Job>,
     pub(super) commands: Pending,
     pub(super) files: Files,
@@ -95,6 +96,7 @@ impl Resources {
         self.commands.cancel();
         self.files.revoke();
         self.media.close();
+        self.inline.close();
         connection.revoke_mouse(connection.updates.borrow().generation);
         connection.keep_alive_gate(connection.updates.borrow().stamp(), false);
         // Cancellation is best effort; shutdown below remains the owned, joined

@@ -91,7 +91,7 @@ DEC2026 的開始／結束由 Screen 解析；同步期間仍完整作用所有 
 
 Connection 同時擁有防閒置的單調時鐘、預設開啟狀態、UI watch 許可及自動刷新等待。UI 僅回報本機操作是否允許，不建立自己的 timer；owner 核對當前 Screen、session／輸入版本及等待狀態後才送一次刷新。手動輸入與自動刷新以不同 PendingInput 變體管理，只有自動等待會因無回應而逾時釋放並停用保活。規則與公開站端來源推論見 [保活契約](keepalive.md)。
 
-媒體依 [預覽契約](media.md) 在 dialog 內顯示。Rust Preview 擁有可取消的 HTTP future 與待解碼內容，關閉／換 session 只有一個清理入口；沒有 detached 下載 task。JS 收到通過格式／尺寸／動畫容量檢查的 bytes 後建立 Blob URL，由 WebView 解碼，成功回報後才保留快取；失敗內容不得造成重試一直命中壞圖。JS owner 註冊／移除自己的 listener 與 ResizeObserver，關閉時撤銷 Blob URL、停止 video、移除來源並清空 canvas；本機轉換／播放 promise 在結束時等待完成。影片使用獨立串流來源，不塞進圖片 cache。BBS canvas、輸入、PNG 與媒體渲染不共用解碼鎖或排版狀態。
+媒體依 [預覽契約](media.md) 提供 dialog、hover 與閱讀頁 Enter 展圖。Enter 使用獨立的有界 inline owner，消費目前已繪製、已過濾的圖片連結；同一 Loader 序列下載、每頁去重、容量限制與 source identity 撤銷。顯示層只插入圖片空間與原 renderer 的行切片，原格線與 PNG 契約不變。Rust Preview 擁有可取消的 HTTP future 與待解碼內容，關閉／換 session 只有一個清理入口；沒有 detached 下載 task。JS 收到通過格式／尺寸／動畫容量檢查的 bytes 後建立 Blob URL，由 WebView 解碼，成功回報後才保留快取；失敗內容不得造成重試一直命中壞圖。JS owner 註冊／移除自己的 listener 與 ResizeObserver，關閉時撤銷 Blob URL、停止 video、移除來源並清空 canvas；本機轉換／播放 promise 在結束時等待完成。影片使用獨立串流來源，不塞進圖片 cache。BBS canvas、輸入、PNG 與媒體渲染不共用解碼鎖或排版狀態。
 
 按鈕登入的 prompt／容量屬 login 核心，Connection 擁有單次等待與送出，Keychain worker 擁有 OS 存取與清理；UI 不接收已存密碼。安全儲存與驗證邊界見 [登入契約](login.md)。
 

@@ -509,3 +509,6 @@ sites-unencrypted = Telnet and ws are unencrypted, including any credentials you
 sites-help = Switch connection closes the current connection first. Only Save favourite or Set as default stores data. The default connects on the next launch without logging in. Each station can use its own encoding; changing it reconnects. Other stations use native input without PTT login or navigation automation.
 
 sites-remove = Remove favourite
+
+inline-image-budget = This page reached the image budget. Open the link to preview separately.
+inline-image-limit = Up to 8 images per page. Open other links to preview separately.

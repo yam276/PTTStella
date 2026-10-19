@@ -624,3 +624,12 @@ macOS arm64 原生合成案例完成非法 https 位址拒絕、保存／移除�
 2026-10-19 網址常駐底線：live renderer 使用 Rust 已投影的連結片段繪製細灰線，hover 只加亮命中片段，不改 ANSI 字形或背景；跨列 OSC 8 共用既有連結／命中資料，PNG renderer 預設不繪製本機提示。6 項連結 JS 回歸與 core gate（13 個命令、2 個 replay）通過。macOS 獨立合成 App 的視窗及全螢幕已觀察兩段連結底線，實際擷取按鈕匯出 960×576 PNG；live 灰線以原生畫面目視核對，獨立像素檢查核對 export 僅有來源黑／青色。初次像素斷言錯把字母下伸部當成非黑失敗，檢查來源圖後改以 fixture 的 ANSI 色彩作獨立預期，未修改產品或圖片；螢幕擷取含有損壓縮，不以其像素當精確 RGB 驗證。正常 Close acknowledged、全部 owner join 通過。完整 osc8 報告仍為 failed，因本次沒有操作開啟／複製／拖曳／媒體案例，不宣稱完整互動 gate 通過。證據保留 `.local/verification/link-underlines`；候選 `dist/macos-link-underlines/PTTStella.app` 已完成 arm64 dev／debug=0 打包與 strict ad-hoc 簽章，未操作使用者實站 session。
 
 2026-10-19 圖床連線相容修正：使用者指定圖片以舊版 production Loader 重現 Network 失敗；相同 HTTPS URL 在省略 User-Agent 時被中斷，帶 App 身分時回傳 200。圖片本身為有效單幀 PNG、1260×726、66,409 bytes，未超過預覽預算。HTTP client 新增 PTTStella／版本 User-Agent，production Loader 實際下載後通過同一格式／尺寸檢查。新增本機 server 回歸在舊版因缺標頭失敗，修正後核對直接請求及重新導向均帶 App 身分，沒有 Cookie／Authorization／Referer；134 項 desktop lib、fmt 與全 targets Clippy 通過。外網診斷是使用者指定的一次調查，不加入一般 gate，也不保存私人 session；診斷及前後結果留在 `.local/verification/catbox-image`。本輪只驗證下載／圖片檢查及本機回歸，未以之宣稱完整原生預覽互動驗收。
+
+
+2026-10-19 Enter 文章內展圖：依使用者選擇，在已辨識 PTT 閱讀頁於圖片網址下方展開，不以再次 Enter 收合。Rust 從目前已繪製且套用名單的 snapshot 准入，保留原生一次／i／IME／前綴與其他站的原輸入；每頁最多 8 個不同網址、合計 24 MiB payload／16M 像素，序列下載，頁面／session／過濾變更撤銷。JS 以原 renderer 的行切片與獨立圖片間隙排版，選取、網址與 PNG 保留原行列；圖片僅顯示首幀，展開時暫停閒置刷新。
+
+macOS arm64 合成原生 App 已確認一般模式兩次 Enter 與 Vim Normal 一次 Enter，共 3 筆明確請求只開 1 個 batch；HTTP peer 記錄 colours.png／missing.png 各 1 個 GET，畫面在網址下方顯示自製紅藍圖片及 HTTP 404，沒有開 modal 或收合。插圖下方拖曳反白對準文字，選取行 PNG 指向原第 4 行。獨立 Pillow 核對整頁 960×576、選取行 960×24 且逐像素等於整頁第 4 行裁切；全圖僅來源灰階，未混入紅藍插圖。站端 peer 拒絕全部 bytes，關閉後 Close acknowledged、renderer listener／connection／credential／file owner 全部 join。證據在 `.local/verification/inline-images`；未操作使用者實站 session。
+
+驗證包含 135 項 desktop lib、61 項 desktop bin、core／兩份 replay、Clippy、JS 幾何／快捷鍵與取消 decoder／舊 batch 回歸、封包與中英文資源。最初合成 footer 缺少離開提示及 wire examples 順序錯誤被測試拒絕，修正 fixture／順序後通過，未放寬辨識規則。獨立瀏覽器 DOM 測試頁已提供，但 browser 工具拒絕 file URL，該測試列 not_ready；原生實測與 JS 回歸各自記錄，沒有據此宣稱所有視窗大小、實站或其他平台已驗收。
+
+最終候選 `dist/macos-inline-images-final/PTTStella.app` 已完成 arm64 dev／debug=0 打包與 strict ad-hoc 簽章。首輪最終候選在開始 UI 觀察時已斷線，操作順序不完整，保留 failed／cleanup false；同一 executable 重新執行後兩次 Enter 僅一個 batch、兩個網址各一個 GET、PNG 與 Close／全部 owner join 通過。未以重跑覆寫失敗紀錄；本輪產生的中間 App／測試副本在正常程序退出後清理，保留報告、來源 helper、產物雜湊與必要像素圖。
