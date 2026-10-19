@@ -11,5 +11,11 @@
   "alpha": true,
   "derivatives": "macOS iconset sizes are generated with Apple sips and packed by iconutil during bundling.",
   "usage": "Project-generated artwork selected by the user for use in PTTStella; no imported third-party artwork.",
-  "prompt": "prompt.txt"
+  "prompt": "prompt.txt",
+  "flat_variant": {
+    "file": "constellation-flat.svg",
+    "source": "Project-authored flat SVG interpretation of the selected gold pixel constellation for the floating tools button.",
+    "sha256": "f5fee9002863c47c933c32ce89153277d3994ee12898bbb8e3d17b2d7cd57ce2",
+    "usage": "Bundled local artwork; no network, font or third-party artwork dependency."
+  }
 }
