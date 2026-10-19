@@ -73,6 +73,20 @@ python tooling/check.py docs
 
 獨立實站檢查：`cargo run --locked --features desktop --bin pttstella -- --probe-live target/verification/live`。這會連至 `wss://ws.ptt.cc/bbs`，只確認登入前提示並斷線，不送帳密；不包含在任何一般 gate。
 
+## Windows ZIP 測試包
+
+在 Windows x64 安裝鎖定 Rust 工具鏈、Python 3.11+、Visual Studio C++ Build Tools 與 Windows SDK；執行環境需要 Microsoft Edge WebView2 Evergreen Runtime。
+
+```text
+python tooling/check.py core
+python tooling/check.py desktop
+python tooling/bundle_windows.py
+```
+
+產物為 `dist/windows/PTTStella-0.1.0-dev.1-windows-x64.zip`，附 `.zip.sha256`。解壓整個資料夾後執行 `pttstella.exe`；不需要 Rust／Python／Node。圖示由同一 PNG 母檔衍生七種尺寸 ICO，嵌入 EXE 並用於視窗／工作列；包內另附 ICO、必要的 app-local VC++ runtime DLL、README、授權資料及檔案雜湊 manifest。WebView2 Runtime 須另外安裝。本機 ZIP 未作 Authenticode 簽署，不包含私人設定、帳密或流量。
+
+腳本不覆寫既有 ZIP，改用 `--out-dir dist/windows-next` 建立另一份；若找不到 Microsoft redistributable CRT，使用 `--crt-dir` 指向 Visual Studio `VC/Redist/MSVC/<version>/x64/Microsoft.VC*.CRT`。打包本身不代表 GUI 或實站登入通過；平台與驗證結果見 active plan，Windows 仍使用 terminal 手動登入，未提供 macOS Keychain 功能。解壓後可用 `python tooling/check.py desktop --desktop-executable <EXE絕對路徑> --desktop-output <獨立驗證目錄>` 驗證實際交付的 EXE，不重新編譯；此模式只跑 GUI，建置檢查須另行完成。
+
 ## macOS App
 
 在 Mac 安裝鎖定的 Rust 工具鏈、Python 3.11+ 與 Xcode Command Line Tools 後，執行：

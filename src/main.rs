@@ -217,6 +217,23 @@ fn main() {
     let window = dioxus::desktop::WindowBuilder::new()
         .with_title("PTTStella")
         .with_inner_size(dioxus::desktop::LogicalSize::new(1040.0, 740.0));
+    #[cfg(target_os = "windows")]
+    let window = {
+        use dioxus::desktop::tao::{
+            platform::windows::{IconExtWindows, WindowBuilderExtWindows},
+            window::Icon,
+        };
+        let icon = match Icon::from_resource(1, None) {
+            Ok(icon) => icon,
+            Err(error) => {
+                eprintln!("cannot load embedded Windows icon: {error}");
+                std::process::exit(1);
+            }
+        };
+        window
+            .with_window_icon(Some(icon.clone()))
+            .with_taskbar_icon(Some(icon))
+    };
     dioxus::desktop::launch::launch_virtual_dom(
         dioxus::prelude::VirtualDom::new_with_props(ui::app, props),
         config

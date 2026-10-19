@@ -242,24 +242,32 @@ def run_core(root):
         return {'profile': 'core', 'status': 'failed', 'reason': str(error)}
 
 
-def run_desktop(root):
+def run_desktop(root, executable=None, artifacts=None):
     if any(not (root / path).is_file() for path in ('src/main.rs', 'tooling/desktop_input.py', 'tooling/desktop_media.py', 'tooling/desktop_hover.py', 'tooling/desktop_profiles.py', 'tooling/desktop_vim.py', 'assets/media.js', 'tests/fixtures/media/colours.png', 'tests/fixtures/media/motion.gif', 'tooling/desktop_capture.py', 'tooling/desktop_navigation.py', 'tooling/inspect_png.ps1')) or not shutil.which('cargo'):
         return unavailable('desktop')
     if sys.platform != 'win32':
         return {'profile': 'desktop', 'status': 'not_ready', 'reason': 'Physical probe has only been verified on Windows.'}
     try:
         channel = tomllib.loads((root / 'rust-toolchain.toml').read_text(encoding='utf-8'))['toolchain']['channel']
-        for arguments in (['fmt', '--all', '--', '--check'],
+        commands = (['fmt', '--all', '--', '--check'],
                           ['clippy', '--features', 'desktop', '--all-targets', '--locked', '--', '-D', 'warnings'],
                           ['test', '--locked', '--features', 'desktop', '--lib'],
-                          ['build', '--locked', '--features', 'desktop', '--bin', 'pttstella']):
+                          ['build', '--locked', '--features', 'desktop', '--bin', 'pttstella'])
+        if executable is not None:
+            executable = Path(executable).resolve()
+            if not executable.is_file():
+                raise CheckFailure('Requested desktop executable is missing')
+            commands = ()  # Verify this exact packaged executable; do not rebuild it.
+        else:
+            executable = root / 'target/debug/pttstella.exe'
+        for arguments in commands:
             result = subprocess.run(['cargo', '+' + channel, *arguments], cwd=root, capture_output=True,
                                     text=True, encoding='utf-8', errors='replace', timeout=300)
             if result.returncode:
                 raise CheckFailure((result.stdout + result.stderr)[-6000:])
             if arguments[0] == 'test':
                 require_suite(result.stdout)
-        output = root / 'target/verification/desktop'
+        output = Path(artifacts).resolve() if artifacts else root / 'target/verification/desktop'
         output.mkdir(parents=True, exist_ok=True)
         report_path = output / 'probe.json'
         report_path.unlink(missing_ok=True)
@@ -272,8 +280,8 @@ def run_desktop(root):
             listener.bind(('127.0.0.1', 0))
             port = listener.getsockname()[1]
         with desktop_media.FixtureServer() as media_server, tempfile.TemporaryFile() as log:
-            process = subprocess.Popen([str(root / 'target/debug/pttstella.exe'), '--probe', str(output), str(port), '--media-origin', media_server.origin],
-                                       cwd=root, stdout=log, stderr=log,
+            process = subprocess.Popen([str(executable), '--probe', str(output), str(port), '--media-origin', media_server.origin],
+                                       cwd=executable.parent, stdout=log, stderr=log,
                                        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             try:
                 input_report = desktop_input.run(port, process, output, media_server)
@@ -313,8 +321,8 @@ def run_desktop(root):
             listener.bind(('127.0.0.1', 0))
             port = listener.getsockname()[1]
         with tempfile.TemporaryFile() as log:
-            process = subprocess.Popen([str(root / 'target/debug/pttstella.exe'), '--probe', str(output), str(port), '--reload-settings', '--media-origin', media_server.origin],
-                                       cwd=root, stdout=log, stderr=log,
+            process = subprocess.Popen([str(executable), '--probe', str(output), str(port), '--reload-settings', '--media-origin', media_server.origin],
+                                       cwd=executable.parent, stdout=log, stderr=log,
                                        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             try:
                 process.wait(timeout=25)
@@ -332,7 +340,10 @@ def run_desktop(root):
             raise CheckFailure('restarted application pixels differed from the saved display settings')
         return {'profile': 'desktop', 'status': 'passed', 'probe': report, 'input_driver': input_report,
                 'settings_restart_pixels': True,
-                'artifacts': 'target/verification/desktop', 'scope': 'Windows WebView2; synthetic data, loopback only; no PTT'}
+                'artifacts': str(output), 'executable': str(executable),
+                'executable_sha256': hashlib.sha256(executable.read_bytes()).hexdigest(),
+                'build_checks_run': bool(commands),
+                'scope': 'Windows WebView2; synthetic data, loopback only; no PTT'}
     except (OSError, ValueError, KeyError, CheckFailure, subprocess.TimeoutExpired) as error:
         return {'profile': 'desktop', 'status': 'failed', 'reason': str(error)}
 
@@ -348,10 +359,17 @@ def exit_code(results):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('profile', choices=('docs', 'core', 'desktop', 'all'))
-    profile = parser.parse_args().profile
+    parser.add_argument('--desktop-executable', type=Path, help='Verify an already-built EXE without rebuilding it')
+    parser.add_argument('--desktop-output', type=Path, help='Isolated desktop probe artifacts directory')
+    arguments = parser.parse_args()
+    profile = arguments.profile
+    if (arguments.desktop_executable or arguments.desktop_output) and profile != 'desktop':
+        parser.error('desktop overrides require the desktop profile')
+    if arguments.desktop_executable and not arguments.desktop_output:
+        parser.error('--desktop-executable requires a separate --desktop-output')
     profiles = ('docs', 'core', 'desktop') if profile == 'all' else (profile,)
     results = [run_docs(ROOT) if selected == 'docs' else run_core(ROOT) if selected == 'core'
-               else run_desktop(ROOT) for selected in profiles]
+               else run_desktop(ROOT, arguments.desktop_executable, arguments.desktop_output) for selected in profiles]
     code = exit_code(results)
     print(json.dumps({'repository': str(ROOT), 'profile': profile, 'provenance': provenance(ROOT),
                       'status': ('passed', 'failed', 'not_ready')[code], 'checks': results}, ensure_ascii=True))

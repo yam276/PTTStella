@@ -141,14 +141,14 @@ impl Vault {
     #[cfg(not(target_os = "macos"))]
     fn load(&self) -> Result<Option<Credentials>, String> {
         let _ = &self.service;
-        Err(crate::msg!("vault-manual-only").into())
+        Err(crate::msg!("vault-manual-only"))
     }
     #[cfg(not(target_os = "macos"))]
     fn save(&self, _: &Credentials) -> Result<(), String> {
-        Err(crate::msg!("vault-unavailable").into())
+        Err(crate::msg!("vault-unavailable"))
     }
     #[cfg(not(target_os = "macos"))]
     fn forget(&self) -> Result<(), String> {
-        Err(crate::msg!("vault-unavailable").into())
+        Err(crate::msg!("vault-unavailable"))
     }
 }

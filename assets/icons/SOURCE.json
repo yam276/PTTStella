@@ -24,5 +24,20 @@
     "source": "Project-authored flat SVG using the same star and connection geometry.",
     "sha256": "1ebfe793597a506f4f9ee6c54b26d4eafc3420e2b7d83e977f89cd408d8bb010",
     "usage": "Bundled local artwork; no network, font or third-party artwork dependency."
+  },
+  "windows_variant": {
+    "file": "pttstella.ico",
+    "source": "pttstella.png; resized using Pillow 12.3.0 ICO writer (LANCZOS)",
+    "sizes": [
+      16,
+      24,
+      32,
+      48,
+      64,
+      128,
+      256
+    ],
+    "sha256": "267f68c2113410959698d494043b220f1dffac2ddf1f9937b09d7396e16037b1",
+    "usage": "Same original project artwork; embedded in the Windows executable and used for the window/taskbar."
   }
 }
