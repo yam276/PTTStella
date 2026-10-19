@@ -463,3 +463,13 @@ tools-probe-title = Local floating tools playground
 tools-back = Back to categories
 tools-back-drag-hint = Click to return to categories; drag to move
 tools-probe-freeplay = Free selection and dragging; no A/B gesture test. No PTT connection.
+
+settings-local-ascii = Local Latin
+settings-local-cjk = Local Chinese
+settings-refresh = Refresh
+settings-baseline-help = The baseline sets the vertical position of text from the top of its cells. Larger values move text down. Check the preview for clipping.
+settings-preview = Preview
+settings-licenses = Bundled font licenses
+settings-import = Load
+settings-export = Export
+settings-profile-help = Load updates the preview until you apply and save. Export uses the effective settings, excluding unapplied drafts.

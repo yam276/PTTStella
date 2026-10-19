@@ -99,6 +99,21 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 .font-sources { flex-wrap: wrap; justify-content: flex-start; }
 #font-local-status { display: block; font-size: 13px; margin: 8px 0; }
 
+#font-dialog .settings-section + .settings-section, #font-dialog details, #font-dialog .settings-footer { border-top: 1px solid var(--ui-border); margin-top: 16px; padding-top: 12px; }
+#font-dialog label { grid-template-columns: minmax(120px, 30%) minmax(0, 1fr); }
+.settings-caption { display: inline-flex; align-items: center; gap: 8px; min-width: 0; text-align: left; }
+.settings-icon { display: inline-flex; flex: 0 0 18px; color: var(--ui-gold); pointer-events: none; }
+#font-dialog button.primary .settings-icon { color: inherit; }
+#font-dialog .settings-help, #font-local-status { color: var(--ui-muted); line-height: 1.5; }
+#font-dialog .settings-preview-label { margin-bottom: 0; }
+#font-dialog .settings-actions { flex-wrap: wrap; }
+#font-dialog .settings-actions button { max-width: 100%; }
+#font-dialog details summary { cursor: pointer; }
+#font-dialog details summary .settings-caption { vertical-align: middle; }
+@media (max-width: 520px) {
+    #font-dialog label { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+}
+
 #destination-dialog { overflow-y: auto; }
 #board-recent { display: flex; flex-wrap: wrap; gap: 6px; max-height: 9rem; overflow-y: auto; list-style: none; padding: 0; }
 #board-recent-note { font-size: 13px; }

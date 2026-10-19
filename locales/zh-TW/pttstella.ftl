@@ -457,3 +457,13 @@ tools-probe-title = 本機浮球自由試用
 tools-back = 返回工具分類
 tools-back-drag-hint = 點擊返回工具分類；拖曳移動位置
 tools-probe-freeplay = 可自由選字、拖曳；此畫面不啟用 A/B 驗收，不連線 PTT。
+
+settings-local-ascii = 本機英數
+settings-local-cjk = 本機中文
+settings-refresh = 重新讀取
+settings-baseline-help = 基線是文字相對格線頂端的垂直位置；數值越大，文字越往下。請用預覽確認沒有裁切。
+settings-preview = 預覽
+settings-licenses = 內建字型授權
+settings-import = 載入
+settings-export = 匯出
+settings-profile-help = 載入只更新預覽，套用儲存後才生效；匯出使用目前已套用的設定，不包含未套用的草稿。
