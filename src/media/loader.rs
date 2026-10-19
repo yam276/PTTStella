@@ -85,6 +85,8 @@ impl Loader {
                     .connect_timeout(Duration::from_secs(8))
                     .pool_max_idle_per_host(1)
                     .referer(false)
+                    // Image hosts may close requests that omit an application identity.
+                    .user_agent(concat!("PTTStella/", env!("CARGO_PKG_VERSION")))
                     .redirect(Policy::custom(|attempt| {
                         let url = attempt.url();
                         let downgrade = attempt.previous().last().is_some_and(|previous| {
