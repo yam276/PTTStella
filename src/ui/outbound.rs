@@ -128,6 +128,15 @@ pub(super) struct FiltersOpen {
 #[derive(Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub(super) enum FiltersResult {
+    Preview {
+        request: u64,
+        entries: Vec<filters::Entry>,
+        message: String,
+    },
+    ImportRejected {
+        request: u64,
+        message: String,
+    },
     Saved {
         entries: Vec<filters::Entry>,
         message: String,

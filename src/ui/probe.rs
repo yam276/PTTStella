@@ -508,6 +508,17 @@ pub(super) fn surface_sample(
         Some("sgr66_legacy") => sgr66_sample(false),
         Some("osc8") => osc8_sample(media_origin),
         Some("inline") => inline_sample(media_origin),
+        Some("account_lists") => {
+            let sample: serde_json::Value =
+                serde_json::from_str(include_str!("../../tests/fixtures/filters.json"))
+                    .map_err(|e| e.to_string())?;
+            encoding::encode(
+                sample["reading"]
+                    .as_str()
+                    .ok_or("missing synthetic reading fixture")?,
+            )
+            .map_err(|e| e.to_string())
+        }
         Some("context_menu") => {
             let mut bytes = inline_sample(media_origin)?;
             // Keep the reading cursor on the last row. A synthetic OSC 8

@@ -61,6 +61,7 @@ pub fn app(props: AppProps) -> Element {
                 | "osc8"
                 | "inline"
                 | "context_menu"
+                | "account_lists"
         )
     );
     let reload_settings = props.reload_settings;
@@ -292,8 +293,17 @@ pub fn app(props: AppProps) -> Element {
                 p { {pttstella::msg!("filters-limitations")} }
                 label { {pttstella::msg!("filters-saved-ids")} select { id: "filters-list", size: "5", "aria-label": pttstella::msg!("filters-saved-ids") } }
                 label { {pttstella::msg!("filters-account-id")} input { id: "filters-id", maxlength: "12", autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
+                label { {pttstella::msg!("filters-policy")} select { id: "filters-policy",
+                    option { value: "mask", {pttstella::msg!("filters-policy-mask")} }
+                    option { value: "allow", {pttstella::msg!("filters-policy-allow")} }
+                } }
                 label { {pttstella::msg!("filters-note")} input { id: "filters-note", maxlength: "128", autocomplete: "off" } }
                 output { id: "filters-note-status", role: "status" }
+                div { class: "dialog-actions",
+                    button { id: "filters-import", {pttstella::msg!("filters-import")} }
+                    button { id: "filters-import-apply", hidden: true, class: "primary", {pttstella::msg!("filters-import-apply")} }
+                    button { id: "filters-import-cancel", hidden: true, {pttstella::msg!("cancel")} }
+                }
                 if filters_probe {
                     label { {pttstella::msg!("probe-clipboard")} textarea { id: "filters-copy-check", "aria-label": pttstella::msg!("probe-clipboard") } }
                 }

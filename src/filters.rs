@@ -6,17 +6,28 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
+pub mod import;
 #[cfg(feature = "desktop")]
 pub mod store;
 
 pub const MAX_BYTES: usize = 256 * 1024;
 pub const MAX_ENTRIES: usize = 512;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Policy {
+    #[default]
+    Mask,
+    Allow,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Entry {
     pub id: String,
     pub note: String,
+    #[serde(default)]
+    pub policy: Policy,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -27,7 +38,7 @@ pub struct Rules {
 impl Default for Rules {
     fn default() -> Self {
         Self {
-            version: 1,
+            version: 2,
             entries: Vec::new(),
         }
     }
@@ -40,7 +51,9 @@ pub fn valid_id(id: &str) -> bool {
 }
 impl Rules {
     pub fn validate(&self) -> Result<(), String> {
-        if self.version != 1 {
+        if !matches!(self.version, 1 | 2)
+            || self.version == 1 && self.entries.iter().any(|e| e.policy != Policy::Mask)
+        {
             return Err(crate::msg!("filters-version"));
         }
         if self.entries.len() > MAX_ENTRIES {
@@ -66,16 +79,27 @@ impl Rules {
         if bytes.len() > MAX_BYTES {
             return Err(crate::msg!("filters-too-large"));
         }
-        let rules: Self =
+        let mut rules: Self =
             serde_json::from_slice(bytes).map_err(|_| crate::msg!("filters-invalid"))?;
         rules.validate().map_err(|error| error.to_string())?;
+        rules.version = 2;
         Ok(rules)
     }
     pub fn edit(&self, id: &str, note: &str, remove: bool) -> Result<Self, String> {
+        self.edit_policy(id, note, Policy::Mask, remove)
+    }
+    pub fn edit_policy(
+        &self,
+        id: &str,
+        note: &str,
+        policy: Policy,
+        remove: bool,
+    ) -> Result<Self, String> {
         if !valid_id(id) {
             return Err(crate::msg!("filters-id-invalid"));
         }
         let mut next = self.clone();
+        next.version = 2;
         let existing = next
             .entries
             .iter()
@@ -89,11 +113,13 @@ impl Rules {
                 next.entries[i] = Entry {
                     id: id.into(),
                     note: note.into(),
+                    policy,
                 }
             }
             (None, false) => next.entries.push(Entry {
                 id: id.into(),
                 note: note.into(),
+                policy,
             }),
         }
         next.validate().map_err(|error| error.to_string())?;
@@ -199,7 +225,7 @@ pub fn project(frame: &Frame, rules: &Rules, revealed: bool) -> Projection {
                 rules
                     .entries
                     .iter()
-                    .any(|e| e.id.eq_ignore_ascii_case(&p.id))
+                    .any(|e| e.policy == Policy::Mask && e.id.eq_ignore_ascii_case(&p.id))
             })
             .collect()
     } else {

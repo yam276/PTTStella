@@ -12,6 +12,14 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。沒有獨立文章 UI、啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## 黑白名單與文字匯入（2026-10-19）
+
+名單新增 Mask／Allow 策略；v1 黑名單載入後遷移至 v2，明確儲存才寫入。UTF-8（可含 BOM）逐行 ID／B:／W: 名單以背景工作讀取，先預覽合併再確認保存；C: 轉為本機遮黑，色碼／底線只保留分類並提示調整數，N: 與未知分類列出略過數。大小寫相同 ID 合併時白名單優先；不載入外部全域顏色或刪行設定。來源檔與本機備份保留，取消與晚到結果不能套用，詳見 [名單契約](../content-filters.md)。
+
+驗證：desktop lib 136／bin 67、core 13 commands／2 replays、JS 116、Fluent、Clippy 通過。macOS 原生 account_lists 先保存 Alice 遮黑，再改為白名單；匯入預覽未寫入、取消恢復，確認後只新增 Bob 遮黑與 Carol 白名單，既有 Alice 例外仍保留。獨立檔案讀回主檔／備份、整頁 960×576／單行 960×24 裁切逐像素一致；只有 Bob 的內容範圍改黑，Alice 原像素不變。原生選取／⌘C 貼回未儲存草稿，確認只有 59 個方塊與作者／時間。peer 拒絕全部站端輸入，Close acknowledged、全部 owner join、程序退出碼 0。
+
+證據保留 `.local/verification/account-lists`。首次 native 探針漏接閱讀 fixture，保留未通過記錄；修正 fixture 路由後重跑完整案例。系統 picker 使用既有 AsyncFileDialog，但這次用固定測試檔路徑，不能宣稱新的選檔視窗人工驗收；來源格式依已確認的靜態契約獨立實作，尚無原程式匯出／重新匯入往返及版本矩陣。私人名單未讀取，測試均為自製資料。
+
 ## 自訂右鍵選單（2026-10-19）
 
 最新交付更新為 `dist/macos-context-menu/PTTStella.app`（arm64、dev debug=0、ad-hoc 簽章）。啟動明確停用 WebView 預設右鍵選單，BBS／黑邊改用深藍金色本機選單。依選取、網址、插圖與閱讀狀態提供複製、開啟、展圖、PNG、翻頁／返回，以及既有書籤／黑名單／Vim／設定入口；站端滑鼠仍由原交易管理，Shift＋右鍵才開本機選單。詳見 [右鍵操作契約](../context-menu.md)。
