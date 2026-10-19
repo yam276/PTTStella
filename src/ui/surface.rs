@@ -157,6 +157,7 @@ async fn run(
         changed=closing.changed()=>{changed.map_err(|e|e.to_string())?;return Ok(Vec::new());}
     };
     let files::Initial {
+        mut sites,
         mut bookmarks,
         mut recent,
         mut preferences,
@@ -187,6 +188,7 @@ async fn run(
         include_str!("../../assets/surface-packets.js"),
         include_str!("../../assets/surface-fonts.js"),
         include_str!("../../assets/surface-settings.js"),
+        include_str!("../../assets/surface-sites.js"),
         include_str!("../../assets/surface-login.js"),
         include_str!("../../assets/surface-navigation.js"),
         include_str!("../../assets/surface-bookmarks.js"),
@@ -225,6 +227,10 @@ async fn run(
         .map_err(|e| e.to_string())?;
     eval.send(Packet::RecentBoards(recent.packet()))
         .map_err(|e| e.to_string())?;
+    if let Some(warning) = sites.warning() {
+        eval.send(Packet::Notice(warning.into()))
+            .map_err(|e| e.to_string())?;
+    }
     if let Some(warning) = preferences.warning() {
         eval.send(Packet::Notice(warning.into()))
             .map_err(|e| e.to_string())?;
@@ -233,9 +239,24 @@ async fn run(
         eval.send(Packet::Notice(warning.into()))
             .map_err(|e| e.to_string())?;
     }
-    connection.connect()?;
+    let sites_restart = surface_probe.as_deref() == Some("sites_restart");
+    if sites_restart {
+        let target = sites.default_target();
+        let url = url::Url::parse(target.endpoint.as_str()).map_err(|e| e.to_string())?;
+        if url.scheme() != "telnet" || url.host_str() != Some("127.0.0.1") {
+            return Err(pttstella::msg!("sites-probe-local"));
+        }
+        connection.connect_to(target)?;
+    } else if probe.is_some() {
+        connection.connect()?;
+    } else {
+        connection.connect_to(sites.default_target())?;
+    }
     let mut close_deadline = None;
     let mut checks = Checks::new();
+    if sites_restart {
+        checks.site_switches = 1;
+    }
     let mut pending_report: Option<serde_json::Value> = None;
     let mut surface_probe_started = false;
     let mut rejected_events = 0;
@@ -320,6 +341,11 @@ async fn run(
             },
             done=files.next(), if !*closing.borrow()=>{
                 let packet=match done {
+                    FileCompletion::Sites {request,action,result}=>{
+                        if result.is_ok(){checks.site_saves=checks.site_saves.saturating_add(1);if matches!(action,super::sites::Edit::Remove){checks.site_removes=checks.site_removes.saturating_add(1);}}else{checks.site_rejections=checks.site_rejections.saturating_add(1);}
+                        let feedback=sites.complete(result.map_err(|e|e.to_string()));
+                        Packet::SitesResult{request,data:sites.snapshot(receiver.borrow().site.clone()),feedback}
+                    },
                     FileCompletion::Bookmarks {request,result}=>{
                         if result.is_ok() {checks.bookmark_saves=checks.bookmark_saves.saturating_add(1);} else {checks.bookmark_rejected=checks.bookmark_rejected.saturating_add(1);}
                         let feedback=bookmarks.complete(result.map_err(|e|e.to_string()));
@@ -434,6 +460,9 @@ async fn run(
                     rejected_events += 1;
                     event.discard();
                     continue;
+                }
+                if event.requires_ptt() && !receiver.borrow().site.ptt_features() {
+                    event.discard();eval.send(Packet::Notice(pttstella::msg!("site-ptt-only"))).map_err(|e|e.to_string())?;continue;
                 }
                 match event {
                     SurfaceEvent::StationMouse { event, .. } => {
@@ -654,8 +683,8 @@ async fn run(
                         ..
                     } => {
                         match action.as_str() {
-                            "toggle" => keyboard_policy.toggle(),
-                            "once" => keyboard_policy.arm(),
+                            "toggle" if receiver.borrow().site.ptt_features() => keyboard_policy.toggle(),
+                            "once" if receiver.borrow().site.ptt_features() => keyboard_policy.arm(),
                             "release" => keyboard_policy.release(&code),
                             "composition_start" => keyboard_policy.composition_start(),
                             "composition_end" => keyboard_policy.composition_end(),
@@ -707,6 +736,22 @@ async fn run(
                                 .map_err(|e| e.to_string())?;
                         }
                     }
+                    SurfaceEvent::SitesOpen {request,trusted:_}=>{
+                        eval.send(Packet::SitesOpen{request,data:sites.snapshot(receiver.borrow().site.clone())}).map_err(|e|e.to_string())?;
+                    },
+                    SurfaceEvent::SitesEdit {request,action,address,encoding,name,trusted:_}=>{
+                        let result=sites.edit(action,address,encoding,name).and_then(|write|files.start(|permit|files::save_sites(permit,request,write)));
+                        if let Err(error)=result {checks.site_rejections=checks.site_rejections.saturating_add(1);eval.send(Packet::SitesResult{request,data:sites.snapshot(receiver.borrow().site.clone()),feedback:Feedback::new(super::sites::Status::Rejected,error)}).map_err(|e|e.to_string())?;}
+                    },
+                    SurfaceEvent::SitesConnect {request,address,encoding,trusted:_}=>{
+                        let result=pttstella::sites::Target::new(address,encoding).and_then(|target|{
+                            if probe.is_some() && url::Url::parse(target.endpoint.as_str()).ok().and_then(|url|url.host_str().map(str::to_owned)).as_deref()!=Some("127.0.0.1") {return Err(pttstella::msg!("sites-probe-local"));}
+                            connection.connect_to(target)
+                        });
+                        if result.is_ok(){checks.site_switches=checks.site_switches.saturating_add(1);login_open=false;login_stamp=None;pending_paste.set(None);commands.cancel();}
+                        let feedback=match result {Ok(())=>Feedback::new(super::sites::Status::Connecting,pttstella::msg!("sites-connecting")),Err(error)=>{checks.site_rejections=checks.site_rejections.saturating_add(1);Feedback::new(super::sites::Status::Rejected,error)}};
+                        eval.send(Packet::SitesResult{request,data:sites.snapshot(receiver.borrow().site.clone()),feedback}).map_err(|e|e.to_string())?;
+                    },
                     SurfaceEvent::SettingsOpen { trusted: _ } => {
                         eval.send(preferences.open_packet())
                             .map_err(|e| e.to_string())?;
@@ -859,7 +904,7 @@ async fn run(
                         generation,
                         trusted: _,
                     } => {
-                        let result = input::prepare_paste(&text)
+                        let result = input::prepare_paste_with(&text,receiver.borrow().site.encoding)
                             .map_err(|e| e.to_string())
                             .and_then(|prepared| {
                                 let current = receiver.borrow();
@@ -1040,7 +1085,7 @@ async fn run(
                             return Err("unexpected probe input".into());
                         }
                         checks.composition_checked |= composition_input && text == "中";
-                        let encoded = input::encode(&text).map_err(|e| e.to_string());
+                        let encoded = input::encode_with(&text,receiver.borrow().site.encoding).map_err(|e| e.to_string());
                         let result = encoded.and_then(|bytes| {
                             if probe.is_some() && !vim_input {
                                 checks.input_bytes.push(bytes.clone());
@@ -1099,6 +1144,7 @@ async fn run(
                         eval.send(Packet::LoginResult(LoginResult::Message{message:pttstella::msg!("command-stale")})).map_err(|e|e.to_string())?;
                     }
                     keyboard_policy.reset();keyboard_generation=view.generation;
+                    if !view.site.ptt_features() && keyboard_policy.status(&view.context()).enabled {keyboard_policy.toggle();}
                 }
                 if view.login_guidance != login_guidance && view.login_guidance.needs_input() {
                     keyboard_policy.use_native_input();
@@ -1135,7 +1181,7 @@ async fn run(
     if let (Some(case), Some(path)) = (surface_probe, probe.as_ref()) {
         let mut mouse_report = checks.mouse_observations();
         mouse_report["final"] = serde_json::json!(receiver.borrow().mouse);
-        reports.push((path.join("surface-probe.json"),serde_json::json!({
+        let mut surface_report = serde_json::json!({
             "status":if case=="slow" && commands.busy() || case=="files_slow" && files.busy() || case=="files" && checks.export_checked || case=="untrusted" && surface_probe_clean && rejected_events==3
                 || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB")
                 || case=="recent" && recent_clears>=1 && recent.packet().boards.is_empty() && recent.packet().notice==Some(pttstella::msg!("recent-cleared"))
@@ -1150,13 +1196,14 @@ async fn run(
                 || case=="osc8" && checks.osc8_open_rows==[8,9] && checks.osc8_copy_rows==[8,9] && checks.osc8_dragged && checks.osc8_media_decoded>=2 && checks.export_checked
                 || case=="login_2fa" && checks.verification_required && checks.verification_rejected && checks.verification_browsing && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
                 || case=="fonts" && checks.font_catalog_reads>=2 && !checks.font_sources.is_empty() && checks.export_checked
+                || checks.sites_passed(&case,&receiver.borrow().site,&sites.default_target(),&receiver.borrow().frame)
                 || matches!(case.as_str(),"tools"|"sgr66"|"sgr66_legacy") && checks.export_checked
                 || case=="dialogs" && checks.settings_saved && checks.export_checked && checks.rows_export_checked && checks.media_external>=1 {"passed"} else {"failed"},
             "recent_initial":initial_recent,"recent_final":recent.packet().boards,"recent_clears":recent_clears,
             "bookmarks_initial":initial_bookmarks,"bookmarks_final":bookmarks.snapshot(),"bookmark_opens":checks.bookmark_opens,"bookmark_saves":checks.bookmark_saves,"bookmark_rejected":checks.bookmark_rejected,
             "article_reached":checks.article_reached,"article_missing":checks.article_missing,"article_rejected":checks.article_rejected,"article_cancelled":checks.article_cancelled,
             "board_reached":checks.board_reached,"board_rejected":checks.board_rejected,"board_cancelled":checks.board_cancelled,
-            "scope":if case=="tools" {"local tools playground: PNG and Close smoke only; gestures are observations, not an A/B acceptance test; peer rejects all station input"} else if matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") {"synthetic native pointer samples: bounded independent exact cells, required final gesture, no local keys or duplicate path, PNG and Close"} else if case=="mouse_boundary" {"synthetic station mouse boundary: one exact press, no release or local keys after leaving the grid; owned cancellation and Close"} else if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
+            "scope":if matches!(case.as_str(),"sites"|"sites_restart") {"synthetic loopback station UI; owned external test peers independently verify Big5/GBK bytes and EOF; explicit TCP shutdown is not a WebSocket acknowledgement"} else if case=="tools" {"local tools playground: PNG and Close smoke only; gestures are observations, not an A/B acceptance test; peer rejects all station input"} else if matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") {"synthetic native pointer samples: bounded independent exact cells, required final gesture, no local keys or duplicate path, PNG and Close"} else if case=="mouse_boundary" {"synthetic station mouse boundary: one exact press, no release or local keys after leaving the grid; owned cancellation and Close"} else if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
             "mouse":mouse_report,
             "tools":checks.tools,
             "osc8_dragged":checks.osc8_dragged,"osc8_media_decoded":checks.osc8_media_decoded,
@@ -1167,7 +1214,15 @@ async fn run(
             "freeplay_only":case=="tools",
             "paste_preview_preserved":pending_paste.read().is_some(),
             "settings_saved":checks.settings_saved,"full_png":checks.export_checked,"rows_png":checks.rows_export_checked,"media_external_requests":checks.media_external,
-        })));
+        });
+        surface_report["final_site"] = serde_json::json!(receiver.borrow().site);
+        surface_report["sites_final"] =
+            serde_json::json!(sites.snapshot(receiver.borrow().site.clone()));
+        surface_report["site_removes"] = checks.site_removes.into();
+        surface_report["site_switches"] = checks.site_switches.into();
+        surface_report["site_saves"] = checks.site_saves.into();
+        surface_report["site_rejections"] = checks.site_rejections.into();
+        reports.push((path.join("surface-probe.json"), surface_report));
     }
     if login_probe {
         let path = probe.as_ref().ok_or("missing login-probe directory")?;

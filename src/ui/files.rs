@@ -25,6 +25,7 @@ use std::{
 };
 
 pub(super) struct Initial {
+    pub sites: super::sites::State,
     pub bookmarks: super::bookmarks::State,
     pub recent: super::recent::State,
     pub preferences: Preferences,
@@ -49,6 +50,11 @@ impl std::fmt::Display for Error {
 }
 type FileResult<T> = Result<T, Error>;
 pub(super) enum Completion {
+    Sites {
+        action: super::sites::Edit,
+        request: u64,
+        result: FileResult<pttstella::sites::Sites>,
+    },
     Bookmarks {
         request: u64,
         result: FileResult<pttstella::bookmarks::Bookmarks>,
@@ -72,6 +78,7 @@ pub(super) enum Completion {
 impl Completion {
     fn failure(self) -> Option<Error> {
         match self {
+            Self::Sites { result, .. } => result.err(),
             Self::Bookmarks { result, .. } => result.err(),
             Self::Recent(done) => done.result.err().map(Error::Failed),
             Self::Loaded(result) => result.err(),
@@ -188,6 +195,7 @@ pub(super) async fn load(permit: Permit, probe: Option<PathBuf>) -> Completion {
                 Err(error) => (filters::Rules::default(), Some(error)),
             };
             Ok(Box::new(Initial {
+                sites: super::sites::State::load(probe.as_deref()),
                 bookmarks: super::bookmarks::State::load(probe.as_deref()),
                 recent: super::recent::State::load(probe.as_deref()),
                 preferences: Preferences::load(probe.as_deref())?,
@@ -458,4 +466,16 @@ async fn export_with_picker<F: Future<Output = Option<PathBuf>>>(
     }
     .await;
     Completion::Export { selected, result }
+}
+
+pub(super) async fn save_sites(
+    permit: Permit,
+    request: u64,
+    write: super::sites::Write,
+) -> Completion {
+    Completion::Sites {
+        action: write.action,
+        request,
+        result: blocking(permit, move || write.store.save(write.draft)).await,
+    }
 }

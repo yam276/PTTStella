@@ -34,10 +34,11 @@ manual keyboard input → session-owned send queue → connection
 | --- | --- |
 | [connection](../src/connection.rs) | 有界命令 API、watch 快照及 worker／probe 的關閉與 join |
 | [connection/worker](../src/connection/worker.rs) | Session 唯一擁有 Screen、socket、登入等待、單一目的地導覽與輸入等待；具名方法處理登入、導覽、保活與發布，select 只分派事件 |
+| [sites](../src/sites.rs)／[sites/store](../src/sites/store.rs) | 位址正規化、站點／編碼、PTT 能力、有界最愛與獨立預設站；儲存由既有檔案 owner 執行 |
 | [navigation_job](../src/navigation_job.rs)／[article_navigation](../src/article_navigation.rs) | Board／Article 的封閉目的地型別及純導覽 reducer；文章組合既有切板、AID 搜尋與資訊核對，Session 唯一排程及發鍵 |
 | [bookmarks](../src/bookmarks.rs)／[bookmarks/store](../src/bookmarks/store.rs) | 明確文章識別的有界本機資料、名稱／建立時間、版本驗證、備份與原子替換；不讀取畫面或送鍵 |
 | [mouse](../src/mouse.rs) | Screen 擁有的站端模式／epoch 與有界 SGR press／release encoder；只有格式子集，送出 owner／UI 尚待接線 |
-| [connection/transport](../src/connection/transport.rs) | TLS／WSS 連線、有界寫入及正常關閉握手；不解讀畫面或決定瀏覽動作 |
+| [connection/transport](../src/connection/transport.rs) | WebSocket／Telnet 的具體 socket enum、TLS、有界寫入及正常關閉；不解讀畫面或決定瀏覽動作 |
 | [ui/app](../src/ui/app.rs) | Dioxus 畫面、原生關窗事件與啟動接線 |
 | [ui/protocol](../src/ui/protocol.rs) | WebView 結構化事件、serde wire 格式及共同輸入准入；沒有副作用 |
 | [ui/outbound](../src/ui/outbound.rs)／[ui/bridge](../src/ui/bridge.rs) | Rust→JS 的 tagged Packet 與具型別 payload／結果狀態；一般 bridge 只接受 Packet，原始 Eval 交由 lifecycle join |
@@ -47,6 +48,7 @@ manual keyboard input → session-owned send queue → connection
 | [ui/presentation](../src/ui/presentation.rs) | 遮黑後的唯一 Paint、連結／圖片命中、選取及輸出使用的版本核對；字型預覽也使用同一封包 |
 | [ui/preferences](../src/ui/preferences.rs) | 生效設定、草稿建構與成功保存後的 commit；初載只由檔案 worker 呼叫，互動時不自行選檔或讀寫 |
 | [ui/bookmarks](../src/ui/bookmarks.rs)／[surface-bookmarks](../assets/surface-bookmarks.js) | Rust 保存後 commit 與壞檔保留；JS 草稿、選取、單筆 request、晚到結果及 dialog 清理。前往只填既有目的地草稿 |
+| [ui/sites](../src/ui/sites.rs)／[surface-sites](../assets/surface-sites.js) | Rust 保存成功後 commit；JS 管理站點草稿／單筆 request，選最愛不連線，明確切站交給唯一 Connection owner |
 | [ui/surface_state](../src/ui/surface_state.rs) | 一筆 in-flight Paint、已確認畫面、dirty、名單投影、選取與 hover；集中繪製確認、版本核對、失效及 PNG lease |
 | [ui/probe](../src/ui/probe.rs) | 自製畫面、驗收計數、獨立色彩 expected 與報告建構，不擁有產品的輸入或畫面狀態 |
 | [ui/surface](../src/ui/surface.rs) | 協調事件、信任／版本檢查、單筆繪製與各 feature owner 的停止順序 |
@@ -67,19 +69,19 @@ PNG 開始時核對相同呈現與選取行範圍，再取得可撤銷 ExportLea
 
 Rust→JS 封包使用 `{kind, payload}`；Stop／MediaReset 是沒有 payload 的 unit variant。登入、名單與設定檔回覆使用明確結果 enum；導航、貼上、保存、匯出與外開使用各自的 status enum。Preferences 回傳同一 Packet，診斷報告不走 UI 通道。JS 的 [router](../assets/surface-packets.js) 只分派指定種類，拒絕未知種類、缺 payload 與舊式混合欄位，不再把未知回覆當成 Paint。雙端隨同一 App 編入，沒有額外通訊服務或通用訊息框架。
 
-JS 的 [設定](../assets/surface-settings.js)、[登入](../assets/surface-login.js) 與 [名單](../assets/surface-filters.js) 各自擁有 DOM 欄位、草稿、busy、timer／request 及清理。它們透過具名的 send、prepare／invalidate、restore 與 changed 回呼協作；bindings 交回既有唯一 listener 擁有者統一撤銷。changed 統一刷新瀏覽與輸出控制項，避免關閉一個 dialog 後留著另一功能的暫停狀態。Settings 的 epoch 與 preview request 在 await 字型載入後再次核對；關閉／換草稿／revoke 後的結果不能重畫或搶回焦點。清理先 revoke 三個 owner，再等待工作並 destroy，最後分別核對 clean。
+JS 的 [設定](../assets/surface-settings.js)、[登入](../assets/surface-login.js)、[名單](../assets/surface-filters.js)、書籤與站點各自擁有 DOM 欄位、草稿、busy、timer／request 及清理。它們透過具名的 send、prepare／invalidate、restore 與 changed 回呼協作；bindings 交回既有唯一 listener 擁有者統一撤銷。changed 統一刷新瀏覽與輸出控制項，避免關閉一個 dialog 後留著另一功能的暫停狀態。Settings 的 epoch 與 preview request 在 await 字型載入後再次核對；關閉／換草稿／revoke 後的結果不能重畫或搶回焦點。清理先 revoke 各 owner，再等待工作並 destroy，最後分別核對 clean。
 
 surface 仍共同協調 Rust 版本核對，以及 JS 的輸入、選取、繪製、字型載入快取與 pointer 操作；這些是同一畫面需要共享的資料，不複製為另一個 terminal 模型。後續可再按實際修改需求縮小 Rust 事件分支；拆分涉及焦點、組字與取消時，仍須有實際 WebView runner。
 
 優先驗證 Dioxus Desktop 與 Canvas 的薄繪製橋接；實際呈現路線以同一 [顯示契約](dual-color.md) 的 probe 決定。若採 JavaScript，只接收結構化 frame，不持有第二份終端狀態。
 
-UI 正常掛載後只發起一次預設 PTT WSS 連線；合成 probe 只連本機 WebSocket。renderer 唯一管理符合視窗／等比例 zoom 及繪製排程；接收的 Screen frame 不因縮放改寫。浮球由獨立的 surface-tools owner 管理座標、慣性、吸邊、capture 與收合；六個 Lucide 分類入口消費同一組功能按鈕，不複製業務事件。bindings 仍由同一 UI lifetime 註冊／移除，停止時撤銷 capture 與唯一 animation frame；Rust 透過獨立 data attribute 及狀態提示維持斷線／錯誤可見。尺寸變更合併為一個 animation callback，背景共用整數像素格線，圖形幾何與文字都使用同一格線與左右 clip。所有輸入／縮放／hover listener 由同一 bindings 清單註冊與移除。
+UI 正常掛載並完成檔案初載後，只發起一次已保存的預設站連線，初始為 PTT WSS；合成 probe 僅連本機服務。renderer 唯一管理符合視窗／等比例 zoom 及繪製排程；接收的 Screen frame 不因縮放改寫。浮球由獨立的 surface-tools owner 管理座標、慣性、吸邊、capture 與收合；六個 Lucide 分類入口消費同一組功能按鈕，不複製業務事件。bindings 仍由同一 UI lifetime 註冊／移除，停止時撤銷 capture 與唯一 animation frame；Rust 透過獨立 data attribute 及狀態提示維持斷線／錯誤可見。尺寸變更合併為一個 animation callback，背景共用整數像素格線，圖形幾何與文字都使用同一格線與左右 clip。所有輸入／縮放／hover listener 由同一 bindings 清單註冊與移除。
 
 不丟原始 bytes；UI 可合併最新 frame，帶 generation／revision 防止晚到更新。手動送鍵序列化，連線關閉時停止對應擁有者，重連是新 session。
 
 DEC2026 的開始／結束由 Screen 解析；同步期間仍完整作用所有 bytes，但 Frame 不算可導覽的完整控制狀態。Session 以原有發布時鐘持有最長一秒的同步等待，重複開始不延長同一批；缺結束碼時釋放顯示，再依 parser／navigation 判定是否可操作。期限屬產品恢復選擇，並非協定規定。Connection View 的 output_pending 與保留的完整 Frame 分開：新終端資料先更新 watch 的失效狀態，再等待傳輸回覆或發布畫面，讓檔案 worker 能直接拒絕過期 PNG。同步中保留舊圖但不准入導覽、選取、連結、hover 或新匯出；Rust／JS 同時撤銷舊互動，UI 不解讀原始控制碼。原始輸入、協商、Ping／Pong、取消與關閉仍由同一 Session 處理；斷線／重連清除同步等待，不重送操作。
 
-目前單一路徑為 WSS → 有界 binary frame → Telnet framing → Screen。每則 WebSocket 訊息上限 64 KiB；不把文字 frame 猜成 Big5。輸入上限 4 KiB、佇列 64 項；無法編碼或佇列滿會顯示錯誤。連線、送出與關閉都有逾時，送出失敗不重試；連線 owner 管理並 join 握手／收送工作。UI 只允許一個尚未完成的繪製 frame，其餘保留最新狀態，不堆積 JS 繪製佇列。關閉視窗時先停止 listener 與連線工作，再關閉 host。
+資料路徑為 WebSocket binary frame 或 Telnet TCP bytes → 同一 Telnet framing → Screen；編碼由當前 Target 決定，接收與輸入／貼上共用。每則 WebSocket 訊息上限 64 KiB，TCP 每次讀取上限 8 KiB；不把 WebSocket 文字 frame 猜成 legacy bytes。輸入上限 4 KiB、佇列 64 項；無法編碼或佇列滿會顯示錯誤。連線、送出與關閉都有逾時，送出失敗不重試；連線 owner 管理並 join 握手／收送工作。切站由同一有界命令佇列執行，關閉舊傳輸後才更換 generation、編碼與畫面；PTT 能力以精確目標判定，其他站不做 PTT 辨識／命令或名單投影。UI 只允許一個尚未完成的繪製 frame，其餘保留最新狀態，不堆積 JS 繪製佇列。關閉視窗時先停止 listener 與連線工作，再關閉 host。
 
 滑鼠導覽只建立目前格線畫面的辨識與命中，不建立獨立文章模型、板名導航按鈕、登入腳本或背景追蹤。文字、排版與雙色字由核心與 renderer 實作；操作及視覺契約見 [滑鼠導覽](navigation.md)。
 
@@ -93,6 +95,6 @@ Connection 同時擁有防閒置的單調時鐘、預設開啟狀態、UI watch 
 
 按鈕登入的 prompt／容量屬 login 核心，Connection 擁有單次等待與送出，Keychain worker 擁有 OS 存取與清理；UI 不接收已存密碼。安全儲存與驗證邊界見 [登入契約](login.md)。
 
-關閉視窗／⌘Q 先停止新互動並立即要求 Connection 結束；網路 owner 送 WebSocket 1000 正常關閉碼，持續讀取至站端回覆與底層關閉，總期限兩秒；依 [Tungstenite 關閉契約](https://docs.rs/tungstenite/0.28.0/tungstenite/protocol/struct.WebSocket.html#method.close) 驅動完整握手。回報區分 acknowledged、peer_closed_without_reply（未回覆 Close 即結束底層連線）、unconfirmed 與 no_connection，重複 shutdown 沿用已完成結果；沒有把送出 Close 當成站端已確認。renderer／Keychain 與網路 worker 都 join 後才完成 App 關閉。這表示 WebSocket 對端的關閉結果，不宣稱 PTT 線上名單即時更新。
+關閉視窗／⌘Q 先停止新互動並立即要求 Connection 結束；網路 owner 送 WebSocket 1000 正常關閉碼，持續讀取至站端回覆與底層關閉，總期限兩秒；依 [Tungstenite 關閉契約](https://docs.rs/tungstenite/0.28.0/tungstenite/protocol/struct.WebSocket.html#method.close) 驅動完整握手。回報區分 acknowledged、peer_closed_without_reply（未回覆 Close 即結束底層連線）、unconfirmed 與 no_connection，Telnet shutdown 另記 transport_closed。重複 shutdown 沿用已完成結果；沒有把送出 Close 或本機 TCP shutdown 當成站端已確認。renderer／Keychain 與網路 worker 都 join 後才完成 App 關閉。這表示傳輸關閉結果，不宣稱站端線上名單即時更新。
 
 合成 probe 的浮球放手觀察附在 renderer finally 的具型別 join 回覆，由同一 Resources 清理 owner 保留；Stopped 通知和 join 的先後不會遺失觀察，也不能把失敗的清理改成成功。正常模式不保存軌跡或觀察檔。

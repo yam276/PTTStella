@@ -105,7 +105,7 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 #font-dialog label { grid-template-columns: minmax(120px, 30%) minmax(0, 1fr); }
 .settings-caption { display: inline-flex; align-items: center; gap: 8px; min-width: 0; text-align: left; }
 .settings-icon { display: inline-flex; flex: 0 0 18px; color: var(--ui-gold); pointer-events: none; }
-#font-dialog button.primary .settings-icon { color: inherit; }
+button.primary .settings-icon { color: inherit; }
 #font-dialog .settings-help, #font-local-status { color: var(--ui-muted); line-height: 1.5; }
 #font-dialog .settings-preview-label { margin-bottom: 0; }
 #font-dialog .settings-actions { flex-wrap: wrap; }
@@ -126,3 +126,11 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 .chrome[data-tools-layout="compact"] .tools-fan { position: fixed; left: var(--grid-x); top: var(--grid-y); width: var(--grid-width); max-height: var(--grid-height); height: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(62px, 1fr)); gap: 10px; overflow: auto; padding: 8px; background: var(--ui-panel); border: 1px solid var(--ui-border); border-radius: 16px; }
 .chrome[data-tools-layout="compact"] .tools-fan[hidden] { display: none; }
 .chrome[data-tools-layout="compact"] .tools-petal { position: static; width: 100%; }
+
+#site-current { font-size: 12px; color: var(--ui-muted); overflow-wrap: anywhere; width: 100%; }
+#sites-dialog .settings-actions { flex-wrap: wrap; margin: 12px 0; }
+#sites-dialog label { grid-template-columns: 100px minmax(0,1fr); }
+#sites-dialog output { display:block; overflow-wrap:anywhere; font-size:13px; margin:10px 0; }
+#sites-dialog p { line-height:1.5; color:var(--ui-muted); }
+#sites-dialog select { text-overflow:ellipsis; }
+@media (max-width:520px) { #sites-dialog label { grid-template-columns:minmax(0,1fr); } }

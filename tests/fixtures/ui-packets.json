@@ -107,6 +107,14 @@
     }
   },
   {
+    "name": "sites_open",
+    "packet": {"kind":"sites_open","payload":{"request":11,"data":{"sites":{"version":1,"default":{"endpoint":"telnet://example.com","encoding":"gbk"},"favourites":[]},"current":{"endpoint":"telnet://example.com","encoding":"gbk"},"writable":true,"warning":null}}}
+  },
+  {
+    "name": "sites_result",
+    "packet": {"kind":"sites_result","payload":{"request":12,"data":{"sites":{"version":1,"default":{"endpoint":"telnet://example.com","encoding":"gbk"},"favourites":[]},"current":{"endpoint":"telnet://example.com","encoding":"gbk"},"writable":true,"warning":null},"feedback":{"status":"saved","notice":"已保存"}}}
+  },
+  {
     "name": "tools_opacity",
     "packet": {"kind": "tools_opacity", "payload": 65}
   },

@@ -137,6 +137,24 @@ pub(super) enum SurfaceEvent {
         operation: Stamp,
         trusted: bool,
     },
+    SitesOpen {
+        request: u64,
+        trusted: bool,
+    },
+    SitesEdit {
+        request: u64,
+        action: super::sites::Edit,
+        address: String,
+        encoding: pttstella::encoding::TextEncoding,
+        name: String,
+        trusted: bool,
+    },
+    SitesConnect {
+        request: u64,
+        address: String,
+        encoding: pttstella::encoding::TextEncoding,
+        trusted: bool,
+    },
     SettingsOpen {
         trusted: bool,
     },
@@ -259,6 +277,24 @@ pub(super) enum SurfaceEvent {
 }
 
 impl SurfaceEvent {
+    /// Site capabilities are checked before credential access or local PTT data edits.
+    pub(super) fn requires_ptt(&self) -> bool {
+        matches!(
+            self,
+            Self::LoginOpen { .. }
+                | Self::LoginSubmit { .. }
+                | Self::LoginForget { .. }
+                | Self::DestinationSubmit { .. }
+                | Self::BookmarksOpen { .. }
+                | Self::BookmarksEdit { .. }
+                | Self::RecentBoardsClear { .. }
+                | Self::FiltersOpen { .. }
+                | Self::FiltersEdit { .. }
+                | Self::FiltersReveal { .. }
+                | Self::Navigate { .. }
+                | Self::KeepAlive { .. }
+        )
+    }
     /// Admit user actions before any state change, encoding or station enqueue.
     /// This is event provenance, not a security boundary against injected code.
     /// Frame/revision and feature-specific checks still belong to their owners.
@@ -323,7 +359,10 @@ impl SurfaceEvent {
             DestinationCancel { trusted, operation } => {
                 *trusted && operation.generation == generation
             }
-            BookmarksOpen { trusted, .. }
+            SitesOpen { trusted, .. }
+            | SitesEdit { trusted, .. }
+            | SitesConnect { trusted, .. }
+            | BookmarksOpen { trusted, .. }
             | BookmarksEdit { trusted, .. }
             | FiltersOpen { trusted }
             | RecentBoardsClear { trusted }
@@ -406,6 +445,24 @@ mod admission_tests {
         serde_json::from_value::<SurfaceEvent>(value)
             .unwrap()
             .admitted(generation)
+    }
+
+    #[test]
+    fn station_actions_require_trusted_closed_typed_intents() {
+        for value in [
+            json!({"kind":"sites_open","request":1}),
+            json!({"kind":"sites_edit","request":2,"action":"favourite","address":"telnet://example.com","encoding":"gbk","name":"Example"}),
+            json!({"kind":"sites_connect","request":3,"address":"wss://example.com/bbs","encoding":"big5"}),
+        ] {
+            assert!(admits(value.clone(), true, 7));
+            assert!(!admits(value, false, 7));
+        }
+        for value in [
+            json!({"kind":"sites_connect","request":1,"address":"example.com","encoding":"guess","trusted":true}),
+            json!({"kind":"sites_edit","request":1,"action":"execute","address":"example.com","encoding":"gbk","name":"","trusted":true}),
+        ] {
+            assert!(serde_json::from_value::<SurfaceEvent>(value).is_err());
+        }
     }
 
     #[test]

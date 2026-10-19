@@ -142,3 +142,9 @@ test("a bookmark target opens the same local draft without sending, and active n
     assert.equal(env.ui.openDraft(event,"#00000101@Stella"),false);assert.equal(env.node("destination-dialog").open,false);
     env.ui.destroy();assert.equal(env.ui.openDraft(event,"#00000101@Stella"),false);
 });
+
+test("PTT navigation shortcuts stay closed on another station",()=>{
+    const env=environment();env.update({ptt_features:false});
+    env.fire("destination-open","click");env.fire("document","keydown",{key:"k",code:"KeyK",metaKey:true});
+    assert.equal(env.node("destination-dialog").open,false);assert.deepEqual(env.sent,[]);
+});

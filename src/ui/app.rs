@@ -4,8 +4,8 @@ use base64::Engine;
 use dioxus::prelude::*;
 use dioxus_icons::lucide::{
     ALargeSmall, AlignVerticalJustifyEnd, ArrowLeft, Camera, Compass, ExternalLink, Eye, FileDown,
-    FileText, FolderOpen, Keyboard, Languages, List, Plug, RefreshCw, RotateCcw, Save, Shield,
-    Type, X,
+    FileText, FolderOpen, Globe, Keyboard, Languages, List, Plug, RefreshCw, RotateCcw, Save,
+    Shield, Star, Trash2, Type, X,
 };
 use pttstella::{
     connection::{Connection, Phase},
@@ -51,7 +51,7 @@ pub fn app(props: AppProps) -> Element {
     let verification_probing = surface_probe.as_deref() == Some("login_2fa");
     let dialogs_probing = matches!(
         surface_probe.as_deref(),
-        Some("dialogs" | "tools" | "fonts" | "sgr66" | "sgr66_legacy" | "osc8")
+        Some("dialogs" | "tools" | "sites" | "fonts" | "sgr66" | "sgr66_legacy" | "osc8")
     );
     let reload_settings = props.reload_settings;
     let media_origin = props.media_origin.clone();
@@ -78,6 +78,9 @@ pub fn app(props: AppProps) -> Element {
                     Connection::start_mouse_samples_probe(case)
                 } else if verification_probing {
                     Connection::start_verification_probe()
+                } else if sample_case.as_deref() == Some("sites_restart") {
+                    let screen = Screen::new(80, 24).map_err(str::to_owned)?;
+                    Connection::start(screen)
                 } else if surface_probing {
                     if dialogs_probing {
                         Connection::start_ui_probe(bytes)
@@ -228,8 +231,10 @@ pub fn app(props: AppProps) -> Element {
                 output { id: "station-mouse-status", role: "status" }
                 }
                 section { "data-tools-group": "session",
+                button { id: "sites-open", SettingsCaption {label:pttstella::msg!("sites-title"),icon:rsx!{Globe{size:18}}} }
+                output { id: "site-current" }
                   button { id: "keep-alive", r#type: "button", "aria-pressed": "true", {pttstella::msg!("keepalive-on")} }
-                button { id: "login-open", disabled: !cfg!(target_os="macos"), {pttstella::msg!("login")} }
+                button { id: "login-open", "data-platform-supported":cfg!(target_os="macos").to_string(), disabled: !cfg!(target_os="macos"), {pttstella::msg!("login")} }
                 button { id: "login-stop", hidden: true, {pttstella::msg!("login-cancel-attempt")} }
                 }
                 section { "data-tools-group": "navigate",
@@ -359,6 +364,28 @@ pub fn app(props: AppProps) -> Element {
             aside { id: "media-hover", hidden:true, "aria-hidden":"true",
                 output { id: "media-hover-status" }
                 div { id: "media-hover-viewport" }
+            }
+            dialog { id: "sites-dialog", class: "paste-preview font-dialog", "aria-labelledby": "sites-title",
+                h2 { id: "sites-title", SettingsCaption { label:pttstella::msg!("sites-title"),icon:rsx!{Globe{size:18}} } }
+                label { {pttstella::msg!("sites-favourites")} select {id:"sites-list"} }
+                output {id:"sites-default"}
+                label { {pttstella::msg!("sites-name")} input {id:"site-name",r#type:"text",maxlength:"128"} }
+                label { {pttstella::msg!("sites-address")} input {id:"site-address",r#type:"text",maxlength:"512",spellcheck:"false",autocapitalize:"off"} }
+                label { {pttstella::msg!("sites-encoding")} select {id:"site-encoding",
+                    option {value:"uao","Big5-UAO"} option {value:"big5","Big5"} option {value:"gbk","GBK"}
+                } }
+                p {id:"sites-transport"}
+                p { {pttstella::msg!("sites-help")} }
+                div {class:"dialog-actions settings-actions",
+                    button {id:"site-save", SettingsCaption {label:pttstella::msg!("sites-save"),icon:rsx!{Star{size:18}}} }
+                    button {id:"site-remove", SettingsCaption {label:pttstella::msg!("sites-remove"),icon:rsx!{Trash2{size:18}}} }
+                    button {id:"site-default", SettingsCaption {label:pttstella::msg!("sites-set-default"),icon:rsx!{Save{size:18}}} }
+                }
+                output {id:"sites-note",role:"status"}
+                div {class:"dialog-actions settings-actions",
+                    button {id:"sites-close",SettingsCaption {label:pttstella::msg!("close"),icon:rsx!{X{size:18}}} }
+                    button {id:"site-connect",class:"primary",SettingsCaption {label:pttstella::msg!("sites-connect"),icon:rsx!{Plug{size:18}}} }
+                }
             }
             dialog { id: "font-dialog", class: "paste-preview font-dialog", "aria-labelledby": "font-title",
                 h2 { id: "font-title", {pttstella::msg!("settings-title")} }

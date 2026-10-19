@@ -1,6 +1,6 @@
 # PTTStella
 
-Rust／Dioxus 的 PTT 桌面介面，外觀像 terminal；不嵌入系統終端、shell 或 PTY。啟動即連上 PTT，手動登入，呈現固定格線、ANSI 色彩與雙色字。
+Rust／Dioxus 的 BBS 桌面介面，以 PTT 為預設站，外觀像 terminal；不嵌入系統終端、shell 或 PTY。啟動連至設定的預設站，手動登入，呈現固定格線、ANSI 色彩與雙色字。
 
 Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Art，搭配公開映射依賴及合成驗收案例。
 
@@ -10,7 +10,7 @@ Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Ar
 
 - 一個 terminal 畫面及連線／斷線狀態。
 - 介面支援繁體中文與英文；「字型與顯示」可保存語言偏好，下次啟動套用。PTT 站端內容不翻譯。翻譯資源與契約見 [介面語言](docs/i18n.md)，驗證進度見 active plan。
-- 一種經驗證的加密傳輸，使用者自行輸入帳號密碼。
+- 浮球「連線 → 站點」可輸入位址、選擇 Big5-UAO／Big5／GBK，保存站點最愛、切換連線或設定下次啟動的預設站；內附 PTT、PTT2、巴哈與水木入口。支援 WSS／WS／Telnet；WS／Telnet 不加密，連線前會明示。其他站使用原始輸入，PTT 專用登入／導覽／保活／名單僅用於預設 PTT 目標。尚不支援 SSH、UTF-8 或 GB18030 四位元組字元，詳見 [站點與編碼](docs/sites.md)。
 - 固定欄位、中文字寬、ANSI 顏色、游標、局部重繪與雙色字。
 - 操作元件採深藍／金色主題，浮球以扁平像素星座標示，主要確認／儲存按鈕以金色填色；PTT 內容保留 ANSI 原色。
 - 設定頁可保存浮球不透明度（20%–100%），滑鼠移入或鍵盤聚焦時恢復清晰；功能選單與斷線／錯誤提示保持不透明。取消不保存，不影響 PNG。
@@ -20,7 +20,7 @@ Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Ar
 - 工具列「快速前往」、⌘K／Ctrl+K 可輸入板名、#AID@板名或支援的 PTT 文章網址，按「前往」才啟動。支援已辨識主選單、看板／文章列表及閱讀頁，逐步等待站端畫面；進板圖或其他確認停下來交還手動，提供「停止導覽」。指定文章會先核對 AID 與選取列再開啟，範圍見 [指定文章](docs/article-navigation.md)。最近看板最多 20 筆，只記錄確認到達的正式名稱，可重新載入與清除；選清單只填入草稿。原生與實站範圍見 [快速切板](docs/quick-boards.md)。
 - 「文章書籤」可手動輸入 AID／文章網址，保存選填名稱、新增或移除，最多 500 筆；本機保存並在重啟時還原，不下載文章或猜目前 AID。按「前往…」先填入快速前往，確認後才開啟。壞檔保留並停用保存，契約與平台範圍見 [本機書籤](docs/article-navigation.md#本機書籤資料)。
 - macOS 工具列「登入」可選擇將一個預設帳號與密碼存入系統鑰匙圈；按登入才送出，密碼不寫入設定檔或回填畫面，提供移除已存帳密。啟動／重連不自動登入；2FA 提示會交還原始輸入，錯碼由使用者重試，取消或本機引導逾時不重送帳密。其他後續確認由使用者操作。見 [登入與保存](docs/login.md)。
-- 關窗／⌘Q 會送正常 WebSocket 關閉通知並有界等待站端結束；工具列斷線區分 Close 回覆、站端直接結束與未確認。
+- 關窗／⌘Q 會有界關閉目前傳輸；WebSocket 等待 Close 回覆，Telnet 明確標示本機傳輸已關閉，不當成站端確認。
 - 一般黑名單可新增／修改／移除完整 ID 與備註，明確儲存於本機；遮黑已辨識的標準推文內容並保留原行列、作者與時間。可暫時顯示目前畫面；複製、PNG 及連結使用相同過濾結果。截斷、無作者續行與非標準格式保留原樣，範圍見 [本機過濾](docs/content-filters.md)。
 - 必要鍵盤輸入；斷線或連線失敗時介面仍可操作。
 - 滑鼠拖曳選取、雙擊整行、工具列整頁選取；Ctrl+C／Cmd+C 複製純文字，雙色中文字保留完整字形。選取保留空白，新畫面會清除舊選取；Esc 清除選取，沒有選取時 Ctrl+C 仍送到 PTT。
@@ -46,6 +46,7 @@ Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Ar
 - [最簡 terminal 計畫](docs/active/minimal-browser.md)
 - [文字與排版契約](docs/dual-color.md)
 - [架構](docs/architecture.md)
+- [站點與編碼](docs/sites.md)
 - [開發 harness](docs/development-harness.md)
 - [後續操作功能研究](docs/feature-research.md)
 - [Vim 瀏覽模式](docs/vim-browsing.md)
@@ -60,7 +61,7 @@ python tooling/check.py docs
 
 `python tooling/check.py core` 執行 fmt、Clippy、畫面／互動測試與 2 個 replay 案例。`desktop` 包含本機傳輸／TLS 設定測試，並啟動實際視窗驗證雙色字像素、16 色與強度切換、填滿本體、輸入、剪貼簿與清理；`all` 跑全部離線 gate，不連 PTT。依賴來源見 [依賴說明](docs/dependencies.md)。
 
-啟動：`cargo run --locked --features desktop --bin pttstella`。預設直接開啟 `wss://ws.ptt.cc/bbs` 的 PTT 連線，手動輸入帳號密碼；方向鍵、Enter、Backspace、Tab、Esc、Home／End、PageUp／Down、Delete 與 Ctrl＋字母會送到 PTT（複製／貼上／快速切板的本機快捷鍵另行處理）。點擊浮球開啟導覽／顯示／擷取／輸入／連線／過濾六類工具；拖曳後會依速度滑行並吸附側邊，視窗上緣保留安全距離，減少動態效果時直接吸邊。Escape 或點外部收合，外部點擊只收合工具，不送入 PTT。斷線或錯誤時保持狀態提示可見，列出站端提供的關閉代碼與原因；沒有原因時明確標示。斷線後由你決定是否重連，不重送舊輸入，不錄製完整流量；macOS 可明確選擇將帳密保存於鑰匙圈，按登入才取用。
+啟動：`cargo run --locked --features desktop --bin pttstella`。初始預設為 `wss://ws.ptt.cc/bbs`；明確「設為預設」後，下次啟動改連該站，仍須手動登入。方向鍵、Enter、Backspace、Tab、Esc、Home／End、PageUp／Down、Delete 與 Ctrl＋字母會送到目前站點（複製／貼上／快速切板的本機快捷鍵另行處理）。點擊浮球開啟導覽／顯示／擷取／輸入／連線／過濾六類工具；拖曳後會依速度滑行並吸附側邊，視窗上緣保留安全距離，減少動態效果時直接吸邊。Escape 或點外部收合，外部點擊只收合工具，不送入站端。斷線或錯誤時保持狀態提示可見，列出站端提供的關閉代碼與原因；沒有原因時明確標示。斷線後由你決定是否重連，不重送舊輸入，不錄製完整流量；macOS 可明確選擇將 PTT 帳密保存於鑰匙圈，按登入才取用，其他站不取用該帳密。
 
 「＋／－」、Ctrl＋加減鍵或 Ctrl＋滾輪以相同比例縮放；「符合視窗」或 Ctrl＋0 還原。放大後可用捲軸查看超出區域。固定 80×24 不重新排字；不同視窗長寬比會留黑邊。方塊／三角形按格線繪製，背景以整數像素共用邊界，避免 ANSI Art 接縫。
 
@@ -81,6 +82,6 @@ python3 tooling/bundle_macos.py
 open dist/macos/PTTStella.app
 ```
 
-有本機資源 harness 的環境，須依工作規則將打包腳本放在 build wrapper 內執行。產物使用本機架構及 ad-hoc 簽章，可移至 Applications；開啟後會自動連上 PTT，仍須手動登入。既有 `.app` 不覆寫，可用 `--out-dir dist/macos-next` 保留另一份。這不是 Developer ID 簽署／Apple 公證的發佈版本，也不代表 macOS 完整功能驗收。細節見 [macOS App 打包](docs/macos-app.md)。
+有本機資源 harness 的環境，須依工作規則將打包腳本放在 build wrapper 內執行。產物使用本機架構及 ad-hoc 簽章，可移至 Applications；開啟後會自動連上預設站，仍須手動登入。既有 `.app` 不覆寫，可用 `--out-dir dist/macos-next` 保留另一份。這不是 Developer ID 簽署／Apple 公證的發佈版本，也不代表 macOS 完整功能驗收。細節見 [macOS App 打包](docs/macos-app.md)。
 
 macOS 原生選單支援 ⌘W 關窗、⌘Q 結束、⌃⌘F 全螢幕及 Window → Zoom；關窗／結束會先清理 renderer 與連線。Vim Normal 將按鍵轉成瀏覽意圖後再轉成 PTT 指令，並避免中文輸入法將瀏覽鍵啟動為組字；i／原生一次仍提供中文輸入。實測範圍與未驗收項目見 active plan。

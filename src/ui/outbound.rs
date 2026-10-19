@@ -11,6 +11,15 @@ use std::collections::BTreeMap;
 #[derive(Serialize)]
 #[serde(tag = "kind", content = "payload", rename_all = "snake_case")]
 pub(super) enum Packet<'a> {
+    SitesOpen {
+        request: u64,
+        data: super::sites::Snapshot,
+    },
+    SitesResult {
+        request: u64,
+        data: super::sites::Snapshot,
+        feedback: Feedback<super::sites::Status>,
+    },
     StationMouseRejected {
         lease: pttstella::mouse::input::Lease,
         message: String,

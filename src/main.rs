@@ -11,12 +11,32 @@ fn main() {
     let filters_probe = flag.as_deref() == Some(std::ffi::OsStr::new("--probe-filters"));
     let login_probe = flag.as_deref() == Some(std::ffi::OsStr::new("--probe-login"));
     let surface_probe_flag = flag.as_deref() == Some(std::ffi::OsStr::new("--probe-surface"));
-    if flag.as_deref() == Some(std::ffi::OsStr::new("--probe-live")) {
+    let site_probe = flag.as_deref() == Some(std::ffi::OsStr::new("--probe-site"));
+    if flag.as_deref() == Some(std::ffi::OsStr::new("--probe-live")) || site_probe {
         let result = (|| -> Result<(), String> {
             let directory = args
                 .next()
                 .map(std::path::PathBuf::from)
                 .ok_or("missing output directory")?;
+            let target = if site_probe {
+                let address = args
+                    .next()
+                    .and_then(|value| value.into_string().ok())
+                    .ok_or("missing station address")?;
+                let encoding = match args
+                    .next()
+                    .and_then(|value| value.into_string().ok())
+                    .as_deref()
+                {
+                    Some("uao") => pttstella::encoding::TextEncoding::Uao,
+                    Some("big5") => pttstella::encoding::TextEncoding::Big5,
+                    Some("gbk") => pttstella::encoding::TextEncoding::Gbk,
+                    _ => return Err("encoding must be uao, big5 or gbk".into()),
+                };
+                Some(pttstella::sites::Target::new(address, encoding)?)
+            } else {
+                None
+            };
             if args.next().is_some() {
                 return Err("unexpected arguments".into());
             }
@@ -24,7 +44,12 @@ fn main() {
                 .enable_all()
                 .build()
                 .map_err(|e| e.to_string())?;
-            let report = runtime.block_on(pttstella::connection::probe_live())?;
+            let report = runtime.block_on(async {
+                match target {
+                    Some(target) => pttstella::connection::probe_site(target).await,
+                    None => pttstella::connection::probe_live().await,
+                }
+            })?;
             std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
             std::fs::write(directory.join("prelogin.json"), report.to_string())
                 .map_err(|e| e.to_string())?;
@@ -56,7 +81,7 @@ fn main() {
         }
         Some(_) => {
             eprintln!(
-                "usage: pttstella [--probe OUTPUT_DIRECTORY DEBUG_PORT | --probe-window OUTPUT_DIRECTORY | --probe-login OUTPUT_DIRECTORY | --probe-filters OUTPUT_DIRECTORY | --probe-surface OUTPUT_DIRECTORY CASE | --probe-live OUTPUT_DIRECTORY]"
+                "usage: pttstella [--probe OUTPUT_DIRECTORY DEBUG_PORT | --probe-window OUTPUT_DIRECTORY | --probe-login OUTPUT_DIRECTORY | --probe-filters OUTPUT_DIRECTORY | --probe-surface OUTPUT_DIRECTORY CASE | --probe-live OUTPUT_DIRECTORY | --probe-site OUTPUT_DIRECTORY ADDRESS uao|big5|gbk]"
             );
             std::process::exit(2);
         }
@@ -69,16 +94,16 @@ fn main() {
         {
             Some(
                 case @ ("decode" | "painted" | "send" | "renderer_error" | "untrusted" | "confirm"
-                | "slow" | "dialogs" | "tools" | "files" | "files_slow" | "fonts" | "sgr66"
-                | "sgr66_legacy" | "login_2fa" | "osc8" | "boards" | "boards_close"
-                | "recent" | "articles" | "articles_close" | "bookmarks"
-                | "bookmarks_restart" | "bookmarks_empty" | "bookmarks_corrupt" | "mouse"
-                | "mouse_boundary" | "mouse_drag" | "mouse_round_trip" | "mouse_motion"
-                | "mouse_wheel"),
+                | "slow" | "dialogs" | "tools" | "sites" | "sites_restart" | "files"
+                | "files_slow" | "fonts" | "sgr66" | "sgr66_legacy" | "login_2fa" | "osc8"
+                | "boards" | "boards_close" | "recent" | "articles" | "articles_close"
+                | "bookmarks" | "bookmarks_restart" | "bookmarks_empty"
+                | "bookmarks_corrupt" | "mouse" | "mouse_boundary" | "mouse_drag"
+                | "mouse_round_trip" | "mouse_motion" | "mouse_wheel"),
             ) => Some(case.to_owned()),
             _ => {
                 eprintln!(
-                    "--probe-surface requires decode, painted, send, renderer_error, untrusted, confirm, slow, dialogs, tools, files, files_slow, fonts, sgr66, sgr66_legacy, login_2fa, osc8, boards, boards_close, recent, articles, articles_close, bookmarks, bookmarks_restart, bookmarks_empty, bookmarks_corrupt, mouse, mouse_boundary, mouse_drag, mouse_round_trip, mouse_motion or mouse_wheel"
+                    "--probe-surface requires decode, painted, send, renderer_error, untrusted, confirm, slow, dialogs, tools, sites, sites_restart, files, files_slow, fonts, sgr66, sgr66_legacy, login_2fa, osc8, boards, boards_close, recent, articles, articles_close, bookmarks, bookmarks_restart, bookmarks_empty, bookmarks_corrupt, mouse, mouse_boundary, mouse_drag, mouse_round_trip, mouse_motion or mouse_wheel"
                 );
                 std::process::exit(2);
             }
