@@ -69,6 +69,10 @@ pub(super) enum Completion {
     Display(FileResult<AppSettings>),
     Hover(FileResult<AppSettings>),
     Filters(FileResult<filters::Rules>),
+    FilterImport {
+        request: u64,
+        result: FileResult<Option<filters::import::Parsed>>,
+    },
     Profile(FileResult<ProfileResult>),
     Export {
         selected: bool,
@@ -87,6 +91,7 @@ impl Completion {
             Self::Fonts { result, .. } => result.err(),
             Self::Display(result) | Self::Hover(result) => result.err(),
             Self::Filters(result) => result.err(),
+            Self::FilterImport { result, .. } => result.err(),
             Self::Profile(result) => result.err(),
             Self::Export { result, .. } => result.err(),
             Self::Probe(result) => result.err(),
@@ -537,4 +542,42 @@ async fn copy_with_writer(
         })
         .await,
     )
+}
+
+pub(super) async fn import_filters(
+    permit: Permit,
+    request: u64,
+    probe: Option<PathBuf>,
+) -> Completion {
+    let result = async {
+        permit.check()?;
+        let path = if let Some(directory) = probe {
+            Some(directory.join("account-list.txt"))
+        } else {
+            let window = dioxus::desktop::window();
+            rfd::AsyncFileDialog::new()
+                .set_parent(window.window.as_ref())
+                .set_title(pttstella::msg!("filters-import-title"))
+                .add_filter(pttstella::msg!("filters-import-file"), &["txt"])
+                .pick_file()
+                .await
+                .map(|file| file.path().to_path_buf())
+        };
+        blocking(permit, move || {
+            let Some(path) = path else {
+                return Ok(None);
+            };
+            use std::io::Read;
+            let file = std::fs::File::open(path)
+                .map_err(|e| pttstella::msg!("filters-read-failed", e = e.to_string()))?;
+            let mut bytes = Vec::new();
+            file.take((filters::MAX_BYTES + 1) as u64)
+                .read_to_end(&mut bytes)
+                .map_err(|e| e.to_string())?;
+            filters::import::parse(&bytes).map(Some)
+        })
+        .await
+    }
+    .await;
+    Completion::FilterImport { request, result }
 }

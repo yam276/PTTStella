@@ -76,7 +76,21 @@ pub(super) enum SurfaceEvent {
     FiltersEdit {
         id: String,
         note: String,
+        #[serde(default)]
+        policy: pttstella::filters::Policy,
         remove: bool,
+        trusted: bool,
+    },
+    FiltersImport {
+        request: u64,
+        trusted: bool,
+    },
+    FiltersImportApply {
+        request: u64,
+        trusted: bool,
+    },
+    FiltersImportCancel {
+        request: u64,
         trusted: bool,
     },
     FiltersReveal {
@@ -303,6 +317,9 @@ impl SurfaceEvent {
                 | Self::RecentBoardsClear { .. }
                 | Self::FiltersOpen { .. }
                 | Self::FiltersEdit { .. }
+                | Self::FiltersImport { .. }
+                | Self::FiltersImportApply { .. }
+                | Self::FiltersImportCancel { .. }
                 | Self::FiltersReveal { .. }
                 | Self::Navigate { .. }
                 | Self::KeepAlive { .. }
@@ -381,6 +398,9 @@ impl SurfaceEvent {
             | FiltersOpen { trusted }
             | RecentBoardsClear { trusted }
             | FiltersEdit { trusted, .. }
+            | FiltersImport { trusted, .. }
+            | FiltersImportApply { trusted, .. }
+            | FiltersImportCancel { trusted, .. }
             | FiltersReveal { trusted, .. }
             | Hover { trusted, .. }
             | HoverPreference { trusted, .. }

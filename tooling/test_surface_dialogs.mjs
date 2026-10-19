@@ -214,3 +214,38 @@ test("PTT login stays disabled on another station and on an unsupported platform
     ui.update({ptt_features:true,login_pending:false});assert.equal(env.node("login-open").disabled,false);
     env.node("login-open").dataset.platformSupported="false";ui.update({ptt_features:true,login_pending:false});assert.equal(env.node("login-open").disabled,true);ui.destroy();
 });
+
+
+test("account policy is explicit, restored on selection, and discarded with unsaved edits",()=>{
+    const env=environment("surface-filters.js","createFiltersDialog"),ui=env.create();
+    env.fire("filters-open");ui.open({entries:[{id:"Alice",note:"exception",policy:"allow"}],warning:null});
+    env.node("filters-list").value="Alice";env.fire("filters-list","change");
+    assert.equal(env.node("filters-policy").value,"allow");
+    env.fire("filters-save","click",false);assert.equal(env.sent.filter(e=>e.kind==="filters_edit").length,0);
+    env.fire("filters-save");assert.equal(env.sent.at(-1).policy,"allow");
+    ui.receive({state:"rejected",message:"failed"});assert.equal(env.node("filters-policy").value,"allow");
+    env.fire("filters-close");assert.equal(env.node("filters-policy").value,"mask");
+    ui.destroy();const count=env.sent.length;env.fire("filters-save");assert.equal(env.sent.length,count);
+});
+
+
+test("import preview requires explicit apply and cancelled late results cannot replace a new draft",()=>{
+    const env=environment("surface-filters.js","createFiltersDialog"),ui=env.create();
+    env.fire("filters-open");ui.open({entries:[{id:"Local",note:"",policy:"allow"}]});
+    env.fire("filters-import","click",false);assert.equal(env.sent.at(-1).kind,"filters_open");
+    env.fire("filters-import");assert.equal(env.sent.at(-1).kind,"filters_import");const first=env.sent.at(-1).request;
+    env.fire("filters-import");assert.equal(env.sent.filter(x=>x.kind==="filters_import").length,1);
+    env.fire("filters-close");assert.equal(env.sent.at(-1).kind,"filters_import_cancel");
+    env.fire("filters-open");ui.open({entries:[{id:"Local",note:"",policy:"allow"}]});env.fire("filters-import");const second=env.sent.at(-1).request;
+    ui.receive({state:"preview",request:first,entries:[{id:"Stale",note:"",policy:"mask"}],message:"stale"});
+    assert.equal(env.node("filters-import-apply").hidden,true);
+    ui.receive({state:"preview",request:second,entries:[{id:"Local",note:"",policy:"allow"},{id:"Imported",note:"",policy:"mask"}],message:"preview"});
+    assert.equal(env.node("filters-import-apply").hidden,false);assert.equal(env.node("filters-save").disabled,true);
+    assert.equal(env.sent.filter(x=>x.kind==="filters_import_apply").length,0);
+    env.fire("filters-import-apply","click",false);assert.equal(env.sent.filter(x=>x.kind==="filters_import_apply").length,0);
+    env.fire("filters-import-apply");env.fire("filters-import-apply");assert.equal(env.sent.filter(x=>x.kind==="filters_import_apply").length,1);
+    assert.equal(ui.blocked(),true);
+    ui.receive({state:"rejected",message:"save failed"});assert.equal(ui.blocked(),false);
+    assert.equal(env.node("filters-list").children.length,2);assert.equal(env.node("filters-import").disabled,false);
+    ui.destroy();assert.equal(ui.clean(),true);
+});

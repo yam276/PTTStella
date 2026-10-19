@@ -169,6 +169,7 @@ async fn run(
     let initial_bookmarks = bookmarks.snapshot();
     let mut recent_clears = 0usize;
     let mut screen = SurfaceState::new(rules);
+    let mut filter_import = super::filter_import::Import::default();
     let mut receiver = connection.updates.clone();
     let Resources {
         eval: owned_eval,
@@ -380,6 +381,17 @@ async fn run(
                             media_preview.close();eval.send(Packet::HoverReset{media:false}).map_err(|e|e.to_string())?;
                         }
                         Packet::HoverSettings(preferences.hover())
+                    },
+                    FileCompletion::FilterImport{request,result}=>{
+                        if !filter_import.accepts(request) {continue;}
+                        match result {
+                            Ok(Some(parsed))=>match filter_import.preview(request,screen.rules(),&parsed.entries) {
+                                Ok(rules)=>Packet::FiltersResult(FiltersResult::Preview{request,entries:rules.entries,message:pttstella::msg!("filters-import-preview", count=parsed.entries.len(), skipped=parsed.skipped, adjusted=parsed.adjusted)}),
+                                Err(message)=>{filter_import.cancel(request);Packet::FiltersResult(FiltersResult::ImportRejected{request,message})},
+                            },
+                            Ok(None)=>{filter_import.cancel(request);Packet::FiltersResult(FiltersResult::ImportRejected{request,message:pttstella::msg!("filters-import-cancelled")})},
+                            Err(error)=>{filter_import.cancel(request);Packet::FiltersResult(FiltersResult::ImportRejected{request,message:error.to_string()})},
+                        }
                     },
                     FileCompletion::Filters(result)=>match result {
                         Ok(rules)=>{
@@ -610,16 +622,33 @@ async fn run(
                         }
                     }
                     SurfaceEvent::FiltersOpen { trusted: _ } => {
+                        filter_import.clear();
                         eval.send(Packet::FiltersOpen(FiltersOpen{entries:screen.rules().entries.clone(),warning:filter_warning.clone()})).map_err(|e|e.to_string())?;
                     }
                     SurfaceEvent::FiltersEdit {
                         id,
                         note,
+                        policy,
                         remove,
                         trusted: _,
                     } => {
-                        let rules=screen.rules().edit(&id,&note,remove);
+                        filter_import.clear();
+                        let rules=screen.rules().edit_policy(&id,&note,policy,remove);
                         if let Err(message)=files.start(|permit|files::save_filters(permit,filter_store.clone(),rules)) {
+                            eval.send(Packet::FiltersResult(FiltersResult::Rejected{message})).map_err(|e|e.to_string())?;
+                        }
+                    }
+                    SurfaceEvent::FiltersImport { request, trusted: _ } => {
+                        if let Err(message)=files.start(|permit|{filter_import.begin(request);files::import_filters(permit,request,probe.clone().filter(|_|surface_probe.as_deref()==Some("account_lists")))}) {
+                            eval.send(Packet::FiltersResult(FiltersResult::ImportRejected{request,message})).map_err(|e|e.to_string())?;
+                        }
+                    }
+                    SurfaceEvent::FiltersImportCancel { request, trusted: _ } => {filter_import.cancel(request);}
+                    SurfaceEvent::FiltersImportApply { request, trusted: _ } => {
+                        if let Err(message)=files.start(|permit|{
+                            let rules=filter_import.apply(request,screen.rules());
+                            files::save_filters(permit,filter_store.clone(),rules)
+                        }) {
                             eval.send(Packet::FiltersResult(FiltersResult::Rejected{message})).map_err(|e|e.to_string())?;
                         }
                     }
@@ -1234,6 +1263,7 @@ async fn run(
                 || case=="boards" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && checks.board_cancelled && checks.board_rejected>=1
                 || matches!(case.as_str(),"mouse"|"mouse_boundary") && checks.mouse_passed(case=="mouse_boundary") && receiver.borrow().mouse.active.is_none()
                 || matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") && checks.mouse_samples_passed(&case) && receiver.borrow().mouse.active.is_none() && receiver.borrow().mouse.modes.tracking()==pttstella::mouse::Tracking::Highlight
+                || case=="account_lists" && checks.filter_edits>=3 && checks.context_copies>=1 && checks.export_checked
                 || matches!(case.as_str(),"inline"|"context_menu") && checks.inline_requests>=2 && checks.inline_expands==1 && checks.export_checked && (case!="context_menu"||checks.context_copies>=2)
                 || case=="osc8" && checks.osc8_open_rows==[8,9] && checks.osc8_copy_rows==[8,9] && checks.osc8_dragged && checks.osc8_media_decoded>=2 && checks.export_checked
                 || case=="login_2fa" && checks.verification_required && checks.verification_rejected && checks.verification_browsing && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"

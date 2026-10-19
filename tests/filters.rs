@@ -141,12 +141,13 @@ fn editing_is_case_insensitive_bounded_and_explicit() {
     let mut duplicate = b.clone();
     duplicate.entries.push(a.entries[0].clone());
     assert!(duplicate.validate().is_err());
-    assert!(Rules::decode(br#"{"version":2,"entries":[]}"#).is_err());
+    assert!(Rules::decode(br#"{"version":3,"entries":[]}"#).is_err());
     assert!(Rules::decode(&vec![0; filters::MAX_BYTES + 1]).is_err());
     let entries = (0..filters::MAX_ENTRIES)
         .map(|i| filters::Entry {
             id: format!("Test{i}"),
             note: String::new(),
+            policy: filters::Policy::Mask,
         })
         .collect();
     let full = Rules {
@@ -176,4 +177,39 @@ fn reveal_and_policy_changes_invalidate_same_frame_and_reset_on_new_source() {
     state.reveal(2, source.revision, true);
     state.sync(2, source.revision + 1);
     assert!(!state.project(2, &source).revealed);
+}
+
+#[test]
+fn allow_policy_preserves_all_consumers_and_old_rules_migrate() {
+    let old = br#"{"version":1,"entries":[{"id":"Alice","note":"old"}]}"#;
+    let mask = Rules::decode(old).unwrap();
+    assert_eq!(mask.version, 2);
+    assert_eq!(mask.entries[0].policy, filters::Policy::Mask);
+    let allow = mask
+        .edit_policy("ALICE", "exception", filters::Policy::Allow, false)
+        .unwrap();
+    assert_eq!(allow.entries.len(), 1);
+    let source = frame();
+    let projected = filters::project(&source, &allow, false);
+    assert!(projected.matches.is_empty());
+    assert_eq!(projected.frame, source);
+    assert_eq!(links::detect(&projected.frame), links::detect(&source));
+    assert_eq!(
+        selection::extract(&projected.frame, &Selection::All)
+            .unwrap()
+            .text,
+        selection::extract(&source, &Selection::All).unwrap().text
+    );
+    assert_eq!(
+        Rules::decode(&serde_json::to_vec(&allow).unwrap()).unwrap(),
+        allow
+    );
+    assert!(
+        Rules::decode(br#"{"version":1,"entries":[{"id":"Alice","note":"","policy":"allow"}]}"#)
+            .is_err()
+    );
+    assert!(
+        Rules::decode(br#"{"version":2,"entries":[{"id":"Alice","note":"","policy":"unknown"}]}"#)
+            .is_err()
+    );
 }

@@ -5,6 +5,7 @@ mod bridge;
 mod commands;
 mod files;
 mod files_recent;
+mod filter_import;
 mod inline_images;
 mod lifecycle;
 mod outbound;
