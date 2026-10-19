@@ -830,9 +830,14 @@ impl Session {
             Some(Ok(Message::Pong(_))) => {}
             Some(Ok(Message::Close(frame))) => {
                 // Reading queued the peer's close acknowledgement; flush it before drop.
-                if let Some(mut socket) = self.socket.take() {
-                    let _ = timeout(Duration::from_secs(2), socket.flush()).await;
-                }
+                self.last_close = if let Some(mut socket) = self.socket.take() {
+                    match timeout(Duration::from_secs(2), socket.flush()).await {
+                        Ok(Ok(())) => CloseOutcome::Acknowledged,
+                        _ => CloseOutcome::Unconfirmed,
+                    }
+                } else {
+                    CloseOutcome::Unconfirmed
+                };
                 self.view.phase = Phase::Disconnected;
                 self.view.message = match frame {
                     Some(frame) if frame.reason.is_empty() => {
