@@ -249,6 +249,9 @@ fn commands(rows: &[Row<'_>], forward: &str) -> bool {
             || rows[23].bar_text("回上層")
             || rows[23].bar_text("文章選讀")
             || rows[23].bar_text("選擇看板")
+            || rows[23].bar_text("看板列表")
+            || rows[23].bar_text("我的最愛")
+            || rows[23].bar_text("分類看板")
             || rows[23].bar_text("郵件選單")
             || rows[23].bar_text("精華列表")
             || rows[23].bar_text("精華管理"))
@@ -431,8 +434,8 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
         // Match stable browser columns plus title/style instead of its wording.
         if !(rows[0].bar_text("看板列表") || rows[0].bar_text("我的最愛"))
             || !(text.contains("編號") || text.contains("總數"))
-            || !text.contains("人氣")
-            || !text.contains("板主")
+            || (!(rows[23].bar_text("看板列表") || rows[23].bar_text("我的最愛"))
+                && (!text.contains("人氣") || !text.contains("板主")))
             || !rows[header].bar_text("類別")
         {
             return Some(unknown(UnknownReason::BoardHeader));
@@ -459,7 +462,7 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
             blank = true;
             continue;
         }
-        let structural = if class_root { 10..20 } else { 10..23 };
+        let structural = if class_root { 12..20 } else { 10..23 };
         if line.spans.iter().any(|span| {
             span.glyph.col < structural.end
                 && span.glyph.col + span.glyph.width > structural.start
@@ -468,7 +471,7 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
             return Some(unknown(UnknownReason::Unmapped));
         }
         let valid = if class_root {
-            line.cells(10, 17)
+            line.cells(12, 17)
                 .and_then(|s| number(s.trim()))
                 .is_some_and(|n| n > 0)
                 && line.cells(20, 80).is_some_and(|s| !s.trim().is_empty())
@@ -487,7 +490,10 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
         items.push(row);
     }
     Some(
-        if cursor.0 <= 2 && items.contains(&cursor.1) && pointer(&rows[cursor.1], 0) {
+        if items.contains(&cursor.1)
+            && ((cursor.0 <= 2 && pointer(&rows[cursor.1], 0))
+                || (class_root && (10..=11).contains(&cursor.0) && pointer(&rows[cursor.1], 10)))
+        {
             Context::BoardList {
                 first_row,
                 last_row: *items.last()?,

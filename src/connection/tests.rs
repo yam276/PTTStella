@@ -2275,3 +2275,53 @@ async fn mail_and_archive_pointer_navigation_revalidates_exact_bytes_and_rejects
         peer.await.unwrap();
     }
 }
+
+#[tokio::test]
+async fn modern_board_and_indented_class_pointer_use_exact_revalidated_row_commands() {
+    for (name, kind, row) in [
+        ("favorites_modern", "board_list", 3),
+        ("boards_modern", "board_list", 3),
+        ("classes_indented", "board_list", 7),
+    ] {
+        let (listener, connection) = idle_local().await;
+        connection.connect().unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        ws.send(Message::Binary(navigation_page(name).into()))
+            .await
+            .unwrap();
+        let view = wait(&connection, |v| {
+            v.context().kind() == kind && !v.input_pending
+        })
+        .await;
+        connection
+            .navigate(view.stamp(), navigation::Intent::Open { row })
+            .await
+            .unwrap();
+        assert!(matches!(ws.next().await,Some(Ok(Message::Binary(b))) if b.as_ref()==b"\x1b[A\r"));
+        ws.send(Message::Binary(
+            b"\x1b[2J\x1b[HConfirm? [Y/n]".to_vec().into(),
+        ))
+        .await
+        .unwrap();
+        let view = wait(&connection, |v| {
+            v.context().kind() == "unknown" && !v.input_pending
+        })
+        .await;
+        assert!(
+            connection
+                .navigate(view.stamp(), navigation::Intent::Open { row })
+                .await
+                .is_err()
+        );
+        let peer = tokio::spawn(async move {
+            assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+            ws.flush().await.unwrap();
+        });
+        assert_eq!(
+            connection.shutdown().await.unwrap(),
+            CloseOutcome::Acknowledged
+        );
+        peer.await.unwrap();
+    }
+}

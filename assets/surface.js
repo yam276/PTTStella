@@ -330,10 +330,18 @@ function linkAt(point) {
     if(!point||!latest) return -1;
     return latest.links.findIndex(link=>link.row===point.row&&link.start<=point.col&&point.col<link.end);
 }
+// Geometry consumes the confirmed Rust profile, never station text.
+function navigationBackRegion(context) {
+    if(!context||context.kind==="main_menu"||context.kind==="unknown")return null;
+    const first=context.kind==="article_list"?(context.articles[0]?.row??3):(context.first_row??1);
+    const end=context.kind==="article_list"?17:context.kind==="board_list"?10:context.kind==="article_reading"?17:20;
+    return {first,last:23,end};
+}
 function hitAt(point) {
     if(!point||blocked()||dragging?.moved||!stationMouse.local()) return null;
     const index=linkAt(point);if(index>=0) return {kind:"link",index};
-    if(canNavigate()&&latest.navigation.kind!=="main_menu"&&point.col<Math.floor((latest.frame?.cols??80)/4)&&point.row>0&&point.row<23)return {kind:"back"};
+    const back=navigationBackRegion(latest?.navigation);
+    if(canNavigate()&&back&&point.col<back.end&&point.row>=back.first&&point.row<back.last)return {kind:"back"};
     if(!canNavigate())return null;
     const context=latest.navigation;
     if(['main_menu','system_menu','document_list','board_list'].includes(context.kind)){
@@ -347,7 +355,7 @@ function hitAt(point) {
 function setHover(point,redraw=true,preview=true) {
     const hit=hitAt(point),index=hit?.kind==="link"?hit.index:-1;
     const changed=index!==hoveredLink;hoveredLink=index;
-    hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:Math.floor(latest.frame.cols/4),kind:hit.kind}:null;
+    hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:["main_menu","system_menu"].includes(latest.navigation.kind)?20:0,kind:hit.kind}:null;
     surface.dataset.pointerAction=hit?.kind||"none";
     surface.style.cursor=hit?.kind==="back"?"":hit?"pointer":"default";
     surface.title=hit?.kind==="back"?tr("pointer-back-hint"):index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredRow?tr(hit.kind==="menu"?"menu-open-hint":"article-open-hint"):"";
@@ -358,7 +366,7 @@ function drawNavigationMarker() {
     const back=surface.dataset.pointerAction==="back";
     navigationMarker.hidden=(!hoveredRow&&!back)||!grid||!canNavigate();
     if(navigationMarker.hidden) {delete navigationMarker.dataset.row;return;}
-    const {row,start,end}=back?{row:1,start:0,end:Math.floor(latest.frame.cols/4)}:{row:hoveredRow.row,start:hoveredRow.start,end:latest.frame.cols};
+    const {row,start,end}=back?{row:navigationBackRegion(latest.navigation).first,start:0,end:1}:{row:hoveredRow.row,start:hoveredRow.start,end:latest.frame.cols};
     navigationMarker.dataset.kind=back?"back":hoveredRow.kind;navigationMarker.dataset.row=String(row);
     Object.assign(navigationMarker.style,{left:grid.x(start)/grid.ratio+"px",top:grid.y(row)/grid.ratio+"px",
         width:(grid.x(end)-grid.x(start))/grid.ratio+"px",height:((back?grid.y(23):grid.bottom(row))-grid.y(row))/grid.ratio+"px"});

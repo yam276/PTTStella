@@ -7,6 +7,7 @@ import vm from "node:vm";
 const source=readFileSync(new URL("../assets/surface.js",import.meta.url),"utf8")+readFileSync(new URL("../assets/surface-renderer.js",import.meta.url),"utf8")+"\nfunction rendererEnd(){}";
 function handler(name,next,context){
     vm.createContext(context);
+    vm.runInContext(source.slice(source.indexOf("function navigationBackRegion("),source.indexOf("function hitAt(")),context);
     vm.runInContext(source.slice(source.indexOf(`function ${name}(`),source.indexOf(`function ${next}(`)),context);
     return context[name];
 }
@@ -51,6 +52,7 @@ test("local navigation sends an explicit pointer or toolbar source",()=>{
     const sent=[],context={stationMouse:{local:()=>true,revoke(){}},canNavigate:()=>true,dragging:null,policy(){},latest:{navigation:{}},clearSelection(){},setHover(){},refreshNavigation(){},
         surface:{dataset:{}},stamp:()=>({generation:7,revision:4,input_epoch:2}),send:v=>sent.push(JSON.parse(JSON.stringify(v))),focus(){}};
     vm.createContext(context);
+    vm.runInContext(source.slice(source.indexOf("function navigationBackRegion("),source.indexOf("function hitAt(")),context);
     vm.runInContext(source.slice(source.indexOf("function navigate("),source.indexOf("const leaveLink="))+"\nglobalThis.buttons=[browseReturn,browseUp,browseDown];",context);
     context.navigate({action:"next_item"},{isTrusted:true});
     for(const button of context.buttons)button({isTrusted:true});
@@ -129,13 +131,13 @@ test("article rows open across their width while the left edge returns; unknown 
     const context={blocked:()=>false,dragging:null,stationMouse:{local:()=>true},canNavigate:()=>true,linkAt:()=>-1,
         latest:{navigation:{kind:"article_list",articles:[{row:4,start:2,end:8}]}}};
     const hit=handler("hitAt","setHover",context);
-    for(const col of [20,21,30,79])assert.deepEqual(JSON.parse(JSON.stringify(hit({row:4,col}))),{kind:"article",row:4});
+    for(const col of [17,18,20,21,30,79])assert.deepEqual(JSON.parse(JSON.stringify(hit({row:4,col}))),{kind:"article",row:4});
     assert.equal(hit({row:3,col:40}),null);
     assert.equal(hit({row:4,col:0}).kind,"back");
     assert.equal(hit({row:0,col:0}),null);assert.equal(hit({row:23,col:0}),null);
     context.latest.navigation={kind:"article_reading"};assert.equal(hit({row:10,col:0}).kind,"back");
-    assert.equal(hit({row:10,col:19}).kind,"back");
-    assert.equal(hit({row:10,col:20}),null);
+    assert.equal(hit({row:10,col:16}).kind,"back");
+    assert.equal(hit({row:10,col:17}),null);
     context.linkAt=()=>2;assert.equal(hit({row:10,col:4}).kind,"link");context.linkAt=()=>-1;
     context.stationMouse.local=()=>false;assert.equal(hit({row:10,col:0}),null);
     context.stationMouse.local=()=>true;context.canNavigate=()=>false;assert.equal(hit({row:10,col:0}),null);
@@ -152,14 +154,14 @@ test("the left edge sends the existing back intent once and refuses a stale gest
     context.released={hit:{kind:"back"},stamp:{revision:3}};click({button:0,detail:1,isTrusted:true});assert.equal(calls.length,1);
 });
 
-test("hover marker spans a complete row, and the return marker occupies the left quarter",()=>{
-    const context={surface:{dataset:{}},navigationMarker:{style:{},dataset:{}},hoveredRow:{row:4,start:1,kind:"article"},
-        latest:{frame:{cols:80}},grid:{ratio:2,x:x=>x*24,y:y=>y*48,bottom:y=>(y+1)*48},canNavigate:()=>true};
+test("hover keeps full-row width while Back only decorates the gutter and skips headers",()=>{
+    const context={surface:{dataset:{}},navigationMarker:{style:{},dataset:{}},hoveredRow:{row:4,start:0,kind:"article"},
+        latest:{frame:{cols:80},navigation:{kind:"article_list",articles:[{row:3}]}},grid:{ratio:2,x:x=>x*24,y:y=>y*48,bottom:y=>(y+1)*48},canNavigate:()=>true};
     const draw=handler("drawNavigationMarker","refreshNavigation",context);draw();
-    assert.equal(context.navigationMarker.style.left,"12px");assert.equal(context.navigationMarker.style.width,"948px");
+    assert.equal(context.navigationMarker.style.left,"0px");assert.equal(context.navigationMarker.style.width,"960px");
     assert.equal(context.navigationMarker.style.height,"24px");
     context.hoveredRow=null;context.surface.dataset.pointerAction="back";draw();
-    assert.equal(context.navigationMarker.style.width,"240px");assert.equal(context.navigationMarker.style.height,"528px");
+    assert.equal(context.navigationMarker.style.width,"12px");assert.equal(context.navigationMarker.style.height,"480px");
     context.canNavigate=()=>false;draw();assert.equal(context.navigationMarker.hidden,true);
     const css=readFileSync(new URL("../assets/app.css",import.meta.url),"utf8");
     assert.match(css,/@media \(prefers-reduced-motion: reduce\) \{ #navigation-marker \{ animation: none/);
@@ -174,4 +176,13 @@ test("mail and archive rows use only verified item targets, retain links and qua
  }
  context.linkAt=()=>0;assert.equal(hit({row:4,col:19}).kind,"link");
  context.dragging={moved:true};assert.equal(hit({row:4,col:20}),null);
+});
+
+test('article Back ends before the author and leaves the operation/header rows inert',()=>{
+ const context={blocked:()=>false,dragging:null,stationMouse:{local:()=>true},canNavigate:()=>true,linkAt:()=>-1,latest:{navigation:{kind:'article_list',articles:[{row:3},{row:4}]}}};
+ const hit=handler('hitAt','setHover',context);
+ for(const col of [0,8,11,16])assert.equal(hit({row:3,col}).kind,'back');
+ for(const col of [17,20,29,30,79])assert.equal(hit({row:3,col}).kind,'article');
+ for(const row of [0,1,2])assert.equal(hit({row,col:0}),null);
+ context.latest.navigation={kind:'board_list',first_row:3,last_row:5};assert.equal(hit({row:3,col:9}).kind,'back');assert.equal(hit({row:3,col:10}).kind,'menu');
 });
