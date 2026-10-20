@@ -140,6 +140,37 @@ class WindowsPublicationTests(unittest.TestCase):
             data = self.output/path.name.removesuffix('.sha256')
             self.assertEqual(path.read_text(), hashlib.sha256(data.read_bytes()).hexdigest()+'  '+data.name+'\n')
 
+    def test_setup_receives_app_local_crt_icon_and_license_payload_with_hashes(self):
+        crt = self.root/'redist/14.0/x64/Microsoft.VC.CRT'
+        crt.mkdir(parents=True)
+        payload = {'pttstella.exe': self.executable.read_bytes(),
+                   'vcruntime140.dll': b'synthetic runtime',
+                   'vcruntime140_1.dll': b'synthetic exception runtime',
+                   'licenses/NOTICE.txt': b'synthetic license notice'}
+        for name in ('vcruntime140.dll', 'vcruntime140_1.dll'):
+            (crt/name).write_bytes(payload[name])
+        def licenses(path):
+            path.mkdir()
+            (path/'NOTICE.txt').write_bytes(payload['licenses/NOTICE.txt'])
+        def setup(package, staging, version):
+            manifest = json.loads((package/'manifest.json').read_text())
+            for name, expected in payload.items():
+                self.assertEqual((package/name).read_bytes(), expected)
+                self.assertEqual(manifest['files'][name], hashlib.sha256(expected).hexdigest())
+            self.assertEqual((package/'PTTStella.ico').read_bytes(),
+                             (bundle_windows.ROOT/'assets/icons/pttstella.ico').read_bytes())
+            self.assertTrue((package/'README.txt').is_file())
+            return self.setup_file(package, staging, version)
+        with patch.object(bundle_windows, 'inspect_pe', return_value={
+                'imports': ['kernel32.dll', 'vcruntime140.dll', 'vcruntime140_1.dll']}), \
+                patch.object(bundle_windows, 'copy_licenses', side_effect=licenses), \
+                patch.object(installer, 'build', side_effect=setup):
+            report = bundle_windows.bundle(self.output, crt_dir=crt, with_installer=True)
+        self.assertEqual(report['bundled_crt'], ['vcruntime140.dll', 'vcruntime140_1.dll'])
+        with zipfile.ZipFile(report['zip']) as archive:
+            for name, expected in payload.items():
+                self.assertEqual(archive.read(self.name+'/'+name), expected)
+
     def test_installer_publication_race_preserves_other_delivery_and_rolls_back_new_zip(self):
         def raced(package, staging, version):
             result = self.setup_file(package, staging, version)

@@ -1,6 +1,10 @@
 # Windows 安裝包與 WebView2
 
-Windows x64 Release 同時提供 `PTTStella-<version>-windows-x64-setup.exe` 與原有 ZIP。Setup 偵測並補裝 Microsoft Edge WebView2 Evergreen Runtime；ZIP 保持可攜、不會自行安裝 Runtime。Windows 10／11 x64 為目標，ARM 與其他 Windows 版本未納入此安裝包。
+Windows x64 Release 的產品下載為單一 `PTTStella-<version>-windows-x64-setup.exe`，包含 App、必要的 app-local VC++ runtime DLL、圖示及授權資料，並偵測／補裝 Microsoft Edge WebView2 Evergreen Runtime。另附校驗碼與來源 manifest 供驗證，不需下載才能安裝。Windows 10／11 x64 為目標，ARM 與其他 Windows 版本未納入此安裝包。
+
+這是單一安裝執行檔；安裝後程式目錄仍有 EXE、DLL 與授權等檔案。MSVC 編譯器不隨產品交付，使用者不需安裝 Visual Studio。JS／CSS、介面翻譯、浮球圖示與內建字型由 Rust 內嵌，執行時不依賴原始碼的 `assets` 目錄；使用者額外指定的本機字型仍須自行合法安裝。
+
+macOS 交付 ZIP 內的一個 `.app`，Finder 視為單一 App，內部仍為標準目錄套件。Linux 提供 `.deb`／`.tar.gz`，程式同樣內嵌上述資產，但 GTK／WebKitGTK 等系統相依套件由發行版提供，並非跨發行版單檔免安裝程式。
 
 ## 使用者流程
 
@@ -28,7 +32,7 @@ GitHub workflow 以 [installer-tools.json](../tooling/windows/installer-tools.js
 
 WebView2 bootstrapper 取自 Microsoft Evergreen 官方端點 `https://go.microsoft.com/fwlink/p/?LinkId=2124703`。建置時有 HTTPS、16 MiB 上限、socket／整體下載期限，以及 Windows Authenticode 有效性與 `Microsoft Corporation` 發行者檢查。將已驗證 SHA-256 編入 Setup，安裝時解出同一檔案再次核對。bootstrapper 本身嵌於 Setup、只在缺少 Runtime 時執行；不放入 portable ZIP，不放入使用者的 App 安裝目錄。Windows Release manifest 記錄 bootstrapper 版本、簽章結果與 SHA-256。
 
-Setup、ZIP 與校驗碼全部完成才原子交付；競爭建立檔案時保留已有產物，清除本次新建的輸出。Release 須同時具備 ZIP 與 Setup，缺少其中之一不能發佈。App 與 Setup 目前未作產品 Authenticode 簽署；Microsoft bootstrapper 的簽章驗證不能當作產品已簽署。
+本機打包器在 Setup、ZIP 與校驗碼全部完成才原子交付；競爭建立檔案時保留已有產物，清除本次新建的輸出。ZIP 保留作為開發／解壓驗證產物；Release 打包器只收錄 Setup，不發佈 ZIP、裸 DLL 或資產資料夾。缺 Setup 即禁止發佈。App 與 Setup 目前未作產品 Authenticode 簽署；Microsoft bootstrapper 的簽章驗證不能當作產品已簽署。
 
 ## 驗證
 
@@ -37,7 +41,7 @@ python -m unittest discover -s tooling -p 'test_*.py'
 python tooling/check_windows_installer.py --output target/verification/windows-installer
 ```
 
-一般 Python 測試使用自製 bytes 與注入的工具結果，不接觸 Microsoft 下載、registry 或真實 Runtime。涵蓋下載超限／期限／HTTP／非 EXE、保留既有檔案、拒絕未知簽章或不符雜湊、Setup 失敗零交付、同源 ZIP／Setup、競爭交付與 Release 缺 Setup 拒絕。
+一般 Python 測試使用自製 bytes 與注入的工具結果，不接觸 Microsoft 下載、registry 或真實 Runtime。涵蓋下載超限／期限／HTTP／非 EXE、保留既有檔案、拒絕未知簽章或不符雜湊、Setup 失敗零交付、同源 ZIP／Setup、CRT／圖示／授權進入 Setup 來源目錄及 manifest、競爭交付、Release 僅收錄 Setup 與缺檔／額外裸檔拒絕。來源目錄測試不能代替真實 Inno 編譯及安裝後檔案核對。
 
 第二個命令僅在 Windows／Inno Setup 可用時執行，否則回報 `not_ready` 並退出 2。它以真實 Inno compiler 編譯並執行同一個 `webview2.iss` 決策函式，僅替換 registry／bootstrapper 系統操作為合成 adapter；11 項 assertion 核對四個 view 跳過、無效值、成功後再檢查與重入、失敗／取消、退出 0 卻仍缺少 Runtime、重啟及例外。probe 不安裝產品、不讀寫真實 registry、不執行 Microsoft bootstrapper；報告明示這個邊界。workflow 的 Windows job 將該原生政策 gate 視為必要，失敗不發佈。
 
