@@ -4,13 +4,25 @@
 
 ## 目標
 
-目前交付為 `dist/macos-reading-click/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：文章有界快取另支援可見上下半部點擊翻頁及左側返回。點擊生產 handler 離線通過，原生鍵盤／展圖／清理回歸通過；另已補驗整頁選取的 24 行 PNG 邊界、長選取停用及歷史剪貼簿。原生滑鼠點擊由使用者手動驗收；實站、實體滾輪／IME、任意快取行拖曳選取 PNG 與 Windows／Linux UI 仍分列待驗。先前 C／D 與其他交付結果保留於各歷程分節，不以本輪案例代替完整跨平台 desktop gate。
+目前交付為 `dist/macos-board-root-actions-r3/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：補上實站我的最愛與分類根目錄省略單向提示的導覽辨識，保留先前文章快取、上下半部點擊與左側返回。PTTStella 帳號的兩種根列表已確認恢復 NORMAL，原生鍵盤移動／進入／返回及 WebView PNG 通過；整頁選取的 24 行 PNG 邊界、長選取停用及歷史剪貼簿亦已補驗。原生滑鼠點擊由使用者手動驗收；實體滾輪／IME、任意快取行拖曳選取 PNG 與 Windows／Linux UI 仍分列待驗。先前各交付結果保留於歷程分節，不以本輪有限實站瀏覽代替完整跨平台 desktop gate。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 實站根列表辨識修正（2026-10-20）
+
+使用者回報看板列表仍不能滑鼠操作，要求用 PTTStella 帳號實際檢查。舊 App 的共同 Rust 辨識要求進入與返回提示同時存在，但實站我的最愛根列表沒有返回提示，分類根目錄沒有進入提示，導致兩者為 Unknown／VIM 暫停；不是僅缺原生點擊驗收。新增 `board_commands` 的兩種完整操作列條件，沿用原標頭／樣式、項目欄、連續列與游標驗證；普通列表與未知畫面的准入不變。詳見 [導覽契約](../navigation.md)。
+
+自製 fixtures 沒有放入實站帳號、最愛內容或私人流量。新增核心正反例核對省略單向提示、完整操作列、兩種游標、無樣式／缺鍵／錯鍵／提示覆蓋與游標失配；production Connection 的同一測試擴充兩種場景，獨立 expected 為 Up＋CR，換成確認畫面後拒絕舊操作且無額外 bytes。core 13 commands／2 replays、desktop lib 142／bin 82、全 targets Clippy、全套 JS 152、Python tooling 70、docs 及 macOS release 打包通過。
+
+實站使用獨立 App 副本、已保存的 PTTStella 帳號及使用者手動協助；先前開著的其他帳號視窗已還原原列表，未用來進行後續驗收。最終候選在我的最愛與分類根目錄均顯示 `VIM NORMAL`、站端未要求滑鼠／使用本機導覽；兩處 j／k 正確移動，l 進入分類子列表或 SYSOP，進板提示明確按空白，h 從文章列表／子列表返回，最後回到我的最愛。這證明共用 profile 與 planner 可操作；正文座標點擊、hover 手感與實體滾輪仍交使用者手動驗收，未用鍵盤冒充滑鼠事件。
+
+依使用者要求，修正前後畫面使用 WebView 內的同一 Canvas renderer、`toBlob` 與 Rust 匯出 owner，經原生 Save picker 保存 PNG；不是桌面截圖。四份 PNG 均為 960×576；兩種列表的標頭／操作列／頁尾逐像素相同，分類整頁亦相同。我的最愛正文的實站人氣會變動，未宣稱整頁相同。PNG 不含浮球、選取或 hover；如需整個 WebView UI，原生 snapshot API 仍是另一種擷取範圍。
+
+最初新增的 ASCII 指標測試覆寫雙格指標時留下半格未映射，改為完整清除兩格後通過，保留原失敗 gate。第一候選離線通過但實站仍暫停，進一步由原生剪貼簿讀回精確文字，確認實站為 `(v)已讀/未讀`、`(y)只列最愛`，修正錯置的合成標籤並新增負例後再建立最終候選；沒有把早期 App 當成通過。證據在 `.local/verification/board-live`，最終離線 logs 為 `gates-r3`，PNG 為 `favorites-before/after.png` 與 `classes-before/after.png`，原生辨識為 `favorites-r3.ax.txt`／`classes-r3.ax.txt`。實站內容與剪貼簿讀回資料僅留本機，不進 repo；沒有錄製完整 session 或保存密碼。
 
 ## 文章點擊翻頁與滑鼠支援界線（2026-10-20）
 

@@ -1321,3 +1321,101 @@ fn modern_board_captions_and_indented_class_pointer_keep_required_item_boundarie
     screen.feed(b"\x1b[9;20H");
     unknown(&screen.frame());
 }
+
+#[test]
+fn root_board_action_bars_admit_only_their_specific_missing_arrow_layouts() {
+    for (name, first_row, last_row, cursor_row) in [
+        ("favorites_root_actions", 3, 5, 4),
+        ("classes_root_actions", 7, 8, 8),
+    ] {
+        let context = page(name);
+        assert_eq!(
+            context,
+            Context::BoardList {
+                first_row,
+                last_row,
+                cursor_row
+            },
+            "{name}"
+        );
+        assert_eq!(
+            navigation::plan(
+                &context,
+                Intent::Open {
+                    row: cursor_row - 1
+                }
+            )
+            .unwrap(),
+            b"\x1b[A\r"
+        );
+        assert_eq!(navigation::plan(&context, Intent::Back).unwrap(), b"\x1b[D");
+        assert_eq!(
+            navigation::plan(&context, Intent::NextPage).unwrap(),
+            b"\x1b[6~"
+        );
+        assert!(!context.allows_keepalive());
+        for (row, text) in [(23, "是否確定？[Y/n]"), (0, "未知選單")] {
+            let mut screen = fixture(name);
+            replace(&mut screen, row, text, "30;47");
+            screen.feed(if first_row == 3 {
+                b"\x1b[5;2H"
+            } else {
+                b"\x1b[9;11H"
+            });
+            unknown(&screen.frame());
+        }
+        let mut screen = fixture(name);
+        screen.feed(b"\x1b[24;80H");
+        unknown(&screen.frame());
+        let mut screen = fixture(name);
+        let cursor = if first_row == 3 {
+            b"\x1b[5;2H".as_slice()
+        } else {
+            b"\x1b[9;11H"
+        };
+        let footer = text::rows(&screen.frame()).unwrap()[23].text.clone();
+        replace(&mut screen, 23, &footer, "0");
+        screen.feed(cursor);
+        unknown(&screen.frame());
+        let mut screen = fixture(name);
+        screen.feed(if first_row == 3 {
+            b"\x1b[5;1H> \x1b[5;1H"
+        } else {
+            b"\x1b[9;11H> \x1b[9;11H"
+        });
+        assert_eq!(navigation::analyze(&screen.frame()), context);
+    }
+    for footer in [
+        "我的最愛 (a)增加看板 (d)刪除 (g)新增目錄 (M)移動位置 (v)已讀/未讀",
+        "我的最愛 (a)增加看板 (d)刪除 (g)新增目錄 (v)已讀/未讀 (h)說明",
+        "看板列表 (a)增加看板 (d)刪除 (g)新增目錄 (M)移動位置 (v)已讀/未讀 (h)說明",
+        "我的最愛 (a)增加看板 (d)刪除 (g)新增目錄 (M)移動位置 (y)已讀/未讀 (h)說明",
+    ] {
+        let mut screen = fixture("favorites_root_actions");
+        replace(&mut screen, 23, footer, "30;47");
+        screen.feed(b"\x1b[5;2H");
+        unknown(&screen.frame());
+    }
+    let mut screen = fixture("favorites_root_actions");
+    replace(&mut screen, 1, "[→]進入 [s]找看板 [/]搜尋", "0");
+    screen.feed(b"\x1b[5;2H");
+    unknown(&screen.frame());
+    let mut screen = fixture("classes_root_actions");
+    replace(
+        &mut screen,
+        23,
+        "分類看板 (m)加入最愛 (v)已讀/未讀 (t)標記 (y)只列最愛",
+        "30;47",
+    );
+    screen.feed(b"\x1b[9;11H");
+    unknown(&screen.frame());
+    let mut screen = fixture("classes_root_actions");
+    replace(
+        &mut screen,
+        23,
+        "分類看板 (m)加入最愛 (y)已讀/未讀 (t)標記 (v)只列最愛 (←)回上層",
+        "30;47",
+    );
+    screen.feed(b"\x1b[9;11H");
+    unknown(&screen.frame());
+}

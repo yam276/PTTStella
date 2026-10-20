@@ -2282,6 +2282,8 @@ async fn modern_board_and_indented_class_pointer_use_exact_revalidated_row_comma
         ("favorites_modern", "board_list", 3),
         ("boards_modern", "board_list", 3),
         ("classes_indented", "board_list", 7),
+        ("favorites_root_actions", "board_list", 3),
+        ("classes_root_actions", "board_list", 7),
     ] {
         let (listener, connection) = idle_local().await;
         connection.connect().unwrap();
