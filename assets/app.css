@@ -193,3 +193,6 @@ button.primary .settings-icon { color: inherit; }
 .settings-host #font-dialog .settings-footer { flex-shrink: 0; }
 .settings-entry, .settings-brand { color: var(--ui-gold); }
 .settings-brand-mark { display:block; width:24px; height:24px; flex-shrink:0; }
+
+@keyframes tools-invite { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) { .tools-ball:hover:not(:active) { animation: tools-invite 1.2s ease-in-out infinite; } }

@@ -62,6 +62,8 @@ Windows 桌面 gate 以獨立 loopback 服務端比對完整 bytes，確認編�
 
 信件列表與精華列表共用 DocumentList 的有界列導航，分別要求「郵件選單」／「精華文章」標題、相符的單份欄位標頭、讀信／讀取資料與返回提示、連續編號及有效游標。UI 只消費 Rust 結果，點擊右側四分之三開啟、左側返回、滾輪 Page Up／Down；未知／多欄標頭、缺列或確認提示不能送出通用 Enter。一般信箱瀏覽不代表新郵件狀態，本項沒有郵件快速跳轉。公開可見欄位格式核對於 2026-10-20，來源為 [mail.c](https://github.com/ptt/pttbbs/blob/master/mbbsd/mail.c) 與 [announce.c](https://github.com/ptt/pttbbs/blob/master/mbbsd/announce.c)；離線自製案例不代表所有實站版型已驗收。
 
+浮球在支援 hover 且未啟用減少動態效果時，以 1.2 秒、最大 1.08 倍的輕微縮放循環提示可點擊；離開或按住即停止，保持原本座標、慣性及扇形配置。
+
 
 | 單欄畫面 | 共用辨識 | 本輪驗證範圍 |
 | --- | --- | --- |
