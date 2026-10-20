@@ -4,13 +4,23 @@
 
 ## 目標
 
-目前交付為 `dist/macos-continue-input-final/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：補上標準任意鍵提示的一般按鍵與單次左鍵繼續，包含先前實站我的最愛與分類根目錄辨識修正、文章快取、上下半部點擊與左側返回。PTTStella 帳號的兩種根列表已確認恢復 NORMAL，原生鍵盤移動／進入／返回及 WebView PNG 通過；整頁選取的 24 行 PNG 邊界、長選取停用及歷史剪貼簿亦已補驗。原生滑鼠點擊由使用者手動驗收；實體滾輪／IME、任意快取行拖曳選取 PNG 與 Windows／Linux UI 仍分列待驗。先前各交付結果保留於歷程分節，不以本輪有限實站瀏覽代替完整跨平台 desktop gate。
+目前交付為 `dist/macos-account-policies/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：文章列表／推文支援內容遮蔽、整行塗黑與白名單 ID 改色，並包含先前文章模式、鍵盤捲動與箭頭游標修正。最新驗證見下方黑白名單分節；各歷史交付與人工驗收邊界保留於各節。原生正文滑鼠仍由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 兩種黑名單與白名單 ID 標色（2026-10-20）
+
+使用者指定發佈前補齊：已辨識文章列表與標準推文皆可選擇只遮標題／內容、保留 ID，或整行塗黑；白名單只以亮青色標示 ID。保留 80×24 行列，不刪行。原站端 Frame 不變，畫面、複製、PNG 與連結共用 Rust 投影；舊規則遷移與明確保存、暫時揭露、規則變更撤銷文章快取一併驗證。未知版型與不完整 ID 不猜測。交付為 `dist/macos-account-policies/PTTStella.app`（arm64 release、ad-hoc 簽章），名單 schema v3，舊 v1／v2 在記憶體遷移、明確保存才改檔。PTTStar Analyzer 的靜態研究證實 B／C 分類及 W ID 標色，但原版另有全域強度設定；匯入預覽明示本產品 B→遮內容、C→整行塗黑、W→ID 標色，白名單優先沿用本產品既有規則。
+
+core 13 commands／2 replays（filters 11 案例）、desktop lib 142／bin 86、全 targets Clippy、JS 166、fmt 與 docs 通過。獨立 expected 覆蓋文章／推文三策略、完整 ID 與保留行列、遮罩複製／連結、舊檔遷移、未知畫面保留，以及網頁／終端機模式的規則變更、來源 PNG 與文章快取撤銷。首次 i18n 舊文案 expected 與新增 JS 測試誤用翻譯 key 各失敗一次，修正測試後分別完整重跑通過。
+
+macOS 原生 Dioxus／WKWebView 的自製文章列表、推文與重啟三個程序通過：表單保存三策略、B／C／W 匯入預覽及確認、移除項目、系統剪貼簿貼上預覽、完整 PNG、暫時揭露與新程序載入。文章剪貼簿預覽完整顯示三筆相關行；推文 AX 預覽截短於第二筆遮罩，完整字串由核心測試核對，未宣稱原生全文逐 byte 讀回。獨立 Pillow 解碼確認文章標題／整行全黑、保留作者與亮青色 ID；推文兩個內容範圍及 Bob 整行全黑，揭露前後其他像素完全相同，白名單色彩保留。重啟後規則 bytes 不變、未建立備份；所有程序 Close acknowledged、listener／connection／credential／file owner join、退出 0。交付與三份原生測試副本的 15 份 Mach-O sections 一致，strict codesign 通過。
+
+證據在 `.local/verification/account-policies/validation.json`，離線為 `checks`／`checks-finish`，原生為 `account_articles-r2`／`account_lists`／`reload`。第一輪文章探針在工具／複製操作期間送出非預期站端輸入而失敗，保留原報告；重跑完整程序後才計通過。正常 60 GiB 與既有 96 GiB 例外均被其他 namespace 的預留額度擋下；依使用者先前明確允許忽略跨專案額度的授權，本輪 scoped wrapper 採 192 GiB aggregate，保留 100 GiB free floor、16 GiB namespace、鎖與 watchdog，未改全域政策或清理他人快取。原生正文滑鼠／hover 與實站三策略仍由使用者驗收；Windows／Linux UI、單行 PNG 與系統選檔視窗未由本輪補驗。
 
 ## 任意鍵提示的按鍵與點擊繼續（2026-10-20）
 
@@ -521,7 +531,7 @@ Windows 真實 WebView 與模擬舊 WebKit 順序的增量 gate 已通過，包�
 | 建議 | 決定與入口 | 現況 |
 | --- | --- | --- |
 | 圖片小預覽 | [hover 方案](../media.md#圖片-hover-小預覽)：跟隨游標／右上固定可切換，單一 request、首幀、點擊升級、不搶焦點 | 已實作；Windows pointer／HTTP、取消、定位與提升驗證通過；其他平台待驗收 |
-| 本機黑白名單 | [名單方案](../content-filters.md)：完整 ID、標題字面條件、備註、例外與可揭露遮罩；共享辨識及輸出，保留固定格線 | 一般推文遮黑已實作並完成有限 Mac 原生及實站驗證；封鎖消失、白名單／關鍵字與舊格式匯入仍待設計／驗證 |
+| 本機黑白名單 | [名單方案](../content-filters.md)：完整 ID、標題字面條件、備註、例外與可揭露遮罩；共享辨識及輸出，保留固定格線 | 三策略與驗證見本頁「兩種黑名單與白名單 ID 標色」；移除行已由新需求取代，關鍵字不在本輪範圍 |
 | 預設組合與自訂檔 | [設定方案](../preferences-and-profiles.md)：任何平台均可選 Windows／Mac／Linux 組合，自訂另存、載入與匯出／匯入，保留明確選擇 | 已實作選擇意圖、具名可攜檔與 v1 遷移；Windows 保存／重啟像素通過 |
 
 使用者已指定名單分一般遮黑與移除推文兩級，本輪不實作名單；詳見名單方案。先完成設定意圖與保存邊界，再實作 hover 呈現；名單須先補 Rust 的作者／推文範圍與共享呈現結果。Vim、設定檔及 hover 的實作與驗收分列如下；名單本輪保持設計階段。

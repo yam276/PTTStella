@@ -35,7 +35,7 @@ impl Import {
         let mut merged = current.clone();
         for entry in entries {
             // An existing explicit exception survives imported masks.
-            if entry.policy == Policy::Mask
+            if entry.policy != Policy::Allow
                 && merged
                     .entries
                     .iter()
@@ -76,8 +76,8 @@ mod tests {
         let imported = vec![
             Entry {
                 id: "ALICE".into(),
-                note: "mask".into(),
-                policy: Policy::Mask,
+                note: "mask row".into(),
+                policy: Policy::MaskRow,
             },
             Entry {
                 id: "Bob".into(),

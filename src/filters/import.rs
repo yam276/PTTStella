@@ -45,7 +45,7 @@ pub fn parse(bytes: &[u8]) -> Result<Parsed, String> {
                 }
                 match classes[0].to_ascii_uppercase() {
                     'B' => (Policy::Mask, note, prefix != "B"),
-                    'C' => (Policy::Mask, note, true),
+                    'C' => (Policy::MaskRow, note, true),
                     'W' => (Policy::Allow, note, prefix != "W"),
                     _ => {
                         skipped += 1;
@@ -65,7 +65,7 @@ pub fn parse(bytes: &[u8]) -> Result<Parsed, String> {
             .entries
             .iter()
             .any(|e| e.id.eq_ignore_ascii_case(id) && e.policy == Policy::Allow)
-            && policy == Policy::Mask
+            && policy != Policy::Allow
         {
             continue;
         }
@@ -108,7 +108,7 @@ mod tests {
         let marked =
             parse(b"Alice=w13_:keep\nBob=C:mask\nCarol=N:note only\nDave=BW:ambiguous").unwrap();
         assert_eq!(marked.entries[0].policy, Policy::Allow);
-        assert_eq!(marked.entries[1].policy, Policy::Mask);
+        assert_eq!(marked.entries[1].policy, Policy::MaskRow);
         assert_eq!((marked.adjusted, marked.skipped), (2, 2));
         let p = parse(b"Alice=B:ok\nOther=X:unsupported\n123=bad\n").unwrap();
         assert_eq!(p.skipped, 2);

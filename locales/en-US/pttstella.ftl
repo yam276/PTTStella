@@ -11,7 +11,7 @@ export-rows-hint = Drag to select the lines to export first
 export-rows = Selected lines PNG
 font-settings = Fonts
 filters-title = Blocklist / allowlist
-filters-reveal = Show replies temporarily
+filters-reveal = Show masked content temporarily
 hover-help = Hover over image links for a small preview
 hover-label = Image preview
 hover-position = Image preview position
@@ -29,7 +29,7 @@ browse-next = Next page
 fatal-reopen = { $error }; close and reopen the window
 screen-label = BBS screen
 keyboard-label = BBS keyboard input
-filters-description = Mask standard replies from blocked accounts, keeping author and time. Allowed accounts stay visible. Match complete IDs, ignoring letter case.
+filters-description = Block article titles / reply content while keeping IDs, or black out entire rows. Allowed IDs are highlighted in bright cyan. Match complete IDs, ignoring letter case.
 filters-limitations = Truncated replies and continuation lines without a complete author or timestamp remain visible. Closing this window discards unsaved edits.
 filters-saved-ids = Saved accounts
 filters-account-id = Account ID
@@ -316,14 +316,14 @@ font-bundled-loaded = Bundled fonts loaded: { $names }; no installation required
 link-hover-hint = { $url } — click to open; right-click for actions
 export-lines-hint = Export lines { $start }–{ $end } (all 80 columns)
 image-ready-cached = Image loaded · memory cache
-filters-reason = Blocklist: { $reason }
+filters-reason = Blocked accounts: { $reason }
 filters-count-hidden = { $count ->
-        [one] One reply hidden
-       *[other] { $count } replies hidden
+        [one] One row hidden
+       *[other] { $count } rows hidden
     }
 filters-count-revealed = { $count ->
-        [one] One reply temporarily shown
-       *[other] { $count } replies temporarily shown
+        [one] One row temporarily shown
+       *[other] { $count } rows temporarily shown
     }
 profile-import-title = Load display settings into preview
 menu-edit = Edit
@@ -535,8 +535,8 @@ context-settings = Settings…
 context-copied = Copied to clipboard
 
 filters-policy = Account policy
-filters-policy-mask = Block (mask content)
-filters-policy-allow = Allow (keep visible)
+filters-policy-mask = Block content (keep ID)
+filters-policy-allow = Allow (bright cyan ID)
 
 pointer-back-hint = Click the left edge to go back; hold Shift to select text
 pointer-page-up-hint = Click to page up; drag or hold Shift to select text
@@ -550,7 +550,7 @@ filters-import-apply = Merge and save
 filters-import-loading = Reading account list…
 filters-import-cancelled = Import cancelled; account lists unchanged
 filters-import-stale = Import preview expired; choose the file again
-filters-import-preview = Read { $count } entries; skipped { $skipped } unsupported rules; adapted { $adjusted } marked or stronger blocking rules. This is a merged preview. Allow rules win; local masking is retained, without external colour settings. Choose Merge and save to apply.
+filters-import-preview = Read { $count } entries; skipped { $skipped } unsupported rules; adapted { $adjusted } marked or stronger blocking rules. Merged preview: B masks content, C blacks out rows, W highlights IDs. Allow rules win; external colours are ignored. Choose Merge and save to apply.
 filters-import-invalid = Cannot import this list format; source file and current rules preserved
 
 settings-saving = Saving…
@@ -606,3 +606,5 @@ article-mode-web = Web
 article-mode-terminal = Terminal
 article-mode-help = Web mode joins visited pages and supports inline images. Terminal mode keeps the station grid and paging, with hover or top-right image previews. Switching starts again from the current station page.
 settings-alias-article-mode = article mode web terminal 文章模式 網頁 終端機
+
+filters-policy-mask-row = Black out entire row

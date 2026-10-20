@@ -6,9 +6,9 @@ import {translator,create,runtime as exports} from "./i18n_test_support.mjs";
 test("official Fluent formats independent Chinese and English catalogs and plurals",()=>{
     const zh=translator("zh-TW"),en=translator("en-US");
     assert.equal(zh("connect"),"連線");assert.equal(en("connect"),"Connect");
-    assert.equal(en("filters-count-hidden",{count:1}),"One reply hidden");
-    assert.equal(en("filters-count-hidden",{count:2}),"2 replies hidden");
-    assert.equal(zh("filters-count-hidden",{count:2}),"已遮黑 2 則推文");
+    assert.equal(en("filters-count-hidden",{count:1}),"One row hidden");
+    assert.equal(en("filters-count-hidden",{count:2}),"2 rows hidden");
+    assert.equal(zh("filters-count-hidden",{count:2}),"已遮黑 2 行");
     assert.equal(en("export-lines-hint",{start:3,end:5}),"Export lines 3–5 (all 80 columns)");
     const unsafe="<img src=x onerror=evil()> & example";
     assert.equal(en("link-hover-hint",{url:unsafe}),unsafe+" — click to open; right-click for actions");

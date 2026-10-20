@@ -119,6 +119,20 @@ test("filter edit admission, failure recovery and presentation blocking share on
     ui.destroy();assert.equal(ui.clean(),true);
 });
 
+test("each account policy survives selection and is sent explicitly on save",()=>{
+    for(const [policy,label] of [["mask","黑名單（遮內容、保留 ID）"],["mask_row","黑名單（整行塗黑）"],["allow","白名單（ID 亮青色）"]]){
+        const env=environment("surface-filters.js","createFiltersDialog"),ui=env.create();
+        env.fire("filters-open");ui.open({entries:[{id:"Alice",note:"",policy}]});
+        assert.ok(env.node("filters-list").children[1].textContent.includes(label));
+        env.node("filters-list").value="Alice";env.fire("filters-list","change");
+        assert.equal(env.node("filters-policy").value,policy);
+        env.fire("filters-save");assert.equal(env.sent.at(-1).policy,policy);
+        ui.receive({state:"saved",entries:[{id:"Alice",note:"",policy}],message:"saved"});
+        assert.equal(env.node("filters-list").children[1].value,"Alice");
+        ui.destroy();
+    }
+});
+
 test("the tagged router delivers independent wire examples once and rejects legacy/unknown envelopes",()=>{
     const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8")+"\ncreateSurfaceRouter");
     const kinds=["localization","station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
