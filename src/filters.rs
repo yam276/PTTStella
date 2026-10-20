@@ -289,57 +289,7 @@ pub fn project(frame: &Frame, rules: &Rules, revealed: bool) -> Projection {
     }
     let mut output = frame.clone();
     if !revealed {
-        let mut redacted = Vec::new();
-        output.hyperlinks.retain_mut(|link| {
-            link.spans.retain(|span| {
-                let hidden = matches.iter().any(|push| {
-                    push.row == span.row && span.start < push.end && span.end > push.start
-                });
-                if hidden {
-                    redacted.push(span.clone());
-                }
-                !hidden
-            });
-            !link.spans.is_empty()
-        });
-        if !redacted.is_empty() {
-            output
-                .hyperlinks
-                .push(crate::screen::hyperlinks::Hyperlink {
-                    target: None,
-                    spans: redacted,
-                });
-        }
-        output.glyphs = frame
-            .glyphs
-            .iter()
-            .flat_map(|g| {
-                if matches
-                    .iter()
-                    .any(|p| p.row == g.row && g.col < p.end && g.col + g.width > p.start)
-                {
-                    (g.col..g.col + g.width)
-                        .map(|col| Glyph {
-                            col,
-                            row: g.row,
-                            width: 1,
-                            text: "█".into(),
-                            left: Style {
-                                fg: 0,
-                                ..Style::default()
-                            },
-                            right: Style {
-                                fg: 0,
-                                ..Style::default()
-                            },
-                            unmapped: false,
-                        })
-                        .collect()
-                } else {
-                    vec![g.clone()]
-                }
-            })
-            .collect();
+        mask_ranges(&mut output, &matches);
     }
     for glyph in &mut output.glyphs {
         if highlights
@@ -361,6 +311,82 @@ pub fn project(frame: &Frame, rules: &Rules, revealed: bool) -> Projection {
         matches,
         revealed,
     }
+}
+
+/// Shared cell replacement for content masks and repeated reply identities.
+fn mask_ranges(frame: &mut Frame, ranges: &[Push]) {
+    if ranges.is_empty() {
+        return;
+    }
+    let mut redacted = Vec::new();
+    frame.hyperlinks.retain_mut(|link| {
+        link.spans.retain(|span| {
+            let hidden = ranges
+                .iter()
+                .any(|push| push.row == span.row && span.start < push.end && span.end > push.start);
+            if hidden {
+                redacted.push(span.clone());
+            }
+            !hidden
+        });
+        !link.spans.is_empty()
+    });
+    if !redacted.is_empty() {
+        frame.hyperlinks.push(crate::screen::hyperlinks::Hyperlink {
+            target: None,
+            spans: redacted,
+        });
+    }
+    frame.glyphs = frame
+        .glyphs
+        .iter()
+        .flat_map(|g| {
+            if ranges
+                .iter()
+                .any(|p| p.row == g.row && g.col < p.end && g.col + g.width > p.start)
+            {
+                (g.col..g.col + g.width)
+                    .map(|col| Glyph {
+                        col,
+                        row: g.row,
+                        width: 1,
+                        text: "█".into(),
+                        left: Style {
+                            fg: 0,
+                            ..Style::default()
+                        },
+                        right: Style {
+                            fg: 0,
+                            ..Style::default()
+                        },
+                        unmapped: false,
+                    })
+                    .collect()
+            } else {
+                vec![g.clone()]
+            }
+        })
+        .collect();
+}
+
+/// Merge only adjacent, independently recognized replies. The caller keeps
+/// identities in Rust so masking or highlighting never becomes parser input.
+pub fn merge_push_ids(frame: &mut Frame, replies: &[Push]) {
+    let ranges: Vec<_> = replies
+        .windows(2)
+        .filter_map(|pair| {
+            let (previous, current) = (&pair[0], &pair[1]);
+            (previous.row + 1 == current.row && previous.id.eq_ignore_ascii_case(&current.id)).then(
+                || Push {
+                    row: current.row,
+                    id: current.id.clone(),
+                    start: 3,
+                    end: 3 + current.id.len(),
+                },
+            )
+        })
+        .collect();
+    mask_ranges(frame, &ranges);
 }
 
 /// Policy/reveal revision is separate from the immutable source frame revision.

@@ -513,7 +513,7 @@ pub(super) fn surface_sample(
             let sample: serde_json::Value = serde_json::from_str(include_str!("../../tests/fixtures/navigation.json")).map_err(|e|e.to_string())?;
             encoding::encode(sample["list"].as_str().ok_or("missing synthetic article fixture")?).map_err(|e|e.to_string())
         }
-        Some("account_lists") => {
+        Some("account_lists" | "merged_replies") => {
             let sample: serde_json::Value =
                 serde_json::from_str(include_str!("../../tests/fixtures/filters.json"))
                     .map_err(|e| e.to_string())?;

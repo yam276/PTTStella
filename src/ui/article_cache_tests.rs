@@ -38,6 +38,74 @@ fn lines(p: &Paint) -> Vec<String> {
         })
         .collect()
 }
+
+fn reply_page(first: usize, row: usize) -> Paint {
+    let mut p = page(first, first + 22, 50);
+    for (col, ch) in (3..8).zip("Alice".chars()) {
+        p.frame
+            .glyphs
+            .iter_mut()
+            .find(|g| g.row == row && g.col == col)
+            .unwrap()
+            .text = ch.to_string();
+    }
+    p.replies = vec![pttstella::filters::Push {
+        row,
+        id: "Alice".into(),
+        start: 9,
+        end: 66,
+    }];
+    p
+}
+
+#[test]
+fn adjacent_cached_pages_merge_ids_but_standalone_png_and_new_segments_keep_the_first() {
+    let mut cache = ArticleCache::default();
+    let mut first = reply_page(1, 22);
+    let first_ids = first.replies.clone();
+    cache.project(&mut first);
+    super::super::presentation::merge_replies(&mut first, &first_ids);
+    assert_eq!(
+        pttstella::text::rows(&first.frame).unwrap()[22].cells(3, 8),
+        Some("Alice")
+    );
+    let mut next = reply_page(24, 0);
+    let next_ids = next.replies.clone();
+    cache.project(&mut next);
+    super::super::presentation::merge_replies(&mut next, &next_ids);
+    assert_eq!(
+        pttstella::text::rows(&next.frame).unwrap()[23].cells(3, 8),
+        Some("█████")
+    );
+    assert_eq!(
+        pttstella::text::rows(next.source_frame.as_ref().unwrap()).unwrap()[0].cells(3, 8),
+        Some("Alice")
+    );
+    assert!(
+        !serde_json::to_value(&next)
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .contains_key("replies")
+    );
+    // The cache retains the unmerged filtered row, so clearing history restores
+    // its first ID instead of persisting a one-way mask.
+    cache.clear();
+    let mut fresh = reply_page(24, 0);
+    cache.project(&mut fresh);
+    super::super::presentation::merge_replies(&mut fresh, &next_ids);
+    assert_eq!(
+        pttstella::text::rows(&fresh.frame).unwrap()[0].cells(3, 8),
+        Some("Alice")
+    );
+    let mut gap = reply_page(100, 0);
+    cache.project(&mut gap);
+    super::super::presentation::merge_replies(&mut gap, &next_ids);
+    assert_eq!(
+        pttstella::text::rows(&gap.frame).unwrap()[0].cells(3, 8),
+        Some("Alice")
+    );
+}
 #[test]
 fn overlaps_are_merged_by_line_and_the_original_png_source_is_untouched() {
     let mut cache = ArticleCache::default();

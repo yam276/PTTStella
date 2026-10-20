@@ -12,6 +12,8 @@ use serde::Serialize;
 
 #[derive(Clone, Serialize)]
 pub(super) struct Paint {
+    #[serde(skip)]
+    pub(super) replies: Vec<filters::Push>,
     pub(super) article_mode: pttstella::settings::ArticleMode,
     pub(super) article: Option<super::article_cache::Reading>,
     pub(super) source_frame: Option<Frame>,
@@ -72,23 +74,12 @@ pub(super) fn paint(
             revealed: false,
         }
     };
-    let links = if view.output_pending {
-        Vec::new()
-    } else {
-        links::detect(&projection.frame)
-    };
-    let image_links = links
-        .iter()
-        .enumerate()
-        .filter_map(|(index, link)| {
-            media::classify(&link.url)
-                .ok()
-                .flatten()
-                .filter(|target| target.kind == media::Kind::Image)
-                .map(|_| index)
-        })
-        .collect();
-    Paint {
+    let mut paint = Paint {
+        replies: if view.site.ptt_features() {
+            filters::pushes(&view.frame)
+        } else {
+            Vec::new()
+        },
         article_mode: Default::default(),
         article: None,
         source_frame: None,
@@ -105,7 +96,7 @@ pub(super) fn paint(
             .map(|p| p.id.as_str())
             .collect::<Vec<_>>()
             .join("、"),
-        image_links,
+        image_links: Vec::new(),
         hover: None,
         keep_alive: view.keep_alive,
         keep_alive_ready: view.keep_alive_ready,
@@ -118,15 +109,47 @@ pub(super) fn paint(
         connected: view.phase == Phase::Connected,
         navigation: view.context(),
         settings: settings.clone(),
-        links,
+        links: Vec::new(),
         frame: projection.frame,
         generation: view.generation,
         probe,
+    };
+    refresh_links(&mut paint);
+    paint
+}
+
+pub(super) fn refresh_links(paint: &mut Paint) {
+    paint.links = if paint.output_pending {
+        Vec::new()
+    } else {
+        links::detect(&paint.frame)
+    };
+    paint.image_links = paint
+        .links
+        .iter()
+        .enumerate()
+        .filter_map(|(index, link)| {
+            media::classify(&link.url)
+                .ok()
+                .flatten()
+                .filter(|target| target.kind == media::Kind::Image)
+                .map(|_| index)
+        })
+        .collect();
+}
+
+pub(super) fn merge_replies(paint: &mut Paint, source_replies: &[filters::Push]) {
+    filters::merge_push_ids(&mut paint.frame, &paint.replies);
+    if let Some(source) = &mut paint.source_frame {
+        // A standalone page starts its own visible group; never hide its first ID.
+        filters::merge_push_ids(source, source_replies);
     }
+    refresh_links(paint);
 }
 
 pub(super) fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint {
     Paint {
+        replies: Vec::new(),
         article_mode: Default::default(),
         article: None,
         source_frame: None,

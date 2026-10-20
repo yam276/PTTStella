@@ -4,13 +4,25 @@
 
 ## 目標
 
-目前交付為 `dist/macos-account-policies/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：文章列表／推文支援內容遮蔽、整行塗黑與白名單 ID 改色，並包含先前文章模式、鍵盤捲動與箭頭游標修正。最新驗證見下方黑白名單分節；各歷史交付與人工驗收邊界保留於各節。原生正文滑鼠仍由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-merged-replies-final/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：新增連續同 ID 推文合併與貼上讀鎖修正，包含兩種黑名單、白名單 ID 改色及先前文章瀏覽功能。最新驗證見下方連續推文分節；各歷史交付與人工驗收邊界保留於各節。原生正文滑鼠仍由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 連續推文 ID 合併（2026-10-20）
+
+使用者要求相同 ID 連續推文只保留第一行 ID，後續行 ID 塗黑以增加一體性。只合併已辨識標準推文、忽略 ASCII 大小寫；不同 ID、空行、未知格式皆中斷，推／噓／箭頭、冒號、正文、時間與行列不改。黑白名單先套用，重複 ID 再塗黑；白名單僅組首 ID 標色。網頁快取已讀取的相鄰頁可接續，未讀間隔與新文章不猜測；終端機／單頁 PNG 以各頁為界保留第一筆 ID。Rust metadata 不序列化至 WebView；複製、PNG、連結共用呈現結果。
+
+core 13 commands／2 replays（filters 14 案例）、desktop lib 142／bin 87、全 targets Clippy、JS 166、fmt 與 docs 通過。新增獨立 expected 覆蓋同 ID／大小寫、不同 ID／空行／未知格式、黑白名單及揭露、ID 連結移除、快取跨頁／缺口／新段及來源 PNG 首筆 ID。兩項原有完整 frame expected 因重複 ID 的新呈現失敗，僅調整明確的五個 ID cells，重跑通過。
+
+macOS arm64 原生 Dioxus／WKWebView 自製 loopback 通過：首筆 Alice 保留，下一筆 ALICE 五個字元全黑，推噓符號／冒號／正文／時間維持。獨立 PNG 解碼核對 960×576 與精確遮罩；除重複 ID 與基準圖先前白名單的 Alice2 色彩之外，其餘像素完全相同。原生情境選單複製後 Cmd-V 預覽可讀到「→ █████:」，取消未送站端文字；Close acknowledged、所有 owner join、退出 0。交付與測試副本 15 份 Mach-O sections 一致，strict codesign 通過。跨頁接續與終端機模式本輪為 Rust 測試證據，未冒充原生跨頁驗收。
+
+首次原生 Cmd-V 卡住，process sample 定位到貼上路徑持有 watch read guard 時再次讀取，遇到等待中的 writer 會 deadlock；已將編碼讀取獨立成 statement 先釋放 guard，再準備貼上／核對當前狀態。保留失敗 sample，終止自有卡住程序後，以新 bundle 完整重跑 PNG／複製／預覽／取消／正常關閉通過。原生正文滑鼠、實站與 Windows／Linux UI 仍待各自驗收。
+
+證據在 `.local/verification/merged-replies/validation.json`；離線為 `checks`、`checks-finish`、`checks-paste-fix`，最終原生為 `native-final`，首次失敗為 `merged_replies`。建置走正常資源 guard；重跑腳本遇既有 evidence／bundle 路徑拒絕時改用新輸出位置，未覆蓋舊證據。
 
 ## 兩種黑名單與白名單 ID 標色（2026-10-20）
 

@@ -3,7 +3,6 @@
 use super::presentation::Paint;
 use pttstella::{
     connection::{Phase, View},
-    links, media,
     mouse::input::Route,
     navigation::Context,
     screen::{Frame, Glyph, hyperlinks::Hyperlink},
@@ -22,6 +21,7 @@ pub(super) struct Reading {
     pub end: bool,
 }
 struct Row {
+    reply: Option<pttstella::filters::Push>,
     glyphs: Vec<Glyph>,
     hyperlinks: Vec<Hyperlink>,
 }
@@ -286,7 +286,14 @@ impl ArticleCache {
                         })
                     })
                     .collect();
-                self.rows.insert(line, Row { glyphs, hyperlinks });
+                self.rows.insert(
+                    line,
+                    Row {
+                        glyphs,
+                        hyperlinks,
+                        reply: paint.replies.iter().find(|reply| reply.row == row).cloned(),
+                    },
+                );
             }
             if percent == 100 {
                 self.end = Some(last_line);
@@ -319,7 +326,12 @@ impl ArticleCache {
             hyperlinks: Vec::new(),
             ..source
         };
+        paint.replies.clear();
         for (row, data) in self.rows.values().enumerate() {
+            if let Some(mut reply) = data.reply.clone() {
+                reply.row = row;
+                paint.replies.push(reply);
+            }
             frame
                 .glyphs
                 .extend(data.glyphs.iter().cloned().map(|mut g| {
@@ -350,23 +362,6 @@ impl ArticleCache {
                 }),
         );
         frame.cursor = (0, frame.rows - 1);
-        paint.links = if paint.output_pending {
-            Vec::new()
-        } else {
-            links::detect(&frame)
-        };
-        paint.image_links = paint
-            .links
-            .iter()
-            .enumerate()
-            .filter_map(|(index, link)| {
-                media::classify(&link.url)
-                    .ok()
-                    .flatten()
-                    .filter(|t| t.kind == media::Kind::Image)
-                    .map(|_| index)
-            })
-            .collect();
         paint.article = Some(Reading {
             id: self.serial,
             first_line: first,
@@ -374,6 +369,7 @@ impl ArticleCache {
             end: self.end == Some(last),
         });
         paint.frame = frame;
+        super::presentation::refresh_links(paint);
     }
     fn link_bytes(&self) -> usize {
         self.rows

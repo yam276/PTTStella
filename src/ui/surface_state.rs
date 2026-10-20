@@ -121,9 +121,11 @@ impl SurfaceState {
         }
         let mut packet = paint(view, probe, settings, &self.filters);
         packet.article_mode = self.article_mode;
+        let source_replies = packet.replies.clone();
         if !self.raw_reading && self.article_mode == ArticleMode::Web {
             self.article.project(&mut packet);
         }
+        super::presentation::merge_replies(&mut packet, &source_replies);
         packet.hover = self
             .hover
             .as_ref()
@@ -355,7 +357,10 @@ impl SurfaceState {
         {
             self.selected = None;
         }
-        let filtered = self.filters.project(view.generation, &view.frame);
+        let mut filtered = self.filters.project(view.generation, &view.frame);
+        if view.site.ptt_features() {
+            filters::merge_push_ids(&mut filtered.frame, &filters::pushes(&view.frame));
+        }
         let revoked = self.hover.as_mut().is_some_and(|lease| {
             !lease.renew(
                 view.stamp(),
