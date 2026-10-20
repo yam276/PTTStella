@@ -452,7 +452,7 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
     if empty_list(rows, cursor, first_row, true) {
         return Some(Context::EmptyList);
     }
-    if !commands(rows, "進入") && !commands(rows, "閱讀") {
+    if !board_commands(rows, class_root) {
         return Some(unknown(UnknownReason::Unrecognized));
     }
     let mut items = Vec::new();
@@ -503,6 +503,53 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
             unknown(UnknownReason::InvalidCursor)
         },
     )
+}
+
+fn board_commands(rows: &[Row<'_>], class_root: bool) -> bool {
+    if commands(rows, "進入") || commands(rows, "閱讀") {
+        return true;
+    }
+    // Root browsers omit one arrow from their dynamic command bars. Admit
+    // only their own full action sets; ordinary lists still need both arrows.
+    let footer = compact(&rows[23].text);
+    if class_root {
+        return footer.starts_with("分類看板")
+            && rows[23].bar_text("分類看板")
+            && [
+                "(m)加入最愛",
+                "(v)已讀/未讀",
+                "(t)標記",
+                "(y)只列最愛",
+                "(←)回上層",
+            ]
+            .iter()
+            .all(|action| footer.contains(action));
+    }
+    let top = compact(&rows[1].text);
+    footer.starts_with("我的最愛")
+        && rows[23].bar_text("我的最愛")
+        && [
+            "(a)增加看板",
+            "(d)刪除",
+            "(g)新增目錄",
+            "(M)移動位置",
+            "(v)已讀/未讀",
+            "(h)說明",
+        ]
+        .iter()
+        .all(|action| footer.contains(action))
+        && [
+            "[y]列出全部",
+            "[→]進入",
+            "[s]找看板",
+            "[/]搜尋",
+            "[c]新文章",
+            "[S]排序",
+            "[PgUp]上頁",
+            "[PgDn]下頁",
+        ]
+        .iter()
+        .all(|action| top.contains(action))
 }
 
 // Mail and archive browsers share row navigation, while retaining distinct
