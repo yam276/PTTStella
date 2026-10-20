@@ -680,8 +680,9 @@ pub(super) async fn serve(
             return window(&mut socket).await;
         }
         if let Scenario::InlinePages {second} = scenario {
-            if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"\x1b[6~") {
-                return Err("cached reading probe expected exactly one PageDown".into());
+            let received=socket.next().await;
+            if !matches!(&received,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"\x1b[6~") {
+                return Err(format!("cached reading probe expected exactly one PageDown; received {received:?}"));
             }
             // A complete first redraw is followed by a fragmented second page.
             // Historical browsing must not send PageUp or refetch old images.
