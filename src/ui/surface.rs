@@ -524,6 +524,10 @@ async fn run(
                 if event.requires_ptt() && !receiver.borrow().site.ptt_features() {
                     event.discard();eval.send(Packet::Notice(pttstella::msg!("site-ptt-only"))).map_err(|e|e.to_string())?;continue;
                 }
+                if inline_images.active() && matches!(&event,
+                    SurfaceEvent::DestinationSubmit{..}|SurfaceEvent::SitesConnect{..}|SurfaceEvent::LoginSubmit{..}|SurfaceEvent::Paste{..}|SurfaceEvent::PasteConfirm{..}) {
+                    inline_images.close();eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
+                }
                 match event {
                     SurfaceEvent::StationMouse { event, .. } => {
                         if super::probe::mouse_case(surface_probe.as_deref()) && checks.mouse_edges.len()<16 {checks.mouse_edges.push(event.report);}
@@ -810,6 +814,9 @@ async fn run(
                                 connection.request_navigate(stamp, intent, source).map(|reply|reply.wait())
                             })
                         };
+                        if result.is_ok() && inline_images.navigation(&receiver.borrow().context(),intent) {
+                            eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
+                        }
                         if let Err(error) = result {
                             eval.send(Packet::NavigationResult(Feedback::new(NavigationStatus::Rejected,error)))
                                 .map_err(|e| e.to_string())?;
@@ -1102,7 +1109,7 @@ async fn run(
                             checks.copied_selection == Some((generation, revision, request));
                     }
                     SurfaceEvent::InlineExpand {presentation,stamp,key,trusted:_} => {
-                        if matches!(surface_probe.as_deref(),Some("inline"|"context_menu")) {checks.inline_requests+=1;}
+                        if matches!(surface_probe.as_deref(),Some("inline"|"inline_pages"|"context_menu")) {checks.inline_requests+=1;}
                         let view=receiver.borrow().clone();
                         if !view.site.ptt_features() || !keyboard_policy.inline_images_key(&key,&view.context())
                             || pending_paste.read().is_some() || commands.busy() || login_open {continue;}
@@ -1110,7 +1117,7 @@ async fn run(
                             // Synthetic probes must never reach a public image host.
                             if probe.is_some() && paint.image_links.iter().any(|index|media_origin.as_ref().is_none_or(|origin|!paint.links[*index].url.starts_with(&format!("{origin}/")))) {continue;}
                             if let Some(open)=inline_images.open(paint)? {
-                                if matches!(surface_probe.as_deref(),Some("inline"|"context_menu")) {checks.inline_expands+=1;}
+                                if matches!(surface_probe.as_deref(),Some("inline"|"inline_pages"|"context_menu")) {checks.inline_expands+=1;}
                                 eval.send(Packet::InlineOpen(open)).map_err(|e|e.to_string())?;
                             }
                         }
@@ -1141,6 +1148,9 @@ async fn run(
                                         connection.request_browse_key(view.stamp(), intent).map(|reply|reply.wait())
                                     })
                                 };
+                                if result.is_ok() && inline_images.navigation(&context,intent) {
+                                    eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
+                                }
                                 if let Err(error) = result {
                                     eval.send(Packet::Notice(error))
                                         .map_err(|e| e.to_string())?;
@@ -1149,6 +1159,9 @@ async fn run(
                             }
                             Effect::Native(bytes) => bytes,
                         };
+                        if inline_images.input(&context,&bytes) {
+                            eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
+                        }
                         if probe.is_some() {
                             let current = receiver.borrow().generation;
                             checks.arrow_checked |=
@@ -1193,6 +1206,9 @@ async fn run(
                         checks.composition_checked |= composition_input && text == "中";
                         let encoded = input::encode_with(&text,receiver.borrow().site.encoding).map_err(|e| e.to_string());
                         let result = encoded.and_then(|bytes| {
+                            if inline_images.input(&receiver.borrow().context(),&bytes) {
+                                eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
+                            }
                             if probe.is_some() && !vim_input {
                                 checks.input_bytes.push(bytes.clone());
                             }
@@ -1213,6 +1229,12 @@ async fn run(
                         generation,
                     } => {
                         screen.acknowledge(Identity{presentation,generation,revision})?;
+                        let view=receiver.borrow();
+                        if let Some(paint)=screen.inline_page(Identity{presentation,generation,revision},view.stamp(),&view)
+                            && (probe.is_none() || paint.image_links.iter().all(|index|media_origin.as_ref().is_some_and(|origin|paint.links[*index].url.starts_with(&format!("{origin}/")))))
+                            && let Some(open)=inline_images.follow(paint)? {
+                            eval.send(Packet::InlineOpen(open)).map_err(|e|e.to_string())?;
+                        }
                     }
                     SurfaceEvent::Error { message } => return Err(message),
                     SurfaceEvent::Probe(pixels) => {
@@ -1240,7 +1262,7 @@ async fn run(
                     media_preview.close();
                     eval.send(Packet::HoverReset{media:false}).map_err(|e|e.to_string())?;
                 }
-                if inline_images.invalidate(screen.inline_identity(&view)) {eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;}
+                if inline_images.observe(&view) {eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;}
                 if keyboard_generation!=view.generation || view.phase!=Phase::Connected {
                     if let Some((request,_))=destination_request.take() {
                         eval.send(Packet::DestinationResult {request,feedback:Feedback::new(DestinationStatus::Rejected,pttstella::msg!("command-stale"))}).map_err(|error|error.to_string())?;
@@ -1302,7 +1324,7 @@ async fn run(
                 || matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") && checks.mouse_samples_passed(&case) && receiver.borrow().mouse.active.is_none() && receiver.borrow().mouse.modes.tracking()==pttstella::mouse::Tracking::Highlight
                 || case=="pointer_rows" && checks.navigation_requests==7 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
                 || case=="account_lists" && checks.filter_edits>=3 && checks.context_copies>=1 && checks.export_checked
-                || matches!(case.as_str(),"inline"|"context_menu") && checks.inline_requests>=2 && checks.inline_expands==1 && checks.export_checked && (case!="context_menu"||checks.context_copies>=2)
+                || matches!(case.as_str(),"inline"|"inline_pages"|"context_menu") && checks.inline_requests>=2 && checks.inline_expands==1 && checks.export_checked && (case!="context_menu"||checks.context_copies>=2)
                 || case=="osc8" && checks.osc8_open_rows==[8,9] && checks.osc8_copy_rows==[8,9] && checks.osc8_dragged && checks.osc8_media_decoded>=2 && checks.export_checked
                 || case=="login_2fa" && checks.verification_required && checks.verification_rejected && checks.verification_browsing && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
                 || case=="fonts" && checks.font_catalog_reads>=2 && !checks.font_sources.is_empty() && checks.export_checked

@@ -702,6 +702,7 @@ function runSurfaceProbe(mode){
             else if(mode==="articles"||mode==="articles_close")surfaceNote.textContent="Article probe: enable Vim, open URL 00000101 and AID 00000102, fail 00000103 and recover manually, reject foreign URL and long draft, then cancel/close during 00000104";
             else if(mode==="boards_close")surfaceNote.textContent="Board close probe: visit Stella and Other, start Beta, then close while waiting";
             else if(mode==="boards")surfaceNote.textContent="Board probe: cancel a draft, visit Stella and Other, reject an invalid name, then start Beta and stop before the delayed board list";
+            else if(mode==="inline_pages")surfaceNote.textContent="Inline pages: press Enter twice, PageDown then PageUp, inspect retained images, export PNG and close. Peer accepts only those two page commands.";
             else if(mode==="inline"||mode==="context_menu")surfaceNote.textContent="Inline probe: press Enter twice, inspect inserted images and text, export PNG, then close. Peer rejects every station byte.";
             else if(mode==="osc8")surfaceNote.textContent="OSC 8 probe: both wrapped fragments share a complete destination; select/copy, drag and open local media";
             else if(mode==="login_2fa")surfaceNote.textContent="Verification probe: explicit synthetic login, six digits, then eight-character recovery; Esc returns to Vim";

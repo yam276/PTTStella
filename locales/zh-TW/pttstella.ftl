@@ -508,8 +508,8 @@ sites-help = 「連線切換」會先關閉目前連線；只有「儲存最愛�
 
 sites-remove = 移除最愛
 
-inline-image-budget = 此頁圖片已達容量上限；可點網址個別預覽。
-inline-image-limit = 每頁最多展開 8 張圖片；其他圖片可點網址預覽。
+inline-image-budget = 此篇文章圖片已達容量上限；可點網址個別預覽。
+inline-image-limit = 每頁最多展開 8 張、同篇文章最多保留 32 張；其他圖片可點網址預覽。
 
 context-title = 畫面操作
 context-copy = 複製選取文字

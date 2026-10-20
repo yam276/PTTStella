@@ -45,7 +45,7 @@ function ownerEnvironment(){
     const surface=element('div'),canvas=element('canvas');canvas.width=480;canvas.height=96;
     const ui=create({surface,canvas,tr:k=>k,redraw(){},changed(){}});
     const packet={presentation:3,generation:7,frame:{revision:4,rows:4}};
-    const open={batch:1,presentation:3,generation:7,revision:4,entries:[{index:0,row:0}]};
+    const open={batch:1,presentation:3,generation:7,revision:4,entries:[{index:0,row:0,key:0}]};
     return {ui,urls,nodes,canvas,surface,packet,open};
 }
 test('reset aborts a pending decoder, releases its URL and ignores late batch delivery',async()=>{
@@ -57,7 +57,7 @@ test('reset aborts a pending decoder, releases its URL and ignores late batch de
     e.ui.receive({batch:1,index:0,image:{}});assert.equal(e.ui.active(),false);
     assert.equal(await e.ui.destroy(),true);assert.equal(e.urls.size,0);
 });
-test('decoded stills survive repeated expansion and are released on a new revision',async()=>{
+test('decoded stills survive a page turn and remap to the current link index without decoding again',async()=>{
     const e=ownerEnvironment();e.ui.open(e.open,e.packet);
     e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:2,height:1}});
     await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img');
@@ -65,12 +65,17 @@ test('decoded stills survive repeated expansion and are released on a new revisi
     const still=e.nodes.find(n=>n.tag==='canvas'&&n!==e.canvas);assert.equal(still.width,2);assert.equal(e.urls.size,0);
     e.ui.open(e.open,e.packet);assert.equal(still.width,2);
     e.ui.layout({...e.packet,frame:{rows:4,revision:5}},{x:c=>c*12,y:r=>r*24},1);
-    assert.equal(e.ui.active(),false);assert.equal(still.width,0);assert.equal(e.canvas.style.visibility,'');
+    assert.equal(e.ui.active(),true);assert.equal(still.width,2);assert.equal(e.canvas.style.visibility,'');
+    const next={...e.packet,frame:{rows:4,revision:5}};
+    e.ui.open({...e.open,revision:5,entries:[{index:3,row:2,key:0}]},next);
+    e.ui.layout(next,{x:c=>c*12,y:r=>r*24},1);
+    assert.equal(still.width,2);assert.equal(e.nodes.filter(n=>n.tag==='img').length,1);
+    e.ui.reset();assert.equal(still.width,0);
     assert.equal(await e.ui.destroy(),true);
 });
 
 test('context hit testing uses inserted image boxes and drops stale indices on reset',async()=>{
-    const e=ownerEnvironment();e.ui.open({...e.open,entries:[{index:3,row:0}]},e.packet);
+    const e=ownerEnvironment();e.ui.open({...e.open,entries:[{index:3,row:0,key:0}]},e.packet);
     const box=e.nodes.find(n=>n.className==='inline-image');box.getBoundingClientRect=()=>({left:20,right:220,top:80,bottom:140});
     assert.equal(e.ui.linkAtPoint({clientX:100,clientY:100}),3);
     assert.equal(e.ui.linkAtPoint({clientX:220,clientY:100}),-1);

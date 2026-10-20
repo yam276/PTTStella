@@ -110,11 +110,11 @@ fn main() {
                 case @ ("decode" | "painted" | "send" | "renderer_error" | "untrusted" | "confirm"
                 | "slow" | "dialogs" | "tools" | "sites" | "sites_restart" | "files"
                 | "files_slow" | "fonts" | "sgr66" | "sgr66_legacy" | "login_2fa" | "osc8"
-                | "inline" | "context_menu" | "account_lists" | "pointer_rows" | "boards"
-                | "boards_close" | "recent" | "articles" | "articles_close" | "bookmarks"
-                | "bookmarks_restart" | "bookmarks_empty" | "bookmarks_corrupt" | "mouse"
-                | "mouse_boundary" | "mouse_drag" | "mouse_round_trip" | "mouse_motion"
-                | "mouse_wheel"),
+                | "inline" | "inline_pages" | "context_menu" | "account_lists"
+                | "pointer_rows" | "boards" | "boards_close" | "recent" | "articles"
+                | "articles_close" | "bookmarks" | "bookmarks_restart" | "bookmarks_empty"
+                | "bookmarks_corrupt" | "mouse" | "mouse_boundary" | "mouse_drag"
+                | "mouse_round_trip" | "mouse_motion" | "mouse_wheel"),
             ) => Some(case.to_owned()),
             _ => {
                 eprintln!(

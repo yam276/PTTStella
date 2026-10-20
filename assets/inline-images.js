@@ -23,31 +23,34 @@ function inlineShortcut(key, state, packet) {
 }
 function installInlineImages({surface,canvas,tr,redraw,changed,notice}) {
     const layer=document.createElement("div");layer.id="inline-images";surface.insertBefore(layer,canvas.nextSibling);
-    let current=null,items=[],strips=[],dead=false;const jobs=new Set();
+    let current=null,items=[],visible=[],strips=[],dead=false;const jobs=new Set();
+    function detach(){for(const strip of strips){strip.width=0;strip.height=0;}strips=[];visible=[];layer.replaceChildren();canvas.style.visibility="";}
     function clear() {
         current=null;
         for(const item of items){item.controller?.abort();item.image?.removeAttribute("src");if(item.url)URL.revokeObjectURL(item.url);if(item.still){item.still.width=0;item.still.height=0;}}
-        for(const strip of strips){strip.width=0;strip.height=0;}
-        items=[];strips=[];layer.replaceChildren();canvas.style.visibility="";
+        items=[];detach();
     }
     function reset(){if(!current)return;clear();redraw();changed();}
     function matches(packet){return current&&current.presentation===packet.presentation&&current.generation===packet.generation&&current.revision===packet.frame.revision;}
     function open(packet,latest) {
         if(dead||packet.presentation!==latest?.presentation||packet.generation!==latest.generation||packet.revision!==latest.frame.revision)return;
-        if(current?.batch===packet.batch)return;
-        clear();current=packet;
-        items=packet.entries.map(entry=>{
+        if(current?.batch===packet.batch&&matches(latest))return;
+        if(current?.batch!==packet.batch)clear();else detach();
+        current=packet;
+        visible=packet.entries.map(entry=>{
+            const cached=items.find(item=>item.key===entry.key);
+            if(cached){Object.assign(cached,entry);layer.append(cached.box);return cached;}
             const box=document.createElement("div"),note=document.createElement("div");box.className="inline-image";note.className="inline-image-note";
             note.textContent=tr("image-loading");box.append(note);layer.append(box);
-            return {...entry,box,note,still:null};
+            const item={...entry,box,note,still:null};items.push(item);return item;
         });
         if(packet.limited)notice?.(tr("inline-image-limit"));
         redraw();changed();
     }
-    function fail(packet){if(current?.batch!==packet.batch)return;const item=items.find(i=>i.index===packet.index);if(item){item.note.textContent=packet.message;item.box.dataset.state="failed";redraw();}}
+    function fail(packet){if(current?.batch!==packet.batch)return;const item=items.find(i=>i.key===packet.index);if(item){item.note.textContent=packet.message;item.box.dataset.state="failed";redraw();}}
     function receive(packet) {
         if(dead||current?.batch!==packet.batch)return;
-        const item=items.find(i=>i.index===packet.index);if(!item||item.controller)return;
+        const item=items.find(i=>i.key===packet.index);if(!item||item.controller)return;
         const controller=new AbortController();item.controller=controller;
         const data=packet.image;
         const job=(async()=>{
@@ -76,9 +79,9 @@ function installInlineImages({surface,canvas,tr,redraw,changed,notice}) {
     }
     function layout(packet,base,ratio) {
         const bottom=row=>base.y(row+1);
-        if(!matches(packet)){if(current)clear();return {...base,bottom};}
+        if(!matches(packet)){if(current)detach();return {...base,bottom};}
         const gaps=new Map(),width=canvas.width/ratio;
-        for(const item of items){
+        for(const item of visible){
             const scale=item.still?Math.min(1,(width-24)/item.still.width,560/item.still.height):1;
             item.height=item.still?Math.max(1,item.still.height*scale)+24:48;
             if(item.still){item.still.style.width=Math.max(1,item.still.width*scale)+"px";item.still.style.height=Math.max(1,item.still.height*scale)+"px";}
@@ -93,13 +96,13 @@ function installInlineImages({surface,canvas,tr,redraw,changed,notice}) {
             Object.assign(strip.style,{top:mapping.y(row)/ratio+"px",width:width+"px",height:height/ratio+"px"});
         }
         const used=new Map();
-        for(const item of items){const offset=used.get(item.row)||0;Object.assign(item.box.style,{top:(mapping.bottom(item.row)/ratio+offset)+"px",width:width+"px",height:item.height+"px"});used.set(item.row,offset+item.height);}
+        for(const item of visible){const offset=used.get(item.row)||0;Object.assign(item.box.style,{top:(mapping.bottom(item.row)/ratio+offset)+"px",width:width+"px",height:item.height+"px"});used.set(item.row,offset+item.height);}
         surface.style.height=mapping.height/ratio+"px";
         return {...base,...mapping};
     }
     function linkAtPoint(event){
         if(!current||dead)return -1;
-        const item=items.find(item=>{const r=item.box.getBoundingClientRect();return event.clientX>=r.left&&event.clientX<r.right&&event.clientY>=r.top&&event.clientY<r.bottom;});
+        const item=visible.find(item=>{const r=item.box.getBoundingClientRect();return event.clientX>=r.left&&event.clientX<r.right&&event.clientY>=r.top&&event.clientY<r.bottom;});
         return item?.index??-1;
     }
     return {open,receive,fail,reset,layout,linkAtPoint,active:()=>!!current,
