@@ -1054,7 +1054,11 @@ async fn run(
                         generation,
                         trusted: _,
                     } => {
-                        let result = input::prepare_paste_with(&text,receiver.borrow().site.encoding)
+                        // Release the watch read lock before the result closure
+                        // reads state again; a waiting writer makes nested reads
+                        // deadlock on platforms with writer-preferring locks.
+                        let encoding = receiver.borrow().site.encoding;
+                        let result = input::prepare_paste_with(&text,encoding)
                             .map_err(|e| e.to_string())
                             .and_then(|prepared| {
                                 let current = receiver.borrow();
