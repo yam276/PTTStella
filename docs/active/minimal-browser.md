@@ -853,3 +853,9 @@ macOS arm64 release 的 short_reading 本機合成原生案例以三行內容、
 core 13 命令／2 replay、desktop lib 142 項、bin 85 項、全 targets Clippy、JS 165 項、fmt 與 docs 通過。macOS arm64 實際 WebView 驗證：一般英文 j 在邊界取得一頁，之後 j／k、上下方向鍵、Home／End 往返；中文輸入法下 Vim 3j／3k、Ctrl+D／U，展圖後 j／k 往返。每組回程的 BBS 內容區像素相同，英文 j 與向下方向鍵的畫面一致；peer 僅收到一次精確 PageDown，三個圖片網址各一次 HTTP GET，PNG 960×576、Close acknowledged、全部 owner join、exit 0。
 
 前兩次原生新版本測試仍使用中文輸入法，j 產生注音而被嚴格 peer 拒絕，保留失敗記錄；後續先在本機設定搜尋欄確認英文輸入，再驗一般模式，切回中文驗 Vim，沒有放寬 peer。合成閱讀 probe 的失敗訊息增加收到的訊息診斷；只在明確啟動的本機 probe 使用。證據在 `.local/verification/reading-keys/`，交付 `dist/macos-reading-keys-r2/PTTStella.app` 與測試副本的 15 個可載入 sections 一致，strict ad-hoc 簽章通過。本輪正常資源 harness 通過，不需額度例外；Windows／Linux 原生及實站仍待驗收。
+
+2026-10-20 依使用者要求調整滑鼠提示：文章可見正文上／下半部使用向上／向下的金色箭頭游標，與返回箭頭共用深色外緣；返回 hover 只留下向左箭頭，刪除左緣框線、底色及其繪製分支。列表／選單的完整列光棒保留；網址、拖曳、Shift、站端滑鼠及拒絕情境沿用原命中與准入，沒有改動實際導覽命令。
+
+core 13 命令／2 replay、desktop lib 142 項、bin 85 項、全 targets Clippy、JS 165 項、fmt 與 docs 通過；既有生產 hover handler 回歸改驗上／下／返回游標分流、返回不繪製 marker，列表全寬光棒仍成立。三份 SVG 游標及 hotspot 已檢查。macOS arm64 release 的 short_reading 原生啟動、PNG 與關閉 smoke 通過，960×576 PNG 與上輪相同 fixture 的全部像素一致，零站端輸入、Close acknowledged、全部 owner join、exit 0；這不代表已原生驗收游標 hover。
+
+交付 `dist/macos-reading-cursors/PTTStella.app`，與原生 smoke 副本的 15 個可載入 sections 相同並通過 strict ad-hoc 簽章；證據在 `.local/verification/reading-cursors/`。標準 harness 因共用磁碟預留額度拒絕後，沿用使用者已授權的單次 aggregate budget 例外，保留其他磁碟／lease 檢查。原生箭頭外觀與滑鼠操作留待使用者人工驗收；Windows／Linux 原生未執行。

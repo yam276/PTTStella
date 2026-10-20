@@ -100,11 +100,16 @@ test('pending output, modal, remote mouse, untrusted events and image gaps canno
     const f=fixture();f.tap(40,380,{isTrusted:false});assert.equal(f.viewport.scrollTop,0);assert.deepEqual(f.sent,[]);
 });
 
-test('cached Back hover decorates only one visible gutter column and never covers text',()=>{
-    const f=fixture();f.viewport.scrollTop=960;f.surface.dataset.pointerAction='back';f.navigationMarker={style:{},dataset:{}};f.hoveredRow=null;
-    vm.runInContext(source.slice(source.indexOf('function drawNavigationMarker('),source.indexOf('function refreshNavigation(')),f);
-    f.drawNavigationMarker();assert.equal(f.navigationMarker.hidden,false);
-    assert.equal(f.navigationMarker.style.width,'12px');assert.equal(f.navigationMarker.style.top,'960px');assert.equal(f.navigationMarker.style.height,'480px');
+test('reading hover chooses directional cursors without drawing a frame over text',()=>{
+    const f=fixture();f.navigationMarker={style:{},dataset:{}};f.surface.style={};
+    f.hoveredLink=-1;f.pointerClient=null;f.previewHover=()=>{};f.draw=()=>{};f.tr=key=>key;
+    vm.runInContext(source.slice(source.indexOf('function setHover('),source.indexOf('function refreshNavigation(')),f);
+    for(const [point,action] of [[{row:3,col:40},'previous_page'],[{row:18,col:40},'next_page'],[{row:3,col:0},'back']]){
+        f.setHover(point,false,false);
+        assert.equal(f.surface.dataset.pointerAction,action);
+        assert.equal(f.surface.style.cursor,'');
+        assert.equal(f.navigationMarker.hidden,true);
+    }
 });
 
 // A pause owns the whole grid, including links and the usual Back gutter.

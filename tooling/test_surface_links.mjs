@@ -154,14 +154,14 @@ test("the left edge sends the existing back intent once and refuses a stale gest
     context.released={hit:{kind:"back"},stamp:{revision:3}};click({button:0,detail:1,isTrusted:true});assert.equal(calls.length,1);
 });
 
-test("hover keeps full-row width while Back only decorates the gutter and skips headers",()=>{
+test("hover keeps full-row width while Back hides the row marker",()=>{
     const context={surface:{dataset:{}},navigationMarker:{style:{},dataset:{}},hoveredRow:{row:4,start:0,kind:"article"},
         latest:{frame:{cols:80},navigation:{kind:"article_list",articles:[{row:3}]}},grid:{ratio:2,x:x=>x*24,y:y=>y*48,bottom:y=>(y+1)*48},canNavigate:()=>true};
     const draw=handler("drawNavigationMarker","refreshNavigation",context);draw();
     assert.equal(context.navigationMarker.style.left,"0px");assert.equal(context.navigationMarker.style.width,"960px");
     assert.equal(context.navigationMarker.style.height,"24px");
     context.hoveredRow=null;context.surface.dataset.pointerAction="back";draw();
-    assert.equal(context.navigationMarker.style.width,"12px");assert.equal(context.navigationMarker.style.height,"480px");
+    assert.equal(context.navigationMarker.hidden,true);
     context.canNavigate=()=>false;draw();assert.equal(context.navigationMarker.hidden,true);
     const css=readFileSync(new URL("../assets/app.css",import.meta.url),"utf8");
     assert.match(css,/@media \(prefers-reduced-motion: reduce\) \{ #navigation-marker \{ animation: none/);

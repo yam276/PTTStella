@@ -48,8 +48,9 @@ main { height: 100vh; position: relative; }
     border: 1px solid #efd494; border-left-width: 3px; border-right-width: 3px; border-radius: 3px;
     background: rgba(82,132,210,.28); box-shadow: inset 0 0 0 1px #e7c46a26;
     animation: navigation-breathe 2.4s ease-in-out infinite; }
-#navigation-marker[data-kind="back"] { border-right: 2px solid #d9b86c; background: rgba(217,184,108,.18); }
 #surface[data-pointer-action="back"] { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M14 6 4 16l10 10M5 16h23' fill='none' stroke='%2308142a' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M14 6 4 16l10 10M5 16h23' fill='none' stroke='%23efd494' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 4 16, w-resize; }
+#surface[data-pointer-action="previous_page"] { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M6 14 16 4l10 10M16 5v23' fill='none' stroke='%2308142a' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M6 14 16 4l10 10M16 5v23' fill='none' stroke='%23efd494' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 16 4, n-resize; }
+#surface[data-pointer-action="next_page"] { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M6 18 16 28l10-10M16 27V4' fill='none' stroke='%2308142a' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M6 18 16 28l10-10M16 27V4' fill='none' stroke='%23efd494' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 16 28, s-resize; }
 @keyframes navigation-breathe { 0%, 100% { opacity: .8; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { #navigation-marker { animation: none; opacity: 1; } }
 button { flex-shrink: 0; border: 1px solid var(--ui-border); background: var(--ui-control); color: var(--ui-text); padding: 6px 10px; border-radius: 7px; cursor: pointer; font: inherit; }

@@ -389,21 +389,18 @@ function setHover(point,redraw=true,preview=true) {
     const hit=hitAt(point,pointerClient?.clientY),index=hit?.kind==="link"?hit.index:-1;
     const changed=index!==hoveredLink;hoveredLink=index;
     hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:0,kind:hit.kind}:null;
-    surface.dataset.pointerAction=hit?.kind||"none";
-    surface.style.cursor=hit?.kind==="back"?"":hit?"pointer":"default";
+    surface.dataset.pointerAction=hit?.kind==="page"?hit.action:hit?.kind||"none";
+    surface.style.cursor=["back","page"].includes(hit?.kind)?"":hit?"pointer":"default";
     surface.title=hit?.kind==="continue"?tr("pointer-continue-hint"):hit?.kind==="back"?tr("pointer-back-hint"):hit?.kind==="page"?tr(hit.action==="previous_page"?"pointer-page-up-hint":"pointer-page-down-hint"):index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredRow?tr(hit.kind==="menu"?"menu-open-hint":"article-open-hint"):"";
     if(preview)previewHover(index);
     if(changed&&redraw&&latest) draw(latest);else drawNavigationMarker();
 }
 function drawNavigationMarker() {
-    const back=surface.dataset.pointerAction==="back";
-    navigationMarker.hidden=(!hoveredRow&&!back)||!grid||!canNavigate();
+    navigationMarker.hidden=!hoveredRow||!grid||!canNavigate();
     if(navigationMarker.hidden) {delete navigationMarker.dataset.row;return;}
-    const region=back?navigationBackRegion(latest.navigation,latest.article):null;
-    const {row,start,end}=back?{row:region.first,start:0,end:1}:{row:hoveredRow.row,start:hoveredRow.start,end:latest.frame.cols};
-    const top=back&&latest.article?Math.max(grid.y(row)/grid.ratio,viewport.scrollTop-surface.offsetTop):grid.y(row)/grid.ratio;
-    const bottom=back&&latest.article?Math.min(grid.y(region.last)/grid.ratio,viewport.scrollTop-surface.offsetTop+viewport.clientHeight):back?grid.y(region.last)/grid.ratio:grid.bottom(row)/grid.ratio;
-    navigationMarker.dataset.kind=back?"back":hoveredRow.kind;navigationMarker.dataset.row=String(row);
+    const {row,start}=hoveredRow,end=latest.frame.cols;
+    const top=grid.y(row)/grid.ratio,bottom=grid.bottom(row)/grid.ratio;
+    navigationMarker.dataset.kind=hoveredRow.kind;navigationMarker.dataset.row=String(row);
     Object.assign(navigationMarker.style,{left:grid.x(start)/grid.ratio+"px",top:top+"px",
         width:(grid.x(end)-grid.x(start))/grid.ratio+"px",height:Math.max(0,bottom-top)+"px"});
 }
