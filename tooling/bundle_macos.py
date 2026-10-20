@@ -13,6 +13,8 @@ import sys
 import tempfile
 import tomllib
 
+import bundle_common
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -22,29 +24,7 @@ def run(*command):
 
 
 def build():
-    executable = None
-    command = ['cargo', 'build', '--locked', '--release', '--features', 'desktop',
-               '--bin', 'pttstella', '--message-format=json-render-diagnostics']
-    # Cargo reports the actual executable path, including a guard's managed target.
-    # Keep stderr attached so long builds show progress and compiler diagnostics.
-    with subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE, text=True) as child:
-        try:
-            for line in child.stdout:
-                message = json.loads(line)
-                if (message.get('reason') == 'compiler-artifact'
-                        and message.get('target', {}).get('name') == 'pttstella'
-                        and 'bin' in message.get('target', {}).get('kind', [])
-                        and message.get('executable')):
-                    executable = Path(message['executable'])
-            if child.wait() != 0:
-                raise RuntimeError('Cargo build failed; no app was produced')
-        except BaseException:
-            if child.poll() is None:
-                child.terminate()
-            raise
-    if executable is None or not executable.is_file():
-        raise RuntimeError('Cargo did not report the pttstella executable')
-    return executable
+    return bundle_common.build()
 
 
 def check_dependencies(executable):

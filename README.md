@@ -43,6 +43,7 @@ Rust 核心與 renderer 實作固定格線、ANSI 色彩、雙色字與 ASCII Ar
 
 ## 開發入口
 
+- 日常開發使用 `develop`；版本發佈才以 Release PR 合併至 `main`，自動測試並產生 Windows／macOS／Linux 下載至 GitHub Releases。步驟、簽章與分支保護限制見 [自動發佈](docs/releases.md)。
 - [工作規則](AGENTS.md)
 - [驗證命令](CONTRIBUTING.md)
 - [最簡 terminal 計畫](docs/active/minimal-browser.md)

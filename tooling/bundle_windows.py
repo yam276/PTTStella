@@ -14,6 +14,8 @@ import tempfile
 import tomllib
 import zipfile
 
+import bundle_common
+
 ROOT = Path(__file__).resolve().parent.parent
 TARGET = 'x86_64-pc-windows-msvc'
 SYSTEM_DLLS = frozenset('advapi32 bcrypt bcryptprimitives combase comctl32 comdlg32 crypt32 '
@@ -111,27 +113,7 @@ def verify_icon(executable):
 
 
 def build():
-    command = ['cargo', 'build', '--locked', '--release', '--target', TARGET,
-               '--features', 'desktop', '--bin', 'pttstella', '--message-format=json-render-diagnostics']
-    executable = None
-    with subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE, text=True, encoding='utf-8') as child:
-        try:
-            for line in child.stdout:
-                message = json.loads(line)
-                if (message.get('reason') == 'compiler-artifact'
-                        and message.get('target', {}).get('name') == 'pttstella'
-                        and message.get('executable')):
-                    executable = Path(message['executable'])
-            if child.wait() != 0:
-                raise RuntimeError('Release build failed; no ZIP was produced')
-        except BaseException:
-            if child.poll() is None:
-                child.terminate()
-                child.wait()
-            raise
-    if executable is None or not executable.is_file():
-        raise RuntimeError('Cargo did not report a release executable')
-    return executable
+    return bundle_common.build(TARGET)
 
 
 def find_crt(names, explicit=None):
@@ -147,28 +129,7 @@ def find_crt(names, explicit=None):
 
 
 def copy_licenses(destination):
-    destination.mkdir()
-    for name in ('NOTICE.txt', 'Cascadia-OFL.txt', 'NotoSansCJK-OFL.txt'):
-        shutil.copy2(ROOT/'assets/fonts'/name, destination/name)
-    shutil.copy2(ROOT/'assets/vendor/fluent/LICENSE', destination/'fluent-Apache-2.0.txt')
-    result = subprocess.run(['cargo', 'metadata', '--locked', '--format-version=1',
-                             '--filter-platform', TARGET, '--features', 'desktop'],
-                            cwd=ROOT, capture_output=True, check=True, encoding='utf-8')
-    inventory = []
-    for package in json.loads(result.stdout)['packages']:
-        if not package.get('source'):
-            continue
-        source = Path(package['manifest_path']).parent
-        label = package['name']+'-'+package['version']
-        files = {p for pattern in ('LICENSE*', 'LICENCE*', 'COPYING*', 'NOTICE*')
-                 for p in source.glob(pattern) if p.is_file()}
-        if package.get('license_file'):
-            files.add(source/package['license_file'])
-        for file in sorted(files):
-            (destination/label).mkdir(exist_ok=True)
-            shutil.copy2(file, destination/label/file.name)
-        inventory.append({key: package.get(key) for key in ('name', 'version', 'license', 'repository', 'source')})
-    (destination/'rust-dependencies.json').write_text(json.dumps(inventory, indent=2)+'\n', encoding='utf-8')
+    bundle_common.copy_licenses(destination, TARGET)
 
 
 def publish_zip(staging, output, name):

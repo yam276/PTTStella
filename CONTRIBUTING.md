@@ -4,6 +4,8 @@
 
 ## 當前 gate
 
+日常功能以 `develop` 為 base；`main` 只接受遞增版本的 Release PR。工作流程、人工驗收邊界與目前 GitHub 方案的分支保護限制見 [自動發佈](docs/releases.md)。發佈 tooling 變更須跑 `python -m unittest discover -s tooling -p 'test_*.py'`、docs、`actionlint .github/workflows/*.yml`，並手動執行 workflow 的 verify 模式，核對各平台實際建置；不能以一台機器的測試代替其他 runner。
+
 需要 Python 3.11+；Git 用於提交與歷史檢查。RTK 是個人 shell 包裝，產品與 gate 不依賴它。
 
 ```text
