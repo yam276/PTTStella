@@ -62,6 +62,70 @@ async fn pointer_menu_favorites_pages_and_row_open_share_the_production_sender()
 }
 
 #[tokio::test]
+async fn nested_menu_pointer_open_and_back_use_the_same_revalidated_sender() {
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    let mut bytes = navigation_page("main_menu");
+    bytes.extend_from_slice(&crate::encoding::encode("\x1b[1;1H\x1b[2K\x1b[37;44m個人設定區\x1b[24;1H\x1b[2K\x1b[30;47m個人設定 (h)說明 (←)回上層\x1b[0m\x1b[14;22H").unwrap());
+    ws.send(Message::Binary(bytes.clone().into()))
+        .await
+        .unwrap();
+    let view = wait(&connection, |v| {
+        v.context().kind() == "system_menu" && !v.input_pending
+    })
+    .await;
+    let open = connection
+        .request_navigate(
+            view.stamp(),
+            navigation::Intent::Open { row: 14 },
+            navigation::Source::Pointer,
+        )
+        .unwrap();
+    open.wait().await.unwrap();
+    assert!(
+        matches!(ws.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"\x1b[B\r")
+    );
+    ws.send(Message::Binary(bytes.into())).await.unwrap();
+    let view = wait(&connection, |v| {
+        v.frame.revision > view.frame.revision && !v.input_pending
+    })
+    .await;
+    connection
+        .navigate(view.stamp(), navigation::Intent::Back)
+        .await
+        .unwrap();
+    assert!(
+        matches!(ws.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"\x1b[D")
+    );
+    ws.send(Message::Binary(
+        b"\x1b[2J\x1b[HConfirm? [Y/n]".to_vec().into(),
+    ))
+    .await
+    .unwrap();
+    let view = wait(&connection, |v| {
+        v.context().kind() == "unknown" && !v.input_pending
+    })
+    .await;
+    assert!(
+        connection
+            .navigate(view.stamp(), navigation::Intent::Open { row: 14 })
+            .await
+            .is_err()
+    );
+    let peer = tokio::spawn(async move {
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+        ws.flush().await.unwrap();
+    });
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+    peer.await.unwrap();
+}
+
+#[tokio::test]
 async fn synchronized_output_retains_complete_frames_but_accepts_raw_input_and_ping() {
     let (listener, connection) = idle_local().await;
     connection.connect().unwrap();

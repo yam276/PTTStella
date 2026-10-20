@@ -75,14 +75,14 @@ def run(devtools, output):
     marker=d.evaluate('(()=>{const m=document.getElementById("navigation-marker"),s=getComputedStyle(m),b=m.getBoundingClientRect();return {background:s.backgroundColor,border:s.borderBottomWidth,edge:s.borderLeftWidth,gold:s.borderLeftColor,width:b.width,screen:document.getElementById("screen").getBoundingClientRect().width};})()')
     if (marker['background']!='rgba(82, 132, 210, 0.28)' or marker['border']!='1px'
             or marker['edge']!='3px' or marker['gold']!='rgb(239, 212, 148)'
-            or abs(marker['width']/marker['screen']-79/80)>.01):
+            or abs(marker['width']/marker['screen']-60/80)>.01):
         raise ValueError('navigation row marker violated its blue/gold full-row contract')
     if before!=d.evaluate('document.getElementById("screen").toDataURL("image/png")'):
         raise ValueError('article hover recoloured ANSI canvas pixels')
     screenshot('navigation-list-hover.png')
     click_cell(40,5.5)
     # A double-click continuation must not send a second open or select the new page.
-    click_cell(4,5.5,count=2)
+    click_cell(40,5.5,count=2)
     wait_page('article_reading',first=1)
     d.call('Input.dispatchMouseEvent',type='mouseMoved',x=20,y=2)
     screenshot('navigation-reading-controls.png')

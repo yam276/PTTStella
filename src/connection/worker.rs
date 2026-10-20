@@ -755,6 +755,7 @@ impl Session {
         let list = matches!(
             context,
             Context::MainMenu { .. }
+                | Context::SystemMenu { .. }
                 | Context::BoardList { .. }
                 | Context::ArticleList { .. }
                 | Context::CommandHelp { .. }

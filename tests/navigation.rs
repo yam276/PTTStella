@@ -78,6 +78,80 @@ fn menu_and_favorite_pointer_targets_use_verified_rows_and_exact_relative_input(
     );
 }
 
+#[test]
+fn nested_system_menus_and_plain_descriptions_use_verified_rows() {
+    for (title, status) in [
+        ("私人信件區", "電子郵件"),
+        ("個人設定區", "個人設定"),
+        ("休閒聊天區", "聊天說話"),
+        ("系統資訊區", "工具程式"),
+        ("編特別名單", "名單編輯"),
+    ] {
+        let mut screen = fixture("main_menu");
+        replace(&mut screen, 0, title, "37;44");
+        replace(
+            &mut screen,
+            23,
+            &format!("{status} (h)說明 (←)回上層"),
+            "30;47",
+        );
+        replace(
+            &mut screen,
+            14,
+            "                      (U)pdate       自製選項",
+            "0",
+        );
+        screen.feed(b"\x1b[14;22H");
+        let context = navigation::analyze(&screen.frame());
+        assert_eq!(
+            context,
+            Context::SystemMenu {
+                first_row: 12,
+                last_row: 15,
+                cursor_row: 13
+            }
+        );
+        assert_eq!(
+            navigation::plan(&context, Intent::Open { row: 14 }).unwrap(),
+            b"\x1b[B\r"
+        );
+        assert_eq!(navigation::plan(&context, Intent::Back).unwrap(), b"\x1b[D");
+        assert!(!context.allows_keepalive());
+        replace(&mut screen, 23, "是否確定？[Y/n]", "30;47");
+        screen.feed(b"\x1b[14;22H");
+        unknown(&screen.frame());
+    }
+    let mut root = fixture("main_menu");
+    replace(
+        &mut root,
+        15,
+        "                      (G)oodbye     自製離開選項",
+        "0",
+    );
+    root.feed(b"\x1b[14;22H");
+    assert!(matches!(
+        navigation::analyze(&root.frame()),
+        Context::MainMenu { last_row: 15, .. }
+    ));
+}
+
+#[test]
+fn favorite_description_glyphs_do_not_decide_navigation_but_names_and_pointer_do() {
+    let mut screen = fixture("favorites");
+    screen.feed(b"\x1b[4;40H\x81 \x1b[5;2H");
+    assert!(screen.frame().glyphs.iter().any(|glyph| glyph.unmapped));
+    assert!(matches!(
+        navigation::analyze(&screen.frame()),
+        Context::BoardList {
+            first_row: 3,
+            last_row: 5,
+            cursor_row: 4
+        }
+    ));
+    screen.feed(b"\x1b[4;11H\x81 \x1b[5;2H");
+    unknown(&screen.frame());
+}
+
 fn switch_scene(name: &str) -> Vec<u8> {
     let data: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/board-switch.json")).unwrap();
