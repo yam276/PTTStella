@@ -17,6 +17,7 @@ use tokio::sync::watch;
 #[derive(Clone, PartialEq, Props)]
 pub struct AppProps {
     pub probe: Option<PathBuf>,
+    pub debug_port: Option<u16>,
     pub window_probe: bool,
     pub login_probe: bool,
     pub filters_probe: bool,
@@ -36,6 +37,7 @@ pub fn app(props: AppProps) -> Element {
                 .encode(include_bytes!("../../assets/icons/constellation-flat.svg"))
         )
     });
+    let debug_port = props.debug_port;
     let probing = props.probe.is_some();
     let window_probe = props.window_probe;
     let login_probe = props.login_probe;
@@ -148,6 +150,7 @@ pub fn app(props: AppProps) -> Element {
         .map(|p| p.prepared.text.clone())
         .unwrap_or_default();
     let closing = use_hook(|| watch::channel(false));
+    let settings_requests = use_hook(|| watch::channel(0u64));
     let close_sender = closing.0.clone();
     dioxus::desktop::use_wry_event_handler(move |event, _| {
         let close_requested = matches!(
@@ -164,12 +167,19 @@ pub fn app(props: AppProps) -> Element {
     #[cfg(target_os = "macos")]
     {
         let close_sender = closing.0.clone();
+        let main_window = std::rc::Rc::downgrade(&dioxus::desktop::window());
+        let settings_sender = settings_requests.0.clone();
         dioxus::desktop::use_muda_event_handler(move |event| {
+            if event.id().0 == crate::macos::SETTINGS {
+                settings_sender.send_modify(|value| *value = value.wrapping_add(1));
+            }
             if event.id().0 == crate::macos::QUIT {
                 if fatal() {
                     // The common cleanup already joined every owner before
                     // entering this state, so no surface loop remains to wake.
-                    dioxus::desktop::window().close();
+                    if let Some(window) = main_window.upgrade() {
+                        window.close();
+                    }
                 } else {
                     close_sender.send_replace(true);
                 }
@@ -216,7 +226,7 @@ pub fn app(props: AppProps) -> Element {
                 span { id: "zoom-level", "100%" }
                 button { id: "zoom-in", "aria-label": pttstella::msg!("zoom-in"), "＋" }
                 button { id: "zoom-fit", {pttstella::msg!("zoom-fit")} }
-                button { id: "font-settings", {pttstella::msg!("font-settings")} }
+                button { id: "font-settings", class:"settings-entry", BrandSettingsCaption{} }
                 }
                 section { "data-tools-group": "capture",
                 button { id: "select-all", {pttstella::msg!("select-all")} }
@@ -270,8 +280,9 @@ pub fn app(props: AppProps) -> Element {
                         started.set(true);
                         let connection = connection.clone(); let probe = probe.clone(); let closing = closing.1.clone(); let media_origin = media_origin.clone();
                         let surface_probe = surface_probe.clone();
+                        let settings_requests = settings_requests.1.clone();
                         spawn(async move {
-                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, Options { reload_settings, media_origin, window_probe, login_probe, filters_probe, surface_probe:surface_probe.clone() }).await;
+                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, Options { debug_port, settings_requests, reload_settings, media_origin, window_probe, login_probe, filters_probe, surface_probe:surface_probe.clone() }).await;
                             if let Err(error) = result {
                                 fatal.set(true);
                                 message.set(pttstella::msg!("fatal-reopen", error = error));
@@ -410,149 +421,7 @@ pub fn app(props: AppProps) -> Element {
                     button {id:"site-connect",class:"primary",SettingsCaption {label:pttstella::msg!("sites-connect"),icon:rsx!{Plug{size:18}}} }
                 }
             }
-            dialog { id: "font-dialog", class: "paste-preview font-dialog", "aria-labelledby": "font-title",
-                h2 { id: "font-title", {pttstella::msg!("settings-title")} }
-                section { class: "settings-section",
-                    label {
-                        SettingsCaption { label: pttstella::msg!("language-label"), icon: rsx! { Languages { size: 18 } } }
-                        select { id: "interface-language", "aria-describedby": "settings-language-help",
-                            option { value: "zh-TW", "繁體中文" }
-                            option { value: "en-US", "English" }
-                        }
-                    }
-                    p { id: "settings-language-help", class: "settings-help", {pttstella::msg!("language-restart")} }
-                    label {
-                        SettingsCaption { label: pttstella::msg!("settings-opacity"), icon: rsx! { Eye { size: 18 } } }
-                        div { class: "settings-range",
-                            input { id: "tools-opacity", r#type: "range", min: "20", max: "100", step: "1", value: "100", "aria-label": pttstella::msg!("settings-opacity"), "aria-describedby": "settings-opacity-help" }
-                            output { id: "tools-opacity-value", "for": "tools-opacity" }
-                        }
-                    }
-                    p { id: "settings-opacity-help", class: "settings-help", {pttstella::msg!("settings-opacity-help")} }
-                    label { class: "settings-check",
-                        input { id: "tools-right-click", r#type: "checkbox", checked: true }
-                        SettingsCaption { label: pttstella::msg!("settings-right-click"), icon: rsx! { Compass { size: 18 } } }
-                    }
-                    label { class: "settings-check",
-                        input { id: "tools-show-ball", r#type: "checkbox", checked: true }
-                        SettingsCaption { label: pttstella::msg!("settings-show-ball"), icon: rsx! { Star { size: 18 } } }
-                    }
-                    p { class: "settings-help", {pttstella::msg!("settings-tool-access-help")} }
-                }
-                section { class: "settings-section",
-                    label {
-                        SettingsCaption { label: pttstella::msg!("font-preset"), icon: rsx! { Type { size: 18 } } }
-                        select { id: "font-preset",
-                            option { value: "platform", {pttstella::msg!("font-platform")} }
-                            option { value: "custom", {pttstella::msg!("font-custom")} }
-                            option { value: "bundled", {pttstella::msg!("font-bundled")} }
-                            option { value: "windows", {pttstella::msg!("font-windows-modern")} }
-                            option { value: "windows_classic", {pttstella::msg!("font-windows-classic")} }
-                            option { value: "macos_bbs", {pttstella::msg!("font-macos-bbs")} }
-                            option { value: "macos", {pttstella::msg!("font-macos-sans")} }
-                            option { value: "linux", "Linux" }
-                            option { value: "macos_serif", {pttstella::msg!("font-macos-serif")} }
-                        }
-                    }
-                    label {
-                        SettingsCaption { label: pttstella::msg!("font-ascii"), icon: rsx! { Type { size: 18 } } }
-                        input { id: "font-ascii", r#type: "text", maxlength: "128" }
-                    }
-                    label {
-                        SettingsCaption { label: pttstella::msg!("settings-local-ascii"), icon: rsx! { List { size: 18 } } }
-                        select { id: "font-local-ascii", disabled: true,
-                            option { value: "", {pttstella::msg!("font-local-choose")} }
-                        }
-                    }
-                    label {
-                        SettingsCaption { label: pttstella::msg!("font-cjk"), icon: rsx! { Type { size: 18 } } }
-                        input { id: "font-cjk", r#type: "text", maxlength: "128" }
-                    }
-                    label {
-                        SettingsCaption { label: pttstella::msg!("settings-local-cjk"), icon: rsx! { List { size: 18 } } }
-                        select { id: "font-local-cjk", disabled: true,
-                            option { value: "", {pttstella::msg!("font-local-choose")} }
-                        }
-                    }
-                    div { class: "dialog-actions settings-actions",
-                        button { id: "font-refresh", title: pttstella::msg!("font-refresh"),
-                            SettingsCaption { label: pttstella::msg!("settings-refresh"), icon: rsx! { RefreshCw { size: 18 } } }
-                        }
-                    }
-                    output { id: "font-local-status", role: "status" }
-                }
-                section { class: "settings-section",
-                    label {
-                        SettingsCaption { label: pttstella::msg!("font-size"), icon: rsx! { ALargeSmall { size: 18 } } }
-                        input { id: "font-size", r#type: "number", min: "8", max: "24", step: "1" }
-                    }
-                    label {
-                        SettingsCaption { label: pttstella::msg!("font-baseline"), icon: rsx! { AlignVerticalJustifyEnd { size: 18 } } }
-                        input { id: "font-baseline", r#type: "number", min: "0", max: "24", step: "1", "aria-describedby": "settings-baseline-help" }
-                    }
-                    p { id: "settings-baseline-help", class: "settings-help", {pttstella::msg!("settings-baseline-help")} }
-                    p { class: "settings-preview-label",
-                        SettingsCaption { label: pttstella::msg!("settings-preview"), icon: rsx! { Eye { size: 18 } } }
-                    }
-                    canvas { id: "font-preview", width: "576", height: "192", "aria-label": pttstella::msg!("font-preview-label") }
-                    output { id: "font-note", role: "status" }
-                    output { id: "font-availability", role: "status" }
-                    p { class: "settings-help", {pttstella::msg!("font-help")} }
-                }
-                details { id: "font-sources",
-                    summary {
-                        SettingsCaption { label: pttstella::msg!("font-source-title"), icon: rsx! { ExternalLink { size: 18 } } }
-                    }
-                    p { {pttstella::msg!("font-windows-explained")} }
-                    p { {pttstella::msg!("font-source-help")} }
-                    div { class: "dialog-actions font-sources settings-actions",
-                        for source in crate::fonts::Source::ALL {
-                            { let help=source.help(); rsx! { button {
-                                id: "font-source-{help.id}",
-                                "data-font-source": help.id,
-                                "data-font-families": help.families.join("\n"),
-                                hidden: true,
-                                SettingsCaption { label: help.label, icon: rsx! { ExternalLink { size: 18 } } }
-                            } } }
-                        }
-                    }
-                }
-                details {
-                    summary {
-                        SettingsCaption { label: pttstella::msg!("settings-licenses"), icon: rsx! { FileText { size: 18 } } }
-                    }
-                    p { class: "settings-help", {pttstella::msg!("font-license")} }
-                    pre { class: "font-license", {include_str!("../../assets/fonts/NOTICE.txt")} }
-                    pre { class: "font-license", {include_str!("../../assets/fonts/Cascadia-OFL.txt")} }
-                    pre { class: "font-license", {include_str!("../../assets/fonts/NotoSansCJK-OFL.txt")} }
-                }
-                section { class: "settings-section",
-                    label {
-                        SettingsCaption { label: pttstella::msg!("profile-name"), icon: rsx! { FileText { size: 18 } } }
-                        input { id: "font-profile-name", r#type: "text", maxlength: "128", value: pttstella::msg!("profile-default-name") }
-                    }
-                    div { class: "dialog-actions settings-actions",
-                        button { id: "profile-import", title: pttstella::msg!("profile-import"), "aria-describedby": "settings-profile-help",
-                            SettingsCaption { label: pttstella::msg!("settings-import"), icon: rsx! { FolderOpen { size: 18 } } }
-                        }
-                        button { id: "profile-export", title: pttstella::msg!("profile-export"), "aria-describedby": "settings-profile-help",
-                            SettingsCaption { label: pttstella::msg!("settings-export"), icon: rsx! { FileDown { size: 18 } } }
-                        }
-                    }
-                    p { id: "settings-profile-help", class: "settings-help", {pttstella::msg!("settings-profile-help")} }
-                }
-                div { class: "dialog-actions settings-actions settings-footer",
-                    button { id: "font-defaults",
-                        SettingsCaption { label: pttstella::msg!("settings-defaults"), icon: rsx! { RotateCcw { size: 18 } } }
-                    }
-                    button { id: "font-cancel",
-                        SettingsCaption { label: pttstella::msg!("cancel"), icon: rsx! { X { size: 18 } } }
-                    }
-                    button { id: "font-save", class: "primary",
-                        SettingsCaption { label: pttstella::msg!("settings-save"), icon: rsx! { Save { size: 18 } } }
-                    }
-                }
-            }
+
         }
     }
 }
@@ -624,9 +493,204 @@ fn context_menu() -> Element {
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "vim",
                 Keyboard { size: 18 } span { {pttstella::msg!("context-vim")} }
             }
-            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "settings",
-                ALargeSmall { size: 18 } span { {pttstella::msg!("context-settings")} }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "settings", class:"settings-entry",
+                BrandSettingsCaption{}
             }
         }
     }
+}
+
+#[component]
+pub(super) fn SettingsForm() -> Element {
+    rsx! {
+            dialog { id: "font-dialog", class: "paste-preview font-dialog", "aria-labelledby": "font-title",
+                h2 { id: "font-title", class:"settings-brand", BrandSettingsCaption{} }
+                div { class: "settings-layout",
+                aside { class: "settings-sidebar",
+                    label { r#for: "settings-search", {pttstella::msg!("settings-search-label")} }
+                    input { id: "settings-search", r#type:"search", maxlength:"128", placeholder:pttstella::msg!("settings-search-placeholder") }
+                    nav { id:"settings-categories", "aria-label":pttstella::msg!("settings-center-title"),
+                        for (id,key) in [("general","settings-general"),("appearance","settings-appearance"),("input","settings-input"),("media","settings-media"),("sites","sites-title"),("filters","filters-title"),("account","settings-account"),("about","settings-about")] {
+                            button { "data-settings-category":id,
+                                SettingsCaption {label:pttstella::i18n::application().loader().get(key),icon:match id {
+                                    "general"=>rsx!{Languages{size:18}},"appearance"=>rsx!{Type{size:18}},"input"=>rsx!{Keyboard{size:18}},"media"=>rsx!{Image{size:18}},"sites"=>rsx!{Globe{size:18}},"filters"=>rsx!{Shield{size:18}},"account"=>rsx!{Plug{size:18}},_=>rsx!{FileText{size:18}}}}
+                            }
+                        }
+                    }
+                }
+                div { class:"settings-content",
+                div { id:"settings-results", hidden:true, "aria-live":"polite" }
+                section { "data-settings-page":"general", class:"settings-section",
+                    label {
+                        SettingsCaption { label: pttstella::msg!("language-label"), icon: rsx! { Languages { size: 18 } } }
+                        select { id: "interface-language", "aria-describedby": "settings-language-help",
+                            option { value: "zh-TW", "繁體中文" }
+                            option { value: "en-US", "English" }
+                        }
+                    }
+                    p { id: "settings-language-help", class: "settings-help", {pttstella::msg!("language-restart")} }
+                }
+                section { "data-settings-page":"input", class:"settings-section",
+                    label {
+                        SettingsCaption { label: pttstella::msg!("settings-opacity"), icon: rsx! { Eye { size: 18 } } }
+                        div { class: "settings-range",
+                            input { id: "tools-opacity", r#type: "range", min: "20", max: "100", step: "1", value: "100", "aria-label": pttstella::msg!("settings-opacity"), "aria-describedby": "settings-opacity-help" }
+                            output { id: "tools-opacity-value", "for": "tools-opacity" }
+                        }
+                    }
+                    p { id: "settings-opacity-help", class: "settings-help", {pttstella::msg!("settings-opacity-help")} }
+                    label { class: "settings-check",
+                        input { id: "tools-right-click", r#type: "checkbox", checked: true }
+                        SettingsCaption { label: pttstella::msg!("settings-right-click"), icon: rsx! { Compass { size: 18 } } }
+                    }
+                    label { class: "settings-check",
+                        input { id: "tools-show-ball", r#type: "checkbox", checked: true }
+                        SettingsCaption { label: pttstella::msg!("settings-show-ball"), icon: rsx! { Star { size: 18 } } }
+                    }
+                    p { class: "settings-help", {pttstella::msg!("settings-tool-access-help")} }
+                }
+                section { "data-settings-page":"appearance", class: "settings-section",
+                    label {
+                        SettingsCaption { label: pttstella::msg!("font-preset"), icon: rsx! { Type { size: 18 } } }
+                        select { id: "font-preset",
+                            option { value: "platform", {pttstella::msg!("font-platform")} }
+                            option { value: "custom", {pttstella::msg!("font-custom")} }
+                            option { value: "bundled", {pttstella::msg!("font-bundled")} }
+                            option { value: "windows", {pttstella::msg!("font-windows-modern")} }
+                            option { value: "windows_classic", {pttstella::msg!("font-windows-classic")} }
+                            option { value: "macos_bbs", {pttstella::msg!("font-macos-bbs")} }
+                            option { value: "macos", {pttstella::msg!("font-macos-sans")} }
+                            option { value: "linux", "Linux" }
+                            option { value: "macos_serif", {pttstella::msg!("font-macos-serif")} }
+                        }
+                    }
+                    label {
+                        SettingsCaption { label: pttstella::msg!("font-ascii"), icon: rsx! { Type { size: 18 } } }
+                        input { id: "font-ascii", r#type: "text", maxlength: "128" }
+                    }
+                    label {
+                        SettingsCaption { label: pttstella::msg!("settings-local-ascii"), icon: rsx! { List { size: 18 } } }
+                        select { id: "font-local-ascii", disabled: true,
+                            option { value: "", {pttstella::msg!("font-local-choose")} }
+                        }
+                    }
+                    label {
+                        SettingsCaption { label: pttstella::msg!("font-cjk"), icon: rsx! { Type { size: 18 } } }
+                        input { id: "font-cjk", r#type: "text", maxlength: "128" }
+                    }
+                    label {
+                        SettingsCaption { label: pttstella::msg!("settings-local-cjk"), icon: rsx! { List { size: 18 } } }
+                        select { id: "font-local-cjk", disabled: true,
+                            option { value: "", {pttstella::msg!("font-local-choose")} }
+                        }
+                    }
+                    div { class: "dialog-actions settings-actions",
+                        button { id: "font-refresh", title: pttstella::msg!("font-refresh"),
+                            SettingsCaption { label: pttstella::msg!("settings-refresh"), icon: rsx! { RefreshCw { size: 18 } } }
+                        }
+                    }
+                    output { id: "font-local-status", role: "status" }
+                }
+                section { "data-settings-page":"appearance", class: "settings-section",
+                    label {
+                        SettingsCaption { label: pttstella::msg!("font-size"), icon: rsx! { ALargeSmall { size: 18 } } }
+                        input { id: "font-size", r#type: "number", min: "8", max: "24", step: "1" }
+                    }
+                    label {
+                        SettingsCaption { label: pttstella::msg!("font-baseline"), icon: rsx! { AlignVerticalJustifyEnd { size: 18 } } }
+                        input { id: "font-baseline", r#type: "number", min: "0", max: "24", step: "1", "aria-describedby": "settings-baseline-help" }
+                    }
+                    p { id: "settings-baseline-help", class: "settings-help", {pttstella::msg!("settings-baseline-help")} }
+                    p { class: "settings-preview-label",
+                        SettingsCaption { label: pttstella::msg!("settings-preview"), icon: rsx! { Eye { size: 18 } } }
+                    }
+                    canvas { id: "font-preview", width: "576", height: "192", "aria-label": pttstella::msg!("font-preview-label") }
+                    output { id: "font-availability", role: "status" }
+                    p { class: "settings-help", {pttstella::msg!("font-help")} }
+                }
+                details { id: "font-sources", "data-settings-page":"appearance",
+                    summary {
+                        SettingsCaption { label: pttstella::msg!("font-source-title"), icon: rsx! { ExternalLink { size: 18 } } }
+                    }
+                    p { {pttstella::msg!("font-windows-explained")} }
+                    p { {pttstella::msg!("font-source-help")} }
+                    div { class: "dialog-actions font-sources settings-actions",
+                        for source in crate::fonts::Source::ALL {
+                            { let help=source.help(); rsx! { button {
+                                id: "font-source-{help.id}",
+                                "data-font-source": help.id,
+                                "data-font-families": help.families.join("\n"),
+                                hidden: true,
+                                SettingsCaption { label: help.label, icon: rsx! { ExternalLink { size: 18 } } }
+                            } } }
+                        }
+                    }
+                }
+                details { "data-settings-page":"about",
+                    summary {
+                        SettingsCaption { label: pttstella::msg!("settings-licenses"), icon: rsx! { FileText { size: 18 } } }
+                    }
+                    p { class: "settings-help", {pttstella::msg!("font-license")} }
+                    pre { class: "font-license", {include_str!("../../assets/fonts/NOTICE.txt")} }
+                    pre { class: "font-license", {include_str!("../../assets/fonts/Cascadia-OFL.txt")} }
+                    pre { class: "font-license", {include_str!("../../assets/fonts/NotoSansCJK-OFL.txt")} }
+                }
+                section { "data-settings-page":"appearance", class: "settings-section",
+                    label {
+                        SettingsCaption { label: pttstella::msg!("profile-name"), icon: rsx! { FileText { size: 18 } } }
+                        input { id: "font-profile-name", r#type: "text", maxlength: "128", value: pttstella::msg!("profile-default-name") }
+                    }
+                    div { class: "dialog-actions settings-actions",
+                        button { id: "profile-import", title: pttstella::msg!("profile-import"), "aria-describedby": "settings-profile-help",
+                            SettingsCaption { label: pttstella::msg!("settings-import"), icon: rsx! { FolderOpen { size: 18 } } }
+                        }
+                        button { id: "profile-export", title: pttstella::msg!("profile-export"), "aria-describedby": "settings-profile-help",
+                            SettingsCaption { label: pttstella::msg!("settings-export"), icon: rsx! { FileDown { size: 18 } } }
+                        }
+                    }
+                    p { id: "settings-profile-help", class: "settings-help", {pttstella::msg!("settings-profile-help")} }
+                }
+                section { "data-settings-page":"media", class:"settings-section",
+                    label { SettingsCaption {label:pttstella::msg!("hover-position"),icon:rsx!{Image{size:18}}}
+                        select {id:"settings-hover",
+                            option {value:"top_right",{pttstella::msg!("hover-top-right")}}
+                            option {value:"follow_cursor",{pttstella::msg!("hover-follow")}}
+                            option {value:"off",{pttstella::msg!("hover-disabled")}}
+                        }
+                    }
+                }
+                for (id,key) in [("sites","sites-title"),("filters","filters-title"),("account","settings-account")] {
+                    section { "data-settings-page":id, class:"settings-section",
+                        p {class:"settings-help",{pttstella::msg!("settings-action-help")}}
+                        button { "data-settings-launch":id, disabled:id=="account"&&!cfg!(target_os="macos"),
+                            SettingsCaption {label:pttstella::i18n::application().loader().get(key),icon:match id{"sites"=>rsx!{Globe{size:18}},"filters"=>rsx!{Shield{size:18}},_=>rsx!{Plug{size:18}}}}
+                        }
+                    }
+                }
+                }
+                }
+                output { id: "font-note", role: "status", "aria-live":"polite" }
+                div { class: "dialog-actions settings-actions settings-footer",
+                    button { id: "font-defaults",
+                        SettingsCaption { label: pttstella::msg!("settings-defaults"), icon: rsx! { RotateCcw { size: 18 } } }
+                    }
+                    button { id: "font-cancel",
+                        SettingsCaption { label: pttstella::msg!("close"), icon: rsx! { X { size: 18 } } }
+                    }
+                    button { id: "font-save", class: "primary",
+                        SettingsCaption { label: pttstella::msg!("settings-retry"), icon: rsx! { Save { size: 18 } } }
+                    }
+                }
+            }
+    }
+}
+
+#[component]
+fn BrandSettingsCaption() -> Element {
+    let mark = format!(
+        "data:image/svg+xml;base64,{}",
+        base64::engine::general_purpose::STANDARD
+            .encode(include_bytes!("../../assets/icons/constellation-flat.svg"))
+    );
+    rsx! {span {class:"settings-caption",img {class:"settings-brand-mark",src:mark,alt:"","aria-hidden":"true"} span {{pttstella::msg!("settings-center-title")}}}}
 }

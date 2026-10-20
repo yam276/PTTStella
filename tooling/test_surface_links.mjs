@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import vm from "node:vm";
 
-const source=readFileSync(new URL("../assets/surface.js",import.meta.url),"utf8");
+const source=readFileSync(new URL("../assets/surface.js",import.meta.url),"utf8")+readFileSync(new URL("../assets/surface-renderer.js",import.meta.url),"utf8")+"\nfunction rendererEnd(){}";
 function handler(name,next,context){
     vm.createContext(context);
     vm.runInContext(source.slice(source.indexOf(`function ${name}(`),source.indexOf(`function ${next}(`)),context);
@@ -65,7 +65,7 @@ function renderedLinks(scale, links, options) {
     const target={width:960*scale,height:576*scale,getContext:()=>ctx};
     const context={palette:["#000000","#800000","#008000","#808000","#000080","#800080","#008080","#c0c0c0","#808080"]};
     const packet={frame:{cols:80,rows:24,glyphs:[],cursor_visible:false},links};
-    handler("render","repaint",context)(target,packet,options);
+    handler("render","rendererEnd",context)(target,packet,options);
     return rectangles.slice(1); // The first rectangle clears the canvas.
 }
 

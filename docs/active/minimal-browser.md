@@ -714,3 +714,14 @@ macOS arm64 合成原生 App 已確認一般模式兩次 Enter 與 Vim Normal �
 
 2026-10-19 合併 Windows 修正與最新 main：以 origin/main 的 97d0ca9（文章內展圖、情境選單）整合 Windows 分支四個提交，保留浮球 modal 事件修正、peer Close 結果與 Windows 圖示／ZIP 建置。Cargo.toml 衝突合併 arboard 及 winresource desktop 依賴，Cargo.lock 同時保留兩者；active plan 衝突保留兩邊完整紀錄。src/main.rs 同時保留停用 WebView 原生選單與 Windows icon 設定，未改寫歷史。
 合併版 docs、core 13 命令／2 replay、desktop Clippy／lib／bin 66 項／實際 WebView2 gate 通過，另有 113 項 JS 與 8 項 Windows／macOS 打包回歸。初輪 GUI 保留 failed：新版右鍵先開情境選單，舊 Windows driver 仍預期直接選取；改由 trusted pointer 點選「選取完整網址」，再以相同完整 URL 讀回系統剪貼簿，未放寬 bytes 或 pixel expected。重跑 GUI 及第二程序保存重啟像素相同、Close acknowledged、全部 owner join 通過；原始結果留在 .local/verification/merge-main。Mac 原生重打包與互動仍待 Mac 端另驗，本輪未以 Windows 或 Python 的 Mac 打包回歸冒充原生 macOS 驗證；既有 ZIP 是先前來源版本的交付，不冒充此合併版。
+
+
+2026-10-20 統一設定中心與浮球功能頁：浮球小面板優先沿分類扇形同側展開，空間不足才沿既有有界備援；該修正獨立提交。設定改為單一可重用原生視窗，深藍金色側欄、金色品牌星座及 Lucide／短標籤；固定中英文功能索引可跨語言搜尋、切分類並聚焦欄位。右鍵與浮球設定入口共用同一視窗，macOS 原生 ⌘, 及 WebView Ctrl+,／⌘,；capture 先攔截快捷鍵，不讓 BBS target handler 收到逗號，組字／重複／不可信事件有回歸。站點、黑白名單、帳號透過明確按鈕回到既有管理介面，不因搜尋自動連線或登入。
+
+有效修改在 300ms 後合併自動保存；一次在途與一份最新修改，Files 忙碌後才以最新生效設定套用。無效中間值／組字不寫入，失敗保留編輯及重試；Close 等待保存，恢復預設只作用目前分類。Preferences／Files 保留唯一生效與 I/O 所有權，hover 未修改時不覆蓋主介面的最新位置。退出 App 先 drain 既有檔案，再保存子視窗最後有效修改，停止 timer／listener、join eval 並真正關閉 native 子視窗；建立 future 在取消 select 後仍保留。主畫面／PNG 與字型預覽抽出同一 renderer，未建立第二份格線或連線。設定開啟時 Rust 與 JS 同時撤銷保活 gate。
+
+驗證：core 13 命令／2 replay、desktop lib 137 項、bin 70 項、全 targets Clippy、Rust i18n 2 項、完整 JS 129 項、Python tooling 70 項及 docs 通過。Windows driver 改以同一 owned loopback port 辨識獨立設定 WebView、保留／釋放其連線，核對搜尋、自動保存的實際檔案／像素、無效值、預設與匯入；有界 target discovery 的單元測試不冒充 Windows 原生通過。本機缺 Windows／Linux runner，兩者 native UI 仍為 not_ready。
+
+macOS arm64 原生合成 App 已確認中文介面用 opacity／透明度搜尋、搜尋結果聚焦、不等保存完成連續切換兩個 checkbox、實際偏好檔及關閉／重開保留值。發現子視窗 WindowHides 讓 cleanup 成功後程序殘留，保留該輪 process-exit failed；退出時改 WindowCloses，重新測試設定內修改後 ⌘Q，PNG、Close acknowledged、全部 owner join、程序 exit 0 通過。最終 release 候選另以已保存的英文合成設定啟動，英文介面搜尋「透明度」、定位欄位與圖示、PNG、設定開啟時 ⌘Q 及程序 exit 0 通過；載入／搜尋未改寫設定 bytes。獨立測試 App 改 bundle identity 並重新 ad-hoc 簽署，以全部 Mach-O loadable section 雜湊核對交付程式與測試副本相同；不把不同簽章造成的 executable bytes 差異當成產品差異。工具 fixture 的前三行依語言不同，兩語 PNG 不作相同輸入的像素 gate。證據、失敗嘗試與畫面保留 `.local/verification/settings-center`；最新候選為 `dist/macos-settings-center-delivery/PTTStella.app`，strict ad-hoc 簽章通過，未公證，未操作使用者實站 session。本輪未驗原生檔案 picker／所有尺寸／實體 IME，亦不取代既有待驗項目。
+
+補充：新增匯入後字型仍在載入的回歸，舊路徑因尚未標記待存而遺失最後 snapshot，測試先失敗；改為接受有效匯入後立即排入 autosave，再獨立等待預覽。慢字型／關閉／晚到繪製的同一生產控制器測試通過，不把預覽完成當成保存前提。

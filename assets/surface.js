@@ -36,6 +36,7 @@ function previewHover(index) {
 }
 function changeHoverPreference(e){send({kind:"hover_preference",position:hoverPosition.value,trusted:e.isTrusted});}
 const vimToggle=document.getElementById("vim-toggle"),vimOnce=document.getElementById("vim-once"),vimStatus=document.getElementById("vim-status");
+let settingsActive=false;
 let keyboardState={enabled:false,mode:"input",pending:false,prefix:""};
 function policy(action,e,code="") {send({kind:"keyboard_state",action,code,generation,trusted:e?.isTrusted??true});}
 function toggleVim(e){policy("toggle",e);restoreEditingFocus();}
@@ -53,8 +54,7 @@ const browseBack=document.getElementById("browse-back"),browsePrevious=document.
 const browseHint=document.getElementById("browse-hint");
 function invalidatePresentation(){contextMenu?.close(false);stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);}
 const ctx=canvas.getContext("2d",{willReadFrequently:true});
-const palette=["#000000","#800000","#008000","#808000","#000080","#800080","#008080","#c0c0c0",
-    "#808080","#ff0000","#00ff00","#ffff00","#0000ff","#ff00ff","#00ffff","#ffffff"];
+
 const {family:fontFamily,description:fontDescription,load:loadFonts,note:fontLoadNote,invalidate:invalidateFonts}=
     createSurfaceFonts({document,FontFace,tr});
 let generation=0, revision=-1, composing=false, composition=null, beforeEdit=null, sent=0;
@@ -470,7 +470,7 @@ function refreshExportControls() {
     exportRows.title=selection?tr("export-lines-hint",{start:selection.value.rows.start+1,end:selection.value.rows.end}):tr("export-rows-hint");
 }
 function refreshKeepAlive() {
-    const ready=!!latest?.keep_alive&&!inlineImages.active()&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
+    const ready=!settingsActive&&!!latest?.keep_alive&&!inlineImages.active()&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
     const current=stamp(),key=JSON.stringify([current,ready,latest?.keep_alive_ready,latest?.keep_alive]);
     keepAlive.textContent=latest?.keep_alive?tr("keepalive-on"):tr("keepalive-off");
     keepAlive.setAttribute("aria-pressed",String(!!latest?.keep_alive));
@@ -536,9 +536,11 @@ const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoo
 const media=installMedia({tr,send,prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshNavigation,restore:restoreEditingFocus});
 function refreshControls(){refreshNavigation();refreshExportControls();}
 const sitesUi=createSitesDialog({tr,send,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls});
-const settingsUi=createSettingsDialog({send,
-    beforeRequest:e=>{stationMouse.revoke();cancelHover(true);policy("reset",e);},beforeShow:invalidatePresentation,
-    restore:restoreEditingFocus,changed:refreshControls,tr,loadFonts,fontLoadNote,invalidateFonts,render});
+// This view only requests the single native settings window.
+const settingsUi={request(e){if(e.isTrusted){stationMouse.revoke();cancelHover(true);policy("reset",e);send({kind:"settings_open",trusted:true});}},
+    bindings:[[document.getElementById("font-settings"),"click",e=>settingsUi.request(e)],
+        [document,"keydown",e=>{if(e.isTrusted&&(e.metaKey||e.ctrlKey)&&e.key===","&&!e.isComposing){e.preventDefault();e.stopImmediatePropagation();if(!e.repeat)settingsUi.request(e);}},true]],
+    open(){},catalog(){},preview(){},profile(){},saved(){},notice:()=>false,revoke(){},destroy(){},clean:()=>true};
 const loginUi=createLoginDialog({tr,send,stamp,
     prepare:e=>{stationMouse.revoke();cancelHover(true);policy("reset",e);cancelComposition();clearSelection();},
     restore:restoreEditingFocus,changed:refreshControls,focus});
@@ -572,34 +574,6 @@ const bindings=[...contextMenu.bindings,...sitesUi.bindings,...tools.bindings,..
     [viewport,"wheel",wheel,{passive:false}],[window,"resize",repaint],[window,"focus",activate],[window,"blur",deactivate],
 ];
 for(const [target,event,callback,options] of bindings) target.addEventListener(event,callback,options);
-function colours(style) {
-    const fg=style.fg+(style.bright&&style.fg<8?8:0), bg=style.bg;
-    return style.inverse?[palette[bg],palette[fg]]:[palette[fg],palette[bg]];
-}
-// Filled BBS graphics follow the grid, independent of font metrics/fallback.
-function graphic(ctx,text,x,y,w,h) {
-    if([...text].length!==1) return false;
-    const code=text.codePointAt(0);
-    const rect=(l,t,r,b)=>{
-        const left=Math.round(x+w*l),top=Math.round(y+h*t);
-        ctx.fillRect(left,top,Math.round(x+w*r)-left,Math.round(y+h*b)-top);
-    };
-    if(code===0x2580) rect(0,0,1,.5);
-    else if(code>=0x2581&&code<=0x2588) rect(0,1-(code-0x2580)/8,1,1);
-    else if(code>=0x2589&&code<=0x258f) rect(0,0,(0x2590-code)/8,1);
-    else if(code===0x2590) rect(.5,0,1,1);
-    else if(code===0x2594) rect(0,0,1,.125);
-    else if(code===0x2595) rect(.875,0,1,1);
-    else if(code>=0x2596&&code<=0x259f) {
-        const mask=[4,8,1,13,9,7,11,2,6,14][code-0x2596];
-        for(let q=0;q<4;q++) if(mask&(1<<q)) rect((q%2)/2,Math.floor(q/2)/2,(q%2+1)/2,(Math.floor(q/2)+1)/2);
-    } else if(code>=0x25e2&&code<=0x25e5) {
-        const corners=[[[1,0],[1,1],[0,1]],[[0,0],[0,1],[1,1]],[[0,0],[1,0],[0,1]],[[0,0],[1,0],[1,1]]][code-0x25e2];
-        ctx.beginPath(); corners.forEach(([u,v],i)=>i===0?ctx.moveTo(x+w*u,y+h*v):ctx.lineTo(x+w*u,y+h*v));
-        ctx.closePath(); ctx.fill();
-    } else return false;
-    return true;
-}
 function draw(packet) {
     const frame=packet.frame,ratio=devicePixelRatio||1,width=frame.cols*12,height=frame.rows*24;
     const available=viewport.getBoundingClientRect();
@@ -612,52 +586,6 @@ function draw(packet) {
     level.textContent=Math.round(physical/ratio/fitting*100)+"%";
     grid={...inlineImages.layout(packet,render(canvas,packet,{cursor:true,hovered:hoveredLink,linkHints:true}),ratio),ratio};
     positionKeyboard();drawSelection();drawNavigationMarker();draws++;return grid;
-}
-function render(target,packet,{cursor=true,hovered=-1,linkHints=false}={}) {
-    const frame=packet.frame,width=frame.cols*12,height=frame.rows*24;
-    const ctx=target.getContext("2d");
-    const scale=Math.min(target.width/width,target.height/height);
-    const x=col=>Math.round(col*12*scale),y=row=>Math.round(row*24*scale);
-    ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle="#000"; ctx.fillRect(0,0,target.width,target.height);
-    // Opaque backgrounds first; both sides of every shared edge use one integer.
-    for(const glyph of frame.glyphs) for(let half=0;half<glyph.width;half++) {
-        const [,bg]=colours(half===0?glyph.left:glyph.right),col=glyph.col+half;
-        ctx.fillStyle=bg; ctx.fillRect(x(col),y(glyph.row),x(col+1)-x(col),y(glyph.row+1)-y(glyph.row));
-    }
-    ctx.textBaseline="alphabetic";
-    for(const glyph of frame.glyphs) {
-        if(glyph.text===" ") continue;
-        ctx.font=fontDescription(packet.settings,glyph.width===2,scale);
-        const left=x(glyph.col),top=y(glyph.row),span=x(glyph.col+glyph.width)-left,h=y(glyph.row+1)-top;
-        const advance=Math.max(ctx.measureText(glyph.text).width,1);
-        // Text keeps the font's aspect ratio; narrow symbols are centred instead
-        // of stretched into ovals. Connected box/shade glyphs retain grid fitting.
-        const code=glyph.text.codePointAt(0),connected=[...glyph.text].length===1&&code>=0x2500&&code<=0x2593;
-        const fitting=connected?span/advance:Math.min(1,span/advance);
-        const origin=connected?left:left+(span-advance*fitting)/2;
-        for(let half=0;half<glyph.width;half++) {
-            const [fg]=colours(half===0?glyph.left:glyph.right),col=glyph.col+half;
-            ctx.save(); ctx.beginPath(); ctx.rect(x(col),top,x(col+1)-x(col),h); ctx.clip(); ctx.fillStyle=fg;
-            if(!graphic(ctx,glyph.text,left,top,span,h)) {
-                ctx.translate(origin,top+packet.settings.baseline*scale); ctx.scale(fitting,connected?1:fitting); ctx.fillText(glyph.text,0,0);
-            }
-            ctx.restore();
-        }
-    }
-    if(cursor&&frame.cursor_visible) {
-        const [col,row]=frame.cursor,bottom=y(row+1),thickness=Math.max(1,Math.round(2*scale));
-        ctx.fillStyle=palette[7]; ctx.fillRect(x(col),bottom-thickness,x(col+1)-x(col),thickness);
-    }
-    // Rust supplies the same visible spans used for hit testing, including OSC 8.
-    // Link hints decorate the live view only; PNG exports keep the source pixels.
-    if(linkHints) {
-        const thickness=Math.max(1,Math.round(scale));
-        packet.links.forEach((link,index)=>{
-            ctx.fillStyle=palette[index===hovered?7:8];
-            ctx.fillRect(x(link.start),y(link.row+1)-thickness,x(link.end)-x(link.start),thickness);
-        });
-    }
-    return {x,y};
 }
 function repaint() {
     if(stopped||!latest||animation) return;
@@ -815,6 +743,8 @@ const route=createSurfaceRouter({
     inline_open:data=>inlineImages.open(data,latest),inline_image:data=>inlineImages.receive(data),inline_error:data=>inlineImages.fail(data),inline_reset:()=>inlineImages.reset(),
     media_open:data=>media.open(data),media_image:data=>media.receiveImage(data),media_error:data=>media.fail(data),
     media_external:data=>media.externalResult(data),media_reset:()=>media.reset(),
+    settings_visibility:open=>{settingsActive=open;refreshKeepAlive();},
+    settings_launch:feature=>{const event={isTrusted:true};if(feature==="sites")sitesUi.request(event);else if(feature==="filters")filterUi.show(event);else if(feature==="account")loginUi.request(event);},
     settings_open:settingsUi.open,font_catalog:settingsUi.catalog,font_preview:settingsUi.preview,
     profile_result:async data=>{await settingsUi.profile(data);showNotice(data.notice);},
     settings_saved:data=>{settingsUi.saved(data);showNotice(data.notice);},
@@ -859,7 +789,7 @@ finally {
     keyboard.dispatchEvent(new InputEvent("input",{data:"a",inputType:"insertText",bubbles:true}));
     surface.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true}));window.dispatchEvent(new Event("resize"));plus.click();
     chrome.dispatchEvent(new PointerEvent("pointerenter"));
-    document.getElementById("font-settings").click();document.getElementById("font-size").dispatchEvent(new InputEvent("input",{bubbles:true}));
+    document.getElementById("font-settings").click();
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
     cleanupClean=mediaClean&&contextMenu.clean()&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0

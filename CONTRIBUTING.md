@@ -31,7 +31,7 @@ core 執行 Rust 1.97.0 的 fmt、Clippy、畫面與互動測試 suite 及 2 個
 
 ## 實作後的驗證
 
-滑鼠瀏覽增量另跑 core、desktop lib／bin、Clippy、i18n 與全套 JS。`--probe-surface OUTPUT_DIRECTORY pointer_rows` 現在以本機合成主選單開始：點個人設定、原始 Left 返回、點我的最愛及目錄、滾輪下／上頁、點文章整行及左緣返回；peer 依序獨立核對 Down＋CR、Left、CR、Up＋CR、PageDown、PageUp、Down＋CR、Left，共七筆導覽與一次原始鍵，不接受多送。最後必須匯出 PNG、Close acknowledged、所有 owner join。原生右鍵另核對無反白開扇形、有反白／Shift 保留情境、checkbox 取消／保存／重啟、隱藏浮球仍可返回收合；hover 目視亮度與金邊，Canvas／匯出不可混入本機裝飾。DOM doubles 與 loopback 不能代替原生 UI，缺平台明記 not_ready。
+滑鼠瀏覽增量另跑 core、desktop lib／bin、Clippy、i18n 與全套 JS。`--probe-surface OUTPUT_DIRECTORY pointer_rows` 現在以本機合成主選單開始：點個人設定、原始 Left 返回、點我的最愛及目錄、滾輪下／上頁、點文章整行及左緣返回；peer 依序獨立核對 Down＋CR、Left、CR、Up＋CR、PageDown、PageUp、Down＋CR、Left，共七筆導覽與一次原始鍵，不接受多送。最後必須匯出 PNG、Close acknowledged、所有 owner join。原生右鍵另核對無反白開扇形、有反白／Shift 保留情境、checkbox 自動保存／重開／重啟、隱藏浮球仍可返回收合；hover 目視亮度與金邊，Canvas／匯出不可混入本機裝飾。DOM doubles 與 loopback 不能代替原生 UI，缺平台明記 not_ready。
 
 Windows ZIP 打包變更另跑 `python -m unittest discover -s tooling -p test_bundle_windows.py`、docs、core 與 desktop gate。`python tooling/bundle_windows.py` 由 Cargo JSON 取得 x64 release executable，檢查 GUI subsystem、實際 PE imports、七份嵌入圖示與來源 ICO payload，打包 Microsoft redistributable CRT 與授權，不覆寫既有 ZIP。publication 回歸涵蓋建置／圖示／未知 DLL 失敗零交付，以及既有 ZIP 和競爭建立不被覆寫。
 
@@ -41,7 +41,7 @@ Windows 免安裝 EXE 變更另跑 desktop lib／bin 測試與 Clippy。`--insta
 
 必須解壓 ZIP 至獨立目錄，核對 manifest 所列 SHA-256，並對解壓的 EXE 執行 `python tooling/check.py desktop --desktop-executable <EXE絕對路徑> --desktop-output <獨立驗證目錄>`。此模式不重新編譯，報告保留 executable 雜湊與 `build_checks_run=false`；兩個程序均從 EXE 所在目錄啟動，使用同一合成／loopback gate，不能將這份 GUI 結果當作編譯或 Clippy 已執行。指定 EXE 必須提供獨立 output，缺檔不能退回 debug binary。未在乾淨 Windows／不同版本／DPI 驗證的範圍仍須分列，實站登入另由使用者人工確認。
 
-Windows CDP runner 以 trusted 點擊浮球與分類揭露功能，操作後經同一浮球返回並收合，避免外部點擊只收合工具而被誤當作 BBS 操作；字型視窗等待初次預覽完成後的焦點才開始輸入。Vim 採 120ms 按鍵節奏，讓無站端重繪的 no-op 等待同一 command owner 完成；不宣稱最高速連發通過。貼上要求 typed rejected 狀態與目前多站版的原因文字，服務端仍獨立比對精確 bytes。這些是實際 WebView 的自動化操作，不代表實體 IME 候選窗或人工審閱。
+Windows CDP runner 以 trusted 點擊浮球與分類揭露功能，操作後經同一浮球返回並收合，避免外部點擊只收合工具而被誤當作 BBS 操作；設定視窗以同一 owned loopback debug port 辨識獨立 .settings-host WebView target，再依可見分類與欄位操作，不能在主 WebView 尋找舊 font-dialog。Vim 採 120ms 按鍵節奏，讓無站端重繪的 no-op 等待同一 command owner 完成；不宣稱最高速連發通過。貼上要求 typed rejected 狀態與目前多站版的原因文字，服務端仍獨立比對精確 bytes。這些是實際 WebView 的自動化操作，不代表實體 IME 候選窗或人工審閱。
 
 macOS 打包變更另跑 `python3 -m unittest discover -s tooling -p test_bundle_macos.py`，確認圖示轉換失敗不簽署／交付半成品、既有 App 不被覆寫。原生打包後需核對 ICNS 各尺寸、透明角落、plist 指向與 strict 簽章；這些不代替桌面功能 gate。
 
@@ -145,7 +145,7 @@ AID 核心另核對 article_navigation 的自製 article-open fixture 與 naviga
 
 `--probe-surface OUTPUT_DIRECTORY files` 使用合成主畫面與拒絕站端輸入的本機 peer，但 PNG／設定檔會走真正的原生 picker。確認原生 Save／Open、讀回 PNG／設定檔、取消及關閉清理；固定 probe 路徑不能替代 picker 驗收。`files_slow` 在 blocking worker 等待 runner 建立 OUTPUT_DIRECTORY/file-release（最多 120 秒），先寫 file-started.json，完成寫 file-finished.json。等待中可開啟／取消設定；第二筆保存應拒絕並恢復控制，⌘Q 後須保留 owner、顯示超時等待，release 後才完成清理及 Close。runner 必須收回自己啟動的程序與釋放訊號，不能留下背景工作。
 
-`--probe-surface OUTPUT_DIRECTORY dialogs --media-origin http://127.0.0.1:PORT` 提供明確本機 UI／媒體 fixture，peer 拒絕輸入 bytes；操作設定預覽／取消／保存、具名設定檔匯出／匯入、整頁及行 PNG、本機圖片與外開 sink 後才檢查報告。媒體 server 必須由 runner 擁有並停止；不能將 sink 宣稱為 OS 瀏覽器實測。對話框拆分另以閱讀畫面逐一開／關名單、字型及登入，確認不用額外點擊或 frame 才恢復瀏覽控制項，再完成原 filters 回歸。
+`--probe-surface OUTPUT_DIRECTORY dialogs --media-origin http://127.0.0.1:PORT` 提供明確本機 UI／媒體 fixture，peer 拒絕輸入 bytes；操作設定預覽／自動保存／關閉 flush、具名設定檔匯出／匯入、整頁及行 PNG、本機圖片與外開 sink 後才檢查報告。媒體 server 必須由 runner 擁有並停止；不能將 sink 宣稱為 OS 瀏覽器實測。對話框拆分另以閱讀畫面逐一開／關名單、字型及登入，確認不用額外點擊或 frame 才恢復瀏覽控制項，再完成原 filters 回歸。
 
 `--probe-surface OUTPUT_DIRECTORY CASE` 是不開 DevTools、不連實站的原生 WebView 探針；CASE 為 `decode`、`painted`、`send`、`renderer_error`、`untrusted`、`confirm` 或 `slow`。前四項分別造成真實事件解碼、版本、Eval 封包序列化及 JS 例外錯誤，應留下 `run_completed=false`、`cleanup_completed=true` 與 acknowledged 的 `cleanup.json`；錯誤畫面之後仍須能 ⌘W／⌘Q 結束。`untrusted` 驗證 JS 合成 paste／按鈕不改狀態，以及 Rust 拒絕三個不可信貼上 wire 事件；`confirm` 由原生貼上 `A\nB` 建立真實預覽，再拒絕合成確認且保留預覽。`slow` 持有 60 秒的合成結果 future，期間以原生按鈕開啟／取消字型設定並關窗，確認命令仍 pending 時就完成清理；它不宣稱模擬了真實網路 backpressure。三者檢查 `surface-probe.json`。所有案例的本機 peer 拒絕任何輸入 bytes，只接受 Close。負面合成事件不當成 trusted 正向輸入證據。
 
@@ -177,3 +177,6 @@ Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_
 
 
 黑白名單／匯入變更另跑 filters 核心與 store、filter_import owner、Files、SurfaceState、所有 JS／Fluent 及 Clippy。自製格式案例涵蓋 UTF-8 BOM、完整 ID、備註分隔、白名單衝突、未支援項目、容量及取消／舊 request。原生 `account_lists` 使用固定測試路徑，確認先預覽、取消零保存、合併後白名單仍顯示、黑名單遮黑、選取複製與 PNG 一致、正常斷線及清理。此探針不代替原生選檔視窗驗收。整行／左緣導覽另核對 `test_surface_links.mjs` 及 `desktop_navigation.py` 的真實 pointer、Shift 選取、光棒範圍與 Canvas 不變；缺平台 runner 仍記 not_ready。
+
+
+統一設定視窗變更另跑完整 JS、desktop lib／bin、Clippy、i18n 與 Python tooling 測試。Windows driver 核對中英文搜尋、實際偏好檔與畫面像素、無效中間值不寫入、分類恢復預設、匯入自動保存及重開；輔助 CDP target 僅接受同一 loopback port、有界八筆 page list，主 driver 關閉時一併釋放。缺少 Windows runner 仍為 not_ready。macOS 原生另核對 ⌘,、品牌與 Lucide、連續修改自動保存、子視窗關閉／重開、設定開啟時 ⌘Q、PNG 與 Close／全部 owner join，還要確認程序退出；只有 cleanup JSON 不能證明沒有隱藏視窗殘留。

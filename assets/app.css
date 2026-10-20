@@ -170,3 +170,23 @@ button.primary .settings-icon { color: inherit; }
     background: #293b55; outline: 1px solid #d4b87c;
 }
 #surface-context-menu button:disabled { opacity: .42; }
+/* Independent settings window: stable sidebar, scrollable detail and save status. */
+.settings-host { height: 100vh; background: var(--ui-panel); }
+.settings-host #font-dialog { position: static; display: flex; flex-direction: column; width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; border: 0; border-radius: 0; padding: 20px; overflow: hidden; }
+.settings-layout { display: grid; grid-template-columns: 200px minmax(0,1fr); flex: 1; min-height: 0; gap: 24px; }
+.settings-sidebar { border-right: 1px solid #e7c46a35; padding-right: 18px; overflow-y: auto; }
+.settings-host #font-dialog .settings-sidebar label { display:block; color:var(--ui-muted); }
+.settings-sidebar input { border-radius: 8px; padding: 9px !important; }
+.settings-sidebar nav { display: grid; gap: 7px; margin-top: 18px; }
+.settings-sidebar nav button { text-align: left; padding: 10px; border-color: transparent; }
+.settings-sidebar button[aria-current="page"] { border-color: var(--ui-gold); background: var(--ui-control-hover); color: var(--ui-gold); }
+.settings-content { overflow-y: auto; padding: 0 8px 16px 2px; }
+.settings-host [data-settings-page][hidden], .settings-host #settings-results[hidden] { display: none; }
+.settings-host #font-dialog .settings-section { border:0; padding-top:0; margin-top:0; }
+#settings-results { display: grid; gap:10px; }
+#settings-results button { text-align: left; padding: 14px; }
+.settings-hit { outline: 2px solid var(--ui-gold); outline-offset: 3px; }
+.settings-host #font-note { min-height: 1.5em; margin: 8px 0; }
+.settings-host #font-dialog .settings-footer { flex-shrink: 0; }
+.settings-entry, .settings-brand { color: var(--ui-gold); }
+.settings-brand-mark { display:block; width:24px; height:24px; flex-shrink:0; }

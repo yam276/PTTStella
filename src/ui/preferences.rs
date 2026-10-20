@@ -7,6 +7,30 @@ use pttstella::{
 };
 use std::path::Path;
 
+/// Fields editable by the settings window. Session controls and secrets are absent.
+#[derive(serde::Deserialize)]
+pub(super) struct Change {
+    pub values: DisplayProfile,
+    #[serde(default)]
+    pub language: pttstella::i18n::Language,
+    pub tools_opacity: pttstella::settings::ToolOpacity,
+    pub tools_access: pttstella::settings::ToolAccess,
+    #[serde(default)]
+    pub hover: Option<HoverPosition>,
+}
+impl Change {
+    pub(super) fn apply(self, mut app: AppSettings) -> Result<AppSettings, String> {
+        app.display = self.values.validate()?;
+        app.language = self.language;
+        app.tools_opacity = self.tools_opacity;
+        app.tools_access = self.tools_access;
+        if let Some(hover) = self.hover {
+            app.hover = hover;
+        }
+        Ok(app)
+    }
+}
+
 pub(super) struct Preferences {
     store: Result<Store, String>,
     app: AppSettings,
@@ -63,12 +87,6 @@ impl Preferences {
         draft
     }
 
-    pub(super) fn display_draft(&self, profile: DisplayProfile) -> AppSettings {
-        let mut draft = self.app.clone();
-        draft.display = profile;
-        draft
-    }
-
     pub(super) fn store(&self) -> Result<Store, String> {
         self.store.clone()
     }
@@ -84,6 +102,7 @@ impl Preferences {
 
     pub(super) fn open_packet(&self) -> Packet<'static> {
         Packet::SettingsOpen(Box::new(SettingsOpen {
+            hover: self.app.hover,
             profile: self.app.display.clone(),
             tools_opacity: self.app.tools_opacity,
             tools_access: self.app.tools_access,
@@ -112,9 +131,9 @@ mod tests {
     use super::*;
     use pttstella::settings::PortableProfile;
     fn save(preferences: &mut Preferences, profile: DisplayProfile) -> Result<(), String> {
-        let saved = preferences
-            .store()?
-            .save(preferences.display_draft(profile))?;
+        let mut draft = preferences.app().clone();
+        draft.display = profile;
+        let saved = preferences.store()?.save(draft)?;
         preferences.commit(saved)
     }
 

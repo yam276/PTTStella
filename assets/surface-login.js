@@ -27,7 +27,7 @@ function createLoginDialog({tr,send,stamp,prepare,restore,changed,focus}) {
     }
     function revoke(){disposed=true;loginPassword.value="";loginRemember.checked=false;}
     function destroy(){revoke();loginAccount.value="";loginSaved=false;if(loginDialog.open)loginDialog.close();}
-    return {receive,revoke,destroy,update:packet=>{loginStop.hidden=!packet.login_pending;loginButton.disabled=packet.ptt_features===false||loginButton.dataset.platformSupported==="false";},
+    return {request:openLogin,receive,revoke,destroy,update:packet=>{loginStop.hidden=!packet.login_pending;loginButton.disabled=packet.ptt_features===false||loginButton.dataset.platformSupported==="false";},
         clean:()=>disposed&&!loginDialog.open&&!loginPassword.value&&!loginAccount.value&&!loginRemember.checked,
         bindings:[[loginButton,"click",openLogin],[loginSubmit,"click",submitLogin],[loginForget,"click",forgetLogin],
             [loginCancel,"click",closeLogin],[loginDialog,"cancel",closeLogin],[loginStop,"click",stopLogin]]};

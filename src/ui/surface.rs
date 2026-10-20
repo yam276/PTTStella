@@ -30,6 +30,8 @@ use super::{
 
 /// Named launch options keep call sites independent of positional booleans.
 pub(super) struct Options {
+    pub(super) debug_port: Option<u16>,
+    pub(super) settings_requests: watch::Receiver<u64>,
     pub(super) reload_settings: bool,
     pub(super) media_origin: Option<String>,
     pub(super) window_probe: bool,
@@ -57,6 +59,7 @@ pub(super) async fn surface(
     mut pending_paste: Signal<Option<PendingPaste>>,
     options: Options,
 ) -> Result<(), String> {
+    let main_window = dioxus::desktop::window();
     let mut resources = Resources::default();
     let mut reports = run(
         connection.clone(),
@@ -119,7 +122,7 @@ pub(super) async fn surface(
         }
     }
     reports?;
-    let window = dioxus::desktop::window();
+    let window = main_window;
     window.set_close_behavior(dioxus::desktop::WindowCloseBehaviour::WindowCloses);
     window.close();
     Ok(())
@@ -139,6 +142,8 @@ async fn run(
         mut pending_paste,
     } = signals;
     let Options {
+        debug_port,
+        mut settings_requests,
         reload_settings,
         media_origin,
         window_probe,
@@ -179,7 +184,9 @@ async fn run(
         commands,
         files,
         tools: _,
+        settings,
     } = resources;
+    settings.configure(probe.as_deref(), debug_port, reload_settings);
     let script = [
         "const fluent = (() => {const exports = {}; const module = {exports};\n",
         include_str!("../../assets/vendor/fluent/index.js"),
@@ -190,7 +197,7 @@ async fn run(
         include_str!("../../assets/surface-lifetime.js"),
         include_str!("../../assets/surface-packets.js"),
         include_str!("../../assets/surface-fonts.js"),
-        include_str!("../../assets/surface-settings.js"),
+        include_str!("../../assets/surface-renderer.js"),
         include_str!("../../assets/surface-sites.js"),
         include_str!("../../assets/surface-login.js"),
         include_str!("../../assets/surface-navigation.js"),
@@ -202,7 +209,7 @@ async fn run(
         include_str!("../../assets/surface.js"),
     ]
     .concat();
-    let mut eval = Bridge::new(&script);
+    let mut eval = Bridge::new(&script, settings);
     *owned_eval = Some(eval.owner());
     let language = pttstella::i18n::application().language();
     eval.send(Packet::Localization {
@@ -218,6 +225,8 @@ async fn run(
     let mut login_stamp: Option<navigation::Stamp> = None;
     let mut destination_request: Option<(u64, navigation::Stamp)> = None;
     let mut login_open = false;
+    let mut settings_visible = false;
+    let mut pending_settings: Option<super::preferences::Change> = None;
     let first = receiver.borrow_and_update().clone();
     let mut last_status = first.message.clone();
     let painting = screen
@@ -320,6 +329,22 @@ async fn run(
         if pending_report.is_some() && probe_checked {
             break (complete, probe_checked);
         }
+        // Autosave retains one authorized edit while an interactive file operation
+        // finishes. Apply against the latest committed state only when admitted.
+        if !files.busy()
+            && let Some(change) = pending_settings.take()
+        {
+            let result = change.apply(preferences.app().clone()).and_then(|draft| {
+                files.start(|permit| files::save_display(permit, preferences.store(), draft))
+            });
+            if let Err(error) = result {
+                eval.send(Packet::SettingsSaved(Feedback::new(
+                    SaveStatus::Rejected,
+                    error,
+                )))
+                .map_err(|e| e.to_string())?;
+            }
+        }
         // One in-flight frame: slow font/paint work cannot grow the JS queue.
         if screen.dirty() && !screen.has_in_flight() {
             let view = receiver.borrow().clone();
@@ -338,6 +363,11 @@ async fn run(
             }
         }
         tokio::select! {
+            request=settings_requests.changed()=>{
+                request.map_err(|e|e.to_string())?;settings_requests.borrow_and_update();
+                settings_visible=true;connection.keep_alive_gate(receiver.borrow().stamp(),false);eval.send(Packet::SettingsVisibility(true)).map_err(|e|e.to_string())?;
+                eval.open_settings(preferences.store());eval.send(preferences.open_packet()).map_err(|e|e.to_string())?;
+            },
             changed = closing.changed() => {
                 changed.map_err(|e| e.to_string())?;
                 if *closing.borrow_and_update() {
@@ -372,6 +402,7 @@ async fn run(
                             screen.display_changed();
                             eval.send(Packet::ToolsOpacity(preferences.app().tools_opacity)).map_err(|e|e.to_string())?;
                             eval.send(Packet::ToolsAccess(preferences.app().tools_access)).map_err(|e|e.to_string())?;
+                            eval.send(Packet::HoverSettings(preferences.hover())).map_err(|e|e.to_string())?;
                             Packet::SettingsSaved(Feedback::new(SaveStatus::Saved,if preferences.app().language!=pttstella::i18n::application().language(){pttstella::msg!("settings-language-saved")}else{pttstella::msg!("settings-saved")}))
                         },
                         Err(error)=>Packet::SettingsSaved(Feedback::new(SaveStatus::Rejected,error)),
@@ -757,6 +788,7 @@ async fn run(
                         connection.keep_alive_gate(
                             stamp,
                             ready
+                                && !settings_visible
                                 && !keyboard_policy
                                     .status(&receiver.borrow().context())
                                     .pending,
@@ -799,7 +831,13 @@ async fn run(
                         let feedback=match result {Ok(())=>Feedback::new(super::sites::Status::Connecting,pttstella::msg!("sites-connecting")),Err(error)=>{checks.site_rejections=checks.site_rejections.saturating_add(1);Feedback::new(super::sites::Status::Rejected,error)}};
                         eval.send(Packet::SitesResult{request,data:sites.snapshot(receiver.borrow().site.clone()),feedback}).map_err(|e|e.to_string())?;
                     },
+                    SurfaceEvent::SettingsVisibility {open} => {settings_visible=open;eval.send(Packet::SettingsVisibility(open)).map_err(|e|e.to_string())?;},
+                    SurfaceEvent::SettingsLaunch {feature,..} => {
+                        eval.focus_main();eval.send(Packet::SettingsLaunch(feature)).map_err(|e|e.to_string())?;
+                    }
                     SurfaceEvent::SettingsOpen { trusted: _ } => {
+                        settings_visible=true;connection.keep_alive_gate(receiver.borrow().stamp(),false);eval.send(Packet::SettingsVisibility(true)).map_err(|e|e.to_string())?;
+                        eval.open_settings(preferences.store());
                         eval.send(preferences.open_packet())
                             .map_err(|e| e.to_string())?;
                     }
@@ -818,17 +856,13 @@ async fn run(
                             Ok(())=>pttstella::msg!("font-source-opened"),
                             Err(error)=>pttstella::msg!("link-open-failed",e=error.to_string()),
                         };
-                        eval.send(Packet::Notice(notice)).map_err(|e|e.to_string())?;
+                        eval.settings_notice(&notice).map_err(|e|e.to_string())?;
                     }
                     SurfaceEvent::SettingsPreview { request, values } => {
                         eval.send(preferences.preview_packet(request, values))
                             .map_err(|e| e.to_string())?;
                     }
-                    SurfaceEvent::SettingsSave { values, language, tools_opacity, tools_access, trusted: _ } => {
-                        if let Err(error)=files.start(|permit|files::save_display(permit,preferences.store(),{let mut draft=preferences.display_draft(values);draft.language=language;draft.tools_opacity=tools_opacity;draft.tools_access=tools_access;draft})) {
-                            eval.send(Packet::SettingsSaved(Feedback::new(SaveStatus::Rejected,error))).map_err(|e|e.to_string())?;
-                        }
-                    }
+                    SurfaceEvent::SettingsSave { change, trusted: _ } => {pending_settings=Some(change);}
                     SurfaceEvent::SettingsProfile {
                         action,
                         name,

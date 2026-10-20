@@ -17,6 +17,7 @@ pub(super) struct Resources {
     pub(super) login: Option<Job>,
     pub(super) commands: Pending,
     pub(super) files: Files,
+    pub(super) settings: super::settings_window::SettingsWindow,
     pub(super) tools: Option<super::protocol::ToolsObservation>,
 }
 
@@ -139,6 +140,17 @@ impl Resources {
             Duration::from_secs(5),
         )
         .await;
+        let settings = retained_wait(
+            self.settings.finish(),
+            || message.set(pttstella::msg!("cleanup-wait")),
+            Duration::from_secs(5),
+        )
+        .await;
+        let files = match (files, settings) {
+            (Ok(()), result) => result,
+            (Err(error), Ok(())) => Err(error),
+            (Err(error), Err(settings)) => Err(format!("{error}；{settings}")),
+        };
         let renderer = renderer.and_then(|finished| {
             self.tools = finished.tools;
             if finished.clean {

@@ -79,6 +79,8 @@ pub(super) enum Packet<'a> {
     },
     InlineReset(bool),
     SettingsOpen(Box<SettingsOpen>),
+    SettingsLaunch(super::protocol::SettingsFeature),
+    SettingsVisibility(bool),
     FontPreview(FontPreview),
     FontCatalog {
         request: u64,
@@ -170,6 +172,7 @@ pub(super) struct MediaImage {
 }
 #[derive(Serialize)]
 pub(super) struct SettingsOpen {
+    pub hover: HoverPosition,
     pub tools_access: pttstella::settings::ToolAccess,
     pub tools_opacity: ToolOpacity,
     pub language: pttstella::i18n::Language,

@@ -8,7 +8,7 @@ function revokeSurfaceSelection(send,cache,busy) {
 function createSurfaceRouter(handlers) {
     const kinds=["station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
         "hover_settings","tools_opacity","tools_access","sites_open","sites_result","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error",
-        "media_external","media_reset","inline_open","inline_image","inline_error","inline_reset","settings_open","font_catalog","font_preview","profile_result","settings_saved",
+        "media_external","media_reset","inline_open","inline_image","inline_error","inline_reset","settings_visibility","settings_launch","settings_open","font_catalog","font_preview","profile_result","settings_saved",
         "selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","link_result","export_result"];
     const table=new Map(kinds.map(kind=>{
         if(typeof handlers[kind]!=="function")throw new Error("Missing surface handler: "+kind);

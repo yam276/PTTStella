@@ -64,7 +64,7 @@ function createSitesDialog({tr,send,prepare,restore,changed}) {
     }
     function revoke(){disposed=true;opening=null;pending=null;composing=false;entries=[];address.value="";name.value="";}
     function destroy(){revoke();if(dialog.open)dialog.close();}
-    return {receiveOpen,receive,revoke,destroy,clean:()=>disposed&&!dialog.open&&!pending&&!opening,
+    return {request:open,receiveOpen,receive,revoke,destroy,clean:()=>disposed&&!dialog.open&&!pending&&!opening,
         bindings:[[button,"click",open],[list,"change",choose],[address,"input",controls],[encoding,"change",controls],
             [favourite,"click",e=>edit("favourite",e)],[remove,"click",e=>edit("remove",e)],[makeDefault,"click",e=>edit("default",e)],
             [connect,"click",go],[closeButton,"click",close],[dialog,"cancel",close],
