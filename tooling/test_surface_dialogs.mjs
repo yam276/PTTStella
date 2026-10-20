@@ -47,18 +47,18 @@ test("the production clearSelection sends a scoped revocation before dropping it
     assert.equal(events.length,0);
 });
 const openData=()=>({language:"zh-TW",tools_opacity:100,tools_access:{right_click_menu:true,show_floating_button:true},profile:{fonts:{kind:"platform_default"}},values:{...display},defaults:{...display},presets:{},sample:{settings:{...display}},warning:null});
-test("right-click and floating visibility stay draft-only until save and restore through cancel and defaults",async()=>{
+test("trusted tool edits autosave, coalesce while writing, and retain failures for retry",async()=>{
     const env=environment("surface-settings.js","createSettingsDialog"),ui=env.create();
-    const initial={...openData(),tools_access:{right_click_menu:false,show_floating_button:true}};
-    await ui.open(initial);
-    assert.equal(env.node("tools-right-click").checked,false);
-    env.node("tools-right-click").checked=true;env.node("tools-show-ball").checked=false;env.fire("font-cancel");
-    assert.equal(env.sent.some(e=>e.kind==="settings_save"),false);
-    await ui.open(initial);assert.equal(env.node("tools-right-click").checked,false);assert.equal(env.node("tools-show-ball").checked,true);
-    env.node("tools-right-click").checked=true;env.node("tools-show-ball").checked=false;env.fire("font-save");
-    assert.deepEqual(JSON.parse(JSON.stringify(env.sent.at(-1).tools_access)),{right_click_menu:true,show_floating_button:false});
-    ui.saved({status:"rejected"});assert.equal(env.node("tools-show-ball").checked,false);
-    env.fire("font-defaults");assert.equal(env.node("tools-right-click").checked,true);assert.equal(env.node("tools-show-ball").checked,true);ui.destroy();
+    await ui.open(openData());env.node("tools-show-ball").checked=false;
+    env.fire("tools-show-ball","change",false);env.tick();assert.equal(env.sent.filter(x=>x.kind==="settings_save").length,0);
+    env.fire("tools-show-ball","change");env.tick();assert.equal(env.sent.at(-1).tools_access.show_floating_button,false);
+    env.node("tools-right-click").checked=false;env.fire("tools-right-click","change");env.tick();
+    assert.equal(env.sent.filter(x=>x.kind==="settings_save").length,1);
+    ui.saved({status:"saved"});assert.equal(env.sent.filter(x=>x.kind==="settings_save").length,2);
+    assert.equal(env.sent.at(-1).tools_access.right_click_menu,false);
+    ui.saved({status:"rejected",notice:"disk full"});assert.equal(env.node("font-note").textContent,"disk full");assert.equal(env.node("font-save").hidden,false);
+    env.fire("font-save");ui.saved({status:"saved"});assert.equal(env.node("font-dialog").open,true);
+    env.fire("font-cancel");assert.equal(env.node("font-dialog").open,false);ui.destroy();
 });
 function deferred(){let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};}
 
@@ -76,14 +76,14 @@ test("an old preview finishing after a newer draft cannot replace it",async()=>{
     const ui=env.create({loadFonts:()=>slow?slow.promise:Promise.resolve("")});
     await ui.open(openData());env.renders.length=0;
     env.node("font-size").value="18";env.fire("font-size","input");env.tick();
-    const first=env.sent.at(-1);slow=deferred();
+    const first=env.sent.filter(x=>x.kind==="settings_preview").at(-1);slow=deferred();
     const receiving=ui.preview({request:first.request,packet:{settings:{...display,font_size:18}}});
     env.node("font-size").value="22";env.fire("font-size","input");env.tick();
-    const second=env.sent.at(-1);assert.equal(second.request,first.request+1);
+    const second=env.sent.filter(x=>x.kind==="settings_preview").at(-1);assert.equal(second.request,first.request+1);
     slow.resolve("");await receiving;assert.equal(env.renders.length,0);
     slow=null;await ui.preview({request:second.request,packet:{settings:{...display,font_size:22}}});
     assert.equal(env.renders.length,1);assert.equal(env.renders[0][1].settings.font_size,22);
-    env.fire("font-size","input");assert.equal(env.timers.size,1);
+    env.fire("font-size","input");assert.equal(env.timers.size,2);
     ui.revoke();assert.equal(env.timers.size,0);ui.destroy();assert.equal(ui.clean(),true);
 });
 
@@ -123,7 +123,7 @@ test("the tagged router delivers independent wire examples once and rejects lega
     const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8")+"\ncreateSurfaceRouter");
     const kinds=["station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
         "hover_settings","tools_opacity","tools_access","sites_open","sites_result","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error","media_external",
-        "media_reset","inline_open","inline_image","inline_error","inline_reset","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","link_result","export_result"];
+        "media_reset","inline_open","inline_image","inline_error","inline_reset","settings_visibility","settings_launch","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","link_result","export_result"];
     const calls=[],handlers=Object.fromEntries(kinds.map(kind=>[kind,payload=>calls.push({kind,payload})]));
     const route=create(handlers),examples=JSON.parse(readFileSync(new URL("../tests/fixtures/ui-packets.json",import.meta.url),"utf8"));
     for(const {packet} of examples){
@@ -138,22 +138,17 @@ test("the tagged router delivers independent wire examples once and rejects lega
 });
 
 
-test("language is a settings draft: cancel sends no save, failure retains the draft, success commits once",async()=>{
+test("language autosaves without closing, and closing flushes the final edit",async()=>{
     const env=environment("surface-settings.js","createSettingsDialog"),ui=env.create();
-    await ui.open(openData());env.sent.length=0;env.node("interface-language").value="en-US";
-    env.fire("font-cancel");assert.equal(env.sent.length,0);
-    await ui.open(openData());env.sent.length=0;assert.equal(env.node("interface-language").value,"zh-TW");
-    env.node("interface-language").value="en-US";env.fire("font-save");env.fire("font-save");
-    assert.equal(env.sent.length,1);assert.equal(env.sent[0].language,"en-US");
-    ui.saved({status:"rejected"});assert.equal(env.node("font-dialog").open,true);
-    assert.equal(env.node("interface-language").value,"en-US");
-    env.fire("font-save");assert.equal(env.sent.length,2);
-    ui.saved({status:"saved"});assert.equal(env.node("font-dialog").open,false);
-    ui.destroy();assert.equal(ui.clean(),true);
+    await ui.open(openData());env.node("interface-language").value="en-US";
+    env.fire("interface-language","change");env.tick();assert.equal(env.sent.at(-1).language,"en-US");
+    ui.saved({status:"saved"});assert.equal(env.node("font-dialog").open,true);
+    env.node("tools-opacity").value="30";env.fire("tools-opacity","input");env.fire("font-cancel");
+    assert.equal(env.sent.at(-1).tools_opacity,30);assert.equal(env.node("font-dialog").open,true);
+    ui.saved({status:"saved"});assert.equal(env.node("font-dialog").open,false);ui.destroy();
 });
 
-
-test("local font selection changes only a draft, ignores stale catalogs and refresh does not save",async()=>{
+test("local font selection autosaves, ignores stale catalogs and refresh does not save again",async()=>{
     const env=environment("surface-settings.js","createSettingsDialog");let refreshed=0;
     const ui=env.create({invalidateFonts(){refreshed++;}});await ui.open(openData());
     const request=env.sent.at(-1).request;
@@ -166,12 +161,13 @@ test("local font selection changes only a draft, ignores stale catalogs and refr
     env.node("font-local-cjk").value="Songti TC";env.fire("font-local-cjk","change");env.tick();
     assert.equal(env.sent.at(-1).values.fonts.cjk_font,"Songti TC");
     assert.equal(env.sent.at(-1).values.fonts.ascii_font,"Menlo");
+    assert.equal(env.sent.filter(e=>e.kind==="settings_save").length,1);ui.saved({status:"saved"});
     env.fire("font-refresh","click",false);assert.equal(refreshed,0);
     env.fire("font-refresh");assert.equal(refreshed,1);const next=env.sent.at(-1).request;
     ui.catalog({request,families:["Stale"],notice:null});assert.notEqual(env.node("font-local-ascii").children[1].textContent,"Stale");
     ui.catalog({request:next,families:[],notice:"scan failed"});assert.equal(env.node("font-local-ascii").disabled,true);
     assert.equal(env.node("font-local-status").textContent,"scan failed");
-    assert.equal(env.node("font-ascii").value,"Menlo");assert.equal(env.sent.some(e=>e.kind==="settings_save"),false);
+    assert.equal(env.node("font-ascii").value,"Menlo");assert.equal(env.sent.filter(e=>e.kind==="settings_save").length,1);
     env.fire("font-cancel");ui.catalog({request:next,families:["Late"],notice:null});
     assert.equal(env.node("font-dialog").open,false);ui.destroy();
 });
@@ -191,7 +187,7 @@ test("official source buttons match selected families and require an explicit tr
 });
 
 
-test("traditional preset choices preserve family intent and current size until explicit save",async()=>{
+test("traditional preset autosaves preserve family intent and current size",async()=>{
     const env=environment("surface-settings.js","createSettingsDialog"),ui=env.create(),data=openData();
     data.presets={windows_classic:{ascii_font:"MingLiU",cjk_font:"MingLiU",font_size:20,baseline:20},macos_bbs:{ascii_font:"Songti TC",cjk_font:"Songti TC",font_size:20,baseline:20}};
     await ui.open(data);env.node("font-size").value="22";env.node("font-baseline").value="19";
@@ -199,26 +195,19 @@ test("traditional preset choices preserve family intent and current size until e
         env.node("font-preset").value=preset;env.fire("font-preset","change");env.tick();
         assert.equal(env.node("font-ascii").value,family);assert.equal(env.node("font-cjk").value,family);
         assert.equal(env.node("font-size").value,"22");assert.equal(env.node("font-baseline").value,"19");
-        const next=env.sent.at(-1);assert.equal(next.kind,"settings_preview");assert.equal(next.values.fonts.preset,preset);
+        const next=env.sent.filter(x=>x.kind==="settings_preview").at(-1);assert.equal(next.kind,"settings_preview");assert.equal(next.values.fonts.preset,preset);
         await ui.preview({request:next.request,packet:{settings:{...display,ascii_font:family,cjk_font:family,font_size:22,baseline:19}}});
     }
-    assert.equal(env.sent.some(e=>e.kind==="settings_save"),false);env.fire("font-save");
-    assert.equal(env.sent.at(-1).values.fonts.preset,"macos_bbs");ui.destroy();
+    ui.saved({status:"saved"});
+    assert.equal(env.sent.filter(x=>x.kind==="settings_save").at(-1).values.fonts.preset,"macos_bbs");ui.destroy();
 });
 
-test("tool opacity remains a settings draft through cancel and failure, and resets explicitly",async()=>{
-    const env=environment("surface-settings.js","createSettingsDialog"),ui=env.create();
-    await ui.open({...openData(),tools_opacity:65});
-    assert.equal(env.node("tools-opacity").value,"65");
-    env.node("tools-opacity").value="35";env.fire("tools-opacity","input");
-    assert.equal(env.node("tools-opacity-value").textContent,"35%");
-    env.fire("font-cancel");assert.equal(env.sent.some(e=>e.kind==="settings_save"),false);
-    await ui.open({...openData(),tools_opacity:65});assert.equal(env.node("tools-opacity").value,"65");
-    env.node("tools-opacity").value="40";env.fire("font-save");
-    assert.equal(env.sent.at(-1).tools_opacity,40);
-    ui.saved({status:"rejected"});assert.equal(env.node("tools-opacity").value,"40");
-    env.fire("font-defaults");assert.equal(env.node("tools-opacity").value,"100");
-    env.fire("font-save");assert.equal(env.sent.at(-1).tools_opacity,100);ui.destroy();
+test("opacity changes autosave, and restored defaults are persisted without resetting language",async()=>{
+    const env=environment("surface-settings.js","createSettingsDialog"),ui=env.create({page:()=>"input"});
+    await ui.open({...openData(),language:"en-US",tools_opacity:65});
+    env.node("tools-opacity").value="35";env.fire("tools-opacity","input");env.tick();
+    assert.equal(env.sent.at(-1).tools_opacity,35);ui.saved({status:"saved"});
+    env.fire("font-defaults");env.tick();assert.equal(env.sent.at(-1).tools_opacity,100);assert.equal(env.sent.at(-1).language,"en-US");ui.destroy();
 });
 
 test("PTT login stays disabled on another station and on an unsupported platform",()=>{
@@ -261,4 +250,27 @@ test("import preview requires explicit apply and cancelled late results cannot r
     ui.receive({state:"rejected",message:"save failed"});assert.equal(ui.blocked(),false);
     assert.equal(env.node("filters-list").children.length,2);assert.equal(env.node("filters-import").disabled,false);
     ui.destroy();assert.equal(ui.clean(),true);
+});
+
+test("invalid fields and composition cannot persist partial edits, and shutdown retains the latest complete snapshot",async()=>{
+ const env=environment("surface-settings.js","createSettingsDialog"),ui=env.create();await ui.open(openData());
+ env.node("font-size").checkValidity=()=>false;env.node("font-size").value="";env.fire("font-size","input");env.tick();
+ assert.equal(env.sent.filter(x=>x.kind==="settings_save").length,0);assert.throws(()=>ui.snapshot(),/尚未完整/);
+ env.node("font-size").checkValidity=()=>true;env.node("font-size").value="18";env.fire("font-size","compositionstart");env.fire("font-size","input");env.tick();
+ assert.equal(env.sent.filter(x=>x.kind==="settings_save").length,0);
+ env.fire("font-size","compositionend");assert.equal(ui.snapshot().values.font_size,18);
+ env.tick();assert.equal(env.sent.filter(x=>x.kind==="settings_save").length,1);
+ env.node("font-size").value="22";env.fire("font-size","input");assert.equal(ui.snapshot().values.font_size,22);
+ ui.destroy();assert.equal(env.timers.size,0);
+});
+
+test("an accepted profile is retained for autosave and shutdown while its fonts are still loading",async()=>{
+ const env=environment("surface-settings.js","createSettingsDialog");let slow=null;
+ const ui=env.create({loadFonts:()=>slow?slow.promise:Promise.resolve("")});await ui.open(openData());
+ slow=deferred();const values={...display,font_size:18,baseline:19};
+ const receiving=ui.profile({status:"imported",profile:{name:"Synthetic",profile:{fonts:{kind:"platform_default"}},values,sample:{settings:values}}});
+ assert.equal(ui.snapshot()?.values.font_size,18,'accepted import must survive closing before preview resolves');
+ env.tick();assert.equal(env.sent.at(-1).kind,"settings_save");assert.equal(env.sent.at(-1).values.font_size,18);
+ ui.destroy();const renders=env.renders.length;slow.resolve("");await receiving;
+ assert.equal(env.renders.length,renders);assert.equal(ui.clean(),true);
 });

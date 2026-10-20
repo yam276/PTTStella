@@ -4,12 +4,20 @@ use dioxus::desktop::muda::{
     accelerator::{Accelerator, Code, Modifiers},
 };
 
+pub const SETTINGS: &str = "pttstella-settings";
 pub const QUIT: &str = "pttstella-quit";
 
 pub fn menu() -> Result<Menu, muda::Error> {
     let menu = Menu::new();
     let application = Submenu::new("PTTStella", true);
     application.append_items(&[
+        &MenuItem::with_id(
+            SETTINGS,
+            pttstella::msg!("context-settings"),
+            true,
+            Some(Accelerator::new(Some(Modifiers::SUPER), Code::Comma)),
+        ),
+        &PredefinedMenuItem::separator(),
         &PredefinedMenuItem::hide(Some(&pttstella::msg!("menu-hide"))),
         &PredefinedMenuItem::hide_others(Some(&pttstella::msg!("menu-hide-others"))),
         &PredefinedMenuItem::show_all(Some(&pttstella::msg!("menu-show-all"))),

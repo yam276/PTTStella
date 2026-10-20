@@ -349,6 +349,11 @@ fn outbound_results_match_the_shared_wire_examples() {
                 },
             },
         ),
+        (
+            "settings_launch",
+            Packet::SettingsLaunch(super::protocol::SettingsFeature::Sites),
+        ),
+        ("settings_visibility", Packet::SettingsVisibility(true)),
     ];
     let expected: Vec<Value> =
         serde_json::from_str(include_str!("../../tests/fixtures/ui-packets.json")).unwrap();

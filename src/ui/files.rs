@@ -581,3 +581,21 @@ pub(super) async fn import_filters(
     .await;
     Completion::FilterImport { request, result }
 }
+
+/// The settings window may retain one final edit across shutdown. Run only after
+/// Files::finish has drained earlier writes; preserve unrelated committed fields.
+pub(super) async fn flush_settings(
+    store: Store,
+    change: super::preferences::Change,
+) -> Result<(), String> {
+    blocking(Permit::default(), move || {
+        let before = store.load()?;
+        let app = change.apply(before.clone())?;
+        if app != before {
+            store.save(app)?;
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())
+}

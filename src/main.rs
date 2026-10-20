@@ -221,6 +221,7 @@ fn main() {
         }
     }
     let props = ui::AppProps {
+        debug_port,
         probe,
         window_probe,
         login_probe,

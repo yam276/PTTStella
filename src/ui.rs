@@ -14,6 +14,7 @@ mod presentation;
 mod probe;
 mod protocol;
 mod recent;
+mod settings_window;
 mod sites;
 mod surface;
 mod surface_state;
