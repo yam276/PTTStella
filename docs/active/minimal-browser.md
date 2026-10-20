@@ -12,6 +12,12 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。沒有獨立文章 UI、啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## Windows 單一安裝檔交付（2026-10-20）
+
+Windows Release 產品下載改為只有 `-setup.exe`，完整包含 staged App、app-local VC++ runtime DLL、圖示與授權；來源 manifest 與校驗碼仍附於 Release。本機 ZIP 保留作為開發／解壓驗證產物，但發佈收集器不收錄，額外 ZIP／裸 DLL／資產壓縮包會被完整白名單拒絕。JS／CSS、翻譯與內建字型原已由 Rust 內嵌，不需帶原始碼 assets 目錄。這是單一下載的安裝檔，安裝目錄仍包含多個檔案；macOS 是標準 `.app` 套件，Linux 仍須系統 GTK／WebKitGTK 等依賴，詳見 [安裝包契約](../windows-installer.md)。
+
+本機 Python tooling 57 項、docs（27 documents／175 links／21 gate regressions）、actionlint 與 core（13 commands／2 replays）通過。新增案例核對 CRT、圖示、授權與 manifest 雜湊在 Setup 來源目錄內，以及 Release 僅收錄 Setup、缺 Setup 不可由 ZIP 取代。測試使用合成 bytes 與注入 compiler 結果，不能證明真實安裝包內容。Windows 原生政策 gate 在 macOS 回報 not_ready；本輪沒有真正編譯 Setup／安裝 App，也沒有重試受帳戶限制的 GitHub runner。原生編譯、安裝及四架構 workflow 驗證仍待完成。證據保留 `.local/verification/windows-single-setup`。
+
 ## Windows Setup 與 WebView2 自動補裝（2026-10-20）
 
 Windows Release 新增 `-setup.exe`，與 ZIP 消費同一次編譯與同一份 staged App；仍使用原本 MSVC／app-local CRT，未混入靜態 CRT 或工具鏈切換。Setup 使用 Inno Setup 7.1.0，繁體中文／英文、目前使用者安裝；前置階段檢查四個 registry view，已有有效 WebView2 時跳過，缺少才執行內附的 Microsoft Evergreen bootstrapper，並再次檢查是否已安裝。失敗停在複製檔案之前，解除安裝保留共用 Runtime 與使用者設定。來源驗證、網路需求與範圍見 [安裝包契約](../windows-installer.md)。

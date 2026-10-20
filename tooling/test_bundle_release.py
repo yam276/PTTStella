@@ -61,7 +61,7 @@ class PackageTests(unittest.TestCase):
                 bundle.bundle(self.root)
         self.assertEqual(list(self.root.iterdir()), [])
 
-    def test_windows_release_requires_setup_and_zip_from_the_same_packaging_pass(self):
+    def test_windows_release_delivers_only_setup_without_portable_or_loose_payloads(self):
         version = tomllib.loads((bundle.ROOT/'Cargo.toml').read_text(encoding='utf-8'))['package']['version']
         stem = f'PTTStella-{version}-windows-x64'
         def windows(output, with_installer=False):
@@ -70,6 +70,9 @@ class PackageTests(unittest.TestCase):
             archive, setup = output/(stem+'.zip'), output/(stem+'-setup.exe')
             archive.write_bytes(b'synthetic portable download')
             setup.write_bytes(b'synthetic setup download')
+            (output/'vcruntime140.dll').write_bytes(b'synthetic CRT')
+            (output/'assets').mkdir()
+            (output/'assets/font.ttf').write_bytes(b'synthetic embedded asset')
             return {'zip': str(archive), 'installer': str(setup),
                     'installer_details': {'webview2': {'install_only_if_missing': True}}}
         output = self.root/'release'
@@ -79,7 +82,11 @@ class PackageTests(unittest.TestCase):
             bundle.bundle(output)
         self.assertEqual(packaged.call_count, 1)
         report = json.loads((output/(stem+'.json')).read_text())
-        self.assertEqual(set(report['files']), {stem+'.zip', stem+'-setup.exe'})
+        self.assertEqual(set(report['files']), {stem+'-setup.exe'})
+        self.assertEqual({p.name for p in output.iterdir()},
+                         {stem+suffix for suffix in ('-setup.exe', '-setup.exe.sha256',
+                                                     '.json', '.json.sha256')})
+        self.assertEqual((output/(stem+'-setup.exe')).read_bytes(), b'synthetic setup download')
         self.assertFalse(report['source_dirty'])
         self.assertTrue(report['installer']['webview2']['install_only_if_missing'])
 

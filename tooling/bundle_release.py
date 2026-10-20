@@ -158,11 +158,12 @@ def bundle(output):
         staging = Path(temporary)
         if target == 'windows-x64':
             result = bundle_windows.bundle(staging/'windows', with_installer=True)
-            assets = []
-            for source in (Path(result['zip']), Path(result['installer'])):
-                archive = staging/source.name
-                shutil.copy2(source, archive)
-                assets.append(archive)
+            # The portable ZIP is a local packaging/verification artifact. Public
+            # Windows delivery is one Setup containing the complete staged App.
+            source = Path(result['installer'])
+            archive = staging/source.name
+            shutil.copy2(source, archive)
+            assets = [archive]
             details = {'authenticode_signed': False,
                        'runtime': 'Microsoft Edge WebView2 Evergreen Runtime',
                        'installer': result['installer_details']}

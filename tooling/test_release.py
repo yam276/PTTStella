@@ -152,7 +152,7 @@ class PublicationTests(unittest.TestCase):
 
     def test_complete_four_architecture_set_and_hashes_are_required(self):
         files = release.validate_assets(self.root, '0.1.0', COMMIT)
-        self.assertEqual(len(files), 10)  # six downloads plus four source manifests
+        self.assertEqual(len(files), 9)  # five downloads plus four source manifests
         (self.root/'private-settings.json').write_text('{}')
         with self.assertRaisesRegex(ValueError, 'unexpected files'):
             release.validate_assets(self.root, '0.1.0', COMMIT)
@@ -177,10 +177,24 @@ class PublicationTests(unittest.TestCase):
             release.publish(self.context, self.root, self.github)
 
     def test_missing_windows_installer_prevents_publication_even_with_a_valid_zip(self):
+        archive = self.root/'PTTStella-0.1.0-windows-x64.zip'
+        archive.write_bytes(b'synthetic portable package')
+        self.checksum(archive)
         (self.root/'PTTStella-0.1.0-windows-x64-setup.exe').unlink()
         with self.assertRaises(FileNotFoundError):
             release.publish(self.context, self.root, self.github)
         self.assertEqual(self.github.calls, [])
+
+    def test_extra_windows_zip_or_loose_runtime_cannot_be_published(self):
+        for name in ('PTTStella-0.1.0-windows-x64.zip', 'vcruntime140.dll', 'assets.zip'):
+            path = self.root/name
+            path.write_bytes(b'synthetic extra payload')
+            self.checksum(path)
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'unexpected files'):
+                release.publish(self.context, self.root, self.github)
+            self.assertEqual(self.github.calls, [])
+            path.unlink()
+            path.with_name(name+'.sha256').unlink()
 
     def test_upload_failure_leaves_draft_and_never_publishes_partial_release(self):
         calls = []
@@ -206,9 +220,9 @@ class PublicationTests(unittest.TestCase):
             return ''
         with patch.object(release, 'command', side_effect=command):
             result = release.publish(self.context, self.root, self.github)
-        self.assertEqual(result['assets'], 11)
+        self.assertEqual(result['assets'], 10)
         self.assertEqual(self.github.tag, COMMIT)
-        self.assertEqual(sum(args[:3] == ('gh', 'release', 'upload') for args in calls), 11)
+        self.assertEqual(sum(args[:3] == ('gh', 'release', 'upload') for args in calls), 10)
         self.assertEqual(calls[-1][:3], ('gh', 'release', 'edit'))
         self.assertIn('--latest=true', calls[-1])
 
