@@ -12,6 +12,14 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。沒有獨立文章 UI、啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## 分支與 Release 自動化（2026-10-20）
+
+已從當前 main 建立並推送 `develop`，GitHub 預設分支改為 develop；main 保持 `095ff2f`，沒有提高產品版本或建立 tag／Release。日常開發在 develop，Release PR 才前往 main；標題、來源、遞增 SemVer 與 Cargo.lock 一致性由 PR policy 檢查。main 的 Cargo.toml 更新才自動進入四架構打包，手動 verify 不發佈；全部 archive／來源 manifest／雜湊通過後才從 draft 發佈，詳見 [發佈流程](../releases.md)。
+
+本機 45 項 Python tooling 測試、docs 與 actionlint 通過。`3595aed` 的 clean source 在 macOS arm64 以正式 release profile 建置，ZIP 解壓後 strict codesign、arm64、plist、完整性與所有 SHA-256 通過，包含 389 筆 locked dependency 授權 inventory；沒有啟動 App 或將打包當作 GUI／實站驗收。保留 `dist/release-workflow-macos-arm64` 與 `.local/verification/release-workflow` 報告。
+
+GitHub verify run `39349452136` 在分配 runner 前失敗，零 step，annotation 指向帳戶付款／Actions spending limit；使用者選擇稍後處理。因此 GitHub 四架構建置仍 not_ready，不能宣稱 Windows／Intel Mac／Linux 套件已經由本流程驗證。私人 repo 的 rulesets／branch protection API 另回覆 403，需要 Pro；已提供匯入 JSON，但尚無伺服器端 main 合併／推送限制。使用者處理帳戶後應重跑 verify，方案支援後另啟用 ruleset；目前沒有遠端 Release 或 tag。
+
 ## 整行滑鼠導覽與左緣返回（2026-10-19）
 
 最新交付為 `dist/macos-account-lists-final/PTTStella.app`（arm64、dev debug=0、ad-hoc 簽章），包含黑白名單匯入與本節滑鼠操作。文章整行可開啟，網址維持優先；最左一欄第 2–23 行提供返回，hover 顯示垂直提示與向左箭頭游標。可返回畫面限閱讀、文章／看板／空列表與命令說明，未知與主選單不猜測。列光棒採低透明度藍金、2.4 秒呼吸動畫，減少動態效果停用；Shift 與拖曳保持選取，所有本機裝飾不進原始 Canvas 或 PNG。

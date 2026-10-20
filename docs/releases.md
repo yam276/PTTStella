@@ -34,6 +34,8 @@ Actions → Desktop Release → Run workflow：
 - **verify**（預設）：選 `develop` 或 `main`，執行相同四架構測試／打包，產物保留於該 run 的 artifacts 14 天。完全不建立 tag 或 Release，適合修改建置流程後驗證。
 - **publish**：只准選已合併 Release PR 的 `main`，重跑未完成的發佈。不是繞過版本與分支檢查的入口。
 
+2026-10-20 初次 verify run 在分配 runner 前因帳戶付款／spending limit 被 GitHub 拒絕，沒有執行建置步驟。使用者選擇稍後處理；恢復 Actions 額度後需重新執行 verify，不能將本機 macOS 打包結果當成 GitHub 四架構建置已通過。詳細驗證狀態見 [active plan](active/minimal-browser.md)。
+
 建置失敗不會建立 Release。上傳時先建 draft，全部檔案上傳成功才公開；上傳中斷會保留 draft。優先使用失敗 run 的 **Re-run failed jobs**，沿用成功 build 的 artifacts。重試可跳過 SHA-256 完全相同的 draft asset，不覆寫不同內容。若重新建置導致相同檔名內容不同，需人工檢查並刪除未發佈的 draft 後重試，或使用新版本；既有 tag 只准仍指向相同 commit，不能移動。已公開的 Release 不由 workflow 修改。
 
 ## GitHub 分支保護
