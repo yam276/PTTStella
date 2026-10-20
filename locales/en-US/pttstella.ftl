@@ -591,3 +591,6 @@ settings-alias-sites = 站點 連線 編碼 網址 最愛 預設 ptt ptt2 telnet
 settings-alias-filters = 黑白名單 黑名單 白名單 過濾 匯入 blacklist whitelist blocklist allowlist filter import
 settings-alias-account = 帳號 密碼 登入 鑰匙圈 隱私 account password login keychain privacy
 settings-alias-about = 關於 授權 版本 about license version
+
+reason-layout = This list layout is not supported
+vim-layout = Vim paused: this list layout is not supported; press i for native input

@@ -1208,3 +1208,77 @@ fn board_browser_still_requires_stable_columns_and_valid_rows() {
         }
     );
 }
+
+#[test]
+fn mail_and_archive_lists_use_verified_single_column_rows_without_new_mail_shortcuts() {
+    use navigation::DocumentKind;
+    for (name, category) in [
+        ("mail", DocumentKind::Mail),
+        ("archive", DocumentKind::Archive),
+    ] {
+        let mut screen = fixture(name);
+        let context = navigation::analyze(&screen.frame());
+        assert_eq!(
+            context,
+            Context::DocumentList {
+                category,
+                first_row: 3,
+                last_row: 4,
+                cursor_row: 4
+            }
+        );
+        assert!(!context.allows_keepalive());
+        for (intent, expected) in [
+            (Intent::Open { row: 3 }, b"\x1b[A\r".as_slice()),
+            (Intent::Open { row: 4 }, b"\r"),
+            (Intent::Back, b"\x1b[D"),
+            (Intent::NextPage, b"\x1b[6~"),
+            (Intent::PreviousPage, b"\x1b[5~"),
+        ] {
+            assert_eq!(navigation::plan(&context, intent).unwrap(), expected);
+        }
+        for row in [0, 2, 5, 23, usize::MAX] {
+            assert_eq!(
+                navigation::plan(&context, Intent::Open { row }),
+                Err(Error::Unavailable)
+            );
+        }
+        replace(&mut screen, 23, "您確定要刪除嗎 [Y/N]", "0");
+        assert!(matches!(
+            navigation::analyze(&screen.frame()),
+            Context::Unknown { .. }
+        ));
+    }
+}
+#[test]
+fn document_list_rejects_multi_column_headers_missing_rows_and_cursor_mismatch() {
+    let mut screen = fixture("mail");
+    replace(
+        &mut screen,
+        2,
+        "編號 日期 作者 信件標題       編號 日期 作者 信件標題",
+        "30;47",
+    );
+    assert_eq!(
+        navigation::analyze(&screen.frame()),
+        Context::Unknown {
+            reason: UnknownReason::UnsupportedLayout
+        }
+    );
+    let mut screen = fixture("archive");
+    replace(&mut screen, 3, "", "0");
+    assert_eq!(
+        navigation::analyze(&screen.frame()),
+        Context::Unknown {
+            reason: UnknownReason::Incomplete
+        }
+    );
+    let mut screen = fixture("mail");
+    screen.feed(b"\x1b[20;1H");
+    assert_eq!(
+        navigation::analyze(&screen.frame()),
+        Context::Unknown {
+            reason: UnknownReason::InvalidCursor
+        }
+    );
+}

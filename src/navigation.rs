@@ -39,6 +39,13 @@ pub enum UnknownReason {
     InvalidCursor,
     BoardHeader,
     BoardRows,
+    UnsupportedLayout,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentKind {
+    Mail,
+    Archive,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -58,6 +65,12 @@ pub enum Context {
         cursor_row: usize,
     },
     SystemMenu {
+        first_row: usize,
+        last_row: usize,
+        cursor_row: usize,
+    },
+    DocumentList {
+        category: DocumentKind,
         first_row: usize,
         last_row: usize,
         cursor_row: usize,
@@ -87,6 +100,7 @@ impl Context {
             Self::MainMenu { .. } => "main_menu",
             Self::SystemMenu { .. } => "system_menu",
             Self::BoardList { .. } => "board_list",
+            Self::DocumentList { .. } => "document_list",
             Self::ArticleList { .. } => "article_list",
             Self::ArticleReading { .. } => "article_reading",
         }
@@ -102,6 +116,11 @@ impl Context {
                 ..
             }
             | Self::SystemMenu {
+                first_row,
+                last_row,
+                ..
+            }
+            | Self::DocumentList {
                 first_row,
                 last_row,
                 ..
@@ -152,6 +171,9 @@ pub fn analyze(frame: &Frame) -> Context {
         return context;
     }
     if let Some(context) = board_list(&rows, frame.cursor) {
+        return context;
+    }
+    if let Some(context) = document_list(&rows, frame.cursor) {
         return context;
     }
     if rows.iter().any(|r| !r.mapped()) {
@@ -226,7 +248,10 @@ fn commands(rows: &[Row<'_>], forward: &str) -> bool {
             || rows[23].bar_text("回到上層")
             || rows[23].bar_text("回上層")
             || rows[23].bar_text("文章選讀")
-            || rows[23].bar_text("選擇看板"))
+            || rows[23].bar_text("選擇看板")
+            || rows[23].bar_text("郵件選單")
+            || rows[23].bar_text("精華列表")
+            || rows[23].bar_text("精華管理"))
 }
 
 fn command_help(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
@@ -474,6 +499,89 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
     )
 }
 
+// Mail and archive browsers share row navigation, while retaining distinct
+// title/header and number-field contracts. This says nothing about new mail.
+fn document_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
+    let (category, forward) = if rows[0].bar_text("郵件選單") {
+        (DocumentKind::Mail, "讀信")
+    } else if rows[0].bar_text("精華文章") {
+        (DocumentKind::Archive, "讀取資料")
+    } else {
+        return None;
+    };
+    let header = (1..=2).find(|&r| {
+        let text = compact(&rows[r].text);
+        rows[r].bar_text("編號")
+            && text.matches("編號").count() == 1
+            && text.contains("日期")
+            && text.contains("標題")
+            && text.contains(if category == DocumentKind::Mail {
+                "作者"
+            } else {
+                "編選"
+            })
+    });
+    let Some(header) = header else {
+        return Some(unknown(UnknownReason::UnsupportedLayout));
+    };
+    if !commands(rows, forward) {
+        return Some(unknown(UnknownReason::Unrecognized));
+    }
+    if rows[0..=header].iter().any(|r| !r.mapped()) || !rows[23].mapped() {
+        return Some(unknown(UnknownReason::Unmapped));
+    }
+    let first_row = header + 1;
+    let mut last_row = None;
+    let mut blank = false;
+    for (row, line) in rows.iter().enumerate().take(23).skip(first_row) {
+        if line.text.trim().is_empty() {
+            blank = true;
+            continue;
+        }
+        if blank {
+            return Some(unknown(UnknownReason::Incomplete));
+        }
+        if !line.mapped() {
+            return Some(unknown(UnknownReason::Unmapped));
+        }
+        let prefix = line.cells(2, 11).unwrap_or("").trim_start();
+        let digits = prefix.bytes().take_while(u8::is_ascii_digit).count();
+        let suffix = &prefix[digits..];
+        let number_ok =
+            (1..=6).contains(&digits) && number(&prefix[..digits]).is_some_and(|n| n > 0);
+        let suffix_ok = match category {
+            DocumentKind::Mail => {
+                suffix.starts_with(' ') && suffix.bytes().all(|b| b" +mMrRD".contains(&b))
+            }
+            DocumentKind::Archive => {
+                suffix.starts_with(['.', ')', 'X']) && suffix.bytes().all(|b| b" .)Xc".contains(&b))
+            }
+        };
+        if !number_ok || !suffix_ok || line.cells(11, 80).is_none_or(|s| s.trim().is_empty()) {
+            return Some(unknown(UnknownReason::Unrecognized));
+        }
+        last_row = Some(row);
+    }
+    let Some(last_row) = last_row else {
+        return Some(unknown(UnknownReason::Unrecognized));
+    };
+    Some(
+        if cursor.0 <= 2
+            && (first_row..=last_row).contains(&cursor.1)
+            && pointer(&rows[cursor.1], 0)
+        {
+            Context::DocumentList {
+                category,
+                first_row,
+                last_row,
+                cursor_row: cursor.1,
+            }
+        } else {
+            unknown(UnknownReason::InvalidCursor)
+        },
+    )
+}
+
 fn compact(text: &str) -> String {
     text.chars().filter(|c| !c.is_whitespace()).collect()
 }
@@ -604,6 +712,12 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
             last_row,
             cursor_row,
         }
+        | Context::DocumentList {
+            first_row,
+            last_row,
+            cursor_row,
+            ..
+        }
         | Context::BoardList {
             first_row,
             last_row,
@@ -628,6 +742,7 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         return match context {
             Context::MainMenu { .. }
             | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
             | Context::BoardList { .. }
             | Context::ArticleList { .. }
             | Context::CommandHelp { .. } => {
@@ -672,6 +787,7 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         (
             Context::MainMenu { .. }
             | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
             | Context::BoardList { .. }
             | Context::ArticleList { .. }
             | Context::ArticleReading { .. },
@@ -680,6 +796,7 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         (
             Context::MainMenu { .. }
             | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
             | Context::BoardList { .. }
             | Context::ArticleList { .. }
             | Context::ArticleReading { .. },
@@ -688,6 +805,7 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         (
             Context::MainMenu { .. }
             | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
             | Context::BoardList { .. }
             | Context::ArticleList { .. },
             Intent::Forward,
@@ -696,6 +814,7 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         (
             Context::MainMenu { .. }
             | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
             | Context::BoardList { .. }
             | Context::ArticleList { .. },
             Intent::Back,
@@ -703,6 +822,7 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         (
             Context::MainMenu { .. }
             | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
             | Context::BoardList { .. }
             | Context::ArticleList { .. },
             Intent::PreviousPage,
@@ -710,6 +830,7 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         (
             Context::MainMenu { .. }
             | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
             | Context::BoardList { .. }
             | Context::ArticleList { .. },
             Intent::NextPage,
@@ -726,6 +847,7 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         (
             Context::MainMenu { .. }
             | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
             | Context::BoardList { .. }
             | Context::ArticleList { .. },
             Intent::PreviousItem,
@@ -733,6 +855,7 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         (
             Context::MainMenu { .. }
             | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
             | Context::BoardList { .. }
             | Context::ArticleList { .. },
             Intent::NextItem,

@@ -244,6 +244,7 @@ impl Keyboard {
                 UnknownReason::Unmapped => crate::msg!("vim-unmapped"),
                 UnknownReason::Unrecognized => crate::msg!("vim-unrecognized"),
                 UnknownReason::BoardHeader => crate::msg!("vim-board-header"),
+                UnknownReason::UnsupportedLayout => crate::msg!("vim-layout"),
                 UnknownReason::BoardRows => crate::msg!("vim-board-rows"),
                 UnknownReason::InvalidCursor => {
                     crate::msg!("vim-cursor")
