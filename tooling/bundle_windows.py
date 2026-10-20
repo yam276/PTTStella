@@ -132,7 +132,7 @@ def copy_licenses(destination):
     bundle_common.copy_licenses(destination, TARGET)
 
 
-def publish_zip(staging, output, name):
+def make_zip(staging, name):
     archive = staging/'package.zip'
     with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9,
                          strict_timestamps=False) as zip_out:
@@ -142,23 +142,21 @@ def publish_zip(staging, output, name):
     with zipfile.ZipFile(archive) as zip_in:
         if zip_in.testzip() is not None:
             raise RuntimeError('ZIP integrity check failed')
-    target = output/(name+'.zip')
-    # Same-volume hard link publishes the complete file atomically and refuses
-    # an existing file, even if another process created it after preflight.
-    os.link(archive, target)
-    archive.unlink()  # Do not leave a writable second name for the delivered ZIP.
-    return target
+    return archive
 
 
-def bundle(output, crt_dir=None):
+def bundle(output, crt_dir=None, with_installer=False):
     if sys.platform != 'win32':
         raise RuntimeError('Run this bundler on Windows with the MSVC toolchain')
     version = tomllib.loads((ROOT/'Cargo.toml').read_text(encoding='utf-8'))['package']['version']
     name = f'PTTStella-{version}-windows-x64'
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
-    if (output/(name+'.zip')).exists():
-        raise FileExistsError('Existing ZIP will not be overwritten; choose another --out-dir')
+    names = [name+'.zip', name+'.zip.sha256']
+    if with_installer:
+        names += [name+'-setup.exe', name+'-setup.exe.sha256']
+    if any(os.path.lexists(output/filename) for filename in names):
+        raise FileExistsError('Existing downloads will not be overwritten; choose another --out-dir')
     executable = build()
     pe = inspect_pe(executable)
     verify_icon(executable)
@@ -189,21 +187,42 @@ def bundle(output, crt_dir=None):
                     'files': {str(p.relative_to(package)).replace('\\', '/'): digest(p)
                               for p in sorted(package.rglob('*')) if p.is_file()}}
         (package/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n', encoding='utf-8')
-        archive = publish_zip(staging, output, name)
+        setup_report = None
+        downloads = []
+        if with_installer:
+            import windows_installer
+            setup, setup_report = windows_installer.build(package, staging, version)
+            downloads.append(setup)
+        archive = make_zip(staging, name)
+        # Name the final ZIP before atomic publication, keeping all files staged
+        # until the optional installer and every checksum are complete.
+        final_zip = staging/(name+'.zip')
+        archive.rename(final_zip)
+        downloads.insert(0, final_zip)
+        files = downloads.copy()
+        for path in downloads:
+            checksum_file = staging/(path.name+'.sha256')
+            checksum_file.write_text(digest(path)+'  '+path.name+'\n', encoding='ascii')
+            files.append(checksum_file)
+        bundle_common.publish_files(files, output)
+    archive = output/(name+'.zip')
     checksum = digest(archive)
-    archive.with_suffix('.zip.sha256').write_text(checksum+'  '+archive.name+'\n', encoding='ascii')
-    return {'status': 'bundled', 'zip': str(archive), 'sha256': checksum,
+    report = {'status': 'bundled', 'zip': str(archive), 'sha256': checksum,
             'bytes': archive.stat().st_size, 'pe': pe, 'bundled_crt': crt,
             'scope': 'packaging only; desktop and live-login verification reported separately'}
+    if with_installer:
+        report.update(installer=str(output/(name+'-setup.exe')), installer_details=setup_report)
+    return report
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out-dir', type=Path, default=ROOT/'dist/windows')
     parser.add_argument('--crt-dir', type=Path)
+    parser.add_argument('--installer', action='store_true', help='Also build Setup with automatic WebView2 provisioning')
     arguments = parser.parse_args()
     try:
-        print(json.dumps(bundle(arguments.out_dir, arguments.crt_dir)))
+        print(json.dumps(bundle(arguments.out_dir, arguments.crt_dir, arguments.installer)))
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
         raise SystemExit(1)

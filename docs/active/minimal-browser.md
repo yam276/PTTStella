@@ -12,6 +12,14 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。沒有獨立文章 UI、啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## Windows Setup 與 WebView2 自動補裝（2026-10-20）
+
+Windows Release 新增 `-setup.exe`，與 ZIP 消費同一次編譯與同一份 staged App；仍使用原本 MSVC／app-local CRT，未混入靜態 CRT 或工具鏈切換。Setup 使用 Inno Setup 7.1.0，繁體中文／英文、目前使用者安裝；前置階段檢查四個 registry view，已有有效 WebView2 時跳過，缺少才執行內附的 Microsoft Evergreen bootstrapper，並再次檢查是否已安裝。失敗停在複製檔案之前，解除安裝保留共用 Runtime 與使用者設定。來源驗證、網路需求與範圍見 [安裝包契約](../windows-installer.md)。
+
+本機全部 Python tooling 55 項、docs、actionlint 及 core 13 commands／2 replays 通過。測試核對 bootstrapper 下載上限／期限、既有檔保留、拒絕錯誤簽章與雜湊、失敗零交付、ZIP／Setup 共用 staged App、交付競爭回滾，以及缺少 Setup 不發佈。沒有執行 Microsoft bootstrapper、操作 registry 或啟動產品。
+
+新增 Windows 原生 Inno 政策 probe，以同一個 production 決策函式與合成 registry／process adapter 驗證 11 項斷言；workflow 把它列為必要 gate 並保留報告。本輪 macOS 沒有 Windows／Inno runner，該 gate 與 desktop 明確回報 not_ready；未實際編譯 Setup，也未證明在無 Runtime 的 Windows 上補裝成功。GitHub Actions 仍受先前已確認的帳戶付款／spending limit 限制，使用者選擇稍後處理，本輪沒有重試或公開發佈。必須另跑原生政策、真正 Setup 編譯與 Windows 10／11 安裝／離線／升級／解除安裝驗收，才能將這些項目標為 passed。證據保留 `.local/verification/windows-installer`。
+
 ## 分支與 Release 自動化（2026-10-20）
 
 已從當前 main 建立並推送 `develop`，GitHub 預設分支改為 develop；main 保持 `095ff2f`，沒有提高產品版本或建立 tag／Release。日常開發在 develop，Release PR 才前往 main；標題、來源、遞增 SemVer 與 Cargo.lock 一致性由 PR policy 檢查。main 的 Cargo.toml 更新才自動進入四架構打包，手動 verify 不發佈；全部 archive／來源 manifest／雜湊通過後才從 draft 發佈，詳見 [發佈流程](../releases.md)。

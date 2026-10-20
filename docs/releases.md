@@ -16,7 +16,7 @@
 
 | 平台 | Runner | 下載 |
 | --- | --- | --- |
-| Windows x64 | `windows-2025` | ZIP，包含 app-local CRT 與授權；另需 WebView2 |
+| Windows x64 | `windows-2025` | Setup 自動補裝缺少的 WebView2；另提供 ZIP（需已有 Runtime），均包含 app-local CRT 與授權 |
 | macOS Apple Silicon | `macos-15` | 包含 `.app` 的 ZIP |
 | macOS Intel | `macos-15-intel` | 包含 `.app` 的 ZIP |
 | Linux x64 | `ubuntu-24.04` | `.deb` 與 `.tar.gz` |
@@ -24,6 +24,8 @@
 每個架構有來源 manifest，列出 commit、profile、相依環境及下載檔 SHA-256；Release 的 `SHA256SUMS` 涵蓋所有下載與 manifest。下載採完整白名單核對，任何缺檔、混入額外檔案、來源不符、dirty checkout 或雜湊不符均禁止發佈。授權資料從同一 locked Cargo dependency graph 收集。Linux `.deb` 以 `dpkg-shlibdeps` 讀取實際 ELF 依賴；不是通用靜態 Linux 程式，使用方式見 [Linux 套件說明](linux-package.txt)。
 
 所有 runner 執行 Python 打包／政策測試、docs、JS、core、desktop lib／bin 與 desktop Clippy，再以 release profile 編譯。Windows／macOS 沿用原生打包驗證，Linux 核對 ELF／系統 shared libraries／Debian metadata。CI 不啟動產品連線，不把無 GUI 的單元與打包測試當成原生輸入、像素、IME 或實站登入驗收。
+
+Windows job 額外安裝固定版 Inno Setup，執行原生合成前置政策 gate，再將同一份 App 打成 ZIP 與 Setup；兩者都必須在來源 manifest 內並通過雜湊，缺 Setup 不能發佈。Setup 的補裝、網路需求、解除安裝與實測邊界見 [Windows 安裝包](windows-installer.md)。
 
 Windows 暫無 Authenticode，macOS 為 ad-hoc 簽章，未做 Developer ID／Apple 公證，因此下載後可能出現系統安全提示。macOS 說明附於 App，見 [macOS 發佈說明](macos-release.txt)。本流程無需另設私人 token 或帳密 secrets，只有發佈 job 取得 `contents: write`，其他 job 為讀取權限；action 以完整 commit 固定版本。
 

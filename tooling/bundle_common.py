@@ -1,10 +1,26 @@
 """Shared Cargo build and license inventory for native desktop packages."""
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def publish_files(paths, output):
+    """Publish complete files without replacement; roll back only this attempt."""
+    created = []
+    try:
+        for path in paths:
+            destination = output/path.name
+            os.link(path, destination)
+            created.append(destination)
+    except BaseException:
+        for path in created:
+            path.unlink()
+        raise
+    return created
 
 
 def build(target=None):

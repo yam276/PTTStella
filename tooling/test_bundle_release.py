@@ -1,8 +1,10 @@
 """Native Release packages preserve old downloads and reject incomplete input."""
 import os
+import json
 from pathlib import Path
 import struct
 import tempfile
+import tomllib
 import unittest
 from unittest.mock import patch
 
@@ -58,6 +60,28 @@ class PackageTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'compiler failed'):
                 bundle.bundle(self.root)
         self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_windows_release_requires_setup_and_zip_from_the_same_packaging_pass(self):
+        version = tomllib.loads((bundle.ROOT/'Cargo.toml').read_text(encoding='utf-8'))['package']['version']
+        stem = f'PTTStella-{version}-windows-x64'
+        def windows(output, with_installer=False):
+            self.assertTrue(with_installer)
+            output.mkdir()
+            archive, setup = output/(stem+'.zip'), output/(stem+'-setup.exe')
+            archive.write_bytes(b'synthetic portable download')
+            setup.write_bytes(b'synthetic setup download')
+            return {'zip': str(archive), 'installer': str(setup),
+                    'installer_details': {'webview2': {'install_only_if_missing': True}}}
+        output = self.root/'release'
+        with patch.object(bundle, 'native_platform', return_value='windows-x64'), \
+                patch.object(bundle, 'run', side_effect=['a'*40, '']), \
+                patch.object(bundle.bundle_windows, 'bundle', side_effect=windows) as packaged:
+            bundle.bundle(output)
+        self.assertEqual(packaged.call_count, 1)
+        report = json.loads((output/(stem+'.json')).read_text())
+        self.assertEqual(set(report['files']), {stem+'.zip', stem+'-setup.exe'})
+        self.assertFalse(report['source_dirty'])
+        self.assertTrue(report['installer']['webview2']['install_only_if_missing'])
 
 
 if __name__ == '__main__':

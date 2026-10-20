@@ -3,7 +3,6 @@
 import argparse
 import hashlib
 import json
-import os
 from pathlib import Path
 import platform
 import shutil
@@ -17,6 +16,7 @@ import tomllib
 import bundle_common
 import bundle_macos
 import bundle_windows
+from bundle_common import publish_files
 
 ROOT = Path(__file__).resolve().parent.parent
 TARGETS = {
@@ -141,21 +141,6 @@ def macos_package(staging, stem, target):
                         'runtime': 'macOS on '+expected}
 
 
-def publish_files(paths, output):
-    """Publish complete files without replacing existing downloads, even in a race."""
-    created = []
-    try:
-        for path in paths:
-            destination = output/path.name
-            os.link(path, destination)
-            created.append(destination)
-    except BaseException:
-        for path in created:
-            path.unlink()
-        raise
-    return created
-
-
 def bundle(output):
     target = native_platform()
     version = tomllib.loads((ROOT/'Cargo.toml').read_text(encoding='utf-8'))['package']['version']
@@ -165,19 +150,22 @@ def bundle(output):
     stem = f'PTTStella-{version}-{target}'
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    if any(output.glob(stem+'.*')):
+    if any(output.glob(stem+'.*')) or any(output.glob(stem+'-setup.*')):
         raise FileExistsError('Existing Release files will not be overwritten; choose another --out-dir')
     revision = run('git', 'rev-parse', 'HEAD')
     dirty = bool(run('git', 'status', '--porcelain', '--untracked-files=normal'))
     with tempfile.TemporaryDirectory(prefix='.release-', dir=output) as temporary:
         staging = Path(temporary)
         if target == 'windows-x64':
-            result = bundle_windows.bundle(staging/'windows')
-            source = Path(result['zip'])
-            archive = staging/source.name
-            shutil.copy2(source, archive)
-            assets, details = [archive], {'authenticode_signed': False,
-                                          'runtime': 'Microsoft Edge WebView2 Evergreen Runtime'}
+            result = bundle_windows.bundle(staging/'windows', with_installer=True)
+            assets = []
+            for source in (Path(result['zip']), Path(result['installer'])):
+                archive = staging/source.name
+                shutil.copy2(source, archive)
+                assets.append(archive)
+            details = {'authenticode_signed': False,
+                       'runtime': 'Microsoft Edge WebView2 Evergreen Runtime',
+                       'installer': result['installer_details']}
         elif target.startswith('macos-'):
             assets, details = macos_package(staging, stem, target)
         else:

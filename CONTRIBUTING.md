@@ -33,6 +33,8 @@ core 執行 Rust 1.97.0 的 fmt、Clippy、畫面與互動測試 suite 及 2 個
 
 Windows ZIP 打包變更另跑 `python -m unittest discover -s tooling -p test_bundle_windows.py`、docs、core 與 desktop gate。`python tooling/bundle_windows.py` 由 Cargo JSON 取得 x64 release executable，檢查 GUI subsystem、實際 PE imports、七份嵌入圖示與來源 ICO payload，打包 Microsoft redistributable CRT 與授權，不覆寫既有 ZIP。publication 回歸涵蓋建置／圖示／未知 DLL 失敗零交付，以及既有 ZIP 和競爭建立不被覆寫。
 
+Windows Setup 變更須執行全部 Python tooling 測試、docs、core 及 workflow actionlint，並在 Windows 以 Inno Setup 7.1.0 執行 `python tooling/check_windows_installer.py --output <新的獨立目錄>` 與實際 Setup 編譯；該原生政策 probe 不操作真實 registry／Runtime。已有／缺少 Runtime、離線、安裝失敗、升級與解除安裝保留資料另需測試環境驗收；缺 Windows runner 必須記 `not_ready`，不能把合成 adapter 當作真實補裝已通過，詳見 [安裝包契約](docs/windows-installer.md)。
+
 必須解壓 ZIP 至獨立目錄，核對 manifest 所列 SHA-256，並對解壓的 EXE 執行 `python tooling/check.py desktop --desktop-executable <EXE絕對路徑> --desktop-output <獨立驗證目錄>`。此模式不重新編譯，報告保留 executable 雜湊與 `build_checks_run=false`；兩個程序均從 EXE 所在目錄啟動，使用同一合成／loopback gate，不能將這份 GUI 結果當作編譯或 Clippy 已執行。指定 EXE 必須提供獨立 output，缺檔不能退回 debug binary。未在乾淨 Windows／不同版本／DPI 驗證的範圍仍須分列，實站登入另由使用者人工確認。
 
 Windows CDP runner 以 trusted 點擊浮球與分類揭露功能，操作後經同一浮球返回並收合，避免外部點擊只收合工具而被誤當作 BBS 操作；字型視窗等待初次預覽完成後的焦點才開始輸入。Vim 採 120ms 按鍵節奏，讓無站端重繪的 no-op 等待同一 command owner 完成；不宣稱最高速連發通過。貼上要求 typed rejected 狀態與目前多站版的原因文字，服務端仍獨立比對精確 bytes。這些是實際 WebView 的自動化操作，不代表實體 IME 候選窗或人工審閱。
