@@ -36,6 +36,34 @@ test('production key handler consumes repeated Enter without sending station byt
     assert.equal(sent.length,2);assert.ok(sent.every(p=>p.kind==='inline_expand'&&p.trusted&&p.presentation===3&&p.stamp.revision===4));
 });
 
+test('ordinary web reading keys move locally and only fetch beyond the cached edge',()=>{
+    const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
+    const sent=[],requests=[];
+    const context={document:{querySelector:()=>null},inlineShortcut:()=>false,
+        keyboardState:{enabled:false,mode:'input'},latest:{connected:true,article:{id:1,first_line:1,end:false},navigation:{kind:'article_reading'}},
+        viewport:{scrollTop:240,scrollHeight:2000,clientHeight:500},grid:{ratio:1,y:()=>0,bottom:()=>24},
+        stationMouse:{revoke(){}},cancelHover(){},pastePending:false,composing:false,hasSelection:()=>false,clearSelection(){},cancelDrag(){},
+        blocked:()=>false,dragging:null,repaint(){},generation:1,commandKeys:new Set(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End']),
+        send:p=>sent.push(p)};
+    vm.runInNewContext(surface.slice(surface.indexOf('function keydown('),surface.indexOf('function input(')),context);
+    vm.runInNewContext(surface.slice(surface.indexOf('function readingMove('),surface.indexOf('function navigate(')),context);
+    context.navigate=intent=>requests.push(intent.action);
+    const key=(value,patch={})=>{let prevented=false;context.keydown({key:value,code:value.length===1?'Key'+value.toUpperCase():value,
+        isTrusted:true,preventDefault(){prevented=true;},...patch});return prevented;};
+    for(const [value,expected] of [['j',264],['k',240],['ArrowDown',264],['ArrowUp',240],['PageDown',690],['PageUp',240],['End',1500],['Home',0]]){
+        assert.equal(key(value),true,value);assert.equal(context.viewport.scrollTop,expected,value);
+    }
+    assert.equal(sent.length,0);assert.deepEqual(requests,[]);
+    assert.equal(key('k'),true);assert.deepEqual(requests,[]);
+    context.viewport.scrollTop=1500;key('j');assert.deepEqual(requests,['next_page']);
+    context.latest.article.end=true;key('j');assert.equal(requests.length,1);
+    for(const state of [{enabled:true,mode:'normal'},{enabled:true,mode:'input'},{enabled:true,mode:'once'}]){
+        context.keyboardState=state;key('j');assert.equal(sent.at(-1).kind,'key');
+    }
+    context.keyboardState={enabled:false,mode:'input'};context.latest.article=null;key('k');
+    assert.equal(sent.at(-1).key.key,'k');assert.equal(requests.length,1);
+});
+
 function ownerEnvironment(cached=false){
     const urls=new Set(),nodes=[];let id=0;
     const element=tag=>{const node={tag,style:{},dataset:{},children:[],width:0,height:0,append(n){this.children.push(n);},insertBefore(n){this.children.push(n);},replaceChildren(){this.children=[];},remove(){},removeAttribute(){},setAttribute(){},getContext:()=>({drawImage(){}})};nodes.push(node);return node;};

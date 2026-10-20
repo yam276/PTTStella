@@ -847,3 +847,9 @@ macOS arm64 最終 release 合成原生已驗證網頁展圖、一次精確 Page
 macOS arm64 release 的 short_reading 本機合成原生案例以三行內容、80×24 來源，完成網頁→終端機→網頁切換。實際 WebView 截圖中三行文字及頁尾的像素邊界一致，空白區保留；PNG 為 960×576，零站端導覽輸入，Close acknowledged、各 owner joined、程序 exit 0。最初案例誤走預設選單，已修正 app 的 fixture 分派並重新建置／驗證；保留該次失敗記錄，不計通過。
 
 交付 `dist/macos-terminal-wheel-final/PTTStella.app`；與原生驗證副本的 15 個可載入 Mach-O sections 相同，兩者嚴格簽章檢查通過。本機證據位於 `.local/verification/terminal-wheel/`。使用者明確授權本輪超過共用額度，僅對本輪調高 aggregate budget，保留 namespace／剩餘空間／lease 檢查，未改全域政策或刪除其他專案資料。原生滾輪／指標與實站體驗仍由使用者人工驗收；Windows／Linux 原生結果為 not_ready。
+
+2026-10-20 修正網頁文章一般鍵盤模式的英文 j／k：原先走 textarea 編輯及原始輸入，繞過本機閱讀；現在與上下方向鍵共用逐行捲動，僅未載入的邊界取頁。Vim Normal、計數、原生一次及輸入模式仍由 Rust 政策處理；中文組字不被當成英文 j／k。JS 生產 handler 回歸涵蓋一般 j／k、方向鍵、Home／End、首尾邊界、Vim／原生模式分流與離開網頁文章後恢復原始按鍵。
+
+core 13 命令／2 replay、desktop lib 142 項、bin 85 項、全 targets Clippy、JS 165 項、fmt 與 docs 通過。macOS arm64 實際 WebView 驗證：一般英文 j 在邊界取得一頁，之後 j／k、上下方向鍵、Home／End 往返；中文輸入法下 Vim 3j／3k、Ctrl+D／U，展圖後 j／k 往返。每組回程的 BBS 內容區像素相同，英文 j 與向下方向鍵的畫面一致；peer 僅收到一次精確 PageDown，三個圖片網址各一次 HTTP GET，PNG 960×576、Close acknowledged、全部 owner join、exit 0。
+
+前兩次原生新版本測試仍使用中文輸入法，j 產生注音而被嚴格 peer 拒絕，保留失敗記錄；後續先在本機設定搜尋欄確認英文輸入，再驗一般模式，切回中文驗 Vim，沒有放寬 peer。合成閱讀 probe 的失敗訊息增加收到的訊息診斷；只在明確啟動的本機 probe 使用。證據在 `.local/verification/reading-keys/`，交付 `dist/macos-reading-keys-r2/PTTStella.app` 與測試副本的 15 個可載入 sections 一致，strict ad-hoc 簽章通過。本輪正常資源 harness 通過，不需額度例外；Windows／Linux 原生及實站仍待驗收。

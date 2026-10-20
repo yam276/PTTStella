@@ -121,7 +121,9 @@ function keydown(e) {
         return;
     }
     if(latest?.article&&!e.ctrlKey&&!e.altKey&&!e.shiftKey&&!keyboardState.enabled) {
-        const action={PageUp:"previous_page",PageDown:"next_page",Home:"first",End:"last",ArrowUp:"up",ArrowDown:"down"," ":"next_page"}[e.key];
+        // PTT's ordinary j/k reading keys must not become textarea edits:
+        // those edits suspend the web projection and bypass its local movement.
+        const action={PageUp:"previous_page",PageDown:"next_page",Home:"first",End:"last",ArrowUp:"up",ArrowDown:"down",k:"up",j:"down"," ":"next_page"}[e.key];
         if(action){e.preventDefault();readingMove(action==="up"||action==="down"?{action:"lines",down:action==="down",count:1}:{action},e);return;}
     }
     const command=commandKeys.has(e.key)||(e.ctrlKey&&/^[a-z]$/i.test(e.key));
