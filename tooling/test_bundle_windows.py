@@ -3,6 +3,7 @@ import tempfile
 import os
 from pathlib import Path
 import unittest
+import tomllib
 from unittest.mock import patch
 import zipfile
 
@@ -13,7 +14,8 @@ class PublicationTests(unittest.TestCase):
     def test_existing_package_is_not_replaced(self):
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp)
-            old = output/'PTTStella-0.1.0-dev.1-windows-x64.zip'
+            version = tomllib.loads((bundle.ROOT/'Cargo.toml').read_text(encoding='utf-8'))['package']['version']
+            old = output/f'PTTStella-{version}-windows-x64.zip'
             old.write_bytes(b'previous verified package')
             with patch.object(bundle.sys, 'platform', 'win32'), patch.object(bundle, 'build') as build:
                 with self.assertRaises(FileExistsError):

@@ -1,0 +1,17 @@
+PTTStella for Linux x64
+
+Built on Ubuntu 24.04. Other distributions and GUI behavior require separate
+verification. This is a native GTK/WebKitGTK application, not a static binary.
+
+Ubuntu 24.04: install the .deb with sudo apt install ./PTTStella-*.deb so apt
+resolves the actual shared-library dependencies and desktop portal providers.
+The application then appears in the desktop application launcher.
+
+The .tar.gz contains the same executable and license inventory for manual use.
+It requires compatible GTK 3, WebKitGTK 4.1, libxdo, fontconfig/freetype,
+CA certificates, a graphical session and an XDG desktop portal provider.
+Run ./pttstella from the extracted directory. No Rust or Python is needed.
+
+Downloads are not distribution-signed. Verify the adjacent SHA-256 checksum.
+No account settings or passwords are included. Startup connects to the default
+site; login remains manual. Packaging success is not GUI or live-login acceptance.
