@@ -506,3 +506,28 @@ fn terminal_mode_revokes_old_acks_and_inline_but_keeps_station_links() {
     assert!(state.reading_context(&view).is_some());
     assert!(state.current(old, &view).is_none());
 }
+
+#[test]
+fn leaving_web_reading_restores_station_grid_for_every_list_and_menu() {
+    let fixtures: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/navigation.json")).unwrap();
+    for name in ["list", "boards", "main_menu", "mail", "archive"] {
+        let mut state = SurfaceState::new(filters::Rules::default());
+        let mut view = view();
+        let reading = displayed(&mut state, &view);
+        assert!(state.current(reading, &view).unwrap().article.is_some());
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&pttstella::encoding::encode(fixtures[name].as_str().unwrap()).unwrap());
+        let revision = view.frame.revision;
+        view.frame = screen.frame();
+        view.frame.revision += revision + 1;
+        state.update(&view);
+        let id = displayed(&mut state, &view);
+        let shown = state.current(id, &view).unwrap();
+        assert!(
+            shown.article.is_none() && shown.source_frame.is_none(),
+            "{name}"
+        );
+        assert_eq!(shown.frame, view.frame);
+    }
+}

@@ -60,7 +60,8 @@ button.primary:not(:disabled):hover, button.primary:not(:disabled):active { back
 button:focus-visible, .font-dialog input:focus-visible, .font-dialog select:focus-visible, .font-dialog textarea:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 3px; }
 input[type="checkbox"] { accent-color: var(--ui-gold); }
 button:disabled { opacity: .4; cursor: default; }
-.workspace { position: absolute; inset: 0; display: flex; overflow: auto; background: #000; }
+.workspace { position: absolute; inset: 0; display: flex; overflow: hidden; overscroll-behavior: none; background: #000; }
+.workspace[data-reading="web"] { overflow: auto; }
 .surface { flex: none; margin: auto; position: relative; background: #000; }
 canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #selection { position: absolute; inset: 0; pointer-events: none; }

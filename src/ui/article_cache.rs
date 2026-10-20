@@ -313,7 +313,7 @@ impl ArticleCache {
         // The original 24-row snapshot remains the source of full-page PNGs.
         paint.source_frame = Some(source.clone());
         let mut frame = Frame {
-            rows: self.rows.len() + 1,
+            rows: (self.rows.len() + 1).max(source.rows),
             cursor_visible: false,
             glyphs: Vec::new(),
             hyperlinks: Vec::new(),

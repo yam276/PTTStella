@@ -508,6 +508,7 @@ pub(super) fn surface_sample(
         Some("sgr66_legacy") => sgr66_sample(false),
         Some("osc8") => osc8_sample(media_origin),
         Some("inline" | "inline_pages") => inline_sample(media_origin),
+        Some("short_reading") => encoding::encode("\x1b[2J\x1b[HShort article: the grid stays 80 columns by 24 rows.\x1b[2;1HSecond line\x1b[3;1HLast line\x1b[24;1H\x1b[7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~3 行 (h)說明 (←)離開\x1b[0m\x1b[?25l").map_err(|e|e.to_string()),
         Some("account_lists") => {
             let sample: serde_json::Value =
                 serde_json::from_str(include_str!("../../tests/fixtures/filters.json"))
