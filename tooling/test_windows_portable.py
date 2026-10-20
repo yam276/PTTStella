@@ -34,7 +34,7 @@ class PortableTests(unittest.TestCase):
                 self.assertEqual(env['PATH'], before['PATH'])
                 self.assertEqual(env['CARGO_ENCODED_RUSTFLAGS'].split('\x1f'),
                                  expected+['-C', 'target-feature=+crt-static'])
-                self.assertEqual(env['PTTSTELLA_NOTICES_FILE'], str(self.root/'licenses.txt'))
+                self.assertEqual(env['PTTSTELLA_NOTICES_FILE'], str((self.root/'licenses.txt').resolve()))
                 self.assertEqual(build.call_args.args, ('x86_64-pc-windows-msvc',))
 
     def test_only_system_dlls_are_allowed_in_standalone_exe(self):
