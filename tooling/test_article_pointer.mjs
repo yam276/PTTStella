@@ -136,3 +136,13 @@ test('pause source or geometry changes cancel both held and released clicks',()=
         }
     }
 });
+
+test('home menu hover marker spans both edges of the terminal grid',()=>{
+    const f=fixture({cached:false});f.latest.navigation={kind:'main_menu',first_row:3,last_row:10};
+    f.hoveredLink=-1;f.pointerClient=null;f.previewHover=()=>{};f.draw=()=>{};
+    f.tr=key=>key;f.surface.style={};f.navigationMarker={style:{},dataset:{}};
+    vm.runInContext(source.slice(source.indexOf('function setHover('),source.indexOf('function refreshNavigation(')),f);
+    f.setHover({row:4,col:25},false,false);
+    assert.equal(f.navigationMarker.hidden,false);assert.equal(f.navigationMarker.style.left,'0px');
+    assert.equal(f.navigationMarker.style.width,'960px');assert.equal(f.navigationMarker.style.height,'24px');
+});
