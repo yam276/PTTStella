@@ -7,6 +7,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
     let point={x:window.innerWidth-80,y:window.innerHeight*.65},drag=null,animation=0,stopped=false,opened=false,selected=null;
     let suppressClickUntil=-1,lastFrame=0,coastUntil=0,velocity={x:0,y:0};
     let viewportWidth=window.innerWidth;
+    let visible=true,parked=null;
     const observations={presses:0,moves:0,drag_releases:0,coast_frames:0,max_coast_distance:0,last_release:null};
     const count=key=>observations[key]=Math.min(65535,observations[key]+1);
     const bounds=()=>({left:16,right:Math.max(16,window.innerWidth-72),top:Math.min(56,Math.max(0,window.innerHeight-72)),bottom:Math.max(16,window.innerHeight-72)});
@@ -19,6 +20,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
     }
     function halt(){if(animation)caf(animation);animation=0;velocity={x:0,y:0};}
     function updateTrigger(){
+        ball.hidden=!visible&&!opened;
         const returning=selected!==null;
         ball.dataset.toolsAction=returning?'back':'toggle';
         ball.setAttribute('aria-label',tr(returning?'tools-back':'tools-toggle'));
@@ -45,6 +47,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
         animation=raf(frame);
     }
     function close(focus=false){opened=false;selected=null;root.classList.remove('open');fan.hidden=true;panel.hidden=true;
+        if(parked){point=parked;parked=null;place();}
         updateTrigger();petals.forEach(p=>p.setAttribute('aria-expanded','false'));
         changed();if(focus&&!stopped)restore();}
     // Largest usable rectangle on one side of the stationary trigger. Both the
@@ -88,6 +91,17 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
         const suppressed=now()<=suppressClickUntil;suppressClickUntil=-1;if(suppressed)return;
         halt();if(opened){if(selected!==null)back();else close(true);return;}prepare(event);opened=true;layout();
         if(!opened)return;root.classList.add('open');ball.focus();changed();}
+    function showAt(event){
+        if(stopped||drag||!event.isTrusted||!Number.isFinite(event.clientX)||!Number.isFinite(event.clientY))return false;
+        halt();close();prepare(event);suppressClickUntil=-1;
+        parked={...point};point={x:event.clientX-28,y:event.clientY-28};place();opened=true;layout();
+        if(opened){root.classList.add('open');ball.focus();changed();}
+        return opened;
+    }
+    function setVisible(value){
+        if(typeof value!=="boolean")throw new Error("Invalid tool visibility");
+        visible=value;updateTrigger();
+    }
     function choose(event){if(stopped||!opened)return;
         selected=event.currentTarget.dataset.toolsTarget;
         groups.forEach(group=>group.hidden=group.dataset.toolsGroup!==selected);
@@ -179,7 +193,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
         [panel,'click',panelAction],
         [document,'keydown',key,true],[window,'resize',resize],[window,'blur',cancel],[document,'visibilitychange',visibility]];
     place();close();
-    return {bindings,close,setOpacity,open:()=>opened,busy:()=>opened||!!drag,destroy(){stopped=true;cancel();},
+    return {bindings,close,setOpacity,setVisible,showAt,open:()=>opened,busy:()=>opened||!!drag,destroy(){stopped=true;cancel();},
         observations:()=>({...observations,last_release:observations.last_release?{...observations.last_release}:null}),
         clean:()=>stopped&&!animation&&!drag&&!opened,
         // Read-only geometry for lifecycle/physics regressions.

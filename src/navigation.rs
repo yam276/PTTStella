@@ -55,9 +55,12 @@ pub enum Context {
     MainMenu {
         first_row: usize,
         last_row: usize,
+        cursor_row: usize,
     },
     BoardList {
         first_row: usize,
+        last_row: usize,
+        cursor_row: usize,
     },
     ArticleList {
         articles: Vec<Article>,
@@ -90,12 +93,14 @@ impl Context {
             Self::MainMenu {
                 first_row,
                 last_row,
+                ..
             }
             | Self::CommandHelp {
                 first_row,
                 last_row,
+                ..
             } => last_row - first_row + 1,
-            Self::BoardList { first_row } => 23 - first_row,
+            Self::BoardList { first_row, .. } => 23 - first_row,
             Self::ArticleList { articles, .. } => 23 - articles.first().map_or(3, |a| a.row),
             _ => 23,
         }
@@ -348,6 +353,7 @@ fn main_menu(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
             Context::MainMenu {
                 first_row,
                 last_row,
+                cursor_row: cursor.1,
             }
         } else {
             unknown(UnknownReason::InvalidCursor)
@@ -417,7 +423,11 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
     }
     Some(
         if cursor.0 <= 2 && items.contains(&cursor.1) && pointer(&rows[cursor.1], 0) {
-            Context::BoardList { first_row }
+            Context::BoardList {
+                first_row,
+                last_row: *items.last()?,
+                cursor_row: cursor.1,
+            }
         } else {
             unknown(UnknownReason::InvalidCursor)
         },
@@ -543,6 +553,29 @@ impl std::fmt::Display for Error {
     }
 }
 pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
+    if let (
+        Context::MainMenu {
+            first_row,
+            last_row,
+            cursor_row,
+        }
+        | Context::BoardList {
+            first_row,
+            last_row,
+            cursor_row,
+        },
+        Intent::Open { row },
+    ) = (context, intent)
+    {
+        if *first_row > *last_row
+            || *last_row >= 23
+            || !(*first_row..=*last_row).contains(&row)
+            || !(*first_row..=*last_row).contains(cursor_row)
+        {
+            return Err(Error::Unavailable);
+        }
+        return Ok(open_row(*cursor_row, row));
+    }
     if let Intent::Lines { down, count } = intent {
         if count == 0 || count > crate::input::MAX_INPUT_BYTES / 3 {
             return Err(Error::Unavailable);
@@ -628,13 +661,7 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
             },
             Intent::Open { row },
         ) if row < 23 && *cursor_row < 23 && articles.iter().any(|a| a.row == row) => {
-            let mut bytes = if row < *cursor_row {
-                b"\x1b[A".repeat(cursor_row - row)
-            } else {
-                b"\x1b[B".repeat(row - cursor_row)
-            };
-            bytes.push(13);
-            return Ok(bytes);
+            return Ok(open_row(*cursor_row, row));
         }
         (
             Context::MainMenu { .. } | Context::BoardList { .. } | Context::ArticleList { .. },
@@ -654,4 +681,14 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         _ => return Err(Error::Unavailable),
     };
     Ok(bytes.to_vec())
+}
+
+fn open_row(cursor: usize, row: usize) -> Vec<u8> {
+    let mut bytes = if row < cursor {
+        b"\x1b[A".repeat(cursor - row)
+    } else {
+        b"\x1b[B".repeat(row - cursor)
+    };
+    bytes.push(13);
+    bytes
 }

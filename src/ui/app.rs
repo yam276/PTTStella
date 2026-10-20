@@ -429,6 +429,15 @@ pub fn app(props: AppProps) -> Element {
                         }
                     }
                     p { id: "settings-opacity-help", class: "settings-help", {pttstella::msg!("settings-opacity-help")} }
+                    label { class: "settings-check",
+                        input { id: "tools-right-click", r#type: "checkbox", checked: true }
+                        SettingsCaption { label: pttstella::msg!("settings-right-click"), icon: rsx! { Compass { size: 18 } } }
+                    }
+                    label { class: "settings-check",
+                        input { id: "tools-show-ball", r#type: "checkbox", checked: true }
+                        SettingsCaption { label: pttstella::msg!("settings-show-ball"), icon: rsx! { Star { size: 18 } } }
+                    }
+                    p { class: "settings-help", {pttstella::msg!("settings-tool-access-help")} }
                 }
                 section { class: "settings-section",
                     label {

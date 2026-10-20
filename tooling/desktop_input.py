@@ -269,7 +269,7 @@ def run(port, process, output=None, media_server=None):
             devtools.call('Input.dispatchMouseEvent', type=kind, x=link_x, y=link_y, button='left', clickCount=1)
         devtools.wait('document.getElementById("surface").dataset.linkResult === "requested"', 'URL click did not reach the opener')
         for kind in ('mousePressed', 'mouseReleased'):
-            devtools.call('Input.dispatchMouseEvent', type=kind, x=link_x, y=link_y, button='right', clickCount=1)
+            devtools.call('Input.dispatchMouseEvent', type=kind, x=link_x, y=link_y, button='right', clickCount=1, modifiers=8)
         devtools.wait('!document.getElementById("surface-context-menu").hidden', 'right-click did not open the context menu')
         devtools.click('[data-context-action="select-link"]')
         devtools.wait('!!document.getElementById("surface").dataset.selectionReady', 'context menu did not select the complete URL')

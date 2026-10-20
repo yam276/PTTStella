@@ -149,7 +149,7 @@ fn opacity_migrates_without_changing_other_preferences_and_rejects_invalid_value
             r#"{{"version":{version},"display":{{"fonts":{{"kind":"preset","preset":"bundled"}},"font_size":18,"baseline":19}},"hover":"off","language":"en-US"}}"#
         );
         let settings = AppSettings::decode(bytes.as_bytes()).unwrap();
-        assert_eq!(settings.version, 4);
+        assert_eq!(settings.version, 5);
         assert_eq!(settings.tools_opacity.percent(), 100);
         assert_eq!(settings.display.font_size, 18.0);
         assert_eq!(settings.language, pttstella::i18n::Language::English);
@@ -183,5 +183,46 @@ fn opacity_migrates_without_changing_other_preferences_and_rejects_invalid_value
         let mut value = settings.clone();
         value["tools_opacity"] = bad;
         assert!(AppSettings::decode(&serde_json::to_vec(&value).unwrap()).is_err());
+    }
+}
+
+#[test]
+fn tool_access_migrates_defaults_and_persists_independent_choices_strictly() {
+    use pttstella::settings::ToolAccess;
+    for version in [2, 3, 4] {
+        let old = serde_json::json!({"version":version,"display":{"fonts":{"kind":"platform_default"},"font_size":18,"baseline":19},"hover":"off","tools_opacity":65});
+        let app = AppSettings::decode(&serde_json::to_vec(&old).unwrap()).unwrap();
+        assert_eq!(app.version, 5);
+        assert_eq!(app.tools_access, ToolAccess::default());
+        assert_eq!(app.tools_opacity.percent(), 65);
+    }
+    for right_click_menu in [false, true] {
+        for show_floating_button in [false, true] {
+            let app = AppSettings {
+                tools_access: ToolAccess {
+                    right_click_menu,
+                    show_floating_button,
+                },
+                ..Default::default()
+            };
+            assert_eq!(
+                AppSettings::decode(&serde_json::to_vec(&app).unwrap()).unwrap(),
+                app
+            );
+            let profile = PortableProfile::new("display only".into(), app.display)
+                .unwrap()
+                .encode()
+                .unwrap();
+            assert!(!String::from_utf8(profile).unwrap().contains("tools_access"));
+        }
+    }
+    for access in [
+        serde_json::json!({"right_click_menu":"true","show_floating_button":true}),
+        serde_json::json!({"right_click_menu":true}),
+        serde_json::json!({"right_click_menu":true,"show_floating_button":true,"extra":false}),
+    ] {
+        let mut app = serde_json::to_value(AppSettings::default()).unwrap();
+        app["tools_access"] = access;
+        assert!(AppSettings::decode(&serde_json::to_vec(&app).unwrap()).is_err());
     }
 }

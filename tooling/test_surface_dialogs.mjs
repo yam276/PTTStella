@@ -46,7 +46,20 @@ test("the production clearSelection sends a scoped revocation before dropping it
     vm.runInNewContext(source.slice(start,end)+"\nclearSelection();",context);
     assert.equal(events.length,0);
 });
-const openData=()=>({language:"zh-TW",tools_opacity:100,profile:{fonts:{kind:"platform_default"}},values:{...display},defaults:{...display},presets:{},sample:{settings:{...display}},warning:null});
+const openData=()=>({language:"zh-TW",tools_opacity:100,tools_access:{right_click_menu:true,show_floating_button:true},profile:{fonts:{kind:"platform_default"}},values:{...display},defaults:{...display},presets:{},sample:{settings:{...display}},warning:null});
+test("right-click and floating visibility stay draft-only until save and restore through cancel and defaults",async()=>{
+    const env=environment("surface-settings.js","createSettingsDialog"),ui=env.create();
+    const initial={...openData(),tools_access:{right_click_menu:false,show_floating_button:true}};
+    await ui.open(initial);
+    assert.equal(env.node("tools-right-click").checked,false);
+    env.node("tools-right-click").checked=true;env.node("tools-show-ball").checked=false;env.fire("font-cancel");
+    assert.equal(env.sent.some(e=>e.kind==="settings_save"),false);
+    await ui.open(initial);assert.equal(env.node("tools-right-click").checked,false);assert.equal(env.node("tools-show-ball").checked,true);
+    env.node("tools-right-click").checked=true;env.node("tools-show-ball").checked=false;env.fire("font-save");
+    assert.deepEqual(JSON.parse(JSON.stringify(env.sent.at(-1).tools_access)),{right_click_menu:true,show_floating_button:false});
+    ui.saved({status:"rejected"});assert.equal(env.node("tools-show-ball").checked,false);
+    env.fire("font-defaults");assert.equal(env.node("tools-right-click").checked,true);assert.equal(env.node("tools-show-ball").checked,true);ui.destroy();
+});
 function deferred(){let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};}
 
 test("closing a settings dialog while fonts load cannot repaint or steal focus",async()=>{
@@ -109,7 +122,7 @@ test("filter edit admission, failure recovery and presentation blocking share on
 test("the tagged router delivers independent wire examples once and rejects legacy/unknown envelopes",()=>{
     const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8")+"\ncreateSurfaceRouter");
     const kinds=["station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
-        "hover_settings","tools_opacity","sites_open","sites_result","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error","media_external",
+        "hover_settings","tools_opacity","tools_access","sites_open","sites_result","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error","media_external",
         "media_reset","inline_open","inline_image","inline_error","inline_reset","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","link_result","export_result"];
     const calls=[],handlers=Object.fromEntries(kinds.map(kind=>[kind,payload=>calls.push({kind,payload})]));
     const route=create(handlers),examples=JSON.parse(readFileSync(new URL("../tests/fixtures/ui-packets.json",import.meta.url),"utf8"));

@@ -13,6 +13,71 @@ fn fixture(name: &str) -> Screen {
     screen
 }
 
+#[test]
+fn menu_and_favorite_pointer_targets_use_verified_rows_and_exact_relative_input() {
+    let mut menu = fixture("main_menu");
+    replace(
+        &mut menu,
+        14,
+        "                      (U)ser         【 個人設定區 】",
+        "0",
+    );
+    menu.feed(b"\x1b[14;22H");
+    let context = navigation::analyze(&menu.frame());
+    assert_eq!(
+        context,
+        Context::MainMenu {
+            first_row: 12,
+            last_row: 15,
+            cursor_row: 13
+        }
+    );
+    for (row, expected) in [(12, b"\x1b[A\r".as_slice()), (13, b"\r"), (14, b"\x1b[B\r")] {
+        assert_eq!(
+            navigation::plan(&context, Intent::Open { row }).unwrap(),
+            expected
+        );
+    }
+    for name in ["boards", "favorites"] {
+        let context = page(name);
+        assert_eq!(
+            context,
+            Context::BoardList {
+                first_row: 3,
+                last_row: 5,
+                cursor_row: 4
+            }
+        );
+        assert_eq!(
+            navigation::plan(&context, Intent::Open { row: 3 }).unwrap(),
+            b"\x1b[A\r"
+        );
+        assert_eq!(
+            navigation::plan(&context, Intent::Open { row: 4 }).unwrap(),
+            b"\r"
+        );
+        assert_eq!(
+            navigation::plan(&context, Intent::Open { row: 5 }).unwrap(),
+            b"\x1b[B\r"
+        );
+        for row in [0, 2, 6, 22, 23, usize::MAX] {
+            assert_eq!(
+                navigation::plan(&context, Intent::Open { row }),
+                Err(Error::Unavailable)
+            );
+        }
+    }
+    let invalid = Context::BoardList {
+        first_row: 3,
+        last_row: usize::MAX,
+        cursor_row: 4,
+    };
+    assert_eq!(
+        navigation::plan(&invalid, Intent::Open { row: 4 }),
+        Err(Error::Unavailable)
+    );
+}
+
 fn switch_scene(name: &str) -> Vec<u8> {
     let data: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/board-switch.json")).unwrap();
@@ -833,7 +898,7 @@ fn menu_board_and_favorite_profiles_translate_without_enabling_keepalive_or_arti
             );
         }
         assert_eq!(
-            navigation::plan(&context, Intent::Open { row: 4 }),
+            navigation::plan(&context, Intent::Open { row: 23 }),
             Err(Error::Unavailable)
         );
     }
@@ -928,7 +993,14 @@ fn menu_banner_and_class_decoration_are_not_input_context() {
 #[test]
 fn real_board_reading_command_and_full_page_are_a_board_context() {
     let context = page("boards_reading");
-    assert_eq!(context, Context::BoardList { first_row: 3 });
+    assert_eq!(
+        context,
+        Context::BoardList {
+            first_row: 3,
+            last_row: 22,
+            cursor_row: 3
+        }
+    );
     assert_eq!(navigation::plan(&context, Intent::Forward).unwrap(), b"\r");
     assert!(!context.allows_keepalive());
 }
@@ -994,7 +1066,14 @@ fn dense_lists_still_reject_prompt_bad_date_or_missing_forward_command() {
 #[test]
 fn board_description_caption_does_not_disable_frequent_board_switching() {
     let context = page("boards_caption");
-    assert_eq!(context, Context::BoardList { first_row: 3 });
+    assert_eq!(
+        context,
+        Context::BoardList {
+            first_row: 3,
+            last_row: 22,
+            cursor_row: 6
+        }
+    );
     for (intent, expected) in [
         (
             Intent::Lines {
@@ -1024,7 +1103,11 @@ fn board_browser_still_requires_stable_columns_and_valid_rows() {
         screen.feed(b"\x1b[7;2H");
         assert_eq!(
             navigation::analyze(&screen.frame()),
-            Context::BoardList { first_row: 3 }
+            Context::BoardList {
+                first_row: 3,
+                last_row: 22,
+                cursor_row: 6
+            }
         );
     }
     for header in [

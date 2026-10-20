@@ -105,7 +105,11 @@ fn continue_prompt_translates_once_and_holds_the_key_across_screen_changes() {
         assert_eq!(keyboard.key(&k, &Context::ContinuePrompt), Effect::None);
         k.repeat = true;
         assert_eq!(keyboard.key(&k, &Context::ContinuePrompt), Effect::None);
-        let list = Context::BoardList { first_row: 3 };
+        let list = Context::BoardList {
+            first_row: 3,
+            last_row: 22,
+            cursor_row: 4,
+        };
         assert_eq!(keyboard.key(&k, &list), Effect::None);
         assert!(!keyboard.accept_text(false));
         keyboard.release(&k.code);
@@ -383,10 +387,18 @@ fn main_menu_and_board_half_pages_use_their_content_height() {
             Context::MainMenu {
                 first_row: 12,
                 last_row: 15,
+                cursor_row: 13,
             },
             2,
         ),
-        (Context::BoardList { first_row: 3 }, 10),
+        (
+            Context::BoardList {
+                first_row: 3,
+                last_row: 22,
+                cursor_row: 4,
+            },
+            10,
+        ),
     ] {
         let mut policy = Keyboard::default();
         policy.toggle();

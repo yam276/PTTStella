@@ -126,6 +126,13 @@ fn outbound_results_match_the_shared_wire_examples() {
             "tools_opacity",
             Packet::ToolsOpacity(pttstella::settings::ToolOpacity::try_from(65).unwrap()),
         ),
+        (
+            "tools_access",
+            Packet::ToolsAccess(pttstella::settings::ToolAccess {
+                right_click_menu: true,
+                show_floating_button: false,
+            }),
+        ),
         ("hover_settings", Packet::HoverSettings(HoverPosition::Off)),
         ("hover_reset", Packet::HoverReset { media: true }),
         ("hover_rejected", Packet::HoverRejected(8)),

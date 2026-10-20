@@ -138,6 +138,21 @@ impl From<ToolOpacity> for u8 {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ToolAccess {
+    pub right_click_menu: bool,
+    pub show_floating_button: bool,
+}
+impl Default for ToolAccess {
+    fn default() -> Self {
+        Self {
+            right_click_menu: true,
+            show_floating_button: true,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AppSettings {
@@ -148,13 +163,16 @@ pub struct AppSettings {
     pub language: crate::i18n::Language,
     #[serde(default)]
     pub tools_opacity: ToolOpacity,
+    #[serde(default)]
+    pub tools_access: ToolAccess,
 }
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
-            version: 4,
+            version: 5,
             language: crate::i18n::Language::default(),
             tools_opacity: ToolOpacity::default(),
+            tools_access: ToolAccess::default(),
             display: DisplayProfile::default(),
             hover: HoverPosition::default(),
         }
@@ -162,13 +180,13 @@ impl Default for AppSettings {
 }
 impl AppSettings {
     fn migrate(mut self) -> Self {
-        if matches!(self.version, 2 | 3) {
-            self.version = 4;
+        if matches!(self.version, 2..=4) {
+            self.version = 5;
         }
         self
     }
     pub fn validate(mut self) -> Result<Self, String> {
-        if self.version != 4 {
+        if self.version != 5 {
             return Err(crate::msg!("settings-version"));
         }
         self.display = self.display.validate()?;
@@ -191,7 +209,7 @@ impl AppSettings {
                     ..Self::default()
                 })
             }
-            2..=4 => serde_json::from_slice::<Self>(bytes)
+            2..=5 => serde_json::from_slice::<Self>(bytes)
                 .map_err(|e| e.to_string())?
                 .migrate()
                 .validate()

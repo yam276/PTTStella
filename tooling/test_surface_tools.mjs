@@ -53,6 +53,21 @@ test('keyboard Back works while dragging from a category closes it without an ac
     f.menu.destroy();assert.equal(f.menu.clean(),true);
 });
 const overlaps=(a,b)=>a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h;
+test('right-click tools reveal a hidden trigger, preserve category navigation and restore its parked position',()=>{
+    const f=fixture(),parked=f.menu.snapshot().point;
+    f.menu.setVisible(false);assert.equal(f.ball.hidden,true);
+    assert.equal(f.menu.showAt({isTrusted:false,clientX:300,clientY:300}),false);
+    assert.equal(f.menu.showAt({isTrusted:true,clientX:NaN,clientY:300}),false);
+    assert.equal(f.menu.showAt({isTrusted:true,clientX:300,clientY:300}),true);
+    assert.equal(f.ball.hidden,false);assert.equal(f.fan.hidden,false);
+    assert.equal(f.menu.snapshot().point.x,272);assert.equal(f.menu.snapshot().point.y,272);
+    f.fire(f.petals[0],'click');assert.equal(f.ball.dataset.toolsAction,'back');
+    f.fire(f.ball,'click');assert.equal(f.fan.hidden,false);
+    f.fire(f.ball,'click');assert.equal(f.menu.open(),false);assert.equal(f.ball.hidden,true);
+    assert.deepEqual(f.menu.snapshot().point,parked);
+    f.menu.setVisible(true);assert.equal(f.ball.hidden,false);
+    assert.throws(()=>f.menu.setVisible('false'));f.menu.destroy();assert.equal(f.menu.clean(),true);
+});
 test('an open modal receives its first pointer action without tool chrome swallowing it or restoring BBS focus',()=>{
     const f=fixture();f.fire(f.ball,'click');f.fire(f.petals[1],'click');
     const field={};f.document.activeElement=field;f.document.querySelector=selector=>selector==='dialog[open]'?{}:null;
