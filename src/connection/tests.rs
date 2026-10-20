@@ -757,72 +757,86 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
 
 #[tokio::test]
 async fn continue_prompt_rejects_duplicate_stale_and_wrong_context_requests() {
-    let (listener, connection) = idle_local().await;
-    connection.connect().unwrap();
-    let (stream, _) = listener.accept().await.unwrap();
-    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-    ws.send(Message::Binary(navigation_page("board_entry").into()))
-        .await
-        .unwrap();
-    let view = wait(&connection, |v| v.received > 0).await;
-    let stamp = view.stamp();
-    connection
-        .browse_key(stamp, Intent::Continue)
-        .await
-        .unwrap();
-    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b" ");
-    let pending = wait(&connection, |v| v.input_pending).await;
-    assert_eq!(
-        connection
-            .browse_key(stamp, Intent::Continue)
+    for source in [navigation::Source::Keyboard, navigation::Source::Pointer] {
+        let (listener, connection) = idle_local().await;
+        connection.connect().unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        ws.send(Message::Binary(navigation_page("board_entry").into()))
             .await
-            .unwrap_err(),
-        navigation::Error::Stale.to_string()
-    );
-    assert_eq!(
+            .unwrap();
+        let view = wait(&connection, |v| v.received > 0).await;
+        let stamp = view.stamp();
         connection
-            .browse_key(pending.stamp(), Intent::Continue)
+            .request_navigate(stamp, Intent::Continue, source)
+            .unwrap()
+            .wait()
             .await
-            .unwrap_err(),
-        navigation::Error::AwaitingScreen.to_string()
-    );
-    assert!(timeout(Duration::from_millis(30), ws.next()).await.is_err());
-    ws.send(Message::Binary(navigation_page("list").into()))
-        .await
-        .unwrap();
-    let list = wait(&connection, |v| {
-        v.frame.revision > view.frame.revision && !v.input_pending
-    })
-    .await;
-    assert_eq!(
+            .unwrap();
+        assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b" ");
+        let pending = wait(&connection, |v| v.input_pending).await;
+        assert_eq!(
+            connection
+                .request_navigate(stamp, Intent::Continue, source)
+                .unwrap()
+                .wait()
+                .await
+                .unwrap_err(),
+            navigation::Error::Stale.to_string()
+        );
+        assert_eq!(
+            connection
+                .request_navigate(pending.stamp(), Intent::Continue, source)
+                .unwrap()
+                .wait()
+                .await
+                .unwrap_err(),
+            navigation::Error::AwaitingScreen.to_string()
+        );
+        assert!(timeout(Duration::from_millis(30), ws.next()).await.is_err());
+        ws.send(Message::Binary(navigation_page("list").into()))
+            .await
+            .unwrap();
+        let list = wait(&connection, |v| {
+            v.frame.revision > view.frame.revision && !v.input_pending
+        })
+        .await;
+        assert_eq!(
+            connection
+                .request_navigate(stamp, Intent::Continue, source)
+                .unwrap()
+                .wait()
+                .await
+                .unwrap_err(),
+            navigation::Error::Stale.to_string()
+        );
+        assert_eq!(
+            connection
+                .request_navigate(list.stamp(), Intent::Continue, source)
+                .unwrap()
+                .wait()
+                .await
+                .unwrap_err(),
+            navigation::Error::Unavailable.to_string()
+        );
+        assert!(timeout(Duration::from_millis(30), ws.next()).await.is_err());
         connection
-            .browse_key(stamp, Intent::Continue)
+            .request_navigate(list.stamp(), Intent::Forward, source)
+            .unwrap()
+            .wait()
             .await
-            .unwrap_err(),
-        navigation::Error::Stale.to_string()
-    );
-    assert_eq!(
-        connection
-            .browse_key(list.stamp(), Intent::Continue)
-            .await
-            .unwrap_err(),
-        navigation::Error::Unavailable.to_string()
-    );
-    assert!(timeout(Duration::from_millis(30), ws.next()).await.is_err());
-    connection
-        .browse_key(list.stamp(), Intent::Forward)
-        .await
-        .unwrap();
-    assert_eq!(
-        ws.next().await.unwrap().unwrap().into_data().as_ref(),
-        b"\r"
-    );
-    let peer = tokio::spawn(async move {
-        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
-        ws.flush().await.unwrap();
-    });
-    connection.shutdown().await.unwrap();
-    peer.await.unwrap();
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            b"\r"
+        );
+        let peer = tokio::spawn(async move {
+            assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+            ws.flush().await.unwrap();
+        });
+        connection.shutdown().await.unwrap();
+        peer.await.unwrap();
+    }
 }
 
 #[tokio::test]

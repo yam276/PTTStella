@@ -4,13 +4,23 @@
 
 ## 目標
 
-目前交付為 `dist/macos-board-root-actions-r3/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：補上實站我的最愛與分類根目錄省略單向提示的導覽辨識，保留先前文章快取、上下半部點擊與左側返回。PTTStella 帳號的兩種根列表已確認恢復 NORMAL，原生鍵盤移動／進入／返回及 WebView PNG 通過；整頁選取的 24 行 PNG 邊界、長選取停用及歷史剪貼簿亦已補驗。原生滑鼠點擊由使用者手動驗收；實體滾輪／IME、任意快取行拖曳選取 PNG 與 Windows／Linux UI 仍分列待驗。先前各交付結果保留於歷程分節，不以本輪有限實站瀏覽代替完整跨平台 desktop gate。
+目前交付為 `dist/macos-continue-input-final/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：補上標準任意鍵提示的一般按鍵與單次左鍵繼續，包含先前實站我的最愛與分類根目錄辨識修正、文章快取、上下半部點擊與左側返回。PTTStella 帳號的兩種根列表已確認恢復 NORMAL，原生鍵盤移動／進入／返回及 WebView PNG 通過；整頁選取的 24 行 PNG 邊界、長選取停用及歷史剪貼簿亦已補驗。原生滑鼠點擊由使用者手動驗收；實體滾輪／IME、任意快取行拖曳選取 PNG 與 Windows／Linux UI 仍分列待驗。先前各交付結果保留於歷程分節，不以本輪有限實站瀏覽代替完整跨平台 desktop gate。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 任意鍵提示的按鍵與點擊繼續（2026-10-20）
+
+使用者要求「請按任意鍵繼續」確實可用任意一般按鍵及滑鼠點擊關閉。沿用原本嚴格 ContinuePrompt 辨識，不解析第二份站端文字。Rust Keyboard 在 Vim 開／關、原生輸入／原生一次中皆把一般按鍵轉為 Continue，再由既有 planner／Connection 送單一空白；f／i／Escape 不在這張提示切換模式，原生一次消耗該次機會，其餘模式保留。Normal 保留 readonly 宿主的實體字母／數字鍵轉譯（含 CJK 來源的 Process／229）；修飾鍵單按、原生輸入的 Dead／Process、真正組字及其確認不送文字；選取 Escape、複製／貼上、本機視窗／縮放快捷鍵保留原本 owner。
+
+滑鼠整個可見 terminal 格線單次左鍵共用 Continue，先於網址與左緣返回。延用 pointer 交易與輸入／畫面版本，另核對投影及可視幾何；拖曳、Shift、取消、雙擊第二次、更新中、忙碌、modal、站端滑鼠與過期手勢皆不能繼續。新畫面不補送；長按持有到 keyup，不把同一次按鍵解讀成下一頁操作。
+
+離線 core 13 commands／2 replays、desktop lib 142／bin 82、全 targets Clippy、全套 JS 158、docs 及 macOS release 打包通過。新增 Rust 按鍵模式／IME／長按與本機服務的 Keyboard／Pointer 兩來源精確 bytes，JS production handler 核對整格線、網址優先、重複／過期／幾何及本機輸入 owner。原生 WKWebView 完整 46 筆 loopback 回歸通過：三張提示分別用 Normal 長按 j 一秒、Vim 關閉時 x 及 Escape，服務端各只收到一個空白；長按未跳過下一張提示。其後恢復 Normal 完成列表／Help／空列表，Close acknowledged、全部 owner join、退出 0。AX 索引重新編號曾誤開原生選單，取消後確認仍為 test37 才繼續，服務端未收到額外 bytes，未重送已完成步驟。
+
+證據在 `.local/verification/continue-input`，`final-checks/checks.json`、`native-final/window-probe.json`、原生提示／長按／原生模式畫面及 `validation.json` 分列範圍。交付與測試副本 strict 簽章、15 份 loadable Mach-O sections 一致；原生滑鼠點擊仍依使用者指示留待手動驗收，不以 DOM doubles 冒充實體點擊。Windows／Linux、原生 IME 與完整 Mac desktop backend 仍未由本輪驗證。 正常模式副本已用保存的 PTTStella 帳號明確按登入，實站標準提示確認為 VIM NORMAL、本機滑鼠路由；收合工具後停留在該提示，供使用者單次點擊驗收，未代按點擊或宣稱滑鼠通過。先前根列表驗收副本已關閉，避免誤測舊程式。
 
 ## 實站根列表辨識修正（2026-10-20）
 
