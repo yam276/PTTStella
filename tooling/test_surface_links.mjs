@@ -137,7 +137,7 @@ test("article rows open across their width while the left edge returns; unknown 
     assert.equal(hit({row:0,col:0}),null);assert.equal(hit({row:23,col:0}),null);
     context.latest.navigation={kind:"article_reading"};assert.equal(hit({row:10,col:0}).kind,"back");
     assert.equal(hit({row:10,col:16}).kind,"back");
-    assert.equal(hit({row:10,col:17}),null);
+    // Reading halves are covered with viewport geometry in test_article_pointer.
     context.linkAt=()=>2;assert.equal(hit({row:10,col:4}).kind,"link");context.linkAt=()=>-1;
     context.stationMouse.local=()=>false;assert.equal(hit({row:10,col:0}),null);
     context.stationMouse.local=()=>true;context.canNavigate=()=>false;assert.equal(hit({row:10,col:0}),null);

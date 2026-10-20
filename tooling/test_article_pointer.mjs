@@ -1,0 +1,108 @@
+// Execute the production pointer transaction and movement handlers. These DOM
+// doubles are independent of native WebView input and do not prove live access.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+
+const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
+function fixture({cached=true}={}){
+    const sent=[],selections=[],capture=new Set();
+    const f={sent,selections,stopped:false,dragging:null,released:null,navigationLocked:false,navigationRequest:false,
+        generation:7,revision:4,composing:false,hoverCandidate:null,
+        latest:{presentation:2,connected:true,input_pending:false,output_pending:false,
+            frame:{cols:80,rows:cached?81:24},navigation:{kind:'article_reading',first_line:1,percent:50},
+            article:cached?{id:1,first_line:1,last_line:80,end:false}:null},
+        viewport:{clientHeight:480,clientWidth:960,scrollTop:0,scrollLeft:0,scrollHeight:1944,
+            getBoundingClientRect:()=>({top:40,left:0}),setPointerCapture:id=>capture.add(id),
+            hasPointerCapture:id=>capture.has(id),releasePointerCapture:id=>capture.delete(id)},
+        surface:{dataset:{},offsetTop:0,getBoundingClientRect:()=>({top:40-f.viewport.scrollTop,left:0,width:960,height:cached?1944:576})},
+        grid:{ratio:1,x:col=>col*12,y:row=>row*24,bottom:row=>(row+1)*24},
+        stationMouse:{local:()=>true,down:()=>false,up:()=>false,move:()=>false,revoke(){}},
+        blocked:()=>false,linkAt:()=>-1,send:p=>sent.push(JSON.parse(JSON.stringify(p))),
+        canNavigate:()=>!f.latest.input_pending&&!f.navigationLocked&&!f.navigationRequest&&f.latest.connected&&f.latest.navigation.kind!=='unknown',
+        stamp:()=>({generation:f.generation,revision:f.revision,input_epoch:0}),sameStamp:(a,b)=>JSON.stringify(a)===JSON.stringify(b),
+        policy(){},focus(){},clearSelection(){},cancelHover(){},refreshKeepAlive(){},refreshNavigation(){},setHover(){},repaint(){},
+        requestSelection:value=>selections.push(value),media:{locate(){}},hoverPreference:'off'};
+    vm.createContext(f);
+    for(const [first,last] of [['navigationBackRegion','setHover'],['pointerdown','cancelDrag'],['readingMove',null]]){
+        const end=last?source.indexOf(`function ${last}(`):source.indexOf('const browseReturn=');
+        vm.runInContext(source.slice(source.indexOf(`function ${first}(`),end),f);
+    }
+    // Use the same cell geometry as production; image gaps are tested separately.
+    f.surface.getBoundingClientRect=()=>({top:40-f.viewport.scrollTop,left:0,right:960,bottom:40-f.viewport.scrollTop+(cached?1944:576),width:960,height:cached?1944:576});
+    f.event=(col,y,extra={})=>({button:0,detail:1,isTrusted:true,isPrimary:true,pointerId:1,
+        clientX:col*12+6,clientY:40+y,shiftKey:false,preventDefault(){},...extra});
+    f.tap=(col,y,extra={})=>{const e=f.event(col,y,extra);f.pointerdown(e);f.pointerup(e);f.click(e);};
+    return f;
+}
+
+test('reading halves use the visible viewport after scrolling, not the full cached document',()=>{
+    const f=fixture();f.viewport.scrollTop=960;
+    f.tap(40,100);assert.equal(f.viewport.scrollTop,528);assert.deepEqual(f.sent,[]);
+    f.tap(40,380);assert.equal(f.viewport.scrollTop,960);assert.deepEqual(f.sent,[]);
+    const narrow=fixture();narrow.viewport.clientHeight=240;narrow.viewport.scrollTop=480;
+    narrow.tap(40,150);assert.equal(narrow.viewport.scrollTop,696);
+});
+
+test('left seventeen columns return across cached rows while live links have priority',()=>{
+    const f=fixture();f.viewport.scrollTop=960;f.tap(16,380);
+    assert.deepEqual(f.sent.map(p=>p.intent),[{action:'back'}]);assert.equal(f.viewport.scrollTop,960);
+    const link=fixture();link.linkAt=()=>3;link.tap(4,100);
+    assert.deepEqual(link.sent,[{kind:'open_link',presentation:2,generation:7,revision:4,index:3,trusted:true}]);
+    assert.equal(link.viewport.scrollTop,0);
+    const body=fixture();body.tap(17,380);assert.equal(body.viewport.scrollTop,432);assert.deepEqual(body.sent,[]);
+});
+
+test('raw reading excludes headers/footer, computes its visible half, and sends the existing typed intent',()=>{
+    for(const [row,action] of [[3,'previous_page'],[18,'next_page']]){
+        const f=fixture({cached:false});f.latest.navigation.first_line=24;f.tap(40,row*24+12);
+        assert.deepEqual(f.sent.map(p=>[p.kind,p.intent.action,p.source]),[['navigate',action,'pointer']]);
+    }
+    const f=fixture({cached:false});assert.equal(f.hitAt({row:0,col:40}),null);assert.equal(f.hitAt({row:23,col:40}),null);
+    f.latest.navigation.kind='unknown';f.tap(40,380);assert.deepEqual(f.sent,[]);
+});
+
+test('only an unknown cache edge fetches once; confirmed first/end and repeated clicks send no bytes',()=>{
+    const f=fixture();f.viewport.scrollTop=1464;f.tap(40,380);f.tap(40,380);
+    assert.deepEqual(f.sent.map(p=>[p.intent.action,p.source]),[['next_page','pointer']]);
+    const end=fixture();end.latest.article.end=true;end.viewport.scrollTop=1464;end.tap(40,380);assert.deepEqual(end.sent,[]);
+    const first=fixture();first.tap(40,100);assert.equal(first.viewport.scrollTop,0);assert.deepEqual(first.sent,[]);
+});
+
+test('drag, Shift, cancelled capture and crossing the half boundary cannot activate a page',()=>{
+    const drag=fixture(),down=drag.event(40,100);drag.pointerdown(down);drag.pointerup(drag.event(42,100));drag.click(down);
+    assert.equal(drag.selections.length,1);assert.deepEqual(drag.sent,[]);assert.equal(drag.viewport.scrollTop,0);
+    const shift=fixture();shift.tap(40,380,{shiftKey:true});assert.equal(shift.viewport.scrollTop,0);
+    const cross=fixture();cross.pointerdown(cross.event(40,239));cross.pointerup(cross.event(40,241));cross.click(cross.event(40,241));
+    assert.equal(cross.viewport.scrollTop,0);assert.deepEqual(cross.sent,[]);
+    const cancelled=fixture();cancelled.pointerdown(cancelled.event(40,380));cancelled.dragging=null;cancelled.pointerup(cancelled.event(40,380));cancelled.click(cancelled.event(40,380));
+    assert.equal(cancelled.viewport.scrollTop,0);
+});
+
+test('source, article, presentation, scroll and resize changes invalidate a held or released gesture',()=>{
+    for(const mutate of [f=>f.revision++,f=>f.latest.article.id++,f=>f.latest.presentation++,
+        f=>f.viewport.scrollTop=24,f=>f.viewport.clientHeight=400]){
+        for(const stage of ['held','released']){
+            const f=fixture(),e=f.event(40,380);f.pointerdown(e);
+            if(stage==='held')mutate(f);f.pointerup(e);if(stage==='released')mutate(f);
+            const top=f.viewport.scrollTop;f.click(e);assert.equal(f.viewport.scrollTop,top);assert.deepEqual(f.sent,[]);
+        }
+    }
+});
+
+test('pending output, modal, remote mouse, untrusted events and image gaps cannot trigger a local page',()=>{
+    for(const mutate of [f=>f.latest.output_pending=true,f=>f.latest.input_pending=true,
+        f=>f.blocked=()=>true,f=>f.stationMouse.local=()=>false,f=>f.latest.connected=false,
+        f=>f.grid.rowAt=()=>null]){
+        const f=fixture();mutate(f);f.tap(40,380);assert.equal(f.viewport.scrollTop,0);assert.deepEqual(f.sent,[]);
+    }
+    const f=fixture();f.tap(40,380,{isTrusted:false});assert.equal(f.viewport.scrollTop,0);assert.deepEqual(f.sent,[]);
+});
+
+test('cached Back hover decorates only one visible gutter column and never covers text',()=>{
+    const f=fixture();f.viewport.scrollTop=960;f.surface.dataset.pointerAction='back';f.navigationMarker={style:{},dataset:{}};f.hoveredRow=null;
+    vm.runInContext(source.slice(source.indexOf('function drawNavigationMarker('),source.indexOf('function refreshNavigation(')),f);
+    f.drawNavigationMarker();assert.equal(f.navigationMarker.hidden,false);
+    assert.equal(f.navigationMarker.style.width,'12px');assert.equal(f.navigationMarker.style.top,'960px');assert.equal(f.navigationMarker.style.height,'480px');
+});

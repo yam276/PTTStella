@@ -216,11 +216,11 @@ function pointerdown(e) {
     // Prevent the scroll container's default focus step from overriding ours.
     e.preventDefault(); focus(); clearSelection();
     const point=cellAt(e,false);
-    const hit=hitAt(point);
+    const hit=hitAt(point,e.clientY);
     if(hit?.kind!=="link"||hoverCandidate?.index!==hit.index)cancelHover();
     else if(!hoverCandidate.started)cancelHover();
     if(point&&!composing) {
-        dragging={anchor:point,x:e.clientX,y:e.clientY,moved:false,pointer:e.pointerId,hit:e.shiftKey?null:hitAt(point),stamp:stamp()};
+        dragging={anchor:point,x:e.clientX,y:e.clientY,moved:false,pointer:e.pointerId,hit:e.shiftKey?null:hit,stamp:stamp(),view:pointerView()};
         viewport.setPointerCapture(e.pointerId);
         surface.dataset.pointerId=String(e.pointerId);surface.dataset.pointerActive="true";
         refreshKeepAlive();
@@ -248,9 +248,9 @@ function pointerup(e) {
     if(!dragging&&stationMouse.up(e))return;
     if(!dragging||e.pointerId!==dragging.pointer) return;
     pointermove(e);
-    const hit=hitAt(cellAt(e,false));
-    if(!dragging.moved&&!e.shiftKey&&stationMouse.local()&&!blocked()&&sameStamp(dragging.stamp,stamp())&&JSON.stringify(dragging.hit)===JSON.stringify(hit)) {
-        released={hit,stamp:dragging.stamp};
+    const hit=hitAt(cellAt(e,false),e.clientY);
+    if(!dragging.moved&&!e.shiftKey&&stationMouse.local()&&!blocked()&&sameStamp(dragging.stamp,stamp())&&dragging.view===pointerView()&&JSON.stringify(dragging.hit)===JSON.stringify(hit)) {
+        released={hit,stamp:dragging.stamp,view:dragging.view};
     }
     dragging=null;
     surface.dataset.pointerActive="false";
@@ -259,11 +259,11 @@ function pointerup(e) {
 }
 function click(e) {
     if(!stationMouse.local()){released=null;return;}
-    if(e.button!==0||e.detail>1) {released=null;refreshKeepAlive();return;}
+    if(!e.isTrusted||e.button!==0||e.detail>1) {released=null;refreshKeepAlive();return;}
     const action=released;released=null;clickSequenceAction=!!action?.hit;
-    if(!action?.hit||blocked()||!sameStamp(action.stamp,stamp())) {refreshKeepAlive();return;}
+    if(!action?.hit||blocked()||!sameStamp(action.stamp,stamp())||action.view&&action.view!==pointerView()) {refreshKeepAlive();return;}
     if(action.hit.kind==="link") send({kind:"open_link",presentation:latest.presentation,generation,revision,index:action.hit.index,trusted:e.isTrusted});
-    else navigate(action.hit.kind==="back"?{action:"back"}:{action:"open",row:action.hit.row},e);
+    else navigate(action.hit.kind==="back"?{action:"back"}:action.hit.kind==="page"?{action:action.hit.action}:{action:"open",row:action.hit.row},e);
     refreshKeepAlive();
 }
 function cancelDrag() {
@@ -342,19 +342,37 @@ function linkAt(point) {
     return latest.links.findIndex(link=>link.row===point.row&&link.start<=point.col&&point.col<link.end);
 }
 // Geometry consumes the confirmed Rust profile, never station text.
-function navigationBackRegion(context) {
+function navigationBackRegion(context,article=null) {
     if(!context||context.kind==="main_menu"||context.kind==="unknown")return null;
+    if(context.kind==="article_reading"&&article)return {first:0,last:article.last_line-article.first_line+1,end:17};
     const first=context.kind==="article_list"?(context.articles[0]?.row??3):(context.first_row??1);
     const end=context.kind==="article_list"?17:context.kind==="board_list"?10:context.kind==="article_reading"?17:20;
     return {first,last:23,end};
 }
-function hitAt(point) {
+function pointerView() {
+    if(latest?.navigation.kind!=="article_reading")return null;
+    const bounds=surface.getBoundingClientRect(),visible=viewport.getBoundingClientRect();
+    return JSON.stringify([latest.presentation,latest.article?.id,viewport.scrollTop,viewport.scrollLeft,
+        viewport.clientWidth,viewport.clientHeight,bounds.left,bounds.top,bounds.width,bounds.height,visible.top]);
+}
+function readingPageAt(point,clientY) {
+    const region=navigationBackRegion(latest.navigation,latest.article);
+    if(point.row<region.first||point.row>=region.last)return null;
+    const bounds=surface.getBoundingClientRect(),visible=viewport.getBoundingClientRect();
+    const top=Math.max(visible.top,bounds.top+grid.y(region.first)/grid.ratio);
+    const bottom=Math.min(visible.top+viewport.clientHeight,bounds.top+grid.y(region.last)/grid.ratio);
+    const y=clientY??bounds.top+(grid.y(point.row)+grid.bottom(point.row))/2/grid.ratio;
+    if(y<top||y>=bottom)return null;
+    return {kind:"page",action:y<(top+bottom)/2?"previous_page":"next_page"};
+}
+function hitAt(point,clientY) {
     if(!point||blocked()||dragging?.moved||!stationMouse.local()) return null;
     const index=linkAt(point);if(index>=0) return {kind:"link",index};
-    const back=latest?.article?null:navigationBackRegion(latest?.navigation);
+    const back=navigationBackRegion(latest?.navigation,latest?.article);
     if(canNavigate()&&back&&point.col<back.end&&point.row>=back.first&&point.row<back.last)return {kind:"back"};
     if(!canNavigate())return null;
     const context=latest.navigation;
+    if(context.kind==="article_reading")return readingPageAt(point,clientY);
     if(['main_menu','system_menu','document_list','board_list'].includes(context.kind)){
         const start=["main_menu","system_menu"].includes(context.kind)?20:1;
         return point.col>=start&&point.row>=context.first_row&&point.row<=context.last_row?{kind:"menu",row:point.row}:null;
@@ -364,23 +382,26 @@ function hitAt(point) {
     return article?{kind:"article",row:article.row}:null;
 }
 function setHover(point,redraw=true,preview=true) {
-    const hit=hitAt(point),index=hit?.kind==="link"?hit.index:-1;
+    const hit=hitAt(point,pointerClient?.clientY),index=hit?.kind==="link"?hit.index:-1;
     const changed=index!==hoveredLink;hoveredLink=index;
     hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:["main_menu","system_menu"].includes(latest.navigation.kind)?20:0,kind:hit.kind}:null;
     surface.dataset.pointerAction=hit?.kind||"none";
     surface.style.cursor=hit?.kind==="back"?"":hit?"pointer":"default";
-    surface.title=hit?.kind==="back"?tr("pointer-back-hint"):index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredRow?tr(hit.kind==="menu"?"menu-open-hint":"article-open-hint"):"";
+    surface.title=hit?.kind==="back"?tr("pointer-back-hint"):hit?.kind==="page"?tr(hit.action==="previous_page"?"pointer-page-up-hint":"pointer-page-down-hint"):index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredRow?tr(hit.kind==="menu"?"menu-open-hint":"article-open-hint"):"";
     if(preview)previewHover(index);
     if(changed&&redraw&&latest) draw(latest);else drawNavigationMarker();
 }
 function drawNavigationMarker() {
     const back=surface.dataset.pointerAction==="back";
-    navigationMarker.hidden=!!latest?.article||(!hoveredRow&&!back)||!grid||!canNavigate();
+    navigationMarker.hidden=(!hoveredRow&&!back)||!grid||!canNavigate();
     if(navigationMarker.hidden) {delete navigationMarker.dataset.row;return;}
-    const {row,start,end}=back?{row:navigationBackRegion(latest.navigation).first,start:0,end:1}:{row:hoveredRow.row,start:hoveredRow.start,end:latest.frame.cols};
+    const region=back?navigationBackRegion(latest.navigation,latest.article):null;
+    const {row,start,end}=back?{row:region.first,start:0,end:1}:{row:hoveredRow.row,start:hoveredRow.start,end:latest.frame.cols};
+    const top=back&&latest.article?Math.max(grid.y(row)/grid.ratio,viewport.scrollTop-surface.offsetTop):grid.y(row)/grid.ratio;
+    const bottom=back&&latest.article?Math.min(grid.y(region.last)/grid.ratio,viewport.scrollTop-surface.offsetTop+viewport.clientHeight):back?grid.y(region.last)/grid.ratio:grid.bottom(row)/grid.ratio;
     navigationMarker.dataset.kind=back?"back":hoveredRow.kind;navigationMarker.dataset.row=String(row);
-    Object.assign(navigationMarker.style,{left:grid.x(start)/grid.ratio+"px",top:grid.y(row)/grid.ratio+"px",
-        width:(grid.x(end)-grid.x(start))/grid.ratio+"px",height:((back?grid.y(23):grid.bottom(row))-grid.y(row))/grid.ratio+"px"});
+    Object.assign(navigationMarker.style,{left:grid.x(start)/grid.ratio+"px",top:top+"px",
+        width:(grid.x(end)-grid.x(start))/grid.ratio+"px",height:Math.max(0,bottom-top)+"px"});
 }
 function refreshNavigation() {
     refreshExportControls();
