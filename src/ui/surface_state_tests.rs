@@ -28,6 +28,24 @@ fn view() -> View {
     }
 }
 
+fn expected_merged_fixture(view: &View) -> pttstella::screen::Frame {
+    let mut expected = view.frame.clone();
+    // Independent fixture expectation: only row 7's five-letter ALICE repeats.
+    for glyph in expected
+        .glyphs
+        .iter_mut()
+        .filter(|g| g.row == 6 && (3..8).contains(&g.col))
+    {
+        glyph.text = "█".into();
+        glyph.left = pttstella::screen::Style {
+            fg: 0,
+            ..Default::default()
+        };
+        glyph.right = glyph.left;
+    }
+    expected
+}
+
 #[test]
 fn cached_history_is_an_acknowledged_filtered_projection_with_its_own_link_indices() {
     let mut state = SurfaceState::new(filters::Rules::default());
@@ -131,8 +149,9 @@ fn retained_frame_cannot_authorize_interactions_during_an_output_batch() {
         .queue(&view, false, &DisplaySettings::default())
         .unwrap();
     assert!(packet.output_pending && packet.input_pending);
-    assert_eq!(packet.source_frame.as_ref(), Some(&view.frame)); // Original source stays retained.
-    assert_eq!(packet.frame.glyphs, view.frame.glyphs); // Cached body never reads partial source bytes.
+    let expected = expected_merged_fixture(&view);
+    assert_eq!(packet.source_frame.as_ref(), Some(&expected));
+    assert_eq!(packet.frame.glyphs, expected.glyphs); // Retained body keeps its known ID grouping.
     assert!(!packet.frame.cursor_visible);
     assert!(packet.links.is_empty() && packet.hover.is_none());
     assert_eq!(packet.navigation.kind(), "unknown");
@@ -539,7 +558,7 @@ fn terminal_mode_revokes_old_acks_and_inline_but_keeps_station_links() {
     assert!(state.reading_move(&view, Intent::NextPage).is_none());
     let terminal = displayed(&mut state, &view);
     let paint = state.current(terminal, &view).unwrap();
-    assert_eq!(paint.frame, view.frame);
+    assert_eq!(paint.frame, expected_merged_fixture(&view));
     assert!(paint.article.is_none() && paint.source_frame.is_none());
     assert!(!paint.links.is_empty());
     assert!(state.navigation_shown(view.stamp()));

@@ -358,3 +358,94 @@ fn article_identity_is_never_inferred_from_mentions_or_deleted_rows() {
     source.cursor = (0, 0);
     assert_eq!(filters::project(&source, &rules, false).frame, source);
 }
+
+#[test]
+fn consecutive_reply_ids_are_masked_without_changing_type_colon_content_or_time() {
+    let source = frame();
+    let mut merged = source.clone();
+    filters::merge_push_ids(&mut merged, &filters::pushes(&source));
+    let rows = text::rows(&merged).unwrap();
+    assert_eq!(rows[5].cells(0, 9), Some("推 Alice:"));
+    assert_eq!(rows[6].cells(0, 9), Some("→ █████:"));
+    assert_eq!(rows[7].cells(0, 10), Some("推 Alice2:"));
+    for glyph in &merged.glyphs {
+        if glyph.row == 6 && (3..8).contains(&glyph.col) {
+            assert_eq!(
+                (glyph.text.as_str(), glyph.left.fg, glyph.left.bg),
+                ("█", 0, 0)
+            );
+        } else {
+            assert!(source.glyphs.contains(glyph));
+        }
+    }
+    assert_eq!(links::detect(&merged), links::detect(&source));
+    assert_eq!(merged.cursor, source.cursor);
+    assert!(
+        selection::extract(&merged, &Selection::All)
+            .unwrap()
+            .text
+            .contains("→ █████:")
+    );
+}
+
+#[test]
+fn merging_never_bridges_a_gap_different_id_unknown_row_or_list() {
+    let source = frame();
+    let mut replies = filters::pushes(&source);
+    replies[1].row = 10;
+    let mut merged = source.clone();
+    filters::merge_push_ids(&mut merged, &replies);
+    assert_eq!(merged, source);
+    let list = article_list();
+    assert!(filters::pushes(&list).is_empty());
+    let mut unknown = source.clone();
+    unknown.control_complete = false;
+    assert!(filters::pushes(&unknown).is_empty());
+}
+
+#[test]
+fn merging_follows_account_policies_even_when_revealed_and_removes_id_hyperlinks() {
+    let mut source = frame();
+    source
+        .hyperlinks
+        .push(pttstella::screen::hyperlinks::Hyperlink {
+            target: Some("https://example.com/identity".into()),
+            spans: vec![pttstella::screen::hyperlinks::Span {
+                row: 6,
+                start: 3,
+                end: 8,
+            }],
+        });
+    let replies = filters::pushes(&source);
+    for policy in [
+        filters::Policy::Mask,
+        filters::Policy::MaskRow,
+        filters::Policy::Allow,
+    ] {
+        for revealed in [false, true] {
+            let rules = Rules::default()
+                .edit_policy("Alice", "", policy, false)
+                .unwrap();
+            let mut projected = filters::project(&source, &rules, revealed).frame;
+            filters::merge_push_ids(&mut projected, &replies);
+            assert_eq!(
+                text::rows(&projected).unwrap()[6].cells(3, 8),
+                Some("█████")
+            );
+            assert!(
+                !links::detect(&projected)
+                    .iter()
+                    .any(|link| link.url.ends_with("/identity"))
+            );
+            if policy == filters::Policy::Allow {
+                assert!(
+                    projected
+                        .glyphs
+                        .iter()
+                        .filter(|g| g.row == 5 && (3..8).contains(&g.col))
+                        .all(|g| g.left.fg == 6)
+                );
+            }
+        }
+    }
+}

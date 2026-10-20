@@ -66,6 +66,7 @@ pub fn app(props: AppProps) -> Element {
                 | "short_reading"
                 | "context_menu"
                 | "account_lists"
+                | "merged_replies"
                 | "account_articles"
         )
     );

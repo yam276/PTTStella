@@ -178,6 +178,8 @@ Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_
 
 黑白名單／匯入變更另跑 filters 核心與 store、filter_import owner、Files、SurfaceState、所有 JS／Fluent 及 Clippy。自製格式案例涵蓋 UTF-8 BOM、完整 ID、備註分隔、白名單衝突、未支援項目、容量及取消／舊 request。原生 `account_lists` 使用固定測試路徑，確認先預覽、取消零保存、合併後白名單只標示 ID、兩種黑名單分別遮內容／整行、選取複製與 PNG 一致、正常斷線及清理。`account_articles` 使用自製文章列表補驗相同三策略，核對遮內容的作者保留、整行 80 欄全黑、白名單只有 ID 改色、揭露與保存後重啟。兩種模式的原生 PNG 以獨立解碼核對範圍，複製讀回不得含被遮內容；站端零輸入且完整 Close／owner 清理。此探針不代替原生選檔視窗驗收。整行／左緣導覽另核對 `test_surface_links.mjs` 及 `desktop_navigation.py` 的真實 pointer、Shift 選取、光棒範圍與 Canvas 不變；缺平台 runner 仍記 not_ready。
 
+連續推文合併另以 `--probe-surface OUTPUT_DIRECTORY merged_replies` 驗證自製標準推文：第一筆 ID 保留、下一筆相同 ID 只塗黑 ID，符號／冒號／正文／時間不變。明確匯出完整 PNG、原生情境選單複製，Cmd-V 預覽確認遮罩後取消，正常關閉。peer 拒絕所有站端輸入；報告須包含 PNG、context copy、Close acknowledged 及全部 owner 清理。原生像素／剪貼簿讀回另核對，不能只依報告 passed；跨頁快取與政策交互由 Rust 獨立 expected 覆蓋。
+
 
 統一設定視窗變更另跑完整 JS、desktop lib／bin、Clippy、i18n 與 Python tooling 測試。Windows driver 核對中英文搜尋、實際偏好檔與畫面像素、無效中間值不寫入、分類恢復預設、匯入自動保存及重開；設定 driver 必須回傳主 target 本身，重複開啟不探索或建立輔助 CDP target。缺少 Windows runner 仍為 not_ready。macOS 原生另核對 ⌘,、品牌與 Lucide、連續修改自動保存、同一主視窗內的對話框關閉／重開、設定開啟時 ⌘Q、PNG 與 Close／全部 owner join，還要確認程序退出；只有 cleanup JSON 不能證明沒有隱藏視窗殘留。
 
