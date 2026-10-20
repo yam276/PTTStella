@@ -35,6 +35,8 @@ Windows ZIP 打包變更另跑 `python -m unittest discover -s tooling -p test_b
 
 Windows Setup 變更須執行全部 Python tooling 測試、docs、core 及 workflow actionlint，並在 Windows 以 Inno Setup 7.1.0 執行 `python tooling/check_windows_installer.py --output <新的獨立目錄>` 與實際 Setup 編譯；該原生政策 probe 不操作真實 registry／Runtime。已有／缺少 Runtime、離線、安裝失敗、升級與解除安裝保留資料另需測試環境驗收；缺 Windows runner 必須記 `not_ready`，不能把合成 adapter 當作真實補裝已通過，詳見 [安裝包契約](docs/windows-installer.md)。
 
+Windows 免安裝 EXE 變更另跑 desktop lib／bin 測試與 Clippy。`--installer --portable`／Release 打包須用同一次靜態 CRT 編譯，核對 PE 無非系統 DLL 依賴、嵌入圖示及空目錄 `--export-licenses` 與編入授權逐 byte 相同；任一失敗不能交付 Setup 或免安裝 EXE。原生授權匯出不啟動 WebView／網路，不等於 GUI 驗收；仍須在乾淨 Windows 10／11、只有 EXE 的資料夾啟動並確認內嵌資產、輸入、正常斷線及缺少 WebView2 的行為。其他 OS 的 CLI 結果不能代替 Windows 靜態連結成功。
+
 必須解壓 ZIP 至獨立目錄，核對 manifest 所列 SHA-256，並對解壓的 EXE 執行 `python tooling/check.py desktop --desktop-executable <EXE絕對路徑> --desktop-output <獨立驗證目錄>`。此模式不重新編譯，報告保留 executable 雜湊與 `build_checks_run=false`；兩個程序均從 EXE 所在目錄啟動，使用同一合成／loopback gate，不能將這份 GUI 結果當作編譯或 Clippy 已執行。指定 EXE 必須提供獨立 output，缺檔不能退回 debug binary。未在乾淨 Windows／不同版本／DPI 驗證的範圍仍須分列，實站登入另由使用者人工確認。
 
 Windows CDP runner 以 trusted 點擊浮球與分類揭露功能，操作後經同一浮球返回並收合，避免外部點擊只收合工具而被誤當作 BBS 操作；字型視窗等待初次預覽完成後的焦點才開始輸入。Vim 採 120ms 按鍵節奏，讓無站端重繪的 no-op 等待同一 command owner 完成；不宣稱最高速連發通過。貼上要求 typed rejected 狀態與目前多站版的原因文字，服務端仍獨立比對精確 bytes。這些是實際 WebView 的自動化操作，不代表實體 IME 候選窗或人工審閱。

@@ -2,11 +2,25 @@
 mod fonts;
 #[cfg(target_os = "macos")]
 mod macos;
+mod notices;
 mod ui;
 
 fn main() {
     let mut args = std::env::args_os().skip(1);
     let flag = args.next();
+    if flag.as_deref() == Some(std::ffi::OsStr::new("--export-licenses")) {
+        let result = match (args.next(), args.next()) {
+            (Some(path), None) => notices::export(std::path::Path::new(&path)),
+            _ => Err(std::io::Error::other(
+                "--export-licenses requires one new output file",
+            )),
+        };
+        if let Err(error) = result {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     let window_probe = flag.as_deref() == Some(std::ffi::OsStr::new("--probe-window"));
     let filters_probe = flag.as_deref() == Some(std::ffi::OsStr::new("--probe-filters"));
     let login_probe = flag.as_deref() == Some(std::ffi::OsStr::new("--probe-login"));
@@ -81,7 +95,7 @@ fn main() {
         }
         Some(_) => {
             eprintln!(
-                "usage: pttstella [--probe OUTPUT_DIRECTORY DEBUG_PORT | --probe-window OUTPUT_DIRECTORY | --probe-login OUTPUT_DIRECTORY | --probe-filters OUTPUT_DIRECTORY | --probe-surface OUTPUT_DIRECTORY CASE | --probe-live OUTPUT_DIRECTORY | --probe-site OUTPUT_DIRECTORY ADDRESS uao|big5|gbk]"
+                "usage: pttstella [--export-licenses OUTPUT_FILE | --probe OUTPUT_DIRECTORY DEBUG_PORT | --probe-window OUTPUT_DIRECTORY | --probe-login OUTPUT_DIRECTORY | --probe-filters OUTPUT_DIRECTORY | --probe-surface OUTPUT_DIRECTORY CASE | --probe-live OUTPUT_DIRECTORY | --probe-site OUTPUT_DIRECTORY ADDRESS uao|big5|gbk]"
             );
             std::process::exit(2);
         }

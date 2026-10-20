@@ -76,7 +76,7 @@ python tooling/check.py docs
 
 獨立實站檢查：`cargo run --locked --features desktop --bin pttstella -- --probe-live target/verification/live`。這會連至 `wss://ws.ptt.cc/bbs`，只確認登入前提示並斷線，不送帳密；不包含在任何一般 gate。
 
-## Windows 安裝包
+## Windows 安裝版與免安裝版
 
 在 Windows x64 安裝鎖定 Rust 工具鏈、Python 3.11+、Visual Studio C++ Build Tools 與 Windows SDK；執行環境需要 Microsoft Edge WebView2 Evergreen Runtime。
 
@@ -84,10 +84,12 @@ python tooling/check.py docs
 python tooling/check.py core
 python tooling/check.py desktop
 python tooling/bundle_windows.py
-python tooling/bundle_windows.py --installer --out-dir dist/windows-setup
+python tooling/bundle_windows.py --installer --portable --out-dir dist/windows-setup
 ```
 
-`--installer` 另需 Inno Setup 7.1.0，本機產生同源 ZIP 與 `-setup.exe`。Release 只交付一個 Setup `.exe`，將 App／資產、必要的 VC++ runtime DLL 與授權一起打包；ZIP 僅供開發／驗證。Setup 已有 WebView2 時跳過，缺少時使用官方 Evergreen bootstrapper 自動補裝（需要網路）；失敗會停止安裝，不自動啟動 App。安裝後仍有 EXE／DLL 等檔案，不需使用者另外下載，也不需安裝 MSVC 編譯器。安裝範圍、來源驗證與待實測項目見 [Windows 安裝包](docs/windows-installer.md)。
+Release 提供 `-setup.exe` 與 `-portable.exe`，擇一下載。兩者使用同一次 App 編譯，靜態連結 CRT 並內嵌介面／字型資產與第三方授權；免安裝版不需外帶 DLL 或 Assets，但須已有 WebView2。Setup 有 WebView2 時跳過，缺少才用官方 bootstrapper 補裝（需要網路），失敗會停止安裝，不自動啟動 App。免安裝版不安裝 Runtime，設定／快取仍存目前帳號的資料目錄；可用 `--export-licenses OUTPUT_FILE` 匯出內嵌授權，不開視窗或連線。使用者不需安裝 MSVC 編譯器。
+
+`--installer` 另需 Inno Setup 7.1.0；`--portable` 強制靜態 CRT 並驗證無外帶 DLL 依賴及空目錄授權匯出。本機 ZIP 保留作開發／驗證，不上傳 Release。來源驗證與待實測項目見 [Windows 安裝版與免安裝版](docs/windows-installer.md)。
 
 產物為 `dist/windows/PTTStella-0.1.0-dev.1-windows-x64.zip`，附 `.zip.sha256`。解壓整個資料夾後執行 `pttstella.exe`；不需要 Rust／Python／Node。圖示由同一 PNG 母檔衍生七種尺寸 ICO，嵌入 EXE 並用於視窗／工作列；包內另附 ICO、必要的 app-local VC++ runtime DLL、README、授權資料及檔案雜湊 manifest。WebView2 Runtime 須另外安裝。本機 ZIP 未作 Authenticode 簽署，不包含私人設定、帳密或流量。
 

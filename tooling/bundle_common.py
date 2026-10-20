@@ -23,13 +23,13 @@ def publish_files(paths, output):
     return created
 
 
-def build(target=None):
+def build(target=None, env=None):
     command = ['cargo', 'build', '--locked', '--release', '--features', 'desktop',
                '--bin', 'pttstella', '--message-format=json-render-diagnostics']
     if target:
         command += ['--target', target]
     executable = None
-    with subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE,
+    with subprocess.Popen(command, cwd=ROOT, env=env, stdout=subprocess.PIPE,
                           text=True, encoding='utf-8') as child:
         try:
             for line in child.stdout:

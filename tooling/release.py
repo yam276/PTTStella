@@ -15,7 +15,7 @@ import tomllib
 ROOT = Path(__file__).resolve().parent.parent
 VERSION = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?')
 SHA = re.compile(r'[0-9a-f]{40}')
-PLATFORMS = {'windows-x64': ('-setup.exe',), 'macos-arm64': ('.zip',),
+PLATFORMS = {'windows-x64': ('-setup.exe', '-portable.exe'), 'macos-arm64': ('.zip',),
              'macos-x64': ('.zip',), 'linux-x64': ('.deb', '.tar.gz')}
 
 
@@ -226,11 +226,13 @@ def publish(context, directory, github):
         if release is None:
             notes = temporary/'notes.md'
             notes.write_text(
-                'Windows x64 Setup · macOS Apple Silicon / Intel ZIP · Linux x64 DEB / tar.gz\n\n'
+                'Windows x64 Setup / portable EXE · macOS Apple Silicon / Intel ZIP · Linux x64 DEB / tar.gz\n\n'
                 'SHA-256 checksums: `SHA256SUMS`. Source: `'+context['commit']+'`.\n\n'
                 'macOS builds are ad-hoc signed and not notarized; Windows builds are not '
                 'Authenticode signed. Windows Setup installs Evergreen WebView2 only if missing '
-                '(internet required) and includes the App, assets and app-local VC++ runtime DLLs. '
+                '(internet required). The portable EXE requires an existing WebView2 Runtime and '
+                'does not install it. Both include static CRT, embedded assets and third-party notices; '
+                'export notices with `--export-licenses OUTPUT_FILE`. '
                 'Linux packages require a compatible '
                 'Ubuntu 24.04 graphical environment. Packaging and automated tests do not replace '
                 'platform GUI or live-login acceptance.\n', encoding='utf-8')

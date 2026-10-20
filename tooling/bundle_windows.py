@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a Windows x64 release ZIP; never launches or publishes to a server."""
+"""Build Windows packages and standalone EXE; never opens App UI or connects to BBS."""
 import argparse
 import ctypes
 import hashlib
@@ -145,7 +145,22 @@ def make_zip(staging, name):
     return archive
 
 
-def bundle(output, crt_dir=None, with_installer=False):
+def inspect_application(executable, portable=False):
+    pe = inspect_pe(executable)
+    verify_icon(executable)
+    if portable:
+        from windows_portable import verify_dependencies
+        verify_dependencies(pe)
+    crt = []
+    for dll in pe['imports']:
+        if dll.startswith(('vcruntime140', 'msvcp140')):
+            crt.append(dll)
+        elif not dll.startswith(('api-ms-win-', 'ext-ms-win-')) and Path(dll).stem not in SYSTEM_DLLS:
+            raise RuntimeError('Unbundled non-system import: '+dll)
+    return pe, crt
+
+
+def bundle(output, crt_dir=None, with_installer=False, with_portable=False):
     if sys.platform != 'win32':
         raise RuntimeError('Run this bundler on Windows with the MSVC toolchain')
     version = tomllib.loads((ROOT/'Cargo.toml').read_text(encoding='utf-8'))['package']['version']
@@ -155,27 +170,30 @@ def bundle(output, crt_dir=None, with_installer=False):
     names = [name+'.zip', name+'.zip.sha256']
     if with_installer:
         names += [name+'-setup.exe', name+'-setup.exe.sha256']
+    if with_portable:
+        names += [name+'-portable.exe', name+'-portable.exe.sha256']
     if any(os.path.lexists(output/filename) for filename in names):
         raise FileExistsError('Existing downloads will not be overwritten; choose another --out-dir')
-    executable = build()
-    pe = inspect_pe(executable)
-    verify_icon(executable)
-    crt = []
-    for dll in pe['imports']:
-        if dll.startswith(('vcruntime140', 'msvcp140')):
-            crt.append(dll)
-        elif not dll.startswith(('api-ms-win-', 'ext-ms-win-')) and Path(dll).stem not in SYSTEM_DLLS:
-            raise RuntimeError('Unbundled non-system import: '+dll)
-    crt_source = find_crt(crt, crt_dir) if crt else None
+    if not with_portable:
+        executable = build()
+        pe, crt = inspect_application(executable)
     with tempfile.TemporaryDirectory(prefix='.pttstella-', dir=output) as temp:
         staging = Path(temp)
         package = staging/name
         package.mkdir()
+        copy_licenses(package/'licenses')
+        portable_report = None
+        if with_portable:
+            import windows_portable
+            notices = staging/'third-party-notices.txt'
+            windows_portable.write_notices(package/'licenses', notices)
+            executable = windows_portable.build(notices)
+            pe, crt = inspect_application(executable, portable=True)
+        crt_source = find_crt(crt, crt_dir) if crt else None
         shutil.copy2(executable, package/'pttstella.exe')
         shutil.copy2(ROOT/'assets/icons/pttstella.ico', package/'PTTStella.ico')
         for dll in crt:
             shutil.copy2(crt_source/dll, package/dll)
-        copy_licenses(package/'licenses')
         shutil.copy2(ROOT/'docs/windows-test-package.txt', package/'README.txt')
         revision = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
         dirty = bool(subprocess.run(['git', 'status', '--porcelain'], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip())
@@ -186,9 +204,21 @@ def bundle(output, crt_dir=None, with_installer=False):
                     'authenticode_signed': False,
                     'files': {str(p.relative_to(package)).replace('\\', '/'): digest(p)
                               for p in sorted(package.rglob('*')) if p.is_file()}}
+        if with_portable:
+            manifest.update(crt_linkage='static', embedded_notices_sha256=digest(notices))
         (package/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n', encoding='utf-8')
         setup_report = None
         downloads = []
+        if with_portable:
+            portable = staging/(name+'-portable.exe')
+            shutil.copy2(executable, portable)
+            windows_portable.verify_export(portable, notices, staging)
+            downloads.append(portable)
+            portable_report = {'crt_linkage': 'static', 'pe': pe,
+                               'embedded_notices_sha256': digest(notices),
+                               'license_export': 'passed',
+                               'prerequisite': 'Microsoft Edge WebView2 Evergreen Runtime',
+                               'runtime_installation': 'none', 'gui_acceptance': 'not_run'}
         if with_installer:
             import windows_installer
             setup, setup_report = windows_installer.build(package, staging, version)
@@ -212,6 +242,8 @@ def bundle(output, crt_dir=None, with_installer=False):
             'scope': 'packaging only; desktop and live-login verification reported separately'}
     if with_installer:
         report.update(installer=str(output/(name+'-setup.exe')), installer_details=setup_report)
+    if with_portable:
+        report.update(portable=str(output/(name+'-portable.exe')), portable_details=portable_report)
     return report
 
 
@@ -220,9 +252,10 @@ if __name__ == '__main__':
     parser.add_argument('--out-dir', type=Path, default=ROOT/'dist/windows')
     parser.add_argument('--crt-dir', type=Path)
     parser.add_argument('--installer', action='store_true', help='Also build Setup with automatic WebView2 provisioning')
+    parser.add_argument('--portable', action='store_true', help='Also build a standalone EXE with static CRT and embedded notices')
     arguments = parser.parse_args()
     try:
-        print(json.dumps(bundle(arguments.out_dir, arguments.crt_dir, arguments.installer)))
+        print(json.dumps(bundle(arguments.out_dir, arguments.crt_dir, arguments.installer, arguments.portable)))
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
         raise SystemExit(1)

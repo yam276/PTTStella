@@ -150,23 +150,25 @@ def bundle(output):
     stem = f'PTTStella-{version}-{target}'
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    if any(output.glob(stem+'.*')) or any(output.glob(stem+'-setup.*')):
+    if any(any(output.glob(stem+suffix)) for suffix in ('.*', '-setup.*', '-portable.*')):
         raise FileExistsError('Existing Release files will not be overwritten; choose another --out-dir')
     revision = run('git', 'rev-parse', 'HEAD')
     dirty = bool(run('git', 'status', '--porcelain', '--untracked-files=normal'))
     with tempfile.TemporaryDirectory(prefix='.release-', dir=output) as temporary:
         staging = Path(temporary)
         if target == 'windows-x64':
-            result = bundle_windows.bundle(staging/'windows', with_installer=True)
-            # The portable ZIP is a local packaging/verification artifact. Public
-            # Windows delivery is one Setup containing the complete staged App.
-            source = Path(result['installer'])
-            archive = staging/source.name
-            shutil.copy2(source, archive)
-            assets = [archive]
+            result = bundle_windows.bundle(staging/'windows', with_installer=True, with_portable=True)
+            # ZIP remains a local verification artifact; users choose Setup or
+            # the standalone App EXE, both from the same static-CRT build.
+            assets = []
+            for source in (Path(result['installer']), Path(result['portable'])):
+                archive = staging/source.name
+                shutil.copy2(source, archive)
+                assets.append(archive)
             details = {'authenticode_signed': False,
                        'runtime': 'Microsoft Edge WebView2 Evergreen Runtime',
-                       'installer': result['installer_details']}
+                       'installer': result['installer_details'],
+                       'portable': result['portable_details']}
         elif target.startswith('macos-'):
             assets, details = macos_package(staging, stem, target)
         else:
