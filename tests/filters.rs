@@ -449,3 +449,50 @@ fn merging_follows_account_policies_even_when_revealed_and_removes_id_hyperlinks
         }
     }
 }
+
+#[test]
+fn visible_account_words_use_whole_cell_tokens_and_never_recover_masked_ids() {
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(b"Alice abc_def A123 123Bad abcdefghijklm _Alice Alice2");
+    let words = filters::account_words(&screen.frame());
+    assert_eq!(
+        words.iter().map(|w| w.id.as_str()).collect::<Vec<_>>(),
+        vec!["Alice", "abc_def", "A123", "Alice2"]
+    );
+    assert_eq!((words[0].row, words[0].start, words[0].end), (0, 0, 5));
+    let rules = Rules::default()
+        .edit_policy("Alice", "", filters::Policy::MaskRow, false)
+        .unwrap();
+    let masked = filters::project(&frame(), &rules, false).frame;
+    assert!(
+        !filters::account_words(&masked)
+            .iter()
+            .any(|w| [5, 6].contains(&w.row))
+    );
+}
+
+#[test]
+fn reply_focus_blacks_only_other_recognized_rows_and_drops_their_urls() {
+    let source = frame();
+    let mut focused = source.clone();
+    filters::focus_pushes(&mut focused, &filters::pushes(&source), "ALICE");
+    let rows = text::rows(&focused).unwrap();
+    assert_eq!(rows[7].text, "█".repeat(80));
+    assert_eq!(rows[8].text, "█".repeat(80));
+    for g in &focused.glyphs {
+        if ![7, 8].contains(&g.row) {
+            assert!(source.glyphs.contains(g));
+        }
+    }
+    assert!(
+        !links::detect(&focused)
+            .iter()
+            .any(|l| l.url.contains("visible.png"))
+    );
+    assert!(
+        links::detect(&focused)
+            .iter()
+            .any(|l| l.url.contains("hidden.png"))
+    );
+    assert_eq!(source, frame());
+}

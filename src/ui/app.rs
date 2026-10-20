@@ -67,6 +67,7 @@ pub fn app(props: AppProps) -> Element {
                 | "context_menu"
                 | "account_lists"
                 | "merged_replies"
+                | "account_actions"
                 | "account_articles"
         )
     );
@@ -479,6 +480,22 @@ fn context_menu() -> Element {
     rsx! {
         div { id: "surface-context-menu", role: "menu", hidden: true,
             "aria-label": pttstella::msg!("context-title"),
+            div { id: "context-account-target", hidden: true, style: "padding: 6px 12px; color: var(--gold); font-weight: 600;" }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "account-mask",
+                Shield { size: 18 } span { {pttstella::msg!("account-mask")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "account-mask-row",
+                Shield { size: 18 } span { {pttstella::msg!("account-mask-row")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "account-allow",
+                Shield { size: 18 } span { {pttstella::msg!("account-allow")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "reply-focus",
+                Shield { size: 18 } span { {pttstella::msg!("reply-focus")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "reply-focus-clear",
+                Shield { size: 18 } span { {pttstella::msg!("reply-focus-clear")} }
+            }
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy",
                 Copy { size: 18 } span { {pttstella::msg!("context-copy")} }
             }

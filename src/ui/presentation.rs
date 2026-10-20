@@ -14,6 +14,9 @@ use serde::Serialize;
 pub(super) struct Paint {
     #[serde(skip)]
     pub(super) replies: Vec<filters::Push>,
+    pub(super) account_words: Vec<filters::AccountWord>,
+    pub(super) reply_rows: Vec<usize>,
+    pub(super) reply_focus: Option<String>,
     pub(super) article_mode: pttstella::settings::ArticleMode,
     pub(super) article: Option<super::article_cache::Reading>,
     pub(super) source_frame: Option<Frame>,
@@ -80,6 +83,9 @@ pub(super) fn paint(
         } else {
             Vec::new()
         },
+        account_words: Vec::new(),
+        reply_rows: Vec::new(),
+        reply_focus: None,
         article_mode: Default::default(),
         article: None,
         source_frame: None,
@@ -150,6 +156,9 @@ pub(super) fn merge_replies(paint: &mut Paint, source_replies: &[filters::Push])
 pub(super) fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint {
     Paint {
         replies: Vec::new(),
+        account_words: Vec::new(),
+        reply_rows: Vec::new(),
+        reply_focus: None,
         article_mode: Default::default(),
         article: None,
         source_frame: None,

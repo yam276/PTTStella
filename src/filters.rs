@@ -313,6 +313,71 @@ pub fn project(frame: &Frame, rules: &Rules, revealed: bool) -> Projection {
     }
 }
 
+/// A complete visible ASCII account-shaped word, resolved from Rust cells.
+#[derive(Clone, Debug, Serialize)]
+pub struct AccountWord {
+    pub row: usize,
+    pub start: usize,
+    pub end: usize,
+    pub id: String,
+}
+pub fn account_words(frame: &Frame) -> Vec<AccountWord> {
+    let Some(rows) = text::rows(frame) else {
+        return Vec::new();
+    };
+    let mut words = Vec::new();
+    for (row, line) in rows.iter().enumerate() {
+        let mut start = 0;
+        while start < frame.cols {
+            let ascii = |col| {
+                line.cells(col, col + 1)
+                    .filter(|s| s.len() == 1)
+                    .and_then(|s| s.bytes().next())
+                    .filter(|b| b.is_ascii_alphanumeric() || *b == b'_')
+            };
+            if ascii(start).is_none() {
+                start += 1;
+                continue;
+            }
+            let mut end = start + 1;
+            while end < frame.cols && ascii(end).is_some() {
+                end += 1;
+            }
+            if let Some(id) = line.cells(start, end).filter(|id| valid_id(id))
+                && line
+                    .spans
+                    .iter()
+                    .filter(|s| s.glyph.col < end && s.glyph.col + s.glyph.width > start)
+                    .all(|s| !s.glyph.unmapped && s.glyph.left.fg != s.glyph.left.bg)
+            {
+                words.push(AccountWord {
+                    row,
+                    start,
+                    end,
+                    id: id.to_owned(),
+                });
+            }
+            start = end;
+        }
+    }
+    words
+}
+
+/// Temporary reply focus never changes the persistent account rules.
+pub fn focus_pushes(frame: &mut Frame, replies: &[Push], id: &str) {
+    let ranges: Vec<_> = replies
+        .iter()
+        .filter(|p| !p.id.eq_ignore_ascii_case(id))
+        .map(|p| Push {
+            row: p.row,
+            id: p.id.clone(),
+            start: 0,
+            end: frame.cols,
+        })
+        .collect();
+    mask_ranges(frame, &ranges);
+}
+
 /// Shared cell replacement for content masks and repeated reply identities.
 fn mask_ranges(frame: &mut Frame, ranges: &[Push]) {
     if ranges.is_empty() {
@@ -408,6 +473,9 @@ impl State {
     }
     pub fn version(&self) -> u64 {
         self.version
+    }
+    pub fn touch(&mut self) {
+        self.version = self.version.saturating_add(1);
     }
     pub fn replace(&mut self, rules: Rules) {
         self.rules = rules;

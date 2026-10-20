@@ -266,6 +266,7 @@ function click(e) {
     const action=released;released=null;clickSequenceAction=!!action?.hit;
     if(!action?.hit||blocked()||!sameStamp(action.stamp,stamp())||action.view&&action.view!==pointerView()) {refreshKeepAlive();return;}
     if(action.hit.kind==="link") send({kind:"open_link",presentation:latest.presentation,generation,revision,index:action.hit.index,trusted:e.isTrusted});
+    else if(action.hit.kind==="reply")send({kind:"reply_focus",presentation:latest.presentation,stamp:stamp(),row:action.hit.row,trusted:true});
     else navigate(action.hit.kind==="continue"?{action:"continue"}:action.hit.kind==="back"?{action:"back"}:action.hit.kind==="page"?{action:action.hit.action}:{action:"open",row:action.hit.row},e);
     refreshKeepAlive();
 }
@@ -372,6 +373,7 @@ function hitAt(point,clientY) {
     if(!point||blocked()||dragging?.moved||!stationMouse.local()) return null;
     if(latest?.navigation.kind==="continue_prompt")return canNavigate()?{kind:"continue"}:null;
     const index=linkAt(point);if(index>=0) return {kind:"link",index};
+    if(canNavigate()&&latest?.navigation.kind==="article_reading"&&latest.reply_rows?.includes(point.row))return {kind:"reply",row:point.row};
     const back=navigationBackRegion(latest?.navigation,latest?.article);
     if(canNavigate()&&back&&point.col<back.end&&point.row>=back.first&&point.row<back.last)return {kind:"back"};
     if(!canNavigate())return null;
@@ -391,7 +393,7 @@ function setHover(point,redraw=true,preview=true) {
     hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:0,kind:hit.kind}:null;
     surface.dataset.pointerAction=hit?.kind==="page"?hit.action:hit?.kind||"none";
     surface.style.cursor=["back","page"].includes(hit?.kind)?"":hit?"pointer":"default";
-    surface.title=hit?.kind==="continue"?tr("pointer-continue-hint"):hit?.kind==="back"?tr("pointer-back-hint"):hit?.kind==="page"?tr(hit.action==="previous_page"?"pointer-page-up-hint":"pointer-page-down-hint"):index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredRow?tr(hit.kind==="menu"?"menu-open-hint":"article-open-hint"):"";
+    surface.title=hit?.kind==="reply"?tr("reply-focus-hint"):hit?.kind==="continue"?tr("pointer-continue-hint"):hit?.kind==="back"?tr("pointer-back-hint"):hit?.kind==="page"?tr(hit.action==="previous_page"?"pointer-page-up-hint":"pointer-page-down-hint"):index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredRow?tr(hit.kind==="menu"?"menu-open-hint":"article-open-hint"):"";
     if(preview)previewHover(index);
     if(changed&&redraw&&latest) draw(latest);else drawNavigationMarker();
 }
@@ -450,11 +452,14 @@ const leaveLink=()=>{if(!dragging){cancelHover(true);setHover(null);}};
 function contextIdentity(){
     return JSON.stringify([stamp(),latest?.presentation,latest?.mouse,latest?.output_pending,latest?.input_pending,selectionCache?.request]);
 }
-function contextState(index){
+function accountWordAt(point){
+    return point&&latest?.account_words?.find(w=>w.row===point.row&&w.start<=point.col&&point.col<w.end)||null;
+}
+function contextState(index,word=null,replyRow=null){
     const ready=!!latest&&!latest.output_pending&&!filterUi.blocked();
     const selectionReady=ready&&!!selectionCache&&selectionCache.presentation===latest.presentation
         &&selectionCache.generation===generation&&selectionCache.revision===revision;
-    return {link:index,selection:hasSelection(),selectionReady,rowsReady:selectionReady&&!exportBusy&&selectionCache.value.rows.end-selectionCache.value.rows.start<=24,
+    return {word,replyRow,focused:!!latest?.reply_focus,link:index,selection:hasSelection(),selectionReady,rowsReady:selectionReady&&!exportBusy&&selectionCache.value.rows.end-selectionCache.value.rows.start<=24,
         ready,exportReady:ready&&!exportBusy,local:stationMouse.local(),ptt:!!latest?.ptt_features,
         reading:latest?.navigation.kind==="article_reading",images:!!latest?.image_links.length,
         inlineReady:inlineShortcut({key:"Enter"},keyboardState,latest),navigate:canNavigate(),
@@ -465,16 +470,24 @@ function openContextMenu(e) {
     if(!e.isTrusted||stopped||composing||pastePending||document.querySelector("dialog[open]")||latest?.output_pending||filterUi.blocked())return;
     if(!stationMouse.local()&&!e.shiftKey)return;
     contextMenu.close(false);
-    if(stationMouse.local()&&!e.shiftKey&&toolAccess.right_click_menu&&!hasSelection()){
+    const point=cellAt(e,false),word=stationMouse.local()?accountWordAt(point):null;
+    const replyRow=point&&stationMouse.local()&&latest.reply_rows?.includes(point.row)?point.row:null;
+    if(!word&&!latest?.reply_focus&&stationMouse.local()&&!e.shiftKey&&toolAccess.right_click_menu&&!hasSelection()){
         tools.showAt(e);return;
     }
     const index=Math.max(linkAt(cellAt(e,false)),inlineImages.linkAtPoint(e));
-    contextMenu.open(e,{index,entries:contextMenuItems(contextState(index))});
+    contextMenu.open(e,{index,word,replyRow,entries:contextMenuItems(contextState(index,word,replyRow))});
 }
 function contextAction(action,context,e){
-    if(!e.isTrusted||stopped||blocked()||contextMenuItems(contextState(context.index)).get(action)!==true)return;
+    if(!e.isTrusted||stopped||blocked()||contextMenuItems(contextState(context.index,context.word,context.replyRow)).get(action)!==true)return;
     if(action==="copy"||action==="copy-link")send({kind:"copy_text",presentation:latest.presentation,generation,revision,
         target:action==="copy"?{kind:"selection",request:selectionCache.request}:{kind:"link",index:context.index},trusted:true});
+    else if(["account-mask","account-mask-row","account-allow"].includes(action)){
+        const policy={"account-mask":"mask","account-mask-row":"mask_row","account-allow":"allow"}[action];
+        send({kind:"account_rule",presentation:latest.presentation,stamp:stamp(),row:context.word.row,col:context.word.start,policy,trusted:true});
+    }
+    else if(action==="reply-focus")send({kind:"reply_focus",presentation:latest.presentation,stamp:stamp(),row:context.replyRow,trusted:true});
+    else if(action==="reply-focus-clear")send({kind:"reply_focus",presentation:latest.presentation,stamp:stamp(),row:null,trusted:true});
     else if(action==="select-link")requestSelection({mode:"link",index:context.index});
     else if(action==="open-link")send({kind:"open_link",presentation:latest.presentation,generation,revision,index:context.index,trusted:true});
     else if(action==="select-all")selectPage();

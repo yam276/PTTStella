@@ -42,6 +42,10 @@ Connection 在真正傳送處檢查 generation、Screen revision 與 input epoch
 Windows 桌面 gate 以獨立 loopback 服務端比對完整 bytes，確認編號開啟、上下頁、返回及列表移動；另外驗證按住滑鼠時鍵盤／畫面更新取消點擊、原生 capture 丟失、標題整行選取、編號拖曳、雙擊延續，以及縮放、本機捲動、組字、dialog、未知畫面及頁尾不送額外導覽。hover 前後 Canvas PNG 相同，提示層為透明背景與一像素底線；合成截圖位於 `target/verification/desktop/navigation-list-hover.png` 及 `navigation-reading-controls.png`。
 
 
+## 推文暫時篩選的優先序
+
+已辨識標準推文現在可左鍵切換只看該 ID，非網址推文整行優先於下述返回／翻頁；再次點同 ID 或右鍵恢復全部。網址、Shift 與拖曳選字仍優先，其他正文維持下述行為。詳見 [本機過濾](content-filters.md)。
+
 ## 整行操作與左緣返回
 
 文章列表的返回區止於日期欄右界（零基第 17 欄前），作者欄起開啟文章；看板列表止於板名前（第 10 欄前）返回，其餘項目區開啟；主選單只在選項區第 21–80 欄提供點選，左緣不返回。hover 光棒採 28% 藍色、金色邊框與左右 3px 金色邊緣，呼吸亮度為 80%–100%，不再降至幾乎看不見。維持 2.4 秒呼吸動畫，減少動態效果時使用固定亮度；不修改 Canvas、複製或 PNG。網址命中仍優先；拖動超過既有距離即改為選字，Shift 保留選取。
