@@ -1282,3 +1282,42 @@ fn document_list_rejects_multi_column_headers_missing_rows_and_cursor_mismatch()
         }
     );
 }
+
+#[test]
+fn modern_board_captions_and_indented_class_pointer_keep_required_item_boundaries() {
+    for name in ["favorites_modern", "boards_modern"] {
+        let mut screen = fixture(name);
+        let context = navigation::analyze(&screen.frame());
+        assert_eq!(
+            context,
+            Context::BoardList {
+                first_row: 3,
+                last_row: 5,
+                cursor_row: 4
+            },
+            "{name}"
+        );
+        assert_eq!(
+            navigation::plan(&context, Intent::Open { row: 3 }).unwrap(),
+            b"\x1b[A\r"
+        );
+        replace(&mut screen, 23, "是否離開 [Y/N]", "0");
+        unknown(&screen.frame());
+    }
+    let mut screen = fixture("classes_indented");
+    let context = navigation::analyze(&screen.frame());
+    assert_eq!(
+        context,
+        Context::BoardList {
+            first_row: 7,
+            last_row: 8,
+            cursor_row: 8
+        }
+    );
+    assert_eq!(
+        navigation::plan(&context, Intent::Open { row: 7 }).unwrap(),
+        b"\x1b[A\r"
+    );
+    screen.feed(b"\x1b[9;20H");
+    unknown(&screen.frame());
+}
