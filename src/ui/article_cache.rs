@@ -5,7 +5,7 @@ use pttstella::{
     connection::{Phase, View},
     mouse::input::Route,
     navigation::Context,
-    screen::{Frame, Glyph, hyperlinks::Hyperlink},
+    screen::{Frame, Glyph, Style, hyperlinks::Hyperlink},
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -352,6 +352,19 @@ impl ArticleCache {
                     }
                     link
                 }));
+        }
+        // A minimum-height article still needs every blank cell. Text consumers
+        // reject holes in the grid, even when the renderer paints them black.
+        for row in self.rows.len()..frame.rows - 1 {
+            frame.glyphs.extend((0..frame.cols).map(|col| Glyph {
+                row,
+                col,
+                width: 1,
+                text: " ".into(),
+                left: Style::default(),
+                right: Style::default(),
+                unmapped: false,
+            }));
         }
         // One live footer, rather than one duplicate footer per cached page.
         frame.glyphs.extend(

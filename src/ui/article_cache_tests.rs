@@ -303,6 +303,10 @@ fn short_articles_keep_the_source_grid_size_and_footer_row() {
         assert_eq!(short.article.as_ref().unwrap().last_line, last);
         assert!(short.frame.glyphs.iter().any(|g| g.row == 23));
         assert!(
+            pttstella::text::rows(&short.frame).is_some(),
+            "short article with {last} lines must retain a complete cell grid"
+        );
+        assert!(
             short
                 .frame
                 .glyphs
@@ -311,5 +315,38 @@ fn short_articles_keep_the_source_grid_size_and_footer_row() {
                 .all(|g| g.text.trim().is_empty())
         );
         assert_eq!(short.settings, DisplaySettings::default());
+    }
+}
+
+#[test]
+fn short_article_padding_preserves_plain_and_explicit_image_links() {
+    for last in [1, 3, 22, 23] {
+        let mut cache = ArticleCache::default();
+        let mut short = page(1, last, 100);
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(b"https://example.com/plain.png \x1b]8;;https://example.com/explicit.png\x1b\\image\x1b]8;;\x1b\\");
+        short.frame = screen.frame();
+        let source = short.frame.clone();
+        cache.project(&mut short);
+        assert_eq!(short.source_frame.as_ref(), Some(&source));
+        assert_eq!(short.image_links.len(), 2, "article length {last}");
+        assert_eq!(
+            short
+                .links
+                .iter()
+                .map(|link| link.url.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "https://example.com/explicit.png",
+                "https://example.com/plain.png"
+            ]
+        );
+        let selected = selection::extract(&short.frame, &Selection::Link { index: 1 }).unwrap();
+        assert_eq!(selected.text, "https://example.com/plain.png");
+        assert!(
+            pttstella::filters::account_words(&short.frame)
+                .iter()
+                .any(|word| word.id == "image")
+        );
     }
 }
