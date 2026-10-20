@@ -1,16 +1,19 @@
 // Owns only tool chrome geometry and pointer capture; never sends station input.
-function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,restore,changed=()=>{},
+function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,restore,onSettings=()=>{},changed=()=>{},
     raf=window.requestAnimationFrame.bind(window),caf=window.cancelAnimationFrame.bind(window),
     now=()=>performance.now(),reduced=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches}) {
     const petals=[...fan.querySelectorAll('[data-tools-target]')];
     const groups=[...panel.querySelectorAll('[data-tools-group]')];
-    let point={x:window.innerWidth-80,y:window.innerHeight*.65},drag=null,animation=0,stopped=false,opened=false,selected=null;
+    const scaling=()=>Math.min(1.75,Math.max(1,Math.min(window.innerWidth/1280,window.innerHeight/800)));
+    let scale=scaling();const u=value=>value*scale;
+    root.style.setProperty("--tools-scale",String(scale));
+    let point={x:window.innerWidth-u(80),y:window.innerHeight*.65},drag=null,animation=0,stopped=false,opened=false,selected=null;
     let suppressClickUntil=-1,lastFrame=0,coastUntil=0,velocity={x:0,y:0};
     let viewportWidth=window.innerWidth;
     let visible=true,parked=null;
     const observations={presses:0,moves:0,drag_releases:0,coast_frames:0,max_coast_distance:0,last_release:null};
     const count=key=>observations[key]=Math.min(65535,observations[key]+1);
-    const bounds=()=>({left:16,right:Math.max(16,window.innerWidth-72),top:Math.min(56,Math.max(0,window.innerHeight-72)),bottom:Math.max(16,window.innerHeight-72)});
+    const bounds=()=>({left:u(16),right:Math.max(u(16),window.innerWidth-u(72)),top:Math.min(u(56),Math.max(0,window.innerHeight-u(72))),bottom:Math.max(u(16),window.innerHeight-u(72))});
     const clamp=(value,min,max)=>Math.max(min,Math.min(Math.max(min,max),value));
     function place(){const b=bounds();point.x=clamp(point.x,b.left,b.right);point.y=clamp(point.y,b.top,b.bottom);
         root.style.setProperty('--tools-x',`${point.x}px`);root.style.setProperty('--tools-y',`${point.y}px`);}
@@ -28,7 +31,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
         ball.setAttribute('aria-controls',returning?'tools-fan':'tools-fan tools-panel');
         if(returning)ball.removeAttribute('aria-expanded');else ball.setAttribute('aria-expanded',String(opened));
     }
-    function dock(){const b=bounds();point.x=point.x+28<window.innerWidth/2?b.left:b.right;place();}
+    function dock(){const b=bounds();point.x=point.x+u(28)<window.innerWidth/2?b.left:b.right;place();}
     function frame(time){animation=0;if(stopped||drag)return;
         const dt=Math.min(32,Math.max(0,time-lastFrame));lastFrame=time;
         if(time<coastUntil&&Math.hypot(velocity.x,velocity.y)>.025){
@@ -40,46 +43,47 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
             const release=observations.last_release;
             if(release)observations.max_coast_distance=Math.max(observations.max_coast_distance,Math.hypot(point.x-release.x,point.y-release.y));
         }else{
-            const b=bounds(),goal=point.x+28<window.innerWidth/2?b.left:b.right;
+            const b=bounds(),goal=point.x+u(28)<window.innerWidth/2?b.left:b.right;
             point.x+=(goal-point.x)*(1-Math.exp(-dt/110));place();
             if(Math.abs(goal-point.x)<.5){point.x=goal;place();return;}
         }
         animation=raf(frame);
     }
+    function expanded(p,value){if(p.dataset.toolsTarget==='settings')p.removeAttribute('aria-expanded');else p.setAttribute('aria-expanded',String(value));}
     function close(focus=false){opened=false;selected=null;root.classList.remove('open');fan.hidden=true;panel.hidden=true;
         if(parked){point=parked;parked=null;place();}
-        updateTrigger();petals.forEach(p=>p.setAttribute('aria-expanded','false'));
+        updateTrigger();petals.forEach(p=>expanded(p,false));
         changed();if(focus&&!stopped)restore();}
     // Largest usable rectangle on one side of the stationary trigger. Both the
     // grid fallback and the feature page reserve this space, including a gap.
     function pageArea(){
-        const right=window.innerWidth-16,bottom=window.innerHeight-16;
-        const direction=point.x+28<window.innerWidth/2?1:-1;
-        const side=direction===1?{x:point.x+68,y:48,w:right-point.x-68,h:bottom-48}:{x:16,y:48,w:point.x-28,h:bottom-48};
-        if(side.w>=240&&side.h>=160)return side;
+        const right=window.innerWidth-u(16),bottom=window.innerHeight-u(16);
+        const direction=point.x+u(28)<window.innerWidth/2?1:-1;
+        const side=direction===1?{x:point.x+u(68),y:u(48),w:right-point.x-u(68),h:bottom-u(48)}:{x:u(16),y:u(48),w:point.x-u(28),h:bottom-u(48)};
+        if(side.w>=u(240)&&side.h>=u(160))return side;
         return [
-            {x:16,y:48,w:point.x-28,h:bottom-48},
-            {x:point.x+68,y:48,w:right-point.x-68,h:bottom-48},
-            {x:16,y:48,w:right-16,h:point.y-60},
-            {x:16,y:point.y+68,w:right-16,h:bottom-point.y-68},
-        ].filter(r=>r.w>0&&r.h>0).sort((a,b)=>Math.min(330,b.w)*Math.min(260,b.h)-Math.min(330,a.w)*Math.min(260,a.h))[0];
+            {x:u(16),y:u(48),w:point.x-u(28),h:bottom-u(48)},
+            {x:point.x+u(68),y:u(48),w:right-point.x-u(68),h:bottom-u(48)},
+            {x:u(16),y:u(48),w:right-u(16),h:point.y-u(60)},
+            {x:u(16),y:point.y+u(68),w:right-u(16),h:bottom-point.y-u(68)},
+        ].filter(r=>r.w>0&&r.h>0).sort((a,b)=>Math.min(u(330),b.w)*Math.min(u(260),b.h)-Math.min(u(330),a.w)*Math.min(u(260),a.h))[0];
     }
     function layout(){
-        const radius=148;
-        const fanY=clamp(point.y,48+radius,window.innerHeight-78-radius);
-        const direction=point.x+28<window.innerWidth/2?1:-1;
+        const radius=u(petals.length>6?196:148);
+        const fanY=clamp(point.y,u(48)+radius,window.innerHeight-u(78)-radius);
+        const direction=point.x+u(28)<window.innerWidth/2?1:-1;
         // A full semicircle gives the rectangular hit areas room at its ends.
         // Offsetting its origin inward also keeps every category off the ball.
-        const positions=petals.map((_,index)=>{const angle=(-90+index*36)*Math.PI/180;
-            return {x:point.x+direction*(72+radius*Math.cos(angle)),y:fanY+radius*Math.sin(angle)};});
-        const fits=window.innerWidth>=500&&window.innerHeight>=420&&positions.every(p=>p.x>=16&&p.x+62<=window.innerWidth-16&&p.y>=48&&p.y+62<=window.innerHeight-16);
+        const positions=petals.map((_,index)=>{const angle=(-90+index*180/Math.max(1,petals.length-1))*Math.PI/180;
+            return {x:point.x+direction*(u(72)+radius*Math.cos(angle)),y:fanY+radius*Math.sin(angle)};});
+        const fits=window.innerWidth>=u(500)&&window.innerHeight>=u(420)&&positions.every(p=>p.x>=u(16)&&p.x+u(62)<=window.innerWidth-u(16)&&p.y>=u(48)&&p.y+u(62)<=window.innerHeight-u(16));
         root.dataset.toolsLayout=fits?'fan':'compact';
         petals.forEach((petal,index)=>{
             petal.style.setProperty('--petal-x',`${positions[index].x-point.x}px`);
             petal.style.setProperty('--petal-y',`${positions[index].y-point.y}px`);});
         const area=pageArea();
         if(!area){close();return;} // No usable content space in a collapsed host.
-        const width=Math.min(330,area.w),height=Math.min(260,area.h);
+        const width=Math.min(u(330),area.w),height=Math.min(u(260),area.h);
         const x=clamp(point.x,area.x,area.x+area.w-width),y=clamp(point.y-height/2,area.y,area.y+area.h-height);
         for(const [key,value] of Object.entries({x,y,width,height}))fan.style.setProperty(`--grid-${key}`,`${value}px`);
         panel.style.left=`${x}px`;panel.style.top=`${y}px`;
@@ -97,7 +101,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
     function showAt(event){
         if(stopped||drag||!event.isTrusted||!Number.isFinite(event.clientX)||!Number.isFinite(event.clientY))return false;
         halt();close();prepare(event);suppressClickUntil=-1;
-        parked={...point};point={x:event.clientX-28,y:event.clientY-28};place();opened=true;layout();
+        parked={...point};point={x:event.clientX-u(28),y:event.clientY-u(28)};place();opened=true;layout();
         if(opened){root.classList.add('open');ball.focus();changed();}
         return opened;
     }
@@ -106,14 +110,15 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
         visible=value;updateTrigger();
     }
     function choose(event){if(stopped||!opened)return;
+        if(event.currentTarget.dataset.toolsTarget==="settings"){close();onSettings(event);return;}
         selected=event.currentTarget.dataset.toolsTarget;
         groups.forEach(group=>group.hidden=group.dataset.toolsGroup!==selected);
-        petals.forEach(p=>p.setAttribute('aria-expanded',String(p.dataset.toolsTarget===selected)));
+        petals.forEach(p=>expanded(p,p.dataset.toolsTarget===selected));
         layout();
         panel.querySelector('section:not([hidden]) button:not(:disabled):not([hidden]),section:not([hidden]) select')?.focus();}
     function back(){if(!opened||selected===null)return;
         const previous=petals.find(p=>p.dataset.toolsTarget===selected);selected=null;
-        groups.forEach(group=>group.hidden=true);petals.forEach(p=>p.setAttribute('aria-expanded','false'));
+        groups.forEach(group=>group.hidden=true);petals.forEach(p=>expanded(p,false));
         layout();previous?.focus();changed();}
     function down(event){if(stopped||event.button!==0||!event.isPrimary||drag)return;
         count('presses');
@@ -183,7 +188,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
             event.preventDefault();event.stopPropagation();const i=petals.indexOf(document.activeElement),step=event.key==='ArrowDown'?1:-1;
             petals[i<0?(step===1?0:petals.length-1):(i+step+petals.length)%petals.length].focus();}
     }
-    function resize(){const left=point.x+28<viewportWidth/2;viewportWidth=window.innerWidth;
+    function resize(){const left=point.x+u(28)<viewportWidth/2;viewportWidth=window.innerWidth;scale=scaling();root.style.setProperty("--tools-scale",String(scale));
         halt();if(drag)cancel();place();if(opened)layout();else{const b=bounds();point.x=left?b.left:b.right;place();}}
     function visibility(){if(document.hidden)cancel();}
     function panelAction(event){
@@ -196,9 +201,9 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
         [panel,'click',panelAction],
         [document,'keydown',key,true],[window,'resize',resize],[window,'blur',cancel],[document,'visibilitychange',visibility]];
     place();close();
-    return {bindings,close,setOpacity,setVisible,showAt,open:()=>opened,busy:()=>opened||!!drag,destroy(){stopped=true;cancel();},
+    return {bindings,close,relocalize:updateTrigger,setOpacity,setVisible,showAt,open:()=>opened,busy:()=>opened||!!drag,destroy(){stopped=true;cancel();},
         observations:()=>({...observations,last_release:observations.last_release?{...observations.last_release}:null}),
         clean:()=>stopped&&!animation&&!drag&&!opened,
         // Read-only geometry for lifecycle/physics regressions.
-        snapshot:()=>({point:{...point},animation:!!animation,dragging:!!drag,opened,selected})};
+        snapshot:()=>({scale,point:{...point},animation:!!animation,dragging:!!drag,opened,selected})};
 }
