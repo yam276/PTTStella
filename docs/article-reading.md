@@ -6,6 +6,8 @@
 
 Rust `SurfaceState` 擁有 `ArticleCache`；來源是同一名單投影的完整格線與共同 `ArticleReading` 行號，JS 不解析 ANSI、頁尾或文字。原始 Screen／Connection 不改為文章模型；`Paint.source_frame` 保留當前站端畫面，`Paint.frame` 是合併後的閱讀投影。選取、完整網址、媒體准入與輸出仍由同一已 ACK 投影及 source generation／revision／input epoch 驗證，歷史 link index 不直接對應站端畫面。
 
+投影保留當前頁尾的字格及 OSC 8 metadata，並一起移至投影末列；不累積歷史頁尾。頁尾上的完整網址仍可辨識及複製，不能只保留其顯示文字。
+
 快取只存記憶體，最多 256 個連續正文行及一份頁尾；超連結 metadata target 合計最多 512 KiB。相鄰／重疊頁按絕對文章行號覆蓋合併，不插入猜測內容；超限移除遠端邊緣。跳到不連續位置時另起一段，已確認的較短文章結尾會移除舊尾端。開頭三行改變亦撤掉舊段，避免沿用不同文章的尾端。
 
 作用域由 session、名單版本與實際輸入維持，並非完整 AID 辨識。離開文章、非閱讀指令、原始輸入、切站、斷線或規則改變清理；短暫分段刷新不當作換篇。沒有磁碟保存、全文預抓、背景讀文或跨 session 復原。

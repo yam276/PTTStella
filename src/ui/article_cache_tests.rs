@@ -350,3 +350,35 @@ fn short_article_padding_preserves_plain_and_explicit_image_links() {
         );
     }
 }
+
+#[test]
+fn cached_footer_keeps_its_explicit_link_at_the_live_footer_row() {
+    for last in [3, 23] {
+        let mut cache = ArticleCache::default();
+        let mut first = page(1, last, 50);
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen
+            .feed(b"\x1b[24;1H\x1b]8;;https://example.com/footer.png\x07footer image\x1b]8;;\x07");
+        first.frame = screen.frame();
+        cache.project(&mut first);
+        assert_eq!(first.links.len(), 1);
+        assert_eq!(
+            (first.links[0].row, first.links[0].start, first.links[0].end),
+            (23, 0, 12)
+        );
+        assert_eq!(first.links[0].url, "https://example.com/footer.png");
+        assert_eq!(first.image_links, vec![0]);
+        assert_eq!(
+            selection::extract(&first.frame, &Selection::Link { index: 0 })
+                .unwrap()
+                .text,
+            "https://example.com/footer.png"
+        );
+
+        let mut next = page(last + 1, last + 23, 100);
+        next.frame = screen.frame();
+        cache.project(&mut next);
+        assert_eq!(next.links.len(), 1); // Never retain duplicate historical footers.
+        assert_eq!(next.links[0].row, last + 23);
+    }
+}
