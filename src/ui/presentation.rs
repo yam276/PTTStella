@@ -12,6 +12,8 @@ use serde::Serialize;
 
 #[derive(Clone, Serialize)]
 pub(super) struct Paint {
+    pub(super) article: Option<super::article_cache::Reading>,
+    pub(super) source_frame: Option<Frame>,
     pub(super) site: pttstella::sites::Target,
     pub(super) ptt_features: bool,
     pub(super) mouse: pttstella::mouse::input::Snapshot,
@@ -86,6 +88,8 @@ pub(super) fn paint(
         })
         .collect();
     Paint {
+        article: None,
+        source_frame: None,
         site: view.site.clone(),
         ptt_features: view.site.ptt_features(),
         mouse: view.mouse,
@@ -121,6 +125,8 @@ pub(super) fn paint(
 
 pub(super) fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint {
     Paint {
+        article: None,
+        source_frame: None,
         site: pttstella::sites::Target::default(),
         ptt_features: false,
         mouse: pttstella::mouse::input::Snapshot::default(),

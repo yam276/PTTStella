@@ -1,0 +1,224 @@
+use super::*;
+use pttstella::{
+    encoding,
+    navigation::Intent,
+    screen::Screen,
+    selection::{self, Selection},
+    settings::DisplaySettings,
+};
+
+fn page(first: usize, last: usize, percent: u8) -> Paint {
+    let mut screen = Screen::new(80, 24).unwrap();
+    for (row, line) in (first..=last).enumerate() {
+        screen.feed(format!("\x1b[{};1Hline {line:04}", row + 1).as_bytes());
+    }
+    screen.feed(b"\x1b[24;1H");
+    screen.feed(&encoding::encode(&format!("瀏覽 第 {first}~{last} 行 ({percent}%)")).unwrap());
+    let mut paint =
+        super::super::presentation::sample_packet(&screen.frame(), &DisplaySettings::default());
+    paint.connected = true;
+    paint.ptt_features = true;
+    paint.navigation = Context::ArticleReading {
+        first_line: first,
+        last_line: last,
+        percent,
+    };
+    paint.frame.revision = first as u64;
+    paint.generation = 7;
+    paint
+}
+fn lines(p: &Paint) -> Vec<String> {
+    (0..p.frame.rows - 1)
+        .map(|row| {
+            selection::extract(&p.frame, &Selection::Line { row })
+                .unwrap()
+                .text
+                .trim_end()
+                .to_owned()
+        })
+        .collect()
+}
+#[test]
+fn overlaps_are_merged_by_line_and_the_original_png_source_is_untouched() {
+    let mut cache = ArticleCache::default();
+    let mut first = page(1, 23, 40);
+    let source = first.frame.clone();
+    cache.project(&mut first);
+    let id = first.article.as_ref().unwrap().id;
+    assert_eq!(first.source_frame.as_ref(), Some(&source));
+    let mut next = page(22, 44, 80);
+    cache.project(&mut next);
+    assert_eq!(next.article.as_ref().unwrap().id, id);
+    assert_eq!(
+        lines(&next),
+        (1..=44)
+            .map(|line| format!("line {line:04}"))
+            .collect::<Vec<_>>()
+    );
+    let mut previous = page(1, 23, 40);
+    cache.project(&mut previous);
+    assert_eq!(lines(&previous), lines(&next));
+    assert_eq!(previous.frame.rows, 45); // 44 body lines and one footer.
+}
+#[test]
+fn incomplete_frames_cannot_replace_cached_content_or_claim_end_of_article() {
+    let mut cache = ArticleCache::default();
+    let mut first = page(1, 23, 40);
+    cache.project(&mut first);
+    let expected = lines(&first);
+    for (input, output, complete) in [
+        (true, false, true),
+        (false, true, true),
+        (false, false, false),
+    ] {
+        let mut fragment = page(22, 44, 100);
+        fragment.input_pending = input;
+        fragment.output_pending = output;
+        fragment.frame.control_complete = complete;
+        cache.project(&mut fragment);
+        assert_eq!(lines(&fragment), expected);
+        assert!(!fragment.article.unwrap().end);
+    }
+}
+#[test]
+fn gaps_generation_filter_policy_and_nonreading_input_reset_the_scope() {
+    let mut cache = ArticleCache::default();
+    let mut first = page(1, 23, 10);
+    cache.project(&mut first);
+    let mut jump = page(100, 122, 100);
+    cache.project(&mut jump);
+    assert!(jump.article.as_ref().unwrap().id > first.article.unwrap().id);
+    assert_eq!(lines(&jump).len(), 23);
+    let mut changed = page(110, 132, 100);
+    changed.presentation = 1;
+    cache.project(&mut changed);
+    assert_eq!(lines(&changed).len(), 23);
+    let id = changed.article.unwrap().id;
+    cache.input(&changed.navigation, b"\x1b[D");
+    let mut other = page(1, 23, 100);
+    cache.project(&mut other);
+    assert!(other.article.as_ref().unwrap().id > id);
+    other.generation += 1;
+    other.source_frame = None;
+    other.article = None;
+    other.frame = page(50, 72, 90).frame;
+    other.navigation = page(50, 72, 90).navigation;
+    cache.project(&mut other);
+    assert_eq!(other.article.unwrap().first_line, 50);
+}
+#[test]
+fn both_directions_evict_only_the_far_edge_and_never_exceed_the_bound() {
+    let mut cache = ArticleCache::default();
+    for first in (1..=441).step_by(22) {
+        let mut p = page(first, first + 22, 50);
+        cache.project(&mut p);
+        assert!(p.frame.rows <= MAX_LINES + 1);
+    }
+    assert_eq!(cache.rows.len(), MAX_LINES);
+    assert_eq!(*cache.rows.last_key_value().unwrap().0, 463);
+    for first in (0..=20).rev().map(|i| 1 + i * 22) {
+        let mut p = page(first, first + 22, 50);
+        cache.project(&mut p);
+        assert!(p.frame.rows <= MAX_LINES + 1);
+    }
+    assert_eq!(*cache.rows.first_key_value().unwrap().0, 1);
+    assert_eq!(*cache.rows.last_key_value().unwrap().0, 256);
+}
+#[test]
+fn cached_historical_links_and_dual_colour_glyphs_keep_their_exact_row_owner() {
+    let mut cache = ArticleCache::default();
+    let mut p = page(1, 23, 50);
+    let mut source = Screen::new(80, 24).unwrap();
+    source.feed(b"\x1b[31m\xa4\x1b[32m\xa4\x1b[0m https://example.com/p.png");
+    p.frame = source.frame();
+    cache.project(&mut p);
+    let glyph = p.frame.glyphs[0].clone();
+    assert_ne!(glyph.left, glyph.right);
+    let mut next = page(22, 44, 100);
+    cache.project(&mut next);
+    assert_eq!(next.frame.glyphs[0], glyph);
+    assert_eq!(next.links[0].url, "https://example.com/p.png");
+    assert_eq!(next.links[0].row, 0);
+    assert_eq!(
+        selection::extract(&next.frame, &Selection::Link { index: 0 })
+            .unwrap()
+            .text,
+        "https://example.com/p.png"
+    );
+}
+#[test]
+fn boundary_fetch_waits_for_new_revision_and_stops_after_a_target_or_no_progress() {
+    let mut cache = ArticleCache::default();
+    let mut first = page(50, 72, 30);
+    cache.project(&mut first);
+    let mut last = page(72, 94, 40);
+    cache.project(&mut last);
+    cache.begin_fetch(Intent::PreviousPage, &last.navigation, 72);
+    assert!(cache.continue_fetch(&last.navigation, 72).is_none()); // ACK is not a station response.
+    let mut transit = page(50, 72, 30);
+    cache.project(&mut transit);
+    assert!(matches!(
+        cache.continue_fetch(&transit.navigation, 73),
+        Some(Intent::PreviousPage)
+    ));
+    assert!(cache.continue_fetch(&transit.navigation, 74).is_none()); // redraw with no movement.
+    assert!(cache.fetch.is_none());
+    cache.begin_fetch(Intent::PreviousPage, &transit.navigation, 74);
+    let mut loaded = page(28, 50, 20);
+    cache.project(&mut loaded);
+    assert!(cache.continue_fetch(&loaded.navigation, 75).is_none());
+    assert!(cache.fetch.is_none());
+    assert_eq!(loaded.article.unwrap().first_line, 28);
+}
+#[test]
+fn reading_counts_preserve_scope_but_editor_and_unrecognized_commands_do_not() {
+    let context = page(1, 23, 50).navigation;
+    assert!(reading_input(&context, &[b'j'; 100]));
+    assert!(reading_input(&context, b"\x1b[5~"));
+    for bytes in [b"jk".as_slice(), b"r", b"\r", b"\x1b[D", &[b'k'; 101]] {
+        assert!(!reading_input(&context, bytes));
+    }
+    assert!(!reading_input(&Context::ContinuePrompt, b" "));
+}
+
+#[test]
+fn changed_opening_header_and_a_shorter_confirmed_end_cannot_leave_an_old_tail() {
+    let mut cache = ArticleCache::default();
+    let mut first = page(1, 23, 50);
+    cache.project(&mut first);
+    let mut second = page(22, 44, 100);
+    cache.project(&mut second);
+    let mut shorter = page(1, 23, 100);
+    cache.project(&mut shorter);
+    assert_eq!(lines(&shorter).len(), 23);
+    assert!(shorter.article.unwrap().end);
+    let mut second = page(22, 44, 100);
+    cache.project(&mut second);
+    let id = second.article.unwrap().id;
+    let mut changed = page(1, 23, 50);
+    changed.frame.glyphs[0].text = "X".into();
+    cache.project(&mut changed);
+    assert!(changed.article.as_ref().unwrap().id > id);
+    assert_eq!(lines(&changed).len(), 23);
+}
+
+#[test]
+fn a_page_turn_does_not_relabel_partial_new_text_with_the_previous_footer_range() {
+    let mut cache = ArticleCache::default();
+    let mut initial = page(1, 23, 50);
+    cache.project(&mut initial);
+    let expected = lines(&initial);
+    cache.input(&initial.navigation, b"\x1b[6~");
+    let mut fragment = page(1, 23, 50);
+    fragment.frame.glyphs[0].text = "X".into();
+    cache.project(&mut fragment);
+    assert_eq!(lines(&fragment), expected);
+    let mut complete = page(22, 44, 100);
+    cache.project(&mut complete);
+    assert_eq!(
+        lines(&complete),
+        (1..=44)
+            .map(|line| format!("line {line:04}"))
+            .collect::<Vec<_>>()
+    );
+}

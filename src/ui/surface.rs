@@ -278,9 +278,18 @@ async fn run(
     let mut surface_probe_started = false;
     let mut rejected_events = 0;
     let mut surface_probe_clean = false;
+    let mut reading_gate = None;
     let (complete, probe_checked) = loop {
         if *closing.borrow() {
             break (false, false);
+        }
+        let key_status = keyboard_policy.status(&receiver.borrow().context());
+        let raw_reading = (key_status.enabled && matches!(key_status.mode, "input" | "once"))
+            || (!key_status.enabled && key_status.pending);
+        if screen.set_raw_reading(raw_reading) && raw_reading {
+            inline_images.close();
+            eval.send(Packet::InlineReset(true))
+                .map_err(|e| e.to_string())?;
         }
         let complete = probe.is_some() && {
             let view = receiver.borrow();
@@ -294,6 +303,33 @@ async fn run(
                     .collect::<String>()
                     == "INPUT ROUND TRIP COMPLETE"
         };
+        if !commands.busy()
+            && !settings_visible
+            && !login_open
+            && pending_paste.read().is_none()
+            && reading_gate == Some(receiver.borrow().stamp())
+            && media_preview.active().is_none()
+        {
+            let view = receiver.borrow().clone();
+            if let Some(intent) = screen.continue_article_fetch(&view) {
+                let result = commands.start(CommandKind::Navigate, view.generation, || {
+                    connection
+                        .request_navigate(view.stamp(), intent, navigation::Source::Button)
+                        .map(|reply| reply.wait())
+                });
+                if let Err(error) = result {
+                    screen.cancel_article_fetch();
+                    eval.send(Packet::NavigationResult(Feedback::new(
+                        NavigationStatus::Rejected,
+                        error,
+                    )))
+                    .map_err(|e| e.to_string())?;
+                } else if let Ok(bytes) = navigation::plan(&view.context(), intent) {
+                    screen.article_input(&view.context(), &bytes);
+                    inline_images.input(&view.context(), &bytes);
+                }
+            }
+        }
         let interactions_checked = checks.interactions_complete(complete);
         let probe_checked = if reload_settings {
             checks.probe_started && !screen.has_in_flight()
@@ -467,7 +503,7 @@ async fn run(
                     },
                     CommandKind::Navigate => match done.result {
                         Ok(()) => {if probe.is_some(){checks.navigation_requests+=1;}Packet::NavigationResult(Feedback::quiet(NavigationStatus::Sent))},
-                        Err(error) => Packet::NavigationResult(Feedback::new(NavigationStatus::Rejected,error)),
+                        Err(error) => {screen.cancel_article_fetch();Packet::NavigationResult(Feedback::new(NavigationStatus::Rejected,error))},
                     },
                     CommandKind::Browse => match done.result {
                         Ok(()) => continue,
@@ -535,8 +571,9 @@ async fn run(
                 if event.requires_ptt() && !receiver.borrow().site.ptt_features() {
                     event.discard();eval.send(Packet::Notice(pttstella::msg!("site-ptt-only"))).map_err(|e|e.to_string())?;continue;
                 }
-                if inline_images.active() && matches!(&event,
+                if matches!(&event,
                     SurfaceEvent::DestinationSubmit{..}|SurfaceEvent::SitesConnect{..}|SurfaceEvent::LoginSubmit{..}|SurfaceEvent::Paste{..}|SurfaceEvent::PasteConfirm{..}) {
+                    screen.clear_article();
                     inline_images.close();eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
                 }
                 match event {
@@ -799,7 +836,8 @@ async fn run(
                                 .map_err(|e| e.to_string())?;
                         }
                     }
-                    SurfaceEvent::KeepAliveGate { stamp, ready } => {
+                    SurfaceEvent::KeepAliveGate { stamp, ready, reading } => {
+                        reading_gate=reading.then_some(stamp);
                         connection.keep_alive_gate(
                             stamp,
                             ready
@@ -825,6 +863,9 @@ async fn run(
                                 connection.request_navigate(stamp, intent, source).map(|reply|reply.wait())
                             })
                         };
+                        if result.is_ok() {
+                            screen.article_navigation(intent, &receiver.borrow());
+                        }
                         if result.is_ok() && inline_images.navigation(&receiver.borrow().context(),intent) {
                             eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
                         }
@@ -906,6 +947,7 @@ async fn run(
                     } => {
                         let result = (|| -> Result<(),String> {
                             let rows=screen.export_rows(Identity{presentation,generation,revision},selection_request,&receiver.borrow())?;
+                            let rows=if rows.end>pttstella::export::ROWS {0..rows.len()} else {rows};
                             files.start(|permit|{
                                 let lease=screen.lease_output(Identity{presentation,generation,revision},selection_request,receiver.borrow().input_epoch);
                                 let request=files::ExportRequest{lease,source:receiver.clone(),png,rows,selected:selection_request.is_some(),probe:probe.clone().filter(|_|surface_probe.as_deref()!=Some("files"))};
@@ -1140,8 +1182,10 @@ async fn run(
                     } => {
                         let view = receiver.borrow().clone();
                         let context = view.context();
-                        let effect = keyboard_policy.key(&key, &context);
-                        eval.send(Packet::KeyboardState(keyboard_policy.status(&context)))
+                        let reading_context=screen.reading_context(&view);
+                        let policy_context=reading_context.as_ref().unwrap_or(&context);
+                        let effect = keyboard_policy.key(&key, policy_context);
+                        eval.send(Packet::KeyboardState(keyboard_policy.status(policy_context)))
                             .map_err(|e| e.to_string())?;
                         let bytes = match effect {
                             Effect::None => continue,
@@ -1151,6 +1195,10 @@ async fn run(
                                 continue;
                             }
                             Effect::Browse(intent) => {
+                                if let Some(packet)=screen.reading_move(&view,intent) {
+                                    eval.send(packet).map_err(|e|e.to_string())?;
+                                    continue;
+                                }
                                 let shown=screen.browse_shown(generation,&context);
                                 let result = if !shown || pending_paste.read().is_some() {
                                     Err(navigation::Error::Stale.to_string())
@@ -1159,7 +1207,10 @@ async fn run(
                                         connection.request_browse_key(view.stamp(), intent).map(|reply|reply.wait())
                                     })
                                 };
-                                if result.is_ok() && inline_images.navigation(&context,intent) {
+                                if result.is_ok() {
+                            screen.article_navigation(intent, &receiver.borrow());
+                        }
+                        if result.is_ok() && inline_images.navigation(&context,intent) {
                                     eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
                                 }
                                 if let Err(error) = result {
@@ -1170,6 +1221,10 @@ async fn run(
                             }
                             Effect::Native(bytes) => bytes,
                         };
+                        if let Some(intent)=super::article_cache::reading_intent(&bytes) && let Some(packet)=screen.reading_move(&view,intent) {
+                            eval.send(packet).map_err(|e|e.to_string())?;continue;
+                        }
+                        screen.article_input(&context,&bytes);
                         if inline_images.input(&context,&bytes) {
                             eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
                         }
@@ -1217,6 +1272,7 @@ async fn run(
                         checks.composition_checked |= composition_input && text == "中";
                         let encoded = input::encode_with(&text,receiver.borrow().site.encoding).map_err(|e| e.to_string());
                         let result = encoded.and_then(|bytes| {
+                            screen.article_input(&receiver.borrow().context(),&bytes);
                             if inline_images.input(&receiver.borrow().context(),&bytes) {
                                 eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
                             }
@@ -1335,7 +1391,7 @@ async fn run(
                 || matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") && checks.mouse_samples_passed(&case) && receiver.borrow().mouse.active.is_none() && receiver.borrow().mouse.modes.tracking()==pttstella::mouse::Tracking::Highlight
                 || case=="pointer_rows" && checks.navigation_requests==7 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
                 || case=="account_lists" && checks.filter_edits>=3 && checks.context_copies>=1 && checks.export_checked
-                || matches!(case.as_str(),"inline"|"inline_pages"|"context_menu") && checks.inline_requests>=2 && checks.inline_expands==1 && checks.export_checked && (case!="context_menu"||checks.context_copies>=2)
+                || matches!(case.as_str(),"inline"|"inline_pages"|"context_menu") && checks.inline_requests>=2 && checks.inline_expands==1 && checks.export_checked && (case!="inline_pages"||checks.navigation_requests==1) && (case!="context_menu"||checks.context_copies>=2)
                 || case=="osc8" && checks.osc8_open_rows==[8,9] && checks.osc8_copy_rows==[8,9] && checks.osc8_dragged && checks.osc8_media_decoded>=2 && checks.export_checked
                 || case=="login_2fa" && checks.verification_required && checks.verification_rejected && checks.verification_browsing && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
                 || case=="fonts" && checks.font_catalog_reads>=2 && !checks.font_sources.is_empty() && checks.export_checked
@@ -1346,7 +1402,7 @@ async fn run(
             "bookmarks_initial":initial_bookmarks,"bookmarks_final":bookmarks.snapshot(),"bookmark_opens":checks.bookmark_opens,"bookmark_saves":checks.bookmark_saves,"bookmark_rejected":checks.bookmark_rejected,
             "article_reached":checks.article_reached,"article_missing":checks.article_missing,"article_rejected":checks.article_rejected,"article_cancelled":checks.article_cancelled,
             "board_reached":checks.board_reached,"board_rejected":checks.board_rejected,"board_cancelled":checks.board_cancelled,
-            "scope":if matches!(case.as_str(),"sites"|"sites_restart") {"synthetic loopback station UI; owned external test peers independently verify Big5/GBK bytes and EOF; explicit TCP shutdown is not a WebSocket acknowledgement"} else if case=="tools" {"local tools playground: PNG and Close smoke only; gestures are observations, not an A/B acceptance test; peer rejects all station input"} else if matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") {"synthetic native pointer samples: bounded independent exact cells, required final gesture, no local keys or duplicate path, PNG and Close"} else if case=="mouse_boundary" {"synthetic station mouse boundary: one exact press, no release or local keys after leaving the grid; owned cancellation and Close"} else if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
+            "scope":if matches!(case.as_str(),"sites"|"sites_restart") {"synthetic loopback station UI; owned external test peers independently verify Big5/GBK bytes and EOF; explicit TCP shutdown is not a WebSocket acknowledgement"} else if case=="inline_pages" {"synthetic cached reading: one exact PageDown, fragmented response, local history without further station bytes, PNG and Close"} else if case=="tools" {"local tools playground: PNG and Close smoke only; gestures are observations, not an A/B acceptance test; peer rejects all station input"} else if matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") {"synthetic native pointer samples: bounded independent exact cells, required final gesture, no local keys or duplicate path, PNG and Close"} else if case=="mouse_boundary" {"synthetic station mouse boundary: one exact press, no release or local keys after leaving the grid; owned cancellation and Close"} else if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
             "mouse":mouse_report,
             "tools":checks.tools,
             "inline_requests":checks.inline_requests,"inline_expands":checks.inline_expands,

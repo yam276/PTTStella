@@ -29,6 +29,88 @@ fn view() -> View {
 }
 
 #[test]
+fn cached_history_is_an_acknowledged_filtered_projection_with_its_own_link_indices() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(
+        &super::super::probe::surface_sample(
+            Some("inline_pages"),
+            true,
+            Some("http://127.0.0.1:1234"),
+        )
+        .unwrap(),
+    );
+    view.frame = screen.frame();
+    let old = displayed(&mut state, &view);
+    state.article_input(&view.context(), b"\x1b[6~");
+    screen.feed(&super::super::probe::inline_second_page(Some("http://127.0.0.1:1234")).unwrap());
+    view.frame = screen.frame();
+    state.update(&view);
+    assert!(state.current(old, &view).is_none());
+    let fresh = displayed(&mut state, &view);
+    let cached = state.current(fresh, &view).unwrap();
+    assert_eq!(cached.frame.rows, 47);
+    assert_eq!(cached.article.as_ref().unwrap().first_line, 1);
+    assert_eq!(cached.source_frame.as_ref().unwrap().rows, 24);
+    let historical_link = cached.links.iter().position(|link| link.row == 2).unwrap();
+    assert_eq!(
+        state
+            .copy_text(
+                fresh,
+                &super::super::protocol::CopyTarget::Link {
+                    index: historical_link
+                },
+                &view
+            )
+            .unwrap(),
+        "http://127.0.0.1:1234/colours.png"
+    );
+    assert!(
+        state
+            .select(fresh, 42, &Selection::Line { row: 0 }, &view)
+            .unwrap()
+            .text
+            .starts_with("Inline image synthetic reading page")
+    );
+    assert_eq!(state.export_rows(fresh, Some(42), &view).unwrap(), 0..1);
+    state
+        .select(fresh, 43, &Selection::Line { row: 32 }, &view)
+        .unwrap();
+    assert_eq!(state.export_rows(fresh, Some(43), &view).unwrap(), 32..33);
+    state.select(fresh, 44, &Selection::All, &view).unwrap();
+    assert!(state.export_rows(fresh, Some(44), &view).is_err());
+    state.replace_rules(filters::Rules::default());
+    assert!(
+        state
+            .copy_text(
+                fresh,
+                &super::super::protocol::CopyTarget::Link {
+                    index: historical_link
+                },
+                &view
+            )
+            .is_none()
+    );
+    let filtered = displayed(&mut state, &view);
+    assert_eq!(
+        state
+            .current(filtered, &view)
+            .unwrap()
+            .article
+            .as_ref()
+            .unwrap()
+            .first_line,
+        24
+    );
+    assert!(state.set_raw_reading(true));
+    let raw = displayed(&mut state, &view);
+    let raw = state.current(raw, &view).unwrap();
+    assert!(raw.article.is_none() && raw.source_frame.is_none());
+    assert_eq!(raw.frame, view.frame);
+}
+
+#[test]
 fn retained_frame_cannot_authorize_interactions_during_an_output_batch() {
     let mut state = SurfaceState::new(filters::Rules::default());
     let mut view = view();
@@ -49,7 +131,9 @@ fn retained_frame_cannot_authorize_interactions_during_an_output_batch() {
         .queue(&view, false, &DisplaySettings::default())
         .unwrap();
     assert!(packet.output_pending && packet.input_pending);
-    assert_eq!(packet.frame, view.frame); // Never the half-written source.
+    assert_eq!(packet.source_frame.as_ref(), Some(&view.frame)); // Original source stays retained.
+    assert_eq!(packet.frame.glyphs, view.frame.glyphs); // Cached body never reads partial source bytes.
+    assert!(!packet.frame.cursor_visible);
     assert!(packet.links.is_empty() && packet.hover.is_none());
     assert_eq!(packet.navigation.kind(), "unknown");
     state.acknowledge(identity).unwrap();

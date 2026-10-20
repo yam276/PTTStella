@@ -140,6 +140,8 @@ pub(super) enum SurfaceEvent {
     KeepAliveGate {
         stamp: Stamp,
         ready: bool,
+        #[serde(default)]
+        reading: bool,
     },
     Navigate {
         stamp: Stamp,

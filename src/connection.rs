@@ -283,10 +283,7 @@ impl Connection {
         Ok(connection)
     }
     pub fn start_inline_pages_probe(first: Vec<u8>, second: Vec<u8>) -> Result<Self, String> {
-        let connection = Self::start_owned_probe(
-            first.clone(),
-            probe::Scenario::InlinePages { first, second },
-        )?;
+        let connection = Self::start_owned_probe(first, probe::Scenario::InlinePages { second })?;
         connection.keep_alive(false)?;
         Ok(connection)
     }

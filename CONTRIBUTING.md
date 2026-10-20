@@ -181,6 +181,6 @@ Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_
 
 統一設定視窗變更另跑完整 JS、desktop lib／bin、Clippy、i18n 與 Python tooling 測試。Windows driver 核對中英文搜尋、實際偏好檔與畫面像素、無效中間值不寫入、分類恢復預設、匯入自動保存及重開；設定 driver 必須回傳主 target 本身，重複開啟不探索或建立輔助 CDP target。缺少 Windows runner 仍為 not_ready。macOS 原生另核對 ⌘,、品牌與 Lucide、連續修改自動保存、同一主視窗內的對話框關閉／重開、設定開啟時 ⌘Q、PNG 與 Close／全部 owner join，還要確認程序退出；只有 cleanup JSON 不能證明沒有隱藏視窗殘留。
 
-`--probe-surface OUTPUT_DIRECTORY inline_pages --media-origin http://127.0.0.1:PORT` 使用兩頁自製閱讀畫面。同一 URL 在兩頁的 link index／行位置不同，peer 只接受 PageDown、PageUp 及 Close，圖片 HTTP 請求不得因往返重複；仍須兩次 Enter 一個 batch、兩頁可見圖片、PNG 與完整清理。此案例不取代原本零站端 bytes 的 inline 探針。
+`--probe-surface OUTPUT_DIRECTORY inline_pages --media-origin http://127.0.0.1:PORT` 使用兩頁自製閱讀畫面。同一 URL 在兩頁的 link index／行位置不同，第二頁分段重繪；peer 只接受一次 PageDown 及 Close，往回讀必須走本機快取，任何 PageUp／額外輸入均失敗，圖片 HTTP 請求不得重複。仍須兩次 Enter 一個 batch、兩頁可見圖片、歷史文字複製、目前站端 PNG 與完整清理。此案例不取代原本零站端 bytes 的 inline 探針。
 
 即時語言變更另核對獨立 Localizer 往返、具名參數無隔離字元、invalid Localization 保留舊 bundles、目前搜尋／快取字型選項／草稿、macOS 原生選單及第一層設定入口；同一合成 session 切換前後 PNG 須逐像素相同，peer 拒絕全部非預期 bytes。返回區變更須分別驗日期／作者邊界、標頭不攔截、完整列光棒與只裝飾一欄的返回提示；新版最愛、完整看板與第 11 欄分類游標另由 Connection 核對列差＋CR 及過期拒絕。

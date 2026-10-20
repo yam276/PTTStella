@@ -27,6 +27,8 @@ pub(super) struct Open {
     pub presentation: u64,
     pub generation: u64,
     pub revision: u64,
+    pub first_line: usize,
+    pub article_id: Option<u64>,
     pub entries: Vec<Entry>,
     pub limited: bool,
 }
@@ -40,6 +42,7 @@ type Job = BoxFuture<'static, Result<Loaded, media::loader::Error>>;
 pub(super) struct InlineImages {
     sequence: u64,
     identity: Option<Identity>,
+    article_id: Option<u64>,
     turning: bool,
     targets: Vec<String>,
     queue: VecDeque<(usize, String)>,
@@ -51,6 +54,7 @@ pub(super) struct InlineImages {
 impl InlineImages {
     pub(super) fn close(&mut self) {
         self.identity = None;
+        self.article_id = None;
         self.turning = false;
         self.targets.clear();
         self.queue.clear();
@@ -73,20 +77,7 @@ impl InlineImages {
         if !self.active() || bytes.is_empty() {
             return false;
         }
-        if matches!(context, Context::ArticleReading { .. })
-            && matches!(
-                bytes,
-                b"\x1b[5~"
-                    | b"\x1b[6~"
-                    | b"\x1b[H"
-                    | b"\x1b[F"
-                    | b" "
-                    | b"j"
-                    | b"k"
-                    | b"\x06"
-                    | b"\x02"
-            )
-        {
+        if super::article_cache::reading_input(context, bytes) {
             self.turning = true;
             false
         } else {
@@ -131,6 +122,10 @@ impl InlineImages {
             generation: paint.generation,
             revision: paint.frame.revision,
         };
+        let article_id = paint.article.as_ref().map(|article| article.id);
+        if self.identity.is_some() && self.article_id != article_id {
+            self.close();
+        }
         if self.identity == Some(identity) {
             return Ok(None);
         }
@@ -153,7 +148,9 @@ impl InlineImages {
                 && target.kind == media::Kind::Image
             {
                 if let Some(existing) = targets.iter_mut().find(|(_, _, url)| url == &target.url) {
-                    existing.1 = existing.1.max(link.row);
+                    if link.row <= existing.1.saturating_add(1) {
+                        existing.1 = existing.1.max(link.row);
+                    }
                 } else {
                     targets.push((index, link.row, target.url));
                 }
@@ -171,12 +168,15 @@ impl InlineImages {
         let sequence = self.sequence;
         self.turning = false;
         self.identity = Some(identity);
-        let mut limited = targets.len() > MAX_IMAGES;
+        self.article_id = article_id;
+        let mut limited = false;
+        let mut added = 0;
         let mut entries = Vec::new();
-        for (index, row, url) in targets.into_iter().take(MAX_IMAGES) {
+        for (index, row, url) in targets {
             let key = match self.targets.iter().position(|known| known == &url) {
                 Some(key) => key,
-                None if self.targets.len() < MAX_ARTICLE_IMAGES => {
+                None if self.targets.len() < MAX_ARTICLE_IMAGES && added < MAX_IMAGES => {
+                    added += 1;
                     let key = self.targets.len();
                     self.targets.push(url.clone());
                     self.queue.push_back((key, url));
@@ -194,9 +194,14 @@ impl InlineImages {
         }
         Ok(Some(Open {
             batch: sequence,
+            article_id,
             presentation: identity.presentation,
             generation: identity.generation,
             revision: identity.revision,
+            first_line: paint
+                .article
+                .as_ref()
+                .map_or(1, |article| article.first_line),
             entries,
             limited,
         }))

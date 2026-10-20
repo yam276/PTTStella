@@ -78,6 +78,11 @@ pub(super) enum Packet<'a> {
         message: String,
     },
     InlineReset(bool),
+    ReadingMove {
+        generation: u64,
+        article: u64,
+        intent: pttstella::navigation::Intent,
+    },
     SettingsOpen(Box<SettingsOpen>),
     SettingsLaunch(super::protocol::SettingsFeature),
     SettingsVisibility(bool),
