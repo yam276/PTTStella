@@ -840,3 +840,10 @@ core 13 命令／2 replay、desktop lib 142 項、bin 83 項、全 targets Clipp
 macOS arm64 最終 release 合成原生已驗證網頁展圖、一次精確 PageDown、網頁→終端機→網頁→終端機、固定格線 PNG、重啟後的終端機及右上預覽偏好。三個成功／404 圖片網址各一個 HTTP GET；模式切換未多送站端 bytes，兩次執行皆 Close acknowledged、全部 owner join、程序 exit 0。重啟讀入與開啟設定未改寫保存 bytes。第一輪 runner 缺 loopback media origin 為 not_ready；第二輪發現舊網頁捲動位置殘留導致終端機上方被捲走，保留 failed 畫面，修正 cached→raw 布局歸零並加入回歸後重新打包實測，不以先前退出碼 0 冒充通過。
 
 證據保留 `.local/verification/article-mode`；交付 `dist/macos-article-mode-final/PTTStella.app` 為 arm64 release／strict ad-hoc，未公證，交付與測試副本 15 份 Mach-O loadable sections 相同。原生滑鼠點擊與 hover 依使用者要求留待人工；未操作使用者實站 session，Windows／Linux 原生仍 not_ready。
+2026-10-20 依使用者實站截圖回報修正非文章畫面的滾輪分流：列表即使有 overflow／放大仍送既有 PageUp／PageDown；只有網頁文章投影開啟 scrollbar，其餘畫面固定格線；未知、選取、組字、工具開啟等拒絕情境不得原生捲動或誤送。保留站端滑鼠分流與 Ctrl＋滾輪縮放。短文章投影至少保留來源格線寬高，底列頁尾位置不因內容較少上移，文章有效行數仍使用真實內容範圍。
+
+驗證通過：core 13 命令／2 replay、desktop lib 142 項、bin 85 項、全 targets Clippy、JS 164 項、fmt 與 docs。生產 handler doubles 覆蓋各列表／選單 overflow 與拒絕情境、網頁文章捲動；Rust 覆蓋短文章 1／3／22／23 行與離開閱讀後恢復各列表原始格線。
+
+macOS arm64 release 的 short_reading 本機合成原生案例以三行內容、80×24 來源，完成網頁→終端機→網頁切換。實際 WebView 截圖中三行文字及頁尾的像素邊界一致，空白區保留；PNG 為 960×576，零站端導覽輸入，Close acknowledged、各 owner joined、程序 exit 0。最初案例誤走預設選單，已修正 app 的 fixture 分派並重新建置／驗證；保留該次失敗記錄，不計通過。
+
+交付 `dist/macos-terminal-wheel-final/PTTStella.app`；與原生驗證副本的 15 個可載入 Mach-O sections 相同，兩者嚴格簽章檢查通過。本機證據位於 `.local/verification/terminal-wheel/`。使用者明確授權本輪超過共用額度，僅對本輪調高 aggregate budget，保留 namespace／剩餘空間／lease 檢查，未改全域政策或刪除其他專案資料。原生滾輪／指標與實站體驗仍由使用者人工驗收；Windows／Linux 原生結果為 not_ready。

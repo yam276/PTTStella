@@ -153,7 +153,7 @@ test('production cached movement scrolls locally, fetches only at an unknown edg
 
 test('production draw never temporarily collapses a cached scroll container to the terminal page height',()=>{
     const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
-    const viewport={scrollTop:500,getBoundingClientRect:()=>({width:960,height:576})};
+    const viewport={dataset:{},scrollTop:500,getBoundingClientRect:()=>({width:960,height:576})};
     let height=1600,layoutCalls=0;
     const style={set height(value){height=parseFloat(value);if(height<viewport.scrollTop+576)viewport.scrollTop=Math.max(0,height-576);},get height(){return height+'px';}};
     const context={devicePixelRatio:1,viewport,surface:{style},canvas:{width:960,height:576},level:{},zoom:1,draws:0,hoveredLink:-1,
@@ -162,6 +162,11 @@ test('production draw never temporarily collapses a cached scroll container to t
     vm.runInNewContext(surface.slice(surface.indexOf('function draw(packet)'),surface.indexOf('function repaint()')),context);
     context.draw({article:{id:1},frame:{rows:47,cols:80},source_frame:{rows:24,cols:80}});
     assert.equal(viewport.scrollTop,500);assert.equal(height,1600);assert.equal(layoutCalls,1);
+    assert.equal(viewport.dataset.reading,'web');
+    context.inlineImages.layout=(packet,base)=>base;
+    context.draw({article:null,frame:{rows:24,cols:80}});
+    assert.equal(viewport.dataset.reading,'terminal');assert.equal(height,576);
+    assert.equal(context.canvas.width,960);assert.equal(context.canvas.height,576);
 });
 
 test('cached reading anchors its hidden physical-key input inside the viewport instead of the station footer',()=>{

@@ -63,6 +63,7 @@ pub fn app(props: AppProps) -> Element {
                 | "sgr66_legacy"
                 | "osc8"
                 | "inline"
+                | "short_reading"
                 | "context_menu"
                 | "account_lists"
         )

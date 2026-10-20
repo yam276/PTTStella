@@ -222,3 +222,26 @@ fn a_page_turn_does_not_relabel_partial_new_text_with_the_previous_footer_range(
             .collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn short_articles_keep_the_source_grid_size_and_footer_row() {
+    for last in [1, 3, 22, 23] {
+        let mut cache = ArticleCache::default();
+        let mut short = page(1, last, 100);
+        let source = short.frame.clone();
+        cache.project(&mut short);
+        assert_eq!((short.frame.cols, short.frame.rows), (80, 24));
+        assert_eq!(short.source_frame.as_ref(), Some(&source));
+        assert_eq!(short.article.as_ref().unwrap().last_line, last);
+        assert!(short.frame.glyphs.iter().any(|g| g.row == 23));
+        assert!(
+            short
+                .frame
+                .glyphs
+                .iter()
+                .filter(|g| g.row >= last && g.row < 23)
+                .all(|g| g.text.trim().is_empty())
+        );
+        assert_eq!(short.settings, DisplaySettings::default());
+    }
+}

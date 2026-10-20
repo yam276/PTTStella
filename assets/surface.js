@@ -589,6 +589,9 @@ function zoomTo(value) {
     viewport.scrollTop=Math.max(0,(surface.offsetHeight-viewport.clientHeight)/2); focus();
 }
 function wheel(e) {
+    // Only the Rust-projected article is a scrollable document. Overflow from
+    // zoom, the input caret or decorations must never turn a list into one.
+    if(!latest?.article)e.preventDefault();
     if(contextMenu?.isOpen()){e.preventDefault();return;}
     cancelHover(true);
     if(tools?.open())return;
@@ -597,11 +600,11 @@ function wheel(e) {
     if(latest?.article&&!e.altKey&&!blocked()&&!dragging&&!hasSelection()){
         e.preventDefault();readingMove({action:"scroll",delta:e.deltaY*(e.deltaMode===1?24:e.deltaMode===2?viewport.clientHeight:1)},e,"pointer");return;
     }
-    if(blocked()||dragging||hasSelection()||viewport.scrollWidth>viewport.clientWidth+1||viewport.scrollHeight>viewport.clientHeight+1) return;
+    if(blocked()||dragging||hasSelection()) return;
     if(stationMouse.wheel(e))return;
     if(e.altKey)return;
     const kind=latest?.navigation.kind;
-    if(!latest?.connected||!['article_list','article_reading','board_list','document_list','system_menu'].includes(kind)) return;
+    if(!latest?.connected||!['article_list','article_reading','board_list','document_list','main_menu','system_menu','command_help'].includes(kind)) return;
     e.preventDefault();
     const action=e.deltaY<0?"previous_page":"next_page";
     navigate({action},e);
@@ -647,6 +650,7 @@ const bindings=[...contextMenu.bindings,...sitesUi.bindings,...tools.bindings,..
 ];
 for(const [target,event,callback,options] of bindings) target.addEventListener(event,callback,options);
 function draw(packet) {
+    viewport.dataset.reading=packet.article?"web":"terminal";
     const frame=packet.source_frame??packet.frame,ratio=devicePixelRatio||1,width=frame.cols*12,height=frame.rows*24;
     const available=viewport.getBoundingClientRect();
     const fitting=Math.min(available.width/width,available.height/height);

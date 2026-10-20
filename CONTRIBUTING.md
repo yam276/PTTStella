@@ -183,4 +183,6 @@ Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_
 
 `--probe-surface OUTPUT_DIRECTORY inline_pages --media-origin http://127.0.0.1:PORT` 使用兩頁自製閱讀畫面。同一 URL 在兩頁的 link index／行位置不同，第二頁分段重繪；peer 只接受一次 PageDown 及 Close，往回讀必須走本機快取，任何 PageUp／額外輸入均失敗，圖片 HTTP 請求不得重複。仍須兩次 Enter 一個 batch、兩頁可見圖片、歷史文字複製、目前站端 PNG 與完整清理。此案例不取代原本零站端 bytes 的 inline 探針。
 
+短文章尺寸另用 `--probe-surface OUTPUT_DIRECTORY short_reading`：自製三行內容、80×24 來源格線與底列頁尾。以相同字型／視窗切換網頁與終端機模式，擷取原生畫面比較字格、空白區與頁尾位置，匯出 960×576 PNG 後正常關閉；peer 拒絕所有站端輸入，報告必須包含 PNG、Close acknowledged 與完整 owner 清理。這個 smoke 不代表原生滑鼠或滾輪已驗收。滾輪分流另由生產 JS handler 測試覆蓋列表 overflow、拒絕情境與網頁文章本機捲動。
+
 即時語言變更另核對獨立 Localizer 往返、具名參數無隔離字元、invalid Localization 保留舊 bundles、目前搜尋／快取字型選項／草稿、macOS 原生選單及第一層設定入口；同一合成 session 切換前後 PNG 須逐像素相同，peer 拒絕全部非預期 bytes。返回區變更須分別驗日期／作者邊界、標頭不攔截、完整列光棒與只裝飾一欄的返回提示；新版最愛、完整看板與第 11 欄分類游標另由 Connection 核對列差＋CR 及過期拒絕。
