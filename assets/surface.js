@@ -386,7 +386,7 @@ function hitAt(point,clientY) {
 function setHover(point,redraw=true,preview=true) {
     const hit=hitAt(point,pointerClient?.clientY),index=hit?.kind==="link"?hit.index:-1;
     const changed=index!==hoveredLink;hoveredLink=index;
-    hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:["main_menu","system_menu"].includes(latest.navigation.kind)?20:0,kind:hit.kind}:null;
+    hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:0,kind:hit.kind}:null;
     surface.dataset.pointerAction=hit?.kind||"none";
     surface.style.cursor=hit?.kind==="back"?"":hit?"pointer":"default";
     surface.title=hit?.kind==="continue"?tr("pointer-continue-hint"):hit?.kind==="back"?tr("pointer-back-hint"):hit?.kind==="page"?tr(hit.action==="previous_page"?"pointer-page-up-hint":"pointer-page-down-hint"):index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredRow?tr(hit.kind==="menu"?"menu-open-hint":"article-open-hint"):"";
