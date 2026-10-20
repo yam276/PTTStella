@@ -734,3 +734,12 @@ macOS arm64 原生合成 App 已確認中文介面用 opacity／透明度搜尋�
 設定側欄增加焦點外框的保留空間，macOS 原生鍵盤聚焦截圖已確認金框四邊完整。浮球改用 App icon 同源的材質渲染圖，依使用者回饋將金色徽章環向外延伸，保留星尖空間，上緣高光與深金下緣呈現玻璃／金屬反光；返回箭頭沿用同環。56px 操作區、透明度、慣性與 owner 不變。最終原生截圖確認三聯星與返回狀態；外觀不以字串斷言代替視覺驗證。
 
 本輪 core 13 命令／2 replay、desktop lib 138 項、bin 73 項、全 targets Clippy、JS 130 項、Python tooling 70 項及 docs 通過。Python 首次遇到 macOS /var 與 /private/var 的同一路徑別名導致既有測試失敗，改為比對 resolve 後的絕對路徑，保留所有編譯環境／旗標與 DLL 負例斷言；isolated lane 重跑通過。失敗過程、原生畫面與報告保留 `.local/verification/browser-polish`。最新候選為 `dist/macos-browser-polish-metal/PTTStella.app`，strict ad-hoc 簽章、交付與測試副本全部 Mach-O loadable sections 雜湊一致；未公證。Windows／Linux 原生與實站登入本輪未執行，仍為 not_ready，未操作使用者的實站視窗。
+
+
+2026-10-20 單欄滑鼠導覽與內建設定：新增 DocumentList，由 Rust 分別核對郵件／精華的標題、唯一欄位標頭、指令提示、連續編號與游標。點擊／翻頁／返回共用既有 planner 及 Connection sender，JS 不解析站端文字；多欄標頭、缺列、游標不符、確認提示及過期 stamp 由負例拒絕。新增 2 項 navigation（共 42 項）及 production Connection 測試，獨立比對兩類畫面的上下鍵＋CR、PageDown、Close 與拒絕後零額外 bytes。新郵件提示／快速跳轉未實作。此輪沒有原生點擊或實站信件／精華畫面驗收，實際未支援版型仍需具體畫面另補。
+
+設定從第二個原生 WebView 改為主視窗內的 modal dialog，移除 native window 建立、弱 handle、輔助事件 channel、第二個 eval 與 debug target discovery。保留中英文搜尋、分類、同一 autosave 與字型 renderer；Modal 背景 inert，BBS key／text callback 另有開啟中的對話框拒絕。站點／名單管理待保存與關閉完成後才交接。退出由同一 renderer finally 保存最後修改快照，Files drain 後透過既有 blocking worker 寫入。替換失去用途的 native 建立取消測試，新增主 target 重用、shortcut 不穿透、管理交接等待關閉與最後快照保存回歸。
+
+macOS arm64 release 合成原生驗證已確認同一主視窗的 ⌘,、英文 opacity 搜尋中文介面、定位欄位、連續 checkbox autosave 實際檔案、關閉重開保留值與站點管理交接。匯出 PNG 後在設定內再次修改 checkbox，在約 47ms 的同次自動化操作內直接 ⌘Q（早於 300ms autosave debounce），最後實際設定檔保留新值、Close acknowledged、全部 owner join 及程序 exit 0；peer 拒絕全部站端 bytes。浮球加入 hover 1.2 秒／1.08 倍縮放，按住停止，減少動態效果及無 hover 裝置不啟用；未取得原生 hover 連續影格，不以靜態截圖冒充動畫觀感驗收。
+
+core 13 命令／2 replay、desktop lib 139 項、bin 72 項、全 targets Clippy、JS 133 項、Python tooling 70 項通過。初輪編譯拒絕新 UnknownReason 未窮舉，補齊 Vim 與雙語提示；JS 初輪指出測試 double 缺 document，補齊 double 並新增 modal 零站端送鍵案例後通過，未放寬產品條件。證據與過程保留 `.local/verification/in-app-settings`；候選 `dist/macos-in-app-settings/PTTStella.app` 為 arm64 release／ad-hoc，未公證，Windows／Linux 原生本輪 not_ready。使用者實站 App 與帳密未操作。

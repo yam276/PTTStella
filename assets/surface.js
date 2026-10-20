@@ -36,7 +36,7 @@ function previewHover(index) {
 }
 function changeHoverPreference(e){send({kind:"hover_preference",position:hoverPosition.value,trusted:e.isTrusted});}
 const vimToggle=document.getElementById("vim-toggle"),vimOnce=document.getElementById("vim-once"),vimStatus=document.getElementById("vim-status");
-let settingsActive=false;
+let settingsActive=false,settingsSnapshot={last:null,error:null};
 let keyboardState={enabled:false,mode:"input",pending:false,prefix:""};
 function policy(action,e,code="") {send({kind:"keyboard_state",action,code,generation,trusted:e?.isTrusted??true});}
 function toggleVim(e){policy("toggle",e);restoreEditingFocus();}
@@ -97,6 +97,7 @@ function sendInput(value){invalidateNavigation();send(value);}
 // the context-dependent conversion from browsing intents to PTT bytes.
 const commandKeys=new Set(["Enter","Backspace","Tab","Escape","ArrowUp","ArrowDown","ArrowRight","ArrowLeft","Home","End","PageUp","PageDown","Delete"]);
 function keydown(e) {
+    if(document.querySelector("dialog[open]")){e.preventDefault();return;}
     if(e.isTrusted)stationMouse.revoke();
     cancelHover(true);
     if(pastePending) {e.preventDefault();return;}
@@ -126,6 +127,7 @@ function keydown(e) {
     }
 }
 function input(e) {
+    if(document.querySelector("dialog[open]")){keyboard.value="";return;}
     if(e.isTrusted)stationMouse.revoke();
     cancelHover(true);
     if(pastePending) {keyboard.value="";return;}
@@ -536,11 +538,9 @@ const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoo
 const media=installMedia({tr,send,prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshNavigation,restore:restoreEditingFocus});
 function refreshControls(){refreshNavigation();refreshExportControls();}
 const sitesUi=createSitesDialog({tr,send,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls});
-// This view only requests the single native settings window.
-const settingsUi={request(e){if(e.isTrusted){stationMouse.revoke();cancelHover(true);policy("reset",e);send({kind:"settings_open",trusted:true});}},
-    bindings:[[document.getElementById("font-settings"),"click",e=>settingsUi.request(e)],
-        [document,"keydown",e=>{if(e.isTrusted&&(e.metaKey||e.ctrlKey)&&e.key===","&&!e.isComposing){e.preventDefault();e.stopImmediatePropagation();if(!e.repeat)settingsUi.request(e);}},true]],
-    open(){},catalog(){},preview(){},profile(){},saved(){},notice:()=>false,revoke(){},destroy(){},clean:()=>true};
+const settingsUi=createSurfaceSettings({document,send,tr,loadFonts,fontLoadNote,invalidateFonts,render,
+    beforeRequest:e=>{stationMouse.revoke();cancelHover(true);policy("reset",e);},
+    beforeShow:()=>{invalidatePresentation();hideChrome();},restore:restoreEditingFocus,changed:refreshControls});
 const loginUi=createLoginDialog({tr,send,stamp,
     prepare:e=>{stationMouse.revoke();cancelHover(true);policy("reset",e);cancelComposition();clearSelection();},
     restore:restoreEditingFocus,changed:refreshControls,focus});
@@ -773,6 +773,7 @@ try {
     }
 } catch(e){send({kind:"error",message:String(e)});}
 finally {
+    try {settingsSnapshot.last=settingsUi.snapshot();} catch(error) {settingsSnapshot.error=String(error);}
     lifetime.release();
     revokeSurface();
     cancelHover(true);
@@ -797,4 +798,4 @@ finally {
         &&sitesUi.clean()&&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&destinationUi.clean()&&bookmarksUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
     try {send({kind:"stopped",clean:cleanupClean,...(toolsProbeEnabled?{tools:tools.observations()}:{})});} catch(_) { /* join still acknowledges cleanup */ }
 }
-return {clean:cleanupClean,tools:toolsProbeEnabled?tools.observations():null};
+return {clean:cleanupClean,tools:toolsProbeEnabled?tools.observations():null,settings:settingsSnapshot};

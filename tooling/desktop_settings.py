@@ -1,4 +1,4 @@
-"""Independent settings window on the owned Windows WebView2 probe."""
+"""In-app settings dialog on the owned Windows WebView2 probe."""
 import base64
 import json
 from pathlib import Path
@@ -82,7 +82,7 @@ def run(main, output):
     s.saved()
     import desktop_profiles
     profile_report = desktop_profiles.run(main, output, s)
-    return ({'status': 'passed', 'independent_native_window': True, 'bilingual_search': True,
+    return ({'status': 'passed', 'same_webview_modal': True, 'bilingual_search': True,
              'autosave_actual_file_and_pixels': True, 'invalid_edit_preserves_effective_values': True,
              'reopen_and_category_defaults': True,
              'scope': 'trusted owned Windows WebView2 controls; native picker and other OS excluded'}, profile_report)
