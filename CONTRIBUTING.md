@@ -47,7 +47,7 @@ macOS 打包變更另跑 `python3 -m unittest discover -s tooling -p test_bundle
 
 站端滑鼠另跑 `cargo test --locked --features desktop --lib mouse`：同一 Screen／CSI parser 的每個分片、固定模式 trace／epoch、RIS／session reset、同步期間模式、取消與超長拒絕，以及純 encoder 的獨立 SGR bytes／修飾鍵／格線邊界；交易 owner 與 production Connection loopback 核對更新後釋放、舊租約／取消、滿佇列控制、速率、模式／重連及保活。UI 另跑 desktop bin 與 `node --test tooling/test_surface_mouse.mjs tooling/test_surface_links.mjs tooling/test_surface_dialogs.mjs`，涵蓋顯示 ACK、封包型別、pointer 交易與分流；不以單元或現有本機滑鼠 gate 代替新的站端原生互動驗收，需求見 [站端滑鼠](docs/station-mouse.md)。
 
-`--probe-surface OUTPUT_DIRECTORY mouse` 使用固定自製文章列表及真正 production Connection；peer 精確要求零基 col 4／row 4 的左鍵 press／release，切成未支援 1001 後拒絕站端滑鼠與滾輪，只有明確停用後點同一文章編號可送一次 CR。重新啟用後要求同座標右鍵一對，再要求中鍵按下；此時 peer 送同步 off／on 撤銷交易，只接受 Close，不能補送中鍵釋放。以原生 Shift 雙擊選行、Cmd-C／草稿 Cmd-V 讀回系統剪貼簿，草稿不保存；另外核對開關、PNG、一次本機導覽、單筆取消、Close acknowledged 與全部 owner join。中鍵使用可保持 1,200ms 的真正按下，以便模式更新先於釋放。不能只看程序退出碼，缺報告或 cleanup false 必須失敗。原生 Shift 拖曳與 Ctrl＋滾輪、所有 DPI／其他平台仍須另驗，不能用這個限定案例冒充通過。
+`--probe-surface OUTPUT_DIRECTORY mouse` 使用固定自製文章列表及真正 production Connection；peer 精確要求零基 col 4／row 4 的左鍵 press／release，切成未支援 1001 後拒絕站端滑鼠與滾輪，只有明確停用後點同一列右側文章區（如 col 40）可送一次 CR。重新啟用後要求同座標右鍵一對，再要求中鍵按下；此時 peer 送同步 off／on 撤銷交易，只接受 Close，不能補送中鍵釋放。以原生 Shift 雙擊選行、Cmd-C／草稿 Cmd-V 讀回系統剪貼簿，草稿不保存；另外核對開關、PNG、一次本機導覽、單筆取消、Close acknowledged 與全部 owner join。中鍵使用可保持 1,200ms 的真正按下，以便模式更新先於釋放。不能只看程序退出碼，缺報告或 cleanup false 必須失敗。原生 Shift 拖曳與 Ctrl＋滾輪、所有 DPI／其他平台仍須另驗，不能用這個限定案例冒充通過。
 
 `--probe-surface OUTPUT_DIRECTORY mouse_boundary` 共用同一格線與模式，但 peer 只接受 col 4／row 4 的一次左鍵按下及 Close。先點格線外的黑邊，再從該格拖曳到黑邊放開；黑邊點擊不得送出任何 bytes，離開格線不得合成座標或釋放／本機導覽。報告必須只有一筆按下、至少一次交易取消、沒有本機導覽／連結／開關操作、沒有殘留交易，另需匯出 PNG、Close acknowledged 及全部 owner 清理。這個案例只驗同一原生尺寸的黑邊與格線外放開，不代替離窗、失焦、所有 DPR 或實體修飾鍵手勢。
 
@@ -180,3 +180,5 @@ Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_
 
 
 統一設定視窗變更另跑完整 JS、desktop lib／bin、Clippy、i18n 與 Python tooling 測試。Windows driver 核對中英文搜尋、實際偏好檔與畫面像素、無效中間值不寫入、分類恢復預設、匯入自動保存及重開；輔助 CDP target 僅接受同一 loopback port、有界八筆 page list，主 driver 關閉時一併釋放。缺少 Windows runner 仍為 not_ready。macOS 原生另核對 ⌘,、品牌與 Lucide、連續修改自動保存、子視窗關閉／重開、設定開啟時 ⌘Q、PNG 與 Close／全部 owner join，還要確認程序退出；只有 cleanup JSON 不能證明沒有隱藏視窗殘留。
+
+`--probe-surface OUTPUT_DIRECTORY inline_pages --media-origin http://127.0.0.1:PORT` 使用兩頁自製閱讀畫面。同一 URL 在兩頁的 link index／行位置不同，peer 只接受 PageDown、PageUp 及 Close，圖片 HTTP 請求不得因往返重複；仍須兩次 Enter 一個 batch、兩頁可見圖片、PNG 與完整清理。此案例不取代原本零站端 bytes 的 inline 探針。

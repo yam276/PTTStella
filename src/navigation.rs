@@ -57,6 +57,11 @@ pub enum Context {
         last_row: usize,
         cursor_row: usize,
     },
+    SystemMenu {
+        first_row: usize,
+        last_row: usize,
+        cursor_row: usize,
+    },
     BoardList {
         first_row: usize,
         last_row: usize,
@@ -80,6 +85,7 @@ impl Context {
             Self::EmptyList => "empty_list",
             Self::CommandHelp { .. } => "command_help",
             Self::MainMenu { .. } => "main_menu",
+            Self::SystemMenu { .. } => "system_menu",
             Self::BoardList { .. } => "board_list",
             Self::ArticleList { .. } => "article_list",
             Self::ArticleReading { .. } => "article_reading",
@@ -91,6 +97,11 @@ impl Context {
     pub fn content_rows(&self) -> usize {
         match self {
             Self::MainMenu {
+                first_row,
+                last_row,
+                ..
+            }
+            | Self::SystemMenu {
                 first_row,
                 last_row,
                 ..
@@ -312,11 +323,25 @@ fn pointer(line: &Row<'_>, col: usize) -> bool {
     line.cells(col, col + 1) == Some(">") || line.cells(col, col + 2) == Some("●")
 }
 fn main_menu(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
-    if !compact(&rows[0].text).contains("主功能表")
-        || !rows[0].bar_text("主功能表")
-        || !rows[23].bar_text("主選單")
-        || !rows[23].text.contains("說明")
-    {
+    let root = compact(&rows[0].text).contains("主功能表")
+        && rows[0].bar_text("主功能表")
+        && rows[23].bar_text("主選單");
+    let submenu = [
+        ("私人信件區", "電子郵件"),
+        ("休閒聊天區", "聊天說話"),
+        ("個人設定區", "個人設定"),
+        ("系統資訊區", "工具程式"),
+        ("網路遊樂場", "休閒遊樂"),
+        ("編特別名單", "名單編輯"),
+        ("系統維護區", "系統維護"),
+        ("金錢相關管理", "金錢管理"),
+        ("使用者記錄管理", "記錄管理"),
+        ("量販店", "量販商店"),
+        ("棋院", "休閒棋院"),
+    ]
+    .iter()
+    .any(|(title, status)| rows[0].bar_text(title) && rows[23].bar_text(status));
+    if !(root || submenu) || !rows[23].text.contains("說明") {
         return None;
     }
     let mut items = Vec::new();
@@ -330,8 +355,7 @@ fn main_menu(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
                 .get(1)
                 .is_some_and(u8::is_ascii_alphanumeric)
             && item.as_bytes().get(2) == Some(&b')')
-            && item.contains('【')
-            && item.contains('】')
+            && item.get(3..).is_some_and(|tail| !tail.trim().is_empty())
         {
             items.push(row);
         }
@@ -344,16 +368,24 @@ fn main_menu(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
         return Some(unknown(UnknownReason::Unmapped));
     }
     Some(
-        if items.len() >= 3
+        if items.len() >= (if root { 3 } else { 1 })
             && items.windows(2).all(|pair| pair[1] == pair[0] + 1)
             && items.contains(&cursor.1)
             && (20..=21).contains(&cursor.0)
             && pointer(&rows[cursor.1], 20)
         {
-            Context::MainMenu {
-                first_row,
-                last_row,
-                cursor_row: cursor.1,
+            if root {
+                Context::MainMenu {
+                    first_row,
+                    last_row,
+                    cursor_row: cursor.1,
+                }
+            } else {
+                Context::SystemMenu {
+                    first_row,
+                    last_row,
+                    cursor_row: cursor.1,
+                }
             }
         } else {
             unknown(UnknownReason::InvalidCursor)
@@ -383,9 +415,9 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
         header + 1
     };
     if !rows[0].mapped()
-        || rows[if class_root { 7 } else { 1 }..]
-            .iter()
-            .any(|r| !r.mapped())
+        || !rows[23].mapped()
+        || (!class_root && !rows[first_row - 1].mapped())
+        || (class_root && rows[first_row..].iter().any(|row| !row.mapped()))
     {
         return Some(unknown(UnknownReason::Unmapped));
     }
@@ -401,6 +433,14 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
         if line.text.trim().is_empty() {
             blank = true;
             continue;
+        }
+        let structural = if class_root { 10..20 } else { 10..23 };
+        if line.spans.iter().any(|span| {
+            span.glyph.col < structural.end
+                && span.glyph.col + span.glyph.width > structural.start
+                && span.glyph.unmapped
+        }) {
+            return Some(unknown(UnknownReason::Unmapped));
         }
         let valid = if class_root {
             line.cells(10, 17)
@@ -559,6 +599,11 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
             last_row,
             cursor_row,
         }
+        | Context::SystemMenu {
+            first_row,
+            last_row,
+            cursor_row,
+        }
         | Context::BoardList {
             first_row,
             last_row,
@@ -582,6 +627,7 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         }
         return match context {
             Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
             | Context::BoardList { .. }
             | Context::ArticleList { .. }
             | Context::CommandHelp { .. } => {
@@ -625,6 +671,7 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         | (Context::ArticleReading { percent: 100, .. }, Intent::Forward) => b"".as_slice(),
         (
             Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
             | Context::BoardList { .. }
             | Context::ArticleList { .. }
             | Context::ArticleReading { .. },
@@ -632,26 +679,39 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         ) => b"\x1b[H".as_slice(),
         (
             Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
             | Context::BoardList { .. }
             | Context::ArticleList { .. }
             | Context::ArticleReading { .. },
             Intent::Last,
         ) => b"\x1b[F".as_slice(),
         (
-            Context::MainMenu { .. } | Context::BoardList { .. } | Context::ArticleList { .. },
+            Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
+            | Context::BoardList { .. }
+            | Context::ArticleList { .. },
             Intent::Forward,
         ) => b"\r".as_slice(),
         (Context::ArticleReading { .. }, Intent::Forward) => b"\x1b[6~".as_slice(),
         (
-            Context::MainMenu { .. } | Context::BoardList { .. } | Context::ArticleList { .. },
+            Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
+            | Context::BoardList { .. }
+            | Context::ArticleList { .. },
             Intent::Back,
         ) => b"\x1b[D".as_slice(),
         (
-            Context::MainMenu { .. } | Context::BoardList { .. } | Context::ArticleList { .. },
+            Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
+            | Context::BoardList { .. }
+            | Context::ArticleList { .. },
             Intent::PreviousPage,
         ) => b"\x1b[5~".as_slice(),
         (
-            Context::MainMenu { .. } | Context::BoardList { .. } | Context::ArticleList { .. },
+            Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
+            | Context::BoardList { .. }
+            | Context::ArticleList { .. },
             Intent::NextPage,
         ) => b"\x1b[6~".as_slice(),
         (
@@ -664,11 +724,17 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
             return Ok(open_row(*cursor_row, row));
         }
         (
-            Context::MainMenu { .. } | Context::BoardList { .. } | Context::ArticleList { .. },
+            Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
+            | Context::BoardList { .. }
+            | Context::ArticleList { .. },
             Intent::PreviousItem,
         ) => b"\x1b[A".as_slice(),
         (
-            Context::MainMenu { .. } | Context::BoardList { .. } | Context::ArticleList { .. },
+            Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
+            | Context::BoardList { .. }
+            | Context::ArticleList { .. },
             Intent::NextItem,
         ) => b"\x1b[B".as_slice(),
         (Context::ArticleReading { first_line, .. }, Intent::PreviousPage) if *first_line > 1 => {

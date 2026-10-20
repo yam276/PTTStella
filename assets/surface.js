@@ -90,7 +90,7 @@ function refreshStationMouse(){
     stationMouseStatus.textContent=!latest?.connected||!state?.enabled?"":tr(state.route==="station"?"station-mouse-active":state.route==="blocked"?"station-mouse-blocked":"station-mouse-local");
     surface.dataset.stationMouseRoute=state?.route??"local";
 }
-const canNavigate=()=>!stopped&&!!latest?.connected&&['main_menu','article_list','article_reading','board_list','empty_list','command_help'].includes(latest.navigation.kind)&&!latest.input_pending&&!navigationLocked&&!navigationRequest&&!blocked();
+const canNavigate=()=>!stopped&&!!latest?.connected&&['main_menu','system_menu','article_list','article_reading','board_list','empty_list','command_help'].includes(latest.navigation.kind)&&!latest.input_pending&&!navigationLocked&&!navigationRequest&&!blocked();
 function invalidateNavigation(){navigationLocked=true;released=null;cancelDrag();setHover(null);refreshNavigation();}
 function sendInput(value){invalidateNavigation();send(value);}
 // Only classify editing vs command events here. Rust owns key translation and
@@ -330,12 +330,12 @@ function linkAt(point) {
 }
 function hitAt(point) {
     if(!point||blocked()||dragging?.moved||!stationMouse.local()) return null;
-    if(canNavigate()&&latest.navigation.kind!=="main_menu"&&point.col<1&&point.row>0&&point.row<23)return {kind:"back"};
     const index=linkAt(point);if(index>=0) return {kind:"link",index};
+    if(canNavigate()&&latest.navigation.kind!=="main_menu"&&point.col<Math.floor((latest.frame?.cols??80)/4)&&point.row>0&&point.row<23)return {kind:"back"};
     if(!canNavigate())return null;
     const context=latest.navigation;
-    if(['main_menu','board_list'].includes(context.kind)){
-        const start=context.kind==="main_menu"?20:1;
+    if(['main_menu','system_menu','board_list'].includes(context.kind)){
+        const start=["main_menu","system_menu"].includes(context.kind)?20:1;
         return point.col>=start&&point.row>=context.first_row&&point.row<=context.last_row?{kind:"menu",row:point.row}:null;
     }
     if(context.kind!=="article_list") return null;
@@ -345,7 +345,7 @@ function hitAt(point) {
 function setHover(point,redraw=true,preview=true) {
     const hit=hitAt(point),index=hit?.kind==="link"?hit.index:-1;
     const changed=index!==hoveredLink;hoveredLink=index;
-    hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:latest.navigation.kind==="main_menu"?20:1,kind:hit.kind}:null;
+    hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:Math.floor(latest.frame.cols/4),kind:hit.kind}:null;
     surface.dataset.pointerAction=hit?.kind||"none";
     surface.style.cursor=hit?.kind==="back"?"":hit?"pointer":"default";
     surface.title=hit?.kind==="back"?tr("pointer-back-hint"):index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredRow?tr(hit.kind==="menu"?"menu-open-hint":"article-open-hint"):"";
@@ -356,7 +356,7 @@ function drawNavigationMarker() {
     const back=surface.dataset.pointerAction==="back";
     navigationMarker.hidden=(!hoveredRow&&!back)||!grid||!canNavigate();
     if(navigationMarker.hidden) {delete navigationMarker.dataset.row;return;}
-    const {row,start,end}=back?{row:1,start:0,end:1}:{row:hoveredRow.row,start:hoveredRow.start,end:latest.frame.cols};
+    const {row,start,end}=back?{row:1,start:0,end:Math.floor(latest.frame.cols/4)}:{row:hoveredRow.row,start:hoveredRow.start,end:latest.frame.cols};
     navigationMarker.dataset.kind=back?"back":hoveredRow.kind;navigationMarker.dataset.row=String(row);
     Object.assign(navigationMarker.style,{left:grid.x(start)/grid.ratio+"px",top:grid.y(row)/grid.ratio+"px",
         width:(grid.x(end)-grid.x(start))/grid.ratio+"px",height:((back?grid.y(23):grid.bottom(row))-grid.y(row))/grid.ratio+"px"});
