@@ -64,6 +64,7 @@ pub fn app(props: AppProps) -> Element {
                 | "osc8"
                 | "inline"
                 | "short_reading"
+                | "short_links"
                 | "context_menu"
                 | "account_lists"
                 | "merged_replies"

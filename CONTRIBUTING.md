@@ -31,6 +31,8 @@ core 執行 Rust 1.97.0 的 fmt、Clippy、畫面與互動測試 suite 及 2 個
 
 ## 實作後的驗證
 
+短文章格線／網址變更另跑 article cache 的完整格線及連結回歸，涵蓋 1／3／22／23 行、一般網址、OSC 8 圖片、選取及 ID 字串。`--probe-surface OUTPUT_DIRECTORY short_links --media-origin LOOPBACK_ORIGIN` 提供三行文章、一般及 OSC 8 圖片各一張；owned HTTP server 提供 `/colours.png`、`/colours-two.png`。實際 WebView 需核對兩條網址底線、兩次 Enter 只展開一個 batch、兩圖解碼且各一次 GET、完整 960×576 PNG、Close acknowledged 與全部 owner join。peer 拒絕所有站端輸入；此鍵盤展圖案例不替代原生滑鼠點圖／hover 驗收。
+
 滑鼠瀏覽增量另跑 core、desktop lib／bin、Clippy、i18n 與全套 JS。`--probe-surface OUTPUT_DIRECTORY pointer_rows` 現在以本機合成主選單開始：點個人設定、原始 Left 返回、點我的最愛及目錄、滾輪下／上頁、點文章整行及左緣返回；peer 依序獨立核對 Down＋CR、Left、CR、Up＋CR、PageDown、PageUp、Down＋CR、Left，共七筆導覽與一次原始鍵，不接受多送。最後必須匯出 PNG、Close acknowledged、所有 owner join。原生右鍵另核對無反白開扇形、有反白／Shift 保留情境、checkbox 自動保存／重開／重啟、隱藏浮球仍可返回收合；hover 目視亮度與金邊，Canvas／匯出不可混入本機裝飾。DOM doubles 與 loopback 不能代替原生 UI，缺平台明記 not_ready。
 
 Windows ZIP 打包變更另跑 `python -m unittest discover -s tooling -p test_bundle_windows.py`、docs、core 與 desktop gate。`python tooling/bundle_windows.py` 由 Cargo JSON 取得 x64 release executable，檢查 GUI subsystem、實際 PE imports、七份嵌入圖示與來源 ICO payload，打包 Microsoft redistributable CRT 與授權，不覆寫既有 ZIP。publication 回歸涵蓋建置／圖示／未知 DLL 失敗零交付，以及既有 ZIP 和競爭建立不被覆寫。

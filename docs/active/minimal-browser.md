@@ -4,13 +4,23 @@
 
 ## 目標
 
-目前交付為 `dist/macos-account-actions-final/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：新增文章字串右鍵快速名單與單一 ID 推文暫時篩選，包含先前連續 ID 合併與文章瀏覽功能。離線通過，這兩個新增入口的完整原生流程仍待驗；最新範圍見下方快速名單分節；各歷史交付與人工驗收邊界保留於各節。原生正文滑鼠仍由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-short-links/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：修復短文章網址底線及開圖候選消失，包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。短文章的原生底線與鍵盤展圖已驗證；快速名單／暫時篩選仍保留原有未完成驗收，不因這次修正升級為通過。原生正文滑鼠仍由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 短文章網址底線與開圖回歸（2026-10-20）
+
+使用者回報先前功能疑似沒有合併，並指出網址底線與開圖。核對 `f652f44` 與當時遠端 develop 一致；文章模式、固定尺寸、j／k、箭頭、黑白名單及合併推文提交均為其祖先。實際找到 `ca9991c` 的回歸：短文章只提高 Frame.rows 並固定頁尾，沒有補上正文與頁尾間的字格；renderer 看似正確，嚴格 text::rows 卻拒絕不完整格線，導致一般／OSC 8 連結、圖片候選及字串候選同時消失。原尺寸測試對空集合使用 all，未證明空白字格存在；原生尺寸案例也沒有網址。
+
+修正由同一 ArticleCache 投影補齊空白字格，保留真實文章行數、原始 PNG source 與頁尾位置；未放寬網址或文字解析的完整性要求。新增完整格線與一般／OSC 8 圖片、連結複製、ID 字串的交互回歸，覆蓋 1／3／22／23 行。修正前兩項測試明確失敗（短文圖片連結 0 而非 2），修正後 core 13 commands／2 replays、desktop lib 142／bin 92、JS 169、Clippy、fmt 與 docs 全數通過。
+
+macOS arm64 實際 Dioxus／WKWebView 的 `short_links` 三行合成頁：兩條底線可見，兩次 Enter 只有一個展圖 batch，兩張自製圖片均解碼且各一個 HTTP GET；End 本機移至第二張圖與頁尾，peer 零站端輸入。完整 PNG 960×576、空白區全黑；Close acknowledged、listener／connection／credential／file owner 全部 join、程序 exit 0。原生截圖為 CUA 的 JPEG／顯示色域，底線與圖片像素使用明確色差容限及長度／面積檢查；PNG 使用無損精確檢查，不混用。
+
+證據在 `.local/verification/short-links/`，包含修正前失敗摘要、離線 logs、原生前後畫面及 `validation.json`。交付與驗證副本的 15 個 Mach-O loadable sections 一致，strict ad-hoc 簽章通過，未公證；本輪正常資源 guard 通過。原生滑鼠點圖／hover、使用者實站及 Windows／Linux 未在本輪驗證，仍待各自驗收。
 
 ## 文章快速名單與暫時只看單一 ID（2026-10-20）
 

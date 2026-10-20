@@ -510,6 +510,10 @@ pub(super) fn surface_sample(
         Some("sgr66_legacy") => sgr66_sample(false),
         Some("osc8") => osc8_sample(media_origin),
         Some("inline" | "inline_pages") => inline_sample(media_origin),
+        Some("short_links") => {
+            let origin = media_origin.ok_or("short links probe requires a loopback media origin")?;
+            encoding::encode(&format!("\x1b[2J\x1b[HShort article image links\x1b[2;1H{origin}/colours.png\x1b[3;1H\x1b]8;;{origin}/colours-two.png\x07Explicit image\x1b]8;;\x07\x1b[24;1H\x1b[7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~3 行 (h)說明 (←)離開\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
+        }
         Some("short_reading") => encoding::encode("\x1b[2J\x1b[HShort article: the grid stays 80 columns by 24 rows.\x1b[2;1HSecond line\x1b[3;1HLast line\x1b[24;1H\x1b[7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~3 行 (h)說明 (←)離開\x1b[0m\x1b[?25l").map_err(|e|e.to_string()),
         Some("account_articles") => {
             let sample: serde_json::Value = serde_json::from_str(include_str!("../../tests/fixtures/navigation.json")).map_err(|e|e.to_string())?;
@@ -829,6 +833,31 @@ mod sample_tests {
             && link.url == "http://127.0.0.1:9876/colours.png"));
     }
 
+    #[test]
+    fn short_link_probe_has_a_three_line_reading_range_and_two_images() {
+        let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
+        screen.feed(
+            &surface_sample(Some("short_links"), true, Some("http://127.0.0.1:9876")).unwrap(),
+        );
+        assert!(matches!(
+            pttstella::navigation::analyze(&screen.frame()),
+            pttstella::navigation::Context::ArticleReading {
+                first_line: 1,
+                last_line: 3,
+                percent: 100,
+            }
+        ));
+        assert_eq!(
+            pttstella::links::detect(&screen.frame())
+                .iter()
+                .map(|link| (link.row, link.url.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                (2, "http://127.0.0.1:9876/colours-two.png"),
+                (1, "http://127.0.0.1:9876/colours.png"),
+            ]
+        );
+    }
     #[test]
     fn inline_sample_is_a_reading_page_with_two_local_images() {
         let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
