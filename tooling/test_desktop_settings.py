@@ -37,25 +37,17 @@ class SettingsTargetTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.discover(b'[]', status=500)
 
-    def test_only_identified_auxiliary_target_is_retained_and_reused(self):
+    def test_settings_reuses_the_main_target_without_discovery_or_new_connection(self):
         main = desktop_input.DevTools.__new__(desktop_input.DevTools)
-        main.port = 8123
-        main.address = 'ws://127.0.0.1:8123/page/main'
-        main.settings_target = None
         main.call = Mock()
         main.click = Mock()
-        unrelated = Mock()
-        unrelated.evaluate.return_value = False
-        settings = Mock()
-        settings.evaluate.return_value = True
-        with patch.object(desktop_input, 'debug_pages', return_value=[main.address, 'other', 'settings']), \
-                patch.object(desktop_input, 'DevTools', side_effect=[unrelated, settings]) as target:
-            self.assertIs(main.open_settings(), settings)
-            self.assertIs(main.open_settings(), settings)
-            self.assertEqual(target.call_count, 2)
-        unrelated.close.assert_called_once()
-        settings.close.assert_not_called()
+        main.wait = Mock()
+        with patch.object(desktop_input, 'debug_pages') as discovery:
+            self.assertIs(main.open_settings(), main)
+            self.assertIs(main.open_settings(), main)
+            discovery.assert_not_called()
         self.assertEqual(main.click.call_count, 2)
+        self.assertEqual(main.wait.call_count, 2)
 
 
 if __name__ == '__main__':

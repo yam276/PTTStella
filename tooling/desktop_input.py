@@ -65,7 +65,6 @@ class DevTools:
             raise ValueError('debug target must belong to this loopback probe')
         self.port = port
         self.address = address
-        self.settings_target = None
         self.socket = socket.create_connection(('127.0.0.1', port), timeout=5)
         self.reader = self.socket.makefile('rb')
         self.sequence = 0
@@ -95,40 +94,14 @@ class DevTools:
             raise ValueError('debug WebSocket handshake rejected')
 
     def close(self):
-        if self.settings_target is not None:
-            self.settings_target.close()
-            self.settings_target = None
         self.reader.close()
         self.socket.close()
 
     def open_settings(self):
         self.call('Page.bringToFront')
         self.click('#font-settings')
-        if self.settings_target is None:
-            deadline = time.monotonic() + 5
-            while self.settings_target is None:
-                for address in debug_pages(self.port):
-                    if address == self.address:
-                        continue
-                    candidate = DevTools(address, self.port)
-                    try:
-                        matches = candidate.evaluate('!!document.querySelector(".settings-host #font-dialog")')
-                    except Exception:
-                        candidate.close()
-                        raise
-                    if matches:
-                        self.settings_target = candidate
-                        break
-                    candidate.close()
-                if time.monotonic() >= deadline and self.settings_target is None:
-                    raise TimeoutError('independent settings debug target unavailable')
-                if self.settings_target is None:
-                    time.sleep(.02)
-        settings = self.settings_target
-        settings.artifact_output = getattr(self, 'artifact_output', None)
-        settings.call('Page.bringToFront')
-        settings.wait('document.getElementById("font-dialog").open', 'settings window did not become ready')
-        return settings
+        self.wait('document.getElementById("font-dialog").open', 'in-app settings did not become ready')
+        return self
 
     def exact(self, size):
         data = self.reader.read(size)

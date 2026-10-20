@@ -46,7 +46,7 @@ manual keyboard input → session-owned send queue → connection
 | [ui/files](../src/ui/files.rs) | 單筆互動式檔案工作及有界最近看板 writer、UI thread 的非同步原生 picker，以及 blocking pool 上的有界讀寫／PNG 解碼；關閉撤銷未開始工作、保留並等待已開始工作 |
 | [ui/lifecycle](../src/ui/lifecycle.rs) | renderer、媒體、鑰匙圈、檔案及命令等待的共同清理擁有者；正常／錯誤退出都停止並 join |
 | [ui/presentation](../src/ui/presentation.rs) | 遮黑後的唯一 Paint、連結／圖片命中、選取及輸出使用的版本核對；字型預覽也使用同一封包 |
-| [ui/settings_window](../src/ui/settings_window.rs) | 單一原生設定視窗、可取消輪詢的建立 future、32 筆有界事件橋接及最後有效修改快照；不持有站端連線或直接讀寫檔案 |
+| [ui/settings_finish](../src/ui/settings_finish.rs) | 主畫面 renderer 結束時保留最後設定修改，於共同 Files drain 後透過同一檔案 worker 保存；不建立視窗或站端連線 |
 | [ui/preferences](../src/ui/preferences.rs) | 生效設定、草稿建構與成功保存後的 commit；初載只由檔案 worker 呼叫，互動時不自行選檔或讀寫 |
 | [ui/bookmarks](../src/ui/bookmarks.rs)／[surface-bookmarks](../assets/surface-bookmarks.js) | Rust 保存後 commit 與壞檔保留；JS 草稿、選取、單筆 request、晚到結果及 dialog 清理。前往只填既有目的地草稿 |
 | [ui/sites](../src/ui/sites.rs)／[surface-sites](../assets/surface-sites.js) | Rust 保存成功後 commit；JS 管理站點草稿／單筆 request，選最愛不連線，明確切站交給唯一 Connection owner |
@@ -100,4 +100,4 @@ Connection 同時擁有防閒置的單調時鐘、預設開啟狀態、UI watch 
 
 合成 probe 的浮球放手觀察附在 renderer finally 的具型別 join 回覆，由同一 Resources 清理 owner 保留；Stopped 通知和 join 的先後不會遺失觀察，也不能把失敗的清理改成成功。正常模式不保存軌跡或觀察檔。
 
-設定視窗由主視窗持有弱 native handle 與建立 future，完成建立後才明確顯示及聚焦；重複開啟沿用同一視窗。Bridge 將設定／預覽／字型清單回覆送到子視窗，其事件白名單不接受站端輸入。生效設定與背景 I/O 仍由 Preferences／Files 擁有；最後有效修改在共同 Files drain 後才覆寫最新設定，避免舊 snapshot 覆蓋主畫面的其他偏好。正常關閉設定先完成 autosave 再隱藏；退出 App 時停止其 JS、join eval 並改為真正關閉 native window。主畫面、PNG 與字型預覽共用 [surface-renderer](../assets/surface-renderer.js)，不複製繪製規則。
+設定使用主 WebView 內的單一 modal dialog，不建立原生子視窗或 App 分頁。搜尋／分類與表單共用既有 settings owner，Bridge 回覆走同一 renderer。Modal 使背景內容 inert，BBS key／text callback 另拒絕開啟中的對話框；關閉先完成 autosave，才恢復輸入焦點，站點／名單管理入口也先完成關閉再交接。退出時同一 renderer 的 finally 回傳最後修改快照，待共同 Files drain 完成後保存；沒有第二個 eval、事件 channel 或 native window lifetime。主畫面、PNG 與字型預覽共用 [surface-renderer](../assets/surface-renderer.js)。

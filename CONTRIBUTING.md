@@ -41,7 +41,7 @@ Windows 免安裝 EXE 變更另跑 desktop lib／bin 測試與 Clippy。`--insta
 
 必須解壓 ZIP 至獨立目錄，核對 manifest 所列 SHA-256，並對解壓的 EXE 執行 `python tooling/check.py desktop --desktop-executable <EXE絕對路徑> --desktop-output <獨立驗證目錄>`。此模式不重新編譯，報告保留 executable 雜湊與 `build_checks_run=false`；兩個程序均從 EXE 所在目錄啟動，使用同一合成／loopback gate，不能將這份 GUI 結果當作編譯或 Clippy 已執行。指定 EXE 必須提供獨立 output，缺檔不能退回 debug binary。未在乾淨 Windows／不同版本／DPI 驗證的範圍仍須分列，實站登入另由使用者人工確認。
 
-Windows CDP runner 以 trusted 點擊浮球與分類揭露功能，操作後經同一浮球返回並收合，避免外部點擊只收合工具而被誤當作 BBS 操作；設定視窗以同一 owned loopback debug port 辨識獨立 .settings-host WebView target，再依可見分類與欄位操作，不能在主 WebView 尋找舊 font-dialog。Vim 採 120ms 按鍵節奏，讓無站端重繪的 no-op 等待同一 command owner 完成；不宣稱最高速連發通過。貼上要求 typed rejected 狀態與目前多站版的原因文字，服務端仍獨立比對精確 bytes。這些是實際 WebView 的自動化操作，不代表實體 IME 候選窗或人工審閱。
+Windows CDP runner 以 trusted 點擊浮球與分類揭露功能，操作後經同一浮球返回並收合，避免外部點擊只收合工具而被誤當作 BBS 操作；設定在同一主 WebView 的 .settings-host #font-dialog 操作，不建立或探索第二個 debug target。Vim 採 120ms 按鍵節奏，讓無站端重繪的 no-op 等待同一 command owner 完成；不宣稱最高速連發通過。貼上要求 typed rejected 狀態與目前多站版的原因文字，服務端仍獨立比對精確 bytes。這些是實際 WebView 的自動化操作，不代表實體 IME 候選窗或人工審閱。
 
 macOS 打包變更另跑 `python3 -m unittest discover -s tooling -p test_bundle_macos.py`，確認圖示轉換失敗不簽署／交付半成品、既有 App 不被覆寫。原生打包後需核對 ICNS 各尺寸、透明角落、plist 指向與 strict 簽章；這些不代替桌面功能 gate。
 
@@ -179,6 +179,6 @@ Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_
 黑白名單／匯入變更另跑 filters 核心與 store、filter_import owner、Files、SurfaceState、所有 JS／Fluent 及 Clippy。自製格式案例涵蓋 UTF-8 BOM、完整 ID、備註分隔、白名單衝突、未支援項目、容量及取消／舊 request。原生 `account_lists` 使用固定測試路徑，確認先預覽、取消零保存、合併後白名單仍顯示、黑名單遮黑、選取複製與 PNG 一致、正常斷線及清理。此探針不代替原生選檔視窗驗收。整行／左緣導覽另核對 `test_surface_links.mjs` 及 `desktop_navigation.py` 的真實 pointer、Shift 選取、光棒範圍與 Canvas 不變；缺平台 runner 仍記 not_ready。
 
 
-統一設定視窗變更另跑完整 JS、desktop lib／bin、Clippy、i18n 與 Python tooling 測試。Windows driver 核對中英文搜尋、實際偏好檔與畫面像素、無效中間值不寫入、分類恢復預設、匯入自動保存及重開；輔助 CDP target 僅接受同一 loopback port、有界八筆 page list，主 driver 關閉時一併釋放。缺少 Windows runner 仍為 not_ready。macOS 原生另核對 ⌘,、品牌與 Lucide、連續修改自動保存、子視窗關閉／重開、設定開啟時 ⌘Q、PNG 與 Close／全部 owner join，還要確認程序退出；只有 cleanup JSON 不能證明沒有隱藏視窗殘留。
+統一設定視窗變更另跑完整 JS、desktop lib／bin、Clippy、i18n 與 Python tooling 測試。Windows driver 核對中英文搜尋、實際偏好檔與畫面像素、無效中間值不寫入、分類恢復預設、匯入自動保存及重開；設定 driver 必須回傳主 target 本身，重複開啟不探索或建立輔助 CDP target。缺少 Windows runner 仍為 not_ready。macOS 原生另核對 ⌘,、品牌與 Lucide、連續修改自動保存、同一主視窗內的對話框關閉／重開、設定開啟時 ⌘Q、PNG 與 Close／全部 owner join，還要確認程序退出；只有 cleanup JSON 不能證明沒有隱藏視窗殘留。
 
 `--probe-surface OUTPUT_DIRECTORY inline_pages --media-origin http://127.0.0.1:PORT` 使用兩頁自製閱讀畫面。同一 URL 在兩頁的 link index／行位置不同，peer 只接受 PageDown、PageUp 及 Close，圖片 HTTP 請求不得因往返重複；仍須兩次 Enter 一個 batch、兩頁可見圖片、PNG 與完整清理。此案例不取代原本零站端 bytes 的 inline 探針。

@@ -17,7 +17,6 @@ use tokio::sync::watch;
 #[derive(Clone, PartialEq, Props)]
 pub struct AppProps {
     pub probe: Option<PathBuf>,
-    pub debug_port: Option<u16>,
     pub window_probe: bool,
     pub login_probe: bool,
     pub filters_probe: bool,
@@ -37,7 +36,6 @@ pub fn app(props: AppProps) -> Element {
                 .encode(include_bytes!("../../assets/icons/pttstella.png"))
         )
     });
-    let debug_port = props.debug_port;
     let probing = props.probe.is_some();
     let window_probe = props.window_probe;
     let login_probe = props.login_probe;
@@ -278,6 +276,7 @@ pub fn app(props: AppProps) -> Element {
                 }
             }
             }
+            div { class: "settings-host", SettingsForm{} }
             section { class: "workspace",
                 div { class: "surface", id: "surface",
                     onmounted: move |_| {
@@ -287,7 +286,7 @@ pub fn app(props: AppProps) -> Element {
                         let surface_probe = surface_probe.clone();
                         let settings_requests = settings_requests.1.clone();
                         spawn(async move {
-                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, Options { debug_port, settings_requests, reload_settings, media_origin, window_probe, login_probe, filters_probe, surface_probe:surface_probe.clone() }).await;
+                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, Options { settings_requests, reload_settings, media_origin, window_probe, login_probe, filters_probe, surface_probe:surface_probe.clone() }).await;
                             if let Err(error) = result {
                                 fatal.set(true);
                                 message.set(pttstella::msg!("fatal-reopen", error = error));

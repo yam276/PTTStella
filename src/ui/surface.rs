@@ -30,7 +30,6 @@ use super::{
 
 /// Named launch options keep call sites independent of positional booleans.
 pub(super) struct Options {
-    pub(super) debug_port: Option<u16>,
     pub(super) settings_requests: watch::Receiver<u64>,
     pub(super) reload_settings: bool,
     pub(super) media_origin: Option<String>,
@@ -142,7 +141,6 @@ async fn run(
         mut pending_paste,
     } = signals;
     let Options {
-        debug_port,
         mut settings_requests,
         reload_settings,
         media_origin,
@@ -186,7 +184,6 @@ async fn run(
         tools: _,
         settings,
     } = resources;
-    settings.configure(probe.as_deref(), debug_port, reload_settings);
     let script = [
         "const fluent = (() => {const exports = {}; const module = {exports};\n",
         include_str!("../../assets/vendor/fluent/index.js"),
@@ -198,6 +195,9 @@ async fn run(
         include_str!("../../assets/surface-packets.js"),
         include_str!("../../assets/surface-fonts.js"),
         include_str!("../../assets/surface-renderer.js"),
+        include_str!("../../assets/settings-catalog.js"),
+        include_str!("../../assets/surface-settings.js"),
+        include_str!("../../assets/surface-settings-host.js"),
         include_str!("../../assets/surface-sites.js"),
         include_str!("../../assets/surface-login.js"),
         include_str!("../../assets/surface-navigation.js"),
@@ -840,7 +840,7 @@ async fn run(
                     },
                     SurfaceEvent::SettingsVisibility {open} => {settings_visible=open;eval.send(Packet::SettingsVisibility(open)).map_err(|e|e.to_string())?;},
                     SurfaceEvent::SettingsLaunch {feature,..} => {
-                        eval.focus_main();eval.send(Packet::SettingsLaunch(feature)).map_err(|e|e.to_string())?;
+                        eval.send(Packet::SettingsLaunch(feature)).map_err(|e|e.to_string())?;
                     }
                     SurfaceEvent::SettingsOpen { trusted: _ } => {
                         settings_visible=true;connection.keep_alive_gate(receiver.borrow().stamp(),false);eval.send(Packet::SettingsVisibility(true)).map_err(|e|e.to_string())?;

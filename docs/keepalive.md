@@ -27,4 +27,4 @@ Connection 擁有唯一單調時鐘與送出序列。一般週期每秒檢查一
 
 Windows WebView 以 trusted 輸入核對預設開啟、切換、選字／組字／dialog／未知畫面的 owner 暫停與恢復，並執行既有畫面、PNG、導覽及清理 gate。未完成實站長時間登入後驗收、實體 IME／睡眠恢復、macOS 或 Linux 驗證；不宣稱所有 timeout 或站端斷線均可避免。
 
-獨立設定視窗開啟時，Rust 立即撤銷 Connection 的保活 gate，並同步主 WebView 的 settings visibility；後續 gate 也必須核對該狀態。子視窗關閉後，由原本畫面／輸入版本重新判定是否恢復，設定視窗不建立第二個 timer。
+主視窗內的設定對話框開啟時，Rust 立即撤銷 Connection 的保活 gate，並同步主 WebView 的 settings visibility；後續 gate 也必須核對該狀態。對話框關閉後，由原本畫面／輸入版本重新判定是否恢復，設定視窗不建立第二個 timer。

@@ -17,13 +17,15 @@ pub(super) struct Resources {
     pub(super) login: Option<Job>,
     pub(super) commands: Pending,
     pub(super) files: Files,
-    pub(super) settings: super::settings_window::SettingsWindow,
+    pub(super) settings: super::settings_finish::RetainedEdits,
     pub(super) tools: Option<super::protocol::ToolsObservation>,
 }
 
 #[derive(serde::Deserialize)]
 struct RendererFinished {
     clean: bool,
+    #[serde(default)]
+    settings: super::settings_finish::Snapshot,
     #[serde(default)]
     tools: Option<super::protocol::ToolsObservation>,
 }
@@ -115,6 +117,7 @@ impl Resources {
                 Some(eval) => renderer(eval).await,
                 None => Ok(RendererFinished {
                     clean: true,
+                    settings: Default::default(),
                     tools: None,
                 }), // Preflight failed before JS was created.
             }
@@ -140,8 +143,22 @@ impl Resources {
             Duration::from_secs(5),
         )
         .await;
+        let (renderer, snapshot) = match renderer {
+            Ok(finished) => {
+                self.tools = finished.tools;
+                (
+                    if finished.clean {
+                        Ok(())
+                    } else {
+                        Err(pttstella::msg!("cleanup-listeners-stopped"))
+                    },
+                    finished.settings,
+                )
+            }
+            Err(error) => (Err(error), Default::default()),
+        };
         let settings = retained_wait(
-            self.settings.finish(),
+            self.settings.finish(snapshot),
             || message.set(pttstella::msg!("cleanup-wait")),
             Duration::from_secs(5),
         )
@@ -151,14 +168,6 @@ impl Resources {
             (Err(error), Ok(())) => Err(error),
             (Err(error), Err(settings)) => Err(format!("{error}；{settings}")),
         };
-        let renderer = renderer.and_then(|finished| {
-            self.tools = finished.tools;
-            if finished.clean {
-                Ok(())
-            } else {
-                Err(pttstella::msg!("cleanup-listeners-stopped"))
-            }
-        });
         let renderer = match (renderer, files) {
             (Ok(()), result) => result,
             (Err(error), Ok(())) => Err(error),

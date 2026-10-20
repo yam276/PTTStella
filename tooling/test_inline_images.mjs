@@ -28,7 +28,7 @@ test('Enter expansion is only offered on an idle local reading page',()=>{
 });
 test('production key handler consumes repeated Enter without sending station bytes',()=>{
     const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');const sent=[];
-    const context={inlineShortcut,keyboardState:{enabled:true,mode:'normal',pending:false},latest:{presentation:3,ptt_features:true,connected:true,navigation:{kind:'article_reading'},image_links:[0],mouse:{route:'local'}},
+    const context={document:{querySelector:()=>null},inlineShortcut,keyboardState:{enabled:true,mode:'normal',pending:false},latest:{presentation:3,ptt_features:true,connected:true,navigation:{kind:'article_reading'},image_links:[0],mouse:{route:'local'}},
         stationMouse:{revoke(){}},cancelHover(){},pastePending:false,composing:false,hasSelection:()=>false,clearSelection(){},cancelDrag(){},stamp:()=>({generation:7,revision:4,input_epoch:2}),send:v=>sent.push(JSON.parse(JSON.stringify(v)))};
     vm.runInNewContext(surface.slice(surface.indexOf('function keydown('),surface.indexOf('function input(')),context);
     const event={key:'Enter',code:'Enter',isTrusted:true,ctrlKey:false,altKey:false,shiftKey:false,repeat:false,preventDefault(){}};
@@ -81,4 +81,14 @@ test('context hit testing uses inserted image boxes and drops stale indices on r
     assert.equal(e.ui.linkAtPoint({clientX:220,clientY:100}),-1);
     assert.equal(e.ui.linkAtPoint({clientX:100,clientY:79}),-1);
     e.ui.reset();assert.equal(e.ui.linkAtPoint({clientX:100,clientY:100}),-1);await e.ui.destroy();
+});
+
+test('an open modal rejects BBS key and text callbacks without forwarding to the station',()=>{
+ const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8'),sent=[];
+ const context={document:{querySelector:()=>({open:true})},keyboard:{value:'private setting'},send:p=>sent.push(p)};
+ const begin=surface.indexOf('function keydown('),end=surface.indexOf('function input(');
+ vm.runInNewContext(surface.slice(begin,end),context);
+ let prevented=false;context.keydown({key:'Enter',isTrusted:true,preventDefault(){prevented=true;}});
+ const inputEnd=surface.indexOf('function ',end+10);vm.runInNewContext(surface.slice(end,inputEnd),context);
+ context.input({data:'text',isTrusted:true});assert.ok(prevented);assert.equal(sent.length,0);assert.equal(context.keyboard.value,'');
 });

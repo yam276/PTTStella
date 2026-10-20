@@ -19,23 +19,32 @@ test('settings search contains only the fixed product index and closed navigatio
  assert.equal(searchSettings(entries,'<img src=x onerror=alert(1)>').length,0);
  assert.equal(searchSettings(entries,'x'.repeat(10000)).length,0);
 });
-test('native settings shortcut captures before BBS input and ignores IME, repeats and untrusted events',()=>{
- const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
- const begin=source.indexOf('const settingsUi='),end=source.indexOf('const loginUi=',begin);
- const document={},sent=[];document.getElementById=()=>({});
- const ui=vm.runInNewContext(source.slice(begin,end)+'\nsettingsUi',{
-  document,send:value=>sent.push(value),stationMouse:{revoke(){}},cancelHover(){},policy(){},
+test('in-app settings shortcut reuses the dialog and captures before BBS input',()=>{
+ const source=readFileSync(new URL('../assets/surface-settings-host.js',import.meta.url),'utf8');
+ const dialog={open:false},search={focus(){focused++;}},document={getElementById:id=>id==='font-dialog'?dialog:search};
+ let requested=0,focused=0,closed=0,disposed=0;const sent=[];
+ const factory=vm.runInNewContext(source+'\ncreateSurfaceSettings',{
+  createSettingsDialog:options=>({bindings:[],request(){requested++;},close(){closed++;},open(){dialog.open=true;},destroy(){disposed++;}}),
+  createSettingsNavigation:()=>({bindings:[],current:()=>"general",destroy(){}})
  });
- const binding=ui.bindings.find(([node])=>node===document);
- assert.equal(binding[3],true,'must intercept before the textarea target handler');
- for(const modifier of ['ctrlKey','metaKey']){
-  let prevented=false,stopped=false;
-  binding[2]({key:',',[modifier]:true,isTrusted:true,preventDefault(){prevented=true;},stopImmediatePropagation(){stopped=true;}});
-  assert.ok(prevented&&stopped);assert.equal(sent.at(-1).kind,'settings_open');
- }
- const count=sent.length;
- for(const changes of [{isComposing:true},{isTrusted:false},{repeat:true},{key:'a'}]){
-  binding[2]({key:',',ctrlKey:true,isTrusted:true,preventDefault(){},stopImmediatePropagation(){},...changes});
- }
- assert.equal(sent.length,count);
+ const ui=factory({document,send:v=>sent.push(v),tr:()=>''});
+ const binding=ui.bindings.find(([node])=>node===document);assert.equal(binding[3],true);
+ function shortcut(extra={}){let prevented=false,stopped=false;binding[2]({key:',',ctrlKey:true,isTrusted:true,preventDefault(){prevented=true;},stopImmediatePropagation(){stopped=true;},...extra});return prevented&&stopped;}
+ assert.ok(shortcut());assert.equal(requested,1);
+ dialog.open=true;assert.ok(shortcut());assert.equal(requested,1);assert.equal(focused,1);
+ for(const extra of [{isComposing:true},{isTrusted:false},{repeat:true},{key:'a'}])shortcut(extra);
+ assert.equal(requested,1);assert.equal(focused,1);assert.equal(sent.length,0);ui.destroy();assert.equal(disposed,1);
+});
+
+test('settings management handoff waits for the autosave-aware modal close',()=>{
+ const source=readFileSync(new URL('../assets/surface-settings-host.js',import.meta.url),'utf8');
+ let options,navigation,closeCalls=0;const sent=[];
+ const factory=vm.runInNewContext(source+'\ncreateSurfaceSettings',{
+  createSettingsDialog:o=>{options=o;return {bindings:[],close(){closeCalls++;},destroy(){}};},
+  createSettingsNavigation:o=>{navigation=o;return {bindings:[],current:()=>"sites",destroy(){}};}
+ });
+ const ui=factory({document:{getElementById:()=>({open:true})},send:v=>sent.push(JSON.parse(JSON.stringify(v))),tr:()=>''});
+ navigation.launch('sites',{isTrusted:true});assert.equal(closeCalls,1);assert.equal(sent.length,0);
+ options.onClose();assert.deepEqual(sent,[{kind:'settings_visibility',open:false},{kind:'settings_launch',feature:'sites',trusted:true}]);
+ options.onClose();assert.equal(sent.filter(x=>x.kind==='settings_launch').length,1);ui.destroy();
 });
