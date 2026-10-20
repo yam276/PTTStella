@@ -4,13 +4,25 @@
 
 ## 目標
 
-目前交付為 `dist/macos-merged-replies-final/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：新增連續同 ID 推文合併與貼上讀鎖修正，包含兩種黑名單、白名單 ID 改色及先前文章瀏覽功能。最新驗證見下方連續推文分節；各歷史交付與人工驗收邊界保留於各節。原生正文滑鼠仍由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-account-actions-final/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：新增文章字串右鍵快速名單與單一 ID 推文暫時篩選，包含先前連續 ID 合併與文章瀏覽功能。離線通過，這兩個新增入口的完整原生流程仍待驗；最新範圍見下方快速名單分節；各歷史交付與人工驗收邊界保留於各節。原生正文滑鼠仍由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 文章快速名單與暫時只看單一 ID（2026-10-20）
+
+使用者要求文章字串右鍵加入兩種黑名單／白名單，以及左鍵點推文只看該 ID。已實作 Rust 可見完整字串候選與已辨識推文 metadata，三個明確名單選項共用保存 owner；暫時篩選在快取後投影，不改永久名單。再次點同 ID 或右鍵恢復全部；網址／Shift／拖曳優先，其他推文整行塗黑且輸出一致。
+
+離線 core 13 commands／2 replays（filters 16 案例）、desktop lib 142／bin 90、JS 169、全 targets Clippy、fmt 與 docs 通過。新增案例覆蓋完整／過長／非法／遮罩字串、三策略保存前准入與保留備註、input epoch／過期 ACK 拒絕、推文整行篩選與連結移除、合併 ID 的 Rust 歸屬、切換恢復、來源 PNG、快取跨頁／新段／session，以及原生 pointer handler 的網址優先、Shift／拖曳／過期手勢不送操作。初次 bin 編譯有新增 match block 的逗號語法錯誤，修正後完整 bin／Clippy 重跑通過。
+
+原生為部分完成，**不是完整 passed**：macOS arm64 Dioxus／WKWebView 的合成閱讀頁，真正右鍵 Alice 顯示目標 ID 與三個選項，遮內容及白名單兩次保存均正確；獨立檔案確認 mask／allow，PNG 960×576 的兩行內容遮罩與 ID 亮青色正確，排除這些指定範圍後其他像素完全相同。整行黑名單快捷入口、暫時篩選／恢復及其原生 PNG 尚未完成；Rust／JS 結果不代替這些 UI 驗收。正文左鍵／拖曳手感仍留使用者，實站與 Windows／Linux UI 未驗。
+
+第一輪為測試方便把游標移至正文，導致正常閱讀辨識拒絕，已修正合成 probe、保持產品契約。第二輪 CUA 座標操作間歇 `noWindowsAvailable`，全螢幕短暫恢復後再次受阻，loopback 最終逾時且 cleanup report 不完整，程序退出 0 不算通過。工具在關閉後讀取視窗會重新啟動同名副本；已關閉其重啟程序，以全新 bundle identity 第三輪仍遭同一座標限制，因此停止 UI 操作；第三輪 Close acknowledged、完整 cleanup、退出 0，但功能 gate 仍 failed／not_ready。所有測試 App 程序已結束，未遺留正常連線副本。
+
+交付與第二／三輪副本的 15 份 Mach-O sections 一致，strict codesign 通過。證據為 `.local/verification/account-actions/validation.json`（status: partial），離線 `checks`／`checks-fixture-fix`，原生 `native-final`／`native-r2`／`native-r3`。正常 60 GiB aggregate 因其他專案預留拒絕，沿用使用者先前額度例外的 scoped 192 GiB wrapper，保留 100 GiB free floor、16 GiB namespace、locks／watchdog，不改全域政策或清理其他 target。
 
 ## 連續推文 ID 合併（2026-10-20）
 

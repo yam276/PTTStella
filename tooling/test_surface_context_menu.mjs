@@ -76,3 +76,20 @@ test("a cancelled dismissing gesture cannot swallow a later independent click",(
     f.fire(f.doc,"pointerdown",f.event({target:{}}));
     const next=f.event({target:{}});f.fire(f.doc,"click",next);assert.equal(next.stopped,undefined);
 });
+
+test('three account policies require a visible Rust word and local PTT reading; focused replies have restore',()=>{
+    const state={...base,reading:true,word:{row:5,start:3,end:8,id:'Alice'},focused:true};
+    const actions=['account-mask','account-mask-row','account-allow'];
+    for(const action of actions)assert.equal(contextMenuItems(state).get(action),true);
+    assert.equal(contextMenuItems(state).get('reply-focus-clear'),true);
+    for(const change of [{word:null},{ptt:false},{reading:false},{local:false}])for(const action of actions)assert.equal(contextMenuItems({...state,...change}).has(action),false);
+});
+test('context account actions send bounded coordinates and explicit policy, not arbitrary ID text',()=>{
+    const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8'),sent=[];
+    const state={stopped:false,blocked:()=>false,contextMenuItems:()=>new Map(['account-mask','account-mask-row','account-allow','reply-focus-clear'].map(x=>[x,true])),contextState:()=>({}),
+      latest:{presentation:3},stamp:()=>({generation:7,revision:4,input_epoch:2}),send:p=>sent.push(JSON.parse(JSON.stringify(p)))};
+    vm.createContext(state);vm.runInContext(surface.slice(surface.indexOf('function contextAction('),surface.indexOf('function activate(')),state);
+    for(const action of ['account-mask','account-mask-row','account-allow','reply-focus-clear'])state.contextAction(action,{index:-1,word:{row:5,start:3,id:'Alice'}},{isTrusted:true});
+    assert.deepEqual(sent.slice(0,3).map(p=>[p.kind,p.row,p.col,p.policy]),[['account_rule',5,3,'mask'],['account_rule',5,3,'mask_row'],['account_rule',5,3,'allow']]);
+    assert.equal(sent[3].row,null);assert.ok(sent.every(p=>!('id' in p)));
+});

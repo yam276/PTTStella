@@ -602,3 +602,11 @@ article-mode-help = 網頁模式累積已讀分頁並可展開圖片；終端機
 settings-alias-article-mode = article mode web terminal 文章模式 網頁 終端機
 
 filters-policy-mask-row = 黑名單（整行塗黑）
+
+account-mask = 加入黑名單：遮內容、保留 ID
+account-mask-row = 加入黑名單：整行塗黑
+account-allow = 加入白名單
+reply-focus-clear = 顯示全部推文
+reply-focus-hint = 點擊只看此 ID 的推文；再點一次恢復全部，Shift 或拖曳選字
+account-action-stale = 畫面已改變，請重新在 ID 上按右鍵。
+reply-focus = 切換只看此 ID 推文

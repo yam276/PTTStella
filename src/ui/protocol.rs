@@ -73,6 +73,20 @@ pub(super) enum SurfaceEvent {
     FiltersOpen {
         trusted: bool,
     },
+    AccountRule {
+        presentation: u64,
+        stamp: Stamp,
+        row: usize,
+        col: usize,
+        policy: pttstella::filters::Policy,
+        trusted: bool,
+    },
+    ReplyFocus {
+        presentation: u64,
+        stamp: Stamp,
+        row: Option<usize>,
+        trusted: bool,
+    },
     FiltersEdit {
         id: String,
         note: String,
@@ -324,6 +338,8 @@ impl SurfaceEvent {
                 | Self::RecentBoardsClear { .. }
                 | Self::FiltersOpen { .. }
                 | Self::FiltersEdit { .. }
+                | Self::AccountRule { .. }
+                | Self::ReplyFocus { .. }
                 | Self::FiltersImport { .. }
                 | Self::FiltersImportApply { .. }
                 | Self::FiltersImportCancel { .. }
@@ -352,7 +368,9 @@ impl SurfaceEvent {
             // Revocation grants no input; it still cannot cross a session.
             StationMouseCancel { lease } => lease.stamp.generation == generation,
             StationMouseRevoke { generation: source } => *source == generation,
-            InlineExpand { trusted, stamp, .. } => *trusted && stamp.generation == generation,
+            AccountRule { trusted, stamp, .. }
+            | ReplyFocus { trusted, stamp, .. }
+            | InlineExpand { trusted, stamp, .. } => *trusted && stamp.generation == generation,
             Key {
                 trusted,
                 generation: source,

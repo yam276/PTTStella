@@ -608,3 +608,11 @@ article-mode-help = Web mode joins visited pages and supports inline images. Ter
 settings-alias-article-mode = article mode web terminal 文章模式 網頁 終端機
 
 filters-policy-mask-row = Black out entire row
+
+account-mask = Block content, keep ID
+account-mask-row = Block entire row
+account-allow = Add to whitelist
+reply-focus-clear = Show all replies
+reply-focus-hint = Click to focus this ID; click again to show all. Shift or drag to select text.
+account-action-stale = The screen changed. Right-click the ID again.
+reply-focus = Toggle replies from this ID

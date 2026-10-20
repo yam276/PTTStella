@@ -151,3 +151,13 @@ test('home menu hover marker spans both edges of the terminal grid',()=>{
     assert.equal(f.navigationMarker.hidden,false);assert.equal(f.navigationMarker.style.left,'0px');
     assert.equal(f.navigationMarker.style.width,'960px');assert.equal(f.navigationMarker.style.height,'24px');
 });
+
+test('reply rows focus before back/page, retain links and reject dragged, stale or Shift gestures',()=>{
+    const f=fixture();f.latest.reply_rows=[5];f.tap(4,5*24+12);
+    assert.deepEqual(f.sent,[{kind:'reply_focus',presentation:2,stamp:{generation:7,revision:4,input_epoch:0},row:5,trusted:true}]);
+    const link=fixture();link.latest.reply_rows=[5];link.linkAt=()=>2;link.tap(4,5*24+12);assert.equal(link.sent[0].kind,'open_link');
+    for(const kind of ['shift','drag','stale','untrusted']){
+        const x=fixture();x.latest.reply_rows=[5];const e=x.event(4,5*24+12,{shiftKey:kind==='shift',isTrusted:kind!=='untrusted'});
+        x.pointerdown(e);if(kind==='stale')x.latest.presentation++;x.pointerup(kind==='drag'?x.event(5,5*24+12):e);x.click(e);assert.deepEqual(x.sent,[],kind);
+    }
+});

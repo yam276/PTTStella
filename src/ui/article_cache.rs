@@ -85,6 +85,12 @@ pub(super) fn reading_intent(bytes: &[u8]) -> Option<pttstella::navigation::Inte
     })
 }
 impl ArticleCache {
+    // Focus is applied after caching and must not discard unmasked history.
+    pub(super) fn focus_version(&mut self, version: u64) {
+        if let Some((_, policy)) = &mut self.scope {
+            *policy = version;
+        }
+    }
     pub(super) fn active(&self) -> bool {
         !self.rows.is_empty()
     }

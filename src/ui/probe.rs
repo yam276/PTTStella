@@ -81,6 +81,8 @@ pub(super) struct Checks {
     pub(super) verification_rejected: bool,
     pub(super) verification_browsing: bool,
     pub(super) filter_edits: usize,
+    pub(super) account_rule_actions: usize,
+    pub(super) reply_focus_actions: usize,
     pub(super) filter_reveals: usize,
     pub(super) filter_copies: usize,
     pub(super) filter_hover_requests: usize,
@@ -513,7 +515,7 @@ pub(super) fn surface_sample(
             let sample: serde_json::Value = serde_json::from_str(include_str!("../../tests/fixtures/navigation.json")).map_err(|e|e.to_string())?;
             encoding::encode(sample["list"].as_str().ok_or("missing synthetic article fixture")?).map_err(|e|e.to_string())
         }
-        Some("account_lists" | "merged_replies") => {
+        Some("account_lists" | "merged_replies" | "account_actions") => {
             let sample: serde_json::Value =
                 serde_json::from_str(include_str!("../../tests/fixtures/filters.json"))
                     .map_err(|e| e.to_string())?;

@@ -8,6 +8,7 @@ const source=readFileSync(new URL("../assets/surface.js",import.meta.url),"utf8"
 function handler(name,next,context){
     vm.createContext(context);
     vm.runInContext(source.slice(source.indexOf("function navigationBackRegion("),source.indexOf("function hitAt(")),context);
+    vm.runInContext(source.slice(source.indexOf("function accountWordAt("),source.indexOf("function contextState(")),context);
     vm.runInContext(source.slice(source.indexOf(`function ${name}(`),source.indexOf(`function ${next}(`)),context);
     return context[name];
 }

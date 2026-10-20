@@ -483,7 +483,9 @@ async fn run(
                             Err(error)=>{filter_import.cancel(request);Packet::FiltersResult(FiltersResult::ImportRejected{request,message:error.to_string()})},
                         }
                     },
-                    FileCompletion::Filters(result)=>match result {
+                    FileCompletion::Filters(result)=>{
+                        eval.send(Packet::Notice(match &result { Ok(_) => pttstella::msg!("filters-saved"), Err(error) => error.to_string() })).map_err(|e|e.to_string())?;
+                        match result {
                         Ok(rules)=>{
                             inline_images.close();eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
                             screen.replace_rules(rules);filter_warning=None;checks.filter_edits+=1;
@@ -492,6 +494,7 @@ async fn run(
                             Packet::FiltersResult(FiltersResult::Saved{entries:screen.rules().entries.clone(),message:pttstella::msg!("filters-saved")})
                         },
                         Err(error)=>Packet::FiltersResult(FiltersResult::Rejected{message:error.to_string()}),
+                        }
                     },
                     FileCompletion::Profile(result)=>Packet::ProfileResult(result.unwrap_or_else(|error|super::outbound::ProfileResult::Rejected{notice:error.to_string()})),
                     FileCompletion::Export{selected,result}=>match result {
@@ -719,6 +722,23 @@ async fn run(
                     SurfaceEvent::FiltersOpen { trusted: _ } => {
                         filter_import.clear();
                         eval.send(Packet::FiltersOpen(FiltersOpen{entries:screen.rules().entries.clone(),warning:filter_warning.clone()})).map_err(|e|e.to_string())?;
+                    }
+                    SurfaceEvent::AccountRule { presentation, stamp, row, col, policy, .. } => {
+                        let rules = screen.account_rule(Identity{presentation,generation:stamp.generation,revision:stamp.revision},stamp,row,col,policy,&receiver.borrow());
+                        let Some(rules) = rules else {eval.send(Packet::Notice(pttstella::msg!("account-action-stale"))).map_err(|e|e.to_string())?;continue;};
+                        checks.account_rule_actions+=1;
+                        filter_import.clear();
+                        if let Err(message)=files.start(|permit|files::save_filters(permit,filter_store.clone(),rules)) {
+                            eval.send(Packet::Notice(message)).map_err(|e|e.to_string())?;
+                        }
+                    }
+                    SurfaceEvent::ReplyFocus { presentation, stamp, row, .. } => {
+                        if screen.focus_reply(Identity{presentation,generation:stamp.generation,revision:stamp.revision},stamp,row,&receiver.borrow()) {
+                            checks.reply_focus_actions+=1;
+                            media_preview.close();inline_images.close();
+                            eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
+                            eval.send(Packet::HoverReset{media:true}).map_err(|e|e.to_string())?;
+                        }
                     }
                     SurfaceEvent::FiltersEdit {
                         id,
@@ -1403,6 +1423,7 @@ async fn run(
                 || matches!(case.as_str(),"mouse"|"mouse_boundary") && checks.mouse_passed(case=="mouse_boundary") && receiver.borrow().mouse.active.is_none()
                 || matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") && checks.mouse_samples_passed(&case) && receiver.borrow().mouse.active.is_none() && receiver.borrow().mouse.modes.tracking()==pttstella::mouse::Tracking::Highlight
                 || case=="pointer_rows" && checks.navigation_requests==7 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
+                || case=="account_actions" && checks.account_rule_actions>=3 && checks.filter_edits>=3 && checks.reply_focus_actions>=2 && checks.export_checked
                 || case=="merged_replies" && checks.context_copies>=1 && checks.export_checked
                 || matches!(case.as_str(),"account_lists"|"account_articles") && checks.filter_edits>=3 && checks.context_copies>=1 && checks.export_checked
                 || matches!(case.as_str(),"inline"|"inline_pages"|"context_menu") && checks.inline_requests>=2 && checks.inline_expands==1 && checks.export_checked && (case!="inline_pages"||checks.navigation_requests==1) && (case!="context_menu"||checks.context_copies>=2)
@@ -1429,6 +1450,8 @@ async fn run(
             "paste_preview_preserved":pending_paste.read().is_some(),
             "settings_saved":checks.settings_saved,"full_png":checks.export_checked,"rows_png":checks.rows_export_checked,"media_external_requests":checks.media_external,
         });
+        surface_report["account_rule_actions"] = checks.account_rule_actions.into();
+        surface_report["reply_focus_actions"] = checks.reply_focus_actions.into();
         surface_report["context_copies"] = checks.context_copies.into();
         surface_report["final_site"] = serde_json::json!(receiver.borrow().site);
         surface_report["sites_final"] =

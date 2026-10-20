@@ -73,6 +73,7 @@ struct SelectedRows {
 pub(super) struct SurfaceState {
     article: super::article_cache::ArticleCache,
     raw_reading: bool,
+    reply_focus: Option<(u64, Option<u64>, String)>,
     article_mode: ArticleMode,
     filters: filters::State,
     in_flight: Option<Paint>,
@@ -87,6 +88,7 @@ impl SurfaceState {
         Self {
             article: Default::default(),
             raw_reading: false,
+            reply_focus: None,
             article_mode: ArticleMode::default(),
             filters: filters::State::new(rules),
             in_flight: None,
@@ -125,7 +127,41 @@ impl SurfaceState {
         if !self.raw_reading && self.article_mode == ArticleMode::Web {
             self.article.project(&mut packet);
         }
+        if self
+            .reply_focus
+            .as_ref()
+            .is_some_and(|(generation, article, _)| {
+                *generation != view.generation || *article != packet.article.as_ref().map(|a| a.id)
+            })
+        {
+            self.reply_focus = None;
+            self.focus_changed();
+            packet.presentation = self.filters.version();
+        }
         super::presentation::merge_replies(&mut packet, &source_replies);
+        packet.reply_rows = packet
+            .replies
+            .iter()
+            .filter(|p| {
+                packet
+                    .frame
+                    .glyphs
+                    .iter()
+                    .any(|g| g.row == p.row && g.text != "█" && g.text != " ")
+            })
+            .map(|p| p.row)
+            .collect();
+        if let Some((_, _, id)) = &self.reply_focus {
+            filters::focus_pushes(&mut packet.frame, &packet.replies, id);
+            if let Some(source) = &mut packet.source_frame {
+                filters::focus_pushes(source, &source_replies, id);
+            }
+            packet.reply_focus = Some(id.clone());
+        }
+        if view.site.ptt_features() && matches!(packet.navigation, Context::ArticleReading { .. }) {
+            packet.account_words = filters::account_words(&packet.frame);
+        }
+        super::presentation::refresh_links(&mut packet);
         packet.hover = self
             .hover
             .as_ref()
@@ -134,6 +170,85 @@ impl SurfaceState {
         self.in_flight = Some(packet);
         self.dirty = false;
         self.in_flight.as_ref()
+    }
+    fn focus_changed(&mut self) {
+        self.filters.touch();
+        self.article.focus_version(self.filters.version());
+        self.revoke_output();
+        self.selected = None;
+        self.hover = None;
+        self.dirty = true;
+    }
+    fn account_paint(&self, identity: Identity, stamp: Stamp, view: &View) -> Option<&Paint> {
+        self.current(identity, view).filter(|p| {
+            view.site.ptt_features()
+                && view.phase == Phase::Connected
+                && !view.input_pending
+                && !view.login_pending
+                && stamp == view.stamp()
+                && p.input_epoch == stamp.input_epoch
+                && view.mouse.route == pttstella::mouse::input::Route::Local
+                && matches!(p.navigation, Context::ArticleReading { .. })
+        })
+    }
+    pub(super) fn account_rule(
+        &self,
+        identity: Identity,
+        stamp: Stamp,
+        row: usize,
+        col: usize,
+        policy: filters::Policy,
+        view: &View,
+    ) -> Option<Result<filters::Rules, String>> {
+        let word = self
+            .account_paint(identity, stamp, view)?
+            .account_words
+            .iter()
+            .find(|w| w.row == row && w.start <= col && col < w.end)?;
+        let note = self
+            .rules()
+            .entries
+            .iter()
+            .find(|e| e.id.eq_ignore_ascii_case(&word.id))
+            .map_or("", |e| e.note.as_str());
+        Some(self.rules().edit_policy(&word.id, note, policy, false))
+    }
+    pub(super) fn focus_reply(
+        &mut self,
+        identity: Identity,
+        stamp: Stamp,
+        row: Option<usize>,
+        view: &View,
+    ) -> bool {
+        let Some(paint) = self.account_paint(identity, stamp, view) else {
+            return false;
+        };
+        let next = if let Some(row) = row {
+            if !paint.reply_rows.contains(&row) {
+                return false;
+            }
+            let Some(reply) = paint.replies.iter().find(|p| p.row == row) else {
+                return false;
+            };
+            if self
+                .reply_focus
+                .as_ref()
+                .is_some_and(|(_, _, id)| id.eq_ignore_ascii_case(&reply.id))
+            {
+                None
+            } else {
+                Some((
+                    view.generation,
+                    paint.article.as_ref().map(|a| a.id),
+                    reply.id.clone(),
+                ))
+            }
+        } else {
+            None
+        };
+        self.reply_focus = next;
+        self.focus_changed();
+        true
     }
     pub(super) fn acknowledge(&mut self, identity: Identity) -> Result<(), String> {
         if self.in_flight.as_ref().map(Identity::of) != Some(identity) {
@@ -240,6 +355,7 @@ impl SurfaceState {
         }
         self.raw_reading = raw;
         self.article.clear();
+        self.reply_focus = None;
         self.display_changed();
         true
     }
@@ -307,12 +423,17 @@ impl SurfaceState {
             .continue_fetch(&view.context(), view.frame.revision)
     }
     pub(super) fn clear_article(&mut self) {
+        self.reply_focus = None;
         self.article.clear();
     }
     pub(super) fn article_input(&mut self, context: &Context, bytes: &[u8]) {
+        if !super::article_cache::reading_input(context, bytes) {
+            self.reply_focus = None;
+        }
         self.article.input(context, bytes);
     }
     fn policy_changed(&mut self) {
+        self.reply_focus = None;
         self.article.clear();
         self.revoke_output();
         self.selected = None;
@@ -339,6 +460,19 @@ impl SurfaceState {
     /// Its snapshot stays ineligible for current interactions after this update.
     pub(super) fn update(&mut self, view: &View) -> bool {
         self.article.observe(view);
+        if self
+            .reply_focus
+            .as_ref()
+            .is_some_and(|(generation, _, _)| *generation != view.generation)
+            || view.phase != Phase::Connected
+            || !view.site.ptt_features()
+            || (!view.output_pending
+                && !view.input_pending
+                && view.frame.control_complete
+                && !matches!(view.context(), Context::ArticleReading { .. }))
+        {
+            self.reply_focus = None;
+        }
         let version = self.filters.version();
         self.filters.sync(view.generation, view.frame.revision);
         if self.output.as_ref().is_some_and(|active| {
@@ -360,6 +494,9 @@ impl SurfaceState {
         let mut filtered = self.filters.project(view.generation, &view.frame);
         if view.site.ptt_features() {
             filters::merge_push_ids(&mut filtered.frame, &filters::pushes(&view.frame));
+        }
+        if let Some((_, _, id)) = &self.reply_focus {
+            filters::focus_pushes(&mut filtered.frame, &filters::pushes(&view.frame), id);
         }
         let revoked = self.hover.as_mut().is_some_and(|lease| {
             !lease.renew(

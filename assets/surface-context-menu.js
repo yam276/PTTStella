@@ -2,6 +2,9 @@
 function contextMenuItems(state) {
     const entries=new Map();
     const add=(name,enabled=true)=>entries.set(name,enabled);
+    if(state.word&&state.ptt&&state.reading&&state.local){add("account-mask",state.ready);add("account-mask-row",state.ready);add("account-allow",state.ready);}
+    if(state.replyRow!==null&&state.replyRow!==undefined&&state.local)add("reply-focus",state.ready);
+    if(state.focused&&state.local)add("reply-focus-clear",state.ready);
     if(state.selection){add("copy",state.selectionReady);add("export-rows",state.rowsReady);}
     if(state.link>=0){add("copy-link");add("open-link",state.local);add("select-link");}
     add("select-all",state.ready);add("export-page",state.exportReady);
@@ -28,6 +31,8 @@ function createSurfaceContextMenu({root,document,window,snapshot,prepare,execute
         if(disposed||!event.isTrusted||!context)return;
         close(false);prepare();dismissClick=false;
         lease={...context,identity:snapshot()};
+        const target=root.querySelector?.("#context-account-target");
+        if(target){target.textContent=context.word?.id||"";target.hidden=!context.word;}
         for(const button of buttons){const state=context.entries.get(button.dataset.contextAction);button.hidden=state===undefined;button.disabled=state===false;}
         root.hidden=false;root.scrollTop=0;
         const bounds=root.getBoundingClientRect();
