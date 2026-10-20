@@ -210,7 +210,6 @@ vim-unrecognized = Vim 已暫停：未辨識的畫面格式；按 i 原始輸入
 vim-board-header = Vim 已暫停：看板標頭未確認；按 i 原始輸入
 vim-board-rows = Vim 已暫停：看板項目欄位未確認；按 i 原始輸入
 vim-cursor = Vim 已暫停：選取指標或游標位置未確認；按 i 原始輸入
-vim-continue = 進板圖：按空白鍵、Enter 或 l 繼續；i 原始輸入
 vim-count-unsupported = 不支援此計數指令
 vim-count-capacity = 導覽計數超過輸入容量；整個指令未送出
 vim-count-rejected = 超限計數的整個指令未送出
@@ -536,6 +535,7 @@ filters-policy-allow = 白名單（保留顯示）
 pointer-back-hint = 點擊左緣返回上一層；Shift 可選字
 pointer-page-up-hint = 點擊向上翻頁；拖曳或 Shift 可選字
 pointer-page-down-hint = 點擊向下翻頁；拖曳或 Shift 可選字
+pointer-continue-hint = 按任意鍵或點擊繼續；拖曳或 Shift 可選字
 
 filters-import = 匯入名單…
 filters-import-title = 選擇帳號名單文字檔

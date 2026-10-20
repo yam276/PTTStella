@@ -106,3 +106,33 @@ test('cached Back hover decorates only one visible gutter column and never cover
     f.drawNavigationMarker();assert.equal(f.navigationMarker.hidden,false);
     assert.equal(f.navigationMarker.style.width,'12px');assert.equal(f.navigationMarker.style.top,'960px');assert.equal(f.navigationMarker.style.height,'480px');
 });
+
+// A pause owns the whole grid, including links and the usual Back gutter.
+function pauseFixture(){const f=fixture({cached:false});f.latest.navigation={kind:'continue_prompt'};f.viewport.clientHeight=576;return f;}
+test('confirmed pause clicks anywhere send Continue once, ahead of links and Back',()=>{
+    for(const [col,y] of [[0,1],[40,280],[79,575]]){
+        const f=pauseFixture();f.linkAt=()=>0;f.tap(col,y);f.tap(col,y);
+        assert.deepEqual(f.sent,[{kind:'navigate',stamp:{generation:7,revision:4,input_epoch:0},intent:{action:'continue'},source:'pointer',trusted:true}]);
+    }
+    const f=pauseFixture();f.tap(40,280);f.navigationRequest=false;f.navigationLocked=false;
+    f.latest.navigation={kind:'board_list',first_row:3,last_row:22};f.revision++;
+    f.tap(40,280,{detail:2});assert.equal(f.sent.length,1);
+});
+test('pause gestures reject drag, Shift, untrusted, outside, busy and remote input',()=>{
+    for(const change of [f=>f.latest.output_pending=true,f=>f.latest.input_pending=true,f=>f.blocked=()=>true,
+        f=>f.stationMouse.local=()=>false,f=>f.latest.connected=false,f=>f.latest.navigation.kind='unknown']){
+        const f=pauseFixture();change(f);f.tap(40,280);assert.deepEqual(f.sent,[]);
+    }
+    for(const extra of [{shiftKey:true},{isTrusted:false},{button:2}]){const f=pauseFixture();f.tap(40,280,extra);assert.deepEqual(f.sent,[]);}
+    const outside=pauseFixture();outside.tap(80,280);assert.deepEqual(outside.sent,[]);
+    const drag=pauseFixture();drag.pointerdown(drag.event(40,280));drag.pointerup(drag.event(42,280));drag.click(drag.event(42,280));assert.deepEqual(drag.sent,[]);assert.equal(drag.selections.length,1);
+});
+test('pause source or geometry changes cancel both held and released clicks',()=>{
+    for(const change of [f=>f.revision++,f=>f.generation++,f=>f.latest.presentation++,f=>f.viewport.scrollTop=24,f=>f.viewport.clientHeight=400]){
+        for(const stage of ['held','released']){
+            const f=pauseFixture(),e=f.event(40,280);f.pointerdown(e);
+            if(stage==='held')change(f);f.pointerup(e);if(stage==='released')change(f);
+            f.click(e);assert.deepEqual(f.sent,[]);
+        }
+    }
+});

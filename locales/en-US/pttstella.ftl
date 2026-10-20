@@ -210,7 +210,6 @@ vim-unrecognized = Vim paused: unrecognized screen format; press i for native in
 vim-board-header = Vim paused: board header is unconfirmed; press i for native input
 vim-board-rows = Vim paused: board item columns are unconfirmed; press i for native input
 vim-cursor = Vim paused: selection marker or cursor is unconfirmed; press i for native input
-vim-continue = Board art: press Space, Enter or l to continue; i for native input
 vim-count-unsupported = This counted command is unsupported
 vim-count-capacity = Navigation count exceeds input capacity; the entire command was rejected
 vim-count-rejected = The entire command with an excessive count was rejected
@@ -542,6 +541,7 @@ filters-policy-allow = Allow (keep visible)
 pointer-back-hint = Click the left edge to go back; hold Shift to select text
 pointer-page-up-hint = Click to page up; drag or hold Shift to select text
 pointer-page-down-hint = Click to page down; drag or hold Shift to select text
+pointer-continue-hint = Press any key or click to continue; drag or hold Shift to select text
 
 filters-import = Import account list…
 filters-import-title = Choose an account list text file

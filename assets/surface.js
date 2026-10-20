@@ -90,7 +90,7 @@ function refreshStationMouse(){
     stationMouseStatus.textContent=!latest?.connected||!state?.enabled?"":tr(state.route==="station"?"station-mouse-active":state.route==="blocked"?"station-mouse-blocked":"station-mouse-local");
     surface.dataset.stationMouseRoute=state?.route??"local";
 }
-const canNavigate=()=>!stopped&&!!latest?.connected&&['main_menu','system_menu','document_list','article_list','article_reading','board_list','empty_list','command_help'].includes(latest.navigation.kind)&&!latest.input_pending&&!navigationLocked&&!navigationRequest&&!blocked();
+const canNavigate=()=>!stopped&&!!latest?.connected&&['main_menu','system_menu','document_list','article_list','article_reading','board_list','empty_list','command_help','continue_prompt'].includes(latest.navigation.kind)&&!latest.input_pending&&!navigationLocked&&!navigationRequest&&!blocked();
 function invalidateNavigation(){navigationLocked=true;released=null;cancelDrag();setHover(null);refreshNavigation();}
 function sendInput(value){invalidateNavigation();send(value);}
 // Only classify editing vs command events here. Rust owns key translation and
@@ -105,6 +105,7 @@ function keydown(e) {
     // event still carries 229 even though isComposing is already false.
     // Leave the native IME action intact; never forward it as a BBS command.
     const browsing=keyboardState.enabled&&!["input","once"].includes(keyboardState.mode);
+    const pause=latest?.navigation.kind==="continue_prompt"&&!["Dead","Shift","Control","Alt","Meta","CapsLock","NumLock","ScrollLock","Fn","FnLock","Symbol","SymbolLock","Hyper","Super"].includes(e.key);
     const physical=browsing&&/^(Key[A-Z]|Digit[0-9])$/.test(e.code);
     if(e.isComposing||composing||((e.keyCode===229||e.key==="Process")&&!physical)||e.metaKey) return;
     // Let the native copy action fire; copy data is already prepared by Rust.
@@ -124,8 +125,8 @@ function keydown(e) {
         if(action){e.preventDefault();readingMove(action==="up"||action==="down"?{action:"lines",down:action==="down",count:1}:{action},e);return;}
     }
     const command=commandKeys.has(e.key)||(e.ctrlKey&&/^[a-z]$/i.test(e.key));
-    if(command||physical||(browsing&&e.key.length===1)) {clearSelection();e.preventDefault();}
-    if(command||physical||e.key.length===1||e.key==="Dead") {
+    if(command||physical||pause||(browsing&&e.key.length===1)) {clearSelection();e.preventDefault();}
+    if(command||physical||pause||e.key.length===1||e.key==="Dead") {
         inputKey=!command;
         send({kind:"key",key:{key:e.key,code:e.code,ctrl:e.ctrlKey,alt:e.altKey,shift:e.shiftKey,repeat:e.repeat},generation,trusted:e.isTrusted});
     }
@@ -263,7 +264,7 @@ function click(e) {
     const action=released;released=null;clickSequenceAction=!!action?.hit;
     if(!action?.hit||blocked()||!sameStamp(action.stamp,stamp())||action.view&&action.view!==pointerView()) {refreshKeepAlive();return;}
     if(action.hit.kind==="link") send({kind:"open_link",presentation:latest.presentation,generation,revision,index:action.hit.index,trusted:e.isTrusted});
-    else navigate(action.hit.kind==="back"?{action:"back"}:action.hit.kind==="page"?{action:action.hit.action}:{action:"open",row:action.hit.row},e);
+    else navigate(action.hit.kind==="continue"?{action:"continue"}:action.hit.kind==="back"?{action:"back"}:action.hit.kind==="page"?{action:action.hit.action}:{action:"open",row:action.hit.row},e);
     refreshKeepAlive();
 }
 function cancelDrag() {
@@ -343,14 +344,14 @@ function linkAt(point) {
 }
 // Geometry consumes the confirmed Rust profile, never station text.
 function navigationBackRegion(context,article=null) {
-    if(!context||context.kind==="main_menu"||context.kind==="unknown")return null;
+    if(!context||["main_menu","unknown","continue_prompt"].includes(context.kind))return null;
     if(context.kind==="article_reading"&&article)return {first:0,last:article.last_line-article.first_line+1,end:17};
     const first=context.kind==="article_list"?(context.articles[0]?.row??3):(context.first_row??1);
     const end=context.kind==="article_list"?17:context.kind==="board_list"?10:context.kind==="article_reading"?17:20;
     return {first,last:23,end};
 }
 function pointerView() {
-    if(latest?.navigation.kind!=="article_reading")return null;
+    if(!["article_reading","continue_prompt"].includes(latest?.navigation.kind))return null;
     const bounds=surface.getBoundingClientRect(),visible=viewport.getBoundingClientRect();
     return JSON.stringify([latest.presentation,latest.article?.id,viewport.scrollTop,viewport.scrollLeft,
         viewport.clientWidth,viewport.clientHeight,bounds.left,bounds.top,bounds.width,bounds.height,visible.top]);
@@ -367,6 +368,7 @@ function readingPageAt(point,clientY) {
 }
 function hitAt(point,clientY) {
     if(!point||blocked()||dragging?.moved||!stationMouse.local()) return null;
+    if(latest?.navigation.kind==="continue_prompt")return canNavigate()?{kind:"continue"}:null;
     const index=linkAt(point);if(index>=0) return {kind:"link",index};
     const back=navigationBackRegion(latest?.navigation,latest?.article);
     if(canNavigate()&&back&&point.col<back.end&&point.row>=back.first&&point.row<back.last)return {kind:"back"};
@@ -387,7 +389,7 @@ function setHover(point,redraw=true,preview=true) {
     hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:["main_menu","system_menu"].includes(latest.navigation.kind)?20:0,kind:hit.kind}:null;
     surface.dataset.pointerAction=hit?.kind||"none";
     surface.style.cursor=hit?.kind==="back"?"":hit?"pointer":"default";
-    surface.title=hit?.kind==="back"?tr("pointer-back-hint"):hit?.kind==="page"?tr(hit.action==="previous_page"?"pointer-page-up-hint":"pointer-page-down-hint"):index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredRow?tr(hit.kind==="menu"?"menu-open-hint":"article-open-hint"):"";
+    surface.title=hit?.kind==="continue"?tr("pointer-continue-hint"):hit?.kind==="back"?tr("pointer-back-hint"):hit?.kind==="page"?tr(hit.action==="previous_page"?"pointer-page-up-hint":"pointer-page-down-hint"):index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredRow?tr(hit.kind==="menu"?"menu-open-hint":"article-open-hint"):"";
     if(preview)previewHover(index);
     if(changed&&redraw&&latest) draw(latest);else drawNavigationMarker();
 }
