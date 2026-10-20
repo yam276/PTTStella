@@ -4,13 +4,25 @@
 
 ## 目標
 
-目前增量：A／B 的明確子集與 C1／C2／C3 已交付並依下文區分平台與實站邊界；C1 指定 macOS 原生互動已補驗。D 點擊路徑及限定 macOS 原生案例通過；D2 移動／wheel 已接線，無按鈕移動與垂直 wheel 在最新測試 package 再次通過。使用者已確認實體 Shift 拖曳／複製及 Control＋滾輪縮放的可見結果，同次 peer 的零多送仍未證明；held drag 與其餘原生邊界接續。交付 App 仍為 `dist/macos-mouse-final/PTTStella.app`，尚未以 D2 測試 package 取代；保留前版 `dist/macos-bookmarks/PTTStella.app`。D2 最新測試 package 已重跑 46 筆 Vim 與 C1 完整網址；其餘平台／手勢邊界分開記錄，不混稱完整 desktop gate 通過。
+目前交付為 `dist/macos-article-cache/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：文章與展圖採有界本機快取，原生合成測試完成；本輪實站、實體滾輪／IME、快取拖曳選行 PNG 與 Windows／Linux UI 仍分列待驗。先前 C／D 與其他交付結果保留於各歷程分節，不以本輪案例代替完整跨平台 desktop gate。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
-初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。沒有獨立文章 UI、啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 文章快取閱讀（2026-10-20）
+
+使用者授權將文章與開圖瀏覽從逐張即時 BBS 刷新改為有界本機快取。本輪交付 `dist/macos-article-cache/PTTStella.app`；新增 Rust `ArticleCache`、雙來源 Paint、按文章行號合併／淘汰、可見行繪製、捲動錨點及本機閱讀鍵盤位置。最近 256 行可本機往返，僅未知邊界取頁；普通 revision 不拆掉展圖。原始輸入／換篇／切站／名單政策仍撤銷，完整 PNG 保持站端 24 行，快取選取 PNG 一次最多 24 行。契約見 [文章閱讀](../article-reading.md)。
+
+離線：core 13 commands／2 replays、desktop lib 142／bin 82、Clippy、144 JS、70 Python、Fluent 與 docs 通過。新增獨立 expected 覆蓋重疊行、缺口、首尾、雙向淘汰、來源／政策撤銷、雙色字、歷史 links／選取與 PNG 範圍、逐頁取界及不進展停止；生產 JS handler 覆蓋有限畫布、前插行／圖片解碼錨點、暫時高度縮小造成的 scrollTop 截斷、鍵盤輸入框位置、滾輪單位與修飾鍵。
+
+原生交付副本使用不同 bundle identity、只連 owned loopback peers：640×1200 紅藍圖、640×900 綠金圖及明確 404。兩次 Enter 一個 batch；讀到邊界只送一次精確 PageDown，第二頁分段回應。Page Up／Home 回看及 Vim `4j`／`4k` 皆為本機，peer 拒絕全部額外 bytes。Vim 實際移動 104px，返回與原圖正文區逐像素相同；回到文章開頭仍能複製第一頁標題，原生貼進本機搜尋欄核對。三個 HTTP 路徑各一次，PNG 為 960×576、純灰階站端內容，不含長圖；Close acknowledged、所有 owner join、程序退出 0。交付與測試副本 15 份 loadable Mach-O sections 雜湊完全相同，交付簽章 strict 驗證成功。
+
+初輪原生發現重繪短暫縮回 24 行，造成捲動截斷；第二輪 peer／清理通過但 Vim 焦點仍跳頁尾，整輪視覺驗收判失敗。兩者皆補生產 handler 回歸並修正後，第三輪才接受；不以程序退出或單份 passed 報告取代操作與像素結果。證據／失敗截圖保留 `.local/verification/article-cache`，最終結果在 `native-delivery/visual-validation.json`。
+
+本輪 CUA 原生座標滑鼠注入回報 `noWindowsAvailable`，實體滾輪、快取拖曳選字／選取行 PNG、原生 IME、不同 DPI、Windows／Linux 與實站仍為 not_ready；已有生產事件單元與 Rust 選取／輸出測試，不冒充上述原生驗收。本機資源保護器曾因其他有效磁碟預留拒絕 gate；拒絕與容量審查有記錄，待額度釋放後完成建置，未刪除其他 target 或繞過 harness。
 
 ## 滑鼠瀏覽與可設定右鍵工具（2026-10-20）
 

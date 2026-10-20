@@ -465,7 +465,8 @@
     }
   },
   {"name": "inline_reset", "packet": {"kind": "inline_reset", "payload": true}},
-  {"name": "inline_open", "packet": {"kind": "inline_open", "payload": {"batch": 2, "presentation": 3, "generation": 7, "revision": 4, "entries": [{"index": 1, "row": 8, "key": 0}], "limited": false}}},
+  {"name": "reading_move", "packet": {"kind": "reading_move", "payload": {"generation": 7, "article": 2, "intent": {"action": "next_page"}}}},
+  {"name": "inline_open", "packet": {"kind": "inline_open", "payload": {"batch": 2, "presentation": 3, "generation": 7, "revision": 4, "first_line": 1, "article_id": 2, "entries": [{"index": 1, "row": 8, "key": 0}], "limited": false}}},
   {"name": "inline_error", "packet": {"kind": "inline_error", "payload": {"batch": 2, "index": 1, "message": "失敗"}}},
   {"name": "inline_image", "packet": {"kind": "inline_image", "payload": {"batch": 2, "index": 1, "image": {"request": 2, "data": "AQID", "mime": "image/png", "width": 2, "height": 1, "animated": false, "cached": false}}}},
   {"name": "settings_launch", "packet": {"kind": "settings_launch", "payload": "sites"}},

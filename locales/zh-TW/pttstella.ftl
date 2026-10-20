@@ -588,3 +588,7 @@ settings-alias-about = 關於 授權 版本 about license version
 
 reason-layout = 尚未支援此列表版型
 vim-layout = Vim 已暫停：尚未支援此列表版型；按 i 原始輸入
+
+article-cache-hint = 已保留第 { $first }–{ $last } 行；往回捲動可閱讀，邊界才載入更多
+export-cache-selection-limit = 選取行 PNG 一次最多 24 行；可先縮小選取範圍
+export-cache-page-hint = 匯出目前站端的 24 行畫面；不包含文章快取與展開圖片

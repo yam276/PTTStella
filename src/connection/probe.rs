@@ -23,7 +23,7 @@ pub(super) enum Scenario {
     Filters,
     Surface,
     PointerRows,
-    InlinePages { first: Vec<u8>, second: Vec<u8> },
+    InlinePages { second: Vec<u8> },
 }
 
 #[derive(Clone, Copy)]
@@ -679,16 +679,19 @@ pub(super) async fn serve(
         if matches!(scenario, Scenario::Window) {
             return window(&mut socket).await;
         }
-        if let Scenario::InlinePages {first,second} = scenario {
-            for (expected,page) in [(b"\x1b[6~".as_slice(),second),(b"\x1b[5~".as_slice(),first)] {
-                if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected) {
-                    return Err("inline page probe expected exact page down/up, without extra station input".into());
-                }
-                socket.send(Message::Binary(page.into())).await.map_err(|e|e.to_string())?;
+        if let Scenario::InlinePages {second} = scenario {
+            if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"\x1b[6~") {
+                return Err("cached reading probe expected exactly one PageDown".into());
             }
+            // A complete first redraw is followed by a fragmented second page.
+            // Historical browsing must not send PageUp or refetch old images.
+            let split=second.len()/2;
+            socket.send(Message::Binary(second[..split].to_vec().into())).await.map_err(|e|e.to_string())?;
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            socket.send(Message::Binary(second[split..].to_vec().into())).await.map_err(|e|e.to_string())?;
             return match socket.next().await {
                 Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
-                _=>Err("inline page probe expected Close after the round trip".into()),
+                _=>Err("cached reading must browse history locally and then Close without further station bytes".into()),
             };
         }
         if let Scenario::Mouse { boundary } = scenario {

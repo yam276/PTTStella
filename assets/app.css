@@ -199,3 +199,8 @@ button.primary .settings-icon { color: inherit; }
 
 .tools-back-mark svg { width: calc(28px * var(--tools-scale, 1)); height: calc(28px * var(--tools-scale, 1)); }
 .tools-petal svg { width: calc(22px * var(--tools-scale, 1)); height: calc(22px * var(--tools-scale, 1)); }
+
+/* Cached reading owns scroll anchoring as image dimensions arrive. */
+.workspace { overflow-anchor: none; }
+
+.inline-image[hidden] { display: none; }

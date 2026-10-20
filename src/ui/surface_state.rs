@@ -71,6 +71,8 @@ struct SelectedRows {
     input_epoch: u64,
 }
 pub(super) struct SurfaceState {
+    article: super::article_cache::ArticleCache,
+    raw_reading: bool,
     filters: filters::State,
     in_flight: Option<Paint>,
     displayed: Option<Paint>,
@@ -82,6 +84,8 @@ pub(super) struct SurfaceState {
 impl SurfaceState {
     pub(super) fn new(rules: filters::Rules) -> Self {
         Self {
+            article: Default::default(),
+            raw_reading: false,
             filters: filters::State::new(rules),
             in_flight: None,
             displayed: None,
@@ -114,6 +118,9 @@ impl SurfaceState {
             return None;
         }
         let mut packet = paint(view, probe, settings, &self.filters);
+        if !self.raw_reading {
+            self.article.project(&mut packet);
+        }
         packet.hover = self
             .hover
             .as_ref()
@@ -208,7 +215,83 @@ impl SurfaceState {
             !p.output_pending && p.generation == generation && p.navigation.kind() == context.kind()
         })
     }
+    pub(super) fn set_raw_reading(&mut self, raw: bool) -> bool {
+        if self.raw_reading == raw {
+            return false;
+        }
+        self.raw_reading = raw;
+        self.article.clear();
+        self.display_changed();
+        true
+    }
+    pub(super) fn reading_context(&self, view: &View) -> Option<Context> {
+        let paint = self.displayed.as_ref()?;
+        let article = paint.article.as_ref()?;
+        (view.phase == Phase::Connected
+            && view.mouse.route == pttstella::mouse::input::Route::Local
+            && paint.generation == view.generation
+            && paint.presentation == self.filters.version()
+            && self.article.active())
+        .then_some(Context::ArticleReading {
+            first_line: article.first_line,
+            last_line: article.last_line,
+            percent: if article.end { 100 } else { 0 },
+        })
+    }
+    pub(super) fn reading_move(
+        &self,
+        view: &View,
+        intent: pttstella::navigation::Intent,
+    ) -> Option<super::outbound::Packet<'static>> {
+        self.reading_context(view)?;
+        if !super::article_cache::local_intent(intent) {
+            return None;
+        }
+        let article = self.displayed.as_ref()?.article.as_ref()?;
+        Some(super::outbound::Packet::ReadingMove {
+            generation: view.generation,
+            article: article.id,
+            intent,
+        })
+    }
+    pub(super) fn cached_reading(&self, stamp: Stamp, view: &View) -> bool {
+        self.navigation_shown(stamp)
+            && self.inline_identity(view).is_some()
+            && self.displayed.as_ref().is_some_and(|p| p.article.is_some())
+    }
+    pub(super) fn article_navigation(
+        &mut self,
+        intent: pttstella::navigation::Intent,
+        view: &View,
+    ) {
+        let context = view.context();
+        if let Ok(bytes) = pttstella::navigation::plan(&context, intent) {
+            self.article.input(&context, &bytes);
+        }
+        self.article
+            .begin_fetch(intent, &context, view.frame.revision);
+    }
+    pub(super) fn cancel_article_fetch(&mut self) {
+        self.article.cancel_fetch();
+    }
+    pub(super) fn continue_article_fetch(
+        &mut self,
+        view: &View,
+    ) -> Option<pttstella::navigation::Intent> {
+        if !self.cached_reading(view.stamp(), view) || self.has_in_flight() || self.dirty {
+            return None;
+        }
+        self.article
+            .continue_fetch(&view.context(), view.frame.revision)
+    }
+    pub(super) fn clear_article(&mut self) {
+        self.article.clear();
+    }
+    pub(super) fn article_input(&mut self, context: &Context, bytes: &[u8]) {
+        self.article.input(context, bytes);
+    }
     fn policy_changed(&mut self) {
+        self.article.clear();
         self.revoke_output();
         self.selected = None;
         self.hover = None;
@@ -233,6 +316,7 @@ impl SurfaceState {
     /// Even an old in-flight ACK must be drained before queuing the newest view.
     /// Its snapshot stays ineligible for current interactions after this update.
     pub(super) fn update(&mut self, view: &View) -> bool {
+        self.article.observe(view);
         let version = self.filters.version();
         self.filters.sync(view.generation, view.frame.revision);
         if self.output.as_ref().is_some_and(|active| {
@@ -326,7 +410,11 @@ impl SurfaceState {
         let shown = self
             .current(identity, view)
             .ok_or(pttstella::msg!("export-screen-changed"))?;
-        if (shown.frame.cols, shown.frame.rows) != (80, export::ROWS) {
+        if (
+            shown.frame.cols,
+            shown.source_frame.as_ref().unwrap_or(&shown.frame).rows,
+        ) != (80, export::ROWS)
+        {
             return Err(pttstella::msg!("export-grid-unsupported"));
         }
         match request {
@@ -339,6 +427,7 @@ impl SurfaceState {
                         && s.request == request
                         && s.input_epoch == view.input_epoch
                 })
+                .filter(|s| s.rows.len() <= export::ROWS)
                 .map(|s| s.rows.clone())
                 .ok_or_else(|| pttstella::msg!("export-selection-changed")),
         }

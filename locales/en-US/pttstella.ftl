@@ -594,3 +594,7 @@ settings-alias-about = 關於 授權 版本 about license version
 
 reason-layout = This list layout is not supported
 vim-layout = Vim paused: this list layout is not supported; press i for native input
+
+article-cache-hint = Lines { $first }–{ $last } retained; scroll back locally, load more at the edge
+export-cache-selection-limit = Selected-row PNGs support up to 24 lines; select a smaller range
+export-cache-page-hint = Export the current 24-row station page, excluding cached history and expanded images

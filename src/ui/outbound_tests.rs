@@ -323,9 +323,19 @@ fn outbound_results_match_the_shared_wire_examples() {
         ),
         ("inline_reset", Packet::InlineReset(true)),
         (
+            "reading_move",
+            Packet::ReadingMove {
+                generation: 7,
+                article: 2,
+                intent: pttstella::navigation::Intent::NextPage,
+            },
+        ),
+        (
             "inline_open",
             Packet::InlineOpen(super::inline_images::Open {
                 batch: 2,
+                first_line: 1,
+                article_id: Some(2),
                 presentation: 3,
                 generation: 7,
                 revision: 4,
