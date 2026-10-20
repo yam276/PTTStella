@@ -380,6 +380,31 @@ impl ArticleCache {
                     g
                 }),
         );
+        frame.hyperlinks.extend(
+            paint
+                .source_frame
+                .as_ref()
+                .into_iter()
+                .flat_map(|f| &f.hyperlinks)
+                .filter_map(|link| {
+                    let spans: Vec<_> = link
+                        .spans
+                        .iter()
+                        .filter(|span| {
+                            span.row + 1 == paint.source_frame.as_ref().map_or(0, |f| f.rows)
+                        })
+                        .cloned()
+                        .map(|mut span| {
+                            span.row = frame.rows - 1;
+                            span
+                        })
+                        .collect();
+                    (!spans.is_empty()).then(|| Hyperlink {
+                        target: link.target.clone(),
+                        spans,
+                    })
+                }),
+        );
         frame.cursor = (0, frame.rows - 1);
         paint.article = Some(Reading {
             id: self.serial,
