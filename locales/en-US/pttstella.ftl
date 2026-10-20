@@ -245,6 +245,7 @@ copy-not-ready = Selection is not ready; copy again
 copy-event-unavailable = Clipboard event data is unavailable in this environment
 copy-failed = Cannot write to clipboard; try again
 article-open-hint = Click the row to open; drag or hold Shift to select text
+menu-open-hint = Click to enter this item; drag or hold Shift to select text
 navigation-wait = Waiting for a screen update
 article-list-hint = Click rows to open · left edge to go back · Shift to select
 article-reading-hint = Scroll to turn pages · Ctrl + scroll to zoom
@@ -475,6 +476,9 @@ settings-export = Export
 settings-profile-help = Load updates the preview until you apply and save. Export uses the effective settings, excluding unapplied drafts.
 
 settings-opacity = Floating button opacity
+settings-right-click = Right-click opens tools
+settings-show-ball = Show floating button
+settings-tool-access-help = Right-click without a selection opens radial tools. A selection or Shift+right-click keeps the context menu. With right-click tools off, settings remain available from the context menu. A hidden floating button appears while tools are open for back and close actions.
 settings-opacity-value = { $percent }%
 settings-opacity-help = 20% is faint; 100% is opaque. Apply to change the floating button; menus stay opaque. Hover or keyboard focus restores full visibility. Disconnection and error notices stay readable.
 settings-opacity-invalid = Floating button opacity must be between 20% and 100%

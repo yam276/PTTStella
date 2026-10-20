@@ -19,6 +19,49 @@ fn explicit_tls_provider_builds_with_desktop_feature_unification() {
 }
 
 #[tokio::test]
+async fn pointer_menu_favorites_pages_and_row_open_share_the_production_sender() {
+    use crate::navigation::Intent;
+    let connection = Connection::start_pointer_rows_probe().unwrap();
+    connection.connect().unwrap();
+    let mut view = wait(&connection, |v| v.received > 0 && !v.input_pending).await;
+    assert_eq!(view.context().kind(), "main_menu");
+    connection
+        .navigate(view.stamp(), Intent::Open { row: 14 })
+        .await
+        .unwrap();
+    let revision = view.frame.revision;
+    view = wait(&connection, |v| {
+        v.frame.revision > revision && !v.input_pending
+    })
+    .await;
+    assert_eq!(view.context().kind(), "unknown");
+    connection
+        .input(view.generation, b"\x1b[D".to_vec())
+        .unwrap();
+    view = wait(&connection, |v| {
+        v.context().kind() == "main_menu" && !v.input_pending
+    })
+    .await;
+    for (intent, expected) in [
+        (Intent::Open { row: 13 }, "board_list"),
+        (Intent::Open { row: 3 }, "article_list"),
+        (Intent::NextPage, "article_list"),
+        (Intent::PreviousPage, "article_list"),
+        (Intent::Open { row: 5 }, "article_reading"),
+        (Intent::Back, "article_list"),
+    ] {
+        let revision = view.frame.revision;
+        connection.navigate(view.stamp(), intent).await.unwrap();
+        view = wait(&connection, |v| {
+            v.frame.revision > revision && !v.input_pending
+        })
+        .await;
+        assert_eq!(view.context().kind(), expected);
+    }
+    connection.shutdown().await.unwrap();
+}
+
+#[tokio::test]
 async fn synchronized_output_retains_complete_frames_but_accepts_raw_input_and_ping() {
     let (listener, connection) = idle_local().await;
     connection.connect().unwrap();

@@ -64,10 +64,11 @@ let grid=null, dragging=null, selectionNext=null, selectionBusy=null, selectionC
 let selectionActive=false, selectionFingerprint=null;
 let pastePending=false;
 let hoveredLink=-1;
-let hoveredArticle=null,released=null,clickSequenceAction=false,navigationLocked=false,navigationRequest=false;
+let hoveredRow=null,released=null,clickSequenceAction=false,navigationLocked=false,navigationRequest=false;
 let exportBusy=false, exportTask=null;
 let keepAliveGate=null;
 let tools=null,contextMenu=null;
+let toolAccess={right_click_menu:true,show_floating_button:true};
 let toolsProbeEnabled=false;
 const send=value=>{ sent++; dioxus.send(value); };
 const stamp=()=>({generation,revision,input_epoch:latest?.input_epoch??0});
@@ -89,7 +90,7 @@ function refreshStationMouse(){
     stationMouseStatus.textContent=!latest?.connected||!state?.enabled?"":tr(state.route==="station"?"station-mouse-active":state.route==="blocked"?"station-mouse-blocked":"station-mouse-local");
     surface.dataset.stationMouseRoute=state?.route??"local";
 }
-const canNavigate=()=>!stopped&&!!latest?.connected&&['article_list','article_reading','board_list','empty_list','command_help'].includes(latest.navigation.kind)&&!latest.input_pending&&!navigationLocked&&!navigationRequest&&!blocked();
+const canNavigate=()=>!stopped&&!!latest?.connected&&['main_menu','article_list','article_reading','board_list','empty_list','command_help'].includes(latest.navigation.kind)&&!latest.input_pending&&!navigationLocked&&!navigationRequest&&!blocked();
 function invalidateNavigation(){navigationLocked=true;released=null;cancelDrag();setHover(null);refreshNavigation();}
 function sendInput(value){invalidateNavigation();send(value);}
 // Only classify editing vs command events here. Rust owns key translation and
@@ -329,28 +330,34 @@ function linkAt(point) {
 }
 function hitAt(point) {
     if(!point||blocked()||dragging?.moved||!stationMouse.local()) return null;
-    if(canNavigate()&&point.col<1&&point.row>0&&point.row<23)return {kind:"back"};
+    if(canNavigate()&&latest.navigation.kind!=="main_menu"&&point.col<1&&point.row>0&&point.row<23)return {kind:"back"};
     const index=linkAt(point);if(index>=0) return {kind:"link",index};
-    if(!canNavigate()||latest.navigation.kind!=="article_list") return null;
+    if(!canNavigate())return null;
+    const context=latest.navigation;
+    if(['main_menu','board_list'].includes(context.kind)){
+        const start=context.kind==="main_menu"?20:1;
+        return point.col>=start&&point.row>=context.first_row&&point.row<=context.last_row?{kind:"menu",row:point.row}:null;
+    }
+    if(context.kind!=="article_list") return null;
     const article=latest.navigation.articles.find(a=>a.row===point.row);
     return article?{kind:"article",row:article.row}:null;
 }
 function setHover(point,redraw=true,preview=true) {
     const hit=hitAt(point),index=hit?.kind==="link"?hit.index:-1;
     const changed=index!==hoveredLink;hoveredLink=index;
-    hoveredArticle=hit?.kind==="article"?latest.navigation.articles.find(a=>a.row===hit.row):null;
+    hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:latest.navigation.kind==="main_menu"?20:1,kind:hit.kind}:null;
     surface.dataset.pointerAction=hit?.kind||"none";
     surface.style.cursor=hit?.kind==="back"?"":hit?"pointer":"default";
-    surface.title=hit?.kind==="back"?tr("pointer-back-hint"):index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredArticle?tr("article-open-hint"):"";
+    surface.title=hit?.kind==="back"?tr("pointer-back-hint"):index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredRow?tr(hit.kind==="menu"?"menu-open-hint":"article-open-hint"):"";
     if(preview)previewHover(index);
     if(changed&&redraw&&latest) draw(latest);else drawNavigationMarker();
 }
 function drawNavigationMarker() {
     const back=surface.dataset.pointerAction==="back";
-    navigationMarker.hidden=(!hoveredArticle&&!back)||!grid||!canNavigate();
+    navigationMarker.hidden=(!hoveredRow&&!back)||!grid||!canNavigate();
     if(navigationMarker.hidden) {delete navigationMarker.dataset.row;return;}
-    const {row,start,end}=back?{row:1,start:0,end:1}:{row:hoveredArticle.row,start:1,end:latest.frame.cols};
-    navigationMarker.dataset.kind=back?"back":"article";navigationMarker.dataset.row=String(row);
+    const {row,start,end}=back?{row:1,start:0,end:1}:{row:hoveredRow.row,start:hoveredRow.start,end:latest.frame.cols};
+    navigationMarker.dataset.kind=back?"back":hoveredRow.kind;navigationMarker.dataset.row=String(row);
     Object.assign(navigationMarker.style,{left:grid.x(start)/grid.ratio+"px",top:grid.y(row)/grid.ratio+"px",
         width:(grid.x(end)-grid.x(start))/grid.ratio+"px",height:((back?grid.y(23):grid.bottom(row))-grid.y(row))/grid.ratio+"px"});
 }
@@ -395,6 +402,9 @@ function openContextMenu(e) {
     if(!e.isTrusted||stopped||composing||pastePending||document.querySelector("dialog[open]")||latest?.output_pending||filterUi.blocked())return;
     if(!stationMouse.local()&&!e.shiftKey)return;
     contextMenu.close(false);
+    if(stationMouse.local()&&!e.shiftKey&&toolAccess.right_click_menu&&!hasSelection()){
+        tools.showAt(e);return;
+    }
     const index=Math.max(linkAt(cellAt(e,false)),inlineImages.linkAtPoint(e));
     contextMenu.open(e,{index,entries:contextMenuItems(contextState(index))});
 }
@@ -517,9 +527,9 @@ function wheel(e) {
     if(stationMouse.wheel(e))return;
     if(e.altKey)return;
     const kind=latest?.navigation.kind;
-    if(!latest?.connected||!['article_list','article_reading'].includes(kind)) return;
+    if(!latest?.connected||!['article_list','article_reading','board_list'].includes(kind)) return;
     e.preventDefault();
-    const action=kind==="article_reading"?(e.deltaY<0?"previous_page":"next_page"):(e.deltaY<0?"previous_item":"next_item");
+    const action=e.deltaY<0?"previous_page":"next_page";
     navigate({action},e);
 }
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
@@ -796,6 +806,7 @@ const route=createSurfaceRouter({
     bookmarks_open:bookmarksUi.receiveOpen,bookmarks_result:bookmarksUi.receive,
     sites_open:sitesUi.receiveOpen,sites_result:sitesUi.receive,
     tools_opacity:percent=>tools.setOpacity(percent),
+    tools_access:access=>{toolAccess=access;tools.setVisible(access.show_floating_button);},
     hover_settings:position=>{hoverPreference=position;hoverPosition.value=position;surface.dataset.hoverPosition=position;
         if(position==="off")cancelHover(true);else if(pointerClient)media.locate(pointerClient,position);},
     media_hover:data=>{if(hoverCandidate?.sequence===data.sequence){media.hover(data);media.locate(pointerClient,hoverPreference);}},

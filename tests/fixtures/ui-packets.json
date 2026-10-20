@@ -119,6 +119,10 @@
     "packet": {"kind": "tools_opacity", "payload": 65}
   },
   {
+    "name": "tools_access",
+    "packet": {"kind": "tools_access", "payload": {"right_click_menu": true, "show_floating_button": false}}
+  },
+  {
     "name": "hover_settings",
     "packet": {
       "kind": "hover_settings",

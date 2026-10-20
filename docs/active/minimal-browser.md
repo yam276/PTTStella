@@ -12,6 +12,18 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。沒有獨立文章 UI、啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## 滑鼠瀏覽與可設定右鍵工具（2026-10-20）
+
+本輪交付為 `dist/macos-mouse-browse/PTTStella.app`（arm64、release、ad-hoc 簽章）。Rust 的主選單及看板／最愛／分類 context 補入已驗證的起訖與游標列，滑鼠以同一 planner／connection owner 送有限方向鍵加 CR；可點個人設定、我的最愛、目錄與看板。主選單僅選項區可點，空白／標頭／過期畫面不開啟，未知系統子選單仍使用原始輸入。文章／看板／最愛及閱讀頁滾輪改用 Page Up／Down，保留 Ctrl 縮放、本機放大捲動、選取與編輯准入。
+
+無反白時普通本機右鍵在游標附近開啟原六類扇形工具，收合後回到浮球原位置；有反白或 Shift＋右鍵保留情境選單。站端滑鼠模式仍沿用原協定。設定頁加入「右鍵開啟工具」及「顯示浮球」，都預設開啟；隱藏時只在工具開啟期間暫時顯示中央返回／收合按鈕。關閉右鍵工具後仍能從情境選單進設定，不會失去恢復入口。v5 自舊設定補入預設，取消／失敗不生效，明確保存後才更新；不包含於可攜顯示 profile。hover 改為較明亮藍色與金色邊框／左右 3px 金邊，呼吸維持 80%–100%，減少動態效果時固定亮度；裝飾不進原始 Canvas／PNG。
+
+本機全套 123 JS、core 13 commands／2 replays、desktop lib 137／bin 68、desktop Clippy、兩項 Rust i18n 與 docs 通過。新增案例涵蓋各選項的精確送鍵、空白／非法列、版本及站端路由、翻頁及選取／放大排除、右鍵分流、浮球暫時顯示與位置還原、設定取消／失敗／保存／預設／嚴格欄位及舊版遷移。修正初輪仍使用舊 migration 版本的斷言、wire fixture 次序及錯誤 i18n target 後再通過；保留原始失敗記錄，未放寬送鍵或畫面條件。
+
+macOS 原生 `pointer_rows` 在合成主選單點個人設定、原始 Left 返回、點我的最愛與目錄、滾輪下／上翻頁、點文章整行與左緣返回；本機 peer 嚴格核對七筆導覽及一次原始鍵，共八筆指定輸入，不接受額外 bytes。原生亦確認無反白開扇形、反白與 Shift 保留情境、取消不保存、隱藏仍可右鍵開／收合、關閉右鍵工具恢復情境入口。獨立新程序載入相同設定，兩個開關皆為 false、浮球隱藏且普通右鍵仍可開設定，來源檔 bytes 不變。兩程序均匯出 PNG、正常退出 0，報告 passed、Close acknowledged、listener 與 connection／credential／file owner 全部 join。探針的 `settings_saved` 是既有字高 18／基線 19 的專用條件，本輪未改字高，不以該欄宣稱新開關未保存；開關由實際檔案、重啟介面與截圖獨立確認。
+
+證據保留 `.local/verification/mouse-browse`，包含藍金 hover 與重啟設定截圖、PNG、來源雜湊與清理報告；兩次都僅連本機合成服務，未操作使用者實站 session。Windows／Linux 原生 UI、本輪英文原生設定、完整站端 Shift 右鍵與其他 DPI 尚待驗證；不把 macOS 結果當作完整跨平台 desktop gate 或實站驗收。
+
 ## Windows 安裝版與單檔免安裝版（2026-10-20）
 
 依使用者補充，Release 提供 `-setup.exe` 及 `-portable.exe` 擇一下載。兩者消費同一次靜態 CRT 編譯的 App，JS／CSS、翻譯、字型及第三方授權內嵌；免安裝 EXE 不需外帶 CRT DLL 或 Assets 目錄，但須已有 WebView2，不自行補裝。Setup 延續前置檢查及缺少時補裝流程。設定與快取仍位於目前 Windows 帳號的資料目錄。來源 manifest／完整白名單必須具有兩個 EXE；本機 ZIP 留作驗證，不上傳 Release。詳見 [Windows 交付契約](../windows-installer.md)。

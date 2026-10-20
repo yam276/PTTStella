@@ -701,11 +701,21 @@ pub(super) async fn serve(
             return filters(&mut socket).await;
         }
         if matches!(scenario, Scenario::PointerRows) {
-            for (expected, page) in [(b"\x1b[B\r".as_slice(), "reading_first"), (b"\x1b[D".as_slice(), "list")] {
+            let stages = [
+                (b"\x1b[B\r".as_slice(), b"\x1b[0m\x1b[2J\x1b[HPTTStella synthetic settings; Left returns".to_vec()),
+                (b"\x1b[D", pointer_menu()?),
+                (b"\r", navigation_page("favorites")?),
+                (b"\x1b[A\r", navigation_page("list")?),
+                (b"\x1b[6~", navigation_page("list_dense")?),
+                (b"\x1b[5~", navigation_page("list")?),
+                (b"\x1b[B\r", navigation_page("reading_first")?),
+                (b"\x1b[D", navigation_page("list")?),
+            ];
+            for (expected, page) in stages {
                 if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected) {
                     return Err("row/edge probe received unexpected station input".into());
                 }
-                socket.send(Message::Binary(navigation_page(page)?.into())).await.map_err(|e|e.to_string())?;
+                socket.send(Message::Binary(page.into())).await.map_err(|e|e.to_string())?;
             }
             return match socket.next().await {
                 Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e|e.to_string()),
@@ -849,6 +859,11 @@ pub(super) fn navigation_page(name: &str) -> Result<Vec<u8>, String> {
     )
     .map_err(|e| e.to_string())
 }
+pub(super) fn pointer_menu() -> Result<Vec<u8>, String> {
+    let mut page = navigation_page("main_menu")?;
+    page.extend(crate::encoding::encode("\x1b[15;1H\x1b[0m\x1b[2K                      (U)ser         【 個人設定區 】\x1b[14;22H").map_err(|e|e.to_string())?);
+    Ok(page)
+}
 async fn navigation<S>(socket: &mut tokio_tungstenite::WebSocketStream<S>) -> Result<(), String>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
@@ -869,8 +884,8 @@ where
         (b"\x1b[6~", navigation_page("reading_middle")?),
         (b"\x1b[6~", navigation_page("reading_last")?),
         (b"\x1b[D", navigation_page("list")?),
-        (b"\x1b[B", next_item),
-        (b"\x1b[A", navigation_page("list")?),
+        (b"\x1b[6~", next_item),
+        (b"\x1b[5~", navigation_page("list")?),
         (
             b"\x1b[C",
             b"\x1b[2J\x1b[22;1HConfirm synthetic action [y/N]".to_vec(),

@@ -48,6 +48,7 @@ pub(super) enum Packet<'a> {
     FiltersResult(FiltersResult),
     HoverSettings(HoverPosition),
     ToolsOpacity(ToolOpacity),
+    ToolsAccess(pttstella::settings::ToolAccess),
     HoverReset {
         media: bool,
     },
@@ -169,6 +170,7 @@ pub(super) struct MediaImage {
 }
 #[derive(Serialize)]
 pub(super) struct SettingsOpen {
+    pub tools_access: pttstella::settings::ToolAccess,
     pub tools_opacity: ToolOpacity,
     pub language: pttstella::i18n::Language,
     pub profile: DisplayProfile,

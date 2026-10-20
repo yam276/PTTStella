@@ -227,6 +227,8 @@ async fn run(
         .map_err(|e| e.to_string())?;
     eval.send(Packet::ToolsOpacity(preferences.app().tools_opacity))
         .map_err(|e| e.to_string())?;
+    eval.send(Packet::ToolsAccess(preferences.app().tools_access))
+        .map_err(|e| e.to_string())?;
     eval.send(Packet::HoverSettings(preferences.hover()))
         .map_err(|e| e.to_string())?;
     eval.send(Packet::RecentBoards(recent.packet()))
@@ -369,6 +371,7 @@ async fn run(
                             checks.settings_saved |= probe.is_some() && preferences.display().font_size==18.0 && preferences.display().baseline==19.0;
                             screen.display_changed();
                             eval.send(Packet::ToolsOpacity(preferences.app().tools_opacity)).map_err(|e|e.to_string())?;
+                            eval.send(Packet::ToolsAccess(preferences.app().tools_access)).map_err(|e|e.to_string())?;
                             Packet::SettingsSaved(Feedback::new(SaveStatus::Saved,if preferences.app().language!=pttstella::i18n::application().language(){pttstella::msg!("settings-language-saved")}else{pttstella::msg!("settings-saved")}))
                         },
                         Err(error)=>Packet::SettingsSaved(Feedback::new(SaveStatus::Rejected,error)),
@@ -821,8 +824,8 @@ async fn run(
                         eval.send(preferences.preview_packet(request, values))
                             .map_err(|e| e.to_string())?;
                     }
-                    SurfaceEvent::SettingsSave { values, language, tools_opacity, trusted: _ } => {
-                        if let Err(error)=files.start(|permit|files::save_display(permit,preferences.store(),{let mut draft=preferences.display_draft(values);draft.language=language;draft.tools_opacity=tools_opacity;draft})) {
+                    SurfaceEvent::SettingsSave { values, language, tools_opacity, tools_access, trusted: _ } => {
+                        if let Err(error)=files.start(|permit|files::save_display(permit,preferences.store(),{let mut draft=preferences.display_draft(values);draft.language=language;draft.tools_opacity=tools_opacity;draft.tools_access=tools_access;draft})) {
                             eval.send(Packet::SettingsSaved(Feedback::new(SaveStatus::Rejected,error))).map_err(|e|e.to_string())?;
                         }
                     }
@@ -1263,7 +1266,7 @@ async fn run(
                 || case=="boards" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && checks.board_cancelled && checks.board_rejected>=1
                 || matches!(case.as_str(),"mouse"|"mouse_boundary") && checks.mouse_passed(case=="mouse_boundary") && receiver.borrow().mouse.active.is_none()
                 || matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") && checks.mouse_samples_passed(&case) && receiver.borrow().mouse.active.is_none() && receiver.borrow().mouse.modes.tracking()==pttstella::mouse::Tracking::Highlight
-                || case=="pointer_rows" && checks.navigation_requests==2 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
+                || case=="pointer_rows" && checks.navigation_requests==7 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
                 || case=="account_lists" && checks.filter_edits>=3 && checks.context_copies>=1 && checks.export_checked
                 || matches!(case.as_str(),"inline"|"context_menu") && checks.inline_requests>=2 && checks.inline_expands==1 && checks.export_checked && (case!="context_menu"||checks.context_copies>=2)
                 || case=="osc8" && checks.osc8_open_rows==[8,9] && checks.osc8_copy_rows==[8,9] && checks.osc8_dragged && checks.osc8_media_decoded>=2 && checks.export_checked

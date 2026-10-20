@@ -245,6 +245,7 @@ copy-not-ready = 選取尚未準備好，請再複製
 copy-event-unavailable = 此環境未提供剪貼簿事件資料
 copy-failed = 無法寫入剪貼簿，請重試
 article-open-hint = 點擊整行開啟文章；拖曳或 Shift 選字
+menu-open-hint = 點擊進入此項目；拖曳或 Shift 選字
 navigation-wait = 等待畫面更新
 article-list-hint = 點整行開啟 · 左緣返回 · Shift 選字
 article-reading-hint = 滾輪翻頁 · Ctrl＋滾輪縮放
@@ -469,6 +470,9 @@ settings-export = 匯出
 settings-profile-help = 載入只更新預覽，套用儲存後才生效；匯出使用目前已套用的設定，不包含未套用的草稿。
 
 settings-opacity = 浮球不透明度
+settings-right-click = 右鍵開啟工具
+settings-show-ball = 顯示浮球
+settings-tool-access-help = 無反白時右鍵開啟扇形工具；有反白或 Shift＋右鍵保留情境選單。關閉右鍵工具後，仍可由情境選單進入設定。隱藏的浮球會在工具開啟時暫時顯示，供返回與收合。
 settings-opacity-value = { $percent }%
 settings-opacity-help = 20% 最淡，100% 不透明；套用後調整浮球，選單維持不透明，滑鼠移入或鍵盤聚焦時恢復清晰。斷線與錯誤提示不受影響。
 settings-opacity-invalid = 浮球不透明度需介於 20% 至 100%

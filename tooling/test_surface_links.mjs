@@ -15,7 +15,7 @@ test("right-click uses the Rust link index without replacing the existing select
     for(const index of [0,1]){
         const calls=[],context={stationMouse:{local:()=>true},linkAt:()=>index,cellAt:()=>({row:8+index,col:4}),
             inlineImages:{linkAtPoint:()=>-1},composing:false,pastePending:false,stopped:false,latest:{output_pending:false},
-            document:{querySelector:()=>null},filterUi:{blocked:()=>false},contextState:i=>i,contextMenuItems:i=>i,
+            toolAccess:{right_click_menu:false},hasSelection:()=>false,document:{querySelector:()=>null},filterUi:{blocked:()=>false},contextState:i=>i,contextMenuItems:i=>i,
             contextMenu:{close:()=>calls.push("close"),open:(e,data)=>calls.push(data.index)}};
         handler("openContextMenu","contextAction",context)({isTrusted:true,preventDefault(){}});
         assert.deepEqual(calls,["close",index]);
@@ -25,7 +25,7 @@ test("station right-click stays remote; Shift opens local menu, and untrusted or
     for(const [shiftKey,isTrusted,composing,expected] of [[false,true,false,0],[true,true,false,1],[true,false,false,0],[true,true,true,0]]){
         let opened=0;
         const context={stationMouse:{local:()=>false},linkAt:()=>-1,cellAt:()=>null,inlineImages:{linkAtPoint:()=>-1},
-            composing,pastePending:false,stopped:false,latest:{},document:{querySelector:()=>null},filterUi:{blocked:()=>false},
+            composing,pastePending:false,stopped:false,latest:{},toolAccess:{right_click_menu:false},hasSelection:()=>false,document:{querySelector:()=>null},filterUi:{blocked:()=>false},
             contextState:()=>({}),contextMenuItems:()=>new Map(),contextMenu:{close(){},open(){opened++;}}};
         handler("openContextMenu","contextAction",context)({shiftKey,isTrusted,preventDefault(){}});
         assert.equal(opened,expected);
@@ -68,6 +68,29 @@ function renderedLinks(scale, links, options) {
     handler("render","repaint",context)(target,packet,options);
     return rectangles.slice(1); // The first rectangle clears the canvas.
 }
+
+test("empty right-click opens radial tools; selections, Shift and opt-out keep the contextual actions",()=>{
+    for(const [selection,shiftKey,enabled,radial] of [[false,false,true,true],[true,false,true,false],[false,true,true,false],[false,false,false,false]]) {
+        const calls=[],context={stationMouse:{local:()=>true},linkAt:()=>0,cellAt:()=>({row:3,col:10}),inlineImages:{linkAtPoint:()=>-1},
+            composing:false,pastePending:false,stopped:false,latest:{output_pending:false},document:{querySelector:()=>null},filterUi:{blocked:()=>false},
+            toolAccess:{right_click_menu:enabled},hasSelection:()=>selection,tools:{showAt:e=>calls.push(['radial',e.isTrusted])},
+            contextState:()=>({}),contextMenuItems:()=>new Map(),contextMenu:{close(){},open:()=>calls.push(['context'])}};
+        handler("openContextMenu","contextAction",context)({isTrusted:true,shiftKey,clientX:300,clientY:200,preventDefault(){}});
+        assert.deepEqual(calls,radial?[["radial",true]]:[["context"]]);
+    }
+});
+
+test("main menu and board rows are clickable only within Rust-verified bounds",()=>{
+    const context={blocked:()=>false,dragging:null,stationMouse:{local:()=>true},canNavigate:()=>true,linkAt:()=>-1,
+        latest:{navigation:{kind:"main_menu",first_row:12,last_row:15,cursor_row:13}}};
+    const hit=handler("hitAt","setHover",context);
+    for(const row of [12,13,14,15])assert.deepEqual(JSON.parse(JSON.stringify(hit({row,col:40}))),{kind:"menu",row});
+    for(const row of [0,11,16,23])assert.equal(hit({row,col:40}),null);
+    assert.equal(hit({row:13,col:0}),null);assert.equal(hit({row:13,col:19}),null);
+    context.latest.navigation={kind:"board_list",first_row:3,last_row:5,cursor_row:4};
+    assert.equal(hit({row:3,col:79}).kind,"menu");assert.equal(hit({row:6,col:30}),null);
+    context.dragging={moved:true};assert.equal(hit({row:3,col:30}),null);
+});
 
 test("live links are underlined without hover, with grid-aligned wrapped spans at each scale",()=>{
     const links=[{row:3,start:8,end:20},{row:4,start:0,end:6}];
@@ -118,12 +141,12 @@ test("the left edge sends the existing back intent once and refuses a stale gest
 });
 
 test("hover marker spans a complete row, and the return marker occupies only the left edge",()=>{
-    const context={surface:{dataset:{}},navigationMarker:{style:{},dataset:{}},hoveredArticle:{row:4,start:2,end:8},
+    const context={surface:{dataset:{}},navigationMarker:{style:{},dataset:{}},hoveredRow:{row:4,start:1,kind:"article"},
         latest:{frame:{cols:80}},grid:{ratio:2,x:x=>x*24,y:y=>y*48,bottom:y=>(y+1)*48},canNavigate:()=>true};
     const draw=handler("drawNavigationMarker","refreshNavigation",context);draw();
     assert.equal(context.navigationMarker.style.left,"12px");assert.equal(context.navigationMarker.style.width,"948px");
     assert.equal(context.navigationMarker.style.height,"24px");
-    context.hoveredArticle=null;context.surface.dataset.pointerAction="back";draw();
+    context.hoveredRow=null;context.surface.dataset.pointerAction="back";draw();
     assert.equal(context.navigationMarker.style.width,"12px");assert.equal(context.navigationMarker.style.height,"528px");
     context.canNavigate=()=>false;draw();assert.equal(context.navigationMarker.hidden,true);
     const css=readFileSync(new URL("../assets/app.css",import.meta.url),"utf8");

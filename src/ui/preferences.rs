@@ -86,6 +86,7 @@ impl Preferences {
         Packet::SettingsOpen(Box::new(SettingsOpen {
             profile: self.app.display.clone(),
             tools_opacity: self.app.tools_opacity,
+            tools_access: self.app.tools_access,
             language: self.app.language,
             values: self.display.clone(),
             defaults: DisplaySettings::default(),

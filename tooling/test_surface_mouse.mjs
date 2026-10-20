@@ -94,7 +94,7 @@ test("station wheel produces no local navigation while Ctrl+wheel still zooms",(
             navigate:intent=>actions.push(intent.action),zoom:1,zoomTo:zoom=>actions.push(zoom)};
         vm.createContext(context);vm.runInContext(surface.slice(surface.indexOf("function wheel("),surface.indexOf("const zoomIn=")),context);
         const event={deltaY:120,preventDefault(){}};context.wheel(event);context.wheel({...event,ctrlKey:true});
-        assert.deepEqual(actions,local?["next_item",0.75]:[0.75]);
+        assert.deepEqual(actions,local?["next_page",0.75]:[0.75]);
         actions.length=0;toolsOpen=true;context.wheel(event);context.wheel({...event,ctrlKey:true});
         assert.deepEqual(actions,[]); // chrome interaction cannot scroll PTT underneath it
         toolsOpen=false;menuOpen=true;context.wheel(event);context.wheel({...event,ctrlKey:true});assert.deepEqual(actions,[]);
@@ -103,6 +103,23 @@ test("station wheel produces no local navigation while Ctrl+wheel still zooms",(
 });
 
 const samples=env=>env.sent.filter(value=>value.kind==="station_mouse_sample");
+test("board and reading wheels page in both directions while selection, zoom and editing remain local",()=>{
+    for(const kind of ["article_list","board_list","article_reading"]){
+        const actions=[],context={contextMenu:{isOpen:()=>false},tools:{open:()=>false},stationMouse:{wheel:()=>false},cancelHover(){},blocked:()=>false,
+            dragging:null,hasSelection:()=>false,viewport:{scrollWidth:100,clientWidth:100,scrollHeight:100,clientHeight:100},
+            latest:{connected:true,navigation:{kind}},navigate:intent=>actions.push(intent.action)};
+        vm.createContext(context);vm.runInContext(surface.slice(surface.indexOf("function wheel("),surface.indexOf("const zoomIn=")),context);
+        const event={deltaY:120,preventDefault(){}};
+        context.wheel(event);context.wheel({...event,deltaY:-120});
+        assert.deepEqual(actions,["next_page","previous_page"]);
+        actions.length=0;
+        context.hasSelection=()=>true;context.wheel(event);
+        context.hasSelection=()=>false;context.blocked=()=>true;context.wheel(event);
+        context.blocked=()=>false;context.viewport.scrollHeight=1010;context.wheel(event);
+        context.viewport.scrollHeight=100;context.wheel({...event,shiftKey:true});context.wheel({...event,altKey:true});
+        assert.deepEqual(actions,[]);
+    }
+});
 test("1003 coalesces a burst to one latest cell with an independent sample sequence",()=>{
     const env=environment();env.update({mouse:{...env.packet.mouse,modes:{epoch:5,tracking:"motion"}}});
     for(let col=0;col<80;col++)env.owner.move(env.event({cell:{col,row:3}}));

@@ -207,6 +207,7 @@ pub(super) enum SurfaceEvent {
     },
     SettingsSave {
         values: DisplayProfile,
+        tools_access: pttstella::settings::ToolAccess,
         tools_opacity: pttstella::settings::ToolOpacity,
         #[serde(default)]
         language: pttstella::i18n::Language,
@@ -519,12 +520,21 @@ mod admission_tests {
 
     #[test]
     fn settings_opacity_requires_a_bounded_integer_and_trusted_save() {
-        let valid = json!({"kind":"settings_save","values":{"fonts":{"kind":"platform_default"},"font_size":20,"baseline":20},"language":"en-US","tools_opacity":65,"trusted":true});
+        let valid = json!({"kind":"settings_save","values":{"fonts":{"kind":"platform_default"},"font_size":20,"baseline":20},"language":"en-US","tools_opacity":65,"tools_access":{"right_click_menu":true,"show_floating_button":true},"trusted":true});
         assert!(admits(valid.clone(), true, 7));
         assert!(!admits(valid.clone(), false, 7));
         for value in [json!(19), json!(101), json!(65.5), json!("65"), Value::Null] {
             let mut invalid = valid.clone();
             invalid["tools_opacity"] = value;
+            assert!(serde_json::from_value::<SurfaceEvent>(invalid).is_err());
+        }
+        for access in [
+            json!({"right_click_menu":"true","show_floating_button":true}),
+            json!({"right_click_menu":true}),
+            json!({"right_click_menu":true,"show_floating_button":true,"unknown":false}),
+        ] {
+            let mut invalid = valid.clone();
+            invalid["tools_access"] = access;
             assert!(serde_json::from_value::<SurfaceEvent>(invalid).is_err());
         }
     }

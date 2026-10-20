@@ -261,10 +261,8 @@ impl Connection {
         Ok(connection)
     }
     pub fn start_pointer_rows_probe() -> Result<Self, String> {
-        let connection = Self::start_owned_probe(
-            probe::navigation_page("list")?,
-            probe::Scenario::PointerRows,
-        )?;
+        let connection =
+            Self::start_owned_probe(probe::pointer_menu()?, probe::Scenario::PointerRows)?;
         connection.keep_alive(false)?;
         Ok(connection)
     }
