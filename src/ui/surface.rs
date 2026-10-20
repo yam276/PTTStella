@@ -30,6 +30,7 @@ use super::{
 
 /// Named launch options keep call sites independent of positional booleans.
 pub(super) struct Options {
+    pub(super) locale: Signal<pttstella::i18n::Language>,
     pub(super) settings_requests: watch::Receiver<u64>,
     pub(super) reload_settings: bool,
     pub(super) media_origin: Option<String>,
@@ -141,6 +142,7 @@ async fn run(
         mut pending_paste,
     } = signals;
     let Options {
+        mut locale,
         mut settings_requests,
         reload_settings,
         media_origin,
@@ -403,7 +405,16 @@ async fn run(
                             eval.send(Packet::ToolsOpacity(preferences.app().tools_opacity)).map_err(|e|e.to_string())?;
                             eval.send(Packet::ToolsAccess(preferences.app().tools_access)).map_err(|e|e.to_string())?;
                             eval.send(Packet::HoverSettings(preferences.hover())).map_err(|e|e.to_string())?;
-                            Packet::SettingsSaved(Feedback::new(SaveStatus::Saved,if preferences.app().language!=pttstella::i18n::application().language(){pttstella::msg!("settings-language-saved")}else{pttstella::msg!("settings-saved")}))
+                            let language=preferences.app().language;
+                            if language!=pttstella::i18n::application().language() {
+                                let previous=pttstella::i18n::application().language();
+                                pttstella::i18n::application().select(language);
+                                let updated={let current=message.peek();pttstella::i18n::application().relocalize_status(previous,current.as_str())};
+                                if let Some(updated)=updated {message.set(updated);}
+                                locale.set(language);
+                                eval.send(Packet::Localization {language:language.tag(),resource:language.resource(),fallback:pttstella::i18n::Language::TraditionalChinese.resource()}).map_err(|e|e.to_string())?;
+                            }
+                            Packet::SettingsSaved(Feedback::new(SaveStatus::Saved,pttstella::msg!("settings-saved")))
                         },
                         Err(error)=>Packet::SettingsSaved(Feedback::new(SaveStatus::Rejected,error)),
                     },

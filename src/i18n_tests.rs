@@ -99,3 +99,38 @@ fn independent_loaders_keep_language_and_named_arguments_without_global_switchin
     assert_eq!(chinese.loader().get("connect"), "連線");
     assert!(serde_json::from_str::<Language>("\"unsupported\"").is_err());
 }
+
+#[test]
+fn one_fluent_loader_can_switch_repeatedly_without_changing_other_loaders() {
+    let live = Localizer::new(Language::TraditionalChinese).unwrap();
+    let fixed = Localizer::new(Language::TraditionalChinese).unwrap();
+    for _ in 0..3 {
+        live.select(Language::English);
+        assert_eq!(live.language(), Language::English);
+        assert_eq!(live.loader().get("connect"), "Connect");
+        assert_eq!(
+            live.loader()
+                .get_args("paste-title", HashMap::from([("paste_lines", "3")])),
+            "Paste 3 lines of text"
+        );
+        live.select(Language::TraditionalChinese);
+        assert_eq!(live.language(), Language::TraditionalChinese);
+        assert_eq!(live.loader().get("connect"), "連線");
+        assert_eq!(fixed.loader().get("connect"), "連線");
+    }
+}
+
+#[test]
+fn live_status_refresh_changes_only_known_app_labels_and_preserves_diagnostics() {
+    let live = Localizer::new(Language::TraditionalChinese).unwrap();
+    let connected = live.loader().get("status-connected");
+    live.select(Language::English);
+    assert_eq!(
+        live.relocalize_status(Language::TraditionalChinese, &connected),
+        Some("Connected — log in to PTT manually on the screen".into())
+    );
+    assert_eq!(
+        live.relocalize_status(Language::TraditionalChinese, "HTTP 404: custom details"),
+        None
+    );
+}

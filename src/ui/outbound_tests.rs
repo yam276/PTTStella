@@ -30,6 +30,14 @@ fn outbound_results_match_the_shared_wire_examples() {
     };
     let actual = vec![
         (
+            "localization",
+            Packet::Localization {
+                language: "en-US",
+                resource: "connect = Connect\n",
+                fallback: "connect = 連線\n",
+            },
+        ),
+        (
             "station_mouse_rejected",
             Packet::StationMouseRejected {
                 lease: pttstella::mouse::input::Lease {

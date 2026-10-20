@@ -743,3 +743,16 @@ macOS arm64 原生合成 App 已確認中文介面用 opacity／透明度搜尋�
 macOS arm64 release 合成原生驗證已確認同一主視窗的 ⌘,、英文 opacity 搜尋中文介面、定位欄位、連續 checkbox autosave 實際檔案、關閉重開保留值與站點管理交接。匯出 PNG 後在設定內再次修改 checkbox，在約 47ms 的同次自動化操作內直接 ⌘Q（早於 300ms autosave debounce），最後實際設定檔保留新值、Close acknowledged、全部 owner join 及程序 exit 0；peer 拒絕全部站端 bytes。浮球加入 hover 1.2 秒／1.08 倍縮放，按住停止，減少動態效果及無 hover 裝置不啟用；未取得原生 hover 連續影格，不以靜態截圖冒充動畫觀感驗收。
 
 core 13 命令／2 replay、desktop lib 139 項、bin 72 項、全 targets Clippy、JS 133 項、Python tooling 70 項通過。初輪編譯拒絕新 UnknownReason 未窮舉，補齊 Vim 與雙語提示；JS 初輪指出測試 double 缺 document，補齊 double 並新增 modal 零站端送鍵案例後通過，未放寬產品條件。證據與過程保留 `.local/verification/in-app-settings`；候選 `dist/macos-in-app-settings/PTTStella.app` 為 arm64 release／ad-hoc，未公證，Windows／Linux 原生本輪 not_ready。使用者實站 App 與帳密未操作。
+
+
+2026-10-20 依使用者新附圖修正滑鼠版型與視覺：分類列表選取標記接受第 11 欄及既有最左欄，數字欄排除游標兩格；新版看板／最愛的底列 caption 可作命令樣式錨點，精簡表頭須保留編號或總數／看板／類別，舊版人氣／板主負例仍保留。新增兩份現代指令列自製列表及一份縮排分類資料，navigation 共 43 項、production Connection 精確核對三類的 Up＋CR，未知提示拒絕後僅接受 Close。沒有從使用者私人流量產生 fixture。附圖不是完整串流，實站仍待新版回報，未宣稱所有列表已辨識。
+
+返回命中與光棒起點分離：文章列表止於日期欄右界（零基 17 前），作者欄起可開文章；看板止於板名前（10 前）。列表標頭不攔截返回，光棒涵蓋完整列；返回僅在最左一格顯示細提示，不再以寬色塊覆蓋日期／作者。JS 核對邊界、header no-op、拖曳、網址優先、過期手勢與光棒／gutter 幾何，Windows driver 的整列 expected 改為全寬。這不代表本輪已原生點擊實站列表。
+
+語言熱切換於保存成功後發布：Rust 預先配置兩份不可變 Fluent catalog，以單一原子選擇供所有 worker 使用；Dioxus language signal 及 macOS 原生選單同步更新。JS 保留 translator callable、原子替換驗證過的 bundles，更新搜尋與字型清單／載入提示，固定 App 連線狀態換成新語言，任意診斷文字保留。匯出名稱使用 initial_value，避免 locale render 覆蓋已輸入資料。沒有重建 renderer 或重連。
+
+浮球增加第一層 Settings 直接入口，語意為開啟 dialog，沒有空分類面板。七入口重新計算半圓及間距；浮球、圖示、字級、點擊區及工具頁共用 1–1.75 倍邏輯 viewport 比例，不重複乘 DPR。小視窗備援與 resize 的停靠側、目前分類及慣性 owner 保持。新增七入口、900×700／1280×800／1920×1080／3840×2160 的非重疊、邊界與 resize 幾何測試；實體 4K 及其他 DPI 原生仍 not_ready。
+
+macOS arm64 release 本機合成原生已驗證第一層設定、同一程序中文→英文→中文、原生 Edit／Window 選單、雙語搜尋、英文工具及返回、實際保存語言。最後交付包另驗字型載入提示與清單均更新，Synthetic draft 匯出名稱熱切後保留，固定連線狀態也更新。語言前後及最終 executable 的同一 BBS PNG bytes 完全相同；各 peer 拒絕全部非預期站端 bytes，各程序 PNG、Close acknowledged、全部 owner join 及 exit 0 通過。最初原生觀察發現既有狀態與字型載入提示仍為舊語言，保留截圖並補上 refresh 後另打包驗證，未以早期候選結案。
+
+core 13 命令／2 replay、desktop lib 142 項、bin 72 項、全 targets Clippy、JS 138 項、Python tooling 70 項及 docs 通過；i18n 包含獨立 loader 往返、具名參數、無半載入狀態及 invalid JS 更新不破壞舊 catalog。初輪 Clippy 的 owned comparison 與 router 缺少 localization fixture 均保留失敗索引，補齊封包 shared example／正式 handler 後通過，沒有放寬 unknown packet。證據在 `.local/verification/live-ui`；最新交付為 `dist/macos-live-ui-delivery/PTTStella.app`，release／arm64／strict ad-hoc，未公證。Windows／Linux 原生、實體 4K 與新實站版型本輪未執行；使用者實站 App 未操作。正常退出後清理本輪中間 App／測試副本，保留報告與必要畫面。

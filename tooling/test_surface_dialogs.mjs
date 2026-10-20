@@ -121,7 +121,7 @@ test("filter edit admission, failure recovery and presentation blocking share on
 
 test("the tagged router delivers independent wire examples once and rejects legacy/unknown envelopes",()=>{
     const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8")+"\ncreateSurfaceRouter");
-    const kinds=["station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
+    const kinds=["localization","station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
         "hover_settings","tools_opacity","tools_access","sites_open","sites_result","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error","media_external",
         "media_reset","inline_open","inline_image","inline_error","inline_reset","settings_visibility","settings_launch","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","link_result","export_result"];
     const calls=[],handlers=Object.fromEntries(kinds.map(kind=>[kind,payload=>calls.push({kind,payload})]));
@@ -273,4 +273,12 @@ test("an accepted profile is retained for autosave and shutdown while its fonts 
  env.tick();assert.equal(env.sent.at(-1).kind,"settings_save");assert.equal(env.sent.at(-1).values.font_size,18);
  ui.destroy();const renders=env.renders.length;slow.resolve("");await receiving;
  assert.equal(env.renders.length,renders);assert.equal(ui.clean(),true);
+});
+
+test("live locale refresh relabels cached font choices without a second catalog request or losing the draft",async()=>{
+ const env=environment('surface-settings.js','createSettingsDialog');let prefix='中文';
+ const ui=env.create({tr:(key,args)=>prefix+key+(args?.count??''),fontLoadNote:()=>prefix+'loaded'});await ui.open(openData());
+ const request=env.sent.find(x=>x.kind==='settings_fonts').request;ui.catalog({request,families:['ASCII','中文']});
+ env.node('font-ascii').value='draft font';const count=env.sent.length;prefix='English';ui.relocalize();
+ assert.equal(env.sent.length,count);assert.equal(env.node('font-local-ascii').children[0].textContent,'Englishfont-local-choose');assert.equal(env.node('font-ascii').value,'draft font');assert.equal(env.node('font-availability').textContent,'Englishloaded');
 });

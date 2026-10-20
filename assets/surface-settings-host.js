@@ -10,7 +10,7 @@ function createSurfaceSettings(options) {
     const navigation=createSettingsNavigation({document,tr:options.tr,launch:(feature,e)=>{launch=feature;ui.close(e);}});
     function request(e){if(!e.isTrusted)return;if(dialog.open){document.getElementById("settings-search").focus();return;}ui.request(e);}
     const shortcuts=[document,"keydown",e=>{if(e.isTrusted&&(e.metaKey||e.ctrlKey)&&e.key===","&&!e.isComposing){e.preventDefault();e.stopImmediatePropagation();if(!e.repeat)request(e);}},true];
-    return {...ui,request,
+    return {...ui,request,relocalize(){ui.relocalize();navigation.relocalize();},
         open:async data=>{await ui.open(data);if(dialog.open)document.getElementById("settings-search").focus();},
         bindings:[...ui.bindings,...navigation.bindings,shortcuts],
         destroy(){launch=null;navigation.destroy();ui.destroy();}

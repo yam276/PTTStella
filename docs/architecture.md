@@ -76,7 +76,7 @@ surface 仍共同協調 Rust 版本核對，以及 JS 的輸入、選取、繪�
 
 優先驗證 Dioxus Desktop 與 Canvas 的薄繪製橋接；實際呈現路線以同一 [顯示契約](dual-color.md) 的 probe 決定。若採 JavaScript，只接收結構化 frame，不持有第二份終端狀態。
 
-UI 正常掛載並完成檔案初載後，只發起一次已保存的預設站連線，初始為 PTT WSS；合成 probe 僅連本機服務。renderer 唯一管理符合視窗／等比例 zoom 及繪製排程；接收的 Screen frame 不因縮放改寫。浮球由獨立的 surface-tools owner 管理座標、慣性、吸邊、capture 與收合；六個 Lucide 分類入口消費同一組功能按鈕，不複製業務事件。bindings 仍由同一 UI lifetime 註冊／移除，停止時撤銷 capture 與唯一 animation frame；Rust 透過獨立 data attribute 及狀態提示維持斷線／錯誤可見。尺寸變更合併為一個 animation callback，背景共用整數像素格線，圖形幾何與文字都使用同一格線與左右 clip。所有輸入／縮放／hover listener 由同一 bindings 清單註冊與移除。
+UI 正常掛載並完成檔案初載後，只發起一次已保存的預設站連線，初始為 PTT WSS；合成 probe 僅連本機服務。renderer 唯一管理符合視窗／等比例 zoom 及繪製排程；接收的 Screen frame 不因縮放改寫。浮球由獨立的 surface-tools owner 管理座標、慣性、吸邊、capture 與收合；六個 Lucide 分類及直接設定入口消費同一組功能按鈕，不複製業務事件。bindings 仍由同一 UI lifetime 註冊／移除，停止時撤銷 capture 與唯一 animation frame；Rust 透過獨立 data attribute 及狀態提示維持斷線／錯誤可見。尺寸變更合併為一個 animation callback，背景共用整數像素格線，圖形幾何與文字都使用同一格線與左右 clip。所有輸入／縮放／hover listener 由同一 bindings 清單註冊與移除。
 
 不丟原始 bytes；UI 可合併最新 frame，帶 generation／revision 防止晚到更新。手動送鍵序列化，連線關閉時停止對應擁有者，重連是新 session。
 
@@ -101,3 +101,5 @@ Connection 同時擁有防閒置的單調時鐘、預設開啟狀態、UI watch 
 合成 probe 的浮球放手觀察附在 renderer finally 的具型別 join 回覆，由同一 Resources 清理 owner 保留；Stopped 通知和 join 的先後不會遺失觀察，也不能把失敗的清理改成成功。正常模式不保存軌跡或觀察檔。
 
 設定使用主 WebView 內的單一 modal dialog，不建立原生子視窗或 App 分頁。搜尋／分類與表單共用既有 settings owner，Bridge 回覆走同一 renderer。Modal 使背景內容 inert，BBS key／text callback 另拒絕開啟中的對話框；關閉先完成 autosave，才恢復輸入焦點，站點／名單管理入口也先完成關閉再交接。退出時同一 renderer 的 finally 回傳最後修改快照，待共同 Files drain 完成後保存；沒有第二個 eval、事件 channel 或 native window lifetime。主畫面、PNG 與字型預覽共用 [surface-renderer](../assets/surface-renderer.js)。
+
+語言選擇由同一偏好保存結果驅動，Dioxus reactive language signal、原生選單與結構化 Localization 更新共用已保存語言。Rust 預載兩份不可變 Fluent catalog，只原子切換選擇；JS 保留 translator callable 並原子替換已驗證 bundles，不重建 view lifetime 或 connection。既有 canonical App 狀態可重譯，任意診斷內容不猜測翻譯。

@@ -26,6 +26,9 @@ pub struct AppProps {
 }
 
 pub fn app(props: AppProps) -> Element {
+    let locale = use_signal(|| pttstella::i18n::application().language());
+    use_context_provider(|| locale);
+    let _language = locale();
     dioxus::desktop::use_asset_handler("pttstella-fonts", |request, responder| {
         responder.respond(crate::fonts::response(&request));
     });
@@ -139,6 +142,20 @@ pub fn app(props: AppProps) -> Element {
         }
     };
     let mut message = use_signal(|| pttstella::msg!("status-offline-preview"));
+    #[cfg(target_os = "macos")]
+    {
+        let menu = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(None)));
+        use_effect(move || {
+            let _language = locale();
+            match crate::macos::menu() {
+                Ok(next) => {
+                    next.init_for_nsapp();
+                    *menu.borrow_mut() = Some(next);
+                }
+                Err(error) => message.set(error.to_string()),
+            }
+        });
+    }
     let phase = use_signal(|| Phase::Disconnected);
     let mut started = use_signal(|| false);
     let mut fatal = use_signal(|| false);
@@ -287,7 +304,7 @@ pub fn app(props: AppProps) -> Element {
                         let surface_probe = surface_probe.clone();
                         let settings_requests = settings_requests.1.clone();
                         spawn(async move {
-                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, Options { settings_requests, reload_settings, media_origin, window_probe, login_probe, filters_probe, surface_probe:surface_probe.clone() }).await;
+                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, Options { locale, settings_requests, reload_settings, media_origin, window_probe, login_probe, filters_probe, surface_probe:surface_probe.clone() }).await;
                             if let Err(error) = result {
                                 fatal.set(true);
                                 message.set(pttstella::msg!("fatal-reopen", error = error));
@@ -509,6 +526,7 @@ fn context_menu() -> Element {
 
 #[component]
 pub(super) fn SettingsForm() -> Element {
+    let _language = use_context::<Signal<pttstella::i18n::Language>>()();
     rsx! {
             dialog { id: "font-dialog", class: "paste-preview font-dialog", "aria-labelledby": "font-title",
                 h2 { id: "font-title", class:"settings-brand", BrandSettingsCaption{} }
@@ -645,7 +663,7 @@ pub(super) fn SettingsForm() -> Element {
                 section { "data-settings-page":"appearance", class: "settings-section",
                     label {
                         SettingsCaption { label: pttstella::msg!("profile-name"), icon: rsx! { FileText { size: 18 } } }
-                        input { id: "font-profile-name", r#type: "text", maxlength: "128", value: pttstella::msg!("profile-default-name") }
+                        input { id: "font-profile-name", r#type: "text", maxlength: "128", initial_value: pttstella::msg!("profile-default-name") }
                     }
                     div { class: "dialog-actions settings-actions",
                         button { id: "profile-import", title: pttstella::msg!("profile-import"), "aria-describedby": "settings-profile-help",
@@ -694,6 +712,7 @@ pub(super) fn SettingsForm() -> Element {
 
 #[component]
 fn BrandSettingsCaption() -> Element {
+    let _language = use_context::<Signal<pttstella::i18n::Language>>()();
     let mark = format!(
         "data:image/svg+xml;base64,{}",
         base64::engine::general_purpose::STANDARD
