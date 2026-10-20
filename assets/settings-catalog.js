@@ -25,7 +25,7 @@ function searchSettings(entries,query){
 function createSettingsNavigation({document,tr,launch}){
     const search=document.getElementById('settings-search'),results=document.getElementById('settings-results');
     const pages=[...document.querySelectorAll('[data-settings-page]')],categories=[...document.querySelectorAll('[data-settings-category]')];
-    const entries=settingsCatalog(tr);let current='general';
+    let entries=settingsCatalog(tr);let current='general';
     function show(page,id){
         current=page;document.getElementById("font-defaults").hidden=!["general","appearance","input","media"].includes(page);search.value='';results.hidden=true;results.replaceChildren();
         for(const section of pages)section.hidden=section.dataset.settingsPage!==page;
@@ -47,5 +47,5 @@ function createSettingsNavigation({document,tr,launch}){
     }
     const bindings=[[search,'input',find],...categories.map(button=>[button,'click',e=>{if(e.isTrusted)show(button.dataset.settingsCategory);}]),
         ...[...document.querySelectorAll('[data-settings-launch]')].map(button=>[button,'click',e=>{if(e.isTrusted)launch(button.dataset.settingsLaunch,e);}])];
-    show('general');return {bindings,show,current:()=>current,destroy(){results.replaceChildren();}};
+    show('general');return {bindings,show,relocalize(){entries=settingsCatalog(tr);if(search.value.trim())find();},current:()=>current,destroy(){results.replaceChildren();}};
 }

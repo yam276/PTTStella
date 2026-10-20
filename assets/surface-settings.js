@@ -17,6 +17,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
     const sourceButtons=[...document.querySelectorAll("[data-font-source]")];
     const sources=document.getElementById("font-sources");
     let hoverTouched=false,hoverVersion=0,savedHoverVersion=0;
+    let lastCatalog=null,lastPreview=null;
     let catalogRequest=0,saveTimer=0,dirty=false,closing=false,composing=false,pendingSave=null;
     function state(message){fontNote.textContent=message;fontSave.hidden=!dirty||fontSaving;fontSave.disabled=fontSaving;}
     function scheduleSave(e){
@@ -50,6 +51,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
     }
     function catalog(data){
         if(disposed||!fontDialog.open||data.request!==catalogRequest)return;
+        lastCatalog=data;
         fontRefresh.disabled=false;
         for(const field of Object.values(localChoices)){
             const placeholder=document.createElement("option");placeholder.value="";placeholder.textContent=tr("font-local-choose");
@@ -122,6 +124,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
     async function preview(settings,packet,valid){
         const warning=await loadFonts(settings);
         if(disposed||!valid())return;
+        lastPreview={settings,warning};
         fontAvailability.textContent=fontLoadNote(settings,warning);
         if(warning)sources.open=true;
         render(fontPreview,packet,{cursor:false});
@@ -173,10 +176,11 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
         if(closing)finishClose();
     }
     function revoke(){disposed=true;clearTimeout(saveTimer);saveTimer=0;epoch++;catalogRequest++;clearTimeout(fontTimer);fontTimer=0;fontPreviewNext=null;}
-    function destroy(){revoke();fontDraft=null;fontPreviewBusy=false;profileBusy=false;fontSaving=false;if(fontDialog.open)fontDialog.close();}
+    function destroy(){revoke();fontDraft=null;lastCatalog=null;lastPreview=null;fontPreviewBusy=false;profileBusy=false;fontSaving=false;if(fontDialog.open)fontDialog.close();}
     return {request:openFonts,close:closeFonts,
         snapshot(){if(!dirty&&!fontSaving)return null;if(!validFields())throw new Error(tr("settings-autosave-invalid"));return {kind:"settings_save",values:readFonts(),language:language.value,hover:hoverTouched?hoverPosition.value:null,tools_opacity:Number(toolsOpacity.value),tools_access:{right_click_menu:rightClickMenu.checked,show_floating_button:showFloatingButton.checked},trusted:true};},
         open,preview:receivePreview,catalog,profile,saved,revoke,destroy,
+        relocalize(){updateOpacity();if(fontDialog.open){if(lastCatalog)catalog(lastCatalog);if(lastPreview)fontAvailability.textContent=fontLoadNote(lastPreview.settings,lastPreview.warning);}},
         notice(message){if(!fontDialog.open)return false;fontNote.textContent=message;return true;},
         clean:()=>disposed&&fontTimer===0&&saveTimer===0&&fontPreviewNext===null&&!fontDialog.open,
         bindings:[

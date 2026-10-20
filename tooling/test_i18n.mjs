@@ -29,3 +29,11 @@ test("the independent Rust/JS bootstrap fixture retains the tagged envelope",()=
     packet.payload.language="zh-TW";packet.payload.resource=packet.payload.fallback;
     assert.equal(create(packet,exports)("connect"),"連線");
 });
+
+test("live catalog replacement preserves callable references and rejects invalid updates atomically",()=>{
+ const tr=translator('zh-TW'),retained=id=>tr(id);
+ const packet=language=>({kind:'localization',payload:{language,resource:readFileSync(new URL('../locales/'+language+'/pttstella.ftl',import.meta.url),'utf8'),fallback:readFileSync(new URL('../locales/zh-TW/pttstella.ftl',import.meta.url),'utf8')}});
+ tr.update(packet('en-US'));assert.equal(retained('connect'),'Connect');
+ assert.throws(()=>tr.update({kind:'localization',payload:{language:'unknown'}}));assert.equal(tr('connect'),'Connect');
+ tr.update(packet('zh-TW'));assert.equal(retained('connect'),'連線');
+});

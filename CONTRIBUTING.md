@@ -169,7 +169,7 @@ AID 核心另核對 article_navigation 的自製 article-open fixture 與 naviga
 
 將該程序的 probe-bookmarks.json 原樣複製至新目錄，以英文 probe-settings.json 啟動 `bookmarks_restart`，檢查中文名稱與識別不變，再明確移除最後一筆；複製新空檔到第三目錄啟動 `bookmarks_empty`，確認仍空。第四目錄將 probe-bookmarks.json 設成自製 `broken`，啟動 `bookmarks_corrupt`，確認警告、保存／移除停用、輸入合法目標後 Enter 零修改。後三個 peer 拒絕所有站端 bytes，各程序需 Close acknowledged／所有 owner join／退出碼 0。獨立核對更名保留建立時間、移除後備份為前版 bytes、重啟 seed 相同、空檔及壞檔未自動改寫。只用獨立 probe 路徑，不取用正式書籤；原生貼上中文不代表 IME 候選窗通過。
 
-浮球工具列變更另跑 `node --test tooling/test_surface_tools.mjs`：檢查點擊／拖曳分流、六類功能、最近 120ms／最多 16 筆軌跡的放手速度、末端小抖動、合併至 pointerup 的位移、停止／反向、慣性與吸邊、有界座標、外來 pointer、實體按鈕遺失、取消／失焦／隱藏／清理、減少動態效果與小視窗。正式功能仍沿用原本的按鈕 ID、Rust 准入及 owner，不新增第二條操作管線。合成 probe 關閉時附帶有型別、定長的浮球觀察（按下／移動／放開計數、最後放手速度、滑行幀數與減少動態效果）；正常模式不保存這些資料。原生驗證需確認扇形／各分類、拖曳後不誤開啟、選取後仍可匯出、沒有額外站端 bytes，以及正常 Close／全部 owner join；單元的模擬事件不算原生驗收。
+浮球工具列變更另跑 `node --test tooling/test_surface_tools.mjs`：檢查點擊／拖曳分流、六類功能與直接設定、七入口及 4K 邏輯尺寸的非重疊幾何、最近 120ms／最多 16 筆軌跡的放手速度、末端小抖動、合併至 pointerup 的位移、停止／反向、慣性與吸邊、有界座標、外來 pointer、實體按鈕遺失、取消／失焦／隱藏／清理、減少動態效果與小視窗。正式功能仍沿用原本的按鈕 ID、Rust 准入及 owner，不新增第二條操作管線。合成 probe 關閉時附帶有型別、定長的浮球觀察（按下／移動／放開計數、最後放手速度、滑行幀數與減少動態效果）；正常模式不保存這些資料。原生驗證需確認扇形／各分類、拖曳後不誤開啟、選取後仍可匯出、沒有額外站端 bytes，以及正常 Close／全部 owner join；單元的模擬事件不算原生驗收。
 
 Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_inline_images.mjs tooling/test_surface_links.mjs tooling/test_surface_dialogs.mjs`、i18n 及 Clippy。原生 inline probe 的 loopback 圖片 peer 應提供 colours.png 和明確 404 的 missing.png，核對兩次 Enter 僅各一個 GET、文章內插圖與錯誤、PNG 不含插圖、零站端 bytes 及 Close／owner join；瀏覽器排版測試不能取代此准入驗收。
 
@@ -182,3 +182,5 @@ Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_
 統一設定視窗變更另跑完整 JS、desktop lib／bin、Clippy、i18n 與 Python tooling 測試。Windows driver 核對中英文搜尋、實際偏好檔與畫面像素、無效中間值不寫入、分類恢復預設、匯入自動保存及重開；設定 driver 必須回傳主 target 本身，重複開啟不探索或建立輔助 CDP target。缺少 Windows runner 仍為 not_ready。macOS 原生另核對 ⌘,、品牌與 Lucide、連續修改自動保存、同一主視窗內的對話框關閉／重開、設定開啟時 ⌘Q、PNG 與 Close／全部 owner join，還要確認程序退出；只有 cleanup JSON 不能證明沒有隱藏視窗殘留。
 
 `--probe-surface OUTPUT_DIRECTORY inline_pages --media-origin http://127.0.0.1:PORT` 使用兩頁自製閱讀畫面。同一 URL 在兩頁的 link index／行位置不同，peer 只接受 PageDown、PageUp 及 Close，圖片 HTTP 請求不得因往返重複；仍須兩次 Enter 一個 batch、兩頁可見圖片、PNG 與完整清理。此案例不取代原本零站端 bytes 的 inline 探針。
+
+即時語言變更另核對獨立 Localizer 往返、具名參數無隔離字元、invalid Localization 保留舊 bundles、目前搜尋／快取字型選項／草稿、macOS 原生選單及第一層設定入口；同一合成 session 切換前後 PNG 須逐像素相同，peer 拒絕全部非預期 bytes。返回區變更須分別驗日期／作者邊界、標頭不攔截、完整列光棒與只裝飾一欄的返回提示；新版最愛、完整看板與第 11 欄分類游標另由 Connection 核對列差＋CR 及過期拒絕。
