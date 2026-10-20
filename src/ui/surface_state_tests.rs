@@ -732,3 +732,141 @@ fn focused_id_survives_contiguous_pages_but_not_a_new_article_segment() {
     let fresh = displayed(&mut state, &view);
     assert!(state.current(fresh, &view).unwrap().reply_focus.is_none());
 }
+
+#[test]
+fn raw_reading_switch_revokes_cached_selection_links_and_delayed_ack() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let view = view();
+    let old = displayed(&mut state, &view);
+    state.select(old, 77, &Selection::All, &view).unwrap();
+    hover(&mut state, old, &view);
+    state.display_changed();
+    let pending = Identity::of(
+        state
+            .queue(&view, false, &DisplaySettings::default())
+            .unwrap(),
+    );
+    assert!(state.set_raw_reading(true));
+    assert!(state.current(old, &view).is_none());
+    assert!(!state.navigation_shown(view.stamp()));
+    assert!(!state.clear_hover());
+    state.acknowledge(pending).unwrap();
+    assert!(state.current(pending, &view).is_none());
+    assert!(state.export_rows(pending, Some(77), &view).is_err());
+    let raw = displayed(&mut state, &view);
+    assert!(state.current(raw, &view).unwrap().article.is_none());
+    assert!(state.set_raw_reading(false));
+    assert!(state.current(raw, &view).is_none());
+    let fresh = displayed(&mut state, &view);
+    assert!(state.current(fresh, &view).unwrap().article.is_some());
+}
+
+#[test]
+fn clearing_reply_focus_cannot_reuse_the_old_presentation() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let view = view();
+    let old = displayed(&mut state, &view);
+    assert!(state.focus_reply(old, view.stamp(), Some(5), &view));
+    let focused = displayed(&mut state, &view);
+    state.select(focused, 78, &Selection::All, &view).unwrap();
+    let lease = state.lease_output(focused, Some(78), view.input_epoch);
+    state.clear_article();
+    state.display_changed();
+    assert!(lease.check(&view).is_err());
+    assert!(state.current(focused, &view).is_none());
+    let restored = displayed(&mut state, &view);
+    assert_ne!(focused.presentation, restored.presentation);
+    assert!(state.current(focused, &view).is_none());
+    assert!(
+        state
+            .current(restored, &view)
+            .unwrap()
+            .reply_focus
+            .is_none()
+    );
+}
+
+#[test]
+fn reading_modes_lengths_and_account_policies_keep_text_links_and_exports_consistent() {
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/filters.json")).unwrap();
+    for mode in [ArticleMode::Web, ArticleMode::Terminal] {
+        for last in [16, 23] {
+            for policy in [
+                None,
+                Some(filters::Policy::Mask),
+                Some(filters::Policy::MaskRow),
+                Some(filters::Policy::Allow),
+            ] {
+                let mut rules = filters::Rules::default();
+                if let Some(policy) = policy {
+                    rules = rules.edit_policy("Alice", "", policy, false).unwrap();
+                }
+                let mut state = SurfaceState::new(rules);
+                state.set_article_mode(mode);
+                let mut view = view();
+                let mut screen = Screen::new(80, 24).unwrap();
+                screen.feed(
+                    &pttstella::encoding::encode(
+                        &fixture["reading"]
+                            .as_str()
+                            .unwrap()
+                            .replace("24~46", &format!("1~{last}")),
+                    )
+                    .unwrap(),
+                );
+                view.frame = screen.frame();
+                let identity = displayed(&mut state, &view);
+                let paint = state.current(identity, &view).unwrap();
+                let rows = pttstella::text::rows(&paint.frame).unwrap();
+                assert_eq!(rows.len(), 24);
+                assert_eq!(paint.frame.cols, 80);
+                assert_eq!(paint.article.is_some(), mode == ArticleMode::Web);
+                let blocked = matches!(
+                    policy,
+                    Some(filters::Policy::Mask | filters::Policy::MaskRow)
+                );
+                let expected = if blocked {
+                    vec!["https://example.com/visible.png"]
+                } else {
+                    vec![
+                        "https://example.com/hidden.png",
+                        "https://example.com/visible.png",
+                    ]
+                };
+                assert_eq!(
+                    paint
+                        .links
+                        .iter()
+                        .map(|l| l.url.as_str())
+                        .collect::<Vec<_>>(),
+                    expected
+                );
+                assert_eq!(paint.image_links.len(), expected.len());
+                let visible = paint
+                    .links
+                    .iter()
+                    .position(|l| l.url.ends_with("/visible.png"))
+                    .unwrap();
+                assert_eq!(
+                    state
+                        .copy_text(
+                            identity,
+                            &super::super::protocol::CopyTarget::Link { index: visible },
+                            &view
+                        )
+                        .unwrap(),
+                    "https://example.com/visible.png"
+                );
+                assert!(state.select(identity, 79, &Selection::All, &view).is_some());
+                assert_eq!(state.export_rows(identity, Some(79), &view).unwrap(), 0..24);
+                assert!(state.reveal(identity, true, &view));
+                assert!(state.current(identity, &view).is_none());
+                let revealed = displayed(&mut state, &view);
+                let paint = state.current(revealed, &view).unwrap();
+                assert_eq!(paint.links.len(), 2);
+                assert!(pttstella::text::rows(&paint.frame).is_some());
+            }
+        }
+    }
+}

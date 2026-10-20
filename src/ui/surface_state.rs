@@ -354,9 +354,8 @@ impl SurfaceState {
             return false;
         }
         self.raw_reading = raw;
-        self.article.clear();
-        self.reply_focus = None;
-        self.display_changed();
+        self.filters.touch();
+        self.policy_changed();
         true
     }
     pub(super) fn reading_context(&self, view: &View) -> Option<Context> {
@@ -404,7 +403,7 @@ impl SurfaceState {
     ) {
         let context = view.context();
         if let Ok(bytes) = pttstella::navigation::plan(&context, intent) {
-            self.article.input(&context, &bytes);
+            self.article_input(&context, &bytes);
         }
         self.article
             .begin_fetch(intent, &context, view.frame.revision);
@@ -423,12 +422,16 @@ impl SurfaceState {
             .continue_fetch(&view.context(), view.frame.revision)
     }
     pub(super) fn clear_article(&mut self) {
-        self.reply_focus = None;
-        self.article.clear();
+        if self.article.active() || self.reply_focus.is_some() {
+            self.filters.touch();
+            self.policy_changed();
+        } else {
+            self.article.clear();
+        }
     }
     pub(super) fn article_input(&mut self, context: &Context, bytes: &[u8]) {
-        if !super::article_cache::reading_input(context, bytes) {
-            self.reply_focus = None;
+        if !bytes.is_empty() && !super::article_cache::reading_input(context, bytes) {
+            self.clear_article();
         }
         self.article.input(context, bytes);
     }
@@ -460,7 +463,7 @@ impl SurfaceState {
     /// Its snapshot stays ineligible for current interactions after this update.
     pub(super) fn update(&mut self, view: &View) -> bool {
         self.article.observe(view);
-        if self
+        if (self
             .reply_focus
             .as_ref()
             .is_some_and(|(generation, _, _)| *generation != view.generation)
@@ -469,9 +472,10 @@ impl SurfaceState {
             || (!view.output_pending
                 && !view.input_pending
                 && view.frame.control_complete
-                && !matches!(view.context(), Context::ArticleReading { .. }))
+                && !matches!(view.context(), Context::ArticleReading { .. })))
+            && self.reply_focus.take().is_some()
         {
-            self.reply_focus = None;
+            self.focus_changed();
         }
         let version = self.filters.version();
         self.filters.sync(view.generation, view.frame.revision);
