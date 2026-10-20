@@ -73,6 +73,11 @@ pub fn app(props: AppProps) -> Element {
             .and_then(|bytes| {
                 if boards_probing {
                     Connection::start_board_probe()
+                } else if sample_case.as_deref() == Some("inline_pages") {
+                    Connection::start_inline_pages_probe(
+                        bytes,
+                        super::probe::inline_second_page(media_origin.as_deref())?,
+                    )
                 } else if articles_probing {
                     Connection::start_article_probe()
                 } else if sample_case.as_deref() == Some("pointer_rows") {

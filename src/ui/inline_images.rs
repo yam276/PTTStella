@@ -1,4 +1,4 @@
-//! One explicit expansion of the acknowledged, filtered reading page.
+//! Article-scoped expansion; page projections use only acknowledged filtered links.
 use super::{presentation::Paint, surface_state::Identity};
 use futures_util::future::BoxFuture;
 use pttstella::{
@@ -12,12 +12,14 @@ use serde::Serialize;
 use std::collections::VecDeque;
 
 const MAX_IMAGES: usize = 8;
+const MAX_ARTICLE_IMAGES: usize = 32;
 const MAX_PIXELS: usize = 16 * 1024 * 1024;
 const MAX_BYTES: usize = 24 * 1024 * 1024;
 #[derive(Clone, Serialize)]
 pub(super) struct Entry {
     pub index: usize,
     pub row: usize,
+    pub key: usize,
 }
 #[derive(Serialize)]
 pub(super) struct Open {
@@ -38,6 +40,8 @@ type Job = BoxFuture<'static, Result<Loaded, media::loader::Error>>;
 pub(super) struct InlineImages {
     sequence: u64,
     identity: Option<Identity>,
+    turning: bool,
+    targets: Vec<String>,
     queue: VecDeque<(usize, String)>,
     job: Option<(usize, Job)>,
     loader: Loader,
@@ -47,18 +51,79 @@ pub(super) struct InlineImages {
 impl InlineImages {
     pub(super) fn close(&mut self) {
         self.identity = None;
+        self.turning = false;
+        self.targets.clear();
         self.queue.clear();
         self.job = None;
         self.bytes = 0;
         self.pixels = 0;
     }
-    pub(super) fn invalidate(&mut self, identity: Option<Identity>) -> bool {
-        if self.identity.is_some() && self.identity != identity {
+    pub(super) fn active(&self) -> bool {
+        self.identity.is_some()
+    }
+    pub(super) fn navigation(
+        &mut self,
+        context: &Context,
+        intent: pttstella::navigation::Intent,
+    ) -> bool {
+        pttstella::navigation::plan(context, intent).is_ok_and(|bytes| self.input(context, &bytes))
+    }
+    /// Only actual reading movements preserve the current article scope.
+    pub(super) fn input(&mut self, context: &Context, bytes: &[u8]) -> bool {
+        if !self.active() || bytes.is_empty() {
+            return false;
+        }
+        if matches!(context, Context::ArticleReading { .. })
+            && matches!(
+                bytes,
+                b"\x1b[5~"
+                    | b"\x1b[6~"
+                    | b"\x1b[H"
+                    | b"\x1b[F"
+                    | b" "
+                    | b"j"
+                    | b"k"
+                    | b"\x06"
+                    | b"\x02"
+            )
+        {
+            self.turning = true;
+            false
+        } else {
+            self.close();
+            true
+        }
+    }
+    pub(super) fn observe(&mut self, view: &pttstella::connection::View) -> bool {
+        let Some(identity) = self.identity else {
+            return false;
+        };
+        let invalid = identity.generation != view.generation
+            || view.phase != pttstella::connection::Phase::Connected
+            || !view.site.ptt_features()
+            || view.mouse.route != pttstella::mouse::input::Route::Local;
+        // A page redraw may be fragmented. Keep resources hidden until a complete
+        // reading frame is acknowledged, without treating a partial prompt as a new article.
+        let left = !view.input_pending
+            && !view.output_pending
+            && view.frame.control_complete
+            && match view.context() {
+                Context::ArticleReading { .. } => false,
+                Context::Unknown { .. } => !self.turning,
+                _ => true,
+            };
+        if invalid || left {
             self.close();
             true
         } else {
             false
         }
+    }
+    pub(super) fn follow(&mut self, paint: &Paint) -> Result<Option<Open>, String> {
+        if !self.active() {
+            return Ok(None);
+        }
+        self.open(paint)
     }
     pub(super) fn open(&mut self, paint: &Paint) -> Result<Option<Open>, String> {
         let identity = Identity {
@@ -76,6 +141,12 @@ impl InlineImages {
         {
             return Ok(None);
         }
+        if self
+            .identity
+            .is_some_and(|old| old.generation != identity.generation)
+        {
+            self.close();
+        }
         let mut targets: Vec<(usize, usize, String)> = Vec::new();
         for (index, link) in paint.links.iter().enumerate() {
             if let Ok(Some(target)) = media::classify(&link.url)
@@ -88,26 +159,39 @@ impl InlineImages {
                 }
             }
         }
-        if targets.is_empty() {
+        if targets.is_empty() && !self.active() {
             return Ok(None);
         }
-        let sequence = self
-            .sequence
-            .checked_add(1)
-            .ok_or_else(|| pttstella::msg!("media-sequence-exhausted"))?;
-        self.close();
-        self.sequence = sequence;
+        if !self.active() {
+            self.sequence = self
+                .sequence
+                .checked_add(1)
+                .ok_or_else(|| pttstella::msg!("media-sequence-exhausted"))?;
+        }
+        let sequence = self.sequence;
+        self.turning = false;
         self.identity = Some(identity);
-        let limited = targets.len() > MAX_IMAGES;
-        let entries = targets
-            .into_iter()
-            .take(MAX_IMAGES)
-            .map(|(index, row, url)| {
-                self.queue.push_back((index, url));
-                Entry { index, row }
-            })
-            .collect();
-        self.start_next();
+        let mut limited = targets.len() > MAX_IMAGES;
+        let mut entries = Vec::new();
+        for (index, row, url) in targets.into_iter().take(MAX_IMAGES) {
+            let key = match self.targets.iter().position(|known| known == &url) {
+                Some(key) => key,
+                None if self.targets.len() < MAX_ARTICLE_IMAGES => {
+                    let key = self.targets.len();
+                    self.targets.push(url.clone());
+                    self.queue.push_back((key, url));
+                    key
+                }
+                None => {
+                    limited = true;
+                    continue;
+                }
+            };
+            entries.push(Entry { index, row, key });
+        }
+        if self.job.is_none() {
+            self.start_next();
+        }
         Ok(Some(Open {
             batch: sequence,
             presentation: identity.presentation,
@@ -188,12 +272,7 @@ mod tests {
         );
         assert!(owner.open(&p).unwrap().is_none());
         assert_eq!(owner.queue.len(), 7);
-        assert!(!owner.invalidate(Some(Identity {
-            presentation: p.presentation,
-            generation: p.generation,
-            revision: p.frame.revision
-        })));
-        assert!(owner.invalidate(None));
+        owner.close();
         assert!(owner.job.is_none());
         assert!(owner.queue.is_empty());
         assert_eq!(owner.open(&p).unwrap().unwrap().batch, 2);
@@ -245,7 +324,7 @@ mod tests {
         assert_eq!((image.width, image.height), (64, 32));
         // The next future is owned but not polled: revocation cannot leave background traffic.
         assert!(owner.job.is_some());
-        owner.invalidate(None);
+        owner.close();
         assert!(owner.job.is_none());
         server.await.unwrap();
     }
@@ -268,5 +347,65 @@ mod tests {
         p.links.clear();
         assert!(owner.open(&p).unwrap().is_none());
         assert!(owner.job.is_none());
+    }
+    #[test]
+    fn page_turns_reuse_resource_keys_and_only_queue_new_visible_urls() {
+        let mut owner = InlineImages::default();
+        let mut p = page();
+        p.links.truncate(2);
+        let first = owner.open(&p).unwrap().unwrap();
+        assert_eq!(owner.targets.len(), 2);
+        assert!(!owner.input(&p.navigation, b"\x1b[6~"));
+        p.frame.revision += 1;
+        p.links.swap(0, 1);
+        p.links[0].row = 8;
+        let second = owner.follow(&p).unwrap().unwrap();
+        assert_eq!(second.batch, first.batch);
+        assert_eq!(second.entries[0].key, 1);
+        assert_eq!(second.entries[0].index, 0);
+        assert_eq!(second.entries[0].row, 8);
+        assert_eq!(owner.targets.len(), 2);
+        assert_eq!(owner.queue.len(), 1);
+        p.frame.revision += 1;
+        p.links.clear();
+        assert!(owner.follow(&p).unwrap().unwrap().entries.is_empty());
+        assert!(owner.active());
+        assert!(owner.input(&p.navigation, b"n"));
+        assert!(owner.follow(&page()).unwrap().is_none());
+        assert!(owner.targets.is_empty());
+        assert_eq!(owner.open(&page()).unwrap().unwrap().batch, first.batch + 1);
+    }
+    #[test]
+    fn article_resource_count_is_bounded_across_many_pages_and_does_not_redownload_old_urls() {
+        let mut owner = InlineImages::default();
+        let mut p = page();
+        let mut last = None;
+        for page in 0..6 {
+            p.frame.revision += 1;
+            for (index, link) in p.links.iter_mut().enumerate() {
+                link.url = format!("http://127.0.0.1:9/{page}-{index}.png");
+            }
+            last = owner.open(&p).unwrap();
+        }
+        assert!(last.unwrap().limited);
+        assert_eq!(owner.targets.len(), 32);
+        assert_eq!(owner.queue.len(), 31);
+        owner.close();
+        assert!(owner.targets.is_empty());
+        assert!(owner.job.is_none());
+    }
+    #[test]
+    fn a_new_connection_cannot_reuse_the_old_article_or_its_pending_download() {
+        let mut owner = InlineImages::default();
+        let mut p = page();
+        let first = owner.open(&p).unwrap().unwrap();
+        p.generation += 1;
+        p.links.truncate(1);
+        let next = owner.open(&p).unwrap().unwrap();
+        assert_eq!(next.batch, first.batch + 1);
+        assert_eq!(owner.targets.len(), 1);
+        assert_eq!(owner.queue.len(), 0);
+        owner.close();
+        assert!(!owner.active());
     }
 }

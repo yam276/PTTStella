@@ -321,7 +321,11 @@ fn outbound_results_match_the_shared_wire_examples() {
                 presentation: 3,
                 generation: 7,
                 revision: 4,
-                entries: vec![super::inline_images::Entry { index: 1, row: 8 }],
+                entries: vec![super::inline_images::Entry {
+                    index: 1,
+                    row: 8,
+                    key: 0,
+                }],
                 limited: false,
             }),
         ),

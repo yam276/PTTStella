@@ -514,8 +514,8 @@ sites-help = Switch connection closes the current connection first. Only Save fa
 
 sites-remove = Remove favourite
 
-inline-image-budget = This page reached the image budget. Open the link to preview separately.
-inline-image-limit = Up to 8 images per page. Open other links to preview separately.
+inline-image-budget = This article reached the image budget. Open the link to preview separately.
+inline-image-limit = Up to 8 images per page and 32 retained per article. Open other links to preview separately.
 
 context-title = Surface actions
 context-copy = Copy selected text

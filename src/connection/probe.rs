@@ -23,6 +23,7 @@ pub(super) enum Scenario {
     Filters,
     Surface,
     PointerRows,
+    InlinePages { first: Vec<u8>, second: Vec<u8> },
 }
 
 #[derive(Clone, Copy)]
@@ -655,6 +656,7 @@ pub(super) async fn serve(
             | Scenario::Login2fa
             | Scenario::Surface
             | Scenario::PointerRows
+            | Scenario::InlinePages { .. }
             | Scenario::Boards
             | Scenario::Articles
             | Scenario::Bookmarks
@@ -676,6 +678,18 @@ pub(super) async fn serve(
             .map_err(|e| e.to_string())?;
         if matches!(scenario, Scenario::Window) {
             return window(&mut socket).await;
+        }
+        if let Scenario::InlinePages {first,second} = scenario {
+            for (expected,page) in [(b"\x1b[6~".as_slice(),second),(b"\x1b[5~".as_slice(),first)] {
+                if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected) {
+                    return Err("inline page probe expected exact page down/up, without extra station input".into());
+                }
+                socket.send(Message::Binary(page.into())).await.map_err(|e|e.to_string())?;
+            }
+            return match socket.next().await {
+                Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
+                _=>Err("inline page probe expected Close after the round trip".into()),
+            };
         }
         if let Scenario::Mouse { boundary } = scenario {
             return mouse(&mut socket, boundary).await;
