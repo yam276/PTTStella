@@ -66,6 +66,7 @@ pub fn app(props: AppProps) -> Element {
                 | "short_reading"
                 | "context_menu"
                 | "account_lists"
+                | "account_articles"
         )
     );
     let reload_settings = props.reload_settings;
@@ -331,6 +332,7 @@ pub fn app(props: AppProps) -> Element {
                 label { {pttstella::msg!("filters-account-id")} input { id: "filters-id", maxlength: "12", autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
                 label { {pttstella::msg!("filters-policy")} select { id: "filters-policy",
                     option { value: "mask", {pttstella::msg!("filters-policy-mask")} }
+                    option { value: "mask_row", {pttstella::msg!("filters-policy-mask-row")} }
                     option { value: "allow", {pttstella::msg!("filters-policy-allow")} }
                 } }
                 label { {pttstella::msg!("filters-note")} input { id: "filters-note", maxlength: "128", autocomplete: "off" } }

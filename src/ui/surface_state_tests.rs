@@ -240,6 +240,50 @@ fn rule_changes_invalidate_selection_hover_copy_and_png_until_the_new_ack() {
 }
 
 #[test]
+fn row_masks_and_id_highlights_rebuild_cached_and_terminal_outputs() {
+    use pttstella::{filters::Policy, settings::ArticleMode, text};
+    for mode in [ArticleMode::Web, ArticleMode::Terminal] {
+        let mut state = SurfaceState::new(filters::Rules::default());
+        let view = view();
+        let settings = DisplaySettings::default();
+        state.set_article_mode(mode);
+        let old = displayed(&mut state, &view);
+        let rules = filters::Rules::default()
+            .edit_policy("Alice", "", Policy::MaskRow, false)
+            .unwrap()
+            .edit_policy("Bob", "", Policy::Allow, false)
+            .unwrap();
+        state.replace_rules(rules);
+        assert!(state.current(old, &view).is_none());
+        let fresh = Identity::of(state.queue(&view, false, &settings).unwrap());
+        state.acknowledge(fresh).unwrap();
+        let packet = state.current(fresh, &view).unwrap();
+        for frame in [
+            &packet.frame,
+            packet.source_frame.as_ref().unwrap_or(&packet.frame),
+        ] {
+            assert_eq!(text::rows(frame).unwrap()[5].text, "█".repeat(80));
+            assert_eq!(text::rows(frame).unwrap()[6].text, "█".repeat(80));
+            assert!(
+                frame
+                    .glyphs
+                    .iter()
+                    .filter(|g| g.row == 8 && (3..6).contains(&g.col))
+                    .all(|g| g.left.fg == 6 && g.left.bright)
+            );
+        }
+        assert!(!packet.links.iter().any(|l| l.url.contains("hidden.png")));
+        assert!(state.reveal(fresh, true, &view));
+        let revealed = displayed(&mut state, &view);
+        assert!(
+            text::rows(&state.current(revealed, &view).unwrap().frame).unwrap()[5]
+                .text
+                .contains("Alice")
+        );
+    }
+}
+
+#[test]
 fn session_frame_and_input_transitions_revoke_only_the_appropriate_interactions() {
     let mut state = SurfaceState::new(filters::Rules::default());
     let original = view();

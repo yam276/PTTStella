@@ -1,4 +1,4 @@
-//! Local push masking. Source frames and station coordinates remain unchanged.
+//! Local account presentation. Source frames and station coordinates remain unchanged.
 use crate::{
     navigation,
     screen::{Frame, Glyph, Style},
@@ -18,6 +18,7 @@ pub const MAX_ENTRIES: usize = 512;
 pub enum Policy {
     #[default]
     Mask,
+    MaskRow,
     Allow,
 }
 
@@ -38,7 +39,7 @@ pub struct Rules {
 impl Default for Rules {
     fn default() -> Self {
         Self {
-            version: 2,
+            version: 3,
             entries: Vec::new(),
         }
     }
@@ -51,8 +52,9 @@ pub fn valid_id(id: &str) -> bool {
 }
 impl Rules {
     pub fn validate(&self) -> Result<(), String> {
-        if !matches!(self.version, 1 | 2)
+        if !matches!(self.version, 1..=3)
             || self.version == 1 && self.entries.iter().any(|e| e.policy != Policy::Mask)
+            || self.version < 3 && self.entries.iter().any(|e| e.policy == Policy::MaskRow)
         {
             return Err(crate::msg!("filters-version"));
         }
@@ -82,7 +84,7 @@ impl Rules {
         let mut rules: Self =
             serde_json::from_slice(bytes).map_err(|_| crate::msg!("filters-invalid"))?;
         rules.validate().map_err(|error| error.to_string())?;
-        rules.version = 2;
+        rules.version = 3;
         Ok(rules)
     }
     pub fn edit(&self, id: &str, note: &str, remove: bool) -> Result<Self, String> {
@@ -99,7 +101,7 @@ impl Rules {
             return Err(crate::msg!("filters-id-invalid"));
         }
         let mut next = self.clone();
-        next.version = 2;
+        next.version = 3;
         let existing = next
             .entries
             .iter()
@@ -217,20 +219,74 @@ pub struct Projection {
     pub matches: Vec<Push>,
     pub revealed: bool,
 }
-pub fn project(frame: &Frame, rules: &Rules, revealed: bool) -> Projection {
-    let matches: Vec<_> = if rules.validate().is_ok() {
-        pushes(frame)
+struct Target {
+    content: Push,
+    id_start: usize,
+}
+fn targets(frame: &Frame) -> Vec<Target> {
+    match navigation::analyze(frame) {
+        navigation::Context::ArticleList { articles, .. } => {
+            let Some(rows) = text::rows(frame) else {
+                return Vec::new();
+            };
+            articles
+                .iter()
+                .filter_map(|article| {
+                    let field = rows.get(article.row)?.cells(17, 30)?;
+                    let id = field.trim();
+                    if !valid_id(id) {
+                        return None;
+                    }
+                    Some(Target {
+                        content: Push {
+                            row: article.row,
+                            id: id.into(),
+                            start: 30,
+                            end: 80,
+                        },
+                        id_start: 17 + field.len() - field.trim_start().len(),
+                    })
+                })
+                .collect()
+        }
+        navigation::Context::ArticleReading { .. } => pushes(frame)
             .into_iter()
-            .filter(|p| {
-                rules
-                    .entries
-                    .iter()
-                    .any(|e| e.policy == Policy::Mask && e.id.eq_ignore_ascii_case(&p.id))
+            .map(|content| Target {
+                content,
+                id_start: 3,
             })
-            .collect()
-    } else {
-        Vec::new()
-    };
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+pub fn project(frame: &Frame, rules: &Rules, revealed: bool) -> Projection {
+    let mut matches = Vec::new();
+    let mut highlights = Vec::new();
+    if rules.validate().is_ok() {
+        for target in targets(frame) {
+            let Some(entry) = rules
+                .entries
+                .iter()
+                .find(|e| e.id.eq_ignore_ascii_case(&target.content.id))
+            else {
+                continue;
+            };
+            let mut content = target.content;
+            match entry.policy {
+                Policy::Allow => {
+                    content.start = target.id_start;
+                    content.end = target.id_start + content.id.len();
+                    highlights.push(content);
+                }
+                Policy::Mask => matches.push(content),
+                Policy::MaskRow => {
+                    content.start = 0;
+                    content.end = frame.cols;
+                    matches.push(content);
+                }
+            }
+        }
+    }
     let mut output = frame.clone();
     if !revealed {
         let mut redacted = Vec::new();
@@ -284,6 +340,21 @@ pub fn project(frame: &Frame, rules: &Rules, revealed: bool) -> Projection {
                 }
             })
             .collect();
+    }
+    for glyph in &mut output.glyphs {
+        if highlights
+            .iter()
+            .any(|p| p.row == glyph.row && glyph.col >= p.start && glyph.col + glyph.width <= p.end)
+        {
+            for style in [&mut glyph.left, &mut glyph.right] {
+                // Preserve the effective background, including inverse rows.
+                let background = if style.inverse { style.fg } else { style.bg };
+                style.fg = 6;
+                style.bg = background;
+                style.bright = true;
+                style.inverse = false;
+            }
+        }
     }
     Projection {
         frame: output,

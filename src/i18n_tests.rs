@@ -81,13 +81,13 @@ fn independent_loaders_keep_language_and_named_arguments_without_global_switchin
         english
             .loader()
             .get_args("filters-count-hidden", HashMap::from([("count", 1)])),
-        "One reply hidden"
+        "One row hidden"
     );
     assert_eq!(
         english
             .loader()
             .get_args("filters-count-hidden", HashMap::from([("count", 2)])),
-        "2 replies hidden"
+        "2 rows hidden"
     );
     assert_eq!(
         chinese.loader().get_args(
