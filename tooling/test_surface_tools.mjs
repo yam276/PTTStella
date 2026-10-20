@@ -309,3 +309,13 @@ test('opacity updates preserve geometry and navigation and reject malformed brid
     for(const value of [0,19,101,NaN,Infinity,35.5,"35",null]){assert.throws(()=>f.menu.setOpacity(value));assert.equal(f.root.style['--tools-opacity'],'0.35');}
     f.menu.setOpacity(100);assert.equal(f.root.style['--tools-opacity'],'1');f.menu.destroy();
 });
+
+test('category pages follow the fan direction even when the opposite side is larger',()=>{
+    for(const x of [350,470]){
+        const f=fixture();openAt(f,x,300);const point=f.menu.snapshot().point;
+        const direction=point.x+28<450?1:-1;
+        f.fire(f.petals[0],'click');const left=parseFloat(f.panel.style.left),width=parseFloat(f.panel.style.width);
+        if(direction===1)assert.ok(left>=point.x+68);else assert.ok(left+width<=point.x-12);
+        assert.equal(f.menu.open(),true);f.menu.destroy();
+    }
+});

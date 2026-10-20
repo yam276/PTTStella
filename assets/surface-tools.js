@@ -54,6 +54,9 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
     // grid fallback and the feature page reserve this space, including a gap.
     function pageArea(){
         const right=window.innerWidth-16,bottom=window.innerHeight-16;
+        const direction=point.x+28<window.innerWidth/2?1:-1;
+        const side=direction===1?{x:point.x+68,y:48,w:right-point.x-68,h:bottom-48}:{x:16,y:48,w:point.x-28,h:bottom-48};
+        if(side.w>=240&&side.h>=160)return side;
         return [
             {x:16,y:48,w:point.x-28,h:bottom-48},
             {x:point.x+68,y:48,w:right-point.x-68,h:bottom-48},
