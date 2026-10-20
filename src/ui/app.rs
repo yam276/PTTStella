@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use dioxus_icons::lucide::{
     ALargeSmall, AlignVerticalJustifyEnd, ArrowDown, ArrowLeft, ArrowUp, Camera, Compass, Copy,
     ExternalLink, Eye, FileDown, FileText, FolderOpen, Globe, Image, Keyboard, Languages, Link,
-    List, Plug, RefreshCw, RotateCcw, Save, Shield, Star, Trash2, Type, X,
+    List, Plug, RefreshCw, RotateCcw, Save, Settings, Shield, Star, Trash2, Type, X,
 };
 use pttstella::{
     connection::{Connection, Phase},
@@ -211,6 +211,7 @@ pub fn app(props: AppProps) -> Element {
                     ToolPetal { group: "input", label: pttstella::msg!("tools-input"), icon: rsx!{ Keyboard { size: 22 } } }
                     ToolPetal { group: "session", label: pttstella::msg!("tools-session"), icon: rsx!{ Plug { size: 22 } } }
                     ToolPetal { group: "filters", label: pttstella::msg!("tools-filters"), icon: rsx!{ Shield { size: 22 } } }
+                    ToolPetal { group: "settings", label: pttstella::msg!("settings-center-title"), icon: rsx!{ Settings { size: 22 } } }
                 }
                 if fatal() || matches!(phase(), Phase::Error | Phase::Disconnected) {
                     output { class: "tools-alert", role: "status", "{message}" }
@@ -434,7 +435,9 @@ pub fn app(props: AppProps) -> Element {
 fn ToolPetal(group: &'static str, label: String, icon: Element) -> Element {
     rsx! {
         button { class: "tools-petal", r#type: "button", "data-tools-target": group,
-            "aria-controls": "tools-panel", "aria-expanded": "false",
+            "aria-controls": if group=="settings" {"font-dialog"} else {"tools-panel"},
+            "aria-expanded": if group=="settings" {None} else {Some("false")},
+            "aria-haspopup": if group=="settings" {Some("dialog")} else {None},
             {icon} span { "{label}" }
         }
     }

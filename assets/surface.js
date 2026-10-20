@@ -549,7 +549,7 @@ const bookmarksUi=createBookmarksDialog({tr,send,prepare:e=>{policy("reset",e);i
 const filterUi=createFiltersDialog({tr,send,current:()=>latest,invalidate:invalidatePresentation,
     reset:e=>policy("reset",e),restore:restoreEditingFocus,changed:refreshControls});
 tools=createFloatingTools({root:chrome,ball:document.getElementById("tools-ball"),fan:document.getElementById("tools-fan"),panel:toolbar,window,document,tr,
-    prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();released=null;},restore:restoreEditingFocus,changed:refreshKeepAlive});
+    onSettings:e=>settingsUi.request(e),prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();released=null;},restore:restoreEditingFocus,changed:refreshKeepAlive});
 contextMenu=createSurfaceContextMenu({root:document.getElementById("surface-context-menu"),document,window,
     snapshot:contextIdentity,prepare:()=>{stationMouse.cancel();tools.close();cancelHover(true);cancelDrag();released=null;setHover(null);},
     execute:contextAction,restore:focus,changed:refreshControls});

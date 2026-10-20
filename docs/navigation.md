@@ -72,3 +72,5 @@ Windows 桌面 gate 以獨立 loopback 服務端比對完整 bytes，確認編�
 | 信件／精華列表 | DocumentList（Mail／Archive） | 新增核心、Connection 精確 bytes 及 JS 命中；原生／實站待驗 |
 | 文章列表／閱讀 | ArticleList／ArticleReading | 既有回歸；不把新列表當成一般文章 |
 | 多欄、未知或輸入提示 | Unknown＋原因 | 保留原始鍵盤，不套通用 Enter |
+
+第一層新增直接開啟設定的入口，與原設定／快捷鍵共用對話框，不建立空的工具分類。七個入口按完整半圓重新計算間距。共同 scale 為 clamp(min(viewportWidth/1280, viewportHeight/800), 1, 1.75)，作用於浮球、圖示、扇形半徑、點擊區、字級及工具頁可用空間；resize 保持停靠側與目前分類。使用邏輯 CSS 尺寸，不重複乘 DPR；4K 幾何單元不是實體 4K 螢幕驗收。
