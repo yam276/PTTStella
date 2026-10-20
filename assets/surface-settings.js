@@ -8,6 +8,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
     const fontDefaults=document.getElementById("font-defaults");
     const profileImport=document.getElementById("profile-import"),profileExport=document.getElementById("profile-export"),profileName=document.getElementById("font-profile-name");
     const hoverPosition=document.getElementById("settings-hover");
+    const articleMode=document.getElementById("article-mode");
     const language=document.getElementById("interface-language");
     const toolsOpacity=document.getElementById("tools-opacity"),opacityValue=document.getElementById("tools-opacity-value");
     const rightClickMenu=document.getElementById("tools-right-click"),showFloatingButton=document.getElementById("tools-show-ball");
@@ -98,7 +99,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
         if(!e.isTrusted||!fontDraft||disposed)return;
         if(page()==="general")language.value="zh-TW";
         else if(page()==="input"){toolsOpacity.value="100";rightClickMenu.checked=true;showFloatingButton.checked=true;updateOpacity();}
-        else if(page()==="media"){hoverPosition.value="top_right";hoverTouched=true;hoverVersion++;}
+        else if(page()==="media"){articleMode.value="web";hoverPosition.value="top_right";hoverTouched=true;hoverVersion++;}
         else if(page()==="appearance"){fillFonts(fontDraft.defaults);fontPreset.value="platform";previewFonts();}
         else return;
         scheduleSave(e);
@@ -116,7 +117,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
         if(!e?.isTrusted||disposed||!fontDialog.open||fontSaving||profileBusy||composing)return;
         clearTimeout(saveTimer);saveTimer=0;
         if(!validFields()){fontDialog.dataset.saveState="invalid";dirty=true;closing=false;state(tr("settings-autosave-invalid"));return;}
-        pendingSave={kind:"settings_save",values:readFonts(),language:language.value,hover:hoverTouched?hoverPosition.value:null,tools_opacity:Number(toolsOpacity.value),
+        pendingSave={kind:"settings_save",values:readFonts(),language:language.value,article_mode:articleMode.value,hover:hoverTouched?hoverPosition.value:null,tools_opacity:Number(toolsOpacity.value),
             tools_access:{right_click_menu:rightClickMenu.checked,show_floating_button:showFloatingButton.checked},trusted:true};
         dirty=false;fontSaving=true;fontDialog.dataset.saveState="writing";savedHoverVersion=hoverVersion;state(tr("settings-saving"));send(pendingSave);
     }
@@ -134,7 +135,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
         if(fontDialog.open)return;
         const opening=++epoch;
         dirty=false;closing=false;fontSaving=false;pendingSave=null;hoverTouched=false;fontDialog.dataset.saveState="saved";fontSave.hidden=true;
-        fontDraft=data;hoverPosition.value=data.hover??"top_right";language.value=data.language;toolsOpacity.value=String(data.tools_opacity);updateOpacity();fillFonts(data.values);fontPreset.value=profileChoice(data.profile);fontNote.textContent=data.warning||"";
+        fontDraft=data;articleMode.value=data.article_mode??"web";hoverPosition.value=data.hover??"top_right";language.value=data.language;toolsOpacity.value=String(data.tools_opacity);updateOpacity();fillFonts(data.values);fontPreset.value=profileChoice(data.profile);fontNote.textContent=data.warning||"";
         rightClickMenu.checked=data.tools_access.right_click_menu;showFloatingButton.checked=data.tools_access.show_floating_button;
         beforeShow();if(!fontDialog.open)fontDialog.showModal();changed();requestCatalog();
         await preview(data.values,data.sample,()=>fontDialog.open&&opening===epoch);
@@ -178,14 +179,14 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
     function revoke(){disposed=true;clearTimeout(saveTimer);saveTimer=0;epoch++;catalogRequest++;clearTimeout(fontTimer);fontTimer=0;fontPreviewNext=null;}
     function destroy(){revoke();fontDraft=null;lastCatalog=null;lastPreview=null;fontPreviewBusy=false;profileBusy=false;fontSaving=false;if(fontDialog.open)fontDialog.close();}
     return {request:openFonts,close:closeFonts,
-        snapshot(){if(!dirty&&!fontSaving)return null;if(!validFields())throw new Error(tr("settings-autosave-invalid"));return {kind:"settings_save",values:readFonts(),language:language.value,hover:hoverTouched?hoverPosition.value:null,tools_opacity:Number(toolsOpacity.value),tools_access:{right_click_menu:rightClickMenu.checked,show_floating_button:showFloatingButton.checked},trusted:true};},
+        snapshot(){if(!dirty&&!fontSaving)return null;if(!validFields())throw new Error(tr("settings-autosave-invalid"));return {kind:"settings_save",values:readFonts(),language:language.value,article_mode:articleMode.value,hover:hoverTouched?hoverPosition.value:null,tools_opacity:Number(toolsOpacity.value),tools_access:{right_click_menu:rightClickMenu.checked,show_floating_button:showFloatingButton.checked},trusted:true};},
         open,preview:receivePreview,catalog,profile,saved,revoke,destroy,
         relocalize(){updateOpacity();if(fontDialog.open){if(lastCatalog)catalog(lastCatalog);if(lastPreview)fontAvailability.textContent=fontLoadNote(lastPreview.settings,lastPreview.warning);}},
         notice(message){if(!fontDialog.open)return false;fontNote.textContent=message;return true;},
         clean:()=>disposed&&fontTimer===0&&saveTimer===0&&fontPreviewNext===null&&!fontDialog.open,
         bindings:[
             [toolsOpacity,"input",e=>{updateOpacity();scheduleSave(e);}],
-            [language,"change",scheduleSave],[hoverPosition,"change",e=>{if(e.isTrusted){hoverTouched=true;hoverVersion++;}scheduleSave(e);}],[rightClickMenu,"change",scheduleSave],[showFloatingButton,"change",scheduleSave],
+            [articleMode,"change",scheduleSave],[language,"change",scheduleSave],[hoverPosition,"change",e=>{if(e.isTrusted){hoverTouched=true;hoverVersion++;}scheduleSave(e);}],[rightClickMenu,"change",scheduleSave],[showFloatingButton,"change",scheduleSave],
             ...Object.values(fontFields).flatMap(field=>[[field,"compositionstart",()=>{composing=true;clearTimeout(saveTimer);saveTimer=0;}],[field,"compositionend",e=>{composing=false;scheduleSave(e);}]]),
             ...(fontButton?[[fontButton,"click",openFonts]]:[]),[fontPreset,"change",chooseFontPreset],
             [fontRefresh,"click",refreshFonts],...Object.values(localChoices).map(field=>[field,"change",chooseLocal]),

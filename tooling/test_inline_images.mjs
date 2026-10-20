@@ -24,7 +24,7 @@ test('Enter expansion is only offered on an idle local reading page',()=>{
     assert.ok(inlineShortcut(key,state,packet));assert.ok(inlineShortcut(key,{...state,enabled:false,mode:'input'},packet));
     for(const patch of [{ctrlKey:true},{altKey:true},{shiftKey:true},{key:'ArrowRight'}])assert.ok(!inlineShortcut({...key,...patch},state,packet));
     for(const patch of [{mode:'input'},{mode:'once'},{pending:true}])assert.ok(!inlineShortcut(key,{...state,...patch},packet));
-    for(const patch of [{ptt_features:false},{connected:false},{input_pending:true},{output_pending:true},{navigation:{kind:'continue_prompt'}},{image_links:[]},{mouse:{route:'station'}}])assert.ok(!inlineShortcut(key,state,{...packet,...patch}));
+    for(const patch of [{article_mode:"terminal"},{ptt_features:false},{connected:false},{input_pending:true},{output_pending:true},{navigation:{kind:'continue_prompt'}},{image_links:[]},{mouse:{route:'station'}}])assert.ok(!inlineShortcut(key,state,{...packet,...patch}));
 });
 test('production key handler consumes repeated Enter without sending station bytes',()=>{
     const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');const sent=[];
@@ -187,4 +187,21 @@ test('production cached wheel normalizes pixel, line and page units while keepin
     context.wheel({...event,ctrlKey:true});assert.deepEqual(zooms,[.75]);
     for(const patch of [{metaKey:true},{shiftKey:true},{altKey:true}])context.wheel({...event,...patch});
     context.blocked=()=>true;context.wheel({...event});assert.equal(moves.length,3);
+});
+
+test('terminal presentation refuses late inline batches even at the same station revision',async()=>{
+    const e=ownerEnvironment();e.ui.open(e.open,e.packet);assert.equal(e.ui.active(),true);
+    e.ui.reset();e.ui.open(e.open,{...e.packet,article_mode:'terminal'});
+    e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:2,height:1}});
+    assert.equal(e.ui.active(),false);assert.equal(e.urls.size,0);
+    assert.equal(await e.ui.destroy(),true);
+});
+
+test('switching a scrolled cached document to the station grid resets both offsets',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    e.ui.layout({...e.packet,article:{id:1,first_line:1,last_line:46},frame:{rows:47,revision:4,glyphs:[]},links:[]},base,1);
+    e.viewport.scrollTop=900;e.viewport.scrollLeft=100;e.ui.reset();
+    e.ui.layout({...e.packet,article_mode:'terminal'},base,1);
+    assert.equal(e.viewport.scrollTop,0);assert.equal(e.viewport.scrollLeft,0);
+    assert.equal(e.canvas.style.visibility,'');assert.equal(await e.ui.destroy(),true);
 });

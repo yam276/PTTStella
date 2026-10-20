@@ -282,3 +282,16 @@ test("live locale refresh relabels cached font choices without a second catalog 
  env.node('font-ascii').value='draft font';const count=env.sent.length;prefix='English';ui.relocalize();
  assert.equal(env.sent.length,count);assert.equal(env.node('font-local-ascii').children[0].textContent,'Englishfont-local-choose');assert.equal(env.node('font-ascii').value,'draft font');assert.equal(env.node('font-availability').textContent,'Englishloaded');
 });
+
+test("article mode saves, retries, survives close snapshots, and resets only in media",async()=>{
+    const env=environment("surface-settings.js","createSettingsDialog");let page="appearance";
+    const ui=env.create({page:()=>page});await ui.open({...openData(),article_mode:"terminal"});
+    assert.equal(env.node("article-mode").value,"terminal");
+    env.node("article-mode").value="web";env.fire("article-mode","change");env.tick();
+    assert.equal(env.sent.at(-1).article_mode,"web");ui.saved({status:"rejected"});
+    assert.equal(ui.snapshot().article_mode,"web");env.fire("font-save");ui.saved({status:"saved"});
+    env.node("article-mode").value="terminal";env.fire("article-mode","change");env.tick();ui.saved({status:"saved"});
+    env.fire("font-defaults");env.tick();assert.equal(env.sent.at(-1).article_mode,"terminal");ui.saved({status:"saved"});
+    page="media";env.fire("font-defaults");env.tick();assert.equal(env.sent.at(-1).article_mode,"web");
+    ui.saved({status:"saved"});ui.destroy();
+});

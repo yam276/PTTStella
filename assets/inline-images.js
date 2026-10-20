@@ -17,7 +17,7 @@ function inlineRowLayout(rows, baseY, gaps) {
 function inlineShortcut(key, state, packet) {
     return key.key==="Enter"&&!key.ctrlKey&&!key.altKey&&!key.shiftKey
         &&!state.pending&&(!state.enabled||state.mode==="normal")
-        &&packet?.ptt_features&&packet.connected&&!packet.input_pending&&!packet.output_pending
+        &&packet?.article_mode!=="terminal"&&packet?.ptt_features&&packet.connected&&!packet.input_pending&&!packet.output_pending
         &&packet.navigation.kind==="article_reading"&&packet.image_links.length>0
         &&packet.mouse.route==="local";
 }
@@ -33,7 +33,7 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
     function reset(){if(!current)return;clear();redraw();changed();}
     function matches(packet){return current&&current.presentation===packet.presentation&&current.generation===packet.generation&&current.revision===packet.frame.revision&&(current.article_id??null)===(packet.article?.id??null);}
     function open(packet,latest) {
-        if(dead||(packet.article_id??null)!==(latest?.article?.id??null)||packet.presentation!==latest?.presentation||packet.generation!==latest.generation||packet.revision!==latest.frame.revision)return;
+        if(dead||latest?.article_mode==="terminal"||(packet.article_id??null)!==(latest?.article?.id??null)||packet.presentation!==latest?.presentation||packet.generation!==latest.generation||packet.revision!==latest.frame.revision)return;
         if(current?.batch===packet.batch&&matches(latest))return;
         if(current?.batch!==packet.batch)clear();else detach(true);
         current=packet;latestLayout=latest;
@@ -82,7 +82,13 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         const bottom=row=>base.y(row+1);
         const cached=!!packet.article;
         if(current&&cached&&((current.article_id??null)!==packet.article.id||current.generation!==packet.generation))clear();
-        if(!cached&&!matches(packet)){if(current||strips.length)detach();lastArticle=null;return {...base,bottom};}
+        if(!cached&&!matches(packet)){
+            if(current||strips.length)detach();
+            // A station grid has no historical scroll position. Reset after a
+            // cached layout so WebView cannot retain the old document offset.
+            if(lastArticle&&viewport){viewport.scrollTop=0;viewport.scrollLeft=0;}
+            lastArticle=null;return {...base,bottom};
+        }
         const article=packet.article;
         let anchor=null;
         if(cached&&lastLayout&&lastArticle?.id===article.id&&lastArticle.generation===packet.generation&&viewport){

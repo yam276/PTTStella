@@ -229,6 +229,7 @@ async fn run(
     let mut login_open = false;
     let mut settings_visible = false;
     let mut pending_settings: Option<super::preferences::Change> = None;
+    screen.set_article_mode(preferences.app().article_mode);
     let first = receiver.borrow_and_update().clone();
     let mut last_status = first.message.clone();
     let painting = screen
@@ -282,6 +283,14 @@ async fn run(
     let (complete, probe_checked) = loop {
         if *closing.borrow() {
             break (false, false);
+        }
+        if screen.set_article_mode(preferences.app().article_mode) {
+            media_preview.close();
+            eval.send(Packet::HoverReset { media: true })
+                .map_err(|e| e.to_string())?;
+            inline_images.close();
+            eval.send(Packet::InlineReset(true))
+                .map_err(|e| e.to_string())?;
         }
         let key_status = keyboard_policy.status(&receiver.borrow().context());
         let raw_reading = (key_status.enabled && matches!(key_status.mode, "input" | "once"))

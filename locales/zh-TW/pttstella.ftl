@@ -594,3 +594,9 @@ vim-layout = Vim 已暫停：尚未支援此列表版型；按 i 原始輸入
 article-cache-hint = 已保留第 { $first }–{ $last } 行；往回捲動可閱讀，邊界才載入更多
 export-cache-selection-limit = 選取行 PNG 一次最多 24 行；可先縮小選取範圍
 export-cache-page-hint = 匯出目前站端的 24 行畫面；不包含文章快取與展開圖片
+
+article-mode = 文章模式
+article-mode-web = 網頁
+article-mode-terminal = 終端機
+article-mode-help = 網頁模式累積已讀分頁並可展開圖片；終端機模式保持站端格線與分頁，只使用懸停或右上圖片預覽。切換時從目前站端頁面重新開始。
+settings-alias-article-mode = article mode web terminal 文章模式 網頁 終端機

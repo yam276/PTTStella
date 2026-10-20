@@ -11,6 +11,7 @@ function settingsCatalog(tr){
         ['tools-opacity','input','settings-opacity','settings-alias-opacity'],
         ['tools-right-click','input','settings-right-click','settings-alias-right-click'],
         ['tools-show-ball','input','settings-show-ball','settings-alias-ball'],
+        ['article-mode','media','article-mode','settings-alias-article-mode'],
         ['settings-hover','media','hover-label','settings-alias-media'],
         [null,'sites','sites-title','settings-alias-sites'],
         [null,'filters','filters-title','settings-alias-filters'],

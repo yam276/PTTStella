@@ -93,7 +93,7 @@ mod tests {
         let old=br#"{"version":2,"display":{"fonts":{"kind":"platform_default"},"font_size":20,"baseline":20},"hover":"off"}"#;
         std::fs::write(&path, old).unwrap();
         let mut draft = store.load().unwrap();
-        assert_eq!(draft.version, 5);
+        assert_eq!(draft.version, 6);
         assert_eq!(draft.tools_access, crate::settings::ToolAccess::default());
         assert_eq!(draft.language, crate::i18n::Language::TraditionalChinese);
         assert_eq!(std::fs::read(&path).unwrap(), old);

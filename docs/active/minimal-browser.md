@@ -829,3 +829,14 @@ core 13 命令／2 replay、desktop lib 139 項、bin 72 項、全 targets Clipp
 macOS arm64 release 本機合成原生已驗證第一層設定、同一程序中文→英文→中文、原生 Edit／Window 選單、雙語搜尋、英文工具及返回、實際保存語言。最後交付包另驗字型載入提示與清單均更新，Synthetic draft 匯出名稱熱切後保留，固定連線狀態也更新。語言前後及最終 executable 的同一 BBS PNG bytes 完全相同；各 peer 拒絕全部非預期站端 bytes，各程序 PNG、Close acknowledged、全部 owner join 及 exit 0 通過。最初原生觀察發現既有狀態與字型載入提示仍為舊語言，保留截圖並補上 refresh 後另打包驗證，未以早期候選結案。
 
 core 13 命令／2 replay、desktop lib 142 項、bin 72 項、全 targets Clippy、JS 138 項、Python tooling 70 項及 docs 通過；i18n 包含獨立 loader 往返、具名參數、無半載入狀態及 invalid JS 更新不破壞舊 catalog。初輪 Clippy 的 owned comparison 與 router 缺少 localization fixture 均保留失敗索引，補齊封包 shared example／正式 handler 後通過，沒有放寬 unknown packet。證據在 `.local/verification/live-ui`；最新交付為 `dist/macos-live-ui-delivery/PTTStella.app`，release／arm64／strict ad-hoc，未公證。Windows／Linux 原生、實體 4K 與新實站版型本輪未執行；使用者實站 App 未操作。正常退出後清理本輪中間 App／測試副本，保留報告與必要畫面。
+
+
+2026-10-20 文章模式與主選單光棒：已向 PTTStar Analyzer 取得文章與滑鼠靜態研究交接。依使用者後續收斂，滑鼠增量限於原版已證實支援的行為，未證實的多欄選單、一般確認／輸入表單保留原始鍵盤，不以通用 Enter fallback 掩蓋未知畫面；原版靜態研究不代表本產品所有實站版型均已驗收。主選單／子選單 hover 光棒改完整列寬，命中與返回優先權維持既有規則。
+
+設定「圖片與媒體」新增網頁／終端機文章偏好，version 6 讀入 v1–v5 時預設網頁，只有保存成功才生效。網頁沿用同一 Rust 有界已讀分頁快取，終端機恢復站端格線與翻頁、保留 hover／右上預覽，Rust 與 JS 同時拒絕內嵌展圖及晚到 batch。切換清除取頁／圖片 owner、文章快取、選取與暫時揭露，撤銷舊 presentation，從目前站端頁面重新開始，不自動重定位或預讀全文。
+
+core 13 命令／2 replay、desktop lib 142 項、bin 83 項、全 targets Clippy、JS 162 項與 docs 通過。回歸涵蓋舊設定遷移／未知模式拒絕、保存重試／最後快照、模式切換的舊 ACK／展圖拒絕、網址保留及模式往返。設定索引數量更新及雙語 article-mode 別名缺漏曾使 JS 失敗，補齊後全套通過；保留原始結果。
+
+macOS arm64 最終 release 合成原生已驗證網頁展圖、一次精確 PageDown、網頁→終端機→網頁→終端機、固定格線 PNG、重啟後的終端機及右上預覽偏好。三個成功／404 圖片網址各一個 HTTP GET；模式切換未多送站端 bytes，兩次執行皆 Close acknowledged、全部 owner join、程序 exit 0。重啟讀入與開啟設定未改寫保存 bytes。第一輪 runner 缺 loopback media origin 為 not_ready；第二輪發現舊網頁捲動位置殘留導致終端機上方被捲走，保留 failed 畫面，修正 cached→raw 布局歸零並加入回歸後重新打包實測，不以先前退出碼 0 冒充通過。
+
+證據保留 `.local/verification/article-mode`；交付 `dist/macos-article-mode-final/PTTStella.app` 為 arm64 release／strict ad-hoc，未公證，交付與測試副本 15 份 Mach-O loadable sections 相同。原生滑鼠點擊與 hover 依使用者要求留待人工；未操作使用者實站 session，Windows／Linux 原生仍 not_ready。

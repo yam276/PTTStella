@@ -12,6 +12,7 @@ use serde::Serialize;
 
 #[derive(Clone, Serialize)]
 pub(super) struct Paint {
+    pub(super) article_mode: pttstella::settings::ArticleMode,
     pub(super) article: Option<super::article_cache::Reading>,
     pub(super) source_frame: Option<Frame>,
     pub(super) site: pttstella::sites::Target,
@@ -88,6 +89,7 @@ pub(super) fn paint(
         })
         .collect();
     Paint {
+        article_mode: Default::default(),
         article: None,
         source_frame: None,
         site: view.site.clone(),
@@ -125,6 +127,7 @@ pub(super) fn paint(
 
 pub(super) fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint {
     Paint {
+        article_mode: Default::default(),
         article: None,
         source_frame: None,
         site: pttstella::sites::Target::default(),
