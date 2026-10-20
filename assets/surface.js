@@ -46,7 +46,7 @@ function receiveKeyboard(state){keyboardState=state;vimToggle.textContent=state.
     keyboard.readOnly=state.enabled&&!["input","once"].includes(state.mode);
     vimToggle.setAttribute("aria-pressed",String(state.enabled));vimOnce.hidden=!state.enabled||state.mode==="input";
     vimOnce.setAttribute("aria-pressed",String(state.mode==="once"));
-    const reason={different_site:tr("site-raw-input"),unsupported_grid:tr("reason-grid"),incomplete:tr("reason-incomplete"),unmapped:tr("reason-unmapped"),unrecognized:tr("reason-unrecognized"),invalid_cursor:tr("reason-cursor"),board_header:tr("reason-board-header"),board_rows:tr("reason-board-rows")}[state.suspended_reason]||tr("reason-unknown");
+    const reason={different_site:tr("site-raw-input"),unsupported_grid:tr("reason-grid"),incomplete:tr("reason-incomplete"),unmapped:tr("reason-unmapped"),unrecognized:tr("reason-unrecognized"),invalid_cursor:tr("reason-cursor"),board_header:tr("reason-board-header"),board_rows:tr("reason-board-rows"),unsupported_layout:tr("reason-layout")}[state.suspended_reason]||tr("reason-unknown");
     vimStatus.textContent=!state.enabled?"":({normal:"VIM NORMAL",input:"PTT INPUT",once:tr("vim-once"),suspended:tr("vim-suspended",{reason})}[state.mode])+" "+state.prefix;
     surface.dataset.keyboardMode=state.mode;surface.dataset.vim=String(state.enabled);refreshKeepAlive();}
 const navigationMarker=document.getElementById("navigation-marker"),browseControls=document.getElementById("browse-controls");
@@ -90,7 +90,7 @@ function refreshStationMouse(){
     stationMouseStatus.textContent=!latest?.connected||!state?.enabled?"":tr(state.route==="station"?"station-mouse-active":state.route==="blocked"?"station-mouse-blocked":"station-mouse-local");
     surface.dataset.stationMouseRoute=state?.route??"local";
 }
-const canNavigate=()=>!stopped&&!!latest?.connected&&['main_menu','system_menu','article_list','article_reading','board_list','empty_list','command_help'].includes(latest.navigation.kind)&&!latest.input_pending&&!navigationLocked&&!navigationRequest&&!blocked();
+const canNavigate=()=>!stopped&&!!latest?.connected&&['main_menu','system_menu','document_list','article_list','article_reading','board_list','empty_list','command_help'].includes(latest.navigation.kind)&&!latest.input_pending&&!navigationLocked&&!navigationRequest&&!blocked();
 function invalidateNavigation(){navigationLocked=true;released=null;cancelDrag();setHover(null);refreshNavigation();}
 function sendInput(value){invalidateNavigation();send(value);}
 // Only classify editing vs command events here. Rust owns key translation and
@@ -334,7 +334,7 @@ function hitAt(point) {
     if(canNavigate()&&latest.navigation.kind!=="main_menu"&&point.col<Math.floor((latest.frame?.cols??80)/4)&&point.row>0&&point.row<23)return {kind:"back"};
     if(!canNavigate())return null;
     const context=latest.navigation;
-    if(['main_menu','system_menu','board_list'].includes(context.kind)){
+    if(['main_menu','system_menu','document_list','board_list'].includes(context.kind)){
         const start=["main_menu","system_menu"].includes(context.kind)?20:1;
         return point.col>=start&&point.row>=context.first_row&&point.row<=context.last_row?{kind:"menu",row:point.row}:null;
     }
@@ -527,7 +527,7 @@ function wheel(e) {
     if(stationMouse.wheel(e))return;
     if(e.altKey)return;
     const kind=latest?.navigation.kind;
-    if(!latest?.connected||!['article_list','article_reading','board_list'].includes(kind)) return;
+    if(!latest?.connected||!['article_list','article_reading','board_list','document_list','system_menu'].includes(kind)) return;
     e.preventDefault();
     const action=e.deltaY<0?"previous_page":"next_page";
     navigate({action},e);

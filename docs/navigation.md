@@ -58,3 +58,15 @@ Windows 桌面 gate 以獨立 loopback 服務端比對完整 bytes，確認編�
 2026-10-20 另核對 [公開選單列印介面](https://github.com/ptt/pttbbs/blob/master/mbbsd/menu.c) 與 [看板列表欄位](https://github.com/ptt/pttbbs/blob/master/mbbsd/board.c) 的可見格式，實作與自製案例仍由本專案撰寫；不把公開來源版本當作實站登入驗收。
 
 浮球沿用 App icon 的同一份 Icon Composer 材質渲染圖，透過圓形外殼顯示，向外延伸的 2px 主題金色徽章環保留星尖空間，上緣高光與下緣深金形成玻璃／金屬反光邊緣，星座與返回箭頭共用；三聯星、三條連線及下方突出的小星保持同源。星座為內嵌本機資產，設定品牌仍使用清晰的扁平向量稿。返回圖案、拖曳命中、慣性、透明度及減少動態效果使用既有 owner。
+
+
+信件列表與精華列表共用 DocumentList 的有界列導航，分別要求「郵件選單」／「精華文章」標題、相符的單份欄位標頭、讀信／讀取資料與返回提示、連續編號及有效游標。UI 只消費 Rust 結果，點擊右側四分之三開啟、左側返回、滾輪 Page Up／Down；未知／多欄標頭、缺列或確認提示不能送出通用 Enter。一般信箱瀏覽不代表新郵件狀態，本項沒有郵件快速跳轉。公開可見欄位格式核對於 2026-10-20，來源為 [mail.c](https://github.com/ptt/pttbbs/blob/master/mbbsd/mail.c) 與 [announce.c](https://github.com/ptt/pttbbs/blob/master/mbbsd/announce.c)；離線自製案例不代表所有實站版型已驗收。
+
+
+| 單欄畫面 | 共用辨識 | 本輪驗證範圍 |
+| --- | --- | --- |
+| 主選單／系統子選單 | MainMenu／SystemMenu | 既有核心與 Connection 回歸 |
+| 分類／看板／我的最愛 | BoardList | 既有核心與 Connection 回歸 |
+| 信件／精華列表 | DocumentList（Mail／Archive） | 新增核心、Connection 精確 bytes 及 JS 命中；原生／實站待驗 |
+| 文章列表／閱讀 | ArticleList／ArticleReading | 既有回歸；不把新列表當成一般文章 |
+| 多欄、未知或輸入提示 | Unknown＋原因 | 保留原始鍵盤，不套通用 Enter |

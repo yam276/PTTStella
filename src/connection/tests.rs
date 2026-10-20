@@ -2212,3 +2212,66 @@ async fn station_banner_probe_uses_the_selected_decoder_and_closes_without_input
     assert_eq!(report["disconnect"], "transport_closed");
     peer.await.unwrap();
 }
+
+#[tokio::test]
+async fn mail_and_archive_pointer_navigation_revalidates_exact_bytes_and_rejects_stale_frames() {
+    for name in ["mail", "archive"] {
+        let (listener, connection) = idle_local().await;
+        connection.connect().unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        let bytes = navigation_page(name);
+        ws.send(Message::Binary(bytes.clone().into()))
+            .await
+            .unwrap();
+        let view = wait(&connection, |v| {
+            v.context().kind() == "document_list" && !v.input_pending
+        })
+        .await;
+        connection
+            .navigate(view.stamp(), navigation::Intent::Open { row: 3 })
+            .await
+            .unwrap();
+        assert!(matches!(ws.next().await,Some(Ok(Message::Binary(b))) if b.as_ref()==b"\x1b[A\r"));
+        ws.send(Message::Binary(bytes.into())).await.unwrap();
+        let next = wait(&connection, |v| {
+            v.frame.revision > view.frame.revision && !v.input_pending
+        })
+        .await;
+        assert!(
+            connection
+                .navigate(view.stamp(), navigation::Intent::Back)
+                .await
+                .is_err()
+        );
+        connection
+            .navigate(next.stamp(), navigation::Intent::NextPage)
+            .await
+            .unwrap();
+        assert!(matches!(ws.next().await,Some(Ok(Message::Binary(b))) if b.as_ref()==b"\x1b[6~"));
+        ws.send(Message::Binary(
+            b"\x1b[2J\x1b[HConfirm? [Y/n]".to_vec().into(),
+        ))
+        .await
+        .unwrap();
+        let view = wait(&connection, |v| {
+            v.context().kind() == "unknown" && !v.input_pending
+        })
+        .await;
+        assert!(
+            connection
+                .navigate(view.stamp(), navigation::Intent::Open { row: 3 })
+                .await
+                .is_err()
+        );
+        let peer = tokio::spawn(async move {
+            assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+            ws.flush().await.unwrap();
+        });
+        assert_eq!(
+            connection.shutdown().await.unwrap(),
+            CloseOutcome::Acknowledged
+        );
+        peer.await.unwrap();
+    }
+}

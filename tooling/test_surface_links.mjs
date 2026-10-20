@@ -164,3 +164,14 @@ test("hover marker spans a complete row, and the return marker occupies the left
     const css=readFileSync(new URL("../assets/app.css",import.meta.url),"utf8");
     assert.match(css,/@media \(prefers-reduced-motion: reduce\) \{ #navigation-marker \{ animation: none/);
 });
+
+test("mail and archive rows use only verified item targets, retain links and quarter-width Back",()=>{
+ const context={blocked:()=>false,dragging:null,stationMouse:{local:()=>true},canNavigate:()=>true,linkAt:()=>-1,
+ latest:{frame:{cols:80},navigation:{kind:"document_list",first_row:3,last_row:4,cursor_row:4}}};
+ const hit=handler("hitAt","setHover",context);
+ for(const category of ["mail","archive"]){context.latest.navigation.category=category;
+  assert.equal(hit({row:4,col:19}).kind,"back");assert.equal(hit({row:4,col:20}).kind,"menu");assert.equal(hit({row:5,col:20}),null);
+ }
+ context.linkAt=()=>0;assert.equal(hit({row:4,col:19}).kind,"link");
+ context.dragging={moved:true};assert.equal(hit({row:4,col:20}),null);
+});
