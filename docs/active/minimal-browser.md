@@ -725,3 +725,12 @@ macOS arm64 合成原生 App 已確認一般模式兩次 Enter 與 Vim Normal �
 macOS arm64 原生合成 App 已確認中文介面用 opacity／透明度搜尋、搜尋結果聚焦、不等保存完成連續切換兩個 checkbox、實際偏好檔及關閉／重開保留值。發現子視窗 WindowHides 讓 cleanup 成功後程序殘留，保留該輪 process-exit failed；退出時改 WindowCloses，重新測試設定內修改後 ⌘Q，PNG、Close acknowledged、全部 owner join、程序 exit 0 通過。最終 release 候選另以已保存的英文合成設定啟動，英文介面搜尋「透明度」、定位欄位與圖示、PNG、設定開啟時 ⌘Q 及程序 exit 0 通過；載入／搜尋未改寫設定 bytes。獨立測試 App 改 bundle identity 並重新 ad-hoc 簽署，以全部 Mach-O loadable section 雜湊核對交付程式與測試副本相同；不把不同簽章造成的 executable bytes 差異當成產品差異。工具 fixture 的前三行依語言不同，兩語 PNG 不作相同輸入的像素 gate。證據、失敗嘗試與畫面保留 `.local/verification/settings-center`；最新候選為 `dist/macos-settings-center-delivery/PTTStella.app`，strict ad-hoc 簽章通過，未公證，未操作使用者實站 session。本輪未驗原生檔案 picker／所有尺寸／實體 IME，亦不取代既有待驗項目。
 
 補充：新增匯入後字型仍在載入的回歸，舊路徑因尚未標記待存而遺失最後 snapshot，測試先失敗；改為接受有效匯入後立即排入 autosave，再獨立等待預覽。慢字型／關閉／晚到繪製的同一生產控制器測試通過，不把預覽完成當成保存前提。
+
+
+2026-10-20 閱讀／滑鼠／外觀修正：文章內展圖改由同篇有界 owner 保存 URL key，Page Up／Down 只替換已確認畫面的 link index 與行位置；每頁 8 張、同篇最多 32 張且共用 24 MiB／16M pixels 限額。離開閱讀或換 session 統一取消，不另建文章內容模型。macOS arm64 最終 release 合成兩頁往返已觀察圖片留存與重新定位，同一成功／404 URL 各僅一個 HTTP GET，兩次 Enter 只一個 batch；peer 精確要求 PageDown、PageUp、Close，PNG、Close acknowledged、全部 owner join 與程序 exit 0 通過。
+
+系統子選單新增有結構驗證的 SystemMenu，主選單接受無裝飾括號的合法項目；最愛／看板描述中的無法解碼字不再停用整頁，但板名與操作欄仍嚴格核對。分類列表的原負例初次回歸失敗，恢復完整項目檢查後 40 項 navigation 通過；未修改負例 expected。新增 production Connection loopback 精確比對子選單移動＋CR、Back 及未知提示拒絕。滑鼠左側四分之一提供返回，網址仍優先、右側提供列表開啟，拖曳／Shift／站端滑鼠與舊版本准入維持既有規則。尚未取得使用者後續的具體漏辨識畫面，沒有宣稱所有系統表單皆可滑鼠操作；此輪子選單不是實站或原生指標點擊驗收。
+
+設定側欄增加焦點外框的保留空間，macOS 原生鍵盤聚焦截圖已確認金框四邊完整。浮球改用 App icon 同源的材質渲染圖，依使用者回饋將金色徽章環向外延伸，保留星尖空間，上緣高光與深金下緣呈現玻璃／金屬反光；返回箭頭沿用同環。56px 操作區、透明度、慣性與 owner 不變。最終原生截圖確認三聯星與返回狀態；外觀不以字串斷言代替視覺驗證。
+
+本輪 core 13 命令／2 replay、desktop lib 138 項、bin 73 項、全 targets Clippy、JS 130 項、Python tooling 70 項及 docs 通過。Python 首次遇到 macOS /var 與 /private/var 的同一路徑別名導致既有測試失敗，改為比對 resolve 後的絕對路徑，保留所有編譯環境／旗標與 DLL 負例斷言；isolated lane 重跑通過。失敗過程、原生畫面與報告保留 `.local/verification/browser-polish`。最新候選為 `dist/macos-browser-polish-metal/PTTStella.app`，strict ad-hoc 簽章、交付與測試副本全部 Mach-O loadable sections 雜湊一致；未公證。Windows／Linux 原生與實站登入本輪未執行，仍為 not_ready，未操作使用者的實站視窗。

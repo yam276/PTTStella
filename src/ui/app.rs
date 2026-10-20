@@ -32,9 +32,9 @@ pub fn app(props: AppProps) -> Element {
     });
     let tools_mark = use_hook(|| {
         format!(
-            "data:image/svg+xml;base64,{}",
+            "data:image/png;base64,{}",
             base64::engine::general_purpose::STANDARD
-                .encode(include_bytes!("../../assets/icons/constellation-flat.svg"))
+                .encode(include_bytes!("../../assets/icons/pttstella.png"))
         )
     });
     let debug_port = props.debug_port;
