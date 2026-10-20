@@ -248,7 +248,7 @@ article-open-hint = Click the row to open; drag or hold Shift to select text
 menu-open-hint = Click to enter this item; drag or hold Shift to select text
 navigation-wait = Waiting for a screen update
 article-list-hint = Click rows to open · left edge to go back · Shift to select
-article-reading-hint = Scroll to turn pages · Ctrl + scroll to zoom
+article-reading-hint = Click upper/lower half to page · Left edge goes back · Ctrl + scroll to zoom
 paste-native-first = Press i to enter native input before pasting
 paste-unavailable = Cannot read pasted text in this environment
 paste-too-long = Pasted text is too long; nothing was sent
@@ -540,6 +540,8 @@ filters-policy-mask = Block (mask content)
 filters-policy-allow = Allow (keep visible)
 
 pointer-back-hint = Click the left edge to go back; hold Shift to select text
+pointer-page-up-hint = Click to page up; drag or hold Shift to select text
+pointer-page-down-hint = Click to page down; drag or hold Shift to select text
 
 filters-import = Import account list…
 filters-import-title = Choose an account list text file

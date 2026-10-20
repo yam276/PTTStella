@@ -248,7 +248,7 @@ article-open-hint = 點擊整行開啟文章；拖曳或 Shift 選字
 menu-open-hint = 點擊進入此項目；拖曳或 Shift 選字
 navigation-wait = 等待畫面更新
 article-list-hint = 點整行開啟 · 左緣返回 · Shift 選字
-article-reading-hint = 滾輪翻頁 · Ctrl＋滾輪縮放
+article-reading-hint = 點上／下半部翻頁 · 左側返回 · Ctrl＋滾輪縮放
 paste-native-first = 請先按 i 切換原始輸入再貼上
 paste-unavailable = 此環境無法讀取貼上的文字
 paste-too-long = 貼上文字過長；整段未送出
@@ -534,6 +534,8 @@ filters-policy-mask = 黑名單（遮黑）
 filters-policy-allow = 白名單（保留顯示）
 
 pointer-back-hint = 點擊左緣返回上一層；Shift 可選字
+pointer-page-up-hint = 點擊向上翻頁；拖曳或 Shift 可選字
+pointer-page-down-hint = 點擊向下翻頁；拖曳或 Shift 可選字
 
 filters-import = 匯入名單…
 filters-import-title = 選擇帳號名單文字檔

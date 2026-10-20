@@ -4,13 +4,30 @@
 
 ## 目標
 
-目前交付為 `dist/macos-article-cache/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：文章與展圖採有界本機快取，原生合成測試完成；本輪實站、實體滾輪／IME、快取拖曳選行 PNG 與 Windows／Linux UI 仍分列待驗。先前 C／D 與其他交付結果保留於各歷程分節，不以本輪案例代替完整跨平台 desktop gate。
+目前交付為 `dist/macos-reading-click/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：文章有界快取另支援可見上下半部點擊翻頁及左側返回。點擊生產 handler 離線通過，原生鍵盤／展圖／清理回歸通過；本輪原生座標點擊、實站、實體滾輪／IME、快取拖曳選行 PNG 與 Windows／Linux UI 仍分列待驗。先前 C／D 與其他交付結果保留於各歷程分節，不以本輪案例代替完整跨平台 desktop gate。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 文章點擊翻頁與滑鼠支援界線（2026-10-20）
+
+可見正文上半部點擊上頁、下半部點擊下頁，快取先本機捲動 90% 可視高度、未知邊界才透過既有 planner 取頁。修復快取閱讀停用左側返回的回歸：保留正文各行左側第 17 欄前返回，hover 只顯示可見最左一欄；網址優先，展圖空隙不套正文點擊，拖曳與 Shift 選字沿用既有 owner。按住或放開後改變 stamp、文章、投影、捲動及可視尺寸會撤銷操作；跨上下半部邊界亦不啟動。
+
+離線通過：新增 8 項生產 pointer／幾何／捲動案例，全套 JS 152 項、desktop lib 142／bin 82、core 13 commands／2 replays、fmt、Clippy 及 docs。包含上下半部隨捲動／縮小視窗調整、左緣／網址優先、只有未知邊界單次取頁、首尾／拖曳／Shift／失去 capture／過期／未知／modal／站端滑鼠／未完成輸出不翻頁，以及返回提示只畫一欄。未放寬既有列表辨識條件。
+
+交付副本只連 owned loopback：兩次 Enter 一個展圖 batch，End 移至本機底部、PageDown 精確一次取得分段第二頁，Home 回到第一頁且圖片仍在。三個 HTTP 路徑各一次；整頁 PNG、Close acknowledged、全部 owner join 與程序退出 0 通過。原生座標點擊被 CUA 以 `noWindowsAvailable` 拒絕，因此報告明確區分鍵盤／展圖 smoke passed 與新點擊 native not_ready；沒有用鍵盤代替點擊驗收。證據在 `.local/verification/article-pointer`，本輪未登入實站帳號。
+
+| 畫面 | 已實作的滑鼠行為 | 本輪證據與缺口 |
+| --- | --- | --- |
+| 主選單／已知系統子選單 | 已辨識單欄項目點選；子選單左側返回 | 既有 core／Connection／JS 回歸；未覆蓋所有實站子介面 |
+| 分類／看板／我的最愛 | 編號／板名／類別及游標核對後點選、翻頁、返回 | 現代命令列及縮排分類自製案例回歸；實站不同版型待核對 |
+| 信件／精華列表 | 已知 DocumentList 單欄項目與翻頁／返回 | core／Connection／JS 回歸；原生與實站尚未驗證；無新郵件捷徑 |
+| 文章列表 | 日期欄右界前返回，作者欄起開啟，整列 hover | 既有回歸；保留原生案例的歷史範圍 |
+| 文章閱讀 | 可見上下半部翻頁、左側返回、網址與快取捲動 | 本輪生產 handler 通過；原生點擊與實站待驗 |
+| 未知、多欄、表單或編輯器 | 保留原始鍵盤，無通用點擊 Enter | 負例回歸；原因沿用 Rust 的版型／欄位／游標／未完成狀態 |
 
 ## 文章快取閱讀（2026-10-20）
 
