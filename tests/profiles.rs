@@ -149,7 +149,7 @@ fn opacity_migrates_without_changing_other_preferences_and_rejects_invalid_value
             r#"{{"version":{version},"display":{{"fonts":{{"kind":"preset","preset":"bundled"}},"font_size":18,"baseline":19}},"hover":"off","language":"en-US"}}"#
         );
         let settings = AppSettings::decode(bytes.as_bytes()).unwrap();
-        assert_eq!(settings.version, 5);
+        assert_eq!(settings.version, 6);
         assert_eq!(settings.tools_opacity.percent(), 100);
         assert_eq!(settings.display.font_size, 18.0);
         assert_eq!(settings.language, pttstella::i18n::Language::English);
@@ -192,7 +192,7 @@ fn tool_access_migrates_defaults_and_persists_independent_choices_strictly() {
     for version in [2, 3, 4] {
         let old = serde_json::json!({"version":version,"display":{"fonts":{"kind":"platform_default"},"font_size":18,"baseline":19},"hover":"off","tools_opacity":65});
         let app = AppSettings::decode(&serde_json::to_vec(&old).unwrap()).unwrap();
-        assert_eq!(app.version, 5);
+        assert_eq!(app.version, 6);
         assert_eq!(app.tools_access, ToolAccess::default());
         assert_eq!(app.tools_opacity.percent(), 65);
     }
@@ -225,4 +225,26 @@ fn tool_access_migrates_defaults_and_persists_independent_choices_strictly() {
         app["tools_access"] = access;
         assert!(AppSettings::decode(&serde_json::to_vec(&app).unwrap()).is_err());
     }
+}
+
+#[test]
+fn article_mode_migrates_and_round_trips_without_accepting_unknown_modes() {
+    use pttstella::settings::{AppSettings, ArticleMode};
+    for version in 2..=5 {
+        let value = serde_json::json!({"version":version,"display":{"fonts":{"kind":"platform_default"},"font_size":18,"baseline":19},"hover":"off"});
+        let loaded = AppSettings::decode(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert_eq!(loaded.version, 6);
+        assert_eq!(loaded.article_mode, ArticleMode::Web);
+    }
+    let terminal = AppSettings {
+        article_mode: ArticleMode::Terminal,
+        ..Default::default()
+    };
+    let mut value = serde_json::to_value(&terminal).unwrap();
+    assert_eq!(
+        AppSettings::decode(&serde_json::to_vec(&value).unwrap()).unwrap(),
+        terminal
+    );
+    value["article_mode"] = "unknown".into();
+    assert!(AppSettings::decode(&serde_json::to_vec(&value).unwrap()).is_err());
 }

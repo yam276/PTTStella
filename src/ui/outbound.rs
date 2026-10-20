@@ -177,6 +177,7 @@ pub(super) struct MediaImage {
 }
 #[derive(Serialize)]
 pub(super) struct SettingsOpen {
+    pub article_mode: pttstella::settings::ArticleMode,
     pub hover: HoverPosition,
     pub tools_access: pttstella::settings::ToolAccess,
     pub tools_opacity: ToolOpacity,

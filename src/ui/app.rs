@@ -676,6 +676,14 @@ pub(super) fn SettingsForm() -> Element {
                     p { id: "settings-profile-help", class: "settings-help", {pttstella::msg!("settings-profile-help")} }
                 }
                 section { "data-settings-page":"media", class:"settings-section",
+                    label { SettingsCaption {label:pttstella::msg!("article-mode"),icon:rsx!{FileText{size:18}}}
+                        select {id:"article-mode",
+                            option {value:"web",{pttstella::msg!("article-mode-web")}}
+                            option {value:"terminal",{pttstella::msg!("article-mode-terminal")}}
+                        }
+                    }
+                    p {class:"settings-help",{pttstella::msg!("article-mode-help")}}
+
                     label { SettingsCaption {label:pttstella::msg!("hover-position"),icon:rsx!{Image{size:18}}}
                         select {id:"settings-hover",
                             option {value:"top_right",{pttstella::msg!("hover-top-right")}}

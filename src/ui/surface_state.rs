@@ -10,7 +10,7 @@ use pttstella::{
     media::hover::Lease,
     navigation::{Context, Stamp},
     selection::{self, SelectedText, Selection},
-    settings::DisplaySettings,
+    settings::{ArticleMode, DisplaySettings},
 };
 use std::{
     ops::Range,
@@ -73,6 +73,7 @@ struct SelectedRows {
 pub(super) struct SurfaceState {
     article: super::article_cache::ArticleCache,
     raw_reading: bool,
+    article_mode: ArticleMode,
     filters: filters::State,
     in_flight: Option<Paint>,
     displayed: Option<Paint>,
@@ -86,6 +87,7 @@ impl SurfaceState {
         Self {
             article: Default::default(),
             raw_reading: false,
+            article_mode: ArticleMode::default(),
             filters: filters::State::new(rules),
             in_flight: None,
             displayed: None,
@@ -118,7 +120,8 @@ impl SurfaceState {
             return None;
         }
         let mut packet = paint(view, probe, settings, &self.filters);
-        if !self.raw_reading {
+        packet.article_mode = self.article_mode;
+        if !self.raw_reading && self.article_mode == ArticleMode::Web {
             self.article.project(&mut packet);
         }
         packet.hover = self
@@ -145,14 +148,15 @@ impl SurfaceState {
     }
     pub(super) fn current(&self, identity: Identity, view: &View) -> Option<&Paint> {
         self.displayed.as_ref().filter(|p| {
-            current_presentation(
-                p,
-                identity.presentation,
-                identity.generation,
-                identity.revision,
-                &self.filters,
-                view,
-            )
+            p.article_mode == self.article_mode
+                && current_presentation(
+                    p,
+                    identity.presentation,
+                    identity.generation,
+                    identity.revision,
+                    &self.filters,
+                    view,
+                )
         })
     }
     pub(super) fn inline_page(
@@ -169,6 +173,9 @@ impl SurfaceState {
         })
     }
     pub(super) fn inline_identity(&self, view: &View) -> Option<Identity> {
+        if self.article_mode == ArticleMode::Terminal {
+            return None;
+        }
         let p = self.displayed.as_ref()?;
         self.current(Identity::of(p), view)
             .filter(|_| {
@@ -182,7 +189,9 @@ impl SurfaceState {
     }
     pub(super) fn navigation_shown(&self, stamp: Stamp) -> bool {
         self.displayed.as_ref().is_some_and(|p| {
-            !p.output_pending
+            p.article_mode == self.article_mode
+                && p.presentation == self.filters.version()
+                && !p.output_pending
                 && p.generation == stamp.generation
                 && p.frame.revision == stamp.revision
                 && p.input_epoch == stamp.input_epoch
@@ -215,6 +224,14 @@ impl SurfaceState {
             !p.output_pending && p.generation == generation && p.navigation.kind() == context.kind()
         })
     }
+    pub(super) fn set_article_mode(&mut self, mode: ArticleMode) -> bool {
+        if self.article_mode == mode {
+            return false;
+        }
+        self.article_mode = mode;
+        self.replace_rules(self.filters.rules().clone());
+        true
+    }
     pub(super) fn set_raw_reading(&mut self, raw: bool) -> bool {
         if self.raw_reading == raw {
             return false;
@@ -225,6 +242,9 @@ impl SurfaceState {
         true
     }
     pub(super) fn reading_context(&self, view: &View) -> Option<Context> {
+        if self.article_mode == ArticleMode::Terminal {
+            return None;
+        }
         let paint = self.displayed.as_ref()?;
         let article = paint.article.as_ref()?;
         (view.phase == Phase::Connected

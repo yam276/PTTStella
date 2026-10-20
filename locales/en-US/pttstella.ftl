@@ -600,3 +600,9 @@ vim-layout = Vim paused: this list layout is not supported; press i for native i
 article-cache-hint = Lines { $first }–{ $last } retained; scroll back locally, load more at the edge
 export-cache-selection-limit = Selected-row PNGs support up to 24 lines; select a smaller range
 export-cache-page-hint = Export the current 24-row station page, excluding cached history and expanded images
+
+article-mode = Article mode
+article-mode-web = Web
+article-mode-terminal = Terminal
+article-mode-help = Web mode joins visited pages and supports inline images. Terminal mode keeps the station grid and paging, with hover or top-right image previews. Switching starts again from the current station page.
+settings-alias-article-mode = article mode web terminal 文章模式 網頁 終端機

@@ -472,3 +472,37 @@ fn context_copy_uses_acknowledged_filtered_text_and_exact_selection_request() {
             .is_none()
     );
 }
+
+#[test]
+fn terminal_mode_revokes_old_acks_and_inline_but_keeps_station_links() {
+    use pttstella::{navigation::Intent, settings::ArticleMode};
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let view = view();
+    let old = displayed(&mut state, &view);
+    assert!(state.inline_page(old, view.stamp(), &view).is_some());
+    assert!(state.reading_context(&view).is_some());
+    state.display_changed();
+    let pending = Identity::of(
+        state
+            .queue(&view, false, &DisplaySettings::default())
+            .unwrap(),
+    );
+    assert!(state.set_article_mode(ArticleMode::Terminal));
+    state.acknowledge(pending).unwrap();
+    assert!(state.current(old, &view).is_none());
+    assert!(!state.navigation_shown(view.stamp()));
+    assert!(state.inline_page(old, view.stamp(), &view).is_none());
+    assert!(state.reading_move(&view, Intent::NextPage).is_none());
+    let terminal = displayed(&mut state, &view);
+    let paint = state.current(terminal, &view).unwrap();
+    assert_eq!(paint.frame, view.frame);
+    assert!(paint.article.is_none() && paint.source_frame.is_none());
+    assert!(!paint.links.is_empty());
+    assert!(state.navigation_shown(view.stamp()));
+    assert!(state.inline_identity(&view).is_none());
+    assert!(state.set_article_mode(ArticleMode::Web));
+    let web = displayed(&mut state, &view);
+    assert!(state.inline_page(web, view.stamp(), &view).is_some());
+    assert!(state.reading_context(&view).is_some());
+    assert!(state.current(old, &view).is_none());
+}

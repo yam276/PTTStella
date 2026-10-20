@@ -64,3 +64,5 @@ Enter 將快取中的直接圖片網址展開於對應文字行下方，再按�
 回歸包含重疊行去重、連續範圍、雙色字與歷史完整網址、來源版本／ACK／名單准入、原始輸入、數量及容量限制、局部捲動、邊界取頁、非進展停止與解碼錨點。`inline` 原生探針仍要求兩次 Enter 一個 batch、PNG、零站端輸入及 Close／owner join。
 
 `inline_pages` 使用本機兩頁及分段重繪，peer 只接受一次 PageDown，之後只准 Close；往回讀不得送 PageUp，HTTP 不得重抓。必須共同核對快取兩頁的可見文字／圖片、歷史內容複製、PNG、HTTP 計數、Close acknowledged 與全部 owner join。離線及原生結果分別記於 active plan，不以計數冒充視覺驗收。
+
+文章內展圖僅供網頁文章模式；終端機模式只保留 hover 或右上預覽，不插入圖片佔位列。切換與保存規則見 [文章閱讀](article-reading.md)。

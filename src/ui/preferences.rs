@@ -12,6 +12,8 @@ use std::path::Path;
 pub(super) struct Change {
     pub values: DisplayProfile,
     #[serde(default)]
+    pub article_mode: Option<pttstella::settings::ArticleMode>,
+    #[serde(default)]
     pub language: pttstella::i18n::Language,
     pub tools_opacity: pttstella::settings::ToolOpacity,
     pub tools_access: pttstella::settings::ToolAccess,
@@ -22,6 +24,9 @@ impl Change {
     pub(super) fn apply(self, mut app: AppSettings) -> Result<AppSettings, String> {
         app.display = self.values.validate()?;
         app.language = self.language;
+        if let Some(mode) = self.article_mode {
+            app.article_mode = mode;
+        }
         app.tools_opacity = self.tools_opacity;
         app.tools_access = self.tools_access;
         if let Some(hover) = self.hover {
@@ -103,6 +108,7 @@ impl Preferences {
     pub(super) fn open_packet(&self) -> Packet<'static> {
         Packet::SettingsOpen(Box::new(SettingsOpen {
             hover: self.app.hover,
+            article_mode: self.app.article_mode,
             profile: self.app.display.clone(),
             tools_opacity: self.app.tools_opacity,
             tools_access: self.app.tools_access,
