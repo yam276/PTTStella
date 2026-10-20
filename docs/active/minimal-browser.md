@@ -4,13 +4,34 @@
 
 ## 目標
 
-目前交付為 `dist/macos-short-links/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：修復短文章網址底線及開圖候選消失，包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。短文章的原生底線與鍵盤展圖已驗證；快速名單／暫時篩選仍保留原有未完成驗收，不因這次修正升級為通過。原生正文滑鼠仍由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-regression-audit/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：完成下述既有功能回歸檢查，修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 既有功能交叉回歸檢查（2026-10-20）
+
+依使用者要求擴大到已做功能，並在驗證後推送 develop。基準為 `f43ef6a`，先前功能提交皆在其祖先鏈，沒有以新功能測試取代既有 suite。新增三個案例先重現失敗：短／長快取頁尾的 OSC 8 metadata 遺失；Vim 原始輸入往返未撤銷舊 presentation／延遲 ACK；清除暫時推文篩選後舊畫面仍被接受。修正保留當前頁尾 metadata，並在閱讀投影／篩選改變時遞增版本、撤銷選取／hover／輸出；空輸入不清除閱讀。一般返回與非閱讀輸入共用清理路徑。
+
+另新增 16 組交叉案例：網頁／終端機、16／23 行文章、無規則／遮內容／整行遮黑／白名單；逐組驗完整文字格線、獨立 expected 網址及圖片候選、連結複製、全文選取與 24 行輸出、暫時揭露和舊版本拒絕。修正前 bin 92 passed／3 failed，修正後完整 bin 96 passed；未修改既有 expected 放行失敗。
+
+| 既有功能 | 本輪驗證 |
+| --- | --- |
+| ANSI／雙色字／固定格線、選取、編碼、網址、名單、站點、傳輸、保活、登入狀態與導覽准入 | 既有 core 13 commands／2 replay、desktop lib 142、bin 96、全 targets Clippy／fmt 通過；合成及 loopback，不代替實站登入 |
+| 滾輪分流、左右／上下游標、拖曳與 Shift、站端滑鼠、IME 事件、快捷鍵、媒體、設定與浮球 | 完整 JS 169 項通過，未以事件 doubles 宣稱實體滑鼠／IME 驗收 |
+| 建置、打包、資產、文件及驗證工具 | isolated lane Python tooling 70 項、docs gate 通過 |
+| 主選單／看板／最愛／文章列表、反覆切板、計數、命令說明、空列表、任意鍵 | 最新交付副本原生 window probe 46 筆精確操作通過，長按 j 一秒僅關閉一張繼續提示 |
+| 網頁文章 j／k、方向鍵、Home／End、展圖／失敗圖片、選取與複製／貼上／PNG | 原生 `inline_pages` 重跑通過；一次 PageDown，j 與 Down／k 回程與 Up／Home 內容區像素相同；兩次 Enter 一個 batch，成功兩圖與 404 各一個 GET；47 行選取禁止行 PNG，Cmd-C／Cmd-V 顯示 47 行預覽，取消零站端文字 |
+| 設定保存／重啟、語言與文章模式、Vim 原始輸入往返 | 獨立程序還原 English／Terminal／Top right，再保存 Web；取頁／展圖後 i 清除圖片並切為原始格線、Escape 返回網頁；本機字型清單及 bundled 字型載入已觀察，未以此宣稱所有字型像素驗收 |
+
+三個完成的原生程序均 Close acknowledged、listener／connection／credential／file owner join、exit 0；兩份 960×576 PNG 排除自有 HTTP port 的五個字格後像素完全相同，且均不包含展圖。交付與三份副本 15 個 Mach-O sections 一致並通過 strict ad-hoc 簽章；未公證。
+
+第一輪文章流程在調查 AX 點選後焦點仍停於工具按鈕時超過 300 秒 loopback deadline，報告保留 failed／cleanup false，不算通過。重跑時明確確認匯出完成後焦點回到 BBS 輸入，原生全文複製與預覽成功；不是藉改 expected 或延長期限放行。CUA 右鍵座標仍曾回 noWindowsAvailable，原生正文點擊／hover／拖曳及上輪快速名單完整 gate 維持原有待驗；實站與 Windows／Linux 本輪未執行。測試使用隔離偏好與自製資料，中文輸入來源已還原，所有自有 App／server 程序結束。
+
+證據在 `.local/verification/regression-audit/`：`before.log`、`checks.json`、`tooling.log`、三份原生報告與畫面、`validation.json` 分列通過範圍及失敗嘗試。正常資源 guard 通過，沒有使用額度例外或刪除其他專案資料。
 
 ## 短文章網址底線與開圖回歸（2026-10-20）
 
