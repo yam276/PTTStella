@@ -116,6 +116,13 @@ jobs:
         run: |
           rustup show
           rustc --version
+      - name: Install pinned Windows installer compiler
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: tooling/windows/install_inno.ps1
+      - name: Verify native installer prerequisite policy
+        if: runner.os == 'Windows'
+        run: python tooling/check_windows_installer.py --output target/verification/windows-installer
       - name: Test release tooling and documentation
         run: |
           python -m unittest discover -s tooling -p 'test_*.py'
@@ -130,6 +137,14 @@ jobs:
           cargo test --locked --features desktop --lib --bin pttstella
       - name: Build native release downloads
         run: python tooling/bundle_release.py --out-dir dist/release
+      - name: Retain Windows installer policy evidence
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: installer-policy-${{ matrix.platform }}
+          path: target/verification/windows-installer
+          if-no-files-found: warn
+          retention-days: 14
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-${{ matrix.platform }}

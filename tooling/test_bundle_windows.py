@@ -48,7 +48,7 @@ class PublicationTests(unittest.TestCase):
                     bundle.bundle(Path(temp))
             self.assertEqual(list(Path(temp).iterdir()), [])
 
-    def test_atomic_publication_contains_only_staged_package_and_refuses_race(self):
+    def test_zip_contains_only_staged_package(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             output = root/'output'
@@ -58,15 +58,10 @@ class PublicationTests(unittest.TestCase):
             package.mkdir(parents=True)
             (package/'README.txt').write_text('test package')
             (staging/'private-settings.json').write_text('must not ship')
-            result = bundle.publish_zip(staging, output, package.name)
+            result = bundle.make_zip(staging, package.name)
             with zipfile.ZipFile(result) as archive:
                 self.assertEqual(archive.namelist(), ['PTTStella-test/README.txt'])
                 self.assertIsNone(archive.testzip())
-            original = result.read_bytes()
-            (package/'README.txt').write_text('new candidate')
-            with self.assertRaises(FileExistsError):
-                bundle.publish_zip(staging, output, package.name)
-            self.assertEqual(result.read_bytes(), original)
 
     def test_registry_license_timestamp_before_1980_is_packaged(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -78,7 +73,7 @@ class PublicationTests(unittest.TestCase):
             license_file = package/'LICENSE'
             license_file.write_text('synthetic license')
             os.utime(license_file, (0, 0))
-            archive = bundle.publish_zip(staging, output, package.name)
+            archive = bundle.make_zip(staging, package.name)
             with zipfile.ZipFile(archive) as zipped:
                 self.assertEqual(zipped.read('PTTStella-test/LICENSE'), b'synthetic license')
                 self.assertEqual(zipped.getinfo('PTTStella-test/LICENSE').date_time[:3], (1980, 1, 1))

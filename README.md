@@ -76,7 +76,7 @@ python tooling/check.py docs
 
 獨立實站檢查：`cargo run --locked --features desktop --bin pttstella -- --probe-live target/verification/live`。這會連至 `wss://ws.ptt.cc/bbs`，只確認登入前提示並斷線，不送帳密；不包含在任何一般 gate。
 
-## Windows ZIP 測試包
+## Windows 安裝包與 ZIP
 
 在 Windows x64 安裝鎖定 Rust 工具鏈、Python 3.11+、Visual Studio C++ Build Tools 與 Windows SDK；執行環境需要 Microsoft Edge WebView2 Evergreen Runtime。
 
@@ -84,7 +84,10 @@ python tooling/check.py docs
 python tooling/check.py core
 python tooling/check.py desktop
 python tooling/bundle_windows.py
+python tooling/bundle_windows.py --installer --out-dir dist/windows-setup
 ```
+
+`--installer` 另需 Inno Setup 7.1.0，產生同源 ZIP 與 `-setup.exe`。Setup 已有 WebView2 時跳過，缺少時使用官方 Evergreen bootstrapper 自動補裝（需要網路）；失敗會停止安裝，不自動啟動 App。安裝範圍、來源驗證與待實測項目見 [Windows 安裝包](docs/windows-installer.md)。Release workflow 同時交付 Setup 與 ZIP。
 
 產物為 `dist/windows/PTTStella-0.1.0-dev.1-windows-x64.zip`，附 `.zip.sha256`。解壓整個資料夾後執行 `pttstella.exe`；不需要 Rust／Python／Node。圖示由同一 PNG 母檔衍生七種尺寸 ICO，嵌入 EXE 並用於視窗／工作列；包內另附 ICO、必要的 app-local VC++ runtime DLL、README、授權資料及檔案雜湊 manifest。WebView2 Runtime 須另外安裝。本機 ZIP 未作 Authenticode 簽署，不包含私人設定、帳密或流量。
 
