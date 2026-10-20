@@ -152,7 +152,7 @@ class PublicationTests(unittest.TestCase):
 
     def test_complete_four_architecture_set_and_hashes_are_required(self):
         files = release.validate_assets(self.root, '0.1.0', COMMIT)
-        self.assertEqual(len(files), 9)  # five downloads plus four source manifests
+        self.assertEqual(len(files), 10)  # six downloads plus four source manifests
         (self.root/'private-settings.json').write_text('{}')
         with self.assertRaisesRegex(ValueError, 'unexpected files'):
             release.validate_assets(self.root, '0.1.0', COMMIT)
@@ -196,6 +196,12 @@ class PublicationTests(unittest.TestCase):
             path.unlink()
             path.with_name(name+'.sha256').unlink()
 
+    def test_missing_portable_exe_prevents_publication_even_when_setup_exists(self):
+        (self.root/'PTTStella-0.1.0-windows-x64-portable.exe').unlink()
+        with self.assertRaises(FileNotFoundError):
+            release.publish(self.context, self.root, self.github)
+        self.assertEqual(self.github.calls, [])
+
     def test_upload_failure_leaves_draft_and_never_publishes_partial_release(self):
         calls = []
         def command(*args):
@@ -220,9 +226,9 @@ class PublicationTests(unittest.TestCase):
             return ''
         with patch.object(release, 'command', side_effect=command):
             result = release.publish(self.context, self.root, self.github)
-        self.assertEqual(result['assets'], 10)
+        self.assertEqual(result['assets'], 11)
         self.assertEqual(self.github.tag, COMMIT)
-        self.assertEqual(sum(args[:3] == ('gh', 'release', 'upload') for args in calls), 10)
+        self.assertEqual(sum(args[:3] == ('gh', 'release', 'upload') for args in calls), 11)
         self.assertEqual(calls[-1][:3], ('gh', 'release', 'edit'))
         self.assertIn('--latest=true', calls[-1])
 

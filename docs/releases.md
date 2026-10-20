@@ -16,7 +16,7 @@
 
 | 平台 | Runner | 下載 |
 | --- | --- | --- |
-| Windows x64 | `windows-2025` | 單一 Setup `.exe`，包含 App／資產、app-local CRT 與授權；自動補裝缺少的 WebView2 |
+| Windows x64 | `windows-2025` | Setup `.exe` 與免安裝 `-portable.exe`；兩者內嵌 CRT／資產／授權，Setup 可補裝 WebView2 |
 | macOS Apple Silicon | `macos-15` | 包含 `.app` 的 ZIP |
 | macOS Intel | `macos-15-intel` | 包含 `.app` 的 ZIP |
 | Linux x64 | `ubuntu-24.04` | `.deb` 與 `.tar.gz` |
@@ -25,7 +25,7 @@
 
 所有 runner 執行 Python 打包／政策測試、docs、JS、core、desktop lib／bin 與 desktop Clippy，再以 release profile 編譯。Windows／macOS 沿用原生打包驗證，Linux 核對 ELF／系統 shared libraries／Debian metadata。CI 不啟動產品連線，不把無 GUI 的單元與打包測試當成原生輸入、像素、IME 或實站登入驗收。
 
-Windows job 額外安裝固定版 Inno Setup，執行原生合成前置政策 gate，再將完整 staged App 打成 Setup；本機打包器的 ZIP 僅供開發／驗證，不上傳 Release。來源 manifest 只列一個 Windows Setup 下載，缺 Setup 或混入額外 ZIP／裸 DLL 均不能發佈。校驗碼與來源 manifest 仍附於 Release，使用者安裝只需下載 Setup。Setup 的補裝、網路需求、解除安裝與實測邊界見 [Windows 安裝包](windows-installer.md)。
+Windows job 額外安裝固定版 Inno Setup，執行原生合成前置政策 gate，以靜態 CRT 與內嵌授權的同一次 App 編譯產生 Setup 和免安裝 EXE；本機 ZIP 僅供開發／驗證，不上傳 Release。打包器拒絕非系統 DLL 依賴，將免安裝 EXE 複製至空目錄執行授權匯出，比對編入內容後才交付。這不建立 WebView、不連線，也不當作 GUI 通過。來源 manifest 必須列出兩個 Windows EXE，缺任一個或混入額外 ZIP／裸 DLL 均不能發佈。校驗碼與來源 manifest 仍附於 Release，使用者擇一下載。兩者的 WebView2 需求及實測邊界見 [Windows 安裝包](windows-installer.md)。
 
 Windows 暫無 Authenticode，macOS 為 ad-hoc 簽章，未做 Developer ID／Apple 公證，因此下載後可能出現系統安全提示。macOS 說明附於 App，見 [macOS 發佈說明](macos-release.txt)。本流程無需另設私人 token 或帳密 secrets，只有發佈 job 取得 `contents: write`，其他 job 為讀取權限；action 以完整 commit 固定版本。
 

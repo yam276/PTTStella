@@ -12,7 +12,17 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。沒有獨立文章 UI、啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
-## Windows 單一安裝檔交付（2026-10-20）
+## Windows 安裝版與單檔免安裝版（2026-10-20）
+
+依使用者補充，Release 提供 `-setup.exe` 及 `-portable.exe` 擇一下載。兩者消費同一次靜態 CRT 編譯的 App，JS／CSS、翻譯、字型及第三方授權內嵌；免安裝 EXE 不需外帶 CRT DLL 或 Assets 目錄，但須已有 WebView2，不自行補裝。Setup 延續前置檢查及缺少時補裝流程。設定與快取仍位於目前 Windows 帳號的資料目錄。來源 manifest／完整白名單必須具有兩個 EXE；本機 ZIP 留作驗證，不上傳 Release。詳見 [Windows 交付契約](../windows-installer.md)。
+
+打包器保留既有 RUSTFLAGS／CARGO_ENCODED_RUSTFLAGS 並追加 `crt-static`，再以實際 PE imports 拒絕所有非系統 DLL。授權由同一 locked dependency graph 收集，編入後將 App 複製至空目錄執行 `--export-licenses`，逐 byte 核對，任一失敗皆零交付；不以旗標存在宣稱單檔成功。匯出在 UI／WebView／連線建立前處理，拒絕覆寫現有檔案。
+
+本機 Python tooling 67 項、core（13 commands／2 replays）、desktop lib 136／bin 68、desktop Clippy、docs 與 actionlint 通過。macOS arm64 實際編譯並匯出包含 389 筆依賴的 3,082,674 bytes 授權文字，與編入內容 SHA-256 完全相同；另證明既有檔不覆寫及額外參數拒絕。此測試未開 UI／WebView 或連網，只證明共用 CLI 與內嵌文字，不證明 Windows 靜態 CRT 或 GUI。
+
+Windows 原生政策與 desktop gate 在 macOS 回報 not_ready；本輪未真正編譯 Windows EXE／Setup、安裝 Runtime 或驗證單檔 GUI 啟動。GitHub Actions 的付款／spending limit 仍為先前已知阻擋，使用者選擇稍後處理，本輪未重試。Windows 10／11 的靜態連結、空目錄授權匯出、內嵌資產、缺少 WebView2 啟動行為、Setup 補裝與正常斷線仍須原生驗證，不能標為 passed。證據保留 `.local/verification/windows-portable`。
+
+## Windows 單一安裝檔交付（2026-10-20，前一增量）
 
 Windows Release 產品下載改為只有 `-setup.exe`，完整包含 staged App、app-local VC++ runtime DLL、圖示與授權；來源 manifest 與校驗碼仍附於 Release。本機 ZIP 保留作為開發／解壓驗證產物，但發佈收集器不收錄，額外 ZIP／裸 DLL／資產壓縮包會被完整白名單拒絕。JS／CSS、翻譯與內建字型原已由 Rust 內嵌，不需帶原始碼 assets 目錄。這是單一下載的安裝檔，安裝目錄仍包含多個檔案；macOS 是標準 `.app` 套件，Linux 仍須系統 GTK／WebKitGTK 等依賴，詳見 [安裝包契約](../windows-installer.md)。
 

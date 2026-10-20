@@ -61,20 +61,35 @@ class PackageTests(unittest.TestCase):
                 bundle.bundle(self.root)
         self.assertEqual(list(self.root.iterdir()), [])
 
-    def test_windows_release_delivers_only_setup_without_portable_or_loose_payloads(self):
+    def test_existing_portable_exe_is_preserved_before_any_build(self):
+        version = tomllib.loads((bundle.ROOT/'Cargo.toml').read_text())['package']['version']
+        path = self.root/f'PTTStella-{version}-windows-x64-portable.exe'
+        path.write_bytes(b'retained standalone delivery')
+        with patch.object(bundle, 'native_platform', return_value='windows-x64'), \
+                patch.object(bundle.bundle_windows, 'bundle') as build:
+            with self.assertRaises(FileExistsError):
+                bundle.bundle(self.root)
+        build.assert_not_called()
+        self.assertEqual(path.read_bytes(), b'retained standalone delivery')
+
+    def test_windows_release_delivers_setup_and_standalone_exe_without_loose_payloads(self):
         version = tomllib.loads((bundle.ROOT/'Cargo.toml').read_text(encoding='utf-8'))['package']['version']
         stem = f'PTTStella-{version}-windows-x64'
-        def windows(output, with_installer=False):
+        def windows(output, with_installer=False, with_portable=False):
             self.assertTrue(with_installer)
+            self.assertTrue(with_portable)
             output.mkdir()
             archive, setup = output/(stem+'.zip'), output/(stem+'-setup.exe')
             archive.write_bytes(b'synthetic portable download')
             setup.write_bytes(b'synthetic setup download')
+            portable = output/(stem+'-portable.exe')
+            portable.write_bytes(b'synthetic standalone App')
             (output/'vcruntime140.dll').write_bytes(b'synthetic CRT')
             (output/'assets').mkdir()
             (output/'assets/font.ttf').write_bytes(b'synthetic embedded asset')
-            return {'zip': str(archive), 'installer': str(setup),
-                    'installer_details': {'webview2': {'install_only_if_missing': True}}}
+            return {'zip': str(archive), 'installer': str(setup), 'portable': str(portable),
+                    'installer_details': {'webview2': {'install_only_if_missing': True}},
+                    'portable_details': {'crt_linkage': 'static'}}
         output = self.root/'release'
         with patch.object(bundle, 'native_platform', return_value='windows-x64'), \
                 patch.object(bundle, 'run', side_effect=['a'*40, '']), \
@@ -82,11 +97,13 @@ class PackageTests(unittest.TestCase):
             bundle.bundle(output)
         self.assertEqual(packaged.call_count, 1)
         report = json.loads((output/(stem+'.json')).read_text())
-        self.assertEqual(set(report['files']), {stem+'-setup.exe'})
+        self.assertEqual(set(report['files']), {stem+'-setup.exe', stem+'-portable.exe'})
         self.assertEqual({p.name for p in output.iterdir()},
                          {stem+suffix for suffix in ('-setup.exe', '-setup.exe.sha256',
+                                                     '-portable.exe', '-portable.exe.sha256',
                                                      '.json', '.json.sha256')})
         self.assertEqual((output/(stem+'-setup.exe')).read_bytes(), b'synthetic setup download')
+        self.assertEqual((output/(stem+'-portable.exe')).read_bytes(), b'synthetic standalone App')
         self.assertFalse(report['source_dirty'])
         self.assertTrue(report['installer']['webview2']['install_only_if_missing'])
 
