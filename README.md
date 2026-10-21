@@ -1,4 +1,29 @@
-# PTTStella
+<p align="center">
+  <img src="assets/icons/pttstella.png" width="144" height="144" alt="PTTStella Logo">
+</p>
+
+<h1 align="center">PTTStella</h1>
+
+<p align="center">
+  <strong>熟悉的 PTT，更順手的桌面閱讀體驗。</strong>
+</p>
+
+<p align="center">
+  <a href="Cargo.toml"><img src="assets/readme/version.svg" width="146" height="24" alt="開發版本 0.1.0-dev.1"></a>
+  <a href="docs/active/minimal-browser.md"><img src="assets/readme/status.svg" width="150" height="24" alt="狀態：開發中"></a>
+  <a href="docs/releases.md"><img src="assets/readme/platforms.svg" width="241" height="24" alt="目標平台：Windows、macOS、Linux"></a>
+</p>
+
+<p align="center">
+  <a href="#第一次開啟">開始使用</a> ·
+  <a href="#日常瀏覽">操作指南</a> ·
+  <a href="https://github.com/yam276/PTTStella/issues">回報問題</a> ·
+  <a href="docs/active/minimal-browser.md">開發進度</a>
+</p>
+
+---
+
+## 關於 PTTStella
 
 PTTStella 是一款 PTT 桌面瀏覽器，保留熟悉的 BBS 排版、ANSI 色彩、雙色字與鍵盤操作，加入滑鼠導覽、文章圖片預覽、本機黑白名單與截圖功能。
 
