@@ -157,6 +157,8 @@ AID 核心另核對 article_navigation 的自製 article-open fixture 與 naviga
 
 `--probe-surface OUTPUT_DIRECTORY CASE` 是不開 DevTools、不連實站的原生 WebView 探針；CASE 為 `decode`、`painted`、`send`、`renderer_error`、`untrusted`、`confirm` 或 `slow`。前四項分別造成真實事件解碼、版本、Eval 封包序列化及 JS 例外錯誤，應留下 `run_completed=false`、`cleanup_completed=true` 與 acknowledged 的 `cleanup.json`；錯誤畫面之後仍須能 ⌘W／⌘Q 結束。`untrusted` 驗證 JS 合成 paste／按鈕不改狀態，以及 Rust 拒絕三個不可信貼上 wire 事件；`confirm` 由原生貼上 `A\nB` 建立真實預覽，再拒絕合成確認且保留預覽。`slow` 持有 60 秒的合成結果 future，期間以原生按鈕開啟／取消字型設定並關窗，確認命令仍 pending 時就完成清理；它不宣稱模擬了真實網路 backpressure。三者檢查 `surface-probe.json`。所有案例的本機 peer 拒絕任何輸入 bytes，只接受 Close。負面合成事件不當成 trusted 正向輸入證據。
 
+黑白名單顏色與推文辨識變更另用 `--probe-surface OUTPUT_DIRECTORY filter_colors`：自製完整推文以等價 ANSI 亮色編碼，分隔空白保留非預期前景色；不能因不可見前景色跳過推文。原生表單至少四次明確保存（共用色與三筆 ID），最後共用亮綠色、Alice 遮內容並保留亮紅 ID、Alice2 沿用共用色、Bob 個別亮紫色。匯出 PNG 後獨立解碼核對黑色遮罩與 ID RGB，檢查 schema v4、個別覆寫／共用值、Close acknowledged 與完整清理；peer 拒絕所有站端 bytes。合成 PNG 不代替實站格式與原生正文滑鼠驗收。
+
 一般黑名單變更須跑 core 的 filters suite、desktop lib store 與 bin presentation admission 案例。`--probe-filters OUTPUT_DIRECTORY` 提供自製推文、獨立名單檔與本機 peer，不開 DevTools port、不連 PTT。原生視窗驗證新增／同 ID 更新／移除、拒絕與保存失敗、遮黑與暫時顯示、系統剪貼簿讀回、整頁／選取行 PNG；獨立解碼確認變更只在命中 cell 範圍、選取行與整頁對應裁切完全相同。peer 僅接受 PageDown／PageUp 往返及 Close，管理名單不能送其他 PTT bytes。檢查 `filters-probe.json`，並另以新程序確認規則保存；不能只以畫面有黑色或 DOM 元素存在當作通過。
 
 ## 資產與提交

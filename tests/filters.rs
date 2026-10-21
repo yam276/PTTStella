@@ -64,7 +64,12 @@ fn one_projection_preserves_source_and_cells_for_copy_links_and_renderer() {
     assert_eq!(urls.len(), 1);
     assert!(urls[0].url.ends_with("visible.png"));
     let shown = filters::project(&source, &rules, true);
-    assert_eq!(shown.frame, source);
+    assert_eq!(
+        selection::extract(&shown.frame, &Selection::All)
+            .unwrap()
+            .text,
+        selection::extract(&source, &Selection::All).unwrap().text
+    );
     assert_eq!(links::detect(&shown.frame).len(), 2);
 }
 
@@ -105,7 +110,10 @@ fn hidden_pushes_remove_osc8_destinations_from_every_projected_consumer() {
             .iter()
             .any(|link| link.url == secret_target)
     );
-    assert_eq!(shown, source);
+    assert_eq!(
+        selection::extract(&shown, &Selection::All).unwrap().text,
+        selection::extract(&source, &Selection::All).unwrap().text
+    );
 }
 #[test]
 fn unknown_unmapped_partial_and_wrapped_records_are_not_guessed() {
@@ -141,18 +149,20 @@ fn editing_is_case_insensitive_bounded_and_explicit() {
     let mut duplicate = b.clone();
     duplicate.entries.push(a.entries[0].clone());
     assert!(duplicate.validate().is_err());
-    assert!(Rules::decode(br#"{"version":4,"entries":[]}"#).is_err());
+    assert!(Rules::decode(br#"{"version":5,"entries":[]}"#).is_err());
     assert!(Rules::decode(&vec![0; filters::MAX_BYTES + 1]).is_err());
     let entries = (0..filters::MAX_ENTRIES)
         .map(|i| filters::Entry {
             id: format!("Test{i}"),
             note: String::new(),
             policy: filters::Policy::Mask,
+            color: None,
         })
         .collect();
     let full = Rules {
         version: 1,
         entries,
+        allow_color: filters::default_allow_color(),
     };
     assert!(full.validate().is_ok());
     assert!(full.edit("Extra", "", false).is_err());
@@ -165,7 +175,7 @@ fn reveal_and_policy_changes_invalidate_same_frame_and_reset_on_new_source() {
     let old = state.version();
     state.reveal(1, source.revision, true);
     assert!(state.version() > old);
-    assert_eq!(state.project(1, &source).frame, source);
+    assert!(state.project(1, &source).revealed);
     state.sync(2, source.revision);
     assert!(!state.project(2, &source).revealed);
     assert_ne!(state.project(2, &source).frame, source);
@@ -183,7 +193,7 @@ fn reveal_and_policy_changes_invalidate_same_frame_and_reset_on_new_source() {
 fn allow_policy_preserves_all_consumers_and_old_rules_migrate() {
     let old = br#"{"version":1,"entries":[{"id":"Alice","note":"old"}]}"#;
     let mask = Rules::decode(old).unwrap();
-    assert_eq!(mask.version, 3);
+    assert_eq!(mask.version, 4);
     assert_eq!(mask.entries[0].policy, filters::Policy::Mask);
     let allow = mask
         .edit_policy("ALICE", "exception", filters::Policy::Allow, false)
@@ -260,6 +270,8 @@ fn article_titles_full_rows_and_only_allow_ids_share_one_projection() {
     for g in &result.frame.glyphs {
         if g.row == 5 && (17..22).contains(&g.col) {
             assert_eq!((g.left.fg, g.left.bg, g.left.bright), (6, 0, true));
+        } else if g.row == 3 && (17..22).contains(&g.col) {
+            assert_eq!((g.left.fg, g.left.bright), (1, true));
         } else if g.row != 4 && !(g.row == 3 && g.col >= 30) {
             assert!(source.glyphs.contains(g));
         }
@@ -324,14 +336,22 @@ fn entire_push_row_removes_identity_time_content_and_links_without_moving_rows()
             .collect::<Vec<_>>()
     );
     assert_eq!(links::detect(&result.frame).len(), 1);
-    assert_eq!(filters::project(&source, &rules, true).frame, source);
+    assert_eq!(
+        selection::extract(
+            &filters::project(&source, &rules, true).frame,
+            &Selection::All
+        )
+        .unwrap()
+        .text,
+        selection::extract(&source, &Selection::All).unwrap().text
+    );
 }
 
 #[test]
 fn v2_migrates_without_reinterpreting_masks_and_old_schemas_reject_row_policy() {
     let old = br#"{"version":2,"entries":[{"id":"Alice","note":"keep","policy":"mask"},{"id":"Bob","note":"","policy":"allow"}]}"#;
     let migrated = Rules::decode(old).unwrap();
-    assert_eq!(migrated.version, 3);
+    assert_eq!(migrated.version, 4);
     assert_eq!(migrated.entries[0].policy, filters::Policy::Mask);
     assert_eq!(migrated.entries[1].policy, filters::Policy::Allow);
     for version in [1, 2] {
@@ -495,4 +515,119 @@ fn reply_focus_blacks_only_other_recognized_rows_and_drops_their_urls() {
             .any(|l| l.url.contains("hidden.png"))
     );
     assert_eq!(source, frame());
+}
+
+#[test]
+fn invisible_separator_ink_and_equivalent_bright_ansi_do_not_disable_push_masking() {
+    let mut source = frame();
+    for glyph in source.glyphs.iter_mut().filter(|g| g.row == 5) {
+        if [2, 66, 78, 79].contains(&glyph.col) && glyph.text.trim().is_empty() {
+            glyph.left.fg = 3;
+            glyph.right.fg = 3;
+        } else {
+            for style in [&mut glyph.left, &mut glyph.right] {
+                if style.bright && style.fg < 8 {
+                    style.fg += 8;
+                    style.bright = false;
+                }
+            }
+        }
+    }
+    let found = filters::pushes(&source);
+    assert!(found.iter().any(|p| p.row == 5 && p.id == "Alice"));
+    let rules = Rules::default().edit("Alice", "", false).unwrap();
+    let masked = filters::project(&source, &rules, false);
+    let rows = text::rows(&masked.frame).unwrap();
+    assert_eq!(rows[5].cells(9, 66), Some("█".repeat(57).as_str()));
+    assert_eq!(rows[5].cells(3, 8), Some("Alice"));
+    assert!(
+        masked
+            .frame
+            .glyphs
+            .iter()
+            .filter(|g| g.row == 5 && (3..8).contains(&g.col))
+            .all(|g| g.left.fg == 1 && g.left.bright)
+    );
+    let mut changed = source.clone();
+    let digit = changed
+        .glyphs
+        .iter_mut()
+        .find(|g| g.row == 5 && g.col == 67)
+        .unwrap();
+    digit.left.fg = 1;
+    assert!(!filters::pushes(&changed).iter().any(|p| p.row == 5));
+    let mut changed = source.clone();
+    let space = changed
+        .glyphs
+        .iter_mut()
+        .find(|g| g.row == 5 && g.col == 66)
+        .unwrap();
+    space.left.bg = 1;
+    assert!(!filters::pushes(&changed).iter().any(|p| p.row == 5));
+}
+
+#[test]
+fn shared_allow_color_overrides_persist_migrate_and_do_not_reveal_masked_rows() {
+    use filters::Policy;
+    let old =
+        Rules::decode(br#"{"version":3,"entries":[{"id":"Alice","note":"","policy":"allow"}]}"#)
+            .unwrap();
+    assert_eq!(
+        (old.version, old.allow_color, old.entries[0].color),
+        (4, 14, None)
+    );
+    let rules = old
+        .with_allow_color(10)
+        .unwrap()
+        .edit_color("Alice2", "", Policy::Allow, Some(13), false)
+        .unwrap()
+        .edit_policy("Bob", "", Policy::MaskRow, false)
+        .unwrap();
+    let source = frame();
+    let p = filters::project(&source, &rules, false);
+    for (row, start, end, fg, bright) in [(5, 3, 8, 2, true), (7, 3, 9, 5, true)] {
+        assert!(
+            p.frame
+                .glyphs
+                .iter()
+                .filter(|g| g.row == row && (start..end).contains(&g.col))
+                .all(|g| g.left.fg == fg && g.left.bright == bright)
+        );
+    }
+    assert_eq!(text::rows(&p.frame).unwrap()[8].text, "█".repeat(80));
+    assert_eq!(
+        Rules::decode(&serde_json::to_vec(&rules).unwrap()).unwrap(),
+        rules
+    );
+    let updated = rules.with_allow_color(12).unwrap();
+    assert_eq!(updated.entries[1].color, Some(13));
+    let inherited = updated
+        .edit_color("Alice2", "", Policy::Allow, None, false)
+        .unwrap();
+    assert_eq!(inherited.entries[1].color, None);
+    assert!(rules.with_allow_color(0).is_err());
+    assert!(rules.with_allow_color(16).is_err());
+    assert!(
+        rules
+            .edit_color("Alice", "", Policy::Allow, Some(99), false)
+            .is_err()
+    );
+    assert!(
+        rules
+            .edit_color("Alice", "", Policy::Mask, Some(10), false)
+            .is_err()
+    );
+    assert!(Rules::decode(br#"{"version":3,"entries":[],"allow_color":10}"#).is_err());
+    assert_eq!(
+        rules
+            .edit_policy("ALICE2", "new note", Policy::Allow, false)
+            .unwrap()
+            .entries[1]
+            .color,
+        Some(13)
+    );
+    let merged = rules
+        .edit_policy("ALICE2", "", Policy::MaskRow, false)
+        .unwrap();
+    assert_eq!(merged.entries[1].color, None);
 }

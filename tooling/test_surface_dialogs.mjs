@@ -120,7 +120,7 @@ test("filter edit admission, failure recovery and presentation blocking share on
 });
 
 test("each account policy survives selection and is sent explicitly on save",()=>{
-    for(const [policy,label] of [["mask","黑名單（遮內容、保留 ID）"],["mask_row","黑名單（整行塗黑）"],["allow","白名單（ID 亮青色）"]]){
+    for(const [policy,label] of [["mask","黑名單（遮內容、保留 ID）"],["mask_row","黑名單（整行塗黑）"],["allow","白名單（ID 標色）"]]){
         const env=environment("surface-filters.js","createFiltersDialog"),ui=env.create();
         env.fire("filters-open");ui.open({entries:[{id:"Alice",note:"",policy}]});
         assert.ok(env.node("filters-list").children[1].textContent.includes(label));
@@ -308,4 +308,24 @@ test("article mode saves, retries, survives close snapshots, and resets only in 
     env.fire("font-defaults");env.tick();assert.equal(env.sent.at(-1).article_mode,"terminal");ui.saved({status:"saved"});
     page="media";env.fire("font-defaults");env.tick();assert.equal(env.sent.at(-1).article_mode,"web");
     ui.saved({status:"saved"});ui.destroy();
+});
+
+
+test("allowlist shared and individual colors require explicit trusted saves and recover failures",()=>{
+    const env=environment("surface-filters.js","createFiltersDialog"),ui=env.create();
+    env.fire("filters-open");ui.open({allow_color:10,entries:[{id:"Alice",policy:"allow",note:"",color:13},{id:"Bob",policy:"allow",note:""}]});
+    assert.equal(env.node("filters-default-color").value,"10");
+    env.node("filters-list").value="Alice";env.fire("filters-list","change");
+    assert.equal(env.node("filters-color").value,"13");assert.equal(env.node("filters-color").disabled,false);
+    env.node("filters-color").value="";env.fire("filters-save");assert.equal(env.sent.at(-1).color,null);
+    ui.receive({state:"saved",allow_color:10,entries:[{id:"Alice",policy:"allow",note:""}],message:"saved"});
+    env.node("filters-default-color").value="12";env.fire("filters-default-color-save","click",false);
+    assert.equal(env.sent.filter(e=>e.kind==="filters_default_color").length,0);
+    env.fire("filters-default-color-save");assert.equal(env.sent.at(-1).color,12);
+    assert.equal(env.node("filters-save").disabled,true);
+    ui.receive({state:"rejected",message:"disk failed"});assert.equal(env.node("filters-default-color").value,"10");
+    env.node("filters-default-color").value="12";env.fire("filters-default-color-save");
+    ui.receive({state:"saved",allow_color:12,entries:[],message:"saved"});assert.equal(env.node("filters-default-color").value,"12");
+    env.node("filters-policy").value="mask";env.fire("filters-policy","change");assert.equal(env.node("filters-color").disabled,true);
+    env.fire("filters-close");assert.equal(env.node("filters-color").value,"");ui.destroy();
 });

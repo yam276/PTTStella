@@ -572,7 +572,7 @@ async fn run(
                             screen.replace_rules(rules);filter_warning=None;checks.filter_edits+=1;
                             media_preview.close();
                             eval.send(Packet::HoverReset{media:true}).map_err(|e|e.to_string())?;
-                            Packet::FiltersResult(FiltersResult::Saved{entries:screen.rules().entries.clone(),message:pttstella::msg!("filters-saved")})
+                            Packet::FiltersResult(FiltersResult::Saved{allow_color:screen.rules().allow_color,entries:screen.rules().entries.clone(),message:pttstella::msg!("filters-saved")})
                         },
                         Err(error)=>Packet::FiltersResult(FiltersResult::Rejected{message:error.to_string()}),
                         }
@@ -807,7 +807,7 @@ async fn run(
                     }
                     SurfaceEvent::FiltersOpen { trusted: _ } => {
                         filter_import.clear();
-                        eval.send(Packet::FiltersOpen(FiltersOpen{entries:screen.rules().entries.clone(),warning:filter_warning.clone()})).map_err(|e|e.to_string())?;
+                        eval.send(Packet::FiltersOpen(FiltersOpen{allow_color:screen.rules().allow_color,entries:screen.rules().entries.clone(),warning:filter_warning.clone()})).map_err(|e|e.to_string())?;
                     }
                     SurfaceEvent::AccountRule { presentation, stamp, row, col, policy, .. } => {
                         let rules = screen.account_rule(Identity{presentation,generation:stamp.generation,revision:stamp.revision},stamp,row,col,policy,&receiver.borrow());
@@ -826,15 +826,23 @@ async fn run(
                             eval.send(Packet::HoverReset{media:true}).map_err(|e|e.to_string())?;
                         }
                     }
+                    SurfaceEvent::FiltersDefaultColor { color, .. } => {
+                        filter_import.clear();
+                        let rules = screen.rules().with_allow_color(color);
+                        if let Err(message) = files.start(|permit|files::save_filters(permit,filter_store.clone(),rules)) {
+                            eval.send(Packet::FiltersResult(FiltersResult::Rejected{message})).map_err(|e|e.to_string())?;
+                        }
+                    }
                     SurfaceEvent::FiltersEdit {
                         id,
                         note,
                         policy,
+                        color,
                         remove,
                         trusted: _,
                     } => {
                         filter_import.clear();
-                        let rules=screen.rules().edit_policy(&id,&note,policy,remove);
+                        let rules=screen.rules().edit_color(&id,&note,policy,color,remove);
                         if let Err(message)=files.start(|permit|files::save_filters(permit,filter_store.clone(),rules)) {
                             eval.send(Packet::FiltersResult(FiltersResult::Rejected{message})).map_err(|e|e.to_string())?;
                         }
@@ -1525,6 +1533,7 @@ async fn run(
                 || matches!(case.as_str(),"mouse"|"mouse_boundary") && checks.mouse_passed(case=="mouse_boundary") && receiver.borrow().mouse.active.is_none()
                 || matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") && checks.mouse_samples_passed(&case) && receiver.borrow().mouse.active.is_none() && receiver.borrow().mouse.modes.tracking()==pttstella::mouse::Tracking::Highlight
                 || case=="pointer_rows" && checks.navigation_requests==7 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
+                || case=="filter_colors" && checks.filter_edits>=4 && checks.export_checked && screen.rules().allow_color==10
                 || case=="account_actions" && checks.account_rule_actions>=3 && checks.filter_edits>=3 && checks.reply_focus_actions>=2 && checks.export_checked
                 || case=="merged_replies" && checks.context_copies>=1 && checks.export_checked
                 || matches!(case.as_str(),"account_lists"|"account_articles") && checks.filter_edits>=3 && checks.context_copies>=1 && checks.export_checked

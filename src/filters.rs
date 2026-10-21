@@ -13,6 +13,11 @@ pub mod store;
 pub const MAX_BYTES: usize = 256 * 1024;
 pub const MAX_ENTRIES: usize = 512;
 
+pub const fn default_allow_color() -> u8 {
+    14
+}
+const BLOCK_ID_COLOR: u8 = 9;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Policy {
@@ -29,18 +34,23 @@ pub struct Entry {
     pub note: String,
     #[serde(default)]
     pub policy: Policy,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<u8>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Rules {
     pub version: u8,
     pub entries: Vec<Entry>,
+    #[serde(default = "default_allow_color")]
+    pub allow_color: u8,
 }
 impl Default for Rules {
     fn default() -> Self {
         Self {
-            version: 3,
+            version: 4,
             entries: Vec::new(),
+            allow_color: default_allow_color(),
         }
     }
 }
@@ -52,11 +62,22 @@ pub fn valid_id(id: &str) -> bool {
 }
 impl Rules {
     pub fn validate(&self) -> Result<(), String> {
-        if !matches!(self.version, 1..=3)
+        if !matches!(self.version, 1..=4)
             || self.version == 1 && self.entries.iter().any(|e| e.policy != Policy::Mask)
             || self.version < 3 && self.entries.iter().any(|e| e.policy == Policy::MaskRow)
         {
             return Err(crate::msg!("filters-version"));
+        }
+        if !(1..=15).contains(&self.allow_color)
+            || self.version < 4
+                && (self.allow_color != default_allow_color()
+                    || self.entries.iter().any(|e| e.color.is_some()))
+            || self.entries.iter().any(|e| {
+                e.color.is_some_and(|c| !(1..=15).contains(&c))
+                    || e.policy != Policy::Allow && e.color.is_some()
+            })
+        {
+            return Err(crate::msg!("filters-color-invalid"));
         }
         if self.entries.len() > MAX_ENTRIES {
             return Err(crate::msg!("filters-capacity"));
@@ -84,7 +105,7 @@ impl Rules {
         let mut rules: Self =
             serde_json::from_slice(bytes).map_err(|_| crate::msg!("filters-invalid"))?;
         rules.validate().map_err(|error| error.to_string())?;
-        rules.version = 3;
+        rules.version = 4;
         Ok(rules)
     }
     pub fn edit(&self, id: &str, note: &str, remove: bool) -> Result<Self, String> {
@@ -101,11 +122,14 @@ impl Rules {
             return Err(crate::msg!("filters-id-invalid"));
         }
         let mut next = self.clone();
-        next.version = 3;
+        next.version = 4;
         let existing = next
             .entries
             .iter()
             .position(|e| e.id.eq_ignore_ascii_case(id));
+        let color = existing
+            .and_then(|i| next.entries[i].color)
+            .filter(|_| policy == Policy::Allow);
         match (existing, remove) {
             (Some(i), true) => {
                 next.entries.remove(i);
@@ -116,15 +140,44 @@ impl Rules {
                     id: id.into(),
                     note: note.into(),
                     policy,
+                    color,
                 }
             }
             (None, false) => next.entries.push(Entry {
                 id: id.into(),
                 note: note.into(),
                 policy,
+                color,
             }),
         }
         next.validate().map_err(|error| error.to_string())?;
+        Ok(next)
+    }
+    pub fn edit_color(
+        &self,
+        id: &str,
+        note: &str,
+        policy: Policy,
+        color: Option<u8>,
+        remove: bool,
+    ) -> Result<Self, String> {
+        let mut next = self.edit_policy(id, note, policy, remove)?;
+        if !remove
+            && let Some(entry) = next
+                .entries
+                .iter_mut()
+                .find(|e| e.id.eq_ignore_ascii_case(id))
+        {
+            entry.color = color;
+        }
+        next.validate()?;
+        Ok(next)
+    }
+    pub fn with_allow_color(&self, color: u8) -> Result<Self, String> {
+        let mut next = self.clone();
+        next.version = 4;
+        next.allow_color = color;
+        next.validate()?;
         Ok(next)
     }
 }
@@ -137,13 +190,22 @@ pub struct Push {
     pub end: usize,
 }
 fn colour(style: Style, fg: u8, bright: bool) -> bool {
-    style.fg == fg && style.bg == 0 && style.bright == bright && !style.inverse
+    let actual = style.fg + u8::from(style.bright && style.fg < 8) * 8;
+    actual == fg + u8::from(bright) * 8 && style.bg == 0 && !style.inverse
 }
 fn span_colour(row: &text::Row<'_>, start: usize, end: usize, fg: u8, bright: bool) -> bool {
     row.spans
         .iter()
         .filter(|s| s.glyph.col < end && s.glyph.col + s.glyph.width > start)
-        .all(|s| colour(s.glyph.left, fg, bright) && colour(s.glyph.right, fg, bright))
+        .all(|s| {
+            if s.glyph.text.chars().all(char::is_whitespace) {
+                [s.glyph.left, s.glyph.right]
+                    .iter()
+                    .all(|style| style.bg == 0 && !style.inverse)
+            } else {
+                colour(s.glyph.left, fg, bright) && colour(s.glyph.right, fg, bright)
+            }
+        })
 }
 fn timestamp(s: &str) -> bool {
     let b = s.as_bytes();
@@ -276,10 +338,22 @@ pub fn project(frame: &Frame, rules: &Rules, revealed: bool) -> Projection {
                 Policy::Allow => {
                     content.start = target.id_start;
                     content.end = target.id_start + content.id.len();
-                    highlights.push(content);
+                    highlights.push((content, entry.color.unwrap_or(rules.allow_color)));
                 }
-                Policy::Mask => matches.push(content),
+                Policy::Mask => {
+                    let mut id = content.clone();
+                    id.start = target.id_start;
+                    id.end = id.start + id.id.len();
+                    highlights.push((id, BLOCK_ID_COLOR));
+                    matches.push(content);
+                }
                 Policy::MaskRow => {
+                    if revealed {
+                        let mut id = content.clone();
+                        id.start = target.id_start;
+                        id.end = id.start + id.id.len();
+                        highlights.push((id, BLOCK_ID_COLOR));
+                    }
                     content.start = 0;
                     content.end = frame.cols;
                     matches.push(content);
@@ -292,16 +366,15 @@ pub fn project(frame: &Frame, rules: &Rules, revealed: bool) -> Projection {
         mask_ranges(&mut output, &matches);
     }
     for glyph in &mut output.glyphs {
-        if highlights
-            .iter()
-            .any(|p| p.row == glyph.row && glyph.col >= p.start && glyph.col + glyph.width <= p.end)
-        {
+        if let Some((_, color)) = highlights.iter().find(|(p, _)| {
+            p.row == glyph.row && glyph.col >= p.start && glyph.col + glyph.width <= p.end
+        }) {
             for style in [&mut glyph.left, &mut glyph.right] {
                 // Preserve the effective background, including inverse rows.
                 let background = if style.inverse { style.fg } else { style.bg };
-                style.fg = 6;
+                style.fg = color % 8;
                 style.bg = background;
-                style.bright = true;
+                style.bright = *color >= 8;
                 style.inverse = false;
             }
         }

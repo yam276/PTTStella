@@ -130,6 +130,7 @@ pub(super) enum LoginResult {
 
 #[derive(Serialize)]
 pub(super) struct FiltersOpen {
+    pub allow_color: u8,
     pub entries: Vec<filters::Entry>,
     pub warning: Option<String>,
 }
@@ -146,6 +147,7 @@ pub(super) enum FiltersResult {
         message: String,
     },
     Saved {
+        allow_color: u8,
         entries: Vec<filters::Entry>,
         message: String,
     },

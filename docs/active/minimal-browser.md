@@ -4,7 +4,7 @@
 
 ## 目標
 
-目前交付為 `dist/macos-long-article/PTTStella.app`（2026-10-21，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-filter-colors-final/PTTStella.app`（2026-10-21，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
@@ -1039,3 +1039,10 @@ core 13 命令／2 replay、desktop lib 142 項、bin 85 項、全 targets Clipp
 同篇 Equestrian #1gm7mfaU（38 頁、827 畫面列）macOS arm64 release 實站量測：首次 PageDown 至快取 complete，修改前 27.952／27.871 秒，分離但每頁繪圖版 6.941／6.182 秒，最後合併繪圖版 0.336／0.355 秒；同一 complete revision 的 Paint ACK 分別為 28.310／28.229 秒、7.415／6.559 秒、0.698／0.718 秒。各有效樣本皆精確 37 次 PageDown；採全螢幕、bundled 字型、未展圖的已連線重複讀取，並非冷啟動或 CPU／RSS 測試。排除登入／導覽／等待前景，不完整或取消的樣本不計；沒有保存文章、URL、私人流量或帳密。PTTStar 3～4 秒僅為使用者觀察，不是本案跨產品基準量測。
 
 驗證：core 13 命令／2 replay、desktop lib 143 項、bin 114 項、全 targets Clippy、JS 186 項、fmt 與 docs 通過。新增 withholding ACK 的 38 頁接入、取消後晚到頁與新 session／文章隔離案例。macOS 實際 WebView long_load 37 次精確翻頁、837 列、Home／End 回讀、手動展圖、full_load 取消／繼續及 19 次翻頁均通過；每輪三個合成圖片網址各一次 HTTP GET，PNG 960×576、Close acknowledged、所有 owner join、程序退出。terminal_pages 原生確認只有一次手動 PageDown 才進第二頁，HTTP 零請求、PNG 與完整清理通過。實站同篇首尾頁可見，置底文不再誤判；未擴大宣稱所有 PTT 文章皆可載入。證據與數字量測保留 .local/verification/preload-independent；交付 dist/macos-reading-independent-final/PTTStella.app 為 arm64 release／strict ad-hoc，未公證。Windows／Linux 原生本輪 not_ready，原生滑鼠細節仍由使用者驗收。
+
+
+2026-10-21 黑白名單推文辨識與顏色：在使用者目前公開文章重現「保存成功但推文仍可見」，測試規則隨後移除。修正 ANSI 等價亮色（SGR 1＋基本色／明確亮色）比較，分隔空白只核對黑背景與非反白，不把不可見前景色當成完整推文成立的必要條件；ID／冒號、可見樣式、時間格式、格線／來源准入仍維持。未知／引用／截斷推文不猜測作者。
+
+保留 ID 的黑名單改為亮紅色；整行塗黑仍不畫出 ID，暫時揭露後以亮紅色辨識。白名單預設共用亮青色，可選 15 種可見 ANSI 前景色，另允許每 ID 覆寫或選回共用色。schema v4 保存全域共用色與 optional entry color，v1～v3 保留原策略並遷移至共用亮青、無覆寫；只在明確保存時改寫，備份／錯誤保留與名單上限不變。快取、來源 PNG、選取／複製及媒體皆消費同一 Rust 投影；連續推文後續 ID 的黑色合併仍優先。
+
+core 13 命令／2 replay（filters 18 項）、desktop lib 143、bin 115、全 targets Clippy、JS 187、fmt 與 docs 通過。macOS arm64 `filter_colors` 實際表單四次保存後，WebView 可見黑名單紅 ID 與內容遮罩、共用綠 ID 及個別紫 ID；獨立 PNG 解碼確認兩列內容全黑、三種 ID RGB 為 red／green／magenta，960×576，名單 v4 寫入值相符。Close acknowledged、全部 owner joined、exit 0。首輪 probe 漏接案例分派而進主選單，保留 failed 記錄，修正分派、bin／Clippy 重跑並另打包後才驗證；沒有用該次退出碼 0 當通過。證據 .local/verification/filter-colors，交付 dist/macos-filter-colors-final/PTTStella.app 為 release／arm64／ad-hoc，未公證。實站修復結果待同篇登入核對；Windows／Linux 原生本輪 not_ready，正文滑鼠仍由使用者驗收。

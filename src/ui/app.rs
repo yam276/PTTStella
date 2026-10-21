@@ -66,6 +66,7 @@ pub fn app(props: AppProps) -> Element {
                 | "short_reading"
                 | "short_links"
                 | "context_menu"
+                | "filter_colors"
                 | "account_lists"
                 | "merged_replies"
                 | "account_actions"
@@ -356,12 +357,19 @@ pub fn app(props: AppProps) -> Element {
                 h2 { id: "filters-title", {pttstella::msg!("filters-title")} }
                 p { {pttstella::msg!("filters-description")} }
                 p { {pttstella::msg!("filters-limitations")} }
+                label { {pttstella::msg!("filters-default-color")} select { id: "filters-default-color", {filter_color_options()} } }
+                button { id: "filters-default-color-save", {pttstella::msg!("filters-default-color-save")} }
+                p { {pttstella::msg!("filters-color-help")} }
                 label { {pttstella::msg!("filters-saved-ids")} select { id: "filters-list", size: "5", "aria-label": pttstella::msg!("filters-saved-ids") } }
                 label { {pttstella::msg!("filters-account-id")} input { id: "filters-id", maxlength: "12", autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
                 label { {pttstella::msg!("filters-policy")} select { id: "filters-policy",
                     option { value: "mask", {pttstella::msg!("filters-policy-mask")} }
                     option { value: "mask_row", {pttstella::msg!("filters-policy-mask-row")} }
                     option { value: "allow", {pttstella::msg!("filters-policy-allow")} }
+                } }
+                label { {pttstella::msg!("filters-id-color")} select { id: "filters-color", disabled: true,
+                    option { value: "", {pttstella::msg!("filters-color-shared")} }
+                    {filter_color_options()}
                 } }
                 label { {pttstella::msg!("filters-note")} input { id: "filters-note", maxlength: "128", autocomplete: "off" } }
                 output { id: "filters-note-status", role: "status" }
@@ -774,4 +782,25 @@ fn BrandSettingsCaption() -> Element {
             .encode(include_bytes!("../../assets/icons/constellation-flat.svg"))
     );
     rsx! {span {class:"settings-caption",img {class:"settings-brand-mark",src:mark,alt:"","aria-hidden":"true"} span {{pttstella::msg!("settings-center-title")}}}}
+}
+
+fn filter_color_options() -> Element {
+    let options = vec![
+        (1, pttstella::msg!("filters-color-red")),
+        (2, pttstella::msg!("filters-color-green")),
+        (3, pttstella::msg!("filters-color-yellow")),
+        (4, pttstella::msg!("filters-color-blue")),
+        (5, pttstella::msg!("filters-color-magenta")),
+        (6, pttstella::msg!("filters-color-cyan")),
+        (7, pttstella::msg!("filters-color-gray")),
+        (8, pttstella::msg!("filters-color-dark-gray")),
+        (9, pttstella::msg!("filters-color-bright-red")),
+        (10, pttstella::msg!("filters-color-bright-green")),
+        (11, pttstella::msg!("filters-color-bright-yellow")),
+        (12, pttstella::msg!("filters-color-bright-blue")),
+        (13, pttstella::msg!("filters-color-bright-magenta")),
+        (14, pttstella::msg!("filters-color-bright-cyan")),
+        (15, pttstella::msg!("filters-color-white")),
+    ];
+    rsx! { for (color, label) in options { option { value: "{color}", "{label}" } } }
 }

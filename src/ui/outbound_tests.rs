@@ -98,6 +98,7 @@ fn outbound_results_match_the_shared_wire_examples() {
         (
             "filters_open",
             Packet::FiltersOpen(FiltersOpen {
+                allow_color: 14,
                 entries: vec![],
                 warning: None,
             }),
@@ -105,6 +106,7 @@ fn outbound_results_match_the_shared_wire_examples() {
         (
             "filters_saved",
             Packet::FiltersResult(FiltersResult::Saved {
+                allow_color: 14,
                 entries: vec![],
                 message: "已保存".into(),
             }),

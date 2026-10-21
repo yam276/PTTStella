@@ -78,11 +78,13 @@ mod tests {
                 id: "ALICE".into(),
                 note: "mask row".into(),
                 policy: Policy::MaskRow,
+                color: None,
             },
             Entry {
                 id: "Bob".into(),
                 note: "".into(),
                 policy: Policy::Mask,
+                color: None,
             },
         ];
         let mut owner = Import::default();
