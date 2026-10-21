@@ -43,6 +43,18 @@ pub(super) struct Reading {
     pub end: bool,
     pub load: Option<LoadState>,
     pub percent_cells: Option<std::ops::Range<usize>>,
+    pub page_cells: Option<std::ops::Range<usize>>,
+    pub pages: Vec<ReadingPage>,
+}
+#[derive(Clone, Serialize)]
+pub(super) struct ReadingPage {
+    pub line: usize,
+    pub number: usize,
+}
+struct CachedPage {
+    start: usize,
+    count: usize,
+    number: Option<usize>,
 }
 struct Row {
     reply: Option<pttstella::filters::Push>,
@@ -58,7 +70,7 @@ pub(super) struct ArticleCache {
     turning: bool,
     source_range: Option<(usize, usize)>,
     // PTT reports logical lines; wrapped rows need their own stable positions.
-    pages: BTreeMap<(usize, usize), (usize, usize)>,
+    pages: BTreeMap<(usize, usize), CachedPage>,
     fetch: Option<Fetch>,
     loader: Loader,
 }
@@ -485,15 +497,13 @@ impl ArticleCache {
                     if self.loader.state.is_none() {
                         self.loader.state = Some(LoadState::Loading);
                     }
-                    let start = if let Some(&(start, count)) =
-                        self.pages.get(&(first_line, last_line))
-                    {
-                        if count != body_rows {
+                    let start = if let Some(page) = self.pages.get(&(first_line, last_line)) {
+                        if page.count != body_rows {
                             self.loader.state = Some(LoadState::Changed);
                             self.loader.awaiting = None;
                             break 'page;
                         }
-                        start
+                        page.start
                     } else if let Some((previous_first, previous_last)) = self.source_range {
                         if first_line < previous_first {
                             let expected =
@@ -573,15 +583,21 @@ impl ArticleCache {
                 }
                 let page_start = incoming.first().map_or(first_line, |(n, _)| *n);
                 let page_end = page_start + body_rows - 1;
-                self.pages
-                    .insert((first_line, last_line), (page_start, body_rows));
+                self.pages.insert(
+                    (first_line, last_line),
+                    CachedPage {
+                        start: page_start,
+                        count: body_rows,
+                        number: footer_page(&source).map(|(_, number)| number),
+                    },
+                );
                 self.rows.extend(incoming);
                 if percent == 100 {
                     let end = page_end;
                     self.end = Some(end);
                     self.rows.retain(|line, _| *line <= end);
                     self.pages
-                        .retain(|_, (start, count)| *start + *count - 1 <= end);
+                        .retain(|_, page| page.start + page.count - 1 <= end);
                 } else if self.end.is_some_and(|end| page_end >= end) {
                     self.end = None;
                 }
@@ -695,6 +711,21 @@ impl ArticleCache {
             end: self.end == Some(last),
             load: self.loader.state,
             percent_cells: paint.source_frame.as_ref().and_then(footer_percent_cells),
+            page_cells: paint
+                .source_frame
+                .as_ref()
+                .and_then(footer_page)
+                .map(|(cells, _)| cells),
+            pages: self
+                .pages
+                .values()
+                .filter_map(|page| {
+                    page.number.map(|number| ReadingPage {
+                        line: page.start,
+                        number,
+                    })
+                })
+                .collect(),
         });
         paint.frame = frame;
         super::presentation::refresh_links(paint);
@@ -721,10 +752,30 @@ fn footer_percent_cells(frame: &Frame) -> Option<std::ops::Range<usize>> {
     if number > 100 || !row.text.get(end + 1..)?.trim_start().starts_with(')') {
         return None;
     }
+    footer_cells(row, start, end, 3)
+}
+fn footer_page(frame: &Frame) -> Option<(std::ops::Range<usize>, usize)> {
+    let rows = pttstella::text::rows(frame)?;
+    let row = rows.last()?;
+    let start = row.text.find('第')? + '第'.len_utf8();
+    let rest = row.text.get(start..)?;
+    let end = start + rest.find(['/', '頁'])?;
+    let number = row.text.get(start..end)?.trim().parse::<usize>().ok()?;
+    if number == 0 {
+        return None;
+    }
+    Some((footer_cells(row, start, end, frame.cols)?, number))
+}
+fn footer_cells(
+    row: &pttstella::text::Row<'_>,
+    start: usize,
+    end: usize,
+    maximum: usize,
+) -> Option<std::ops::Range<usize>> {
     let first = row.spans.iter().find(|s| s.bytes.start == start)?;
     let last = row.spans.iter().find(|s| s.bytes.start == end)?;
     let cells = first.glyph.col..last.glyph.col;
-    if !(1..=3).contains(&cells.len())
+    if !(1..=maximum).contains(&cells.len())
         || !row
             .spans
             .iter()

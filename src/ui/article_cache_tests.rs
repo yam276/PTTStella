@@ -644,3 +644,60 @@ fn local_percent_metadata_identifies_only_ascii_status_cells_and_preserves_sourc
         }
     }
 }
+
+#[test]
+fn source_page_numbers_keep_their_physical_starts_across_a_clamped_tail_and_revisit() {
+    fn numbered(mut packet: Paint, page: usize, percent: usize) -> Paint {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(b"\x1b[24;1H");
+        screen.feed(
+            &encoding::encode(&format!(
+                " 瀏覽 第 {page}/2 頁 ({percent}%) 目前顯示: 第 1~22 行 (y)回應(X)推文(h)說明"
+            ))
+            .unwrap(),
+        );
+        packet.frame.glyphs.retain(|g| g.row != 23);
+        packet
+            .frame
+            .glyphs
+            .extend(screen.frame().glyphs.into_iter().filter(|g| g.row == 23));
+        packet
+    }
+    let mut cache = ArticleCache::default();
+    let original = numbered(page(1, 22, 46), 1, 46);
+    let mut first = original.clone();
+    cache.project(&mut first);
+    let mut last = numbered(page(10, 32, 100), 2, 100);
+    last.navigation = Context::ArticleReading {
+        first_line: 9,
+        last_line: 31,
+        percent: 100,
+    };
+    cache.project(&mut last);
+    let reading = last.article.as_ref().unwrap();
+    assert_eq!(reading.page_cells, Some(8..10));
+    assert_eq!(
+        reading
+            .pages
+            .iter()
+            .map(|p| (p.line, p.number))
+            .collect::<Vec<_>>(),
+        vec![(1, 1), (10, 2)]
+    );
+    assert_eq!(reading.last_line, 32);
+    let mut revisit = original;
+    revisit.frame.revision += 100;
+    cache.project(&mut revisit);
+    assert_eq!(
+        revisit
+            .article
+            .as_ref()
+            .unwrap()
+            .pages
+            .iter()
+            .map(|p| (p.line, p.number))
+            .collect::<Vec<_>>(),
+        vec![(1, 1), (10, 2)]
+    );
+    assert_eq!(revisit.article.as_ref().unwrap().last_line, 32);
+}

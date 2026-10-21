@@ -27,7 +27,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
         const returning=selected!==null;
         ball.dataset.toolsAction=returning?'back':'toggle';
         ball.setAttribute('aria-label',tr(returning?'tools-back':'tools-toggle'));
-        ball.setAttribute('title',tr(returning?'tools-back-drag-hint':'tools-drag-hint'));
+        ball.removeAttribute('title');
         ball.setAttribute('aria-controls',returning?'tools-fan':'tools-fan tools-panel');
         if(returning)ball.removeAttribute('aria-expanded');else ball.setAttribute('aria-expanded',String(opened));
     }

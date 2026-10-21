@@ -160,6 +160,15 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
                 progress=(percent===null?"--":String(percent)).padStart(cells.end-cells.start," ");
                 footerGlyphs=footerGlyphs.map(g=>g.col>=cells.start&&g.col<cells.end?{...g,text:progress[g.col-cells.start]}:g);
             }
+            if(article.page_cells&&article.pages?.length&&viewport){
+                const line=article.first_line+Math.min(article.last_line-article.first_line,mapping.rowAt(top,true));
+                const page=article.pages.reduce((best,page)=>Math.abs(page.line-line)<Math.abs(best.line-line)?page:best);
+                const cells=article.page_cells,value=String(page.number).padStart(cells.end-cells.start," ");
+                if(value.length===cells.end-cells.start){
+                    footerGlyphs=footerGlyphs.map(g=>g.col>=cells.start&&g.col<cells.end?{...g,text:value[g.col-cells.start]}:g);
+                    progress=JSON.stringify([progress,page.number]);
+                }
+            }
             if(!footer){footer=document.createElement("canvas");footer.className="article-footer-canvas";
                 footerLayer=document.createElement("div");footerLayer.className="article-footer";
                 footerImage=document.createElement("img");footerImage.className="article-footer-image";footerImage.draggable=false;footerLayer.append(footerImage);}

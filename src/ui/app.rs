@@ -236,7 +236,6 @@ pub fn app(props: AppProps) -> Element {
                 "data-attention": if fatal() || matches!(phase(), Phase::Error | Phase::Disconnected) { "true" } else { "false" },
                 button { id: "tools-ball", class: "tools-ball", r#type: "button",
                     "aria-label": pttstella::msg!("tools-toggle"), "aria-expanded": "false", "aria-controls": "tools-fan tools-panel",
-                    title: pttstella::msg!("tools-drag-hint"),
                     img { class: "tools-mark", src: "{tools_mark}", alt: "", "aria-hidden": "true", draggable: "false" }
                     span { class: "tools-back-mark", "aria-hidden": "true", ArrowLeft { size: 28 } }
                 }
