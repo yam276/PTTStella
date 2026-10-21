@@ -161,8 +161,12 @@ impl SurfaceState {
             }
             packet.reply_focus = Some(id.clone());
         }
-        if view.site.ptt_features() && matches!(packet.navigation, Context::ArticleReading { .. }) {
-            packet.account_words = filters::account_words(&packet.frame);
+        if view.site.ptt_features() {
+            packet.account_words = match packet.navigation {
+                Context::ArticleReading { .. } => filters::account_words(&packet.frame),
+                Context::ArticleList { .. } => filters::article_authors(&view.frame, &packet.frame),
+                _ => Vec::new(),
+            };
         }
         super::presentation::refresh_links(&mut packet);
         packet.hover = self
@@ -191,7 +195,10 @@ impl SurfaceState {
                 && stamp == view.stamp()
                 && p.input_epoch == stamp.input_epoch
                 && view.mouse.route == pttstella::mouse::input::Route::Local
-                && matches!(p.navigation, Context::ArticleReading { .. })
+                && matches!(
+                    p.navigation,
+                    Context::ArticleReading { .. } | Context::ArticleList { .. }
+                )
         })
     }
     pub(super) fn account_rule(
@@ -223,7 +230,10 @@ impl SurfaceState {
         row: Option<usize>,
         view: &View,
     ) -> bool {
-        let Some(paint) = self.account_paint(identity, stamp, view) else {
+        let Some(paint) = self
+            .account_paint(identity, stamp, view)
+            .filter(|p| matches!(p.navigation, Context::ArticleReading { .. }))
+        else {
             return false;
         };
         let next = if let Some(row) = row {
