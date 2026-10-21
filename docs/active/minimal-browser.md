@@ -4,13 +4,19 @@
 
 ## 目標
 
-目前交付為 `dist/macos-regression-audit/PTTStella.app`（2026-10-20，macOS arm64 release、ad-hoc 簽章）：完成下述既有功能回歸檢查，修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-vim-experimental/PTTStella.app`（2026-10-21，macOS arm64 release、ad-hoc 簽章）：在既有回歸版上將 Vim 開關與情境選單加註「實驗中」，英文為 experimental。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## Vim 實驗中標示（2026-10-21）
+
+README 與 Vim 文件加註實驗狀態；兩語共用的 `vim-off`、`vim-on`、`context-vim` 文案更新，因此初始按鈕、切換後與右鍵入口皆使用相同標示。沒有改動按鍵或導覽政策。
+
+Rust i18n 4 項、相關 JS 44 項與 docs 通過。macOS arm64 的隔離 `short_reading` 原生程序已觀察中文開／關、同程序保存並切換英文後的 on／off；第二個程序還原英文後按鈕仍為 experimental。兩次均匯出 PNG、Close acknowledged、全部 owner join、exit 0；兩張來源 PNG bytes 相同。交付與測試副本的 15 個 Mach-O sections 相同，strict ad-hoc 簽章通過，未公證。證據位於 `.local/verification/vim-experimental/`。右鍵入口的新增文案經 Fluent 檢查，本輪未另做原生正文右鍵或完整瀏覽回歸；使用者實站與其他平台未操作。
 
 ## 既有功能交叉回歸檢查（2026-10-20）
 
