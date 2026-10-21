@@ -65,17 +65,20 @@ test('ordinary web reading keys move locally and only fetch beyond the cached ed
 });
 
 function ownerEnvironment(cached=false){
-    const urls=new Set(),nodes=[];let id=0;
-    const element=tag=>{const node={tag,style:{},dataset:{},children:[],width:0,height:0,append(n){this.children.push(n);},insertBefore(n){this.children.push(n);},replaceChildren(){this.children=[];},remove(){},removeAttribute(){},setAttribute(){},getContext:()=>({drawImage(){}})};nodes.push(node);return node;};
+    const urls=new Set(),nodes=[],encoded=[];let id=0;
+    const element=tag=>{const node={tag,style:{},dataset:{},children:[],width:0,height:0,append(n){this.children.push(n);n.parentNode=this;},insertBefore(n){this.children.push(n);n.parentNode=this;},replaceChildren(){for(const n of this.children)n.parentNode=null;this.children=[];},remove(){if(this.parentNode)this.parentNode.children=this.parentNode.children.filter(n=>n!==this);this.parentNode=null;},removeAttribute(name){delete this[name];},setAttribute(){},toDataURL(){encoded.push(this);return "data:image/png;base64,"+encoded.length;},getBoundingClientRect(){const parent=this.className==='article-footer-image'?this.parentNode.getBoundingClientRect():null,left=(parseFloat(this.style.left)||0)+(parent?.left??0),top=(parseFloat(this.style.top)||0)+(parent?.top??0),width=parseFloat(this.style.width)||parent?.width||this.width,height=parseFloat(this.style.height)||parent?.height||this.height;return{left,top,width,height,right:left+width,bottom:top+height};},getContext:()=>({drawImage(){}})};nodes.push(node);return node;};
     const context={document:{createElement:element},AbortController,setTimeout,clearTimeout,
         fetch:async()=>({blob:async()=>({})}),URL:{createObjectURL(){const url='blob:'+ ++id;urls.add(url);return url;},revokeObjectURL(url){urls.delete(url);}}};
     const create=vm.runInNewContext(source+'\ninstallInlineImages',context);
     const surface=element('div'),canvas=element('canvas');canvas.width=480;canvas.height=96;surface.offsetTop=0;
-    const viewport=cached?{scrollTop:0,clientHeight:96}:undefined,rendered=[];
+    const viewport=cached?Object.assign(element('div'),{scrollTop:0,clientHeight:96}):undefined,rendered=[];
+    const root=element('main');if(viewport)root.append(viewport);
+    if(viewport)viewport.getBoundingClientRect=()=>({left:0,top:0,bottom:viewport.clientHeight});
+    surface.getBoundingClientRect=()=>({left:0,top:surface.offsetTop-(viewport?.scrollTop??0)});
     const ui=create({surface,canvas,viewport,render:(target,packet)=>rendered.push(packet),tr:k=>k,redraw(){},changed(){}});
     const packet={presentation:3,generation:7,frame:{revision:4,rows:4}};
     const open={batch:1,presentation:3,generation:7,revision:4,entries:[{index:0,row:0,key:0}]};
-    return {ui,urls,nodes,canvas,surface,packet,open,viewport,rendered};
+    return {ui,urls,nodes,canvas,surface,packet,open,viewport,rendered,root,encoded};
 }
 test('reset aborts a pending decoder, releases its URL and ignores late batch delivery',async()=>{
     const e=ownerEnvironment();e.ui.open(e.open,e.packet);
@@ -127,7 +130,7 @@ test('cached rows remain visible across live revisions, virtualize offscreen row
     const packet={...e.packet,article:{id:1,first_line:50,last_line:149},frame:{rows:101,revision:4,glyphs:[]},links:[]};
     e.ui.layout(packet,base,1);
     assert.equal(e.canvas.style.visibility,'hidden');assert.equal(e.surface.style.height,'2424px');
-    assert.ok(e.rendered.length<=7);assert.ok(e.rendered.every(p=>p.frame.rows===1));
+    assert.ok(e.rendered.length<=8);assert.ok(e.rendered.every(p=>p.frame.rows===1));
     e.viewport.scrollTop=600;e.ui.layout(packet,base,1);
     assert.equal(e.viewport.scrollTop,600);
     // Twenty earlier rows arrive while the user reads absolute line 75.
@@ -148,13 +151,13 @@ test('an expanded image keeps its slot during a new source frame and late decodi
     e.ui.open({...e.open,first_line:1,article_id:1},packet);
     e.ui.layout(packet,base,1);e.viewport.scrollTop=120;e.ui.layout(packet,base,1);
     e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:100,height:200}});
-    await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img');
+    await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
     image.naturalWidth=100;image.naturalHeight=200;image.onload();await new Promise(resolve=>setImmediate(resolve));
     e.ui.layout({...packet,frame:{...packet.frame,revision:5}},base,1);
     assert.equal(e.viewport.scrollTop,296); // The same text anchor, +176px decoded height.
     assert.equal(e.canvas.style.visibility,'hidden');
     assert.equal(e.nodes.find(n=>n.className==='inline-image').hidden,false);
-    assert.equal(e.nodes.filter(n=>n.tag==='img').length,1);
+    assert.equal(e.nodes.filter(n=>n.tag==='img'&&n.className!=='article-footer-image').length,1);
     await e.ui.destroy();
 });
 
@@ -237,4 +240,59 @@ test('switching a scrolled cached document to the station grid resets both offse
     e.ui.layout({...e.packet,article_mode:'terminal'},base,1);
     assert.equal(e.viewport.scrollTop,0);assert.equal(e.viewport.scrollLeft,0);
     assert.equal(e.canvas.style.visibility,'');assert.equal(await e.ui.destroy(),true);
+});
+
+test('cached reading pins one live footer and maps its links and selection to the original footer row',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:46},
+        frame:{rows:47,revision:4,glyphs:[{row:46,col:0,text:'50%',left:{},right:{}}]},
+        links:[{row:46,start:0,end:3,url:'https://example.com/progress'}]};
+    let grid=e.ui.layout(packet,base,1);
+    const footer=e.nodes.find(n=>n.className==='article-footer-canvas'),view=e.nodes.find(n=>n.className==='article-footer');
+    assert.ok(footer,'a live footer exists above the scrolling text');
+    assert.equal(view.parentNode,e.root,'the footer is outside the scroll container and its text/image layer');
+    assert.equal(view.hidden,false);assert.equal(view.style.top,'72px');assert.equal(e.encoded.length,1);
+    assert.equal(grid.y(46),72);assert.equal(grid.bottom(46),96);
+    assert.equal(grid.rowAt(73),46);assert.equal(grid.rowAt(71),2);
+    assert.equal(grid.height,1128,'pinning does not collapse or grow the document');
+    const painted=e.rendered.at(-1);
+    assert.equal(painted.frame.glyphs[0].text,'50%');assert.equal(painted.frame.glyphs[0].row,0);
+    assert.equal(painted.links[0].url,'https://example.com/progress');
+    e.viewport.scrollTop=240;grid=e.ui.layout(packet,base,1);
+    assert.equal(view.style.top,'72px');assert.equal(e.encoded.length,1,'scrolling reuses the same footer bitmap');assert.equal(grid.rowAt(313),46);assert.equal(grid.rowAt(311),12);
+    assert.equal(grid.bottom(13)-grid.y(13),0,'a selected body row behind the footer has no visible overlay');
+    assert.equal(grid.footerHeight,24);assert.ok(e.rendered.length<24,'footer does not defeat row virtualization');
+    const newer={...packet,frame:{...packet.frame,revision:5,glyphs:[{row:46,col:0,text:'100%',left:{},right:{}}]}};
+    e.ui.layout(newer,base,1);assert.equal(e.rendered.at(-1).frame.glyphs[0].text,'100%');assert.equal(e.encoded.length,2);
+    assert.equal(e.nodes.filter(n=>n.className==='article-footer-canvas').length,1);
+    // A native scroll can update scrollTop before the surface's client rect.
+    // The pinned view must follow the actual viewport edge in that interval.
+    e.surface.getBoundingClientRect=()=>({left:0,top:0});e.ui.layout(newer,base,1);
+    assert.equal(view.style.top,'72px');
+    e.ui.layout(e.packet,base,1);assert.equal(view.hidden,true);assert.equal(footer.width,0);
+    await e.ui.destroy();assert.equal(footer.height,0);
+});
+
+test('pinned footer preserves short grid dimensions and uses physical pixels at different scales',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:3},frame:{rows:24,revision:4,glyphs:[]},links:[]};
+    e.viewport.clientHeight=1000;e.surface.offsetTop=212;
+    let grid=e.ui.layout(packet,base,1);
+    assert.equal(grid.y(23),552);assert.equal(grid.height,576);
+    e.viewport.clientHeight=96;e.surface.offsetTop=0;
+    grid=e.ui.layout(packet,base,2);
+    assert.equal(grid.footerHeight,12);assert.equal(grid.y(23),168);assert.equal(grid.bottom(23),192);
+    assert.equal(grid.rowAt(169),23);
+    await e.ui.destroy();
+});
+
+test('a pinned footer occludes inline image hit targets without losing the image below it',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:23},frame:{rows:24,revision:4,glyphs:[]},links:[]};
+    e.ui.open({...e.open,article_id:1,entries:[{index:3,row:0,key:0}]},packet);e.ui.layout(packet,base,1);
+    const box=e.nodes.find(n=>n.className==='inline-image');box.getBoundingClientRect=()=>({left:20,right:220,top:80,bottom:140});
+    const footer=e.nodes.find(n=>n.className==='article-footer-image');footer.getBoundingClientRect=()=>({left:0,right:480,top:72,bottom:96});
+    assert.equal(e.ui.linkAtPoint({clientX:100,clientY:80}),-1);
+    assert.equal(e.ui.linkAtPoint({clientX:100,clientY:120}),3);
+    await e.ui.destroy();
 });

@@ -23,8 +23,9 @@ function inlineShortcut(key, state, packet) {
 }
 function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,notice}) {
     const layer=document.createElement("div");layer.id="inline-images";surface.insertBefore(layer,canvas.nextSibling);
-    let current=null,items=[],visible=[],strips=[],dead=false,lastLayout=null,lastArticle=null,latestLayout=null;const jobs=new Set();
-    function detach(preserve=false){if(!preserve)lastLayout=null;for(const strip of strips){strip.width=0;strip.height=0;}strips=[];visible=[];layer.replaceChildren();canvas.style.visibility="";}
+    let current=null,items=[],visible=[],strips=[],footer=null,footerLayer=null,footerImage=null,footerPacket=null,dead=false,lastLayout=null,lastArticle=null,latestLayout=null;const jobs=new Set();
+    function detach(preserve=false){if(!preserve)lastLayout=null;for(const strip of strips){strip.width=0;strip.height=0;}strips=[];visible=[];
+        if(footer){footer.width=0;footer.height=0;footerPacket=null;footerImage.removeAttribute("src");footerLayer.hidden=true;}layer.replaceChildren();canvas.style.visibility="";}
     function clear() {
         current=null;
         for(const item of items){item.controller?.abort();item.image?.removeAttribute("src");if(item.url)URL.revokeObjectURL(item.url);if(item.still){item.still.width=0;item.still.height=0;}}
@@ -117,19 +118,24 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         // or a collection of hundreds of full-resolution backing stores.
         const top=viewport?Math.max(0,viewport.scrollTop-surface.offsetTop)*ratio:0;
         const start=viewport?Math.max(0,mapping.rowAt(top,true)-2):0;
-        const end=viewport?Math.min(packet.frame.rows,mapping.rowAt(top+viewport.clientHeight*ratio,true)+3):packet.frame.rows;
+        const textRows=cached?packet.frame.rows-1:packet.frame.rows;
+        const end=viewport?Math.min(textRows,mapping.rowAt(top+viewport.clientHeight*ratio,true)+3):textRows;
         const count=end-start;
         while(strips.length>count){const strip=strips.pop();strip.width=0;strip.height=0;strip.remove();}
         while(strips.length<count){const strip=document.createElement("canvas");strip.className="inline-text-row";strips.push(strip);layer.append(strip);}
-        for(let at=0;at<count;at++){
-            const row=start+at,strip=strips[at],height=base.y(row+1)-base.y(row);strip.width=canvas.width;strip.height=height;
+        function paintRow(strip,row,top){
+            const height=base.y(row+1)-base.y(row);
+            if(strip.width!==canvas.width)strip.width=canvas.width;
+            if(strip.height!==height)strip.height=height;
             if(cached){
                 const frame={...packet.frame,rows:1,cursor_visible:false,glyphs:packet.frame.glyphs.filter(g=>g.row===row).map(g=>({...g,row:0}))};
                 const links=packet.links.filter(link=>link.row===row).map(link=>({...link,row:0}));
                 render(strip,{...packet,frame,links},{cursor:false,linkHints:true});
             } else strip.getContext("2d").drawImage(canvas,0,base.y(row),canvas.width,height,0,0,canvas.width,height);
-            Object.assign(strip.style,{top:mapping.y(row)/ratio+"px",width:width+"px",height:height/ratio+"px"});
+            Object.assign(strip.style,{width:width+"px",height:height/ratio+"px"});
+            if(top!==null)strip.style.top=top/ratio+"px";
         }
+        for(let at=0;at<count;at++)paintRow(strips[at],start+at,mapping.y(start+at));
         const used=new Map();
         for(const item of visible){
             const row=item.row+rowOffset,shown=row>=0&&row<packet.frame.rows-1;
@@ -139,13 +145,43 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         }
         surface.style.height=mapping.height/ratio+"px";
         lastLayout=mapping;lastArticle=cached?{...article,generation:packet.generation,ratio}:null;
+        if(cached){
+            const row=packet.frame.rows-1,height=base.y(row+1)-base.y(row);
+            // Keep the same Rust footer cells, link indices and selection row.
+            // Only its on-screen location changes; PNGs retain source geometry.
+            if(!footer){footer=document.createElement("canvas");footer.className="article-footer-canvas";
+                footerLayer=document.createElement("div");footerLayer.className="article-footer";
+                footerImage=document.createElement("img");footerImage.className="article-footer-image";footerImage.draggable=false;footerLayer.append(footerImage);}
+            const host=viewport?.parentNode??surface;
+            if(footerLayer.parentNode!==host)host.append(footerLayer);
+            footerLayer.hidden=false;
+            // WebKit can lose a standalone canvas while scrolling a long view.
+            // Present the same renderer's one-row bitmap; local scrolling and
+            // image resizing reuse it without re-encoding or decoding the row.
+            // Fonts are loaded before Paint is published by the surface owner.
+            if(footerPacket!==packet||footer.width!==canvas.width||footer.height!==height){
+                paintRow(footer,row,null);footerImage.src=footer.toDataURL("image/png");footerPacket=packet;
+                footerImage.alt=packet.frame.glyphs.filter(g=>g.row===row).map(g=>g.text).join("");
+            }
+            // The overlay belongs to the main view, outside the scroll port.
+            const bounds=surface.getBoundingClientRect(),origin=host.getBoundingClientRect();
+            const footerTop=Math.min(bounds.top+mapping.y(row)/ratio,viewport?viewport.getBoundingClientRect().bottom-height/ratio:Infinity);
+            Object.assign(footerLayer.style,{left:(bounds.left-origin.left)+"px",top:(footerTop-origin.top)+"px",
+                width:width+"px",height:height/ratio+"px"});
+            const drawn=footerImage.getBoundingClientRect(),drawnTop=(drawn.top-bounds.top)*ratio,drawnHeight=drawn.height*ratio;
+            return {...base,...mapping,footerHeight:drawn.height,
+                y:r=>r===row?drawnTop:Math.min(mapping.y(r),drawnTop),
+                bottom:r=>r===row?drawnTop+drawnHeight:Math.min(mapping.bottom(r),drawnTop),
+                rowAt(value,clamp=false){return value>=drawnTop&&value<drawnTop+drawnHeight?row:mapping.rowAt(value,clamp);}};
+        }
         return {...base,...mapping};
     }
     function linkAtPoint(event){
         if(!current||dead||!matches(latestLayout))return -1;
+        if(footerLayer&&!footerLayer.hidden){const r=footerImage.getBoundingClientRect();if(event.clientX>=r.left&&event.clientX<r.right&&event.clientY>=r.top&&event.clientY<r.bottom)return -1;}
         const item=visible.find(item=>{const r=item.box.getBoundingClientRect();return event.clientX>=r.left&&event.clientX<r.right&&event.clientY>=r.top&&event.clientY<r.bottom;});
         return item?.index??-1;
     }
     return {open,receive,fail,reset,layout,linkAtPoint,active:()=>!!current,
-        async destroy(){dead=true;clear();lastLayout=null;lastArticle=null;latestLayout=null;await Promise.allSettled([...jobs]);layer.remove();return jobs.size===0;}};
+        async destroy(){dead=true;clear();lastLayout=null;lastArticle=null;latestLayout=null;await Promise.allSettled([...jobs]);layer.remove();footerLayer?.remove();return jobs.size===0;}};
 }
