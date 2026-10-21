@@ -4,13 +4,25 @@
 
 ## 目標
 
-目前交付為 `dist/macos-reading-footer-delivery/PTTStella.app`（2026-10-21，macOS arm64 release、ad-hoc 簽章）：網頁文章保留可見 BBS 區域下緣的原始 PTT 資訊列，包含站端頁數、百分比及行範圍；保留 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-reading-stall/PTTStella.app`（2026-10-21，macOS arm64 release、ad-hoc 簽章）：修正文章到中段頁尾省略「←離開」後無法繼續取頁的問題，保留固定的原始 PTT 資訊列及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 文章中段 52% 停住與 PageUp／PageDown（2026-10-21）
+
+使用者回報部分文章卡住並提供公開 AID。新增同版型自製案例先重現 `Unknown(Unrecognized)`：共同閱讀辨識器要求頁尾同時包含「←／離開」，但 PTT 的回應／推文頁尾可省略此提示。修正接受行範圍後完整的 `(y)回應(X)推文(h)說明`，各鍵及說明須有狀態列背景；原有有效頁碼、百分比、最多 23 行、完整映射／控制碼與游標限制保持。一般鍵盤、Vim、滑鼠、快取與傳輸共用此結果，不用任意 PageDown fallback。錯鍵／缺鍵、無背景或局部去背景、額外確認／輸入提示及正文游標仍拒絕。
+
+core 13 commands／2 replay、desktop lib 143／bin 96、全 targets Clippy、fmt、JS 172 及 docs 通過。新 production Connection loopback 連續十頁，包含 52% 後的 64% 至 100%，獨立核對九筆 PageDown；末頁與後續確認提示拒絕額外送鍵並正常 Close。既有 `inline_pages` 自製頁尾改用回應／推文版型，macOS arm64 真正 WebView 驗證 PageDown 取下一頁、PageUp／PageDown 回讀、兩次 Enter 一個展圖 batch、兩張圖及 404 各一個 GET、PNG 與全部 owner／server join、exit 0。來源 PNG 960×576，正文排除自有 port 後與前版相同；頁尾差異為此次明確更換的合成版型。
+
+實站另已重現並驗證：舊交付在 EZsoft `#1gfarpNI` 由第 5 頁 40%（仍有←離開）進到第 6 頁 52%（返回提示消失）後，PageDown 無法再取頁。正常關閉舊版並啟動修正版，使用者協助完成登入；同篇依序通過 52%、64%、76%、89%，至第 10/10 頁 100%（第 196～218 行），再用 PageUp／PageDown 回看並返回末端。新版正常視窗保留在此文章供使用者驗收；沒有匯出或記錄私人流量／帳密，公開文章內容不做 fixture。這是一篇實站案例，不能推定所有長文／所有站端版型均通過。
+
+證據在 `.local/verification/reading-stall/`（before、checks、finish、native、validation 與 live-observation）。標準 16 GiB harness 通過，沒有額度例外。Windows／Linux 與正文滑鼠仍待各自驗收。主選單快速前往途中曾停在「我的最愛」選取列，手動 Enter 後才進入列表；同篇驗證改由已辨識列表及原始 AID 定位，該主選單路徑另記待核對，未宣稱本輪已修復。
+
+已讀取 PTTStar Analyzer 既有交接：靜態證據確認相鄰頁合併、本機長文及邊界交回站端；是否進文即自動抓全文的完整排程仍未證實。本次修正辨識，不悄悄啟用全文預抓；後續若採全文載入，應另定義取消、容量、文章變動與站端操作交接。
 
 ## 網頁文章保留底列資訊（2026-10-21）
 

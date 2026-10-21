@@ -19,6 +19,71 @@ fn explicit_tls_provider_builds_with_desktop_feature_unification() {
 }
 
 #[tokio::test]
+async fn reply_footer_reads_past_halfway_to_end_and_rejects_a_later_prompt() {
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    for (index, percent) in [9, 18, 26, 35, 44, 52, 64, 74, 86, 100]
+        .into_iter()
+        .enumerate()
+    {
+        let first = 1 + index * 22;
+        let bytes = crate::encoding::encode(&format!("\x1b[2J\x1b[HOwn synthetic article page {}\x1b[24;1H\x1b[30;47m\x1b[2K瀏覽 第 {}/10 頁 ({percent}%) 目前顯示: 第 {first}~{} 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H",index+1,index+1,first+22)).unwrap();
+        // Exercise the real receiver with a response split across messages.
+        let split = bytes.len() / 2;
+        ws.send(Message::Binary(bytes[..split].to_vec().into()))
+            .await
+            .unwrap();
+        ws.send(Message::Binary(bytes[split..].to_vec().into()))
+            .await
+            .unwrap();
+        let view = wait(&connection, |v| {
+            !v.input_pending
+                && !v.output_pending
+                && v.context()
+                    == navigation::Context::ArticleReading {
+                        first_line: first,
+                        last_line: first + 22,
+                        percent,
+                    }
+        })
+        .await;
+        let result = connection
+            .navigate(view.stamp(), navigation::Intent::NextPage)
+            .await;
+        if percent < 100 {
+            result.unwrap();
+            assert_eq!(
+                ws.next().await.unwrap().unwrap().into_data().as_ref(),
+                b"\x1b[6~"
+            );
+        } else {
+            assert!(result.is_err());
+        }
+    }
+    ws.send(Message::Binary(
+        crate::encoding::encode("\x1b[24;1H\x1b[30;47m\x1b[2K是否繼續？[Y/n]\x1b[0m\x1b[24;80H")
+            .unwrap()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    let prompt = wait(&connection, |v| {
+        !v.output_pending && matches!(v.context(), navigation::Context::Unknown { .. })
+    })
+    .await;
+    assert!(
+        connection
+            .navigate(prompt.stamp(), navigation::Intent::NextPage)
+            .await
+            .is_err()
+    );
+    assert!(timeout(Duration::from_millis(80), ws.next()).await.is_err());
+    finish_board_peer(&connection, ws).await;
+}
+
+#[tokio::test]
 async fn pointer_menu_favorites_pages_and_row_open_share_the_production_sender() {
     use crate::navigation::Intent;
     let connection = Connection::start_pointer_rows_probe().unwrap();

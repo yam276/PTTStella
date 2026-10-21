@@ -897,6 +897,106 @@ fn reading_ranges_and_page_boundaries_drive_only_available_actions() {
     );
 }
 #[test]
+fn reply_command_footer_keeps_all_ten_reading_pages_navigable() {
+    for (index, percent) in [9, 18, 26, 35, 44, 52, 64, 74, 86, 100]
+        .into_iter()
+        .enumerate()
+    {
+        let first = 1 + index * 22;
+        let mut screen = fixture("reading_middle");
+        replace(
+            &mut screen,
+            23,
+            &format!(
+                "瀏覽 第 {}/10 頁 ({percent}%) 目前顯示: 第 {first}~{} 行 (y)回應(X)推文(h)說明",
+                index + 1,
+                first + 22
+            ),
+            "30;47",
+        );
+        screen.feed(b"\x1b[24;80H");
+        let context = navigation::analyze(&screen.frame());
+        assert_eq!(
+            context,
+            Context::ArticleReading {
+                first_line: first,
+                last_line: first + 22,
+                percent
+            }
+        );
+        assert_eq!(
+            navigation::plan(&context, Intent::NextPage),
+            if percent == 100 {
+                Err(Error::Unavailable)
+            } else {
+                Ok(b"\x1b[6~".to_vec())
+            }
+        );
+        assert_eq!(
+            navigation::plan(&context, Intent::PreviousPage),
+            if first == 1 {
+                Err(Error::Unavailable)
+            } else {
+                Ok(b"\x1b[5~".to_vec())
+            }
+        );
+        assert_eq!(navigation::plan(&context, Intent::Back).unwrap(), b"\x1b[D");
+    }
+}
+
+#[test]
+fn reply_footer_requires_the_complete_styled_command_band_and_range() {
+    let report = "瀏覽 第 6/10 頁 (52%) 目前顯示: 第 110~132 行";
+    for (suffix, sgr) in [
+        ("(y)回應(X)推文(h)說明", "0"),
+        ("(n)回應(X)推文(h)說明", "30;47"),
+        ("(y)回應(x)推文(h)說明", "30;47"),
+        ("(y)回應(X)推文", "30;47"),
+        ("是否執行？(y)回應(X)推文(h)說明", "30;47"),
+        ("(y)回應(X)推文(h)說明 請輸入密碼:", "30;47"),
+    ] {
+        let mut screen = fixture("reading_middle");
+        replace(&mut screen, 23, &format!("{report} {suffix}"), sgr);
+        screen.feed(b"\x1b[24;80H");
+        unknown(&screen.frame());
+    }
+    for edit in [
+        "\x1b[4;1H",
+        "\x1b[24;30H\x1b[0m目前顯示\x1b[24;80H",
+        "\x1b[31;",
+    ] {
+        let mut screen = fixture("reading_middle");
+        replace(
+            &mut screen,
+            23,
+            &format!("{report} (y)回應 (X)推文 (h)說明"),
+            "30;47",
+        );
+        screen.feed(b"\x1b[24;80H");
+        screen.feed(&encoding::encode(edit).unwrap());
+        unknown(&screen.frame());
+    }
+    let mut screen = fixture("reading_middle");
+    replace(
+        &mut screen,
+        23,
+        &format!("{report} (y)回應(X)推文(h)說明"),
+        "30;47",
+    );
+    let frame = screen.frame();
+    let rows = text::rows(&frame).unwrap();
+    let col = rows[23]
+        .spans
+        .iter()
+        .find(|s| s.glyph.text == "X")
+        .unwrap()
+        .glyph
+        .col;
+    screen.feed(format!("\x1b[24;{}H\x1b[0mX\x1b[24;80H", col + 1).as_bytes());
+    unknown(&screen.frame());
+}
+
+#[test]
 fn malformed_reading_reports_and_prompt_overlays_do_not_enable_actions() {
     for status in [
         "瀏覽 第 0/3 頁 (66%) 目前顯示: 第 24~46 行 ← 離開",
