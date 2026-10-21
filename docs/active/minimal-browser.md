@@ -4,13 +4,23 @@
 
 ## 目標
 
-目前交付為 `dist/macos-vim-experimental/PTTStella.app`（2026-10-21，macOS arm64 release、ad-hoc 簽章）：在既有回歸版上將 Vim 開關與情境選單加註「實驗中」，英文為 experimental。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-reading-footer-delivery/PTTStella.app`（2026-10-21，macOS arm64 release、ad-hoc 簽章）：網頁文章保留可見 BBS 區域下緣的原始 PTT 資訊列，包含站端頁數、百分比及行範圍；保留 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 網頁文章保留底列資訊（2026-10-21）
+
+依使用者要求，網頁文章及展圖時固定顯示同一 Rust 投影的最後一列，沿用 PTT 原始字格、ANSI 配色、頁數／百分比與行範圍。百分比仍是目前站端頁面資訊，回看快取或展圖不另外推算進度。正文虛擬列排除該列，以共同 renderer 產生一張有界單列影像，新 Paint／尺寸才重建；本機捲動重用。位置依實際 viewport 邊界計算，不混合 scrollTop 與尚未更新的 surface client rect。選取及連結共用顯示幾何，底列不點穿圖片，翻頁扣除該列高度；短文章及來源 PNG 格線維持原尺寸。清理撤掉影像來源與圖層。
+
+core 13 commands／2 replay、desktop lib 142／bin 96、全 targets Clippy 與 fmt 通過；最終完整 JS 172 項及 docs 通過。新增固定列、站端更新、縮放、短文章、選取、圖片遮擋、清理及非同步捲動座標案例。加入 footer img 後既有媒體解碼測試誤選該 img，修正為選擇實際 decoder，未放寬解碼／錨點條件。先前 canvas／混用座標的原生候選未達標，保留 failed 記錄，不以退出碼 0 當作畫面通過。
+
+最終 macOS arm64 `inline_pages` 合成原生已觀察 50%→100% 資訊列更新、兩張圖片及 404、Home／End／Down 完成重繪後的固定底列。兩次 Enter 共一個展圖 batch，三個 URL 各一次 GET；peer 僅收到一次精確 PageDown，其餘本機捲動零額外站端輸入。即時快照偶爾早於非同步合成完成，驗證使用完成重繪的畫面，不宣稱逐幀無閃爍。來源 PNG 960×576 排除自有 HTTP port 字格後與既有回歸基準相同；Close acknowledged、全部 owner join、server join、exit 0。交付與測試副本 15 個 Mach-O sections 相同，strict ad-hoc 簽章通過；未公證。
+
+證據位於 `.local/verification/reading-footer/`。標準 16 GiB 與 10 GiB ceiling 曾因其他 namespace 預留被拒；核對本 namespace 約 6.71 GiB，變更僅同依賴／同 profile 的嵌入資產，審查後採較嚴格 8 GiB ceiling 完成，保留全域 60 GiB 與 100 GiB free floor，沒有刪除其他資料。正文滑鼠／hover／拖曳仍由使用者人工驗收；實站、Windows／Linux 本輪未驗證。
 
 ## Vim 實驗中標示（2026-10-21）
 

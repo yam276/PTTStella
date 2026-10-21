@@ -65,7 +65,7 @@ button:disabled { opacity: .4; cursor: default; }
 .workspace[data-reading="web"] { overflow: auto; }
 .surface { flex: none; margin: auto; position: relative; background: #000; }
 canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-#selection { position: absolute; inset: 0; pointer-events: none; }
+#selection { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 .selection-row { position: absolute; background: rgba(128, 180, 255, .35); }
 #surface-note { position: absolute; right: 4px; bottom: 4px; padding: 4px 8px; background: var(--ui-panel); color: var(--ui-text); font-size: 13px; pointer-events: none; }
 #surface-note:empty { display: none; }
@@ -150,6 +150,9 @@ button.primary .settings-icon { color: inherit; }
 
 #inline-images { position:absolute; inset:0; pointer-events:none; }
 #inline-images .inline-text-row { position:absolute; left:0; bottom:auto; }
+.article-footer { position: absolute; inset: auto; z-index: 1; background: #000; pointer-events: none; }
+.article-footer[hidden] { display: none; }
+.article-footer-image { display: block; width: 100%; height: 100%; }
 .inline-image { position:absolute; left:0; display:flex; align-items:center; justify-content:center; padding:12px; box-sizing:border-box; }
 .inline-image canvas { position:static; flex:none; }
 .inline-image-note { color:var(--ui-muted); font-size:14px; }
