@@ -42,6 +42,7 @@ pub(super) struct Reading {
     pub last_line: usize,
     pub end: bool,
     pub load: Option<LoadState>,
+    pub percent_cells: Option<std::ops::Range<usize>>,
 }
 struct Row {
     reply: Option<pttstella::filters::Push>,
@@ -693,6 +694,7 @@ impl ArticleCache {
             last_line: last,
             end: self.end == Some(last),
             load: self.loader.state,
+            percent_cells: paint.source_frame.as_ref().and_then(footer_percent_cells),
         });
         paint.frame = frame;
         super::presentation::refresh_links(paint);
@@ -705,6 +707,41 @@ impl ArticleCache {
             .map(String::len)
             .sum()
     }
+}
+
+// Expose only the validated numeric field to the layout owner. The WebView
+// never parses station text, and its local progress cannot change source cells.
+fn footer_percent_cells(frame: &Frame) -> Option<std::ops::Range<usize>> {
+    let rows = pttstella::text::rows(frame)?;
+    let row = rows.last()?;
+    let end = row.text.find('%')?;
+    let start = row.text.get(..end)?.rfind('(')? + 1;
+    let value = row.text.get(start..end)?;
+    let number = value.trim().parse::<u8>().ok()?;
+    if number > 100 || !row.text.get(end + 1..)?.trim_start().starts_with(')') {
+        return None;
+    }
+    let first = row.spans.iter().find(|s| s.bytes.start == start)?;
+    let last = row.spans.iter().find(|s| s.bytes.start == end)?;
+    let cells = first.glyph.col..last.glyph.col;
+    if !(1..=3).contains(&cells.len())
+        || !row
+            .spans
+            .iter()
+            .filter(|s| s.bytes.start >= start && s.bytes.end <= end)
+            .all(|s| {
+                s.glyph.width == 1
+                    && !s.glyph.unmapped
+                    && s.glyph.text.len() == 1
+                    && s.glyph
+                        .text
+                        .bytes()
+                        .all(|b| b.is_ascii_digit() || b == b' ')
+            })
+    {
+        return None;
+    }
+    Some(cells)
 }
 
 // Footer ranges are logical lines, and a final-page clamp may land inside a

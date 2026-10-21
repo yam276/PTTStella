@@ -325,3 +325,44 @@ test('a pinned footer occludes inline image hit targets without losing the image
     assert.equal(e.ui.linkAtPoint({clientX:100,clientY:120}),3);
     await e.ui.destroy();
 });
+
+
+test('cached footer percentage follows the visible document, including images, without mutating source cells',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:100,end:true,percent_cells:{start:2,end:5}},
+        frame:{rows:101,revision:4,glyphs:Array.from(' (100%) ',(text,col)=>({row:100,col,width:1,text,left:{},right:{}}))},links:[]};
+    const text=()=>e.nodes.find(n=>n.className==='article-footer-image').alt;
+    const layout=()=>e.ui.layout(packet,base,1);
+    layout();assert.equal(text(),' (  3%) ');assert.equal(e.encoded.length,1);
+    e.viewport.scrollTop=1;layout();assert.equal(text(),' (  3%) ');assert.equal(e.encoded.length,1,'reuse unchanged integer progress');
+    e.viewport.scrollTop=24;layout();assert.equal(text(),' (  4%) ');assert.equal(e.encoded.length,2);
+    e.viewport.scrollTop=1200;layout();assert.equal(text(),' ( 53%) ');
+    e.viewport.scrollTop=2328;layout();assert.equal(text(),' (100%) ');
+    e.viewport.scrollTop=0;layout();assert.equal(text(),' (  3%) ');
+    e.ui.open({...e.open,article_id:1,first_line:1},packet);
+    e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:100,height:400}});
+    await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+    image.naturalWidth=100;image.naturalHeight=400;image.onload();await new Promise(resolve=>setImmediate(resolve));
+    layout();assert.equal(text(),' (  2%) ');
+    e.viewport.scrollTop=parseFloat(e.surface.style.height)-e.viewport.clientHeight;layout();assert.equal(text(),' (100%) ');
+    e.ui.layout({...packet,article:{...packet.article,end:false}},base,1);assert.equal(text(),' ( --%) ');
+    assert.equal(packet.frame.glyphs.map(g=>g.text).join(''),' (100%) ');
+    assert.equal(await e.ui.destroy(),true);
+});
+
+
+test('short-article blank padding does not count as unread content after images expand',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    e.viewport.clientHeight=576;e.canvas.height=576;
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:3,end:true,percent_cells:{start:2,end:5}},
+        frame:{rows:24,revision:4,glyphs:Array.from(' (100%) ',(text,col)=>({row:23,col,width:1,text,left:{},right:{}}))},links:[]};
+    const text=()=>e.nodes.find(n=>n.className==='article-footer-image').alt;
+    e.ui.layout(packet,base,1);assert.equal(text(),' (100%) ');
+    e.ui.open({...e.open,article_id:1,first_line:1,entries:[{index:0,row:2,key:0}]},packet);
+    e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:100,height:200}});
+    await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+    image.naturalWidth=100;image.naturalHeight=200;image.onload();await new Promise(resolve=>setImmediate(resolve));
+    e.ui.layout(packet,base,1);assert.equal(text(),' (100%) ','all three text rows and the image fit above the footer');
+    assert.equal(e.surface.style.height,'800px','retain the minimum BBS grid separately from reading progress');
+    await e.ui.destroy();
+});

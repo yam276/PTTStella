@@ -615,3 +615,32 @@ fn overlap_ignores_invisible_blank_foreground_but_preserves_visible_changes() {
         }
     }
 }
+
+#[test]
+fn local_percent_metadata_identifies_only_ascii_status_cells_and_preserves_source() {
+    let mut cache = ArticleCache::default();
+    let mut p = page(1, 3, 100);
+    let original = p.frame.clone();
+    cache.project(&mut p);
+    assert_eq!(p.article.as_ref().unwrap().percent_cells, Some(16..19));
+    assert_eq!(p.source_frame.as_ref().unwrap(), &original);
+    let rows = pttstella::text::rows(&p.frame).unwrap();
+    assert_eq!(rows.last().unwrap().cells(16, 19), Some("100"));
+    for text in [
+        "(101%)",
+        "(URL%)",
+        "(1a%)",
+        "(1%)bad",
+        "(1000%)",
+        "(１００%)",
+    ] {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(b"\x1b[24;1H");
+        screen.feed(&encoding::encode(text).unwrap());
+        if text == "(1%)bad" {
+            assert_eq!(footer_percent_cells(&screen.frame()), Some(1..2));
+        } else {
+            assert_eq!(footer_percent_cells(&screen.frame()), None, "{text}");
+        }
+    }
+}

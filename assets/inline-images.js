@@ -23,9 +23,9 @@ function inlineShortcut(key, state, packet) {
 }
 function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,notice}) {
     const layer=document.createElement("div");layer.id="inline-images";surface.insertBefore(layer,canvas.nextSibling);
-    let current=null,items=[],visible=[],strips=[],footer=null,footerLayer=null,footerImage=null,footerPacket=null,dead=false,lastLayout=null,lastArticle=null,latestLayout=null;const jobs=new Set();
+    let current=null,items=[],visible=[],strips=[],footer=null,footerLayer=null,footerImage=null,footerPacket=null,footerProgress=null,dead=false,lastLayout=null,lastArticle=null,latestLayout=null;const jobs=new Set();
     function detach(preserve=false){if(!preserve)lastLayout=null;for(const strip of strips){strip.width=0;strip.height=0;}strips=[];visible=[];
-        if(footer){footer.width=0;footer.height=0;footerPacket=null;footerImage.removeAttribute("src");footerLayer.hidden=true;}layer.replaceChildren();canvas.style.visibility="";}
+        if(footer){footer.width=0;footer.height=0;footerPacket=null;footerProgress=null;footerImage.removeAttribute("src");footerLayer.hidden=true;}layer.replaceChildren();canvas.style.visibility="";}
     function clear() {
         current=null;
         for(const item of items){item.controller?.abort();item.image?.removeAttribute("src");if(item.url)URL.revokeObjectURL(item.url);if(item.still){item.still.width=0;item.still.height=0;}}
@@ -123,12 +123,12 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         const count=end-start;
         while(strips.length>count){const strip=strips.pop();strip.width=0;strip.height=0;strip.remove();}
         while(strips.length<count){const strip=document.createElement("canvas");strip.className="inline-text-row";strips.push(strip);layer.append(strip);}
-        function paintRow(strip,row,top){
+        function paintRow(strip,row,top,glyphs=null){
             const height=base.y(row+1)-base.y(row);
             if(strip.width!==canvas.width)strip.width=canvas.width;
             if(strip.height!==height)strip.height=height;
             if(cached){
-                const frame={...packet.frame,rows:1,cursor_visible:false,glyphs:packet.frame.glyphs.filter(g=>g.row===row).map(g=>({...g,row:0}))};
+                const frame={...packet.frame,rows:1,cursor_visible:false,glyphs:(glyphs??packet.frame.glyphs.filter(g=>g.row===row)).map(g=>({...g,row:0}))};
                 const links=packet.links.filter(link=>link.row===row).map(link=>({...link,row:0}));
                 render(strip,{...packet,frame,links},{cursor:false,linkHints:true});
             } else strip.getContext("2d").drawImage(canvas,0,base.y(row),canvas.width,height,0,0,canvas.width,height);
@@ -147,8 +147,19 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         lastLayout=mapping;lastArticle=cached?{...article,generation:packet.generation,ratio}:null;
         if(cached){
             const row=packet.frame.rows-1,height=base.y(row+1)-base.y(row);
-            // Keep the same Rust footer cells, link indices and selection row.
-            // Only its on-screen location changes; PNGs retain source geometry.
+            // Rust identifies the numeric status cells. Only the visible
+            // percentage is a local layout decoration; source PNGs stay intact.
+            let footerGlyphs=packet.frame.glyphs.filter(g=>g.row===row),progress=null;
+            const cells=article.percent_cells;
+            if(cells&&viewport){
+                // Minimum-height blank padding is not unread article content.
+                const bodyRows=Math.min(row,article.last_line-article.first_line+1);
+                const total=Math.max(1,mapping.y(bodyRows));
+                const seen=Math.max(0,(viewport.scrollTop-surface.offsetTop+viewport.clientHeight)*ratio-height);
+                const percent=article.first_line===1&&article.end?(seen>=total-1?100:Math.min(99,Math.floor(seen/total*100))):null;
+                progress=(percent===null?"--":String(percent)).padStart(cells.end-cells.start," ");
+                footerGlyphs=footerGlyphs.map(g=>g.col>=cells.start&&g.col<cells.end?{...g,text:progress[g.col-cells.start]}:g);
+            }
             if(!footer){footer=document.createElement("canvas");footer.className="article-footer-canvas";
                 footerLayer=document.createElement("div");footerLayer.className="article-footer";
                 footerImage=document.createElement("img");footerImage.className="article-footer-image";footerImage.draggable=false;footerLayer.append(footerImage);}
@@ -156,12 +167,12 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
             if(footerLayer.parentNode!==host)host.append(footerLayer);
             footerLayer.hidden=false;
             // WebKit can lose a standalone canvas while scrolling a long view.
-            // Present the same renderer's one-row bitmap; local scrolling and
-            // image resizing reuse it without re-encoding or decoding the row.
+            // Present the same renderer's one-row bitmap; scrolling only
+            // re-encodes it when the integer reading percentage changes.
             // Fonts are loaded before Paint is published by the surface owner.
-            if(footerPacket!==packet||footer.width!==canvas.width||footer.height!==height){
-                paintRow(footer,row,null);footerImage.src=footer.toDataURL("image/png");footerPacket=packet;
-                footerImage.alt=packet.frame.glyphs.filter(g=>g.row===row).map(g=>g.text).join("");
+            if(footerPacket!==packet||footerProgress!==progress||footer.width!==canvas.width||footer.height!==height){
+                paintRow(footer,row,null,footerGlyphs);footerImage.src=footer.toDataURL("image/png");footerPacket=packet;footerProgress=progress;
+                footerImage.alt=footerGlyphs.map(g=>g.text).join("");
             }
             // The overlay belongs to the main view, outside the scroll port.
             const bounds=surface.getBoundingClientRect(),origin=host.getBoundingClientRect();
