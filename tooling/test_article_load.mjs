@@ -51,3 +51,15 @@ test('Escape cancels a load without station input while selection, dialogs and I
     modal=true;c.keydown(event);assert.equal(cancelled,0);
     modal=false;c.keydown(event);assert.equal(cancelled,1);
 });
+
+test('changed or capacity-stopped article cannot send End across a retained-history gap',()=>{
+    const c={latest:{article:{first_line:1,last_line:661,end:false,load:'changed'},connected:true},viewport:{scrollTop:600,scrollHeight:1000,clientHeight:400},grid:{ratio:1,y:r=>r*24,bottom:r=>(r+1)*24,footerHeight:24},blocked:()=>false,dragging:null,clearSelection(){},cancelHover(){},repaint(){},navigate(){assert.fail('cannot fetch across a frozen cache');}};
+    vm.runInNewContext(source.slice(source.indexOf('function readingMove('),source.indexOf('function navigate(')),c);
+    for(const state of ['changed','limit']){c.latest.article.load=state;c.readingMove({action:'last'},{isTrusted:true});c.readingMove({action:'next_page'},{isTrusted:true});}
+});
+test('returning to the foreground refreshes the reading gate even without a new station frame',()=>{
+    let focused=0,refreshed=0;const c={contextMenu:{isOpen:()=>false},document:{querySelector:()=>null,activeElement:{}},chrome:{contains:()=>false},focus(){focused++;},refreshKeepAlive(){refreshed++;}};
+    vm.runInNewContext(source.slice(source.indexOf('function activate()'),source.indexOf('function paste(')),c);
+    c.activate();assert.equal(focused,1);assert.equal(refreshed,1);
+    assert.match(source,/\[document,"visibilitychange",refreshKeepAlive\]/);
+});

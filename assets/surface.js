@@ -457,7 +457,7 @@ function readingMove(intent,e,source="button") {
     if(action==="first"&&article.first_line===1||action==="last"&&article.end)return true;
     if(!["first","last"].includes(action))action=delta<0?"previous_page":"next_page";
     if(action==="previous_page"&&article.first_line===1||action==="next_page"&&article.end)return true;
-    if(article.load==="loading")return true;
+    if(["loading","changed","limit"].includes(article.load))return true;
     navigate({action},e,source,false);return true;
 }
 function navigate(intent,e,source="pointer",cached=true) {
@@ -524,7 +524,7 @@ function contextAction(action,context,e){
     else if(action==="vim")toggleVim(e);
     else if(action==="settings")settingsUi.request(e);
 }
-function activate() { if(!contextMenu?.isOpen()&&!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); }
+function activate() { if(!contextMenu?.isOpen()&&!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); refreshKeepAlive(); }
 function paste(e) {
     if(!e.isTrusted||stopped)return;
     stationMouse.revoke();
@@ -680,6 +680,7 @@ const bindings=[...contextMenu.bindings,...sitesUi.bindings,...tools.bindings,..
     [hoverPosition,"change",changeHoverPreference],
     [browseBack,"click",browseReturn],[browsePrevious,"click",browseUp],[browseNext,"click",browseDown],
     [plus,"click",zoomIn],[minus,"click",zoomOut],[fit,"click",zoomFit],
+    [document,"visibilitychange",refreshKeepAlive],
     [viewport,"scroll",repaint],[viewport,"wheel",wheel,{passive:false}],[window,"resize",repaint],[window,"focus",activate],[window,"blur",deactivate],
     [articleLoadCancel,"click",cancelArticleLoad],[articleLoadResume,"click",resumeArticleLoad],
 ];

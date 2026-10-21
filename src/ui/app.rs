@@ -79,11 +79,18 @@ pub fn app(props: AppProps) -> Element {
             .and_then(|bytes| {
                 if boards_probing {
                     Connection::start_board_probe()
-                } else if sample_case.as_deref() == Some("full_load") {
+                } else if matches!(sample_case.as_deref(), Some("full_load" | "long_load")) {
+                    let long = sample_case.as_deref() == Some("long_load");
                     Connection::start_article_load_probe(
                         bytes,
-                        (2..=20)
-                            .map(|page| super::probe::full_load_page(page, media_origin.as_deref()))
+                        (2..=if long { 38 } else { 20 })
+                            .map(|page| {
+                                if long {
+                                    super::probe::long_load_page(page, media_origin.as_deref())
+                                } else {
+                                    super::probe::full_load_page(page, media_origin.as_deref())
+                                }
+                            })
                             .collect::<Result<Vec<_>, _>>()?,
                     )
                 } else if matches!(

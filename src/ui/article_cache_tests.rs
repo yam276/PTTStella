@@ -748,3 +748,77 @@ fn source_page_numbers_keep_their_physical_starts_across_a_clamped_tail_and_revi
     );
     assert_eq!(revisit.article.as_ref().unwrap().last_line, 32);
 }
+
+#[test]
+fn long_full_load_accepts_default_ink_reset_only_at_a_new_pages_leading_overlap() {
+    for change in ["reset", "text", "background", "new_ink", "second_row"] {
+        let mut cache = ArticleCache::default();
+        for index in 0..38 {
+            let start = 1 + index * 22;
+            let mut packet = page(start, start + 22, if index == 37 { 100 } else { 50 });
+            // A colour span starts late on page 30 and crosses its last row.
+            // Page 31 redraws the same text with default ink at its first row.
+            if index == 29 {
+                for g in packet
+                    .frame
+                    .glyphs
+                    .iter_mut()
+                    .filter(|g| g.row == 22 || change == "second_row" && g.row == 21)
+                {
+                    g.left.fg = 3;
+                    g.left.bright = true;
+                    g.right = g.left;
+                }
+            }
+            if index == 30 {
+                if change == "text" {
+                    packet.frame.glyphs[0].text = "X".into();
+                }
+                if change == "background" {
+                    packet.frame.glyphs[0].left.bg = 4;
+                }
+                if change == "new_ink" {
+                    packet.frame.glyphs[0].left.fg = 2;
+                }
+                if change == "second_row" {
+                    // Two rows overlap, and a reset on the second remains invalid.
+                    packet = page(start - 1, start + 21, 50);
+                }
+            }
+            let context = packet.navigation.clone();
+            let revision = packet.frame.revision;
+            cache.project(&mut packet);
+            if index == 30 && change != "reset" {
+                assert_eq!(cache.load_state(), Some(LoadState::Changed), "{change}");
+                break;
+            }
+            assert_ne!(
+                cache.load_state(),
+                Some(LoadState::Changed),
+                "{change} page {}",
+                index + 1
+            );
+            if index == 30 {
+                let projected = &packet.frame.glyphs;
+                let g = projected
+                    .iter()
+                    .find(|g| g.row == 660 && g.col == 0)
+                    .unwrap();
+                assert_eq!(
+                    (g.left.fg, g.left.bright),
+                    (3, true),
+                    "retain known full-article colour"
+                );
+                assert_eq!(
+                    packet.source_frame.as_ref().unwrap().glyphs[0].left,
+                    Style::default()
+                );
+            }
+            cache.next_full_page(&context, revision, Instant::now());
+        }
+        if change == "reset" {
+            assert_eq!(cache.load_state(), Some(LoadState::Complete));
+            assert_eq!(cache.rows.len(), 837);
+        }
+    }
+}

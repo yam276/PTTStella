@@ -518,6 +518,7 @@ impl ArticleCache {
                                 &after,
                                 expected,
                                 last_line >= previous_first,
+                                false,
                             );
                             let start = overlap.and_then(|n| {
                                 self.rows.first_key_value()?.0.checked_sub(body_rows - n)
@@ -539,6 +540,7 @@ impl ArticleCache {
                                 &after,
                                 expected,
                                 first_line <= previous_last,
+                                true,
                             );
                             let Some(overlap) = matched else {
                                 self.loader.state = Some(LoadState::Changed);
@@ -590,6 +592,19 @@ impl ArticleCache {
                         self.stop_load(LoadState::Limit);
                         break 'page;
                     }
+                }
+                // A forward redraw may reset inherited ink at its leading row.
+                // Keep the already verified full-article style for that overlap;
+                // the source frame remains the exact station screenshot.
+                if let Some((line, row)) = incoming.first_mut()
+                    && self
+                        .source_range
+                        .is_some_and(|(first, _)| first_line > first)
+                    && let Some(known) = self.rows.get(line)
+                    && same_glyphs_with_leading_reset(&known.glyphs, &row.glyphs, true)
+                    && !same_glyphs(&known.glyphs, &row.glyphs)
+                {
+                    row.glyphs.clone_from(&known.glyphs);
                 }
                 let page_start = incoming.first().map_or(first_line, |(n, _)| *n);
                 let page_end = page_start + body_rows - 1;
@@ -829,17 +844,29 @@ fn footer_cells(
 // Footer ranges are logical lines, and a final-page clamp may land inside a
 // wrapped line. Match physical rows, using the reported overlap to disambiguate
 // repeated rows rather than requiring it to be the physical overlap length.
-fn page_overlap(before: &[&Row], after: &[&Row], expected: usize, required: bool) -> Option<usize> {
+fn page_overlap(
+    before: &[&Row],
+    after: &[&Row],
+    expected: usize,
+    required: bool,
+    leading_reset: bool,
+) -> Option<usize> {
     (usize::from(required)..=before.len().min(after.len()))
         .filter(|n| {
             before[before.len() - n..]
                 .iter()
                 .zip(after)
-                .all(|(a, b)| same_glyphs(&a.glyphs, &b.glyphs))
+                .enumerate()
+                .all(|(row, (a, b))| {
+                    same_glyphs_with_leading_reset(&a.glyphs, &b.glyphs, leading_reset && row == 0)
+                })
         })
         .min_by_key(|n| n.abs_diff(expected))
 }
 fn same_glyphs(a: &[Glyph], b: &[Glyph]) -> bool {
+    same_glyphs_with_leading_reset(a, b, false)
+}
+fn same_glyphs_with_leading_reset(a: &[Glyph], b: &[Glyph], leading_reset: bool) -> bool {
     fn colours(style: Style) -> (u8, u8) {
         let fg = style.fg + u8::from(style.bright && style.fg < 8) * 8;
         if style.inverse {
@@ -857,9 +884,10 @@ fn same_glyphs(a: &[Glyph], b: &[Glyph]) -> bool {
                 && a.text == b.text
                 && a.unmapped == b.unmapped
                 && [(a.left, b.left), (a.right, b.right)].iter().all(|(a, b)| {
+                    let default_reset = leading_reset && *b == Style::default();
                     let a = colours(*a);
                     let b = colours(*b);
-                    a.1 == b.1 && (blank || a.0 == b.0)
+                    a.1 == b.1 && (blank || a.0 == b.0 || default_reset)
                 })
         })
 }
