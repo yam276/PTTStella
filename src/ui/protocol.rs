@@ -208,10 +208,6 @@ pub(super) enum SurfaceEvent {
     SettingsVisibility {
         open: bool,
     },
-    SettingsLaunch {
-        feature: SettingsFeature,
-        trusted: bool,
-    },
     SettingsOpen {
         trusted: bool,
     },
@@ -454,7 +450,6 @@ impl SurfaceEvent {
             | Media { trusted, .. }
             | KeepAlive { trusted, .. }
             | SettingsOpen { trusted }
-            | SettingsLaunch { trusted, .. }
             | FontSource { trusted, .. }
             | LoginOpen { trusted }
             | LoginForget { trusted }
@@ -760,14 +755,6 @@ pub(super) struct ProbePixels {
 pub(super) enum CopyTarget {
     Selection { request: u64 },
     Link { index: usize },
-}
-
-#[derive(Clone, Copy, serde::Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub(super) enum SettingsFeature {
-    Sites,
-    Filters,
-    Account,
 }
 
 #[cfg(test)]

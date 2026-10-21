@@ -213,3 +213,9 @@ button.primary .settings-icon { color: inherit; }
 .workspace { overflow-anchor: none; }
 
 .inline-image[hidden] { display: none; }
+
+/* Management forms belong to the same settings modal and content column. */
+#font-dialog .settings-panel { position: static; inset: auto; margin: 0; padding: 0; width: auto; max-width: none; max-height: none; border: 0; border-radius: 0; background: transparent; color: inherit; overflow: visible; }
+#font-dialog .settings-panel > h2 { margin-top: 0; }
+#font-dialog #sites-close, #font-dialog #filters-close, #font-dialog #login-cancel { display: none; }
+#font-dialog .settings-license-text { max-height: none; overflow: visible; }

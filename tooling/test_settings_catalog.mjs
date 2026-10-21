@@ -36,15 +36,57 @@ test('in-app settings shortcut reuses the dialog and captures before BBS input',
  assert.equal(requested,1);assert.equal(focused,1);assert.equal(sent.length,0);ui.destroy();assert.equal(disposed,1);
 });
 
-test('settings management handoff waits for the autosave-aware modal close',()=>{
+test('management categories stay embedded, open automatically and clean drafts on leaving',async()=>{
  const source=readFileSync(new URL('../assets/surface-settings-host.js',import.meta.url),'utf8');
- let options,navigation,closeCalls=0;const sent=[];
+ const nodes=Object.fromEntries(['font-dialog','sites-dialog','filters-dialog','login-dialog'].map(id=>[id,{open:false,close(){this.open=false;}}]));
+ let options,nav,current='general',requested=0,password='';const sent=[],visits=[];
+ const features=Object.fromEntries([['sites','sites-dialog'],['filters','filters-dialog'],['account','login-dialog']].map(([page,id])=>[page,{
+  request(){visits.push(page);nodes[id].open=true;},close(){nodes[id].close();if(page==='account')password='';}
+ }]));
  const factory=vm.runInNewContext(source+'\ncreateSurfaceSettings',{
-  createSettingsDialog:o=>{options=o;return {bindings:[],close(){closeCalls++;},destroy(){}};},
-  createSettingsNavigation:o=>{navigation=o;return {bindings:[],current:()=>"sites",destroy(){}};}
+  createSettingsDialog:o=>{options=o;return {bindings:[],request(){requested++;},open(){nodes['font-dialog'].open=true;},close(){nodes['font-dialog'].close();o.onClose();},destroy(){}};},
+  createSettingsNavigation:o=>{nav={bindings:[],current:()=>current,show(page,id,event){const previous=current;current=page;o.changed(page,previous,event);},destroy(){}};return nav;}
  });
- const ui=factory({document:{getElementById:()=>({open:true})},send:v=>sent.push(JSON.parse(JSON.stringify(v))),tr:()=>''});
- navigation.launch('sites',{isTrusted:true});assert.equal(closeCalls,1);assert.equal(sent.length,0);
- options.onClose();assert.deepEqual(sent,[{kind:'settings_visibility',open:false},{kind:'settings_launch',feature:'sites',trusted:true}]);
- options.onClose();assert.equal(sent.filter(x=>x.kind==='settings_launch').length,1);ui.destroy();
+ const ui=factory({document:{getElementById:id=>nodes[id]},features:()=>features,send:v=>sent.push(JSON.parse(JSON.stringify(v))),tr:()=>''});
+ assert.equal(ui.manage('filters',{isTrusted:false}),false);assert.equal(requested,0);
+ assert.equal(ui.manage('filters',{isTrusted:true}),false);assert.equal(requested,1);assert.deepEqual(visits,[]);
+ await ui.open({});assert.deepEqual(visits,['filters']);assert.equal(ui.manage('filters',{isTrusted:true}),true);
+ nav.show('account',null,{isTrusted:true});password='private draft';assert.equal(nodes['filters-dialog'].open,false);
+ nav.show('sites',null,{isTrusted:true});assert.equal(password,'');assert.equal(nodes['login-dialog'].open,false);
+ assert.equal(nodes['font-dialog'].open,true);assert.equal(sent.length,0);
+ nav.show('about');assert.equal(nodes['sites-dialog'].open,false);assert.equal(ui.visible('about'),true);
+ nav.show('account');password='another draft';ui.close({isTrusted:true});assert.equal(password,'');
+ assert.ok(Object.values(nodes).every(node=>!node.open));assert.deepEqual(sent,[{kind:'settings_visibility',open:false}]);
+ ui.destroy();assert.equal(ui.manage('sites',{isTrusted:true}),false);
+});
+
+test('search leaves the visible management page and reopening it restores its controls',()=>{
+ const source=readFileSync(new URL('../assets/settings-catalog.js',import.meta.url),'utf8');
+ const nodes=new Map(),changes=[];
+ const node=id=>{if(!nodes.has(id))nodes.set(id,{id,value:'',hidden:true,children:[],replaceChildren(){this.children=[];},append(child){this.children.push(child);},focus(){}});return nodes.get(id);};
+ const sections=['general','account','sites','filters','about'].map(page=>({dataset:{settingsPage:page},hidden:true}));
+ const categories=sections.map(section=>({dataset:{settingsCategory:section.dataset.settingsPage},setAttribute(){}}));
+ const document={getElementById:node,querySelectorAll:selector=>selector==='[data-settings-page]'?sections:selector==='[data-settings-category]'?categories:[],createElement:()=>({addEventListener(){}})};
+ const create=vm.runInNewContext(source+'\ncreateSettingsNavigation');
+ const ui=create({document,tr:translator('zh-TW'),changed:(page,previous)=>changes.push([page,previous])});
+ ui.show('account');assert.equal(ui.visible(),'account');node('settings-search').value='站點';
+ ui.bindings.find(([target,type])=>target===node('settings-search')&&type==='input')[2]();
+ assert.equal(ui.visible(),null);assert.deepEqual(changes.at(-1),[null,'account']);assert.ok(sections.every(s=>s.hidden));
+ ui.show('sites');assert.equal(ui.visible(),'sites');assert.equal(sections.find(s=>s.dataset.settingsPage==='sites').hidden,false);
+ ui.destroy();
+});
+
+test('closing a nonmodal account panel restores the visible search field after browser focus restoration',()=>{
+ const source=readFileSync(new URL('../assets/surface-settings-host.js',import.meta.url),'utf8');
+ let navigation,focused=0,closed=0;const search={closest:()=>null,focus(){focused++;}};
+ const dialog={open:true,contains:node=>node===search},account={open:true};
+ const document={activeElement:search,getElementById:id=>id==='font-dialog'?dialog:id==='login-dialog'?account:null};
+ const factory=vm.runInNewContext(source+'\ncreateSurfaceSettings',{
+  createSettingsDialog:()=>({bindings:[],destroy(){}}),
+  createSettingsNavigation:o=>{navigation=o;return {bindings:[],current:()=>"account",destroy(){}};}
+ });
+ const ui=factory({document,send(){},features:()=>({account:{close(){closed++;account.open=false;document.activeElement=dialog;}}}),tr:()=>''});
+ navigation.changed(null,'account');assert.equal(closed,1);assert.equal(focused,1);
+ search.closest=()=>({hidden:true});account.open=true;navigation.changed('sites','account');assert.equal(focused,1);
+ ui.destroy();
 });

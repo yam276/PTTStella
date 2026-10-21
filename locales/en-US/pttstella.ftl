@@ -647,3 +647,5 @@ filters-color-bright-blue = Bright blue
 filters-color-bright-magenta = Bright magenta
 filters-color-bright-cyan = Bright cyan
 filters-color-white = White
+
+settings-privacy-description = Settings, bookmarks and account lists stay on this computer. Full session traffic is not recorded by default. Passwords enter the OS credential store only when you choose to save them. Signing in still requires pressing Log in.

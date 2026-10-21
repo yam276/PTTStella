@@ -641,3 +641,5 @@ filters-color-bright-blue = 亮藍
 filters-color-bright-magenta = 亮紫
 filters-color-bright-cyan = 亮青
 filters-color-white = 白
+
+settings-privacy-description = 設定、書籤及名單保存在此電腦。程式預設不錄製完整連線流量；只有勾選保存時，密碼才會存入作業系統鑰匙圈。登入仍須按下登入按鈕。

@@ -325,7 +325,7 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "article-load-cancel", {pttstella::msg!("article-load-cancel")} }
                 button { id: "article-load-resume", hidden: true, {pttstella::msg!("article-load-resume")} }
             }
-            div { class: "settings-host", SettingsForm{} }
+            div { class: "settings-host", SettingsForm{filters_probe} }
             section { class: "workspace",
                 div { class: "surface", id: "surface",
                     onmounted: move |_| {
@@ -353,53 +353,6 @@ pub fn app(props: AppProps) -> Element {
                 }
             }
             {context_menu()}
-            dialog { id: "filters-dialog", class: "paste-preview font-dialog", "aria-labelledby": "filters-title",
-                h2 { id: "filters-title", {pttstella::msg!("filters-title")} }
-                p { {pttstella::msg!("filters-description")} }
-                p { {pttstella::msg!("filters-limitations")} }
-                label { {pttstella::msg!("filters-default-color")} select { id: "filters-default-color", {filter_color_options()} } }
-                button { id: "filters-default-color-save", {pttstella::msg!("filters-default-color-save")} }
-                p { {pttstella::msg!("filters-color-help")} }
-                label { {pttstella::msg!("filters-saved-ids")} select { id: "filters-list", size: "5", "aria-label": pttstella::msg!("filters-saved-ids") } }
-                label { {pttstella::msg!("filters-account-id")} input { id: "filters-id", maxlength: "12", autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
-                label { {pttstella::msg!("filters-policy")} select { id: "filters-policy",
-                    option { value: "mask", {pttstella::msg!("filters-policy-mask")} }
-                    option { value: "mask_row", {pttstella::msg!("filters-policy-mask-row")} }
-                    option { value: "allow", {pttstella::msg!("filters-policy-allow")} }
-                } }
-                label { {pttstella::msg!("filters-id-color")} select { id: "filters-color", disabled: true,
-                    option { value: "", {pttstella::msg!("filters-color-shared")} }
-                    {filter_color_options()}
-                } }
-                label { {pttstella::msg!("filters-note")} input { id: "filters-note", maxlength: "128", autocomplete: "off" } }
-                output { id: "filters-note-status", role: "status" }
-                div { class: "dialog-actions",
-                    button { id: "filters-import", {pttstella::msg!("filters-import")} }
-                    button { id: "filters-import-apply", hidden: true, class: "primary", {pttstella::msg!("filters-import-apply")} }
-                    button { id: "filters-import-cancel", hidden: true, {pttstella::msg!("cancel")} }
-                }
-                if filters_probe {
-                    label { {pttstella::msg!("probe-clipboard")} textarea { id: "filters-copy-check", "aria-label": pttstella::msg!("probe-clipboard") } }
-                }
-                div { class: "dialog-actions",
-                    button { id: "filters-remove", {pttstella::msg!("filters-remove")} }
-                    button { id: "filters-save", class: "primary", {pttstella::msg!("filters-save")} }
-                    button { id: "filters-close", {pttstella::msg!("close")} }
-                }
-            }
-            dialog { id: "login-dialog", class: "paste-preview font-dialog", "aria-labelledby": "login-title",
-                h2 { id: "login-title", {pttstella::msg!("login-title")} }
-                p { {pttstella::msg!("login-description")} }
-                label { {pttstella::msg!("account")} input { id: "login-account", maxlength: "12", autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
-                label { {pttstella::msg!("password")} input { id: "login-password", r#type: "password", maxlength: "72", autocomplete: "off" } }
-                label { input { id: "login-remember", r#type: "checkbox" } {pttstella::msg!("login-remember")} }
-                p { id: "login-note", role: "status" }
-                div { class: "dialog-actions",
-                    button { id: "login-forget", {pttstella::msg!("login-forget")} }
-                    button { id: "login-cancel", {pttstella::msg!("cancel")} }
-                    button { id: "login-submit", class: "primary", {pttstella::msg!("login")} }
-                }
-            }
             dialog { id: "destination-dialog", class: "paste-preview", "aria-labelledby": "destination-title",
                 h2 { id: "destination-title", {pttstella::msg!("destination-title")} }
                 p { {pttstella::msg!("destination-dialog-hint")} }
@@ -460,28 +413,7 @@ pub fn app(props: AppProps) -> Element {
                 output { id: "media-hover-status" }
                 div { id: "media-hover-viewport" }
             }
-            dialog { id: "sites-dialog", class: "paste-preview font-dialog", "aria-labelledby": "sites-title",
-                h2 { id: "sites-title", SettingsCaption { label:pttstella::msg!("sites-title"),icon:rsx!{Globe{size:18}} } }
-                label { {pttstella::msg!("sites-favourites")} select {id:"sites-list"} }
-                output {id:"sites-default"}
-                label { {pttstella::msg!("sites-name")} input {id:"site-name",r#type:"text",maxlength:"128"} }
-                label { {pttstella::msg!("sites-address")} input {id:"site-address",r#type:"text",maxlength:"512",spellcheck:"false",autocapitalize:"off"} }
-                label { {pttstella::msg!("sites-encoding")} select {id:"site-encoding",
-                    option {value:"uao","Big5-UAO"} option {value:"big5","Big5"} option {value:"gbk","GBK"}
-                } }
-                p {id:"sites-transport"}
-                p { {pttstella::msg!("sites-help")} }
-                div {class:"dialog-actions settings-actions",
-                    button {id:"site-save", SettingsCaption {label:pttstella::msg!("sites-save"),icon:rsx!{Star{size:18}}} }
-                    button {id:"site-remove", SettingsCaption {label:pttstella::msg!("sites-remove"),icon:rsx!{Trash2{size:18}}} }
-                    button {id:"site-default", SettingsCaption {label:pttstella::msg!("sites-set-default"),icon:rsx!{Save{size:18}}} }
-                }
-                output {id:"sites-note",role:"status"}
-                div {class:"dialog-actions settings-actions",
-                    button {id:"sites-close",SettingsCaption {label:pttstella::msg!("close"),icon:rsx!{X{size:18}}} }
-                    button {id:"site-connect",class:"primary",SettingsCaption {label:pttstella::msg!("sites-connect"),icon:rsx!{Plug{size:18}}} }
-                }
-            }
+
 
         }
     }
@@ -580,7 +512,7 @@ fn context_menu() -> Element {
 }
 
 #[component]
-pub(super) fn SettingsForm() -> Element {
+pub(super) fn SettingsForm(filters_probe: bool) -> Element {
     let _language = use_context::<Signal<pttstella::i18n::Language>>()();
     rsx! {
             dialog { id: "font-dialog", class: "paste-preview font-dialog", "aria-labelledby": "font-title",
@@ -706,14 +638,12 @@ pub(super) fn SettingsForm() -> Element {
                         }
                     }
                 }
-                details { "data-settings-page":"about",
-                    summary {
-                        SettingsCaption { label: pttstella::msg!("settings-licenses"), icon: rsx! { FileText { size: 18 } } }
-                    }
+                section { "data-settings-page":"about", class:"settings-section",
+                    h3 { SettingsCaption { label: pttstella::msg!("settings-licenses"), icon: rsx! { FileText { size: 18 } } } }
                     p { class: "settings-help", {pttstella::msg!("font-license")} }
-                    pre { class: "font-license", {include_str!("../../assets/fonts/NOTICE.txt")} }
-                    pre { class: "font-license", {include_str!("../../assets/fonts/Cascadia-OFL.txt")} }
-                    pre { class: "font-license", {include_str!("../../assets/fonts/NotoSansCJK-OFL.txt")} }
+                    pre { class: "font-license settings-license-text", {include_str!("../../assets/fonts/NOTICE.txt")} }
+                    pre { class: "font-license settings-license-text", {include_str!("../../assets/fonts/Cascadia-OFL.txt")} }
+                    pre { class: "font-license settings-license-text", {include_str!("../../assets/fonts/NotoSansCJK-OFL.txt")} }
                 }
                 section { "data-settings-page":"appearance", class: "settings-section",
                     label {
@@ -747,13 +677,11 @@ pub(super) fn SettingsForm() -> Element {
                         }
                     }
                 }
-                for (id,key) in [("sites","sites-title"),("filters","filters-title"),("account","settings-account")] {
-                    section { "data-settings-page":id, class:"settings-section",
-                        p {class:"settings-help",{pttstella::msg!("settings-action-help")}}
-                        button { "data-settings-launch":id, disabled:id=="account"&&!cfg!(target_os="macos"),
-                            SettingsCaption {label:pttstella::i18n::application().loader().get(key),icon:match id{"sites"=>rsx!{Globe{size:18}},"filters"=>rsx!{Shield{size:18}},_=>rsx!{Plug{size:18}}}}
-                        }
-                    }
+                section { "data-settings-page":"sites", class:"settings-section", SitesSettings{} }
+                section { "data-settings-page":"filters", class:"settings-section", FiltersSettings{filters_probe} }
+                section { "data-settings-page":"account", class:"settings-section",
+                    p { class:"settings-help", {pttstella::msg!("settings-privacy-description")} }
+                    LoginSettings{}
                 }
                 }
                 }
@@ -803,4 +731,94 @@ fn filter_color_options() -> Element {
         (15, pttstella::msg!("filters-color-white")),
     ];
     rsx! { for (color, label) in options { option { value: "{color}", "{label}" } } }
+}
+
+#[component]
+fn FiltersSettings(filters_probe: bool) -> Element {
+    let _language = use_context::<Signal<pttstella::i18n::Language>>()();
+    rsx! {
+    dialog { id: "filters-dialog", class: "settings-panel", "aria-labelledby": "filters-title",
+                    h2 { id: "filters-title", {pttstella::msg!("filters-title")} }
+                    p { {pttstella::msg!("filters-description")} }
+                    p { {pttstella::msg!("filters-limitations")} }
+                    label { {pttstella::msg!("filters-default-color")} select { id: "filters-default-color", {filter_color_options()} } }
+                    button { id: "filters-default-color-save", {pttstella::msg!("filters-default-color-save")} }
+                    p { {pttstella::msg!("filters-color-help")} }
+                    label { {pttstella::msg!("filters-saved-ids")} select { id: "filters-list", size: "5", "aria-label": pttstella::msg!("filters-saved-ids") } }
+                    label { {pttstella::msg!("filters-account-id")} input { id: "filters-id", maxlength: "12", autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
+                    label { {pttstella::msg!("filters-policy")} select { id: "filters-policy",
+                        option { value: "mask", {pttstella::msg!("filters-policy-mask")} }
+                        option { value: "mask_row", {pttstella::msg!("filters-policy-mask-row")} }
+                        option { value: "allow", {pttstella::msg!("filters-policy-allow")} }
+                    } }
+                    label { {pttstella::msg!("filters-id-color")} select { id: "filters-color", disabled: true,
+                        option { value: "", {pttstella::msg!("filters-color-shared")} }
+                        {filter_color_options()}
+                    } }
+                    label { {pttstella::msg!("filters-note")} input { id: "filters-note", maxlength: "128", autocomplete: "off" } }
+                    output { id: "filters-note-status", role: "status" }
+                    div { class: "dialog-actions",
+                        button { id: "filters-import", {pttstella::msg!("filters-import")} }
+                        button { id: "filters-import-apply", hidden: true, class: "primary", {pttstella::msg!("filters-import-apply")} }
+                        button { id: "filters-import-cancel", hidden: true, {pttstella::msg!("cancel")} }
+                    }
+                    if filters_probe {
+                        label { {pttstella::msg!("probe-clipboard")} textarea { id: "filters-copy-check", "aria-label": pttstella::msg!("probe-clipboard") } }
+                    }
+                    div { class: "dialog-actions",
+                        button { id: "filters-remove", {pttstella::msg!("filters-remove")} }
+                        button { id: "filters-save", class: "primary", {pttstella::msg!("filters-save")} }
+                        button { id: "filters-close", {pttstella::msg!("close")} }
+                    }
+                }
+        }
+}
+
+#[component]
+fn LoginSettings() -> Element {
+    let _language = use_context::<Signal<pttstella::i18n::Language>>()();
+    rsx! {
+    dialog { id: "login-dialog", class: "settings-panel", "aria-labelledby": "login-title",
+                    h2 { id: "login-title", {pttstella::msg!("login-title")} }
+                    p { {pttstella::msg!("login-description")} }
+                    label { {pttstella::msg!("account")} input { id: "login-account", maxlength: "12", autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
+                    label { {pttstella::msg!("password")} input { id: "login-password", r#type: "password", maxlength: "72", autocomplete: "off" } }
+                    label { input { id: "login-remember", r#type: "checkbox" } {pttstella::msg!("login-remember")} }
+                    p { id: "login-note", role: "status" }
+                    div { class: "dialog-actions",
+                        button { id: "login-forget", {pttstella::msg!("login-forget")} }
+                        button { id: "login-cancel", {pttstella::msg!("cancel")} }
+                        button { id: "login-submit", class: "primary", {pttstella::msg!("login")} }
+                    }
+                }
+        }
+}
+
+#[component]
+fn SitesSettings() -> Element {
+    let _language = use_context::<Signal<pttstella::i18n::Language>>()();
+    rsx! {
+    dialog { id: "sites-dialog", class: "settings-panel", "aria-labelledby": "sites-title",
+                    h2 { id: "sites-title", SettingsCaption { label:pttstella::msg!("sites-title"),icon:rsx!{Globe{size:18}} } }
+                    label { {pttstella::msg!("sites-favourites")} select {id:"sites-list"} }
+                    output {id:"sites-default"}
+                    label { {pttstella::msg!("sites-name")} input {id:"site-name",r#type:"text",maxlength:"128"} }
+                    label { {pttstella::msg!("sites-address")} input {id:"site-address",r#type:"text",maxlength:"512",spellcheck:"false",autocapitalize:"off"} }
+                    label { {pttstella::msg!("sites-encoding")} select {id:"site-encoding",
+                        option {value:"uao","Big5-UAO"} option {value:"big5","Big5"} option {value:"gbk","GBK"}
+                    } }
+                    p {id:"sites-transport"}
+                    p { {pttstella::msg!("sites-help")} }
+                    div {class:"dialog-actions settings-actions",
+                        button {id:"site-save", SettingsCaption {label:pttstella::msg!("sites-save"),icon:rsx!{Star{size:18}}} }
+                        button {id:"site-remove", SettingsCaption {label:pttstella::msg!("sites-remove"),icon:rsx!{Trash2{size:18}}} }
+                        button {id:"site-default", SettingsCaption {label:pttstella::msg!("sites-set-default"),icon:rsx!{Save{size:18}}} }
+                    }
+                    output {id:"sites-note",role:"status"}
+                    div {class:"dialog-actions settings-actions",
+                        button {id:"sites-close",SettingsCaption {label:pttstella::msg!("close"),icon:rsx!{X{size:18}}} }
+                        button {id:"site-connect",class:"primary",SettingsCaption {label:pttstella::msg!("sites-connect"),icon:rsx!{Plug{size:18}}} }
+                    }
+                }
+        }
 }

@@ -59,10 +59,9 @@ mod tests {
         assert_eq!(saved.display.font_size, 18.0);
         assert_eq!(saved.hover, pttstella::settings::HoverPosition::Off);
         assert!(!saved.tools_access.show_floating_button);
-        let untrusted = serde_json::from_value(
-            serde_json::json!({"kind":"settings_launch","feature":"sites","trusted":false}),
-        )
-        .unwrap();
+        let untrusted =
+            serde_json::from_value(serde_json::json!({"kind":"settings_open","trusted":false}))
+                .unwrap();
         assert!(final_change(untrusted).is_err());
     }
 }

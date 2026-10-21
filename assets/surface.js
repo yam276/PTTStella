@@ -228,6 +228,7 @@ function positionKeyboard() {
 }
 function focus() { if(document.activeElement!==keyboard) keyboard.focus({preventScroll:true}); }
 function restoreEditingFocus(){tools?.close();keyboard.blur();focus();}
+function restoreSettingsPanelFocus(){if(!document.getElementById("font-dialog").open)restoreEditingFocus();}
 function pointerdown(e) {
     if(stationMouse.down(e))return;
     if(e.button!==0||!e.isPrimary||dragging) return;
@@ -646,17 +647,18 @@ function wheel(e) {
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
 const media=installMedia({tr,send,prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshNavigation,restore:restoreEditingFocus});
 function refreshControls(){refreshNavigation();refreshExportControls();}
-const sitesUi=createSitesDialog({tr,send,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls});
+const sitesUi=createSitesDialog({tr,send,manage:e=>settingsUi.manage("sites",e),present:dialog=>dialog.show(),visible:()=>settingsUi.visible("sites"),finished:()=>settingsUi.close({isTrusted:true}),prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreSettingsPanelFocus,changed:refreshControls});
 const settingsUi=createSurfaceSettings({document,send,tr,loadFonts,fontLoadNote,invalidateFonts,render,
+    features:()=>({sites:sitesUi,filters:filterUi,account:loginUi}),
     beforeRequest:e=>{stationMouse.revoke();cancelHover(true);policy("reset",e);},
     beforeShow:()=>{invalidatePresentation();hideChrome();},restore:restoreEditingFocus,changed:refreshControls});
-const loginUi=createLoginDialog({tr,send,stamp,
+const loginUi=createLoginDialog({tr,send,stamp,manage:e=>settingsUi.manage("account",e),present:dialog=>dialog.show(),visible:()=>settingsUi.visible("account"),finished:()=>settingsUi.close({isTrusted:true}),
     prepare:e=>{stationMouse.revoke();cancelHover(true);policy("reset",e);cancelComposition();clearSelection();},
-    restore:restoreEditingFocus,changed:refreshControls,focus});
+    restore:restoreSettingsPanelFocus,changed:refreshControls,focus});
 const destinationUi=createNavigationDialog({tr,send,stamp,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,current:()=>latest,isEditing:()=>composing||pastePending});
 const bookmarksUi=createBookmarksDialog({tr,send,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,openDestination:destinationUi.openDraft,current:()=>latest});
-const filterUi=createFiltersDialog({tr,send,current:()=>latest,invalidate:invalidatePresentation,
-    reset:e=>policy("reset",e),restore:restoreEditingFocus,changed:refreshControls});
+const filterUi=createFiltersDialog({tr,send,manage:e=>settingsUi.manage("filters",e),present:dialog=>dialog.show(),visible:()=>settingsUi.visible("filters"),current:()=>latest,invalidate:invalidatePresentation,
+    reset:e=>policy("reset",e),restore:restoreSettingsPanelFocus,changed:refreshControls});
 tools=createFloatingTools({root:chrome,ball:document.getElementById("tools-ball"),fan:document.getElementById("tools-fan"),panel:toolbar,window,document,tr,
     onSettings:e=>settingsUi.request(e),prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();released=null;},restore:restoreEditingFocus,changed:refreshKeepAlive});
 contextMenu=createSurfaceContextMenu({root:document.getElementById("surface-context-menu"),document,window,
@@ -871,7 +873,6 @@ const route=createSurfaceRouter({
     media_open:data=>media.open(data),media_image:data=>media.receiveImage(data),media_error:data=>media.fail(data),
     media_external:data=>media.externalResult(data),media_reset:()=>media.reset(),
     settings_visibility:open=>{settingsActive=open;refreshKeepAlive();},
-    settings_launch:feature=>{const event={isTrusted:true};if(feature==="sites")sitesUi.request(event);else if(feature==="filters")filterUi.show(event);else if(feature==="account")loginUi.request(event);},
     settings_open:settingsUi.open,font_catalog:settingsUi.catalog,font_preview:settingsUi.preview,
     profile_result:async data=>{await settingsUi.profile(data);showNotice(data.notice);},
     settings_saved:data=>{settingsUi.saved(data);showNotice(data.notice);},
