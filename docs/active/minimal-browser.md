@@ -4,13 +4,25 @@
 
 ## 目標
 
-目前交付為 `dist/macos-fixed-reading-viewport/PTTStella.app`（2026-10-21，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的原始 PTT 資訊列及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-reading-progress-final/PTTStella.app`（2026-10-21，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 網頁閱讀百分比跟隨可見位置（2026-10-21）
+
+使用者要求全文完成後，下排百分比應表示目前讀到的位置。網頁模式以可視正文下緣／完整文件內容高度計算整數百分比，含展開圖片；短文章為維持 24 列補齊的空白不算未讀內容。內容末端可見才是 100%，未取得全文時顯示 `--%`，載入控制仍報已取得行數。頁碼、來源行範圍及指令維持站端資訊；終端機百分比不變。此項取代先前只顯示站端百分比的契約。
+
+Rust 由同一完整 glyph/cell 投影提供已驗證的 ASCII 數字欄位，JS 只依所擁有的捲動／展圖幾何更新顯示數字，不解析 PTT 文字或產生新的站端輸入。顯示的整數改變才重建一列 bitmap；來源格線、複製及 PNG 不因本機狀態顯示而改寫。未知／超長／非 ASCII 的數字欄位保守不套用。
+
+新增 JS 獨立 expected 先重現首頁仍為 100%；Rust bin 108、全 targets Clippy／fmt、完整 JS 179 及 docs 通過。涵蓋上下捲動、回首頁、到底、同整數 bitmap 重用、展圖後重新計算、未完成全文，以及短文＋圖片全部可見時不將空白算為未讀。
+
+最終交付 `dist/macos-reading-progress-final/PTTStella.app` 的 macOS arm64 原生 short_overlap：全文完成後 Home 71%、End 100%、Up 96%；兩次 Enter 一個 batch，展圖後 Home 38%、End 100%，載入中為 `--%`。歷史一般網址真正左鍵一次由 sink 收到，peer 僅一個 PageDown，三個圖片網址各一次 GET。含正常視窗固定範圍的前一版及最終全螢幕符合比例的驗證；不是跨平台驗收。PNG 仍 960×576，排除自有 port 字格後與固定尺寸版逐像素相同，未包含展圖或本機百分比。Close acknowledged、全部 owner／HTTP server join、exit 0；15 個 Mach-O sections 與最終副本相同，strict ad-hoc 簽章通過，未公證。
+
+證據同在 `.local/verification/article-overlap/`：progress-before-js.log、progress-checks.json、progress-js-final.log、native-progress-release 與 progress-validation.json。中間一次以中文輸入法按字母後確認組字，送出文字而遭精確 peer 拒絕，保留 failed；重跑使用方向鍵並保持原輸入法，未放寬站端預期。實站新版重啟、正文其他滑鼠手勢及 Windows／Linux 本輪未驗證。
 
 ## 全文閱讀可視區固定尺寸（2026-10-21）
 
