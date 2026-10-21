@@ -14,6 +14,7 @@ mod preferences;
 mod presentation;
 mod probe;
 mod protocol;
+mod reading_timing;
 mod recent;
 mod settings_finish;
 mod sites;

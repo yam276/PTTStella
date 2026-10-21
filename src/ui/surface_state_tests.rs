@@ -872,7 +872,8 @@ fn reading_modes_lengths_and_account_policies_keep_text_links_and_exports_consis
 }
 
 #[test]
-fn full_article_loading_requires_ack_preserves_cancelled_data_and_never_runs_in_terminal_mode() {
+fn full_article_loading_does_not_require_ack_preserves_cancelled_data_and_never_runs_in_terminal_mode()
+ {
     let mut state = SurfaceState::new(filters::Rules::default());
     let mut view = view();
     let mut source = Screen::new(80, 24).unwrap();
@@ -890,7 +891,11 @@ fn full_article_loading_requires_ack_preserves_cancelled_data_and_never_runs_in_
         .unwrap()
         .clone();
     let id = packet.article.as_ref().unwrap().id;
-    assert!(state.next_full_page(&view).is_none());
+    assert_eq!(
+        state.next_full_page(&view),
+        Some(pttstella::navigation::Intent::NextPage)
+    );
+    // One network request remains outstanding even if its old UI frame is ACKed.
     assert!(
         state
             .acknowledge(Identity {
@@ -900,10 +905,7 @@ fn full_article_loading_requires_ack_preserves_cancelled_data_and_never_runs_in_
             })
             .is_ok()
     );
-    assert_eq!(
-        state.next_full_page(&view),
-        Some(pttstella::navigation::Intent::NextPage)
-    );
+    assert!(state.next_full_page(&view).is_none());
     assert!(!state.full_load_action(view.generation, id + 1, false, &view));
     assert!(state.full_load_action(view.generation, id, false, &view));
     assert!(state.full_load_deadline().is_none());
@@ -971,4 +973,127 @@ fn clamped_short_article_retains_its_tail_and_opens_the_acknowledged_historical_
             .iter()
             .any(|link| link.url == "https://example.com/pttstella")
     );
+}
+
+#[test]
+fn preload_ingests_all_pages_while_the_first_paint_ack_is_withheld() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut source = Screen::new(80, 24).unwrap();
+    source.feed(&super::super::probe::long_load_page(1, Some("http://127.0.0.1:1234")).unwrap());
+    view.frame = source.frame();
+    let old = state
+        .queue(&view, false, &DisplaySettings::default())
+        .unwrap()
+        .clone();
+    let id = old.article.as_ref().unwrap().id;
+    let permit = state.authorize_reading(view.stamp(), id).unwrap();
+    for page in 2..=38 {
+        assert_eq!(state.reading_scope(), Some(permit));
+        assert_eq!(
+            state.next_full_page(&view),
+            Some(pttstella::navigation::Intent::NextPage)
+        );
+        assert!(state.next_full_page(&view).is_none());
+        state.article_input(&view.context(), b"\x1b[6~");
+        source.feed(
+            &super::super::probe::long_load_page(page, Some("http://127.0.0.1:1234")).unwrap(),
+        );
+        view.frame = source.frame();
+        state.update(&view);
+        assert!(state.has_in_flight());
+        assert!(
+            state
+                .queue(&view, false, &DisplaySettings::default())
+                .is_none()
+        );
+    }
+    assert_eq!(
+        state.reading_progress(),
+        Some((
+            id,
+            1,
+            837,
+            Some(super::super::article_cache::LoadState::Complete)
+        ))
+    );
+    assert!(state.next_full_page(&view).is_none());
+    let old_identity = Identity {
+        presentation: old.presentation,
+        generation: old.generation,
+        revision: old.frame.revision,
+    };
+    state.acknowledge(old_identity).unwrap();
+    assert!(state.current(old_identity, &view).is_none());
+    let final_packet = state
+        .queue(&view, false, &DisplaySettings::default())
+        .unwrap();
+    let rows = pttstella::text::rows(&final_packet.frame).unwrap();
+    assert!(rows[0].text.starts_with("Full article synthetic line 0001"));
+    assert!(
+        rows[836]
+            .text
+            .starts_with("Full article synthetic line 0837")
+    );
+    assert_eq!(final_packet.article.as_ref().unwrap().last_line, 837);
+}
+
+#[test]
+fn preload_cancel_late_page_and_article_switch_revoke_old_scope_without_waiting_for_ack() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut source = Screen::new(80, 24).unwrap();
+    source.feed(&super::super::probe::long_load_page(1, Some("http://127.0.0.1:1234")).unwrap());
+    view.frame = source.frame();
+    let old = state
+        .queue(&view, false, &DisplaySettings::default())
+        .unwrap()
+        .clone();
+    let id = old.article.as_ref().unwrap().id;
+    let stamp = view.stamp();
+    assert!(state.next_full_page(&view).is_some());
+    state.article_input(&view.context(), b"\x1b[6~");
+    assert!(state.full_load_action(view.generation, id, false, &view));
+    source.feed(&super::super::probe::long_load_page(2, Some("http://127.0.0.1:1234")).unwrap());
+    view.frame = source.frame();
+    state.update(&view);
+    assert_eq!(
+        state.reading_progress(),
+        Some((
+            id,
+            1,
+            45,
+            Some(super::super::article_cache::LoadState::Cancelled)
+        ))
+    );
+    assert!(state.next_full_page(&view).is_none());
+    state.article_input(&view.context(), b"q");
+    assert!(state.reading_scope().is_none());
+    assert!(state.authorize_reading(stamp, id).is_none());
+    view.generation += 1;
+    let mut fresh = Screen::new(80, 24).unwrap();
+    fresh.feed(&super::super::probe::long_load_page(1, Some("http://127.0.0.1:1234")).unwrap());
+    view.frame = fresh.frame();
+    state.update(&view);
+    let new_id = state.reading_progress().unwrap().0;
+    assert_ne!(new_id, id);
+    assert_eq!(state.reading_progress().unwrap().2, 23);
+    assert!(state.authorize_reading(stamp, id).is_none());
+    assert!(!state.full_load_action(view.generation, id, true, &view));
+    state
+        .acknowledge(Identity {
+            presentation: old.presentation,
+            generation: old.generation,
+            revision: old.frame.revision,
+        })
+        .unwrap();
+    let new_packet = state
+        .queue(&view, false, &DisplaySettings::default())
+        .unwrap()
+        .clone();
+    assert_eq!(new_packet.article.as_ref().unwrap().last_line, 23);
+    assert!(state.authorize_reading(view.stamp(), new_id).is_some());
+    state.set_article_mode(ArticleMode::Terminal);
+    assert!(state.reading_scope().is_none());
+    assert!(state.next_full_page(&view).is_none());
 }

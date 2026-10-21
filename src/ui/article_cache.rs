@@ -69,6 +69,8 @@ pub(super) struct ArticleCache {
     scope: Option<(u64, u64)>,
     rows: BTreeMap<usize, Row>,
     end: Option<usize>,
+    // One uncommitted blank screen row may be the next page's overlap.
+    trailing: Option<Row>,
     turning: bool,
     source_range: Option<(usize, usize)>,
     // PTT reports logical lines; wrapped rows need their own stable positions.
@@ -126,6 +128,14 @@ pub(super) fn reading_intent(bytes: &[u8]) -> Option<pttstella::navigation::Inte
     })
 }
 impl ArticleCache {
+    pub(super) fn progress(&self) -> Option<(u64, usize, usize, Option<LoadState>)> {
+        Some((
+            self.serial,
+            *self.rows.first_key_value()?.0,
+            *self.rows.last_key_value()?.0,
+            self.loader.state,
+        ))
+    }
     pub(super) fn loading(&self) -> bool {
         self.loader.state == Some(LoadState::Loading)
     }
@@ -348,7 +358,7 @@ impl ArticleCache {
             self.clear();
         }
     }
-    pub(super) fn project(&mut self, paint: &mut Paint) {
+    pub(super) fn capture(&mut self, paint: &Paint) {
         if self
             .scope
             .is_some_and(|scope| scope != (paint.generation, paint.presentation))
@@ -445,46 +455,10 @@ impl ArticleCache {
                     .unwrap_or(0)
                     .max(last_line - first_line + 1);
                 for row in 0..body_rows {
-                    let line = first_line + row;
-                    let glyphs = source
-                        .glyphs
-                        .iter()
-                        .filter(|g| g.row == row)
-                        .cloned()
-                        .map(|mut g| {
-                            g.row = 0;
-                            g
-                        })
-                        .collect();
-                    let hyperlinks = source
-                        .hyperlinks
-                        .iter()
-                        .filter_map(|link| {
-                            let spans: Vec<_> = link
-                                .spans
-                                .iter()
-                                .filter(|s| s.row == row)
-                                .cloned()
-                                .map(|mut s| {
-                                    s.row = 0;
-                                    s
-                                })
-                                .collect();
-                            (!spans.is_empty()).then(|| Hyperlink {
-                                target: link.target.clone(),
-                                spans,
-                            })
-                        })
-                        .collect();
-                    incoming.push((
-                        line,
-                        Row {
-                            glyphs,
-                            hyperlinks,
-                            reply: paint.replies.iter().find(|reply| reply.row == row).cloned(),
-                        },
-                    ));
+                    incoming.push((first_line + row, source_row(paint, row)));
                 }
+                let trailing = (percent < 100 && body_rows + 2 == source.rows)
+                    .then(|| source_row(paint, body_rows));
                 {
                     if let Some((sent, old_first, old_last, down, _)) = self.loader.awaiting
                         && source.revision != sent
@@ -542,12 +516,20 @@ impl ArticleCache {
                                 first_line <= previous_last,
                                 true,
                             );
-                            let Some(overlap) = matched else {
+                            let matched = matched.map(|n| (n, 0)).or_else(|| {
+                                if first_line > previous_last {
+                                    return None;
+                                }
+                                let mut before = before;
+                                before.push(self.trailing.as_ref()?);
+                                page_overlap(&before, &after, expected, true, true).map(|n| (n, 1))
+                            });
+                            let Some((overlap, extra)) = matched else {
                                 self.loader.state = Some(LoadState::Changed);
                                 self.loader.awaiting = None;
                                 break 'page;
                             };
-                            self.rows.last_key_value().map_or(1, |(n, _)| n + 1) - overlap
+                            self.rows.last_key_value().map_or(1, |(n, _)| n + 1) + extra - overlap
                         }
                     } else {
                         first_line
@@ -570,7 +552,8 @@ impl ArticleCache {
                             .filter(|(range, _)| **range != (first_line, last_line))
                             .map(|(_, page)| page.styles.capacity() * std::mem::size_of::<Style>())
                             .sum::<usize>()
-                        + page_styles.capacity() * std::mem::size_of::<Style>();
+                        + page_styles.capacity() * std::mem::size_of::<Style>()
+                        + trailing.as_ref().map_or(0, row_bytes);
                     let count = self
                         .rows
                         .keys()
@@ -618,6 +601,7 @@ impl ArticleCache {
                     },
                 );
                 self.rows.extend(incoming);
+                self.trailing = trailing;
                 if percent == 100 {
                     let end = page_end;
                     self.end = Some(end);
@@ -642,6 +626,17 @@ impl ArticleCache {
                 }
             }
         }
+    }
+    #[cfg(test)]
+    pub(super) fn project(&mut self, paint: &mut Paint) {
+        self.capture(paint);
+        self.render(paint);
+    }
+    pub(super) fn render(&self, paint: &mut Paint) {
+        if self.scope != Some((paint.generation, paint.presentation)) {
+            return;
+        }
+        let source = paint.frame.clone();
         let (Some((&first, _)), Some((&last, _))) =
             (self.rows.first_key_value(), self.rows.last_key_value())
         else {
@@ -839,6 +834,44 @@ fn footer_cells(
         return None;
     }
     Some(cells)
+}
+
+fn source_row(paint: &Paint, row: usize) -> Row {
+    Row {
+        glyphs: paint
+            .frame
+            .glyphs
+            .iter()
+            .filter(|g| g.row == row)
+            .cloned()
+            .map(|mut g| {
+                g.row = 0;
+                g
+            })
+            .collect(),
+        hyperlinks: paint
+            .frame
+            .hyperlinks
+            .iter()
+            .filter_map(|link| {
+                let spans: Vec<_> = link
+                    .spans
+                    .iter()
+                    .filter(|s| s.row == row)
+                    .cloned()
+                    .map(|mut s| {
+                        s.row = 0;
+                        s
+                    })
+                    .collect();
+                (!spans.is_empty()).then(|| Hyperlink {
+                    target: link.target.clone(),
+                    spans,
+                })
+            })
+            .collect(),
+        reply: paint.replies.iter().find(|reply| reply.row == row).cloned(),
+    }
 }
 
 // Footer ranges are logical lines, and a final-page clamp may land inside a

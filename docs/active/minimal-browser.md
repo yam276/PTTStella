@@ -1030,3 +1030,12 @@ core 13 命令／2 replay、desktop lib 142 項、bin 85 項、全 targets Clipp
 core 13 命令／2 replay、desktop lib 142 項、bin 85 項、全 targets Clippy、JS 165 項、fmt 與 docs 通過；既有生產 hover handler 回歸改驗上／下／返回游標分流、返回不繪製 marker，列表全寬光棒仍成立。三份 SVG 游標及 hotspot 已檢查。macOS arm64 release 的 short_reading 原生啟動、PNG 與關閉 smoke 通過，960×576 PNG 與上輪相同 fixture 的全部像素一致，零站端輸入、Close acknowledged、全部 owner join、exit 0；這不代表已原生驗收游標 hover。
 
 交付 `dist/macos-reading-cursors/PTTStella.app`，與原生 smoke 副本的 15 個可載入 sections 相同並通過 strict ad-hoc 簽章；證據在 `.local/verification/reading-cursors/`。標準 harness 因共用磁碟預留額度拒絕後，沿用使用者已授權的單次 aggregate budget 例外，保留其他磁碟／lease 檢查。原生箭頭外觀與滑鼠操作留待使用者人工驗收；Windows／Linux 原生未執行。
+
+
+2026-10-21 全文取頁與繪圖分離：每次完整來源 View 抵達即由同一 ArticleCache 核對／接入，不等 Paint ACK；同時仍只有一筆站端命令與一個在途 Paint。閱讀准許依 generation／文章數字 ID／名單版本隔離，只接受已知顯示或在途快照；站端 input／output pending 不撤銷文章准許，當前來源完整及序列化 command owner 仍是每次取頁的必要條件。載入期間至多每 250 ms 重建全文投影，完成、取消或離開後即更新；沒有額外送鍵 task。保留取消／晚到頁、切篇、舊 ACK、失焦、選字／組字與模式切換保護。
+
+置底文誤判變更另修正：站端頁尾是邏輯行號，不能直接當物理畫面列；保留最多一個未確認尾端空白列，僅下一頁實際格線重疊時才納入文章，不把補白一律當正文。文字／背景變更仍拒絕。獨立 expected 覆蓋空白接頁、真正變更拒絕與既有折行／末頁 clamp；實站馬術版最底下「長距離賽事區」由第一頁停載修復為 8/8 頁、166 畫面列（末頁邏輯行 143～165），End 可見末尾推文與編輯紀錄。
+
+同篇 Equestrian #1gm7mfaU（38 頁、827 畫面列）macOS arm64 release 實站量測：首次 PageDown 至快取 complete，修改前 27.952／27.871 秒，分離但每頁繪圖版 6.941／6.182 秒，最後合併繪圖版 0.336／0.355 秒；同一 complete revision 的 Paint ACK 分別為 28.310／28.229 秒、7.415／6.559 秒、0.698／0.718 秒。各有效樣本皆精確 37 次 PageDown；採全螢幕、bundled 字型、未展圖的已連線重複讀取，並非冷啟動或 CPU／RSS 測試。排除登入／導覽／等待前景，不完整或取消的樣本不計；沒有保存文章、URL、私人流量或帳密。PTTStar 3～4 秒僅為使用者觀察，不是本案跨產品基準量測。
+
+驗證：core 13 命令／2 replay、desktop lib 143 項、bin 114 項、全 targets Clippy、JS 186 項、fmt 與 docs 通過。新增 withholding ACK 的 38 頁接入、取消後晚到頁與新 session／文章隔離案例。macOS 實際 WebView long_load 37 次精確翻頁、837 列、Home／End 回讀、手動展圖、full_load 取消／繼續及 19 次翻頁均通過；每輪三個合成圖片網址各一次 HTTP GET，PNG 960×576、Close acknowledged、所有 owner join、程序退出。terminal_pages 原生確認只有一次手動 PageDown 才進第二頁，HTTP 零請求、PNG 與完整清理通過。實站同篇首尾頁可見，置底文不再誤判；未擴大宣稱所有 PTT 文章皆可載入。證據與數字量測保留 .local/verification/preload-independent；交付 dist/macos-reading-independent-final/PTTStella.app 為 arm64 release／strict ad-hoc，未公證。Windows／Linux 原生本輪 not_ready，原生滑鼠細節仍由使用者驗收。

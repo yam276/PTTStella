@@ -72,6 +72,7 @@ struct SelectedRows {
 }
 pub(super) struct SurfaceState {
     article: super::article_cache::ArticleCache,
+    captured: Option<(Stamp, u64)>,
     raw_reading: bool,
     reply_focus: Option<(u64, Option<u64>, String)>,
     article_mode: ArticleMode,
@@ -87,6 +88,7 @@ impl SurfaceState {
     pub(super) fn new(rules: filters::Rules) -> Self {
         Self {
             article: super::article_cache::ArticleCache::default(),
+            captured: None,
             raw_reading: false,
             reply_focus: None,
             article_mode: ArticleMode::default(),
@@ -121,11 +123,12 @@ impl SurfaceState {
         if !self.dirty || self.in_flight.is_some() {
             return None;
         }
+        self.capture_reading(view);
         let mut packet = paint(view, probe, settings, &self.filters);
         packet.article_mode = self.article_mode;
         let source_replies = packet.replies.clone();
         if !self.raw_reading && self.article_mode == ArticleMode::Web {
-            self.article.project(&mut packet);
+            self.article.render(&mut packet);
         }
         if self
             .reply_focus
@@ -411,6 +414,11 @@ impl SurfaceState {
     pub(super) fn cancel_article_fetch(&mut self) {
         self.article.cancel_fetch();
     }
+    pub(super) fn reading_progress(
+        &self,
+    ) -> Option<(u64, usize, usize, Option<super::article_cache::LoadState>)> {
+        self.article.progress()
+    }
     pub(super) fn full_load_active(&self) -> bool {
         self.article.loading()
     }
@@ -452,8 +460,60 @@ impl SurfaceState {
         self.dirty |= changed;
         changed
     }
+    fn capture_reading(&mut self, view: &View) {
+        if self.article_mode != ArticleMode::Web
+            || self.raw_reading
+            || view.input_pending
+            || view.output_pending
+            || view.login_pending
+            || matches!(
+                view.destination,
+                pttstella::navigation_job::Progress::Active { .. }
+            )
+            || !view.frame.control_complete
+        {
+            return;
+        }
+        let identity = (view.stamp(), self.filters.version());
+        if self.captured == Some(identity) {
+            return;
+        }
+        let packet = paint(view, false, &DisplaySettings::default(), &self.filters);
+        self.article.capture(&packet);
+        self.captured = Some(identity);
+    }
+    pub(super) fn reading_scope(&self) -> Option<(u64, u64, u64)> {
+        if self.article_mode != ArticleMode::Web || self.raw_reading {
+            return None;
+        }
+        let (article, _, _, _) = self.article.progress()?;
+        Some((self.captured?.0.generation, article, self.filters.version()))
+    }
+    pub(super) fn authorize_reading(&self, stamp: Stamp, article: u64) -> Option<(u64, u64, u64)> {
+        let scope = self.reading_scope()?;
+        if (scope.0, scope.1) != (stamp.generation, article) {
+            return None;
+        }
+        self.displayed
+            .iter()
+            .chain(self.in_flight.iter())
+            .any(|p| {
+                p.presentation == scope.2
+                    && p.generation == stamp.generation
+                    && p.frame.revision == stamp.revision
+                    && p.input_epoch == stamp.input_epoch
+                    && p.article.as_ref().is_some_and(|a| a.id == article)
+            })
+            .then_some(scope)
+    }
     pub(super) fn next_full_page(&mut self, view: &View) -> Option<pttstella::navigation::Intent> {
-        if !self.cached_reading(view.stamp(), view) || self.has_in_flight() || self.dirty {
+        if self.article_mode != ArticleMode::Web
+            || self.raw_reading
+            || view.phase != Phase::Connected
+            || view.input_pending
+            || view.output_pending
+            || self.captured != Some((view.stamp(), self.filters.version()))
+        {
             return None;
         }
         let old = self.article.load_state();
@@ -481,6 +541,7 @@ impl SurfaceState {
             self.policy_changed();
         } else {
             self.article.clear();
+            self.captured = None;
         }
     }
     pub(super) fn article_input(&mut self, context: &Context, bytes: &[u8]) {
@@ -492,6 +553,7 @@ impl SurfaceState {
     fn policy_changed(&mut self) {
         self.reply_focus = None;
         self.article.clear();
+        self.captured = None;
         self.revoke_output();
         self.selected = None;
         self.hover = None;
@@ -569,6 +631,7 @@ impl SurfaceState {
         if revoked {
             self.hover = None;
         }
+        self.capture_reading(view);
         self.dirty = true;
         revoked
     }
