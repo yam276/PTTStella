@@ -518,6 +518,7 @@ pub(super) fn surface_sample(
             Ok(bytes)
         },
         Some("full_load") => full_load_page(1,media_origin),
+        Some("long_load") => long_load_page(1,media_origin),
         Some("short_overlap") => short_overlap_page(false,media_origin),
         Some("short_links") => {
             let origin = media_origin.ok_or("short links probe requires a loopback media origin")?;
@@ -660,6 +661,17 @@ pub(super) fn short_overlap_page(last: bool, origin: Option<&str>) -> Result<Vec
 }
 
 pub(super) fn full_load_page(page: usize, origin: Option<&str>) -> Result<Vec<u8>, String> {
+    reading_load_page(page, 20, false, origin)
+}
+pub(super) fn long_load_page(page: usize, origin: Option<&str>) -> Result<Vec<u8>, String> {
+    reading_load_page(page, 38, true, origin)
+}
+fn reading_load_page(
+    page: usize,
+    total: usize,
+    reset_ink: bool,
+    origin: Option<&str>,
+) -> Result<Vec<u8>, String> {
     let first = 1 + (page - 1) * 22;
     let mut text = String::from("\x1b[2J\x1b[H");
     for row in 0..23 {
@@ -682,9 +694,14 @@ pub(super) fn full_load_page(page: usize, origin: Option<&str>) -> Result<Vec<u8
         } else {
             format!("Full article synthetic line {line:04}")
         };
-        text.push_str(&format!("\x1b[{};1H{body}", row + 1));
+        let ink = if reset_ink && page == 30 && row == 22 {
+            "\x1b[1;33m"
+        } else {
+            "\x1b[0m"
+        };
+        text.push_str(&format!("\x1b[{};1H{ink}{body}", row + 1));
     }
-    text.push_str(&format!("\x1b[24;1H\x1b[30;47m 瀏覽 第 {page}/20 頁 ({}%) 目前顯示: 第 {first}~{} 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H",page*5,first+22));
+    text.push_str(&format!("\x1b[24;1H\x1b[30;47m 瀏覽 第 {page}/{total} 頁 ({}%) 目前顯示: 第 {first}~{} 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H",page*100/total,first+22));
     encoding::encode(&text).map_err(|e| e.to_string())
 }
 

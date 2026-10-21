@@ -200,3 +200,5 @@ Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_
 即時語言變更另核對獨立 Localizer 往返、具名參數無隔離字元、invalid Localization 保留舊 bundles、目前搜尋／快取字型選項／草稿、macOS 原生選單及第一層設定入口；同一合成 session 切換前後 PNG 須逐像素相同，peer 拒絕全部非預期 bytes。返回區變更須分別驗日期／作者邊界、標頭不攔截、完整列光棒與只裝飾一欄的返回提示；新版最愛、完整看板與第 11 欄分類游標另由 Connection 核對列差＋CR 及過期拒絕。
 
 短文展圖的捲動末端可用 `short_links` 搭配兩張 100×60 本機圖片驗證：展圖後內容仍在原 24 列內，Home／End 畫面及頁尾位置應相同，重複 End／PageDown 不得多送站端 bytes。較長圖片仍須可捲至完整末端；JS 另以誇大的 DOM scrollHeight 核對 renderer 高度邊界，不能以 DOM double 代替原生滾輪驗收。
+
+長文 ANSI 接頁使用 `--probe-surface OUTPUT_DIRECTORY long_load --media-origin LOOPBACK_ORIGIN`：38 頁共 837 列，peer 只接受 37 筆精確 PageDown 及 Close；第 31 頁首列僅重設前景色。確認載入完成、End 看見第 837 列、Home 回首頁、兩次 Enter 一個 batch，圖片各一次 HTTP、來源 PNG 與完整 owner 清理。不能以只接受 20 頁的原 `full_load` 案例宣稱覆蓋這個邊界；原案例的取消／繼續驗收維持。

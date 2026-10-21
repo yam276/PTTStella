@@ -110,7 +110,7 @@ fn main() {
                 case @ ("decode" | "painted" | "send" | "renderer_error" | "untrusted" | "confirm"
                 | "slow" | "dialogs" | "tools" | "sites" | "sites_restart" | "files"
                 | "files_slow" | "fonts" | "sgr66" | "sgr66_legacy" | "login_2fa" | "osc8"
-                | "inline" | "inline_pages" | "full_load" | "terminal_pages"
+                | "inline" | "inline_pages" | "full_load" | "long_load" | "terminal_pages"
                 | "short_overlap" | "short_reading" | "short_links" | "context_menu"
                 | "account_lists" | "merged_replies" | "account_actions"
                 | "account_articles" | "pointer_rows" | "boards" | "boards_close"
