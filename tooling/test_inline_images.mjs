@@ -184,7 +184,7 @@ test('production cached movement scrolls locally, fetches only at an unknown edg
 
 test('production draw never temporarily collapses a cached scroll container to the terminal page height',()=>{
     const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
-    const viewport={dataset:{},scrollTop:500,getBoundingClientRect:()=>({width:960,height:576})};
+    const viewport={dataset:{},style:{},scrollTop:500,getBoundingClientRect:()=>({width:960,height:576}),parentElement:{getBoundingClientRect:()=>({width:960,height:576})}};
     let height=1600,layoutCalls=0;
     const style={set height(value){height=parseFloat(value);if(height<viewport.scrollTop+576)viewport.scrollTop=Math.max(0,height-576);},get height(){return height+'px';}};
     const context={devicePixelRatio:1,viewport,surface:{style},canvas:{width:960,height:576},level:{},zoom:1,draws:0,hoveredLink:-1,
@@ -198,6 +198,35 @@ test('production draw never temporarily collapses a cached scroll container to t
     context.draw({article:null,frame:{rows:24,cols:80}});
     assert.equal(viewport.dataset.reading,'terminal');assert.equal(height,576);
     assert.equal(context.canvas.width,960);assert.equal(context.canvas.height,576);
+});
+
+test('web reading keeps the fitted source BBS viewport through full loading, images, zoom and host resize',()=>{
+    const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
+    const host={width:1040,height:740},viewport={dataset:{},style:{},getBoundingClientRect:()=>host,parentElement:{getBoundingClientRect:()=>host}};
+    const context={devicePixelRatio:2,viewport,surface:{style:{}},canvas:{},level:{},zoom:1,draws:0,hoveredLink:-1,
+        render:()=>({}),inlineImages:{layout:(packet,base)=>base},positionKeyboard(){},drawSelection(){},drawNavigationMarker(){}};
+    vm.runInNewContext(source.slice(source.indexOf('function draw(packet)'),source.indexOf('function repaint()')),context);
+    const draw=rows=>context.draw({article:{id:1},frame:{rows,cols:80},source_frame:{rows:24,cols:80}});
+    for(const rows of [24,33,442,4097]){
+        draw(rows);
+        assert.equal(viewport.style.width,'1040px');assert.equal(viewport.style.height,'624px');
+        assert.equal(viewport.style.inset,'58px auto auto 0px');
+        assert.equal(context.canvas.width,2080);assert.equal(context.canvas.height,1248);
+    }
+    context.inlineImages.layout=(packet,base)=>{context.surface.style.height='12000px';return base;};
+    draw(442);assert.equal(viewport.style.height,'624px');assert.equal(context.surface.style.height,'12000px');
+    context.zoom=1.5;draw(442);assert.equal(viewport.style.height,'624px');assert.equal(viewport.style.width,'1040px');
+    assert.equal(context.canvas.height,1872);
+    context.zoom=1;host.width=800;host.height=1000;draw(442);
+    assert.equal(viewport.style.width,'800px');assert.equal(viewport.style.height,'480px');
+    assert.equal(viewport.style.inset,'260px auto auto 0px');assert.equal(context.canvas.height,960);
+    host.width=1200;host.height=600;draw(442);
+    assert.ok(Math.abs(parseFloat(viewport.style.width)-1000)<1e-9);assert.equal(viewport.style.height,'600px');
+    const inset=viewport.style.inset.split(' ');assert.equal(inset[0],'0px');assert.ok(Math.abs(parseFloat(inset[3])-100)<1e-9);
+    context.inlineImages.layout=(packet,base)=>base;
+    context.draw({article:null,frame:{rows:24,cols:80}});
+    assert.equal(viewport.style.inset,'');assert.equal(viewport.style.width,'');assert.equal(viewport.style.height,'');
+    assert.equal(context.surface.style.height,'600px');
 });
 
 test('cached reading anchors its hidden physical-key input inside the viewport instead of the station footer',()=>{
