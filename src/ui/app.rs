@@ -515,8 +515,11 @@ fn context_menu() -> Element {
 pub(super) fn SettingsForm(filters_probe: bool) -> Element {
     let _language = use_context::<Signal<pttstella::i18n::Language>>()();
     rsx! {
-            dialog { id: "font-dialog", class: "paste-preview font-dialog", "aria-labelledby": "font-title",
-                h2 { id: "font-title", class:"settings-brand", BrandSettingsCaption{} }
+            dialog { id: "font-dialog", class: "paste-preview font-dialog", "aria-labelledby": "font-title settings-window-label",
+                header { class: "settings-window-header",
+                    h2 { id: "font-title", class: "settings-brand", SettingsBrandMark{} span { "PTTStella" } }
+                    span { id: "settings-window-label", class: "settings-window-label", {pttstella::msg!("settings-center-title")} }
+                }
                 div { class: "settings-layout",
                 aside { class: "settings-sidebar",
                     label { r#for: "settings-search", {pttstella::msg!("settings-search-label")} }
@@ -531,6 +534,9 @@ pub(super) fn SettingsForm(filters_probe: bool) -> Element {
                     }
                 }
                 div { class:"settings-content",
+                header { class: "settings-page-header",
+                    h2 { id: "settings-page-title", {pttstella::msg!("settings-general")} }
+                }
                 div { id:"settings-results", hidden:true, "aria-live":"polite" }
                 section { "data-settings-page":"general", class:"settings-section",
                     label {
@@ -685,8 +691,8 @@ pub(super) fn SettingsForm(filters_probe: bool) -> Element {
                 }
                 }
                 }
-                output { id: "font-note", role: "status", "aria-live":"polite" }
                 div { class: "dialog-actions settings-actions settings-footer",
+                    output { id: "font-note", role: "status", "aria-live":"polite" }
                     button { id: "font-defaults",
                         SettingsCaption { label: pttstella::msg!("settings-defaults"), icon: rsx! { RotateCcw { size: 18 } } }
                     }
@@ -702,14 +708,19 @@ pub(super) fn SettingsForm(filters_probe: bool) -> Element {
 }
 
 #[component]
-fn BrandSettingsCaption() -> Element {
-    let _language = use_context::<Signal<pttstella::i18n::Language>>()();
+fn SettingsBrandMark() -> Element {
     let mark = format!(
         "data:image/svg+xml;base64,{}",
         base64::engine::general_purpose::STANDARD
             .encode(include_bytes!("../../assets/icons/constellation-flat.svg"))
     );
-    rsx! {span {class:"settings-caption",img {class:"settings-brand-mark",src:mark,alt:"","aria-hidden":"true"} span {{pttstella::msg!("settings-center-title")}}}}
+    rsx! { img { class: "settings-brand-mark", src: mark, alt: "", "aria-hidden": "true" } }
+}
+
+#[component]
+fn BrandSettingsCaption() -> Element {
+    let _language = use_context::<Signal<pttstella::i18n::Language>>()();
+    rsx! { span { class: "settings-caption", SettingsBrandMark{} span { {pttstella::msg!("settings-center-title")} } } }
 }
 
 fn filter_color_options() -> Element {

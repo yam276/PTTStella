@@ -27,8 +27,12 @@ function createSettingsNavigation({document,tr,changed=()=>{}}){
     const search=document.getElementById('settings-search'),results=document.getElementById('settings-results');
     const pages=[...document.querySelectorAll('[data-settings-page]')],categories=[...document.querySelectorAll('[data-settings-category]')];
     let entries=settingsCatalog(tr);let current='general';
+    const title=document.getElementById('settings-page-title');
+    function heading(searching=false){
+        if(title)title.textContent=searching?tr('settings-search-label'):tr('settings-page-'+current);
+    }
     function show(page,id,event){
-        const previous=current;current=page;document.getElementById("font-defaults").hidden=!["general","appearance","input","media"].includes(page);search.value='';results.hidden=true;results.replaceChildren();
+        const previous=current;current=page;heading();document.getElementById("font-defaults").hidden=!["general","appearance","input","media"].includes(page);search.value='';results.hidden=true;results.replaceChildren();
         for(const section of pages)section.hidden=section.dataset.settingsPage!==page;
         for(const button of categories)button.setAttribute('aria-current',button.dataset.settingsCategory===page?'page':'false');
         document.querySelectorAll('.settings-hit').forEach(node=>node.classList.remove('settings-hit'));
@@ -38,7 +42,7 @@ function createSettingsNavigation({document,tr,changed=()=>{}}){
     }
     function find(){
         if(!search.value.trim()){show(current);search.focus();return;}
-        changed(null,current);
+        changed(null,current);heading(true);
         for(const section of pages)section.hidden=true;
         results.hidden=false;results.replaceChildren();
         const found=searchSettings(entries,search.value);
@@ -49,5 +53,5 @@ function createSettingsNavigation({document,tr,changed=()=>{}}){
         }
     }
     const bindings=[[search,'input',find],...categories.map(button=>[button,'click',e=>{if(e.isTrusted)show(button.dataset.settingsCategory,null,e);}])];
-    show('general');return {bindings,show,relocalize(){entries=settingsCatalog(tr);if(search.value.trim())find();},current:()=>current,visible:()=>results.hidden?current:null,destroy(){results.replaceChildren();}};
+    show('general');return {bindings,show,relocalize(){entries=settingsCatalog(tr);if(search.value.trim())find();else heading();},current:()=>current,visible:()=>results.hidden?current:null,destroy(){results.replaceChildren();}};
 }
