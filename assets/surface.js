@@ -413,7 +413,7 @@ function setHover(point,redraw=true,preview=true) {
     hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:0,kind:hit.kind}:null;
     surface.dataset.pointerAction=hit?.kind==="page"?hit.action:hit?.kind||"none";
     surface.style.cursor=["back","page"].includes(hit?.kind)?"":hit?"pointer":"default";
-    surface.title=hit?.kind==="reply"?tr("reply-focus-hint"):hit?.kind==="continue"?tr("pointer-continue-hint"):hit?.kind==="back"?tr("pointer-back-hint"):hit?.kind==="page"?tr(hit.action==="previous_page"?"pointer-page-up-hint":"pointer-page-down-hint"):index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredRow?tr(hit.kind==="menu"?"menu-open-hint":"article-open-hint"):"";
+    surface.title=index>=0?latest.links[index].url:"";
     if(preview)previewHover(index);
     if(changed&&redraw&&latest) draw(latest);else drawNavigationMarker();
 }

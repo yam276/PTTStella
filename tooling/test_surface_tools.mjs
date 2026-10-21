@@ -32,7 +32,7 @@ test('the floating trigger returns from every category before another tap closes
         const f=fixture({language});f.fire(f.ball,'click');
         for(const petal of f.petals){
             const point=f.menu.snapshot().point;f.fire(petal,'click');
-            assert.equal(f.ball.dataset.toolsAction,'back');assert.equal(f.ball.attrs['aria-label'],label);
+            assert.equal(f.ball.dataset.toolsAction,'back');assert.equal(f.ball.attrs['aria-label'],label);assert.equal(f.ball.attrs.title,undefined);
             assert.equal(f.ball.attrs['aria-expanded'],undefined,'Back is navigation, not a disclosure toggle');
             f.fire(f.ball,'pointerdown');f.fire(f.ball,'pointerup');f.fire(f.ball,'click');
             assert.equal(f.menu.open(),true);assert.equal(f.panel.hidden,true);assert.equal(f.fan.hidden,false);

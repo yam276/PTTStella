@@ -108,6 +108,7 @@ test('reading hover chooses directional cursors without drawing a frame over tex
         f.setHover(point,false,false);
         assert.equal(f.surface.dataset.pointerAction,action);
         assert.equal(f.surface.style.cursor,'');
+        assert.equal(f.surface.title,'');
         assert.equal(f.navigationMarker.hidden,true);
     }
 });
@@ -150,6 +151,7 @@ test('home menu hover marker spans both edges of the terminal grid',()=>{
     f.setHover({row:4,col:25},false,false);
     assert.equal(f.navigationMarker.hidden,false);assert.equal(f.navigationMarker.style.left,'0px');
     assert.equal(f.navigationMarker.style.width,'960px');assert.equal(f.navigationMarker.style.height,'24px');
+    assert.equal(f.surface.title,'');
 });
 
 test('reply rows focus before back/page, retain links and reject dragged, stale or Shift gestures',()=>{
@@ -160,4 +162,16 @@ test('reply rows focus before back/page, retain links and reject dragged, stale 
         const x=fixture();x.latest.reply_rows=[5];const e=x.event(4,5*24+12,{shiftKey:kind==='shift',isTrusted:kind!=='untrusted'});
         x.pointerdown(e);if(kind==='stale')x.latest.presentation++;x.pointerup(kind==='drag'?x.event(5,5*24+12):e);x.click(e);assert.deepEqual(x.sent,[],kind);
     }
+});
+
+
+test('basic reply and selection hover stays quiet while links retain their literal destination',()=>{
+    const f=fixture();f.surface.style={};f.navigationMarker={style:{},dataset:{}};
+    f.hoveredLink=-1;f.pointerClient=null;f.previewHover=()=>{};f.draw=()=>{};f.tr=key=>key;
+    f.latest.reply_rows=[5];f.latest.links=[{url:'https://example.com/a?b=1&c=2'}];
+    vm.runInContext(source.slice(source.indexOf('function setHover('),source.indexOf('function refreshNavigation(')),f);
+    f.setHover({row:5,col:40},false,false);assert.equal(f.surface.title,'');
+    f.dragging={moved:true};f.setHover({row:5,col:40},false,false);assert.equal(f.surface.title,'');
+    f.dragging=null;f.linkAt=()=>0;f.setHover({row:5,col:40},false,false);
+    assert.equal(f.surface.title,'https://example.com/a?b=1&c=2');
 });

@@ -366,3 +366,24 @@ test('short-article blank padding does not count as unread content after images 
     assert.equal(e.surface.style.height,'800px','retain the minimum BBS grid separately from reading progress');
     await e.ui.destroy();
 });
+
+
+test('cached page counter follows source-page anchors without changing the station total or source cells',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:12,end:true,page_cells:{start:1,end:2},
+        pages:[{line:1,number:1},{line:5,number:2},{line:9,number:3}]},
+        frame:{cols:80,rows:13,revision:4,glyphs:Array.from(' 3/3 (100%) ',(text,col)=>({row:12,col,width:1,text,left:{},right:{}}))},links:[]};
+    const text=()=>e.nodes.find(n=>n.className==='article-footer-image').alt;
+    e.ui.layout(packet,base,1);assert.equal(text(),' 1/3 (100%) ');
+    e.viewport.scrollTop=96;e.ui.layout(packet,base,1);assert.equal(text(),' 2/3 (100%) ');
+    e.viewport.scrollTop=216;e.ui.layout(packet,base,1);assert.equal(text(),' 3/3 (100%) ');
+    e.viewport.scrollTop=0;e.ui.layout(packet,base,1);assert.equal(text(),' 1/3 (100%) ');
+    e.ui.open({...e.open,article_id:1,first_line:1},packet);
+    e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:100,height:400}});
+    await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+    image.naturalWidth=100;image.naturalHeight=400;image.onload();await new Promise(resolve=>setImmediate(resolve));
+    e.ui.layout(packet,base,1);e.viewport.scrollTop=200;e.ui.layout(packet,base,1);
+    assert.equal(text(),' 1/3 (100%) ','inside an image, retain its owning source page');
+    assert.equal(packet.frame.glyphs.map(g=>g.text).join(''),' 3/3 (100%) ');
+    await e.ui.destroy();
+});
