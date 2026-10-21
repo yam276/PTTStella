@@ -394,6 +394,46 @@ pub struct AccountWord {
     pub end: usize,
     pub id: String,
 }
+/// Only independently recognized article-list author fields can expose account
+/// actions. A whole-row mask must not leak its hidden author through metadata.
+pub fn article_authors(source: &Frame, visible: &Frame) -> Vec<AccountWord> {
+    if !matches!(
+        navigation::analyze(source),
+        navigation::Context::ArticleList { .. }
+    ) {
+        return Vec::new();
+    }
+    let Some(rows) = text::rows(visible) else {
+        return Vec::new();
+    };
+    targets(source)
+        .into_iter()
+        .filter_map(|target| {
+            let id = &target.content.id;
+            let start = target.id_start;
+            let end = start + id.len();
+            let row = rows.get(target.content.row)?;
+            if row.cells(start, end)? != id
+                || !row
+                    .spans
+                    .iter()
+                    .filter(|s| s.glyph.col < end && s.glyph.col + s.glyph.width > start)
+                    .all(|s| {
+                        s.glyph.left.fg != s.glyph.left.bg && s.glyph.right.fg != s.glyph.right.bg
+                    })
+            {
+                return None;
+            }
+            Some(AccountWord {
+                row: target.content.row,
+                start: 17,
+                end: 30,
+                id: id.clone(),
+            })
+        })
+        .collect()
+}
+
 pub fn account_words(frame: &Frame) -> Vec<AccountWord> {
     let Some(rows) = text::rows(frame) else {
         return Vec::new();

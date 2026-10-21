@@ -93,3 +93,10 @@ test('context account actions send bounded coordinates and explicit policy, not 
     assert.deepEqual(sent.slice(0,3).map(p=>[p.kind,p.row,p.col,p.policy]),[['account_rule',5,3,'mask'],['account_rule',5,3,'mask_row'],['account_rule',5,3,'allow']]);
     assert.equal(sent[3].row,null);assert.ok(sent.every(p=>!('id' in p)));
 });
+
+test('recognized list author offers policies without reply focus or reading navigation',()=>{
+ const state={...base,authors:true,word:{row:3,start:17,end:30,id:'alice'}};
+ for(const action of ['account-mask','account-mask-row','account-allow'])assert.equal(contextMenuItems(state).get(action),true);
+ for(const action of ['reply-focus','reply-focus-clear','previous','next'])assert.equal(contextMenuItems(state).has(action),false);
+ for(const change of [{word:null},{authors:false},{ptt:false},{local:false}])assert.equal(contextMenuItems({...state,...change}).has('account-mask'),false);
+});

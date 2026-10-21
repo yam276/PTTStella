@@ -631,3 +631,34 @@ fn shared_allow_color_overrides_persist_migrate_and_do_not_reveal_masked_rows() 
         .unwrap();
     assert_eq!(merged.entries[1].color, None);
 }
+
+#[test]
+fn author_context_fields_exclude_headers_titles_and_hidden_identities() {
+    let source = article_list();
+    let words = filters::article_authors(&source, &source);
+    assert_eq!(
+        words
+            .iter()
+            .map(|w| (w.row, w.start, w.end, w.id.as_str()))
+            .collect::<Vec<_>>(),
+        vec![
+            (3, 17, 30, "alice"),
+            (4, 17, 30, "bob"),
+            (5, 17, 30, "carol")
+        ]
+    );
+    let rules = Rules::default()
+        .edit_policy("alice", "", filters::Policy::Mask, false)
+        .unwrap()
+        .edit_policy("bob", "", filters::Policy::MaskRow, false)
+        .unwrap();
+    let visible = filters::project(&source, &rules, false).frame;
+    assert_eq!(
+        filters::article_authors(&source, &visible)
+            .iter()
+            .map(|w| w.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["alice", "carol"]
+    );
+    assert!(filters::article_authors(&frame(), &frame()).is_empty());
+}

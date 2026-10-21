@@ -483,7 +483,7 @@ function contextState(index,word=null,replyRow=null){
         &&selectionCache.generation===generation&&selectionCache.revision===revision;
     return {word,replyRow,focused:!!latest?.reply_focus,link:index,selection:hasSelection(),selectionReady,rowsReady:selectionReady&&!exportBusy&&selectionCache.value.rows.end-selectionCache.value.rows.start<=24,
         ready,exportReady:ready&&!exportBusy,local:stationMouse.local(),ptt:!!latest?.ptt_features,
-        reading:latest?.navigation.kind==="article_reading",images:!!latest?.image_links.length,
+        reading:latest?.navigation.kind==="article_reading",authors:latest?.navigation.kind==="article_list",images:!!latest?.image_links.length,
         inlineReady:inlineShortcut({key:"Enter"},keyboardState,latest),navigate:canNavigate(),
         first:latest?.navigation.first_line===1,last:latest?.navigation.percent===100};
 }

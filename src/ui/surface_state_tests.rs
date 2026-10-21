@@ -1097,3 +1097,62 @@ fn preload_cancel_late_page_and_article_switch_revoke_old_scope_without_waiting_
     assert!(state.reading_scope().is_none());
     assert!(state.next_full_page(&view).is_none());
 }
+
+#[test]
+fn author_actions_use_acknowledged_list_fields_and_reject_stale_or_hidden_authors() {
+    let mut view = view();
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/navigation.json")).unwrap();
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(&pttstella::encoding::encode(fixture["list"].as_str().unwrap()).unwrap());
+    view.frame = screen.frame();
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let identity = displayed(&mut state, &view);
+    for col in [17, 21, 29] {
+        for policy in [
+            filters::Policy::Mask,
+            filters::Policy::MaskRow,
+            filters::Policy::Allow,
+        ] {
+            let rules = state
+                .account_rule(identity, view.stamp(), 3, col, policy, &view)
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                (rules.entries[0].id.as_str(), rules.entries[0].policy),
+                ("alice", policy)
+            );
+        }
+    }
+    for (row, col) in [(2, 17), (3, 16), (3, 30), (23, 17)] {
+        assert!(
+            state
+                .account_rule(
+                    identity,
+                    view.stamp(),
+                    row,
+                    col,
+                    filters::Policy::Mask,
+                    &view
+                )
+                .is_none()
+        );
+    }
+    assert!(!state.focus_reply(identity, view.stamp(), Some(3), &view));
+    view.input_epoch += 1;
+    assert!(
+        state
+            .account_rule(identity, view.stamp(), 3, 17, filters::Policy::Mask, &view)
+            .is_none()
+    );
+    let rules = filters::Rules::default()
+        .edit_policy("alice", "", filters::Policy::MaskRow, false)
+        .unwrap();
+    let mut state = SurfaceState::new(rules);
+    let identity = displayed(&mut state, &view);
+    assert!(
+        state
+            .account_rule(identity, view.stamp(), 3, 17, filters::Policy::Allow, &view)
+            .is_none()
+    );
+}
