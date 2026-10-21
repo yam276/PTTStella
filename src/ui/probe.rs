@@ -518,6 +518,7 @@ pub(super) fn surface_sample(
             Ok(bytes)
         },
         Some("full_load") => full_load_page(1,media_origin),
+        Some("short_overlap") => short_overlap_page(false,media_origin),
         Some("short_links") => {
             let origin = media_origin.ok_or("short links probe requires a loopback media origin")?;
             encoding::encode(&format!("\x1b[2J\x1b[HShort article image links\x1b[2;1H{origin}/colours.png\x1b[3;1H\x1b]8;;{origin}/colours-two.png\x07Explicit image\x1b]8;;\x07\x1b[24;1H\x1b[7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~3 行 (h)說明 (←)離開\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
@@ -622,6 +623,40 @@ pub(super) fn sgr66_sample(modern: bool) -> Result<Vec<u8>, String> {
     }
     bytes.extend_from_slice(b"\x1b[24;80H\x1b[?25l");
     Ok(bytes)
+}
+
+// Self-authored two-page clamp: logical 9 starts at physical display row 10.
+pub(super) fn short_overlap_page(last: bool, origin: Option<&str>) -> Result<Vec<u8>, String> {
+    let origin = origin.ok_or("short overlap probe requires media origin")?;
+    let mut text = String::from("\x1b[0m\x1b[2J\x1b[H");
+    for (row, line) in (if last { 10..=32 } else { 1..=22 }).enumerate() {
+        let body = match line {
+            2 => "https://example.com/pttstella".into(),
+            10 => "Wrapped paragraph continuation".into(),
+            14 | 17 => String::new(),
+            22 => "Signature begins below".into(),
+            23 => "--".into(),
+            24 => "Synthetic signature: preserve every row".into(),
+            25 => format!("{origin}/colours.png"),
+            26 => format!("{origin}/missing.png"),
+            27 => format!("{origin}/colours-two.png"),
+            31 => "First synthetic reply remains visible".into(),
+            32 => "Last synthetic reply remains visible".into(),
+            _ => format!("Synthetic short article row {line:04}"),
+        };
+        text.push_str(&format!(
+            "\x1b[{};1H\x1b[{}m\x1b[2K{body}\x1b[0m",
+            row + 1,
+            if last && body.is_empty() { 32 } else { 0 }
+        ));
+    }
+    text.push_str(if last {
+        "\x1b[24;1H\x1b[7m 瀏覽 第 2/2 頁 (100%) 目前顯示: 第 9~31 行 (y)回應(X)推文(h)說明"
+    } else {
+        "\x1b[24;1H\x1b[7m 瀏覽 第 1/2 頁 (46%) 目前顯示: 第 1~22 行 (y)回應(X)推文(h)說明"
+    });
+    text.push_str("\x1b[0m\x1b[?25l");
+    encoding::encode(&text).map_err(|e| e.to_string())
 }
 
 pub(super) fn full_load_page(page: usize, origin: Option<&str>) -> Result<Vec<u8>, String> {

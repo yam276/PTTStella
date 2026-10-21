@@ -88,11 +88,15 @@ pub fn app(props: AppProps) -> Element {
                     )
                 } else if matches!(
                     sample_case.as_deref(),
-                    Some("inline_pages" | "terminal_pages")
+                    Some("inline_pages" | "terminal_pages" | "short_overlap")
                 ) {
                     Connection::start_inline_pages_probe(
                         bytes,
-                        super::probe::inline_second_page(media_origin.as_deref())?,
+                        if sample_case.as_deref() == Some("short_overlap") {
+                            super::probe::short_overlap_page(true, media_origin.as_deref())?
+                        } else {
+                            super::probe::inline_second_page(media_origin.as_deref())?
+                        },
                     )
                 } else if articles_probing {
                     Connection::start_article_probe()

@@ -12,6 +12,18 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## 短文章末頁與網址回歸（2026-10-21）
+
+使用者回報 C_Question `#1gs1UIuY` 的短文章缺少後半簽名檔及推文，網頁上顯示文章已變更。已從同一實站閱讀確認站端末頁確有內容；末頁回報 9～31 行，起點可以是折行的續段。舊快取將邏輯重疊行數當作畫面重疊長度的下限，導致接頁被拒；另外空白格的不可見前景色不同，也會誤判為變更。
+
+修正以實際畫面列的可見 glyph 邊界對齊，邏輯行數用於重複列的取捨；空白格比較實際背景，非空白文字及雙色前景／背景仍須相同。沒有放寬可見文字改變、缺口與 stale／scope 准入。兩個新增獨立 expected 在修改前均失敗；修改後完整 core 13 commands／2 replay、desktop lib 143／bin 107、全 targets Clippy／fmt、JS 176 與 docs 通過。新增 SurfaceState 案例核對 32 列完整尾端，以及不在站端末頁的一般網址仍由目前 ACK 投影解析，舊來源拒絕。
+
+最終原生 `short_overlap`（同時含下述固定可視區修正）通過：一筆精確 PageDown 後完整保留 1～32 列、end／complete，End 看見簽名檔與最後兩行，Home 回看並真正左鍵點擊歷史一般網址，sink 收到一次。兩次 Enter 僅一個 batch，兩圖與 404 各一次 GET；960×576 來源 PNG 不含展圖，Close acknowledged、全部 owner／HTTP server join、exit 0。使用者亦回報短文章目前可閱讀。實站終端機的一般 PTT 網址曾正常開啟預設 Firefox；sink 仍不當作外部瀏覽器啟動證明。
+
+初次原生流程未取得前景焦點，另一次完成全文但尚未點網址／展圖／匯出便退出，兩份 failed 保留；固定可視區的首次流程誤送 Tab 被精確 peer 拒絕，也保留 failed。最後一次由使用者切到前景後完成上述操作，未放寬 peer 或 gate。
+
+證據在 `.local/verification/article-overlap/`。標準 8 GiB build 因共用預留拒絕；使用者本輪明確指示「你無視此次的共用磁碟」。僅本案執行程序的政策副本暫用 64 GiB 共用准入，保留同一資源登記／實體 lease／target 鎖、8 GiB namespace、Cargo shim、watchdog 及 100 GiB free floor；沒有修改共用政策檔、啟動 coordinator 或清理他人資料。格式／JS／docs 曾以 0.05 GiB isolated lane 獨立先行通過，Rust／打包使用上述已授權例外。
+
 ## 可取消的網頁全文載入（2026-10-21）
 
 依使用者明確要求，網頁文章進入即載入全文，終端機文章保持原始逐頁送鍵。Rust 的同一快取保留全文及來源頁面→顯示列對應，移除舊 256 行淘汰實作；PTT 邏輯行號與折行畫面列分開，歷史重繪不重複接頁。從中段進入時先 Home 回開頭，重建顯示列並撤銷舊圖片位置，再逐頁 PageDown。完成須同時保留文章開頭與已確認結尾，不把只看過末頁當全文。

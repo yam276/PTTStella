@@ -560,3 +560,58 @@ fn full_loading_matches_wrapped_physical_rows_instead_of_losing_them_to_logical_
     cache.project(&mut tail);
     assert_eq!(lines(&tail), initial);
 }
+
+#[test]
+fn clamped_short_last_page_can_start_inside_a_wrapped_logical_line() {
+    let mut cache = ArticleCache::default();
+    let mut first = page(1, 22, 46);
+    cache.project(&mut first);
+    cache.next_full_page(&first.navigation, 1, Instant::now());
+    // A last-page clamp can report logical line 9 while the first physical
+    // row is the continuation of that line (display row 10).
+    let mut last = page(10, 32, 100);
+    last.navigation = Context::ArticleReading {
+        first_line: 9,
+        last_line: 31,
+        percent: 100,
+    };
+    cache.project(&mut last);
+    assert_eq!(
+        lines(&last),
+        (1..=32).map(|n| format!("line {n:04}")).collect::<Vec<_>>()
+    );
+    assert_eq!(last.article.unwrap().load, Some(LoadState::Complete));
+}
+
+#[test]
+fn overlap_ignores_invisible_blank_foreground_but_preserves_visible_changes() {
+    for change in ["blank_ink", "text_ink", "blank_background"] {
+        let mut cache = ArticleCache::default();
+        let mut first = page(1, 23, 50);
+        cache.project(&mut first);
+        let mut last = page(22, 44, 100);
+        for glyph in last.frame.glyphs.iter_mut().filter(|g| g.row == 0) {
+            if change == "text_ink" || glyph.text == " " {
+                if change == "blank_background" {
+                    glyph.left.bg = 4;
+                    glyph.right.bg = 4;
+                } else {
+                    glyph.left.fg = 2;
+                    glyph.right.fg = 2;
+                }
+            }
+        }
+        cache.project(&mut last);
+        assert_eq!(
+            last.article.as_ref().unwrap().load,
+            Some(if change == "blank_ink" {
+                LoadState::Complete
+            } else {
+                LoadState::Changed
+            })
+        );
+        if change == "blank_ink" {
+            assert_eq!(lines(&last).len(), 44);
+        }
+    }
+}

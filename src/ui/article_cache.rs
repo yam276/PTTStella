@@ -56,7 +56,6 @@ pub(super) struct ArticleCache {
     end: Option<usize>,
     turning: bool,
     source_range: Option<(usize, usize)>,
-    source_rows: usize,
     // PTT reports logical lines; wrapped rows need their own stable positions.
     pages: BTreeMap<(usize, usize), (usize, usize)>,
     fetch: Option<Fetch>,
@@ -369,7 +368,6 @@ impl ArticleCache {
                     self.rows.clear();
                     self.end = None;
                     self.source_range = None;
-                    self.source_rows = 0;
                     self.pages.clear();
                     self.loader.awaiting = None;
                 }
@@ -389,7 +387,7 @@ impl ArticleCache {
                                     g
                                 })
                                 .collect();
-                            incoming != known.glyphs
+                            !same_glyphs(&incoming, &known.glyphs)
                         })
                     })
                 {
@@ -497,23 +495,16 @@ impl ArticleCache {
                         start
                     } else if let Some((previous_first, previous_last)) = self.source_range {
                         if first_line < previous_first {
-                            let minimum =
+                            let expected =
                                 last_line.saturating_add(1).saturating_sub(previous_first);
-                            let maximum = (minimum
-                                + body_rows.saturating_sub(last_line - first_line + 1))
-                            .min(incoming.len())
-                            .min(self.rows.len());
-                            let overlap = (minimum..=maximum).find(|n| {
-                                incoming
-                                    .iter()
-                                    .rev()
-                                    .take(*n)
-                                    .collect::<Vec<_>>()
-                                    .iter()
-                                    .rev()
-                                    .zip(self.rows.values())
-                                    .all(|((_, row), known)| row.glyphs == known.glyphs)
-                            });
+                            let before = incoming.iter().map(|(_, row)| row).collect::<Vec<_>>();
+                            let after = self.rows.values().collect::<Vec<_>>();
+                            let overlap = page_overlap(
+                                &before,
+                                &after,
+                                expected,
+                                last_line >= previous_first,
+                            );
                             let start = overlap.and_then(|n| {
                                 self.rows.first_key_value()?.0.checked_sub(body_rows - n)
                             });
@@ -525,22 +516,16 @@ impl ArticleCache {
                             };
                             start
                         } else {
-                            let minimum =
+                            let expected =
                                 previous_last.saturating_add(1).saturating_sub(first_line);
-                            let maximum = (minimum
-                                + self
-                                    .source_rows
-                                    .saturating_sub(previous_last - previous_first + 1))
-                            .min(incoming.len())
-                            .min(self.rows.len());
-                            let matched = (minimum..=maximum).find(|n| {
-                                let suffix = self.rows.values().rev().take(*n).collect::<Vec<_>>();
-                                suffix
-                                    .iter()
-                                    .rev()
-                                    .zip(incoming.iter())
-                                    .all(|(known, (_, row))| known.glyphs == row.glyphs)
-                            });
+                            let before = self.rows.values().collect::<Vec<_>>();
+                            let after = incoming.iter().map(|(_, row)| row).collect::<Vec<_>>();
+                            let matched = page_overlap(
+                                &before,
+                                &after,
+                                expected,
+                                first_line <= previous_last,
+                            );
                             let Some(overlap) = matched else {
                                 self.loader.state = Some(LoadState::Changed);
                                 self.loader.awaiting = None;
@@ -601,7 +586,6 @@ impl ArticleCache {
                 }
                 self.turning = false;
                 self.source_range = Some((first_line, last_line));
-                self.source_rows = body_rows;
                 if self.loading()
                     && self.loader.at_head
                     && self.rows.first_key_value().is_some_and(|(n, _)| *n == 1)
@@ -721,6 +705,44 @@ impl ArticleCache {
             .map(String::len)
             .sum()
     }
+}
+
+// Footer ranges are logical lines, and a final-page clamp may land inside a
+// wrapped line. Match physical rows, using the reported overlap to disambiguate
+// repeated rows rather than requiring it to be the physical overlap length.
+fn page_overlap(before: &[&Row], after: &[&Row], expected: usize, required: bool) -> Option<usize> {
+    (usize::from(required)..=before.len().min(after.len()))
+        .filter(|n| {
+            before[before.len() - n..]
+                .iter()
+                .zip(after)
+                .all(|(a, b)| same_glyphs(&a.glyphs, &b.glyphs))
+        })
+        .min_by_key(|n| n.abs_diff(expected))
+}
+fn same_glyphs(a: &[Glyph], b: &[Glyph]) -> bool {
+    fn colours(style: Style) -> (u8, u8) {
+        let fg = style.fg + u8::from(style.bright && style.fg < 8) * 8;
+        if style.inverse {
+            (style.bg, fg)
+        } else {
+            (fg, style.bg)
+        }
+    }
+    a.len() == b.len()
+        && a.iter().zip(b).all(|(a, b)| {
+            let blank = a.text.chars().all(|c| c == ' ' || c == '\u{3000}');
+            a.row == b.row
+                && a.col == b.col
+                && a.width == b.width
+                && a.text == b.text
+                && a.unmapped == b.unmapped
+                && [(a.left, b.left), (a.right, b.right)].iter().all(|(a, b)| {
+                    let a = colours(*a);
+                    let b = colours(*b);
+                    a.1 == b.1 && (blank || a.0 == b.0)
+                })
+        })
 }
 
 fn row_bytes(row: &Row) -> usize {
