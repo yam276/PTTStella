@@ -69,10 +69,10 @@ test('search leaves the visible management page and reopening it restores its co
  const document={getElementById:node,querySelectorAll:selector=>selector==='[data-settings-page]'?sections:selector==='[data-settings-category]'?categories:[],createElement:()=>({addEventListener(){}})};
  const create=vm.runInNewContext(source+'\ncreateSettingsNavigation');
  const ui=create({document,tr:translator('zh-TW'),changed:(page,previous)=>changes.push([page,previous])});
- ui.show('account');assert.equal(ui.visible(),'account');node('settings-search').value='站點';
+ ui.show('account');assert.equal(ui.visible(),'account');assert.equal(node('settings-page-title').textContent,'帳號與隱私');node('settings-search').value='站點';
  ui.bindings.find(([target,type])=>target===node('settings-search')&&type==='input')[2]();
- assert.equal(ui.visible(),null);assert.deepEqual(changes.at(-1),[null,'account']);assert.ok(sections.every(s=>s.hidden));
- ui.show('sites');assert.equal(ui.visible(),'sites');assert.equal(sections.find(s=>s.dataset.settingsPage==='sites').hidden,false);
+ assert.equal(ui.visible(),null);assert.equal(node('settings-page-title').textContent,'搜尋設定');assert.deepEqual(changes.at(-1),[null,'account']);assert.ok(sections.every(s=>s.hidden));
+ ui.show('sites');assert.equal(ui.visible(),'sites');assert.equal(node('settings-page-title').textContent,'站點與連線');assert.equal(sections.find(s=>s.dataset.settingsPage==='sites').hidden,false);
  ui.destroy();
 });
 
