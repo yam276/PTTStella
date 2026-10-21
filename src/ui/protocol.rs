@@ -87,11 +87,17 @@ pub(super) enum SurfaceEvent {
         row: Option<usize>,
         trusted: bool,
     },
+    FiltersDefaultColor {
+        color: u8,
+        trusted: bool,
+    },
     FiltersEdit {
         id: String,
         note: String,
         #[serde(default)]
         policy: pttstella::filters::Policy,
+        #[serde(default)]
+        color: Option<u8>,
         remove: bool,
         trusted: bool,
     },
@@ -346,6 +352,7 @@ impl SurfaceEvent {
                 | Self::RecentBoardsClear { .. }
                 | Self::FiltersOpen { .. }
                 | Self::FiltersEdit { .. }
+                | Self::FiltersDefaultColor { .. }
                 | Self::AccountRule { .. }
                 | Self::ReplyFocus { .. }
                 | Self::FiltersImport { .. }
@@ -437,6 +444,7 @@ impl SurfaceEvent {
             | FiltersOpen { trusted }
             | RecentBoardsClear { trusted }
             | FiltersEdit { trusted, .. }
+            | FiltersDefaultColor { trusted, .. }
             | FiltersImport { trusted, .. }
             | FiltersImportApply { trusted, .. }
             | FiltersImportCancel { trusted, .. }
@@ -484,6 +492,31 @@ impl SurfaceEvent {
 
 #[cfg(test)]
 mod admission_tests {
+    #[test]
+    fn filter_color_edits_are_typed_trusted_ptt_actions() {
+        use serde_json::json;
+        for (value, expected) in [
+            (
+                json!({"kind":"filters_default_color","color":10,"trusted":true}),
+                true,
+            ),
+            (
+                json!({"kind":"filters_default_color","color":10,"trusted":false}),
+                false,
+            ),
+        ] {
+            let event: super::SurfaceEvent = serde_json::from_value(value).unwrap();
+            assert!(event.requires_ptt());
+            assert_eq!(event.admitted(7), expected);
+        }
+        assert!(
+            serde_json::from_value::<super::SurfaceEvent>(
+                json!({"kind":"filters_default_color","color":"red","trusted":true})
+            )
+            .is_err()
+        );
+    }
+
     #[test]
     fn context_copy_requires_trust_and_closed_targets() {
         let event = json!({"kind":"copy_text","presentation":3,"generation":7,"revision":4,"target":{"kind":"link","index":0}});

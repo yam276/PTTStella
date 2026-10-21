@@ -529,15 +529,17 @@ pub(super) fn surface_sample(
             let sample: serde_json::Value = serde_json::from_str(include_str!("../../tests/fixtures/navigation.json")).map_err(|e|e.to_string())?;
             encoding::encode(sample["list"].as_str().ok_or("missing synthetic article fixture")?).map_err(|e|e.to_string())
         }
-        Some("account_lists" | "merged_replies" | "account_actions") => {
+        Some("account_lists" | "merged_replies" | "account_actions" | "filter_colors") => {
             let sample: serde_json::Value =
                 serde_json::from_str(include_str!("../../tests/fixtures/filters.json"))
                     .map_err(|e| e.to_string())?;
-            encoding::encode(
-                sample["reading"]
-                    .as_str()
-                    .ok_or("missing synthetic reading fixture")?.replace("第 2/3 頁 (66%) 目前顯示: 第 24~46 行","第 1/1 頁 (100%) 目前顯示: 第 1~23 行").as_str(),
-            )
+            let mut reading = sample["reading"].as_str().ok_or("missing synthetic reading fixture")?
+                .replace("第 2/3 頁 (66%) 目前顯示: 第 24~46 行","第 1/1 頁 (100%) 目前顯示: 第 1~23 行");
+            if case == Some("filter_colors") {
+                reading = reading.replace("\x1b[1;37m", "\x1b[97m").replace("\x1b[33m", "\x1b[93m");
+                reading.push_str("\x1b[6;3H\x1b[33m \x1b[6;67H \x1b[7;3H \x1b[7;67H \x1b[0m\x1b[24;80H");
+            }
+            encoding::encode(&reading)
             .map_err(|e| e.to_string())
         }
         Some("context_menu") => {

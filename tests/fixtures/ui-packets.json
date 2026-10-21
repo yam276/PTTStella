@@ -81,6 +81,7 @@
     "packet": {
       "kind": "filters_open",
       "payload": {
+        "allow_color": 14,
         "entries": [],
         "warning": null
       }
@@ -92,6 +93,7 @@
       "kind": "filters_result",
       "payload": {
         "state": "saved",
+        "allow_color": 14,
         "entries": [],
         "message": "已保存"
       }
