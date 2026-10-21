@@ -651,9 +651,9 @@ pub(super) fn short_overlap_page(last: bool, origin: Option<&str>) -> Result<Vec
         ));
     }
     text.push_str(if last {
-        "\x1b[24;1H\x1b[7m 瀏覽 第 2/2 頁 (100%) 目前顯示: 第 9~31 行 (y)回應(X)推文(h)說明"
+        "\x1b[24;1H\x1b[30;46m 瀏覽 第 2/2 頁 (100%)\x1b[0;7m 目前顯示: 第 9~31 行 (y)回應(X)推文(h)說明"
     } else {
-        "\x1b[24;1H\x1b[7m 瀏覽 第 1/2 頁 (46%) 目前顯示: 第 1~22 行 (y)回應(X)推文(h)說明"
+        "\x1b[24;1H\x1b[37;44m 瀏覽 第 1/2 頁 (46%)\x1b[0;7m 目前顯示: 第 1~22 行 (y)回應(X)推文(h)說明"
     });
     text.push_str("\x1b[0m\x1b[?25l");
     encoding::encode(&text).map_err(|e| e.to_string())

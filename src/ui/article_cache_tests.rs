@@ -661,6 +661,23 @@ fn source_page_numbers_keep_their_physical_starts_across_a_clamped_tail_and_revi
             .frame
             .glyphs
             .extend(screen.frame().glyphs.into_iter().filter(|g| g.row == 23));
+        let style = Style {
+            fg: if page == 1 { 7 } else { 0 },
+            bg: if page == 1 { 4 } else { 6 },
+            ..Style::default()
+        };
+        for glyph in packet.frame.glyphs.iter_mut().filter(|g| g.row == 23) {
+            glyph.left = style;
+            glyph.right = style;
+            if glyph.col == 1 {
+                glyph.right = Style {
+                    fg: 3,
+                    bg: 5,
+                    bright: true,
+                    inverse: true,
+                };
+            }
+        }
         packet
     }
     let mut cache = ArticleCache::default();
@@ -683,6 +700,36 @@ fn source_page_numbers_keep_their_physical_starts_across_a_clamped_tail_and_revi
             .map(|p| (p.line, p.number))
             .collect::<Vec<_>>(),
         vec![(1, 1), (10, 2)]
+    );
+    assert_eq!(reading.pages[0].styles.len(), 80);
+    assert_eq!(
+        reading.pages[0].styles[0],
+        Style {
+            fg: 7,
+            bg: 4,
+            ..Style::default()
+        }
+    );
+    assert_eq!(
+        reading.pages[1].styles[0],
+        Style {
+            fg: 0,
+            bg: 6,
+            ..Style::default()
+        }
+    );
+    assert_eq!(
+        reading.pages[0].styles[2],
+        Style {
+            fg: 3,
+            bg: 5,
+            bright: true,
+            inverse: true
+        }
+    );
+    assert_eq!(
+        footer_styles(last.source_frame.as_ref().unwrap()),
+        reading.pages[1].styles
     );
     assert_eq!(reading.last_line, 32);
     let mut revisit = original;
