@@ -183,8 +183,7 @@ pub fn analyze(frame: &Frame) -> Context {
     if frame.cursor.1 == 23
         && footer.bar_text("瀏覽")
         && footer.bar_text("目前顯示")
-        && footer.text.contains('←')
-        && footer.text.contains("離開")
+        && reading_commands(footer)
         && let Some((first_line, last_line, percent)) = reading(&footer.text)
     {
         return Context::ArticleReading {
@@ -691,6 +690,19 @@ fn article(line: &Row<'_>, row: usize) -> Option<Article> {
         start: 2,
         end: 8,
     })
+}
+fn reading_commands(footer: &Row<'_>) -> bool {
+    if footer.text.contains('←') && footer.text.contains("離開") {
+        return true;
+    }
+    // PTT's reply-enabled pmore footer fills the row with y/X/h instead of
+    // displaying the back hint. Require that complete, styled command band.
+    compact(&footer.text)
+        .split_once('行')
+        .is_some_and(|(_, commands)| commands == "(y)回應(X)推文(h)說明")
+        && ["(y)", "回應", "(X)", "推文", "(h)", "說明"]
+            .iter()
+            .all(|text| footer.bar_text(text))
 }
 fn reading(text: &str) -> Option<(usize, usize, u8)> {
     let text = compact(text);

@@ -561,11 +561,11 @@ fn tools_sample() -> Result<Vec<u8>, String> {
 
 fn inline_sample(origin: Option<&str>) -> Result<Vec<u8>, String> {
     let origin = origin.ok_or("inline probe requires a loopback media origin")?;
-    encoding::encode(&format!("\x1b[2J\x1b[HInline image synthetic reading page\x1b[3;1H{origin}/colours.png\x1b[4;1HText below first picture: SELECT THIS ROW\x1b[6;1H{origin}/missing.png\x1b[7;1HText below failed picture\x1b[24;1H\x1b[7m 瀏覽 第 1/2 頁 (50%) 目前顯示: 第 1~23 行 (h)說明 (←)離開\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
+    encoding::encode(&format!("\x1b[2J\x1b[HInline image synthetic reading page\x1b[3;1H{origin}/colours.png\x1b[4;1HText below first picture: SELECT THIS ROW\x1b[6;1H{origin}/missing.png\x1b[7;1HText below failed picture\x1b[24;1H\x1b[7m 瀏覽 第 1/2 頁 (50%) 目前顯示: 第 1~23 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
 }
 pub(super) fn inline_second_page(origin: Option<&str>) -> Result<Vec<u8>, String> {
     let origin = origin.ok_or("inline page probe needs a loopback origin")?;
-    encoding::encode(&format!("\x1b[2J\x1b[HInline image PAGE TWO: cached image moves below row 9\x1b[3;1H{origin}/missing.png\x1b[9;1H{origin}/colours.png\x1b[10;1HRepeated URL: first expansion stays at its original line\x1b[14;1H{origin}/colours-two.png\x1b[15;1HText under a new retained image\x1b[24;1H\x1b[7m 瀏覽 第 2/2 頁 (100%) 目前顯示: 第 24~46 行 (h)說明 (←)離開\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
+    encoding::encode(&format!("\x1b[2J\x1b[HInline image PAGE TWO: cached image moves below row 9\x1b[3;1H{origin}/missing.png\x1b[9;1H{origin}/colours.png\x1b[10;1HRepeated URL: first expansion stays at its original line\x1b[14;1H{origin}/colours-two.png\x1b[15;1HText under a new retained image\x1b[24;1H\x1b[7m 瀏覽 第 2/2 頁 (100%) 目前顯示: 第 24~46 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
 }
 
 pub(super) fn osc8_sample(media_origin: Option<&str>) -> Result<Vec<u8>, String> {
