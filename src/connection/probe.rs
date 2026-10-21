@@ -23,7 +23,7 @@ pub(super) enum Scenario {
     Filters,
     Surface,
     PointerRows,
-    InlinePages { second: Vec<u8> },
+    InlinePages { pages: Vec<Vec<u8>>, delay_ms: u64 },
 }
 
 #[derive(Clone, Copy)]
@@ -308,12 +308,18 @@ pub(super) fn article_page(name: &str) -> Result<Vec<u8>, String> {
     let data: serde_json::Value =
         serde_json::from_str(include_str!("../../tests/fixtures/article-open.json"))
             .map_err(|e| e.to_string())?;
-    crate::encoding::encode(
+    let mut page = crate::encoding::encode(
         data["screens"][name]
             .as_str()
             .ok_or("missing article-open scene")?,
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    // Destination probes publish a complete one-page synthetic article.
+    // Long-article loading has its own peer with exact paging expectations.
+    if name.starts_with("reading_") {
+        page.extend(crate::encoding::encode("\x1b[24;1H\x1b[30;47m\x1b[2K瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (h)說明 (←)離開\x1b[0m\x1b[24;80H").map_err(|e|e.to_string())?);
+    }
+    Ok(page)
 }
 const ARTICLE_FIRST_OPEN: &[(&[u8], &str)] = &[
     (b"f", "boards"),
@@ -679,17 +685,22 @@ pub(super) async fn serve(
         if matches!(scenario, Scenario::Window) {
             return window(&mut socket).await;
         }
-        if let Scenario::InlinePages {second} = scenario {
+        if let Scenario::InlinePages {pages,delay_ms} = scenario {
+            let started=std::time::Instant::now();
+            for (index, second) in pages.into_iter().enumerate() {
             let received=socket.next().await;
             if !matches!(&received,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"\x1b[6~") {
                 return Err(format!("cached reading probe expected exactly one PageDown; received {received:?}"));
             }
-            // A complete first redraw is followed by a fragmented second page.
+            eprintln!("synthetic article page {} requested at {}ms",index+2,started.elapsed().as_millis());
+            // Each response is deliberately fragmented; local history must not refetch.
             // Historical browsing must not send PageUp or refetch old images.
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
             let split=second.len()/2;
             socket.send(Message::Binary(second[..split].to_vec().into())).await.map_err(|e|e.to_string())?;
             tokio::time::sleep(std::time::Duration::from_millis(150)).await;
             socket.send(Message::Binary(second[split..].to_vec().into())).await.map_err(|e|e.to_string())?;
+            }
             return match socket.next().await {
                 Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
                 _=>Err("cached reading must browse history locally and then Close without further station bytes".into()),
@@ -726,7 +737,11 @@ pub(super) async fn serve(
                 (b"\x1b[A\r", navigation_page("list")?),
                 (b"\x1b[6~", navigation_page("list_dense")?),
                 (b"\x1b[5~", navigation_page("list")?),
-                (b"\x1b[B\r", navigation_page("reading_first")?),
+                (b"\x1b[B\r", {
+                    let mut page = navigation_page("reading_first")?;
+                    page.extend(crate::encoding::encode("\x1b[24;1H\x1b[30;47m\x1b[2K瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (h)說明 (←)離開\x1b[0m\x1b[24;80H").map_err(|e|e.to_string())?);
+                    page
+                }),
                 (b"\x1b[D", navigation_page("list")?),
             ];
             for (expected, page) in stages {

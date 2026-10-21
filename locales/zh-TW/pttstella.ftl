@@ -610,3 +610,12 @@ reply-focus-clear = 顯示全部推文
 reply-focus-hint = 點擊只看此 ID 的推文；再點一次恢復全部，Shift 或拖曳選字
 account-action-stale = 畫面已改變，請重新在 ID 上按右鍵。
 reply-focus = 切換只看此 ID 推文
+
+article-load-loading = 正在載入全文 · 已取得 { $lines } 行
+article-load-complete = 全文已載入 · { $lines } 行
+article-load-cancelled = 已取消全文載入 · 保留 { $lines } 行
+article-load-stopped = 讀取中斷 · 保留 { $lines } 行
+article-load-changed = 文章內容已變更，已停止載入
+article-load-limit = 已達全文載入上限，後續請用終端機模式閱讀
+article-load-cancel = 取消載入（Esc）
+article-load-resume = 繼續載入

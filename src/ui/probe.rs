@@ -103,6 +103,8 @@ pub(super) struct Checks {
     pub(super) rows_export_checked: bool,
     pub(super) settings_saved: bool,
     pub(super) navigation_requests: usize,
+    pub(super) load_cancels: usize,
+    pub(super) load_resumes: usize,
     pub(super) paste_single: bool,
     pub(super) paste_confirm: bool,
     pub(super) paste_cancel: bool,
@@ -509,7 +511,13 @@ pub(super) fn surface_sample(
         Some("sgr66") => sgr66_sample(true),
         Some("sgr66_legacy") => sgr66_sample(false),
         Some("osc8") => osc8_sample(media_origin),
-        Some("inline" | "inline_pages") => inline_sample(media_origin),
+        Some("inline_pages" | "terminal_pages") => inline_sample(media_origin),
+        Some("inline") => {
+            let mut bytes=inline_sample(media_origin)?;
+            bytes.extend_from_slice(&encoding::encode("\x1b[24;1H\x1b[7m\x1b[2K 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H").map_err(|e|e.to_string())?);
+            Ok(bytes)
+        },
+        Some("full_load") => full_load_page(1,media_origin),
         Some("short_links") => {
             let origin = media_origin.ok_or("short links probe requires a loopback media origin")?;
             encoding::encode(&format!("\x1b[2J\x1b[HShort article image links\x1b[2;1H{origin}/colours.png\x1b[3;1H\x1b]8;;{origin}/colours-two.png\x07Explicit image\x1b]8;;\x07\x1b[24;1H\x1b[7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~3 行 (h)說明 (←)離開\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
@@ -526,7 +534,7 @@ pub(super) fn surface_sample(
             encoding::encode(
                 sample["reading"]
                     .as_str()
-                    .ok_or("missing synthetic reading fixture")?,
+                    .ok_or("missing synthetic reading fixture")?.replace("第 2/3 頁 (66%) 目前顯示: 第 24~46 行","第 1/1 頁 (100%) 目前顯示: 第 1~23 行").as_str(),
             )
             .map_err(|e| e.to_string())
         }
@@ -535,7 +543,7 @@ pub(super) fn surface_sample(
             // Keep the reading cursor on the last row. A synthetic OSC 8
             // footer provides a real link under the accessibility editing host.
             let origin = media_origin.ok_or("context menu probe requires a media origin")?;
-            bytes.extend_from_slice(&encoding::encode(&format!("\x1b[24;1H\x1b[7m\x1b]8;;{origin}/colours.png\x07 瀏覽 第 1/2 頁 (50%) 目前顯示: 第 1~23 行 (h)說明 (←)離開\x1b]8;;\x07\x1b[0m\x1b[24;6H")).map_err(|e|e.to_string())?);
+            bytes.extend_from_slice(&encoding::encode(&format!("\x1b[24;1H\x1b[7m\x1b]8;;{origin}/colours.png\x07 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (h)說明 (←)離開\x1b]8;;\x07\x1b[0m\x1b[24;6H")).map_err(|e|e.to_string())?);
             Ok(bytes)
         }
         _ => preview(probe, media_origin),
@@ -614,6 +622,35 @@ pub(super) fn sgr66_sample(modern: bool) -> Result<Vec<u8>, String> {
     }
     bytes.extend_from_slice(b"\x1b[24;80H\x1b[?25l");
     Ok(bytes)
+}
+
+pub(super) fn full_load_page(page: usize, origin: Option<&str>) -> Result<Vec<u8>, String> {
+    let first = 1 + (page - 1) * 22;
+    let mut text = String::from("\x1b[2J\x1b[H");
+    for row in 0..23 {
+        let line = first + row;
+        let body = if line == 2 {
+            format!(
+                "{}/colours.png",
+                origin.ok_or("full load probe requires media origin")?
+            )
+        } else if line == 5 {
+            format!(
+                "{}/missing.png",
+                origin.ok_or("full load probe requires media origin")?
+            )
+        } else if line == 270 {
+            format!(
+                "{}/colours-two.png",
+                origin.ok_or("full load probe requires media origin")?
+            )
+        } else {
+            format!("Full article synthetic line {line:04}")
+        };
+        text.push_str(&format!("\x1b[{};1H{body}", row + 1));
+    }
+    text.push_str(&format!("\x1b[24;1H\x1b[30;47m 瀏覽 第 {page}/20 頁 ({}%) 目前顯示: 第 {first}~{} 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H",page*5,first+22));
+    encoding::encode(&text).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

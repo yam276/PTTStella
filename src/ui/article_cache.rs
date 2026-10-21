@@ -9,9 +9,31 @@ use pttstella::{
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
+use tokio::time::{Duration, Instant};
 
-pub(super) const MAX_LINES: usize = 256;
+const MAX_FETCH_STEPS: usize = 14;
 const MAX_LINK_BYTES: usize = 512 * 1024;
+const MAX_FULL_LINES: usize = 4096;
+const MAX_FULL_BYTES: usize = 32 * 1024 * 1024;
+const LOAD_RESPONSE_TIMEOUT: Duration = Duration::from_secs(6);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum LoadState {
+    Loading,
+    Complete,
+    Cancelled,
+    Stopped,
+    Changed,
+    Limit,
+}
+#[derive(Default)]
+struct Loader {
+    state: Option<LoadState>,
+    awaiting: Option<(u64, usize, usize, bool, Instant)>,
+    steps: usize,
+    at_head: bool,
+}
 
 #[derive(Clone, Serialize)]
 pub(super) struct Reading {
@@ -19,6 +41,7 @@ pub(super) struct Reading {
     pub first_line: usize,
     pub last_line: usize,
     pub end: bool,
+    pub load: Option<LoadState>,
 }
 struct Row {
     reply: Option<pttstella::filters::Push>,
@@ -33,7 +56,11 @@ pub(super) struct ArticleCache {
     end: Option<usize>,
     turning: bool,
     source_range: Option<(usize, usize)>,
+    source_rows: usize,
+    // PTT reports logical lines; wrapped rows need their own stable positions.
+    pages: BTreeMap<(usize, usize), (usize, usize)>,
     fetch: Option<Fetch>,
+    loader: Loader,
 }
 
 struct Fetch {
@@ -85,6 +112,102 @@ pub(super) fn reading_intent(bytes: &[u8]) -> Option<pttstella::navigation::Inte
     })
 }
 impl ArticleCache {
+    pub(super) fn loading(&self) -> bool {
+        self.loader.state == Some(LoadState::Loading)
+    }
+    pub(super) fn load_state(&self) -> Option<LoadState> {
+        self.loader.state
+    }
+    pub(super) fn load_deadline(&self) -> Option<Instant> {
+        self.loader.awaiting.map(|a| a.4)
+    }
+    pub(super) fn stop_load(&mut self, state: LoadState) {
+        if self.loading() {
+            self.loader.state = Some(state);
+            self.loader.awaiting = None;
+        }
+    }
+    pub(super) fn load_action(&mut self, id: u64, resume: bool) -> bool {
+        if id != self.serial || !self.active() {
+            return false;
+        }
+        if resume {
+            if !matches!(
+                self.loader.state,
+                Some(LoadState::Cancelled | LoadState::Stopped)
+            ) {
+                return false;
+            }
+            self.loader.state = Some(LoadState::Loading);
+            self.loader.steps = 0;
+            self.loader.awaiting = None;
+        } else {
+            if !self.loading() {
+                return false;
+            }
+            self.stop_load(LoadState::Cancelled);
+        }
+        true
+    }
+    pub(super) fn expire_load(&mut self, now: Instant) -> bool {
+        if self.load_deadline().is_some_and(|deadline| now >= deadline) {
+            self.stop_load(LoadState::Stopped);
+            return true;
+        }
+        false
+    }
+    pub(super) fn next_full_page(
+        &mut self,
+        context: &Context,
+        revision: u64,
+        now: Instant,
+    ) -> Option<pttstella::navigation::Intent> {
+        use pttstella::navigation::Intent;
+        if !self.loading() {
+            return None;
+        }
+        let Context::ArticleReading {
+            first_line,
+            last_line,
+            ..
+        } = context
+        else {
+            return None;
+        };
+        if self.loader.awaiting.is_some() {
+            return None;
+        }
+        self.rows.first_key_value()?;
+        let down = self.loader.at_head;
+        if self.loader.steps >= MAX_FULL_LINES * 2 + 2 {
+            self.stop_load(LoadState::Limit);
+            return None;
+        }
+        self.loader.steps += 1;
+        self.loader.awaiting = Some((
+            revision,
+            *first_line,
+            *last_line,
+            down,
+            now + LOAD_RESPONSE_TIMEOUT,
+        ));
+        Some(if down {
+            Intent::NextPage
+        } else {
+            Intent::First
+        })
+    }
+    fn reset_segment(&mut self) {
+        let state = self.loader.state.map(|s| {
+            if s == LoadState::Loading {
+                LoadState::Changed
+            } else {
+                s
+            }
+        });
+        self.clear();
+        self.loader.state = state;
+    }
     // Focus is applied after caching and must not discard unmasked history.
     pub(super) fn focus_version(&mut self, version: u64) {
         if let Some((_, policy)) = &mut self.scope {
@@ -100,6 +223,7 @@ impl ArticleCache {
         context: &Context,
         revision: u64,
     ) {
+        self.stop_load(LoadState::Cancelled);
         use pttstella::navigation::Intent;
         let Context::ArticleReading { first_line, .. } = context else {
             return;
@@ -136,6 +260,13 @@ impl ArticleCache {
         context: &Context,
         revision: u64,
     ) -> Option<pttstella::navigation::Intent> {
+        if matches!(
+            self.loader.state,
+            Some(LoadState::Changed | LoadState::Limit)
+        ) {
+            self.fetch = None;
+            return None;
+        }
         let fetch = self.fetch.as_ref()?;
         if revision == fetch.revision {
             return None;
@@ -150,7 +281,7 @@ impl ArticleCache {
             return None;
         };
         if self.rows.contains_key(&fetch.target)
-            || fetch.steps >= MAX_LINES.div_ceil(22) + 2
+            || fetch.steps >= MAX_FETCH_STEPS
             || *first_line == fetch.previous
             || fetch.down && *percent == 100
             || !fetch.down && *first_line == 1
@@ -227,96 +358,262 @@ impl ArticleCache {
             && last_line - first_line < source.rows.saturating_sub(1)
             && !(self.turning && self.source_range == Some((first_line, last_line)))
         {
-            let previous = self.rows.first_key_value().map(|(line, _)| *line);
-            if first_line == 1
-                && (1..=3.min(last_line)).any(|line| {
-                    self.rows.get(&line).is_some_and(|known| {
-                        let incoming: Vec<_> = source
-                            .glyphs
-                            .iter()
-                            .filter(|g| g.row == line - 1)
-                            .cloned()
-                            .map(|mut g| {
-                                g.row = 0;
-                                g
-                            })
-                            .collect();
-                        incoming != known.glyphs
-                    })
-                })
-            {
-                // A changed opening header cannot inherit another document's tail.
-                self.clear();
-            }
-            if let (Some((&first, _)), Some((&last, _))) =
-                (self.rows.first_key_value(), self.rows.last_key_value())
-                && (last_line.saturating_add(1) < first || first_line > last.saturating_add(1))
-            {
-                // An explicit Home/End or an unobserved range is a new segment;
-                // never fill a gap with guessed text.
-                self.clear();
-            }
-            if self.scope.is_none() {
-                self.serial = self.serial.saturating_add(1);
-            }
-            self.scope = Some((paint.generation, paint.presentation));
-            for line in first_line..=last_line {
-                let row = line - first_line;
-                let glyphs = source
-                    .glyphs
-                    .iter()
-                    .filter(|g| g.row == row)
-                    .cloned()
-                    .map(|mut g| {
-                        g.row = 0;
-                        g
-                    })
-                    .collect();
-                let hyperlinks = source
-                    .hyperlinks
-                    .iter()
-                    .filter_map(|link| {
-                        let spans: Vec<_> = link
-                            .spans
-                            .iter()
-                            .filter(|s| s.row == row)
-                            .cloned()
-                            .map(|mut s| {
-                                s.row = 0;
-                                s
-                            })
-                            .collect();
-                        (!spans.is_empty()).then(|| Hyperlink {
-                            target: link.target.clone(),
-                            spans,
+            'page: {
+                if matches!(
+                    self.loader.state,
+                    Some(LoadState::Limit | LoadState::Changed)
+                ) {
+                    break 'page;
+                }
+                if first_line == 1 && self.loader.awaiting.is_some_and(|a| !a.3) {
+                    self.rows.clear();
+                    self.end = None;
+                    self.source_range = None;
+                    self.source_rows = 0;
+                    self.pages.clear();
+                    self.loader.awaiting = None;
+                }
+                if first_line == 1 {
+                    self.loader.at_head = true;
+                }
+                if first_line == 1
+                    && (1..=3.min(last_line)).any(|line| {
+                        self.rows.get(&line).is_some_and(|known| {
+                            let incoming: Vec<_> = source
+                                .glyphs
+                                .iter()
+                                .filter(|g| g.row == line - 1)
+                                .cloned()
+                                .map(|mut g| {
+                                    g.row = 0;
+                                    g
+                                })
+                                .collect();
+                            incoming != known.glyphs
                         })
                     })
-                    .collect();
-                self.rows.insert(
-                    line,
-                    Row {
-                        glyphs,
-                        hyperlinks,
-                        reply: paint.replies.iter().find(|reply| reply.row == row).cloned(),
-                    },
-                );
-            }
-            if percent == 100 {
-                self.end = Some(last_line);
-                self.rows.retain(|line, _| *line <= last_line);
-            } else if self.end.is_some_and(|end| last_line >= end) {
-                self.end = None;
-            }
-            let forward = previous.is_none_or(|first| first_line >= first);
-            while self.rows.len() > MAX_LINES || self.link_bytes() > MAX_LINK_BYTES {
-                if forward {
-                    self.rows.pop_first();
-                } else {
-                    self.rows.pop_last();
+                {
+                    // A changed opening header cannot inherit another document's tail.
+                    self.loader.state = Some(LoadState::Changed);
+                    self.loader.awaiting = None;
+                    break 'page;
+                }
+                if let Some((first, last)) = self.source_range
+                    && !self.pages.contains_key(&(first_line, last_line))
+                    && (last_line.saturating_add(1) < first || first_line > last.saturating_add(1))
+                {
+                    // An explicit Home/End or an unobserved range is a new segment;
+                    // never fill a gap with guessed text.
+                    if self.loading() {
+                        self.stop_load(LoadState::Changed);
+                        break 'page;
+                    }
+                    self.reset_segment();
+                }
+                if self.scope.is_none() {
+                    self.serial = self.serial.saturating_add(1);
+                }
+                self.scope = Some((paint.generation, paint.presentation));
+                let mut incoming = Vec::new();
+                let body_rows = source
+                    .glyphs
+                    .iter()
+                    .filter(|g| {
+                        g.row + 1 < source.rows
+                            && (g.text.chars().any(|c| !c.is_whitespace())
+                                || g.left.bg != 0
+                                || g.right.bg != 0
+                                || g.left.inverse
+                                || g.right.inverse)
+                    })
+                    .map(|g| g.row + 1)
+                    .max()
+                    .unwrap_or(0)
+                    .max(last_line - first_line + 1);
+                for row in 0..body_rows {
+                    let line = first_line + row;
+                    let glyphs = source
+                        .glyphs
+                        .iter()
+                        .filter(|g| g.row == row)
+                        .cloned()
+                        .map(|mut g| {
+                            g.row = 0;
+                            g
+                        })
+                        .collect();
+                    let hyperlinks = source
+                        .hyperlinks
+                        .iter()
+                        .filter_map(|link| {
+                            let spans: Vec<_> = link
+                                .spans
+                                .iter()
+                                .filter(|s| s.row == row)
+                                .cloned()
+                                .map(|mut s| {
+                                    s.row = 0;
+                                    s
+                                })
+                                .collect();
+                            (!spans.is_empty()).then(|| Hyperlink {
+                                target: link.target.clone(),
+                                spans,
+                            })
+                        })
+                        .collect();
+                    incoming.push((
+                        line,
+                        Row {
+                            glyphs,
+                            hyperlinks,
+                            reply: paint.replies.iter().find(|reply| reply.row == row).cloned(),
+                        },
+                    ));
+                }
+                {
+                    if let Some((sent, old_first, old_last, down, _)) = self.loader.awaiting
+                        && source.revision != sent
+                        && (first_line, last_line) != (old_first, old_last)
+                    {
+                        if down && last_line <= old_last || !down && first_line >= old_first {
+                            self.loader.state = Some(LoadState::Changed);
+                            self.loader.awaiting = None;
+                            break 'page;
+                        }
+                        self.loader.awaiting = None;
+                    }
+                    if self.loader.state.is_none() {
+                        self.loader.state = Some(LoadState::Loading);
+                    }
+                    let start = if let Some(&(start, count)) =
+                        self.pages.get(&(first_line, last_line))
+                    {
+                        if count != body_rows {
+                            self.loader.state = Some(LoadState::Changed);
+                            self.loader.awaiting = None;
+                            break 'page;
+                        }
+                        start
+                    } else if let Some((previous_first, previous_last)) = self.source_range {
+                        if first_line < previous_first {
+                            let minimum =
+                                last_line.saturating_add(1).saturating_sub(previous_first);
+                            let maximum = (minimum
+                                + body_rows.saturating_sub(last_line - first_line + 1))
+                            .min(incoming.len())
+                            .min(self.rows.len());
+                            let overlap = (minimum..=maximum).find(|n| {
+                                incoming
+                                    .iter()
+                                    .rev()
+                                    .take(*n)
+                                    .collect::<Vec<_>>()
+                                    .iter()
+                                    .rev()
+                                    .zip(self.rows.values())
+                                    .all(|((_, row), known)| row.glyphs == known.glyphs)
+                            });
+                            let start = overlap.and_then(|n| {
+                                self.rows.first_key_value()?.0.checked_sub(body_rows - n)
+                            });
+                            let Some(start) = start.filter(|n| *n > 0) else {
+                                self.loader.state = Some(LoadState::Changed);
+                                self.loader.awaiting = None;
+                                self.fetch = None;
+                                break 'page;
+                            };
+                            start
+                        } else {
+                            let minimum =
+                                previous_last.saturating_add(1).saturating_sub(first_line);
+                            let maximum = (minimum
+                                + self
+                                    .source_rows
+                                    .saturating_sub(previous_last - previous_first + 1))
+                            .min(incoming.len())
+                            .min(self.rows.len());
+                            let matched = (minimum..=maximum).find(|n| {
+                                let suffix = self.rows.values().rev().take(*n).collect::<Vec<_>>();
+                                suffix
+                                    .iter()
+                                    .rev()
+                                    .zip(incoming.iter())
+                                    .all(|(known, (_, row))| known.glyphs == row.glyphs)
+                            });
+                            let Some(overlap) = matched else {
+                                self.loader.state = Some(LoadState::Changed);
+                                self.loader.awaiting = None;
+                                break 'page;
+                            };
+                            self.rows.last_key_value().map_or(1, |(n, _)| n + 1) - overlap
+                        }
+                    } else {
+                        first_line
+                    };
+                    incoming = incoming
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, (_, r))| (start + i, r))
+                        .collect();
+                    let size = self
+                        .rows
+                        .iter()
+                        .filter(|(line, _)| !incoming.iter().any(|(n, _)| n == *line))
+                        .map(|(_, r)| row_bytes(r))
+                        .sum::<usize>()
+                        + incoming.iter().map(|(_, r)| row_bytes(r)).sum::<usize>();
+                    let count = self
+                        .rows
+                        .keys()
+                        .filter(|line| !incoming.iter().any(|(n, _)| n == *line))
+                        .count()
+                        + incoming.len();
+                    if count > MAX_FULL_LINES
+                        || self.pages.len() >= MAX_FULL_LINES * 2 + 2
+                        || size > MAX_FULL_BYTES
+                        || self.link_bytes()
+                            + incoming
+                                .iter()
+                                .flat_map(|(_, r)| &r.hyperlinks)
+                                .filter_map(|l| l.target.as_ref())
+                                .map(String::len)
+                                .sum::<usize>()
+                            > MAX_LINK_BYTES
+                    {
+                        self.stop_load(LoadState::Limit);
+                        break 'page;
+                    }
+                }
+                let page_start = incoming.first().map_or(first_line, |(n, _)| *n);
+                let page_end = page_start + body_rows - 1;
+                self.pages
+                    .insert((first_line, last_line), (page_start, body_rows));
+                self.rows.extend(incoming);
+                if percent == 100 {
+                    let end = page_end;
+                    self.end = Some(end);
+                    self.rows.retain(|line, _| *line <= end);
+                    self.pages
+                        .retain(|_, (start, count)| *start + *count - 1 <= end);
+                } else if self.end.is_some_and(|end| page_end >= end) {
+                    self.end = None;
+                }
+                self.turning = false;
+                self.source_range = Some((first_line, last_line));
+                self.source_rows = body_rows;
+                if self.loading()
+                    && self.loader.at_head
+                    && self.rows.first_key_value().is_some_and(|(n, _)| *n == 1)
+                    && self
+                        .rows
+                        .last_key_value()
+                        .is_some_and(|(n, _)| self.end == Some(*n))
+                {
+                    self.loader.state = Some(LoadState::Complete);
+                    self.loader.awaiting = None;
                 }
             }
-            self.turning = false;
-            self.source_range = Some((first_line, last_line));
         }
         let (Some((&first, _)), Some((&last, _))) =
             (self.rows.first_key_value(), self.rows.last_key_value())
@@ -411,6 +708,7 @@ impl ArticleCache {
             first_line: first,
             last_line: last,
             end: self.end == Some(last),
+            load: self.loader.state,
         });
         paint.frame = frame;
         super::presentation::refresh_links(paint);
@@ -425,6 +723,21 @@ impl ArticleCache {
     }
 }
 
+fn row_bytes(row: &Row) -> usize {
+    row.glyphs.capacity() * std::mem::size_of::<Glyph>()
+        + row.glyphs.iter().map(|g| g.text.capacity()).sum::<usize>()
+        + row.reply.as_ref().map_or(0, |reply| reply.id.capacity())
+        + row.hyperlinks.capacity() * std::mem::size_of::<Hyperlink>()
+        + row
+            .hyperlinks
+            .iter()
+            .map(|l| {
+                l.target.as_ref().map_or(0, String::capacity)
+                    + l.spans.capacity()
+                        * std::mem::size_of::<pttstella::screen::hyperlinks::Span>()
+            })
+            .sum::<usize>()
+}
 #[cfg(test)]
 #[path = "article_cache_tests.rs"]
 mod tests;

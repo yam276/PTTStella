@@ -79,7 +79,17 @@ pub fn app(props: AppProps) -> Element {
             .and_then(|bytes| {
                 if boards_probing {
                     Connection::start_board_probe()
-                } else if sample_case.as_deref() == Some("inline_pages") {
+                } else if sample_case.as_deref() == Some("full_load") {
+                    Connection::start_article_load_probe(
+                        bytes,
+                        (2..=20)
+                            .map(|page| super::probe::full_load_page(page, media_origin.as_deref()))
+                            .collect::<Result<Vec<_>, _>>()?,
+                    )
+                } else if matches!(
+                    sample_case.as_deref(),
+                    Some("inline_pages" | "terminal_pages")
+                ) {
                     Connection::start_inline_pages_probe(
                         bytes,
                         super::probe::inline_second_page(media_origin.as_deref())?,
@@ -298,6 +308,11 @@ pub fn app(props: AppProps) -> Element {
                 span { id: "browse-hint" }
                 }
             }
+            }
+            div { id: "article-load", class: "article-load", hidden: true,
+                output { id: "article-load-status", role: "status" }
+                button { id: "article-load-cancel", {pttstella::msg!("article-load-cancel")} }
+                button { id: "article-load-resume", hidden: true, {pttstella::msg!("article-load-resume")} }
             }
             div { class: "settings-host", SettingsForm{} }
             section { class: "workspace",

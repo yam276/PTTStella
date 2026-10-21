@@ -616,3 +616,12 @@ reply-focus-clear = Show all replies
 reply-focus-hint = Click to focus this ID; click again to show all. Shift or drag to select text.
 account-action-stale = The screen changed. Right-click the ID again.
 reply-focus = Toggle replies from this ID
+
+article-load-loading = Loading article · { $lines } lines received
+article-load-complete = Article loaded · { $lines } lines
+article-load-cancelled = Loading cancelled · { $lines } lines retained
+article-load-stopped = Loading interrupted · { $lines } lines retained
+article-load-changed = Article content changed; loading stopped
+article-load-limit = Article loading limit reached; use terminal mode to continue
+article-load-cancel = Cancel loading (Esc)
+article-load-resume = Resume loading

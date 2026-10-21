@@ -98,6 +98,7 @@ fn adjacent_cached_pages_merge_ids_but_standalone_png_and_new_segments_keep_the_
         pttstella::text::rows(&fresh.frame).unwrap()[0].cells(3, 8),
         Some("Alice")
     );
+    cache.stop_load(LoadState::Cancelled);
     let mut gap = reply_page(100, 0);
     cache.project(&mut gap);
     super::super::presentation::merge_replies(&mut gap, &next_ids);
@@ -153,6 +154,7 @@ fn gaps_generation_filter_policy_and_nonreading_input_reset_the_scope() {
     let mut cache = ArticleCache::default();
     let mut first = page(1, 23, 10);
     cache.project(&mut first);
+    cache.stop_load(LoadState::Cancelled);
     let mut jump = page(100, 122, 100);
     cache.project(&mut jump);
     assert!(jump.article.as_ref().unwrap().id > first.article.unwrap().id);
@@ -175,23 +177,28 @@ fn gaps_generation_filter_policy_and_nonreading_input_reset_the_scope() {
     assert_eq!(other.article.unwrap().first_line, 50);
 }
 #[test]
-fn both_directions_evict_only_the_far_edge_and_never_exceed_the_bound() {
+fn both_directions_revisit_known_pages_without_discarding_full_history() {
     let mut cache = ArticleCache::default();
     for first in (1..=441).step_by(22) {
         let mut p = page(first, first + 22, 50);
         cache.project(&mut p);
-        assert!(p.frame.rows <= MAX_LINES + 1);
     }
-    assert_eq!(cache.rows.len(), MAX_LINES);
-    assert_eq!(*cache.rows.last_key_value().unwrap().0, 463);
+    assert_eq!(cache.rows.len(), 463);
+    cache.stop_load(LoadState::Cancelled);
     for first in (0..=20).rev().map(|i| 1 + i * 22) {
         let mut p = page(first, first + 22, 50);
         cache.project(&mut p);
-        assert!(p.frame.rows <= MAX_LINES + 1);
+        assert_eq!(
+            lines(&p),
+            (1..=463)
+                .map(|n| format!("line {n:04}"))
+                .collect::<Vec<_>>()
+        );
     }
     assert_eq!(*cache.rows.first_key_value().unwrap().0, 1);
-    assert_eq!(*cache.rows.last_key_value().unwrap().0, 256);
+    assert_eq!(*cache.rows.last_key_value().unwrap().0, 463);
 }
+
 #[test]
 fn cached_historical_links_and_dual_colour_glyphs_keep_their_exact_row_owner() {
     let mut cache = ArticleCache::default();
@@ -262,12 +269,17 @@ fn changed_opening_header_and_a_shorter_confirmed_end_cannot_leave_an_old_tail()
     assert!(shorter.article.unwrap().end);
     let mut second = page(22, 44, 100);
     cache.project(&mut second);
-    let id = second.article.unwrap().id;
+    let id = second.article.as_ref().unwrap().id;
+    let expected = lines(&second);
     let mut changed = page(1, 23, 50);
     changed.frame.glyphs[0].text = "X".into();
     cache.project(&mut changed);
-    assert!(changed.article.as_ref().unwrap().id > id);
-    assert_eq!(lines(&changed).len(), 23);
+    assert_eq!(changed.article.as_ref().unwrap().id, id);
+    assert_eq!(
+        changed.article.as_ref().unwrap().load,
+        Some(LoadState::Changed)
+    );
+    assert_eq!(lines(&changed), expected);
 }
 
 #[test]
@@ -381,4 +393,170 @@ fn cached_footer_keeps_its_explicit_link_at_the_live_footer_row() {
         assert_eq!(next.links.len(), 1); // Never retain duplicate historical footers.
         assert_eq!(next.links[0].row, last + 23);
     }
+}
+
+#[test]
+fn full_loading_retains_more_than_the_old_window_and_completes_only_with_both_ends() {
+    let mut cache = ArticleCache::default();
+    let now = Instant::now();
+    let mut first = page(1, 23, 1);
+    cache.project(&mut first);
+    let id = first.article.unwrap().id;
+    for index in 1..=20 {
+        let start = 1 + (index - 1) * 22;
+        let context = Context::ArticleReading {
+            first_line: start,
+            last_line: start + 22,
+            percent: if index == 20 { 100 } else { 50 },
+        };
+        if index > 1 {
+            let mut next = page(start, start + 22, if index == 20 { 100 } else { 50 });
+            cache.project(&mut next);
+            assert_eq!(next.article.as_ref().unwrap().id, id);
+        }
+        let result = cache.next_full_page(&context, start as u64, now);
+        if index < 20 {
+            assert_eq!(result, Some(Intent::NextPage));
+            assert!(cache.next_full_page(&context, start as u64, now).is_none());
+        } else {
+            assert!(result.is_none());
+            assert_eq!(cache.load_state(), Some(LoadState::Complete));
+        }
+    }
+    assert_eq!(cache.rows.len(), 441);
+    let mut final_page = page(419, 441, 100);
+    cache.project(&mut final_page);
+    assert_eq!(
+        lines(&final_page),
+        (1..=441)
+            .map(|n| format!("line {n:04}"))
+            .collect::<Vec<_>>()
+    );
+}
+#[test]
+fn full_loading_cancel_keeps_late_page_but_never_restarts_without_a_current_resume() {
+    let mut cache = ArticleCache::default();
+    let now = Instant::now();
+    let mut first = page(1, 23, 10);
+    cache.project(&mut first);
+    let id = first.article.unwrap().id;
+    assert_eq!(
+        cache.next_full_page(&first.navigation, 1, now),
+        Some(Intent::NextPage)
+    );
+    assert!(!cache.load_action(id + 1, false));
+    assert!(cache.load_action(id, false));
+    let mut late = page(22, 44, 20);
+    cache.project(&mut late);
+    assert_eq!(late.article.unwrap().load, Some(LoadState::Cancelled));
+    assert_eq!(cache.rows.len(), 44);
+    assert!(cache.next_full_page(&late.navigation, 22, now).is_none());
+    assert!(cache.load_deadline().is_none());
+    assert!(cache.load_action(id, true));
+    assert_eq!(
+        cache.next_full_page(&late.navigation, 22, now),
+        Some(Intent::NextPage)
+    );
+    cache.input(&late.navigation, b"\x1b[D");
+    assert!(!cache.load_action(id, true));
+    assert!(cache.load_deadline().is_none());
+}
+#[test]
+fn full_loading_waits_for_a_real_range_and_times_out_without_retries() {
+    let mut cache = ArticleCache::default();
+    let now = Instant::now();
+    let mut first = page(1, 23, 10);
+    cache.project(&mut first);
+    assert_eq!(
+        cache.next_full_page(&first.navigation, 1, now),
+        Some(Intent::NextPage)
+    );
+    assert!(cache.next_full_page(&first.navigation, 2, now).is_none());
+    assert!(!cache.expire_load(now + Duration::from_secs(5)));
+    assert!(cache.expire_load(now + LOAD_RESPONSE_TIMEOUT));
+    assert_eq!(cache.load_state(), Some(LoadState::Stopped));
+    assert!(cache.next_full_page(&first.navigation, 3, now).is_none());
+    assert!(!cache.expire_load(now + Duration::from_secs(60)));
+}
+#[test]
+fn full_loading_observed_response_clears_network_deadline_even_while_ui_is_paused() {
+    let mut cache = ArticleCache::default();
+    let now = Instant::now();
+    let mut first = page(50, 72, 50);
+    cache.project(&mut first);
+    assert_eq!(
+        cache.next_full_page(&first.navigation, 50, now),
+        Some(Intent::First)
+    );
+    let mut head = page(1, 23, 10);
+    cache.project(&mut head);
+    assert!(cache.load_deadline().is_none());
+    assert!(!cache.expire_load(now + Duration::from_secs(60)));
+    assert_eq!(
+        cache.next_full_page(&head.navigation, 1, now),
+        Some(Intent::NextPage)
+    );
+    assert_eq!(cache.rows.len(), 23);
+}
+
+#[test]
+fn full_loading_changed_overlap_and_capacity_stop_without_claiming_complete() {
+    let mut cache = ArticleCache::default();
+    let mut first = page(1, 23, 10);
+    cache.project(&mut first);
+    let now = Instant::now();
+    cache.next_full_page(&first.navigation, 1, now);
+    let mut changed = page(22, 44, 100);
+    changed.frame.glyphs[0].text = "X".into();
+    cache.project(&mut changed);
+    assert_eq!(cache.load_state(), Some(LoadState::Changed));
+    assert_eq!(cache.rows.len(), 23);
+    assert!(!changed.article.unwrap().end);
+    assert!(cache.next_full_page(&changed.navigation, 22, now).is_none());
+    // A narrow but complete synthetic grid exercises the production row limit
+    // without allocating thousands of full-width text frames in the test.
+    let mut cache = ArticleCache::default();
+    for start in (1..=MAX_FULL_LINES + 22).step_by(22) {
+        let mut p = page(start, start + 22, 50);
+        p.frame.cols = 1;
+        p.frame.glyphs.retain(|g| g.col == 0);
+        cache.project(&mut p);
+        assert!(cache.rows.len() <= MAX_FULL_LINES);
+    }
+    assert_eq!(cache.load_state(), Some(LoadState::Limit));
+    assert_eq!(*cache.rows.first_key_value().unwrap().0, 1);
+    assert!(cache.load_deadline().is_none());
+}
+
+#[test]
+fn full_loading_matches_wrapped_physical_rows_instead_of_losing_them_to_logical_line_numbers() {
+    fn wrapped(first: usize, last: usize, percent: u8, body: &[String]) -> Paint {
+        let mut p = page(first, last, percent);
+        let mut screen = Screen::new(80, 24).unwrap();
+        for (row, line) in body.iter().enumerate() {
+            screen.feed(format!("\x1b[{};1H{line}", row + 1).as_bytes());
+        }
+        p.frame = screen.frame();
+        p.frame.revision = first as u64;
+        p
+    }
+    let mut initial = (1..=21).map(|n| format!("row {n:04}")).collect::<Vec<_>>();
+    initial.extend(["wrapped first part".into(), "wrapped second part".into()]);
+    let mut next = vec!["wrapped first part".into(), "wrapped second part".into()];
+    next.extend((23..=43).map(|n| format!("row {n:04}")));
+    let mut cache = ArticleCache::default();
+    let mut first = wrapped(1, 22, 50, &initial);
+    cache.project(&mut first);
+    cache.next_full_page(&first.navigation, 1, Instant::now());
+    let mut last = wrapped(22, 43, 100, &next);
+    cache.project(&mut last);
+    initial.extend(next.iter().skip(2).cloned());
+    assert_eq!(lines(&last), initial);
+    assert_eq!(last.article.unwrap().load, Some(LoadState::Complete));
+    let mut historic = wrapped(1, 22, 50, &initial[..23]);
+    cache.project(&mut historic);
+    assert_eq!(lines(&historic), initial);
+    let mut tail = wrapped(22, 43, 100, &next);
+    cache.project(&mut tail);
+    assert_eq!(lines(&tail), initial);
 }
