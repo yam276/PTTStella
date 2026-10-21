@@ -84,7 +84,6 @@ pub(super) enum Packet<'a> {
         intent: pttstella::navigation::Intent,
     },
     SettingsOpen(Box<SettingsOpen>),
-    SettingsLaunch(super::protocol::SettingsFeature),
     SettingsVisibility(bool),
     FontPreview(FontPreview),
     FontCatalog {

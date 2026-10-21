@@ -23,30 +23,31 @@ function searchSettings(entries,query){
     const words=query.slice(0,128).normalize('NFKC').toLowerCase().trim().split(/\s+/).filter(Boolean);
     return words.length?entries.filter(entry=>words.every(word=>entry.search.includes(word))):[];
 }
-function createSettingsNavigation({document,tr,launch}){
+function createSettingsNavigation({document,tr,changed=()=>{}}){
     const search=document.getElementById('settings-search'),results=document.getElementById('settings-results');
     const pages=[...document.querySelectorAll('[data-settings-page]')],categories=[...document.querySelectorAll('[data-settings-category]')];
     let entries=settingsCatalog(tr);let current='general';
-    function show(page,id){
-        current=page;document.getElementById("font-defaults").hidden=!["general","appearance","input","media"].includes(page);search.value='';results.hidden=true;results.replaceChildren();
+    function show(page,id,event){
+        const previous=current;current=page;document.getElementById("font-defaults").hidden=!["general","appearance","input","media"].includes(page);search.value='';results.hidden=true;results.replaceChildren();
         for(const section of pages)section.hidden=section.dataset.settingsPage!==page;
         for(const button of categories)button.setAttribute('aria-current',button.dataset.settingsCategory===page?'page':'false');
         document.querySelectorAll('.settings-hit').forEach(node=>node.classList.remove('settings-hit'));
+        changed(page,previous,event);
         const field=id?document.getElementById(id):null;
         if(field){field.classList.add('settings-hit');field.scrollIntoView({block:'center'});field.focus();}
     }
     function find(){
         if(!search.value.trim()){show(current);search.focus();return;}
+        changed(null,current);
         for(const section of pages)section.hidden=true;
         results.hidden=false;results.replaceChildren();
         const found=searchSettings(entries,search.value);
         if(!found.length){results.textContent=tr('settings-search-empty');return;}
         for(const entry of found){
             const button=document.createElement('button');button.type='button';button.textContent=entry.label+' · '+tr('settings-page-'+entry.page);
-            button.addEventListener('click',e=>{if(e.isTrusted)show(entry.page,entry.id);});results.append(button);
+            button.addEventListener('click',e=>{if(e.isTrusted)show(entry.page,entry.id,e);});results.append(button);
         }
     }
-    const bindings=[[search,'input',find],...categories.map(button=>[button,'click',e=>{if(e.isTrusted)show(button.dataset.settingsCategory);}]),
-        ...[...document.querySelectorAll('[data-settings-launch]')].map(button=>[button,'click',e=>{if(e.isTrusted)launch(button.dataset.settingsLaunch,e);}])];
-    show('general');return {bindings,show,relocalize(){entries=settingsCatalog(tr);if(search.value.trim())find();},current:()=>current,destroy(){results.replaceChildren();}};
+    const bindings=[[search,'input',find],...categories.map(button=>[button,'click',e=>{if(e.isTrusted)show(button.dataset.settingsCategory,null,e);}])];
+    show('general');return {bindings,show,relocalize(){entries=settingsCatalog(tr);if(search.value.trim())find();},current:()=>current,visible:()=>results.hidden?current:null,destroy(){results.replaceChildren();}};
 }

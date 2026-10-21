@@ -1021,9 +1021,6 @@ async fn run(
                         eval.send(Packet::SitesResult{request,data:sites.snapshot(receiver.borrow().site.clone()),feedback}).map_err(|e|e.to_string())?;
                     },
                     SurfaceEvent::SettingsVisibility {open} => {settings_visible=open;eval.send(Packet::SettingsVisibility(open)).map_err(|e|e.to_string())?;},
-                    SurfaceEvent::SettingsLaunch {feature,..} => {
-                        eval.send(Packet::SettingsLaunch(feature)).map_err(|e|e.to_string())?;
-                    }
                     SurfaceEvent::SettingsOpen { trusted: _ } => {
                         settings_visible=true;connection.keep_alive_gate(receiver.borrow().stamp(),false);eval.send(Packet::SettingsVisibility(true)).map_err(|e|e.to_string())?;
                         eval.open_settings(preferences.store());

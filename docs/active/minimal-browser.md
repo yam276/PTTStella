@@ -4,13 +4,23 @@
 
 ## 目標
 
-目前交付為 `dist/macos-filter-colors-final/PTTStella.app`（2026-10-21，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-settings-ready/PTTStella.app`（2026-10-21，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 設定分類內嵌與列表作者右鍵（2026-10-21）
+
+依使用者要求，站點、黑白名單、帳號與隱私、關於與授權直接顯示於統一設定的內容欄，點分類或搜尋結果便展開；浮球／情境選單入口共用同一設定 owner。原表單、原子保存及明確送出規則保留，移除原 settings_launch 關閉後轉開對話框管線。內嵌表單不建立第二個 modal；授權文字不用再點 disclosure。離開帳號頁、開始搜尋與關閉設定清除密碼草稿及保存勾選，晚到結果不得重開已關閉表單或搶走隱藏頁焦點。原生驗證另抓到關閉子 dialog 的 WebView 焦點恢復會打斷搜尋；修正後完整連續輸入 sites，搜尋結果直接開站點表單。
+
+文章列表作者欄也可右鍵加入遮內容保留 ID、整行黑名單或白名單，沿用同一保存／投影。Rust 只提供已辨識列表的完整作者欄候選，欄內留白同屬該作者；標頭／日期／標題不推測帳號，整行遮黑不洩露隱藏 ID。重新核對已 ACK 畫面、session、revision、input epoch 及本機路由；閱讀頁的推文暫時篩選不延伸到列表。
+
+core 13 命令／2 replay（filters 19 項）、desktop lib 143／bin 116、全 targets Clippy、JS 193、Python tooling 70、fmt 與 docs 通過。macOS arm64 實際 Dioxus／WKWebView 的四分類自動展開、站點兩次保存、名單三策略保存／重開、密碼清除及搜尋連續輸入已觀察。account_articles 探針 passed，獨立 PNG 960×576 核對紅色保留作者、標題全黑、整行全黑及白名單亮青；原生剪貼簿預覽讀回同一遮罩、取消零站端 bytes。最終交付 short_reading 探針 passed，PNG、Close acknowledged、全部 owner join、exit 0，15 份 Mach-O loadable sections 與交付一致，strict ad-hoc 驗章通過。
+
+作者字格原生座標右鍵回 noWindowsAvailable，account_rule_actions 為 0；上面的表單保存不代替該操作驗收，仍交使用者手動驗收。Windows／Linux 原生 UI 本輪 not_ready。證據 .local/verification/settings-sections 保留初版及兩次搜尋焦點修正過程，focus-final 的首字失焦與未匯出 PNG 失敗紀錄未放行；ready 為最後通過版本。交付 dist/macos-settings-ready/PTTStella.app（release／arm64／ad-hoc，未公證）；前一版名單遮罩修復另已由使用者回報測試成功。
 
 ## 長文跨頁前景色重設造成中途停止（2026-10-21）
 
@@ -1045,4 +1055,4 @@ core 13 命令／2 replay、desktop lib 142 項、bin 85 項、全 targets Clipp
 
 保留 ID 的黑名單改為亮紅色；整行塗黑仍不畫出 ID，暫時揭露後以亮紅色辨識。白名單預設共用亮青色，可選 15 種可見 ANSI 前景色，另允許每 ID 覆寫或選回共用色。schema v4 保存全域共用色與 optional entry color，v1～v3 保留原策略並遷移至共用亮青、無覆寫；只在明確保存時改寫，備份／錯誤保留與名單上限不變。快取、來源 PNG、選取／複製及媒體皆消費同一 Rust 投影；連續推文後續 ID 的黑色合併仍優先。
 
-core 13 命令／2 replay（filters 18 項）、desktop lib 143、bin 115、全 targets Clippy、JS 187、fmt 與 docs 通過。macOS arm64 `filter_colors` 實際表單四次保存後，WebView 可見黑名單紅 ID 與內容遮罩、共用綠 ID 及個別紫 ID；獨立 PNG 解碼確認兩列內容全黑、三種 ID RGB 為 red／green／magenta，960×576，名單 v4 寫入值相符。Close acknowledged、全部 owner joined、exit 0。首輪 probe 漏接案例分派而進主選單，保留 failed 記錄，修正分派、bin／Clippy 重跑並另打包後才驗證；沒有用該次退出碼 0 當通過。證據 .local/verification/filter-colors，交付 dist/macos-filter-colors-final/PTTStella.app 為 release／arm64／ad-hoc，未公證。實站修復結果待同篇登入核對；Windows／Linux 原生本輪 not_ready，正文滑鼠仍由使用者驗收。
+core 13 命令／2 replay（filters 18 項）、desktop lib 143、bin 115、全 targets Clippy、JS 187、fmt 與 docs 通過。macOS arm64 `filter_colors` 實際表單四次保存後，WebView 可見黑名單紅 ID 與內容遮罩、共用綠 ID 及個別紫 ID；獨立 PNG 解碼確認兩列內容全黑、三種 ID RGB 為 red／green／magenta，960×576，名單 v4 寫入值相符。Close acknowledged、全部 owner joined、exit 0。首輪 probe 漏接案例分派而進主選單，保留 failed 記錄，修正分派、bin／Clippy 重跑並另打包後才驗證；沒有用該次退出碼 0 當通過。證據 .local/verification/filter-colors，交付 dist/macos-filter-colors-final/PTTStella.app 為 release／arm64／ad-hoc，未公證。使用者隨後回覆「我測試成功了」，實站名單遮罩修復記為使用者確認；Windows／Linux 原生本輪 not_ready，正文滑鼠仍由使用者驗收。

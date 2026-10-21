@@ -137,7 +137,7 @@ test("the tagged router delivers independent wire examples once and rejects lega
     const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8")+"\ncreateSurfaceRouter");
     const kinds=["localization","station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
         "hover_settings","tools_opacity","tools_access","sites_open","sites_result","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error","media_external",
-        "media_reset","reading_move","inline_open","inline_image","inline_error","inline_reset","settings_visibility","settings_launch","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","link_result","export_result"];
+        "media_reset","reading_move","inline_open","inline_image","inline_error","inline_reset","settings_visibility","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","link_result","export_result"];
     const calls=[],handlers=Object.fromEntries(kinds.map(kind=>[kind,payload=>calls.push({kind,payload})]));
     const route=create(handlers),examples=JSON.parse(readFileSync(new URL("../tests/fixtures/ui-packets.json",import.meta.url),"utf8"));
     for(const {packet} of examples){
@@ -328,4 +328,35 @@ test("allowlist shared and individual colors require explicit trusted saves and 
     ui.receive({state:"saved",allow_color:12,entries:[],message:"saved"});assert.equal(env.node("filters-default-color").value,"12");
     env.node("filters-policy").value="mask";env.fire("filters-policy","change");assert.equal(env.node("filters-color").disabled,true);
     env.fire("filters-close");assert.equal(env.node("filters-color").value,"");ui.destroy();
+});
+
+test('embedded login clears secret drafts on category exit and ignores late vault replies',()=>{
+ const env=environment('surface-login.js','createLoginDialog');let presentations=0;
+ const ui=env.create({manage:()=>true,present:dialog=>{presentations++;dialog.open=true;},visible:()=>false});
+ ui.request({isTrusted:true});assert.equal(presentations,1);assert.equal(env.sent.at(-1).kind,'login_open');
+ env.node('login-password').value='temporary draft';env.node('login-remember').checked=true;
+ ui.close({isTrusted:true,preventDefault(){}});
+ assert.equal(env.node('login-password').value,'');assert.equal(env.node('login-remember').checked,false);
+ ui.receive({state:'opened',account:'Alice',saved:true,message:'late'});
+ assert.equal(env.node('login-dialog').open,false);assert.equal(env.focus.length,0);
+ assert.ok(env.sent.every(packet=>packet.kind!=='login_submit'));
+ ui.request({isTrusted:true});ui.receive({state:'opened',account:'Alice',saved:true,message:'ready'});
+ assert.equal(env.node('login-account').value,'Alice');assert.equal(env.focus.length,0);ui.destroy();
+});
+test('embedded filters use the host without opening when the host is still loading',()=>{
+ const env=environment('surface-filters.js','createFiltersDialog');let managed=false;
+ const ui=env.create({manage:()=>managed,present:dialog=>{dialog.open=true;},visible:()=>false});
+ ui.request({isTrusted:true});assert.equal(env.sent.length,0);assert.equal(env.node('filters-dialog').open,false);
+ managed=true;ui.request({isTrusted:true});assert.equal(env.sent.at(-1).kind,'filters_open');
+ ui.open({entries:[],allow_color:14});assert.equal(env.focus.length,0);
+ ui.close({isTrusted:true,preventDefault(){}});ui.open({entries:[{id:'late',policy:'allow'}]});
+ assert.equal(env.node('filters-dialog').open,false);ui.destroy();
+});
+
+test('leaving an embedded settings panel preserves search focus until the host closes',()=>{
+ const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
+ const start=source.indexOf('function restoreSettingsPanelFocus()'),end=source.indexOf('\n',start);
+ const dialog={open:true};let restored=0;
+ const restore=vm.runInNewContext(source.slice(start,end)+'\nrestoreSettingsPanelFocus',{document:{getElementById:()=>dialog},restoreEditingFocus:()=>restored++});
+ restore();assert.equal(restored,0);dialog.open=false;restore();assert.equal(restored,1);
 });

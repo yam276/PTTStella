@@ -1,5 +1,5 @@
 // Rules editing and temporary presentation blocking share this owner.
-function createFiltersDialog({tr,send,current,invalidate,reset,restore,changed}) {
+function createFiltersDialog({tr,send,current,invalidate,reset,restore,changed,manage=null,present=dialog=>dialog.showModal(),visible=()=>true}) {
     const filtersButton=document.getElementById("filters-open"),filtersDialog=document.getElementById("filters-dialog");
     const filtersList=document.getElementById("filters-list"),filtersId=document.getElementById("filters-id"),filtersNote=document.getElementById("filters-note");
     const filtersSave=document.getElementById("filters-save"),filtersRemove=document.getElementById("filters-remove"),filtersClose=document.getElementById("filters-close");
@@ -10,7 +10,7 @@ function createFiltersDialog({tr,send,current,invalidate,reset,restore,changed})
     const importButton=document.getElementById("filters-import"),importApply=document.getElementById("filters-import-apply"),importCancel=document.getElementById("filters-import-cancel");
     let importSequence=0,importRequest=null,importPreview=false,savedEntries=[];
     let filterEntries=[],filtersBusy=false,presentationBlocked=false,disposed=false;
-    function openFilters(e){if(disposed||!e.isTrusted)return;invalidate();reset(e);filtersDialog.showModal();changed();send({kind:"filters_open",trusted:e.isTrusted});}
+    function openFilters(e){if(disposed||!e.isTrusted||manage&&!manage(e))return;if(filtersDialog.open)return;invalidate();reset(e);present(filtersDialog);changed();send({kind:"filters_open",trusted:e.isTrusted});}
     function closeFilters(e){e?.preventDefault();cancelImport(e);if(filtersDialog.open)filtersDialog.close();filtersId.value="";filtersNote.value="";filtersPolicy.value="mask";filtersColor.value="";defaultColor.value=String(savedColor);colorControls();filtersList.selectedIndex=-1;restore();changed();}
     function fillFilters(entries){filterEntries=entries;const selected=filtersId.value.toLowerCase();filtersList.replaceChildren();const fresh=document.createElement("option");fresh.value="";fresh.textContent=tr("filters-new");fresh.selected=!selected;filtersList.append(fresh);
         for(const entry of entries){const option=document.createElement("option");option.value=entry.id;option.textContent=tr(entry.policy==="allow"?"filters-policy-allow":entry.policy==="mask_row"?"filters-policy-mask-row":"filters-policy-mask")+" · "+entry.id+(entry.note?" — "+entry.note:"");option.selected=entry.id.toLowerCase()===selected;filtersList.append(option);}}
@@ -28,7 +28,7 @@ function createFiltersDialog({tr,send,current,invalidate,reset,restore,changed})
     function revealFilters(e){const latest=current();if(!latest||presentationBlocked)return;presentationBlocked=true;invalidate();changed();
         send({kind:"filters_reveal",presentation:latest.presentation,generation:latest.generation,revision:latest.frame.revision,reveal:!latest.revealed,trusted:e.isTrusted});}
 
-    function open(data){if(disposed)return;savedEntries=data.entries;savedColor=data.allow_color??14;defaultColor.value=String(savedColor);filtersColor.value="";colorControls();fillFilters(data.entries);filtersMessage.textContent=data.warning||tr("filters-save-help");filtersId.focus();}
+    function open(data){if(disposed||!filtersDialog.open)return;savedEntries=data.entries;savedColor=data.allow_color??14;defaultColor.value=String(savedColor);filtersColor.value="";colorControls();fillFilters(data.entries);filtersMessage.textContent=data.warning||tr("filters-save-help");if(visible())filtersId.focus();}
     function receive(data){
         if(disposed)return;
         if(data.state==="preview"||data.state==="import_rejected") {
@@ -78,7 +78,7 @@ function createFiltersDialog({tr,send,current,invalidate,reset,restore,changed})
     }
     function revoke(){disposed=true;}
     function destroy(){revoke();importRequest=null;importPreview=false;savedEntries=[];if(filtersDialog.open)filtersDialog.close();filterEntries=[];filtersId.value="";filtersNote.value="";}
-    return {show:openFilters,open,receive,paint,revoke,destroy,blocked:()=>presentationBlocked,
+    return {show:openFilters,request:openFilters,close:closeFilters,open,receive,paint,revoke,destroy,blocked:()=>presentationBlocked,
         clean:()=>disposed&&!filtersDialog.open&&filterEntries.length===0&&!filtersId.value&&!filtersNote.value,
         bindings:[[filtersPolicy,"change",colorControls],[defaultSave,"click",saveDefault],[importButton,"click",startImport],[importApply,"click",applyImport],[importCancel,"click",cancelImport],[filtersButton,"click",openFilters],[filtersClose,"click",closeFilters],[filtersDialog,"cancel",closeFilters],
             [filtersList,"change",chooseFilter],[filtersSave,"click",saveFilter],[filtersRemove,"click",removeFilter],[filtersReveal,"click",revealFilters]]};
