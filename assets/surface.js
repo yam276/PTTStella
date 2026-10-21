@@ -297,7 +297,7 @@ function cancelDrag() {
     refreshKeepAlive();
 }
 function pointercancel(){stationMouse.revoke();cancelHover(true);released=null;cancelDrag();clearSelection();}
-function deactivate(e){contextMenu?.close(false);stationMouse.revoke();cancelHover(true);policy("reset",e);released=null;cancelDrag();setHover(null);cancelComposition();}
+function deactivate(e){contextMenu?.close(false);stationMouse.revoke();cancelHover(true);policy("reset",e);released=null;cancelDrag();setHover(null);cancelComposition();refreshKeepAlive();}
 function lostcapture(e){stationMouse.lost(e);if(dragging){cancelHover();dragging=null;released=null;surface.dataset.pointerActive="false";refreshKeepAlive();}}
 function hasSelection(){return selectionActive;}
 function clearSelection() {
@@ -570,13 +570,13 @@ function refreshExportControls() {
 }
 function refreshKeepAlive() {
     const ready=!settingsActive&&!!latest?.keep_alive&&!inlineImages.active()&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
-    const reading=!!latest?.article&&document.hasFocus()&&document.visibilityState!=="hidden"&&!settingsActive&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
-    const current=stamp(),key=JSON.stringify([current,ready,reading,latest?.keep_alive_ready,latest?.keep_alive]);
+    const reading=!!latest?.article&&document.hasFocus()&&document.visibilityState!=="hidden"&&!stopped&&!!latest.connected&&!settingsActive&&!blocked()&&!navigationLocked&&!navigationRequest&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
+    const current=stamp(),key=JSON.stringify([current,latest?.presentation,latest?.article?.id,ready,reading,latest?.keep_alive_ready,latest?.keep_alive]);
     keepAlive.textContent=latest?.keep_alive?tr("keepalive-on"):tr("keepalive-off");
     keepAlive.setAttribute("aria-pressed",String(!!latest?.keep_alive));
     keepAlive.title=latest?.keep_alive_failure||(!latest?.keep_alive?tr("keepalive-disabled-help"):
         ready?tr("keepalive-ready-help"):tr("keepalive-wait-help"));
-    if(!stopped&&latest&&key!==keepAliveGate) {keepAliveGate=key;send({kind:"keep_alive_gate",stamp:current,ready,reading});}
+    if(!stopped&&latest&&key!==keepAliveGate) {keepAliveGate=key;send({kind:"keep_alive_gate",stamp:current,ready,reading,article:latest.article?.id??null});}
 }
 function toggleKeepAlive(e){if(latest&&!stopped)send({kind:"keep_alive",enabled:!latest.keep_alive,trusted:e.isTrusted});}
 function exportScreen(e, selected=false) {

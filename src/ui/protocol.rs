@@ -156,6 +156,8 @@ pub(super) enum SurfaceEvent {
         ready: bool,
         #[serde(default)]
         reading: bool,
+        #[serde(default)]
+        article: Option<u64>,
     },
     Navigate {
         stamp: Stamp,

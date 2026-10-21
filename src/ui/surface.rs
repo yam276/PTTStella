@@ -284,6 +284,8 @@ async fn run(
     let mut rejected_events = 0;
     let mut surface_probe_clean = false;
     let mut reading_gate = None;
+    let mut reading_paint_at = tokio::time::Instant::now();
+    let mut reading_timing = super::reading_timing::ReadingTiming::new()?;
     let (complete, probe_checked) = loop {
         if *closing.borrow() {
             break (false, false);
@@ -327,7 +329,8 @@ async fn run(
             && !settings_visible
             && !login_open
             && pending_paste.read().is_none()
-            && reading_gate == Some(receiver.borrow().stamp())
+            && reading_gate.is_some()
+            && reading_gate == screen.reading_scope()
             && media_preview.active().is_none()
         {
             let view = receiver.borrow().clone();
@@ -338,6 +341,12 @@ async fn run(
                 screen.continue_article_fetch(&view)
             };
             if let Some(intent) = intent {
+                reading_timing.record(
+                    "request",
+                    view.generation,
+                    view.frame.revision,
+                    screen.reading_progress(),
+                )?;
                 let result = commands.start(
                     if preload {
                         CommandKind::Preload
@@ -429,7 +438,15 @@ async fn run(
             }
         }
         // One in-flight frame: slow font/paint work cannot grow the JS queue.
-        if screen.dirty() && !screen.has_in_flight() {
+        let preload_paint = screen.full_load_active() && screen.reading_progress().is_some();
+        let reading_paint_due = tokio::time::Instant::now() >= reading_paint_at;
+        if screen.dirty()
+            && !screen.has_in_flight()
+            && (!preload_paint
+                || (reading_paint_due
+                    && !receiver.borrow().input_pending
+                    && !receiver.borrow().output_pending))
+        {
             let view = receiver.borrow().clone();
             let run_probe = probe.is_some()
                 && !window_probe
@@ -443,10 +460,33 @@ async fn run(
             if let Some(painting) = screen.queue(&view, run_probe, preferences.display()) {
                 eval.send(Packet::Paint(painting))
                     .map_err(|e| e.to_string())?;
+                reading_paint_at =
+                    tokio::time::Instant::now() + std::time::Duration::from_millis(250);
+            }
+        }
+        {
+            let view = receiver.borrow();
+            reading_timing.record(
+                "cached",
+                view.generation,
+                view.frame.revision,
+                screen.reading_progress(),
+            )?;
+            if screen.has_in_flight() {
+                reading_timing.record(
+                    "paint_pending",
+                    view.generation,
+                    view.frame.revision,
+                    screen.reading_progress(),
+                )?;
             }
         }
         let load_deadline = screen.full_load_deadline();
+        let paint_deadline =
+            (preload_paint && screen.dirty() && !screen.has_in_flight() && !reading_paint_due)
+                .then_some(reading_paint_at);
         tokio::select! {
+            _ = async {if let Some(at)=paint_deadline {tokio::time::sleep_until(at).await;}else{std::future::pending::<()>().await;}} => {},
             _ = async {if let Some(at)=load_deadline {tokio::time::sleep_until(at).await;}else{std::future::pending::<()>().await;}} => {
                 screen.expire_full_load(tokio::time::Instant::now());
                 if commands.is(CommandKind::Preload) {commands.cancel();}
@@ -911,8 +951,8 @@ async fn run(
                                 .map_err(|e| e.to_string())?;
                         }
                     }
-                    SurfaceEvent::KeepAliveGate { stamp, ready, reading } => {
-                        reading_gate=reading.then_some(stamp);
+                    SurfaceEvent::KeepAliveGate { stamp, ready, reading, article } => {
+                        reading_gate=if reading {article.and_then(|id|screen.authorize_reading(stamp,id))}else{None};
                         connection.keep_alive_gate(
                             stamp,
                             ready
@@ -1383,6 +1423,7 @@ async fn run(
                         generation,
                     } => {
                         screen.acknowledge(Identity{presentation,generation,revision})?;
+                        reading_timing.record("painted",generation,revision,screen.reading_progress())?;
                         let view=receiver.borrow();
                         if let Some(paint)=screen.inline_page(Identity{presentation,generation,revision},view.stamp(),&view)
                             && (probe.is_none() || paint.image_links.iter().all(|index|media_origin.as_ref().is_some_and(|origin|paint.links[*index].url.starts_with(&format!("{origin}/")))))

@@ -822,3 +822,67 @@ fn long_full_load_accepts_default_ink_reset_only_at_a_new_pages_leading_overlap(
         }
     }
 }
+
+#[test]
+fn blank_screen_tail_is_preserved_when_ptt_repeats_its_logical_line() {
+    let mut cache = ArticleCache::default();
+    let mut first = page(1, 22, 30);
+    cache.project(&mut first);
+    assert_eq!(first.article.as_ref().unwrap().last_line, 22);
+    let mut second = page(23, 45, 60);
+    for g in second.frame.glyphs.iter_mut().filter(|g| g.row == 0) {
+        g.text = " ".into();
+    }
+    second.navigation = Context::ArticleReading {
+        first_line: 22,
+        last_line: 44,
+        percent: 60,
+    };
+    cache.project(&mut second);
+    assert_eq!(
+        second.article.as_ref().unwrap().load,
+        Some(LoadState::Loading)
+    );
+    let mut last = page(45, 67, 100);
+    last.navigation = Context::ArticleReading {
+        first_line: 44,
+        last_line: 66,
+        percent: 100,
+    };
+    cache.project(&mut last);
+    let mut expected: Vec<_> = (1..=22).map(|n| format!("line {n:04}")).collect();
+    expected.push(String::new());
+    expected.extend((24..=67).map(|n| format!("line {n:04}")));
+    assert_eq!(lines(&last), expected);
+    assert_eq!(
+        last.article.as_ref().unwrap().load,
+        Some(LoadState::Complete)
+    );
+}
+
+#[test]
+fn retained_blank_tail_does_not_accept_changed_text_or_background() {
+    for background in [false, true] {
+        let mut cache = ArticleCache::default();
+        cache.project(&mut page(1, 22, 30));
+        let mut changed = page(23, 45, 60);
+        changed.navigation = Context::ArticleReading {
+            first_line: 22,
+            last_line: 44,
+            percent: 60,
+        };
+        if background {
+            for g in changed.frame.glyphs.iter_mut().filter(|g| g.row == 0) {
+                g.text = " ".into();
+                g.left.bg = 1;
+                g.right.bg = 1;
+            }
+        }
+        cache.project(&mut changed);
+        assert_eq!(
+            changed.article.as_ref().unwrap().load,
+            Some(LoadState::Changed)
+        );
+        assert_eq!(changed.article.as_ref().unwrap().last_line, 22);
+    }
+}

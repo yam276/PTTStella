@@ -63,3 +63,14 @@ test('returning to the foreground refreshes the reading gate even without a new 
     c.activate();assert.equal(focused,1);assert.equal(refreshed,1);
     assert.match(source,/\[document,"visibilitychange",refreshKeepAlive\]/);
 });
+
+test('article-scoped UI permission survives station page transitions but pauses for local interaction',()=>{
+    const sent=[],c={latest:{connected:true,input_pending:true,output_pending:true,presentation:2,article:{id:7}},document:{hasFocus:()=>true,visibilityState:'visible'},settingsActive:false,stopped:false,
+        blocked:()=>false,canNavigate:()=>false,inlineImages:{active:()=>false},tools:{busy:()=>false},stationMouse:{active:()=>false},dragging:null,released:null,
+        hasSelection:()=>false,exportBusy:false,keyboardState:{pending:false},navigationLocked:false,navigationRequest:false,stamp:()=>({generation:1,revision:9,input_epoch:3}),keepAliveGate:null,keepAlive:{setAttribute(){}},tr:k=>k,send:p=>sent.push(p)};
+    vm.runInNewContext(source.slice(source.indexOf('function refreshKeepAlive()'),source.indexOf('function toggleKeepAlive(')),c);
+    c.refreshKeepAlive();assert.equal(sent.at(-1).reading,true);assert.equal(sent.at(-1).article,7);
+    c.latest.article.id=8;c.refreshKeepAlive();assert.equal(sent.at(-1).article,8,'article changes renew permission even on the same stamp');
+    c.dragging={};c.refreshKeepAlive();assert.equal(sent.at(-1).reading,false);
+    c.dragging=null;c.document.hasFocus=()=>false;c.refreshKeepAlive();assert.equal(sent.at(-1).reading,false);
+});
