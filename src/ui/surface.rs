@@ -1248,7 +1248,7 @@ async fn run(
                             checks.copied_selection == Some((generation, revision, request));
                     }
                     SurfaceEvent::InlineExpand {presentation,stamp,key,trusted:_} => {
-                        if matches!(surface_probe.as_deref(),Some("inline"|"inline_pages"|"full_load"|"short_links"|"context_menu")) {checks.inline_requests+=1;}
+                        if matches!(surface_probe.as_deref(),Some("inline"|"inline_pages"|"full_load"|"short_overlap"|"short_links"|"context_menu")) {checks.inline_requests+=1;}
                         let view=receiver.borrow().clone();
                         if !view.site.ptt_features() || !keyboard_policy.inline_images_key(&key,&view.context())
                             || pending_paste.read().is_some() || commands.busy() || login_open {continue;}
@@ -1256,7 +1256,7 @@ async fn run(
                             // Synthetic probes must never reach a public image host.
                             if probe.is_some() && paint.image_links.iter().any(|index|media_origin.as_ref().is_none_or(|origin|!paint.links[*index].url.starts_with(&format!("{origin}/")))) {continue;}
                             if let Some(open)=inline_images.open(paint)? {
-                                if matches!(surface_probe.as_deref(),Some("inline"|"inline_pages"|"full_load"|"short_links"|"context_menu")) {checks.inline_expands+=1;}
+                                if matches!(surface_probe.as_deref(),Some("inline"|"inline_pages"|"full_load"|"short_overlap"|"short_links"|"context_menu")) {checks.inline_expands+=1;}
                                 eval.send(Packet::InlineOpen(open)).map_err(|e|e.to_string())?;
                             }
                         }
@@ -1462,6 +1462,13 @@ async fn run(
     };
     let mut reports = Vec::new();
     if let (Some(case), Some(path)) = (surface_probe, probe.as_ref()) {
+        let reading = {
+            let view = receiver.borrow();
+            screen
+                .inline_identity(&view)
+                .and_then(|identity| screen.current(identity, &view))
+                .and_then(|paint| paint.article.clone())
+        };
         let mut mouse_report = checks.mouse_observations();
         mouse_report["final"] = serde_json::json!(receiver.borrow().mouse);
         let mut surface_report = serde_json::json!({
@@ -1480,6 +1487,7 @@ async fn run(
                 || case=="account_actions" && checks.account_rule_actions>=3 && checks.filter_edits>=3 && checks.reply_focus_actions>=2 && checks.export_checked
                 || case=="merged_replies" && checks.context_copies>=1 && checks.export_checked
                 || matches!(case.as_str(),"account_lists"|"account_articles") && checks.filter_edits>=3 && checks.context_copies>=1 && checks.export_checked
+                || case=="short_overlap" && checks.navigation_requests==1 && checks.inline_requests>=2 && checks.inline_expands==1 && checks.link_requests>=1 && checks.export_checked && reading.as_ref().is_some_and(|r| r.first_line==1 && r.last_line==32 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
                 || case=="terminal_pages" && checks.export_checked && !screen.full_load_active()
                 || case=="full_load" && checks.load_cancels>=1 && checks.load_resumes>=1 && checks.navigation_requests==19 && checks.export_checked && checks.inline_requests>=2 && checks.inline_expands==1
                 || matches!(case.as_str(),"inline"|"inline_pages"|"short_links"|"context_menu") && checks.inline_requests>=2 && checks.inline_expands==1 && checks.export_checked && (case!="inline_pages"||checks.navigation_requests==1) && (case!="context_menu"||checks.context_copies>=2)
@@ -1506,6 +1514,9 @@ async fn run(
             "paste_preview_preserved":pending_paste.read().is_some(),
             "settings_saved":checks.settings_saved,"full_png":checks.export_checked,"rows_png":checks.rows_export_checked,"media_external_requests":checks.media_external,
         });
+        surface_report["article_reading"] =
+            serde_json::to_value(reading).map_err(|e| e.to_string())?;
+        surface_report["link_requests"] = checks.link_requests.into();
         surface_report["load_cancels"] = checks.load_cancels.into();
         surface_report["load_resumes"] = checks.load_resumes.into();
         surface_report["account_rule_actions"] = checks.account_rule_actions.into();

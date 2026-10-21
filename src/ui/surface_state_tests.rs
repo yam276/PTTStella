@@ -926,3 +926,49 @@ fn full_article_loading_requires_ack_preserves_cancelled_data_and_never_runs_in_
     assert!(state.next_full_page(&view).is_none());
     assert!(!state.full_load_action(view.generation, id, true, &view));
 }
+
+#[test]
+fn clamped_short_article_retains_its_tail_and_opens_the_acknowledged_historical_link() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(
+        &super::super::probe::short_overlap_page(false, Some("http://127.0.0.1:1234")).unwrap(),
+    );
+    view.frame = screen.frame();
+    let old = displayed(&mut state, &view);
+    assert!(state.next_full_page(&view).is_some());
+    state.article_input(&view.context(), b"\x1b[6~");
+    screen.feed(
+        &super::super::probe::short_overlap_page(true, Some("http://127.0.0.1:1234")).unwrap(),
+    );
+    view.frame = screen.frame();
+    state.update(&view);
+    assert!(state.current(old, &view).is_none());
+    let fresh = displayed(&mut state, &view);
+    let paint = state.current(fresh, &view).unwrap();
+    let article = paint.article.as_ref().unwrap();
+    assert_eq!(
+        (article.first_line, article.last_line, article.end),
+        (1, 32, true)
+    );
+    let text = pttstella::text::rows(&paint.frame).unwrap();
+    assert!(text[23].text.starts_with("Synthetic signature:"));
+    assert!(text[31].text.starts_with("Last synthetic reply"));
+    let index = paint
+        .links
+        .iter()
+        .position(|link| link.url == "https://example.com/pttstella")
+        .unwrap();
+    assert_eq!(paint.links[index].row, 1);
+    // The OpenLink consumer resolves from this ACK, not from station-page indices.
+    assert_eq!(
+        state.current(fresh, &view).unwrap().links[index].url,
+        "https://example.com/pttstella"
+    );
+    assert!(
+        !pttstella::links::detect(&view.frame)
+            .iter()
+            .any(|link| link.url == "https://example.com/pttstella")
+    );
+}

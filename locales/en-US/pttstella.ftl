@@ -604,7 +604,7 @@ export-cache-page-hint = Export the current 24-row station page, excluding cache
 article-mode = Article mode
 article-mode-web = Web
 article-mode-terminal = Terminal
-article-mode-help = Web mode joins visited pages and supports inline images. Terminal mode keeps the station grid and paging, with hover or top-right image previews. Switching starts again from the current station page.
+article-mode-help = Web mode loads the full article, with cancel and resume; expand images explicitly. Terminal mode keeps station paging, with hover or top-right image previews.
 settings-alias-article-mode = article mode web terminal 文章模式 網頁 終端機
 
 filters-policy-mask-row = Black out entire row
