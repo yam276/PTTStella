@@ -686,8 +686,18 @@ for(const [target,event,callback,options] of bindings) target.addEventListener(e
 function draw(packet) {
     viewport.dataset.reading=packet.article?"web":"terminal";
     const frame=packet.source_frame??packet.frame,ratio=devicePixelRatio||1,width=frame.cols*12,height=frame.rows*24;
-    const available=viewport.getBoundingClientRect();
+    const available=viewport.parentElement.getBoundingClientRect();
     const fitting=Math.min(available.width/width,available.height/height);
+    // The scrolling document may grow; its viewport stays inside the fitted
+    // station grid. Measure the host so previous bounds cannot feed back into
+    // fitting, and keep zoom within this same reading area.
+    if(packet.article){
+        const fittedWidth=width*fitting,fittedHeight=height*fitting;
+        viewport.style.inset=`${(available.height-fittedHeight)/2}px auto auto ${(available.width-fittedWidth)/2}px`;
+        viewport.style.width=fittedWidth+"px";viewport.style.height=fittedHeight+"px";
+    }else{
+        viewport.style.inset="";viewport.style.width="";viewport.style.height="";
+    }
     // At most 16M RGBA pixels (64 MiB), and 8192 pixels per dimension.
     const capacity=Math.min(Math.sqrt(16*1024*1024/(width*height)),8192/width,8192/height);
     const physical=Math.min(fitting*zoom*ratio,capacity);
@@ -704,7 +714,7 @@ function repaint() {
     if(stopped||!latest||animation) return;
     animation=requestAnimationFrame(()=>{animation=0;if(!stopped) {draw(latest);if(pointerClient)setHover(cellAt(pointerClient,false),false);}});
 }
-const observer=new ResizeObserver(repaint); observer.observe(viewport);
+const observer=new ResizeObserver(repaint); observer.observe(viewport);observer.observe(viewport.parentElement);
 function checkArt({x,y}) {
     const pixels=ctx.getImageData(x(0),y(19),x(16)-x(0),y(21)-y(19)).data;
     let seams=0;
