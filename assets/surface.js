@@ -444,7 +444,8 @@ function readingMove(intent,e,source="button") {
     if(!article)return false;
     if(!["lines","previous_page","next_page","forward","first","last","scroll"].includes(intent.action))return false;
     if(blocked()||dragging||!latest.connected)return true;
-    const maximum=Math.max(0,viewport.scrollHeight-viewport.clientHeight),top=viewport.scrollTop;
+    const documentHeight=grid?.height!==undefined?surface.offsetTop+grid.height/grid.ratio:viewport.scrollHeight;
+    const maximum=Math.max(0,documentHeight-viewport.clientHeight),top=viewport.scrollTop;
     const line=grid?(grid.bottom(0)-grid.y(0))/grid.ratio:24;
     let delta=intent.action==="scroll"?intent.delta:intent.action==="lines"?(intent.down?1:-1)*line*intent.count:
         (intent.action==="previous_page"?-1:1)*Math.max(line,viewport.clientHeight-(grid?.footerHeight??0))*.9;

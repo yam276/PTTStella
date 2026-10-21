@@ -363,7 +363,9 @@ test('short-article blank padding does not count as unread content after images 
     await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
     image.naturalWidth=100;image.naturalHeight=200;image.onload();await new Promise(resolve=>setImmediate(resolve));
     e.ui.layout(packet,base,1);assert.equal(text(),' (100%) ','all three text rows and the image fit above the footer');
-    assert.equal(e.surface.style.height,'800px','retain the minimum BBS grid separately from reading progress');
+    assert.equal(e.surface.style.height,'576px','images consume existing short-article padding before adding scrollable height');
+    e.viewport.scrollTop=1200;e.ui.layout(packet,base,1);assert.equal(e.viewport.scrollTop,0);
+    assert.equal(e.nodes.find(n=>n.className==='article-footer').style.top,'552px');
     await e.ui.destroy();
 });
 
@@ -386,4 +388,36 @@ test('cached page counter follows source-page anchors without changing the stati
     assert.equal(text(),' 1/3 (100%) ','inside an image, retain its owning source page');
     assert.equal(packet.frame.glyphs.map(g=>g.text).join(''),' 3/3 (100%) ');
     await e.ui.destroy();
+});
+
+
+test('cached footer uses each source page cell style, including both halves, without altering source colours',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    const old={fg:7,bg:0,bright:false,inverse:true},blue={fg:7,bg:4,bright:true,inverse:false},cyan={fg:0,bg:6,bright:false,inverse:false};
+    const first=Array.from({length:80},()=>({...blue})),last=Array.from({length:80},()=>({...cyan}));
+    first[1]={fg:3,bg:5,bright:false,inverse:true};
+    const glyphs=[{row:12,col:0,width:2,text:'頁',left:old,right:old},...Array.from('2/2 (100%) ',(text,col)=>({row:12,col:col+2,width:1,text,left:old,right:old}))];
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:12,end:true,page_cells:{start:2,end:3},pages:[{line:1,number:1,styles:first},{line:7,number:2,styles:last}]},frame:{cols:80,rows:13,revision:4,glyphs},links:[]};
+    e.ui.layout(packet,base,1);
+    let footer=e.rendered.at(-1).frame.glyphs;
+    assert.deepEqual(footer[0].left,blue);assert.deepEqual(footer[0].right,first[1]);assert.equal(footer[1].text,'1');
+    e.viewport.scrollTop=216;e.ui.layout(packet,base,1);footer=e.rendered.at(-1).frame.glyphs;
+    assert.deepEqual(footer[0].left,cyan);assert.deepEqual(footer[0].right,cyan);assert.equal(footer[1].text,'2');
+    e.viewport.scrollTop=0;e.ui.layout(packet,base,1);assert.deepEqual(e.rendered.at(-1).frame.glyphs[0].left,blue);
+    assert.deepEqual(glyphs[0].left,old);assert.equal(glyphs[1].text,'2');
+    const incomplete={...packet,article:{...packet.article,pages:[{line:1,number:1,styles:[blue]}]}};
+    e.ui.layout(incomplete,base,1);assert.deepEqual(e.rendered.at(-1).frame.glyphs[0].left,old,'reject partial style arrays');
+    await e.ui.destroy();
+});
+
+
+test('cached End and wheel stop at renderer height even if the DOM reports stale overflow',()=>{
+    const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
+    const context={latest:{connected:true,article:{first_line:1,end:true}},viewport:{scrollTop:0,scrollHeight:5000,clientHeight:576},
+        surface:{offsetTop:0},grid:{height:576,ratio:1,y:r=>r*24,bottom:r=>(r+1)*24},blocked:()=>false,dragging:null,
+        clearSelection(){},cancelHover(){},repaint(){},navigate(){assert.fail('complete article must not send station input');}};
+    vm.runInNewContext(source.slice(source.indexOf('function readingMove('),source.indexOf('function navigate(')),context);
+    for(const intent of [{action:'last'},{action:'scroll',delta:5000},{action:'next_page'}]){
+        context.readingMove(intent,{isTrusted:true});assert.equal(context.viewport.scrollTop,0);
+    }
 });

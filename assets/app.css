@@ -63,6 +63,7 @@ input[type="checkbox"] { accent-color: var(--ui-gold); }
 button:disabled { opacity: .4; cursor: default; }
 .workspace { position: absolute; inset: 0; display: flex; overflow: hidden; overscroll-behavior: none; background: #000; }
 .workspace[data-reading="web"] { overflow: auto; }
+.workspace[data-reading="web"] .surface { overflow: clip; }
 .surface { flex: none; margin: auto; position: relative; background: #000; }
 canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #selection { position: absolute; inset: 0; pointer-events: none; z-index: 2; }

@@ -108,17 +108,26 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
             if(row>=0&&row<packet.frame.rows-1)gaps.set(row,(gaps.get(row)||0)+item.height*ratio);
         }
         const mapping=inlineRowLayout(packet.frame.rows,base.y,gaps);
+        const bodyRows=cached?Math.min(packet.frame.rows-1,article.last_line-article.first_line+1):packet.frame.rows;
+        if(cached){
+            const footerHeight=base.y(packet.frame.rows)-base.y(packet.frame.rows-1);
+            // Images use the short article's existing blank rows first. Only
+            // actual content beyond the original grid adds scrollable height.
+            mapping.height=Math.max(base.y(packet.source_frame?.rows??packet.frame.rows),mapping.y(bodyRows)+footerHeight);
+        }
         canvas.style.visibility="hidden";
         surface.style.height=mapping.height/ratio+"px";
         if(anchor&&viewport){
             const row=Math.max(0,Math.min(packet.frame.rows-1,anchor.line-article.first_line));
             viewport.scrollTop=Math.max(0,surface.offsetTop+(mapping.y(row)+anchor.offset)/ratio);
         }
+        if(cached&&viewport)viewport.scrollTop=Math.max(0,Math.min(viewport.scrollTop,
+            Math.max(0,surface.offsetTop+mapping.height/ratio-viewport.clientHeight)));
         // Only rasterize viewport rows. Cache size never becomes canvas height
         // or a collection of hundreds of full-resolution backing stores.
         const top=viewport?Math.max(0,viewport.scrollTop-surface.offsetTop)*ratio:0;
         const start=viewport?Math.max(0,mapping.rowAt(top,true)-2):0;
-        const textRows=cached?packet.frame.rows-1:packet.frame.rows;
+        const textRows=bodyRows;
         const end=viewport?Math.min(textRows,mapping.rowAt(top+viewport.clientHeight*ratio,true)+3):textRows;
         const count=end-start;
         while(strips.length>count){const strip=strips.pop();strip.width=0;strip.height=0;strip.remove();}
@@ -148,7 +157,8 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         if(cached){
             const row=packet.frame.rows-1,height=base.y(row+1)-base.y(row);
             // Rust identifies the numeric status cells. Only the visible
-            // percentage is a local layout decoration; source PNGs stay intact.
+            // page and percentage are local decorations. Colours come from
+            // the visible source page; source PNGs stay intact.
             let footerGlyphs=packet.frame.glyphs.filter(g=>g.row===row),progress=null;
             const cells=article.percent_cells;
             if(cells&&viewport){
@@ -160,13 +170,16 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
                 progress=(percent===null?"--":String(percent)).padStart(cells.end-cells.start," ");
                 footerGlyphs=footerGlyphs.map(g=>g.col>=cells.start&&g.col<cells.end?{...g,text:progress[g.col-cells.start]}:g);
             }
-            if(article.page_cells&&article.pages?.length&&viewport){
+            if(article.pages?.length&&viewport){
                 const line=article.first_line+Math.min(article.last_line-article.first_line,mapping.rowAt(top,true));
                 const page=article.pages.reduce((best,page)=>Math.abs(page.line-line)<Math.abs(best.line-line)?page:best);
-                const cells=article.page_cells,value=String(page.number).padStart(cells.end-cells.start," ");
-                if(value.length===cells.end-cells.start){
+                if(page.styles?.length===packet.frame.cols){
+                    footerGlyphs=footerGlyphs.map(g=>({...g,left:page.styles[g.col],right:page.styles[g.col+g.width-1]}));
+                }
+                progress=JSON.stringify([progress,page.line,page.number]);
+                const cells=article.page_cells,value=cells?String(page.number).padStart(cells.end-cells.start," "):null;
+                if(cells&&value.length===cells.end-cells.start){
                     footerGlyphs=footerGlyphs.map(g=>g.col>=cells.start&&g.col<cells.end?{...g,text:value[g.col-cells.start]}:g);
-                    progress=JSON.stringify([progress,page.number]);
                 }
             }
             if(!footer){footer=document.createElement("canvas");footer.className="article-footer-canvas";
@@ -185,7 +198,7 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
             }
             // The overlay belongs to the main view, outside the scroll port.
             const bounds=surface.getBoundingClientRect(),origin=host.getBoundingClientRect();
-            const footerTop=Math.min(bounds.top+mapping.y(row)/ratio,viewport?viewport.getBoundingClientRect().bottom-height/ratio:Infinity);
+            const footerTop=Math.min(bounds.top+(mapping.height-height)/ratio,viewport?viewport.getBoundingClientRect().bottom-height/ratio:Infinity);
             Object.assign(footerLayer.style,{left:(bounds.left-origin.left)+"px",top:(footerTop-origin.top)+"px",
                 width:width+"px",height:height/ratio+"px"});
             const drawn=footerImage.getBoundingClientRect(),drawnTop=(drawn.top-bounds.top)*ratio,drawnHeight=drawn.height*ratio;

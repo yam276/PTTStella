@@ -4,13 +4,25 @@
 
 ## 目標
 
-目前交付為 `dist/macos-page-hints/PTTStella.app`（2026-10-21，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-reader-colours-end/PTTStella.app`（2026-10-21，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 來源頁尾配色與文章捲動末端（2026-10-21）
+
+依使用者要求，資訊列配色跟隨目前閱讀的 PTT 來源頁：Rust 保存逐格 ANSI 樣式，包含雙色字左右半、亮色與反白；JS 隨目前頁碼切換同一頁尾 renderer。樣式納入既有 32 MiB 准入估計，來源格線／文字及 PNG 不改寫。
+
+使用者另回報短文章到底仍能捲出大片空白。短文展圖原先把圖片加在完整補齊格線上，造成補列重複延長文件；改為先使用原有空白，超過來源格線才增加高度。裁切溢位、End／翻頁／滾輪與 layout 收回位置共用 renderer 文件高度，資訊列位於實際文件底端或可視區下緣。保留短文最小 80×24 與長文完整末尾。
+
+獨立 expected 先重現每頁配色、短文圖片重複空白及 stale DOM overflow；完整 desktop bin 109、JS 183、全 targets Clippy、fmt、docs 與 macOS release 打包通過。首次 Rust 測試失敗是新 fixture 在加入頁尾前先上色，修正 fixture 順序後通過；沒有只改產品 expected 放行。
+
+最終交付的 macOS arm64 實際 Dioxus／WKWebView 使用兩個本機自製案例。`short_links` 兩張 100×60 圖片展開後，Home／End／向下鍵的正文與底列區域逐像素相同，peer 零站端輸入；背景視窗的原生滾輪呼叫遭 macOS 拒絕，不計為該案例滾輪通過。`short_overlap` 在全螢幕確認 Home 藍底 1/2 → End 青底 2/2 → Home 藍底；展圖後最後兩則推文仍完整可見，原生向下滾輪到底後正文／底列像素不變。首次即時截圖早於非同步文字重繪，使用完成重繪的快照比較，不宣稱逐幀無閃爍。歷史一般網址原生左鍵一次由 sink 收到；peer 僅接受一次 PageDown，兩次 Enter 一個展圖 batch，兩圖與 404 各一次 GET。來源 PNG 均 960×576，末頁仍為來源青底，不含本機展圖。兩案例 `status=passed`、Close acknowledged、所有 owner 與 HTTP server joined、exit 0。
+
+證據位於 `.local/verification/reading-page-colours/`，15 個 Mach-O sections 與交付相同，strict ad-hoc 簽章通過。結果限本機合成 macOS 案例，未據此結清其他原生滑鼠、實站與跨平台項目；上一節的歷史失敗紀錄仍保留。
 
 ## 目前閱讀頁數與基本 hover 提示（2026-10-21，原生滑鼠待人工驗收）
 

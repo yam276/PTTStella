@@ -31,7 +31,7 @@ core 執行 Rust 1.97.0 的 fmt、Clippy、畫面與互動測試 suite 及 2 個
 
 ## 實作後的驗證
 
-短文章末頁接頁另用 `--probe-surface OUTPUT_DIRECTORY short_overlap --media-origin LOOPBACK_ORIGIN`：自製兩頁回報邏輯 1～22／9～31，實際末頁從第 10 個畫面列開始，合併後必須完整保留 32 列。包含相同黑背景但空白前景色不同的重疊、簽名檔、末尾兩列與歷史一般網址；peer 只接受一次 PageDown 和 Close。原生須確認末尾可見、Home 回看並左鍵點不在站端當頁的一般網址（probe 擷取到 sink，不啟動外站）、Enter 展圖、來源 PNG 與完整清理；報告須有完整 article_reading 1～32/end/complete、link request 及既有 batch 計數。真正系統瀏覽器啟動另外記實站或正常 App 的結果，不用 sink 當作外部啟動證明。
+短文章末頁接頁另用 `--probe-surface OUTPUT_DIRECTORY short_overlap --media-origin LOOPBACK_ORIGIN`：自製兩頁回報邏輯 1～22／9～31，實際末頁從第 10 個畫面列開始，合併後必須完整保留 32 列。首尾頁尾分別使用藍底／青底，須核對 Home／End／Home 隨來源頁換色及雙色樣式；來源 PNG 保留站端末頁配色。包含相同黑背景但空白前景色不同的重疊、簽名檔、末尾兩列與歷史一般網址；peer 只接受一次 PageDown 和 Close。原生須確認末尾可見、Home 回看並左鍵點不在站端當頁的一般網址（probe 擷取到 sink，不啟動外站）、Enter 展圖、來源 PNG 與完整清理；報告須有完整 article_reading 1～32/end/complete、link request 及既有 batch 計數。真正系統瀏覽器啟動另外記實站或正常 App 的結果，不用 sink 當作外部啟動證明。
 
 全文載入另跑 core、desktop lib／bin、Clippy、fmt、完整 JS 與 docs。`--probe-surface OUTPUT_DIRECTORY full_load --media-origin LOOPBACK_ORIGIN` 提供 20 頁、441 行自製文章，peer 逐筆核對 19 個 PageDown（延遲與分片回覆），再僅接受 Close。需取消並確認不再前進、明確繼續至 100%，Home／End／PageUp／PageDown 本機回讀不得加 bytes；完成前 HTTP 零請求，之後兩次 Enter 一個 batch，三個圖片網址（含 404）各一次 GET。核對完整來源 PNG 960×576 不含展圖、Close acknowledged、全部 owner／HTTP server join 與程序退出。`terminal_pages` 使用兩頁 peer，停留第一頁不自動取頁，一次手動 PageDown 才進第二頁，圖片 HTTP 零請求，匯出 PNG 後完整清理。這些本機案例不代替實站或正文滑鼠人工驗收。
 
@@ -198,3 +198,5 @@ Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_
 短文章尺寸另用 `--probe-surface OUTPUT_DIRECTORY short_reading`：自製三行內容、80×24 來源格線與底列頁尾。以相同字型／視窗切換網頁與終端機模式，擷取原生畫面比較字格、空白區與頁尾位置，匯出 960×576 PNG 後正常關閉；peer 拒絕所有站端輸入，報告必須包含 PNG、Close acknowledged 與完整 owner 清理。這個 smoke 不代表原生滑鼠或滾輪已驗收。滾輪分流另由生產 JS handler 測試覆蓋列表 overflow、拒絕情境與網頁文章本機捲動。
 
 即時語言變更另核對獨立 Localizer 往返、具名參數無隔離字元、invalid Localization 保留舊 bundles、目前搜尋／快取字型選項／草稿、macOS 原生選單及第一層設定入口；同一合成 session 切換前後 PNG 須逐像素相同，peer 拒絕全部非預期 bytes。返回區變更須分別驗日期／作者邊界、標頭不攔截、完整列光棒與只裝飾一欄的返回提示；新版最愛、完整看板與第 11 欄分類游標另由 Connection 核對列差＋CR 及過期拒絕。
+
+短文展圖的捲動末端可用 `short_links` 搭配兩張 100×60 本機圖片驗證：展圖後內容仍在原 24 列內，Home／End 畫面及頁尾位置應相同，重複 End／PageDown 不得多送站端 bytes。較長圖片仍須可捲至完整末端；JS 另以誇大的 DOM scrollHeight 核對 renderer 高度邊界，不能以 DOM double 代替原生滾輪驗收。

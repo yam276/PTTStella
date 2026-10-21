@@ -50,11 +50,13 @@ pub(super) struct Reading {
 pub(super) struct ReadingPage {
     pub line: usize,
     pub number: usize,
+    pub styles: Vec<Style>,
 }
 struct CachedPage {
     start: usize,
     count: usize,
     number: Option<usize>,
+    styles: Vec<Style>,
 }
 struct Row {
     reply: Option<pttstella::filters::Push>,
@@ -371,6 +373,7 @@ impl ArticleCache {
             && !(self.turning && self.source_range == Some((first_line, last_line)))
         {
             'page: {
+                let page_styles = footer_styles(&source);
                 if matches!(
                     self.loader.state,
                     Some(LoadState::Limit | LoadState::Changed)
@@ -558,7 +561,14 @@ impl ArticleCache {
                         .filter(|(line, _)| !incoming.iter().any(|(n, _)| n == *line))
                         .map(|(_, r)| row_bytes(r))
                         .sum::<usize>()
-                        + incoming.iter().map(|(_, r)| row_bytes(r)).sum::<usize>();
+                        + incoming.iter().map(|(_, r)| row_bytes(r)).sum::<usize>()
+                        + self
+                            .pages
+                            .iter()
+                            .filter(|(range, _)| **range != (first_line, last_line))
+                            .map(|(_, page)| page.styles.capacity() * std::mem::size_of::<Style>())
+                            .sum::<usize>()
+                        + page_styles.capacity() * std::mem::size_of::<Style>();
                     let count = self
                         .rows
                         .keys()
@@ -589,6 +599,7 @@ impl ArticleCache {
                         start: page_start,
                         count: body_rows,
                         number: footer_page(&source).map(|(_, number)| number),
+                        styles: page_styles,
                     },
                 );
                 self.rows.extend(incoming);
@@ -723,6 +734,7 @@ impl ArticleCache {
                     page.number.map(|number| ReadingPage {
                         line: page.start,
                         number,
+                        styles: page.styles.clone(),
                     })
                 })
                 .collect(),
@@ -737,6 +749,25 @@ impl ArticleCache {
             .filter_map(|link| link.target.as_ref())
             .map(String::len)
             .sum()
+    }
+}
+
+// Store actual per-cell footer colours, preserving each half of a wide glyph.
+fn footer_styles(frame: &Frame) -> Vec<Style> {
+    let mut styles = Vec::with_capacity(frame.cols);
+    for glyph in frame.glyphs.iter().filter(|g| g.row + 1 == frame.rows) {
+        if glyph.col != styles.len() || !matches!(glyph.width, 1 | 2) {
+            return Vec::new();
+        }
+        styles.push(glyph.left);
+        if glyph.width == 2 {
+            styles.push(glyph.right);
+        }
+    }
+    if styles.len() == frame.cols {
+        styles
+    } else {
+        Vec::new()
     }
 }
 
