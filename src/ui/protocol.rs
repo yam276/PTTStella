@@ -163,6 +163,12 @@ pub(super) enum SurfaceEvent {
         source: pttstella::navigation::Source,
         trusted: bool,
     },
+    ArticleLoad {
+        generation: u64,
+        article: u64,
+        resume: bool,
+        trusted: bool,
+    },
     DestinationSubmit {
         request: u64,
         stamp: Stamp,
@@ -345,6 +351,7 @@ impl SurfaceEvent {
                 | Self::FiltersImportCancel { .. }
                 | Self::FiltersReveal { .. }
                 | Self::Navigate { .. }
+                | Self::ArticleLoad { .. }
                 | Self::KeepAlive { .. }
         )
     }
@@ -409,6 +416,11 @@ impl SurfaceEvent {
                     && stamp.generation == generation
                     && *source != pttstella::navigation::Source::Keyboard
             }
+            ArticleLoad {
+                trusted,
+                generation: source,
+                ..
+            } => *trusted && *source == generation,
             LoginSubmit { trusted, stamp, .. } | DestinationSubmit { trusted, stamp, .. } => {
                 *trusted && stamp.generation == generation
             }
@@ -721,4 +733,24 @@ pub(super) enum SettingsFeature {
     Sites,
     Filters,
     Account,
+}
+
+#[cfg(test)]
+mod article_load_tests {
+    use super::*;
+    #[test]
+    fn loading_actions_are_typed_ptt_actions_and_reject_foreign_sessions_or_synthetic_clicks() {
+        for (trusted, generation, expected) in
+            [(true, 7, true), (false, 7, false), (true, 8, false)]
+        {
+            let event = SurfaceEvent::ArticleLoad {
+                generation,
+                article: 42,
+                resume: false,
+                trusted,
+            };
+            assert!(event.requires_ptt());
+            assert_eq!(event.admitted(7), expected);
+        }
+    }
 }

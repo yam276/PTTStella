@@ -86,7 +86,7 @@ pub(super) struct SurfaceState {
 impl SurfaceState {
     pub(super) fn new(rules: filters::Rules) -> Self {
         Self {
-            article: Default::default(),
+            article: super::article_cache::ArticleCache::default(),
             raw_reading: false,
             reply_focus: None,
             article_mode: ArticleMode::default(),
@@ -410,6 +410,60 @@ impl SurfaceState {
     }
     pub(super) fn cancel_article_fetch(&mut self) {
         self.article.cancel_fetch();
+    }
+    pub(super) fn full_load_active(&self) -> bool {
+        self.article.loading()
+    }
+    pub(super) fn full_load_deadline(&self) -> Option<tokio::time::Instant> {
+        self.article.load_deadline()
+    }
+    pub(super) fn expire_full_load(&mut self, now: tokio::time::Instant) {
+        self.dirty |= self.article.expire_load(now);
+    }
+    pub(super) fn stop_full_load(&mut self) {
+        let old = self.article.load_state();
+        self.article
+            .stop_load(super::article_cache::LoadState::Stopped);
+        self.dirty |= old != self.article.load_state();
+    }
+    pub(super) fn interrupt_full_load(&mut self) {
+        let old = self.article.load_state();
+        self.article
+            .stop_load(super::article_cache::LoadState::Cancelled);
+        self.dirty |= old != self.article.load_state();
+    }
+    pub(super) fn full_load_action(
+        &mut self,
+        generation: u64,
+        id: u64,
+        resume: bool,
+        view: &View,
+    ) -> bool {
+        if generation != view.generation
+            || self.article_mode != ArticleMode::Web
+            || self.raw_reading
+            || resume
+                && (view.phase != Phase::Connected
+                    || !matches!(view.context(), Context::ArticleReading { .. }))
+        {
+            return false;
+        }
+        let changed = self.article.load_action(id, resume);
+        self.dirty |= changed;
+        changed
+    }
+    pub(super) fn next_full_page(&mut self, view: &View) -> Option<pttstella::navigation::Intent> {
+        if !self.cached_reading(view.stamp(), view) || self.has_in_flight() || self.dirty {
+            return None;
+        }
+        let old = self.article.load_state();
+        let intent = self.article.next_full_page(
+            &view.context(),
+            view.frame.revision,
+            tokio::time::Instant::now(),
+        );
+        self.dirty |= old != self.article.load_state();
+        intent
     }
     pub(super) fn continue_article_fetch(
         &mut self,

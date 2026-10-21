@@ -5,6 +5,7 @@ use std::{future::Future, pin::Pin};
 pub(super) enum Kind {
     Login,
     Navigate,
+    Preload,
     Browse,
     Destination,
 }

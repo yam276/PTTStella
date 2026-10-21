@@ -870,3 +870,59 @@ fn reading_modes_lengths_and_account_policies_keep_text_links_and_exports_consis
         }
     }
 }
+
+#[test]
+fn full_article_loading_requires_ack_preserves_cancelled_data_and_never_runs_in_terminal_mode() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut source = Screen::new(80, 24).unwrap();
+    source.feed(
+        &super::super::probe::surface_sample(
+            Some("inline_pages"),
+            true,
+            Some("http://127.0.0.1:1234"),
+        )
+        .unwrap(),
+    );
+    view.frame = source.frame();
+    let packet = state
+        .queue(&view, false, &DisplaySettings::default())
+        .unwrap()
+        .clone();
+    let id = packet.article.as_ref().unwrap().id;
+    assert!(state.next_full_page(&view).is_none());
+    assert!(
+        state
+            .acknowledge(Identity {
+                presentation: packet.presentation,
+                generation: packet.generation,
+                revision: packet.frame.revision
+            })
+            .is_ok()
+    );
+    assert_eq!(
+        state.next_full_page(&view),
+        Some(pttstella::navigation::Intent::NextPage)
+    );
+    assert!(!state.full_load_action(view.generation, id + 1, false, &view));
+    assert!(state.full_load_action(view.generation, id, false, &view));
+    assert!(state.full_load_deadline().is_none());
+    let current = displayed(&mut state, &view);
+    assert_eq!(
+        state
+            .current(current, &view)
+            .unwrap()
+            .article
+            .as_ref()
+            .unwrap()
+            .load,
+        Some(super::super::article_cache::LoadState::Cancelled)
+    );
+    assert!(state.next_full_page(&view).is_none());
+    assert!(state.set_article_mode(ArticleMode::Terminal));
+    displayed(&mut state, &view);
+    assert!(state.displayed.as_ref().unwrap().article.is_none());
+    assert!(!state.full_load_active());
+    assert!(state.next_full_page(&view).is_none());
+    assert!(!state.full_load_action(view.generation, id, true, &view));
+}

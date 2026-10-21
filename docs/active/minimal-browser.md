@@ -4,13 +4,27 @@
 
 ## 目標
 
-目前交付為 `dist/macos-reading-stall/PTTStella.app`（2026-10-21，macOS arm64 release、ad-hoc 簽章）：修正文章到中段頁尾省略「←離開」後無法繼續取頁的問題，保留固定的原始 PTT 資訊列及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-full-article-final/PTTStella.app`（2026-10-21，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的原始 PTT 資訊列及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 可取消的網頁全文載入（2026-10-21）
+
+依使用者明確要求，網頁文章進入即載入全文，終端機文章保持原始逐頁送鍵。Rust 的同一快取保留全文及來源頁面→顯示列對應，移除舊 256 行淘汰實作；PTT 邏輯行號與折行畫面列分開，歷史重繪不重複接頁。從中段進入時先 Home 回開頭，重建顯示列並撤銷舊圖片位置，再逐頁 PageDown。完成須同時保留文章開頭與已確認結尾，不把只看過末頁當全文。
+
+載入使用現有 planner、command owner、Connection 與 Paint ACK，一次一頁；失焦、modal、選字／拖曳、組字、工具及匯出期間暫停續送。取消按鈕或 Esc 可停止、保留已取得文字，晚到的一頁可保留但不再續送；明確按繼續才恢復。單頁等待 6 秒、總步數與容量有界，逾時不自動重試；文章接頁變動與容量限制保留舊內容並提示。上限 4,096 畫面列、估計 payload 32 MiB、連結 target 512 KiB，詳見 [文章閱讀](../article-reading.md)。自動取得的是文字，圖片仍由明確 Enter／情境操作展開；下排仍是站端原始百分比，不改成閱讀位置百分比。
+
+最終離線 gate 通過 core 13 commands／2 replay、desktop lib 143／bin 104、全 targets Clippy／fmt、完整 JS 176 及 docs。測試涵蓋 441 行、取消／晚到／繼續／舊 scope、等待期限、暫停期間回覆、中段 Home、折行兩列重疊及歷史頁重繪、容量保留開頭、終端機無預載與既有名單／網址／短文章交叉回歸。原生 window／filters 探針明確採終端機模式維持既有精確站端命令契約，單頁 UI 探針改用完整 1/1 頁尾；多頁網頁另由 full_load 驗證，未關閉產品載入功能來避開測試。
+
+最終 macOS arm64 真正 WebView 的 full_load：20 頁自製文章分片／延遲回覆，Esc 取消後停在 397 行，觀察仍不前進；明確繼續後至第 20/20 頁 100%，End 看見第 441 行，Home／PageUp／PageDown 回讀零額外站端 bytes。peer 獨立核對 19 筆精確 PageDown；全文取得期間 HTTP 計數為空，兩次 Enter 只建立一個 batch，兩圖及 404 各一個 GET。整篇選取停用超過 24 行的行 PNG；過長文字貼上被既有上限拒絕、零站端文字。terminal_pages 原生保持第一頁，手動 PageDown 才到第二頁，零自動取頁／圖片 HTTP，沒有全文控制列。
+
+兩個最終案例均匯出 960×576 原始站端 PNG，獨立像素檢查無展圖彩色內容；Close acknowledged、listeners／Connection／credential／file worker 及 HTTP server 全部 join、程序 exit 0。最終交付與兩份測試副本 15 個 Mach-O sections 相同，strict ad-hoc 簽章通過，未公證。證據為 `.local/verification/full-article/finish.json`、`native-full-final`、`native-terminal-final` 與 `validation.json`。第一輪 full_load 在操作取消前已完成，報告 failed；第一輪 terminal_pages 測試誤送 Home，被只接受 PageDown 的 peer 拒絕，failed 保留，均未列為通過。
+
+標準 16 GiB ceiling 曾因其他 namespace 預留而拒絕；核對本 namespace 約 6.71 GiB，依賴／編譯器／profile 不變，採較嚴格 8 GiB ceiling 通過，保留全域 60 GiB 與 100 GiB free floor，未清除他人資料。全文實站、正文原生滑鼠／hover／拖曳與 Windows／Linux 本輪未驗證；既有實站 52% 修復結果保留如下，不能代替新全文排程的實站驗收。正常使用者視窗未以合成探針取代，測試副本均已關閉。
 
 ## 文章中段 52% 停住與 PageUp／PageDown（2026-10-21）
 

@@ -283,7 +283,28 @@ impl Connection {
         Ok(connection)
     }
     pub fn start_inline_pages_probe(first: Vec<u8>, second: Vec<u8>) -> Result<Self, String> {
-        let connection = Self::start_owned_probe(first, probe::Scenario::InlinePages { second })?;
+        let connection = Self::start_owned_probe(
+            first,
+            probe::Scenario::InlinePages {
+                pages: vec![second],
+                delay_ms: 0,
+            },
+        )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    /// Explicit bounded local fixture for cancellable article preloading.
+    pub fn start_article_load_probe(first: Vec<u8>, pages: Vec<Vec<u8>>) -> Result<Self, String> {
+        if pages.is_empty() || pages.len() > 32 || pages.iter().any(|p| p.len() > 64 * 1024) {
+            return Err("invalid article load probe pages".into());
+        }
+        let connection = Self::start_owned_probe(
+            first,
+            probe::Scenario::InlinePages {
+                pages,
+                delay_ms: 500,
+            },
+        )?;
         connection.keep_alive(false)?;
         Ok(connection)
     }

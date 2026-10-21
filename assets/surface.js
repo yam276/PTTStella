@@ -52,6 +52,23 @@ function receiveKeyboard(state){keyboardState=state;vimToggle.textContent=state.
 const navigationMarker=document.getElementById("navigation-marker"),browseControls=document.getElementById("browse-controls");
 const browseBack=document.getElementById("browse-back"),browsePrevious=document.getElementById("browse-previous"),browseNext=document.getElementById("browse-next");
 const browseHint=document.getElementById("browse-hint");
+const articleLoad=document.getElementById("article-load"),articleLoadStatus=document.getElementById("article-load-status");
+const articleLoadCancel=document.getElementById("article-load-cancel"),articleLoadResume=document.getElementById("article-load-resume");
+function refreshArticleLoad() {
+    const article=latest?.article,state=article?.load;
+    articleLoad.hidden=!state||state==="complete";
+    articleLoad.dataset.state=state??"";
+    articleLoadStatus.textContent=state?tr("article-load-"+state,{lines:article.last_line-article.first_line+1}):"";
+    articleLoadCancel.hidden=state!=="loading";
+    articleLoadResume.hidden=!["cancelled","stopped"].includes(state);
+    articleLoadCancel.textContent=tr("article-load-cancel");articleLoadResume.textContent=tr("article-load-resume");
+}
+function changeArticleLoad(e,resume=false) {
+    if(!e.isTrusted||stopped||!latest?.article)return;
+    send({kind:"article_load",generation,article:latest.article.id,resume,trusted:true});
+    focus();
+}
+const cancelArticleLoad=e=>changeArticleLoad(e),resumeArticleLoad=e=>changeArticleLoad(e,true);
 function invalidatePresentation(){contextMenu?.close(false);stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);}
 const ctx=canvas.getContext("2d",{willReadFrequently:true});
 
@@ -101,6 +118,9 @@ function keydown(e) {
     if(e.isTrusted)stationMouse.revoke();
     cancelHover(true);
     if(pastePending) {e.preventDefault();return;}
+    if(e.key==="Escape"&&latest?.article?.load==="loading"&&!e.isComposing&&!composing&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!blocked()&&!hasSelection()&&!dragging) {
+        e.preventDefault();cancelArticleLoad(e);return;
+    }
     // Older WebKit can end composition before its confirming keydown. That
     // event still carries 229 even though isComposing is already false.
     // Leave the native IME action intact; never forward it as a BBS command.
@@ -436,6 +456,7 @@ function readingMove(intent,e,source="button") {
     if(action==="first"&&article.first_line===1||action==="last"&&article.end)return true;
     if(!["first","last"].includes(action))action=delta<0?"previous_page":"next_page";
     if(action==="previous_page"&&article.first_line===1||action==="next_page"&&article.end)return true;
+    if(article.load==="loading")return true;
     navigate({action},e,source,false);return true;
 }
 function navigate(intent,e,source="pointer",cached=true) {
@@ -548,7 +569,7 @@ function refreshExportControls() {
 }
 function refreshKeepAlive() {
     const ready=!settingsActive&&!!latest?.keep_alive&&!inlineImages.active()&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
-    const reading=!!latest?.article&&document.hasFocus()&&document.visibilityState!=="hidden"&&!settingsActive&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!exportBusy&&!keyboardState.pending;
+    const reading=!!latest?.article&&document.hasFocus()&&document.visibilityState!=="hidden"&&!settingsActive&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
     const current=stamp(),key=JSON.stringify([current,ready,reading,latest?.keep_alive_ready,latest?.keep_alive]);
     keepAlive.textContent=latest?.keep_alive?tr("keepalive-on"):tr("keepalive-off");
     keepAlive.setAttribute("aria-pressed",String(!!latest?.keep_alive));
@@ -659,6 +680,7 @@ const bindings=[...contextMenu.bindings,...sitesUi.bindings,...tools.bindings,..
     [browseBack,"click",browseReturn],[browsePrevious,"click",browseUp],[browseNext,"click",browseDown],
     [plus,"click",zoomIn],[minus,"click",zoomOut],[fit,"click",zoomFit],
     [viewport,"scroll",repaint],[viewport,"wheel",wheel,{passive:false}],[window,"resize",repaint],[window,"focus",activate],[window,"blur",deactivate],
+    [articleLoadCancel,"click",cancelArticleLoad],[articleLoadResume,"click",resumeArticleLoad],
 ];
 for(const [target,event,callback,options] of bindings) target.addEventListener(event,callback,options);
 function draw(packet) {
@@ -756,7 +778,7 @@ async function paint(packet) {
         if(packet.keep_alive_failure) surfaceNote.textContent=packet.keep_alive_failure;
         else if(surfaceNote.textContent===previousFailure) surfaceNote.textContent="";
     }
-    refreshNavigation();
+    refreshNavigation();refreshArticleLoad();
     const geometry=draw(packet);send({kind:"painted",presentation:packet.presentation,revision,generation});if(packet.probe) probe(packet,geometry);
     surface.dataset.revision=String(revision);
     surface.dataset.fontSize=String(packet.settings.font_size);surface.dataset.baseline=String(packet.settings.baseline);
@@ -817,7 +839,7 @@ function runSurfaceProbe(mode){
 }
 function showNotice(message){if(!stopped&&message&&!settingsUi.notice(message))surfaceNote.textContent=message;}
 const route=createSurfaceRouter({
-    localization:data=>{tr.update({kind:"localization",payload:data});document.documentElement.lang=data.language;settingsUi.relocalize();tools.relocalize();receiveKeyboard(keyboardState);refreshControls();},
+    localization:data=>{tr.update({kind:"localization",payload:data});document.documentElement.lang=data.language;settingsUi.relocalize();tools.relocalize();receiveKeyboard(keyboardState);refreshControls();refreshArticleLoad();},
     paint,
     station_mouse_rejected:data=>{stationMouse.reject(data.lease);showNotice(data.message);},
     surface_probe:runSurfaceProbe,
