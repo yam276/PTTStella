@@ -3,7 +3,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import time
@@ -67,7 +66,7 @@ def build(package, staging, version):
     parse_version(version)
     iscc = compiler()
     config = json.loads((ROOT/'tooling/windows/installer-tools.json').read_text(encoding='utf-8'))
-    if not re.search(r'(?<![0-9.])'+re.escape(config['version'])+r'(?![0-9.])', run(str(iscc), '/?')):
+    if run(str(iscc), '--version').strip() != config['version']:
         raise RuntimeError('Use the pinned Inno Setup '+config['version']+' compiler')
     bootstrapper = staging/'MicrosoftEdgeWebview2Setup.exe'
     download_bootstrapper(bootstrapper)

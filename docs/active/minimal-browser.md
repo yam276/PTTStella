@@ -18,7 +18,9 @@ repo 改為 Public 後，GitHub 標準 runner 已實際啟動，Release PR polic
 
 後續 Windows desktop bin 的 overdue_cleanup 測試在 130 項通過、1 項失敗時抓到測試自身的計時競態：10ms timer 與零期限通知在同一 Windows timer tick 可同時就緒，不能用固定睡眠證明通知已發出。改以獨立 oneshot 接收真實 overdue 通知，再確認 cleanup 的 ack sender 尚未關閉，送 ack 後必須收到 joined；保留提前結束失敗與有界等待，不調整生產 retained_wait 或清理期限。macOS 本機 131 項 bin、全 targets Clippy、fmt／docs 通過；Windows 最終結果仍以新 run 為準。
 
-證據 .local/verification/release-v0.1.0（windows-verify-attempt2.log、windows-verify-4d.log、lifecycle-gate.json）；0.1.0 發佈與四架構最終建置仍進行中，尚未建立 tag 或 Release。
+Windows 隨後已通過全部 Rust／JS 測試，原生打包抓到 Inno 7 的 help banner 只寫主版本 7，無法用 /? 檢查完整 7.1.0。依上游 is-7_1_0 的 ISCC.dpr，改用正式 --version 輸出的 engine version 並精確比較，仍拒絕錯版、相鄰版本及空輸出；不放寬下載 SHA-256 或 WebView2 簽章驗證。Python tooling 71、docs 與 actionlint 通過，原生結果以後續完整 verify 為準。
+
+證據 .local/verification/release-v0.1.0（windows-verify-attempt2.log、windows-verify-4d.log、lifecycle-gate.json、windows-9f.log、ISCC-7.1.0.dpr）；0.1.0 發佈與四架構最終建置仍進行中，尚未建立 tag 或 Release。
 
 ## 列表與選單可視區首尾 Home／End（2026-10-22）
 
