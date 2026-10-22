@@ -100,28 +100,26 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         for(const index of packet.image_links??[]){
             const link=packet.links[index];if(!link||link.row>=packet.frame.rows-1)continue;
             const previous=result.find(candidate=>candidate.source===link.url);
-            if(previous){if(link.row<=previous.row+1){previous.row=Math.max(previous.row,link.row);previous.end=link.end;}continue;}
-            result.push({index,row:link.row,end:link.end,source:link.url});
+            if(previous){if(link.row<=previous.row+1){previous.row=Math.max(previous.row,link.row);previous.start=link.start;previous.end=link.end;}continue;}
+            result.push({index,row:link.row,start:link.start,end:link.end,source:link.url});
         }
         return result;
     }
-    function layoutControls(packet,mapping,base,ratio,width,controlGaps,wholeRow){
+    function layoutControls(packet,mapping,base,ratio,wholeRow){
         const live=new Set(candidates.map(candidate=>candidate.source));
         for(const [source,button] of controls)if(!live.has(source)){button.remove();controls.delete(source);}
-        const bounds=viewport?.getBoundingClientRect(),origin=surface.getBoundingClientRect(),slots=new Map();
+        const bounds=viewport?.getBoundingClientRect(),origin=surface.getBoundingClientRect();
         for(const candidate of candidates){
-            const height=(base.y(candidate.row+1)-base.y(candidate.row))/ratio,size=Math.max(14,Math.min(26,height-2));
-            const below=controlGaps.has(candidate.row),top=(below?mapping.bottom(candidate.row):mapping.y(candidate.row))/ratio;
-            const slot=below?(slots.get(candidate.row)||0):0;
-            if(below)slots.set(candidate.row,slot+1);
-            const left=below?width-size-2-slot*(size+4):base.x(candidate.end)/ratio+3;
+            const height=(base.y(candidate.row+1)-base.y(candidate.row))/ratio;
+            const size=Math.min(Math.max(14,Math.min(26,height-2)),(base.x(candidate.end)-base.x(candidate.start))/ratio);
+            const top=mapping.y(candidate.row)/ratio+(height-size)/2,left=base.x(candidate.end)/ratio-size;
             let button=controls.get(candidate.source);
             if(!button){button=document.createElement("button");button.className="inline-expand-trigger";button.type="button";button.textContent="";controls.set(candidate.source,button);layer.append(button);}
             if(button.parentNode!==layer)layer.append(button);
             const expanded=!!candidateItem(candidate);button.disabled=expanded||!allowed();
             button.setAttribute("aria-label",tr(expanded?"inline-image-opened":"inline-image-open-one",{url:candidate.source}));button.setAttribute("aria-expanded",String(expanded));
             button.hidden=!wholeRow(candidate.row)||!!bounds&&(origin.top+top>=bounds.bottom-height||origin.top+top+size<=bounds.top);
-            Object.assign(button.style,{left:left+"px",top:top+"px",width:size+"px",height:size+"px"});
+            Object.assign(button.style,{left:left+"px",top:top+"px",width:size+"px",height:size+"px",fontSize:size+"px"});
         }
     }
     function detach(preserve=false){if(!preserve)lastLayout=null;for(const strip of strips){strip.width=0;strip.height=0;}strips=[];visible=[];
@@ -213,16 +211,8 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
             anchor={line:lastArticle.first_line+row,offset:(top-lastLayout.y(row))*ratio/oldRatio};
         } else if(cached&&lastArticle&&(lastArticle.id!==article.id||lastArticle.generation!==packet.generation)&&viewport)viewport.scrollTop=0;
         const rowOffset=cached?(current?.first_line??article.first_line)-article.first_line:0;
-        const gaps=new Map(),controlGaps=new Map(),width=canvas.width/ratio;
+        const gaps=new Map(),width=canvas.width/ratio;
         candidates=buildCandidates(packet);
-        const occupiedRows=new Map(candidates.map(candidate=>[candidate.row,[]]));
-        if(occupiedRows.size)for(const glyph of packet.frame.glyphs??[]){const row=occupiedRows.get(glyph.row);if(row&&glyph.text.trim())row.push(glyph.col);}
-        for(const candidate of candidates){
-            const size=Math.max(14,Math.min(26,(base.y(candidate.row+1)-base.y(candidate.row))/ratio-2));
-            const right=base.x(candidate.end)/ratio+size+5;
-            const occupied=occupiedRows.get(candidate.row).some(col=>col>=candidate.end&&col<(candidate.end+Math.ceil((size+5)*ratio/(base.x(1)-base.x(0)))));
-            if(right>width||occupied){const height=base.y(candidate.row+1)-base.y(candidate.row);controlGaps.set(candidate.row,height);gaps.set(candidate.row,height);}
-        }
         for(const item of visible){
             const scale=item.still?(item.wide?width/item.still.width:Math.min(1,(width-24)/item.still.width,560/item.still.height)):1;
             item.box.style.padding=item.wide?"12px 0":"12px";
@@ -295,11 +285,11 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         for(const item of visible){
             const row=item.row+rowOffset,shown=row>=0&&row<packet.frame.rows-1;
             item.box.hidden=!shown;if(!shown)continue;
-            const offset=used.get(row)??(controlGaps.get(row)||0)/ratio;
+            const offset=used.get(row)??0;
             Object.assign(item.box.style,{top:(mapping.bottom(row)/ratio+offset)+"px",width:width+"px",height:item.height+"px"});used.set(row,offset+item.height);
         }
         surface.style.height=mapping.height/ratio+"px";
-        layoutControls(packet,mapping,base,ratio,width,controlGaps,wholeRow);
+        layoutControls(packet,mapping,base,ratio,wholeRow);
         geometry={...mapping,ratio,footerHeight:cached?(base.y(packet.frame.rows)-base.y(packet.frame.rows-1))/ratio:0};knownScroll=viewport?.scrollTop??0;
         lastLayout=mapping;lastArticle=cached?{...article,generation:packet.generation,ratio}:null;
         gifs.refresh();

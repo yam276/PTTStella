@@ -4,13 +4,23 @@
 
 ## 目標
 
-目前交付為 `dist/macos-youtube-external/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-reply-image-controls-final/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 正文與推文圖片箭頭收在網址內（2026-10-22）
+
+圖片控制項統一靠齊 Rust 已辨識連結的右端、在該文字行垂直置中；方框寬度不超出該段連結，短 OSC 8 標籤的箭頭亦隨尺寸縮小。正文與標準推文共用此路徑，保留單張受信任連結索引／作用域驗證。藍金方框改用 75～85% 不透明度呼吸，hover／鍵盤 focus 恢復清楚顯示，減少動態效果仍停用動畫。移除原本掃描右側佔用文字、滿行時插入一行放按鈕的替代路徑；控制項只疊在網址末端，推文時間欄、緊鄰文字及下一行不移動。網址去重、下載預算、Enter 開啟順序、已開圖片與高亮保留規則不變。
+
+core 13 命令／2 replay、desktop lib 143／bin 130、全 targets Clippy、JS 230、Python tooling 70、fmt／docs 通過。JS 獨立 expected 核對滿行、推文右側中文字／時間、同列多條連結、單欄 OSC 8 標籤與 DPR 1／1.5／2 的精確方框邊界及行號映射，按鈕只送原 Rust 索引；既有 Enter、完整行、GIF／高亮與輸出回歸全數重跑。新增 inline_replies 本機合成探針，Rust 確認標準推文 ANSI、Alice 作者、兩個圖片連結欄位與固定時間欄，避免用普通引用文字冒充推文。初輪 fixture 欄位長度算錯及缺標準推文 ANSI，測試確實拒絕；依自製字串長度與既有推文格式修正 fixture，失敗 log 保留。
+
+macOS arm64 最終 Dioxus／WKWebView 畫面確認兩個方框都在網址末端內，正文 AFTER、推文作者／時間及緊鄰下一行完整，沒有多插空白行。經原生可及性按鈕操作，正文及推文各送一次指定 Link(0)／Link(1)，HTTP 精確為 colours.png 與 missing.png 的 404，同一 batch；50ms Enter 等寬正常。固定 1040×768，960×576 來源 PNG 與系統剪貼簿讀回逐像素相同。Close acknowledged、全部 owner／HTTP thread join、程序 exit 0；15 份 Mach-O loadable sections 與交付一致、strict ad-hoc 驗章通過。此輪驗證按鈕可及性操作，正文座標滑鼠手勢仍依既有約定由使用者手動驗收；Windows／Linux 原生 UI not_ready。
+
+證據 .local/verification/reply-image-controls（delivery-gate.json、final-gate.json、initial／initial-r2、native-initial、native、validation.json）；最終交付 dist/macos-reply-image-controls-final/PTTStella.app（macOS arm64 release／ad-hoc，未公證）。
 
 ## YouTube 連結直接開啟瀏覽器（2026-10-22）
 

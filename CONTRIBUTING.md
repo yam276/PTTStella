@@ -207,7 +207,7 @@ Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_
 
 內嵌管理分類另核對同一設定對話框內的站點／黑白名單／帳號與隱私／授權：分類直接顯示表單與授權文字，不再經 settings_launch 交接；工具入口與搜尋共用同一 owner。離開帳號頁、開始搜尋或關閉設定須清除密碼草稿，搜尋連續輸入不失焦；保存、晚到回覆與正常關閉需保留原有持久化／取消規則。文章列表作者欄右鍵另以 Rust 獨立 expected 驗證完整欄位、標頭／標題拒絕、整行遮罩不洩露 ID、過期畫面及本機路由；原生座標右鍵失敗須記 not_ready，不能用表單保存代替右鍵驗收。
 
-單張／等寬展圖另核對 Rust 單張索引只下載指定網址、同批次新增另一張、單張後 Paint 不自動擴張、全開升級重用資源、非法索引與終端機拒絕。JS 檢查 500ms held timer、repeat／keyup 去重、失焦／撤銷／換篇取消、可見中央目標、第二次等寬與捲動重設、解碼前的寬度意圖，以及滿行／後方有文字時箭頭不遮原文。`inline` 原生先用箭頭單開一張，核對 HTTP 只有指定圖片，短按 Enter 等寬後長按全開；另用新程序以明確 50ms 短按、方向鍵捲動及再短按核對 index 切換，500ms 以上才是長按。來源 PNG 仍不含控制項與展圖，正常 Close／全部 owner join，並核對 `inline_targets` 與下載計數。原生工具的預設按鍵持續時間不當作短按證明。
+單張／等寬展圖另核對 Rust 單張索引只下載指定網址、同批次新增另一張、單張後 Paint 不自動擴張、全開升級重用資源、非法索引與終端機拒絕。JS 檢查 500ms held timer、repeat／keyup 去重、失焦／撤銷／換篇取消、可見中央目標、第二次等寬與捲動重設、解碼前的寬度意圖，以及滿行／後方有文字時箭頭限於網址末端、不遮右側文字或新增行。`inline_replies` 使用正文及標準推文圖片連結，後接正文／時間欄；核對原生半透明按鈕在網址內、推文作者與時間不被蓋住，按鈕單開後仍是同一 batch，來源 PNG 及 Close／owner 清理通過。`inline` 原生先用箭頭單開一張，核對 HTTP 只有指定圖片，短按 Enter 等寬後長按全開；另用新程序以明確 50ms 短按、方向鍵捲動及再短按核對 index 切換，500ms 以上才是長按。來源 PNG 仍不含控制項與展圖，正常 Close／全部 owner join，並核對 `inline_targets` 與下載計數。原生工具的預設按鍵持續時間不當作短按證明。
 
 macOS 設定 Esc／關於／GIF／圖片剪貼簿變更需跑 core、desktop lib／bin、Clippy、JS 與 docs。實際全螢幕視窗開設定，Esc 關閉設定後必須維持全螢幕；有草稿先保存，錯誤保留表單。關於頁作者／版本／repo 與 Cargo package metadata 比對，不以寫死版本替代。GIF 使用本機 motion.gif，觀察不同時間的像素變化、離開畫面／失焦停止、回來播放與關閉清理；動畫數量與幀像素預算由獨立 expected JS 案例核對。PNG 剪貼簿沿用 production export pipeline，原生複製後由 OS clipboard 讀回，在 probe 獨立目錄留下 clipboard.png／clipboard-rows.png 供像素比對；只在明確點測試複製時執行，不記一般使用者剪貼簿。存檔與剪貼簿須保有相同尺寸與像素，過期／取消／不合法 PNG 不可寫入。
 

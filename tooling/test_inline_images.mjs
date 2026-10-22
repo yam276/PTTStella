@@ -489,15 +489,35 @@ test('scrolling chooses unopened visible images before widening, and excludes of
     assert.ok(e.nodes.filter(n=>n.className==='inline-image').every(box=>box.children.every(n=>n.style.width!=='480px')));
     await e.ui.destroy();
 });
-test('the square URL control opens only its Rust index and never overlays following text or a full-width URL',async()=>{
+test('the square URL control stays inside the URL tail without inserting rows or covering following text',async()=>{
     const e=interactiveImages();e.packet.links[0].end=80;e.layout();
     const buttons=e.nodes.filter(n=>n.className==='inline-expand-trigger'&&n.parentNode);
-    assert.equal(buttons.length,3);assert.equal(buttons[0].style.left,'456px');assert.equal(buttons[0].style.top,'72px');
-    assert.equal(e.ui.layout(e.packet,e.base,1).rowAt(80),null,'fallback control row is outside terminal cells');
+    assert.equal(buttons.length,3);assert.equal(buttons[0].style.left,'458px');assert.equal(buttons[0].style.top,'49px');
+    assert.equal(e.ui.layout(e.packet,e.base,1).rowAt(80),3,'no fallback row or shifted terminal cells');
     const button=buttons[1],event={target:{closest:()=>button},isTrusted:true,button:0,preventDefault(){},stopPropagation(){}};
     e.ui.bindings.find(([node,type])=>node.id==='inline-images'&&type==='click')[2](event);
     assert.deepEqual(e.requests,[{target:{kind:'link',index:1},trusted:true}]);
     e.ui.bindings.find(([node,type])=>node.id==='inline-images'&&type==='click')[2]({...event,isTrusted:false});assert.equal(e.requests.length,1);
+    await e.ui.destroy();
+});
+
+test('reply-image arrows stay within the URL before timestamps, adjacent links and short OSC 8 labels at fractional scales',async()=>{
+    const e=interactiveImages();
+    e.packet.links=[{row:2,start:12,end:50,url:'https://example.com/reply.png'},
+        {row:2,start:52,end:74,url:'https://example.com/second.png'},
+        {row:7,start:12,end:13,url:'https://example.com/label.png'}];
+    e.packet.reply_rows=[2,7];
+    e.packet.frame.glyphs=[{row:2,col:50,text:'後',width:2},...Array.from('10/22',(text,col)=>({row:2,col:74+col,text,width:1}))];
+    for(const ratio of [1,1.5,2]){
+        const mapping=e.ui.layout(e.packet,{x:c=>c*6*ratio,y:r=>r*24*ratio},ratio);
+        const buttons=e.nodes.filter(n=>n.className==='inline-expand-trigger'&&n.parentNode);
+        assert.deepEqual(buttons.map(b=>[b.style.left,b.style.top,b.style.width,b.style.height]),
+            [['278px','49px','22px','22px'],['422px','49px','22px','22px'],['72px','177px','6px','6px']]);
+        assert.equal(mapping.y(3),72*ratio);assert.equal(mapping.y(8),192*ratio);
+        const button=buttons[0],event={target:{closest:()=>button},isTrusted:true,button:0,preventDefault(){},stopPropagation(){}};
+        e.ui.bindings.find(([node,type])=>node.id==='inline-images'&&type==='click')[2](event);
+    }
+    assert.deepEqual(e.requests.map(r=>r.target),Array(3).fill({kind:'link',index:0}));
     await e.ui.destroy();
 });
 
