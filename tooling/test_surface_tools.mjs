@@ -12,7 +12,7 @@ function fixture({width=900,height=700,reduced=false,language='zh-TW',withSettin
         setAttribute(k,v){this.attrs[k]=v;},removeAttribute(k){delete this.attrs[k];},focus(){document.activeElement=this;},
         contains(target){return target===this;}});
     const root=element(),ball=element(),fan=element(),panel=element();
-    root.classList={add:v=>classes.add(v),remove:v=>classes.delete(v)};
+    root.classList={add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v)};
     const petals=['navigate','display','capture','input','session','filters',...(withSettings?['settings']:[])].map(group=>{const p=element();p.dataset.toolsTarget=group;return p;});
     const groups=petals.filter(p=>p.dataset.toolsTarget!=="settings").map(p=>{const group=element();group.dataset.toolsGroup=p.dataset.toolsTarget;return group;});
     const document={activeElement:null,hidden:false,querySelector:()=>null},window={innerWidth:width,innerHeight:height};
@@ -335,4 +335,18 @@ test('seven responsive hit areas and their panel scale consistently through 4K w
   f.window.innerWidth=900;f.window.innerHeight=700;f.fire(f.window,'resize');assert.equal(f.menu.snapshot().scale,1);assert.equal(Number.parseFloat(f.panel.style.width),330);
   f.menu.destroy();assert.equal(f.menu.clean(),true);
  }
+});
+
+test('low opacity preference remains intact through both open paths, category Back and dismissal',()=>{
+    const f=fixture();f.menu.setOpacity(20);
+    for(const open of [()=>f.fire(f.ball,'click'),()=>f.menu.showAt({isTrusted:true,clientX:300,clientY:300})]){
+        open();assert.equal(f.root.classList.contains('open'),true);
+        assert.equal(f.root.style['--tools-opacity'],'0.2');
+        f.fire(f.petals[0],'click');assert.equal(f.ball.attrs['aria-expanded'],undefined);
+        assert.equal(f.root.classList.contains('open'),true);
+        f.fire(f.ball,'click');assert.equal(f.root.classList.contains('open'),true);
+        f.fire(f.window,'blur');assert.equal(f.root.classList.contains('open'),false);
+        assert.equal(f.root.style['--tools-opacity'],'0.2');
+    }
+    f.menu.destroy();assert.equal(f.menu.clean(),true);
 });
