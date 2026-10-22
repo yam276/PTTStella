@@ -184,7 +184,6 @@ impl Resources {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{cell::Cell, rc::Rc};
     use tokio::sync::oneshot;
     #[test]
     fn joined_renderer_keeps_probe_observations_when_stopped_notification_races() {
@@ -206,15 +205,13 @@ mod tests {
     #[tokio::test]
     async fn overdue_cleanup_keeps_ownership_until_acknowledged() {
         let (ack, receiver) = oneshot::channel();
-        let notified = Rc::new(Cell::new(false));
-        let flag = notified.clone();
-        let work = retained_wait(receiver, || flag.set(true), Duration::ZERO);
+        let (notified, notice) = oneshot::channel();
+        let work = retained_wait(receiver, move || notified.send(()).unwrap(), Duration::ZERO);
         tokio::pin!(work);
         tokio::select! {
             _ = &mut work => panic!("cleanup was abandoned"),
-            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
+            result = tokio::time::timeout(Duration::from_secs(2), notice) => result.unwrap().unwrap(),
         }
-        assert!(notified.get());
         assert!(!ack.is_closed());
         ack.send("joined").unwrap();
         assert_eq!(work.await.unwrap(), "joined");
