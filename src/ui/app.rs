@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use dioxus_icons::lucide::{
     ALargeSmall, AlignVerticalJustifyEnd, ArrowDown, ArrowLeft, ArrowUp, Camera, Compass, Copy,
     ExternalLink, Eye, FileDown, FileText, FolderOpen, Globe, Image, Keyboard, Languages, Link,
-    List, Plug, RefreshCw, RotateCcw, Save, Settings, Shield, Star, Trash2, Type, X,
+    List, ListFilter, Plug, RefreshCw, RotateCcw, Save, Settings, Shield, Star, Trash2, Type, X,
 };
 use pttstella::{
     connection::{Connection, Phase},
@@ -724,24 +724,26 @@ fn BrandSettingsCaption() -> Element {
 }
 
 fn filter_color_options() -> Element {
-    let options = vec![
-        (1, pttstella::msg!("filters-color-red")),
-        (2, pttstella::msg!("filters-color-green")),
-        (3, pttstella::msg!("filters-color-yellow")),
-        (4, pttstella::msg!("filters-color-blue")),
-        (5, pttstella::msg!("filters-color-magenta")),
-        (6, pttstella::msg!("filters-color-cyan")),
-        (7, pttstella::msg!("filters-color-gray")),
-        (8, pttstella::msg!("filters-color-dark-gray")),
-        (9, pttstella::msg!("filters-color-bright-red")),
-        (10, pttstella::msg!("filters-color-bright-green")),
-        (11, pttstella::msg!("filters-color-bright-yellow")),
-        (12, pttstella::msg!("filters-color-bright-blue")),
-        (13, pttstella::msg!("filters-color-bright-magenta")),
-        (14, pttstella::msg!("filters-color-bright-cyan")),
-        (15, pttstella::msg!("filters-color-white")),
+    let options = [
+        (1, "filters-color-red"),
+        (2, "filters-color-green"),
+        (3, "filters-color-yellow"),
+        (4, "filters-color-blue"),
+        (5, "filters-color-magenta"),
+        (6, "filters-color-cyan"),
+        (7, "filters-color-gray"),
+        (8, "filters-color-dark-gray"),
+        (9, "filters-color-bright-red"),
+        (10, "filters-color-bright-green"),
+        (11, "filters-color-bright-yellow"),
+        (12, "filters-color-bright-blue"),
+        (13, "filters-color-bright-magenta"),
+        (14, "filters-color-bright-cyan"),
+        (15, "filters-color-white"),
     ];
-    rsx! { for (color, label) in options { option { value: "{color}", "{label}" } } }
+    rsx! { for (color, key) in options {
+        option { value: "{color}", "data-color-key": key, {pttstella::i18n::application().loader().get(key)} }
+    } }
 }
 
 #[component]
@@ -750,36 +752,53 @@ fn FiltersSettings(filters_probe: bool) -> Element {
     rsx! {
     dialog { id: "filters-dialog", class: "settings-panel", "aria-labelledby": "filters-title",
                     h2 { id: "filters-title", {pttstella::msg!("filters-title")} }
-                    p { {pttstella::msg!("filters-description")} }
-                    p { {pttstella::msg!("filters-limitations")} }
-                    label { {pttstella::msg!("filters-default-color")} select { id: "filters-default-color", {filter_color_options()} } }
-                    button { id: "filters-default-color-save", {pttstella::msg!("filters-default-color-save")} }
-                    p { {pttstella::msg!("filters-color-help")} }
-                    label { {pttstella::msg!("filters-saved-ids")} select { id: "filters-list", size: "5", "aria-label": pttstella::msg!("filters-saved-ids") } }
-                    label { {pttstella::msg!("filters-account-id")} input { id: "filters-id", maxlength: "12", autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
-                    label { {pttstella::msg!("filters-policy")} select { id: "filters-policy",
-                        option { value: "mask", {pttstella::msg!("filters-policy-mask")} }
-                        option { value: "mask_row", {pttstella::msg!("filters-policy-mask-row")} }
-                        option { value: "allow", {pttstella::msg!("filters-policy-allow")} }
-                    } }
-                    label { {pttstella::msg!("filters-id-color")} select { id: "filters-color", disabled: true,
-                        option { value: "", {pttstella::msg!("filters-color-shared")} }
-                        {filter_color_options()}
-                    } }
-                    label { {pttstella::msg!("filters-note")} input { id: "filters-note", maxlength: "128", autocomplete: "off" } }
-                    output { id: "filters-note-status", role: "status" }
-                    div { class: "dialog-actions",
+                    div { class: "filters-tabs", role: "tablist", "aria-label": pttstella::msg!("filters-title"),
+                        button { id: "filters-tab-block", role: "tab", "aria-selected": "true", "aria-controls": "filters-editor", {pttstella::msg!("filters-tab-block")} }
+                        button { id: "filters-tab-allow", role: "tab", "aria-selected": "false", "aria-controls": "filters-editor", {pttstella::msg!("filters-tab-allow")} }
+                    }
+                    div { id: "filters-editor", role: "tabpanel", "aria-labelledby": "filters-tab-block",
+                        div { class: "filters-list-toolbar",
+                            label { r#for: "filters-list", {pttstella::msg!("filters-saved-ids")} }
+                            button { id: "filters-sort", "aria-pressed": "false",
+                                ListFilter { size: 16 }
+                                span { id: "filters-sort-label", {pttstella::msg!("filters-sort-id")} }
+                            }
+                            button { id: "filters-new", {pttstella::msg!("filters-new")} }
+                        }
+                        select { id: "filters-list", size: "5", "aria-label": pttstella::msg!("filters-saved-ids"), "aria-describedby": "filters-empty" }
+                        p { id: "filters-empty", class: "settings-help", hidden: true, {pttstella::msg!("filters-empty-block")} }
+                        label { {pttstella::msg!("filters-account-id")} input { id: "filters-id", maxlength: "12", autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
+                        label { id: "filters-policy-field", {pttstella::msg!("filters-policy")} select { id: "filters-policy",
+                            option { value: "mask", {pttstella::msg!("filters-policy-mask")} }
+                            option { value: "mask_row", {pttstella::msg!("filters-policy-mask-row")} }
+                            option { value: "allow", hidden: true, {pttstella::msg!("filters-policy-allow")} }
+                        } }
+                        label { id: "filters-color-field", hidden: true, {pttstella::msg!("filters-id-color")} select { id: "filters-color", disabled: true,
+                            option { value: "", {pttstella::msg!("filters-color-shared")} }
+                            {filter_color_options()}
+                        } }
+                        label { {pttstella::msg!("filters-note")} input { id: "filters-note", maxlength: "128", autocomplete: "off" } }
+                        output { id: "filters-note-status", role: "status" }
+                        div { class: "dialog-actions settings-actions",
+                            button { id: "filters-remove", {pttstella::msg!("filters-remove")} }
+                            button { id: "filters-save", class: "primary", {pttstella::msg!("filters-save")} }
+                            button { id: "filters-close", {pttstella::msg!("close")} }
+                        }
+                        div { id: "filters-shared-color", hidden: true,
+                            label { {pttstella::msg!("filters-default-color")} select { id: "filters-default-color", {filter_color_options()} } }
+                            button { id: "filters-default-color-save", {pttstella::msg!("filters-default-color-save")} }
+                            p { class: "settings-help", {pttstella::msg!("filters-color-help")} }
+                        }
+                    }
+                    div { class: "dialog-actions settings-actions",
                         button { id: "filters-import", {pttstella::msg!("filters-import")} }
                         button { id: "filters-import-apply", hidden: true, class: "primary", {pttstella::msg!("filters-import-apply")} }
                         button { id: "filters-import-cancel", hidden: true, {pttstella::msg!("cancel")} }
                     }
+                    p { class: "settings-help", {pttstella::msg!("filters-description")} }
+                    p { class: "settings-help", {pttstella::msg!("filters-limitations")} }
                     if filters_probe {
                         label { {pttstella::msg!("probe-clipboard")} textarea { id: "filters-copy-check", "aria-label": pttstella::msg!("probe-clipboard") } }
-                    }
-                    div { class: "dialog-actions",
-                        button { id: "filters-remove", {pttstella::msg!("filters-remove")} }
-                        button { id: "filters-save", class: "primary", {pttstella::msg!("filters-save")} }
-                        button { id: "filters-close", {pttstella::msg!("close")} }
                     }
                 }
         }

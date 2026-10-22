@@ -853,7 +853,7 @@ function runSurfaceProbe(mode){
 }
 function showNotice(message){if(!stopped&&message&&!settingsUi.notice(message))surfaceNote.textContent=message;}
 const route=createSurfaceRouter({
-    localization:data=>{tr.update({kind:"localization",payload:data});document.documentElement.lang=data.language;settingsUi.relocalize();tools.relocalize();receiveKeyboard(keyboardState);refreshControls();refreshArticleLoad();},
+    localization:data=>{tr.update({kind:"localization",payload:data});document.documentElement.lang=data.language;settingsUi.relocalize();filterUi.relocalize();tools.relocalize();receiveKeyboard(keyboardState);refreshControls();refreshArticleLoad();},
     paint,
     station_mouse_rejected:data=>{stationMouse.reject(data.lease);showNotice(data.message);},
     surface_probe:runSurfaceProbe,

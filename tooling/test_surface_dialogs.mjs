@@ -7,7 +7,8 @@ import {translator} from "./i18n_test_support.mjs";
 
 function environment(file,factory){
     const nodes=new Map(),focus=[],sent=[],renders=[],timers=new Map();let nextTimer=0;
-    function element(id){return {id,value:"",checked:false,disabled:false,open:false,dataset:{},children:[],textContent:"",
+    function element(id){return {id,value:"",checked:false,disabled:false,open:false,dataset:{},attrs:{},children:[],textContent:"",
+        setAttribute(key,value){this.attrs[key]=value;},get options(){return this.children;},
         showModal(){this.open=true;},close(){this.open=false;},focus(){focus.push(id);},
         replaceChildren(...values){this.children=values;},append(value){this.children.push(value);}};}
     const document={getElementById(id){if(!nodes.has(id))nodes.set(id,element(id));return nodes.get(id);},querySelectorAll:()=>[document.getElementById("font-source-cascadia"),document.getElementById("font-source-microsoft_jhenghei")],createElement:()=>element("option")};
@@ -20,7 +21,7 @@ function environment(file,factory){
         create(extra={}){ui=create({tr:translator("zh-TW"),send:value=>sent.push(value),beforeRequest(){},beforeShow(){},restore(){},changed(){},
             loadFonts:async()=>"",fontLoadNote:()=>"loaded",invalidateFonts(){},render:(...args)=>renders.push(args),
             prepare(){},stamp:()=>({generation:7,revision:9,input_epoch:0}),focus(){},current:()=>null,invalidate(){},reset(){},...extra});return ui;},
-        fire(id,event="click",trusted=true){const binding=ui.bindings.find(([target,type])=>target.id===id&&type===event);assert.ok(binding,id+" "+event);binding[2]({target:document.getElementById(id),isTrusted:trusted,preventDefault(){}});},
+        fire(id,event="click",trusted=true,extra={}){const binding=ui.bindings.find(([target,type])=>target.id===id&&type===event);assert.ok(binding,id+" "+event);binding[2]({target:document.getElementById(id),isTrusted:trusted,preventDefault(){},stopPropagation(){},...extra});},
         tick(){const work=[...timers.values()];timers.clear();for(const fn of work)fn();},
     };
 }
@@ -123,12 +124,15 @@ test("each account policy survives selection and is sent explicitly on save",()=
     for(const [policy,label] of [["mask","黑名單（遮內容、保留 ID）"],["mask_row","黑名單（整行塗黑）"],["allow","白名單（ID 標色）"]]){
         const env=environment("surface-filters.js","createFiltersDialog"),ui=env.create();
         env.fire("filters-open");ui.open({entries:[{id:"Alice",note:"",policy}]});
-        assert.ok(env.node("filters-list").children[1].textContent.includes(label));
+        if(policy==="allow")env.fire("filters-tab-allow");
+        assert.equal(env.node("filters-list").children.length,1);
+        assert.ok(env.node("filters-list").children[0].textContent.startsWith("Alice · "));
+        assert.ok(env.node("filters-list").children[0].textContent.includes(policy==="allow"?"使用共用顏色":label));
         env.node("filters-list").value="Alice";env.fire("filters-list","change");
         assert.equal(env.node("filters-policy").value,policy);
         env.fire("filters-save");assert.equal(env.sent.at(-1).policy,policy);
         ui.receive({state:"saved",entries:[{id:"Alice",note:"",policy}],message:"saved"});
-        assert.equal(env.node("filters-list").children[1].value,"Alice");
+        assert.equal(env.node("filters-list").children[0].value,"Alice");
         ui.destroy();
     }
 });
@@ -235,12 +239,14 @@ test("PTT login stays disabled on another station and on an unsupported platform
 test("account policy is explicit, restored on selection, and discarded with unsaved edits",()=>{
     const env=environment("surface-filters.js","createFiltersDialog"),ui=env.create();
     env.fire("filters-open");ui.open({entries:[{id:"Alice",note:"exception",policy:"allow"}],warning:null});
+    env.fire("filters-tab-allow");
     env.node("filters-list").value="Alice";env.fire("filters-list","change");
     assert.equal(env.node("filters-policy").value,"allow");
     env.fire("filters-save","click",false);assert.equal(env.sent.filter(e=>e.kind==="filters_edit").length,0);
     env.fire("filters-save");assert.equal(env.sent.at(-1).policy,"allow");
     ui.receive({state:"rejected",message:"failed"});assert.equal(env.node("filters-policy").value,"allow");
-    env.fire("filters-close");assert.equal(env.node("filters-policy").value,"mask");
+    env.fire("filters-close");assert.equal(env.node("filters-policy").value,"allow");
+    assert.equal(env.node("filters-id").value,"");
     ui.destroy();const count=env.sent.length;env.fire("filters-save");assert.equal(env.sent.length,count);
 });
 
@@ -262,7 +268,9 @@ test("import preview requires explicit apply and cancelled late results cannot r
     env.fire("filters-import-apply");env.fire("filters-import-apply");assert.equal(env.sent.filter(x=>x.kind==="filters_import_apply").length,1);
     assert.equal(ui.blocked(),true);
     ui.receive({state:"rejected",message:"save failed"});assert.equal(ui.blocked(),false);
-    assert.equal(env.node("filters-list").children.length,2);assert.equal(env.node("filters-import").disabled,false);
+    assert.equal(env.node("filters-list").children.length,0);
+    env.fire("filters-tab-allow");assert.equal(env.node("filters-list").children.length,1);
+    assert.equal(env.node("filters-list").children[0].value,"Local");assert.equal(env.node("filters-import").disabled,false);
     ui.destroy();assert.equal(ui.clean(),true);
 });
 
@@ -315,6 +323,7 @@ test("allowlist shared and individual colors require explicit trusted saves and 
     const env=environment("surface-filters.js","createFiltersDialog"),ui=env.create();
     env.fire("filters-open");ui.open({allow_color:10,entries:[{id:"Alice",policy:"allow",note:"",color:13},{id:"Bob",policy:"allow",note:""}]});
     assert.equal(env.node("filters-default-color").value,"10");
+    env.fire("filters-tab-allow");
     env.node("filters-list").value="Alice";env.fire("filters-list","change");
     assert.equal(env.node("filters-color").value,"13");assert.equal(env.node("filters-color").disabled,false);
     env.node("filters-color").value="";env.fire("filters-save");assert.equal(env.sent.at(-1).color,null);
@@ -324,9 +333,11 @@ test("allowlist shared and individual colors require explicit trusted saves and 
     env.fire("filters-default-color-save");assert.equal(env.sent.at(-1).color,12);
     assert.equal(env.node("filters-save").disabled,true);
     ui.receive({state:"rejected",message:"disk failed"});assert.equal(env.node("filters-default-color").value,"10");
+    env.fire("filters-tab-allow");
     env.node("filters-default-color").value="12";env.fire("filters-default-color-save");
     ui.receive({state:"saved",allow_color:12,entries:[],message:"saved"});assert.equal(env.node("filters-default-color").value,"12");
-    env.node("filters-policy").value="mask";env.fire("filters-policy","change");assert.equal(env.node("filters-color").disabled,true);
+    env.fire("filters-tab-block");assert.equal(env.node("filters-color").disabled,true);
+    assert.equal(env.node("filters-color-field").hidden,true);
     env.fire("filters-close");assert.equal(env.node("filters-color").value,"");ui.destroy();
 });
 
@@ -359,4 +370,70 @@ test('leaving an embedded settings panel preserves search focus until the host c
  const dialog={open:true};let restored=0;
  const restore=vm.runInNewContext(source.slice(start,end)+'\nrestoreSettingsPanelFocus',{document:{getElementById:()=>dialog},restoreEditingFocus:()=>restored++});
  restore();assert.equal(restored,0);dialog.open=false;restore();assert.equal(restored,1);
+});
+
+function filterFixture(entries,{allowColor=14}={}){
+    const env=environment("surface-filters.js","createFiltersDialog");let language="zh-TW";
+    for(const [value,key] of [[10,"filters-color-bright-green"],[13,"filters-color-bright-magenta"],[14,"filters-color-bright-cyan"]])
+        env.node("filters-color").append({value:String(value),dataset:{colorKey:key}});
+    const ui=env.create({tr:(key,args)=>translator(language)(key,args)});
+    env.fire("filters-open");ui.open({entries,allow_color:allowColor});
+    return {env,ui,ids:()=>env.node("filters-list").children.map(option=>option.value),language:value=>language=value};
+}
+test("account tabs contain only real IDs and sort within each category without editing stored rules",()=>{
+    const entries=[{id:"Zulu",policy:"mask",note:"z note"},{id:"alpha",policy:"mask_row",note:"a note"},
+        {id:"Zwhite",policy:"allow",color:10,note:"green"},{id:"Awhite",policy:"allow",note:"shared"},{id:"Bwhite",policy:"allow",color:13,note:"pink"}];
+    const f=filterFixture(entries),{env,ui}=f,snapshot=JSON.stringify(entries),count=env.sent.length;
+    assert.deepEqual(f.ids(),["alpha","Zulu"]);assert.equal(env.node("filters-list").selectedIndex,-1);
+    assert.ok(env.node("filters-list").children[0].textContent.startsWith("alpha · 黑名單（整行塗黑）"));
+    env.node("filters-list").value="alpha";env.fire("filters-list","change");env.node("filters-note").value="unsaved note";
+    env.fire("filters-sort","click",false);assert.deepEqual(f.ids(),["alpha","Zulu"]);
+    env.fire("filters-sort");assert.deepEqual(f.ids(),["Zulu","alpha"]);assert.equal(env.node("filters-list").selectedIndex,1);
+    assert.equal(env.node("filters-note").value,"unsaved note");assert.equal(env.node("filters-sort").attrs["aria-pressed"],"true");
+    env.fire("filters-tab-allow");assert.deepEqual(f.ids(),["Zwhite","Bwhite","Awhite"]);
+    assert.equal(env.node("filters-id").value,"");assert.equal(env.node("filters-policy").value,"allow");
+    assert.equal(env.node("filters-policy-field").hidden,true);assert.equal(env.node("filters-color-field").hidden,false);
+    assert.ok(env.node("filters-list").children[0].textContent.startsWith("Zwhite · 亮綠"));
+    env.fire("filters-sort");assert.deepEqual(f.ids(),["Awhite","Bwhite","Zwhite"]);
+    assert.equal(env.node("filters-tab-allow").attrs["aria-selected"],"true");
+    assert.equal(env.sent.length,count);assert.equal(JSON.stringify(entries),snapshot);
+    env.fire("filters-tab-block","keydown",true,{key:"ArrowLeft"});assert.equal(env.focus.at(-1),"filters-tab-block");
+    assert.deepEqual(f.ids(),["alpha","Zulu"]);ui.destroy();
+});
+test("new account is a separate action, tab choice constrains policy, and empty lists have no placeholder row",()=>{
+    const f=filterFixture([{id:"Alice",policy:"mask",note:"saved"}]),{env,ui}=f;
+    env.node("filters-list").value="Alice";env.fire("filters-list","change");const count=env.sent.length;
+    env.fire("filters-new");assert.equal(env.node("filters-id").value,"");assert.equal(env.node("filters-note").value,"");
+    assert.equal(env.focus.at(-1),"filters-id");assert.equal(env.sent.length,count);
+    env.fire("filters-tab-allow");assert.deepEqual(f.ids(),[]);assert.equal(env.node("filters-empty").hidden,false);
+    env.node("filters-id").value="Bob";env.node("filters-policy").value="mask_row";env.fire("filters-save");
+    assert.equal(env.sent.at(-1).policy,"allow");assert.equal(env.sent.at(-1).id,"Bob");
+    ui.receive({state:"saved",entries:[{id:"Alice",policy:"mask",note:"saved"},{id:"Bob",policy:"allow",note:""}]});
+    assert.deepEqual(f.ids(),["Bob"]);env.fire("filters-tab-block");
+    env.node("filters-id").value="Charlie";env.node("filters-policy").value="allow";env.fire("filters-save");
+    assert.equal(env.sent.at(-1).policy,"mask");ui.destroy();
+});
+test("shared color changes regroup allowlist rows, and live translation preserves the selected draft",()=>{
+    const entries=[{id:"Alice",policy:"allow",note:"saved"},{id:"Bob",policy:"allow",color:13,note:""}];
+    const f=filterFixture(entries),{env,ui}=f;env.fire("filters-tab-allow");env.fire("filters-sort");assert.deepEqual(f.ids(),["Bob","Alice"]);
+    env.node("filters-default-color").value="10";env.fire("filters-default-color-save");
+    ui.receive({state:"saved",allow_color:10,entries});assert.deepEqual(f.ids(),["Alice","Bob"]);
+    env.node("filters-list").value="Bob";env.fire("filters-list","change");env.node("filters-note").value="unsaved";
+    const count=env.sent.length;f.language("en-US");ui.relocalize();
+    assert.ok(env.node("filters-list").children[0].textContent.startsWith("Alice · Bright green"));
+    assert.equal(env.node("filters-sort-label").textContent,"Sort: category");assert.equal(env.node("filters-note").value,"unsaved");
+    assert.equal(env.node("filters-color").value,"13");assert.equal(env.node("filters-list").selectedIndex,1);assert.equal(env.sent.length,count);
+    env.node("filters-default-color").value="14";env.fire("filters-default-color-save");ui.receive({state:"rejected",message:"failed"});
+    assert.deepEqual(f.ids(),["Alice","Bob"]);assert.equal(env.node("filters-default-color").value,"10");ui.destroy();
+});
+test("import preview can be inspected across tabs and sort modes before cancellation restores saved entries",()=>{
+    const f=filterFixture([{id:"Local",policy:"allow",note:""}]),{env,ui}=f;
+    env.fire("filters-import");const request=env.sent.at(-1).request;
+    ui.receive({state:"preview",request,entries:[{id:"Imported",policy:"mask",note:""},{id:"Local",policy:"allow",note:""}]});
+    assert.deepEqual(f.ids(),["Imported"]);assert.equal(env.node("filters-new").disabled,true);
+    const count=env.sent.length;env.fire("filters-tab-allow");env.fire("filters-sort");assert.deepEqual(f.ids(),["Local"]);
+    env.fire("filters-new");assert.equal(env.sent.length,count);assert.equal(env.node("filters-save").disabled,true);
+    env.fire("filters-import-cancel");env.fire("filters-tab-block");assert.deepEqual(f.ids(),[]);
+    assert.equal(env.node("filters-empty").hidden,false);env.fire("filters-tab-allow");assert.deepEqual(f.ids(),["Local"]);
+    assert.equal(env.sent.filter(packet=>packet.kind==="filters_import_apply"||packet.kind==="filters_edit").length,0);ui.destroy();
 });
