@@ -12,6 +12,14 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## 0.1.0 Windows 原生建置檢查修復（2026-10-22）
+
+repo 改為 Public 後，GitHub 標準 runner 已實際啟動，Release PR policy 通過；先前付款／spending limit 的拒絕不再阻擋本次 run。第一輪 Windows 原生 Inno Setup 發現共用 Code include 的首行使用分號註解，已改為 Pascal 區塊註解；後續 Windows runner 的 11 項原生前置政策 probe 已通過，仍使用合成 registry／process adapter，不冒充真實 Runtime 安裝驗收。
+
+後續 Windows desktop bin 的 overdue_cleanup 測試在 130 項通過、1 項失敗時抓到測試自身的計時競態：10ms timer 與零期限通知在同一 Windows timer tick 可同時就緒，不能用固定睡眠證明通知已發出。改以獨立 oneshot 接收真實 overdue 通知，再確認 cleanup 的 ack sender 尚未關閉，送 ack 後必須收到 joined；保留提前結束失敗與有界等待，不調整生產 retained_wait 或清理期限。macOS 本機 131 項 bin、全 targets Clippy、fmt／docs 通過；Windows 最終結果仍以新 run 為準。
+
+證據 .local/verification/release-v0.1.0（windows-verify-attempt2.log、windows-verify-4d.log、lifecycle-gate.json）；0.1.0 發佈與四架構最終建置仍進行中，尚未建立 tag 或 Release。
+
 ## 列表與選單可視區首尾 Home／End（2026-10-22）
 
 依使用者要求，已辨識的主選單、系統子選單、看板／最愛／分類、文章列表、信件／精華列表與指令說明頁，內容區頂端／底端的一行範圍提供 Home／End，排除底部狀態列。與閱讀共用同一幾何 owner、16～32 CSS px 窄區及帶橫線箭頭，沒有新增覆蓋層或常駐提示。中間仍依已辨識列進入；網址與左緣返回優先，未知／空列表不提供通用 fallback。pointer 的可視幾何快照擴及這些 profile，縮放／捲動／profile 改變會撤銷舊點擊；既有 Shift、拖曳、來源版本及站端滑鼠拒絕規則保留。
