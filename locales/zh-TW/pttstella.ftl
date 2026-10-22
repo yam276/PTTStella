@@ -650,3 +650,6 @@ filters-sort-id = 排序：ID
 filters-sort-category = 排序：分類
 filters-empty-block = 尚無黑名單帳號。
 filters-empty-allow = 尚無白名單帳號。
+
+inline-image-open-one = 展開這張圖片：{ $url }
+inline-image-opened = 圖片已展開：{ $url }

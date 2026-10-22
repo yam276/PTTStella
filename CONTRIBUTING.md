@@ -33,11 +33,11 @@ core 執行 Rust 1.97.0 的 fmt、Clippy、畫面與互動測試 suite 及 2 個
 
 短文章末頁接頁另用 `--probe-surface OUTPUT_DIRECTORY short_overlap --media-origin LOOPBACK_ORIGIN`：自製兩頁回報邏輯 1～22／9～31，實際末頁從第 10 個畫面列開始，合併後必須完整保留 32 列。首尾頁尾分別使用藍底／青底，須核對 Home／End／Home 隨來源頁換色及雙色樣式；來源 PNG 保留站端末頁配色。包含相同黑背景但空白前景色不同的重疊、簽名檔、末尾兩列與歷史一般網址；peer 只接受一次 PageDown 和 Close。原生須確認末尾可見、Home 回看並左鍵點不在站端當頁的一般網址（probe 擷取到 sink，不啟動外站）、Enter 展圖、來源 PNG 與完整清理；報告須有完整 article_reading 1～32/end/complete、link request 及既有 batch 計數。真正系統瀏覽器啟動另外記實站或正常 App 的結果，不用 sink 當作外部啟動證明。
 
-全文載入另跑 core、desktop lib／bin、Clippy、fmt、完整 JS 與 docs。`--probe-surface OUTPUT_DIRECTORY full_load --media-origin LOOPBACK_ORIGIN` 提供 20 頁、441 行自製文章，peer 逐筆核對 19 個 PageDown（延遲與分片回覆），再僅接受 Close。需取消並確認不再前進、明確繼續至 100%，Home／End／PageUp／PageDown 本機回讀不得加 bytes；完成前 HTTP 零請求，之後兩次 Enter 一個 batch，三個圖片網址（含 404）各一次 GET。核對完整來源 PNG 960×576 不含展圖、Close acknowledged、全部 owner／HTTP server join 與程序退出。`terminal_pages` 使用兩頁 peer，停留第一頁不自動取頁，一次手動 PageDown 才進第二頁，圖片 HTTP 零請求，匯出 PNG 後完整清理。這些本機案例不代替實站或正文滑鼠人工驗收。
+全文載入另跑 core、desktop lib／bin、Clippy、fmt、完整 JS 與 docs。`--probe-surface OUTPUT_DIRECTORY full_load --media-origin LOOPBACK_ORIGIN` 提供 20 頁、441 行自製文章，peer 逐筆核對 19 個 PageDown（延遲與分片回覆），再僅接受 Close。需取消並確認不再前進、明確繼續至 100%，Home／End／PageUp／PageDown 本機回讀不得加 bytes；完成前 HTTP 零請求，之後兩次長按 Enter 一個 batch，三個圖片網址（含 404）各一次 GET。核對完整來源 PNG 960×576 不含展圖、Close acknowledged、全部 owner／HTTP server join 與程序退出。`terminal_pages` 使用兩頁 peer，停留第一頁不自動取頁，一次手動 PageDown 才進第二頁，圖片 HTTP 零請求，匯出 PNG 後完整清理。這些本機案例不代替實站或正文滑鼠人工驗收。
 
 原生 `window_probe` 與 `filters_probe` 明確採終端機文章模式，保留各自原本的逐筆站端鍵盤／刷新契約；網頁全文另由上述案例驗證。單頁的 inline／context menu／名單、文章定位及 pointer-row 合成畫面使用完整的 1/1、100% 頁尾，不以測試專用開關關閉網頁模式的載入。
 
-短文章格線／網址變更另跑 article cache 的完整格線及連結回歸，涵蓋 1／3／22／23 行、一般網址、OSC 8 圖片、選取及 ID 字串。`--probe-surface OUTPUT_DIRECTORY short_links --media-origin LOOPBACK_ORIGIN` 提供三行文章、一般及 OSC 8 圖片各一張；owned HTTP server 提供 `/colours.png`、`/colours-two.png`。實際 WebView 需核對兩條網址底線、兩次 Enter 只展開一個 batch、兩圖解碼且各一次 GET、完整 960×576 PNG、Close acknowledged 與全部 owner join。peer 拒絕所有站端輸入；此鍵盤展圖案例不替代原生滑鼠點圖／hover 驗收。
+短文章格線／網址變更另跑 article cache 的完整格線及連結回歸，涵蓋 1／3／22／23 行、一般網址、OSC 8 圖片、選取及 ID 字串。`--probe-surface OUTPUT_DIRECTORY short_links --media-origin LOOPBACK_ORIGIN` 提供三行文章、一般及 OSC 8 圖片各一張；owned HTTP server 提供 `/colours.png`、`/colours-two.png`。實際 WebView 需核對兩條網址底線、兩次長按 Enter 只展開一個 batch、兩圖解碼且各一次 GET、完整 960×576 PNG、Close acknowledged 與全部 owner join。peer 拒絕所有站端輸入；此鍵盤展圖案例不替代原生滑鼠點圖／hover 驗收。
 
 滑鼠瀏覽增量另跑 core、desktop lib／bin、Clippy、i18n 與全套 JS。`--probe-surface OUTPUT_DIRECTORY pointer_rows` 現在以本機合成主選單開始：點個人設定、原始 Left 返回、點我的最愛及目錄、滾輪下／上頁、點文章整行及左緣返回；peer 依序獨立核對 Down＋CR、Left、CR、Up＋CR、PageDown、PageUp、Down＋CR、Left，共七筆導覽與一次原始鍵，不接受多送。最後必須匯出 PNG、Close acknowledged、所有 owner join。原生右鍵另核對無反白開扇形、有反白／Shift 保留情境、checkbox 自動保存／重開／重啟、隱藏浮球仍可返回收合；hover 目視亮度與金邊，Canvas／匯出不可混入本機裝飾。DOM doubles 與 loopback 不能代替原生 UI，缺平台明記 not_ready。
 
@@ -181,7 +181,7 @@ AID 核心另核對 article_navigation 的自製 article-open fixture 與 naviga
 
 浮球工具列變更另跑 `node --test tooling/test_surface_tools.mjs`：檢查點擊／拖曳分流、六類功能與直接設定、七入口及 4K 邏輯尺寸的非重疊幾何、最近 120ms／最多 16 筆軌跡的放手速度、末端小抖動、合併至 pointerup 的位移、停止／反向、慣性與吸邊、有界座標、外來 pointer、實體按鈕遺失、取消／失焦／隱藏／清理、減少動態效果與小視窗。正式功能仍沿用原本的按鈕 ID、Rust 准入及 owner，不新增第二條操作管線。合成 probe 關閉時附帶有型別、定長的浮球觀察（按下／移動／放開計數、最後放手速度、滑行幀數與減少動態效果）；正常模式不保存這些資料。原生驗證需確認扇形／各分類、拖曳後不誤開啟、選取後仍可匯出、沒有額外站端 bytes，以及正常 Close／全部 owner join；單元的模擬事件不算原生驗收。
 
-Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_inline_images.mjs tooling/test_surface_links.mjs tooling/test_surface_dialogs.mjs`、i18n 及 Clippy。原生 inline probe 的 loopback 圖片 peer 應提供 colours.png 和明確 404 的 missing.png，核對兩次 Enter 僅各一個 GET、文章內插圖與錯誤、PNG 不含插圖、零站端 bytes 及 Close／owner join；瀏覽器排版測試不能取代此准入驗收。
+Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_inline_images.mjs tooling/test_surface_links.mjs tooling/test_surface_dialogs.mjs`、i18n 及 Clippy。原生 inline probe 的 loopback 圖片 peer 應提供 colours.png 和明確 404 的 missing.png，核對兩次長按 Enter 僅各一個 GET、文章內插圖與錯誤、PNG 不含插圖、零站端 bytes 及 Close／owner join；瀏覽器排版測試不能取代此准入驗收。
 
 自訂右鍵另跑 `node --test tooling/test_surface_context_menu.mjs tooling/test_surface_links.mjs tooling/test_surface_mouse.mjs tooling/test_inline_images.mjs`、desktop lib／bin、Fluent、core 與 Clippy。原生 `context_menu` 探針、剪貼簿讀回、選單不穿透／按鍵不送站端、PNG 與正常關閉的要求見 [右鍵操作契約](docs/context-menu.md)。剪貼簿單元使用注入 writer，不操作開發者的系統剪貼簿；原生探針才在明確測試操作時寫入自製內容。
 
@@ -195,7 +195,7 @@ Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_
 
 統一設定視窗變更另跑完整 JS、desktop lib／bin、Clippy、i18n 與 Python tooling 測試。Windows driver 核對中英文搜尋、實際偏好檔與畫面像素、無效中間值不寫入、分類恢復預設、匯入自動保存及重開；設定 driver 必須回傳主 target 本身，重複開啟不探索或建立輔助 CDP target。缺少 Windows runner 仍為 not_ready。macOS 原生另核對 ⌘,、品牌與 Lucide、連續修改自動保存、同一主視窗內的對話框關閉／重開、設定開啟時 ⌘Q、PNG 與 Close／全部 owner join，還要確認程序退出；只有 cleanup JSON 不能證明沒有隱藏視窗殘留。
 
-`--probe-surface OUTPUT_DIRECTORY inline_pages --media-origin http://127.0.0.1:PORT` 使用兩頁自製閱讀畫面。同一 URL 在兩頁的 link index／行位置不同，第二頁分段重繪；peer 只接受一次 PageDown 及 Close，往回讀必須走本機快取，任何 PageUp／額外輸入均失敗，圖片 HTTP 請求不得重複。仍須兩次 Enter 一個 batch、兩頁可見圖片、歷史文字複製、目前站端 PNG 與完整清理。此案例不取代原本零站端 bytes 的 inline 探針。
+`--probe-surface OUTPUT_DIRECTORY inline_pages --media-origin http://127.0.0.1:PORT` 使用兩頁自製閱讀畫面。同一 URL 在兩頁的 link index／行位置不同，第二頁分段重繪；peer 只接受一次 PageDown 及 Close，往回讀必須走本機快取，任何 PageUp／額外輸入均失敗，圖片 HTTP 請求不得重複。仍須兩次長按 Enter 一個 batch、兩頁可見圖片、歷史文字複製、目前站端 PNG 與完整清理。此案例不取代原本零站端 bytes 的 inline 探針。
 
 短文章尺寸另用 `--probe-surface OUTPUT_DIRECTORY short_reading`：自製三行內容、80×24 來源格線與底列頁尾。以相同字型／視窗切換網頁與終端機模式，擷取原生畫面比較字格、空白區與頁尾位置，匯出 960×576 PNG 後正常關閉；peer 拒絕所有站端輸入，報告必須包含 PNG、Close acknowledged 與完整 owner 清理。這個 smoke 不代表原生滑鼠或滾輪已驗收。滾輪分流另由生產 JS handler 測試覆蓋列表 overflow、拒絕情境與網頁文章本機捲動。
 
@@ -203,6 +203,8 @@ Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_
 
 短文展圖的捲動末端可用 `short_links` 搭配兩張 100×60 本機圖片驗證：展圖後內容仍在原 24 列內，Home／End 畫面及頁尾位置應相同，重複 End／PageDown 不得多送站端 bytes。較長圖片仍須可捲至完整末端；JS 另以誇大的 DOM scrollHeight 核對 renderer 高度邊界，不能以 DOM double 代替原生滾輪驗收。
 
-長文 ANSI 接頁使用 `--probe-surface OUTPUT_DIRECTORY long_load --media-origin LOOPBACK_ORIGIN`：38 頁共 837 列，peer 只接受 37 筆精確 PageDown 及 Close；第 31 頁首列僅重設前景色。確認載入完成、End 看見第 837 列、Home 回首頁、兩次 Enter 一個 batch，圖片各一次 HTTP、來源 PNG 與完整 owner 清理。不能以只接受 20 頁的原 `full_load` 案例宣稱覆蓋這個邊界；原案例的取消／繼續驗收維持。
+長文 ANSI 接頁使用 `--probe-surface OUTPUT_DIRECTORY long_load --media-origin LOOPBACK_ORIGIN`：38 頁共 837 列，peer 只接受 37 筆精確 PageDown 及 Close；第 31 頁首列僅重設前景色。確認載入完成、End 看見第 837 列、Home 回首頁、兩次長按 Enter 一個 batch，圖片各一次 HTTP、來源 PNG 與完整 owner 清理。不能以只接受 20 頁的原 `full_load` 案例宣稱覆蓋這個邊界；原案例的取消／繼續驗收維持。
 
 內嵌管理分類另核對同一設定對話框內的站點／黑白名單／帳號與隱私／授權：分類直接顯示表單與授權文字，不再經 settings_launch 交接；工具入口與搜尋共用同一 owner。離開帳號頁、開始搜尋或關閉設定須清除密碼草稿，搜尋連續輸入不失焦；保存、晚到回覆與正常關閉需保留原有持久化／取消規則。文章列表作者欄右鍵另以 Rust 獨立 expected 驗證完整欄位、標頭／標題拒絕、整行遮罩不洩露 ID、過期畫面及本機路由；原生座標右鍵失敗須記 not_ready，不能用表單保存代替右鍵驗收。
+
+單張／等寬展圖另核對 Rust 單張索引只下載指定網址、同批次新增另一張、單張後 Paint 不自動擴張、全開升級重用資源、非法索引與終端機拒絕。JS 檢查 500ms held timer、repeat／keyup 去重、失焦／撤銷／換篇取消、可見中央目標、第二次等寬與捲動重設、解碼前的寬度意圖，以及滿行／後方有文字時箭頭不遮原文。`inline` 原生先用箭頭單開一張，核對 HTTP 只有指定圖片，短按 Enter 等寬後長按全開；另用新程序以明確 50ms 短按、方向鍵捲動及再短按核對 index 切換，500ms 以上才是長按。來源 PNG 仍不含控制項與展圖，正常 Close／全部 owner join，並核對 `inline_targets` 與下載計數。原生工具的預設按鍵持續時間不當作短按證明。

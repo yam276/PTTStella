@@ -8,7 +8,7 @@ function fixture(enabled=false){
     const f={sent:[],generation:7,composing:false,pastePending:false,selected:false,modal:false,
         keyboardState:{enabled,mode:enabled?'normal':'input'},latest:{navigation:{kind:'continue_prompt'}},
         document:{querySelector:()=>f.modal?{}:null},stationMouse:{revoke(){}},cancelHover(){},cancelDrag(){},clearSelection(){f.selected=false;},
-        hasSelection:()=>f.selected,inlineShortcut:()=>false,zoom:1,zoomTo(){f.zoomed=true;},send:p=>f.sent.push(JSON.parse(JSON.stringify(p)))};
+        hasSelection:()=>f.selected,inlineShortcut:()=>false,inlineImages:{keyHeld:()=>false},zoom:1,zoomTo(){f.zoomed=true;},send:p=>f.sent.push(JSON.parse(JSON.stringify(p)))};
     vm.createContext(f);vm.runInContext(source.slice(source.indexOf('const commandKeys='),source.indexOf('function input(')),f);
     f.key=(key,extra={})=>{const e={key,code:'KeyJ',keyCode:0,isTrusted:true,isComposing:false,ctrlKey:false,altKey:false,metaKey:false,shiftKey:false,repeat:false,prevented:false,preventDefault(){this.prevented=true;},...extra};f.keydown(e);return e;};
     return f;

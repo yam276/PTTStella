@@ -1292,16 +1292,17 @@ async fn run(
                         checks.copy_checked |=
                             checks.copied_selection == Some((generation, revision, request));
                     }
-                    SurfaceEvent::InlineExpand {presentation,stamp,key,trusted:_} => {
-                        if matches!(surface_probe.as_deref(),Some("inline"|"inline_pages"|"full_load"|"long_load"|"short_overlap"|"short_links"|"context_menu")) {checks.inline_requests+=1;}
+                    SurfaceEvent::InlineExpand {presentation,stamp,key,target,trusted:_} => {
+                        if matches!(surface_probe.as_deref(),Some("inline"|"inline_pages"|"full_load"|"long_load"|"short_overlap"|"short_links"|"context_menu")) {checks.inline_requests+=1;if checks.inline_targets.len()>=128{return Err("too many inline probe requests".into());}checks.inline_targets.push(target);}
                         let view=receiver.borrow().clone();
                         if !view.site.ptt_features() || !keyboard_policy.inline_images_key(&key,&view.context())
                             || pending_paste.read().is_some() || commands.busy() || login_open {continue;}
                         if let Some(paint)=screen.inline_page(Identity{presentation,generation:stamp.generation,revision:stamp.revision},stamp,&view) {
                             // Synthetic probes must never reach a public image host.
                             if probe.is_some() && paint.image_links.iter().any(|index|media_origin.as_ref().is_none_or(|origin|!paint.links[*index].url.starts_with(&format!("{origin}/")))) {continue;}
-                            if let Some(open)=inline_images.open(paint)? {
-                                if matches!(surface_probe.as_deref(),Some("inline"|"inline_pages"|"full_load"|"long_load"|"short_overlap"|"short_links"|"context_menu")) {checks.inline_expands+=1;}
+                            let old_batch=inline_images.batch();
+                            if let Some(open)=inline_images.open(paint,target)? {
+                                if matches!(surface_probe.as_deref(),Some("inline"|"inline_pages"|"full_load"|"long_load"|"short_overlap"|"short_links"|"context_menu"))  && old_batch!=Some(open.batch) {checks.inline_expands+=1;}
                                 eval.send(Packet::InlineOpen(open)).map_err(|e|e.to_string())?;
                             }
                         }
@@ -1564,6 +1565,8 @@ async fn run(
         });
         surface_report["article_reading"] =
             serde_json::to_value(reading).map_err(|e| e.to_string())?;
+        surface_report["inline_targets"] =
+            serde_json::to_value(&checks.inline_targets).map_err(|e| e.to_string())?;
         surface_report["link_requests"] = checks.link_requests.into();
         surface_report["load_cancels"] = checks.load_cancels.into();
         surface_report["load_resumes"] = checks.load_resumes.into();

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 const source=readFileSync(new URL('../assets/inline-images.js',import.meta.url),'utf8');
-const {inlineRowLayout,inlineShortcut}=vm.runInNewContext(source+'\n({inlineRowLayout,inlineShortcut})');
+const {inlineRowLayout,inlineShortcut,createInlineImageKey}=vm.runInNewContext(source+'\n({inlineRowLayout,inlineShortcut,createInlineImageKey})');
 test('inserted gaps never acquire terminal cells and selection height excludes pictures',()=>{
     for(const scale of [.5,1,1.5,2]) {
         const layout=inlineRowLayout(4,row=>row*24*scale,new Map([[0,100*scale],[2,60*scale]]));
@@ -26,14 +26,33 @@ test('Enter expansion is only offered on an idle local reading page',()=>{
     for(const patch of [{mode:'input'},{mode:'once'},{pending:true}])assert.ok(!inlineShortcut(key,{...state,...patch},packet));
     for(const patch of [{article_mode:"terminal"},{ptt_features:false},{connected:false},{input_pending:true},{output_pending:true},{navigation:{kind:'continue_prompt'}},{image_links:[]},{mouse:{route:'station'}}])assert.ok(!inlineShortcut(key,state,{...packet,...patch}));
 });
-test('production key handler consumes repeated Enter without sending station bytes',()=>{
-    const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');const sent=[];
+test('production Enter routes release to one image and a held press to one all-image request',()=>{
+    const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8'),sent=[],timers=new Map();let next=0;
     const context={document:{querySelector:()=>null},inlineShortcut,keyboardState:{enabled:true,mode:'normal',pending:false},latest:{presentation:3,ptt_features:true,connected:true,navigation:{kind:'article_reading'},image_links:[0],mouse:{route:'local'}},
-        stationMouse:{revoke(){}},cancelHover(){},pastePending:false,composing:false,hasSelection:()=>false,clearSelection(){},cancelDrag(){},stamp:()=>({generation:7,revision:4,input_epoch:2}),send:v=>sent.push(JSON.parse(JSON.stringify(v)))};
-    vm.runInNewContext(surface.slice(surface.indexOf('function keydown('),surface.indexOf('function input(')),context);
+        stationMouse:{revoke(){}},cancelHover(){},pastePending:false,composing:false,hasSelection:()=>false,clearSelection(){},cancelDrag(){},stamp:()=>({generation:7,revision:4,input_epoch:2}),send:v=>sent.push(JSON.parse(JSON.stringify(v))),blocked:()=>false,tools:{busy:()=>false},stopped:false,focus(){}};
+    vm.createContext(context);
+    vm.runInContext(surface.slice(surface.indexOf('function requestInline('),surface.indexOf('const inlineImages=')),context);
+    const gesture=createInlineImageKey({scope:()=>1,allowed:()=>inlineShortcut({key:'Enter'},context.keyboardState,context.latest),
+        single:e=>context.requestInline({kind:'link',index:0},e),all:e=>context.requestInline({kind:'all'},e),setTimer:fn=>{timers.set(++next,fn);return next;},clearTimer:id=>timers.delete(id)});
+    context.inlineImages={keydown:gesture.down,keyHeld:gesture.held};
+    vm.runInContext(surface.slice(surface.indexOf('function keydown('),surface.indexOf('function input(')),context);
     const event={key:'Enter',code:'Enter',isTrusted:true,ctrlKey:false,altKey:false,shiftKey:false,repeat:false,preventDefault(){}};
-    context.keydown(event);context.keydown({...event,repeat:true});context.keydown(event);
-    assert.equal(sent.length,2);assert.ok(sent.every(p=>p.kind==='inline_expand'&&p.trusted&&p.presentation===3&&p.stamp.revision===4));
+    context.keydown(event);context.keydown({...event,repeat:true});assert.equal(sent.length,0);gesture.up(event);
+    assert.equal(sent.length,1);assert.deepEqual(sent[0].target,{kind:'link',index:0});assert.equal(timers.size,0);
+    context.keydown(event);for(const fn of timers.values())fn();timers.clear();context.keydown({...event,repeat:true});gesture.up(event);
+    assert.equal(sent.length,2);assert.deepEqual(sent[1].target,{kind:'all'});
+    assert.ok(sent.every(p=>p.kind==='inline_expand'&&p.trusted&&p.presentation===3&&p.stamp.revision===4));
+    context.keydown(event);context.latest.input_pending=true;context.keydown({...event,repeat:true});gesture.up(event);
+    assert.equal(sent.length,2);assert.equal(gesture.clean(),true);
+});
+test('held Enter is revoked by focus cancellation, scope changes, blocking and untrusted input',()=>{
+    for(const reason of ['cancel','scope','blocked','destroy']){
+        let scope=1,allowed=true,actions=[],timer;
+        const g=createInlineImageKey({scope:()=>scope,allowed:()=>allowed,single:()=>actions.push('one'),all:()=>actions.push('all'),setTimer:fn=>{timer=fn;return 1;},clearTimer(){}});
+        const event={key:'Enter',isTrusted:true};g.down({...event,isTrusted:false});assert.equal(g.held(),false);g.down(event);
+        if(reason==='scope')scope=2;else if(reason==='blocked')allowed=false;else g.cancel();
+        timer();g.up(event);assert.deepEqual(actions,[]);assert.equal(g.clean(),true);
+    }
 });
 
 test('ordinary web reading keys move locally and only fetch beyond the cached edge',()=>{
@@ -64,7 +83,7 @@ test('ordinary web reading keys move locally and only fetch beyond the cached ed
     assert.equal(sent.at(-1).key.key,'k');assert.equal(requests.length,1);
 });
 
-function ownerEnvironment(cached=false){
+function ownerEnvironment(cached=false,extra={}){
     const urls=new Set(),nodes=[],encoded=[];let id=0;
     const element=tag=>{const node={tag,style:{},dataset:{},children:[],width:0,height:0,append(n){this.children.push(n);n.parentNode=this;},insertBefore(n){this.children.push(n);n.parentNode=this;},replaceChildren(){for(const n of this.children)n.parentNode=null;this.children=[];},remove(){if(this.parentNode)this.parentNode.children=this.parentNode.children.filter(n=>n!==this);this.parentNode=null;},removeAttribute(name){delete this[name];},setAttribute(){},toDataURL(){encoded.push(this);return "data:image/png;base64,"+encoded.length;},getBoundingClientRect(){const parent=this.className==='article-footer-image'?this.parentNode.getBoundingClientRect():null,left=(parseFloat(this.style.left)||0)+(parent?.left??0),top=(parseFloat(this.style.top)||0)+(parent?.top??0),width=parseFloat(this.style.width)||parent?.width||this.width,height=parseFloat(this.style.height)||parent?.height||this.height;return{left,top,width,height,right:left+width,bottom:top+height};},getContext:()=>({drawImage(){}})};nodes.push(node);return node;};
     const context={document:{createElement:element},AbortController,setTimeout,clearTimeout,
@@ -75,7 +94,7 @@ function ownerEnvironment(cached=false){
     const root=element('main');if(viewport)root.append(viewport);
     if(viewport)viewport.getBoundingClientRect=()=>({left:0,top:0,bottom:viewport.clientHeight});
     surface.getBoundingClientRect=()=>({left:0,top:surface.offsetTop-(viewport?.scrollTop??0)});
-    const ui=create({surface,canvas,viewport,render:(target,packet)=>rendered.push(packet),tr:k=>k,redraw(){},changed(){}});
+    const ui=create({surface,canvas,viewport,render:(target,packet)=>rendered.push(packet),tr:k=>k,redraw(){},changed(){},...extra});
     const packet={presentation:3,generation:7,frame:{revision:4,rows:4}};
     const open={batch:1,presentation:3,generation:7,revision:4,entries:[{index:0,row:0,key:0}]};
     return {ui,urls,nodes,canvas,surface,packet,open,viewport,rendered,root,encoded};
@@ -420,4 +439,64 @@ test('cached End and wheel stop at renderer height even if the DOM reports stale
     for(const intent of [{action:'last'},{action:'scroll',delta:5000},{action:'next_page'}]){
         context.readingMove(intent,{isTrusted:true});assert.equal(context.viewport.scrollTop,0);
     }
+});
+
+function interactiveImages(){
+    const requests=[],e=ownerEnvironment(true,{allowed:()=>true,request:(target,event)=>requests.push({target:JSON.parse(JSON.stringify(target)),trusted:event.isTrusted})});
+    e.viewport.clientHeight=500;e.viewport.getBoundingClientRect=()=>({left:0,top:0,bottom:e.viewport.clientHeight});
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:20,end:true},frame:{cols:80,rows:24,revision:4,glyphs:[]},
+        links:[{row:2,start:0,end:20,url:'https://example.com/one.png'},{row:7,start:0,end:20,url:'https://example.com/two.png'},{row:12,start:0,end:20,url:'https://example.com/three.png'}],image_links:[0,1,2]};
+    const base={x:c=>c*6,y:r=>r*24};
+    const layout=()=>e.ui.layout(packet,base,1);
+    const enter=()=>{const event={key:'Enter',isTrusted:true};e.ui.keydown(event);e.ui.keyup(event);};
+    const open=indices=>e.ui.open({...e.open,article_id:1,first_line:1,entries:indices.map(index=>({index,row:packet.links[index].row,key:index}))},packet);
+    async function decode(index){e.ui.receive({batch:1,index,image:{mime:'image/png',data:'AA==',width:64,height:32}});await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');image.naturalWidth=64;image.naturalHeight=32;image.onload();await new Promise(resolve=>setImmediate(resolve));layout();}
+    layout();return {...e,packet,base,layout,enter,open,decode,requests};
+}
+test('short Enter opens the closest visible unopened image, then makes that image exactly BBS width',async()=>{
+    const e=interactiveImages();e.enter();assert.deepEqual(e.requests,[{target:{kind:'link',index:1},trusted:true}]);
+    e.open([1]);await e.decode(1);e.enter();e.layout();assert.equal(e.requests.length,1);
+    const still=e.nodes.find(n=>n.tag==='canvas'&&n!==e.canvas&&n.width===64);assert.equal(still.style.width,'480px');assert.equal(still.style.height,'240px');
+    assert.equal(e.nodes.find(n=>n.className==='inline-image').style.padding,'12px 0');
+    await e.ui.destroy();
+});
+test('movement cancels second-Enter targeting; when every visible image is open the nearest non-wide one is enlarged',async()=>{
+    const e=interactiveImages();e.enter();e.open([0,1,2]);await e.decode(0);await e.decode(1);await e.decode(2);
+    e.viewport.scrollTop=20;e.layout();e.enter();e.layout();
+    const boxes=e.nodes.filter(n=>n.className==='inline-image');
+    const wide=boxes.filter(box=>box.children.some(n=>n.style.width==='480px'));
+    assert.equal(wide.length,1);assert.equal(boxes[1],wide[0]);assert.equal(e.requests.length,1);
+    await e.ui.destroy();
+});
+test('after moving, Enter prefers another unopened visible URL rather than enlarging the previous image',async()=>{
+    const e=interactiveImages();e.enter();e.open([1]);await e.decode(1);
+    e.viewport.scrollTop=20;e.layout();e.enter();assert.equal(e.requests.length,2);assert.notEqual(e.requests[1].target.index,1);
+    assert.ok(e.nodes.filter(n=>n.className==='inline-image').every(box=>box.children.every(n=>n.style.width!=='480px')));
+    await e.ui.destroy();
+});
+test('the square URL control opens only its Rust index and never overlays following text or a full-width URL',async()=>{
+    const e=interactiveImages();e.packet.links[0].end=80;e.layout();
+    const buttons=e.nodes.filter(n=>n.className==='inline-expand-trigger'&&n.parentNode);
+    assert.equal(buttons.length,3);assert.equal(buttons[0].style.left,'456px');assert.equal(buttons[0].style.top,'72px');
+    assert.equal(e.ui.layout(e.packet,e.base,1).rowAt(80),null,'fallback control row is outside terminal cells');
+    const button=buttons[1],event={target:{closest:()=>button},isTrusted:true,button:0,preventDefault(){},stopPropagation(){}};
+    e.ui.bindings.find(([node,type])=>node.id==='inline-images'&&type==='click')[2](event);
+    assert.deepEqual(e.requests,[{target:{kind:'link',index:1},trusted:true}]);
+    e.ui.bindings.find(([node,type])=>node.id==='inline-images'&&type==='click')[2]({...event,isTrusted:false});assert.equal(e.requests.length,1);
+    await e.ui.destroy();
+});
+
+test('a second Enter before decode remembers width intent without another download',async()=>{
+    const e=interactiveImages();e.enter();e.enter();assert.equal(e.requests.length,1);
+    e.open([1]);await e.decode(1);const box=e.nodes.find(n=>n.className==='inline-image');
+    assert.equal(box.children.find(n=>n.width===64).style.width,'480px');await e.ui.destroy();
+});
+test('scope changes and terminal mode clear image targets and revoke an unfinished held Enter',async()=>{
+    const e=interactiveImages();e.enter();e.open([1]);await e.decode(1);
+    e.ui.keydown({key:'Enter',isTrusted:true});
+    e.packet.article={id:2,first_line:1,last_line:20,end:true};e.packet.presentation++;e.layout();
+    e.ui.keyup({key:'Enter',isTrusted:true});assert.equal(e.requests.length,1);assert.equal(e.ui.active(),false);
+    e.packet.article_mode='terminal';e.packet.article=null;e.layout();
+    assert.ok(e.nodes.filter(n=>n.className==='inline-expand-trigger').every(n=>!n.parentNode));
+    await e.ui.destroy();
 });
