@@ -9,16 +9,15 @@
 </p>
 
 <p align="center">
-  <a href="Cargo.toml"><img src="assets/readme/version.svg" width="146" height="24" alt="開發版本 0.1.0-dev.1"></a>
-  <a href="docs/active/minimal-browser.md"><img src="assets/readme/status.svg" width="150" height="24" alt="狀態：開發中"></a>
-  <a href="docs/releases.md"><img src="assets/readme/platforms.svg" width="241" height="24" alt="目標平台：Windows、macOS、Linux"></a>
+  <a href="Cargo.toml"><img src="assets/readme/version.svg" width="146" height="24" alt="正式版本 0.1.0"></a>
+  <a href="https://github.com/yam276/PTTStella/releases/latest"><img src="assets/readme/status.svg" width="150" height="24" alt="狀態：正式版"></a>
+  <a href="#下載與安裝"><img src="assets/readme/platforms.svg" width="241" height="24" alt="目標平台：Windows、macOS、Linux"></a>
 </p>
 
 <p align="center">
   <a href="#第一次開啟">開始使用</a> ·
   <a href="#日常瀏覽">操作指南</a> ·
-  <a href="https://github.com/yam276/PTTStella/issues">回報問題</a> ·
-  <a href="docs/active/minimal-browser.md">開發進度</a>
+  <a href="https://github.com/yam276/PTTStella/issues">回報問題</a>
 </p>
 
 ---
@@ -31,17 +30,15 @@ PTTStella 是一款 PTT 桌面瀏覽器，保留熟悉的 BBS 排版、ANSI 色�
 
 ## 下載與安裝
 
-目前仍在開發與驗收，尚未建立 GitHub Release。正式版本將放在 [Releases 下載頁](https://github.com/yam276/PTTStella/releases)；`develop` 包含開發中的新功能，實際交付與待驗項目請見 [目前進度](docs/active/minimal-browser.md)。
-
-如果已取得測試包，請使用符合電腦平台與架構的版本：
+請從 [Releases 下載頁](https://github.com/yam276/PTTStella/releases/latest) 取得正式版，並選擇符合電腦平台與架構的檔案：
 
 | 平台 | 使用方式與需求 |
 | --- | --- |
 | Windows 10／11 x64 | 安裝版使用 `-setup.exe`；免安裝版直接執行 `-portable.exe`。兩者都需要 Microsoft Edge WebView2 Runtime，安裝版可在缺少時透過網路補裝，免安裝版須事先具備。 |
-| macOS | 解壓縮後將 `PTTStella.app` 移至「應用程式」。Apple Silicon 選 arm64，Intel 選 x64。目前測試包未經 Apple 公證，可能出現系統安全提示，詳見 [macOS 說明](docs/macos-release.txt)。 |
-| Linux x64 | 套件目標為 Ubuntu 24.04，規劃提供 `.deb` 與 `.tar.gz`，需要相容的圖形環境與系統函式庫；原生功能仍待驗證，詳見 [Linux 說明](docs/linux-package.txt)。 |
+| macOS | 解壓縮後將 `PTTStella.app` 移至「應用程式」。Apple Silicon 選 arm64，Intel 選 x64。目前版本未經 Apple 公證，可能出現系統安全提示，詳見 [macOS 說明](docs/macos-release.txt)。 |
+| Linux x64 | 套件目標為 Ubuntu 24.04，提供 `.deb` 與 `.tar.gz`，需要相容的圖形環境與系統函式庫，詳見 [Linux 說明](docs/linux-package.txt)。 |
 
-使用已打包的程式不需要安裝 Rust、Python 或 Node.js。Windows 安裝與缺少 WebView2 時的處理方式，請見 [Windows 安裝說明](docs/windows-installer.md)。
+Windows 安裝與缺少 WebView2 時的處理方式，請見 [Windows 安裝說明](docs/windows-installer.md)。
 
 ## 第一次開啟
 
@@ -52,7 +49,7 @@ PTTStella 是一款 PTT 桌面瀏覽器，保留熟悉的 BBS 排版、ANSI 色�
 
 **自動連線不會自動登入。** 啟動或重新連線時，程式不會重送帳密與先前輸入。
 
-macOS 另提供「登入」工具：在空白帳號提示時開啟，輸入帳密並按「登入」。只有勾選「將此帳號與密碼存入 macOS 鑰匙圈」才保存；之後仍須親自按登入才會取用。Windows 與 Linux 目前使用畫面中的手動登入。詳細行為見 [登入與帳密保存](docs/login.md)。
+macOS 另提供「登入」工具：在空白帳號提示時開啟，輸入帳密並按「登入」。只有勾選「將此帳號與密碼存入 macOS 鑰匙圈」才保存；之後仍須親自按登入才會取用。Windows 與 Linux 目前使用畫面中的手動登入。
 
 ### 找到工具與設定
 
@@ -99,13 +96,13 @@ macOS 另提供「登入」工具：在空白帳號提示時開啟，輸入帳�
 - **選字：** 拖曳選取文字，雙擊選取整行。需要避免觸發導覽時，可按住 `Shift` 操作。
 - **「請按任意鍵繼續」：** 標準進板提示可按一般按鍵或在 BBS 畫面內單次左鍵繼續。
 
-滑鼠導覽只適用於已辨識的版型；遇到特殊表單、確認提示或無反應的畫面，請使用 PTT 原本的鍵盤指令。部分原生滑鼠操作仍待人工驗收，詳見 [滑鼠導覽範圍](docs/navigation.md)。
+滑鼠導覽只適用於已辨識的版型；遇到特殊表單、確認提示或無反應的畫面，請使用 PTT 原本的鍵盤指令。
 
 ### 快速前往與書籤
 
 開啟「快速前往」，輸入板名、`#AID@板名` 或支援的 PTT 文章網址，再按「前往」。選擇最近看板只會填入目的地，確認後才開始；遇到進板圖或確認提示時，請先手動處理，也可按「停止導覽」中止。
 
-「文章書籤」可手動保存 AID／文章網址與選填名稱，供下次開啟；書籤只存在本機，不會下載文章全文。使用方式見 [快速切板](docs/quick-boards.md) 與 [指定文章、書籤](docs/article-navigation.md)。
+「文章書籤」可手動保存 AID／文章網址與選填名稱，供下次開啟；書籤只存在本機，不會下載文章全文。
 
 ## 閱讀文章與開圖
 
@@ -134,8 +131,6 @@ macOS 另提供「登入」工具：在空白帳號提示時開啟，輸入帳�
 
 滑鼠停在圖片連結上可顯示小預覽，預設固定於右上方；可在設定改為跟隨游標或關閉。完整圖片預覽提供符合視窗、原尺寸與重試；GIF 在開啟完整預覽或文章內展開時自動播放；文章內最多同時播放兩張可見 GIF，離開畫面或視窗失焦時暫停。滑過連結的小預覽維持首幀。影片格式的支援依作業系統而異。
 
-完整規則見 [文章閱讀](docs/article-reading.md)、[網址操作](docs/links.md) 與 [媒體預覽](docs/media.md)。
-
 ## 黑白名單與推文
 
 從浮球「過濾」開啟「黑白名單」，先切換黑名單／白名單分頁，再按「新增帳號」、輸入完整 ID 並儲存。清單先列 ID，再列遮蔽類型或標記顏色與備註；排序按鈕可切換 ID 排序與分類排序。黑名單依兩種遮蔽方式分組，白名單依標記顏色分組。也可在文章中對可見的完整 ID 字串，或文章列表的作者欄按右鍵，直接選擇加入方式；已在名單內時，對應項目改為「移出名單」。
@@ -155,7 +150,7 @@ macOS 另提供「登入」工具：在空白帳號提示時開啟，輸入帳�
 - **暫時揭露：** 「暫時顯示遮蔽內容」可查看當前畫面的黑名單內容，新畫面會恢復遮蔽。
 - **匯入名單：** 選取支援的文字名單後先預覽，按「合併並儲存」才生效。
 
-複製與 PNG 會保留目前的遮蔽結果。匯入格式與完整限制見 [本機黑白名單](docs/content-filters.md)。
+複製與 PNG 會保留目前的遮蔽結果。
 
 ## 複製、貼上與截圖
 
@@ -177,9 +172,9 @@ PNG 不包含工具列、反白、滑鼠提示或文章內展開的圖片。網�
 
 設定也可切換繁體中文／英文、調整浮球透明度、顯示浮球與右鍵工具。外觀、語言等有效修改會自動保存；站點、黑白名單與書籤則需按各自的儲存按鈕。顯示設定檔可匯出、載入字型與排版選擇，不包含帳密或黑白名單。
 
-浮球「連線 → 站點」可管理站點、編碼與下次啟動的預設站。初始為 PTT 的加密 WebSocket 連線；另有 PTT2、巴哈與水木入口。其他站目前使用原始鍵盤輸入，不套用 PTT 專用的導覽、登入與過濾。詳見 [站點與編碼](docs/sites.md)。
+浮球「連線 → 站點」可管理站點、編碼與下次啟動的預設站。初始為 PTT 的加密 WebSocket 連線；另有 PTT2、巴哈與水木入口。其他站目前使用原始鍵盤輸入，不套用 PTT 專用的導覽、登入與過濾。
 
-防閒置預設開啟，只在已辨識的文章列表／閱讀畫面閒置後刷新；登入、選字、組字、貼上或開啟對話框時暫停。可在「連線」工具中暫停本次啟動的防閒置，實站長時間效果仍待驗收。
+防閒置預設開啟，只在已辨識的文章列表／閱讀畫面閒置後刷新；登入、選字、組字、貼上或開啟對話框時暫停。可在「連線」工具中暫停本次啟動的防閒置。
 
 設定、書籤與名單保存在目前作業系統帳號的資料目錄。免安裝版也會使用該目錄，不會把所有資料放在執行檔旁。程式預設不錄製完整連線流量；macOS 明確選擇保存的密碼只存於系統鑰匙圈。
 
@@ -200,7 +195,7 @@ PNG 不包含工具列、反白、滑鼠提示或文章內展開的圖片。網�
 | `f` | 「原生一次」：下一個按鍵使用 PTT 原本功能 |
 | `i` | 持續使用 PTT 原生輸入，適合搜尋、推文與編輯 |
 
-例如要用 PTT 原本的 `h` 說明鍵，可按 `f` 再按 `h`。原生輸入在已辨識的瀏覽頁按 `Esc` 可回到 Vim；未知畫面會暫停 Vim，必要時可由工具列切換輸入模式。完整鍵位與差異見 [Vim 瀏覽](docs/vim-browsing.md)。
+例如要用 PTT 原本的 `h` 說明鍵，可按 `f` 再按 `h`。原生輸入在已辨識的瀏覽頁按 `Esc` 可回到 Vim；未知畫面會暫停 Vim，必要時可由工具列切換輸入模式。
 
 ## 常見問題
 
@@ -218,15 +213,4 @@ PNG 不包含工具列、反白、滑鼠提示或文章內展開的圖片。網�
 
 **遇到畫面或操作問題，要提供什麼？**
 
-請附上程式版本或來源 commit、作業系統與架構、重現步驟，以及當時的文章模式／Vim 狀態。必要時附上不含私人資料的截圖，勿提供密碼、驗證碼或私人名單。可至 [Issues](https://github.com/yam276/PTTStella/issues) 回報。
-
-## 開發與驗證文件
-
-PTTStella 使用 Rust／Dioxus 與系統 WebView。一般使用請以以上操作說明為主；自行編譯、參與開發或查閱驗證範圍，可從以下文件開始：
-
-- [開發與驗證流程](CONTRIBUTING.md)、[專案工作規則](AGENTS.md)
-- [目前進度與平台驗證紀錄](docs/active/minimal-browser.md)
-- [Windows 打包](docs/windows-installer.md)、[macOS 打包](docs/macos-app.md)
-- [分支與版本發佈](docs/releases.md)
-- [架構](docs/architecture.md)、[文字與雙色字](docs/dual-color.md)
-- [字型與顯示設定檔](docs/preferences-and-profiles.md)、[依賴與授權來源](docs/dependencies.md)
+請附上程式版本、作業系統與架構、重現步驟，以及當時的文章模式／Vim 狀態。必要時附上不含私人資料的截圖，勿提供密碼、驗證碼或私人名單。可至 [Issues](https://github.com/yam276/PTTStella/issues) 回報。

@@ -232,6 +232,30 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(calls[-1][:3], ('gh', 'release', 'edit'))
         self.assertIn('--latest=true', calls[-1])
 
+    def test_versioned_chinese_notes_are_published_verbatim_without_generated_changelog(self):
+        source = self.root/'source'
+        notes = source/'docs/release-notes/v0.1.0.md'
+        notes.parent.mkdir(parents=True)
+        text = '首個正式版。\n\nFirst stable release.\n'
+        notes.write_text(text, encoding='utf-8')
+        observed = []
+        def command(*args):
+            if args[:3] == ('gh', 'release', 'create'):
+                observed.append((Path(args[args.index('--notes-file') + 1]).read_text(encoding='utf-8'), args))
+                self.github.release = {'draft': True, 'assets': []}
+            return ''
+        # The notes source is separate from the exact native artifact whitelist.
+        assets = self.root/'assets'
+        assets.mkdir()
+        for path in list(self.root.iterdir()):
+            if path.is_file():
+                path.rename(assets/path.name)
+        with patch.object(release, 'ROOT', source), patch.object(release, 'command', side_effect=command):
+            result = release.publish(self.context, assets, self.github)
+        self.assertEqual(result['assets'], 11)
+        self.assertEqual(observed[0][0], text)
+        self.assertNotIn('--generate-notes', observed[0][1])
+
     def test_changed_tag_or_existing_public_release_is_never_replaced(self):
         self.github.tag = 'b'*40
         with self.assertRaisesRegex(ValueError, 'tag changed'):

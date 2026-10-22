@@ -6,6 +6,7 @@
 
 1. 在 `develop` 完成變更與驗收，將 `Cargo.toml` 的 package version 提高，並以 Cargo 更新 `Cargo.lock` 的本產品版本；兩者必須一致。使用 SemVer，例如 `0.1.0` 或 `0.1.0-rc.1`，不接受 `+build` metadata。
 2. 將版本變更提交並推送到 `develop`，建立 **develop → main** 的 PR，標題必須為 `release: v0.1.0`（對應實際版本）。版本必須高於當前 `main`。`Release PR policy` 會檢查分支、來源 repo、版本、lockfile、打包回歸與文件；草稿不通過。
+   若有 `docs/release-notes/v<version>.md`，發佈時會原樣使用該說明，不另附自動變更清單；沒有版本專用說明時沿用自動摘要。
 3. 檢查變更與驗收結果後，合併該 PR。一般 merge commit 或 squash merge 均可；不要使用 rebase merge，發佈需要 GitHub 記錄的 PR merge commit 與觸發 commit 完全一致。
 4. `main` 的 `Cargo.toml` 更新觸發 `Desktop Release`。先核對剛合併的 PR 與遞增版本，再平行測試／打包四個架構，全部成功後才建立 `v0.1.0` tag 與 GitHub Release、附上下載檔。預發佈版本自動標示 Pre-release；正式版標示 Latest。
 5. 將 `main` 合併回 `develop`，保留兩條長期分支。不要在發佈後刪除 `develop`。
