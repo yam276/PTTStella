@@ -400,7 +400,9 @@ function hitAt(point,clientY) {
     if(!point||blocked()||dragging?.moved||!stationMouse.local()) return null;
     if(latest?.navigation.kind==="continue_prompt")return canNavigate()?{kind:"continue"}:null;
     const index=linkAt(point);if(index>=0) return {kind:"link",index};
-    if(canNavigate()&&latest?.navigation.kind==="article_reading"&&latest.reply_rows?.includes(point.row))return {kind:"reply",row:point.row};
+    if(canNavigate()&&latest?.navigation.kind==="article_reading"&&latest.reply_author_words?.some(index=>{
+        const word=latest.account_words[index];return word?.row===point.row&&word.start<=point.col&&point.col<word.end;
+    }))return {kind:"reply",row:point.row};
     const back=navigationBackRegion(latest?.navigation,latest?.article);
     if(canNavigate()&&back&&point.col<back.end&&point.row>=back.first&&point.row<back.last)return {kind:"back"};
     if(!canNavigate())return null;

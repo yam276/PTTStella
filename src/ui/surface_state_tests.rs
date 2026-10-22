@@ -277,6 +277,14 @@ fn row_masks_and_id_highlights_rebuild_cached_and_terminal_outputs() {
         let fresh = Identity::of(state.queue(&view, false, &settings).unwrap());
         state.acknowledge(fresh).unwrap();
         let packet = state.current(fresh, &view).unwrap();
+        assert_eq!(
+            packet
+                .reply_author_words
+                .iter()
+                .map(|&i| packet.account_words[i].row)
+                .collect::<Vec<_>>(),
+            vec![7, 8]
+        );
         for frame in [
             &packet.frame,
             packet.source_frame.as_ref().unwrap_or(&packet.frame),
@@ -658,6 +666,33 @@ fn account_word_actions_revalidate_snapshot_and_preserve_existing_notes() {
             )
             .is_none()
     );
+}
+
+#[test]
+fn reply_author_targets_only_expose_visible_recognized_id_words() {
+    for mode in [ArticleMode::Web, ArticleMode::Terminal] {
+        let mut state = SurfaceState::new(filters::Rules::default());
+        state.set_article_mode(mode);
+        let view = view();
+        let identity = displayed(&mut state, &view);
+        let paint = state.current(identity, &view).unwrap();
+        let authors: Vec<_> = paint
+            .reply_author_words
+            .iter()
+            .map(|&index| {
+                let word = &paint.account_words[index];
+                (word.row, word.start, word.end, word.id.as_str())
+            })
+            .collect();
+        assert_eq!(
+            authors,
+            vec![(5, 3, 8, "Alice"), (7, 3, 9, "Alice2"), (8, 3, 6, "Bob")]
+        );
+        // A merged ID, quoted reply, truncated reply and body words are not authors.
+        assert!(paint.reply_rows.contains(&6));
+        let encoded = serde_json::to_value(paint).unwrap();
+        assert_eq!(encoded["reply_author_words"].as_array().unwrap().len(), 3);
+    }
 }
 
 #[test]

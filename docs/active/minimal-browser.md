@@ -4,13 +4,27 @@
 
 ## 目標
 
-目前交付為 `dist/macos-desktop-polish/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-image-navigation/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 開圖順序、首尾點擊與推文作者命中（2026-10-22）
+
+短按 Enter 改為可見範圍內由上到下優先開啟未開的圖，全部開啟後才依相同順序等寬；同列按連結欄位順序。移除舊的最近中央與第二次 Enter 指定目標／pendingWide 路徑，不保留舊目標優先權。尚未 ACK 時再按仍請求同一圖片，由既有 Rust batch 去重，不提早放大。長按全開、取消／切篇／失焦與捲動撤銷 held timer、GIF 可見播放預算及 Blob 清理保持同一 owner。
+
+可見正文最頂與最底的一行範圍（16～32 CSS px，最多四分之一高度）左鍵改為 Home／End，游標為帶橫線的金色上下箭頭；其餘上半／下半仍翻頁，左緣仍返回。展圖方框內使用同一物理可視區導覽，不虛構 terminal cell；拖曳圖片取消點擊且不產生文字選取。圖片右鍵仍走原連結情境選單。來源 stamp、投影、捲動／視窗幾何及圖片索引改變都撤銷舊點擊；終端機使用既有 First／Last intent，網頁使用既有本機首尾移動，不觸發換篇。
+
+左鍵推文高亮僅命中仍可見的作者 ID 字元，冒號／空白／內容／時間回復一般導覽，網址仍優先。Rust 用已辨識推文及可見 account words 產生作者索引，UI 只核對行／欄範圍，不解析文章或猜 ID。合併與整行遮蔽的隱藏作者不出現在左鍵目標，右鍵推文及清除高亮維持原規則。
+
+core 13 命令／2 replay、desktop lib 143／bin 127、全 targets Clippy、JS 222、Python tooling 70、fmt／docs 通過。新增獨立 expected 覆蓋開啟與等寬的上到下順序、未開優先／不預先放大、非陣列順序與可視範圍；首尾窄區、原分頁與左緣優先、圖片間隙不選字、拖曳／Shift／過期幾何／不同圖片／站端路由拒絕；作者 ID 邊界、內容中同名詞、不完整推文、合併與整行黑名單不洩露命中。既有右鍵連結、GIF、PNG、全文及文章切換測試亦通過。初輪 JS double 缺 pointerHit 及開啟後 layout，修正測試環境後重跑全套，失敗 log 保留。
+
+macOS 原生 short_links 探針 passed：兩次 50ms Enter 依文章順序先 Link(1) 一般網址、再 Link(0) OSC 8，精確 GET colours.png／colours-two.png 各一次，同一 batch；前兩次截圖仍為兩張 64×32，第三次才把上方圖放成 1040px 等寬，後續按鍵沒有額外 HTTP。視窗始終 1040×768。來源 PNG 960×576 不含圖片與控制項，系統圖片剪貼簿讀回與存檔逐像素相同；Close acknowledged、全部 owner／HTTP thread join、exit 0，15 份 Mach-O loadable sections 與交付一致、strict ad-hoc 驗章通過。
+
+正文原生座標點擊（圖片返回／上下與首尾、作者 ID 高亮）依使用者先前約定保留人工驗收；JS 生產 handler 與 Rust 資料驗證不代替該實體操作。Windows／Linux 原生 UI 本輪 not_ready。證據 .local/verification/image-navigation（delivery-gate.json、native、validation.json）；交付 dist/macos-image-navigation/PTTStella.app（macOS arm64 release／ad-hoc，未公證）。
 
 ## 設定 Esc、關於資訊、GIF 播放與圖片剪貼簿（2026-10-22）
 

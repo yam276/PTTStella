@@ -613,7 +613,7 @@ account-mask = Block content, keep ID
 account-mask-row = Block entire row
 account-allow = Add to whitelist
 reply-focus-clear = Clear reply highlighting
-reply-focus-hint = Click to highlight every reply from this ID; click again to clear. Shift or drag to select text.
+reply-focus-hint = Click the author ID to highlight all their replies; click again to clear. Shift or drag to select text.
 account-action-stale = The screen changed. Right-click the ID again.
 reply-focus = Toggle highlighting for this ID
 
