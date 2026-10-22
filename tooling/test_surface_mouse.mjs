@@ -220,7 +220,7 @@ test("samples are revoked on cancellation, source changes, black margins and des
 });
 
 test("a local Shift drag completes even if Shift is released before pointerup",()=>{
-    const calls=[],context={dragging:{pointer:9,moved:true},stationMouse:{up(){assert.fail("station must not consume local drag");}},pointermove(){},hitAt:()=>null,cellAt:()=>({col:4,row:4}),
+    const calls=[],context={dragging:{pointer:9,moved:true},stationMouse:{up(){assert.fail("station must not consume local drag");}},pointermove(){},pointerHit:()=>null,cellAt:()=>({col:4,row:4}),
         viewport:{hasPointerCapture:()=>true,releasePointerCapture:id=>calls.push(id)},surface:{dataset:{}},refreshKeepAlive(){}};
     handler("pointerup","click",context)({pointerId:9,shiftKey:false});assert.equal(context.dragging,null);assert.deepEqual(calls,[9]);
 });

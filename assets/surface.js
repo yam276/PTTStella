@@ -243,10 +243,10 @@ function pointerdown(e) {
     // Prevent the scroll container's default focus step from overriding ours.
     e.preventDefault(); focus(); clearSelection();
     const point=cellAt(e,false);
-    const hit=hitAt(point,e.clientY);
+    const hit=pointerHit(point,e);
     if(hit?.kind!=="link"||hoverCandidate?.index!==hit.index)cancelHover();
     else if(!hoverCandidate.started)cancelHover();
-    if(point&&!composing) {
+    if((point||hit&&!e.shiftKey)&&!composing) {
         dragging={anchor:point,x:e.clientX,y:e.clientY,moved:false,pointer:e.pointerId,hit:e.shiftKey?null:hit,stamp:stamp(),view:pointerView()};
         viewport.setPointerCapture(e.pointerId);
         surface.dataset.pointerId=String(e.pointerId);surface.dataset.pointerActive="true";
@@ -266,16 +266,16 @@ function pointermove(e) {
     pointerClient={x:e.clientX,y:e.clientY,clientX:e.clientX,clientY:e.clientY,trusted:e.isTrusted};media.locate(pointerClient,hoverPreference);
     if(dragging&&e.pointerId!==dragging.pointer) return;
     if(!dragging&&stationMouse.move(e)){cancelHover();setHover(null);return;}
-    if(!dragging) {if(stationMouse.local())setHover(e.shiftKey?null:cellAt(e,false));else {cancelHover();setHover(null);}return;}
+    if(!dragging) {if(stationMouse.local())setHover(e.shiftKey?null:cellAt(e,false),true,true,e.shiftKey?null:e);else {cancelHover();setHover(null);}return;}
     dragging.moved ||= Math.hypot(e.clientX-dragging.x,e.clientY-dragging.y)>3;
     if(dragging.moved)cancelHover();
-    if(dragging.moved) requestSelection({mode:"range",anchor:dragging.anchor,focus:cellAt(e,true)});
+    if(dragging.moved&&dragging.anchor) requestSelection({mode:"range",anchor:dragging.anchor,focus:cellAt(e,true)});
 }
 function pointerup(e) {
     if(!dragging&&stationMouse.up(e))return;
     if(!dragging||e.pointerId!==dragging.pointer) return;
     pointermove(e);
-    const hit=hitAt(cellAt(e,false),e.clientY);
+    const hit=pointerHit(cellAt(e,false),e);
     if(!dragging.moved&&!e.shiftKey&&stationMouse.local()&&!blocked()&&sameStamp(dragging.stamp,stamp())&&dragging.view===pointerView()&&JSON.stringify(dragging.hit)===JSON.stringify(hit)) {
         released={hit,stamp:dragging.stamp,view:dragging.view};
     }
@@ -385,12 +385,15 @@ function pointerView() {
 }
 function readingPageAt(point,clientY) {
     const region=navigationBackRegion(latest.navigation,latest.article);
-    if(point.row<region.first||point.row>=region.last)return null;
+    if(point&&(point.row<region.first||point.row>=region.last)||!point&&!Number.isFinite(clientY))return null;
     const bounds=surface.getBoundingClientRect(),visible=viewport.getBoundingClientRect();
     const top=Math.max(visible.top,bounds.top+grid.y(region.first)/grid.ratio);
     const bottom=Math.min(visible.top+viewport.clientHeight,bounds.top+grid.y(region.last)/grid.ratio);
     const y=clientY??bounds.top+(grid.y(point.row)+grid.bottom(point.row))/2/grid.ratio;
     if(y<top||y>=bottom)return null;
+    const edge=Math.min((bottom-top)/4,Math.max(16,Math.min(32,(grid.bottom(region.first)-grid.y(region.first))/grid.ratio)));
+    if(y<top+edge)return {kind:"page",action:"first"};
+    if(y>=bottom-edge)return {kind:"page",action:"last"};
     return {kind:"page",action:y<(top+bottom)/2?"previous_page":"next_page"};
 }
 function hitAt(point,clientY) {
@@ -411,8 +414,18 @@ function hitAt(point,clientY) {
     const article=latest.navigation.articles.find(a=>a.row===point.row);
     return article?{kind:"article",row:article.row}:null;
 }
-function setHover(point,redraw=true,preview=true) {
-    const hit=hitAt(point,pointerClient?.clientY),index=hit?.kind==="link"?hit.index:-1;
+// Inserted images remain outside terminal cells. Only navigation uses their
+// physical position; text selection and the image context menu keep their owners.
+function pointerHit(point,event) {
+    const image=inlineImages.linkAtPoint(event);
+    if(image<0)return hitAt(point,event.clientY);
+    if(blocked()||dragging?.moved||!stationMouse.local()||!canNavigate()||latest?.navigation.kind!=="article_reading")return null;
+    const bounds=surface.getBoundingClientRect(),back=navigationBackRegion(latest.navigation,latest.article);
+    const hit=(event.clientX-bounds.left)*grid.ratio<grid.x(back.end)?{kind:"back"}:readingPageAt(null,event.clientY);
+    return hit?{...hit,image}:null;
+}
+function setHover(point,redraw=true,preview=true,event=null) {
+    const hit=event?pointerHit(point,event):hitAt(point,pointerClient?.clientY),index=hit?.kind==="link"?hit.index:-1;
     const changed=index!==hoveredLink;hoveredLink=index;
     hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:0,kind:hit.kind}:null;
     surface.dataset.pointerAction=hit?.kind==="page"?hit.action:hit?.kind||"none";
@@ -736,7 +749,7 @@ function draw(packet) {
 }
 function repaint() {
     if(stopped||!latest||animation) return;
-    animation=requestAnimationFrame(()=>{animation=0;if(!stopped) {draw(latest);if(pointerClient)setHover(cellAt(pointerClient,false),false);}});
+    animation=requestAnimationFrame(()=>{animation=0;if(!stopped) {draw(latest);if(pointerClient)setHover(cellAt(pointerClient,false),false,true,pointerClient);}});
 }
 const observer=new ResizeObserver(repaint); observer.observe(viewport);observer.observe(viewport.parentElement);
 function checkArt({x,y}) {
@@ -807,7 +820,7 @@ async function paint(packet) {
             candidate.stamp=lease.stamp;candidate.index=lease.index;
         } else cancelHover();
     }
-    if(pointerClient)setHover(cellAt(pointerClient,false),false);
+    if(pointerClient)setHover(cellAt(pointerClient,false),false,true,pointerClient);
     if(failureChanged) {
         if(packet.keep_alive_failure) surfaceNote.textContent=packet.keep_alive_failure;
         else if(surfaceNote.textContent===previousFailure) surfaceNote.textContent="";

@@ -23,7 +23,7 @@ function fixture({cached=true}={}){
         canNavigate:()=>!f.latest.input_pending&&!f.navigationLocked&&!f.navigationRequest&&f.latest.connected&&f.latest.navigation.kind!=='unknown',
         stamp:()=>({generation:f.generation,revision:f.revision,input_epoch:0}),sameStamp:(a,b)=>JSON.stringify(a)===JSON.stringify(b),
         policy(){},focus(){},clearSelection(){},cancelHover(){},refreshKeepAlive(){},refreshNavigation(){},setHover(){},repaint(){},
-        requestSelection:value=>selections.push(value),media:{locate(){}},hoverPreference:'off'};
+        requestSelection:value=>selections.push(value),media:{locate(){}},hoverPreference:'off',inlineImages:{linkAtPoint:()=>-1}};
     vm.createContext(f);
     for(const [first,last] of [['navigationBackRegion','setHover'],['pointerdown','cancelDrag'],['readingMove',null]]){
         const end=last?source.indexOf(`function ${last}(`):source.indexOf('const browseReturn=');
@@ -52,6 +52,55 @@ test('left seventeen columns return across cached rows while live links have pri
     assert.deepEqual(link.sent,[{kind:'open_link',presentation:2,generation:7,revision:4,index:3,trusted:true}]);
     assert.equal(link.viewport.scrollTop,0);
     const body=fixture();body.tap(17,380);assert.equal(body.viewport.scrollTop,432);assert.deepEqual(body.sent,[]);
+});
+
+test('the visible top and bottom row jump Home and End while the central halves still page',()=>{
+    const f=fixture();f.latest.article.end=true;f.viewport.scrollTop=960;
+    f.tap(40,5);assert.equal(f.viewport.scrollTop,0);assert.deepEqual(f.sent,[]);
+    f.tap(40,475);assert.equal(f.viewport.scrollTop,1464);assert.deepEqual(f.sent,[]);
+    f.tap(40,100);assert.equal(f.viewport.scrollTop,1032);
+    f.tap(40,380);assert.equal(f.viewport.scrollTop,1464);
+    // Same geometry at half-height, without making the entire viewport an edge.
+    const small=fixture();small.viewport.clientHeight=240;small.viewport.scrollTop=480;
+    small.tap(40,5);assert.equal(small.viewport.scrollTop,0);
+    small.tap(40,235);assert.equal(small.viewport.scrollTop,1704);
+    for(const [y,action] of [[25,'first'],[475,'last']]){
+        const raw=fixture({cached:false});raw.latest.navigation.first_line=24;
+        raw.tap(40,y);assert.equal(raw.sent[0].intent.action,action);
+    }
+    const back=fixture();back.tap(4,475);assert.equal(back.sent[0].intent.action,'back');
+    const link=fixture();link.linkAt=()=>1;link.tap(40,5);assert.equal(link.sent[0].kind,'open_link');
+});
+function imageFixture(){
+    const f=fixture();f.viewport.scrollTop=960;f.grid.rowAt=()=>null;
+    f.inlineImages.linkAtPoint=e=>e.clientX>=0&&e.clientX<960&&e.clientY>=40&&e.clientY<520?0:-1;
+    return f;
+}
+test('expanded image gaps support Back, page, Home and End without becoming selectable terminal cells',()=>{
+    for(const [col,y,expected] of [[40,100,528],[40,380,1392],[40,5,0],[40,475,1464]]){
+        const f=imageFixture();f.tap(col,y);assert.equal(f.viewport.scrollTop,expected);assert.deepEqual(f.sent,[]);assert.deepEqual(f.selections,[]);
+    }
+    const back=imageFixture();back.tap(4,380);assert.equal(back.sent[0].intent.action,'back');
+    const hover=imageFixture();assert.deepEqual(JSON.parse(JSON.stringify(hover.pointerHit(null,hover.event(40,5)))),{kind:'page',action:'first',image:0});
+    assert.equal(hover.cellAt(hover.event(40,5),false),null);
+});
+test('image navigation rejects Shift, drag, stale geometry, wrong releases, remote route and non-image gaps',()=>{
+    for(const reason of ['shift','drag','stale','scroll','resize','other-image','released-stale','blocked','remote','unknown','untrusted','gap']){
+        const f=imageFixture(),e=f.event(40,380,{shiftKey:reason==='shift',isTrusted:reason!=='untrusted'});
+        if(reason==='blocked')f.blocked=()=>true;
+        if(reason==='remote')f.stationMouse.local=()=>false;
+        if(reason==='unknown')f.latest.navigation.kind='unknown';
+        if(reason==='gap')f.inlineImages.linkAtPoint=()=>-1;
+        f.pointerdown(e);
+        if(reason==='stale')f.latest.presentation++;
+        if(reason==='scroll')f.viewport.scrollTop=800;
+        if(reason==='resize')f.viewport.clientHeight=400;
+        if(reason==='other-image')f.inlineImages.linkAtPoint=()=>1;
+        f.pointerup(reason==='drag'?f.event(42,380):e);
+        if(reason==='released-stale')f.latest.presentation++;
+        const top=f.viewport.scrollTop;f.click(e);
+        assert.equal(f.viewport.scrollTop,top,reason);assert.deepEqual(f.sent,[],reason);assert.deepEqual(f.selections,[],reason);
+    }
 });
 
 test('raw reading excludes headers/footer, computes its visible half, and sends the existing typed intent',()=>{
