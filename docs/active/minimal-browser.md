@@ -4,13 +4,23 @@
 
 ## 目標
 
-目前交付為 `dist/macos-wide-last-row/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-list-edges/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 列表與選單可視區首尾 Home／End（2026-10-22）
+
+依使用者要求，已辨識的主選單、系統子選單、看板／最愛／分類、文章列表、信件／精華列表與指令說明頁，內容區頂端／底端的一行範圍提供 Home／End，排除底部狀態列。與閱讀共用同一幾何 owner、16～32 CSS px 窄區及帶橫線箭頭，沒有新增覆蓋層或常駐提示。中間仍依已辨識列進入；網址與左緣返回優先，未知／空列表不提供通用 fallback。pointer 的可視幾何快照擴及這些 profile，縮放／捲動／profile 改變會撤銷舊點擊；既有 Shift、拖曳、來源版本及站端滑鼠拒絕規則保留。
+
+core 13 命令／2 replay、desktop lib 144／bin 131、全 targets Clippy、JS 235、Python tooling 71、fmt／docs 通過。新增生產 JS pointerdown／up／click 測試核對七種 profile 的頂底只送一次 First／Last、底列拒絕、一般列仍 Open、實際可視區縮放／捲動、Back／連結優先、Shift／拖曳／過期／外站路由拒絕與游標不跳提示。Production Connection loopback 對主選單、看板與文章列表逐一核對精確 ESC[H／ESC[F，拒絕重複舊 stamp，等新 frame 才接受下一次；Close acknowledged。
+
+最終 macOS arm64 Dioxus／WKWebView 重新跑 wide_last_row：等寬後末行仍可見，重複 End／PageDown 不移動，來源 PNG 與修改前及系統剪貼簿 RGBA 完全一致，1040×768 固定視窗、一筆 HTTP、同一 batch、全部 owner／thread join、exit 0。交付與測試副本 15 份 Mach-O loadable sections 一致、strict ad-hoc 驗章通過。此 native smoke 未點列表首尾；該原生座標手勢依既有約定由使用者手動驗收，Windows／Linux 原生 UI not_ready，不能以 mock 或 loopback 代替。
+
+證據 .local/verification/list-edges（delivery-gate.json、native、validation.json）；交付 dist/macos-list-edges/PTTStella.app（0.1.0、macOS arm64 release／ad-hoc，未公證）。GitHub 完整發佈建置需包含這次變更後重新執行。
 
 ## 等寬圖片後末行仍可到達（2026-10-22）
 

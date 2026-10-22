@@ -238,3 +238,56 @@ test('basic reply and selection hover stays quiet while links retain their liter
     f.dragging=null;f.linkAt=()=>0;f.setHover({row:5,col:40},false,false);
     assert.equal(f.surface.title,'https://example.com/a?b=1&c=2');
 });
+
+function listFixture(kind='board_list'){
+    const f=fixture({cached:false});f.viewport.clientHeight=576;
+    f.latest.navigation=kind==='article_list'?{kind,articles:[{row:4},{row:22}],cursor_row:4}:
+        {kind,first_row:['main_menu','system_menu'].includes(kind)?12:3,last_row:['main_menu','system_menu'].includes(kind)?15:22,cursor_row:13};
+    return f;
+}
+test('known list and menu viewport edges send Home and End once without opening a row',()=>{
+    for(const kind of ['main_menu','system_menu','document_list','board_list','article_list','command_help']){
+        for(const [y,action] of [[5,'first'],[550,'last']]){
+            const f=listFixture(kind);f.tap(40,y);f.tap(40,y);
+            assert.deepEqual(f.sent.map(p=>[p.intent,p.source]),[[{action},'pointer']],kind);
+        }
+        const footer=listFixture(kind);footer.tap(40,575);assert.deepEqual(footer.sent,[],kind+' footer');
+    }
+    for(const kind of ['unknown','empty_list']){const f=listFixture(kind);f.tap(40,5);assert.deepEqual(f.sent,[]);}
+    for(const kind of ['board_list','document_list','article_list']){
+        const f=listFixture(kind);f.tap(40,100);assert.deepEqual(f.sent.map(p=>p.intent),[{action:'open',row:4}]);
+    }
+    const menu=listFixture('main_menu');menu.tap(40,330);assert.deepEqual(menu.sent.map(p=>p.intent),[{action:'open',row:13}]);
+});
+test('list edges use the visible scaled viewport and preserve links and Back priority',()=>{
+    for(const [y,action] of [[5,'first'],[235,'last']]){
+        const f=listFixture();f.viewport.clientHeight=240;f.viewport.scrollTop=72;f.tap(40,y);
+        assert.deepEqual(f.sent.map(p=>p.intent),[{action}]);
+    }
+    const back=listFixture();back.tap(4,550);assert.equal(back.sent[0].intent.action,'back');
+    const link=listFixture();link.linkAt=()=>2;link.tap(40,5);assert.equal(link.sent[0].kind,'open_link');
+});
+test('list edge transactions reject Shift, drags, late geometry, stale source and foreign mouse routes',()=>{
+    for(const reason of ['shift','drag','untrusted','remote','blocked','pending','released-scroll','held-resize','profile']){
+        const f=listFixture(),e=f.event(40,5,{shiftKey:reason==='shift',isTrusted:reason!=='untrusted'});
+        if(reason==='remote')f.stationMouse.local=()=>false;
+        if(reason==='blocked')f.blocked=()=>true;
+        if(reason==='pending')f.latest.input_pending=true;
+        f.pointerdown(e);
+        if(reason==='held-resize')f.viewport.clientHeight=300;
+        if(reason==='profile')f.latest.navigation.kind='system_menu';
+        f.pointerup(reason==='drag'?f.event(42,5):e);
+        if(reason==='released-scroll')f.viewport.scrollTop=24;
+        f.click(e);assert.deepEqual(f.sent,[],reason);
+    }
+});
+test('list edge hover uses the same Home/End cursors without a marker or tooltip',()=>{
+    const f=listFixture();f.navigationMarker={style:{},dataset:{}};f.surface.style={};
+    f.hoveredLink=-1;f.pointerClient=null;f.previewHover=()=>{};f.draw=()=>{};f.tr=key=>key;
+    vm.runInContext(source.slice(source.indexOf('function setHover('),source.indexOf('function refreshNavigation(')),f);
+    for(const [point,y,action] of [[{row:0,col:40},5,'first'],[{row:22,col:40},550,'last']]){
+        f.setHover(point,false,false,f.event(40,y));
+        assert.equal(f.surface.dataset.pointerAction,action);assert.equal(f.surface.style.cursor,'');
+        assert.equal(f.surface.title,'');assert.equal(f.navigationMarker.hidden,true);
+    }
+});

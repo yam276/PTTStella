@@ -377,14 +377,16 @@ function navigationBackRegion(context,article=null) {
     const end=context.kind==="article_list"?17:context.kind==="board_list"?10:context.kind==="article_reading"?17:20;
     return {first,last:23,end};
 }
+function hasPageEdges(context) {
+    return ["main_menu","system_menu","document_list","board_list","article_list","command_help","article_reading"].includes(context?.kind);
+}
 function pointerView() {
-    if(!["article_reading","continue_prompt"].includes(latest?.navigation.kind))return null;
+    if(!hasPageEdges(latest?.navigation)&&latest?.navigation.kind!=="continue_prompt")return null;
     const bounds=surface.getBoundingClientRect(),visible=viewport.getBoundingClientRect();
-    return JSON.stringify([latest.presentation,latest.article?.id,viewport.scrollTop,viewport.scrollLeft,
+    return JSON.stringify([latest.presentation,latest.navigation.kind,latest.article?.id,viewport.scrollTop,viewport.scrollLeft,
         viewport.clientWidth,viewport.clientHeight,bounds.left,bounds.top,bounds.width,bounds.height,visible.top]);
 }
-function readingPageAt(point,clientY) {
-    const region=navigationBackRegion(latest.navigation,latest.article);
+function navigationPageAt(point,clientY,region,halves) {
     if(point&&(point.row<region.first||point.row>=region.last)||!point&&!Number.isFinite(clientY))return null;
     const bounds=surface.getBoundingClientRect(),visible=viewport.getBoundingClientRect();
     const top=Math.max(visible.top,bounds.top+grid.y(region.first)/grid.ratio);
@@ -394,7 +396,14 @@ function readingPageAt(point,clientY) {
     const edge=Math.min((bottom-top)/4,Math.max(16,Math.min(32,(grid.bottom(region.first)-grid.y(region.first))/grid.ratio)));
     if(y<top+edge)return {kind:"page",action:"first"};
     if(y>=bottom-edge)return {kind:"page",action:"last"};
-    return {kind:"page",action:y<(top+bottom)/2?"previous_page":"next_page"};
+    return halves?{kind:"page",action:y<(top+bottom)/2?"previous_page":"next_page"}:null;
+}
+function readingPageAt(point,clientY) {
+    return navigationPageAt(point,clientY,navigationBackRegion(latest.navigation,latest.article),true);
+}
+function listEdgeAt(point,clientY) {
+    if(!hasPageEdges(latest.navigation)||latest.navigation.kind==="article_reading"||!Number.isFinite(clientY))return null;
+    return navigationPageAt(point,clientY,{first:0,last:latest.frame.rows-1},false);
 }
 function hitAt(point,clientY) {
     if(!point||blocked()||dragging?.moved||!stationMouse.local()) return null;
@@ -408,6 +417,7 @@ function hitAt(point,clientY) {
     if(!canNavigate())return null;
     const context=latest.navigation;
     if(context.kind==="article_reading")return readingPageAt(point,clientY);
+    const edge=listEdgeAt(point,clientY);if(edge)return edge;
     if(['main_menu','system_menu','document_list','board_list'].includes(context.kind)){
         const start=["main_menu","system_menu"].includes(context.kind)?20:1;
         return point.col>=start&&point.row>=context.first_row&&point.row<=context.last_row?{kind:"menu",row:point.row}:null;
