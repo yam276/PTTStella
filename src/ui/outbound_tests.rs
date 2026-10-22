@@ -30,6 +30,14 @@ fn outbound_results_match_the_shared_wire_examples() {
     };
     let actual = vec![
         (
+            "localization",
+            Packet::Localization {
+                language: "en-US",
+                resource: "connect = Connect\n",
+                fallback: "connect = 連線\n",
+            },
+        ),
+        (
             "station_mouse_rejected",
             Packet::StationMouseRejected {
                 lease: pttstella::mouse::input::Lease {
@@ -90,6 +98,7 @@ fn outbound_results_match_the_shared_wire_examples() {
         (
             "filters_open",
             Packet::FiltersOpen(FiltersOpen {
+                allow_color: 14,
                 entries: vec![],
                 warning: None,
             }),
@@ -97,6 +106,7 @@ fn outbound_results_match_the_shared_wire_examples() {
         (
             "filters_saved",
             Packet::FiltersResult(FiltersResult::Saved {
+                allow_color: 14,
                 entries: vec![],
                 message: "已保存".into(),
             }),
@@ -126,6 +136,13 @@ fn outbound_results_match_the_shared_wire_examples() {
             "tools_opacity",
             Packet::ToolsOpacity(pttstella::settings::ToolOpacity::try_from(65).unwrap()),
         ),
+        (
+            "tools_access",
+            Packet::ToolsAccess(pttstella::settings::ToolAccess {
+                right_click_menu: true,
+                show_floating_button: false,
+            }),
+        ),
         ("hover_settings", Packet::HoverSettings(HoverPosition::Off)),
         ("hover_reset", Packet::HoverReset { media: true }),
         ("hover_rejected", Packet::HoverRejected(8)),
@@ -154,6 +171,7 @@ fn outbound_results_match_the_shared_wire_examples() {
                 width: 1,
                 height: 2,
                 animated: false,
+                animation_pixels: None,
                 cached: true,
             }),
         ),
@@ -308,13 +326,27 @@ fn outbound_results_match_the_shared_wire_examples() {
         ),
         ("inline_reset", Packet::InlineReset(true)),
         (
+            "reading_move",
+            Packet::ReadingMove {
+                generation: 7,
+                article: 2,
+                intent: pttstella::navigation::Intent::NextPage,
+            },
+        ),
+        (
             "inline_open",
             Packet::InlineOpen(super::inline_images::Open {
                 batch: 2,
+                first_line: 1,
+                article_id: Some(2),
                 presentation: 3,
                 generation: 7,
                 revision: 4,
-                entries: vec![super::inline_images::Entry { index: 1, row: 8 }],
+                entries: vec![super::inline_images::Entry {
+                    index: 1,
+                    row: 8,
+                    key: 0,
+                }],
                 limited: false,
             }),
         ),
@@ -338,10 +370,12 @@ fn outbound_results_match_the_shared_wire_examples() {
                     width: 2,
                     height: 1,
                     animated: false,
+                    animation_pixels: None,
                     cached: false,
                 },
             },
         ),
+        ("settings_visibility", Packet::SettingsVisibility(true)),
     ];
     let expected: Vec<Value> =
         serde_json::from_str(include_str!("../../tests/fixtures/ui-packets.json")).unwrap();

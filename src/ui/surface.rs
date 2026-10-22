@@ -30,6 +30,10 @@ use super::{
 
 /// Named launch options keep call sites independent of positional booleans.
 pub(super) struct Options {
+    pub(super) locale: Signal<pttstella::i18n::Language>,
+    pub(super) settings_requests: watch::Receiver<(u64, bool)>,
+    #[cfg(target_os = "macos")]
+    pub(super) native_menu: crate::macos::NativeMenu,
     pub(super) reload_settings: bool,
     pub(super) media_origin: Option<String>,
     pub(super) window_probe: bool,
@@ -57,6 +61,7 @@ pub(super) async fn surface(
     mut pending_paste: Signal<Option<PendingPaste>>,
     options: Options,
 ) -> Result<(), String> {
+    let main_window = dioxus::desktop::window();
     let mut resources = Resources::default();
     let mut reports = run(
         connection.clone(),
@@ -119,7 +124,7 @@ pub(super) async fn surface(
         }
     }
     reports?;
-    let window = dioxus::desktop::window();
+    let window = main_window;
     window.set_close_behavior(dioxus::desktop::WindowCloseBehaviour::WindowCloses);
     window.close();
     Ok(())
@@ -139,6 +144,10 @@ async fn run(
         mut pending_paste,
     } = signals;
     let Options {
+        mut locale,
+        mut settings_requests,
+        #[cfg(target_os = "macos")]
+        native_menu,
         reload_settings,
         media_origin,
         window_probe,
@@ -179,18 +188,23 @@ async fn run(
         commands,
         files,
         tools: _,
+        settings,
     } = resources;
     let script = [
         "const fluent = (() => {const exports = {}; const module = {exports};\n",
         include_str!("../../assets/vendor/fluent/index.js"),
         "\nreturn module.exports;})();\n",
         include_str!("../../assets/i18n.js"),
+        include_str!("../../assets/gif-playback.js"),
         include_str!("../../assets/media.js"),
         include_str!("../../assets/inline-images.js"),
         include_str!("../../assets/surface-lifetime.js"),
         include_str!("../../assets/surface-packets.js"),
         include_str!("../../assets/surface-fonts.js"),
+        include_str!("../../assets/surface-renderer.js"),
+        include_str!("../../assets/settings-catalog.js"),
         include_str!("../../assets/surface-settings.js"),
+        include_str!("../../assets/surface-settings-host.js"),
         include_str!("../../assets/surface-sites.js"),
         include_str!("../../assets/surface-login.js"),
         include_str!("../../assets/surface-navigation.js"),
@@ -202,7 +216,7 @@ async fn run(
         include_str!("../../assets/surface.js"),
     ]
     .concat();
-    let mut eval = Bridge::new(&script);
+    let mut eval = Bridge::new(&script, settings);
     *owned_eval = Some(eval.owner());
     let language = pttstella::i18n::application().language();
     eval.send(Packet::Localization {
@@ -218,6 +232,14 @@ async fn run(
     let mut login_stamp: Option<navigation::Stamp> = None;
     let mut destination_request: Option<(u64, navigation::Stamp)> = None;
     let mut login_open = false;
+    let mut settings_visible = false;
+    let mut pending_settings: Option<super::preferences::Change> = None;
+    screen.set_article_boundary_navigation(preferences.app().article_boundary_navigation);
+    screen.set_article_mode(if window_probe || filters_probe {
+        pttstella::settings::ArticleMode::Terminal
+    } else {
+        preferences.app().article_mode
+    });
     let first = receiver.borrow_and_update().clone();
     let mut last_status = first.message.clone();
     let painting = screen
@@ -226,6 +248,8 @@ async fn run(
     eval.send(Packet::Paint(painting))
         .map_err(|e| e.to_string())?;
     eval.send(Packet::ToolsOpacity(preferences.app().tools_opacity))
+        .map_err(|e| e.to_string())?;
+    eval.send(Packet::ToolsAccess(preferences.app().tools_access))
         .map_err(|e| e.to_string())?;
     eval.send(Packet::HoverSettings(preferences.hover()))
         .map_err(|e| e.to_string())?;
@@ -265,9 +289,36 @@ async fn run(
     let mut surface_probe_started = false;
     let mut rejected_events = 0;
     let mut surface_probe_clean = false;
+    let mut reading_gate = None;
+    let mut reading_paint_at = tokio::time::Instant::now();
+    let mut reading_timing = super::reading_timing::ReadingTiming::new()?;
     let (complete, probe_checked) = loop {
         if *closing.borrow() {
             break (false, false);
+        }
+        screen.set_article_boundary_navigation(preferences.app().article_boundary_navigation);
+        if screen.set_article_mode(if window_probe || filters_probe {
+            pttstella::settings::ArticleMode::Terminal
+        } else {
+            preferences.app().article_mode
+        }) {
+            media_preview.close();
+            eval.send(Packet::HoverReset { media: true })
+                .map_err(|e| e.to_string())?;
+            inline_images.close();
+            eval.send(Packet::InlineReset(true))
+                .map_err(|e| e.to_string())?;
+        }
+        let key_status = keyboard_policy.status(&receiver.borrow().context());
+        let raw_reading = (key_status.enabled && matches!(key_status.mode, "input" | "once"))
+            || (!key_status.enabled && key_status.pending);
+        if screen.set_raw_reading(raw_reading) && raw_reading {
+            inline_images.close();
+            eval.send(Packet::InlineReset(true))
+                .map_err(|e| e.to_string())?;
+        }
+        if commands.is(CommandKind::Preload) && !screen.full_load_active() {
+            commands.cancel();
         }
         let complete = probe.is_some() && {
             let view = receiver.borrow();
@@ -281,6 +332,65 @@ async fn run(
                     .collect::<String>()
                     == "INPUT ROUND TRIP COMPLETE"
         };
+        if !commands.busy()
+            && !settings_visible
+            && !login_open
+            && pending_paste.read().is_none()
+            && reading_gate.is_some()
+            && reading_gate == screen.reading_scope()
+            && media_preview.active().is_none()
+        {
+            let view = receiver.borrow().clone();
+            let preload = screen.full_load_active();
+            let intent = if preload {
+                screen.next_full_page(&view)
+            } else {
+                screen.continue_article_fetch(&view)
+            };
+            if let Some(intent) = intent {
+                reading_timing.record(
+                    "request",
+                    view.generation,
+                    view.frame.revision,
+                    screen.reading_progress(),
+                )?;
+                let result = commands.start(
+                    if preload {
+                        CommandKind::Preload
+                    } else {
+                        CommandKind::Navigate
+                    },
+                    view.generation,
+                    || {
+                        connection
+                            .request_navigate(view.stamp(), intent, navigation::Source::Button)
+                            .map(|reply| reply.wait())
+                    },
+                );
+                if let Err(error) = result {
+                    screen.cancel_article_fetch();
+                    if preload {
+                        screen.stop_full_load();
+                    }
+                    eval.send(Packet::NavigationResult(Feedback::new(
+                        NavigationStatus::Rejected,
+                        error,
+                    )))
+                    .map_err(|e| e.to_string())?;
+                } else if let Ok(bytes) = navigation::plan(&view.context(), intent) {
+                    screen.article_input(&view.context(), &bytes);
+                    if preload && intent == navigation::Intent::First {
+                        // Restarting from the head changes display-row ownership
+                        // when the initial station page contained wrapped lines.
+                        inline_images.close();
+                        eval.send(Packet::InlineReset(true))
+                            .map_err(|e| e.to_string())?;
+                    } else {
+                        inline_images.input(&view.context(), &bytes);
+                    }
+                }
+            }
+        }
         let interactions_checked = checks.interactions_complete(complete);
         let probe_checked = if reload_settings {
             checks.probe_started && !screen.has_in_flight()
@@ -318,8 +428,32 @@ async fn run(
         if pending_report.is_some() && probe_checked {
             break (complete, probe_checked);
         }
+        // Autosave retains one authorized edit while an interactive file operation
+        // finishes. Apply against the latest committed state only when admitted.
+        if !files.busy()
+            && let Some(change) = pending_settings.take()
+        {
+            let result = change.apply(preferences.app().clone()).and_then(|draft| {
+                files.start(|permit| files::save_display(permit, preferences.store(), draft))
+            });
+            if let Err(error) = result {
+                eval.send(Packet::SettingsSaved(Feedback::new(
+                    SaveStatus::Rejected,
+                    error,
+                )))
+                .map_err(|e| e.to_string())?;
+            }
+        }
         // One in-flight frame: slow font/paint work cannot grow the JS queue.
-        if screen.dirty() && !screen.has_in_flight() {
+        let preload_paint = screen.full_load_active() && screen.reading_progress().is_some();
+        let reading_paint_due = tokio::time::Instant::now() >= reading_paint_at;
+        if screen.dirty()
+            && !screen.has_in_flight()
+            && (!preload_paint
+                || (reading_paint_due
+                    && !receiver.borrow().input_pending
+                    && !receiver.borrow().output_pending))
+        {
             let view = receiver.borrow().clone();
             let run_probe = probe.is_some()
                 && !window_probe
@@ -333,9 +467,46 @@ async fn run(
             if let Some(painting) = screen.queue(&view, run_probe, preferences.display()) {
                 eval.send(Packet::Paint(painting))
                     .map_err(|e| e.to_string())?;
+                reading_paint_at =
+                    tokio::time::Instant::now() + std::time::Duration::from_millis(250);
             }
         }
+        {
+            let view = receiver.borrow();
+            reading_timing.record(
+                "cached",
+                view.generation,
+                view.frame.revision,
+                screen.reading_progress(),
+            )?;
+            if screen.has_in_flight() {
+                reading_timing.record(
+                    "paint_pending",
+                    view.generation,
+                    view.frame.revision,
+                    screen.reading_progress(),
+                )?;
+            }
+        }
+        #[cfg(target_os = "macos")]
+        native_menu.settings_visible(settings_visible);
+        let load_deadline = screen.full_load_deadline();
+        let paint_deadline =
+            (preload_paint && screen.dirty() && !screen.has_in_flight() && !reading_paint_due)
+                .then_some(reading_paint_at);
         tokio::select! {
+            _ = async {if let Some(at)=paint_deadline {tokio::time::sleep_until(at).await;}else{std::future::pending::<()>().await;}} => {},
+            _ = async {if let Some(at)=load_deadline {tokio::time::sleep_until(at).await;}else{std::future::pending::<()>().await;}} => {
+                screen.expire_full_load(tokio::time::Instant::now());
+                if commands.is(CommandKind::Preload) {commands.cancel();}
+            },
+            request=settings_requests.changed()=>{
+                request.map_err(|e|e.to_string())?;
+                let close=settings_requests.borrow_and_update().1;
+                if close {eval.send(Packet::SettingsClose(true)).map_err(|e|e.to_string())?;continue;}
+                settings_visible=true;connection.keep_alive_gate(receiver.borrow().stamp(),false);eval.send(Packet::SettingsVisibility(true)).map_err(|e|e.to_string())?;
+                eval.open_settings(preferences.store());eval.send(preferences.open_packet()).map_err(|e|e.to_string())?;
+            },
             changed = closing.changed() => {
                 changed.map_err(|e| e.to_string())?;
                 if *closing.borrow_and_update() {
@@ -369,7 +540,18 @@ async fn run(
                             checks.settings_saved |= probe.is_some() && preferences.display().font_size==18.0 && preferences.display().baseline==19.0;
                             screen.display_changed();
                             eval.send(Packet::ToolsOpacity(preferences.app().tools_opacity)).map_err(|e|e.to_string())?;
-                            Packet::SettingsSaved(Feedback::new(SaveStatus::Saved,if preferences.app().language!=pttstella::i18n::application().language(){pttstella::msg!("settings-language-saved")}else{pttstella::msg!("settings-saved")}))
+                            eval.send(Packet::ToolsAccess(preferences.app().tools_access)).map_err(|e|e.to_string())?;
+                            eval.send(Packet::HoverSettings(preferences.hover())).map_err(|e|e.to_string())?;
+                            let language=preferences.app().language;
+                            if language!=pttstella::i18n::application().language() {
+                                let previous=pttstella::i18n::application().language();
+                                pttstella::i18n::application().select(language);
+                                let updated={let current=message.peek();pttstella::i18n::application().relocalize_status(previous,current.as_str())};
+                                if let Some(updated)=updated {message.set(updated);}
+                                locale.set(language);
+                                eval.send(Packet::Localization {language:language.tag(),resource:language.resource(),fallback:pttstella::i18n::Language::TraditionalChinese.resource()}).map_err(|e|e.to_string())?;
+                            }
+                            Packet::SettingsSaved(Feedback::new(SaveStatus::Saved,pttstella::msg!("settings-saved")))
                         },
                         Err(error)=>Packet::SettingsSaved(Feedback::new(SaveStatus::Rejected,error)),
                     },
@@ -393,18 +575,22 @@ async fn run(
                             Err(error)=>{filter_import.cancel(request);Packet::FiltersResult(FiltersResult::ImportRejected{request,message:error.to_string()})},
                         }
                     },
-                    FileCompletion::Filters(result)=>match result {
+                    FileCompletion::Filters(result)=>{
+                        eval.send(Packet::Notice(match &result { Ok(_) => pttstella::msg!("filters-saved"), Err(error) => error.to_string() })).map_err(|e|e.to_string())?;
+                        match result {
                         Ok(rules)=>{
                             inline_images.close();eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
                             screen.replace_rules(rules);filter_warning=None;checks.filter_edits+=1;
                             media_preview.close();
                             eval.send(Packet::HoverReset{media:true}).map_err(|e|e.to_string())?;
-                            Packet::FiltersResult(FiltersResult::Saved{entries:screen.rules().entries.clone(),message:pttstella::msg!("filters-saved")})
+                            Packet::FiltersResult(FiltersResult::Saved{allow_color:screen.rules().allow_color,entries:screen.rules().entries.clone(),message:pttstella::msg!("filters-saved")})
                         },
                         Err(error)=>Packet::FiltersResult(FiltersResult::Rejected{message:error.to_string()}),
+                        }
                     },
                     FileCompletion::Profile(result)=>Packet::ProfileResult(result.unwrap_or_else(|error|super::outbound::ProfileResult::Rejected{notice:error.to_string()})),
-                    FileCompletion::Export{selected,result}=>match result {
+                    FileCompletion::Export{selected,destination,result}=>match result {
+                        Ok(true) if destination==files::ExportDestination::Clipboard=>{checks.image_copies+=1;Packet::ExportResult(Feedback::new(ExportStatus::Copied,pttstella::msg!("export-copied")))},
                         Ok(true)=>{checks.export_checked|=probe.is_some()&&!selected;checks.rows_export_checked|=probe.is_some()&&selected;Packet::ExportResult(Feedback::new(ExportStatus::Saved,pttstella::msg!("export-saved")))},
                         Ok(false)=>Packet::ExportResult(Feedback::new(ExportStatus::Cancelled,pttstella::msg!("export-cancelled"))),
                         Err(error)=>Packet::ExportResult(Feedback::new(ExportStatus::Failed,error.to_string())),
@@ -420,9 +606,14 @@ async fn run(
                         Ok(()) => continue,
                         Err(error) => Packet::LoginResult(LoginResult::Message{message:error}),
                     },
+                    CommandKind::Preload => {
+                        if done.result.is_err() {screen.stop_full_load();}
+                        if probe.is_some() && done.result.is_ok() {checks.navigation_requests+=1;}
+                        continue;
+                    },
                     CommandKind::Navigate => match done.result {
                         Ok(()) => {if probe.is_some(){checks.navigation_requests+=1;}Packet::NavigationResult(Feedback::quiet(NavigationStatus::Sent))},
-                        Err(error) => Packet::NavigationResult(Feedback::new(NavigationStatus::Rejected,error)),
+                        Err(error) => {screen.cancel_article_fetch();Packet::NavigationResult(Feedback::new(NavigationStatus::Rejected,error))},
                     },
                     CommandKind::Browse => match done.result {
                         Ok(()) => continue,
@@ -461,7 +652,7 @@ async fn run(
                 let packet=match update.result {
                     Ok(loaded)=>{let image=loaded.image;Packet::InlineImage{batch:update.batch,index:update.index,image:MediaImage{
                         request:update.batch,data:base64::engine::general_purpose::STANDARD.encode(&image.bytes),
-                        mime:image.mime,width:image.width,height:image.height,animated:image.animated_format,cached:false}}},
+                        mime:image.mime,width:image.width,height:image.height,animated:image.animated_format,animation_pixels:(image.animated_format&&image.mime=="image/gif").then_some(image.animation_pixels),cached:false}}},
                     Err(message)=>Packet::InlineError{batch:update.batch,index:update.index,message},
                 };
                 eval.send(packet).map_err(|e|e.to_string())?;
@@ -473,7 +664,7 @@ async fn run(
                             Packet::MediaImage(MediaImage{request:update.request,
                                 data:base64::engine::general_purpose::STANDARD.encode(&image.bytes),
                                 mime:image.mime,width:image.width,height:image.height,
-                                animated:image.animated_format,cached})
+                                animated:image.animated_format,animation_pixels:(image.animated_format&&image.mime=="image/gif").then_some(image.animation_pixels),cached})
                         },
                         Err(error) => Packet::MediaError{request:update.request,message:error.to_string()},
                     };
@@ -489,6 +680,11 @@ async fn run(
                 }
                 if event.requires_ptt() && !receiver.borrow().site.ptt_features() {
                     event.discard();eval.send(Packet::Notice(pttstella::msg!("site-ptt-only"))).map_err(|e|e.to_string())?;continue;
+                }
+                if matches!(&event,
+                    SurfaceEvent::DestinationSubmit{..}|SurfaceEvent::SitesConnect{..}|SurfaceEvent::LoginSubmit{..}|SurfaceEvent::Paste{..}|SurfaceEvent::PasteConfirm{..}) {
+                    screen.clear_article();
+                    inline_images.close();eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
                 }
                 match event {
                     SurfaceEvent::StationMouse { event, .. } => {
@@ -623,17 +819,43 @@ async fn run(
                     }
                     SurfaceEvent::FiltersOpen { trusted: _ } => {
                         filter_import.clear();
-                        eval.send(Packet::FiltersOpen(FiltersOpen{entries:screen.rules().entries.clone(),warning:filter_warning.clone()})).map_err(|e|e.to_string())?;
+                        eval.send(Packet::FiltersOpen(FiltersOpen{allow_color:screen.rules().allow_color,entries:screen.rules().entries.clone(),warning:filter_warning.clone()})).map_err(|e|e.to_string())?;
+                    }
+                    SurfaceEvent::AccountRule { presentation, stamp, row, col, policy, remove, .. } => {
+                        let rules = screen.account_rule(Identity{presentation,generation:stamp.generation,revision:stamp.revision},stamp,(row,col),policy,remove,&receiver.borrow());
+                        let Some(rules) = rules else {eval.send(Packet::Notice(pttstella::msg!("account-action-stale"))).map_err(|e|e.to_string())?;continue;};
+                        checks.account_rule_actions+=1;
+                        filter_import.clear();
+                        if let Err(message)=files.start(|permit|files::save_filters(permit,filter_store.clone(),rules)) {
+                            eval.send(Packet::Notice(message)).map_err(|e|e.to_string())?;
+                        }
+                    }
+                    SurfaceEvent::ReplyFocus { presentation, stamp, row, .. } => {
+                        if screen.focus_reply(Identity{presentation,generation:stamp.generation,revision:stamp.revision},stamp,row,&receiver.borrow()) {
+                            checks.reply_focus_actions+=1;
+                            // Focus changes only local backgrounds. The next acknowledged
+                            // projection follows the same article's expanded resources.
+                            media_preview.close();
+                            eval.send(Packet::HoverReset{media:true}).map_err(|e|e.to_string())?;
+                        }
+                    }
+                    SurfaceEvent::FiltersDefaultColor { color, .. } => {
+                        filter_import.clear();
+                        let rules = screen.rules().with_allow_color(color);
+                        if let Err(message) = files.start(|permit|files::save_filters(permit,filter_store.clone(),rules)) {
+                            eval.send(Packet::FiltersResult(FiltersResult::Rejected{message})).map_err(|e|e.to_string())?;
+                        }
                     }
                     SurfaceEvent::FiltersEdit {
                         id,
                         note,
                         policy,
+                        color,
                         remove,
                         trusted: _,
                     } => {
                         filter_import.clear();
-                        let rules=screen.rules().edit_policy(&id,&note,policy,remove);
+                        let rules=screen.rules().edit_color(&id,&note,policy,color,remove);
                         if let Err(message)=files.start(|permit|files::save_filters(permit,filter_store.clone(),rules)) {
                             eval.send(Packet::FiltersResult(FiltersResult::Rejected{message})).map_err(|e|e.to_string())?;
                         }
@@ -750,21 +972,35 @@ async fn run(
                                 .map_err(|e| e.to_string())?;
                         }
                     }
-                    SurfaceEvent::KeepAliveGate { stamp, ready } => {
+                    SurfaceEvent::KeepAliveGate { stamp, ready, reading, article } => {
+                        reading_gate=if reading {article.and_then(|id|screen.authorize_reading(stamp,id))}else{None};
                         connection.keep_alive_gate(
                             stamp,
                             ready
+                                && !settings_visible
                                 && !keyboard_policy
                                     .status(&receiver.borrow().context())
                                     .pending,
                         );
                     }
+                    SurfaceEvent::ArticleLoad {generation,article,resume,trusted:_} => {
+                        if screen.full_load_action(generation,article,resume,&receiver.borrow()) {
+                            if probe.is_some() {if resume {checks.load_resumes+=1;}else{checks.load_cancels+=1;}}
+                            if !resume && commands.is(CommandKind::Preload) {commands.cancel();}
+                        }
+                    },
                     SurfaceEvent::Navigate {
                         stamp,
                         intent,
                         source,
                         trusted: _,
                     } => {
+                        if let navigation::Intent::AdjacentArticle { down } = intent
+                            && (source != navigation::Source::Keyboard || !screen.adjacent_article_allowed(stamp, down, &receiver.borrow())) {
+                            eval.send(Packet::NavigationResult(Feedback::new(NavigationStatus::Rejected,navigation::Error::Unavailable.to_string()))).map_err(|e|e.to_string())?;
+                            continue;
+                        }
+                        screen.interrupt_full_load();if commands.is(CommandKind::Preload) {commands.cancel();}
                         let shown=screen.navigation_shown(stamp);
                         let result = if !shown {
                             Err(navigation::Error::Stale.to_string())
@@ -775,6 +1011,12 @@ async fn run(
                                 connection.request_navigate(stamp, intent, source).map(|reply|reply.wait())
                             })
                         };
+                        if result.is_ok() {
+                            screen.article_navigation(intent, &receiver.borrow());
+                        }
+                        if result.is_ok() && inline_images.navigation(&receiver.borrow().context(),intent) {
+                            eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
+                        }
                         if let Err(error) = result {
                             eval.send(Packet::NavigationResult(Feedback::new(NavigationStatus::Rejected,error)))
                                 .map_err(|e| e.to_string())?;
@@ -796,7 +1038,15 @@ async fn run(
                         let feedback=match result {Ok(())=>Feedback::new(super::sites::Status::Connecting,pttstella::msg!("sites-connecting")),Err(error)=>{checks.site_rejections=checks.site_rejections.saturating_add(1);Feedback::new(super::sites::Status::Rejected,error)}};
                         eval.send(Packet::SitesResult{request,data:sites.snapshot(receiver.borrow().site.clone()),feedback}).map_err(|e|e.to_string())?;
                     },
+                    SurfaceEvent::SettingsVisibility {open} => {settings_visible=open;eval.send(Packet::SettingsVisibility(open)).map_err(|e|e.to_string())?;},
+                    SurfaceEvent::AboutRepository { .. } => {
+                        if probe.is_none() && let Err(error) = webbrowser::open(env!("CARGO_PKG_REPOSITORY")) {
+                            eval.send(Packet::Notice(pttstella::msg!("link-open-failed",e=error.to_string()))).map_err(|e|e.to_string())?;
+                        }
+                    }
                     SurfaceEvent::SettingsOpen { trusted: _ } => {
+                        settings_visible=true;connection.keep_alive_gate(receiver.borrow().stamp(),false);eval.send(Packet::SettingsVisibility(true)).map_err(|e|e.to_string())?;
+                        eval.open_settings(preferences.store());
                         eval.send(preferences.open_packet())
                             .map_err(|e| e.to_string())?;
                     }
@@ -815,17 +1065,13 @@ async fn run(
                             Ok(())=>pttstella::msg!("font-source-opened"),
                             Err(error)=>pttstella::msg!("link-open-failed",e=error.to_string()),
                         };
-                        eval.send(Packet::Notice(notice)).map_err(|e|e.to_string())?;
+                        eval.settings_notice(&notice).map_err(|e|e.to_string())?;
                     }
                     SurfaceEvent::SettingsPreview { request, values } => {
                         eval.send(preferences.preview_packet(request, values))
                             .map_err(|e| e.to_string())?;
                     }
-                    SurfaceEvent::SettingsSave { values, language, tools_opacity, trusted: _ } => {
-                        if let Err(error)=files.start(|permit|files::save_display(permit,preferences.store(),{let mut draft=preferences.display_draft(values);draft.language=language;draft.tools_opacity=tools_opacity;draft})) {
-                            eval.send(Packet::SettingsSaved(Feedback::new(SaveStatus::Rejected,error))).map_err(|e|e.to_string())?;
-                        }
-                    }
+                    SurfaceEvent::SettingsSave { change, trusted: _ } => {pending_settings=Some(change);}
                     SurfaceEvent::SettingsProfile {
                         action,
                         name,
@@ -846,15 +1092,18 @@ async fn run(
                         generation,
                         revision,
                         selection_request,
+                        destination,
                         png,
                         trusted: _,
                     } => {
                         let result = (|| -> Result<(),String> {
                             let rows=screen.export_rows(Identity{presentation,generation,revision},selection_request,&receiver.borrow())?;
+                            let rows=if rows.end>pttstella::export::ROWS {0..rows.len()} else {rows};
+                            let clipboard=files.clipboard();
                             files.start(|permit|{
                                 let lease=screen.lease_output(Identity{presentation,generation,revision},selection_request,receiver.borrow().input_epoch);
                                 let request=files::ExportRequest{lease,source:receiver.clone(),png,rows,selected:selection_request.is_some(),probe:probe.clone().filter(|_|surface_probe.as_deref()!=Some("files"))};
-                                files::export_png(permit,request)
+                                files::export_image(permit,request,destination,clipboard)
                             })
                         })();
                         if let Err(error)=result {
@@ -873,14 +1122,12 @@ async fn run(
                             .and_then(|p|p.links.get(index)).cloned();
                         if let Some(link) = &link {
                             match media::classify(&link.url) {
-                                Ok(Some(mut target)) => {
+                                Ok(Some(target)) => {
                                     if probe.is_some() {
                                         let origin = media_origin
                                             .as_deref()
                                             .ok_or("missing media probe origin")?;
-                                        if target.kind == media::Kind::Youtube {
-                                            target.image_url = Some(format!("{origin}/colours.png"));
-                                        } else if !target.url.starts_with(&format!("{origin}/")) {
+                                        if !target.url.starts_with(&format!("{origin}/")) {
                                             return Err("unexpected media probe URL".into());
                                         }
                                     }
@@ -899,7 +1146,7 @@ async fn run(
                         }
                         let result = match link {
                             Some(link) if probe.is_some() => {
-                                if link.url != "https://example.com/pttstella" && !(surface_probe.as_deref()==Some("osc8") && link.url==super::probe::OSC8_URL) {
+                                if link.url != "https://example.com/pttstella" && !(surface_probe.as_deref()==Some("dialogs") && link.url=="https://youtu.be/Abc_12-dEF0") && !(surface_probe.as_deref()==Some("osc8") && link.url==super::probe::OSC8_URL) {
                                     return Err("unexpected probe URL".into());
                                 }
                                 checks.link_requests += 1;
@@ -948,7 +1195,11 @@ async fn run(
                         generation,
                         trusted: _,
                     } => {
-                        let result = input::prepare_paste_with(&text,receiver.borrow().site.encoding)
+                        // Release the watch read lock before the result closure
+                        // reads state again; a waiting writer makes nested reads
+                        // deadlock on platforms with writer-preferring locks.
+                        let encoding = receiver.borrow().site.encoding;
+                        let result = input::prepare_paste_with(&text,encoding)
                             .map_err(|e| e.to_string())
                             .and_then(|prepared| {
                                 let current = receiver.borrow();
@@ -1064,16 +1315,17 @@ async fn run(
                         checks.copy_checked |=
                             checks.copied_selection == Some((generation, revision, request));
                     }
-                    SurfaceEvent::InlineExpand {presentation,stamp,key,trusted:_} => {
-                        if matches!(surface_probe.as_deref(),Some("inline"|"context_menu")) {checks.inline_requests+=1;}
+                    SurfaceEvent::InlineExpand {presentation,stamp,key,target,trusted:_} => {
+                        if matches!(surface_probe.as_deref(),Some("inline"|"wide_last_row"|"inline_replies"|"inline_pages"|"full_load"|"long_load"|"short_overlap"|"short_links"|"context_menu")) {checks.inline_requests+=1;if checks.inline_targets.len()>=128{return Err("too many inline probe requests".into());}checks.inline_targets.push(target);}
                         let view=receiver.borrow().clone();
                         if !view.site.ptt_features() || !keyboard_policy.inline_images_key(&key,&view.context())
                             || pending_paste.read().is_some() || commands.busy() || login_open {continue;}
                         if let Some(paint)=screen.inline_page(Identity{presentation,generation:stamp.generation,revision:stamp.revision},stamp,&view) {
                             // Synthetic probes must never reach a public image host.
                             if probe.is_some() && paint.image_links.iter().any(|index|media_origin.as_ref().is_none_or(|origin|!paint.links[*index].url.starts_with(&format!("{origin}/")))) {continue;}
-                            if let Some(open)=inline_images.open(paint)? {
-                                if matches!(surface_probe.as_deref(),Some("inline"|"context_menu")) {checks.inline_expands+=1;}
+                            let old_batch=inline_images.batch();
+                            if let Some(open)=inline_images.open(paint,target)? {
+                                if matches!(surface_probe.as_deref(),Some("inline"|"wide_last_row"|"inline_replies"|"inline_pages"|"full_load"|"long_load"|"short_overlap"|"short_links"|"context_menu"))  && old_batch!=Some(open.batch) {checks.inline_expands+=1;}
                                 eval.send(Packet::InlineOpen(open)).map_err(|e|e.to_string())?;
                             }
                         }
@@ -1085,9 +1337,24 @@ async fn run(
                     } => {
                         let view = receiver.borrow().clone();
                         let context = view.context();
-                        let effect = keyboard_policy.key(&key, &context);
-                        eval.send(Packet::KeyboardState(keyboard_policy.status(&context)))
+                        let reading_context=screen.reading_context(&view);
+                        let policy_context=reading_context.as_ref().unwrap_or(&context);
+                        let effect = keyboard_policy.key(&key, policy_context);
+                        eval.send(Packet::KeyboardState(keyboard_policy.status(policy_context)))
                             .map_err(|e| e.to_string())?;
+                        if screen.reading_context(&view).is_none()
+                            && let Some(bytes)=super::article_cache::terminal_arrow_boundary(&key,&context,preferences.app().article_boundary_navigation)
+                        {
+                            if !screen.navigation_shown(view.stamp()) || generation != view.generation || view.input_pending || view.output_pending
+                                || view.mouse.route != pttstella::mouse::input::Route::Local {continue;}
+                            if !bytes.is_empty() {
+                                screen.article_input(&context,&bytes);
+                                inline_images.close();
+                                eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
+                                if let Err(error)=connection.input(generation,bytes) {eval.send(Packet::InputRejected(error)).map_err(|e|e.to_string())?;}
+                            }
+                            continue;
+                        }
                         let bytes = match effect {
                             Effect::None => continue,
                             Effect::Notice(notice) => {
@@ -1096,6 +1363,11 @@ async fn run(
                                 continue;
                             }
                             Effect::Browse(intent) => {
+                                if let Some(packet)=screen.reading_move(&view,intent) {
+                                    eval.send(packet).map_err(|e|e.to_string())?;
+                                    continue;
+                                }
+                                screen.interrupt_full_load();if commands.is(CommandKind::Preload) {commands.cancel();}
                                 let shown=screen.browse_shown(generation,&context);
                                 let result = if !shown || pending_paste.read().is_some() {
                                     Err(navigation::Error::Stale.to_string())
@@ -1104,6 +1376,12 @@ async fn run(
                                         connection.request_browse_key(view.stamp(), intent).map(|reply|reply.wait())
                                     })
                                 };
+                                if result.is_ok() {
+                            screen.article_navigation(intent, &receiver.borrow());
+                        }
+                        if result.is_ok() && inline_images.navigation(&context,intent) {
+                                    eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
+                                }
                                 if let Err(error) = result {
                                     eval.send(Packet::Notice(error))
                                         .map_err(|e| e.to_string())?;
@@ -1112,6 +1390,13 @@ async fn run(
                             }
                             Effect::Native(bytes) => bytes,
                         };
+                        if let Some(intent)=super::article_cache::reading_intent(&bytes) && let Some(packet)=screen.reading_move(&view,intent) {
+                            eval.send(packet).map_err(|e|e.to_string())?;continue;
+                        }
+                        screen.article_input(&context,&bytes);
+                        if inline_images.input(&context,&bytes) {
+                            eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
+                        }
                         if probe.is_some() {
                             let current = receiver.borrow().generation;
                             checks.arrow_checked |=
@@ -1156,6 +1441,10 @@ async fn run(
                         checks.composition_checked |= composition_input && text == "中";
                         let encoded = input::encode_with(&text,receiver.borrow().site.encoding).map_err(|e| e.to_string());
                         let result = encoded.and_then(|bytes| {
+                            screen.article_input(&receiver.borrow().context(),&bytes);
+                            if inline_images.input(&receiver.borrow().context(),&bytes) {
+                                eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
+                            }
                             if probe.is_some() && !vim_input {
                                 checks.input_bytes.push(bytes.clone());
                             }
@@ -1176,6 +1465,13 @@ async fn run(
                         generation,
                     } => {
                         screen.acknowledge(Identity{presentation,generation,revision})?;
+                        reading_timing.record("painted",generation,revision,screen.reading_progress())?;
+                        let view=receiver.borrow();
+                        if let Some(paint)=screen.inline_page(Identity{presentation,generation,revision},view.stamp(),&view)
+                            && (probe.is_none() || paint.image_links.iter().all(|index|media_origin.as_ref().is_some_and(|origin|paint.links[*index].url.starts_with(&format!("{origin}/")))))
+                            && let Some(open)=inline_images.follow(paint)? {
+                            eval.send(Packet::InlineOpen(open)).map_err(|e|e.to_string())?;
+                        }
                     }
                     SurfaceEvent::Error { message } => return Err(message),
                     SurfaceEvent::Probe(pixels) => {
@@ -1203,7 +1499,7 @@ async fn run(
                     media_preview.close();
                     eval.send(Packet::HoverReset{media:false}).map_err(|e|e.to_string())?;
                 }
-                if inline_images.invalidate(screen.inline_identity(&view)) {eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;}
+                if inline_images.observe(&view) {eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;}
                 if keyboard_generation!=view.generation || view.phase!=Phase::Connected {
                     if let Some((request,_))=destination_request.take() {
                         eval.send(Packet::DestinationResult {request,feedback:Feedback::new(DestinationStatus::Rejected,pttstella::msg!("command-stale"))}).map_err(|error|error.to_string())?;
@@ -1249,6 +1545,13 @@ async fn run(
     };
     let mut reports = Vec::new();
     if let (Some(case), Some(path)) = (surface_probe, probe.as_ref()) {
+        let reading = {
+            let view = receiver.borrow();
+            screen
+                .inline_identity(&view)
+                .and_then(|identity| screen.current(identity, &view))
+                .and_then(|paint| paint.article.clone())
+        };
         let mut mouse_report = checks.mouse_observations();
         mouse_report["final"] = serde_json::json!(receiver.borrow().mouse);
         let mut surface_report = serde_json::json!({
@@ -1263,20 +1566,27 @@ async fn run(
                 || case=="boards" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && checks.board_cancelled && checks.board_rejected>=1
                 || matches!(case.as_str(),"mouse"|"mouse_boundary") && checks.mouse_passed(case=="mouse_boundary") && receiver.borrow().mouse.active.is_none()
                 || matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") && checks.mouse_samples_passed(&case) && receiver.borrow().mouse.active.is_none() && receiver.borrow().mouse.modes.tracking()==pttstella::mouse::Tracking::Highlight
-                || case=="pointer_rows" && checks.navigation_requests==2 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
-                || case=="account_lists" && checks.filter_edits>=3 && checks.context_copies>=1 && checks.export_checked
-                || matches!(case.as_str(),"inline"|"context_menu") && checks.inline_requests>=2 && checks.inline_expands==1 && checks.export_checked && (case!="context_menu"||checks.context_copies>=2)
+                || case=="pointer_rows" && checks.navigation_requests==7 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
+                || case=="filter_colors" && checks.filter_edits>=4 && checks.export_checked && screen.rules().allow_color==10
+                || case=="account_actions" && checks.account_rule_actions>=3 && checks.filter_edits>=3 && checks.reply_focus_actions>=2 && checks.export_checked
+                || case=="merged_replies" && checks.context_copies>=1 && checks.export_checked
+                || matches!(case.as_str(),"account_lists"|"account_articles") && checks.filter_edits>=3 && checks.context_copies>=1 && checks.export_checked
+                || case=="short_overlap" && checks.navigation_requests==1 && checks.inline_requests>=2 && checks.inline_expands==1 && checks.link_requests>=1 && checks.export_checked && reading.as_ref().is_some_and(|r| r.first_line==1 && r.last_line==32 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
+                || case=="terminal_pages" && checks.export_checked && !screen.full_load_active()
+                || case=="long_load" && checks.navigation_requests==37 && checks.export_checked && checks.inline_requests>=2 && checks.inline_expands==1 && reading.as_ref().is_some_and(|r|r.first_line==1 && r.last_line==837 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
+                || case=="full_load" && checks.load_cancels>=1 && checks.load_resumes>=1 && checks.navigation_requests==19 && checks.export_checked && checks.inline_requests>=2 && checks.inline_expands==1
+                || matches!(case.as_str(),"inline"|"wide_last_row"|"inline_replies"|"inline_pages"|"short_links"|"context_menu") && checks.inline_requests>=2 && checks.inline_expands==1 && checks.export_checked && (case!="inline_pages"||checks.navigation_requests==1) && (case!="context_menu"||checks.context_copies>=2)
                 || case=="osc8" && checks.osc8_open_rows==[8,9] && checks.osc8_copy_rows==[8,9] && checks.osc8_dragged && checks.osc8_media_decoded>=2 && checks.export_checked
                 || case=="login_2fa" && checks.verification_required && checks.verification_rejected && checks.verification_browsing && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
                 || case=="fonts" && checks.font_catalog_reads>=2 && !checks.font_sources.is_empty() && checks.export_checked
                 || checks.sites_passed(&case,&receiver.borrow().site,&sites.default_target(),&receiver.borrow().frame)
-                || matches!(case.as_str(),"tools"|"sgr66"|"sgr66_legacy") && checks.export_checked
+                || matches!(case.as_str(),"tools"|"short_reading"|"reading_rows"|"sgr66"|"sgr66_legacy") && checks.export_checked
                 || case=="dialogs" && checks.settings_saved && checks.export_checked && checks.rows_export_checked && checks.media_external>=1 {"passed"} else {"failed"},
             "recent_initial":initial_recent,"recent_final":recent.packet().boards,"recent_clears":recent_clears,
             "bookmarks_initial":initial_bookmarks,"bookmarks_final":bookmarks.snapshot(),"bookmark_opens":checks.bookmark_opens,"bookmark_saves":checks.bookmark_saves,"bookmark_rejected":checks.bookmark_rejected,
             "article_reached":checks.article_reached,"article_missing":checks.article_missing,"article_rejected":checks.article_rejected,"article_cancelled":checks.article_cancelled,
             "board_reached":checks.board_reached,"board_rejected":checks.board_rejected,"board_cancelled":checks.board_cancelled,
-            "scope":if matches!(case.as_str(),"sites"|"sites_restart") {"synthetic loopback station UI; owned external test peers independently verify Big5/GBK bytes and EOF; explicit TCP shutdown is not a WebSocket acknowledgement"} else if case=="tools" {"local tools playground: PNG and Close smoke only; gestures are observations, not an A/B acceptance test; peer rejects all station input"} else if matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") {"synthetic native pointer samples: bounded independent exact cells, required final gesture, no local keys or duplicate path, PNG and Close"} else if case=="mouse_boundary" {"synthetic station mouse boundary: one exact press, no release or local keys after leaving the grid; owned cancellation and Close"} else if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
+            "scope":if matches!(case.as_str(),"sites"|"sites_restart") {"synthetic loopback station UI; owned external test peers independently verify Big5/GBK bytes and EOF; explicit TCP shutdown is not a WebSocket acknowledgement"} else if case=="long_load" {"synthetic 38-page reading: thirty-seven exact PageDown commands, leading ink reset at page 31, retained 837 rows, explicit images, PNG and Close"} else if case=="full_load" {"synthetic full reading: nineteen exact PageDown commands, cancellation and explicit resume, retained 441 rows, explicit image expansion, PNG and Close"} else if case=="terminal_pages" {"synthetic terminal reading: no automatic load or image requests; one manual PageDown, PNG and Close"} else if case=="inline_pages" {"synthetic cached reading: one exact PageDown, fragmented response, local history without further station bytes, PNG and Close"} else if case=="tools" {"local tools playground: PNG and Close smoke only; gestures are observations, not an A/B acceptance test; peer rejects all station input"} else if matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") {"synthetic native pointer samples: bounded independent exact cells, required final gesture, no local keys or duplicate path, PNG and Close"} else if case=="mouse_boundary" {"synthetic station mouse boundary: one exact press, no release or local keys after leaving the grid; owned cancellation and Close"} else if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
             "mouse":mouse_report,
             "tools":checks.tools,
             "inline_requests":checks.inline_requests,"inline_expands":checks.inline_expands,
@@ -1289,6 +1599,16 @@ async fn run(
             "paste_preview_preserved":pending_paste.read().is_some(),
             "settings_saved":checks.settings_saved,"full_png":checks.export_checked,"rows_png":checks.rows_export_checked,"media_external_requests":checks.media_external,
         });
+        surface_report["article_reading"] =
+            serde_json::to_value(reading).map_err(|e| e.to_string())?;
+        surface_report["image_copies"] = checks.image_copies.into();
+        surface_report["inline_targets"] =
+            serde_json::to_value(&checks.inline_targets).map_err(|e| e.to_string())?;
+        surface_report["link_requests"] = checks.link_requests.into();
+        surface_report["load_cancels"] = checks.load_cancels.into();
+        surface_report["load_resumes"] = checks.load_resumes.into();
+        surface_report["account_rule_actions"] = checks.account_rule_actions.into();
+        surface_report["reply_focus_actions"] = checks.reply_focus_actions.into();
         surface_report["context_copies"] = checks.context_copies.into();
         surface_report["final_site"] = serde_json::json!(receiver.borrow().site);
         surface_report["sites_final"] =

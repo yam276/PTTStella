@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a Windows x64 release ZIP; never launches or publishes to a server."""
+"""Build Windows packages and standalone EXE; never opens App UI or connects to BBS."""
 import argparse
 import ctypes
 import hashlib
@@ -13,6 +13,8 @@ import sys
 import tempfile
 import tomllib
 import zipfile
+
+import bundle_common
 
 ROOT = Path(__file__).resolve().parent.parent
 TARGET = 'x86_64-pc-windows-msvc'
@@ -41,28 +43,55 @@ def inspect_pe(path):
         raise ValueError('Expected Windows GUI subsystem (release build)')
     sections = [struct.unpack_from('<IIII', data, opt+optional_size+i*40+8) for i in range(count)]
 
-    def offset(rva):
+    def offset(rva, length=1):
         for virtual_size, address, raw_size, raw in sections:
-            if address <= rva < address+max(virtual_size, raw_size):
-                return raw+rva-address
-        raise ValueError('PE RVA has no section')
+            if address <= rva and rva-address+length <= raw_size:
+                position = raw+rva-address
+                if position+length <= len(data):
+                    return position
+        raise ValueError('PE RVA has no file-backed section')
+
+    def dll_name(rva):
+        name = offset(rva)
+        # Bound the string to file-backed bytes, not virtual section padding.
+        for size in range(1, 257):
+            offset(rva, size)
+            if data[name+size-1] == 0:
+                if size == 1:
+                    break
+                return data[name:name+size-1].decode('ascii').lower()
+        raise ValueError('Invalid PE import DLL name')
 
     rva, size = struct.unpack_from('<II', data, opt+120)
     imports = []
     if rva:
-        start = offset(rva)
         for i in range(min(size//20, 4096)):
-            entry = struct.unpack_from('<IIIII', data, start+i*20)
+            entry = struct.unpack_from('<IIIII', data, offset(rva+i*20, 20))
             if not any(entry):
                 break
-            name = offset(entry[3])
-            imports.append(data[name:data.index(b'\0', name, name+256)].decode('ascii').lower())
+            imports.append(dll_name(entry[3]))
         else:
             raise ValueError('Unterminated import directory')
-    # Never silently omit a delayed sidecar dependency.
-    if any(struct.unpack_from('<II', data, opt+112+13*8)):
-        raise ValueError('Delay imports require explicit dependency handling')
-    return {'machine': 'AMD64', 'subsystem': 'Windows GUI', 'imports': sorted(set(imports))}
+    # PE delay descriptors use 32-bit RVA fields (attribute 1), or legacy VAs
+    # (attribute 0). Include both in the same dependency policy as normal imports.
+    # https://learn.microsoft.com/windows/win32/debug/pe-format#delay-load-import-tables-image-only
+    rva, size = struct.unpack_from('<II', data, opt+112+13*8)
+    delayed = []
+    if rva:
+        base = struct.unpack_from('<Q', data, opt+24)[0]
+        for i in range(min(size//32, 4096)):
+            entry = struct.unpack_from('<IIIIIIII', data, offset(rva+i*32, 32))
+            if not any(entry):
+                break
+            if entry[0] not in (0, 1):
+                raise ValueError('Unknown PE delay import attributes')
+            delayed.append(dll_name(entry[1] if entry[0] else entry[1]-base))
+        else:
+            raise ValueError('Unterminated delay import directory')
+    elif size:
+        raise ValueError('PE delay import directory is missing its RVA')
+    return {'machine': 'AMD64', 'subsystem': 'Windows GUI',
+            'imports': sorted(set(imports+delayed)), 'delay_imports': sorted(set(delayed))}
 
 
 def verify_icon(executable):
@@ -111,27 +140,7 @@ def verify_icon(executable):
 
 
 def build():
-    command = ['cargo', 'build', '--locked', '--release', '--target', TARGET,
-               '--features', 'desktop', '--bin', 'pttstella', '--message-format=json-render-diagnostics']
-    executable = None
-    with subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE, text=True, encoding='utf-8') as child:
-        try:
-            for line in child.stdout:
-                message = json.loads(line)
-                if (message.get('reason') == 'compiler-artifact'
-                        and message.get('target', {}).get('name') == 'pttstella'
-                        and message.get('executable')):
-                    executable = Path(message['executable'])
-            if child.wait() != 0:
-                raise RuntimeError('Release build failed; no ZIP was produced')
-        except BaseException:
-            if child.poll() is None:
-                child.terminate()
-                child.wait()
-            raise
-    if executable is None or not executable.is_file():
-        raise RuntimeError('Cargo did not report a release executable')
-    return executable
+    return bundle_common.build(TARGET)
 
 
 def find_crt(names, explicit=None):
@@ -147,31 +156,10 @@ def find_crt(names, explicit=None):
 
 
 def copy_licenses(destination):
-    destination.mkdir()
-    for name in ('NOTICE.txt', 'Cascadia-OFL.txt', 'NotoSansCJK-OFL.txt'):
-        shutil.copy2(ROOT/'assets/fonts'/name, destination/name)
-    shutil.copy2(ROOT/'assets/vendor/fluent/LICENSE', destination/'fluent-Apache-2.0.txt')
-    result = subprocess.run(['cargo', 'metadata', '--locked', '--format-version=1',
-                             '--filter-platform', TARGET, '--features', 'desktop'],
-                            cwd=ROOT, capture_output=True, check=True, encoding='utf-8')
-    inventory = []
-    for package in json.loads(result.stdout)['packages']:
-        if not package.get('source'):
-            continue
-        source = Path(package['manifest_path']).parent
-        label = package['name']+'-'+package['version']
-        files = {p for pattern in ('LICENSE*', 'LICENCE*', 'COPYING*', 'NOTICE*')
-                 for p in source.glob(pattern) if p.is_file()}
-        if package.get('license_file'):
-            files.add(source/package['license_file'])
-        for file in sorted(files):
-            (destination/label).mkdir(exist_ok=True)
-            shutil.copy2(file, destination/label/file.name)
-        inventory.append({key: package.get(key) for key in ('name', 'version', 'license', 'repository', 'source')})
-    (destination/'rust-dependencies.json').write_text(json.dumps(inventory, indent=2)+'\n', encoding='utf-8')
+    bundle_common.copy_licenses(destination, TARGET)
 
 
-def publish_zip(staging, output, name):
+def make_zip(staging, name):
     archive = staging/'package.zip'
     with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9,
                          strict_timestamps=False) as zip_out:
@@ -181,42 +169,58 @@ def publish_zip(staging, output, name):
     with zipfile.ZipFile(archive) as zip_in:
         if zip_in.testzip() is not None:
             raise RuntimeError('ZIP integrity check failed')
-    target = output/(name+'.zip')
-    # Same-volume hard link publishes the complete file atomically and refuses
-    # an existing file, even if another process created it after preflight.
-    os.link(archive, target)
-    archive.unlink()  # Do not leave a writable second name for the delivered ZIP.
-    return target
+    return archive
 
 
-def bundle(output, crt_dir=None):
-    if sys.platform != 'win32':
-        raise RuntimeError('Run this bundler on Windows with the MSVC toolchain')
-    version = tomllib.loads((ROOT/'Cargo.toml').read_text(encoding='utf-8'))['package']['version']
-    name = f'PTTStella-{version}-windows-x64'
-    output = Path(output).resolve()
-    output.mkdir(parents=True, exist_ok=True)
-    if (output/(name+'.zip')).exists():
-        raise FileExistsError('Existing ZIP will not be overwritten; choose another --out-dir')
-    executable = build()
+def inspect_application(executable, portable=False):
     pe = inspect_pe(executable)
     verify_icon(executable)
+    if portable:
+        from windows_portable import verify_dependencies
+        verify_dependencies(pe)
     crt = []
     for dll in pe['imports']:
         if dll.startswith(('vcruntime140', 'msvcp140')):
             crt.append(dll)
         elif not dll.startswith(('api-ms-win-', 'ext-ms-win-')) and Path(dll).stem not in SYSTEM_DLLS:
             raise RuntimeError('Unbundled non-system import: '+dll)
-    crt_source = find_crt(crt, crt_dir) if crt else None
+    return pe, crt
+
+
+def bundle(output, crt_dir=None, with_installer=False, with_portable=False):
+    if sys.platform != 'win32':
+        raise RuntimeError('Run this bundler on Windows with the MSVC toolchain')
+    version = tomllib.loads((ROOT/'Cargo.toml').read_text(encoding='utf-8'))['package']['version']
+    name = f'PTTStella-{version}-windows-x64'
+    output = Path(output).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    names = [name+'.zip', name+'.zip.sha256']
+    if with_installer:
+        names += [name+'-setup.exe', name+'-setup.exe.sha256']
+    if with_portable:
+        names += [name+'-portable.exe', name+'-portable.exe.sha256']
+    if any(os.path.lexists(output/filename) for filename in names):
+        raise FileExistsError('Existing downloads will not be overwritten; choose another --out-dir')
+    if not with_portable:
+        executable = build()
+        pe, crt = inspect_application(executable)
     with tempfile.TemporaryDirectory(prefix='.pttstella-', dir=output) as temp:
         staging = Path(temp)
         package = staging/name
         package.mkdir()
+        copy_licenses(package/'licenses')
+        portable_report = None
+        if with_portable:
+            import windows_portable
+            notices = staging/'third-party-notices.txt'
+            windows_portable.write_notices(package/'licenses', notices)
+            executable = windows_portable.build(notices)
+            pe, crt = inspect_application(executable, portable=True)
+        crt_source = find_crt(crt, crt_dir) if crt else None
         shutil.copy2(executable, package/'pttstella.exe')
         shutil.copy2(ROOT/'assets/icons/pttstella.ico', package/'PTTStella.ico')
         for dll in crt:
             shutil.copy2(crt_source/dll, package/dll)
-        copy_licenses(package/'licenses')
         shutil.copy2(ROOT/'docs/windows-test-package.txt', package/'README.txt')
         revision = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
         dirty = bool(subprocess.run(['git', 'status', '--porcelain'], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip())
@@ -227,22 +231,58 @@ def bundle(output, crt_dir=None):
                     'authenticode_signed': False,
                     'files': {str(p.relative_to(package)).replace('\\', '/'): digest(p)
                               for p in sorted(package.rglob('*')) if p.is_file()}}
+        if with_portable:
+            manifest.update(crt_linkage='static', embedded_notices_sha256=digest(notices))
         (package/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n', encoding='utf-8')
-        archive = publish_zip(staging, output, name)
+        setup_report = None
+        downloads = []
+        if with_portable:
+            portable = staging/(name+'-portable.exe')
+            shutil.copy2(executable, portable)
+            windows_portable.verify_export(portable, notices, staging)
+            downloads.append(portable)
+            portable_report = {'crt_linkage': 'static', 'pe': pe,
+                               'embedded_notices_sha256': digest(notices),
+                               'license_export': 'passed',
+                               'prerequisite': 'Microsoft Edge WebView2 Evergreen Runtime',
+                               'runtime_installation': 'none', 'gui_acceptance': 'not_run'}
+        if with_installer:
+            import windows_installer
+            setup, setup_report = windows_installer.build(package, staging, version)
+            downloads.append(setup)
+        archive = make_zip(staging, name)
+        # Name the final ZIP before atomic publication, keeping all files staged
+        # until the optional installer and every checksum are complete.
+        final_zip = staging/(name+'.zip')
+        archive.rename(final_zip)
+        downloads.insert(0, final_zip)
+        files = downloads.copy()
+        for path in downloads:
+            checksum_file = staging/(path.name+'.sha256')
+            checksum_file.write_text(digest(path)+'  '+path.name+'\n', encoding='ascii')
+            files.append(checksum_file)
+        bundle_common.publish_files(files, output)
+    archive = output/(name+'.zip')
     checksum = digest(archive)
-    archive.with_suffix('.zip.sha256').write_text(checksum+'  '+archive.name+'\n', encoding='ascii')
-    return {'status': 'bundled', 'zip': str(archive), 'sha256': checksum,
+    report = {'status': 'bundled', 'zip': str(archive), 'sha256': checksum,
             'bytes': archive.stat().st_size, 'pe': pe, 'bundled_crt': crt,
             'scope': 'packaging only; desktop and live-login verification reported separately'}
+    if with_installer:
+        report.update(installer=str(output/(name+'-setup.exe')), installer_details=setup_report)
+    if with_portable:
+        report.update(portable=str(output/(name+'-portable.exe')), portable_details=portable_report)
+    return report
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out-dir', type=Path, default=ROOT/'dist/windows')
     parser.add_argument('--crt-dir', type=Path)
+    parser.add_argument('--installer', action='store_true', help='Also build Setup with automatic WebView2 provisioning')
+    parser.add_argument('--portable', action='store_true', help='Also build a standalone EXE with static CRT and embedded notices')
     arguments = parser.parse_args()
     try:
-        print(json.dumps(bundle(arguments.out_dir, arguments.crt_dir)))
+        print(json.dumps(bundle(arguments.out_dir, arguments.crt_dir, arguments.installer, arguments.portable)))
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
         raise SystemExit(1)

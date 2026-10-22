@@ -1,4 +1,4 @@
-//! Local push masking. Source frames and station coordinates remain unchanged.
+//! Local account presentation. Source frames and station coordinates remain unchanged.
 use crate::{
     navigation,
     screen::{Frame, Glyph, Style},
@@ -13,11 +13,17 @@ pub mod store;
 pub const MAX_BYTES: usize = 256 * 1024;
 pub const MAX_ENTRIES: usize = 512;
 
+pub const fn default_allow_color() -> u8 {
+    14
+}
+const BLOCK_ID_COLOR: u8 = 9;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Policy {
     #[default]
     Mask,
+    MaskRow,
     Allow,
 }
 
@@ -28,18 +34,23 @@ pub struct Entry {
     pub note: String,
     #[serde(default)]
     pub policy: Policy,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<u8>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Rules {
     pub version: u8,
     pub entries: Vec<Entry>,
+    #[serde(default = "default_allow_color")]
+    pub allow_color: u8,
 }
 impl Default for Rules {
     fn default() -> Self {
         Self {
-            version: 2,
+            version: 4,
             entries: Vec::new(),
+            allow_color: default_allow_color(),
         }
     }
 }
@@ -51,10 +62,22 @@ pub fn valid_id(id: &str) -> bool {
 }
 impl Rules {
     pub fn validate(&self) -> Result<(), String> {
-        if !matches!(self.version, 1 | 2)
+        if !matches!(self.version, 1..=4)
             || self.version == 1 && self.entries.iter().any(|e| e.policy != Policy::Mask)
+            || self.version < 3 && self.entries.iter().any(|e| e.policy == Policy::MaskRow)
         {
             return Err(crate::msg!("filters-version"));
+        }
+        if !(1..=15).contains(&self.allow_color)
+            || self.version < 4
+                && (self.allow_color != default_allow_color()
+                    || self.entries.iter().any(|e| e.color.is_some()))
+            || self.entries.iter().any(|e| {
+                e.color.is_some_and(|c| !(1..=15).contains(&c))
+                    || e.policy != Policy::Allow && e.color.is_some()
+            })
+        {
+            return Err(crate::msg!("filters-color-invalid"));
         }
         if self.entries.len() > MAX_ENTRIES {
             return Err(crate::msg!("filters-capacity"));
@@ -82,7 +105,7 @@ impl Rules {
         let mut rules: Self =
             serde_json::from_slice(bytes).map_err(|_| crate::msg!("filters-invalid"))?;
         rules.validate().map_err(|error| error.to_string())?;
-        rules.version = 2;
+        rules.version = 4;
         Ok(rules)
     }
     pub fn edit(&self, id: &str, note: &str, remove: bool) -> Result<Self, String> {
@@ -99,11 +122,14 @@ impl Rules {
             return Err(crate::msg!("filters-id-invalid"));
         }
         let mut next = self.clone();
-        next.version = 2;
+        next.version = 4;
         let existing = next
             .entries
             .iter()
             .position(|e| e.id.eq_ignore_ascii_case(id));
+        let color = existing
+            .and_then(|i| next.entries[i].color)
+            .filter(|_| policy == Policy::Allow);
         match (existing, remove) {
             (Some(i), true) => {
                 next.entries.remove(i);
@@ -114,15 +140,44 @@ impl Rules {
                     id: id.into(),
                     note: note.into(),
                     policy,
+                    color,
                 }
             }
             (None, false) => next.entries.push(Entry {
                 id: id.into(),
                 note: note.into(),
                 policy,
+                color,
             }),
         }
         next.validate().map_err(|error| error.to_string())?;
+        Ok(next)
+    }
+    pub fn edit_color(
+        &self,
+        id: &str,
+        note: &str,
+        policy: Policy,
+        color: Option<u8>,
+        remove: bool,
+    ) -> Result<Self, String> {
+        let mut next = self.edit_policy(id, note, policy, remove)?;
+        if !remove
+            && let Some(entry) = next
+                .entries
+                .iter_mut()
+                .find(|e| e.id.eq_ignore_ascii_case(id))
+        {
+            entry.color = color;
+        }
+        next.validate()?;
+        Ok(next)
+    }
+    pub fn with_allow_color(&self, color: u8) -> Result<Self, String> {
+        let mut next = self.clone();
+        next.version = 4;
+        next.allow_color = color;
+        next.validate()?;
         Ok(next)
     }
 }
@@ -135,13 +190,22 @@ pub struct Push {
     pub end: usize,
 }
 fn colour(style: Style, fg: u8, bright: bool) -> bool {
-    style.fg == fg && style.bg == 0 && style.bright == bright && !style.inverse
+    let actual = style.fg + u8::from(style.bright && style.fg < 8) * 8;
+    actual == fg + u8::from(bright) * 8 && style.bg == 0 && !style.inverse
 }
 fn span_colour(row: &text::Row<'_>, start: usize, end: usize, fg: u8, bright: bool) -> bool {
     row.spans
         .iter()
         .filter(|s| s.glyph.col < end && s.glyph.col + s.glyph.width > start)
-        .all(|s| colour(s.glyph.left, fg, bright) && colour(s.glyph.right, fg, bright))
+        .all(|s| {
+            if s.glyph.text.chars().all(char::is_whitespace) {
+                [s.glyph.left, s.glyph.right]
+                    .iter()
+                    .all(|style| style.bg == 0 && !style.inverse)
+            } else {
+                colour(s.glyph.left, fg, bright) && colour(s.glyph.right, fg, bright)
+            }
+        })
 }
 fn timestamp(s: &str) -> bool {
     let b = s.as_bytes();
@@ -217,79 +281,310 @@ pub struct Projection {
     pub matches: Vec<Push>,
     pub revealed: bool,
 }
-pub fn project(frame: &Frame, rules: &Rules, revealed: bool) -> Projection {
-    let matches: Vec<_> = if rules.validate().is_ok() {
-        pushes(frame)
+struct Target {
+    content: Push,
+    id_start: usize,
+}
+fn targets(frame: &Frame) -> Vec<Target> {
+    match navigation::analyze(frame) {
+        navigation::Context::ArticleList { articles, .. } => {
+            let Some(rows) = text::rows(frame) else {
+                return Vec::new();
+            };
+            articles
+                .iter()
+                .filter_map(|article| {
+                    let field = rows.get(article.row)?.cells(17, 30)?;
+                    let id = field.trim();
+                    if !valid_id(id) {
+                        return None;
+                    }
+                    Some(Target {
+                        content: Push {
+                            row: article.row,
+                            id: id.into(),
+                            start: 30,
+                            end: 80,
+                        },
+                        id_start: 17 + field.len() - field.trim_start().len(),
+                    })
+                })
+                .collect()
+        }
+        navigation::Context::ArticleReading { .. } => pushes(frame)
             .into_iter()
-            .filter(|p| {
-                rules
-                    .entries
-                    .iter()
-                    .any(|e| e.policy == Policy::Mask && e.id.eq_ignore_ascii_case(&p.id))
+            .map(|content| Target {
+                content,
+                id_start: 3,
             })
-            .collect()
-    } else {
-        Vec::new()
-    };
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+pub fn project(frame: &Frame, rules: &Rules, revealed: bool) -> Projection {
+    let mut matches = Vec::new();
+    let mut highlights = Vec::new();
+    if rules.validate().is_ok() {
+        for target in targets(frame) {
+            let Some(entry) = rules
+                .entries
+                .iter()
+                .find(|e| e.id.eq_ignore_ascii_case(&target.content.id))
+            else {
+                continue;
+            };
+            let mut content = target.content;
+            match entry.policy {
+                Policy::Allow => {
+                    content.start = target.id_start;
+                    content.end = target.id_start + content.id.len();
+                    highlights.push((content, entry.color.unwrap_or(rules.allow_color)));
+                }
+                Policy::Mask => {
+                    let mut id = content.clone();
+                    id.start = target.id_start;
+                    id.end = id.start + id.id.len();
+                    highlights.push((id, BLOCK_ID_COLOR));
+                    matches.push(content);
+                }
+                Policy::MaskRow => {
+                    if revealed {
+                        let mut id = content.clone();
+                        id.start = target.id_start;
+                        id.end = id.start + id.id.len();
+                        highlights.push((id, BLOCK_ID_COLOR));
+                    }
+                    content.start = 0;
+                    content.end = frame.cols;
+                    matches.push(content);
+                }
+            }
+        }
+    }
     let mut output = frame.clone();
     if !revealed {
-        let mut redacted = Vec::new();
-        output.hyperlinks.retain_mut(|link| {
-            link.spans.retain(|span| {
-                let hidden = matches.iter().any(|push| {
-                    push.row == span.row && span.start < push.end && span.end > push.start
-                });
-                if hidden {
-                    redacted.push(span.clone());
-                }
-                !hidden
-            });
-            !link.spans.is_empty()
-        });
-        if !redacted.is_empty() {
-            output
-                .hyperlinks
-                .push(crate::screen::hyperlinks::Hyperlink {
-                    target: None,
-                    spans: redacted,
-                });
+        mask_ranges(&mut output, &matches);
+    }
+    for glyph in &mut output.glyphs {
+        if let Some((_, color)) = highlights.iter().find(|(p, _)| {
+            p.row == glyph.row && glyph.col >= p.start && glyph.col + glyph.width <= p.end
+        }) {
+            for style in [&mut glyph.left, &mut glyph.right] {
+                // Preserve the effective background, including inverse rows.
+                let background = if style.inverse { style.fg } else { style.bg };
+                style.fg = color % 8;
+                style.bg = background;
+                style.bright = *color >= 8;
+                style.inverse = false;
+            }
         }
-        output.glyphs = frame
-            .glyphs
-            .iter()
-            .flat_map(|g| {
-                if matches
-                    .iter()
-                    .any(|p| p.row == g.row && g.col < p.end && g.col + g.width > p.start)
-                {
-                    (g.col..g.col + g.width)
-                        .map(|col| Glyph {
-                            col,
-                            row: g.row,
-                            width: 1,
-                            text: "█".into(),
-                            left: Style {
-                                fg: 0,
-                                ..Style::default()
-                            },
-                            right: Style {
-                                fg: 0,
-                                ..Style::default()
-                            },
-                            unmapped: false,
-                        })
-                        .collect()
-                } else {
-                    vec![g.clone()]
-                }
-            })
-            .collect();
     }
     Projection {
         frame: output,
         matches,
         revealed,
     }
+}
+
+/// A complete visible ASCII account-shaped word, resolved from Rust cells.
+#[derive(Clone, Debug, Serialize)]
+pub struct AccountWord {
+    pub row: usize,
+    pub start: usize,
+    pub end: usize,
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub policy: Option<Policy>,
+}
+/// Only independently recognized article-list author fields can expose account
+/// actions. A whole-row mask must not leak its hidden author through metadata.
+pub fn article_authors(source: &Frame, visible: &Frame) -> Vec<AccountWord> {
+    if !matches!(
+        navigation::analyze(source),
+        navigation::Context::ArticleList { .. }
+    ) {
+        return Vec::new();
+    }
+    let Some(rows) = text::rows(visible) else {
+        return Vec::new();
+    };
+    targets(source)
+        .into_iter()
+        .filter_map(|target| {
+            let id = &target.content.id;
+            let start = target.id_start;
+            let end = start + id.len();
+            let row = rows.get(target.content.row)?;
+            if row.cells(start, end)? != id
+                || !row
+                    .spans
+                    .iter()
+                    .filter(|s| s.glyph.col < end && s.glyph.col + s.glyph.width > start)
+                    .all(|s| {
+                        s.glyph.left.fg != s.glyph.left.bg && s.glyph.right.fg != s.glyph.right.bg
+                    })
+            {
+                return None;
+            }
+            Some(AccountWord {
+                row: target.content.row,
+                start: 17,
+                end: 30,
+                id: id.clone(),
+                policy: None,
+            })
+        })
+        .collect()
+}
+
+pub fn account_words(frame: &Frame) -> Vec<AccountWord> {
+    let Some(rows) = text::rows(frame) else {
+        return Vec::new();
+    };
+    let mut words = Vec::new();
+    for (row, line) in rows.iter().enumerate() {
+        let mut start = 0;
+        while start < frame.cols {
+            let ascii = |col| {
+                line.cells(col, col + 1)
+                    .filter(|s| s.len() == 1)
+                    .and_then(|s| s.bytes().next())
+                    .filter(|b| b.is_ascii_alphanumeric() || *b == b'_')
+            };
+            if ascii(start).is_none() {
+                start += 1;
+                continue;
+            }
+            let mut end = start + 1;
+            while end < frame.cols && ascii(end).is_some() {
+                end += 1;
+            }
+            if let Some(id) = line.cells(start, end).filter(|id| valid_id(id))
+                && line
+                    .spans
+                    .iter()
+                    .filter(|s| s.glyph.col < end && s.glyph.col + s.glyph.width > start)
+                    .all(|s| !s.glyph.unmapped && s.glyph.left.fg != s.glyph.left.bg)
+            {
+                words.push(AccountWord {
+                    row,
+                    start,
+                    end,
+                    id: id.to_owned(),
+                    policy: None,
+                });
+            }
+            start = end;
+        }
+    }
+    words
+}
+
+/// Temporary reply focus never changes the persistent account rules.
+pub fn focus_pushes(frame: &mut Frame, replies: &[Push], id: &str) {
+    let marked: std::collections::BTreeSet<_> = replies
+        .iter()
+        .filter(|p| p.id.eq_ignore_ascii_case(id))
+        .map(|p| p.row)
+        .collect();
+    let blue_rows: std::collections::BTreeSet<_> = frame
+        .glyphs
+        .iter()
+        .filter(|g| marked.contains(&g.row) && [g.left, g.right].iter().any(|s| s.fg % 8 == 4))
+        .map(|g| g.row)
+        .collect();
+    for glyph in &mut frame.glyphs {
+        if !marked.contains(&glyph.row) {
+            continue;
+        }
+        // Permanent masks and merged identities remain opaque, even on a marked row.
+        if glyph.text == "█"
+            && [glyph.left, glyph.right]
+                .iter()
+                .all(|s| s.fg == 0 && s.bg == 0)
+        {
+            continue;
+        }
+        for style in [&mut glyph.left, &mut glyph.right] {
+            style.bg = if blue_rows.contains(&glyph.row) { 5 } else { 4 };
+        }
+    }
+}
+
+/// Shared cell replacement for content masks and repeated reply identities.
+fn mask_ranges(frame: &mut Frame, ranges: &[Push]) {
+    if ranges.is_empty() {
+        return;
+    }
+    let mut redacted = Vec::new();
+    frame.hyperlinks.retain_mut(|link| {
+        link.spans.retain(|span| {
+            let hidden = ranges
+                .iter()
+                .any(|push| push.row == span.row && span.start < push.end && span.end > push.start);
+            if hidden {
+                redacted.push(span.clone());
+            }
+            !hidden
+        });
+        !link.spans.is_empty()
+    });
+    if !redacted.is_empty() {
+        frame.hyperlinks.push(crate::screen::hyperlinks::Hyperlink {
+            target: None,
+            spans: redacted,
+        });
+    }
+    frame.glyphs = frame
+        .glyphs
+        .iter()
+        .flat_map(|g| {
+            if ranges
+                .iter()
+                .any(|p| p.row == g.row && g.col < p.end && g.col + g.width > p.start)
+            {
+                (g.col..g.col + g.width)
+                    .map(|col| Glyph {
+                        col,
+                        row: g.row,
+                        width: 1,
+                        text: "█".into(),
+                        left: Style {
+                            fg: 0,
+                            ..Style::default()
+                        },
+                        right: Style {
+                            fg: 0,
+                            ..Style::default()
+                        },
+                        unmapped: false,
+                    })
+                    .collect()
+            } else {
+                vec![g.clone()]
+            }
+        })
+        .collect();
+}
+
+/// Merge only adjacent, independently recognized replies. The caller keeps
+/// identities in Rust so masking or highlighting never becomes parser input.
+pub fn merge_push_ids(frame: &mut Frame, replies: &[Push]) {
+    let ranges: Vec<_> = replies
+        .windows(2)
+        .filter_map(|pair| {
+            let (previous, current) = (&pair[0], &pair[1]);
+            (previous.row + 1 == current.row && previous.id.eq_ignore_ascii_case(&current.id)).then(
+                || Push {
+                    row: current.row,
+                    id: current.id.clone(),
+                    start: 3,
+                    end: 3 + current.id.len(),
+                },
+            )
+        })
+        .collect();
+    mask_ranges(frame, &ranges);
 }
 
 /// Policy/reveal revision is separate from the immutable source frame revision.
@@ -311,6 +606,9 @@ impl State {
     }
     pub fn version(&self) -> u64 {
         self.version
+    }
+    pub fn touch(&mut self) {
+        self.version = self.version.saturating_add(1);
     }
     pub fn replace(&mut self, rules: Rules) {
         self.rules = rules;

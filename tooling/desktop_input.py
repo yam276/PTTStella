@@ -63,6 +63,8 @@ class DevTools:
         url = urlsplit(address)
         if url.scheme != 'ws' or url.hostname != '127.0.0.1' or url.port != port:
             raise ValueError('debug target must belong to this loopback probe')
+        self.port = port
+        self.address = address
         self.socket = socket.create_connection(('127.0.0.1', port), timeout=5)
         self.reader = self.socket.makefile('rb')
         self.sequence = 0
@@ -94,6 +96,12 @@ class DevTools:
     def close(self):
         self.reader.close()
         self.socket.close()
+
+    def open_settings(self):
+        self.call('Page.bringToFront')
+        self.click('#font-settings')
+        self.wait('document.getElementById("font-dialog").open', 'in-app settings did not become ready')
+        return self
 
     def exact(self, size):
         data = self.reader.read(size)
@@ -217,24 +225,41 @@ class DevTools:
             time.sleep(.02)
 
 
+def debug_pages(port):
+    """Discover only the owned probe's bounded loopback page list."""
+    connection = http.client.HTTPConnection('127.0.0.1', port, timeout=1)
+    try:
+        connection.request('GET', '/json/list')
+        response = connection.getresponse()
+        data = response.read(1024 * 1024 + 1)
+        if response.status != 200 or len(data) > 1024 * 1024:
+            raise ValueError('invalid debug target response')
+        targets = json.loads(data)
+        if not isinstance(targets, list) or len(targets) > 8 or any(not isinstance(p, dict) for p in targets):
+            raise ValueError('invalid debug target list')
+        addresses = []
+        for target in targets:
+            if target.get('type') != 'page':
+                continue
+            address = target.get('webSocketDebuggerUrl')
+            url = urlsplit(address) if isinstance(address, str) else None
+            if url is None or url.scheme != 'ws' or url.hostname != '127.0.0.1' or url.port != port:
+                raise ValueError('debug target must belong to this loopback probe')
+            addresses.append(address)
+        return addresses
+    finally:
+        connection.close()
+
+
 def run(port, process, output=None, media_server=None):
     """No credentials, PTT traffic, arbitrary target selection, or OS-wide input."""
     deadline = time.monotonic() + 15
     address = None
     while time.monotonic() < deadline and process.poll() is None:
         try:
-            connection = http.client.HTTPConnection('127.0.0.1', port, timeout=1)
-            try:
-                connection.request('GET', '/json/list')
-                response = connection.getresponse()
-                targets = json.loads(response.read(1024 * 1024))
-                if not isinstance(targets, list) or any(not isinstance(p, dict) for p in targets):
-                    raise ValueError('invalid debug target list')
-                pages = [p for p in targets if p.get('type') == 'page']
-            finally:
-                connection.close()
+            pages = debug_pages(port)
             if len(pages) == 1:
-                address = pages[0].get('webSocketDebuggerUrl')
+                address = pages[0]
                 break
         except (OSError, ValueError, http.client.HTTPException):
             pass
@@ -269,7 +294,7 @@ def run(port, process, output=None, media_server=None):
             devtools.call('Input.dispatchMouseEvent', type=kind, x=link_x, y=link_y, button='left', clickCount=1)
         devtools.wait('document.getElementById("surface").dataset.linkResult === "requested"', 'URL click did not reach the opener')
         for kind in ('mousePressed', 'mouseReleased'):
-            devtools.call('Input.dispatchMouseEvent', type=kind, x=link_x, y=link_y, button='right', clickCount=1)
+            devtools.call('Input.dispatchMouseEvent', type=kind, x=link_x, y=link_y, button='right', clickCount=1, modifiers=8)
         devtools.wait('!document.getElementById("surface-context-menu").hidden', 'right-click did not open the context menu')
         devtools.click('[data-context-action="select-link"]')
         devtools.wait('!!document.getElementById("surface").dataset.selectionReady', 'context menu did not select the complete URL')
@@ -318,64 +343,8 @@ def run(port, process, output=None, media_server=None):
                 raise ValueError('circular symbol ink was distorted: '+repr(symbol_bounds))
         import desktop_capture
         capture_report = desktop_capture.run(devtools, output)
-        # Edit actual form controls; cancelled previews must not change the screen/store.
-        initial_pixels = devtools.evaluate('document.getElementById("screen").toDataURL("image/png")')
-        def edit_field(selector, value):
-            devtools.click(selector)
-            devtools.wait('document.activeElement === document.querySelector('+json.dumps(selector)+')', 'field did not receive focus')
-            devtools.shortcut('a')
-            devtools.call('Input.insertText', text=value)
-            devtools.wait('document.querySelector('+json.dumps(selector)+').value === '+json.dumps(value), 'field did not receive the complete edit')
-        def open_fonts():
-            devtools.call('Input.dispatchMouseEvent', type='mouseMoved', x=20, y=2)
-            devtools.click('#font-settings')
-            devtools.wait('document.getElementById("font-dialog").open && document.activeElement.id === "font-ascii"', 'font dialog initial preview and focus did not become ready')
-        open_fonts()
-        edit_field('#font-size', '18')
-        edit_field('#font-baseline', '19')
-        devtools.wait('document.getElementById("font-preview").dataset.fontSize === "18" && document.getElementById("font-preview").dataset.baseline === "19"',
-                      'font preview did not render the validated draft')
-        devtools.click('#font-cancel')
-        devtools.wait('!document.getElementById("font-dialog").open', 'font preview did not cancel')
-        if devtools.evaluate('document.getElementById("screen").toDataURL("image/png")') != initial_pixels:
-            raise ValueError('cancelled font preview changed the PTT screen')
-        if output is not None and (Path(output)/'probe-settings.json').exists():
-            raise ValueError('cancelled preview saved preferences')
-        open_fonts()
-        if devtools.evaluate('document.getElementById("font-size").value') != '20':
-            raise ValueError('reopening settings retained an unsaved draft')
-        edit_field('#font-size', '18')
-        edit_field('#font-baseline', '19')
-        edit_field('#font-ascii', 'Courier New')
-        devtools.click('#font-save')
-        devtools.wait('!document.getElementById("font-dialog").open && document.getElementById("surface").dataset.fontSize === "18" && document.getElementById("surface").dataset.baseline === "19"',
-                      'saved font settings did not reach the PTT renderer')
-        changed_pixels = devtools.evaluate('document.getElementById("screen").toDataURL("image/png")')
-        if changed_pixels == initial_pixels:
-            raise ValueError('saved font metrics did not affect rendered glyph pixels')
-        if output is not None:
-            (Path(output)/'settings-after.png').write_bytes(base64.b64decode(changed_pixels.split(',',1)[1], validate=True))
-            saved_bytes = (Path(output)/'probe-settings.json').read_bytes()
-            saved = json.loads(saved_bytes)
-            if saved['display']['font_size'] != 18 or saved['display']['baseline'] != 19 or saved['display']['fonts']['ascii_font'] != 'Courier New':
-                raise ValueError('saved configuration did not contain the applied settings')
-        open_fonts()
-        edit_field('#font-size', '100')
-        devtools.click('#font-save')
-        devtools.wait('document.getElementById("font-note").textContent.includes("字高需介於")', 'invalid font metrics were not rejected')
-        if not devtools.evaluate('document.getElementById("font-dialog").open'):
-            raise ValueError('failed settings save closed the draft')
-        devtools.click('#font-defaults')
-        devtools.wait('document.getElementById("font-preview").dataset.fontSize === "20" && document.getElementById("font-preview").dataset.baseline === "20"',
-                      'default font metrics were not previewed')
-        devtools.click('#font-cancel')
-        if output is not None and (Path(output)/'probe-settings.json').read_bytes() != saved_bytes:
-            raise ValueError('invalid or cancelled settings replaced saved configuration')
-        # Default preview does not commit until the user saves.
-        if devtools.evaluate('document.getElementById("surface").dataset.fontSize') != '18':
-            raise ValueError('default preview changed the committed settings')
-        import desktop_profiles
-        profiles_report=desktop_profiles.run(devtools,output,edit_field,open_fonts)
+        import desktop_settings
+        settings_report, profiles_report = desktop_settings.run(devtools, output)
         import desktop_hover
         hover_report=desktop_hover.run(devtools,output,media_server)
         devtools.call('Input.dispatchMouseEvent', type='mouseMoved', x=20, y=2)
@@ -529,6 +498,7 @@ def run(port, process, output=None, media_server=None):
                 'selected_rows_png': capture_report,
                 'font_preview_save_cancel_validation': True,
                 'mouse_navigation': navigation_report,
+                'settings_center':settings_report,
                 'display_profiles':profiles_report,
                 'hover_preview':hover_report,
                 'media': media_report,

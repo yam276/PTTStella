@@ -212,10 +212,11 @@ async fn failed_save_preserves_effective_state_and_the_next_save_can_commit() {
     store.save(original.clone()).unwrap();
     let old = std::fs::read(dir.path().join("probe-settings.json")).unwrap();
     std::fs::create_dir(dir.path().join("probe-settings.json.bak")).unwrap();
-    let mut draft = preferences.display_draft(DisplayProfile {
+    let mut draft = preferences.app().clone();
+    draft.display = DisplayProfile {
         font_size: 18.0,
         ..Default::default()
-    });
+    };
     draft.language = pttstella::i18n::Language::English;
     let mut files = Files::default();
     files
@@ -624,4 +625,105 @@ async fn clipboard_worker_is_bounded_nonblocking_and_joined_on_close() {
             .contains("synthetic clipboard failure")
     );
     assert!(!files.busy());
+}
+
+#[test]
+fn png_clipboard_decodes_rgb_and_rgba_with_exact_bounded_dimensions() {
+    let image = clipboard_pixels(black_png_data(), &(0..24)).unwrap();
+    assert_eq!((image.width, image.height), (960, 576));
+    assert!(
+        image
+            .bytes
+            .chunks_exact(4)
+            .all(|pixel| pixel == [0, 0, 0, 255])
+    );
+    let mut bytes = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut bytes, 960, 24);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().unwrap();
+        writer
+            .write_image_data(&[17, 34, 51, 128].repeat(960 * 24))
+            .unwrap();
+    }
+    let encoded = format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(&bytes)
+    );
+    let image = clipboard_pixels(encoded.clone(), &(0..1)).unwrap();
+    assert_eq!((image.width, image.height), (960, 24));
+    assert!(image.bytes.chunks_exact(4).all(|p| p == [17, 34, 51, 128]));
+    assert!(clipboard_pixels(encoded, &(0..24)).is_err());
+    bytes.truncate(40);
+    let encoded = format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(&bytes)
+    );
+    assert!(clipboard_pixels(encoded, &(0..1)).is_err());
+}
+
+#[tokio::test]
+async fn png_clipboard_rejects_cancelled_revised_or_filtered_output_before_os_write() {
+    for mode in [
+        "valid", "revised", "filtered", "closed", "invalid", "session",
+    ] {
+        let (mut state, updates, source, identity) = snapshot();
+        let lease = state.lease_output(identity, None, 0);
+        let mut files = Files::default();
+        if mode == "revised" {
+            updates.send_modify(|v| v.frame.revision += 1);
+        }
+        if mode == "session" {
+            updates.send_modify(|v| v.generation += 1);
+        }
+
+        if mode == "filtered" {
+            state.replace_rules(filters::Rules::default());
+        }
+        if mode == "closed" {
+            files.revoke();
+        }
+        let writes = Arc::new(Mutex::new(0));
+        let written = writes.clone();
+        let request = ExportRequest {
+            lease,
+            source,
+            png: if mode == "invalid" {
+                "data:image/png;base64,AAAA".into()
+            } else {
+                black_png_data()
+            },
+            rows: 0..24,
+            selected: false,
+            probe: None,
+        };
+        let done = copy_png_with_writer(files.permit.clone(), request, move |image| {
+            assert_eq!((image.width, image.height), (960, 576));
+            *written.lock().unwrap() += 1;
+            Ok(())
+        })
+        .await;
+        assert_eq!(
+            matches!(
+                done,
+                Completion::Export {
+                    destination: ExportDestination::Clipboard,
+                    result: Ok(true),
+                    ..
+                }
+            ),
+            mode == "valid"
+        );
+        assert_eq!(*writes.lock().unwrap(), usize::from(mode == "valid"));
+        files.finish().await.unwrap();
+    }
+}
+
+fn black_png_data() -> String {
+    format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD
+            .encode(include_bytes!("../../tests/fixtures/export-black.png"))
+    )
 }

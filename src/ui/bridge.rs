@@ -2,12 +2,17 @@
 use super::{outbound::Packet, protocol::SurfaceEvent};
 use dioxus::prelude::document;
 
-pub(super) struct Bridge {
+pub(super) struct Bridge<'a> {
+    settings: &'a mut super::settings_finish::RetainedEdits,
     eval: document::Eval,
 }
-impl Bridge {
-    pub(super) fn new(script: &str) -> Self {
+impl<'a> Bridge<'a> {
+    pub(super) fn new(
+        script: &str,
+        settings: &'a mut super::settings_finish::RetainedEdits,
+    ) -> Self {
         Self {
+            settings,
             eval: document::eval(script),
         }
     }
@@ -16,6 +21,15 @@ impl Bridge {
     }
     pub(super) fn send(&self, packet: Packet<'_>) -> Result<(), document::EvalError> {
         self.eval.send(packet)
+    }
+    pub(super) fn open_settings(
+        &mut self,
+        store: Result<pttstella::settings::store::Store, String>,
+    ) {
+        self.settings.open(store);
+    }
+    pub(super) fn settings_notice(&self, message: &str) -> Result<(), document::EvalError> {
+        self.eval.send(Packet::Notice(message.into()))
     }
     pub(super) async fn recv(&mut self) -> Result<SurfaceEvent, document::EvalError> {
         self.eval.recv().await

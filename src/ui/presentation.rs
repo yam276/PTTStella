@@ -12,6 +12,16 @@ use serde::Serialize;
 
 #[derive(Clone, Serialize)]
 pub(super) struct Paint {
+    #[serde(skip)]
+    pub(super) replies: Vec<filters::Push>,
+    pub(super) account_words: Vec<filters::AccountWord>,
+    pub(super) reply_rows: Vec<usize>,
+    pub(super) reply_author_words: Vec<usize>,
+    pub(super) reply_focus: Option<String>,
+    pub(super) article_mode: pttstella::settings::ArticleMode,
+    pub(super) article_boundary_navigation: bool,
+    pub(super) article: Option<super::article_cache::Reading>,
+    pub(super) source_frame: Option<Frame>,
     pub(super) site: pttstella::sites::Target,
     pub(super) ptt_features: bool,
     pub(super) mouse: pttstella::mouse::input::Snapshot,
@@ -69,23 +79,20 @@ pub(super) fn paint(
             revealed: false,
         }
     };
-    let links = if view.output_pending {
-        Vec::new()
-    } else {
-        links::detect(&projection.frame)
-    };
-    let image_links = links
-        .iter()
-        .enumerate()
-        .filter_map(|(index, link)| {
-            media::classify(&link.url)
-                .ok()
-                .flatten()
-                .filter(|target| target.kind == media::Kind::Image)
-                .map(|_| index)
-        })
-        .collect();
-    Paint {
+    let mut paint = Paint {
+        replies: if view.site.ptt_features() {
+            filters::pushes(&view.frame)
+        } else {
+            Vec::new()
+        },
+        account_words: Vec::new(),
+        reply_rows: Vec::new(),
+        reply_author_words: Vec::new(),
+        reply_focus: None,
+        article_mode: Default::default(),
+        article_boundary_navigation: false,
+        article: None,
+        source_frame: None,
         site: view.site.clone(),
         ptt_features: view.site.ptt_features(),
         mouse: view.mouse,
@@ -99,7 +106,7 @@ pub(super) fn paint(
             .map(|p| p.id.as_str())
             .collect::<Vec<_>>()
             .join("、"),
-        image_links,
+        image_links: Vec::new(),
         hover: None,
         keep_alive: view.keep_alive,
         keep_alive_ready: view.keep_alive_ready,
@@ -112,15 +119,55 @@ pub(super) fn paint(
         connected: view.phase == Phase::Connected,
         navigation: view.context(),
         settings: settings.clone(),
-        links,
+        links: Vec::new(),
         frame: projection.frame,
         generation: view.generation,
         probe,
+    };
+    refresh_links(&mut paint);
+    paint
+}
+
+pub(super) fn refresh_links(paint: &mut Paint) {
+    paint.links = if paint.output_pending {
+        Vec::new()
+    } else {
+        links::detect(&paint.frame)
+    };
+    paint.image_links = paint
+        .links
+        .iter()
+        .enumerate()
+        .filter_map(|(index, link)| {
+            media::classify(&link.url)
+                .ok()
+                .flatten()
+                .filter(|target| target.kind == media::Kind::Image)
+                .map(|_| index)
+        })
+        .collect();
+}
+
+pub(super) fn merge_replies(paint: &mut Paint, source_replies: &[filters::Push]) {
+    filters::merge_push_ids(&mut paint.frame, &paint.replies);
+    if let Some(source) = &mut paint.source_frame {
+        // A standalone page starts its own visible group; never hide its first ID.
+        filters::merge_push_ids(source, source_replies);
     }
+    refresh_links(paint);
 }
 
 pub(super) fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint {
     Paint {
+        replies: Vec::new(),
+        account_words: Vec::new(),
+        reply_rows: Vec::new(),
+        reply_author_words: Vec::new(),
+        reply_focus: None,
+        article_mode: Default::default(),
+        article_boundary_navigation: false,
+        article: None,
+        source_frame: None,
         site: pttstella::sites::Target::default(),
         ptt_features: false,
         mouse: pttstella::mouse::input::Snapshot::default(),

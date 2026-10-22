@@ -261,10 +261,8 @@ impl Connection {
         Ok(connection)
     }
     pub fn start_pointer_rows_probe() -> Result<Self, String> {
-        let connection = Self::start_owned_probe(
-            probe::navigation_page("list")?,
-            probe::Scenario::PointerRows,
-        )?;
+        let connection =
+            Self::start_owned_probe(probe::pointer_menu()?, probe::Scenario::PointerRows)?;
         connection.keep_alive(false)?;
         Ok(connection)
     }
@@ -281,6 +279,32 @@ impl Connection {
     /// Explicit synthetic UI fixture; the peer accepts Close and no input bytes.
     pub fn start_ui_probe(bytes: Vec<u8>) -> Result<Self, String> {
         let connection = Self::start_owned_probe(bytes, probe::Scenario::Surface)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    pub fn start_inline_pages_probe(first: Vec<u8>, second: Vec<u8>) -> Result<Self, String> {
+        let connection = Self::start_owned_probe(
+            first,
+            probe::Scenario::InlinePages {
+                pages: vec![second],
+                delay_ms: 0,
+            },
+        )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    /// Explicit bounded local fixture for cancellable article preloading.
+    pub fn start_article_load_probe(first: Vec<u8>, pages: Vec<Vec<u8>>) -> Result<Self, String> {
+        if pages.is_empty() || pages.len() > 64 || pages.iter().any(|p| p.len() > 64 * 1024) {
+            return Err("invalid article load probe pages".into());
+        }
+        let connection = Self::start_owned_probe(
+            first,
+            probe::Scenario::InlinePages {
+                pages,
+                delay_ms: 500,
+            },
+        )?;
         connection.keep_alive(false)?;
         Ok(connection)
     }

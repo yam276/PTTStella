@@ -1,5 +1,5 @@
 // Owns station editor drafts and request lifetime. Rust validates targets and owns persistence.
-function createSitesDialog({tr,send,prepare,restore,changed}) {
+function createSitesDialog({tr,send,prepare,restore,changed,manage=null,present=dialog=>dialog.showModal(),visible=()=>true,finished=()=>{}}) {
     const button=document.getElementById("sites-open"),dialog=document.getElementById("sites-dialog");
     const list=document.getElementById("sites-list"),name=document.getElementById("site-name"),address=document.getElementById("site-address"),encoding=document.getElementById("site-encoding");
     const favourite=document.getElementById("site-save"),remove=document.getElementById("site-remove"),makeDefault=document.getElementById("site-default"),connect=document.getElementById("site-connect"),closeButton=document.getElementById("sites-close");
@@ -27,9 +27,10 @@ function createSitesDialog({tr,send,prepare,restore,changed}) {
         defaultNote.textContent=tr("sites-default-value",{target:description(data.sites.default)});controls();
     }
     function open(e){
-        if(disposed||!e.isTrusted||document.querySelector("dialog[open]"))return;
+        if(disposed||!e.isTrusted||manage&&!manage(e)||!manage&&document.querySelector("dialog[open]"))return;
+        if(pending!==null||opening!==null){present(dialog);changed();return;}
         prepare(e);opening=++sequence;pending=null;composing=false;list.value="";note.textContent=tr("sites-loading");
-        dialog.showModal();controls();changed();send({kind:"sites_open",request:opening,trusted:true});
+        present(dialog);controls();changed();send({kind:"sites_open",request:opening,trusted:true});
     }
     function close(e){
         e?.preventDefault();if(disposed||!e?.isTrusted||pending!==null||opening!==null)return;
@@ -54,17 +55,17 @@ function createSitesDialog({tr,send,prepare,restore,changed}) {
         send({kind:"sites_connect",request:pending,address:address.value,encoding:encoding.value,trusted:true});
     }
     function receiveOpen(packet){
-        if(disposed||!dialog.open||packet.request!==opening)return;
-        opening=null;snapshot(packet.data);fill(packet.data.current);note.textContent=packet.data.warning??"";address.focus();
+        if(disposed||packet.request!==opening)return;
+        opening=null;if(!dialog.open)return;snapshot(packet.data);fill(packet.data.current);note.textContent=packet.data.warning??"";if(visible())address.focus();
     }
     function receive(packet){
-        if(disposed||!dialog.open||packet.request!==pending)return;
-        pending=null;snapshot(packet.data);note.textContent=packet.feedback.notice??packet.data.warning??"";
-        if(packet.feedback.status==="connecting"){dialog.close();restore();changed();}else address.focus();
+        if(disposed||packet.request!==pending)return;
+        pending=null;if(!dialog.open)return;snapshot(packet.data);note.textContent=packet.feedback.notice??packet.data.warning??"";
+        if(packet.feedback.status==="connecting"){dialog.close();finished();restore();changed();}else if(visible())address.focus();
     }
     function revoke(){disposed=true;opening=null;pending=null;composing=false;entries=[];address.value="";name.value="";}
     function destroy(){revoke();if(dialog.open)dialog.close();}
-    return {receiveOpen,receive,revoke,destroy,clean:()=>disposed&&!dialog.open&&!pending&&!opening,
+    return {request:open,close,receiveOpen,receive,revoke,destroy,clean:()=>disposed&&!dialog.open&&!pending&&!opening,
         bindings:[[button,"click",open],[list,"change",choose],[address,"input",controls],[encoding,"change",controls],
             [favourite,"click",e=>edit("favourite",e)],[remove,"click",e=>edit("remove",e)],[makeDefault,"click",e=>edit("default",e)],
             [connect,"click",go],[closeButton,"click",close],[dialog,"cancel",close],

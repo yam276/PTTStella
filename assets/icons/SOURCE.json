@@ -39,5 +39,10 @@
     ],
     "sha256": "267f68c2113410959698d494043b220f1dffac2ddf1f9937b09d7396e16037b1",
     "usage": "Same original project artwork; embedded in the Windows executable and used for the window/taskbar."
+  },
+  "floating_variant": {
+    "file": "pttstella.png",
+    "source": "The same Icon Composer rendition as the App icon, shown through the circular button mask.",
+    "usage": "Embedded local original artwork; keeps the three stars, quiet connections and rendered glass material."
   }
 }

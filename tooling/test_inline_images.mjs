@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
-const source=readFileSync(new URL('../assets/inline-images.js',import.meta.url),'utf8');
-const {inlineRowLayout,inlineShortcut}=vm.runInNewContext(source+'\n({inlineRowLayout,inlineShortcut})');
+const source=readFileSync(new URL('../assets/gif-playback.js',import.meta.url),'utf8')+'\n'+readFileSync(new URL('../assets/inline-images.js',import.meta.url),'utf8');
+const {inlineRowLayout,inlineShortcut,createInlineImageKey}=vm.runInNewContext(source+'\n({inlineRowLayout,inlineShortcut,createInlineImageKey})');
 test('inserted gaps never acquire terminal cells and selection height excludes pictures',()=>{
     for(const scale of [.5,1,1.5,2]) {
         const layout=inlineRowLayout(4,row=>row*24*scale,new Map([[0,100*scale],[2,60*scale]]));
@@ -24,29 +24,80 @@ test('Enter expansion is only offered on an idle local reading page',()=>{
     assert.ok(inlineShortcut(key,state,packet));assert.ok(inlineShortcut(key,{...state,enabled:false,mode:'input'},packet));
     for(const patch of [{ctrlKey:true},{altKey:true},{shiftKey:true},{key:'ArrowRight'}])assert.ok(!inlineShortcut({...key,...patch},state,packet));
     for(const patch of [{mode:'input'},{mode:'once'},{pending:true}])assert.ok(!inlineShortcut(key,{...state,...patch},packet));
-    for(const patch of [{ptt_features:false},{connected:false},{input_pending:true},{output_pending:true},{navigation:{kind:'continue_prompt'}},{image_links:[]},{mouse:{route:'station'}}])assert.ok(!inlineShortcut(key,state,{...packet,...patch}));
+    for(const patch of [{article_mode:"terminal"},{ptt_features:false},{connected:false},{input_pending:true},{output_pending:true},{navigation:{kind:'continue_prompt'}},{image_links:[]},{mouse:{route:'station'}}])assert.ok(!inlineShortcut(key,state,{...packet,...patch}));
 });
-test('production key handler consumes repeated Enter without sending station bytes',()=>{
-    const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');const sent=[];
-    const context={inlineShortcut,keyboardState:{enabled:true,mode:'normal',pending:false},latest:{presentation:3,ptt_features:true,connected:true,navigation:{kind:'article_reading'},image_links:[0],mouse:{route:'local'}},
-        stationMouse:{revoke(){}},cancelHover(){},pastePending:false,composing:false,hasSelection:()=>false,clearSelection(){},cancelDrag(){},stamp:()=>({generation:7,revision:4,input_epoch:2}),send:v=>sent.push(JSON.parse(JSON.stringify(v)))};
-    vm.runInNewContext(surface.slice(surface.indexOf('function keydown('),surface.indexOf('function input(')),context);
+test('production Enter routes release to one image and a held press to one all-image request',()=>{
+    const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8'),sent=[],timers=new Map();let next=0;
+    const context={document:{querySelector:()=>null},inlineShortcut,keyboardState:{enabled:true,mode:'normal',pending:false},latest:{presentation:3,ptt_features:true,connected:true,navigation:{kind:'article_reading'},image_links:[0],mouse:{route:'local'}},
+        stationMouse:{revoke(){}},policy(){},cancelHover(){},pastePending:false,composing:false,hasSelection:()=>false,clearSelection(){},cancelDrag(){},stamp:()=>({generation:7,revision:4,input_epoch:2}),send:v=>sent.push(JSON.parse(JSON.stringify(v))),blocked:()=>false,tools:{busy:()=>false},stopped:false,focus(){}};
+    vm.createContext(context);
+    vm.runInContext(surface.slice(surface.indexOf('function requestInline('),surface.indexOf('const inlineImages=')),context);
+    const gesture=createInlineImageKey({scope:()=>1,allowed:()=>inlineShortcut({key:'Enter'},context.keyboardState,context.latest),
+        single:e=>context.requestInline({kind:'link',index:0},e),all:e=>context.requestInline({kind:'all'},e),setTimer:fn=>{timers.set(++next,fn);return next;},clearTimer:id=>timers.delete(id)});
+    context.inlineImages={keydown:gesture.down,keyHeld:gesture.held};
+    vm.runInContext(surface.slice(surface.indexOf('function keydown('),surface.indexOf('function input(')),context);
     const event={key:'Enter',code:'Enter',isTrusted:true,ctrlKey:false,altKey:false,shiftKey:false,repeat:false,preventDefault(){}};
-    context.keydown(event);context.keydown({...event,repeat:true});context.keydown(event);
-    assert.equal(sent.length,2);assert.ok(sent.every(p=>p.kind==='inline_expand'&&p.trusted&&p.presentation===3&&p.stamp.revision===4));
+    context.keydown(event);context.keydown({...event,repeat:true});assert.equal(sent.length,0);gesture.up(event);
+    assert.equal(sent.length,1);assert.deepEqual(sent[0].target,{kind:'link',index:0});assert.equal(timers.size,0);
+    context.keydown(event);for(const fn of timers.values())fn();timers.clear();context.keydown({...event,repeat:true});gesture.up(event);
+    assert.equal(sent.length,2);assert.deepEqual(sent[1].target,{kind:'all'});
+    assert.ok(sent.every(p=>p.kind==='inline_expand'&&p.trusted&&p.presentation===3&&p.stamp.revision===4));
+    context.keydown(event);context.latest.input_pending=true;context.keydown({...event,repeat:true});gesture.up(event);
+    assert.equal(sent.length,2);assert.equal(gesture.clean(),true);
+});
+test('held Enter is revoked by focus cancellation, scope changes, blocking and untrusted input',()=>{
+    for(const reason of ['cancel','scope','blocked','destroy']){
+        let scope=1,allowed=true,actions=[],timer;
+        const g=createInlineImageKey({scope:()=>scope,allowed:()=>allowed,single:()=>actions.push('one'),all:()=>actions.push('all'),setTimer:fn=>{timer=fn;return 1;},clearTimer(){}});
+        const event={key:'Enter',isTrusted:true};g.down({...event,isTrusted:false});assert.equal(g.held(),false);g.down(event);
+        if(reason==='scope')scope=2;else if(reason==='blocked')allowed=false;else g.cancel();
+        timer();g.up(event);assert.deepEqual(actions,[]);assert.equal(g.clean(),true);
+    }
 });
 
-function ownerEnvironment(){
-    const urls=new Set(),nodes=[];let id=0;
-    const element=tag=>{const node={tag,style:{},dataset:{},children:[],width:0,height:0,append(n){this.children.push(n);},insertBefore(n){this.children.push(n);},replaceChildren(){this.children=[];},remove(){},removeAttribute(){},setAttribute(){},getContext:()=>({drawImage(){}})};nodes.push(node);return node;};
+test('ordinary web reading keys move locally and only fetch beyond the cached edge',()=>{
+    const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
+    const sent=[],requests=[];
+    const context={document:{querySelector:()=>null},inlineShortcut:()=>false,policy(){},
+        keyboardState:{enabled:false,mode:'input'},latest:{connected:true,article:{id:1,first_line:1,end:false},navigation:{kind:'article_reading'}},
+        viewport:{scrollTop:240,scrollHeight:2000,clientHeight:500},grid:{ratio:1,y:()=>0,bottom:()=>24},
+        stationMouse:{revoke(){}},cancelHover(){},pastePending:false,composing:false,hasSelection:()=>false,clearSelection(){},cancelDrag(){},
+        blocked:()=>false,dragging:null,repaint(){},generation:1,commandKeys:new Set(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End']),
+        send:p=>sent.push(p)};
+    vm.runInNewContext(surface.slice(surface.indexOf('function keydown('),surface.indexOf('function input(')),context);
+    vm.runInNewContext(surface.slice(surface.indexOf('function readingMove('),surface.indexOf('function navigate(')),context);
+    context.navigate=intent=>requests.push(intent.action);
+    const key=(value,patch={})=>{let prevented=false;context.keydown({key:value,code:value.length===1?'Key'+value.toUpperCase():value,
+        isTrusted:true,preventDefault(){prevented=true;},...patch});return prevented;};
+    for(const [value,expected] of [['j',264],['k',240],['ArrowDown',264],['ArrowUp',240],['PageDown',690],['PageUp',240],['End',1500],['Home',0]]){
+        assert.equal(key(value),true,value);assert.equal(context.viewport.scrollTop,expected,value);
+    }
+    assert.equal(sent.length,0);assert.deepEqual(requests,[]);
+    assert.equal(key('k'),true);assert.deepEqual(requests,[]);
+    context.viewport.scrollTop=1500;key('j');assert.deepEqual(requests,['next_page']);
+    context.latest.article.end=true;key('j');assert.equal(requests.length,1);
+    for(const state of [{enabled:true,mode:'normal'},{enabled:true,mode:'input'},{enabled:true,mode:'once'}]){
+        context.keyboardState=state;key('j');assert.equal(sent.at(-1).kind,'key');
+    }
+    context.keyboardState={enabled:false,mode:'input'};context.latest.article=null;key('k');
+    assert.equal(sent.at(-1).key.key,'k');assert.equal(requests.length,1);
+});
+
+function ownerEnvironment(cached=false,extra={}){
+    const urls=new Set(),nodes=[],encoded=[];let id=0;
+    const element=tag=>{const node={tag,style:{},dataset:{},children:[],width:0,height:0,append(n){this.children.push(n);n.parentNode=this;},insertBefore(n){this.children.push(n);n.parentNode=this;},replaceChildren(){for(const n of this.children)n.parentNode=null;this.children=[];},remove(){if(this.parentNode)this.parentNode.children=this.parentNode.children.filter(n=>n!==this);this.parentNode=null;},removeAttribute(name){delete this[name];},setAttribute(){},toDataURL(){encoded.push(this);return "data:image/png;base64,"+encoded.length;},getBoundingClientRect(){const parent=this.className==='article-footer-image'?this.parentNode.getBoundingClientRect():null,left=(parseFloat(this.style.left)||0)+(parent?.left??0),top=(parseFloat(this.style.top)||0)+(parent?.top??0),width=parseFloat(this.style.width)||parent?.width||this.width,height=parseFloat(this.style.height)||parent?.height||this.height;return{left,top,width,height,right:left+width,bottom:top+height};},getContext:()=>({drawImage(){}})};nodes.push(node);return node;};
     const context={document:{createElement:element},AbortController,setTimeout,clearTimeout,
         fetch:async()=>({blob:async()=>({})}),URL:{createObjectURL(){const url='blob:'+ ++id;urls.add(url);return url;},revokeObjectURL(url){urls.delete(url);}}};
     const create=vm.runInNewContext(source+'\ninstallInlineImages',context);
-    const surface=element('div'),canvas=element('canvas');canvas.width=480;canvas.height=96;
-    const ui=create({surface,canvas,tr:k=>k,redraw(){},changed(){}});
+    const surface=element('div'),canvas=element('canvas');canvas.width=480;canvas.height=96;surface.offsetTop=0;
+    const viewport=cached?Object.assign(element('div'),{scrollTop:0,clientHeight:96}):undefined,rendered=[];
+    const root=element('main');if(viewport)root.append(viewport);
+    if(viewport)viewport.getBoundingClientRect=()=>({left:0,top:0,bottom:viewport.clientHeight});
+    surface.getBoundingClientRect=()=>({left:0,top:surface.offsetTop-(viewport?.scrollTop??0)});
+    const ui=create({surface,canvas,viewport,render:(target,packet)=>rendered.push(packet),tr:k=>k,redraw(){},changed(){},...extra});
     const packet={presentation:3,generation:7,frame:{revision:4,rows:4}};
-    const open={batch:1,presentation:3,generation:7,revision:4,entries:[{index:0,row:0}]};
-    return {ui,urls,nodes,canvas,surface,packet,open};
+    const open={batch:1,presentation:3,generation:7,revision:4,entries:[{index:0,row:0,key:0}]};
+    return {ui,urls,nodes,canvas,surface,packet,open,viewport,rendered,root,encoded};
 }
 test('reset aborts a pending decoder, releases its URL and ignores late batch delivery',async()=>{
     const e=ownerEnvironment();e.ui.open(e.open,e.packet);
@@ -57,7 +108,7 @@ test('reset aborts a pending decoder, releases its URL and ignores late batch de
     e.ui.receive({batch:1,index:0,image:{}});assert.equal(e.ui.active(),false);
     assert.equal(await e.ui.destroy(),true);assert.equal(e.urls.size,0);
 });
-test('decoded stills survive repeated expansion and are released on a new revision',async()=>{
+test('decoded stills survive a page turn and remap to the current link index without decoding again',async()=>{
     const e=ownerEnvironment();e.ui.open(e.open,e.packet);
     e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:2,height:1}});
     await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img');
@@ -65,15 +116,591 @@ test('decoded stills survive repeated expansion and are released on a new revisi
     const still=e.nodes.find(n=>n.tag==='canvas'&&n!==e.canvas);assert.equal(still.width,2);assert.equal(e.urls.size,0);
     e.ui.open(e.open,e.packet);assert.equal(still.width,2);
     e.ui.layout({...e.packet,frame:{rows:4,revision:5}},{x:c=>c*12,y:r=>r*24},1);
-    assert.equal(e.ui.active(),false);assert.equal(still.width,0);assert.equal(e.canvas.style.visibility,'');
+    assert.equal(e.ui.active(),true);assert.equal(still.width,2);assert.equal(e.canvas.style.visibility,'');
+    const next={...e.packet,frame:{rows:4,revision:5}};
+    e.ui.open({...e.open,revision:5,entries:[{index:3,row:2,key:0}]},next);
+    e.ui.layout(next,{x:c=>c*12,y:r=>r*24},1);
+    assert.equal(still.width,2);assert.equal(e.nodes.filter(n=>n.tag==='img').length,1);
+    e.ui.reset();assert.equal(still.width,0);
     assert.equal(await e.ui.destroy(),true);
 });
 
 test('context hit testing uses inserted image boxes and drops stale indices on reset',async()=>{
-    const e=ownerEnvironment();e.ui.open({...e.open,entries:[{index:3,row:0}]},e.packet);
+    const e=ownerEnvironment();e.ui.open({...e.open,entries:[{index:3,row:0,key:0}]},e.packet);
     const box=e.nodes.find(n=>n.className==='inline-image');box.getBoundingClientRect=()=>({left:20,right:220,top:80,bottom:140});
     assert.equal(e.ui.linkAtPoint({clientX:100,clientY:100}),3);
     assert.equal(e.ui.linkAtPoint({clientX:220,clientY:100}),-1);
     assert.equal(e.ui.linkAtPoint({clientX:100,clientY:79}),-1);
     e.ui.reset();assert.equal(e.ui.linkAtPoint({clientX:100,clientY:100}),-1);await e.ui.destroy();
+});
+
+test('an open modal rejects BBS key and text callbacks without forwarding to the station',()=>{
+ const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8'),sent=[];
+ const context={document:{querySelector:()=>({open:true})},keyboard:{value:'private setting'},send:p=>sent.push(p)};
+ const begin=surface.indexOf('function keydown('),end=surface.indexOf('function input(');
+ vm.runInNewContext(surface.slice(begin,end),context);
+ let prevented=false;context.keydown({key:'Enter',isTrusted:true,preventDefault(){prevented=true;}});
+ const inputEnd=surface.indexOf('function ',end+10);vm.runInNewContext(surface.slice(end,inputEnd),context);
+ context.input({data:'text',isTrusted:true});assert.ok(prevented);assert.equal(sent.length,0);assert.equal(context.keyboard.value,'');
+});
+
+test('cached rows remain visible across live revisions, virtualize offscreen rows and preserve an absolute-line anchor',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    const packet={...e.packet,article:{id:1,first_line:50,last_line:149},frame:{rows:101,revision:4,glyphs:[]},links:[]};
+    e.ui.layout(packet,base,1);
+    assert.equal(e.canvas.style.visibility,'hidden');assert.equal(e.surface.style.height,'2424px');
+    assert.ok(e.rendered.length<=8);assert.ok(e.rendered.every(p=>p.frame.rows===1));
+    e.viewport.scrollTop=600;e.ui.layout(packet,base,1);
+    assert.equal(e.viewport.scrollTop,600);
+    // Twenty earlier rows arrive while the user reads absolute line 75.
+    const prepended={...packet,article:{id:1,first_line:30,last_line:149},frame:{rows:121,revision:8,glyphs:[]}};
+    e.ui.layout(prepended,base,1);assert.equal(e.viewport.scrollTop,1080);
+    // A pending source repaint cannot remove the cached text layer.
+    e.ui.layout({...prepended,output_pending:true,frame:{...prepended.frame,revision:9}},base,1);
+    assert.equal(e.canvas.style.visibility,'hidden');assert.equal(e.viewport.scrollTop,1080);
+    e.ui.layout({...packet,article:{id:2,first_line:1,last_line:100}},base,1);
+    assert.equal(e.viewport.scrollTop,0);
+    e.ui.layout(e.packet,base,1);assert.equal(e.canvas.style.visibility,'');
+    assert.equal(await e.ui.destroy(),true);
+});
+
+test('an expanded image keeps its slot during a new source frame and late decoding anchors the text below it',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:23},frame:{rows:24,revision:4,glyphs:[]},links:[]};
+    e.ui.open({...e.open,first_line:1,article_id:1},packet);
+    e.ui.layout(packet,base,1);e.viewport.scrollTop=120;e.ui.layout(packet,base,1);
+    e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:100,height:200}});
+    await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+    image.naturalWidth=100;image.naturalHeight=200;image.onload();await new Promise(resolve=>setImmediate(resolve));
+    e.ui.layout({...packet,frame:{...packet.frame,revision:5}},base,1);
+    assert.equal(e.viewport.scrollTop,296); // The same text anchor, +176px decoded height.
+    assert.equal(e.canvas.style.visibility,'hidden');
+    assert.equal(e.nodes.find(n=>n.className==='inline-image').hidden,false);
+    assert.equal(e.nodes.filter(n=>n.tag==='img'&&n.className!=='article-footer-image').length,1);
+    await e.ui.destroy();
+});
+
+test('production cached movement scrolls locally, fetches only at an unknown edge and rejects duplicate or blocked sends',()=>{
+    const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8'),sent=[];
+    const context={latest:{article:{first_line:1,last_line:46,end:false},connected:true,input_pending:false,output_pending:false},
+        viewport:{scrollTop:0,scrollHeight:1000,clientHeight:400},grid:{ratio:1,y:r=>24*r,bottom:r=>24*(r+1)},
+        blocked:()=>false,dragging:null,hasSelection:()=>false,clearSelection(){},cancelHover(){},repaint(){},
+        stationMouse:{local:()=>true,revoke(){}},policy(){},canNavigate:()=>!context.navigationLocked,
+        setHover(){},refreshNavigation(){},stamp:()=>({generation:7,revision:20,input_epoch:3}),send:p=>sent.push(p),focus(){},surface:{dataset:{}}};
+    vm.runInNewContext(surface.slice(surface.indexOf('function readingMove('),surface.indexOf('const browseReturn=')),context);
+    const event={isTrusted:true};
+    context.navigate({action:'next_page'},event);assert.equal(context.viewport.scrollTop,360);assert.equal(sent.length,0);
+    context.navigate({action:'next_page'},event);assert.equal(context.viewport.scrollTop,600);assert.equal(sent.length,0);
+    context.navigate({action:'next_page'},event);assert.equal(sent.length,1);assert.equal(sent[0].stamp.revision,20);
+    context.navigate({action:'next_page'},event);assert.equal(sent.length,1);
+    context.navigationLocked=false;context.viewport.scrollTop=600;
+    context.navigate({action:'previous_page'},event);assert.equal(context.viewport.scrollTop,240);assert.equal(sent.length,1);
+    context.viewport.scrollTop=0;context.navigate({action:'previous_page'},event);assert.equal(sent.length,1);
+    context.latest.article.end=true;context.viewport.scrollTop=600;context.navigate({action:'next_page'},event);assert.equal(sent.length,1);
+    context.latest.input_pending=true;context.navigate({action:'previous_page'},event);assert.equal(context.viewport.scrollTop,240);
+    context.latest.input_pending=false;context.blocked=()=>true;context.navigate({action:'previous_page'},event);assert.equal(context.viewport.scrollTop,240);
+});
+
+test('production draw never temporarily collapses a cached scroll container to the terminal page height',()=>{
+    const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
+    const viewport={dataset:{},style:{},scrollTop:500,getBoundingClientRect:()=>({width:960,height:576}),parentElement:{getBoundingClientRect:()=>({width:960,height:576})}};
+    let height=1600,layoutCalls=0;
+    const style={set height(value){height=parseFloat(value);if(height<viewport.scrollTop+576)viewport.scrollTop=Math.max(0,height-576);},get height(){return height+'px';}};
+    const context={devicePixelRatio:1,viewport,surface:{style},canvas:{width:960,height:576},level:{},zoom:1,draws:0,hoveredLink:-1,
+        render:()=>({x:c=>c*12,y:r=>r*24}),inlineImages:{layout(packet,base){layoutCalls++;assert.equal(viewport.scrollTop,500);return base;}},
+        positionKeyboard(){},drawSelection(){},drawNavigationMarker(){}};
+    vm.runInNewContext(surface.slice(surface.indexOf('function draw(packet)'),surface.indexOf('function repaint()')),context);
+    context.draw({article:{id:1},frame:{rows:47,cols:80},source_frame:{rows:24,cols:80}});
+    assert.equal(viewport.scrollTop,500);assert.equal(height,1600);assert.equal(layoutCalls,1);
+    assert.equal(viewport.dataset.reading,'web');
+    context.inlineImages.layout=(packet,base)=>base;
+    context.draw({article:null,frame:{rows:24,cols:80}});
+    assert.equal(viewport.dataset.reading,'terminal');assert.equal(height,576);
+    assert.equal(context.canvas.width,960);assert.equal(context.canvas.height,576);
+});
+
+test('web reading keeps the fitted source BBS viewport through full loading, images, zoom and host resize',()=>{
+    const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
+    const host={width:1040,height:740},viewport={dataset:{},style:{},getBoundingClientRect:()=>host,parentElement:{getBoundingClientRect:()=>host}};
+    const context={devicePixelRatio:2,viewport,surface:{style:{}},canvas:{},level:{},zoom:1,draws:0,hoveredLink:-1,
+        render:()=>({}),inlineImages:{layout:(packet,base)=>base},positionKeyboard(){},drawSelection(){},drawNavigationMarker(){}};
+    vm.runInNewContext(source.slice(source.indexOf('function draw(packet)'),source.indexOf('function repaint()')),context);
+    const draw=rows=>context.draw({article:{id:1},frame:{rows,cols:80},source_frame:{rows:24,cols:80}});
+    for(const rows of [24,33,442,4097]){
+        draw(rows);
+        assert.equal(viewport.style.width,'1040px');assert.equal(viewport.style.height,'624px');
+        assert.equal(viewport.style.inset,'58px auto auto 0px');
+        assert.equal(context.canvas.width,2080);assert.equal(context.canvas.height,1248);
+    }
+    context.inlineImages.layout=(packet,base)=>{context.surface.style.height='12000px';return base;};
+    draw(442);assert.equal(viewport.style.height,'624px');assert.equal(context.surface.style.height,'12000px');
+    context.zoom=1.5;draw(442);assert.equal(viewport.style.height,'624px');assert.equal(viewport.style.width,'1040px');
+    assert.equal(context.canvas.height,1872);
+    context.zoom=1;host.width=800;host.height=1000;draw(442);
+    assert.equal(viewport.style.width,'800px');assert.equal(viewport.style.height,'480px');
+    assert.equal(viewport.style.inset,'260px auto auto 0px');assert.equal(context.canvas.height,960);
+    host.width=1200;host.height=600;draw(442);
+    assert.ok(Math.abs(parseFloat(viewport.style.width)-1000)<1e-9);assert.equal(viewport.style.height,'600px');
+    const inset=viewport.style.inset.split(' ');assert.equal(inset[0],'0px');assert.ok(Math.abs(parseFloat(inset[3])-100)<1e-9);
+    context.inlineImages.layout=(packet,base)=>base;
+    context.draw({article:null,frame:{rows:24,cols:80}});
+    assert.equal(viewport.style.inset,'');assert.equal(viewport.style.width,'');assert.equal(viewport.style.height,'');
+    assert.equal(context.surface.style.height,'600px');
+});
+
+test('cached reading anchors its hidden physical-key input inside the viewport instead of the station footer',()=>{
+    const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
+    const context={grid:{},latest:{article:{id:1},frame:{cursor:[0,256]}},composing:false,
+        viewport:{scrollTop:600,scrollLeft:40},surface:{offsetTop:0,offsetLeft:10},keyboard:{style:{}}};
+    vm.runInNewContext(source.slice(source.indexOf('function positionKeyboard()'),source.indexOf('function focus()')),context);
+    context.positionKeyboard();
+    assert.equal(context.keyboard.style.top,'608px');assert.equal(context.keyboard.style.left,'38px');
+    assert.equal(context.keyboard.style.height,'1px');
+    context.viewport.scrollTop=0;context.positionKeyboard();assert.equal(context.keyboard.style.top,'8px');
+});
+
+test('production cached wheel normalizes pixel, line and page units while keeping modifiers and blocked input separate',()=>{
+    const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8'),moves=[],zooms=[];
+    const context={contextMenu:{isOpen:()=>false},cancelHover(){},tools:{open:()=>false},latest:{article:{id:1},connected:true},
+        viewport:{clientHeight:400,scrollWidth:100,clientWidth:100,scrollHeight:1000},blocked:()=>false,dragging:null,hasSelection:()=>false,
+        readingMove:(intent,event,origin)=>moves.push([intent.delta,origin]),stationMouse:{wheel:()=>false},zoom:1,zoomTo:value=>zooms.push(value)};
+    vm.runInNewContext(source.slice(source.indexOf('function wheel(e)'),source.indexOf('const zoomIn=')),context);
+    const event={deltaY:3,deltaMode:0,isTrusted:true,preventDefault(){this.prevented=true;}};
+    for(const deltaMode of [0,1,2])context.wheel({...event,deltaMode});
+    assert.deepEqual(moves,[[3,'pointer'],[72,'pointer'],[1200,'pointer']]);
+    context.wheel({...event,ctrlKey:true});assert.deepEqual(zooms,[.75]);
+    for(const patch of [{metaKey:true},{shiftKey:true},{altKey:true}])context.wheel({...event,...patch});
+    context.blocked=()=>true;context.wheel({...event});assert.equal(moves.length,3);
+});
+
+test('terminal presentation refuses late inline batches even at the same station revision',async()=>{
+    const e=ownerEnvironment();e.ui.open(e.open,e.packet);assert.equal(e.ui.active(),true);
+    e.ui.reset();e.ui.open(e.open,{...e.packet,article_mode:'terminal'});
+    e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:2,height:1}});
+    assert.equal(e.ui.active(),false);assert.equal(e.urls.size,0);
+    assert.equal(await e.ui.destroy(),true);
+});
+
+test('switching a scrolled cached document to the station grid resets both offsets',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    e.ui.layout({...e.packet,article:{id:1,first_line:1,last_line:46},frame:{rows:47,revision:4,glyphs:[]},links:[]},base,1);
+    e.viewport.scrollTop=900;e.viewport.scrollLeft=100;e.ui.reset();
+    e.ui.layout({...e.packet,article_mode:'terminal'},base,1);
+    assert.equal(e.viewport.scrollTop,0);assert.equal(e.viewport.scrollLeft,0);
+    assert.equal(e.canvas.style.visibility,'');assert.equal(await e.ui.destroy(),true);
+});
+
+test('cached reading pins one live footer and maps its links and selection to the original footer row',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:46},
+        frame:{rows:47,revision:4,glyphs:[{row:46,col:0,text:'50%',left:{},right:{}}]},
+        links:[{row:46,start:0,end:3,url:'https://example.com/progress'}]};
+    let grid=e.ui.layout(packet,base,1);
+    const footer=e.nodes.find(n=>n.className==='article-footer-canvas'),view=e.nodes.find(n=>n.className==='article-footer');
+    assert.ok(footer,'a live footer exists above the scrolling text');
+    assert.equal(view.parentNode,e.root,'the footer is outside the scroll container and its text/image layer');
+    assert.equal(view.hidden,false);assert.equal(view.style.top,'72px');assert.equal(e.encoded.length,1);
+    assert.equal(grid.y(46),72);assert.equal(grid.bottom(46),96);
+    assert.equal(grid.rowAt(73),46);assert.equal(grid.rowAt(71),2);
+    assert.equal(grid.height,1128,'pinning does not collapse or grow the document');
+    const painted=e.rendered.at(-1);
+    assert.equal(painted.frame.glyphs[0].text,'50%');assert.equal(painted.frame.glyphs[0].row,0);
+    assert.equal(painted.links[0].url,'https://example.com/progress');
+    e.viewport.scrollTop=240;grid=e.ui.layout(packet,base,1);
+    assert.equal(view.style.top,'72px');assert.equal(e.encoded.length,1,'scrolling reuses the same footer bitmap');assert.equal(grid.rowAt(313),46);assert.equal(grid.rowAt(311),12);
+    assert.equal(grid.bottom(13)-grid.y(13),0,'a selected body row behind the footer has no visible overlay');
+    assert.equal(grid.footerHeight,24);assert.ok(e.rendered.length<24,'footer does not defeat row virtualization');
+    const newer={...packet,frame:{...packet.frame,revision:5,glyphs:[{row:46,col:0,text:'100%',left:{},right:{}}]}};
+    e.ui.layout(newer,base,1);assert.equal(e.rendered.at(-1).frame.glyphs[0].text,'100%');assert.equal(e.encoded.length,2);
+    assert.equal(e.nodes.filter(n=>n.className==='article-footer-canvas').length,1);
+    // A native scroll can update scrollTop before the surface's client rect.
+    // The pinned view must follow the actual viewport edge in that interval.
+    e.surface.getBoundingClientRect=()=>({left:0,top:0});e.ui.layout(newer,base,1);
+    assert.equal(view.style.top,'72px');
+    e.ui.layout(e.packet,base,1);assert.equal(view.hidden,true);assert.equal(footer.width,0);
+    await e.ui.destroy();assert.equal(footer.height,0);
+});
+
+test('pinned footer preserves short grid dimensions and uses physical pixels at different scales',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:3},frame:{rows:24,revision:4,glyphs:[]},links:[]};
+    e.viewport.clientHeight=1000;e.surface.offsetTop=212;
+    let grid=e.ui.layout(packet,base,1);
+    assert.equal(grid.y(23),552);assert.equal(grid.height,576);
+    e.viewport.clientHeight=96;e.surface.offsetTop=0;
+    grid=e.ui.layout(packet,base,2);
+    assert.equal(grid.footerHeight,12);assert.equal(grid.y(23),168);assert.equal(grid.bottom(23),192);
+    assert.equal(grid.rowAt(169),23);
+    await e.ui.destroy();
+});
+
+test('a pinned footer occludes inline image hit targets without losing the image below it',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:23},frame:{rows:24,revision:4,glyphs:[]},links:[]};
+    e.ui.open({...e.open,article_id:1,entries:[{index:3,row:0,key:0}]},packet);e.ui.layout(packet,base,1);
+    const box=e.nodes.find(n=>n.className==='inline-image');box.getBoundingClientRect=()=>({left:20,right:220,top:80,bottom:140});
+    const footer=e.nodes.find(n=>n.className==='article-footer-image');footer.getBoundingClientRect=()=>({left:0,right:480,top:72,bottom:96});
+    assert.equal(e.ui.linkAtPoint({clientX:100,clientY:80}),-1);
+    assert.equal(e.ui.linkAtPoint({clientX:100,clientY:120}),3);
+    await e.ui.destroy();
+});
+
+
+test('cached footer percentage follows the visible document, including images, without mutating source cells',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:100,end:true,percent_cells:{start:2,end:5}},
+        frame:{rows:101,revision:4,glyphs:Array.from(' (100%) ',(text,col)=>({row:100,col,width:1,text,left:{},right:{}}))},links:[]};
+    const text=()=>e.nodes.find(n=>n.className==='article-footer-image').alt;
+    const layout=()=>e.ui.layout(packet,base,1);
+    layout();assert.equal(text(),' (  3%) ');assert.equal(e.encoded.length,1);
+    e.viewport.scrollTop=1;layout();assert.equal(text(),' (  3%) ');assert.equal(e.encoded.length,1,'reuse unchanged integer progress');
+    e.viewport.scrollTop=24;layout();assert.equal(text(),' (  4%) ');assert.equal(e.encoded.length,2);
+    e.viewport.scrollTop=1200;layout();assert.equal(text(),' ( 53%) ');
+    e.viewport.scrollTop=2328;layout();assert.equal(text(),' (100%) ');
+    e.viewport.scrollTop=0;layout();assert.equal(text(),' (  3%) ');
+    e.ui.open({...e.open,article_id:1,first_line:1},packet);
+    e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:100,height:400}});
+    await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+    image.naturalWidth=100;image.naturalHeight=400;image.onload();await new Promise(resolve=>setImmediate(resolve));
+    layout();assert.equal(text(),' (  2%) ');
+    e.viewport.scrollTop=parseFloat(e.surface.style.height)-e.viewport.clientHeight;layout();assert.equal(text(),' (100%) ');
+    e.ui.layout({...packet,article:{...packet.article,end:false}},base,1);assert.equal(text(),' ( --%) ');
+    assert.equal(packet.frame.glyphs.map(g=>g.text).join(''),' (100%) ');
+    assert.equal(await e.ui.destroy(),true);
+});
+
+
+test('short-article blank padding does not count as unread content after images expand',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    e.viewport.clientHeight=576;e.canvas.height=576;
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:3,end:true,percent_cells:{start:2,end:5}},
+        frame:{rows:24,revision:4,glyphs:Array.from(' (100%) ',(text,col)=>({row:23,col,width:1,text,left:{},right:{}}))},links:[]};
+    const text=()=>e.nodes.find(n=>n.className==='article-footer-image').alt;
+    e.ui.layout(packet,base,1);assert.equal(text(),' (100%) ');
+    e.ui.open({...e.open,article_id:1,first_line:1,entries:[{index:0,row:2,key:0}]},packet);
+    e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:100,height:200}});
+    await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+    image.naturalWidth=100;image.naturalHeight=200;image.onload();await new Promise(resolve=>setImmediate(resolve));
+    e.ui.layout(packet,base,1);assert.equal(text(),' (100%) ','all three text rows and the image fit above the footer');
+    assert.equal(e.surface.style.height,'576px','images consume existing short-article padding before adding scrollable height');
+    e.viewport.scrollTop=1200;e.ui.layout(packet,base,1);assert.equal(e.viewport.scrollTop,0);
+    assert.equal(e.nodes.find(n=>n.className==='article-footer').style.top,'552px');
+    await e.ui.destroy();
+});
+
+
+test('cached page counter follows source-page anchors without changing the station total or source cells',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:12,end:true,page_cells:{start:1,end:2},
+        pages:[{line:1,number:1},{line:5,number:2},{line:9,number:3}]},
+        frame:{cols:80,rows:13,revision:4,glyphs:Array.from(' 3/3 (100%) ',(text,col)=>({row:12,col,width:1,text,left:{},right:{}}))},links:[]};
+    const text=()=>e.nodes.find(n=>n.className==='article-footer-image').alt;
+    e.ui.layout(packet,base,1);assert.equal(text(),' 1/3 (100%) ');
+    e.viewport.scrollTop=96;e.ui.layout(packet,base,1);assert.equal(text(),' 2/3 (100%) ');
+    e.viewport.scrollTop=216;e.ui.layout(packet,base,1);assert.equal(text(),' 3/3 (100%) ');
+    e.viewport.scrollTop=0;e.ui.layout(packet,base,1);assert.equal(text(),' 1/3 (100%) ');
+    e.ui.open({...e.open,article_id:1,first_line:1},packet);
+    e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:100,height:400}});
+    await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+    image.naturalWidth=100;image.naturalHeight=400;image.onload();await new Promise(resolve=>setImmediate(resolve));
+    e.ui.layout(packet,base,1);e.viewport.scrollTop=200;e.ui.layout(packet,base,1);
+    assert.equal(text(),' 1/3 (100%) ','inside an image, retain its owning source page');
+    assert.equal(packet.frame.glyphs.map(g=>g.text).join(''),' 3/3 (100%) ');
+    await e.ui.destroy();
+});
+
+
+test('cached footer uses each source page cell style, including both halves, without altering source colours',async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    const old={fg:7,bg:0,bright:false,inverse:true},blue={fg:7,bg:4,bright:true,inverse:false},cyan={fg:0,bg:6,bright:false,inverse:false};
+    const first=Array.from({length:80},()=>({...blue})),last=Array.from({length:80},()=>({...cyan}));
+    first[1]={fg:3,bg:5,bright:false,inverse:true};
+    const glyphs=[{row:12,col:0,width:2,text:'頁',left:old,right:old},...Array.from('2/2 (100%) ',(text,col)=>({row:12,col:col+2,width:1,text,left:old,right:old}))];
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:12,end:true,page_cells:{start:2,end:3},pages:[{line:1,number:1,styles:first},{line:7,number:2,styles:last}]},frame:{cols:80,rows:13,revision:4,glyphs},links:[]};
+    e.ui.layout(packet,base,1);
+    let footer=e.rendered.at(-1).frame.glyphs;
+    assert.deepEqual(footer[0].left,blue);assert.deepEqual(footer[0].right,first[1]);assert.equal(footer[1].text,'1');
+    e.viewport.scrollTop=216;e.ui.layout(packet,base,1);footer=e.rendered.at(-1).frame.glyphs;
+    assert.deepEqual(footer[0].left,cyan);assert.deepEqual(footer[0].right,cyan);assert.equal(footer[1].text,'2');
+    e.viewport.scrollTop=0;e.ui.layout(packet,base,1);assert.deepEqual(e.rendered.at(-1).frame.glyphs[0].left,blue);
+    assert.deepEqual(glyphs[0].left,old);assert.equal(glyphs[1].text,'2');
+    const incomplete={...packet,article:{...packet.article,pages:[{line:1,number:1,styles:[blue]}]}};
+    e.ui.layout(incomplete,base,1);assert.deepEqual(e.rendered.at(-1).frame.glyphs[0].left,old,'reject partial style arrays');
+    await e.ui.destroy();
+});
+
+
+test('cached End and wheel stop at renderer height even if the DOM reports stale overflow',()=>{
+    const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
+    const context={latest:{connected:true,article:{first_line:1,end:true}},viewport:{scrollTop:0,scrollHeight:5000,clientHeight:576},
+        surface:{offsetTop:0},grid:{height:576,ratio:1,y:r=>r*24,bottom:r=>(r+1)*24},blocked:()=>false,dragging:null,
+        clearSelection(){},cancelHover(){},repaint(){},navigate(){assert.fail('complete article must not send station input');}};
+    vm.runInNewContext(source.slice(source.indexOf('function readingMove('),source.indexOf('function navigate(')),context);
+    for(const intent of [{action:'last'},{action:'scroll',delta:5000},{action:'next_page'}]){
+        context.readingMove(intent,{isTrusted:true});assert.equal(context.viewport.scrollTop,0);
+    }
+});
+
+function interactiveImages(){
+    const requests=[],e=ownerEnvironment(true,{allowed:()=>true,request:(target,event)=>requests.push({target:JSON.parse(JSON.stringify(target)),trusted:event.isTrusted})});
+    e.viewport.clientHeight=500;e.viewport.getBoundingClientRect=()=>({left:0,top:0,bottom:e.viewport.clientHeight});
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:20,end:true},frame:{cols:80,rows:24,revision:4,glyphs:[]},
+        links:[{row:2,start:0,end:20,url:'https://example.com/one.png'},{row:7,start:0,end:20,url:'https://example.com/two.png'},{row:12,start:0,end:20,url:'https://example.com/three.png'}],image_links:[0,1,2]};
+    const base={x:c=>c*6,y:r=>r*24};
+    const layout=()=>e.ui.layout(packet,base,1);
+    const enter=()=>{const event={key:'Enter',isTrusted:true};e.ui.keydown(event);e.ui.keyup(event);};
+    const open=indices=>e.ui.open({...e.open,article_id:1,first_line:1,entries:indices.map(index=>({index,row:packet.links[index].row,key:index}))},packet);
+    async function decode(index){e.ui.receive({batch:1,index,image:{mime:'image/png',data:'AA==',width:64,height:32}});await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');image.naturalWidth=64;image.naturalHeight=32;image.onload();await new Promise(resolve=>setImmediate(resolve));layout();}
+    layout();return {...e,packet,base,layout,enter,open,decode,requests};
+}
+test('Enter opens visible images from top to bottom before widening any of them',async()=>{
+    const e=interactiveImages();
+    // The link array order is not the reading order.
+    e.packet.image_links=[2,0,1];e.layout();
+    e.enter();assert.deepEqual(e.requests.map(r=>r.target),[{kind:'link',index:0}]);
+    e.open([0]);await e.decode(0);e.enter();
+    assert.deepEqual(e.requests.map(r=>r.target),[{kind:'link',index:0},{kind:'link',index:1}]);
+    e.open([0,1]);await e.decode(1);e.enter();
+    assert.deepEqual(e.requests.map(r=>r.target),[{kind:'link',index:0},{kind:'link',index:1},{kind:'link',index:2}]);
+    e.open([0,1,2]);await e.decode(2);
+    const boxes=e.nodes.filter(n=>n.className==='inline-image');
+    assert.ok(boxes.every(box=>box.children.every(n=>n.style.width!=='480px')));
+    e.enter();e.layout();
+    assert.equal(e.requests.length,3);
+    assert.equal(boxes[0].children.find(n=>n.width===64).style.width,'480px');
+    assert.equal(boxes[0].children.find(n=>n.width===64).style.height,'240px');
+    assert.equal(boxes[0].style.padding,'12px 0');
+    await e.ui.destroy();
+});
+test('after all visible images are open, widening also follows top-to-bottom order',async()=>{
+    const e=interactiveImages();e.viewport.clientHeight=1600;e.open([2,1,0]);
+    await e.decode(0);await e.decode(1);await e.decode(2);
+    const boxes=e.nodes.filter(n=>n.className==='inline-image');
+    // Boxes were created in reverse order [2, 1, 0]; expected decisions are independent of layout math.
+    for(const expected of [[false,false,true],[false,true,true],[true,true,true]]){
+        e.enter();e.layout();assert.deepEqual(boxes.map(box=>box.children.some(n=>n.style.width==='480px')),expected);
+    }
+    e.enter();assert.equal(e.requests.length,0);
+    await e.ui.destroy();
+});
+test('scrolling chooses unopened visible images before widening, and excludes offscreen URLs',async()=>{
+    const e=interactiveImages();e.open([0]);await e.decode(0);
+    e.viewport.scrollTop=150;e.layout();e.enter();assert.equal(e.requests.at(-1).target.index,1);
+    assert.ok(e.nodes.filter(n=>n.className==='inline-image').every(box=>box.children.every(n=>n.style.width!=='480px')));
+    await e.ui.destroy();
+});
+test('the square URL control stays inside the URL tail without inserting rows or covering following text',async()=>{
+    const e=interactiveImages();e.packet.links[0].end=80;e.layout();
+    const buttons=e.nodes.filter(n=>n.className==='inline-expand-trigger'&&n.parentNode);
+    assert.equal(buttons.length,3);assert.equal(buttons[0].style.left,'458px');assert.equal(buttons[0].style.top,'49px');
+    assert.equal(e.ui.layout(e.packet,e.base,1).rowAt(80),3,'no fallback row or shifted terminal cells');
+    const button=buttons[1],event={target:{closest:()=>button},isTrusted:true,button:0,preventDefault(){},stopPropagation(){}};
+    e.ui.bindings.find(([node,type])=>node.id==='inline-images'&&type==='click')[2](event);
+    assert.deepEqual(e.requests,[{target:{kind:'link',index:1},trusted:true}]);
+    e.ui.bindings.find(([node,type])=>node.id==='inline-images'&&type==='click')[2]({...event,isTrusted:false});assert.equal(e.requests.length,1);
+    await e.ui.destroy();
+});
+
+test('reply-image arrows stay within the URL before timestamps, adjacent links and short OSC 8 labels at fractional scales',async()=>{
+    const e=interactiveImages();
+    e.packet.links=[{row:2,start:12,end:50,url:'https://example.com/reply.png'},
+        {row:2,start:52,end:74,url:'https://example.com/second.png'},
+        {row:7,start:12,end:13,url:'https://example.com/label.png'}];
+    e.packet.reply_rows=[2,7];
+    e.packet.frame.glyphs=[{row:2,col:50,text:'後',width:2},...Array.from('10/22',(text,col)=>({row:2,col:74+col,text,width:1}))];
+    for(const ratio of [1,1.5,2]){
+        const mapping=e.ui.layout(e.packet,{x:c=>c*6*ratio,y:r=>r*24*ratio},ratio);
+        const buttons=e.nodes.filter(n=>n.className==='inline-expand-trigger'&&n.parentNode);
+        assert.deepEqual(buttons.map(b=>[b.style.left,b.style.top,b.style.width,b.style.height]),
+            [['278px','49px','22px','22px'],['422px','49px','22px','22px'],['72px','177px','6px','6px']]);
+        assert.equal(mapping.y(3),72*ratio);assert.equal(mapping.y(8),192*ratio);
+        const button=buttons[0],event={target:{closest:()=>button},isTrusted:true,button:0,preventDefault(){},stopPropagation(){}};
+        e.ui.bindings.find(([node,type])=>node.id==='inline-images'&&type==='click')[2](event);
+    }
+    assert.deepEqual(e.requests.map(r=>r.target),Array(3).fill({kind:'link',index:0}));
+    await e.ui.destroy();
+});
+
+test('rapid Enter repeats an unacknowledged target without pre-arming width or skipping images',async()=>{
+    const e=interactiveImages();e.enter();e.enter();
+    assert.deepEqual(e.requests.map(r=>r.target.index),[0,0]);
+    e.open([0]);e.layout();e.enter();assert.equal(e.requests.at(-1).target.index,1);
+    await e.decode(0);const box=e.nodes.find(n=>n.className==='inline-image');
+    assert.equal(box.children.find(n=>n.width===64).style.width,'64px');await e.ui.destroy();
+});
+test('scope changes and terminal mode clear image targets and revoke an unfinished held Enter',async()=>{
+    const e=interactiveImages();e.enter();e.open([1]);await e.decode(1);
+    e.ui.keydown({key:'Enter',isTrusted:true});
+    e.packet.article={id:2,first_line:1,last_line:20,end:true};e.packet.presentation++;e.layout();
+    e.ui.keyup({key:'Enter',isTrusted:true});assert.equal(e.requests.length,1);assert.equal(e.ui.active(),false);
+    e.packet.article_mode='terminal';e.packet.article=null;e.layout();
+    assert.ok(e.nodes.filter(n=>n.className==='inline-expand-trigger').every(n=>!n.parentNode));
+    await e.ui.destroy();
+});
+
+test('only a fresh physical arrow at the complete visible edge can switch articles',()=>{
+ const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8'),requests=[];
+ const c={latest:{article_boundary_navigation:true,connected:true,article:{first_line:1,end:true,load:'complete'}},
+  viewport:{scrollTop:0,scrollHeight:2000,clientHeight:500},surface:{offsetTop:0},grid:{height:2000,ratio:1,y:()=>0,bottom:()=>24},
+  blocked:()=>false,dragging:null,clearSelection(){},cancelHover(){},repaint(){},navigate:(intent,event,source,cached)=>requests.push([JSON.parse(JSON.stringify(intent)),source,cached])};
+ vm.createContext(c);vm.runInContext(surface.slice(surface.indexOf('function readingMove('),surface.indexOf('function navigate(')),c);
+ const move=(intent,patch={},source='keyboard-arrow')=>c.readingMove(intent,{isTrusted:true,...patch},source);
+ const up={action:'lines',down:false,count:1},down={action:'lines',down:true,count:1};
+ move(up);assert.deepEqual(requests.pop(),[{action:'adjacent_article',down:false},'keyboard',false]);
+ c.viewport.scrollTop=1500;move(down);assert.deepEqual(requests.pop(),[{action:'adjacent_article',down:true},'keyboard',false]);
+ for(const action of ['next_page','last'])move({action});
+ for(const source of ['button','pointer'])move(down,{},source);
+ move(down,{repeat:true});
+ c.latest.article_boundary_navigation=false;move(down);
+ c.latest.article_boundary_navigation=true;c.latest.article.load='loading';move(down);
+ c.latest.article.load='complete';c.blocked=()=>true;move(down);c.blocked=()=>false;
+ assert.equal(requests.length,0);
+ c.viewport.scrollTop=1200;move(down);assert.equal(c.viewport.scrollTop,1224);assert.equal(requests.length,0);
+ c.viewport.scrollTop=0;c.latest.article.first_line=24;move(up);assert.deepEqual(requests.pop(),[{action:'previous_page'},'keyboard',false]);
+});
+
+test('inline GIF keeps its native source only while visible and resets release the Blob',async()=>{
+ const e=interactiveImages();e.open([0]);
+ e.ui.receive({batch:1,index:0,image:{mime:'image/gif',data:'AA==',width:64,height:32,animated:true}});
+ await new Promise(r=>setImmediate(r));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+ image.naturalWidth=64;image.naturalHeight=32;image.onload();await new Promise(r=>setImmediate(r));e.layout();
+ assert.equal(e.urls.size,1);assert.equal(image.hidden,false);assert.ok(image.src.startsWith('blob:'));
+ const url=image.src;e.viewport.getBoundingClientRect=()=>({top:9000,bottom:9500});e.ui.refreshAnimations();
+ assert.equal(image.hidden,true);assert.equal(image.src,undefined);assert.equal(e.urls.size,1);
+ e.viewport.getBoundingClientRect=()=>({top:0,bottom:500});e.ui.refreshAnimations();assert.equal(image.src,url);
+ e.ui.reset();assert.equal(e.urls.size,0);assert.equal(image.src,undefined);assert.equal(await e.ui.destroy(),true);
+});
+
+
+function alignedReading({height=100,line=24,ratio=1}={}){
+    const e=ownerEnvironment(true,{allowed:()=>true,render(target,packet){target.paintedRows=packet.frame.glyphs.map(g=>g.text);}});e.viewport.clientHeight=height;
+    const packet={...e.packet,connected:true,article:{id:1,first_line:1,last_line:40,end:true},frame:{cols:80,rows:41,revision:4,glyphs:Array.from({length:40},(_,row)=>({row,col:0,width:1,text:String(row),left:{},right:{}}))},
+        links:[{row:3,start:0,end:10,url:'https://example.com/edge.png'}],image_links:[0]};
+    const base={x:c=>c*6*ratio,y:r=>Math.floor(r*line*ratio)};
+    const c={latest:packet,viewport:e.viewport,surface:e.surface,blocked:()=>false,dragging:null,clearSelection(){},cancelHover(){},
+        repaint(){c.grid={...e.ui.layout(packet,base,ratio),ratio};},navigate(){assert.fail('complete cached reading must not send station input');}};
+    const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
+    vm.runInNewContext(surface.slice(surface.indexOf('function readingMove('),surface.indexOf('function navigate(')),c);c.repaint();
+    const move=(intent,source='button')=>c.readingMove(intent,{isTrusted:true},source);
+    const strips=()=>e.nodes.filter(n=>n.className==='inline-text-row'&&n.parentNode&&n.style.visibility!=='hidden');
+    const whole=()=>{assert.ok(strips().length>0);for(const strip of strips()){
+        const top=parseFloat(strip.style.top)+e.surface.offsetTop-e.viewport.scrollTop,bottom=top+parseFloat(strip.style.height);
+        assert.ok(top>=-.011&&bottom<=height-c.grid.footerHeight+.011,JSON.stringify({top,bottom,height}));
+    }};
+    return {...e,packet,base,c,move,strips,whole};
+}
+test('discrete page and line navigation aligns rows and never skips the hidden trailing row',async()=>{
+    const e=alignedReading({height:94}); // 70px body: row 2 must be deferred, never skipped.
+    e.whole();assert.equal(e.strips().length,2);
+    for(const [action,expected] of [['next_page',48],['next_page',96],['previous_page',48],['previous_page',0]]){
+        e.move({action});assert.equal(e.viewport.scrollTop,expected);e.whole();
+    }
+    e.move({action:'scroll',delta:43},'pointer');assert.equal(e.viewport.scrollTop,43);
+    e.move({action:'lines',down:true,count:1},'keyboard-arrow');assert.equal(e.viewport.scrollTop,48);e.whole();
+    e.move({action:'lines',down:false,count:1},'keyboard-arrow');assert.equal(e.viewport.scrollTop,24);e.whole();
+    e.move({action:'lines',down:true,count:3});assert.equal(e.viewport.scrollTop,96);e.whole();
+    await e.ui.destroy();
+});
+test('wheel stays pixel-smooth, while commands hide fractional edge rows and their URL controls',async()=>{
+    const e=alignedReading();e.whole();
+    assert.equal(e.c.grid.rowAt(73),null);assert.equal(e.c.grid.rowAt(73,true),3);
+    assert.equal(e.c.grid.reading.clippedAt(73),3);
+    assert.equal(e.nodes.find(n=>n.className==='inline-expand-trigger').hidden,true);
+    e.move({action:'scroll',delta:.25},'pointer');assert.equal(e.viewport.scrollTop,.25);
+    e.move({action:'scroll',delta:7},'pointer');assert.equal(e.viewport.scrollTop,7.25);
+    assert.ok(e.strips().some(n=>parseFloat(n.style.top)<e.viewport.scrollTop),'wheel renders the partially clipped top row');
+    e.move({action:'next_page'});assert.equal(e.viewport.scrollTop,72);e.whole();
+    e.move({action:'last'});assert.equal(e.viewport.scrollTop,884);e.whole();
+    assert.ok(e.strips().some(n=>parseFloat(n.style.top)+parseFloat(n.style.height)===960),'last text row remains visible');
+    const last=e.viewport.scrollTop;e.move({action:'next_page'});assert.equal(e.viewport.scrollTop,last);e.whole();
+    e.move({action:'scroll',delta:1},'pointer');assert.equal(e.viewport.scrollTop,last);
+    assert.ok(e.strips().some(n=>parseFloat(n.style.top)<last));
+    e.move({action:'last'});e.whole();e.move({action:'first'});assert.equal(e.viewport.scrollTop,0);e.whole();
+    await e.ui.destroy();
+});
+test('fractional zoom and DPR retain complete rows without rounding the continuous wheel offset',async()=>{
+    for(const ratio of [1,1.5,2])for(const line of [19.3,26.5,31.7]){
+        const e=alignedReading({ratio,line,height:173});e.whole();
+        for(const action of ['next_page','next_page','previous_page','last','first']){e.move({action});e.whole();}
+        e.move({action:'scroll',delta:17.35},'pointer');assert.equal(e.viewport.scrollTop,17.35);
+        e.move({action:'lines',down:true,count:1});e.whole();await e.ui.destroy();
+    }
+});
+test('image gaps keep pixel movement inside the image but only complete neighboring text rows',async()=>{
+    const e=alignedReading();e.packet.links=[{row:0,start:0,end:10,url:'https://example.com/image.png'}];e.c.repaint();
+    e.ui.open({...e.open,article_id:1,first_line:1},e.packet);
+    e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:64,height:35}});
+    await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+    image.naturalWidth=64;image.naturalHeight=35;image.onload();await new Promise(resolve=>setImmediate(resolve));e.c.repaint();
+    e.move({action:'next_page'});assert.equal(e.viewport.scrollTop,68.4);e.whole();
+    assert.equal(e.c.grid.rowAt(75+68.4),null,'a fractional bottom row after an image is not a text hit');
+    e.move({action:'last'});e.whole();e.move({action:'previous_page'});e.whole();
+    e.move({action:'scroll',delta:-1.5},'pointer');const raw=e.viewport.scrollTop;
+    e.packet.article={...e.packet.article,id:2};e.c.repaint();assert.equal(e.viewport.scrollTop,0);e.whole();
+    assert.ok(raw>0);await e.ui.destroy();
+});
+
+test('full-width fractional images keep the final line reachable with native integer scroll limits across scales',async()=>{
+    for(const ratio of [1,1.5,2])for(const line of [19.3,24,26.5])for(const imageHeight of [33,35,37]){
+        const e=alignedReading({ratio,line,height:173});
+        // Model a native extent rounded inward, rather than the unlimited
+        // fractional scrollTop of a plain JavaScript object.
+        let top=0;
+        Object.defineProperty(e.viewport,'scrollTop',{get:()=>top,set(value){top=Math.max(0,Math.min(value,Math.floor(parseFloat(e.surface.style.height)||0)-e.viewport.clientHeight));}});
+        e.packet.links=[{row:0,start:0,end:10,url:'https://example.com/image.png'}];e.c.repaint();
+        e.ui.open({...e.open,article_id:1,first_line:1},e.packet);
+        e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:64,height:imageHeight}});
+        await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+        image.naturalWidth=64;image.naturalHeight=imageHeight;image.onload();await new Promise(resolve=>setImmediate(resolve));e.c.repaint();
+        e.ui.keydown({key:'Enter',isTrusted:true});e.ui.keyup({key:'Enter',isTrusted:true});e.c.repaint();
+        const box=e.nodes.find(n=>n.className==='inline-image');
+        assert.equal(box.children.find(n=>n.width===64).style.width,(480/ratio)+'px');
+        const raw=e.base.y(41)/ratio+parseFloat(box.style.height),extent=parseFloat(e.surface.style.height);
+        assert.ok(extent>=raw-.0001&&extent-raw<1.0001,'rounding adds less than one CSS pixel to the document');
+        e.move({action:'last'});e.whole();
+        assert.ok(e.strips().some(strip=>strip.paintedRows.includes('39')),'final line '+JSON.stringify({ratio,line,imageHeight}));
+        const end=e.viewport.scrollTop;
+        e.move({action:'next_page'});assert.equal(e.viewport.scrollTop,end);e.whole();
+        e.move({action:'scroll',delta:1},'pointer');assert.equal(e.viewport.scrollTop,end);
+        e.move({action:'last'});e.whole();
+        await e.ui.destroy();
+    }
+});
+
+test('paging through fractional viewports exposes every source row completely',async()=>{
+    for(const height of [94,100,173])for(const line of [19.3,24,26.5]){
+        const e=alignedReading({height,line}),seen=new Set();
+        for(let step=0;step<100;step++){
+            e.whole();for(const strip of e.strips())for(const row of strip.paintedRows)seen.add(Number(row));
+            const before=e.viewport.scrollTop;e.move({action:'next_page'});if(e.viewport.scrollTop===before)break;
+        }
+        assert.deepEqual([...seen].sort((a,b)=>a-b),Array.from({length:40},(_,i)=>i),JSON.stringify({height,line}));
+        await e.ui.destroy();
+    }
+});
+
+test('highlight projections retain expanded sizes, decoded resources, failures and the reading anchor',async()=>{
+    const e=interactiveImages();e.viewport.clientHeight=900;e.open([0,1,2]);await e.decode(0);
+    e.ui.receive({batch:1,index:1,image:{mime:'image/gif',data:'AA==',width:64,height:32,animated:true,animation_pixels:4096}});
+    await new Promise(r=>setImmediate(r));const gif=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+    gif.naturalWidth=64;gif.naturalHeight=32;gif.onload();await new Promise(r=>setImmediate(r));
+    e.ui.fail({batch:1,index:2,message:'synthetic image failure'});e.layout();e.enter();e.layout();
+    const boxes=e.nodes.filter(n=>n.className==='inline-image'),still=boxes[0].children.find(n=>n.width===64);
+    assert.equal(still.style.width,'480px');assert.equal(e.urls.size,1);
+    e.viewport.clientHeight=500;e.viewport.scrollTop=200;e.layout();
+    const before={height:e.surface.style.height,top:e.viewport.scrollTop,boxes:boxes.map(b=>b.style.top),decoders:e.nodes.filter(n=>n.tag==='img').length};
+    for(const focus of ['Alice','Bob',null]){
+        e.packet.presentation++;e.packet.reply_focus=focus;
+        // The new Paint arrives before its ACK/follow. Cached image gaps must
+        // remain in place in this interval as well as after InlineOpen.
+        e.layout();assert.equal(e.viewport.scrollTop,before.top);assert.equal(e.surface.style.height,before.height);
+        e.open([0,1,2]);e.layout();
+        assert.equal(e.viewport.scrollTop,before.top);assert.equal(e.surface.style.height,before.height);
+        assert.deepEqual(boxes.map(b=>b.style.top),before.boxes);
+        assert.equal(still.style.width,'480px');assert.equal(e.nodes.filter(n=>n.tag==='img').length,before.decoders);
+        assert.equal(boxes[2].dataset.state,'failed');assert.equal(e.urls.size,1);
+    }
+    assert.equal(e.requests.length,0,'highlighting neither downloads nor expands additional images');
+    e.packet.article={...e.packet.article,id:2};e.layout();assert.equal(e.ui.active(),false);assert.equal(e.urls.size,0);
+    assert.equal(await e.ui.destroy(),true);
 });

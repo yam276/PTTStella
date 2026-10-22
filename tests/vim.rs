@@ -92,56 +92,157 @@ fn command_help_keeps_browsing_and_requires_explicit_native_execution() {
 
 #[test]
 fn continue_prompt_translates_once_and_holds_the_key_across_screen_changes() {
-    for value in [" ", "Enter", "l", "ArrowRight"] {
+    for enabled in [false, true] {
+        for value in [
+            " ",
+            "Enter",
+            "l",
+            "ArrowRight",
+            "j",
+            "h",
+            "i",
+            "f",
+            "3",
+            "g",
+            "Escape",
+            "Tab",
+            "F1",
+            "中",
+        ] {
+            let mut keyboard = Keyboard::default();
+            if enabled {
+                keyboard.toggle();
+            }
+            let mut k = key(value);
+            assert_eq!(
+                keyboard.key(&k, &Context::ContinuePrompt),
+                Effect::Browse(Intent::Continue)
+            );
+            assert_eq!(
+                keyboard.status(&Context::ContinuePrompt).mode,
+                if enabled { "normal" } else { "input" }
+            );
+            assert!(!keyboard.accept_text(false));
+            assert_eq!(keyboard.key(&k, &Context::ContinuePrompt), Effect::None);
+            k.repeat = true;
+            assert_eq!(keyboard.key(&k, &Context::ContinuePrompt), Effect::None);
+            let list = Context::BoardList {
+                first_row: 3,
+                last_row: 22,
+                cursor_row: 4,
+            };
+            assert_eq!(keyboard.key(&k, &list), Effect::None);
+            assert!(!keyboard.accept_text(false));
+            keyboard.release(&k.code);
+            k.repeat = false;
+            assert_eq!(
+                keyboard.key(&k, &Context::ContinuePrompt),
+                Effect::Browse(Intent::Continue)
+            );
+        }
+    }
+}
+
+#[test]
+fn continue_prompt_preserves_editing_modes_and_rejects_composition_and_modifier_keys() {
+    for enabled in [false, true] {
         let mut keyboard = Keyboard::default();
-        keyboard.toggle();
-        let mut k = key(value);
+        if enabled {
+            keyboard.toggle();
+        }
+        for value in [
+            "Shift",
+            "Control",
+            "Alt",
+            "Meta",
+            "CapsLock",
+            "NumLock",
+            "ScrollLock",
+            "Fn",
+            "Dead",
+            "Process",
+            "Unidentified",
+            "",
+        ] {
+            assert_eq!(
+                press(&mut keyboard, value, &Context::ContinuePrompt),
+                Effect::None
+            );
+            assert!(!keyboard.accept_text(false));
+        }
+        keyboard.composition_start();
         assert_eq!(
-            keyboard.key(&k, &Context::ContinuePrompt),
-            Effect::Browse(Intent::Continue)
+            keyboard.key(&key("Enter"), &Context::ContinuePrompt),
+            Effect::None
         );
-        assert_eq!(keyboard.status(&Context::ContinuePrompt).mode, "normal");
-        assert!(!keyboard.accept_text(false));
-        assert_eq!(keyboard.key(&k, &Context::ContinuePrompt), Effect::None);
-        k.repeat = true;
-        assert_eq!(keyboard.key(&k, &Context::ContinuePrompt), Effect::None);
-        let list = Context::BoardList { first_row: 3 };
-        assert_eq!(keyboard.key(&k, &list), Effect::None);
-        assert!(!keyboard.accept_text(false));
-        keyboard.release(&k.code);
-        k.repeat = false;
+        assert!(!keyboard.accept_text(true));
+        keyboard.composition_end();
+        let mut repeated = key("Enter");
+        repeated.repeat = true;
         assert_eq!(
-            keyboard.key(&k, &Context::ContinuePrompt),
-            Effect::Browse(Intent::Continue)
+            keyboard.key(&repeated, &Context::ContinuePrompt),
+            Effect::None
         );
+        for modifier in ["ctrl", "alt", "shift"] {
+            let mut k = key("a");
+            k.ctrl = modifier == "ctrl";
+            k.alt = modifier == "alt";
+            k.shift = modifier == "shift";
+            assert_eq!(
+                keyboard.key(&k, &Context::ContinuePrompt),
+                Effect::Browse(Intent::Continue)
+            );
+            keyboard.release(&k.code);
+        }
     }
     let mut keyboard = Keyboard::default();
     keyboard.toggle();
-    for value in ["j", "k", "h", "g", "3", "y", "n"] {
-        assert!(matches!(
-            press(&mut keyboard, value, &Context::ContinuePrompt),
-            Effect::Notice(_)
-        ));
-        assert!(!keyboard.accept_text(false));
-    }
-    let mut control = key("l");
-    control.ctrl = true;
-    assert!(matches!(
-        keyboard.key(&control, &Context::ContinuePrompt),
-        Effect::Notice(_)
-    ));
-    let mut repeated = key("Enter");
-    repeated.repeat = true;
+    keyboard.use_native_input();
     assert_eq!(
-        keyboard.key(&repeated, &Context::ContinuePrompt),
-        Effect::None
+        press(&mut keyboard, "Escape", &Context::ContinuePrompt),
+        Effect::Browse(Intent::Continue)
     );
-    press(&mut keyboard, "i", &Context::ContinuePrompt);
+    assert_eq!(keyboard.status(&Context::ContinuePrompt).mode, "input");
+    assert_eq!(press(&mut keyboard, "a", &Context::EmptyList), Effect::None);
+    assert!(keyboard.accept_text(false));
+    press(&mut keyboard, "Escape", &Context::EmptyList);
+    keyboard.context(&Context::ContinuePrompt);
+    keyboard.arm();
     assert_eq!(
-        press(&mut keyboard, "Enter", &Context::ContinuePrompt),
-        Effect::Native(vec![13])
+        press(&mut keyboard, "f", &Context::ContinuePrompt),
+        Effect::Browse(Intent::Continue)
     );
+    assert_eq!(keyboard.status(&Context::ContinuePrompt).mode, "normal");
 }
+
+#[test]
+fn continue_prompt_keeps_normal_physical_keys_but_not_native_ime_confirmation() {
+    for enabled in [false, true] {
+        let mut keyboard = Keyboard::default();
+        if enabled {
+            keyboard.toggle();
+        }
+        let mut process = key("Process");
+        process.code = "KeyJ".into();
+        assert_eq!(
+            keyboard.key(&process, &Context::ContinuePrompt),
+            if enabled {
+                Effect::Browse(Intent::Continue)
+            } else {
+                Effect::None
+            }
+        );
+        keyboard.release(&process.code);
+        keyboard.composition_start();
+        assert_eq!(
+            keyboard.key(&process, &Context::ContinuePrompt),
+            Effect::None
+        );
+        assert!(!keyboard.accept_text(true));
+        keyboard.composition_end();
+    }
+}
+
 #[test]
 fn cjk_input_source_uses_physical_keys_only_in_normal_mode() {
     let c = reading(24, 50);
@@ -383,10 +484,18 @@ fn main_menu_and_board_half_pages_use_their_content_height() {
             Context::MainMenu {
                 first_row: 12,
                 last_row: 15,
+                cursor_row: 13,
             },
             2,
         ),
-        (Context::BoardList { first_row: 3 }, 10),
+        (
+            Context::BoardList {
+                first_row: 3,
+                last_row: 22,
+                cursor_row: 4,
+            },
+            10,
+        ),
     ] {
         let mut policy = Keyboard::default();
         policy.toggle();

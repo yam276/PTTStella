@@ -5,34 +5,34 @@ import assert from 'node:assert/strict';
 import {translator} from './i18n_test_support.mjs';
 
 const create=vm.runInNewContext(readFileSync(new URL('../assets/surface-tools.js',import.meta.url),'utf8')+'\ncreateFloatingTools');
-function fixture({width=900,height=700,reduced=false,language='zh-TW'}={}){
-    let clock=0,next=0,prepared=0,restored=0;
+function fixture({width=900,height=700,reduced=false,language='zh-TW',withSettings=false}={}){
+    let clock=0,next=0,prepared=0,restored=0,settingsOpened=0;
     const frames=new Map(),classes=new Set();
     const element=()=>({hidden:true,attrs:{},dataset:{},style:{setProperty(k,v){this[k]=v;}},
         setAttribute(k,v){this.attrs[k]=v;},removeAttribute(k){delete this.attrs[k];},focus(){document.activeElement=this;},
         contains(target){return target===this;}});
     const root=element(),ball=element(),fan=element(),panel=element();
-    root.classList={add:v=>classes.add(v),remove:v=>classes.delete(v)};
-    const petals=['navigate','display','capture','input','session','filters'].map(group=>{const p=element();p.dataset.toolsTarget=group;return p;});
-    const groups=petals.map(p=>{const group=element();group.dataset.toolsGroup=p.dataset.toolsTarget;return group;});
+    root.classList={add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v)};
+    const petals=['navigate','display','capture','input','session','filters',...(withSettings?['settings']:[])].map(group=>{const p=element();p.dataset.toolsTarget=group;return p;});
+    const groups=petals.filter(p=>p.dataset.toolsTarget!=="settings").map(p=>{const group=element();group.dataset.toolsGroup=p.dataset.toolsTarget;return group;});
     const document={activeElement:null,hidden:false,querySelector:()=>null},window={innerWidth:width,innerHeight:height};
     const captures=new Set();ball.setPointerCapture=id=>captures.add(id);ball.hasPointerCapture=id=>captures.has(id);ball.releasePointerCapture=id=>captures.delete(id);
     fan.querySelectorAll=()=>petals;fan.contains=target=>petals.includes(target);
     panel.querySelectorAll=()=>groups;panel.querySelector=()=>null;
     root.contains=target=>[root,ball,fan,panel,...petals,...groups].includes(target);
-    const menu=create({root,ball,fan,panel,window,document,tr:translator(language),prepare:()=>prepared++,restore:()=>restored++,
+    const menu=create({root,ball,fan,panel,window,document,tr:translator(language),prepare:()=>prepared++,restore:()=>restored++,onSettings:()=>settingsOpened++,
         raf:callback=>{frames.set(++next,callback);return next;},caf:id=>frames.delete(id),now:()=>clock,reduced:()=>reduced});
     function fire(target,type,values={}){const e={pointerId:1,button:0,buttons:1,isPrimary:true,clientX:820,clientY:455,detail:1,preventDefault(){this.prevented=true;},stopPropagation(){this.stopped=true;},...values};
         for(const [node,event,callback] of menu.bindings)if(node===target&&event===type)callback({...e,currentTarget:target});return e;}
     function advance(ms=16){clock+=ms;const queued=[...frames.values()];frames.clear();queued.forEach(fn=>fn(clock));}
-    return {menu,fire,advance,root,ball,fan,panel,petals,groups,window,document,captures,frames,counts:()=>({prepared,restored})};
+    return {menu,fire,advance,root,ball,fan,panel,petals,groups,window,document,captures,frames,counts:()=>({prepared,restored,settingsOpened})};
 }
 test('the floating trigger returns from every category before another tap closes the menu',()=>{
     for(const [language,label] of [['zh-TW','返回工具分類'],['en-US','Back to categories']]){
         const f=fixture({language});f.fire(f.ball,'click');
         for(const petal of f.petals){
             const point=f.menu.snapshot().point;f.fire(petal,'click');
-            assert.equal(f.ball.dataset.toolsAction,'back');assert.equal(f.ball.attrs['aria-label'],label);
+            assert.equal(f.ball.dataset.toolsAction,'back');assert.equal(f.ball.attrs['aria-label'],label);assert.equal(f.ball.attrs.title,undefined);
             assert.equal(f.ball.attrs['aria-expanded'],undefined,'Back is navigation, not a disclosure toggle');
             f.fire(f.ball,'pointerdown');f.fire(f.ball,'pointerup');f.fire(f.ball,'click');
             assert.equal(f.menu.open(),true);assert.equal(f.panel.hidden,true);assert.equal(f.fan.hidden,false);
@@ -53,6 +53,21 @@ test('keyboard Back works while dragging from a category closes it without an ac
     f.menu.destroy();assert.equal(f.menu.clean(),true);
 });
 const overlaps=(a,b)=>a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h;
+test('right-click tools reveal a hidden trigger, preserve category navigation and restore its parked position',()=>{
+    const f=fixture(),parked=f.menu.snapshot().point;
+    f.menu.setVisible(false);assert.equal(f.ball.hidden,true);
+    assert.equal(f.menu.showAt({isTrusted:false,clientX:300,clientY:300}),false);
+    assert.equal(f.menu.showAt({isTrusted:true,clientX:NaN,clientY:300}),false);
+    assert.equal(f.menu.showAt({isTrusted:true,clientX:300,clientY:300}),true);
+    assert.equal(f.ball.hidden,false);assert.equal(f.fan.hidden,false);
+    assert.equal(f.menu.snapshot().point.x,272);assert.equal(f.menu.snapshot().point.y,272);
+    f.fire(f.petals[0],'click');assert.equal(f.ball.dataset.toolsAction,'back');
+    f.fire(f.ball,'click');assert.equal(f.fan.hidden,false);
+    f.fire(f.ball,'click');assert.equal(f.menu.open(),false);assert.equal(f.ball.hidden,true);
+    assert.deepEqual(f.menu.snapshot().point,parked);
+    f.menu.setVisible(true);assert.equal(f.ball.hidden,false);
+    assert.throws(()=>f.menu.setVisible('false'));f.menu.destroy();assert.equal(f.menu.clean(),true);
+});
 test('an open modal receives its first pointer action without tool chrome swallowing it or restoring BBS focus',()=>{
     const f=fixture();f.fire(f.ball,'click');f.fire(f.petals[1],'click');
     const field={};f.document.activeElement=field;f.document.querySelector=selector=>selector==='dialog[open]'?{}:null;
@@ -293,4 +308,45 @@ test('opacity updates preserve geometry and navigation and reject malformed brid
     f.menu.setOpacity(35);assert.equal(f.root.style['--tools-opacity'],'0.35');assert.deepEqual(f.menu.snapshot(),before);
     for(const value of [0,19,101,NaN,Infinity,35.5,"35",null]){assert.throws(()=>f.menu.setOpacity(value));assert.equal(f.root.style['--tools-opacity'],'0.35');}
     f.menu.setOpacity(100);assert.equal(f.root.style['--tools-opacity'],'1');f.menu.destroy();
+});
+
+test('category pages follow the fan direction even when the opposite side is larger',()=>{
+    for(const x of [350,470]){
+        const f=fixture();openAt(f,x,300);const point=f.menu.snapshot().point;
+        const direction=point.x+28<450?1:-1;
+        f.fire(f.petals[0],'click');const left=parseFloat(f.panel.style.left),width=parseFloat(f.panel.style.width);
+        if(direction===1)assert.ok(left>=point.x+68);else assert.ok(left+width<=point.x-12);
+        assert.equal(f.menu.open(),true);f.menu.destroy();
+    }
+});
+
+test('the seventh first-level Settings entry opens the shared dialog without an empty category page',()=>{
+ const f=fixture({withSettings:true});f.fire(f.ball,'click');assert.equal(f.petals.length,7);
+ f.fire(f.petals[6],'click');assert.equal(f.counts().settingsOpened,1);assert.equal(f.menu.open(),false);assert.equal(f.panel.hidden,true);assert.equal(f.menu.snapshot().selected,null);
+});
+test('seven responsive hit areas and their panel scale consistently through 4K without overlap',()=>{
+ for(const [width,height,expected]of [[900,700,1],[1280,800,1],[1920,1080,1.35],[3840,2160,1.75]]){
+  const f=fixture({width,height,withSettings:true});f.fire(f.ball,'click');const {scale,point}=f.menu.snapshot();assert.equal(scale,expected);
+  assert.equal(Number(f.root.style['--tools-scale']),expected);assert.equal(f.root.dataset.toolsLayout,'fan');
+  const rects=f.petals.map(p=>({x:point.x+Number.parseFloat(p.style['--petal-x']),y:point.y+Number.parseFloat(p.style['--petal-y']),w:62*scale,h:62*scale}));
+  for(const r of rects){assert.ok(r.x>=16*scale&&r.y>=48*scale&&r.x+r.w<=width-16*scale+.001&&r.y+r.h<=height-16*scale+.001);assert.equal(overlaps({...point,w:56*scale,h:56*scale},r),false);}
+  for(let i=0;i<rects.length;i++)for(let j=i+1;j<rects.length;j++)assert.equal(overlaps({...rects[i],x:rects[i].x-4*scale,y:rects[i].y-4*scale,w:70*scale,h:70*scale},rects[j]),false);
+  f.fire(f.petals[0],'click');assert.equal(Number.parseFloat(f.panel.style.width),330*scale);assert.equal(Number.parseFloat(f.panel.style.maxHeight),260*scale);
+  f.window.innerWidth=900;f.window.innerHeight=700;f.fire(f.window,'resize');assert.equal(f.menu.snapshot().scale,1);assert.equal(Number.parseFloat(f.panel.style.width),330);
+  f.menu.destroy();assert.equal(f.menu.clean(),true);
+ }
+});
+
+test('low opacity preference remains intact through both open paths, category Back and dismissal',()=>{
+    const f=fixture();f.menu.setOpacity(20);
+    for(const open of [()=>f.fire(f.ball,'click'),()=>f.menu.showAt({isTrusted:true,clientX:300,clientY:300})]){
+        open();assert.equal(f.root.classList.contains('open'),true);
+        assert.equal(f.root.style['--tools-opacity'],'0.2');
+        f.fire(f.petals[0],'click');assert.equal(f.ball.attrs['aria-expanded'],undefined);
+        assert.equal(f.root.classList.contains('open'),true);
+        f.fire(f.ball,'click');assert.equal(f.root.classList.contains('open'),true);
+        f.fire(f.window,'blur');assert.equal(f.root.classList.contains('open'),false);
+        assert.equal(f.root.style['--tools-opacity'],'0.2');
+    }
+    f.menu.destroy();assert.equal(f.menu.clean(),true);
 });

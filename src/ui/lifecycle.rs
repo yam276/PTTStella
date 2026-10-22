@@ -17,12 +17,15 @@ pub(super) struct Resources {
     pub(super) login: Option<Job>,
     pub(super) commands: Pending,
     pub(super) files: Files,
+    pub(super) settings: super::settings_finish::RetainedEdits,
     pub(super) tools: Option<super::protocol::ToolsObservation>,
 }
 
 #[derive(serde::Deserialize)]
 struct RendererFinished {
     clean: bool,
+    #[serde(default)]
+    settings: super::settings_finish::Snapshot,
     #[serde(default)]
     tools: Option<super::protocol::ToolsObservation>,
 }
@@ -114,6 +117,7 @@ impl Resources {
                 Some(eval) => renderer(eval).await,
                 None => Ok(RendererFinished {
                     clean: true,
+                    settings: Default::default(),
                     tools: None,
                 }), // Preflight failed before JS was created.
             }
@@ -139,14 +143,31 @@ impl Resources {
             Duration::from_secs(5),
         )
         .await;
-        let renderer = renderer.and_then(|finished| {
-            self.tools = finished.tools;
-            if finished.clean {
-                Ok(())
-            } else {
-                Err(pttstella::msg!("cleanup-listeners-stopped"))
+        let (renderer, snapshot) = match renderer {
+            Ok(finished) => {
+                self.tools = finished.tools;
+                (
+                    if finished.clean {
+                        Ok(())
+                    } else {
+                        Err(pttstella::msg!("cleanup-listeners-stopped"))
+                    },
+                    finished.settings,
+                )
             }
-        });
+            Err(error) => (Err(error), Default::default()),
+        };
+        let settings = retained_wait(
+            self.settings.finish(snapshot),
+            || message.set(pttstella::msg!("cleanup-wait")),
+            Duration::from_secs(5),
+        )
+        .await;
+        let files = match (files, settings) {
+            (Ok(()), result) => result,
+            (Err(error), Ok(())) => Err(error),
+            (Err(error), Err(settings)) => Err(format!("{error}；{settings}")),
+        };
         let renderer = match (renderer, files) {
             (Ok(()), result) => result,
             (Err(error), Ok(())) => Err(error),
@@ -163,7 +184,6 @@ impl Resources {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{cell::Cell, rc::Rc};
     use tokio::sync::oneshot;
     #[test]
     fn joined_renderer_keeps_probe_observations_when_stopped_notification_races() {
@@ -185,15 +205,13 @@ mod tests {
     #[tokio::test]
     async fn overdue_cleanup_keeps_ownership_until_acknowledged() {
         let (ack, receiver) = oneshot::channel();
-        let notified = Rc::new(Cell::new(false));
-        let flag = notified.clone();
-        let work = retained_wait(receiver, || flag.set(true), Duration::ZERO);
+        let (notified, notice) = oneshot::channel();
+        let work = retained_wait(receiver, move || notified.send(()).unwrap(), Duration::ZERO);
         tokio::pin!(work);
         tokio::select! {
             _ = &mut work => panic!("cleanup was abandoned"),
-            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
+            result = tokio::time::timeout(Duration::from_secs(2), notice) => result.unwrap().unwrap(),
         }
-        assert!(notified.get());
         assert!(!ack.is_closed());
         ack.send("joined").unwrap();
         assert_eq!(work.await.unwrap(), "joined");

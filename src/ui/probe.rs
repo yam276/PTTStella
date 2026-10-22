@@ -47,6 +47,7 @@ pub(super) fn mouse_case(case: Option<&str>) -> bool {
 
 #[derive(Default)]
 pub(super) struct Checks {
+    pub(super) image_copies: usize,
     pub(super) site_switches: u8,
     pub(super) site_saves: u8,
     pub(super) site_removes: u8,
@@ -76,11 +77,14 @@ pub(super) struct Checks {
     pub(super) osc8_media_decoded: usize,
     pub(super) inline_expands: usize,
     pub(super) inline_requests: usize,
+    pub(super) inline_targets: Vec<super::inline_images::Target>,
     pub(super) context_copies: usize,
     pub(super) verification_required: bool,
     pub(super) verification_rejected: bool,
     pub(super) verification_browsing: bool,
     pub(super) filter_edits: usize,
+    pub(super) account_rule_actions: usize,
+    pub(super) reply_focus_actions: usize,
     pub(super) filter_reveals: usize,
     pub(super) filter_copies: usize,
     pub(super) filter_hover_requests: usize,
@@ -101,6 +105,8 @@ pub(super) struct Checks {
     pub(super) rows_export_checked: bool,
     pub(super) settings_saved: bool,
     pub(super) navigation_requests: usize,
+    pub(super) load_cancels: usize,
+    pub(super) load_resumes: usize,
     pub(super) paste_single: bool,
     pub(super) paste_confirm: bool,
     pub(super) paste_cancel: bool,
@@ -507,16 +513,51 @@ pub(super) fn surface_sample(
         Some("sgr66") => sgr66_sample(true),
         Some("sgr66_legacy") => sgr66_sample(false),
         Some("osc8") => osc8_sample(media_origin),
-        Some("inline") => inline_sample(media_origin),
-        Some("account_lists") => {
+        Some("inline_pages" | "terminal_pages") => inline_sample(media_origin),
+        Some("inline") => {
+            let mut bytes=inline_sample(media_origin)?;
+            bytes.extend_from_slice(&encoding::encode("\x1b[24;1H\x1b[7m\x1b[2K 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H").map_err(|e|e.to_string())?);
+            Ok(bytes)
+        },
+        Some("inline_replies") => {
+            let origin = media_origin.ok_or("reply images probe requires a loopback media origin")?;
+            encoding::encode(&format!("\x1b[2J\x1b[HReply image controls synthetic page\x1b[3;1H{origin}/colours.png AFTER\x1b[6;1H\x1b[1;37m推 \x1b[33mAlice\x1b[0;33m: {origin}/missing.png\x1b[0m\x1b[6;68H10/22 12:34\x1b[7;1HKeep this row directly below the reply\x1b[24;1H\x1b[7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
+        },
+        Some("full_load") => full_load_page(1,media_origin),
+        Some("long_load") => long_load_page(1,media_origin),
+        Some("short_overlap") => short_overlap_page(false,media_origin),
+        Some("short_links") => {
+            let origin = media_origin.ok_or("short links probe requires a loopback media origin")?;
+            encoding::encode(&format!("\x1b[2J\x1b[HShort article image links\x1b[2;1H{origin}/colours.png\x1b[3;1H\x1b]8;;{origin}/colours-two.png\x07Explicit image\x1b]8;;\x07\x1b[24;1H\x1b[7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~3 行 (h)說明 (←)離開\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
+        }
+        Some("reading_rows" | "wide_last_row") => {
+            let mut sample = String::from("\x1b[2J\x1b[H");
+            for row in 1..=23 {
+                sample.push_str(&format!("\x1b[{row};1H\x1b[0mROW {row:02} - complete text row\x1b[{row};31H\x1b[1;{}m{}", if row % 2 == 1 {31} else {32}, "█".repeat(10)));
+            }
+            if case == Some("wide_last_row") {
+                let origin = media_origin.ok_or("wide last row probe requires a loopback media origin")?;
+                sample.push_str(&format!("\x1b[2;1H\x1b[0m\x1b[2K{origin}/colours.png\x1b[23;1H\x1b[0mLAST ARTICLE LINE MUST REMAIN VISIBLE"));
+            }
+            sample.push_str("\x1b[24;1H\x1b[0;7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (h)說明 (←)離開\x1b[0m\x1b[?25l");
+            encoding::encode(&sample).map_err(|e|e.to_string())
+        }
+        Some("short_reading") => encoding::encode("\x1b[2J\x1b[HShort article: the grid stays 80 columns by 24 rows.\x1b[2;1HSecond line\x1b[3;1HLast line\x1b[24;1H\x1b[7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~3 行 (h)說明 (←)離開\x1b[0m\x1b[?25l").map_err(|e|e.to_string()),
+        Some("account_articles") => {
+            let sample: serde_json::Value = serde_json::from_str(include_str!("../../tests/fixtures/navigation.json")).map_err(|e|e.to_string())?;
+            encoding::encode(sample["list"].as_str().ok_or("missing synthetic article fixture")?).map_err(|e|e.to_string())
+        }
+        Some("account_lists" | "merged_replies" | "account_actions" | "filter_colors") => {
             let sample: serde_json::Value =
                 serde_json::from_str(include_str!("../../tests/fixtures/filters.json"))
                     .map_err(|e| e.to_string())?;
-            encoding::encode(
-                sample["reading"]
-                    .as_str()
-                    .ok_or("missing synthetic reading fixture")?,
-            )
+            let mut reading = sample["reading"].as_str().ok_or("missing synthetic reading fixture")?
+                .replace("第 2/3 頁 (66%) 目前顯示: 第 24~46 行","第 1/1 頁 (100%) 目前顯示: 第 1~23 行");
+            if case == Some("filter_colors") {
+                reading = reading.replace("\x1b[1;37m", "\x1b[97m").replace("\x1b[33m", "\x1b[93m");
+                reading.push_str("\x1b[6;3H\x1b[33m \x1b[6;67H \x1b[7;3H \x1b[7;67H \x1b[0m\x1b[24;80H");
+            }
+            encoding::encode(&reading)
             .map_err(|e| e.to_string())
         }
         Some("context_menu") => {
@@ -524,7 +565,7 @@ pub(super) fn surface_sample(
             // Keep the reading cursor on the last row. A synthetic OSC 8
             // footer provides a real link under the accessibility editing host.
             let origin = media_origin.ok_or("context menu probe requires a media origin")?;
-            bytes.extend_from_slice(&encoding::encode(&format!("\x1b[24;1H\x1b[7m\x1b]8;;{origin}/colours.png\x07 瀏覽 第 1/2 頁 (50%) 目前顯示: 第 1~23 行 (h)說明 (←)離開\x1b]8;;\x07\x1b[0m\x1b[24;6H")).map_err(|e|e.to_string())?);
+            bytes.extend_from_slice(&encoding::encode(&format!("\x1b[24;1H\x1b[7m\x1b]8;;{origin}/colours.png\x07 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (h)說明 (←)離開\x1b]8;;\x07\x1b[0m\x1b[24;6H")).map_err(|e|e.to_string())?);
             Ok(bytes)
         }
         _ => preview(probe, media_origin),
@@ -550,7 +591,11 @@ fn tools_sample() -> Result<Vec<u8>, String> {
 
 fn inline_sample(origin: Option<&str>) -> Result<Vec<u8>, String> {
     let origin = origin.ok_or("inline probe requires a loopback media origin")?;
-    encoding::encode(&format!("\x1b[2J\x1b[HInline image synthetic reading page\x1b[3;1H{origin}/colours.png\x1b[4;1HText below first picture: SELECT THIS ROW\x1b[6;1H{origin}/missing.png\x1b[7;1HText below failed picture\x1b[24;1H\x1b[7m 瀏覽 第 1/2 頁 (50%) 目前顯示: 第 1~23 行 (h)說明 (←)離開\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
+    encoding::encode(&format!("\x1b[2J\x1b[HInline image synthetic reading page\x1b[3;1H{origin}/colours.png\x1b[4;1HText below first picture: SELECT THIS ROW\x1b[6;1H{origin}/missing.png\x1b[7;1HText below failed picture\x1b[24;1H\x1b[7m 瀏覽 第 1/2 頁 (50%) 目前顯示: 第 1~23 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
+}
+pub(super) fn inline_second_page(origin: Option<&str>) -> Result<Vec<u8>, String> {
+    let origin = origin.ok_or("inline page probe needs a loopback origin")?;
+    encoding::encode(&format!("\x1b[2J\x1b[HInline image PAGE TWO: cached image moves below row 9\x1b[3;1H{origin}/missing.png\x1b[9;1H{origin}/colours.png\x1b[10;1HRepeated URL: first expansion stays at its original line\x1b[14;1H{origin}/colours-two.png\x1b[15;1HText under a new retained image\x1b[24;1H\x1b[7m 瀏覽 第 2/2 頁 (100%) 目前顯示: 第 24~46 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
 }
 
 pub(super) fn osc8_sample(media_origin: Option<&str>) -> Result<Vec<u8>, String> {
@@ -599,6 +644,85 @@ pub(super) fn sgr66_sample(modern: bool) -> Result<Vec<u8>, String> {
     }
     bytes.extend_from_slice(b"\x1b[24;80H\x1b[?25l");
     Ok(bytes)
+}
+
+// Self-authored two-page clamp: logical 9 starts at physical display row 10.
+pub(super) fn short_overlap_page(last: bool, origin: Option<&str>) -> Result<Vec<u8>, String> {
+    let origin = origin.ok_or("short overlap probe requires media origin")?;
+    let mut text = String::from("\x1b[0m\x1b[2J\x1b[H");
+    for (row, line) in (if last { 10..=32 } else { 1..=22 }).enumerate() {
+        let body = match line {
+            2 => "https://example.com/pttstella".into(),
+            10 => "Wrapped paragraph continuation".into(),
+            14 | 17 => String::new(),
+            22 => "Signature begins below".into(),
+            23 => "--".into(),
+            24 => "Synthetic signature: preserve every row".into(),
+            25 => format!("{origin}/colours.png"),
+            26 => format!("{origin}/missing.png"),
+            27 => format!("{origin}/colours-two.png"),
+            31 => "First synthetic reply remains visible".into(),
+            32 => "Last synthetic reply remains visible".into(),
+            _ => format!("Synthetic short article row {line:04}"),
+        };
+        text.push_str(&format!(
+            "\x1b[{};1H\x1b[{}m\x1b[2K{body}\x1b[0m",
+            row + 1,
+            if last && body.is_empty() { 32 } else { 0 }
+        ));
+    }
+    text.push_str(if last {
+        "\x1b[24;1H\x1b[30;46m 瀏覽 第 2/2 頁 (100%)\x1b[0;7m 目前顯示: 第 9~31 行 (y)回應(X)推文(h)說明"
+    } else {
+        "\x1b[24;1H\x1b[37;44m 瀏覽 第 1/2 頁 (46%)\x1b[0;7m 目前顯示: 第 1~22 行 (y)回應(X)推文(h)說明"
+    });
+    text.push_str("\x1b[0m\x1b[?25l");
+    encoding::encode(&text).map_err(|e| e.to_string())
+}
+
+pub(super) fn full_load_page(page: usize, origin: Option<&str>) -> Result<Vec<u8>, String> {
+    reading_load_page(page, 20, false, origin)
+}
+pub(super) fn long_load_page(page: usize, origin: Option<&str>) -> Result<Vec<u8>, String> {
+    reading_load_page(page, 38, true, origin)
+}
+fn reading_load_page(
+    page: usize,
+    total: usize,
+    reset_ink: bool,
+    origin: Option<&str>,
+) -> Result<Vec<u8>, String> {
+    let first = 1 + (page - 1) * 22;
+    let mut text = String::from("\x1b[2J\x1b[H");
+    for row in 0..23 {
+        let line = first + row;
+        let body = if line == 2 {
+            format!(
+                "{}/colours.png",
+                origin.ok_or("full load probe requires media origin")?
+            )
+        } else if line == 5 {
+            format!(
+                "{}/missing.png",
+                origin.ok_or("full load probe requires media origin")?
+            )
+        } else if line == 270 {
+            format!(
+                "{}/colours-two.png",
+                origin.ok_or("full load probe requires media origin")?
+            )
+        } else {
+            format!("Full article synthetic line {line:04}")
+        };
+        let ink = if reset_ink && page == 30 && row == 22 {
+            "\x1b[1;33m"
+        } else {
+            "\x1b[0m"
+        };
+        text.push_str(&format!("\x1b[{};1H{ink}{body}", row + 1));
+    }
+    text.push_str(&format!("\x1b[24;1H\x1b[30;47m 瀏覽 第 {page}/{total} 頁 ({}%) 目前顯示: 第 {first}~{} 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H",page*100/total,first+22));
+    encoding::encode(&text).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -819,6 +943,55 @@ mod sample_tests {
     }
 
     #[test]
+    fn reading_row_probe_has_twenty_three_independently_numbered_full_height_rows() {
+        let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
+        screen.feed(&surface_sample(Some("reading_rows"), true, None).unwrap());
+        let frame = screen.frame();
+        assert!(matches!(
+            pttstella::navigation::analyze(&frame),
+            pttstella::navigation::Context::ArticleReading {
+                first_line: 1,
+                last_line: 23,
+                percent: 100
+            }
+        ));
+        let rows = pttstella::text::rows(&frame).unwrap();
+        for (row, text) in rows.iter().take(23).enumerate() {
+            assert!(
+                text.text
+                    .starts_with(&format!("ROW {:02} - complete text row", row + 1))
+            );
+            // UAO block glyphs occupy two terminal cells each.
+            assert_eq!(text.cells(30, 50), Some("██████████"));
+        }
+    }
+
+    #[test]
+    fn short_link_probe_has_a_three_line_reading_range_and_two_images() {
+        let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
+        screen.feed(
+            &surface_sample(Some("short_links"), true, Some("http://127.0.0.1:9876")).unwrap(),
+        );
+        assert!(matches!(
+            pttstella::navigation::analyze(&screen.frame()),
+            pttstella::navigation::Context::ArticleReading {
+                first_line: 1,
+                last_line: 3,
+                percent: 100,
+            }
+        ));
+        assert_eq!(
+            pttstella::links::detect(&screen.frame())
+                .iter()
+                .map(|link| (link.row, link.url.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                (2, "http://127.0.0.1:9876/colours-two.png"),
+                (1, "http://127.0.0.1:9876/colours.png"),
+            ]
+        );
+    }
+    #[test]
     fn inline_sample_is_a_reading_page_with_two_local_images() {
         let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
         screen.feed(&surface_sample(Some("inline"), true, Some("http://127.0.0.1:9876")).unwrap());
@@ -835,6 +1008,58 @@ mod sample_tests {
                 (2, "http://127.0.0.1:9876/colours.png".into()),
                 (5, "http://127.0.0.1:9876/missing.png".into())
             ]
+        );
+    }
+    #[test]
+    fn wide_image_probe_has_a_final_source_line_and_one_local_image() {
+        let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
+        screen.feed(
+            &surface_sample(Some("wide_last_row"), true, Some("http://127.0.0.1:9876")).unwrap(),
+        );
+        let frame = screen.frame();
+        let links = pttstella::links::detect(&frame);
+        assert_eq!(links.len(), 1);
+        assert_eq!((links[0].row, links[0].start, links[0].end), (1, 0, 33));
+        assert!(
+            pttstella::text::rows(&frame).unwrap()[22]
+                .text
+                .starts_with("LAST ARTICLE LINE MUST REMAIN VISIBLE")
+        );
+        assert!(matches!(
+            pttstella::navigation::analyze(&frame),
+            pttstella::navigation::Context::ArticleReading { percent: 100, .. }
+        ));
+    }
+    #[test]
+    fn reply_image_probe_preserves_author_url_timestamp_and_following_row() {
+        let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
+        screen.feed(
+            &surface_sample(Some("inline_replies"), true, Some("http://127.0.0.1:9876")).unwrap(),
+        );
+        let frame = screen.frame();
+        let mut paint = super::super::presentation::sample_packet(
+            &frame,
+            &pttstella::settings::DisplaySettings::default(),
+        );
+        super::super::presentation::refresh_links(&mut paint);
+        assert_eq!(paint.image_links, vec![0, 1]);
+        assert_eq!(
+            paint
+                .links
+                .iter()
+                .map(|l| (l.row, l.start, l.end))
+                .collect::<Vec<_>>(),
+            vec![(2, 0, 33), (5, 10, 43)]
+        );
+        let replies = pttstella::filters::pushes(&frame);
+        assert_eq!(replies.len(), 1);
+        assert_eq!((replies[0].row, replies[0].id.as_str()), (5, "Alice"));
+        let rows = pttstella::text::rows(&frame).unwrap();
+        assert_eq!(rows[5].cells(67, 78), Some("10/22 12:34"));
+        assert!(
+            rows[6]
+                .text
+                .starts_with("Keep this row directly below the reply")
         );
     }
     #[test]

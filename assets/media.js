@@ -4,13 +4,15 @@ function installMedia({tr,send,prepare,changed,restore}) {
     const hover=document.getElementById("media-hover"),hoverView=document.getElementById("media-hover-viewport"),hoverNote=document.getElementById("media-hover-status");
     const title=document.getElementById("media-title"),urlText=document.getElementById("media-url"),status=document.getElementById("media-status");
     const buttons=Object.fromEntries(["minus","plus","fit","original","motion","retry","external","close"].map(name=>[name,document.getElementById("media-"+name)]));
-    let current=null,image=null,video=null,still=null,stage=null,objectUrl=null,conversion=null,dead=false;
+    let current=null,image=null,video=null,still=null,stage=null,objectUrl=null,conversion=null,dead=false,gif=null;
+    const gifs=createGifPlayback({document,window:typeof window!=="undefined"?window:null,limit:1});
     let width=0,height=0,scale=1,fit=true,playing=false,animated=false;
     let presentation="inspect",point={x:0,y:0},position="top_right",positionFrame=0,state="closed",message="";
     const owner=()=>presentation==="hover"?hover:dialog,container=()=>presentation==="hover"?hoverView:view;
     const jobs=new Set();
     const note=(text,value)=>{message=text;state=value;(presentation==="hover"?hoverNote:status).textContent=text;owner().dataset.state=value;if(presentation==="hover")place();};
     function dispose() {
+        gif?.remove();gif=null;
         conversion?.abort();conversion=null;
         if(image) {image.onload=null;image.onerror=null;image.removeAttribute("src");image=null;}
         if(video) {video.onplaying=null;video.onpause=null;video.onerror=null;video.onstalled=null;video.onwaiting=null;video.pause();video.removeAttribute("src");video.load();video=null;}
@@ -21,6 +23,7 @@ function installMedia({tr,send,prepare,changed,restore}) {
         owner().dataset.resources="0";buttons.motion.hidden=true;
     }
     function resize() {
+        gifs.refresh();
         if(presentation==="hover") {place();return;}
         if(!stage||!width||!height) return;
         if(fit) scale=Math.min(1,Math.max(.01,view.clientWidth/width),Math.max(.01,view.clientHeight/height));
@@ -65,7 +68,7 @@ function installMedia({tr,send,prepare,changed,restore}) {
         const oldState=state,oldMessage=message,cached=hover.dataset.cached;
         if(!promote)dispose();current=packet;presentation="inspect";hover.hidden=true;fit=true;scale=1;
         if(promote&&stage)view.append(stage);
-        title.textContent=packet.target.kind==="youtube"?tr("youtube-title"):packet.target.kind==="video"?tr("video-title"):tr("image-title");
+        title.textContent=packet.target.kind==="video"?tr("video-title"):tr("image-title");
         urlText.textContent=packet.target.url;
         dialog.dataset.request=String(packet.request);dialog.dataset.kind=packet.target.kind;delete dialog.dataset.cached;
         delete dialog.dataset.external;delete dialog.dataset.frame;
@@ -73,7 +76,7 @@ function installMedia({tr,send,prepare,changed,restore}) {
         prepare();if(!dialog.open) dialog.showModal();changed();buttons.close.focus();
         if(promote) {note(oldMessage,oldState);dialog.dataset.resources=objectUrl?"1":"0";if(cached!==undefined)dialog.dataset.cached=cached;buttons.motion.hidden=!animated;resize();return;}
         if(packet.target.kind==="video") openVideo();
-        else note(packet.target.kind==="youtube"?tr("youtube-loading"):tr("image-loading"),"loading");
+        else note(tr("image-loading"),"loading");
     }
     function openVideo() {
         const request=current.request;
@@ -116,8 +119,14 @@ function installMedia({tr,send,prepare,changed,restore}) {
                     if(current?.request!==request||dead) return;
                     if(image.naturalWidth!==width||image.naturalHeight!==height) {fail({request,message:tr("image-size-mismatch")});return;}
                     if(animated&&!playing) snapshot();
+                    if(animated&&packet.mime==="image/gif"){
+                        image.onload=null;image.alt=tr("gif-playing");still.setAttribute("aria-label",tr("gif-paused"));
+                        gif=gifs.add({image,still,url:objectUrl,cost:packet.animation_pixels,score:()=>presentation==="inspect"&&dialog.open?0:Infinity,
+                            changed:value=>{playing=value;buttons.motion.textContent=tr(value?"media-stop":"media-play");dialog.dataset.motion=value?"playing":"paused";}});
+                    }
+
                     owner().dataset.cached=String(packet.cached);buttons.motion.hidden=!animated||presentation==="hover";
-                    note(current.target.kind==="youtube"?tr("youtube-ready"):tr(packet.cached?"image-ready-cached":"image-ready"),"ready");
+                    note(tr(packet.cached?"image-ready-cached":"image-ready"),"ready");
                     resize();
                     send({kind:"media_decoded",request,success:true});
                 };
@@ -140,6 +149,7 @@ function installMedia({tr,send,prepare,changed,restore}) {
         dispose();note(tr("image-reloading"),"loading");send({kind:"media",request:current.request,action:"retry",trusted:e.isTrusted});
     }
     function motion(e) {
+        if(e.isTrusted&&gif){gif.setEnabled(!gif.enabled());return;}
         if(e.isTrusted&&video&&current) {
             if(!video.paused) {video.pause();return;}
             const request=current.request;
@@ -153,7 +163,7 @@ function installMedia({tr,send,prepare,changed,restore}) {
     }
     function external(e) {if(current&&e.isTrusted) send({kind:"media",request:current.request,action:"external",trusted:e.isTrusted});}
     function zoom(delta) {if(width){fit=false;scale=Math.max(.05,Math.min(8,scale+delta));resize();}}
-    const bindings=[
+    const bindings=[...gifs.bindings,
         [buttons.close,"click",close],[dialog,"cancel",close],
         [buttons.minus,"click",()=>zoom(-.25)],[buttons.plus,"click",()=>zoom(.25)],
         [buttons.fit,"click",()=>{fit=true;resize();}],[buttons.original,"click",()=>{fit=false;scale=1;resize();}],
@@ -164,7 +174,7 @@ function installMedia({tr,send,prepare,changed,restore}) {
     return {
         open,receiveImage,fail,hover:openHover,hideHover,locate,reset:()=>close(null,false),
         externalResult(packet){if(current?.request===packet.request){dialog.dataset.external=String(packet.ok);if(!packet.ok) status.textContent=packet.message;}},
-        async destroy(){dead=true;for(const [target,event,callback] of bindings) target.removeEventListener(event,callback);
+        async destroy(){dead=true;gifs.destroy();for(const [target,event,callback] of bindings) target.removeEventListener(event,callback);
             observer.disconnect();close(null,false);await Promise.allSettled([...jobs]);
             return !objectUrl&&!conversion&&!dialog.open&&!view.childElementCount&&!hoverView.childElementCount&&!positionFrame&&!jobs.size;},
     };

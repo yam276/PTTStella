@@ -1,0 +1,12 @@
+PTTStella for macOS
+
+Extract the ZIP and move PTTStella.app to Applications. Download the arm64 build
+for Apple Silicon or the x64 build for Intel. No Rust or Python is needed.
+
+This build has an ad-hoc signature. It is not Developer ID signed or notarized;
+Gatekeeper can block a downloaded application. Review Apple's current guidance:
+https://support.apple.com/102445
+
+Verify the adjacent SHA-256 checksum. No account settings or passwords are
+included. Startup connects to the default site; login remains manual.
+Packaging success is not complete GUI or live-login acceptance.

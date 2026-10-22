@@ -21,7 +21,7 @@ test('gold theme controls and primary actions retain readable normal text contra
     for(const ref of css.matchAll(/var\((--ui-[\w-]+)\)/g))assert.ok(palette[ref[1]],`undefined palette token ${ref[1]}`);
 });
 
-test('the flat constellation artwork has visible contrast on the floating button',()=>{
+test('the flat settings-brand artwork has visible contrast on the navy controls',()=>{
     const svg=readFileSync(new URL('../assets/icons/constellation-flat.svg',import.meta.url),'utf8');
     const colors=[...svg.matchAll(/(?:fill|stroke)="(#[\da-f]{6})"/gi)].map(m=>m[1]);
     assert.ok(colors.length>0);

@@ -39,6 +39,13 @@ pub enum UnknownReason {
     InvalidCursor,
     BoardHeader,
     BoardRows,
+    UnsupportedLayout,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentKind {
+    Mail,
+    Archive,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -55,9 +62,23 @@ pub enum Context {
     MainMenu {
         first_row: usize,
         last_row: usize,
+        cursor_row: usize,
+    },
+    SystemMenu {
+        first_row: usize,
+        last_row: usize,
+        cursor_row: usize,
+    },
+    DocumentList {
+        category: DocumentKind,
+        first_row: usize,
+        last_row: usize,
+        cursor_row: usize,
     },
     BoardList {
         first_row: usize,
+        last_row: usize,
+        cursor_row: usize,
     },
     ArticleList {
         articles: Vec<Article>,
@@ -77,7 +98,9 @@ impl Context {
             Self::EmptyList => "empty_list",
             Self::CommandHelp { .. } => "command_help",
             Self::MainMenu { .. } => "main_menu",
+            Self::SystemMenu { .. } => "system_menu",
             Self::BoardList { .. } => "board_list",
+            Self::DocumentList { .. } => "document_list",
             Self::ArticleList { .. } => "article_list",
             Self::ArticleReading { .. } => "article_reading",
         }
@@ -90,12 +113,24 @@ impl Context {
             Self::MainMenu {
                 first_row,
                 last_row,
+                ..
+            }
+            | Self::SystemMenu {
+                first_row,
+                last_row,
+                ..
+            }
+            | Self::DocumentList {
+                first_row,
+                last_row,
+                ..
             }
             | Self::CommandHelp {
                 first_row,
                 last_row,
+                ..
             } => last_row - first_row + 1,
-            Self::BoardList { first_row } => 23 - first_row,
+            Self::BoardList { first_row, .. } => 23 - first_row,
             Self::ArticleList { articles, .. } => 23 - articles.first().map_or(3, |a| a.row),
             _ => 23,
         }
@@ -138,6 +173,9 @@ pub fn analyze(frame: &Frame) -> Context {
     if let Some(context) = board_list(&rows, frame.cursor) {
         return context;
     }
+    if let Some(context) = document_list(&rows, frame.cursor) {
+        return context;
+    }
     if rows.iter().any(|r| !r.mapped()) {
         return unknown(UnknownReason::Unmapped);
     }
@@ -145,8 +183,7 @@ pub fn analyze(frame: &Frame) -> Context {
     if frame.cursor.1 == 23
         && footer.bar_text("瀏覽")
         && footer.bar_text("目前顯示")
-        && footer.text.contains('←')
-        && footer.text.contains("離開")
+        && reading_commands(footer)
         && let Some((first_line, last_line, percent)) = reading(&footer.text)
     {
         return Context::ArticleReading {
@@ -210,7 +247,13 @@ fn commands(rows: &[Row<'_>], forward: &str) -> bool {
             || rows[23].bar_text("回到上層")
             || rows[23].bar_text("回上層")
             || rows[23].bar_text("文章選讀")
-            || rows[23].bar_text("選擇看板"))
+            || rows[23].bar_text("選擇看板")
+            || rows[23].bar_text("看板列表")
+            || rows[23].bar_text("我的最愛")
+            || rows[23].bar_text("分類看板")
+            || rows[23].bar_text("郵件選單")
+            || rows[23].bar_text("精華列表")
+            || rows[23].bar_text("精華管理"))
 }
 
 fn command_help(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
@@ -307,11 +350,25 @@ fn pointer(line: &Row<'_>, col: usize) -> bool {
     line.cells(col, col + 1) == Some(">") || line.cells(col, col + 2) == Some("●")
 }
 fn main_menu(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
-    if !compact(&rows[0].text).contains("主功能表")
-        || !rows[0].bar_text("主功能表")
-        || !rows[23].bar_text("主選單")
-        || !rows[23].text.contains("說明")
-    {
+    let root = compact(&rows[0].text).contains("主功能表")
+        && rows[0].bar_text("主功能表")
+        && rows[23].bar_text("主選單");
+    let submenu = [
+        ("私人信件區", "電子郵件"),
+        ("休閒聊天區", "聊天說話"),
+        ("個人設定區", "個人設定"),
+        ("系統資訊區", "工具程式"),
+        ("網路遊樂場", "休閒遊樂"),
+        ("編特別名單", "名單編輯"),
+        ("系統維護區", "系統維護"),
+        ("金錢相關管理", "金錢管理"),
+        ("使用者記錄管理", "記錄管理"),
+        ("量販店", "量販商店"),
+        ("棋院", "休閒棋院"),
+    ]
+    .iter()
+    .any(|(title, status)| rows[0].bar_text(title) && rows[23].bar_text(status));
+    if !(root || submenu) || !rows[23].text.contains("說明") {
         return None;
     }
     let mut items = Vec::new();
@@ -325,8 +382,7 @@ fn main_menu(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
                 .get(1)
                 .is_some_and(u8::is_ascii_alphanumeric)
             && item.as_bytes().get(2) == Some(&b')')
-            && item.contains('【')
-            && item.contains('】')
+            && item.get(3..).is_some_and(|tail| !tail.trim().is_empty())
         {
             items.push(row);
         }
@@ -339,15 +395,24 @@ fn main_menu(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
         return Some(unknown(UnknownReason::Unmapped));
     }
     Some(
-        if items.len() >= 3
+        if items.len() >= (if root { 3 } else { 1 })
             && items.windows(2).all(|pair| pair[1] == pair[0] + 1)
             && items.contains(&cursor.1)
             && (20..=21).contains(&cursor.0)
             && pointer(&rows[cursor.1], 20)
         {
-            Context::MainMenu {
-                first_row,
-                last_row,
+            if root {
+                Context::MainMenu {
+                    first_row,
+                    last_row,
+                    cursor_row: cursor.1,
+                }
+            } else {
+                Context::SystemMenu {
+                    first_row,
+                    last_row,
+                    cursor_row: cursor.1,
+                }
             }
         } else {
             unknown(UnknownReason::InvalidCursor)
@@ -368,8 +433,8 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
         // Match stable browser columns plus title/style instead of its wording.
         if !(rows[0].bar_text("看板列表") || rows[0].bar_text("我的最愛"))
             || !(text.contains("編號") || text.contains("總數"))
-            || !text.contains("人氣")
-            || !text.contains("板主")
+            || (!(rows[23].bar_text("看板列表") || rows[23].bar_text("我的最愛"))
+                && (!text.contains("人氣") || !text.contains("板主")))
             || !rows[header].bar_text("類別")
         {
             return Some(unknown(UnknownReason::BoardHeader));
@@ -377,16 +442,16 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
         header + 1
     };
     if !rows[0].mapped()
-        || rows[if class_root { 7 } else { 1 }..]
-            .iter()
-            .any(|r| !r.mapped())
+        || !rows[23].mapped()
+        || (!class_root && !rows[first_row - 1].mapped())
+        || (class_root && rows[first_row..].iter().any(|row| !row.mapped()))
     {
         return Some(unknown(UnknownReason::Unmapped));
     }
     if empty_list(rows, cursor, first_row, true) {
         return Some(Context::EmptyList);
     }
-    if !commands(rows, "進入") && !commands(rows, "閱讀") {
+    if !board_commands(rows, class_root) {
         return Some(unknown(UnknownReason::Unrecognized));
     }
     let mut items = Vec::new();
@@ -396,8 +461,16 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
             blank = true;
             continue;
         }
+        let structural = if class_root { 12..20 } else { 10..23 };
+        if line.spans.iter().any(|span| {
+            span.glyph.col < structural.end
+                && span.glyph.col + span.glyph.width > structural.start
+                && span.glyph.unmapped
+        }) {
+            return Some(unknown(UnknownReason::Unmapped));
+        }
         let valid = if class_root {
-            line.cells(10, 17)
+            line.cells(12, 17)
                 .and_then(|s| number(s.trim()))
                 .is_some_and(|n| n > 0)
                 && line.cells(20, 80).is_some_and(|s| !s.trim().is_empty())
@@ -416,8 +489,145 @@ fn board_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
         items.push(row);
     }
     Some(
-        if cursor.0 <= 2 && items.contains(&cursor.1) && pointer(&rows[cursor.1], 0) {
-            Context::BoardList { first_row }
+        if items.contains(&cursor.1)
+            && ((cursor.0 <= 2 && pointer(&rows[cursor.1], 0))
+                || (class_root && (10..=11).contains(&cursor.0) && pointer(&rows[cursor.1], 10)))
+        {
+            Context::BoardList {
+                first_row,
+                last_row: *items.last()?,
+                cursor_row: cursor.1,
+            }
+        } else {
+            unknown(UnknownReason::InvalidCursor)
+        },
+    )
+}
+
+fn board_commands(rows: &[Row<'_>], class_root: bool) -> bool {
+    if commands(rows, "進入") || commands(rows, "閱讀") {
+        return true;
+    }
+    // Root browsers omit one arrow from their dynamic command bars. Admit
+    // only their own full action sets; ordinary lists still need both arrows.
+    let footer = compact(&rows[23].text);
+    if class_root {
+        return footer.starts_with("分類看板")
+            && rows[23].bar_text("分類看板")
+            && [
+                "(m)加入最愛",
+                "(v)已讀/未讀",
+                "(t)標記",
+                "(y)只列最愛",
+                "(←)回上層",
+            ]
+            .iter()
+            .all(|action| footer.contains(action));
+    }
+    let top = compact(&rows[1].text);
+    footer.starts_with("我的最愛")
+        && rows[23].bar_text("我的最愛")
+        && [
+            "(a)增加看板",
+            "(d)刪除",
+            "(g)新增目錄",
+            "(M)移動位置",
+            "(v)已讀/未讀",
+            "(h)說明",
+        ]
+        .iter()
+        .all(|action| footer.contains(action))
+        && [
+            "[y]列出全部",
+            "[→]進入",
+            "[s]找看板",
+            "[/]搜尋",
+            "[c]新文章",
+            "[S]排序",
+            "[PgUp]上頁",
+            "[PgDn]下頁",
+        ]
+        .iter()
+        .all(|action| top.contains(action))
+}
+
+// Mail and archive browsers share row navigation, while retaining distinct
+// title/header and number-field contracts. This says nothing about new mail.
+fn document_list(rows: &[Row<'_>], cursor: (usize, usize)) -> Option<Context> {
+    let (category, forward) = if rows[0].bar_text("郵件選單") {
+        (DocumentKind::Mail, "讀信")
+    } else if rows[0].bar_text("精華文章") {
+        (DocumentKind::Archive, "讀取資料")
+    } else {
+        return None;
+    };
+    let header = (1..=2).find(|&r| {
+        let text = compact(&rows[r].text);
+        rows[r].bar_text("編號")
+            && text.matches("編號").count() == 1
+            && text.contains("日期")
+            && text.contains("標題")
+            && text.contains(if category == DocumentKind::Mail {
+                "作者"
+            } else {
+                "編選"
+            })
+    });
+    let Some(header) = header else {
+        return Some(unknown(UnknownReason::UnsupportedLayout));
+    };
+    if !commands(rows, forward) {
+        return Some(unknown(UnknownReason::Unrecognized));
+    }
+    if rows[0..=header].iter().any(|r| !r.mapped()) || !rows[23].mapped() {
+        return Some(unknown(UnknownReason::Unmapped));
+    }
+    let first_row = header + 1;
+    let mut last_row = None;
+    let mut blank = false;
+    for (row, line) in rows.iter().enumerate().take(23).skip(first_row) {
+        if line.text.trim().is_empty() {
+            blank = true;
+            continue;
+        }
+        if blank {
+            return Some(unknown(UnknownReason::Incomplete));
+        }
+        if !line.mapped() {
+            return Some(unknown(UnknownReason::Unmapped));
+        }
+        let prefix = line.cells(2, 11).unwrap_or("").trim_start();
+        let digits = prefix.bytes().take_while(u8::is_ascii_digit).count();
+        let suffix = &prefix[digits..];
+        let number_ok =
+            (1..=6).contains(&digits) && number(&prefix[..digits]).is_some_and(|n| n > 0);
+        let suffix_ok = match category {
+            DocumentKind::Mail => {
+                suffix.starts_with(' ') && suffix.bytes().all(|b| b" +mMrRD".contains(&b))
+            }
+            DocumentKind::Archive => {
+                suffix.starts_with(['.', ')', 'X']) && suffix.bytes().all(|b| b" .)Xc".contains(&b))
+            }
+        };
+        if !number_ok || !suffix_ok || line.cells(11, 80).is_none_or(|s| s.trim().is_empty()) {
+            return Some(unknown(UnknownReason::Unrecognized));
+        }
+        last_row = Some(row);
+    }
+    let Some(last_row) = last_row else {
+        return Some(unknown(UnknownReason::Unrecognized));
+    };
+    Some(
+        if cursor.0 <= 2
+            && (first_row..=last_row).contains(&cursor.1)
+            && pointer(&rows[cursor.1], 0)
+        {
+            Context::DocumentList {
+                category,
+                first_row,
+                last_row,
+                cursor_row: cursor.1,
+            }
         } else {
             unknown(UnknownReason::InvalidCursor)
         },
@@ -481,6 +691,19 @@ fn article(line: &Row<'_>, row: usize) -> Option<Article> {
         end: 8,
     })
 }
+fn reading_commands(footer: &Row<'_>) -> bool {
+    if footer.text.contains('←') && footer.text.contains("離開") {
+        return true;
+    }
+    // PTT's reply-enabled pmore footer fills the row with y/X/h instead of
+    // displaying the back hint. Require that complete, styled command band.
+    compact(&footer.text)
+        .split_once('行')
+        .is_some_and(|(_, commands)| commands == "(y)回應(X)推文(h)說明")
+        && ["(y)", "回應", "(X)", "推文", "(h)", "說明"]
+            .iter()
+            .all(|text| footer.bar_text(text))
+}
 fn reading(text: &str) -> Option<(usize, usize, u8)> {
     let text = compact(text);
     let rest = text.strip_prefix("瀏覽第")?;
@@ -522,6 +745,7 @@ pub enum Intent {
     Last,
     Forward,
     Lines { down: bool, count: usize },
+    AdjacentArticle { down: bool },
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
@@ -543,12 +767,48 @@ impl std::fmt::Display for Error {
     }
 }
 pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
+    if let (
+        Context::MainMenu {
+            first_row,
+            last_row,
+            cursor_row,
+        }
+        | Context::SystemMenu {
+            first_row,
+            last_row,
+            cursor_row,
+        }
+        | Context::DocumentList {
+            first_row,
+            last_row,
+            cursor_row,
+            ..
+        }
+        | Context::BoardList {
+            first_row,
+            last_row,
+            cursor_row,
+        },
+        Intent::Open { row },
+    ) = (context, intent)
+    {
+        if *first_row > *last_row
+            || *last_row >= 23
+            || !(*first_row..=*last_row).contains(&row)
+            || !(*first_row..=*last_row).contains(cursor_row)
+        {
+            return Err(Error::Unavailable);
+        }
+        return Ok(open_row(*cursor_row, row));
+    }
     if let Intent::Lines { down, count } = intent {
         if count == 0 || count > crate::input::MAX_INPUT_BYTES / 3 {
             return Err(Error::Unavailable);
         }
         return match context {
             Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
             | Context::BoardList { .. }
             | Context::ArticleList { .. }
             | Context::CommandHelp { .. } => {
@@ -586,12 +846,21 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         return Ok(bytes.to_vec());
     }
     let bytes = match (context, intent) {
+        // Reposition first: the web reader's visible edge can differ from the station page.
+        (Context::ArticleReading { .. }, Intent::AdjacentArticle { down: true }) => {
+            b"\x1b[F\x1b[B".as_slice()
+        }
+        (Context::ArticleReading { .. }, Intent::AdjacentArticle { down: false }) => {
+            b"\x1b[H\x1b[A".as_slice()
+        }
         (Context::ContinuePrompt, Intent::Continue) => b" ".as_slice(),
         (Context::ArticleReading { first_line: 1, .. }, Intent::First)
         | (Context::ArticleReading { percent: 100, .. }, Intent::Last)
         | (Context::ArticleReading { percent: 100, .. }, Intent::Forward) => b"".as_slice(),
         (
             Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
             | Context::BoardList { .. }
             | Context::ArticleList { .. }
             | Context::ArticleReading { .. },
@@ -599,26 +868,44 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         ) => b"\x1b[H".as_slice(),
         (
             Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
             | Context::BoardList { .. }
             | Context::ArticleList { .. }
             | Context::ArticleReading { .. },
             Intent::Last,
         ) => b"\x1b[F".as_slice(),
         (
-            Context::MainMenu { .. } | Context::BoardList { .. } | Context::ArticleList { .. },
+            Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
+            | Context::BoardList { .. }
+            | Context::ArticleList { .. },
             Intent::Forward,
         ) => b"\r".as_slice(),
         (Context::ArticleReading { .. }, Intent::Forward) => b"\x1b[6~".as_slice(),
         (
-            Context::MainMenu { .. } | Context::BoardList { .. } | Context::ArticleList { .. },
+            Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
+            | Context::BoardList { .. }
+            | Context::ArticleList { .. },
             Intent::Back,
         ) => b"\x1b[D".as_slice(),
         (
-            Context::MainMenu { .. } | Context::BoardList { .. } | Context::ArticleList { .. },
+            Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
+            | Context::BoardList { .. }
+            | Context::ArticleList { .. },
             Intent::PreviousPage,
         ) => b"\x1b[5~".as_slice(),
         (
-            Context::MainMenu { .. } | Context::BoardList { .. } | Context::ArticleList { .. },
+            Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
+            | Context::BoardList { .. }
+            | Context::ArticleList { .. },
             Intent::NextPage,
         ) => b"\x1b[6~".as_slice(),
         (
@@ -628,20 +915,22 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
             },
             Intent::Open { row },
         ) if row < 23 && *cursor_row < 23 && articles.iter().any(|a| a.row == row) => {
-            let mut bytes = if row < *cursor_row {
-                b"\x1b[A".repeat(cursor_row - row)
-            } else {
-                b"\x1b[B".repeat(row - cursor_row)
-            };
-            bytes.push(13);
-            return Ok(bytes);
+            return Ok(open_row(*cursor_row, row));
         }
         (
-            Context::MainMenu { .. } | Context::BoardList { .. } | Context::ArticleList { .. },
+            Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
+            | Context::BoardList { .. }
+            | Context::ArticleList { .. },
             Intent::PreviousItem,
         ) => b"\x1b[A".as_slice(),
         (
-            Context::MainMenu { .. } | Context::BoardList { .. } | Context::ArticleList { .. },
+            Context::MainMenu { .. }
+            | Context::SystemMenu { .. }
+            | Context::DocumentList { .. }
+            | Context::BoardList { .. }
+            | Context::ArticleList { .. },
             Intent::NextItem,
         ) => b"\x1b[B".as_slice(),
         (Context::ArticleReading { first_line, .. }, Intent::PreviousPage) if *first_line > 1 => {
@@ -654,4 +943,14 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         _ => return Err(Error::Unavailable),
     };
     Ok(bytes.to_vec())
+}
+
+fn open_row(cursor: usize, row: usize) -> Vec<u8> {
+    let mut bytes = if row < cursor {
+        b"\x1b[A".repeat(cursor - row)
+    } else {
+        b"\x1b[B".repeat(row - cursor)
+    };
+    bytes.push(13);
+    bytes
 }

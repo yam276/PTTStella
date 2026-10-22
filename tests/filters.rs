@@ -64,7 +64,12 @@ fn one_projection_preserves_source_and_cells_for_copy_links_and_renderer() {
     assert_eq!(urls.len(), 1);
     assert!(urls[0].url.ends_with("visible.png"));
     let shown = filters::project(&source, &rules, true);
-    assert_eq!(shown.frame, source);
+    assert_eq!(
+        selection::extract(&shown.frame, &Selection::All)
+            .unwrap()
+            .text,
+        selection::extract(&source, &Selection::All).unwrap().text
+    );
     assert_eq!(links::detect(&shown.frame).len(), 2);
 }
 
@@ -105,7 +110,10 @@ fn hidden_pushes_remove_osc8_destinations_from_every_projected_consumer() {
             .iter()
             .any(|link| link.url == secret_target)
     );
-    assert_eq!(shown, source);
+    assert_eq!(
+        selection::extract(&shown, &Selection::All).unwrap().text,
+        selection::extract(&source, &Selection::All).unwrap().text
+    );
 }
 #[test]
 fn unknown_unmapped_partial_and_wrapped_records_are_not_guessed() {
@@ -141,18 +149,20 @@ fn editing_is_case_insensitive_bounded_and_explicit() {
     let mut duplicate = b.clone();
     duplicate.entries.push(a.entries[0].clone());
     assert!(duplicate.validate().is_err());
-    assert!(Rules::decode(br#"{"version":3,"entries":[]}"#).is_err());
+    assert!(Rules::decode(br#"{"version":5,"entries":[]}"#).is_err());
     assert!(Rules::decode(&vec![0; filters::MAX_BYTES + 1]).is_err());
     let entries = (0..filters::MAX_ENTRIES)
         .map(|i| filters::Entry {
             id: format!("Test{i}"),
             note: String::new(),
             policy: filters::Policy::Mask,
+            color: None,
         })
         .collect();
     let full = Rules {
         version: 1,
         entries,
+        allow_color: filters::default_allow_color(),
     };
     assert!(full.validate().is_ok());
     assert!(full.edit("Extra", "", false).is_err());
@@ -165,7 +175,7 @@ fn reveal_and_policy_changes_invalidate_same_frame_and_reset_on_new_source() {
     let old = state.version();
     state.reveal(1, source.revision, true);
     assert!(state.version() > old);
-    assert_eq!(state.project(1, &source).frame, source);
+    assert!(state.project(1, &source).revealed);
     state.sync(2, source.revision);
     assert!(!state.project(2, &source).revealed);
     assert_ne!(state.project(2, &source).frame, source);
@@ -183,7 +193,7 @@ fn reveal_and_policy_changes_invalidate_same_frame_and_reset_on_new_source() {
 fn allow_policy_preserves_all_consumers_and_old_rules_migrate() {
     let old = br#"{"version":1,"entries":[{"id":"Alice","note":"old"}]}"#;
     let mask = Rules::decode(old).unwrap();
-    assert_eq!(mask.version, 2);
+    assert_eq!(mask.version, 4);
     assert_eq!(mask.entries[0].policy, filters::Policy::Mask);
     let allow = mask
         .edit_policy("ALICE", "exception", filters::Policy::Allow, false)
@@ -192,7 +202,16 @@ fn allow_policy_preserves_all_consumers_and_old_rules_migrate() {
     let source = frame();
     let projected = filters::project(&source, &allow, false);
     assert!(projected.matches.is_empty());
-    assert_eq!(projected.frame, source);
+    assert_ne!(projected.frame, source);
+    for (before, after) in source.glyphs.iter().zip(&projected.frame.glyphs) {
+        if [5, 6].contains(&before.row) && (3..8).contains(&before.col) {
+            assert_eq!(after.left.fg, 6);
+            assert!(after.left.bright);
+            assert_eq!(after.text, before.text);
+        } else {
+            assert_eq!(before, after);
+        }
+    }
     assert_eq!(links::detect(&projected.frame), links::detect(&source));
     assert_eq!(
         selection::extract(&projected.frame, &Selection::All)
@@ -212,4 +231,451 @@ fn allow_policy_preserves_all_consumers_and_old_rules_migrate() {
         Rules::decode(br#"{"version":2,"entries":[{"id":"Alice","note":"","policy":"unknown"}]}"#)
             .is_err()
     );
+}
+
+fn article_list() -> pttstella::screen::Frame {
+    let data: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/navigation.json")).unwrap();
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(&encoding::encode(data["list"].as_str().unwrap()).unwrap());
+    screen.frame()
+}
+
+#[test]
+fn article_titles_full_rows_and_only_allow_ids_share_one_projection() {
+    use filters::Policy;
+    let source = article_list();
+    let rules = Rules::default()
+        .edit_policy("ALICE", "", Policy::Mask, false)
+        .unwrap()
+        .edit_policy("bob", "", Policy::MaskRow, false)
+        .unwrap()
+        .edit_policy("carol", "", Policy::Allow, false)
+        .unwrap();
+    let result = filters::project(&source, &rules, false);
+    assert_eq!(
+        result
+            .matches
+            .iter()
+            .map(|p| (p.row, p.start, p.end))
+            .collect::<Vec<_>>(),
+        vec![(3, 30, 80), (4, 0, 80)]
+    );
+    let rows = text::rows(&result.frame).unwrap();
+    let original = text::rows(&source).unwrap();
+    assert_eq!(rows[3].cells(0, 30), original[3].cells(0, 30));
+    assert_eq!(rows[3].cells(30, 80), Some("█".repeat(50).as_str()));
+    assert_eq!(rows[4].text, "█".repeat(80));
+    assert_eq!(rows[5].text, original[5].text);
+    for g in &result.frame.glyphs {
+        if g.row == 5 && (17..22).contains(&g.col) {
+            assert_eq!((g.left.fg, g.left.bg, g.left.bright), (6, 0, true));
+        } else if g.row == 3 && (17..22).contains(&g.col) {
+            assert_eq!((g.left.fg, g.left.bright), (1, true));
+        } else if g.row != 4 && !(g.row == 3 && g.col >= 30) {
+            assert!(source.glyphs.contains(g));
+        }
+    }
+    assert_eq!(
+        (result.frame.cols, result.frame.rows, result.frame.cursor),
+        (80, 24, source.cursor)
+    );
+    let copied = selection::extract(&result.frame, &Selection::All)
+        .unwrap()
+        .text;
+    assert!(copied.contains("alice") && copied.contains("carol"));
+    assert!(
+        !copied.contains("bob") && !copied.contains("合成文章一") && !copied.contains("合成文章二")
+    );
+    let revealed = filters::project(&source, &rules, true);
+    assert_eq!(
+        selection::extract(&revealed.frame, &Selection::All)
+            .unwrap()
+            .text,
+        selection::extract(&source, &Selection::All).unwrap().text
+    );
+    assert!(
+        revealed
+            .frame
+            .glyphs
+            .iter()
+            .filter(|g| g.row == 5 && (17..22).contains(&g.col))
+            .all(|g| g.left.fg == 6)
+    );
+}
+
+#[test]
+fn entire_push_row_removes_identity_time_content_and_links_without_moving_rows() {
+    let source = frame();
+    let rules = Rules::default()
+        .edit_policy("Alice", "", filters::Policy::MaskRow, false)
+        .unwrap();
+    let result = filters::project(&source, &rules, false);
+    for row in [5, 6] {
+        assert_eq!(text::rows(&result.frame).unwrap()[row].text, "█".repeat(80));
+        assert!(
+            result
+                .frame
+                .glyphs
+                .iter()
+                .filter(|g| g.row == row)
+                .all(|g| g.left.fg == 0 && g.left.bg == 0 && !g.left.inverse)
+        );
+    }
+    assert_eq!(
+        result
+            .frame
+            .glyphs
+            .iter()
+            .filter(|g| ![5, 6].contains(&g.row))
+            .collect::<Vec<_>>(),
+        source
+            .glyphs
+            .iter()
+            .filter(|g| ![5, 6].contains(&g.row))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(links::detect(&result.frame).len(), 1);
+    assert_eq!(
+        selection::extract(
+            &filters::project(&source, &rules, true).frame,
+            &Selection::All
+        )
+        .unwrap()
+        .text,
+        selection::extract(&source, &Selection::All).unwrap().text
+    );
+}
+
+#[test]
+fn v2_migrates_without_reinterpreting_masks_and_old_schemas_reject_row_policy() {
+    let old = br#"{"version":2,"entries":[{"id":"Alice","note":"keep","policy":"mask"},{"id":"Bob","note":"","policy":"allow"}]}"#;
+    let migrated = Rules::decode(old).unwrap();
+    assert_eq!(migrated.version, 4);
+    assert_eq!(migrated.entries[0].policy, filters::Policy::Mask);
+    assert_eq!(migrated.entries[1].policy, filters::Policy::Allow);
+    for version in [1, 2] {
+        assert!(Rules::decode(format!(r#"{{"version":{version},"entries":[{{"id":"Alice","note":"","policy":"mask_row"}}]}}"#).as_bytes()).is_err());
+    }
+    let row = migrated
+        .edit_policy("Alice", "", filters::Policy::MaskRow, false)
+        .unwrap();
+    assert_eq!(
+        Rules::decode(&serde_json::to_vec(&row).unwrap()).unwrap(),
+        row
+    );
+}
+
+#[test]
+fn article_identity_is_never_inferred_from_mentions_or_deleted_rows() {
+    let mut source = article_list();
+    let rules = Rules::default().edit("Alice2", "", false).unwrap();
+    assert_eq!(filters::project(&source, &rules, false).frame, source);
+    let rules = Rules::default().edit("Alice", "", false).unwrap();
+    source.control_complete = false;
+    assert_eq!(filters::project(&source, &rules, false).frame, source);
+    source.control_complete = true;
+    source.cursor = (0, 0);
+    assert_eq!(filters::project(&source, &rules, false).frame, source);
+}
+
+#[test]
+fn consecutive_reply_ids_are_masked_without_changing_type_colon_content_or_time() {
+    let source = frame();
+    let mut merged = source.clone();
+    filters::merge_push_ids(&mut merged, &filters::pushes(&source));
+    let rows = text::rows(&merged).unwrap();
+    assert_eq!(rows[5].cells(0, 9), Some("推 Alice:"));
+    assert_eq!(rows[6].cells(0, 9), Some("→ █████:"));
+    assert_eq!(rows[7].cells(0, 10), Some("推 Alice2:"));
+    for glyph in &merged.glyphs {
+        if glyph.row == 6 && (3..8).contains(&glyph.col) {
+            assert_eq!(
+                (glyph.text.as_str(), glyph.left.fg, glyph.left.bg),
+                ("█", 0, 0)
+            );
+        } else {
+            assert!(source.glyphs.contains(glyph));
+        }
+    }
+    assert_eq!(links::detect(&merged), links::detect(&source));
+    assert_eq!(merged.cursor, source.cursor);
+    assert!(
+        selection::extract(&merged, &Selection::All)
+            .unwrap()
+            .text
+            .contains("→ █████:")
+    );
+}
+
+#[test]
+fn merging_never_bridges_a_gap_different_id_unknown_row_or_list() {
+    let source = frame();
+    let mut replies = filters::pushes(&source);
+    replies[1].row = 10;
+    let mut merged = source.clone();
+    filters::merge_push_ids(&mut merged, &replies);
+    assert_eq!(merged, source);
+    let list = article_list();
+    assert!(filters::pushes(&list).is_empty());
+    let mut unknown = source.clone();
+    unknown.control_complete = false;
+    assert!(filters::pushes(&unknown).is_empty());
+}
+
+#[test]
+fn merging_follows_account_policies_even_when_revealed_and_removes_id_hyperlinks() {
+    let mut source = frame();
+    source
+        .hyperlinks
+        .push(pttstella::screen::hyperlinks::Hyperlink {
+            target: Some("https://example.com/identity".into()),
+            spans: vec![pttstella::screen::hyperlinks::Span {
+                row: 6,
+                start: 3,
+                end: 8,
+            }],
+        });
+    let replies = filters::pushes(&source);
+    for policy in [
+        filters::Policy::Mask,
+        filters::Policy::MaskRow,
+        filters::Policy::Allow,
+    ] {
+        for revealed in [false, true] {
+            let rules = Rules::default()
+                .edit_policy("Alice", "", policy, false)
+                .unwrap();
+            let mut projected = filters::project(&source, &rules, revealed).frame;
+            filters::merge_push_ids(&mut projected, &replies);
+            assert_eq!(
+                text::rows(&projected).unwrap()[6].cells(3, 8),
+                Some("█████")
+            );
+            assert!(
+                !links::detect(&projected)
+                    .iter()
+                    .any(|link| link.url.ends_with("/identity"))
+            );
+            if policy == filters::Policy::Allow {
+                assert!(
+                    projected
+                        .glyphs
+                        .iter()
+                        .filter(|g| g.row == 5 && (3..8).contains(&g.col))
+                        .all(|g| g.left.fg == 6)
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn visible_account_words_use_whole_cell_tokens_and_never_recover_masked_ids() {
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(b"Alice abc_def A123 123Bad abcdefghijklm _Alice Alice2");
+    let words = filters::account_words(&screen.frame());
+    assert_eq!(
+        words.iter().map(|w| w.id.as_str()).collect::<Vec<_>>(),
+        vec!["Alice", "abc_def", "A123", "Alice2"]
+    );
+    assert_eq!((words[0].row, words[0].start, words[0].end), (0, 0, 5));
+    let rules = Rules::default()
+        .edit_policy("Alice", "", filters::Policy::MaskRow, false)
+        .unwrap();
+    let masked = filters::project(&frame(), &rules, false).frame;
+    assert!(
+        !filters::account_words(&masked)
+            .iter()
+            .any(|w| [5, 6].contains(&w.row))
+    );
+}
+
+#[test]
+fn reply_focus_marks_matching_rows_preserving_text_links_and_permanent_masks() {
+    let source = frame();
+    let replies = filters::pushes(&source);
+    let mut focused = source.clone();
+    filters::focus_pushes(&mut focused, &replies, "ALICE");
+    assert_eq!(
+        text::rows(&focused)
+            .unwrap()
+            .iter()
+            .map(|r| &r.text)
+            .collect::<Vec<_>>(),
+        text::rows(&source)
+            .unwrap()
+            .iter()
+            .map(|r| &r.text)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(links::detect(&focused), links::detect(&source));
+    for (original, marked) in source.glyphs.iter().zip(&focused.glyphs) {
+        if [5, 6].contains(&marked.row) {
+            assert_eq!(marked.left.bg, 4);
+            assert_eq!(marked.right.bg, 4);
+            assert_eq!(marked.left.fg, original.left.fg);
+        } else {
+            assert_eq!(marked, original);
+        }
+    }
+    for policy in [filters::Policy::Mask, filters::Policy::MaskRow] {
+        let rules = filters::Rules::default()
+            .edit_policy("Alice", "", policy, false)
+            .unwrap();
+        let mut masked = filters::project(&source, &rules, false).frame;
+        let before = masked.clone();
+        filters::focus_pushes(&mut masked, &replies, "Alice");
+        for glyph in before.glyphs.iter().filter(|g| g.text == "█") {
+            assert!(masked.glyphs.contains(glyph));
+        }
+        assert_eq!(links::detect(&masked), links::detect(&before));
+    }
+    assert_eq!(source, frame());
+}
+
+#[test]
+fn invisible_separator_ink_and_equivalent_bright_ansi_do_not_disable_push_masking() {
+    let mut source = frame();
+    for glyph in source.glyphs.iter_mut().filter(|g| g.row == 5) {
+        if [2, 66, 78, 79].contains(&glyph.col) && glyph.text.trim().is_empty() {
+            glyph.left.fg = 3;
+            glyph.right.fg = 3;
+        } else {
+            for style in [&mut glyph.left, &mut glyph.right] {
+                if style.bright && style.fg < 8 {
+                    style.fg += 8;
+                    style.bright = false;
+                }
+            }
+        }
+    }
+    let found = filters::pushes(&source);
+    assert!(found.iter().any(|p| p.row == 5 && p.id == "Alice"));
+    let rules = Rules::default().edit("Alice", "", false).unwrap();
+    let masked = filters::project(&source, &rules, false);
+    let rows = text::rows(&masked.frame).unwrap();
+    assert_eq!(rows[5].cells(9, 66), Some("█".repeat(57).as_str()));
+    assert_eq!(rows[5].cells(3, 8), Some("Alice"));
+    assert!(
+        masked
+            .frame
+            .glyphs
+            .iter()
+            .filter(|g| g.row == 5 && (3..8).contains(&g.col))
+            .all(|g| g.left.fg == 1 && g.left.bright)
+    );
+    let mut changed = source.clone();
+    let digit = changed
+        .glyphs
+        .iter_mut()
+        .find(|g| g.row == 5 && g.col == 67)
+        .unwrap();
+    digit.left.fg = 1;
+    assert!(!filters::pushes(&changed).iter().any(|p| p.row == 5));
+    let mut changed = source.clone();
+    let space = changed
+        .glyphs
+        .iter_mut()
+        .find(|g| g.row == 5 && g.col == 66)
+        .unwrap();
+    space.left.bg = 1;
+    assert!(!filters::pushes(&changed).iter().any(|p| p.row == 5));
+}
+
+#[test]
+fn shared_allow_color_overrides_persist_migrate_and_do_not_reveal_masked_rows() {
+    use filters::Policy;
+    let old =
+        Rules::decode(br#"{"version":3,"entries":[{"id":"Alice","note":"","policy":"allow"}]}"#)
+            .unwrap();
+    assert_eq!(
+        (old.version, old.allow_color, old.entries[0].color),
+        (4, 14, None)
+    );
+    let rules = old
+        .with_allow_color(10)
+        .unwrap()
+        .edit_color("Alice2", "", Policy::Allow, Some(13), false)
+        .unwrap()
+        .edit_policy("Bob", "", Policy::MaskRow, false)
+        .unwrap();
+    let source = frame();
+    let p = filters::project(&source, &rules, false);
+    for (row, start, end, fg, bright) in [(5, 3, 8, 2, true), (7, 3, 9, 5, true)] {
+        assert!(
+            p.frame
+                .glyphs
+                .iter()
+                .filter(|g| g.row == row && (start..end).contains(&g.col))
+                .all(|g| g.left.fg == fg && g.left.bright == bright)
+        );
+    }
+    assert_eq!(text::rows(&p.frame).unwrap()[8].text, "█".repeat(80));
+    assert_eq!(
+        Rules::decode(&serde_json::to_vec(&rules).unwrap()).unwrap(),
+        rules
+    );
+    let updated = rules.with_allow_color(12).unwrap();
+    assert_eq!(updated.entries[1].color, Some(13));
+    let inherited = updated
+        .edit_color("Alice2", "", Policy::Allow, None, false)
+        .unwrap();
+    assert_eq!(inherited.entries[1].color, None);
+    assert!(rules.with_allow_color(0).is_err());
+    assert!(rules.with_allow_color(16).is_err());
+    assert!(
+        rules
+            .edit_color("Alice", "", Policy::Allow, Some(99), false)
+            .is_err()
+    );
+    assert!(
+        rules
+            .edit_color("Alice", "", Policy::Mask, Some(10), false)
+            .is_err()
+    );
+    assert!(Rules::decode(br#"{"version":3,"entries":[],"allow_color":10}"#).is_err());
+    assert_eq!(
+        rules
+            .edit_policy("ALICE2", "new note", Policy::Allow, false)
+            .unwrap()
+            .entries[1]
+            .color,
+        Some(13)
+    );
+    let merged = rules
+        .edit_policy("ALICE2", "", Policy::MaskRow, false)
+        .unwrap();
+    assert_eq!(merged.entries[1].color, None);
+}
+
+#[test]
+fn author_context_fields_exclude_headers_titles_and_hidden_identities() {
+    let source = article_list();
+    let words = filters::article_authors(&source, &source);
+    assert_eq!(
+        words
+            .iter()
+            .map(|w| (w.row, w.start, w.end, w.id.as_str()))
+            .collect::<Vec<_>>(),
+        vec![
+            (3, 17, 30, "alice"),
+            (4, 17, 30, "bob"),
+            (5, 17, 30, "carol")
+        ]
+    );
+    let rules = Rules::default()
+        .edit_policy("alice", "", filters::Policy::Mask, false)
+        .unwrap()
+        .edit_policy("bob", "", filters::Policy::MaskRow, false)
+        .unwrap();
+    let visible = filters::project(&source, &rules, false).frame;
+    assert_eq!(
+        filters::article_authors(&source, &visible)
+            .iter()
+            .map(|w| w.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["alice", "carol"]
+    );
+    assert!(filters::article_authors(&frame(), &frame()).is_empty());
 }

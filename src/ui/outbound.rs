@@ -48,6 +48,7 @@ pub(super) enum Packet<'a> {
     FiltersResult(FiltersResult),
     HoverSettings(HoverPosition),
     ToolsOpacity(ToolOpacity),
+    ToolsAccess(pttstella::settings::ToolAccess),
     HoverReset {
         media: bool,
     },
@@ -77,7 +78,14 @@ pub(super) enum Packet<'a> {
         message: String,
     },
     InlineReset(bool),
+    ReadingMove {
+        generation: u64,
+        article: u64,
+        intent: pttstella::navigation::Intent,
+    },
     SettingsOpen(Box<SettingsOpen>),
+    SettingsVisibility(bool),
+    SettingsClose(bool),
     FontPreview(FontPreview),
     FontCatalog {
         request: u64,
@@ -122,6 +130,7 @@ pub(super) enum LoginResult {
 
 #[derive(Serialize)]
 pub(super) struct FiltersOpen {
+    pub allow_color: u8,
     pub entries: Vec<filters::Entry>,
     pub warning: Option<String>,
 }
@@ -138,6 +147,7 @@ pub(super) enum FiltersResult {
         message: String,
     },
     Saved {
+        allow_color: u8,
         entries: Vec<filters::Entry>,
         message: String,
     },
@@ -165,10 +175,16 @@ pub(super) struct MediaImage {
     pub width: usize,
     pub height: usize,
     pub animated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub animation_pixels: Option<usize>,
     pub cached: bool,
 }
 #[derive(Serialize)]
 pub(super) struct SettingsOpen {
+    pub article_mode: pttstella::settings::ArticleMode,
+    pub article_boundary_navigation: bool,
+    pub hover: HoverPosition,
+    pub tools_access: pttstella::settings::ToolAccess,
     pub tools_opacity: ToolOpacity,
     pub language: pttstella::i18n::Language,
     pub profile: DisplayProfile,
@@ -236,7 +252,7 @@ statuses! {
     NavigationStatus { Sent, Rejected },
     DestinationStatus { Started, Rejected },
     PasteStatus { Queued, Preview, Cancelled, Rejected },
-    ExportStatus { Saved, Cancelled, Failed },
+    ExportStatus { Saved, Copied, Cancelled, Failed },
     LinkStatus { Requested, Failed },
     SaveStatus { Saved, Rejected },
 }
