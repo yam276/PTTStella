@@ -229,7 +229,11 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
             const footerHeight=base.y(packet.frame.rows)-base.y(packet.frame.rows-1);
             // Images use the short article's existing blank rows first. Only
             // actual content beyond the original grid adds scrollable height.
-            mapping.height=Math.max(base.y(packet.source_frame?.rows??packet.frame.rows),mapping.y(bodyRows)+footerHeight);
+            const minimum=base.y(packet.source_frame?.rows??packet.frame.rows),content=mapping.y(bodyRows)+footerHeight;
+            // Native scroll extents are integer CSS pixels. Round growing
+            // content outward once so a fractional image height cannot leave
+            // the final text row behind the pinned footer at maximum scroll.
+            mapping.height=content>minimum?Math.ceil(content/ratio)*ratio:minimum;
         }
         canvas.style.visibility="hidden";
         surface.style.height=mapping.height/ratio+"px";

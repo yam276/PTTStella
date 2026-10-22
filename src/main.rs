@@ -112,12 +112,13 @@ fn main() {
                 | "files_slow" | "fonts" | "sgr66" | "sgr66_legacy" | "login_2fa" | "osc8"
                 | "filter_colors" | "inline" | "inline_pages" | "full_load" | "long_load"
                 | "terminal_pages" | "short_overlap" | "short_reading" | "reading_rows"
-                | "inline_replies" | "short_links" | "context_menu" | "account_lists"
-                | "merged_replies" | "account_actions" | "account_articles"
-                | "pointer_rows" | "boards" | "boards_close" | "recent" | "articles"
-                | "articles_close" | "bookmarks" | "bookmarks_restart" | "bookmarks_empty"
-                | "bookmarks_corrupt" | "mouse" | "mouse_boundary" | "mouse_drag"
-                | "mouse_round_trip" | "mouse_motion" | "mouse_wheel"),
+                | "wide_last_row" | "inline_replies" | "short_links" | "context_menu"
+                | "account_lists" | "merged_replies" | "account_actions"
+                | "account_articles" | "pointer_rows" | "boards" | "boards_close"
+                | "recent" | "articles" | "articles_close" | "bookmarks"
+                | "bookmarks_restart" | "bookmarks_empty" | "bookmarks_corrupt" | "mouse"
+                | "mouse_boundary" | "mouse_drag" | "mouse_round_trip" | "mouse_motion"
+                | "mouse_wheel"),
             ) => Some(case.to_owned()),
             _ => {
                 eprintln!(
