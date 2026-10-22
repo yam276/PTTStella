@@ -229,6 +229,7 @@ async fn run(
     let mut login_open = false;
     let mut settings_visible = false;
     let mut pending_settings: Option<super::preferences::Change> = None;
+    screen.set_article_boundary_navigation(preferences.app().article_boundary_navigation);
     screen.set_article_mode(if window_probe || filters_probe {
         pttstella::settings::ArticleMode::Terminal
     } else {
@@ -290,6 +291,7 @@ async fn run(
         if *closing.borrow() {
             break (false, false);
         }
+        screen.set_article_boundary_navigation(preferences.app().article_boundary_navigation);
         if screen.set_article_mode(if window_probe || filters_probe {
             pttstella::settings::ArticleMode::Terminal
         } else {
@@ -809,8 +811,8 @@ async fn run(
                         filter_import.clear();
                         eval.send(Packet::FiltersOpen(FiltersOpen{allow_color:screen.rules().allow_color,entries:screen.rules().entries.clone(),warning:filter_warning.clone()})).map_err(|e|e.to_string())?;
                     }
-                    SurfaceEvent::AccountRule { presentation, stamp, row, col, policy, .. } => {
-                        let rules = screen.account_rule(Identity{presentation,generation:stamp.generation,revision:stamp.revision},stamp,row,col,policy,&receiver.borrow());
+                    SurfaceEvent::AccountRule { presentation, stamp, row, col, policy, remove, .. } => {
+                        let rules = screen.account_rule(Identity{presentation,generation:stamp.generation,revision:stamp.revision},stamp,(row,col),policy,remove,&receiver.borrow());
                         let Some(rules) = rules else {eval.send(Packet::Notice(pttstella::msg!("account-action-stale"))).map_err(|e|e.to_string())?;continue;};
                         checks.account_rule_actions+=1;
                         filter_import.clear();
@@ -982,6 +984,11 @@ async fn run(
                         source,
                         trusted: _,
                     } => {
+                        if let navigation::Intent::AdjacentArticle { down } = intent
+                            && (source != navigation::Source::Keyboard || !screen.adjacent_article_allowed(stamp, down, &receiver.borrow())) {
+                            eval.send(Packet::NavigationResult(Feedback::new(NavigationStatus::Rejected,navigation::Error::Unavailable.to_string()))).map_err(|e|e.to_string())?;
+                            continue;
+                        }
                         screen.interrupt_full_load();if commands.is(CommandKind::Preload) {commands.cancel();}
                         let shown=screen.navigation_shown(stamp);
                         let result = if !shown {
@@ -1319,6 +1326,19 @@ async fn run(
                         let effect = keyboard_policy.key(&key, policy_context);
                         eval.send(Packet::KeyboardState(keyboard_policy.status(policy_context)))
                             .map_err(|e| e.to_string())?;
+                        if screen.reading_context(&view).is_none()
+                            && let Some(bytes)=super::article_cache::terminal_arrow_boundary(&key,&context,preferences.app().article_boundary_navigation)
+                        {
+                            if !screen.navigation_shown(view.stamp()) || generation != view.generation || view.input_pending || view.output_pending
+                                || view.mouse.route != pttstella::mouse::input::Route::Local {continue;}
+                            if !bytes.is_empty() {
+                                screen.article_input(&context,&bytes);
+                                inline_images.close();
+                                eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
+                                if let Err(error)=connection.input(generation,bytes) {eval.send(Packet::InputRejected(error)).map_err(|e|e.to_string())?;}
+                            }
+                            continue;
+                        }
                         let bytes = match effect {
                             Effect::None => continue,
                             Effect::Notice(notice) => {

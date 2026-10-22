@@ -492,28 +492,45 @@ fn visible_account_words_use_whole_cell_tokens_and_never_recover_masked_ids() {
 }
 
 #[test]
-fn reply_focus_blacks_only_other_recognized_rows_and_drops_their_urls() {
+fn reply_focus_marks_matching_rows_preserving_text_links_and_permanent_masks() {
     let source = frame();
+    let replies = filters::pushes(&source);
     let mut focused = source.clone();
-    filters::focus_pushes(&mut focused, &filters::pushes(&source), "ALICE");
-    let rows = text::rows(&focused).unwrap();
-    assert_eq!(rows[7].text, "█".repeat(80));
-    assert_eq!(rows[8].text, "█".repeat(80));
-    for g in &focused.glyphs {
-        if ![7, 8].contains(&g.row) {
-            assert!(source.glyphs.contains(g));
+    filters::focus_pushes(&mut focused, &replies, "ALICE");
+    assert_eq!(
+        text::rows(&focused)
+            .unwrap()
+            .iter()
+            .map(|r| &r.text)
+            .collect::<Vec<_>>(),
+        text::rows(&source)
+            .unwrap()
+            .iter()
+            .map(|r| &r.text)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(links::detect(&focused), links::detect(&source));
+    for (original, marked) in source.glyphs.iter().zip(&focused.glyphs) {
+        if [5, 6].contains(&marked.row) {
+            assert_eq!(marked.left.bg, 4);
+            assert_eq!(marked.right.bg, 4);
+            assert_eq!(marked.left.fg, original.left.fg);
+        } else {
+            assert_eq!(marked, original);
         }
     }
-    assert!(
-        !links::detect(&focused)
-            .iter()
-            .any(|l| l.url.contains("visible.png"))
-    );
-    assert!(
-        links::detect(&focused)
-            .iter()
-            .any(|l| l.url.contains("hidden.png"))
-    );
+    for policy in [filters::Policy::Mask, filters::Policy::MaskRow] {
+        let rules = filters::Rules::default()
+            .edit_policy("Alice", "", policy, false)
+            .unwrap();
+        let mut masked = filters::project(&source, &rules, false).frame;
+        let before = masked.clone();
+        filters::focus_pushes(&mut masked, &replies, "Alice");
+        for glyph in before.glyphs.iter().filter(|g| g.text == "█") {
+            assert!(masked.glyphs.contains(glyph));
+        }
+        assert_eq!(links::detect(&masked), links::detect(&before));
+    }
     assert_eq!(source, frame());
 }
 

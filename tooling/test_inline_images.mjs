@@ -29,7 +29,7 @@ test('Enter expansion is only offered on an idle local reading page',()=>{
 test('production Enter routes release to one image and a held press to one all-image request',()=>{
     const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8'),sent=[],timers=new Map();let next=0;
     const context={document:{querySelector:()=>null},inlineShortcut,keyboardState:{enabled:true,mode:'normal',pending:false},latest:{presentation:3,ptt_features:true,connected:true,navigation:{kind:'article_reading'},image_links:[0],mouse:{route:'local'}},
-        stationMouse:{revoke(){}},cancelHover(){},pastePending:false,composing:false,hasSelection:()=>false,clearSelection(){},cancelDrag(){},stamp:()=>({generation:7,revision:4,input_epoch:2}),send:v=>sent.push(JSON.parse(JSON.stringify(v))),blocked:()=>false,tools:{busy:()=>false},stopped:false,focus(){}};
+        stationMouse:{revoke(){}},policy(){},cancelHover(){},pastePending:false,composing:false,hasSelection:()=>false,clearSelection(){},cancelDrag(){},stamp:()=>({generation:7,revision:4,input_epoch:2}),send:v=>sent.push(JSON.parse(JSON.stringify(v))),blocked:()=>false,tools:{busy:()=>false},stopped:false,focus(){}};
     vm.createContext(context);
     vm.runInContext(surface.slice(surface.indexOf('function requestInline('),surface.indexOf('const inlineImages=')),context);
     const gesture=createInlineImageKey({scope:()=>1,allowed:()=>inlineShortcut({key:'Enter'},context.keyboardState,context.latest),
@@ -58,7 +58,7 @@ test('held Enter is revoked by focus cancellation, scope changes, blocking and u
 test('ordinary web reading keys move locally and only fetch beyond the cached edge',()=>{
     const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
     const sent=[],requests=[];
-    const context={document:{querySelector:()=>null},inlineShortcut:()=>false,
+    const context={document:{querySelector:()=>null},inlineShortcut:()=>false,policy(){},
         keyboardState:{enabled:false,mode:'input'},latest:{connected:true,article:{id:1,first_line:1,end:false},navigation:{kind:'article_reading'}},
         viewport:{scrollTop:240,scrollHeight:2000,clientHeight:500},grid:{ratio:1,y:()=>0,bottom:()=>24},
         stationMouse:{revoke(){}},cancelHover(){},pastePending:false,composing:false,hasSelection:()=>false,clearSelection(){},cancelDrag(){},
@@ -499,4 +499,25 @@ test('scope changes and terminal mode clear image targets and revoke an unfinish
     e.packet.article_mode='terminal';e.packet.article=null;e.layout();
     assert.ok(e.nodes.filter(n=>n.className==='inline-expand-trigger').every(n=>!n.parentNode));
     await e.ui.destroy();
+});
+
+test('only a fresh physical arrow at the complete visible edge can switch articles',()=>{
+ const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8'),requests=[];
+ const c={latest:{article_boundary_navigation:true,connected:true,article:{first_line:1,end:true,load:'complete'}},
+  viewport:{scrollTop:0,scrollHeight:2000,clientHeight:500},surface:{offsetTop:0},grid:{height:2000,ratio:1,y:()=>0,bottom:()=>24},
+  blocked:()=>false,dragging:null,clearSelection(){},cancelHover(){},repaint(){},navigate:(intent,event,source,cached)=>requests.push([JSON.parse(JSON.stringify(intent)),source,cached])};
+ vm.createContext(c);vm.runInContext(surface.slice(surface.indexOf('function readingMove('),surface.indexOf('function navigate(')),c);
+ const move=(intent,patch={},source='keyboard-arrow')=>c.readingMove(intent,{isTrusted:true,...patch},source);
+ const up={action:'lines',down:false,count:1},down={action:'lines',down:true,count:1};
+ move(up);assert.deepEqual(requests.pop(),[{action:'adjacent_article',down:false},'keyboard',false]);
+ c.viewport.scrollTop=1500;move(down);assert.deepEqual(requests.pop(),[{action:'adjacent_article',down:true},'keyboard',false]);
+ for(const action of ['next_page','last'])move({action});
+ for(const source of ['button','pointer'])move(down,{},source);
+ move(down,{repeat:true});
+ c.latest.article_boundary_navigation=false;move(down);
+ c.latest.article_boundary_navigation=true;c.latest.article.load='loading';move(down);
+ c.latest.article.load='complete';c.blocked=()=>true;move(down);c.blocked=()=>false;
+ assert.equal(requests.length,0);
+ c.viewport.scrollTop=1200;move(down);assert.equal(c.viewport.scrollTop,1224);assert.equal(requests.length,0);
+ c.viewport.scrollTop=0;c.latest.article.first_line=24;move(up);assert.deepEqual(requests.pop(),[{action:'previous_page'},'keyboard',false]);
 });

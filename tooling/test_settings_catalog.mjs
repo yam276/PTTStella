@@ -14,7 +14,7 @@ test('both UI languages find independently expected Chinese, English, case and m
  }
 });
 test('settings search contains only the fixed product index and closed navigation targets',()=>{
- const entries=settingsCatalog(translator('en-US'));assert.equal(entries.length,16);
+ const entries=settingsCatalog(translator('en-US'));assert.equal(entries.length,17);
  assert.ok(entries.every(entry=>['general','appearance','input','media','sites','filters','account','about'].includes(entry.page)));
  assert.equal(searchSettings(entries,'<img src=x onerror=alert(1)>').length,0);
  assert.equal(searchSettings(entries,'x'.repeat(10000)).length,0);

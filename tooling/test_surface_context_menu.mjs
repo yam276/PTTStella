@@ -100,3 +100,22 @@ test('recognized list author offers policies without reply focus or reading navi
  for(const action of ['reply-focus','reply-focus-clear','previous','next'])assert.equal(contextMenuItems(state).has(action),false);
  for(const change of [{word:null},{authors:false},{ptt:false},{local:false}])assert.equal(contextMenuItems({...state,...change}).has('account-mask'),false);
 });
+
+test('existing policy replaces only its add entry with an explicit removal action',()=>{
+ for(const [policy,name] of [['mask','mask'],['mask_row','mask-row'],['allow','allow']]){
+  const entries=contextMenuItems({...base,reading:true,word:{id:'Alice',policy}});
+  assert.equal(entries.has('account-'+name),false);
+  assert.equal(entries.get('account-remove-'+name),true);
+  assert.equal([...entries.keys()].filter(k=>k.startsWith('account-')).length,3);
+  assert.equal(contextMenuItems({...base,reading:true,ready:false,word:{id:'Alice',policy}}).get('account-remove-'+name),false);
+ }
+});
+test('removal sends the matching policy and stamped cell without accepting a client ID',()=>{
+ const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8'),sent=[];
+ const state={stopped:false,blocked:()=>false,contextState:()=>({}),contextMenuItems:()=>new Map(['mask','mask-row','allow'].map(p=>['account-remove-'+p,true])),
+ latest:{presentation:3},stamp:()=>({generation:7,revision:4,input_epoch:2}),send:p=>sent.push(JSON.parse(JSON.stringify(p)))};
+ vm.createContext(state);vm.runInContext(surface.slice(surface.indexOf('function contextAction('),surface.indexOf('function activate(')),state);
+ for(const name of ['mask','mask-row','allow'])state.contextAction('account-remove-'+name,{word:{row:5,start:3,id:'Alice'}},{isTrusted:true});
+ assert.deepEqual(sent.map(p=>[p.policy,p.remove,p.row,p.col]),[['mask',true,5,3],['mask_row',true,5,3],['allow',true,5,3]]);
+ assert.ok(sent.every(p=>!('id' in p)));
+});

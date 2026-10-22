@@ -2,7 +2,10 @@
 function contextMenuItems(state) {
     const entries=new Map();
     const add=(name,enabled=true)=>entries.set(name,enabled);
-    if(state.word&&state.ptt&&(state.reading||state.authors)&&state.local){add("account-mask",state.ready);add("account-mask-row",state.ready);add("account-allow",state.ready);}
+    if(state.word&&state.ptt&&(state.reading||state.authors)&&state.local){
+        for(const [name,policy] of [["mask","mask"],["mask-row","mask_row"],["allow","allow"]])
+            add("account-"+(state.word.policy===policy?"remove-":"")+name,state.ready);
+    }
     if(state.replyRow!==null&&state.replyRow!==undefined&&state.local)add("reply-focus",state.ready);
     if(state.focused&&state.local)add("reply-focus-clear",state.ready);
     if(state.selection){add("copy",state.selectionReady);add("export-rows",state.rowsReady);}

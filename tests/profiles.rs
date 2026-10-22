@@ -248,3 +248,26 @@ fn article_mode_migrates_and_round_trips_without_accepting_unknown_modes() {
     value["article_mode"] = "unknown".into();
     assert!(AppSettings::decode(&serde_json::to_vec(&value).unwrap()).is_err());
 }
+
+#[test]
+fn article_boundary_preference_defaults_off_migrates_and_round_trips() {
+    use pttstella::settings::AppSettings;
+    for version in 2..=6 {
+        let mut value = serde_json::to_value(AppSettings::default()).unwrap();
+        value["version"] = version.into();
+        value
+            .as_object_mut()
+            .unwrap()
+            .remove("article_boundary_navigation");
+        let old = AppSettings::decode(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(!old.article_boundary_navigation);
+    }
+    let enabled = AppSettings {
+        article_boundary_navigation: true,
+        ..Default::default()
+    };
+    assert_eq!(
+        AppSettings::decode(&serde_json::to_vec(&enabled).unwrap()).unwrap(),
+        enabled
+    );
+}

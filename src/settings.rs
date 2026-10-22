@@ -167,6 +167,8 @@ pub enum ArticleMode {
 pub struct AppSettings {
     #[serde(default)]
     pub article_mode: ArticleMode,
+    #[serde(default)]
+    pub article_boundary_navigation: bool,
     pub version: u32,
     pub display: DisplayProfile,
     pub hover: HoverPosition,
@@ -182,6 +184,7 @@ impl Default for AppSettings {
         Self {
             version: 6,
             article_mode: ArticleMode::default(),
+            article_boundary_navigation: false,
             language: crate::i18n::Language::default(),
             tools_opacity: ToolOpacity::default(),
             tools_access: ToolAccess::default(),

@@ -612,10 +612,10 @@ filters-policy-mask-row = Black out entire row
 account-mask = Block content, keep ID
 account-mask-row = Block entire row
 account-allow = Add to whitelist
-reply-focus-clear = Show all replies
-reply-focus-hint = Click to focus this ID; click again to show all. Shift or drag to select text.
+reply-focus-clear = Clear reply highlighting
+reply-focus-hint = Click to highlight every reply from this ID; click again to clear. Shift or drag to select text.
 account-action-stale = The screen changed. Right-click the ID again.
-reply-focus = Toggle replies from this ID
+reply-focus = Toggle highlighting for this ID
 
 article-load-loading = Loading article · { $lines } lines received
 article-load-complete = Article loaded · { $lines } lines
@@ -659,3 +659,13 @@ filters-empty-allow = No allowed accounts yet.
 
 inline-image-open-one = Expand this image: { $url }
 inline-image-opened = Image expanded: { $url }
+
+account-remove-mask = Remove content block
+
+account-remove-mask-row = Remove entire-row block
+
+account-remove-allow = Remove from whitelist
+
+article-boundary-navigation = Switch articles with arrows at the top or bottom
+article-boundary-help = Off by default. Press ↑ again at the top for the previous article, or ↓ at the bottom for the next. PageUp/PageDown, j/k and the wheel never switch articles. Wait for loading to stop; release a held arrow before switching.
+settings-alias-article-boundary = article boundary arrow previous next 上一篇 下一篇 首尾 邊界 方向鍵

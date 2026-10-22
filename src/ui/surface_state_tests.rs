@@ -609,7 +609,7 @@ fn account_word_actions_revalidate_snapshot_and_preserve_existing_notes() {
         filters::Policy::Allow,
     ] {
         let rules = state
-            .account_rule(identity, view.stamp(), 5, 4, policy, &view)
+            .account_rule(identity, view.stamp(), (5, 4), policy, false, &view)
             .unwrap()
             .unwrap();
         assert_eq!(
@@ -623,18 +623,39 @@ fn account_word_actions_revalidate_snapshot_and_preserve_existing_notes() {
     }
     assert!(
         state
-            .account_rule(identity, view.stamp(), 6, 4, filters::Policy::Mask, &view)
+            .account_rule(
+                identity,
+                view.stamp(),
+                (6, 4),
+                filters::Policy::Mask,
+                false,
+                &view
+            )
             .is_none()
     ); // merged ID
     assert!(
         state
-            .account_rule(identity, view.stamp(), 500, 4, filters::Policy::Mask, &view)
+            .account_rule(
+                identity,
+                view.stamp(),
+                (500, 4),
+                filters::Policy::Mask,
+                false,
+                &view
+            )
             .is_none()
     );
     view.input_epoch += 1;
     assert!(
         state
-            .account_rule(identity, view.stamp(), 5, 4, filters::Policy::Mask, &view)
+            .account_rule(
+                identity,
+                view.stamp(),
+                (5, 4),
+                filters::Policy::Mask,
+                false,
+                &view
+            )
             .is_none()
     );
 }
@@ -662,14 +683,29 @@ fn reply_focus_toggles_without_persisting_or_losing_article_history_and_revokes_
         assert_eq!(paint.article.as_ref().map(|a| a.id), article);
         assert_eq!(
             pttstella::text::rows(&paint.frame).unwrap()[7].text,
-            "█".repeat(80)
+            pttstella::text::rows(&baseline).unwrap()[7].text
         );
-        assert!(!paint.account_words.iter().any(|w| w.row == 7));
-        assert!(paint.links.iter().all(|l| !l.url.contains("visible.png")));
+        assert!(paint.account_words.iter().any(|w| w.row == 7));
+        assert!(paint.links.iter().any(|l| l.url.contains("visible.png")));
+        assert!(
+            paint
+                .frame
+                .glyphs
+                .iter()
+                .filter(|g| g.row == 5)
+                .all(|g| g.left.bg == 4)
+        );
         if let Some(source) = &paint.source_frame {
+            assert!(
+                source
+                    .glyphs
+                    .iter()
+                    .filter(|g| g.row == 5)
+                    .all(|g| g.left.bg == 4)
+            );
             assert_eq!(
                 pttstella::text::rows(source).unwrap()[7].text,
-                "█".repeat(80)
+                pttstella::text::rows(&baseline).unwrap()[7].text
             );
         }
         assert!(state.rules().entries.is_empty());
@@ -725,8 +761,18 @@ fn focused_id_survives_contiguous_pages_but_not_a_new_article_segment() {
     assert_eq!(paint.reply_focus.as_deref(), Some("Alice"));
     assert_eq!(paint.frame.rows, 47);
     let rows = pttstella::text::rows(&paint.frame).unwrap();
-    assert_eq!(rows[7].text, "█".repeat(80));
-    assert_eq!(rows[30].text, "█".repeat(80));
+    assert_ne!(rows[7].text, "█".repeat(80));
+    assert_eq!(rows[7].text, rows[30].text);
+    for row in [5, 28] {
+        assert!(
+            paint
+                .frame
+                .glyphs
+                .iter()
+                .filter(|g| g.row == row)
+                .all(|g| g.left.bg == 4)
+        );
+    }
     state.clear_article();
     state.display_changed();
     let fresh = displayed(&mut state, &view);
@@ -1115,7 +1161,7 @@ fn author_actions_use_acknowledged_list_fields_and_reject_stale_or_hidden_author
             filters::Policy::Allow,
         ] {
             let rules = state
-                .account_rule(identity, view.stamp(), 3, col, policy, &view)
+                .account_rule(identity, view.stamp(), (3, col), policy, false, &view)
                 .unwrap()
                 .unwrap();
             assert_eq!(
@@ -1130,9 +1176,9 @@ fn author_actions_use_acknowledged_list_fields_and_reject_stale_or_hidden_author
                 .account_rule(
                     identity,
                     view.stamp(),
-                    row,
-                    col,
+                    (row, col),
                     filters::Policy::Mask,
+                    false,
                     &view
                 )
                 .is_none()
@@ -1142,7 +1188,14 @@ fn author_actions_use_acknowledged_list_fields_and_reject_stale_or_hidden_author
     view.input_epoch += 1;
     assert!(
         state
-            .account_rule(identity, view.stamp(), 3, 17, filters::Policy::Mask, &view)
+            .account_rule(
+                identity,
+                view.stamp(),
+                (3, 17),
+                filters::Policy::Mask,
+                false,
+                &view
+            )
             .is_none()
     );
     let rules = filters::Rules::default()
@@ -1152,7 +1205,102 @@ fn author_actions_use_acknowledged_list_fields_and_reject_stale_or_hidden_author
     let identity = displayed(&mut state, &view);
     assert!(
         state
-            .account_rule(identity, view.stamp(), 3, 17, filters::Policy::Allow, &view)
+            .account_rule(
+                identity,
+                view.stamp(),
+                (3, 17),
+                filters::Policy::Allow,
+                false,
+                &view
+            )
             .is_none()
     );
+}
+
+#[test]
+fn context_removal_requires_matching_rule_current_visible_word_and_successful_save() {
+    for policy in [filters::Policy::Mask, filters::Policy::Allow] {
+        let rules = filters::Rules::default()
+            .edit_policy("Alice", "keep", policy, false)
+            .unwrap();
+        let mut state = SurfaceState::new(rules.clone());
+        let view = view();
+        let original = displayed(&mut state, &view);
+        assert_eq!(
+            state
+                .current(original, &view)
+                .unwrap()
+                .account_words
+                .iter()
+                .find(|w| w.row == 5 && w.id == "Alice")
+                .unwrap()
+                .policy,
+            Some(policy)
+        );
+        let mismatch = if policy == filters::Policy::Allow {
+            filters::Policy::Mask
+        } else {
+            filters::Policy::Allow
+        };
+        assert!(
+            state
+                .account_rule(original, view.stamp(), (5, 3), mismatch, true, &view)
+                .is_none()
+        );
+        let removed = state
+            .account_rule(original, view.stamp(), (5, 3), policy, true, &view)
+            .unwrap()
+            .unwrap();
+        assert!(removed.entries.is_empty());
+        assert_eq!(state.rules(), &rules); // draft/failed persistence cannot change effective rules
+        state.replace_rules(removed);
+        assert!(
+            state
+                .account_rule(original, view.stamp(), (5, 3), policy, true, &view)
+                .is_none()
+        );
+        let fresh = displayed(&mut state, &view);
+        assert!(
+            state
+                .account_rule(fresh, view.stamp(), (5, 3), policy, true, &view)
+                .is_none()
+        );
+    }
+}
+
+#[test]
+fn adjacent_article_requires_enabled_current_local_cache_and_a_real_retained_edge() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/filters.json")).unwrap();
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(
+        &pttstella::encoding::encode(
+            &fixture["reading"]
+                .as_str()
+                .unwrap()
+                .replace("24~46", "1~23"),
+        )
+        .unwrap(),
+    );
+    view.frame = screen.frame();
+    displayed(&mut state, &view);
+    assert!(!state.adjacent_article_allowed(view.stamp(), false, &view));
+    state.set_article_boundary_navigation(true);
+    displayed(&mut state, &view);
+    assert!(!state.adjacent_article_allowed(view.stamp(), false, &view)); // active preload
+    state.stop_full_load();
+    displayed(&mut state, &view);
+    assert!(state.adjacent_article_allowed(view.stamp(), false, &view));
+    assert!(!state.adjacent_article_allowed(view.stamp(), true, &view));
+    let old = view.stamp();
+    view.input_epoch += 1;
+    assert!(!state.adjacent_article_allowed(old, false, &view));
+    view.input_pending = true;
+    assert!(!state.adjacent_article_allowed(view.stamp(), false, &view));
+    view.input_pending = false;
+    state.set_article_mode(ArticleMode::Terminal);
+    displayed(&mut state, &view);
+    assert!(!state.adjacent_article_allowed(view.stamp(), false, &view));
 }

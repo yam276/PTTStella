@@ -94,6 +94,46 @@ pub(super) fn local_intent(intent: pttstella::navigation::Intent) -> bool {
     )
 }
 
+/// Only unmodified physical arrows can cross an article edge; paging and Vim letters cannot.
+pub(super) fn terminal_arrow_boundary(
+    key: &pttstella::vim::Key,
+    context: &Context,
+    enabled: bool,
+) -> Option<Vec<u8>> {
+    if key.ctrl || key.alt || key.shift {
+        return None;
+    }
+    let down = match key.key.as_str() {
+        "ArrowDown" => true,
+        "ArrowUp" => false,
+        _ => return None,
+    };
+    let Context::ArticleReading {
+        first_line,
+        percent,
+        ..
+    } = context
+    else {
+        return None;
+    };
+    if !(if down {
+        *percent == 100
+    } else {
+        *first_line == 1
+    }) {
+        return None;
+    }
+    if enabled && !key.repeat {
+        pttstella::navigation::plan(
+            context,
+            pttstella::navigation::Intent::AdjacentArticle { down },
+        )
+        .ok()
+    } else {
+        Some(Vec::new())
+    }
+}
+
 pub(super) fn reading_input(context: &Context, bytes: &[u8]) -> bool {
     matches!(context, Context::ArticleReading { .. }) && reading_intent(bytes).is_some()
 }

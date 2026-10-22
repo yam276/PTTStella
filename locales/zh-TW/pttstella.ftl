@@ -606,10 +606,10 @@ filters-policy-mask-row = 黑名單（整行塗黑）
 account-mask = 加入黑名單：遮內容、保留 ID
 account-mask-row = 加入黑名單：整行塗黑
 account-allow = 加入白名單
-reply-focus-clear = 顯示全部推文
-reply-focus-hint = 點擊只看此 ID 的推文；再點一次恢復全部，Shift 或拖曳選字
+reply-focus-clear = 取消推文底色標示
+reply-focus-hint = 點擊以底色標示此 ID 全部推文；再點一次取消，Shift 或拖曳選字
 account-action-stale = 畫面已改變，請重新在 ID 上按右鍵。
-reply-focus = 切換只看此 ID 推文
+reply-focus = 切換此 ID 推文底色標示
 
 article-load-loading = 正在載入全文 · 已取得 { $lines } 行
 article-load-complete = 全文已載入 · { $lines } 行
@@ -653,3 +653,13 @@ filters-empty-allow = 尚無白名單帳號。
 
 inline-image-open-one = 展開這張圖片：{ $url }
 inline-image-opened = 圖片已展開：{ $url }
+
+account-remove-mask = 移出黑名單：遮內容、保留 ID
+
+account-remove-mask-row = 移出黑名單：整行塗黑
+
+account-remove-allow = 移出白名單
+
+article-boundary-navigation = 文章首尾以方向鍵切換上一篇／下一篇
+article-boundary-help = 預設關閉。到最頂後再按 ↑ 切上一篇，到最底後再按 ↓ 切下一篇；PageUp／PageDown、j／k 與滾輪不切換文章。全文載入中暫不切換，長按到邊界後需放開再按。
+settings-alias-article-boundary = article boundary arrow previous next 上一篇 下一篇 首尾 邊界 方向鍵

@@ -4,13 +4,29 @@
 
 ## 目標
 
-目前交付為 `dist/macos-image-actions/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-reply-navigation-final/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 名單右鍵移除、推文底色與文章邊界方向鍵（2026-10-22）
+
+對可見帳號／文章列表作者右鍵，與目前策略相符的加入項改為移出黑名單或白名單，其他策略仍可切換。Rust 只對已 ACK 的 cell 解析 ID，依目前規則核對移除策略；過期版本、不同策略、隱藏 ID 或輸入 epoch 改變皆拒絕，保存成功後才生效。名單格式仍為 v4，備註與個別顏色沿用既有規則。
+
+推文單擊改為標示該 ID 的全部已辨識推文，藍底保留前景色；該行有藍字時改紫底。再點同 ID 或右鍵取消標示。其他人的文字與網址不再遮黑，永久黑名單／合併 ID 的黑色遮罩仍保留。標示套用於快取後，不丟失當篇歷史；來源／歷史 PNG 使用相同背景，文字與連結內容不改變，離篇與版本清理沿用原本契約。行號預先建立集合，避免長文 glyphs 與推文做全乘積掃描。
+
+新增「圖片與媒體 → 文章首尾以方向鍵切換上一篇／下一篇」，預設關閉，缺欄位的舊設定亦關閉；保存／關閉快照／重啟與分頁恢復預設皆支援。網頁模式依實際可視區首尾，僅獨立 ↑／↓ 可換篇，PageUp／PageDown、j／k、Home／End、滾輪及按鈕不換篇，長按 repeat 不跨篇。全文讀取中拒絕切篇，其他狀態仍要求該邊界已取得。Home＋↑／End＋↓ 由同一命令 owner 先同步站端邊界再切篇；重新驗設定、作用域、stamp／input epoch／ACK／本機路由，拒絕時回傳結果解除 UI 等待。終端機只攔截已辨識文章邊界的普通上下鍵；設定關閉或 repeat 時不送鍵。切篇清除舊文章／媒體，保留取消及晚到結果隔離。
+
+驗證：core 13 命令／2 replay、desktop lib 143／bin 123、全 targets Clippy、JS 211、Python tooling 70、fmt 與 docs 通過。新增獨立 expected 覆蓋移除與策略不符／舊版本／未保存保留生效規則、標示文字／網址與永久遮罩不變、跨頁標示／取消／來源投影，以及首尾方向鍵與其他鍵分流、repeat／載入／關閉設定、偏好遷移與失敗保存。新准入案例先抓出缺少 input epoch 比對，補上後才通過；另修正內部 arrow 來源只可轉成封閉 keyboard source，取消載入後的取頁不傳未知來源。中途測試與 lint 失敗保留，不當作 gate 通過。
+
+macOS 原生設定已確認預設關閉、保存啟用與獨立程序讀回；關閉後網頁／終端機的上下鍵、網頁 PageUp／PageDown／Home／End 與長按保持同篇，loopback 零站端輸入。short_reading 來源 PNG、Close acknowledged 與所有 owner join 通過。兩輪加入字母鍵的探針因非預期站端輸入失敗，保留 failed；與上一版獨立程序比對顯示目前輸入環境下 j 進入注音「ㄨ」組字，取消組字後上一版 PNG／Close 正常，不將該次輸入當作英文 j/k 通過。實站換篇、正文右鍵／點 ID 的原生手勢、Windows／Linux 原生 UI 仍待驗收；不以設定 smoke 代替這些項目。
+
+最終交付的原生 short_reading 另一次通過；來源 PNG 960×576 與上一交付對照全部像素相同。15 份 Mach-O loadable sections 與測試副本一致，strict ad-hoc 驗章通過，Close acknowledged、全部 owner join、程序 exit 0。所有合成副本均已退出。
+
+證據 .local/verification/reply-highlight（gate-delivery.json、native-delivery、native-settings-r3、native-baseline、validation.json）；交付 dist/macos-reply-navigation-final/PTTStella.app 為 macOS arm64 release／ad-hoc，未公證。
 
 ## 單張展圖、Enter 長按與等寬（2026-10-22）
 
