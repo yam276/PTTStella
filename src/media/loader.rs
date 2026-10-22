@@ -51,6 +51,7 @@ pub struct Image {
     pub width: usize,
     pub height: usize,
     pub animated_format: bool,
+    pub animation_pixels: usize,
 }
 
 pub struct Loaded {
@@ -268,6 +269,10 @@ fn inspect(bytes: Vec<u8>) -> Result<Image, Error> {
         width: dimensions.width,
         height: dimensions.height,
         animated_format: frames > 1,
+        animation_pixels: dimensions
+            .width
+            .saturating_mul(dimensions.height)
+            .saturating_mul(frames),
     })
 }
 

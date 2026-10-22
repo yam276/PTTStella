@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
-const source=readFileSync(new URL('../assets/inline-images.js',import.meta.url),'utf8');
+const source=readFileSync(new URL('../assets/gif-playback.js',import.meta.url),'utf8')+'\n'+readFileSync(new URL('../assets/inline-images.js',import.meta.url),'utf8');
 const {inlineRowLayout,inlineShortcut,createInlineImageKey}=vm.runInNewContext(source+'\n({inlineRowLayout,inlineShortcut,createInlineImageKey})');
 test('inserted gaps never acquire terminal cells and selection height excludes pictures',()=>{
     for(const scale of [.5,1,1.5,2]) {
@@ -520,4 +520,16 @@ test('only a fresh physical arrow at the complete visible edge can switch articl
  assert.equal(requests.length,0);
  c.viewport.scrollTop=1200;move(down);assert.equal(c.viewport.scrollTop,1224);assert.equal(requests.length,0);
  c.viewport.scrollTop=0;c.latest.article.first_line=24;move(up);assert.deepEqual(requests.pop(),[{action:'previous_page'},'keyboard',false]);
+});
+
+test('inline GIF keeps its native source only while visible and resets release the Blob',async()=>{
+ const e=interactiveImages();e.open([0]);
+ e.ui.receive({batch:1,index:0,image:{mime:'image/gif',data:'AA==',width:64,height:32,animated:true}});
+ await new Promise(r=>setImmediate(r));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+ image.naturalWidth=64;image.naturalHeight=32;image.onload();await new Promise(r=>setImmediate(r));e.layout();
+ assert.equal(e.urls.size,1);assert.equal(image.hidden,false);assert.ok(image.src.startsWith('blob:'));
+ const url=image.src;e.viewport.getBoundingClientRect=()=>({top:9000,bottom:9500});e.ui.refreshAnimations();
+ assert.equal(image.hidden,true);assert.equal(image.src,undefined);assert.equal(e.urls.size,1);
+ e.viewport.getBoundingClientRect=()=>({top:0,bottom:500});e.ui.refreshAnimations();assert.equal(image.src,url);
+ e.ui.reset();assert.equal(e.urls.size,0);assert.equal(image.src,undefined);assert.equal(await e.ui.destroy(),true);
 });

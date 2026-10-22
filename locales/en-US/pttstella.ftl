@@ -673,3 +673,6 @@ settings-alias-article-boundary = article boundary arrow previous next 上一篇
 settings-close-command = Close Settings
 about-author = Author: { $author }
 about-version = Version: { $version }
+
+gif-playing = GIF animation playing
+gif-paused = GIF animation paused

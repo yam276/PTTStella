@@ -13,7 +13,7 @@ function environment(language,geometry={}){
         clientWidth:800,clientHeight:400,naturalWidth:32,naturalHeight:16,paused:true,
         append(...children){this.children.push(...children);},replaceChildren(){this.children=[];},
         get childElementCount(){return this.children.length;},
-        setAttribute(name,value){this.attributes[name]=value;},removeAttribute(name){delete this.attributes[name];},
+        setAttribute(name,value){this.attributes[name]=value;},removeAttribute(name){delete this.attributes[name];delete this[name];},
         showModal(){this.open=true;},close(){this.open=false;},focus(){},
         listeners:new Map(),addEventListener(name,callback){this.listeners.set(name,callback);},removeEventListener(name){this.listeners.delete(name);},pause(){this.paused=true;},load(){},
         getBoundingClientRect(){return {left:0,top:0,right:800,bottom:400,width:800,height:400};},
@@ -21,7 +21,7 @@ function environment(language,geometry={}){
     const workspace=element("workspace"),bounds={left:40,top:30,width:1280,height:900,...geometry};
     bounds.right=bounds.left+bounds.width;bounds.bottom=bounds.top+bounds.height;
     workspace.getBoundingClientRect=()=>bounds;
-    const document={getElementById(id){if(!nodes.has(id))nodes.set(id,element(id));return nodes.get(id);},
+    const document={listeners:new Map(),addEventListener(name,fn){this.listeners.set(name,fn);},removeEventListener(name){this.listeners.delete(name);},getElementById(id){if(!nodes.has(id))nodes.set(id,element(id));return nodes.get(id);},
         querySelector:()=>workspace,createElement(tag){const node=element(tag);created.push(node);return node;}};
     document.getElementById("chrome").getBoundingClientRect=()=>bounds;
     document.getElementById("media-hover-status").getBoundingClientRect=()=>({height:18});
@@ -29,13 +29,13 @@ function environment(language,geometry={}){
         const stage=document.getElementById("media-hover-viewport").children[0];
         return {width:(Number.parseFloat(stage?.style.width)||100)+10,height:(Number.parseFloat(stage?.style.height)||0)+28};
     };
-    const install=vm.runInNewContext(readFileSync(new URL("../assets/media.js",import.meta.url),"utf8")+"\ninstallMedia",{
+    const install=vm.runInNewContext(readFileSync(new URL("../assets/gif-playback.js",import.meta.url),"utf8")+"\n"+readFileSync(new URL("../assets/media.js",import.meta.url),"utf8")+"\ninstallMedia",{
         document,AbortController,fetch:async()=>({blob:async()=>({size:1})}),
         URL:{createObjectURL(){const url="blob:"+urls.size;urls.add(url);return url;},revokeObjectURL:url=>urls.delete(url)},
         ResizeObserver:class{observe(){}disconnect(){}},requestAnimationFrame:callback=>{frames.set(++nextFrame,callback);return nextFrame;},cancelAnimationFrame:id=>frames.delete(id),
     });
     const ui=install({tr:translator(language),send:packet=>sent.push(packet),prepare(){},changed(){},restore(){}});
-    return {ui,nodes,sent,urls,created,bounds,node:document.getElementById,flush(){for(const [id,callback] of [...frames]){frames.delete(id);callback();}}};
+    return {ui,nodes,sent,urls,created,bounds,document,node:document.getElementById,flush(){for(const [id,callback] of [...frames]){frames.delete(id);callback();}}};
 }
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 
@@ -102,4 +102,21 @@ test("portrait hover accounts for its status and promotion preserves image resou
     env.node("media-original").listeners.get("click")();
     assert.equal(stage.style.width,"800px");assert.equal(stage.style.height,"1600px");
     assert.equal(await env.ui.destroy(),true);
+});
+
+test('explicit GIF previews autoplay, hover stays still, and pause/focus lifecycle releases the native source',async()=>{
+ const env=environment('en-US');
+ env.ui.hover({request:9,position:'top_right',target:{kind:'image',url:'https://example.com/motion.gif'}});
+ env.ui.receiveImage({request:9,mime:'image/gif',data:'AA==',width:32,height:16,animated:true,cached:false});
+ await settle();const image=env.created.find(n=>n.tag==='img');
+ const context={clearRect(){},drawImage(){}};env.created.filter(n=>n.tag==='canvas').forEach(c=>c.getContext=()=>context);
+ image.onload();assert.equal(image.hidden,true);assert.equal(image.src,undefined);
+ env.ui.open({request:9,target:{kind:'image',url:'https://example.com/motion.gif'}});
+ assert.equal(image.hidden,false);assert.ok(image.src.startsWith('blob:'));
+ assert.equal(env.node('media-motion').textContent,'Stop and return to first frame');
+ env.node('media-motion').listeners.get('click')({isTrusted:true});assert.equal(image.hidden,true);assert.equal(image.src,undefined);
+ env.node('media-motion').listeners.get('click')({isTrusted:true});assert.equal(image.hidden,false);
+ env.document.visibilityState='hidden';env.document.listeners.get('visibilitychange')();assert.equal(image.src,undefined);
+ env.document.visibilityState='visible';env.document.listeners.get('visibilitychange')();assert.equal(image.hidden,false);
+ assert.equal(await env.ui.destroy(),true);assert.equal(env.urls.size,0);assert.equal(env.document.listeners.size,0);
 });

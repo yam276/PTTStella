@@ -40,11 +40,19 @@ function createInlineImageKey({scope,allowed,single,all,setTimer=setTimeout,clea
 function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,notice,allowed=()=>false,request=()=>{}}) {
     const layer=document.createElement("div");layer.id="inline-images";surface.insertBefore(layer,canvas.nextSibling);
     let current=null,items=[],visible=[],strips=[],footer=null,footerLayer=null,footerImage=null,footerPacket=null,footerProgress=null,dead=false,lastLayout=null,lastArticle=null,latestLayout=null;const jobs=new Set();
+    const gifs=createGifPlayback({document,window:typeof window!=="undefined"?window:null,limit:2});
+    function gifScore(item){
+        if(dead||!current||!geometry||!matches(latestLayout)||item.box.hidden||item.box.isConnected===false||document.querySelector?.("dialog[open]"))return Infinity;
+        const box=item.box.getBoundingClientRect(),bounds=viewport?.getBoundingClientRect();
+        if(!bounds)return 0;
+        const bottom=bounds.bottom-(geometry.footerHeight??0);
+        return box.top<bottom&&box.bottom>bounds.top?Math.abs((box.top+box.bottom-bounds.top-bottom)/2):Infinity;
+    }
     const controls=new Map();let candidates=[],geometry=null,lastOpened=null,pendingSource=null,pendingWide=null,knownScroll=viewport?.scrollTop??0;
     const scope=()=>JSON.stringify([latestLayout?.generation,latestLayout?.article?.id??latestLayout?.presentation]);
     const gesture=createInlineImageKey({scope,allowed:()=>!dead&&allowed(),single:singleImage,all:event=>{lastOpened=null;request({kind:"all"},event);}});
     function suspend(){gesture.cancel();lastOpened=null;}
-    function moved(){if(viewport&&Math.abs(viewport.scrollTop-knownScroll)>1){suspend();knownScroll=viewport.scrollTop;}}
+    function moved(){if(viewport&&Math.abs(viewport.scrollTop-knownScroll)>1){suspend();knownScroll=viewport.scrollTop;}gifs.refresh();}
     function candidateItem(candidate){return items.find(item=>item.source===candidate.source);}
     function visibleCandidates(){
         moved();
@@ -119,11 +127,11 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         }
     }
     function detach(preserve=false){if(!preserve)lastLayout=null;for(const strip of strips){strip.width=0;strip.height=0;}strips=[];visible=[];
-        if(footer){footer.width=0;footer.height=0;footerPacket=null;footerProgress=null;footerImage.removeAttribute("src");footerLayer.hidden=true;}layer.replaceChildren();canvas.style.visibility="";}
+        if(footer){footer.width=0;footer.height=0;footerPacket=null;footerProgress=null;footerImage.removeAttribute("src");footerLayer.hidden=true;}layer.replaceChildren();canvas.style.visibility="";gifs.refresh();}
     function clear() {
         current=null;suspend();pendingSource=null;pendingWide=null;
         for(const button of controls.values())button.remove();controls.clear();candidates=[];geometry=null;
-        for(const item of items){item.controller?.abort();item.image?.removeAttribute("src");if(item.url)URL.revokeObjectURL(item.url);if(item.still){item.still.width=0;item.still.height=0;}}
+        for(const item of items){item.gif?.remove();item.animation?.removeAttribute("src");item.controller?.abort();item.image?.removeAttribute("src");if(item.url)URL.revokeObjectURL(item.url);if(item.still){item.still.width=0;item.still.height=0;}}
         items=[];detach(true);
     }
     function reset(){suspend();if(!current)return;clear();redraw();changed();}
@@ -176,9 +184,17 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
                 const still=document.createElement("canvas");still.width=data.width;still.height=data.height;
                 still.getContext("2d").drawImage(item.image,0,0);still.setAttribute("aria-label",tr("media-title"));
                 item.still=still;item.box.append(still);item.note.textContent="";item.box.dataset.state="ready";
+                if(data.mime==="image/gif"&&data.animated){
+                    item.animation=item.image;item.image=null;item.animation.alt=tr("media-title");item.animation.draggable=false;
+                    item.box.append(item.animation);still.setAttribute("aria-label",tr("gif-paused"));
+                    item.box.dataset.motion="paused";
+                    item.gif=gifs.add({image:item.animation,still,url:item.url,cost:data.animation_pixels,score:()=>gifScore(item),
+                        changed:playing=>{item.box.dataset.motion=playing?"playing":"paused";item.animation.alt=tr("gif-playing");still.setAttribute("aria-label",tr("gif-paused"));}});
+                }
+
                 redraw();
             } catch(error){if(!controller.signal.aborted)fail({...packet,message:error.message});}
-            finally {clearTimeout(timeout);item.image?.removeAttribute("src");item.image=null;if(item.url){URL.revokeObjectURL(item.url);item.url=null;}}
+            finally {clearTimeout(timeout);item.image?.removeAttribute("src");item.image=null;if(item.url&&!item.animation){URL.revokeObjectURL(item.url);item.url=null;}}
         })();jobs.add(job);job.finally(()=>jobs.delete(job));
     }
     function layout(packet,base,ratio) {
@@ -219,6 +235,8 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
             item.box.style.padding=item.wide?"12px 0":"12px";
             item.height=item.still?Math.max(1,item.still.height*scale)+24:48;
             if(item.still){item.still.style.width=Math.max(1,item.still.width*scale)+"px";item.still.style.height=Math.max(1,item.still.height*scale)+"px";}
+            if(item.animation&&item.still){item.animation.style.width=item.still.style.width;item.animation.style.height=item.still.style.height;}
+
             const row=item.row+rowOffset;
             if(row>=0&&row<packet.frame.rows-1)gaps.set(row,(gaps.get(row)||0)+item.height*ratio);
         }
@@ -271,6 +289,7 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         layoutControls(packet,mapping,base,ratio,width,controlGaps);
         geometry={...mapping,ratio,footerHeight:cached?(base.y(packet.frame.rows)-base.y(packet.frame.rows-1))/ratio:0};knownScroll=viewport?.scrollTop??0;
         lastLayout=mapping;lastArticle=cached?{...article,generation:packet.generation,ratio}:null;
+        gifs.refresh();
         if(cached){
             const row=packet.frame.rows-1,height=base.y(row+1)-base.y(row);
             // Rust identifies the numeric status cells. Only the visible
@@ -332,8 +351,8 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         const item=visible.find(item=>{const r=item.box.getBoundingClientRect();return event.clientX>=r.left&&event.clientX<r.right&&event.clientY>=r.top&&event.clientY<r.bottom;});
         return item?.index??-1;
     }
-    return {open,receive,fail,reset,layout,linkAtPoint,active:()=>!!current,keydown:gesture.down,keyup:gesture.up,keyHeld:gesture.held,suspend,
-        bindings:[[layer,"pointerdown",triggerDown],[layer,"click",triggerClick],...(viewport?[[viewport,"scroll",moved]]:[]),
+    return {open,receive,fail,reset,layout,linkAtPoint,refreshAnimations:gifs.refresh,active:()=>!!current,keydown:gesture.down,keyup:gesture.up,keyHeld:gesture.held,suspend,
+        bindings:[...gifs.bindings,[layer,"pointerdown",triggerDown],[layer,"click",triggerClick],...(viewport?[[viewport,"scroll",moved]]:[]),
             ...(typeof window!=="undefined"?[[window,"blur",suspend]]:[]),[document,"visibilitychange",suspend]],
-        async destroy(){dead=true;clear();lastLayout=null;lastArticle=null;latestLayout=null;await Promise.allSettled([...jobs]);layer.remove();footerLayer?.remove();return jobs.size===0;}};
+        async destroy(){dead=true;gifs.destroy();clear();lastLayout=null;lastArticle=null;latestLayout=null;await Promise.allSettled([...jobs]);layer.remove();footerLayer?.remove();return jobs.size===0;}};
 }

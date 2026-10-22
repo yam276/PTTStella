@@ -195,6 +195,7 @@ async fn run(
         include_str!("../../assets/vendor/fluent/index.js"),
         "\nreturn module.exports;})();\n",
         include_str!("../../assets/i18n.js"),
+        include_str!("../../assets/gif-playback.js"),
         include_str!("../../assets/media.js"),
         include_str!("../../assets/inline-images.js"),
         include_str!("../../assets/surface-lifetime.js"),
@@ -650,7 +651,7 @@ async fn run(
                 let packet=match update.result {
                     Ok(loaded)=>{let image=loaded.image;Packet::InlineImage{batch:update.batch,index:update.index,image:MediaImage{
                         request:update.batch,data:base64::engine::general_purpose::STANDARD.encode(&image.bytes),
-                        mime:image.mime,width:image.width,height:image.height,animated:image.animated_format,cached:false}}},
+                        mime:image.mime,width:image.width,height:image.height,animated:image.animated_format,animation_pixels:(image.animated_format&&image.mime=="image/gif").then_some(image.animation_pixels),cached:false}}},
                     Err(message)=>Packet::InlineError{batch:update.batch,index:update.index,message},
                 };
                 eval.send(packet).map_err(|e|e.to_string())?;
@@ -662,7 +663,7 @@ async fn run(
                             Packet::MediaImage(MediaImage{request:update.request,
                                 data:base64::engine::general_purpose::STANDARD.encode(&image.bytes),
                                 mime:image.mime,width:image.width,height:image.height,
-                                animated:image.animated_format,cached})
+                                animated:image.animated_format,animation_pixels:(image.animated_format&&image.mime=="image/gif").then_some(image.animation_pixels),cached})
                         },
                         Err(error) => Packet::MediaError{request:update.request,message:error.to_string()},
                     };
