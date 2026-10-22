@@ -649,3 +649,10 @@ filters-color-bright-cyan = Bright cyan
 filters-color-white = White
 
 settings-privacy-description = Settings, bookmarks and account lists stay on this computer. Full session traffic is not recorded by default. Passwords enter the OS credential store only when you choose to save them. Signing in still requires pressing Log in.
+
+filters-tab-block = Blocklist
+filters-tab-allow = Allowlist
+filters-sort-id = Sort: ID
+filters-sort-category = Sort: category
+filters-empty-block = No blocked accounts yet.
+filters-empty-allow = No allowed accounts yet.

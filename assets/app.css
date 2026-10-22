@@ -261,3 +261,16 @@ button.primary .settings-icon { color: inherit; }
 #font-dialog .settings-panel > h2 { display: none; }
 #font-dialog #sites-close, #font-dialog #filters-close, #font-dialog #login-cancel { display: none; }
 #font-dialog .settings-license-text { max-height: none; overflow: visible; }
+
+/* List tabs and sorting only change the local editor view. */
+#filters-dialog .filters-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--settings-line); margin-bottom: 16px; }
+#filters-dialog .filters-tabs button { flex: 1; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--ui-muted); padding: 10px; }
+#filters-dialog .filters-tabs button[aria-selected="true"] { color: var(--ui-gold); border-bottom-color: var(--ui-gold); background: var(--ui-control); }
+#filters-dialog .filters-list-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+#filters-dialog .filters-list-toolbar label { display: block; flex: 1; margin: 0; padding: 0; border: 0; }
+#filters-dialog #filters-sort { display: inline-flex; align-items: center; gap: 7px; }
+#filters-dialog #filters-sort svg { color: var(--ui-gold); flex-shrink: 0; }
+#filters-dialog #filters-list { display: block; width: 100%; }
+#filters-editor > label, #filters-shared-color > label { margin: 0; padding: 13px 0; border-bottom: 1px solid var(--settings-line); }
+#filters-dialog [hidden] { display: none; }
+#filters-shared-color { border-top: 1px solid var(--settings-line); margin-top: 20px; padding-top: 12px; }

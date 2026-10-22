@@ -643,3 +643,10 @@ filters-color-bright-cyan = 亮青
 filters-color-white = 白
 
 settings-privacy-description = 設定、書籤及名單保存在此電腦。程式預設不錄製完整連線流量；只有勾選保存時，密碼才會存入作業系統鑰匙圈。登入仍須按下登入按鈕。
+
+filters-tab-block = 黑名單
+filters-tab-allow = 白名單
+filters-sort-id = 排序：ID
+filters-sort-category = 排序：分類
+filters-empty-block = 尚無黑名單帳號。
+filters-empty-allow = 尚無白名單帳號。

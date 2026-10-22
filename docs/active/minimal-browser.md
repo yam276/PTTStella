@@ -4,13 +4,21 @@
 
 ## 目標
 
-目前交付為 `dist/macos-settings-instrument-final/PTTStella.app`（2026-10-21，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-list-tabs/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 黑白名單分頁與排序（2026-10-22）
+
+設定內新增黑名單／白名單分頁，已儲存清單只列實際帳號，順序為 ID、遮蔽策略或生效顏色、備註；移除「新增帳號」虛擬清單項，改用清單外的新增按鈕。黑名單表單只提供遮內容／整行塗黑，白名單表單顯示個別色及共用色。排序按鈕切換 ID 與分類：黑名單按遮蔽策略、白名單按生效 ANSI 色號分組，同組按 ID。分頁切換清空未保存草稿，排序及即時翻譯保留草稿；兩者不寫入名單。匯入預覽沿用同一分頁／排序，仍須明確套用才保存。
+
+core 13 命令／2 replay、desktop lib 143／bin 116、全 targets Clippy、JS 198、Python tooling 70、fmt 與 docs 通過。新增 JS 獨立 expected 覆蓋分組、排序、無虛擬選項、明確保存、匯入取消、shared color 變更與即時翻譯。macOS arm64 實際 Dioxus／WKWebView 核對兩分頁、排序、保留草稿、獨立新增及更新備註；檔案確認排序零寫入，保存保留既有兩種黑名單、個別色與共用色。切英文及新程序重啟後讀回新增帳號、顏色與備註。
+
+兩次 short_reading 原生探針 passed，peer 零站端輸入，Close acknowledged、所有 owner join、程序 exit 0。來源 PNG 960×576 與前一交付全部像素相同，15 份 Mach-O loadable sections 與交付相同，strict ad-hoc 驗章通過。證據 .local/verification/list-tabs；交付 dist/macos-list-tabs/PTTStella.app（arm64 release／ad-hoc，未公證）。Windows／Linux 原生 UI 本輪 not_ready，既有正文滑鼠人工驗收界線保留。
 
 ## 精密儀表設定外觀（2026-10-21）
 
