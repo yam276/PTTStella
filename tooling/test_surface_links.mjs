@@ -74,7 +74,7 @@ function renderedLinks(scale, links, options) {
 
 test("empty right-click opens radial tools; selections, Shift and opt-out keep the contextual actions",()=>{
     for(const [selection,shiftKey,enabled,radial] of [[false,false,true,true],[true,false,true,false],[false,true,true,false],[false,false,false,false]]) {
-        const calls=[],context={stationMouse:{local:()=>true},linkAt:()=>0,cellAt:()=>({row:3,col:10}),inlineImages:{linkAtPoint:()=>-1},
+        const calls=[],context={stationMouse:{local:()=>true},linkAt:()=>-1,cellAt:()=>({row:3,col:10}),inlineImages:{linkAtPoint:()=>-1},
             composing:false,pastePending:false,stopped:false,latest:{output_pending:false},document:{querySelector:()=>null},filterUi:{blocked:()=>false},
             toolAccess:{right_click_menu:enabled},hasSelection:()=>selection,tools:{showAt:e=>calls.push(['radial',e.isTrusted])},
             contextState:()=>({}),contextMenuItems:()=>new Map(),contextMenu:{close(){},open:()=>calls.push(['context'])}};
@@ -186,4 +186,30 @@ test('article Back ends before the author and leaves the operation/header rows i
  for(const col of [17,20,29,30,79])assert.equal(hit({row:3,col}).kind,'article');
  for(const row of [0,1,2])assert.equal(hit({row,col:0}),null);
  context.latest.navigation={kind:'board_list',first_row:3,last_row:5};assert.equal(hit({row:3,col:9}).kind,'back');assert.equal(hit({row:3,col:10}).kind,'menu');
+});
+
+test("ordinary right-click on text URLs or inline images takes precedence over radial tools and account words",()=>{
+    for(const [textIndex,imageIndex,point] of [[0,-1,{row:3,col:10}],[2,-1,{row:3,col:10}],[-1,0,null]]){
+        for(const selection of [false,true]){
+            const calls=[],context={stationMouse:{local:()=>true},linkAt:()=>textIndex,cellAt:()=>point,inlineImages:{linkAtPoint:()=>imageIndex},
+                composing:false,pastePending:false,stopped:false,latest:{output_pending:false,account_words:[{row:3,start:0,end:40,id:"example"}],reply_rows:[3]},
+                document:{querySelector:()=>null},filterUi:{blocked:()=>false},toolAccess:{right_click_menu:true},hasSelection:()=>selection,
+                tools:{showAt:()=>calls.push("radial")},contextState:(index,word,replyRow)=>({index,word,replyRow}),contextMenuItems:s=>s,
+                contextMenu:{close(){},open:(event,data)=>calls.push(JSON.parse(JSON.stringify(data)))}};
+            handler("openContextMenu","contextAction",context)({isTrusted:true,shiftKey:false,preventDefault(){}});
+            const expected=Math.max(textIndex,imageIndex);
+            assert.deepEqual(calls,[{index:expected,word:null,replyRow:null,entries:{index:expected,word:null,replyRow:null}}]);
+        }
+    }
+});
+test("non-link account words still open account actions while output, paste and filter transactions block both menus",()=>{
+    for(const [change,expected] of [[{},1],[{output_pending:true},0],[{pastePending:true},0],[{filterBlocked:true},0]]){
+        let opened=0;
+        const context={stationMouse:{local:()=>true},linkAt:()=>-1,cellAt:()=>({row:3,col:10}),inlineImages:{linkAtPoint:()=>-1},
+            composing:false,pastePending:change.pastePending??false,stopped:false,latest:{output_pending:change.output_pending??false,account_words:[{row:3,start:4,end:12,id:"Alice"}]},
+            document:{querySelector:()=>null},filterUi:{blocked:()=>change.filterBlocked??false},toolAccess:{right_click_menu:true},hasSelection:()=>false,
+            tools:{showAt:()=>assert.fail("account must not open tools")},contextState:()=>({}),contextMenuItems:()=>new Map(),
+            contextMenu:{close(){},open:(event,data)=>{opened++;assert.equal(data.word.id,"Alice");assert.equal(data.index,-1);}}};
+        handler("openContextMenu","contextAction",context)({isTrusted:true,preventDefault(){}});assert.equal(opened,expected);
+    }
 });
