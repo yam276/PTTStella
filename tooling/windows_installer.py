@@ -90,8 +90,9 @@ def build(package, staging, version):
         raise RuntimeError('Inno Setup did not produce the installer')
     # Inno Setup is explicitly configured for x64 GUI output.
     from bundle_windows import inspect_pe
-    inspect_pe(setup)
+    pe = inspect_pe(setup)
     return setup, {'compiler': 'Inno Setup '+config['version'],
+                   'pe': pe,
                    'webview2': {'mode': 'evergreen_bootstrapper', 'url': BOOTSTRAPPER_URL,
                                'bootstrapper': signature, 'install_only_if_missing': True,
                                'internet_required_when_missing': True},

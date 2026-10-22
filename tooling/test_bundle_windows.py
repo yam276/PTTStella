@@ -6,8 +6,79 @@ import unittest
 import tomllib
 from unittest.mock import patch
 import zipfile
+import struct
 
 import bundle_windows as bundle
+
+
+class DependencyTests(unittest.TestCase):
+    def image(self, delayed='USER32.dll', attributes=1, image_base=0x140000000):
+        # Independent minimal PE32+: header at 0x80, one file-backed section
+        # (RVA 0x1000 -> file 0x200), normal and delay import tables.
+        data = bytearray(0x600)
+        data[:2] = b'MZ'
+        struct.pack_into('<I', data, 0x3c, 0x80)
+        data[0x80:0x84] = b'PE\0\0'
+        struct.pack_into('<HH', data, 0x84, 0x8664, 1)
+        struct.pack_into('<H', data, 0x94, 240)
+        struct.pack_into('<H', data, 0x98, 0x20b)
+        struct.pack_into('<Q', data, 0xb0, image_base)
+        struct.pack_into('<H', data, 0xdc, 2)
+        struct.pack_into('<IIII', data, 0x190, 0x400, 0x1000, 0x400, 0x200)
+        struct.pack_into('<II', data, 0x110, 0x1000, 40)
+        struct.pack_into('<IIIII', data, 0x200, 0, 0, 0, 0x1100, 0)
+        data[0x300:0x30d] = b'KERNEL32.dll\0'
+        struct.pack_into('<II', data, 0x170, 0x1040, 64)
+        name = 0x1120+(image_base if attributes == 0 else 0)
+        struct.pack_into('<IIIIIIII', data, 0x240, attributes, name, 0, 0, 0, 0, 0, 0)
+        text = delayed.encode('ascii')+b'\0'
+        data[0x320:0x320+len(text)] = text
+        return data
+
+    def inspect(self, data):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp)/'synthetic.exe'
+            path.write_bytes(data)
+            return bundle.inspect_pe(path)
+
+    def test_regular_and_delayed_imports_share_the_dependency_inventory(self):
+        from windows_portable import verify_dependencies
+        result = self.inspect(self.image())
+        self.assertEqual(result, {'machine': 'AMD64', 'subsystem': 'Windows GUI',
+                                'imports': ['kernel32.dll', 'user32.dll'],
+                                'delay_imports': ['user32.dll']})
+        verify_dependencies(result)
+        legacy = self.inspect(self.image(attributes=0, image_base=0x400000))
+        self.assertEqual(legacy, result)
+
+    def test_delayed_private_dll_is_still_rejected_by_both_application_policies(self):
+        from windows_portable import verify_dependencies
+        result = self.inspect(self.image(delayed='private-development.dll'))
+        with self.assertRaisesRegex(RuntimeError, 'external DLL: private-development.dll'):
+            verify_dependencies(result)
+        with patch.object(bundle, 'inspect_pe', return_value=result), patch.object(bundle, 'verify_icon'):
+            with self.assertRaisesRegex(RuntimeError, 'Unbundled non-system import: private-development.dll'):
+                bundle.inspect_application(Path('unused.exe'))
+
+    def test_malformed_delay_tables_fail_closed(self):
+        for field, value, error in [(0x240, 2, 'attributes'),
+                                    (0x244, 0x1800, 'file-backed'),
+                                    (0x174, 32, 'Unterminated'),
+                                    (0x170, 0, 'missing its RVA')]:
+            with self.subTest(field=field):
+                data = self.image()
+                struct.pack_into('<I', data, field, value)
+                with self.assertRaisesRegex(ValueError, error):
+                    self.inspect(data)
+        data = self.image()
+        data[0x320:0x420] = b'x'*256
+        with self.assertRaisesRegex(ValueError, 'DLL name'):
+            self.inspect(data)
+        data = self.image()
+        struct.pack_into('<I', data, 0x244, 0x13ff)
+        data[-1] = ord('x')
+        with self.assertRaisesRegex(ValueError, 'file-backed'):
+            self.inspect(data)
 
 
 class PublicationTests(unittest.TestCase):

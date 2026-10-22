@@ -43,28 +43,55 @@ def inspect_pe(path):
         raise ValueError('Expected Windows GUI subsystem (release build)')
     sections = [struct.unpack_from('<IIII', data, opt+optional_size+i*40+8) for i in range(count)]
 
-    def offset(rva):
+    def offset(rva, length=1):
         for virtual_size, address, raw_size, raw in sections:
-            if address <= rva < address+max(virtual_size, raw_size):
-                return raw+rva-address
-        raise ValueError('PE RVA has no section')
+            if address <= rva and rva-address+length <= raw_size:
+                position = raw+rva-address
+                if position+length <= len(data):
+                    return position
+        raise ValueError('PE RVA has no file-backed section')
+
+    def dll_name(rva):
+        name = offset(rva)
+        # Bound the string to file-backed bytes, not virtual section padding.
+        for size in range(1, 257):
+            offset(rva, size)
+            if data[name+size-1] == 0:
+                if size == 1:
+                    break
+                return data[name:name+size-1].decode('ascii').lower()
+        raise ValueError('Invalid PE import DLL name')
 
     rva, size = struct.unpack_from('<II', data, opt+120)
     imports = []
     if rva:
-        start = offset(rva)
         for i in range(min(size//20, 4096)):
-            entry = struct.unpack_from('<IIIII', data, start+i*20)
+            entry = struct.unpack_from('<IIIII', data, offset(rva+i*20, 20))
             if not any(entry):
                 break
-            name = offset(entry[3])
-            imports.append(data[name:data.index(b'\0', name, name+256)].decode('ascii').lower())
+            imports.append(dll_name(entry[3]))
         else:
             raise ValueError('Unterminated import directory')
-    # Never silently omit a delayed sidecar dependency.
-    if any(struct.unpack_from('<II', data, opt+112+13*8)):
-        raise ValueError('Delay imports require explicit dependency handling')
-    return {'machine': 'AMD64', 'subsystem': 'Windows GUI', 'imports': sorted(set(imports))}
+    # PE delay descriptors use 32-bit RVA fields (attribute 1), or legacy VAs
+    # (attribute 0). Include both in the same dependency policy as normal imports.
+    # https://learn.microsoft.com/windows/win32/debug/pe-format#delay-load-import-tables-image-only
+    rva, size = struct.unpack_from('<II', data, opt+112+13*8)
+    delayed = []
+    if rva:
+        base = struct.unpack_from('<Q', data, opt+24)[0]
+        for i in range(min(size//32, 4096)):
+            entry = struct.unpack_from('<IIIIIIII', data, offset(rva+i*32, 32))
+            if not any(entry):
+                break
+            if entry[0] not in (0, 1):
+                raise ValueError('Unknown PE delay import attributes')
+            delayed.append(dll_name(entry[1] if entry[0] else entry[1]-base))
+        else:
+            raise ValueError('Unterminated delay import directory')
+    elif size:
+        raise ValueError('PE delay import directory is missing its RVA')
+    return {'machine': 'AMD64', 'subsystem': 'Windows GUI',
+            'imports': sorted(set(imports+delayed)), 'delay_imports': sorted(set(delayed))}
 
 
 def verify_icon(executable):
