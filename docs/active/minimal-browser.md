@@ -4,13 +4,23 @@
 
 ## 目標
 
-目前交付為 `dist/macos-highlight-images/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-youtube-external/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## YouTube 連結直接開啟瀏覽器（2026-10-22）
+
+使用者回報影片點開只有框內縮圖。YouTube 網頁連結改走既有 OpenLink 外部瀏覽器路徑，原網址與時間／查詢／片段參數不重建；移除 YouTube 專用 target、縮圖下載及介面翻譯分支。點擊仍核對受信任事件、來源版本與投影。直接 MP4／WebM／OGV 的原生 video controls、preload none、codec 失敗與外部開啟後備保留。此輪沒有加入 YouTube IFrame 播放器。
+
+core 13 命令／2 replay、desktop lib 143／bin 129、全 targets Clippy、JS 229、Python tooling 70、fmt／docs 通過。Rust 案例確認 YouTube watch／shorts／live／短網址不產生縮圖 target，原網址保持不變；既有直接圖片／影片、網址安全及版本拒絕案例重跑。Windows desktop_media 探針更新為檢查 YouTube 直達 native external sink，沒有縮圖 HTTP 或 preview 節點，並保留圖片外開與影片播放驗證；本輪無 Windows runner，這個原生探針列 not_ready，不能以 Python 單元測試代替。
+
+macOS arm64 原生 inline smoke passed：兩次 Enter 精確取得 colours.png 與 missing.png 的 404，第三次等寬成功，視窗固定 1040×768。來源 PNG 960×576 與系統剪貼簿讀回逐像素相同；Close acknowledged、全部 owner／HTTP thread join、程序 exit 0，15 份 Mach-O loadable sections 與交付一致、strict ad-hoc 驗章通過。此 smoke 未點 YouTube，實際系統瀏覽器啟動仍留人工驗收；不以圖片 smoke 宣稱影片播放或外開實測通過。Windows／Linux 原生 UI 本輪 not_ready。
+
+證據 .local/verification/youtube-external（delivery-gate.json、native、validation.json）；交付 dist/macos-youtube-external/PTTStella.app（macOS arm64 release／ad-hoc，未公證）。
 
 ## 推文高亮保留展圖與閱讀位置（2026-10-22）
 
