@@ -652,8 +652,8 @@ function wheel(e) {
     navigate({action},e);
 }
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
-const media=installMedia({tr,send,prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshNavigation,restore:restoreEditingFocus});
-function refreshControls(){refreshNavigation();refreshExportControls();}
+const media=installMedia({tr,send,prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshControls,restore:restoreEditingFocus});
+function refreshControls(){refreshNavigation();refreshExportControls();inlineImages.refreshAnimations();}
 const sitesUi=createSitesDialog({tr,send,manage:e=>settingsUi.manage("sites",e),present:dialog=>dialog.show(),visible:()=>settingsUi.visible("sites"),finished:()=>settingsUi.close({isTrusted:true}),prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreSettingsPanelFocus,changed:refreshControls});
 const settingsUi=createSurfaceSettings({document,send,tr,loadFonts,fontLoadNote,invalidateFonts,render,
     features:()=>({sites:sitesUi,filters:filterUi,account:loginUi}),

@@ -667,3 +667,6 @@ settings-alias-article-boundary = article boundary arrow previous next 上一篇
 settings-close-command = 關閉設定
 about-author = 作者：{ $author }
 about-version = 版本：{ $version }
+
+gif-playing = GIF 動畫播放中
+gif-paused = GIF 動畫已暫停
