@@ -450,11 +450,20 @@ fn context_menu() -> Element {
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "account-mask",
                 Shield { size: 18 } span { {pttstella::msg!("account-mask")} }
             }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "account-remove-mask",
+                Shield { size: 18 } span { {pttstella::msg!("account-remove-mask")} }
+            }
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "account-mask-row",
                 Shield { size: 18 } span { {pttstella::msg!("account-mask-row")} }
             }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "account-remove-mask-row",
+                Shield { size: 18 } span { {pttstella::msg!("account-remove-mask-row")} }
+            }
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "account-allow",
                 Shield { size: 18 } span { {pttstella::msg!("account-allow")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "account-remove-allow",
+                Shield { size: 18 } span { {pttstella::msg!("account-remove-allow")} }
             }
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "reply-focus",
                 Shield { size: 18 } span { {pttstella::msg!("reply-focus")} }
@@ -674,6 +683,12 @@ pub(super) fn SettingsForm(filters_probe: bool) -> Element {
                         }
                     }
                     p {class:"settings-help",{pttstella::msg!("article-mode-help")}}
+                    label { class:"settings-check",
+                        input { id:"article-boundary-navigation", r#type:"checkbox" }
+                        span { {pttstella::msg!("article-boundary-navigation")} }
+                    }
+                    p {class:"settings-help",{pttstella::msg!("article-boundary-help")}}
+
 
                     label { SettingsCaption {label:pttstella::msg!("hover-position"),icon:rsx!{Image{size:18}}}
                         select {id:"settings-hover",

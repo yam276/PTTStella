@@ -745,6 +745,7 @@ pub enum Intent {
     Last,
     Forward,
     Lines { down: bool, count: usize },
+    AdjacentArticle { down: bool },
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
@@ -845,6 +846,13 @@ pub fn plan(context: &Context, intent: Intent) -> Result<Vec<u8>, Error> {
         return Ok(bytes.to_vec());
     }
     let bytes = match (context, intent) {
+        // Reposition first: the web reader's visible edge can differ from the station page.
+        (Context::ArticleReading { .. }, Intent::AdjacentArticle { down: true }) => {
+            b"\x1b[F\x1b[B".as_slice()
+        }
+        (Context::ArticleReading { .. }, Intent::AdjacentArticle { down: false }) => {
+            b"\x1b[H\x1b[A".as_slice()
+        }
         (Context::ContinuePrompt, Intent::Continue) => b" ".as_slice(),
         (Context::ArticleReading { first_line: 1, .. }, Intent::First)
         | (Context::ArticleReading { percent: 100, .. }, Intent::Last)

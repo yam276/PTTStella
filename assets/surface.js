@@ -138,6 +138,10 @@ function keydown(e) {
     if(inlineShortcut(e,keyboardState,latest)||e.key==="Enter"&&inlineImages.keyHeld()) {
         e.preventDefault();clearSelection();cancelDrag();inlineImages.keydown(e);return;
     }
+    if(latest?.article&&["ArrowUp","ArrowDown"].includes(e.key)&&!e.ctrlKey&&!e.altKey&&!e.shiftKey
+        &&!(keyboardState.enabled&&["input","once"].includes(keyboardState.mode))) {
+        e.preventDefault();policy("reset",e);readingMove({action:"lines",down:e.key==="ArrowDown",count:1},e,"keyboard-arrow");return;
+    }
     if(latest?.article&&!e.ctrlKey&&!e.altKey&&!e.shiftKey&&!keyboardState.enabled) {
         // PTT's ordinary j/k reading keys must not become textarea edits:
         // those edits suspend the web projection and bypass its local movement.
@@ -455,9 +459,13 @@ function readingMove(intent,e,source="button") {
     let action=intent.action;
     if(action==="first"&&article.first_line===1||action==="last"&&article.end)return true;
     if(!["first","last"].includes(action))action=delta<0?"previous_page":"next_page";
-    if(action==="previous_page"&&article.first_line===1||action==="next_page"&&article.end)return true;
+    if(action==="previous_page"&&article.first_line===1||action==="next_page"&&article.end){
+        if(intent.action==="lines"&&intent.count===1&&source==="keyboard-arrow"&&latest.article_boundary_navigation&&!e.repeat&&article.load!=="loading")
+            navigate({action:"adjacent_article",down:delta>0},e,"keyboard",false);
+        return true;
+    }
     if(["loading","changed","limit"].includes(article.load))return true;
-    navigate({action},e,source,false);return true;
+    navigate({action},e,source==="keyboard-arrow"?"keyboard":source,false);return true;
 }
 function navigate(intent,e,source="pointer",cached=true) {
     if(cached&&readingMove(intent,e,source))return;
@@ -503,9 +511,10 @@ function contextAction(action,context,e){
     if(!e.isTrusted||stopped||blocked()||contextMenuItems(contextState(context.index,context.word,context.replyRow)).get(action)!==true)return;
     if(action==="copy"||action==="copy-link")send({kind:"copy_text",presentation:latest.presentation,generation,revision,
         target:action==="copy"?{kind:"selection",request:selectionCache.request}:{kind:"link",index:context.index},trusted:true});
-    else if(["account-mask","account-mask-row","account-allow"].includes(action)){
-        const policy={"account-mask":"mask","account-mask-row":"mask_row","account-allow":"allow"}[action];
-        send({kind:"account_rule",presentation:latest.presentation,stamp:stamp(),row:context.word.row,col:context.word.start,policy,trusted:true});
+    else if(["account-mask","account-mask-row","account-allow","account-remove-mask","account-remove-mask-row","account-remove-allow"].includes(action)){
+        const remove=action.startsWith("account-remove-");
+        const policy={"account-mask":"mask","account-mask-row":"mask_row","account-allow":"allow"}[action.replace("account-remove-","account-")];
+        send({kind:"account_rule",presentation:latest.presentation,stamp:stamp(),row:context.word.row,col:context.word.start,policy,remove,trusted:true});
     }
     else if(action==="reply-focus")send({kind:"reply_focus",presentation:latest.presentation,stamp:stamp(),row:context.replyRow,trusted:true});
     else if(action==="reply-focus-clear")send({kind:"reply_focus",presentation:latest.presentation,stamp:stamp(),row:null,trusted:true});

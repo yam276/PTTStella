@@ -76,6 +76,7 @@ pub(super) struct SurfaceState {
     raw_reading: bool,
     reply_focus: Option<(u64, Option<u64>, String)>,
     article_mode: ArticleMode,
+    article_boundary_navigation: bool,
     filters: filters::State,
     in_flight: Option<Paint>,
     displayed: Option<Paint>,
@@ -92,6 +93,7 @@ impl SurfaceState {
             raw_reading: false,
             reply_focus: None,
             article_mode: ArticleMode::default(),
+            article_boundary_navigation: false,
             filters: filters::State::new(rules),
             in_flight: None,
             displayed: None,
@@ -126,6 +128,7 @@ impl SurfaceState {
         self.capture_reading(view);
         let mut packet = paint(view, probe, settings, &self.filters);
         packet.article_mode = self.article_mode;
+        packet.article_boundary_navigation = self.article_boundary_navigation;
         let source_replies = packet.replies.clone();
         if !self.raw_reading && self.article_mode == ArticleMode::Web {
             self.article.render(&mut packet);
@@ -168,6 +171,14 @@ impl SurfaceState {
                 _ => Vec::new(),
             };
         }
+        for word in &mut packet.account_words {
+            word.policy = self
+                .rules()
+                .entries
+                .iter()
+                .find(|entry| entry.id.eq_ignore_ascii_case(&word.id))
+                .map(|entry| entry.policy);
+        }
         super::presentation::refresh_links(&mut packet);
         packet.hover = self
             .hover
@@ -205,11 +216,12 @@ impl SurfaceState {
         &self,
         identity: Identity,
         stamp: Stamp,
-        row: usize,
-        col: usize,
+        cell: (usize, usize),
         policy: filters::Policy,
+        remove: bool,
         view: &View,
     ) -> Option<Result<filters::Rules, String>> {
+        let (row, col) = cell;
         let word = self
             .account_paint(identity, stamp, view)?
             .account_words
@@ -221,7 +233,10 @@ impl SurfaceState {
             .iter()
             .find(|e| e.id.eq_ignore_ascii_case(&word.id))
             .map_or("", |e| e.note.as_str());
-        Some(self.rules().edit_policy(&word.id, note, policy, false))
+        if remove && word.policy != Some(policy) {
+            return None;
+        }
+        Some(self.rules().edit_policy(&word.id, note, policy, remove))
     }
     pub(super) fn focus_reply(
         &mut self,
@@ -353,6 +368,31 @@ impl SurfaceState {
         self.displayed.as_ref().is_some_and(|p| {
             !p.output_pending && p.generation == generation && p.navigation.kind() == context.kind()
         })
+    }
+    pub(super) fn set_article_boundary_navigation(&mut self, enabled: bool) {
+        if self.article_boundary_navigation != enabled {
+            self.article_boundary_navigation = enabled;
+            self.dirty = true;
+        }
+    }
+    pub(super) fn adjacent_article_allowed(&self, stamp: Stamp, down: bool, view: &View) -> bool {
+        self.article_boundary_navigation
+            && stamp == view.stamp()
+            && self.cached_reading(stamp, view)
+            && !view.input_pending
+            && !view.output_pending
+            && self
+                .displayed
+                .as_ref()
+                .and_then(|p| p.article.as_ref())
+                .is_some_and(|article| {
+                    article.load != Some(super::article_cache::LoadState::Loading)
+                        && if down {
+                            article.end
+                        } else {
+                            article.first_line == 1
+                        }
+                })
     }
     pub(super) fn set_article_mode(&mut self, mode: ArticleMode) -> bool {
         if self.article_mode == mode {

@@ -14,6 +14,8 @@ pub(super) struct Change {
     #[serde(default)]
     pub article_mode: Option<pttstella::settings::ArticleMode>,
     #[serde(default)]
+    pub article_boundary_navigation: Option<bool>,
+    #[serde(default)]
     pub language: pttstella::i18n::Language,
     pub tools_opacity: pttstella::settings::ToolOpacity,
     pub tools_access: pttstella::settings::ToolAccess,
@@ -26,6 +28,9 @@ impl Change {
         app.language = self.language;
         if let Some(mode) = self.article_mode {
             app.article_mode = mode;
+        }
+        if let Some(enabled) = self.article_boundary_navigation {
+            app.article_boundary_navigation = enabled;
         }
         app.tools_opacity = self.tools_opacity;
         app.tools_access = self.tools_access;
@@ -109,6 +114,7 @@ impl Preferences {
         Packet::SettingsOpen(Box::new(SettingsOpen {
             hover: self.app.hover,
             article_mode: self.app.article_mode,
+            article_boundary_navigation: self.app.article_boundary_navigation,
             profile: self.app.display.clone(),
             tools_opacity: self.app.tools_opacity,
             tools_access: self.app.tools_access,

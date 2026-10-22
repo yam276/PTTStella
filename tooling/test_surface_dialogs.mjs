@@ -437,3 +437,16 @@ test("import preview can be inspected across tabs and sort modes before cancella
     assert.equal(env.node("filters-empty").hidden,false);env.fire("filters-tab-allow");assert.deepEqual(f.ids(),["Local"]);
     assert.equal(env.sent.filter(packet=>packet.kind==="filters_import_apply"||packet.kind==="filters_edit").length,0);ui.destroy();
 });
+
+test('article boundary setting defaults off, saves, retries and resets with its own page',async()=>{
+ let page='media';const env=environment('surface-settings.js','createSettingsDialog'),ui=env.create({page:()=>page});
+ await ui.open(openData());assert.equal(env.node('article-boundary-navigation').checked,false);
+ env.node('article-boundary-navigation').checked=true;env.fire('article-boundary-navigation','change',false);env.tick();
+ assert.equal(env.sent.filter(p=>p.kind==='settings_save').length,0);
+ env.fire('article-boundary-navigation','change');env.tick();assert.equal(env.sent.at(-1).article_boundary_navigation,true);
+ ui.saved({status:'rejected'});assert.equal(ui.snapshot().article_boundary_navigation,true);
+ env.fire('font-save');ui.saved({status:'saved'});
+ page='appearance';env.fire('font-defaults');env.tick();assert.equal(env.sent.at(-1).article_boundary_navigation,true);ui.saved({status:'saved'});
+ page='media';env.fire('font-defaults');env.tick();assert.equal(env.sent.at(-1).article_boundary_navigation,false);ui.saved({status:'saved'});
+ ui.destroy();
+});

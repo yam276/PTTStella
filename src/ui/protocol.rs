@@ -79,6 +79,8 @@ pub(super) enum SurfaceEvent {
         row: usize,
         col: usize,
         policy: pttstella::filters::Policy,
+        #[serde(default)]
+        remove: bool,
         trusted: bool,
     },
     ReplyFocus {

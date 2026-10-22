@@ -886,3 +886,59 @@ fn retained_blank_tail_does_not_accept_changed_text_or_background() {
         assert_eq!(changed.article.as_ref().unwrap().last_line, 22);
     }
 }
+
+#[test]
+fn terminal_article_edges_only_switch_on_fresh_arrows_when_enabled() {
+    let context = Context::ArticleReading {
+        first_line: 1,
+        last_line: 16,
+        percent: 100,
+    };
+    for (name, bytes) in [
+        ("ArrowDown", b"\x1b[F\x1b[B".as_slice()),
+        ("ArrowUp", b"\x1b[H\x1b[A".as_slice()),
+    ] {
+        let mut key = pttstella::vim::Key {
+            key: name.into(),
+            code: name.into(),
+            ctrl: false,
+            alt: false,
+            shift: false,
+            repeat: false,
+        };
+        assert_eq!(
+            terminal_arrow_boundary(&key, &context, false),
+            Some(Vec::new())
+        );
+        assert_eq!(
+            terminal_arrow_boundary(&key, &context, true).as_deref(),
+            Some(bytes)
+        );
+        key.repeat = true;
+        assert_eq!(
+            terminal_arrow_boundary(&key, &context, true),
+            Some(Vec::new())
+        );
+        key.repeat = false;
+        key.shift = true;
+        assert_eq!(terminal_arrow_boundary(&key, &context, true), None);
+        key.shift = false;
+        let middle = Context::ArticleReading {
+            first_line: 24,
+            last_line: 46,
+            percent: 50,
+        };
+        assert_eq!(terminal_arrow_boundary(&key, &middle, true), None);
+    }
+    for name in ["PageUp", "PageDown", "j", "k", "End", "Home"] {
+        let key = pttstella::vim::Key {
+            key: name.into(),
+            code: name.into(),
+            ctrl: false,
+            alt: false,
+            shift: false,
+            repeat: false,
+        };
+        assert_eq!(terminal_arrow_boundary(&key, &context, true), None);
+    }
+}

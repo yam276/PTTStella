@@ -12,6 +12,7 @@ function settingsCatalog(tr){
         ['tools-right-click','input','settings-right-click','settings-alias-right-click'],
         ['tools-show-ball','input','settings-show-ball','settings-alias-ball'],
         ['article-mode','media','article-mode','settings-alias-article-mode'],
+        ['article-boundary-navigation','media','article-boundary-navigation','settings-alias-article-boundary'],
         ['settings-hover','media','hover-label','settings-alias-media'],
         [null,'sites','sites-title','settings-alias-sites'],
         [null,'filters','filters-title','settings-alias-filters'],

@@ -393,6 +393,8 @@ pub struct AccountWord {
     pub start: usize,
     pub end: usize,
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub policy: Option<Policy>,
 }
 /// Only independently recognized article-list author fields can expose account
 /// actions. A whole-row mask must not leak its hidden author through metadata.
@@ -429,6 +431,7 @@ pub fn article_authors(source: &Frame, visible: &Frame) -> Vec<AccountWord> {
                 start: 17,
                 end: 30,
                 id: id.clone(),
+                policy: None,
             })
         })
         .collect()
@@ -468,6 +471,7 @@ pub fn account_words(frame: &Frame) -> Vec<AccountWord> {
                     start,
                     end,
                     id: id.to_owned(),
+                    policy: None,
                 });
             }
             start = end;
@@ -478,17 +482,33 @@ pub fn account_words(frame: &Frame) -> Vec<AccountWord> {
 
 /// Temporary reply focus never changes the persistent account rules.
 pub fn focus_pushes(frame: &mut Frame, replies: &[Push], id: &str) {
-    let ranges: Vec<_> = replies
+    let marked: std::collections::BTreeSet<_> = replies
         .iter()
-        .filter(|p| !p.id.eq_ignore_ascii_case(id))
-        .map(|p| Push {
-            row: p.row,
-            id: p.id.clone(),
-            start: 0,
-            end: frame.cols,
-        })
+        .filter(|p| p.id.eq_ignore_ascii_case(id))
+        .map(|p| p.row)
         .collect();
-    mask_ranges(frame, &ranges);
+    let blue_rows: std::collections::BTreeSet<_> = frame
+        .glyphs
+        .iter()
+        .filter(|g| marked.contains(&g.row) && [g.left, g.right].iter().any(|s| s.fg % 8 == 4))
+        .map(|g| g.row)
+        .collect();
+    for glyph in &mut frame.glyphs {
+        if !marked.contains(&glyph.row) {
+            continue;
+        }
+        // Permanent masks and merged identities remain opaque, even on a marked row.
+        if glyph.text == "█"
+            && [glyph.left, glyph.right]
+                .iter()
+                .all(|s| s.fg == 0 && s.bg == 0)
+        {
+            continue;
+        }
+        for style in [&mut glyph.left, &mut glyph.right] {
+            style.bg = if blue_rows.contains(&glyph.row) { 5 } else { 4 };
+        }
+    }
 }
 
 /// Shared cell replacement for content masks and repeated reply identities.
