@@ -10,10 +10,11 @@ default-run = "pttstella"
 
 [features]
 default = []
-desktop = ["dep:arboard", "dep:dioxus-icons", "dep:dioxus", "dep:tokio", "dep:base64", "dep:tokio-tungstenite", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser", "dep:rfd", "dep:tempfile", "dep:directories", "dep:reqwest", "dep:imagesize", "dep:security-framework", "dep:font-kit", "dep:winresource"]
+desktop = ["dep:png", "dep:arboard", "dep:dioxus-icons", "dep:dioxus", "dep:tokio", "dep:base64", "dep:tokio-tungstenite", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser", "dep:rfd", "dep:tempfile", "dep:directories", "dep:reqwest", "dep:imagesize", "dep:security-framework", "dep:font-kit", "dep:winresource"]
 
 [dependencies]
-arboard = { version = "=3.7.0", default-features = false, optional = true }
+arboard = { version = "=3.7.0", default-features = false, features = ["image-data"], optional = true }
+png = { version = "=0.18.1", optional = true }
 dioxus-icons = { version = "=0.1.0", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

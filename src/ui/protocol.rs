@@ -260,6 +260,8 @@ pub(super) enum SurfaceEvent {
         generation: u64,
         revision: u64,
         selection_request: Option<u64>,
+        #[serde(default)]
+        destination: super::files::ExportDestination,
         png: String,
         trusted: bool,
     },
@@ -782,5 +784,32 @@ mod article_load_tests {
             assert!(event.requires_ptt());
             assert_eq!(event.admitted(7), expected);
         }
+    }
+}
+
+#[cfg(test)]
+mod image_clipboard_tests {
+    use super::*;
+    #[test]
+    fn image_export_destinations_are_closed_and_require_trusted_events() {
+        let mut value = serde_json::json!({"kind":"export_png","presentation":3,"generation":7,"revision":4,"selection_request":null,"destination":"clipboard","png":"data:image/png;base64,AA==","trusted":true});
+        let event: SurfaceEvent = serde_json::from_value(value.clone()).unwrap();
+        assert!(event.admitted(7));
+        // SurfaceState and OutputLease own source freshness for export events.
+        assert!(matches!(
+            event,
+            SurfaceEvent::ExportPng {
+                destination: super::super::files::ExportDestination::Clipboard,
+                ..
+            }
+        ));
+        value["trusted"] = false.into();
+        assert!(
+            !serde_json::from_value::<SurfaceEvent>(value.clone())
+                .unwrap()
+                .admitted(7)
+        );
+        value["destination"] = "custom".into();
+        assert!(serde_json::from_value::<SurfaceEvent>(value).is_err());
     }
 }

@@ -286,6 +286,9 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "select-all", {pttstella::msg!("select-all")} }
                 button { id: "export-png", {pttstella::msg!("export-png")} }
                 button { id: "export-rows", disabled: true, title: pttstella::msg!("export-rows-hint"), {pttstella::msg!("export-rows")} }
+                button { id: "copy-png", {pttstella::msg!("copy-png")} }
+                button { id: "copy-rows-png", disabled: true, title: pttstella::msg!("export-rows-hint"), {pttstella::msg!("copy-rows-png")} }
+
                 }
                 section { "data-tools-group": "filters",
                 button { id: "filters-open", {pttstella::msg!("filters-title")} }
@@ -493,6 +496,12 @@ fn context_menu() -> Element {
             }
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "select-link",
                 Link { size: 18 } span { {pttstella::msg!("context-select-link")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy-image-page",
+                Copy { size: 18 } span { {pttstella::msg!("copy-png")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy-image-rows",
+                Copy { size: 18 } span { {pttstella::msg!("copy-rows-png")} }
             }
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "select-all",
                 FileText { size: 18 } span { {pttstella::msg!("context-select-all")} }

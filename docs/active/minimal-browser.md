@@ -4,13 +4,27 @@
 
 ## 目標
 
-目前交付為 `dist/macos-reply-navigation-final/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-desktop-polish/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 設定 Esc、關於資訊、GIF 播放與圖片剪貼簿（2026-10-22）
+
+macOS 設定開啟時啟用原生 Escape menu accelerator，先消費關鍵事件，再由既有設定 owner 執行保存／關閉；不退出全螢幕。WebView capture handler 同時支援其他平台，組字與 repeat 不重複關閉，保存失敗保持開啟。選單翻譯更新保留設定可見狀態，surface 結束解除捷徑。「關於與授權」顯示 Cargo 的作者、實際編譯版本及固定 repo 網址；按鈕沿受信任事件開啟瀏覽器，未提高產品版本。
+
+完整預覽及文章展圖的 GIF 交由 WebView 原生 img 解碼播放，保留首幀 Canvas；hover 仍是首幀。共用播放 owner 管理可見區、失焦、隱藏、使用者暫停與清理；文章內最多兩張、完整預覽最多一張，按距可視區中心排序，另有 64M decoded frame pixels 的播放總量上限。Rust 既有格式／下載／幀數限制先驗證並提供 frame-pixel 成本；切換與取消移除 img src，再撤銷 Blob。沒有 JavaScript 每幀繪製 loop；此資源上限不是原生 process RSS 量測。
+
+擷取工具與情境選單新增複製整頁／選取行 PNG，仍保留另存。沿同一 renderer、80 欄及連續行契約，檢查 PNG 實際格式／尺寸／容量後轉 RGBA，經既有 worker 與持有的原生 clipboard owner 寫入。工作前與寫入前核對 output lease，拒絕取消、session／revision／policy 過期結果。只有明確複製動作寫入，正常模式不保存讀回證據；probe 模式才核對系統剪貼簿並寫本機合成圖片證據。
+
+驗證：core 13 命令／2 replay、desktop lib 143／bin 126、全 targets Clippy、JS 219、Python tooling 70、fmt 及 docs 通過。新增 expected 覆蓋設定 Esc／組字／保存失敗、GIF 可見排序／播放成本／失焦／手動暫停／清理、圖片目標與信任邊界、RGB／RGBA 解碼、錯誤尺寸／截斷、取消與舊 session 拒絕寫入。最終 build marker 已核對，未將較早候選的 aria 標示當作最終包。
+
+macOS arm64 原生 Dioxus／WKWebView 全螢幕下按 Esc，設定消失且前後維持 1920×1080；關於文字與 Cargo metadata 一致。候選包原生 GIF 兩個時間點的紅／藍色幀不同，確認實際播放；最終包自動化未取得前景時顯示暫停，保持失焦保護，前景恢復的實際操作仍待人工驗收。最終重新執行的 inline 探針 passed：精確兩筆 HTTP、同一展圖 batch、整頁及 24 行選取的系統剪貼簿讀回 RGBA 與 PNG 存檔逐像素相同（960×576）；單行 RGBA 另由 Rust 案例覆蓋。Close acknowledged、全部 owner join、程序 exit 0；15 份 Mach-O loadable sections 與交付一致，strict ad-hoc 驗章通過。
+
+保留中途失敗：startup menu wrapper 缺漏、JS DOM double 缺 listener、原大型 JSON 巨集遞迴，以及誤將 generic event admission 當作 export freshness 的測試預期，皆修正後重跑。第一輪最終包探針逾時列 failed，不當作通過，已由 native-delivery-r2 完整取代。正文座標滑鼠、其他程式實際貼圖介面、前景切換恢復播放仍留人工驗收；Windows／Linux 原生 UI 本輪 not_ready。證據 .local/verification/release-polish（delivery-gate-r2.json、native、native-delivery-r2、validation.json）。交付 dist/macos-desktop-polish/PTTStella.app（release／arm64／ad-hoc，未公證）。
 
 ## 名單右鍵移除、推文底色與文章邊界方向鍵（2026-10-22）
 

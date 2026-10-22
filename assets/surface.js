@@ -11,6 +11,7 @@ const surfaceNote=document.getElementById("surface-note");
 const pasteDialog=document.getElementById("paste-dialog"), pasteSend=document.getElementById("paste-send"), pasteCancel=document.getElementById("paste-cancel");
 const exportButton=document.getElementById("export-png");
 const exportRows=document.getElementById("export-rows");
+const copyPng=document.getElementById("copy-png"),copyRowsPng=document.getElementById("copy-rows-png");
 const keepAlive=document.getElementById("keep-alive");
 const stationMouseButton=document.getElementById("station-mouse"),stationMouseStatus=document.getElementById("station-mouse-status");
 const hoverPosition=document.getElementById("hover-position");
@@ -523,6 +524,8 @@ function contextAction(action,context,e){
     else if(action==="select-all")selectPage();
     else if(action==="export-rows")exportScreen(e,true);
     else if(action==="export-page")exportScreen(e);
+    else if(action==="copy-image-page")copyPageImage(e);
+    else if(action==="copy-image-rows")copySelectedImage(e);
     else if(action==="inline")requestInline({kind:"all"},e);
     else if(action==="back")browseReturn(e);
     else if(action==="previous")browseUp(e);
@@ -574,7 +577,9 @@ function refreshExportControls() {
     exportButton.title=latest?.article?tr("export-cache-page-hint"):"";
     exportButton.disabled=exportBusy||!latest||latest.output_pending||filterUi.blocked();
     exportRows.disabled=exportBusy||latest?.output_pending||filterUi.blocked()||blocked()||!selection||selection.value.rows.end-selection.value.rows.start>24||selection.generation!==generation||selection.revision!==revision||selection.presentation!==latest?.presentation;
+    copyPng.disabled=exportButton.disabled;copyRowsPng.disabled=exportRows.disabled;
     exportRows.title=selection&&selection.value.rows.end-selection.value.rows.start>24?tr("export-cache-selection-limit"):selection?tr("export-lines-hint",{start:selection.value.rows.start+(latest?.article?.first_line??1),end:selection.value.rows.end+(latest?.article?.first_line??1)-1}):tr("export-rows-hint");
+    copyPng.title=exportButton.title;copyRowsPng.title=exportRows.title;
 }
 function refreshKeepAlive() {
     const ready=!settingsActive&&!!latest?.keep_alive&&!inlineImages.active()&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
@@ -587,7 +592,7 @@ function refreshKeepAlive() {
     if(!stopped&&latest&&key!==keepAliveGate) {keepAliveGate=key;send({kind:"keep_alive_gate",stamp:current,ready,reading,article:latest.article?.id??null});}
 }
 function toggleKeepAlive(e){if(latest&&!stopped)send({kind:"keep_alive",enabled:!latest.keep_alive,trusted:e.isTrusted});}
-function exportScreen(e, selected=false) {
+function exportScreen(e, selected=false, destination="file") {
     if(exportBusy||!latest||stopped||filterUi.blocked()) return;
     const selection=selected?selectionCache:null;
     if(selected&&exportRows.disabled) return;
@@ -614,7 +619,7 @@ function exportScreen(e, selected=false) {
                 const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error(tr("export-prepare-failed")));reader.readAsDataURL(blob);
             });
             if(!stopped) send({kind:"export_png",presentation:packet.presentation,generation:packet.generation,revision:packet.frame.revision,
-                selection_request:selection?.request??null,png,trusted:e.isTrusted});
+                selection_request:selection?.request??null,destination,png,trusted:e.isTrusted});
         } catch(error) {
             exportBusy=false;refreshExportControls();
             if(!stopped) {surface.dataset.exportResult="failed";surfaceNote.textContent=String(error);restoreEditingFocus();}
@@ -622,6 +627,7 @@ function exportScreen(e, selected=false) {
     })();
 }
 const exportSelected=e=>exportScreen(e,true);
+const copyPageImage=e=>exportScreen(e,false,"clipboard"),copySelectedImage=e=>exportScreen(e,true,"clipboard");
 function hideChrome() { tools.close(); }
 function zoomTo(value) {
     if(stopped||!latest) return;
@@ -691,7 +697,7 @@ const bindings=[...inlineImages.bindings,...contextMenu.bindings,...sitesUi.bind
     [selectAll,"click",selectPage],[document,"copy",copy],
     [viewport,"contextmenu",openContextMenu],[surface,"pointerleave",leaveLink],
     [pasteSend,"click",confirmPaste],[pasteCancel,"click",cancelPaste],[pasteDialog,"cancel",cancelPaste],
-    [exportButton,"click",exportScreen],[exportRows,"click",exportSelected],
+    [exportButton,"click",exportScreen],[exportRows,"click",exportSelected],[copyPng,"click",copyPageImage],[copyRowsPng,"click",copySelectedImage],
     [keepAlive,"click",toggleKeepAlive],[stationMouseButton,"click",toggleStationMouse],
     [hoverPosition,"change",changeHoverPreference],
     [browseBack,"click",browseReturn],[browsePrevious,"click",browseUp],[browseNext,"click",browseDown],

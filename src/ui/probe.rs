@@ -47,6 +47,7 @@ pub(super) fn mouse_case(case: Option<&str>) -> bool {
 
 #[derive(Default)]
 pub(super) struct Checks {
+    pub(super) image_copies: usize,
     pub(super) site_switches: u8,
     pub(super) site_saves: u8,
     pub(super) site_removes: u8,
