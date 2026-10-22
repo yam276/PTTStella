@@ -550,3 +550,84 @@ test('inline GIF keeps its native source only while visible and resets release t
  e.viewport.getBoundingClientRect=()=>({top:0,bottom:500});e.ui.refreshAnimations();assert.equal(image.src,url);
  e.ui.reset();assert.equal(e.urls.size,0);assert.equal(image.src,undefined);assert.equal(await e.ui.destroy(),true);
 });
+
+
+function alignedReading({height=100,line=24,ratio=1}={}){
+    const e=ownerEnvironment(true,{render(target,packet){target.paintedRows=packet.frame.glyphs.map(g=>g.text);}});e.viewport.clientHeight=height;
+    const packet={...e.packet,connected:true,article:{id:1,first_line:1,last_line:40,end:true},frame:{cols:80,rows:41,revision:4,glyphs:Array.from({length:40},(_,row)=>({row,col:0,width:1,text:String(row),left:{},right:{}}))},
+        links:[{row:3,start:0,end:10,url:'https://example.com/edge.png'}],image_links:[0]};
+    const base={x:c=>c*6*ratio,y:r=>Math.floor(r*line*ratio)};
+    const c={latest:packet,viewport:e.viewport,surface:e.surface,blocked:()=>false,dragging:null,clearSelection(){},cancelHover(){},
+        repaint(){c.grid={...e.ui.layout(packet,base,ratio),ratio};},navigate(){assert.fail('complete cached reading must not send station input');}};
+    const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
+    vm.runInNewContext(surface.slice(surface.indexOf('function readingMove('),surface.indexOf('function navigate(')),c);c.repaint();
+    const move=(intent,source='button')=>c.readingMove(intent,{isTrusted:true},source);
+    const strips=()=>e.nodes.filter(n=>n.className==='inline-text-row'&&n.parentNode&&n.style.visibility!=='hidden');
+    const whole=()=>{assert.ok(strips().length>0);for(const strip of strips()){
+        const top=parseFloat(strip.style.top)+e.surface.offsetTop-e.viewport.scrollTop,bottom=top+parseFloat(strip.style.height);
+        assert.ok(top>=-.011&&bottom<=height-c.grid.footerHeight+.011,JSON.stringify({top,bottom,height}));
+    }};
+    return {...e,packet,base,c,move,strips,whole};
+}
+test('discrete page and line navigation aligns rows and never skips the hidden trailing row',async()=>{
+    const e=alignedReading({height:94}); // 70px body: row 2 must be deferred, never skipped.
+    e.whole();assert.equal(e.strips().length,2);
+    for(const [action,expected] of [['next_page',48],['next_page',96],['previous_page',48],['previous_page',0]]){
+        e.move({action});assert.equal(e.viewport.scrollTop,expected);e.whole();
+    }
+    e.move({action:'scroll',delta:43},'pointer');assert.equal(e.viewport.scrollTop,43);
+    e.move({action:'lines',down:true,count:1},'keyboard-arrow');assert.equal(e.viewport.scrollTop,48);e.whole();
+    e.move({action:'lines',down:false,count:1},'keyboard-arrow');assert.equal(e.viewport.scrollTop,24);e.whole();
+    e.move({action:'lines',down:true,count:3});assert.equal(e.viewport.scrollTop,96);e.whole();
+    await e.ui.destroy();
+});
+test('wheel stays pixel-smooth, while commands hide fractional edge rows and their URL controls',async()=>{
+    const e=alignedReading();e.whole();
+    assert.equal(e.c.grid.rowAt(73),null);assert.equal(e.c.grid.rowAt(73,true),3);
+    assert.equal(e.c.grid.reading.clippedAt(73),3);
+    assert.equal(e.nodes.find(n=>n.className==='inline-expand-trigger').hidden,true);
+    e.move({action:'scroll',delta:.25},'pointer');assert.equal(e.viewport.scrollTop,.25);
+    e.move({action:'scroll',delta:7},'pointer');assert.equal(e.viewport.scrollTop,7.25);
+    assert.ok(e.strips().some(n=>parseFloat(n.style.top)<e.viewport.scrollTop),'wheel renders the partially clipped top row');
+    e.move({action:'next_page'});assert.equal(e.viewport.scrollTop,72);e.whole();
+    e.move({action:'last'});assert.equal(e.viewport.scrollTop,884);e.whole();
+    assert.ok(e.strips().some(n=>parseFloat(n.style.top)+parseFloat(n.style.height)===960),'last text row remains visible');
+    const last=e.viewport.scrollTop;e.move({action:'next_page'});assert.equal(e.viewport.scrollTop,last);e.whole();
+    e.move({action:'scroll',delta:1},'pointer');assert.equal(e.viewport.scrollTop,last);
+    assert.ok(e.strips().some(n=>parseFloat(n.style.top)<last));
+    e.move({action:'last'});e.whole();e.move({action:'first'});assert.equal(e.viewport.scrollTop,0);e.whole();
+    await e.ui.destroy();
+});
+test('fractional zoom and DPR retain complete rows without rounding the continuous wheel offset',async()=>{
+    for(const ratio of [1,1.5,2])for(const line of [19.3,26.5,31.7]){
+        const e=alignedReading({ratio,line,height:173});e.whole();
+        for(const action of ['next_page','next_page','previous_page','last','first']){e.move({action});e.whole();}
+        e.move({action:'scroll',delta:17.35},'pointer');assert.equal(e.viewport.scrollTop,17.35);
+        e.move({action:'lines',down:true,count:1});e.whole();await e.ui.destroy();
+    }
+});
+test('image gaps keep pixel movement inside the image but only complete neighboring text rows',async()=>{
+    const e=alignedReading();e.packet.links=[{row:0,start:0,end:10,url:'https://example.com/image.png'}];e.c.repaint();
+    e.ui.open({...e.open,article_id:1,first_line:1},e.packet);
+    e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:64,height:35}});
+    await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+    image.naturalWidth=64;image.naturalHeight=35;image.onload();await new Promise(resolve=>setImmediate(resolve));e.c.repaint();
+    e.move({action:'next_page'});assert.equal(e.viewport.scrollTop,68.4);e.whole();
+    assert.equal(e.c.grid.rowAt(75+68.4),null,'a fractional bottom row after an image is not a text hit');
+    e.move({action:'last'});e.whole();e.move({action:'previous_page'});e.whole();
+    e.move({action:'scroll',delta:-1.5},'pointer');const raw=e.viewport.scrollTop;
+    e.packet.article={...e.packet.article,id:2};e.c.repaint();assert.equal(e.viewport.scrollTop,0);e.whole();
+    assert.ok(raw>0);await e.ui.destroy();
+});
+
+test('paging through fractional viewports exposes every source row completely',async()=>{
+    for(const height of [94,100,173])for(const line of [19.3,24,26.5]){
+        const e=alignedReading({height,line}),seen=new Set();
+        for(let step=0;step<100;step++){
+            e.whole();for(const strip of e.strips())for(const row of strip.paintedRows)seen.add(Number(row));
+            const before=e.viewport.scrollTop;e.move({action:'next_page'});if(e.viewport.scrollTop===before)break;
+        }
+        assert.deepEqual([...seen].sort((a,b)=>a-b),Array.from({length:40},(_,i)=>i),JSON.stringify({height,line}));
+        await e.ui.destroy();
+    }
+});

@@ -39,7 +39,8 @@ function createInlineImageKey({scope,allowed,single,all,setTimer=setTimeout,clea
 }
 function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,notice,allowed=()=>false,request=()=>{}}) {
     const layer=document.createElement("div");layer.id="inline-images";surface.insertBefore(layer,canvas.nextSibling);
-    let current=null,items=[],visible=[],strips=[],footer=null,footerLayer=null,footerImage=null,footerPacket=null,footerProgress=null,dead=false,lastLayout=null,lastArticle=null,latestLayout=null;const jobs=new Set();
+    let current=null,items=[],visible=[],strips=[],footer=null,footerLayer=null,footerImage=null,footerPacket=null,footerProgress=null,dead=false,lastLayout=null,lastArticle=null,latestLayout=null,freeScroll=false;const jobs=new Set();
+    function setFreeScroll(value){const changed=freeScroll!==value;freeScroll=value;return changed;}
     const gifs=createGifPlayback({document,window:typeof window!=="undefined"?window:null,limit:2});
     function gifScore(item){
         if(dead||!current||!geometry||!matches(latestLayout)||item.box.hidden||item.box.isConnected===false||document.querySelector?.("dialog[open]"))return Infinity;
@@ -104,7 +105,7 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         }
         return result;
     }
-    function layoutControls(packet,mapping,base,ratio,width,controlGaps){
+    function layoutControls(packet,mapping,base,ratio,width,controlGaps,wholeRow){
         const live=new Set(candidates.map(candidate=>candidate.source));
         for(const [source,button] of controls)if(!live.has(source)){button.remove();controls.delete(source);}
         const bounds=viewport?.getBoundingClientRect(),origin=surface.getBoundingClientRect(),slots=new Map();
@@ -119,14 +120,14 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
             if(button.parentNode!==layer)layer.append(button);
             const expanded=!!candidateItem(candidate);button.disabled=expanded||!allowed();
             button.setAttribute("aria-label",tr(expanded?"inline-image-opened":"inline-image-open-one",{url:candidate.source}));button.setAttribute("aria-expanded",String(expanded));
-            button.hidden=!!bounds&&(origin.top+top>=bounds.bottom-height||origin.top+top+size<=bounds.top);
+            button.hidden=!wholeRow(candidate.row)||!!bounds&&(origin.top+top>=bounds.bottom-height||origin.top+top+size<=bounds.top);
             Object.assign(button.style,{left:left+"px",top:top+"px",width:size+"px",height:size+"px"});
         }
     }
     function detach(preserve=false){if(!preserve)lastLayout=null;for(const strip of strips){strip.width=0;strip.height=0;}strips=[];visible=[];
         if(footer){footer.width=0;footer.height=0;footerPacket=null;footerProgress=null;footerImage.removeAttribute("src");footerLayer.hidden=true;}layer.replaceChildren();canvas.style.visibility="";gifs.refresh();}
     function clear() {
-        current=null;suspend();
+        current=null;suspend();freeScroll=false;
         for(const button of controls.values())button.remove();controls.clear();candidates=[];geometry=null;
         for(const item of items){item.gif?.remove();item.animation?.removeAttribute("src");item.controller?.abort();item.image?.removeAttribute("src");if(item.url)URL.revokeObjectURL(item.url);if(item.still){item.still.width=0;item.still.height=0;}}
         items=[];detach(true);
@@ -192,7 +193,7 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
     function layout(packet,base,ratio) {
         moved();
         latestLayout=packet;gesture.validate();
-        if(lastArticle&&(lastArticle.id!==packet.article?.id||lastArticle.generation!==packet.generation))suspend();
+        if(lastArticle&&(lastArticle.id!==packet.article?.id||lastArticle.generation!==packet.generation)){suspend();freeScroll=false;}
         const bottom=row=>base.y(row+1);
         const cached=!!packet.article;
         if(current&&cached&&((current.article_id??null)!==packet.article.id||current.generation!==packet.generation))clear();
@@ -254,6 +255,23 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         const start=viewport?Math.max(0,mapping.rowAt(top,true)-2):0;
         const textRows=bodyRows;
         const end=viewport?Math.min(textRows,mapping.rowAt(top+viewport.clientHeight*ratio,true)+3):textRows;
+        const footerHeight=cached?base.y(packet.frame.rows)-base.y(packet.frame.rows-1):0;
+        const readingBottom=viewport?Math.min(mapping.height-footerHeight,top+viewport.clientHeight*ratio-footerHeight):mapping.height;
+        // A fitted/zoomed viewport and inserted images need not contain a whole
+        // number of rows. Discrete navigation shows only complete edge rows;
+        // wheel scrolling intentionally retains the normal continuous clipping.
+        const wholeRow=row=>!cached||!viewport||freeScroll||mapping.y(row)>=top-.01&&mapping.bottom(row)<=readingBottom+.01;
+        const reading={free:setFreeScroll,clippedAt(pixel){
+            const row=mapping.rowAt(pixel);
+            return row!==null&&row<bodyRows&&!wholeRow(row)?row:-1;
+        },align(target,maximum,edge="nearest"){
+            if(target<=0||target>=maximum&&edge!=="before")return target;
+            const pixel=(target-surface.offsetTop)*ratio,row=mapping.rowAt(pixel);
+            if(row===null||row>=bodyRows)return target; // Images have no terminal cells.
+            const before=mapping.y(row),after=mapping.bottom(row);
+            const aligned=Math.abs(pixel-before)<.01?before:edge==="before"?before:edge==="after"?after:pixel-before<=after-pixel?before:after;
+            return Math.max(0,Math.min(maximum,surface.offsetTop+aligned/ratio));
+        }};
         const count=end-start;
         while(strips.length>count){const strip=strips.pop();strip.width=0;strip.height=0;strip.remove();}
         while(strips.length<count){const strip=document.createElement("canvas");strip.className="inline-text-row";strips.push(strip);layer.append(strip);}
@@ -269,7 +287,10 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
             Object.assign(strip.style,{width:width+"px",height:height/ratio+"px"});
             if(top!==null)strip.style.top=top/ratio+"px";
         }
-        for(let at=0;at<count;at++)paintRow(strips[at],start+at,mapping.y(start+at));
+        for(let at=0;at<count;at++){
+            paintRow(strips[at],start+at,mapping.y(start+at));
+            strips[at].style.visibility=wholeRow(start+at)?"":"hidden";
+        }
         const used=new Map();
         for(const item of visible){
             const row=item.row+rowOffset,shown=row>=0&&row<packet.frame.rows-1;
@@ -278,7 +299,7 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
             Object.assign(item.box.style,{top:(mapping.bottom(row)/ratio+offset)+"px",width:width+"px",height:item.height+"px"});used.set(row,offset+item.height);
         }
         surface.style.height=mapping.height/ratio+"px";
-        layoutControls(packet,mapping,base,ratio,width,controlGaps);
+        layoutControls(packet,mapping,base,ratio,width,controlGaps,wholeRow);
         geometry={...mapping,ratio,footerHeight:cached?(base.y(packet.frame.rows)-base.y(packet.frame.rows-1))/ratio:0};knownScroll=viewport?.scrollTop??0;
         lastLayout=mapping;lastArticle=cached?{...article,generation:packet.generation,ratio}:null;
         gifs.refresh();
@@ -330,10 +351,14 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
             Object.assign(footerLayer.style,{left:(bounds.left-origin.left)+"px",top:(footerTop-origin.top)+"px",
                 width:width+"px",height:height/ratio+"px"});
             const drawn=footerImage.getBoundingClientRect(),drawnTop=(drawn.top-bounds.top)*ratio,drawnHeight=drawn.height*ratio;
-            return {...base,...mapping,footerHeight:drawn.height,
+            return {...base,...mapping,reading,footerHeight:drawn.height,
                 y:r=>r===row?drawnTop:Math.min(mapping.y(r),drawnTop),
                 bottom:r=>r===row?drawnTop+drawnHeight:Math.min(mapping.bottom(r),drawnTop),
-                rowAt(value,clamp=false){return value>=drawnTop&&value<drawnTop+drawnHeight?row:mapping.rowAt(value,clamp);}};
+                rowAt(value,clamp=false){
+                    if(value>=drawnTop&&value<drawnTop+drawnHeight)return row;
+                    const at=mapping.rowAt(value,clamp);
+                    return at===null||!clamp&&!wholeRow(at)?null:at;
+                }};
         }
         return {...base,...mapping};
     }

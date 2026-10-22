@@ -420,11 +420,14 @@ function hitAt(point,clientY) {
 // physical position; text selection and the image context menu keep their owners.
 function pointerHit(point,event) {
     const image=inlineImages.linkAtPoint(event);
-    if(image<0)return hitAt(point,event.clientY);
+    const bounds=surface.getBoundingClientRect();
+    const clipped=point===null&&event.clientX>=bounds.left&&event.clientX<bounds.right?
+        (grid?.reading?.clippedAt((event.clientY-bounds.top)*grid.ratio)??-1):-1;
+    if(image<0&&clipped<0)return hitAt(point,event.clientY);
     if(blocked()||dragging?.moved||!stationMouse.local()||!canNavigate()||latest?.navigation.kind!=="article_reading")return null;
-    const bounds=surface.getBoundingClientRect(),back=navigationBackRegion(latest.navigation,latest.article);
+    const back=navigationBackRegion(latest.navigation,latest.article);
     const hit=(event.clientX-bounds.left)*grid.ratio<grid.x(back.end)?{kind:"back"}:readingPageAt(null,event.clientY);
-    return hit?{...hit,image}:null;
+    return hit?{...hit,...(image>=0?{image}:{clipped})}:null;
 }
 function setHover(point,redraw=true,preview=true,event=null) {
     const hit=event?pointerHit(point,event):hitAt(point,pointerClient?.clientY),index=hit?.kind==="link"?hit.index:-1;
@@ -471,7 +474,21 @@ function readingMove(intent,e,source="button") {
     let target=Math.max(0,Math.min(maximum,top+delta));
     if(intent.action==="first")target=0;
     if(intent.action==="last")target=maximum;
-    if(Math.abs(target-top)>1){clearSelection();cancelHover(true);viewport.scrollTop=target;repaint();return true;}
+    const free=intent.action==="scroll";
+    if(grid?.reading?.free(free))repaint();
+    if(!free){
+        if(intent.action==="lines"){
+            const anchor=grid?.reading?.align(top,maximum,intent.down?"before":"after")??top;
+            target=Math.max(0,Math.min(maximum,anchor+delta));
+        }
+        const edge=["first","last","lines"].includes(intent.action)?"nearest":delta>0?"before":"after";
+        const finalStep=edge==="before"&&target>=maximum;
+        target=grid?.reading?.align(target,maximum,edge)??target;
+        // Show the last partial-top row at its own start before settling at
+        // the exact document end; the final page must not skip that row.
+        if(finalStep&&target<=top+.01)target=maximum;
+    }
+    if(Math.abs(target-top)>.01){clearSelection();cancelHover(true);viewport.scrollTop=target;repaint();return true;}
     let action=intent.action;
     if(action==="first"&&article.first_line===1||action==="last"&&article.end)return true;
     if(!["first","last"].includes(action))action=delta<0?"previous_page":"next_page";

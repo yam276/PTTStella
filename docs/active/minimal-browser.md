@@ -4,13 +4,25 @@
 
 ## 目標
 
-目前交付為 `dist/macos-image-navigation/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-row-alignment/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 非滾輪導覽維持完整文字行（2026-10-22）
+
+網頁文章原本以可視高度 90% 的像素量翻頁，會落在半行。現在鍵盤／Vim、按鈕與正文左鍵移動透過同一 row layout 對齊文字行；圖片間隙仍不取得 terminal cell。PageDown 往原可視區取整、PageUp 反向取整以保留重疊，方向鍵從當前行界移動。末頁若直接對齊實際底部會略過一行，先顯示該行起點，再前進到實際底部。Home／End 保留真正首尾，沒有增加文件空白或改變固定 BBS 視窗。
+
+分數縮放、圖片間隙與末頁無法同時對齊上下邊緣時，只繪製完整文字列，暫不呈現的邊緣列與其展圖控制項下次仍可完整讀到；原資料、選取／複製及來源 PNG 不刪行。被遮住的邊緣區可返回／翻頁／Home／End，不命中隱藏的文字網址或 ID。滾輪保留連續像素位移及原生裁切；下一個離散導覽恢復完整行。模式由 inline layout 擁有，新文章／清理重設；沒有額外 timer、全篇 canvas 或第二份文字解析。
+
+core 13 命令／2 replay、desktop lib 143／bin 128、全 targets Clippy、JS 228、Python tooling 70、fmt／docs 通過。新增 expected 覆蓋完整行上下界、行界落點／來源偏移、浮點滾輪（含 0.25px）與恢復、Home／End／首尾黑邊導覽、圖片間隙、DPR 1／1.5／2 及多種字高。逐頁遍歷不同高度／字高，獨立核對 40 個來源行全部曾完整出現；這個檢查曾抓出分數末頁漏看一行，修正後才通過。初輪 probe 預期把 UAO 雙欄實心塊當單欄、JS double 未完整提供 reading owner，保留失敗 log；沒有藉改產品行寬或放寬完整行驗證結案。
+
+新增 reading_rows 本機合成探針，23 個編號列加紅／綠滿字格色塊，peer 拒絕所有站端輸入。最終 macOS arm64 Dioxus／WKWebView 在 100% 顯示 23 個完整色塊，125% 的 Home、PageDown、End、PageUp 各顯示 18 個完整色塊；末頁最後紅色列可見，沒有半高邊緣色塊。工具收合後曾未取得正文焦點，改用可及性聚焦輸入後重做鍵盤與截圖，不將無效按鍵當通過。視窗固定 1040×768。來源 PNG 960×576 仍有全部 23 行，系統剪貼簿讀回與存檔 RGBA 完全一致；Close acknowledged、全部 owner／HTTP worker join、exit 0，15 份 Mach-O loadable sections 與交付一致、strict ad-hoc 驗章通過。
+
+原生滾輪／正文點擊依既有界線留給使用者手動驗收，Windows／Linux 原生 UI 本輪 not_ready。證據 .local/verification/row-alignment（delivery-gate.json 的 core／lib、final-gate-r2.json、native、validation.json；中途失敗保留）。交付 dist/macos-row-alignment/PTTStella.app（macOS arm64 release／ad-hoc，未公證）。
 
 ## 開圖順序、首尾點擊與推文作者命中（2026-10-22）
 
