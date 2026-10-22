@@ -73,11 +73,33 @@ pub(super) enum SurfaceEvent {
     FiltersOpen {
         trusted: bool,
     },
+    AccountRule {
+        presentation: u64,
+        stamp: Stamp,
+        row: usize,
+        col: usize,
+        policy: pttstella::filters::Policy,
+        #[serde(default)]
+        remove: bool,
+        trusted: bool,
+    },
+    ReplyFocus {
+        presentation: u64,
+        stamp: Stamp,
+        row: Option<usize>,
+        trusted: bool,
+    },
+    FiltersDefaultColor {
+        color: u8,
+        trusted: bool,
+    },
     FiltersEdit {
         id: String,
         note: String,
         #[serde(default)]
         policy: pttstella::filters::Policy,
+        #[serde(default)]
+        color: Option<u8>,
         remove: bool,
         trusted: bool,
     },
@@ -122,6 +144,8 @@ pub(super) enum SurfaceEvent {
         presentation: u64,
         stamp: Stamp,
         key: vim::Key,
+        #[serde(default)]
+        target: super::inline_images::Target,
         trusted: bool,
     },
     MediaDecoded {
@@ -140,11 +164,21 @@ pub(super) enum SurfaceEvent {
     KeepAliveGate {
         stamp: Stamp,
         ready: bool,
+        #[serde(default)]
+        reading: bool,
+        #[serde(default)]
+        article: Option<u64>,
     },
     Navigate {
         stamp: Stamp,
         intent: Intent,
         source: pttstella::navigation::Source,
+        trusted: bool,
+    },
+    ArticleLoad {
+        generation: u64,
+        article: u64,
+        resume: bool,
         trusted: bool,
     },
     DestinationSubmit {
@@ -173,6 +207,12 @@ pub(super) enum SurfaceEvent {
         request: u64,
         address: String,
         encoding: pttstella::encoding::TextEncoding,
+        trusted: bool,
+    },
+    SettingsVisibility {
+        open: bool,
+    },
+    AboutRepository {
         trusted: bool,
     },
     SettingsOpen {
@@ -206,10 +246,8 @@ pub(super) enum SurfaceEvent {
         values: DisplayProfile,
     },
     SettingsSave {
-        values: DisplayProfile,
-        tools_opacity: pttstella::settings::ToolOpacity,
-        #[serde(default)]
-        language: pttstella::i18n::Language,
+        #[serde(flatten)]
+        change: super::preferences::Change,
         trusted: bool,
     },
     SettingsProfile {
@@ -222,6 +260,8 @@ pub(super) enum SurfaceEvent {
         generation: u64,
         revision: u64,
         selection_request: Option<u64>,
+        #[serde(default)]
+        destination: super::files::ExportDestination,
         png: String,
         trusted: bool,
     },
@@ -317,11 +357,15 @@ impl SurfaceEvent {
                 | Self::RecentBoardsClear { .. }
                 | Self::FiltersOpen { .. }
                 | Self::FiltersEdit { .. }
+                | Self::FiltersDefaultColor { .. }
+                | Self::AccountRule { .. }
+                | Self::ReplyFocus { .. }
                 | Self::FiltersImport { .. }
                 | Self::FiltersImportApply { .. }
                 | Self::FiltersImportCancel { .. }
                 | Self::FiltersReveal { .. }
                 | Self::Navigate { .. }
+                | Self::ArticleLoad { .. }
                 | Self::KeepAlive { .. }
         )
     }
@@ -345,7 +389,9 @@ impl SurfaceEvent {
             // Revocation grants no input; it still cannot cross a session.
             StationMouseCancel { lease } => lease.stamp.generation == generation,
             StationMouseRevoke { generation: source } => *source == generation,
-            InlineExpand { trusted, stamp, .. } => *trusted && stamp.generation == generation,
+            AccountRule { trusted, stamp, .. }
+            | ReplyFocus { trusted, stamp, .. }
+            | InlineExpand { trusted, stamp, .. } => *trusted && stamp.generation == generation,
             Key {
                 trusted,
                 generation: source,
@@ -384,6 +430,11 @@ impl SurfaceEvent {
                     && stamp.generation == generation
                     && *source != pttstella::navigation::Source::Keyboard
             }
+            ArticleLoad {
+                trusted,
+                generation: source,
+                ..
+            } => *trusted && *source == generation,
             LoginSubmit { trusted, stamp, .. } | DestinationSubmit { trusted, stamp, .. } => {
                 *trusted && stamp.generation == generation
             }
@@ -398,6 +449,7 @@ impl SurfaceEvent {
             | FiltersOpen { trusted }
             | RecentBoardsClear { trusted }
             | FiltersEdit { trusted, .. }
+            | FiltersDefaultColor { trusted, .. }
             | FiltersImport { trusted, .. }
             | FiltersImportApply { trusted, .. }
             | FiltersImportCancel { trusted, .. }
@@ -406,6 +458,7 @@ impl SurfaceEvent {
             | HoverPreference { trusted, .. }
             | Media { trusted, .. }
             | KeepAlive { trusted, .. }
+            | AboutRepository { trusted }
             | SettingsOpen { trusted }
             | FontSource { trusted, .. }
             | LoginOpen { trusted }
@@ -422,6 +475,7 @@ impl SurfaceEvent {
             // Internal notifications and projections do not submit user input.
             MediaDecoded { .. }
             | KeepAliveGate { .. }
+            | SettingsVisibility { .. }
             | SettingsFonts { .. }
             | SettingsPreview { .. }
             | Select { .. }
@@ -443,6 +497,31 @@ impl SurfaceEvent {
 
 #[cfg(test)]
 mod admission_tests {
+    #[test]
+    fn filter_color_edits_are_typed_trusted_ptt_actions() {
+        use serde_json::json;
+        for (value, expected) in [
+            (
+                json!({"kind":"filters_default_color","color":10,"trusted":true}),
+                true,
+            ),
+            (
+                json!({"kind":"filters_default_color","color":10,"trusted":false}),
+                false,
+            ),
+        ] {
+            let event: super::SurfaceEvent = serde_json::from_value(value).unwrap();
+            assert!(event.requires_ptt());
+            assert_eq!(event.admitted(7), expected);
+        }
+        assert!(
+            serde_json::from_value::<super::SurfaceEvent>(
+                json!({"kind":"filters_default_color","color":"red","trusted":true})
+            )
+            .is_err()
+        );
+    }
+
     #[test]
     fn context_copy_requires_trust_and_closed_targets() {
         let event = json!({"kind":"copy_text","presentation":3,"generation":7,"revision":4,"target":{"kind":"link","index":0}});
@@ -519,12 +598,21 @@ mod admission_tests {
 
     #[test]
     fn settings_opacity_requires_a_bounded_integer_and_trusted_save() {
-        let valid = json!({"kind":"settings_save","values":{"fonts":{"kind":"platform_default"},"font_size":20,"baseline":20},"language":"en-US","tools_opacity":65,"trusted":true});
+        let valid = json!({"kind":"settings_save","values":{"fonts":{"kind":"platform_default"},"font_size":20,"baseline":20},"language":"en-US","tools_opacity":65,"tools_access":{"right_click_menu":true,"show_floating_button":true},"trusted":true});
         assert!(admits(valid.clone(), true, 7));
         assert!(!admits(valid.clone(), false, 7));
         for value in [json!(19), json!(101), json!(65.5), json!("65"), Value::Null] {
             let mut invalid = valid.clone();
             invalid["tools_opacity"] = value;
+            assert!(serde_json::from_value::<SurfaceEvent>(invalid).is_err());
+        }
+        for access in [
+            json!({"right_click_menu":"true","show_floating_button":true}),
+            json!({"right_click_menu":true}),
+            json!({"right_click_menu":true,"show_floating_button":true,"unknown":false}),
+        ] {
+            let mut invalid = valid.clone();
+            invalid["tools_access"] = access;
             assert!(serde_json::from_value::<SurfaceEvent>(invalid).is_err());
         }
     }
@@ -677,4 +765,51 @@ pub(super) struct ProbePixels {
 pub(super) enum CopyTarget {
     Selection { request: u64 },
     Link { index: usize },
+}
+
+#[cfg(test)]
+mod article_load_tests {
+    use super::*;
+    #[test]
+    fn loading_actions_are_typed_ptt_actions_and_reject_foreign_sessions_or_synthetic_clicks() {
+        for (trusted, generation, expected) in
+            [(true, 7, true), (false, 7, false), (true, 8, false)]
+        {
+            let event = SurfaceEvent::ArticleLoad {
+                generation,
+                article: 42,
+                resume: false,
+                trusted,
+            };
+            assert!(event.requires_ptt());
+            assert_eq!(event.admitted(7), expected);
+        }
+    }
+}
+
+#[cfg(test)]
+mod image_clipboard_tests {
+    use super::*;
+    #[test]
+    fn image_export_destinations_are_closed_and_require_trusted_events() {
+        let mut value = serde_json::json!({"kind":"export_png","presentation":3,"generation":7,"revision":4,"selection_request":null,"destination":"clipboard","png":"data:image/png;base64,AA==","trusted":true});
+        let event: SurfaceEvent = serde_json::from_value(value.clone()).unwrap();
+        assert!(event.admitted(7));
+        // SurfaceState and OutputLease own source freshness for export events.
+        assert!(matches!(
+            event,
+            SurfaceEvent::ExportPng {
+                destination: super::super::files::ExportDestination::Clipboard,
+                ..
+            }
+        ));
+        value["trusted"] = false.into();
+        assert!(
+            !serde_json::from_value::<SurfaceEvent>(value.clone())
+                .unwrap()
+                .admitted(7)
+        );
+        value["destination"] = "custom".into();
+        assert!(serde_json::from_value::<SurfaceEvent>(value).is_err());
+    }
 }

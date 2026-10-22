@@ -1,0 +1,181 @@
+name: Desktop Release
+
+on:
+  push:
+    branches: [main]
+    paths: [Cargo.toml]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Verify packages without publishing, or retry a main release
+        required: true
+        type: choice
+        default: verify
+        options: [verify, publish]
+
+permissions:
+  contents: read
+
+# Do not cancel a publication partway through an upload.
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  admission:
+    name: Validate release source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      version: ${{ steps.source.outputs.version }}
+      commit: ${{ steps.source.outputs.commit }}
+      publish: ${{ steps.mode.outputs.publish }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - name: Select explicitly requested mode
+        id: mode
+        env:
+          MODE: ${{ github.event_name == 'push' && 'publish' || inputs.mode }}
+        run: |
+          if [[ "$MODE" == publish ]]; then
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
+          elif [[ "$MODE" == verify ]]; then
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+          else
+            exit 1
+          fi
+      - name: Check immutable source, version and merged release PR
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH: ${{ steps.mode.outputs.publish }}
+        run: |
+          if [[ "$PUBLISH" == true ]]; then
+            python tooling/release.py prepare
+          else
+            python tooling/release.py inspect
+          fi
+
+  build:
+    name: Package ${{ matrix.platform }}
+    needs: admission
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x64
+            runner: windows-2025
+          - platform: macos-arm64
+            runner: macos-15
+          - platform: macos-x64
+            runner: macos-15-intel
+          - platform: linux-x64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.admission.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+      - name: Install Linux desktop build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libwebkit2gtk-4.1-dev libxdo-dev \
+            libssl-dev libayatana-appindicator3-dev librsvg2-dev \
+            libfontconfig1-dev libfreetype6-dev dpkg-dev
+      - name: Activate the repository Rust toolchain
+        run: |
+          rustup show
+          rustc --version
+      - name: Install pinned Windows installer compiler
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: tooling/windows/install_inno.ps1
+      - name: Verify native installer prerequisite policy
+        if: runner.os == 'Windows'
+        run: python tooling/check_windows_installer.py --output target/verification/windows-installer
+      - name: Test release tooling and documentation
+        run: |
+          python -m unittest discover -s tooling -p 'test_*.py'
+          python tooling/check.py docs
+      - name: Test JavaScript
+        run: node --test tooling/test_*.mjs
+      - name: Verify core
+        run: python tooling/check.py core
+      - name: Verify desktop compilation and unit tests
+        run: |
+          cargo clippy --locked --features desktop --all-targets -- -D warnings
+          cargo test --locked --features desktop --lib --bin pttstella
+      - name: Build native release downloads
+        run: python tooling/bundle_release.py --out-dir dist/release
+      - name: Retain Windows installer policy evidence
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: installer-policy-${{ matrix.platform }}
+          path: target/verification/windows-installer
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-${{ matrix.platform }}
+          path: dist/release/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish complete Release
+    needs: [admission, build]
+    if: needs.admission.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ needs.admission.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: release-*
+          path: dist/release
+          merge-multiple: true
+      - name: Recheck policy and publish all verified downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tooling/release.py publish --assets dist/release

@@ -72,15 +72,17 @@ def run(devtools, output):
     before=d.evaluate('document.getElementById("screen").toDataURL("image/png")')
     d.call('Input.dispatchMouseEvent',type='mouseMoved',**point(40,5.5))
     d.wait('document.getElementById("navigation-marker").dataset.row === "5"','article title hover did not display its row marker')
-    marker=d.evaluate('(()=>{const m=document.getElementById("navigation-marker"),s=getComputedStyle(m),b=m.getBoundingClientRect();return {background:s.backgroundColor,border:s.borderBottomWidth,width:b.width,screen:document.getElementById("screen").getBoundingClientRect().width};})()')
-    if marker['background']!='rgba(120, 151, 206, 0.12)' or marker['border']!='1px' or abs(marker['width']/marker['screen']-79/80)>.01:
-        raise ValueError('navigation row marker violated its low-opacity full-row bounds')
+    marker=d.evaluate('(()=>{const m=document.getElementById("navigation-marker"),s=getComputedStyle(m),b=m.getBoundingClientRect();return {background:s.backgroundColor,border:s.borderBottomWidth,edge:s.borderLeftWidth,gold:s.borderLeftColor,width:b.width,screen:document.getElementById("screen").getBoundingClientRect().width};})()')
+    if (marker['background']!='rgba(82, 132, 210, 0.28)' or marker['border']!='1px'
+            or marker['edge']!='3px' or marker['gold']!='rgb(239, 212, 148)'
+            or abs(marker['width']/marker['screen']-1)>.01):
+        raise ValueError('navigation row marker violated its blue/gold full-row contract')
     if before!=d.evaluate('document.getElementById("screen").toDataURL("image/png")'):
         raise ValueError('article hover recoloured ANSI canvas pixels')
     screenshot('navigation-list-hover.png')
     click_cell(40,5.5)
     # A double-click continuation must not send a second open or select the new page.
-    click_cell(4,5.5,count=2)
+    click_cell(40,5.5,count=2)
     wait_page('article_reading',first=1)
     d.call('Input.dispatchMouseEvent',type='mouseMoved',x=20,y=2)
     screenshot('navigation-reading-controls.png')
@@ -104,13 +106,11 @@ def run(devtools, output):
     wheel(120)
     d.call('Input.imeSetComposition',text='',selectionStart=0,selectionEnd=0)
     d.wait('document.getElementById("surface").dataset.keepAliveReady === "true"', 'composition cancellation did not resume keepalive')
-    toolbar('#font-settings')
-    d.wait('document.getElementById("font-dialog").open','settings dialog did not open during reading')
-    d.wait('document.getElementById("surface").dataset.keepAliveReady === "false"', 'modal did not pause keepalive')
-    wheel(120)
-    d.click('#font-cancel')
-    d.wait('!document.getElementById("font-dialog").open','settings dialog did not close during reading')
-    d.wait('document.getElementById("surface").dataset.keepAliveReady === "true"', 'closing modal did not resume keepalive')
+    import desktop_settings
+    settings = desktop_settings.Settings(d)
+    d.wait('document.getElementById("surface").dataset.keepAliveReady === "false"', 'auxiliary settings did not pause keepalive')
+    settings.close()
+    d.wait('document.getElementById("surface").dataset.keepAliveReady === "true"', 'closing settings did not resume keepalive')
     toolbar('#browse-next')
     wait_page('article_reading',first=24)
     toolbar('#browse-next')

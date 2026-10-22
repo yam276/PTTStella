@@ -1,9 +1,12 @@
-//! Fluent catalogs are embedded. The process language is selected once before
-//! the desktop event loop; saving a preference cannot change an active session.
+//! Embedded Fluent catalogs. The UI owner selects a language after a successful save;
+//! one atomic choice publishes the same selection to background work.
 use i18n_embed::{LanguageLoader, fluent::FluentLanguageLoader};
 use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
-use std::sync::OnceLock;
+use std::sync::{
+    OnceLock,
+    atomic::{AtomicBool, Ordering},
+};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Language {
@@ -32,31 +35,68 @@ impl Language {
 struct Catalogs;
 
 pub struct Localizer {
-    language: Language,
-    loader: FluentLanguageLoader,
+    chinese: FluentLanguageLoader,
+    english: FluentLanguageLoader,
+    english_selected: AtomicBool,
 }
 impl Localizer {
     pub fn new(language: Language) -> Result<Self, String> {
-        let loader = i18n_embed::fluent::fluent_language_loader!();
-        let identifier = language.tag().parse().map_err(|e| format!("locale: {e}"))?;
-        loader
-            .load_languages(&Catalogs, &[identifier])
-            .map_err(|e| format!("embedded Fluent catalog: {e}"))?;
-        // Both supported languages are LTR. Preserve exact IDs/paths and the
-        // existing clipboard/status contracts without invisible bidi marks.
-        loader.set_use_isolating(false);
-        Ok(Self { language, loader })
+        fn load(language: Language) -> Result<FluentLanguageLoader, String> {
+            let loader = i18n_embed::fluent::fluent_language_loader!();
+            let identifier = language.tag().parse().map_err(|e| format!("locale: {e}"))?;
+            loader
+                .load_languages(&Catalogs, &[identifier])
+                .map_err(|e| format!("embedded Fluent catalog: {e}"))?;
+            loader.set_use_isolating(false);
+            Ok(loader)
+        }
+        Ok(Self {
+            chinese: load(Language::TraditionalChinese)?,
+            english: load(Language::English)?,
+            english_selected: AtomicBool::new(language == Language::English),
+        })
     }
     pub fn language(&self) -> Language {
-        self.language
+        if self.english_selected.load(Ordering::Acquire) {
+            Language::English
+        } else {
+            Language::TraditionalChinese
+        }
+    }
+    /// Publish only the selected enum. Both immutable catalogs are already
+    /// validated and configured, so workers cannot observe half-loaded bundles.
+    pub fn select(&self, language: Language) {
+        self.english_selected
+            .store(language == Language::English, Ordering::Release);
+    }
+    fn loader_for(&self, language: Language) -> &FluentLanguageLoader {
+        if language == Language::English {
+            &self.english
+        } else {
+            &self.chinese
+        }
     }
     pub fn loader(&self) -> &FluentLanguageLoader {
-        &self.loader
+        self.loader_for(self.language())
+    }
+    /// Refresh only canonical App status labels. Preserve diagnostic details.
+    pub fn relocalize_status(&self, previous: Language, text: &str) -> Option<String> {
+        [
+            "status-offline-preview",
+            "status-offline",
+            "status-connecting",
+            "status-connected",
+            "status-keepalive-on",
+            "status-keepalive-off",
+        ]
+        .into_iter()
+        .find(|key| self.loader_for(previous).get(key) == text)
+        .map(|key| self.loader().get(key))
     }
 }
 
-// Immutable after startup. There is deliberately no runtime locale setter or
-// per-thread language: background work uses the same language as the UI.
+// One process owner, immutable embedded catalogs and one atomic language choice.
+// The UI changes the choice only after persistence succeeds.
 static APPLICATION: OnceLock<Localizer> = OnceLock::new();
 static FALLBACK: OnceLock<Localizer> = OnceLock::new();
 pub fn initialize(language: Language) -> Result<(), String> {

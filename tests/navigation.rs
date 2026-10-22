@@ -13,6 +13,145 @@ fn fixture(name: &str) -> Screen {
     screen
 }
 
+#[test]
+fn menu_and_favorite_pointer_targets_use_verified_rows_and_exact_relative_input() {
+    let mut menu = fixture("main_menu");
+    replace(
+        &mut menu,
+        14,
+        "                      (U)ser         【 個人設定區 】",
+        "0",
+    );
+    menu.feed(b"\x1b[14;22H");
+    let context = navigation::analyze(&menu.frame());
+    assert_eq!(
+        context,
+        Context::MainMenu {
+            first_row: 12,
+            last_row: 15,
+            cursor_row: 13
+        }
+    );
+    for (row, expected) in [(12, b"\x1b[A\r".as_slice()), (13, b"\r"), (14, b"\x1b[B\r")] {
+        assert_eq!(
+            navigation::plan(&context, Intent::Open { row }).unwrap(),
+            expected
+        );
+    }
+    for name in ["boards", "favorites"] {
+        let context = page(name);
+        assert_eq!(
+            context,
+            Context::BoardList {
+                first_row: 3,
+                last_row: 5,
+                cursor_row: 4
+            }
+        );
+        assert_eq!(
+            navigation::plan(&context, Intent::Open { row: 3 }).unwrap(),
+            b"\x1b[A\r"
+        );
+        assert_eq!(
+            navigation::plan(&context, Intent::Open { row: 4 }).unwrap(),
+            b"\r"
+        );
+        assert_eq!(
+            navigation::plan(&context, Intent::Open { row: 5 }).unwrap(),
+            b"\x1b[B\r"
+        );
+        for row in [0, 2, 6, 22, 23, usize::MAX] {
+            assert_eq!(
+                navigation::plan(&context, Intent::Open { row }),
+                Err(Error::Unavailable)
+            );
+        }
+    }
+    let invalid = Context::BoardList {
+        first_row: 3,
+        last_row: usize::MAX,
+        cursor_row: 4,
+    };
+    assert_eq!(
+        navigation::plan(&invalid, Intent::Open { row: 4 }),
+        Err(Error::Unavailable)
+    );
+}
+
+#[test]
+fn nested_system_menus_and_plain_descriptions_use_verified_rows() {
+    for (title, status) in [
+        ("私人信件區", "電子郵件"),
+        ("個人設定區", "個人設定"),
+        ("休閒聊天區", "聊天說話"),
+        ("系統資訊區", "工具程式"),
+        ("編特別名單", "名單編輯"),
+    ] {
+        let mut screen = fixture("main_menu");
+        replace(&mut screen, 0, title, "37;44");
+        replace(
+            &mut screen,
+            23,
+            &format!("{status} (h)說明 (←)回上層"),
+            "30;47",
+        );
+        replace(
+            &mut screen,
+            14,
+            "                      (U)pdate       自製選項",
+            "0",
+        );
+        screen.feed(b"\x1b[14;22H");
+        let context = navigation::analyze(&screen.frame());
+        assert_eq!(
+            context,
+            Context::SystemMenu {
+                first_row: 12,
+                last_row: 15,
+                cursor_row: 13
+            }
+        );
+        assert_eq!(
+            navigation::plan(&context, Intent::Open { row: 14 }).unwrap(),
+            b"\x1b[B\r"
+        );
+        assert_eq!(navigation::plan(&context, Intent::Back).unwrap(), b"\x1b[D");
+        assert!(!context.allows_keepalive());
+        replace(&mut screen, 23, "是否確定？[Y/n]", "30;47");
+        screen.feed(b"\x1b[14;22H");
+        unknown(&screen.frame());
+    }
+    let mut root = fixture("main_menu");
+    replace(
+        &mut root,
+        15,
+        "                      (G)oodbye     自製離開選項",
+        "0",
+    );
+    root.feed(b"\x1b[14;22H");
+    assert!(matches!(
+        navigation::analyze(&root.frame()),
+        Context::MainMenu { last_row: 15, .. }
+    ));
+}
+
+#[test]
+fn favorite_description_glyphs_do_not_decide_navigation_but_names_and_pointer_do() {
+    let mut screen = fixture("favorites");
+    screen.feed(b"\x1b[4;40H\x81 \x1b[5;2H");
+    assert!(screen.frame().glyphs.iter().any(|glyph| glyph.unmapped));
+    assert!(matches!(
+        navigation::analyze(&screen.frame()),
+        Context::BoardList {
+            first_row: 3,
+            last_row: 5,
+            cursor_row: 4
+        }
+    ));
+    screen.feed(b"\x1b[4;11H\x81 \x1b[5;2H");
+    unknown(&screen.frame());
+}
+
 fn switch_scene(name: &str) -> Vec<u8> {
     let data: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/board-switch.json")).unwrap();
@@ -758,6 +897,106 @@ fn reading_ranges_and_page_boundaries_drive_only_available_actions() {
     );
 }
 #[test]
+fn reply_command_footer_keeps_all_ten_reading_pages_navigable() {
+    for (index, percent) in [9, 18, 26, 35, 44, 52, 64, 74, 86, 100]
+        .into_iter()
+        .enumerate()
+    {
+        let first = 1 + index * 22;
+        let mut screen = fixture("reading_middle");
+        replace(
+            &mut screen,
+            23,
+            &format!(
+                "瀏覽 第 {}/10 頁 ({percent}%) 目前顯示: 第 {first}~{} 行 (y)回應(X)推文(h)說明",
+                index + 1,
+                first + 22
+            ),
+            "30;47",
+        );
+        screen.feed(b"\x1b[24;80H");
+        let context = navigation::analyze(&screen.frame());
+        assert_eq!(
+            context,
+            Context::ArticleReading {
+                first_line: first,
+                last_line: first + 22,
+                percent
+            }
+        );
+        assert_eq!(
+            navigation::plan(&context, Intent::NextPage),
+            if percent == 100 {
+                Err(Error::Unavailable)
+            } else {
+                Ok(b"\x1b[6~".to_vec())
+            }
+        );
+        assert_eq!(
+            navigation::plan(&context, Intent::PreviousPage),
+            if first == 1 {
+                Err(Error::Unavailable)
+            } else {
+                Ok(b"\x1b[5~".to_vec())
+            }
+        );
+        assert_eq!(navigation::plan(&context, Intent::Back).unwrap(), b"\x1b[D");
+    }
+}
+
+#[test]
+fn reply_footer_requires_the_complete_styled_command_band_and_range() {
+    let report = "瀏覽 第 6/10 頁 (52%) 目前顯示: 第 110~132 行";
+    for (suffix, sgr) in [
+        ("(y)回應(X)推文(h)說明", "0"),
+        ("(n)回應(X)推文(h)說明", "30;47"),
+        ("(y)回應(x)推文(h)說明", "30;47"),
+        ("(y)回應(X)推文", "30;47"),
+        ("是否執行？(y)回應(X)推文(h)說明", "30;47"),
+        ("(y)回應(X)推文(h)說明 請輸入密碼:", "30;47"),
+    ] {
+        let mut screen = fixture("reading_middle");
+        replace(&mut screen, 23, &format!("{report} {suffix}"), sgr);
+        screen.feed(b"\x1b[24;80H");
+        unknown(&screen.frame());
+    }
+    for edit in [
+        "\x1b[4;1H",
+        "\x1b[24;30H\x1b[0m目前顯示\x1b[24;80H",
+        "\x1b[31;",
+    ] {
+        let mut screen = fixture("reading_middle");
+        replace(
+            &mut screen,
+            23,
+            &format!("{report} (y)回應 (X)推文 (h)說明"),
+            "30;47",
+        );
+        screen.feed(b"\x1b[24;80H");
+        screen.feed(&encoding::encode(edit).unwrap());
+        unknown(&screen.frame());
+    }
+    let mut screen = fixture("reading_middle");
+    replace(
+        &mut screen,
+        23,
+        &format!("{report} (y)回應(X)推文(h)說明"),
+        "30;47",
+    );
+    let frame = screen.frame();
+    let rows = text::rows(&frame).unwrap();
+    let col = rows[23]
+        .spans
+        .iter()
+        .find(|s| s.glyph.text == "X")
+        .unwrap()
+        .glyph
+        .col;
+    screen.feed(format!("\x1b[24;{}H\x1b[0mX\x1b[24;80H", col + 1).as_bytes());
+    unknown(&screen.frame());
+}
+
+#[test]
 fn malformed_reading_reports_and_prompt_overlays_do_not_enable_actions() {
     for status in [
         "瀏覽 第 0/3 頁 (66%) 目前顯示: 第 24~46 行 ← 離開",
@@ -833,7 +1072,7 @@ fn menu_board_and_favorite_profiles_translate_without_enabling_keepalive_or_arti
             );
         }
         assert_eq!(
-            navigation::plan(&context, Intent::Open { row: 4 }),
+            navigation::plan(&context, Intent::Open { row: 23 }),
             Err(Error::Unavailable)
         );
     }
@@ -928,7 +1167,14 @@ fn menu_banner_and_class_decoration_are_not_input_context() {
 #[test]
 fn real_board_reading_command_and_full_page_are_a_board_context() {
     let context = page("boards_reading");
-    assert_eq!(context, Context::BoardList { first_row: 3 });
+    assert_eq!(
+        context,
+        Context::BoardList {
+            first_row: 3,
+            last_row: 22,
+            cursor_row: 3
+        }
+    );
     assert_eq!(navigation::plan(&context, Intent::Forward).unwrap(), b"\r");
     assert!(!context.allows_keepalive());
 }
@@ -994,7 +1240,14 @@ fn dense_lists_still_reject_prompt_bad_date_or_missing_forward_command() {
 #[test]
 fn board_description_caption_does_not_disable_frequent_board_switching() {
     let context = page("boards_caption");
-    assert_eq!(context, Context::BoardList { first_row: 3 });
+    assert_eq!(
+        context,
+        Context::BoardList {
+            first_row: 3,
+            last_row: 22,
+            cursor_row: 6
+        }
+    );
     for (intent, expected) in [
         (
             Intent::Lines {
@@ -1024,7 +1277,11 @@ fn board_browser_still_requires_stable_columns_and_valid_rows() {
         screen.feed(b"\x1b[7;2H");
         assert_eq!(
             navigation::analyze(&screen.frame()),
-            Context::BoardList { first_row: 3 }
+            Context::BoardList {
+                first_row: 3,
+                last_row: 22,
+                cursor_row: 6
+            }
         );
     }
     for header in [
@@ -1050,4 +1307,215 @@ fn board_browser_still_requires_stable_columns_and_valid_rows() {
             reason: UnknownReason::BoardRows
         }
     );
+}
+
+#[test]
+fn mail_and_archive_lists_use_verified_single_column_rows_without_new_mail_shortcuts() {
+    use navigation::DocumentKind;
+    for (name, category) in [
+        ("mail", DocumentKind::Mail),
+        ("archive", DocumentKind::Archive),
+    ] {
+        let mut screen = fixture(name);
+        let context = navigation::analyze(&screen.frame());
+        assert_eq!(
+            context,
+            Context::DocumentList {
+                category,
+                first_row: 3,
+                last_row: 4,
+                cursor_row: 4
+            }
+        );
+        assert!(!context.allows_keepalive());
+        for (intent, expected) in [
+            (Intent::Open { row: 3 }, b"\x1b[A\r".as_slice()),
+            (Intent::Open { row: 4 }, b"\r"),
+            (Intent::Back, b"\x1b[D"),
+            (Intent::NextPage, b"\x1b[6~"),
+            (Intent::PreviousPage, b"\x1b[5~"),
+        ] {
+            assert_eq!(navigation::plan(&context, intent).unwrap(), expected);
+        }
+        for row in [0, 2, 5, 23, usize::MAX] {
+            assert_eq!(
+                navigation::plan(&context, Intent::Open { row }),
+                Err(Error::Unavailable)
+            );
+        }
+        replace(&mut screen, 23, "您確定要刪除嗎 [Y/N]", "0");
+        assert!(matches!(
+            navigation::analyze(&screen.frame()),
+            Context::Unknown { .. }
+        ));
+    }
+}
+#[test]
+fn document_list_rejects_multi_column_headers_missing_rows_and_cursor_mismatch() {
+    let mut screen = fixture("mail");
+    replace(
+        &mut screen,
+        2,
+        "編號 日期 作者 信件標題       編號 日期 作者 信件標題",
+        "30;47",
+    );
+    assert_eq!(
+        navigation::analyze(&screen.frame()),
+        Context::Unknown {
+            reason: UnknownReason::UnsupportedLayout
+        }
+    );
+    let mut screen = fixture("archive");
+    replace(&mut screen, 3, "", "0");
+    assert_eq!(
+        navigation::analyze(&screen.frame()),
+        Context::Unknown {
+            reason: UnknownReason::Incomplete
+        }
+    );
+    let mut screen = fixture("mail");
+    screen.feed(b"\x1b[20;1H");
+    assert_eq!(
+        navigation::analyze(&screen.frame()),
+        Context::Unknown {
+            reason: UnknownReason::InvalidCursor
+        }
+    );
+}
+
+#[test]
+fn modern_board_captions_and_indented_class_pointer_keep_required_item_boundaries() {
+    for name in ["favorites_modern", "boards_modern"] {
+        let mut screen = fixture(name);
+        let context = navigation::analyze(&screen.frame());
+        assert_eq!(
+            context,
+            Context::BoardList {
+                first_row: 3,
+                last_row: 5,
+                cursor_row: 4
+            },
+            "{name}"
+        );
+        assert_eq!(
+            navigation::plan(&context, Intent::Open { row: 3 }).unwrap(),
+            b"\x1b[A\r"
+        );
+        replace(&mut screen, 23, "是否離開 [Y/N]", "0");
+        unknown(&screen.frame());
+    }
+    let mut screen = fixture("classes_indented");
+    let context = navigation::analyze(&screen.frame());
+    assert_eq!(
+        context,
+        Context::BoardList {
+            first_row: 7,
+            last_row: 8,
+            cursor_row: 8
+        }
+    );
+    assert_eq!(
+        navigation::plan(&context, Intent::Open { row: 7 }).unwrap(),
+        b"\x1b[A\r"
+    );
+    screen.feed(b"\x1b[9;20H");
+    unknown(&screen.frame());
+}
+
+#[test]
+fn root_board_action_bars_admit_only_their_specific_missing_arrow_layouts() {
+    for (name, first_row, last_row, cursor_row) in [
+        ("favorites_root_actions", 3, 5, 4),
+        ("classes_root_actions", 7, 8, 8),
+    ] {
+        let context = page(name);
+        assert_eq!(
+            context,
+            Context::BoardList {
+                first_row,
+                last_row,
+                cursor_row
+            },
+            "{name}"
+        );
+        assert_eq!(
+            navigation::plan(
+                &context,
+                Intent::Open {
+                    row: cursor_row - 1
+                }
+            )
+            .unwrap(),
+            b"\x1b[A\r"
+        );
+        assert_eq!(navigation::plan(&context, Intent::Back).unwrap(), b"\x1b[D");
+        assert_eq!(
+            navigation::plan(&context, Intent::NextPage).unwrap(),
+            b"\x1b[6~"
+        );
+        assert!(!context.allows_keepalive());
+        for (row, text) in [(23, "是否確定？[Y/n]"), (0, "未知選單")] {
+            let mut screen = fixture(name);
+            replace(&mut screen, row, text, "30;47");
+            screen.feed(if first_row == 3 {
+                b"\x1b[5;2H"
+            } else {
+                b"\x1b[9;11H"
+            });
+            unknown(&screen.frame());
+        }
+        let mut screen = fixture(name);
+        screen.feed(b"\x1b[24;80H");
+        unknown(&screen.frame());
+        let mut screen = fixture(name);
+        let cursor = if first_row == 3 {
+            b"\x1b[5;2H".as_slice()
+        } else {
+            b"\x1b[9;11H"
+        };
+        let footer = text::rows(&screen.frame()).unwrap()[23].text.clone();
+        replace(&mut screen, 23, &footer, "0");
+        screen.feed(cursor);
+        unknown(&screen.frame());
+        let mut screen = fixture(name);
+        screen.feed(if first_row == 3 {
+            b"\x1b[5;1H> \x1b[5;1H"
+        } else {
+            b"\x1b[9;11H> \x1b[9;11H"
+        });
+        assert_eq!(navigation::analyze(&screen.frame()), context);
+    }
+    for footer in [
+        "我的最愛 (a)增加看板 (d)刪除 (g)新增目錄 (M)移動位置 (v)已讀/未讀",
+        "我的最愛 (a)增加看板 (d)刪除 (g)新增目錄 (v)已讀/未讀 (h)說明",
+        "看板列表 (a)增加看板 (d)刪除 (g)新增目錄 (M)移動位置 (v)已讀/未讀 (h)說明",
+        "我的最愛 (a)增加看板 (d)刪除 (g)新增目錄 (M)移動位置 (y)已讀/未讀 (h)說明",
+    ] {
+        let mut screen = fixture("favorites_root_actions");
+        replace(&mut screen, 23, footer, "30;47");
+        screen.feed(b"\x1b[5;2H");
+        unknown(&screen.frame());
+    }
+    let mut screen = fixture("favorites_root_actions");
+    replace(&mut screen, 1, "[→]進入 [s]找看板 [/]搜尋", "0");
+    screen.feed(b"\x1b[5;2H");
+    unknown(&screen.frame());
+    let mut screen = fixture("classes_root_actions");
+    replace(
+        &mut screen,
+        23,
+        "分類看板 (m)加入最愛 (v)已讀/未讀 (t)標記 (y)只列最愛",
+        "30;47",
+    );
+    screen.feed(b"\x1b[9;11H");
+    unknown(&screen.frame());
+    let mut screen = fixture("classes_root_actions");
+    replace(
+        &mut screen,
+        23,
+        "分類看板 (m)加入最愛 (y)已讀/未讀 (t)標記 (v)只列最愛 (←)回上層",
+        "30;47",
+    );
+    screen.feed(b"\x1b[9;11H");
+    unknown(&screen.frame());
 }

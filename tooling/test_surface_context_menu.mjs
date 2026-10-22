@@ -7,11 +7,11 @@ const scope=vm.createContext({});vm.runInContext(source,scope);
 const {contextMenuItems,contextMenuPosition,createSurfaceContextMenu}=scope;
 const base={link:-1,selection:false,ready:true,exportReady:true,local:true,ptt:true,reading:false};
 test("items follow selected content and capabilities, without inactive feature placeholders",()=>{
-    assert.deepEqual([...contextMenuItems(base).keys()],["select-all","export-page","bookmarks","filters","vim","settings"]);
+    assert.deepEqual([...contextMenuItems(base).keys()],["select-all","export-page","copy-image-page","bookmarks","filters","vim","settings"]);
     const entries=contextMenuItems({...base,link:1,selection:true,selectionReady:false,rowsReady:false,local:false,reading:true,images:true,inlineReady:false,navigate:true,first:true,last:false});
     assert.equal(entries.get("copy"),false);assert.equal(entries.get("copy-link"),true);assert.equal(entries.get("open-link"),false);
     assert.equal(entries.get("inline"),false);assert.equal(entries.get("previous"),false);assert.equal(entries.get("next"),true);
-    assert.deepEqual([...contextMenuItems({...base,ptt:false}).keys()],["select-all","export-page","settings"]);
+    assert.deepEqual([...contextMenuItems({...base,ptt:false}).keys()],["select-all","export-page","copy-image-page","settings"]);
 });
 test("menu position fits the bottom/right corner and negative coordinates",()=>{
     assert.deepEqual({...contextMenuPosition(990,790,270,400,1000,800)},{left:722,top:392});
@@ -75,4 +75,55 @@ test("a cancelled dismissing gesture cannot swallow a later independent click",(
     const f=fixture();f.open();f.fire(f.doc,"pointerdown",f.event({target:{}}));
     f.fire(f.doc,"pointerdown",f.event({target:{}}));
     const next=f.event({target:{}});f.fire(f.doc,"click",next);assert.equal(next.stopped,undefined);
+});
+
+test('three account policies require a visible Rust word and local PTT reading; focused replies have restore',()=>{
+    const state={...base,reading:true,word:{row:5,start:3,end:8,id:'Alice'},focused:true};
+    const actions=['account-mask','account-mask-row','account-allow'];
+    for(const action of actions)assert.equal(contextMenuItems(state).get(action),true);
+    assert.equal(contextMenuItems(state).get('reply-focus-clear'),true);
+    for(const change of [{word:null},{ptt:false},{reading:false},{local:false}])for(const action of actions)assert.equal(contextMenuItems({...state,...change}).has(action),false);
+});
+test('context account actions send bounded coordinates and explicit policy, not arbitrary ID text',()=>{
+    const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8'),sent=[];
+    const state={stopped:false,blocked:()=>false,contextMenuItems:()=>new Map(['account-mask','account-mask-row','account-allow','reply-focus-clear'].map(x=>[x,true])),contextState:()=>({}),
+      latest:{presentation:3},stamp:()=>({generation:7,revision:4,input_epoch:2}),send:p=>sent.push(JSON.parse(JSON.stringify(p)))};
+    vm.createContext(state);vm.runInContext(surface.slice(surface.indexOf('function contextAction('),surface.indexOf('function activate(')),state);
+    for(const action of ['account-mask','account-mask-row','account-allow','reply-focus-clear'])state.contextAction(action,{index:-1,word:{row:5,start:3,id:'Alice'}},{isTrusted:true});
+    assert.deepEqual(sent.slice(0,3).map(p=>[p.kind,p.row,p.col,p.policy]),[['account_rule',5,3,'mask'],['account_rule',5,3,'mask_row'],['account_rule',5,3,'allow']]);
+    assert.equal(sent[3].row,null);assert.ok(sent.every(p=>!('id' in p)));
+});
+
+test('recognized list author offers policies without reply focus or reading navigation',()=>{
+ const state={...base,authors:true,word:{row:3,start:17,end:30,id:'alice'}};
+ for(const action of ['account-mask','account-mask-row','account-allow'])assert.equal(contextMenuItems(state).get(action),true);
+ for(const action of ['reply-focus','reply-focus-clear','previous','next'])assert.equal(contextMenuItems(state).has(action),false);
+ for(const change of [{word:null},{authors:false},{ptt:false},{local:false}])assert.equal(contextMenuItems({...state,...change}).has('account-mask'),false);
+});
+
+test('existing policy replaces only its add entry with an explicit removal action',()=>{
+ for(const [policy,name] of [['mask','mask'],['mask_row','mask-row'],['allow','allow']]){
+  const entries=contextMenuItems({...base,reading:true,word:{id:'Alice',policy}});
+  assert.equal(entries.has('account-'+name),false);
+  assert.equal(entries.get('account-remove-'+name),true);
+  assert.equal([...entries.keys()].filter(k=>k.startsWith('account-')).length,3);
+  assert.equal(contextMenuItems({...base,reading:true,ready:false,word:{id:'Alice',policy}}).get('account-remove-'+name),false);
+ }
+});
+test('removal sends the matching policy and stamped cell without accepting a client ID',()=>{
+ const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8'),sent=[];
+ const state={stopped:false,blocked:()=>false,contextState:()=>({}),contextMenuItems:()=>new Map(['mask','mask-row','allow'].map(p=>['account-remove-'+p,true])),
+ latest:{presentation:3},stamp:()=>({generation:7,revision:4,input_epoch:2}),send:p=>sent.push(JSON.parse(JSON.stringify(p)))};
+ vm.createContext(state);vm.runInContext(surface.slice(surface.indexOf('function contextAction('),surface.indexOf('function activate(')),state);
+ for(const name of ['mask','mask-row','allow'])state.contextAction('account-remove-'+name,{word:{row:5,start:3,id:'Alice'}},{isTrusted:true});
+ assert.deepEqual(sent.map(p=>[p.policy,p.remove,p.row,p.col]),[['mask',true,5,3],['mask_row',true,5,3],['allow',true,5,3]]);
+ assert.ok(sent.every(p=>!('id' in p)));
+});
+
+test('image clipboard choices use the same page and row availability as file export',()=>{
+ for(const ready of [true,false]){
+  const entries=contextMenuItems({...base,exportReady:ready,selection:true,rowsReady:ready});
+  assert.equal(entries.get('copy-image-page'),ready);assert.equal(entries.get('copy-image-rows'),ready);
+ }
+ assert.equal(contextMenuItems(base).has('copy-image-rows'),false);
 });

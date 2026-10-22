@@ -94,7 +94,7 @@ test("station wheel produces no local navigation while Ctrl+wheel still zooms",(
             navigate:intent=>actions.push(intent.action),zoom:1,zoomTo:zoom=>actions.push(zoom)};
         vm.createContext(context);vm.runInContext(surface.slice(surface.indexOf("function wheel("),surface.indexOf("const zoomIn=")),context);
         const event={deltaY:120,preventDefault(){}};context.wheel(event);context.wheel({...event,ctrlKey:true});
-        assert.deepEqual(actions,local?["next_item",0.75]:[0.75]);
+        assert.deepEqual(actions,local?["next_page",0.75]:[0.75]);
         actions.length=0;toolsOpen=true;context.wheel(event);context.wheel({...event,ctrlKey:true});
         assert.deepEqual(actions,[]); // chrome interaction cannot scroll PTT underneath it
         toolsOpen=false;menuOpen=true;context.wheel(event);context.wheel({...event,ctrlKey:true});assert.deepEqual(actions,[]);
@@ -103,6 +103,24 @@ test("station wheel produces no local navigation while Ctrl+wheel still zooms",(
 });
 
 const samples=env=>env.sent.filter(value=>value.kind==="station_mouse_sample");
+test("terminal wheels page despite overflow while selection and editing suppress navigation",()=>{
+    for(const kind of ["article_list","board_list","article_reading","document_list","main_menu","system_menu","command_help"]){
+        const actions=[],context={contextMenu:{isOpen:()=>false},tools:{open:()=>false},stationMouse:{wheel:()=>false},cancelHover(){},blocked:()=>false,
+            dragging:null,hasSelection:()=>false,viewport:{scrollWidth:100,clientWidth:100,scrollHeight:100,clientHeight:100},
+            latest:{connected:true,navigation:{kind}},navigate:intent=>actions.push(intent.action)};
+        vm.createContext(context);vm.runInContext(surface.slice(surface.indexOf("function wheel("),surface.indexOf("const zoomIn=")),context);
+        const event={deltaY:120,preventDefault(){}};
+        context.wheel(event);context.wheel({...event,deltaY:-120});
+        assert.deepEqual(actions,["next_page","previous_page"]);
+        actions.length=0;
+        context.hasSelection=()=>true;context.wheel(event);
+        context.hasSelection=()=>false;context.blocked=()=>true;context.wheel(event);
+        context.blocked=()=>false;context.viewport.scrollHeight=1010;context.wheel(event);
+        assert.deepEqual(actions,["next_page"]);actions.length=0;
+        context.viewport.scrollHeight=100;context.wheel({...event,shiftKey:true});context.wheel({...event,altKey:true});
+        assert.deepEqual(actions,[]);
+    }
+});
 test("1003 coalesces a burst to one latest cell with an independent sample sequence",()=>{
     const env=environment();env.update({mouse:{...env.packet.mouse,modes:{epoch:5,tracking:"motion"}}});
     for(let col=0;col<80;col++)env.owner.move(env.event({cell:{col,row:3}}));
@@ -202,7 +220,31 @@ test("samples are revoked on cancellation, source changes, black margins and des
 });
 
 test("a local Shift drag completes even if Shift is released before pointerup",()=>{
-    const calls=[],context={dragging:{pointer:9,moved:true},stationMouse:{up(){assert.fail("station must not consume local drag");}},pointermove(){},hitAt:()=>null,cellAt:()=>({col:4,row:4}),
+    const calls=[],context={dragging:{pointer:9,moved:true},stationMouse:{up(){assert.fail("station must not consume local drag");}},pointermove(){},pointerHit:()=>null,cellAt:()=>({col:4,row:4}),
         viewport:{hasPointerCapture:()=>true,releasePointerCapture:id=>calls.push(id)},surface:{dataset:{}},refreshKeepAlive(){}};
     handler("pointerup","click",context)({pointerId:9,shiftKey:false});assert.equal(context.dragging,null);assert.deepEqual(calls,[9]);
+});
+
+test("terminal wheel never falls back to WebView scrolling, including rejected gestures",()=>{
+    for(const variant of ['normal','overflow','horizontal','selection','drag','blocked','tools','unknown','disconnected','shift','alt','meta','station']){
+        let prevented=0,station=0;const actions=[];
+        const context={contextMenu:{isOpen:()=>false},tools:{open:()=>variant==='tools'},stationMouse:{wheel:()=>{station++;return variant==='station';}},cancelHover(){},blocked:()=>variant==='blocked',
+            dragging:variant==='drag'?{}:null,hasSelection:()=>variant==='selection',viewport:{scrollWidth:1000,clientWidth:100,scrollHeight:1000,clientHeight:100},
+            latest:{connected:variant!=='disconnected',navigation:{kind:variant==='unknown'?'unknown':'article_list'}},navigate:intent=>actions.push(intent.action)};
+        vm.createContext(context);vm.runInContext(surface.slice(surface.indexOf('function wheel('),surface.indexOf('const zoomIn=')),context);
+        const e={deltaY:variant==='horizontal'?0:120,deltaX:120,shiftKey:variant==='shift',altKey:variant==='alt',metaKey:variant==='meta',preventDefault(){prevented++;}};
+        context.wheel(e);assert.ok(prevented>0,variant);
+        assert.deepEqual(actions,['normal','overflow'].includes(variant)?['next_page']:[],variant);
+        if(variant==='station')assert.equal(station,1);
+    }
+});
+test("web article wheel still uses local reading and normalizes pixel, line and page input",()=>{
+    for(const [deltaMode,expected] of [[0,2],[1,48],[2,800]]){
+        let prevented=0;const moves=[];
+        const context={contextMenu:{isOpen:()=>false},tools:{open:()=>false},cancelHover(){},blocked:()=>false,dragging:null,hasSelection:()=>false,
+            latest:{article:{id:1},navigation:{kind:'article_reading'}},viewport:{clientHeight:400},readingMove:(intent)=>moves.push(intent),stationMouse:{wheel(){assert.fail('station wheel');}},navigate(){assert.fail('station paging');}};
+        vm.createContext(context);vm.runInContext(surface.slice(surface.indexOf('function wheel('),surface.indexOf('const zoomIn=')),context);
+        context.wheel({deltaY:2,deltaMode,preventDefault(){prevented++;}});
+        assert.equal(prevented,1);assert.equal(moves[0].delta,expected);
+    }
 });

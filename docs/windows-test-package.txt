@@ -1,19 +1,24 @@
-PTTStella Windows x64 測試包
+PTTStella Windows x64
 
 使用方式
-1. 將整個 ZIP 解壓縮到可寫入的資料夾；不要直接在 ZIP 內執行。
+1. 使用 Setup 安裝，或直接開啟 -portable.exe。
+   開發用 ZIP 請完整解壓；不要直接在 ZIP 內執行。
 2. 確認已安裝 Microsoft Edge WebView2 Evergreen Runtime：
    https://developer.microsoft.com/microsoft-edge/webview2/
-3. 雙擊 pttstella.exe。啟動會連至保存的預設站，首次為 PTT WSS。
+   若使用 -setup.exe 安裝版，會偵測並自動補裝缺少的 Runtime（需要網路）；
+   免安裝 EXE 與開發用 ZIP 不會自動補裝。
+3. 開啟 App。啟動會連至保存的預設站，首次為 PTT WSS。
 4. 在 BBS 畫面手動輸入帳號、密碼。Windows 目前不提供帳密保存。
 
-本包包含 EXE／視窗／工作列圖示、獨立 ICO、所需 Microsoft VC++ runtime
-DLL，以及內建字型和其他依賴的授權資料。使用者不需要安裝 Rust、Python、
+Release 的免安裝 EXE 與 Setup 內的 App 靜態連結 CRT，內嵌介面、字型、
+圖示與第三方授權，不需外帶 CRT DLL 或 Assets 目錄；開發用舊 ZIP 模式
+可能另帶 app-local CRT DLL，應保留整個資料夾。
+使用者不需要安裝 Rust、Python、
 Node 或 Visual Studio。WebView2 Runtime 由系統另外安裝，不包含在 ZIP。
 
 測試目標為 Windows 10/11 x64；目前實測平台與通過範圍以專案 active plan
 及隨交付提供的驗證報告為準，不代表每個 Windows 版本均已驗證。
-本測試包尚未進行 Authenticode 簽署。
+本產品尚未進行 Authenticode 簽署。
 
 基本操作
 - 點擊右側星座浮球，選擇導覽、顯示、擷取、輸入、連線或過濾。
@@ -25,7 +30,11 @@ Node 或 Visual Studio。WebView2 Runtime 由系統另外安裝，不包含在 Z
 顯示設定位置：%APPDATA%\PTTStella\config\settings.json
 本包不包含私人設定、帳密、BBS 流量或測試 fixture。
 manifest.json 記錄版本、來源提交、是否含未提交修改及各檔 SHA-256。
-ZIP 旁的 .sha256 可用於核對下載後檔案完整性。
+下載檔旁的 .sha256 可用於核對下載後檔案完整性。
+免安裝 EXE 內嵌的第三方授權可由 PowerShell 匯出至新檔案：
+  & .\PTTStella-<version>-windows-x64-portable.exe --export-licenses .\NOTICES.txt
+這個命令不建立視窗、不連線；既有輸出檔不會覆寫。
+免安裝版仍在目前 Windows 帳號的資料目錄保存設定／快取。
 
 Microsoft Visual C++ runtime DLL 為 Microsoft Corporation 的元件，
 隨應用程式作 app-local 部署；其權利及條款由 Microsoft 保留。

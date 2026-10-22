@@ -28,6 +28,106 @@ fn view() -> View {
     }
 }
 
+fn expected_merged_fixture(view: &View) -> pttstella::screen::Frame {
+    let mut expected = view.frame.clone();
+    // Independent fixture expectation: only row 7's five-letter ALICE repeats.
+    for glyph in expected
+        .glyphs
+        .iter_mut()
+        .filter(|g| g.row == 6 && (3..8).contains(&g.col))
+    {
+        glyph.text = "█".into();
+        glyph.left = pttstella::screen::Style {
+            fg: 0,
+            ..Default::default()
+        };
+        glyph.right = glyph.left;
+    }
+    expected
+}
+
+#[test]
+fn cached_history_is_an_acknowledged_filtered_projection_with_its_own_link_indices() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(
+        &super::super::probe::surface_sample(
+            Some("inline_pages"),
+            true,
+            Some("http://127.0.0.1:1234"),
+        )
+        .unwrap(),
+    );
+    view.frame = screen.frame();
+    let old = displayed(&mut state, &view);
+    state.article_input(&view.context(), b"\x1b[6~");
+    screen.feed(&super::super::probe::inline_second_page(Some("http://127.0.0.1:1234")).unwrap());
+    view.frame = screen.frame();
+    state.update(&view);
+    assert!(state.current(old, &view).is_none());
+    let fresh = displayed(&mut state, &view);
+    let cached = state.current(fresh, &view).unwrap();
+    assert_eq!(cached.frame.rows, 47);
+    assert_eq!(cached.article.as_ref().unwrap().first_line, 1);
+    assert_eq!(cached.source_frame.as_ref().unwrap().rows, 24);
+    let historical_link = cached.links.iter().position(|link| link.row == 2).unwrap();
+    assert_eq!(
+        state
+            .copy_text(
+                fresh,
+                &super::super::protocol::CopyTarget::Link {
+                    index: historical_link
+                },
+                &view
+            )
+            .unwrap(),
+        "http://127.0.0.1:1234/colours.png"
+    );
+    assert!(
+        state
+            .select(fresh, 42, &Selection::Line { row: 0 }, &view)
+            .unwrap()
+            .text
+            .starts_with("Inline image synthetic reading page")
+    );
+    assert_eq!(state.export_rows(fresh, Some(42), &view).unwrap(), 0..1);
+    state
+        .select(fresh, 43, &Selection::Line { row: 32 }, &view)
+        .unwrap();
+    assert_eq!(state.export_rows(fresh, Some(43), &view).unwrap(), 32..33);
+    state.select(fresh, 44, &Selection::All, &view).unwrap();
+    assert!(state.export_rows(fresh, Some(44), &view).is_err());
+    state.replace_rules(filters::Rules::default());
+    assert!(
+        state
+            .copy_text(
+                fresh,
+                &super::super::protocol::CopyTarget::Link {
+                    index: historical_link
+                },
+                &view
+            )
+            .is_none()
+    );
+    let filtered = displayed(&mut state, &view);
+    assert_eq!(
+        state
+            .current(filtered, &view)
+            .unwrap()
+            .article
+            .as_ref()
+            .unwrap()
+            .first_line,
+        24
+    );
+    assert!(state.set_raw_reading(true));
+    let raw = displayed(&mut state, &view);
+    let raw = state.current(raw, &view).unwrap();
+    assert!(raw.article.is_none() && raw.source_frame.is_none());
+    assert_eq!(raw.frame, view.frame);
+}
+
 #[test]
 fn retained_frame_cannot_authorize_interactions_during_an_output_batch() {
     let mut state = SurfaceState::new(filters::Rules::default());
@@ -49,7 +149,10 @@ fn retained_frame_cannot_authorize_interactions_during_an_output_batch() {
         .queue(&view, false, &DisplaySettings::default())
         .unwrap();
     assert!(packet.output_pending && packet.input_pending);
-    assert_eq!(packet.frame, view.frame); // Never the half-written source.
+    let expected = expected_merged_fixture(&view);
+    assert_eq!(packet.source_frame.as_ref(), Some(&expected));
+    assert_eq!(packet.frame.glyphs, expected.glyphs); // Retained body keeps its known ID grouping.
+    assert!(!packet.frame.cursor_visible);
     assert!(packet.links.is_empty() && packet.hover.is_none());
     assert_eq!(packet.navigation.kind(), "unknown");
     state.acknowledge(identity).unwrap();
@@ -153,6 +256,58 @@ fn rule_changes_invalidate_selection_hover_copy_and_png_until_the_new_ack() {
     let revealed = displayed(&mut state, &view);
     assert!(state.current(revealed, &view).unwrap().revealed);
     assert_eq!(state.export_rows(revealed, None, &view).unwrap(), 0..24);
+}
+
+#[test]
+fn row_masks_and_id_highlights_rebuild_cached_and_terminal_outputs() {
+    use pttstella::{filters::Policy, settings::ArticleMode, text};
+    for mode in [ArticleMode::Web, ArticleMode::Terminal] {
+        let mut state = SurfaceState::new(filters::Rules::default());
+        let view = view();
+        let settings = DisplaySettings::default();
+        state.set_article_mode(mode);
+        let old = displayed(&mut state, &view);
+        let rules = filters::Rules::default()
+            .edit_policy("Alice", "", Policy::MaskRow, false)
+            .unwrap()
+            .edit_policy("Bob", "", Policy::Allow, false)
+            .unwrap();
+        state.replace_rules(rules);
+        assert!(state.current(old, &view).is_none());
+        let fresh = Identity::of(state.queue(&view, false, &settings).unwrap());
+        state.acknowledge(fresh).unwrap();
+        let packet = state.current(fresh, &view).unwrap();
+        assert_eq!(
+            packet
+                .reply_author_words
+                .iter()
+                .map(|&i| packet.account_words[i].row)
+                .collect::<Vec<_>>(),
+            vec![7, 8]
+        );
+        for frame in [
+            &packet.frame,
+            packet.source_frame.as_ref().unwrap_or(&packet.frame),
+        ] {
+            assert_eq!(text::rows(frame).unwrap()[5].text, "█".repeat(80));
+            assert_eq!(text::rows(frame).unwrap()[6].text, "█".repeat(80));
+            assert!(
+                frame
+                    .glyphs
+                    .iter()
+                    .filter(|g| g.row == 8 && (3..6).contains(&g.col))
+                    .all(|g| g.left.fg == 6 && g.left.bright)
+            );
+        }
+        assert!(!packet.links.iter().any(|l| l.url.contains("hidden.png")));
+        assert!(state.reveal(fresh, true, &view));
+        let revealed = displayed(&mut state, &view);
+        assert!(
+            text::rows(&state.current(revealed, &view).unwrap().frame).unwrap()[5]
+                .text
+                .contains("Alice")
+        );
+    }
 }
 
 #[test]
@@ -387,4 +542,843 @@ fn context_copy_uses_acknowledged_filtered_text_and_exact_selection_request() {
             .copy_text(identity, &CopyTarget::Link { index: 0 }, &view)
             .is_none()
     );
+}
+
+#[test]
+fn terminal_mode_revokes_old_acks_and_inline_but_keeps_station_links() {
+    use pttstella::{navigation::Intent, settings::ArticleMode};
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let view = view();
+    let old = displayed(&mut state, &view);
+    assert!(state.inline_page(old, view.stamp(), &view).is_some());
+    assert!(state.reading_context(&view).is_some());
+    state.display_changed();
+    let pending = Identity::of(
+        state
+            .queue(&view, false, &DisplaySettings::default())
+            .unwrap(),
+    );
+    assert!(state.set_article_mode(ArticleMode::Terminal));
+    state.acknowledge(pending).unwrap();
+    assert!(state.current(old, &view).is_none());
+    assert!(!state.navigation_shown(view.stamp()));
+    assert!(state.inline_page(old, view.stamp(), &view).is_none());
+    assert!(state.reading_move(&view, Intent::NextPage).is_none());
+    let terminal = displayed(&mut state, &view);
+    let paint = state.current(terminal, &view).unwrap();
+    assert_eq!(paint.frame, expected_merged_fixture(&view));
+    assert!(paint.article.is_none() && paint.source_frame.is_none());
+    assert!(!paint.links.is_empty());
+    assert!(state.navigation_shown(view.stamp()));
+    assert!(state.inline_identity(&view).is_none());
+    assert!(state.set_article_mode(ArticleMode::Web));
+    let web = displayed(&mut state, &view);
+    assert!(state.inline_page(web, view.stamp(), &view).is_some());
+    assert!(state.reading_context(&view).is_some());
+    assert!(state.current(old, &view).is_none());
+}
+
+#[test]
+fn leaving_web_reading_restores_station_grid_for_every_list_and_menu() {
+    let fixtures: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/navigation.json")).unwrap();
+    for name in ["list", "boards", "main_menu", "mail", "archive"] {
+        let mut state = SurfaceState::new(filters::Rules::default());
+        let mut view = view();
+        let reading = displayed(&mut state, &view);
+        assert!(state.current(reading, &view).unwrap().article.is_some());
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&pttstella::encoding::encode(fixtures[name].as_str().unwrap()).unwrap());
+        let revision = view.frame.revision;
+        view.frame = screen.frame();
+        view.frame.revision += revision + 1;
+        state.update(&view);
+        let id = displayed(&mut state, &view);
+        let shown = state.current(id, &view).unwrap();
+        assert!(
+            shown.article.is_none() && shown.source_frame.is_none(),
+            "{name}"
+        );
+        assert_eq!(shown.frame, view.frame);
+    }
+}
+
+#[test]
+fn account_word_actions_revalidate_snapshot_and_preserve_existing_notes() {
+    let rules = filters::Rules::default()
+        .edit_policy("Alice", "keep note", filters::Policy::Allow, false)
+        .unwrap();
+    let mut state = SurfaceState::new(rules);
+    let mut view = view();
+    let identity = displayed(&mut state, &view);
+    for policy in [
+        filters::Policy::Mask,
+        filters::Policy::MaskRow,
+        filters::Policy::Allow,
+    ] {
+        let rules = state
+            .account_rule(identity, view.stamp(), (5, 4), policy, false, &view)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (
+                rules.entries[0].id.as_str(),
+                rules.entries[0].note.as_str(),
+                rules.entries[0].policy
+            ),
+            ("Alice", "keep note", policy)
+        );
+    }
+    assert!(
+        state
+            .account_rule(
+                identity,
+                view.stamp(),
+                (6, 4),
+                filters::Policy::Mask,
+                false,
+                &view
+            )
+            .is_none()
+    ); // merged ID
+    assert!(
+        state
+            .account_rule(
+                identity,
+                view.stamp(),
+                (500, 4),
+                filters::Policy::Mask,
+                false,
+                &view
+            )
+            .is_none()
+    );
+    view.input_epoch += 1;
+    assert!(
+        state
+            .account_rule(
+                identity,
+                view.stamp(),
+                (5, 4),
+                filters::Policy::Mask,
+                false,
+                &view
+            )
+            .is_none()
+    );
+}
+
+#[test]
+fn reply_author_targets_only_expose_visible_recognized_id_words() {
+    for mode in [ArticleMode::Web, ArticleMode::Terminal] {
+        let mut state = SurfaceState::new(filters::Rules::default());
+        state.set_article_mode(mode);
+        let view = view();
+        let identity = displayed(&mut state, &view);
+        let paint = state.current(identity, &view).unwrap();
+        let authors: Vec<_> = paint
+            .reply_author_words
+            .iter()
+            .map(|&index| {
+                let word = &paint.account_words[index];
+                (word.row, word.start, word.end, word.id.as_str())
+            })
+            .collect();
+        assert_eq!(
+            authors,
+            vec![(5, 3, 8, "Alice"), (7, 3, 9, "Alice2"), (8, 3, 6, "Bob")]
+        );
+        // A merged ID, quoted reply, truncated reply and body words are not authors.
+        assert!(paint.reply_rows.contains(&6));
+        let encoded = serde_json::to_value(paint).unwrap();
+        assert_eq!(encoded["reply_author_words"].as_array().unwrap().len(), 3);
+    }
+}
+
+#[test]
+fn reply_highlight_reprojects_the_same_expanded_batch_without_requeuing_images() {
+    use super::super::inline_images::{InlineImages, Target};
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut identity = displayed(&mut state, &view);
+    let mut images = InlineImages::default();
+    let first = images
+        .open(state.current(identity, &view).unwrap(), Target::All)
+        .unwrap()
+        .unwrap();
+    let entries: Vec<_> = first
+        .entries
+        .iter()
+        .map(|e| (e.index, e.row, e.key))
+        .collect();
+    assert_eq!(entries.len(), 2);
+    for row in [Some(5), Some(8), None] {
+        let old = identity;
+        let lease = state.lease_output(old, None, view.input_epoch);
+        assert!(state.focus_reply(old, view.stamp(), row, &view));
+        assert!(state.current(old, &view).is_none());
+        assert!(lease.check(&view).is_err());
+        identity = displayed(&mut state, &view);
+        let paint = state.current(identity, &view).unwrap();
+        let next = images.follow(paint).unwrap().unwrap();
+        assert_eq!(next.batch, first.batch);
+        assert_eq!(next.article_id, first.article_id);
+        assert_eq!(
+            next.entries
+                .iter()
+                .map(|e| (e.index, e.row, e.key))
+                .collect::<Vec<_>>(),
+            entries
+        );
+        assert!(images.follow(paint).unwrap().is_none());
+    }
+    // A real session change still revokes the retained batch and its downloads.
+    view.generation += 1;
+    assert!(images.observe(&view));
+    assert!(!images.active());
+}
+
+#[test]
+fn reply_focus_toggles_without_persisting_or_losing_article_history_and_revokes_outputs() {
+    for mode in [ArticleMode::Web, ArticleMode::Terminal] {
+        let mut state = SurfaceState::new(filters::Rules::default());
+        state.set_article_mode(mode);
+        let mut view = view();
+        let original = displayed(&mut state, &view);
+        let baseline = state.current(original, &view).unwrap().frame.clone();
+        let article = state
+            .current(original, &view)
+            .unwrap()
+            .article
+            .as_ref()
+            .map(|a| a.id);
+        let lease = state.lease_output(original, None, view.input_epoch);
+        assert!(state.focus_reply(original, view.stamp(), Some(6), &view)); // merged ID still has Rust identity
+        assert!(state.current(original, &view).is_none());
+        assert!(lease.check(&view).is_err());
+        let focused = displayed(&mut state, &view);
+        let paint = state.current(focused, &view).unwrap();
+        assert_eq!(paint.article.as_ref().map(|a| a.id), article);
+        assert_eq!(
+            pttstella::text::rows(&paint.frame).unwrap()[7].text,
+            pttstella::text::rows(&baseline).unwrap()[7].text
+        );
+        assert!(paint.account_words.iter().any(|w| w.row == 7));
+        assert!(paint.links.iter().any(|l| l.url.contains("visible.png")));
+        assert!(
+            paint
+                .frame
+                .glyphs
+                .iter()
+                .filter(|g| g.row == 5)
+                .all(|g| g.left.bg == 4)
+        );
+        if let Some(source) = &paint.source_frame {
+            assert!(
+                source
+                    .glyphs
+                    .iter()
+                    .filter(|g| g.row == 5)
+                    .all(|g| g.left.bg == 4)
+            );
+            assert_eq!(
+                pttstella::text::rows(source).unwrap()[7].text,
+                pttstella::text::rows(&baseline).unwrap()[7].text
+            );
+        }
+        assert!(state.rules().entries.is_empty());
+        assert!(!state.focus_reply(original, view.stamp(), Some(5), &view));
+        assert!(state.focus_reply(focused, view.stamp(), Some(5), &view));
+        let restored = displayed(&mut state, &view);
+        assert_eq!(state.current(restored, &view).unwrap().frame, baseline);
+        assert!(state.focus_reply(restored, view.stamp(), Some(8), &view));
+        let focused = displayed(&mut state, &view);
+        assert!(state.focus_reply(focused, view.stamp(), None, &view));
+        let restored = displayed(&mut state, &view);
+        assert!(state.focus_reply(restored, view.stamp(), Some(5), &view));
+        view.generation += 1;
+        state.update(&view);
+        let fresh = displayed(&mut state, &view);
+        assert!(state.current(fresh, &view).unwrap().reply_focus.is_none());
+    }
+}
+
+#[test]
+fn focused_id_survives_contiguous_pages_but_not_a_new_article_segment() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let original = displayed(&mut state, &view);
+    assert!(state.focus_reply(original, view.stamp(), Some(5), &view));
+    let focused = displayed(&mut state, &view);
+    let article = state
+        .current(focused, &view)
+        .unwrap()
+        .article
+        .as_ref()
+        .unwrap()
+        .id;
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/filters.json")).unwrap();
+    let mut screen = Screen::new(80, 24).unwrap();
+    state.article_input(&view.context(), b"\x1b[6~");
+    screen.feed(
+        &pttstella::encoding::encode(
+            &fixture["reading"]
+                .as_str()
+                .unwrap()
+                .replace("24~46", "47~69"),
+        )
+        .unwrap(),
+    );
+    view.frame = screen.frame();
+    view.frame.revision += 100;
+    state.update(&view);
+    let next = displayed(&mut state, &view);
+    let paint = state.current(next, &view).unwrap();
+    assert_eq!(paint.article.as_ref().unwrap().id, article);
+    assert_eq!(paint.reply_focus.as_deref(), Some("Alice"));
+    assert_eq!(paint.frame.rows, 47);
+    let rows = pttstella::text::rows(&paint.frame).unwrap();
+    assert_ne!(rows[7].text, "█".repeat(80));
+    assert_eq!(rows[7].text, rows[30].text);
+    for row in [5, 28] {
+        assert!(
+            paint
+                .frame
+                .glyphs
+                .iter()
+                .filter(|g| g.row == row)
+                .all(|g| g.left.bg == 4)
+        );
+    }
+    state.clear_article();
+    state.display_changed();
+    let fresh = displayed(&mut state, &view);
+    assert!(state.current(fresh, &view).unwrap().reply_focus.is_none());
+}
+
+#[test]
+fn raw_reading_switch_revokes_cached_selection_links_and_delayed_ack() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let view = view();
+    let old = displayed(&mut state, &view);
+    state.select(old, 77, &Selection::All, &view).unwrap();
+    hover(&mut state, old, &view);
+    state.display_changed();
+    let pending = Identity::of(
+        state
+            .queue(&view, false, &DisplaySettings::default())
+            .unwrap(),
+    );
+    assert!(state.set_raw_reading(true));
+    assert!(state.current(old, &view).is_none());
+    assert!(!state.navigation_shown(view.stamp()));
+    assert!(!state.clear_hover());
+    state.acknowledge(pending).unwrap();
+    assert!(state.current(pending, &view).is_none());
+    assert!(state.export_rows(pending, Some(77), &view).is_err());
+    let raw = displayed(&mut state, &view);
+    assert!(state.current(raw, &view).unwrap().article.is_none());
+    assert!(state.set_raw_reading(false));
+    assert!(state.current(raw, &view).is_none());
+    let fresh = displayed(&mut state, &view);
+    assert!(state.current(fresh, &view).unwrap().article.is_some());
+}
+
+#[test]
+fn clearing_reply_focus_cannot_reuse_the_old_presentation() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let view = view();
+    let old = displayed(&mut state, &view);
+    assert!(state.focus_reply(old, view.stamp(), Some(5), &view));
+    let focused = displayed(&mut state, &view);
+    state.select(focused, 78, &Selection::All, &view).unwrap();
+    let lease = state.lease_output(focused, Some(78), view.input_epoch);
+    state.clear_article();
+    state.display_changed();
+    assert!(lease.check(&view).is_err());
+    assert!(state.current(focused, &view).is_none());
+    let restored = displayed(&mut state, &view);
+    assert_ne!(focused.presentation, restored.presentation);
+    assert!(state.current(focused, &view).is_none());
+    assert!(
+        state
+            .current(restored, &view)
+            .unwrap()
+            .reply_focus
+            .is_none()
+    );
+}
+
+#[test]
+fn reading_modes_lengths_and_account_policies_keep_text_links_and_exports_consistent() {
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/filters.json")).unwrap();
+    for mode in [ArticleMode::Web, ArticleMode::Terminal] {
+        for last in [16, 23] {
+            for policy in [
+                None,
+                Some(filters::Policy::Mask),
+                Some(filters::Policy::MaskRow),
+                Some(filters::Policy::Allow),
+            ] {
+                let mut rules = filters::Rules::default();
+                if let Some(policy) = policy {
+                    rules = rules.edit_policy("Alice", "", policy, false).unwrap();
+                }
+                let mut state = SurfaceState::new(rules);
+                state.set_article_mode(mode);
+                let mut view = view();
+                let mut screen = Screen::new(80, 24).unwrap();
+                screen.feed(
+                    &pttstella::encoding::encode(
+                        &fixture["reading"]
+                            .as_str()
+                            .unwrap()
+                            .replace("24~46", &format!("1~{last}")),
+                    )
+                    .unwrap(),
+                );
+                view.frame = screen.frame();
+                let identity = displayed(&mut state, &view);
+                let paint = state.current(identity, &view).unwrap();
+                let rows = pttstella::text::rows(&paint.frame).unwrap();
+                assert_eq!(rows.len(), 24);
+                assert_eq!(paint.frame.cols, 80);
+                assert_eq!(paint.article.is_some(), mode == ArticleMode::Web);
+                let blocked = matches!(
+                    policy,
+                    Some(filters::Policy::Mask | filters::Policy::MaskRow)
+                );
+                let expected = if blocked {
+                    vec!["https://example.com/visible.png"]
+                } else {
+                    vec![
+                        "https://example.com/hidden.png",
+                        "https://example.com/visible.png",
+                    ]
+                };
+                assert_eq!(
+                    paint
+                        .links
+                        .iter()
+                        .map(|l| l.url.as_str())
+                        .collect::<Vec<_>>(),
+                    expected
+                );
+                assert_eq!(paint.image_links.len(), expected.len());
+                let visible = paint
+                    .links
+                    .iter()
+                    .position(|l| l.url.ends_with("/visible.png"))
+                    .unwrap();
+                assert_eq!(
+                    state
+                        .copy_text(
+                            identity,
+                            &super::super::protocol::CopyTarget::Link { index: visible },
+                            &view
+                        )
+                        .unwrap(),
+                    "https://example.com/visible.png"
+                );
+                assert!(state.select(identity, 79, &Selection::All, &view).is_some());
+                assert_eq!(state.export_rows(identity, Some(79), &view).unwrap(), 0..24);
+                assert!(state.reveal(identity, true, &view));
+                assert!(state.current(identity, &view).is_none());
+                let revealed = displayed(&mut state, &view);
+                let paint = state.current(revealed, &view).unwrap();
+                assert_eq!(paint.links.len(), 2);
+                assert!(pttstella::text::rows(&paint.frame).is_some());
+            }
+        }
+    }
+}
+
+#[test]
+fn full_article_loading_does_not_require_ack_preserves_cancelled_data_and_never_runs_in_terminal_mode()
+ {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut source = Screen::new(80, 24).unwrap();
+    source.feed(
+        &super::super::probe::surface_sample(
+            Some("inline_pages"),
+            true,
+            Some("http://127.0.0.1:1234"),
+        )
+        .unwrap(),
+    );
+    view.frame = source.frame();
+    let packet = state
+        .queue(&view, false, &DisplaySettings::default())
+        .unwrap()
+        .clone();
+    let id = packet.article.as_ref().unwrap().id;
+    assert_eq!(
+        state.next_full_page(&view),
+        Some(pttstella::navigation::Intent::NextPage)
+    );
+    // One network request remains outstanding even if its old UI frame is ACKed.
+    assert!(
+        state
+            .acknowledge(Identity {
+                presentation: packet.presentation,
+                generation: packet.generation,
+                revision: packet.frame.revision
+            })
+            .is_ok()
+    );
+    assert!(state.next_full_page(&view).is_none());
+    assert!(!state.full_load_action(view.generation, id + 1, false, &view));
+    assert!(state.full_load_action(view.generation, id, false, &view));
+    assert!(state.full_load_deadline().is_none());
+    let current = displayed(&mut state, &view);
+    assert_eq!(
+        state
+            .current(current, &view)
+            .unwrap()
+            .article
+            .as_ref()
+            .unwrap()
+            .load,
+        Some(super::super::article_cache::LoadState::Cancelled)
+    );
+    assert!(state.next_full_page(&view).is_none());
+    assert!(state.set_article_mode(ArticleMode::Terminal));
+    displayed(&mut state, &view);
+    assert!(state.displayed.as_ref().unwrap().article.is_none());
+    assert!(!state.full_load_active());
+    assert!(state.next_full_page(&view).is_none());
+    assert!(!state.full_load_action(view.generation, id, true, &view));
+}
+
+#[test]
+fn clamped_short_article_retains_its_tail_and_opens_the_acknowledged_historical_link() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(
+        &super::super::probe::short_overlap_page(false, Some("http://127.0.0.1:1234")).unwrap(),
+    );
+    view.frame = screen.frame();
+    let old = displayed(&mut state, &view);
+    assert!(state.next_full_page(&view).is_some());
+    state.article_input(&view.context(), b"\x1b[6~");
+    screen.feed(
+        &super::super::probe::short_overlap_page(true, Some("http://127.0.0.1:1234")).unwrap(),
+    );
+    view.frame = screen.frame();
+    state.update(&view);
+    assert!(state.current(old, &view).is_none());
+    let fresh = displayed(&mut state, &view);
+    let paint = state.current(fresh, &view).unwrap();
+    let article = paint.article.as_ref().unwrap();
+    assert_eq!(
+        (article.first_line, article.last_line, article.end),
+        (1, 32, true)
+    );
+    let text = pttstella::text::rows(&paint.frame).unwrap();
+    assert!(text[23].text.starts_with("Synthetic signature:"));
+    assert!(text[31].text.starts_with("Last synthetic reply"));
+    let index = paint
+        .links
+        .iter()
+        .position(|link| link.url == "https://example.com/pttstella")
+        .unwrap();
+    assert_eq!(paint.links[index].row, 1);
+    // The OpenLink consumer resolves from this ACK, not from station-page indices.
+    assert_eq!(
+        state.current(fresh, &view).unwrap().links[index].url,
+        "https://example.com/pttstella"
+    );
+    assert!(
+        !pttstella::links::detect(&view.frame)
+            .iter()
+            .any(|link| link.url == "https://example.com/pttstella")
+    );
+}
+
+#[test]
+fn preload_ingests_all_pages_while_the_first_paint_ack_is_withheld() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut source = Screen::new(80, 24).unwrap();
+    source.feed(&super::super::probe::long_load_page(1, Some("http://127.0.0.1:1234")).unwrap());
+    view.frame = source.frame();
+    let old = state
+        .queue(&view, false, &DisplaySettings::default())
+        .unwrap()
+        .clone();
+    let id = old.article.as_ref().unwrap().id;
+    let permit = state.authorize_reading(view.stamp(), id).unwrap();
+    for page in 2..=38 {
+        assert_eq!(state.reading_scope(), Some(permit));
+        assert_eq!(
+            state.next_full_page(&view),
+            Some(pttstella::navigation::Intent::NextPage)
+        );
+        assert!(state.next_full_page(&view).is_none());
+        state.article_input(&view.context(), b"\x1b[6~");
+        source.feed(
+            &super::super::probe::long_load_page(page, Some("http://127.0.0.1:1234")).unwrap(),
+        );
+        view.frame = source.frame();
+        state.update(&view);
+        assert!(state.has_in_flight());
+        assert!(
+            state
+                .queue(&view, false, &DisplaySettings::default())
+                .is_none()
+        );
+    }
+    assert_eq!(
+        state.reading_progress(),
+        Some((
+            id,
+            1,
+            837,
+            Some(super::super::article_cache::LoadState::Complete)
+        ))
+    );
+    assert!(state.next_full_page(&view).is_none());
+    let old_identity = Identity {
+        presentation: old.presentation,
+        generation: old.generation,
+        revision: old.frame.revision,
+    };
+    state.acknowledge(old_identity).unwrap();
+    assert!(state.current(old_identity, &view).is_none());
+    let final_packet = state
+        .queue(&view, false, &DisplaySettings::default())
+        .unwrap();
+    let rows = pttstella::text::rows(&final_packet.frame).unwrap();
+    assert!(rows[0].text.starts_with("Full article synthetic line 0001"));
+    assert!(
+        rows[836]
+            .text
+            .starts_with("Full article synthetic line 0837")
+    );
+    assert_eq!(final_packet.article.as_ref().unwrap().last_line, 837);
+}
+
+#[test]
+fn preload_cancel_late_page_and_article_switch_revoke_old_scope_without_waiting_for_ack() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut source = Screen::new(80, 24).unwrap();
+    source.feed(&super::super::probe::long_load_page(1, Some("http://127.0.0.1:1234")).unwrap());
+    view.frame = source.frame();
+    let old = state
+        .queue(&view, false, &DisplaySettings::default())
+        .unwrap()
+        .clone();
+    let id = old.article.as_ref().unwrap().id;
+    let stamp = view.stamp();
+    assert!(state.next_full_page(&view).is_some());
+    state.article_input(&view.context(), b"\x1b[6~");
+    assert!(state.full_load_action(view.generation, id, false, &view));
+    source.feed(&super::super::probe::long_load_page(2, Some("http://127.0.0.1:1234")).unwrap());
+    view.frame = source.frame();
+    state.update(&view);
+    assert_eq!(
+        state.reading_progress(),
+        Some((
+            id,
+            1,
+            45,
+            Some(super::super::article_cache::LoadState::Cancelled)
+        ))
+    );
+    assert!(state.next_full_page(&view).is_none());
+    state.article_input(&view.context(), b"q");
+    assert!(state.reading_scope().is_none());
+    assert!(state.authorize_reading(stamp, id).is_none());
+    view.generation += 1;
+    let mut fresh = Screen::new(80, 24).unwrap();
+    fresh.feed(&super::super::probe::long_load_page(1, Some("http://127.0.0.1:1234")).unwrap());
+    view.frame = fresh.frame();
+    state.update(&view);
+    let new_id = state.reading_progress().unwrap().0;
+    assert_ne!(new_id, id);
+    assert_eq!(state.reading_progress().unwrap().2, 23);
+    assert!(state.authorize_reading(stamp, id).is_none());
+    assert!(!state.full_load_action(view.generation, id, true, &view));
+    state
+        .acknowledge(Identity {
+            presentation: old.presentation,
+            generation: old.generation,
+            revision: old.frame.revision,
+        })
+        .unwrap();
+    let new_packet = state
+        .queue(&view, false, &DisplaySettings::default())
+        .unwrap()
+        .clone();
+    assert_eq!(new_packet.article.as_ref().unwrap().last_line, 23);
+    assert!(state.authorize_reading(view.stamp(), new_id).is_some());
+    state.set_article_mode(ArticleMode::Terminal);
+    assert!(state.reading_scope().is_none());
+    assert!(state.next_full_page(&view).is_none());
+}
+
+#[test]
+fn author_actions_use_acknowledged_list_fields_and_reject_stale_or_hidden_authors() {
+    let mut view = view();
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/navigation.json")).unwrap();
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(&pttstella::encoding::encode(fixture["list"].as_str().unwrap()).unwrap());
+    view.frame = screen.frame();
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let identity = displayed(&mut state, &view);
+    for col in [17, 21, 29] {
+        for policy in [
+            filters::Policy::Mask,
+            filters::Policy::MaskRow,
+            filters::Policy::Allow,
+        ] {
+            let rules = state
+                .account_rule(identity, view.stamp(), (3, col), policy, false, &view)
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                (rules.entries[0].id.as_str(), rules.entries[0].policy),
+                ("alice", policy)
+            );
+        }
+    }
+    for (row, col) in [(2, 17), (3, 16), (3, 30), (23, 17)] {
+        assert!(
+            state
+                .account_rule(
+                    identity,
+                    view.stamp(),
+                    (row, col),
+                    filters::Policy::Mask,
+                    false,
+                    &view
+                )
+                .is_none()
+        );
+    }
+    assert!(!state.focus_reply(identity, view.stamp(), Some(3), &view));
+    view.input_epoch += 1;
+    assert!(
+        state
+            .account_rule(
+                identity,
+                view.stamp(),
+                (3, 17),
+                filters::Policy::Mask,
+                false,
+                &view
+            )
+            .is_none()
+    );
+    let rules = filters::Rules::default()
+        .edit_policy("alice", "", filters::Policy::MaskRow, false)
+        .unwrap();
+    let mut state = SurfaceState::new(rules);
+    let identity = displayed(&mut state, &view);
+    assert!(
+        state
+            .account_rule(
+                identity,
+                view.stamp(),
+                (3, 17),
+                filters::Policy::Allow,
+                false,
+                &view
+            )
+            .is_none()
+    );
+}
+
+#[test]
+fn context_removal_requires_matching_rule_current_visible_word_and_successful_save() {
+    for policy in [filters::Policy::Mask, filters::Policy::Allow] {
+        let rules = filters::Rules::default()
+            .edit_policy("Alice", "keep", policy, false)
+            .unwrap();
+        let mut state = SurfaceState::new(rules.clone());
+        let view = view();
+        let original = displayed(&mut state, &view);
+        assert_eq!(
+            state
+                .current(original, &view)
+                .unwrap()
+                .account_words
+                .iter()
+                .find(|w| w.row == 5 && w.id == "Alice")
+                .unwrap()
+                .policy,
+            Some(policy)
+        );
+        let mismatch = if policy == filters::Policy::Allow {
+            filters::Policy::Mask
+        } else {
+            filters::Policy::Allow
+        };
+        assert!(
+            state
+                .account_rule(original, view.stamp(), (5, 3), mismatch, true, &view)
+                .is_none()
+        );
+        let removed = state
+            .account_rule(original, view.stamp(), (5, 3), policy, true, &view)
+            .unwrap()
+            .unwrap();
+        assert!(removed.entries.is_empty());
+        assert_eq!(state.rules(), &rules); // draft/failed persistence cannot change effective rules
+        state.replace_rules(removed);
+        assert!(
+            state
+                .account_rule(original, view.stamp(), (5, 3), policy, true, &view)
+                .is_none()
+        );
+        let fresh = displayed(&mut state, &view);
+        assert!(
+            state
+                .account_rule(fresh, view.stamp(), (5, 3), policy, true, &view)
+                .is_none()
+        );
+    }
+}
+
+#[test]
+fn adjacent_article_requires_enabled_current_local_cache_and_a_real_retained_edge() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/filters.json")).unwrap();
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(
+        &pttstella::encoding::encode(
+            &fixture["reading"]
+                .as_str()
+                .unwrap()
+                .replace("24~46", "1~23"),
+        )
+        .unwrap(),
+    );
+    view.frame = screen.frame();
+    displayed(&mut state, &view);
+    assert!(!state.adjacent_article_allowed(view.stamp(), false, &view));
+    state.set_article_boundary_navigation(true);
+    displayed(&mut state, &view);
+    assert!(!state.adjacent_article_allowed(view.stamp(), false, &view)); // active preload
+    state.stop_full_load();
+    displayed(&mut state, &view);
+    assert!(state.adjacent_article_allowed(view.stamp(), false, &view));
+    assert!(!state.adjacent_article_allowed(view.stamp(), true, &view));
+    let old = view.stamp();
+    view.input_epoch += 1;
+    assert!(!state.adjacent_article_allowed(old, false, &view));
+    view.input_pending = true;
+    assert!(!state.adjacent_article_allowed(view.stamp(), false, &view));
+    view.input_pending = false;
+    state.set_article_mode(ArticleMode::Terminal);
+    displayed(&mut state, &view);
+    assert!(!state.adjacent_article_allowed(view.stamp(), false, &view));
 }

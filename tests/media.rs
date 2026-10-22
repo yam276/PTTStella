@@ -87,20 +87,15 @@ fn direct_media_preserves_query_and_does_not_guess_web_pages() {
 }
 
 #[test]
-fn youtube_uses_exact_hosts_valid_ids_and_original_playback_url() {
+fn youtube_pages_use_the_original_external_url_without_a_thumbnail_target() {
     for url in [
         "https://youtu.be/Abc_12-dEF0?t=12",
         "https://www.youtube.com/watch?v=Abc_12-dEF0&t=12",
         "https://m.youtube.com/shorts/Abc_12-dEF0",
         "https://youtube.com/live/Abc_12-dEF0",
     ] {
-        let target = classify(url).unwrap().unwrap();
-        assert_eq!(target.kind, Kind::Youtube);
-        assert_eq!(target.url, url);
-        assert_eq!(
-            target.image_url.as_deref(),
-            Some("https://i.ytimg.com/vi/Abc_12-dEF0/hqdefault.jpg")
-        );
+        assert_eq!(classify(url).unwrap(), None);
+        assert_eq!(pttstella::media::validate(url).unwrap().as_str(), url);
     }
     for url in [
         "https://youtube.com.evil.example/watch?v=Abc_12-dEF0",

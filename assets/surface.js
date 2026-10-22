@@ -11,6 +11,7 @@ const surfaceNote=document.getElementById("surface-note");
 const pasteDialog=document.getElementById("paste-dialog"), pasteSend=document.getElementById("paste-send"), pasteCancel=document.getElementById("paste-cancel");
 const exportButton=document.getElementById("export-png");
 const exportRows=document.getElementById("export-rows");
+const copyPng=document.getElementById("copy-png"),copyRowsPng=document.getElementById("copy-rows-png");
 const keepAlive=document.getElementById("keep-alive");
 const stationMouseButton=document.getElementById("station-mouse"),stationMouseStatus=document.getElementById("station-mouse-status");
 const hoverPosition=document.getElementById("hover-position");
@@ -36,25 +37,42 @@ function previewHover(index) {
 }
 function changeHoverPreference(e){send({kind:"hover_preference",position:hoverPosition.value,trusted:e.isTrusted});}
 const vimToggle=document.getElementById("vim-toggle"),vimOnce=document.getElementById("vim-once"),vimStatus=document.getElementById("vim-status");
+let settingsActive=false,settingsSnapshot={last:null,error:null};
 let keyboardState={enabled:false,mode:"input",pending:false,prefix:""};
 function policy(action,e,code="") {send({kind:"keyboard_state",action,code,generation,trusted:e?.isTrusted??true});}
 function toggleVim(e){policy("toggle",e);restoreEditingFocus();}
 function armNative(e){policy("once",e);restoreEditingFocus();}
-function keyup(e){if(!e.metaKey)policy("release",e,e.code);}
+function keyup(e){if(inlineImages.keyup(e))e.preventDefault();if(!e.metaKey)policy("release",e,e.code);}
 function receiveKeyboard(state){keyboardState=state;vimToggle.textContent=state.enabled?tr("vim-on"):tr("vim-off");
     keyboard.readOnly=state.enabled&&!["input","once"].includes(state.mode);
     vimToggle.setAttribute("aria-pressed",String(state.enabled));vimOnce.hidden=!state.enabled||state.mode==="input";
     vimOnce.setAttribute("aria-pressed",String(state.mode==="once"));
-    const reason={different_site:tr("site-raw-input"),unsupported_grid:tr("reason-grid"),incomplete:tr("reason-incomplete"),unmapped:tr("reason-unmapped"),unrecognized:tr("reason-unrecognized"),invalid_cursor:tr("reason-cursor"),board_header:tr("reason-board-header"),board_rows:tr("reason-board-rows")}[state.suspended_reason]||tr("reason-unknown");
+    const reason={different_site:tr("site-raw-input"),unsupported_grid:tr("reason-grid"),incomplete:tr("reason-incomplete"),unmapped:tr("reason-unmapped"),unrecognized:tr("reason-unrecognized"),invalid_cursor:tr("reason-cursor"),board_header:tr("reason-board-header"),board_rows:tr("reason-board-rows"),unsupported_layout:tr("reason-layout")}[state.suspended_reason]||tr("reason-unknown");
     vimStatus.textContent=!state.enabled?"":({normal:"VIM NORMAL",input:"PTT INPUT",once:tr("vim-once"),suspended:tr("vim-suspended",{reason})}[state.mode])+" "+state.prefix;
     surface.dataset.keyboardMode=state.mode;surface.dataset.vim=String(state.enabled);refreshKeepAlive();}
 const navigationMarker=document.getElementById("navigation-marker"),browseControls=document.getElementById("browse-controls");
 const browseBack=document.getElementById("browse-back"),browsePrevious=document.getElementById("browse-previous"),browseNext=document.getElementById("browse-next");
 const browseHint=document.getElementById("browse-hint");
+const articleLoad=document.getElementById("article-load"),articleLoadStatus=document.getElementById("article-load-status");
+const articleLoadCancel=document.getElementById("article-load-cancel"),articleLoadResume=document.getElementById("article-load-resume");
+function refreshArticleLoad() {
+    const article=latest?.article,state=article?.load;
+    articleLoad.hidden=!state||state==="complete";
+    articleLoad.dataset.state=state??"";
+    articleLoadStatus.textContent=state?tr("article-load-"+state,{lines:article.last_line-article.first_line+1}):"";
+    articleLoadCancel.hidden=state!=="loading";
+    articleLoadResume.hidden=!["cancelled","stopped"].includes(state);
+    articleLoadCancel.textContent=tr("article-load-cancel");articleLoadResume.textContent=tr("article-load-resume");
+}
+function changeArticleLoad(e,resume=false) {
+    if(!e.isTrusted||stopped||!latest?.article)return;
+    send({kind:"article_load",generation,article:latest.article.id,resume,trusted:true});
+    focus();
+}
+const cancelArticleLoad=e=>changeArticleLoad(e),resumeArticleLoad=e=>changeArticleLoad(e,true);
 function invalidatePresentation(){contextMenu?.close(false);stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);}
 const ctx=canvas.getContext("2d",{willReadFrequently:true});
-const palette=["#000000","#800000","#008000","#808000","#000080","#800080","#008080","#c0c0c0",
-    "#808080","#ff0000","#00ff00","#ffff00","#0000ff","#ff00ff","#00ffff","#ffffff"];
+
 const {family:fontFamily,description:fontDescription,load:loadFonts,note:fontLoadNote,invalidate:invalidateFonts}=
     createSurfaceFonts({document,FontFace,tr});
 let generation=0, revision=-1, composing=false, composition=null, beforeEdit=null, sent=0;
@@ -64,10 +82,11 @@ let grid=null, dragging=null, selectionNext=null, selectionBusy=null, selectionC
 let selectionActive=false, selectionFingerprint=null;
 let pastePending=false;
 let hoveredLink=-1;
-let hoveredArticle=null,released=null,clickSequenceAction=false,navigationLocked=false,navigationRequest=false;
+let hoveredRow=null,released=null,clickSequenceAction=false,navigationLocked=false,navigationRequest=false;
 let exportBusy=false, exportTask=null;
 let keepAliveGate=null;
 let tools=null,contextMenu=null;
+let toolAccess={right_click_menu:true,show_floating_button:true};
 let toolsProbeEnabled=false;
 const send=value=>{ sent++; dioxus.send(value); };
 const stamp=()=>({generation,revision,input_epoch:latest?.input_epoch??0});
@@ -89,20 +108,25 @@ function refreshStationMouse(){
     stationMouseStatus.textContent=!latest?.connected||!state?.enabled?"":tr(state.route==="station"?"station-mouse-active":state.route==="blocked"?"station-mouse-blocked":"station-mouse-local");
     surface.dataset.stationMouseRoute=state?.route??"local";
 }
-const canNavigate=()=>!stopped&&!!latest?.connected&&['article_list','article_reading','board_list','empty_list','command_help'].includes(latest.navigation.kind)&&!latest.input_pending&&!navigationLocked&&!navigationRequest&&!blocked();
+const canNavigate=()=>!stopped&&!!latest?.connected&&['main_menu','system_menu','document_list','article_list','article_reading','board_list','empty_list','command_help','continue_prompt'].includes(latest.navigation.kind)&&!latest.input_pending&&!navigationLocked&&!navigationRequest&&!blocked();
 function invalidateNavigation(){navigationLocked=true;released=null;cancelDrag();setHover(null);refreshNavigation();}
 function sendInput(value){invalidateNavigation();send(value);}
 // Only classify editing vs command events here. Rust owns key translation and
 // the context-dependent conversion from browsing intents to PTT bytes.
 const commandKeys=new Set(["Enter","Backspace","Tab","Escape","ArrowUp","ArrowDown","ArrowRight","ArrowLeft","Home","End","PageUp","PageDown","Delete"]);
 function keydown(e) {
+    if(document.querySelector("dialog[open]")){e.preventDefault();return;}
     if(e.isTrusted)stationMouse.revoke();
     cancelHover(true);
     if(pastePending) {e.preventDefault();return;}
+    if(e.key==="Escape"&&latest?.article?.load==="loading"&&!e.isComposing&&!composing&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!blocked()&&!hasSelection()&&!dragging) {
+        e.preventDefault();cancelArticleLoad(e);return;
+    }
     // Older WebKit can end composition before its confirming keydown. That
     // event still carries 229 even though isComposing is already false.
     // Leave the native IME action intact; never forward it as a BBS command.
     const browsing=keyboardState.enabled&&!["input","once"].includes(keyboardState.mode);
+    const pause=latest?.navigation.kind==="continue_prompt"&&!["Dead","Shift","Control","Alt","Meta","CapsLock","NumLock","ScrollLock","Fn","FnLock","Symbol","SymbolLock","Hyper","Super"].includes(e.key);
     const physical=browsing&&/^(Key[A-Z]|Digit[0-9])$/.test(e.code);
     if(e.isComposing||composing||((e.keyCode===229||e.key==="Process")&&!physical)||e.metaKey) return;
     // Let the native copy action fire; copy data is already prepared by Rust.
@@ -112,19 +136,28 @@ function keydown(e) {
     if(e.ctrlKey&&["+","=","-","0"].includes(e.key)) {
         e.preventDefault(); zoomTo(e.key==="0"?1:zoom+(e.key==="-"?-.25:.25)); return;
     }
-    if(inlineShortcut(e,keyboardState,latest)) {
-        e.preventDefault();clearSelection();cancelDrag();
-        if(!e.repeat)send({kind:"inline_expand",presentation:latest.presentation,stamp:stamp(),key:{key:e.key,code:e.code,ctrl:e.ctrlKey,alt:e.altKey,shift:e.shiftKey,repeat:e.repeat},trusted:e.isTrusted});
-        return;
+    if(inlineShortcut(e,keyboardState,latest)||e.key==="Enter"&&inlineImages.keyHeld()) {
+        e.preventDefault();clearSelection();cancelDrag();inlineImages.keydown(e);return;
+    }
+    if(latest?.article&&["ArrowUp","ArrowDown"].includes(e.key)&&!e.ctrlKey&&!e.altKey&&!e.shiftKey
+        &&!(keyboardState.enabled&&["input","once"].includes(keyboardState.mode))) {
+        e.preventDefault();policy("reset",e);readingMove({action:"lines",down:e.key==="ArrowDown",count:1},e,"keyboard-arrow");return;
+    }
+    if(latest?.article&&!e.ctrlKey&&!e.altKey&&!e.shiftKey&&!keyboardState.enabled) {
+        // PTT's ordinary j/k reading keys must not become textarea edits:
+        // those edits suspend the web projection and bypass its local movement.
+        const action={PageUp:"previous_page",PageDown:"next_page",Home:"first",End:"last",ArrowUp:"up",ArrowDown:"down",k:"up",j:"down"," ":"next_page"}[e.key];
+        if(action){e.preventDefault();readingMove(action==="up"||action==="down"?{action:"lines",down:action==="down",count:1}:{action},e);return;}
     }
     const command=commandKeys.has(e.key)||(e.ctrlKey&&/^[a-z]$/i.test(e.key));
-    if(command||physical||(browsing&&e.key.length===1)) {clearSelection();e.preventDefault();}
-    if(command||physical||e.key.length===1||e.key==="Dead") {
+    if(command||physical||pause||(browsing&&e.key.length===1)) {clearSelection();e.preventDefault();}
+    if(command||physical||pause||e.key.length===1||e.key==="Dead") {
         inputKey=!command;
         send({kind:"key",key:{key:e.key,code:e.code,ctrl:e.ctrlKey,alt:e.altKey,shift:e.shiftKey,repeat:e.repeat},generation,trusted:e.isTrusted});
     }
 }
 function input(e) {
+    if(document.querySelector("dialog[open]")){keyboard.value="";return;}
     if(e.isTrusted)stationMouse.revoke();
     cancelHover(true);
     if(pastePending) {keyboard.value="";return;}
@@ -174,6 +207,13 @@ function cancelComposition() {
 }
 function positionKeyboard() {
     if(!grid||!latest) return;
+    if(latest.article){
+        // WebView may reveal the focused textarea's caret on a physical key.
+        // Reading has no station caret; keep this invisible sink in the viewport.
+        Object.assign(keyboard.style,{left:Math.max(0,viewport.scrollLeft-surface.offsetLeft)+8+"px",
+            top:Math.max(0,viewport.scrollTop-surface.offsetTop)+8+"px",height:"1px",lineHeight:"1px",width:"1px"});
+        return;
+    }
     const [col,row]=latest.frame.cursor, left=grid.x(col)/grid.ratio, top=grid.y(row)/grid.ratio;
     const height=(grid.bottom(row)-grid.y(row))/grid.ratio;
     const fontSize=height*latest.settings.font_size/24;
@@ -191,6 +231,7 @@ function positionKeyboard() {
 }
 function focus() { if(document.activeElement!==keyboard) keyboard.focus({preventScroll:true}); }
 function restoreEditingFocus(){tools?.close();keyboard.blur();focus();}
+function restoreSettingsPanelFocus(){if(!document.getElementById("font-dialog").open)restoreEditingFocus();}
 function pointerdown(e) {
     if(stationMouse.down(e))return;
     if(e.button!==0||!e.isPrimary||dragging) return;
@@ -202,11 +243,11 @@ function pointerdown(e) {
     // Prevent the scroll container's default focus step from overriding ours.
     e.preventDefault(); focus(); clearSelection();
     const point=cellAt(e,false);
-    const hit=hitAt(point);
+    const hit=pointerHit(point,e);
     if(hit?.kind!=="link"||hoverCandidate?.index!==hit.index)cancelHover();
     else if(!hoverCandidate.started)cancelHover();
-    if(point&&!composing) {
-        dragging={anchor:point,x:e.clientX,y:e.clientY,moved:false,pointer:e.pointerId,hit:e.shiftKey?null:hitAt(point),stamp:stamp()};
+    if((point||hit&&!e.shiftKey)&&!composing) {
+        dragging={anchor:point,x:e.clientX,y:e.clientY,moved:false,pointer:e.pointerId,hit:e.shiftKey?null:hit,stamp:stamp(),view:pointerView()};
         viewport.setPointerCapture(e.pointerId);
         surface.dataset.pointerId=String(e.pointerId);surface.dataset.pointerActive="true";
         refreshKeepAlive();
@@ -225,18 +266,18 @@ function pointermove(e) {
     pointerClient={x:e.clientX,y:e.clientY,clientX:e.clientX,clientY:e.clientY,trusted:e.isTrusted};media.locate(pointerClient,hoverPreference);
     if(dragging&&e.pointerId!==dragging.pointer) return;
     if(!dragging&&stationMouse.move(e)){cancelHover();setHover(null);return;}
-    if(!dragging) {if(stationMouse.local())setHover(e.shiftKey?null:cellAt(e,false));else {cancelHover();setHover(null);}return;}
+    if(!dragging) {if(stationMouse.local())setHover(e.shiftKey?null:cellAt(e,false),true,true,e.shiftKey?null:e);else {cancelHover();setHover(null);}return;}
     dragging.moved ||= Math.hypot(e.clientX-dragging.x,e.clientY-dragging.y)>3;
     if(dragging.moved)cancelHover();
-    if(dragging.moved) requestSelection({mode:"range",anchor:dragging.anchor,focus:cellAt(e,true)});
+    if(dragging.moved&&dragging.anchor) requestSelection({mode:"range",anchor:dragging.anchor,focus:cellAt(e,true)});
 }
 function pointerup(e) {
     if(!dragging&&stationMouse.up(e))return;
     if(!dragging||e.pointerId!==dragging.pointer) return;
     pointermove(e);
-    const hit=hitAt(cellAt(e,false));
-    if(!dragging.moved&&!e.shiftKey&&stationMouse.local()&&!blocked()&&sameStamp(dragging.stamp,stamp())&&JSON.stringify(dragging.hit)===JSON.stringify(hit)) {
-        released={hit,stamp:dragging.stamp};
+    const hit=pointerHit(cellAt(e,false),e);
+    if(!dragging.moved&&!e.shiftKey&&stationMouse.local()&&!blocked()&&sameStamp(dragging.stamp,stamp())&&dragging.view===pointerView()&&JSON.stringify(dragging.hit)===JSON.stringify(hit)) {
+        released={hit,stamp:dragging.stamp,view:dragging.view};
     }
     dragging=null;
     surface.dataset.pointerActive="false";
@@ -245,11 +286,12 @@ function pointerup(e) {
 }
 function click(e) {
     if(!stationMouse.local()){released=null;return;}
-    if(e.button!==0||e.detail>1) {released=null;refreshKeepAlive();return;}
+    if(!e.isTrusted||e.button!==0||e.detail>1) {released=null;refreshKeepAlive();return;}
     const action=released;released=null;clickSequenceAction=!!action?.hit;
-    if(!action?.hit||blocked()||!sameStamp(action.stamp,stamp())) {refreshKeepAlive();return;}
+    if(!action?.hit||blocked()||!sameStamp(action.stamp,stamp())||action.view&&action.view!==pointerView()) {refreshKeepAlive();return;}
     if(action.hit.kind==="link") send({kind:"open_link",presentation:latest.presentation,generation,revision,index:action.hit.index,trusted:e.isTrusted});
-    else navigate(action.hit.kind==="back"?{action:"back"}:{action:"open",row:action.hit.row},e);
+    else if(action.hit.kind==="reply")send({kind:"reply_focus",presentation:latest.presentation,stamp:stamp(),row:action.hit.row,trusted:true});
+    else navigate(action.hit.kind==="continue"?{action:"continue"}:action.hit.kind==="back"?{action:"back"}:action.hit.kind==="page"?{action:action.hit.action}:{action:"open",row:action.hit.row},e);
     refreshKeepAlive();
 }
 function cancelDrag() {
@@ -259,7 +301,7 @@ function cancelDrag() {
     refreshKeepAlive();
 }
 function pointercancel(){stationMouse.revoke();cancelHover(true);released=null;cancelDrag();clearSelection();}
-function deactivate(e){contextMenu?.close(false);stationMouse.revoke();cancelHover(true);policy("reset",e);released=null;cancelDrag();setHover(null);cancelComposition();}
+function deactivate(e){contextMenu?.close(false);stationMouse.revoke();cancelHover(true);policy("reset",e);released=null;cancelDrag();setHover(null);cancelComposition();refreshKeepAlive();}
 function lostcapture(e){stationMouse.lost(e);if(dragging){cancelHover();dragging=null;released=null;surface.dataset.pointerActive="false";refreshKeepAlive();}}
 function hasSelection(){return selectionActive;}
 function clearSelection() {
@@ -327,32 +369,94 @@ function linkAt(point) {
     if(!point||!latest) return -1;
     return latest.links.findIndex(link=>link.row===point.row&&link.start<=point.col&&point.col<link.end);
 }
-function hitAt(point) {
+// Geometry consumes the confirmed Rust profile, never station text.
+function navigationBackRegion(context,article=null) {
+    if(!context||["main_menu","unknown","continue_prompt"].includes(context.kind))return null;
+    if(context.kind==="article_reading"&&article)return {first:0,last:article.last_line-article.first_line+1,end:17};
+    const first=context.kind==="article_list"?(context.articles[0]?.row??3):(context.first_row??1);
+    const end=context.kind==="article_list"?17:context.kind==="board_list"?10:context.kind==="article_reading"?17:20;
+    return {first,last:23,end};
+}
+function hasPageEdges(context) {
+    return ["main_menu","system_menu","document_list","board_list","article_list","command_help","article_reading"].includes(context?.kind);
+}
+function pointerView() {
+    if(!hasPageEdges(latest?.navigation)&&latest?.navigation.kind!=="continue_prompt")return null;
+    const bounds=surface.getBoundingClientRect(),visible=viewport.getBoundingClientRect();
+    return JSON.stringify([latest.presentation,latest.navigation.kind,latest.article?.id,viewport.scrollTop,viewport.scrollLeft,
+        viewport.clientWidth,viewport.clientHeight,bounds.left,bounds.top,bounds.width,bounds.height,visible.top]);
+}
+function navigationPageAt(point,clientY,region,halves) {
+    if(point&&(point.row<region.first||point.row>=region.last)||!point&&!Number.isFinite(clientY))return null;
+    const bounds=surface.getBoundingClientRect(),visible=viewport.getBoundingClientRect();
+    const top=Math.max(visible.top,bounds.top+grid.y(region.first)/grid.ratio);
+    const bottom=Math.min(visible.top+viewport.clientHeight,bounds.top+grid.y(region.last)/grid.ratio);
+    const y=clientY??bounds.top+(grid.y(point.row)+grid.bottom(point.row))/2/grid.ratio;
+    if(y<top||y>=bottom)return null;
+    const edge=Math.min((bottom-top)/4,Math.max(16,Math.min(32,(grid.bottom(region.first)-grid.y(region.first))/grid.ratio)));
+    if(y<top+edge)return {kind:"page",action:"first"};
+    if(y>=bottom-edge)return {kind:"page",action:"last"};
+    return halves?{kind:"page",action:y<(top+bottom)/2?"previous_page":"next_page"}:null;
+}
+function readingPageAt(point,clientY) {
+    return navigationPageAt(point,clientY,navigationBackRegion(latest.navigation,latest.article),true);
+}
+function listEdgeAt(point,clientY) {
+    if(!hasPageEdges(latest.navigation)||latest.navigation.kind==="article_reading"||!Number.isFinite(clientY))return null;
+    return navigationPageAt(point,clientY,{first:0,last:latest.frame.rows-1},false);
+}
+function hitAt(point,clientY) {
     if(!point||blocked()||dragging?.moved||!stationMouse.local()) return null;
-    if(canNavigate()&&point.col<1&&point.row>0&&point.row<23)return {kind:"back"};
+    if(latest?.navigation.kind==="continue_prompt")return canNavigate()?{kind:"continue"}:null;
     const index=linkAt(point);if(index>=0) return {kind:"link",index};
-    if(!canNavigate()||latest.navigation.kind!=="article_list") return null;
+    if(canNavigate()&&latest?.navigation.kind==="article_reading"&&latest.reply_author_words?.some(index=>{
+        const word=latest.account_words[index];return word?.row===point.row&&word.start<=point.col&&point.col<word.end;
+    }))return {kind:"reply",row:point.row};
+    const back=navigationBackRegion(latest?.navigation,latest?.article);
+    if(canNavigate()&&back&&point.col<back.end&&point.row>=back.first&&point.row<back.last)return {kind:"back"};
+    if(!canNavigate())return null;
+    const context=latest.navigation;
+    if(context.kind==="article_reading")return readingPageAt(point,clientY);
+    const edge=listEdgeAt(point,clientY);if(edge)return edge;
+    if(['main_menu','system_menu','document_list','board_list'].includes(context.kind)){
+        const start=["main_menu","system_menu"].includes(context.kind)?20:1;
+        return point.col>=start&&point.row>=context.first_row&&point.row<=context.last_row?{kind:"menu",row:point.row}:null;
+    }
+    if(context.kind!=="article_list") return null;
     const article=latest.navigation.articles.find(a=>a.row===point.row);
     return article?{kind:"article",row:article.row}:null;
 }
-function setHover(point,redraw=true,preview=true) {
-    const hit=hitAt(point),index=hit?.kind==="link"?hit.index:-1;
+// Inserted images remain outside terminal cells. Only navigation uses their
+// physical position; text selection and the image context menu keep their owners.
+function pointerHit(point,event) {
+    const image=inlineImages.linkAtPoint(event);
+    const bounds=surface.getBoundingClientRect();
+    const clipped=point===null&&event.clientX>=bounds.left&&event.clientX<bounds.right?
+        (grid?.reading?.clippedAt((event.clientY-bounds.top)*grid.ratio)??-1):-1;
+    if(image<0&&clipped<0)return hitAt(point,event.clientY);
+    if(blocked()||dragging?.moved||!stationMouse.local()||!canNavigate()||latest?.navigation.kind!=="article_reading")return null;
+    const back=navigationBackRegion(latest.navigation,latest.article);
+    const hit=(event.clientX-bounds.left)*grid.ratio<grid.x(back.end)?{kind:"back"}:readingPageAt(null,event.clientY);
+    return hit?{...hit,...(image>=0?{image}:{clipped})}:null;
+}
+function setHover(point,redraw=true,preview=true,event=null) {
+    const hit=event?pointerHit(point,event):hitAt(point,pointerClient?.clientY),index=hit?.kind==="link"?hit.index:-1;
     const changed=index!==hoveredLink;hoveredLink=index;
-    hoveredArticle=hit?.kind==="article"?latest.navigation.articles.find(a=>a.row===hit.row):null;
-    surface.dataset.pointerAction=hit?.kind||"none";
-    surface.style.cursor=hit?.kind==="back"?"":hit?"pointer":"default";
-    surface.title=hit?.kind==="back"?tr("pointer-back-hint"):index>=0?tr("link-hover-hint",{url:latest.links[index].url}):hoveredArticle?tr("article-open-hint"):"";
+    hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:0,kind:hit.kind}:null;
+    surface.dataset.pointerAction=hit?.kind==="page"?hit.action:hit?.kind||"none";
+    surface.style.cursor=["back","page"].includes(hit?.kind)?"":hit?"pointer":"default";
+    surface.title=index>=0?latest.links[index].url:"";
     if(preview)previewHover(index);
     if(changed&&redraw&&latest) draw(latest);else drawNavigationMarker();
 }
 function drawNavigationMarker() {
-    const back=surface.dataset.pointerAction==="back";
-    navigationMarker.hidden=(!hoveredArticle&&!back)||!grid||!canNavigate();
+    navigationMarker.hidden=!hoveredRow||!grid||!canNavigate();
     if(navigationMarker.hidden) {delete navigationMarker.dataset.row;return;}
-    const {row,start,end}=back?{row:1,start:0,end:1}:{row:hoveredArticle.row,start:1,end:latest.frame.cols};
-    navigationMarker.dataset.kind=back?"back":"article";navigationMarker.dataset.row=String(row);
-    Object.assign(navigationMarker.style,{left:grid.x(start)/grid.ratio+"px",top:grid.y(row)/grid.ratio+"px",
-        width:(grid.x(end)-grid.x(start))/grid.ratio+"px",height:((back?grid.y(23):grid.bottom(row))-grid.y(row))/grid.ratio+"px"});
+    const {row,start}=hoveredRow,end=latest.frame.cols;
+    const top=grid.y(row)/grid.ratio,bottom=grid.bottom(row)/grid.ratio;
+    navigationMarker.dataset.kind=hoveredRow.kind;navigationMarker.dataset.row=String(row);
+    Object.assign(navigationMarker.style,{left:grid.x(start)/grid.ratio+"px",top:top+"px",
+        width:(grid.x(end)-grid.x(start))/grid.ratio+"px",height:Math.max(0,bottom-top)+"px"});
 }
 function refreshNavigation() {
     refreshExportControls();
@@ -361,17 +465,57 @@ function refreshNavigation() {
     surface.dataset.readingFirst=String(context?.first_line??0);
     browseControls.hidden=context?.kind!=="article_reading";
     browseBack.disabled=!ready||context?.kind!=="article_reading";
-    browsePrevious.disabled=browseBack.disabled||context.first_line===1;
-    browseNext.disabled=browseBack.disabled||context.percent===100;
+    browsePrevious.disabled=browseBack.disabled||(!latest.article&&context.first_line===1);
+    browseNext.disabled=browseBack.disabled||(!latest.article&&context.percent===100);
     browseHint.textContent=!latest?.connected||!stationMouse.local()?"":latest.input_pending||navigationLocked||navigationRequest?tr("navigation-wait"):
-        context?.kind==="article_list"?tr("article-list-hint"):context?.kind==="article_reading"?tr("article-reading-hint"):"";
+        context?.kind==="article_list"?tr("article-list-hint"):context?.kind==="article_reading"?(latest.article?tr("article-cache-hint",{first:latest.article.first_line,last:latest.article.last_line}):tr("article-reading-hint")):"";
     drawNavigationMarker();
 }
-function navigate(intent,e,source="pointer") {
+function readingMove(intent,e,source="button") {
+    const article=latest?.article;
+    if(!article)return false;
+    if(!["lines","previous_page","next_page","forward","first","last","scroll"].includes(intent.action))return false;
+    if(blocked()||dragging||!latest.connected)return true;
+    const documentHeight=grid?.height!==undefined?surface.offsetTop+grid.height/grid.ratio:viewport.scrollHeight;
+    const maximum=Math.max(0,documentHeight-viewport.clientHeight),top=viewport.scrollTop;
+    const line=grid?(grid.bottom(0)-grid.y(0))/grid.ratio:24;
+    let delta=intent.action==="scroll"?intent.delta:intent.action==="lines"?(intent.down?1:-1)*line*intent.count:
+        (intent.action==="previous_page"?-1:1)*Math.max(line,viewport.clientHeight-(grid?.footerHeight??0))*.9;
+    let target=Math.max(0,Math.min(maximum,top+delta));
+    if(intent.action==="first")target=0;
+    if(intent.action==="last")target=maximum;
+    const free=intent.action==="scroll";
+    if(grid?.reading?.free(free))repaint();
+    if(!free){
+        if(intent.action==="lines"){
+            const anchor=grid?.reading?.align(top,maximum,intent.down?"before":"after")??top;
+            target=Math.max(0,Math.min(maximum,anchor+delta));
+        }
+        const edge=["first","last","lines"].includes(intent.action)?"nearest":delta>0?"before":"after";
+        const finalStep=edge==="before"&&target>=maximum;
+        target=grid?.reading?.align(target,maximum,edge)??target;
+        // Show the last partial-top row at its own start before settling at
+        // the exact document end; the final page must not skip that row.
+        if(finalStep&&target<=top+.01)target=maximum;
+    }
+    if(Math.abs(target-top)>.01){clearSelection();cancelHover(true);viewport.scrollTop=target;repaint();return true;}
+    let action=intent.action;
+    if(action==="first"&&article.first_line===1||action==="last"&&article.end)return true;
+    if(!["first","last"].includes(action))action=delta<0?"previous_page":"next_page";
+    if(action==="previous_page"&&article.first_line===1||action==="next_page"&&article.end){
+        if(intent.action==="lines"&&intent.count===1&&source==="keyboard-arrow"&&latest.article_boundary_navigation&&!e.repeat&&article.load!=="loading")
+            navigate({action:"adjacent_article",down:delta>0},e,"keyboard",false);
+        return true;
+    }
+    if(["loading","changed","limit"].includes(article.load))return true;
+    navigate({action},e,source==="keyboard-arrow"?"keyboard":source,false);return true;
+}
+function navigate(intent,e,source="pointer",cached=true) {
+    if(cached&&readingMove(intent,e,source))return;
     if(source==="pointer"&&!stationMouse.local())return;
     if(!canNavigate()||dragging?.moved) return;
     stationMouse.revoke();policy("reset",e);
-    if(intent.action==="previous_page"&&latest.navigation.first_line===1||intent.action==="next_page"&&latest.navigation.percent===100) return;
+    if(!latest.article&&(intent.action==="previous_page"&&latest.navigation.first_line===1||intent.action==="next_page"&&latest.navigation.percent===100)) return;
     clearSelection();navigationRequest=true;navigationLocked=true;setHover(null);refreshNavigation();
     surface.dataset.navigationResult="pending";send({kind:"navigate",stamp:stamp(),intent,source,trusted:e.isTrusted});focus();
 }
@@ -380,13 +524,16 @@ const leaveLink=()=>{if(!dragging){cancelHover(true);setHover(null);}};
 function contextIdentity(){
     return JSON.stringify([stamp(),latest?.presentation,latest?.mouse,latest?.output_pending,latest?.input_pending,selectionCache?.request]);
 }
-function contextState(index){
+function accountWordAt(point){
+    return point&&latest?.account_words?.find(w=>w.row===point.row&&w.start<=point.col&&point.col<w.end)||null;
+}
+function contextState(index,word=null,replyRow=null){
     const ready=!!latest&&!latest.output_pending&&!filterUi.blocked();
     const selectionReady=ready&&!!selectionCache&&selectionCache.presentation===latest.presentation
         &&selectionCache.generation===generation&&selectionCache.revision===revision;
-    return {link:index,selection:hasSelection(),selectionReady,rowsReady:selectionReady&&!exportBusy,
+    return {word,replyRow,focused:!!latest?.reply_focus,link:index,selection:hasSelection(),selectionReady,rowsReady:selectionReady&&!exportBusy&&selectionCache.value.rows.end-selectionCache.value.rows.start<=24,
         ready,exportReady:ready&&!exportBusy,local:stationMouse.local(),ptt:!!latest?.ptt_features,
-        reading:latest?.navigation.kind==="article_reading",images:!!latest?.image_links.length,
+        reading:latest?.navigation.kind==="article_reading",authors:latest?.navigation.kind==="article_list",images:!!latest?.image_links.length,
         inlineReady:inlineShortcut({key:"Enter"},keyboardState,latest),navigate:canNavigate(),
         first:latest?.navigation.first_line===1,last:latest?.navigation.percent===100};
 }
@@ -395,19 +542,33 @@ function openContextMenu(e) {
     if(!e.isTrusted||stopped||composing||pastePending||document.querySelector("dialog[open]")||latest?.output_pending||filterUi.blocked())return;
     if(!stationMouse.local()&&!e.shiftKey)return;
     contextMenu.close(false);
-    const index=Math.max(linkAt(cellAt(e,false)),inlineImages.linkAtPoint(e));
-    contextMenu.open(e,{index,entries:contextMenuItems(contextState(index))});
+    const point=cellAt(e,false),index=Math.max(linkAt(point),inlineImages.linkAtPoint(e));
+    const word=index<0&&stationMouse.local()?accountWordAt(point):null;
+    const replyRow=index<0&&point&&stationMouse.local()&&latest.reply_rows?.includes(point.row)?point.row:null;
+    if(index<0&&!word&&!latest?.reply_focus&&stationMouse.local()&&!e.shiftKey&&toolAccess.right_click_menu&&!hasSelection()){
+        tools.showAt(e);return;
+    }
+    contextMenu.open(e,{index,word,replyRow,entries:contextMenuItems(contextState(index,word,replyRow))});
 }
 function contextAction(action,context,e){
-    if(!e.isTrusted||stopped||blocked()||contextMenuItems(contextState(context.index)).get(action)!==true)return;
+    if(!e.isTrusted||stopped||blocked()||contextMenuItems(contextState(context.index,context.word,context.replyRow)).get(action)!==true)return;
     if(action==="copy"||action==="copy-link")send({kind:"copy_text",presentation:latest.presentation,generation,revision,
         target:action==="copy"?{kind:"selection",request:selectionCache.request}:{kind:"link",index:context.index},trusted:true});
+    else if(["account-mask","account-mask-row","account-allow","account-remove-mask","account-remove-mask-row","account-remove-allow"].includes(action)){
+        const remove=action.startsWith("account-remove-");
+        const policy={"account-mask":"mask","account-mask-row":"mask_row","account-allow":"allow"}[action.replace("account-remove-","account-")];
+        send({kind:"account_rule",presentation:latest.presentation,stamp:stamp(),row:context.word.row,col:context.word.start,policy,remove,trusted:true});
+    }
+    else if(action==="reply-focus")send({kind:"reply_focus",presentation:latest.presentation,stamp:stamp(),row:context.replyRow,trusted:true});
+    else if(action==="reply-focus-clear")send({kind:"reply_focus",presentation:latest.presentation,stamp:stamp(),row:null,trusted:true});
     else if(action==="select-link")requestSelection({mode:"link",index:context.index});
     else if(action==="open-link")send({kind:"open_link",presentation:latest.presentation,generation,revision,index:context.index,trusted:true});
     else if(action==="select-all")selectPage();
     else if(action==="export-rows")exportScreen(e,true);
     else if(action==="export-page")exportScreen(e);
-    else if(action==="inline")send({kind:"inline_expand",presentation:latest.presentation,stamp:stamp(),key:{key:"Enter",code:"Enter",ctrl:false,alt:false,shift:false,repeat:false},trusted:true});
+    else if(action==="copy-image-page")copyPageImage(e);
+    else if(action==="copy-image-rows")copySelectedImage(e);
+    else if(action==="inline")requestInline({kind:"all"},e);
     else if(action==="back")browseReturn(e);
     else if(action==="previous")browseUp(e);
     else if(action==="next")browseDown(e);
@@ -416,7 +577,7 @@ function contextAction(action,context,e){
     else if(action==="vim")toggleVim(e);
     else if(action==="settings")settingsUi.request(e);
 }
-function activate() { if(!contextMenu?.isOpen()&&!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); }
+function activate() { if(!contextMenu?.isOpen()&&!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); refreshKeepAlive(); }
 function paste(e) {
     if(!e.isTrusted||stopped)return;
     stationMouse.revoke();
@@ -455,21 +616,25 @@ pasteObserver.observe(pasteDialog,{attributes:true,attributeFilter:["data-active
 function refreshExportControls() {
     refreshKeepAlive();
     const selection=selectionCache;
+    exportButton.title=latest?.article?tr("export-cache-page-hint"):"";
     exportButton.disabled=exportBusy||!latest||latest.output_pending||filterUi.blocked();
-    exportRows.disabled=exportBusy||latest?.output_pending||filterUi.blocked()||blocked()||!selection||selection.generation!==generation||selection.revision!==revision||selection.presentation!==latest?.presentation;
-    exportRows.title=selection?tr("export-lines-hint",{start:selection.value.rows.start+1,end:selection.value.rows.end}):tr("export-rows-hint");
+    exportRows.disabled=exportBusy||latest?.output_pending||filterUi.blocked()||blocked()||!selection||selection.value.rows.end-selection.value.rows.start>24||selection.generation!==generation||selection.revision!==revision||selection.presentation!==latest?.presentation;
+    copyPng.disabled=exportButton.disabled;copyRowsPng.disabled=exportRows.disabled;
+    exportRows.title=selection&&selection.value.rows.end-selection.value.rows.start>24?tr("export-cache-selection-limit"):selection?tr("export-lines-hint",{start:selection.value.rows.start+(latest?.article?.first_line??1),end:selection.value.rows.end+(latest?.article?.first_line??1)-1}):tr("export-rows-hint");
+    copyPng.title=exportButton.title;copyRowsPng.title=exportRows.title;
 }
 function refreshKeepAlive() {
-    const ready=!!latest?.keep_alive&&!inlineImages.active()&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
-    const current=stamp(),key=JSON.stringify([current,ready,latest?.keep_alive_ready,latest?.keep_alive]);
+    const ready=!settingsActive&&!!latest?.keep_alive&&!inlineImages.active()&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
+    const reading=!!latest?.article&&document.hasFocus()&&document.visibilityState!=="hidden"&&!stopped&&!!latest.connected&&!settingsActive&&!blocked()&&!navigationLocked&&!navigationRequest&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
+    const current=stamp(),key=JSON.stringify([current,latest?.presentation,latest?.article?.id,ready,reading,latest?.keep_alive_ready,latest?.keep_alive]);
     keepAlive.textContent=latest?.keep_alive?tr("keepalive-on"):tr("keepalive-off");
     keepAlive.setAttribute("aria-pressed",String(!!latest?.keep_alive));
     keepAlive.title=latest?.keep_alive_failure||(!latest?.keep_alive?tr("keepalive-disabled-help"):
         ready?tr("keepalive-ready-help"):tr("keepalive-wait-help"));
-    if(!stopped&&latest&&key!==keepAliveGate) {keepAliveGate=key;send({kind:"keep_alive_gate",stamp:current,ready});}
+    if(!stopped&&latest&&key!==keepAliveGate) {keepAliveGate=key;send({kind:"keep_alive_gate",stamp:current,ready,reading,article:latest.article?.id??null});}
 }
 function toggleKeepAlive(e){if(latest&&!stopped)send({kind:"keep_alive",enabled:!latest.keep_alive,trusted:e.isTrusted});}
-function exportScreen(e, selected=false) {
+function exportScreen(e, selected=false, destination="file") {
     if(exportBusy||!latest||stopped||filterUi.blocked()) return;
     const selection=selected?selectionCache:null;
     if(selected&&exportRows.disabled) return;
@@ -479,11 +644,16 @@ function exportScreen(e, selected=false) {
         const full=document.createElement("canvas");full.width=960;full.height=576;
         const target=selection?document.createElement("canvas"):full;
         try {
-            render(full,packet,{cursor:false,hovered:-1});
+            const source=packet.source_frame??packet.frame;
+            if(selection&&packet.article){
+                const {start,end}=selection.value.rows;
+                full.height=(end-start)*24;
+                render(full,{...packet,frame:{...packet.frame,rows:end-start,glyphs:packet.frame.glyphs.filter(g=>g.row>=start&&g.row<end).map(g=>({...g,row:g.row-start}))}},{cursor:false});
+            } else render(full,{...packet,frame:source},{cursor:false,hovered:-1});
             if(selection) {
                 const {start,end}=selection.value.rows;
                 target.width=960;target.height=(end-start)*24;
-                target.getContext("2d").drawImage(full,0,start*24,960,target.height,0,0,960,target.height);
+                target.getContext("2d").drawImage(full,0,packet.article?0:start*24,960,target.height,0,0,960,target.height);
             }
             const blob=await new Promise((resolve,reject)=>target.toBlob(value=>value?resolve(value):reject(new Error(tr("export-encode-failed"))),"image/png"));
             if(blob.size>3*1024*1024) throw new Error(tr("export-too-large"));
@@ -491,7 +661,7 @@ function exportScreen(e, selected=false) {
                 const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error(tr("export-prepare-failed")));reader.readAsDataURL(blob);
             });
             if(!stopped) send({kind:"export_png",presentation:packet.presentation,generation:packet.generation,revision:packet.frame.revision,
-                selection_request:selection?.request??null,png,trusted:e.isTrusted});
+                selection_request:selection?.request??null,destination,png,trusted:e.isTrusted});
         } catch(error) {
             exportBusy=false;refreshExportControls();
             if(!stopped) {surface.dataset.exportResult="failed";surfaceNote.textContent=String(error);restoreEditingFocus();}
@@ -499,6 +669,7 @@ function exportScreen(e, selected=false) {
     })();
 }
 const exportSelected=e=>exportScreen(e,true);
+const copyPageImage=e=>exportScreen(e,false,"clipboard"),copySelectedImage=e=>exportScreen(e,true,"clipboard");
 function hideChrome() { tools.close(); }
 function zoomTo(value) {
     if(stopped||!latest) return;
@@ -508,40 +679,54 @@ function zoomTo(value) {
     viewport.scrollTop=Math.max(0,(surface.offsetHeight-viewport.clientHeight)/2); focus();
 }
 function wheel(e) {
+    // Only the Rust-projected article is a scrollable document. Overflow from
+    // zoom, the input caret or decorations must never turn a list into one.
+    if(!latest?.article)e.preventDefault();
     if(contextMenu?.isOpen()){e.preventDefault();return;}
     cancelHover(true);
     if(tools?.open())return;
     if(!e.deltaY||e.metaKey||e.shiftKey) return;
     if(e.ctrlKey) {e.preventDefault();zoomTo(zoom+(e.deltaY<0?.25:-.25));return;}
-    if(blocked()||dragging||hasSelection()||viewport.scrollWidth>viewport.clientWidth+1||viewport.scrollHeight>viewport.clientHeight+1) return;
+    if(latest?.article&&!e.altKey&&!blocked()&&!dragging&&!hasSelection()){
+        e.preventDefault();readingMove({action:"scroll",delta:e.deltaY*(e.deltaMode===1?24:e.deltaMode===2?viewport.clientHeight:1)},e,"pointer");return;
+    }
+    if(blocked()||dragging||hasSelection()) return;
     if(stationMouse.wheel(e))return;
     if(e.altKey)return;
     const kind=latest?.navigation.kind;
-    if(!latest?.connected||!['article_list','article_reading'].includes(kind)) return;
+    if(!latest?.connected||!['article_list','article_reading','board_list','document_list','main_menu','system_menu','command_help'].includes(kind)) return;
     e.preventDefault();
-    const action=kind==="article_reading"?(e.deltaY<0?"previous_page":"next_page"):(e.deltaY<0?"previous_item":"next_item");
+    const action=e.deltaY<0?"previous_page":"next_page";
     navigate({action},e);
 }
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
-const media=installMedia({tr,send,prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshNavigation,restore:restoreEditingFocus});
-function refreshControls(){refreshNavigation();refreshExportControls();}
-const sitesUi=createSitesDialog({tr,send,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls});
-const settingsUi=createSettingsDialog({send,
-    beforeRequest:e=>{stationMouse.revoke();cancelHover(true);policy("reset",e);},beforeShow:invalidatePresentation,
-    restore:restoreEditingFocus,changed:refreshControls,tr,loadFonts,fontLoadNote,invalidateFonts,render});
-const loginUi=createLoginDialog({tr,send,stamp,
+const media=installMedia({tr,send,prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshControls,restore:restoreEditingFocus});
+function refreshControls(){refreshNavigation();refreshExportControls();inlineImages.refreshAnimations();}
+const sitesUi=createSitesDialog({tr,send,manage:e=>settingsUi.manage("sites",e),present:dialog=>dialog.show(),visible:()=>settingsUi.visible("sites"),finished:()=>settingsUi.close({isTrusted:true}),prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreSettingsPanelFocus,changed:refreshControls});
+const settingsUi=createSurfaceSettings({document,send,tr,loadFonts,fontLoadNote,invalidateFonts,render,
+    features:()=>({sites:sitesUi,filters:filterUi,account:loginUi}),
+    beforeRequest:e=>{stationMouse.revoke();cancelHover(true);policy("reset",e);},
+    beforeShow:()=>{invalidatePresentation();hideChrome();},restore:restoreEditingFocus,changed:refreshControls});
+const loginUi=createLoginDialog({tr,send,stamp,manage:e=>settingsUi.manage("account",e),present:dialog=>dialog.show(),visible:()=>settingsUi.visible("account"),finished:()=>settingsUi.close({isTrusted:true}),
     prepare:e=>{stationMouse.revoke();cancelHover(true);policy("reset",e);cancelComposition();clearSelection();},
-    restore:restoreEditingFocus,changed:refreshControls,focus});
+    restore:restoreSettingsPanelFocus,changed:refreshControls,focus});
 const destinationUi=createNavigationDialog({tr,send,stamp,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,current:()=>latest,isEditing:()=>composing||pastePending});
 const bookmarksUi=createBookmarksDialog({tr,send,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,openDestination:destinationUi.openDraft,current:()=>latest});
-const filterUi=createFiltersDialog({tr,send,current:()=>latest,invalidate:invalidatePresentation,
-    reset:e=>policy("reset",e),restore:restoreEditingFocus,changed:refreshControls});
+const filterUi=createFiltersDialog({tr,send,manage:e=>settingsUi.manage("filters",e),present:dialog=>dialog.show(),visible:()=>settingsUi.visible("filters"),current:()=>latest,invalidate:invalidatePresentation,
+    reset:e=>policy("reset",e),restore:restoreSettingsPanelFocus,changed:refreshControls});
 tools=createFloatingTools({root:chrome,ball:document.getElementById("tools-ball"),fan:document.getElementById("tools-fan"),panel:toolbar,window,document,tr,
-    prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();released=null;},restore:restoreEditingFocus,changed:refreshKeepAlive});
+    onSettings:e=>settingsUi.request(e),prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();released=null;},restore:restoreEditingFocus,changed:refreshKeepAlive});
 contextMenu=createSurfaceContextMenu({root:document.getElementById("surface-context-menu"),document,window,
     snapshot:contextIdentity,prepare:()=>{stationMouse.cancel();tools.close();cancelHover(true);cancelDrag();released=null;setHover(null);},
     execute:contextAction,restore:focus,changed:refreshControls});
-const bindings=[...contextMenu.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
+function requestInline(target,e){
+    if(!e.isTrusted||stopped||blocked()||tools?.busy()||!inlineShortcut({key:"Enter"},keyboardState,latest))return;
+    send({kind:"inline_expand",presentation:latest.presentation,stamp:stamp(),target,
+        key:{key:"Enter",code:"Enter",ctrl:false,alt:false,shift:false,repeat:false},trusted:true});focus();
+}
+const inlineImages=installInlineImages({surface,canvas,viewport,tr,render,redraw:()=>{if(latest)draw(latest);},changed:refreshKeepAlive,notice:text=>{surfaceNote.textContent=text;},
+    allowed:()=>!stopped&&!blocked()&&!tools?.busy()&&inlineShortcut({key:"Enter"},keyboardState,latest),request:requestInline});
+const bindings=[...inlineImages.bindings,...contextMenu.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
     [keyboard,"beforeinput",beforeinput],
@@ -554,106 +739,48 @@ const bindings=[...contextMenu.bindings,...sitesUi.bindings,...tools.bindings,..
     [selectAll,"click",selectPage],[document,"copy",copy],
     [viewport,"contextmenu",openContextMenu],[surface,"pointerleave",leaveLink],
     [pasteSend,"click",confirmPaste],[pasteCancel,"click",cancelPaste],[pasteDialog,"cancel",cancelPaste],
-    [exportButton,"click",exportScreen],[exportRows,"click",exportSelected],
+    [exportButton,"click",exportScreen],[exportRows,"click",exportSelected],[copyPng,"click",copyPageImage],[copyRowsPng,"click",copySelectedImage],
     [keepAlive,"click",toggleKeepAlive],[stationMouseButton,"click",toggleStationMouse],
     [hoverPosition,"change",changeHoverPreference],
     [browseBack,"click",browseReturn],[browsePrevious,"click",browseUp],[browseNext,"click",browseDown],
     [plus,"click",zoomIn],[minus,"click",zoomOut],[fit,"click",zoomFit],
-    [viewport,"wheel",wheel,{passive:false}],[window,"resize",repaint],[window,"focus",activate],[window,"blur",deactivate],
+    [document,"visibilitychange",refreshKeepAlive],
+    [viewport,"scroll",repaint],[viewport,"wheel",wheel,{passive:false}],[window,"resize",repaint],[window,"focus",activate],[window,"blur",deactivate],
+    [articleLoadCancel,"click",cancelArticleLoad],[articleLoadResume,"click",resumeArticleLoad],
 ];
 for(const [target,event,callback,options] of bindings) target.addEventListener(event,callback,options);
-function colours(style) {
-    const fg=style.fg+(style.bright&&style.fg<8?8:0), bg=style.bg;
-    return style.inverse?[palette[bg],palette[fg]]:[palette[fg],palette[bg]];
-}
-// Filled BBS graphics follow the grid, independent of font metrics/fallback.
-function graphic(ctx,text,x,y,w,h) {
-    if([...text].length!==1) return false;
-    const code=text.codePointAt(0);
-    const rect=(l,t,r,b)=>{
-        const left=Math.round(x+w*l),top=Math.round(y+h*t);
-        ctx.fillRect(left,top,Math.round(x+w*r)-left,Math.round(y+h*b)-top);
-    };
-    if(code===0x2580) rect(0,0,1,.5);
-    else if(code>=0x2581&&code<=0x2588) rect(0,1-(code-0x2580)/8,1,1);
-    else if(code>=0x2589&&code<=0x258f) rect(0,0,(0x2590-code)/8,1);
-    else if(code===0x2590) rect(.5,0,1,1);
-    else if(code===0x2594) rect(0,0,1,.125);
-    else if(code===0x2595) rect(.875,0,1,1);
-    else if(code>=0x2596&&code<=0x259f) {
-        const mask=[4,8,1,13,9,7,11,2,6,14][code-0x2596];
-        for(let q=0;q<4;q++) if(mask&(1<<q)) rect((q%2)/2,Math.floor(q/2)/2,(q%2+1)/2,(Math.floor(q/2)+1)/2);
-    } else if(code>=0x25e2&&code<=0x25e5) {
-        const corners=[[[1,0],[1,1],[0,1]],[[0,0],[0,1],[1,1]],[[0,0],[1,0],[0,1]],[[0,0],[1,0],[1,1]]][code-0x25e2];
-        ctx.beginPath(); corners.forEach(([u,v],i)=>i===0?ctx.moveTo(x+w*u,y+h*v):ctx.lineTo(x+w*u,y+h*v));
-        ctx.closePath(); ctx.fill();
-    } else return false;
-    return true;
-}
 function draw(packet) {
-    const frame=packet.frame,ratio=devicePixelRatio||1,width=frame.cols*12,height=frame.rows*24;
-    const available=viewport.getBoundingClientRect();
+    viewport.dataset.reading=packet.article?"web":"terminal";
+    const frame=packet.source_frame??packet.frame,ratio=devicePixelRatio||1,width=frame.cols*12,height=frame.rows*24;
+    const available=viewport.parentElement.getBoundingClientRect();
     const fitting=Math.min(available.width/width,available.height/height);
+    // The scrolling document may grow; its viewport stays inside the fitted
+    // station grid. Measure the host so previous bounds cannot feed back into
+    // fitting, and keep zoom within this same reading area.
+    if(packet.article){
+        const fittedWidth=width*fitting,fittedHeight=height*fitting;
+        viewport.style.inset=`${(available.height-fittedHeight)/2}px auto auto ${(available.width-fittedWidth)/2}px`;
+        viewport.style.width=fittedWidth+"px";viewport.style.height=fittedHeight+"px";
+    }else{
+        viewport.style.inset="";viewport.style.width="";viewport.style.height="";
+    }
     // At most 16M RGBA pixels (64 MiB), and 8192 pixels per dimension.
     const capacity=Math.min(Math.sqrt(16*1024*1024/(width*height)),8192/width,8192/height);
     const physical=Math.min(fitting*zoom*ratio,capacity);
     canvas.width=Math.max(1,Math.floor(width*physical)); canvas.height=Math.max(1,Math.floor(height*physical));
-    surface.style.width=canvas.width/ratio+"px"; surface.style.height=canvas.height/ratio+"px";
+    surface.style.width=canvas.width/ratio+"px";
+    // Collapsing a cached document here makes WebView clamp scrollTop before
+    // the reader can capture its anchor. Its layout owns document height.
+    if(!packet.article)surface.style.height=canvas.height/ratio+"px";
     level.textContent=Math.round(physical/ratio/fitting*100)+"%";
-    grid={...inlineImages.layout(packet,render(canvas,packet,{cursor:true,hovered:hoveredLink,linkHints:true}),ratio),ratio};
+    grid={...inlineImages.layout(packet,render(canvas,{...packet,frame},{cursor:!packet.article,hovered:hoveredLink,linkHints:true}),ratio),ratio};
     positionKeyboard();drawSelection();drawNavigationMarker();draws++;return grid;
-}
-function render(target,packet,{cursor=true,hovered=-1,linkHints=false}={}) {
-    const frame=packet.frame,width=frame.cols*12,height=frame.rows*24;
-    const ctx=target.getContext("2d");
-    const scale=Math.min(target.width/width,target.height/height);
-    const x=col=>Math.round(col*12*scale),y=row=>Math.round(row*24*scale);
-    ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle="#000"; ctx.fillRect(0,0,target.width,target.height);
-    // Opaque backgrounds first; both sides of every shared edge use one integer.
-    for(const glyph of frame.glyphs) for(let half=0;half<glyph.width;half++) {
-        const [,bg]=colours(half===0?glyph.left:glyph.right),col=glyph.col+half;
-        ctx.fillStyle=bg; ctx.fillRect(x(col),y(glyph.row),x(col+1)-x(col),y(glyph.row+1)-y(glyph.row));
-    }
-    ctx.textBaseline="alphabetic";
-    for(const glyph of frame.glyphs) {
-        if(glyph.text===" ") continue;
-        ctx.font=fontDescription(packet.settings,glyph.width===2,scale);
-        const left=x(glyph.col),top=y(glyph.row),span=x(glyph.col+glyph.width)-left,h=y(glyph.row+1)-top;
-        const advance=Math.max(ctx.measureText(glyph.text).width,1);
-        // Text keeps the font's aspect ratio; narrow symbols are centred instead
-        // of stretched into ovals. Connected box/shade glyphs retain grid fitting.
-        const code=glyph.text.codePointAt(0),connected=[...glyph.text].length===1&&code>=0x2500&&code<=0x2593;
-        const fitting=connected?span/advance:Math.min(1,span/advance);
-        const origin=connected?left:left+(span-advance*fitting)/2;
-        for(let half=0;half<glyph.width;half++) {
-            const [fg]=colours(half===0?glyph.left:glyph.right),col=glyph.col+half;
-            ctx.save(); ctx.beginPath(); ctx.rect(x(col),top,x(col+1)-x(col),h); ctx.clip(); ctx.fillStyle=fg;
-            if(!graphic(ctx,glyph.text,left,top,span,h)) {
-                ctx.translate(origin,top+packet.settings.baseline*scale); ctx.scale(fitting,connected?1:fitting); ctx.fillText(glyph.text,0,0);
-            }
-            ctx.restore();
-        }
-    }
-    if(cursor&&frame.cursor_visible) {
-        const [col,row]=frame.cursor,bottom=y(row+1),thickness=Math.max(1,Math.round(2*scale));
-        ctx.fillStyle=palette[7]; ctx.fillRect(x(col),bottom-thickness,x(col+1)-x(col),thickness);
-    }
-    // Rust supplies the same visible spans used for hit testing, including OSC 8.
-    // Link hints decorate the live view only; PNG exports keep the source pixels.
-    if(linkHints) {
-        const thickness=Math.max(1,Math.round(scale));
-        packet.links.forEach((link,index)=>{
-            ctx.fillStyle=palette[index===hovered?7:8];
-            ctx.fillRect(x(link.start),y(link.row+1)-thickness,x(link.end)-x(link.start),thickness);
-        });
-    }
-    return {x,y};
 }
 function repaint() {
     if(stopped||!latest||animation) return;
-    animation=requestAnimationFrame(()=>{animation=0;if(!stopped) {draw(latest);if(pointerClient)setHover(cellAt(pointerClient,false),false);}});
+    animation=requestAnimationFrame(()=>{animation=0;if(!stopped) {draw(latest);if(pointerClient)setHover(cellAt(pointerClient,false),false,true,pointerClient);}});
 }
-const observer=new ResizeObserver(repaint); observer.observe(viewport);
+const observer=new ResizeObserver(repaint); observer.observe(viewport);observer.observe(viewport.parentElement);
 function checkArt({x,y}) {
     const pixels=ctx.getImageData(x(0),y(19),x(16)-x(0),y(21)-y(19)).data;
     let seams=0;
@@ -722,12 +849,12 @@ async function paint(packet) {
             candidate.stamp=lease.stamp;candidate.index=lease.index;
         } else cancelHover();
     }
-    if(pointerClient)setHover(cellAt(pointerClient,false),false);
+    if(pointerClient)setHover(cellAt(pointerClient,false),false,true,pointerClient);
     if(failureChanged) {
         if(packet.keep_alive_failure) surfaceNote.textContent=packet.keep_alive_failure;
         else if(surfaceNote.textContent===previousFailure) surfaceNote.textContent="";
     }
-    refreshNavigation();
+    refreshNavigation();refreshArticleLoad();
     const geometry=draw(packet);send({kind:"painted",presentation:packet.presentation,revision,generation});if(packet.probe) probe(packet,geometry);
     surface.dataset.revision=String(revision);
     surface.dataset.fontSize=String(packet.settings.font_size);surface.dataset.baseline=String(packet.settings.baseline);
@@ -741,10 +868,9 @@ async function paint(packet) {
 }
 focus();
 function revokeSurface(){
-    stopped=true;contextMenu?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
+    stopped=true;inlineImages.suspend();contextMenu?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
     for(const [target,event,callback,options] of bindings)target.removeEventListener(event,callback,options);
 }
-const inlineImages=installInlineImages({surface,canvas,tr,redraw:()=>{if(latest)draw(latest);},changed:refreshKeepAlive,notice:text=>{surfaceNote.textContent=text;}});
 const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
 let cleanupClean=false;
 function runSurfaceProbe(mode){
@@ -764,6 +890,7 @@ function runSurfaceProbe(mode){
             else if(mode==="articles"||mode==="articles_close")surfaceNote.textContent="Article probe: enable Vim, open URL 00000101 and AID 00000102, fail 00000103 and recover manually, reject foreign URL and long draft, then cancel/close during 00000104";
             else if(mode==="boards_close")surfaceNote.textContent="Board close probe: visit Stella and Other, start Beta, then close while waiting";
             else if(mode==="boards")surfaceNote.textContent="Board probe: cancel a draft, visit Stella and Other, reject an invalid name, then start Beta and stop before the delayed board list";
+            else if(mode==="inline_pages")surfaceNote.textContent="Cached reading: press Enter twice. Scroll to the end to load page two, then browse back locally. Peer accepts one PageDown only; PageUp or extra input fails. Export PNG and close.";
             else if(mode==="inline"||mode==="context_menu")surfaceNote.textContent="Inline probe: press Enter twice, inspect inserted images and text, export PNG, then close. Peer rejects every station byte.";
             else if(mode==="osc8")surfaceNote.textContent="OSC 8 probe: both wrapped fragments share a complete destination; select/copy, drag and open local media";
             else if(mode==="login_2fa")surfaceNote.textContent="Verification probe: explicit synthetic login, six digits, then eight-character recovery; Esc returns to Vim";
@@ -787,6 +914,7 @@ function runSurfaceProbe(mode){
 }
 function showNotice(message){if(!stopped&&message&&!settingsUi.notice(message))surfaceNote.textContent=message;}
 const route=createSurfaceRouter({
+    localization:data=>{tr.update({kind:"localization",payload:data});document.documentElement.lang=data.language;settingsUi.relocalize();filterUi.relocalize();tools.relocalize();receiveKeyboard(keyboardState);refreshControls();refreshArticleLoad();},
     paint,
     station_mouse_rejected:data=>{stationMouse.reject(data.lease);showNotice(data.message);},
     surface_probe:runSurfaceProbe,
@@ -796,15 +924,17 @@ const route=createSurfaceRouter({
     bookmarks_open:bookmarksUi.receiveOpen,bookmarks_result:bookmarksUi.receive,
     sites_open:sitesUi.receiveOpen,sites_result:sitesUi.receive,
     tools_opacity:percent=>tools.setOpacity(percent),
+    tools_access:access=>{toolAccess=access;tools.setVisible(access.show_floating_button);},
     hover_settings:position=>{hoverPreference=position;hoverPosition.value=position;surface.dataset.hoverPosition=position;
         if(position==="off")cancelHover(true);else if(pointerClient)media.locate(pointerClient,position);},
     media_hover:data=>{if(hoverCandidate?.sequence===data.sequence){media.hover(data);media.locate(pointerClient,hoverPreference);}},
     hover_reset:data=>{cancelHover();if(data.media)media.reset();},
     hover_rejected:sequence=>{if(hoverCandidate?.sequence===sequence)cancelHover();},
-    inline_open:data=>inlineImages.open(data,latest),inline_image:data=>inlineImages.receive(data),inline_error:data=>inlineImages.fail(data),inline_reset:()=>inlineImages.reset(),
+    reading_move:data=>{if(data.generation===latest?.generation&&data.article===latest?.article?.id)readingMove(data.intent,{isTrusted:true});},inline_open:data=>inlineImages.open(data,latest),inline_image:data=>inlineImages.receive(data),inline_error:data=>inlineImages.fail(data),inline_reset:()=>inlineImages.reset(),
     media_open:data=>media.open(data),media_image:data=>media.receiveImage(data),media_error:data=>media.fail(data),
     media_external:data=>media.externalResult(data),media_reset:()=>media.reset(),
-    settings_open:settingsUi.open,font_catalog:settingsUi.catalog,font_preview:settingsUi.preview,
+    settings_visibility:open=>{settingsActive=open;refreshKeepAlive();},
+    settings_close:()=>settingsUi.escape(),settings_open:settingsUi.open,font_catalog:settingsUi.catalog,font_preview:settingsUi.preview,
     profile_result:async data=>{await settingsUi.profile(data);showNotice(data.notice);},
     settings_saved:data=>{settingsUi.saved(data);showNotice(data.notice);},
     selection:receiveSelection,
@@ -831,6 +961,7 @@ try {
     }
 } catch(e){send({kind:"error",message:String(e)});}
 finally {
+    try {settingsSnapshot.last=settingsUi.snapshot();} catch(error) {settingsSnapshot.error=String(error);}
     lifetime.release();
     revokeSurface();
     cancelHover(true);
@@ -848,11 +979,11 @@ finally {
     keyboard.dispatchEvent(new InputEvent("input",{data:"a",inputType:"insertText",bubbles:true}));
     surface.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true}));window.dispatchEvent(new Event("resize"));plus.click();
     chrome.dispatchEvent(new PointerEvent("pointerenter"));
-    document.getElementById("font-settings").click();document.getElementById("font-size").dispatchEvent(new InputEvent("input",{bubbles:true}));
+    document.getElementById("font-settings").click();
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
     cleanupClean=mediaClean&&contextMenu.clean()&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
         &&sitesUi.clean()&&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&destinationUi.clean()&&bookmarksUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
     try {send({kind:"stopped",clean:cleanupClean,...(toolsProbeEnabled?{tools:tools.observations()}:{})});} catch(_) { /* join still acknowledges cleanup */ }
 }
-return {clean:cleanupClean,tools:toolsProbeEnabled?tools.observations():null};
+return {clean:cleanupClean,tools:toolsProbeEnabled?tools.observations():null,settings:settingsSnapshot};

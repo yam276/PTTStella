@@ -143,7 +143,8 @@ impl Keyboard {
     pub fn composition_start(&mut self) {
         self.count = 0;
         self.g = false;
-        self.composition = !self.enabled || self.input || self.once;
+        self.composition =
+            self.profile == "continue_prompt" || !self.enabled || self.input || self.once;
     }
     pub fn composition_end(&mut self) {
         self.composition = false;
@@ -153,6 +154,10 @@ impl Keyboard {
         self.text = Some(false);
     }
     pub fn accept_text(&mut self, composition: bool) -> bool {
+        if self.profile == "continue_prompt" {
+            self.text = Some(false);
+            return false;
+        }
         let allowed = if composition {
             self.composition
         } else {
@@ -182,7 +187,19 @@ impl Keyboard {
         let printable = key.key.chars().count() == 1 && !key.ctrl;
         if matches!(
             key.key.as_str(),
-            "Shift" | "Control" | "Alt" | "Meta" | "CapsLock"
+            "Shift"
+                | "Control"
+                | "Alt"
+                | "Meta"
+                | "CapsLock"
+                | "NumLock"
+                | "ScrollLock"
+                | "Fn"
+                | "FnLock"
+                | "Symbol"
+                | "SymbolLock"
+                | "Hyper"
+                | "Super"
         ) {
             return Effect::None;
         }
@@ -191,6 +208,23 @@ impl Keyboard {
             || self.continue_hold.as_deref() == Some(&key.code)
         {
             return Effect::None;
+        }
+        // A confirmed pause has one command in every keyboard mode. Never
+        // forward its dismissing key as text or reinterpret it on the next page.
+        if matches!(context, Context::ContinuePrompt) {
+            if key.repeat
+                || self.composition
+                || key.key.is_empty()
+                || matches!(key.key.as_str(), "Dead" | "Process" | "Unidentified")
+            {
+                return Effect::None;
+            }
+            self.count = 0;
+            self.invalid_count = false;
+            self.g = false;
+            self.once = false;
+            self.continue_hold = Some(key.code.clone());
+            return Effect::Browse(Intent::Continue);
         }
         if !self.enabled || self.input || self.once {
             if self.enabled
@@ -244,24 +278,12 @@ impl Keyboard {
                 UnknownReason::Unmapped => crate::msg!("vim-unmapped"),
                 UnknownReason::Unrecognized => crate::msg!("vim-unrecognized"),
                 UnknownReason::BoardHeader => crate::msg!("vim-board-header"),
+                UnknownReason::UnsupportedLayout => crate::msg!("vim-layout"),
                 UnknownReason::BoardRows => crate::msg!("vim-board-rows"),
                 UnknownReason::InvalidCursor => {
                     crate::msg!("vim-cursor")
                 }
             });
-        }
-        if matches!(context, Context::ContinuePrompt) {
-            if key.repeat {
-                return Effect::None;
-            }
-            if !key.ctrl
-                && !key.alt
-                && matches!(key.key.as_str(), " " | "Enter" | "l" | "ArrowRight")
-            {
-                self.continue_hold = Some(key.code.clone());
-                return Effect::Browse(Intent::Continue);
-            }
-            return Effect::Notice(crate::msg!("vim-continue"));
         }
         if !key.ctrl && !key.alt && key.key.len() == 1 && key.key.as_bytes()[0].is_ascii_digit() {
             if self.invalid_count {

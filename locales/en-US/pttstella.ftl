@@ -11,14 +11,14 @@ export-rows-hint = Drag to select the lines to export first
 export-rows = Selected lines PNG
 font-settings = Fonts
 filters-title = Blocklist / allowlist
-filters-reveal = Show replies temporarily
+filters-reveal = Show masked content temporarily
 hover-help = Hover over image links for a small preview
 hover-label = Image preview
 hover-position = Image preview position
 hover-top-right = Top right
 hover-follow = Follow pointer
 close = Close
-vim-off = Vim: off
+vim-off = Vim (experimental): off
 vim-once-button = Native once (f)
 keepalive-on = Keep alive: on
 login = Log in
@@ -29,7 +29,7 @@ browse-next = Next page
 fatal-reopen = { $error }; close and reopen the window
 screen-label = BBS screen
 keyboard-label = BBS keyboard input
-filters-description = Mask standard replies from blocked accounts, keeping author and time. Allowed accounts stay visible. Match complete IDs, ignoring letter case.
+filters-description = Block article titles / reply content while keeping IDs, or black out entire rows. Retained blocked IDs are bright red. Allowed IDs use a shared color or an individual override. Match complete IDs, ignoring letter case.
 filters-limitations = Truncated replies and continuation lines without a complete author or timestamp remain visible. Closing this window discards unsaved edits.
 filters-saved-ids = Saved accounts
 filters-account-id = Account ID
@@ -210,7 +210,6 @@ vim-unrecognized = Vim paused: unrecognized screen format; press i for native in
 vim-board-header = Vim paused: board header is unconfirmed; press i for native input
 vim-board-rows = Vim paused: board item columns are unconfirmed; press i for native input
 vim-cursor = Vim paused: selection marker or cursor is unconfirmed; press i for native input
-vim-continue = Board art: press Space, Enter or l to continue; i for native input
 vim-count-unsupported = This counted command is unsupported
 vim-count-capacity = Navigation count exceeds input capacity; the entire command was rejected
 vim-count-rejected = The entire command with an excessive count was rejected
@@ -228,7 +227,7 @@ navigation-help-native = This help page can execute commands; press f, then conf
 navigation-stale = The screen or input changed; navigation was not sent
 navigation-awaiting = Wait for the server to update the screen before navigating
 navigation-disconnected = The connection changed; navigation was not sent
-vim-on = Vim: on
+vim-on = Vim (experimental): on
 reason-grid = Unsupported grid
 reason-incomplete = Screen reception is incomplete
 reason-unmapped = Unmapped screen cells
@@ -245,9 +244,10 @@ copy-not-ready = Selection is not ready; copy again
 copy-event-unavailable = Clipboard event data is unavailable in this environment
 copy-failed = Cannot write to clipboard; try again
 article-open-hint = Click the row to open; drag or hold Shift to select text
+menu-open-hint = Click to enter this item; drag or hold Shift to select text
 navigation-wait = Waiting for a screen update
 article-list-hint = Click rows to open · left edge to go back · Shift to select
-article-reading-hint = Scroll to turn pages · Ctrl + scroll to zoom
+article-reading-hint = Click upper/lower half to page · Left edge goes back · Ctrl + scroll to zoom
 paste-native-first = Press i to enter native input before pasting
 paste-unavailable = Cannot read pasted text in this environment
 paste-too-long = Pasted text is too long; nothing was sent
@@ -258,10 +258,8 @@ keepalive-wait-help = Enabled; waiting for a recognized screen and local operati
 export-encode-failed = Cannot encode PNG
 export-prepare-failed = Cannot prepare PNG
 image-loading = Loading image…
-youtube-title = YouTube preview
 video-title = Video preview
 image-title = Image preview
-youtube-loading = Loading thumbnail; you can open the video in a browser now
 video-player = Video player
 video-pause = Pause video
 media-playing = Playing
@@ -273,7 +271,6 @@ video-buffering = Buffering video…
 video-ready = Press Play in the player; format support depends on the system
 image-decoding = Decoding image…
 image-size-mismatch = Image dimensions do not match; open in a browser
-youtube-ready = Thumbnail loaded; open in a browser to play
 image-ready = Image loaded
 image-decode-failed = Cannot decode image; retry or open in a browser
 image-prepare-failed = Cannot prepare image preview; retry or open in a browser
@@ -306,8 +303,8 @@ export-screen-changed = The screen changed; select again before exporting
 export-grid-unsupported = This screen size does not support PNG export
 export-selection-changed = The selection changed; select again before exporting
 language-label = Interface language
-language-restart = Saved language applies on the next launch. PTT server content is not translated.
-settings-language-saved = Settings saved; the interface language applies on the next launch
+language-restart = Changes apply immediately after saving; PTT content is unchanged.
+settings-language-saved = Language applied and saved.
 vim-suspended = VIM paused · { $reason } · i for native input
 font-face-bundled-failed = Bundled { $role } font “{ $name }” failed to load
 font-face-local-failed = Local { $role } font “{ $name }” is unavailable
@@ -316,14 +313,14 @@ font-bundled-loaded = Bundled fonts loaded: { $names }; no installation required
 link-hover-hint = { $url } — click to open; right-click for actions
 export-lines-hint = Export lines { $start }–{ $end } (all 80 columns)
 image-ready-cached = Image loaded · memory cache
-filters-reason = Blocklist: { $reason }
+filters-reason = Blocked accounts: { $reason }
 filters-count-hidden = { $count ->
-        [one] One reply hidden
-       *[other] { $count } replies hidden
+        [one] One row hidden
+       *[other] { $count } rows hidden
     }
 filters-count-revealed = { $count ->
-        [one] One reply temporarily shown
-       *[other] { $count } replies temporarily shown
+        [one] One row temporarily shown
+       *[other] { $count } rows temporarily shown
     }
 profile-import-title = Load display settings into preview
 menu-edit = Edit
@@ -472,9 +469,12 @@ settings-preview = Preview
 settings-licenses = Bundled font licenses
 settings-import = Load
 settings-export = Export
-settings-profile-help = Load updates the preview until you apply and save. Export uses the effective settings, excluding unapplied drafts.
+settings-profile-help = Loading automatically saves display preferences. Export uses the saved settings.
 
 settings-opacity = Floating button opacity
+settings-right-click = Right-click opens tools
+settings-show-ball = Show floating button
+settings-tool-access-help = Right-click without a selection opens radial tools. A selection or Shift+right-click keeps the context menu. With right-click tools off, settings remain available from the context menu. A hidden floating button appears while tools are open for back and close actions.
 settings-opacity-value = { $percent }%
 settings-opacity-help = 20% is faint; 100% is opaque. Apply to change the floating button; menus stay opaque. Hover or keyboard focus restores full visibility. Disconnection and error notices stay readable.
 settings-opacity-invalid = Floating button opacity must be between 20% and 100%
@@ -510,8 +510,8 @@ sites-help = Switch connection closes the current connection first. Only Save fa
 
 sites-remove = Remove favourite
 
-inline-image-budget = This page reached the image budget. Open the link to preview separately.
-inline-image-limit = Up to 8 images per page. Open other links to preview separately.
+inline-image-budget = This article reached the image budget. Open the link to preview separately.
+inline-image-limit = Up to 8 images per page and 32 retained per article. Open other links to preview separately.
 
 context-title = Surface actions
 context-copy = Copy selected text
@@ -527,15 +527,18 @@ context-previous = Previous page
 context-next = Next page
 context-bookmarks = Article bookmarks…
 context-filters = Manage account lists…
-context-vim = Toggle Vim mode
-context-settings = Appearance and settings…
+context-vim = Toggle Vim mode (experimental)
+context-settings = Settings…
 context-copied = Copied to clipboard
 
 filters-policy = Account policy
-filters-policy-mask = Block (mask content)
-filters-policy-allow = Allow (keep visible)
+filters-policy-mask = Block content (keep ID)
+filters-policy-allow = Allow (colored ID)
 
 pointer-back-hint = Click the left edge to go back; hold Shift to select text
+pointer-page-up-hint = Click to page up; drag or hold Shift to select text
+pointer-page-down-hint = Click to page down; drag or hold Shift to select text
+pointer-continue-hint = Press any key or click to continue; drag or hold Shift to select text
 
 filters-import = Import account list…
 filters-import-title = Choose an account list text file
@@ -544,5 +547,133 @@ filters-import-apply = Merge and save
 filters-import-loading = Reading account list…
 filters-import-cancelled = Import cancelled; account lists unchanged
 filters-import-stale = Import preview expired; choose the file again
-filters-import-preview = Read { $count } entries; skipped { $skipped } unsupported rules; adapted { $adjusted } marked or stronger blocking rules. This is a merged preview. Allow rules win; local masking is retained, without external colour settings. Choose Merge and save to apply.
+filters-import-preview = Read { $count } entries; skipped { $skipped } unsupported rules; adapted { $adjusted } marked or stronger blocking rules. Merged preview: B masks content, C blacks out rows, W highlights IDs. Allow rules win; external colours are ignored. Choose Merge and save to apply.
 filters-import-invalid = Cannot import this list format; source file and current rules preserved
+
+settings-saving = Saving…
+settings-autosave-invalid = A field is incomplete or out of range. Changes have not been saved.
+settings-save-failed = Saving failed. Changes have not taken effect. Please retry.
+settings-retry = Retry saving
+
+settings-center-title = Settings
+settings-search-label = Search settings
+settings-search-placeholder = Search in English or Chinese…
+settings-search-empty = No matching settings.
+settings-general = General
+settings-appearance = Appearance and fonts
+settings-input = Keyboard and mouse
+settings-media = Images and media
+settings-account = Account and privacy
+settings-about = About and licenses
+settings-action-help = Open the existing manager. Login, connection and deletion still require an explicit action.
+hover-disabled = Off
+settings-page-general = General
+settings-page-appearance = Appearance and fonts
+settings-page-input = Keyboard and mouse
+settings-page-media = Images and media
+settings-page-sites = Sites and connections
+settings-page-filters = Account lists
+settings-page-account = Account and privacy
+settings-page-about = About and licenses
+settings-alias-language = 語言 繁體中文 英文 language locale english chinese
+settings-alias-font = 字型 字體 預設 font fonts typeface preset windows macos linux
+settings-alias-ascii = 英數 符號 字型 字體 ascii latin font fonts symbols
+settings-alias-cjk = 中文字體 中文字型 中文 漢字 字型 字體 chinese cjk font fonts
+settings-alias-size = 字級 字高 字型 大小 font size height
+settings-alias-baseline = 基線 排版 baseline alignment
+settings-alias-profile = 顯示 設定檔 匯入 匯出 profile import export
+settings-alias-opacity = 透明度 不透明度 浮球 opacity transparency floating button
+settings-alias-right-click = 右鍵 扇形 選單 right click context menu radial
+settings-alias-ball = 浮球 浮動 按鈕 顯示 隱藏 floating ball button visibility hide show
+settings-alias-media = 圖片 滑過 懸停 預覽 位置 image media hover preview position
+settings-alias-sites = 站點 連線 編碼 網址 最愛 預設 ptt ptt2 telnet websocket gbk big5 sites connection encoding address favorite default
+settings-alias-filters = 黑白名單 黑名單 白名單 過濾 匯入 blacklist whitelist blocklist allowlist filter import
+settings-alias-account = 帳號 密碼 登入 鑰匙圈 隱私 account password login keychain privacy
+settings-alias-about = 關於 授權 版本 about license version
+
+reason-layout = This list layout is not supported
+vim-layout = Vim paused: this list layout is not supported; press i for native input
+
+article-cache-hint = Lines { $first }–{ $last } retained; scroll back locally, load more at the edge
+export-cache-selection-limit = Selected-row PNGs support up to 24 lines; select a smaller range
+export-cache-page-hint = Export the current 24-row station page, excluding cached history and expanded images
+
+article-mode = Article mode
+article-mode-web = Web
+article-mode-terminal = Terminal
+article-mode-help = Web mode loads the full article, with cancel and resume; expand images explicitly. Terminal mode keeps station paging, with hover or top-right image previews.
+settings-alias-article-mode = article mode web terminal 文章模式 網頁 終端機
+
+filters-policy-mask-row = Black out entire row
+
+account-mask = Block content, keep ID
+account-mask-row = Block entire row
+account-allow = Add to whitelist
+reply-focus-clear = Clear reply highlighting
+reply-focus-hint = Click the author ID to highlight all their replies; click again to clear. Shift or drag to select text.
+account-action-stale = The screen changed. Right-click the ID again.
+reply-focus = Toggle highlighting for this ID
+
+article-load-loading = Loading article · { $lines } lines received
+article-load-complete = Article loaded · { $lines } lines
+article-load-cancelled = Loading cancelled · { $lines } lines retained
+article-load-stopped = Loading interrupted · { $lines } lines retained
+article-load-changed = Article content changed; loading stopped
+article-load-limit = Article loading limit reached; use terminal mode to continue
+article-load-cancel = Cancel loading (Esc)
+article-load-resume = Resume loading
+
+filters-color-invalid = Choose a valid ID color; only allowed IDs support individual colors
+filters-default-color = Shared allowlist color
+filters-default-color-save = Save shared color
+filters-id-color = Allowlist color for this ID
+filters-color-shared = Use shared color
+filters-color-help = Allowed IDs without an override follow the shared color. Individual colors are saved with the entry.
+filters-color-red = Red
+filters-color-green = Green
+filters-color-yellow = Yellow
+filters-color-blue = Blue
+filters-color-magenta = Magenta
+filters-color-cyan = Cyan
+filters-color-gray = Gray
+filters-color-dark-gray = Dark gray
+filters-color-bright-red = Bright red
+filters-color-bright-green = Bright green
+filters-color-bright-yellow = Bright yellow
+filters-color-bright-blue = Bright blue
+filters-color-bright-magenta = Bright magenta
+filters-color-bright-cyan = Bright cyan
+filters-color-white = White
+
+settings-privacy-description = Settings, bookmarks and account lists stay on this computer. Full session traffic is not recorded by default. Passwords enter the OS credential store only when you choose to save them. Signing in still requires pressing Log in.
+
+filters-tab-block = Blocklist
+filters-tab-allow = Allowlist
+filters-sort-id = Sort: ID
+filters-sort-category = Sort: category
+filters-empty-block = No blocked accounts yet.
+filters-empty-allow = No allowed accounts yet.
+
+inline-image-open-one = Expand this image: { $url }
+inline-image-opened = Image expanded: { $url }
+
+account-remove-mask = Remove content block
+
+account-remove-mask-row = Remove entire-row block
+
+account-remove-allow = Remove from whitelist
+
+article-boundary-navigation = Switch articles with arrows at the top or bottom
+article-boundary-help = Off by default. Press ↑ again at the top for the previous article, or ↓ at the bottom for the next. PageUp/PageDown, j/k and the wheel never switch articles. Wait for loading to stop; release a held arrow before switching.
+settings-alias-article-boundary = article boundary arrow previous next 上一篇 下一篇 首尾 邊界 方向鍵
+
+settings-close-command = Close Settings
+about-author = Author: { $author }
+about-version = Version: { $version }
+
+copy-png = Copy page PNG
+copy-rows-png = Copy selected rows PNG
+export-copied = Image copied to clipboard
+
+gif-playing = GIF animation playing
+gif-paused = GIF animation paused

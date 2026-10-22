@@ -243,7 +243,7 @@ def run_core(root):
 
 
 def run_desktop(root, executable=None, artifacts=None):
-    if any(not (root / path).is_file() for path in ('src/main.rs', 'tooling/desktop_input.py', 'tooling/desktop_media.py', 'tooling/desktop_hover.py', 'tooling/desktop_profiles.py', 'tooling/desktop_vim.py', 'assets/media.js', 'tests/fixtures/media/colours.png', 'tests/fixtures/media/motion.gif', 'tooling/desktop_capture.py', 'tooling/desktop_navigation.py', 'tooling/inspect_png.ps1')) or not shutil.which('cargo'):
+    if any(not (root / path).is_file() for path in ('src/main.rs', 'tooling/desktop_input.py', 'tooling/desktop_media.py', 'tooling/desktop_hover.py', 'tooling/desktop_profiles.py', 'tooling/desktop_settings.py', 'tooling/desktop_vim.py', 'assets/media.js', 'tests/fixtures/media/colours.png', 'tests/fixtures/media/motion.gif', 'tooling/desktop_capture.py', 'tooling/desktop_navigation.py', 'tooling/inspect_png.ps1')) or not shutil.which('cargo'):
         return unavailable('desktop')
     if sys.platform != 'win32':
         return {'profile': 'desktop', 'status': 'not_ready', 'reason': 'Physical probe has only been verified on Windows.'}

@@ -46,6 +46,7 @@ manual keyboard input → session-owned send queue → connection
 | [ui/files](../src/ui/files.rs) | 單筆互動式檔案工作及有界最近看板 writer、UI thread 的非同步原生 picker，以及 blocking pool 上的有界讀寫／PNG 解碼；關閉撤銷未開始工作、保留並等待已開始工作 |
 | [ui/lifecycle](../src/ui/lifecycle.rs) | renderer、媒體、鑰匙圈、檔案及命令等待的共同清理擁有者；正常／錯誤退出都停止並 join |
 | [ui/presentation](../src/ui/presentation.rs) | 遮黑後的唯一 Paint、連結／圖片命中、選取及輸出使用的版本核對；字型預覽也使用同一封包 |
+| [ui/settings_finish](../src/ui/settings_finish.rs) | 主畫面 renderer 結束時保留最後設定修改，於共同 Files drain 後透過同一檔案 worker 保存；不建立視窗或站端連線 |
 | [ui/preferences](../src/ui/preferences.rs) | 生效設定、草稿建構與成功保存後的 commit；初載只由檔案 worker 呼叫，互動時不自行選檔或讀寫 |
 | [ui/bookmarks](../src/ui/bookmarks.rs)／[surface-bookmarks](../assets/surface-bookmarks.js) | Rust 保存後 commit 與壞檔保留；JS 草稿、選取、單筆 request、晚到結果及 dialog 清理。前往只填既有目的地草稿 |
 | [ui/sites](../src/ui/sites.rs)／[surface-sites](../assets/surface-sites.js) | Rust 保存成功後 commit；JS 管理站點草稿／單筆 request，選最愛不連線，明確切站交給唯一 Connection owner |
@@ -75,7 +76,7 @@ surface 仍共同協調 Rust 版本核對，以及 JS 的輸入、選取、繪�
 
 優先驗證 Dioxus Desktop 與 Canvas 的薄繪製橋接；實際呈現路線以同一 [顯示契約](dual-color.md) 的 probe 決定。若採 JavaScript，只接收結構化 frame，不持有第二份終端狀態。
 
-UI 正常掛載並完成檔案初載後，只發起一次已保存的預設站連線，初始為 PTT WSS；合成 probe 僅連本機服務。renderer 唯一管理符合視窗／等比例 zoom 及繪製排程；接收的 Screen frame 不因縮放改寫。浮球由獨立的 surface-tools owner 管理座標、慣性、吸邊、capture 與收合；六個 Lucide 分類入口消費同一組功能按鈕，不複製業務事件。bindings 仍由同一 UI lifetime 註冊／移除，停止時撤銷 capture 與唯一 animation frame；Rust 透過獨立 data attribute 及狀態提示維持斷線／錯誤可見。尺寸變更合併為一個 animation callback，背景共用整數像素格線，圖形幾何與文字都使用同一格線與左右 clip。所有輸入／縮放／hover listener 由同一 bindings 清單註冊與移除。
+UI 正常掛載並完成檔案初載後，只發起一次已保存的預設站連線，初始為 PTT WSS；合成 probe 僅連本機服務。renderer 唯一管理符合視窗／等比例 zoom 及繪製排程；接收的 Screen frame 不因縮放改寫。浮球由獨立的 surface-tools owner 管理座標、慣性、吸邊、capture 與收合；六個 Lucide 分類及直接設定入口消費同一組功能按鈕，不複製業務事件。bindings 仍由同一 UI lifetime 註冊／移除，停止時撤銷 capture 與唯一 animation frame；Rust 透過獨立 data attribute 及狀態提示維持斷線／錯誤可見。尺寸變更合併為一個 animation callback，背景共用整數像素格線，圖形幾何與文字都使用同一格線與左右 clip。所有輸入／縮放／hover listener 由同一 bindings 清單註冊與移除。
 
 不丟原始 bytes；UI 可合併最新 frame，帶 generation／revision 防止晚到更新。手動送鍵序列化，連線關閉時停止對應擁有者，重連是新 session。
 
@@ -91,10 +92,14 @@ DEC2026 的開始／結束由 Screen 解析；同步期間仍完整作用所有 
 
 Connection 同時擁有防閒置的單調時鐘、預設開啟狀態、UI watch 許可及自動刷新等待。UI 僅回報本機操作是否允許，不建立自己的 timer；owner 核對當前 Screen、session／輸入版本及等待狀態後才送一次刷新。手動輸入與自動刷新以不同 PendingInput 變體管理，只有自動等待會因無回應而逾時釋放並停用保活。規則與公開站端來源推論見 [保活契約](keepalive.md)。
 
-媒體依 [預覽契約](media.md) 提供 dialog、hover 與閱讀頁 Enter 展圖。Enter 使用獨立的有界 inline owner，消費目前已繪製、已過濾的圖片連結；同一 Loader 序列下載、每頁去重、容量限制與 source identity 撤銷。顯示層只插入圖片空間與原 renderer 的行切片，原格線與 PNG 契約不變。Rust Preview 擁有可取消的 HTTP future 與待解碼內容，關閉／換 session 只有一個清理入口；沒有 detached 下載 task。JS 收到通過格式／尺寸／動畫容量檢查的 bytes 後建立 Blob URL，由 WebView 解碼，成功回報後才保留快取；失敗內容不得造成重試一直命中壞圖。JS owner 註冊／移除自己的 listener 與 ResizeObserver，關閉時撤銷 Blob URL、停止 video、移除來源並清空 canvas；本機轉換／播放 promise 在結束時等待完成。影片使用獨立串流來源，不塞進圖片 cache。BBS canvas、輸入、PNG 與媒體渲染不共用解碼鎖或排版狀態。
+媒體依 [預覽契約](media.md) 提供 dialog、hover 與閱讀頁 Enter 展圖。Enter 使用獨立的有界 inline owner，消費目前已繪製、已過濾的圖片連結；同一 Loader 序列下載，每頁去重並以文章內的 URL key 保留有界資源；翻頁只更換已確認頁面的行位置與連結索引，不撤銷同篇 batch。離開閱讀、其他操作或換 session 統一清理。顯示層只插入圖片空間與原 renderer 的行切片，原格線與 PNG 契約不變。Rust Preview 擁有可取消的 HTTP future 與待解碼內容，關閉／換 session 只有一個清理入口；沒有 detached 下載 task。JS 收到通過格式／尺寸／動畫容量檢查的 bytes 後建立 Blob URL，由 WebView 解碼，成功回報後才保留快取；失敗內容不得造成重試一直命中壞圖。JS owner 註冊／移除自己的 listener 與 ResizeObserver，關閉時撤銷 Blob URL、停止 video、移除來源並清空 canvas；本機轉換／播放 promise 在結束時等待完成。影片使用獨立串流來源，不塞進圖片 cache。BBS canvas、輸入、PNG 與媒體渲染不共用解碼鎖或排版狀態。
 
 按鈕登入的 prompt／容量屬 login 核心，Connection 擁有單次等待與送出，Keychain worker 擁有 OS 存取與清理；UI 不接收已存密碼。安全儲存與驗證邊界見 [登入契約](login.md)。
 
 關閉視窗／⌘Q 先停止新互動並立即要求 Connection 結束；網路 owner 送 WebSocket 1000 正常關閉碼，持續讀取至站端回覆與底層關閉，總期限兩秒；依 [Tungstenite 關閉契約](https://docs.rs/tungstenite/0.28.0/tungstenite/protocol/struct.WebSocket.html#method.close) 驅動完整握手。回報區分 acknowledged、peer_closed_without_reply（未回覆 Close 即結束底層連線）、unconfirmed 與 no_connection，Telnet shutdown 另記 transport_closed。重複 shutdown 沿用已完成結果；沒有把送出 Close 或本機 TCP shutdown 當成站端已確認。renderer／Keychain 與網路 worker 都 join 後才完成 App 關閉。這表示傳輸關閉結果，不宣稱站端線上名單即時更新。
 
 合成 probe 的浮球放手觀察附在 renderer finally 的具型別 join 回覆，由同一 Resources 清理 owner 保留；Stopped 通知和 join 的先後不會遺失觀察，也不能把失敗的清理改成成功。正常模式不保存軌跡或觀察檔。
+
+設定使用主 WebView 內的單一 modal dialog，不建立原生子視窗或 App 分頁。搜尋／分類與表單共用既有 settings owner，Bridge 回覆走同一 renderer。Modal 使背景內容 inert，BBS key／text callback 另拒絕開啟中的對話框；關閉先完成 autosave，才恢復輸入焦點，站點／名單管理入口也先完成關閉再交接。退出時同一 renderer 的 finally 回傳最後修改快照，待共同 Files drain 完成後保存；沒有第二個 eval、事件 channel 或 native window lifetime。主畫面、PNG 與字型預覽共用 [surface-renderer](../assets/surface-renderer.js)。
+
+語言選擇由同一偏好保存結果驅動，Dioxus reactive language signal、原生選單與結構化 Localization 更新共用已保存語言。Rust 預載兩份不可變 Fluent catalog，只原子切換選擇；JS 保留 translator callable 並原子替換已驗證 bundles，不重建 view lifetime 或 connection。既有 canonical App 狀態可重譯，任意診斷內容不猜測翻譯。
