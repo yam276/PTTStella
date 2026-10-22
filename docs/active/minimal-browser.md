@@ -4,13 +4,23 @@
 
 ## 目標
 
-目前交付為 `dist/macos-list-edges/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-diagnostic-ready/PTTStella.app`（2026-10-22，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 偶發卡頓診斷版與發佈暫緩（2026-10-22）
+
+使用者回報滑鼠與鍵盤偶爾無反應，或做其他操作後才恢復，要求先交付自動記錄 log 的版本，並自行將 repo 改回 Private。四架構 verify 39758784499 已全部成功，Release PR #1 已合併為 main d8d605d；main／develop 已同步此合併歷史。依新指示取消尚未完成的正式發佈 39761002694，確認尚無 v0.1.0 tag／Release。保留 main 的 0.1.0 來源；本機 develop 的下一版與診斷交付為 0.2.0-dev.1，不恢復或另行公開發佈。
+
+[診斷契約](../diagnostics.md) 定義 compile-time opt-in 的診斷 App：一般建置預設關閉；診斷版正常啟動即寫入本機資料目錄，視窗標題明示。型別化事件只含種類、數值旗標、版本、狀態與時間，排除鍵名／文字／原始流量／帳密／文章／網址。WebView 原生事件到達與處理後測點、packet wall time、每秒脈衝及 Rust 每秒 pending／busy 快照分開記錄；獨立 thread 持續 watchdog，診斷寫檔不進輸入路徑。256 筆 try_send、32 筆／秒操作採樣與獨立 8 筆／秒慢封包額度、四份各 2 MiB 輪替與 OS file lock；退出 drain／join，失敗顯示提示，不自動重試使用者操作。Cmd／Ctrl+Shift+L 只加入本機問題標記。
+
+本機合成 diagnostics probe 只連 loopback，正文含不可進 log 的獨立 sentinel，明確模擬 1.4 秒 WebView 停頓。core 13 命令／2 replay、desktop lib 144／bin 136、全 targets Clippy、JS 242、Python tooling 74、fmt／docs 通過。新增 logger 測試覆蓋檔案輪替／排他、佇列飽和不阻塞、停用後拒絕新紀錄、獨立 watchdog、寫入失敗及退出 join；共用 wire fixture 與 router 驗證 on／off 診斷封包。初次原生測試發現 router 白名單未同步，已修復；快操作測試另抓到背景封包消耗操作採樣額度，改為只收耗時至少 16ms 的封包並使用獨立額度，重跑同一快速序列保留 key／pointer／wheel。失敗證據仍保留，不將早期結果當作通過。
+
+最終 macOS arm64 原生 Dioxus／WKWebView 使用交付的同一 loadable sections，確認約 1.39 秒停頓期間仍有 writer watchdog；恢復後 End／Home／Down、Cmd+Shift+L、原生點擊與滾輪均入 log。正文獨立 sentinel 可見但不進 JSONL，960×576 來源 PNG 的紅／綠獨立色塊正確；固定 1040×768 視窗，peer 拒絕全部站端輸入，Close acknowledged，全部 owner 與診斷 writer 完成，exit 0，strict ad-hoc 驗章通過。證據 .local/verification/diagnostics（r4-gate.json、delivery-gate.json、ready-gate.json、native-ready、ready-validation.json）；交付 dist/macos-diagnostic-ready/PTTStella.app。Windows／Linux 原生診斷 UI 本輪 not_ready；使用者實站偶發問題的根因尚未確認，不能以合成停頓結案。
 
 ## 0.1.0 Windows 原生建置檢查修復（2026-10-22）
 
@@ -22,7 +32,7 @@ Windows 隨後已通過全部 Rust／JS 測試，原生打包抓到 Inno 7 的 h
 
 原生 Setup 編譯後另發現 Inno 產物使用 PE delay-load imports，舊檢查器遇到任何 delay table 就拒絕。依 Microsoft PE 格式補上 32-byte descriptor、RVA／legacy VA、檔案實體範圍與結束記號解析，將延遲 DLL 合併到同一 imports inventory；應用程式及免安裝的非系統 DLL 拒絕仍有效，Setup manifest 另記實際 PE 檢查結果。獨立自製 PE 覆蓋普通／延遲／legacy、私有 DLL、未知 attributes、越界與缺結束記號；Python tooling 74、docs／actionlint 通過，四架構完整 verify 需重新執行。
 
-另以固定 SHA-256 的上游 Inno 7.1.0 x64 真實安裝檔驗證解析，辨識 kernel32／user32 的延遲依賴；下載檔與上游源碼留於 repo 外。證據 .local/verification/release-v0.1.0（windows-verify-attempt2.log、windows-verify-4d.log、lifecycle-gate.json、windows-9f.log、windows-f40.log、inno-pe-check.json）；0.1.0 發佈與四架構最終建置仍進行中，尚未建立 tag 或 Release。
+另以固定 SHA-256 的上游 Inno 7.1.0 x64 真實安裝檔驗證解析，辨識 kernel32／user32 的延遲依賴；下載檔與上游源碼留於 repo 外。證據 .local/verification/release-v0.1.0（windows-verify-attempt2.log、windows-verify-4d.log、lifecycle-gate.json、windows-9f.log、windows-f40.log、inno-pe-check.json）；當時尚未建立 tag 或 Release；最終處置見上節的發佈暫緩。
 
 ## 列表與選單可視區首尾 Home／End（2026-10-22）
 
