@@ -631,3 +631,29 @@ test('paging through fractional viewports exposes every source row completely',a
         await e.ui.destroy();
     }
 });
+
+test('highlight projections retain expanded sizes, decoded resources, failures and the reading anchor',async()=>{
+    const e=interactiveImages();e.viewport.clientHeight=900;e.open([0,1,2]);await e.decode(0);
+    e.ui.receive({batch:1,index:1,image:{mime:'image/gif',data:'AA==',width:64,height:32,animated:true,animation_pixels:4096}});
+    await new Promise(r=>setImmediate(r));const gif=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+    gif.naturalWidth=64;gif.naturalHeight=32;gif.onload();await new Promise(r=>setImmediate(r));
+    e.ui.fail({batch:1,index:2,message:'synthetic image failure'});e.layout();e.enter();e.layout();
+    const boxes=e.nodes.filter(n=>n.className==='inline-image'),still=boxes[0].children.find(n=>n.width===64);
+    assert.equal(still.style.width,'480px');assert.equal(e.urls.size,1);
+    e.viewport.clientHeight=500;e.viewport.scrollTop=200;e.layout();
+    const before={height:e.surface.style.height,top:e.viewport.scrollTop,boxes:boxes.map(b=>b.style.top),decoders:e.nodes.filter(n=>n.tag==='img').length};
+    for(const focus of ['Alice','Bob',null]){
+        e.packet.presentation++;e.packet.reply_focus=focus;
+        // The new Paint arrives before its ACK/follow. Cached image gaps must
+        // remain in place in this interval as well as after InlineOpen.
+        e.layout();assert.equal(e.viewport.scrollTop,before.top);assert.equal(e.surface.style.height,before.height);
+        e.open([0,1,2]);e.layout();
+        assert.equal(e.viewport.scrollTop,before.top);assert.equal(e.surface.style.height,before.height);
+        assert.deepEqual(boxes.map(b=>b.style.top),before.boxes);
+        assert.equal(still.style.width,'480px');assert.equal(e.nodes.filter(n=>n.tag==='img').length,before.decoders);
+        assert.equal(boxes[2].dataset.state,'failed');assert.equal(e.urls.size,1);
+    }
+    assert.equal(e.requests.length,0,'highlighting neither downloads nor expands additional images');
+    e.packet.article={...e.packet.article,id:2};e.layout();assert.equal(e.ui.active(),false);assert.equal(e.urls.size,0);
+    assert.equal(await e.ui.destroy(),true);
+});

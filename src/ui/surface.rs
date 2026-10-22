@@ -833,8 +833,9 @@ async fn run(
                     SurfaceEvent::ReplyFocus { presentation, stamp, row, .. } => {
                         if screen.focus_reply(Identity{presentation,generation:stamp.generation,revision:stamp.revision},stamp,row,&receiver.borrow()) {
                             checks.reply_focus_actions+=1;
-                            media_preview.close();inline_images.close();
-                            eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
+                            // Focus changes only local backgrounds. The next acknowledged
+                            // projection follows the same article's expanded resources.
+                            media_preview.close();
                             eval.send(Packet::HoverReset{media:true}).map_err(|e|e.to_string())?;
                         }
                     }

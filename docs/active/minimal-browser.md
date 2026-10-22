@@ -4,13 +4,23 @@
 
 ## 目標
 
-目前交付為 `dist/macos-row-alignment/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-highlight-images/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 推文高亮保留展圖與閱讀位置（2026-10-22）
+
+使用者回報點 ID 高亮使全部圖片摺疊，文章隨高度縮短跳動。原因為 ReplyFocus 成功分支沿用了永久名單變更的清理行為，主動 close InlineImages 並送 InlineReset。移除這兩個動作；推文高亮只更新背景投影版本，原 article ID／batch／resource keys 保留，新 Paint ACK 後沿原 follow 管線更新。暫時媒體預覽及 hover 租約仍關閉，舊選取／輸出租約照常撤銷。永久名單更新、切篇、離開閱讀、斷線／新 session 的清理分支不變。
+
+core 13 命令／2 replay、desktop lib 143／bin 129、全 targets Clippy、JS 229、Python tooling 70、fmt／docs 通過。Rust 使用生產 SurfaceState 與 InlineImages 串接高亮 Alice、改選 Bob、取消高亮，逐次核對相同 article／batch／entries keys、舊輸出租約無效、新 session 仍清理。JS 生產 inline owner 另外覆蓋新 Paint 尚未 ACK 與 follow 重投影兩個階段，保留解碼 canvas、GIF Blob、等寬、失敗訊息、文件高度與 scrollTop，沒有新增下載／解碼或順便開其他圖；切篇釋放資源。既有完整行顯示、開圖順序與原生操作分流測試全數重跑。
+
+macOS arm64 原生 inline smoke passed：兩次 Enter 精確取得 colours.png 與 missing.png 的 404，同一 batch；第三次等寬成功，視窗固定 1040×768。來源 PNG 960×576 與系統剪貼簿讀回逐像素相同；Close acknowledged、全部 owner／HTTP thread join、程序 exit 0，15 份 Mach-O loadable sections 與交付一致、strict ad-hoc 驗章通過。此 native smoke 的 reply_focus_actions 為 0，不當作點作者高亮的原生回歸驗收；該手勢依既有約定留人工驗收。Windows／Linux 原生 UI 本輪 not_ready。
+
+證據 .local/verification/highlight-images（delivery-gate.json、native、validation.json）；交付 dist/macos-highlight-images/PTTStella.app（macOS arm64 release／ad-hoc，未公證）。
 
 ## 非滾輪導覽維持完整文字行（2026-10-22）
 
