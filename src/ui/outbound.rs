@@ -85,6 +85,7 @@ pub(super) enum Packet<'a> {
     },
     SettingsOpen(Box<SettingsOpen>),
     SettingsVisibility(bool),
+    SettingsClose(bool),
     FontPreview(FontPreview),
     FontCatalog {
         request: u64,

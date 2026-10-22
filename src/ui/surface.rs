@@ -31,7 +31,9 @@ use super::{
 /// Named launch options keep call sites independent of positional booleans.
 pub(super) struct Options {
     pub(super) locale: Signal<pttstella::i18n::Language>,
-    pub(super) settings_requests: watch::Receiver<u64>,
+    pub(super) settings_requests: watch::Receiver<(u64, bool)>,
+    #[cfg(target_os = "macos")]
+    pub(super) native_menu: crate::macos::NativeMenu,
     pub(super) reload_settings: bool,
     pub(super) media_origin: Option<String>,
     pub(super) window_probe: bool,
@@ -144,6 +146,8 @@ async fn run(
     let Options {
         mut locale,
         mut settings_requests,
+        #[cfg(target_os = "macos")]
+        native_menu,
         reload_settings,
         media_origin,
         window_probe,
@@ -483,6 +487,8 @@ async fn run(
                 )?;
             }
         }
+        #[cfg(target_os = "macos")]
+        native_menu.settings_visible(settings_visible);
         let load_deadline = screen.full_load_deadline();
         let paint_deadline =
             (preload_paint && screen.dirty() && !screen.has_in_flight() && !reading_paint_due)
@@ -494,7 +500,9 @@ async fn run(
                 if commands.is(CommandKind::Preload) {commands.cancel();}
             },
             request=settings_requests.changed()=>{
-                request.map_err(|e|e.to_string())?;settings_requests.borrow_and_update();
+                request.map_err(|e|e.to_string())?;
+                let close=settings_requests.borrow_and_update().1;
+                if close {eval.send(Packet::SettingsClose(true)).map_err(|e|e.to_string())?;continue;}
                 settings_visible=true;connection.keep_alive_gate(receiver.borrow().stamp(),false);eval.send(Packet::SettingsVisibility(true)).map_err(|e|e.to_string())?;
                 eval.open_settings(preferences.store());eval.send(preferences.open_packet()).map_err(|e|e.to_string())?;
             },
@@ -1028,6 +1036,11 @@ async fn run(
                         eval.send(Packet::SitesResult{request,data:sites.snapshot(receiver.borrow().site.clone()),feedback}).map_err(|e|e.to_string())?;
                     },
                     SurfaceEvent::SettingsVisibility {open} => {settings_visible=open;eval.send(Packet::SettingsVisibility(open)).map_err(|e|e.to_string())?;},
+                    SurfaceEvent::AboutRepository { .. } => {
+                        if probe.is_none() && let Err(error) = webbrowser::open(env!("CARGO_PKG_REPOSITORY")) {
+                            eval.send(Packet::Notice(pttstella::msg!("link-open-failed",e=error.to_string()))).map_err(|e|e.to_string())?;
+                        }
+                    }
                     SurfaceEvent::SettingsOpen { trusted: _ } => {
                         settings_visible=true;connection.keep_alive_gate(receiver.borrow().stamp(),false);eval.send(Packet::SettingsVisibility(true)).map_err(|e|e.to_string())?;
                         eval.open_settings(preferences.store());

@@ -170,16 +170,14 @@ pub fn app(props: AppProps) -> Element {
     };
     let mut message = use_signal(|| pttstella::msg!("status-offline-preview"));
     #[cfg(target_os = "macos")]
+    let native_menu = use_hook(crate::macos::NativeMenu::default);
+    #[cfg(target_os = "macos")]
     {
-        let menu = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(None)));
+        let menu = native_menu.clone();
         use_effect(move || {
             let _language = locale();
-            match crate::macos::menu() {
-                Ok(next) => {
-                    next.init_for_nsapp();
-                    *menu.borrow_mut() = Some(next);
-                }
-                Err(error) => message.set(error.to_string()),
+            if let Err(error) = menu.install() {
+                message.set(error.to_string());
             }
         });
     }
@@ -197,7 +195,7 @@ pub fn app(props: AppProps) -> Element {
         .map(|p| p.prepared.text.clone())
         .unwrap_or_default();
     let closing = use_hook(|| watch::channel(false));
-    let settings_requests = use_hook(|| watch::channel(0u64));
+    let settings_requests = use_hook(|| watch::channel((0u64, false)));
     let close_sender = closing.0.clone();
     dioxus::desktop::use_wry_event_handler(move |event, _| {
         let close_requested = matches!(
@@ -218,7 +216,16 @@ pub fn app(props: AppProps) -> Element {
         let settings_sender = settings_requests.0.clone();
         dioxus::desktop::use_muda_event_handler(move |event| {
             if event.id().0 == crate::macos::SETTINGS {
-                settings_sender.send_modify(|value| *value = value.wrapping_add(1));
+                settings_sender.send_modify(|(serial, close)| {
+                    *serial = serial.wrapping_add(1);
+                    *close = false;
+                });
+            }
+            if event.id().0 == crate::macos::CLOSE_SETTINGS {
+                settings_sender.send_modify(|(serial, close)| {
+                    *serial = serial.wrapping_add(1);
+                    *close = true;
+                });
             }
             if event.id().0 == crate::macos::QUIT {
                 if fatal() {
@@ -334,8 +341,12 @@ pub fn app(props: AppProps) -> Element {
                         let connection = connection.clone(); let probe = probe.clone(); let closing = closing.1.clone(); let media_origin = media_origin.clone();
                         let surface_probe = surface_probe.clone();
                         let settings_requests = settings_requests.1.clone();
+                        #[cfg(target_os = "macos")]
+                        let menu = native_menu.clone();
                         spawn(async move {
-                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, Options { locale, settings_requests, reload_settings, media_origin, window_probe, login_probe, filters_probe, surface_probe:surface_probe.clone() }).await;
+                            let result = surface(connection.clone(), closing, probe, message, phase, pending_paste, Options { locale, settings_requests, #[cfg(target_os = "macos")] native_menu: menu.clone(), reload_settings, media_origin, window_probe, login_probe, filters_probe, surface_probe:surface_probe.clone() }).await;
+                            #[cfg(target_os = "macos")]
+                            menu.settings_visible(false);
                             if let Err(error) = result {
                                 fatal.set(true);
                                 message.set(pttstella::msg!("fatal-reopen", error = error));
@@ -654,6 +665,11 @@ pub(super) fn SettingsForm(filters_probe: bool) -> Element {
                     }
                 }
                 section { "data-settings-page":"about", class:"settings-section",
+                    h3 { "PTTStella" }
+                    p { class:"settings-help", {pttstella::msg!("about-author", author = env!("CARGO_PKG_AUTHORS"))} }
+                    p { class:"settings-help", {pttstella::msg!("about-version", version = env!("CARGO_PKG_VERSION"))} }
+                    button { id:"about-repository", r#type:"button", {env!("CARGO_PKG_REPOSITORY")} }
+
                     h3 { SettingsCaption { label: pttstella::msg!("settings-licenses"), icon: rsx! { FileText { size: 18 } } } }
                     p { class: "settings-help", {pttstella::msg!("font-license")} }
                     pre { class: "font-license settings-license-text", {include_str!("../../assets/fonts/NOTICE.txt")} }

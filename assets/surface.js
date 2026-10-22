@@ -886,7 +886,7 @@ const route=createSurfaceRouter({
     media_open:data=>media.open(data),media_image:data=>media.receiveImage(data),media_error:data=>media.fail(data),
     media_external:data=>media.externalResult(data),media_reset:()=>media.reset(),
     settings_visibility:open=>{settingsActive=open;refreshKeepAlive();},
-    settings_open:settingsUi.open,font_catalog:settingsUi.catalog,font_preview:settingsUi.preview,
+    settings_close:()=>settingsUi.escape(),settings_open:settingsUi.open,font_catalog:settingsUi.catalog,font_preview:settingsUi.preview,
     profile_result:async data=>{await settingsUi.profile(data);showNotice(data.notice);},
     settings_saved:data=>{settingsUi.saved(data);showNotice(data.notice);},
     selection:receiveSelection,

@@ -109,6 +109,12 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
         clearTimeout(fontTimer);fontTimer=0;fontRequest++;fontPreviewNext=null;
         fontDialog.close();epoch++;catalogRequest++;fontRefresh.disabled=false;restore();changed();onClose();
     }
+    function escapeSettings(e) {
+        if(disposed||!fontDialog.open||!e.isTrusted||e.key!=="Escape"||e.isComposing||e.keyCode===229||composing)return;
+        e.preventDefault();e.stopImmediatePropagation();
+        if(!e.repeat)closeFonts();
+    }
+    function repository(e){if(!disposed&&fontDialog.open&&e.isTrusted)send({kind:"about_repository",trusted:true});}
     function closeFonts(e) {
         e?.preventDefault();if(disposed||profileBusy)return;
         if(dirty||fontSaving){closing=true;clearTimeout(saveTimer);saveTimer=0;if(!fontSaving)saveFonts({isTrusted:true});return;}
@@ -179,13 +185,17 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
     }
     function revoke(){disposed=true;clearTimeout(saveTimer);saveTimer=0;epoch++;catalogRequest++;clearTimeout(fontTimer);fontTimer=0;fontPreviewNext=null;}
     function destroy(){revoke();fontDraft=null;lastCatalog=null;lastPreview=null;fontPreviewBusy=false;profileBusy=false;fontSaving=false;if(fontDialog.open)fontDialog.close();}
-    return {request:openFonts,close:closeFonts,
+    return {request:openFonts,close:closeFonts,escape(){if(!composing)closeFonts();},
         snapshot(){if(!dirty&&!fontSaving)return null;if(!validFields())throw new Error(tr("settings-autosave-invalid"));return {kind:"settings_save",values:readFonts(),language:language.value,article_mode:articleMode.value,article_boundary_navigation:articleBoundary.checked,hover:hoverTouched?hoverPosition.value:null,tools_opacity:Number(toolsOpacity.value),tools_access:{right_click_menu:rightClickMenu.checked,show_floating_button:showFloatingButton.checked},trusted:true};},
         open,preview:receivePreview,catalog,profile,saved,revoke,destroy,
         relocalize(){updateOpacity();if(fontDialog.open){if(lastCatalog)catalog(lastCatalog);if(lastPreview)fontAvailability.textContent=fontLoadNote(lastPreview.settings,lastPreview.warning);}},
         notice(message){if(!fontDialog.open)return false;fontNote.textContent=message;return true;},
         clean:()=>disposed&&fontTimer===0&&saveTimer===0&&fontPreviewNext===null&&!fontDialog.open,
         bindings:[
+            [document,"keydown",escapeSettings,true],
+            [fontDialog,"compositionstart",()=>{composing=true;clearTimeout(saveTimer);saveTimer=0;}],
+            [fontDialog,"compositionend",e=>{composing=false;if(dirty)scheduleSave(e);}],
+            [document.getElementById("about-repository"),"click",repository],
             [toolsOpacity,"input",e=>{updateOpacity();scheduleSave(e);}],
             [articleMode,"change",scheduleSave],[articleBoundary,"change",scheduleSave],[language,"change",scheduleSave],[hoverPosition,"change",e=>{if(e.isTrusted){hoverTouched=true;hoverVersion++;}scheduleSave(e);}],[rightClickMenu,"change",scheduleSave],[showFloatingButton,"change",scheduleSave],
             ...Object.values(fontFields).flatMap(field=>[[field,"compositionstart",()=>{composing=true;clearTimeout(saveTimer);saveTimer=0;}],[field,"compositionend",e=>{composing=false;scheduleSave(e);}]]),

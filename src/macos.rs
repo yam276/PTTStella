@@ -5,11 +5,18 @@ use dioxus::desktop::muda::{
 };
 
 pub const SETTINGS: &str = "pttstella-settings";
+pub const CLOSE_SETTINGS: &str = "pttstella-settings-close";
 pub const QUIT: &str = "pttstella-quit";
 
-pub fn menu() -> Result<Menu, muda::Error> {
+fn build_menu(visible: bool) -> Result<(Menu, MenuItem), muda::Error> {
     let menu = Menu::new();
     let application = Submenu::new("PTTStella", true);
+    let close = MenuItem::with_id(
+        CLOSE_SETTINGS,
+        pttstella::msg!("settings-close-command"),
+        visible,
+        Some(Accelerator::new(None, Code::Escape)),
+    );
     application.append_items(&[
         &MenuItem::with_id(
             SETTINGS,
@@ -17,6 +24,7 @@ pub fn menu() -> Result<Menu, muda::Error> {
             true,
             Some(Accelerator::new(Some(Modifiers::SUPER), Code::Comma)),
         ),
+        &close,
         &PredefinedMenuItem::separator(),
         &PredefinedMenuItem::hide(Some(&pttstella::msg!("menu-hide"))),
         &PredefinedMenuItem::hide_others(Some(&pttstella::msg!("menu-hide-others"))),
@@ -48,5 +56,37 @@ pub fn menu() -> Result<Menu, muda::Error> {
     ])?;
     window.set_as_windows_menu_for_nsapp();
     menu.append_items(&[&application, &edit, &window])?;
-    Ok(menu)
+    Ok((menu, close))
+}
+
+/// Shared only by this window and its surface; no process-global key monitor.
+#[derive(Clone, Default)]
+pub struct NativeMenu(std::rc::Rc<std::cell::RefCell<MenuState>>);
+#[derive(Default)]
+struct MenuState {
+    current: Option<(Menu, MenuItem)>,
+    settings_visible: bool,
+}
+impl NativeMenu {
+    pub fn install(&self) -> Result<(), muda::Error> {
+        let mut state = self.0.borrow_mut();
+        let next = build_menu(state.settings_visible)?;
+        next.0.init_for_nsapp();
+        state.current = Some(next);
+        Ok(())
+    }
+    pub fn settings_visible(&self, visible: bool) {
+        let mut state = self.0.borrow_mut();
+        if state.settings_visible == visible {
+            return;
+        }
+        state.settings_visible = visible;
+        if let Some((_, close)) = &state.current {
+            close.set_enabled(visible);
+        }
+    }
+}
+
+pub fn menu() -> Result<Menu, muda::Error> {
+    build_menu(false).map(|(menu, _)| menu)
 }
