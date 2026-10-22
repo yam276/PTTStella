@@ -696,6 +696,49 @@ fn reply_author_targets_only_expose_visible_recognized_id_words() {
 }
 
 #[test]
+fn reply_highlight_reprojects_the_same_expanded_batch_without_requeuing_images() {
+    use super::super::inline_images::{InlineImages, Target};
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut identity = displayed(&mut state, &view);
+    let mut images = InlineImages::default();
+    let first = images
+        .open(state.current(identity, &view).unwrap(), Target::All)
+        .unwrap()
+        .unwrap();
+    let entries: Vec<_> = first
+        .entries
+        .iter()
+        .map(|e| (e.index, e.row, e.key))
+        .collect();
+    assert_eq!(entries.len(), 2);
+    for row in [Some(5), Some(8), None] {
+        let old = identity;
+        let lease = state.lease_output(old, None, view.input_epoch);
+        assert!(state.focus_reply(old, view.stamp(), row, &view));
+        assert!(state.current(old, &view).is_none());
+        assert!(lease.check(&view).is_err());
+        identity = displayed(&mut state, &view);
+        let paint = state.current(identity, &view).unwrap();
+        let next = images.follow(paint).unwrap().unwrap();
+        assert_eq!(next.batch, first.batch);
+        assert_eq!(next.article_id, first.article_id);
+        assert_eq!(
+            next.entries
+                .iter()
+                .map(|e| (e.index, e.row, e.key))
+                .collect::<Vec<_>>(),
+            entries
+        );
+        assert!(images.follow(paint).unwrap().is_none());
+    }
+    // A real session change still revokes the retained batch and its downloads.
+    view.generation += 1;
+    assert!(images.observe(&view));
+    assert!(!images.active());
+}
+
+#[test]
 fn reply_focus_toggles_without_persisting_or_losing_article_history_and_revokes_outputs() {
     for mode in [ArticleMode::Web, ArticleMode::Terminal] {
         let mut state = SurfaceState::new(filters::Rules::default());
