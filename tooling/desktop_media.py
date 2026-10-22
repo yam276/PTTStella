@@ -112,11 +112,14 @@ def run(d, output, server):
                                              for name in ('jpeg', 'webp', 'video')]
     (output / 'synthetic-video.webm').write_bytes(server.video)
 
-    def cell(row):
+    def cell(row, external=False):
         point = d.evaluate('(()=>{const b=document.getElementById("screen").getBoundingClientRect();return {x:b.left+b.width*8/80,y:b.top+b.height*'+str(row-.5)+'/24};})()')
         for kind in ('mousePressed', 'mouseReleased'):
             d.call('Input.dispatchMouseEvent', type=kind, **point, button='left', clickCount=1)
-        d.wait('document.getElementById("media-dialog").open', 'media link did not open its dialog')
+        if external:
+            d.wait('document.getElementById("surface").dataset.linkResult === "requested" && !document.getElementById("media-dialog").open', 'external link did not reach the native sink')
+        else:
+            d.wait('document.getElementById("media-dialog").open', 'media link did not open its dialog')
     def state(value):
         d.wait('document.getElementById("media-dialog").dataset.state === '+repr(value), 'media state did not become ' + value)
     def close(escape=False):
@@ -154,6 +157,8 @@ def run(d, output, server):
         d.call('Input.dispatchKeyEvent', type=kind, key='n', code='KeyN', windowsVirtualKeyCode=78)
     if d.evaluate('document.getElementById("surface").dataset.inputEpoch') != epoch:
         raise ValueError('media dialog leaked a key to PTT')
+    d.click('#media-external')
+    d.wait('document.getElementById("media-dialog").dataset.external === "true"', 'image external action did not reach native sink')
     close()
     started = time.monotonic()
     cell(8);state('ready')
@@ -209,12 +214,11 @@ def run(d, output, server):
     if not server.cancelled.wait(3):
         raise ValueError('closed preview did not cancel the HTTP stream')
     cancel_ms = (time.monotonic() - started) * 1000
-    cell(18)
-    if not d.evaluate('!document.getElementById("media-external").disabled'):
-        raise ValueError('YouTube external action blocked on thumbnail')
-    d.click('#media-external')
-    d.wait('document.getElementById("media-dialog").dataset.external === "true"', 'media external action did not reach native sink')
-    close();cell(10);state('ready')
+    counts = dict(server.counts)
+    cell(18, external=True)
+    if server.counts != counts or d.evaluate('document.getElementById("media-viewport").childElementCount') != 0:
+        raise ValueError('YouTube fetched a thumbnail or allocated a preview')
+    cell(10);state('ready')
     if d.evaluate('document.querySelector("#media-viewport video").preload') != 'none':
         raise ValueError('video was set to predownload')
     d.evaluate('document.querySelector("#media-viewport video").requestVideoFrameCallback(()=>document.getElementById("media-dialog").dataset.frame="presented")')

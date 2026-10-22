@@ -68,7 +68,7 @@ function installMedia({tr,send,prepare,changed,restore}) {
         const oldState=state,oldMessage=message,cached=hover.dataset.cached;
         if(!promote)dispose();current=packet;presentation="inspect";hover.hidden=true;fit=true;scale=1;
         if(promote&&stage)view.append(stage);
-        title.textContent=packet.target.kind==="youtube"?tr("youtube-title"):packet.target.kind==="video"?tr("video-title"):tr("image-title");
+        title.textContent=packet.target.kind==="video"?tr("video-title"):tr("image-title");
         urlText.textContent=packet.target.url;
         dialog.dataset.request=String(packet.request);dialog.dataset.kind=packet.target.kind;delete dialog.dataset.cached;
         delete dialog.dataset.external;delete dialog.dataset.frame;
@@ -76,7 +76,7 @@ function installMedia({tr,send,prepare,changed,restore}) {
         prepare();if(!dialog.open) dialog.showModal();changed();buttons.close.focus();
         if(promote) {note(oldMessage,oldState);dialog.dataset.resources=objectUrl?"1":"0";if(cached!==undefined)dialog.dataset.cached=cached;buttons.motion.hidden=!animated;resize();return;}
         if(packet.target.kind==="video") openVideo();
-        else note(packet.target.kind==="youtube"?tr("youtube-loading"):tr("image-loading"),"loading");
+        else note(tr("image-loading"),"loading");
     }
     function openVideo() {
         const request=current.request;
@@ -126,7 +126,7 @@ function installMedia({tr,send,prepare,changed,restore}) {
                     }
 
                     owner().dataset.cached=String(packet.cached);buttons.motion.hidden=!animated||presentation==="hover";
-                    note(current.target.kind==="youtube"?tr("youtube-ready"):tr(packet.cached?"image-ready-cached":"image-ready"),"ready");
+                    note(tr(packet.cached?"image-ready-cached":"image-ready"),"ready");
                     resize();
                     send({kind:"media_decoded",request,success:true});
                 };

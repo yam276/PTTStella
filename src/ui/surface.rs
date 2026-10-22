@@ -1122,14 +1122,12 @@ async fn run(
                             .and_then(|p|p.links.get(index)).cloned();
                         if let Some(link) = &link {
                             match media::classify(&link.url) {
-                                Ok(Some(mut target)) => {
+                                Ok(Some(target)) => {
                                     if probe.is_some() {
                                         let origin = media_origin
                                             .as_deref()
                                             .ok_or("missing media probe origin")?;
-                                        if target.kind == media::Kind::Youtube {
-                                            target.image_url = Some(format!("{origin}/colours.png"));
-                                        } else if !target.url.starts_with(&format!("{origin}/")) {
+                                        if !target.url.starts_with(&format!("{origin}/")) {
                                             return Err("unexpected media probe URL".into());
                                         }
                                     }
@@ -1148,7 +1146,7 @@ async fn run(
                         }
                         let result = match link {
                             Some(link) if probe.is_some() => {
-                                if link.url != "https://example.com/pttstella" && !(surface_probe.as_deref()==Some("osc8") && link.url==super::probe::OSC8_URL) {
+                                if link.url != "https://example.com/pttstella" && !(surface_probe.as_deref()==Some("dialogs") && link.url=="https://youtu.be/Abc_12-dEF0") && !(surface_probe.as_deref()==Some("osc8") && link.url==super::probe::OSC8_URL) {
                                     return Err("unexpected probe URL".into());
                                 }
                                 checks.link_requests += 1;
