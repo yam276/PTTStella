@@ -453,24 +453,39 @@ function interactiveImages(){
     async function decode(index){e.ui.receive({batch:1,index,image:{mime:'image/png',data:'AA==',width:64,height:32}});await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');image.naturalWidth=64;image.naturalHeight=32;image.onload();await new Promise(resolve=>setImmediate(resolve));layout();}
     layout();return {...e,packet,base,layout,enter,open,decode,requests};
 }
-test('short Enter opens the closest visible unopened image, then makes that image exactly BBS width',async()=>{
-    const e=interactiveImages();e.enter();assert.deepEqual(e.requests,[{target:{kind:'link',index:1},trusted:true}]);
-    e.open([1]);await e.decode(1);e.enter();e.layout();assert.equal(e.requests.length,1);
-    const still=e.nodes.find(n=>n.tag==='canvas'&&n!==e.canvas&&n.width===64);assert.equal(still.style.width,'480px');assert.equal(still.style.height,'240px');
-    assert.equal(e.nodes.find(n=>n.className==='inline-image').style.padding,'12px 0');
-    await e.ui.destroy();
-});
-test('movement cancels second-Enter targeting; when every visible image is open the nearest non-wide one is enlarged',async()=>{
-    const e=interactiveImages();e.enter();e.open([0,1,2]);await e.decode(0);await e.decode(1);await e.decode(2);
-    e.viewport.scrollTop=20;e.layout();e.enter();e.layout();
+test('Enter opens visible images from top to bottom before widening any of them',async()=>{
+    const e=interactiveImages();
+    // The link array order is not the reading order.
+    e.packet.image_links=[2,0,1];e.layout();
+    e.enter();assert.deepEqual(e.requests.map(r=>r.target),[{kind:'link',index:0}]);
+    e.open([0]);await e.decode(0);e.enter();
+    assert.deepEqual(e.requests.map(r=>r.target),[{kind:'link',index:0},{kind:'link',index:1}]);
+    e.open([0,1]);await e.decode(1);e.enter();
+    assert.deepEqual(e.requests.map(r=>r.target),[{kind:'link',index:0},{kind:'link',index:1},{kind:'link',index:2}]);
+    e.open([0,1,2]);await e.decode(2);
     const boxes=e.nodes.filter(n=>n.className==='inline-image');
-    const wide=boxes.filter(box=>box.children.some(n=>n.style.width==='480px'));
-    assert.equal(wide.length,1);assert.equal(boxes[1],wide[0]);assert.equal(e.requests.length,1);
+    assert.ok(boxes.every(box=>box.children.every(n=>n.style.width!=='480px')));
+    e.enter();e.layout();
+    assert.equal(e.requests.length,3);
+    assert.equal(boxes[0].children.find(n=>n.width===64).style.width,'480px');
+    assert.equal(boxes[0].children.find(n=>n.width===64).style.height,'240px');
+    assert.equal(boxes[0].style.padding,'12px 0');
     await e.ui.destroy();
 });
-test('after moving, Enter prefers another unopened visible URL rather than enlarging the previous image',async()=>{
-    const e=interactiveImages();e.enter();e.open([1]);await e.decode(1);
-    e.viewport.scrollTop=20;e.layout();e.enter();assert.equal(e.requests.length,2);assert.notEqual(e.requests[1].target.index,1);
+test('after all visible images are open, widening also follows top-to-bottom order',async()=>{
+    const e=interactiveImages();e.viewport.clientHeight=1600;e.open([2,1,0]);
+    await e.decode(0);await e.decode(1);await e.decode(2);
+    const boxes=e.nodes.filter(n=>n.className==='inline-image');
+    // Boxes were created in reverse order [2, 1, 0]; expected decisions are independent of layout math.
+    for(const expected of [[false,false,true],[false,true,true],[true,true,true]]){
+        e.enter();e.layout();assert.deepEqual(boxes.map(box=>box.children.some(n=>n.style.width==='480px')),expected);
+    }
+    e.enter();assert.equal(e.requests.length,0);
+    await e.ui.destroy();
+});
+test('scrolling chooses unopened visible images before widening, and excludes offscreen URLs',async()=>{
+    const e=interactiveImages();e.open([0]);await e.decode(0);
+    e.viewport.scrollTop=150;e.layout();e.enter();assert.equal(e.requests.at(-1).target.index,1);
     assert.ok(e.nodes.filter(n=>n.className==='inline-image').every(box=>box.children.every(n=>n.style.width!=='480px')));
     await e.ui.destroy();
 });
@@ -486,10 +501,12 @@ test('the square URL control opens only its Rust index and never overlays follow
     await e.ui.destroy();
 });
 
-test('a second Enter before decode remembers width intent without another download',async()=>{
-    const e=interactiveImages();e.enter();e.enter();assert.equal(e.requests.length,1);
-    e.open([1]);await e.decode(1);const box=e.nodes.find(n=>n.className==='inline-image');
-    assert.equal(box.children.find(n=>n.width===64).style.width,'480px');await e.ui.destroy();
+test('rapid Enter repeats an unacknowledged target without pre-arming width or skipping images',async()=>{
+    const e=interactiveImages();e.enter();e.enter();
+    assert.deepEqual(e.requests.map(r=>r.target.index),[0,0]);
+    e.open([0]);e.layout();e.enter();assert.equal(e.requests.at(-1).target.index,1);
+    await e.decode(0);const box=e.nodes.find(n=>n.className==='inline-image');
+    assert.equal(box.children.find(n=>n.width===64).style.width,'64px');await e.ui.destroy();
 });
 test('scope changes and terminal mode clear image targets and revoke an unfinished held Enter',async()=>{
     const e=interactiveImages();e.enter();e.open([1]);await e.decode(1);
