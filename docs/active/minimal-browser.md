@@ -4,13 +4,23 @@
 
 ## 目標
 
-目前交付為 `dist/macos-v0.1.0/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-wide-last-row/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 等寬圖片後末行仍可到達（2026-10-22）
+
+發佈前使用者回報等寬圖片後，End 顯示 100% 仍漏掉整篇最後一行，已暫緩合併 Release PR。原因為圖片比例產生小數 CSS px 文件高度，原生捲動上限取整後比 renderer 的末端略短，完整行判定因此隱藏最後一整行。只將超出原格線的整篇高度向外取整，增加不足一 CSS px；短文最小格線、圖片實際尺寸、逐行裁切／滾輪規則及固定頁尾不改，不新增空白文字列。
+
+先以生產 layout／readingMove 搭配原生整數捲動上限重現失敗，再涵蓋 DPR 1／1.5／2、三種字高及三種圖片高度共 27 組獨立 expected；每組經真正 Enter 等寬後按 End，最後來源行仍完整可見，重複 PageDown／End／滾輪不得繼續多捲，末端向外取整小於一 CSS px。core 13 命令／2 replay、desktop lib 143／bin 131、全 targets Clippy、JS 231、Python tooling 71、fmt／docs 通過。
+
+macOS arm64 wide_last_row 原生對照使用同一來源與 64×33 紅藍 PNG。修改前等寬＋End 的末行色塊／文字消失；修改後 LAST ARTICLE LINE MUST REMAIN VISIBLE 與完整末行色塊可見，重複 End／PageDown 區域像素不再移動。兩個程序均精確一筆 GET、同一 batch，Close acknowledged、全部 owner／HTTP thread join、exit 0。修改前後的 960×576 來源 PNG 及修正後系統剪貼簿讀回 RGBA 逐像素相同；視窗固定 1040×768。各交付與原生副本的 15 份 Mach-O loadable sections 一致、strict ad-hoc 驗章通過。Windows／Linux 原生 UI 本輪 not_ready；GitHub 發佈仍以後續完整建置為準。
+
+證據 .local/verification/wide-last-row（reproduction.log、delivery-gate.json、before、after、validation.json）；交付 dist/macos-wide-last-row/PTTStella.app（0.1.0、macOS arm64 release／ad-hoc，未公證）。
 
 ## 0.1.0 正式版準備（2026-10-22）
 

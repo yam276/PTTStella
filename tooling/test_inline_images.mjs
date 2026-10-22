@@ -573,7 +573,7 @@ test('inline GIF keeps its native source only while visible and resets release t
 
 
 function alignedReading({height=100,line=24,ratio=1}={}){
-    const e=ownerEnvironment(true,{render(target,packet){target.paintedRows=packet.frame.glyphs.map(g=>g.text);}});e.viewport.clientHeight=height;
+    const e=ownerEnvironment(true,{allowed:()=>true,render(target,packet){target.paintedRows=packet.frame.glyphs.map(g=>g.text);}});e.viewport.clientHeight=height;
     const packet={...e.packet,connected:true,article:{id:1,first_line:1,last_line:40,end:true},frame:{cols:80,rows:41,revision:4,glyphs:Array.from({length:40},(_,row)=>({row,col:0,width:1,text:String(row),left:{},right:{}}))},
         links:[{row:3,start:0,end:10,url:'https://example.com/edge.png'}],image_links:[0]};
     const base={x:c=>c*6*ratio,y:r=>Math.floor(r*line*ratio)};
@@ -638,6 +638,33 @@ test('image gaps keep pixel movement inside the image but only complete neighbor
     e.move({action:'scroll',delta:-1.5},'pointer');const raw=e.viewport.scrollTop;
     e.packet.article={...e.packet.article,id:2};e.c.repaint();assert.equal(e.viewport.scrollTop,0);e.whole();
     assert.ok(raw>0);await e.ui.destroy();
+});
+
+test('full-width fractional images keep the final line reachable with native integer scroll limits across scales',async()=>{
+    for(const ratio of [1,1.5,2])for(const line of [19.3,24,26.5])for(const imageHeight of [33,35,37]){
+        const e=alignedReading({ratio,line,height:173});
+        // Model a native extent rounded inward, rather than the unlimited
+        // fractional scrollTop of a plain JavaScript object.
+        let top=0;
+        Object.defineProperty(e.viewport,'scrollTop',{get:()=>top,set(value){top=Math.max(0,Math.min(value,Math.floor(parseFloat(e.surface.style.height)||0)-e.viewport.clientHeight));}});
+        e.packet.links=[{row:0,start:0,end:10,url:'https://example.com/image.png'}];e.c.repaint();
+        e.ui.open({...e.open,article_id:1,first_line:1},e.packet);
+        e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:64,height:imageHeight}});
+        await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+        image.naturalWidth=64;image.naturalHeight=imageHeight;image.onload();await new Promise(resolve=>setImmediate(resolve));e.c.repaint();
+        e.ui.keydown({key:'Enter',isTrusted:true});e.ui.keyup({key:'Enter',isTrusted:true});e.c.repaint();
+        const box=e.nodes.find(n=>n.className==='inline-image');
+        assert.equal(box.children.find(n=>n.width===64).style.width,(480/ratio)+'px');
+        const raw=e.base.y(41)/ratio+parseFloat(box.style.height),extent=parseFloat(e.surface.style.height);
+        assert.ok(extent>=raw-.0001&&extent-raw<1.0001,'rounding adds less than one CSS pixel to the document');
+        e.move({action:'last'});e.whole();
+        assert.ok(e.strips().some(strip=>strip.paintedRows.includes('39')),'final line '+JSON.stringify({ratio,line,imageHeight}));
+        const end=e.viewport.scrollTop;
+        e.move({action:'next_page'});assert.equal(e.viewport.scrollTop,end);e.whole();
+        e.move({action:'scroll',delta:1},'pointer');assert.equal(e.viewport.scrollTop,end);
+        e.move({action:'last'});e.whole();
+        await e.ui.destroy();
+    }
 });
 
 test('paging through fractional viewports exposes every source row completely',async()=>{

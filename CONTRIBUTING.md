@@ -213,3 +213,5 @@ macOS 設定 Esc／關於／GIF／圖片剪貼簿變更需跑 core、desktop lib
 
 
 完整行顯示另用 `--probe-surface OUTPUT_DIRECTORY reading_rows`：23 行自製編號與滿字格紅／綠色塊，1/1、100% 頁尾，peer 拒絕全部站端 bytes。實際 WebView 在 100%／125% 縮放按 Home、PageDown、PageUp、End，截圖核對邊緣色塊只有完整列、末列可見、固定視窗不放大；匯出來源 PNG 後正常 Close，所有 owner join。JS 另覆蓋滾輪保留分數 offset、切回離散導覽、圖片間隙、DPR／縮放、頁尾不跳行及遮住的列不命中連結。原生滾輪與正文點擊另列人工驗收，不以這個鍵盤探針代替。
+
+等寬圖片末行另用 `wide_last_row`：23 個自製編號列與末行標記，第二列為本機圖片連結；HTTP 提供 64×33 紅藍 PNG。先短按 Enter 開圖、再短按等寬，End 必須看見完整最後一行及色塊；重複 End／PageDown 不再增加捲動。來源 PNG 需與修改前逐像素相同、視窗固定、Close 及全部 owner join。JS 同時核對整數原生捲動上限、不同 DPR／字高／圖片比例、末端取整不足一 CSS px，不能以放寬完整行規則或新增空白文字行通過。
