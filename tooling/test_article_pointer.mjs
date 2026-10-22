@@ -103,6 +103,17 @@ test('image navigation rejects Shift, drag, stale geometry, wrong releases, remo
     }
 });
 
+test('a masked partial edge row still offers Home/End navigation without exposing its text or links',()=>{
+    for(const [y,expected] of [[5,0],[475,1464]]){
+        const f=fixture();f.viewport.scrollTop=960;f.grid.rowAt=()=>null;
+        f.grid.reading={clippedAt:()=>59,free:()=>false,align:v=>v};f.linkAt=()=>3;
+        f.tap(40,y);assert.equal(f.viewport.scrollTop,expected);assert.deepEqual(f.sent,[]);
+        assert.deepEqual(f.selections,[]);
+    }
+    const outside=fixture();outside.grid.rowAt=()=>null;outside.grid.reading={clippedAt:()=>3,free:()=>false,align:v=>v};
+    outside.tap(81,380);assert.deepEqual(outside.sent,[]);assert.equal(outside.viewport.scrollTop,0);
+});
+
 test('raw reading excludes headers/footer, computes its visible half, and sends the existing typed intent',()=>{
     for(const [row,action] of [[3,'previous_page'],[18,'next_page']]){
         const f=fixture({cached:false});f.latest.navigation.first_line=24;f.tap(40,row*24+12);

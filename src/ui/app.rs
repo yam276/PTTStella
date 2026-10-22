@@ -64,6 +64,7 @@ pub fn app(props: AppProps) -> Element {
                 | "osc8"
                 | "inline"
                 | "short_reading"
+                | "reading_rows"
                 | "short_links"
                 | "context_menu"
                 | "filter_colors"

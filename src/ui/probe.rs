@@ -526,6 +526,14 @@ pub(super) fn surface_sample(
             let origin = media_origin.ok_or("short links probe requires a loopback media origin")?;
             encoding::encode(&format!("\x1b[2J\x1b[HShort article image links\x1b[2;1H{origin}/colours.png\x1b[3;1H\x1b]8;;{origin}/colours-two.png\x07Explicit image\x1b]8;;\x07\x1b[24;1H\x1b[7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~3 行 (h)說明 (←)離開\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
         }
+        Some("reading_rows") => {
+            let mut sample = String::from("\x1b[2J\x1b[H");
+            for row in 1..=23 {
+                sample.push_str(&format!("\x1b[{row};1H\x1b[0mROW {row:02} - complete text row\x1b[{row};31H\x1b[1;{}m{}", if row % 2 == 1 {31} else {32}, "█".repeat(10)));
+            }
+            sample.push_str("\x1b[24;1H\x1b[0;7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (h)說明 (←)離開\x1b[0m\x1b[?25l");
+            encoding::encode(&sample).map_err(|e|e.to_string())
+        }
         Some("short_reading") => encoding::encode("\x1b[2J\x1b[HShort article: the grid stays 80 columns by 24 rows.\x1b[2;1HSecond line\x1b[3;1HLast line\x1b[24;1H\x1b[7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~3 行 (h)說明 (←)離開\x1b[0m\x1b[?25l").map_err(|e|e.to_string()),
         Some("account_articles") => {
             let sample: serde_json::Value = serde_json::from_str(include_str!("../../tests/fixtures/navigation.json")).map_err(|e|e.to_string())?;
@@ -924,6 +932,30 @@ mod sample_tests {
             && link.start <= col
             && col < link.end
             && link.url == "http://127.0.0.1:9876/colours.png"));
+    }
+
+    #[test]
+    fn reading_row_probe_has_twenty_three_independently_numbered_full_height_rows() {
+        let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
+        screen.feed(&surface_sample(Some("reading_rows"), true, None).unwrap());
+        let frame = screen.frame();
+        assert!(matches!(
+            pttstella::navigation::analyze(&frame),
+            pttstella::navigation::Context::ArticleReading {
+                first_line: 1,
+                last_line: 23,
+                percent: 100
+            }
+        ));
+        let rows = pttstella::text::rows(&frame).unwrap();
+        for (row, text) in rows.iter().take(23).enumerate() {
+            assert!(
+                text.text
+                    .starts_with(&format!("ROW {:02} - complete text row", row + 1))
+            );
+            // UAO block glyphs occupy two terminal cells each.
+            assert_eq!(text.cells(30, 50), Some("██████████"));
+        }
     }
 
     #[test]
