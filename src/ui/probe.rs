@@ -519,6 +519,10 @@ pub(super) fn surface_sample(
             bytes.extend_from_slice(&encoding::encode("\x1b[24;1H\x1b[7m\x1b[2K 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H").map_err(|e|e.to_string())?);
             Ok(bytes)
         },
+        Some("inline_replies") => {
+            let origin = media_origin.ok_or("reply images probe requires a loopback media origin")?;
+            encoding::encode(&format!("\x1b[2J\x1b[HReply image controls synthetic page\x1b[3;1H{origin}/colours.png AFTER\x1b[6;1H\x1b[1;37m推 \x1b[33mAlice\x1b[0;33m: {origin}/missing.png\x1b[0m\x1b[6;68H10/22 12:34\x1b[7;1HKeep this row directly below the reply\x1b[24;1H\x1b[7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
+        },
         Some("full_load") => full_load_page(1,media_origin),
         Some("long_load") => long_load_page(1,media_origin),
         Some("short_overlap") => short_overlap_page(false,media_origin),
@@ -1000,6 +1004,38 @@ mod sample_tests {
                 (2, "http://127.0.0.1:9876/colours.png".into()),
                 (5, "http://127.0.0.1:9876/missing.png".into())
             ]
+        );
+    }
+    #[test]
+    fn reply_image_probe_preserves_author_url_timestamp_and_following_row() {
+        let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
+        screen.feed(
+            &surface_sample(Some("inline_replies"), true, Some("http://127.0.0.1:9876")).unwrap(),
+        );
+        let frame = screen.frame();
+        let mut paint = super::super::presentation::sample_packet(
+            &frame,
+            &pttstella::settings::DisplaySettings::default(),
+        );
+        super::super::presentation::refresh_links(&mut paint);
+        assert_eq!(paint.image_links, vec![0, 1]);
+        assert_eq!(
+            paint
+                .links
+                .iter()
+                .map(|l| (l.row, l.start, l.end))
+                .collect::<Vec<_>>(),
+            vec![(2, 0, 33), (5, 10, 43)]
+        );
+        let replies = pttstella::filters::pushes(&frame);
+        assert_eq!(replies.len(), 1);
+        assert_eq!((replies[0].row, replies[0].id.as_str()), (5, "Alice"));
+        let rows = pttstella::text::rows(&frame).unwrap();
+        assert_eq!(rows[5].cells(67, 78), Some("10/22 12:34"));
+        assert!(
+            rows[6]
+                .text
+                .starts_with("Keep this row directly below the reply")
         );
     }
     #[test]

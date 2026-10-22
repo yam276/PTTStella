@@ -65,6 +65,7 @@ pub fn app(props: AppProps) -> Element {
                 | "inline"
                 | "short_reading"
                 | "reading_rows"
+                | "inline_replies"
                 | "short_links"
                 | "context_menu"
                 | "filter_colors"
