@@ -493,12 +493,12 @@ function openContextMenu(e) {
     if(!e.isTrusted||stopped||composing||pastePending||document.querySelector("dialog[open]")||latest?.output_pending||filterUi.blocked())return;
     if(!stationMouse.local()&&!e.shiftKey)return;
     contextMenu.close(false);
-    const point=cellAt(e,false),word=stationMouse.local()?accountWordAt(point):null;
-    const replyRow=point&&stationMouse.local()&&latest.reply_rows?.includes(point.row)?point.row:null;
-    if(!word&&!latest?.reply_focus&&stationMouse.local()&&!e.shiftKey&&toolAccess.right_click_menu&&!hasSelection()){
+    const point=cellAt(e,false),index=Math.max(linkAt(point),inlineImages.linkAtPoint(e));
+    const word=index<0&&stationMouse.local()?accountWordAt(point):null;
+    const replyRow=index<0&&point&&stationMouse.local()&&latest.reply_rows?.includes(point.row)?point.row:null;
+    if(index<0&&!word&&!latest?.reply_focus&&stationMouse.local()&&!e.shiftKey&&toolAccess.right_click_menu&&!hasSelection()){
         tools.showAt(e);return;
     }
-    const index=Math.max(linkAt(cellAt(e,false)),inlineImages.linkAtPoint(e));
     contextMenu.open(e,{index,word,replyRow,entries:contextMenuItems(contextState(index,word,replyRow))});
 }
 function contextAction(action,context,e){

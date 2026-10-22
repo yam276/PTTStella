@@ -4,13 +4,25 @@
 
 ## 目標
 
-目前交付為 `dist/macos-list-tabs/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-link-context/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 網址普通右鍵優先顯示連結選單（2026-10-22）
+
+右鍵先核對 Rust 連結索引及已展開圖片的命中，再決定是否開浮球。網址、OSC 8 片段與文章內插圖無需 Shift 便提供複製完整網址、開啟連結／圖片預覽與選取完整網址；網址內的英文字串及所屬推文列不當作帳號或只看 ID 候選。已有反白保留複製選取，空白處的右鍵工具及非網址帳號選單仍沿用既有規則。站端滑鼠普通右鍵與 Shift 本機覆寫、trust、版本及忙碌准入不變；未新增第二條複製或開啟管線。
+
+core 13 命令／2 replay、desktop lib 143／bin 116、全 targets Clippy、JS 200、Python tooling 70、fmt 與 docs 通過。新增生產 handler 獨立 expected 覆蓋索引 0／其他文字連結／插圖、反白、網址與帳號重疊、空白處及保存／貼上忙碌。舊「空白處」測試曾錯用連結索引 0，改為真正無連結的 -1，並另驗索引 0 必須走連結選單。
+
+macOS arm64 實際 Dioxus／WKWebView 的 context_menu 探針在預設右鍵工具開啟、無反白／無 Shift 下，對合成 OSC 8 頁尾連結普通右鍵，已出現連結選單。實際複製完整網址、選取完整網址後複製選取，兩者均原生貼回搜尋欄讀到同一 loopback URL；開啟選項成功解碼固定紅／藍圖片。原生 JPEG 快照的圖片色塊核對採 codec rounding 容差，來源 PNG 維持逐 byte 相等的完整行裁切。兩次選單展圖只建立一個 batch；HTTP 精確為預覽一次 colours.png、展圖一次 colours.png 及 missing.png 的 404。
+
+探針 passed，兩次 context copy、全頁 960×576 與選取行 960×24 PNG、零站端 bytes、Close acknowledged、全部 owner／HTTP worker join、exit 0；15 份 Mach-O loadable sections 與交付相同，strict ad-hoc 驗章通過。驗證腳本初次誤將圖片預覽計入外開 sink，依生產分支修正為 0 並另核對實際預覽圖片；原生 JPEG 快照的精確 RGB 假設也改為明示的編碼容差，來源 PNG 檢查未放寬。
+
+正文文字網址的座標右鍵回 noWindowsAvailable，不能以固定頁尾 AX 操作代替該原生手勢；保留使用者人工驗收。Windows／Linux 原生 UI 本輪 not_ready。證據 .local/verification/link-context；交付 dist/macos-link-context/PTTStella.app（arm64 release／ad-hoc，未公證）。
 
 ## 浮球選單開啟時保持不透明（2026-10-22）
 
