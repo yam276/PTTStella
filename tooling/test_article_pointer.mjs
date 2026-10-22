@@ -203,21 +203,24 @@ test('home menu hover marker spans both edges of the terminal grid',()=>{
     assert.equal(f.surface.title,'');
 });
 
-test('reply rows focus before back/page, retain links and reject dragged, stale or Shift gestures',()=>{
-    const f=fixture();f.latest.reply_rows=[5];f.tap(4,5*24+12);
-    assert.deepEqual(f.sent,[{kind:'reply_focus',presentation:2,stamp:{generation:7,revision:4,input_epoch:0},row:5,trusted:true}]);
-    const link=fixture();link.latest.reply_rows=[5];link.linkAt=()=>2;link.tap(4,5*24+12);assert.equal(link.sent[0].kind,'open_link');
+test('only the visible author word toggles reply focus; content, time and adjacent spaces navigate',()=>{
+    const setup=()=>{const f=fixture();f.latest.reply_rows=[5];f.latest.account_words=[{row:5,start:3,end:8,id:'Alice'},{row:5,start:30,end:35,id:'Alice'}];f.latest.reply_author_words=[0];return f;};
+    for(const col of [3,4,7]){const f=setup();f.tap(col,5*24+12);
+        assert.deepEqual(f.sent,[{kind:'reply_focus',presentation:2,stamp:{generation:7,revision:4,input_epoch:0},row:5,trusted:true}]);}
+    for(const col of [0,2,8,16]){const f=setup();f.tap(col,5*24+12);assert.equal(f.sent[0].intent.action,'back');}
+    for(const col of [17,30,40,70]){const f=setup();f.viewport.scrollTop=240;f.tap(col,5*24+12);assert.equal(f.viewport.scrollTop,0);assert.deepEqual(f.sent,[]);}
+    const link=setup();link.linkAt=()=>2;link.tap(4,5*24+12);assert.equal(link.sent[0].kind,'open_link');
+    const hidden=setup();hidden.latest.reply_author_words=[];hidden.tap(4,5*24+12);assert.equal(hidden.sent[0].intent.action,'back');
     for(const kind of ['shift','drag','stale','untrusted']){
-        const x=fixture();x.latest.reply_rows=[5];const e=x.event(4,5*24+12,{shiftKey:kind==='shift',isTrusted:kind!=='untrusted'});
+        const x=setup();const e=x.event(4,5*24+12,{shiftKey:kind==='shift',isTrusted:kind!=='untrusted'});
         x.pointerdown(e);if(kind==='stale')x.latest.presentation++;x.pointerup(kind==='drag'?x.event(5,5*24+12):e);x.click(e);assert.deepEqual(x.sent,[],kind);
     }
 });
 
-
 test('basic reply and selection hover stays quiet while links retain their literal destination',()=>{
     const f=fixture();f.surface.style={};f.navigationMarker={style:{},dataset:{}};
     f.hoveredLink=-1;f.pointerClient=null;f.previewHover=()=>{};f.draw=()=>{};f.tr=key=>key;
-    f.latest.reply_rows=[5];f.latest.links=[{url:'https://example.com/a?b=1&c=2'}];
+    f.latest.reply_rows=[5];f.latest.account_words=[{row:5,start:3,end:8,id:'Alice'}];f.latest.reply_author_words=[0];f.latest.links=[{url:'https://example.com/a?b=1&c=2'}];
     vm.runInContext(source.slice(source.indexOf('function setHover('),source.indexOf('function refreshNavigation(')),f);
     f.setHover({row:5,col:40},false,false);assert.equal(f.surface.title,'');
     f.dragging={moved:true};f.setHover({row:5,col:40},false,false);assert.equal(f.surface.title,'');

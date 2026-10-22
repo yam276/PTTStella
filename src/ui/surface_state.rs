@@ -171,6 +171,23 @@ impl SurfaceState {
                 _ => Vec::new(),
             };
         }
+        let authors: std::collections::HashMap<_, _> = packet
+            .replies
+            .iter()
+            .map(|reply| (reply.row, reply.id.as_str()))
+            .collect();
+        packet.reply_author_words = packet
+            .account_words
+            .iter()
+            .enumerate()
+            .filter(|(_, word)| {
+                word.start == 3
+                    && authors
+                        .get(&word.row)
+                        .is_some_and(|id| id.eq_ignore_ascii_case(&word.id))
+            })
+            .map(|(index, _)| index)
+            .collect();
         for word in &mut packet.account_words {
             word.policy = self
                 .rules()

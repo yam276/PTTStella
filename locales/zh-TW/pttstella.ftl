@@ -607,7 +607,7 @@ account-mask = 加入黑名單：遮內容、保留 ID
 account-mask-row = 加入黑名單：整行塗黑
 account-allow = 加入白名單
 reply-focus-clear = 取消推文底色標示
-reply-focus-hint = 點擊以底色標示此 ID 全部推文；再點一次取消，Shift 或拖曳選字
+reply-focus-hint = 點擊作者 ID，以底色標示其全部推文；再點一次取消，Shift 或拖曳選字
 account-action-stale = 畫面已改變，請重新在 ID 上按右鍵。
 reply-focus = 切換此 ID 推文底色標示
 
