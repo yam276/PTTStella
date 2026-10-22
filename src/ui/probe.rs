@@ -76,6 +76,7 @@ pub(super) struct Checks {
     pub(super) osc8_media_decoded: usize,
     pub(super) inline_expands: usize,
     pub(super) inline_requests: usize,
+    pub(super) inline_targets: Vec<super::inline_images::Target>,
     pub(super) context_copies: usize,
     pub(super) verification_required: bool,
     pub(super) verification_rejected: bool,

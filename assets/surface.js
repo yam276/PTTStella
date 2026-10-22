@@ -41,7 +41,7 @@ let keyboardState={enabled:false,mode:"input",pending:false,prefix:""};
 function policy(action,e,code="") {send({kind:"keyboard_state",action,code,generation,trusted:e?.isTrusted??true});}
 function toggleVim(e){policy("toggle",e);restoreEditingFocus();}
 function armNative(e){policy("once",e);restoreEditingFocus();}
-function keyup(e){if(!e.metaKey)policy("release",e,e.code);}
+function keyup(e){if(inlineImages.keyup(e))e.preventDefault();if(!e.metaKey)policy("release",e,e.code);}
 function receiveKeyboard(state){keyboardState=state;vimToggle.textContent=state.enabled?tr("vim-on"):tr("vim-off");
     keyboard.readOnly=state.enabled&&!["input","once"].includes(state.mode);
     vimToggle.setAttribute("aria-pressed",String(state.enabled));vimOnce.hidden=!state.enabled||state.mode==="input";
@@ -135,10 +135,8 @@ function keydown(e) {
     if(e.ctrlKey&&["+","=","-","0"].includes(e.key)) {
         e.preventDefault(); zoomTo(e.key==="0"?1:zoom+(e.key==="-"?-.25:.25)); return;
     }
-    if(inlineShortcut(e,keyboardState,latest)) {
-        e.preventDefault();clearSelection();cancelDrag();
-        if(!e.repeat)send({kind:"inline_expand",presentation:latest.presentation,stamp:stamp(),key:{key:e.key,code:e.code,ctrl:e.ctrlKey,alt:e.altKey,shift:e.shiftKey,repeat:e.repeat},trusted:e.isTrusted});
-        return;
+    if(inlineShortcut(e,keyboardState,latest)||e.key==="Enter"&&inlineImages.keyHeld()) {
+        e.preventDefault();clearSelection();cancelDrag();inlineImages.keydown(e);return;
     }
     if(latest?.article&&!e.ctrlKey&&!e.altKey&&!e.shiftKey&&!keyboardState.enabled) {
         // PTT's ordinary j/k reading keys must not become textarea edits:
@@ -516,7 +514,7 @@ function contextAction(action,context,e){
     else if(action==="select-all")selectPage();
     else if(action==="export-rows")exportScreen(e,true);
     else if(action==="export-page")exportScreen(e);
-    else if(action==="inline")send({kind:"inline_expand",presentation:latest.presentation,stamp:stamp(),key:{key:"Enter",code:"Enter",ctrl:false,alt:false,shift:false,repeat:false},trusted:true});
+    else if(action==="inline")requestInline({kind:"all"},e);
     else if(action==="back")browseReturn(e);
     else if(action==="previous")browseUp(e);
     else if(action==="next")browseDown(e);
@@ -664,7 +662,14 @@ tools=createFloatingTools({root:chrome,ball:document.getElementById("tools-ball"
 contextMenu=createSurfaceContextMenu({root:document.getElementById("surface-context-menu"),document,window,
     snapshot:contextIdentity,prepare:()=>{stationMouse.cancel();tools.close();cancelHover(true);cancelDrag();released=null;setHover(null);},
     execute:contextAction,restore:focus,changed:refreshControls});
-const bindings=[...contextMenu.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
+function requestInline(target,e){
+    if(!e.isTrusted||stopped||blocked()||tools?.busy()||!inlineShortcut({key:"Enter"},keyboardState,latest))return;
+    send({kind:"inline_expand",presentation:latest.presentation,stamp:stamp(),target,
+        key:{key:"Enter",code:"Enter",ctrl:false,alt:false,shift:false,repeat:false},trusted:true});focus();
+}
+const inlineImages=installInlineImages({surface,canvas,viewport,tr,render,redraw:()=>{if(latest)draw(latest);},changed:refreshKeepAlive,notice:text=>{surfaceNote.textContent=text;},
+    allowed:()=>!stopped&&!blocked()&&!tools?.busy()&&inlineShortcut({key:"Enter"},keyboardState,latest),request:requestInline});
+const bindings=[...inlineImages.bindings,...contextMenu.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
     [keyboard,"beforeinput",beforeinput],
@@ -806,10 +811,9 @@ async function paint(packet) {
 }
 focus();
 function revokeSurface(){
-    stopped=true;contextMenu?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
+    stopped=true;inlineImages.suspend();contextMenu?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
     for(const [target,event,callback,options] of bindings)target.removeEventListener(event,callback,options);
 }
-const inlineImages=installInlineImages({surface,canvas,viewport,tr,render,redraw:()=>{if(latest)draw(latest);},changed:refreshKeepAlive,notice:text=>{surfaceNote.textContent=text;}});
 const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
 let cleanupClean=false;
 function runSurfaceProbe(mode){

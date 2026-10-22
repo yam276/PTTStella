@@ -4,13 +4,29 @@
 
 ## 目標
 
-目前交付為 `dist/macos-link-context/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-image-actions/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單／暫時篩選仍保留原有未完成的原生驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 單張展圖、Enter 長按與等寬（2026-10-22）
+
+網頁文章的不同圖片網址旁新增方形向下箭頭，使用與光棒一致的低對比藍金色及減少動態效果設定。網址滿行或後方有文字時改置該行下方靠右，不遮蓋原文；跨行及重複網址沿用 Rust 原去重／落點規則。箭頭原先用文字字元偏向下緣，依使用者回饋改成 CSS 線條圖示，原生快照核對圖示中心與 24px 方框中心同為 (457,150)。
+
+短按 Enter 在放開時開目前可見、最接近中央且未展開的一張；沒有捲動時再短按，將剛開圖片等比例放大到 BBS 文字區完整寬度。捲動後取消第二次目標；若可見圖片都已開啟，選最接近中央、尚未等寬的可用圖片。解碼前可保留等寬意圖，失敗圖片不做無效放大。長按 500ms 只全開一次，keyup 與 repeat 不再觸發其他動作；失焦、隱藏、撤銷、模式或文章作用域變更清除 held timer。一般尺寸仍保留原尺寸／560px 上限，明確等寬才解除這些顯示限制。
+
+Rust 以封閉的 All／Link index 接受請求；單張請求只加入指定圖片，後續 Paint 只重新投影已開的資源。全開可升級同一 batch 並沿用既有新頁擴展，資源數、24 MiB payload／16M pixels、序列下載、取消、晚到拒絕及 Blob 清理不變。UI 只使用 Rust links／image_links 及自身排版幾何，不重解文章或網址。控制項及圖片不進來源 PNG；寬圖只增加文件高度，不放大固定的 BBS 可視區。
+
+core 13 命令／2 replay、desktop lib 143／bin 120、全 targets Clippy、JS 207、Python tooling 70、fmt 與 docs 通過。Rust 新案例覆蓋單張後再加一張／全開、Follow 不偷下載、非法／非圖索引、終端機與新 connection、真實 loopback 只收到指定 GET；JS 覆蓋單張與第二次等寬、500ms timer、keyup／repeat、捲動／全部可見已開的中央選擇、解碼前意圖、作用域清理與不遮字的控制間隙。渲染控制項的空白檢查按行預分組，避免每個連結重新掃整篇 glyphs。
+
+最終 macOS arm64 Dioxus／WKWebView 兩個 inline 原生程序均 passed。第一輪點箭頭只 GET colours.png，50ms Enter 將 64px 圖片放大至 BBS 的 1040px 寬且無額外 HTTP；700ms 長按才 GET missing.png 的 404，target trace 為 Link(0)／All，共一個 batch。第二輪 50ms Enter 先取最接近中央的 Link(1)，Down 捲動後 50ms Enter 再取 Link(0)，再次短按由 64px 放大到 1040px；target trace 只有兩筆 Link，沒有暗中全開。兩輪均零站端 bytes、完整來源 PNG 960×576、Close acknowledged、所有 connection／credential／file／listener／HTTP owner 清理，程序 exit 0。PNG 除自製網址的兩處隨機 port cell 外，與前一候選包逐像素相同，未包含箭頭或展圖；15 份 Mach-O loadable sections 與交付相同，strict ad-hoc 驗章通過。
+
+保留中途失敗：新增 probe 欄位使原大型 JSON 巨集達遞迴限制，改為在外部插入該欄位；第一輪 JS gate 缺少新 held owner double，補齊後重跑。keyboard 舊候選的預設按鍵持續時間產生多筆 All，且舊 UI helper 綁到已退出副本，誤開正常副本的另存視窗；該輪 failed 不放行，已取消另存並正常退出自有副本。最終改用明確短按／長按及顯式傳入 App 的 helper，兩輪獨立通過，沒有將中途報告的 exit 0 當作 passed。
+
+證據 .local/verification/single-images（final-gates、delivery-gates、delivery-native、delivery-motion、validation-delivery.json）；交付 dist/macos-image-actions/PTTStella.app（arm64 release／ad-hoc，未公證）。Windows／Linux 原生 UI、實站與其他正文 pointer 手勢本輪 not_ready，保留既有使用者人工驗收界線。
 
 ## 網址普通右鍵優先顯示連結選單（2026-10-22）
 

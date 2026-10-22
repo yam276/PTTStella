@@ -142,6 +142,8 @@ pub(super) enum SurfaceEvent {
         presentation: u64,
         stamp: Stamp,
         key: vim::Key,
+        #[serde(default)]
+        target: super::inline_images::Target,
         trusted: bool,
     },
     MediaDecoded {

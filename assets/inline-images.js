@@ -21,31 +21,134 @@ function inlineShortcut(key, state, packet) {
         &&packet.navigation.kind==="article_reading"&&packet.image_links.length>0
         &&packet.mouse.route==="local";
 }
-function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,notice}) {
+// One held Enter owns one timer. Repeats never become station input or extra requests.
+function createInlineImageKey({scope,allowed,single,all,setTimer=setTimeout,clearTimer=clearTimeout}) {
+    let held=null;
+    function cancel(){if(held?.timer!==null&&held?.timer!==undefined)clearTimer(held.timer);held=null;}
+    function valid(press){return press.scope===scope()&&allowed();}
+    function down(event){
+        if(!event.isTrusted||event.repeat||held)return;
+        const press={scope:scope(),event,fired:false,timer:null};held=press;
+        press.timer=setTimer(()=>{press.timer=null;if(held!==press)return;press.fired=true;if(valid(press))all(press.event);},500);
+    }
+    function up(event){
+        if(event.key!=="Enter"||!event.isTrusted||!held)return false;
+        const press=held;cancel();if(!press.fired&&valid(press)&&!event.ctrlKey&&!event.altKey&&!event.metaKey&&!event.shiftKey&&!event.isComposing)single(event);return true;
+    }
+    return {down,up,cancel,held:()=>!!held,validate(){if(held&&!valid(held))cancel();},clean:()=>held===null};
+}
+function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,notice,allowed=()=>false,request=()=>{}}) {
     const layer=document.createElement("div");layer.id="inline-images";surface.insertBefore(layer,canvas.nextSibling);
     let current=null,items=[],visible=[],strips=[],footer=null,footerLayer=null,footerImage=null,footerPacket=null,footerProgress=null,dead=false,lastLayout=null,lastArticle=null,latestLayout=null;const jobs=new Set();
+    const controls=new Map();let candidates=[],geometry=null,lastOpened=null,pendingSource=null,pendingWide=null,knownScroll=viewport?.scrollTop??0;
+    const scope=()=>JSON.stringify([latestLayout?.generation,latestLayout?.article?.id??latestLayout?.presentation]);
+    const gesture=createInlineImageKey({scope,allowed:()=>!dead&&allowed(),single:singleImage,all:event=>{lastOpened=null;request({kind:"all"},event);}});
+    function suspend(){gesture.cancel();lastOpened=null;}
+    function moved(){if(viewport&&Math.abs(viewport.scrollTop-knownScroll)>1){suspend();knownScroll=viewport.scrollTop;}}
+    function candidateItem(candidate){return items.find(item=>item.source===candidate.source);}
+    function visibleCandidates(){
+        moved();
+        if(!viewport||!geometry)return [];
+        const bounds=viewport.getBoundingClientRect(),origin=surface.getBoundingClientRect();
+        const bottom=bounds.bottom-(geometry.footerHeight??0),center=(bounds.top+bottom)/2;
+        return candidates.map(candidate=>{
+            const item=candidateItem(candidate);
+            const top=origin.top+geometry.y(candidate.row)/geometry.ratio;
+            const end=origin.top+geometry.bottom(candidate.row)/geometry.ratio;
+            const box=item&&!item.box.hidden?item.box.getBoundingClientRect():null;
+            const shown=top<bottom&&end>bounds.top||box&&box.top<bottom&&box.bottom>bounds.top;
+            return {...candidate,item,shown,distance:Math.abs((box?(box.top+box.bottom)/2:(top+end)/2)-center)};
+        }).filter(candidate=>candidate.shown).sort((a,b)=>a.distance-b.distance||a.row-b.row);
+    }
+    function widen(candidate){
+        const item=candidateItem(candidate);
+        if(item){if(item.wide||item.box.dataset.state==="failed")return false;item.wide=true;redraw();return true;}
+        if(pendingSource===candidate.source){pendingWide=candidate.source;return true;}
+        return false;
+    }
+    function singleImage(event){
+        if(dead||!event.isTrusted||!allowed())return;
+        const shown=visibleCandidates();
+        if(lastOpened){const previous=candidates.find(candidate=>candidate.source===lastOpened);lastOpened=null;if(previous&&widen(previous))return;}
+        const next=shown.find(candidate=>!candidate.item&&candidate.source!==pendingSource);
+        if(next){expandOne(next,event);return;}
+        const closest=shown.find(candidate=>candidate.item&&!candidate.item.wide&&candidate.item.box.dataset.state!=="failed");
+        if(closest)widen(closest);
+    }
+    function expandOne(candidate,event){
+        if(dead||!event.isTrusted||!allowed()||candidateItem(candidate))return;
+        lastOpened=candidate.source;pendingSource=candidate.source;
+        request({kind:"link",index:candidate.index},event);
+    }
+    function triggerDown(event){if(event.button===0&&event.target.closest?.(".inline-expand-trigger")){event.preventDefault();event.stopPropagation();}}
+    function triggerClick(event){
+        const button=event.target.closest?.(".inline-expand-trigger");if(!button)return;
+        event.preventDefault();event.stopPropagation();
+        if(event.button!==undefined&&event.button!==0||event.shiftKey||event.ctrlKey||event.metaKey||event.altKey)return;
+        const candidate=candidates.find(candidate=>controls.get(candidate.source)===button);
+        if(candidate)expandOne(candidate,event);
+    }
+    function buildCandidates(packet){
+        const result=[];
+        if(!packet.article||packet.article_mode==="terminal")return result;
+        for(const index of packet.image_links??[]){
+            const link=packet.links[index];if(!link||link.row>=packet.frame.rows-1)continue;
+            const previous=result.find(candidate=>candidate.source===link.url);
+            if(previous){if(link.row<=previous.row+1){previous.row=Math.max(previous.row,link.row);previous.end=link.end;}continue;}
+            result.push({index,row:link.row,end:link.end,source:link.url});
+        }
+        return result;
+    }
+    function layoutControls(packet,mapping,base,ratio,width,controlGaps){
+        const live=new Set(candidates.map(candidate=>candidate.source));
+        for(const [source,button] of controls)if(!live.has(source)){button.remove();controls.delete(source);}
+        const bounds=viewport?.getBoundingClientRect(),origin=surface.getBoundingClientRect(),slots=new Map();
+        for(const candidate of candidates){
+            const height=(base.y(candidate.row+1)-base.y(candidate.row))/ratio,size=Math.max(14,Math.min(26,height-2));
+            const below=controlGaps.has(candidate.row),top=(below?mapping.bottom(candidate.row):mapping.y(candidate.row))/ratio;
+            const slot=below?(slots.get(candidate.row)||0):0;
+            if(below)slots.set(candidate.row,slot+1);
+            const left=below?width-size-2-slot*(size+4):base.x(candidate.end)/ratio+3;
+            let button=controls.get(candidate.source);
+            if(!button){button=document.createElement("button");button.className="inline-expand-trigger";button.type="button";button.textContent="";controls.set(candidate.source,button);layer.append(button);}
+            if(button.parentNode!==layer)layer.append(button);
+            const expanded=!!candidateItem(candidate);button.disabled=expanded||!allowed();
+            button.setAttribute("aria-label",tr(expanded?"inline-image-opened":"inline-image-open-one",{url:candidate.source}));button.setAttribute("aria-expanded",String(expanded));
+            button.hidden=!!bounds&&(origin.top+top>=bounds.bottom-height||origin.top+top+size<=bounds.top);
+            Object.assign(button.style,{left:left+"px",top:top+"px",width:size+"px",height:size+"px"});
+        }
+    }
     function detach(preserve=false){if(!preserve)lastLayout=null;for(const strip of strips){strip.width=0;strip.height=0;}strips=[];visible=[];
         if(footer){footer.width=0;footer.height=0;footerPacket=null;footerProgress=null;footerImage.removeAttribute("src");footerLayer.hidden=true;}layer.replaceChildren();canvas.style.visibility="";}
     function clear() {
-        current=null;
+        current=null;suspend();pendingSource=null;pendingWide=null;
+        for(const button of controls.values())button.remove();controls.clear();candidates=[];geometry=null;
         for(const item of items){item.controller?.abort();item.image?.removeAttribute("src");if(item.url)URL.revokeObjectURL(item.url);if(item.still){item.still.width=0;item.still.height=0;}}
         items=[];detach(true);
     }
-    function reset(){if(!current)return;clear();redraw();changed();}
+    function reset(){suspend();if(!current)return;clear();redraw();changed();}
     function matches(packet){return current&&current.presentation===packet.presentation&&current.generation===packet.generation&&current.revision===packet.frame.revision&&(current.article_id??null)===(packet.article?.id??null);}
     function open(packet,latest) {
         if(dead||latest?.article_mode==="terminal"||(packet.article_id??null)!==(latest?.article?.id??null)||packet.presentation!==latest?.presentation||packet.generation!==latest.generation||packet.revision!==latest.frame.revision)return;
-        if(current?.batch===packet.batch&&matches(latest))return;
+        if(current?.batch===packet.batch&&matches(latest)&&current.limited===packet.limited&&JSON.stringify(current.entries)===JSON.stringify(packet.entries))return;
+        const requested={lastOpened,pendingSource,pendingWide};
         if(current?.batch!==packet.batch)clear();else detach(true);
+        ({lastOpened,pendingSource,pendingWide}=requested);
         current=packet;latestLayout=latest;
         visible=packet.entries.map(entry=>{
+            const source=latest.links?.[entry.index]?.url;
             const cached=items.find(item=>item.key===entry.key);
-            if(cached){Object.assign(cached,entry);layer.append(cached.box);return cached;}
+            if(cached){Object.assign(cached,entry,{source});if(source===pendingWide)cached.wide=true;layer.append(cached.box);return cached;}
             const box=document.createElement("div"),note=document.createElement("div");box.className="inline-image";note.className="inline-image-note";
             note.textContent=tr("image-loading");box.append(note);layer.append(box);
-            const item={...entry,box,note,still:null};items.push(item);return item;
+            const item={...entry,source,box,note,still:null,wide:source===pendingWide};items.push(item);return item;
         });
-        if(packet.limited)notice?.(tr("inline-image-limit"));
+        if(visible.some(item=>item.source===pendingSource))pendingSource=null;
+        if(visible.some(item=>item.source===pendingWide))pendingWide=null;
+        if(packet.limited){
+            if(pendingSource&&!visible.some(item=>item.source===pendingSource)){lastOpened=null;pendingSource=null;pendingWide=null;}
+            notice?.(tr("inline-image-limit"));
+        }
         redraw();changed();
     }
     function fail(packet){if(current?.batch!==packet.batch)return;const item=items.find(i=>i.key===packet.index);if(item){item.note.textContent=packet.message;item.box.dataset.state="failed";redraw();}}
@@ -79,7 +182,9 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         })();jobs.add(job);job.finally(()=>jobs.delete(job));
     }
     function layout(packet,base,ratio) {
-        latestLayout=packet;
+        moved();
+        latestLayout=packet;gesture.validate();
+        if(lastArticle&&(lastArticle.id!==packet.article?.id||lastArticle.generation!==packet.generation)){suspend();pendingSource=null;pendingWide=null;}
         const bottom=row=>base.y(row+1);
         const cached=!!packet.article;
         if(current&&cached&&((current.article_id??null)!==packet.article.id||current.generation!==packet.generation))clear();
@@ -99,9 +204,19 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
             anchor={line:lastArticle.first_line+row,offset:(top-lastLayout.y(row))*ratio/oldRatio};
         } else if(cached&&lastArticle&&(lastArticle.id!==article.id||lastArticle.generation!==packet.generation)&&viewport)viewport.scrollTop=0;
         const rowOffset=cached?(current?.first_line??article.first_line)-article.first_line:0;
-        const gaps=new Map(),width=canvas.width/ratio;
+        const gaps=new Map(),controlGaps=new Map(),width=canvas.width/ratio;
+        candidates=buildCandidates(packet);
+        const occupiedRows=new Map(candidates.map(candidate=>[candidate.row,[]]));
+        if(occupiedRows.size)for(const glyph of packet.frame.glyphs??[]){const row=occupiedRows.get(glyph.row);if(row&&glyph.text.trim())row.push(glyph.col);}
+        for(const candidate of candidates){
+            const size=Math.max(14,Math.min(26,(base.y(candidate.row+1)-base.y(candidate.row))/ratio-2));
+            const right=base.x(candidate.end)/ratio+size+5;
+            const occupied=occupiedRows.get(candidate.row).some(col=>col>=candidate.end&&col<(candidate.end+Math.ceil((size+5)*ratio/(base.x(1)-base.x(0)))));
+            if(right>width||occupied){const height=base.y(candidate.row+1)-base.y(candidate.row);controlGaps.set(candidate.row,height);gaps.set(candidate.row,height);}
+        }
         for(const item of visible){
-            const scale=item.still?Math.min(1,(width-24)/item.still.width,560/item.still.height):1;
+            const scale=item.still?(item.wide?width/item.still.width:Math.min(1,(width-24)/item.still.width,560/item.still.height)):1;
+            item.box.style.padding=item.wide?"12px 0":"12px";
             item.height=item.still?Math.max(1,item.still.height*scale)+24:48;
             if(item.still){item.still.style.width=Math.max(1,item.still.width*scale)+"px";item.still.style.height=Math.max(1,item.still.height*scale)+"px";}
             const row=item.row+rowOffset;
@@ -149,10 +264,12 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         for(const item of visible){
             const row=item.row+rowOffset,shown=row>=0&&row<packet.frame.rows-1;
             item.box.hidden=!shown;if(!shown)continue;
-            const offset=used.get(row)||0;
+            const offset=used.get(row)??(controlGaps.get(row)||0)/ratio;
             Object.assign(item.box.style,{top:(mapping.bottom(row)/ratio+offset)+"px",width:width+"px",height:item.height+"px"});used.set(row,offset+item.height);
         }
         surface.style.height=mapping.height/ratio+"px";
+        layoutControls(packet,mapping,base,ratio,width,controlGaps);
+        geometry={...mapping,ratio,footerHeight:cached?(base.y(packet.frame.rows)-base.y(packet.frame.rows-1))/ratio:0};knownScroll=viewport?.scrollTop??0;
         lastLayout=mapping;lastArticle=cached?{...article,generation:packet.generation,ratio}:null;
         if(cached){
             const row=packet.frame.rows-1,height=base.y(row+1)-base.y(row);
@@ -215,6 +332,8 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         const item=visible.find(item=>{const r=item.box.getBoundingClientRect();return event.clientX>=r.left&&event.clientX<r.right&&event.clientY>=r.top&&event.clientY<r.bottom;});
         return item?.index??-1;
     }
-    return {open,receive,fail,reset,layout,linkAtPoint,active:()=>!!current,
+    return {open,receive,fail,reset,layout,linkAtPoint,active:()=>!!current,keydown:gesture.down,keyup:gesture.up,keyHeld:gesture.held,suspend,
+        bindings:[[layer,"pointerdown",triggerDown],[layer,"click",triggerClick],...(viewport?[[viewport,"scroll",moved]]:[]),
+            ...(typeof window!=="undefined"?[[window,"blur",suspend]]:[]),[document,"visibilitychange",suspend]],
         async destroy(){dead=true;clear();lastLayout=null;lastArticle=null;latestLayout=null;await Promise.allSettled([...jobs]);layer.remove();footerLayer?.remove();return jobs.size===0;}};
 }

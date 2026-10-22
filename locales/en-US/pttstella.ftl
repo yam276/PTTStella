@@ -656,3 +656,6 @@ filters-sort-id = Sort: ID
 filters-sort-category = Sort: category
 filters-empty-block = No blocked accounts yet.
 filters-empty-allow = No allowed accounts yet.
+
+inline-image-open-one = Expand this image: { $url }
+inline-image-opened = Image expanded: { $url }
