@@ -63,7 +63,7 @@ class InstallerTests(unittest.TestCase):
                 path.write_bytes(b'MZsynthetic')
             with patch.object(installer, 'compiler', return_value=Path('ISCC.exe')), \
                     patch.object(installer, 'download_bootstrapper', side_effect=download), \
-                    patch.object(installer, 'run', side_effect=['Inno Setup 7.1.0', json.dumps(signature)]) as run:
+                    patch.object(installer, 'run', side_effect=['7.1.0\n', json.dumps(signature)]) as run:
                 with self.assertRaisesRegex(RuntimeError, 'signature/hash'):
                     installer.build(staging, staging, '0.1.0')
                 self.assertEqual(run.call_count, 2)
@@ -74,8 +74,8 @@ class InstallerTests(unittest.TestCase):
         expected = hashlib.sha256(b'MZsynthetic').hexdigest()
         def run(*args):
             calls.append(args)
-            if args[-1] == '/?':
-                return 'Inno Setup 7.1.0'
+            if args[-1] == '--version':
+                return '7.1.0\n'
             if args[0] == 'powershell.exe':
                 return json.dumps({'status': 'Valid', 'publisher': 'Microsoft Corporation', 'sha256': expected})
             (self.root/'setup/PTTStella-0.1.0-windows-x64-setup.exe').write_bytes(b'MZsynthetic installer')
@@ -86,17 +86,21 @@ class InstallerTests(unittest.TestCase):
                 patch.object(bundle_windows, 'inspect_pe', return_value={'machine': 'AMD64'}):
             setup, report = installer.build(self.root, self.root, '0.1.0')
         self.assertTrue(setup.is_file())
+        self.assertEqual(calls[0], ('ISCC.exe', '--version'))
         self.assertIn('/DBootstrapperSHA256='+expected, calls[-1])
         self.assertTrue(report['webview2']['install_only_if_missing'])
         self.assertEqual(report['runtime_installation_acceptance'], 'not_run')
 
     def test_wrong_compiler_fails_before_downloading_or_building_an_installer(self):
-        with patch.object(installer, 'compiler', return_value=Path('ISCC.exe')), \
-                patch.object(installer, 'run', return_value='Inno Setup 6.6.1'), \
-                patch.object(installer, 'download_bootstrapper') as download:
-            with self.assertRaisesRegex(RuntimeError, 'pinned Inno Setup'):
-                installer.build(self.root, self.root, '0.1.0')
-        download.assert_not_called()
+        for version in ('6.6.1\n', '7.1.01\n', '7.1.0.1\n',
+                        'Inno Setup 7 Command-Line Compiler\n', ''):
+            with self.subTest(version=version), \
+                    patch.object(installer, 'compiler', return_value=Path('ISCC.exe')), \
+                    patch.object(installer, 'run', return_value=version), \
+                    patch.object(installer, 'download_bootstrapper') as download:
+                with self.assertRaisesRegex(RuntimeError, 'pinned Inno Setup'):
+                    installer.build(self.root, self.root, '0.1.0')
+            download.assert_not_called()
 
 
 class WindowsPublicationTests(unittest.TestCase):
