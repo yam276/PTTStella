@@ -1,4 +1,4 @@
-; Shared prerequisite policy. The host supplies registry and process operations.
+{ Shared prerequisite policy. The host supplies registry and process operations. }
 function RuntimeAt(const RootKey: HKEY): Boolean;
 var
   Value: String;
