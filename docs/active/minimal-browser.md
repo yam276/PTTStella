@@ -4,13 +4,21 @@
 
 ## 目標
 
-目前交付為 `dist/macos-reply-image-controls-final/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前交付為 `dist/macos-v0.1.0/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 0.1.0 正式版準備（2026-10-22）
+
+依使用者要求將目前功能固定為 0.1.0，Cargo.toml／Cargo.lock、版本及正式版標章一致；About 與各平台打包版本沿實際 Cargo package metadata。README 改為一般使用者的安裝／操作說明，移除開發與驗證文件章節及內部契約入口。簡短中文為主、英文摘要為輔的發佈內容保存於 docs/release-notes/v0.1.0.md；publisher 使用版本專用說明時不另追加自動 changelog，仍維持四架構來源／完整資產／checksum 白名單與 draft 全上傳才公開的要求。
+
+core 13 命令／2 replay、desktop lib 143／bin 130、全 targets Clippy、JS 230、Python tooling 71、fmt／docs 通過；Actionlint 1.7.12 驗證現有 release／release-pr workflows 通過。新增 publication 案例確認中文與英文 notes 逐字送到 draft create 且不附 generate-notes。Cargo offline workspace update 只有本產品版本變更。macOS arm64 release App 的 CFBundleShortVersionString／CFBundleVersion 均為 0.1.0，strict ad-hoc 驗章通過；本輪版本／文件變更未重做正文手勢人工驗收。證據 .local/verification/release-v0.1.0；交付 dist/macos-v0.1.0/PTTStella.app。
+
+本提交為 develop → main Release PR 的待發佈來源，GitHub 四架構建置與正式 Release 需以後續實際 run 結果為準。發佈成功後將 main 回併 develop，再將日常開發提高為 0.2.0-dev.1；不提前移動或手動建立發佈 tag。
 
 ## 正文與推文圖片箭頭收在網址內（2026-10-22）
 

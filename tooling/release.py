@@ -236,8 +236,13 @@ def publish(context, directory, github):
                 'Linux packages require a compatible '
                 'Ubuntu 24.04 graphical environment. Packaging and automated tests do not replace '
                 'platform GUI or live-login acceptance.\n', encoding='utf-8')
+            custom_notes = ROOT/'docs'/'release-notes'/(tag+'.md')
+            if custom_notes.is_file():
+                notes.write_text(custom_notes.read_text(encoding='utf-8'), encoding='utf-8')
             args = ['gh', 'release', 'create', tag, '--repo', repository, '--verify-tag',
-                    '--draft', '--title', 'PTTStella '+tag, '--generate-notes', '--notes-file', str(notes)]
+                    '--draft', '--title', 'PTTStella '+tag, '--notes-file', str(notes)]
+            if not custom_notes.is_file():
+                args.append('--generate-notes')
             if context['prerelease']:
                 args.append('--prerelease')
             command(*args)
