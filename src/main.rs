@@ -112,8 +112,8 @@ fn main() {
                 | "files_slow" | "fonts" | "sgr66" | "sgr66_legacy" | "login_2fa" | "osc8"
                 | "filter_colors" | "inline" | "inline_pages" | "full_load" | "long_load"
                 | "terminal_pages" | "short_overlap" | "short_reading" | "reading_rows"
-                | "wide_last_row" | "inline_replies" | "short_links" | "context_menu"
-                | "account_lists" | "merged_replies" | "account_actions"
+                | "wide_last_row" | "diagnostics" | "inline_replies" | "short_links"
+                | "context_menu" | "account_lists" | "merged_replies" | "account_actions"
                 | "account_articles" | "pointer_rows" | "boards" | "boards_close"
                 | "recent" | "articles" | "articles_close" | "bookmarks"
                 | "bookmarks_restart" | "bookmarks_empty" | "bookmarks_corrupt" | "mouse"
@@ -234,7 +234,11 @@ fn main() {
         media_origin,
     };
     let window = dioxus::desktop::WindowBuilder::new()
-        .with_title("PTTStella")
+        .with_title(if ui::diagnostics::diagnostic_build() {
+            "PTTStella（診斷版）"
+        } else {
+            "PTTStella"
+        })
         .with_inner_size(dioxus::desktop::LogicalSize::new(1040.0, 740.0));
     #[cfg(target_os = "windows")]
     let window = {

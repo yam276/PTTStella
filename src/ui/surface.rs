@@ -61,6 +61,11 @@ pub(super) async fn surface(
     mut pending_paste: Signal<Option<PendingPaste>>,
     options: Options,
 ) -> Result<(), String> {
+    let mut journal = super::diagnostics::Journal::start(probe.as_deref())?;
+    let diagnostics = journal
+        .as_ref()
+        .map(|journal| journal.handle())
+        .unwrap_or_default();
     let main_window = dioxus::desktop::window();
     let mut resources = Resources::default();
     let mut reports = run(
@@ -74,12 +79,18 @@ pub(super) async fn surface(
         },
         options,
         &mut resources,
+        diagnostics,
     )
     .await;
     pending_paste.set(None);
     // Every exit, including preflight, decoding and send errors, joins the same
     // owners. No branch can bypass renderer or credential cleanup.
     let cleanup = resources.finish(&connection, message).await;
+    let diagnostic_result = if let Some(journal) = journal.as_mut() {
+        journal.finish(reports.is_ok(), cleanup.is_ok()).await
+    } else {
+        Ok(())
+    };
     if let Some(path) = &probe {
         std::fs::create_dir_all(path).map_err(|e| e.to_string())?;
         std::fs::write(
@@ -124,6 +135,7 @@ pub(super) async fn surface(
         }
     }
     reports?;
+    diagnostic_result?;
     let window = main_window;
     window.set_close_behavior(dioxus::desktop::WindowCloseBehaviour::WindowCloses);
     window.close();
@@ -137,6 +149,7 @@ async fn run(
     signals: Signals,
     options: Options,
     resources: &mut Resources,
+    diagnostics: super::diagnostics::Handle,
 ) -> Result<Vec<(PathBuf, serde_json::Value)>, String> {
     let Signals {
         mut message,
@@ -213,10 +226,11 @@ async fn run(
         include_str!("../../assets/surface-mouse.js"),
         include_str!("../../assets/surface-tools.js"),
         include_str!("../../assets/surface-context-menu.js"),
+        include_str!("../../assets/surface-diagnostics.js"),
         include_str!("../../assets/surface.js"),
     ]
     .concat();
-    let mut eval = Bridge::new(&script, settings);
+    let mut eval = Bridge::new(&script, settings, diagnostics.clone());
     *owned_eval = Some(eval.owner());
     let language = pttstella::i18n::application().language();
     eval.send(Packet::Localization {
@@ -225,6 +239,8 @@ async fn run(
         fallback: pttstella::i18n::Language::TraditionalChinese.resource(),
     })
     .map_err(|e| e.to_string())?;
+    eval.send(Packet::Diagnostics(diagnostics.enabled()))
+        .map_err(|e| e.to_string())?;
     let mut keyboard_policy = vim::Keyboard::default();
     let mut keyboard_generation = 0;
     let mut login_guidance = pttstella::login::Guidance::Idle;
@@ -292,6 +308,9 @@ async fn run(
     let mut reading_gate = None;
     let mut reading_paint_at = tokio::time::Instant::now();
     let mut reading_timing = super::reading_timing::ReadingTiming::new()?;
+    let mut diagnostic_tick = tokio::time::interval(std::time::Duration::from_secs(1));
+    diagnostic_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut diagnostic_failed = false;
     let (complete, probe_checked) = loop {
         if *closing.borrow() {
             break (false, false);
@@ -495,6 +514,21 @@ async fn run(
             (preload_paint && screen.dirty() && !screen.has_in_flight() && !reading_paint_due)
                 .then_some(reading_paint_at);
         tokio::select! {
+            _ = diagnostic_tick.tick(), if diagnostics.enabled() => {
+                let view=receiver.borrow();
+                diagnostics.state(super::diagnostics::State {
+                    generation:view.generation,revision:view.frame.revision,input_epoch:view.input_epoch,
+                    received_bytes:view.received,phase:match view.phase {Phase::Disconnected=>"disconnected",Phase::Connecting=>"connecting",Phase::Connected=>"connected",Phase::Error=>"error"},
+                    input_pending:view.input_pending,output_pending:view.output_pending,
+                    paint_pending:screen.has_in_flight(),dirty:screen.dirty(),command_busy:commands.busy(),files_busy:files.busy(),
+                    login_open,settings_open:settings_visible,paste_pending:pending_paste.read().is_some(),full_load:screen.full_load_active(),
+                    keyboard_pending:keyboard_policy.status(&view.context()).pending,
+                });
+                if diagnostics.failed() && !diagnostic_failed {
+                    diagnostic_failed=true;
+                    eval.send(Packet::Notice("診斷紀錄寫入失敗，請確認磁碟空間與權限。".into())).map_err(|e|e.to_string())?;
+                }
+            },
             _ = async {if let Some(at)=paint_deadline {tokio::time::sleep_until(at).await;}else{std::future::pending::<()>().await;}} => {},
             _ = async {if let Some(at)=load_deadline {tokio::time::sleep_until(at).await;}else{std::future::pending::<()>().await;}} => {
                 screen.expire_full_load(tokio::time::Instant::now());
@@ -674,6 +708,7 @@ async fn run(
             event = eval.recv() => {
                 let event = event.map_err(|e| e.to_string())?;
                 if !event.admitted(receiver.borrow().generation) {
+                    diagnostics.bridge("rejected","admission",false,receiver.borrow().generation,receiver.borrow().frame.revision,0);
                     rejected_events += 1;
                     event.discard();
                     continue;
@@ -687,6 +722,7 @@ async fn run(
                     inline_images.close();eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
                 }
                 match event {
+                    SurfaceEvent::Diagnostics { trace } => {diagnostics.web(trace);},
                     SurfaceEvent::StationMouse { event, .. } => {
                         if super::probe::mouse_case(surface_probe.as_deref()) && checks.mouse_edges.len()<16 {checks.mouse_edges.push(event.report);}
                         let result = if !screen.mouse_shown(&event) || pending_paste.read().is_some() || keyboard_policy.status(&receiver.borrow().context()).pending {
@@ -1555,7 +1591,7 @@ async fn run(
         let mut mouse_report = checks.mouse_observations();
         mouse_report["final"] = serde_json::json!(receiver.borrow().mouse);
         let mut surface_report = serde_json::json!({
-            "status":if case=="slow" && commands.busy() || case=="files_slow" && files.busy() || case=="files" && checks.export_checked || case=="untrusted" && surface_probe_clean && rejected_events==3
+            "status":if case=="slow" && commands.busy() || case=="files_slow" && files.busy() || matches!(case.as_str(),"files"|"diagnostics") && checks.export_checked || case=="untrusted" && surface_probe_clean && rejected_events==3
                 || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB")
                 || case=="recent" && recent_clears>=1 && recent.packet().boards.is_empty() && recent.packet().notice==Some(pttstella::msg!("recent-cleared"))
                 || checks.bookmarks_passed(&case,&initial_bookmarks,&bookmarks.snapshot(),&receiver.borrow().destination)

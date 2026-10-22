@@ -472,6 +472,7 @@ function refreshNavigation() {
     drawNavigationMarker();
 }
 function readingMove(intent,e,source="button") {
+    if(typeof diagnostics!=="undefined")diagnostics.note("reading_move");
     const article=latest?.article;
     if(!article)return false;
     if(!["lines","previous_page","next_page","forward","first","last","scroll"].includes(intent.action))return false;
@@ -511,6 +512,7 @@ function readingMove(intent,e,source="button") {
     navigate({action},e,source==="keyboard-arrow"?"keyboard":source,false);return true;
 }
 function navigate(intent,e,source="pointer",cached=true) {
+    if(typeof diagnostics!=="undefined")diagnostics.note("navigate");
     if(cached&&readingMove(intent,e,source))return;
     if(source==="pointer"&&!stationMouse.local())return;
     if(!canNavigate()||dragging?.moved) return;
@@ -749,6 +751,18 @@ const bindings=[...inlineImages.bindings,...contextMenu.bindings,...sitesUi.bind
     [articleLoadCancel,"click",cancelArticleLoad],[articleLoadResume,"click",resumeArticleLoad],
 ];
 for(const [target,event,callback,options] of bindings) target.addEventListener(event,callback,options);
+const diagnostics=createSurfaceDiagnostics({send,document,window,snapshot:()=>{
+    const states=[latest?.connected,latest?.input_pending,latest?.output_pending,navigationLocked,navigationRequest,
+        composing,pastePending,!!document.querySelector("dialog[open]"),hasSelection(),!!dragging,settingsActive,
+        document.hasFocus(),document.visibilityState==="hidden",document.activeElement===keyboard,
+        !stationMouse.local(),!!tools?.open(),!!latest?.article,keyboardState.enabled,keyboardState.pending,!!contextMenu?.isOpen()];
+    const profiles=["unknown","main_menu","system_menu","document_list","article_list","article_reading","board_list","empty_list","command_help","continue_prompt"];
+    const profile=Math.max(0,profiles.indexOf(latest?.navigation.kind));
+    const flags=states.reduce((flags,value,index)=>flags|(value?1<<index:0),0)|(profile<<20)
+        |(latest?.article?.load==="loading"?1<<25:0)|(latest?.article?.load==="changed"?1<<26:0)|(latest?.article?.load==="limit"?1<<27:0);
+    return {generation,revision:Math.max(0,revision),presentation:latest?.presentation??0,
+        flags,scroll:viewport.scrollTop,extent:viewport.scrollHeight};
+}});
 function draw(packet) {
     viewport.dataset.reading=packet.article?"web":"terminal";
     const frame=packet.source_frame??packet.frame,ratio=devicePixelRatio||1,width=frame.cols*12,height=frame.rows*24;
@@ -879,6 +893,14 @@ function runSurfaceProbe(mode){
             else if(mode==="tools")surfaceNote.textContent=tr("tools-probe-freeplay");
             else if(mode==="decode")send({kind:"synthetic_invalid_event"});
             else if(mode==="painted")send({kind:"painted",presentation:latest.presentation,revision:revision+100,generation});
+            else if(mode==="diagnostics"){
+                // Explicit loopback-only probe: measure a known stalled WebView,
+                // then require native input, marker, PNG and normal close outside JS.
+                diagnostics.note("marker",4,0,0,true);
+                const start=performance.now();while(performance.now()-start<1400){}
+                diagnostics.note("marker",5,0,performance.now()-start,true);
+                surfaceNote.textContent="本機診斷探針：已模擬 1.4 秒停頓；測試導覽、問題標記、PNG 與關閉";
+            }
             else if(mode==="renderer_error")throw new Error("synthetic renderer failure");
             else if(mode==="slow")surfaceNote.textContent="慢命令探針：結果等待 60 秒；可開啟字型設定或立即關閉視窗";
             else if(mode==="files")surfaceNote.textContent="原生選檔探針（本機合成資料）：可匯出 PNG 或匯入／匯出設定檔";
@@ -914,6 +936,7 @@ function runSurfaceProbe(mode){
 }
 function showNotice(message){if(!stopped&&message&&!settingsUi.notice(message))surfaceNote.textContent=message;}
 const route=createSurfaceRouter({
+    diagnostics:enabled=>diagnostics.enable(enabled),
     localization:data=>{tr.update({kind:"localization",payload:data});document.documentElement.lang=data.language;settingsUi.relocalize();filterUi.relocalize();tools.relocalize();receiveKeyboard(keyboardState);refreshControls();refreshArticleLoad();},
     paint,
     station_mouse_rejected:data=>{stationMouse.reject(data.lease);showNotice(data.message);},
@@ -957,10 +980,13 @@ try {
     while(true){
         const packet=await lifetime.receive();
         if(packet?.kind==="stop")break;
+        const receivedAt=performance.now();
         await route(packet);
+        diagnostics.note("packet",0,0,performance.now()-receivedAt);
     }
 } catch(e){send({kind:"error",message:String(e)});}
 finally {
+    diagnostics.destroy();
     try {settingsSnapshot.last=settingsUi.snapshot();} catch(error) {settingsSnapshot.error=String(error);}
     lifetime.release();
     revokeSurface();

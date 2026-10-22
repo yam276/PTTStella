@@ -37,6 +37,8 @@ fn outbound_results_match_the_shared_wire_examples() {
                 fallback: "connect = 連線\n",
             },
         ),
+        ("diagnostics_disabled", Packet::Diagnostics(false)),
+        ("diagnostics_enabled", Packet::Diagnostics(true)),
         (
             "station_mouse_rejected",
             Packet::StationMouseRejected {

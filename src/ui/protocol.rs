@@ -37,6 +37,9 @@ pub(super) enum MediaAction {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(super) enum SurfaceEvent {
+    Diagnostics {
+        trace: super::diagnostics::WebTrace,
+    },
     StationMouse {
         event: pttstella::mouse::input::Event,
         trusted: bool,
@@ -474,6 +477,7 @@ impl SurfaceEvent {
             | CopyText { trusted, .. } => *trusted,
             // Internal notifications and projections do not submit user input.
             MediaDecoded { .. }
+            | Diagnostics { .. }
             | KeepAliveGate { .. }
             | SettingsVisibility { .. }
             | SettingsFonts { .. }
