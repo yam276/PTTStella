@@ -76,6 +76,7 @@ pub(super) enum Completion {
     Profile(FileResult<ProfileResult>),
     Export {
         selected: bool,
+        destination: ExportDestination,
         result: FileResult<bool>,
     },
     Probe(FileResult<serde_json::Value>),
@@ -397,6 +398,14 @@ pub(super) async fn profile(
     Completion::Profile(result)
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum ExportDestination {
+    #[default]
+    File,
+    Clipboard,
+}
+
 pub(super) struct ExportRequest {
     pub lease: super::surface_state::OutputLease,
     pub source: tokio::sync::watch::Receiver<pttstella::connection::View>,
@@ -447,6 +456,142 @@ async fn pick_export(
     }
 }
 
+pub(super) async fn export_image(
+    permit: Permit,
+    request: ExportRequest,
+    destination: ExportDestination,
+    clipboard: Clipboard,
+) -> Completion {
+    match destination {
+        ExportDestination::File => export_png(permit, request).await,
+        ExportDestination::Clipboard => {
+            let probe = request.probe.clone();
+            let selected = request.selected;
+            copy_png_with_writer(permit, request, move |image| {
+                let mut owner = clipboard
+                    .lock()
+                    .map_err(|_| pttstella::msg!("copy-failed"))?;
+                if owner.is_none() {
+                    *owner = Some(
+                        arboard::Clipboard::new().map_err(|_| pttstella::msg!("copy-failed"))?,
+                    );
+                }
+                let clipboard = owner
+                    .as_mut()
+                    .ok_or_else(|| pttstella::msg!("copy-failed"))?;
+                // Test-only readback after an explicit copy gesture; normal copies retain no image evidence.
+                let expected = probe
+                    .as_ref()
+                    .map(|_| (image.width, image.height, image.bytes.clone().into_owned()));
+                clipboard
+                    .set_image(image)
+                    .map_err(|_| pttstella::msg!("copy-failed"))?;
+                if let (Some(directory), Some((width, height, expected))) = (probe, expected) {
+                    let actual = clipboard
+                        .get_image()
+                        .map_err(|_| "clipboard probe readback failed".to_owned())?;
+                    if actual.width != width
+                        || actual.height != height
+                        || actual.bytes.as_ref() != expected
+                    {
+                        return Err("clipboard probe pixels differ".into());
+                    }
+                    let mut bytes = Vec::new();
+                    {
+                        let mut encoder =
+                            png::Encoder::new(&mut bytes, width as u32, height as u32);
+                        encoder.set_color(png::ColorType::Rgba);
+                        encoder.set_depth(png::BitDepth::Eight);
+                        let mut writer = encoder.write_header().map_err(|e| e.to_string())?;
+                        writer
+                            .write_image_data(&actual.bytes)
+                            .map_err(|e| e.to_string())?;
+                    }
+                    storage::replace(
+                        &directory.join(if selected {
+                            "clipboard-rows.png"
+                        } else {
+                            "clipboard.png"
+                        }),
+                        &bytes,
+                    )?;
+                }
+                Ok(())
+            })
+            .await
+        }
+    }
+}
+fn clipboard_pixels(
+    png: String,
+    rows: &Range<usize>,
+) -> Result<arboard::ImageData<'static>, String> {
+    let bytes = decode_png(png, rows)?;
+    let decoder = png::Decoder::new_with_limits(
+        std::io::Cursor::new(bytes),
+        png::Limits {
+            bytes: 8 * 1024 * 1024,
+        },
+    );
+    let mut reader = decoder
+        .read_info()
+        .map_err(|_| pttstella::msg!("export-invalid"))?;
+    let count = reader
+        .output_buffer_size()
+        .filter(|n| *n <= (export::WIDTH * export::HEIGHT * 4) as usize)
+        .ok_or_else(|| pttstella::msg!("export-too-large"))?;
+    let mut data = vec![0; count];
+    let info = reader
+        .next_frame(&mut data)
+        .map_err(|_| pttstella::msg!("export-invalid"))?;
+    if info.width != export::WIDTH
+        || info.height != rows.len() as u32 * export::ROW_HEIGHT
+        || info.bit_depth != png::BitDepth::Eight
+    {
+        return Err(pttstella::msg!("export-invalid"));
+    }
+    let rgba = match info.color_type {
+        png::ColorType::Rgba => data,
+        png::ColorType::Rgb => data[..info.buffer_size()]
+            .chunks_exact(3)
+            .flat_map(|p| [p[0], p[1], p[2], 255])
+            .collect(),
+        _ => return Err(pttstella::msg!("export-invalid")),
+    };
+    Ok(arboard::ImageData {
+        width: info.width as usize,
+        height: info.height as usize,
+        bytes: rgba.into(),
+    })
+}
+async fn copy_png_with_writer(
+    permit: Permit,
+    request: ExportRequest,
+    write: impl FnOnce(arboard::ImageData<'static>) -> Result<(), String> + Send + 'static,
+) -> Completion {
+    let ExportRequest {
+        png,
+        rows,
+        selected,
+        lease,
+        source,
+        ..
+    } = request;
+    let result = blocking_result(permit, move || {
+        lease.check(&source.borrow()).map_err(|_| Error::Stale)?;
+        let image = clipboard_pixels(png, &rows).map_err(Error::Failed)?;
+        lease.check(&source.borrow()).map_err(|_| Error::Stale)?;
+        write(image).map_err(Error::Failed)?;
+        Ok(true)
+    })
+    .await;
+    Completion::Export {
+        selected,
+        destination: ExportDestination::Clipboard,
+        result,
+    }
+}
+
 pub(super) async fn export_png(permit: Permit, request: ExportRequest) -> Completion {
     export_with_picker(permit, request, pick_export).await
 }
@@ -491,7 +636,11 @@ async fn export_with_picker<F: Future<Output = Option<PathBuf>>>(
         .await
     }
     .await;
-    Completion::Export { selected, result }
+    Completion::Export {
+        selected,
+        destination: ExportDestination::File,
+        result,
+    }
 }
 
 pub(super) async fn save_sites(

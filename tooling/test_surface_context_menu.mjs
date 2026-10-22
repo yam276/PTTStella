@@ -7,11 +7,11 @@ const scope=vm.createContext({});vm.runInContext(source,scope);
 const {contextMenuItems,contextMenuPosition,createSurfaceContextMenu}=scope;
 const base={link:-1,selection:false,ready:true,exportReady:true,local:true,ptt:true,reading:false};
 test("items follow selected content and capabilities, without inactive feature placeholders",()=>{
-    assert.deepEqual([...contextMenuItems(base).keys()],["select-all","export-page","bookmarks","filters","vim","settings"]);
+    assert.deepEqual([...contextMenuItems(base).keys()],["select-all","export-page","copy-image-page","bookmarks","filters","vim","settings"]);
     const entries=contextMenuItems({...base,link:1,selection:true,selectionReady:false,rowsReady:false,local:false,reading:true,images:true,inlineReady:false,navigate:true,first:true,last:false});
     assert.equal(entries.get("copy"),false);assert.equal(entries.get("copy-link"),true);assert.equal(entries.get("open-link"),false);
     assert.equal(entries.get("inline"),false);assert.equal(entries.get("previous"),false);assert.equal(entries.get("next"),true);
-    assert.deepEqual([...contextMenuItems({...base,ptt:false}).keys()],["select-all","export-page","settings"]);
+    assert.deepEqual([...contextMenuItems({...base,ptt:false}).keys()],["select-all","export-page","copy-image-page","settings"]);
 });
 test("menu position fits the bottom/right corner and negative coordinates",()=>{
     assert.deepEqual({...contextMenuPosition(990,790,270,400,1000,800)},{left:722,top:392});
@@ -118,4 +118,12 @@ test('removal sends the matching policy and stamped cell without accepting a cli
  for(const name of ['mask','mask-row','allow'])state.contextAction('account-remove-'+name,{word:{row:5,start:3,id:'Alice'}},{isTrusted:true});
  assert.deepEqual(sent.map(p=>[p.policy,p.remove,p.row,p.col]),[['mask',true,5,3],['mask_row',true,5,3],['allow',true,5,3]]);
  assert.ok(sent.every(p=>!('id' in p)));
+});
+
+test('image clipboard choices use the same page and row availability as file export',()=>{
+ for(const ready of [true,false]){
+  const entries=contextMenuItems({...base,exportReady:ready,selection:true,rowsReady:ready});
+  assert.equal(entries.get('copy-image-page'),ready);assert.equal(entries.get('copy-image-rows'),ready);
+ }
+ assert.equal(contextMenuItems(base).has('copy-image-rows'),false);
 });

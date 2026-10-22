@@ -589,7 +589,8 @@ async fn run(
                         }
                     },
                     FileCompletion::Profile(result)=>Packet::ProfileResult(result.unwrap_or_else(|error|super::outbound::ProfileResult::Rejected{notice:error.to_string()})),
-                    FileCompletion::Export{selected,result}=>match result {
+                    FileCompletion::Export{selected,destination,result}=>match result {
+                        Ok(true) if destination==files::ExportDestination::Clipboard=>{checks.image_copies+=1;Packet::ExportResult(Feedback::new(ExportStatus::Copied,pttstella::msg!("export-copied")))},
                         Ok(true)=>{checks.export_checked|=probe.is_some()&&!selected;checks.rows_export_checked|=probe.is_some()&&selected;Packet::ExportResult(Feedback::new(ExportStatus::Saved,pttstella::msg!("export-saved")))},
                         Ok(false)=>Packet::ExportResult(Feedback::new(ExportStatus::Cancelled,pttstella::msg!("export-cancelled"))),
                         Err(error)=>Packet::ExportResult(Feedback::new(ExportStatus::Failed,error.to_string())),
@@ -1090,16 +1091,18 @@ async fn run(
                         generation,
                         revision,
                         selection_request,
+                        destination,
                         png,
                         trusted: _,
                     } => {
                         let result = (|| -> Result<(),String> {
                             let rows=screen.export_rows(Identity{presentation,generation,revision},selection_request,&receiver.borrow())?;
                             let rows=if rows.end>pttstella::export::ROWS {0..rows.len()} else {rows};
+                            let clipboard=files.clipboard();
                             files.start(|permit|{
                                 let lease=screen.lease_output(Identity{presentation,generation,revision},selection_request,receiver.borrow().input_epoch);
                                 let request=files::ExportRequest{lease,source:receiver.clone(),png,rows,selected:selection_request.is_some(),probe:probe.clone().filter(|_|surface_probe.as_deref()!=Some("files"))};
-                                files::export_png(permit,request)
+                                files::export_image(permit,request,destination,clipboard)
                             })
                         })();
                         if let Err(error)=result {
@@ -1599,6 +1602,7 @@ async fn run(
         });
         surface_report["article_reading"] =
             serde_json::to_value(reading).map_err(|e| e.to_string())?;
+        surface_report["image_copies"] = checks.image_copies.into();
         surface_report["inline_targets"] =
             serde_json::to_value(&checks.inline_targets).map_err(|e| e.to_string())?;
         surface_report["link_requests"] = checks.link_requests.into();

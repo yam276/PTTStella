@@ -674,5 +674,9 @@ settings-close-command = Close Settings
 about-author = Author: { $author }
 about-version = Version: { $version }
 
+copy-png = Copy page PNG
+copy-rows-png = Copy selected rows PNG
+export-copied = Image copied to clipboard
+
 gif-playing = GIF animation playing
 gif-paused = GIF animation paused

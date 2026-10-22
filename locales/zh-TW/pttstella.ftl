@@ -668,5 +668,9 @@ settings-close-command = 關閉設定
 about-author = 作者：{ $author }
 about-version = 版本：{ $version }
 
+copy-png = 複製整頁 PNG
+copy-rows-png = 複製選取行 PNG
+export-copied = 圖片已複製到剪貼簿
+
 gif-playing = GIF 動畫播放中
 gif-paused = GIF 動畫已暫停

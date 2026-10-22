@@ -252,7 +252,7 @@ statuses! {
     NavigationStatus { Sent, Rejected },
     DestinationStatus { Started, Rejected },
     PasteStatus { Queued, Preview, Cancelled, Rejected },
-    ExportStatus { Saved, Cancelled, Failed },
+    ExportStatus { Saved, Copied, Cancelled, Failed },
     LinkStatus { Requested, Failed },
     SaveStatus { Saved, Rejected },
 }
