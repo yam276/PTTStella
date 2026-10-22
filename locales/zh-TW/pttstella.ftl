@@ -663,3 +663,7 @@ account-remove-allow = 移出白名單
 article-boundary-navigation = 文章首尾以方向鍵切換上一篇／下一篇
 article-boundary-help = 預設關閉。到最頂後再按 ↑ 切上一篇，到最底後再按 ↓ 切下一篇；PageUp／PageDown、j／k 與滾輪不切換文章。全文載入中暫不切換，長按到邊界後需放開再按。
 settings-alias-article-boundary = article boundary arrow previous next 上一篇 下一篇 首尾 邊界 方向鍵
+
+settings-close-command = 關閉設定
+about-author = 作者：{ $author }
+about-version = 版本：{ $version }

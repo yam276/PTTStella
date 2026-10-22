@@ -212,6 +212,9 @@ pub(super) enum SurfaceEvent {
     SettingsVisibility {
         open: bool,
     },
+    AboutRepository {
+        trusted: bool,
+    },
     SettingsOpen {
         trusted: bool,
     },
@@ -453,6 +456,7 @@ impl SurfaceEvent {
             | HoverPreference { trusted, .. }
             | Media { trusted, .. }
             | KeepAlive { trusted, .. }
+            | AboutRepository { trusted }
             | SettingsOpen { trusted }
             | FontSource { trusted, .. }
             | LoginOpen { trusted }

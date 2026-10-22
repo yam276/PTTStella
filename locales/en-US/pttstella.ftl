@@ -669,3 +669,7 @@ account-remove-allow = Remove from whitelist
 article-boundary-navigation = Switch articles with arrows at the top or bottom
 article-boundary-help = Off by default. Press ↑ again at the top for the previous article, or ↓ at the bottom for the next. PageUp/PageDown, j/k and the wheel never switch articles. Wait for loading to stop; release a held arrow before switching.
 settings-alias-article-boundary = article boundary arrow previous next 上一篇 下一篇 首尾 邊界 方向鍵
+
+settings-close-command = Close Settings
+about-author = Author: { $author }
+about-version = Version: { $version }

@@ -141,7 +141,7 @@ test("the tagged router delivers independent wire examples once and rejects lega
     const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8")+"\ncreateSurfaceRouter");
     const kinds=["localization","station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
         "hover_settings","tools_opacity","tools_access","sites_open","sites_result","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error","media_external",
-        "media_reset","reading_move","inline_open","inline_image","inline_error","inline_reset","settings_visibility","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","link_result","export_result"];
+        "media_reset","reading_move","inline_open","inline_image","inline_error","inline_reset","settings_visibility","settings_close","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","link_result","export_result"];
     const calls=[],handlers=Object.fromEntries(kinds.map(kind=>[kind,payload=>calls.push({kind,payload})]));
     const route=create(handlers),examples=JSON.parse(readFileSync(new URL("../tests/fixtures/ui-packets.json",import.meta.url),"utf8"));
     for(const {packet} of examples){
@@ -449,4 +449,23 @@ test('article boundary setting defaults off, saves, retries and resets with its 
  page='appearance';env.fire('font-defaults');env.tick();assert.equal(env.sent.at(-1).article_boundary_navigation,true);ui.saved({status:'saved'});
  page='media';env.fire('font-defaults');env.tick();assert.equal(env.sent.at(-1).article_boundary_navigation,false);ui.saved({status:'saved'});
  ui.destroy();
+});
+
+test('settings Escape owns the gesture, waits for autosave and preserves composition',async()=>{
+ const env=environment('surface-settings.js','createSettingsDialog'),ui=env.create();await ui.open(openData());
+ const escape=ui.bindings.find(b=>b[0]===env.node('font-dialog'));
+ const handler=ui.bindings.find(b=>b[1]==='keydown'&&b[3]===true)[2];
+ let prevented=0,stopped=0;const event={key:'Escape',isTrusted:true,preventDefault(){prevented++;},stopImmediatePropagation(){stopped++;}};
+ handler({...event,isComposing:true});handler({...event,isTrusted:false});assert.equal(prevented,0);
+ env.node('font-size').value='18';env.fire('font-size','input');handler(event);
+ assert.equal(prevented,1);assert.equal(stopped,1);assert.equal(env.node('font-dialog').open,true);
+ ui.saved({status:'rejected'});assert.equal(env.node('font-dialog').open,true);
+ handler(event);ui.saved({status:'saved'});assert.equal(env.node('font-dialog').open,false);
+ ui.destroy();
+});
+
+test('native settings Escape does not discard an active IME composition',async()=>{
+ const env=environment('surface-settings.js','createSettingsDialog'),ui=env.create();await ui.open(openData());
+ env.fire('font-dialog','compositionstart');ui.escape();assert.equal(env.node('font-dialog').open,true);
+ env.fire('font-dialog','compositionend');ui.escape();assert.equal(env.node('font-dialog').open,false);ui.destroy();
 });
