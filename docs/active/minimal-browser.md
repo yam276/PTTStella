@@ -20,7 +20,9 @@ repo 改為 Public 後，GitHub 標準 runner 已實際啟動，Release PR polic
 
 Windows 隨後已通過全部 Rust／JS 測試，原生打包抓到 Inno 7 的 help banner 只寫主版本 7，無法用 /? 檢查完整 7.1.0。依上游 is-7_1_0 的 ISCC.dpr，改用正式 --version 輸出的 engine version 並精確比較，仍拒絕錯版、相鄰版本及空輸出；不放寬下載 SHA-256 或 WebView2 簽章驗證。Python tooling 71、docs 與 actionlint 通過，原生結果以後續完整 verify 為準。
 
-證據 .local/verification/release-v0.1.0（windows-verify-attempt2.log、windows-verify-4d.log、lifecycle-gate.json、windows-9f.log、ISCC-7.1.0.dpr）；0.1.0 發佈與四架構最終建置仍進行中，尚未建立 tag 或 Release。
+原生 Setup 編譯後另發現 Inno 產物使用 PE delay-load imports，舊檢查器遇到任何 delay table 就拒絕。依 Microsoft PE 格式補上 32-byte descriptor、RVA／legacy VA、檔案實體範圍與結束記號解析，將延遲 DLL 合併到同一 imports inventory；應用程式及免安裝的非系統 DLL 拒絕仍有效，Setup manifest 另記實際 PE 檢查結果。獨立自製 PE 覆蓋普通／延遲／legacy、私有 DLL、未知 attributes、越界與缺結束記號；Python tooling 74、docs／actionlint 通過，四架構完整 verify 需重新執行。
+
+另以固定 SHA-256 的上游 Inno 7.1.0 x64 真實安裝檔驗證解析，辨識 kernel32／user32 的延遲依賴；下載檔與上游源碼留於 repo 外。證據 .local/verification/release-v0.1.0（windows-verify-attempt2.log、windows-verify-4d.log、lifecycle-gate.json、windows-9f.log、windows-f40.log、inno-pe-check.json）；0.1.0 發佈與四架構最終建置仍進行中，尚未建立 tag 或 Release。
 
 ## 列表與選單可視區首尾 Home／End（2026-10-22）
 
