@@ -947,6 +947,49 @@ async fn keyboard_noop_streaming_and_unanswered_moves_have_one_owner() {
 }
 
 #[tokio::test]
+async fn list_pointer_edges_send_exact_home_end_once_per_fresh_frame() {
+    for page in ["main_menu", "boards_caption", "list_edge_cases"] {
+        let (listener, connection) = idle_local().await;
+        connection.connect().unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        ws.send(Message::Binary(navigation_page(page).into()))
+            .await
+            .unwrap();
+        let mut view = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
+        for (intent, expected) in [
+            (Intent::First, b"\x1b[H".as_slice()),
+            (Intent::Last, b"\x1b[F"),
+        ] {
+            connection.navigate(view.stamp(), intent).await.unwrap();
+            assert_eq!(
+                ws.next().await.unwrap().unwrap().into_data().as_ref(),
+                expected
+            );
+            assert!(connection.navigate(view.stamp(), intent).await.is_err());
+            assert!(timeout(Duration::from_millis(30), ws.next()).await.is_err());
+            let received = view.received;
+            ws.send(Message::Binary(navigation_page(page).into()))
+                .await
+                .unwrap();
+            view = wait(&connection, |v| {
+                v.received > received && !v.input_pending && !v.output_pending
+            })
+            .await;
+        }
+        let peer = tokio::spawn(async move {
+            assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+            ws.flush().await.unwrap();
+        });
+        assert_eq!(
+            connection.shutdown().await.unwrap(),
+            CloseOutcome::Acknowledged
+        );
+        peer.await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn list_keyboard_moves_continue_without_redraw_but_transitions_and_mouse_wait() {
     for page in ["main_menu", "boards_caption", "list_edge_cases"] {
         let (listener, connection) = local().await;
