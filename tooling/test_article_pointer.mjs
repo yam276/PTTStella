@@ -8,7 +8,7 @@ import vm from 'node:vm';
 const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
 function fixture({cached=true}={}){
     const sent=[],selections=[],capture=new Set();
-    const f={sent,selections,stopped:false,dragging:null,released:null,navigationLocked:false,navigationRequest:false,
+    const f={navigationSequence:0,sent,selections,stopped:false,dragging:null,released:null,navigationLocked:false,navigationRequest:false,
         generation:7,revision:4,composing:false,hoverCandidate:null,
         latest:{presentation:2,connected:true,input_pending:false,output_pending:false,
             frame:{cols:80,rows:cached?81:24},navigation:{kind:'article_reading',first_line:1,percent:50},
@@ -178,7 +178,7 @@ function pauseFixture(){const f=fixture({cached:false});f.latest.navigation={kin
 test('confirmed pause clicks anywhere send Continue once, ahead of links and Back',()=>{
     for(const [col,y] of [[0,1],[40,280],[79,575]]){
         const f=pauseFixture();f.linkAt=()=>0;f.tap(col,y);f.tap(col,y);
-        assert.deepEqual(f.sent,[{kind:'navigate',stamp:{generation:7,revision:4,input_epoch:0},intent:{action:'continue'},source:'pointer',trusted:true}]);
+        assert.deepEqual(f.sent,[{kind:'navigate',request:1,stamp:{generation:7,revision:4,input_epoch:0},intent:{action:'continue'},source:'pointer',trusted:true}]);
     }
     const f=pauseFixture();f.tap(40,280);f.navigationRequest=false;f.navigationLocked=false;
     f.latest.navigation={kind:'board_list',first_row:3,last_row:22};f.revision++;

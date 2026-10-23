@@ -217,3 +217,5 @@ macOS 設定 Esc／關於／GIF／圖片剪貼簿變更需跑 core、desktop lib
 Control 與工具列焦點使用 `--probe-surface OUTPUT_DIRECTORY control_input`：本機自製編輯畫面，peer 只接受各一次、依序的 Ctrl+X／Ctrl+Z／Ctrl+A（0x18／0x1a／0x01）及最後 Close，拒絕額外／缺少輸入；需觀察 1/3、2/3、3/3 VERIFIED 畫面。期間開啟工具分類後按 Esc，AX 必須顯示焦點已回到 BBS，緊接下一個控制鍵能送達，Esc 本身不進 peer。匯出 PNG 後正常關閉，核對 3/3、Close acknowledged 與全部 owner join；診斷只記修飾鍵、按鍵形狀與實體字母代碼存在與否，不記鍵值。核心／JS 另覆蓋 Vim 關閉、原生輸入、原生一次、ASCII 配置、無效 code、Alt、組字及剪貼簿拒絕邊界。原生結果限實測平台，不重寄實站郵件作為測試。
 
 等寬圖片末行另用 `wide_last_row`：23 個自製編號列與末行標記，第二列為本機圖片連結；HTTP 提供 64×33 紅藍 PNG。先短按 Enter 開圖、再短按等寬，End 必須看見完整最後一行及色塊；重複 End／PageDown 不再增加捲動。來源 PNG 需與修改前逐像素相同、視窗固定、Close 及全部 owner join。JS 同時核對整數原生捲動上限、不同 DPR／字高／圖片比例、末端取整不足一 CSS px，不能以放寬完整行規則或新增空白文字行通過。
+
+導覽等待變更另跑 `node --test tooling/test_navigation_lifecycle.mjs` 與 desktop lib／bin：共享 fixture 經真正 JS producer、packet router 與 Rust protocol 准入，涵蓋普通方向鍵邊界取頁、拒絕、舊回覆、取消後 Cmd/Ctrl+K 切板及新文章翻頁。command owner 的成功／錯誤／取消須保留原 request，沒有重送。原生驗證須區分預讀與手動取頁：inline_pages 可驗分段回覆、本機 Down 接續與末行，若下一頁已被預讀，不能計為方向鍵未知邊界的證明。另在先取消全文且只保留第一頁的原生畫面按一次 Down，核對真正 Navigate／同 request 結果及新行範圍；不能只用 Next 或預讀的 PageDown 代替此路徑。實站畫面異常的 AX 與 screenshot 必須來自同一次 `getAXStateAndScreenshot` 回傳並一併保存，不另擷取第二張作為當下證據。

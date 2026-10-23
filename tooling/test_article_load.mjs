@@ -5,7 +5,7 @@ import vm from 'node:vm';
 const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
 function environment(){
     const node=()=>({hidden:false,dataset:{},textContent:''}),sent=[];
-    const c={readingPauseReason:()=>null,articleLoad:node(),articleLoadStatus:node(),articleLoadCancel:node(),articleLoadResume:node(),latest:{article:{id:7,first_line:1,last_line:441,load:'loading'}},generation:4,stopped:false,send:p=>sent.push(p),focus(){},tr:(key,args)=>key+':'+(args?.lines??'')};
+    const c={revokeNavigation(){},readingPauseReason:()=>null,articleLoad:node(),articleLoadStatus:node(),articleLoadCancel:node(),articleLoadResume:node(),latest:{article:{id:7,first_line:1,last_line:441,load:'loading'}},generation:4,stopped:false,send:p=>sent.push(p),focus(){},tr:(key,args)=>key+':'+(args?.lines??'')};
     vm.runInNewContext(source.slice(source.indexOf('function refreshArticleLoad('),source.indexOf('function invalidatePresentation()')),c);
     return {c,sent};
 }
@@ -33,7 +33,7 @@ test('cancel remains usable during station updates but does not enqueue station 
     c.stopped=true;c.changeArticleLoad({isTrusted:true});assert.equal(sent.length,2);
 });
 test('loading edges wait locally while ordinary cached movement and a cancelled load retain manual boundary navigation',()=>{
-    const sent=[],c={latest:{article:{first_line:1,last_line:46,end:false,load:'loading'},connected:true},viewport:{scrollTop:0,scrollHeight:1000,clientHeight:400},grid:{ratio:1,y:r=>r*24,bottom:r=>(r+1)*24,footerHeight:24},blocked:()=>false,dragging:null,clearSelection(){},cancelHover(){},repaint(){},navigate:(intent,...args)=>sent.push(intent)};
+    const sent=[],c={navigationSequence:0,stopped:false,showNotice(){},latest:{article:{first_line:1,last_line:46,end:false,load:'loading'},connected:true},viewport:{scrollTop:0,scrollHeight:1000,clientHeight:400},grid:{ratio:1,y:r=>r*24,bottom:r=>(r+1)*24,footerHeight:24},blocked:()=>false,dragging:null,clearSelection(){},cancelHover(){},repaint(){},navigate:(intent,...args)=>sent.push(intent)};
     vm.runInNewContext(source.slice(source.indexOf('function readingMove('),source.indexOf('function navigate(')),c);
     c.readingMove({action:'next_page'},{isTrusted:true});assert.equal(c.viewport.scrollTop,338.40000000000003);assert.equal(sent.length,0);
     c.viewport.scrollTop=600;c.readingMove({action:'next_page'},{isTrusted:true});assert.equal(sent.length,0);
@@ -65,7 +65,7 @@ test('returning to the foreground refreshes the reading gate even without a new 
 });
 
 test('article-scoped UI permission survives station page transitions but pauses for local interaction',()=>{
-    const sent=[],c={latest:{connected:true,input_pending:true,output_pending:true,presentation:2,article:{id:7}},document:{hasFocus:()=>true,visibilityState:'visible'},settingsActive:false,stopped:false,
+    const sent=[],c={navigationSequence:0,stopped:false,showNotice(){},latest:{connected:true,input_pending:true,output_pending:true,presentation:2,article:{id:7}},document:{hasFocus:()=>true,visibilityState:'visible'},settingsActive:false,stopped:false,
         blocked:()=>false,canNavigate:()=>false,inlineImages:{active:()=>false},tools:{busy:()=>false},stationMouse:{active:()=>false},dragging:null,released:null,
         hasSelection:()=>false,exportBusy:false,keyboardState:{pending:false},navigationLocked:false,navigationRequest:false,stamp:()=>({generation:1,revision:9,input_epoch:3}),keepAliveGate:null,keepAlive:{setAttribute(){}},tr:k=>k,send:p=>sent.push(p)};
     c.refreshArticleLoad=()=>{};
@@ -92,7 +92,7 @@ test("paused loading explains background and interaction without turning pause i
     assert.equal(sent.length,0,"status changes never send station commands");
 });
 function continuationEnvironment(){
-    const sent=[],c={latest:{generation:4,article:{id:7,first_line:1,last_line:46,end:false,load:"cancelled"},connected:true},
+    const sent=[],c={navigationSequence:0,stopped:false,showNotice(){},latest:{generation:4,article:{id:7,first_line:1,last_line:46,end:false,load:"cancelled"},connected:true},
         pendingReadingMove:null,navigationLocked:false,navigationRequest:false,
         viewport:{scrollTop:600,scrollHeight:1000,clientHeight:400},surface:{offsetTop:0,dataset:{}},
         grid:{height:1000,ratio:1,y:r=>24*r,bottom:r=>24*(r+1)},blocked:()=>false,dragging:null,

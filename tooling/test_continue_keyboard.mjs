@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
 function fixture(enabled=false){
-    const f={sent:[],generation:7,composing:false,pastePending:false,selected:false,modal:false,
+    const f={revokeNavigation(){},sent:[],generation:7,composing:false,pastePending:false,selected:false,modal:false,
         keyboardState:{enabled,mode:enabled?'normal':'input'},latest:{navigation:{kind:'continue_prompt'}},
         document:{querySelector:()=>f.modal?{}:null},stationMouse:{revoke(){}},cancelHover(){},cancelDrag(){},clearSelection(){f.selected=false;},
         hasSelection:()=>f.selected,inlineShortcut:()=>false,inlineImages:{keyHeld:()=>false},zoom:1,zoomTo(){f.zoomed=true;},send:p=>f.sent.push(JSON.parse(JSON.stringify(p)))};

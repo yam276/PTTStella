@@ -96,7 +96,7 @@ impl Resources {
         connection: &Connection,
         mut message: Signal<String>,
     ) -> Result<CloseOutcome, String> {
-        self.commands.cancel();
+        let _ = self.commands.cancel(); // Renderer is already stopping; no live UI wait remains.
         self.files.revoke();
         self.media.close();
         self.inline.close();

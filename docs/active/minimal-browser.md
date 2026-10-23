@@ -4,13 +4,21 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-reading-continuity-final/PTTStella.app`（2026-10-23，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-navigation-waits-final/PTTStella.app`（2026-10-23，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 方向鍵取頁與跨看板等待生命週期（2026-10-23）
+
+前次 SubAgent 的卡住已由 log 與生產程式交叉定位：網頁文章取消全文後，方向鍵在未知邊界送出普通 next_page 卻帶 keyboard 來源，Rust protocol 拒絕；早期拒絕沒有 navigation_result，前端 navigationRequest 殘留，後續換板仍受影響。修正普通方向鍵取頁走既有普通來源；keyboard 只准入受設定、文章邊界及版本再次核對的跨文章方向鍵。每筆 UI 導覽綁定安全整數 request／generation；送出、拒絕、取消與過期回覆只結束對應等待。工具、原始輸入、換篇、換 session、取消及快速跳轉撤銷舊等待，內部預讀沒有 UI ticket，不會解鎖新請求；唯一 command owner、原有六秒回覆期限及不重送 bytes 規則保留。
+
+core 13 命令／2 replay、desktop lib 144／bin 141、全 targets Clippy、JS 253、fmt／docs 通過。新增共享 fixture 經真正 JS producer／packet router 及 Rust 准入，另覆蓋 command owner 成功、錯誤與取消、舊回覆不得解除新等待，以及真正 Cmd/Ctrl+K 對話框提交後切板再翻頁。macOS arm64 原生 inline_pages 逐筆 peer 只接受一筆精確 PageDown；Down 本機接續至 2～24，End 到 46，Home 回讀及展圖後 End 末行完整。補核 log 發現此合成案例由預讀先取回下一頁，因此不計為普通方向鍵邊界准入證明。兩次長按 Enter 共一個 batch，三個圖片路徑各一筆 HTTP、960×576 來源 PNG、1040×768 固定視窗、Close acknowledged、全部 owner／HTTP thread join 與 exit 0；交付與副本 15 份 loadable sections 相同並通過 strict ad-hoc 驗章。
+
+先前「文字消失」的命名截圖仍可見正文，不能證實 Canvas 根因；本輪原生與後續實站測試改為保存同一次 getAXStateAndScreenshot 回傳的 state／screenshot，未猜測改繪圖。新診斷交付 dist/macos-navigation-waits-final/PTTStella.app；證據 .local/verification/navigation-waits-fix。SubAgent 實站重跑於 10 月 24 日完成：同帳號依序 MobileComm → CmdK Steam → CmdK NBA，三篇取消全文後均以單次 Down 取得下一頁並自動接續一行；各完整讀到 68／41／52 行，末尾推文可見，Home／End、PageDown 與返回列表正常。七筆 Navigate／NavigationResult 的 request 1～7 在同 generation 逐一匹配、全部成功，採樣 dropped 為 0、沒有 renderer_error。實站未保證命中毫秒級的在途取消競態，舊回覆隔離由可控制順序的生產 JS／Rust owner 測試補證。文章標題、公開 URL、大意及成對截圖留在 .local/verification/subagent-navigation-waits-2026-10-23；未發文／推文／寄信或修改最愛／設定。App 留在 NBA 列表。Windows／Linux 原生 not_ready，正文滑鼠仍由使用者驗收，正式發佈維持暫緩。
 
 ## 專版閱讀後的取頁接續與資訊列修復（2026-10-23）
 

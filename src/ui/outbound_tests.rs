@@ -236,7 +236,11 @@ fn outbound_results_match_the_shared_wire_examples() {
         ),
         (
             "navigation_result_sent",
-            Packet::NavigationResult(Feedback::new(NavigationStatus::Sent, "回覆")),
+            super::protocol::NavigationTicket {
+                request: 11,
+                generation: 7,
+            }
+            .finish(Feedback::new(NavigationStatus::Sent, "回覆")),
         ),
         (
             "destination_result_started",
@@ -254,7 +258,11 @@ fn outbound_results_match_the_shared_wire_examples() {
         ),
         (
             "navigation_result_rejected",
-            Packet::NavigationResult(Feedback::new(NavigationStatus::Rejected, "回覆")),
+            super::protocol::NavigationTicket {
+                request: 12,
+                generation: 7,
+            }
+            .finish(Feedback::new(NavigationStatus::Rejected, "回覆")),
         ),
         (
             "paste_result_queued",
