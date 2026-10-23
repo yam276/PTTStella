@@ -12,6 +12,14 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## 最新診斷版追加唯讀測試與鑰匙圈說明（2026-10-24）
+
+沿用已登入的 macos-navigation-waits-final，以 PTTStella 再讀 NBA「[情報] Dalton Knecht 去尼克」完整 79 行、4/4、100%，末尾 corner0111 推文可見；取消全文後單次 Down 取得 45 行並顯示 2～24，手動 Next 續至 67／79，Home 回 1/4、1～23、29%。只記錄 App 顯示的消息大意，未獨立查核；沒有發文、推文、寄信或改設定／最愛。
+
+新增限制：當時 NBA 文章列表被判未知，快速切板明確拒絕；回上層已辨識分類列表後可正常前往 PC_Shopping 進板提示。置底作者的非標準標籤可能相關，尚無格線重現證明，不宣稱已修復。PC_Shopping 後續鍵盤轉場未取得確認，原生座標工具回 noWindowsAvailable，列自動化 not_ready，不據此當作產品按鍵故障。成對畫面、文章大意及有界數字 log 保存在 .local/verification/latest-user-test-2026-10-24；App 留在 PC_Shopping 進板提示。
+
+帳密沿用既有鑰匙圈流程，沒有讀出、保存或記錄密碼；補充同版始終允許與 ad-hoc 換版重複授權的差異，見登入契約。程式實際 designated requirement 為特定 cdhash，未自行建立簽署身分或改安全設定；本輪只有文件／測試紀錄，未重建 App，前次功能 gate 不冒充新增情境全數通過。
+
 ## 方向鍵取頁與跨看板等待生命週期（2026-10-23）
 
 前次 SubAgent 的卡住已由 log 與生產程式交叉定位：網頁文章取消全文後，方向鍵在未知邊界送出普通 next_page 卻帶 keyboard 來源，Rust protocol 拒絕；早期拒絕沒有 navigation_result，前端 navigationRequest 殘留，後續換板仍受影響。修正普通方向鍵取頁走既有普通來源；keyboard 只准入受設定、文章邊界及版本再次核對的跨文章方向鍵。每筆 UI 導覽綁定安全整數 request／generation；送出、拒絕、取消與過期回覆只結束對應等待。工具、原始輸入、換篇、換 session、取消及快速跳轉撤銷舊等待，內部預讀沒有 UI ticket，不會解鎖新請求；唯一 command owner、原有六秒回覆期限及不重送 bytes 規則保留。
