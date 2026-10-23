@@ -4,13 +4,21 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-nba-list-final/PTTStella.app`（2026-10-24，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-main-menu-jump-final/PTTStella.app`（2026-10-24，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 主選單快速前往的選項確認修復（2026-10-24）
+
+前次實站主選單快速前往只移到我的最愛，原因是 Switch::begin 直接送 f，依賴字母直接執行的站端行為；目前帳號只會先定位。改在已辨識主選單的有效項目列中找唯一 Favorite／最愛，沿用 navigation::plan Open 的相對方向鍵＋CR；不修改站端偏好，不加入第二個送鍵器。已選 Favorite 只送 CR，其他位置只走最短相對移動後確認；缺項／重複項仍拒絕，後續確認看板列表才搜尋。指定文章入口也共用修正。
+
+新增回歸先重現舊版送出 f；四個游標位置使用獨立 expected 核對 Down＋CR／CR／Up＋CR／UpUp＋CR。Connection 自 Class 開始精確核對 Up＋CR，再送回中途 Favorite 選取畫面，必須零額外 Enter，之後才接受正常板列表／分段搜尋提示／板名及目標確認；原取消、過期與跨 session 測試保留。首次完整檢查抓到指定文章鏈的舊 f wire expected，已更新同一初始選項開啟契約並重新跑完整 gate；沒有放寬 bytes 或刪除 article 身分驗證／取消案例。
+
+core 13 命令／2 replay（navigation 50 項）、desktop lib 145／bin 141、全 targets Clippy、JS 253、fmt／docs 與 macOS arm64 診斷版 release／strict ad-hoc 通過。交付 dist/macos-main-menu-jump-final/PTTStella.app 的實際執行路徑核對一致。使用者處理鑰匙圈授權後，App 留空密碼並沿用已保存帳密登入 PTTStella；從主選單 Class 選項 CmdK 前往 Steam，再回主選單 Favorite 選項 CmdK 前往 NBA，兩次都直接到達目的板進板圖，沒有停在我的最愛或手動補確認。只在正常進板圖按 Return 後，分別確認 Steam／NBA 文章列表，NBA 原有「[馬路探子]」置底顯示作者仍可見。沒有 renderer_error，採樣 dropped 最大 0；未發文／推文／寄信或改最愛／設定，App 留在已登入 NBA 列表。成對 AX／畫面及有界數字報告位於 .local/verification/main-menu-jump-fix/live，離線證據為 red.log、r2/gate.json；Windows／Linux 原生 not_ready，正文滑鼠仍由使用者驗收，正式發佈仍暫緩。
 
 ## NBA 置底顯示作者與快速切板修復（2026-10-24）
 

@@ -259,6 +259,63 @@ fn board_identity_uses_the_actual_header_suffix_and_distinguishes_empty_lists_an
 }
 
 #[test]
+fn switch_from_main_opens_verified_favorite_from_each_cursor_without_letter_shortcuts() {
+    use pttstella::board_navigation::{BoardName, Start, Switch};
+    for (row, expected) in [
+        (12, b"\x1b[B\r".as_slice()),
+        (13, b"\r"),
+        (14, b"\x1b[A\r"),
+        (15, b"\x1b[A\x1b[A\r"),
+    ] {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&switch_scene("main"));
+        screen.feed(
+            &encoding::encode(&format!(
+                "\x1b[14;21H  \x1b[{};21H●\x1b[{};22H",
+                row + 1,
+                row + 1
+            ))
+            .unwrap(),
+        );
+        let Start::Run { bytes, .. } = Switch::begin(
+            &screen.frame(),
+            BoardName::parse("Stella").unwrap(),
+            std::time::Instant::now(),
+        )
+        .unwrap() else {
+            panic!("workflow")
+        };
+        assert_eq!(bytes, expected, "cursor row {row}");
+    }
+}
+
+#[test]
+fn switch_from_main_rejects_missing_or_ambiguous_favorite_before_sending_input() {
+    use pttstella::board_navigation::{self as board, BoardName, Switch};
+    for (row, item) in [
+        (13, "                      (U)ser         【 個人設定區 】"),
+        (14, "                      (F)avorite     【 我的最愛 】"),
+    ] {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&switch_scene("main"));
+        replace(&mut screen, row, item, "0");
+        screen.feed(&encoding::encode("\x1b[14;21H●\x1b[14;22H").unwrap());
+        assert!(matches!(
+            navigation::analyze(&screen.frame()),
+            Context::MainMenu { .. }
+        ));
+        assert!(matches!(
+            Switch::begin(
+                &screen.frame(),
+                BoardName::parse("Stella").unwrap(),
+                std::time::Instant::now()
+            ),
+            Err(board::Error::Unsupported)
+        ));
+    }
+}
+
+#[test]
 fn switch_from_main_waits_for_prompt_then_selected_target_before_entering_once() {
     use pttstella::board_navigation::{Advance, BoardName, Start, Switch};
     let now = std::time::Instant::now();
@@ -269,7 +326,7 @@ fn switch_from_main_waits_for_prompt_then_selected_target_before_entering_once()
     else {
         panic!("expected workflow")
     };
-    assert_eq!(bytes, b"f");
+    assert_eq!(bytes, b"\r");
     assert_eq!(switch.observe(&screen.frame(), now).unwrap(), Advance::Wait);
     for (name, expected) in [
         ("boards", b"s".as_slice()),

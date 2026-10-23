@@ -1085,9 +1085,9 @@ async fn board_switch_serializes_confirmed_steps_and_never_uses_a_synchronized_p
     connection.connect().unwrap();
     let (stream, _) = listener.accept().await.unwrap();
     let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-    ws.send(Message::Binary(board_page("main").into()))
-        .await
-        .unwrap();
+    let mut main = board_page("main");
+    main.extend(crate::encoding::encode("\x1b[14;21H  \x1b[15;21H●\x1b[15;22H").unwrap());
+    ws.send(Message::Binary(main.into())).await.unwrap();
     let initial = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
     connection
         .request_switch_board(initial.stamp(), BoardName::parse("stella").unwrap())
@@ -1095,7 +1095,10 @@ async fn board_switch_serializes_confirmed_steps_and_never_uses_a_synchronized_p
         .wait()
         .await
         .unwrap();
-    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"f");
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"\x1b[A\r"
+    );
     let active = connection.updates.borrow().clone();
     assert_eq!(active.frame.revision, initial.frame.revision);
     assert_eq!(active.input_epoch, initial.input_epoch + 1);
@@ -1116,6 +1119,16 @@ async fn board_switch_serializes_confirmed_steps_and_never_uses_a_synchronized_p
         connection.updates.borrow().destination,
         NavigationProgress::Active { .. }
     ));
+    // The menu may paint the selected Favorite before its queued Enter is
+    // processed. Never send a second confirmation into the following screen.
+    ws.send(Message::Binary(board_page("main").into()))
+        .await
+        .unwrap();
+    wait(&connection, |v| {
+        v.frame.revision > initial.frame.revision && !v.output_pending
+    })
+    .await;
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
     ws.send(Message::Binary(board_page("boards").into()))
         .await
         .unwrap();
