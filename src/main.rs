@@ -224,6 +224,18 @@ fn main() {
             ));
         }
     }
+    let test_window = ui::diagnostics::diagnostic_build() || probe.is_some();
+    #[cfg(target_os = "macos")]
+    if test_window {
+        use dioxus::desktop::tao::{
+            event_loop::EventLoopBuilder, platform::macos::EventLoopExtMacOS,
+        };
+        // Dioxus shows the WebView after initialization. Keep that show from
+        // activating this test app over the user's currently active app.
+        let mut event_loop = EventLoopBuilder::with_user_event().build();
+        event_loop.set_activate_ignoring_other_apps(false);
+        config = config.with_event_loop(event_loop);
+    }
     let props = ui::AppProps {
         probe,
         window_probe,
@@ -240,6 +252,11 @@ fn main() {
             "PTTStella"
         })
         .with_inner_size(dioxus::desktop::LogicalSize::new(1040.0, 740.0));
+    let window = if test_window {
+        window.with_always_on_top(true).with_focused(false)
+    } else {
+        window
+    };
     #[cfg(target_os = "windows")]
     let window = {
         use dioxus::desktop::tao::{
