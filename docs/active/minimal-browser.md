@@ -18,7 +18,7 @@
 
 原生座標點擊與滾輪工具在傳送前回 noWindowsAvailable，AX Raise 也無法排除；因此列表／正文點擊、左緣返回及滾輪仍 not_ready，已請使用者手動核對，不能以 AX 點工具按鈕當作正文滑鼠通過。可用的有界輪替 log 沒有 renderer_error、採樣 dropped 最大 0；舊版正常關窗後 run_ok／cleanup_ok 均 true，程序已退出。
 
-依使用者要求，診斷編譯或合成 probe 視窗改為置頂且初始不要求焦點；macOS event loop 同時停用啟動時忽略其他 App 的自動啟用。一般發佈保留原行為，不加定時 Raise、不禁用正常手動聚焦，全文失焦暫停與原准入保留。desktop lib 145／bin 141、全 targets Clippy、fmt／docs 與新版 macOS arm64 release／strict ad-hoc 打包通過（window-gate/gate.json）。交付 dist/macos-floating-test-final/PTTStella.app 啟動畫面為未啟用狀態，實站續測正等待新簽章鑰匙圈授權；未宣稱置頂重疊及手動滑鼠已通過。使用者要求一般瀏覽確認後推送 develop，目前保留此待驗條件，未推送。Windows／Linux 原生仍 not_ready，正式發佈維持暫緩。
+依使用者要求，診斷編譯或合成 probe 視窗改為置頂且初始不要求焦點；macOS event loop 同時停用啟動時忽略其他 App 的自動啟用。一般發佈保留原行為，不加定時 Raise、不禁用正常手動聚焦，全文失焦暫停與原准入保留。desktop lib 145／bin 141、全 targets Clippy、fmt／docs 與新版 macOS arm64 release／strict ad-hoc 打包通過（window-gate/gate.json）。交付 dist/macos-floating-test-final/PTTStella.app 啟動畫面為未啟用狀態，實際程序路徑核對一致；鑰匙圈讀取完成後留空密碼登入，再從主選單 CmdK 前往 MobileComm。平板實測文章取消全文後以單次 Down 取頁，完整到 65 行、3/3、100%，最後 birdy590 推文可見；Home 回 1～23、35%。初次 j／k 重建投影，逐鍵 log 證明收到非 ASCII 字形（shape 5）及 textarea text；切換輸入來源後，英文 j 取得第二頁並顯示 2～24，k 回 1～23，shape 1／defaultPrevented／reading_move 相符，符合 README 的英文輸入契約，不據此修改中文輸入。輸入來源切換已還原。Left 返回後再 CmdK 前往 NBA，進板確認後列表含原括號置底作者正常，App 留在 NBA；數字 log 無 renderer_error、採樣 dropped 最大 0。未宣稱置頂重疊及手動滑鼠已通過。使用者要求一般瀏覽確認後推送 develop，目前保留原生滑鼠待驗條件，未推送。Windows／Linux 原生仍 not_ready，正式發佈維持暫緩。
 
 ## 主選單快速前往的選項確認修復（2026-10-24）
 
