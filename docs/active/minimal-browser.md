@@ -4,13 +4,21 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-input-fix-final/PTTStella.app`（2026-10-23，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-reading-continuity-final/PTTStella.app`（2026-10-23，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 專版閱讀後的取頁接續與資訊列修復（2026-10-23）
+
+PTTStella 帳號實讀 MobileComm、Steam、NBA 三個即時熱門專版，沒有進入八卦／政黑、沒有發文／推文／寄信。本機摘要與閱讀範圍保留於 .local/verification/specialty-reading-2026-10-23；Steam 只讀正文與推文開頭，不宣稱讀完全部 14 頁。發現隱藏 WebView 的全文載入依既有規則暫停，但提示未解釋；取消後，手動取回的新頁只更新快取，原本的捲動需再按一次；末頁 Home 後頁碼／百分比已更新，目前顯示行號仍沿用站端尾頁。
+
+修正把暫停原因與原閱讀 permission 共用，顯示背景／操作暫停及自動恢復說明，仍可取消，沒有放寬背景取頁。手動邊界最多保留一筆綁定 generation／文章 ID 的閱讀意圖，等新範圍和導覽結果到齊後只接續一次本機捲動，不重送取頁；其他輸入、換篇、取消、失焦、工具或拒絕會撤銷。Rust 只驗證並提供頁尾數字 cell 範圍，JS 用可見快取畫面列更新行號（折行按畫面列計數）；來源格線／PNG 不改，ANSI 配色仍使用原頁樣式。
+
+core 13 命令／2 replay、desktop lib 144／bin 137、全 targets Clippy、JS 249、fmt／docs 通過。原生 macOS arm64 inline_pages 以分段回覆證實一次 PageDown 即自動顯示第二頁；Home 行號回到 1～23，展圖後 End 仍能看到末端。兩次長按 Enter 同一 batch、三個圖片路徑各一筆 HTTP、來源 PNG、站端精確一筆 PageDown、Close acknowledged 與全部 owner join 通過。暫停原因與取消狀態另由生產 JS 測試覆蓋；沒有宣稱本輪驗證 Windows／Linux 或所有偶發卡頓。診斷交付保留預設本機 log，證據 .local/verification/reading-continuity-fix；正式發佈仍暫緩。
 
 ## 工具列焦點與中文輸入法 Control 快捷鍵修復（2026-10-23）
 

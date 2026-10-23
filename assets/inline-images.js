@@ -300,7 +300,7 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         if(cached){
             const row=packet.frame.rows-1,height=base.y(row+1)-base.y(row);
             // Rust identifies the numeric status cells. Only the visible
-            // page and percentage are local decorations. Colours come from
+            // page, visible row range and percentage are local decorations. Colours come from
             // the visible source page; source PNGs stay intact.
             let footerGlyphs=packet.frame.glyphs.filter(g=>g.row===row),progress=null;
             const cells=article.percent_cells;
@@ -322,6 +322,19 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
                 progress=JSON.stringify([progress,page.line,page.number]);
                 const cells=article.page_cells,value=cells?String(page.number).padStart(cells.end-cells.start," "):null;
                 if(cells&&value.length===cells.end-cells.start){
+                    footerGlyphs=footerGlyphs.map(g=>g.col>=cells.start&&g.col<cells.end?{...g,text:value[g.col-cells.start]}:g);
+                }
+            }
+            if(article.range_cells&&viewport){
+                let first=Math.min(bodyRows-1,mapping.rowAt(top,true));
+                let last=Math.min(bodyRows-1,mapping.rowAt(Math.max(top,readingBottom-.01),true));
+                if(!freeScroll&&!wholeRow(first)&&first<last)first++;
+                if(!freeScroll&&!wholeRow(last)&&last>first)last--;
+                const range=[article.first_line+first,article.first_line+Math.max(first,last)];
+                progress=JSON.stringify([progress,range]);
+                for(const [index,cells] of [article.range_cells.first,article.range_cells.last].entries()){
+                    const width=cells.end-cells.start,number=String(range[index]);
+                    const value=number.length<=width?number.padStart(width," "):"-".repeat(width);
                     footerGlyphs=footerGlyphs.map(g=>g.col>=cells.start&&g.col<cells.end?{...g,text:value[g.col-cells.start]}:g);
                 }
             }

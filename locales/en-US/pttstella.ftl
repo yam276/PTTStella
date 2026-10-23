@@ -615,6 +615,8 @@ account-action-stale = The screen changed. Right-click the ID again.
 reply-focus = Toggle highlighting for this ID
 
 article-load-loading = Loading article · { $lines } lines received
+article-load-paused-background = Loading paused while window is inactive · { $lines } lines retained; resumes when you return
+article-load-paused-interaction = Loading paused during interaction · { $lines } lines retained; resumes when finished
 article-load-complete = Article loaded · { $lines } lines
 article-load-cancelled = Loading cancelled · { $lines } lines retained
 article-load-stopped = Loading interrupted · { $lines } lines retained

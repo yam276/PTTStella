@@ -609,6 +609,8 @@ account-action-stale = 畫面已改變，請重新在 ID 上按右鍵。
 reply-focus = 切換此 ID 推文底色標示
 
 article-load-loading = 正在載入全文 · 已取得 { $lines } 行
+article-load-paused-background = 視窗不在前景，已暫停載入 · 保留 { $lines } 行；回到視窗後自動繼續
+article-load-paused-interaction = 操作中，已暫停載入 · 保留 { $lines } 行；操作結束後自動繼續
 article-load-complete = 全文已載入 · { $lines } 行
 article-load-cancelled = 已取消全文載入 · 保留 { $lines } 行
 article-load-stopped = 讀取中斷 · 保留 { $lines } 行
