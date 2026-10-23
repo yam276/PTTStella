@@ -63,6 +63,20 @@ test("trusted tool edits autosave, coalesce while writing, and retain failures f
 });
 function deferred(){let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};}
 
+test("finishing embedded login closes settings without requiring a DOM event",async()=>{
+    const env=environment("surface-settings.js","createSettingsDialog");let closed=0;
+    const ui=env.create({onClose(){closed++;}});
+    await ui.open(openData());
+    assert.doesNotThrow(()=>ui.close({isTrusted:true}));
+    assert.equal(env.node("font-dialog").open,false);assert.equal(closed,1);
+    await ui.open(openData());env.node("tools-show-ball").checked=false;
+    env.fire("tools-show-ball","change");
+    ui.close({isTrusted:true});assert.equal(env.node("font-dialog").open,true);
+    assert.equal(env.sent.at(-1).kind,"settings_save");
+    ui.saved({status:"saved"});assert.equal(env.node("font-dialog").open,false);assert.equal(closed,2);
+    ui.destroy();
+});
+
 test("closing a settings dialog while fonts load cannot repaint or steal focus",async()=>{
     const env=environment("surface-settings.js","createSettingsDialog"),load=deferred();
     const ui=env.create({loadFonts:()=>load.promise});

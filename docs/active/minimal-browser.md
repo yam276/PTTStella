@@ -12,6 +12,12 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## 一般使用實測：登入完成後設定關閉失敗（2026-10-23）
+
+依使用者授權，以 PTTStella 帳號模擬一般操作（不發文、最多一封指定收件人的測試信，加入最愛並閱讀文章）。macOS 實站按鈕登入重現 `preventDefault is not a function`，診斷紀錄包含 renderer_error、run_ok=false 與 cleanup_ok=true。根因是內嵌登入／站點操作完成後，以只有 isTrusted 的內部物件呼叫設定關閉；關閉程式卻假定必有 DOM preventDefault 方法。改為方法存在時才呼叫，保留原本 autosave 與關閉流程。回歸案例覆蓋無事件方法的完成回呼，以及未保存設定必須等成功保存才關閉。
+
+全部 JS 243、docs 與 macOS arm64 release／ad-hoc 打包通過。修正版 `dist/macos-diagnostic-user-test/PTTStella.app` 已以鑰匙圈保存的帳號完成實站登入、通過歡迎畫面並進入主選單與信件編輯器；未再出現該例外。中文貼上預覽與站端顯示已核對；自動化直接中文字元與 Ctrl+X 未得到預期結果，仍待區分輸入工具與原生操作差異，不能宣稱寄信或一般瀏覽全數通過。進行中證據保留在 .local/verification/live-user-2026-10-23；未恢復正式發佈。
+
 ## 偶發卡頓診斷版與發佈暫緩（2026-10-22）
 
 使用者回報滑鼠與鍵盤偶爾無反應，或做其他操作後才恢復，要求先交付自動記錄 log 的版本，並自行將 repo 改回 Private。四架構 verify 39758784499 已全部成功，Release PR #1 已合併為 main d8d605d；main／develop 已同步此合併歷史。依新指示取消尚未完成的正式發佈 39761002694，確認尚無 v0.1.0 tag／Release。保留 main 的 0.1.0 來源；本機 develop 的下一版與診斷交付為 0.2.0-dev.1，不恢復或另行公開發佈。
