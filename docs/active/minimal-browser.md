@@ -4,13 +4,21 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-floating-test-final/PTTStella.app`（2026-10-24，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-list-home-end-final/PTTStella.app`（2026-10-24，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 普通編號列的彩券顯示作者（2026-10-24）
+
+續查已登入 NBA 當頁，普通編號文章含「[彩券]」作者欄，診斷 profile 為 unknown；即使畫面首尾命中正確，原有保守准入仍會拒絕。以自製三列 fixture 的普通編號列換成同一固定標籤，先重現 ArticleList 辨識失敗。只補此精確標籤，不普遍放寬其他普通編號括號名稱；日期、13 欄作者、文章標記、標頭／游標與完整畫面要求保留。黑白名單／作者右鍵仍只接受真正帳號。
+
+核心新增 First／Last／Open、current_board 及作者操作不含顯示標籤的獨立 expected，負例保留近似標籤、缺括號、不合法日期與提示文字；Connection 對同一合成普通編號標籤頁精確核對 Home／End、舊 stamp 拒絕、零重複輸入與 Close acknowledged。core 13 命令／2 replay（navigation 51 項）、desktop lib 145／bin 141、全 targets Clippy、JS 256、fmt／docs 與 macOS arm64 release／strict ad-hoc 全通過，證據 .local/verification/lottery-list-author/gate.json；沒有放寬或移除原普通括號標籤負例。合併兩項修正的 dist/macos-list-home-end-final/PTTStella.app 已開啟，實際程序路徑與交付一致，目前等待新簽章鑰匙圈授權。實站原生滑鼠限制仍單獨記錄，不以合成資料宣稱手動驗收完成。
+
+舊 macos-floating-test-final 換版關窗時，出現「畫面工作未確認結束：EvalError::Finished - eval has already ran；停止訊號：未確認」。診斷 finish 為 run_ok true／cleanup_ok false；已保存同次 AX／畫面與 finish，第二次關閉錯誤視窗後程序退出。此獨立清理問題尚未定位或修復，不計為關閉驗收通過；證據 .local/verification/list-viewport-edges/old-cleanup-failure.*、old-finish.json。先前條件式推送 develop 仍未執行，原生滑鼠待驗與此清理失敗均需如實保留。
 
 ## 列表上下留白的滑鼠 Home／End（2026-10-24）
 

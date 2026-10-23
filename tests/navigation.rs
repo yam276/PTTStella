@@ -797,6 +797,59 @@ fn pinned_display_authors_preserve_list_targets_and_quick_board_switching() {
 }
 
 #[test]
+fn numbered_lottery_display_author_keeps_list_edges_and_does_not_become_an_account() {
+    let mut screen = fixture("list");
+    replace(
+        &mut screen,
+        5,
+        &article_row("123", "    ", "10/16", "[彩券]", "□ 自製公告"),
+        "0",
+    );
+    screen.feed(b"\x1b[5;1H");
+    let frame = screen.frame();
+    let context = navigation::analyze(&frame);
+    assert!(matches!(context, Context::ArticleList { ref articles, .. } if articles.len() == 3));
+    assert_eq!(
+        navigation::plan(&context, Intent::First).unwrap(),
+        b"\x1b[H"
+    );
+    assert_eq!(navigation::plan(&context, Intent::Last).unwrap(), b"\x1b[F");
+    assert_eq!(
+        navigation::plan(&context, Intent::Open { row: 5 }).unwrap(),
+        b"\x1b[B\r"
+    );
+    assert_eq!(
+        pttstella::board_navigation::current_board(&frame)
+            .unwrap()
+            .as_str(),
+        "Stella"
+    );
+    assert_eq!(
+        pttstella::filters::article_authors(&frame, &frame)
+            .iter()
+            .map(|word| word.id.as_str())
+            .collect::<Vec<_>>(),
+        ["alice", "bob"]
+    );
+    for (author, date, title) in [
+        ("[彩卷]", "10/16", "□ 自製公告"),
+        ("[樂透]", "10/16", "□ 自製公告"),
+        ("[彩券", "10/16", "□ 自製公告"),
+        ("[彩券]", "99/99", "□ 自製公告"),
+        ("[彩券]", "10/16", "是否確定？[Y/n]"),
+    ] {
+        replace(
+            &mut screen,
+            5,
+            &article_row("123", "    ", date, author, title),
+            "0",
+        );
+        screen.feed(b"\x1b[5;1H");
+        unknown(&screen.frame());
+    }
+}
+
+#[test]
 fn pinned_display_authors_do_not_admit_prompts_or_broken_columns() {
     for (number, label, title) in [
         ("122", "[測試作者]", "□ 非置底"),

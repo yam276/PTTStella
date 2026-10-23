@@ -674,15 +674,16 @@ fn article(line: &Row<'_>, row: usize) -> Option<Article> {
     // required along with number/date/author and the surrounding list anchors.
     let mark = title.split_whitespace().next()?;
     let deleted = author == "-" && matches!(mark, "╳" | "□");
-    // Legacy pinned headers may retain a bracketed display author instead of
-    // an account ID. This admits only that row shape, never an account action.
-    let display_author = prefix == "★"
-        && author
-            .strip_prefix('[')
-            .and_then(|label| label.strip_suffix(']'))
-            .is_some_and(|label| {
-                !label.is_empty() && label.chars().all(|c| c.is_alphanumeric() || c == '_')
-            });
+    // [彩券] also occurs on numbered rows. Other display labels remain
+    // limited to pinned headers; none of them are account IDs for actions.
+    let display_author = author == "[彩券]"
+        || prefix == "★"
+            && author
+                .strip_prefix('[')
+                .and_then(|label| label.strip_suffix(']'))
+                .is_some_and(|label| {
+                    !label.is_empty() && label.chars().all(|c| c.is_alphanumeric() || c == '_')
+                });
     if !deleted
         && !display_author
         && (author.len() > 16

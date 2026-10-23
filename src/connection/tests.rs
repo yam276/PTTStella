@@ -948,12 +948,21 @@ async fn keyboard_noop_streaming_and_unanswered_moves_have_one_owner() {
 
 #[tokio::test]
 async fn list_pointer_edges_send_exact_home_end_once_per_fresh_frame() {
-    for page in ["main_menu", "boards_caption", "list_edge_cases"] {
+    for (page, lottery) in [
+        ("main_menu", false),
+        ("boards_caption", false),
+        ("list_edge_cases", false),
+        ("list", true),
+    ] {
         let (listener, connection) = idle_local().await;
         connection.connect().unwrap();
         let (stream, _) = listener.accept().await.unwrap();
         let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-        ws.send(Message::Binary(navigation_page(page).into()))
+        let mut frame = navigation_page(page);
+        if lottery {
+            frame.extend(crate::encoding::encode("\x1b[4;18H[彩券]       \x1b[5;1H").unwrap());
+        }
+        ws.send(Message::Binary(frame.clone().into()))
             .await
             .unwrap();
         let mut view = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
@@ -969,7 +978,7 @@ async fn list_pointer_edges_send_exact_home_end_once_per_fresh_frame() {
             assert!(connection.navigate(view.stamp(), intent).await.is_err());
             assert!(timeout(Duration::from_millis(30), ws.next()).await.is_err());
             let received = view.received;
-            ws.send(Message::Binary(navigation_page(page).into()))
+            ws.send(Message::Binary(frame.clone().into()))
                 .await
                 .unwrap();
             view = wait(&connection, |v| {
