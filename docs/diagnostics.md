@@ -2,6 +2,8 @@
 
 診斷版供重現偶發卡頓、滑鼠／鍵盤無反應與操作後才恢復的問題。一般建置預設不開啟；本機以 `PTTSTELLA_DIAGNOSTIC_BUILD=1` 建置的 App，直接開啟就會記錄，視窗標題標示「診斷版」。不自動登入、不自動重送操作，也不改變原有操作准入規則。
 
+診斷版與合成 probe 視窗置頂，啟動時不要求焦點；macOS 另停用啟動時忽略其他 App 的自動啟用。仍可由使用者點擊視窗取得焦點，沒有反覆置前的 timer。一般發佈建置保持原有視窗行為；僅指定診斷紀錄目錄不會啟用此測試視窗設定。全文失焦暫停與其他操作保護維持原規則，置頂不代表已取得焦點。
+
 macOS 紀錄目錄為 `~/Library/Application Support/PTTStella/diagnostics`；其他平台使用同一 ProjectDirs 本機資料目錄。可明確設定 `PTTSTELLA_DIAGNOSTICS_DIR` 指定診斷目錄；合成 probe 的診斷版預設寫在該 probe 輸出下，不混入正常使用紀錄。
 
 遇到問題後，可按 macOS `Cmd+Shift+L`（其他平台 `Ctrl+Shift+L`）標記時間，再正常離開 App，把整個 diagnostics 目錄壓縮提供分析。標記只供診斷，不送至 PTT；如果當下無法操作，恢復後再按即可。每個 JSONL 行都有 session 的 Unix 毫秒時間、相對毫秒與程序 PID，可以比對大約發生時間。重現不需要另外開終端機。
