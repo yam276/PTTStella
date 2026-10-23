@@ -398,13 +398,13 @@ function pointerView() {
     if(!hasPageEdges(latest?.navigation)&&latest?.navigation.kind!=="continue_prompt")return null;
     const bounds=surface.getBoundingClientRect(),visible=viewport.getBoundingClientRect();
     return JSON.stringify([latest.presentation,latest.navigation.kind,latest.article?.id,viewport.scrollTop,viewport.scrollLeft,
-        viewport.clientWidth,viewport.clientHeight,bounds.left,bounds.top,bounds.width,bounds.height,visible.top]);
+        viewport.clientWidth,viewport.clientHeight,bounds.left,bounds.top,bounds.width,bounds.height,visible.top,visible.left]);
 }
-function navigationPageAt(point,clientY,region,halves) {
+function navigationPageAt(point,clientY,region,halves,viewportEdges=false) {
     if(point&&(point.row<region.first||point.row>=region.last)||!point&&!Number.isFinite(clientY))return null;
     const bounds=surface.getBoundingClientRect(),visible=viewport.getBoundingClientRect();
-    const top=Math.max(visible.top,bounds.top+grid.y(region.first)/grid.ratio);
-    const bottom=Math.min(visible.top+viewport.clientHeight,bounds.top+grid.y(region.last)/grid.ratio);
+    const top=viewportEdges?visible.top:Math.max(visible.top,bounds.top+grid.y(region.first)/grid.ratio);
+    const bottom=viewportEdges?visible.top+viewport.clientHeight:Math.min(visible.top+viewport.clientHeight,bounds.top+grid.y(region.last)/grid.ratio);
     const y=clientY??bounds.top+(grid.y(point.row)+grid.bottom(point.row))/2/grid.ratio;
     if(y<top||y>=bottom)return null;
     const edge=Math.min((bottom-top)/4,Math.max(16,Math.min(32,(grid.bottom(region.first)-grid.y(region.first))/grid.ratio)));
@@ -416,8 +416,11 @@ function readingPageAt(point,clientY) {
     return navigationPageAt(point,clientY,navigationBackRegion(latest.navigation,latest.article),true);
 }
 function listEdgeAt(point,clientY) {
-    if(!hasPageEdges(latest.navigation)||latest.navigation.kind==="article_reading"||!Number.isFinite(clientY))return null;
-    return navigationPageAt(point,clientY,{first:0,last:latest.frame.rows-1},false);
+    if(!Number.isFinite(clientY)||!hasPageEdges(latest.navigation)||latest.navigation.kind==="article_reading"||!grid)return null;
+    const region={first:0,last:latest.frame.rows-1};
+    // A fitted terminal can leave black margins above/below the grid. Keep
+    // its original grid-edge targets and also admit the actual viewport edges.
+    return navigationPageAt(point,clientY,region,false,true)||navigationPageAt(point,clientY,region,false);
 }
 function hitAt(point,clientY) {
     if(!point||blocked()||dragging?.moved||!stationMouse.local()) return null;
@@ -443,6 +446,13 @@ function hitAt(point,clientY) {
 // Inserted images remain outside terminal cells. Only navigation uses their
 // physical position; text selection and the image context menu keep their owners.
 function pointerHit(point,event) {
+    if(!point&&!blocked()&&!dragging?.moved&&stationMouse.local()&&canNavigate()){
+        const visible=viewport.getBoundingClientRect();
+        if(event.clientX>=visible.left&&event.clientX<visible.left+viewport.clientWidth
+            &&event.clientY>=visible.top&&event.clientY<visible.top+viewport.clientHeight){
+            const edge=listEdgeAt(null,event.clientY);if(edge)return edge;
+        }
+    }
     const image=inlineImages.linkAtPoint(event);
     const bounds=surface.getBoundingClientRect();
     const clipped=point===null&&event.clientX>=bounds.left&&event.clientX<bounds.right?
@@ -458,6 +468,7 @@ function setHover(point,redraw=true,preview=true,event=null) {
     const changed=index!==hoveredLink;hoveredLink=index;
     hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:0,kind:hit.kind}:null;
     surface.dataset.pointerAction=hit?.kind==="page"?hit.action:hit?.kind||"none";
+    viewport.dataset.pointerAction=surface.dataset.pointerAction;
     surface.style.cursor=["back","page"].includes(hit?.kind)?"":hit?"pointer":"default";
     surface.title=index>=0?latest.links[index].url:"";
     if(preview)previewHover(index);

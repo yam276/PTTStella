@@ -12,6 +12,12 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## 列表上下留白的滑鼠 Home／End（2026-10-24）
+
+使用者確認要求滑鼠點畫面最頂／最底。既有首尾僅在 BBS 格線內，置中後的上下黑邊因沒有 terminal cell 而無法命中。為已辨識文章列表、看板／最愛／分類、主選單、系統／信件／精華列表與說明頁補上 viewport 首尾窄帶，沿用共同幾何及 First／Last sender；格線內原命中、網址及返回優先、底部狀態列拒絕保持。留白中段與未知／空列表不放行，不新增覆蓋層或常駐提示，黑邊顯示相同帶橫線箭頭。閱讀模式與原生 Home／End 鍵不改。
+
+新增生產 pointerdown／up／click 回歸先重現黑邊零送出與缺少游標狀態，另核對六種列表 profile 的頂／底各僅送一筆、保留舊格線入口、留白中段及頁尾不觸發；Shift、拖曳、過期幾何、未繪圖、忙碌、外站路由及視窗外點擊均拒絕。core 13 命令／2 replay、desktop lib 145／bin 141、全 targets Clippy、JS 256、fmt／docs 與 macOS arm64 release／strict ad-hoc 通過（r3/gate.json）。首次新增未繪圖負例後，全套檢查抓到不帶 clientY 的既有獨立命中測試會先讀幾何；已先驗 clientY 再讀 grid，保留原有測試及新未繪圖拒絕。來源與證據 .local/verification/list-viewport-edges；新版原生操作驗收待補，既有 noWindowsAvailable 限制不能以 JS 測試冒充通過。先前一般瀏覽後推送 develop 的手動滑鼠待驗條件仍保留。
+
 ## 一般瀏覽回歸與測試視窗（2026-10-24）
 
 沿用主選單修正版實站唯讀瀏覽 NBA、Steam：NBA「Walter Clayton Jr. 跟獨行俠隊簽下雙向約」取消全文後，兩次單次 Down 分別取得 44／56 行並自動接續至 2～24／23～45；End 可見最後 dash007 推文，3/3、100%。Home／j／k、PageDown／PageUp 往返正確，閱讀中 CmdK 前往 Steam 進板圖，確認後到文章列表。Steam「Epic 的免費遊戲 + steam PTT 評價」以 Enter 開啟，取消後手動取頁至 76 行、4/4、100%，最後 t32908 推文可見；Left 返回列表。再用 AX 點浮球／導覽分類、Esc 關閉工具，未另外重聚焦即可 Up＋Right 進入相鄰 reanimal 文章；只核對首屏，未宣稱完整讀完 55 頁，載入暫停中 Left 正常返回。文章主張大意、URL 與成對 AX／截圖見 .local/verification/general-browsing-2026-10-24/notes.json；沒有發文／推文／寄信或改最愛／設定。

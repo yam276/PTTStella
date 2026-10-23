@@ -13,7 +13,7 @@ function fixture({cached=true}={}){
         latest:{presentation:2,connected:true,input_pending:false,output_pending:false,
             frame:{cols:80,rows:cached?81:24},navigation:{kind:'article_reading',first_line:1,percent:50},
             article:cached?{id:1,first_line:1,last_line:80,end:false}:null},
-        viewport:{clientHeight:480,clientWidth:960,scrollTop:0,scrollLeft:0,scrollHeight:1944,
+        viewport:{dataset:{},clientHeight:480,clientWidth:960,scrollTop:0,scrollLeft:0,scrollHeight:1944,
             getBoundingClientRect:()=>({top:40,left:0}),setPointerCapture:id=>capture.add(id),
             hasPointerCapture:id=>capture.has(id),releasePointerCapture:id=>capture.delete(id)},
         surface:{dataset:{},offsetTop:0,getBoundingClientRect:()=>({top:40-f.viewport.scrollTop,left:0,width:960,height:cached?1944:576})},
@@ -290,4 +290,59 @@ test('list edge hover uses the same Home/End cursors without a marker or tooltip
         assert.equal(f.surface.dataset.pointerAction,action);assert.equal(f.surface.style.cursor,'');
         assert.equal(f.surface.title,'');assert.equal(f.navigationMarker.hidden,true);
     }
+});
+
+function letterboxedList(kind='article_list'){
+    const f=listFixture(kind);f.viewport.clientHeight=800;
+    f.surface.getBoundingClientRect=()=>({top:152,left:0,right:960,bottom:728,width:960,height:576});
+    return f;
+}
+test('list Home/End also reach the physical viewport edges outside the centered BBS grid',()=>{
+    for(const kind of ['main_menu','system_menu','document_list','board_list','article_list','command_help']){
+        for(const [y,action] of [[5,'first'],[795,'last']]){
+            const f=letterboxedList(kind);assert.equal(f.cellAt(f.event(40,y),false),null);
+            f.tap(40,y);f.tap(40,y);
+            assert.deepEqual(f.sent.map(p=>[p.intent,p.source]),[[{action},'pointer']],kind);
+            assert.deepEqual(f.selections,[]);
+        }
+    }
+    // Keep both the old grid-edge target and the inert middle of the margin.
+    for(const [y,action] of [[117,'first'],[662,'last']]){
+        const f=letterboxedList();f.tap(40,y);assert.deepEqual(f.sent.map(p=>p.intent),[{action}]);
+    }
+    for(const y of [60,680,730]){const f=letterboxedList();f.tap(40,y);assert.deepEqual(f.sent,[]);}
+});
+test('viewport margin Home/End reject stale geometry, Shift, drags, foreign routes and outside-window points',()=>{
+    for(const reason of ['shift','drag','untrusted','remote','blocked','pending','output','no-grid','profile','held-resize','released-scroll','outside-left','outside-top','outside-right','outside-bottom']){
+        const f=letterboxedList(),e=f.event(40,5,{shiftKey:reason==='shift',isTrusted:reason!=='untrusted'});
+        if(reason==='remote')f.stationMouse.local=()=>false;
+        if(reason==='blocked')f.blocked=()=>true;
+        if(reason==='pending')f.latest.input_pending=true;
+        if(reason==='output')f.latest.output_pending=true;
+        if(reason==='no-grid')f.grid=null;
+        if(reason==='outside-left')e.clientX=-1;
+        if(reason==='outside-top')e.clientY=39;
+        if(reason==='outside-right')e.clientX=960;
+        if(reason==='outside-bottom')e.clientY=840;
+        f.pointerdown(e);
+        if(reason==='profile')f.latest.navigation.kind='unknown';
+        if(reason==='held-resize')f.viewport.clientHeight=900;
+        f.pointerup(reason==='drag'?{...e,clientX:e.clientX+10}:e);
+        if(reason==='released-scroll')f.viewport.scrollTop=24;
+        f.click(e);assert.deepEqual(f.sent,[],reason);
+    }
+    for(const kind of ['unknown','empty_list','continue_prompt','article_reading']){
+        const f=letterboxedList(kind);f.tap(40,5);assert.deepEqual(f.sent,[],kind);
+    }
+});
+test('viewport margin hover shows the shared bar-arrow cursor and clears without a row marker',()=>{
+    const f=letterboxedList();f.navigationMarker={style:{},dataset:{}};f.surface.style={};
+    f.hoveredLink=-1;f.pointerClient=null;f.previewHover=()=>{};f.draw=()=>{};f.tr=key=>key;
+    vm.runInContext(source.slice(source.indexOf('function setHover('),source.indexOf('function refreshNavigation(')),f);
+    for(const [y,action] of [[5,'first'],[795,'last']]){
+        f.setHover(null,false,false,f.event(40,y));
+        assert.equal(f.viewport.dataset.pointerAction,action);
+        assert.equal(f.surface.title,'');assert.equal(f.navigationMarker.hidden,true);
+    }
+    f.setHover(null,false,false);assert.equal(f.viewport.dataset.pointerAction,'none');
 });
