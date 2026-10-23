@@ -82,7 +82,9 @@ pub fn app(props: AppProps) -> Element {
     let owner = use_hook(move || {
         super::probe::surface_sample(sample_case.as_deref(), probing, media_origin.as_deref())
             .and_then(|bytes| {
-                if boards_probing {
+                if sample_case.as_deref() == Some("control_input") {
+                    Connection::start_control_input_probe(bytes)
+                } else if boards_probing {
                     Connection::start_board_probe()
                 } else if matches!(sample_case.as_deref(), Some("full_load" | "long_load")) {
                     let long = sample_case.as_deref() == Some("long_load");

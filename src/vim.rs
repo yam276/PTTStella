@@ -175,8 +175,12 @@ impl Keyboard {
         self.context(context);
         // Normal mode is a command surface even with a CJK input source active.
         // WebKit can report Process/229 instead of a Latin key. Use the physical
-        // code only in browsing modes; native text/composition keeps its owner.
-        let normalized = if self.enabled && !self.input && !self.once {
+        // code in browsing modes and explicit Control shortcuts. A CJK input
+        // source can report a non-Latin glyph for Ctrl+X even outside Vim.
+        // Ordinary text, Alt-produced text and composition keep their owner.
+        let normalized = if self.enabled && !self.input && !self.once
+            || key.ctrl && !key.alt && !self.composition
+        {
             normal_key(key)
         } else {
             None

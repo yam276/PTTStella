@@ -282,6 +282,12 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    /// Bounded native Control-key fixture: accepts exactly Ctrl+X, Ctrl+Z, Ctrl+A, then Close.
+    pub fn start_control_input_probe(bytes: Vec<u8>) -> Result<Self, String> {
+        let connection = Self::start_owned_probe(bytes, probe::Scenario::ControlInput)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     pub fn start_inline_pages_probe(first: Vec<u8>, second: Vec<u8>) -> Result<Self, String> {
         let connection = Self::start_owned_probe(
             first,

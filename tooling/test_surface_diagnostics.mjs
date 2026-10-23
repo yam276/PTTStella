@@ -53,6 +53,26 @@ test("floods are sampled while the independent pulse retains delay and suppressi
     assert.equal(s.sent.at(-1).trace.suppressed,968);
     s.owner.destroy();
 });
+test("key diagnostics distinguish modifiers and control-code shape without retaining the key",()=>{
+    const s=setup();s.owner.enable(true);
+    function press(values){
+        const e=new Event("keydown",{cancelable:true});
+        for(const [name,value] of Object.entries(values))Object.defineProperty(e,name,{value});
+        s.document.dispatchEvent(e);return s.sent.at(-1).trace;
+    }
+    const control=press({key:"x",ctrlKey:true});assert.equal(control.phase&252,4);assert.equal(control.target>>4,1);
+    const other=press({key:"z",ctrlKey:true});assert.deepEqual(other,control);
+    assert.equal(press({key:"x",metaKey:true}).phase&252,8);
+    assert.equal(press({key:"\x18",ctrlKey:true}).phase&252,132);
+    assert.equal(press({key:"Process",keyCode:229}).phase&252,64);
+    assert.equal(press({key:"SECRET KEY",altKey:true,shiftKey:true}).phase&252,48);
+    const unidentified=press({key:"Unidentified",code:"KeyX",ctrlKey:true});
+    assert.equal((unidentified.target>>4)&7,3);assert.equal(unidentified.target&128,128);
+    assert.equal((press({key:"中",ctrlKey:true}).target>>4)&7,5);
+    assert.equal(JSON.stringify(s.sent).includes("SECRET"),false);
+    assert.equal(JSON.stringify(s.sent).includes('"key":'),false);
+    s.owner.destroy();
+});
 test("background packets cannot exhaust the budget needed for mouse and keyboard evidence",()=>{
     const s=setup();s.owner.enable(true);
     for(let i=0;i<1000;i++)s.owner.note("packet",0,0,1);

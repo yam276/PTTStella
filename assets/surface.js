@@ -126,12 +126,14 @@ function keydown(e) {
     // event still carries 229 even though isComposing is already false.
     // Leave the native IME action intact; never forward it as a BBS command.
     const browsing=keyboardState.enabled&&!["input","once"].includes(keyboardState.mode);
+    const control=e.ctrlKey&&!e.altKey?(/^[a-z]$/i.test(e.key)?e.key.toLowerCase():
+        (e.key==="Process"||/[^\x00-\x7f]/.test(e.key))&&/^Key[A-Z]$/.test(e.code)?e.code.slice(3).toLowerCase():null):null;
     const pause=latest?.navigation.kind==="continue_prompt"&&!["Dead","Shift","Control","Alt","Meta","CapsLock","NumLock","ScrollLock","Fn","FnLock","Symbol","SymbolLock","Hyper","Super"].includes(e.key);
-    const physical=browsing&&/^(Key[A-Z]|Digit[0-9])$/.test(e.code);
+    const physical=browsing&&/^(Key[A-Z]|Digit[0-9])$/.test(e.code)||control!==null;
     if(e.isComposing||composing||((e.keyCode===229||e.key==="Process")&&!physical)||e.metaKey) return;
     // Let the native copy action fire; copy data is already prepared by Rust.
-    if(e.ctrlKey&&e.key.toLowerCase()==="c"&&hasSelection()) return;
-    if(e.ctrlKey&&e.key.toLowerCase()==="v") return;
+    if(control==="c"&&hasSelection()) return;
+    if(control==="v") return;
     if(e.key==="Escape"&&hasSelection()) { e.preventDefault(); cancelDrag();clearSelection(); return; }
     if(e.ctrlKey&&["+","=","-","0"].includes(e.key)) {
         e.preventDefault(); zoomTo(e.key==="0"?1:zoom+(e.key==="-"?-.25:.25)); return;
@@ -149,7 +151,7 @@ function keydown(e) {
         const action={PageUp:"previous_page",PageDown:"next_page",Home:"first",End:"last",ArrowUp:"up",ArrowDown:"down",k:"up",j:"down"," ":"next_page"}[e.key];
         if(action){e.preventDefault();readingMove(action==="up"||action==="down"?{action:"lines",down:action==="down",count:1}:{action},e);return;}
     }
-    const command=commandKeys.has(e.key)||(e.ctrlKey&&/^[a-z]$/i.test(e.key));
+    const command=commandKeys.has(e.key)||control!==null;
     if(command||physical||pause||(browsing&&e.key.length===1)) {clearSelection();e.preventDefault();}
     if(command||physical||pause||e.key.length===1||e.key==="Dead") {
         inputKey=!command;

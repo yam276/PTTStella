@@ -530,6 +530,7 @@ pub(super) fn surface_sample(
             let origin = media_origin.ok_or("short links probe requires a loopback media origin")?;
             encoding::encode(&format!("\x1b[2J\x1b[HShort article image links\x1b[2;1H{origin}/colours.png\x1b[3;1H\x1b]8;;{origin}/colours-two.png\x07Explicit image\x1b]8;;\x07\x1b[24;1H\x1b[7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~3 行 (h)說明 (←)離開\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
         }
+        Some("control_input") => Ok(b"\x1b[2J\x1b[HCONTROL INPUT 0/3 - Ctrl+X, Ctrl+Z, Ctrl+A\x1b[24;1HLocal editor fixture; no real station or mail\x1b[?25l".to_vec()),
         Some("reading_rows" | "wide_last_row" | "diagnostics") => {
             let mut sample = String::from("\x1b[2J\x1b[H");
             for row in 1..=23 {

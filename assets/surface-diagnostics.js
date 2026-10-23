@@ -23,11 +23,18 @@ function createSurfaceDiagnostics({send,snapshot,document,window,clock=()=>perfo
     }
     function target(event) {
         const value=event.target;
-        if(value?.id==="keyboard")return 1;
-        if(value?.closest?.("dialog"))return 3;
-        if(value?.closest?.("#chrome"))return 4;
-        if(value?.closest?.(".workspace"))return 2;
-        return 0;
+        const base=value?.id==="keyboard"?1:value?.closest?.("dialog")?3:value?.closest?.("#chrome")?4:value?.closest?.(".workspace")?2:0;
+        if(event.type!=="keydown")return base;
+        const key=typeof event.key==="string"?event.key:"";
+        const shape=/^[a-z]$/i.test(key)?1:/^[\x00-\x1f\x7f]$/.test(key)?2:
+            ["Process","Dead","Unidentified"].includes(key)?3:key.length>1?4:key.length===1?(key.charCodeAt(0)>127?5:6):0;
+        return base|(shape<<4)|(/^Key[A-Z]$/.test(event.code)?128:0);
+    }
+    function phase(event,stage) {
+        if(event.type!=="keydown")return stage;
+        const control=typeof event.key==="string"&&/^[\x00-\x1f\x7f]$/.test(event.key);
+        return stage|(event.ctrlKey?4:0)|(event.metaKey?8:0)|(event.altKey?16:0)|(event.shiftKey?32:0)
+            |(event.isComposing||event.keyCode===229||event.key==="Process"?64:0)|(control?128:0);
     }
     function bind(element,name,callback,options) {
         element.addEventListener(name,callback,options);bindings.push([element,name,callback,options]);
@@ -39,9 +46,9 @@ function createSurfaceDiagnostics({send,snapshot,document,window,clock=()=>perfo
             click:"click",wheel:"wheel",focusin:"focus",focusout:"focus",visibilitychange:"visibility",
             compositionstart:"composition",compositionend:"composition"};
         for(const [name,kind] of Object.entries(names)) {
-            bind(document,name,e=>note(kind,e.defaultPrevented?1:0,target(e)),{capture:true,passive:true});
+            bind(document,name,e=>note(kind,phase(e,e.defaultPrevented?1:0),target(e)),{capture:true,passive:true});
             if(["keydown","click","wheel"].includes(name))
-                bind(document,name,e=>note(kind,e.defaultPrevented?3:2,target(e)),{passive:true});
+                bind(document,name,e=>note(kind,phase(e,e.defaultPrevented?3:2),target(e)),{passive:true});
         }
         bind(window,"keydown",e=>{
             if(e.isTrusted&&!e.repeat&&(e.metaKey||e.ctrlKey)&&e.shiftKey&&!e.altKey&&e.code==="KeyL") {

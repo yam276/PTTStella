@@ -36,3 +36,19 @@ test('normal readonly CJK physical commands reach Rust, while native composition
     const normal=fixture(true),e=normal.key('Process',{keyCode:229});assert.equal(e.prevented,true);assert.equal(normal.sent[0].key.code,'KeyJ');
     for(const f of [fixture(false),Object.assign(fixture(true),{composing:true})]){assert.equal(f.key('Process',{keyCode:229}).prevented,false);assert.deepEqual(f.sent,[]);}
 });
+test('CJK Control shortcuts use the physical command path without admitting text or stealing clipboard/IME',()=>{
+    for(const enabled of [false,true])for(const keyCode of [0,229]){
+        const f=fixture(enabled);f.latest.navigation.kind='unknown';
+        const e=f.key('ㄌ',{code:'KeyX',ctrlKey:true,keyCode});
+        assert.equal(e.prevented,true);assert.equal(f.sent.length,1);
+        assert.deepEqual(f.sent[0].key,{key:'ㄌ',code:'KeyX',ctrl:true,alt:false,shift:false,repeat:false});
+    }
+    for(const change of [f=>f.composing=true,f=>f.modal=true]){
+        const f=fixture();change(f);f.key('ㄌ',{code:'KeyX',ctrlKey:true});assert.deepEqual(f.sent,[]);
+    }
+    const composing=fixture();composing.key('ㄌ',{code:'KeyX',ctrlKey:true,isComposing:true});assert.deepEqual(composing.sent,[]);
+    const copy=fixture();copy.selected=true;copy.key('ㄏ',{code:'KeyC',ctrlKey:true});assert.deepEqual(copy.sent,[]);
+    const paste=fixture();paste.key('ㄒ',{code:'KeyV',ctrlKey:true});assert.deepEqual(paste.sent,[]);
+    const text=fixture();text.latest.navigation.kind='unknown';const e=text.key('ㄌ',{code:'KeyX'});assert.equal(e.prevented,false);
+    assert.equal(text.sent[0].kind,'key'); // Rust still decides ordinary text admission.
+});
