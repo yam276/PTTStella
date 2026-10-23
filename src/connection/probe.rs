@@ -22,6 +22,7 @@ pub(super) enum Scenario {
     MouseSamples(MouseSampleProbe),
     Filters,
     Surface,
+    ControlInput,
     PointerRows,
     InlinePages { pages: Vec<Vec<u8>>, delay_ms: u64 },
 }
@@ -661,6 +662,7 @@ pub(super) async fn serve(
             | Scenario::Login
             | Scenario::Login2fa
             | Scenario::Surface
+            | Scenario::ControlInput
             | Scenario::PointerRows
             | Scenario::InlinePages { .. }
             | Scenario::Boards
@@ -753,6 +755,19 @@ pub(super) async fn serve(
             return match socket.next().await {
                 Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e|e.to_string()),
                 _ => Err("row/edge probe expected Close without extra input".into()),
+            };
+        }
+        if matches!(scenario, Scenario::ControlInput) {
+            for (index, expected) in [24_u8, 26, 1].into_iter().enumerate() {
+                if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==[expected]) {
+                    return Err(format!("control input probe rejected step {}", index + 1));
+                }
+                socket.send(Message::Binary(format!("\x1b[1;1H\x1b[2KCONTROL INPUT {}/3 VERIFIED",index+1).into_bytes().into()))
+                    .await.map_err(|e| e.to_string())?;
+            }
+            return match socket.next().await {
+                Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e| e.to_string()),
+                _ => Err("control input probe expected Close without extra input".into()),
             };
         }
         if matches!(scenario, Scenario::Surface) {

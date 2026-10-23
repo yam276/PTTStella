@@ -19,6 +19,6 @@ macOS 紀錄目錄為 `~/Library/Application Support/PTTStella/diagnostics`；�
 
 WebView trace 的 flags 以 bit 表示：0 connected、1 input_pending、2 output_pending、3 navigationLocked、4 navigationRequest、5 composing、6 pastePending、7 dialog、8 selection、9 dragging、10 settings、11 document focus、12 hidden、13 keyboard sink focused、14 station mouse 非 local、15 tools open、16 web article、17 Vim enabled、18 keyboard pending、19 context menu。bits 20～24 為 navigation profile：0 unknown、1 main_menu、2 system_menu、3 document_list、4 article_list、5 article_reading、6 board_list、7 empty_list、8 command_help、9 continue_prompt。bits 25／26／27 分別是全文 loading／changed／limit。
 
-phase 0／1 表示捕捉階段尚未／已 preventDefault，2／3 表示一般處理後尚未／已 preventDefault；packet、reading_move 與 navigate 的 phase 0 是本機測點。target 0 為其他、1 為鍵盤接收區、2 為閱讀區、3 為對話框、4 為工具列。數字均為有界結構，不保存 DOM 文字或 ID。Web trace 的 pulse elapsed_ms 是距上一個脈衝的時間；packet elapsed_ms 是處理該封包的 wall time。
+phase 的低兩個 bit（phase & 3）中，0／1 表示捕捉階段尚未／已 preventDefault，2／3 表示一般處理後尚未／已 preventDefault；packet、reading_move 與 navigate 的 phase 0 是本機測點。key 事件另以 bit 2／3／4／5 分別記錄 Control／Meta／Alt／Shift，bit 6 表示組字或 Process／229，bit 7 表示 key 是單一 ASCII 控制字元；只記分類，不保存鍵名、字母、實體 code 或控制字元值。這能區分原生 Control、系統快捷鍵與事件形狀，不能重建鍵入內容。target 的低四個 bit（target & 15）中，0 為其他、1 為鍵盤接收區、2 為閱讀區、3 為對話框、4 為工具列。key 事件的 target bit 4～6 是按鍵形狀分類：0 無值、1 ASCII 字母、2 ASCII 控制字元、3 Process／Dead／Unidentified、4 其他具名鍵、5 單一非 ASCII 字元、6 其他單一 ASCII 字元；bit 7 表示實體 code 是字母鍵，仍不保存哪個字母。數字均為有界結構，不保存 DOM 文字或 ID。Web trace 的 pulse elapsed_ms 是距上一個脈衝的時間；packet elapsed_ms 是處理該封包的 wall time。
 
 此版提供定位證據，尚未宣稱已找出偶發卡頓原因。合成 gate 不代替使用者日常實站重現。

@@ -4,13 +4,21 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-diagnostic-ready/PTTStella.app`（2026-10-22，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-input-fix-final/PTTStella.app`（2026-10-23，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 工具列焦點與中文輸入法 Control 快捷鍵修復（2026-10-23）
+
+一般使用實測發現兩條獨立路徑：工具選單／分類的 Esc 原先把焦點留在浮球，改為關閉後呼叫共同的 BBS 焦點恢復；這次 Esc 由工具列消耗，不穿透站端，另有對話框時保留其 owner。另一條在明確恢復 BBS 焦點後仍發生：macOS WebKit 在中文輸入法下，把 Ctrl+X 回報為非 ASCII 邏輯字元，Control 為真且實體字母代碼存在；原始 Rust Control 轉譯只接受 ASCII 字母，導致無聲略過。JS 保留這類明確快捷鍵的命令路徑，由既有 Rust 正規化實體字母；一般文字／Alt／正在組字不改成實體字元，ASCII 邏輯鍵仍尊重目前配置，複製／貼上與 Normal 的破壞性命令保護保留。診斷增加有界修飾鍵與按鍵形狀，仍不記鍵值／文字／code 內容，見診斷契約。
+
+core 13 命令／2 replay、desktop lib 144／bin 136、全 targets Clippy、JS 245、fmt／docs 通過。新 control_input 原生探針以本機假編輯器核對 Ctrl+X／Ctrl+Z／Ctrl+A 各一次，獨立 peer 僅接受 0x18／0x1a／0x01 及 Close；macOS arm64 同一交付程式觀察到 1/3、2/3、3/3 VERIFIED，工具分類 Esc 後 AX 焦點回到 BBS，下一控制鍵立即生效。來源 PNG、Close acknowledged、全部 owner join 與 exit 0 通過。早期分類探針逾時及新 fixture 漏列原生互動期限的失敗證據保留，只有最終 native-control 計為通過；沒有再寄信或發文。Windows／Linux 原生結果本輪 not_ready，也不以此結案所有未重現的偶發卡頓。
+
+修正版 dist/macos-input-fix-final/PTTStella.app，證據 .local/verification/input-focus-fix（final-gate.json、native-control/probe、validation.json）。前次一般使用與寄信的歷史結果仍保留於下節。
 
 ## 一般使用實測：登入完成後設定關閉失敗（2026-10-23）
 
