@@ -181,7 +181,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
         if(event.target===ball&&(event.key==='Enter'||event.key===' '))suppressClickUntil=-1;
         if(!opened)return;
         if(document.querySelector('dialog[open]')){close();return;}
-        if(event.key==='Escape'){event.preventDefault();event.stopPropagation();close();ball.focus();}
+        if(event.key==='Escape'){event.preventDefault();event.stopPropagation();close(true);}
         else if(event.key==='ArrowDown'||event.key==='ArrowUp'){
             if(fan.hidden)return;
             if(!fan.contains(document.activeElement)&&document.activeElement!==ball)return;
