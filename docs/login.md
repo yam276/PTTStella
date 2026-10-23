@@ -8,6 +8,12 @@ macOS 工具列的「登入」開啟視窗。首次輸入帳號、密碼，預�
 
 再次開啟可看見帳號，密碼欄保持空白；留空並按登入才取用已存密碼。改成另一帳號時必須重新輸入密碼，不會沿用其他帳號的密碼。「移除已存帳密」只移除本 App 的這筆鑰匙圈項目，不變更站端密碼，也不登出目前連線。其他平台尚未提供安全儲存，保留原始鍵盤手動登入。
 
+## 開發版的重複系統授權
+
+測試帳號的密碼由使用者在 App 保存至鑰匙圈；自動化只操作登入按鈕，讓 Rust 取用，毋須將密碼交給聊天、環境變數或一般檔案。若顯示 macOS 鑰匙圈授權視窗，要求的是該鑰匙圈的密碼，由使用者在系統視窗輸入；不要當成 PTT 密碼欄。
+
+同一受信任版本可由使用者在系統提示選擇「始終允許」，見 [Apple 的存取選項](https://support.apple.com/en-euro/guide/keychain-access/kyca1243/mac)。目前打包腳本使用 ad-hoc 簽章，實際 designated requirement 綁定該程式的 cdhash；重新編譯後不能保證沿用前版授權。Apple [TN3127](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements) 說明 ad-hoc 身分綁定特定程式版本。跨版本減少提示須使用穩定的簽署身分及 bundle identifier，另驗更新後鑰匙圈存取；僅固定路徑或識別碼不足以證明已解決。本輪未建立憑證、修改鑰匙圈 ACL 或降低系統保護。
+
 ## 儲存與暫存
 
 帳號與密碼一起放入 macOS Keychain 的一筆 generic password；不建立帳密 JSON、明文備份或自製加密檔，也不加入可攜顯示設定、PNG 或診斷報告。Keychain 提供加密儲存及 OS 的存取管理，見 [Apple Keychain 說明](https://developer.apple.com/documentation/security/using-the-keychain-to-manage-user-secrets)。以鎖定的 [security-framework 3.7.0 安全 API](https://docs.rs/security-framework/3.7.0/security_framework/passwords/index.html) 讀、寫及刪除，錯誤只顯示 OS status code，不輸出密碼或 credential payload。
