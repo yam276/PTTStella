@@ -1172,6 +1172,51 @@ async fn board_switch_serializes_confirmed_steps_and_never_uses_a_synchronized_p
 }
 
 #[tokio::test]
+async fn board_switch_from_list_with_pinned_display_author_uses_only_confirmed_steps() {
+    let (listener, connection) = local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    let mut initial = board_page("other_articles");
+    initial.extend(
+        crate::encoding::encode(
+            "\x1b[6;1H\x1b[0m\x1b[2K    ★    810/16 [測試作者]   □ 自製置底公告\x1b[5;1H",
+        )
+        .unwrap(),
+    );
+    ws.send(Message::Binary(initial.into())).await.unwrap();
+    let view = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
+    assert_eq!(view.context().kind(), "article_list");
+    connection
+        .request_switch_board(view.stamp(), BoardName::parse("Stella").unwrap())
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"\x1b[D"
+    );
+    // No board name is sent before a verified board list and search prompt.
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    for (scene, expected) in [("empty_boards", b"s".as_slice()), ("prompt", b"Stella\r")] {
+        ws.send(Message::Binary(board_page(scene).into()))
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            expected
+        );
+    }
+    ws.send(Message::Binary(board_page("empty_articles").into()))
+        .await
+        .unwrap();
+    wait(&connection, |v| matches!(&v.destination, NavigationProgress::Reached { target, .. } if target.board().as_str() == "Stella")).await;
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    finish_board_peer(&connection, ws).await;
+}
+
+#[tokio::test]
 async fn board_switch_from_reading_pauses_keepalive_and_waits_for_each_back_before_direct_empty_arrival()
  {
     let (listener, connection) = idle_local().await;
