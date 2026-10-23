@@ -646,6 +646,53 @@ fn local_percent_metadata_identifies_only_ascii_status_cells_and_preserves_sourc
 }
 
 #[test]
+fn visible_row_range_metadata_validates_both_fields_without_changing_source_cells() {
+    let mut cache = ArticleCache::default();
+    let mut p = page(1, 3, 100);
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(b"\x1b[24;1H");
+    screen.feed(&encoding::encode("目前顯示: 第 01~03 行").unwrap());
+    p.frame.glyphs.retain(|g| g.row != 23);
+    p.frame
+        .glyphs
+        .extend(screen.frame().glyphs.into_iter().filter(|g| g.row == 23));
+    let source = p.frame.clone();
+    cache.project(&mut p);
+    let range = p.article.as_ref().unwrap().range_cells.as_ref().unwrap();
+    let rows = pttstella::text::rows(p.source_frame.as_ref().unwrap()).unwrap();
+    assert_eq!(
+        rows.last()
+            .unwrap()
+            .cells(range.first.start, range.first.end)
+            .unwrap()
+            .trim(),
+        "01"
+    );
+    assert_eq!(
+        rows.last()
+            .unwrap()
+            .cells(range.last.start, range.last.end)
+            .unwrap()
+            .trim(),
+        "03"
+    );
+    assert_eq!(p.source_frame.as_ref().unwrap(), &source);
+    for text in [
+        "目前顯示: 第 0~3 行",
+        "目前顯示: 第 9~3 行",
+        "目前顯示: 第 1~x 行",
+        "目前顯示: 第 １~3 行",
+        "第 1~3 行",
+        "目前顯示: 第 1-3 行",
+    ] {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(b"\x1b[24;1H");
+        screen.feed(&encoding::encode(text).unwrap());
+        assert!(footer_range_cells(&screen.frame()).is_none(), "{text}");
+    }
+}
+
+#[test]
 fn source_page_numbers_keep_their_physical_starts_across_a_clamped_tail_and_revisit() {
     fn numbered(mut packet: Paint, page: usize, percent: usize) -> Paint {
         let mut screen = Screen::new(80, 24).unwrap();

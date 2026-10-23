@@ -704,3 +704,24 @@ test('highlight projections retain expanded sizes, decoded resources, failures a
     e.packet.article={...e.packet.article,id:2};e.layout();assert.equal(e.ui.active(),false);assert.equal(e.urls.size,0);
     assert.equal(await e.ui.destroy(),true);
 });
+
+
+test("visible footer row range follows Home, pages and images while station cells remain untouched",async()=>{
+    const e=ownerEnvironment(true),base={x:c=>c*6,y:r=>r*24};
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:123,end:true,range_cells:{first:{start:1,end:4},last:{start:5,end:8}}},
+        frame:{cols:80,rows:124,revision:4,glyphs:Array.from(" 101~123 ",(text,col)=>({row:123,col,width:1,text,left:{},right:{}}))},links:[]};
+    const text=()=>e.nodes.find(n=>n.className==="article-footer-image").alt;
+    const layout=()=>e.ui.layout(packet,base,1);
+    layout();assert.equal(text(),"   1~  3 ");
+    e.viewport.scrollTop=2400;layout();assert.equal(text()," 101~103 ");
+    const count=e.encoded.length;e.viewport.scrollTop=2401;layout();assert.equal(text()," 102~103 ");
+    assert.equal(e.encoded.length,count+1,"row boundary repaints even without a percent field");
+    e.viewport.scrollTop=0;layout();assert.equal(text(),"   1~  3 ");
+    e.ui.open({...e.open,article_id:1,first_line:1},packet);
+    e.ui.receive({batch:1,index:0,image:{mime:"image/png",data:"AA==",width:100,height:400}});
+    await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==="img"&&typeof n.onload==="function");
+    image.naturalWidth=100;image.naturalHeight=400;image.onload();await new Promise(resolve=>setImmediate(resolve));
+    layout();e.viewport.scrollTop=200;layout();assert.equal(text(),"   1~  1 ","image-only viewport retains its owning text row");
+    assert.equal(packet.frame.glyphs.map(g=>g.text).join("")," 101~123 ");
+    await e.ui.destroy();
+});
