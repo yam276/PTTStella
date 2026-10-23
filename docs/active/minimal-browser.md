@@ -16,7 +16,7 @@
 
 續查已登入 NBA 當頁，普通編號文章含「[彩券]」作者欄，診斷 profile 為 unknown；即使畫面首尾命中正確，原有保守准入仍會拒絕。以自製三列 fixture 的普通編號列換成同一固定標籤，先重現 ArticleList 辨識失敗。只補此精確標籤，不普遍放寬其他普通編號括號名稱；日期、13 欄作者、文章標記、標頭／游標與完整畫面要求保留。黑白名單／作者右鍵仍只接受真正帳號。
 
-核心新增 First／Last／Open、current_board 及作者操作不含顯示標籤的獨立 expected，負例保留近似標籤、缺括號、不合法日期與提示文字；Connection 對同一合成普通編號標籤頁精確核對 Home／End、舊 stamp 拒絕、零重複輸入與 Close acknowledged。core 13 命令／2 replay（navigation 51 項）、desktop lib 145／bin 141、全 targets Clippy、JS 256、fmt／docs 與 macOS arm64 release／strict ad-hoc 全通過，證據 .local/verification/lottery-list-author/gate.json；沒有放寬或移除原普通括號標籤負例。合併兩項修正的 dist/macos-list-home-end-final/PTTStella.app 已開啟，實際程序路徑與交付一致，目前等待新簽章鑰匙圈授權。實站原生滑鼠限制仍單獨記錄，不以合成資料宣稱手動驗收完成。
+核心新增 First／Last／Open、current_board 及作者操作不含顯示標籤的獨立 expected，負例保留近似標籤、缺括號、不合法日期與提示文字；Connection 對同一合成普通編號標籤頁精確核對 Home／End、舊 stamp 拒絕、零重複輸入與 Close acknowledged。core 13 命令／2 replay（navigation 51 項）、desktop lib 145／bin 141、全 targets Clippy、JS 256、fmt／docs 與 macOS arm64 release／strict ad-hoc 全通過，證據 .local/verification/lottery-list-author/gate.json；沒有放寬或移除原普通括號標籤負例。合併兩項修正的 dist/macos-list-home-end-final/PTTStella.app 已開啟，實際程序路徑與交付一致。使用者完成鑰匙圈授權後沿用保存帳密登入，主選單 CmdK 前往 NBA，通過進板圖後以三次 PageUp 回到含同一「[彩券]」普通編號文章的頁面，profile 從舊 unknown 恢復 article_list。鍵盤 Home 到第 1 篇、End 到最新與置底列、再次 Home 回首頁，首頁仍為 article_list；這是首尾目的位置對照，不當作滑鼠通過。新版原生底部黑邊點擊仍被工具以 noWindowsAvailable 在送出前拒絕，未手動驗收；live-report.json 與成對畫面如實記錄。診斷無 renderer_error、採樣 dropped 最大 0，沒有發文／推文／寄信或改設定／最愛，App 留在 NBA 第一頁列表供驗收。
 
 舊 macos-floating-test-final 換版關窗時，出現「畫面工作未確認結束：EvalError::Finished - eval has already ran；停止訊號：未確認」。診斷 finish 為 run_ok true／cleanup_ok false；已保存同次 AX／畫面與 finish，第二次關閉錯誤視窗後程序退出。此獨立清理問題尚未定位或修復，不計為關閉驗收通過；證據 .local/verification/list-viewport-edges/old-cleanup-failure.*、old-finish.json。先前條件式推送 develop 仍未執行，原生滑鼠待驗與此清理失敗均需如實保留。
 
