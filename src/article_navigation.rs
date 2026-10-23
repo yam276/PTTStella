@@ -377,7 +377,7 @@ mod tests {
             now,
         )
         .unwrap();
-        assert_eq!(bytes, b"f");
+        assert_eq!(bytes, b"\r");
         for (step, (name, bytes)) in [
             ("boards", b"s".as_slice()),
             ("board_prompt", b"Stella\r"),

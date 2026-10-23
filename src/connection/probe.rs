@@ -323,7 +323,7 @@ pub(super) fn article_page(name: &str) -> Result<Vec<u8>, String> {
     Ok(page)
 }
 const ARTICLE_FIRST_OPEN: &[(&[u8], &str)] = &[
-    (b"f", "boards"),
+    (b"\r", "boards"),
     (b"s", "board_prompt"),
     (b"Stella\r", "selected"),
     (b"\x1b[C", "articles"),
@@ -406,7 +406,7 @@ where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
     for (step, (expected, scene)) in [
-        (b"f".as_slice(), "boards"),
+        (b"\r".as_slice(), "boards"),
         (b"s", "prompt"),
         (b"Stella\r", "selected"),
         (b"\x1b[C", "articles"),
@@ -975,7 +975,7 @@ mod tests {
         // This case tests the close lifetime, independently of reducer identity
         // tests. The peer still validates each input before replying.
         for bytes in [
-            b"f".as_slice(),
+            b"\r".as_slice(),
             b"s",
             b"Stella\r",
             b"\x1b[C",

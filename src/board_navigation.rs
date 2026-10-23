@@ -180,16 +180,26 @@ impl Switch {
             (Stage::Prompt, b"s".to_vec())
         } else {
             match navigation::analyze(frame) {
-                Context::MainMenu { .. }
-                    if text::rows(frame).is_some_and(|rows| {
-                        rows.iter().any(|row| {
-                            row.cells(22, 80).is_some_and(|item| {
-                                item.starts_with("(F)avorite") && item.contains("最愛")
-                            })
+                context @ Context::MainMenu {
+                    first_row,
+                    last_row,
+                    ..
+                } => {
+                    let rows = text::rows(frame).ok_or(Error::Unsupported)?;
+                    let mut favorites = (first_row..=last_row).filter(|row| {
+                        rows[*row].cells(22, 80).is_some_and(|item| {
+                            item.starts_with("(F)avorite") && item.contains("最愛")
                         })
-                    }) =>
-                {
-                    (Stage::Boards, b"f".to_vec())
+                    });
+                    let row = favorites.next().ok_or(Error::Unsupported)?;
+                    if favorites.next().is_some() {
+                        return Err(Error::Unsupported);
+                    }
+                    // A letter shortcut may only move the menu cursor. Use
+                    // the same verified row-open plan as pointer navigation.
+                    let bytes = navigation::plan(&context, navigation::Intent::Open { row })
+                        .map_err(|_| Error::Unsupported)?;
+                    (Stage::Boards, bytes)
                 }
                 Context::ArticleReading { .. } => (Stage::Articles, b"\x1b[D".to_vec()),
                 Context::ArticleList { .. } | Context::EmptyList => {
