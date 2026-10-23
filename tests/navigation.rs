@@ -621,7 +621,8 @@ fn article_row(number: &str, flags: &str, date: &str, author: &str, title: &str)
     } else {
         format!("{number:>6}")
     };
-    format!(" {number}{flags}{date} {author:13}{title}")
+    let padding = " ".repeat(13 - encoding::encode(author).unwrap().len());
+    format!(" {number}{flags}{date} {author}{padding}{title}")
 }
 
 #[test]
@@ -698,6 +699,79 @@ fn pinned_article_and_complete_dual_colour_title_keep_column_targets() {
         Context::ArticleList { .. }
     ));
 }
+#[test]
+fn pinned_display_authors_preserve_list_targets_and_quick_board_switching() {
+    use pttstella::board_navigation::{self, BoardName, Start, Switch};
+    for label in ["[測試作者]", "[公告小組]", "[Legacy_12]"] {
+        let mut screen = fixture("list");
+        replace(
+            &mut screen,
+            5,
+            &article_row("★", "   8", "10/16", label, "□ 自製置底公告"),
+            "0",
+        );
+        screen.feed(b"\x1b[5;1H");
+        let frame = screen.frame();
+        let context = navigation::analyze(&frame);
+        assert!(
+            matches!(context, Context::ArticleList { ref articles, cursor_row: 4 } if articles.len() == 3),
+            "{label}: {context:?}"
+        );
+        assert_eq!(
+            navigation::plan(&context, Intent::Open { row: 5 }).unwrap(),
+            b"\x1b[B\r"
+        );
+        assert_eq!(
+            board_navigation::current_board(&frame).unwrap().as_str(),
+            "Stella"
+        );
+        assert!(
+            matches!(Switch::begin(&frame, BoardName::parse("Beta").unwrap(), std::time::Instant::now()).unwrap(), Start::Run { bytes, .. } if bytes == b"\x1b[D")
+        );
+        let words = pttstella::filters::article_authors(&frame, &frame);
+        assert_eq!(
+            words
+                .iter()
+                .map(|word| word.id.as_str())
+                .collect::<Vec<_>>(),
+            ["alice", "bob"]
+        );
+    }
+}
+
+#[test]
+fn pinned_display_authors_do_not_admit_prompts_or_broken_columns() {
+    for (number, label, title) in [
+        ("122", "[測試作者]", "□ 非置底"),
+        ("★", "測試作者", "□ 未括起名稱"),
+        ("★", "[測試作者", "□ 缺結尾"),
+        ("★", "測試作者]", "□ 缺開頭"),
+        ("★", "[]", "□ 空名稱"),
+        ("★", "[ab cd]", "□ 內含空白"),
+        ("★", "[a/b]", "□ 內含指令符號"),
+        ("★", "[測試作者]", "是否確定？[Y/n]"),
+    ] {
+        let mut screen = fixture("list");
+        replace(
+            &mut screen,
+            5,
+            &article_row(number, "    ", "10/16", label, title),
+            "0",
+        );
+        screen.feed(b"\x1b[5;1H");
+        unknown(&screen.frame());
+    }
+    let mut screen = fixture("list");
+    replace(
+        &mut screen,
+        5,
+        &article_row("★", "    ", "10/16", "[測試作者]", "□ 自製公告"),
+        "0",
+    );
+    screen.feed(b"\x1b[6;20H\x81 \x1b[5;1H");
+    unknown(&screen.frame());
+}
+
 #[test]
 fn live_empty_article_titles_keep_valid_number_and_author_targets() {
     let mut screen = fixture("list_dense");

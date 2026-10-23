@@ -4,13 +4,21 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-navigation-waits-final/PTTStella.app`（2026-10-23，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-nba-list-final/PTTStella.app`（2026-10-24，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## NBA 置底顯示作者與快速切板修復（2026-10-24）
+
+以自製「[測試作者]」置底列重現舊版 Unknown／Unrecognized；作者欄只接受一般 ASCII 帳號，造成同頁其他正常文章也無法提供列表導覽與快速切板。只為 ★ 置底列補上完整方括號的非空字母／數字／底線顯示名稱，保留格線、日期、標記、完整畫面、游標與其他負例；普通編號列不放寬。原有 filters 帳號驗證保持獨立，顯示名稱不會變成黑白名單或作者右鍵的 ID。
+
+core 13 命令／2 replay（navigation 48 項）、desktop lib 145／bin 141、全 targets Clippy、JS 253、fmt／docs 與診斷版 macOS arm64 release 打包通過。core 新案例涵蓋整頁辨識、Open 精確相對鍵、current_board／Switch::begin，以及只有真帳號才有作者操作；Connection loopback 核對唯一 Left → 已辨識板列表後 s → 空搜尋提示後 Stella＋CR，確認到達、零額外 bytes 及 Close acknowledged。首次新增 Connection fixture 多一格，日期欄測試確實拒絕，修正合成欄位後重跑完整 gate，沒有放寬生產日期檢查；保留初次失敗與 red regression 證據。
+
+交付 dist/macos-nba-list-final/PTTStella.app 已通過 strict ad-hoc 驗章，實際執行路徑與交付一致。使用者處理鑰匙圈授權後，由 App 留空密碼登入 PTTStella，實站 NBA 列表保留同一「[馬路探子]」置底列，診斷 profile 從前次 unknown 恢復 article_list。直接 CmdK 前往 Steam、通過站端進板圖後到達 Steam 列表，再直接 CmdK 返回 NBA，含相同置底作者的列表仍正常；不需手動退出 NBA 列表作為切板前置。沒有 renderer_error、採樣 dropped 最大 0，未發文／推文／寄信或改最愛／設定，App 留在已登入 NBA 列表。成對 AX／畫面與報告 .local/verification/nba-list-fix/live，完整 gate 位於 r2/gate.json。附帶觀察主選單的快速前往曾停在 Favorite 選項，手動 Right 進入後才開始本輪列表測試；該獨立主選單路徑未修復，不擴大宣稱所有入口通過。Windows／Linux 原生 not_ready，正式發佈仍暫緩。
 
 ## 最新診斷版追加唯讀測試與鑰匙圈說明（2026-10-24）
 
