@@ -61,7 +61,7 @@ test('ordinary web reading keys move locally and only fetch beyond the cached ed
     const context={document:{querySelector:()=>null},inlineShortcut:()=>false,policy(){},
         keyboardState:{enabled:false,mode:'input'},latest:{connected:true,article:{id:1,first_line:1,end:false},navigation:{kind:'article_reading'}},
         viewport:{scrollTop:240,scrollHeight:2000,clientHeight:500},grid:{ratio:1,y:()=>0,bottom:()=>24},
-        stationMouse:{revoke(){}},cancelHover(){},pastePending:false,composing:false,hasSelection:()=>false,clearSelection(){},cancelDrag(){},
+        stationMouse:{revoke(){}},revokeNavigation(){},cancelHover(){},pastePending:false,composing:false,hasSelection:()=>false,clearSelection(){},cancelDrag(){},
         blocked:()=>false,dragging:null,repaint(){},generation:1,commandKeys:new Set(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End']),
         send:p=>sent.push(p)};
     vm.runInNewContext(surface.slice(surface.indexOf('function keydown('),surface.indexOf('function input(')),context);
@@ -182,7 +182,7 @@ test('an expanded image keeps its slot during a new source frame and late decodi
 
 test('production cached movement scrolls locally, fetches only at an unknown edge and rejects duplicate or blocked sends',()=>{
     const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8'),sent=[];
-    const context={latest:{article:{first_line:1,last_line:46,end:false},connected:true,input_pending:false,output_pending:false},
+    const context={navigationSequence:0,stopped:false,latest:{article:{first_line:1,last_line:46,end:false},connected:true,input_pending:false,output_pending:false},
         viewport:{scrollTop:0,scrollHeight:1000,clientHeight:400},grid:{ratio:1,y:r=>24*r,bottom:r=>24*(r+1)},
         blocked:()=>false,dragging:null,hasSelection:()=>false,clearSelection(){},cancelHover(){},repaint(){},
         stationMouse:{local:()=>true,revoke(){}},policy(){},canNavigate:()=>!context.navigationLocked,
@@ -556,7 +556,7 @@ test('only a fresh physical arrow at the complete visible edge can switch articl
  c.latest.article.load='complete';c.blocked=()=>true;move(down);c.blocked=()=>false;
  assert.equal(requests.length,0);
  c.viewport.scrollTop=1200;move(down);assert.equal(c.viewport.scrollTop,1224);assert.equal(requests.length,0);
- c.viewport.scrollTop=0;c.latest.article.first_line=24;move(up);assert.deepEqual(requests.pop(),[{action:'previous_page'},'keyboard',false]);
+ c.viewport.scrollTop=0;c.latest.article.first_line=24;move(up);assert.deepEqual(requests.pop(),[{action:'previous_page'},'button',false]);
 });
 
 test('inline GIF keeps its native source only while visible and resets release the Blob',async()=>{

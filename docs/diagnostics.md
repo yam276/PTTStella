@@ -22,3 +22,5 @@ WebView trace 的 flags 以 bit 表示：0 connected、1 input_pending、2 outpu
 phase 的低兩個 bit（phase & 3）中，0／1 表示捕捉階段尚未／已 preventDefault，2／3 表示一般處理後尚未／已 preventDefault；packet、reading_move 與 navigate 的 phase 0 是本機測點。key 事件另以 bit 2／3／4／5 分別記錄 Control／Meta／Alt／Shift，bit 6 表示組字或 Process／229，bit 7 表示 key 是單一 ASCII 控制字元；只記分類，不保存鍵名、字母、實體 code 或控制字元值。這能區分原生 Control、系統快捷鍵與事件形狀，不能重建鍵入內容。target 的低四個 bit（target & 15）中，0 為其他、1 為鍵盤接收區、2 為閱讀區、3 為對話框、4 為工具列。key 事件的 target bit 4～6 是按鍵形狀分類：0 無值、1 ASCII 字母、2 ASCII 控制字元、3 Process／Dead／Unidentified、4 其他具名鍵、5 單一非 ASCII 字元、6 其他單一 ASCII 字元；bit 7 表示實體 code 是字母鍵，仍不保存哪個字母。數字均為有界結構，不保存 DOM 文字或 ID。Web trace 的 pulse elapsed_ms 是距上一個脈衝的時間；packet elapsed_ms 是處理該封包的 wall time。
 
 此版提供定位證據，尚未宣稱已找出偶發卡頓原因。合成 gate 不代替使用者日常實站重現。
+
+導覽橋接的數字關聯：`event=bridge`／`direction=recv`／`kind=navigate` 的 presentation 欄保存 request ID，generation／revision 仍為來源版本；`event=bridge`／`direction=send`／`kind=navigation_result` 的 revision 欄保存相同 request ID、generation 為該請求的 session。這些只用於比對等待的建立與收尾，不包含按鍵或文章內容。

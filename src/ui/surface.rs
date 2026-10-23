@@ -142,6 +142,17 @@ pub(super) async fn surface(
     Ok(())
 }
 
+fn cancel_commands(
+    commands: &mut super::commands::Pending,
+    eval: &Bridge<'_>,
+) -> Result<(), String> {
+    if let Some(ticket) = commands.cancel() {
+        eval.send(ticket.finish(Feedback::quiet(NavigationStatus::Cancelled)))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 async fn run(
     connection: Arc<Connection>,
     mut closing: watch::Receiver<bool>,
@@ -337,7 +348,7 @@ async fn run(
                 .map_err(|e| e.to_string())?;
         }
         if commands.is(CommandKind::Preload) && !screen.full_load_active() {
-            commands.cancel();
+            cancel_commands(commands, &eval)?;
         }
         let complete = probe.is_some() && {
             let view = receiver.borrow();
@@ -391,11 +402,8 @@ async fn run(
                     if preload {
                         screen.stop_full_load();
                     }
-                    eval.send(Packet::NavigationResult(Feedback::new(
-                        NavigationStatus::Rejected,
-                        error,
-                    )))
-                    .map_err(|e| e.to_string())?;
+                    eval.send(Packet::Notice(error))
+                        .map_err(|e| e.to_string())?;
                 } else if let Ok(bytes) = navigation::plan(&view.context(), intent) {
                     screen.article_input(&view.context(), &bytes);
                     if preload && intent == navigation::Intent::First {
@@ -532,7 +540,7 @@ async fn run(
             _ = async {if let Some(at)=paint_deadline {tokio::time::sleep_until(at).await;}else{std::future::pending::<()>().await;}} => {},
             _ = async {if let Some(at)=load_deadline {tokio::time::sleep_until(at).await;}else{std::future::pending::<()>().await;}} => {
                 screen.expire_full_load(tokio::time::Instant::now());
-                if commands.is(CommandKind::Preload) {commands.cancel();}
+                if commands.is(CommandKind::Preload) {cancel_commands(commands,&eval)?;}
             },
             request=settings_requests.changed()=>{
                 request.map_err(|e|e.to_string())?;
@@ -633,7 +641,10 @@ async fn run(
                 eval.send(packet).map_err(|e|e.to_string())?;
             },
             done = commands.next() => {
-                if done.generation != receiver.borrow().generation {continue;}
+                if done.generation != receiver.borrow().generation {
+                    if let Some(ticket)=done.navigation {eval.send(ticket.finish(Feedback::quiet(NavigationStatus::Cancelled))).map_err(|e|e.to_string())?;}
+                    continue;
+                }
                 let packet = match done.kind {
                     CommandKind::Login => match done.result {
                         Ok(()) if login_open => {login_open=false;Packet::LoginResult(LoginResult::Sent)},
@@ -645,9 +656,14 @@ async fn run(
                         if probe.is_some() && done.result.is_ok() {checks.navigation_requests+=1;}
                         continue;
                     },
-                    CommandKind::Navigate => match done.result {
-                        Ok(()) => {if probe.is_some(){checks.navigation_requests+=1;}Packet::NavigationResult(Feedback::quiet(NavigationStatus::Sent))},
-                        Err(error) => {screen.cancel_article_fetch();Packet::NavigationResult(Feedback::new(NavigationStatus::Rejected,error))},
+                    CommandKind::Navigate => {
+                        let feedback=match done.result {
+                            Ok(()) => {if probe.is_some(){checks.navigation_requests+=1;}Feedback::quiet(NavigationStatus::Sent)},
+                            Err(error) => {screen.cancel_article_fetch();Feedback::new(NavigationStatus::Rejected,error)},
+                        };
+                        if let Some(ticket)=done.navigation {ticket.finish(feedback)}
+                        else if let Some(notice)=feedback.notice {Packet::Notice(notice)}
+                        else {continue;}
                     },
                     CommandKind::Browse => match done.result {
                         Ok(()) => continue,
@@ -710,10 +726,17 @@ async fn run(
                 if !event.admitted(receiver.borrow().generation) {
                     diagnostics.bridge("rejected","admission",false,receiver.borrow().generation,receiver.borrow().frame.revision,0);
                     rejected_events += 1;
+                    if let Some(ticket)=event.navigation_ticket() {
+                        eval.send(ticket.finish(Feedback::quiet(NavigationStatus::Rejected))).map_err(|e|e.to_string())?;
+                    }
                     event.discard();
                     continue;
                 }
                 if event.requires_ptt() && !receiver.borrow().site.ptt_features() {
+                    if let Some(ticket)=event.navigation_ticket() {
+                        eval.send(ticket.finish(Feedback::new(NavigationStatus::Rejected,pttstella::msg!("site-ptt-only")))).map_err(|e|e.to_string())?;
+                        continue;
+                    }
                     event.discard();eval.send(Packet::Notice(pttstella::msg!("site-ptt-only"))).map_err(|e|e.to_string())?;continue;
                 }
                 if matches!(&event,
@@ -793,7 +816,7 @@ async fn run(
                         checks.article_cancelled |= matches!(surface_probe.as_deref(),Some("articles"|"articles_close")) && matches!(&receiver.borrow().destination,pttstella::navigation_job::Progress::Active{operation:owner,target:pttstella::navigation_job::Destination::Article(_),..} if *owner==operation);
                         checks.board_cancelled |= matches!(surface_probe.as_deref(),Some("boards"|"boards_close")) && matches!(&receiver.borrow().destination,pttstella::navigation_job::Progress::Active{operation:owner,..} if *owner==operation);
                         if destination_request.is_some_and(|(_,stamp)|stamp==operation) {
-                            if commands.is(CommandKind::Destination) {commands.cancel();}
+                            if commands.is(CommandKind::Destination) {cancel_commands(commands,&eval)?;}
                             destination_request=None;
                         }
                         if let Err(error)=connection.cancel_navigation(operation) {eval.send(Packet::Notice(error)).map_err(|error|error.to_string())?;}
@@ -847,7 +870,7 @@ async fn run(
                         login_open = false;
                         login_stamp = None;
                         if commands.is(CommandKind::Login) {
-                            commands.cancel();
+                            cancel_commands(commands,&eval)?;
                         }
                         if let Err(error) = connection.cancel_login() {
                             message.set(error);
@@ -1022,28 +1045,30 @@ async fn run(
                     SurfaceEvent::ArticleLoad {generation,article,resume,trusted:_} => {
                         if screen.full_load_action(generation,article,resume,&receiver.borrow()) {
                             if probe.is_some() {if resume {checks.load_resumes+=1;}else{checks.load_cancels+=1;}}
-                            if !resume && commands.is(CommandKind::Preload) {commands.cancel();}
+                            if !resume && commands.is(CommandKind::Preload) {cancel_commands(commands,&eval)?;}
                         }
                     },
                     SurfaceEvent::Navigate {
+                        request,
                         stamp,
                         intent,
                         source,
                         trusted: _,
                     } => {
+                        let ticket=super::protocol::NavigationTicket {request,generation:stamp.generation};
                         if let navigation::Intent::AdjacentArticle { down } = intent
                             && (source != navigation::Source::Keyboard || !screen.adjacent_article_allowed(stamp, down, &receiver.borrow())) {
-                            eval.send(Packet::NavigationResult(Feedback::new(NavigationStatus::Rejected,navigation::Error::Unavailable.to_string()))).map_err(|e|e.to_string())?;
+                            eval.send(ticket.finish(Feedback::new(NavigationStatus::Rejected,navigation::Error::Unavailable.to_string()))).map_err(|e|e.to_string())?;
                             continue;
                         }
-                        screen.interrupt_full_load();if commands.is(CommandKind::Preload) {commands.cancel();}
+                        screen.interrupt_full_load();if commands.is(CommandKind::Preload) {cancel_commands(commands,&eval)?;}
                         let shown=screen.navigation_shown(stamp);
                         let result = if !shown {
                             Err(navigation::Error::Stale.to_string())
                         } else if pending_paste.read().is_some() {
                             Err(navigation::Error::Unavailable.to_string())
                         } else {
-                            commands.start(CommandKind::Navigate, stamp.generation, || {
+                            commands.start_navigation(ticket, || {
                                 connection.request_navigate(stamp, intent, source).map(|reply|reply.wait())
                             })
                         };
@@ -1054,10 +1079,17 @@ async fn run(
                             eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
                         }
                         if let Err(error) = result {
-                            eval.send(Packet::NavigationResult(Feedback::new(NavigationStatus::Rejected,error)))
+                            eval.send(ticket.finish(Feedback::new(NavigationStatus::Rejected,error)))
                                 .map_err(|e| e.to_string())?;
                         }
                     }
+                    SurfaceEvent::NavigationCancel {request,generation} => {
+                        let ticket=super::protocol::NavigationTicket {request,generation};
+                        if commands.navigation()==Some(ticket) {
+                            screen.cancel_article_fetch();
+                            cancel_commands(commands,&eval)?;
+                        }
+                    },
                     SurfaceEvent::SitesOpen {request,trusted:_}=>{
                         eval.send(Packet::SitesOpen{request,data:sites.snapshot(receiver.borrow().site.clone())}).map_err(|e|e.to_string())?;
                     },
@@ -1070,7 +1102,7 @@ async fn run(
                             if probe.is_some() && url::Url::parse(target.endpoint.as_str()).ok().and_then(|url|url.host_str().map(str::to_owned)).as_deref()!=Some("127.0.0.1") {return Err(pttstella::msg!("sites-probe-local"));}
                             connection.connect_to(target)
                         });
-                        if result.is_ok(){checks.site_switches=checks.site_switches.saturating_add(1);login_open=false;login_stamp=None;pending_paste.set(None);commands.cancel();}
+                        if result.is_ok(){checks.site_switches=checks.site_switches.saturating_add(1);login_open=false;login_stamp=None;pending_paste.set(None);cancel_commands(commands,&eval)?;}
                         let feedback=match result {Ok(())=>Feedback::new(super::sites::Status::Connecting,pttstella::msg!("sites-connecting")),Err(error)=>{checks.site_rejections=checks.site_rejections.saturating_add(1);Feedback::new(super::sites::Status::Rejected,error)}};
                         eval.send(Packet::SitesResult{request,data:sites.snapshot(receiver.borrow().site.clone()),feedback}).map_err(|e|e.to_string())?;
                     },
@@ -1403,7 +1435,7 @@ async fn run(
                                     eval.send(packet).map_err(|e|e.to_string())?;
                                     continue;
                                 }
-                                screen.interrupt_full_load();if commands.is(CommandKind::Preload) {commands.cancel();}
+                                screen.interrupt_full_load();if commands.is(CommandKind::Preload) {cancel_commands(commands,&eval)?;}
                                 let shown=screen.browse_shown(generation,&context);
                                 let result = if !shown || pending_paste.read().is_some() {
                                     Err(navigation::Error::Stale.to_string())
@@ -1541,8 +1573,7 @@ async fn run(
                         eval.send(Packet::DestinationResult {request,feedback:Feedback::new(DestinationStatus::Rejected,pttstella::msg!("command-stale"))}).map_err(|error|error.to_string())?;
                     }
                     if commands.busy() {
-                        commands.cancel();
-                        eval.send(Packet::NavigationResult(Feedback::quiet(NavigationStatus::Rejected))).map_err(|e|e.to_string())?;
+                        cancel_commands(commands,&eval)?;
                         eval.send(Packet::LoginResult(LoginResult::Message{message:pttstella::msg!("command-stale")})).map_err(|e|e.to_string())?;
                     }
                     keyboard_policy.reset();keyboard_generation=view.generation;

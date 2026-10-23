@@ -7,6 +7,13 @@ use pttstella::{
 };
 use serde::{Deserialize, Serialize};
 
+/// A renderer wait is scoped independently of source revisions and station bytes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct NavigationTicket {
+    pub request: u64,
+    pub generation: u64,
+}
+
 /// Bounded, chrome-only observations returned by synthetic probes at shutdown.
 #[derive(Deserialize, Serialize)]
 pub(super) struct ToolsObservation {
@@ -173,10 +180,15 @@ pub(super) enum SurfaceEvent {
         article: Option<u64>,
     },
     Navigate {
+        request: u64,
         stamp: Stamp,
         intent: Intent,
         source: pttstella::navigation::Source,
         trusted: bool,
+    },
+    NavigationCancel {
+        request: u64,
+        generation: u64,
     },
     ArticleLoad {
         generation: u64,
@@ -347,6 +359,15 @@ pub(super) enum SurfaceEvent {
 }
 
 impl SurfaceEvent {
+    pub(super) fn navigation_ticket(&self) -> Option<NavigationTicket> {
+        match self {
+            Self::Navigate { request, stamp, .. } => Some(NavigationTicket {
+                request: *request,
+                generation: stamp.generation,
+            }),
+            _ => None,
+        }
+    }
     /// Site capabilities are checked before credential access or local PTT data edits.
     pub(super) fn requires_ptt(&self) -> bool {
         matches!(
@@ -424,15 +445,21 @@ impl SurfaceEvent {
                 (*trusted || action == "composition_end") && *source == generation
             }
             Navigate {
+                request,
                 trusted,
                 stamp,
                 source,
-                ..
+                intent,
             } => {
                 *trusted
+                    && (1..=9_007_199_254_740_991).contains(request)
                     && stamp.generation == generation
-                    && *source != pttstella::navigation::Source::Keyboard
+                    && (*source != pttstella::navigation::Source::Keyboard
+                        || matches!(intent, Intent::AdjacentArticle { .. }))
             }
+            NavigationCancel {
+                generation: source, ..
+            } => *source == generation,
             ArticleLoad {
                 trusted,
                 generation: source,
@@ -583,6 +610,71 @@ mod admission_tests {
     }
 
     #[test]
+    fn navigation_requests_match_shared_javascript_lifecycle_examples() {
+        use super::super::outbound::{Feedback, NavigationStatus};
+        let cases: Vec<Value> = serde_json::from_str(include_str!(
+            "../../tests/fixtures/navigation-requests.json"
+        ))
+        .unwrap();
+        for case in cases {
+            let event: SurfaceEvent = serde_json::from_value(case["event"].clone()).unwrap();
+            let admitted = event.admitted(case["current_generation"].as_u64().unwrap());
+            assert_eq!(
+                admitted,
+                case["admitted"].as_bool().unwrap(),
+                "{}",
+                case["name"]
+            );
+            let result = event
+                .navigation_ticket()
+                .unwrap()
+                .finish(Feedback::quiet(if admitted {
+                    NavigationStatus::Sent
+                } else {
+                    NavigationStatus::Rejected
+                }));
+            assert_eq!(
+                serde_json::to_value(result).unwrap(),
+                case["result"],
+                "{}",
+                case["name"]
+            );
+        }
+    }
+
+    #[test]
+    fn keyboard_origin_is_narrowly_admitted_only_for_adjacent_article_and_valid_ticket() {
+        let mut event = json!({"kind":"navigate","request":1,"stamp":{"generation":7,"revision":4,"input_epoch":2},"intent":{"action":"adjacent_article","down":true},"source":"keyboard"});
+        assert!(admits(event.clone(), true, 7));
+        assert!(!admits(event.clone(), false, 7));
+        assert!(!admits(event.clone(), true, 8));
+        for intent in [
+            json!({"action":"back"}),
+            json!({"action":"next_page"}),
+            json!({"action":"lines","down":true,"count":1}),
+        ] {
+            event["intent"] = intent;
+            assert!(!admits(event.clone(), true, 7));
+        }
+        event["source"] = json!("button");
+        event["intent"] = json!({"action":"next_page"});
+        for request in [0, 9_007_199_254_740_992u64] {
+            event["request"] = json!(request);
+            assert!(!admits(event.clone(), true, 7));
+        }
+        assert!(admits(
+            json!({"kind":"navigation_cancel","request":1,"generation":7}),
+            false,
+            7
+        ));
+        assert!(!admits(
+            json!({"kind":"navigation_cancel","request":1,"generation":7}),
+            false,
+            8
+        ));
+    }
+
+    #[test]
     fn station_actions_require_trusted_closed_typed_intents() {
         for value in [
             json!({"kind":"sites_open","request":1}),
@@ -629,8 +721,8 @@ mod admission_tests {
             json!({"kind":"key","key":{"key":"Enter","code":"Enter","ctrl":false,"alt":false,"shift":false,"repeat":false},"generation":7}),
             json!({"kind":"text","text":"a","generation":7}),
             json!({"kind":"paste","text":"a\nb","generation":7}),
-            json!({"kind":"navigate","stamp":stamp,"intent":{"action":"back"},"source":"pointer"}),
-            json!({"kind":"navigate","stamp":stamp,"intent":{"action":"back"},"source":"button"}),
+            json!({"kind":"navigate","request":1,"stamp":stamp,"intent":{"action":"back"},"source":"pointer"}),
+            json!({"kind":"navigate","request":1,"stamp":stamp,"intent":{"action":"back"},"source":"button"}),
             json!({"kind":"destination_submit","request":1,"stamp":stamp,"value":"Stella"}),
             json!({"kind":"destination_cancel","operation":stamp}),
             json!({"kind":"login_submit","account":"Synthetic","password":"unused","remember":false,"stamp":stamp}),
@@ -728,7 +820,7 @@ mod admission_tests {
 
     #[test]
     fn local_navigation_requires_a_closed_source_and_cannot_impersonate_vim() {
-        let event = json!({"kind":"navigate","stamp":{"generation":7,"revision":4,"input_epoch":2},"intent":{"action":"back"},"trusted":true});
+        let event = json!({"kind":"navigate","request":1,"stamp":{"generation":7,"revision":4,"input_epoch":2},"intent":{"action":"back"},"trusted":true});
         assert!(serde_json::from_value::<SurfaceEvent>(event.clone()).is_err());
         let mut invalid = event.clone();
         invalid["source"] = "unspecified".into();

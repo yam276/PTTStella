@@ -294,6 +294,8 @@
     "packet": {
       "kind": "navigation_result",
       "payload": {
+        "request": 11,
+        "generation": 7,
         "status": "sent",
         "notice": "回覆"
       }
@@ -330,6 +332,8 @@
     "packet": {
       "kind": "navigation_result",
       "payload": {
+        "request": 12,
+        "generation": 7,
         "status": "rejected",
         "notice": "回覆"
       }

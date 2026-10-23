@@ -32,12 +32,16 @@ impl<'a> Bridge<'a> {
                 true,
             )),
             Packet::InputRejected(_) => Some(("input_rejected", 0, 0, 0, false)),
-            Packet::NavigationResult(result) => Some((
+            Packet::NavigationResult {
+                request,
+                generation,
+                feedback,
+            } => Some((
                 "navigation_result",
+                *generation,
+                *request,
                 0,
-                0,
-                0,
-                matches!(result.status, super::outbound::NavigationStatus::Sent),
+                matches!(feedback.status, super::outbound::NavigationStatus::Sent),
             )),
             Packet::ReadingMove {
                 generation,
@@ -81,8 +85,8 @@ impl<'a> Bridge<'a> {
                     } => Some(("painted", *generation, *revision, *presentation)),
                     SurfaceEvent::Key { generation, .. } => Some(("key", *generation, 0, 0)),
                     SurfaceEvent::Text { generation, .. } => Some(("text", *generation, 0, 0)),
-                    SurfaceEvent::Navigate { stamp, .. } => {
-                        Some(("navigate", stamp.generation, stamp.revision, 0))
+                    SurfaceEvent::Navigate { request, stamp, .. } => {
+                        Some(("navigate", stamp.generation, stamp.revision, *request))
                     }
                     SurfaceEvent::InlineExpand { stamp, .. } => {
                         Some(("inline_expand", stamp.generation, stamp.revision, 0))

@@ -1,0 +1,30 @@
+[
+  {
+    "name": "arrow_fetch_uses_page_admission",
+    "current_generation": 7,
+    "event": {"kind":"navigate","request":1,"stamp":{"generation":7,"revision":4,"input_epoch":2},"intent":{"action":"next_page"},"source":"button","trusted":true},
+    "admitted": true,
+    "result": {"kind":"navigation_result","payload":{"request":1,"generation":7,"status":"sent","notice":null}}
+  },
+  {
+    "name": "ordinary_keyboard_source_is_rejected_but_finishes_its_wait",
+    "current_generation": 7,
+    "event": {"kind":"navigate","request":2,"stamp":{"generation":7,"revision":4,"input_epoch":2},"intent":{"action":"next_page"},"source":"keyboard","trusted":true},
+    "admitted": false,
+    "result": {"kind":"navigation_result","payload":{"request":2,"generation":7,"status":"rejected","notice":null}}
+  },
+  {
+    "name": "old_generation_cannot_finish_a_new_wait",
+    "current_generation": 8,
+    "event": {"kind":"navigate","request":3,"stamp":{"generation":7,"revision":4,"input_epoch":2},"intent":{"action":"next_page"},"source":"button","trusted":true},
+    "admitted": false,
+    "result": {"kind":"navigation_result","payload":{"request":3,"generation":7,"status":"rejected","notice":null}}
+  },
+  {
+    "name": "untrusted_input_still_has_no_station_admission",
+    "current_generation": 7,
+    "event": {"kind":"navigate","request":4,"stamp":{"generation":7,"revision":4,"input_epoch":2},"intent":{"action":"next_page"},"source":"button","trusted":false},
+    "admitted": false,
+    "result": {"kind":"navigation_result","payload":{"request":4,"generation":7,"status":"rejected","notice":null}}
+  }
+]
