@@ -116,7 +116,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
     }
     function repository(e){if(!disposed&&fontDialog.open&&e.isTrusted)send({kind:"about_repository",trusted:true});}
     function closeFonts(e) {
-        e?.preventDefault();if(disposed||profileBusy)return;
+        e?.preventDefault?.();if(disposed||profileBusy)return;
         if(dirty||fontSaving){closing=true;clearTimeout(saveTimer);saveTimer=0;if(!fontSaving)saveFonts({isTrusted:true});return;}
         finishClose();
     }
