@@ -375,7 +375,12 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         const item=visible.find(item=>{const r=item.box.getBoundingClientRect();return event.clientX>=r.left&&event.clientX<r.right&&event.clientY>=r.top&&event.clientY<r.bottom;});
         return item?.index??-1;
     }
-    return {open,receive,fail,reset,layout,linkAtPoint,refreshAnimations:gifs.refresh,active:()=>!!current,keydown:gesture.down,keyup:gesture.up,keyHeld:gesture.held,suspend,
+    function pictureState(index){
+        if(!current||dead||!matches(latestLayout))return null;
+        const item=visible.find(item=>item.index===index);
+        return item?{ready:!!item.still&&item.box.dataset.state==="ready"}:null;
+    }
+    return {open,receive,fail,reset,layout,linkAtPoint,pictureState,refreshAnimations:gifs.refresh,active:()=>!!current,keydown:gesture.down,keyup:gesture.up,keyHeld:gesture.held,suspend,
         bindings:[...gifs.bindings,[layer,"pointerdown",triggerDown],[layer,"click",triggerClick],...(viewport?[[viewport,"scroll",moved]]:[]),
             ...(typeof window!=="undefined"?[[window,"blur",suspend]]:[]),[document,"visibilitychange",suspend]],
         async destroy(){dead=true;gifs.destroy();clear();lastLayout=null;lastArticle=null;latestLayout=null;await Promise.allSettled([...jobs]);layer.remove();footerLayer?.remove();return jobs.size===0;}};

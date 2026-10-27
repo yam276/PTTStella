@@ -14,7 +14,8 @@ function environment(language,geometry={}){
         append(...children){this.children.push(...children);},replaceChildren(){this.children=[];},
         get childElementCount(){return this.children.length;},
         setAttribute(name,value){this.attributes[name]=value;},removeAttribute(name){delete this.attributes[name];delete this[name];},
-        showModal(){this.open=true;},close(){this.open=false;},focus(){},
+        showModal(){this.open=true;},close(){this.open=false;},focus(){document.activeElement=this;},
+        contains(target){return this===target||this.children.some(child=>child.contains(target));},closest(){return this.dataset.contextAction?this:null;},
         listeners:new Map(),addEventListener(name,callback){this.listeners.set(name,callback);},removeEventListener(name){this.listeners.delete(name);},pause(){this.paused=true;},load(){},
         getBoundingClientRect(){return {left:0,top:0,right:800,bottom:400,width:800,height:400};},
     });
@@ -29,13 +30,16 @@ function environment(language,geometry={}){
         const stage=document.getElementById("media-hover-viewport").children[0];
         return {width:(Number.parseFloat(stage?.style.width)||100)+10,height:(Number.parseFloat(stage?.style.height)||0)+28};
     };
-    const install=vm.runInNewContext(readFileSync(new URL("../assets/gif-playback.js",import.meta.url),"utf8")+"\n"+readFileSync(new URL("../assets/media.js",import.meta.url),"utf8")+"\ninstallMedia",{
-        document,AbortController,fetch:async()=>({blob:async()=>({size:1})}),
+    const window={innerWidth:1000,innerHeight:700,listeners:new Map(),addEventListener(name,fn){this.listeners.set(name,fn);},removeEventListener(name){this.listeners.delete(name);}};
+    const menuButtons=["copy-picture","save-picture","copy-link","open-link","settings","next"].map(action=>{const button=element("button");button.dataset.contextAction=action;return button;});
+    const menu=document.getElementById("media-context-menu");menu.hidden=true;menu.append(...menuButtons);menu.querySelectorAll=()=>menuButtons;
+    const install=vm.runInNewContext(readFileSync(new URL("../assets/surface-context-menu.js",import.meta.url),"utf8")+"\n"+readFileSync(new URL("../assets/gif-playback.js",import.meta.url),"utf8")+"\n"+readFileSync(new URL("../assets/media.js",import.meta.url),"utf8")+"\ninstallMedia",{
+        document,window,AbortController,fetch:async()=>({blob:async()=>({size:1})}),
         URL:{createObjectURL(){const url="blob:"+urls.size;urls.add(url);return url;},revokeObjectURL:url=>urls.delete(url)},
         ResizeObserver:class{observe(){}disconnect(){}},requestAnimationFrame:callback=>{frames.set(++nextFrame,callback);return nextFrame;},cancelAnimationFrame:id=>frames.delete(id),
     });
     const ui=install({tr:translator(language),send:packet=>sent.push(packet),prepare(){},changed(){},restore(){}});
-    return {ui,nodes,sent,urls,created,bounds,document,node:document.getElementById,flush(){for(const [id,callback] of [...frames]){frames.delete(id);callback();}}};
+    return {ui,nodes,sent,urls,created,bounds,document,window,menuButtons,node:document.getElementById,flush(){for(const [id,callback] of [...frames]){frames.delete(id);callback();}}};
 }
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 
@@ -119,4 +123,36 @@ test('explicit GIF previews autoplay, hover stays still, and pause/focus lifecyc
  env.document.visibilityState='hidden';env.document.listeners.get('visibilitychange')();assert.equal(image.src,undefined);
  env.document.visibilityState='visible';env.document.listeners.get('visibilitychange')();assert.equal(image.hidden,false);
  assert.equal(await env.ui.destroy(),true);assert.equal(env.urls.size,0);assert.equal(env.document.listeners.size,0);
+});
+
+const pointer=target=>({target,isTrusted:true,clientX:500,clientY:350,preventDefault(){this.prevented=true;},stopPropagation(){this.stopped=true;},stopImmediatePropagation(){this.stopped=true;}});
+async function inspectImage(env,request=20){
+ env.ui.open({request,target:{kind:'image',url:'https://example.com/source.png'}});
+ env.ui.receiveImage({request,mime:'image/png',data:'AA==',width:32,height:16,animated:false,cached:false});
+ await settle();const image=env.created.filter(node=>node.tag==='img').at(-1);image.onload();return image;
+}
+test('inspected images share the four-item contextual menu and send only the current request',async()=>{
+ const env=environment('zh-TW'),image=await inspectImage(env),menu=env.node('media-context-menu');
+ const right=()=>env.node('media-viewport').listeners.get('contextmenu')(pointer(image));
+ for(const [action,expected] of [['copy-picture','copy_image'],['save-picture','save_image'],['copy-link','copy_url'],['open-link','external']]){
+  right();assert.equal(menu.hidden,false);
+  assert.deepEqual(env.menuButtons.filter(button=>!button.hidden).map(button=>button.dataset.contextAction),['copy-picture','save-picture','copy-link','open-link']);
+  menu.listeners.get('click')(pointer(env.menuButtons.find(button=>button.dataset.contextAction===action)));
+  assert.deepEqual(JSON.parse(JSON.stringify(env.sent.at(-1))),{kind:'media',request:20,action:expected,trusted:true});assert.equal(menu.hidden,true);
+ }
+ right();const escape={...pointer(menu),key:'Escape'};env.document.listeners.get('keydown')(escape);
+ assert.equal(menu.hidden,true);assert.equal(env.node('media-dialog').open,true);assert.equal(escape.stopped,true);
+ right();env.ui.open({request:21,target:{kind:'image',url:'https://example.com/next.png'}});assert.equal(menu.hidden,true);
+ const count=env.sent.length;menu.listeners.get('click')(pointer(env.menuButtons[0]));assert.equal(env.sent.length,count);
+ assert.equal(env.ui.notice('copied'),true);assert.equal(env.node('media-status').textContent,'copied');
+ assert.equal(await env.ui.destroy(),true);assert.equal(env.document.listeners.size,0);assert.equal(env.window.listeners.size,0);assert.equal(menu.listeners.size,0);
+});
+test('image menus reject untrusted, background, hover, failed and video targets',async()=>{
+ const env=environment('en-US'),image=await inspectImage(env),menu=env.node('media-context-menu'),fire=event=>env.node('media-viewport').listeners.get('contextmenu')(event);
+ fire({...pointer(image),isTrusted:false});assert.equal(menu.hidden,true);
+ fire(pointer(env.node('media-viewport')));assert.equal(menu.hidden,true);
+ env.ui.fail({request:20,message:'decode failed'});fire(pointer(image));assert.equal(menu.hidden,true);
+ env.ui.open({request:22,target:{kind:'video',url:'https://example.com/video.webm'}});fire(pointer(env.created.find(node=>node.tag==='video')));assert.equal(menu.hidden,true);
+ env.ui.hover({request:23,position:'top_right',target:{kind:'image',url:'https://example.com/hover.png'}});fire(pointer(image));assert.equal(menu.hidden,true);
+ assert.equal(await env.ui.destroy(),true);assert.equal(env.ui.notice('late'),false);
 });

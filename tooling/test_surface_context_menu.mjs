@@ -10,7 +10,8 @@ test("items follow selected content and capabilities, without inactive feature p
     assert.deepEqual([...contextMenuItems(base).keys()],["select-all","export-page","copy-image-page","bookmarks","filters","vim","settings"]);
     const entries=contextMenuItems({...base,link:1,selection:true,selectionReady:false,rowsReady:false,local:false,reading:true,images:true,inlineReady:false,navigate:true,first:true,last:false});
     assert.equal(entries.get("copy"),false);assert.equal(entries.get("copy-link"),true);assert.equal(entries.get("open-link"),false);
-    assert.equal(entries.get("inline"),false);assert.equal(entries.get("previous"),false);assert.equal(entries.get("next"),true);
+    assert.deepEqual([...entries.keys()],["copy","export-rows","copy-image-rows","copy-link","open-link","select-link"]);
+    for(const name of ["inline","back","previous","next","select-all","export-page","copy-image-page","bookmarks","filters","vim","settings"])assert.equal(entries.has(name),false);
     assert.deepEqual([...contextMenuItems({...base,ptt:false}).keys()],["select-all","export-page","copy-image-page","settings"]);
 });
 test("menu position fits the bottom/right corner and negative coordinates",()=>{
@@ -123,7 +124,29 @@ test('removal sends the matching policy and stamped cell without accepting a cli
 test('image clipboard choices use the same page and row availability as file export',()=>{
  for(const ready of [true,false]){
   const entries=contextMenuItems({...base,exportReady:ready,selection:true,rowsReady:ready});
-  assert.equal(entries.get('copy-image-page'),ready);assert.equal(entries.get('copy-image-rows'),ready);
+  assert.equal(entries.has('copy-image-page'),false);assert.equal(entries.get('copy-image-rows'),ready);
  }
  assert.equal(contextMenuItems(base).has('copy-image-rows'),false);
+});
+
+test('decoded pictures offer original-image actions and links without page or account commands',()=>{
+ for(const ready of [true,false]){
+  const entries=contextMenuItems({...base,picture:true,pictureReady:ready,link:3,selection:true,word:{id:'Alice'},reading:true,images:true,navigate:true});
+  assert.deepEqual([...entries.keys()],['copy-picture','save-picture','copy-link','open-link']);
+  assert.equal(entries.get('copy-picture'),ready);assert.equal(entries.get('save-picture'),ready);
+ }
+});
+test('account and selected-text contexts omit general navigation and settings',()=>{
+ for(const context of [{word:{id:'Alice'},reading:true},{selection:true,selectionReady:true,rowsReady:true}]){
+  const entries=contextMenuItems({...base,...context,navigate:true,images:true});
+  for(const name of ['back','previous','next','select-all','export-page','copy-image-page','bookmarks','filters','vim','settings','inline'])assert.equal(entries.has(name),false,name);
+ }
+});
+test('original-image output carries only an acknowledged index and stamp, with no URL or pixels',()=>{
+ const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8'),sent=[];
+ const state={stopped:false,blocked:()=>false,contextMenuItems:()=>new Map([['copy-picture',true],['save-picture',true]]),contextState:()=>({}),latest:{presentation:3},stamp:()=>({generation:7,revision:4,input_epoch:2}),send:p=>sent.push(JSON.parse(JSON.stringify(p)))};
+ vm.createContext(state);vm.runInContext(surface.slice(surface.indexOf('function contextAction('),surface.indexOf('function activate(')),state);
+ for(const action of ['copy-picture','save-picture'])state.contextAction(action,{index:2},{isTrusted:true});
+ assert.deepEqual(sent.map(p=>[p.kind,p.index,p.destination]),[['picture',2,'clipboard'],['picture',2,'file']]);
+ assert.ok(sent.every(p=>p.stamp.generation===7&&!('url'in p)&&!('png'in p)));
 });

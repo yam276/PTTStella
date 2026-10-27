@@ -679,3 +679,9 @@ export-copied = Image copied to clipboard
 
 gif-playing = GIF animation playing
 gif-paused = GIF animation paused
+
+context-copy-picture = Copy image
+context-save-picture = Save image as…
+picture-saved = Image saved
+picture-save-title = Save image
+picture-extension = Keep the original image file extension

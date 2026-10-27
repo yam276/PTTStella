@@ -673,3 +673,9 @@ export-copied = 圖片已複製到剪貼簿
 
 gif-playing = GIF 動畫播放中
 gif-paused = GIF 動畫已暫停
+
+context-copy-picture = 複製圖片
+context-save-picture = 另存圖片…
+picture-saved = 圖片已儲存
+picture-save-title = 儲存圖片
+picture-extension = 請保留圖片原有的副檔名

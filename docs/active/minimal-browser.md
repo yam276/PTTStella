@@ -4,13 +4,25 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-article-switch-ime-final-check/PTTStella.app`（2026-10-27，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-picture-context-final/PTTStella.app`，前版 `dist/macos-article-switch-ime-final-check/PTTStella.app` 保留供比較（2026-10-27，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 圖片複製／另存與內容右鍵選單（2026-10-27）
+
+依使用者要求，文章插圖與完整圖片預覽的右鍵提供複製圖片、另存圖片、複製完整網址、開啟連結四項。圖片／網址、ID 與反白文字的選單不再混入翻頁、整頁匯出、Vim 或設定；背景選單保留全域工具。ID 的名單加入／移除與推文高亮、文字的複製與選取行 PNG 均保留。完整預覽的選單放在同一 modal 內，共用既有焦點／快照／外部手勢控制器，Esc 先關選單。
+
+原圖由 Rust 依當前 ACK 投影的 index／stamp 或完整預覽 request 取得，沿用同一有界原始資源，不依賴畫面縮圖、不接受 renderer URL／pixels、輸出不重複下載。Files 同一工作槽在 blocking worker 解碼並寫入 OS 剪貼簿；存檔保留來源 bytes／格式／動畫，以時間命名。動圖複製首幀，複製保留原解析度；失效 session、輸入 epoch、投影、切篇、預覽關閉／重試或尚未解碼均不能輸出舊圖，已開始的 OS 作業仍 join。image 0.25.10 原已在鎖檔，此次加入桌面直接依賴，僅啟用 PNG／JPEG／GIF／WebP；沒有升級其他 package。
+
+core 13 命令／2 replay、desktop lib 151／bin 147、JS 266、全 targets Clippy、fmt／docs 與 macOS arm64 release／strict ad-hoc 打包通過，證據 .local/verification/picture-context。新增本機 production Preview 回歸核對 decode ACK、hover promotion、retry／close／stale；獨立紅藍 PNG 與 GIF 首幀像素、來源尺寸與損毀／超限拒絕、原始檔 bytes、零 OS 觸碰的過期拒絕及 typed PictureOutput 閉集合通過。首次額外 URL 欄位負例抓到 SurfaceEvent 原有忽略未知欄位行為，PictureOutput 改獨立 deny_unknown_fields，保留失敗紀錄後全套重跑。
+
+原生 picture_menu 在 macOS arm64 的實際 Dioxus／WKWebView 通過：文章插圖與完整預覽各複製一次原圖，OS 剪貼簿讀回的 640×320 全部紅藍 RGBA 像素符合獨立 expected；另存 PNG bytes 與自製來源完全相同。兩次完整網址複製後，原生貼到快速前往草稿核對完整 URL，取消草稿未送站端；選單僅四項，Esc 關閉選單仍保留預覽與全螢幕。兩次 HTTP GET 分別來自文章展圖／完整預覽，複製與另存沒有重新下載；固定來源格線 PNG 960×576、Close acknowledged、全部 owner join、媒體無待處理資源、exit 0 通過。副本與交付的 15 個 Mach-O sections 相同。成對 AX／截圖與獨立讀回驗證保留於 native／validation.json；系統另存對話框本輪使用 probe 目的路徑，沒有宣稱已驗收原生選檔器或 Windows／Linux。
+
+首次隔離 runner 受其他工作預留影響，被 harness 拒絕啟動，原始 native-admission-refused.json 保留。使用者明確要求移除全域 AGENTS 的 Diolama harness 規則，已在 repo 外先備份該文件，再刪除全域該節；本 repo 註明不是 Diolama 系列並採自己的 Cargo／tooling 流程，未操作 Diolama repo 或共用 target。隨後以原 runner 直接執行，以上原生結果不依賴放寬 peer、事件或像素條件。其他既有待驗項目與條件式 develop 推送維持原狀，沒有公開發佈。
 
 ## 方向鍵換篇與注音空白的文章作用域（2026-10-27）
 
