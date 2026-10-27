@@ -28,11 +28,17 @@ enum PendingInput {
         revision: u64,
         deadline: Instant,
         streaming: bool,
+        list_refresh: Option<ListRefresh>,
     },
     Refresh {
         revision: u64,
         deadline: Instant,
     },
+}
+
+struct ListRefresh {
+    stamp: Stamp,
+    due: Instant,
 }
 impl PendingInput {
     fn revision(&self) -> u64 {
@@ -127,7 +133,7 @@ pub(super) async fn run(
             incoming = async {
                 match session.socket.as_mut() { Some(socket) => socket.next().await, None => pending().await }
             } => session.receive(incoming).await,
-            _ = clock.tick(), if session.dirty || session.output.active() || session.navigation_job.is_some() => {
+            _ = clock.tick(), if session.dirty || session.output.active() || session.navigation_job.is_some() || session.has_list_refresh() => {
                 if session.output.expire(Instant::now()) {
                     session.screen.release_synchronized_output();
                     session.continue_login().await;
@@ -139,6 +145,7 @@ pub(super) async fn run(
                 // Automatic steps yield to already queued manual input/UI state.
                 if commands.is_empty() && matches!(gates.has_changed(),Ok(false)) {
                     session.advance_navigation(Instant::now()).await;
+                    session.refresh_unanswered_list_move(Instant::now()).await;
                 }
                 if session.dirty { session.publish(); }
             },
@@ -535,7 +542,67 @@ impl Session {
             revision: self.screen.revision(),
             deadline: Instant::now() + self.timing.response_timeout,
             streaming,
+            list_refresh: None,
         });
+    }
+
+    fn has_list_refresh(&self) -> bool {
+        matches!(
+            self.pending_input,
+            Some(PendingInput::Manual {
+                list_refresh: Some(_),
+                ..
+            })
+        )
+    }
+
+    async fn refresh_unanswered_list_move(&mut self, now: Instant) {
+        self.clear_answered_input();
+        let Some(PendingInput::Manual {
+            list_refresh,
+            deadline,
+            ..
+        }) = &mut self.pending_input
+        else {
+            return;
+        };
+        if !list_refresh
+            .as_ref()
+            .is_some_and(|refresh| now >= refresh.due)
+        {
+            return;
+        }
+        // Consume once even when the original permission no longer holds.
+        // This redraw is never a replay of the user's movement.
+        let Some(refresh) = list_refresh.take() else {
+            return;
+        };
+        if now >= *deadline {
+            return;
+        }
+        if refresh.stamp != self.stamp()
+            || self.socket.is_none()
+            || self.view.phase != Phase::Connected
+            || !self.view.site.ptt_features()
+            || self.login_attempt.is_some()
+            || self.login_followup.is_some()
+            || self.navigation_job.is_some()
+            || self.screen.synchronized_since().is_some()
+            || !self.screen.frame().control_complete
+            || self.mouse.snapshot(self.mouse_context()).route != crate::mouse::input::Route::Local
+            || !matches!(
+                self.view.context(),
+                Context::ArticleList { .. } | Context::BoardList { .. }
+            )
+        {
+            return;
+        }
+        self.idle.activity(now);
+        if self.write_input(liveness::REFRESH).await.is_ok() {
+            // Wait for the real redraw; no local unlock against an old page.
+            self.wait_for_input(false);
+        }
+        self.dirty = true;
     }
 
     async fn input(&mut self, generation: u64, bytes: &[u8]) {
@@ -813,6 +880,21 @@ impl Session {
         let result = self.write_input(&bytes).await;
         if result.is_ok() {
             self.wait_for_input(keyboard && (list_move || matches!(intent, Intent::Lines { .. })));
+            if !keyboard
+                && list_move
+                && matches!(
+                    context,
+                    Context::ArticleList { .. } | Context::BoardList { .. }
+                )
+            {
+                let refresh = ListRefresh {
+                    stamp: self.stamp(),
+                    due: Instant::now() + Duration::from_millis(350),
+                };
+                if let Some(PendingInput::Manual { list_refresh, .. }) = &mut self.pending_input {
+                    *list_refresh = Some(refresh);
+                }
+            }
         }
         self.dirty = true;
         result

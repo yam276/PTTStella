@@ -266,6 +266,15 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    /// A synthetic list ignores the boundary move, then answers one redraw.
+    pub fn start_list_boundary_probe() -> Result<Self, String> {
+        let connection = Self::start_owned_probe(
+            probe::navigation_page("list")?,
+            probe::Scenario::ListBoundary,
+        )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     pub fn start_filters_probe() -> Result<Self, String> {
         let connection =
             Self::start_owned_probe(probe::filters_page(false)?, probe::Scenario::Filters)?;

@@ -24,6 +24,7 @@ pub(super) enum Scenario {
     Surface,
     ControlInput,
     PointerRows,
+    ListBoundary,
     InlinePages { pages: Vec<Vec<u8>>, delay_ms: u64 },
 }
 
@@ -664,6 +665,7 @@ pub(super) async fn serve(
             | Scenario::Surface
             | Scenario::ControlInput
             | Scenario::PointerRows
+            | Scenario::ListBoundary
             | Scenario::InlinePages { .. }
             | Scenario::Boards
             | Scenario::Articles
@@ -755,6 +757,26 @@ pub(super) async fn serve(
             return match socket.next().await {
                 Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e|e.to_string()),
                 _ => Err("row/edge probe expected Close without extra input".into()),
+            };
+        }
+        if matches!(scenario, Scenario::ListBoundary) {
+            for (expected, response) in [
+                (b"\x1b[6~".as_slice(), None),
+                (b"\x0c\x0c", Some(navigation_page("list")?)),
+                (b"\x1b[5~", Some(navigation_page("list_dense")?)),
+                (b"\r", Some(navigation_page("reading_first")?)),
+                (b"\x1b[D", Some(navigation_page("list")?)),
+            ] {
+                if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected) {
+                    return Err("list boundary probe received unexpected input".into());
+                }
+                if let Some(page) = response {
+                    socket.send(Message::Binary(page.into())).await.map_err(|e|e.to_string())?;
+                }
+            }
+            return match socket.next().await {
+                Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e|e.to_string()),
+                _ => Err("list boundary probe expected Close without extra input".into()),
             };
         }
         if matches!(scenario, Scenario::ControlInput) {
