@@ -4,13 +4,25 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-fullscreen-status-end-final/PTTStella.app`（2026-10-27，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-list-boundary-final/PTTStella.app`（2026-10-27，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 列表滾輪到邊界後等待回覆（2026-10-27）
+
+使用者回報看板滾輪到底後，後續滑鼠操作失效。沿同一個已登入診斷程序的有界數字紀錄，確認 ArticleList 的第二次滾輪送出後沒有任何新 bytes，input_pending 持續約 5.48 秒，後續滾輪／點擊都在正常准入被擋住；逾時後自行解除，沒有證據顯示該次永久鎖死。這條路徑的問題是邊界動作本來就可能不重繪，不能把所有無回覆都當成仍在換頁。
+
+connection 為已辨識 ArticleList／BoardList 的本機滑鼠或工具按鈕列表移動保留一筆原等待內的重繪許可；350ms 無畫面回應才補送一次既有雙 Ctrl+L，不重送移動、不提早解除輸入等待。唯一 session owner 沿原 16ms clock 檢查，排隊輸入優先；generation／revision／epoch／原期限、PTT 目標、本機滑鼠路由、完整控制碼、同步輸出及登入／切板工作都需再確認。已有回應、原始輸入、換 session、斷線或睡眠超過原期限均不補送；補繪也無回應時不循環。一般正常翻頁 bytes、鍵盤、文章逐頁／全文及其他選單不改。
+
+先以 production Connection loopback 重現邊界一秒內沒有重繪要求的失敗，再核對上下邊界、Home／End、Pointer／Button、同頁重繪後反向移動／Open／Back的精確 bytes。另覆蓋正常回應、原始輸入、未知提示、同步輸出、Keyboard／閱讀頁及斷線時不得晚送，以及重繪也無回應時零重播；生產 JS wheel／request／result 回歸證明等待期不能提早 Open，真實重繪後可反向 wheel 與 Open。core 13 命令／2 replay、desktop lib 148／bin 141、全 targets Clippy、JS 258、fmt／docs、macOS arm64 release／strict ad-hoc 全通過。證據 .local/verification/list-boundary-wait（before-diagnostics.json、red.log、gate.json、validation.json）。
+
+新增 list_boundary 本機原生探針，peer 精確只收 PageDown、一次雙 Ctrl+L、PageUp、CR、Left 與 Close。最終 native-r3 在真正 Dioxus／WKWebView 全螢幕以原生滾輪下到無回應邊界，392ms 後收到同頁重繪；反向原生滾輪顯示完整前頁，經工具 Esc 恢復輸入焦點後 Enter 開合成文章，工具返回回到列表。三筆導覽、960×576 來源 PNG、Close acknowledged、全部 owner join 與 exit 0；無 renderer_error，dropped 最大 0。交付與副本 15 份 Mach-O loadable sections 一致、strict 驗章通過。392ms 是本機案例，沒有當作同篇實站速度比較。
+
+初輪排除 noWindowsAvailable 工具問題時超過 peer 五分鐘期限，native-r2 則在原始鍵前多出 pointer 導覽，被嚴格 peer 拒絕；失敗畫面／報告都保留，沒有放寬 bytes 或計數。重跑曾因共用磁碟預留拒絕，結束本案上一個測試並釋放自己的預留後通過原 guard。原生座標點文章仍回 noWindowsAvailable，不能以這次原生滾輪、鍵盤與 AX 工具返回宣稱全部滑鼠驗收；一般尺寸座標、Windows／Linux 及新版實站登入仍待驗。舊版偶發清理失敗與全螢幕截圖局部缺字未在本次修改範圍，條件式推送 develop 仍未執行，沒有公開發佈。
 
 ## 診斷版全螢幕與列表狀態列 End（2026-10-27）
 

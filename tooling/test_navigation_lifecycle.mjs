@@ -12,7 +12,7 @@ function environment(){
         blocked:()=>false,dragging:null,stationMouse:{local:()=>true,revoke(){}},policy(){},clearSelection(){},cancelHover(){},cancelComposition(){},cancelDrag(){},setHover(){},
         contextMenu:{close(){}},refreshNavigation(){},focus(){},repaint(){},showNotice:value=>{if(value)notices.push(value);},send:value=>sent.push(JSON.parse(JSON.stringify(value)))};
     c.stamp=()=>({generation:c.latest.generation,revision:c.latest.frame.revision,input_epoch:c.latest.input_epoch});
-    c.canNavigate=()=>c.latest.connected&&!c.navigationRequest&&!c.navigationLocked;
+    c.canNavigate=()=>c.latest.connected&&!c.latest.input_pending&&!c.navigationRequest&&!c.navigationLocked&&!c.blocked();
     c.grid.packet=c.latest;
     vm.createContext(c);
     vm.runInContext(source.slice(source.indexOf('function readingMove('),source.indexOf('const browseReturn=')),c);
@@ -86,4 +86,27 @@ test('article changes, reconnects and input cleanup revoke only scoped waits',()
         route(cases[0].result);assert.equal(c.navigationRequest,false);
         assert.equal(c.viewport.scrollTop,0);
     }
+});
+
+test('a wheel boundary remains gated until the real redraw, then reverse wheel and pointer Open work',()=>{
+    const {c,sent,route,frame}=environment();
+    c.latest.article=null;c.latest.navigation={kind:'article_list'};c.latest.input_pending=false;
+    Object.assign(c,{contextMenu:{isOpen:()=>false},hasSelection:()=>false,tools:{open:()=>false},stationMouse:{local:()=>true,revoke(){},wheel:()=>false},zoomTo(){}});
+    vm.runInContext(source.slice(source.indexOf('function wheel('),source.indexOf('const zoomIn=')),c);
+    const wheel=deltaY=>c.wheel({...trusted,deltaY,preventDefault(){}});
+    wheel(120);const request={...c.navigationRequest};
+    route({kind:'navigation_result',payload:{request:request.request,generation:7,status:'sent',notice:null}});
+    // The station accepts the key but sends nothing at its last page.
+    frame({input_epoch:3,input_pending:true});
+    wheel(120);wheel(-120);c.navigate({action:'open',row:4},trusted);
+    assert.equal(sent.filter(p=>p.kind==='navigate').length,1,'no duplicate or premature Open');
+    // A genuine redraw with the same visible rows settles the pending input.
+    frame({input_epoch:4,input_pending:false});
+    wheel(-120);assert.equal(sent.at(-1).intent.action,'previous_page');
+    const reverse={...c.navigationRequest};
+    route({kind:'navigation_result',payload:{request:reverse.request,generation:7,status:'sent',notice:null}});
+    frame({input_epoch:5,input_pending:false});
+    c.navigate({action:'open',row:4},trusted);
+    assert.deepEqual(sent.at(-1).intent,{action:'open',row:4});
+    assert.equal(sent.filter(p=>p.kind==='navigate').length,3);
 });

@@ -2516,3 +2516,276 @@ async fn modern_board_and_indented_class_pointer_use_exact_revalidated_row_comma
         peer.await.unwrap();
     }
 }
+
+#[tokio::test]
+async fn unanswered_pointer_list_boundary_refreshes_once_before_allowing_more_navigation() {
+    use navigation::{Intent, Source};
+    for (name, action, movement, opposite, reverse, source) in [
+        (
+            "list",
+            Intent::NextPage,
+            b"\x1b[6~".as_slice(),
+            Intent::PreviousPage,
+            b"\x1b[5~".as_slice(),
+            Source::Pointer,
+        ),
+        (
+            "list_dense",
+            Intent::Last,
+            b"\x1b[F",
+            Intent::First,
+            b"\x1b[H",
+            Source::Button,
+        ),
+        (
+            "favorites",
+            Intent::PreviousPage,
+            b"\x1b[5~",
+            Intent::NextPage,
+            b"\x1b[6~",
+            Source::Pointer,
+        ),
+    ] {
+        let (listener, connection) = idle_local().await;
+        connection.connect().unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        let page = navigation_page(name);
+        ws.send(Message::Binary(page.clone().into())).await.unwrap();
+        let original = wait(&connection, |v| v.received > 0 && !v.input_pending).await;
+        connection
+            .request_navigate(original.stamp(), action, source)
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            movement
+        );
+        let pending = wait(&connection, |v| v.input_epoch == 1 && v.input_pending).await;
+        assert_eq!(
+            connection
+                .navigate(pending.stamp(), Intent::Open { row: 4 })
+                .await
+                .unwrap_err(),
+            navigation::Error::AwaitingScreen.to_string()
+        );
+        assert!(
+            timeout(Duration::from_millis(100), ws.next())
+                .await
+                .is_err(),
+            "no immediate duplicate or refresh"
+        );
+        assert_eq!(
+            timeout(Duration::from_secs(1), ws.next())
+                .await
+                .expect("boundary must request one redraw rather than wait five seconds")
+                .unwrap()
+                .unwrap()
+                .into_data()
+                .as_ref(),
+            b"\x0c\x0c"
+        );
+        let refreshing = wait(&connection, |v| v.input_epoch == 2 && v.input_pending).await;
+        assert_eq!(refreshing.frame.revision, original.frame.revision);
+        assert!(
+            connection
+                .navigate(refreshing.stamp(), Intent::Back)
+                .await
+                .is_err(),
+            "redraw must be received before another action"
+        );
+        ws.send(Message::Binary(page.clone().into())).await.unwrap();
+        let ready = wait(&connection, |v| {
+            v.frame.revision > original.frame.revision && !v.input_pending
+        })
+        .await;
+        connection.navigate(ready.stamp(), opposite).await.unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            reverse
+        );
+        ws.send(Message::Binary(page.clone().into())).await.unwrap();
+        let ready = wait(&connection, |v| {
+            v.frame.revision > ready.frame.revision && !v.input_pending
+        })
+        .await;
+        let row = match ready.context() {
+            navigation::Context::ArticleList { cursor_row, .. }
+            | navigation::Context::BoardList { cursor_row, .. } => cursor_row,
+            context => panic!("expected list, got {context:?}"),
+        };
+        connection
+            .navigate(ready.stamp(), Intent::Open { row })
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            b"\r"
+        );
+        ws.send(Message::Binary(navigation_page("reading_first").into()))
+            .await
+            .unwrap();
+        let reading = wait(&connection, |v| {
+            v.context().kind() == "article_reading" && !v.input_pending
+        })
+        .await;
+        connection
+            .navigate(reading.stamp(), Intent::Back)
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            b"\x1b[D"
+        );
+        ws.send(Message::Binary(page.into())).await.unwrap();
+        wait(&connection, |v| {
+            v.context().kind() == original.context().kind() && !v.input_pending
+        })
+        .await;
+        assert!(
+            timeout(Duration::from_millis(420), ws.next())
+                .await
+                .is_err(),
+            "answered movement and later transition cancel the one-shot redraw"
+        );
+        finish_board_peer(&connection, ws).await;
+    }
+}
+
+#[tokio::test]
+async fn list_boundary_refresh_is_cancelled_by_answer_input_transition_and_disconnect() {
+    use navigation::{Intent, Source};
+    for mode in [
+        "answer",
+        "input",
+        "prompt",
+        "synchronized",
+        "disconnect",
+        "keyboard",
+        "reading",
+    ] {
+        let (listener, connection) = idle_local().await;
+        connection.connect().unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        let initial = if mode == "reading" {
+            "reading_first"
+        } else {
+            "list"
+        };
+        ws.send(Message::Binary(navigation_page(initial).into()))
+            .await
+            .unwrap();
+        let original = wait(&connection, |v| v.received > 0 && !v.input_pending).await;
+        connection
+            .request_navigate(
+                original.stamp(),
+                Intent::NextPage,
+                if mode == "keyboard" {
+                    Source::Keyboard
+                } else {
+                    Source::Pointer
+                },
+            )
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            b"\x1b[6~"
+        );
+        match mode {
+            "answer" => {
+                ws.send(Message::Binary(navigation_page("list_dense").into()))
+                    .await
+                    .unwrap();
+            }
+            "input" => {
+                connection
+                    .input(original.generation, b"\x1b[A".to_vec())
+                    .unwrap();
+                assert_eq!(
+                    ws.next().await.unwrap().unwrap().into_data().as_ref(),
+                    b"\x1b[A"
+                );
+            }
+            "prompt" => {
+                ws.send(Message::Binary(
+                    b"\x1b[2J\x1b[HOwn synthetic input prompt".to_vec().into(),
+                ))
+                .await
+                .unwrap();
+            }
+            "synchronized" => {
+                ws.send(Message::Binary(b"\x1b[?2026h\x1b[H".to_vec().into()))
+                    .await
+                    .unwrap();
+            }
+            "disconnect" => {
+                connection.disconnect().unwrap();
+                assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+                ws.flush().await.unwrap();
+                connection.shutdown().await.unwrap();
+                continue;
+            }
+            _ => {}
+        }
+        assert!(
+            timeout(Duration::from_millis(650), ws.next())
+                .await
+                .is_err(),
+            "no late refresh after {mode}"
+        );
+        finish_board_peer(&connection, ws).await;
+    }
+}
+
+#[tokio::test]
+async fn unanswered_list_refresh_never_repeats_or_replays_the_movement() {
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(navigation_page("list").into()))
+        .await
+        .unwrap();
+    let initial = wait(&connection, |v| v.received > 0 && !v.input_pending).await;
+    connection
+        .navigate(initial.stamp(), navigation::Intent::NextPage)
+        .await
+        .unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"\x1b[6~"
+    );
+    assert_eq!(
+        timeout(Duration::from_secs(1), ws.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap()
+            .into_data()
+            .as_ref(),
+        b"\x0c\x0c"
+    );
+    let pending = wait(&connection, |v| v.input_epoch == 2 && v.input_pending).await;
+    assert!(
+        connection
+            .navigate(pending.stamp(), navigation::Intent::Back)
+            .await
+            .is_err()
+    );
+    assert!(
+        timeout(Duration::from_millis(650), ws.next())
+            .await
+            .is_err()
+    );
+    let released = wait(&connection, |v| !v.input_pending).await;
+    assert_eq!(released.frame.revision, initial.frame.revision);
+    assert_eq!(released.input_epoch, 2);
+    assert_eq!(released.message, crate::msg!("input-unanswered"));
+    finish_board_peer(&connection, ws).await;
+}
