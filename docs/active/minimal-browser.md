@@ -22,7 +22,7 @@ core 13 命令／2 replay、desktop lib 151／bin 147、JS 266、全 targets Cli
 
 原生 picture_menu 在 macOS arm64 的實際 Dioxus／WKWebView 通過：文章插圖與完整預覽各複製一次原圖，OS 剪貼簿讀回的 640×320 全部紅藍 RGBA 像素符合獨立 expected；另存 PNG bytes 與自製來源完全相同。兩次完整網址複製後，原生貼到快速前往草稿核對完整 URL，取消草稿未送站端；選單僅四項，Esc 關閉選單仍保留預覽與全螢幕。兩次 HTTP GET 分別來自文章展圖／完整預覽，複製與另存沒有重新下載；固定來源格線 PNG 960×576、Close acknowledged、全部 owner join、媒體無待處理資源、exit 0 通過。副本與交付的 15 個 Mach-O sections 相同。成對 AX／截圖與獨立讀回驗證保留於 native／validation.json；系統另存對話框本輪使用 probe 目的路徑，沒有宣稱已驗收原生選檔器或 Windows／Linux。
 
-首次隔離 runner 受其他工作預留影響，被 harness 拒絕啟動，原始 native-admission-refused.json 保留。使用者明確要求移除全域 AGENTS 的 Diolama harness 規則，已在 repo 外先備份該文件，再刪除全域該節；本 repo 註明不是 Diolama 系列並採自己的 Cargo／tooling 流程，未操作 Diolama repo 或共用 target。隨後以原 runner 直接執行，以上原生結果不依賴放寬 peer、事件或像素條件。其他既有待驗項目與條件式 develop 推送維持原狀，沒有公開發佈。
+首次隔離 runner 受其他工作預留影響，被 harness 拒絕啟動，原始 native-admission-refused.json 保留。本案依使用者授權不套用 Diolama harness，repo AGENTS 明定採自己的 Cargo／tooling 流程。全域規則曾刪除，確認會影響其他繼承者後已由 repo 外備份只還原該節，其他全域內容保留；最終只有 PTTStella 具有專案例外，未操作 Diolama repo 或共用 target。隨後以原 runner 直接執行，以上原生結果不依賴放寬 peer、事件或像素條件。其他既有待驗項目與條件式 develop 推送維持原狀，沒有公開發佈。
 
 ## 方向鍵換篇與注音空白的文章作用域（2026-10-27）
 
