@@ -70,6 +70,10 @@ PNG 開始時核對相同呈現與選取行範圍，再取得可撤銷 ExportLea
 
 Rust→JS 封包使用 `{kind, payload}`；Stop／MediaReset 是沒有 payload 的 unit variant。登入、名單與設定檔回覆使用明確結果 enum；導航、貼上、保存、匯出與外開使用各自的 status enum。Preferences 回傳同一 Packet，診斷報告不走 UI 通道。JS 的 [router](../assets/surface-packets.js) 只分派指定種類，拒絕未知種類、缺 payload 與舊式混合欄位，不再把未知回覆當成 Paint。雙端隨同一 App 編入，沒有額外通訊服務或通用訊息框架。
 
+Bridge 以 [render_wire](../src/render_wire.rs) 直接將完整 Packet 寫成有 64 MiB byte 上限的 JSON 字串，再交給 Dioxus 的結構化通道，避免建立全文 serde_json::Value 物件樹；不自行拼接可執行程式。Paint／字型預覽／設定樣本的 Frame 使用 runs_v1：只合併同行、相鄰且寬度／左右樣式／unmapped 相同的 glyph，保留每個完整文字、順序與座標。Screen 與 PNG 的原始 Frame 序列化不變。啟動語系、一般 receive 與 router 共用 envelope 解碼；router 完整驗證並展開畫面後才交給原 handler，錯誤不發布或 ACK 部分畫面。仍只有一筆完整 in-flight Paint，沒有第二個非同步分段 owner，取消、切篇及舊 ACK 的保護沿用既有 SurfaceState。
+
+文章行索引只持有目前不可變投影的 glyph／link，離開閱讀與 destroy 釋放；scroll／hover 不為每個可見列掃描全文，未改變的可見列 canvas 可重用。索引不解析文章文字或產生另一份終端狀態，原始連結 index、格線幾何與資訊列樣式仍由 Rust 投影提供。
+
 JS 的 [設定](../assets/surface-settings.js)、[登入](../assets/surface-login.js)、[名單](../assets/surface-filters.js)、書籤與站點各自擁有 DOM 欄位、草稿、busy、timer／request 及清理。它們透過具名的 send、prepare／invalidate、restore 與 changed 回呼協作；bindings 交回既有唯一 listener 擁有者統一撤銷。changed 統一刷新瀏覽與輸出控制項，避免關閉一個 dialog 後留著另一功能的暫停狀態。Settings 的 epoch 與 preview request 在 await 字型載入後再次核對；關閉／換草稿／revoke 後的結果不能重畫或搶回焦點。清理先 revoke 各 owner，再等待工作並 destroy，最後分別核對 clean。
 
 surface 仍共同協調 Rust 版本核對，以及 JS 的輸入、選取、繪製、字型載入快取與 pointer 操作；這些是同一畫面需要共享的資料，不複製為另一個 terminal 模型。後續可再按實際修改需求縮小 Rust 事件分支；拆分涉及焦點、組字與取消時，仍須有實際 WebView runner。

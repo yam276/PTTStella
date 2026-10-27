@@ -1,0 +1,161 @@
+{
+  "compact": {
+    "control_complete": true,
+    "cols": 4,
+    "rows": 2,
+    "cursor": [
+      3,
+      1
+    ],
+    "cursor_visible": true,
+    "revision": 9,
+    "unsupported": 3,
+    "glyph_encoding": "runs_v1",
+    "runs": [
+      [
+        0,
+        0,
+        1,
+        7,
+        7,
+        false,
+        [
+          "a",
+          "\"\\\n"
+        ]
+      ],
+      [
+        0,
+        2,
+        2,
+        66561,
+        132354,
+        true,
+        [
+          "中"
+        ]
+      ],
+      [
+        1,
+        0,
+        1,
+        7,
+        7,
+        false,
+        [
+          "<img>",
+          "é"
+        ]
+      ]
+    ]
+  },
+  "expanded": {
+    "control_complete": true,
+    "cols": 4,
+    "rows": 2,
+    "cursor": [
+      3,
+      1
+    ],
+    "cursor_visible": true,
+    "revision": 9,
+    "unsupported": 3,
+    "glyphs": [
+      {
+        "row": 0,
+        "col": 0,
+        "width": 1,
+        "text": "a",
+        "left": {
+          "fg": 7,
+          "bg": 0,
+          "bright": false,
+          "inverse": false
+        },
+        "right": {
+          "fg": 7,
+          "bg": 0,
+          "bright": false,
+          "inverse": false
+        },
+        "unmapped": false
+      },
+      {
+        "row": 0,
+        "col": 1,
+        "width": 1,
+        "text": "\"\\\n",
+        "left": {
+          "fg": 7,
+          "bg": 0,
+          "bright": false,
+          "inverse": false
+        },
+        "right": {
+          "fg": 7,
+          "bg": 0,
+          "bright": false,
+          "inverse": false
+        },
+        "unmapped": false
+      },
+      {
+        "row": 0,
+        "col": 2,
+        "width": 2,
+        "text": "中",
+        "left": {
+          "fg": 1,
+          "bg": 4,
+          "bright": true,
+          "inverse": false
+        },
+        "right": {
+          "fg": 2,
+          "bg": 5,
+          "bright": false,
+          "inverse": true
+        },
+        "unmapped": true
+      },
+      {
+        "row": 1,
+        "col": 0,
+        "width": 1,
+        "text": "<img>",
+        "left": {
+          "fg": 7,
+          "bg": 0,
+          "bright": false,
+          "inverse": false
+        },
+        "right": {
+          "fg": 7,
+          "bg": 0,
+          "bright": false,
+          "inverse": false
+        },
+        "unmapped": false
+      },
+      {
+        "row": 1,
+        "col": 1,
+        "width": 1,
+        "text": "é",
+        "left": {
+          "fg": 7,
+          "bg": 0,
+          "bright": false,
+          "inverse": false
+        },
+        "right": {
+          "fg": 7,
+          "bg": 0,
+          "bright": false,
+          "inverse": false
+        },
+        "unmapped": false
+      }
+    ]
+  }
+}

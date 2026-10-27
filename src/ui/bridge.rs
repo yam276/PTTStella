@@ -51,7 +51,9 @@ impl<'a> Bridge<'a> {
             Packet::Stop => Some(("stop", 0, 0, 0, true)),
             _ => None,
         };
-        let result = self.eval.send(packet);
+        let result = pttstella::render_wire::packet_json(&packet)
+            .map_err(document::EvalError::Serialization)
+            .and_then(|json| self.eval.send(json));
         if let Some((kind, generation, revision, presentation, ok)) = trace {
             self.diagnostics.bridge(
                 "send",
@@ -71,7 +73,7 @@ impl<'a> Bridge<'a> {
         self.settings.open(store);
     }
     pub(super) fn settings_notice(&self, message: &str) -> Result<(), document::EvalError> {
-        self.eval.send(Packet::Notice(message.into()))
+        self.send(Packet::Notice(message.into()))
     }
     pub(super) async fn recv(&mut self) -> Result<SurfaceEvent, document::EvalError> {
         let result = self.eval.recv().await;

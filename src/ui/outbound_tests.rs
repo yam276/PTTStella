@@ -425,17 +425,38 @@ fn frame_and_preview_packets_keep_typed_identity_and_data_under_payload() {
         serde_json::json!({"enabled":true,"policy_epoch":0,"modes":{"tracking":"off","encoding":"legacy","epoch":0},"ready":false,"route":"local","active":null})
     );
     assert_eq!(value["payload"]["settings"]["cjk_font"], "中文");
+    assert_eq!(value["payload"]["frame"]["glyph_encoding"], "runs_v1");
+    assert_eq!(
+        value["payload"]["frame"]["runs"],
+        serde_json::json!([[0, 0, 1, 7, 7, false, [" ", " "]]])
+    );
+    assert!(value["payload"]["frame"].get("glyphs").is_none());
+    assert_eq!(
+        serde_json::from_str::<Value>(
+            &pttstella::render_wire::packet_json(&Packet::Paint(&paint)).unwrap()
+        )
+        .unwrap(),
+        value
+    );
     assert!(value.get("frame").is_none());
     let directory = tempfile::tempdir().unwrap();
     let preferences = Preferences::load(Some(directory.path())).unwrap();
     let open = serde_json::to_value(preferences.open_packet()).unwrap();
     assert_eq!(open["kind"], "settings_open");
     assert!(open["payload"]["sample"]["frame"].is_object());
+    assert_eq!(
+        open["payload"]["sample"]["frame"]["glyph_encoding"],
+        "runs_v1"
+    );
     let preview =
         serde_json::to_value(preferences.preview_packet(41, DisplayProfile::default())).unwrap();
     assert_eq!(preview["kind"], "font_preview");
     assert_eq!(preview["payload"]["request"], 41);
     assert!(preview["payload"]["packet"]["frame"].is_object());
+    assert_eq!(
+        preview["payload"]["packet"]["frame"]["glyph_encoding"],
+        "runs_v1"
+    );
 }
 
 #[test]

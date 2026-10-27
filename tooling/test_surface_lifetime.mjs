@@ -3,7 +3,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import vm from "node:vm";
-const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-lifetime.js",import.meta.url),"utf8")+"\ncreateSurfaceLifetime");
+const packetsSource=readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8");
+const create=vm.runInNewContext(packetsSource+"\n"+readFileSync(new URL("../assets/surface-lifetime.js",import.meta.url),"utf8")+"\ncreateSurfaceLifetime");
 
 class Target extends EventTarget {
     count=0;
@@ -64,6 +65,16 @@ test("stop before receive does not start channel work",async()=>{
     lifetime.release();assert.equal(target.count,0);
 });
 
+test("serialized transport delivers once, rejects bad JSON without retaining a waiter, and stops",async()=>{
+    const target=new Target(),packets=['{"kind":"notice","payload":"a\\n中文"}','{bad','{"kind":"stop","payload":null}'];
+    let revocations=0;
+    const lifetime=create({recv:()=>Promise.resolve(packets.shift())},target,()=>revocations++);
+    assert.equal((await lifetime.receive()).payload,"a\n中文");
+    await assert.rejects(lifetime.receive(),/JSON|property|Expected/);
+    assert.equal((await lifetime.receive()).kind,"stop");assert.equal(revocations,1);
+    assert.equal(packets.length,0);lifetime.release();assert.equal(target.count,0);
+});
+
 test("twenty thousand packets do not accumulate reactions on an unresolved stop promise",async()=>{
     const states=[];
     class TrackedPromise extends Promise {
@@ -75,7 +86,7 @@ test("twenty thousand packets do not accumulate reactions on an unresolved stop 
         static get [Symbol.species](){return Promise;}
         then(...args){if(!this.state.settled)this.state.reactions++;return super.then(...args);}
     }
-    const factory=vm.runInNewContext(readFileSync(new URL("../assets/surface-lifetime.js",import.meta.url),"utf8")+"\ncreateSurfaceLifetime",{Promise:TrackedPromise});
+    const factory=vm.runInNewContext(packetsSource+"\n"+readFileSync(new URL("../assets/surface-lifetime.js",import.meta.url),"utf8")+"\ncreateSurfaceLifetime",{Promise:TrackedPromise});
     const target=new Target();let received=0;
     const lifetime=factory({recv(){return Promise.resolve({sequence:++received});}},target);
     for(let index=1;index<=20000;index++){
