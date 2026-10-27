@@ -150,16 +150,17 @@ impl SurfaceState {
             packet.presentation = self.filters.version();
         }
         super::presentation::merge_replies(&mut packet, &source_replies);
+        let visible_reply_rows: std::collections::HashSet<_> = packet
+            .frame
+            .glyphs
+            .iter()
+            .filter(|g| g.text != "█" && g.text != " ")
+            .map(|g| g.row)
+            .collect();
         packet.reply_rows = packet
             .replies
             .iter()
-            .filter(|p| {
-                packet
-                    .frame
-                    .glyphs
-                    .iter()
-                    .any(|g| g.row == p.row && g.text != "█" && g.text != " ")
-            })
+            .filter(|p| visible_reply_rows.contains(&p.row))
             .map(|p| p.row)
             .collect();
         if let Some((_, _, id)) = &self.reply_focus {

@@ -516,16 +516,42 @@ fn mask_ranges(frame: &mut Frame, ranges: &[Push]) {
     if ranges.is_empty() {
         return;
     }
+    // Index once for both glyphs and OSC spans. Adjacent/overlapping intervals
+    // are merged so even several policies on one row have bounded lookup cost.
+    let mut rows = std::collections::BTreeMap::<usize, Vec<(usize, usize)>>::new();
+    for range in ranges {
+        rows.entry(range.row)
+            .or_default()
+            .push((range.start, range.end));
+    }
+    for intervals in rows.values_mut() {
+        intervals.sort_unstable();
+        let mut used = 0;
+        for i in 0..intervals.len() {
+            let (start, end) = intervals[i];
+            if used > 0 && start <= intervals[used - 1].1 {
+                intervals[used - 1].1 = intervals[used - 1].1.max(end);
+            } else {
+                intervals[used] = (start, end);
+                used += 1;
+            }
+        }
+        intervals.truncate(used);
+    }
+    let hidden = |row, start, end| {
+        rows.get(&row).is_some_and(|intervals| {
+            let i = intervals.partition_point(|&(_, stop)| stop <= start);
+            intervals.get(i).is_some_and(|&(begin, _)| begin < end)
+        })
+    };
     let mut redacted = Vec::new();
     frame.hyperlinks.retain_mut(|link| {
         link.spans.retain(|span| {
-            let hidden = ranges
-                .iter()
-                .any(|push| push.row == span.row && span.start < push.end && span.end > push.start);
-            if hidden {
+            let masked = hidden(span.row, span.start, span.end);
+            if masked {
                 redacted.push(span.clone());
             }
-            !hidden
+            !masked
         });
         !link.spans.is_empty()
     });
@@ -535,36 +561,31 @@ fn mask_ranges(frame: &mut Frame, ranges: &[Push]) {
             spans: redacted,
         });
     }
-    frame.glyphs = frame
-        .glyphs
-        .iter()
-        .flat_map(|g| {
-            if ranges
-                .iter()
-                .any(|p| p.row == g.row && g.col < p.end && g.col + g.width > p.start)
-            {
-                (g.col..g.col + g.width)
-                    .map(|col| Glyph {
-                        col,
-                        row: g.row,
-                        width: 1,
-                        text: "█".into(),
-                        left: Style {
-                            fg: 0,
-                            ..Style::default()
-                        },
-                        right: Style {
-                            fg: 0,
-                            ..Style::default()
-                        },
-                        unmapped: false,
-                    })
-                    .collect()
-            } else {
-                vec![g.clone()]
+    let original = std::mem::take(&mut frame.glyphs);
+    frame.glyphs.reserve(original.len());
+    for g in original {
+        if hidden(g.row, g.col, g.col + g.width) {
+            for col in g.col..g.col + g.width {
+                frame.glyphs.push(Glyph {
+                    col,
+                    row: g.row,
+                    width: 1,
+                    text: "█".into(),
+                    left: Style {
+                        fg: 0,
+                        ..Style::default()
+                    },
+                    right: Style {
+                        fg: 0,
+                        ..Style::default()
+                    },
+                    unmapped: false,
+                });
             }
-        })
-        .collect();
+        } else {
+            frame.glyphs.push(g);
+        }
+    }
 }
 
 /// Merge only adjacent, independently recognized replies. The caller keeps
