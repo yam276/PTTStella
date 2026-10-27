@@ -4,7 +4,7 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-picture-context-final/PTTStella.app`，前版 `dist/macos-article-switch-ime-final-check/PTTStella.app` 保留供比較（2026-10-27，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-reading-performance-diagnostic-r2/PTTStella.app`（2026-10-28，0.2.0-dev.1、macOS arm64 release／ad-hoc、自動本機 log），前版 `dist/macos-picture-context-final/PTTStella.app` 保留供比較；本輪效能與回歸結果見下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
@@ -12,7 +12,7 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
-## 長文章效能修正計畫（2026-10-28，進行中）
+## 長文章效能修正計畫（2026-10-28，已完成）
 
 依本次 code review 修正三條已量測的共同路徑，基線為 develop `4557b298`。相同自製 80 欄、24／837／2000／4000 行工作量與原始紀錄保留於 `.local/verification/code-review-20261028`；4000 行用來維持既有 4096 行／32 MiB 快取界限內的密集案例。不將本機微量測當成低階硬體或跨平台實測。
 
@@ -22,9 +22,19 @@
 
 依上述可獨立驗收的單位修正與提交，最後執行 CONTRIBUTING 對應 core、desktop、JS、Clippy、fmt／文件 gate；以實際 Dioxus／WKWebView 的本機合成長文、切篇與展圖案例驗證閱讀、取消／過期保護、PNG 原始格線、視窗尺寸與清理。量測保留修改前後相同方法、cold／warm 範圍及記憶體口徑；未測平台明示 not_ready。若設計或量測不符門檻，記錄原因並繼續修正，不能以縮小資料量或放寬既有保護結案。其他舊待人工驗收項目維持原狀，本計畫不包含公開發佈。
 
-第一項已改為按行合併區間與二分查找，glyph 移轉不再逐字配置小 Vec；推文可見列以一次掃描建立集合。filters 20 與 production SurfaceState 29 測試通過，新增亂序 glyph／跨遮蔽邊界雙寬字的獨立 expected。同一 release helper 七次中位數：連續相同 ID 的 4000 行從 453.69 ms 降至 4.85 ms；三行一組從 289.30 ms 降至 4.34 ms；2000→4000 行分別約 2.24／2.15 倍。證據 `.local/verification/performance-fix-20261028`，其餘項目與原生 gate 仍進行中。
+第一項已改為按行合併區間與二分查找，glyph 移轉不再逐字配置小 Vec；推文可見列以一次掃描建立集合。filters 20 與 production SurfaceState 29 測試通過，新增亂序 glyph／跨遮蔽邊界雙寬字的獨立 expected。同一 release helper 七次中位數：連續相同 ID 的 4000 行從 453.69 ms 降至 4.85 ms；三行一組從 289.30 ms 降至 4.34 ms；2000→4000 行分別約 2.24／2.15 倍。證據 `.local/verification/performance-fix-20261028`，完整驗證結果見本節末。
 
-第二項已建立單一不可變投影的 glyph／link 行索引，可見 canvas 只有列或投影／尺寸改變才重繪；離開文章與 destroy 釋放索引，rowAt 改為二分定位。新增 4000 行測試核對重繪不讀全文、連結索引與座標、highlight／尺寸變更仍重繪。inline 44 與全部 JS 269 測試通過。原 1 px offset 工作量後續 layout 為約 0.10 ms；另以同一基線程式重跑每次整行捲動，4000 行由 55.14 ms 降至 0.11 ms，首次 layout 由 51.97 ms 降至 29.27 ms。後續 layout 全文 glyph row 讀取為 0，首次建索引仍為線性成本；這些 Node／DOM doubles 結果不含 Canvas raster、原生 layout 或 GPU，原生 gate 待完成。
+第二項已建立單一不可變投影的 glyph／link 行索引，可見 canvas 只有列或投影／尺寸改變才重繪；離開文章與 destroy 釋放索引，rowAt 改為二分定位。新增 4000 行測試核對重繪不讀全文、連結索引與座標、highlight／尺寸變更仍重繪。inline 44 與全部 JS 269 測試通過。原 1 px offset 工作量後續 layout 為約 0.10 ms；另以同一基線程式重跑每次整行捲動，4000 行由 55.14 ms 降至 0.11 ms，首次 layout 由 51.97 ms 降至 29.27 ms。後續 layout 全文 glyph row 讀取為 0，首次建索引仍為線性成本；這些 Node／DOM doubles 結果不含 Canvas raster、原生 layout 或 GPU，原生 gate 結果見下段。
+
+第三項採緊湊、完整 Packet，保留唯一 in-flight／ACK；沒有增加分段 task 或第二份文章狀態。runs_v1 只共用相鄰 glyph 的幾何與左右樣式，每字文字、unmapped 與原順序完全保留；Bridge 直接序列化有 64 MiB byte 上限的 JSON 字串，Dioxus 不再建立全文 Value 樹，啟動語系與一般 receive 共用解碼。原 Screen／PNG serialization 不改。相同 4000 行獨立 release helper 的完整轉換鏈從約 365.6 ms／53,951,324 bytes 降到 17.6 ms／2,011,061 bytes，maximum resident set 從 862,912,512 bytes（約 823 MiB）降至 41,959,424 bytes（約 40 MiB）。每 glyph 改變樣式、無法合併長 run 的額外壓力案例為約 74 MiB／10.8 MB JSON；沒有只選易壓縮資料隱藏退化。此 RSS 包含 helper 的來源 Frame，並非完整 App／WebKit process-family 記憶體。Node 的 JSON parse／展開首次約 23.1 ms、warm 中位數約 11.4 ms，仍不含原生繪圖。
+
+metadata-only 仍送完整緊湊 Frame，沒有宣稱已做 row delta；同一來源 Frame 加切換 boolean 的序列化／Eval Value string／stringify／script-copy helper，首次約 24.6 ms、後七次中位數 14.5 ms，封包仍約 2 MB，不含其他 Paint 欄位。完整更新、cold／warm、CPU／wall／RSS 原始記錄分開保存。這是本輪可驗收的記憶體與平方掃描修復，不能據此宣稱低階硬體 FPS 或跨平台原生結果。
+
+core 14 命令／2 replay、desktop lib 152／bin 147、JS 271、全 targets Clippy、fmt／docs 與 macOS arm64 release／strict ad-hoc 通過。共享獨立 fixture 核對 Rust encoding 與 JS decoding 的雙色字、寬度、Unicode、跳格／亂序、unmapped 及控制字元；生產 Paint、設定樣本與字型預覽使用同一 codec，錯誤或部分資料不進 handler／ACK。字串封包的 Stop、壞 JSON 後接續接收、listener 清理與 bootstrap 均有回歸。首次原生測試抓到語系第一包尚未解碼，修正並保留失敗紀錄；另一輪 full_load 在取消前已完成，未計入取消驗收。
+
+實際 Dioxus／WKWebView 的 long_load、full_load 與 article_switch 最終通過：38 頁 837 行完整到末行、Home／End／PageUp／Down 本機回讀、展圖後仍固定視窗；取消後停在 23 行，明確繼續至 441 行；A→B→C 分別完整載入且最終 id 3／45 行，沒有文章已變更停載。peer 各只接受 37／19／5 筆導覽，展圖每 URL 一次 HTTP、同一 batch；PNG 960×576、Close acknowledged、全部 owner／fixture server join、exit 0，診斷 run_ok／cleanup_ok 均 true。測試副本與交付各 15 個 Mach-O sections 相同。再以修改前版本及相同字型設定重跑同一 38 頁案例，前後來源 PNG bytes／全部 RGBA 像素完全相同；先前不同 bundled 字型的舊圖不混入比較。成對 AX／截圖、驗證器及量測保留於 `.local/verification/performance-fix-20261028/validation.json` 與同目錄。
+
+三項效能門檻均達成並按修正分別提交。Windows／Linux 原生與實體低階硬體本輪 not_ready；舊的其他人工驗收項目仍保留，不以本輪合成結果代替。本輪未推送、未發佈，正常版視窗政策與既有保護不變。
 
 ## 圖片複製／另存與內容右鍵選單（2026-10-27）
 

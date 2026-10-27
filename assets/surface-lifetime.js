@@ -19,7 +19,10 @@ function createSurfaceLifetime(bridge, target, revoke=()=>{}) {
                 };
                 try {
                     Promise.resolve(bridge.recv()).then(packet=>{
-                        if(packet?.kind==="stop")stop();else finish(resolve,packet);
+                        try {
+                            packet=decodeSurfaceEnvelope(packet);
+                            if(packet?.kind==="stop")stop();else finish(resolve,packet);
+                        } catch(error){finish(reject,error);}
                     },error=>finish(reject,error));
                 } catch(error){finish(reject,error);}
             });

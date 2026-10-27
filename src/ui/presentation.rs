@@ -21,6 +21,7 @@ pub(super) struct Paint {
     pub(super) article_mode: pttstella::settings::ArticleMode,
     pub(super) article_boundary_navigation: bool,
     pub(super) article: Option<super::article_cache::Reading>,
+    #[serde(serialize_with = "pttstella::render_wire::serialize_optional_frame")]
     pub(super) source_frame: Option<Frame>,
     pub(super) site: pttstella::sites::Target,
     pub(super) ptt_features: bool,
@@ -42,6 +43,7 @@ pub(super) struct Paint {
     pub(super) destination: pttstella::navigation_job::Progress,
     pub(super) connected: bool,
     pub(super) navigation: Context,
+    #[serde(serialize_with = "pttstella::render_wire::serialize_frame")]
     pub(super) frame: Frame,
     pub(super) generation: u64,
     pub(super) probe: bool,

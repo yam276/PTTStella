@@ -1,4 +1,4 @@
-const localization=await dioxus.recv();
+const localization=decodeSurfaceEnvelope(await dioxus.recv());
 const tr=createSurfaceI18n(localization,fluent);
 document.documentElement.lang=localization.payload.language;
 const canvas=document.getElementById("screen"), keyboard=document.getElementById("keyboard");

@@ -59,7 +59,7 @@ def provenance(root):
                 facts['dirty'] = bool(status.stdout.strip())
         except (OSError, subprocess.TimeoutExpired):
             facts['git_metadata'] = 'unavailable'
-    for name in ('dual-color.json', 'redraw.json', 'navigation.json', 'board-switch.json', 'article-open.json', 'ui-packets.json', 'filters.json', 'media/colours.png', 'media/motion.gif'):
+    for name in ('dual-color.json', 'redraw.json', 'navigation.json', 'board-switch.json', 'article-open.json', 'ui-packets.json', 'render-wire.json', 'filters.json', 'media/colours.png', 'media/motion.gif'):
         path = root / 'tests/fixtures' / name
         if path.is_file():
             facts['fixture_sha256'][name] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -213,7 +213,7 @@ def unavailable(profile):
 
 def run_core(root):
     needed = ('Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', 'tests/screen.rs',
-              'tests/interaction.rs', 'tests/filters.rs', 'tests/fixtures/filters.json', 'tests/login.rs', 'tests/navigation.rs', 'tests/media.rs', 'tests/vim.rs', 'tests/profiles.rs', 'tests/sites.rs', 'tests/fixtures/dual-color.json', 'tests/fixtures/redraw.json', 'tests/fixtures/navigation.json', 'tests/fixtures/board-switch.json', 'tests/fixtures/article-open.json')
+              'tests/interaction.rs', 'tests/filters.rs', 'tests/fixtures/filters.json', 'tests/login.rs', 'tests/navigation.rs', 'tests/media.rs', 'tests/vim.rs', 'tests/profiles.rs', 'tests/sites.rs', 'tests/render_wire.rs', 'tests/fixtures/render-wire.json', 'tests/fixtures/dual-color.json', 'tests/fixtures/redraw.json', 'tests/fixtures/navigation.json', 'tests/fixtures/board-switch.json', 'tests/fixtures/article-open.json')
     if any(not (root / path).is_file() for path in needed) or not shutil.which('cargo'):
         return {'profile': 'core', 'status': 'not_ready', 'reason': 'Missing pinned Rust product, corpus or cargo.'}
     try:
@@ -222,7 +222,7 @@ def run_core(root):
         commands = [cargo + ['fmt', '--all', '--', '--check'],
                     cargo + ['clippy', '--no-default-features', '--all-targets', '--locked', '--', '-D', 'warnings']]
         commands += [cargo + ['test', '--no-default-features', '--test', suite, '--locked']
-                     for suite in ('screen', 'interaction', 'navigation', 'media', 'vim', 'profiles', 'login', 'filters', 'sites')]
+                     for suite in ('screen', 'interaction', 'navigation', 'media', 'vim', 'profiles', 'login', 'filters', 'sites', 'render_wire')]
         commands += [cargo + ['run', '--quiet', '--locked', '--no-default-features', '--bin', 'replay', '--',
                               'tests/fixtures/' + name] for name in ('dual-color.json', 'redraw.json')]
         for command in commands:
