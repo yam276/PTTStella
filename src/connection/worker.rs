@@ -20,6 +20,12 @@ use tokio::{
 use tokio_tungstenite::tungstenite::{Error as SocketError, Message};
 
 enum PendingInput {
+    Adjacent {
+        revision: u64,
+        deadline: Instant,
+        epoch: u64,
+        down: bool,
+    },
     Mouse {
         revision: u64,
         deadline: Instant,
@@ -43,14 +49,16 @@ struct ListRefresh {
 impl PendingInput {
     fn revision(&self) -> u64 {
         match self {
-            Self::Manual { revision, .. }
+            Self::Adjacent { revision, .. }
+            | Self::Manual { revision, .. }
             | Self::Refresh { revision, .. }
             | Self::Mouse { revision, .. } => *revision,
         }
     }
     fn expired(&self, now: Instant) -> bool {
         match self {
-            Self::Manual { deadline, .. }
+            Self::Adjacent { deadline, .. }
+            | Self::Manual { deadline, .. }
             | Self::Refresh { deadline, .. }
             | Self::Mouse { deadline, .. } => now >= *deadline,
         }
@@ -133,7 +141,7 @@ pub(super) async fn run(
             incoming = async {
                 match session.socket.as_mut() { Some(socket) => socket.next().await, None => pending().await }
             } => session.receive(incoming).await,
-            _ = clock.tick(), if session.dirty || session.output.active() || session.navigation_job.is_some() || session.has_list_refresh() => {
+            _ = clock.tick(), if session.dirty || session.output.active() || session.navigation_job.is_some() || session.has_list_refresh() || matches!(session.pending_input, Some(PendingInput::Adjacent { .. })) => {
                 if session.output.expire(Instant::now()) {
                     session.screen.release_synchronized_output();
                     session.continue_login().await;
@@ -145,6 +153,7 @@ pub(super) async fn run(
                 // Automatic steps yield to already queued manual input/UI state.
                 if commands.is_empty() && matches!(gates.has_changed(),Ok(false)) {
                     session.advance_navigation(Instant::now()).await;
+                    session.advance_adjacent(Instant::now()).await;
                     session.refresh_unanswered_list_move(Instant::now()).await;
                 }
                 if session.dirty { session.publish(); }
@@ -605,6 +614,64 @@ impl Session {
         self.dirty = true;
     }
 
+    async fn advance_adjacent(&mut self, now: Instant) {
+        let Some(PendingInput::Adjacent {
+            revision,
+            deadline,
+            epoch,
+            down,
+        }) = self.pending_input
+        else {
+            return;
+        };
+        if now >= deadline
+            || self.view.input_epoch != epoch
+            || self.view.phase != Phase::Connected
+            || !self.view.site.ptt_features()
+            || self.mouse.snapshot(self.mouse_context()).route != crate::mouse::input::Route::Local
+        {
+            self.pending_input = None;
+            if now >= deadline {
+                self.view.message = crate::msg!("input-unanswered");
+            }
+            self.dirty = true;
+            return;
+        }
+        let frame = self.screen.frame();
+        if frame.revision == revision
+            || self.screen.synchronized_since().is_some()
+            || !frame.control_complete
+        {
+            return;
+        }
+        let Context::ArticleReading {
+            first_line,
+            percent,
+            ..
+        } = navigation::analyze(&frame)
+        else {
+            return;
+        };
+        if !(if down {
+            percent == 100
+        } else {
+            first_line == 1
+        }) {
+            return;
+        }
+        // Consume the positioning step before writing. The intermediate page
+        // stays input-pending; no article cache or preload may consume it.
+        self.pending_input = None;
+        if self
+            .write_input(if down { b"\x1b[B" } else { b"\x1b[A" })
+            .await
+            .is_ok()
+        {
+            self.wait_for_input(false);
+        }
+        self.dirty = true;
+    }
+
     async fn input(&mut self, generation: u64, bytes: &[u8]) {
         self.login_attempt = None;
         // Preserve the peer/transport's last reason when typing after closure.
@@ -870,7 +937,36 @@ impl Session {
         {
             return Err(navigation::Error::AwaitingScreen.to_string());
         }
-        let bytes = navigation::plan(&context, intent).map_err(|e| e.to_string())?;
+        let mut bytes = navigation::plan(&context, intent).map_err(|e| e.to_string())?;
+        let adjacent = if let Intent::AdjacentArticle { down } = intent {
+            let Context::ArticleReading {
+                first_line,
+                percent,
+                ..
+            } = context
+            else {
+                return Err(navigation::Error::Unavailable.to_string());
+            };
+            let at_edge = if down {
+                percent == 100
+            } else {
+                first_line == 1
+            };
+            bytes = if at_edge {
+                if down {
+                    b"\x1b[B".to_vec()
+                } else {
+                    b"\x1b[A".to_vec()
+                }
+            } else if down {
+                b"\x1b[F".to_vec()
+            } else {
+                b"\x1b[H".to_vec()
+            };
+            (!at_edge).then_some(down)
+        } else {
+            None
+        };
         self.mouse.intervene();
         self.dirty = true;
         if bytes.is_empty() {
@@ -880,6 +976,14 @@ impl Session {
         let result = self.write_input(&bytes).await;
         if result.is_ok() {
             self.wait_for_input(keyboard && (list_move || matches!(intent, Intent::Lines { .. })));
+            if let Some(down) = adjacent {
+                self.pending_input = Some(PendingInput::Adjacent {
+                    revision: self.screen.revision(),
+                    deadline: Instant::now() + self.timing.response_timeout,
+                    epoch: self.view.input_epoch,
+                    down,
+                });
+            }
             if !keyboard
                 && list_move
                 && matches!(
@@ -1066,11 +1170,9 @@ impl Session {
         if self.screen.synchronized_since().is_some() {
             return;
         }
-        if self
-            .pending_input
-            .as_ref()
-            .is_some_and(|p| p.revision() != self.screen.revision())
-        {
+        if self.pending_input.as_ref().is_some_and(|p| {
+            !matches!(p, PendingInput::Adjacent { .. }) && p.revision() != self.screen.revision()
+        }) {
             self.pending_input = None;
         }
     }

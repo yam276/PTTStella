@@ -41,6 +41,8 @@ core 執行 Rust 1.97.0 的 fmt、Clippy、畫面與互動測試 suite 及 2 個
 
 滑鼠瀏覽增量另跑 core、desktop lib／bin、Clippy、i18n 與全套 JS。`--probe-surface OUTPUT_DIRECTORY pointer_rows` 現在以本機合成主選單開始：點個人設定、原始 Left 返回、點我的最愛及目錄、滾輪下／上頁、點文章整行及左緣返回；peer 依序獨立核對 Down＋CR、Left、CR、Up＋CR、PageDown、PageUp、Down＋CR、Left，共七筆導覽與一次原始鍵，不接受多送。最後必須匯出 PNG、Close acknowledged、所有 owner join。原生右鍵另核對無反白開扇形、有反白／Shift 保留情境、checkbox 自動保存／重開／重啟、隱藏浮球仍可返回收合；hover 目視亮度與金邊，Canvas／匯出不可混入本機裝飾。DOM doubles 與 loopback 不能代替原生 UI，缺平台明記 not_ready。
 
+文章方向鍵切篇與 IME 空白另跑 core、desktop lib／bin、全 targets Clippy 與全部 JS。`--probe-surface OUTPUT_DIRECTORY article_switch` 使用三篇自製兩頁文章：先完整載入 A，Home 後 ↑ 切 B，再 End 後 ↓ 切 C；peer 獨立只接受 PageDown、Home、↑、PageDown、↓、PageDown，回覆以同步控制分段。三篇都須完整到 45 行，空白／Home／End／PageUp／Down 的本機回讀不得增加站端 bytes；報告需五筆導覽（含三次預讀）、末篇 complete、PNG、Close acknowledged、全部 owner join 及 exit 0。組字確認／取消及普通文字事件的空白路徑另由生產 JS handler 負例驗證；不能以此宣稱已操作特定原生注音候選窗。
+
 列表無回應邊界另跑 desktop lib 的 list boundary／one-shot redraw 回歸及 `tooling/test_navigation_lifecycle.mjs`。`--probe-surface OUTPUT_DIRECTORY list_boundary` 以獨立自製文章列表起始：peer 只接受一次 PageDown 且故意不回應，再接受一筆兩個 Ctrl+L，才重繪同一列表。後續精確接受 PageUp、CR 開文章、Left 返回及 Close；不得重送翻頁或多送刷新。原生以滾輪下／上、Enter 開文章及工具返回，確認補繪後可反向翻頁、進出文章及匯出 PNG，報告須有三筆導覽、最終 article_list、Close acknowledged、全部 owner join 與 exit 0。這個流程不冒充列表座標點文章或正文滑鼠驗收。
 
 Windows ZIP 打包變更另跑 `python -m unittest discover -s tooling -p test_bundle_windows.py`、docs、core 與 desktop gate。`python tooling/bundle_windows.py` 由 Cargo JSON 取得 x64 release executable，檢查 GUI subsystem、實際 PE imports、七份嵌入圖示與來源 ICO payload，打包 Microsoft redistributable CRT 與授權，不覆寫既有 ZIP。publication 回歸涵蓋建置／圖示／未知 DLL 失敗零交付，以及既有 ZIP 和競爭建立不被覆寫。

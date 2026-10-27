@@ -340,8 +340,10 @@ async fn run(
                 .map_err(|e| e.to_string())?;
         }
         let key_status = keyboard_policy.status(&receiver.borrow().context());
-        let raw_reading = (key_status.enabled && matches!(key_status.mode, "input" | "once"))
-            || (!key_status.enabled && key_status.pending);
+        // Native composition pauses loading through its existing UI gate.
+        // Starting/cancelling an IME edit is not a station input and must not
+        // destroy the cached article. Committed text clears it via article_input.
+        let raw_reading = key_status.enabled && matches!(key_status.mode, "input" | "once");
         if screen.set_raw_reading(raw_reading) && raw_reading {
             inline_images.close();
             eval.send(Packet::InlineReset(true))
@@ -405,7 +407,7 @@ async fn run(
                     eval.send(Packet::Notice(error))
                         .map_err(|e| e.to_string())?;
                 } else if let Ok(bytes) = navigation::plan(&view.context(), intent) {
-                    screen.article_input(&view.context(), &bytes);
+                    screen.article_input(&view, &bytes);
                     if preload && intent == navigation::Intent::First {
                         // Restarting from the head changes display-row ownership
                         // when the initial station page contained wrapped lines.
@@ -1062,6 +1064,7 @@ async fn run(
                             continue;
                         }
                         screen.interrupt_full_load();if commands.is(CommandKind::Preload) {cancel_commands(commands,&eval)?;}
+                        let navigation_view=receiver.borrow().clone();
                         let shown=screen.navigation_shown(stamp);
                         let result = if !shown {
                             Err(navigation::Error::Stale.to_string())
@@ -1073,7 +1076,7 @@ async fn run(
                             })
                         };
                         if result.is_ok() {
-                            screen.article_navigation(intent, &receiver.borrow());
+                            screen.article_navigation(intent, &navigation_view);
                         }
                         if result.is_ok() && inline_images.navigation(&receiver.borrow().context(),intent) {
                             eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
@@ -1407,7 +1410,7 @@ async fn run(
                         let context = view.context();
                         let reading_context=screen.reading_context(&view);
                         let policy_context=reading_context.as_ref().unwrap_or(&context);
-                        let effect = keyboard_policy.key(&key, policy_context);
+                        let mut effect = keyboard_policy.key(&key, policy_context);
                         eval.send(Packet::KeyboardState(keyboard_policy.status(policy_context)))
                             .map_err(|e| e.to_string())?;
                         if screen.reading_context(&view).is_none()
@@ -1415,13 +1418,8 @@ async fn run(
                         {
                             if !screen.navigation_shown(view.stamp()) || generation != view.generation || view.input_pending || view.output_pending
                                 || view.mouse.route != pttstella::mouse::input::Route::Local {continue;}
-                            if !bytes.is_empty() {
-                                screen.article_input(&context,&bytes);
-                                inline_images.close();
-                                eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
-                                if let Err(error)=connection.input(generation,bytes) {eval.send(Packet::InputRejected(error)).map_err(|e|e.to_string())?;}
-                            }
-                            continue;
+                            if bytes.is_empty() {continue;}
+                            effect=Effect::Browse(navigation::Intent::AdjacentArticle {down:key.key=="ArrowDown"});
                         }
                         let bytes = match effect {
                             Effect::None => continue,
@@ -1445,7 +1443,7 @@ async fn run(
                                     })
                                 };
                                 if result.is_ok() {
-                            screen.article_navigation(intent, &receiver.borrow());
+                            screen.article_navigation(intent, &view);
                         }
                         if result.is_ok() && inline_images.navigation(&context,intent) {
                                     eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
@@ -1461,7 +1459,7 @@ async fn run(
                         if let Some(intent)=super::article_cache::reading_intent(&bytes) && let Some(packet)=screen.reading_move(&view,intent) {
                             eval.send(packet).map_err(|e|e.to_string())?;continue;
                         }
-                        screen.article_input(&context,&bytes);
+                        screen.article_input(&view,&bytes);
                         if inline_images.input(&context,&bytes) {
                             eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
                         }
@@ -1507,10 +1505,11 @@ async fn run(
                             return Err("unexpected probe input".into());
                         }
                         checks.composition_checked |= composition_input && text == "中";
-                        let encoded = input::encode_with(&text,receiver.borrow().site.encoding).map_err(|e| e.to_string());
+                        let view = receiver.borrow().clone();
+                        let encoded = input::encode_with(&text,view.site.encoding).map_err(|e| e.to_string());
                         let result = encoded.and_then(|bytes| {
-                            screen.article_input(&receiver.borrow().context(),&bytes);
-                            if inline_images.input(&receiver.borrow().context(),&bytes) {
+                            screen.article_input(&view,&bytes);
+                            if inline_images.input(&view.context(),&bytes) {
                                 eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
                             }
                             if probe.is_some() && !vim_input {
@@ -1634,6 +1633,7 @@ async fn run(
                 || matches!(case.as_str(),"mouse"|"mouse_boundary") && checks.mouse_passed(case=="mouse_boundary") && receiver.borrow().mouse.active.is_none()
                 || matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") && checks.mouse_samples_passed(&case) && receiver.borrow().mouse.active.is_none() && receiver.borrow().mouse.modes.tracking()==pttstella::mouse::Tracking::Highlight
                 || case=="pointer_rows" && checks.navigation_requests==7 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
+                || case=="article_switch" && checks.navigation_requests==5 && checks.export_checked && reading.as_ref().is_some_and(|r|r.first_line==1 && r.last_line==45 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
                 || case=="list_boundary" && checks.navigation_requests==3 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
                 || case=="filter_colors" && checks.filter_edits>=4 && checks.export_checked && screen.rules().allow_color==10
                 || case=="account_actions" && checks.account_rule_actions>=3 && checks.filter_edits>=3 && checks.reply_focus_actions>=2 && checks.export_checked
@@ -1655,7 +1655,7 @@ async fn run(
             "bookmarks_initial":initial_bookmarks,"bookmarks_final":bookmarks.snapshot(),"bookmark_opens":checks.bookmark_opens,"bookmark_saves":checks.bookmark_saves,"bookmark_rejected":checks.bookmark_rejected,
             "article_reached":checks.article_reached,"article_missing":checks.article_missing,"article_rejected":checks.article_rejected,"article_cancelled":checks.article_cancelled,
             "board_reached":checks.board_reached,"board_rejected":checks.board_rejected,"board_cancelled":checks.board_cancelled,
-            "scope":if matches!(case.as_str(),"sites"|"sites_restart") {"synthetic loopback station UI; owned external test peers independently verify Big5/GBK bytes and EOF; explicit TCP shutdown is not a WebSocket acknowledgement"} else if case=="long_load" {"synthetic 38-page reading: thirty-seven exact PageDown commands, leading ink reset at page 31, retained 837 rows, explicit images, PNG and Close"} else if case=="full_load" {"synthetic full reading: nineteen exact PageDown commands, cancellation and explicit resume, retained 441 rows, explicit image expansion, PNG and Close"} else if case=="terminal_pages" {"synthetic terminal reading: no automatic load or image requests; one manual PageDown, PNG and Close"} else if case=="inline_pages" {"synthetic cached reading: one exact PageDown, fragmented response, local history without further station bytes, PNG and Close"} else if case=="control_input" {"synthetic editor: peer requires exactly Ctrl+X, Ctrl+Z, Ctrl+A followed by Close; rejects extra or missing input"} else if case=="tools" {"local tools playground: PNG and Close smoke only; gestures are observations, not an A/B acceptance test; peer rejects all station input"} else if matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") {"synthetic native pointer samples: bounded independent exact cells, required final gesture, no local keys or duplicate path, PNG and Close"} else if case=="mouse_boundary" {"synthetic station mouse boundary: one exact press, no release or local keys after leaving the grid; owned cancellation and Close"} else if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
+            "scope":if matches!(case.as_str(),"sites"|"sites_restart") {"synthetic loopback station UI; owned external test peers independently verify Big5/GBK bytes and EOF; explicit TCP shutdown is not a WebSocket acknowledgement"} else if case=="article_switch" {"synthetic A/B/C articles: exact staged Home then Up, direct Down at station end, three complete two-page loads, PNG and Close"} else if case=="long_load" {"synthetic 38-page reading: thirty-seven exact PageDown commands, leading ink reset at page 31, retained 837 rows, explicit images, PNG and Close"} else if case=="full_load" {"synthetic full reading: nineteen exact PageDown commands, cancellation and explicit resume, retained 441 rows, explicit image expansion, PNG and Close"} else if case=="terminal_pages" {"synthetic terminal reading: no automatic load or image requests; one manual PageDown, PNG and Close"} else if case=="inline_pages" {"synthetic cached reading: one exact PageDown, fragmented response, local history without further station bytes, PNG and Close"} else if case=="control_input" {"synthetic editor: peer requires exactly Ctrl+X, Ctrl+Z, Ctrl+A followed by Close; rejects extra or missing input"} else if case=="tools" {"local tools playground: PNG and Close smoke only; gestures are observations, not an A/B acceptance test; peer rejects all station input"} else if matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") {"synthetic native pointer samples: bounded independent exact cells, required final gesture, no local keys or duplicate path, PNG and Close"} else if case=="mouse_boundary" {"synthetic station mouse boundary: one exact press, no release or local keys after leaving the grid; owned cancellation and Close"} else if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
             "mouse":mouse_report,
             "tools":checks.tools,
             "inline_requests":checks.inline_requests,"inline_expands":checks.inline_expands,

@@ -52,3 +52,33 @@ test('CJK Control shortcuts use the physical command path without admitting text
     const text=fixture();text.latest.navigation.kind='unknown';const e=text.key('ㄌ',{code:'KeyX'});assert.equal(e.prevented,false);
     assert.equal(text.sent[0].kind,'key'); // Rust still decides ordinary text admission.
 });
+
+test('IME-delivered plain space in web reading stays a local page action',()=>{
+    const f=fixture();f.latest={article:{id:1},navigation:{kind:'article_reading'}};
+    Object.assign(f,{keyboard:{value:' '},composition:null,beforeEdit:{composition:false},sendInput:p=>f.sent.push(p),readingMove:(intent)=>f.movement=intent});
+    vm.runInContext(source.slice(source.indexOf('function input('),source.indexOf('function compositionstart(')),f);
+    f.input({data:' ',inputType:'insertText',isTrusted:true});
+    assert.equal(f.movement?.action,'next_page');assert.deepEqual(f.sent,[]);
+});
+
+test('native composition, Vim input, terminal text and non-space edits keep their text owner',()=>{
+    for(const reason of ['composition','trailing','vim','terminal','text']){
+        const f=fixture(reason==='vim');f.latest={article:reason==='terminal'?null:{id:1},navigation:{kind:'article_reading'}};
+        Object.assign(f,{keyboard:{value:' '},composition:{},positionKeyboard(){},beforeEdit:{composition:reason==='trailing'},sendInput:p=>f.sent.push(p),readingMove:()=>assert.fail('must retain text/IME ownership')});
+        vm.runInContext(source.slice(source.indexOf('function input('),source.indexOf('function compositionstart(')),f);
+        f.composing=reason==='composition';f.input({data:reason==='text'?'中':' ',inputType:'insertText',isTrusted:true});
+        assert.equal(f.sent.length,['composition','trailing'].includes(reason)?0:1,reason);
+    }
+});
+
+test('a trusted IME-confirmed lone space pages locally; cancellation and committed Chinese keep composition ownership',()=>{
+    for(const value of [' ','','中']){
+        const f=fixture();f.latest={article:{id:1},navigation:{kind:'article_reading'}};
+        Object.assign(f,{composition:{generation:7,startTrusted:true,editTrusted:true,editText:value},keyboard:{value,classList:{remove(){}}},positionKeyboard(){},refreshNavigation(){},policy(){},sendInput:p=>f.sent.push(p),readingMove:intent=>f.movement=intent});
+        vm.runInContext(source.slice(source.indexOf('function compositionend('),source.indexOf('function cancelComposition(')),f);
+        f.compositionend({data:value,isTrusted:true});
+        assert.equal(f.movement?.action,value===' '?'next_page':undefined);
+        assert.equal(f.sent.length,value==='中'?1:0);
+        if(value==='中')assert.equal(f.sent[0].composed,true);
+    }
+});

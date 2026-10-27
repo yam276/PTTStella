@@ -25,6 +25,7 @@ pub(super) enum Scenario {
     ControlInput,
     PointerRows,
     ListBoundary,
+    ArticleSwitch,
     InlinePages { pages: Vec<Vec<u8>>, delay_ms: u64 },
 }
 
@@ -254,6 +255,21 @@ where
                 .into(),
         ),
     }
+}
+
+pub(super) fn switch_page(article: char, second: bool) -> Result<Vec<u8>, String> {
+    let first = if second { 23 } else { 1 };
+    let last = first + 22;
+    let mut page = String::from("\x1b[?2026h\x1b[2J\x1b[H");
+    for (row, line) in (first..=last).enumerate() {
+        page.push_str(&format!(
+            "\x1b[{};1HARTICLE {article} line {line:03}",
+            row + 1
+        ));
+    }
+    page.push_str(&format!("\x1b[24;1H\x1b[30;47m\x1b[2K瀏覽 第 {}/2 頁 ({}%) 目前顯示: 第 {first}~{last} 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H", if second {2} else {1}, if second {100} else {50}));
+    page.push_str("\x1b[?2026l");
+    crate::encoding::encode(&page).map_err(|e| e.to_string())
 }
 
 pub(super) fn filters_page(next: bool) -> Result<Vec<u8>, String> {
@@ -654,7 +670,9 @@ pub(super) async fn serve(
 ) -> Result<(), String> {
     let deadline = if matches!(
         scenario,
-        Scenario::Filters | Scenario::MouseSamples(MouseSampleProbe::RoundTrip)
+        Scenario::Filters
+            | Scenario::ArticleSwitch
+            | Scenario::MouseSamples(MouseSampleProbe::RoundTrip)
     ) {
         900
     } else if matches!(
@@ -757,6 +775,29 @@ pub(super) async fn serve(
             return match socket.next().await {
                 Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e|e.to_string()),
                 _ => Err("row/edge probe expected Close without extra input".into()),
+            };
+        }
+        if matches!(scenario, Scenario::ArticleSwitch) {
+            for (expected, article, second) in [
+                (b"\x1b[6~".as_slice(), 'A', true),
+                (b"\x1b[H", 'A', false),
+                (b"\x1b[A", 'B', false),
+                (b"\x1b[6~", 'B', true),
+                (b"\x1b[B", 'C', false),
+                (b"\x1b[6~", 'C', true),
+            ] {
+                if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected) {
+                    return Err("article switch probe received unexpected input".into());
+                }
+                let page = switch_page(article, second)?;
+                let split=page.len()/2;
+                socket.send(Message::Binary(page[..split].to_vec().into())).await.map_err(|e|e.to_string())?;
+                tokio::time::sleep(Duration::from_millis(80)).await;
+                socket.send(Message::Binary(page[split..].to_vec().into())).await.map_err(|e|e.to_string())?;
+            }
+            return match socket.next().await {
+                Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e|e.to_string()),
+                _ => Err("article switch probe expected Close without extra input".into()),
             };
         }
         if matches!(scenario, Scenario::ListBoundary) {

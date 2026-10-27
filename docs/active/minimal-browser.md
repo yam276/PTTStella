@@ -4,13 +4,25 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-png-timestamps-final/PTTStella.app`（2026-10-27，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-article-switch-ime-final-check/PTTStella.app`（2026-10-27，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 方向鍵換篇與注音空白的文章作用域（2026-10-27）
+
+使用者回報方向鍵換篇或注音空白後出現文章已變更，只剩第一頁。生產 SurfaceState 回歸重現：清除快取後、Connection 尚未發布送鍵等待的排隊空檔，未變動的舊 View 會再次進入新快取。非閱讀輸入現在保存原 source stamp，直到同一 session 的 input epoch 與 revision 都前進才允許重新擷取；換篇的清理使用排入前的來源 View，不追讀可能已更新的 receiver。未經換篇的開頭三行、重疊文字／背景變動仍依原有 Changed 規則停止，沒有放寬內容比對。
+
+Connection 同一 owner 將換篇定位分成有界兩步：站端尚未到相應首尾時只送 Home／End，完整、已辨識的對應頁抵達後才送一次方向鍵，定位中保持 input_pending。已在首尾時直接送方向鍵，避免多一次重繪；既有 timer 檢查期限、epoch、站點與本機路由，原始輸入、逾時或斷線不晚送。終端機首尾方向鍵亦走相同導航路徑；關閉設定、repeat、PageUp／Down、j／k、滑鼠不改成換篇。新增真實 loopback 精確 bytes、未完成同步不得續送、錯誤範圍／逾時／中斷／斷線負例。
+
+有界舊診斷另顯示組字前後 revision 不變但 presentation 變更、網頁投影被撤銷，支持組字狀態會清空快取的程式路徑；沒有從 log 推測鍵名或讀取文字。正常模式的開始／取消組字改為暫停載入、保留投影；實際送出文字或原始操作仍撤銷。普通文字事件或可信組字確認的單一空白使用網頁本機翻頁，不送成站端文字；中文確認、取消、Vim 輸入、終端機及一般編輯保留原 owner。生產 JS handler 覆蓋相應事件與負例，不冒充已操作特定原生輸入法候選窗。
+
+core 13 命令／2 replay、desktop lib 150／bin 142、全 targets Clippy、JS 261、fmt／docs 與 macOS arm64 release／strict ad-hoc 通過；證據 .local/verification/article-switch-ime。原生 article_switch 以三篇自製兩頁文章獨立核對六筆站端輸入。首輪已目視 A→B→C 與 C 第 45 行，但排查焦點耗盡 peer 期限，Close／清理失敗，不能計為完整通過；第二輪原生鍵盤焦點未恢復，工具返回的 Escape 落入 BBS，被精確 peer 拒絕，未放寬 bytes。最終 native-r3 已通過原生 Home／↑ 切 B、End／↓ 切 C，B／C 第 45 行可見；三篇分離為 id 1／2／3，末篇 1～45 行、complete，五筆 UI 導覽／六筆精確站端鍵、960×576 PNG、Close acknowledged、全部 owner join 與 exit 0。交付與副本 15 份 Mach-O loadable sections 相同，無 renderer_error、採樣 dropped 為 0；特定唯音／威注音候選窗與 Windows／Linux 原生本輪仍未驗證。
+
+依使用者再確認，AGENTS 明定僅診斷／測試視窗置頂且啟動不搶焦點，正常發佈版維持一般視窗；此行為已由原程式 test_window 分支提供，沒有為測試取消失焦／隱藏時暫停全文的保護。新增案例的互動準備期限調為 15 分鐘，正式站端回覆期限不變。其他既有待驗條件與條件式推送仍保留，未公開發佈。
 
 ## PNG 預設檔名加入時間（2026-10-27）
 
