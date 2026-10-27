@@ -251,7 +251,12 @@ test('known list and menu viewport edges send Home and End once without opening 
             const f=listFixture(kind);f.tap(40,y);f.tap(40,y);
             assert.deepEqual(f.sent.map(p=>[p.intent,p.source]),[[{action},'pointer']],kind);
         }
-        const footer=listFixture(kind);footer.tap(40,575);assert.deepEqual(footer.sent,[],kind+' footer');
+        for(const col of [0,16,40,79]){
+            for(const y of [552,563,575]){
+                const footer=listFixture(kind);footer.tap(col,y);footer.tap(col,y);
+                assert.deepEqual(footer.sent.map(p=>[p.intent,p.source]),[[{action:'last'},'pointer']],kind+' footer');
+            }
+        }
     }
     for(const kind of ['unknown','empty_list']){const f=listFixture(kind);f.tap(40,5);assert.deepEqual(f.sent,[]);}
     for(const kind of ['board_list','document_list','article_list']){
@@ -307,10 +312,10 @@ test('list Home/End also reach the physical viewport edges outside the centered 
         }
     }
     // Keep both the old grid-edge target and the inert middle of the margin.
-    for(const [y,action] of [[117,'first'],[662,'last']]){
+    for(const [y,action] of [[117,'first'],[662,'last'],[680,'last']]){
         const f=letterboxedList();f.tap(40,y);assert.deepEqual(f.sent.map(p=>p.intent),[{action}]);
     }
-    for(const y of [60,680,730]){const f=letterboxedList();f.tap(40,y);assert.deepEqual(f.sent,[]);}
+    for(const y of [60,730]){const f=letterboxedList();f.tap(40,y);assert.deepEqual(f.sent,[]);}
 });
 test('viewport margin Home/End reject stale geometry, Shift, drags, foreign routes and outside-window points',()=>{
     for(const reason of ['shift','drag','untrusted','remote','blocked','pending','output','no-grid','profile','held-resize','released-scroll','outside-left','outside-top','outside-right','outside-bottom']){
@@ -345,4 +350,23 @@ test('viewport margin hover shows the shared bar-arrow cursor and clears without
         assert.equal(f.surface.title,'');assert.equal(f.navigationMarker.hidden,true);
     }
     f.setHover(null,false,false);assert.equal(f.viewport.dataset.pointerAction,'none');
+});
+
+test('status-row End retains pointer admission and leaves article footers unchanged',()=>{
+    for(const reason of ['shift','drag','untrusted','remote','blocked','pending','output','stale','released-scroll','profile']){
+        const f=listFixture('article_list'),e=f.event(4,565,{shiftKey:reason==='shift',isTrusted:reason!=='untrusted'});
+        if(reason==='remote')f.stationMouse.local=()=>false;
+        if(reason==='blocked')f.blocked=()=>true;
+        if(reason==='pending')f.latest.input_pending=true;
+        if(reason==='output')f.latest.output_pending=true;
+        f.pointerdown(e);
+        if(reason==='stale')f.latest.presentation++;
+        if(reason==='profile')f.latest.navigation.kind='unknown';
+        f.pointerup(reason==='drag'?f.event(6,565):e);
+        if(reason==='released-scroll')f.viewport.scrollTop=24;
+        f.click(e);assert.deepEqual(f.sent,[],reason);
+    }
+    for(const kind of ['unknown','empty_list','article_reading']){
+        const f=listFixture(kind);f.tap(4,565);assert.deepEqual(f.sent,[],kind);
+    }
 });

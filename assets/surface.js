@@ -417,6 +417,8 @@ function readingPageAt(point,clientY) {
 }
 function listEdgeAt(point,clientY) {
     if(!Number.isFinite(clientY)||!hasPageEdges(latest.navigation)||latest.navigation.kind==="article_reading"||!grid)return null;
+    // The complete final status row is End, including its left-hand label.
+    if(point?.row===latest.frame.rows-1)return {kind:"page",action:"last"};
     const region={first:0,last:latest.frame.rows-1};
     // A fitted terminal can leave black margins above/below the grid. Keep
     // its original grid-edge targets and also admit the actual viewport edges.
