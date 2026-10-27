@@ -32,6 +32,8 @@
 
 ## 變更與驗證
 
+- 本專案不屬於 Diolama 系列，不套用 Diolama 的資源 harness；建置與測試直接使用本 repo 的 Cargo／tooling 流程，不占用或清除其他專案的共用 target。
+
 - 日常開發與功能 PR 使用 `develop`；`main` 只放發佈版本，以標題 `release: v<package version>` 的 develop → main PR 推進，Cargo.toml／Cargo.lock 版本必須一致且遞增。不要因修改 CI 直接提高版本或發佈產品，流程與實際分支保護狀態見 [自動發佈](docs/releases.md)。
 - 把目標寫成可觀察的輸入、結果及驗收。可逆且已授權的工作持續完成；只為實質缺少資訊或授權詢問，不為例行選擇反覆確認。
 - 保持方法與狀態責任清楚；第二份非平凡近似實作出現時找共同擁有者。修 bug 檢查產生邊界及直接消費者，移除被取代路徑，不混入無關重構。
