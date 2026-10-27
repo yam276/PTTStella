@@ -4,13 +4,23 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-list-home-end-final/PTTStella.app`（2026-10-24，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-fullscreen-status-end-final/PTTStella.app`（2026-10-27，0.2.0-dev.1、macOS arm64 release／ad-hoc，自動本機 log，詳見下節）。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 診斷版全螢幕與列表狀態列 End（2026-10-27）
+
+診斷版置頂使用浮動層級；原 macOS 預定義選單直接送 toggleFullScreen，沒有先降低層級，因此 Control＋Command＋F 及選單均留在原視窗。改用同一原生選單加速鍵呼叫安全的 Tao set_fullscreen；框架先降回一般層級再進入原生全螢幕。每個視窗的 owner 只在原先為置頂時記錄尺寸，退出全螢幕且恢復原尺寸後恢復置頂；不加入搶焦點 timer，也不修改設定 Esc 的優先順序。來源依本機安裝的 Tao 0.34.8／muda 0.19.3 實作核對，沒有新增 unsafe 或原生全域按鍵監聽。
+
+依新要求，已辨識列表／選單最底下整條狀態列改為 End，包含左側標籤；先前上下黑邊與格線首尾入口保留。閱讀文章資訊列仍依原有閱讀路徑，未知／空列表不放行。先更新獨立 expected 重現舊版狀態列零送出，再核對六種 profile、全行四個橫向位置與三個垂直位置各只送一筆 Last。拖曳、Shift、未受信任、忙碌、輸出等待、過期來源與幾何變動仍拒絕，連結與既有返回優先不改。
+
+core 13 命令／2 replay、desktop lib 145／bin 141、全 targets Clippy、JS 257、fmt／docs 與 macOS arm64 release／strict ad-hoc 通過；證據 .local/verification/fullscreen-status-end（red-pointer.log、gate.json）。新版實際程序路徑與交付一致，啟動畫面為未啟用的灰色標題列；原生鍵盤及選單各完成一次 1040×768 → 1920×1080 → 1040×768。全螢幕設定開啟後 Esc 關閉，AX 回 BBS，視窗仍為 1920×1080；成對 AX／截圖見 native。關窗後 finish 的 run_ok／cleanup_ok 均為 true，程序已退出。此輪未登入或送站端操作。
+
+另保留觀察限制：全螢幕關設定後的擷取圖下方部分登入文字缺塊，退出全螢幕後完整；尚未區分實畫面與原生擷取差異，不將尺寸驗證宣稱為全畫面像素驗收。列表狀態列的原生滑鼠點擊仍待人工確認，先前 noWindowsAvailable 工具限制未以 DOM／Connection 測試冒充通過；舊版偶發 cleanup_ok false 也未據本次正常關閉宣稱修復。先前條件式推送 develop 仍保留待驗條件，未推送；Windows／Linux 原生 not_ready，沒有公開發佈。
 
 ## 普通編號列的彩券顯示作者（2026-10-24）
 
