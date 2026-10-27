@@ -725,3 +725,26 @@ test("visible footer row range follows Home, pages and images while station cell
     assert.equal(packet.frame.glyphs.map(g=>g.text).join("")," 101~123 ");
     await e.ui.destroy();
 });
+
+test('long article scroll reads indexed visible rows and reuses only unchanged canvas rows',async()=>{
+    const e=ownerEnvironment(true),style={fg:7,bg:0,bright:false,inverse:false};
+    let reads=0;
+    const glyphs=Array.from({length:4001},(_,row)=>({get row(){reads++;return row;},col:0,width:1,text:String(row),left:style,right:style}));
+    const links=[{row:2000,start:0,end:1,url:'https://example.com/visible'},{row:2001,start:0,end:1,url:'https://example.com/next'}];
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:4000,end:true},source_frame:{rows:24},frame:{...e.packet.frame,rows:4001,cols:80,glyphs},links,image_links:[]};
+    const base={x:c=>c*12,y:r=>r*24};
+    e.ui.layout(packet,base,1);reads=0;e.rendered.length=0;
+    e.ui.layout(packet,base,1);assert.equal(reads,0);assert.equal(e.rendered.length,0);
+    e.viewport.scrollTop=2000*24;e.ui.layout(packet,base,1);
+    assert.equal(reads,0);assert.ok(e.rendered.length<=10);
+    const row=e.rendered.find(p=>p.frame.glyphs[0]?.text==='2000');
+    assert.equal(row.frame.glyphs[0].row,0);assert.equal(row.links[0].url,links[0].url);assert.equal(row.links[0].row,0);
+    e.rendered.length=0;e.ui.layout(packet,base,1);assert.equal(e.rendered.length,0);
+    // A fresh projection (e.g. account highlight) and a resized backing store
+    // must repaint even when terminal row coordinates are identical.
+    e.ui.layout({...packet,presentation:4,frame:{...packet.frame,glyphs:glyphs.map(g=>({...g,left:{...style,bg:4}}))}},base,1);
+    assert.ok(e.rendered.some(p=>p.frame.glyphs.some(g=>g.left.bg===4)));
+    e.rendered.length=0;e.canvas.width+=24;e.ui.layout(packet,base,1);assert.ok(e.rendered.length>0);
+    assert.equal(links[0].row,2000);await e.ui.destroy();
+});
+

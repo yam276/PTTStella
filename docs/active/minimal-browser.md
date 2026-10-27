@@ -24,6 +24,8 @@
 
 第一項已改為按行合併區間與二分查找，glyph 移轉不再逐字配置小 Vec；推文可見列以一次掃描建立集合。filters 20 與 production SurfaceState 29 測試通過，新增亂序 glyph／跨遮蔽邊界雙寬字的獨立 expected。同一 release helper 七次中位數：連續相同 ID 的 4000 行從 453.69 ms 降至 4.85 ms；三行一組從 289.30 ms 降至 4.34 ms；2000→4000 行分別約 2.24／2.15 倍。證據 `.local/verification/performance-fix-20261028`，其餘項目與原生 gate 仍進行中。
 
+第二項已建立單一不可變投影的 glyph／link 行索引，可見 canvas 只有列或投影／尺寸改變才重繪；離開文章與 destroy 釋放索引，rowAt 改為二分定位。新增 4000 行測試核對重繪不讀全文、連結索引與座標、highlight／尺寸變更仍重繪。inline 44 與全部 JS 269 測試通過。原 1 px offset 工作量後續 layout 為約 0.10 ms；另以同一基線程式重跑每次整行捲動，4000 行由 55.14 ms 降至 0.11 ms，首次 layout 由 51.97 ms 降至 29.27 ms。後續 layout 全文 glyph row 讀取為 0，首次建索引仍為線性成本；這些 Node／DOM doubles 結果不含 Canvas raster、原生 layout 或 GPU，原生 gate 待完成。
+
 ## 圖片複製／另存與內容右鍵選單（2026-10-27）
 
 依使用者要求，文章插圖與完整圖片預覽的右鍵提供複製圖片、另存圖片、複製完整網址、開啟連結四項。圖片／網址、ID 與反白文字的選單不再混入翻頁、整頁匯出、Vim 或設定；背景選單保留全域工具。ID 的名單加入／移除與推文高亮、文字的複製與選取行 PNG 均保留。完整預覽的選單放在同一 modal 內，共用既有焦點／快照／外部手勢控制器，Esc 先關選單。
