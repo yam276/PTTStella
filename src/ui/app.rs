@@ -219,8 +219,30 @@ pub fn app(props: AppProps) -> Element {
     {
         let close_sender = closing.0.clone();
         let main_window = std::rc::Rc::downgrade(&dioxus::desktop::window());
+        let fullscreen = use_hook(|| std::rc::Rc::new(crate::macos::NativeFullscreen::default()));
+        let fullscreen_events = fullscreen.clone();
+        let fullscreen_window = main_window.clone();
+        dioxus::desktop::use_wry_event_handler(move |event, _| {
+            use dioxus::desktop::tao::event::Event;
+            if let Some(window) = fullscreen_window.upgrade() {
+                match event {
+                    Event::WindowEvent { window_id, .. } if *window_id == window.id() => {
+                        fullscreen_events.restore_if_windowed(&window);
+                    }
+                    // Also cover a failed/cancelled native transition that
+                    // restores the window without another resize notification.
+                    Event::MainEventsCleared => fullscreen_events.restore_if_windowed(&window),
+                    _ => {}
+                }
+            }
+        });
         let settings_sender = settings_requests.0.clone();
         dioxus::desktop::use_muda_event_handler(move |event| {
+            if event.id().0 == crate::macos::FULLSCREEN
+                && let Some(window) = main_window.upgrade()
+            {
+                fullscreen.toggle(&window);
+            }
             if event.id().0 == crate::macos::SETTINGS {
                 settings_sender.send_modify(|(serial, close)| {
                     *serial = serial.wrapping_add(1);

@@ -7,6 +7,7 @@ use dioxus::desktop::muda::{
 pub const SETTINGS: &str = "pttstella-settings";
 pub const CLOSE_SETTINGS: &str = "pttstella-settings-close";
 pub const QUIT: &str = "pttstella-quit";
+pub const FULLSCREEN: &str = "pttstella-fullscreen";
 
 fn build_menu(visible: bool) -> Result<(Menu, MenuItem), muda::Error> {
     let menu = Menu::new();
@@ -51,7 +52,15 @@ fn build_menu(visible: bool) -> Result<(Menu, MenuItem), muda::Error> {
     window.append_items(&[
         &PredefinedMenuItem::minimize(Some(&pttstella::msg!("menu-minimize"))),
         &PredefinedMenuItem::maximize(Some(&pttstella::msg!("menu-maximize"))),
-        &PredefinedMenuItem::fullscreen(Some(&pttstella::msg!("menu-fullscreen"))),
+        &MenuItem::with_id(
+            FULLSCREEN,
+            pttstella::msg!("menu-fullscreen"),
+            true,
+            Some(Accelerator::new(
+                Some(Modifiers::SUPER | Modifiers::CONTROL),
+                Code::KeyF,
+            )),
+        ),
         &PredefinedMenuItem::close_window(Some(&pttstella::msg!("menu-close"))),
     ])?;
     window.set_as_windows_menu_for_nsapp();
@@ -89,4 +98,36 @@ impl NativeMenu {
 
 pub fn menu() -> Result<Menu, muda::Error> {
     build_menu(false).map(|(menu, _)| menu)
+}
+
+/// Tao lowers floating windows before entering native fullscreen. The direct
+/// AppKit menu selector skips that step, so it cannot enter from our test window.
+/// Restore the floating level only after the original window size returns;
+/// `set_fullscreen(None)` updates Tao's state before the exit animation finishes.
+#[derive(Default)]
+pub struct NativeFullscreen {
+    floating_size: std::cell::Cell<Option<dioxus::desktop::tao::dpi::PhysicalSize<u32>>>,
+}
+impl NativeFullscreen {
+    pub fn toggle(&self, window: &dioxus::desktop::tao::window::Window) {
+        use dioxus::desktop::tao::window::Fullscreen;
+        if window.fullscreen().is_some() {
+            window.set_fullscreen(None);
+        } else {
+            if window.is_always_on_top() {
+                self.floating_size.set(Some(window.inner_size()));
+            }
+            window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+        }
+    }
+
+    pub fn restore_if_windowed(&self, window: &dioxus::desktop::tao::window::Window) {
+        if let Some(size) = self.floating_size.get()
+            && window.fullscreen().is_none()
+            && window.inner_size() == size
+        {
+            self.floating_size.set(None);
+            window.set_always_on_top(true);
+        }
+    }
 }
