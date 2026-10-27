@@ -105,6 +105,9 @@ impl SurfaceState {
             output: None,
         }
     }
+    pub(super) fn presentation(&self) -> u64 {
+        self.filters.version()
+    }
     pub(super) fn rules(&self) -> &filters::Rules {
         self.filters.rules()
     }
@@ -814,7 +817,7 @@ impl SurfaceState {
     pub(super) fn begin_hover(&mut self, lease: Lease) {
         self.hover = Some(lease);
     }
-    fn revoke_output(&mut self) {
+    pub(super) fn revoke_output(&mut self) {
         if let Some(active) = self.output.take() {
             active.lease.revoked.store(true, Ordering::Release);
         }
@@ -837,6 +840,11 @@ impl SurfaceState {
             lease: lease.clone(),
             selection,
         });
+        lease
+    }
+    pub(super) fn lease_picture(&mut self, identity: Identity, epoch: u64) -> OutputLease {
+        let mut lease = self.lease_output(identity, None, epoch);
+        lease.input_epoch = Some(epoch);
         lease
     }
     pub(super) fn clear_hover(&mut self) -> bool {

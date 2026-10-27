@@ -48,6 +48,7 @@ pub(super) fn mouse_case(case: Option<&str>) -> bool {
 #[derive(Default)]
 pub(super) struct Checks {
     pub(super) image_copies: usize,
+    pub(super) picture_saves: usize,
     pub(super) site_switches: u8,
     pub(super) site_saves: u8,
     pub(super) site_removes: u8,
@@ -514,7 +515,7 @@ pub(super) fn surface_sample(
         Some("sgr66_legacy") => sgr66_sample(false),
         Some("osc8") => osc8_sample(media_origin),
         Some("inline_pages" | "terminal_pages") => inline_sample(media_origin),
-        Some("inline") => {
+        Some("inline" | "picture_menu") => {
             let mut bytes=inline_sample(media_origin)?;
             bytes.extend_from_slice(&encoding::encode("\x1b[24;1H\x1b[7m\x1b[2K 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H").map_err(|e|e.to_string())?);
             Ok(bytes)

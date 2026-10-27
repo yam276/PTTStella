@@ -3752,6 +3752,7 @@ dependencies = [
  "futures-util",
  "i18n-embed",
  "i18n-embed-fl",
+ "image",
  "imagesize",
  "png 0.18.1",
  "reqwest",

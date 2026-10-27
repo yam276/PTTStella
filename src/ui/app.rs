@@ -69,6 +69,7 @@ pub fn app(props: AppProps) -> Element {
                 | "diagnostics"
                 | "inline_replies"
                 | "short_links"
+                | "picture_menu"
                 | "context_menu"
                 | "filter_colors"
                 | "account_lists"
@@ -454,6 +455,11 @@ pub fn app(props: AppProps) -> Element {
                 p { id: "media-url" }
                 output { id: "media-status", role: "status" }
                 div { id: "media-viewport" }
+                div { id: "media-context-menu", class: "surface-context-menu", role: "menu", hidden: true,
+                    "aria-label":pttstella::msg!("image-title"),
+                    PictureActions {}
+                    LinkActions {}
+                }
             }
             aside { id: "media-hover", hidden:true, "aria-hidden":"true",
                 output { id: "media-hover-status" }
@@ -490,7 +496,7 @@ fn SettingsCaption(label: String, icon: Element) -> Element {
 // Static, localized controls; the surface owner supplies context and admission.
 fn context_menu() -> Element {
     rsx! {
-        div { id: "surface-context-menu", role: "menu", hidden: true,
+        div { id: "surface-context-menu", class: "surface-context-menu", role: "menu", hidden: true,
             "aria-label": pttstella::msg!("context-title"),
             div { id: "context-account-target", hidden: true, style: "padding: 6px 12px; color: var(--gold); font-weight: 600;" }
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "account-mask",
@@ -520,15 +526,8 @@ fn context_menu() -> Element {
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy",
                 Copy { size: 18 } span { {pttstella::msg!("context-copy")} }
             }
-            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy-link",
-                Link { size: 18 } span { {pttstella::msg!("context-copy-link")} }
-            }
-            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "open-link",
-                ExternalLink { size: 18 } span { {pttstella::msg!("context-open-link")} }
-            }
-            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "select-link",
-                Link { size: 18 } span { {pttstella::msg!("context-select-link")} }
-            }
+            PictureActions {}
+            LinkActions {}
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy-image-page",
                 Copy { size: 18 } span { {pttstella::msg!("copy-png")} }
             }
@@ -569,6 +568,34 @@ fn context_menu() -> Element {
                 BrandSettingsCaption{}
             }
         }
+    }
+}
+
+#[component]
+fn PictureActions() -> Element {
+    let _language = use_context::<Signal<pttstella::i18n::Language>>()();
+    rsx! {
+        button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"copy-picture",
+            Copy {size:18} span {{pttstella::msg!("context-copy-picture")}}
+        }
+        button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"save-picture",
+            Save {size:18} span {{pttstella::msg!("context-save-picture")}}
+        }
+    }
+}
+#[component]
+fn LinkActions() -> Element {
+    let _language = use_context::<Signal<pttstella::i18n::Language>>()();
+    rsx! {
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy-link",
+                Link { size: 18 } span { {pttstella::msg!("context-copy-link")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "open-link",
+                ExternalLink { size: 18 } span { {pttstella::msg!("context-open-link")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "select-link",
+                Link { size: 18 } span { {pttstella::msg!("context-select-link")} }
+            }
     }
 }
 

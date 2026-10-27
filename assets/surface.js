@@ -610,7 +610,8 @@ function contextState(index,word=null,replyRow=null){
     const ready=!!latest&&!latest.output_pending&&!filterUi.blocked();
     const selectionReady=ready&&!!selectionCache&&selectionCache.presentation===latest.presentation
         &&selectionCache.generation===generation&&selectionCache.revision===revision;
-    return {word,replyRow,focused:!!latest?.reply_focus,link:index,selection:hasSelection(),selectionReady,rowsReady:selectionReady&&!exportBusy&&selectionCache.value.rows.end-selectionCache.value.rows.start<=24,
+    const picture=inlineImages.pictureState(index);
+    return {picture:!!picture,pictureReady:!!picture?.ready,word,replyRow,focused:!!latest?.reply_focus,link:index,selection:hasSelection(),selectionReady,rowsReady:selectionReady&&!exportBusy&&selectionCache.value.rows.end-selectionCache.value.rows.start<=24,
         ready,exportReady:ready&&!exportBusy,local:stationMouse.local(),ptt:!!latest?.ptt_features,
         reading:latest?.navigation.kind==="article_reading",authors:latest?.navigation.kind==="article_list",images:!!latest?.image_links.length,
         inlineReady:inlineShortcut({key:"Enter"},keyboardState,latest),navigate:canNavigate(),
@@ -640,6 +641,8 @@ function contextAction(action,context,e){
     }
     else if(action==="reply-focus")send({kind:"reply_focus",presentation:latest.presentation,stamp:stamp(),row:context.replyRow,trusted:true});
     else if(action==="reply-focus-clear")send({kind:"reply_focus",presentation:latest.presentation,stamp:stamp(),row:null,trusted:true});
+    else if(action==="copy-picture"||action==="save-picture")send({kind:"picture",presentation:latest.presentation,stamp:stamp(),index:context.index,
+        destination:action==="copy-picture"?"clipboard":"file",trusted:true});
     else if(action==="select-link")requestSelection({mode:"link",index:context.index});
     else if(action==="open-link")send({kind:"open_link",presentation:latest.presentation,generation,revision,index:context.index,trusted:true});
     else if(action==="select-all")selectPage();
@@ -1013,7 +1016,7 @@ function runSurfaceProbe(mode){
             }
 
 }
-function showNotice(message){if(!stopped&&message&&!settingsUi.notice(message))surfaceNote.textContent=message;}
+function showNotice(message){if(!stopped&&message&&!settingsUi.notice(message)&&!media.notice(message))surfaceNote.textContent=message;}
 const route=createSurfaceRouter({
     diagnostics:enabled=>diagnostics.enable(enabled),
     localization:data=>{tr.update({kind:"localization",payload:data});document.documentElement.lang=data.language;settingsUi.relocalize();filterUi.relocalize();tools.relocalize();receiveKeyboard(keyboardState);refreshControls();refreshArticleLoad();},

@@ -40,6 +40,9 @@ pub(super) enum MediaAction {
     Close,
     Retry,
     External,
+    CopyImage,
+    SaveImage,
+    CopyUrl,
 }
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -280,6 +283,7 @@ pub(super) enum SurfaceEvent {
         png: String,
         trusted: bool,
     },
+    Picture(PictureOutput),
     OpenLink {
         presentation: u64,
         generation: u64,
@@ -460,6 +464,9 @@ impl SurfaceEvent {
             NavigationCancel {
                 generation: source, ..
             } => *source == generation,
+            Picture(PictureOutput { trusted, stamp, .. }) => {
+                *trusted && stamp.generation == generation
+            }
             ArticleLoad {
                 trusted,
                 generation: source,
@@ -908,4 +915,39 @@ mod image_clipboard_tests {
         value["destination"] = "custom".into();
         assert!(serde_json::from_value::<SurfaceEvent>(value).is_err());
     }
+}
+
+#[cfg(test)]
+mod picture_tests {
+    use super::*;
+    #[test]
+    fn original_picture_output_accepts_only_trusted_current_typed_requests() {
+        let value = serde_json::json!({"kind":"picture","presentation":3,"stamp":{"generation":7,"revision":4,"input_epoch":2},"index":0,"destination":"clipboard","trusted":true});
+        let event: SurfaceEvent = serde_json::from_value(value.clone()).unwrap();
+        assert!(event.admitted(7));
+        assert!(!event.admitted(8));
+        for (field, bad) in [
+            ("trusted", serde_json::json!(false)),
+            ("index", serde_json::json!(-1)),
+            ("destination", serde_json::json!("custom")),
+            ("url", serde_json::json!("https://other/image.png")),
+        ] {
+            let mut invalid = value.clone();
+            invalid[field] = bad;
+            assert!(
+                serde_json::from_value::<SurfaceEvent>(invalid)
+                    .map_or(true, |event| !event.admitted(7))
+            );
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct PictureOutput {
+    pub presentation: u64,
+    pub stamp: Stamp,
+    pub index: usize,
+    pub destination: super::files::ExportDestination,
+    pub trusted: bool,
 }

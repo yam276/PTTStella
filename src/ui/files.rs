@@ -1,4 +1,6 @@
 //! One retained file operation. Disk work never runs on the surface event loop.
+#[path = "files_picture.rs"]
+pub(super) mod picture;
 #[cfg(test)]
 #[path = "files_tests.rs"]
 mod tests;
@@ -51,6 +53,10 @@ impl std::fmt::Display for Error {
 type FileResult<T> = Result<T, Error>;
 pub(super) enum Completion {
     Clipboard(FileResult<()>),
+    Picture {
+        destination: ExportDestination,
+        result: FileResult<bool>,
+    },
     Sites {
         action: super::sites::Edit,
         request: u64,
@@ -85,6 +91,7 @@ impl Completion {
     fn failure(self) -> Option<Error> {
         match self {
             Self::Clipboard(result) => result.err(),
+            Self::Picture { result, .. } => result.err(),
             Self::Sites { result, .. } => result.err(),
             Self::Bookmarks { result, .. } => result.err(),
             Self::Recent(done) => done.result.err().map(Error::Failed),
@@ -427,6 +434,21 @@ fn decode_png(png: String, rows: &Range<usize>) -> Result<Vec<u8>, String> {
     export::check_export_header(&bytes, rows).map_err(|error| error.to_string())?;
     Ok(bytes)
 }
+fn timestamp_stem() -> String {
+    let now = time::OffsetDateTime::now_utc();
+    let now = time::UtcOffset::local_offset_at(now).map_or(now, |offset| now.to_offset(offset));
+    format!(
+        "PTTStella-{:04}{:02}{:02}-{:02}{:02}{:02}-{:03}{}",
+        now.year(),
+        u8::from(now.month()),
+        now.day(),
+        now.hour(),
+        now.minute(),
+        now.second(),
+        now.millisecond(),
+        if now.offset().is_utc() { "Z" } else { "" },
+    )
+}
 async fn pick_export(
     rows: Range<usize>,
     selected: bool,
@@ -439,19 +461,7 @@ async fn pick_export(
             "export.png"
         }))
     } else {
-        let now = time::OffsetDateTime::now_utc();
-        let now = time::UtcOffset::local_offset_at(now).map_or(now, |offset| now.to_offset(offset));
-        let stem = format!(
-            "PTTStella-{:04}{:02}{:02}-{:02}{:02}{:02}-{:03}{}",
-            now.year(),
-            u8::from(now.month()),
-            now.day(),
-            now.hour(),
-            now.minute(),
-            now.second(),
-            now.millisecond(),
-            if now.offset().is_utc() { "Z" } else { "" },
-        );
+        let stem = timestamp_stem();
         let filename = if selected {
             format!("{stem}-lines-{}-{}.png", rows.start + 1, rows.end)
         } else {
@@ -482,59 +492,63 @@ pub(super) async fn export_image(
             let probe = request.probe.clone();
             let selected = request.selected;
             copy_png_with_writer(permit, request, move |image| {
-                let mut owner = clipboard
-                    .lock()
-                    .map_err(|_| pttstella::msg!("copy-failed"))?;
-                if owner.is_none() {
-                    *owner = Some(
-                        arboard::Clipboard::new().map_err(|_| pttstella::msg!("copy-failed"))?,
-                    );
-                }
-                let clipboard = owner
-                    .as_mut()
-                    .ok_or_else(|| pttstella::msg!("copy-failed"))?;
-                // Test-only readback after an explicit copy gesture; normal copies retain no image evidence.
-                let expected = probe
-                    .as_ref()
-                    .map(|_| (image.width, image.height, image.bytes.clone().into_owned()));
-                clipboard
-                    .set_image(image)
-                    .map_err(|_| pttstella::msg!("copy-failed"))?;
-                if let (Some(directory), Some((width, height, expected))) = (probe, expected) {
-                    let actual = clipboard
-                        .get_image()
-                        .map_err(|_| "clipboard probe readback failed".to_owned())?;
-                    if actual.width != width
-                        || actual.height != height
-                        || actual.bytes.as_ref() != expected
-                    {
-                        return Err("clipboard probe pixels differ".into());
-                    }
-                    let mut bytes = Vec::new();
-                    {
-                        let mut encoder =
-                            png::Encoder::new(&mut bytes, width as u32, height as u32);
-                        encoder.set_color(png::ColorType::Rgba);
-                        encoder.set_depth(png::BitDepth::Eight);
-                        let mut writer = encoder.write_header().map_err(|e| e.to_string())?;
-                        writer
-                            .write_image_data(&actual.bytes)
-                            .map_err(|e| e.to_string())?;
-                    }
-                    storage::replace(
-                        &directory.join(if selected {
+                write_clipboard_image(
+                    clipboard,
+                    image,
+                    probe.map(|directory| {
+                        directory.join(if selected {
                             "clipboard-rows.png"
                         } else {
                             "clipboard.png"
-                        }),
-                        &bytes,
-                    )?;
-                }
-                Ok(())
+                        })
+                    }),
+                )
             })
             .await
         }
     }
+}
+fn write_clipboard_image(
+    clipboard: Clipboard,
+    image: arboard::ImageData<'static>,
+    probe: Option<PathBuf>,
+) -> Result<(), String> {
+    let mut owner = clipboard
+        .lock()
+        .map_err(|_| pttstella::msg!("copy-failed"))?;
+    if owner.is_none() {
+        *owner = Some(arboard::Clipboard::new().map_err(|_| pttstella::msg!("copy-failed"))?);
+    }
+    let clipboard = owner
+        .as_mut()
+        .ok_or_else(|| pttstella::msg!("copy-failed"))?;
+    // Test-only readback after an explicit copy gesture; normal copies retain no image evidence.
+    let expected = probe
+        .as_ref()
+        .map(|_| (image.width, image.height, image.bytes.clone().into_owned()));
+    clipboard
+        .set_image(image)
+        .map_err(|_| pttstella::msg!("copy-failed"))?;
+    if let (Some(path), Some((width, height, expected))) = (probe, expected) {
+        let actual = clipboard
+            .get_image()
+            .map_err(|_| "clipboard probe readback failed".to_owned())?;
+        if actual.width != width || actual.height != height || actual.bytes.as_ref() != expected {
+            return Err("clipboard probe pixels differ".into());
+        }
+        let mut bytes = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut bytes, width as u32, height as u32);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            let mut writer = encoder.write_header().map_err(|e| e.to_string())?;
+            writer
+                .write_image_data(&actual.bytes)
+                .map_err(|e| e.to_string())?;
+        }
+        storage::replace(&path, &bytes)?;
+    }
+    Ok(())
 }
 fn clipboard_pixels(
     png: String,

@@ -31,6 +31,7 @@ pub struct Preview {
     active: Option<Active>,
     job: Option<BoxFuture<'static, Result<Loaded, Error>>>,
     pending: Option<Loaded>,
+    image: Option<Arc<Image>>,
     loader: Loader,
 }
 impl Preview {
@@ -79,22 +80,39 @@ impl Preview {
     pub fn close(&mut self) {
         self.job = None;
         self.pending = None;
+        self.image = None;
         self.active = None;
     }
     pub fn retry(&mut self) {
         self.pending = None;
+        self.image = None;
         self.job = self
             .active
             .as_ref()
             .and_then(|active| active.target.image_url.as_ref())
             .map(|url| self.loader.load(url));
     }
+    pub fn image(&self, request: u64, generation: u64) -> Option<Arc<Image>> {
+        let active = self.active.as_ref()?;
+        (active.request == request
+            && active.generation == generation
+            && active.presentation == Presentation::Inspect
+            && self.pending.is_none())
+        .then(|| self.image.clone())
+        .flatten()
+    }
     pub fn decoded(&mut self, request: u64, success: bool) {
         if self
             .active
             .as_ref()
-            .is_some_and(|active| active.request == request)
-            && let Some(loaded) = self.pending.take()
+            .is_none_or(|active| active.request != request)
+        {
+            return;
+        }
+        if !success {
+            self.image = None;
+        }
+        if let Some(loaded) = self.pending.take()
             && success
         {
             self.loader.retain(&loaded);
@@ -109,6 +127,7 @@ impl Preview {
         let active = self.active.as_ref()?;
         let result = match result {
             Ok(loaded) => {
+                self.image = Some(loaded.image.clone());
                 let result = (loaded.image.clone(), loaded.cached);
                 self.pending = Some(loaded);
                 Ok(result)
@@ -119,5 +138,94 @@ impl Preview {
             request: active.request,
             result,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener,
+        time::{Duration, timeout},
+    };
+
+    #[tokio::test]
+    async fn originals_require_current_inspect_and_successful_decode_and_release_on_retry_or_close()
+    {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let target = super::super::classify(&format!(
+            "http://{}/image.png",
+            listener.local_addr().unwrap()
+        ))
+        .unwrap()
+        .unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            while !request.ends_with(b"\r\n\r\n") && request.len() < 4096 {
+                request.push(socket.read_u8().await.unwrap());
+            }
+            assert!(request.starts_with(b"GET /image.png HTTP/1.1\r\n"));
+            let bytes = include_bytes!("../../tests/fixtures/media/colours.png");
+            socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nCache-Control: max-age=60\r\nConnection: close\r\n\r\n", bytes.len()).as_bytes()).await.unwrap();
+            socket.write_all(bytes).await.unwrap();
+        });
+        let mut preview = Preview::default();
+        let active = preview.hover(7, target.clone()).unwrap();
+        assert!(preview.image(active.request, 7).is_none());
+        let image = timeout(Duration::from_secs(3), preview.update())
+            .await
+            .unwrap()
+            .unwrap()
+            .result
+            .unwrap()
+            .0;
+        preview.decoded(active.request + 1, true);
+        assert!(preview.image(active.request, 7).is_none());
+        preview.decoded(active.request, true);
+        assert!(
+            preview.image(active.request, 7).is_none(),
+            "hover grants no original output"
+        );
+        assert_eq!(
+            preview.open(7, target.clone()).unwrap().request,
+            active.request
+        );
+        assert!(Arc::ptr_eq(
+            &preview.image(active.request, 7).unwrap(),
+            &image
+        ));
+        assert!(preview.image(active.request, 8).is_none());
+        assert!(preview.image(active.request + 1, 7).is_none());
+        preview.retry();
+        assert!(preview.image(active.request, 7).is_none());
+        assert!(
+            timeout(Duration::from_secs(3), preview.update())
+                .await
+                .unwrap()
+                .unwrap()
+                .result
+                .unwrap()
+                .1,
+            "retry reuses only the successfully decoded cache"
+        );
+        assert!(
+            preview.image(active.request, 7).is_none(),
+            "new decode ACK is required"
+        );
+        preview.decoded(active.request, false);
+        assert!(preview.image(active.request, 7).is_none());
+        let next = preview.open(8, target).unwrap();
+        assert_ne!(active.request, next.request);
+        preview.close();
+        preview.decoded(next.request, true);
+        assert!(preview.active().is_none());
+        assert!(!preview.pending());
+        assert!(preview.image(next.request, 8).is_none());
+        timeout(Duration::from_secs(3), server)
+            .await
+            .unwrap()
+            .unwrap();
     }
 }

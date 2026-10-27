@@ -187,7 +187,7 @@ AID 核心另核對 article_navigation 的自製 article-open fixture 與 naviga
 
 Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_inline_images.mjs tooling/test_surface_links.mjs tooling/test_surface_dialogs.mjs`、i18n 及 Clippy。原生 inline probe 的 loopback 圖片 peer 應提供 colours.png 和明確 404 的 missing.png，核對兩次長按 Enter 僅各一個 GET、文章內插圖與錯誤、PNG 不含插圖、零站端 bytes 及 Close／owner join；瀏覽器排版測試不能取代此准入驗收。
 
-自訂右鍵另跑 `node --test tooling/test_surface_context_menu.mjs tooling/test_surface_links.mjs tooling/test_surface_mouse.mjs tooling/test_inline_images.mjs`、desktop lib／bin、Fluent、core 與 Clippy。原生 `context_menu` 探針、剪貼簿讀回、選單不穿透／按鍵不送站端、PNG 與正常關閉的要求見 [右鍵操作契約](docs/context-menu.md)。剪貼簿單元使用注入 writer，不操作開發者的系統剪貼簿；原生探針才在明確測試操作時寫入自製內容。
+自訂右鍵另跑 `node --test tooling/test_surface_context_menu.mjs tooling/test_surface_links.mjs tooling/test_surface_mouse.mjs tooling/test_inline_images.mjs`、desktop lib／bin、Fluent、core 與 Clippy。原生 `context_menu` 探針、剪貼簿讀回、選單不穿透／按鍵不送站端、PNG 與正常關閉的要求見 [右鍵操作契約](docs/context-menu.md)。圖片原圖輸出另跑 `picture_menu`，依同一契約核對 inline／modal 兩次 OS 圖片讀回、原始檔 bytes、完整網址、來源 PNG 與清理。剪貼簿單元使用注入 writer，不操作開發者的系統剪貼簿；原生探針才在明確測試操作時寫入自製內容。
 
 
 黑白名單／匯入變更另跑 filters 核心與 store、filter_import owner、Files、SurfaceState、所有 JS／Fluent 及 Clippy。自製格式案例涵蓋 UTF-8 BOM、完整 ID、備註分隔、白名單衝突、未支援項目、容量及取消／舊 request。原生 `account_lists` 使用固定測試路徑，確認先預覽、取消零保存、合併後白名單只標示 ID、兩種黑名單分別遮內容／整行、選取複製與 PNG 一致、正常斷線及清理。`account_articles` 使用自製文章列表補驗相同三策略，核對遮內容的作者保留、整行 80 欄全黑、白名單只有 ID 改色、揭露與保存後重啟。兩種模式的原生 PNG 以獨立解碼核對範圍，複製讀回不得含被遮內容；站端零輸入且完整 Close／owner 清理。此探針不代替原生選檔視窗驗收。整行／左緣導覽另核對 `test_surface_links.mjs` 及 `desktop_navigation.py` 的真實 pointer、Shift 選取、光棒範圍與 Canvas 不變；缺平台 runner 仍記 not_ready。

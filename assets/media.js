@@ -4,6 +4,8 @@ function installMedia({tr,send,prepare,changed,restore}) {
     const hover=document.getElementById("media-hover"),hoverView=document.getElementById("media-hover-viewport"),hoverNote=document.getElementById("media-hover-status");
     const title=document.getElementById("media-title"),urlText=document.getElementById("media-url"),status=document.getElementById("media-status");
     const buttons=Object.fromEntries(["minus","plus","fit","original","motion","retry","external","close"].map(name=>[name,document.getElementById("media-"+name)]));
+    let pictureMenu=null;
+    const pictureBindings=[];
     let current=null,image=null,video=null,still=null,stage=null,objectUrl=null,conversion=null,dead=false,gif=null;
     const gifs=createGifPlayback({document,window:typeof window!=="undefined"?window:null,limit:1});
     let width=0,height=0,scale=1,fit=true,playing=false,animated=false;
@@ -12,6 +14,7 @@ function installMedia({tr,send,prepare,changed,restore}) {
     const jobs=new Set();
     const note=(text,value)=>{message=text;state=value;(presentation==="hover"?hoverNote:status).textContent=text;owner().dataset.state=value;if(presentation==="hover")place();};
     function dispose() {
+        pictureMenu?.close(false);
         gif?.remove();gif=null;
         conversion?.abort();conversion=null;
         if(image) {image.onload=null;image.onerror=null;image.removeAttribute("src");image=null;}
@@ -161,10 +164,24 @@ function installMedia({tr,send,prepare,changed,restore}) {
         playing=true;still.hidden=true;image.hidden=false;buttons.motion.textContent=tr("media-stop");
         dialog.dataset.motion="playing";image.src=objectUrl;
     }
+    function pictureContext(e){
+        if(!e.isTrusted||dead||presentation!=="inspect"||current?.target.kind!=="image"||!stage?.contains(e.target))return;
+        e.preventDefault();e.stopPropagation();
+        if(!pictureMenu){
+            pictureMenu=createSurfaceContextMenu({root:document.getElementById("media-context-menu"),document,window,
+                snapshot:()=>JSON.stringify([current?.request,current?.generation,state,dead]),prepare(){},
+                execute:(action,_,event)=>{
+                    const actions={"copy-picture":"copy_image","save-picture":"save_image","copy-link":"copy_url","open-link":"external"};
+                    if(current&&event.isTrusted&&actions[action])send({kind:"media",request:current.request,action:actions[action],trusted:true});
+                },restore:()=>buttons.close.focus({preventScroll:true}),changed});
+            for(const binding of pictureMenu.bindings){const [target,event,callback,options]=binding;target.addEventListener(event,callback,options);pictureBindings.push(binding);}
+        }
+        pictureMenu.open(e,{entries:contextMenuItems({picture:true,pictureReady:state==="ready",ready:true,link:0,local:true})});
+    }
     function external(e) {if(current&&e.isTrusted) send({kind:"media",request:current.request,action:"external",trusted:e.isTrusted});}
     function zoom(delta) {if(width){fit=false;scale=Math.max(.05,Math.min(8,scale+delta));resize();}}
     const bindings=[...gifs.bindings,
-        [buttons.close,"click",close],[dialog,"cancel",close],
+        [buttons.close,"click",close],[dialog,"cancel",close],[view,"contextmenu",pictureContext],
         [buttons.minus,"click",()=>zoom(-.25)],[buttons.plus,"click",()=>zoom(.25)],
         [buttons.fit,"click",()=>{fit=true;resize();}],[buttons.original,"click",()=>{fit=false;scale=1;resize();}],
         [buttons.retry,"click",retry],[buttons.motion,"click",motion],[buttons.external,"click",external],
@@ -172,9 +189,10 @@ function installMedia({tr,send,prepare,changed,restore}) {
     for(const [target,event,callback] of bindings) target.addEventListener(event,callback);
     const observer=new ResizeObserver(resize);observer.observe(view);observer.observe(document.querySelector(".workspace"));observer.observe(document.getElementById("chrome"));
     return {
+        notice(value){if(current&&presentation==="inspect"&&dialog.open){status.textContent=value;return true;}return false;},
         open,receiveImage,fail,hover:openHover,hideHover,locate,reset:()=>close(null,false),
         externalResult(packet){if(current?.request===packet.request){dialog.dataset.external=String(packet.ok);if(!packet.ok) status.textContent=packet.message;}},
-        async destroy(){dead=true;gifs.destroy();for(const [target,event,callback] of bindings) target.removeEventListener(event,callback);
+        async destroy(){dead=true;pictureMenu?.destroy();for(const [target,event,callback,options] of pictureBindings)target.removeEventListener(event,callback,options);pictureBindings.length=0;gifs.destroy();for(const [target,event,callback] of bindings) target.removeEventListener(event,callback);
             observer.disconnect();close(null,false);await Promise.allSettled([...jobs]);
             return !objectUrl&&!conversion&&!dialog.open&&!view.childElementCount&&!hoverView.childElementCount&&!positionFrame&&!jobs.size;},
     };

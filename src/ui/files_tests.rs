@@ -727,3 +727,72 @@ fn black_png_data() -> String {
             .encode(include_bytes!("../../tests/fixtures/export-black.png"))
     )
 }
+
+#[tokio::test]
+async fn original_picture_save_preserves_bytes_and_epoch_revocation_never_touches_clipboard() {
+    use std::sync::Arc;
+    let bytes = include_bytes!("../../tests/fixtures/media/colours.png");
+    let image = Arc::new(pttstella::media::loader::Image {
+        bytes: bytes.to_vec(),
+        mime: "image/png",
+        width: 64,
+        height: 32,
+        animated_format: false,
+        animation_pixels: 0,
+    });
+    let (mut state, sender, receiver, identity) = snapshot();
+    let directory = tempfile::tempdir().unwrap();
+    let mut files = Files::default();
+    let clipboard = files.clipboard();
+    files
+        .start(|permit| {
+            picture::output(
+                permit,
+                picture::Request {
+                    image: image.clone(),
+                    lease: state.lease_picture(identity, receiver.borrow().input_epoch),
+                    source: receiver.clone(),
+                    destination: ExportDestination::File,
+                    probe: Some(directory.path().to_path_buf()),
+                },
+                clipboard.clone(),
+            )
+        })
+        .unwrap();
+    assert!(matches!(
+        files.next().await,
+        Completion::Picture {
+            result: Ok(true),
+            ..
+        }
+    ));
+    assert_eq!(
+        std::fs::read(directory.path().join("picture.png")).unwrap(),
+        bytes
+    );
+    files
+        .start(|permit| {
+            picture::output(
+                permit,
+                picture::Request {
+                    image,
+                    lease: state.lease_picture(identity, receiver.borrow().input_epoch),
+                    source: receiver.clone(),
+                    destination: ExportDestination::Clipboard,
+                    probe: None,
+                },
+                clipboard.clone(),
+            )
+        })
+        .unwrap();
+    sender.send_modify(|view| view.input_epoch += 1);
+    assert!(matches!(
+        files.next().await,
+        Completion::Picture {
+            result: Err(Error::Stale),
+            ..
+        }
+    ));
+    assert!(clipboard.lock().unwrap().is_none());
+    files.finish().await.unwrap();
+}
