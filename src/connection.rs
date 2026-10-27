@@ -275,6 +275,14 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    pub fn start_article_switch_probe() -> Result<Self, String> {
+        let connection = Self::start_owned_probe(
+            probe::switch_page('A', false)?,
+            probe::Scenario::ArticleSwitch,
+        )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     pub fn start_filters_probe() -> Result<Self, String> {
         let connection =
             Self::start_owned_probe(probe::filters_page(false)?, probe::Scenario::Filters)?;

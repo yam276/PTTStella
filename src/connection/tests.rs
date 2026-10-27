@@ -2789,3 +2789,162 @@ async fn unanswered_list_refresh_never_repeats_or_replays_the_movement() {
     assert_eq!(released.message, crate::msg!("input-unanswered"));
     finish_board_peer(&connection, ws).await;
 }
+
+#[tokio::test]
+async fn adjacent_article_positioning_is_not_published_as_a_new_article() {
+    use navigation::{Context, Intent, Source};
+    for down in [false, true] {
+        let (listener, connection) = idle_local().await;
+        connection.connect().unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        let page = |first, percent| {
+            crate::encoding::encode(&format!("\x1b[2J\x1b[HOriginal synthetic article\x1b[24;1H\x1b[30;47m\x1b[2K瀏覽 第 2/4 頁 ({percent}%) 目前顯示: 第 {first}~{} 行 (y)回應(X)推文(h)說明",first+22)).unwrap()
+        };
+        ws.send(Message::Binary(page(23, 50).into())).await.unwrap();
+        let initial = wait(&connection, |v| v.received > 0 && !v.input_pending).await;
+        connection
+            .request_navigate(
+                initial.stamp(),
+                Intent::AdjacentArticle { down },
+                Source::Keyboard,
+            )
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            if down { b"\x1b[F" } else { b"\x1b[H" }
+        );
+        // No arrow before a complete, confirmed boundary response.
+        assert!(
+            tokio::time::timeout(Duration::from_millis(80), ws.next())
+                .await
+                .is_err()
+        );
+        let target = if down { 45 } else { 1 };
+        ws.send(Message::Binary(
+            page(target, if down { 100 } else { 25 }).into(),
+        ))
+        .await
+        .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            if down { b"\x1b[B" } else { b"\x1b[A" }
+        );
+        let between = wait(&connection, |v| v.input_epoch == 2).await;
+        assert!(between.input_pending);
+        ws.send(Message::Binary(page(1, 25).into())).await.unwrap();
+        let arrived = wait(&connection, |v| {
+            !v.input_pending && v.frame.revision > between.frame.revision
+        })
+        .await;
+        assert!(matches!(
+            arrived.context(),
+            Context::ArticleReading { first_line: 1, .. }
+        ));
+        let close = tokio::spawn(async move {
+            let message = ws.next().await.unwrap().unwrap();
+            assert!(matches!(message, Message::Close(_)));
+            ws.flush().await.unwrap();
+        });
+        assert_eq!(
+            connection.shutdown().await.unwrap(),
+            CloseOutcome::Acknowledged
+        );
+        close.await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn adjacent_positioning_never_sends_a_late_arrow_after_interruption_or_timeout() {
+    use navigation::{Intent, Source};
+    for reason in ["raw", "timeout", "synchronized", "disconnect"] {
+        let (listener, connection) = idle_local().await;
+        connection.connect().unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        let page = |first| {
+            crate::encoding::encode(&format!("\x1b[2J\x1b[HOriginal synthetic article\x1b[24;1H\x1b[30;47m\x1b[2K瀏覽 第 2/4 頁 (50%) 目前顯示: 第 {first}~{} 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H",first+22)).unwrap()
+        };
+        ws.send(Message::Binary(page(23).into())).await.unwrap();
+        let initial = wait(&connection, |v| v.received > 0 && !v.input_pending).await;
+        connection
+            .request_navigate(
+                initial.stamp(),
+                Intent::AdjacentArticle { down: false },
+                Source::Keyboard,
+            )
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            b"\x1b[H"
+        );
+        if reason == "raw" {
+            connection
+                .input(initial.generation, b"\x1b[D".to_vec())
+                .unwrap();
+            assert_eq!(
+                ws.next().await.unwrap().unwrap().into_data().as_ref(),
+                b"\x1b[D"
+            );
+            ws.send(Message::Binary(page(1).into())).await.unwrap();
+        } else if reason == "synchronized" {
+            ws.send(Message::Binary(
+                [b"\x1b[?2026h".as_slice(), &page(1)].concat().into(),
+            ))
+            .await
+            .unwrap();
+            assert!(
+                tokio::time::timeout(Duration::from_millis(80), ws.next())
+                    .await
+                    .is_err()
+            );
+            ws.send(Message::Binary(b"\x1b[?2026l".to_vec().into()))
+                .await
+                .unwrap();
+            assert_eq!(
+                ws.next().await.unwrap().unwrap().into_data().as_ref(),
+                b"\x1b[A"
+            );
+            ws.send(Message::Binary(page(1).into())).await.unwrap();
+        } else if reason == "timeout" {
+            // A complete but wrong range must not advance the staged arrow.
+            ws.send(Message::Binary(page(23).into())).await.unwrap();
+            assert!(
+                tokio::time::timeout(Duration::from_millis(600), ws.next())
+                    .await
+                    .is_err()
+            );
+            ws.send(Message::Binary(page(1).into())).await.unwrap();
+        } else {
+            ws.send(Message::Close(None)).await.unwrap();
+            assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+            wait(&connection, |v| v.phase == Phase::Disconnected).await;
+            assert_eq!(
+                connection.shutdown().await.unwrap(),
+                CloseOutcome::Acknowledged
+            );
+            continue;
+        }
+        wait(&connection, |v| !v.input_pending).await;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(80), ws.next())
+                .await
+                .is_err()
+        );
+        let close = tokio::spawn(async move {
+            assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+            ws.flush().await.unwrap();
+        });
+        assert_eq!(
+            connection.shutdown().await.unwrap(),
+            CloseOutcome::Acknowledged
+        );
+        close.await.unwrap();
+    }
+}

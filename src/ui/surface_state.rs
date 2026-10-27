@@ -74,6 +74,7 @@ pub(super) struct SurfaceState {
     article: super::article_cache::ArticleCache,
     captured: Option<(Stamp, u64)>,
     raw_reading: bool,
+    reading_reset: Option<Stamp>,
     reply_focus: Option<(u64, Option<u64>, String)>,
     article_mode: ArticleMode,
     article_boundary_navigation: bool,
@@ -91,6 +92,7 @@ impl SurfaceState {
             article: super::article_cache::ArticleCache::default(),
             captured: None,
             raw_reading: false,
+            reading_reset: None,
             reply_focus: None,
             article_mode: ArticleMode::default(),
             article_boundary_navigation: false,
@@ -473,7 +475,7 @@ impl SurfaceState {
     ) {
         let context = view.context();
         if let Ok(bytes) = pttstella::navigation::plan(&context, intent) {
-            self.article_input(&context, &bytes);
+            self.article_input(view, &bytes);
         }
         self.article
             .begin_fetch(intent, &context, view.frame.revision);
@@ -528,6 +530,15 @@ impl SurfaceState {
         changed
     }
     fn capture_reading(&mut self, view: &View) {
+        if let Some(previous) = self.reading_reset {
+            if previous.generation == view.generation
+                && (view.input_epoch <= previous.input_epoch
+                    || view.frame.revision <= previous.revision)
+            {
+                return;
+            }
+            self.reading_reset = None;
+        }
         if self.article_mode != ArticleMode::Web
             || self.raw_reading
             || view.input_pending
@@ -611,11 +622,15 @@ impl SurfaceState {
             self.captured = None;
         }
     }
-    pub(super) fn article_input(&mut self, context: &Context, bytes: &[u8]) {
-        if !bytes.is_empty() && !super::article_cache::reading_input(context, bytes) {
+    pub(super) fn article_input(&mut self, view: &View, bytes: &[u8]) {
+        let context = view.context();
+        if !bytes.is_empty() && !super::article_cache::reading_input(&context, bytes) {
             self.clear_article();
+            // Enqueueing input is asynchronous. Never seed the new cache from
+            // the unchanged view before the session owner publishes that input.
+            self.reading_reset = Some(view.stamp());
         }
-        self.article.input(context, bytes);
+        self.article.input(&context, bytes);
     }
     fn policy_changed(&mut self) {
         self.reply_focus = None;

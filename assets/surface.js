@@ -186,6 +186,11 @@ function input(e) {
     // A trailing input for an already committed composition belongs to that edit,
     // while a new beforeinput identifies a new edit even when its text is equal.
     if(beforeEdit?.composition) {beforeEdit=null;return;}
+    // Some IMEs deliver an uncomposed Space as text rather than a command
+    // keydown. It has the same local page owner as an ordinary reading Space.
+    if(text===" "&&latest?.article&&!keyboardState.enabled) {
+        beforeEdit=null;readingMove({action:"next_page"},e);return;
+    }
     if(text) { clearSelection(); sendInput({kind:"text",text,generation,trusted:e.isTrusted}); }
 }
 const lineBreak=e=>e.inputType==="insertLineBreak"||e.inputType==="insertParagraph";
@@ -208,8 +213,12 @@ function compositionstart(e) {
 function compositionend(e) {
     const finished=composition;
     composing=false;composition=null;keyboard.classList.remove("composing");keyboard.value="";positionKeyboard();
-    if(finished&&e.data) sendInput({kind:"text",text:e.data,generation:finished.generation,trusted:e.isTrusted,composed:true,
-        composition_input:finished.startTrusted&&finished.editTrusted&&finished.editText===e.data});
+    if(finished&&e.data) {
+        if(e.data===" "&&e.isTrusted&&finished.generation===generation&&latest?.article&&!keyboardState.enabled)
+            readingMove({action:"next_page"},e);
+        else sendInput({kind:"text",text:e.data,generation:finished.generation,trusted:e.isTrusted,composed:true,
+            composition_input:finished.startTrusted&&finished.editTrusted&&finished.editText===e.data});
+    }
     policy("composition_end",e);
     refreshNavigation();
 }
