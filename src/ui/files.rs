@@ -439,17 +439,31 @@ async fn pick_export(
             "export.png"
         }))
     } else {
+        let now = time::OffsetDateTime::now_utc();
+        let now = time::UtcOffset::local_offset_at(now).map_or(now, |offset| now.to_offset(offset));
+        let stem = format!(
+            "PTTStella-{:04}{:02}{:02}-{:02}{:02}{:02}-{:03}{}",
+            now.year(),
+            u8::from(now.month()),
+            now.day(),
+            now.hour(),
+            now.minute(),
+            now.second(),
+            now.millisecond(),
+            if now.offset().is_utc() { "Z" } else { "" },
+        );
+        let filename = if selected {
+            format!("{stem}-lines-{}-{}.png", rows.start + 1, rows.end)
+        } else {
+            format!("{stem}.png")
+        };
         let window = dioxus::desktop::window();
         window.window.set_focus();
         rfd::AsyncFileDialog::new()
             .set_parent(window.window.as_ref())
             .set_title(pttstella::msg!("export-title"))
             .add_filter("PNG", &["png"])
-            .set_file_name(if selected {
-                format!("PTTStella-lines-{}-{}.png", rows.start + 1, rows.end)
-            } else {
-                "PTTStella.png".into()
-            })
+            .set_file_name(filename)
             .save_file()
             .await
             .map(|file| file.path().to_path_buf())
