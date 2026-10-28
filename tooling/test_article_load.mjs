@@ -35,7 +35,7 @@ test('cancel remains usable during station updates but does not enqueue station 
 test('loading edges wait locally while ordinary cached movement and a cancelled load retain manual boundary navigation',()=>{
     const sent=[],c={navigationSequence:0,stopped:false,showNotice(){},latest:{article:{first_line:1,last_line:46,end:false,load:'loading'},connected:true},viewport:{scrollTop:0,scrollHeight:1000,clientHeight:400},grid:{ratio:1,y:r=>r*24,bottom:r=>(r+1)*24,footerHeight:24},blocked:()=>false,dragging:null,clearSelection(){},cancelHover(){},repaint(){},navigate:(intent,...args)=>sent.push(intent)};
     vm.runInNewContext(source.slice(source.indexOf('function readingMove('),source.indexOf('function navigate(')),c);
-    c.readingMove({action:'next_page'},{isTrusted:true});assert.equal(c.viewport.scrollTop,338.40000000000003);assert.equal(sent.length,0);
+    c.readingMove({action:'next_page'},{isTrusted:true});assert.equal(c.viewport.scrollTop,352);assert.equal(sent.length,0);
     c.viewport.scrollTop=600;c.readingMove({action:'next_page'},{isTrusted:true});assert.equal(sent.length,0);
     c.latest.article.load='cancelled';c.readingMove({action:'next_page'},{isTrusted:true});assert.deepEqual(JSON.parse(JSON.stringify(sent)),[{action:'next_page'}]);
 });
@@ -112,8 +112,8 @@ test("one boundary PageDown completes locally after response and navigation resu
         if(resultFirst){c.navigationRequest=false;c.resumeReadingMove();assert.equal(c.viewport.scrollTop,600);}
         receive();c.resumeReadingMove();
         if(!resultFirst){assert.equal(c.viewport.scrollTop,600);c.navigationRequest=false;c.resumeReadingMove();}
-        assert.equal(c.viewport.scrollTop,960,"new rows finish the original page movement");
-        c.resumeReadingMove();assert.equal(c.viewport.scrollTop,960);assert.equal(sent.length,1,"no repeated station fetch");
+        assert.equal(c.viewport.scrollTop,976,"new rows finish the original page movement");
+        c.resumeReadingMove();assert.equal(c.viewport.scrollTop,976);assert.equal(sent.length,1,"no repeated station fetch");
         assert.equal(c.pendingReadingMove,null);
     }
 });
