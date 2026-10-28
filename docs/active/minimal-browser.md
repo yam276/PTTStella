@@ -4,13 +4,21 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，待發佈的 0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 維持草稿，尚未合併或建立 tag／Release。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，待發佈的 0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 依使用者指示恢復發佈準備，尚未合併或建立 tag／Release；GitHub Actions 目前仍被 Billing／spending limit 擋住。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 0.2.0 再次 Critic 與發佈準備（2026-10-28）
+
+使用者授權再次交由 SubAgent 獨立 Critic，翻頁與浮球確認沒有回歸後繼續 0.2.0 Release。兩位 Critic 均審查 develop `736afcc`，沒有 actionable findings：翻頁 91 項針對測試及額外 108 組 production layout／readingMove 情境通過，涵蓋分數 DPR／字高、無圖／短圖／高圖、端點、取消／晚到回覆及切篇隔離；浮球 31 項測試及 16,758 組 production geometry 情境通過，涵蓋六／七入口、任意右鍵位置、小視窗、直向及 4K 邏輯幾何。兩者為只讀審查與 DOM doubles，不新增原生、實體 4K 或跨平台驗收宣稱；既有原生右鍵／動畫外觀限制仍保留。
+
+本機另完成 74 項 Python 發佈／打包政策測試及文件檢查，補齊 README 的一行翻頁銜接與中文為主、英文摘要的 0.2.0 說明。Cargo.toml／Cargo.lock 維持已準備的 0.2.0，不因 CI 狀態另改版本。審查與補充證據位於 `.local/verification/release-020-critic-20261028/`；沒有新增測試 App、branch 或 worktree，保留小型審查紀錄供核對。
+
+GitHub Release PR #2 的既有 `Release PR policy` run 40646964373 在 runner 分配前失敗，job 無 steps／runner_id 0，annotation 明確為 account payments／spending limit。已請使用者恢復 Actions 額度，仍維持 Private，不改 repo 可見性、不繞過政策或建立缺少四架構下載檔的 Release。PR 恢復 ready 及 verify 後仍必須等實際 GitHub 檢查通過才合併；發佈 workflow 全部下載、manifest 及 SHA-256 核對成功後才建立 v0.2.0 Tag／Release，再將 main 合回 develop。
 
 ## 文章翻頁銜接與浮球選單間距（2026-10-28）
 
