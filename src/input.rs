@@ -72,3 +72,42 @@ pub fn prepare_paste_with(
     let lines = text.split('\n').count();
     Ok(PreparedPaste { text, bytes, lines })
 }
+
+/// An explicit paste into PTT's editor may insert colour SGR, but no terminal
+/// movement, OSC, editor commands or other controls. ESC is typed as Ctrl+U,
+/// the editor's insert-ESC command, rather than sent as a terminal escape key.
+pub fn prepare_editor_paste(
+    text: &str,
+    selected: encoding::TextEncoding,
+) -> Result<PreparedPaste, InputError> {
+    if text.is_empty() {
+        return Err(InputError::Empty);
+    }
+    if text.len() > MAX_INPUT_TEXT_BYTES {
+        return Err(InputError::TooLong);
+    }
+    let text = text.replace("\r\n", "\n").replace('\r', "\n");
+    let mut rest = text.as_str();
+    while !rest.is_empty() {
+        if let Some(sgr) = rest.strip_prefix("\x1b[") {
+            let end = sgr
+                .find('m')
+                .filter(|end| *end <= 64)
+                .ok_or(InputError::Control('\x1b'))?;
+            let parameters = &sgr[..end];
+            if !parameters.split(';').all(|part| part.is_empty() || part.bytes().all(|b| b.is_ascii_digit()) && part.parse::<u16>().is_ok_and(|n| matches!(n, 0 | 1 | 4 | 5 | 7 | 22 | 24 | 25 | 27 | 30..=37 | 39 | 40..=47 | 49 | 66 | 90..=97 | 100..=107))) {
+                return Err(InputError::Control('\x1b'));
+            }
+            rest = &sgr[end + 1..];
+        } else {
+            let Some(ch) = rest.chars().next() else { break };
+            if ch.is_control() && !matches!(ch, '\n' | '\t') {
+                return Err(InputError::Control(ch));
+            }
+            rest = &rest[ch.len_utf8()..];
+        }
+    }
+    let bytes = encode_with(&text.replace('\x1b', "\x15").replace('\n', "\r"), selected)?;
+    let lines = text.split('\n').count();
+    Ok(PreparedPaste { text, bytes, lines })
+}

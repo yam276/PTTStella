@@ -45,12 +45,54 @@ pub(super) struct Options {
 #[derive(Clone)]
 pub(super) struct PendingPaste {
     pub(super) generation: u64,
+    stamp: navigation::Stamp,
     pub(super) prepared: PreparedPaste,
 }
 struct Signals {
     message: Signal<String>,
     phase: Signal<Phase>,
     pending_paste: Signal<Option<PendingPaste>>,
+}
+
+fn queue_paste(
+    prepared: Result<PreparedPaste, String>,
+    generation: u64,
+    connection: &Connection,
+    receiver: &watch::Receiver<pttstella::connection::View>,
+    mut pending: Signal<Option<PendingPaste>>,
+    checks: &mut Checks,
+    probe: bool,
+) -> Packet<'static> {
+    let result = prepared.and_then(|prepared| {
+        let current = receiver.borrow();
+        if current.phase != Phase::Connected || current.generation != generation {
+            return Err(pttstella::msg!("paste-stale"));
+        }
+        if prepared.lines > 1 || prepared.text.contains('\x1b') {
+            pending.set(Some(PendingPaste {
+                generation,
+                stamp: current.stamp(),
+                prepared,
+            }));
+            Ok(false)
+        } else {
+            checks.paste_single |= probe && prepared.text == "中";
+            connection.input(generation, prepared.bytes).map(|()| true)
+        }
+    });
+    match result {
+        Ok(queued) => Packet::PasteResult(Feedback::quiet(if queued {
+            PasteStatus::Queued
+        } else {
+            PasteStatus::Preview
+        })),
+        Err(error) => {
+            if probe {
+                checks.paste_rejected += 1;
+            }
+            Packet::PasteResult(Feedback::new(PasteStatus::Rejected, error))
+        }
+    }
 }
 pub(super) async fn surface(
     connection: Arc<Connection>,
@@ -583,6 +625,14 @@ async fn run(
                         Packet::BookmarksResult {request, data:bookmarks.snapshot(), feedback}
                     },
                     FileCompletion::Clipboard(result)=>Packet::Notice(result.map(|_|{checks.context_copies+=1;pttstella::msg!("context-copied")}).unwrap_or_else(|e|if e==files::Error::Stale {pttstella::msg!("copy-not-ready")}else{e.to_string()})),
+                    FileCompletion::ClipboardPaste { identity, stamp, result } => {
+                        let current = receiver.borrow();
+                        let valid = !current.input_pending && current.stamp() == stamp && screen.current(identity, &current).is_some_and(|paint| paint.editor)
+                            && (!keyboard_policy.status(&current.context()).enabled || keyboard_policy.status(&current.context()).mode == "input");
+                        drop(current);
+                        let prepared = if valid { result.map_err(|e|e.to_string()) } else { Err(pttstella::msg!("paste-stale")) };
+                        queue_paste(prepared, stamp.generation, &connection, &receiver, pending_paste, &mut checks, probe.is_some())
+                    },
                     FileCompletion::Picture{destination,result}=>Packet::Notice(match result {
                         Ok(true) if destination==files::ExportDestination::Clipboard=>{checks.image_copies+=1;pttstella::msg!("context-copied")},
                         Ok(true)=>{checks.picture_saves+=1;pttstella::msg!("picture-saved")},
@@ -1326,38 +1376,29 @@ async fn run(
                         // Release the watch read lock before the result closure
                         // reads state again; a waiting writer makes nested reads
                         // deadlock on platforms with writer-preferring locks.
-                        let encoding = receiver.borrow().site.encoding;
-                        let result = input::prepare_paste_with(&text,encoding)
-                            .map_err(|e| e.to_string())
-                            .and_then(|prepared| {
-                                let current = receiver.borrow();
-                                if current.phase != Phase::Connected || current.generation != generation {
-                                    return Err(pttstella::msg!("paste-stale"));
-                                }
-                                if prepared.lines > 1 {
-                                    pending_paste.set(Some(PendingPaste {
-                                        generation,
-                                        prepared,
-                                    }));
-                                    Ok(false)
-                                } else {
-                                    checks.paste_single |=
-                                        probe.is_some() && prepared.text == "中";
-                                    connection.input(generation, prepared.bytes).map(|()| true)
-                                }
-                            });
-                        let reply = match result {
-                            Ok(queued) => {
-                                Packet::PasteResult(Feedback::quiet(if queued{PasteStatus::Queued}else{PasteStatus::Preview}))
-                            }
-                            Err(error) => {
-                                if probe.is_some()  {
-                                    checks.paste_rejected += 1;
-                                }
-                                Packet::PasteResult(Feedback::new(PasteStatus::Rejected,error))
-                            }
-                        };
+                        let current = receiver.borrow();
+                        let prepared = if current.site.ptt_features() && navigation::article_editor(&current.frame) {
+                            input::prepare_editor_paste(&text,current.site.encoding)
+                        } else { input::prepare_paste_with(&text,current.site.encoding) }.map_err(|e| e.to_string());
+                        drop(current);
+                        let reply = queue_paste(prepared, generation, &connection, &receiver, pending_paste, &mut checks, probe.is_some());
                         eval.send(reply).map_err(|e| e.to_string())?;
+                    }
+                    SurfaceEvent::PasteClipboard { presentation, stamp, trusted: _ } => {
+                        let view = receiver.borrow().clone();
+                        let identity = Identity { presentation, generation: stamp.generation, revision: stamp.revision };
+                        let keyboard = keyboard_policy.status(&view.context());
+                        if view.phase != Phase::Connected || view.input_pending || view.stamp() != stamp || !view.site.ptt_features()
+                            || !screen.current(identity, &view).is_some_and(|paint| paint.editor)
+                            || keyboard.enabled && keyboard.mode != "input" || pending_paste.read().is_some()
+                        {
+                            eval.send(Packet::PasteResult(Feedback::new(PasteStatus::Rejected,pttstella::msg!("paste-stale")))).map_err(|e|e.to_string())?;
+                            continue;
+                        }
+                        let clipboard = files.clipboard();
+                        if let Err(error) = files.start(|permit| files::read_editor_clipboard(permit,clipboard,identity,stamp,screen.lease_picture(identity,view.input_epoch),receiver.clone())) {
+                            eval.send(Packet::PasteResult(Feedback::new(PasteStatus::Rejected,error))).map_err(|e|e.to_string())?;
+                        }
                     }
                     SurfaceEvent::PasteCancel { trusted: _ } => {
                         checks.paste_cancel |= probe.is_some()
@@ -1376,6 +1417,7 @@ async fn run(
                             let current = receiver.borrow();
                             let result = if current.phase == Phase::Connected
                                 && current.generation == pending.generation
+                                && current.stamp() == pending.stamp
                             {
                                 checks.paste_confirm |=
                                     probe.is_some() && pending.prepared.text == "A\nB";
@@ -1428,7 +1470,7 @@ async fn run(
                         let view=receiver.borrow().clone();
                         let identity=Identity{presentation,generation,revision};
                         if let Some(text)=screen.copy_text(identity,&target,&view) {
-                            let selected=match target {super::protocol::CopyTarget::Selection{request}=>Some(request),super::protocol::CopyTarget::Link{..}=>None};
+                            let selected=match target {super::protocol::CopyTarget::Selection{request}|super::protocol::CopyTarget::SelectionAnsi{request}=>Some(request),super::protocol::CopyTarget::Link{..}=>None};
                             let clipboard=files.clipboard();
                             if let Err(error)=files.start(|permit|files::copy_text(permit,clipboard,text,screen.lease_output(identity,selected,view.input_epoch),receiver.clone())) {
                                 eval.send(Packet::Notice(error)).map_err(|e|e.to_string())?;
@@ -1714,6 +1756,7 @@ async fn run(
                 || matches!(case.as_str(),"account_lists"|"account_articles") && checks.filter_edits>=3 && checks.context_copies>=1 && checks.export_checked
                 || case=="short_overlap" && checks.navigation_requests==1 && checks.inline_requests>=2 && checks.inline_expands==1 && checks.link_requests>=1 && checks.export_checked && reading.as_ref().is_some_and(|r| r.first_line==1 && r.last_line==32 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
                 || case=="control_input" && checks.export_checked && receiver.borrow().frame.glyphs.iter().map(|g|g.text.as_str()).collect::<String>().contains("CONTROL INPUT 3/3 VERIFIED")
+                || case=="editor_clipboard" && checks.export_checked && receiver.borrow().frame.glyphs.iter().map(|g|g.text.as_str()).collect::<String>().contains("EDITOR CLIPBOARD 4/4 VERIFIED")
                 || case=="terminal_pages" && checks.export_checked && !screen.full_load_active()
                 || case=="long_load" && checks.navigation_requests==37 && checks.export_checked && checks.inline_requests>=2 && checks.inline_expands==1 && reading.as_ref().is_some_and(|r|r.first_line==1 && r.last_line==837 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
                 || case=="full_load" && checks.load_cancels>=1 && checks.load_resumes>=1 && checks.navigation_requests==19 && checks.export_checked && checks.inline_requests>=2 && checks.inline_expands==1
@@ -1730,7 +1773,7 @@ async fn run(
             "bookmarks_initial":initial_bookmarks,"bookmarks_final":bookmarks.snapshot(),"bookmark_opens":checks.bookmark_opens,"bookmark_saves":checks.bookmark_saves,"bookmark_rejected":checks.bookmark_rejected,
             "article_reached":checks.article_reached,"article_missing":checks.article_missing,"article_rejected":checks.article_rejected,"article_cancelled":checks.article_cancelled,
             "board_reached":checks.board_reached,"board_rejected":checks.board_rejected,"board_cancelled":checks.board_cancelled,
-            "scope":if matches!(case.as_str(),"sites"|"sites_restart") {"synthetic loopback station UI; owned external test peers independently verify Big5/GBK bytes and EOF; explicit TCP shutdown is not a WebSocket acknowledgement"} else if case=="article_switch" {"synthetic A/B/C articles: exact staged Home then Up, direct Down at station end, three complete two-page loads, PNG and Close"} else if case=="long_load" {"synthetic 38-page reading: thirty-seven exact PageDown commands, leading ink reset at page 31, retained 837 rows, explicit images, PNG and Close"} else if case=="full_load" {"synthetic full reading: nineteen exact PageDown commands, cancellation and explicit resume, retained 441 rows, explicit image expansion, PNG and Close"} else if case=="terminal_pages" {"synthetic terminal reading: no automatic load or image requests; one manual PageDown, PNG and Close"} else if case=="inline_pages" {"synthetic cached reading: one exact PageDown, fragmented response, local history without further station bytes, PNG and Close"} else if case=="control_input" {"synthetic editor: peer requires exactly Ctrl+X, Ctrl+Z, Ctrl+A followed by Close; rejects extra or missing input"} else if case=="tools" {"local tools playground: PNG and Close smoke only; gestures are observations, not an A/B acceptance test; peer rejects all station input"} else if matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") {"synthetic native pointer samples: bounded independent exact cells, required final gesture, no local keys or duplicate path, PNG and Close"} else if case=="mouse_boundary" {"synthetic station mouse boundary: one exact press, no release or local keys after leaving the grid; owned cancellation and Close"} else if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
+            "scope":if matches!(case.as_str(),"sites"|"sites_restart") {"synthetic loopback station UI; owned external test peers independently verify Big5/GBK bytes and EOF; explicit TCP shutdown is not a WebSocket acknowledgement"} else if case=="article_switch" {"synthetic A/B/C articles: exact staged Home then Up, direct Down at station end, three complete two-page loads, PNG and Close"} else if case=="long_load" {"synthetic 38-page reading: thirty-seven exact PageDown commands, leading ink reset at page 31, retained 837 rows, explicit images, PNG and Close"} else if case=="full_load" {"synthetic full reading: nineteen exact PageDown commands, cancellation and explicit resume, retained 441 rows, explicit image expansion, PNG and Close"} else if case=="terminal_pages" {"synthetic terminal reading: no automatic load or image requests; one manual PageDown, PNG and Close"} else if case=="inline_pages" {"synthetic cached reading: one exact PageDown, fragmented response, local history without further station bytes, PNG and Close"} else if case=="editor_clipboard" {"synthetic editor: three exact Ctrl+V commands, one confirmed ANSI-to-Ctrl+U Chinese paste, native ANSI clipboard readback preview/cancel, PNG and Close"} else if case=="control_input" {"synthetic editor: peer requires exactly Ctrl+X, Ctrl+Z, Ctrl+A followed by Close; rejects extra or missing input"} else if case=="tools" {"local tools playground: PNG and Close smoke only; gestures are observations, not an A/B acceptance test; peer rejects all station input"} else if matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") {"synthetic native pointer samples: bounded independent exact cells, required final gesture, no local keys or duplicate path, PNG and Close"} else if case=="mouse_boundary" {"synthetic station mouse boundary: one exact press, no release or local keys after leaving the grid; owned cancellation and Close"} else if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
             "mouse":mouse_report,
             "tools":checks.tools,
             "inline_requests":checks.inline_requests,"inline_expands":checks.inline_expands,

@@ -228,3 +228,5 @@ Control 與工具列焦點使用 `--probe-surface OUTPUT_DIRECTORY control_input
 
 
 全螢幕／清理回歸另用 `--probe-surface OUTPUT_DIRECTORY fullscreen`：本機 peer 拒絕全部站端 bytes；在一般視窗、全螢幕、全螢幕設定 Esc、返回一般視窗各點一次擷取工具中的 `Capture live viewport`（最多八次）。Files owner 有界解碼並獨立檢查 24 行背景及 120 個標記文字格，留下 viewport-N.png／json；須四次成功、來源 PNG、Close acknowledged 與所有 owner join。前景畫面與 live Canvas readback 分別核對；背景原生擷取漏文字不能直接判定 Canvas 缺字。另跑 `renderer_error` 負例與設定儲存中關閉，前者必須 run_ok false／cleanup_ok true，後者須保留最後設定。GC 負例使用 `node --expose-gc tooling/probe_surface_result_gc.mjs`，已納入 JS suite；不得把 EvalError::Finished 視為清理成功。合成 Surface peer 的互動期限維持 300 秒，逾時案例不算正常關閉通過。
+
+0.2.1 編輯器色碼回歸另用 `--probe-surface OUTPUT_DIRECTORY editor_clipboard`：本機 peer 依序只接受兩次 Ctrl+V、已確認且 ESC→Ctrl+U 的固定 ANSI 中文貼上、第三次 Ctrl+V 及 Close。需觀察 4/4 VERIFIED、來源 PNG 與完整清理。選取 ANSI／雙色字、遮罩、舊 request／epoch、控制碼拒絕及情境選單另由核心、desktop 與 JS 測試核對。原生滑鼠右鍵與不同平台分開記錄，不能以合成事件當作通過。

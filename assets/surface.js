@@ -144,7 +144,8 @@ function keydown(e) {
     if(e.isComposing||composing||((e.keyCode===229||e.key==="Process")&&!physical)||e.metaKey) return;
     // Let the native copy action fire; copy data is already prepared by Rust.
     if(control==="c"&&hasSelection()) return;
-    if(control==="v") return;
+    // PTT editor Ctrl+V toggles ANSI preview; shifted/system paste stays native.
+    if(control==="v"&&(!latest?.editor||!latest?.ptt_features||e.shiftKey)) return;
     if(e.key==="Escape"&&hasSelection()) { e.preventDefault(); cancelDrag();clearSelection(); return; }
     if(e.ctrlKey&&["+","=","-","0"].includes(e.key)) {
         e.preventDefault(); zoomTo(e.key==="0"?1:zoom+(e.key==="-"?-.25:.25)); return;
@@ -622,7 +623,7 @@ function contextState(index,word=null,replyRow=null){
     const selectionReady=ready&&!!selectionCache&&selectionCache.presentation===latest.presentation
         &&selectionCache.generation===generation&&selectionCache.revision===revision;
     const picture=inlineImages.pictureState(index);
-    return {picture:!!picture,pictureReady:!!picture?.ready,word,replyRow,focused:!!latest?.reply_focus,link:index,selection:hasSelection(),selectionReady,rowsReady:selectionReady&&!exportBusy&&selectionCache.value.rows.end-selectionCache.value.rows.start<=24,
+    return {picture:!!picture,pictureReady:!!picture?.ready,word,replyRow,editor:!!latest?.editor,focused:!!latest?.reply_focus,link:index,selection:hasSelection(),selectionReady,rowsReady:selectionReady&&!exportBusy&&selectionCache.value.rows.end-selectionCache.value.rows.start<=24,
         ready,exportReady:ready&&!exportBusy,local:stationMouse.local(),ptt:!!latest?.ptt_features,
         reading:latest?.navigation.kind==="article_reading",authors:latest?.navigation.kind==="article_list",images:!!latest?.image_links.length,
         inlineReady:inlineShortcut({key:"Enter"},keyboardState,latest),navigate:canNavigate(),
@@ -636,15 +637,20 @@ function openContextMenu(e) {
     const point=cellAt(e,false),index=Math.max(linkAt(point),inlineImages.linkAtPoint(e));
     const word=index<0&&stationMouse.local()?accountWordAt(point):null;
     const replyRow=index<0&&point&&stationMouse.local()&&latest.reply_rows?.includes(point.row)?point.row:null;
-    if(index<0&&!word&&!latest?.reply_focus&&stationMouse.local()&&!e.shiftKey&&toolAccess.right_click_menu&&!hasSelection()){
+    if(index<0&&!word&&!latest?.reply_focus&&!latest?.editor&&stationMouse.local()&&!e.shiftKey&&toolAccess.right_click_menu&&!hasSelection()){
         tools.showAt(e);return;
     }
     contextMenu.open(e,{index,word,replyRow,entries:contextMenuItems(contextState(index,word,replyRow))});
 }
 function contextAction(action,context,e){
     if(!e.isTrusted||stopped||blocked()||contextMenuItems(contextState(context.index,context.word,context.replyRow)).get(action)!==true)return;
-    if(action==="copy"||action==="copy-link")send({kind:"copy_text",presentation:latest.presentation,generation,revision,
-        target:action==="copy"?{kind:"selection",request:selectionCache.request}:{kind:"link",index:context.index},trusted:true});
+    if(action==="copy"||action==="copy-ansi"||action==="copy-link")send({kind:"copy_text",presentation:latest.presentation,generation,revision,
+        target:action!=="copy-link"?{kind:action==="copy-ansi"?"selection_ansi":"selection",request:selectionCache.request}:{kind:"link",index:context.index},trusted:true});
+    else if(action==="paste"){
+        if(keyboardState.enabled&&keyboardState.mode!=="input"){policy("reset",e);surfaceNote.textContent=tr("paste-native-first");return;}
+        cancelComposition();cancelDrag();clearSelection();pastePending=true;
+        sendInput({kind:"paste_clipboard",presentation:latest.presentation,stamp:stamp(),trusted:true});
+    }
     else if(["account-mask","account-mask-row","account-allow","account-remove-mask","account-remove-mask-row","account-remove-allow"].includes(action)){
         const remove=action.startsWith("account-remove-");
         const policy={"account-mask":"mask","account-mask-row":"mask_row","account-allow":"allow"}[action.replace("account-remove-","account-")];

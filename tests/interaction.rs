@@ -42,6 +42,94 @@ fn paste_rejects_control_sequences_but_preserves_tabs_and_text() {
     assert_eq!(prepare_paste("").unwrap_err(), InputError::Empty);
 }
 
+#[test]
+fn ansi_clipboard_preserves_both_halves_styles_spaces_and_resets_each_line() {
+    let mut source = Screen::new(5, 2).unwrap();
+    source.feed(b"\x1b[1;31;44m\xa4\x1b[7;92;103m\xa4Z\r\n\x1b[0m A");
+    let frame = source.frame();
+    let selected = selection::extract(&frame, &Selection::All).unwrap();
+    let ansi = selection::ansi(&frame, &selected.spans, selected.rows);
+    assert!(ansi.contains(";66;"));
+    assert!(ansi.starts_with("\x1b[0m"));
+    assert!(ansi.ends_with("\x1b[0m"));
+    let bytes = pttstella::encoding::encode(&ansi.replace('\n', "\r\n")).unwrap();
+    let mut restored = Screen::new(5, 2).unwrap();
+    restored.feed(&bytes);
+    assert_eq!(restored.frame().glyphs, frame.glyphs);
+    let partial = selection::extract(&frame, &range((1, 0), (1, 0))).unwrap();
+    let ansi = selection::ansi(&frame, &partial.spans, partial.rows);
+    assert!(ansi.contains('中'));
+    assert!(!ansi.contains('Z'));
+}
+
+#[test]
+fn editor_paste_accepts_only_bounded_sgr_and_types_insert_escape_not_terminal_commands() {
+    use pttstella::{
+        encoding::TextEncoding,
+        input::{prepare_editor_paste, prepare_paste},
+    };
+    let text = "\x1b[1;31m中\x1b[m\r\nB";
+    let prepared = prepare_editor_paste(text, TextEncoding::Uao).unwrap();
+    assert_eq!(prepared.bytes, b"\x15[1;31m\xa4\xa4\x15[m\rB");
+    assert_eq!(prepared.lines, 2);
+    assert!(
+        prepare_paste(text).is_err(),
+        "ordinary paste must continue rejecting ESC"
+    );
+    for text in [
+        "\x1b[2J",
+        "\x1b[H",
+        "\x1b]8;;https://example.com\x07",
+        "\x1b[31mA\x18",
+        "\x15[31m",
+        "\x1b[?31m",
+        "\x1b[38;5;1m",
+        "\x1b[9999999999m",
+        "\x1b[31",
+        "\x1b[31\nm",
+        "\x1b[31mA\x7f",
+    ] {
+        assert!(
+            prepare_editor_paste(text, TextEncoding::Uao).is_err(),
+            "{text:?}"
+        );
+    }
+    assert!(
+        prepare_editor_paste(&format!("\x1b[{}mA", "0;".repeat(33)), TextEncoding::Uao).is_err()
+    );
+    assert!(prepare_editor_paste(&"中".repeat(2049), TextEncoding::Uao).is_err());
+}
+
+#[test]
+fn station_editor_recognition_requires_complete_ptt_footer_and_body_cursor() {
+    use pttstella::navigation::article_editor;
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(
+        &pttstella::encoding::encode(
+            "\x1b[24;1H\x1b[30;47m編輯文章 ^X存檔 ^C色碼 ^V彩色 ^Q放棄\x1b[0m\x1b[3;1H",
+        )
+        .unwrap(),
+    );
+    assert!(article_editor(&screen.frame()));
+    let mut bad = screen.frame();
+    bad.cursor.1 = 23;
+    assert!(!article_editor(&bad));
+    screen.feed(b"\x1b[");
+    assert!(!article_editor(&screen.frame()));
+    for footer in [
+        "編輯文章 ^X存檔",
+        "文章中引用 ^X ^V 編輯文章",
+        "編輯文章 ^V彩色",
+    ] {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(
+            &pttstella::encoding::encode(&format!("\x1b[24;1H\x1b[30;47m{footer}\x1b[0m\x1b[3;1H"))
+                .unwrap(),
+        );
+        assert!(!article_editor(&screen.frame()));
+    }
+}
+
 fn range(a: (usize, usize), b: (usize, usize)) -> Selection {
     Selection::Range {
         anchor: Position { col: a.0, row: a.1 },

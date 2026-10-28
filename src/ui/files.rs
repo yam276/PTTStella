@@ -53,6 +53,11 @@ impl std::fmt::Display for Error {
 type FileResult<T> = Result<T, Error>;
 pub(super) enum Completion {
     Clipboard(FileResult<()>),
+    ClipboardPaste {
+        identity: super::surface_state::Identity,
+        stamp: pttstella::navigation::Stamp,
+        result: FileResult<pttstella::input::PreparedPaste>,
+    },
     Viewport(FileResult<()>),
     Picture {
         destination: ExportDestination,
@@ -92,6 +97,7 @@ impl Completion {
     fn failure(self) -> Option<Error> {
         match self {
             Self::Clipboard(result) | Self::Viewport(result) => result.err(),
+            Self::ClipboardPaste { result, .. } => result.err(),
             Self::Picture { result, .. } => result.err(),
             Self::Sites { result, .. } => result.err(),
             Self::Bookmarks { result, .. } => result.err(),
@@ -793,6 +799,54 @@ pub(super) async fn copy_text(
             .ok_or_else(|| pttstella::msg!("copy-failed"))?
             .set_text(text)
             .map_err(|_| pttstella::msg!("copy-failed"))
+    })
+    .await
+}
+
+pub(super) async fn read_editor_clipboard(
+    permit: Permit,
+    clipboard: Clipboard,
+    identity: super::surface_state::Identity,
+    stamp: pttstella::navigation::Stamp,
+    lease: super::surface_state::OutputLease,
+    source: tokio::sync::watch::Receiver<pttstella::connection::View>,
+) -> Completion {
+    let result = read_editor_with_reader(permit, lease, source, move || {
+        let mut owner = clipboard
+            .lock()
+            .map_err(|_| Error::Failed(pttstella::msg!("paste-unavailable")))?;
+        if owner.is_none() {
+            *owner = Some(
+                arboard::Clipboard::new()
+                    .map_err(|_| Error::Failed(pttstella::msg!("paste-unavailable")))?,
+            );
+        }
+        owner
+            .as_mut()
+            .ok_or_else(|| Error::Failed(pttstella::msg!("paste-unavailable")))?
+            .get_text()
+            .map_err(|_| Error::Failed(pttstella::msg!("paste-unavailable")))
+    })
+    .await;
+    Completion::ClipboardPaste {
+        identity,
+        stamp,
+        result,
+    }
+}
+async fn read_editor_with_reader(
+    permit: Permit,
+    lease: super::surface_state::OutputLease,
+    source: tokio::sync::watch::Receiver<pttstella::connection::View>,
+    read: impl FnOnce() -> FileResult<String> + Send + 'static,
+) -> FileResult<pttstella::input::PreparedPaste> {
+    blocking_result(permit, move || {
+        lease.check(&source.borrow()).map_err(|_| Error::Stale)?;
+        let text = read()?;
+        let view = source.borrow();
+        lease.check(&view).map_err(|_| Error::Stale)?;
+        pttstella::input::prepare_editor_paste(&text, view.site.encoding)
+            .map_err(|e| Error::Failed(e.to_string()))
     })
     .await
 }

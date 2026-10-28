@@ -4,13 +4,23 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，待發佈的 0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前最新診斷交付為 `dist/macos-021-ansi-verified/PTTStella.app`（0.2.1 色碼修正，見下節）。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 0.2.1 編輯器色碼緊急修正（2026-10-28）
+
+使用者要求迅速發佈 0.2.1，修復 PTT 編輯器 Ctrl+V 被系統貼上攔截。Rust 以完整格線、底列編輯文章／^X／^V 與正文游標辨識編輯器，JS 只按 typed capability 分流；Ctrl+V 送站端預覽鍵，Cmd+V／Ctrl+Shift+V 與右鍵貼上維持明確入口。編輯器背景右鍵直接提供貼上，其他背景仍沿原浮球偏好。
+
+選取新增「複製含 ANSI 色碼」，從同一已 ACK、過濾後的 glyph／左右樣式序列化 SGR；保留雙色字與逐行 reset，不洩露被遮內容。貼上色碼只在編輯器接受有界 SGR，ESC 轉 Ctrl+U 插入命令；其他控制序列整段拒絕。多行／色碼先確認，確認前重驗 generation、revision 與 input epoch。原生右鍵讀剪貼簿沿 Files 單一工作槽、blocking worker、前後 lease 與完成檢查，取消／忙碌／過期不送出，不記使用者剪貼簿。
+
+本機核心、全套 JS、desktop lib／bin、Clippy、Python tooling、fmt／docs 已跑；新增負例確實抓到未綁輸入 epoch 的 lease，改為完整 epoch lease 並放入 Files 准入 factory 後重測。macOS arm64 合成原生視窗完整通過兩次 Ctrl+V、精確 ANSI 中文確認貼上與第三次 Ctrl+V（4/4 VERIFIED）；另實際 AX 右鍵複製 ANSI、右鍵貼上讀回 24 行含紅色 SGR、取消而未多送 bytes。來源 PNG、Close acknowledged 與全部 owner 清理通過。原生座標工具仍回 noWindowsAvailable；AX 右鍵確實打開產品選單，未以合成事件冒充。Windows／Linux 原生 GUI 未測，不以 macOS 結果代替。
+
+證據 `.local/verification/release-021-ansi-20261028/`。診斷交付 `dist/macos-021-ansi-verified/PTTStella.app`，只在測試版置頂、不自動搶焦點。版本、README 與中文為主的簡短 Release notes 已更新；四架構 CI 與公開發佈結果後續補記。
 
 ## 0.2.0 正式發佈與草稿查詢修復（2026-10-28）
 

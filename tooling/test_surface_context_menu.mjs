@@ -6,11 +6,18 @@ const source=readFileSync(new URL("../assets/surface-context-menu.js",import.met
 const scope=vm.createContext({});vm.runInContext(source,scope);
 const {contextMenuItems,contextMenuPosition,createSurfaceContextMenu}=scope;
 const base={link:-1,selection:false,ready:true,exportReady:true,local:true,ptt:true,reading:false};
+test('station editor offers paste instead of browsing tools, and retains ANSI selection copy',()=>{
+    assert.deepEqual([...contextMenuItems({...base,editor:true}).keys()],['paste']);
+    const selected=contextMenuItems({...base,editor:true,selection:true,selectionReady:true,rowsReady:true});
+    assert.deepEqual([...selected.keys()],['copy','copy-ansi','export-rows','copy-image-rows','paste']);
+    assert.equal(contextMenuItems({...base,editor:true,local:false}).get('paste'),false);
+    assert.equal(contextMenuItems({...base,editor:true,ready:false}).get('paste'),false);
+});
 test("items follow selected content and capabilities, without inactive feature placeholders",()=>{
     assert.deepEqual([...contextMenuItems(base).keys()],["select-all","export-page","copy-image-page","bookmarks","filters","vim","settings"]);
     const entries=contextMenuItems({...base,link:1,selection:true,selectionReady:false,rowsReady:false,local:false,reading:true,images:true,inlineReady:false,navigate:true,first:true,last:false});
     assert.equal(entries.get("copy"),false);assert.equal(entries.get("copy-link"),true);assert.equal(entries.get("open-link"),false);
-    assert.deepEqual([...entries.keys()],["copy","export-rows","copy-image-rows","copy-link","open-link","select-link"]);
+    assert.deepEqual([...entries.keys()],["copy","copy-ansi","export-rows","copy-image-rows","copy-link","open-link","select-link"]);
     for(const name of ["inline","back","previous","next","select-all","export-page","copy-image-page","bookmarks","filters","vim","settings"])assert.equal(entries.has(name),false);
     assert.deepEqual([...contextMenuItems({...base,ptt:false}).keys()],["select-all","export-page","copy-image-page","settings"]);
 });
@@ -61,14 +68,16 @@ test("escape, scroll, blur, resize and destroy leave no open menu or callable ac
 
 test("menu copy sends only a closed Rust target, never arbitrary clipboard text",()=>{
     const surface=readFileSync(new URL("../assets/surface.js",import.meta.url),"utf8"),sent=[];
-    const state={stopped:false,blocked:()=>false,contextMenuItems:()=>new Map([["copy",true],["copy-link",true]]),contextState:()=>({}),
+    const state={stopped:false,blocked:()=>false,contextMenuItems:()=>new Map([["copy",true],["copy-link",true],["copy-ansi",true]]),contextState:()=>({}),
         latest:{presentation:3},generation:7,revision:4,selectionCache:{request:11},send:p=>sent.push(JSON.parse(JSON.stringify(p)))};
     vm.createContext(state);vm.runInContext(surface.slice(surface.indexOf("function contextAction("),surface.indexOf("function activate(")),state);
     state.contextAction("copy",{index:2},{isTrusted:true});state.contextAction("copy-link",{index:2},{isTrusted:true});
     state.contextAction("copy-link",{index:2},{isTrusted:false});
+    state.contextAction("copy-ansi",{index:2},{isTrusted:true});
     assert.deepEqual(sent,[
         {kind:"copy_text",presentation:3,generation:7,revision:4,target:{kind:"selection",request:11},trusted:true},
         {kind:"copy_text",presentation:3,generation:7,revision:4,target:{kind:"link",index:2},trusted:true},
+        {kind:"copy_text",presentation:3,generation:7,revision:4,target:{kind:"selection_ansi",request:11},trusted:true},
     ]);
 });
 
@@ -149,4 +158,28 @@ test('original-image output carries only an acknowledged index and stamp, with n
  for(const action of ['copy-picture','save-picture'])state.contextAction(action,{index:2},{isTrusted:true});
  assert.deepEqual(sent.map(p=>[p.kind,p.index,p.destination]),[['picture',2,'clipboard'],['picture',2,'file']]);
  assert.ok(sent.every(p=>p.stamp.generation===7&&!('url'in p)&&!('png'in p)));
+});
+
+test('editor paste action requests the owned clipboard by exact stamp, never clipboard text',()=>{
+    const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8'),sent=[];
+    const f={stopped:false,blocked:()=>false,contextMenuItems:()=>new Map([['paste',true]]),contextState:()=>({}),
+      latest:{presentation:3},stamp:()=>({generation:7,revision:4,input_epoch:2}),keyboardState:{enabled:false},
+      cancelComposition(){},cancelDrag(){},clearSelection(){},sendInput:p=>sent.push(JSON.parse(JSON.stringify(p)))};
+    vm.createContext(f);vm.runInContext(surface.slice(surface.indexOf('function contextAction('),surface.indexOf('function activate(')),f);
+    f.contextAction('paste',{index:-1},{isTrusted:false});assert.deepEqual(sent,[]);
+    f.contextAction('paste',{index:-1},{isTrusted:true});
+    assert.deepEqual(sent,[{kind:'paste_clipboard',presentation:3,stamp:{generation:7,revision:4,input_epoch:2},trusted:true}]);
+    assert.equal(f.pastePending,true);
+});
+
+test('ordinary native editor right-click opens paste menu while browsing background still opens floating tools',()=>{
+    const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
+    for(const editor of [true,false]){
+        const calls=[],f={stopped:false,composing:false,pastePending:false,document:{querySelector:()=>null},latest:{editor,reply_rows:[]},
+          stationMouse:{local:()=>true},filterUi:{blocked:()=>false},contextMenu:{close(){},open:()=>calls.push('menu')},
+          cellAt:()=>null,linkAt:()=>-1,inlineImages:{linkAtPoint:()=>-1},accountWordAt:()=>null,
+          hasSelection:()=>false,toolAccess:{right_click_menu:true},tools:{showAt:()=>calls.push('tools')},contextState:()=>({}),contextMenuItems:()=>new Map()};
+        vm.createContext(f);vm.runInContext(surface.slice(surface.indexOf('function openContextMenu('),surface.indexOf('function contextAction(')),f);
+        f.openContextMenu({isTrusted:true,shiftKey:false,preventDefault(){}});assert.deepEqual(calls,[editor?'menu':'tools']);
+    }
 });

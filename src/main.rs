@@ -113,13 +113,14 @@ fn main() {
                 | "sgr66_legacy" | "login_2fa" | "osc8" | "filter_colors" | "inline"
                 | "inline_pages" | "full_load" | "long_load" | "terminal_pages"
                 | "short_overlap" | "short_reading" | "reading_rows" | "control_input"
-                | "wide_last_row" | "diagnostics" | "inline_replies" | "short_links"
-                | "picture_menu" | "context_menu" | "account_lists" | "merged_replies"
-                | "account_actions" | "account_articles" | "pointer_rows" | "list_boundary"
-                | "article_switch" | "boards" | "boards_close" | "recent" | "articles"
-                | "articles_close" | "bookmarks" | "bookmarks_restart" | "bookmarks_empty"
-                | "bookmarks_corrupt" | "mouse" | "mouse_boundary" | "mouse_drag"
-                | "mouse_round_trip" | "mouse_motion" | "mouse_wheel"),
+                | "editor_clipboard" | "wide_last_row" | "diagnostics" | "inline_replies"
+                | "short_links" | "picture_menu" | "context_menu" | "account_lists"
+                | "merged_replies" | "account_actions" | "account_articles"
+                | "pointer_rows" | "list_boundary" | "article_switch" | "boards"
+                | "boards_close" | "recent" | "articles" | "articles_close" | "bookmarks"
+                | "bookmarks_restart" | "bookmarks_empty" | "bookmarks_corrupt" | "mouse"
+                | "mouse_boundary" | "mouse_drag" | "mouse_round_trip" | "mouse_motion"
+                | "mouse_wheel"),
             ) => Some(case.to_owned()),
             _ => {
                 eprintln!(
