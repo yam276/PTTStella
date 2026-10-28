@@ -281,6 +281,23 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         const reading={free:setFreeScroll,rowTop:row=>mapping.y(row),clippedAt(pixel){
             const row=mapping.rowAt(pixel);
             return row!==null&&row<bodyRows&&!wholeRow(row)?row:-1;
+        },page(top,maximum,down){
+            const pixel=(top-surface.offsetTop)*ratio,body=viewport.clientHeight*ratio-footerHeight;
+            const first=mapping.rowAt(pixel),line=first===null?base.y(1)-base.y(0):mapping.bottom(first)-mapping.y(first);
+            let target=top+(down?1:-1)*Math.max(line,body-line)/ratio;
+            if(down){
+                // Keep exactly the last complete visible row as the next
+                // page's first row, even with fractional zoom or image gaps.
+                let row=mapping.rowAt(pixel+body-.01,true);
+                if(row!==null&&mapping.bottom(row)>pixel+body+.01)row--;
+                if(row!==null&&row>=0&&row<bodyRows&&mapping.y(row)>pixel+.01)target=surface.offsetTop+mapping.y(row)/ratio;
+            } else if(first!==null&&first<bodyRows){
+                const row=mapping.y(first)<pixel-.01?first+1:first;
+                if(row<bodyRows)target=surface.offsetTop+(mapping.bottom(row)-body)/ratio;
+            }
+            // Inside a tall image there may be no complete text row to keep.
+            // Continue through it rather than repeatedly returning to its URL.
+            return Math.max(0,Math.min(maximum,target));
         },align(target,maximum,edge="nearest"){
             if(target<=0||target>=maximum&&edge!=="before")return target;
             const pixel=(target-surface.offsetTop)*ratio,row=mapping.rowAt(pixel);

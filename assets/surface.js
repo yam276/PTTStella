@@ -527,13 +527,15 @@ function readingMove(intent,e,source="button",fetch=true) {
     const maximum=Math.max(0,documentHeight-viewport.clientHeight),top=viewport.scrollTop;
     const line=grid?(grid.bottom(0)-grid.y(0))/grid.ratio:24;
     let delta=intent.action==="scroll"?intent.delta:intent.action==="lines"?(intent.down?1:-1)*line*intent.count:
-        (intent.action==="previous_page"?-1:1)*Math.max(line,viewport.clientHeight-(grid?.footerHeight??0))*.9;
+        (intent.action==="previous_page"?-1:1)*Math.max(line,viewport.clientHeight-(grid?.footerHeight??0)-line);
     let target=Math.max(0,Math.min(maximum,top+delta));
     if(intent.action==="first")target=0;
     if(intent.action==="last")target=maximum;
     const free=intent.action==="scroll";
     if(grid?.reading?.free(free))repaint();
     if(!free){
+        if(["previous_page","next_page","forward"].includes(intent.action))
+            target=grid?.reading?.page(top,maximum,delta>0)??target;
         if(intent.action==="lines"){
             const anchor=grid?.reading?.align(top,maximum,intent.down?"before":"after")??top;
             target=Math.max(0,Math.min(maximum,anchor+delta));

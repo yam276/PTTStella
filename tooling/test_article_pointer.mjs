@@ -39,7 +39,7 @@ function fixture({cached=true}={}){
 
 test('reading halves use the visible viewport after scrolling, not the full cached document',()=>{
     const f=fixture();f.viewport.scrollTop=960;
-    f.tap(40,100);assert.equal(f.viewport.scrollTop,528);assert.deepEqual(f.sent,[]);
+    f.tap(40,100);assert.equal(f.viewport.scrollTop,504);assert.deepEqual(f.sent,[]);
     f.tap(40,380);assert.equal(f.viewport.scrollTop,960);assert.deepEqual(f.sent,[]);
     const narrow=fixture();narrow.viewport.clientHeight=240;narrow.viewport.scrollTop=480;
     narrow.tap(40,150);assert.equal(narrow.viewport.scrollTop,696);
@@ -51,14 +51,14 @@ test('left seventeen columns return across cached rows while live links have pri
     const link=fixture();link.linkAt=()=>3;link.tap(4,100);
     assert.deepEqual(link.sent,[{kind:'open_link',presentation:2,generation:7,revision:4,index:3,trusted:true}]);
     assert.equal(link.viewport.scrollTop,0);
-    const body=fixture();body.tap(17,380);assert.equal(body.viewport.scrollTop,432);assert.deepEqual(body.sent,[]);
+    const body=fixture();body.tap(17,380);assert.equal(body.viewport.scrollTop,456);assert.deepEqual(body.sent,[]);
 });
 
 test('the visible top and bottom row jump Home and End while the central halves still page',()=>{
     const f=fixture();f.latest.article.end=true;f.viewport.scrollTop=960;
     f.tap(40,5);assert.equal(f.viewport.scrollTop,0);assert.deepEqual(f.sent,[]);
     f.tap(40,475);assert.equal(f.viewport.scrollTop,1464);assert.deepEqual(f.sent,[]);
-    f.tap(40,100);assert.equal(f.viewport.scrollTop,1032);
+    f.tap(40,100);assert.equal(f.viewport.scrollTop,1008);
     f.tap(40,380);assert.equal(f.viewport.scrollTop,1464);
     // Same geometry at half-height, without making the entire viewport an edge.
     const small=fixture();small.viewport.clientHeight=240;small.viewport.scrollTop=480;
@@ -77,7 +77,7 @@ function imageFixture(){
     return f;
 }
 test('expanded image gaps support Back, page, Home and End without becoming selectable terminal cells',()=>{
-    for(const [col,y,expected] of [[40,100,528],[40,380,1392],[40,5,0],[40,475,1464]]){
+    for(const [col,y,expected] of [[40,100,504],[40,380,1416],[40,5,0],[40,475,1464]]){
         const f=imageFixture();f.tap(col,y);assert.equal(f.viewport.scrollTop,expected);assert.deepEqual(f.sent,[]);assert.deepEqual(f.selections,[]);
     }
     const back=imageFixture();back.tap(4,380);assert.equal(back.sent[0].intent.action,'back');

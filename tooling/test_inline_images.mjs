@@ -71,7 +71,7 @@ test('ordinary web reading keys move locally and only fetch beyond the cached ed
     context.navigate=intent=>requests.push(intent.action);
     const key=(value,patch={})=>{let prevented=false;context.keydown({key:value,code:value.length===1?'Key'+value.toUpperCase():value,
         isTrusted:true,preventDefault(){prevented=true;},...patch});return prevented;};
-    for(const [value,expected] of [['j',264],['k',240],['ArrowDown',264],['ArrowUp',240],['PageDown',690],['PageUp',240],['End',1500],['Home',0]]){
+    for(const [value,expected] of [['j',264],['k',240],['ArrowDown',264],['ArrowUp',240],['PageDown',716],['PageUp',240],['End',1500],['Home',0]]){
         assert.equal(key(value),true,value);assert.equal(context.viewport.scrollTop,expected,value);
     }
     assert.equal(sent.length,0);assert.deepEqual(requests,[]);
@@ -191,16 +191,16 @@ test('production cached movement scrolls locally, fetches only at an unknown edg
         setHover(){},refreshNavigation(){},stamp:()=>({generation:7,revision:20,input_epoch:3}),send:p=>sent.push(p),focus(){},surface:{dataset:{}}};
     vm.runInNewContext(surface.slice(surface.indexOf('function readingMove('),surface.indexOf('const browseReturn=')),context);
     const event={isTrusted:true};
-    context.navigate({action:'next_page'},event);assert.equal(context.viewport.scrollTop,360);assert.equal(sent.length,0);
+    context.navigate({action:'next_page'},event);assert.equal(context.viewport.scrollTop,376);assert.equal(sent.length,0);
     context.navigate({action:'next_page'},event);assert.equal(context.viewport.scrollTop,600);assert.equal(sent.length,0);
     context.navigate({action:'next_page'},event);assert.equal(sent.length,1);assert.equal(sent[0].stamp.revision,20);
     context.navigate({action:'next_page'},event);assert.equal(sent.length,1);
     context.navigationLocked=false;context.viewport.scrollTop=600;
-    context.navigate({action:'previous_page'},event);assert.equal(context.viewport.scrollTop,240);assert.equal(sent.length,1);
+    context.navigate({action:'previous_page'},event);assert.equal(context.viewport.scrollTop,224);assert.equal(sent.length,1);
     context.viewport.scrollTop=0;context.navigate({action:'previous_page'},event);assert.equal(sent.length,1);
     context.latest.article.end=true;context.viewport.scrollTop=600;context.navigate({action:'next_page'},event);assert.equal(sent.length,1);
-    context.latest.input_pending=true;context.navigate({action:'previous_page'},event);assert.equal(context.viewport.scrollTop,240);
-    context.latest.input_pending=false;context.blocked=()=>true;context.navigate({action:'previous_page'},event);assert.equal(context.viewport.scrollTop,240);
+    context.latest.input_pending=true;context.navigate({action:'previous_page'},event);assert.equal(context.viewport.scrollTop,224);
+    context.latest.input_pending=false;context.blocked=()=>true;context.navigate({action:'previous_page'},event);assert.equal(context.viewport.scrollTop,224);
 });
 
 test('production draw never temporarily collapses a cached scroll container to the terminal page height',()=>{
@@ -594,7 +594,7 @@ function alignedReading({height=100,line=24,ratio=1}={}){
 test('discrete page and line navigation aligns rows and never skips the hidden trailing row',async()=>{
     const e=alignedReading({height:94}); // 70px body: row 2 must be deferred, never skipped.
     e.whole();assert.equal(e.strips().length,2);
-    for(const [action,expected] of [['next_page',48],['next_page',96],['previous_page',48],['previous_page',0]]){
+    for(const [action,expected] of [['next_page',24],['next_page',48],['previous_page',24],['previous_page',0]]){
         e.move({action});assert.equal(e.viewport.scrollTop,expected);e.whole();
     }
     e.move({action:'scroll',delta:43},'pointer');assert.equal(e.viewport.scrollTop,43);
@@ -611,7 +611,7 @@ test('wheel stays pixel-smooth, while commands hide fractional edge rows and the
     e.move({action:'scroll',delta:.25},'pointer');assert.equal(e.viewport.scrollTop,.25);
     e.move({action:'scroll',delta:7},'pointer');assert.equal(e.viewport.scrollTop,7.25);
     assert.ok(e.strips().some(n=>parseFloat(n.style.top)<e.viewport.scrollTop),'wheel renders the partially clipped top row');
-    e.move({action:'next_page'});assert.equal(e.viewport.scrollTop,72);e.whole();
+    e.move({action:'next_page'});assert.equal(e.viewport.scrollTop,48);e.whole();
     e.move({action:'last'});assert.equal(e.viewport.scrollTop,884);e.whole();
     assert.ok(e.strips().some(n=>parseFloat(n.style.top)+parseFloat(n.style.height)===960),'last text row remains visible');
     const last=e.viewport.scrollTop;e.move({action:'next_page'});assert.equal(e.viewport.scrollTop,last);e.whole();
@@ -628,18 +628,56 @@ test('fractional zoom and DPR retain complete rows without rounding the continuo
         e.move({action:'lines',down:true,count:1});e.whole();await e.ui.destroy();
     }
 });
+test('pages overlap exactly one complete visible row across fractional heights and DPR',async()=>{
+    for(const ratio of [1,1.5,2])for(const line of [19.3,24,26.5,31.7])for(const height of [400,173,500]){
+        const e=alignedReading({ratio,line,height});
+        const visible=()=>e.strips().map(n=>Number(n.paintedRows[0])).sort((a,b)=>a-b);
+        let previous=visible();
+        while(true){
+            const top=e.viewport.scrollTop;e.move({action:'next_page'});e.whole();
+            const rows=visible();if(e.viewport.scrollTop===top)break;
+            const maximum=parseFloat(e.surface.style.height)-height;
+            if(e.base.y(previous.at(-1))/ratio<maximum-.01)assert.equal(rows[0],previous.at(-1),JSON.stringify({ratio,line,height,previous,rows}));
+            previous=rows;
+        }
+        while(e.viewport.scrollTop>0){
+            const first=visible()[0],top=e.viewport.scrollTop;e.move({action:'previous_page'});e.whole();
+            assert.ok(e.viewport.scrollTop<top,'PageUp must progress');
+            if(e.viewport.scrollTop>.01){
+                assert.ok(visible().includes(first),JSON.stringify({ratio,line,height}));
+                assert.ok(visible().at(-1)<=first+1,'fractional raster rows may retain one extra boundary row');
+            }
+        }
+        await e.ui.destroy();
+    }
+});
 test('image gaps keep pixel movement inside the image but only complete neighboring text rows',async()=>{
     const e=alignedReading();e.packet.links=[{row:0,start:0,end:10,url:'https://example.com/image.png'}];e.c.repaint();
     e.ui.open({...e.open,article_id:1,first_line:1},e.packet);
     e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:64,height:35}});
     await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
     image.naturalWidth=64;image.naturalHeight=35;image.onload();await new Promise(resolve=>setImmediate(resolve));e.c.repaint();
-    e.move({action:'next_page'});assert.equal(e.viewport.scrollTop,68.4);e.whole();
-    assert.equal(e.c.grid.rowAt(75+68.4),null,'a fractional bottom row after an image is not a text hit');
+    e.move({action:'next_page'});assert.equal(e.viewport.scrollTop,52);e.whole();
+    assert.equal(e.c.grid.rowAt(75+52),null,'a fractional bottom row after an image is not a text hit');
     e.move({action:'last'});e.whole();e.move({action:'previous_page'});e.whole();
     e.move({action:'scroll',delta:-1.5},'pointer');const raw=e.viewport.scrollTop;
     e.packet.article={...e.packet.article,id:2};e.c.repaint();assert.equal(e.viewport.scrollTop,0);e.whole();
     assert.ok(raw>0);await e.ui.destroy();
+});
+test('page overlap keeps making progress through an image taller than the viewport',async()=>{
+    const e=alignedReading({height:173});
+    e.packet.links=[{row:0,start:0,end:10,url:'https://example.com/tall.png'}];e.c.repaint();
+    e.ui.open({...e.open,article_id:1,first_line:1},e.packet);
+    e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:64,height:2000}});
+    await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+    image.naturalWidth=64;image.naturalHeight=2000;image.onload();await new Promise(resolve=>setImmediate(resolve));e.c.repaint();
+    let steps=0;
+    while(e.viewport.scrollTop<parseFloat(e.surface.style.height)-173-.01){
+        const top=e.viewport.scrollTop;e.move({action:'next_page'});
+        assert.ok(e.viewport.scrollTop>top,'a page must not get stuck at the image URL');
+        assert.ok(++steps<30,'bounded traversal of the known fixture');
+    }
+    e.whole();assert.ok(e.strips().some(n=>n.paintedRows.includes('39')));await e.ui.destroy();
 });
 
 test('full-width fractional images keep the final line reachable with native integer scroll limits across scales',async()=>{
