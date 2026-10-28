@@ -1,3 +1,4 @@
+retainSurfaceResult(dioxus,window);
 const localization=decodeSurfaceEnvelope(await dioxus.recv());
 const tr=createSurfaceI18n(localization,fluent);
 document.documentElement.lang=localization.payload.language;

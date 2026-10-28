@@ -1,3 +1,17 @@
+// Dioxus Desktop releases a returned Eval through a JS FinalizationRegistry.
+// Keep its channel reachable until Rust has consumed the final result. A single
+// window-owned listener is released by the native callback after join, including
+// error paths; it never carries BBS input or starts a timer/worker.
+function retainSurfaceResult(bridge,target) {
+    const slot=Symbol("PTTStella pending surface result");
+    Object.defineProperty(target,slot,{value:bridge,configurable:true});
+    const release=()=>{
+        target.removeEventListener("pttstella:release-result",release);
+        delete target[slot];
+    };
+    target.addEventListener("pttstella:release-result",release);
+}
+
 // One renderer per native window. The out-of-band stop also works when its
 // data channel cannot accept a packet. It can only revoke this renderer.
 function createSurfaceLifetime(bridge, target, revoke=()=>{}) {

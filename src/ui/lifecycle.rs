@@ -50,12 +50,33 @@ async fn retained_wait<T>(
     }
 }
 
+/// A static WebView control command with explicit execution acknowledgement.
+/// Unlike another short-lived document::eval, it cannot lose its own result to GC.
+async fn control(script: &'static str) -> Result<(), String> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    let sender = std::sync::Mutex::new(Some(sender));
+    dioxus::desktop::window()
+        .webview
+        .evaluate_script_with_callback(script, move |result| {
+            if let Ok(mut sender) = sender.lock()
+                && let Some(sender) = sender.take()
+            {
+                let _ = sender.send(result);
+            }
+        })
+        .map_err(|error| error.to_string())?;
+    let result = receiver.await.map_err(|error| error.to_string())?;
+    if !matches!(serde_json::from_str::<bool>(&result), Ok(true)) {
+        return Err("WebView cleanup control was not acknowledged".into());
+    }
+    Ok(())
+}
+
 async fn renderer(mut eval: document::Eval) -> Result<RendererFinished, String> {
     let _ = eval.send(Packet::Stop);
-    // A second, static control query does not depend on the surface data channel.
-    let interrupt =
-        document::eval("window.dispatchEvent(new Event('pttstella:stop')); return null;");
-    let (interrupted, finished) = tokio::join!(interrupt.join::<serde_json::Value>(), async {
+    // Native callbacks have no Eval/FinalizationRegistry lifetime of their own.
+    let interrupt = control("window.dispatchEvent(new Event('pttstella:stop')); true;");
+    let (interrupted, finished) = tokio::join!(interrupt, async {
         let joined = eval.join::<RendererFinished>();
         tokio::pin!(joined);
         let mut receiving = true;
@@ -76,8 +97,12 @@ async fn renderer(mut eval: document::Eval) -> Result<RendererFinished, String> 
             }
         }
     });
+    // The JS channel stays pinned through the final result. Release only after
+    // join has consumed the full clean/settings/tools snapshot, even on error.
+    let released =
+        control("window.dispatchEvent(new Event('pttstella:release-result')); true;").await;
     match finished {
-        Ok(finished) => Ok(finished),
+        Ok(finished) => Ok(finished.acknowledge(Some(released.is_ok()))),
         Err(error) => Err(pttstella::msg!(
             "cleanup-stop-error",
             error = error,
@@ -200,6 +225,18 @@ mod tests {
             assert_eq!(result.clean, clean);
             assert_eq!(serde_json::to_value(result.tools).unwrap(), tools);
         }
+    }
+
+    #[tokio::test]
+    async fn failed_release_ack_preserves_the_final_settings_snapshot() {
+        let result: RendererFinished=serde_json::from_value(serde_json::json!({"clean":true,"settings":{"last":null,"error":"retained final draft error"}})).unwrap();
+        let result = result.acknowledge(Some(false));
+        assert!(!result.clean);
+        let error = super::super::settings_finish::RetainedEdits::default()
+            .finish(result.settings)
+            .await
+            .unwrap_err();
+        assert_eq!(error, "retained final draft error");
     }
 
     #[tokio::test]
