@@ -217,7 +217,8 @@ def validate_assets(directory, version, sha):
             if digest(path) != data['files'][name]:
                 raise ValueError('Release archive hash mismatch: '+name)
             downloads.append(path)
-        downloads.append(report)
+        # Manifests remain required build evidence in Actions artifacts. Only
+        # executable downloads are public Release assets and listed in sums.
         expected |= names | {report.name}
     for name in expected.copy():
         path = directory/name
