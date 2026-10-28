@@ -22,11 +22,11 @@
 | macOS Intel | `macos-15-intel` | 包含 `.app` 的 ZIP |
 | Linux x64 | `ubuntu-24.04` | `.deb` 與 `.tar.gz` |
 
-每個架構有來源 manifest，列出 commit、profile、相依環境及下載檔 SHA-256；Release 的 `SHA256SUMS` 涵蓋所有下載與 manifest。下載採完整白名單核對，任何缺檔、混入額外檔案、來源不符、dirty checkout 或雜湊不符均禁止發佈。授權資料從同一 locked Cargo dependency graph 收集。Linux `.deb` 以 `dpkg-shlibdeps` 讀取實際 ELF 依賴；不是通用靜態 Linux 程式，使用方式見 [Linux 套件說明](linux-package.txt)。
+每個架構有來源 manifest，列出 commit、profile、相依環境及下載檔 SHA-256；公開 Release 的 `SHA256SUMS` 只涵蓋六個平台下載；manifest 及其逐檔校驗保留在 Actions artifacts，不公開附加。下載採完整白名單核對，任何缺檔、混入額外檔案、來源不符、dirty checkout 或雜湊不符均禁止發佈。授權資料從同一 locked Cargo dependency graph 收集。Linux `.deb` 以 `dpkg-shlibdeps` 讀取實際 ELF 依賴；不是通用靜態 Linux 程式，使用方式見 [Linux 套件說明](linux-package.txt)。
 
 所有 runner 執行 Python 打包／政策測試、docs、JS、core、desktop lib／bin 與 desktop Clippy，再以 release profile 編譯。Windows／macOS 沿用原生打包驗證，Linux 核對 ELF／系統 shared libraries／Debian metadata。CI 不啟動產品連線，不把無 GUI 的單元與打包測試當成原生輸入、像素、IME 或實站登入驗收。
 
-Windows job 額外安裝固定版 Inno Setup，執行原生合成前置政策 gate，以靜態 CRT 與內嵌授權的同一次 App 編譯產生 Setup 和免安裝 EXE；本機 ZIP 僅供開發／驗證，不上傳 Release。打包器拒絕非系統 DLL 依賴，將免安裝 EXE 複製至空目錄執行授權匯出，比對編入內容後才交付。這不建立 WebView、不連線，也不當作 GUI 通過。來源 manifest 必須列出兩個 Windows EXE，缺任一個或混入額外 ZIP／裸 DLL 均不能發佈。校驗碼與來源 manifest 仍附於 Release，使用者擇一下載。兩者的 WebView2 需求及實測邊界見 [Windows 安裝包](windows-installer.md)。
+Windows job 額外安裝固定版 Inno Setup，執行原生合成前置政策 gate，以靜態 CRT 與內嵌授權的同一次 App 編譯產生 Setup 和免安裝 EXE；本機 ZIP 僅供開發／驗證，不上傳 Release。打包器拒絕非系統 DLL 依賴，將免安裝 EXE 複製至空目錄執行授權匯出，比對編入內容後才交付。這不建立 WebView、不連線，也不當作 GUI 通過。來源 manifest 必須列出兩個 Windows EXE，缺任一個或混入額外 ZIP／裸 DLL 均不能發佈。公開 Release 保留下載檔與 SHA256SUMS，來源 manifest 仍在 Actions artifacts 驗證；使用者擇一下載。兩者的 WebView2 需求及實測邊界見 [Windows 安裝包](windows-installer.md)。
 
 Windows 暫無 Authenticode，macOS 為 ad-hoc 簽章，未做 Developer ID／Apple 公證，因此下載後可能出現系統安全提示。macOS 說明附於 App，見 [macOS 發佈說明](macos-release.txt)。本流程無需另設私人 token 或帳密 secrets，只有發佈 job 取得 `contents: write`，其他 job 為讀取權限；action 以完整 commit 固定版本。
 
@@ -73,6 +73,12 @@ gh api --method POST repos/yam276/PTTStella/rulesets --input .github/rulesets/ma
 
 Release PR #3 合併至 main `4f194551a02821e7b80ae78591a125774e74487e`。四架構 verify 40664831408 與正式 run 40667567525 全數成功，publisher 已正常完成。[v0.2.1](https://github.com/yam276/PTTStella/releases/tag/v0.2.1) 為 Latest stable，附六個平台下載套件、四份 manifest 與 SHA256SUMS；獨立核對精確附件清單、版本／來源／release profile、GitHub 上傳 digest、校驗碼與版本專用說明通過。這次仍使用既有 11 附件流程，下列清單精簡留待下一版。main 已整合回 develop，後續文件提交留 develop。
 
-## 下一版公開下載清單調整（已規劃，0.2.1 不變）
+## 公開下載清單精簡
 
-使用者指定在 0.2.1 之後的下一版再調整：建置資訊 JSON 保留於 GitHub Actions artifacts，繼續核對版本、平台、來源 commit、簽章狀態及執行檔 SHA-256；公開 Release 只放六個平台下載套件與 `SHA256SUMS`。校驗清單只列公開下載項。這需要同步調整發佈資產白名單、驗證與測試；保留全部套件驗證及完整上傳後才公開的規則，不在目前已合併的 0.2.1 建置中變更。
+使用者後續指定這次重新發佈 0.2.1 就套用：建置資訊 JSON 保留於 GitHub Actions artifacts，繼續核對版本、平台、來源 commit、簽章狀態及執行檔 SHA-256；公開 Release 只放六個平台下載套件與 `SHA256SUMS`。校驗清單只列公開下載項。完整 manifest／逐檔校驗及建置目錄白名單仍全部驗證，缺少 JSON 或遭竄改也禁止發佈。
+
+## 明確授權的同版本替換
+
+一般流程維持 develop → main 與版本遞增。只有使用者明確要求替換既有版本時，才可從該發佈提交建立 `codex/reissue-v<version>` → main 的 Release PR，標題仍為 `release: v<version>`。必須提交 `docs/release-replacements/v<version>.json`，只含 `version`、`previous_commit` 與非空 `reason`；版本與父提交必須精確符合被替換的 main，不能套用到其他版本或後來的提交。來源仍須同 repo、乾淨 checkout、唯一已合併 PR 及精確 merge commit。這份紀錄不會自動刪除任何 Release 或移動 tag。
+
+先備份舊 Release metadata、tag、Git bundle 與可下載的舊附件並核對 digest，再回移已驗證修復、通過 Release PR policy，合併後手動在 main 跑四架構 verify。全部實際建置通過後，才依明確授權刪除舊 Release 與 tag；以相同 main 提交及同次 verify 的原始 artifacts，重新執行 production `prepare`、`validate_assets`、`publish`。這個手動出版步驟由使用者的本次替換授權觸發；verify workflow 本身仍不具出版權限。一般 publisher 依然拒絕既有公開 Release 或指向別處的 tag，所有下載上傳完才公開。重發後核對遠端來源、六個套件及 SHA256SUMS，再把 main 整合回 develop，保留 develop 的較新開發版本。
