@@ -758,4 +758,3 @@ test('leaving a 4000-row article releases its Paint and glyphs while the footer 
     assert.deepEqual(report.results.map(r=>r.mode),['list','terminal','new_article','destroy']);
     assert.ok(report.results.every(r=>r.packet_collected&&r.glyphs_collected&&r.style_collected));
 });
-
