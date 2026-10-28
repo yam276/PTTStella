@@ -153,7 +153,8 @@ pub fn article_editor(frame: &Frame) -> bool {
         && footer.text.trim_start().starts_with("編輯文章")
         && footer.bar_text("編輯文章")
         && footer.text.contains("^X")
-        && footer.text.contains("^V")
+        && (footer.text.contains("^V")
+            || (footer.text.contains("^C") && footer.text.contains("色碼")))
 }
 
 pub fn analyze(frame: &Frame) -> Context {
