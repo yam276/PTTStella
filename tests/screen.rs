@@ -355,13 +355,7 @@ fn sgr66_latch_is_one_cell_not_a_sticky_character_or_second_screen_model() {
             assert_eq!((a.byte, a.style.fg, b.byte, b.style.fg), (b'A', 1, b'B', 2));
         });
     }
-    for control in [
-        b"\r".as_slice(),
-        b"\x07",
-        b"\x7f",
-        b"\x1b[1;1H",
-        b"\x1b[32m",
-    ] {
+    for control in [b"\r".as_slice(), b"\x07", b"\x7f"] {
         let bytes = [b"\x1b[31;66;32m".as_slice(), control, b"\xa4\xa4"].concat();
         assert_control_chunks(&bytes, |screen| {
             let glyph = &screen.frame().glyphs[0];
@@ -398,4 +392,41 @@ fn sgr66_latch_is_one_cell_not_a_sticky_character_or_second_screen_model() {
         ),
         (1, 2)
     );
+}
+
+#[test]
+fn sgr66_latch_survives_separate_escape_commands_until_printable_cell() {
+    // PTT pfterm's ESC branch precedes C0 cancellation. Splitting an SGR
+    // across commands must not discard the saved left-half attributes.
+    for commands in [
+        b"\x1b[32;45m".as_slice(),
+        b"\x1b[32m\x1b[45m",
+        b"\x1b[1;1H\x1b[32;45m",
+    ] {
+        let bytes = [b"\x1b[31;44;66m".as_slice(), commands, b"\xa4\xa4X"].concat();
+        assert_control_chunks(&bytes, |screen| {
+            let frame = screen.frame();
+            let glyph = &frame.glyphs[0];
+            assert_eq!((&*glyph.text, glyph.width), ("中", 2));
+            assert_eq!((glyph.left.fg, glyph.left.bg), (1, 4));
+            assert_eq!((glyph.right.fg, glyph.right.bg), (2, 5));
+            assert_eq!((frame.glyphs[1].left.fg, frame.glyphs[1].left.bg), (2, 5));
+            assert_eq!(frame.unsupported, 0);
+        });
+    }
+    assert_control_chunks(b"\x1b[31;44;66m\x1b[0m\xa4\xa4", |screen| {
+        let glyph = &screen.frame().glyphs[0];
+        assert_eq!((glyph.left.fg, glyph.left.bg), (1, 4));
+        assert_eq!(glyph.right, pttstella::screen::Style::default());
+    });
+    assert_control_chunks(b"\x1b[31;66m\x1b[32;66;34mAB", |screen| {
+        assert_eq!(screen.cell(0, 0).unwrap().style.fg, 2);
+        assert_eq!(screen.cell(1, 0).unwrap().style.fg, 4);
+    });
+    assert_control_chunks(b"\x1b[31;66m\x1bcAB", |screen| {
+        assert_eq!(
+            screen.cell(0, 0).unwrap().style,
+            pttstella::screen::Style::default()
+        );
+    });
 }

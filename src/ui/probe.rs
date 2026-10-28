@@ -649,6 +649,16 @@ pub(super) fn sgr66_sample(modern: bool) -> Result<Vec<u8>, String> {
             b"\x1b[0;31;44;66;32;45mAB",
         ),
         (
+            5,
+            b"\x1b[0;31;44m\xa4\x1b[32;45m\xa4X",
+            b"\x1b[0;31;44;66m\x1b[32m\x1b[45m\xa4\xa4X",
+        ),
+        (
+            6,
+            b"\x1b[0;30;44m\xa4\x1b[30;46m\xde",
+            b"\x1b[0;30;44;66m\x1b[30;46m\xa4\xde",
+        ),
+        (
             19,
             b"\x1b[1;7;31;44m\xa4\x1b[22;27;32;45m\xa4",
             b"\x1b[1;7;31;44;66;22;27;32;45m\xa4\xa4",
@@ -1112,6 +1122,11 @@ mod sample_tests {
                 (left.style.fg, left.style.bg, right.style.fg, right.style.bg),
                 (1, 4, 2, 5)
             );
+            for (row, expected) in [(4, (1, 4, 2, 5)), (5, (0, 4, 0, 6))] {
+                let left = screen.cell(0, row).unwrap().style;
+                let right = screen.cell(1, row).unwrap().style;
+                assert_eq!((left.fg, left.bg, right.fg, right.bg), expected);
+            }
             assert_eq!(
                 (
                     screen.cell(0, 17).unwrap().byte,

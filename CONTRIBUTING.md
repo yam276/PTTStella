@@ -81,7 +81,7 @@ mouse report 的 `edges` 保留至多 16 筆已准入事件的格線座標、按
 
 2FA 引導另用 `--probe-surface OUTPUT_DIRECTORY login_2fa`，開啟 Vim 後按鈕登入合成帳密；原始輸入六位錯碼、八位救援碼，進入主選單後明確 Esc 回 Normal，再正常關窗。peer 精確核對一次帳密與兩次手動碼，額外輸入失敗；報告需包含提示／錯碼／瀏覽三個狀態、Close acknowledged 與 owner join。不代替實站 2FA 或原生 IME 驗收。
 
-SGR 66 顯示變更另使用 `--probe-surface OUTPUT_DIRECTORY sgr66_legacy` 與 `--probe-surface OUTPUT_DIRECTORY sgr66` 啟動兩個獨立程序，沿用相同 probe-settings.json 與字型；在原生視窗點「匯出 PNG」後正常關閉。兩者使用等價自製串流、本機 peer 拒絕站端 bytes，各自留下 export.png、surface-probe.json 與 cleanup.json。需獨立解碼兩張 960×576 PNG 核對全部像素及已知左右背景／明暗反相，不能只檢查 PNG 標頭或兩份 Core 相等；CPU 核心另測每個分片、單寬字、控制碼取消、覆寫／捲動與 session reset。這不代表已驗證 UTF-8 或其他 OS。
+SGR 66 顯示變更另使用 `--probe-surface OUTPUT_DIRECTORY sgr66_legacy` 與 `--probe-surface OUTPUT_DIRECTORY sgr66` 啟動兩個獨立程序，沿用相同 probe-settings.json 與字型；在原生視窗點「匯出 PNG」後正常關閉。兩者使用等價自製串流、本機 peer 拒絕站端 bytes，各自留下 export.png、surface-probe.json 與 cleanup.json。需獨立解碼兩張 960×576 PNG 核對全部像素及已知左右背景／明暗反相，不能只檢查 PNG 標頭或兩份 Core 相等；CPU 核心另測每個分片、單寬字、分開 SGR／游標命令保留、其他 C0／DEL 取消、覆寫／捲動與 session reset。這不代表已驗證 UTF-8 或其他 OS。
 
 Vim gate 由真正 WebView 編輯／按鍵事件送至 Rust policy，再由本機服務逐筆比對原生一次 h／Ctrl+d／中文、計數、半頁、gg/G、h/l 與模式返回；前綴取消不能夾帶原始字母。macOS 原生 window probe 另以 46 筆精確輸入覆蓋主選單／看板／最愛／文章、無更新時的列表移動，以及三次進板提示的 l／Enter／空白鍵繼續與後續六位數文章列表操作；最後六筆覆蓋命令說明頁的移動／首尾／返回及空列表返回，l／Enter 執行由負面案例拒絕。每次換頁加入 DEC2026、未知 ESC intermediate 與超長 CSI，畫面分兩段、間隔 120ms；runner 應觀察更新後再輸入，不能把本例宣稱為極速連發或逐像素防撕裂證據。同步持有舊圖、拒絕舊導覽、允許原始輸入／Ping、缺結束恢復及批次中關閉另由 Connection loopback 與核心測試核對。進板辨識、兩種鍵盤模式的一般按鍵、長按跨畫面、重複／過期 Continue 另由核心與 Connection 的負面案例核對。暫停提示變更另跑 `node --test tooling/test_continue_keyboard.mjs tooling/test_article_pointer.mjs`，檢查橋接保留 IME／本機快捷鍵、整格線單次點擊、網址優先權覆寫及拖曳／Shift／雙擊／忙碌／過期／幾何變更拒絕；DOM doubles 不算原生點擊驗收。可攜顯示設定驗證兩份具名檔、固定 preset、載入預覽／取消／套用與錯誤保留，重啟程序另外比對保存結果和全部畫素。probe 只替代原生 picker 的路徑，沒有宣稱操作原生選檔視窗。
 
