@@ -4,13 +4,23 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，待發佈的 0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 依使用者指示恢復發佈準備，尚未合併或建立 tag／Release；儲存庫已由使用者改為 Public，正在重新驗證三平台打包。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，待發佈的 0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 0.2.0 正式發佈與草稿查詢修復（2026-10-28）
+
+Release PR #2 已合併為 main `2ad0755`，四架構 verify 40654284739 成功；正式 run 40656739145 的四架構測試及打包成功。Windows 初輪 unused mut 已由 `25ce1e8` 修正並在實際 Windows runner 通過。正式流程在建立草稿後，REST tag 查詢回傳 404 而停止；GraphQL 精確 tag 與 REST 數字 ID 均能讀到同一草稿，未公開不完整的 Release。
+
+從相同正式 run 取回原始 artifacts，以未改動的 main `prepare`／`validate_assets`／`publish` 重查所有 gate，只為該已確認草稿補上精確 ID 解析，完成全部上傳後公開。v0.2.0 tag 指向 `2ad07554b6440b03b55f60c9d02d6b8b21d29539`，Latest stable，11 個 Assets 含 Windows Setup／portable、macOS arm64／x64 ZIP、Linux DEB／tar.gz、四份來源 manifest 及 SHA256SUMS；遠端上傳 digest、manifest 的版本／來源／profile 與校驗碼獨立核對通過，說明沿用中文為主、英文摘要。沒有移動 tag 或改寫正式下載檔。發佈後 main 已快轉整合至本機 develop。
+
+publisher 的後續修正以 GraphQL 的精確 tag 取得數字 ID，再從 REST 讀取同一 Release，錯誤／權限不明／無效 ID／tag 不符仍拒絕。新增草稿及正式版、缺少 Release 與權限失敗的區別、無效 ID 及錯誤 tag 負例；本機 77 項 Python tooling、docs 與 actionlint 通過。此工具修正留 develop，不修改 0.2.0 的 immutable 發佈提交；其跨平台 verify 另行記錄，不把已發佈 App 的測試當成新工具已驗證。
+
+證據 `.local/verification/release-020-public-20261028/` 保存各輪成功／失敗狀態、原始 Windows／publish 失敗 log、原始 artifacts 的驗證清單、接續發布結果與公開 metadata。前輪原生右鍵／動畫外觀及其他平台人工 GUI 仍沿用既有邊界，不因打包成功改成 passed；本輪沒有登入 PTT、建立新 App 副本或臨時分支／worktree。
 
 ## 0.2.0 再次 Critic 與發佈準備（2026-10-28）
 
