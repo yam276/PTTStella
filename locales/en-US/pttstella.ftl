@@ -685,3 +685,10 @@ context-save-picture = Save image as…
 picture-saved = Image saved
 picture-save-title = Save image
 picture-extension = Keep the original image file extension
+
+update-check = Check for updates
+update-checking = Checking…
+update-open = Download new version
+update-available = New version available: { $version }
+update-current = You have the latest stable release or a newer development version.
+update-help = Stable releases are checked at startup or on request. Unavailable checks stay silent. Download and install updates manually.

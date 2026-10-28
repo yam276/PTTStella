@@ -252,6 +252,14 @@ async fn run(
     .map_err(|e| e.to_string())?;
     eval.send(Packet::Diagnostics(diagnostics.enabled()))
         .map_err(|e| e.to_string())?;
+    // Local future ownership makes every run exit cancel update HTTP work.
+    // Synthetic probes never contact GitHub, including manual check events.
+    let mut updates = pttstella::updates::Checker::default();
+    if probe.is_none() {
+        updates.start();
+    }
+    eval.send(Packet::UpdateStatus(updates.status().clone()))
+        .map_err(|e| e.to_string())?;
     let mut keyboard_policy = vim::Keyboard::default();
     let mut keyboard_generation = 0;
     let mut login_guidance = pttstella::login::Guidance::Idle;
@@ -524,6 +532,9 @@ async fn run(
             (preload_paint && screen.dirty() && !screen.has_in_flight() && !reading_paint_due)
                 .then_some(reading_paint_at);
         tokio::select! {
+            status = updates.next() => {
+                eval.send(Packet::UpdateStatus(status)).map_err(|e|e.to_string())?;
+            },
             _ = diagnostic_tick.tick(), if diagnostics.enabled() => {
                 let view=receiver.borrow();
                 diagnostics.state(super::diagnostics::State {
@@ -1116,6 +1127,20 @@ async fn run(
                         eval.send(Packet::SitesResult{request,data:sites.snapshot(receiver.borrow().site.clone()),feedback}).map_err(|e|e.to_string())?;
                     },
                     SurfaceEvent::SettingsVisibility {open} => {settings_visible=open;eval.send(Packet::SettingsVisibility(open)).map_err(|e|e.to_string())?;},
+                    SurfaceEvent::UpdateCheck { .. } => {
+                        if settings_visible && probe.is_none() {
+                            updates.start();
+                            eval.send(Packet::UpdateStatus(updates.status().clone())).map_err(|e|e.to_string())?;
+                        }
+                    }
+                    SurfaceEvent::UpdateOpen { .. } => {
+                        if settings_visible && probe.is_none() && let Some(release) = &updates.status().available {
+                            // Lookup belongs to Rust; no caller-supplied URL is accepted.
+                            if let Err(error) = webbrowser::open(&release.url) {
+                                eval.send(Packet::Notice(pttstella::msg!("link-open-failed",e=error.to_string()))).map_err(|e|e.to_string())?;
+                            }
+                        }
+                    }
                     SurfaceEvent::AboutRepository { .. } => {
                         if probe.is_none() && let Err(error) = webbrowser::open(env!("CARGO_PKG_REPOSITORY")) {
                             eval.send(Packet::Notice(pttstella::msg!("link-open-failed",e=error.to_string()))).map_err(|e|e.to_string())?;

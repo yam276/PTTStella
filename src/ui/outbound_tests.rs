@@ -40,6 +40,34 @@ fn outbound_results_match_the_shared_wire_examples() {
         ("diagnostics_disabled", Packet::Diagnostics(false)),
         ("diagnostics_enabled", Packet::Diagnostics(true)),
         (
+            "update_idle",
+            Packet::UpdateStatus(pttstella::updates::Status::default()),
+        ),
+        (
+            "update_checking",
+            Packet::UpdateStatus(pttstella::updates::Status {
+                checking: true,
+                ..Default::default()
+            }),
+        ),
+        (
+            "update_current",
+            Packet::UpdateStatus(pttstella::updates::Status {
+                up_to_date: true,
+                ..Default::default()
+            }),
+        ),
+        (
+            "update_available",
+            Packet::UpdateStatus(pttstella::updates::Status {
+                available: Some(pttstella::updates::Release {
+                    version: "0.3.0".into(),
+                    url: "https://github.com/yam276/PTTStella/releases/tag/v0.3.0".into(),
+                }),
+                ..Default::default()
+            }),
+        ),
+        (
             "station_mouse_rejected",
             Packet::StationMouseRejected {
                 lease: pttstella::mouse::input::Lease {

@@ -30,6 +30,12 @@ Windows job 額外安裝固定版 Inno Setup，執行原生合成前置政策 ga
 
 Windows 暫無 Authenticode，macOS 為 ad-hoc 簽章，未做 Developer ID／Apple 公證，因此下載後可能出現系統安全提示。macOS 說明附於 App，見 [macOS 發佈說明](macos-release.txt)。本流程無需另設私人 token 或帳密 secrets，只有發佈 job 取得 `contents: write`，其他 job 為讀取權限；action 以完整 commit 固定版本。
 
+## App 版本檢查
+
+正常啟動及「關於與授權 → 檢查新版本」以無認證 GET 查詢本專案 `/releases/latest`。只接受比實際 package SemVer 更新的正式版本；新 dev 版不會被提示降回舊正式版。按下載才開啟固定 GitHub repo 的該 tag 頁，不自動下載或安裝。
+
+private repo 的 404、權限／限流、網路、逾時或無效回應保持靜默；只有成功比較後才顯示沒有較新正式版本。每次最多一個請求、8 秒 HTTP 總期限、256 KiB 回應上限，拒絕 redirect；surface 結束直接取消所持 future，無背景輪詢／重試、無 token／鑰匙圈存取。合成 probe 不對 GitHub 發出請求。此介面對應 [GitHub Latest Release API](https://docs.github.com/en/rest/releases/releases#get-the-latest-release)，不更動發佈 workflow。
+
 ## 手動驗證與失敗重試
 
 Actions → Desktop Release → Run workflow：

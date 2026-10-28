@@ -737,6 +737,12 @@ pub(super) fn SettingsForm(filters_probe: bool) -> Element {
                     p { class:"settings-help", {pttstella::msg!("about-author", author = env!("CARGO_PKG_AUTHORS"))} }
                     p { class:"settings-help", {pttstella::msg!("about-version", version = env!("CARGO_PKG_VERSION"))} }
                     button { id:"about-repository", r#type:"button", {env!("CARGO_PKG_REPOSITORY")} }
+                    div { class:"dialog-actions settings-actions",
+                        button { id:"update-check", r#type:"button", {pttstella::msg!("update-check")} }
+                        button { id:"update-open", r#type:"button", hidden:true, {pttstella::msg!("update-open")} }
+                    }
+                    p { id:"update-status", class:"settings-help", role:"status", "aria-live":"polite" }
+                    p { class:"settings-help", {pttstella::msg!("update-help")} }
 
                     h3 { SettingsCaption { label: pttstella::msg!("settings-licenses"), icon: rsx! { FileText { size: 18 } } } }
                     p { class: "settings-help", {pttstella::msg!("font-license")} }

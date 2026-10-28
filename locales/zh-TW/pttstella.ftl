@@ -679,3 +679,10 @@ context-save-picture = 另存圖片…
 picture-saved = 圖片已儲存
 picture-save-title = 儲存圖片
 picture-extension = 請保留圖片原有的副檔名
+
+update-check = 檢查新版本
+update-checking = 正在檢查…
+update-open = 前往下載新版
+update-available = 有新版本：{ $version }
+update-current = 目前已是最新正式版本，或使用較新的開發版本。
+update-help = 啟動時檢查正式版本，也可手動檢查。取得失敗時不顯示提示；下載後請自行安裝。

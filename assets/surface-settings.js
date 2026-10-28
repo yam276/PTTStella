@@ -1,6 +1,19 @@
 // One bounded autosave: coalesce edits, retain failures, never overwrite newer input.
 function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,loadFonts,fontLoadNote,invalidateFonts,render,onClose=()=>{},page=()=>"appearance"}) {
     const fontButton=document.getElementById("font-settings"),fontDialog=document.getElementById("font-dialog");
+    const updateCheck=document.getElementById("update-check"),updateOpen=document.getElementById("update-open"),updateNote=document.getElementById("update-status");
+    let updateState={checking:false,available:null,up_to_date:false};
+    function updateStatus(data){
+        if(disposed)return;
+        updateState=data;
+        updateCheck.disabled=data.checking;
+        updateCheck.textContent=tr(data.checking?"update-checking":"update-check");
+        updateOpen.hidden=!data.available;
+        updateOpen.textContent=tr("update-open");
+        updateNote.textContent=data.available?tr("update-available",{version:data.available.version}):data.up_to_date?tr("update-current"):"";
+    }
+    function checkUpdate(e){if(!disposed&&fontDialog.open&&e.isTrusted&&!updateState.checking)send({kind:"update_check",trusted:true});}
+    function openUpdate(e){if(!disposed&&fontDialog.open&&e.isTrusted&&updateState.available)send({kind:"update_open",trusted:true});}
     let disposed=false,epoch=0,fontDraft=null,fontTimer=0,fontRequest=0,fontPreviewBusy=false,fontPreviewNext=null,fontSaving=false;
     const fontPreview=document.getElementById("font-preview"),fontNote=document.getElementById("font-note");
     const fontAvailability=document.getElementById("font-availability");
@@ -187,8 +200,8 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
     function destroy(){revoke();fontDraft=null;lastCatalog=null;lastPreview=null;fontPreviewBusy=false;profileBusy=false;fontSaving=false;if(fontDialog.open)fontDialog.close();}
     return {request:openFonts,close:closeFonts,escape(){if(!composing)closeFonts();},
         snapshot(){if(!dirty&&!fontSaving)return null;if(!validFields())throw new Error(tr("settings-autosave-invalid"));return {kind:"settings_save",values:readFonts(),language:language.value,article_mode:articleMode.value,article_boundary_navigation:articleBoundary.checked,hover:hoverTouched?hoverPosition.value:null,tools_opacity:Number(toolsOpacity.value),tools_access:{right_click_menu:rightClickMenu.checked,show_floating_button:showFloatingButton.checked},trusted:true};},
-        open,preview:receivePreview,catalog,profile,saved,revoke,destroy,
-        relocalize(){updateOpacity();if(fontDialog.open){if(lastCatalog)catalog(lastCatalog);if(lastPreview)fontAvailability.textContent=fontLoadNote(lastPreview.settings,lastPreview.warning);}},
+        open,preview:receivePreview,catalog,profile,saved,revoke,destroy,updateStatus,
+        relocalize(){updateStatus(updateState);updateOpacity();if(fontDialog.open){if(lastCatalog)catalog(lastCatalog);if(lastPreview)fontAvailability.textContent=fontLoadNote(lastPreview.settings,lastPreview.warning);}},
         notice(message){if(!fontDialog.open)return false;fontNote.textContent=message;return true;},
         clean:()=>disposed&&fontTimer===0&&saveTimer===0&&fontPreviewNext===null&&!fontDialog.open,
         bindings:[
@@ -196,6 +209,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
             [fontDialog,"compositionstart",()=>{composing=true;clearTimeout(saveTimer);saveTimer=0;}],
             [fontDialog,"compositionend",e=>{composing=false;if(dirty)scheduleSave(e);}],
             [document.getElementById("about-repository"),"click",repository],
+            [updateCheck,"click",checkUpdate],[updateOpen,"click",openUpdate],
             [toolsOpacity,"input",e=>{updateOpacity();scheduleSave(e);}],
             [articleMode,"change",scheduleSave],[articleBoundary,"change",scheduleSave],[language,"change",scheduleSave],[hoverPosition,"change",e=>{if(e.isTrusted){hoverTouched=true;hoverVersion++;}scheduleSave(e);}],[rightClickMenu,"change",scheduleSave],[showFloatingButton,"change",scheduleSave],
             ...Object.values(fontFields).flatMap(field=>[[field,"compositionstart",()=>{composing=true;clearTimeout(saveTimer);saveTimer=0;}],[field,"compositionend",e=>{composing=false;scheduleSave(e);}]]),

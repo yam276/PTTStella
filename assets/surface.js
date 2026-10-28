@@ -1041,6 +1041,7 @@ const route=createSurfaceRouter({
     settings_visibility:open=>{settingsActive=open;refreshKeepAlive();},
     settings_close:()=>settingsUi.escape(),settings_open:settingsUi.open,font_catalog:settingsUi.catalog,font_preview:settingsUi.preview,
     profile_result:async data=>{await settingsUi.profile(data);showNotice(data.notice);},
+    update_status:settingsUi.updateStatus,
     settings_saved:data=>{settingsUi.saved(data);showNotice(data.notice);},
     selection:receiveSelection,
     paste_result:data=>{
