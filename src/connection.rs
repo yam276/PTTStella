@@ -266,6 +266,23 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    /// A synthetic list ignores the boundary move, then answers one redraw.
+    pub fn start_list_boundary_probe() -> Result<Self, String> {
+        let connection = Self::start_owned_probe(
+            probe::navigation_page("list")?,
+            probe::Scenario::ListBoundary,
+        )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    pub fn start_article_switch_probe() -> Result<Self, String> {
+        let connection = Self::start_owned_probe(
+            probe::switch_page('A', false)?,
+            probe::Scenario::ArticleSwitch,
+        )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     pub fn start_filters_probe() -> Result<Self, String> {
         let connection =
             Self::start_owned_probe(probe::filters_page(false)?, probe::Scenario::Filters)?;
@@ -279,6 +296,12 @@ impl Connection {
     /// Explicit synthetic UI fixture; the peer accepts Close and no input bytes.
     pub fn start_ui_probe(bytes: Vec<u8>) -> Result<Self, String> {
         let connection = Self::start_owned_probe(bytes, probe::Scenario::Surface)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    /// Bounded native Control-key fixture: accepts exactly Ctrl+X, Ctrl+Z, Ctrl+A, then Close.
+    pub fn start_control_input_probe(bytes: Vec<u8>) -> Result<Self, String> {
+        let connection = Self::start_owned_probe(bytes, probe::Scenario::ControlInput)?;
         connection.keep_alive(false)?;
         Ok(connection)
     }

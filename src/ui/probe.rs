@@ -48,6 +48,8 @@ pub(super) fn mouse_case(case: Option<&str>) -> bool {
 #[derive(Default)]
 pub(super) struct Checks {
     pub(super) image_copies: usize,
+    pub(super) viewport_captures: u8,
+    pub(super) picture_saves: usize,
     pub(super) site_switches: u8,
     pub(super) site_saves: u8,
     pub(super) site_removes: u8,
@@ -509,12 +511,21 @@ pub(super) fn surface_sample(
     media_origin: Option<&str>,
 ) -> Result<Vec<u8>, String> {
     match case {
+        Some("fullscreen") => {
+            let mut text=String::from("\x1b[2J\x1b[H");
+            for row in 1..=24 {
+                let colour=41+(row-1)%6;
+                text.push_str(&format!("\x1b[{row};1H\x1b[0;37;{colour}mROW {row:02} {}", " ".repeat(72)));
+            }
+            text.push_str("\x1b[0m\x1b[?25l");
+            encoding::encode(&text).map_err(|e|e.to_string())
+        },
         Some("tools" | "sites" | "sites_restart") => tools_sample(),
         Some("sgr66") => sgr66_sample(true),
         Some("sgr66_legacy") => sgr66_sample(false),
         Some("osc8") => osc8_sample(media_origin),
         Some("inline_pages" | "terminal_pages") => inline_sample(media_origin),
-        Some("inline") => {
+        Some("inline" | "picture_menu") => {
             let mut bytes=inline_sample(media_origin)?;
             bytes.extend_from_slice(&encoding::encode("\x1b[24;1H\x1b[7m\x1b[2K 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H").map_err(|e|e.to_string())?);
             Ok(bytes)
@@ -530,7 +541,8 @@ pub(super) fn surface_sample(
             let origin = media_origin.ok_or("short links probe requires a loopback media origin")?;
             encoding::encode(&format!("\x1b[2J\x1b[HShort article image links\x1b[2;1H{origin}/colours.png\x1b[3;1H\x1b]8;;{origin}/colours-two.png\x07Explicit image\x1b]8;;\x07\x1b[24;1H\x1b[7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~3 行 (h)說明 (←)離開\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
         }
-        Some("reading_rows" | "wide_last_row") => {
+        Some("control_input") => Ok(b"\x1b[2J\x1b[HCONTROL INPUT 0/3 - Ctrl+X, Ctrl+Z, Ctrl+A\x1b[24;1HLocal editor fixture; no real station or mail\x1b[?25l".to_vec()),
+        Some("reading_rows" | "wide_last_row" | "diagnostics") => {
             let mut sample = String::from("\x1b[2J\x1b[H");
             for row in 1..=23 {
                 sample.push_str(&format!("\x1b[{row};1H\x1b[0mROW {row:02} - complete text row\x1b[{row};31H\x1b[1;{}m{}", if row % 2 == 1 {31} else {32}, "█".repeat(10)));
@@ -538,6 +550,9 @@ pub(super) fn surface_sample(
             if case == Some("wide_last_row") {
                 let origin = media_origin.ok_or("wide last row probe requires a loopback media origin")?;
                 sample.push_str(&format!("\x1b[2;1H\x1b[0m\x1b[2K{origin}/colours.png\x1b[23;1H\x1b[0mLAST ARTICLE LINE MUST REMAIN VISIBLE"));
+            }
+            if case == Some("diagnostics") {
+                sample.push_str("\x1b[1;1HSTELLA_PRIVATE_SENTINEL_DO_NOT_LOG");
             }
             sample.push_str("\x1b[24;1H\x1b[0;7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (h)說明 (←)離開\x1b[0m\x1b[?25l");
             encoding::encode(&sample).map_err(|e|e.to_string())
@@ -1115,5 +1130,37 @@ mod sample_tests {
             frames.push(screen.frame());
         }
         assert_eq!(frames[0].glyphs, frames[1].glyphs);
+    }
+}
+
+#[cfg(test)]
+mod fullscreen_tests {
+    #[test]
+    fn fullscreen_fixture_covers_all_24_rows_with_independent_colour_expectations() {
+        let bytes = super::surface_sample(Some("fullscreen"), true, None).unwrap();
+        let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
+        screen.feed(&bytes);
+        let frame = screen.frame();
+        let colours = [
+            1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6,
+        ];
+        for (row, bg) in colours.into_iter().enumerate() {
+            let glyph = frame
+                .glyphs
+                .iter()
+                .find(|g| g.row == row && g.col == 60)
+                .unwrap();
+            assert_eq!((glyph.text.as_str(), glyph.left.bg), (" ", bg));
+        }
+        let text = |row| {
+            frame
+                .glyphs
+                .iter()
+                .filter(|g| g.row == row && g.col < 6)
+                .map(|g| g.text.as_str())
+                .collect::<String>()
+        };
+        assert_eq!(text(0), "ROW 01");
+        assert_eq!(text(23), "ROW 24");
     }
 }

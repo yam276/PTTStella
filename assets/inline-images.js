@@ -7,11 +7,10 @@ function inlineRowLayout(rows, baseY, gaps) {
     }
     return {y:row=>tops[row]??baseY(rows)+added,bottom:row=>bottoms[row],height:baseY(rows)+added,
         rowAt(value,clamp=false){
-            for(let row=0;row<rows;row++) {
-                if(value<tops[row])return clamp?Math.max(0,row-1):null;
-                if(value<bottoms[row])return row;
-            }
-            return clamp?rows-1:null;
+            let lo=0,hi=rows;
+            while(lo<hi){const mid=(lo+hi)>>>1;if(tops[mid]<=value)lo=mid+1;else hi=mid;}
+            const row=lo-1;
+            return row>=0&&value<bottoms[row]?row:clamp?(rows?Math.max(0,row):-1):null;
         }};
 }
 function inlineShortcut(key, state, packet) {
@@ -37,9 +36,26 @@ function createInlineImageKey({scope,allowed,single,all,setTimer=setTimeout,clea
     }
     return {down,up,cancel,held:()=>!!held,validate(){if(held&&!valid(held))cancel();},clean:()=>held===null};
 }
-function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,notice,allowed=()=>false,request=()=>{}}) {
+function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,notice,find=null,allowed=()=>false,request=()=>{}}) {
     const layer=document.createElement("div");layer.id="inline-images";surface.insertBefore(layer,canvas.nextSibling);
     let current=null,items=[],visible=[],strips=[],footer=null,footerLayer=null,footerImage=null,footerPacket=null,footerProgress=null,dead=false,lastLayout=null,lastArticle=null,latestLayout=null,freeScroll=false;const jobs=new Set();
+    // One immutable Rust projection owns one row index. Scroll/hover repaint
+    // never filters the full article again for each visible canvas.
+    let indexedFrame=null,indexedLinks=null,rowGlyphs=new Map(),rowLinks=new Map();
+    const paintedRows=new WeakMap();
+    function indexRows(packet){
+        if(indexedFrame!==packet.frame){
+            indexedFrame=packet.frame;rowGlyphs=new Map();
+            for(const glyph of packet.frame.glyphs){
+                let row=rowGlyphs.get(glyph.row);if(!row)rowGlyphs.set(glyph.row,row=[]);
+                row.push({...glyph,row:0});
+            }
+        }
+        if(indexedLinks!==packet.links){
+            indexedLinks=packet.links;rowLinks=new Map();
+            for(const link of packet.links){let row=rowLinks.get(link.row);if(!row)rowLinks.set(link.row,row=[]);row.push({...link,row:0});}
+        }
+    }
     function setFreeScroll(value){const changed=freeScroll!==value;freeScroll=value;return changed;}
     const gifs=createGifPlayback({document,window:typeof window!=="undefined"?window:null,limit:2});
     function gifScore(item){
@@ -196,6 +212,7 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         const cached=!!packet.article;
         if(current&&cached&&((current.article_id??null)!==packet.article.id||current.generation!==packet.generation))clear();
         if(!cached&&!matches(packet)){
+            indexedFrame=null;indexedLinks=null;rowGlyphs.clear();rowLinks.clear();
             if(current||strips.length)detach();
             // A station grid has no historical scroll position. Reset after a
             // cached layout so WebView cannot retain the old document offset.
@@ -203,6 +220,7 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
             lastArticle=null;return {...base,bottom};
         }
         const article=packet.article;
+        if(cached)indexRows(packet);
         let anchor=null;
         if(cached&&lastLayout&&lastArticle?.id===article.id&&lastArticle.generation===packet.generation&&viewport){
             const oldRatio=lastArticle.ratio??ratio;
@@ -216,7 +234,12 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         for(const item of visible){
             const scale=item.still?(item.wide?width/item.still.width:Math.min(1,(width-24)/item.still.width,560/item.still.height)):1;
             item.box.style.padding=item.wide?"12px 0":"12px";
-            item.height=item.still?Math.max(1,item.still.height*scale)+24:48;
+            // Native scroll offsets can round to whole CSS pixels. Keep each
+            // image slot on that same lattice so fractional aspect ratios do
+            // not shift every following row and hide a full bottom line.
+            // The image itself keeps its exact aspect ratio; only its surrounding
+            // padding may grow by less than one CSS pixel.
+            item.height=item.still?Math.ceil(Math.max(1,item.still.height*scale)+24):48;
             if(item.still){item.still.style.width=Math.max(1,item.still.width*scale)+"px";item.still.style.height=Math.max(1,item.still.height*scale)+"px";}
             if(item.animation&&item.still){item.animation.style.width=item.still.style.width;item.animation.style.height=item.still.style.height;}
 
@@ -255,9 +278,26 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         // number of rows. Discrete navigation shows only complete edge rows;
         // wheel scrolling intentionally retains the normal continuous clipping.
         const wholeRow=row=>!cached||!viewport||freeScroll||mapping.y(row)>=top-.01&&mapping.bottom(row)<=readingBottom+.01;
-        const reading={free:setFreeScroll,clippedAt(pixel){
+        const reading={free:setFreeScroll,rowTop:row=>mapping.y(row),clippedAt(pixel){
             const row=mapping.rowAt(pixel);
             return row!==null&&row<bodyRows&&!wholeRow(row)?row:-1;
+        },page(top,maximum,down){
+            const pixel=(top-surface.offsetTop)*ratio,body=viewport.clientHeight*ratio-footerHeight;
+            const first=mapping.rowAt(pixel),line=first===null?base.y(1)-base.y(0):mapping.bottom(first)-mapping.y(first);
+            let target=top+(down?1:-1)*Math.max(line,body-line)/ratio;
+            if(down){
+                // Keep exactly the last complete visible row as the next
+                // page's first row, even with fractional zoom or image gaps.
+                let row=mapping.rowAt(pixel+body-.01,true);
+                if(row!==null&&mapping.bottom(row)>pixel+body+.01)row--;
+                if(row!==null&&row>=0&&row<bodyRows&&mapping.y(row)>pixel+.01)target=surface.offsetTop+mapping.y(row)/ratio;
+            } else if(first!==null&&first<bodyRows){
+                const row=mapping.y(first)<pixel-.01?first+1:first;
+                if(row<bodyRows)target=surface.offsetTop+(mapping.bottom(row)-body)/ratio;
+            }
+            // Inside a tall image there may be no complete text row to keep.
+            // Continue through it rather than repeatedly returning to its URL.
+            return Math.max(0,Math.min(maximum,target));
         },align(target,maximum,edge="nearest"){
             if(target<=0||target>=maximum&&edge!=="before")return target;
             const pixel=(target-surface.offsetTop)*ratio,row=mapping.rowAt(pixel);
@@ -274,9 +314,15 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
             if(strip.width!==canvas.width)strip.width=canvas.width;
             if(strip.height!==height)strip.height=height;
             if(cached){
-                const frame={...packet.frame,rows:1,cursor_visible:false,glyphs:(glyphs??packet.frame.glyphs.filter(g=>g.row===row)).map(g=>({...g,row:0}))};
-                const links=packet.links.filter(link=>link.row===row).map(link=>({...link,row:0}));
-                render(strip,{...packet,frame,links},{cursor:false,linkHints:true});
+                const previous=paintedRows.get(strip);
+                const findVersion=find?.version()??0;
+                if(glyphs||previous?.packet!==packet||previous.row!==row||previous.width!==strip.width||previous.height!==strip.height||previous.findVersion!==findVersion){
+                    const frame={...packet.frame,rows:1,cursor_visible:false,glyphs:glyphs?glyphs.map(g=>({...g,row:0})):(rowGlyphs.get(row)??[])};
+                    render(strip,{...packet,frame,links:rowLinks.get(row)??[]},{cursor:false,linkHints:true,highlight:glyphs?null:find?.highlighter(row)});
+                    // The reusable footer has its own footerPacket/progress
+                    // owner. Caching it here would retain an exited article.
+                    if(glyphs===null)paintedRows.set(strip,{packet,row,width:strip.width,height:strip.height,findVersion});
+                }
             } else strip.getContext("2d").drawImage(canvas,0,base.y(row),canvas.width,height,0,0,canvas.width,height);
             Object.assign(strip.style,{width:width+"px",height:height/ratio+"px"});
             if(top!==null)strip.style.top=top/ratio+"px";
@@ -300,9 +346,9 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         if(cached){
             const row=packet.frame.rows-1,height=base.y(row+1)-base.y(row);
             // Rust identifies the numeric status cells. Only the visible
-            // page and percentage are local decorations. Colours come from
+            // page, visible row range and percentage are local decorations. Colours come from
             // the visible source page; source PNGs stay intact.
-            let footerGlyphs=packet.frame.glyphs.filter(g=>g.row===row),progress=null;
+            let footerGlyphs=rowGlyphs.get(row)??[],progress=null;
             const cells=article.percent_cells;
             if(cells&&viewport){
                 // Minimum-height blank padding is not unread article content.
@@ -322,6 +368,19 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
                 progress=JSON.stringify([progress,page.line,page.number]);
                 const cells=article.page_cells,value=cells?String(page.number).padStart(cells.end-cells.start," "):null;
                 if(cells&&value.length===cells.end-cells.start){
+                    footerGlyphs=footerGlyphs.map(g=>g.col>=cells.start&&g.col<cells.end?{...g,text:value[g.col-cells.start]}:g);
+                }
+            }
+            if(article.range_cells&&viewport){
+                let first=Math.min(bodyRows-1,mapping.rowAt(top,true));
+                let last=Math.min(bodyRows-1,mapping.rowAt(Math.max(top,readingBottom-.01),true));
+                if(!freeScroll&&!wholeRow(first)&&first<last)first++;
+                if(!freeScroll&&!wholeRow(last)&&last>first)last--;
+                const range=[article.first_line+first,article.first_line+Math.max(first,last)];
+                progress=JSON.stringify([progress,range]);
+                for(const [index,cells] of [article.range_cells.first,article.range_cells.last].entries()){
+                    const width=cells.end-cells.start,number=String(range[index]);
+                    const value=number.length<=width?number.padStart(width," "):"-".repeat(width);
                     footerGlyphs=footerGlyphs.map(g=>g.col>=cells.start&&g.col<cells.end?{...g,text:value[g.col-cells.start]}:g);
                 }
             }
@@ -362,8 +421,13 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         const item=visible.find(item=>{const r=item.box.getBoundingClientRect();return event.clientX>=r.left&&event.clientX<r.right&&event.clientY>=r.top&&event.clientY<r.bottom;});
         return item?.index??-1;
     }
-    return {open,receive,fail,reset,layout,linkAtPoint,refreshAnimations:gifs.refresh,active:()=>!!current,keydown:gesture.down,keyup:gesture.up,keyHeld:gesture.held,suspend,
+    function pictureState(index){
+        if(!current||dead||!matches(latestLayout))return null;
+        const item=visible.find(item=>item.index===index);
+        return item?{ready:!!item.still&&item.box.dataset.state==="ready"}:null;
+    }
+    return {open,receive,fail,reset,layout,linkAtPoint,pictureState,refreshAnimations:gifs.refresh,active:()=>!!current,keydown:gesture.down,keyup:gesture.up,keyHeld:gesture.held,suspend,
         bindings:[...gifs.bindings,[layer,"pointerdown",triggerDown],[layer,"click",triggerClick],...(viewport?[[viewport,"scroll",moved]]:[]),
             ...(typeof window!=="undefined"?[[window,"blur",suspend]]:[]),[document,"visibilitychange",suspend]],
-        async destroy(){dead=true;gifs.destroy();clear();lastLayout=null;lastArticle=null;latestLayout=null;await Promise.allSettled([...jobs]);layer.remove();footerLayer?.remove();return jobs.size===0;}};
+        async destroy(){dead=true;gifs.destroy();clear();lastLayout=null;lastArticle=null;latestLayout=null;indexedFrame=null;indexedLinks=null;rowGlyphs.clear();rowLinks.clear();await Promise.allSettled([...jobs]);layer.remove();footerLayer?.remove();return jobs.size===0;}};
 }

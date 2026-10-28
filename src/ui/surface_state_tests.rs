@@ -61,7 +61,7 @@ fn cached_history_is_an_acknowledged_filtered_projection_with_its_own_link_indic
     );
     view.frame = screen.frame();
     let old = displayed(&mut state, &view);
-    state.article_input(&view.context(), b"\x1b[6~");
+    state.article_input(&view, b"\x1b[6~");
     screen.feed(&super::super::probe::inline_second_page(Some("http://127.0.0.1:1234")).unwrap());
     view.frame = screen.frame();
     state.update(&view);
@@ -820,7 +820,7 @@ fn focused_id_survives_contiguous_pages_but_not_a_new_article_segment() {
     let fixture: serde_json::Value =
         serde_json::from_str(include_str!("../../tests/fixtures/filters.json")).unwrap();
     let mut screen = Screen::new(80, 24).unwrap();
-    state.article_input(&view.context(), b"\x1b[6~");
+    state.article_input(&view, b"\x1b[6~");
     screen.feed(
         &pttstella::encoding::encode(
             &fixture["reading"]
@@ -1064,7 +1064,7 @@ fn clamped_short_article_retains_its_tail_and_opens_the_acknowledged_historical_
     view.frame = screen.frame();
     let old = displayed(&mut state, &view);
     assert!(state.next_full_page(&view).is_some());
-    state.article_input(&view.context(), b"\x1b[6~");
+    state.article_input(&view, b"\x1b[6~");
     screen.feed(
         &super::super::probe::short_overlap_page(true, Some("http://127.0.0.1:1234")).unwrap(),
     );
@@ -1119,7 +1119,7 @@ fn preload_ingests_all_pages_while_the_first_paint_ack_is_withheld() {
             Some(pttstella::navigation::Intent::NextPage)
         );
         assert!(state.next_full_page(&view).is_none());
-        state.article_input(&view.context(), b"\x1b[6~");
+        state.article_input(&view, b"\x1b[6~");
         source.feed(
             &super::super::probe::long_load_page(page, Some("http://127.0.0.1:1234")).unwrap(),
         );
@@ -1176,7 +1176,7 @@ fn preload_cancel_late_page_and_article_switch_revoke_old_scope_without_waiting_
     let id = old.article.as_ref().unwrap().id;
     let stamp = view.stamp();
     assert!(state.next_full_page(&view).is_some());
-    state.article_input(&view.context(), b"\x1b[6~");
+    state.article_input(&view, b"\x1b[6~");
     assert!(state.full_load_action(view.generation, id, false, &view));
     source.feed(&super::super::probe::long_load_page(2, Some("http://127.0.0.1:1234")).unwrap());
     view.frame = source.frame();
@@ -1191,7 +1191,7 @@ fn preload_cancel_late_page_and_article_switch_revoke_old_scope_without_waiting_
         ))
     );
     assert!(state.next_full_page(&view).is_none());
-    state.article_input(&view.context(), b"q");
+    state.article_input(&view, b"q");
     assert!(state.reading_scope().is_none());
     assert!(state.authorize_reading(stamp, id).is_none());
     view.generation += 1;
@@ -1381,4 +1381,68 @@ fn adjacent_article_requires_enabled_current_local_cache_and_a_real_retained_edg
     state.set_article_mode(ArticleMode::Terminal);
     displayed(&mut state, &view);
     assert!(!state.adjacent_article_allowed(view.stamp(), false, &view));
+}
+
+#[test]
+fn adjacent_switch_cannot_recapture_the_queued_old_article() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut old = view();
+    let mut terminal = Screen::new(80, 24).unwrap();
+    terminal.feed(
+        &super::super::probe::surface_sample(
+            Some("inline_pages"),
+            true,
+            Some("http://127.0.0.1:1234"),
+        )
+        .unwrap(),
+    );
+    old.frame = terminal.frame();
+    let identity = displayed(&mut state, &old);
+    let article = state
+        .current(identity, &old)
+        .unwrap()
+        .article
+        .as_ref()
+        .unwrap()
+        .id;
+    state.article_navigation(
+        pttstella::navigation::Intent::AdjacentArticle { down: true },
+        &old,
+    );
+    // The command is queued; the connection has not published its pending view yet.
+    state.update(&old);
+    let identity = displayed(&mut state, &old);
+    assert!(state.current(identity, &old).unwrap().article.is_none());
+    let mut next = old.clone();
+    next.input_epoch += 1;
+    terminal.feed(b"\x1b[1;1HA different synthetic article\x1b[24;80H");
+    next.frame = terminal.frame();
+    state.update(&next);
+    let identity = displayed(&mut state, &next);
+    let reading = state
+        .current(identity, &next)
+        .unwrap()
+        .article
+        .as_ref()
+        .unwrap();
+    assert_ne!(reading.id, article);
+    assert_eq!(
+        reading.load,
+        Some(super::super::article_cache::LoadState::Loading)
+    );
+    terminal.feed(&super::super::probe::inline_second_page(Some("http://127.0.0.1:1234")).unwrap());
+    next.frame = terminal.frame();
+    state.update(&next);
+    let identity = displayed(&mut state, &next);
+    let reading = state
+        .current(identity, &next)
+        .unwrap()
+        .article
+        .as_ref()
+        .unwrap();
+    assert!(reading.end);
+    assert_eq!(
+        reading.load,
+        Some(super::super::article_cache::LoadState::Complete)
+    );
 }

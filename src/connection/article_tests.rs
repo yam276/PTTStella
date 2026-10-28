@@ -62,7 +62,7 @@ async fn article_destination_uses_the_one_writer_through_canonical_board_and_ver
         .wait()
         .await
         .unwrap();
-    expect(&mut ws, b"f").await;
+    expect(&mut ws, b"\r").await;
     let active = connection.updates.borrow().clone();
     assert!(active.input_pending && !active.keep_alive_ready);
     assert!(

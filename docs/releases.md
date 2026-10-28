@@ -30,6 +30,12 @@ Windows job 額外安裝固定版 Inno Setup，執行原生合成前置政策 ga
 
 Windows 暫無 Authenticode，macOS 為 ad-hoc 簽章，未做 Developer ID／Apple 公證，因此下載後可能出現系統安全提示。macOS 說明附於 App，見 [macOS 發佈說明](macos-release.txt)。本流程無需另設私人 token 或帳密 secrets，只有發佈 job 取得 `contents: write`，其他 job 為讀取權限；action 以完整 commit 固定版本。
 
+## App 版本檢查
+
+正常啟動及「關於與授權 → 檢查新版本」以無認證 GET 查詢本專案 `/releases/latest`。只接受比實際 package SemVer 更新的正式版本；新 dev 版不會被提示降回舊正式版。按下載才開啟固定 GitHub repo 的該 tag 頁，不自動下載或安裝。
+
+private repo 的 404、權限／限流、網路、逾時或無效回應保持靜默；只有成功比較後才顯示沒有較新正式版本。每次最多一個請求、8 秒 HTTP 總期限、256 KiB 回應上限，拒絕 redirect；surface 結束直接取消所持 future，無背景輪詢／重試、無 token／鑰匙圈存取。合成 probe 不對 GitHub 發出請求。此介面對應 [GitHub Latest Release API](https://docs.github.com/en/rest/releases/releases#get-the-latest-release)，不更動發佈 workflow。
+
 ## 手動驗證與失敗重試
 
 Actions → Desktop Release → Run workflow：
@@ -37,7 +43,7 @@ Actions → Desktop Release → Run workflow：
 - **verify**（預設）：選 `develop` 或 `main`，執行相同四架構測試／打包，產物保留於該 run 的 artifacts 14 天。完全不建立 tag 或 Release，適合修改建置流程後驗證。
 - **publish**：只准選已合併 Release PR 的 `main`，重跑未完成的發佈。不是繞過版本與分支檢查的入口。
 
-2026-10-20 初次 verify run 在分配 runner 前因帳戶付款／spending limit 被 GitHub 拒絕，沒有執行建置步驟。使用者選擇稍後處理；恢復 Actions 額度後需重新執行 verify，不能將本機 macOS 打包結果當成 GitHub 四架構建置已通過。詳細驗證狀態見 [active plan](active/minimal-browser.md)。
+2026-10-20 初次 verify run 在分配 runner 前因帳戶付款／spending limit 被 GitHub 拒絕，沒有執行建置步驟。2026-10-22 使用者曾將 repo 改為 Public，四架構 verify 全部通過，Release PR 也已合併 main；之後因使用期間偶發卡頓，使用者改回 Private 並優先要求診斷版。未完成的正式發佈 run 已取消，尚無 v0.1.0 tag 或 Release；不將 verify 產物當成正式公開發佈。後續恢復發佈與原生 UI 驗收邊界見 [active plan](active/minimal-browser.md)。
 
 建置失敗不會建立 Release。上傳時先建 draft，全部檔案上傳成功才公開；上傳中斷會保留 draft。優先使用失敗 run 的 **Re-run failed jobs**，沿用成功 build 的 artifacts。重試可跳過 SHA-256 完全相同的 draft asset，不覆寫不同內容。若重新建置導致相同檔名內容不同，需人工檢查並刪除未發佈的 draft 後重試，或使用新版本；既有 tag 只准仍指向相同 commit，不能移動。已公開的 Release 不由 workflow 修改。
 
@@ -45,9 +51,9 @@ Actions → Desktop Release → Run workflow：
 
 必要規則已準備於 [.github/rulesets/main-release.json](../.github/rulesets/main-release.json)：`main` 必須經 PR、要求 `Release PR policy`、禁止 force-push／刪除、沒有 bypass。該 JSON 是可匯入的設定，放入 repo **不會自動啟用**。
 
-2026-10-20 此私人 repo 的 GitHub API 對 rulesets 與 branch protection 均回覆 403，要求 GitHub Pro 或公開 repo。因此目前 PR workflow 能顯示失敗，發佈程式也會拒絕非 Release PR 的 commit，但**不能阻止具寫入權限者直接推送或合併到 main**。這個限制不以 workflow 檔案冒充已解除，也不更改 repo 可見性或購買方案。
+2026-10-20 私人 repo 的 GitHub API 曾對 rulesets 與 branch protection 回覆 403，要求 GitHub Pro 或公開 repo。2026-10-22 暫時 Public 期間查得 rulesets 為空、main 的 protected 為 false，未啟用伺服器端分支保護；使用者稍後已改回 Private，本輪未改動保護規則。PR workflow 能顯示失敗，發佈程式也會拒絕非 Release PR 的 commit，但**目前不能阻止具寫入權限者直接推送或合併到 main**。
 
-方案支援後，在 Settings → Rules → Rulesets 匯入上述 JSON 並啟用；也可由具有管理權限的使用者執行：
+若要啟用，在 Settings → Rules → Rulesets 匯入上述 JSON；也可由具有管理權限的使用者執行：
 
 ```text
 gh api --method POST repos/yam276/PTTStella/rulesets --input .github/rulesets/main-release.json

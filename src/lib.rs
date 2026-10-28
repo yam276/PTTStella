@@ -17,6 +17,7 @@ pub mod mouse;
 pub mod navigation;
 pub mod navigation_job;
 pub mod recent_boards;
+pub mod render_wire;
 pub mod screen;
 pub mod selection;
 pub mod settings;
@@ -27,4 +28,6 @@ pub mod telnet;
 pub mod text;
 #[cfg(feature = "desktop")]
 mod tls;
+#[cfg(feature = "desktop")]
+pub mod updates;
 pub mod vim;

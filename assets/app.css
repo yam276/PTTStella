@@ -51,8 +51,8 @@ main { height: 100vh; position: relative; }
 #surface[data-pointer-action="back"] { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M14 6 4 16l10 10M5 16h23' fill='none' stroke='%2308142a' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M14 6 4 16l10 10M5 16h23' fill='none' stroke='%23efd494' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 4 16, w-resize; }
 #surface[data-pointer-action="previous_page"] { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M6 14 16 4l10 10M16 5v23' fill='none' stroke='%2308142a' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M6 14 16 4l10 10M16 5v23' fill='none' stroke='%23efd494' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 16 4, n-resize; }
 #surface[data-pointer-action="next_page"] { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M6 18 16 28l10-10M16 27V4' fill='none' stroke='%2308142a' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M6 18 16 28l10-10M16 27V4' fill='none' stroke='%23efd494' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 16 28, s-resize; }
-#surface[data-pointer-action="first"] { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M6 4h20M6 20l10-10 10 10M16 11v17' fill='none' stroke='%2308142a' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M6 4h20M6 20l10-10 10 10M16 11v17' fill='none' stroke='%23efd494' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 16 4, n-resize; }
-#surface[data-pointer-action="last"] { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M6 28h20M6 12l10 10 10-10M16 21V4' fill='none' stroke='%2308142a' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M6 28h20M6 12l10 10 10-10M16 21V4' fill='none' stroke='%23efd494' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 16 28, s-resize; }
+#surface[data-pointer-action="first"], .workspace[data-pointer-action="first"] { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M6 4h20M6 20l10-10 10 10M16 11v17' fill='none' stroke='%2308142a' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M6 4h20M6 20l10-10 10 10M16 11v17' fill='none' stroke='%23efd494' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 16 4, n-resize; }
+#surface[data-pointer-action="last"], .workspace[data-pointer-action="last"] { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M6 28h20M6 12l10 10 10-10M16 21V4' fill='none' stroke='%2308142a' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M6 28h20M6 12l10 10 10-10M16 21V4' fill='none' stroke='%23efd494' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 16 28, s-resize; }
 @keyframes navigation-breathe { 0%, 100% { opacity: .8; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { #navigation-marker { animation: none; opacity: 1; } }
 button { flex-shrink: 0; border: 1px solid var(--ui-border); background: var(--ui-control); color: var(--ui-text); padding: 6px 10px; border-radius: 7px; cursor: pointer; font: inherit; }
@@ -159,30 +159,35 @@ button.primary .settings-icon { color: inherit; }
 .article-load { position: fixed; z-index: 3; top: 12px; right: 12px; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--ui-border); border-radius: 8px; background: var(--ui-panel); color: var(--ui-text); font-size: 13px; max-width: calc(100vw - 24px); box-sizing: border-box; }
 .article-load[hidden], .article-load button[hidden] { display: none; }
 .article-load button { flex: none; }
+.article-find { position:fixed; z-index:4; top:12px; right:12px; display:flex; align-items:center; gap:8px; padding:8px; max-width:calc(100vw - 24px); box-sizing:border-box; border:1px solid var(--ui-border); border-radius:4px; background:var(--ui-panel); color:var(--ui-text); box-shadow:0 3px 12px #0008; }
+.article-find[hidden] { display:none; }
+.article-find input { width:220px; min-width:60px; flex:1; }
+.article-find output { font-size:13px; white-space:nowrap; }
+.article-find button { flex:none; min-width:30px; padding:5px 8px; }
 .inline-image { position:absolute; left:0; display:flex; align-items:center; justify-content:center; padding:12px; box-sizing:border-box; }
 .inline-image canvas, .inline-image img { position:static; flex:none; }
 .inline-image [hidden] { display:none; }
 .inline-image-note { color:var(--ui-muted); font-size:14px; }
 
 /* App-owned context menu stays inside the viewport, independently of zoom. */
-#surface-context-menu {
+.surface-context-menu {
     position: fixed; z-index: 80; width: min(270px, calc(100vw - 16px));
     max-height: calc(100vh - 16px); overflow-y: auto; overscroll-behavior: contain;
     padding: 6px; box-sizing: border-box; border: 1px solid #8e784a;
     border-radius: 12px; background: #101d32; color: #eee9dc;
     box-shadow: 0 8px 28px #0009; user-select: none;
 }
-#surface-context-menu[hidden], #surface-context-menu button[hidden] { display: none; }
-#surface-context-menu button {
+.surface-context-menu[hidden], .surface-context-menu button[hidden] { display: none; }
+.surface-context-menu button {
     display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px;
     padding: 7px 10px; margin: 0; border: 0; border-radius: 6px;
     text-align: left; background: transparent; color: inherit; font-size: 13px;
 }
-#surface-context-menu button svg { color: #d4b87c; flex-shrink: 0; }
-#surface-context-menu button:hover:not(:disabled), #surface-context-menu button:focus-visible {
+.surface-context-menu button svg { color: #d4b87c; flex-shrink: 0; }
+.surface-context-menu button:hover:not(:disabled), .surface-context-menu button:focus-visible {
     background: #293b55; outline: 1px solid #d4b87c;
 }
-#surface-context-menu button:disabled { opacity: .42; }
+.surface-context-menu button:disabled { opacity: .42; }
 /* Instrument-style settings: flat navigation, quiet dividers and one gold active rail. */
 .settings-host { display: contents; }
 .settings-host #font-dialog {

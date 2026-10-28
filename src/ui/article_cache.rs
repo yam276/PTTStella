@@ -44,7 +44,13 @@ pub(super) struct Reading {
     pub load: Option<LoadState>,
     pub percent_cells: Option<std::ops::Range<usize>>,
     pub page_cells: Option<std::ops::Range<usize>>,
+    pub range_cells: Option<ReadingRangeCells>,
     pub pages: Vec<ReadingPage>,
+}
+#[derive(Clone, Serialize)]
+pub(super) struct ReadingRangeCells {
+    pub first: std::ops::Range<usize>,
+    pub last: std::ops::Range<usize>,
 }
 #[derive(Clone, Serialize)]
 pub(super) struct ReadingPage {
@@ -772,6 +778,7 @@ impl ArticleCache {
             end: self.end == Some(last),
             load: self.loader.state,
             percent_cells: paint.source_frame.as_ref().and_then(footer_percent_cells),
+            range_cells: paint.source_frame.as_ref().and_then(footer_range_cells),
             page_cells: paint
                 .source_frame
                 .as_ref()
@@ -846,6 +853,29 @@ fn footer_page(frame: &Frame) -> Option<(std::ops::Range<usize>, usize)> {
         return None;
     }
     Some((footer_cells(row, start, end, frame.cols)?, number))
+}
+fn footer_range_cells(frame: &Frame) -> Option<ReadingRangeCells> {
+    let rows = pttstella::text::rows(frame)?;
+    let row = rows.last()?;
+    let marker = row.text.find("目前顯示")?;
+    let start = marker + row.text.get(marker..)?.find('第')? + '第'.len_utf8();
+    let middle = start + row.text.get(start..)?.find('~')?;
+    let last_start = middle + 1;
+    let end = last_start + row.text.get(last_start..)?.find('行')?;
+    let first = row.text.get(start..middle)?.trim().parse::<usize>().ok()?;
+    let last = row
+        .text
+        .get(last_start..end)?
+        .trim()
+        .parse::<usize>()
+        .ok()?;
+    if first == 0 || last < first {
+        return None;
+    }
+    Some(ReadingRangeCells {
+        first: footer_cells(row, start, middle, frame.cols)?,
+        last: footer_cells(row, last_start, end, frame.cols)?,
+    })
 }
 fn footer_cells(
     row: &pttstella::text::Row<'_>,

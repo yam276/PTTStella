@@ -63,6 +63,20 @@ test("trusted tool edits autosave, coalesce while writing, and retain failures f
 });
 function deferred(){let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};}
 
+test("finishing embedded login closes settings without requiring a DOM event",async()=>{
+    const env=environment("surface-settings.js","createSettingsDialog");let closed=0;
+    const ui=env.create({onClose(){closed++;}});
+    await ui.open(openData());
+    assert.doesNotThrow(()=>ui.close({isTrusted:true}));
+    assert.equal(env.node("font-dialog").open,false);assert.equal(closed,1);
+    await ui.open(openData());env.node("tools-show-ball").checked=false;
+    env.fire("tools-show-ball","change");
+    ui.close({isTrusted:true});assert.equal(env.node("font-dialog").open,true);
+    assert.equal(env.sent.at(-1).kind,"settings_save");
+    ui.saved({status:"saved"});assert.equal(env.node("font-dialog").open,false);assert.equal(closed,2);
+    ui.destroy();
+});
+
 test("closing a settings dialog while fonts load cannot repaint or steal focus",async()=>{
     const env=environment("surface-settings.js","createSettingsDialog"),load=deferred();
     const ui=env.create({loadFonts:()=>load.promise});
@@ -139,7 +153,7 @@ test("each account policy survives selection and is sent explicitly on save",()=
 
 test("the tagged router delivers independent wire examples once and rejects legacy/unknown envelopes",()=>{
     const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8")+"\ncreateSurfaceRouter");
-    const kinds=["localization","station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
+    const kinds=["localization","diagnostics","update_status","station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
         "hover_settings","tools_opacity","tools_access","sites_open","sites_result","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error","media_external",
         "media_reset","reading_move","inline_open","inline_image","inline_error","inline_reset","settings_visibility","settings_close","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","link_result","export_result"];
     const calls=[],handlers=Object.fromEntries(kinds.map(kind=>[kind,payload=>calls.push({kind,payload})]));
@@ -468,4 +482,32 @@ test('native settings Escape does not discard an active IME composition',async()
  const env=environment('surface-settings.js','createSettingsDialog'),ui=env.create();await ui.open(openData());
  env.fire('font-dialog','compositionstart');ui.escape();assert.equal(env.node('font-dialog').open,true);
  env.fire('font-dialog','compositionend');ui.escape();assert.equal(env.node('font-dialog').open,false);ui.destroy();
+});
+
+test("update checks and download actions require an open trusted settings dialog",async()=>{
+    const env=environment("surface-settings.js","createSettingsDialog"),ui=env.create();
+    env.fire("update-check");assert.equal(env.sent.length,0);
+    await ui.open(openData());env.sent.length=0;
+    env.fire("update-check","click",false);assert.equal(env.sent.length,0);
+    env.fire("update-check");assert.equal(env.sent.at(-1).kind,"update_check");
+    ui.updateStatus({checking:true,available:null,up_to_date:false});
+    assert.equal(env.node("update-check").disabled,true);
+    const before=env.sent.length;env.fire("update-check");assert.equal(env.sent.length,before);
+    ui.updateStatus({checking:false,available:null,up_to_date:false});
+    assert.equal(env.node("update-status").textContent,"");
+    assert.equal(env.node("update-open").hidden,true);
+    assert.equal(env.node("update-check").disabled,false);
+    env.fire("update-open");assert.equal(env.sent.length,before);
+    ui.updateStatus({checking:false,available:{version:"0.3.0",url:"https://github.com/yam276/PTTStella/releases/tag/v0.3.0"},up_to_date:false});
+    assert.equal(env.node("update-status").textContent,"有新版本：0.3.0");
+    assert.equal(env.node("update-open").hidden,false);
+    env.fire("update-open","click",false);assert.equal(env.sent.length,before);
+    env.fire("update-open");assert.equal(JSON.stringify(env.sent.at(-1)),JSON.stringify({kind:"update_open",trusted:true}));
+    ui.relocalize();assert.equal(env.node("update-status").textContent,"有新版本：0.3.0");
+    ui.updateStatus({checking:false,available:null,up_to_date:true});
+    assert.match(env.node("update-status").textContent,/最新正式版本/);
+    ui.destroy();const message=env.node("update-status").textContent;
+    ui.updateStatus({checking:true,available:null,up_to_date:false});
+    assert.equal(env.node("update-status").textContent,message);
+    const final=env.sent.length;env.fire("update-check");env.fire("update-open");assert.equal(env.sent.length,final);
 });

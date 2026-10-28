@@ -37,6 +37,36 @@ fn outbound_results_match_the_shared_wire_examples() {
                 fallback: "connect = 連線\n",
             },
         ),
+        ("diagnostics_disabled", Packet::Diagnostics(false)),
+        ("diagnostics_enabled", Packet::Diagnostics(true)),
+        (
+            "update_idle",
+            Packet::UpdateStatus(pttstella::updates::Status::default()),
+        ),
+        (
+            "update_checking",
+            Packet::UpdateStatus(pttstella::updates::Status {
+                checking: true,
+                ..Default::default()
+            }),
+        ),
+        (
+            "update_current",
+            Packet::UpdateStatus(pttstella::updates::Status {
+                up_to_date: true,
+                ..Default::default()
+            }),
+        ),
+        (
+            "update_available",
+            Packet::UpdateStatus(pttstella::updates::Status {
+                available: Some(pttstella::updates::Release {
+                    version: "0.3.0".into(),
+                    url: "https://github.com/yam276/PTTStella/releases/tag/v0.3.0".into(),
+                }),
+                ..Default::default()
+            }),
+        ),
         (
             "station_mouse_rejected",
             Packet::StationMouseRejected {
@@ -234,7 +264,11 @@ fn outbound_results_match_the_shared_wire_examples() {
         ),
         (
             "navigation_result_sent",
-            Packet::NavigationResult(Feedback::new(NavigationStatus::Sent, "回覆")),
+            super::protocol::NavigationTicket {
+                request: 11,
+                generation: 7,
+            }
+            .finish(Feedback::new(NavigationStatus::Sent, "回覆")),
         ),
         (
             "destination_result_started",
@@ -252,7 +286,11 @@ fn outbound_results_match_the_shared_wire_examples() {
         ),
         (
             "navigation_result_rejected",
-            Packet::NavigationResult(Feedback::new(NavigationStatus::Rejected, "回覆")),
+            super::protocol::NavigationTicket {
+                request: 12,
+                generation: 7,
+            }
+            .finish(Feedback::new(NavigationStatus::Rejected, "回覆")),
         ),
         (
             "paste_result_queued",
@@ -415,17 +453,38 @@ fn frame_and_preview_packets_keep_typed_identity_and_data_under_payload() {
         serde_json::json!({"enabled":true,"policy_epoch":0,"modes":{"tracking":"off","encoding":"legacy","epoch":0},"ready":false,"route":"local","active":null})
     );
     assert_eq!(value["payload"]["settings"]["cjk_font"], "中文");
+    assert_eq!(value["payload"]["frame"]["glyph_encoding"], "runs_v1");
+    assert_eq!(
+        value["payload"]["frame"]["runs"],
+        serde_json::json!([[0, 0, 1, 7, 7, false, [" ", " "]]])
+    );
+    assert!(value["payload"]["frame"].get("glyphs").is_none());
+    assert_eq!(
+        serde_json::from_str::<Value>(
+            &pttstella::render_wire::packet_json(&Packet::Paint(&paint)).unwrap()
+        )
+        .unwrap(),
+        value
+    );
     assert!(value.get("frame").is_none());
     let directory = tempfile::tempdir().unwrap();
     let preferences = Preferences::load(Some(directory.path())).unwrap();
     let open = serde_json::to_value(preferences.open_packet()).unwrap();
     assert_eq!(open["kind"], "settings_open");
     assert!(open["payload"]["sample"]["frame"].is_object());
+    assert_eq!(
+        open["payload"]["sample"]["frame"]["glyph_encoding"],
+        "runs_v1"
+    );
     let preview =
         serde_json::to_value(preferences.preview_packet(41, DisplayProfile::default())).unwrap();
     assert_eq!(preview["kind"], "font_preview");
     assert_eq!(preview["payload"]["request"], 41);
     assert!(preview["payload"]["packet"]["frame"].is_object());
+    assert_eq!(
+        preview["payload"]["packet"]["frame"]["glyph_encoding"],
+        "runs_v1"
+    );
 }
 
 #[test]

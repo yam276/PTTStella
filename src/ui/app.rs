@@ -56,6 +56,7 @@ pub fn app(props: AppProps) -> Element {
         surface_probe.as_deref(),
         Some(
             "dialogs"
+                | "fullscreen"
                 | "tools"
                 | "sites"
                 | "fonts"
@@ -66,8 +67,10 @@ pub fn app(props: AppProps) -> Element {
                 | "short_reading"
                 | "reading_rows"
                 | "wide_last_row"
+                | "diagnostics"
                 | "inline_replies"
                 | "short_links"
+                | "picture_menu"
                 | "context_menu"
                 | "filter_colors"
                 | "account_lists"
@@ -81,7 +84,9 @@ pub fn app(props: AppProps) -> Element {
     let owner = use_hook(move || {
         super::probe::surface_sample(sample_case.as_deref(), probing, media_origin.as_deref())
             .and_then(|bytes| {
-                if boards_probing {
+                if sample_case.as_deref() == Some("control_input") {
+                    Connection::start_control_input_probe(bytes)
+                } else if boards_probing {
                     Connection::start_board_probe()
                 } else if matches!(sample_case.as_deref(), Some("full_load" | "long_load")) {
                     let long = sample_case.as_deref() == Some("long_load");
@@ -113,6 +118,10 @@ pub fn app(props: AppProps) -> Element {
                     Connection::start_article_probe()
                 } else if sample_case.as_deref() == Some("pointer_rows") {
                     Connection::start_pointer_rows_probe()
+                } else if sample_case.as_deref() == Some("article_switch") {
+                    Connection::start_article_switch_probe()
+                } else if sample_case.as_deref() == Some("list_boundary") {
+                    Connection::start_list_boundary_probe()
                 } else if sample_case.as_deref() == Some("bookmarks") {
                     Connection::start_bookmarks_probe()
                 } else if matches!(sample_case.as_deref(), Some("mouse" | "mouse_boundary")) {
@@ -216,8 +225,30 @@ pub fn app(props: AppProps) -> Element {
     {
         let close_sender = closing.0.clone();
         let main_window = std::rc::Rc::downgrade(&dioxus::desktop::window());
+        let fullscreen = use_hook(|| std::rc::Rc::new(crate::macos::NativeFullscreen::default()));
+        let fullscreen_events = fullscreen.clone();
+        let fullscreen_window = main_window.clone();
+        dioxus::desktop::use_wry_event_handler(move |event, _| {
+            use dioxus::desktop::tao::event::Event;
+            if let Some(window) = fullscreen_window.upgrade() {
+                match event {
+                    Event::WindowEvent { window_id, .. } if *window_id == window.id() => {
+                        fullscreen_events.restore_if_windowed(&window);
+                    }
+                    // Also cover a failed/cancelled native transition that
+                    // restores the window without another resize notification.
+                    Event::MainEventsCleared => fullscreen_events.restore_if_windowed(&window),
+                    _ => {}
+                }
+            }
+        });
         let settings_sender = settings_requests.0.clone();
         dioxus::desktop::use_muda_event_handler(move |event| {
+            if event.id().0 == crate::macos::FULLSCREEN
+                && let Some(window) = main_window.upgrade()
+            {
+                fullscreen.toggle(&window);
+            }
             if event.id().0 == crate::macos::SETTINGS {
                 settings_sender.send_modify(|(serial, close)| {
                     *serial = serial.wrapping_add(1);
@@ -288,6 +319,9 @@ pub fn app(props: AppProps) -> Element {
                 section { "data-tools-group": "capture",
                 button { id: "select-all", {pttstella::msg!("select-all")} }
                 button { id: "export-png", {pttstella::msg!("export-png")} }
+                if surface_probe.as_deref()==Some("fullscreen") {
+                    button { id:"probe-viewport", "Capture live viewport" }
+                }
                 button { id: "export-rows", disabled: true, title: pttstella::msg!("export-rows-hint"), {pttstella::msg!("export-rows")} }
                 button { id: "copy-png", {pttstella::msg!("copy-png")} }
                 button { id: "copy-rows-png", disabled: true, title: pttstella::msg!("export-rows-hint"), {pttstella::msg!("copy-rows-png")} }
@@ -339,6 +373,13 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "article-load-resume", hidden: true, {pttstella::msg!("article-load-resume")} }
             }
             div { class: "settings-host", SettingsForm{filters_probe} }
+            div { id: "article-find", class: "article-find", role: "search", hidden: true,
+                input { id: "article-find-input", r#type: "text", maxlength: "256", autocomplete: "off", spellcheck: "false" }
+                output { id: "article-find-status", role: "status", "aria-live": "polite" }
+                button { id: "article-find-previous", r#type: "button", "↑" }
+                button { id: "article-find-next", r#type: "button", "↓" }
+                button { id: "article-find-close", r#type: "button", "×" }
+            }
             section { class: "workspace",
                 div { class: "surface", id: "surface",
                     onmounted: move |_| {
@@ -425,6 +466,11 @@ pub fn app(props: AppProps) -> Element {
                 p { id: "media-url" }
                 output { id: "media-status", role: "status" }
                 div { id: "media-viewport" }
+                div { id: "media-context-menu", class: "surface-context-menu", role: "menu", hidden: true,
+                    "aria-label":pttstella::msg!("image-title"),
+                    PictureActions {}
+                    LinkActions {}
+                }
             }
             aside { id: "media-hover", hidden:true, "aria-hidden":"true",
                 output { id: "media-hover-status" }
@@ -461,7 +507,7 @@ fn SettingsCaption(label: String, icon: Element) -> Element {
 // Static, localized controls; the surface owner supplies context and admission.
 fn context_menu() -> Element {
     rsx! {
-        div { id: "surface-context-menu", role: "menu", hidden: true,
+        div { id: "surface-context-menu", class: "surface-context-menu", role: "menu", hidden: true,
             "aria-label": pttstella::msg!("context-title"),
             div { id: "context-account-target", hidden: true, style: "padding: 6px 12px; color: var(--gold); font-weight: 600;" }
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "account-mask",
@@ -491,15 +537,8 @@ fn context_menu() -> Element {
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy",
                 Copy { size: 18 } span { {pttstella::msg!("context-copy")} }
             }
-            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy-link",
-                Link { size: 18 } span { {pttstella::msg!("context-copy-link")} }
-            }
-            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "open-link",
-                ExternalLink { size: 18 } span { {pttstella::msg!("context-open-link")} }
-            }
-            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "select-link",
-                Link { size: 18 } span { {pttstella::msg!("context-select-link")} }
-            }
+            PictureActions {}
+            LinkActions {}
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy-image-page",
                 Copy { size: 18 } span { {pttstella::msg!("copy-png")} }
             }
@@ -540,6 +579,34 @@ fn context_menu() -> Element {
                 BrandSettingsCaption{}
             }
         }
+    }
+}
+
+#[component]
+fn PictureActions() -> Element {
+    let _language = use_context::<Signal<pttstella::i18n::Language>>()();
+    rsx! {
+        button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"copy-picture",
+            Copy {size:18} span {{pttstella::msg!("context-copy-picture")}}
+        }
+        button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"save-picture",
+            Save {size:18} span {{pttstella::msg!("context-save-picture")}}
+        }
+    }
+}
+#[component]
+fn LinkActions() -> Element {
+    let _language = use_context::<Signal<pttstella::i18n::Language>>()();
+    rsx! {
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy-link",
+                Link { size: 18 } span { {pttstella::msg!("context-copy-link")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "open-link",
+                ExternalLink { size: 18 } span { {pttstella::msg!("context-open-link")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "select-link",
+                Link { size: 18 } span { {pttstella::msg!("context-select-link")} }
+            }
     }
 }
 
@@ -681,6 +748,12 @@ pub(super) fn SettingsForm(filters_probe: bool) -> Element {
                     p { class:"settings-help", {pttstella::msg!("about-author", author = env!("CARGO_PKG_AUTHORS"))} }
                     p { class:"settings-help", {pttstella::msg!("about-version", version = env!("CARGO_PKG_VERSION"))} }
                     button { id:"about-repository", r#type:"button", {env!("CARGO_PKG_REPOSITORY")} }
+                    div { class:"dialog-actions settings-actions",
+                        button { id:"update-check", r#type:"button", {pttstella::msg!("update-check")} }
+                        button { id:"update-open", r#type:"button", hidden:true, {pttstella::msg!("update-open")} }
+                    }
+                    p { id:"update-status", class:"settings-help", role:"status", "aria-live":"polite" }
+                    p { class:"settings-help", {pttstella::msg!("update-help")} }
 
                     h3 { SettingsCaption { label: pttstella::msg!("settings-licenses"), icon: rsx! { FileText { size: 18 } } } }
                     p { class: "settings-help", {pttstella::msg!("font-license")} }

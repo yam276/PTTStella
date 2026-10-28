@@ -4,13 +4,259 @@
 
 ## 目標
 
-目前交付為 `dist/macos-list-edges/PTTStella.app`（2026-10-22，macOS arm64 release、ad-hoc 簽章）：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，待發佈的 0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 依使用者指示恢復發佈準備，尚未合併或建立 tag／Release；儲存庫已由使用者改為 Public，正在重新驗證三平台打包。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 0.2.0 再次 Critic 與發佈準備（2026-10-28）
+
+使用者授權再次交由 SubAgent 獨立 Critic，翻頁與浮球確認沒有回歸後繼續 0.2.0 Release。兩位 Critic 均審查 develop `736afcc`，沒有 actionable findings：翻頁 91 項針對測試及額外 108 組 production layout／readingMove 情境通過，涵蓋分數 DPR／字高、無圖／短圖／高圖、端點、取消／晚到回覆及切篇隔離；浮球 31 項測試及 16,758 組 production geometry 情境通過，涵蓋六／七入口、任意右鍵位置、小視窗、直向及 4K 邏輯幾何。兩者為只讀審查與 DOM doubles，不新增原生、實體 4K 或跨平台驗收宣稱；既有原生右鍵／動畫外觀限制仍保留。
+
+本機另完成 74 項 Python 發佈／打包政策測試及文件檢查，補齊 README 的一行翻頁銜接與中文為主、英文摘要的 0.2.0 說明。Cargo.toml／Cargo.lock 維持已準備的 0.2.0，不因 CI 狀態另改版本。審查與補充證據位於 `.local/verification/release-020-critic-20261028/`；沒有新增測試 App、branch 或 worktree，保留小型審查紀錄供核對。
+
+GitHub Release PR #2 的既有 `Release PR policy` run 40646964373 在 runner 分配前失敗，job 無 steps／runner_id 0，annotation 明確為 account payments／spending limit。已請使用者恢復 Actions 額度，仍維持 Private，不改 repo 可見性、不繞過政策或建立缺少四架構下載檔的 Release。PR 恢復 ready 及 verify 後仍必須等實際 GitHub 檢查通過才合併；發佈 workflow 全部下載、manifest 及 SHA-256 核對成功後才建立 v0.2.0 Tag／Release，再將 main 合回 develop。
+
+使用者隨後將 repo 改為 Public，Release PR policy 重跑已成功，四架構確實取得 runner。第一輪 verify 40652249579 的 Windows Clippy 發現 `diagnostics::options` 的 mut 僅 Unix 使用；現在將可變綁定限制在 Unix 分支，保留 0600 與 Windows 的原始 OpenOptions。此為跨平台編譯修正，不改診斷輸出或提高版本；保留 Windows 失敗 log，停止已過時的本輪 verify，再對新提交完整重跑，不能沿用舊 commit 產物發佈。
+
+## 文章翻頁銜接與浮球選單間距（2026-10-28）
+
+網頁文章下頁以目前最後一個完整可見正文列定位下一頁頂端，取代固定 90% 高度；PageUp 保留先前頂列。排版 owner 使用同一文字／圖片映射，不另掃描全文；圖片內沒有完整文字時仍前進，末端保留既有捲動上限及最後一列保護。滾輪、終端機站端翻頁、取消／切篇及未知邊界單筆接續仍使用原路徑。小數縮放的 PageUp 可多保留一個邊界列，契約見文章閱讀文件。
+
+浮球第一層改用半橢圓並只增加避開浮球所需的內移量；按鈕大小、垂直間隙及小視窗格狀退路保留。相同 1040×740 工作量，中央入口水平位移由 268px 減至 152px（靠近 116px）。31 項既有浮球測試涵蓋六／七入口、邊界、小視窗及 4K 邏輯幾何；原生 AX 分類／擷取操作成功，但座標工具仍回 noWindowsAvailable，背景擷取未繪出動畫中的扇形，原生右鍵與外觀留人工確認，不以 DOM doubles 宣稱已完成滑鼠驗收。
+
+完整 JS 289、core 14 commands／2 replays、desktop lib 159／bin 151、Clippy、fmt／docs 通過。新增獨立可見列預期：DPR 1／1.5／2、四種字高、三種可視高度共 36 組，另核對高於視窗的圖片仍能逐頁前進。相同新測試在修改前失敗（1～19 行後下頁從 18 而非 19 開始），修改後通過；保留 baseline log，既有 pointer／鍵盤／邊界測試只更新有意變更的翻頁距離。
+
+最終 macOS arm64 Dioxus／WKWebView 單頁合成文章放大至 200%，Home 顯示 1～11 行，PageDown 顯示 11～21，PageUp 返回 1～11。展圖後 End 可到第 23 行；三次長按共用一 batch、圖片只有一次 GET，沒有站端導覽。來源 PNG 960×576、Close acknowledged、listeners 及全部 owner／HTTP join、exit 0 通過；15 個 Mach-O sections 與交付相同，strict ad-hoc 簽章通過。案例使用 loopback，不代替實站或其他平台驗收。
+
+首輪長文因前景保護暫停並超過 runner 期限，保留 not_ready／exit -15；第二輪翻頁觀察成功但只發一次展圖請求，未達該 probe 的兩次請求門檻，保留 failed／cleanup true／exit 0。最終完整通過另存 native-accepted，未放寬 probe 或失焦保護。已刪除本輪兩個測試 App 副本及三份 baseline 暫存來源（約 79 MB）；確切路徑與保留項目在 `.local/verification/tools-spacing-20261028/removed-output.json`，保留最終交付、成功／失敗報告、PNG／截圖與既有 Cargo cache，無新增 branch／worktree。Release PR #2 維持草稿。
+
+## 文章內本機尋找（2026-10-28，已完成）
+
+驗收輸入：在已辨識的文章按 Cmd+F／Ctrl+F，輸入中文或英文文字；黃底黑字標出命中，目前一筆深藍底白字，Enter／Shift+Enter 前後切換，Esc 關閉且不取消全文載入。PTT 的 `/` 原樣保留，不送出查詢，不改文章或 PNG，展開／等寬圖片保留；離開文章／重連會清除查詢、索引、timer 及反白。終端機模式僅搜尋目前頁，網頁查已載入範圍。
+
+已實作有界的本機 owner：最多 256 UTF-16 units／4,096 筆命中（超過顯示 +）、120ms 合併輸入、逐列字面／大小寫無關比對、排除頁尾與不可見字格；使用投影 glyph 與緊密整數位置索引，不解析原始 ANSI。尋找版本只使文字 bitmap 失效，不改圖片 batch。透過原閱讀 gate 暫停與恢復預讀／保活，IME 與對話框／情境選單保留按鍵優先權，保持焦點復原與切篇隔離。
+
+完整 JS 287、core 14 commands／2 replays、desktop lib 159／bin 151、Clippy、fmt／docs 通過。10 項尋找案例包含 Unicode／雙欄格、大小寫、字面、零命中、循環、組字／取消、遮罩、終端機頁尾、切篇／重連、索引重用與數量上限；額外圖片回歸核對反白不摺疊圖片且停用後移除反白。原生首輪已看到 42 筆 ROW／row 命中、上一筆／下一筆、Ctrl+F 與 Cmd+F、末行 LAST 與等寬圖片保存；另抓到 Cmd+Ctrl+F 誤攔截，已加入拒絕雙修飾鍵的回歸並重打包。首輪合成 peer／PNG／清理 passed 不代表全螢幕驗收成功，另留 failed acceptance 記錄。
+
+最終 macOS arm64 實際 Dioxus／WKWebView 通過 Ctrl+F／Cmd+F、1→2→1→42→1 循環，輸入 LAST 後不用再按 Enter 即顯示 3～23 行及末行反白；關閉尋找後，等寬圖區域 1000×529 pixels 與尋找前完全相同。修正首次定位曾誤用被固定頁尾裁切的 hit-test y，現在使用同一排版 owner 的完整 rowTop，新增單次定位回歸。反白仍開啟時匯出來源 PNG 960×576，獨立解碼 ROW 字格僅原灰階（374 個非黑像素、零藍／黃像素）。全螢幕、Esc 關閉尋找且維持全螢幕、回一般視窗及 Close acknowledged／全部 owner 與 HTTP join／exit 0 均通過；零站端導覽，兩次展圖共用一 batch、圖片只一次 GET。索引與 timer 的 clean 亦納入 surface 最終清理判定。
+
+先前全螢幕退出後失焦而超過 runner 期限的一輪保留 not_ready／exit -15，首次定位未到底的一輪保留 failed acceptance，沒有用其 peer 的 passed 掩蓋畫面失敗。最終交付 `dist/macos-article-find-delivery/PTTStella.app` 與驗證副本 15 個 Mach-O sections 相同、strict ad-hoc 簽章通過。已刪除本輪九個過時打包／合成 App 目錄（約 356 MB），確切路徑在證據目錄 removed-output.json；保留 PNG／截圖、成功及失敗報告與既有 Cargo cache，無新增 branch／worktree。未連 PTT，Windows／Linux 原生與特定注音候選窗仍待驗；Release PR #2 維持草稿，不合併或發佈。
+
+4,000 行／320,000 glyph 的 Node V8 生產 owner 合成量測（不含 WebView／繪圖）：首次索引與查詢約 33.8ms，20 次重用索引查詢約 0.14～0.37ms，未開尋找的 100 次同 frame 更新約 0.043ms。這些是單程序 wall time，並非低階硬體、程序家族 CPU／RSS 基準；原始記憶體樣本分列 heap／ArrayBuffer／RSS，不把索引釋放等同 RSS 立即下降。證據 `.local/verification/article-find-20261028/`。
+
+## 等寬圖片後底部多空一行（2026-10-28，已修正）
+
+使用者確認內容仍可讀，問題是等寬展圖後，純文字頁持續多空一整行。圖片比例產生的小數佔位高度，使後續行的位置偏離整數 CSS 像素；原生 scrollTop 取整後，完整行裁切會多藏一行。每張圖片佔位改為向上取整，不到一 CSS 像素的差額留在圖片周圍，實際圖像仍保留精確比例；不新增文字列、不改核心內容或原有連續滾輪行為。
+
+新增生產 layout／readingMove 回歸，明確讓 scrollTop 取整：修改前可重現可見三行降為兩行；修改後 DPR 1／1.5／2、floor／round／ceil 與兩種圖片比例，共 18 組均保留完整容量，Home／End 與末行可見。完整 JS 275、core 14 commands／2 replays、desktop lib 159／bin 151、Clippy、fmt 與 docs 通過。
+
+macOS arm64 實際 Dioxus／WKWebView 使用自製 64×35 圖片及 38 頁／837 行長文，完成載入後展圖並等寬。一般視窗純文字頁分別顯示 17～39、37～59、18～40 行，全螢幕為 18～40 行，均為完整 23 行而無多餘空白列；PageUp／PageDown、方向鍵與 End 回讀沒有多送站端 bytes，End 可見 815～837 行。來源 PNG 960×576，精確 37 次站端 PageDown、兩次展圖請求共用一 batch、三個圖片路徑各一次 HTTP GET、Close acknowledged、全部 owner／HTTP join、exit 0。全螢幕原生擷取的閱讀區外白邊保留為工具擷取差異，沒有為此改 renderer。
+
+初輪等候前景期間，在全文尚未完成時誤送 Enter，使嚴格 peer 拒絕額外輸入，且隨後超過 runner 期限；保留該輪 failed／cleanup false／exit -15，不計通過。重跑先核對 complete 才送展圖鍵。證據 `.local/verification/wide-image-bottom-row-20261028/`；交付 `dist/macos-wide-image-row-fixed-final/PTTStella.app`。未連 PTT，其他平台與實站文章仍待驗，不因本輪修復恢復合併或發佈。 驗收後已移除本輪兩個合成 App 副本與首輪冗餘打包目錄（約 119 MB），確切路徑記於同證據目錄的 removed-output.json；保留最終 App、所有失敗／成功報告與既有 Cargo cache，未建立分支或 worktree。
+
+## 清理競態與全螢幕驗證（2026-10-28，已完成）
+
+舊的 `EvalError::Finished` 清理失敗對應 Dioxus Desktop 的 FinalizationRegistry：JS 已回傳時，channel 若先被回收，Rust 可能無法 join 完整結果。現在由單一 window-owned symbol／listener 保留 channel，Rust 消費 clean／settings／tools 完整快照後才釋放；停止與釋放改用有確認的原生 WebView callback，不再另外建立易被回收的短 Eval。無法確認釋放仍算清理失敗，但已收到的設定快照仍交給 RetainedEdits 保存，沒有把 Finished 當成功。
+
+全螢幕「缺字」已查明為原生自動化擷取與 live Canvas 內容不一致；舊與新讀回 PNG 的 24 行、120 個文字格均完整，使用者也確認前景畫面完整。撤回所有字型快取／暫存畫布／排程實驗，production renderer、文章快取與圖片狀態均未改動。新增明確合成 `fullscreen` 探針：只接受使用者點擊擷取，最多八張，Rust 解碼後以獨立 expected 檢查每行背景及各文字格像素；不以來源 PNG 或操作計數代替 live 驗證。
+
+最新版 macOS arm64 診斷 App 通過一般視窗→全螢幕→設定 Esc→返回視窗四次 live readback（含首末行），Esc 後仍維持全螢幕。來源 PNG 與修改前像素一致；正常關閉、設定顯示「正在儲存」時關閉、synthetic renderer error 三例均 Close acknowledged／全部 owner join／exit 0，字高 22 的最後變更已保存。錯誤例維持 run_ok false、cleanup_ok true。可控 GC 的負例會丟失未保留 channel，修正後存活至 join、釋放後可回收。超過合成 peer 300 秒期限的探索保留為失敗，沒有算進上述驗收。
+
+驗證：core 14 commands／2 replays、desktop lib 159／bin 151、JS 274、Clippy、fmt 與 docs。另修正更新檢查取消測試：TCP FIN 與 ConnectionReset 都是取消結果，仍拒絕多餘資料、其他錯誤及逾時。證據 `.local/verification/cleanup-fullscreen-20261028/`，保留讀回 PNG、原生擷取差異、失敗與最終紀錄；交付 `dist/macos-cleanup-verified-v2/PTTStella.app`。本次未連 PTT、未做長時間實站或其他平台原生驗收，沒有推送或發佈。
+
+## GitHub 正式版本檢查（2026-10-28，已完成）
+
+正常啟動背景查詢一次 GitHub 最新正式 Release，「關於與授權」另提供手動檢查及已發現新版的下載入口。以實際 Cargo package SemVer 比較，不將舊正式版提示給較新的 dev 版；排除草稿與預發佈。不自動下載、安裝或讀取 GitHub／PTT 憑證；private／404、限流、網路、格式與逾時失敗保持靜默，不顯示為已是最新版。單一可取消 HTTP future、總逾時與 response byte 上限；合成 probe 禁止自動或手動外連。
+
+驗收通過：本機 HTTP peer／生產 checker 的 7 項測試核對正式／dev／build metadata 的 SemVer 比較、無認證 headers、404／403／429／格式失敗靜默、宣告／串流超量、標頭／正文逾時與 redirect 拒絕；單一 request、失敗後手動重試與直接 drop 取消未完成 HTTP body（peer 收到 EOF）均通過。JS 核對可信按鈕、只有成功才顯示已是最新版、沒有新版時隱藏下載、已知新版保留、語系重繪與 destroy 後忽略晚到結果；四個獨立 wire examples 共用於 Rust／JS，更新操作不接受 caller URL。
+
+core 14 命令／2 replay、desktop lib 159／bin 148、全 targets Clippy、JS 273 與文件 gate 通過。新版診斷 App 已打包及 strict ad-hoc 驗章；macOS arm64 實際 Dioxus／WKWebView 設定頁可見實際 0.2.0-dev.1、檢查按鈕與說明，合成模式點檢查不外連；關閉設定、來源 PNG（獨立解碼 960×576）、Close acknowledged、全部 owner／listener 清理、exit 0 與診斷 finish 均通過。測試副本與交付的 15 個 Mach-O sections 相同。第一組成對 AX／截圖顯示完整關於頁；第二次截圖局部黑畫面保留，不以其宣稱舊擷取問題已修正。
+
+證據 `.local/verification/update-check-20261028`；不將本機 HTTP／JS 的成功通知視為已對公開 GitHub Release 實測，private repo 不使用私人 token。Windows／Linux 原生本輪 not_ready。不更動 release workflow、不建立 Release；提交於 develop，尚未推送。測試副本 `.local/verification/update-check-20261028/StellaUpdateCheck.app` 已在驗收、sections／簽章及無執行使用者核對後刪除（約 39.5 MB），保留小型證據與新版交付；無新增 branch／worktree。
+
+## 離開文章後資訊列快取釋放（2026-10-28，已完成）
+
+獨立 Critic 發現前輪 `7b6e522` 的可見列 WeakMap 也記錄長期重用的 footer canvas，離開閱讀後即使已清除行索引與 footerPacket，仍經 WeakMap value 保留整篇 Paint。資訊列本來已有獨立的 footerPacket／progress 失效判斷，現在只讓正文 strip 參與行繪圖快取，不在該 WeakMap 保存 footer；原顯示、資料與版本保護不改。
+
+新增使用生產 layout owner 的 Node GC 子程序，DOM／render doubles 不保留 Paint；4000 行、320080 glyphs 在 owner／footer 持續存活時，分別驗證回列表、終端機模式、換篇與 destroy 後舊 Paint 及 glyph array 可回收，重用 footer 仍能繪製。先保存修正前失敗，再於相同測試確認四條路徑通過；全部 JS 272 通過。證據 `.local/verification/footer-cache-fix-20261028`；前次 Critic 原始失敗仍保留，不覆寫為通過。
+
+core 14 命令／2 replay、desktop lib 152／bin 147、全 targets Clippy、JS 272 及文件 gate 通過。GC 子程序另核對共用樣式可回收，避免只釋放陣列卻由行索引保留 glyph 副本；footer 重用仍有實際繪製。這是同一 production owner 的可達性證明，不將 Node GC 當成原生 App-family RSS 量測。
+
+新版 macOS arm64 實際 Dioxus／WKWebView 的 long_load 與 article_switch 通過：837 行完整末端、Home／End／PageUp／Down、資訊列進度及展圖；A→B→C 的 B／C 末行與頁尾均完整，最終 id 3／45 行，peer 分別精確只收 37／5 筆導覽。長文兩次長按只有同一 batch，每個圖片 URL 一次 HTTP；來源 PNG 與修正前 bytes 完全相同，維持 960×576。Close acknowledged、全部 owner／server join、exit 0、診斷 run_ok／cleanup_ok 均通過，測試副本與交付 15 個 Mach-O sections 相同，strict 驗章通過。一般尺寸座標工具仍回 noWindowsAvailable，改用原生全螢幕／AX／鍵盤；全螢幕轉換當下的局部截圖保留，不用來宣稱舊的全螢幕截圖問題已修正，穩定後的一般尺寸 C 第 45 行另有成對 AX／截圖。Windows／Linux 原生及低階實體硬體本輪未驗證。
+
+兩個原生案例共用一份測試 App 副本；驗收、核對 sections／簽章及確認無執行使用者後，已移除 `.local/verification/footer-cache-fix-20261028/StellaFooterCheck.app`（約 39.4 MB），保留同目錄的 red／green、GC、成對截圖、probe、validation.json、cleanup.json 與新版診斷交付。沒有建立或移除額外 branch／worktree，不動其他工作的輸出與共用快取。獨立修正提交於 develop，未推送／發佈；既有其他人工驗收項目不由本次結案。
+
+## 長文章效能修正計畫（2026-10-28，已完成）
+
+依本次 code review 修正三條已量測的共同路徑，基線為 develop `4557b298`。相同自製 80 欄、24／837／2000／4000 行工作量與原始紀錄保留於 `.local/verification/code-review-20261028`；4000 行用來維持既有 4096 行／32 MiB 快取界限內的密集案例。不將本機微量測當成低階硬體或跨平台實測。
+
+1. 推文合併：將逐 glyph 搜尋全部遮蔽範圍及逐推文搜尋全文，改為按行索引／單次掃描。保留雙寬字完整遮蔽、超連結撤銷、黑白名單、連續 ID 合併與作者高亮。用獨立 expected 核對結果；重跑相同兩種 ID 分布，4000 行耗時較基線至少降低 75%，2000→4000 行不再呈平方增長。
+2. 閱讀繪製：在接收新投影時建立 glyph／link 行索引，捲動只讀取可見列，重用未變動列的繪圖；不得為每個可見列重新掃描整篇。保留原始連結 index、ANSI 雙色、固定資訊列、展圖位置與完整末行。用同一 production JS layout 工作量分開量測首次建立與後續捲動；4000 行後續 layout 中位數較原 52.9 ms 至少降低 75%，全文 glyph 掃描不得隨可見列數倍增。
+3. Rust→WebView：降低全文 Paint 的序列化膨脹，採有界、型別化的緊湊傳輸／分段更新，避免同步產生整篇 verbose JSON Value。generation／presentation／文章作用域及 ACK 必須涵蓋完整投影，部分或過期更新不能操作、顯示或覆蓋新文章；取消與切篇仍能清理工作。文字／ANSI 唯一來源仍為 Rust，JS 不重解原始串流。相同 4000 行橋接工作量的暫存記憶體較原約 823 MiB 至少降低 75%；記錄最大封包大小、完整更新時間及 metadata-only 更新成本，不能只報單一小分段。
+
+依上述可獨立驗收的單位修正與提交，最後執行 CONTRIBUTING 對應 core、desktop、JS、Clippy、fmt／文件 gate；以實際 Dioxus／WKWebView 的本機合成長文、切篇與展圖案例驗證閱讀、取消／過期保護、PNG 原始格線、視窗尺寸與清理。量測保留修改前後相同方法、cold／warm 範圍及記憶體口徑；未測平台明示 not_ready。若設計或量測不符門檻，記錄原因並繼續修正，不能以縮小資料量或放寬既有保護結案。其他舊待人工驗收項目維持原狀，本計畫不包含公開發佈。
+
+第一項已改為按行合併區間與二分查找，glyph 移轉不再逐字配置小 Vec；推文可見列以一次掃描建立集合。filters 20 與 production SurfaceState 29 測試通過，新增亂序 glyph／跨遮蔽邊界雙寬字的獨立 expected。同一 release helper 七次中位數：連續相同 ID 的 4000 行從 453.69 ms 降至 4.85 ms；三行一組從 289.30 ms 降至 4.34 ms；2000→4000 行分別約 2.24／2.15 倍。證據 `.local/verification/performance-fix-20261028`，完整驗證結果見本節末。
+
+第二項已建立單一不可變投影的 glyph／link 行索引，可見 canvas 只有列或投影／尺寸改變才重繪；離開文章與 destroy 釋放索引，rowAt 改為二分定位。新增 4000 行測試核對重繪不讀全文、連結索引與座標、highlight／尺寸變更仍重繪。inline 44 與全部 JS 269 測試通過。原 1 px offset 工作量後續 layout 為約 0.10 ms；另以同一基線程式重跑每次整行捲動，4000 行由 55.14 ms 降至 0.11 ms，首次 layout 由 51.97 ms 降至 29.27 ms。後續 layout 全文 glyph row 讀取為 0，首次建索引仍為線性成本；這些 Node／DOM doubles 結果不含 Canvas raster、原生 layout 或 GPU，原生 gate 結果見下段。
+
+第三項採緊湊、完整 Packet，保留唯一 in-flight／ACK；沒有增加分段 task 或第二份文章狀態。runs_v1 只共用相鄰 glyph 的幾何與左右樣式，每字文字、unmapped 與原順序完全保留；Bridge 直接序列化有 64 MiB byte 上限的 JSON 字串，Dioxus 不再建立全文 Value 樹，啟動語系與一般 receive 共用解碼。原 Screen／PNG serialization 不改。相同 4000 行獨立 release helper 的完整轉換鏈從約 365.6 ms／53,951,324 bytes 降到 17.6 ms／2,011,061 bytes，maximum resident set 從 862,912,512 bytes（約 823 MiB）降至 41,959,424 bytes（約 40 MiB）。每 glyph 改變樣式、無法合併長 run 的額外壓力案例為約 74 MiB／10.8 MB JSON；沒有只選易壓縮資料隱藏退化。此 RSS 包含 helper 的來源 Frame，並非完整 App／WebKit process-family 記憶體。Node 的 JSON parse／展開首次約 23.1 ms、warm 中位數約 11.4 ms，仍不含原生繪圖。
+
+metadata-only 仍送完整緊湊 Frame，沒有宣稱已做 row delta；同一來源 Frame 加切換 boolean 的序列化／Eval Value string／stringify／script-copy helper，首次約 24.6 ms、後七次中位數 14.5 ms，封包仍約 2 MB，不含其他 Paint 欄位。完整更新、cold／warm、CPU／wall／RSS 原始記錄分開保存。這是本輪可驗收的記憶體與平方掃描修復，不能據此宣稱低階硬體 FPS 或跨平台原生結果。
+
+core 14 命令／2 replay、desktop lib 152／bin 147、JS 271、全 targets Clippy、fmt／docs 與 macOS arm64 release／strict ad-hoc 通過。共享獨立 fixture 核對 Rust encoding 與 JS decoding 的雙色字、寬度、Unicode、跳格／亂序、unmapped 及控制字元；生產 Paint、設定樣本與字型預覽使用同一 codec，錯誤或部分資料不進 handler／ACK。字串封包的 Stop、壞 JSON 後接續接收、listener 清理與 bootstrap 均有回歸。首次原生測試抓到語系第一包尚未解碼，修正並保留失敗紀錄；另一輪 full_load 在取消前已完成，未計入取消驗收。
+
+實際 Dioxus／WKWebView 的 long_load、full_load 與 article_switch 最終通過：38 頁 837 行完整到末行、Home／End／PageUp／Down 本機回讀、展圖後仍固定視窗；取消後停在 23 行，明確繼續至 441 行；A→B→C 分別完整載入且最終 id 3／45 行，沒有文章已變更停載。peer 各只接受 37／19／5 筆導覽，展圖每 URL 一次 HTTP、同一 batch；PNG 960×576、Close acknowledged、全部 owner／fixture server join、exit 0，診斷 run_ok／cleanup_ok 均 true。測試副本與交付各 15 個 Mach-O sections 相同。再以修改前版本及相同字型設定重跑同一 38 頁案例，前後來源 PNG bytes／全部 RGBA 像素完全相同；先前不同 bundled 字型的舊圖不混入比較。成對 AX／截圖、驗證器及量測保留於 `.local/verification/performance-fix-20261028/validation.json` 與同目錄。
+
+三項效能門檻均達成並按修正分別提交。Windows／Linux 原生與實體低階硬體本輪 not_ready；舊的其他人工驗收項目仍保留，不以本輪合成結果代替。本輪未推送、未發佈，正常版視窗政策與既有保護不變。
+
+## 圖片複製／另存與內容右鍵選單（2026-10-27）
+
+依使用者要求，文章插圖與完整圖片預覽的右鍵提供複製圖片、另存圖片、複製完整網址、開啟連結四項。圖片／網址、ID 與反白文字的選單不再混入翻頁、整頁匯出、Vim 或設定；背景選單保留全域工具。ID 的名單加入／移除與推文高亮、文字的複製與選取行 PNG 均保留。完整預覽的選單放在同一 modal 內，共用既有焦點／快照／外部手勢控制器，Esc 先關選單。
+
+原圖由 Rust 依當前 ACK 投影的 index／stamp 或完整預覽 request 取得，沿用同一有界原始資源，不依賴畫面縮圖、不接受 renderer URL／pixels、輸出不重複下載。Files 同一工作槽在 blocking worker 解碼並寫入 OS 剪貼簿；存檔保留來源 bytes／格式／動畫，以時間命名。動圖複製首幀，複製保留原解析度；失效 session、輸入 epoch、投影、切篇、預覽關閉／重試或尚未解碼均不能輸出舊圖，已開始的 OS 作業仍 join。image 0.25.10 原已在鎖檔，此次加入桌面直接依賴，僅啟用 PNG／JPEG／GIF／WebP；沒有升級其他 package。
+
+core 13 命令／2 replay、desktop lib 151／bin 147、JS 266、全 targets Clippy、fmt／docs 與 macOS arm64 release／strict ad-hoc 打包通過，證據 .local/verification/picture-context。新增本機 production Preview 回歸核對 decode ACK、hover promotion、retry／close／stale；獨立紅藍 PNG 與 GIF 首幀像素、來源尺寸與損毀／超限拒絕、原始檔 bytes、零 OS 觸碰的過期拒絕及 typed PictureOutput 閉集合通過。首次額外 URL 欄位負例抓到 SurfaceEvent 原有忽略未知欄位行為，PictureOutput 改獨立 deny_unknown_fields，保留失敗紀錄後全套重跑。
+
+原生 picture_menu 在 macOS arm64 的實際 Dioxus／WKWebView 通過：文章插圖與完整預覽各複製一次原圖，OS 剪貼簿讀回的 640×320 全部紅藍 RGBA 像素符合獨立 expected；另存 PNG bytes 與自製來源完全相同。兩次完整網址複製後，原生貼到快速前往草稿核對完整 URL，取消草稿未送站端；選單僅四項，Esc 關閉選單仍保留預覽與全螢幕。兩次 HTTP GET 分別來自文章展圖／完整預覽，複製與另存沒有重新下載；固定來源格線 PNG 960×576、Close acknowledged、全部 owner join、媒體無待處理資源、exit 0 通過。副本與交付的 15 個 Mach-O sections 相同。成對 AX／截圖與獨立讀回驗證保留於 native／validation.json；系統另存對話框本輪使用 probe 目的路徑，沒有宣稱已驗收原生選檔器或 Windows／Linux。
+
+首次隔離 runner 受其他工作預留影響，被 harness 拒絕啟動，原始 native-admission-refused.json 保留。本案依使用者授權不套用 Diolama harness，repo AGENTS 明定採自己的 Cargo／tooling 流程。全域規則曾刪除，確認會影響其他繼承者後已由 repo 外備份只還原該節，其他全域內容保留；最終只有 PTTStella 具有專案例外，未操作 Diolama repo 或共用 target。隨後以原 runner 直接執行，以上原生結果不依賴放寬 peer、事件或像素條件。其他既有待驗項目與條件式 develop 推送維持原狀，沒有公開發佈。
+
+## 方向鍵換篇與注音空白的文章作用域（2026-10-27）
+
+使用者回報方向鍵換篇或注音空白後出現文章已變更，只剩第一頁。生產 SurfaceState 回歸重現：清除快取後、Connection 尚未發布送鍵等待的排隊空檔，未變動的舊 View 會再次進入新快取。非閱讀輸入現在保存原 source stamp，直到同一 session 的 input epoch 與 revision 都前進才允許重新擷取；換篇的清理使用排入前的來源 View，不追讀可能已更新的 receiver。未經換篇的開頭三行、重疊文字／背景變動仍依原有 Changed 規則停止，沒有放寬內容比對。
+
+Connection 同一 owner 將換篇定位分成有界兩步：站端尚未到相應首尾時只送 Home／End，完整、已辨識的對應頁抵達後才送一次方向鍵，定位中保持 input_pending。已在首尾時直接送方向鍵，避免多一次重繪；既有 timer 檢查期限、epoch、站點與本機路由，原始輸入、逾時或斷線不晚送。終端機首尾方向鍵亦走相同導航路徑；關閉設定、repeat、PageUp／Down、j／k、滑鼠不改成換篇。新增真實 loopback 精確 bytes、未完成同步不得續送、錯誤範圍／逾時／中斷／斷線負例。
+
+有界舊診斷另顯示組字前後 revision 不變但 presentation 變更、網頁投影被撤銷，支持組字狀態會清空快取的程式路徑；沒有從 log 推測鍵名或讀取文字。正常模式的開始／取消組字改為暫停載入、保留投影；實際送出文字或原始操作仍撤銷。普通文字事件或可信組字確認的單一空白使用網頁本機翻頁，不送成站端文字；中文確認、取消、Vim 輸入、終端機及一般編輯保留原 owner。生產 JS handler 覆蓋相應事件與負例，不冒充已操作特定原生輸入法候選窗。
+
+core 13 命令／2 replay、desktop lib 150／bin 142、全 targets Clippy、JS 261、fmt／docs 與 macOS arm64 release／strict ad-hoc 通過；證據 .local/verification/article-switch-ime。原生 article_switch 以三篇自製兩頁文章獨立核對六筆站端輸入。首輪已目視 A→B→C 與 C 第 45 行，但排查焦點耗盡 peer 期限，Close／清理失敗，不能計為完整通過；第二輪原生鍵盤焦點未恢復，工具返回的 Escape 落入 BBS，被精確 peer 拒絕，未放寬 bytes。最終 native-r3 已通過原生 Home／↑ 切 B、End／↓ 切 C，B／C 第 45 行可見；三篇分離為 id 1／2／3，末篇 1～45 行、complete，五筆 UI 導覽／六筆精確站端鍵、960×576 PNG、Close acknowledged、全部 owner join 與 exit 0。交付與副本 15 份 Mach-O loadable sections 相同，無 renderer_error、採樣 dropped 為 0；特定唯音／威注音候選窗與 Windows／Linux 原生本輪仍未驗證。
+
+依使用者再確認，AGENTS 明定僅診斷／測試視窗置頂且啟動不搶焦點，正常發佈版維持一般視窗；此行為已由原程式 test_window 分支提供，沒有為測試取消失焦／隱藏時暫停全文的保護。新增案例的互動準備期限調為 15 分鐘，正式站端回覆期限不變。其他既有待驗條件與條件式推送仍保留，未公開發佈。
+
+## PNG 預設檔名加入時間（2026-10-27）
+
+使用者要求避免每次匯出都手動改名。實際儲存視窗的預設名稱改為本機日期、時間與毫秒，例如 PTTStella-20261027-145015-751.png；選取行保留 -lines-起行-末行 後綴。系統無法取得本機時區時使用 UTC 並加 Z，仍可在視窗自行改名。沿用已鎖定的 time 0.3.55 並啟用 local-offset；新增間接依賴 num_threads 0.1.8，沒有新增自行撰寫的 unsafe。原固定路徑探針、剪貼簿、PNG 來源與儲存取消／過期檢查維持原路徑。
+
+desktop lib 148／bin 141、全 targets Clippy、fmt／docs 與 macOS arm64 release／strict ad-hoc 打包通過。以交付副本執行 files 合成本機探針，透過真正原生 Save 視窗連續保存兩個未修改的預設名稱，時間分別為 14:50:15.751 與 14:50:54.475；檔名不同、兩個 960×576 PNG bytes 完全相同。選取整頁後，另一儲存視窗顯示新時間及 lines-1-24，取消後明示未選擇儲存位置，沒有產生第三份檔案。Close acknowledged、全部 owner join、cleanup_completed 與 exit 0 通過。證據 .local/verification/png-timestamps（gate.json、validation.json、native/probe 的成對 AX／截圖）；未連實站或操作帳密，Windows／Linux 原生儲存視窗本輪未驗證。
+
+交付 dist/macos-png-timestamps-final/PTTStella.app；目前已登入的舊診斷視窗保留，未因檔名更新中斷使用者工作。先前其他待驗條件與推送狀態不由本次低影響匯出變更結案。
+
+## 列表滾輪到邊界後等待回覆（2026-10-27）
+
+使用者回報看板滾輪到底後，後續滑鼠操作失效。沿同一個已登入診斷程序的有界數字紀錄，確認 ArticleList 的第二次滾輪送出後沒有任何新 bytes，input_pending 持續約 5.48 秒，後續滾輪／點擊都在正常准入被擋住；逾時後自行解除，沒有證據顯示該次永久鎖死。這條路徑的問題是邊界動作本來就可能不重繪，不能把所有無回覆都當成仍在換頁。
+
+connection 為已辨識 ArticleList／BoardList 的本機滑鼠或工具按鈕列表移動保留一筆原等待內的重繪許可；350ms 無畫面回應才補送一次既有雙 Ctrl+L，不重送移動、不提早解除輸入等待。唯一 session owner 沿原 16ms clock 檢查，排隊輸入優先；generation／revision／epoch／原期限、PTT 目標、本機滑鼠路由、完整控制碼、同步輸出及登入／切板工作都需再確認。已有回應、原始輸入、換 session、斷線或睡眠超過原期限均不補送；補繪也無回應時不循環。一般正常翻頁 bytes、鍵盤、文章逐頁／全文及其他選單不改。
+
+先以 production Connection loopback 重現邊界一秒內沒有重繪要求的失敗，再核對上下邊界、Home／End、Pointer／Button、同頁重繪後反向移動／Open／Back的精確 bytes。另覆蓋正常回應、原始輸入、未知提示、同步輸出、Keyboard／閱讀頁及斷線時不得晚送，以及重繪也無回應時零重播；生產 JS wheel／request／result 回歸證明等待期不能提早 Open，真實重繪後可反向 wheel 與 Open。core 13 命令／2 replay、desktop lib 148／bin 141、全 targets Clippy、JS 258、fmt／docs、macOS arm64 release／strict ad-hoc 全通過。證據 .local/verification/list-boundary-wait（before-diagnostics.json、red.log、gate.json、validation.json）。
+
+新增 list_boundary 本機原生探針，peer 精確只收 PageDown、一次雙 Ctrl+L、PageUp、CR、Left 與 Close。最終 native-r3 在真正 Dioxus／WKWebView 全螢幕以原生滾輪下到無回應邊界，392ms 後收到同頁重繪；反向原生滾輪顯示完整前頁，經工具 Esc 恢復輸入焦點後 Enter 開合成文章，工具返回回到列表。三筆導覽、960×576 來源 PNG、Close acknowledged、全部 owner join 與 exit 0；無 renderer_error，dropped 最大 0。交付與副本 15 份 Mach-O loadable sections 一致、strict 驗章通過。392ms 是本機案例，沒有當作同篇實站速度比較。
+
+初輪排除 noWindowsAvailable 工具問題時超過 peer 五分鐘期限，native-r2 則在原始鍵前多出 pointer 導覽，被嚴格 peer 拒絕；失敗畫面／報告都保留，沒有放寬 bytes 或計數。重跑曾因共用磁碟預留拒絕，結束本案上一個測試並釋放自己的預留後通過原 guard。原生座標點文章仍回 noWindowsAvailable，不能以這次原生滾輪、鍵盤與 AX 工具返回宣稱全部滑鼠驗收；一般尺寸座標、Windows／Linux 及新版實站登入仍待驗。舊版偶發清理失敗與全螢幕截圖局部缺字未在本次修改範圍，條件式推送 develop 仍未執行，沒有公開發佈。
+
+使用者後續回報「正常了」，已取得列表滾輪邊界問題的實站手動確認；其他先前待驗項目不因此視為通過。
+
+## 診斷版全螢幕與列表狀態列 End（2026-10-27）
+
+診斷版置頂使用浮動層級；原 macOS 預定義選單直接送 toggleFullScreen，沒有先降低層級，因此 Control＋Command＋F 及選單均留在原視窗。改用同一原生選單加速鍵呼叫安全的 Tao set_fullscreen；框架先降回一般層級再進入原生全螢幕。每個視窗的 owner 只在原先為置頂時記錄尺寸，退出全螢幕且恢復原尺寸後恢復置頂；不加入搶焦點 timer，也不修改設定 Esc 的優先順序。來源依本機安裝的 Tao 0.34.8／muda 0.19.3 實作核對，沒有新增 unsafe 或原生全域按鍵監聽。
+
+依新要求，已辨識列表／選單最底下整條狀態列改為 End，包含左側標籤；先前上下黑邊與格線首尾入口保留。閱讀文章資訊列仍依原有閱讀路徑，未知／空列表不放行。先更新獨立 expected 重現舊版狀態列零送出，再核對六種 profile、全行四個橫向位置與三個垂直位置各只送一筆 Last。拖曳、Shift、未受信任、忙碌、輸出等待、過期來源與幾何變動仍拒絕，連結與既有返回優先不改。
+
+core 13 命令／2 replay、desktop lib 145／bin 141、全 targets Clippy、JS 257、fmt／docs 與 macOS arm64 release／strict ad-hoc 通過；證據 .local/verification/fullscreen-status-end（red-pointer.log、gate.json）。新版實際程序路徑與交付一致，啟動畫面為未啟用的灰色標題列；原生鍵盤及選單各完成一次 1040×768 → 1920×1080 → 1040×768。全螢幕設定開啟後 Esc 關閉，AX 回 BBS，視窗仍為 1920×1080；成對 AX／截圖見 native。關窗後 finish 的 run_ok／cleanup_ok 均為 true，程序已退出。此輪未登入或送站端操作。
+
+另保留觀察限制：全螢幕關設定後的擷取圖下方部分登入文字缺塊，退出全螢幕後完整；尚未區分實畫面與原生擷取差異，不將尺寸驗證宣稱為全畫面像素驗收。列表狀態列的原生滑鼠點擊仍待人工確認，先前 noWindowsAvailable 工具限制未以 DOM／Connection 測試冒充通過；舊版偶發 cleanup_ok false 也未據本次正常關閉宣稱修復。先前條件式推送 develop 仍保留待驗條件，未推送；Windows／Linux 原生 not_ready，沒有公開發佈。
+
+## 普通編號列的彩券顯示作者（2026-10-24）
+
+續查已登入 NBA 當頁，普通編號文章含「[彩券]」作者欄，診斷 profile 為 unknown；即使畫面首尾命中正確，原有保守准入仍會拒絕。以自製三列 fixture 的普通編號列換成同一固定標籤，先重現 ArticleList 辨識失敗。只補此精確標籤，不普遍放寬其他普通編號括號名稱；日期、13 欄作者、文章標記、標頭／游標與完整畫面要求保留。黑白名單／作者右鍵仍只接受真正帳號。
+
+核心新增 First／Last／Open、current_board 及作者操作不含顯示標籤的獨立 expected，負例保留近似標籤、缺括號、不合法日期與提示文字；Connection 對同一合成普通編號標籤頁精確核對 Home／End、舊 stamp 拒絕、零重複輸入與 Close acknowledged。core 13 命令／2 replay（navigation 51 項）、desktop lib 145／bin 141、全 targets Clippy、JS 256、fmt／docs 與 macOS arm64 release／strict ad-hoc 全通過，證據 .local/verification/lottery-list-author/gate.json；沒有放寬或移除原普通括號標籤負例。合併兩項修正的 dist/macos-list-home-end-final/PTTStella.app 已開啟，實際程序路徑與交付一致。使用者完成鑰匙圈授權後沿用保存帳密登入，主選單 CmdK 前往 NBA，通過進板圖後以三次 PageUp 回到含同一「[彩券]」普通編號文章的頁面，profile 從舊 unknown 恢復 article_list。鍵盤 Home 到第 1 篇、End 到最新與置底列、再次 Home 回首頁，首頁仍為 article_list；這是首尾目的位置對照，不當作滑鼠通過。新版原生底部黑邊點擊仍被工具以 noWindowsAvailable 在送出前拒絕，未手動驗收；live-report.json 與成對畫面如實記錄。診斷無 renderer_error、採樣 dropped 最大 0，沒有發文／推文／寄信或改設定／最愛，App 留在 NBA 第一頁列表供驗收。
+
+舊 macos-floating-test-final 換版關窗時，出現「畫面工作未確認結束：EvalError::Finished - eval has already ran；停止訊號：未確認」。診斷 finish 為 run_ok true／cleanup_ok false；已保存同次 AX／畫面與 finish，第二次關閉錯誤視窗後程序退出。此獨立清理問題尚未定位或修復，不計為關閉驗收通過；證據 .local/verification/list-viewport-edges/old-cleanup-failure.*、old-finish.json。先前條件式推送 develop 仍未執行，原生滑鼠待驗與此清理失敗均需如實保留。
+
+## 列表上下留白的滑鼠 Home／End（2026-10-24）
+
+使用者確認要求滑鼠點畫面最頂／最底。既有首尾僅在 BBS 格線內，置中後的上下黑邊因沒有 terminal cell 而無法命中。為已辨識文章列表、看板／最愛／分類、主選單、系統／信件／精華列表與說明頁補上 viewport 首尾窄帶，沿用共同幾何及 First／Last sender；格線內原命中、網址及返回優先、底部狀態列拒絕保持。留白中段與未知／空列表不放行，不新增覆蓋層或常駐提示，黑邊顯示相同帶橫線箭頭。閱讀模式與原生 Home／End 鍵不改。
+
+新增生產 pointerdown／up／click 回歸先重現黑邊零送出與缺少游標狀態，另核對六種列表 profile 的頂／底各僅送一筆、保留舊格線入口、留白中段及頁尾不觸發；Shift、拖曳、過期幾何、未繪圖、忙碌、外站路由及視窗外點擊均拒絕。core 13 命令／2 replay、desktop lib 145／bin 141、全 targets Clippy、JS 256、fmt／docs 與 macOS arm64 release／strict ad-hoc 通過（r3/gate.json）。首次新增未繪圖負例後，全套檢查抓到不帶 clientY 的既有獨立命中測試會先讀幾何；已先驗 clientY 再讀 grid，保留原有測試及新未繪圖拒絕。來源與證據 .local/verification/list-viewport-edges；新版原生操作驗收待補，既有 noWindowsAvailable 限制不能以 JS 測試冒充通過。先前一般瀏覽後推送 develop 的手動滑鼠待驗條件仍保留。
+
+## 一般瀏覽回歸與測試視窗（2026-10-24）
+
+沿用主選單修正版實站唯讀瀏覽 NBA、Steam：NBA「Walter Clayton Jr. 跟獨行俠隊簽下雙向約」取消全文後，兩次單次 Down 分別取得 44／56 行並自動接續至 2～24／23～45；End 可見最後 dash007 推文，3/3、100%。Home／j／k、PageDown／PageUp 往返正確，閱讀中 CmdK 前往 Steam 進板圖，確認後到文章列表。Steam「Epic 的免費遊戲 + steam PTT 評價」以 Enter 開啟，取消後手動取頁至 76 行、4/4、100%，最後 t32908 推文可見；Left 返回列表。再用 AX 點浮球／導覽分類、Esc 關閉工具，未另外重聚焦即可 Up＋Right 進入相鄰 reanimal 文章；只核對首屏，未宣稱完整讀完 55 頁，載入暫停中 Left 正常返回。文章主張大意、URL 與成對 AX／截圖見 .local/verification/general-browsing-2026-10-24/notes.json；沒有發文／推文／寄信或改最愛／設定。
+
+原生座標點擊與滾輪工具在傳送前回 noWindowsAvailable，AX Raise 也無法排除；因此列表／正文點擊、左緣返回及滾輪仍 not_ready，已請使用者手動核對，不能以 AX 點工具按鈕當作正文滑鼠通過。可用的有界輪替 log 沒有 renderer_error、採樣 dropped 最大 0；舊版正常關窗後 run_ok／cleanup_ok 均 true，程序已退出。
+
+依使用者要求，診斷編譯或合成 probe 視窗改為置頂且初始不要求焦點；macOS event loop 同時停用啟動時忽略其他 App 的自動啟用。一般發佈保留原行為，不加定時 Raise、不禁用正常手動聚焦，全文失焦暫停與原准入保留。desktop lib 145／bin 141、全 targets Clippy、fmt／docs 與新版 macOS arm64 release／strict ad-hoc 打包通過（window-gate/gate.json）。交付 dist/macos-floating-test-final/PTTStella.app 啟動畫面為未啟用狀態，實際程序路徑核對一致；鑰匙圈讀取完成後留空密碼登入，再從主選單 CmdK 前往 MobileComm。平板實測文章取消全文後以單次 Down 取頁，完整到 65 行、3/3、100%，最後 birdy590 推文可見；Home 回 1～23、35%。初次 j／k 重建投影，逐鍵 log 證明收到非 ASCII 字形（shape 5）及 textarea text；切換輸入來源後，英文 j 取得第二頁並顯示 2～24，k 回 1～23，shape 1／defaultPrevented／reading_move 相符，符合 README 的英文輸入契約，不據此修改中文輸入。輸入來源切換已還原。Left 返回後再 CmdK 前往 NBA，進板確認後列表含原括號置底作者正常，App 留在 NBA；數字 log 無 renderer_error、採樣 dropped 最大 0。未宣稱置頂重疊及手動滑鼠已通過。使用者要求一般瀏覽確認後推送 develop，目前保留原生滑鼠待驗條件，未推送。Windows／Linux 原生仍 not_ready，正式發佈維持暫緩。
+
+## 主選單快速前往的選項確認修復（2026-10-24）
+
+前次實站主選單快速前往只移到我的最愛，原因是 Switch::begin 直接送 f，依賴字母直接執行的站端行為；目前帳號只會先定位。改在已辨識主選單的有效項目列中找唯一 Favorite／最愛，沿用 navigation::plan Open 的相對方向鍵＋CR；不修改站端偏好，不加入第二個送鍵器。已選 Favorite 只送 CR，其他位置只走最短相對移動後確認；缺項／重複項仍拒絕，後續確認看板列表才搜尋。指定文章入口也共用修正。
+
+新增回歸先重現舊版送出 f；四個游標位置使用獨立 expected 核對 Down＋CR／CR／Up＋CR／UpUp＋CR。Connection 自 Class 開始精確核對 Up＋CR，再送回中途 Favorite 選取畫面，必須零額外 Enter，之後才接受正常板列表／分段搜尋提示／板名及目標確認；原取消、過期與跨 session 測試保留。首次完整檢查抓到指定文章鏈的舊 f wire expected，已更新同一初始選項開啟契約並重新跑完整 gate；沒有放寬 bytes 或刪除 article 身分驗證／取消案例。
+
+core 13 命令／2 replay（navigation 50 項）、desktop lib 145／bin 141、全 targets Clippy、JS 253、fmt／docs 與 macOS arm64 診斷版 release／strict ad-hoc 通過。交付 dist/macos-main-menu-jump-final/PTTStella.app 的實際執行路徑核對一致。使用者處理鑰匙圈授權後，App 留空密碼並沿用已保存帳密登入 PTTStella；從主選單 Class 選項 CmdK 前往 Steam，再回主選單 Favorite 選項 CmdK 前往 NBA，兩次都直接到達目的板進板圖，沒有停在我的最愛或手動補確認。只在正常進板圖按 Return 後，分別確認 Steam／NBA 文章列表，NBA 原有「[馬路探子]」置底顯示作者仍可見。沒有 renderer_error，採樣 dropped 最大 0；未發文／推文／寄信或改最愛／設定，App 留在已登入 NBA 列表。成對 AX／畫面及有界數字報告位於 .local/verification/main-menu-jump-fix/live，離線證據為 red.log、r2/gate.json；Windows／Linux 原生 not_ready，正文滑鼠仍由使用者驗收，正式發佈仍暫緩。
+
+## NBA 置底顯示作者與快速切板修復（2026-10-24）
+
+以自製「[測試作者]」置底列重現舊版 Unknown／Unrecognized；作者欄只接受一般 ASCII 帳號，造成同頁其他正常文章也無法提供列表導覽與快速切板。只為 ★ 置底列補上完整方括號的非空字母／數字／底線顯示名稱，保留格線、日期、標記、完整畫面、游標與其他負例；普通編號列不放寬。原有 filters 帳號驗證保持獨立，顯示名稱不會變成黑白名單或作者右鍵的 ID。
+
+core 13 命令／2 replay（navigation 48 項）、desktop lib 145／bin 141、全 targets Clippy、JS 253、fmt／docs 與診斷版 macOS arm64 release 打包通過。core 新案例涵蓋整頁辨識、Open 精確相對鍵、current_board／Switch::begin，以及只有真帳號才有作者操作；Connection loopback 核對唯一 Left → 已辨識板列表後 s → 空搜尋提示後 Stella＋CR，確認到達、零額外 bytes 及 Close acknowledged。首次新增 Connection fixture 多一格，日期欄測試確實拒絕，修正合成欄位後重跑完整 gate，沒有放寬生產日期檢查；保留初次失敗與 red regression 證據。
+
+交付 dist/macos-nba-list-final/PTTStella.app 已通過 strict ad-hoc 驗章，實際執行路徑與交付一致。使用者處理鑰匙圈授權後，由 App 留空密碼登入 PTTStella，實站 NBA 列表保留同一「[馬路探子]」置底列，診斷 profile 從前次 unknown 恢復 article_list。直接 CmdK 前往 Steam、通過站端進板圖後到達 Steam 列表，再直接 CmdK 返回 NBA，含相同置底作者的列表仍正常；不需手動退出 NBA 列表作為切板前置。沒有 renderer_error、採樣 dropped 最大 0，未發文／推文／寄信或改最愛／設定，App 留在已登入 NBA 列表。成對 AX／畫面與報告 .local/verification/nba-list-fix/live，完整 gate 位於 r2/gate.json。附帶觀察主選單的快速前往曾停在 Favorite 選項，手動 Right 進入後才開始本輪列表測試；該獨立主選單路徑未修復，不擴大宣稱所有入口通過。Windows／Linux 原生 not_ready，正式發佈仍暫緩。
+
+## 最新診斷版追加唯讀測試與鑰匙圈說明（2026-10-24）
+
+沿用已登入的 macos-navigation-waits-final，以 PTTStella 再讀 NBA「[情報] Dalton Knecht 去尼克」完整 79 行、4/4、100%，末尾 corner0111 推文可見；取消全文後單次 Down 取得 45 行並顯示 2～24，手動 Next 續至 67／79，Home 回 1/4、1～23、29%。只記錄 App 顯示的消息大意，未獨立查核；沒有發文、推文、寄信或改設定／最愛。
+
+新增限制：當時 NBA 文章列表被判未知，快速切板明確拒絕；回上層已辨識分類列表後可正常前往 PC_Shopping 進板提示。置底作者的非標準標籤可能相關，尚無格線重現證明，不宣稱已修復。PC_Shopping 後續鍵盤轉場未取得確認，原生座標工具回 noWindowsAvailable，列自動化 not_ready，不據此當作產品按鍵故障。成對畫面、文章大意及有界數字 log 保存在 .local/verification/latest-user-test-2026-10-24；App 留在 PC_Shopping 進板提示。
+
+帳密沿用既有鑰匙圈流程，沒有讀出、保存或記錄密碼；補充同版始終允許與 ad-hoc 換版重複授權的差異，見登入契約。程式實際 designated requirement 為特定 cdhash，未自行建立簽署身分或改安全設定；本輪只有文件／測試紀錄，未重建 App，前次功能 gate 不冒充新增情境全數通過。
+
+## 方向鍵取頁與跨看板等待生命週期（2026-10-23）
+
+前次 SubAgent 的卡住已由 log 與生產程式交叉定位：網頁文章取消全文後，方向鍵在未知邊界送出普通 next_page 卻帶 keyboard 來源，Rust protocol 拒絕；早期拒絕沒有 navigation_result，前端 navigationRequest 殘留，後續換板仍受影響。修正普通方向鍵取頁走既有普通來源；keyboard 只准入受設定、文章邊界及版本再次核對的跨文章方向鍵。每筆 UI 導覽綁定安全整數 request／generation；送出、拒絕、取消與過期回覆只結束對應等待。工具、原始輸入、換篇、換 session、取消及快速跳轉撤銷舊等待，內部預讀沒有 UI ticket，不會解鎖新請求；唯一 command owner、原有六秒回覆期限及不重送 bytes 規則保留。
+
+core 13 命令／2 replay、desktop lib 144／bin 141、全 targets Clippy、JS 253、fmt／docs 通過。新增共享 fixture 經真正 JS producer／packet router 及 Rust 准入，另覆蓋 command owner 成功、錯誤與取消、舊回覆不得解除新等待，以及真正 Cmd/Ctrl+K 對話框提交後切板再翻頁。macOS arm64 原生 inline_pages 逐筆 peer 只接受一筆精確 PageDown；Down 本機接續至 2～24，End 到 46，Home 回讀及展圖後 End 末行完整。補核 log 發現此合成案例由預讀先取回下一頁，因此不計為普通方向鍵邊界准入證明。兩次長按 Enter 共一個 batch，三個圖片路徑各一筆 HTTP、960×576 來源 PNG、1040×768 固定視窗、Close acknowledged、全部 owner／HTTP thread join 與 exit 0；交付與副本 15 份 loadable sections 相同並通過 strict ad-hoc 驗章。
+
+先前「文字消失」的命名截圖仍可見正文，不能證實 Canvas 根因；本輪原生與後續實站測試改為保存同一次 getAXStateAndScreenshot 回傳的 state／screenshot，未猜測改繪圖。新診斷交付 dist/macos-navigation-waits-final/PTTStella.app；證據 .local/verification/navigation-waits-fix。SubAgent 實站重跑於 10 月 24 日完成：同帳號依序 MobileComm → CmdK Steam → CmdK NBA，三篇取消全文後均以單次 Down 取得下一頁並自動接續一行；各完整讀到 68／41／52 行，末尾推文可見，Home／End、PageDown 與返回列表正常。七筆 Navigate／NavigationResult 的 request 1～7 在同 generation 逐一匹配、全部成功，採樣 dropped 為 0、沒有 renderer_error。實站未保證命中毫秒級的在途取消競態，舊回覆隔離由可控制順序的生產 JS／Rust owner 測試補證。文章標題、公開 URL、大意及成對截圖留在 .local/verification/subagent-navigation-waits-2026-10-23；未發文／推文／寄信或修改最愛／設定。App 留在 NBA 列表。Windows／Linux 原生 not_ready，正文滑鼠仍由使用者驗收，正式發佈維持暫緩。
+
+## 專版閱讀後的取頁接續與資訊列修復（2026-10-23）
+
+PTTStella 帳號實讀 MobileComm、Steam、NBA 三個即時熱門專版，沒有進入八卦／政黑、沒有發文／推文／寄信。本機摘要與閱讀範圍保留於 .local/verification/specialty-reading-2026-10-23；Steam 只讀正文與推文開頭，不宣稱讀完全部 14 頁。發現隱藏 WebView 的全文載入依既有規則暫停，但提示未解釋；取消後，手動取回的新頁只更新快取，原本的捲動需再按一次；末頁 Home 後頁碼／百分比已更新，目前顯示行號仍沿用站端尾頁。
+
+修正把暫停原因與原閱讀 permission 共用，顯示背景／操作暫停及自動恢復說明，仍可取消，沒有放寬背景取頁。手動邊界最多保留一筆綁定 generation／文章 ID 的閱讀意圖，等新範圍和導覽結果到齊後只接續一次本機捲動，不重送取頁；其他輸入、換篇、取消、失焦、工具或拒絕會撤銷。Rust 只驗證並提供頁尾數字 cell 範圍，JS 用可見快取畫面列更新行號（折行按畫面列計數）；來源格線／PNG 不改，ANSI 配色仍使用原頁樣式。
+
+core 13 命令／2 replay、desktop lib 144／bin 137、全 targets Clippy、JS 249、fmt／docs 通過。原生 macOS arm64 inline_pages 以分段回覆證實一次 PageDown 即自動顯示第二頁；Home 行號回到 1～23，展圖後 End 仍能看到末端。兩次長按 Enter 同一 batch、三個圖片路徑各一筆 HTTP、來源 PNG、站端精確一筆 PageDown、Close acknowledged 與全部 owner join 通過。暫停原因與取消狀態另由生產 JS 測試覆蓋；沒有宣稱本輪驗證 Windows／Linux 或所有偶發卡頓。診斷交付保留預設本機 log，證據 .local/verification/reading-continuity-fix；正式發佈仍暫緩。
+
+## 工具列焦點與中文輸入法 Control 快捷鍵修復（2026-10-23）
+
+一般使用實測發現兩條獨立路徑：工具選單／分類的 Esc 原先把焦點留在浮球，改為關閉後呼叫共同的 BBS 焦點恢復；這次 Esc 由工具列消耗，不穿透站端，另有對話框時保留其 owner。另一條在明確恢復 BBS 焦點後仍發生：macOS WebKit 在中文輸入法下，把 Ctrl+X 回報為非 ASCII 邏輯字元，Control 為真且實體字母代碼存在；原始 Rust Control 轉譯只接受 ASCII 字母，導致無聲略過。JS 保留這類明確快捷鍵的命令路徑，由既有 Rust 正規化實體字母；一般文字／Alt／正在組字不改成實體字元，ASCII 邏輯鍵仍尊重目前配置，複製／貼上與 Normal 的破壞性命令保護保留。診斷增加有界修飾鍵與按鍵形狀，仍不記鍵值／文字／code 內容，見診斷契約。
+
+core 13 命令／2 replay、desktop lib 144／bin 136、全 targets Clippy、JS 245、fmt／docs 通過。新 control_input 原生探針以本機假編輯器核對 Ctrl+X／Ctrl+Z／Ctrl+A 各一次，獨立 peer 僅接受 0x18／0x1a／0x01 及 Close；macOS arm64 同一交付程式觀察到 1/3、2/3、3/3 VERIFIED，工具分類 Esc 後 AX 焦點回到 BBS，下一控制鍵立即生效。來源 PNG、Close acknowledged、全部 owner join 與 exit 0 通過。早期分類探針逾時及新 fixture 漏列原生互動期限的失敗證據保留，只有最終 native-control 計為通過；沒有再寄信或發文。Windows／Linux 原生結果本輪 not_ready，也不以此結案所有未重現的偶發卡頓。
+
+修正版 dist/macos-input-fix-final/PTTStella.app，證據 .local/verification/input-focus-fix（final-gate.json、native-control/probe、validation.json）。前次一般使用與寄信的歷史結果仍保留於下節。
+
+## 一般使用實測：登入完成後設定關閉失敗（2026-10-23）
+
+依使用者授權，以 PTTStella 帳號模擬一般操作（不發文、最多一封指定收件人的測試信，加入最愛並閱讀文章）。macOS 實站按鈕登入重現 `preventDefault is not a function`，診斷紀錄包含 renderer_error、run_ok=false 與 cleanup_ok=true。根因是內嵌登入／站點操作完成後，以只有 isTrusted 的內部物件呼叫設定關閉；關閉程式卻假定必有 DOM preventDefault 方法。改為方法存在時才呼叫，保留原本 autosave 與關閉流程。回歸案例覆蓋無事件方法的完成回呼，以及未保存設定必須等成功保存才關閉。
+
+全部 JS 243、docs 與 macOS arm64 release／ad-hoc 打包通過。修正版 `dist/macos-diagnostic-user-test/PTTStella.app` 已以鑰匙圈保存的帳號完成實站登入、通過歡迎畫面並進入主選單與信件編輯器；未再出現該例外。中文貼上預覽與站端顯示已核對；自動化直接中文字元與 Ctrl+X 未得到預期結果，仍待區分輸入工具與原生操作差異，不能宣稱寄信或一般瀏覽全數通過。進行中證據保留在 .local/verification/live-user-2026-10-23；未恢復正式發佈。
+
+同帳號隨後新增 C_Chat、Baseball、PC_Shopping 三個站端最愛，離板返回後仍在清單。各讀一篇文章並於本機保留標題、公開文章網址、內容大意及閱讀範圍：Corsair 新品 38 行、松井秀喜就任問答 130 行、豪華列車寫作挑戰 26 行，均觀察到末尾推文；未發文或推文。Home／End、PageDown（原生工具名稱 Next）、j／k、單圖箭頭、第二次短 Enter 等寬及展圖後完整末行已分別觀察；取消全文後可用 Next 手動接頁，換篇移除前篇圖片與載入狀態。自動化期間出現 document.hidden，全文暫停但提示仍為載入中，因此不以這輪證明前景全文效能。工具列 Esc 關閉後原程式將焦點留在浮球；log 可見按鍵落在 chrome，明確點回 BBS 輸入區後同一 Esc 可取消全文，這個焦點行為尚未修正。Ctrl+X 在明確恢復 BBS 焦點後仍有自動化無效的另一條路徑，現有不記鍵名的 log 尚不足以確定原因。寄信首份草稿已由使用者確認放棄；第二份草稿經手動 Ctrl+X 協助進入存檔選單後，由自動化確認寄送，站端明示「已順利寄出」。僅寄一封指定收件人的測試信，保存並讀回唯一新增的底稿，收件人、中文主旨與兩行正文相符，1/1、100%；不宣稱收件人已讀，也不將手動協助包裝成 Ctrl+X 自動化通過。App 留在已登入主選單。
+
+## 偶發卡頓診斷版與發佈暫緩（2026-10-22）
+
+使用者回報滑鼠與鍵盤偶爾無反應，或做其他操作後才恢復，要求先交付自動記錄 log 的版本，並自行將 repo 改回 Private。四架構 verify 39758784499 已全部成功，Release PR #1 已合併為 main d8d605d；main／develop 已同步此合併歷史。依新指示取消尚未完成的正式發佈 39761002694，確認尚無 v0.1.0 tag／Release。保留 main 的 0.1.0 來源；本機 develop 的下一版與診斷交付為 0.2.0-dev.1，不恢復或另行公開發佈。
+
+[診斷契約](../diagnostics.md) 定義 compile-time opt-in 的診斷 App：一般建置預設關閉；診斷版正常啟動即寫入本機資料目錄，視窗標題明示。型別化事件只含種類、數值旗標、版本、狀態與時間，排除鍵名／文字／原始流量／帳密／文章／網址。WebView 原生事件到達與處理後測點、packet wall time、每秒脈衝及 Rust 每秒 pending／busy 快照分開記錄；獨立 thread 持續 watchdog，診斷寫檔不進輸入路徑。256 筆 try_send、32 筆／秒操作採樣與獨立 8 筆／秒慢封包額度、四份各 2 MiB 輪替與 OS file lock；退出 drain／join，失敗顯示提示，不自動重試使用者操作。Cmd／Ctrl+Shift+L 只加入本機問題標記。
+
+本機合成 diagnostics probe 只連 loopback，正文含不可進 log 的獨立 sentinel，明確模擬 1.4 秒 WebView 停頓。core 13 命令／2 replay、desktop lib 144／bin 136、全 targets Clippy、JS 242、Python tooling 74、fmt／docs 通過。新增 logger 測試覆蓋檔案輪替／排他、佇列飽和不阻塞、停用後拒絕新紀錄、獨立 watchdog、寫入失敗及退出 join；共用 wire fixture 與 router 驗證 on／off 診斷封包。初次原生測試發現 router 白名單未同步，已修復；快操作測試另抓到背景封包消耗操作採樣額度，改為只收耗時至少 16ms 的封包並使用獨立額度，重跑同一快速序列保留 key／pointer／wheel。失敗證據仍保留，不將早期結果當作通過。
+
+最終 macOS arm64 原生 Dioxus／WKWebView 使用交付的同一 loadable sections，確認約 1.39 秒停頓期間仍有 writer watchdog；恢復後 End／Home／Down、Cmd+Shift+L、原生點擊與滾輪均入 log。正文獨立 sentinel 可見但不進 JSONL，960×576 來源 PNG 的紅／綠獨立色塊正確；固定 1040×768 視窗，peer 拒絕全部站端輸入，Close acknowledged，全部 owner 與診斷 writer 完成，exit 0，strict ad-hoc 驗章通過。證據 .local/verification/diagnostics（r4-gate.json、delivery-gate.json、ready-gate.json、native-ready、ready-validation.json）；交付 dist/macos-diagnostic-ready/PTTStella.app。Windows／Linux 原生診斷 UI 本輪 not_ready；使用者實站偶發問題的根因尚未確認，不能以合成停頓結案。
 
 ## 0.1.0 Windows 原生建置檢查修復（2026-10-22）
 
@@ -22,7 +268,7 @@ Windows 隨後已通過全部 Rust／JS 測試，原生打包抓到 Inno 7 的 h
 
 原生 Setup 編譯後另發現 Inno 產物使用 PE delay-load imports，舊檢查器遇到任何 delay table 就拒絕。依 Microsoft PE 格式補上 32-byte descriptor、RVA／legacy VA、檔案實體範圍與結束記號解析，將延遲 DLL 合併到同一 imports inventory；應用程式及免安裝的非系統 DLL 拒絕仍有效，Setup manifest 另記實際 PE 檢查結果。獨立自製 PE 覆蓋普通／延遲／legacy、私有 DLL、未知 attributes、越界與缺結束記號；Python tooling 74、docs／actionlint 通過，四架構完整 verify 需重新執行。
 
-另以固定 SHA-256 的上游 Inno 7.1.0 x64 真實安裝檔驗證解析，辨識 kernel32／user32 的延遲依賴；下載檔與上游源碼留於 repo 外。證據 .local/verification/release-v0.1.0（windows-verify-attempt2.log、windows-verify-4d.log、lifecycle-gate.json、windows-9f.log、windows-f40.log、inno-pe-check.json）；0.1.0 發佈與四架構最終建置仍進行中，尚未建立 tag 或 Release。
+另以固定 SHA-256 的上游 Inno 7.1.0 x64 真實安裝檔驗證解析，辨識 kernel32／user32 的延遲依賴；下載檔與上游源碼留於 repo 外。證據 .local/verification/release-v0.1.0（windows-verify-attempt2.log、windows-verify-4d.log、lifecycle-gate.json、windows-9f.log、windows-f40.log、inno-pe-check.json）；當時尚未建立 tag 或 Release；最終處置見上節的發佈暫緩。
 
 ## 列表與選單可視區首尾 Home／End（2026-10-22）
 

@@ -1,4 +1,6 @@
 //! One retained file operation. Disk work never runs on the surface event loop.
+#[path = "files_picture.rs"]
+pub(super) mod picture;
 #[cfg(test)]
 #[path = "files_tests.rs"]
 mod tests;
@@ -51,6 +53,11 @@ impl std::fmt::Display for Error {
 type FileResult<T> = Result<T, Error>;
 pub(super) enum Completion {
     Clipboard(FileResult<()>),
+    Viewport(FileResult<()>),
+    Picture {
+        destination: ExportDestination,
+        result: FileResult<bool>,
+    },
     Sites {
         action: super::sites::Edit,
         request: u64,
@@ -84,7 +91,8 @@ pub(super) enum Completion {
 impl Completion {
     fn failure(self) -> Option<Error> {
         match self {
-            Self::Clipboard(result) => result.err(),
+            Self::Clipboard(result) | Self::Viewport(result) => result.err(),
+            Self::Picture { result, .. } => result.err(),
             Self::Sites { result, .. } => result.err(),
             Self::Bookmarks { result, .. } => result.err(),
             Self::Recent(done) => done.result.err().map(Error::Failed),
@@ -286,6 +294,96 @@ pub(super) async fn probe_report(
     )
 }
 
+/// Live canvas readback is confined to the explicit synthetic fullscreen probe.
+pub(super) async fn viewport_capture(
+    permit: Permit,
+    capture: super::protocol::ViewportCapture,
+    path: PathBuf,
+) -> Completion {
+    Completion::Viewport(blocking(permit, move || {
+        let [width,height]=capture.pixels;
+        if !(1..=8).contains(&capture.sequence) || width==0 || height==0 || width>8192 || height>8192
+            || u64::from(width)*u64::from(height)>16*1024*1024 || capture.png.len()>export::MAX_BASE64_BYTES+32 {
+            return Err("invalid viewport probe bounds".into());
+        }
+        let data=capture.png.strip_prefix("data:image/png;base64,").ok_or("invalid viewport PNG")?;
+        let bytes=base64::engine::general_purpose::STANDARD.decode(data).map_err(|e|e.to_string())?;
+        if bytes.len()>export::MAX_PNG_BYTES {return Err("viewport PNG too large".into());}
+        let stem=format!("viewport-{}",capture.sequence);
+        std::fs::write(path.join(format!("{stem}.png")),&bytes).map_err(|e|e.to_string())?;
+        let ink=viewport_ink(&bytes,width,height)?;
+        let metadata=serde_json::json!({"pixels":capture.pixels,"bounds":capture.bounds,"window":capture.window,"dpr":capture.dpr,"draws":capture.draws,"glyph_ink":ink});
+        std::fs::write(path.join(format!("{stem}.json")),metadata.to_string()).map_err(|e|e.to_string())?;
+        Ok(())
+    }).await)
+}
+
+/// Independent fullscreen fixture oracle: every label cell has ink and every
+/// row retains its literal ANSI background, including the first and last rows.
+fn viewport_ink(bytes: &[u8], width: u32, height: u32) -> Result<Vec<[usize; 5]>, String> {
+    let decoder = png::Decoder::new_with_limits(
+        std::io::Cursor::new(bytes),
+        png::Limits {
+            bytes: 64 * 1024 * 1024,
+        },
+    );
+    let mut reader = decoder.read_info().map_err(|e| e.to_string())?;
+    if (reader.info().width, reader.info().height) != (width, height) || width < 80 || height < 24 {
+        return Err("viewport dimensions differ".into());
+    }
+    let count = reader
+        .output_buffer_size()
+        .filter(|n| *n <= 64 * 1024 * 1024)
+        .ok_or("viewport raster too large")?;
+    let mut data = vec![0; count];
+    let info = reader.next_frame(&mut data).map_err(|e| e.to_string())?;
+    let channels = match (info.bit_depth, info.color_type) {
+        (png::BitDepth::Eight, png::ColorType::Rgba) => 4,
+        (png::BitDepth::Eight, png::ColorType::Rgb) => 3,
+        _ => return Err("viewport format unsupported".into()),
+    };
+    let scale = (width as f64 / 960.0).min(height as f64 / 576.0);
+    let x = |col| ((col as f64) * 12.0 * scale).round() as usize;
+    let y = |row| ((row as f64) * 24.0 * scale).round() as usize;
+    let rgb = |col: usize, row: usize| {
+        let i = (row * width as usize + col) * channels;
+        if channels == 4 && data[i + 3] != 255 {
+            [0; 3]
+        } else {
+            [data[i], data[i + 1], data[i + 2]]
+        }
+    };
+    let colours = [
+        [128, 0, 0],
+        [0, 128, 0],
+        [128, 128, 0],
+        [0, 0, 128],
+        [128, 0, 128],
+        [0, 128, 128],
+    ];
+    let mut rows = Vec::new();
+    for row in 0..24 {
+        if rgb(x(60), y(row)) != colours[row % 6] {
+            return Err(format!("viewport row {} background missing", row + 1));
+        }
+        let mut counts = [0; 5];
+        for (index, col) in [0, 1, 2, 4, 5].into_iter().enumerate() {
+            for py in y(row)..y(row + 1) {
+                for px in x(col)..x(col + 1) {
+                    if rgb(px, py).into_iter().all(|v| v >= 170) {
+                        counts[index] += 1;
+                    }
+                }
+            }
+        }
+        if counts.contains(&0) {
+            return Err(format!("viewport row {} label missing", row + 1));
+        }
+        rows.push(counts);
+    }
+    Ok(rows)
+}
+
 /// Explicit local fault fixture: an actual blocking worker retained until the
 /// runner releases it. Never selected by a normal application launch.
 pub(super) async fn slow_probe(permit: Permit, directory: PathBuf) -> Completion {
@@ -427,6 +525,21 @@ fn decode_png(png: String, rows: &Range<usize>) -> Result<Vec<u8>, String> {
     export::check_export_header(&bytes, rows).map_err(|error| error.to_string())?;
     Ok(bytes)
 }
+fn timestamp_stem() -> String {
+    let now = time::OffsetDateTime::now_utc();
+    let now = time::UtcOffset::local_offset_at(now).map_or(now, |offset| now.to_offset(offset));
+    format!(
+        "PTTStella-{:04}{:02}{:02}-{:02}{:02}{:02}-{:03}{}",
+        now.year(),
+        u8::from(now.month()),
+        now.day(),
+        now.hour(),
+        now.minute(),
+        now.second(),
+        now.millisecond(),
+        if now.offset().is_utc() { "Z" } else { "" },
+    )
+}
 async fn pick_export(
     rows: Range<usize>,
     selected: bool,
@@ -439,17 +552,19 @@ async fn pick_export(
             "export.png"
         }))
     } else {
+        let stem = timestamp_stem();
+        let filename = if selected {
+            format!("{stem}-lines-{}-{}.png", rows.start + 1, rows.end)
+        } else {
+            format!("{stem}.png")
+        };
         let window = dioxus::desktop::window();
         window.window.set_focus();
         rfd::AsyncFileDialog::new()
             .set_parent(window.window.as_ref())
             .set_title(pttstella::msg!("export-title"))
             .add_filter("PNG", &["png"])
-            .set_file_name(if selected {
-                format!("PTTStella-lines-{}-{}.png", rows.start + 1, rows.end)
-            } else {
-                "PTTStella.png".into()
-            })
+            .set_file_name(filename)
             .save_file()
             .await
             .map(|file| file.path().to_path_buf())
@@ -468,59 +583,63 @@ pub(super) async fn export_image(
             let probe = request.probe.clone();
             let selected = request.selected;
             copy_png_with_writer(permit, request, move |image| {
-                let mut owner = clipboard
-                    .lock()
-                    .map_err(|_| pttstella::msg!("copy-failed"))?;
-                if owner.is_none() {
-                    *owner = Some(
-                        arboard::Clipboard::new().map_err(|_| pttstella::msg!("copy-failed"))?,
-                    );
-                }
-                let clipboard = owner
-                    .as_mut()
-                    .ok_or_else(|| pttstella::msg!("copy-failed"))?;
-                // Test-only readback after an explicit copy gesture; normal copies retain no image evidence.
-                let expected = probe
-                    .as_ref()
-                    .map(|_| (image.width, image.height, image.bytes.clone().into_owned()));
-                clipboard
-                    .set_image(image)
-                    .map_err(|_| pttstella::msg!("copy-failed"))?;
-                if let (Some(directory), Some((width, height, expected))) = (probe, expected) {
-                    let actual = clipboard
-                        .get_image()
-                        .map_err(|_| "clipboard probe readback failed".to_owned())?;
-                    if actual.width != width
-                        || actual.height != height
-                        || actual.bytes.as_ref() != expected
-                    {
-                        return Err("clipboard probe pixels differ".into());
-                    }
-                    let mut bytes = Vec::new();
-                    {
-                        let mut encoder =
-                            png::Encoder::new(&mut bytes, width as u32, height as u32);
-                        encoder.set_color(png::ColorType::Rgba);
-                        encoder.set_depth(png::BitDepth::Eight);
-                        let mut writer = encoder.write_header().map_err(|e| e.to_string())?;
-                        writer
-                            .write_image_data(&actual.bytes)
-                            .map_err(|e| e.to_string())?;
-                    }
-                    storage::replace(
-                        &directory.join(if selected {
+                write_clipboard_image(
+                    clipboard,
+                    image,
+                    probe.map(|directory| {
+                        directory.join(if selected {
                             "clipboard-rows.png"
                         } else {
                             "clipboard.png"
-                        }),
-                        &bytes,
-                    )?;
-                }
-                Ok(())
+                        })
+                    }),
+                )
             })
             .await
         }
     }
+}
+fn write_clipboard_image(
+    clipboard: Clipboard,
+    image: arboard::ImageData<'static>,
+    probe: Option<PathBuf>,
+) -> Result<(), String> {
+    let mut owner = clipboard
+        .lock()
+        .map_err(|_| pttstella::msg!("copy-failed"))?;
+    if owner.is_none() {
+        *owner = Some(arboard::Clipboard::new().map_err(|_| pttstella::msg!("copy-failed"))?);
+    }
+    let clipboard = owner
+        .as_mut()
+        .ok_or_else(|| pttstella::msg!("copy-failed"))?;
+    // Test-only readback after an explicit copy gesture; normal copies retain no image evidence.
+    let expected = probe
+        .as_ref()
+        .map(|_| (image.width, image.height, image.bytes.clone().into_owned()));
+    clipboard
+        .set_image(image)
+        .map_err(|_| pttstella::msg!("copy-failed"))?;
+    if let (Some(path), Some((width, height, expected))) = (probe, expected) {
+        let actual = clipboard
+            .get_image()
+            .map_err(|_| "clipboard probe readback failed".to_owned())?;
+        if actual.width != width || actual.height != height || actual.bytes.as_ref() != expected {
+            return Err("clipboard probe pixels differ".into());
+        }
+        let mut bytes = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut bytes, width as u32, height as u32);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            let mut writer = encoder.write_header().map_err(|e| e.to_string())?;
+            writer
+                .write_image_data(&actual.bytes)
+                .map_err(|e| e.to_string())?;
+        }
+        storage::replace(&path, &bytes)?;
+    }
+    Ok(())
 }
 fn clipboard_pixels(
     png: String,

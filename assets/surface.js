@@ -1,4 +1,5 @@
-const localization=await dioxus.recv();
+retainSurfaceResult(dioxus,window);
+const localization=decodeSurfaceEnvelope(await dioxus.recv());
 const tr=createSurfaceI18n(localization,fluent);
 document.documentElement.lang=localization.payload.language;
 const canvas=document.getElementById("screen"), keyboard=document.getElementById("keyboard");
@@ -55,22 +56,29 @@ const browseBack=document.getElementById("browse-back"),browsePrevious=document.
 const browseHint=document.getElementById("browse-hint");
 const articleLoad=document.getElementById("article-load"),articleLoadStatus=document.getElementById("article-load-status");
 const articleLoadCancel=document.getElementById("article-load-cancel"),articleLoadResume=document.getElementById("article-load-resume");
-function refreshArticleLoad() {
+function readingPauseReason() {
+    if(!document.hasFocus()||document.visibilityState==="hidden")return "background";
+    return stopped||!latest?.connected||settingsActive||articleFind?.isOpen()||blocked()||navigationLocked||navigationRequest
+        ||tools?.busy()||stationMouse.active()||dragging||hasSelection()||exportBusy||keyboardState.pending?"interaction":null;
+}
+function refreshArticleLoad(reason=readingPauseReason()) {
     const article=latest?.article,state=article?.load;
     articleLoad.hidden=!state||state==="complete";
-    articleLoad.dataset.state=state??"";
-    articleLoadStatus.textContent=state?tr("article-load-"+state,{lines:article.last_line-article.first_line+1}):"";
+    const display=state==="loading"&&reason?"paused-"+reason:state;
+    articleLoad.dataset.state=display??"";
+    articleLoadStatus.textContent=state?tr("article-load-"+display,{lines:article.last_line-article.first_line+1}):"";
     articleLoadCancel.hidden=state!=="loading";
     articleLoadResume.hidden=!["cancelled","stopped"].includes(state);
     articleLoadCancel.textContent=tr("article-load-cancel");articleLoadResume.textContent=tr("article-load-resume");
 }
 function changeArticleLoad(e,resume=false) {
     if(!e.isTrusted||stopped||!latest?.article)return;
+    revokeNavigation();
     send({kind:"article_load",generation,article:latest.article.id,resume,trusted:true});
     focus();
 }
 const cancelArticleLoad=e=>changeArticleLoad(e),resumeArticleLoad=e=>changeArticleLoad(e,true);
-function invalidatePresentation(){contextMenu?.close(false);stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);}
+function invalidatePresentation(){articleFind?.close(false);revokeNavigation();contextMenu?.close(false);stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);}
 const ctx=canvas.getContext("2d",{willReadFrequently:true});
 
 const {family:fontFamily,description:fontDescription,load:loadFonts,note:fontLoadNote,invalidate:invalidateFonts}=
@@ -83,9 +91,11 @@ let selectionActive=false, selectionFingerprint=null;
 let pastePending=false;
 let hoveredLink=-1;
 let hoveredRow=null,released=null,clickSequenceAction=false,navigationLocked=false,navigationRequest=false;
+let navigationSequence=0;
+let pendingReadingMove=null;
 let exportBusy=false, exportTask=null;
 let keepAliveGate=null;
-let tools=null,contextMenu=null;
+let tools=null,contextMenu=null,articleFind=null;
 let toolAccess={right_click_menu:true,show_floating_button:true};
 let toolsProbeEnabled=false;
 const send=value=>{ sent++; dioxus.send(value); };
@@ -109,12 +119,13 @@ function refreshStationMouse(){
     surface.dataset.stationMouseRoute=state?.route??"local";
 }
 const canNavigate=()=>!stopped&&!!latest?.connected&&['main_menu','system_menu','document_list','article_list','article_reading','board_list','empty_list','command_help','continue_prompt'].includes(latest.navigation.kind)&&!latest.input_pending&&!navigationLocked&&!navigationRequest&&!blocked();
-function invalidateNavigation(){navigationLocked=true;released=null;cancelDrag();setHover(null);refreshNavigation();}
+function invalidateNavigation(){revokeNavigation();navigationLocked=true;released=null;cancelDrag();setHover(null);refreshNavigation();}
 function sendInput(value){invalidateNavigation();send(value);}
 // Only classify editing vs command events here. Rust owns key translation and
 // the context-dependent conversion from browsing intents to PTT bytes.
 const commandKeys=new Set(["Enter","Backspace","Tab","Escape","ArrowUp","ArrowDown","ArrowRight","ArrowLeft","Home","End","PageUp","PageDown","Delete"]);
 function keydown(e) {
+    pendingReadingMove=null;
     if(document.querySelector("dialog[open]")){e.preventDefault();return;}
     if(e.isTrusted)stationMouse.revoke();
     cancelHover(true);
@@ -126,12 +137,14 @@ function keydown(e) {
     // event still carries 229 even though isComposing is already false.
     // Leave the native IME action intact; never forward it as a BBS command.
     const browsing=keyboardState.enabled&&!["input","once"].includes(keyboardState.mode);
+    const control=e.ctrlKey&&!e.altKey?(/^[a-z]$/i.test(e.key)?e.key.toLowerCase():
+        (e.key==="Process"||/[^\x00-\x7f]/.test(e.key))&&/^Key[A-Z]$/.test(e.code)?e.code.slice(3).toLowerCase():null):null;
     const pause=latest?.navigation.kind==="continue_prompt"&&!["Dead","Shift","Control","Alt","Meta","CapsLock","NumLock","ScrollLock","Fn","FnLock","Symbol","SymbolLock","Hyper","Super"].includes(e.key);
-    const physical=browsing&&/^(Key[A-Z]|Digit[0-9])$/.test(e.code);
+    const physical=browsing&&/^(Key[A-Z]|Digit[0-9])$/.test(e.code)||control!==null;
     if(e.isComposing||composing||((e.keyCode===229||e.key==="Process")&&!physical)||e.metaKey) return;
     // Let the native copy action fire; copy data is already prepared by Rust.
-    if(e.ctrlKey&&e.key.toLowerCase()==="c"&&hasSelection()) return;
-    if(e.ctrlKey&&e.key.toLowerCase()==="v") return;
+    if(control==="c"&&hasSelection()) return;
+    if(control==="v") return;
     if(e.key==="Escape"&&hasSelection()) { e.preventDefault(); cancelDrag();clearSelection(); return; }
     if(e.ctrlKey&&["+","=","-","0"].includes(e.key)) {
         e.preventDefault(); zoomTo(e.key==="0"?1:zoom+(e.key==="-"?-.25:.25)); return;
@@ -149,9 +162,10 @@ function keydown(e) {
         const action={PageUp:"previous_page",PageDown:"next_page",Home:"first",End:"last",ArrowUp:"up",ArrowDown:"down",k:"up",j:"down"," ":"next_page"}[e.key];
         if(action){e.preventDefault();readingMove(action==="up"||action==="down"?{action:"lines",down:action==="down",count:1}:{action},e);return;}
     }
-    const command=commandKeys.has(e.key)||(e.ctrlKey&&/^[a-z]$/i.test(e.key));
+    const command=commandKeys.has(e.key)||control!==null;
     if(command||physical||pause||(browsing&&e.key.length===1)) {clearSelection();e.preventDefault();}
     if(command||physical||pause||e.key.length===1||e.key==="Dead") {
+        revokeNavigation();
         inputKey=!command;
         send({kind:"key",key:{key:e.key,code:e.code,ctrl:e.ctrlKey,alt:e.altKey,shift:e.shiftKey,repeat:e.repeat},generation,trusted:e.isTrusted});
     }
@@ -173,6 +187,11 @@ function input(e) {
     // A trailing input for an already committed composition belongs to that edit,
     // while a new beforeinput identifies a new edit even when its text is equal.
     if(beforeEdit?.composition) {beforeEdit=null;return;}
+    // Some IMEs deliver an uncomposed Space as text rather than a command
+    // keydown. It has the same local page owner as an ordinary reading Space.
+    if(text===" "&&latest?.article&&!keyboardState.enabled) {
+        beforeEdit=null;readingMove({action:"next_page"},e);return;
+    }
     if(text) { clearSelection(); sendInput({kind:"text",text,generation,trusted:e.isTrusted}); }
 }
 const lineBreak=e=>e.inputType==="insertLineBreak"||e.inputType==="insertParagraph";
@@ -195,8 +214,12 @@ function compositionstart(e) {
 function compositionend(e) {
     const finished=composition;
     composing=false;composition=null;keyboard.classList.remove("composing");keyboard.value="";positionKeyboard();
-    if(finished&&e.data) sendInput({kind:"text",text:e.data,generation:finished.generation,trusted:e.isTrusted,composed:true,
-        composition_input:finished.startTrusted&&finished.editTrusted&&finished.editText===e.data});
+    if(finished&&e.data) {
+        if(e.data===" "&&e.isTrusted&&finished.generation===generation&&latest?.article&&!keyboardState.enabled)
+            readingMove({action:"next_page"},e);
+        else sendInput({kind:"text",text:e.data,generation:finished.generation,trusted:e.isTrusted,composed:true,
+            composition_input:finished.startTrusted&&finished.editTrusted&&finished.editText===e.data});
+    }
     policy("composition_end",e);
     refreshNavigation();
 }
@@ -233,6 +256,7 @@ function focus() { if(document.activeElement!==keyboard) keyboard.focus({prevent
 function restoreEditingFocus(){tools?.close();keyboard.blur();focus();}
 function restoreSettingsPanelFocus(){if(!document.getElementById("font-dialog").open)restoreEditingFocus();}
 function pointerdown(e) {
+    pendingReadingMove=null;
     if(stationMouse.down(e))return;
     if(e.button!==0||!e.isPrimary||dragging) return;
     released=null;
@@ -301,7 +325,7 @@ function cancelDrag() {
     refreshKeepAlive();
 }
 function pointercancel(){stationMouse.revoke();cancelHover(true);released=null;cancelDrag();clearSelection();}
-function deactivate(e){contextMenu?.close(false);stationMouse.revoke();cancelHover(true);policy("reset",e);released=null;cancelDrag();setHover(null);cancelComposition();refreshKeepAlive();}
+function deactivate(e){pendingReadingMove=null;contextMenu?.close(false);stationMouse.revoke();cancelHover(true);policy("reset",e);released=null;cancelDrag();setHover(null);cancelComposition();refreshKeepAlive();}
 function lostcapture(e){stationMouse.lost(e);if(dragging){cancelHover();dragging=null;released=null;surface.dataset.pointerActive="false";refreshKeepAlive();}}
 function hasSelection(){return selectionActive;}
 function clearSelection() {
@@ -384,13 +408,13 @@ function pointerView() {
     if(!hasPageEdges(latest?.navigation)&&latest?.navigation.kind!=="continue_prompt")return null;
     const bounds=surface.getBoundingClientRect(),visible=viewport.getBoundingClientRect();
     return JSON.stringify([latest.presentation,latest.navigation.kind,latest.article?.id,viewport.scrollTop,viewport.scrollLeft,
-        viewport.clientWidth,viewport.clientHeight,bounds.left,bounds.top,bounds.width,bounds.height,visible.top]);
+        viewport.clientWidth,viewport.clientHeight,bounds.left,bounds.top,bounds.width,bounds.height,visible.top,visible.left]);
 }
-function navigationPageAt(point,clientY,region,halves) {
+function navigationPageAt(point,clientY,region,halves,viewportEdges=false) {
     if(point&&(point.row<region.first||point.row>=region.last)||!point&&!Number.isFinite(clientY))return null;
     const bounds=surface.getBoundingClientRect(),visible=viewport.getBoundingClientRect();
-    const top=Math.max(visible.top,bounds.top+grid.y(region.first)/grid.ratio);
-    const bottom=Math.min(visible.top+viewport.clientHeight,bounds.top+grid.y(region.last)/grid.ratio);
+    const top=viewportEdges?visible.top:Math.max(visible.top,bounds.top+grid.y(region.first)/grid.ratio);
+    const bottom=viewportEdges?visible.top+viewport.clientHeight:Math.min(visible.top+viewport.clientHeight,bounds.top+grid.y(region.last)/grid.ratio);
     const y=clientY??bounds.top+(grid.y(point.row)+grid.bottom(point.row))/2/grid.ratio;
     if(y<top||y>=bottom)return null;
     const edge=Math.min((bottom-top)/4,Math.max(16,Math.min(32,(grid.bottom(region.first)-grid.y(region.first))/grid.ratio)));
@@ -402,8 +426,13 @@ function readingPageAt(point,clientY) {
     return navigationPageAt(point,clientY,navigationBackRegion(latest.navigation,latest.article),true);
 }
 function listEdgeAt(point,clientY) {
-    if(!hasPageEdges(latest.navigation)||latest.navigation.kind==="article_reading"||!Number.isFinite(clientY))return null;
-    return navigationPageAt(point,clientY,{first:0,last:latest.frame.rows-1},false);
+    if(!Number.isFinite(clientY)||!hasPageEdges(latest.navigation)||latest.navigation.kind==="article_reading"||!grid)return null;
+    // The complete final status row is End, including its left-hand label.
+    if(point?.row===latest.frame.rows-1)return {kind:"page",action:"last"};
+    const region={first:0,last:latest.frame.rows-1};
+    // A fitted terminal can leave black margins above/below the grid. Keep
+    // its original grid-edge targets and also admit the actual viewport edges.
+    return navigationPageAt(point,clientY,region,false,true)||navigationPageAt(point,clientY,region,false);
 }
 function hitAt(point,clientY) {
     if(!point||blocked()||dragging?.moved||!stationMouse.local()) return null;
@@ -429,6 +458,13 @@ function hitAt(point,clientY) {
 // Inserted images remain outside terminal cells. Only navigation uses their
 // physical position; text selection and the image context menu keep their owners.
 function pointerHit(point,event) {
+    if(!point&&!blocked()&&!dragging?.moved&&stationMouse.local()&&canNavigate()){
+        const visible=viewport.getBoundingClientRect();
+        if(event.clientX>=visible.left&&event.clientX<visible.left+viewport.clientWidth
+            &&event.clientY>=visible.top&&event.clientY<visible.top+viewport.clientHeight){
+            const edge=listEdgeAt(null,event.clientY);if(edge)return edge;
+        }
+    }
     const image=inlineImages.linkAtPoint(event);
     const bounds=surface.getBoundingClientRect();
     const clipped=point===null&&event.clientX>=bounds.left&&event.clientX<bounds.right?
@@ -444,6 +480,7 @@ function setHover(point,redraw=true,preview=true,event=null) {
     const changed=index!==hoveredLink;hoveredLink=index;
     hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:0,kind:hit.kind}:null;
     surface.dataset.pointerAction=hit?.kind==="page"?hit.action:hit?.kind||"none";
+    viewport.dataset.pointerAction=surface.dataset.pointerAction;
     surface.style.cursor=["back","page"].includes(hit?.kind)?"":hit?"pointer":"default";
     surface.title=index>=0?latest.links[index].url:"";
     if(preview)previewHover(index);
@@ -471,22 +508,34 @@ function refreshNavigation() {
         context?.kind==="article_list"?tr("article-list-hint"):context?.kind==="article_reading"?(latest.article?tr("article-cache-hint",{first:latest.article.first_line,last:latest.article.last_line}):tr("article-reading-hint")):"";
     drawNavigationMarker();
 }
-function readingMove(intent,e,source="button") {
+function findArticleMatch(match) {
+    if(!latest?.article||!grid)return;
+    const maximum=Math.max(0,surface.offsetTop+grid.height/grid.ratio-viewport.clientHeight);
+    // grid.y is clipped at the pinned footer for hit testing. Finding an
+    // offscreen row must use its full document position, including images.
+    const target=surface.offsetTop+grid.reading.rowTop(match.row)/grid.ratio-Math.max(0,(viewport.clientHeight-grid.footerHeight)/2);
+    grid.reading.free(false);viewport.scrollTop=grid.reading.align(Math.max(0,Math.min(maximum,target)),maximum);draw(latest);
+}
+function readingMove(intent,e,source="button",fetch=true) {
+    if(typeof diagnostics!=="undefined")diagnostics.note("reading_move");
     const article=latest?.article;
     if(!article)return false;
     if(!["lines","previous_page","next_page","forward","first","last","scroll"].includes(intent.action))return false;
+    pendingReadingMove=null;
     if(blocked()||dragging||!latest.connected)return true;
     const documentHeight=grid?.height!==undefined?surface.offsetTop+grid.height/grid.ratio:viewport.scrollHeight;
     const maximum=Math.max(0,documentHeight-viewport.clientHeight),top=viewport.scrollTop;
     const line=grid?(grid.bottom(0)-grid.y(0))/grid.ratio:24;
     let delta=intent.action==="scroll"?intent.delta:intent.action==="lines"?(intent.down?1:-1)*line*intent.count:
-        (intent.action==="previous_page"?-1:1)*Math.max(line,viewport.clientHeight-(grid?.footerHeight??0))*.9;
+        (intent.action==="previous_page"?-1:1)*Math.max(line,viewport.clientHeight-(grid?.footerHeight??0)-line);
     let target=Math.max(0,Math.min(maximum,top+delta));
     if(intent.action==="first")target=0;
     if(intent.action==="last")target=maximum;
     const free=intent.action==="scroll";
     if(grid?.reading?.free(free))repaint();
     if(!free){
+        if(["previous_page","next_page","forward"].includes(intent.action))
+            target=grid?.reading?.page(top,maximum,delta>0)??target;
         if(intent.action==="lines"){
             const anchor=grid?.reading?.align(top,maximum,intent.down?"before":"after")??top;
             target=Math.max(0,Math.min(maximum,anchor+delta));
@@ -507,17 +556,58 @@ function readingMove(intent,e,source="button") {
             navigate({action:"adjacent_article",down:delta>0},e,"keyboard",false);
         return true;
     }
-    if(["loading","changed","limit"].includes(article.load))return true;
-    navigate({action},e,source==="keyboard-arrow"?"keyboard":source,false);return true;
+    if(!fetch||["loading","changed","limit"].includes(article.load))return true;
+    if(navigate({action},e,source==="keyboard-arrow"?"button":source,false))
+        pendingReadingMove={generation:latest.generation,article:article.id,first:article.first_line,last:article.last_line,
+            top:viewport.scrollTop,intent:{...intent}};
+    return true;
+}
+function resumeReadingMove() {
+    const pending=pendingReadingMove,article=latest?.article;
+    if(!pending)return;
+    if(!latest.connected||pending.generation!==latest.generation||pending.article!==article?.id
+        ||["changed","limit"].includes(article.load)) {pendingReadingMove=null;return;}
+    if(navigationRequest||navigationLocked||blocked()||dragging||grid?.packet!==latest)return;
+    if(article.first_line>=pending.first&&article.last_line<=pending.last)return;
+    pendingReadingMove=null;
+    // Preserve a prepended page's row anchor, but never override a user's
+    // intervening scroll. This is one local completion, never another fetch.
+    if(article.first_line===pending.first&&Math.abs(viewport.scrollTop-pending.top)>.01)return;
+    readingMove(pending.intent,{isTrusted:true},"continuation",false);
 }
 function navigate(intent,e,source="pointer",cached=true) {
+    if(typeof diagnostics!=="undefined")diagnostics.note("navigate");
     if(cached&&readingMove(intent,e,source))return;
     if(source==="pointer"&&!stationMouse.local())return;
     if(!canNavigate()||dragging?.moved) return;
+    if(!Number.isSafeInteger(navigationSequence)||navigationSequence>=Number.MAX_SAFE_INTEGER)return;
     stationMouse.revoke();policy("reset",e);
     if(!latest.article&&(intent.action==="previous_page"&&latest.navigation.first_line===1||intent.action==="next_page"&&latest.navigation.percent===100)) return;
-    clearSelection();navigationRequest=true;navigationLocked=true;setHover(null);refreshNavigation();
-    surface.dataset.navigationResult="pending";send({kind:"navigate",stamp:stamp(),intent,source,trusted:e.isTrusted});focus();
+    pendingReadingMove=null;
+    const operation=stamp(),request=++navigationSequence;
+    navigationRequest={request,generation:operation.generation,article:latest.article?.id??null};
+    clearSelection();navigationLocked=true;setHover(null);refreshNavigation();
+    surface.dataset.navigationResult="pending";send({kind:"navigate",request,stamp:operation,intent,source,trusted:e.isTrusted});focus();
+    return true;
+}
+function revokeNavigation() {
+    pendingReadingMove=null;
+    const pending=navigationRequest;
+    if(!pending)return;
+    navigationRequest=false;navigationLocked=false;
+    if(!stopped)send({kind:"navigation_cancel",request:pending.request,generation:pending.generation});
+}
+function receiveNavigation(data) {
+    const pending=navigationRequest;
+    if(!pending||data.request!==pending.request||data.generation!==pending.generation||data.generation!==latest?.generation)return;
+    navigationRequest=false;surface.dataset.navigationResult=data.status;
+    if(data.status!=="sent"){navigationLocked=false;pendingReadingMove=null;}
+    refreshNavigation();resumeReadingMove();showNotice(data.notice);
+}
+function observeNavigation(packet,changed) {
+    if(navigationRequest&&(navigationRequest.generation!==packet.generation
+        ||navigationRequest.article!==null&&navigationRequest.article!==(packet.article?.id??null)))revokeNavigation();
+    if(changed||packet.output_pending||latest?.input_pending&&!packet.input_pending)navigationLocked=false;
 }
 const browseReturn=e=>navigate({action:"back"},e,"button"),browseUp=e=>navigate({action:"previous_page"},e,"button"),browseDown=e=>navigate({action:"next_page"},e,"button");
 const leaveLink=()=>{if(!dragging){cancelHover(true);setHover(null);}};
@@ -531,7 +621,8 @@ function contextState(index,word=null,replyRow=null){
     const ready=!!latest&&!latest.output_pending&&!filterUi.blocked();
     const selectionReady=ready&&!!selectionCache&&selectionCache.presentation===latest.presentation
         &&selectionCache.generation===generation&&selectionCache.revision===revision;
-    return {word,replyRow,focused:!!latest?.reply_focus,link:index,selection:hasSelection(),selectionReady,rowsReady:selectionReady&&!exportBusy&&selectionCache.value.rows.end-selectionCache.value.rows.start<=24,
+    const picture=inlineImages.pictureState(index);
+    return {picture:!!picture,pictureReady:!!picture?.ready,word,replyRow,focused:!!latest?.reply_focus,link:index,selection:hasSelection(),selectionReady,rowsReady:selectionReady&&!exportBusy&&selectionCache.value.rows.end-selectionCache.value.rows.start<=24,
         ready,exportReady:ready&&!exportBusy,local:stationMouse.local(),ptt:!!latest?.ptt_features,
         reading:latest?.navigation.kind==="article_reading",authors:latest?.navigation.kind==="article_list",images:!!latest?.image_links.length,
         inlineReady:inlineShortcut({key:"Enter"},keyboardState,latest),navigate:canNavigate(),
@@ -561,6 +652,8 @@ function contextAction(action,context,e){
     }
     else if(action==="reply-focus")send({kind:"reply_focus",presentation:latest.presentation,stamp:stamp(),row:context.replyRow,trusted:true});
     else if(action==="reply-focus-clear")send({kind:"reply_focus",presentation:latest.presentation,stamp:stamp(),row:null,trusted:true});
+    else if(action==="copy-picture"||action==="save-picture")send({kind:"picture",presentation:latest.presentation,stamp:stamp(),index:context.index,
+        destination:action==="copy-picture"?"clipboard":"file",trusted:true});
     else if(action==="select-link")requestSelection({mode:"link",index:context.index});
     else if(action==="open-link")send({kind:"open_link",presentation:latest.presentation,generation,revision,index:context.index,trusted:true});
     else if(action==="select-all")selectPage();
@@ -577,7 +670,7 @@ function contextAction(action,context,e){
     else if(action==="vim")toggleVim(e);
     else if(action==="settings")settingsUi.request(e);
 }
-function activate() { if(!contextMenu?.isOpen()&&!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); refreshKeepAlive(); }
+function activate() { if(!articleFind?.ownsFocus()&&!contextMenu?.isOpen()&&!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); refreshKeepAlive(); }
 function paste(e) {
     if(!e.isTrusted||stopped)return;
     stationMouse.revoke();
@@ -624,8 +717,9 @@ function refreshExportControls() {
     copyPng.title=exportButton.title;copyRowsPng.title=exportRows.title;
 }
 function refreshKeepAlive() {
-    const ready=!settingsActive&&!!latest?.keep_alive&&!inlineImages.active()&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
-    const reading=!!latest?.article&&document.hasFocus()&&document.visibilityState!=="hidden"&&!stopped&&!!latest.connected&&!settingsActive&&!blocked()&&!navigationLocked&&!navigationRequest&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
+    const ready=!settingsActive&&!articleFind?.isOpen()&&!!latest?.keep_alive&&!inlineImages.active()&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
+    const reason=readingPauseReason(),reading=!!latest?.article&&!reason;
+    refreshArticleLoad(reason);
     const current=stamp(),key=JSON.stringify([current,latest?.presentation,latest?.article?.id,ready,reading,latest?.keep_alive_ready,latest?.keep_alive]);
     keepAlive.textContent=latest?.keep_alive?tr("keepalive-on"):tr("keepalive-off");
     keepAlive.setAttribute("aria-pressed",String(!!latest?.keep_alive));
@@ -700,7 +794,7 @@ function wheel(e) {
     navigate({action},e);
 }
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
-const media=installMedia({tr,send,prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshControls,restore:restoreEditingFocus});
+const media=installMedia({tr,send,prepare:()=>{articleFind?.close(false);stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshControls,restore:restoreEditingFocus});
 function refreshControls(){refreshNavigation();refreshExportControls();inlineImages.refreshAnimations();}
 const sitesUi=createSitesDialog({tr,send,manage:e=>settingsUi.manage("sites",e),present:dialog=>dialog.show(),visible:()=>settingsUi.visible("sites"),finished:()=>settingsUi.close({isTrusted:true}),prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreSettingsPanelFocus,changed:refreshControls});
 const settingsUi=createSurfaceSettings({document,send,tr,loadFonts,fontLoadNote,invalidateFonts,render,
@@ -715,18 +809,31 @@ const bookmarksUi=createBookmarksDialog({tr,send,prepare:e=>{policy("reset",e);i
 const filterUi=createFiltersDialog({tr,send,manage:e=>settingsUi.manage("filters",e),present:dialog=>dialog.show(),visible:()=>settingsUi.visible("filters"),current:()=>latest,invalidate:invalidatePresentation,
     reset:e=>policy("reset",e),restore:restoreSettingsPanelFocus,changed:refreshControls});
 tools=createFloatingTools({root:chrome,ball:document.getElementById("tools-ball"),fan:document.getElementById("tools-fan"),panel:toolbar,window,document,tr,
-    onSettings:e=>settingsUi.request(e),prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();released=null;},restore:restoreEditingFocus,changed:refreshKeepAlive});
+    onSettings:e=>settingsUi.request(e),prepare:()=>{revokeNavigation();stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();released=null;},restore:restoreEditingFocus,changed:refreshKeepAlive});
 contextMenu=createSurfaceContextMenu({root:document.getElementById("surface-context-menu"),document,window,
-    snapshot:contextIdentity,prepare:()=>{stationMouse.cancel();tools.close();cancelHover(true);cancelDrag();released=null;setHover(null);},
+    snapshot:contextIdentity,prepare:()=>{revokeNavigation();stationMouse.cancel();tools.close();cancelHover(true);cancelDrag();released=null;setHover(null);},
     execute:contextAction,restore:focus,changed:refreshControls});
+articleFind=createArticleFind({document,tr,current:()=>latest,allowed:()=>!stopped&&!settingsActive&&!blocked()&&!tools?.busy(),
+    prepare:e=>{policy("reset",e);tools?.close();invalidatePresentation();inlineImages.suspend();},restore:focus,
+    redraw:()=>{if(!stopped&&latest)draw(latest);},changed:refreshKeepAlive,jump:findArticleMatch});
 function requestInline(target,e){
     if(!e.isTrusted||stopped||blocked()||tools?.busy()||!inlineShortcut({key:"Enter"},keyboardState,latest))return;
     send({kind:"inline_expand",presentation:latest.presentation,stamp:stamp(),target,
         key:{key:"Enter",code:"Enter",ctrl:false,alt:false,shift:false,repeat:false},trusted:true});focus();
 }
-const inlineImages=installInlineImages({surface,canvas,viewport,tr,render,redraw:()=>{if(latest)draw(latest);},changed:refreshKeepAlive,notice:text=>{surfaceNote.textContent=text;},
+const inlineImages=installInlineImages({surface,canvas,viewport,tr,render,find:articleFind,redraw:()=>{if(latest)draw(latest);},changed:refreshKeepAlive,notice:text=>{surfaceNote.textContent=text;},
     allowed:()=>!stopped&&!blocked()&&!tools?.busy()&&inlineShortcut({key:"Enter"},keyboardState,latest),request:requestInline});
-const bindings=[...inlineImages.bindings,...contextMenu.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
+let viewportProbe=false,viewportCapture=0;
+function captureViewport(event){
+    if(!viewportProbe||stopped||!event.isTrusted||viewportCapture>=8)return;
+    hideChrome();
+    const bounds=canvas.getBoundingClientRect();
+    send({kind:"viewport_capture",sequence:++viewportCapture,png:canvas.toDataURL("image/png"),
+        pixels:[canvas.width,canvas.height],bounds:[bounds.left,bounds.top,bounds.width,bounds.height],
+        window:[innerWidth,innerHeight],dpr:devicePixelRatio||1,
+        draws});
+}
+const bindings=[...articleFind.bindings,...inlineImages.bindings,...contextMenu.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
     [keyboard,"beforeinput",beforeinput],
@@ -749,7 +856,20 @@ const bindings=[...inlineImages.bindings,...contextMenu.bindings,...sitesUi.bind
     [articleLoadCancel,"click",cancelArticleLoad],[articleLoadResume,"click",resumeArticleLoad],
 ];
 for(const [target,event,callback,options] of bindings) target.addEventListener(event,callback,options);
+const diagnostics=createSurfaceDiagnostics({send,document,window,snapshot:()=>{
+    const states=[latest?.connected,latest?.input_pending,latest?.output_pending,navigationLocked,navigationRequest,
+        composing,pastePending,!!document.querySelector("dialog[open]"),hasSelection(),!!dragging,settingsActive,
+        document.hasFocus(),document.visibilityState==="hidden",document.activeElement===keyboard,
+        !stationMouse.local(),!!tools?.open(),!!latest?.article,keyboardState.enabled,keyboardState.pending,!!contextMenu?.isOpen()];
+    const profiles=["unknown","main_menu","system_menu","document_list","article_list","article_reading","board_list","empty_list","command_help","continue_prompt"];
+    const profile=Math.max(0,profiles.indexOf(latest?.navigation.kind));
+    const flags=states.reduce((flags,value,index)=>flags|(value?1<<index:0),0)|(profile<<20)
+        |(latest?.article?.load==="loading"?1<<25:0)|(latest?.article?.load==="changed"?1<<26:0)|(latest?.article?.load==="limit"?1<<27:0);
+    return {generation,revision:Math.max(0,revision),presentation:latest?.presentation??0,
+        flags,scroll:viewport.scrollTop,extent:viewport.scrollHeight};
+}});
 function draw(packet) {
+    articleFind.update(packet);
     viewport.dataset.reading=packet.article?"web":"terminal";
     const frame=packet.source_frame??packet.frame,ratio=devicePixelRatio||1,width=frame.cols*12,height=frame.rows*24;
     const available=viewport.parentElement.getBoundingClientRect();
@@ -773,13 +893,15 @@ function draw(packet) {
     // the reader can capture its anchor. Its layout owns document height.
     if(!packet.article)surface.style.height=canvas.height/ratio+"px";
     level.textContent=Math.round(physical/ratio/fitting*100)+"%";
-    grid={...inlineImages.layout(packet,render(canvas,{...packet,frame},{cursor:!packet.article,hovered:hoveredLink,linkHints:true}),ratio),ratio};
+    grid={...inlineImages.layout(packet,render(canvas,{...packet,frame},{cursor:!packet.article,hovered:hoveredLink,linkHints:true,highlight:packet.article?null:articleFind.highlighter()}),ratio),ratio,packet};
     positionKeyboard();drawSelection();drawNavigationMarker();draws++;return grid;
 }
 function repaint() {
     if(stopped||!latest||animation) return;
     animation=requestAnimationFrame(()=>{animation=0;if(!stopped) {draw(latest);if(pointerClient)setHover(cellAt(pointerClient,false),false,true,pointerClient);}});
 }
+const viewportProbeButton=document.getElementById("probe-viewport");
+if(viewportProbeButton){viewportProbeButton.addEventListener("click",captureViewport);bindings.push([viewportProbeButton,"click",captureViewport]);}
 const observer=new ResizeObserver(repaint); observer.observe(viewport);observer.observe(viewport.parentElement);
 function checkArt({x,y}) {
     const pixels=ctx.getImageData(x(0),y(19),x(16)-x(0),y(21)-y(19)).data;
@@ -832,7 +954,8 @@ async function paint(packet) {
     if(stopped)return;
     const presentationChanged=packet.presentation!==latest?.presentation;
     const changed=presentationChanged||!sameStamp(stamp(),{generation:packet.generation,revision:packet.frame.revision,input_epoch:packet.input_epoch});
-    if(changed||packet.output_pending||latest?.input_pending&&!packet.input_pending) {released=null;clearSelection();cancelDrag();setHover(null,false,false);navigationLocked=false;}
+    observeNavigation(packet,changed);
+    if(changed||packet.output_pending||latest?.input_pending&&!packet.input_pending) {released=null;clearSelection();cancelDrag();setHover(null,false,false);}
     if(packet.output_pending)cancelHover();
     if(packet.mouse?.modes.epoch!==latest?.mouse?.modes.epoch||packet.mouse?.enabled!==latest?.mouse?.enabled){released=null;cancelDrag();cancelHover();setHover(null,false,false);}
     if(packet.generation!==generation){
@@ -855,7 +978,7 @@ async function paint(packet) {
         else if(surfaceNote.textContent===previousFailure) surfaceNote.textContent="";
     }
     refreshNavigation();refreshArticleLoad();
-    const geometry=draw(packet);send({kind:"painted",presentation:packet.presentation,revision,generation});if(packet.probe) probe(packet,geometry);
+    const geometry=draw(packet);resumeReadingMove();send({kind:"painted",presentation:packet.presentation,revision,generation});if(packet.probe) probe(packet,geometry);
     surface.dataset.revision=String(revision);
     surface.dataset.fontSize=String(packet.settings.font_size);surface.dataset.baseline=String(packet.settings.baseline);
     surface.dataset.cursorRow=String(packet.frame.cursor[1]);surface.dataset.inputEpoch=String(packet.input_epoch);
@@ -868,17 +991,26 @@ async function paint(packet) {
 }
 focus();
 function revokeSurface(){
-    stopped=true;inlineImages.suspend();contextMenu?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
+    stopped=true;articleFind.destroy();revokeNavigation();inlineImages.suspend();contextMenu?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
     for(const [target,event,callback,options] of bindings)target.removeEventListener(event,callback,options);
 }
 const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
 let cleanupClean=false;
 function runSurfaceProbe(mode){
             toolsProbeEnabled=true;
-            if(mode==="sites"||mode==="sites_restart")surfaceNote.textContent="Local station probe: loopback Big5/GBK peers only; station favourites, default, input, PNG and shutdown";
+            if(mode==="fullscreen")viewportProbe=true;
+            else if(mode==="sites"||mode==="sites_restart")surfaceNote.textContent="Local station probe: loopback Big5/GBK peers only; station favourites, default, input, PNG and shutdown";
             else if(mode==="tools")surfaceNote.textContent=tr("tools-probe-freeplay");
             else if(mode==="decode")send({kind:"synthetic_invalid_event"});
             else if(mode==="painted")send({kind:"painted",presentation:latest.presentation,revision:revision+100,generation});
+            else if(mode==="diagnostics"){
+                // Explicit loopback-only probe: measure a known stalled WebView,
+                // then require native input, marker, PNG and normal close outside JS.
+                diagnostics.note("marker",4,0,0,true);
+                const start=performance.now();while(performance.now()-start<1400){}
+                diagnostics.note("marker",5,0,performance.now()-start,true);
+                surfaceNote.textContent="本機診斷探針：已模擬 1.4 秒停頓；測試導覽、問題標記、PNG 與關閉";
+            }
             else if(mode==="renderer_error")throw new Error("synthetic renderer failure");
             else if(mode==="slow")surfaceNote.textContent="慢命令探針：結果等待 60 秒；可開啟字型設定或立即關閉視窗";
             else if(mode==="files")surfaceNote.textContent="原生選檔探針（本機合成資料）：可匯出 PNG 或匯入／匯出設定檔";
@@ -912,9 +1044,10 @@ function runSurfaceProbe(mode){
             }
 
 }
-function showNotice(message){if(!stopped&&message&&!settingsUi.notice(message))surfaceNote.textContent=message;}
+function showNotice(message){if(!stopped&&message&&!settingsUi.notice(message)&&!media.notice(message))surfaceNote.textContent=message;}
 const route=createSurfaceRouter({
-    localization:data=>{tr.update({kind:"localization",payload:data});document.documentElement.lang=data.language;settingsUi.relocalize();filterUi.relocalize();tools.relocalize();receiveKeyboard(keyboardState);refreshControls();refreshArticleLoad();},
+    diagnostics:enabled=>diagnostics.enable(enabled),
+    localization:data=>{tr.update({kind:"localization",payload:data});document.documentElement.lang=data.language;settingsUi.relocalize();filterUi.relocalize();tools.relocalize();articleFind.relocalize();receiveKeyboard(keyboardState);refreshControls();refreshArticleLoad();},
     paint,
     station_mouse_rejected:data=>{stationMouse.reject(data.lease);showNotice(data.message);},
     surface_probe:runSurfaceProbe,
@@ -936,6 +1069,7 @@ const route=createSurfaceRouter({
     settings_visibility:open=>{settingsActive=open;refreshKeepAlive();},
     settings_close:()=>settingsUi.escape(),settings_open:settingsUi.open,font_catalog:settingsUi.catalog,font_preview:settingsUi.preview,
     profile_result:async data=>{await settingsUi.profile(data);showNotice(data.notice);},
+    update_status:settingsUi.updateStatus,
     settings_saved:data=>{settingsUi.saved(data);showNotice(data.notice);},
     selection:receiveSelection,
     paste_result:data=>{
@@ -944,11 +1078,7 @@ const route=createSurfaceRouter({
         refreshNavigation();showNotice(data.notice);
     },
     input_rejected:message=>{navigationLocked=false;refreshNavigation();showNotice(message);},
-    navigation_result:data=>{
-        navigationRequest=false;surface.dataset.navigationResult=data.status;
-        if(data.status==="rejected")navigationLocked=false;
-        refreshNavigation();showNotice(data.notice);
-    },
+    navigation_result:receiveNavigation,
     link_result:data=>{surface.dataset.linkResult=data.status;showNotice(data.notice);},
     export_result:data=>{surface.dataset.exportResult=data.status;exportBusy=false;refreshExportControls();restoreEditingFocus();showNotice(data.notice);},
     notice:showNotice,
@@ -957,10 +1087,13 @@ try {
     while(true){
         const packet=await lifetime.receive();
         if(packet?.kind==="stop")break;
+        const receivedAt=performance.now();
         await route(packet);
+        diagnostics.note("packet",0,0,performance.now()-receivedAt);
     }
 } catch(e){send({kind:"error",message:String(e)});}
 finally {
+    diagnostics.destroy();
     try {settingsSnapshot.last=settingsUi.snapshot();} catch(error) {settingsSnapshot.error=String(error);}
     lifetime.release();
     revokeSurface();
@@ -968,7 +1101,7 @@ finally {
     stopped=true;latest=null;observer.disconnect();pasteObserver.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
     const inlineClean=await inlineImages.destroy();
     const mediaClean=await media.destroy()&&inlineClean;
-    sitesUi.destroy();settingsUi.destroy();loginUi.destroy();filterUi.destroy();destinationUi.destroy();bookmarksUi.destroy();
+    articleFind.destroy();sitesUi.destroy();settingsUi.destroy();loginUi.destroy();filterUi.destroy();destinationUi.destroy();bookmarksUi.destroy();
     tools.destroy();
     if(exportTask)await exportTask;
     if(pasteDialog.open)pasteDialog.close();
@@ -982,7 +1115,7 @@ finally {
     document.getElementById("font-settings").click();
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
-    cleanupClean=mediaClean&&contextMenu.clean()&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
+    cleanupClean=mediaClean&&articleFind.clean()&&contextMenu.clean()&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
         &&sitesUi.clean()&&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&destinationUi.clean()&&bookmarksUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
     try {send({kind:"stopped",clean:cleanupClean,...(toolsProbeEnabled?{tools:tools.observations()}:{})});} catch(_) { /* join still acknowledges cleanup */ }
 }

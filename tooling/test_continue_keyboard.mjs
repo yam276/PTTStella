@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
 function fixture(enabled=false){
-    const f={sent:[],generation:7,composing:false,pastePending:false,selected:false,modal:false,
+    const f={revokeNavigation(){},sent:[],generation:7,composing:false,pastePending:false,selected:false,modal:false,
         keyboardState:{enabled,mode:enabled?'normal':'input'},latest:{navigation:{kind:'continue_prompt'}},
         document:{querySelector:()=>f.modal?{}:null},stationMouse:{revoke(){}},cancelHover(){},cancelDrag(){},clearSelection(){f.selected=false;},
         hasSelection:()=>f.selected,inlineShortcut:()=>false,inlineImages:{keyHeld:()=>false},zoom:1,zoomTo(){f.zoomed=true;},send:p=>f.sent.push(JSON.parse(JSON.stringify(p)))};
@@ -35,4 +35,50 @@ test('pause keeps native IME, clipboard, local shortcuts and modal editing owner
 test('normal readonly CJK physical commands reach Rust, while native composition keeps its owner',()=>{
     const normal=fixture(true),e=normal.key('Process',{keyCode:229});assert.equal(e.prevented,true);assert.equal(normal.sent[0].key.code,'KeyJ');
     for(const f of [fixture(false),Object.assign(fixture(true),{composing:true})]){assert.equal(f.key('Process',{keyCode:229}).prevented,false);assert.deepEqual(f.sent,[]);}
+});
+test('CJK Control shortcuts use the physical command path without admitting text or stealing clipboard/IME',()=>{
+    for(const enabled of [false,true])for(const keyCode of [0,229]){
+        const f=fixture(enabled);f.latest.navigation.kind='unknown';
+        const e=f.key('ㄌ',{code:'KeyX',ctrlKey:true,keyCode});
+        assert.equal(e.prevented,true);assert.equal(f.sent.length,1);
+        assert.deepEqual(f.sent[0].key,{key:'ㄌ',code:'KeyX',ctrl:true,alt:false,shift:false,repeat:false});
+    }
+    for(const change of [f=>f.composing=true,f=>f.modal=true]){
+        const f=fixture();change(f);f.key('ㄌ',{code:'KeyX',ctrlKey:true});assert.deepEqual(f.sent,[]);
+    }
+    const composing=fixture();composing.key('ㄌ',{code:'KeyX',ctrlKey:true,isComposing:true});assert.deepEqual(composing.sent,[]);
+    const copy=fixture();copy.selected=true;copy.key('ㄏ',{code:'KeyC',ctrlKey:true});assert.deepEqual(copy.sent,[]);
+    const paste=fixture();paste.key('ㄒ',{code:'KeyV',ctrlKey:true});assert.deepEqual(paste.sent,[]);
+    const text=fixture();text.latest.navigation.kind='unknown';const e=text.key('ㄌ',{code:'KeyX'});assert.equal(e.prevented,false);
+    assert.equal(text.sent[0].kind,'key'); // Rust still decides ordinary text admission.
+});
+
+test('IME-delivered plain space in web reading stays a local page action',()=>{
+    const f=fixture();f.latest={article:{id:1},navigation:{kind:'article_reading'}};
+    Object.assign(f,{keyboard:{value:' '},composition:null,beforeEdit:{composition:false},sendInput:p=>f.sent.push(p),readingMove:(intent)=>f.movement=intent});
+    vm.runInContext(source.slice(source.indexOf('function input('),source.indexOf('function compositionstart(')),f);
+    f.input({data:' ',inputType:'insertText',isTrusted:true});
+    assert.equal(f.movement?.action,'next_page');assert.deepEqual(f.sent,[]);
+});
+
+test('native composition, Vim input, terminal text and non-space edits keep their text owner',()=>{
+    for(const reason of ['composition','trailing','vim','terminal','text']){
+        const f=fixture(reason==='vim');f.latest={article:reason==='terminal'?null:{id:1},navigation:{kind:'article_reading'}};
+        Object.assign(f,{keyboard:{value:' '},composition:{},positionKeyboard(){},beforeEdit:{composition:reason==='trailing'},sendInput:p=>f.sent.push(p),readingMove:()=>assert.fail('must retain text/IME ownership')});
+        vm.runInContext(source.slice(source.indexOf('function input('),source.indexOf('function compositionstart(')),f);
+        f.composing=reason==='composition';f.input({data:reason==='text'?'中':' ',inputType:'insertText',isTrusted:true});
+        assert.equal(f.sent.length,['composition','trailing'].includes(reason)?0:1,reason);
+    }
+});
+
+test('a trusted IME-confirmed lone space pages locally; cancellation and committed Chinese keep composition ownership',()=>{
+    for(const value of [' ','','中']){
+        const f=fixture();f.latest={article:{id:1},navigation:{kind:'article_reading'}};
+        Object.assign(f,{composition:{generation:7,startTrusted:true,editTrusted:true,editText:value},keyboard:{value,classList:{remove(){}}},positionKeyboard(){},refreshNavigation(){},policy(){},sendInput:p=>f.sent.push(p),readingMove:intent=>f.movement=intent});
+        vm.runInContext(source.slice(source.indexOf('function compositionend('),source.indexOf('function cancelComposition(')),f);
+        f.compositionend({data:value,isTrusted:true});
+        assert.equal(f.movement?.action,value===' '?'next_page':undefined);
+        assert.equal(f.sent.length,value==='中'?1:0);
+        if(value==='中')assert.equal(f.sent[0].composed,true);
+    }
 });
