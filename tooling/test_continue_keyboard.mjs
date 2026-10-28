@@ -53,6 +53,19 @@ test('CJK Control shortcuts use the physical command path without admitting text
     assert.equal(text.sent[0].kind,'key'); // Rust still decides ordinary text admission.
 });
 
+test('PTT editor Ctrl+V sends one station key instead of pasting, including CJK key delivery',()=>{
+    for(const extra of [{key:'v',code:'KeyV'},{key:'ㄒ',code:'KeyV',keyCode:229}]){
+        const f=fixture();f.latest={editor:true,ptt_features:true,navigation:{kind:'unknown'}};
+        const e=f.key('v',{ctrlKey:true,...extra});
+        assert.equal(e.prevented,true);assert.equal(f.sent.length,1);assert.equal(f.sent[0].kind,'key');
+        assert.equal(f.sent[0].key.code,'KeyV');assert.equal(f.sent[0].key.ctrl,true);
+    }
+    for(const extra of [{shiftKey:true},{metaKey:true},{isComposing:true}]){
+        const f=fixture();f.latest={editor:true,ptt_features:true,navigation:{kind:'unknown'}};
+        assert.equal(f.key('v',{ctrlKey:true,code:'KeyV',...extra}).prevented,false);assert.deepEqual(f.sent,[]);
+    }
+});
+
 test('IME-delivered plain space in web reading stays a local page action',()=>{
     const f=fixture();f.latest={article:{id:1},navigation:{kind:'article_reading'}};
     Object.assign(f,{keyboard:{value:' '},composition:null,beforeEdit:{composition:false},sendInput:p=>f.sent.push(p),readingMove:(intent)=>f.movement=intent});

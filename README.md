@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="Cargo.toml"><img src="assets/readme/version.svg" width="146" height="24" alt="正式版本 0.2.0"></a>
+  <a href="Cargo.toml"><img src="assets/readme/version.svg" width="146" height="24" alt="正式版本 0.2.1"></a>
   <a href="https://github.com/yam276/PTTStella/releases/latest"><img src="assets/readme/status.svg" width="150" height="24" alt="狀態：正式版"></a>
   <a href="#下載與安裝"><img src="assets/readme/platforms.svg" width="241" height="24" alt="目標平台：Windows、macOS、Linux"></a>
 </p>
@@ -30,7 +30,7 @@ PTTStella 是一款 PTT 桌面瀏覽器，保留熟悉的 BBS 排版、ANSI 色�
 
 ## 下載與安裝
 
-此頁對應 `0.2.0` 正式版。請從 [Releases 下載頁](https://github.com/yam276/PTTStella/releases/latest) 取得正式版，並選擇符合電腦平台與架構的檔案：
+此頁對應 `0.2.1` 正式版。請從 [Releases 下載頁](https://github.com/yam276/PTTStella/releases/latest) 取得正式版，並選擇符合電腦平台與架構的檔案：
 
 | 平台 | 使用方式與需求 |
 | --- | --- |
@@ -85,10 +85,12 @@ macOS 另提供「登入」工具：在空白帳號提示時開啟，輸入帳�
 | 快速前往看板或文章 | macOS `Cmd+K`；Windows／Linux `Ctrl+K` |
 | 設定 | macOS `Cmd+,`；Windows／Linux `Ctrl+,` |
 | 複製已選取文字 | macOS `Cmd+C`；Windows／Linux `Ctrl+C` |
-| 貼上 | macOS `Cmd+V`；Windows／Linux `Ctrl+V` |
+| 貼上 | macOS `Cmd+V`；Windows／Linux `Ctrl+V`（PTT 編輯器內用右鍵貼上或 `Ctrl+Shift+V`） |
 | 放大／縮小 | `Ctrl+加號`／`Ctrl+減號`，或 `Ctrl+滾輪` |
 | 符合視窗 | `Ctrl+0` |
 | 清除文字選取 | `Esc` |
+
+在 PTT 發文、回文或信件編輯器，`Ctrl+V` 保留給站端切換 ANSI 彩色預覽。選取文字後按右鍵可「複製含 ANSI 色碼」；編輯器內按右鍵可直接選「貼上」，多行或含色碼的內容會先確認。ANSI 複製保留文字與雙色字的配色；貼上僅接受色彩控制碼。
 
 ### 滑鼠
 

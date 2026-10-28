@@ -515,6 +515,7 @@ inline-image-limit = Up to 8 images per page and 32 retained per article. Open o
 
 context-title = Surface actions
 context-copy = Copy selected text
+context-copy-ansi = Copy with ANSI colours
 context-copy-link = Copy full URL
 context-open-link = Open link / preview image
 context-select-link = Select full URL

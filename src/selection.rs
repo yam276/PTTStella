@@ -18,11 +18,74 @@ pub enum Selection {
     All,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Span {
     pub row: usize,
     pub start: usize,
     pub end: usize,
+}
+
+/// Serialize only the acknowledged selection's glyphs, never hidden source text.
+/// PTT's SGR 66 latches the first byte's style inside one SGR, preserving a
+/// two-colour Big5 glyph without splitting Unicode in the system clipboard.
+pub fn ansi(frame: &Frame, spans: &[Span], rows: Range<usize>) -> String {
+    use crate::screen::Style;
+    use std::fmt::Write;
+    fn parameters(style: Style) -> String {
+        let fg = if style.fg < 8 {
+            30 + style.fg
+        } else {
+            90 + style.fg - 8
+        };
+        let bg = if style.bg < 8 {
+            40 + style.bg
+        } else {
+            100 + style.bg - 8
+        };
+        format!(
+            "0;{};{};{fg};{bg}",
+            if style.bright { 1 } else { 22 },
+            if style.inverse { 7 } else { 27 }
+        )
+    }
+    let mut output = String::new();
+    let mut glyphs = frame.glyphs.iter().peekable();
+    let mut spans = spans.iter().peekable();
+    for row in rows.clone() {
+        if row != rows.start {
+            output.push('\n');
+        }
+        output.push_str("\x1b[0m");
+        let mut current = Style::default();
+        while glyphs.peek().is_some_and(|g| g.row < row) {
+            glyphs.next();
+        }
+        while spans.peek().is_some_and(|s| s.row < row) {
+            spans.next();
+        }
+        while let Some(glyph) = glyphs.next_if(|g| g.row == row) {
+            if !spans.peek().is_some_and(|s| {
+                s.row == row && glyph.col >= s.start && glyph.col + glyph.width <= s.end
+            }) {
+                continue;
+            }
+            if glyph.width == 2 && glyph.left != glyph.right {
+                let _ = write!(
+                    output,
+                    "\x1b[{};66;{}m",
+                    parameters(glyph.left),
+                    parameters(glyph.right)
+                );
+                current = glyph.right;
+            } else if glyph.left != current {
+                let _ = write!(output, "\x1b[{}m", parameters(glyph.left));
+                current = glyph.left;
+            }
+            output.push_str(&glyph.text);
+        }
+        output.push_str("\x1b[0m");
+    }
+    output
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize)]

@@ -509,6 +509,7 @@ inline-image-limit = 每頁最多展開 8 張、同篇文章最多保留 32 張�
 
 context-title = 畫面操作
 context-copy = 複製選取文字
+context-copy-ansi = 複製含 ANSI 色碼
 context-copy-link = 複製完整網址
 context-open-link = 開啟連結／預覽圖片
 context-select-link = 選取完整網址

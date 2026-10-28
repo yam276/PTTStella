@@ -305,6 +305,13 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    /// Local editor: two ANSI-preview keys, one exact confirmed colour paste,
+    /// another preview key, then the normal acknowledged Close.
+    pub fn start_editor_clipboard_probe(bytes: Vec<u8>) -> Result<Self, String> {
+        let connection = Self::start_owned_probe(bytes, probe::Scenario::EditorClipboard)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     pub fn start_inline_pages_probe(first: Vec<u8>, second: Vec<u8>) -> Result<Self, String> {
         let connection = Self::start_owned_probe(
             first,
