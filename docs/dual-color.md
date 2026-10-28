@@ -17,7 +17,7 @@ Rust 核心保存逐 cell 的來源內容與樣式，控制碼先作用於格線
 
 同一完整字形共用原點、baseline 與字型設定，再按左右 cell 的區域／樣式裁切；背景也分半處理。renderer 不把左右 byte 當兩個 Unicode 字元，字型自然寬度也不重新決定終端欄寬。
 
-SGR 66 沿用同一 byte／cell 模型：[公開格式](https://github.com/ptt/pttbbs/commit/5bec38cc8a18f08a660c01611e31bda11078c212) 的 `ESC[31;44;66;32;45m` 保存遇到 66 當下的樣式供下一個可列印 cell 使用，後續參數改變一般樣式。因此緊接的 Big5 雙 byte 字仍配成一個完整字形，左紅／藍底、右綠／紫底；後續文字使用新樣式。這個暫存只作用一次，單寬字同樣消耗；同一 SGR 內再次 66 替換暫存，同一 SGR 的 reset 只改一般樣式。後來的 ESC／C0／DEL 或 session reset 取消尚未消耗的暫存，不改舊格子，也不增加另一個字形模型。覆寫、捲動與行末沿用原有 cell 規則。本輪只驗證 Big5／UAO，沒有宣稱 UTF-8 decoder 已完成。
+SGR 66 沿用同一 byte／cell 模型：[公開格式](https://github.com/ptt/pttbbs/commit/5bec38cc8a18f08a660c01611e31bda11078c212) 的 `ESC[31;44;66;32;45m` 保存遇到 66 當下的樣式供下一個可列印 cell 使用，後續參數改變一般樣式。因此緊接的 Big5 雙 byte 字仍配成一個完整字形，左紅／藍底、右綠／紫底；後續文字使用新樣式。這個暫存只作用一次，單寬字同樣消耗；同一 SGR 內再次 66 替換暫存，同一 SGR 的 reset 只改一般樣式。依 [PTT pfterm](https://github.com/ptt/pttbbs/blob/653523c29dc6d9207641ce7b4bb1d721d4ea1f53/mbbsd/pfterm.c#L1943) 的命令分流，後來的 ESC 本身不取消暫存；分開的 SGR（含 reset）、再次 66 及游標命令仍保留它直到下一個可列印 cell，實際 terminal reset 則清除。其他 C0／DEL 或 session reset 取消尚未消耗的暫存，不改舊格子，也不增加另一個字形模型。覆寫、捲動與行末沿用原有 cell 規則。本輪只驗證 Big5／UAO，沒有宣稱 UTF-8 decoder 已完成。
 
 一般文字按字型自然比例置中於所屬欄位，不把每個字形橫向拉滿；超寬時等比例縮小以容納。這讓圓點、空心圓及雙圈符號不因不同 advance 而變成橢圓，同時維持固定 cell 位置與左右裁切。連接用的框線／陰影字元保留格線 fitting；已由幾何繪製的方塊／三角形不經字型縮放。沒有將所有符號替換為自畫圖案。
 

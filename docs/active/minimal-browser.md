@@ -16,7 +16,11 @@
 
 依使用者要求，develop 進入 `0.3.0-dev.1`，Cargo manifest／lockfile 與 README 徽章同步，main／v0.2.1 保持正式版。待另一路工作完成及整合驗證後才準備 Release PR／Tag，本輪不先發佈。
 
-使用者提供同一 ANSI 圖的進板與原文截圖：右側文字與大致格線一致，人物的半格色塊、局部字形不一致。待取得看板及原文 AID，比較進板／閱讀的逐 cell byte 與左右樣式、SGR 66／傳統 Big5 中插 SGR、PTT 來源顯示路徑，以及相同 Frame 在 Canvas／PNG 的一致性；不先假定貼圖者複製出錯。外部文章及原始站端資料留 repo 外，產品回歸只加入自製獨立 expected fixture。截圖不能單獨證明 raw byte 或來源檔相同。
+使用者提供同一 ANSI 圖的進板與原文截圖：右側文字與大致格線一致，人物的半格色塊、局部字形不一致。已定位[原文](https://www.ptt.cc/bbs/C_Chat/M.1718469028.A.778.html)，並在既有已登入的 0.2.0 診斷 App 唯讀開啟第一頁，與使用者第二張圖一致。原文確實含有兩個「引」字，正常圖靠左右不同樣式隱藏部分筆畫，不能把露出的字單獨當成 byte 被換掉的證據。Marginalman 進板實際取得另一幅圖，尚未取得使用者截圖對應的進板原始串流；仍待確認看板及同圖來源差異，不先歸咎複製者，也不宣稱該圖已修好。外部文章／研究資料留 repo 外，產品回歸只用自製資料。
+
+調查另確認一個可獨立重現的相容錯誤：[PTT pfterm 653523c](https://github.com/ptt/pttbbs/blob/653523c29dc6d9207641ce7b4bb1d721d4ea1f53/mbbsd/pfterm.c#L1943) 的 ESC 分流先於 C0 取消；我們卻在每次 ESC 清除 SGR 66 左半格樣式。分開的 SGR／reset／再次 66／游標命令因此錯色。修正只讓 ESC 保留一次性 latch；其他 C0／DEL、terminal／session reset 與單寬字消耗維持明確行為，沒有重解串流或新增繪圖狀態。新增獨立 expected 在修正前確實失敗，修正後逐 byte 分片全過；同一自製「中／引」與左右背景的傳統格式及分開命令 SGR 66，macOS arm64 實際 Dioxus／WKWebView 匯出 960×576 PNG 全像素相等，獨立 RGB 檢查通過，兩次正常 Close acknowledged／全部 owner join／exit 0。
+
+本機 core 14 commands／2 replays、screen 21、desktop lib 159／bin 152、JS 293、全 targets Clippy、fmt／docs 通過。證據 `.local/verification/ansi-entry-20261028/`；對應原圖／PTT source 留 `/Users/ladesine/.codex/research/PTTStella/ansi-entry-20261028/`。保留 `dist/macos-030-ansi-latch/PTTStella.app` 為 0.3.0-dev.1 診斷交付（顯示名稱 StellaAnsi030，與既有登入 App 隔離）；未建立額外測試副本、branch 或 worktree。這個合成格式修正不等於確認實際進板問題的根因，Windows／Linux 原生本輪未驗證。
 
 ## 0.2.1 編輯器色碼緊急修正（2026-10-28）
 
