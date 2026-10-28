@@ -4,7 +4,7 @@
 
 ## 目標
 
-目前最新診斷交付為 `dist/macos-021-ansi-verified/PTTStella.app`（0.2.1 色碼修正，見下節）。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前最新診斷交付為 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修，見下節）。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
@@ -12,15 +12,19 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
-## 0.2.1 編輯器底列補修與重新發佈（2026-10-28，進行中）
+## 0.2.1 編輯器底列補修與重新發佈（2026-10-28，已完成）
 
 使用者回報實站編輯器底列只有「(^X)存檔 (^C)色碼 (Esc-h)按鍵 (^Z)說明」，沒有 ^V，因此 0.2.1 以 ^X／^V 辨識的條件未命中，Ctrl+V 仍被本機貼上保留。新增 ^X 與 ^C／色碼 的受限替代條件，仍要求完整 80×24、映射底列、編輯文章的色帶及正文游標；舊 ^V 底列保留。新獨立 expected 在修正前失敗，修正後通過，缺錨點及一般文字負例維持拒絕。
 
-本機合成 peer 改用同款未列 ^V 的底列，獨立核對三次單筆 0x16 與一次已確認 ANSI 中文貼上，並交替回覆彩色預覽／字面色碼；macOS arm64 原生觀察 1/4 預覽開、2/4 預覽關及貼上後 4/4 預覽開，右鍵只有貼上，PNG、Close acknowledged、全部 owner join 與 exit 0 通過。不操作使用者現有草稿。core、desktop lib／bin、JS、Clippy／fmt 與文件檢查分列證據 `.local/verification/editor-ctrl-v-help-20261028/`；新診斷交付 `dist/macos-030-editor-help/PTTStella.app`，僅測試置頂。未冒充 Windows／Linux 原生 GUI 或特定輸入法實測。
+本機合成 peer 改用同款未列 ^V 的底列，獨立核對三次單筆 0x16 與一次已確認 ANSI 中文貼上，並交替回覆彩色預覽／字面色碼；macOS arm64 原生觀察 1/4 預覽開、2/4 預覽關及貼上後 4/4 預覽開，右鍵只有貼上，PNG、Close acknowledged、全部 owner join 與 exit 0 通過。不操作使用者現有草稿。core、desktop lib／bin、JS、Clippy／fmt 與文件檢查分列證據 `.local/verification/editor-ctrl-v-help-20261028/`；另從精確重發來源 main `1ac078b5a5f2b883f21be657505c823a08145a0c` 打包 0.2.1，原生重跑相同四步、編輯器右鍵、PNG、Close 與全部清理通過；最新診斷交付 `dist/macos-021-editor-help/PTTStella.app`，僅測試置頂。已清理被取代的 0.3.0 測試包，保留兩輪唯一證據、穩定版交付與共享 Cargo 快取。未冒充 Windows／Linux 原生 GUI 或特定輸入法實測。
 
 使用者明確要求刪除舊公開 0.2.1 並以相同版本重新發佈，且公開附件改為六個平台下載檔與 SHA256SUMS，完整 JSON／逐檔校驗仍在 Actions artifacts 驗證。先完成修復、獨立回歸與備份，再以針對既有發佈提交的紀錄及 Release PR 回移 main；四架構完整建置驗證之後才刪除舊 Release／tag 並重建，不以本機測試代替三平台建置。develop 維持 0.3.0-dev.1。這是本次明確授權的同版本替換，不放寬一般遞增版本或不可覆寫已發佈下載檔的規則。
 
 使用者隨後取消進板圖調查，認為是版主複製造成；停止該圖的後續修正，先前通用 SGR 66 修正及比對證據保留，不把使用者判斷改寫為已取得原始串流的技術結論。
+
+Release PR #4 政策通過，合併為 main `1ac078b5a5f2b883f21be657505c823a08145a0c`；同一來源 verify run 40681843325 的 Windows x64、macOS arm64／x64 及 Linux x64 測試／打包全部成功。取回該次原始 artifacts，以 production validate_assets 核對全部 20 個檔案、四份 JSON 及逐檔校驗通過。舊版 Release metadata、tag、Git bundle、七個可下載附件與四份原始 manifest 已備份至 repo 外 `/Users/ladesine/.codex/release-backups/PTTStella/v0.2.1-before-editor-help-20261028/`，核對舊 digest 後才依明確授權刪除 Release 426507886 及舊 tag。由同一乾淨 main 執行未改動的 prepare／publish，全部上傳後公開新版 Release 426610699。verify 本身沒有執行 publish job，不將手動出版冒充 CI publish 成功。
+
+[v0.2.1](https://github.com/yam276/PTTStella/releases/tag/v0.2.1) 已重新公開為 Latest stable，tag 指向 `1ac078b`；六個平台套件加 SHA256SUMS 共七個附件，無 JSON。重新下載公開 SHA256SUMS，核對六筆 package hash、GitHub 七個 digest／檔案大小與原始 CI 產物完全相同，中文為主的重發說明吻合。main 已整合回 develop，保留 0.3.0-dev.1。原先下載 0.2.1 者需手動重新下載，同版號不會觸發版本更新提示。最終下載與 manifest 保留於 `dist/release-v0.2.1-reissued/`，小型驗證證據保留於上述 verification 目錄；完成的 managed worktree 與已整合 delivery branch 於結案清理，不刪除使用者仍在執行的其他 App 或共享 target。
 
 ## 0.3.0 開發與進板 ANSI 差異調查（2026-10-28）
 
