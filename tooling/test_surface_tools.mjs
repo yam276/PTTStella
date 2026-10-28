@@ -11,7 +11,7 @@ function fixture({width=900,height=700,reduced=false,language='zh-TW',withSettin
     const element=()=>({hidden:true,attrs:{},dataset:{},style:{setProperty(k,v){this[k]=v;}},
         setAttribute(k,v){this.attrs[k]=v;},removeAttribute(k){delete this.attrs[k];},focus(){document.activeElement=this;},
         contains(target){return target===this;}});
-    const root=element(),ball=element(),fan=element(),panel=element();
+    const root=element(),ball=element(),fan=element(),panel=element(),keyboard=element();
     root.classList={add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v)};
     const petals=['navigate','display','capture','input','session','filters',...(withSettings?['settings']:[])].map(group=>{const p=element();p.dataset.toolsTarget=group;return p;});
     const groups=petals.filter(p=>p.dataset.toolsTarget!=="settings").map(p=>{const group=element();group.dataset.toolsGroup=p.dataset.toolsTarget;return group;});
@@ -20,12 +20,12 @@ function fixture({width=900,height=700,reduced=false,language='zh-TW',withSettin
     fan.querySelectorAll=()=>petals;fan.contains=target=>petals.includes(target);
     panel.querySelectorAll=()=>groups;panel.querySelector=()=>null;
     root.contains=target=>[root,ball,fan,panel,...petals,...groups].includes(target);
-    const menu=create({root,ball,fan,panel,window,document,tr:translator(language),prepare:()=>prepared++,restore:()=>restored++,onSettings:()=>settingsOpened++,
+    const menu=create({root,ball,fan,panel,window,document,tr:translator(language),prepare:()=>prepared++,restore:()=>{restored++;keyboard.focus();},onSettings:()=>settingsOpened++,
         raf:callback=>{frames.set(++next,callback);return next;},caf:id=>frames.delete(id),now:()=>clock,reduced:()=>reduced});
     function fire(target,type,values={}){const e={pointerId:1,button:0,buttons:1,isPrimary:true,clientX:820,clientY:455,detail:1,preventDefault(){this.prevented=true;},stopPropagation(){this.stopped=true;},...values};
         for(const [node,event,callback] of menu.bindings)if(node===target&&event===type)callback({...e,currentTarget:target});return e;}
     function advance(ms=16){clock+=ms;const queued=[...frames.values()];frames.clear();queued.forEach(fn=>fn(clock));}
-    return {menu,fire,advance,root,ball,fan,panel,petals,groups,window,document,captures,frames,counts:()=>({prepared,restored,settingsOpened})};
+    return {menu,fire,advance,root,ball,fan,panel,keyboard,petals,groups,window,document,captures,frames,counts:()=>({prepared,restored,settingsOpened})};
 }
 test('the floating trigger returns from every category before another tap closes the menu',()=>{
     for(const [language,label] of [['zh-TW','返回工具分類'],['en-US','Back to categories']]){
@@ -202,11 +202,15 @@ test('blur during momentum cancels the frame; reduced motion docks immediately',
         assert.equal(f.menu.snapshot().animation,!reduced);f.fire(f.window,'blur');assert.equal(f.frames.size,0);
     }
 });
-test('keyboard navigation and Escape stay within local chrome; resize keeps tools reachable',()=>{
+test('Escape exits tools to BBS input; resize keeps tools reachable',()=>{
     const f=fixture();f.fire(f.ball,'click',{detail:0});f.ball.focus();
     f.fire(f.document,'keydown',{key:'ArrowUp'});assert.equal(f.document.activeElement,f.petals[5]);
     f.fire(f.document,'keydown',{key:'ArrowDown'});assert.equal(f.document.activeElement,f.petals[0]);
-    f.fire(f.document,'keydown',{key:'Escape'});assert.equal(f.document.activeElement,f.ball);assert.equal(f.menu.open(),false);
+    let prevented=0,stopped=0;
+    f.fire(f.document,'keydown',{key:'Escape',preventDefault(){prevented++;},stopPropagation(){stopped++;}});
+    assert.equal(f.document.activeElement,f.keyboard);assert.equal(f.menu.open(),false);
+    assert.equal(f.counts().restored,1);assert.equal(prevented,1);assert.equal(stopped,1);
+    f.fire(f.document,'keydown',{key:'Escape'});assert.equal(f.counts().restored,1,'the next key belongs to BBS, not the closed tools');
     f.window.innerWidth=360;f.window.innerHeight=300;f.fire(f.window,'resize');f.fire(f.ball,'click');
     assert.equal(f.root.dataset.toolsLayout,'compact');f.fire(f.petals[1],'click');assert.equal(f.fan.hidden,true);assert.equal(f.panel.hidden,false);
     const p=f.menu.snapshot().point;assert.ok(p.x>=16&&p.x<=288&&p.y>=56&&p.y<=228);

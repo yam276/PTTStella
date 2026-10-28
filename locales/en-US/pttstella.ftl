@@ -615,12 +615,24 @@ account-action-stale = The screen changed. Right-click the ID again.
 reply-focus = Toggle highlighting for this ID
 
 article-load-loading = Loading article · { $lines } lines received
+article-load-paused-background = Loading paused while window is inactive · { $lines } lines retained; resumes when you return
+article-load-paused-interaction = Loading paused during interaction · { $lines } lines retained; resumes when finished
 article-load-complete = Article loaded · { $lines } lines
 article-load-cancelled = Loading cancelled · { $lines } lines retained
 article-load-stopped = Loading interrupted · { $lines } lines retained
 article-load-changed = Article content changed; loading stopped
 article-load-limit = Article loading limit reached; use terminal mode to continue
 article-load-cancel = Cancel loading (Esc)
+article-find-title = Find in article
+article-find-placeholder = Find article text
+article-find-hint = Search loaded text, ignoring letter case; terminal mode searches the current page only. Separate from PTT's / search.
+article-find-empty = Enter text
+article-find-none = No matches
+article-find-count = { $current } / { $total }
+article-find-count-limited = { $current } / { $total }+
+article-find-previous = Previous match (Shift+Enter)
+article-find-next = Next match (Enter)
+article-find-close = Close find (Esc)
 article-load-resume = Resume loading
 
 filters-color-invalid = Choose a valid ID color; only allowed IDs support individual colors
@@ -677,3 +689,16 @@ export-copied = Image copied to clipboard
 
 gif-playing = GIF animation playing
 gif-paused = GIF animation paused
+
+context-copy-picture = Copy image
+context-save-picture = Save image as…
+picture-saved = Image saved
+picture-save-title = Save image
+picture-extension = Keep the original image file extension
+
+update-check = Check for updates
+update-checking = Checking…
+update-open = Download new version
+update-available = New version available: { $version }
+update-current = You have the latest stable release or a newer development version.
+update-help = Stable releases are checked at startup or on request. Unavailable checks stay silent. Download and install updates manually.

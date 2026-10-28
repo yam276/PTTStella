@@ -13,6 +13,7 @@ pub(super) struct Completion {
     pub(super) kind: Kind,
     pub(super) generation: u64,
     pub(super) result: Result<(), String>,
+    pub(super) navigation: Option<super::protocol::NavigationTicket>,
 }
 type Reply = Pin<Box<dyn Future<Output = Completion>>>;
 
@@ -20,6 +21,7 @@ type Reply = Pin<Box<dyn Future<Output = Completion>>>;
 pub(super) struct Pending {
     reply: Option<Reply>,
     kind: Option<Kind>,
+    navigation: Option<super::protocol::NavigationTicket>,
 }
 impl Pending {
     pub(super) fn busy(&self) -> bool {
@@ -46,25 +48,40 @@ impl Pending {
                 kind,
                 generation,
                 result: work.await,
+                navigation: None,
             }
         }));
         self.kind = Some(kind);
         Ok(())
     }
+    pub(super) fn start_navigation<F: Future<Output = Result<(), String>> + 'static>(
+        &mut self,
+        ticket: super::protocol::NavigationTicket,
+        begin: impl FnOnce() -> Result<F, String>,
+    ) -> Result<(), String> {
+        self.start(Kind::Navigate, ticket.generation, begin)?;
+        self.navigation = Some(ticket);
+        Ok(())
+    }
+    pub(super) fn navigation(&self) -> Option<super::protocol::NavigationTicket> {
+        self.navigation
+    }
     pub(super) async fn next(&mut self) -> Completion {
-        let result = match &mut self.reply {
+        let mut result = match &mut self.reply {
             Some(reply) => reply.await,
             None => std::future::pending().await,
         };
         self.reply = None;
         self.kind = None;
+        result.navigation = self.navigation.take();
         result
     }
     /// Drops the Connection reply receiver, revoking commands still in its queue.
     /// An in-progress write cannot be rolled back and is never retried here.
-    pub(super) fn cancel(&mut self) {
+    pub(super) fn cancel(&mut self) -> Option<super::protocol::NavigationTicket> {
         self.reply = None;
         self.kind = None;
+        self.navigation.take()
     }
 }
 
@@ -72,6 +89,63 @@ impl Pending {
 mod tests {
     use super::*;
     use tokio::sync::oneshot;
+
+    #[tokio::test]
+    async fn navigation_ticket_survives_success_and_error_without_a_retry() {
+        for fail in [false, true] {
+            let mut pending = Pending::default();
+            let ticket = super::super::protocol::NavigationTicket {
+                request: 21,
+                generation: 7,
+            };
+            let (answer, receiver) = oneshot::channel();
+            pending
+                .start_navigation(ticket, || {
+                    Ok(async move { receiver.await.map_err(|e| e.to_string())? })
+                })
+                .unwrap();
+            assert_eq!(pending.navigation(), Some(ticket));
+            answer
+                .send(if fail {
+                    Err("navigation deadline expired".into())
+                } else {
+                    Ok(())
+                })
+                .unwrap();
+            let completed = pending.next().await;
+            assert_eq!(completed.navigation, Some(ticket));
+            assert_eq!(completed.result.is_err(), fail);
+            assert!(!pending.busy());
+            assert!(pending.navigation().is_none());
+            assert!(pending.cancel().is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_releases_only_the_old_wait_and_closes_its_queue_ticket() {
+        let mut pending = Pending::default();
+        let old = super::super::protocol::NavigationTicket {
+            request: 21,
+            generation: 7,
+        };
+        let new = super::super::protocol::NavigationTicket {
+            request: 22,
+            generation: 7,
+        };
+        let (old_answer, old_receiver) = oneshot::channel::<Result<(), String>>();
+        pending
+            .start_navigation(old, || {
+                Ok(async move { old_receiver.await.map_err(|e| e.to_string())? })
+            })
+            .unwrap();
+        assert_eq!(pending.cancel(), Some(old));
+        assert!(old_answer.is_closed());
+        assert!(pending.cancel().is_none());
+        pending
+            .start_navigation(new, || Ok(async { Ok(()) }))
+            .unwrap();
+        assert_eq!(pending.next().await.navigation, Some(new));
+    }
 
     #[tokio::test]
     async fn acceptance_enqueues_now_and_busy_rejection_never_calls_the_factory() {
@@ -94,7 +168,7 @@ mod tests {
         );
         order.push("native");
         assert_eq!(order, ["browse", "native"]);
-        pending.cancel();
+        let _ = pending.cancel();
     }
 
     #[tokio::test]
@@ -111,7 +185,7 @@ mod tests {
                 biased;
                 _ = pending.next() => panic!("slow station reply unexpectedly completed"),
                 event = async { event } => {
-                    if event == "close" { pending.cancel(); }
+                    if event == "close" { let _ = pending.cancel(); }
                 }
             }
         }

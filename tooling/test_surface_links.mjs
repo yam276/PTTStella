@@ -50,7 +50,7 @@ test("link activation uses the released hit and exact frame stamp once",()=>{
 
 
 test("local navigation sends an explicit pointer or toolbar source",()=>{
-    const sent=[],context={stationMouse:{local:()=>true,revoke(){}},canNavigate:()=>true,dragging:null,policy(){},latest:{navigation:{}},clearSelection(){},setHover(){},refreshNavigation(){},
+    const sent=[],context={navigationSequence:0,stationMouse:{local:()=>true,revoke(){}},canNavigate:()=>true,dragging:null,policy(){},latest:{navigation:{}},clearSelection(){},setHover(){},refreshNavigation(){},
         surface:{dataset:{}},stamp:()=>({generation:7,revision:4,input_epoch:2}),send:v=>sent.push(JSON.parse(JSON.stringify(v))),focus(){}};
     vm.createContext(context);
     vm.runInContext(source.slice(source.indexOf("function navigationBackRegion("),source.indexOf("function hitAt(")),context);

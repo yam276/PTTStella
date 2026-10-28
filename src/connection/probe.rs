@@ -22,7 +22,10 @@ pub(super) enum Scenario {
     MouseSamples(MouseSampleProbe),
     Filters,
     Surface,
+    ControlInput,
     PointerRows,
+    ListBoundary,
+    ArticleSwitch,
     InlinePages { pages: Vec<Vec<u8>>, delay_ms: u64 },
 }
 
@@ -254,6 +257,21 @@ where
     }
 }
 
+pub(super) fn switch_page(article: char, second: bool) -> Result<Vec<u8>, String> {
+    let first = if second { 23 } else { 1 };
+    let last = first + 22;
+    let mut page = String::from("\x1b[?2026h\x1b[2J\x1b[H");
+    for (row, line) in (first..=last).enumerate() {
+        page.push_str(&format!(
+            "\x1b[{};1HARTICLE {article} line {line:03}",
+            row + 1
+        ));
+    }
+    page.push_str(&format!("\x1b[24;1H\x1b[30;47m\x1b[2K瀏覽 第 {}/2 頁 ({}%) 目前顯示: 第 {first}~{last} 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H", if second {2} else {1}, if second {100} else {50}));
+    page.push_str("\x1b[?2026l");
+    crate::encoding::encode(&page).map_err(|e| e.to_string())
+}
+
 pub(super) fn filters_page(next: bool) -> Result<Vec<u8>, String> {
     let pages: serde_json::Value =
         serde_json::from_str(include_str!("../../tests/fixtures/filters.json"))
@@ -322,7 +340,7 @@ pub(super) fn article_page(name: &str) -> Result<Vec<u8>, String> {
     Ok(page)
 }
 const ARTICLE_FIRST_OPEN: &[(&[u8], &str)] = &[
-    (b"f", "boards"),
+    (b"\r", "boards"),
     (b"s", "board_prompt"),
     (b"Stella\r", "selected"),
     (b"\x1b[C", "articles"),
@@ -405,7 +423,7 @@ where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
     for (step, (expected, scene)) in [
-        (b"f".as_slice(), "boards"),
+        (b"\r".as_slice(), "boards"),
         (b"s", "prompt"),
         (b"Stella\r", "selected"),
         (b"\x1b[C", "articles"),
@@ -652,7 +670,9 @@ pub(super) async fn serve(
 ) -> Result<(), String> {
     let deadline = if matches!(
         scenario,
-        Scenario::Filters | Scenario::MouseSamples(MouseSampleProbe::RoundTrip)
+        Scenario::Filters
+            | Scenario::ArticleSwitch
+            | Scenario::MouseSamples(MouseSampleProbe::RoundTrip)
     ) {
         900
     } else if matches!(
@@ -661,7 +681,9 @@ pub(super) async fn serve(
             | Scenario::Login
             | Scenario::Login2fa
             | Scenario::Surface
+            | Scenario::ControlInput
             | Scenario::PointerRows
+            | Scenario::ListBoundary
             | Scenario::InlinePages { .. }
             | Scenario::Boards
             | Scenario::Articles
@@ -753,6 +775,62 @@ pub(super) async fn serve(
             return match socket.next().await {
                 Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e|e.to_string()),
                 _ => Err("row/edge probe expected Close without extra input".into()),
+            };
+        }
+        if matches!(scenario, Scenario::ArticleSwitch) {
+            for (expected, article, second) in [
+                (b"\x1b[6~".as_slice(), 'A', true),
+                (b"\x1b[H", 'A', false),
+                (b"\x1b[A", 'B', false),
+                (b"\x1b[6~", 'B', true),
+                (b"\x1b[B", 'C', false),
+                (b"\x1b[6~", 'C', true),
+            ] {
+                if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected) {
+                    return Err("article switch probe received unexpected input".into());
+                }
+                let page = switch_page(article, second)?;
+                let split=page.len()/2;
+                socket.send(Message::Binary(page[..split].to_vec().into())).await.map_err(|e|e.to_string())?;
+                tokio::time::sleep(Duration::from_millis(80)).await;
+                socket.send(Message::Binary(page[split..].to_vec().into())).await.map_err(|e|e.to_string())?;
+            }
+            return match socket.next().await {
+                Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e|e.to_string()),
+                _ => Err("article switch probe expected Close without extra input".into()),
+            };
+        }
+        if matches!(scenario, Scenario::ListBoundary) {
+            for (expected, response) in [
+                (b"\x1b[6~".as_slice(), None),
+                (b"\x0c\x0c", Some(navigation_page("list")?)),
+                (b"\x1b[5~", Some(navigation_page("list_dense")?)),
+                (b"\r", Some(navigation_page("reading_first")?)),
+                (b"\x1b[D", Some(navigation_page("list")?)),
+            ] {
+                if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected) {
+                    return Err("list boundary probe received unexpected input".into());
+                }
+                if let Some(page) = response {
+                    socket.send(Message::Binary(page.into())).await.map_err(|e|e.to_string())?;
+                }
+            }
+            return match socket.next().await {
+                Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e|e.to_string()),
+                _ => Err("list boundary probe expected Close without extra input".into()),
+            };
+        }
+        if matches!(scenario, Scenario::ControlInput) {
+            for (index, expected) in [24_u8, 26, 1].into_iter().enumerate() {
+                if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==[expected]) {
+                    return Err(format!("control input probe rejected step {}", index + 1));
+                }
+                socket.send(Message::Binary(format!("\x1b[1;1H\x1b[2KCONTROL INPUT {}/3 VERIFIED",index+1).into_bytes().into()))
+                    .await.map_err(|e| e.to_string())?;
+            }
+            return match socket.next().await {
+                Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e| e.to_string()),
+                _ => Err("control input probe expected Close without extra input".into()),
             };
         }
         if matches!(scenario, Scenario::Surface) {
@@ -960,7 +1038,7 @@ mod tests {
         // This case tests the close lifetime, independently of reducer identity
         // tests. The peer still validates each input before replying.
         for bytes in [
-            b"f".as_slice(),
+            b"\r".as_slice(),
             b"s",
             b"Stella\r",
             b"\x1b[C",

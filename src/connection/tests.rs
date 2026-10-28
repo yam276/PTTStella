@@ -948,12 +948,21 @@ async fn keyboard_noop_streaming_and_unanswered_moves_have_one_owner() {
 
 #[tokio::test]
 async fn list_pointer_edges_send_exact_home_end_once_per_fresh_frame() {
-    for page in ["main_menu", "boards_caption", "list_edge_cases"] {
+    for (page, lottery) in [
+        ("main_menu", false),
+        ("boards_caption", false),
+        ("list_edge_cases", false),
+        ("list", true),
+    ] {
         let (listener, connection) = idle_local().await;
         connection.connect().unwrap();
         let (stream, _) = listener.accept().await.unwrap();
         let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-        ws.send(Message::Binary(navigation_page(page).into()))
+        let mut frame = navigation_page(page);
+        if lottery {
+            frame.extend(crate::encoding::encode("\x1b[4;18H[彩券]       \x1b[5;1H").unwrap());
+        }
+        ws.send(Message::Binary(frame.clone().into()))
             .await
             .unwrap();
         let mut view = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
@@ -969,7 +978,7 @@ async fn list_pointer_edges_send_exact_home_end_once_per_fresh_frame() {
             assert!(connection.navigate(view.stamp(), intent).await.is_err());
             assert!(timeout(Duration::from_millis(30), ws.next()).await.is_err());
             let received = view.received;
-            ws.send(Message::Binary(navigation_page(page).into()))
+            ws.send(Message::Binary(frame.clone().into()))
                 .await
                 .unwrap();
             view = wait(&connection, |v| {
@@ -1085,9 +1094,9 @@ async fn board_switch_serializes_confirmed_steps_and_never_uses_a_synchronized_p
     connection.connect().unwrap();
     let (stream, _) = listener.accept().await.unwrap();
     let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
-    ws.send(Message::Binary(board_page("main").into()))
-        .await
-        .unwrap();
+    let mut main = board_page("main");
+    main.extend(crate::encoding::encode("\x1b[14;21H  \x1b[15;21H●\x1b[15;22H").unwrap());
+    ws.send(Message::Binary(main.into())).await.unwrap();
     let initial = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
     connection
         .request_switch_board(initial.stamp(), BoardName::parse("stella").unwrap())
@@ -1095,7 +1104,10 @@ async fn board_switch_serializes_confirmed_steps_and_never_uses_a_synchronized_p
         .wait()
         .await
         .unwrap();
-    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"f");
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"\x1b[A\r"
+    );
     let active = connection.updates.borrow().clone();
     assert_eq!(active.frame.revision, initial.frame.revision);
     assert_eq!(active.input_epoch, initial.input_epoch + 1);
@@ -1116,6 +1128,16 @@ async fn board_switch_serializes_confirmed_steps_and_never_uses_a_synchronized_p
         connection.updates.borrow().destination,
         NavigationProgress::Active { .. }
     ));
+    // The menu may paint the selected Favorite before its queued Enter is
+    // processed. Never send a second confirmation into the following screen.
+    ws.send(Message::Binary(board_page("main").into()))
+        .await
+        .unwrap();
+    wait(&connection, |v| {
+        v.frame.revision > initial.frame.revision && !v.output_pending
+    })
+    .await;
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
     ws.send(Message::Binary(board_page("boards").into()))
         .await
         .unwrap();
@@ -1167,6 +1189,51 @@ async fn board_switch_serializes_confirmed_steps_and_never_uses_a_synchronized_p
         matches!(v.destination, NavigationProgress::Reached { serial: 2, .. })
     })
     .await;
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    finish_board_peer(&connection, ws).await;
+}
+
+#[tokio::test]
+async fn board_switch_from_list_with_pinned_display_author_uses_only_confirmed_steps() {
+    let (listener, connection) = local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    let mut initial = board_page("other_articles");
+    initial.extend(
+        crate::encoding::encode(
+            "\x1b[6;1H\x1b[0m\x1b[2K    ★    810/16 [測試作者]   □ 自製置底公告\x1b[5;1H",
+        )
+        .unwrap(),
+    );
+    ws.send(Message::Binary(initial.into())).await.unwrap();
+    let view = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
+    assert_eq!(view.context().kind(), "article_list");
+    connection
+        .request_switch_board(view.stamp(), BoardName::parse("Stella").unwrap())
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"\x1b[D"
+    );
+    // No board name is sent before a verified board list and search prompt.
+    assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
+    for (scene, expected) in [("empty_boards", b"s".as_slice()), ("prompt", b"Stella\r")] {
+        ws.send(Message::Binary(board_page(scene).into()))
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            expected
+        );
+    }
+    ws.send(Message::Binary(board_page("empty_articles").into()))
+        .await
+        .unwrap();
+    wait(&connection, |v| matches!(&v.destination, NavigationProgress::Reached { target, .. } if target.board().as_str() == "Stella")).await;
     assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
     finish_board_peer(&connection, ws).await;
 }
@@ -2447,5 +2514,437 @@ async fn modern_board_and_indented_class_pointer_use_exact_revalidated_row_comma
             CloseOutcome::Acknowledged
         );
         peer.await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn unanswered_pointer_list_boundary_refreshes_once_before_allowing_more_navigation() {
+    use navigation::{Intent, Source};
+    for (name, action, movement, opposite, reverse, source) in [
+        (
+            "list",
+            Intent::NextPage,
+            b"\x1b[6~".as_slice(),
+            Intent::PreviousPage,
+            b"\x1b[5~".as_slice(),
+            Source::Pointer,
+        ),
+        (
+            "list_dense",
+            Intent::Last,
+            b"\x1b[F",
+            Intent::First,
+            b"\x1b[H",
+            Source::Button,
+        ),
+        (
+            "favorites",
+            Intent::PreviousPage,
+            b"\x1b[5~",
+            Intent::NextPage,
+            b"\x1b[6~",
+            Source::Pointer,
+        ),
+    ] {
+        let (listener, connection) = idle_local().await;
+        connection.connect().unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        let page = navigation_page(name);
+        ws.send(Message::Binary(page.clone().into())).await.unwrap();
+        let original = wait(&connection, |v| v.received > 0 && !v.input_pending).await;
+        connection
+            .request_navigate(original.stamp(), action, source)
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            movement
+        );
+        let pending = wait(&connection, |v| v.input_epoch == 1 && v.input_pending).await;
+        assert_eq!(
+            connection
+                .navigate(pending.stamp(), Intent::Open { row: 4 })
+                .await
+                .unwrap_err(),
+            navigation::Error::AwaitingScreen.to_string()
+        );
+        assert!(
+            timeout(Duration::from_millis(100), ws.next())
+                .await
+                .is_err(),
+            "no immediate duplicate or refresh"
+        );
+        assert_eq!(
+            timeout(Duration::from_secs(1), ws.next())
+                .await
+                .expect("boundary must request one redraw rather than wait five seconds")
+                .unwrap()
+                .unwrap()
+                .into_data()
+                .as_ref(),
+            b"\x0c\x0c"
+        );
+        let refreshing = wait(&connection, |v| v.input_epoch == 2 && v.input_pending).await;
+        assert_eq!(refreshing.frame.revision, original.frame.revision);
+        assert!(
+            connection
+                .navigate(refreshing.stamp(), Intent::Back)
+                .await
+                .is_err(),
+            "redraw must be received before another action"
+        );
+        ws.send(Message::Binary(page.clone().into())).await.unwrap();
+        let ready = wait(&connection, |v| {
+            v.frame.revision > original.frame.revision && !v.input_pending
+        })
+        .await;
+        connection.navigate(ready.stamp(), opposite).await.unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            reverse
+        );
+        ws.send(Message::Binary(page.clone().into())).await.unwrap();
+        let ready = wait(&connection, |v| {
+            v.frame.revision > ready.frame.revision && !v.input_pending
+        })
+        .await;
+        let row = match ready.context() {
+            navigation::Context::ArticleList { cursor_row, .. }
+            | navigation::Context::BoardList { cursor_row, .. } => cursor_row,
+            context => panic!("expected list, got {context:?}"),
+        };
+        connection
+            .navigate(ready.stamp(), Intent::Open { row })
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            b"\r"
+        );
+        ws.send(Message::Binary(navigation_page("reading_first").into()))
+            .await
+            .unwrap();
+        let reading = wait(&connection, |v| {
+            v.context().kind() == "article_reading" && !v.input_pending
+        })
+        .await;
+        connection
+            .navigate(reading.stamp(), Intent::Back)
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            b"\x1b[D"
+        );
+        ws.send(Message::Binary(page.into())).await.unwrap();
+        wait(&connection, |v| {
+            v.context().kind() == original.context().kind() && !v.input_pending
+        })
+        .await;
+        assert!(
+            timeout(Duration::from_millis(420), ws.next())
+                .await
+                .is_err(),
+            "answered movement and later transition cancel the one-shot redraw"
+        );
+        finish_board_peer(&connection, ws).await;
+    }
+}
+
+#[tokio::test]
+async fn list_boundary_refresh_is_cancelled_by_answer_input_transition_and_disconnect() {
+    use navigation::{Intent, Source};
+    for mode in [
+        "answer",
+        "input",
+        "prompt",
+        "synchronized",
+        "disconnect",
+        "keyboard",
+        "reading",
+    ] {
+        let (listener, connection) = idle_local().await;
+        connection.connect().unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        let initial = if mode == "reading" {
+            "reading_first"
+        } else {
+            "list"
+        };
+        ws.send(Message::Binary(navigation_page(initial).into()))
+            .await
+            .unwrap();
+        let original = wait(&connection, |v| v.received > 0 && !v.input_pending).await;
+        connection
+            .request_navigate(
+                original.stamp(),
+                Intent::NextPage,
+                if mode == "keyboard" {
+                    Source::Keyboard
+                } else {
+                    Source::Pointer
+                },
+            )
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            b"\x1b[6~"
+        );
+        match mode {
+            "answer" => {
+                ws.send(Message::Binary(navigation_page("list_dense").into()))
+                    .await
+                    .unwrap();
+            }
+            "input" => {
+                connection
+                    .input(original.generation, b"\x1b[A".to_vec())
+                    .unwrap();
+                assert_eq!(
+                    ws.next().await.unwrap().unwrap().into_data().as_ref(),
+                    b"\x1b[A"
+                );
+            }
+            "prompt" => {
+                ws.send(Message::Binary(
+                    b"\x1b[2J\x1b[HOwn synthetic input prompt".to_vec().into(),
+                ))
+                .await
+                .unwrap();
+            }
+            "synchronized" => {
+                ws.send(Message::Binary(b"\x1b[?2026h\x1b[H".to_vec().into()))
+                    .await
+                    .unwrap();
+            }
+            "disconnect" => {
+                connection.disconnect().unwrap();
+                assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+                ws.flush().await.unwrap();
+                connection.shutdown().await.unwrap();
+                continue;
+            }
+            _ => {}
+        }
+        assert!(
+            timeout(Duration::from_millis(650), ws.next())
+                .await
+                .is_err(),
+            "no late refresh after {mode}"
+        );
+        finish_board_peer(&connection, ws).await;
+    }
+}
+
+#[tokio::test]
+async fn unanswered_list_refresh_never_repeats_or_replays_the_movement() {
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(navigation_page("list").into()))
+        .await
+        .unwrap();
+    let initial = wait(&connection, |v| v.received > 0 && !v.input_pending).await;
+    connection
+        .navigate(initial.stamp(), navigation::Intent::NextPage)
+        .await
+        .unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"\x1b[6~"
+    );
+    assert_eq!(
+        timeout(Duration::from_secs(1), ws.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap()
+            .into_data()
+            .as_ref(),
+        b"\x0c\x0c"
+    );
+    let pending = wait(&connection, |v| v.input_epoch == 2 && v.input_pending).await;
+    assert!(
+        connection
+            .navigate(pending.stamp(), navigation::Intent::Back)
+            .await
+            .is_err()
+    );
+    assert!(
+        timeout(Duration::from_millis(650), ws.next())
+            .await
+            .is_err()
+    );
+    let released = wait(&connection, |v| !v.input_pending).await;
+    assert_eq!(released.frame.revision, initial.frame.revision);
+    assert_eq!(released.input_epoch, 2);
+    assert_eq!(released.message, crate::msg!("input-unanswered"));
+    finish_board_peer(&connection, ws).await;
+}
+
+#[tokio::test]
+async fn adjacent_article_positioning_is_not_published_as_a_new_article() {
+    use navigation::{Context, Intent, Source};
+    for down in [false, true] {
+        let (listener, connection) = idle_local().await;
+        connection.connect().unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        let page = |first, percent| {
+            crate::encoding::encode(&format!("\x1b[2J\x1b[HOriginal synthetic article\x1b[24;1H\x1b[30;47m\x1b[2K瀏覽 第 2/4 頁 ({percent}%) 目前顯示: 第 {first}~{} 行 (y)回應(X)推文(h)說明",first+22)).unwrap()
+        };
+        ws.send(Message::Binary(page(23, 50).into())).await.unwrap();
+        let initial = wait(&connection, |v| v.received > 0 && !v.input_pending).await;
+        connection
+            .request_navigate(
+                initial.stamp(),
+                Intent::AdjacentArticle { down },
+                Source::Keyboard,
+            )
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            if down { b"\x1b[F" } else { b"\x1b[H" }
+        );
+        // No arrow before a complete, confirmed boundary response.
+        assert!(
+            tokio::time::timeout(Duration::from_millis(80), ws.next())
+                .await
+                .is_err()
+        );
+        let target = if down { 45 } else { 1 };
+        ws.send(Message::Binary(
+            page(target, if down { 100 } else { 25 }).into(),
+        ))
+        .await
+        .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            if down { b"\x1b[B" } else { b"\x1b[A" }
+        );
+        let between = wait(&connection, |v| v.input_epoch == 2).await;
+        assert!(between.input_pending);
+        ws.send(Message::Binary(page(1, 25).into())).await.unwrap();
+        let arrived = wait(&connection, |v| {
+            !v.input_pending && v.frame.revision > between.frame.revision
+        })
+        .await;
+        assert!(matches!(
+            arrived.context(),
+            Context::ArticleReading { first_line: 1, .. }
+        ));
+        let close = tokio::spawn(async move {
+            let message = ws.next().await.unwrap().unwrap();
+            assert!(matches!(message, Message::Close(_)));
+            ws.flush().await.unwrap();
+        });
+        assert_eq!(
+            connection.shutdown().await.unwrap(),
+            CloseOutcome::Acknowledged
+        );
+        close.await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn adjacent_positioning_never_sends_a_late_arrow_after_interruption_or_timeout() {
+    use navigation::{Intent, Source};
+    for reason in ["raw", "timeout", "synchronized", "disconnect"] {
+        let (listener, connection) = idle_local().await;
+        connection.connect().unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        let page = |first| {
+            crate::encoding::encode(&format!("\x1b[2J\x1b[HOriginal synthetic article\x1b[24;1H\x1b[30;47m\x1b[2K瀏覽 第 2/4 頁 (50%) 目前顯示: 第 {first}~{} 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H",first+22)).unwrap()
+        };
+        ws.send(Message::Binary(page(23).into())).await.unwrap();
+        let initial = wait(&connection, |v| v.received > 0 && !v.input_pending).await;
+        connection
+            .request_navigate(
+                initial.stamp(),
+                Intent::AdjacentArticle { down: false },
+                Source::Keyboard,
+            )
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+        assert_eq!(
+            ws.next().await.unwrap().unwrap().into_data().as_ref(),
+            b"\x1b[H"
+        );
+        if reason == "raw" {
+            connection
+                .input(initial.generation, b"\x1b[D".to_vec())
+                .unwrap();
+            assert_eq!(
+                ws.next().await.unwrap().unwrap().into_data().as_ref(),
+                b"\x1b[D"
+            );
+            ws.send(Message::Binary(page(1).into())).await.unwrap();
+        } else if reason == "synchronized" {
+            ws.send(Message::Binary(
+                [b"\x1b[?2026h".as_slice(), &page(1)].concat().into(),
+            ))
+            .await
+            .unwrap();
+            assert!(
+                tokio::time::timeout(Duration::from_millis(80), ws.next())
+                    .await
+                    .is_err()
+            );
+            ws.send(Message::Binary(b"\x1b[?2026l".to_vec().into()))
+                .await
+                .unwrap();
+            assert_eq!(
+                ws.next().await.unwrap().unwrap().into_data().as_ref(),
+                b"\x1b[A"
+            );
+            ws.send(Message::Binary(page(1).into())).await.unwrap();
+        } else if reason == "timeout" {
+            // A complete but wrong range must not advance the staged arrow.
+            ws.send(Message::Binary(page(23).into())).await.unwrap();
+            assert!(
+                tokio::time::timeout(Duration::from_millis(600), ws.next())
+                    .await
+                    .is_err()
+            );
+            ws.send(Message::Binary(page(1).into())).await.unwrap();
+        } else {
+            ws.send(Message::Close(None)).await.unwrap();
+            assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+            wait(&connection, |v| v.phase == Phase::Disconnected).await;
+            assert_eq!(
+                connection.shutdown().await.unwrap(),
+                CloseOutcome::Acknowledged
+            );
+            continue;
+        }
+        wait(&connection, |v| !v.input_pending).await;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(80), ws.next())
+                .await
+                .is_err()
+        );
+        let close = tokio::spawn(async move {
+            assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+            ws.flush().await.unwrap();
+        });
+        assert_eq!(
+            connection.shutdown().await.unwrap(),
+            CloseOutcome::Acknowledged
+        );
+        close.await.unwrap();
     }
 }

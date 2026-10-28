@@ -4,6 +4,7 @@ mod article_cache;
 mod bookmarks;
 mod bridge;
 mod commands;
+pub(crate) mod diagnostics;
 mod files;
 mod files_recent;
 mod filter_import;

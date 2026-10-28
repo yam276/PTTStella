@@ -727,3 +727,131 @@ fn black_png_data() -> String {
             .encode(include_bytes!("../../tests/fixtures/export-black.png"))
     )
 }
+
+#[tokio::test]
+async fn original_picture_save_preserves_bytes_and_epoch_revocation_never_touches_clipboard() {
+    use std::sync::Arc;
+    let bytes = include_bytes!("../../tests/fixtures/media/colours.png");
+    let image = Arc::new(pttstella::media::loader::Image {
+        bytes: bytes.to_vec(),
+        mime: "image/png",
+        width: 64,
+        height: 32,
+        animated_format: false,
+        animation_pixels: 0,
+    });
+    let (mut state, sender, receiver, identity) = snapshot();
+    let directory = tempfile::tempdir().unwrap();
+    let mut files = Files::default();
+    let clipboard = files.clipboard();
+    files
+        .start(|permit| {
+            picture::output(
+                permit,
+                picture::Request {
+                    image: image.clone(),
+                    lease: state.lease_picture(identity, receiver.borrow().input_epoch),
+                    source: receiver.clone(),
+                    destination: ExportDestination::File,
+                    probe: Some(directory.path().to_path_buf()),
+                },
+                clipboard.clone(),
+            )
+        })
+        .unwrap();
+    assert!(matches!(
+        files.next().await,
+        Completion::Picture {
+            result: Ok(true),
+            ..
+        }
+    ));
+    assert_eq!(
+        std::fs::read(directory.path().join("picture.png")).unwrap(),
+        bytes
+    );
+    files
+        .start(|permit| {
+            picture::output(
+                permit,
+                picture::Request {
+                    image,
+                    lease: state.lease_picture(identity, receiver.borrow().input_epoch),
+                    source: receiver.clone(),
+                    destination: ExportDestination::Clipboard,
+                    probe: None,
+                },
+                clipboard.clone(),
+            )
+        })
+        .unwrap();
+    sender.send_modify(|view| view.input_epoch += 1);
+    assert!(matches!(
+        files.next().await,
+        Completion::Picture {
+            result: Err(Error::Stale),
+            ..
+        }
+    ));
+    assert!(clipboard.lock().unwrap().is_none());
+    files.finish().await.unwrap();
+}
+
+#[test]
+fn viewport_oracle_rejects_missing_text_and_last_row_background() {
+    let (width, height) = (800u32, 480u32);
+    let mut pixels = vec![0u8; (width * height * 3) as usize];
+    let colours = [
+        [128, 0, 0],
+        [0, 128, 0],
+        [128, 128, 0],
+        [0, 0, 128],
+        [128, 0, 128],
+        [0, 128, 128],
+    ];
+    for row in 0..24 {
+        for y in row * 20..(row + 1) * 20 {
+            for x in 0..800 {
+                let i = (y * 800 + x) * 3;
+                pixels[i..i + 3].copy_from_slice(&colours[row % 6]);
+            }
+        }
+        for col in [0, 1, 2, 4, 5] {
+            let i = ((row * 20 + 3) * 800 + col * 10 + 3) * 3;
+            pixels[i..i + 3].fill(192);
+        }
+    }
+    let encode = |pixels: &[u8]| {
+        let mut bytes = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut bytes, width, height);
+            encoder.set_color(png::ColorType::Rgb);
+            encoder.set_depth(png::BitDepth::Eight);
+            encoder
+                .write_header()
+                .unwrap()
+                .write_image_data(pixels)
+                .unwrap();
+        }
+        bytes
+    };
+    assert_eq!(
+        super::viewport_ink(&encode(&pixels), width, height).unwrap(),
+        vec![[1; 5]; 24]
+    );
+    let missing = ((23 * 20 + 3) * 800 + 5 * 10 + 3) * 3;
+    pixels[missing..missing + 3].copy_from_slice(&colours[5]);
+    assert!(
+        super::viewport_ink(&encode(&pixels), width, height)
+            .unwrap_err()
+            .contains("label missing")
+    );
+    pixels[missing..missing + 3].fill(192);
+    let missing = (23 * 20 * 800 + 600) * 3;
+    pixels[missing..missing + 3].fill(0);
+    assert!(
+        super::viewport_ink(&encode(&pixels), width, height)
+            .unwrap_err()
+            .contains("background missing")
+    );
+}

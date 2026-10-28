@@ -424,6 +424,47 @@ fn merging_never_bridges_a_gap_different_id_unknown_row_or_list() {
 }
 
 #[test]
+fn merging_uses_row_coordinates_and_masks_an_entire_overlapping_wide_glyph() {
+    let mut source = frame();
+    let replies = filters::pushes(&source);
+    let wide = source
+        .glyphs
+        .iter_mut()
+        .find(|g| g.row == 6 && g.col == 2)
+        .unwrap();
+    wide.width = 2;
+    wide.text = "中".into();
+    source.glyphs.retain(|g| !(g.row == 6 && g.col == 3));
+    // Frame order is not an implicit part of the masking contract.
+    source.glyphs.reverse();
+    let mut merged = source.clone();
+    filters::merge_push_ids(&mut merged, &replies);
+    for col in 2..8 {
+        let masked = merged
+            .glyphs
+            .iter()
+            .find(|g| g.row == 6 && g.col == col)
+            .unwrap();
+        assert_eq!(
+            (
+                masked.text.as_str(),
+                masked.width,
+                masked.left.fg,
+                masked.left.bg
+            ),
+            ("█", 1, 0, 0)
+        );
+    }
+    for glyph in source
+        .glyphs
+        .iter()
+        .filter(|g| g.row != 6 || g.col >= 8 || g.col < 2)
+    {
+        assert!(merged.glyphs.contains(glyph));
+    }
+}
+
+#[test]
 fn merging_follows_account_policies_even_when_revealed_and_removes_id_hyperlinks() {
     let mut source = frame();
     source

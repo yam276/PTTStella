@@ -9,7 +9,10 @@ use pttstella::{
     navigation::Context,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
+use std::{
+    collections::{BTreeMap, VecDeque},
+    sync::Arc,
+};
 
 const MAX_IMAGES: usize = 8;
 const MAX_ARTICLE_IMAGES: usize = 32;
@@ -55,6 +58,7 @@ pub(super) struct InlineImages {
     turning: bool,
     expand_all: bool,
     targets: Vec<String>,
+    images: BTreeMap<usize, Arc<media::loader::Image>>,
     queue: VecDeque<(usize, String)>,
     job: Option<(usize, Job)>,
     loader: Loader,
@@ -68,6 +72,7 @@ impl InlineImages {
         self.turning = false;
         self.expand_all = false;
         self.targets.clear();
+        self.images.clear();
         self.queue.clear();
         self.job = None;
         self.bytes = 0;
@@ -255,6 +260,25 @@ impl InlineImages {
             limited,
         }))
     }
+    pub(super) fn image(&self, paint: &Paint, index: usize) -> Option<Arc<media::loader::Image>> {
+        let identity = Identity {
+            presentation: paint.presentation,
+            generation: paint.generation,
+            revision: paint.frame.revision,
+        };
+        if self.identity != Some(identity)
+            || self.article_id != paint.article.as_ref().map(|a| a.id)
+            || !paint.connected
+            || paint.input_pending
+            || paint.output_pending
+            || paint.article_mode == pttstella::settings::ArticleMode::Terminal
+        {
+            return None;
+        }
+        let target = media::classify(&paint.links.get(index)?.url).ok()??;
+        let key = self.targets.iter().position(|url| *url == target.url)?;
+        self.images.get(&key).cloned()
+    }
     fn start_next(&mut self) {
         self.job = self
             .queue
@@ -278,10 +302,12 @@ impl InlineImages {
             let pixels = loaded.image.width.saturating_mul(loaded.image.height);
             let bytes = loaded.image.bytes.len();
             self.admit(pixels, bytes)?;
+            self.images.insert(index, loaded.image.clone());
             Ok(loaded)
         });
         self.start_next();
-        // Inline owns only still canvases, not a second encoded-image cache.
+        // Retained originals share the existing article payload budget and are
+        // released with this scope; explicit copy/save never redownloads.
         Update {
             batch: self.sequence,
             index,
@@ -574,5 +600,63 @@ mod tests {
         assert_eq!(owner.queue.len(), 0);
         owner.close();
         assert!(!owner.active());
+    }
+}
+
+#[cfg(test)]
+mod output_tests {
+    use super::*;
+    #[test]
+    fn original_output_resolves_only_current_owned_links_and_clears_with_the_article() {
+        let frame = pttstella::screen::Screen::new(80, 24).unwrap().frame();
+        let mut paint = super::super::presentation::sample_packet(&frame, &Default::default());
+        paint.connected = true;
+        paint.navigation = Context::ArticleReading {
+            first_line: 1,
+            last_line: 23,
+            percent: 100,
+        };
+        paint.links = vec![pttstella::links::Link {
+            row: 2,
+            start: 0,
+            end: 20,
+            url: "https://example.com/a.png".into(),
+        }];
+        let mut owner = InlineImages::default();
+        owner.open(&paint, Target::Link { index: 0 }).unwrap();
+        assert!(owner.image(&paint, 0).is_none());
+        let image = Arc::new(media::loader::Image {
+            bytes: vec![1],
+            mime: "image/png",
+            width: 1,
+            height: 1,
+            animated_format: false,
+            animation_pixels: 0,
+        });
+        owner.images.insert(0, image.clone());
+        assert!(Arc::ptr_eq(&owner.image(&paint, 0).unwrap(), &image));
+        assert!(owner.image(&paint, 1).is_none());
+        for change in [
+            "generation",
+            "presentation",
+            "revision",
+            "pending",
+            "terminal",
+            "url",
+        ] {
+            let mut stale = paint.clone();
+            match change {
+                "generation" => stale.generation += 1,
+                "presentation" => stale.presentation += 1,
+                "revision" => stale.frame.revision += 1,
+                "pending" => stale.input_pending = true,
+                "terminal" => stale.article_mode = pttstella::settings::ArticleMode::Terminal,
+                _ => stale.links[0].url = "https://example.com/b.png".into(),
+            }
+            assert!(owner.image(&stale, 0).is_none(), "{change}");
+        }
+        owner.close();
+        assert!(owner.images.is_empty());
+        assert!(owner.image(&paint, 0).is_none());
     }
 }

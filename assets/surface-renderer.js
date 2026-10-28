@@ -29,7 +29,7 @@ function graphic(ctx,text,x,y,w,h) {
     } else return false;
     return true;
 }
-function render(target,packet,{cursor=true,hovered=-1,linkHints=false}={}) {
+function render(target,packet,{cursor=true,hovered=-1,linkHints=false,highlight=null}={}) {
     const frame=packet.frame,width=frame.cols*12,height=frame.rows*24;
     const ctx=target.getContext("2d");
     const scale=Math.min(target.width/width,target.height/height);
@@ -37,7 +37,7 @@ function render(target,packet,{cursor=true,hovered=-1,linkHints=false}={}) {
     ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle="#000"; ctx.fillRect(0,0,target.width,target.height);
     // Opaque backgrounds first; both sides of every shared edge use one integer.
     for(const glyph of frame.glyphs) for(let half=0;half<glyph.width;half++) {
-        const [,bg]=colours(half===0?glyph.left:glyph.right),col=glyph.col+half;
+        const [,bg]=colours(highlight?.(glyph)??(half===0?glyph.left:glyph.right)),col=glyph.col+half;
         ctx.fillStyle=bg; ctx.fillRect(x(col),y(glyph.row),x(col+1)-x(col),y(glyph.row+1)-y(glyph.row));
     }
     ctx.textBaseline="alphabetic";
@@ -52,7 +52,7 @@ function render(target,packet,{cursor=true,hovered=-1,linkHints=false}={}) {
         const fitting=connected?span/advance:Math.min(1,span/advance);
         const origin=connected?left:left+(span-advance*fitting)/2;
         for(let half=0;half<glyph.width;half++) {
-            const [fg]=colours(half===0?glyph.left:glyph.right),col=glyph.col+half;
+            const [fg]=colours(highlight?.(glyph)??(half===0?glyph.left:glyph.right)),col=glyph.col+half;
             ctx.save(); ctx.beginPath(); ctx.rect(x(col),top,x(col+1)-x(col),h); ctx.clip(); ctx.fillStyle=fg;
             if(!graphic(ctx,glyph.text,left,top,span,h)) {
                 ctx.translate(origin,top+packet.settings.baseline*scale); ctx.scale(fitting,connected?1:fitting); ctx.fillText(glyph.text,0,0);

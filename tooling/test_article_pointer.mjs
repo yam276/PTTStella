@@ -8,12 +8,12 @@ import vm from 'node:vm';
 const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
 function fixture({cached=true}={}){
     const sent=[],selections=[],capture=new Set();
-    const f={sent,selections,stopped:false,dragging:null,released:null,navigationLocked:false,navigationRequest:false,
+    const f={navigationSequence:0,sent,selections,stopped:false,dragging:null,released:null,navigationLocked:false,navigationRequest:false,
         generation:7,revision:4,composing:false,hoverCandidate:null,
         latest:{presentation:2,connected:true,input_pending:false,output_pending:false,
             frame:{cols:80,rows:cached?81:24},navigation:{kind:'article_reading',first_line:1,percent:50},
             article:cached?{id:1,first_line:1,last_line:80,end:false}:null},
-        viewport:{clientHeight:480,clientWidth:960,scrollTop:0,scrollLeft:0,scrollHeight:1944,
+        viewport:{dataset:{},clientHeight:480,clientWidth:960,scrollTop:0,scrollLeft:0,scrollHeight:1944,
             getBoundingClientRect:()=>({top:40,left:0}),setPointerCapture:id=>capture.add(id),
             hasPointerCapture:id=>capture.has(id),releasePointerCapture:id=>capture.delete(id)},
         surface:{dataset:{},offsetTop:0,getBoundingClientRect:()=>({top:40-f.viewport.scrollTop,left:0,width:960,height:cached?1944:576})},
@@ -39,7 +39,7 @@ function fixture({cached=true}={}){
 
 test('reading halves use the visible viewport after scrolling, not the full cached document',()=>{
     const f=fixture();f.viewport.scrollTop=960;
-    f.tap(40,100);assert.equal(f.viewport.scrollTop,528);assert.deepEqual(f.sent,[]);
+    f.tap(40,100);assert.equal(f.viewport.scrollTop,504);assert.deepEqual(f.sent,[]);
     f.tap(40,380);assert.equal(f.viewport.scrollTop,960);assert.deepEqual(f.sent,[]);
     const narrow=fixture();narrow.viewport.clientHeight=240;narrow.viewport.scrollTop=480;
     narrow.tap(40,150);assert.equal(narrow.viewport.scrollTop,696);
@@ -51,14 +51,14 @@ test('left seventeen columns return across cached rows while live links have pri
     const link=fixture();link.linkAt=()=>3;link.tap(4,100);
     assert.deepEqual(link.sent,[{kind:'open_link',presentation:2,generation:7,revision:4,index:3,trusted:true}]);
     assert.equal(link.viewport.scrollTop,0);
-    const body=fixture();body.tap(17,380);assert.equal(body.viewport.scrollTop,432);assert.deepEqual(body.sent,[]);
+    const body=fixture();body.tap(17,380);assert.equal(body.viewport.scrollTop,456);assert.deepEqual(body.sent,[]);
 });
 
 test('the visible top and bottom row jump Home and End while the central halves still page',()=>{
     const f=fixture();f.latest.article.end=true;f.viewport.scrollTop=960;
     f.tap(40,5);assert.equal(f.viewport.scrollTop,0);assert.deepEqual(f.sent,[]);
     f.tap(40,475);assert.equal(f.viewport.scrollTop,1464);assert.deepEqual(f.sent,[]);
-    f.tap(40,100);assert.equal(f.viewport.scrollTop,1032);
+    f.tap(40,100);assert.equal(f.viewport.scrollTop,1008);
     f.tap(40,380);assert.equal(f.viewport.scrollTop,1464);
     // Same geometry at half-height, without making the entire viewport an edge.
     const small=fixture();small.viewport.clientHeight=240;small.viewport.scrollTop=480;
@@ -77,7 +77,7 @@ function imageFixture(){
     return f;
 }
 test('expanded image gaps support Back, page, Home and End without becoming selectable terminal cells',()=>{
-    for(const [col,y,expected] of [[40,100,528],[40,380,1392],[40,5,0],[40,475,1464]]){
+    for(const [col,y,expected] of [[40,100,504],[40,380,1416],[40,5,0],[40,475,1464]]){
         const f=imageFixture();f.tap(col,y);assert.equal(f.viewport.scrollTop,expected);assert.deepEqual(f.sent,[]);assert.deepEqual(f.selections,[]);
     }
     const back=imageFixture();back.tap(4,380);assert.equal(back.sent[0].intent.action,'back');
@@ -178,7 +178,7 @@ function pauseFixture(){const f=fixture({cached:false});f.latest.navigation={kin
 test('confirmed pause clicks anywhere send Continue once, ahead of links and Back',()=>{
     for(const [col,y] of [[0,1],[40,280],[79,575]]){
         const f=pauseFixture();f.linkAt=()=>0;f.tap(col,y);f.tap(col,y);
-        assert.deepEqual(f.sent,[{kind:'navigate',stamp:{generation:7,revision:4,input_epoch:0},intent:{action:'continue'},source:'pointer',trusted:true}]);
+        assert.deepEqual(f.sent,[{kind:'navigate',request:1,stamp:{generation:7,revision:4,input_epoch:0},intent:{action:'continue'},source:'pointer',trusted:true}]);
     }
     const f=pauseFixture();f.tap(40,280);f.navigationRequest=false;f.navigationLocked=false;
     f.latest.navigation={kind:'board_list',first_row:3,last_row:22};f.revision++;
@@ -251,7 +251,12 @@ test('known list and menu viewport edges send Home and End once without opening 
             const f=listFixture(kind);f.tap(40,y);f.tap(40,y);
             assert.deepEqual(f.sent.map(p=>[p.intent,p.source]),[[{action},'pointer']],kind);
         }
-        const footer=listFixture(kind);footer.tap(40,575);assert.deepEqual(footer.sent,[],kind+' footer');
+        for(const col of [0,16,40,79]){
+            for(const y of [552,563,575]){
+                const footer=listFixture(kind);footer.tap(col,y);footer.tap(col,y);
+                assert.deepEqual(footer.sent.map(p=>[p.intent,p.source]),[[{action:'last'},'pointer']],kind+' footer');
+            }
+        }
     }
     for(const kind of ['unknown','empty_list']){const f=listFixture(kind);f.tap(40,5);assert.deepEqual(f.sent,[]);}
     for(const kind of ['board_list','document_list','article_list']){
@@ -289,5 +294,79 @@ test('list edge hover uses the same Home/End cursors without a marker or tooltip
         f.setHover(point,false,false,f.event(40,y));
         assert.equal(f.surface.dataset.pointerAction,action);assert.equal(f.surface.style.cursor,'');
         assert.equal(f.surface.title,'');assert.equal(f.navigationMarker.hidden,true);
+    }
+});
+
+function letterboxedList(kind='article_list'){
+    const f=listFixture(kind);f.viewport.clientHeight=800;
+    f.surface.getBoundingClientRect=()=>({top:152,left:0,right:960,bottom:728,width:960,height:576});
+    return f;
+}
+test('list Home/End also reach the physical viewport edges outside the centered BBS grid',()=>{
+    for(const kind of ['main_menu','system_menu','document_list','board_list','article_list','command_help']){
+        for(const [y,action] of [[5,'first'],[795,'last']]){
+            const f=letterboxedList(kind);assert.equal(f.cellAt(f.event(40,y),false),null);
+            f.tap(40,y);f.tap(40,y);
+            assert.deepEqual(f.sent.map(p=>[p.intent,p.source]),[[{action},'pointer']],kind);
+            assert.deepEqual(f.selections,[]);
+        }
+    }
+    // Keep both the old grid-edge target and the inert middle of the margin.
+    for(const [y,action] of [[117,'first'],[662,'last'],[680,'last']]){
+        const f=letterboxedList();f.tap(40,y);assert.deepEqual(f.sent.map(p=>p.intent),[{action}]);
+    }
+    for(const y of [60,730]){const f=letterboxedList();f.tap(40,y);assert.deepEqual(f.sent,[]);}
+});
+test('viewport margin Home/End reject stale geometry, Shift, drags, foreign routes and outside-window points',()=>{
+    for(const reason of ['shift','drag','untrusted','remote','blocked','pending','output','no-grid','profile','held-resize','released-scroll','outside-left','outside-top','outside-right','outside-bottom']){
+        const f=letterboxedList(),e=f.event(40,5,{shiftKey:reason==='shift',isTrusted:reason!=='untrusted'});
+        if(reason==='remote')f.stationMouse.local=()=>false;
+        if(reason==='blocked')f.blocked=()=>true;
+        if(reason==='pending')f.latest.input_pending=true;
+        if(reason==='output')f.latest.output_pending=true;
+        if(reason==='no-grid')f.grid=null;
+        if(reason==='outside-left')e.clientX=-1;
+        if(reason==='outside-top')e.clientY=39;
+        if(reason==='outside-right')e.clientX=960;
+        if(reason==='outside-bottom')e.clientY=840;
+        f.pointerdown(e);
+        if(reason==='profile')f.latest.navigation.kind='unknown';
+        if(reason==='held-resize')f.viewport.clientHeight=900;
+        f.pointerup(reason==='drag'?{...e,clientX:e.clientX+10}:e);
+        if(reason==='released-scroll')f.viewport.scrollTop=24;
+        f.click(e);assert.deepEqual(f.sent,[],reason);
+    }
+    for(const kind of ['unknown','empty_list','continue_prompt','article_reading']){
+        const f=letterboxedList(kind);f.tap(40,5);assert.deepEqual(f.sent,[],kind);
+    }
+});
+test('viewport margin hover shows the shared bar-arrow cursor and clears without a row marker',()=>{
+    const f=letterboxedList();f.navigationMarker={style:{},dataset:{}};f.surface.style={};
+    f.hoveredLink=-1;f.pointerClient=null;f.previewHover=()=>{};f.draw=()=>{};f.tr=key=>key;
+    vm.runInContext(source.slice(source.indexOf('function setHover('),source.indexOf('function refreshNavigation(')),f);
+    for(const [y,action] of [[5,'first'],[795,'last']]){
+        f.setHover(null,false,false,f.event(40,y));
+        assert.equal(f.viewport.dataset.pointerAction,action);
+        assert.equal(f.surface.title,'');assert.equal(f.navigationMarker.hidden,true);
+    }
+    f.setHover(null,false,false);assert.equal(f.viewport.dataset.pointerAction,'none');
+});
+
+test('status-row End retains pointer admission and leaves article footers unchanged',()=>{
+    for(const reason of ['shift','drag','untrusted','remote','blocked','pending','output','stale','released-scroll','profile']){
+        const f=listFixture('article_list'),e=f.event(4,565,{shiftKey:reason==='shift',isTrusted:reason!=='untrusted'});
+        if(reason==='remote')f.stationMouse.local=()=>false;
+        if(reason==='blocked')f.blocked=()=>true;
+        if(reason==='pending')f.latest.input_pending=true;
+        if(reason==='output')f.latest.output_pending=true;
+        f.pointerdown(e);
+        if(reason==='stale')f.latest.presentation++;
+        if(reason==='profile')f.latest.navigation.kind='unknown';
+        f.pointerup(reason==='drag'?f.event(6,565):e);
+        if(reason==='released-scroll')f.viewport.scrollTop=24;
+        f.click(e);assert.deepEqual(f.sent,[],reason);
+    }
+    for(const kind of ['unknown','empty_list','article_reading']){
+        const f=listFixture(kind);f.tap(4,565);assert.deepEqual(f.sent,[],kind);
     }
 });

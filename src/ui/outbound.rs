@@ -11,6 +11,8 @@ use std::collections::BTreeMap;
 #[derive(Serialize)]
 #[serde(tag = "kind", content = "payload", rename_all = "snake_case")]
 pub(super) enum Packet<'a> {
+    Diagnostics(bool),
+    UpdateStatus(pttstella::updates::Status),
     SitesOpen {
         request: u64,
         data: super::sites::Snapshot,
@@ -94,7 +96,12 @@ pub(super) enum Packet<'a> {
     },
     SettingsSaved(Feedback<SaveStatus>),
     ProfileResult(ProfileResult),
-    NavigationResult(Feedback<NavigationStatus>),
+    NavigationResult {
+        request: u64,
+        generation: u64,
+        #[serde(flatten)]
+        feedback: Feedback<NavigationStatus>,
+    },
     DestinationResult {
         request: u64,
         feedback: Feedback<DestinationStatus>,
@@ -105,6 +112,15 @@ pub(super) enum Packet<'a> {
     ExportResult(Feedback<ExportStatus>),
     LinkResult(Feedback<LinkStatus>),
     Selection(SelectionReply),
+}
+impl super::protocol::NavigationTicket {
+    pub(super) fn finish(self, feedback: Feedback<NavigationStatus>) -> Packet<'static> {
+        Packet::NavigationResult {
+            request: self.request,
+            generation: self.generation,
+            feedback,
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -249,7 +265,7 @@ macro_rules! statuses {
     )+};
 }
 statuses! {
-    NavigationStatus { Sent, Rejected },
+    NavigationStatus { Sent, Rejected, Cancelled },
     DestinationStatus { Started, Rejected },
     PasteStatus { Queued, Preview, Cancelled, Rejected },
     ExportStatus { Saved, Copied, Cancelled, Failed },

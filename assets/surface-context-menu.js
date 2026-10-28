@@ -2,14 +2,21 @@
 function contextMenuItems(state) {
     const entries=new Map();
     const add=(name,enabled=true)=>entries.set(name,enabled);
+    if(state.picture){
+        add("copy-picture",state.ready&&state.pictureReady);
+        add("save-picture",state.ready&&state.pictureReady);
+        if(state.link>=0){add("copy-link");add("open-link",state.local);}
+        return entries;
+    }
     if(state.word&&state.ptt&&(state.reading||state.authors)&&state.local){
         for(const [name,policy] of [["mask","mask"],["mask-row","mask_row"],["allow","allow"]])
             add("account-"+(state.word.policy===policy?"remove-":"")+name,state.ready);
     }
-    if(state.replyRow!==null&&state.replyRow!==undefined&&state.local)add("reply-focus",state.ready);
-    if(state.focused&&state.local)add("reply-focus-clear",state.ready);
+    if(state.word&&state.replyRow!==null&&state.replyRow!==undefined&&state.local)add("reply-focus",state.ready);
+    if(state.focused&&state.local&&(state.word||!state.selection&&state.link<0))add("reply-focus-clear",state.ready);
     if(state.selection){add("copy",state.selectionReady);add("export-rows",state.rowsReady);add("copy-image-rows",state.rowsReady);}
     if(state.link>=0){add("copy-link");add("open-link",state.local);add("select-link");}
+    if(state.word||state.selection||state.link>=0)return entries;
     add("select-all",state.ready);add("export-page",state.exportReady);add("copy-image-page",state.exportReady);
     if(state.reading){
         if(state.images)add("inline",state.inlineReady);

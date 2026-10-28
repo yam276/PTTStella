@@ -21,6 +21,56 @@ fn key(value: &str) -> Key {
 }
 
 #[test]
+fn native_control_shortcuts_survive_cjk_logical_keys_in_each_raw_mode() {
+    let context = Context::Unknown {
+        reason: UnknownReason::Unrecognized,
+    };
+    for mode in 0..3 {
+        for (glyph, code, byte) in [("ㄌ", "KeyX", 24), ("Ω", "KeyZ", 26), ("中", "KeyA", 1)] {
+            let mut keyboard = Keyboard::default();
+            keyboard.context(&context);
+            if mode > 0 {
+                keyboard.toggle();
+            }
+            if mode == 1 {
+                keyboard.use_native_input();
+            }
+            if mode == 2 {
+                keyboard.arm();
+            }
+            let mut command = key(glyph);
+            command.code = code.into();
+            command.ctrl = true;
+            assert_eq!(keyboard.key(&command, &context), Effect::Native(vec![byte]));
+            assert!(!keyboard.accept_text(false));
+        }
+    }
+    let mut keyboard = Keyboard::default();
+    let mut command = key("ㄌ");
+    command.ctrl = true;
+    command.code = "KeyX".into();
+    command.alt = true;
+    assert_eq!(keyboard.key(&command, &context), Effect::None);
+    command.alt = false;
+    command.code = "Unidentified".into();
+    assert_eq!(keyboard.key(&command, &context), Effect::None);
+    command.code = "KeyX".into();
+    keyboard.composition_start();
+    assert_eq!(keyboard.key(&command, &context), Effect::None);
+    keyboard.composition_end();
+    command.key = "a".into();
+    assert_eq!(
+        keyboard.key(&command, &context),
+        Effect::Native(vec![1]),
+        "an ASCII logical key still respects the active layout"
+    );
+    command.key = "ㄌ".into();
+    command.ctrl = false;
+    assert_eq!(keyboard.key(&command, &context), Effect::None);
+    assert!(keyboard.accept_text(false));
+}
+
+#[test]
 fn authentication_handoff_clears_prefix_and_keeps_native_input_until_explicit_escape() {
     let mut keyboard = Keyboard::default();
     keyboard.toggle();

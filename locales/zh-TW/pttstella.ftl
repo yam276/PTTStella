@@ -609,12 +609,24 @@ account-action-stale = 畫面已改變，請重新在 ID 上按右鍵。
 reply-focus = 切換此 ID 推文底色標示
 
 article-load-loading = 正在載入全文 · 已取得 { $lines } 行
+article-load-paused-background = 視窗不在前景，已暫停載入 · 保留 { $lines } 行；回到視窗後自動繼續
+article-load-paused-interaction = 操作中，已暫停載入 · 保留 { $lines } 行；操作結束後自動繼續
 article-load-complete = 全文已載入 · { $lines } 行
 article-load-cancelled = 已取消全文載入 · 保留 { $lines } 行
 article-load-stopped = 讀取中斷 · 保留 { $lines } 行
 article-load-changed = 文章內容已變更，已停止載入
 article-load-limit = 已達全文載入上限，後續請用終端機模式閱讀
 article-load-cancel = 取消載入（Esc）
+article-find-title = 在文章中尋找
+article-find-placeholder = 尋找文章文字
+article-find-hint = 搜尋已載入的文字，不分英文大小寫；終端機模式僅搜尋目前頁。不會送出 PTT 的 / 搜尋。
+article-find-empty = 輸入文字
+article-find-none = 找不到
+article-find-count = { $current } / { $total }
+article-find-count-limited = { $current } / { $total }+
+article-find-previous = 上一筆（Shift+Enter）
+article-find-next = 下一筆（Enter）
+article-find-close = 關閉尋找（Esc）
 article-load-resume = 繼續載入
 
 filters-color-invalid = 請選擇有效的 ID 顏色；只有白名單可設定個別顏色
@@ -671,3 +683,16 @@ export-copied = 圖片已複製到剪貼簿
 
 gif-playing = GIF 動畫播放中
 gif-paused = GIF 動畫已暫停
+
+context-copy-picture = 複製圖片
+context-save-picture = 另存圖片…
+picture-saved = 圖片已儲存
+picture-save-title = 儲存圖片
+picture-extension = 請保留圖片原有的副檔名
+
+update-check = 檢查新版本
+update-checking = 正在檢查…
+update-open = 前往下載新版
+update-available = 有新版本：{ $version }
+update-current = 目前已是最新正式版本，或使用較新的開發版本。
+update-help = 啟動時檢查正式版本，也可手動檢查。取得失敗時不顯示提示；下載後請自行安裝。

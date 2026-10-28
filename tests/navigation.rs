@@ -259,6 +259,63 @@ fn board_identity_uses_the_actual_header_suffix_and_distinguishes_empty_lists_an
 }
 
 #[test]
+fn switch_from_main_opens_verified_favorite_from_each_cursor_without_letter_shortcuts() {
+    use pttstella::board_navigation::{BoardName, Start, Switch};
+    for (row, expected) in [
+        (12, b"\x1b[B\r".as_slice()),
+        (13, b"\r"),
+        (14, b"\x1b[A\r"),
+        (15, b"\x1b[A\x1b[A\r"),
+    ] {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&switch_scene("main"));
+        screen.feed(
+            &encoding::encode(&format!(
+                "\x1b[14;21H  \x1b[{};21H●\x1b[{};22H",
+                row + 1,
+                row + 1
+            ))
+            .unwrap(),
+        );
+        let Start::Run { bytes, .. } = Switch::begin(
+            &screen.frame(),
+            BoardName::parse("Stella").unwrap(),
+            std::time::Instant::now(),
+        )
+        .unwrap() else {
+            panic!("workflow")
+        };
+        assert_eq!(bytes, expected, "cursor row {row}");
+    }
+}
+
+#[test]
+fn switch_from_main_rejects_missing_or_ambiguous_favorite_before_sending_input() {
+    use pttstella::board_navigation::{self as board, BoardName, Switch};
+    for (row, item) in [
+        (13, "                      (U)ser         【 個人設定區 】"),
+        (14, "                      (F)avorite     【 我的最愛 】"),
+    ] {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&switch_scene("main"));
+        replace(&mut screen, row, item, "0");
+        screen.feed(&encoding::encode("\x1b[14;21H●\x1b[14;22H").unwrap());
+        assert!(matches!(
+            navigation::analyze(&screen.frame()),
+            Context::MainMenu { .. }
+        ));
+        assert!(matches!(
+            Switch::begin(
+                &screen.frame(),
+                BoardName::parse("Stella").unwrap(),
+                std::time::Instant::now()
+            ),
+            Err(board::Error::Unsupported)
+        ));
+    }
+}
+
+#[test]
 fn switch_from_main_waits_for_prompt_then_selected_target_before_entering_once() {
     use pttstella::board_navigation::{Advance, BoardName, Start, Switch};
     let now = std::time::Instant::now();
@@ -269,7 +326,7 @@ fn switch_from_main_waits_for_prompt_then_selected_target_before_entering_once()
     else {
         panic!("expected workflow")
     };
-    assert_eq!(bytes, b"f");
+    assert_eq!(bytes, b"\r");
     assert_eq!(switch.observe(&screen.frame(), now).unwrap(), Advance::Wait);
     for (name, expected) in [
         ("boards", b"s".as_slice()),
@@ -621,7 +678,8 @@ fn article_row(number: &str, flags: &str, date: &str, author: &str, title: &str)
     } else {
         format!("{number:>6}")
     };
-    format!(" {number}{flags}{date} {author:13}{title}")
+    let padding = " ".repeat(13 - encoding::encode(author).unwrap().len());
+    format!(" {number}{flags}{date} {author}{padding}{title}")
 }
 
 #[test]
@@ -698,6 +756,132 @@ fn pinned_article_and_complete_dual_colour_title_keep_column_targets() {
         Context::ArticleList { .. }
     ));
 }
+#[test]
+fn pinned_display_authors_preserve_list_targets_and_quick_board_switching() {
+    use pttstella::board_navigation::{self, BoardName, Start, Switch};
+    for label in ["[測試作者]", "[公告小組]", "[Legacy_12]"] {
+        let mut screen = fixture("list");
+        replace(
+            &mut screen,
+            5,
+            &article_row("★", "   8", "10/16", label, "□ 自製置底公告"),
+            "0",
+        );
+        screen.feed(b"\x1b[5;1H");
+        let frame = screen.frame();
+        let context = navigation::analyze(&frame);
+        assert!(
+            matches!(context, Context::ArticleList { ref articles, cursor_row: 4 } if articles.len() == 3),
+            "{label}: {context:?}"
+        );
+        assert_eq!(
+            navigation::plan(&context, Intent::Open { row: 5 }).unwrap(),
+            b"\x1b[B\r"
+        );
+        assert_eq!(
+            board_navigation::current_board(&frame).unwrap().as_str(),
+            "Stella"
+        );
+        assert!(
+            matches!(Switch::begin(&frame, BoardName::parse("Beta").unwrap(), std::time::Instant::now()).unwrap(), Start::Run { bytes, .. } if bytes == b"\x1b[D")
+        );
+        let words = pttstella::filters::article_authors(&frame, &frame);
+        assert_eq!(
+            words
+                .iter()
+                .map(|word| word.id.as_str())
+                .collect::<Vec<_>>(),
+            ["alice", "bob"]
+        );
+    }
+}
+
+#[test]
+fn numbered_lottery_display_author_keeps_list_edges_and_does_not_become_an_account() {
+    let mut screen = fixture("list");
+    replace(
+        &mut screen,
+        5,
+        &article_row("123", "    ", "10/16", "[彩券]", "□ 自製公告"),
+        "0",
+    );
+    screen.feed(b"\x1b[5;1H");
+    let frame = screen.frame();
+    let context = navigation::analyze(&frame);
+    assert!(matches!(context, Context::ArticleList { ref articles, .. } if articles.len() == 3));
+    assert_eq!(
+        navigation::plan(&context, Intent::First).unwrap(),
+        b"\x1b[H"
+    );
+    assert_eq!(navigation::plan(&context, Intent::Last).unwrap(), b"\x1b[F");
+    assert_eq!(
+        navigation::plan(&context, Intent::Open { row: 5 }).unwrap(),
+        b"\x1b[B\r"
+    );
+    assert_eq!(
+        pttstella::board_navigation::current_board(&frame)
+            .unwrap()
+            .as_str(),
+        "Stella"
+    );
+    assert_eq!(
+        pttstella::filters::article_authors(&frame, &frame)
+            .iter()
+            .map(|word| word.id.as_str())
+            .collect::<Vec<_>>(),
+        ["alice", "bob"]
+    );
+    for (author, date, title) in [
+        ("[彩卷]", "10/16", "□ 自製公告"),
+        ("[樂透]", "10/16", "□ 自製公告"),
+        ("[彩券", "10/16", "□ 自製公告"),
+        ("[彩券]", "99/99", "□ 自製公告"),
+        ("[彩券]", "10/16", "是否確定？[Y/n]"),
+    ] {
+        replace(
+            &mut screen,
+            5,
+            &article_row("123", "    ", date, author, title),
+            "0",
+        );
+        screen.feed(b"\x1b[5;1H");
+        unknown(&screen.frame());
+    }
+}
+
+#[test]
+fn pinned_display_authors_do_not_admit_prompts_or_broken_columns() {
+    for (number, label, title) in [
+        ("122", "[測試作者]", "□ 非置底"),
+        ("★", "測試作者", "□ 未括起名稱"),
+        ("★", "[測試作者", "□ 缺結尾"),
+        ("★", "測試作者]", "□ 缺開頭"),
+        ("★", "[]", "□ 空名稱"),
+        ("★", "[ab cd]", "□ 內含空白"),
+        ("★", "[a/b]", "□ 內含指令符號"),
+        ("★", "[測試作者]", "是否確定？[Y/n]"),
+    ] {
+        let mut screen = fixture("list");
+        replace(
+            &mut screen,
+            5,
+            &article_row(number, "    ", "10/16", label, title),
+            "0",
+        );
+        screen.feed(b"\x1b[5;1H");
+        unknown(&screen.frame());
+    }
+    let mut screen = fixture("list");
+    replace(
+        &mut screen,
+        5,
+        &article_row("★", "    ", "10/16", "[測試作者]", "□ 自製公告"),
+        "0",
+    );
+    screen.feed(b"\x1b[6;20H\x81 \x1b[5;1H");
+    unknown(&screen.frame());
+}
+
 #[test]
 fn live_empty_article_titles_keep_valid_number_and_author_targets() {
     let mut screen = fixture("list_dense");
