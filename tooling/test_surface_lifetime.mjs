@@ -1,4 +1,6 @@
 // No browser automation: exercise the production stop owner with fake channels.
+import {spawnSync} from "node:child_process";
+import {fileURLToPath} from "node:url";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
@@ -99,4 +101,10 @@ test("twenty thousand packets do not accumulate reactions on an unresolved stop 
     target.dispatchEvent(new Event("pttstella:stop"));
     assert.equal((await lifetime.receive()).kind,"stop");
     lifetime.release();assert.equal(target.count,0);
+});
+
+test("the final Eval channel survives GC through join and is released afterwards",()=>{
+    const result=spawnSync(process.execPath,["--expose-gc",fileURLToPath(new URL("./probe_surface_result_gc.mjs",import.meta.url))],{encoding:"utf8",timeout:10000});
+    assert.equal(result.status,0,result.stderr||String(result.error));
+    assert.deepEqual(JSON.parse(result.stdout),{unretained_collected:true,retained_alive_until_join:true,released_collected:true,listeners_after_release:0});
 });

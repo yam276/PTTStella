@@ -11,7 +11,7 @@ test('surface bootstrap decodes the initial localization before constructing its
     const bootstrap=surface.slice(0,surface.indexOf('const canvas='));
     const packet={kind:'localization',payload:{language:'zh-TW'}};
     let received=0;
-    const context={dioxus:{recv:async()=>JSON.stringify(packet)},document:{documentElement:{}},fluent:{},createSurfaceI18n(data){assert.deepEqual(plain(data),packet);received++;}};
+    const context={retainSurfaceResult(){},window:{},dioxus:{recv:async()=>JSON.stringify(packet)},document:{documentElement:{}},fluent:{},createSurfaceI18n(data){assert.deepEqual(plain(data),packet);received++;}};
     await vm.runInNewContext(source+'\n(async()=>{'+bootstrap+'})()',context);
     assert.equal(received,1);assert.equal(context.document.documentElement.lang,'zh-TW');
 });
