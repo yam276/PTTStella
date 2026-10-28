@@ -69,6 +69,10 @@ gh api --method POST repos/yam276/PTTStella/rulesets --input .github/rulesets/ma
 
 `Release PR policy` 必須維持同名並由 GitHub Actions 提供。啟用後核對規則 active、沒有 bypass，並以不符合條件的測試 PR 確認不能合併，才可宣稱伺服器端限制已完成。
 
-## 下一版公開下載清單調整（已排程，0.2.1 不變）
+## 0.2.1 發佈狀態
+
+Release PR #3 合併至 main `4f194551a02821e7b80ae78591a125774e74487e`。四架構 verify 40664831408 與正式 run 40667567525 全數成功，publisher 已正常完成。[v0.2.1](https://github.com/yam276/PTTStella/releases/tag/v0.2.1) 為 Latest stable，附六個平台下載套件、四份 manifest 與 SHA256SUMS；獨立核對精確附件清單、版本／來源／release profile、GitHub 上傳 digest、校驗碼與版本專用說明通過。這次仍使用既有 11 附件流程，下列清單精簡留待下一版。main 已整合回 develop，後續文件提交留 develop。
+
+## 下一版公開下載清單調整（已規劃，0.2.1 不變）
 
 使用者指定在 0.2.1 之後的下一版再調整：建置資訊 JSON 保留於 GitHub Actions artifacts，繼續核對版本、平台、來源 commit、簽章狀態及執行檔 SHA-256；公開 Release 只放六個平台下載套件與 `SHA256SUMS`。校驗清單只列公開下載項。這需要同步調整發佈資產白名單、驗證與測試；保留全部套件驗證及完整上傳後才公開的規則，不在目前已合併的 0.2.1 建置中變更。
