@@ -225,3 +225,6 @@ Control 與工具列焦點使用 `--probe-surface OUTPUT_DIRECTORY control_input
 等寬圖片末行另用 `wide_last_row`：23 個自製編號列與末行標記，第二列為本機圖片連結；HTTP 提供 64×33 紅藍 PNG。先短按 Enter 開圖、再短按等寬，End 必須看見完整最後一行及色塊；重複 End／PageDown 不再增加捲動。來源 PNG 需與修改前逐像素相同、視窗固定、Close 及全部 owner join。JS 同時核對整數原生捲動上限、不同 DPR／字高／圖片比例、末端取整不足一 CSS px，不能以放寬完整行規則或新增空白文字行通過。
 
 導覽等待變更另跑 `node --test tooling/test_navigation_lifecycle.mjs` 與 desktop lib／bin：共享 fixture 經真正 JS producer、packet router 與 Rust protocol 准入，涵蓋普通方向鍵邊界取頁、拒絕、舊回覆、取消後 Cmd/Ctrl+K 切板及新文章翻頁。command owner 的成功／錯誤／取消須保留原 request，沒有重送。原生驗證須區分預讀與手動取頁：inline_pages 可驗分段回覆、本機 Down 接續與末行，若下一頁已被預讀，不能計為方向鍵未知邊界的證明。另在先取消全文且只保留第一頁的原生畫面按一次 Down，核對真正 Navigate／同 request 結果及新行範圍；不能只用 Next 或預讀的 PageDown 代替此路徑。實站畫面異常的 AX 與 screenshot 必須來自同一次 `getAXStateAndScreenshot` 回傳並一併保存，不另擷取第二張作為當下證據。
+
+
+全螢幕／清理回歸另用 `--probe-surface OUTPUT_DIRECTORY fullscreen`：本機 peer 拒絕全部站端 bytes；在一般視窗、全螢幕、全螢幕設定 Esc、返回一般視窗各點一次擷取工具中的 `Capture live viewport`（最多八次）。Files owner 有界解碼並獨立檢查 24 行背景及 120 個標記文字格，留下 viewport-N.png／json；須四次成功、來源 PNG、Close acknowledged 與所有 owner join。前景畫面與 live Canvas readback 分別核對；背景原生擷取漏文字不能直接判定 Canvas 缺字。另跑 `renderer_error` 負例與設定儲存中關閉，前者必須 run_ok false／cleanup_ok true，後者須保留最後設定。GC 負例使用 `node --expose-gc tooling/probe_surface_result_gc.mjs`，已納入 JS suite；不得把 EvalError::Finished 視為清理成功。合成 Surface peer 的互動期限維持 300 秒，逾時案例不算正常關閉通過。

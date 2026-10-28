@@ -810,6 +810,16 @@ function requestInline(target,e){
 }
 const inlineImages=installInlineImages({surface,canvas,viewport,tr,render,redraw:()=>{if(latest)draw(latest);},changed:refreshKeepAlive,notice:text=>{surfaceNote.textContent=text;},
     allowed:()=>!stopped&&!blocked()&&!tools?.busy()&&inlineShortcut({key:"Enter"},keyboardState,latest),request:requestInline});
+let viewportProbe=false,viewportCapture=0;
+function captureViewport(event){
+    if(!viewportProbe||stopped||!event.isTrusted||viewportCapture>=8)return;
+    hideChrome();
+    const bounds=canvas.getBoundingClientRect();
+    send({kind:"viewport_capture",sequence:++viewportCapture,png:canvas.toDataURL("image/png"),
+        pixels:[canvas.width,canvas.height],bounds:[bounds.left,bounds.top,bounds.width,bounds.height],
+        window:[innerWidth,innerHeight],dpr:devicePixelRatio||1,
+        draws});
+}
 const bindings=[...inlineImages.bindings,...contextMenu.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
@@ -876,6 +886,8 @@ function repaint() {
     if(stopped||!latest||animation) return;
     animation=requestAnimationFrame(()=>{animation=0;if(!stopped) {draw(latest);if(pointerClient)setHover(cellAt(pointerClient,false),false,true,pointerClient);}});
 }
+const viewportProbeButton=document.getElementById("probe-viewport");
+if(viewportProbeButton){viewportProbeButton.addEventListener("click",captureViewport);bindings.push([viewportProbeButton,"click",captureViewport]);}
 const observer=new ResizeObserver(repaint); observer.observe(viewport);observer.observe(viewport.parentElement);
 function checkArt({x,y}) {
     const pixels=ctx.getImageData(x(0),y(19),x(16)-x(0),y(21)-y(19)).data;
@@ -972,7 +984,8 @@ const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
 let cleanupClean=false;
 function runSurfaceProbe(mode){
             toolsProbeEnabled=true;
-            if(mode==="sites"||mode==="sites_restart")surfaceNote.textContent="Local station probe: loopback Big5/GBK peers only; station favourites, default, input, PNG and shutdown";
+            if(mode==="fullscreen")viewportProbe=true;
+            else if(mode==="sites"||mode==="sites_restart")surfaceNote.textContent="Local station probe: loopback Big5/GBK peers only; station favourites, default, input, PNG and shutdown";
             else if(mode==="tools")surfaceNote.textContent=tr("tools-probe-freeplay");
             else if(mode==="decode")send({kind:"synthetic_invalid_event"});
             else if(mode==="painted")send({kind:"painted",presentation:latest.presentation,revision:revision+100,generation});

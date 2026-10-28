@@ -107,23 +107,23 @@ fn main() {
             .as_deref()
         {
             Some(
-                case @ ("decode" | "painted" | "send" | "renderer_error" | "untrusted" | "confirm"
-                | "slow" | "dialogs" | "tools" | "sites" | "sites_restart" | "files"
-                | "files_slow" | "fonts" | "sgr66" | "sgr66_legacy" | "login_2fa" | "osc8"
-                | "filter_colors" | "inline" | "inline_pages" | "full_load" | "long_load"
-                | "terminal_pages" | "short_overlap" | "short_reading" | "reading_rows"
-                | "control_input" | "wide_last_row" | "diagnostics" | "inline_replies"
-                | "short_links" | "picture_menu" | "context_menu" | "account_lists"
-                | "merged_replies" | "account_actions" | "account_articles"
-                | "pointer_rows" | "list_boundary" | "article_switch" | "boards"
-                | "boards_close" | "recent" | "articles" | "articles_close" | "bookmarks"
-                | "bookmarks_restart" | "bookmarks_empty" | "bookmarks_corrupt" | "mouse"
-                | "mouse_boundary" | "mouse_drag" | "mouse_round_trip" | "mouse_motion"
-                | "mouse_wheel"),
+                case @ ("fullscreen" | "decode" | "painted" | "send" | "renderer_error"
+                | "untrusted" | "confirm" | "slow" | "dialogs" | "tools" | "sites"
+                | "sites_restart" | "files" | "files_slow" | "fonts" | "sgr66"
+                | "sgr66_legacy" | "login_2fa" | "osc8" | "filter_colors" | "inline"
+                | "inline_pages" | "full_load" | "long_load" | "terminal_pages"
+                | "short_overlap" | "short_reading" | "reading_rows" | "control_input"
+                | "wide_last_row" | "diagnostics" | "inline_replies" | "short_links"
+                | "picture_menu" | "context_menu" | "account_lists" | "merged_replies"
+                | "account_actions" | "account_articles" | "pointer_rows" | "list_boundary"
+                | "article_switch" | "boards" | "boards_close" | "recent" | "articles"
+                | "articles_close" | "bookmarks" | "bookmarks_restart" | "bookmarks_empty"
+                | "bookmarks_corrupt" | "mouse" | "mouse_boundary" | "mouse_drag"
+                | "mouse_round_trip" | "mouse_motion" | "mouse_wheel"),
             ) => Some(case.to_owned()),
             _ => {
                 eprintln!(
-                    "--probe-surface requires decode, painted, send, renderer_error, untrusted, confirm, slow, dialogs, tools, sites, sites_restart, files, files_slow, fonts, sgr66, sgr66_legacy, login_2fa, osc8, inline, boards, boards_close, recent, articles, articles_close, bookmarks, bookmarks_restart, bookmarks_empty, bookmarks_corrupt, mouse, mouse_boundary, mouse_drag, mouse_round_trip, mouse_motion or mouse_wheel"
+                    "--probe-surface requires fullscreen, decode, painted, send, renderer_error, untrusted, confirm, slow, dialogs, tools, sites, sites_restart, files, files_slow, fonts, sgr66, sgr66_legacy, login_2fa, osc8, inline, boards, boards_close, recent, articles, articles_close, bookmarks, bookmarks_restart, bookmarks_empty, bookmarks_corrupt, mouse, mouse_boundary, mouse_drag, mouse_round_trip, mouse_motion or mouse_wheel"
                 );
                 std::process::exit(2);
             }

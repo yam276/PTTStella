@@ -12,6 +12,16 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## 清理競態與全螢幕驗證（2026-10-28，已完成）
+
+舊的 `EvalError::Finished` 清理失敗對應 Dioxus Desktop 的 FinalizationRegistry：JS 已回傳時，channel 若先被回收，Rust 可能無法 join 完整結果。現在由單一 window-owned symbol／listener 保留 channel，Rust 消費 clean／settings／tools 完整快照後才釋放；停止與釋放改用有確認的原生 WebView callback，不再另外建立易被回收的短 Eval。無法確認釋放仍算清理失敗，但已收到的設定快照仍交給 RetainedEdits 保存，沒有把 Finished 當成功。
+
+全螢幕「缺字」已查明為原生自動化擷取與 live Canvas 內容不一致；舊與新讀回 PNG 的 24 行、120 個文字格均完整，使用者也確認前景畫面完整。撤回所有字型快取／暫存畫布／排程實驗，production renderer、文章快取與圖片狀態均未改動。新增明確合成 `fullscreen` 探針：只接受使用者點擊擷取，最多八張，Rust 解碼後以獨立 expected 檢查每行背景及各文字格像素；不以來源 PNG 或操作計數代替 live 驗證。
+
+最新版 macOS arm64 診斷 App 通過一般視窗→全螢幕→設定 Esc→返回視窗四次 live readback（含首末行），Esc 後仍維持全螢幕。來源 PNG 與修改前像素一致；正常關閉、設定顯示「正在儲存」時關閉、synthetic renderer error 三例均 Close acknowledged／全部 owner join／exit 0，字高 22 的最後變更已保存。錯誤例維持 run_ok false、cleanup_ok true。可控 GC 的負例會丟失未保留 channel，修正後存活至 join、釋放後可回收。超過合成 peer 300 秒期限的探索保留為失敗，沒有算進上述驗收。
+
+驗證：core 14 commands／2 replays、desktop lib 159／bin 151、JS 274、Clippy、fmt 與 docs。另修正更新檢查取消測試：TCP FIN 與 ConnectionReset 都是取消結果，仍拒絕多餘資料、其他錯誤及逾時。證據 `.local/verification/cleanup-fullscreen-20261028/`，保留讀回 PNG、原生擷取差異、失敗與最終紀錄；交付 `dist/macos-cleanup-verified-v2/PTTStella.app`。本次未連 PTT、未做長時間實站或其他平台原生驗收，沒有推送或發佈。
+
 ## GitHub 正式版本檢查（2026-10-28，已完成）
 
 正常啟動背景查詢一次 GitHub 最新正式 Release，「關於與授權」另提供手動檢查及已發現新版的下載入口。以實際 Cargo package SemVer 比較，不將舊正式版提示給較新的 dev 版；排除草稿與預發佈。不自動下載、安裝或讀取 GitHub／PTT 憑證；private／404、限流、網路、格式與逾時失敗保持靜默，不顯示為已是最新版。單一可取消 HTTP future、總逾時與 response byte 上限；合成 probe 禁止自動或手動外連。

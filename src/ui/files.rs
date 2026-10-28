@@ -53,6 +53,7 @@ impl std::fmt::Display for Error {
 type FileResult<T> = Result<T, Error>;
 pub(super) enum Completion {
     Clipboard(FileResult<()>),
+    Viewport(FileResult<()>),
     Picture {
         destination: ExportDestination,
         result: FileResult<bool>,
@@ -90,7 +91,7 @@ pub(super) enum Completion {
 impl Completion {
     fn failure(self) -> Option<Error> {
         match self {
-            Self::Clipboard(result) => result.err(),
+            Self::Clipboard(result) | Self::Viewport(result) => result.err(),
             Self::Picture { result, .. } => result.err(),
             Self::Sites { result, .. } => result.err(),
             Self::Bookmarks { result, .. } => result.err(),
@@ -291,6 +292,96 @@ pub(super) async fn probe_report(
         })
         .await,
     )
+}
+
+/// Live canvas readback is confined to the explicit synthetic fullscreen probe.
+pub(super) async fn viewport_capture(
+    permit: Permit,
+    capture: super::protocol::ViewportCapture,
+    path: PathBuf,
+) -> Completion {
+    Completion::Viewport(blocking(permit, move || {
+        let [width,height]=capture.pixels;
+        if !(1..=8).contains(&capture.sequence) || width==0 || height==0 || width>8192 || height>8192
+            || u64::from(width)*u64::from(height)>16*1024*1024 || capture.png.len()>export::MAX_BASE64_BYTES+32 {
+            return Err("invalid viewport probe bounds".into());
+        }
+        let data=capture.png.strip_prefix("data:image/png;base64,").ok_or("invalid viewport PNG")?;
+        let bytes=base64::engine::general_purpose::STANDARD.decode(data).map_err(|e|e.to_string())?;
+        if bytes.len()>export::MAX_PNG_BYTES {return Err("viewport PNG too large".into());}
+        let stem=format!("viewport-{}",capture.sequence);
+        std::fs::write(path.join(format!("{stem}.png")),&bytes).map_err(|e|e.to_string())?;
+        let ink=viewport_ink(&bytes,width,height)?;
+        let metadata=serde_json::json!({"pixels":capture.pixels,"bounds":capture.bounds,"window":capture.window,"dpr":capture.dpr,"draws":capture.draws,"glyph_ink":ink});
+        std::fs::write(path.join(format!("{stem}.json")),metadata.to_string()).map_err(|e|e.to_string())?;
+        Ok(())
+    }).await)
+}
+
+/// Independent fullscreen fixture oracle: every label cell has ink and every
+/// row retains its literal ANSI background, including the first and last rows.
+fn viewport_ink(bytes: &[u8], width: u32, height: u32) -> Result<Vec<[usize; 5]>, String> {
+    let decoder = png::Decoder::new_with_limits(
+        std::io::Cursor::new(bytes),
+        png::Limits {
+            bytes: 64 * 1024 * 1024,
+        },
+    );
+    let mut reader = decoder.read_info().map_err(|e| e.to_string())?;
+    if (reader.info().width, reader.info().height) != (width, height) || width < 80 || height < 24 {
+        return Err("viewport dimensions differ".into());
+    }
+    let count = reader
+        .output_buffer_size()
+        .filter(|n| *n <= 64 * 1024 * 1024)
+        .ok_or("viewport raster too large")?;
+    let mut data = vec![0; count];
+    let info = reader.next_frame(&mut data).map_err(|e| e.to_string())?;
+    let channels = match (info.bit_depth, info.color_type) {
+        (png::BitDepth::Eight, png::ColorType::Rgba) => 4,
+        (png::BitDepth::Eight, png::ColorType::Rgb) => 3,
+        _ => return Err("viewport format unsupported".into()),
+    };
+    let scale = (width as f64 / 960.0).min(height as f64 / 576.0);
+    let x = |col| ((col as f64) * 12.0 * scale).round() as usize;
+    let y = |row| ((row as f64) * 24.0 * scale).round() as usize;
+    let rgb = |col: usize, row: usize| {
+        let i = (row * width as usize + col) * channels;
+        if channels == 4 && data[i + 3] != 255 {
+            [0; 3]
+        } else {
+            [data[i], data[i + 1], data[i + 2]]
+        }
+    };
+    let colours = [
+        [128, 0, 0],
+        [0, 128, 0],
+        [128, 128, 0],
+        [0, 0, 128],
+        [128, 0, 128],
+        [0, 128, 128],
+    ];
+    let mut rows = Vec::new();
+    for row in 0..24 {
+        if rgb(x(60), y(row)) != colours[row % 6] {
+            return Err(format!("viewport row {} background missing", row + 1));
+        }
+        let mut counts = [0; 5];
+        for (index, col) in [0, 1, 2, 4, 5].into_iter().enumerate() {
+            for py in y(row)..y(row + 1) {
+                for px in x(col)..x(col + 1) {
+                    if rgb(px, py).into_iter().all(|v| v >= 170) {
+                        counts[index] += 1;
+                    }
+                }
+            }
+        }
+        if counts.contains(&0) {
+            return Err(format!("viewport row {} label missing", row + 1));
+        }
+        rows.push(counts);
+    }
+    Ok(rows)
 }
 
 /// Explicit local fault fixture: an actual blocking worker retained until the

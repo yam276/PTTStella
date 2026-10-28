@@ -48,6 +48,7 @@ pub(super) fn mouse_case(case: Option<&str>) -> bool {
 #[derive(Default)]
 pub(super) struct Checks {
     pub(super) image_copies: usize,
+    pub(super) viewport_captures: u8,
     pub(super) picture_saves: usize,
     pub(super) site_switches: u8,
     pub(super) site_saves: u8,
@@ -510,6 +511,15 @@ pub(super) fn surface_sample(
     media_origin: Option<&str>,
 ) -> Result<Vec<u8>, String> {
     match case {
+        Some("fullscreen") => {
+            let mut text=String::from("\x1b[2J\x1b[H");
+            for row in 1..=24 {
+                let colour=41+(row-1)%6;
+                text.push_str(&format!("\x1b[{row};1H\x1b[0;37;{colour}mROW {row:02} {}", " ".repeat(72)));
+            }
+            text.push_str("\x1b[0m\x1b[?25l");
+            encoding::encode(&text).map_err(|e|e.to_string())
+        },
         Some("tools" | "sites" | "sites_restart") => tools_sample(),
         Some("sgr66") => sgr66_sample(true),
         Some("sgr66_legacy") => sgr66_sample(false),
@@ -1120,5 +1130,37 @@ mod sample_tests {
             frames.push(screen.frame());
         }
         assert_eq!(frames[0].glyphs, frames[1].glyphs);
+    }
+}
+
+#[cfg(test)]
+mod fullscreen_tests {
+    #[test]
+    fn fullscreen_fixture_covers_all_24_rows_with_independent_colour_expectations() {
+        let bytes = super::surface_sample(Some("fullscreen"), true, None).unwrap();
+        let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
+        screen.feed(&bytes);
+        let frame = screen.frame();
+        let colours = [
+            1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6,
+        ];
+        for (row, bg) in colours.into_iter().enumerate() {
+            let glyph = frame
+                .glyphs
+                .iter()
+                .find(|g| g.row == row && g.col == 60)
+                .unwrap();
+            assert_eq!((glyph.text.as_str(), glyph.left.bg), (" ", bg));
+        }
+        let text = |row| {
+            frame
+                .glyphs
+                .iter()
+                .filter(|g| g.row == row && g.col < 6)
+                .map(|g| g.text.as_str())
+                .collect::<String>()
+        };
+        assert_eq!(text(0), "ROW 01");
+        assert_eq!(text(23), "ROW 24");
     }
 }
