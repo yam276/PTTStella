@@ -75,8 +75,24 @@ def version_at(sha):
     return package['version']
 
 
-def validate_pr(pr, repository, version, previous):
-    if (pr['base']['ref'] != 'main' or pr['head']['ref'] != 'develop'
+def replacement_at(sha, previous_sha, version):
+    """An explicit same-version replacement is pinned to one prior commit."""
+    path = 'docs/release-replacements/v'+version+'.json'
+    if not command('git', 'ls-tree', '--name-only', sha, '--', path):
+        return None
+    record = json.loads(command('git', 'show', sha+':'+path))
+    if (not isinstance(record, dict) or set(record) != {'version', 'previous_commit', 'reason'}
+            or record['version'] != version or record['previous_commit'] != previous_sha
+            or not isinstance(record['reason'], str) or not record['reason'].strip()
+            or len(record['reason']) > 500):
+        raise ValueError('Replacement record must identify this exact prior release commit')
+    check_sha(previous_sha)
+    return record
+
+
+def validate_pr(pr, repository, version, previous, replacement=None):
+    head = 'develop' if replacement is None else 'codex/reissue-v'+version
+    if (pr['base']['ref'] != 'main' or pr['head']['ref'] != head
             or pr['base']['repo']['full_name'] != repository
             or (pr['head'].get('repo') or {}).get('full_name') != repository):
         raise ValueError('Only a develop → main release PR from this repository is allowed')
@@ -84,7 +100,11 @@ def validate_pr(pr, repository, version, previous):
         raise ValueError('A draft PR is not ready for release')
     if pr['title'] != 'release: v'+version:
         raise ValueError('Release PR title must be exactly: release: v'+version)
-    if parse_version(version) <= parse_version(previous):
+    if replacement is not None:
+        if (version != previous or replacement['version'] != version
+                or replacement['previous_commit'] != pr['base']['sha']):
+            raise ValueError('Replacement must keep the version and exact prior release base')
+    elif parse_version(version) <= parse_version(previous):
         raise ValueError(f'Release version must increase: {previous} → {version}')
 
 
@@ -92,7 +112,8 @@ def check_pr(event, repository):
     pr = event['pull_request']
     version = version_at(pr['head']['sha'])
     previous = version_at(pr['base']['sha'])
-    validate_pr(pr, repository, version, previous)
+    replacement = replacement_at(pr['head']['sha'], pr['base']['sha'], version) if version == previous else None
+    validate_pr(pr, repository, version, previous, replacement)
     return {'version': version, 'previous_version': previous, 'tag': 'v'+version}
 
 
@@ -174,7 +195,8 @@ def prepare(repository, sha, ref, github):
            if pr.get('merged_at') and pr.get('merge_commit_sha') == sha]
     if len(prs) != 1:
         raise ValueError('Release commit must be the merge commit of one release PR')
-    validate_pr(prs[0], repository, version, previous)
+    replacement = replacement_at(sha, parent, version) if version == previous else None
+    validate_pr(prs[0], repository, version, previous, replacement)
     tag = 'v'+version
     tagged = github.tag_commit(tag)
     if tagged is not None and tagged != sha:

@@ -1,0 +1,5 @@
+{
+  "version": "0.2.1",
+  "previous_commit": "4f194551a02821e7b80ae78591a125774e74487e",
+  "reason": "User explicitly requested replacing the original v0.2.1 after Ctrl+V still failed with the standard ^C colour-help editor footer; also keep JSON build manifests only in Actions artifacts."
+}
