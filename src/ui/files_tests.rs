@@ -855,3 +855,43 @@ fn viewport_oracle_rejects_missing_text_and_last_row_background() {
             .contains("background missing")
     );
 }
+
+#[tokio::test]
+async fn editor_clipboard_read_rechecks_lease_and_rejects_cancel_stale_controls_and_failure() {
+    for mode in ["valid", "cancel", "before", "during", "control", "failed"] {
+        let (mut state, sender, source, identity) = snapshot();
+        let lease = state.lease_picture(identity, 0);
+        let permit = Permit::default();
+        if mode == "cancel" {
+            permit.0.store(true, Ordering::Release);
+        }
+        if mode == "before" {
+            sender.send_modify(|v| v.input_epoch += 1);
+        }
+        let result = read_editor_with_reader(permit, lease, source, move || {
+            assert!(
+                !matches!(mode, "cancel" | "before"),
+                "revoked work must not read clipboard"
+            );
+            if mode == "during" {
+                sender.send_modify(|v| v.input_epoch += 1);
+            }
+            if mode == "failed" {
+                return Err(Error::Failed("synthetic unavailable".into()));
+            }
+            Ok(if mode == "control" {
+                "\x1b[2J"
+            } else {
+                "\x1b[31mA\x1b[0m"
+            }
+            .into())
+        })
+        .await;
+        match mode {
+            "valid" => assert_eq!(result.unwrap().bytes, b"\x15[31mA\x15[0m"),
+            "cancel" => assert!(matches!(result, Err(Error::Cancelled))),
+            "before" | "during" => assert!(matches!(result, Err(Error::Stale))),
+            _ => assert!(matches!(result, Err(Error::Failed(_)))),
+        }
+    }
+}

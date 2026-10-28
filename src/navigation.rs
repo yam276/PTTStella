@@ -140,6 +140,22 @@ fn unknown(reason: UnknownReason) -> Context {
     Context::Unknown { reason }
 }
 
+/// The station editor keeps its own control keys; it is never a browsing profile.
+pub fn article_editor(frame: &Frame) -> bool {
+    if (frame.cols, frame.rows) != (80, 24) || !frame.control_complete || frame.cursor.1 >= 23 {
+        return false;
+    }
+    let Some(rows) = text::rows(frame) else {
+        return false;
+    };
+    let footer = &rows[23];
+    footer.mapped()
+        && footer.text.trim_start().starts_with("編輯文章")
+        && footer.bar_text("編輯文章")
+        && footer.text.contains("^X")
+        && footer.text.contains("^V")
+}
+
 pub fn analyze(frame: &Frame) -> Context {
     if (frame.cols, frame.rows) != (80, 24) {
         return unknown(UnknownReason::UnsupportedGrid);

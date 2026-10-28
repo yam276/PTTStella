@@ -505,6 +505,15 @@ fn context_copy_uses_acknowledged_filtered_text_and_exact_selection_request() {
         .select(identity, 41, &Selection::Line { row: 5 }, &view)
         .unwrap();
     let selected = CopyTarget::Selection { request: 41 };
+    let ansi = CopyTarget::SelectionAnsi { request: 41 };
+    let colored = state.copy_text(identity, &ansi, &view).unwrap();
+    assert!(colored.contains("\x1b["));
+    assert!(!colored.contains("機密測試內容"));
+    assert!(
+        state
+            .copy_text(identity, &CopyTarget::SelectionAnsi { request: 40 }, &view)
+            .is_none()
+    );
     assert!(
         !state
             .copy_text(identity, &selected, &view)
@@ -528,6 +537,7 @@ fn context_copy_uses_acknowledged_filtered_text_and_exact_selection_request() {
             .is_none()
     );
     state.clear_selection(identity, 41);
+    assert!(state.copy_text(identity, &ansi, &view).is_none());
     assert!(state.copy_text(identity, &selected, &view).is_none());
     view.frame.revision += 1;
     assert!(

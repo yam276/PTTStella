@@ -23,6 +23,7 @@ pub(super) enum Scenario {
     Filters,
     Surface,
     ControlInput,
+    EditorClipboard,
     PointerRows,
     ListBoundary,
     ArticleSwitch,
@@ -682,6 +683,7 @@ pub(super) async fn serve(
             | Scenario::Login2fa
             | Scenario::Surface
             | Scenario::ControlInput
+            | Scenario::EditorClipboard
             | Scenario::PointerRows
             | Scenario::ListBoundary
             | Scenario::InlinePages { .. }
@@ -818,6 +820,19 @@ pub(super) async fn serve(
             return match socket.next().await {
                 Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e|e.to_string()),
                 _ => Err("list boundary probe expected Close without extra input".into()),
+            };
+        }
+        if matches!(scenario, Scenario::EditorClipboard) {
+            for (index, expected) in [b"\x16".as_slice(), b"\x16", b"ANSI clipboard check:\x15[31m\xa4\xa4\x15[0m\rEND", b"\x16"].into_iter().enumerate() {
+                if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected) {
+                    return Err(format!("editor clipboard probe rejected step {}", index + 1));
+                }
+                socket.send(Message::Binary(format!("\x1b[1;1H\x1b[2KEDITOR CLIPBOARD {}/4 VERIFIED\x1b[3;1H",index+1).into_bytes().into()))
+                    .await.map_err(|e|e.to_string())?;
+            }
+            return match socket.next().await {
+                Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e|e.to_string()),
+                _ => Err("editor clipboard probe expected Close without extra input".into()),
             };
         }
         if matches!(scenario, Scenario::ControlInput) {

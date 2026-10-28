@@ -132,6 +132,30 @@ class GitHub:
             obj = self.api('git/tags/'+check_sha(obj['sha']))['object']
         raise ValueError('Release tag does not resolve to a commit')
 
+    def release_for_tag(self, tag, missing_ok=False):
+        # REST lookup by tag can return 404 for an existing draft. Resolve its
+        # exact identity through GraphQL, then read the same REST release by ID.
+        owner, name = self.repository.split('/')
+        query = ('query($owner:String!,$name:String!,$tag:String!){'
+                 'repository(owner:$owner,name:$name){release(tagName:$tag){databaseId}}}')
+        data = json.loads(command('gh', 'api', 'graphql', '-f', 'query='+query,
+                                  '-F', 'owner='+owner, '-F', 'name='+name, '-F', 'tag='+tag))
+        repository = (data.get('data') or {}).get('repository')
+        if data.get('errors') or not isinstance(repository, dict) or 'release' not in repository:
+            raise RuntimeError('GitHub could not resolve the Release repository')
+        record = repository['release']
+        if record is None:
+            if missing_ok:
+                return None
+            raise RuntimeError('Release does not exist: '+tag)
+        identifier = record.get('databaseId') if isinstance(record, dict) else None
+        if type(identifier) is not int or identifier <= 0:
+            raise RuntimeError('Release has no valid database identity')
+        result = self.api('releases/'+str(identifier))
+        if not isinstance(result, dict) or result.get('tag_name') != tag:
+            raise RuntimeError('Resolved Release does not match the requested tag')
+        return result
+
 
 def prepare(repository, sha, ref, github):
     if ref != 'refs/heads/main':
@@ -155,7 +179,7 @@ def prepare(repository, sha, ref, github):
     tagged = github.tag_commit(tag)
     if tagged is not None and tagged != sha:
         raise ValueError('Existing release tag points to another commit; tags are never moved')
-    release = github.api('releases/tags/'+tag, missing_ok=True)
+    release = github.release_for_tag(tag, missing_ok=True)
     if release is not None and not release['draft']:
         raise ValueError('This version is already published; published assets are never replaced')
     return {'version': version, 'previous_version': previous, 'tag': tag, 'commit': sha,
@@ -222,7 +246,7 @@ def publish(context, directory, github):
             github.api('git/refs', {'ref': 'refs/tags/'+tag, 'sha': context['commit']})
         elif tagged != context['commit']:
             raise ValueError('Release tag changed during the build')
-        release = github.api('releases/tags/'+tag, missing_ok=True)
+        release = github.release_for_tag(tag, missing_ok=True)
         if release is None:
             notes = temporary/'notes.md'
             notes.write_text(
@@ -246,7 +270,7 @@ def publish(context, directory, github):
             if context['prerelease']:
                 args.append('--prerelease')
             command(*args)
-            release = github.api('releases/tags/'+tag)
+            release = github.release_for_tag(tag)
         if not release['draft']:
             raise ValueError('Published Releases cannot be modified by this workflow')
         existing = {asset['name'] for asset in release['assets']}

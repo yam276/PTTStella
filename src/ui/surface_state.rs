@@ -68,6 +68,7 @@ struct SelectedRows {
     request: u64,
     rows: Range<usize>,
     text: String,
+    spans: Vec<selection::Span>,
     input_epoch: u64,
 }
 pub(super) struct SurfaceState {
@@ -743,6 +744,7 @@ impl SurfaceState {
             request,
             rows: s.rows.clone(),
             text: s.text.clone(),
+            spans: s.spans.clone(),
             input_epoch: view.input_epoch,
         });
         selected
@@ -760,6 +762,13 @@ impl SurfaceState {
     ) -> Option<String> {
         let paint = self.current(identity, view)?;
         match target {
+            super::protocol::CopyTarget::SelectionAnsi { request } => self
+                .selected
+                .as_ref()
+                .filter(|_| self.copied(identity, *request, view))
+                .map(|selected| {
+                    selection::ansi(&paint.frame, &selected.spans, selected.rows.clone())
+                }),
             super::protocol::CopyTarget::Selection { request } => self
                 .selected
                 .as_ref()

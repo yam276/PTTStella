@@ -86,6 +86,8 @@ pub fn app(props: AppProps) -> Element {
             .and_then(|bytes| {
                 if sample_case.as_deref() == Some("control_input") {
                     Connection::start_control_input_probe(bytes)
+                } else if sample_case.as_deref() == Some("editor_clipboard") {
+                    Connection::start_editor_clipboard_probe(bytes)
                 } else if boards_probing {
                     Connection::start_board_probe()
                 } else if matches!(sample_case.as_deref(), Some("full_load" | "long_load")) {
@@ -204,7 +206,7 @@ pub fn app(props: AppProps) -> Element {
     let paste_text = pending_paste
         .read()
         .as_ref()
-        .map(|p| p.prepared.text.clone())
+        .map(|p| p.prepared.text.replace('\x1b', "␛"))
         .unwrap_or_default();
     let closing = use_hook(|| watch::channel(false));
     let settings_requests = use_hook(|| watch::channel((0u64, false)));
@@ -536,6 +538,12 @@ fn context_menu() -> Element {
             }
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy",
                 Copy { size: 18 } span { {pttstella::msg!("context-copy")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy-ansi",
+                Copy { size: 18 } span { {pttstella::msg!("context-copy-ansi")} }
+            }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "paste",
+                Copy { size: 18 } span { {pttstella::msg!("menu-paste")} }
             }
             PictureActions {}
             LinkActions {}
