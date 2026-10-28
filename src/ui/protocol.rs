@@ -230,6 +230,12 @@ pub(super) enum SurfaceEvent {
     SettingsVisibility {
         open: bool,
     },
+    UpdateCheck {
+        trusted: bool,
+    },
+    UpdateOpen {
+        trusted: bool,
+    },
     AboutRepository {
         trusted: bool,
     },
@@ -495,6 +501,8 @@ impl SurfaceEvent {
             | HoverPreference { trusted, .. }
             | Media { trusted, .. }
             | KeepAlive { trusted, .. }
+            | UpdateCheck { trusted }
+            | UpdateOpen { trusted }
             | AboutRepository { trusted }
             | SettingsOpen { trusted }
             | FontSource { trusted, .. }
@@ -950,4 +958,33 @@ pub(super) struct PictureOutput {
     pub index: usize,
     pub destination: super::files::ExportDestination,
     pub trusted: bool,
+}
+
+#[cfg(test)]
+mod update_tests {
+    use super::*;
+    #[test]
+    fn update_actions_require_trust_and_do_not_consume_a_caller_url() {
+        for kind in ["update_check", "update_open"] {
+            let mut value = serde_json::json!({"kind":kind,"trusted":true});
+            assert!(
+                serde_json::from_value::<SurfaceEvent>(value.clone())
+                    .unwrap()
+                    .admitted(7)
+            );
+            value["trusted"] = false.into();
+            assert!(
+                !serde_json::from_value::<SurfaceEvent>(value.clone())
+                    .unwrap()
+                    .admitted(7)
+            );
+            value["url"] = "https://evil.invalid/".into();
+            let event = serde_json::from_value::<SurfaceEvent>(value).unwrap();
+            assert!(matches!(
+                event,
+                SurfaceEvent::UpdateCheck { trusted: false }
+                    | SurfaceEvent::UpdateOpen { trusted: false }
+            ));
+        }
+    }
 }

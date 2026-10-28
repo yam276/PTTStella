@@ -4,13 +4,23 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-footer-cache-fixed/PTTStella.app`（2026-10-28，0.2.0-dev.1、macOS arm64 release／ad-hoc、自動本機 log），前版 `dist/macos-reading-performance-diagnostic-r2/PTTStella.app` 保留供比較；本輪釋放與回歸結果見下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-update-check-diagnostic/PTTStella.app`（2026-10-28，0.2.0-dev.1、macOS arm64 release／ad-hoc、自動本機 log），包含 GitHub 正式版本檢查；前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## GitHub 正式版本檢查（2026-10-28，已完成）
+
+正常啟動背景查詢一次 GitHub 最新正式 Release，「關於與授權」另提供手動檢查及已發現新版的下載入口。以實際 Cargo package SemVer 比較，不將舊正式版提示給較新的 dev 版；排除草稿與預發佈。不自動下載、安裝或讀取 GitHub／PTT 憑證；private／404、限流、網路、格式與逾時失敗保持靜默，不顯示為已是最新版。單一可取消 HTTP future、總逾時與 response byte 上限；合成 probe 禁止自動或手動外連。
+
+驗收通過：本機 HTTP peer／生產 checker 的 7 項測試核對正式／dev／build metadata 的 SemVer 比較、無認證 headers、404／403／429／格式失敗靜默、宣告／串流超量、標頭／正文逾時與 redirect 拒絕；單一 request、失敗後手動重試與直接 drop 取消未完成 HTTP body（peer 收到 EOF）均通過。JS 核對可信按鈕、只有成功才顯示已是最新版、沒有新版時隱藏下載、已知新版保留、語系重繪與 destroy 後忽略晚到結果；四個獨立 wire examples 共用於 Rust／JS，更新操作不接受 caller URL。
+
+core 14 命令／2 replay、desktop lib 159／bin 148、全 targets Clippy、JS 273 與文件 gate 通過。新版診斷 App 已打包及 strict ad-hoc 驗章；macOS arm64 實際 Dioxus／WKWebView 設定頁可見實際 0.2.0-dev.1、檢查按鈕與說明，合成模式點檢查不外連；關閉設定、來源 PNG（獨立解碼 960×576）、Close acknowledged、全部 owner／listener 清理、exit 0 與診斷 finish 均通過。測試副本與交付的 15 個 Mach-O sections 相同。第一組成對 AX／截圖顯示完整關於頁；第二次截圖局部黑畫面保留，不以其宣稱舊擷取問題已修正。
+
+證據 `.local/verification/update-check-20261028`；不將本機 HTTP／JS 的成功通知視為已對公開 GitHub Release 實測，private repo 不使用私人 token。Windows／Linux 原生本輪 not_ready。不更動 release workflow、不建立 Release；提交於 develop，尚未推送。測試副本 `.local/verification/update-check-20261028/StellaUpdateCheck.app` 已在驗收、sections／簽章及無執行使用者核對後刪除（約 39.5 MB），保留小型證據與新版交付；無新增 branch／worktree。
 
 ## 離開文章後資訊列快取釋放（2026-10-28，已完成）
 

@@ -2,6 +2,10 @@
   {"name":"localization","packet":{"kind":"localization","payload":{"language":"en-US","resource":"connect = Connect\n","fallback":"connect = 連線\n"}}},
   {"name":"diagnostics_disabled","packet":{"kind":"diagnostics","payload":false}},
   {"name":"diagnostics_enabled","packet":{"kind":"diagnostics","payload":true}},
+  {"name":"update_idle","packet":{"kind":"update_status","payload":{"checking":false,"available":null,"up_to_date":false}}},
+  {"name":"update_checking","packet":{"kind":"update_status","payload":{"checking":true,"available":null,"up_to_date":false}}},
+  {"name":"update_current","packet":{"kind":"update_status","payload":{"checking":false,"available":null,"up_to_date":true}}},
+  {"name":"update_available","packet":{"kind":"update_status","payload":{"checking":false,"available":{"version":"0.3.0","url":"https://github.com/yam276/PTTStella/releases/tag/v0.3.0"},"up_to_date":false}}},
   {
     "name": "station_mouse_rejected",
     "packet": {"kind":"station_mouse_rejected","payload":{"lease":{"stamp":{"generation":7,"revision":4,"input_epoch":2},"mode_epoch":5,"policy_epoch":3,"transaction":9},"message":"滑鼠事件未送出"}}

@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 #[serde(tag = "kind", content = "payload", rename_all = "snake_case")]
 pub(super) enum Packet<'a> {
     Diagnostics(bool),
+    UpdateStatus(pttstella::updates::Status),
     SitesOpen {
         request: u64,
         data: super::sites::Snapshot,
