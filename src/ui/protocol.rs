@@ -302,6 +302,11 @@ pub(super) enum SurfaceEvent {
         generation: u64,
         trusted: bool,
     },
+    PasteClipboard {
+        presentation: u64,
+        stamp: pttstella::navigation::Stamp,
+        trusted: bool,
+    },
     PasteConfirm {
         trusted: bool,
     },
@@ -426,7 +431,8 @@ impl SurfaceEvent {
             StationMouseRevoke { generation: source } => *source == generation,
             AccountRule { trusted, stamp, .. }
             | ReplyFocus { trusted, stamp, .. }
-            | InlineExpand { trusted, stamp, .. } => *trusted && stamp.generation == generation,
+            | InlineExpand { trusted, stamp, .. }
+            | PasteClipboard { trusted, stamp, .. } => *trusted && stamp.generation == generation,
             Key {
                 trusted,
                 generation: source,
@@ -877,6 +883,7 @@ pub(super) struct ProbePixels {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub(super) enum CopyTarget {
     Selection { request: u64 },
+    SelectionAnsi { request: u64 },
     Link { index: usize },
 }
 

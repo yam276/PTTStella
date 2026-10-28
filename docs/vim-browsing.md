@@ -78,7 +78,7 @@ Normal 只在已辨識的主選單、列表、閱讀頁及上述標準暫停提�
 
 輸入維持兩層對應：`Keyboard` 把按鍵與計數轉成瀏覽 `Intent`，`navigation::plan` 再按目前畫面轉成 PTT bytes。例如 j 的「向下移動」在列表使用方向鍵，在閱讀使用站端單行捲動；Ctrl+d 不會在 Normal 變成原始刪除控制碼。JS 只分類按鍵／文字事件與管理編輯預設行為，沒有第二份 key-to-byte 表。原生模式仍由 Rust 編碼站端輸入；macOS 的 Command 視窗快捷鍵屬原生選單，不進 PTT 送鍵佇列。
 
-Normal／暫停時輸入宿主為 readonly，瀏覽按鍵同步阻止文字編輯，避免系統中文輸入法把 j 等指令變成組字。WebKit 以 Process／非 ASCII key 回報時，Rust 在瀏覽模式按 `code` 與 Shift 解析英文字母／未按 Shift 的數字；組字進行中不搶輸入。i／原生一次會解除 readonly，中文組字仍走原本的 editing owner，不拿實體鍵碼代替使用者輸入的中文字。另一個明確例外是未組字、未按 Alt 的 Control 快捷鍵：即使 Vim 關閉或在原生模式，中文輸入法回報非 ASCII key 時仍可依實體字母代碼辨識 Ctrl+X 等控制命令。ASCII 邏輯字母仍依目前鍵盤配置解釋；有選取的 Ctrl+C、Ctrl+V 及真正的組字事件保留原 owner，Normal 既有瀏覽與破壞性指令拒絕規則不變。
+Normal／暫停時輸入宿主為 readonly，瀏覽按鍵同步阻止文字編輯，避免系統中文輸入法把 j 等指令變成組字。WebKit 以 Process／非 ASCII key 回報時，Rust 在瀏覽模式按 `code` 與 Shift 解析英文字母／未按 Shift 的數字；組字進行中不搶輸入。i／原生一次會解除 readonly，中文組字仍走原本的 editing owner，不拿實體鍵碼代替使用者輸入的中文字。另一個明確例外是未組字、未按 Alt 的 Control 快捷鍵：即使 Vim 關閉或在原生模式，中文輸入法回報非 ASCII key 時仍可依實體字母代碼辨識 Ctrl+X 等控制命令。ASCII 邏輯字母仍依目前鍵盤配置解釋；有選取的 Ctrl+C、系統貼上及真正的組字事件保留原 owner；PTT 編輯器的 Ctrl+V 屬於站端彩色預覽，Normal 既有瀏覽與破壞性指令拒絕規則不變。
 
 i 進入的原生輸入允許既有按鍵、IME 與貼上流程。只有當畫面重新確認為可瀏覽且沒有組字時，Esc 才能本機回到 Normal；其他畫面的 Esc 保留給站端，工具列仍可切換。原生輸入是站端完整操作，不能稱作 session 唯讀。
 
@@ -99,7 +99,7 @@ f 在 Vim 的 Normal／暫停狀態可啟用原生一次；原生輸入狀態中
 
 原生一次可供暫停中的未知畫面使用，讓使用者手動操作；它不代表該畫面已被辨識。使用後若站端顯示說明／提示等未知畫面，Vim 狀態仍為暫停，不能立刻猜測新的 hjkl 意義。失焦、重連、關閉 dialog 或選擇其他模式會取消未使用的機會，不能留到另一個 session；已開始的輸入交易仍須由原 owner 清理。
 
-「原生」指 PTTStella 既有輸入規則：系統快捷鍵、選取複製與貼上流程仍各自處理，不把 Ctrl+V 偷換成原始 0x16。原生一次的 Ctrl+d 則會按原生規則送出 0x04；這是使用者明確要求的站端熱鍵，不能再混用 Vim 半頁語義。
+「原生」指 PTTStella 既有輸入規則：系統快捷鍵、選取複製與貼上流程仍各自處理，PTT 編輯器內的 Ctrl+V 明確送 0x16 切換彩色預覽，其他畫面仍維持系統貼上；編輯器內另可用 Cmd+V／Ctrl+Shift+V 或右鍵貼上。原生一次的 Ctrl+d 則會按原生規則送出 0x04；這是使用者明確要求的站端熱鍵，不能再混用 Vim 半頁語義。
 
 Vim 指令由 keydown 產生一次；被接管的可列印按鍵必須同步 preventDefault，避免又從 beforeinput／input 送一次。Rust 擁有模式、計數、g 前綴與命令解析，WebView 只根據帶版本的模式快照分流、傳結構化鍵值。IME 的 Process／229／composition 仍由既有組字 owner 處理，不得把確認候選字的 Enter 或組字文字當作 Vim 指令。
 

@@ -33,6 +33,9 @@ class FakeGitHub:
     def tag_commit(self, tag):
         return self.tag
 
+    def release_for_tag(self, tag, missing_ok=False):
+        return self.api('releases/tags/'+tag, missing_ok=missing_ok)
+
     def api(self, endpoint, payload=None, missing_ok=False):
         self.calls.append((endpoint, payload))
         if endpoint.startswith('commits/'):
@@ -43,6 +46,50 @@ class FakeGitHub:
             self.tag = payload['sha']
             return {}
         raise AssertionError('Unexpected API call: '+endpoint)
+
+
+class ReleaseLookupTests(unittest.TestCase):
+    def test_exact_graphql_identity_resolves_draft_and_published_releases(self):
+        github = release.GitHub(REPOSITORY)
+        response = {'data': {'repository': {'release': {'databaseId': 123}}}}
+        for draft in (True, False):
+            expected = {'tag_name': 'v0.1.0', 'draft': draft, 'assets': []}
+            with patch.object(release, 'command', return_value=json.dumps(response)) as command, \
+                    patch.object(github, 'api', return_value=expected) as api:
+                self.assertEqual(github.release_for_tag('v0.1.0'), expected)
+                api.assert_called_once_with('releases/123')
+                self.assertEqual(command.call_args.args[:3], ('gh', 'api', 'graphql'))
+                for field in ('owner=example', 'name=stella', 'tag=v0.1.0'):
+                    self.assertIn(field, command.call_args.args)
+
+    def test_missing_release_is_distinct_from_inaccessible_repository_or_graphql_error(self):
+        github = release.GitHub(REPOSITORY)
+        response = {'data': {'repository': {'release': None}}}
+        with patch.object(release, 'command', return_value=json.dumps(response)), \
+                patch.object(github, 'api') as api:
+            self.assertIsNone(github.release_for_tag('v0.1.0', missing_ok=True))
+            with self.assertRaisesRegex(RuntimeError, 'does not exist'):
+                github.release_for_tag('v0.1.0')
+            api.assert_not_called()
+        for response in ({'data': {'repository': None}}, {'data': {'repository': {}}},
+                         {'errors': [{'message': 'forbidden'}], 'data': {'repository': {'release': None}}}):
+            with patch.object(release, 'command', return_value=json.dumps(response)), \
+                    self.assertRaises(RuntimeError):
+                github.release_for_tag('v0.1.0', missing_ok=True)
+
+    def test_invalid_release_identity_and_wrong_tag_fail_closed(self):
+        github = release.GitHub(REPOSITORY)
+        for identifier in (None, True, 0, -1, '123'):
+            response = {'data': {'repository': {'release': {'databaseId': identifier}}}}
+            with patch.object(release, 'command', return_value=json.dumps(response)), \
+                    patch.object(github, 'api') as api, self.assertRaises(RuntimeError):
+                github.release_for_tag('v0.1.0', missing_ok=True)
+            api.assert_not_called()
+        response = {'data': {'repository': {'release': {'databaseId': 123}}}}
+        with patch.object(release, 'command', return_value=json.dumps(response)), \
+                patch.object(github, 'api', return_value={'tag_name': 'v0.9.0'}), \
+                self.assertRaisesRegex(RuntimeError, 'does not match'):
+            github.release_for_tag('v0.1.0')
 
 
 class VersionTests(unittest.TestCase):
