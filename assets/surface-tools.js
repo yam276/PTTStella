@@ -69,13 +69,17 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
         ].filter(r=>r.w>0&&r.h>0).sort((a,b)=>Math.min(u(330),b.w)*Math.min(u(260),b.h)-Math.min(u(330),a.w)*Math.min(u(260),a.h))[0];
     }
     function layout(){
-        const radius=u(petals.length>6?196:148);
-        const fanY=clamp(point.y,u(48)+radius,window.innerHeight-u(78)-radius);
+        const radiusY=u(petals.length>6?196:148),radiusX=u(144);
+        const fanY=clamp(point.y,u(48)+radiusY,window.innerHeight-u(78)-radiusY);
         const direction=point.x+u(28)<window.innerWidth/2?1:-1;
-        // A full semicircle gives the rectangular hit areas room at its ends.
-        // Offsetting its origin inward also keeps every category off the ball.
+        // A tall half-ellipse keeps rectangular targets apart without pushing
+        // the middle categories far away. Add only the inward shift needed
+        // to clear the stationary ball, including near the vertical edges.
         const positions=petals.map((_,index)=>{const angle=(-90+index*180/Math.max(1,petals.length-1))*Math.PI/180;
-            return {x:point.x+direction*(u(72)+radius*Math.cos(angle)),y:fanY+radius*Math.sin(angle)};});
+            return {inward:radiusX*Math.cos(angle),y:fanY+radiusY*Math.sin(angle)};});
+        const inset=Math.max(u(8),...positions.filter(p=>p.y<point.y+u(72)&&p.y+u(78)>point.y)
+            .map(p=>u(direction===1?72:78)-p.inward));
+        for(const p of positions)p.x=point.x+direction*(inset+p.inward);
         const fits=window.innerWidth>=u(500)&&window.innerHeight>=u(420)&&positions.every(p=>p.x>=u(16)&&p.x+u(62)<=window.innerWidth-u(16)&&p.y>=u(48)&&p.y+u(62)<=window.innerHeight-u(16));
         root.dataset.toolsLayout=fits?'fan':'compact';
         petals.forEach((petal,index)=>{
