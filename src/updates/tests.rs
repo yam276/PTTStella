@@ -256,13 +256,16 @@ async fn closing_owner_cancels_an_active_http_body_without_waiting_for_the_deadl
             .unwrap();
         started.send(()).unwrap();
         let mut byte = [0];
-        assert_eq!(
-            tokio::time::timeout(Duration::from_secs(2), socket.read(&mut byte))
-                .await
-                .unwrap()
-                .unwrap(),
-            0
-        );
+        // Dropping an unread HTTP response may close with FIN or RST.
+        // Both prove cancellation; data, other errors and a timeout still fail.
+        let closed = tokio::time::timeout(Duration::from_secs(2), socket.read(&mut byte))
+            .await
+            .unwrap();
+        match closed {
+            Ok(0) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::ConnectionReset => {}
+            other => panic!("expected cancelled connection, got {other:?}"),
+        }
     });
     let mut owner = pending(Box::pin(async move {
         fetch(client(), &url, "0.2.0", Duration::from_secs(8)).await
