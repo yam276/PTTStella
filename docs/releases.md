@@ -68,3 +68,7 @@ gh api --method POST repos/yam276/PTTStella/rulesets --input .github/rulesets/ma
 ```
 
 `Release PR policy` 必須維持同名並由 GitHub Actions 提供。啟用後核對規則 active、沒有 bypass，並以不符合條件的測試 PR 確認不能合併，才可宣稱伺服器端限制已完成。
+
+## 下一版公開下載清單調整（已排程，0.2.1 不變）
+
+使用者指定在 0.2.1 之後的下一版再調整：建置資訊 JSON 保留於 GitHub Actions artifacts，繼續核對版本、平台、來源 commit、簽章狀態及執行檔 SHA-256；公開 Release 只放六個平台下載套件與 `SHA256SUMS`。校驗清單只列公開下載項。這需要同步調整發佈資產白名單、驗證與測試；保留全部套件驗證及完整上傳後才公開的規則，不在目前已合併的 0.2.1 建置中變更。

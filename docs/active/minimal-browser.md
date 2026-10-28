@@ -20,7 +20,9 @@
 
 本機核心、全套 JS、desktop lib／bin、Clippy、Python tooling、fmt／docs 已跑；新增負例確實抓到未綁輸入 epoch 的 lease，改為完整 epoch lease 並放入 Files 准入 factory 後重測。macOS arm64 合成原生視窗完整通過兩次 Ctrl+V、精確 ANSI 中文確認貼上與第三次 Ctrl+V（4/4 VERIFIED）；另實際 AX 右鍵複製 ANSI、右鍵貼上讀回 24 行含紅色 SGR、取消而未多送 bytes。來源 PNG、Close acknowledged 與全部 owner 清理通過。原生座標工具仍回 noWindowsAvailable；AX 右鍵確實打開產品選單，未以合成事件冒充。Windows／Linux 原生 GUI 未測，不以 macOS 結果代替。
 
-證據 `.local/verification/release-021-ansi-20261028/`。診斷交付 `dist/macos-021-ansi-verified/PTTStella.app`，只在測試版置頂、不自動搶焦點。版本、README 與中文為主的簡短 Release notes 已更新；四架構 CI 與公開發佈結果後續補記。
+證據 `.local/verification/release-021-ansi-20261028/`。診斷交付 `dist/macos-021-ansi-verified/PTTStella.app`，只在測試版置頂、不自動搶焦點。版本、README 與中文為主的簡短 Release notes 已更新。四架構 verify 40664831408 全數通過；Release PR #3 已合併至 main `4f19455`，正式建置 40667567525 進行中，公開發佈結果後續補記。
+
+使用者追加的下一版要求：建置資訊 JSON 僅保留 GitHub Actions artifacts，公開 Release 只放平台下載套件與 SHA256SUMS；相應調整公開校驗清單與白名單，完整 manifest 驗證仍保留。這項延至 0.2.1 之後，見 [發佈流程](../releases.md)。
 
 ## 0.2.0 正式發佈與草稿查詢修復（2026-10-28）
 
