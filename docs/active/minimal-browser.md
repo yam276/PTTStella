@@ -4,13 +4,25 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-reading-performance-diagnostic-r2/PTTStella.app`（2026-10-28，0.2.0-dev.1、macOS arm64 release／ad-hoc、自動本機 log），前版 `dist/macos-picture-context-final/PTTStella.app` 保留供比較；本輪效能與回歸結果見下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-footer-cache-fixed/PTTStella.app`（2026-10-28，0.2.0-dev.1、macOS arm64 release／ad-hoc、自動本機 log），前版 `dist/macos-reading-performance-diagnostic-r2/PTTStella.app` 保留供比較；本輪釋放與回歸結果見下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 離開文章後資訊列快取釋放（2026-10-28，已完成）
+
+獨立 Critic 發現前輪 `7b6e522` 的可見列 WeakMap 也記錄長期重用的 footer canvas，離開閱讀後即使已清除行索引與 footerPacket，仍經 WeakMap value 保留整篇 Paint。資訊列本來已有獨立的 footerPacket／progress 失效判斷，現在只讓正文 strip 參與行繪圖快取，不在該 WeakMap 保存 footer；原顯示、資料與版本保護不改。
+
+新增使用生產 layout owner 的 Node GC 子程序，DOM／render doubles 不保留 Paint；4000 行、320080 glyphs 在 owner／footer 持續存活時，分別驗證回列表、終端機模式、換篇與 destroy 後舊 Paint 及 glyph array 可回收，重用 footer 仍能繪製。先保存修正前失敗，再於相同測試確認四條路徑通過；全部 JS 272 通過。證據 `.local/verification/footer-cache-fix-20261028`；前次 Critic 原始失敗仍保留，不覆寫為通過。
+
+core 14 命令／2 replay、desktop lib 152／bin 147、全 targets Clippy、JS 272 及文件 gate 通過。GC 子程序另核對共用樣式可回收，避免只釋放陣列卻由行索引保留 glyph 副本；footer 重用仍有實際繪製。這是同一 production owner 的可達性證明，不將 Node GC 當成原生 App-family RSS 量測。
+
+新版 macOS arm64 實際 Dioxus／WKWebView 的 long_load 與 article_switch 通過：837 行完整末端、Home／End／PageUp／Down、資訊列進度及展圖；A→B→C 的 B／C 末行與頁尾均完整，最終 id 3／45 行，peer 分別精確只收 37／5 筆導覽。長文兩次長按只有同一 batch，每個圖片 URL 一次 HTTP；來源 PNG 與修正前 bytes 完全相同，維持 960×576。Close acknowledged、全部 owner／server join、exit 0、診斷 run_ok／cleanup_ok 均通過，測試副本與交付 15 個 Mach-O sections 相同，strict 驗章通過。一般尺寸座標工具仍回 noWindowsAvailable，改用原生全螢幕／AX／鍵盤；全螢幕轉換當下的局部截圖保留，不用來宣稱舊的全螢幕截圖問題已修正，穩定後的一般尺寸 C 第 45 行另有成對 AX／截圖。Windows／Linux 原生及低階實體硬體本輪未驗證。
+
+兩個原生案例共用一份測試 App 副本；驗收、核對 sections／簽章及確認無執行使用者後，已移除 `.local/verification/footer-cache-fix-20261028/StellaFooterCheck.app`（約 39.4 MB），保留同目錄的 red／green、GC、成對截圖、probe、validation.json、cleanup.json 與新版診斷交付。沒有建立或移除額外 branch／worktree，不動其他工作的輸出與共用快取。獨立修正提交於 develop，未推送／發佈；既有其他人工驗收項目不由本次結案。
 
 ## 長文章效能修正計畫（2026-10-28，已完成）
 

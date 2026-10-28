@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import vm from 'node:vm';
 const source=readFileSync(new URL('../assets/gif-playback.js',import.meta.url),'utf8')+'\n'+readFileSync(new URL('../assets/inline-images.js',import.meta.url),'utf8');
 const {inlineRowLayout,inlineShortcut,createInlineImageKey}=vm.runInNewContext(source+'\n({inlineRowLayout,inlineShortcut,createInlineImageKey})');
@@ -746,5 +748,14 @@ test('long article scroll reads indexed visible rows and reuses only unchanged c
     assert.ok(e.rendered.some(p=>p.frame.glyphs.some(g=>g.left.bg===4)));
     e.rendered.length=0;e.canvas.width+=24;e.ui.layout(packet,base,1);assert.ok(e.rendered.length>0);
     assert.equal(links[0].row,2000);await e.ui.destroy();
+});
+
+test('leaving a 4000-row article releases its Paint and glyphs while the footer owner remains alive',()=>{
+    const result=spawnSync(process.execPath,['--expose-gc',fileURLToPath(new URL('./probe_inline_gc.mjs',import.meta.url))],{encoding:'utf8',timeout:20000});
+    assert.equal(result.status,0,result.stderr||String(result.error));
+    const report=JSON.parse(result.stdout);
+    assert.equal(report.status,'passed');assert.equal(report.glyphs,320080);
+    assert.deepEqual(report.results.map(r=>r.mode),['list','terminal','new_article','destroy']);
+    assert.ok(report.results.every(r=>r.packet_collected&&r.glyphs_collected&&r.style_collected));
 });
 
