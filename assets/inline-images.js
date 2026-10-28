@@ -296,7 +296,9 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
                 if(glyphs||previous?.packet!==packet||previous.row!==row||previous.width!==strip.width||previous.height!==strip.height){
                     const frame={...packet.frame,rows:1,cursor_visible:false,glyphs:glyphs?glyphs.map(g=>({...g,row:0})):(rowGlyphs.get(row)??[])};
                     render(strip,{...packet,frame,links:rowLinks.get(row)??[]},{cursor:false,linkHints:true});
-                    paintedRows.set(strip,{packet,row,width:strip.width,height:strip.height});
+                    // The reusable footer has its own footerPacket/progress
+                    // owner. Caching it here would retain an exited article.
+                    if(glyphs===null)paintedRows.set(strip,{packet,row,width:strip.width,height:strip.height});
                 }
             } else strip.getContext("2d").drawImage(canvas,0,base.y(row),canvas.width,height,0,0,canvas.width,height);
             Object.assign(strip.style,{width:width+"px",height:height/ratio+"px"});
