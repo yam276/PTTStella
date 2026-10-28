@@ -69,7 +69,7 @@ gh api --method POST repos/yam276/PTTStella/rulesets --input .github/rulesets/ma
 
 `Release PR policy` 必須維持同名並由 GitHub Actions 提供。啟用後核對規則 active、沒有 bypass，並以不符合條件的測試 PR 確認不能合併，才可宣稱伺服器端限制已完成。
 
-## 0.2.1 發佈狀態
+## 0.2.1 原始發佈狀態（已由下列重發取代）
 
 Release PR #3 合併至 main `4f194551a02821e7b80ae78591a125774e74487e`。四架構 verify 40664831408 與正式 run 40667567525 全數成功，publisher 已正常完成。[v0.2.1](https://github.com/yam276/PTTStella/releases/tag/v0.2.1) 為 Latest stable，附六個平台下載套件、四份 manifest 與 SHA256SUMS；獨立核對精確附件清單、版本／來源／release profile、GitHub 上傳 digest、校驗碼與版本專用說明通過。這次仍使用既有 11 附件流程，下列清單精簡留待下一版。main 已整合回 develop，後續文件提交留 develop。
 
@@ -82,3 +82,9 @@ Release PR #3 合併至 main `4f194551a02821e7b80ae78591a125774e74487e`。四架
 一般流程維持 develop → main 與版本遞增。只有使用者明確要求替換既有版本時，才可從該發佈提交建立 `codex/reissue-v<version>` → main 的 Release PR，標題仍為 `release: v<version>`。必須提交 `docs/release-replacements/v<version>.json`，只含 `version`、`previous_commit` 與非空 `reason`；版本與父提交必須精確符合被替換的 main，不能套用到其他版本或後來的提交。來源仍須同 repo、乾淨 checkout、唯一已合併 PR 及精確 merge commit。這份紀錄不會自動刪除任何 Release 或移動 tag。
 
 先備份舊 Release metadata、tag、Git bundle 與可下載的舊附件並核對 digest，再回移已驗證修復、通過 Release PR policy，合併後手動在 main 跑四架構 verify。全部實際建置通過後，才依明確授權刪除舊 Release 與 tag；以相同 main 提交及同次 verify 的原始 artifacts，重新執行 production `prepare`、`validate_assets`、`publish`。這個手動出版步驟由使用者的本次替換授權觸發；verify workflow 本身仍不具出版權限。一般 publisher 依然拒絕既有公開 Release 或指向別處的 tag，所有下載上傳完才公開。重發後核對遠端來源、六個套件及 SHA256SUMS，再把 main 整合回 develop，保留 develop 的較新開發版本。
+
+## 0.2.1 重新發佈結果（2026-10-28）
+
+Release PR #4 通過政策並合併至 main `1ac078b5a5f2b883f21be657505c823a08145a0c`，四架構 verify [40681843325](https://github.com/yam276/PTTStella/actions/runs/40681843325) 全部成功。先核對該次原始 artifacts 的四份 manifest、全部下載與逐檔 SHA-256，再按本次使用者明確授權，備份並移除原始 Release 426507886 與指向 `4f19455` 的 tag；使用相同乾淨 main 的 production prepare／validate_assets／publish 完成重新上傳及最後公開。verify 未取得或執行出版權限，這次出版由授權的本機 publisher 執行。
+
+[v0.2.1](https://github.com/yam276/PTTStella/releases/tag/v0.2.1) 現為 Release 426610699，Latest stable，tag 指向 `1ac078b`。公開附件只有六個平台套件與 SHA256SUMS，共七個；四份 JSON 與其校驗仍保留於 Actions artifacts。公開校驗清單的六筆 hash、七個 GitHub asset digest／大小及雙語重發說明均獨立核對通過。舊來源與下載備份留 repo 外，細節見 active plan；main 已整合回 develop，後者保留 0.3.0-dev.1。因同版本替換，舊 0.2.1 使用者須手動重新下載，更新檢查不提示相同版號。

@@ -48,4 +48,4 @@
 
 原生 `picture_menu` 案例使用同一合成閱讀頁與自製兩色圖。需從文章插圖與完整預覽各複製一次原圖（OS 剪貼簿讀回）、另存一次原始 bytes、複製一次完整網址、匯出來源格線 PNG，再正常 Close。runner 獨立核對原圖尺寸／紅藍像素、存檔 bytes、HTTP 次數及全部 worker 清理；不可只看動作計數或退出碼。
 
-0.2.1：Rust 從已 ACK 的過濾後選取序列化 ANSI SGR，逐行 reset，SGR 66 保留雙色中文字。一般複製不附色碼。編輯器辨識要求完整 80×24 格線、正文游標、底列「編輯文章」的色帶及 ^X／^V，未辨識畫面維持既有行為。Ctrl+V 在編輯器送站端 0x16；Cmd+V／Ctrl+Shift+V 與右鍵負責貼上。只接受有界 SGR 色碼，ESC 轉成 PTT 編輯器的 Ctrl+U 插入字元；其他控制碼整段拒絕，含色碼或多行一律先預覽。確認時再次檢查 session、revision 與 input epoch，不能把舊內容貼入新畫面。站端語義參考 [PTT editor](https://github.com/ptt/pttbbs/blob/main/mbbsd/edit.c)。
+0.2.1：Rust 從已 ACK 的過濾後選取序列化 ANSI SGR，逐行 reset，SGR 66 保留雙色中文字。一般複製不附色碼。編輯器辨識要求完整 80×24 格線、正文游標、底列「編輯文章」的色帶、^X 與 ^V（或 ^C／色碼提示），未辨識畫面維持既有行為。Ctrl+V 在編輯器送站端 0x16；Cmd+V／Ctrl+Shift+V 與右鍵負責貼上。只接受有界 SGR 色碼，ESC 轉成 PTT 編輯器的 Ctrl+U 插入字元；其他控制碼整段拒絕，含色碼或多行一律先預覽。確認時再次檢查 session、revision 與 input epoch，不能把舊內容貼入新畫面。站端語義參考 [PTT editor](https://github.com/ptt/pttbbs/blob/main/mbbsd/edit.c)。
