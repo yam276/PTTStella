@@ -130,6 +130,36 @@ fn station_editor_recognition_requires_complete_ptt_footer_and_body_cursor() {
     }
 }
 
+#[test]
+fn station_editor_accepts_colour_code_help_without_listing_ctrl_v() {
+    use pttstella::navigation::article_editor;
+    for footer in [
+        " (^X)存檔 (^C)色碼 (Esc-h)按鍵 (^Z)說明 插入 | user | 1:1",
+        " ^X存檔 ^C色碼 ^Z說明 覆寫",
+    ] {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(
+            &pttstella::encoding::encode(&format!(
+                "\x1b[24;1H\x1b[34;46m 編輯文章 \x1b[30;47m{footer}\x1b[0m\x1b[1;1H"
+            ))
+            .unwrap(),
+        );
+        assert!(article_editor(&screen.frame()));
+    }
+    for footer in [
+        "編輯文章 ^X存檔 ^C複製",
+        "編輯文章 ^C色碼 ^Z說明",
+        "編輯文章 色碼 ^X存檔",
+    ] {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(
+            &pttstella::encoding::encode(&format!("\x1b[24;1H\x1b[30;47m{footer}\x1b[0m\x1b[1;1H"))
+                .unwrap(),
+        );
+        assert!(!article_editor(&screen.frame()));
+    }
+}
+
 fn range(a: (usize, usize), b: (usize, usize)) -> Selection {
     Selection::Range {
         anchor: Position { col: a.0, row: a.1 },

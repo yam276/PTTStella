@@ -827,7 +827,12 @@ pub(super) async fn serve(
                 if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected) {
                     return Err(format!("editor clipboard probe rejected step {}", index + 1));
                 }
-                socket.send(Message::Binary(format!("\x1b[1;1H\x1b[2KEDITOR CLIPBOARD {}/4 VERIFIED\x1b[3;1H",index+1).into_bytes().into()))
+                let preview = if index == 0 || index == 3 {
+                    "\x1b[5;1H\x1b[2K\x1b[1;31mANSI PREVIEW ON\x1b[0m"
+                } else {
+                    "\x1b[5;1H\x1b[2K*[1;31mANSI PREVIEW OFF*[m"
+                };
+                socket.send(Message::Binary(format!("\x1b[1;1H\x1b[2KEDITOR CLIPBOARD {}/4 VERIFIED{preview}\x1b[3;1H",index+1).into_bytes().into()))
                     .await.map_err(|e|e.to_string())?;
             }
             return match socket.next().await {
