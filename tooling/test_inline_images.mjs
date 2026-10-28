@@ -758,3 +758,30 @@ test('leaving a 4000-row article releases its Paint and glyphs while the footer 
     assert.deepEqual(report.results.map(r=>r.mode),['list','terminal','new_article','destroy']);
     assert.ok(report.results.every(r=>r.packet_collected&&r.glyphs_collected&&r.style_collected));
 });
+
+test('wide images retain full row capacity with quantized native scroll offsets across scales',async()=>{
+    for(const ratio of [1,1.5,2])for(const rounding of [Math.floor,Math.round,Math.ceil])for(const width of [63,64]){
+        const e=alignedReading({height:96,line:24,ratio});
+        let top=0;
+        Object.defineProperty(e.viewport,'scrollTop',{get:()=>top,set(value){top=Math.max(0,Math.min(rounding(value),Math.floor(parseFloat(e.surface.style.height)||0)-e.viewport.clientHeight));}});
+        e.packet.links=[{row:0,start:0,end:10,url:'https://example.com/fractional.png'}];e.c.repaint();
+        e.ui.open({...e.open,article_id:1,first_line:1},e.packet);
+        e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width,height:35}});
+        await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+        image.naturalWidth=width;image.naturalHeight=35;image.onload();await new Promise(resolve=>setImmediate(resolve));e.c.repaint();
+        e.ui.keydown({key:'Enter',isTrusted:true});e.ui.keyup({key:'Enter',isTrusted:true});e.c.repaint();
+        const box=e.nodes.find(n=>n.className==='inline-image'),afterImage=24+parseFloat(box.style.height);
+        let checked=0;
+        for(let step=0;step<25;step++){
+            e.move({action:'next_page'});
+            if(e.viewport.scrollTop>=afterImage&&e.viewport.scrollTop<e.c.grid.height/ratio-96-72){
+                e.whole();checked++;assert.equal(e.strips().length,3,`one extra blank row at native offset ${e.viewport.scrollTop}, DPR ${ratio}, ${rounding.name}, width ${width}`);
+            }
+        }
+        assert.ok(checked>=5,'exercise several pages below the widened image');
+        e.move({action:'last'});e.whole();
+        assert.ok(e.strips().some(s=>s.paintedRows?.includes('39')),'End retains the final article row');
+        e.move({action:'first'});assert.equal(e.viewport.scrollTop,0);
+        await e.ui.destroy();
+    }
+});
