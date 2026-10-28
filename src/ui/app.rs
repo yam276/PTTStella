@@ -56,6 +56,7 @@ pub fn app(props: AppProps) -> Element {
         surface_probe.as_deref(),
         Some(
             "dialogs"
+                | "fullscreen"
                 | "tools"
                 | "sites"
                 | "fonts"
@@ -318,6 +319,9 @@ pub fn app(props: AppProps) -> Element {
                 section { "data-tools-group": "capture",
                 button { id: "select-all", {pttstella::msg!("select-all")} }
                 button { id: "export-png", {pttstella::msg!("export-png")} }
+                if surface_probe.as_deref()==Some("fullscreen") {
+                    button { id:"probe-viewport", "Capture live viewport" }
+                }
                 button { id: "export-rows", disabled: true, title: pttstella::msg!("export-rows-hint"), {pttstella::msg!("export-rows")} }
                 button { id: "copy-png", {pttstella::msg!("copy-png")} }
                 button { id: "copy-rows-png", disabled: true, title: pttstella::msg!("export-rows-hint"), {pttstella::msg!("copy-rows-png")} }

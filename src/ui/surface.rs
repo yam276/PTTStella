@@ -589,6 +589,11 @@ async fn run(
                         Err(error)=>error.to_string(),
                     }),
                     FileCompletion::Recent(done)=>{recent.complete(done);Packet::RecentBoards(recent.packet())},
+                    FileCompletion::Viewport(result)=>{
+                        result.map_err(|e|e.to_string())?;
+                        checks.viewport_captures=checks.viewport_captures.saturating_add(1);
+                        Packet::Notice(format!("Live viewport {} saved",checks.viewport_captures))
+                    },
                     FileCompletion::Probe(result)=>{pending_report=Some(result.map_err(|e|e.to_string())?);close_deadline=Some(tokio::time::Instant::now()+std::time::Duration::from_secs(45));continue;},
                     FileCompletion::Fonts{request,result}=>{
                         if result.is_ok(){checks.font_catalog_reads+=1;}
@@ -1603,6 +1608,11 @@ async fn run(
                         }
                     }
                     SurfaceEvent::Error { message } => return Err(message),
+                    SurfaceEvent::ViewportCapture(capture) => {
+                        let path=probe.clone().filter(|_|surface_probe.as_deref()==Some("fullscreen")).ok_or("viewport capture is synthetic-only")?;
+                        if checks.viewport_captures>=8 || capture.sequence!=checks.viewport_captures+1 {return Err("viewport capture sequence".into());}
+                        files.start(|permit|files::viewport_capture(permit,*capture,path))?;
+                    }
                     SurfaceEvent::Probe(pixels) => {
                         let path=probe.clone().ok_or("unexpected probe response")?;
                         let settings=preferences.app().clone();
@@ -1712,6 +1722,7 @@ async fn run(
                 || case=="login_2fa" && checks.verification_required && checks.verification_rejected && checks.verification_browsing && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
                 || case=="fonts" && checks.font_catalog_reads>=2 && !checks.font_sources.is_empty() && checks.export_checked
                 || checks.sites_passed(&case,&receiver.borrow().site,&sites.default_target(),&receiver.borrow().frame)
+                || case=="fullscreen" && checks.viewport_captures>=4 && checks.export_checked
                 || matches!(case.as_str(),"tools"|"short_reading"|"reading_rows"|"sgr66"|"sgr66_legacy") && checks.export_checked
                 || case=="dialogs" && checks.settings_saved && checks.export_checked && checks.rows_export_checked && checks.media_external>=1 {"passed"} else {"failed"},
             "recent_initial":initial_recent,"recent_final":recent.packet().boards,"recent_clears":recent_clears,
@@ -1731,6 +1742,7 @@ async fn run(
             "paste_preview_preserved":pending_paste.read().is_some(),
             "settings_saved":checks.settings_saved,"full_png":checks.export_checked,"rows_png":checks.rows_export_checked,"media_external_requests":checks.media_external,
         });
+        surface_report["viewport_captures"] = checks.viewport_captures.into();
         surface_report["article_reading"] =
             serde_json::to_value(reading).map_err(|e| e.to_string())?;
         surface_report["image_copies"] = checks.image_copies.into();

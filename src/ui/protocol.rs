@@ -355,6 +355,7 @@ pub(super) enum SurfaceEvent {
         generation: u64,
     },
     Probe(Box<ProbePixels>),
+    ViewportCapture(Box<ViewportCapture>),
     Error {
         message: String,
     },
@@ -528,6 +529,7 @@ impl SurfaceEvent {
             | SelectionCleared { .. }
             | Painted { .. }
             | Probe(_)
+            | ViewportCapture(_)
             | Error { .. }
             | Stopped { .. }
             | SurfaceProbe { .. } => true,
@@ -987,4 +989,16 @@ mod update_tests {
             ));
         }
     }
+}
+
+/// Explicit synthetic full-screen probe only; never accepted in a normal session.
+#[derive(serde::Deserialize, serde::Serialize)]
+pub(super) struct ViewportCapture {
+    pub sequence: u8,
+    pub png: String,
+    pub pixels: [u32; 2],
+    pub bounds: [f64; 4],
+    pub window: [u32; 2],
+    pub dpr: f64,
+    pub draws: u64,
 }
