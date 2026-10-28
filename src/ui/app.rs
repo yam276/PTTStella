@@ -373,6 +373,13 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "article-load-resume", hidden: true, {pttstella::msg!("article-load-resume")} }
             }
             div { class: "settings-host", SettingsForm{filters_probe} }
+            div { id: "article-find", class: "article-find", role: "search", hidden: true,
+                input { id: "article-find-input", r#type: "text", maxlength: "256", autocomplete: "off", spellcheck: "false" }
+                output { id: "article-find-status", role: "status", "aria-live": "polite" }
+                button { id: "article-find-previous", r#type: "button", "↑" }
+                button { id: "article-find-next", r#type: "button", "↓" }
+                button { id: "article-find-close", r#type: "button", "×" }
+            }
             section { class: "workspace",
                 div { class: "surface", id: "surface",
                     onmounted: move |_| {

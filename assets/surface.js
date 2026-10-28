@@ -58,7 +58,7 @@ const articleLoad=document.getElementById("article-load"),articleLoadStatus=docu
 const articleLoadCancel=document.getElementById("article-load-cancel"),articleLoadResume=document.getElementById("article-load-resume");
 function readingPauseReason() {
     if(!document.hasFocus()||document.visibilityState==="hidden")return "background";
-    return stopped||!latest?.connected||settingsActive||blocked()||navigationLocked||navigationRequest
+    return stopped||!latest?.connected||settingsActive||articleFind?.isOpen()||blocked()||navigationLocked||navigationRequest
         ||tools?.busy()||stationMouse.active()||dragging||hasSelection()||exportBusy||keyboardState.pending?"interaction":null;
 }
 function refreshArticleLoad(reason=readingPauseReason()) {
@@ -78,7 +78,7 @@ function changeArticleLoad(e,resume=false) {
     focus();
 }
 const cancelArticleLoad=e=>changeArticleLoad(e),resumeArticleLoad=e=>changeArticleLoad(e,true);
-function invalidatePresentation(){revokeNavigation();contextMenu?.close(false);stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);}
+function invalidatePresentation(){articleFind?.close(false);revokeNavigation();contextMenu?.close(false);stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);}
 const ctx=canvas.getContext("2d",{willReadFrequently:true});
 
 const {family:fontFamily,description:fontDescription,load:loadFonts,note:fontLoadNote,invalidate:invalidateFonts}=
@@ -95,7 +95,7 @@ let navigationSequence=0;
 let pendingReadingMove=null;
 let exportBusy=false, exportTask=null;
 let keepAliveGate=null;
-let tools=null,contextMenu=null;
+let tools=null,contextMenu=null,articleFind=null;
 let toolAccess={right_click_menu:true,show_floating_button:true};
 let toolsProbeEnabled=false;
 const send=value=>{ sent++; dioxus.send(value); };
@@ -508,6 +508,14 @@ function refreshNavigation() {
         context?.kind==="article_list"?tr("article-list-hint"):context?.kind==="article_reading"?(latest.article?tr("article-cache-hint",{first:latest.article.first_line,last:latest.article.last_line}):tr("article-reading-hint")):"";
     drawNavigationMarker();
 }
+function findArticleMatch(match) {
+    if(!latest?.article||!grid)return;
+    const maximum=Math.max(0,surface.offsetTop+grid.height/grid.ratio-viewport.clientHeight);
+    // grid.y is clipped at the pinned footer for hit testing. Finding an
+    // offscreen row must use its full document position, including images.
+    const target=surface.offsetTop+grid.reading.rowTop(match.row)/grid.ratio-Math.max(0,(viewport.clientHeight-grid.footerHeight)/2);
+    grid.reading.free(false);viewport.scrollTop=grid.reading.align(Math.max(0,Math.min(maximum,target)),maximum);draw(latest);
+}
 function readingMove(intent,e,source="button",fetch=true) {
     if(typeof diagnostics!=="undefined")diagnostics.note("reading_move");
     const article=latest?.article;
@@ -660,7 +668,7 @@ function contextAction(action,context,e){
     else if(action==="vim")toggleVim(e);
     else if(action==="settings")settingsUi.request(e);
 }
-function activate() { if(!contextMenu?.isOpen()&&!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); refreshKeepAlive(); }
+function activate() { if(!articleFind?.ownsFocus()&&!contextMenu?.isOpen()&&!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); refreshKeepAlive(); }
 function paste(e) {
     if(!e.isTrusted||stopped)return;
     stationMouse.revoke();
@@ -707,7 +715,7 @@ function refreshExportControls() {
     copyPng.title=exportButton.title;copyRowsPng.title=exportRows.title;
 }
 function refreshKeepAlive() {
-    const ready=!settingsActive&&!!latest?.keep_alive&&!inlineImages.active()&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
+    const ready=!settingsActive&&!articleFind?.isOpen()&&!!latest?.keep_alive&&!inlineImages.active()&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
     const reason=readingPauseReason(),reading=!!latest?.article&&!reason;
     refreshArticleLoad(reason);
     const current=stamp(),key=JSON.stringify([current,latest?.presentation,latest?.article?.id,ready,reading,latest?.keep_alive_ready,latest?.keep_alive]);
@@ -784,7 +792,7 @@ function wheel(e) {
     navigate({action},e);
 }
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
-const media=installMedia({tr,send,prepare:()=>{stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshControls,restore:restoreEditingFocus});
+const media=installMedia({tr,send,prepare:()=>{articleFind?.close(false);stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshControls,restore:restoreEditingFocus});
 function refreshControls(){refreshNavigation();refreshExportControls();inlineImages.refreshAnimations();}
 const sitesUi=createSitesDialog({tr,send,manage:e=>settingsUi.manage("sites",e),present:dialog=>dialog.show(),visible:()=>settingsUi.visible("sites"),finished:()=>settingsUi.close({isTrusted:true}),prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreSettingsPanelFocus,changed:refreshControls});
 const settingsUi=createSurfaceSettings({document,send,tr,loadFonts,fontLoadNote,invalidateFonts,render,
@@ -803,12 +811,15 @@ tools=createFloatingTools({root:chrome,ball:document.getElementById("tools-ball"
 contextMenu=createSurfaceContextMenu({root:document.getElementById("surface-context-menu"),document,window,
     snapshot:contextIdentity,prepare:()=>{revokeNavigation();stationMouse.cancel();tools.close();cancelHover(true);cancelDrag();released=null;setHover(null);},
     execute:contextAction,restore:focus,changed:refreshControls});
+articleFind=createArticleFind({document,tr,current:()=>latest,allowed:()=>!stopped&&!settingsActive&&!blocked()&&!tools?.busy(),
+    prepare:e=>{policy("reset",e);tools?.close();invalidatePresentation();inlineImages.suspend();},restore:focus,
+    redraw:()=>{if(!stopped&&latest)draw(latest);},changed:refreshKeepAlive,jump:findArticleMatch});
 function requestInline(target,e){
     if(!e.isTrusted||stopped||blocked()||tools?.busy()||!inlineShortcut({key:"Enter"},keyboardState,latest))return;
     send({kind:"inline_expand",presentation:latest.presentation,stamp:stamp(),target,
         key:{key:"Enter",code:"Enter",ctrl:false,alt:false,shift:false,repeat:false},trusted:true});focus();
 }
-const inlineImages=installInlineImages({surface,canvas,viewport,tr,render,redraw:()=>{if(latest)draw(latest);},changed:refreshKeepAlive,notice:text=>{surfaceNote.textContent=text;},
+const inlineImages=installInlineImages({surface,canvas,viewport,tr,render,find:articleFind,redraw:()=>{if(latest)draw(latest);},changed:refreshKeepAlive,notice:text=>{surfaceNote.textContent=text;},
     allowed:()=>!stopped&&!blocked()&&!tools?.busy()&&inlineShortcut({key:"Enter"},keyboardState,latest),request:requestInline});
 let viewportProbe=false,viewportCapture=0;
 function captureViewport(event){
@@ -820,7 +831,7 @@ function captureViewport(event){
         window:[innerWidth,innerHeight],dpr:devicePixelRatio||1,
         draws});
 }
-const bindings=[...inlineImages.bindings,...contextMenu.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
+const bindings=[...articleFind.bindings,...inlineImages.bindings,...contextMenu.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
     [keyboard,"beforeinput",beforeinput],
@@ -856,6 +867,7 @@ const diagnostics=createSurfaceDiagnostics({send,document,window,snapshot:()=>{
         flags,scroll:viewport.scrollTop,extent:viewport.scrollHeight};
 }});
 function draw(packet) {
+    articleFind.update(packet);
     viewport.dataset.reading=packet.article?"web":"terminal";
     const frame=packet.source_frame??packet.frame,ratio=devicePixelRatio||1,width=frame.cols*12,height=frame.rows*24;
     const available=viewport.parentElement.getBoundingClientRect();
@@ -879,7 +891,7 @@ function draw(packet) {
     // the reader can capture its anchor. Its layout owns document height.
     if(!packet.article)surface.style.height=canvas.height/ratio+"px";
     level.textContent=Math.round(physical/ratio/fitting*100)+"%";
-    grid={...inlineImages.layout(packet,render(canvas,{...packet,frame},{cursor:!packet.article,hovered:hoveredLink,linkHints:true}),ratio),ratio,packet};
+    grid={...inlineImages.layout(packet,render(canvas,{...packet,frame},{cursor:!packet.article,hovered:hoveredLink,linkHints:true,highlight:packet.article?null:articleFind.highlighter()}),ratio),ratio,packet};
     positionKeyboard();drawSelection();drawNavigationMarker();draws++;return grid;
 }
 function repaint() {
@@ -977,7 +989,7 @@ async function paint(packet) {
 }
 focus();
 function revokeSurface(){
-    stopped=true;revokeNavigation();inlineImages.suspend();contextMenu?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
+    stopped=true;articleFind.destroy();revokeNavigation();inlineImages.suspend();contextMenu?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
     for(const [target,event,callback,options] of bindings)target.removeEventListener(event,callback,options);
 }
 const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
@@ -1033,7 +1045,7 @@ function runSurfaceProbe(mode){
 function showNotice(message){if(!stopped&&message&&!settingsUi.notice(message)&&!media.notice(message))surfaceNote.textContent=message;}
 const route=createSurfaceRouter({
     diagnostics:enabled=>diagnostics.enable(enabled),
-    localization:data=>{tr.update({kind:"localization",payload:data});document.documentElement.lang=data.language;settingsUi.relocalize();filterUi.relocalize();tools.relocalize();receiveKeyboard(keyboardState);refreshControls();refreshArticleLoad();},
+    localization:data=>{tr.update({kind:"localization",payload:data});document.documentElement.lang=data.language;settingsUi.relocalize();filterUi.relocalize();tools.relocalize();articleFind.relocalize();receiveKeyboard(keyboardState);refreshControls();refreshArticleLoad();},
     paint,
     station_mouse_rejected:data=>{stationMouse.reject(data.lease);showNotice(data.message);},
     surface_probe:runSurfaceProbe,
@@ -1087,7 +1099,7 @@ finally {
     stopped=true;latest=null;observer.disconnect();pasteObserver.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
     const inlineClean=await inlineImages.destroy();
     const mediaClean=await media.destroy()&&inlineClean;
-    sitesUi.destroy();settingsUi.destroy();loginUi.destroy();filterUi.destroy();destinationUi.destroy();bookmarksUi.destroy();
+    articleFind.destroy();sitesUi.destroy();settingsUi.destroy();loginUi.destroy();filterUi.destroy();destinationUi.destroy();bookmarksUi.destroy();
     tools.destroy();
     if(exportTask)await exportTask;
     if(pasteDialog.open)pasteDialog.close();
@@ -1101,7 +1113,7 @@ finally {
     document.getElementById("font-settings").click();
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
-    cleanupClean=mediaClean&&contextMenu.clean()&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
+    cleanupClean=mediaClean&&articleFind.clean()&&contextMenu.clean()&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
         &&sitesUi.clean()&&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&destinationUi.clean()&&bookmarksUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
     try {send({kind:"stopped",clean:cleanupClean,...(toolsProbeEnabled?{tools:tools.observations()}:{})});} catch(_) { /* join still acknowledges cleanup */ }
 }

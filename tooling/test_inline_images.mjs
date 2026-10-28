@@ -208,7 +208,7 @@ test('production draw never temporarily collapses a cached scroll container to t
     const viewport={dataset:{},style:{},scrollTop:500,getBoundingClientRect:()=>({width:960,height:576}),parentElement:{getBoundingClientRect:()=>({width:960,height:576})}};
     let height=1600,layoutCalls=0;
     const style={set height(value){height=parseFloat(value);if(height<viewport.scrollTop+576)viewport.scrollTop=Math.max(0,height-576);},get height(){return height+'px';}};
-    const context={devicePixelRatio:1,viewport,surface:{style},canvas:{width:960,height:576},level:{},zoom:1,draws:0,hoveredLink:-1,
+    const context={articleFind:{update(){},highlighter:()=>null},devicePixelRatio:1,viewport,surface:{style},canvas:{width:960,height:576},level:{},zoom:1,draws:0,hoveredLink:-1,
         render:()=>({x:c=>c*12,y:r=>r*24}),inlineImages:{layout(packet,base){layoutCalls++;assert.equal(viewport.scrollTop,500);return base;}},
         positionKeyboard(){},drawSelection(){},drawNavigationMarker(){}};
     vm.runInNewContext(surface.slice(surface.indexOf('function draw(packet)'),surface.indexOf('function repaint()')),context);
@@ -224,7 +224,7 @@ test('production draw never temporarily collapses a cached scroll container to t
 test('web reading keeps the fitted source BBS viewport through full loading, images, zoom and host resize',()=>{
     const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
     const host={width:1040,height:740},viewport={dataset:{},style:{},getBoundingClientRect:()=>host,parentElement:{getBoundingClientRect:()=>host}};
-    const context={devicePixelRatio:2,viewport,surface:{style:{}},canvas:{},level:{},zoom:1,draws:0,hoveredLink:-1,
+    const context={articleFind:{update(){},highlighter:()=>null},devicePixelRatio:2,viewport,surface:{style:{}},canvas:{},level:{},zoom:1,draws:0,hoveredLink:-1,
         render:()=>({}),inlineImages:{layout:(packet,base)=>base},positionKeyboard(){},drawSelection(){},drawNavigationMarker(){}};
     vm.runInNewContext(source.slice(source.indexOf('function draw(packet)'),source.indexOf('function repaint()')),context);
     const draw=rows=>context.draw({article:{id:1},frame:{rows,cols:80},source_frame:{rows:24,cols:80}});
@@ -784,4 +784,40 @@ test('wide images retain full row capacity with quantized native scroll offsets 
         e.move({action:'first'});assert.equal(e.viewport.scrollTop,0);
         await e.ui.destroy();
     }
+});
+
+test('find repaint invalidates only text bitmaps and keeps the expanded image and reading geometry',async()=>{
+    let version=0,enabled=false;const paints=[];
+    const find={version:()=>version,highlighter:row=>enabled&&row===1?()=>({fg:0,bg:11}):null};
+    const e=ownerEnvironment(true,{find,allowed:()=>true,render(target,packet,options){paints.push({packet,highlight:options.highlight?.(packet.frame.glyphs[0])});}});
+    const packet={...e.packet,article:{id:1,first_line:1,last_line:3,end:true},frame:{cols:80,rows:4,revision:4,glyphs:[0,1,2,3].map(row=>({row,col:0,width:1,text:String(row),left:{},right:{}}))},links:[]};
+    const layout=()=>e.ui.layout(packet,{x:c=>c*6,y:r=>r*24},1);
+    layout();e.ui.open({...e.open,article_id:1,first_line:1},packet);
+    e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:64,height:35}});
+    await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+    image.naturalWidth=64;image.naturalHeight=35;image.onload();await new Promise(resolve=>setImmediate(resolve));layout();
+    const box=e.nodes.find(n=>n.className==='inline-image'),before={height:box.style.height,top:box.style.top,extent:e.surface.style.height};
+    paints.length=0;layout();assert.equal(paints.length,0,'unchanged find state reuses text canvases');
+    enabled=true;version++;layout();assert.ok(paints.some(p=>p.highlight?.bg===11));
+    assert.deepEqual({height:box.style.height,top:box.style.top,extent:e.surface.style.height},before);
+    assert.equal(e.ui.active(),true);assert.equal(e.nodes.filter(n=>n.tag==='img'&&n.naturalWidth===64).length,1);
+    enabled=false;version++;paints.length=0;layout();assert.ok(paints.length>0);assert.ok(paints.every(p=>!p.highlight));
+    assert.deepEqual(packet.frame.glyphs.map(g=>g.text),['0','1','2','3']);await e.ui.destroy();
+});
+
+test('finding a row below a full-width image jumps directly past the clipped footer geometry',async()=>{
+    const e=alignedReading({height:96,line:24});
+    e.packet.links=[{row:0,start:0,end:10,url:'https://example.com/find.png'}];e.c.repaint();
+    e.ui.open({...e.open,article_id:1,first_line:1},e.packet);
+    e.ui.receive({batch:1,index:0,image:{mime:'image/png',data:'AA==',width:64,height:35}});
+    await new Promise(resolve=>setImmediate(resolve));const image=e.nodes.find(n=>n.tag==='img'&&typeof n.onload==='function');
+    image.naturalWidth=64;image.naturalHeight=35;image.onload();await new Promise(resolve=>setImmediate(resolve));e.c.repaint();
+    e.ui.keydown({key:'Enter',isTrusted:true});e.ui.keyup({key:'Enter',isTrusted:true});e.c.repaint();
+    assert.ok(parseFloat(e.nodes.find(n=>n.className==='inline-image').style.height)>200);
+    const code=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
+    const c={latest:e.packet,grid:e.c.grid,surface:e.surface,viewport:e.viewport,draw(){e.c.repaint();c.grid=e.c.grid;}};
+    vm.runInNewContext(code.slice(code.indexOf('function findArticleMatch('),code.indexOf('function readingMove(')),c);
+    assert.ok(c.grid.y(39)<c.grid.reading.rowTop(39),'hit testing intentionally clips offscreen coordinates');
+    c.findArticleMatch({row:39});e.whole();assert.ok(e.strips().some(s=>s.paintedRows.includes('39')),'one jump reveals the last match');
+    c.findArticleMatch({row:0});assert.equal(e.viewport.scrollTop,0);await e.ui.destroy();
 });

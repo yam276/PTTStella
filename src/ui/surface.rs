@@ -226,6 +226,7 @@ async fn run(
         include_str!("../../assets/surface-packets.js"),
         include_str!("../../assets/surface-fonts.js"),
         include_str!("../../assets/surface-renderer.js"),
+        include_str!("../../assets/article-find.js"),
         include_str!("../../assets/settings-catalog.js"),
         include_str!("../../assets/surface-settings.js"),
         include_str!("../../assets/surface-settings-host.js"),

@@ -623,6 +623,16 @@ article-load-stopped = Loading interrupted · { $lines } lines retained
 article-load-changed = Article content changed; loading stopped
 article-load-limit = Article loading limit reached; use terminal mode to continue
 article-load-cancel = Cancel loading (Esc)
+article-find-title = Find in article
+article-find-placeholder = Find article text
+article-find-hint = Search loaded text, ignoring letter case; terminal mode searches the current page only. Separate from PTT's / search.
+article-find-empty = Enter text
+article-find-none = No matches
+article-find-count = { $current } / { $total }
+article-find-count-limited = { $current } / { $total }+
+article-find-previous = Previous match (Shift+Enter)
+article-find-next = Next match (Enter)
+article-find-close = Close find (Esc)
 article-load-resume = Resume loading
 
 filters-color-invalid = Choose a valid ID color; only allowed IDs support individual colors
