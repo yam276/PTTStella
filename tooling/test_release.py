@@ -107,6 +107,59 @@ class VersionTests(unittest.TestCase):
 
 
 class AdmissionTests(unittest.TestCase):
+    def test_explicit_replacement_is_limited_to_same_version_and_exact_prior_base(self):
+        pr = pull_request()
+        pr['head']['ref'] = 'codex/reissue-v0.1.0'
+        record = {'version': '0.1.0', 'previous_commit': pr['base']['sha'],
+                  'reason': 'Owner requested replacement after an editor regression.'}
+        release.validate_pr(pr, REPOSITORY, '0.1.0', '0.1.0', record)
+        for branch in ('develop', 'feature', 'codex/reissue-v0.2.0'):
+            bad = copy.deepcopy(pr)
+            bad['head']['ref'] = branch
+            with self.assertRaises(ValueError):
+                release.validate_pr(bad, REPOSITORY, '0.1.0', '0.1.0', record)
+        for previous, replacement in [('0.0.9', record), ('0.1.0', {**record, 'previous_commit': 'c'*40})]:
+            with self.assertRaises(ValueError):
+                release.validate_pr(pr, REPOSITORY, '0.1.0', previous, replacement)
+        with self.assertRaises(ValueError):
+            release.validate_pr(pr, REPOSITORY, '0.1.0', '0.1.0')
+
+    def test_replacement_record_is_read_from_committed_source_and_rejects_wrong_anchor(self):
+        record = {'version': '0.1.0', 'previous_commit': 'b'*40, 'reason': 'Explicit replacement.'}
+        for change in ({}, {'version': '0.2.0'}, {'previous_commit': 'c'*40}, {'reason': ''}):
+            with patch.object(release, 'command', side_effect=['docs/release-replacements/v0.1.0.json', json.dumps({**record, **change})]):
+                if change:
+                    with self.assertRaises(ValueError):
+                        release.replacement_at(COMMIT, 'b'*40, '0.1.0')
+                else:
+                    self.assertEqual(release.replacement_at(COMMIT, 'b'*40, '0.1.0'), record)
+        with patch.object(release, 'command', return_value=''):
+            self.assertIsNone(release.replacement_at(COMMIT, 'b'*40, '0.1.0'))
+
+    def test_replacement_still_requires_merged_pr_and_absent_old_publication(self):
+        pr = pull_request()
+        pr['head']['ref'] = 'codex/reissue-v0.1.0'
+        record = {'version': '0.1.0', 'previous_commit': 'b'*40, 'reason': 'Explicit replacement.'}
+        def command(*args):
+            if args[:2] == ('git', 'status'):
+                return ''
+            return COMMIT if args[-1] == 'HEAD' else 'b'*40
+        with patch.object(release, 'command', side_effect=command), \
+                patch.object(release, 'version_at', return_value='0.1.0'), \
+                patch.object(release, 'replacement_at', return_value=record):
+            github = FakeGitHub(pr)
+            self.assertEqual(release.prepare(REPOSITORY, COMMIT, 'refs/heads/main', github)['version'], '0.1.0')
+            github.tag = 'b'*40
+            with self.assertRaisesRegex(ValueError, 'another commit'):
+                release.prepare(REPOSITORY, COMMIT, 'refs/heads/main', github)
+            github.tag = None
+            github.release = {'draft': False}
+            with self.assertRaisesRegex(ValueError, 'already published'):
+                release.prepare(REPOSITORY, COMMIT, 'refs/heads/main', github)
+            github.prs = []
+            with self.assertRaisesRegex(ValueError, 'merge commit'):
+                release.prepare(REPOSITORY, COMMIT, 'refs/heads/main', github)
+
     def test_release_pr_requires_local_develop_and_an_increased_version(self):
         good = pull_request()
         release.validate_pr(good, REPOSITORY, '0.1.0', '0.1.0-dev.1')
