@@ -47,6 +47,14 @@ Actions → Desktop Release → Run workflow：
 
 建置失敗不會建立 Release。上傳時先建 draft，全部檔案上傳成功才公開；上傳中斷會保留 draft。優先使用失敗 run 的 **Re-run failed jobs**，沿用成功 build 的 artifacts。重試可跳過 SHA-256 完全相同的 draft asset，不覆寫不同內容。若重新建置導致相同檔名內容不同，需人工檢查並刪除未發佈的 draft 後重試，或使用新版本；既有 tag 只准仍指向相同 commit，不能移動。已公開的 Release 不由 workflow 修改。
 
+## 0.2.0 發佈狀態
+
+2026-10-28 使用者將 repo 改為 Public 後，Release PR #2 的政策與 verify run 40654284739 四架構全部通過，PR 已合併為 main `2ad07554b6440b03b55f60c9d02d6b8b21d29539`。正式 run 40656739145 的四架構測試／打包亦全部成功；最後 publish 因 REST 依 tag 查詢既有草稿回傳 404 而停止，沒有把該 run 記為完整成功。
+
+接手時從同一次正式 run 取回原始 artifacts，使用未修改的 `prepare`、`validate_assets` 與 `publish`；只以已確認的草稿 ID 426430986 解析該次 404，保留合併 PR、乾淨來源、版本、tag 不移動、完整白名單、逐檔 SHA-256 及最後才公開的全部檢查。[v0.2.0](https://github.com/yam276/PTTStella/releases/tag/v0.2.0) 已公開為 Latest，六個下載檔、四份 manifest 與 SHA256SUMS 共 11 個附件全部上傳完成，另核對 GitHub 的上傳 digest 與 manifest／校驗碼一致。
+
+後續 publisher 在 develop 改以 GraphQL 精確 tag 查詢取得 Release ID，再讀取 REST 數字 ID，兼容草稿與正式版；查詢錯誤、無權限、無效 ID 或 tag 不符仍停止。0.2.0 的 tag、main 發佈提交與下載內容保持原樣，不因工具修正改寫已發佈版本。
+
 ## GitHub 分支保護
 
 必要規則已準備於 [.github/rulesets/main-release.json](../.github/rulesets/main-release.json)：`main` 必須經 PR、要求 `Release PR policy`、禁止 force-push／刪除、沒有 bypass。該 JSON 是可匯入的設定，放入 repo **不會自動啟用**。
