@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
 const cases=JSON.parse(readFileSync(new URL('../tests/fixtures/navigation-requests.json',import.meta.url),'utf8'));
 function environment(){
-    const sent=[],notices=[],c={navigationSequence:0,navigationRequest:false,navigationLocked:false,pendingReadingMove:null,stopped:false,
+    const sent=[],notices=[],c={articleFind:null,navigationSequence:0,navigationRequest:false,navigationLocked:false,pendingReadingMove:null,stopped:false,
         latest:{generation:7,presentation:1,input_epoch:2,frame:{revision:4},connected:true,article:{id:1,first_line:1,last_line:23,end:false,load:'cancelled'},navigation:{kind:'article_reading'}},
         viewport:{scrollTop:0,clientHeight:624},surface:{offsetTop:0,dataset:{}},grid:{height:624,ratio:1,y:r=>r*24,bottom:r=>(r+1)*24},
         blocked:()=>false,dragging:null,stationMouse:{local:()=>true,revoke(){}},policy(){},clearSelection(){},cancelHover(){},cancelComposition(){},cancelDrag(){},setHover(){},

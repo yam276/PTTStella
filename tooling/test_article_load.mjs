@@ -58,14 +58,15 @@ test('changed or capacity-stopped article cannot send End across a retained-hist
     for(const state of ['changed','limit']){c.latest.article.load=state;c.readingMove({action:'last'},{isTrusted:true});c.readingMove({action:'next_page'},{isTrusted:true});}
 });
 test('returning to the foreground refreshes the reading gate even without a new station frame',()=>{
-    let focused=0,refreshed=0;const c={contextMenu:{isOpen:()=>false},document:{querySelector:()=>null,activeElement:{}},chrome:{contains:()=>false},focus(){focused++;},refreshKeepAlive(){refreshed++;}};
+    let focused=0,refreshed=0;const c={articleFind:null,contextMenu:{isOpen:()=>false},document:{querySelector:()=>null,activeElement:{}},chrome:{contains:()=>false},focus(){focused++;},refreshKeepAlive(){refreshed++;}};
     vm.runInNewContext(source.slice(source.indexOf('function activate()'),source.indexOf('function paste(')),c);
     c.activate();assert.equal(focused,1);assert.equal(refreshed,1);
+    c.articleFind={ownsFocus:()=>true};c.activate();assert.equal(focused,1,'returning to a search field must not focus the station input');assert.equal(refreshed,2);
     assert.match(source,/\[document,"visibilitychange",refreshKeepAlive\]/);
 });
 
 test('article-scoped UI permission survives station page transitions but pauses for local interaction',()=>{
-    const sent=[],c={navigationSequence:0,stopped:false,showNotice(){},latest:{connected:true,input_pending:true,output_pending:true,presentation:2,article:{id:7}},document:{hasFocus:()=>true,visibilityState:'visible'},settingsActive:false,stopped:false,
+    const sent=[],c={articleFind:null,navigationSequence:0,stopped:false,showNotice(){},latest:{connected:true,input_pending:true,output_pending:true,presentation:2,article:{id:7}},document:{hasFocus:()=>true,visibilityState:'visible'},settingsActive:false,stopped:false,
         blocked:()=>false,canNavigate:()=>false,inlineImages:{active:()=>false},tools:{busy:()=>false},stationMouse:{active:()=>false},dragging:null,released:null,
         hasSelection:()=>false,exportBusy:false,keyboardState:{pending:false},navigationLocked:false,navigationRequest:false,stamp:()=>({generation:1,revision:9,input_epoch:3}),keepAliveGate:null,keepAlive:{setAttribute(){}},tr:k=>k,send:p=>sent.push(p)};
     c.refreshArticleLoad=()=>{};

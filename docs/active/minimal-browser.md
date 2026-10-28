@@ -4,13 +4,27 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-wide-image-row-fixed-final/PTTStella.app`（2026-10-28，待發佈的 0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 維持草稿，尚未合併或建立 tag／Release。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-article-find-delivery/PTTStella.app`（2026-10-28，待發佈的 0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 維持草稿，尚未合併或建立 tag／Release。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 文章內本機尋找（2026-10-28，已完成）
+
+驗收輸入：在已辨識的文章按 Cmd+F／Ctrl+F，輸入中文或英文文字；黃底黑字標出命中，目前一筆深藍底白字，Enter／Shift+Enter 前後切換，Esc 關閉且不取消全文載入。PTT 的 `/` 原樣保留，不送出查詢，不改文章或 PNG，展開／等寬圖片保留；離開文章／重連會清除查詢、索引、timer 及反白。終端機模式僅搜尋目前頁，網頁查已載入範圍。
+
+已實作有界的本機 owner：最多 256 UTF-16 units／4,096 筆命中（超過顯示 +）、120ms 合併輸入、逐列字面／大小寫無關比對、排除頁尾與不可見字格；使用投影 glyph 與緊密整數位置索引，不解析原始 ANSI。尋找版本只使文字 bitmap 失效，不改圖片 batch。透過原閱讀 gate 暫停與恢復預讀／保活，IME 與對話框／情境選單保留按鍵優先權，保持焦點復原與切篇隔離。
+
+完整 JS 287、core 14 commands／2 replays、desktop lib 159／bin 151、Clippy、fmt／docs 通過。10 項尋找案例包含 Unicode／雙欄格、大小寫、字面、零命中、循環、組字／取消、遮罩、終端機頁尾、切篇／重連、索引重用與數量上限；額外圖片回歸核對反白不摺疊圖片且停用後移除反白。原生首輪已看到 42 筆 ROW／row 命中、上一筆／下一筆、Ctrl+F 與 Cmd+F、末行 LAST 與等寬圖片保存；另抓到 Cmd+Ctrl+F 誤攔截，已加入拒絕雙修飾鍵的回歸並重打包。首輪合成 peer／PNG／清理 passed 不代表全螢幕驗收成功，另留 failed acceptance 記錄。
+
+最終 macOS arm64 實際 Dioxus／WKWebView 通過 Ctrl+F／Cmd+F、1→2→1→42→1 循環，輸入 LAST 後不用再按 Enter 即顯示 3～23 行及末行反白；關閉尋找後，等寬圖區域 1000×529 pixels 與尋找前完全相同。修正首次定位曾誤用被固定頁尾裁切的 hit-test y，現在使用同一排版 owner 的完整 rowTop，新增單次定位回歸。反白仍開啟時匯出來源 PNG 960×576，獨立解碼 ROW 字格僅原灰階（374 個非黑像素、零藍／黃像素）。全螢幕、Esc 關閉尋找且維持全螢幕、回一般視窗及 Close acknowledged／全部 owner 與 HTTP join／exit 0 均通過；零站端導覽，兩次展圖共用一 batch、圖片只一次 GET。索引與 timer 的 clean 亦納入 surface 最終清理判定。
+
+先前全螢幕退出後失焦而超過 runner 期限的一輪保留 not_ready／exit -15，首次定位未到底的一輪保留 failed acceptance，沒有用其 peer 的 passed 掩蓋畫面失敗。最終交付 `dist/macos-article-find-delivery/PTTStella.app` 與驗證副本 15 個 Mach-O sections 相同、strict ad-hoc 簽章通過。已刪除本輪九個過時打包／合成 App 目錄（約 356 MB），確切路徑在證據目錄 removed-output.json；保留 PNG／截圖、成功及失敗報告與既有 Cargo cache，無新增 branch／worktree。未連 PTT，Windows／Linux 原生與特定注音候選窗仍待驗；Release PR #2 維持草稿，不合併或發佈。
+
+4,000 行／320,000 glyph 的 Node V8 生產 owner 合成量測（不含 WebView／繪圖）：首次索引與查詢約 33.8ms，20 次重用索引查詢約 0.14～0.37ms，未開尋找的 100 次同 frame 更新約 0.043ms。這些是單程序 wall time，並非低階硬體、程序家族 CPU／RSS 基準；原始記憶體樣本分列 heap／ArrayBuffer／RSS，不把索引釋放等同 RSS 立即下降。證據 `.local/verification/article-find-20261028/`。
 
 ## 等寬圖片後底部多空一行（2026-10-28，已修正）
 

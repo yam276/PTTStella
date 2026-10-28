@@ -617,6 +617,16 @@ article-load-stopped = 讀取中斷 · 保留 { $lines } 行
 article-load-changed = 文章內容已變更，已停止載入
 article-load-limit = 已達全文載入上限，後續請用終端機模式閱讀
 article-load-cancel = 取消載入（Esc）
+article-find-title = 在文章中尋找
+article-find-placeholder = 尋找文章文字
+article-find-hint = 搜尋已載入的文字，不分英文大小寫；終端機模式僅搜尋目前頁。不會送出 PTT 的 / 搜尋。
+article-find-empty = 輸入文字
+article-find-none = 找不到
+article-find-count = { $current } / { $total }
+article-find-count-limited = { $current } / { $total }+
+article-find-previous = 上一筆（Shift+Enter）
+article-find-next = 下一筆（Enter）
+article-find-close = 關閉尋找（Esc）
 article-load-resume = 繼續載入
 
 filters-color-invalid = 請選擇有效的 ID 顏色；只有白名單可設定個別顏色

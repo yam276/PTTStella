@@ -36,7 +36,7 @@ function createInlineImageKey({scope,allowed,single,all,setTimer=setTimeout,clea
     }
     return {down,up,cancel,held:()=>!!held,validate(){if(held&&!valid(held))cancel();},clean:()=>held===null};
 }
-function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,notice,allowed=()=>false,request=()=>{}}) {
+function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,notice,find=null,allowed=()=>false,request=()=>{}}) {
     const layer=document.createElement("div");layer.id="inline-images";surface.insertBefore(layer,canvas.nextSibling);
     let current=null,items=[],visible=[],strips=[],footer=null,footerLayer=null,footerImage=null,footerPacket=null,footerProgress=null,dead=false,lastLayout=null,lastArticle=null,latestLayout=null,freeScroll=false;const jobs=new Set();
     // One immutable Rust projection owns one row index. Scroll/hover repaint
@@ -278,7 +278,7 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         // number of rows. Discrete navigation shows only complete edge rows;
         // wheel scrolling intentionally retains the normal continuous clipping.
         const wholeRow=row=>!cached||!viewport||freeScroll||mapping.y(row)>=top-.01&&mapping.bottom(row)<=readingBottom+.01;
-        const reading={free:setFreeScroll,clippedAt(pixel){
+        const reading={free:setFreeScroll,rowTop:row=>mapping.y(row),clippedAt(pixel){
             const row=mapping.rowAt(pixel);
             return row!==null&&row<bodyRows&&!wholeRow(row)?row:-1;
         },align(target,maximum,edge="nearest"){
@@ -298,12 +298,13 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
             if(strip.height!==height)strip.height=height;
             if(cached){
                 const previous=paintedRows.get(strip);
-                if(glyphs||previous?.packet!==packet||previous.row!==row||previous.width!==strip.width||previous.height!==strip.height){
+                const findVersion=find?.version()??0;
+                if(glyphs||previous?.packet!==packet||previous.row!==row||previous.width!==strip.width||previous.height!==strip.height||previous.findVersion!==findVersion){
                     const frame={...packet.frame,rows:1,cursor_visible:false,glyphs:glyphs?glyphs.map(g=>({...g,row:0})):(rowGlyphs.get(row)??[])};
-                    render(strip,{...packet,frame,links:rowLinks.get(row)??[]},{cursor:false,linkHints:true});
+                    render(strip,{...packet,frame,links:rowLinks.get(row)??[]},{cursor:false,linkHints:true,highlight:glyphs?null:find?.highlighter(row)});
                     // The reusable footer has its own footerPacket/progress
                     // owner. Caching it here would retain an exited article.
-                    if(glyphs===null)paintedRows.set(strip,{packet,row,width:strip.width,height:strip.height});
+                    if(glyphs===null)paintedRows.set(strip,{packet,row,width:strip.width,height:strip.height,findVersion});
                 }
             } else strip.getContext("2d").drawImage(canvas,0,base.y(row),canvas.width,height,0,0,canvas.width,height);
             Object.assign(strip.style,{width:width+"px",height:height/ratio+"px"});
