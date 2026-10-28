@@ -4,13 +4,23 @@
 
 ## 目標
 
-目前診斷交付為 `dist/macos-update-check-diagnostic/PTTStella.app`（2026-10-28，0.2.0-dev.1、macOS arm64 release／ad-hoc、自動本機 log），包含 GitHub 正式版本檢查；前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前診斷交付為 `dist/macos-wide-image-row-fixed-final/PTTStella.app`（2026-10-28，待發佈的 0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 維持草稿，尚未合併或建立 tag／Release。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 等寬圖片後底部多空一行（2026-10-28，已修正）
+
+使用者確認內容仍可讀，問題是等寬展圖後，純文字頁持續多空一整行。圖片比例產生的小數佔位高度，使後續行的位置偏離整數 CSS 像素；原生 scrollTop 取整後，完整行裁切會多藏一行。每張圖片佔位改為向上取整，不到一 CSS 像素的差額留在圖片周圍，實際圖像仍保留精確比例；不新增文字列、不改核心內容或原有連續滾輪行為。
+
+新增生產 layout／readingMove 回歸，明確讓 scrollTop 取整：修改前可重現可見三行降為兩行；修改後 DPR 1／1.5／2、floor／round／ceil 與兩種圖片比例，共 18 組均保留完整容量，Home／End 與末行可見。完整 JS 275、core 14 commands／2 replays、desktop lib 159／bin 151、Clippy、fmt 與 docs 通過。
+
+macOS arm64 實際 Dioxus／WKWebView 使用自製 64×35 圖片及 38 頁／837 行長文，完成載入後展圖並等寬。一般視窗純文字頁分別顯示 17～39、37～59、18～40 行，全螢幕為 18～40 行，均為完整 23 行而無多餘空白列；PageUp／PageDown、方向鍵與 End 回讀沒有多送站端 bytes，End 可見 815～837 行。來源 PNG 960×576，精確 37 次站端 PageDown、兩次展圖請求共用一 batch、三個圖片路徑各一次 HTTP GET、Close acknowledged、全部 owner／HTTP join、exit 0。全螢幕原生擷取的閱讀區外白邊保留為工具擷取差異，沒有為此改 renderer。
+
+初輪等候前景期間，在全文尚未完成時誤送 Enter，使嚴格 peer 拒絕額外輸入，且隨後超過 runner 期限；保留該輪 failed／cleanup false／exit -15，不計通過。重跑先核對 complete 才送展圖鍵。證據 `.local/verification/wide-image-bottom-row-20261028/`；交付 `dist/macos-wide-image-row-fixed-final/PTTStella.app`。未連 PTT，其他平台與實站文章仍待驗，不因本輪修復恢復合併或發佈。 驗收後已移除本輪兩個合成 App 副本與首輪冗餘打包目錄（約 119 MB），確切路徑記於同證據目錄的 removed-output.json；保留最終 App、所有失敗／成功報告與既有 Cargo cache，未建立分支或 worktree。
 
 ## 清理競態與全螢幕驗證（2026-10-28，已完成）
 

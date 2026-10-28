@@ -234,7 +234,12 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
         for(const item of visible){
             const scale=item.still?(item.wide?width/item.still.width:Math.min(1,(width-24)/item.still.width,560/item.still.height)):1;
             item.box.style.padding=item.wide?"12px 0":"12px";
-            item.height=item.still?Math.max(1,item.still.height*scale)+24:48;
+            // Native scroll offsets can round to whole CSS pixels. Keep each
+            // image slot on that same lattice so fractional aspect ratios do
+            // not shift every following row and hide a full bottom line.
+            // The image itself keeps its exact aspect ratio; only its surrounding
+            // padding may grow by less than one CSS pixel.
+            item.height=item.still?Math.ceil(Math.max(1,item.still.height*scale)+24):48;
             if(item.still){item.still.style.width=Math.max(1,item.still.width*scale)+"px";item.still.style.height=Math.max(1,item.still.height*scale)+"px";}
             if(item.animation&&item.still){item.animation.style.width=item.still.style.width;item.animation.style.height=item.still.style.height;}
 
