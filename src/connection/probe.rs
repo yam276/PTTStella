@@ -24,6 +24,7 @@ pub(super) enum Scenario {
     Surface,
     ControlInput,
     EditorClipboard,
+    EditorColor,
     PointerRows,
     ListBoundary,
     ArticleSwitch,
@@ -672,6 +673,7 @@ pub(super) async fn serve(
     let deadline = if matches!(
         scenario,
         Scenario::Filters
+            | Scenario::EditorColor
             | Scenario::ArticleSwitch
             | Scenario::MouseSamples(MouseSampleProbe::RoundTrip)
     ) {
@@ -821,6 +823,26 @@ pub(super) async fn serve(
                 Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e|e.to_string()),
                 _ => Err("list boundary probe expected Close without extra input".into()),
             };
+        }
+        if matches!(scenario, Scenario::EditorColor) {
+            let mut editor=crate::editor_color::fixture::Editor::new(&["P\x1b[32m中\x1b[0m文\x1b[34mQ","","第三行"],true,false,true);
+            for _ in 0..4096 {
+                match socket.next().await {
+                    Some(Ok(Message::Binary(bytes)))=>{
+                        if bytes.len()>4096{return Err("editor colour probe input too large".into());}
+                        editor.accept(&bytes);
+                        socket.send(Message::Binary(editor.wire().into())).await.map_err(|e|e.to_string())?;
+                    },
+                    Some(Ok(Message::Close(_)))=>{
+                        socket.flush().await.map_err(|e|e.to_string())?;
+                        let expected=["P\x1b[32m\x1b[0;1;31;40m中\x1b[0m\x1b[0;1;31;40m文\x1b[34m\x1b[0;1;31;40mQ\x1b[m","","\x1b[0;1;31;40m第三行\x1b[m"];
+                        let expected=expected.iter().map(|s|crate::encoding::encode(s).map_err(|e|e.to_string())).collect::<Result<Vec<_>,_>>()?;
+                        return if editor.lines==expected && editor.preview && !editor.insert {Ok(())}else{Err("editor colour probe document/mode differs from independent expected".into())};
+                    },
+                    _=>return Err("editor colour probe expected bounded input or Close".into()),
+                }
+            }
+            return Err("editor colour probe exceeded input bound".into());
         }
         if matches!(scenario, Scenario::EditorClipboard) {
             for (index, expected) in [b"\x16".as_slice(), b"\x16", b"ANSI clipboard check:\x15[31m\xa4\xa4\x15[0m\rEND", b"\x16"].into_iter().enumerate() {

@@ -15,7 +15,7 @@ function contextMenuItems(state) {
     if(state.word&&state.replyRow!==null&&state.replyRow!==undefined&&state.local)add("reply-focus",state.ready);
     if(state.focused&&state.local&&(state.word||!state.selection&&state.link<0))add("reply-focus-clear",state.ready);
     if(state.selection){add("copy",state.selectionReady);add("copy-ansi",state.selectionReady);add("export-rows",state.rowsReady);add("copy-image-rows",state.rowsReady);}
-    if(state.editor){add("paste",state.ready&&state.local);return entries;}
+    if(state.editor){add("paste",state.ready&&state.local);if(state.selection&&state.ptt)add("editor-color",state.selectionReady&&state.local&&!state.pending);return entries;}
     if(state.link>=0){add("copy-link");add("open-link",state.local);add("select-link");}
     if(state.word||state.selection||state.link>=0)return entries;
     add("select-all",state.ready);add("export-page",state.exportReady);add("copy-image-page",state.exportReady);

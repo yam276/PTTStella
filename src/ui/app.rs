@@ -45,6 +45,7 @@ pub fn app(props: AppProps) -> Element {
     let filters_probe = props.filters_probe;
     let surface_probe = props.surface_probe.clone();
     let surface_probing = surface_probe.is_some();
+    let editor_color_probing = surface_probe.as_deref() == Some("editor_color");
     let sample_case = surface_probe.clone();
     let boards_probing = matches!(surface_probe.as_deref(), Some("boards" | "boards_close"));
     let articles_probing = matches!(
@@ -88,6 +89,8 @@ pub fn app(props: AppProps) -> Element {
                     Connection::start_control_input_probe(bytes)
                 } else if sample_case.as_deref() == Some("editor_clipboard") {
                     Connection::start_editor_clipboard_probe(bytes)
+                } else if sample_case.as_deref() == Some("editor_color") {
+                    Connection::start_editor_color_probe(bytes)
                 } else if boards_probing {
                     Connection::start_board_probe()
                 } else if matches!(sample_case.as_deref(), Some("full_load" | "long_load")) {
@@ -413,6 +416,13 @@ pub fn app(props: AppProps) -> Element {
                 }
             }
             {context_menu()}
+            {editor_color_dialog()}
+            if editor_color_probing {
+                div {class:"editor-color-probe-controls",style:"position:fixed;top:8px;left:8px;z-index:30;display:flex;gap:8px",
+                    button {id:"editor-color-probe-select",r#type:"button","選取三行合成範圍"}
+                    button {id:"editor-color-probe-open",r#type:"button","顯示測試色彩表"}
+                }
+            }
             dialog { id: "destination-dialog", class: "paste-preview", "aria-labelledby": "destination-title",
                 h2 { id: "destination-title", {pttstella::msg!("destination-title")} }
                 p { {pttstella::msg!("destination-dialog-hint")} }
@@ -545,6 +555,9 @@ fn context_menu() -> Element {
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "paste",
                 Copy { size: 18 } span { {pttstella::msg!("menu-paste")} }
             }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "editor-color",
+                Type {size:18} span {{pttstella::msg!("editor-color-title")}}
+            }
             PictureActions {}
             LinkActions {}
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy-image-page",
@@ -585,6 +598,24 @@ fn context_menu() -> Element {
             }
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "settings", class:"settings-entry",
                 BrandSettingsCaption{}
+            }
+        }
+    }
+}
+
+fn editor_color_dialog() -> Element {
+    rsx! {
+        dialog {id:"editor-color-dialog",class:"editor-color-dialog","aria-labelledby":"editor-color-title",
+            h2 {id:"editor-color-title",{pttstella::msg!("editor-color-title")}}
+            p {{pttstella::msg!("editor-color-help")}}
+            fieldset {legend {{pttstella::msg!("editor-color-foreground")}} div {id:"editor-color-foreground",class:"editor-color-grid"}}
+            fieldset {legend {{pttstella::msg!("editor-color-background")}} div {id:"editor-color-background",class:"editor-color-grid"}}
+            div {id:"editor-color-preview",class:"editor-color-preview",{pttstella::msg!("editor-color-sample")}}
+            code {id:"editor-color-code"}
+            div {class:"editor-color-actions",
+                button {r#type:"button",id:"editor-color-reset",{pttstella::msg!("editor-color-reset")}}
+                button {r#type:"button",id:"editor-color-cancel",{pttstella::msg!("editor-color-cancel")}}
+                button {r#type:"button",id:"editor-color-apply",{pttstella::msg!("editor-color-apply")}}
             }
         }
     }

@@ -280,6 +280,7 @@ async fn run(
         include_str!("../../assets/surface-mouse.js"),
         include_str!("../../assets/surface-tools.js"),
         include_str!("../../assets/surface-context-menu.js"),
+        include_str!("../../assets/surface-editor-color.js"),
         include_str!("../../assets/surface-diagnostics.js"),
         include_str!("../../assets/surface.js"),
     ]
@@ -748,6 +749,7 @@ async fn run(
                         Ok(()) => continue,
                         Err(error) => Packet::Notice(error),
                     },
+                    CommandKind::EditorColor => Packet::Notice(match done.result {Ok(())=>{checks.editor_colors+=1;pttstella::msg!("editor-color-done")},Err(error)=>error}),
                     CommandKind::Destination => {
                         let Some((request,_))=destination_request.take() else {continue;};
                         Packet::DestinationResult {request,feedback:match done.result {
@@ -1388,6 +1390,18 @@ async fn run(
                         let reply = queue_paste(prepared, generation, &connection, &receiver, pending_paste, &mut checks, probe.is_some());
                         eval.send(reply).map_err(|e| e.to_string())?;
                     }
+                    SurfaceEvent::EditorColor {presentation,stamp,request,color,trusted:_} => {
+                        let view=receiver.borrow().clone();
+                        let identity=Identity{presentation,generation:stamp.generation,revision:stamp.revision};
+                        let result=(|| {
+                            let keyboard=keyboard_policy.status(&view.context());
+                            if view.stamp()!=stamp || view.input_pending || view.output_pending || pending_paste.read().is_some()
+                                || keyboard.enabled && keyboard.mode!="input" {return Err(pttstella::msg!("editor-color-stale"));}
+                            let selection=screen.editor_selection(identity,request,&view).ok_or_else(||pttstella::msg!("editor-color-stale"))?;
+                            commands.start(CommandKind::EditorColor,stamp.generation,||connection.request_editor_color(stamp,selection,color).map(|reply|reply.wait()))
+                        })();
+                        if let Err(error)=result {eval.send(Packet::Notice(error)).map_err(|e|e.to_string())?;}
+                    },
                     SurfaceEvent::PasteClipboard { presentation, stamp, trusted: _ } => {
                         let view = receiver.borrow().clone();
                         let identity = Identity { presentation, generation: stamp.generation, revision: stamp.revision };
@@ -1760,6 +1774,7 @@ async fn run(
                 || matches!(case.as_str(),"account_lists"|"account_articles") && checks.filter_edits>=3 && checks.context_copies>=1 && checks.export_checked
                 || case=="short_overlap" && checks.navigation_requests==1 && checks.inline_requests>=2 && checks.inline_expands==1 && checks.link_requests>=1 && checks.export_checked && reading.as_ref().is_some_and(|r| r.first_line==1 && r.last_line==32 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
                 || case=="control_input" && checks.export_checked && receiver.borrow().frame.glyphs.iter().map(|g|g.text.as_str()).collect::<String>().contains("CONTROL INPUT 3/3 VERIFIED")
+                || case=="editor_color" && checks.export_checked && checks.editor_colors==1
                 || case=="editor_clipboard" && checks.export_checked && receiver.borrow().frame.glyphs.iter().map(|g|g.text.as_str()).collect::<String>().contains("EDITOR CLIPBOARD 4/4 VERIFIED")
                 || case=="terminal_pages" && checks.export_checked && !screen.full_load_active()
                 || case=="long_load" && checks.navigation_requests==37 && checks.export_checked && checks.inline_requests>=2 && checks.inline_expands==1 && reading.as_ref().is_some_and(|r|r.first_line==1 && r.last_line==837 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
@@ -1790,6 +1805,7 @@ async fn run(
             "paste_preview_preserved":pending_paste.read().is_some(),
             "settings_saved":checks.settings_saved,"full_png":checks.export_checked,"rows_png":checks.rows_export_checked,"media_external_requests":checks.media_external,
         });
+        surface_report["editor_colours_completed"] = checks.editor_colors.into();
         surface_report["viewport_captures"] = checks.viewport_captures.into();
         surface_report["article_reading"] =
             serde_json::to_value(reading).map_err(|e| e.to_string())?;

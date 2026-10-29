@@ -49,3 +49,12 @@
 原生 `picture_menu` 案例使用同一合成閱讀頁與自製兩色圖。需從文章插圖與完整預覽各複製一次原圖（OS 剪貼簿讀回）、另存一次原始 bytes、複製一次完整網址、匯出來源格線 PNG，再正常 Close。runner 獨立核對原圖尺寸／紅藍像素、存檔 bytes、HTTP 次數及全部 worker 清理；不可只看動作計數或退出碼。
 
 0.2.1：Rust 從已 ACK 的過濾後選取序列化 ANSI SGR，逐行 reset，SGR 66 保留雙色中文字。一般複製不附色碼。編輯器辨識要求完整 80×24 格線、正文游標、底列「編輯文章」的色帶、^X 與 ^V（或 ^C／色碼提示），未辨識畫面維持既有行為。Ctrl+V 在編輯器送站端 0x16；Cmd+V／Ctrl+Shift+V 與右鍵負責貼上。只接受有界 SGR 色碼，ESC 轉成 PTT 編輯器的 Ctrl+U 插入字元；其他控制碼整段拒絕，含色碼或多行一律先預覽。確認時再次檢查 session、revision 與 input epoch，不能把舊內容貼入新畫面。站端語義參考 [PTT editor](https://github.com/ptt/pttbbs/blob/main/mbbsd/edit.c)。
+
+
+0.3.0 開發版框選上色：選取後右鍵「文字上色」，本機色表提供 16 色前景、8 色背景、正常／亮色數字與預覽，取消不送站端輸入。Apply 只提交色彩數字、stamp 與既有 Rust selection request，不接受 JS 原始碼、文字或任意按鍵。Rust 由 ACK 來源推導完整中文字與多行範圍；顯示模式、游標、邏輯行及插入／取代狀態由站端狀態列確認。
+
+先以 Esc-u 取消站端既有區塊標記（與本機框選分開），避免 Ctrl+V 把標記內的字面 `*[` 轉成 ESC。每行 End 證明色碼顯示來源完整，再切彩色預覽逐字比對；所有行預檢完成才修改。只插入受控的 SGR，不刪字、不重貼文章；選取內每個既有 SGR 後加上新色，結尾重設並恢復尾段原屬性，空行不加碼。末尾核對文字與選取內外完整 glyph 樣式，成功才回報並還原原模式與 caret。狀態、每步及總期限／指令數均有界；手動鍵盤、等待撤銷、斷線／關窗或異常停止，已送 bytes 不回滾、不重送。
+
+目前只接受一行前 79 格內可完整確認的來源；End 顯示更長、未映射／截斷／未知控制碼、中文內夾碼或 SGR 66 等無法精確確認的內容拒絕。插入後必須小於 PTT WRAPMARGIN 511。這些限制不改原本 Ctrl+C／Ctrl+V／Ctrl+U 手動指令。來源參考 [PTT insert_ansi_code 與編輯器按鍵](https://github.com/ptt/pttbbs/blob/c591f7ca0222da541fa5098656a03f4668af2b5d/mbbsd/edit.c) 及 [WRAPMARGIN](https://github.com/ptt/pttbbs/blob/c591f7ca0222da541fa5098656a03f4668af2b5d/include/config.h)。研究副本留 repo 外，產品／測試不包含第三方 editor 原始碼。
+
+驗證另外跑 editor_color 核心與 Connection loopback、UI selection freshness／typed protocol、全套 JS／Fluent／Clippy／core。`--probe-surface OUTPUT_DIRECTORY editor_color` 為獨立標題的本機合成編輯器，從第一行「中」框選至第三行「第三行」末字，選亮紅／黑底套用、匯出 PNG，Close 時 peer 獨立核對所有原始文章 bytes 與原預覽／取代模式；不連 PTT、不發文。原生工具無法拖曳時，可由此 case 專用的「選取三行合成範圍／顯示測試色彩表」建立固定 Rust 選取，再以 trusted AX 操作色表；兩個按鈕不在一般 App。這不算原生多行拖曳，手勢與實站草稿結果另記 active plan，不以模型或 AX 截圖當成原生操作通過。
