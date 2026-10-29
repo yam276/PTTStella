@@ -4,7 +4,7 @@
 
 ## 目標
 
-目前最新開發診斷交付為 `dist/macos-multi-instance-final/PTTStella.app`（0.3.0-dev.1，多程序隔離與安全保存，見下節）。穩定版診斷交付 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修）保留。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前最新開發診斷交付為 `dist/macos-030-multi-instance-critic/PTTStella.app`（0.3.0-dev.2，含多程序保存與 Critic 補修，見下節）。穩定版診斷交付 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修）保留。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
@@ -12,13 +12,17 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
-## 0.2.2 多開修正 Critic 與發佈（2026-10-29，進行中）
+## 0.2.2 多開修正 Critic 與發佈（2026-10-29，已完成）
 
 使用者要求再次交由 SubAgent 獨立 Critic，確認多開、共用設定與名單保存沒有回歸後推送 develop 並發佈 0.2.2。兩位 Critic 分別審查保存／UI 基準與診斷／鎖／清理，唯讀工作不碰私人資料或 PTT。先完成修正與本機檢查，再推送正式版本來源，經 develop → main Release PR 與四架構 verify；通過後才合併及公開，公開附件仍只有六個平台套件與 SHA256SUMS，JSON 留 Actions artifacts。正式發佈後 develop 恢復 0.3.0 開發版。
 
 Critic 找到並修正兩項問題：書籤合併可能超過 500 筆卻回報成功，改由序列化 owner 在備份／替換前拒絕；關窗 drain 遺失成功但未 ACK 的設定提交基準，導致最後草稿誤判衝突，改為僅採用本視窗成功的 submitted 推進 retained 基準。兩個新回歸案例在修正前均確實失敗；修正後書籤原檔／備份／重啟可讀保護、最後草稿保存及外窗同欄衝突保護通過，保存 Critic 已獨立覆核。診斷 Critic 無 actionable finding，七項測試及 20 輪雙程序隔離（40 個子程序）全過；Windows runtime 仍待 CI。
 
 本機最終 core 14 commands／2 replays、desktop lib 159／bin 158、多程序整合 7、JS 293、Python tooling 80、Clippy／fmt／docs 通過；0.2.2 診斷 App 的兩個原生 Dioxus 視窗共用診斷根目錄，逐一開工具／PNG／關閉通過，兩份 Finish run_ok／cleanup_ok、Close acknowledged、全部 worker join 與 exit 0 通過。此原生案例只驗雙程序與關閉流程，設定未 ACK 時序由受控的生產 save_display／Files drain 回歸測試證明，不冒充原生即時關窗重現。
+
+發佈結果：Release PR #5 政策通過，develop `eaf8e83` 的 verify run 40820260479 四架構成功後合併為 main `029b318d55bcad5d0cac3b37de05c89c18c3f73c`。正式 run 40821773621 的四架構測試／打包及 Publish complete Release 全部成功，[v0.2.2](https://github.com/yam276/PTTStella/releases/tag/v0.2.2) 已公開為 Latest stable（Release 427497649），tag 固定相同 main 提交。取回同一次正式 run 的全部 20 份原始產物，以 production validate_assets 核對四份 manifest、來源／版本／release profile、六個套件與逐檔 SHA-256；公開六個套件加 SHA256SUMS 共七個附件的 digest／大小、六筆校驗與雙語說明全部吻合，沒有 JSON 附件。沒有手動補發或繞過 publisher。main 已整合回 develop，後者恢復 `0.3.0-dev.2` 並保持正式 tag／main 不變。
+
+保留 `dist/release-v0.2.2/` 正式下載、`dist/release-v0.2.2-artifacts/` 唯一原始建置產物與 verification 下的 Critic／原生證據；開發診斷包更新至 `dist/macos-030-multi-instance-critic/PTTStella.app`。被取代的本次診斷包僅在確認非活動、解析路徑與內容屬於本工作後清理；共享 Cargo target 與其他工作交付保留，精確清理清單見 verification 的 cleanup-owned-output.json。沒有新建 feature 分支或 worktree；develop 是長期分支，保留不刪。
 
 本次把 `multi_instance` 獨立程序整合測試加入四架構 CI。Windows／Linux 沒有原生 GUI 驗收，不以 CI 單元／打包結果代替。證據目錄 `.local/verification/release-022-20261029/` 與 `.local/verification/multi-instance-critic-20261029/`。
 

@@ -88,3 +88,8 @@ Release PR #3 合併至 main `4f194551a02821e7b80ae78591a125774e74487e`。四架
 Release PR #4 通過政策並合併至 main `1ac078b5a5f2b883f21be657505c823a08145a0c`，四架構 verify [40681843325](https://github.com/yam276/PTTStella/actions/runs/40681843325) 全部成功。先核對該次原始 artifacts 的四份 manifest、全部下載與逐檔 SHA-256，再按本次使用者明確授權，備份並移除原始 Release 426507886 與指向 `4f19455` 的 tag；使用相同乾淨 main 的 production prepare／validate_assets／publish 完成重新上傳及最後公開。verify 未取得或執行出版權限，這次出版由授權的本機 publisher 執行。
 
 [v0.2.1](https://github.com/yam276/PTTStella/releases/tag/v0.2.1) 現為 Release 426610699，Latest stable，tag 指向 `1ac078b`。公開附件只有六個平台套件與 SHA256SUMS，共七個；四份 JSON 與其校驗仍保留於 Actions artifacts。公開校驗清單的六筆 hash、七個 GitHub asset digest／大小及雙語重發說明均獨立核對通過。舊來源與下載備份留 repo 外，細節見 active plan；main 已整合回 develop，後者保留 0.3.0-dev.1。因同版本替換，舊 0.2.1 使用者須手動重新下載，更新檢查不提示相同版號。
+
+
+## 0.2.2 發佈結果（2026-10-29）
+
+SubAgent Critic 提出的書籤合併超量與設定關窗保存基準問題修正後，Release PR #5 政策及 develop verify [40820260479](https://github.com/yam276/PTTStella/actions/runs/40820260479) 四架構全部通過，合併為 main `029b318d55bcad5d0cac3b37de05c89c18c3f73c`。正式 [40821773621](https://github.com/yam276/PTTStella/actions/runs/40821773621) 四架構測試／打包與 publisher 成功，[v0.2.2](https://github.com/yam276/PTTStella/releases/tag/v0.2.2) 為 Latest stable。公開六個平台下載與 SHA256SUMS，共七個附件，無 JSON；取回同次原始 artifacts，逐項核對四份 manifest、全部校驗、來源／版本、公開 digest／大小與說明通過。多程序整合測試已納入所有架構，CI 不取代 Windows／Linux GUI、IME 或實站登入驗收。main 已整合回 develop，恢復 0.3.0-dev.2；正式 tag 與下載保持不變。
