@@ -440,6 +440,27 @@ test("shared color changes regroup allowlist rows, and live translation preserve
     env.node("filters-default-color").value="14";env.fire("filters-default-color-save");ui.receive({state:"rejected",message:"failed"});
     assert.deepEqual(f.ids(),["Alice","Bob"]);assert.equal(env.node("filters-default-color").value,"10");ui.destroy();
 });
+test("imported marker colours are readable in preview and cancellation restores local colours",()=>{
+    const local=[{id:"Alice",policy:"allow",note:"local",color:13}];
+    const f=filterFixture(local),{env,ui}=f;
+    env.fire("filters-import");const request=env.sent.at(-1).request;
+    ui.receive({state:"preview",request,entries:[{id:"Alice",policy:"allow",note:"imported",color:10}],message:"preview"});
+    env.fire("filters-tab-allow");
+    assert.ok(env.node("filters-list").children[0].textContent.startsWith("Alice · 亮綠"));
+    env.node("filters-list").value="Alice";env.fire("filters-list","change");
+    assert.equal(env.node("filters-color").value,"10");
+    assert.equal(env.sent.filter(packet=>packet.kind==="filters_import_apply").length,0);
+    env.fire("filters-import-cancel");
+    assert.ok(env.node("filters-list").children[0].textContent.startsWith("Alice · 亮紫"));
+    env.fire("filters-import");const next=env.sent.at(-1).request;
+    ui.receive({state:"preview",request:next,entries:[{id:"Alice",policy:"allow",note:"imported",color:10}],message:"preview"});
+    env.fire("filters-import-apply");
+    assert.equal(env.sent.at(-1).kind,"filters_import_apply");
+    assert.equal(env.sent.at(-1).request,next);
+    ui.receive({state:"saved",allow_color:14,entries:[{id:"Alice",policy:"allow",note:"imported",color:10}],message:"saved"});
+    assert.ok(env.node("filters-list").children[0].textContent.startsWith("Alice · 亮綠"));ui.destroy();
+});
+
 test("import preview can be inspected across tabs and sort modes before cancellation restores saved entries",()=>{
     const f=filterFixture([{id:"Local",policy:"allow",note:""}]),{env,ui}=f;
     env.fire("filters-import");const request=env.sent.at(-1).request;

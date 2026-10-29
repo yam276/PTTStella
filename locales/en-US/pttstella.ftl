@@ -548,7 +548,7 @@ filters-import-apply = Merge and save
 filters-import-loading = Reading account list…
 filters-import-cancelled = Import cancelled; account lists unchanged
 filters-import-stale = Import preview expired; choose the file again
-filters-import-preview = Read { $count } entries; skipped { $skipped } unsupported rules; adapted { $adjusted } marked or stronger blocking rules. Merged preview: B masks content, C blacks out rows, W highlights IDs. Allow rules win; external colours are ignored. Choose Merge and save to apply.
+filters-import-preview = Read { $count } entries; skipped { $skipped } unsupported rules; adapted { $adjusted } entries. B masks content and keeps IDs; C blacks out rows; W highlights IDs. Numbered markers become allow-list colours; the lowest number wins. Numbered entries without a blocking class also become allow rules. Unmarked entries keep a local override or the shared colour. Allow rules win. Inspect colours in the Allow tab, then choose Merge and save to apply.
 filters-import-invalid = Cannot import this list format; source file and current rules preserved
 
 settings-saving = Saving…
