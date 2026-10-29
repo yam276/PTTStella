@@ -171,11 +171,25 @@ impl Files {
     pub(super) fn revoke(&self) {
         self.permit.0.store(true, Ordering::Release);
     }
-    pub(super) async fn finish(&mut self) -> Result<(), String> {
+    pub(super) async fn finish(
+        &mut self,
+        mut settings: Option<&mut super::settings_finish::RetainedEdits>,
+    ) -> Result<(), String> {
         self.revoke();
         let mut errors = Vec::new();
         while self.busy() {
-            if let Some(Error::Failed(error)) = self.next().await.failure() {
+            let completion = self.next().await;
+            if let (
+                Some(settings),
+                Completion::Display {
+                    submitted,
+                    result: Ok(_),
+                },
+            ) = (settings.as_deref_mut(), &completion)
+            {
+                settings.submitted(submitted.clone());
+            }
+            if let Some(Error::Failed(error)) = completion.failure() {
                 errors.push(error);
             }
         }

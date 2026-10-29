@@ -158,7 +158,7 @@ impl Resources {
                     render,
                     connection.shutdown(),
                     credentials,
-                    self.files.finish()
+                    self.files.finish(Some(&mut self.settings))
                 )
             },
             || {

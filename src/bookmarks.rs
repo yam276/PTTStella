@@ -57,7 +57,7 @@ impl Bookmarks {
             old.target = target;
             old.label = label;
         } else {
-            if next.entries.len() == LIMIT {
+            if next.entries.len() >= LIMIT {
                 return Err(crate::msg!("bookmarks-full"));
             }
             next.entries.insert(
@@ -82,6 +82,11 @@ impl Bookmarks {
         Ok(next)
     }
     pub fn encode(&self) -> Result<Vec<u8>, String> {
+        // Shared saves can merge individually valid drafts past the item cap.
+        // Enforce it at the serialization owner before either file is replaced.
+        if self.entries.len() > LIMIT {
+            return Err(crate::msg!("bookmarks-full"));
+        }
         let bytes = serde_json::to_vec_pretty(&serde_json::json!({
             "version": 1,
             "entries": self.entries,

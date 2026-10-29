@@ -20,6 +20,14 @@ impl RetainedEdits {
     ) {
         self.store = Some((store, base));
     }
+    /// A successful save drained during shutdown belongs to this editor, even
+    /// when its UI acknowledgement never ran. Keep submitted fields, not the
+    /// merged disk result, so unseen changes from other windows stay external.
+    pub(super) fn submitted(&mut self, submitted: pttstella::settings::AppSettings) {
+        if let Some((_, base)) = self.store.as_mut() {
+            *base = submitted;
+        }
+    }
     pub(super) async fn finish(&mut self, snapshot: Snapshot) -> Result<(), String> {
         if let Some(error) = snapshot.error {
             return Err(error);
