@@ -12,6 +12,16 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## 0.2.2 多開修正 Critic 與發佈（2026-10-29，進行中）
+
+使用者要求再次交由 SubAgent 獨立 Critic，確認多開、共用設定與名單保存沒有回歸後推送 develop 並發佈 0.2.2。兩位 Critic 分別審查保存／UI 基準與診斷／鎖／清理，唯讀工作不碰私人資料或 PTT。先完成修正與本機檢查，再推送正式版本來源，經 develop → main Release PR 與四架構 verify；通過後才合併及公開，公開附件仍只有六個平台套件與 SHA256SUMS，JSON 留 Actions artifacts。正式發佈後 develop 恢復 0.3.0 開發版。
+
+Critic 找到並修正兩項問題：書籤合併可能超過 500 筆卻回報成功，改由序列化 owner 在備份／替換前拒絕；關窗 drain 遺失成功但未 ACK 的設定提交基準，導致最後草稿誤判衝突，改為僅採用本視窗成功的 submitted 推進 retained 基準。兩個新回歸案例在修正前均確實失敗；修正後書籤原檔／備份／重啟可讀保護、最後草稿保存及外窗同欄衝突保護通過，保存 Critic 已獨立覆核。診斷 Critic 無 actionable finding，七項測試及 20 輪雙程序隔離（40 個子程序）全過；Windows runtime 仍待 CI。
+
+本機最終 core 14 commands／2 replays、desktop lib 159／bin 158、多程序整合 7、JS 293、Python tooling 80、Clippy／fmt／docs 通過；0.2.2 診斷 App 的兩個原生 Dioxus 視窗共用診斷根目錄，逐一開工具／PNG／關閉通過，兩份 Finish run_ok／cleanup_ok、Close acknowledged、全部 worker join 與 exit 0 通過。此原生案例只驗雙程序與關閉流程，設定未 ACK 時序由受控的生產 save_display／Files drain 回歸測試證明，不冒充原生即時關窗重現。
+
+本次把 `multi_instance` 獨立程序整合測試加入四架構 CI。Windows／Linux 沒有原生 GUI 驗收，不以 CI 單元／打包結果代替。證據目錄 `.local/verification/release-022-20261029/` 與 `.local/verification/multi-instance-critic-20261029/`。
+
 ## 多程序隔離與共用資料保存（2026-10-29，已完成）
 
 輸入／結果：同時啟動兩個程序並使用相同診斷根目錄，兩者各自記錄、輪替及正常清理，不競爭同一 writer.lock；每次記錄仍有容量及保留範圍。共用設定／黑白名單／書籤／站點以跨程序檔案鎖涵蓋讀取、合併、備份及原子替換。請求攜帶畫面所據的基準快照；不同欄位／項目合併，同一項目的不相容變更拒絕並提示重新載入，不能靜默覆蓋。最近看板只保存新到訪操作及明確清除，不把整份舊歷史重寫回來。
