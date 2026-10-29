@@ -169,6 +169,8 @@ AID 核心另核對 article_navigation 的自製 article-open fixture 與 naviga
 
 一般黑名單變更須跑 core 的 filters suite、desktop lib store 與 bin presentation admission 案例。`--probe-filters OUTPUT_DIRECTORY` 提供自製推文、獨立名單檔與本機 peer，不開 DevTools port、不連 PTT。原生視窗驗證新增／同 ID 更新／移除、拒絕與保存失敗、遮黑與暫時顯示、系統剪貼簿讀回、整頁／選取行 PNG；獨立解碼確認變更只在命中 cell 範圍、選取行與整頁對應裁切完全相同。peer 僅接受 PageDown／PageUp 往返及 Close，管理名單不能送其他 PTT bytes。檢查 `filters-probe.json`，並另以新程序確認規則保存；不能只以畫面有黑色或 DOM 元素存在當作通過。
 
+編輯器框選上色變更另跑 core、desktop lib／bin、完整 JS、Fluent、Clippy 與 docs。`editor_color` 核心涵蓋兩種顯示／插入模式、DBCS 開關、多行與空行、中文半格、既有 SGR 覆寫與未選取尾字原色、截斷／未知色碼拒絕及 23×79 格頁面有界指令；Connection loopback 必須獨立核對原始 bytes、分片回覆、手動打斷、排隊撤銷與重連不重送。`--probe-surface OUTPUT_DIRECTORY editor_color` 需原生框選含空行的三行、色表取消後重開／亮紅黑底套用、匯出 PNG 及正常 Close，由 peer 核對全篇 bytes 與原模式。不得把工具無法點擊或未套用當成通過。
+
 ## 資產與提交
 
 資產與依賴須有來源、授權與版本；合成 fixture 保存獨立 expected。提交前檢查實際 diff，維持獨立 checkout 可建置及驗證。

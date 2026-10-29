@@ -8,6 +8,7 @@ pub(super) enum Kind {
     Preload,
     Browse,
     Destination,
+    EditorColor,
 }
 pub(super) struct Completion {
     pub(super) kind: Kind,

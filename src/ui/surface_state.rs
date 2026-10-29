@@ -754,6 +754,29 @@ impl SurfaceState {
             s.identity == identity && s.request == request && s.input_epoch == view.input_epoch
         }) && self.current(identity, view).is_some()
     }
+    pub(super) fn editor_selection(
+        &self,
+        identity: Identity,
+        request: u64,
+        view: &View,
+    ) -> Option<selection::Selection> {
+        if !self.copied(identity, request, view) || !self.current(identity, view)?.editor {
+            return None;
+        }
+        let spans = &self.selected.as_ref()?.spans;
+        let first = spans.first()?;
+        let last = spans.last()?;
+        Some(selection::Selection::Range {
+            anchor: selection::Position {
+                row: first.row,
+                col: first.start,
+            },
+            focus: selection::Position {
+                row: last.row,
+                col: last.end.checked_sub(1)?,
+            },
+        })
+    }
     pub(super) fn copy_text(
         &self,
         identity: Identity,

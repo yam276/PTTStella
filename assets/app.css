@@ -178,6 +178,17 @@ button.primary .settings-icon { color: inherit; }
     box-shadow: 0 8px 28px #0009; user-select: none;
 }
 .surface-context-menu[hidden], .surface-context-menu button[hidden] { display: none; }
+.editor-color-dialog { width: min(440px, calc(100vw - 48px)); color: var(--ink, #e6e1d6); background: #0d1924; border: 1px solid #b99c61; padding: 22px; }
+.editor-color-dialog::backdrop { background: #0008; }
+.editor-color-dialog h2 { margin-top: 0; }
+.editor-color-dialog p { font-size: 13px; line-height: 1.6; }
+.editor-color-dialog fieldset { margin: 12px 0; border: 1px solid #61707d; }
+.editor-color-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+.editor-color-grid button { height: 36px; min-width: 24px; padding: 0; border-radius: 2px; border: 1px solid #8e949a; font: 12px monospace; cursor: pointer; }
+.editor-color-grid button[aria-pressed="true"] { outline: 2px solid #eac773; outline-offset: 2px; }
+.editor-color-preview { padding: 14px; margin: 14px 0 8px; border: 1px solid #61707d; font-family: monospace; }
+.editor-color-dialog code { display: block; color: #eac773; }
+.editor-color-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .surface-context-menu button {
     display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px;
     padding: 7px 10px; margin: 0; border: 0; border-radius: 6px;

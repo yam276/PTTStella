@@ -4,13 +4,31 @@
 
 ## 目標
 
-目前最新開發診斷交付為 `dist/macos-030-multi-instance-critic/PTTStella.app`（0.3.0-dev.2，含多程序保存與 Critic 補修，見下節）。穩定版診斷交付 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修）保留。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前最新開發診斷交付為 `dist/macos-editor-colour-verified/PTTStella.app`（0.3.0-dev.2，含框選上色與 PTT 色表，合成驗證範圍見下節）；前版 `dist/macos-030-multi-instance-critic/PTTStella.app` 保留供比較。穩定版診斷交付 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修）保留。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 編輯器框選上色（2026-10-29，已實作，合成驗證通過）
+
+輸入／結果：PTT 文章／回文／信件編輯器框選文字，右鍵開啟「文字上色」色彩表；16 色前景、8 色背景、可讀文字預覽與數字色碼，確認套用才送站端輸入。多行逐行起始／重設，空行略過，中文半格選取擴成完整字形。既有 SGR 不刪除、不重送文章文字，於範圍內覆寫舊色碼、結尾重設並恢復未選取文字原色。
+
+Connection 單一 writer 擁有有界工作；先依站端狀態列核對邏輯行／游標／顯示與插入模式，再以色碼顯示及彩色預覽互相驗證來源。所有行完成預檢才開始寫入；每筆游標與色碼等待確認。手動鍵盤、取消等待、斷線／關窗、逾時或畫面不符即停止，不重試已送 bytes，不假稱回滾。成功恢復原模式與插入／取代狀態，確認文字未變及選取／外圍樣式後才回報。
+
+安全範圍：僅目前可完整確認的 80×24 PTT 編輯版型，不跨頁選取。PTT 色碼顯示只呈現一行前 79 格，End 證明來源超過此範圍、特殊控制碼／雙色字中插碼或無法定位時拒絕而不改草稿；插碼後亦不得達到 PTT 511 bytes 單行折行上限。限制是來源驗證，非刪去被裁切內容或假裝上色成功。實作留在 develop 0.3.0-dev.2，不發佈。
+
+驗收：獨立 byte 編輯器模型核對多行／空行、中英混排／半個中文選取、既有 SGR／reset／尾字顏色、兩種顯示與插入／取代模式、DBCS 開關；Connection 實際 loopback 驗證順序、取消／手動打斷／斷線／重連零重送；JS 色彩表確認／取消／過期選取與不可信操作；實際 Dioxus host 的色彩表及合成多行操作另留原生結果，不以單元測試代替實站發文。
+
+結果：核心 8 項（含 23×79 格整頁中文）與 Connection 真實 loopback 3 項通過；desktop lib 170、bin 160 通過，bin 的一個 ignored 是由父測試啟動的診斷子程序入口，未另算通過。完整 JS 297、core 14 commands／2 replays、Fluent、Clippy／fmt／docs 通過。新核對涵蓋不完整回覆等待、不變更未選取尾字、typed／trusted／generation 與 ACK 選取保存、所有行預檢後才插碼及中途畫面異動停止。Home／End 與已確認的 ASCII 游標段可合併送鍵，避免整頁逐字網路往返；來源 glyph 查找使用既有排序的二分搜尋，不對每行每個字掃整張 frame。
+
+原生 macOS arm64 真正 Dioxus／WKWebView：原生滑鼠工具持續回報 noWindowsAvailable；使用者手動操作回報色表可開啟，讀回確認一個第三行單行變色，未把這輪當成完整多行通過。之後在明確 `editor_color` 本機模式加入固定三行選取入口，由 trusted AX 按鈕建立同一 Rust selection，再以真正色表取消（input epoch 仍 0）、重開、選亮紅／黑底及套用。這是固定 fixture 範圍及原生色表操作，沒有合成 trusted pointer 或放寬一般事件准入，也不宣稱自動化完成了原生拖曳。
+
+最終來源 PNG 960×576 的獨立解碼：首行未選取 P 111 個灰階像素、選取部分 465 個紅色像素、第三行 583 個紅色像素，空行全黑。合成 peer 在 Close 獨立核對全部原始文章 bytes、既有 SGR 保留／新色覆寫及原彩色預覽／取代模式；surface-probe passed、一次上色、正常 Close acknowledged、所有 owner join、Finish run_ok／cleanup_ok 與程序 exit 0。該 App 為診斷編譯，置頂且不搶焦點；一般啟動沒有測試按鈕。未登入 PTT、未發文，實站草稿、原生多行拖曳與其他平台 GUI 仍待驗，不以此合成結果代替。
+
+首輪未收到任何上色指令、第二輪只有單行而非指定三行，以及測試入口誤以舊的一次性 Paint.probe 旗標作准入的輪次，均保留 failed／not_ready 的原始報告；入口改綁明確 case，沒有改 peer expected。最終證據 `.local/verification/editor-colour-20261029/native-verified/`，自動檢查與失敗輪次同根目錄保留。驗收後清除本工作 `dist/macos-editor-colour-dev`、`dist/macos-editor-colour-final`、`dist/macos-editor-colour-delivery` 三個非活動過時 App 目錄（約 119.6 MB），精確路徑與保留原因記於同根 cleanup-owned-output.json；保留唯一交付、必要證據與共用 Cargo cache，沒有建立或刪除分支／worktree。不推進 main／master、不發佈。
 
 ## 0.2.2 多開修正 Critic 與發佈（2026-10-29，已完成）
 

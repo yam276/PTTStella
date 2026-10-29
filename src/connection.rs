@@ -93,6 +93,12 @@ enum Command {
         generation: u64,
         bytes: Vec<u8>,
     },
+    EditorColor {
+        stamp: Stamp,
+        selection: crate::selection::Selection,
+        color: crate::editor_color::Color,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
     Login {
         stamp: Stamp,
         credentials: Credentials,
@@ -312,6 +318,11 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    pub fn start_editor_color_probe(bytes: Vec<u8>) -> Result<Self, String> {
+        let connection = Self::start_owned_probe(bytes, probe::Scenario::EditorColor)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     pub fn start_inline_pages_probe(first: Vec<u8>, second: Vec<u8>) -> Result<Self, String> {
         let connection = Self::start_owned_probe(
             first,
@@ -482,6 +493,26 @@ impl Connection {
             closed: crate::msg!("navigation-service-unavailable"),
         })
     }
+    pub fn request_editor_color(
+        &self,
+        stamp: Stamp,
+        selection: crate::selection::Selection,
+        color: crate::editor_color::Color,
+    ) -> Result<Reply, String> {
+        let (reply, receiver) = oneshot::channel();
+        self.enqueue(Command::EditorColor {
+            stamp,
+            selection,
+            color,
+            reply,
+        })?;
+        Ok(Reply {
+            answer: receiver,
+            deadline: tokio::time::Instant::now() + Duration::from_secs(185),
+            expired: crate::msg!("editor-color-stopped"),
+            closed: crate::msg!("editor-color-stopped"),
+        })
+    }
     fn enqueue(&self, command: Command) -> Result<(), String> {
         self.commands
             .try_send(command)
@@ -565,6 +596,8 @@ impl Connection {
     }
 }
 
+#[cfg(test)]
+mod editor_color_tests;
 mod liveness;
 mod mouse_control;
 mod output;

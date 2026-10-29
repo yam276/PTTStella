@@ -9,7 +9,7 @@ const base={link:-1,selection:false,ready:true,exportReady:true,local:true,ptt:t
 test('station editor offers paste instead of browsing tools, and retains ANSI selection copy',()=>{
     assert.deepEqual([...contextMenuItems({...base,editor:true}).keys()],['paste']);
     const selected=contextMenuItems({...base,editor:true,selection:true,selectionReady:true,rowsReady:true});
-    assert.deepEqual([...selected.keys()],['copy','copy-ansi','export-rows','copy-image-rows','paste']);
+    assert.deepEqual([...selected.keys()],['copy','copy-ansi','export-rows','copy-image-rows','paste','editor-color']);
     assert.equal(contextMenuItems({...base,editor:true,local:false}).get('paste'),false);
     assert.equal(contextMenuItems({...base,editor:true,ready:false}).get('paste'),false);
 });

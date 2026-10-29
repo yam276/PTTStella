@@ -95,7 +95,7 @@ let navigationSequence=0;
 let pendingReadingMove=null;
 let exportBusy=false, exportTask=null;
 let keepAliveGate=null;
-let tools=null,contextMenu=null,articleFind=null;
+let tools=null,contextMenu=null,articleFind=null,editorColor=null;
 let toolAccess={right_click_menu:true,show_floating_button:true};
 let toolsProbeEnabled=false;
 const send=value=>{ sent++; dioxus.send(value); };
@@ -624,7 +624,7 @@ function contextState(index,word=null,replyRow=null){
         &&selectionCache.generation===generation&&selectionCache.revision===revision;
     const picture=inlineImages.pictureState(index);
     return {picture:!!picture,pictureReady:!!picture?.ready,word,replyRow,editor:!!latest?.editor,focused:!!latest?.reply_focus,link:index,selection:hasSelection(),selectionReady,rowsReady:selectionReady&&!exportBusy&&selectionCache.value.rows.end-selectionCache.value.rows.start<=24,
-        ready,exportReady:ready&&!exportBusy,local:stationMouse.local(),ptt:!!latest?.ptt_features,
+        ready,pending:!!latest?.input_pending,exportReady:ready&&!exportBusy,local:stationMouse.local(),ptt:!!latest?.ptt_features,
         reading:latest?.navigation.kind==="article_reading",authors:latest?.navigation.kind==="article_list",images:!!latest?.image_links.length,
         inlineReady:inlineShortcut({key:"Enter"},keyboardState,latest),navigate:canNavigate(),
         first:latest?.navigation.first_line===1,last:latest?.navigation.percent===100};
@@ -651,6 +651,7 @@ function contextAction(action,context,e){
         cancelComposition();cancelDrag();clearSelection();pastePending=true;
         sendInput({kind:"paste_clipboard",presentation:latest.presentation,stamp:stamp(),trusted:true});
     }
+    else if(action==="editor-color")editorColor.open(selectionCache,stamp());
     else if(["account-mask","account-mask-row","account-allow","account-remove-mask","account-remove-mask-row","account-remove-allow"].includes(action)){
         const remove=action.startsWith("account-remove-");
         const policy={"account-mask":"mask","account-mask-row":"mask_row","account-allow":"allow"}[action.replace("account-remove-","account-")];
@@ -816,6 +817,7 @@ const filterUi=createFiltersDialog({tr,send,manage:e=>settingsUi.manage("filters
     reset:e=>policy("reset",e),restore:restoreSettingsPanelFocus,changed:refreshControls});
 tools=createFloatingTools({root:chrome,ball:document.getElementById("tools-ball"),fan:document.getElementById("tools-fan"),panel:toolbar,window,document,tr,
     onSettings:e=>settingsUi.request(e),prepare:()=>{revokeNavigation();stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();released=null;},restore:restoreEditingFocus,changed:refreshKeepAlive});
+editorColor=createEditorColor({root:document.getElementById("editor-color-dialog"),document,palette,tr,identity:contextIdentity,send,restore:focus,changed:refreshControls});
 contextMenu=createSurfaceContextMenu({root:document.getElementById("surface-context-menu"),document,window,
     snapshot:contextIdentity,prepare:()=>{revokeNavigation();stationMouse.cancel();tools.close();cancelHover(true);cancelDrag();released=null;setHover(null);},
     execute:contextAction,restore:focus,changed:refreshControls});
@@ -839,7 +841,7 @@ function captureViewport(event){
         window:[innerWidth,innerHeight],dpr:devicePixelRatio||1,
         draws});
 }
-const bindings=[...articleFind.bindings,...inlineImages.bindings,...contextMenu.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
+const bindings=[...articleFind.bindings,...inlineImages.bindings,...contextMenu.bindings,...editorColor.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
     [keyboard,"beforeinput",beforeinput],
@@ -861,6 +863,14 @@ const bindings=[...articleFind.bindings,...inlineImages.bindings,...contextMenu.
     [viewport,"scroll",repaint],[viewport,"wheel",wheel,{passive:false}],[window,"resize",repaint],[window,"focus",activate],[window,"blur",deactivate],
     [articleLoadCancel,"click",cancelArticleLoad],[articleLoadResume,"click",resumeArticleLoad],
 ];
+// Explicit loopback-fixture controls. They select a known range, without
+// synthesising a trusted pointer event or weakening the production colour gate.
+const colourProbeSelect=document.getElementById("editor-color-probe-select"),colourProbeOpen=document.getElementById("editor-color-probe-open");
+let editorColourProbe=false;
+if(colourProbeSelect&&colourProbeOpen){
+    bindings.push([colourProbeSelect,"click",e=>{if(e.isTrusted&&editorColourProbe&&!blocked()){requestSelection({mode:"range",anchor:{row:0,col:1},focus:{row:2,col:5}});focus();}}],
+        [colourProbeOpen,"click",e=>{if(e.isTrusted&&editorColourProbe)contextAction("editor-color",{index:-1},e);}]);
+}
 for(const [target,event,callback,options] of bindings) target.addEventListener(event,callback,options);
 const diagnostics=createSurfaceDiagnostics({send,document,window,snapshot:()=>{
     const states=[latest?.connected,latest?.input_pending,latest?.output_pending,navigationLocked,navigationRequest,
@@ -970,7 +980,7 @@ async function paint(packet) {
     const previousFailure=latest?.keep_alive_failure;
     const failureChanged=packet.keep_alive_failure!==previousFailure;
     stationMouse.update(packet);
-    generation=packet.generation;revision=packet.frame.revision;latest=packet;contextMenu?.validate();filterUi.paint(packet);refreshStationMouse();
+    generation=packet.generation;revision=packet.frame.revision;latest=packet;contextMenu?.validate();editorColor?.validate();filterUi.paint(packet);refreshStationMouse();
     surface.dataset.presentation=String(packet.presentation);surface.dataset.maskedPushes=String(packet.masked_pushes);surface.dataset.revealed=String(packet.revealed);
     if(changed&&hoverCandidate) {
         const lease=packet.hover,candidate=hoverCandidate;
@@ -997,12 +1007,13 @@ async function paint(packet) {
 }
 focus();
 function revokeSurface(){
-    stopped=true;articleFind.destroy();revokeNavigation();inlineImages.suspend();contextMenu?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
+    stopped=true;articleFind.destroy();revokeNavigation();inlineImages.suspend();contextMenu?.destroy();editorColor?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
     for(const [target,event,callback,options] of bindings)target.removeEventListener(event,callback,options);
 }
 const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
 let cleanupClean=false;
 function runSurfaceProbe(mode){
+            editorColourProbe=mode==="editor_color";
             toolsProbeEnabled=true;
             if(mode==="fullscreen")viewportProbe=true;
             else if(mode==="sites"||mode==="sites_restart")surfaceNote.textContent="Local station probe: loopback Big5/GBK peers only; station favourites, default, input, PNG and shutdown";
@@ -1121,7 +1132,7 @@ finally {
     document.getElementById("font-settings").click();
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
-    cleanupClean=mediaClean&&articleFind.clean()&&contextMenu.clean()&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
+    cleanupClean=mediaClean&&articleFind.clean()&&editorColor.clean()&&contextMenu.clean()&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
         &&sitesUi.clean()&&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&destinationUi.clean()&&bookmarksUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
     try {send({kind:"stopped",clean:cleanupClean,...(toolsProbeEnabled?{tools:tools.observations()}:{})});} catch(_) { /* join still acknowledges cleanup */ }
 }

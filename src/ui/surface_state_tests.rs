@@ -175,6 +175,36 @@ fn displayed(state: &mut SurfaceState, view: &View) -> Identity {
     state.acknowledge(identity).unwrap();
     identity
 }
+#[test]
+fn editor_colouring_consumes_only_the_acknowledged_rust_selection() {
+    let mut current = view();
+    current.frame =
+        pttstella::editor_color::fixture::Editor::new(&["Ab中文", "下一行"], true, true, true)
+            .frame();
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let identity = displayed(&mut state, &current);
+    let selection = Selection::Range {
+        anchor: selection::Position { row: 0, col: 3 },
+        focus: selection::Position { row: 1, col: 5 },
+    };
+    assert!(state.editor_selection(identity, 11, &current).is_none());
+    state.select(identity, 11, &selection, &current).unwrap();
+    let Selection::Range { anchor, focus } =
+        state.editor_selection(identity, 11, &current).unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!((anchor.row, anchor.col, focus.row, focus.col), (0, 2, 1, 5));
+    assert!(state.editor_selection(identity, 12, &current).is_none());
+    let mut intervened = current.clone();
+    intervened.input_epoch += 1;
+    assert!(state.editor_selection(identity, 11, &intervened).is_none());
+    let mut reconnected = current.clone();
+    reconnected.generation += 1;
+    assert!(state.editor_selection(identity, 11, &reconnected).is_none());
+    state.clear_selection(identity, 11);
+    assert!(state.editor_selection(identity, 11, &current).is_none());
+}
 fn hover(state: &mut SurfaceState, identity: Identity, view: &View) {
     let link = state.current(identity, view).unwrap().links[0].clone();
     state.begin_hover(Lease {
