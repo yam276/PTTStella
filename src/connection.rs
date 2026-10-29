@@ -289,6 +289,14 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    pub fn start_live_updates_probe(origin: Option<String>) -> Result<Self, String> {
+        let connection = Self::start_owned_probe(
+            probe::live_updates::page(1, 23, 45, origin.as_deref())?,
+            probe::Scenario::LiveUpdates { origin },
+        )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     pub fn start_filters_probe() -> Result<Self, String> {
         let connection =
             Self::start_owned_probe(probe::filters_page(false)?, probe::Scenario::Filters)?;

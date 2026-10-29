@@ -890,6 +890,7 @@ impl Session {
                         board = article.board().as_str(),
                         aid = article.aid().as_str()
                     ),
+                    Destination::Refresh { .. } => crate::msg!("article-updates-refreshing"),
                 };
                 self.navigation_job = Some(NavigationJob {
                     flow,
@@ -959,6 +960,7 @@ impl Session {
                 board = article.board().as_str(),
                 aid = article.aid().as_str()
             ),
+            Destination::Refresh { .. } => crate::msg!("article-updates-refreshing"),
         };
         self.view.destination = NavigationProgress::Reached { serial, target };
         self.dirty = true;

@@ -199,6 +199,12 @@ pub(super) enum SurfaceEvent {
         resume: bool,
         trusted: bool,
     },
+    ArticleUpdates {
+        generation: u64,
+        article: u64,
+        enabled: bool,
+        trusted: bool,
+    },
     DestinationSubmit {
         request: u64,
         stamp: Stamp,
@@ -413,6 +419,7 @@ impl SurfaceEvent {
                 | Self::FiltersReveal { .. }
                 | Self::Navigate { .. }
                 | Self::ArticleLoad { .. }
+                | Self::ArticleUpdates { .. }
                 | Self::KeepAlive { .. }
                 | Self::EditorColor { .. }
         )
@@ -490,6 +497,11 @@ impl SurfaceEvent {
                 *trusted && stamp.generation == generation
             }
             ArticleLoad {
+                trusted,
+                generation: source,
+                ..
+            } => *trusted && *source == generation,
+            ArticleUpdates {
                 trusted,
                 generation: source,
                 ..
@@ -912,6 +924,14 @@ mod article_load_tests {
             };
             assert!(event.requires_ptt());
             assert_eq!(event.admitted(7), expected);
+            let updates = SurfaceEvent::ArticleUpdates {
+                generation,
+                article: 42,
+                enabled: true,
+                trusted,
+            };
+            assert!(updates.requires_ptt());
+            assert_eq!(updates.admitted(7), expected);
         }
     }
 }

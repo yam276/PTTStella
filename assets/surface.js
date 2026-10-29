@@ -95,7 +95,7 @@ let navigationSequence=0;
 let pendingReadingMove=null;
 let exportBusy=false, exportTask=null;
 let keepAliveGate=null;
-let tools=null,contextMenu=null,articleFind=null,editorColor=null;
+let tools=null,contextMenu=null,articleFind=null,editorColor=null,articleUpdates=null;
 let toolAccess={right_click_menu:true,show_floating_button:true};
 let toolsProbeEnabled=false;
 const send=value=>{ sent++; dioxus.send(value); };
@@ -726,6 +726,7 @@ function refreshKeepAlive() {
     const ready=!settingsActive&&!articleFind?.isOpen()&&!!latest?.keep_alive&&!inlineImages.active()&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
     const reason=readingPauseReason(),reading=!!latest?.article&&!reason;
     refreshArticleLoad(reason);
+    articleUpdates?.refresh(reason);
     const current=stamp(),key=JSON.stringify([current,latest?.presentation,latest?.article?.id,ready,reading,latest?.keep_alive_ready,latest?.keep_alive]);
     keepAlive.textContent=latest?.keep_alive?tr("keepalive-on"):tr("keepalive-off");
     keepAlive.setAttribute("aria-pressed",String(!!latest?.keep_alive));
@@ -830,6 +831,9 @@ function requestInline(target,e){
 }
 const inlineImages=installInlineImages({surface,canvas,viewport,tr,render,find:articleFind,redraw:()=>{if(latest)draw(latest);},changed:refreshKeepAlive,notice:text=>{surfaceNote.textContent=text;},
     allowed:()=>!stopped&&!blocked()&&!tools?.busy()&&inlineShortcut({key:"Enter"},keyboardState,latest),request:requestInline});
+articleUpdates=createArticleUpdates({root:document.getElementById("article-updates"),status:document.getElementById("article-updates-status"),toggle:document.getElementById("article-updates-toggle"),fresh:document.getElementById("article-updates-new"),tr,current:()=>latest,send,
+    bottom:()=>Math.max(0,surface.offsetTop+(grid?.height??0)/(grid?.ratio??1)-viewport.clientHeight),position:()=>viewport.scrollTop,
+    move:top=>{viewport.scrollTop=top;repaint();},restore:focus,changed:refreshKeepAlive});
 let viewportProbe=false,viewportCapture=0;
 function captureViewport(event){
     if(!viewportProbe||stopped||!event.isTrusted||viewportCapture>=8)return;
@@ -841,7 +845,7 @@ function captureViewport(event){
         draws});
 }
 const toast=createSurfaceToast({root:document.getElementById("surface-toast"),message:surfaceNote,dismiss:document.getElementById("toast-dismiss"),document,MutationObserver,restore:restoreEditingFocus});
-const bindings=[...toast.bindings,...articleFind.bindings,...inlineImages.bindings,...contextMenu.bindings,...editorColor.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
+const bindings=[...articleUpdates.bindings,[viewport,"scroll",()=>articleUpdates.scroll()],...toast.bindings,...articleFind.bindings,...inlineImages.bindings,...contextMenu.bindings,...editorColor.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
     [keyboard,"beforeinput",beforeinput],
@@ -870,6 +874,12 @@ let editorColourProbe=false;
 if(colourProbeSelect&&colourProbeOpen){
     bindings.push([colourProbeSelect,"click",e=>{if(e.isTrusted&&editorColourProbe&&!blocked()){requestSelection({mode:"range",anchor:{row:0,col:1},focus:{row:2,col:5}});focus();}}],
         [colourProbeOpen,"click",e=>{if(e.isTrusted&&editorColourProbe)contextAction("editor-color",{index:-1},e);}]);
+}
+// Only present in the explicit live_updates loopback fixture. Trusted AX
+// clicks exercise the production local movement owner, without synthetic keys.
+for(const [id,action] of [["live-updates-home","first"],["live-updates-end","last"]]) {
+    const button=document.getElementById(id);
+    if(button)bindings.push([button,"click",e=>{if(e.isTrusted){readingMove({action},e);focus();}}]);
 }
 for(const [target,event,callback,options] of bindings) target.addEventListener(event,callback,options);
 const diagnostics=createSurfaceDiagnostics({send,document,window,snapshot:()=>{
@@ -994,7 +1004,8 @@ async function paint(packet) {
         else if(surfaceNote.textContent===previousFailure) surfaceNote.textContent="";
     }
     refreshNavigation();refreshArticleLoad();
-    const geometry=draw(packet);resumeReadingMove();send({kind:"painted",presentation:packet.presentation,revision,generation});if(packet.probe) probe(packet,geometry);
+    const followReplies=articleUpdates?.beforePaint(packet);
+    const geometry=draw(packet);articleUpdates?.afterPaint(packet,followReplies);resumeReadingMove();send({kind:"painted",presentation:packet.presentation,revision,generation});if(packet.probe) probe(packet,geometry);
     surface.dataset.revision=String(revision);
     surface.dataset.fontSize=String(packet.settings.font_size);surface.dataset.baseline=String(packet.settings.baseline);
     surface.dataset.cursorRow=String(packet.frame.cursor[1]);surface.dataset.inputEpoch=String(packet.input_epoch);
@@ -1007,7 +1018,7 @@ async function paint(packet) {
 }
 focus();
 function revokeSurface(){
-    stopped=true;toast.destroy();articleFind.destroy();revokeNavigation();inlineImages.suspend();contextMenu?.destroy();editorColor?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
+    stopped=true;articleUpdates.destroy();toast.destroy();articleFind.destroy();revokeNavigation();inlineImages.suspend();contextMenu?.destroy();editorColor?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
     for(const [target,event,callback,options] of bindings)target.removeEventListener(event,callback,options);
 }
 const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
@@ -1087,6 +1098,7 @@ const route=createSurfaceRouter({
     settings_close:()=>settingsUi.escape(),settings_open:settingsUi.open,font_catalog:settingsUi.catalog,font_preview:settingsUi.preview,
     profile_result:async data=>{await settingsUi.profile(data);showNotice(data.notice);},
     update_status:settingsUi.updateStatus,
+    article_updates:data=>articleUpdates.receive(data),
     settings_saved:data=>{settingsUi.saved(data);showNotice(data.notice);},
     selection:receiveSelection,
     paste_result:data=>{

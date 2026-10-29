@@ -745,3 +745,12 @@ toast-connecting-title = Connecting
 toast-reopen-title = Reopen PTTStella
 toast-reconnect = Reconnect
 toast-connecting-action = Connecting…
+
+article-updates-start = Update replies
+article-updates-pause = Pause updates
+article-updates-refreshing = Updating replies…
+article-updates-waiting = Replies update every 15 seconds
+article-updates-paused = Reply updates paused: interacting or window inactive
+article-updates-stopped = Updates stopped; check the station screen or reopen the article
+article-updates-off = Reply updates are off
+article-updates-new = { $count } new replies · View

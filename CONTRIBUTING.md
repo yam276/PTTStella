@@ -243,3 +243,6 @@ Control 與工具列焦點使用 `--probe-surface OUTPUT_DIRECTORY control_input
 共用設定、黑白名單、書籤、站點與最近看板的保存變更，另跑 `cargo test --locked --features desktop --test multi_instance`、desktop lib／bin 與全 targets Clippy。此測試使用獨立子程序及暫存目錄，核對同步修改、刪除、同項衝突、合併後容量拒絕、歷史清空、鎖定逾時與程序結束釋鎖；不碰使用者資料或連線 PTT。標為 ignored 的 `process_child` 是父測試以 `--ignored` 啟動的輔助入口，不能單獨當成通過證據。
 
 診斷 desktop bin 測試另以兩個子程序同時寫同一根目錄，核對不同 PID／獨立事件檔與 Finish，並驗證舊紀錄保留上限不刪活動或未知資料。原生驗證應同時啟動兩個 Dioxus 合成視窗，指定相同診斷根目錄、各自獨立的 probe 輸出，完成 PNG 與正常 Close／全部 owner join。多開不解除 PTT 的同帳號連線限制；保存契約與舊版並行限制見 [多開](docs/multi-instance.md)。
+
+
+文章推文更新變更另跑 desktop lib／bin、核心 gate、全部 JS／Fluent、Clippy 與 docs。獨立 expected 核對 Q／AID／重新進入／原尾行、錯誤身分與標頭、未知／分段提示、逾時、尾段追加／修改、scope 撤銷、取消及手動輸入後晚到查詢零續送。JS 覆蓋底部跟隨、往回閱讀位置不變／新增提示、明確跳轉、停用與舊 scope、未授權按鈕及清理。`--probe-surface OUTPUT_DIRECTORY live_updates --media-origin LOOPBACK_ORIGIN` 使用自製 45→48→51 行文章，peer 只接受最初 PageDown 及兩次精確 Q／空白／#／AID／Q／空白／Right／原尾行／PageDown，之後接受最多 64 次相同驗證路徑的無新內容檢查（不能多送 PageDown）及 Close；需在實際 WebView 核對底部跟隨、往回讀只提示、點提示跳轉、同一圖片 batch／一次 HTTP、暫停後無額外輸入、PNG、Close acknowledged、全部 owner join 及 exit 0。前景限制不得為探針放寬；合成成功不代替實站部署的資訊框／新推文驗證。

@@ -1,5 +1,6 @@
 //! PTT-specific screen state. This is not a shell, PTY or general terminal emulator.
 pub mod article_navigation;
+pub mod article_refresh;
 pub mod article_target;
 pub mod board_navigation;
 pub mod bookmarks;

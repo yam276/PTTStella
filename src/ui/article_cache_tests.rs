@@ -989,3 +989,62 @@ fn terminal_article_edges_only_switch_on_fresh_arrows_when_enabled() {
         assert_eq!(terminal_arrow_boundary(&key, &context, true), None);
     }
 }
+
+#[test]
+fn refresh_appends_overlapping_tail_without_replacing_scope_and_rejects_tail_edits() {
+    for changed in [false, true] {
+        let mut cache = ArticleCache::default();
+        cache.project(&mut page(1, 23, 51));
+        let mut old = page(23, 45, 100);
+        cache.project(&mut old);
+        let id = old.article.as_ref().unwrap().id;
+        assert_eq!(
+            old.article.as_ref().unwrap().load,
+            Some(LoadState::Complete)
+        );
+        cache.begin_refresh();
+        let mut refreshed = page(23, 45, 93);
+        if changed {
+            refreshed
+                .frame
+                .glyphs
+                .iter_mut()
+                .find(|g| g.row == 4 && g.col == 0)
+                .unwrap()
+                .text = "X".into();
+        }
+        cache.project(&mut refreshed);
+        assert_eq!(refreshed.article.as_ref().unwrap().id, id);
+        if changed {
+            assert_eq!(
+                refreshed.article.as_ref().unwrap().load,
+                Some(LoadState::Changed)
+            );
+            assert_eq!(lines(&refreshed), lines(&old));
+        } else {
+            assert_eq!(
+                refreshed.article.as_ref().unwrap().load,
+                Some(LoadState::Loading)
+            );
+            let mut appended = page(26, 48, 100);
+            cache.project(&mut appended);
+            assert_eq!(appended.article.as_ref().unwrap().id, id);
+            assert_eq!(
+                appended.article.as_ref().unwrap().load,
+                Some(LoadState::Complete)
+            );
+            assert_eq!(
+                lines(&appended),
+                (1..=48).map(|n| format!("line {n:04}")).collect::<Vec<_>>()
+            );
+            cache.begin_refresh();
+            let mut unchanged = page(26, 48, 100);
+            cache.project(&mut unchanged);
+            assert_eq!(
+                unchanged.article.as_ref().unwrap().load,
+                Some(LoadState::Complete)
+            );
+            assert_eq!(lines(&unchanged), lines(&appended));
+        }
+    }
+}

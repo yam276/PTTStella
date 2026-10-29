@@ -1486,3 +1486,84 @@ fn adjacent_switch_cannot_recapture_the_queued_old_article() {
         Some(super::super::article_cache::LoadState::Complete)
     );
 }
+
+#[test]
+fn refresh_holds_the_acknowledged_article_until_verified_reentry_and_cancels_on_switch() {
+    use pttstella::article_target::ArticleTarget;
+    use pttstella::navigation_job::{Destination, Progress};
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut source = Screen::new(80, 24).unwrap();
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/article-open.json")).unwrap();
+    source.feed(
+        &pttstella::encoding::encode(
+            &fixture["screens"]["reading"]
+                .as_str()
+                .unwrap()
+                .replace("1/3 頁 (33%)", "1/1 頁 (100%)"),
+        )
+        .unwrap(),
+    );
+    view.frame = source.frame();
+    let original = displayed(&mut state, &view);
+    let id = state.reading_progress().unwrap().0;
+    assert!(state.updates_status().unwrap().available);
+    assert!(!state.updates_action(6, id, true));
+    assert!(state.updates_action(7, id, true));
+    assert!(matches!(
+        state.next_update(&view),
+        Some(Destination::Refresh { .. })
+    ));
+    let stamp = view.stamp();
+    view.destination = Progress::Active {
+        serial: 1,
+        operation: stamp,
+        target: Destination::Board {
+            board: pttstella::board_navigation::BoardName::parse("Stella").unwrap(),
+        },
+    };
+    state.update(&view);
+    assert!(state.updates_holding());
+    source.feed(b"\x1b[2J\x1b[Hsynthetic intermediate query");
+    view.frame = source.frame();
+    view.input_epoch += 1;
+    state.update(&view);
+    assert!(state.queue(&view, false, &Default::default()).is_none());
+    assert_eq!(
+        state
+            .displayed
+            .as_ref()
+            .unwrap()
+            .article
+            .as_ref()
+            .unwrap()
+            .id,
+        id
+    );
+    source.feed(
+        &pttstella::encoding::encode(
+            &fixture["screens"]["reading"]
+                .as_str()
+                .unwrap()
+                .replace("1/3 頁 (33%)", "1/1 頁 (100%)"),
+        )
+        .unwrap(),
+    );
+    view.frame = source.frame();
+    view.destination = Progress::Reached {
+        serial: 1,
+        target: Destination::Article(ArticleTarget::new("Stella", "00000101").unwrap()),
+    };
+    state.update(&view);
+    assert!(!state.updates_holding());
+    let refreshed = displayed(&mut state, &view);
+    assert_ne!(refreshed, original);
+    assert_eq!(state.reading_progress().unwrap().0, id);
+    assert!(state.updates_status().unwrap().enabled);
+    assert!(!state.updates_status().unwrap().busy);
+    state.article_input(&view, b"\x1b[D");
+    assert!(state.updates_status().is_none());
+    assert!(!state.updates_action(7, id, true));
+    assert!(state.next_update(&view).is_none());
+}

@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 pub(super) enum Packet<'a> {
     Diagnostics(bool),
     UpdateStatus(pttstella::updates::Status),
+    ArticleUpdates(Option<super::article_updates::Status>),
     SitesOpen {
         request: u64,
         data: super::sites::Snapshot,

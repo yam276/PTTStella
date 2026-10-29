@@ -42,6 +42,7 @@ pub(super) struct Reading {
     pub last_line: usize,
     pub end: bool,
     pub load: Option<LoadState>,
+    pub reply_count: usize,
     pub percent_cells: Option<std::ops::Range<usize>>,
     pub page_cells: Option<std::ops::Range<usize>>,
     pub range_cells: Option<ReadingRangeCells>,
@@ -83,6 +84,7 @@ pub(super) struct ArticleCache {
     pages: BTreeMap<(usize, usize), CachedPage>,
     fetch: Option<Fetch>,
     loader: Loader,
+    refreshing: bool,
 }
 
 struct Fetch {
@@ -174,6 +176,35 @@ pub(super) fn reading_intent(bytes: &[u8]) -> Option<pttstella::navigation::Inte
     })
 }
 impl ArticleCache {
+    pub(super) fn refresh_destination(&self) -> Option<pttstella::navigation_job::Destination> {
+        if self.load_state() != Some(LoadState::Complete) || *self.rows.first_key_value()?.0 != 1 {
+            return None;
+        }
+        let head: [String; 3] = std::array::from_fn(|i| {
+            self.rows
+                .get(&(i + 1))
+                .map(|r| {
+                    r.glyphs
+                        .iter()
+                        .map(|g| g.text.as_str())
+                        .collect::<String>()
+                        .trim_end()
+                        .to_owned()
+                })
+                .unwrap_or_default()
+        });
+        let name = head[0].strip_prefix("作者")?.rsplit_once("看板")?.1.trim();
+        let board = pttstella::board_navigation::BoardName::parse(name).ok()?;
+        Some(pttstella::navigation_job::Destination::Refresh { board, head })
+    }
+    pub(super) fn begin_refresh(&mut self) {
+        self.refreshing = true;
+        self.turning = false;
+        self.loader.state = Some(LoadState::Loading);
+        self.loader.awaiting = None;
+        self.loader.steps = 0;
+        self.loader.at_head = true;
+    }
     pub(super) fn progress(&self) -> Option<(u64, usize, usize, Option<LoadState>)> {
         Some((
             self.serial,
@@ -623,6 +654,18 @@ impl ArticleCache {
                     }
                 }
                 // A forward redraw may reset inherited ink at its leading row.
+                if self.refreshing
+                    && incoming.iter().enumerate().any(|(i, (line, row))| {
+                        self.rows.get(line).is_some_and(|known| {
+                            !same_glyphs_with_leading_reset(&known.glyphs, &row.glyphs, i == 0)
+                        })
+                    })
+                {
+                    self.loader.state = Some(LoadState::Changed);
+                    self.loader.awaiting = None;
+                    self.refreshing = false;
+                    break 'page;
+                }
                 // Keep the already verified full-article style for that overlap;
                 // the source frame remains the exact station screenshot.
                 if let Some((line, row)) = incoming.first_mut()
@@ -668,6 +711,7 @@ impl ArticleCache {
                         .is_some_and(|(n, _)| self.end == Some(*n))
                 {
                     self.loader.state = Some(LoadState::Complete);
+                    self.refreshing = false;
                     self.loader.awaiting = None;
                 }
             }
@@ -777,6 +821,7 @@ impl ArticleCache {
             last_line: last,
             end: self.end == Some(last),
             load: self.loader.state,
+            reply_count: self.rows.values().filter(|row| row.reply.is_some()).count(),
             percent_cells: paint.source_frame.as_ref().and_then(footer_percent_cells),
             range_cells: paint.source_frame.as_ref().and_then(footer_range_cells),
             page_cells: paint
