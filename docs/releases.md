@@ -24,7 +24,7 @@
 
 每個架構有來源 manifest，列出 commit、profile、相依環境及下載檔 SHA-256；公開 Release 的 `SHA256SUMS` 只涵蓋六個平台下載；manifest 及其逐檔校驗保留在 Actions artifacts，不公開附加。下載採完整白名單核對，任何缺檔、混入額外檔案、來源不符、dirty checkout 或雜湊不符均禁止發佈。授權資料從同一 locked Cargo dependency graph 收集。Linux `.deb` 以 `dpkg-shlibdeps` 讀取實際 ELF 依賴；不是通用靜態 Linux 程式，使用方式見 [Linux 套件說明](linux-package.txt)。
 
-所有 runner 執行 Python 打包／政策測試、docs、JS、core、desktop lib／bin 與 desktop Clippy，再以 release profile 編譯。Windows／macOS 沿用原生打包驗證，Linux 核對 ELF／系統 shared libraries／Debian metadata。CI 不啟動產品連線，不把無 GUI 的單元與打包測試當成原生輸入、像素、IME 或實站登入驗收。
+所有 runner 執行 Python 打包／政策測試、docs、JS、core、desktop lib／bin、多程序保存整合測試與 desktop Clippy，再以 release profile 編譯。Windows／macOS 沿用原生打包驗證，Linux 核對 ELF／系統 shared libraries／Debian metadata。CI 不啟動產品連線，不把無 GUI 的單元與打包測試當成原生輸入、像素、IME 或實站登入驗收。
 
 Windows job 額外安裝固定版 Inno Setup，執行原生合成前置政策 gate，以靜態 CRT 與內嵌授權的同一次 App 編譯產生 Setup 和免安裝 EXE；本機 ZIP 僅供開發／驗證，不上傳 Release。打包器拒絕非系統 DLL 依賴，將免安裝 EXE 複製至空目錄執行授權匯出，比對編入內容後才交付。這不建立 WebView、不連線，也不當作 GUI 通過。來源 manifest 必須列出兩個 Windows EXE，缺任一個或混入額外 ZIP／裸 DLL 均不能發佈。公開 Release 保留下載檔與 SHA256SUMS，來源 manifest 仍在 Actions artifacts 驗證；使用者擇一下載。兩者的 WebView2 需求及實測邊界見 [Windows 安裝包](windows-installer.md)。
 
