@@ -1,19 +1,20 @@
 //! User configuration paths and bounded, backed-up persistence.
 use super::{AppSettings, MAX_SETTINGS_BYTES};
-use crate::storage;
-use std::{
-    fs::File,
-    io::{ErrorKind, Read},
-    path::PathBuf,
+use crate::storage::{
+    ReadError,
+    shared::{self, Document},
 };
+use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct Store {
-    path: PathBuf,
+    document: Document,
 }
 impl Store {
     pub fn at(path: PathBuf) -> Self {
-        Self { path }
+        Self {
+            document: Document::new(path),
+        }
     }
     pub fn system() -> Result<Self, String> {
         let dirs = directories::ProjectDirs::from("", "", "PTTStella")
@@ -21,24 +22,14 @@ impl Store {
         Ok(Self::at(dirs.config_dir().join("settings.json")))
     }
     pub fn read(&self) -> Result<Option<Vec<u8>>, String> {
-        let file = match File::open(&self.path) {
-            Ok(file) => file,
-            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(error) => {
-                return Err(crate::msg!(
-                    "settings-read-failed",
-                    error = error.to_string()
-                ));
-            }
-        };
-        let mut bytes = Vec::new();
-        file.take((MAX_SETTINGS_BYTES + 1) as u64)
-            .read_to_end(&mut bytes)
-            .map_err(|e| crate::msg!("settings-read-detail", e = e.to_string()))?;
-        if bytes.len() > MAX_SETTINGS_BYTES {
-            return Err(crate::msg!("settings-too-large"));
-        }
-        Ok(Some(bytes))
+        self.document
+            .read(MAX_SETTINGS_BYTES)
+            .map_err(|error| match error {
+                ReadError::Io(error) => {
+                    crate::msg!("settings-read-failed", error = error.to_string())
+                }
+                ReadError::TooLarge => crate::msg!("settings-too-large"),
+            })
     }
     pub fn load(&self) -> Result<AppSettings, String> {
         match self.read()? {
@@ -47,21 +38,64 @@ impl Store {
         }
     }
     pub fn save(&self, draft: AppSettings) -> Result<AppSettings, String> {
-        let settings = draft.validate().map_err(|error| error.to_string())?;
-        let bytes = serde_json::to_vec_pretty(&settings).map_err(|e| e.to_string())?;
-        if bytes.len() > MAX_SETTINGS_BYTES {
-            return Err(crate::msg!("settings-save-too-large"));
-        }
-        let previous = self.read()?;
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| crate::msg!("settings-directory-failed", e = e.to_string()))?;
-        }
-        if let Some(previous) = previous {
-            storage::replace(&self.path.with_extension("json.bak"), &previous)?;
-        }
-        storage::replace(&self.path, &bytes)?;
-        Ok(settings)
+        self.save_from(&self.document.baseline(AppSettings::decode)?, draft)
+    }
+    pub fn save_from(&self, base: &AppSettings, draft: AppSettings) -> Result<AppSettings, String> {
+        let draft = draft.validate()?;
+        self.document
+            .update(MAX_SETTINGS_BYTES, None, |bytes, unchanged| {
+                let current = match bytes {
+                    None => AppSettings::default(),
+                    Some(bytes) => match AppSettings::decode(bytes) {
+                        Ok(value) => value,
+                        // Explicit recovery of the exact corrupt file observed at load.
+                        Err(_) if unchanged => base.clone(),
+                        Err(error) => return Err(error),
+                    },
+                };
+                let mut merged = current.clone();
+                merged.display.fonts = shared::field(
+                    &base.display.fonts,
+                    &draft.display.fonts,
+                    &current.display.fonts,
+                )?;
+                merged.display.font_size = shared::field(
+                    &base.display.font_size,
+                    &draft.display.font_size,
+                    &current.display.font_size,
+                )?;
+                merged.display.baseline = shared::field(
+                    &base.display.baseline,
+                    &draft.display.baseline,
+                    &current.display.baseline,
+                )?;
+                merged.language =
+                    shared::field(&base.language, &draft.language, &current.language)?;
+                merged.article_mode = shared::field(
+                    &base.article_mode,
+                    &draft.article_mode,
+                    &current.article_mode,
+                )?;
+                merged.article_boundary_navigation = shared::field(
+                    &base.article_boundary_navigation,
+                    &draft.article_boundary_navigation,
+                    &current.article_boundary_navigation,
+                )?;
+                merged.tools_opacity = shared::field(
+                    &base.tools_opacity,
+                    &draft.tools_opacity,
+                    &current.tools_opacity,
+                )?;
+                merged.tools_access = shared::field(
+                    &base.tools_access,
+                    &draft.tools_access,
+                    &current.tools_access,
+                )?;
+                merged.hover = shared::field(&base.hover, &draft.hover, &current.hover)?;
+                let merged = merged.validate()?;
+                let bytes = serde_json::to_vec_pretty(&merged).map_err(|e| e.to_string())?;
+                Ok((merged, bytes))
+            })
     }
 }
 

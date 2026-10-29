@@ -44,13 +44,13 @@ impl State {
             notice: self.notice.clone(),
         }
     }
-    fn save(&mut self, files: &mut Files, clear: bool) {
+    fn save(&mut self, files: &mut Files, clear: bool, visits: RecentBoards) {
         self.revision = self.revision.saturating_add(1);
         let result = self.store.clone().and_then(|store| {
             files.save_recent(files_recent::Write {
                 store,
                 revision: self.revision,
-                history: self.history.clone(),
+                history: visits,
                 clear,
             })
         });
@@ -75,24 +75,30 @@ impl State {
             return false;
         }
         if self.writable {
-            self.save(files, false);
+            let mut visits = RecentBoards::default();
+            visits.visit(visit.board.clone());
+            self.save(files, false, visits);
         }
         true
     }
     pub(super) fn clear(&mut self, files: &mut Files) {
         self.history = RecentBoards::default();
         self.writable = self.store.is_ok();
-        self.save(files, true);
+        self.save(files, true, RecentBoards::default());
     }
     pub(super) fn complete(&mut self, done: files_recent::Completed) {
         if done.revision != self.revision {
             return;
         }
         self.notice = Some(match done.result {
-            Ok(()) if done.clear && self.history.boards().is_empty() => {
-                pttstella::msg!("recent-cleared")
+            Ok(history) => {
+                self.history = history;
+                if done.clear && self.history.boards().is_empty() {
+                    pttstella::msg!("recent-cleared")
+                } else {
+                    pttstella::msg!("recent-saved")
+                }
             }
-            Ok(()) => pttstella::msg!("recent-saved"),
             Err(error) if done.clear => pttstella::msg!("recent-clear-failed", error = error),
             Err(error) => pttstella::msg!("recent-failed", error = error),
         });

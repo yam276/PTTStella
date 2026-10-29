@@ -1,18 +1,20 @@
-//! Private local rules, separate from portable appearance profiles.
+//! Private local rules, merged under the shared document transaction lock.
 use super::{MAX_BYTES, Rules};
-use std::{
-    fs::File,
-    io::{ErrorKind, Read},
-    path::PathBuf,
+use crate::storage::{
+    ReadError,
+    shared::{self, Document},
 };
+use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct Store {
-    path: PathBuf,
+    document: Document,
 }
 impl Store {
     pub fn at(path: PathBuf) -> Self {
-        Self { path }
+        Self {
+            document: Document::new(path),
+        }
     }
     pub fn system() -> Result<Self, String> {
         let dirs = directories::ProjectDirs::from("", "", "PTTStella")
@@ -20,40 +22,47 @@ impl Store {
         Ok(Self::at(dirs.config_dir().join("filters.json")))
     }
     fn read(&self) -> Result<Option<Vec<u8>>, String> {
-        let file = match File::open(&self.path) {
-            Ok(f) => f,
-            Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(crate::msg!("filters-read-failed", e = e.to_string())),
-        };
-        let mut bytes = Vec::new();
-        file.take((MAX_BYTES + 1) as u64)
-            .read_to_end(&mut bytes)
-            .map_err(|e| crate::msg!("filters-read-failed", e = e.to_string()))?;
-        if bytes.len() > MAX_BYTES {
-            return Err(crate::msg!("filters-too-large"));
-        }
-        Ok(Some(bytes))
+        self.document.read(MAX_BYTES).map_err(|error| match error {
+            ReadError::Io(e) => crate::msg!("filters-read-failed", e = e.to_string()),
+            ReadError::TooLarge => crate::msg!("filters-too-large"),
+        })
     }
     pub fn load(&self) -> Result<Rules, String> {
         self.read()?
             .map_or_else(|| Ok(Rules::default()), |b| Rules::decode(&b))
     }
     pub fn save(&self, rules: Rules) -> Result<Rules, String> {
-        rules.validate().map_err(|error| error.to_string())?;
-        let bytes = serde_json::to_vec_pretty(&rules).map_err(|e| e.to_string())?;
-        if bytes.len() > MAX_BYTES {
-            return Err(crate::msg!("filters-save-too-large"));
-        }
-        let previous = self.read()?;
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| crate::msg!("filters-directory-failed", e = e.to_string()))?;
-        }
-        if let Some(previous) = previous {
-            crate::storage::replace(&self.path.with_extension("json.bak"), &previous)?;
-        }
-        crate::storage::replace(&self.path, &bytes)?;
-        Ok(rules)
+        self.save_from(&self.document.baseline(Rules::decode)?, rules)
+    }
+    pub fn save_from(&self, base: &Rules, rules: Rules) -> Result<Rules, String> {
+        rules.validate()?;
+        self.document.update(MAX_BYTES, None, |bytes, unchanged| {
+            let current = match bytes {
+                None => Rules::default(),
+                Some(bytes) => match Rules::decode(bytes) {
+                    Ok(value) => value,
+                    Err(_) if unchanged => base.clone(),
+                    Err(error) => return Err(error),
+                },
+            };
+            let merged = Rules {
+                version: 4,
+                allow_color: shared::field(
+                    &base.allow_color,
+                    &rules.allow_color,
+                    &current.allow_color,
+                )?,
+                entries: shared::entries(
+                    &base.entries,
+                    &rules.entries,
+                    &current.entries,
+                    |a, b| a.id.eq_ignore_ascii_case(&b.id),
+                )?,
+            };
+            merged.validate()?;
+            let bytes = serde_json::to_vec_pretty(&merged).map_err(|e| e.to_string())?;
+            Ok((merged, bytes))
+        })
     }
 }
 

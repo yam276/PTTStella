@@ -78,7 +78,10 @@ pub(super) enum Completion {
         request: u64,
         result: FileResult<crate::fonts::Catalog>,
     },
-    Display(FileResult<AppSettings>),
+    Display {
+        submitted: AppSettings,
+        result: FileResult<AppSettings>,
+    },
     Hover(FileResult<AppSettings>),
     Filters(FileResult<filters::Rules>),
     FilterImport {
@@ -104,7 +107,7 @@ impl Completion {
             Self::Recent(done) => done.result.err().map(Error::Failed),
             Self::Loaded(result) => result.err(),
             Self::Fonts { result, .. } => result.err(),
-            Self::Display(result) | Self::Hover(result) => result.err(),
+            Self::Display { result, .. } | Self::Hover(result) => result.err(),
             Self::Filters(result) => result.err(),
             Self::FilterImport { result, .. } => result.err(),
             Self::Profile(result) => result.err(),
@@ -257,23 +260,30 @@ pub(super) async fn font_catalog(permit: Permit, request: u64) -> Completion {
 pub(super) async fn save_display(
     permit: Permit,
     store: Result<Store, String>,
+    base: AppSettings,
     draft: AppSettings,
 ) -> Completion {
-    Completion::Display(blocking(permit, move || store?.save(draft)).await)
+    let submitted = draft.clone();
+    Completion::Display {
+        submitted,
+        result: blocking(permit, move || store?.save_from(&base, draft)).await,
+    }
 }
 pub(super) async fn save_hover(
     permit: Permit,
     store: Result<Store, String>,
+    base: AppSettings,
     draft: AppSettings,
 ) -> Completion {
-    Completion::Hover(blocking(permit, move || store?.save(draft)).await)
+    Completion::Hover(blocking(permit, move || store?.save_from(&base, draft)).await)
 }
 pub(super) async fn save_filters(
     permit: Permit,
     store: Result<filters::store::Store, String>,
+    base: filters::Rules,
     rules: Result<filters::Rules, String>,
 ) -> Completion {
-    Completion::Filters(blocking(permit, move || store?.save(rules?)).await)
+    Completion::Filters(blocking(permit, move || store?.save_from(&base, rules?)).await)
 }
 pub(super) async fn save_bookmarks(
     permit: Permit,
@@ -282,7 +292,10 @@ pub(super) async fn save_bookmarks(
 ) -> Completion {
     Completion::Bookmarks {
         request,
-        result: blocking(permit, move || write.store.save(write.draft)).await,
+        result: blocking(permit, move || {
+            write.store.save_from(&write.base, write.draft)
+        })
+        .await,
     }
 }
 pub(super) async fn probe_report(
@@ -776,7 +789,10 @@ pub(super) async fn save_sites(
     Completion::Sites {
         action: write.action,
         request,
-        result: blocking(permit, move || write.store.save(write.draft)).await,
+        result: blocking(permit, move || {
+            write.store.save_from(&write.base, write.draft)
+        })
+        .await,
     }
 }
 
@@ -908,13 +924,13 @@ pub(super) async fn import_filters(
 /// Files::finish has drained earlier writes; preserve unrelated committed fields.
 pub(super) async fn flush_settings(
     store: Store,
+    before: AppSettings,
     change: super::preferences::Change,
 ) -> Result<(), String> {
     blocking(Permit::default(), move || {
-        let before = store.load()?;
         let app = change.apply(before.clone())?;
         if app != before {
-            store.save(app)?;
+            store.save_from(&before, app)?;
         }
         Ok(())
     })

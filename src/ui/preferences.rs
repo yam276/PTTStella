@@ -44,6 +44,7 @@ impl Change {
 pub(super) struct Preferences {
     store: Result<Store, String>,
     app: AppSettings,
+    edit_base: AppSettings,
     display: DisplaySettings,
     warning: Option<String>,
     sample: Frame,
@@ -71,6 +72,7 @@ impl Preferences {
         let display = app.display.resolve().map_err(|error| error.to_string())?;
         Ok(Self {
             store,
+            edit_base: app.clone(),
             app,
             display,
             warning,
@@ -80,6 +82,12 @@ impl Preferences {
 
     pub(super) fn app(&self) -> &AppSettings {
         &self.app
+    }
+    pub(super) fn edit_base(&self) -> &AppSettings {
+        &self.edit_base
+    }
+    pub(super) fn submitted(&mut self, draft: AppSettings) {
+        self.edit_base = draft;
     }
     pub(super) fn display(&self) -> &DisplaySettings {
         &self.display
@@ -110,7 +118,8 @@ impl Preferences {
         Ok(())
     }
 
-    pub(super) fn open_packet(&self) -> Packet<'static> {
+    pub(super) fn open_packet(&mut self) -> Packet<'static> {
+        self.edit_base = self.app.clone();
         Packet::SettingsOpen(Box::new(SettingsOpen {
             hover: self.app.hover,
             article_mode: self.app.article_mode,
@@ -220,5 +229,38 @@ mod tests {
             std::fs::read(path.with_extension("json.bak")).unwrap(),
             b"broken"
         );
+    }
+    #[test]
+    fn successive_client_autosaves_preserve_unseen_external_fields_and_allow_undo() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        let mut preferences = Preferences::from_store(Ok(Store::at(path.clone()))).unwrap();
+        let external = Store::at(path);
+        let base = external.load().unwrap();
+        let mut remote = base.clone();
+        remote.language = pttstella::i18n::Language::English;
+        external.save_from(&base, remote).unwrap();
+        let original = preferences.edit_base().clone();
+        for size in [18.0, 19.0, original.display.font_size] {
+            // The open page still shows its original language while changing font size.
+            let mut submitted = original.clone();
+            submitted.display.font_size = size;
+            let saved = preferences
+                .store()
+                .unwrap()
+                .save_from(preferences.edit_base(), submitted.clone())
+                .unwrap();
+            preferences.commit(saved).unwrap();
+            preferences.submitted(submitted);
+            assert_eq!(
+                preferences.app().language,
+                pttstella::i18n::Language::English
+            );
+            assert_eq!(external.load().unwrap().display.font_size, size);
+            assert_eq!(
+                external.load().unwrap().language,
+                pttstella::i18n::Language::English
+            );
+        }
     }
 }
