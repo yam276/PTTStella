@@ -16,6 +16,9 @@ use std::{
 const FILE_BYTES: u64 = 2 * 1024 * 1024;
 const FILE_COUNT: usize = 4;
 const QUEUE: usize = 256;
+const FINISHED_RUNS: usize = 8;
+const RUN_PREFIX: &str = "pttstella-run-";
+const OWNER: &[u8] = b"PTTStella diagnostics v1\n";
 
 pub(crate) fn diagnostic_build() -> bool {
     option_env!("PTTSTELLA_DIAGNOSTIC_BUILD") == Some("1")
@@ -204,9 +207,28 @@ impl Journal {
                     .join("diagnostics"),
             },
         };
-        Self::at(&directory, FILE_BYTES)
+        Self::isolated(&directory, FILE_BYTES)
             .map(Some)
             .map_err(|error| format!("診斷紀錄無法啟動（{}）：{error}", directory.display()))
+    }
+    fn isolated(root: &Path, limit: u64) -> std::io::Result<Self> {
+        std::fs::create_dir_all(root)?;
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+        let directory = tempfile::Builder::new()
+            .prefix(&format!("{RUN_PREFIX}{stamp:020}-{}-", std::process::id()))
+            .tempdir_in(root)?;
+        options()
+            .write(true)
+            .create_new(true)
+            .open(directory.path().join("owner"))?
+            .write_all(OWNER)?;
+        let journal = Self::at(directory.path(), limit)?;
+        let _ = directory.keep();
+        prune_finished(root);
+        Ok(journal)
     }
     fn at(directory: &Path, limit: u64) -> std::io::Result<Self> {
         std::fs::create_dir_all(directory)?;
@@ -235,13 +257,22 @@ impl Journal {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis();
+        let retention_root = directory
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|name| name.starts_with(RUN_PREFIX))
+            .and_then(|_| directory.parent())
+            .map(Path::to_path_buf);
         let worker = std::thread::Builder::new()
             .name("pttstella-diagnostics".into())
             .spawn(move || {
-                let _lock = lock;
                 let result = write_loop(writer, receiver, &shared, session);
                 if result.is_err() {
                     shared.failed.store(true, Ordering::Relaxed);
+                }
+                drop(lock);
+                if let Some(root) = retention_root {
+                    prune_finished(&root);
                 }
                 result
             })?;
@@ -279,6 +310,103 @@ impl Journal {
         if let Some((_, shared)) = &self.handle.inner {
             shared.stop.store(true, Ordering::Release);
         }
+    }
+}
+
+/// Only our marked, inactive, exact-layout run directories are disposable.
+/// The root lock serializes pruning; active writers and legacy logs are retained.
+fn prune_finished(root: &Path) {
+    let Ok(root_lock) = options()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(root.join("retention.lock"))
+    else {
+        return;
+    };
+    if root_lock.try_lock().is_err() {
+        return;
+    }
+    let Ok(children) = std::fs::read_dir(root) else {
+        return;
+    };
+    let mut finished = Vec::new();
+    // An unexpectedly large/mixed directory is retained, never scanned unboundedly.
+    let children: Vec<_> = children.take(513).collect();
+    if children.len() > 512 {
+        return;
+    }
+    for child in children.into_iter().flatten() {
+        let path = child.path();
+        let Ok(kind) = child.file_type() else {
+            continue;
+        };
+        if !kind.is_dir() || !child.file_name().to_string_lossy().starts_with(RUN_PREFIX) {
+            continue;
+        }
+        let Ok(entries) = std::fs::read_dir(&path) else {
+            continue;
+        };
+        let mut names = Vec::new();
+        let mut safe = true;
+        for entry in entries.take(8) {
+            let Ok(entry) = entry else {
+                safe = false;
+                break;
+            };
+            if !entry.file_type().is_ok_and(|kind| kind.is_file()) {
+                safe = false;
+                break;
+            }
+            let name = entry.file_name();
+            if !matches!(
+                name.to_str(),
+                Some(
+                    "owner"
+                        | "writer.lock"
+                        | "events-0.jsonl"
+                        | "events-1.jsonl"
+                        | "events-2.jsonl"
+                        | "events-3.jsonl"
+                )
+            ) {
+                safe = false;
+                break;
+            }
+            names.push(name);
+        }
+        if !safe
+            || !names.iter().any(|name| name == "writer.lock")
+            || !names.iter().any(|name| name == "owner")
+        {
+            continue;
+        }
+        // Never read an unbounded or linked ownership file.
+        let Ok(Some(owner)) = pttstella::storage::read_bounded(&path.join("owner"), OWNER.len())
+        else {
+            continue;
+        };
+        if owner != OWNER {
+            continue;
+        }
+        let Ok(lock) = options()
+            .read(true)
+            .write(true)
+            .open(path.join("writer.lock"))
+        else {
+            continue;
+        };
+        if lock.try_lock().is_err() {
+            continue;
+        }
+        finished.push((child.file_name(), path, lock));
+    }
+    finished.sort_by(|a, b| b.0.cmp(&a.0));
+    for (_, path, lock) in finished.into_iter().skip(FINISHED_RUNS) {
+        // Session names are unique and never reused. Drop handles for Windows.
+        drop(lock);
+        let _ = std::fs::remove_dir_all(path);
     }
 }
 impl Drop for Journal {
@@ -404,6 +532,130 @@ fn write_loop(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn runs_are_isolated_and_retention_never_touches_active_or_foreign_files() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("events-0.jsonl"), b"legacy").unwrap();
+        let foreign = root
+            .path()
+            .join(format!("{RUN_PREFIX}00000000000000000000-foreign"));
+        std::fs::create_dir(&foreign).unwrap();
+        std::fs::write(foreign.join("keep.txt"), b"foreign").unwrap();
+        let mut active = Journal::isolated(root.path(), 4096).unwrap();
+        for _ in 0..FINISHED_RUNS + 3 {
+            let mut run = Journal::isolated(root.path(), 4096).unwrap();
+            run.handle().bridge("recv", "key", true, 1, 2, 3);
+            run.finish(true, true).await.unwrap();
+        }
+        assert!(active.handle().enabled());
+        active
+            .handle()
+            .bridge("recv", "still_active", true, 1, 2, 3);
+        let owned = || {
+            std::fs::read_dir(root.path())
+                .unwrap()
+                .flatten()
+                .filter(|entry| entry.path().join("owner").is_file())
+                .count()
+        };
+        assert_eq!(owned(), FINISHED_RUNS + 1);
+        active.finish(true, true).await.unwrap();
+        assert_eq!(owned(), FINISHED_RUNS);
+        assert_eq!(
+            std::fs::read(root.path().join("events-0.jsonl")).unwrap(),
+            b"legacy"
+        );
+        assert_eq!(std::fs::read(foreign.join("keep.txt")).unwrap(), b"foreign");
+    }
+    #[tokio::test]
+    #[ignore = "owned subprocess used only by the isolation test"]
+    async fn isolated_child() {
+        let root = PathBuf::from(std::env::var_os("PTTSTELLA_TEST_LOG_ROOT").unwrap());
+        let role = std::env::var("PTTSTELLA_TEST_LOG_ROLE").unwrap();
+        let mut journal = Journal::isolated(&root, 4096).unwrap();
+        journal.handle().bridge("recv", "key", true, 1, 2, 3);
+        std::fs::write(root.join(format!("ready-{role}")), b"ready").unwrap();
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while !root.join("release").exists() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
+        journal.finish(true, true).await.unwrap();
+    }
+    #[test]
+    fn independent_processes_write_the_same_root_without_lock_contention() {
+        struct Child(std::process::Child);
+        impl Drop for Child {
+            fn drop(&mut self) {
+                if self.0.try_wait().ok().flatten().is_none() {
+                    let _ = self.0.kill();
+                }
+                let _ = self.0.wait();
+            }
+        }
+        let root = tempfile::tempdir().unwrap();
+        let mut children = Vec::new();
+        for role in ["a", "b"] {
+            children.push(Child(
+                std::process::Command::new(std::env::current_exe().unwrap())
+                    .args([
+                        "--exact",
+                        "ui::diagnostics::tests::isolated_child",
+                        "--ignored",
+                        "--nocapture",
+                    ])
+                    .env("PTTSTELLA_TEST_LOG_ROOT", root.path())
+                    .env("PTTSTELLA_TEST_LOG_ROLE", role)
+                    .stdout(std::process::Stdio::null())
+                    .spawn()
+                    .unwrap(),
+            ));
+        }
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !["ready-a", "ready-b"]
+            .iter()
+            .all(|name| root.path().join(name).exists())
+        {
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        std::fs::write(root.path().join("release"), b"go").unwrap();
+        for child in &mut children {
+            loop {
+                if let Some(status) = child.0.try_wait().unwrap() {
+                    assert!(status.success());
+                    break;
+                }
+                assert!(Instant::now() < deadline);
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+        let runs: Vec<_> = std::fs::read_dir(root.path())
+            .unwrap()
+            .flatten()
+            .filter(|entry| entry.path().join("owner").is_file())
+            .collect();
+        assert_eq!(runs.len(), 2);
+        let mut pids = std::collections::BTreeSet::new();
+        for run in runs {
+            let records = std::fs::read_to_string(run.path().join("events-0.jsonl")).unwrap();
+            let records: Vec<serde_json::Value> = records
+                .lines()
+                .map(|line| serde_json::from_str(line).unwrap())
+                .collect();
+            assert!(
+                records
+                    .iter()
+                    .any(|r| r["data"]["event"] == "finish" && r["data"]["cleanup_ok"] == true)
+            );
+            let pid = records[0]["pid"].as_u64().unwrap();
+            assert!(records.iter().all(|r| r["pid"].as_u64() == Some(pid)));
+            pids.insert(pid);
+        }
+        assert_eq!(pids.len(), 2);
+    }
     #[test]
     fn rotation_is_bounded_and_only_owns_its_four_log_files() {
         let directory = tempfile::tempdir().unwrap();

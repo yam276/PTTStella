@@ -134,7 +134,7 @@ jobs:
       - name: Verify desktop compilation and unit tests
         run: |
           cargo clippy --locked --features desktop --all-targets -- -D warnings
-          cargo test --locked --features desktop --lib --bin pttstella
+          cargo test --locked --features desktop --lib --bin pttstella --test multi_instance
       - name: Build native release downloads
         run: python tooling/bundle_release.py --out-dir dist/release
       - name: Retain Windows installer policy evidence

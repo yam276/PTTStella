@@ -468,7 +468,7 @@ fn frame_and_preview_packets_keep_typed_identity_and_data_under_payload() {
     );
     assert!(value.get("frame").is_none());
     let directory = tempfile::tempdir().unwrap();
-    let preferences = Preferences::load(Some(directory.path())).unwrap();
+    let mut preferences = Preferences::load(Some(directory.path())).unwrap();
     let open = serde_json::to_value(preferences.open_packet()).unwrap();
     assert_eq!(open["kind"], "settings_open");
     assert!(open["payload"]["sample"]["frame"].is_object());

@@ -28,6 +28,7 @@ pub(super) struct Snapshot {
     pub warning: Option<String>,
 }
 pub(super) struct Write {
+    pub base: Sites,
     pub action: Edit,
     pub store: Store,
     pub draft: Sites,
@@ -85,6 +86,7 @@ impl State {
         }
         draft.validate()?;
         Ok(Write {
+            base: self.sites.clone(),
             action,
             store: self.store.clone()?,
             draft,
@@ -119,7 +121,7 @@ mod tests {
         assert_eq!(state.sites, original);
         state.complete(Err("failed".into()));
         assert_eq!(state.sites, original);
-        state.complete(write.store.save(write.draft));
+        state.complete(write.store.save_from(&write.base, write.draft));
         assert_eq!(State::load(Some(directory.path())).sites, state.sites);
         assert_eq!(state.sites.default.encoding, TextEncoding::Gbk);
         assert!(

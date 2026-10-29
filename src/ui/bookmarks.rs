@@ -17,6 +17,7 @@ pub(super) struct Snapshot {
     pub warning: Option<String>,
 }
 pub(super) struct Write {
+    pub base: Bookmarks,
     pub store: Store,
     pub draft: Bookmarks,
 }
@@ -64,6 +65,7 @@ impl State {
             self.bookmarks.upsert(target, label, created_at)?
         };
         Ok(Write {
+            base: self.bookmarks.clone(),
             store: self.store.clone()?,
             draft,
         })
@@ -90,12 +92,12 @@ mod tests {
         let write = state.edit("#00000101@Stella", "自製", false).unwrap();
         assert!(state.bookmarks.entries().is_empty());
         assert!(!dir.path().join("probe-bookmarks.json").exists());
-        let saved = write.store.save(write.draft).unwrap();
+        let saved = write.store.save_from(&write.base, write.draft).unwrap();
         state.complete(Ok(saved));
         let original = state.bookmarks.clone();
         let write = state.edit("#00000101@stella", "changed", false).unwrap();
         std::fs::create_dir(dir.path().join("probe-bookmarks.json.bak")).unwrap();
-        state.complete(write.store.save(write.draft));
+        state.complete(write.store.save_from(&write.base, write.draft));
         assert_eq!(state.bookmarks, original);
         assert_eq!(State::load(Some(dir.path())).bookmarks, original);
         assert!(state.edit("Stella", "", false).is_err());

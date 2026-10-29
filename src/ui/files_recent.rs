@@ -11,12 +11,12 @@ pub(super) struct Write {
 pub(super) struct Completed {
     pub revision: u64,
     pub clear: bool,
-    pub result: Result<(), String>,
+    pub result: Result<RecentBoards, String>,
 }
 struct Running {
     revision: u64,
     clear_revision: Option<u64>,
-    task: JoinHandle<Result<(), String>>,
+    task: JoinHandle<Result<RecentBoards, String>>,
 }
 #[derive(Default)]
 pub(super) struct Writer {
@@ -31,6 +31,16 @@ impl Writer {
     pub(super) fn enqueue(&mut self, write: Write) {
         if write.clear {
             self.clear_revision = Some(write.revision);
+        }
+        let mut write = write;
+        if !write.clear
+            && let Some(previous) = self.queued.take()
+        {
+            let mut visits = previous.history;
+            for board in write.history.boards().iter().rev() {
+                visits.visit(board.clone());
+            }
+            write.history = visits;
         }
         self.queued = Some(write);
         self.start();
@@ -47,7 +57,7 @@ impl Writer {
             revision: write.revision,
             clear_revision,
             task: tokio::task::spawn_blocking(move || {
-                write.store.save(&write.history, clear_revision.is_some())
+                write.store.record(&write.history, clear_revision.is_some())
             }),
         });
     }
@@ -95,7 +105,7 @@ mod tests {
         let path = dir.path().join("recent.json");
         let store = Store::at(path.clone());
         store
-            .save(&write(&store, 0, "Old", false).history, false)
+            .record(&write(&store, 0, "Old", false).history, false)
             .unwrap();
         let (started, start) = tokio::sync::oneshot::channel();
         let (release, gate) = std::sync::mpsc::channel();
@@ -106,7 +116,7 @@ mod tests {
                 task: tokio::task::spawn_blocking(move || {
                     started.send(()).unwrap();
                     gate.recv_timeout(Duration::from_secs(3)).unwrap();
-                    Ok(())
+                    Ok(RecentBoards::default())
                 }),
             }),
             ..Writer::default()
@@ -160,5 +170,43 @@ mod tests {
                 .is_empty()
         );
         assert_eq!(store.load().unwrap().boards()[0].as_str(), "Next");
+    }
+    #[tokio::test]
+    async fn coalescing_keeps_every_new_visit_in_order_without_replaying_old_snapshots() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::at(dir.path().join("recent.json"));
+        store
+            .record(&write(&store, 0, "Old", false).history, false)
+            .unwrap();
+        let (release, gate) = std::sync::mpsc::channel();
+        let mut writer = Writer {
+            running: Some(Running {
+                revision: 1,
+                clear_revision: None,
+                task: tokio::task::spawn_blocking(move || {
+                    gate.recv_timeout(Duration::from_secs(3)).unwrap();
+                    Ok(RecentBoards::default())
+                }),
+            }),
+            ..Writer::default()
+        };
+        for (index, name) in ["First", "Middle", "Latest"].into_iter().enumerate() {
+            writer.enqueue(write(&store, index as u64 + 2, name, false));
+        }
+        release.send(()).unwrap();
+        writer.next().await;
+        let done = writer.next().await;
+        assert_eq!(done.revision, 4);
+        assert!(!done.clear);
+        let history = done.result.unwrap();
+        assert_eq!(
+            history
+                .boards()
+                .iter()
+                .map(|b| b.as_str())
+                .collect::<Vec<_>>(),
+            ["Latest", "Middle", "First", "Old"]
+        );
+        assert_eq!(store.load().unwrap(), history);
     }
 }

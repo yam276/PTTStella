@@ -697,3 +697,9 @@ update-open = 前往下載新版
 update-available = 有新版本：{ $version }
 update-current = 目前已是最新正式版本，或使用較新的開發版本。
 update-help = 啟動時檢查正式版本，也可手動檢查。取得失敗時不顯示提示；下載後請自行安裝。
+
+storage-document-busy = 其他視窗正在保存資料，請稍後再試。
+
+storage-document-conflict = 其他視窗已修改同一項目，本次未覆蓋。請重新啟動此視窗，載入最新資料後再修改。
+
+storage-document-too-large = 共用資料超過容量上限，未保存。
