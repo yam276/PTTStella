@@ -1,12 +1,43 @@
-PTTStella for macOS
+PTTStella macOS 安裝說明
 
-Extract the ZIP and move PTTStella.app to Applications. Download the arm64 build
-for Apple Silicon or the x64 build for Intel. No Rust or Python is needed.
+下載與安裝
 
-This build has an ad-hoc signature. It is not Developer ID signed or notarized;
-Gatekeeper can block a downloaded application. Review Apple's current guidance:
-https://support.apple.com/102445
+請從 https://github.com/yam276/PTTStella/releases/latest 取得正式版本。
+Apple Silicon（M 系列）選 arm64；Intel Mac 選 x64。不需要安裝 Rust 或 Python。
 
-Verify the adjacent SHA-256 checksum. No account settings or passwords are
-included. Startup connects to the default site; login remains manual.
-Packaging success is not complete GUI or live-login acceptance.
+使用 ZIP：
+1. 按兩下 ZIP 解壓縮。
+2. 將 PTTStella.app 拖入 Finder 的「應用程式」，再從該處開啟。
+
+首次開啟：隱私權與安全性 → 強制打開
+
+目前使用 ad-hoc 簽章，尚未經 Developer ID 簽章或 Apple 公證。
+若第一次開啟時顯示無法驗證開發者或無法檢查惡意軟體，請先確認下載來源為
+本專案的 GitHub Releases，再使用 macOS 提供的單一 App 允許流程：
+
+1. 先嘗試開啟「應用程式」中的 PTTStella，再關閉封鎖提示。
+2. 打開 Apple 選單 → 系統設定 → 隱私權與安全性。
+3. 向下捲動至「安全性」，找到 PTTStella 的封鎖訊息，按「強制打開」。
+4. 依 macOS 提示完成驗證，再按「打開」。之後通常可直接按兩下 App 開啟。
+
+這些步驟使用圖形介面，不需輸入 xattr 或其他終端機指令。
+若沒有「強制打開」、電腦由公司／學校管理，或仍出現「已損壞」或
+「將損壞你的電腦」，請先停止安裝並回報完整訊息，不要停用整體安全保護。
+Apple 官方說明：https://support.apple.com/zh-tw/102445
+
+啟動只會連線至預設站點，不會自動登入；下載檔不含使用者帳號或密碼。
+下載頁提供 SHA256SUMS 供核對。打包成功不代表所有 Mac 與登入情境皆已驗收。
+
+English
+
+Download arm64 for Apple Silicon or x64 for Intel. Extract the ZIP and drag
+PTTStella.app into Applications, then open it from there. No Rust or Python
+installation is required.
+
+This App is ad-hoc signed, not Developer ID signed or notarized. If blocked on
+first launch, close the alert, open System Settings > Privacy & Security,
+scroll to Security, select Open Anyway for PTTStella, authenticate if requested,
+and confirm Open. No Terminal or xattr command is required for this GUI flow.
+If Open Anyway is unavailable or macOS reports damage or malware, stop and
+report the message; managed Macs may restrict this option.
+Apple guidance: https://support.apple.com/102445
