@@ -542,7 +542,7 @@ filters-import-apply = 合併並儲存
 filters-import-loading = 正在讀取名單…
 filters-import-cancelled = 已取消匯入，名單未變更
 filters-import-stale = 匯入預覽已失效，請重新選擇檔案
-filters-import-preview = 已讀取 { $count } 筆，略過 { $skipped } 筆不支援的規則，{ $adjusted } 筆標記／加強封鎖轉為本機顯示方式。下方為合併預覽；B 遮內容、C 整行塗黑、W 標示 ID，白名單優先，不套用外部顏色。按「合併並儲存」才生效。
+filters-import-preview = 已讀取 { $count } 筆，略過 { $skipped } 筆不支援的規則，{ $adjusted } 筆轉為本機顯示方式。B 遮內容保留 ID、C 整行塗黑、W 標示 ID；數字標記轉為白名單顏色，多個標記取最小編號，無分類但有數字標記也轉為白名單。無標記沿用本機個別色或共用色，白名單優先。可切換黑／白名單檢查顏色，按「合併並儲存」才生效。
 filters-import-invalid = 無法匯入此名單格式；原檔與目前名單保留
 
 settings-saving = 正在儲存…

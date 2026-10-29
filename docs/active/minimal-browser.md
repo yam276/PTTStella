@@ -4,7 +4,7 @@
 
 ## 目標
 
-目前最新開發診斷交付為 `dist/macos-toast-verified/PTTStella.app`（0.3.0-dev.2，含藍金大字通知與斷線重連，合成驗證範圍見下節）；前版 `dist/macos-editor-colour-verified/PTTStella.app` 保留供比較；前版 `dist/macos-030-multi-instance-critic/PTTStella.app` 保留供比較。穩定版診斷交付 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修）保留。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前最新開發診斷交付為 `dist/macos-list-import-verified/PTTStella.app`（0.3.0-dev.2，含文字名單標記轉色、相容匯入與藍金通知，合成驗證範圍見下節）；前版 `dist/macos-toast-verified/PTTStella.app` 保留供比較；前版 `dist/macos-editor-colour-verified/PTTStella.app` 保留供比較；前版 `dist/macos-030-multi-instance-critic/PTTStella.app` 保留供比較。穩定版診斷交付 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修）保留。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
@@ -26,6 +26,18 @@
 | 接續 | 完整本機備份／還原 | 設定、黑白名單、書籤與閱讀位置明確匯出／預覽還原；不包含密碼，沿用跨程序合併與衝突拒絕。 |
 
 需求依據：[近期閱讀／推文中斷與追蹤需求](https://www.ptt.cc/bbs/EZsoft/M.1789283699.A.5D2.html)、[觸控板／側鍵操作討論](https://www.ptt.cc/bbs/Browsers/M.1786265274.A.5E3.html)、[桌面鍵盤需求](https://www.pttweb.cc/bbs/Android/M.1792249559.A.5EA)。完整本機備份屬產品建議；[其他桌面客戶端的設定同步](https://github.com/ksliao0314/MacPTT)僅為設計參考，不作為需求普及率或安全驗證證據。這些連結是研究來源，產品匯入介面與使用說明採中性的格式名稱。
+
+## 文字名單相容匯入與標記顏色（2026-10-29，已完成合成驗證）
+
+沿用既有 B／C／W 分類匯入、Files 背景讀取與明確確認；補上數字分類標記轉白名單個別色，合併預覽不再丟失該色。B 遮內容保留 ID、C 整行塗黑，兩者不因數字標記變更策略；W 與只有數字標記的中立項目以顏色辨識。1～9 對應亮紅／亮綠／亮黃／亮藍／亮紫／亮青／亮白／青／紫；多標記取最小編號，無標記的匯入保留既有本機個別色，新白名單 ID 沿用共用色，不改全域共用色。介面與使用說明只寫「匯入名單」及中性格式，不加外部產品名稱，沒有旗標 UI。
+
+數字是可複選分類而非 RGB，固定顏色轉換是本產品的設計，預覽說明並顯示實際色名；不宣稱還原外部自訂色表。格式以既有官方封裝的靜態讀寫／標記序列化證據核對，原始研究保留 repo 外 `/Users/ladesine/.codex/research/PTTStella/list-import-20261029/`；沒有執行該程式或讀私人名單。來源檔不寫回，仍維持 256 KiB／512 ID、白名單優先、UTF-8 BOM、取消／舊 request 拒絕及跨程序保存保護。未知分類／非法標記計入略過；無可匯入項目則拒絕。
+
+驗證通過：desktop lib 172、bin 162（另有一個由父測試實際啟動的 ignored 子程序入口，不另算通過）、JS 304、core 14 commands／2 replays、全 targets Clippy、fmt／Fluent／docs。新增獨立 expected 覆蓋九種顏色、多標記順序／重複、純標記與中立分類、兩種遮擋不變、中文備註、未知／混合分類拒絕、既有色覆寫／保留、共用色不變，以及預覽／確認／序列化／過期快照與取消還原。
+
+macOS arm64 實際 Dioxus／WKWebView 使用自製 UTF-8 BOM 名單，trusted AX 開啟兩分頁核對預覽、取消後來源／規則 bytes 不變且未建立備份，再明確套用並兩次修改合成備註保存。白名單 Alice 個別亮綠、Carol 亮黃、純標記 Dave 亮紅；Bob 遮內容、Alice2 整行黑。實際右鍵複製選取文字、匯出 960×576 PNG；獨立 RGB／cell 解碼確認 Alice 綠色 125 pixels、Bob 紅色 74 pixels、內容／整行範圍全黑。第二個新程序載入逐 byte 相同的已保存名單，PNG bytes 與第一輪完全相同，未建立備份或重寫名單。
+
+兩程序各自 surface-probe passed、Close acknowledged、connection／credential／file owner join、listeners release、cleanup true 與 exit 0；本機 peer 拒絕全部站端輸入，不登入 PTT。原生固定測試選檔路徑不代替系統 picker 驗收；本輪沒有外部程式真正匯出往返、全部版本矩陣或 Windows／Linux GUI 實測。證據 `.local/verification/list-import-20261029/`，交付 `dist/macos-list-import-verified/PTTStella.app`（0.3.0-dev.2，診斷置頂／啟動不搶焦點，strict ad-hoc，未公證）。清除本工作已關閉 REA 的過時執行檔擷取副本，保留唯一研究／合成證據、正式交付與共用 Cargo cache，精確清理清單見 cleanup-owned-output.json；沒有建立或刪除分支／worktree。只提交 develop，不推送、不發佈。
 
 ## 藍金通知與斷線重連（2026-10-29，已完成合成驗證）
 
