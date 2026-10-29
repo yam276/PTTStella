@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="Cargo.toml"><img src="assets/readme/version.svg" width="146" height="24" alt="開發版本 0.3.0-dev.1"></a>
-  <a href="https://github.com/yam276/PTTStella/releases/latest"><img src="assets/readme/status.svg" width="150" height="24" alt="狀態：開發中"></a>
+  <a href="Cargo.toml"><img src="assets/readme/version.svg" width="146" height="24" alt="版本 0.2.2"></a>
+  <a href="https://github.com/yam276/PTTStella/releases/latest"><img src="assets/readme/status.svg" width="150" height="24" alt="狀態：正式版"></a>
   <a href="#下載與安裝"><img src="assets/readme/platforms.svg" width="241" height="24" alt="目標平台：Windows、macOS、Linux"></a>
 </p>
 
@@ -30,7 +30,7 @@ PTTStella 是一款 PTT 桌面瀏覽器，保留熟悉的 BBS 排版、ANSI 色�
 
 ## 下載與安裝
 
-此頁對應 `0.3.0-dev.1` 開發版；最新正式版為 `0.2.1`。請從 [Releases 下載頁](https://github.com/yam276/PTTStella/releases/latest) 取得正式版，並選擇符合電腦平台與架構的檔案：
+此頁對應 `0.2.2` 正式版。請從 [Releases 下載頁](https://github.com/yam276/PTTStella/releases/latest) 取得正式版，並選擇符合電腦平台與架構的檔案：
 
 | 平台 | 使用方式與需求 |
 | --- | --- |
@@ -107,6 +107,8 @@ macOS 另提供「登入」工具：在空白帳號提示時開啟，輸入帳�
 開啟「快速前往」，輸入板名、`#AID@板名` 或支援的 PTT 文章網址，再按「前往」。選擇最近看板只會填入目的地，確認後才開始；遇到進板圖或確認提示時，請先手動處理，也可按「停止導覽」中止。
 
 「文章書籤」可手動保存 AID／文章網址與選填名稱，供下次開啟；書籤只存在本機，不會下載文章全文。
+
+同時開啟多個 PTTStella 時，設定、黑白名單、書籤與站點的不同修改會在保存時合併；同一項目若發生衝突，程式會提示，保留已保存的內容。重新啟動該視窗可載入最新資料，目前不會即時同步其他視窗的畫面。請避免舊版與新版同時修改共用資料；多開仍受 PTT 站端的同帳號連線限制。
 
 ## 閱讀文章與開圖
 
