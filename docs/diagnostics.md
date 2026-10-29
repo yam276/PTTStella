@@ -6,7 +6,7 @@
 
 macOS 紀錄目錄為 `~/Library/Application Support/PTTStella/diagnostics`；其他平台使用同一 ProjectDirs 本機資料目錄。可明確設定 `PTTSTELLA_DIAGNOSTICS_DIR` 指定診斷目錄；合成 probe 的診斷版預設寫在該 probe 輸出下，不混入正常使用紀錄。
 
-遇到問題後，可按 macOS `Cmd+Shift+L`（其他平台 `Ctrl+Shift+L`）標記時間，再正常離開 App，把整個 diagnostics 目錄壓縮提供分析。標記只供診斷，不送至 PTT；如果當下無法操作，恢復後再按即可。每個 JSONL 行都有 session 的 Unix 毫秒時間、相對毫秒與程序 PID，可以比對大約發生時間。重現不需要另外開終端機。
+遇到問題後，可按 macOS `Cmd+Shift+L`（其他平台 `Ctrl+Shift+L`）標記時間，再正常離開 App，把對應這次啟動的 `pttstella-run-…` 目錄壓縮提供分析。標記只供診斷，不送至 PTT；如果當下無法操作，恢復後再按即可。每個 JSONL 行都有 session 的 Unix 毫秒時間、相對毫秒與程序 PID，可以比對大約發生時間。重現不需要另外開終端機。
 
 ## 記錄內容與容量
 
@@ -14,7 +14,8 @@ macOS 紀錄目錄為 `~/Library/Application Support/PTTStella/diagnostics`；�
 - WebView 記錄按鍵、文字編輯、點擊、滾輪、焦點與組字事件有沒有到達、捕捉／處理後階段、固定分類的目標、准入狀態旗標及頁面捲動位置。只記事件種類，不記實際鍵名、字母或文字。
 - WebView 每秒脈衝量測事件迴圈延遲，Rust 每秒狀態表示 UI loop 是否仍有進展。獨立寫入執行緒持續記錄 UI／WebView 最近回報距今多久，即使兩者不再回報，仍留下 watchdog 證據。睡眠、失焦與隱藏會影響時間，必須連同旗標解讀。
 - 不記錄原始輸入 bytes、帳號／密碼／驗證碼、文章內容、站點網址、圖片網址、黑白名單、剪貼簿文字或錯誤訊息／stack 中可能夾帶的私人內容。不自動截圖，不上傳。
-- 四個 `events-0.jsonl` 至 `events-3.jsonl`，每個最多 2 MiB，總計最多約 8 MiB；0 為最新，跨啟動保留並輪替。只輪替這四個自有名稱，不刪其他檔案。同一目錄使用 OS file lock，拒絕第二個 writer。
+- 每次啟動在診斷根目錄建立獨立的 `pttstella-run-時間-PID-隨機值` 子目錄。同時開啟的程序不共用 writer lock 或事件檔；即使指定相同 `PTTSTELLA_DIAGNOSTICS_DIR` 也能並行。每個子目錄有四個 `events-0.jsonl` 至 `events-3.jsonl`，每個最多 2 MiB，總計最多約 8 MiB；0 為最新。
+- 啟動與關閉時保留最近八份已停止寫入的紀錄，正在寫入的紀錄另計。只清除有本程式標記、名稱與檔案配置均符合的舊子目錄；透過 OS lock 確認 writer 已結束，不以 PID 或時間猜測。舊版根目錄紀錄、未知檔案及連結一律保留；根目錄超過 512 個項目時跳過清理，避免無界掃描。這些保留例外不計入八份上限。
 - UI 使用 256 筆有界非阻塞佇列，滿載只丟診斷事件並累計 dropped，不等待寫檔。WebView 每秒最多採樣 32 筆操作事件；耗時至少 16ms 的封包另外有每秒 8 筆額度，避免背景封包擠掉鍵盤與滑鼠證據。另保留脈衝／手動標記，不記高頻 pointermove。寫入失敗會提示，正常關閉保留 finish 與 cleanup 結果並 join writer。
 
 ## JSONL 旗標

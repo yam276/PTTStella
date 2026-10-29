@@ -4,13 +4,25 @@
 
 ## 目標
 
-目前最新診斷交付為 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修，見下節）。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前最新開發診斷交付為 `dist/macos-multi-instance-final/PTTStella.app`（0.3.0-dev.1，多程序隔離與安全保存，見下節）。穩定版診斷交付 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修）保留。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 多程序隔離與共用資料保存（2026-10-29，已完成）
+
+輸入／結果：同時啟動兩個程序並使用相同診斷根目錄，兩者各自記錄、輪替及正常清理，不競爭同一 writer.lock；每次記錄仍有容量及保留範圍。共用設定／黑白名單／書籤／站點以跨程序檔案鎖涵蓋讀取、合併、備份及原子替換。請求攜帶畫面所據的基準快照；不同欄位／項目合併，同一項目的不相容變更拒絕並提示重新載入，不能靜默覆蓋。最近看板只保存新到訪操作及明確清除，不把整份舊歷史重寫回來。
+
+驗收：自製資料的兩個獨立程序同時增修設定／名單／書籤／站點；同欄衝突、刪除後舊視窗保存、最近歷史清除後到訪、鎖忙碌及程序退出釋鎖、損壞／超量／備份失敗保護。另驗診斷同根目錄兩個程序、各自有界日誌、正常退出與舊式日誌保留；原生 Dioxus 同時啟動只連 loopback，不使用私人帳密或站端刪除連線。版本維持 0.3.0-dev.1，不重發或改寫正式 Release。
+
+結果：desktop lib 159、bin 157、獨立多程序整合 6 通過；兩個 ignored 入口分別由父測試實際啟動，不計為獨立通過案例。涵蓋不同欄位／項目合併、ID 大小寫、修改與刪除衝突、合併後容量拒絕、歷史清空、鎖忙碌及程序被終止後的釋鎖，既有格式／超量／備份失敗保護維持。設定頁連續保存及關閉前最後快照另驗外部修改不被舊表單復寫。core 14 commands／2 replays、JS 293、Clippy、fmt／docs 通過。
+
+macOS arm64 原生 Dioxus 同時啟動兩程序，明確指定同一診斷根目錄，觀察不同 PID 的獨立紀錄。兩邊逐一開工具、匯出 960×576 PNG、正常 Close；關閉第一個後第二個仍可操作。兩份 surface-probe passed、exit 0、Close acknowledged、connection／credential／file worker join、listeners release 及 Finish run_ok／cleanup_ok 全通過；診斷不含合成 sentinel 文字。一般保存與名單並行由生產 Store 的獨立程序測試證明，原生案例的 probe 資料目錄各自隔離，不混稱為原生同時編輯名單。證據 `.local/verification/multi-instance-20261029/`。
+
+限制：本次沒有連 PTT／讀取鑰匙圈，沒有解除站端同帳號連線限制；Windows／Linux 原生多開未執行。同項衝突目前提示重新啟動該視窗載入最新資料，沒有背景即時同步。舊版不遵守新鎖協定，不應與新版同時修改共用資料。契約見 [多開](../multi-instance.md)。
 
 ## 0.2.1 編輯器底列補修與重新發佈（2026-10-28，已完成）
 
