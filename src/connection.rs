@@ -323,6 +323,12 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    /// Exactly two loopback sessions, with no login or station bytes permitted.
+    pub fn start_toast_reconnect_probe(bytes: Vec<u8>) -> Result<Self, String> {
+        let connection = Self::start_owned_probe(bytes, probe::Scenario::ToastReconnect)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     pub fn start_inline_pages_probe(first: Vec<u8>, second: Vec<u8>) -> Result<Self, String> {
         let connection = Self::start_owned_probe(
             first,

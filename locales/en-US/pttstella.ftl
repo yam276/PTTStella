@@ -735,3 +735,13 @@ editor-color-empty = Select text within the editor, excluding the status bar.
 editor-color-stopped = Colouring stopped without retrying. Sent colour codes may remain; check the draft and display mode.
 editor-color-partial = Colouring stopped partway through. Sent codes may remain; check the draft: { $error }
 editor-color-done = Selected colours applied to each line.
+
+toast-region = Notifications
+toast-notice-title = Notification
+toast-dismiss = Dismiss notification
+toast-disconnected-title = Connection lost
+toast-connection-error-title = Unable to connect
+toast-connecting-title = Connecting
+toast-reopen-title = Reopen PTTStella
+toast-reconnect = Reconnect
+toast-connecting-action = Connecting…

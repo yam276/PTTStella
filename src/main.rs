@@ -113,9 +113,9 @@ fn main() {
                 | "sgr66_legacy" | "login_2fa" | "osc8" | "filter_colors" | "inline"
                 | "inline_pages" | "full_load" | "long_load" | "terminal_pages"
                 | "short_overlap" | "short_reading" | "reading_rows" | "control_input"
-                | "editor_clipboard" | "editor_color" | "wide_last_row" | "diagnostics"
-                | "inline_replies" | "short_links" | "picture_menu" | "context_menu"
-                | "account_lists" | "merged_replies" | "account_actions"
+                | "editor_clipboard" | "editor_color" | "toast_reconnect" | "wide_last_row"
+                | "diagnostics" | "inline_replies" | "short_links" | "picture_menu"
+                | "context_menu" | "account_lists" | "merged_replies" | "account_actions"
                 | "account_articles" | "pointer_rows" | "list_boundary" | "article_switch"
                 | "boards" | "boards_close" | "recent" | "articles" | "articles_close"
                 | "bookmarks" | "bookmarks_restart" | "bookmarks_empty"
@@ -239,6 +239,7 @@ fn main() {
         config = config.with_event_loop(event_loop);
     }
     let editor_color_probe = surface_probe.as_deref() == Some("editor_color");
+    let toast_reconnect_probe = surface_probe.as_deref() == Some("toast_reconnect");
     let props = ui::AppProps {
         probe,
         window_probe,
@@ -251,6 +252,8 @@ fn main() {
     let window = dioxus::desktop::WindowBuilder::new()
         .with_title(if editor_color_probe {
             "PTTStella — 編輯上色測試（本機）"
+        } else if toast_reconnect_probe {
+            "PTTStella — 通知與重連測試（本機）"
         } else if ui::diagnostics::diagnostic_build() {
             "PTTStella（診斷版）"
         } else {

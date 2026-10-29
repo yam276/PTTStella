@@ -91,6 +91,8 @@ pub fn app(props: AppProps) -> Element {
                     Connection::start_editor_clipboard_probe(bytes)
                 } else if sample_case.as_deref() == Some("editor_color") {
                     Connection::start_editor_color_probe(bytes)
+                } else if sample_case.as_deref() == Some("toast_reconnect") {
+                    Connection::start_toast_reconnect_probe(bytes)
                 } else if boards_probing {
                     Connection::start_board_probe()
                 } else if matches!(sample_case.as_deref(), Some("full_load" | "long_load")) {
@@ -198,7 +200,7 @@ pub fn app(props: AppProps) -> Element {
             }
         });
     }
-    let phase = use_signal(|| Phase::Disconnected);
+    let mut phase = use_signal(|| Phase::Disconnected);
     let mut started = use_signal(|| false);
     let mut fatal = use_signal(|| false);
     let pending_paste = use_signal(|| None::<PendingPaste>);
@@ -283,6 +285,45 @@ pub fn app(props: AppProps) -> Element {
     let media_origin = props.media_origin.clone();
     let connect = connection.clone();
     let disconnect = connection.clone();
+    let synthetic = props.probe.is_some();
+    let reconnect_probe = surface_probe.as_deref() == Some("toast_reconnect");
+    let closing_connection = closing.1.clone();
+    let connect_action = use_callback(move |_| {
+        if !can_reconnect(
+            phase(),
+            fatal(),
+            synthetic,
+            reconnect_probe,
+            *closing_connection.borrow(),
+        ) {
+            return;
+        }
+        let current_phase = connect.updates.borrow().phase;
+        if matches!(current_phase, Phase::Connecting | Phase::Connected) {
+            phase.set(current_phase);
+            return;
+        }
+        match connect.connect() {
+            // Immediate local feedback also closes the duplicate-click window
+            // before the worker's first Connecting view reaches the renderer.
+            Ok(()) => phase.set(Phase::Connecting),
+            Err(error) => message.set(error),
+        }
+    });
+    let connection_title = if fatal() {
+        pttstella::msg!("toast-reopen-title")
+    } else if phase() == Phase::Connecting {
+        pttstella::msg!("toast-connecting-title")
+    } else if phase() == Phase::Error {
+        pttstella::msg!("toast-connection-error-title")
+    } else {
+        pttstella::msg!("toast-disconnected-title")
+    };
+    let reconnect_label = if phase() == Phase::Connecting {
+        pttstella::msg!("toast-connecting-action")
+    } else {
+        pttstella::msg!("toast-reconnect")
+    };
     rsx! {
         style { {include_str!("../../assets/app.css")} }
         main {
@@ -302,15 +343,12 @@ pub fn app(props: AppProps) -> Element {
                     ToolPetal { group: "filters", label: pttstella::msg!("tools-filters"), icon: rsx!{ Shield { size: 22 } } }
                     ToolPetal { group: "settings", label: pttstella::msg!("settings-center-title"), icon: rsx!{ Settings { size: 22 } } }
                 }
-                if fatal() || matches!(phase(), Phase::Error | Phase::Disconnected) {
-                    output { class: "tools-alert", role: "status", "{message}" }
-                }
             header { id: "tools-panel", hidden: true, "aria-label": pttstella::msg!("tools-title"),
                 div { class: "brand", "PTTStella" }
                 span { class: "status", title: "{message}", "{message}" }
                 section { "data-tools-group": "session",
                 button { disabled: fatal() || props.probe.is_some() || matches!(phase(), Phase::Connecting | Phase::Connected),
-                    onclick: move |_| { if let Err(error) = connect.connect() { message.set(error); } }, {pttstella::msg!("connect")} }
+                    onclick: move |event| connect_action.call(event), {pttstella::msg!("connect")} }
                 button { disabled: fatal() || props.probe.is_some() || !matches!(phase(), Phase::Connecting | Phase::Connected),
                     onclick: move |_| { if let Err(error) = disconnect.disconnect() { message.set(error); } }, {pttstella::msg!("disconnect")} }
                 }
@@ -411,8 +449,36 @@ pub fn app(props: AppProps) -> Element {
                     canvas { id: "screen", "aria-label": pttstella::msg!("screen-label") }
                     div { id: "selection", "aria-hidden": "true" }
                     div { id: "navigation-marker", "aria-hidden": "true", hidden: true }
-                    output { id: "surface-note", role: "status" }
                     textarea { id: "keyboard", "aria-label": pttstella::msg!("keyboard-label"), autocomplete: "off", autocapitalize: "off", "autocorrect": "off", wrap: "off", spellcheck: "false" }
+                }
+            }
+            div {id:"toast-dock",class:"toast-dock","aria-label":pttstella::msg!("toast-region"),
+                if fatal() || phase()!=Phase::Connected {
+                    section {id:"connection-toast",class:"stella-toast connection-toast",role:if fatal()||phase()==Phase::Error{"alert"}else{"status"},"aria-atomic":"true",
+                        "data-level":if fatal()||phase()==Phase::Error{"error"}else{"connection"},
+                        img {class:"toast-mark",src:"{tools_mark}",alt:"","aria-hidden":"true"}
+                        div {class:"toast-content",
+                            span {class:"toast-brand","PTTSTELLA"}
+                            strong {class:"toast-title","{connection_title}"}
+                            p {class:"toast-message","{message}"}
+                            if !fatal() {
+                                button {id:"toast-reconnect",r#type:"button",class:"toast-action",disabled:!can_reconnect(phase(),fatal(),synthetic,reconnect_probe,*closing.1.borrow()),
+                                    onclick:move |event|connect_action.call(event),
+                                    RefreshCw {size:19}
+                                    "{reconnect_label}"
+                                }
+                            }
+                        }
+                    }
+                }
+                section {id:"surface-toast",class:"stella-toast",role:"status","aria-atomic":"true",hidden:true,
+                    img {class:"toast-mark",src:"{tools_mark}",alt:"","aria-hidden":"true"}
+                    div {class:"toast-content",
+                        span {class:"toast-brand","PTTSTELLA"}
+                        strong {class:"toast-title",{pttstella::msg!("toast-notice-title")}}
+                        p {id:"surface-note",class:"toast-message"}
+                    }
+                    button {id:"toast-dismiss",r#type:"button",class:"toast-dismiss","aria-label":pttstella::msg!("toast-dismiss"),X {size:20}}
                 }
             }
             {context_menu()}
@@ -517,6 +583,37 @@ fn SettingsCaption(label: String, icon: Element) -> Element {
 }
 
 // Static, localized controls; the surface owner supplies context and admission.
+fn can_reconnect(
+    phase: Phase,
+    fatal: bool,
+    synthetic: bool,
+    reconnect_probe: bool,
+    closing: bool,
+) -> bool {
+    !fatal
+        && !closing
+        && (!synthetic || reconnect_probe)
+        && matches!(phase, Phase::Disconnected | Phase::Error)
+}
+
+#[cfg(test)]
+mod reconnect_tests {
+    use super::*;
+    #[test]
+    fn reconnect_requires_a_live_ui_and_an_offline_connection() {
+        for phase in [Phase::Disconnected, Phase::Error] {
+            assert!(can_reconnect(phase, false, false, false, false));
+            assert!(!can_reconnect(phase, true, false, false, false));
+            assert!(!can_reconnect(phase, false, false, false, true));
+            assert!(!can_reconnect(phase, false, true, false, false));
+            assert!(can_reconnect(phase, false, true, true, false));
+        }
+        for phase in [Phase::Connected, Phase::Connecting] {
+            assert!(!can_reconnect(phase, false, false, false, false));
+        }
+    }
+}
+
 fn context_menu() -> Element {
     rsx! {
         div { id: "surface-context-menu", class: "surface-context-menu", role: "menu", hidden: true,

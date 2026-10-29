@@ -35,7 +35,19 @@ main { height: 100vh; position: relative; }
 .chrome header button { padding: 7px 10px; border-radius: 7px; max-width: 100%; overflow-wrap: anywhere; }
 .chrome header .status { min-width: 0; flex-basis: 100%; }
 .chrome header .brand { width: 100%; }
-.tools-alert { position: absolute; left: 16px; bottom: 16px; max-width: min(600px, calc(100vw - 104px)); font-size: 12px; color: #e5b6a6; background: #27201de8; padding: 8px 12px; border-radius: 8px; overflow-wrap: anywhere; }
+.toast-dock { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow: auto; display: grid; gap: 12px; z-index: 40; pointer-events: none; }
+.stella-toast { display: flex; align-items: flex-start; gap: 16px; padding: 20px; color: var(--ui-text); background: linear-gradient(110deg, #122a43, #0c1c30 72%); border: 1px solid #b69a59; border-left: 4px solid var(--ui-gold); border-radius: 4px; box-shadow: 0 12px 32px #000a, inset 0 1px #f4d99514; pointer-events: auto; }
+.stella-toast[hidden] { display: none; }
+.toast-mark { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 50%; }
+.toast-content { min-width: 0; flex: 1; }
+.toast-brand { display: block; margin-bottom: 5px; color: var(--ui-gold); font-size: 11px; font-weight: 700; letter-spacing: .18em; }
+.toast-title { display: block; font-size: clamp(20px, 1.5vw, 24px); line-height: 1.35; font-weight: 650; }
+.toast-message { margin: 9px 0 0; font-size: clamp(18px, 1.2vw, 21px); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 32vh; overflow: auto; }
+.toast-action { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 44px; margin-top: 16px; padding: 10px 18px; font-size: 16px; font-weight: 650; border-radius: 3px; color: var(--ui-on-gold); background: var(--ui-gold); border-color: var(--ui-gold); }
+.toast-action:not(:disabled):hover { background: var(--ui-gold-hover); }
+.toast-dismiss { display: grid; place-items: center; padding: 8px; min-width: 38px; min-height: 38px; border: 1px solid transparent; border-radius: 3px; background: transparent; color: var(--ui-muted); }
+.stella-toast[data-level="error"] { border-left-color: #e6a08a; }
+@media (max-width: 480px) { .toast-dock { top: 12px; } .stella-toast { padding: 16px; gap: 12px; } .toast-mark { width: 34px; height: 34px; flex-basis: 34px; } .toast-action { width: 100%; } }
 .chrome[data-attention="true"] .tools-ball { border-color: #d09b7b; }
 @keyframes tools-unfold { from { opacity: 0; transform: scale(.75); } to { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .tools-petal { animation: none; } }
@@ -70,8 +82,6 @@ button:disabled { opacity: .4; cursor: default; }
 canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #selection { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
 .selection-row { position: absolute; background: rgba(128, 180, 255, .35); }
-#surface-note { position: absolute; right: 4px; bottom: 4px; padding: 4px 8px; background: var(--ui-panel); color: var(--ui-text); font-size: 13px; pointer-events: none; }
-#surface-note:empty { display: none; }
 #keyboard { position: absolute; left: 0; top: 0; width: 1px; height: 1px; margin: 0; padding: 0; border: 0; border-radius: 0; outline: none; box-shadow: none; appearance: none; opacity: 0; resize: none; overflow: hidden; white-space: pre; }
 #keyboard.composing { opacity: 1; z-index: 1; }
 .paste-preview { width: min(620px, 90vw); max-height: 80vh; border: 1px solid var(--ui-border); border-radius: 12px; background: var(--ui-panel); color: var(--ui-text); padding: 20px; }

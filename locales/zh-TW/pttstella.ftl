@@ -729,3 +729,13 @@ editor-color-empty = 請框選編輯區內有文字的範圍，勿包含狀態�
 editor-color-stopped = 上色已停止，不會重送；已送出的色碼可能保留，請檢查草稿與顯示模式。
 editor-color-partial = 上色中途停止，已送出的色碼可能保留，請檢查草稿：{ $error }
 editor-color-done = 已逐行套用選取顏色。
+
+toast-region = 通知
+toast-notice-title = 操作通知
+toast-dismiss = 關閉通知
+toast-disconnected-title = 連線已中斷
+toast-connection-error-title = 無法連線
+toast-connecting-title = 正在連線
+toast-reopen-title = 請重新開啟 PTTStella
+toast-reconnect = 重新連線
+toast-connecting-action = 連線中…
