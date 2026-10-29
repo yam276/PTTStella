@@ -509,12 +509,14 @@ async fn run(
             break (complete, probe_checked);
         }
         // Autosave retains one authorized edit while an interactive file operation
-        // finishes. Apply against the latest committed state only when admitted.
+        // finishes. Keep the actual editor baseline so unseen external fields
+        // are not mistaken for new user changes.
         if !files.busy()
             && let Some(change) = pending_settings.take()
         {
-            let result = change.apply(preferences.app().clone()).and_then(|draft| {
-                files.start(|permit| files::save_display(permit, preferences.store(), draft))
+            let base = preferences.edit_base().clone();
+            let result = change.apply(base.clone()).and_then(|draft| {
+                files.start(|permit| files::save_display(permit, preferences.store(), base, draft))
             });
             if let Err(error) = result {
                 eval.send(Packet::SettingsSaved(Feedback::new(
@@ -603,7 +605,7 @@ async fn run(
                 let close=settings_requests.borrow_and_update().1;
                 if close {eval.send(Packet::SettingsClose(true)).map_err(|e|e.to_string())?;continue;}
                 settings_visible=true;connection.keep_alive_gate(receiver.borrow().stamp(),false);eval.send(Packet::SettingsVisibility(true)).map_err(|e|e.to_string())?;
-                eval.open_settings(preferences.store());eval.send(preferences.open_packet()).map_err(|e|e.to_string())?;
+                eval.open_settings(preferences.store(),preferences.app().clone());eval.send(preferences.open_packet()).map_err(|e|e.to_string())?;
             },
             changed = closing.changed() => {
                 changed.map_err(|e| e.to_string())?;
@@ -652,8 +654,10 @@ async fn run(
                         Packet::FontCatalog{request,families:catalog.families,notice:catalog.notice}
                     },
                     FileCompletion::Loaded(_)=>return Err(pttstella::msg!("file-load-duplicate")),
-                    FileCompletion::Display(result)=>match result.map_err(|e|e.to_string()).and_then(|saved|preferences.commit(saved)) {
+                    FileCompletion::Display{submitted,result}=>match result.map_err(|e|e.to_string()).and_then(|saved|preferences.commit(saved)) {
                         Ok(())=>{
+                            preferences.submitted(submitted);
+                            eval.open_settings(preferences.store(), preferences.edit_base().clone());
                             checks.settings_saved |= probe.is_some() && preferences.display().font_size==18.0 && preferences.display().baseline==19.0;
                             screen.display_changed();
                             eval.send(Packet::ToolsOpacity(preferences.app().tools_opacity)).map_err(|e|e.to_string())?;
@@ -960,7 +964,7 @@ async fn run(
                         let Some(rules) = rules else {eval.send(Packet::Notice(pttstella::msg!("account-action-stale"))).map_err(|e|e.to_string())?;continue;};
                         checks.account_rule_actions+=1;
                         filter_import.clear();
-                        if let Err(message)=files.start(|permit|files::save_filters(permit,filter_store.clone(),rules)) {
+                        if let Err(message)=files.start(|permit|files::save_filters(permit,filter_store.clone(),screen.rules().clone(),rules)) {
                             eval.send(Packet::Notice(message)).map_err(|e|e.to_string())?;
                         }
                     }
@@ -976,7 +980,7 @@ async fn run(
                     SurfaceEvent::FiltersDefaultColor { color, .. } => {
                         filter_import.clear();
                         let rules = screen.rules().with_allow_color(color);
-                        if let Err(message) = files.start(|permit|files::save_filters(permit,filter_store.clone(),rules)) {
+                        if let Err(message) = files.start(|permit|files::save_filters(permit,filter_store.clone(),screen.rules().clone(),rules)) {
                             eval.send(Packet::FiltersResult(FiltersResult::Rejected{message})).map_err(|e|e.to_string())?;
                         }
                     }
@@ -990,7 +994,7 @@ async fn run(
                     } => {
                         filter_import.clear();
                         let rules=screen.rules().edit_color(&id,&note,policy,color,remove);
-                        if let Err(message)=files.start(|permit|files::save_filters(permit,filter_store.clone(),rules)) {
+                        if let Err(message)=files.start(|permit|files::save_filters(permit,filter_store.clone(),screen.rules().clone(),rules)) {
                             eval.send(Packet::FiltersResult(FiltersResult::Rejected{message})).map_err(|e|e.to_string())?;
                         }
                     }
@@ -1003,7 +1007,7 @@ async fn run(
                     SurfaceEvent::FiltersImportApply { request, trusted: _ } => {
                         if let Err(message)=files.start(|permit|{
                             let rules=filter_import.apply(request,screen.rules());
-                            files::save_filters(permit,filter_store.clone(),rules)
+                            files::save_filters(permit,filter_store.clone(),screen.rules().clone(),rules)
                         }) {
                             eval.send(Packet::FiltersResult(FiltersResult::Rejected{message})).map_err(|e|e.to_string())?;
                         }
@@ -1024,7 +1028,7 @@ async fn run(
                             .map_err(|e| e.to_string())?;
                     }
                     SurfaceEvent::HoverPreference { position, trusted: _ } => {
-                        if let Err(error)=files.start(|permit|files::save_hover(permit,preferences.store(),preferences.hover_draft(position))) {
+                        if let Err(error)=files.start(|permit|files::save_hover(permit,preferences.store(),preferences.app().clone(),preferences.hover_draft(position))) {
                             eval.send(Packet::Notice(error)).map_err(|e|e.to_string())?;
                             eval.send(Packet::HoverSettings(preferences.hover())).map_err(|e|e.to_string())?;
                         }
@@ -1204,7 +1208,7 @@ async fn run(
                     }
                     SurfaceEvent::SettingsOpen { trusted: _ } => {
                         settings_visible=true;connection.keep_alive_gate(receiver.borrow().stamp(),false);eval.send(Packet::SettingsVisibility(true)).map_err(|e|e.to_string())?;
-                        eval.open_settings(preferences.store());
+                        eval.open_settings(preferences.store(),preferences.app().clone());
                         eval.send(preferences.open_packet())
                             .map_err(|e| e.to_string())?;
                     }

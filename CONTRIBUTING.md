@@ -81,7 +81,7 @@ mouse report 的 `edges` 保留至多 16 筆已准入事件的格線座標、按
 
 2FA 引導另用 `--probe-surface OUTPUT_DIRECTORY login_2fa`，開啟 Vim 後按鈕登入合成帳密；原始輸入六位錯碼、八位救援碼，進入主選單後明確 Esc 回 Normal，再正常關窗。peer 精確核對一次帳密與兩次手動碼，額外輸入失敗；報告需包含提示／錯碼／瀏覽三個狀態、Close acknowledged 與 owner join。不代替實站 2FA 或原生 IME 驗收。
 
-SGR 66 顯示變更另使用 `--probe-surface OUTPUT_DIRECTORY sgr66_legacy` 與 `--probe-surface OUTPUT_DIRECTORY sgr66` 啟動兩個獨立程序，沿用相同 probe-settings.json 與字型；在原生視窗點「匯出 PNG」後正常關閉。兩者使用等價自製串流、本機 peer 拒絕站端 bytes，各自留下 export.png、surface-probe.json 與 cleanup.json。需獨立解碼兩張 960×576 PNG 核對全部像素及已知左右背景／明暗反相，不能只檢查 PNG 標頭或兩份 Core 相等；CPU 核心另測每個分片、單寬字、控制碼取消、覆寫／捲動與 session reset。這不代表已驗證 UTF-8 或其他 OS。
+SGR 66 顯示變更另使用 `--probe-surface OUTPUT_DIRECTORY sgr66_legacy` 與 `--probe-surface OUTPUT_DIRECTORY sgr66` 啟動兩個獨立程序，沿用相同 probe-settings.json 與字型；在原生視窗點「匯出 PNG」後正常關閉。兩者使用等價自製串流、本機 peer 拒絕站端 bytes，各自留下 export.png、surface-probe.json 與 cleanup.json。需獨立解碼兩張 960×576 PNG 核對全部像素及已知左右背景／明暗反相，不能只檢查 PNG 標頭或兩份 Core 相等；CPU 核心另測每個分片、單寬字、分開 SGR／游標命令保留、其他 C0／DEL 取消、覆寫／捲動與 session reset。這不代表已驗證 UTF-8 或其他 OS。
 
 Vim gate 由真正 WebView 編輯／按鍵事件送至 Rust policy，再由本機服務逐筆比對原生一次 h／Ctrl+d／中文、計數、半頁、gg/G、h/l 與模式返回；前綴取消不能夾帶原始字母。macOS 原生 window probe 另以 46 筆精確輸入覆蓋主選單／看板／最愛／文章、無更新時的列表移動，以及三次進板提示的 l／Enter／空白鍵繼續與後續六位數文章列表操作；最後六筆覆蓋命令說明頁的移動／首尾／返回及空列表返回，l／Enter 執行由負面案例拒絕。每次換頁加入 DEC2026、未知 ESC intermediate 與超長 CSI，畫面分兩段、間隔 120ms；runner 應觀察更新後再輸入，不能把本例宣稱為極速連發或逐像素防撕裂證據。同步持有舊圖、拒絕舊導覽、允許原始輸入／Ping、缺結束恢復及批次中關閉另由 Connection loopback 與核心測試核對。進板辨識、兩種鍵盤模式的一般按鍵、長按跨畫面、重複／過期 Continue 另由核心與 Connection 的負面案例核對。暫停提示變更另跑 `node --test tooling/test_continue_keyboard.mjs tooling/test_article_pointer.mjs`，檢查橋接保留 IME／本機快捷鍵、整格線單次點擊、網址優先權覆寫及拖曳／Shift／雙擊／忙碌／過期／幾何變更拒絕；DOM doubles 不算原生點擊驗收。可攜顯示設定驗證兩份具名檔、固定 preset、載入預覽／取消／套用與錯誤保留，重啟程序另外比對保存結果和全部畫素。probe 只替代原生 picker 的路徑，沒有宣稱操作原生選檔視窗。
 
@@ -230,3 +230,10 @@ Control 與工具列焦點使用 `--probe-surface OUTPUT_DIRECTORY control_input
 全螢幕／清理回歸另用 `--probe-surface OUTPUT_DIRECTORY fullscreen`：本機 peer 拒絕全部站端 bytes；在一般視窗、全螢幕、全螢幕設定 Esc、返回一般視窗各點一次擷取工具中的 `Capture live viewport`（最多八次）。Files owner 有界解碼並獨立檢查 24 行背景及 120 個標記文字格，留下 viewport-N.png／json；須四次成功、來源 PNG、Close acknowledged 與所有 owner join。前景畫面與 live Canvas readback 分別核對；背景原生擷取漏文字不能直接判定 Canvas 缺字。另跑 `renderer_error` 負例與設定儲存中關閉，前者必須 run_ok false／cleanup_ok true，後者須保留最後設定。GC 負例使用 `node --expose-gc tooling/probe_surface_result_gc.mjs`，已納入 JS suite；不得把 EvalError::Finished 視為清理成功。合成 Surface peer 的互動期限維持 300 秒，逾時案例不算正常關閉通過。
 
 0.2.1 編輯器色碼回歸另用 `--probe-surface OUTPUT_DIRECTORY editor_clipboard`：本機 peer 依序只接受兩次 Ctrl+V、已確認且 ESC→Ctrl+U 的固定 ANSI 中文貼上、第三次 Ctrl+V 及 Close。需觀察 4/4 VERIFIED、來源 PNG 與完整清理。選取 ANSI／雙色字、遮罩、舊 request／epoch、控制碼拒絕及情境選單另由核心、desktop 與 JS 測試核對。原生滑鼠右鍵與不同平台分開記錄，不能以合成事件當作通過。
+
+
+## 多程序保存驗證
+
+共用設定、黑白名單、書籤、站點與最近看板的保存變更，另跑 `cargo test --locked --features desktop --test multi_instance`、desktop lib／bin 與全 targets Clippy。此測試使用獨立子程序及暫存目錄，核對同步修改、刪除、同項衝突、合併後容量拒絕、歷史清空、鎖定逾時與程序結束釋鎖；不碰使用者資料或連線 PTT。標為 ignored 的 `process_child` 是父測試以 `--ignored` 啟動的輔助入口，不能單獨當成通過證據。
+
+診斷 desktop bin 測試另以兩個子程序同時寫同一根目錄，核對不同 PID／獨立事件檔與 Finish，並驗證舊紀錄保留上限不刪活動或未知資料。原生驗證應同時啟動兩個 Dioxus 合成視窗，指定相同診斷根目錄、各自獨立的 probe 輸出，完成 PNG 與正常 Close／全部 owner join。多開不解除 PTT 的同帳號連線限制；保存契約與舊版並行限制見 [多開](docs/multi-instance.md)。

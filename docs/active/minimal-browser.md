@@ -4,13 +4,63 @@
 
 ## 目標
 
-目前最新診斷交付為 `dist/macos-021-ansi-verified/PTTStella.app`（0.2.1 色碼修正，見下節）。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前最新開發診斷交付為 `dist/macos-multi-instance-final/PTTStella.app`（0.3.0-dev.1，多程序隔離與安全保存，見下節）。穩定版診斷交付 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修）保留。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 0.2.2 多開修正 Critic 與發佈（2026-10-29，進行中）
+
+使用者要求再次交由 SubAgent 獨立 Critic，確認多開、共用設定與名單保存沒有回歸後推送 develop 並發佈 0.2.2。兩位 Critic 分別審查保存／UI 基準與診斷／鎖／清理，唯讀工作不碰私人資料或 PTT。先完成修正與本機檢查，再推送正式版本來源，經 develop → main Release PR 與四架構 verify；通過後才合併及公開，公開附件仍只有六個平台套件與 SHA256SUMS，JSON 留 Actions artifacts。正式發佈後 develop 恢復 0.3.0 開發版。
+
+Critic 找到並修正兩項問題：書籤合併可能超過 500 筆卻回報成功，改由序列化 owner 在備份／替換前拒絕；關窗 drain 遺失成功但未 ACK 的設定提交基準，導致最後草稿誤判衝突，改為僅採用本視窗成功的 submitted 推進 retained 基準。兩個新回歸案例在修正前均確實失敗；修正後書籤原檔／備份／重啟可讀保護、最後草稿保存及外窗同欄衝突保護通過，保存 Critic 已獨立覆核。診斷 Critic 無 actionable finding，七項測試及 20 輪雙程序隔離（40 個子程序）全過；Windows runtime 仍待 CI。
+
+本機最終 core 14 commands／2 replays、desktop lib 159／bin 158、多程序整合 7、JS 293、Python tooling 80、Clippy／fmt／docs 通過；0.2.2 診斷 App 的兩個原生 Dioxus 視窗共用診斷根目錄，逐一開工具／PNG／關閉通過，兩份 Finish run_ok／cleanup_ok、Close acknowledged、全部 worker join 與 exit 0 通過。此原生案例只驗雙程序與關閉流程，設定未 ACK 時序由受控的生產 save_display／Files drain 回歸測試證明，不冒充原生即時關窗重現。
+
+本次把 `multi_instance` 獨立程序整合測試加入四架構 CI。Windows／Linux 沒有原生 GUI 驗收，不以 CI 單元／打包結果代替。證據目錄 `.local/verification/release-022-20261029/` 與 `.local/verification/multi-instance-critic-20261029/`。
+
+## 多程序隔離與共用資料保存（2026-10-29，已完成）
+
+輸入／結果：同時啟動兩個程序並使用相同診斷根目錄，兩者各自記錄、輪替及正常清理，不競爭同一 writer.lock；每次記錄仍有容量及保留範圍。共用設定／黑白名單／書籤／站點以跨程序檔案鎖涵蓋讀取、合併、備份及原子替換。請求攜帶畫面所據的基準快照；不同欄位／項目合併，同一項目的不相容變更拒絕並提示重新載入，不能靜默覆蓋。最近看板只保存新到訪操作及明確清除，不把整份舊歷史重寫回來。
+
+驗收：自製資料的兩個獨立程序同時增修設定／名單／書籤／站點；同欄衝突、刪除後舊視窗保存、最近歷史清除後到訪、鎖忙碌及程序退出釋鎖、損壞／超量／備份失敗保護。另驗診斷同根目錄兩個程序、各自有界日誌、正常退出與舊式日誌保留；原生 Dioxus 同時啟動只連 loopback，不使用私人帳密或站端刪除連線。版本維持 0.3.0-dev.1，不重發或改寫正式 Release。
+
+結果：desktop lib 159、bin 157、獨立多程序整合 6 通過；兩個 ignored 入口分別由父測試實際啟動，不計為獨立通過案例。涵蓋不同欄位／項目合併、ID 大小寫、修改與刪除衝突、合併後容量拒絕、歷史清空、鎖忙碌及程序被終止後的釋鎖，既有格式／超量／備份失敗保護維持。設定頁連續保存及關閉前最後快照另驗外部修改不被舊表單復寫。core 14 commands／2 replays、JS 293、Clippy、fmt／docs 通過。
+
+macOS arm64 原生 Dioxus 同時啟動兩程序，明確指定同一診斷根目錄，觀察不同 PID 的獨立紀錄。兩邊逐一開工具、匯出 960×576 PNG、正常 Close；關閉第一個後第二個仍可操作。兩份 surface-probe passed、exit 0、Close acknowledged、connection／credential／file worker join、listeners release 及 Finish run_ok／cleanup_ok 全通過；診斷不含合成 sentinel 文字。一般保存與名單並行由生產 Store 的獨立程序測試證明，原生案例的 probe 資料目錄各自隔離，不混稱為原生同時編輯名單。證據 `.local/verification/multi-instance-20261029/`。
+
+限制：本次沒有連 PTT／讀取鑰匙圈，沒有解除站端同帳號連線限制；Windows／Linux 原生多開未執行。同項衝突目前提示重新啟動該視窗載入最新資料，沒有背景即時同步。舊版不遵守新鎖協定，不應與新版同時修改共用資料。契約見 [多開](../multi-instance.md)。
+
+## 0.2.1 編輯器底列補修與重新發佈（2026-10-28，已完成）
+
+使用者回報實站編輯器底列只有「(^X)存檔 (^C)色碼 (Esc-h)按鍵 (^Z)說明」，沒有 ^V，因此 0.2.1 以 ^X／^V 辨識的條件未命中，Ctrl+V 仍被本機貼上保留。新增 ^X 與 ^C／色碼 的受限替代條件，仍要求完整 80×24、映射底列、編輯文章的色帶及正文游標；舊 ^V 底列保留。新獨立 expected 在修正前失敗，修正後通過，缺錨點及一般文字負例維持拒絕。
+
+本機合成 peer 改用同款未列 ^V 的底列，獨立核對三次單筆 0x16 與一次已確認 ANSI 中文貼上，並交替回覆彩色預覽／字面色碼；macOS arm64 原生觀察 1/4 預覽開、2/4 預覽關及貼上後 4/4 預覽開，右鍵只有貼上，PNG、Close acknowledged、全部 owner join 與 exit 0 通過。不操作使用者現有草稿。core、desktop lib／bin、JS、Clippy／fmt 與文件檢查分列證據 `.local/verification/editor-ctrl-v-help-20261028/`；另從精確重發來源 main `1ac078b5a5f2b883f21be657505c823a08145a0c` 打包 0.2.1，原生重跑相同四步、編輯器右鍵、PNG、Close 與全部清理通過；最新診斷交付 `dist/macos-021-editor-help/PTTStella.app`，僅測試置頂。已清理被取代的 0.3.0 測試包，保留兩輪唯一證據、穩定版交付與共享 Cargo 快取。未冒充 Windows／Linux 原生 GUI 或特定輸入法實測。
+
+使用者明確要求刪除舊公開 0.2.1 並以相同版本重新發佈，且公開附件改為六個平台下載檔與 SHA256SUMS，完整 JSON／逐檔校驗仍在 Actions artifacts 驗證。先完成修復、獨立回歸與備份，再以針對既有發佈提交的紀錄及 Release PR 回移 main；四架構完整建置驗證之後才刪除舊 Release／tag 並重建，不以本機測試代替三平台建置。develop 維持 0.3.0-dev.1。這是本次明確授權的同版本替換，不放寬一般遞增版本或不可覆寫已發佈下載檔的規則。
+
+使用者隨後取消進板圖調查，認為是版主複製造成；停止該圖的後續修正，先前通用 SGR 66 修正及比對證據保留，不把使用者判斷改寫為已取得原始串流的技術結論。
+
+Release PR #4 政策通過，合併為 main `1ac078b5a5f2b883f21be657505c823a08145a0c`；同一來源 verify run 40681843325 的 Windows x64、macOS arm64／x64 及 Linux x64 測試／打包全部成功。取回該次原始 artifacts，以 production validate_assets 核對全部 20 個檔案、四份 JSON 及逐檔校驗通過。舊版 Release metadata、tag、Git bundle、七個可下載附件與四份原始 manifest 已備份至 repo 外 `/Users/ladesine/.codex/release-backups/PTTStella/v0.2.1-before-editor-help-20261028/`，核對舊 digest 後才依明確授權刪除 Release 426507886 及舊 tag。由同一乾淨 main 執行未改動的 prepare／publish，全部上傳後公開新版 Release 426610699。verify 本身沒有執行 publish job，不將手動出版冒充 CI publish 成功。
+
+[v0.2.1](https://github.com/yam276/PTTStella/releases/tag/v0.2.1) 已重新公開為 Latest stable，tag 指向 `1ac078b`；六個平台套件加 SHA256SUMS 共七個附件，無 JSON。重新下載公開 SHA256SUMS，核對六筆 package hash、GitHub 七個 digest／檔案大小與原始 CI 產物完全相同，中文為主的重發說明吻合。main 已整合回 develop，保留 0.3.0-dev.1。原先下載 0.2.1 者需手動重新下載，同版號不會觸發版本更新提示。最終下載與 manifest 保留於 `dist/release-v0.2.1-reissued/`，小型驗證證據保留於上述 verification 目錄；完成的 managed worktree 與已整合 delivery branch 於結案清理，不刪除使用者仍在執行的其他 App 或共享 target。
+
+## 0.3.0 開發與進板 ANSI 差異調查（2026-10-28）
+
+依使用者要求，develop 進入 `0.3.0-dev.1`，Cargo manifest／lockfile 與 README 徽章同步，main／v0.2.1 保持正式版。待另一路工作完成及整合驗證後才準備 Release PR／Tag，本輪不先發佈。
+
+使用者提供同一 ANSI 圖的進板與原文截圖：右側文字與大致格線一致，人物的半格色塊、局部字形不一致。已定位[原文](https://www.ptt.cc/bbs/C_Chat/M.1718469028.A.778.html)，並在既有已登入的 0.2.0 診斷 App 唯讀開啟第一頁，與使用者第二張圖一致。原文確實含有兩個「引」字，正常圖靠左右不同樣式隱藏部分筆畫，不能把露出的字單獨當成 byte 被換掉的證據。使用者後續確認原作為本人所畫的 `#1cRS6aTu (C_Chat)`，並協助在 Marginalman 刷出同圖；已保存舊版／新版目標進板畫面，見下段實站比對。外部文章／研究資料留 repo 外，產品回歸只用自製資料。
+
+調查另確認一個可獨立重現的相容錯誤：[PTT pfterm 653523c](https://github.com/ptt/pttbbs/blob/653523c29dc6d9207641ce7b4bb1d721d4ea1f53/mbbsd/pfterm.c#L1943) 的 ESC 分流先於 C0 取消；我們卻在每次 ESC 清除 SGR 66 左半格樣式。分開的 SGR／reset／再次 66／游標命令因此錯色。修正只讓 ESC 保留一次性 latch；其他 C0／DEL、terminal／session reset 與單寬字消耗維持明確行為，沒有重解串流或新增繪圖狀態。新增獨立 expected 在修正前確實失敗，修正後逐 byte 分片全過；同一自製「中／引」與左右背景的傳統格式及分開命令 SGR 66，macOS arm64 實際 Dioxus／WKWebView 匯出 960×576 PNG 全像素相等，獨立 RGB 檢查通過，兩次正常 Close acknowledged／全部 owner join／exit 0。
+
+本機 core 14 commands／2 replays、screen 21、desktop lib 159／bin 152、JS 293、全 targets Clippy、fmt／docs 通過。證據 `.local/verification/ansi-entry-20261028/`；對應原圖／PTT source 留 `/Users/ladesine/.codex/research/PTTStella/ansi-entry-20261028/`。保留 `dist/macos-030-ansi-latch/PTTStella.app` 為 0.3.0-dev.1 診斷交付（顯示名稱 StellaAnsi030，與既有登入 App 隔離）；未建立額外測試副本、branch 或 worktree。這個合成格式修正不等於確認實際進板問題的根因，Windows／Linux 原生本輪未驗證。
+
+實站補驗（2026-10-28）：另開同一 0.3.0-dev.1 診斷交付，與原先 0.2.0 已登入視窗隔離；使用者處理一次鑰匙圈授權後，以已存帳號登入，原視窗留在目標進板圖。正常模式的診斷目錄改用上述 repo 外研究目錄下的 new-diagnostics，避免與原程序競爭 writer lock；沒有移除 lock 或關閉原程序。新版同圖仍重現錯色，排除只是在看舊版；因此不能以 SGR 66 合成案例通過宣稱這張進板圖已修復。
+
+經產品原生整頁選取／右鍵「複製含 ANSI 色碼」，分別取得新版中目標進板與原文首 24 列的明確選取資料；成功提示後才讀回系統剪貼簿，只保存這兩份公開圖案到 repo 外。依使用者補充，進板可能裁切首尾一列，不能假設與原作全圖相同；先排除第 24 列站端提示／頁尾，僅用文字列在 ±3 列範圍對齊，再比較共同範圍。同圖實際最佳位移為 0，23 列中 21 列文字完全相符，其他候選位移均 0 列完全相符；對齊後第 7 行第 19 欄 `|`→空白、第 17 行第 24 欄 `◣`→`▃`。這兩處字元差異不單獨作為複製失真的結論；另有 347 個半格原始 Style 差異（包含不影響空白外觀的前景差異，不等於 347 處可見錯誤）。第 20、21 行第 41 欄「引」的底色由原文藍色 4 變為進板青色 6，直接對應露出筆畫。資料來自 Rust 已 ACK Frame 的同一 selection serializer，顯示差異在 Canvas 前已存在；因此不是單純字型／縮放或畫布漏畫。這些是解析後的正規化 ANSI，不能冒充站端原始串流，也不能據此區分來源檔轉存、PTT 進板處理或其他尚未重現的解析問題；最後根因仍待同圖原始 ANSI／入站 bytes 的獨立比對，裁切不算錯誤。比對後已透過原生視窗選單關閉自己的新版副本，程序 exit 0；原目標圖已保存為外部研究證據，其餘使用者視窗不再操作。未新增繪圖補丁，未發佈或變更使用者的圖檔／看板內容。
 
 ## 0.2.1 編輯器色碼緊急修正（2026-10-28）
 
@@ -20,7 +70,9 @@
 
 本機核心、全套 JS、desktop lib／bin、Clippy、Python tooling、fmt／docs 已跑；新增負例確實抓到未綁輸入 epoch 的 lease，改為完整 epoch lease 並放入 Files 准入 factory 後重測。macOS arm64 合成原生視窗完整通過兩次 Ctrl+V、精確 ANSI 中文確認貼上與第三次 Ctrl+V（4/4 VERIFIED）；另實際 AX 右鍵複製 ANSI、右鍵貼上讀回 24 行含紅色 SGR、取消而未多送 bytes。來源 PNG、Close acknowledged 與全部 owner 清理通過。原生座標工具仍回 noWindowsAvailable；AX 右鍵確實打開產品選單，未以合成事件冒充。Windows／Linux 原生 GUI 未測，不以 macOS 結果代替。
 
-證據 `.local/verification/release-021-ansi-20261028/`。診斷交付 `dist/macos-021-ansi-verified/PTTStella.app`，只在測試版置頂、不自動搶焦點。版本、README 與中文為主的簡短 Release notes 已更新；四架構 CI 與公開發佈結果後續補記。
+證據 `.local/verification/release-021-ansi-20261028/` 保存公開 metadata、校驗清單與獨立驗證報告；已清理本輪兩份中間 App 及原生測試副本，精確路徑／大小見 removed-output.json，保留最新診斷交付、唯一證據與共享 Cargo 快取。本輪無新建 feature 分支或 worktree。診斷交付 `dist/macos-021-ansi-verified/PTTStella.app`，只在測試版置頂、不自動搶焦點。版本、README 與中文為主的簡短 Release notes 已更新。四架構 verify 40664831408 全數通過；Release PR #3 已合併至 main `4f19455`，正式建置 40667567525 四架構與 publisher 全數成功。[v0.2.1](https://github.com/yam276/PTTStella/releases/tag/v0.2.1) 已公開為 Latest stable，tag 固定 `4f194551a02821e7b80ae78591a125774e74487e`。六個平台下載套件、四份 manifest 與 SHA256SUMS 共 11 個附件完整；另以 GitHub 上傳 digest、manifest 的來源／版本／profile、校驗碼及 Release 說明逐項獨立核對通過。publisher 的 GraphQL 精確 Release ID 修正亦隨這次正式流程成功。
+
+使用者追加的下一版要求：建置資訊 JSON 僅保留 GitHub Actions artifacts，公開 Release 只放平台下載套件與 SHA256SUMS；相應調整公開校驗清單與白名單，完整 manifest 驗證仍保留。這項延至 0.2.1 之後，見 [發佈流程](../releases.md)。
 
 ## 0.2.0 正式發佈與草稿查詢修復（2026-10-28）
 

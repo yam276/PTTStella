@@ -21,7 +21,7 @@ async fn bookmark_files_keep_request_identity_commit_only_on_delivery_and_revoke
     files
         .start(|permit| save_bookmarks(permit, 17, write))
         .unwrap();
-    files.finish().await.unwrap();
+    files.finish(None).await.unwrap();
     assert!(!path.exists());
     let mut files = Files::default();
     let write = state.edit("#00000101@Stella", "自製", false).unwrap();
@@ -56,7 +56,7 @@ async fn bookmark_files_keep_request_identity_commit_only_on_delivery_and_revoke
     state.complete(Err(error.to_string()));
     assert_eq!(state.snapshot().entries.len(), 1);
     assert_eq!(std::fs::read(path).unwrap(), old);
-    files.finish().await.unwrap();
+    files.finish(None).await.unwrap();
     assert!(!files.busy());
 }
 
@@ -134,7 +134,7 @@ async fn slow_disk_keeps_ui_pollable_and_cleanup_retains_the_started_work() {
         _=tokio::time::sleep(Duration::from_millis(5))=>{},
     }
     assert!(!path.exists());
-    let mut finish = Box::pin(files.finish());
+    let mut finish = Box::pin(files.finish(None));
     tokio::select! {
         _=&mut finish=>panic!("cleanup dropped the disk owner"),
         _=tokio::time::sleep(Duration::from_millis(5))=>{},
@@ -149,7 +149,14 @@ async fn slow_disk_keeps_ui_pollable_and_cleanup_retains_the_started_work() {
 async fn busy_admission_never_starts_another_operation_and_unstarted_work_is_revoked() {
     let mut files = Files::default();
     files
-        .start(|permit| save_hover(permit, Err("no store".into()), AppSettings::default()))
+        .start(|permit| {
+            save_hover(
+                permit,
+                Err("no store".into()),
+                AppSettings::default(),
+                AppSettings::default(),
+            )
+        })
         .unwrap();
     let called = std::cell::Cell::new(false);
     assert!(
@@ -194,7 +201,7 @@ async fn closing_during_a_picker_retains_the_result_but_does_not_start_a_write()
         })
         .unwrap();
     tokio::select! {_=files.next()=>panic!("picker finished"),_=opening=>{}}
-    let mut finish = Box::pin(files.finish());
+    let mut finish = Box::pin(files.finish(None));
     tokio::select! {_=&mut finish=>panic!("picker owner lost"),_=tokio::time::sleep(Duration::from_millis(5))=>{}}
     assert!(!choose.is_closed());
     choose.send(()).unwrap();
@@ -220,9 +227,19 @@ async fn failed_save_preserves_effective_state_and_the_next_save_can_commit() {
     draft.language = pttstella::i18n::Language::English;
     let mut files = Files::default();
     files
-        .start(|permit| save_display(permit, preferences.store(), draft.clone()))
+        .start(|permit| {
+            save_display(
+                permit,
+                preferences.store(),
+                preferences.app().clone(),
+                draft.clone(),
+            )
+        })
         .unwrap();
-    assert!(matches!(files.next().await, Completion::Display(Err(_))));
+    assert!(matches!(
+        files.next().await,
+        Completion::Display { result: Err(_), .. }
+    ));
     assert_eq!(preferences.app(), &original);
     assert_eq!(
         std::fs::read(dir.path().join("probe-settings.json")).unwrap(),
@@ -230,9 +247,19 @@ async fn failed_save_preserves_effective_state_and_the_next_save_can_commit() {
     );
     std::fs::remove_dir(dir.path().join("probe-settings.json.bak")).unwrap();
     files
-        .start(|permit| save_display(permit, preferences.store(), draft))
+        .start(|permit| {
+            save_display(
+                permit,
+                preferences.store(),
+                preferences.app().clone(),
+                draft,
+            )
+        })
         .unwrap();
-    let Completion::Display(Ok(saved)) = files.next().await else {
+    let Completion::Display {
+        result: Ok(saved), ..
+    } = files.next().await
+    else {
         panic!("save failed")
     };
     assert_eq!(preferences.app(), &original); // Delivery alone never mutates UI state.
@@ -240,7 +267,14 @@ async fn failed_save_preserves_effective_state_and_the_next_save_can_commit() {
     assert_eq!(preferences.display().font_size, 18.0);
     let draft = preferences.hover_draft(HoverPosition::Off);
     files
-        .start(|permit| save_hover(permit, preferences.store(), draft))
+        .start(|permit| {
+            save_hover(
+                permit,
+                preferences.store(),
+                preferences.app().clone(),
+                draft,
+            )
+        })
         .unwrap();
     let Completion::Hover(Ok(saved)) = files.next().await else {
         panic!("hover save failed")
@@ -291,7 +325,7 @@ async fn revoked_profile_and_invalid_png_never_write_and_release_the_file_slot()
             )
         })
         .unwrap();
-    files.finish().await.unwrap();
+    files.finish(None).await.unwrap();
     assert!(!dir.path().join("display.pttstella.json").exists());
     assert!(!files.busy());
 }
@@ -466,7 +500,7 @@ async fn cleanup_reports_a_started_file_failure_instead_of_claiming_success() {
     files.revoke();
     release.send(()).unwrap();
     assert_eq!(
-        files.finish().await,
+        files.finish(None).await,
         Err("關閉前的檔案操作失敗：synthetic disk failure".into())
     );
     assert!(!files.busy());
@@ -514,7 +548,7 @@ async fn recent_writes_run_alongside_a_picker_and_close_drains_the_latest_snapsh
             })
             .unwrap();
     }
-    let mut finish = Box::pin(files.finish());
+    let mut finish = Box::pin(files.finish(None));
     tokio::select! { _=&mut finish=>panic!("picker was dropped on close"), _=tokio::time::sleep(Duration::from_millis(10))=>{} }
     release.send(()).unwrap();
     finish.await.unwrap();
@@ -555,7 +589,7 @@ async fn recent_failure_during_close_is_reported_and_joined() {
             clear: true,
         })
         .unwrap();
-    assert!(files.finish().await.is_err());
+    assert!(files.finish(None).await.is_err());
     assert!(!files.busy());
 }
 
@@ -589,7 +623,7 @@ async fn clipboard_write_rechecks_revocation_and_source_before_touching_os() {
         .await;
         assert!(matches!(result, Completion::Clipboard(Ok(()))) == (mode == "valid"));
         assert_eq!(writes.lock().unwrap().len(), usize::from(mode == "valid"));
-        files.finish().await.unwrap();
+        files.finish(None).await.unwrap();
     }
 }
 
@@ -615,7 +649,7 @@ async fn clipboard_worker_is_bounded_nonblocking_and_joined_on_close() {
             .start(|_| async { Completion::Clipboard(Ok(())) })
             .is_err()
     );
-    let mut finish = Box::pin(files.finish());
+    let mut finish = Box::pin(files.finish(None));
     tokio::select! {_=&mut finish=>panic!("worker was not joined"),_=tokio::time::sleep(Duration::from_millis(10))=>{}}
     release.send(()).unwrap();
     assert!(
@@ -716,7 +750,7 @@ async fn png_clipboard_rejects_cancelled_revised_or_filtered_output_before_os_wr
             mode == "valid"
         );
         assert_eq!(*writes.lock().unwrap(), usize::from(mode == "valid"));
-        files.finish().await.unwrap();
+        files.finish(None).await.unwrap();
     }
 }
 
@@ -794,7 +828,7 @@ async fn original_picture_save_preserves_bytes_and_epoch_revocation_never_touche
         }
     ));
     assert!(clipboard.lock().unwrap().is_none());
-    files.finish().await.unwrap();
+    files.finish(None).await.unwrap();
 }
 
 #[test]
@@ -893,5 +927,71 @@ async fn editor_clipboard_read_rechecks_lease_and_rejects_cancel_stale_controls_
             "before" | "during" => assert!(matches!(result, Err(Error::Stale))),
             _ => assert!(matches!(result, Err(Error::Failed(_)))),
         }
+    }
+}
+
+#[tokio::test]
+async fn closing_drains_the_successful_autosave_before_merging_the_final_draft() {
+    use super::super::settings_finish::{RetainedEdits, Snapshot};
+    for conflicting_external_edit in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let store = Store::at(directory.path().join("settings.json"));
+        let base = store.load().unwrap();
+        let external = Store::at(directory.path().join("settings.json"));
+        let mut remote = base.clone();
+        remote.hover = HoverPosition::Off;
+        external.save_from(&base, remote).unwrap();
+        let mut retained = RetainedEdits::default();
+        retained.open(Ok(store.clone()), base.clone());
+        let mut submitted = base.clone();
+        submitted.display.font_size = 18.0;
+        let mut final_draft = submitted.clone();
+        final_draft.display.font_size = 19.0;
+        let snapshot: Snapshot = serde_json::from_value(serde_json::json!({"last":{
+            "kind":"settings_save","values":final_draft.display,
+            "language":final_draft.language,"tools_opacity":final_draft.tools_opacity,
+            "tools_access":final_draft.tools_access,"trusted":true
+        }}))
+        .unwrap();
+        let (saved, save_ready) = tokio::sync::oneshot::channel();
+        let (deliver, delivery) = tokio::sync::oneshot::channel();
+        let mut files = Files::default();
+        files
+            .start(|permit| async move {
+                let completion = save_display(permit, Ok(store), base, submitted).await;
+                assert!(matches!(
+                    &completion,
+                    Completion::Display { result: Ok(_), .. }
+                ));
+                saved.send(()).unwrap();
+                delivery.await.unwrap();
+                completion
+            })
+            .unwrap();
+        // The real save has reached disk, but the normal UI loop has not ACKed it.
+        tokio::select! {
+            _ = files.next() => panic!("completion must remain owned until delivery"),
+            ready = save_ready => ready.unwrap(),
+        }
+        if conflicting_external_edit {
+            let before = external.load().unwrap();
+            let mut change = before.clone();
+            change.display.font_size = 17.0;
+            external.save_from(&before, change).unwrap();
+        }
+        deliver.send(()).unwrap();
+        files.finish(Some(&mut retained)).await.unwrap();
+        let result = retained.finish(snapshot).await;
+        assert_eq!(result.is_err(), conflicting_external_edit);
+        let persisted = external.load().unwrap();
+        assert_eq!(
+            persisted.display.font_size,
+            if conflicting_external_edit {
+                17.0
+            } else {
+                19.0
+            }
+        );
+        assert_eq!(persisted.hover, HoverPosition::Off);
     }
 }

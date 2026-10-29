@@ -208,9 +208,10 @@ impl Screen {
         self.revision = self.revision.saturating_add(1);
     }
     fn parse_byte(&mut self, byte: u8) {
-        // SGR 66 latches one byte-cell's previous style. A subsequent control
-        // cancels that latch; high Big5/UAO bytes remain printable data.
-        if byte <= 0x1f || byte == 0x7f {
+        // SGR 66 latches one byte-cell's previous style. Like PTT pfterm,
+        // ESC starts a command without cancelling that latch (including a
+        // separate SGR). Other C0/DEL controls cancel it; Big5 stays data.
+        if (byte <= 0x1f && byte != 0x1b) || byte == 0x7f {
             self.next_cell_style = None;
         }
         // Only 7-bit controls are recognized: 0x80..=0x9f are Big5/UAO data.
