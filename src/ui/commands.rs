@@ -6,6 +6,7 @@ pub(super) enum Kind {
     Login,
     Navigate,
     Preload,
+    ReplyUpdate,
     Browse,
     Destination,
     EditorColor,

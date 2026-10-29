@@ -108,6 +108,7 @@ pub(super) struct Checks {
     pub(super) rows_export_checked: bool,
     pub(super) settings_saved: bool,
     pub(super) navigation_requests: usize,
+    pub(super) reply_updates: usize,
     pub(super) load_cancels: usize,
     pub(super) load_resumes: usize,
     pub(super) paste_single: bool,

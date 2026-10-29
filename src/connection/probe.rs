@@ -1,4 +1,5 @@
 //! Synthetic round trip through the production connection owner.
+pub(super) mod live_updates;
 pub(super) mod round_trip;
 use futures_util::{SinkExt, StreamExt};
 use tokio::{
@@ -29,6 +30,7 @@ pub(super) enum Scenario {
     PointerRows,
     ListBoundary,
     ArticleSwitch,
+    LiveUpdates { origin: Option<String> },
     InlinePages { pages: Vec<Vec<u8>>, delay_ms: u64 },
 }
 
@@ -717,6 +719,7 @@ pub(super) async fn serve(
         Scenario::Filters
             | Scenario::EditorColor
             | Scenario::ArticleSwitch
+            | Scenario::LiveUpdates { .. }
             | Scenario::MouseSamples(MouseSampleProbe::RoundTrip)
     ) {
         900
@@ -753,6 +756,7 @@ pub(super) async fn serve(
         if matches!(scenario, Scenario::Window) {
             return window(&mut socket).await;
         }
+        if let Scenario::LiveUpdates {origin} = scenario {return live_updates::run(&mut socket,origin.as_deref()).await;}
         if let Scenario::InlinePages {pages,delay_ms} = scenario {
             let started=std::time::Instant::now();
             for (index, second) in pages.into_iter().enumerate() {

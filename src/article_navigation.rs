@@ -263,43 +263,66 @@ fn information(frame: &Frame, selected: &Selected) -> Option<ArticleTarget> {
         return None;
     }
     let rows = text::rows(frame)?;
-    let top = format!("┌{}┐", "─".repeat(37));
-    let bottom = "└──────────────────────── [再按 Q 切換價格列表]  ─┘";
     for height in [4, 5] {
         let mut first = selected.row + 1;
         if first + height > 23 || selected.row >= 15 {
             first = selected.row.checked_sub(height)?;
         }
-        let last = first + height - 1;
-        if !rows[first].mapped() || rows[first].text.trim_end() != top {
-            continue;
+        if let Some(target) = information_box(&rows, first, height) {
+            return Some(target);
         }
-        if !rows[last].mapped() || rows[last].text.trim_end() != bottom {
-            continue;
-        }
-        let line = &rows[first + 1];
-        if !line.mapped() {
-            continue;
-        }
-        let rest = line.text.strip_prefix("│ 文章代碼(AID): ")?;
-        let mut parts = rest.split_whitespace();
-        let aid = parts.next()?;
-        let board = parts.next()?.strip_prefix('(')?.strip_suffix(')')?;
-        if parts.next() != Some("[ptt.cc]") || !line.text.trim_end().ends_with('│') {
-            return None;
-        }
-        let start = line.text.find(aid)?;
-        if !line
-            .spans
-            .iter()
-            .filter(|span| span.bytes.start < start + aid.len() && span.bytes.end > start)
-            .all(|span| span.glyph.left.bright && span.glyph.right.bright)
-        {
-            return None;
-        }
-        return ArticleTarget::new(board, aid).ok();
     }
     None
+}
+
+/// Only an owned Q query from a reading page may consume this bottom information box.
+pub(crate) fn reading_information(frame: &Frame) -> Option<ArticleTarget> {
+    if !matches!(navigation::analyze(frame), Context::ContinuePrompt) {
+        return None;
+    }
+    let rows = text::rows(frame)?;
+    for height in [4, 5] {
+        for first in 17..=19 {
+            if first + height <= 23
+                && let Some(target) = information_box(&rows, first, height)
+            {
+                return Some(target);
+            }
+        }
+    }
+    None
+}
+fn information_box(rows: &[text::Row<'_>], first: usize, height: usize) -> Option<ArticleTarget> {
+    let top = format!("┌{}┐", "─".repeat(37));
+    let bottom = "└──────────────────────── [再按 Q 切換價格列表]  ─┘";
+    let last = first + height - 1;
+    if !rows[first].mapped() || rows[first].text.trim_end() != top {
+        return None;
+    }
+    if !rows[last].mapped() || rows[last].text.trim_end() != bottom {
+        return None;
+    }
+    let line = &rows[first + 1];
+    if !line.mapped() {
+        return None;
+    }
+    let rest = line.text.strip_prefix("│ 文章代碼(AID): ")?;
+    let mut parts = rest.split_whitespace();
+    let aid = parts.next()?;
+    let board = parts.next()?.strip_prefix('(')?.strip_suffix(')')?;
+    if parts.next() != Some("[ptt.cc]") || !line.text.trim_end().ends_with('│') {
+        return None;
+    }
+    let start = line.text.find(aid)?;
+    if !line
+        .spans
+        .iter()
+        .filter(|span| span.bytes.start < start + aid.len() && span.bytes.end > start)
+        .all(|span| span.glyph.left.bright && span.glyph.right.bright)
+    {
+        return None;
+    }
+    ArticleTarget::new(board, aid).ok()
 }
 
 #[cfg(test)]

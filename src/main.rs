@@ -117,8 +117,8 @@ fn main() {
                 | "diagnostics" | "inline_replies" | "short_links" | "picture_menu"
                 | "context_menu" | "account_lists" | "merged_replies" | "account_actions"
                 | "account_articles" | "pointer_rows" | "list_boundary" | "article_switch"
-                | "boards" | "boards_close" | "recent" | "articles" | "articles_close"
-                | "bookmarks" | "bookmarks_restart" | "bookmarks_empty"
+                | "live_updates" | "boards" | "boards_close" | "recent" | "articles"
+                | "articles_close" | "bookmarks" | "bookmarks_restart" | "bookmarks_empty"
                 | "bookmarks_corrupt" | "mouse" | "mouse_boundary" | "mouse_drag"
                 | "mouse_round_trip" | "mouse_motion" | "mouse_wheel"),
             ) => Some(case.to_owned()),

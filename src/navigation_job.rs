@@ -12,8 +12,15 @@ use std::time::Instant;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Destination {
-    Board { board: BoardName },
+    Board {
+        board: BoardName,
+    },
     Article(ArticleTarget),
+    Refresh {
+        board: BoardName,
+        #[serde(skip)]
+        head: [String; 3],
+    },
 }
 impl Destination {
     /// Local draft grammar; length is checked before trimming so a truncated
@@ -37,6 +44,7 @@ impl Destination {
         match self {
             Self::Board { board } => board,
             Self::Article(target) => target.board(),
+            Self::Refresh { board, .. } => board,
         }
     }
 }
@@ -58,6 +66,7 @@ pub enum Progress {
 pub enum Flow {
     Board(board_navigation::Switch),
     Article(article_navigation::Open),
+    Refresh(Box<crate::article_refresh::Refresh>),
 }
 pub enum Start {
     Reached(Destination),
@@ -92,24 +101,35 @@ impl Flow {
                     bytes,
                 })
             }
+            Destination::Refresh { board, head } => {
+                let (flow, bytes) = crate::article_refresh::Refresh::begin(frame, board, head, now)
+                    .map_err(|e| e.to_string())?;
+                Ok(Start::Run {
+                    flow: Self::Refresh(Box::new(flow)),
+                    bytes,
+                })
+            }
         }
     }
     pub fn needs_frame(&self, revision: u64) -> bool {
         match self {
             Self::Board(flow) => flow.needs_frame(revision),
             Self::Article(flow) => flow.needs_frame(revision),
+            Self::Refresh(flow) => flow.needs_frame(revision),
         }
     }
     pub fn expired(&self, now: Instant) -> bool {
         match self {
             Self::Board(flow) => flow.expired(now),
             Self::Article(flow) => flow.expired(now),
+            Self::Refresh(flow) => flow.expired(now),
         }
     }
     pub fn timeout_message(&self) -> String {
         match self {
             Self::Board(_) => board_navigation::Error::Timeout.to_string(),
             Self::Article(_) => article_navigation::Error::Timeout.to_string(),
+            Self::Refresh(_) => article_navigation::Error::Timeout.to_string(),
         }
     }
     pub fn observe(&mut self, frame: &Frame, now: Instant) -> Result<Advance, String> {
@@ -122,6 +142,15 @@ impl Flow {
                 }
             }),
             Self::Article(flow) => {
+                Ok(match flow.observe(frame, now).map_err(|e| e.to_string())? {
+                    article_navigation::Advance::Wait => Advance::Wait,
+                    article_navigation::Advance::Send(bytes) => Advance::Send(bytes),
+                    article_navigation::Advance::Reached(target) => {
+                        Advance::Reached(Destination::Article(target))
+                    }
+                })
+            }
+            Self::Refresh(flow) => {
                 Ok(match flow.observe(frame, now).map_err(|e| e.to_string())? {
                     article_navigation::Advance::Wait => Advance::Wait,
                     article_navigation::Advance::Send(bytes) => Advance::Send(bytes),
