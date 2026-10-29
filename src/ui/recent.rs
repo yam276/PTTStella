@@ -194,7 +194,7 @@ mod tests {
             state.notice.as_deref(),
             Some(pttstella::msg!("recent-cleared").as_str())
         );
-        files.finish().await.unwrap();
+        files.finish(None).await.unwrap();
     }
     #[tokio::test]
     async fn corrupt_load_keeps_visits_in_memory_until_explicit_recovery() {
@@ -219,6 +219,6 @@ mod tests {
             Store::at(path).load().unwrap().boards()[0].as_str(),
             "Other"
         );
-        files.finish().await.unwrap();
+        files.finish(None).await.unwrap();
     }
 }

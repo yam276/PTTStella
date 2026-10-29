@@ -342,3 +342,45 @@ fn a_newly_corrupted_document_is_never_treated_as_observed_recovery() {
         b"preserve backup"
     );
 }
+
+#[test]
+fn merged_bookmarks_over_capacity_reject_without_damaging_saved_data() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("bookmarks.json");
+    let a = bookmarks::store::Store::at(path.clone());
+    let b = bookmarks::store::Store::at(path.clone());
+    let mut initial = bookmarks::Bookmarks::default();
+    for index in 0..bookmarks::LIMIT - 1 {
+        initial = initial
+            .upsert(
+                ArticleTarget::new(&format!("Board{index}"), "00000101").unwrap(),
+                "",
+                100,
+            )
+            .unwrap();
+    }
+    a.save(initial).unwrap();
+    let base_a = a.load().unwrap();
+    let base_b = b.load().unwrap();
+    let draft_a = base_a
+        .upsert(ArticleTarget::new("NewA", "00000101").unwrap(), "", 100)
+        .unwrap();
+    let draft_b = base_b
+        .upsert(ArticleTarget::new("NewB", "00000101").unwrap(), "", 100)
+        .unwrap();
+    assert_eq!(draft_a.entries().len(), bookmarks::LIMIT);
+    assert_eq!(draft_b.entries().len(), bookmarks::LIMIT);
+    a.save_from(&base_a, draft_a.clone()).unwrap();
+    let current = std::fs::read(&path).unwrap();
+    let backup = std::fs::read(path.with_extension("json.bak")).unwrap();
+    assert!(
+        b.save_from(&base_b, draft_b).is_err(),
+        "the merged 501st bookmark must be rejected"
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), current);
+    assert_eq!(
+        std::fs::read(path.with_extension("json.bak")).unwrap(),
+        backup
+    );
+    assert_eq!(bookmarks::store::Store::at(path).load().unwrap(), draft_a);
+}
