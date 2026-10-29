@@ -35,10 +35,21 @@ PTTStella 是一款 PTT 桌面瀏覽器，保留熟悉的 BBS 排版、ANSI 色�
 | 平台 | 使用方式與需求 |
 | --- | --- |
 | Windows 10／11 x64 | 安裝版使用 `-setup.exe`；免安裝版直接執行 `-portable.exe`。兩者都需要 Microsoft Edge WebView2 Runtime，安裝版可在缺少時透過網路補裝，免安裝版須事先具備。 |
-| macOS | 解壓縮後將 `PTTStella.app` 移至「應用程式」。Apple Silicon 選 arm64，Intel 選 x64。目前版本未經 Apple 公證，可能出現系統安全提示，詳見 [macOS 說明](docs/macos-release.txt)。 |
+| macOS | Apple Silicon 選 arm64，Intel 選 x64。ZIP 解壓縮後將 `PTTStella.app` 拖入「應用程式」。首次開啟步驟見下方及 [macOS 安裝說明](docs/macos-release.txt)。 |
 | Linux x64 | 套件目標為 Ubuntu 24.04，提供 `.deb` 與 `.tar.gz`，需要相容的圖形環境與系統函式庫，詳見 [Linux 說明](docs/linux-package.txt)。 |
 
 Windows 安裝與缺少 WebView2 時的處理方式，請見 [Windows 安裝說明](docs/windows-installer.md)。
+
+### macOS 安裝與首次開啟
+
+請使用本專案 [Releases](https://github.com/yam276/PTTStella/releases/latest) 提供的下載檔。
+
+1. **安裝 App：** 按兩下 ZIP 解壓縮，將 `PTTStella.app` 拖入 Finder 的「應用程式」。
+2. 從「應用程式」開啟 PTTStella。目前版本尚未經 Developer ID 簽章與 Apple 公證，首次可能出現「無法驗證開發者」或「Apple 無法驗證是否含有惡意軟體」提示；先關閉該提示。
+3. 打開 Apple 選單中的「系統設定」，選擇「隱私權與安全性」，向下捲動至「安全性」，找到 PTTStella 的封鎖訊息並按「強制打開」（英文為 Open Anyway）。
+4. 依 macOS 提示完成驗證，再按「打開」。系統會記住這次允許，之後通常可直接從「應用程式」開啟。
+
+以上使用 macOS 的圖形介面，不需輸入 `xattr` 或其他終端機指令。若沒有「強制打開」、電腦由公司／學校管理，或仍出現「已損壞」「將損壞你的電腦」等提示，請先停止安裝，參考 [Apple 官方說明](https://support.apple.com/zh-tw/102445) 或附上完整訊息回報問題。
 
 ## 第一次開啟
 
