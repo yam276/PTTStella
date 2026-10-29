@@ -332,7 +332,6 @@ function hasSelection(){return selectionActive;}
 function clearSelection() {
     if(!stopped)revokeSurfaceSelection(send,selectionCache,selectionBusy);
     selectionActive=false;selectionFingerprint=null;selectionNext=null;selectionCache=null;selectionLayer.replaceChildren();
-    surfaceNote.textContent="";
     delete surface.dataset.selectionReady;
     refreshExportControls();
 }
@@ -357,7 +356,7 @@ function receiveSelection(reply) {
     if(!selectionBusy||selectionBusy.request!==reply.request) return;
     selectionBusy=null;
     if(selectionActive&&!latest?.output_pending&&!selectionNext&&reply.generation===generation&&reply.revision===revision&&reply.presentation===latest?.presentation&&!filterUi.blocked()&&reply.value) {
-        selectionCache=reply;surfaceNote.textContent="";surface.dataset.selectionReady=String(reply.request);drawSelection();
+        selectionCache=reply;surface.dataset.selectionReady=String(reply.request);drawSelection();
     }
     refreshExportControls();
     flushSelection();
@@ -841,7 +840,8 @@ function captureViewport(event){
         window:[innerWidth,innerHeight],dpr:devicePixelRatio||1,
         draws});
 }
-const bindings=[...articleFind.bindings,...inlineImages.bindings,...contextMenu.bindings,...editorColor.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
+const toast=createSurfaceToast({root:document.getElementById("surface-toast"),message:surfaceNote,dismiss:document.getElementById("toast-dismiss"),document,MutationObserver,restore:restoreEditingFocus});
+const bindings=[...toast.bindings,...articleFind.bindings,...inlineImages.bindings,...contextMenu.bindings,...editorColor.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
     [keyboard,"beforeinput",beforeinput],
@@ -1007,7 +1007,7 @@ async function paint(packet) {
 }
 focus();
 function revokeSurface(){
-    stopped=true;articleFind.destroy();revokeNavigation();inlineImages.suspend();contextMenu?.destroy();editorColor?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
+    stopped=true;toast.destroy();articleFind.destroy();revokeNavigation();inlineImages.suspend();contextMenu?.destroy();editorColor?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
     for(const [target,event,callback,options] of bindings)target.removeEventListener(event,callback,options);
 }
 const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
@@ -1132,7 +1132,7 @@ finally {
     document.getElementById("font-settings").click();
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
-    cleanupClean=mediaClean&&articleFind.clean()&&editorColor.clean()&&contextMenu.clean()&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
+    cleanupClean=mediaClean&&toast.clean()&&articleFind.clean()&&editorColor.clean()&&contextMenu.clean()&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
         &&sitesUi.clean()&&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&destinationUi.clean()&&bookmarksUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
     try {send({kind:"stopped",clean:cleanupClean,...(toolsProbeEnabled?{tools:tools.observations()}:{})});} catch(_) { /* join still acknowledges cleanup */ }
 }

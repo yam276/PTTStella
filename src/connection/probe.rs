@@ -25,6 +25,7 @@ pub(super) enum Scenario {
     ControlInput,
     EditorClipboard,
     EditorColor,
+    ToastReconnect,
     PointerRows,
     ListBoundary,
     ArticleSwitch,
@@ -670,6 +671,47 @@ pub(super) async fn serve(
     bytes: Vec<u8>,
     scenario: Scenario,
 ) -> Result<(), String> {
+    if matches!(scenario, Scenario::ToastReconnect) {
+        return timeout(Duration::from_secs(900), async {
+            for stage in 1..=2 {
+                let (stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
+                let mut socket = tokio_tungstenite::accept_async(stream)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                let mut wire = bytes.clone();
+                wire.extend(
+                    format!("\x1b[3;1HSESSION {stage}/2 - no login or replay allowed").into_bytes(),
+                );
+                socket
+                    .send(Message::Binary(wire.into()))
+                    .await
+                    .map_err(|e| e.to_string())?;
+                if stage == 1 {
+                    tokio::time::sleep(Duration::from_millis(300)).await;
+                    socket
+                        .send(Message::Close(Some(CloseFrame {
+                            code: CloseCode::Normal,
+                            reason: "Synthetic reconnect test".into(),
+                        })))
+                        .await
+                        .map_err(|e| e.to_string())?;
+                }
+                match socket.next().await {
+                    Some(Ok(Message::Close(_))) => {
+                        socket.flush().await.map_err(|e| e.to_string())?
+                    }
+                    _ => {
+                        return Err(
+                            "reconnect probe forbids login, replay and all station input".into(),
+                        );
+                    }
+                }
+            }
+            Ok(())
+        })
+        .await
+        .map_err(|_| "reconnect probe deadline expired".to_owned())?;
+    }
     let deadline = if matches!(
         scenario,
         Scenario::Filters

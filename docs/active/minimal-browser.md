@@ -4,13 +4,31 @@
 
 ## 目標
 
-目前最新開發診斷交付為 `dist/macos-editor-colour-verified/PTTStella.app`（0.3.0-dev.2，含框選上色與 PTT 色表，合成驗證範圍見下節）；前版 `dist/macos-030-multi-instance-critic/PTTStella.app` 保留供比較。穩定版診斷交付 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修）保留。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前最新開發診斷交付為 `dist/macos-toast-verified/PTTStella.app`（0.3.0-dev.2，含藍金大字通知與斷線重連，合成驗證範圍見下節）；前版 `dist/macos-editor-colour-verified/PTTStella.app` 保留供比較；前版 `dist/macos-030-multi-instance-critic/PTTStella.app` 保留供比較。穩定版診斷交付 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修）保留。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
 使用者已明確補充：只有外觀像 terminal，並非真實系統終端。本產品不開 shell／PTY，不追求通用 terminal 相容。
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
+
+## 藍金通知與斷線重連（2026-10-29，已完成合成驗證）
+
+輸入／結果：操作通知改為視窗上方中央的深藍／金線／星徽卡片，標題 20～24px、內文 18～21px，窄視窗維持換行與可捲動內容；不改 BBS 格線、不進 PNG。一般通知單一槽位取代舊訊息，約 8 秒自動收起，hover／鍵盤焦點暫停剩餘時間，可明確關閉且不搶焦點。斷線／錯誤用獨立持續卡片，不被一般通知覆蓋、不自動消失。
+
+斷線卡片提供重新連線，沿用 Connection 原站點與單一 writer；按下立即鎖定、顯示連線中，連線成功後收起，失敗保留原因與再次重試。Connected／Connecting、關窗與 fatal UI 拒絕重連；fatal 提示重新開啟 App。重連不登入、不讀鑰匙圈、不重送輸入或帳密。一般合成 probe 保持重連禁用，只有 `toast_reconnect` 專用的兩次 loopback 連線案例開放這個按鈕。
+
+驗收：JS 驗證唯一 timer／observer、到期、取代、hover／焦點剩餘時間、關閉、焦點及清理；Rust 准入與既有重連隔離回歸。真正 Dioxus host 的 `--probe-surface OUTPUT_DIRECTORY toast_reconnect` 由自製本機 server 第一次斷線，原生重連後第二次連線保持、拒絕全部登入／重送 bytes，再匯出 PNG、關閉通知並正常退出。視覺需讀回斷線卡與一般通知；缺 native runner 不算通過。保持 develop 0.3.0-dev.2，不發佈。
+
+結果：JS 通知 owner 新增六項計時／暫停／取代／關閉／焦點／清理測試，連同完整 JS 回歸通過；Rust 准入涵蓋關窗、fatal、合成場景、Connecting／Connected 鎖定。停止時移除所有 listener、observer 與唯一 timer，沒有背景輪詢。通知不因選取或畫面刷新提早消失；直接沿用原本純文字出口，沒有 HTML 插入或另一份訊息 queue。
+
+自動檢查：desktop lib 170、bin 161（另有一個由父測試啟動的 ignored 診斷子程序入口，未另算通過）、JS 303、core 14 commands／2 replays、Fluent、Clippy／fmt／docs 全部通過。
+
+macOS arm64 原生 Dioxus／WKWebView `toast_reconnect` 已完成兩輪。首輪原生重連／自動收起與傳輸通過，但背景視窗的進場動畫使通知停在透明狀態，該輪視覺不算通過；移除進場動畫後，最終 CUA 實際讀回確認 620px 寬的斷線卡及一般操作卡，星徽、20px 標題與 18px 內文清楚，未取得前景焦點仍直接顯示。斷線卡停留超過 8 秒仍有按鈕，trusted AX 點重新連線後卡片收起；PNG 已儲存的新卡可由原生關閉通知按鈕移除。hover／焦點暫停時間由受控 JS clock 驗證，不冒充原生滑鼠 hover 已測。
+
+兩輪合成 server 均獨立完成恰兩次連線，第二階段拒絕所有站端 bytes；診斷 generation 2、input epoch 0，沒有登入、帳密或舊操作重送。來源 PNG 維持 960×576，移除通知動畫前後的來源 PNG SHA-256 相同。最終 surface-probe passed、run_completed／cleanup_completed、Close acknowledged、全部 owner join、Finish run_ok／cleanup_ok 與 exit 0 通過。證據 `.local/verification/toast-20261029/`；只診斷編譯／合成視窗置頂，未連 PTT，Windows／Linux 原生與窄視窗仍待實測。
+
+最終 App 移至 `dist/macos-toast-verified/PTTStella.app`，與實測 binary 相同且 strict ad-hoc 簽章通過；已移除本工作非活動的 `dist/macos-toast-dev`，保留兩輪唯一證據與共用 Cargo cache。精確路徑、搬移與保留原因在 cleanup-owned-output.json。沒有新建分支或 worktree，保持 develop 0.3.0-dev.2，不推進 main／master、不發佈。
 
 ## 編輯器框選上色（2026-10-29，已實作，合成驗證通過）
 

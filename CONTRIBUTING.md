@@ -171,6 +171,8 @@ AID 核心另核對 article_navigation 的自製 article-open fixture 與 naviga
 
 編輯器框選上色變更另跑 core、desktop lib／bin、完整 JS、Fluent、Clippy 與 docs。`editor_color` 核心涵蓋兩種顯示／插入模式、DBCS 開關、多行與空行、中文半格、既有 SGR 覆寫與未選取尾字原色、截斷／未知色碼拒絕及 23×79 格頁面有界指令；Connection loopback 必須獨立核對原始 bytes、分片回覆、手動打斷、排隊撤銷與重連不重送。`--probe-surface OUTPUT_DIRECTORY editor_color` 需原生框選含空行的三行、色表取消後重開／亮紅黑底套用、匯出 PNG 及正常 Close，由 peer 核對全篇 bytes 與原模式。不得把工具無法點擊或未套用當成通過。
 
+通知／重連介面變更另跑 desktop lib／bin、core、完整 JS／Fluent、Clippy 與 docs；一般通知須只有一個 observer 與 timer，核對取代、8 秒到期、hover／焦點的剩餘時間、明確關閉、純文字與清理，不能因刷新或選取清掉通知。原生 `--probe-surface OUTPUT_DIRECTORY toast_reconnect` 僅連同一個 owned loopback peer 的兩個 session，第一次自動斷線，原生按重新連線後第二次拒絕全部登入／重送 bytes；讀回持續斷線卡與一般卡、匯出 PNG、關閉通知及正常 Close／全部 owner join。此 case 專用開放重連，其他合成 probe 仍禁用；背景擷取或未執行不能算視覺通過。
+
 ## 資產與提交
 
 資產與依賴須有來源、授權與版本；合成 fixture 保存獨立 expected。提交前檢查實際 diff，維持獨立 checkout 可建置及驗證。
