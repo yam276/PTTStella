@@ -1,14 +1,19 @@
 //! Local station choices, using the shared bounded read and atomic backup writer.
 use super::{MAX_BYTES, Sites};
-use crate::storage::{self, ReadError};
+use crate::storage::{
+    ReadError,
+    shared::{self, Document},
+};
 use std::path::PathBuf;
 #[derive(Clone)]
 pub struct Store {
-    path: PathBuf,
+    document: Document,
 }
 impl Store {
     pub fn at(path: PathBuf) -> Self {
-        Self { path }
+        Self {
+            document: Document::new(path),
+        }
     }
     pub fn system() -> Result<Self, String> {
         let dirs = directories::ProjectDirs::from("", "", "PTTStella")
@@ -16,7 +21,7 @@ impl Store {
         Ok(Self::at(dirs.config_dir().join("sites.json")))
     }
     fn read(&self) -> Result<Option<Vec<u8>>, String> {
-        storage::read_bounded(&self.path, MAX_BYTES).map_err(|e| match e {
+        self.document.read(MAX_BYTES).map_err(|e| match e {
             ReadError::TooLarge => crate::msg!("sites-invalid"),
             ReadError::Io(e) => crate::msg!("sites-read-failed", error = e.to_string()),
         })
@@ -26,13 +31,25 @@ impl Store {
             .map_or_else(|| Ok(Sites::default()), |bytes| Sites::decode(&bytes))
     }
     pub fn save(&self, sites: Sites) -> Result<Sites, String> {
-        let bytes = sites.encode()?;
-        let previous = self.read()?;
-        if let Some(bytes) = &previous {
-            Sites::decode(bytes)?;
-        }
-        storage::replace_backed_up(&self.path, &bytes, previous.as_deref())?;
-        Ok(sites)
+        self.save_from(&self.document.baseline(Sites::decode)?, sites)
+    }
+    pub fn save_from(&self, base: &Sites, draft: Sites) -> Result<Sites, String> {
+        draft.encode()?;
+        self.document.update(MAX_BYTES, None, |bytes, _| {
+            let current = bytes.map_or_else(|| Ok(Sites::default()), Sites::decode)?;
+            let merged = Sites {
+                version: 1,
+                default: shared::field(&base.default, &draft.default, &current.default)?,
+                favourites: shared::entries(
+                    &base.favourites,
+                    &draft.favourites,
+                    &current.favourites,
+                    |a, b| a.target == b.target,
+                )?,
+            };
+            let bytes = merged.encode()?;
+            Ok((merged, bytes))
+        })
     }
 }
 #[cfg(test)]

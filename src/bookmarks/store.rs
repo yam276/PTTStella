@@ -1,15 +1,20 @@
 //! Bounded local article references; no page contents or account data.
 use super::{Bookmarks, MAX_BYTES};
-use crate::storage::{self, ReadError};
+use crate::storage::{
+    ReadError,
+    shared::{self, Document},
+};
 use std::path::PathBuf;
 
 #[derive(Clone)]
 pub struct Store {
-    path: PathBuf,
+    document: Document,
 }
 impl Store {
     pub fn at(path: PathBuf) -> Self {
-        Self { path }
+        Self {
+            document: Document::new(path),
+        }
     }
     pub fn system() -> Result<Self, String> {
         let dirs = directories::ProjectDirs::from("", "", "PTTStella")
@@ -17,7 +22,7 @@ impl Store {
         Ok(Self::at(dirs.data_local_dir().join("bookmarks.json")))
     }
     fn read(&self) -> Result<Option<Vec<u8>>, String> {
-        storage::read_bounded(&self.path, MAX_BYTES).map_err(|error| match error {
+        self.document.read(MAX_BYTES).map_err(|error| match error {
             ReadError::Io(error) => crate::msg!("bookmarks-read-failed", error = error.to_string()),
             ReadError::TooLarge => crate::msg!("bookmarks-invalid"),
         })
@@ -30,13 +35,23 @@ impl Store {
     }
     /// A bad existing document is never replaced by an empty fallback or edit.
     pub fn save(&self, bookmarks: Bookmarks) -> Result<Bookmarks, String> {
-        let bytes = bookmarks.encode()?;
-        let previous = self.read()?;
-        if let Some(previous) = &previous {
-            Bookmarks::decode(previous)?;
-        }
-        storage::replace_backed_up(&self.path, &bytes, previous.as_deref())?;
-        Ok(bookmarks)
+        self.save_from(&self.document.baseline(Bookmarks::decode)?, bookmarks)
+    }
+    pub fn save_from(&self, base: &Bookmarks, draft: Bookmarks) -> Result<Bookmarks, String> {
+        draft.encode()?;
+        self.document.update(MAX_BYTES, None, |bytes, _| {
+            let current = bytes.map_or_else(|| Ok(Bookmarks::default()), Bookmarks::decode)?;
+            let merged = Bookmarks {
+                entries: shared::entries(
+                    &base.entries,
+                    &draft.entries,
+                    &current.entries,
+                    |a, b| a.matches(&b.target),
+                )?,
+            };
+            let bytes = merged.encode()?;
+            Ok((merged, bytes))
+        })
     }
 }
 
@@ -113,7 +128,25 @@ mod tests {
         std::fs::create_dir(&backup).unwrap();
         assert!(store.save(Bookmarks::default()).is_err());
         assert_eq!(std::fs::read(&path).unwrap(), previous);
-        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
+        let mut names: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            [
+                "bookmarks.json",
+                "bookmarks.json.bak",
+                "bookmarks.json.lock"
+            ]
+        );
+        assert_eq!(
+            std::fs::metadata(path.with_extension("json.lock"))
+                .unwrap()
+                .len(),
+            0
+        );
         std::fs::remove_dir(&backup).unwrap();
         std::fs::remove_file(&path).unwrap();
         std::fs::create_dir(&path).unwrap();

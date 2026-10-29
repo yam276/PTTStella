@@ -149,7 +149,14 @@ async fn slow_disk_keeps_ui_pollable_and_cleanup_retains_the_started_work() {
 async fn busy_admission_never_starts_another_operation_and_unstarted_work_is_revoked() {
     let mut files = Files::default();
     files
-        .start(|permit| save_hover(permit, Err("no store".into()), AppSettings::default()))
+        .start(|permit| {
+            save_hover(
+                permit,
+                Err("no store".into()),
+                AppSettings::default(),
+                AppSettings::default(),
+            )
+        })
         .unwrap();
     let called = std::cell::Cell::new(false);
     assert!(
@@ -220,9 +227,19 @@ async fn failed_save_preserves_effective_state_and_the_next_save_can_commit() {
     draft.language = pttstella::i18n::Language::English;
     let mut files = Files::default();
     files
-        .start(|permit| save_display(permit, preferences.store(), draft.clone()))
+        .start(|permit| {
+            save_display(
+                permit,
+                preferences.store(),
+                preferences.app().clone(),
+                draft.clone(),
+            )
+        })
         .unwrap();
-    assert!(matches!(files.next().await, Completion::Display(Err(_))));
+    assert!(matches!(
+        files.next().await,
+        Completion::Display { result: Err(_), .. }
+    ));
     assert_eq!(preferences.app(), &original);
     assert_eq!(
         std::fs::read(dir.path().join("probe-settings.json")).unwrap(),
@@ -230,9 +247,19 @@ async fn failed_save_preserves_effective_state_and_the_next_save_can_commit() {
     );
     std::fs::remove_dir(dir.path().join("probe-settings.json.bak")).unwrap();
     files
-        .start(|permit| save_display(permit, preferences.store(), draft))
+        .start(|permit| {
+            save_display(
+                permit,
+                preferences.store(),
+                preferences.app().clone(),
+                draft,
+            )
+        })
         .unwrap();
-    let Completion::Display(Ok(saved)) = files.next().await else {
+    let Completion::Display {
+        result: Ok(saved), ..
+    } = files.next().await
+    else {
         panic!("save failed")
     };
     assert_eq!(preferences.app(), &original); // Delivery alone never mutates UI state.
@@ -240,7 +267,14 @@ async fn failed_save_preserves_effective_state_and_the_next_save_can_commit() {
     assert_eq!(preferences.display().font_size, 18.0);
     let draft = preferences.hover_draft(HoverPosition::Off);
     files
-        .start(|permit| save_hover(permit, preferences.store(), draft))
+        .start(|permit| {
+            save_hover(
+                permit,
+                preferences.store(),
+                preferences.app().clone(),
+                draft,
+            )
+        })
         .unwrap();
     let Completion::Hover(Ok(saved)) = files.next().await else {
         panic!("hover save failed")

@@ -703,3 +703,9 @@ update-open = Download new version
 update-available = New version available: { $version }
 update-current = You have the latest stable release or a newer development version.
 update-help = Stable releases are checked at startup or on request. Unavailable checks stay silent. Download and install updates manually.
+
+storage-document-busy = Another window is saving this data. Please try again shortly.
+
+storage-document-conflict = Another window changed the same item. Nothing was overwritten. Restart this window to load the latest data before editing again.
+
+storage-document-too-large = Shared data exceeds its size limit; it was not saved.

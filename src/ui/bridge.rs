@@ -69,8 +69,9 @@ impl<'a> Bridge<'a> {
     pub(super) fn open_settings(
         &mut self,
         store: Result<pttstella::settings::store::Store, String>,
+        base: pttstella::settings::AppSettings,
     ) {
-        self.settings.open(store);
+        self.settings.open(store, base);
     }
     pub(super) fn settings_notice(&self, message: &str) -> Result<(), document::EvalError> {
         self.send(Packet::Notice(message.into()))

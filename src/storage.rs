@@ -5,6 +5,8 @@ use std::{
     path::Path,
 };
 
+pub mod shared;
+
 pub enum ReadError {
     Io(io::Error),
     TooLarge,
