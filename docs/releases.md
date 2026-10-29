@@ -1,15 +1,22 @@
 # 分支與自動發佈
 
-`develop` 是日常開發與一般 PR 的預設分支；`main` 保留發佈版本。不要直接把功能分支合併或推送到 `main`，也不要在 GitHub 手動建立缺少下載檔的 Release。
+`develop` 是日常開發與一般 PR 的預設分支；`main`／`master` 只保留正式版號。此 repo 的正式分支是 `main`；若存在 `master`，適用相同規則，不需另建或改名。不要直接把功能分支合併或推送到 `main`，也不要在 GitHub 手動建立缺少下載檔的 Release。
+
+## 分支版號規則
+
+- `main`／`master` 的當前產品版號只能是正式 SemVer，例如 `0.2.2`；不得包含 `-dev`、`-alpha`、`-beta`、`-rc` 等預發佈後綴或 `+build` metadata。
+- 只有 `develop` 使用 dev 版號，例如 `0.3.0-dev.2`。準備 Release PR 時，才暫時改為目標正式版號，讓合併到 `main` 的檔案已是正式版本。
+- 正式發佈後將 `main` 整合回 `develop`，再更新 `develop` 的下一個 dev 版號。恢復 dev 版號的提交只留在 `develop`，不得同步回 `main`／`master`。
+- `Cargo.toml`、`Cargo.lock`、README 當前版本與版本徽章必須一致；歷史紀錄中的舊版號維持原樣。
 
 ## 發佈一個版本
 
-1. 在 `develop` 完成變更與驗收，將 `Cargo.toml` 的 package version 提高，並以 Cargo 更新 `Cargo.lock` 的本產品版本；兩者必須一致。使用 SemVer，例如 `0.1.0` 或 `0.1.0-rc.1`，不接受 `+build` metadata。
+1. 在 `develop` 完成變更與驗收，將 `Cargo.toml` 的 package version 提高，並以 Cargo 更新 `Cargo.lock` 的本產品版本；兩者必須一致。使用正式 SemVer，例如 `0.1.0`；不將 dev 或其他預發佈版號合併到 `main`，也不接受 `+build` metadata。
 2. 將版本變更提交並推送到 `develop`，建立 **develop → main** 的 PR，標題必須為 `release: v0.1.0`（對應實際版本）。版本必須高於當前 `main`。`Release PR policy` 會檢查分支、來源 repo、版本、lockfile、打包回歸與文件；草稿不通過。
    若有 `docs/release-notes/v<version>.md`，發佈時會原樣使用該說明，不另附自動變更清單；沒有版本專用說明時沿用自動摘要。
 3. 檢查變更與驗收結果後，合併該 PR。一般 merge commit 或 squash merge 均可；不要使用 rebase merge，發佈需要 GitHub 記錄的 PR merge commit 與觸發 commit 完全一致。
-4. `main` 的 `Cargo.toml` 更新觸發 `Desktop Release`。先核對剛合併的 PR 與遞增版本，再平行測試／打包四個架構，全部成功後才建立 `v0.1.0` tag 與 GitHub Release、附上下載檔。預發佈版本自動標示 Pre-release；正式版標示 Latest。
-5. 將 `main` 合併回 `develop`，保留兩條長期分支。不要在發佈後刪除 `develop`。
+4. `main` 的 `Cargo.toml` 更新觸發 `Desktop Release`。先核對剛合併的 PR 與遞增版本，再平行測試／打包四個架構，全部成功後才建立 `v0.1.0` tag 與 GitHub Release、附上下載檔。依目前分支規則只發佈正式版本，標示 Latest。
+5. 將 `main` 合併回 `develop`，再把 `develop` 更新為下一個 dev 版號並同步 README／徽章；此提交不得合併回 `main`。保留兩條長期分支，不要在發佈後刪除 `develop`。
 
 目前沒有自動提交版本、啟動 App、登入站點或發送站內訊息。日常 push 到 `develop` 不會自動執行這套建置。初次安裝 workflow 留在 `develop`，第一個正式 Release PR 會一併帶到 `main`；安裝本身不提高產品版本、不建立 Release。
 
