@@ -33,7 +33,11 @@ function render(target,packet,{cursor=true,hovered=-1,linkHints=false,highlight=
     const frame=packet.frame,width=frame.cols*12,height=frame.rows*24;
     const ctx=target.getContext("2d");
     const scale=Math.min(target.width/width,target.height/height);
-    const x=col=>Math.round(col*12*scale),y=row=>Math.round(row*24*scale);
+    // Each backing dimension was rounded independently by the host. In a
+    // one-row article strip its height can be one pixel taller than 24*scale;
+    // using the smaller scale for both axes leaves that pixel black. Shared
+    // edges must span the actual backing extent, including the final edge.
+    const x=col=>Math.round(col*target.width/frame.cols),y=row=>Math.round(row*target.height/frame.rows);
     ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle="#000"; ctx.fillRect(0,0,target.width,target.height);
     // Opaque backgrounds first; both sides of every shared edge use one integer.
     for(const glyph of frame.glyphs) for(let half=0;half<glyph.width;half++) {
