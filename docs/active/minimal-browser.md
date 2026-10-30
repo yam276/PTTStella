@@ -12,6 +12,24 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## 0.3.0 功能凍結與發佈前驗收（2026-10-30，進行中）
+
+使用者要求凍結功能，先完成剩餘實站、操作與效能回歸，再跑 Windows x64、macOS arm64／x64、Linux x64 的 verify 建置；全部必要項通過後才準備 0.3.0。保持 develop／0.3.0-dev.2，不因測試完成自行合併或發佈。當前最新診斷 App 是 `dist/macos-list-bookmarks-final/PTTStella.app`；舊段落的其他 App 路徑屬歷史紀錄，已被取代的測試副本依結案規則清理，不能當作仍存在的交付。
+
+待驗：實站切板／進出長短文章、展圖與首尾／銜接翻頁、五秒推文更新保持位置／取消／切篇、列表標題收藏與離線讀回、原生右鍵／滑鼠及注音 IME、相同工作量 cold／warm wall／CPU／process-family memory。一般 gate 只用本機合成資料；實站不發文／推文／寄信，不把私人帳密或原始流量存入 repo。人工／工具限制保留 not_ready，不以 JS doubles 代替。檢查狀態及原始證據保留 `.local/verification/release-030-freeze-20261030/`。
+
+### 本輪實站結果與修正
+
+PTTStella 專用帳號實站登入，Steam／NBA／Equestrian／Test 切板與進板提示、實體點文章列、正文上下翻頁、圖片上的翻頁、左緣返回、列表滾輪到底後操作、標題右鍵收藏與圖片右鍵選單完成指定範圍驗收。PageDown 由 1～23 銜接 23～45；Steam 指定列收藏與光棒原列不同，保存 #1gu_9w4z，斷線後副本可讀至第70行。五秒推文檢查多次保持23～45行，暫停後首尾可讀；該時段未自然出現新推文，實際追加仍以既有45→48→51行本機peer證據為準。使用者確認原生注音輸入、方向鍵／空白及Ctrl+V正常。兩份站端測試草稿均選放棄並確認「文章沒有存入」，沒有發文／推文／寄信。
+
+實站找出兩項發佈前修正。上色會等待無效回覆：PTT取消不存在的區塊標記或已在行尾的End，可能沒有screen diff；只在這兩步附加Ctrl+L重繪，保留唯一writer、fresh frame驗證與取消／期限。獨立peer不再對其他no-op製造ACK，修正前5.05秒停止，修正後中文／多行／空行／既有SGR及取消／斷線全部通過；實站已完成上色並確認第三行整行變綠、Ctrl+V可切實際色碼／彩色預覽。原生drag端點與請求範圍不同，不把該工具範圍當作精確三行人工驗收；先前使用者三行成功及strict transport結果分開保留。PTT來源依據為[官方編輯器](https://github.com/ptt/pttbbs/blob/c591f7ca0222da541fa5098656a03f4668af2b5d/mbbsd/edit.c)，只保存來源於repo外。
+
+第二項為標準文章標頭有前置空格，原AID導覽開對文章卻誤報身分失敗；用Rust選取複製讀回公開標頭證明「 作者」。導覽與refresh共用純標頭板名解析，僅略過ASCII前置空格，原始前三行仍完整保存用於reentry比較；錯板、缺label、錯AID與過期流程仍拒絕。最終App實站已顯示「已開啟 Equestrian 的 #1gm7mfaU」。新test首輪因合成標頭重繪後未還原頁尾游標而Wait，補正fixture游標位置，未放寬產品准入。
+
+最終診斷App `dist/macos-030-freeze-final/PTTStella.app`（macOS arm64／strict ad-hoc／未公證；不等於正式版）完整讀到827行。相同827行／38頁長文重讀20輪皆可到805～827行，量測CPU seconds、RSS及vmmap physical footprint，完整方法與數據見本機 `performance.json`；含CUA輸入與Home／End／AX觀察的單輪約2.1秒，不能與舊0.7秒Paint ACK量測直接比較。RSS含shared／empty allocator pages，與physical footprint分開；未宣稱低階實機FPS或整日無洩漏。額外嘗試因失焦保護暫停，立即停止續送／取消回列表，不記通過；未為測試放寬失焦規則。先前兩個App及其WebKit cohort正常退出，診斷finish run_ok／cleanup_ok均true。
+
+最終本機gate：Python81、JS323、desktop lib186／bin173、多程序保存9、core14commands／2replays、Clippy／fmt／Fluent／docs通過；ignored為父測試實際使用的子程序helper，未算成通過數。先前Python設定helper mock缺Runtime boolean回覆，補上root/group狀態後通過，原失敗紀錄保留。下一步推送develop並執行release.yml的verify（Windows x64、macOS arm64／x64、Linux x64）；目前未以舊版CI當作本版通過，也沒有建立PR／Tag／Release。所有新證據保留 `.local/verification/release-030-freeze-20261030/`，跨平台GUI／低階硬體及長時段實站追加推文仍為明示驗證邊界。
+
 ## 0.3.0 後續需求與順序（2026-10-29）
 
 依使用者要求整理桌面 PTT 的公開需求，以下為質性討論與本產品缺口的優先順序，不代表使用者比例調查，也不表示本輪已實作全部功能。日常開發維持 develop，不自行發佈。
