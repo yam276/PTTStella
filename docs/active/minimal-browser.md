@@ -1678,3 +1678,10 @@ core 13 命令／2 replay（filters 18 項）、desktop lib 143、bin 115、全 
 自動驗證通過：desktop lib183、bin171（1個父測試使用的helper）、多程序保存9（1個子程序helper）、JS318、core14commands／2replays、Clippy／fmt／docs。初次編譯測試少匯入text及三份舊DOM double缺navigation，修正測試依賴／可選取值；無標頭測試最初將游標留在正文而未符合既有閱讀辨識，修正自製串流回到頁尾，沒有放寬production閱讀格式。測試先從另一篇已快取文章直接改首三列會正確判changed，改成獨立headerless初始作用域後通過；失敗log均留存。
 
 原生進度：已打包 `dist/macos-ansi-edges-headerless-current/PTTStella.app`（macOS arm64 release／診斷置頂、不搶啟動焦點、strict ad-hoc、未公證）。無標頭45列合成視窗前三列已顯示，右上off浮層確實不見；AX按鍵元件／Raise未能啟用前景，標題列座標點擊回報noWindowsAvailable，全文依原保護停23列。已請使用者取得前景，尚未完成原生收藏／離線讀回或ansi_zoom縮放像素驗收，不記passed。視窗與本輪交付包因待驗而保留；證據在 `.local/verification/ansi-edges-headerless-20261030/`。Windows／Linux原生、實站均未執行；未操作使用者已登入的session。沒有本輪過時App副本／工作樹／分支需要清理，保留共用target與先前交付。
+
+
+2026-10-30 前景補驗完成：上一份等待使用者的native-headerless peer已於900秒逾時，嚴格保留failed／cleanup=false；關窗後該程序已退出。重開自製headerless加連續青色帶的同一測試，使用者取得前景後完整載入45列，按收藏核對精確9階段（一次PageDown、Q、列表、#、AID、Q、返回、Right、:23），保存1筆、label=null而顯示#00000101@Stella。真實本機副本首三行保留原無標頭文字，End可見REPLY0045，返回文章仍保留原閱讀位置。PNG匯出獨立解碼960×576；沒有因展開對話框或縮放更改來源尺寸。最終surface-probe status=passed、Close acknowledged、listeners／file／connection／credential worker皆joined、process exit0，pgrep確認無本輪殘留。
+
+同一WebView在100%／125%／150%取同回合AX與screenshot；實際工具回傳JPEG，副檔名已修正為.jpg，色彩帶有螢幕轉換，不能以其RGB當原ANSI色值。Pillow獨立解碼三張圖，以21px中央帶的逐行median檢查內部缺線：三次dark rows均0，green median最小115／115／117；色帶寬196／244／292px，實際縮放已改變。保留來源PNG與原始截圖，未編輯畫面。Ctrl+0在本輪原生輸入環境未復位，已使用設定「符合視窗」確認從150%回100%；沒有把這個工具按鍵結果當快捷鍵驗收。原生座標右鍵仍在送出前回報noWindowsAvailable，更新推文情境入口保留JS通過／原生not_ready，沒有用合成點擊冒充實體右鍵。
+
+最終交付改為 `dist/macos-ansi-archive-acceptance/PTTStella.app`（相同生產修正，僅合成fixture增加青色帶），strict ad-hoc驗證通過。補跑Refresh四案及全targets Clippy均通過，前輪完整gate仍有效；新包與雜湊、像素與保存／清理證據在 `.local/verification/ansi-edges-headerless-20261030/validation.json`。尚未推送或發佈，原生Windows／Linux及實站仍未執行。
