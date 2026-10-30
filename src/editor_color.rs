@@ -705,10 +705,12 @@ impl Flow {
                 // Ctrl+V with PTT's own block mark can convert literal *[ into
                 // ESC. Revoke that station mark before switching preview modes;
                 // the application's acknowledged mouse selection is separate.
+                // Cancelling an absent mark may produce no screen diff. Force
+                // one redraw so the next step has a real, fresh response.
                 self.stage = Stage::Raw;
                 Ok(self.send(
                     frame,
-                    b"\x1bu".to_vec(),
+                    b"\x1bu\x0c".to_vec(),
                     state.line,
                     Some(state.col),
                     state.preview,
@@ -744,7 +746,9 @@ impl Flow {
                         display: Vec::new(),
                         expected_styles: Vec::new(),
                     });
-                    return Ok(self.send(frame, vec![5], line, None, false, state.insert));
+                    // End can also be silent when already at the line end
+                    // (including an empty line). Redraw without changing text.
+                    return Ok(self.send(frame, vec![5, 0x0c], line, None, false, state.insert));
                 }
                 self.rows[index] = Row::capture(frame, state, span, line)?;
                 let observed = if self.original.preview {

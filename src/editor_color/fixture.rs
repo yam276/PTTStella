@@ -65,6 +65,7 @@ impl Editor {
         let mut i = 0;
         while i < bytes.len() {
             match bytes[i] {
+                0x0c => {} // Explicit redraw; document and cursor stay unchanged.
                 0x16 => self.preview = !self.preview,
                 0x0f => self.insert = !self.insert,
                 1 => self.pos = 0,
