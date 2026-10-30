@@ -60,6 +60,8 @@ pub enum Progress {
     },
     Reached {
         serial: u64,
+        #[serde(skip)]
+        operation: Stamp,
         target: Destination,
     },
 }
@@ -230,7 +232,12 @@ mod tests {
                 serde_json::json!({"state":"active","serial":4,"target":expected,"operation":{"generation":7,"revision":3,"input_epoch":2}})
             );
             assert_eq!(
-                serde_json::to_value(Progress::Reached { serial: 4, target }).unwrap(),
+                serde_json::to_value(Progress::Reached {
+                    serial: 4,
+                    operation,
+                    target
+                })
+                .unwrap(),
                 serde_json::json!({"state":"reached","serial":4,"target":expected})
             );
         }

@@ -743,8 +743,11 @@ toast-connecting-action = 連線中…
 article-updates-start = 更新推文
 article-updates-pause = 暫停更新
 article-updates-refreshing = 正在更新推文…
-article-updates-waiting = 每 15 秒更新推文
+article-updates-waiting = 每 5 秒更新推文
 article-updates-paused = 推文更新已暫停：操作中或視窗不在前景
 article-updates-stopped = 更新已停止；請檢查站端畫面或重新開啟文章
 article-updates-off = 推文更新未開啟
 article-updates-new = 新增 { $count } 則推文 · 查看
+
+article-updates-station = 顯示站端畫面
+article-updates-retained = 更新已停止，閱讀位置已保留；可切回站端處理

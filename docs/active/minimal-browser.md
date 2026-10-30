@@ -4,7 +4,7 @@
 
 ## 目標
 
-目前最新開發診斷交付為 `dist/macos-reply-updates-ready/PTTStella.app`（0.3.0-dev.2，含明確開啟的目前文章推文更新、名單標記轉色與藍金通知，合成驗證範圍見下節）；前版 `dist/macos-toast-verified/PTTStella.app` 保留供比較；前版 `dist/macos-editor-colour-verified/PTTStella.app` 保留供比較；前版 `dist/macos-030-multi-instance-critic/PTTStella.app` 保留供比較。穩定版診斷交付 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修）保留。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前最新開發診斷交付為 `dist/macos-reply-5s-final/PTTStella.app`（0.3.0-dev.2，含五秒且保留閱讀位置的目前文章推文更新、名單標記轉色與藍金通知，合成驗證範圍見下節）；前版 `dist/macos-toast-verified/PTTStella.app` 保留供比較；前版 `dist/macos-editor-colour-verified/PTTStella.app` 保留供比較；前版 `dist/macos-030-multi-instance-critic/PTTStella.app` 保留供比較。穩定版診斷交付 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修）保留。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
@@ -20,12 +20,24 @@
 | --- | --- | --- |
 | 發佈門檻 | 操作穩定與低效能機器回歸 | 長時間切板、長文／展圖、首尾翻頁、編輯與斷線恢復不鎖死；未知提示保留原始鍵盤，不重送帳密或待送內容。以同工作量記錄 cold／warm、wall time、CPU 與 process-family memory。 |
 | 已完成合成驗收 | 文字名單相容匯入 | B 遮內容並保留 ID、C 整行塗黑、W 以顏色標示 ID；數字標記的顏色轉換在預覽說明，確認才合併保存，取消／失敗不改原檔與生效規則。 |
-| 本輪，實站待驗 | 文章推文更新 | 停在底部可跟隨；往回讀保持位置並顯示新推文數，明確操作才跳下去；可暫停，失焦／編輯及站端等待時停止或退避，不阻塞手動輸入。 |
+| 本輪，實站待驗 | 文章推文更新 | 每五秒檢查；所有位置含舊底部都保持不動並顯示新推文數，明確操作才跳下去；可暫停，失焦／編輯及站端等待時停止或退避，不阻塞手動輸入。 |
 | 下一項 | 追蹤文章與接續閱讀 | 從既有 AID 書籤出發，可靠記錄閱讀位置及新舊推文界線；文章變動有明確退回位置，不以頁碼猜文章身分；只對使用者明確追蹤的項目更新。 |
 | 接續 | 桌面輸入裝置一致性 | Mac 觸控板、高速滾輪與側鍵不重複翻頁、不穿透選單；列表維持終端機翻頁，只有網頁文章捲動；不破壞鍵盤與 IME。 |
 | 接續 | 完整本機備份／還原 | 設定、黑白名單、書籤與閱讀位置明確匯出／預覽還原；不包含密碼，沿用跨程序合併與衝突拒絕。 |
 
 需求依據：[近期閱讀／推文中斷與追蹤需求](https://www.ptt.cc/bbs/EZsoft/M.1789283699.A.5D2.html)、[觸控板／側鍵操作討論](https://www.ptt.cc/bbs/Browsers/M.1786265274.A.5E3.html)、[桌面鍵盤需求](https://www.pttweb.cc/bbs/Android/M.1792249559.A.5EA)。完整本機備份屬產品建議；[其他桌面客戶端的設定同步](https://github.com/ksliao0314/MacPTT)僅為設計參考，不作為需求普及率或安全驗證證據。這些連結是研究來源，產品匯入介面與使用說明採中性的格式名稱。
+
+## 五秒更新與 SubAgent Critic（2026-10-30）
+
+使用者要求再審更新／取消／切篇、改為五秒且不能影響進度，通過後只推送 develop。本輪移除底部自動跟隨：頂端、中段、圖片內與原底部皆保持既有行錨點，只有 trusted 點新推文提示才跳到新底部。成功完成後五秒再檢查，互動／背景退避不補送；終端機與未明確開啟的文章不輪詢。
+
+兩位唯讀 SubAgent 找到並重審解除的問題：watch 合併略過 Active 時須以 Reached 的原 operation Stamp 確認工作；Q／列表重開中取消或失焦不得清空文章，改保留 ACK 閱讀／展圖且停止後續取頁，明確「顯示站端畫面」才釋放投影與圖片／hover owner。保留期間相對滑鼠／Vim／普通 Left、Right、Enter、Backspace 都拒絕，避免誤操作真正站端；本機上下首尾仍可閱讀，明確 raw 文字／控制鍵及換篇／世代變更維持原清理。
+
+取消改走既有 Session 控制 watch 的獨立欄位，避免一般 64 格佇列滿時遺失票據；GoTo 有 Connection 內單調 request 序號，取消只截止當時已提交的工作，新明確請求即使來源 Stamp 相同仍可開始。worker 在命令開始與自動步驟前套用控制；舊／未來取消不污染新工作，不新建背景重送 task。SubAgent 各自的 production-module／Connection 重現與最終結論保留在 `.local/verification/reply-update-cancel-critic-20261030/`；前端另跑 113 項針對回歸與 96 組 DPR／字高／圖片比例／等寬／位置追加組合。這些是 Rust／loopback／DOM doubles，不代替原生或低階機器效能驗收。
+
+完整 desktop lib 178／bin 168（另有父測試啟動的一個 ignored 子程序）、JS 309、core 14 commands／2 replays、Clippy／fmt／Fluent／docs 通過。原生更新／取消兩案例皆 passed、PNG 960×576、圖片各一次 HTTP、Close acknowledged、三個 owner join／HTTP join 與 exit 0；末次取頁請求至下次 Q 為 5.087 秒（含約 80ms 分段回覆處理），成功後五秒 deadline 另有獨立時鐘邊界測試。暫停後觀察 6.8 秒無新增送鍵。完整 gate、原生五秒計時與取消晚到查詢證據在 `.local/verification/reply-5s-20261030/`。最新 App 為 `dist/macos-reply-5s-final/PTTStella.app`，診斷置頂且初始不搶焦點、arm64／strict ad-hoc、未公證。兩個最終合成案例分別檢查 45→48→51 行後舊底部仍 23～45 行、往回讀仍 1～20 行、只點提示才到 51 行；以及 Q 延遲期間 busy 取消、45 行與展圖保留、本機首尾仍可用、晚到查詢不續送，明確顯示站端後釋放圖片。兩者需 PNG、HTTP 一次、Close acknowledged、全部 owner join、exit 0 才算原生通過；一般操作與取消不是只靠新的單元測試驗證。
+
+本輪不登入 PTT、不發文／寄信。實站部署、Windows／Linux GUI 與低階硬體仍待驗收。版本維持 0.3.0-dev.2，完成後只推 develop，不建立 PR／Tag／Release 或推進 main。清理本輪過時打包，保留最終 App、唯一證據與共用 Cargo cache；精確清單見本輪 `cleanup-owned-output.json`。
 
 ## 目前文章推文更新（2026-10-29，實作與本機合成驗證）
 

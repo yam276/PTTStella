@@ -381,8 +381,11 @@ async fn run(
         if *closing.borrow() {
             break (false, false);
         }
-        if let Some(operation) = screen.cancelled_update() {
-            let _ = connection.cancel_navigation(operation);
+        if let Some(operation) = screen.cancelled_update()
+            && let Err(error) = connection.cancel_navigation(operation)
+        {
+            eval.send(Packet::Notice(error))
+                .map_err(|e| e.to_string())?;
         }
         let status = screen.updates_status();
         if status != updates_status {
@@ -1174,10 +1177,21 @@ async fn run(
                         }
                     },
                     SurfaceEvent::ArticleUpdates {generation,article,enabled,trusted:_} => {
+                        let busy=screen.updates_status().is_some_and(|s|s.busy);
                         if screen.updates_action(generation,article,enabled) && !enabled {
+                            if busy && probe.is_some(){checks.reply_update_cancels+=1;}
                             screen.interrupt_full_load();if commands.is(CommandKind::Preload){cancel_commands(commands,&eval)?;}
                             let view=receiver.borrow().clone();screen.update(&view);
                         }
+                    },
+                    SurfaceEvent::ArticleStationRestore{generation,article,trusted:_} => {
+                        let retained=screen.reading_progress().is_some_and(|(id,first,last,load)|id==article&&first==1&&last==45&&load==Some(super::article_cache::LoadState::Complete));
+                        if screen.restore_station(generation,article) {
+                            if retained && probe.is_some(){checks.reply_retained_restores+=1;}
+                            inline_images.close();media_preview.close();
+                            eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
+                            eval.send(Packet::HoverReset{media:true}).map_err(|e|e.to_string())?;
+                            let view=receiver.borrow().clone();screen.update(&view);}
                     },
                     SurfaceEvent::Navigate {
                         request,
@@ -1187,6 +1201,7 @@ async fn run(
                         trusted: _,
                     } => {
                         let ticket=super::protocol::NavigationTicket {request,generation:stamp.generation};
+                        if screen.updates_holding() {eval.send(ticket.finish(Feedback::new(NavigationStatus::Rejected,pttstella::msg!("article-updates-retained")))).map_err(|e|e.to_string())?;continue;}
                         if let navigation::Intent::AdjacentArticle { down } = intent
                             && (source != navigation::Source::Keyboard || !screen.adjacent_article_allowed(stamp, down, &receiver.borrow())) {
                             eval.send(ticket.finish(Feedback::new(NavigationStatus::Rejected,navigation::Error::Unavailable.to_string()))).map_err(|e|e.to_string())?;
@@ -1565,7 +1580,7 @@ async fn run(
                             checks.copied_selection == Some((generation, revision, request));
                     }
                     SurfaceEvent::InlineExpand {presentation,stamp,key,target,trusted:_} => {
-                        if matches!(surface_probe.as_deref(),Some("inline"|"wide_last_row"|"inline_replies"|"inline_pages"|"full_load"|"long_load"|"short_overlap"|"short_links"|"context_menu"|"picture_menu"|"live_updates")) {checks.inline_requests+=1;if checks.inline_targets.len()>=128{return Err("too many inline probe requests".into());}checks.inline_targets.push(target);}
+                        if matches!(surface_probe.as_deref(),Some("inline"|"wide_last_row"|"inline_replies"|"inline_pages"|"full_load"|"long_load"|"short_overlap"|"short_links"|"context_menu"|"picture_menu"|"live_updates"|"live_updates_cancel")) {checks.inline_requests+=1;if checks.inline_targets.len()>=128{return Err("too many inline probe requests".into());}checks.inline_targets.push(target);}
                         let view=receiver.borrow().clone();
                         if !view.site.ptt_features() || !keyboard_policy.inline_images_key(&key,&view.context())
                             || pending_paste.read().is_some() || commands.busy() || login_open {continue;}
@@ -1574,7 +1589,7 @@ async fn run(
                             if probe.is_some() && paint.image_links.iter().any(|index|media_origin.as_ref().is_none_or(|origin|!paint.links[*index].url.starts_with(&format!("{origin}/")))) {continue;}
                             let old_batch=inline_images.batch();
                             if let Some(open)=inline_images.open(paint,target)? {
-                                if matches!(surface_probe.as_deref(),Some("inline"|"wide_last_row"|"inline_replies"|"inline_pages"|"full_load"|"long_load"|"short_overlap"|"short_links"|"context_menu"|"picture_menu"|"live_updates"))  && old_batch!=Some(open.batch) {checks.inline_expands+=1;}
+                                if matches!(surface_probe.as_deref(),Some("inline"|"wide_last_row"|"inline_replies"|"inline_pages"|"full_load"|"long_load"|"short_overlap"|"short_links"|"context_menu"|"picture_menu"|"live_updates"|"live_updates_cancel"))  && old_batch!=Some(open.batch) {checks.inline_expands+=1;}
                                 eval.send(Packet::InlineOpen(open)).map_err(|e|e.to_string())?;
                             }
                         }
@@ -1637,6 +1652,7 @@ async fn run(
                         if let Some(intent)=super::article_cache::reading_intent(&bytes) && let Some(packet)=screen.reading_move(&view,intent) {
                             eval.send(packet).map_err(|e|e.to_string())?;continue;
                         }
+                        if screen.retained_relative_key(&key) {eval.send(Packet::Notice(pttstella::msg!("article-updates-retained"))).map_err(|e|e.to_string())?;continue;}
                         screen.article_input(&view,&bytes);
                         if inline_images.input(&context,&bytes) {
                             eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
@@ -1764,9 +1780,9 @@ async fn run(
                 if view.login_guidance != login_guidance && view.login_guidance.needs_input() {
                     keyboard_policy.use_native_input();
                 }
-                if matches!(surface_probe.as_deref(),Some("boards"|"boards_close")) && checks.board_reached.len()<3 && let pttstella::navigation_job::Progress::Reached{serial,target}=&view.destination && checks.board_reached.last().is_none_or(|(seen,_)|seen!=serial) {checks.board_reached.push((*serial,target.board().as_str().to_owned()));}
+                if matches!(surface_probe.as_deref(),Some("boards"|"boards_close")) && checks.board_reached.len()<3 && let pttstella::navigation_job::Progress::Reached{serial,target,..}=&view.destination && checks.board_reached.last().is_none_or(|(seen,_)|seen!=serial) {checks.board_reached.push((*serial,target.board().as_str().to_owned()));}
                 if matches!(surface_probe.as_deref(),Some("articles"|"articles_close")) {
-                    if checks.article_reached.len()<3 && let pttstella::navigation_job::Progress::Reached{serial,target:pttstella::navigation_job::Destination::Article(target)}=&view.destination && checks.article_reached.last().is_none_or(|(seen,_)|seen!=serial) { checks.article_reached.push((*serial,target.aid().as_str().to_owned())); }
+                    if checks.article_reached.len()<3 && let pttstella::navigation_job::Progress::Reached{serial,target:pttstella::navigation_job::Destination::Article(target),..}=&view.destination && checks.article_reached.last().is_none_or(|(seen,_)|seen!=serial) { checks.article_reached.push((*serial,target.aid().as_str().to_owned())); }
                     checks.article_missing |= view.message==pttstella::msg!("article-open-missing");
                 }
                 login_guidance = view.login_guidance;
@@ -1816,6 +1832,7 @@ async fn run(
                 || matches!(case.as_str(),"mouse"|"mouse_boundary") && checks.mouse_passed(case=="mouse_boundary") && receiver.borrow().mouse.active.is_none()
                 || matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") && checks.mouse_samples_passed(&case) && receiver.borrow().mouse.active.is_none() && receiver.borrow().mouse.modes.tracking()==pttstella::mouse::Tracking::Highlight
                 || case=="pointer_rows" && checks.navigation_requests==7 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
+                || case=="live_updates_cancel" && checks.reply_updates==1 && checks.reply_update_cancels==1 && checks.reply_retained_restores==1 && checks.navigation_requests==1 && checks.export_checked && checks.inline_expands==1 && screen.reading_progress().is_none() && receiver.borrow().context().kind()=="continue_prompt"
                 || case=="live_updates" && checks.reply_updates>=2 && checks.navigation_requests==3 && checks.export_checked && checks.inline_requests>=1 && checks.inline_expands==1 && screen.updates_status().is_some_and(|s|!s.enabled&&!s.busy&&!s.failed) && reading.as_ref().is_some_and(|r|r.first_line==1 && r.last_line==51 && r.reply_count==12 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
                 || case=="article_switch" && checks.navigation_requests==5 && checks.export_checked && reading.as_ref().is_some_and(|r|r.first_line==1 && r.last_line==45 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
                 || case=="list_boundary" && checks.navigation_requests==3 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
@@ -1857,6 +1874,8 @@ async fn run(
             "paste_preview_preserved":pending_paste.read().is_some(),
             "settings_saved":checks.settings_saved,"full_png":checks.export_checked,"rows_png":checks.rows_export_checked,"media_external_requests":checks.media_external,
         });
+        surface_report["reply_update_cancels"] = checks.reply_update_cancels.into();
+        surface_report["reply_retained_restores"] = checks.reply_retained_restores.into();
         surface_report["reply_updates"] = checks.reply_updates.into();
         surface_report["navigation_requests"] = checks.navigation_requests.into();
         surface_report["editor_colours_completed"] = checks.editor_colors.into();
