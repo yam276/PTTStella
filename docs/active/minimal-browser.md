@@ -1698,3 +1698,10 @@ core 13 命令／2 replay（filters 18 項）、desktop lib 143、bin 115、全 
 離線最終通過：desktop lib185、bin172（1個父測試使用的helper）、JS323、多程序保存9（1個helper）、core14commands／2replays、全targets Clippy／fmt／Fluent／docs。新增production Session精確Up／Q／空白／Right與無標頭成功；列變更、錯板及取消後晚Q零續送。FromList核對owned Reached、完整scope及gate，故障／遺失scope／取消／世代／其他operation拒絕；JS核對標題row與cursor不同、舊lease、刪除列不fallback、終端機／busy／遠端mouse／untrusted拒絕、blur只送一次取消與五分類到4K非重疊。第一次編譯少Context import、helper借用不符、Clippy指出擴大Open使Refresh enum過大及測試模組後項目，已正確匯入／借用、Box化Open及移動fixture項目，保留failed log；未抑制gate或改expected掩蓋問題。
 
 本機合成bookmark_list的候選已開啟：AX可見第一層「收藏」及兩項入口，trusted合成控制選第一篇（初始cursor第二篇），peer獨立確認Up／Q／同列返回／Right四步，已開對應無標頭文章。全文暫留23行，因非前景按原規則暫停；已請使用者點標題列，尚未完成自動全文保存／離線讀回，不記原生passed，也不把probe row控制當實體右鍵驗收。最終診斷包 `dist/macos-list-bookmarks-final/PTTStella.app`（release／arm64／strict ad-hoc、未公證）另含tooltip修正、取消single-flight／刪除列lease及Refresh Box修正；前述候選不冒充最終二進位完整原生驗收。證據 `.local/verification/list-bookmark-20261030/validation.json`。保留current候選為活動驗收窗、final為交付、唯一證據與共用target，沒有分支／工作樹或其他過時本輪輸出可刪。未操作使用者實站session，Windows／Linux原生not_ready。
+
+
+2026-10-30 列表收藏最終原生補驗完成：舊current候選在等待前景期間超過900秒，保留native-list failed／cleanup=false；關窗後該程序已結束，不把它計入通過。使用最終交付包重開同一bookmark_list案例後，不需再次手動登入／介入；原生AX確認五個第一層分類及「收藏」，指定第一篇（初始光棒第二篇）後自動完成全文及收藏，沒有另外按「收藏目前文章」。peer獨立核對Up／Q／空白／Right，再逐筆核對PageDown與既有收藏Q／#／AID／重開／尾頁，共13步且零額外輸入。bookmarks主檔只有Stella/#00000101一筆、45列原始archive；實際本機End讀到第45行REPLY0045，返回仍為原來1～23／51%。第一層、離線末頁及返回AX／原生screenshot均保存；圖片工具本輪回傳JPEG，明確使用.jpg。
+
+同一最終App另完成原始PNG匯出；surface-probe status=passed、bookmark_saves=1／archive_reads=1／full_png=true、Close acknowledged、listeners及file／connection／credential worker全部joined、process exit0。pgrep確認兩份本輪probe程序皆不存在。最終App仍為 `dist/macos-list-bookmarks-final/PTTStella.app`，來源與上一筆feature commit相同，未修改生產程式。實體標題右鍵受原生工具限制仍未驗收；trusted row-selection probe只驗共同lease及完整保存，不冒充實體右鍵，實際producer分流及stale／deleted列由JS獨立expected核對。
+
+驗收後刪除本輪已無使用者的過時候選 `/Users/ladesine/Documents/Github/PTTStella/dist/macos-list-bookmarks-current`（確認resolved path非symlink、只有自己打包的App、process已退出並記錄SHA-256），保留final交付、唯一成功／失敗證據、共用Cargo target與先前已交付基線；沒有建立或刪除分支／worktree。精確結果在 `.local/verification/list-bookmark-20261030/validation.json`。本輪保持develop，未推送或發佈。
