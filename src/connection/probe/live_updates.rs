@@ -127,6 +127,23 @@ pub(in crate::connection) fn bookmark_page(
     headerless: bool,
 ) -> Result<Vec<u8>, String> {
     let mut bytes = page(first, last, 45, None)?;
+    if headerless {
+        // A continuous cyan band makes rounded strip gaps visible during the
+        // same archive acceptance run, without using third-party ANSI art.
+        for (row, line) in (first..=last).enumerate() {
+            if line > 3 {
+                bytes.extend(
+                    crate::encoding::encode(&format!(
+                        "\x1b[{};51H\x1b[0;36;46m{}\x1b[0m",
+                        row + 1,
+                        " ".repeat(10)
+                    ))
+                    .map_err(|e| e.to_string())?,
+                );
+            }
+        }
+        bytes.extend_from_slice(b"\x1b[24;80H");
+    }
     if headerless && first == 1 {
         bytes.extend(crate::encoding::encode("\x1b[1;1H\x1b[0m\x1b[2K無標頭的 ANSI 圖\x1b[2;1H\x1b[2K第二行 ANSI 圖\x1b[3;1H\x1b[2K第三行 ANSI 圖\x1b[24;80H\x1b[?25l").map_err(|e|e.to_string())?);
     }
