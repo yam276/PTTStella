@@ -104,6 +104,7 @@ async fn article_destination_uses_the_one_writer_through_canonical_board_and_ver
         reached.destination,
         NavigationProgress::Reached {
             serial: 1,
+            operation: initial.stamp(),
             target: Destination::Article(target())
         }
     );

@@ -831,7 +831,7 @@ function requestInline(target,e){
 }
 const inlineImages=installInlineImages({surface,canvas,viewport,tr,render,find:articleFind,redraw:()=>{if(latest)draw(latest);},changed:refreshKeepAlive,notice:text=>{surfaceNote.textContent=text;},
     allowed:()=>!stopped&&!blocked()&&!tools?.busy()&&inlineShortcut({key:"Enter"},keyboardState,latest),request:requestInline});
-articleUpdates=createArticleUpdates({root:document.getElementById("article-updates"),status:document.getElementById("article-updates-status"),toggle:document.getElementById("article-updates-toggle"),fresh:document.getElementById("article-updates-new"),tr,current:()=>latest,send,
+articleUpdates=createArticleUpdates({root:document.getElementById("article-updates"),status:document.getElementById("article-updates-status"),toggle:document.getElementById("article-updates-toggle"),fresh:document.getElementById("article-updates-new"),station:document.getElementById("article-updates-station"),tr,current:()=>latest,send,
     bottom:()=>Math.max(0,surface.offsetTop+(grid?.height??0)/(grid?.ratio??1)-viewport.clientHeight),position:()=>viewport.scrollTop,
     move:top=>{viewport.scrollTop=top;repaint();},restore:focus,changed:refreshKeepAlive});
 let viewportProbe=false,viewportCapture=0;
@@ -1004,8 +1004,7 @@ async function paint(packet) {
         else if(surfaceNote.textContent===previousFailure) surfaceNote.textContent="";
     }
     refreshNavigation();refreshArticleLoad();
-    const followReplies=articleUpdates?.beforePaint(packet);
-    const geometry=draw(packet);articleUpdates?.afterPaint(packet,followReplies);resumeReadingMove();send({kind:"painted",presentation:packet.presentation,revision,generation});if(packet.probe) probe(packet,geometry);
+    const geometry=draw(packet);articleUpdates?.afterPaint(packet);resumeReadingMove();send({kind:"painted",presentation:packet.presentation,revision,generation});if(packet.probe) probe(packet,geometry);
     surface.dataset.revision=String(revision);
     surface.dataset.fontSize=String(packet.settings.font_size);surface.dataset.baseline=String(packet.settings.baseline);
     surface.dataset.cursorRow=String(packet.frame.cursor[1]);surface.dataset.inputEpoch=String(packet.input_epoch);

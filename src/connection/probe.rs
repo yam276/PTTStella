@@ -12,14 +12,18 @@ use tokio_tungstenite::tungstenite::{
 };
 
 pub(super) enum Scenario {
-    Desktop { reload_settings: bool },
+    Desktop {
+        reload_settings: bool,
+    },
     Window,
     Login,
     Login2fa,
     Boards,
     Articles,
     Bookmarks,
-    Mouse { boundary: bool },
+    Mouse {
+        boundary: bool,
+    },
     MouseSamples(MouseSampleProbe),
     Filters,
     Surface,
@@ -30,8 +34,14 @@ pub(super) enum Scenario {
     PointerRows,
     ListBoundary,
     ArticleSwitch,
-    LiveUpdates { origin: Option<String> },
-    InlinePages { pages: Vec<Vec<u8>>, delay_ms: u64 },
+    LiveUpdates {
+        origin: Option<String>,
+        cancelled: bool,
+    },
+    InlinePages {
+        pages: Vec<Vec<u8>>,
+        delay_ms: u64,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -756,7 +766,7 @@ pub(super) async fn serve(
         if matches!(scenario, Scenario::Window) {
             return window(&mut socket).await;
         }
-        if let Scenario::LiveUpdates {origin} = scenario {return live_updates::run(&mut socket,origin.as_deref()).await;}
+        if let Scenario::LiveUpdates {origin,cancelled} = scenario {return if cancelled {live_updates::cancel(&mut socket,origin.as_deref()).await}else{live_updates::run(&mut socket,origin.as_deref()).await};}
         if let Scenario::InlinePages {pages,delay_ms} = scenario {
             let started=std::time::Instant::now();
             for (index, second) in pages.into_iter().enumerate() {

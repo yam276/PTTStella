@@ -3015,3 +3015,98 @@ async fn article_refresh_cancellation_and_manual_input_revoke_late_query_steps()
         finish_board_peer(&connection, ws).await;
     }
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn refresh_cancellation_has_priority_over_full_queue_and_a_queued_start() {
+    for queued_start in [false, true] {
+        let (listener, connection) = local().await;
+        connection.connect().unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/article-open.json")).unwrap();
+        ws.send(Message::Binary(
+            crate::encoding::encode(
+                &fixture["screens"]["reading"]
+                    .as_str()
+                    .unwrap()
+                    .replace("1/3 頁 (33%)", "1/1 頁 (100%)"),
+            )
+            .unwrap()
+            .into(),
+        ))
+        .await
+        .unwrap();
+        let view = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
+        let rows = crate::text::rows(&view.frame).unwrap();
+        let head = std::array::from_fn(|i| rows[i].text.trim_end().to_owned());
+        // A future/foreign cancellation cannot poison this or later work.
+        connection
+            .cancel_navigation(Stamp {
+                input_epoch: view.input_epoch + 1_000_000,
+                ..view.stamp()
+            })
+            .unwrap();
+        let reply = connection
+            .request_go_to(
+                view.stamp(),
+                crate::navigation_job::Destination::Refresh {
+                    board: BoardName::parse("Stella").unwrap(),
+                    head,
+                },
+            )
+            .unwrap();
+        if queued_start {
+            connection.cancel_navigation(view.stamp()).unwrap();
+            assert!(reply.wait().await.is_err());
+            assert!(timeout(Duration::from_millis(30), ws.next()).await.is_err());
+            let rows = crate::text::rows(&view.frame).unwrap();
+            let head = std::array::from_fn(|i| rows[i].text.trim_end().to_owned());
+            connection
+                .request_go_to(
+                    view.stamp(),
+                    crate::navigation_job::Destination::Refresh {
+                        board: BoardName::parse("Stella").unwrap(),
+                        head,
+                    },
+                )
+                .unwrap()
+                .wait()
+                .await
+                .unwrap();
+            assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"Q");
+            connection.cancel_navigation(view.stamp()).unwrap();
+            wait(&connection, |v| {
+                matches!(v.destination, NavigationProgress::Idle)
+            })
+            .await;
+        } else {
+            reply.wait().await.unwrap();
+            assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"Q");
+            for _ in 0..64 {
+                connection.keep_alive(false).unwrap();
+            }
+            assert_eq!(connection.commands.capacity(), 0);
+            connection.cancel_navigation(view.stamp()).unwrap();
+            wait(&connection, |v| {
+                matches!(v.destination, NavigationProgress::Idle)
+            })
+            .await;
+            let query = format!(
+                "\x1b[2J\x1b[19;1H┌{}┐\x1b[20;1H│ 文章代碼(AID): \x1b[1m#00000101\x1b[0m (Stella) [ptt.cc] local\x1b[20;77H│\x1b[21;1H│ 文章網址: local\x1b[21;77H│\x1b[22;1H│ 這一篇文章值 0 Ptt幣\x1b[22;77H│\x1b[23;1H└──────────────────────── [再按 Q 切換價格列表]  ─┘\x1b[24;1H\x1b[37;44m 請按任意鍵繼續 \x1b[0m\x1b[24;80H",
+                "─".repeat(37)
+            );
+            ws.send(Message::Binary(
+                crate::encoding::encode(&query).unwrap().into(),
+            ))
+            .await
+            .unwrap();
+        }
+        assert!(
+            timeout(Duration::from_millis(120), ws.next())
+                .await
+                .is_err()
+        );
+        finish_board_peer(&connection, ws).await;
+    }
+}

@@ -205,6 +205,11 @@ pub(super) enum SurfaceEvent {
         enabled: bool,
         trusted: bool,
     },
+    ArticleStationRestore {
+        generation: u64,
+        article: u64,
+        trusted: bool,
+    },
     DestinationSubmit {
         request: u64,
         stamp: Stamp,
@@ -420,6 +425,7 @@ impl SurfaceEvent {
                 | Self::Navigate { .. }
                 | Self::ArticleLoad { .. }
                 | Self::ArticleUpdates { .. }
+                | Self::ArticleStationRestore { .. }
                 | Self::KeepAlive { .. }
                 | Self::EditorColor { .. }
         )
@@ -502,6 +508,11 @@ impl SurfaceEvent {
                 ..
             } => *trusted && *source == generation,
             ArticleUpdates {
+                trusted,
+                generation: source,
+                ..
+            }
+            | ArticleStationRestore {
                 trusted,
                 generation: source,
                 ..
@@ -932,6 +943,13 @@ mod article_load_tests {
             };
             assert!(updates.requires_ptt());
             assert_eq!(updates.admitted(7), expected);
+            let restore = SurfaceEvent::ArticleStationRestore {
+                generation,
+                article: 42,
+                trusted,
+            };
+            assert!(restore.requires_ptt());
+            assert_eq!(restore.admitted(7), expected);
         }
     }
 }

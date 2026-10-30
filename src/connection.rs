@@ -106,12 +106,10 @@ enum Command {
     },
     CancelLogin,
     GoTo {
+        sequence: u64,
         stamp: Stamp,
         destination: Destination,
         reply: oneshot::Sender<Result<(), String>>,
-    },
-    CancelNavigation {
-        operation: Stamp,
     },
     Navigate {
         stamp: Stamp,
@@ -121,9 +119,18 @@ enum Command {
     },
     Shutdown(oneshot::Sender<CloseOutcome>),
 }
+#[derive(Clone, Copy, Default)]
+struct SessionControls {
+    keep_alive: Option<(Stamp, bool)>,
+    cancel_through: Option<(Stamp, u64)>,
+}
+fn stamp_order(stamp: Stamp) -> (u64, u64, u64) {
+    (stamp.generation, stamp.input_epoch, stamp.revision)
+}
 pub struct Connection {
     commands: mpsc::Sender<Command>,
-    keep_alive_ui: watch::Sender<Option<(Stamp, bool)>>,
+    session_ui: watch::Sender<SessionControls>,
+    navigation_sequence: std::sync::atomic::AtomicU64,
     mouse_ui: watch::Sender<mouse_control::Controls>,
     pub updates: watch::Receiver<View>,
     worker: Mutex<Option<JoinHandle<()>>>,
@@ -184,7 +191,7 @@ impl Connection {
             received: 0,
         };
         let (sender, updates) = watch::channel(initial);
-        let (keep_alive_ui, gates) = watch::channel(None);
+        let (session_ui, gates) = watch::channel(SessionControls::default());
         let (mouse_ui, mouse_gates) = watch::channel(mouse_control::Controls::default());
         let worker = runtime.spawn(worker::run(
             screen,
@@ -197,7 +204,8 @@ impl Connection {
         ));
         Ok(Self {
             commands,
-            keep_alive_ui,
+            session_ui,
+            navigation_sequence: std::sync::atomic::AtomicU64::new(0),
             mouse_ui,
             updates,
             worker: Mutex::new(Some(worker)),
@@ -289,10 +297,13 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
-    pub fn start_live_updates_probe(origin: Option<String>) -> Result<Self, String> {
+    pub fn start_live_updates_probe(
+        origin: Option<String>,
+        cancelled: bool,
+    ) -> Result<Self, String> {
         let connection = Self::start_owned_probe(
             probe::live_updates::page(1, 23, 45, origin.as_deref())?,
-            probe::Scenario::LiveUpdates { origin },
+            probe::Scenario::LiveUpdates { origin, cancelled },
         )?;
         connection.keep_alive(false)?;
         Ok(connection)
@@ -394,7 +405,8 @@ impl Connection {
     }
     pub fn keep_alive_gate(&self, stamp: Stamp, ready: bool) {
         // A blocked UI cannot lose its pause request to a full input queue.
-        self.keep_alive_ui.send_replace(Some((stamp, ready)));
+        self.session_ui
+            .send_modify(|ui| ui.keep_alive = Some((stamp, ready)));
     }
     pub fn input(&self, generation: u64, bytes: Vec<u8>) -> Result<(), String> {
         if bytes.is_empty() || bytes.len() > MAX_INPUT_BYTES {
@@ -461,7 +473,17 @@ impl Connection {
     }
     pub fn request_go_to(&self, stamp: Stamp, destination: Destination) -> Result<Reply, String> {
         let (reply, answer) = oneshot::channel();
+        let sequence = self
+            .navigation_sequence
+            .fetch_update(
+                std::sync::atomic::Ordering::SeqCst,
+                std::sync::atomic::Ordering::SeqCst,
+                |n| n.checked_add(1),
+            )
+            .map_err(|_| crate::msg!("navigation-service-unavailable"))?
+            + 1;
         self.enqueue(Command::GoTo {
+            sequence,
             stamp,
             destination,
             reply,
@@ -474,7 +496,29 @@ impl Connection {
         })
     }
     pub fn cancel_navigation(&self, operation: Stamp) -> Result<(), String> {
-        self.enqueue(Command::CancelNavigation { operation })
+        if self.session_ui.is_closed() {
+            return Err(crate::msg!("navigation-service-unavailable"));
+        }
+        let current = self.updates.borrow().stamp();
+        if operation.generation != current.generation
+            || stamp_order(operation) > stamp_order(current)
+        {
+            return Ok(());
+        }
+        let through = self
+            .navigation_sequence
+            .load(std::sync::atomic::Ordering::SeqCst);
+        self.session_ui.send_if_modified(|ui| {
+            if ui.cancel_through.is_none_or(|(old, limit)| {
+                (stamp_order(operation), through) > (stamp_order(old), limit)
+            }) {
+                ui.cancel_through = Some((operation, through));
+                true
+            } else {
+                false
+            }
+        });
+        Ok(())
     }
     pub async fn navigate(&self, stamp: Stamp, intent: Intent) -> Result<(), String> {
         self.request_navigate(stamp, intent, navigation::Source::Pointer)?

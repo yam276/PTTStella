@@ -359,14 +359,15 @@ impl SurfaceState {
             .map(Identity::of)
     }
     pub(super) fn navigation_shown(&self, stamp: Stamp) -> bool {
-        self.displayed.as_ref().is_some_and(|p| {
-            p.article_mode == self.article_mode
-                && p.presentation == self.filters.version()
-                && !p.output_pending
-                && p.generation == stamp.generation
-                && p.frame.revision == stamp.revision
-                && p.input_epoch == stamp.input_epoch
-        })
+        !self.updates.holding()
+            && self.displayed.as_ref().is_some_and(|p| {
+                p.article_mode == self.article_mode
+                    && p.presentation == self.filters.version()
+                    && !p.output_pending
+                    && p.generation == stamp.generation
+                    && p.frame.revision == stamp.revision
+                    && p.input_epoch == stamp.input_epoch
+            })
     }
     pub(super) fn mouse_shown(&self, event: &pttstella::mouse::input::Event) -> bool {
         use pttstella::mouse::{Action, input::Route};
@@ -391,9 +392,12 @@ impl SurfaceState {
     }
     /// Vim may advance its logical cursor before the next terminal redraw.
     pub(super) fn browse_shown(&self, generation: u64, context: &Context) -> bool {
-        self.displayed.as_ref().is_some_and(|p| {
-            !p.output_pending && p.generation == generation && p.navigation.kind() == context.kind()
-        })
+        !self.updates.holding()
+            && self.displayed.as_ref().is_some_and(|p| {
+                !p.output_pending
+                    && p.generation == generation
+                    && p.navigation.kind() == context.kind()
+            })
     }
     pub(super) fn set_article_boundary_navigation(&mut self, enabled: bool) {
         if self.article_boundary_navigation != enabled {
@@ -500,9 +504,18 @@ impl SurfaceState {
     }
     pub(super) fn updates_status(&self) -> Option<super::article_updates::Status> {
         self.updates.status().map(|mut status| {
-            status.available = self.article.refresh_destination().is_some();
+            status.available = !status.recovery && self.article.refresh_destination().is_some();
             status
         })
+    }
+    pub(super) fn retained_relative_key(&self, key: &pttstella::vim::Key) -> bool {
+        self.updates.holding()
+            && !key.ctrl
+            && !key.alt
+            && matches!(
+                key.key.as_str(),
+                "ArrowLeft" | "ArrowRight" | "Enter" | "Backspace"
+            )
     }
     pub(super) fn updates_holding(&self) -> bool {
         self.updates.holding()
@@ -524,6 +537,17 @@ impl SurfaceState {
             self.article.refresh_destination().is_some(),
             tokio::time::Instant::now(),
         )
+    }
+    pub(super) fn restore_station(&mut self, generation: u64, id: u64) -> bool {
+        if !self
+            .updates
+            .status()
+            .is_some_and(|s| s.generation == generation && s.article == id && s.recovery)
+        {
+            return false;
+        }
+        self.clear_article();
+        true
     }
     pub(super) fn pause_updates(&mut self) {
         if self.updates.holding() {
@@ -559,7 +583,10 @@ impl SurfaceState {
         self.article.load_deadline()
     }
     pub(super) fn expire_full_load(&mut self, now: tokio::time::Instant) {
-        self.dirty |= self.article.expire_load(now);
+        if self.article.expire_load(now) {
+            self.updates.stop(true);
+            self.dirty = true;
+        }
     }
     pub(super) fn stop_full_load(&mut self) {
         if self.updates.fetching() {
@@ -587,6 +614,7 @@ impl SurfaceState {
         view: &View,
     ) -> bool {
         if generation != view.generation
+            || self.updates.holding()
             || self.article_mode != ArticleMode::Web
             || self.raw_reading
             || resume
@@ -676,6 +704,7 @@ impl SurfaceState {
     pub(super) fn next_full_page(&mut self, view: &View) -> Option<pttstella::navigation::Intent> {
         if self.article_mode != ArticleMode::Web
             || self.raw_reading
+            || self.updates.holding()
             || view.phase != Phase::Connected
             || view.input_pending
             || view.output_pending

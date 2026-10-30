@@ -46,7 +46,10 @@ pub fn app(props: AppProps) -> Element {
     let surface_probe = props.surface_probe.clone();
     let surface_probing = surface_probe.is_some();
     let editor_color_probing = surface_probe.as_deref() == Some("editor_color");
-    let live_updates_probing = surface_probe.as_deref() == Some("live_updates");
+    let live_updates_probing = matches!(
+        surface_probe.as_deref(),
+        Some("live_updates" | "live_updates_cancel")
+    );
     let sample_case = surface_probe.clone();
     let boards_probing = matches!(surface_probe.as_deref(), Some("boards" | "boards_close"));
     let articles_probing = matches!(
@@ -86,8 +89,14 @@ pub fn app(props: AppProps) -> Element {
     let owner = use_hook(move || {
         super::probe::surface_sample(sample_case.as_deref(), probing, media_origin.as_deref())
             .and_then(|bytes| {
-                if sample_case.as_deref() == Some("live_updates") {
-                    Connection::start_live_updates_probe(media_origin.clone())
+                if matches!(
+                    sample_case.as_deref(),
+                    Some("live_updates" | "live_updates_cancel")
+                ) {
+                    Connection::start_live_updates_probe(
+                        media_origin.clone(),
+                        sample_case.as_deref() == Some("live_updates_cancel"),
+                    )
                 } else if sample_case.as_deref() == Some("control_input") {
                     Connection::start_control_input_probe(bytes)
                 } else if sample_case.as_deref() == Some("editor_clipboard") {
@@ -422,6 +431,7 @@ pub fn app(props: AppProps) -> Element {
             div { id: "article-updates", class: "article-updates", hidden: true,
                 output { id: "article-updates-status", role: "status" }
                 button { id: "article-updates-toggle", {pttstella::msg!("article-updates-start")} }
+                button { id: "article-updates-station", hidden:true, {pttstella::msg!("article-updates-station")} }
                 button { id: "article-updates-new", hidden: true, {pttstella::msg!("article-updates-new",count=0)} }
             }
             if live_updates_probing {

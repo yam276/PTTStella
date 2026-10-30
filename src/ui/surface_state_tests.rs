@@ -1487,6 +1487,25 @@ fn adjacent_switch_cannot_recapture_the_queued_old_article() {
     );
 }
 
+fn refresh_fixture() -> (SurfaceState, View, Screen) {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut source = Screen::new(80, 24).unwrap();
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/article-open.json")).unwrap();
+    source.feed(
+        &pttstella::encoding::encode(
+            &fixture["screens"]["reading"]
+                .as_str()
+                .unwrap()
+                .replace("1/3 頁 (33%)", "1/1 頁 (100%)"),
+        )
+        .unwrap(),
+    );
+    view.frame = source.frame();
+    displayed(&mut state, &view);
+    (state, view, source)
+}
 #[test]
 fn refresh_holds_the_acknowledged_article_until_verified_reentry_and_cancels_on_switch() {
     use pttstella::article_target::ArticleTarget;
@@ -1553,6 +1572,7 @@ fn refresh_holds_the_acknowledged_article_until_verified_reentry_and_cancels_on_
     view.frame = source.frame();
     view.destination = Progress::Reached {
         serial: 1,
+        operation: stamp,
         target: Destination::Article(ArticleTarget::new("Stella", "00000101").unwrap()),
     };
     state.update(&view);
@@ -1566,4 +1586,112 @@ fn refresh_holds_the_acknowledged_article_until_verified_reentry_and_cancels_on_
     assert!(state.updates_status().is_none());
     assert!(!state.updates_action(7, id, true));
     assert!(state.next_update(&view).is_none());
+}
+
+#[test]
+fn cancelling_reentry_preserves_local_reading_until_explicit_station_restore_or_scope_change() {
+    use pttstella::navigation_job::{Destination, Progress};
+    for action in [
+        "cancel",
+        "background",
+        "failed",
+        "foreign_done",
+        "generation",
+        "raw",
+    ] {
+        let (mut state, mut view, mut source) = refresh_fixture();
+        let before = state.reading_progress();
+        let id = before.unwrap().0;
+        assert!(state.updates_action(7, id, true));
+        assert!(state.next_update(&view).is_some());
+        let operation = view.stamp();
+        view.destination = Progress::Active {
+            serial: 1,
+            operation,
+            target: Destination::Board {
+                board: pttstella::board_navigation::BoardName::parse("Stella").unwrap(),
+            },
+        };
+        source.feed(
+            &pttstella::encoding::encode(
+                "\x1b[2J\x1b[24;1H\x1b[37;44m 請按任意鍵繼續 \x1b[0m\x1b[24;80H",
+            )
+            .unwrap(),
+        );
+        view.frame = source.frame();
+        view.input_epoch += 1;
+        state.update(&view);
+        match action {
+            "cancel" => assert!(state.updates_action(7, id, false)),
+            "background" => state.pause_updates(),
+            "failed" => state.fail_updates(),
+            "foreign_done" => {
+                view.destination = Progress::Reached {
+                    serial: 2,
+                    operation: Stamp {
+                        input_epoch: operation.input_epoch + 1,
+                        ..operation
+                    },
+                    target: Destination::Article(
+                        pttstella::article_target::ArticleTarget::new("Stella", "00000102")
+                            .unwrap(),
+                    ),
+                }
+            }
+            "generation" => view.generation += 1,
+            "raw" => state.article_input(&view, b"Q"),
+            _ => unreachable!(),
+        }
+        state.update(&view);
+        if ["generation", "raw"].contains(&action) {
+            assert!(state.reading_progress().is_none());
+            continue;
+        }
+        assert_eq!(state.reading_progress(), before, "{action}");
+        assert!(
+            !state.navigation_shown(operation),
+            "stale relative Back must be rejected before clearing the projection"
+        );
+        assert!(!state.browse_shown(view.generation, &view.context()));
+        for key in ["ArrowLeft", "ArrowRight", "Enter", "Backspace"] {
+            let key = pttstella::vim::Key {
+                key: key.into(),
+                code: String::new(),
+                ctrl: false,
+                alt: false,
+                shift: false,
+                repeat: false,
+            };
+            assert!(state.retained_relative_key(&key));
+            assert!(!state.retained_relative_key(&pttstella::vim::Key { ctrl: true, ..key }));
+        }
+        assert!(!state.retained_relative_key(&pttstella::vim::Key {
+            key: "q".into(),
+            code: "KeyQ".into(),
+            ctrl: false,
+            alt: false,
+            shift: false,
+            repeat: false
+        }));
+        let status = state.updates_status().unwrap();
+        assert!(status.recovery);
+        assert!(!status.available && !status.enabled && !status.busy);
+        assert!(state.queue(&view, false, &Default::default()).is_none());
+        assert!(
+            state
+                .reading_move(&view, pttstella::navigation::Intent::First)
+                .is_some()
+        );
+        assert!(state.next_full_page(&view).is_none());
+        assert!(state.next_update(&view).is_none());
+        assert_eq!(state.cancelled_update(), Some(operation));
+        assert!(state.cancelled_update().is_none());
+        assert!(!state.restore_station(8, id));
+        assert!(!state.restore_station(7, id + 1));
+        assert!(state.restore_station(7, id));
+        state.update(&view);
+        assert!(state.reading_progress().is_none());
+        let actual = displayed(&mut state, &view);
+        assert!(state.current(actual, &view).unwrap().article.is_none());
+    }
 }

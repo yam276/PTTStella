@@ -40,6 +40,7 @@ pub(super) async fn run<S>(
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
+    let started = std::time::Instant::now();
     let mut stages = vec![(b"\x1b[6~".to_vec(), page(23, 45, 45, origin)?)];
     for (old_first, old_last, total) in [(23, 45, 48), (26, 48, 51)] {
         stages.extend([
@@ -66,7 +67,10 @@ where
                 expected.len()
             ));
         }
-        eprintln!("live updates peer step {index} verified");
+        eprintln!(
+            "live updates peer step {index} verified at {}ms",
+            started.elapsed().as_millis()
+        );
         let split = response.len() / 2;
         socket
             .send(Message::Binary(response[..split].to_vec().into()))
@@ -115,6 +119,41 @@ where
         eprintln!("live updates unchanged cycle {cycle} verified");
     }
     Err("live updates exceeded 64 unchanged checks".into())
+}
+
+/// Cancellation is a local command. A delayed station query may still arrive,
+/// but the peer must receive no dismissal/re-entry bytes after the owned Q.
+pub(super) async fn cancel<S>(
+    socket: &mut WebSocketStream<S>,
+    origin: Option<&str>,
+) -> Result<(), String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    for (expected, response) in [
+        (b"\x1b[6~".as_slice(), page(23, 45, 45, origin)?),
+        (b"Q", information()?),
+    ] {
+        let received = socket.next().await;
+        if !matches!(&received,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected) {
+            return Err(format!(
+                "cancel probe expected {} bytes, received {received:?}",
+                expected.len()
+            ));
+        }
+        eprintln!("live cancellation peer accepted {} bytes", expected.len());
+        if expected == b"Q" {
+            tokio::time::sleep(std::time::Duration::from_secs(6)).await;
+        }
+        socket
+            .send(Message::Binary(response.into()))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    match socket.next().await {
+        Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e| e.to_string()),
+        other => Err(format!("cancelled query must not continue: {other:?}")),
+    }
 }
 
 #[cfg(test)]
