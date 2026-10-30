@@ -267,10 +267,7 @@ impl ArticleCache {
                 })
                 .unwrap_or_default()
         });
-        let board = head[0]
-            .strip_prefix("作者")
-            .and_then(|line| line.rsplit_once("看板"))
-            .and_then(|(_, name)| pttstella::board_navigation::BoardName::parse(name.trim()).ok());
+        let board = pttstella::article_navigation::header_board(&head[0]);
         Some(pttstella::navigation_job::Destination::Refresh { board, head })
     }
     pub(super) fn begin_refresh(&mut self) {

@@ -1745,6 +1745,34 @@ fn current_bookmark_requires_complete_ack_and_owns_verified_identity_until_cance
 }
 
 #[test]
+fn padded_author_header_keeps_refresh_board_and_exact_reentry_text() {
+    let (_, mut view, mut source) = refresh_fixture();
+    source.feed(
+        &pttstella::encoding::encode(
+            "\x1b[1;1H\x1b[2K 作者 Sample (合成) 看板 Stella\x1b[24;80H\x1b[?25l",
+        )
+        .unwrap(),
+    );
+    view.frame = source.frame();
+    let mut state = SurfaceState::new(filters::Rules::default());
+    displayed(&mut state, &view);
+    let id = state.reading_progress().unwrap().0;
+    let (_, destination) = state.bookmark_current(view.stamp(), id, &view).unwrap();
+    let pttstella::navigation_job::Destination::Refresh {
+        board: Some(board),
+        head,
+    } = destination
+    else {
+        panic!("standard padded author header must preserve its board");
+    };
+    assert_eq!(board.as_str(), "Stella");
+    assert!(
+        head[0].starts_with(" 作者 Sample"),
+        "reentry still compares the exact original text"
+    );
+}
+
+#[test]
 fn headerless_complete_article_can_pin_a_bookmark_without_guessing_its_board() {
     let (_, mut view, mut source) = refresh_fixture();
     let mut state = SurfaceState::new(filters::Rules::default());
