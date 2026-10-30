@@ -197,3 +197,14 @@ test('article update toggle is confined to ordinary article background menus',()
   assert.equal(contextMenuItems({...state,...patch}).has('article-updates'),false);
  }
 });
+
+test('a list title uses Bookmarks at the pointer and retains its row even when it is not the cursor',()=>{
+ const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
+ const chosen=[],menus=[],calls=[],f={stopped:false,composing:false,pastePending:false,document:{querySelector:()=>null},
+  latest:{reply_rows:[],navigation:{kind:'article_list',cursor_row:4,articles:[{row:3,title_start:30,bookmark:true},{row:4,title_start:30,bookmark:true}]}},
+  stationMouse:{local:()=>true},filterUi:{blocked:()=>false},contextMenu:{close(){},open:(e,c)=>menus.push(c)},cellAt:()=>({row:3,col:40}),linkAt:()=>-1,inlineImages:{linkAtPoint:()=>-1},accountWordAt:()=>null,
+  hasSelection:()=>false,toolAccess:{right_click_menu:true},tools:{showAt:()=>{calls.push('fan');return true;}},bookmarksUi:{setListTarget:row=>chosen.push(row)},contextState:(index,word,replyRow,articleRow)=>({articleRow}),contextMenuItems:s=>s};
+ vm.createContext(f);vm.runInContext(surface.slice(surface.indexOf('function openContextMenu('),surface.indexOf('function contextAction(')),f);
+ f.openContextMenu({isTrusted:true,shiftKey:false,preventDefault(){}});assert.deepEqual(calls,['fan']);assert.deepEqual(chosen,[3]);assert.equal(menus.length,0);
+ f.toolAccess.right_click_menu=false;f.openContextMenu({isTrusted:true,shiftKey:false,preventDefault(){}});assert.equal(menus.at(-1).articleRow,3);
+});

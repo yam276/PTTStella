@@ -378,6 +378,7 @@ async fn run(
     let mut diagnostic_failed = false;
     let mut updates_status = None;
     let mut bookmark_capture: Option<super::bookmarks::Acquisition> = None;
+    let mut list_bookmark: Option<super::bookmarks::FromList> = None;
     let (complete, probe_checked) = loop {
         if *closing.borrow() {
             break (false, false);
@@ -447,6 +448,60 @@ async fn run(
             inline_images.close();
             eval.send(Packet::InlineReset(true))
                 .map_err(|e| e.to_string())?;
+        }
+        let list_result = list_bookmark.as_mut().and_then(|capture| {
+            capture.observe(
+                &receiver.borrow(),
+                screen.reading_scope(),
+                screen.reading_progress(),
+                reading_gate,
+            )
+        });
+        if let Some(result) = list_result {
+            let ready = !commands.busy()
+                && !files.busy()
+                && !settings_visible
+                && !login_open
+                && pending_paste.read().is_none()
+                && screen.navigation_shown(receiver.borrow().stamp());
+            if (result.is_err() || ready)
+                && let Some(capture) = list_bookmark.take()
+            {
+                let request = capture.request;
+                let result = result.and_then(|(id, target)| {
+                    bookmarks.check_write()?;
+                    let view = receiver.borrow().clone();
+                    super::bookmarks::start_capture(
+                        &mut screen,
+                        commands,
+                        &connection,
+                        &view,
+                        request,
+                        view.stamp(),
+                        id,
+                    )
+                    .map(|capture| capture.expect(target))
+                });
+                match result {
+                    Ok(capture) => bookmark_capture = Some(capture),
+                    Err(error) => {
+                        let _ = connection.cancel_navigation(capture.stamp);
+                        screen.stop_full_load();
+                        if commands.is(CommandKind::BookmarkOpen)
+                            || commands.is(CommandKind::Preload)
+                        {
+                            cancel_commands(commands, &eval)?;
+                        }
+                        checks.bookmark_rejected += 1;
+                        eval.send(Packet::BookmarksResult {
+                            request,
+                            data: bookmarks.snapshot(),
+                            feedback: Feedback::new(SaveStatus::Rejected, error),
+                        })
+                        .map_err(|e| e.to_string())?;
+                    }
+                }
+            }
         }
         if commands.is(CommandKind::Preload) && !screen.full_load_active() {
             cancel_commands(commands, &eval)?;
@@ -641,6 +696,9 @@ async fn run(
         }
         #[cfg(target_os = "macos")]
         native_menu.settings_visible(settings_visible);
+        let list_bookmark_deadline = list_bookmark
+            .as_ref()
+            .and_then(|capture| capture.deadline());
         let load_deadline = screen.full_load_deadline();
         let updates_deadline = screen.updates_deadline(
             updates_allowed
@@ -652,6 +710,9 @@ async fn run(
             (preload_paint && screen.dirty() && !screen.has_in_flight() && !reading_paint_due)
                 .then_some(reading_paint_at);
         tokio::select! {
+            _ = async {if let Some(deadline)=list_bookmark_deadline {tokio::time::sleep_until(deadline).await;}else{std::future::pending::<()>().await;}} => {
+                if let Some(capture)=list_bookmark.as_mut(){capture.fail();}
+            },
             _ = async {if let Some(at)=updates_deadline {tokio::time::sleep_until(at).await;}else{std::future::pending::<()>().await;}} => {
                 if screen.updates_holding(){screen.fail_updates();let view=receiver.borrow().clone();screen.update(&view);}
             },
@@ -814,6 +875,7 @@ async fn run(
                         if probe.is_some() && done.result.is_ok() {checks.navigation_requests+=1;}
                         continue;
                     },
+                    CommandKind::BookmarkOpen=>{if done.result.is_err()&&let Some(capture)=list_bookmark.as_mut(){capture.fail();}continue;},
                     CommandKind::Bookmark=>{if done.result.is_err(){screen.fail_updates();}continue;},
                     CommandKind::ReplyUpdate => {if done.result.is_err(){screen.fail_updates();}else if probe.is_some(){checks.reply_updates+=1;}continue;},
                     CommandKind::Navigate => {
@@ -900,6 +962,13 @@ async fn run(
                     }
                     event.discard();eval.send(Packet::Notice(pttstella::msg!("site-ptt-only"))).map_err(|e|e.to_string())?;continue;
                 }
+                if event.interrupts_list_bookmark()&&let Some(capture)=list_bookmark.take(){
+                    connection.cancel_navigation(capture.stamp)?;
+                    screen.stop_full_load();
+                    if commands.is(CommandKind::BookmarkOpen)||commands.is(CommandKind::Preload){cancel_commands(commands,&eval)?;}
+                    checks.bookmark_rejected+=1;
+                    eval.send(Packet::BookmarksResult{request:capture.request,data:bookmarks.snapshot(),feedback:Feedback::new(SaveStatus::Rejected,pttstella::msg!("bookmarks-capture-cancelled"))}).map_err(|e|e.to_string())?;
+                }
                 if matches!(&event,
                     SurfaceEvent::DestinationSubmit{..}|SurfaceEvent::SitesConnect{..}|SurfaceEvent::LoginSubmit{..}|SurfaceEvent::Paste{..}|SurfaceEvent::PasteConfirm{..}) {
                     screen.clear_article();
@@ -949,17 +1018,37 @@ async fn run(
                     },
                     SurfaceEvent::BookmarkCurrent{request,stamp,article,..}=>{
                         let result=(|| {
-                            if bookmark_capture.is_some() || commands.busy() || files.busy() || settings_visible || login_open || pending_paste.read().is_some(){return Err(pttstella::msg!("command-busy"));}
+                            if bookmark_capture.is_some() || list_bookmark.is_some() || commands.busy() || files.busy() || settings_visible || login_open || pending_paste.read().is_some(){return Err(pttstella::msg!("command-busy"));}
                             bookmarks.check_write()?;
                             let view=receiver.borrow().clone();
-                            let (frame,destination)=screen.bookmark_current(stamp,article,&view)?;
-                            if let Err(e)=commands.start(CommandKind::Bookmark,view.generation,||connection.request_go_to(stamp,destination).map(|reply|reply.wait())){screen.fail_updates();return Err(e);}
-                            bookmark_capture=Some(super::bookmarks::Acquisition::new(request,stamp,frame));
+                            bookmark_capture=Some(super::bookmarks::start_capture(&mut screen,commands,&connection,&view,request,stamp,article)?);
                             Ok(())
                         })();
                         if let Err(error)=result {eval.send(Packet::BookmarksResult{request,data:bookmarks.snapshot(),feedback:Feedback::new(SaveStatus::Rejected,error)}).map_err(|e|e.to_string())?;}
                     },
+                    SurfaceEvent::BookmarkList{request,stamp,row,..}=>{
+                        let result=(|| {
+                            if bookmark_capture.is_some()||list_bookmark.is_some()||commands.busy()||files.busy()||settings_visible||login_open||pending_paste.read().is_some(){return Err(pttstella::msg!("command-busy"));}
+                            bookmarks.check_write()?;
+                            let view=receiver.borrow().clone();
+                            if preferences.app().article_mode!=pttstella::settings::ArticleMode::Web||!screen.navigation_shown(stamp)||view.stamp()!=stamp||view.input_pending||view.output_pending||view.mouse.route!=pttstella::mouse::input::Route::Local{return Err(pttstella::msg!("bookmarks-current-unavailable"));}
+                            let board=pttstella::board_navigation::current_board(&view.frame).ok_or(pttstella::msg!("bookmarks-current-unavailable"))?;
+                            if !matches!(view.context(),navigation::Context::ArticleList{articles,..} if articles.iter().any(|a|a.row==row&&a.bookmark)){return Err(pttstella::msg!("bookmarks-current-unavailable"));}
+                            let target=pttstella::navigation_job::Destination::ListArticle{board,row};
+                            commands.start(CommandKind::BookmarkOpen,view.generation,||connection.request_go_to(stamp,target).map(|reply|reply.wait()))?;
+                            list_bookmark=Some(super::bookmarks::FromList::new(request,stamp));
+                            Ok(())
+                        })();
+                        if let Err(error)=result {checks.bookmark_rejected+=1;eval.send(Packet::BookmarksResult{request,data:bookmarks.snapshot(),feedback:Feedback::new(SaveStatus::Rejected,error)}).map_err(|e|e.to_string())?;}
+                    },
                     SurfaceEvent::BookmarkCancel{request,..}=>{
+                        if list_bookmark.as_ref().is_some_and(|c|c.request==request){
+                            if let Some(capture)=list_bookmark.take(){connection.cancel_navigation(capture.stamp)?;}
+                            screen.stop_full_load();
+                            if commands.is(CommandKind::BookmarkOpen)||commands.is(CommandKind::Preload){cancel_commands(commands,&eval)?;}
+                            checks.bookmark_rejected+=1;
+                            eval.send(Packet::BookmarksResult{request,data:bookmarks.snapshot(),feedback:Feedback::new(SaveStatus::Rejected,pttstella::msg!("bookmarks-capture-cancelled"))}).map_err(|e|e.to_string())?;
+                        }
                         if bookmark_capture.as_ref().is_some_and(|c|c.request==request){
                             bookmark_capture=None;screen.fail_updates();checks.bookmark_rejected+=1;
                             eval.send(Packet::BookmarksResult{request,data:bookmarks.snapshot(),feedback:Feedback::new(SaveStatus::Rejected,pttstella::msg!("bookmarks-capture-cancelled"))}).map_err(|e|e.to_string())?;
@@ -1888,7 +1977,7 @@ async fn run(
                 || matches!(case.as_str(),"mouse"|"mouse_boundary") && checks.mouse_passed(case=="mouse_boundary") && receiver.borrow().mouse.active.is_none()
                 || matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") && checks.mouse_samples_passed(&case) && receiver.borrow().mouse.active.is_none() && receiver.borrow().mouse.modes.tracking()==pttstella::mouse::Tracking::Highlight
                 || case=="pointer_rows" && checks.navigation_requests==7 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
-                || matches!(case.as_str(),"bookmark_archive"|"bookmark_headerless") && checks.bookmark_saves==1 && checks.archive_reads>=1 && bookmarks.snapshot().entries.len()==1 && reading.as_ref().is_some_and(|r|r.first_line==1&&r.last_line==45&&r.load==Some(super::article_cache::LoadState::Complete))
+                || matches!(case.as_str(),"bookmark_archive"|"bookmark_headerless"|"bookmark_list") && checks.bookmark_saves==1 && checks.archive_reads>=1 && bookmarks.snapshot().entries.len()==1 && reading.as_ref().is_some_and(|r|r.first_line==1&&r.last_line==45&&r.load==Some(super::article_cache::LoadState::Complete))
                 || case=="bookmark_archive_cancel" && checks.bookmark_saves==0 && checks.bookmark_rejected>=1 && bookmarks.snapshot().entries.is_empty() && screen.updates_status().is_some_and(|s|s.recovery)
                 || case=="bookmarks_archive_restart" && checks.archive_reads>=1 && bookmarks.snapshot().entries.len()==1 && checks.bookmark_saves==0
                 || case=="live_updates_cancel" && checks.reply_updates==1 && checks.reply_update_cancels==1 && checks.reply_retained_restores==1 && checks.navigation_requests==1 && checks.export_checked && checks.inline_expands==1 && screen.reading_progress().is_none() && receiver.borrow().context().kind()=="continue_prompt"

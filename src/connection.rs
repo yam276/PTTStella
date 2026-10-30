@@ -297,6 +297,14 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    pub fn start_bookmark_list_probe() -> Result<Self, String> {
+        let connection = Self::start_owned_probe(
+            probe::article_page("articles")?,
+            probe::Scenario::BookmarkList,
+        )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     pub fn start_bookmark_archive_probe(headerless: bool) -> Result<Self, String> {
         let connection = Self::start_owned_probe(
             probe::live_updates::bookmark_page(1, 23, headerless)?,

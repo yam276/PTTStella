@@ -912,6 +912,7 @@ impl Session {
                         board = article.board().as_str(),
                         aid = article.aid().as_str()
                     ),
+                    Destination::ListArticle { .. } => crate::msg!("bookmarks-list-loading"),
                     Destination::Refresh { .. } => crate::msg!("article-updates-refreshing"),
                 };
                 self.navigation_job = Some(NavigationJob {
@@ -984,6 +985,7 @@ impl Session {
                 board = article.board().as_str(),
                 aid = article.aid().as_str()
             ),
+            Destination::ListArticle { .. } => crate::msg!("bookmarks-list-loading"),
             Destination::Refresh { .. } => crate::msg!("article-updates-refreshing"),
         };
         self.view.destination = NavigationProgress::Reached {

@@ -1685,3 +1685,16 @@ core 13 命令／2 replay（filters 18 項）、desktop lib 143、bin 115、全 
 同一WebView在100%／125%／150%取同回合AX與screenshot；實際工具回傳JPEG，副檔名已修正為.jpg，色彩帶有螢幕轉換，不能以其RGB當原ANSI色值。Pillow獨立解碼三張圖，以21px中央帶的逐行median檢查內部缺線：三次dark rows均0，green median最小115／115／117；色帶寬196／244／292px，實際縮放已改變。保留來源PNG與原始截圖，未編輯畫面。Ctrl+0在本輪原生輸入環境未復位，已使用設定「符合視窗」確認從150%回100%；沒有把這個工具按鍵結果當快捷鍵驗收。原生座標右鍵仍在送出前回報noWindowsAvailable，更新推文情境入口保留JS通過／原生not_ready，沒有用合成點擊冒充實體右鍵。
 
 最終交付改為 `dist/macos-ansi-archive-acceptance/PTTStella.app`（相同生產修正，僅合成fixture增加青色帶），strict ad-hoc驗證通過。補跑Refresh四案及全targets Clippy均通過，前輪完整gate仍有效；新包與雜湊、像素與保存／清理證據在 `.local/verification/ansi-edges-headerless-20261030/validation.json`。尚未推送或發佈，原生Windows／Linux及實站仍未執行。
+
+
+## 2026-10-30 第一層收藏與列表標題收藏
+
+使用者要求收藏移至浮球第一層，文章列表可對標題右鍵從浮球收藏。本批維持develop／0.3.0-dev.2，不推送、不發佈。五類為導覽、收藏、擷取、連線、設定；原目前文章與清單控制搬入收藏群組，同一DOM ID／handler。書籤格式與容量不變。
+
+列表右鍵保存指定列的畫面lease，採Rust提供title_start及bookmark准入；刪除列、過期畫面不退回光棒另一篇。作者／網址／反白保留既有優先權，關閉右鍵浮球時保留標題情境收藏。ListArticle重用Session Open／唯一writer，以有限方向鍵只移游標、核對原列、Q身分、返回同列後Right，支援無標頭閱讀頁。UI FromList綁初始operation、article id／規則版本、ACK及reading gate；同一全文loader完整後才重用目前文章收藏，第二次核對AID必須等於列表取得的身分，之後Files單一原子交易。完成停在該文章，未假裝不進入文章即可取得完整內文。
+
+取消、失焦、手動輸入／換篇、模式／規則／世代改變、錯板／列變更、載入停止或超量均不能串存。開文底層5秒／30秒保留，UI另35秒收束未取得Reaching的狀態，有明確同迴圈deadline，沒有第二個sender或讀取task。開始保存後仍保留檔案owner至完成，不能假裝撤回已保存bytes。JS取消single-flight避免重複blur排入多筆取消。
+
+離線最終通過：desktop lib185、bin172（1個父測試使用的helper）、JS323、多程序保存9（1個helper）、core14commands／2replays、全targets Clippy／fmt／Fluent／docs。新增production Session精確Up／Q／空白／Right與無標頭成功；列變更、錯板及取消後晚Q零續送。FromList核對owned Reached、完整scope及gate，故障／遺失scope／取消／世代／其他operation拒絕；JS核對標題row與cursor不同、舊lease、刪除列不fallback、終端機／busy／遠端mouse／untrusted拒絕、blur只送一次取消與五分類到4K非重疊。第一次編譯少Context import、helper借用不符、Clippy指出擴大Open使Refresh enum過大及測試模組後項目，已正確匯入／借用、Box化Open及移動fixture項目，保留failed log；未抑制gate或改expected掩蓋問題。
+
+本機合成bookmark_list的候選已開啟：AX可見第一層「收藏」及兩項入口，trusted合成控制選第一篇（初始cursor第二篇），peer獨立確認Up／Q／同列返回／Right四步，已開對應無標頭文章。全文暫留23行，因非前景按原規則暫停；已請使用者點標題列，尚未完成自動全文保存／離線讀回，不記原生passed，也不把probe row控制當實體右鍵驗收。最終診斷包 `dist/macos-list-bookmarks-final/PTTStella.app`（release／arm64／strict ad-hoc、未公證）另含tooltip修正、取消single-flight／刪除列lease及Refresh Box修正；前述候選不冒充最終二進位完整原生驗收。證據 `.local/verification/list-bookmark-20261030/validation.json`。保留current候選為活動驗收窗、final為交付、唯一證據與共用target，沒有分支／工作樹或其他過時本輪輸出可刪。未操作使用者實站session，Windows／Linux原生not_ready。

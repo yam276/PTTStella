@@ -223,6 +223,49 @@ where
     }
 }
 
+/// The target is the first row; the initial station cursor is on the second.
+/// Opening it must send Up, verify Q, restore that same row, then Right.
+pub(super) async fn bookmark_list<S>(socket: &mut WebSocketStream<S>) -> Result<(), String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    let f: serde_json::Value =
+        serde_json::from_str(include_str!("../../../tests/fixtures/article-open.json"))
+            .map_err(|e| e.to_string())?;
+    let selected = f["screens"]["articles"]
+        .as_str()
+        .ok_or("missing article fixture")?
+        .replace(">   121", "    121")
+        .replace("    120", ">   120")
+        + "\x1b[4;1H";
+    let info = selected.clone()
+        + &format!(
+            "\x1b[5;1H\x1b[0m\x1b[2K┌{}┐\x1b[6;1H\x1b[2K│ 文章代碼(AID): \x1b[1m#00000101\x1b[0m (Stella) [ptt.cc] local\x1b[6;77H│\x1b[7;1H\x1b[2K│ 文章網址: synthetic\x1b[7;77H│\x1b[8;1H\x1b[2K│ 這一篇文章值 0 Ptt幣\x1b[8;77H│\x1b[9;1H\x1b[2K└──────────────────────── [再按 Q 切換價格列表]  ─┘\x1b[24;1H\x1b[37;44m\x1b[2K 請按任意鍵繼續 \x1b[0m\x1b[24;80H",
+            "─".repeat(37)
+        );
+    let encode = |s: &str| crate::encoding::encode(s).map_err(|e| e.to_string());
+    for (index, (expected, response)) in [
+        (b"\x1b[A".as_slice(), encode(&selected)?),
+        (b"Q", encode(&info)?),
+        (b" ", encode(&selected)?),
+        (b"\x1b[C", bookmark_page(1, 23, true)?),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let received = socket.next().await;
+        if !matches!(&received,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected) {
+            return Err(format!("list bookmark step {index} rejected {received:?}"));
+        }
+        eprintln!("list bookmark peer verified step {index}");
+        socket
+            .send(Message::Binary(response.into()))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    bookmark(socket, true).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

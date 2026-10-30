@@ -24,7 +24,7 @@ function contextMenuItems(state) {
         if(state.images)add("inline",state.inlineReady);
         add("back",state.navigate);add("previous",state.navigate&&!state.first);add("next",state.navigate&&!state.last);
     }
-    if(state.ptt){if(state.reading)add("bookmark-current",state.ready&&!!state.bookmark);add("bookmarks");}
+    if(state.ptt){if(state.listBookmark)add("bookmark-list",state.ready);if(state.reading)add("bookmark-current",state.ready&&!!state.bookmark);add("bookmarks");}
     add("settings");return entries;
 }
 function contextMenuPosition(x,y,width,height,viewportWidth,viewportHeight) {

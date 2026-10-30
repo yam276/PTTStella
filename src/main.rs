@@ -155,6 +155,7 @@ fn main() {
                 | "article_switch"
                 | "bookmark_archive"
                 | "bookmark_headerless"
+                | "bookmark_list"
                 | "bookmark_archive_cancel"
                 | "bookmarks_archive_restart"
                 | "live_updates"

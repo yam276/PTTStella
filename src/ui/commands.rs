@@ -8,6 +8,7 @@ pub(super) enum Kind {
     Preload,
     ReplyUpdate,
     Bookmark,
+    BookmarkOpen,
     Browse,
     Destination,
     EditorColor,

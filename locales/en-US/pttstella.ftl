@@ -773,3 +773,8 @@ settings-alias-zoom = zoom fit scale 縮放 比例 符合視窗
 settings-alias-vim = Vim experimental keyboard navigation 實驗中 鍵盤 瀏覽
 settings-alias-station-mouse = mouse terminal reporting 站端 滑鼠 回報
 settings-alias-keepalive = keepalive idle connection 防閒置 保活 閒置
+
+tools-bookmarks = Bookmarks
+bookmarks-list-current = Bookmark this article
+bookmarks-list-loading = Opening and loading the article before saving its full local copy…
+bookmarks-list-hint = Right-click a title in the article list to bookmark it. The article opens and loads fully first; you can cancel.

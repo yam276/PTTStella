@@ -16,6 +16,10 @@ pub enum Destination {
         board: BoardName,
     },
     Article(ArticleTarget),
+    ListArticle {
+        board: BoardName,
+        row: usize,
+    },
     Refresh {
         board: Option<BoardName>,
         #[serde(skip)]
@@ -44,6 +48,7 @@ impl Destination {
         match self {
             Self::Board { board } => Some(board),
             Self::Article(target) => Some(target.board()),
+            Self::ListArticle { board, .. } => Some(board),
             Self::Refresh { board, .. } => board.as_ref(),
         }
     }
@@ -97,6 +102,19 @@ impl Flow {
             }
             Destination::Article(target) => {
                 let (flow, bytes) = article_navigation::Open::begin(frame, target, now)
+                    .map_err(|e| e.to_string())?;
+                Ok(Start::Run {
+                    flow: Self::Article(flow),
+                    bytes,
+                })
+            }
+            Destination::ListArticle { board, row } => {
+                if !board_navigation::current_board(frame)
+                    .is_some_and(|current| current.same(&board))
+                {
+                    return Err(article_navigation::Error::Identity.to_string());
+                }
+                let (flow, bytes) = article_navigation::Open::from_list(frame, row, now)
                     .map_err(|e| e.to_string())?;
                 Ok(Start::Run {
                     flow: Self::Article(flow),

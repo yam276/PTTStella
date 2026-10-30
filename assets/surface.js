@@ -617,13 +617,13 @@ function contextIdentity(){
 function accountWordAt(point){
     return point&&latest?.account_words?.find(w=>w.row===point.row&&w.start<=point.col&&point.col<w.end)||null;
 }
-function contextState(index,word=null,replyRow=null){
+function contextState(index,word=null,replyRow=null,articleRow=null){
     const ready=!!latest&&!latest.output_pending&&!filterUi.blocked();
     const selectionReady=ready&&!!selectionCache&&selectionCache.presentation===latest.presentation
         &&selectionCache.generation===generation&&selectionCache.revision===revision;
     const picture=inlineImages.pictureState(index);
     return {picture:!!picture,pictureReady:!!picture?.ready,word,replyRow,editor:!!latest?.editor,focused:!!latest?.reply_focus,link:index,selection:hasSelection(),selectionReady,rowsReady:selectionReady&&!exportBusy&&selectionCache.value.rows.end-selectionCache.value.rows.start<=24,
-        ready,bookmark:bookmarksUi.available(),updates:articleUpdates?.available(),pending:!!latest?.input_pending,exportReady:ready&&!exportBusy,local:stationMouse.local(),ptt:!!latest?.ptt_features,
+        ready,bookmark:bookmarksUi.available(),listBookmark:articleRow!==null&&bookmarksUi.listAvailable(articleRow),updates:articleUpdates?.available(),pending:!!latest?.input_pending,exportReady:ready&&!exportBusy,local:stationMouse.local(),ptt:!!latest?.ptt_features,
         reading:latest?.navigation.kind==="article_reading",authors:latest?.navigation.kind==="article_list",images:!!latest?.image_links.length,
         inlineReady:inlineShortcut({key:"Enter"},keyboardState,latest),navigate:canNavigate(),
         first:latest?.navigation.first_line===1,last:latest?.navigation.percent===100};
@@ -636,13 +636,18 @@ function openContextMenu(e) {
     const point=cellAt(e,false),index=Math.max(linkAt(point),inlineImages.linkAtPoint(e));
     const word=index<0&&stationMouse.local()?accountWordAt(point):null;
     const replyRow=index<0&&point&&stationMouse.local()&&latest.reply_rows?.includes(point.row)?point.row:null;
+    const title=point&&index<0&&!word&&!hasSelection()&&latest?.navigation?.kind==="article_list"?latest.navigation.articles?.find(a=>a.row===point.row&&point.col>=a.title_start):null;
+    if(title&&stationMouse.local()&&!e.shiftKey&&toolAccess.right_click_menu){
+        if(tools.showAt(e))bookmarksUi.setListTarget(title.row);
+        return;
+    }
     if(index<0&&!word&&!latest?.reply_focus&&!latest?.editor&&latest?.navigation?.kind!=="article_reading"&&stationMouse.local()&&!e.shiftKey&&toolAccess.right_click_menu&&!hasSelection()){
         tools.showAt(e);return;
     }
-    contextMenu.open(e,{index,word,replyRow,entries:contextMenuItems(contextState(index,word,replyRow))});
+    contextMenu.open(e,{index,word,replyRow,...(title?{articleRow:title.row}:{}),entries:contextMenuItems(contextState(index,word,replyRow,title?.row??null))});
 }
 function contextAction(action,context,e){
-    if(!e.isTrusted||stopped||blocked()||contextMenuItems(contextState(context.index,context.word,context.replyRow)).get(action)!==true)return;
+    if(!e.isTrusted||stopped||blocked()||contextMenuItems(contextState(context.index,context.word,context.replyRow,context.articleRow??null)).get(action)!==true)return;
     if(action==="copy"||action==="copy-ansi"||action==="copy-link")send({kind:"copy_text",presentation:latest.presentation,generation,revision,
         target:action!=="copy-link"?{kind:action==="copy-ansi"?"selection_ansi":"selection",request:selectionCache.request}:{kind:"link",index:context.index},trusted:true});
     else if(action==="paste"){
@@ -673,6 +678,7 @@ function contextAction(action,context,e){
     else if(action==="next")browseDown(e);
     else if(action==="bookmarks")bookmarksUi.show(e);
     else if(action==="bookmark-current")bookmarksUi.capture(e);
+    else if(action==="bookmark-list")bookmarksUi.capture(e,context.articleRow);
     else if(action==="article-updates")articleUpdates.toggle(e);
     else if(action==="settings")settingsUi.request(e);
 }
@@ -812,11 +818,11 @@ const loginUi=createLoginDialog({tr,send,stamp,manage:e=>settingsUi.manage("acco
     prepare:e=>{stationMouse.revoke();cancelHover(true);policy("reset",e);cancelComposition();clearSelection();},
     restore:restoreSettingsPanelFocus,changed:refreshControls,focus});
 const destinationUi=createNavigationDialog({tr,send,stamp,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,current:()=>latest,isEditing:()=>composing||pastePending});
-const bookmarksUi=createBookmarksDialog({tr,send,render,notice:text=>{surfaceNote.textContent=text;},prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,openDestination:destinationUi.openDraft,current:()=>latest});
+const bookmarksUi=createBookmarksDialog({tr,send,render,window,notice:text=>{surfaceNote.textContent=text;},prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,openDestination:destinationUi.openDraft,current:()=>latest});
 const filterUi=createFiltersDialog({tr,send,manage:e=>settingsUi.manage("filters",e),present:dialog=>dialog.show(),visible:()=>settingsUi.visible("filters"),current:()=>latest,invalidate:invalidatePresentation,
     reset:e=>policy("reset",e),restore:restoreSettingsPanelFocus,changed:refreshControls});
 tools=createFloatingTools({root:chrome,ball:document.getElementById("tools-ball"),fan:document.getElementById("tools-fan"),panel:toolbar,window,document,tr,
-    onSettings:e=>settingsUi.request(e),prepare:()=>{revokeNavigation();stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();released=null;},restore:restoreEditingFocus,changed:refreshKeepAlive});
+    onSettings:e=>settingsUi.request(e),prepare:()=>{bookmarksUi.clearListTarget();revokeNavigation();stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();released=null;},restore:restoreEditingFocus,changed:refreshKeepAlive});
 editorColor=createEditorColor({root:document.getElementById("editor-color-dialog"),document,palette,tr,identity:contextIdentity,send,restore:focus,changed:refreshControls});
 contextMenu=createSurfaceContextMenu({root:document.getElementById("surface-context-menu"),document,window,
     snapshot:contextIdentity,prepare:()=>{revokeNavigation();stationMouse.cancel();tools.close();cancelHover(true);cancelDrag();released=null;setHover(null);},
@@ -870,6 +876,10 @@ const bindings=[...articleUpdates.bindings,[viewport,"scroll",()=>articleUpdates
 ];
 // Explicit loopback-fixture controls. They select a known range, without
 // synthesising a trusted pointer event or weakening the production colour gate.
+// Only the self-authored loopback list fixture exposes this trusted control.
+// It exercises the same right-click row lease without fabricating a pointer.
+const bookmarkProbeFirst=document.getElementById("bookmark-probe-first");
+if(bookmarkProbeFirst)bindings.push([bookmarkProbeFirst,"click",e=>{if(e.isTrusted)bookmarksUi.setListTarget(3);}]);
 const colourProbeSelect=document.getElementById("editor-color-probe-select"),colourProbeOpen=document.getElementById("editor-color-probe-open");
 let editorColourProbe=false;
 if(colourProbeSelect&&colourProbeOpen){

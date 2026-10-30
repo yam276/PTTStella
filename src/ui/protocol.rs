@@ -75,6 +75,12 @@ pub(super) enum SurfaceEvent {
         article: u64,
         trusted: bool,
     },
+    BookmarkList {
+        request: u64,
+        stamp: Stamp,
+        row: usize,
+        trusted: bool,
+    },
     BookmarkCancel {
         request: u64,
         trusted: bool,
@@ -408,6 +414,22 @@ pub(super) enum SurfaceEvent {
 }
 
 impl SurfaceEvent {
+    pub(super) fn interrupts_list_bookmark(&self) -> bool {
+        matches!(
+            self,
+            Self::Key { .. }
+                | Self::Text { .. }
+                | Self::Navigate { .. }
+                | Self::DestinationSubmit { .. }
+                | Self::SitesConnect { .. }
+                | Self::LoginSubmit { .. }
+                | Self::SettingsOpen { .. }
+                | Self::Paste { .. }
+                | Self::PasteClipboard { .. }
+                | Self::PasteConfirm { .. }
+                | Self::ArticleLoad { resume: false, .. }
+        )
+    }
     pub(super) fn navigation_ticket(&self) -> Option<NavigationTicket> {
         match self {
             Self::Navigate { request, stamp, .. } => Some(NavigationTicket {
@@ -426,6 +448,7 @@ impl SurfaceEvent {
                 | Self::LoginForget { .. }
                 | Self::DestinationSubmit { .. }
                 | Self::BookmarkCurrent { .. }
+                | Self::BookmarkList { .. }
                 | Self::RecentBoardsClear { .. }
                 | Self::FiltersOpen { .. }
                 | Self::FiltersEdit { .. }
@@ -541,6 +564,7 @@ impl SurfaceEvent {
             | SitesEdit { trusted, .. }
             | SitesConnect { trusted, .. }
             | BookmarkCurrent { trusted, .. }
+            | BookmarkList { trusted, .. }
             | BookmarkCancel { trusted, .. }
             | ArchiveOpen { trusted, .. }
             | BookmarksOpen { trusted, .. }
