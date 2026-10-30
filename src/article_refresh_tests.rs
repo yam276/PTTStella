@@ -1,5 +1,5 @@
 use super::*;
-use crate::{encoding, screen::Screen};
+use crate::{encoding, screen::Screen, text};
 fn scene(name: &str) -> String {
     let f: serde_json::Value =
         serde_json::from_str(include_str!("../tests/fixtures/article-open.json")).unwrap();
@@ -34,7 +34,7 @@ fn begin() -> (Screen, Refresh, Instant) {
     let now = Instant::now();
     let (flow, bytes) = Refresh::begin(
         &screen.frame(),
-        BoardName::parse("Stella").unwrap(),
+        Some(BoardName::parse("Stella").unwrap()),
         head,
         now,
     )
@@ -128,10 +128,87 @@ fn incomplete_information_cannot_be_dismissed_and_non_tail_sources_cannot_refres
     assert!(
         Refresh::begin(
             &screen.frame(),
-            BoardName::parse("Stella").unwrap(),
+            Some(BoardName::parse("Stella").unwrap()),
             std::array::from_fn(|_| String::new()),
             now
         )
         .is_err()
     );
+}
+
+#[test]
+fn headerless_reentry_uses_owned_q_then_verifies_board_aid_and_the_original_three_rows() {
+    for changed in ["none", "board", "aid", "body"] {
+        let mut screen = Screen::new(80, 24).unwrap();
+        let opening = scene("reading")
+            + "\x1b[1;1H\x1b[0m\x1b[2K沒有作者資訊的 ANSI 圖\x1b[2;1H\x1b[2K第二行\x1b[3;1H\x1b[2K第三行\x1b[24;80H\x1b[?25l";
+        feed(&mut screen, &opening);
+        let head = std::array::from_fn(|i| {
+            text::rows(&screen.frame()).unwrap()[i]
+                .text
+                .trim_end()
+                .to_owned()
+        });
+        feed(&mut screen, &tail());
+        let now = Instant::now();
+        let (mut flow, bytes) = Refresh::begin(&screen.frame(), None, head, now).unwrap();
+        assert_eq!(bytes, b"Q");
+        feed(&mut screen, &info());
+        assert_eq!(
+            flow.observe(&screen.frame(), now).unwrap(),
+            Advance::Send(b" ".to_vec())
+        );
+        if changed == "board" {
+            feed(&mut screen, &scene("articles").replace("Stella", "Other"));
+            assert_eq!(flow.observe(&screen.frame(), now), Err(Error::Identity));
+            continue;
+        }
+        for (input, expected) in [
+            (scene("articles"), b"#".as_slice()),
+            (scene("aid_prompt"), b"00000101\r"),
+            (scene("articles"), b"Q"),
+        ] {
+            feed(&mut screen, &input);
+            assert_eq!(
+                flow.observe(&screen.frame(), now).unwrap(),
+                Advance::Send(expected.to_vec())
+            );
+        }
+        if changed == "aid" {
+            feed(&mut screen, &scene("wrong_aid"));
+            assert_eq!(flow.observe(&screen.frame(), now), Err(Error::Identity));
+            continue;
+        }
+        for (input, expected) in [
+            (scene("information"), b" ".as_slice()),
+            (scene("articles"), b"\x1b[C"),
+        ] {
+            feed(&mut screen, &input);
+            assert_eq!(
+                flow.observe(&screen.frame(), now).unwrap(),
+                Advance::Send(expected.to_vec())
+            );
+        }
+        feed(
+            &mut screen,
+            &if changed == "body" {
+                opening.replace("第三行", "不同文")
+            } else {
+                opening.clone()
+            },
+        );
+        if changed == "body" {
+            assert_eq!(flow.observe(&screen.frame(), now), Err(Error::Identity));
+        } else {
+            assert_eq!(
+                flow.observe(&screen.frame(), now).unwrap(),
+                Advance::Send(b":23\r".to_vec())
+            );
+            feed(&mut screen, &tail());
+            assert_eq!(
+                flow.observe(&screen.frame(), now).unwrap(),
+                Advance::Reached(ArticleTarget::new("Stella", "00000101").unwrap())
+            );
+        }
+    }
 }

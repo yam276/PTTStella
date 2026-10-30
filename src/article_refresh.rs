@@ -5,7 +5,6 @@ use crate::{
     board_navigation::{self, BoardName},
     navigation::{self, Context},
     screen::Frame,
-    text,
 };
 use std::time::{Duration, Instant};
 #[cfg(test)]
@@ -20,7 +19,7 @@ enum Stage {
     Finished,
 }
 pub struct Refresh {
-    board: BoardName,
+    board: Option<BoardName>,
     head: [String; 3],
     line: usize,
     revision: u64,
@@ -31,7 +30,7 @@ pub struct Refresh {
 impl Refresh {
     pub fn begin(
         frame: &Frame,
-        board: BoardName,
+        board: Option<BoardName>,
         head: [String; 3],
         now: Instant,
     ) -> Result<(Self, Vec<u8>), Error> {
@@ -85,9 +84,16 @@ impl Refresh {
                 let Some(target) = article_navigation::reading_information(frame) else {
                     return Ok(Advance::Wait);
                 };
-                if !target.board().same(&self.board) {
+                if self
+                    .board
+                    .as_ref()
+                    .is_some_and(|board| !target.board().same(board))
+                {
                     return Err(Error::Identity);
                 }
+                // Headerless articles obtain their board only from this owned
+                // Q reply. The list and second Q must independently confirm it.
+                self.board = Some(target.board().clone());
                 self.stage = Stage::Return(target);
                 Advance::Send(b" ".to_vec())
             }
@@ -96,25 +102,17 @@ impl Refresh {
                     return Ok(Advance::Wait);
                 }
                 if !board_navigation::current_board(frame)
-                    .is_some_and(|board| board.same(&self.board))
+                    .is_some_and(|board| board.same(target.board()))
                 {
                     return Err(Error::Identity);
                 }
-                let (flow, bytes) = Open::begin(frame, target.clone(), now)?;
+                let (flow, bytes) =
+                    Open::begin_reentry(frame, target.clone(), self.head.clone(), now)?;
                 self.stage = Stage::Open(flow);
                 Advance::Send(bytes)
             }
             Stage::Open(flow) => match flow.observe(frame, now)? {
                 Advance::Reached(target) => {
-                    let rows = text::rows(frame).ok_or(Error::Identity)?;
-                    if self
-                        .head
-                        .iter()
-                        .enumerate()
-                        .any(|(i, line)| rows[i].text.trim_end() != line)
-                    {
-                        return Err(Error::Identity);
-                    }
                     if self.line == 1 {
                         return Ok(Advance::Reached(target));
                     }

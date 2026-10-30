@@ -9,7 +9,7 @@ function createNavigationDialog({tr,send,stamp,prepare,restore,changed,current,i
     function open(e,draft=""){
         if(disposed||!e.isTrusted||current()?.ptt_features===false||document.querySelector("dialog[open]")&&!dialog.open)return false;
         if(dialog.open){name.focus();return true;}
-        prepare(e);name.value=active?(active.target.kind==="article"?"#"+active.target.aid+"@"+active.target.board:active.target.board):draft;note.textContent=active?tr(active.target.kind==="article"?"article-open-active":"board-switch-active",{board:active.target.board,aid:active.target.aid}):"";
+        prepare(e);name.value=active?(active.target.kind==="article"?"#"+active.target.aid+"@"+active.target.board:active.target.board??""):draft;note.textContent=active?tr(active.target.kind==="refresh"?"article-updates-refreshing":active.target.kind==="article"?"article-open-active":"board-switch-active",{board:active.target.board,aid:active.target.aid}):"";
         composing=false;dialog.showModal();working();changed();name.focus();
         return true;
     }

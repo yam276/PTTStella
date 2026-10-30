@@ -111,7 +111,7 @@ impl ArchiveSnapshot {
         let text = glyphs.iter().map(|g| g.text.as_str()).collect::<String>();
         text.trim()
             .strip_prefix("標題")
-            .unwrap_or(text.trim())
+            .unwrap_or_default()
             .trim()
             .chars()
             .take(128)
@@ -258,7 +258,7 @@ impl ArticleCache {
             self.rows
                 .get(&(i + 1))
                 .map(|r| {
-                    r.glyphs
+                    r.raw_glyphs()
                         .iter()
                         .map(|g| g.text.as_str())
                         .collect::<String>()
@@ -267,8 +267,10 @@ impl ArticleCache {
                 })
                 .unwrap_or_default()
         });
-        let name = head[0].strip_prefix("作者")?.rsplit_once("看板")?.1.trim();
-        let board = pttstella::board_navigation::BoardName::parse(name).ok()?;
+        let board = head[0]
+            .strip_prefix("作者")
+            .and_then(|line| line.rsplit_once("看板"))
+            .and_then(|(_, name)| pttstella::board_navigation::BoardName::parse(name.trim()).ok());
         Some(pttstella::navigation_job::Destination::Refresh { board, head })
     }
     pub(super) fn begin_refresh(&mut self) {

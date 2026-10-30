@@ -1663,3 +1663,18 @@ core 13 命令／2 replay（filters 18 項）、desktop lib 143、bin 115、全 
 最終 App `dist/macos-bookmark-archive-current/PTTStella.app` 為 macOS arm64 release／strict ad-hoc、未公證、診斷置頂且初始不搶焦點。`native-current-save` 精確9步核對、保存Stella/#00000101完整45列，實際離線End看到REPLY0045，返回仍1～23／51%；`native-restart` 新程序讀回先前實際保存的檔案，本機End／Up／Home＋PageDown讀到45列、重疊一行，peer拒絕所有站端bytes。Canvas位於資訊下／按鈕上，Back／Close可用；末端按鈕停用後明確恢復Canvas焦點，返回清單恢復提示。真正設定Ctrl/Cmd+,入口、Vim on/off及125%/fit均留在設定焦點，關閉回鍵盤。`native-cancel-atomic` 在Q延遲6秒時以當下完整AX讀取按取消，沒有建立bookmarks檔、零保存、晚到Q零續送，仍可本機End讀45列。三案皆passed、Close acknowledged、renderer／file／connection／credential owner join；已核對程序均結束且無殘留。先前一份來源PNG另由獨立解碼為960×576，不含本機對話框或展圖。
 
 失敗證據保留：第一個新Scenario未列入互動900秒而於90秒失敗，已加入相同測試窗期限，不放寬任何站端5秒回應期限；兩次取消工具回合超過期限／解析AX diff未辨識+標記，嚴格記failed，之後改同一CUA回合讀完整最新AX再按取消才通過。沒有以自動逾時冒充明確取消。完整證據在 `.local/verification/bookmarks-archive-20261030/`；不連實站、不取鑰匙圈、不發文／寄信，不把macOS合成結果當成Windows／Linux或低階硬體驗收。清理本批三份過時打包，保留current交付、上一輪已交付App、唯一證據與共用target；精確清單見該目錄cleanup-owned-output.json。保持develop與0.3.0-dev.2，本次僅本機提交，不推送或發佈。
+
+
+## 2026-10-30 ANSI 放大接縫、文章更新入口與無標頭收藏
+
+使用者回報網頁 ANSI 圖放大出現水平黑線、右上常駐「推文更新未開啟」干擾，以及刪除作者／標題／時間三列的文章無法收藏。本批保持 develop／0.3.0-dev.2，不推送或發佈。
+
+查明：主 Canvas 寬高各自取整後，單行 strip 可能比等比 scale 的24px行高高1 pixel；renderer 使用兩軸較小scale定位最末邊界，留下黑底。改為各軸依實際 backing store 寬／高分配同組整數邊界，字型仍等比。獨立整數像素consumer覆蓋六種分數縮放／DPR寬度、上下取整行高、純背景／實心方塊與24列；相同案例在修改前renderer確實失敗，修改後全部填滿。原生另提供ansi_zoom自製連續青色帶，不能以純JS當成原生合成器驗收。
+
+推文更新預設關閉時隱藏整個右上浮層；文章空白處右鍵使用情境選單，提供同一開啟／暫停工作，不建立額外timer。列表空白右鍵維持浮球；圖片／網址／ID／選取／編輯器維持專用項目。啟用、錯誤／恢復、已有未讀新推文的可操作提示仍保留，無更新時不顯示off文字。JS核對入口、過期文章、不可信操作及原位置不變。
+
+無標頭收藏讓Refresh的已知板名可為空，只由本次Q完整資訊框取得Board/AID，仍逐步核對列表、#、第二Q、同選取列及重新開啟的原文前三列；只有內部reentry可用原文取代標頭核對，一般Open未放寬。前三列採原始未過濾文字，缺標題時保留空label回退AID，不把ANSI圖當標題。已有取消／失焦／期限／generation／operation隔離不變。新增自製headerless peer，沒有取用使用者圖畫／實站流量。
+
+自動驗證通過：desktop lib183、bin171（1個父測試使用的helper）、多程序保存9（1個子程序helper）、JS318、core14commands／2replays、Clippy／fmt／docs。初次編譯測試少匯入text及三份舊DOM double缺navigation，修正測試依賴／可選取值；無標頭測試最初將游標留在正文而未符合既有閱讀辨識，修正自製串流回到頁尾，沒有放寬production閱讀格式。測試先從另一篇已快取文章直接改首三列會正確判changed，改成獨立headerless初始作用域後通過；失敗log均留存。
+
+原生進度：已打包 `dist/macos-ansi-edges-headerless-current/PTTStella.app`（macOS arm64 release／診斷置頂、不搶啟動焦點、strict ad-hoc、未公證）。無標頭45列合成視窗前三列已顯示，右上off浮層確實不見；AX按鍵元件／Raise未能啟用前景，標題列座標點擊回報noWindowsAvailable，全文依原保護停23列。已請使用者取得前景，尚未完成原生收藏／離線讀回或ansi_zoom縮放像素驗收，不記passed。視窗與本輪交付包因待驗而保留；證據在 `.local/verification/ansi-edges-headerless-20261030/`。Windows／Linux原生、實站均未執行；未操作使用者已登入的session。沒有本輪過時App副本／工作樹／分支需要清理，保留共用target與先前交付。
