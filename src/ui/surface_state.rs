@@ -73,6 +73,7 @@ struct SelectedRows {
 }
 pub(super) struct SurfaceState {
     article: super::article_cache::ArticleCache,
+    updates: super::article_updates::Updates,
     captured: Option<(Stamp, u64)>,
     raw_reading: bool,
     reading_reset: Option<Stamp>,
@@ -91,6 +92,7 @@ impl SurfaceState {
     pub(super) fn new(rules: filters::Rules) -> Self {
         Self {
             article: super::article_cache::ArticleCache::default(),
+            updates: super::article_updates::Updates::default(),
             captured: None,
             raw_reading: false,
             reading_reset: None,
@@ -128,7 +130,7 @@ impl SurfaceState {
         probe: bool,
         settings: &DisplaySettings,
     ) -> Option<&Paint> {
-        if !self.dirty || self.in_flight.is_some() {
+        if !self.dirty || self.in_flight.is_some() || self.updates.holding() {
             return None;
         }
         self.capture_reading(view);
@@ -357,14 +359,15 @@ impl SurfaceState {
             .map(Identity::of)
     }
     pub(super) fn navigation_shown(&self, stamp: Stamp) -> bool {
-        self.displayed.as_ref().is_some_and(|p| {
-            p.article_mode == self.article_mode
-                && p.presentation == self.filters.version()
-                && !p.output_pending
-                && p.generation == stamp.generation
-                && p.frame.revision == stamp.revision
-                && p.input_epoch == stamp.input_epoch
-        })
+        !self.updates.holding()
+            && self.displayed.as_ref().is_some_and(|p| {
+                p.article_mode == self.article_mode
+                    && p.presentation == self.filters.version()
+                    && !p.output_pending
+                    && p.generation == stamp.generation
+                    && p.frame.revision == stamp.revision
+                    && p.input_epoch == stamp.input_epoch
+            })
     }
     pub(super) fn mouse_shown(&self, event: &pttstella::mouse::input::Event) -> bool {
         use pttstella::mouse::{Action, input::Route};
@@ -389,9 +392,12 @@ impl SurfaceState {
     }
     /// Vim may advance its logical cursor before the next terminal redraw.
     pub(super) fn browse_shown(&self, generation: u64, context: &Context) -> bool {
-        self.displayed.as_ref().is_some_and(|p| {
-            !p.output_pending && p.generation == generation && p.navigation.kind() == context.kind()
-        })
+        !self.updates.holding()
+            && self.displayed.as_ref().is_some_and(|p| {
+                !p.output_pending
+                    && p.generation == generation
+                    && p.navigation.kind() == context.kind()
+            })
     }
     pub(super) fn set_article_boundary_navigation(&mut self, enabled: bool) {
         if self.article_boundary_navigation != enabled {
@@ -496,19 +502,138 @@ impl SurfaceState {
     pub(super) fn full_load_active(&self) -> bool {
         self.article.loading()
     }
+    pub(super) fn updates_status(&self) -> Option<super::article_updates::Status> {
+        self.updates.status().map(|mut status| {
+            status.available = !status.recovery && self.article.refresh_destination().is_some();
+            status
+        })
+    }
+    pub(super) fn retained_relative_key(&self, key: &pttstella::vim::Key) -> bool {
+        self.updates.holding()
+            && !key.ctrl
+            && !key.alt
+            && matches!(
+                key.key.as_str(),
+                "ArrowLeft" | "ArrowRight" | "Enter" | "Backspace"
+            )
+    }
+    pub(super) fn updates_holding(&self) -> bool {
+        self.updates.holding()
+    }
+    pub(super) fn update_ready(&self, view: &View) -> bool {
+        self.cached_reading(view.stamp(), view) && !view.input_pending && !view.output_pending
+    }
+    pub(super) fn updates_deadline(&self, allowed: bool) -> Option<tokio::time::Instant> {
+        self.updates.deadline(allowed)
+    }
+    pub(super) fn cancelled_update(&mut self) -> Option<Stamp> {
+        self.updates.take_cancelled()
+    }
+    pub(super) fn updates_action(&mut self, generation: u64, id: u64, enabled: bool) -> bool {
+        self.updates.action(
+            generation,
+            id,
+            enabled,
+            self.article.refresh_destination().is_some(),
+            tokio::time::Instant::now(),
+        )
+    }
+    pub(super) fn restore_station(&mut self, generation: u64, id: u64) -> bool {
+        if !self
+            .updates
+            .status()
+            .is_some_and(|s| s.generation == generation && s.article == id && s.recovery)
+        {
+            return false;
+        }
+        self.clear_article();
+        true
+    }
+    pub(super) fn pause_updates(&mut self) {
+        if self.updates.holding() {
+            self.updates.stop(true);
+            self.dirty = true;
+        } else {
+            self.updates.defer(tokio::time::Instant::now());
+        }
+    }
+    pub(super) fn fail_updates(&mut self) {
+        self.updates.stop(true);
+        self.dirty = true;
+    }
+    pub(super) fn bookmark_current(
+        &mut self,
+        stamp: Stamp,
+        id: u64,
+        view: &View,
+    ) -> Result<
+        (
+            super::article_cache::ArchiveSnapshot,
+            pttstella::navigation_job::Destination,
+        ),
+        String,
+    > {
+        if self.authorize_reading(stamp, id).is_none()
+            || !self.cached_reading(stamp, view)
+            || stamp != view.stamp()
+            || view.input_pending
+            || view.output_pending
+            || self.updates.holding()
+            || self.updates.status().is_some_and(|s| s.busy)
+        {
+            return Err(pttstella::msg!("bookmarks-current-unavailable"));
+        }
+        let destination = self
+            .article
+            .refresh_destination()
+            .ok_or(pttstella::msg!("bookmarks-current-unavailable"))?;
+        let frame = self
+            .article
+            .archive_snapshot(&view.frame)
+            .ok_or(pttstella::msg!("bookmarks-current-unavailable"))?;
+        self.updates.begin(stamp, tokio::time::Instant::now());
+        Ok((frame, destination))
+    }
+    pub(super) fn next_update(
+        &mut self,
+        view: &View,
+    ) -> Option<pttstella::navigation_job::Destination> {
+        let now = tokio::time::Instant::now();
+        if !self.updates.due(now)
+            || !self.cached_reading(view.stamp(), view)
+            || view.input_pending
+            || view.output_pending
+            || self.has_in_flight()
+            || self.dirty
+        {
+            return None;
+        }
+        let destination = self.article.refresh_destination()?;
+        self.updates.begin(view.stamp(), now);
+        Some(destination)
+    }
     pub(super) fn full_load_deadline(&self) -> Option<tokio::time::Instant> {
         self.article.load_deadline()
     }
     pub(super) fn expire_full_load(&mut self, now: tokio::time::Instant) {
-        self.dirty |= self.article.expire_load(now);
+        if self.article.expire_load(now) {
+            self.updates.stop(true);
+            self.dirty = true;
+        }
     }
     pub(super) fn stop_full_load(&mut self) {
+        if self.updates.fetching() {
+            self.updates.stop(true);
+        }
         let old = self.article.load_state();
         self.article
             .stop_load(super::article_cache::LoadState::Stopped);
         self.dirty |= old != self.article.load_state();
     }
     pub(super) fn interrupt_full_load(&mut self) {
+        if self.updates.fetching() {
+            self.updates.stop(false);
+        }
         let old = self.article.load_state();
         self.article
             .stop_load(super::article_cache::LoadState::Cancelled);
@@ -522,6 +647,7 @@ impl SurfaceState {
         view: &View,
     ) -> bool {
         if generation != view.generation
+            || self.updates.holding()
             || self.article_mode != ArticleMode::Web
             || self.raw_reading
             || resume
@@ -562,8 +688,27 @@ impl SurfaceState {
             return;
         }
         let packet = paint(view, false, &DisplaySettings::default(), &self.filters);
-        self.article.capture(&packet);
+        self.article.capture_source(&packet, Some(&view.frame));
         self.captured = Some(identity);
+        self.updates.sync(
+            self.article
+                .progress()
+                .map(|(id, _, _, _)| (view.generation, id)),
+        );
+        if self.updates.fetching() {
+            match self.article.load_state() {
+                Some(super::article_cache::LoadState::Complete) => {
+                    self.updates.finish(tokio::time::Instant::now())
+                }
+                Some(
+                    super::article_cache::LoadState::Changed
+                    | super::article_cache::LoadState::Limit
+                    | super::article_cache::LoadState::Stopped
+                    | super::article_cache::LoadState::Cancelled,
+                ) => self.updates.stop(true),
+                _ => {}
+            }
+        }
     }
     pub(super) fn reading_scope(&self) -> Option<(u64, u64, u64)> {
         if self.article_mode != ArticleMode::Web || self.raw_reading {
@@ -592,6 +737,7 @@ impl SurfaceState {
     pub(super) fn next_full_page(&mut self, view: &View) -> Option<pttstella::navigation::Intent> {
         if self.article_mode != ArticleMode::Web
             || self.raw_reading
+            || self.updates.holding()
             || view.phase != Phase::Connected
             || view.input_pending
             || view.output_pending
@@ -619,6 +765,7 @@ impl SurfaceState {
             .continue_fetch(&view.context(), view.frame.revision)
     }
     pub(super) fn clear_article(&mut self) {
+        self.updates.sync(None);
         if self.article.active() || self.reply_focus.is_some() {
             self.filters.touch();
             self.policy_changed();
@@ -638,6 +785,7 @@ impl SurfaceState {
         self.article.input(&context, bytes);
     }
     fn policy_changed(&mut self) {
+        self.updates.sync(None);
         self.reply_focus = None;
         self.article.clear();
         self.captured = None;
@@ -665,6 +813,13 @@ impl SurfaceState {
     /// Even an old in-flight ACK must be drained before queuing the newest view.
     /// Its snapshot stays ineligible for current interactions after this update.
     pub(super) fn update(&mut self, view: &View) -> bool {
+        let holding = self.updates.holding();
+        if self.updates.observe(view, tokio::time::Instant::now()) {
+            return false;
+        }
+        if holding && self.updates.fetching() {
+            self.article.begin_refresh();
+        }
         self.article.observe(view);
         if (self
             .reply_focus
@@ -753,6 +908,29 @@ impl SurfaceState {
         self.selected.as_ref().is_some_and(|s| {
             s.identity == identity && s.request == request && s.input_epoch == view.input_epoch
         }) && self.current(identity, view).is_some()
+    }
+    pub(super) fn editor_selection(
+        &self,
+        identity: Identity,
+        request: u64,
+        view: &View,
+    ) -> Option<selection::Selection> {
+        if !self.copied(identity, request, view) || !self.current(identity, view)?.editor {
+            return None;
+        }
+        let spans = &self.selected.as_ref()?.spans;
+        let first = spans.first()?;
+        let last = spans.last()?;
+        Some(selection::Selection::Range {
+            anchor: selection::Position {
+                row: first.row,
+                col: first.start,
+            },
+            focus: selection::Position {
+                row: last.row,
+                col: last.end.checked_sub(1)?,
+            },
+        })
     }
     pub(super) fn copy_text(
         &self,

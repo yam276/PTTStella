@@ -1,6 +1,6 @@
 # AID 與指定文章
 
-本契約對應 active plan 的 C3。已實作文章識別、網址驗證、Session 導覽、快速前往與手動書籤。macOS 已完成本機合成原生往返；其他平台／實站另行驗收，不把解析成功當成已開啟文章。
+本契約對應 active plan 的 C3。已實作文章識別、網址驗證、Session 導覽、快速前往與目前文章收藏／本機副本。macOS 已完成本機合成原生往返；其他平台／實站另行驗收，不把解析成功當成已開啟文章。
 
 ## 識別與輸入
 
@@ -41,11 +41,11 @@ Rust 在 trim 之前檢查 256-byte 上限與控制字元；HTML maxlength 由�
 
 ## 本機書籤資料
 
-「文章書籤」已接 Files 與本機保存，不自動收藏閱讀頁，也不把先前導覽的 Reached 當成目前文章身分；只接受使用者明確指定的 ArticleTarget。資料只包含板名、八碼 AID、可選顯示名稱與 Unix 建立秒數，不保存內文或帳號。
+「文章書籤」已接 Files 與本機保存，不自動收藏閱讀頁，也不把先前導覽的 Reached 當成目前文章身分。手動新增仍只保存明確 ArticleTarget、名稱與建立時間；使用者按「收藏目前文章」才核對目前 AID 並保存完整文章副本，包含作者／推文 ID，但不包含登入、信件、密碼或完整 session。
 
 `Bookmarks` 最多 500 筆，板名不分大小寫、AID 區分大小寫去重。新增放在最前；更新同一識別的名稱時保留原位置與建立時間。顯示名稱在 trim 前限制 128 個 Unicode 字元、512 bytes，拒絕控制字元；空名稱保存為 null。時間限正數至西元 9999 年末，不用當前時鐘拒絕跨裝置或時區資料。
 
-獨立 `bookmarks.json` 位於產品本機資料目錄，document version 1、最大 512 KiB。載入需整份通過版本、容量、識別、標籤、時間與去重檢查，不略過錯誤項目或改寫原檔。保存先確認既有主檔有效，再將前一份原始 bytes 原子替換至 `.json.bak`，最後原子替換主檔；備份失敗不更動主檔，任一步失敗均不算保存成功。兩個檔案分別替換，並非跨檔案交易。壞檔與超量資料保留原樣；目前需使用者修復／還原後才能修改，不以空清單覆蓋。
+獨立 `bookmarks.json` 位於產品本機資料目錄，document version 2、最大 32 MiB，仍可讀 version 1 並於下次明確保存升級。每筆可含一份 version 1 封存：4096 行／8 MiB、保存秒數、80欄連續原始 glyph tuples、雙色樣式、原頁尾與有界 OSC 8 spans。欄位、映射、row/col、style、來源頁尾、文字與容量均須驗證；row/glyph/entry 反序列化也限制數量。載入需整份通過版本、容量、識別、標籤、時間與去重檢查，不略過錯誤項目或改寫原檔。保存先確認既有主檔有效，再將前一份原始 bytes 原子替換至 `.json.bak`，最後原子替換主檔；備份失敗不更動主檔，任一步失敗均不算保存成功。兩個檔案分別替換，並非跨檔案交易。壞檔與超量資料保留原樣；目前需使用者修復／還原後才能修改，不以空清單覆蓋。
 
 書籤與最近看板共用 storage 的有界讀取及逐檔原子替換機制，各自維持資料驗證與恢復政策；最近清單的明確清除仍同時覆寫空備份及主檔。自製 [書籤 fixture](../tests/fixtures/bookmarks.json) 是獨立手寫 expected，核對固定身分、名稱、時間與 wire，不依賴外部文章。
 
@@ -54,3 +54,29 @@ Rust 在 trim 之前檢查 256-byte 上限與控制字元；HTML maxlength 由�
 ui/bookmarks 管理資料與保存後 commit；Files 的單一互動工作槽在 blocking pool 讀寫，忙碌明確拒絕、不建立第二個 queue。保存成功才替換已存清單，失敗保留生效資料與草稿。關閉清掉未送出草稿、撤銷讀取 request；已明確保存且開始的工作仍追蹤至完成，關窗時 join。晚到結果不重開視窗、不搶焦點或覆蓋下一份草稿。壞檔顯示警告並停用保存，Enter 也不能送出；可以手動修復／還原檔案後重啟。
 
 DOM／event doubles 核對 request 身分、晚到讀取／保存、取消／重開、IME、readonly、不可信事件、選取移除、沿用快速前往及清理；Rust 另驗證不保存直到成功、錯誤保留、Files 撤銷未開始工作及 request 回傳。macOS 四個獨立程序驗證繁中新增／更名／移除、拒絕無 AID 草稿、書籤開啟文章、英文重啟／刪空、再重啟仍空及壞檔警告／Enter 零修改；正常關窗均需 Close acknowledged 與 owner join。中文使用原生貼上並核對欄位值，不冒充 IME 候選窗驗收；一般測試不連 PTT。
+
+
+## 收藏目前文章與離線閱讀
+
+只接受已 ACK、Web 模式且首尾皆完整的原文章，PTT／local mouse route／無待輸入與寫出／無其他命令／檔案工作／登入／設定。先 pin 同一 ArticleCache 的 Arc<Row> 與來源頁尾，原始列只在與名單投影不同時額外保存，計入既有32 MiB閱讀容量。一般無過濾差異頁只做一次有界比較，不額外配置全文。
+
+沿用同一 Session 的 Refresh 流程（Q資訊、AID、重新開文、核對前三列並還原站端尾頁），不是純Q查詢，也不猜AID；使用者瀏覽位置和展圖由既有 held projection 保留。Acquisition 綁 request／operation Stamp，只在核對到同工作 Article Reached 後交 Files；取消、原始輸入、失焦、斷線、切篇、未知提示或期限停止，不存未核對／不完整內容。pin 在核對前完成，保存的是按鈕當下已完整讀取的版本，不冒稱永遠與站端最新一致。
+
+Files 背景建立／校驗 archive、建立 draft，經共同鎖與三方 merge 把 metadata 與副本一次提交主檔；Arc 讓 UI 基線與草稿不深複製全文。不同收藏合併，同項衝突拒絕；容量不足不自動淘汰。保存開始前可取消核對，已開始的檔案工作保留至完成。移除收藏移除主檔副本；一代備份仍可能保留，非安全抹除。
+
+開啟「閱讀本機副本」不連站，Files 依目前名單將原文切成完整24列 pmore projection（末段補空白）後套相同 Rust filter，再只傳過濾後本機 frame。此封包不帶 Connected、Stamp、送鍵、keepalive 或推文 timer。JS 使用同一 renderer／固定80×23 canvas，row index只畫可見23列，PageUp/Down重疊一列，Home/End及上下/滾輪均只移動本機viewport。圖片只保存網址，不發HTTP；雙色字、原始格線及文字不交由第二個ANSI parser。關閉釋放frame／row index，晚到讀取不能重開或蓋下一份選取。
+
+原生新增 `bookmark_archive`（45列完整載入→核對一次AID→保存→讀本機）、`bookmark_archive_cancel`（Q延遲6秒、取消後零續送／零保存），以及 `bookmarks_archive_restart`（新程序只讀保存的副本、peer拒絕站端輸入）。各案均需Close acknowledged／owner join；讀取末行、返回、關閉與canvas未遮住按鈕另由真實Dioxus畫面確認。驗證狀態見active plan，不能以核心或DOM測試代替原生驗收。
+
+無作者／標題／時間標頭的文章也可收藏。Refresh 的已知看板可為空，只從本工作尾頁 Q 的完整資訊框取得板名／AID；再核對返回同板列表、#定位、第二次Q身分及原選取列。僅此已核對重開路徑可用原文前三列比對取代一般 Open 的作者／板名標頭要求；一般快速前往維持原條件。缺原標頭不把圖畫／內文當成標題；收藏顯示可回退至 #AID@看板。身分或前三列不一致、取消、逾時與舊 operation 仍拒絕。
+
+`bookmark_headerless` 另以自製無標頭45列及連續ANSI青色帶驗證同一核對／保存／本機讀回流程；不需登入。需實際在同一WebView讀到本機末行、保存PNG，並確認Close acknowledged及各owner join。此案例可一併以100%／125%／150%檢查縮放接縫，截圖色彩轉換與原PNG像素分開報告。
+
+
+## 從列表收藏
+
+浮球第一層有「收藏」分類，包含當前／指定文章收藏與書籤清單。文章列表的標題命中起點與可收藏狀態由Rust Article提供，JS不解析標題或從文字猜AID；刪除列不提供收藏。普通標題右鍵先開浮球並保存該列、generation／revision／input_epoch／presentation的lease，不能退回目前cursor；舊畫面失效後拒絕，重新開浮球才回到當前選取列。作者／網址／選字仍優先專用選單；關閉右鍵浮球或Shift時使用標題情境收藏。
+
+`ListArticle`沿用Session的同一Open reducer與唯一writer：用有界方向鍵移至指定列，核對除pointer外的完整原列，Q驗證AID／同板，返回相同列才Right開啟。此來源已有明確列及Q身分，允許無標頭的標準閱讀頁；一般快速前往仍保留既有標頭要求。進入後由同一ArticleCache／全文loader取得文章，綁初始operation、後續article id／規則版本與實際reading gate，完整且已ACK才交既有目前文章收藏再核對一次；最終AID須與列表查得的身分相同。不同operation／世代／scope／首尾不完整、載入錯誤、手動換篇／輸入、設定、取消或失焦都不能串存。開啟階段另有35秒UI收束期限，底層每步5秒／整體30秒不變，不另開sender、reader或輪詢task。
+
+列表收藏會進入並停留在所收藏的文章；不偷偷回退或重送使用者輸入。過程可取消，已確認的部分文章仍按原閱讀規則保留。開始Files保存後不宣稱可回滾，清理仍等待Files owner。資料格式、容量、不同程序合併與離線閱讀沿用前述契約，沒有第二份收藏儲存。

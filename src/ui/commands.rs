@@ -6,8 +6,12 @@ pub(super) enum Kind {
     Login,
     Navigate,
     Preload,
+    ReplyUpdate,
+    Bookmark,
+    BookmarkOpen,
     Browse,
     Destination,
+    EditorColor,
 }
 pub(super) struct Completion {
     pub(super) kind: Kind,

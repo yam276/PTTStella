@@ -4,7 +4,7 @@
 
 ## 目標
 
-目前最新開發診斷交付為 `dist/macos-multi-instance-final/PTTStella.app`（0.3.0-dev.1，多程序隔離與安全保存，見下節）。穩定版診斷交付 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修）保留。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前進入 `0.3.0` 發佈準備：develop 的 Cargo／lock、README／徽章與版專用說明已更新為正式0.3.0，準備develop→main的Release PR；main及公開正式下載仍為0.2.2，尚未合併或發佈。本輪實站／操作／20輪827行長文與四架構verify結果見下節。最新未發佈本機候選為 `dist/macos-030-release-candidate/PTTStella.app`（正常視窗、非診斷；原生About確認0.3.0）；本輪實站診斷基線為 `dist/macos-030-freeze-final/PTTStella.app`（實際0.3.0-dev.2）。歷史交付與驗證範圍保留於後續各節，過時副本依task-owned清理規則處理。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
@@ -12,13 +12,134 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
-## 0.2.2 多開修正 Critic 與發佈（2026-10-29，進行中）
+## 0.3.0 功能凍結與發佈前驗收（2026-10-30，進行中）
+
+使用者要求凍結功能，先完成剩餘實站、操作與效能回歸，再跑 Windows x64、macOS arm64／x64、Linux x64 的 verify 建置；全部必要項通過後才準備 0.3.0。保持 develop／0.3.0-dev.2，不因測試完成自行合併或發佈。當前最新診斷 App 是 `dist/macos-list-bookmarks-final/PTTStella.app`；舊段落的其他 App 路徑屬歷史紀錄，已被取代的測試副本依結案規則清理，不能當作仍存在的交付。
+
+待驗：實站切板／進出長短文章、展圖與首尾／銜接翻頁、五秒推文更新保持位置／取消／切篇、列表標題收藏與離線讀回、原生右鍵／滑鼠及注音 IME、相同工作量 cold／warm wall／CPU／process-family memory。一般 gate 只用本機合成資料；實站不發文／推文／寄信，不把私人帳密或原始流量存入 repo。人工／工具限制保留 not_ready，不以 JS doubles 代替。檢查狀態及原始證據保留 `.local/verification/release-030-freeze-20261030/`。
+
+### 本輪實站結果與修正
+
+PTTStella 專用帳號實站登入，Steam／NBA／Equestrian／Test 切板與進板提示、實體點文章列、正文上下翻頁、圖片上的翻頁、左緣返回、列表滾輪到底後操作、標題右鍵收藏與圖片右鍵選單完成指定範圍驗收。PageDown 由 1～23 銜接 23～45；Steam 指定列收藏與光棒原列不同，保存 #1gu_9w4z，斷線後副本可讀至第70行。五秒推文檢查多次保持23～45行，暫停後首尾可讀；該時段未自然出現新推文，實際追加仍以既有45→48→51行本機peer證據為準。使用者確認原生注音輸入、方向鍵／空白及Ctrl+V正常。兩份站端測試草稿均選放棄並確認「文章沒有存入」，沒有發文／推文／寄信。
+
+實站找出兩項發佈前修正。上色會等待無效回覆：PTT取消不存在的區塊標記或已在行尾的End，可能沒有screen diff；只在這兩步附加Ctrl+L重繪，保留唯一writer、fresh frame驗證與取消／期限。獨立peer不再對其他no-op製造ACK，修正前5.05秒停止，修正後中文／多行／空行／既有SGR及取消／斷線全部通過；實站已完成上色並確認第三行整行變綠、Ctrl+V可切實際色碼／彩色預覽。原生drag端點與請求範圍不同，不把該工具範圍當作精確三行人工驗收；先前使用者三行成功及strict transport結果分開保留。PTT來源依據為[官方編輯器](https://github.com/ptt/pttbbs/blob/c591f7ca0222da541fa5098656a03f4668af2b5d/mbbsd/edit.c)，只保存來源於repo外。
+
+第二項為標準文章標頭有前置空格，原AID導覽開對文章卻誤報身分失敗；用Rust選取複製讀回公開標頭證明「 作者」。導覽與refresh共用純標頭板名解析，僅略過ASCII前置空格，原始前三行仍完整保存用於reentry比較；錯板、缺label、錯AID與過期流程仍拒絕。最終App實站已顯示「已開啟 Equestrian 的 #1gm7mfaU」。新test首輪因合成標頭重繪後未還原頁尾游標而Wait，補正fixture游標位置，未放寬產品准入。
+
+最終診斷App `dist/macos-030-freeze-final/PTTStella.app`（macOS arm64／strict ad-hoc／未公證；不等於正式版）完整讀到827行。相同827行／38頁長文重讀20輪皆可到805～827行，量測CPU seconds、RSS及vmmap physical footprint，完整方法與數據見本機 `performance.json`；含CUA輸入與Home／End／AX觀察的單輪約2.1秒，不能與舊0.7秒Paint ACK量測直接比較。RSS含shared／empty allocator pages，與physical footprint分開；未宣稱低階實機FPS或整日無洩漏。額外嘗試因失焦保護暫停，立即停止續送／取消回列表，不記通過；未為測試放寬失焦規則。先前兩個App及其WebKit cohort正常退出，診斷finish run_ok／cleanup_ok均true。
+
+最終本機gate：Python81、JS323、desktop lib186／bin173、多程序保存9、core14commands／2replays、Clippy／fmt／Fluent／docs通過；ignored為父測試實際使用的子程序helper，未算成通過數。先前Python設定helper mock缺Runtime boolean回覆，補上root/group狀態後通過，原失敗紀錄保留。下一步推送develop並執行release.yml的verify（Windows x64、macOS arm64／x64、Linux x64）；目前未以舊版CI當作本版通過，也沒有建立PR／Tag／Release。所有新證據保留 `.local/verification/release-030-freeze-20261030/`，跨平台GUI／低階硬體及長時段實站追加推文仍為明示驗證邊界。
+
+### 四架構建置通過，準備 0.3.0 Release PR
+
+[verify 41034914069](https://github.com/yam276/PTTStella/actions/runs/41034914069) 在乾淨develop `4a39995` 完成 Windows x64、macOS arm64／x64、Linux x64 全部測試與打包；publish依verify模式skipped。取回同次原始artifacts，用production `validate_assets` 核對四份manifest、六個下載、來源commit／version／release profile／dirty=false、全部逐檔SHA-256與完整白名單均通過，沒有建立Tag或GitHub Release。
+
+依本次「確認後準備發佈0.3.0」授權，現在只在develop把Cargo／lock、README／徽章與版專用說明改為正式0.3.0，準備develop→main的Release PR供審閱，不自行合併或發佈。前述原生與四架構驗證針對同一產品程式；此步只有版本／文件，不把dev下載改名冒充正式下載。正式套件仍由合併後的main發佈流程重新建置並校驗。診斷App `dist/macos-030-freeze-final/PTTStella.app` 仍標示實際0.3.0-dev.2；不宣稱它是正式下載。
+
+本輪全部App及WebKit cohort已退出，最終finish run_ok／cleanup_ok true、診斷無丟紀錄；取樣工具也已join。保留來源／失敗／成功與CPU／RSS／vmmap證據，自己的過時中間App已清理；明確清單及保留理由在本輪cleanup-owned-output.json。平台GUI與低階實機範圍仍按前述限制，不因CI通過擴大宣稱。
+
+## 0.3.0 後續需求與順序（2026-10-29）
+
+依使用者要求整理桌面 PTT 的公開需求，以下為質性討論與本產品缺口的優先順序，不代表使用者比例調查，也不表示本輪已實作全部功能。日常開發維持 develop，不自行發佈。
+
+| 順序 | 工作 | 可觀察的驗收 |
+| --- | --- | --- |
+| 發佈門檻 | 操作穩定與低效能機器回歸 | 長時間切板、長文／展圖、首尾翻頁、編輯與斷線恢復不鎖死；未知提示保留原始鍵盤，不重送帳密或待送內容。以同工作量記錄 cold／warm、wall time、CPU 與 process-family memory。 |
+| 已完成合成驗收 | 文字名單相容匯入 | B 遮內容並保留 ID、C 整行塗黑、W 以顏色標示 ID；數字標記的顏色轉換在預覽說明，確認才合併保存，取消／失敗不改原檔與生效規則。 |
+| 本輪，實站待驗 | 文章推文更新 | 每五秒檢查；所有位置含舊底部都保持不動並顯示新推文數，明確操作才跳下去；可暫停，失焦／編輯及站端等待時停止或退避，不阻塞手動輸入。 |
+| 下一項 | 追蹤文章與接續閱讀 | 從既有 AID 書籤出發，可靠記錄閱讀位置及新舊推文界線；文章變動有明確退回位置，不以頁碼猜文章身分；只對使用者明確追蹤的項目更新。 |
+| 接續 | 桌面輸入裝置一致性 | Mac 觸控板、高速滾輪與側鍵不重複翻頁、不穿透選單；列表維持終端機翻頁，只有網頁文章捲動；不破壞鍵盤與 IME。 |
+| 接續 | 完整本機備份／還原 | 設定、黑白名單、書籤與閱讀位置明確匯出／預覽還原；不包含密碼，沿用跨程序合併與衝突拒絕。 |
+
+需求依據：[近期閱讀／推文中斷與追蹤需求](https://www.ptt.cc/bbs/EZsoft/M.1789283699.A.5D2.html)、[觸控板／側鍵操作討論](https://www.ptt.cc/bbs/Browsers/M.1786265274.A.5E3.html)、[桌面鍵盤需求](https://www.pttweb.cc/bbs/Android/M.1792249559.A.5EA)。完整本機備份屬產品建議；[其他桌面客戶端的設定同步](https://github.com/ksliao0314/MacPTT)僅為設計參考，不作為需求普及率或安全驗證證據。這些連結是研究來源，產品匯入介面與使用說明採中性的格式名稱。
+
+## 五秒更新與 SubAgent Critic（2026-10-30）
+
+使用者要求再審更新／取消／切篇、改為五秒且不能影響進度，通過後只推送 develop。本輪移除底部自動跟隨：頂端、中段、圖片內與原底部皆保持既有行錨點，只有 trusted 點新推文提示才跳到新底部。成功完成後五秒再檢查，互動／背景退避不補送；終端機與未明確開啟的文章不輪詢。
+
+兩位唯讀 SubAgent 找到並重審解除的問題：watch 合併略過 Active 時須以 Reached 的原 operation Stamp 確認工作；Q／列表重開中取消或失焦不得清空文章，改保留 ACK 閱讀／展圖且停止後續取頁，明確「顯示站端畫面」才釋放投影與圖片／hover owner。保留期間相對滑鼠／Vim／普通 Left、Right、Enter、Backspace 都拒絕，避免誤操作真正站端；本機上下首尾仍可閱讀，明確 raw 文字／控制鍵及換篇／世代變更維持原清理。
+
+取消改走既有 Session 控制 watch 的獨立欄位，避免一般 64 格佇列滿時遺失票據；GoTo 有 Connection 內單調 request 序號，取消只截止當時已提交的工作，新明確請求即使來源 Stamp 相同仍可開始。worker 在命令開始與自動步驟前套用控制；舊／未來取消不污染新工作，不新建背景重送 task。SubAgent 各自的 production-module／Connection 重現與最終結論保留在 `.local/verification/reply-update-cancel-critic-20261030/`；前端另跑 113 項針對回歸與 96 組 DPR／字高／圖片比例／等寬／位置追加組合。這些是 Rust／loopback／DOM doubles，不代替原生或低階機器效能驗收。
+
+完整 desktop lib 178／bin 168（另有父測試啟動的一個 ignored 子程序）、JS 309、core 14 commands／2 replays、Clippy／fmt／Fluent／docs 通過。原生更新／取消兩案例皆 passed、PNG 960×576、圖片各一次 HTTP、Close acknowledged、三個 owner join／HTTP join 與 exit 0；末次取頁請求至下次 Q 為 5.087 秒（含約 80ms 分段回覆處理），成功後五秒 deadline 另有獨立時鐘邊界測試。暫停後觀察 6.8 秒無新增送鍵。完整 gate、原生五秒計時與取消晚到查詢證據在 `.local/verification/reply-5s-20261030/`。最新 App 為 `dist/macos-reply-5s-final/PTTStella.app`，診斷置頂且初始不搶焦點、arm64／strict ad-hoc、未公證。兩個最終合成案例分別檢查 45→48→51 行後舊底部仍 23～45 行、往回讀仍 1～20 行、只點提示才到 51 行；以及 Q 延遲期間 busy 取消、45 行與展圖保留、本機首尾仍可用、晚到查詢不續送，明確顯示站端後釋放圖片。兩者需 PNG、HTTP 一次、Close acknowledged、全部 owner join、exit 0 才算原生通過；一般操作與取消不是只靠新的單元測試驗證。
+
+本輪不登入 PTT、不發文／寄信。實站部署、Windows／Linux GUI 與低階硬體仍待驗收。版本維持 0.3.0-dev.2，完成後只推 develop，不建立 PR／Tag／Release 或推進 main。清理本輪過時打包，保留最終 App、唯一證據與共用 Cargo cache；精確清單見本輪 `cleanup-owned-output.json`。
+
+## 目前文章推文更新（2026-10-29，實作與本機合成驗證）
+
+依開發順序實作 opt-in 推文更新：網頁全文完成、標準作者／看板標頭可確認後才提供控制，預設關閉，每篇明確開啟，先檢查一次、成功後每 15 秒再查。保持既有單一 surface deadline／Connection writer／取消 owner；不增加輪詢執行緒或額外連線。按暫停、離開文章、切模式／規則／站點／世代與關閉撤銷；失焦或互動時退避，若已在重新進入流程則停止並保留真正站端畫面供手動恢復。未知提示、錯誤身分／開頭／尾段重疊、逾時或容量上限不繼續送鍵。
+
+核對公開 PTT 原始碼：原閱讀器使用固定檔長，單純重繪／End 不會刷新內容。更新先 Q 確認目前文章 AID，空白回列表，沿用既有 AID 定位／Q 核對／開啟流程，確認作者／標題／時間三行，再定位原尾頁起行；重新進入中間畫面不替換本機閱讀投影或撤銷圖片。只重取尾段並追加新行，沿用 4,096 列／32 MiB／連結預算；只驗證重新讀到的尾段及開頭，不宣稱能偵測未讀回的中段修改。產品界線與來源見 [文章閱讀契約](../article-reading.md)。
+
+JS 只消費 Rust 的標準推文列數與自身幾何：更新前在底部才跟隨新末端；往回讀維持錨點，顯示新增列數，明確點提示才跳下去。初次全文載入屬基準，不顯示為新推文；開啟更新後的未讀在暫停時保留。同一文章維持已展開圖片／等寬狀態，不自動下載新圖。
+
+離線獨立 expected 覆蓋標準／不完整 Q 資訊框、精確重新進入與原尾行、錯誤 AID／標頭／未知提示、尾段追加與修改、操作序列／scope、取消與手動輸入後晚到查詢零續送、timer 不補送、底部跟隨、往回讀／明確跳轉、初次載入基準與停用／過期／清理。完整 desktop lib 177、bin 166（另有父測試實際啟動的一個 ignored 子程序入口）、JS 308、core 14 commands／2 replays、Clippy／fmt／Fluent／docs 通過，結果保留於 `.local/verification/live-replies-20261029/checks/`。
+
+macOS arm64 的實際 Dioxus／WKWebView 合成文章由 45→48→51 行；peer 獨立核對起初一次 PageDown、兩次 Q／AID／開啟／原尾行／PageDown，之後容許有界且精確的無新內容檢查。原生確認底部 48 行／100%、往回讀停在 1～20 行且只提示新增三則，明確點提示到 51 行／100%；圖片 batch 一個且 HTTP 只下載一次。初次完成未出現新推文提示，兩次新增後另完成三次無變化檢查；暫停後觀察 25.17 秒無新站端輸入。保存 960×576 PNG、Close acknowledged、全部 owner join 與 exit 0 的最終結果見驗證目錄。原生首尾測試用明確 trusted fixture 按鈕走同一 production readingMove，不當作實體 Home／End 或正文滑鼠驗收。
+
+前幾輪失敗結果保留：第一輪原生 Home 工具送出非預期輸入而被 peer 拒絕；第二輪測試站只接受兩次刷新，未包含後續正常無新內容檢查；第三輪資料缺 PTT 標準推文配色，保守辨識正確不計數。兩個已結束的失敗 probe 因錯誤清理路徑保留程序，僅終止各自已確認 PID，未動使用者或其他工作的程序；後續正常流程完整清理。修正的是合成資料／探針，再補初次載入未讀基準的產品修正，不放寬推文、站端或前景准入。
+
+本輪不登入 PTT、不發文／寄信；資訊框幾何與實際新推文仍須實站驗收，Windows／Linux GUI、實體 IME 與低階硬體效能未由本輪代替。保持 develop 的 0.3.0-dev.2，只本機提交，不推送、不發佈；下一項為追蹤文章／接續閱讀，實站驗證仍是發佈前待辦。清理自身過時打包副本，保留唯一證據、最新 App 與共用 Cargo target，清單見 `cleanup-owned-output.json`；無分支或 worktree 異動。
+
+## 文字名單相容匯入與標記顏色（2026-10-29，已完成合成驗證）
+
+沿用既有 B／C／W 分類匯入、Files 背景讀取與明確確認；補上數字分類標記轉白名單個別色，合併預覽不再丟失該色。B 遮內容保留 ID、C 整行塗黑，兩者不因數字標記變更策略；W 與只有數字標記的中立項目以顏色辨識。1～9 對應亮紅／亮綠／亮黃／亮藍／亮紫／亮青／亮白／青／紫；多標記取最小編號，無標記的匯入保留既有本機個別色，新白名單 ID 沿用共用色，不改全域共用色。介面與使用說明只寫「匯入名單」及中性格式，不加外部產品名稱，沒有旗標 UI。
+
+數字是可複選分類而非 RGB，固定顏色轉換是本產品的設計，預覽說明並顯示實際色名；不宣稱還原外部自訂色表。格式以既有官方封裝的靜態讀寫／標記序列化證據核對，原始研究保留 repo 外 `/Users/ladesine/.codex/research/PTTStella/list-import-20261029/`；沒有執行該程式或讀私人名單。來源檔不寫回，仍維持 256 KiB／512 ID、白名單優先、UTF-8 BOM、取消／舊 request 拒絕及跨程序保存保護。未知分類／非法標記計入略過；無可匯入項目則拒絕。
+
+驗證通過：desktop lib 172、bin 162（另有一個由父測試實際啟動的 ignored 子程序入口，不另算通過）、JS 304、core 14 commands／2 replays、全 targets Clippy、fmt／Fluent／docs。新增獨立 expected 覆蓋九種顏色、多標記順序／重複、純標記與中立分類、兩種遮擋不變、中文備註、未知／混合分類拒絕、既有色覆寫／保留、共用色不變，以及預覽／確認／序列化／過期快照與取消還原。
+
+macOS arm64 實際 Dioxus／WKWebView 使用自製 UTF-8 BOM 名單，trusted AX 開啟兩分頁核對預覽、取消後來源／規則 bytes 不變且未建立備份，再明確套用並兩次修改合成備註保存。白名單 Alice 個別亮綠、Carol 亮黃、純標記 Dave 亮紅；Bob 遮內容、Alice2 整行黑。實際右鍵複製選取文字、匯出 960×576 PNG；獨立 RGB／cell 解碼確認 Alice 綠色 125 pixels、Bob 紅色 74 pixels、內容／整行範圍全黑。第二個新程序載入逐 byte 相同的已保存名單，PNG bytes 與第一輪完全相同，未建立備份或重寫名單。
+
+兩程序各自 surface-probe passed、Close acknowledged、connection／credential／file owner join、listeners release、cleanup true 與 exit 0；本機 peer 拒絕全部站端輸入，不登入 PTT。原生固定測試選檔路徑不代替系統 picker 驗收；本輪沒有外部程式真正匯出往返、全部版本矩陣或 Windows／Linux GUI 實測。證據 `.local/verification/list-import-20261029/`，交付 `dist/macos-list-import-verified/PTTStella.app`（0.3.0-dev.2，診斷置頂／啟動不搶焦點，strict ad-hoc，未公證）。清除本工作已關閉 REA 的過時執行檔擷取副本，保留唯一研究／合成證據、正式交付與共用 Cargo cache，精確清理清單見 cleanup-owned-output.json；沒有建立或刪除分支／worktree。只提交 develop，不推送、不發佈。
+
+## 藍金通知與斷線重連（2026-10-29，已完成合成驗證）
+
+輸入／結果：操作通知改為視窗上方中央的深藍／金線／星徽卡片，標題 20～24px、內文 18～21px，窄視窗維持換行與可捲動內容；不改 BBS 格線、不進 PNG。一般通知單一槽位取代舊訊息，約 8 秒自動收起，hover／鍵盤焦點暫停剩餘時間，可明確關閉且不搶焦點。斷線／錯誤用獨立持續卡片，不被一般通知覆蓋、不自動消失。
+
+斷線卡片提供重新連線，沿用 Connection 原站點與單一 writer；按下立即鎖定、顯示連線中，連線成功後收起，失敗保留原因與再次重試。Connected／Connecting、關窗與 fatal UI 拒絕重連；fatal 提示重新開啟 App。重連不登入、不讀鑰匙圈、不重送輸入或帳密。一般合成 probe 保持重連禁用，只有 `toast_reconnect` 專用的兩次 loopback 連線案例開放這個按鈕。
+
+驗收：JS 驗證唯一 timer／observer、到期、取代、hover／焦點剩餘時間、關閉、焦點及清理；Rust 准入與既有重連隔離回歸。真正 Dioxus host 的 `--probe-surface OUTPUT_DIRECTORY toast_reconnect` 由自製本機 server 第一次斷線，原生重連後第二次連線保持、拒絕全部登入／重送 bytes，再匯出 PNG、關閉通知並正常退出。視覺需讀回斷線卡與一般通知；缺 native runner 不算通過。保持 develop 0.3.0-dev.2，不發佈。
+
+結果：JS 通知 owner 新增六項計時／暫停／取代／關閉／焦點／清理測試，連同完整 JS 回歸通過；Rust 准入涵蓋關窗、fatal、合成場景、Connecting／Connected 鎖定。停止時移除所有 listener、observer 與唯一 timer，沒有背景輪詢。通知不因選取或畫面刷新提早消失；直接沿用原本純文字出口，沒有 HTML 插入或另一份訊息 queue。
+
+自動檢查：desktop lib 170、bin 161（另有一個由父測試啟動的 ignored 診斷子程序入口，未另算通過）、JS 303、core 14 commands／2 replays、Fluent、Clippy／fmt／docs 全部通過。
+
+macOS arm64 原生 Dioxus／WKWebView `toast_reconnect` 已完成兩輪。首輪原生重連／自動收起與傳輸通過，但背景視窗的進場動畫使通知停在透明狀態，該輪視覺不算通過；移除進場動畫後，最終 CUA 實際讀回確認 620px 寬的斷線卡及一般操作卡，星徽、20px 標題與 18px 內文清楚，未取得前景焦點仍直接顯示。斷線卡停留超過 8 秒仍有按鈕，trusted AX 點重新連線後卡片收起；PNG 已儲存的新卡可由原生關閉通知按鈕移除。hover／焦點暫停時間由受控 JS clock 驗證，不冒充原生滑鼠 hover 已測。
+
+兩輪合成 server 均獨立完成恰兩次連線，第二階段拒絕所有站端 bytes；診斷 generation 2、input epoch 0，沒有登入、帳密或舊操作重送。來源 PNG 維持 960×576，移除通知動畫前後的來源 PNG SHA-256 相同。最終 surface-probe passed、run_completed／cleanup_completed、Close acknowledged、全部 owner join、Finish run_ok／cleanup_ok 與 exit 0 通過。證據 `.local/verification/toast-20261029/`；只診斷編譯／合成視窗置頂，未連 PTT，Windows／Linux 原生與窄視窗仍待實測。
+
+最終 App 移至 `dist/macos-toast-verified/PTTStella.app`，與實測 binary 相同且 strict ad-hoc 簽章通過；已移除本工作非活動的 `dist/macos-toast-dev`，保留兩輪唯一證據與共用 Cargo cache。精確路徑、搬移與保留原因在 cleanup-owned-output.json。沒有新建分支或 worktree，保持 develop 0.3.0-dev.2，不推進 main／master、不發佈。
+
+## 編輯器框選上色（2026-10-29，已實作，合成驗證通過）
+
+輸入／結果：PTT 文章／回文／信件編輯器框選文字，右鍵開啟「文字上色」色彩表；16 色前景、8 色背景、可讀文字預覽與數字色碼，確認套用才送站端輸入。多行逐行起始／重設，空行略過，中文半格選取擴成完整字形。既有 SGR 不刪除、不重送文章文字，於範圍內覆寫舊色碼、結尾重設並恢復未選取文字原色。
+
+Connection 單一 writer 擁有有界工作；先依站端狀態列核對邏輯行／游標／顯示與插入模式，再以色碼顯示及彩色預覽互相驗證來源。所有行完成預檢才開始寫入；每筆游標與色碼等待確認。手動鍵盤、取消等待、斷線／關窗、逾時或畫面不符即停止，不重試已送 bytes，不假稱回滾。成功恢復原模式與插入／取代狀態，確認文字未變及選取／外圍樣式後才回報。
+
+安全範圍：僅目前可完整確認的 80×24 PTT 編輯版型，不跨頁選取。PTT 色碼顯示只呈現一行前 79 格，End 證明來源超過此範圍、特殊控制碼／雙色字中插碼或無法定位時拒絕而不改草稿；插碼後亦不得達到 PTT 511 bytes 單行折行上限。限制是來源驗證，非刪去被裁切內容或假裝上色成功。實作留在 develop 0.3.0-dev.2，不發佈。
+
+驗收：獨立 byte 編輯器模型核對多行／空行、中英混排／半個中文選取、既有 SGR／reset／尾字顏色、兩種顯示與插入／取代模式、DBCS 開關；Connection 實際 loopback 驗證順序、取消／手動打斷／斷線／重連零重送；JS 色彩表確認／取消／過期選取與不可信操作；實際 Dioxus host 的色彩表及合成多行操作另留原生結果，不以單元測試代替實站發文。
+
+結果：核心 8 項（含 23×79 格整頁中文）與 Connection 真實 loopback 3 項通過；desktop lib 170、bin 160 通過，bin 的一個 ignored 是由父測試啟動的診斷子程序入口，未另算通過。完整 JS 297、core 14 commands／2 replays、Fluent、Clippy／fmt／docs 通過。新核對涵蓋不完整回覆等待、不變更未選取尾字、typed／trusted／generation 與 ACK 選取保存、所有行預檢後才插碼及中途畫面異動停止。Home／End 與已確認的 ASCII 游標段可合併送鍵，避免整頁逐字網路往返；來源 glyph 查找使用既有排序的二分搜尋，不對每行每個字掃整張 frame。
+
+原生 macOS arm64 真正 Dioxus／WKWebView：原生滑鼠工具持續回報 noWindowsAvailable；使用者手動操作回報色表可開啟，讀回確認一個第三行單行變色，未把這輪當成完整多行通過。之後在明確 `editor_color` 本機模式加入固定三行選取入口，由 trusted AX 按鈕建立同一 Rust selection，再以真正色表取消（input epoch 仍 0）、重開、選亮紅／黑底及套用。這是固定 fixture 範圍及原生色表操作，沒有合成 trusted pointer 或放寬一般事件准入，也不宣稱自動化完成了原生拖曳。
+
+最終來源 PNG 960×576 的獨立解碼：首行未選取 P 111 個灰階像素、選取部分 465 個紅色像素、第三行 583 個紅色像素，空行全黑。合成 peer 在 Close 獨立核對全部原始文章 bytes、既有 SGR 保留／新色覆寫及原彩色預覽／取代模式；surface-probe passed、一次上色、正常 Close acknowledged、所有 owner join、Finish run_ok／cleanup_ok 與程序 exit 0。該 App 為診斷編譯，置頂且不搶焦點；一般啟動沒有測試按鈕。未登入 PTT、未發文，實站草稿、原生多行拖曳與其他平台 GUI 仍待驗，不以此合成結果代替。
+
+首輪未收到任何上色指令、第二輪只有單行而非指定三行，以及測試入口誤以舊的一次性 Paint.probe 旗標作准入的輪次，均保留 failed／not_ready 的原始報告；入口改綁明確 case，沒有改 peer expected。最終證據 `.local/verification/editor-colour-20261029/native-verified/`，自動檢查與失敗輪次同根目錄保留。驗收後清除本工作 `dist/macos-editor-colour-dev`、`dist/macos-editor-colour-final`、`dist/macos-editor-colour-delivery` 三個非活動過時 App 目錄（約 119.6 MB），精確路徑與保留原因記於同根 cleanup-owned-output.json；保留唯一交付、必要證據與共用 Cargo cache，沒有建立或刪除分支／worktree。不推進 main／master、不發佈。
+
+## 0.2.2 多開修正 Critic 與發佈（2026-10-29，已完成）
 
 使用者要求再次交由 SubAgent 獨立 Critic，確認多開、共用設定與名單保存沒有回歸後推送 develop 並發佈 0.2.2。兩位 Critic 分別審查保存／UI 基準與診斷／鎖／清理，唯讀工作不碰私人資料或 PTT。先完成修正與本機檢查，再推送正式版本來源，經 develop → main Release PR 與四架構 verify；通過後才合併及公開，公開附件仍只有六個平台套件與 SHA256SUMS，JSON 留 Actions artifacts。正式發佈後 develop 恢復 0.3.0 開發版。
 
 Critic 找到並修正兩項問題：書籤合併可能超過 500 筆卻回報成功，改由序列化 owner 在備份／替換前拒絕；關窗 drain 遺失成功但未 ACK 的設定提交基準，導致最後草稿誤判衝突，改為僅採用本視窗成功的 submitted 推進 retained 基準。兩個新回歸案例在修正前均確實失敗；修正後書籤原檔／備份／重啟可讀保護、最後草稿保存及外窗同欄衝突保護通過，保存 Critic 已獨立覆核。診斷 Critic 無 actionable finding，七項測試及 20 輪雙程序隔離（40 個子程序）全過；Windows runtime 仍待 CI。
 
 本機最終 core 14 commands／2 replays、desktop lib 159／bin 158、多程序整合 7、JS 293、Python tooling 80、Clippy／fmt／docs 通過；0.2.2 診斷 App 的兩個原生 Dioxus 視窗共用診斷根目錄，逐一開工具／PNG／關閉通過，兩份 Finish run_ok／cleanup_ok、Close acknowledged、全部 worker join 與 exit 0 通過。此原生案例只驗雙程序與關閉流程，設定未 ACK 時序由受控的生產 save_display／Files drain 回歸測試證明，不冒充原生即時關窗重現。
+
+發佈結果：Release PR #5 政策通過，develop `eaf8e83` 的 verify run 40820260479 四架構成功後合併為 main `029b318d55bcad5d0cac3b37de05c89c18c3f73c`。正式 run 40821773621 的四架構測試／打包及 Publish complete Release 全部成功，[v0.2.2](https://github.com/yam276/PTTStella/releases/tag/v0.2.2) 已公開為 Latest stable（Release 427497649），tag 固定相同 main 提交。取回同一次正式 run 的全部 20 份原始產物，以 production validate_assets 核對四份 manifest、來源／版本／release profile、六個套件與逐檔 SHA-256；公開六個套件加 SHA256SUMS 共七個附件的 digest／大小、六筆校驗與雙語說明全部吻合，沒有 JSON 附件。沒有手動補發或繞過 publisher。main 已整合回 develop，後者恢復 `0.3.0-dev.2` 並保持正式 tag／main 不變。
+
+保留 `dist/release-v0.2.2/` 正式下載、`dist/release-v0.2.2-artifacts/` 唯一原始建置產物與 verification 下的 Critic／原生證據；開發診斷包更新至 `dist/macos-030-multi-instance-critic/PTTStella.app`。被取代的本次診斷包僅在確認非活動、解析路徑與內容屬於本工作後清理；共享 Cargo target 與其他工作交付保留，精確清理清單見 verification 的 cleanup-owned-output.json。沒有新建 feature 分支或 worktree；develop 是長期分支，保留不刪。
 
 本次把 `multi_instance` 獨立程序整合測試加入四架構 CI。Windows／Linux 沒有原生 GUI 驗收，不以 CI 單元／打包結果代替。證據目錄 `.local/verification/release-022-20261029/` 與 `.local/verification/multi-instance-critic-20261029/`。
 
@@ -1550,3 +1671,63 @@ core 13 命令／2 replay、desktop lib 142 項、bin 85 項、全 targets Clipp
 保留 ID 的黑名單改為亮紅色；整行塗黑仍不畫出 ID，暫時揭露後以亮紅色辨識。白名單預設共用亮青色，可選 15 種可見 ANSI 前景色，另允許每 ID 覆寫或選回共用色。schema v4 保存全域共用色與 optional entry color，v1～v3 保留原策略並遷移至共用亮青、無覆寫；只在明確保存時改寫，備份／錯誤保留與名單上限不變。快取、來源 PNG、選取／複製及媒體皆消費同一 Rust 投影；連續推文後續 ID 的黑色合併仍優先。
 
 core 13 命令／2 replay（filters 18 項）、desktop lib 143、bin 115、全 targets Clippy、JS 187、fmt 與 docs 通過。macOS arm64 `filter_colors` 實際表單四次保存後，WebView 可見黑名單紅 ID 與內容遮罩、共用綠 ID 及個別紫 ID；獨立 PNG 解碼確認兩列內容全黑、三種 ID RGB 為 red／green／magenta，960×576，名單 v4 寫入值相符。Close acknowledged、全部 owner joined、exit 0。首輪 probe 漏接案例分派而進主選單，保留 failed 記錄，修正分派、bin／Clippy 重跑並另打包後才驗證；沒有用該次退出碼 0 當通過。證據 .local/verification/filter-colors，交付 dist/macos-filter-colors-final/PTTStella.app 為 release／arm64／ad-hoc，未公證。使用者隨後回覆「我測試成功了」，實站名單遮罩修復記為使用者確認；Windows／Linux 原生本輪 not_ready，正文滑鼠仍由使用者驗收。
+
+
+## 2026-10-30 目前文章收藏／本機副本與浮球精簡
+
+使用者要求：不手打 AID 即可收藏目前文章、保存文章防站端刪除；右鍵浮球請 SubAgent Critic，只保留常用項目，進階項目進設定。本批保持 develop／0.3.0-dev.2，不發佈。
+
+驗收輸入與結果：網頁全文 complete 時按「收藏目前文章」，pin 同一 article 的 unfiltered 原文列（含雙色、推文、連結），沿既有 Q／AID／重開／tail 核對流程，只有匹配 operation 的正式 Article Reached 才交 Files 背景建立副本並原子保存。取消／失焦／切篇／未知畫面不得串存或續送；不保存登入、信件、編輯器或不完整全文。離線副本走同一 renderer，固定 80×23 本機頁面，不帶 Connected／Stamp，不送站端按鍵，也不自動下載圖片。
+
+保存採單一 bookmarks.json v2 原子交易（讀入 v1，保存升 v2），500筆／32 MiB，單篇4096行／8 MiB，一代備份；複用共同鎖及三方合併，不同文章修改合併，同篇衝突拒絕。Entry 以 Arc 共用封存，UI Summary 不傳原文，Files 才展開 pin／驗證／套目前名單。原文差異保留計入既有閱讀32MiB上限；名單不寫死進副本。移除收藏移除主檔副本，一代備份保留既有語意，不宣稱安全清除。
+
+浮球預設四類：導覽、擷取、連線、設定；原縮放／Vim實驗中／站端滑鼠／防閒置控制搬到統一設定，沿用單一 DOM ID 與 handler，設定內不把焦點交回 BBS。暫時解除遮蔽保留於導覽。圖片／ID／網址／反白／編輯器的情境選單維持；背景右鍵也刪除進階設定快捷項。兩位 SubAgent Critic 的阻塞已逐項修正，最終複審通過。
+
+
+本批最終驗證：desktop lib 182、bin 170（另1個由父測試啟動的ignored helper）、multi_instance 9（另1個真正子程序helper）、JS 315、core14 commands／2replays、Clippy／fmt／Fluent／docs均通過。新增真正兩程序同時各存archive並保留兩篇，另測同篇刪除／更新衝突與壞archive主／備檔不覆蓋。Critic先後發現的raw過濾永久化、UI做全文序列化、舊failed污染、末段缺padding、raw leading-reset色彩、pin漏footer、Summary普通編譯及Canvas定位等均修正並補驗證；不改expected掩蓋失敗。
+
+最終 App `dist/macos-bookmark-archive-current/PTTStella.app` 為 macOS arm64 release／strict ad-hoc、未公證、診斷置頂且初始不搶焦點。`native-current-save` 精確9步核對、保存Stella/#00000101完整45列，實際離線End看到REPLY0045，返回仍1～23／51%；`native-restart` 新程序讀回先前實際保存的檔案，本機End／Up／Home＋PageDown讀到45列、重疊一行，peer拒絕所有站端bytes。Canvas位於資訊下／按鈕上，Back／Close可用；末端按鈕停用後明確恢復Canvas焦點，返回清單恢復提示。真正設定Ctrl/Cmd+,入口、Vim on/off及125%/fit均留在設定焦點，關閉回鍵盤。`native-cancel-atomic` 在Q延遲6秒時以當下完整AX讀取按取消，沒有建立bookmarks檔、零保存、晚到Q零續送，仍可本機End讀45列。三案皆passed、Close acknowledged、renderer／file／connection／credential owner join；已核對程序均結束且無殘留。先前一份來源PNG另由獨立解碼為960×576，不含本機對話框或展圖。
+
+失敗證據保留：第一個新Scenario未列入互動900秒而於90秒失敗，已加入相同測試窗期限，不放寬任何站端5秒回應期限；兩次取消工具回合超過期限／解析AX diff未辨識+標記，嚴格記failed，之後改同一CUA回合讀完整最新AX再按取消才通過。沒有以自動逾時冒充明確取消。完整證據在 `.local/verification/bookmarks-archive-20261030/`；不連實站、不取鑰匙圈、不發文／寄信，不把macOS合成結果當成Windows／Linux或低階硬體驗收。清理本批三份過時打包，保留current交付、上一輪已交付App、唯一證據與共用target；精確清單見該目錄cleanup-owned-output.json。保持develop與0.3.0-dev.2，本次僅本機提交，不推送或發佈。
+
+
+## 2026-10-30 ANSI 放大接縫、文章更新入口與無標頭收藏
+
+使用者回報網頁 ANSI 圖放大出現水平黑線、右上常駐「推文更新未開啟」干擾，以及刪除作者／標題／時間三列的文章無法收藏。本批保持 develop／0.3.0-dev.2，不推送或發佈。
+
+查明：主 Canvas 寬高各自取整後，單行 strip 可能比等比 scale 的24px行高高1 pixel；renderer 使用兩軸較小scale定位最末邊界，留下黑底。改為各軸依實際 backing store 寬／高分配同組整數邊界，字型仍等比。獨立整數像素consumer覆蓋六種分數縮放／DPR寬度、上下取整行高、純背景／實心方塊與24列；相同案例在修改前renderer確實失敗，修改後全部填滿。原生另提供ansi_zoom自製連續青色帶，不能以純JS當成原生合成器驗收。
+
+推文更新預設關閉時隱藏整個右上浮層；文章空白處右鍵使用情境選單，提供同一開啟／暫停工作，不建立額外timer。列表空白右鍵維持浮球；圖片／網址／ID／選取／編輯器維持專用項目。啟用、錯誤／恢復、已有未讀新推文的可操作提示仍保留，無更新時不顯示off文字。JS核對入口、過期文章、不可信操作及原位置不變。
+
+無標頭收藏讓Refresh的已知板名可為空，只由本次Q完整資訊框取得Board/AID，仍逐步核對列表、#、第二Q、同選取列及重新開啟的原文前三列；只有內部reentry可用原文取代標頭核對，一般Open未放寬。前三列採原始未過濾文字，缺標題時保留空label回退AID，不把ANSI圖當標題。已有取消／失焦／期限／generation／operation隔離不變。新增自製headerless peer，沒有取用使用者圖畫／實站流量。
+
+自動驗證通過：desktop lib183、bin171（1個父測試使用的helper）、多程序保存9（1個子程序helper）、JS318、core14commands／2replays、Clippy／fmt／docs。初次編譯測試少匯入text及三份舊DOM double缺navigation，修正測試依賴／可選取值；無標頭測試最初將游標留在正文而未符合既有閱讀辨識，修正自製串流回到頁尾，沒有放寬production閱讀格式。測試先從另一篇已快取文章直接改首三列會正確判changed，改成獨立headerless初始作用域後通過；失敗log均留存。
+
+原生進度：已打包 `dist/macos-ansi-edges-headerless-current/PTTStella.app`（macOS arm64 release／診斷置頂、不搶啟動焦點、strict ad-hoc、未公證）。無標頭45列合成視窗前三列已顯示，右上off浮層確實不見；AX按鍵元件／Raise未能啟用前景，標題列座標點擊回報noWindowsAvailable，全文依原保護停23列。已請使用者取得前景，尚未完成原生收藏／離線讀回或ansi_zoom縮放像素驗收，不記passed。視窗與本輪交付包因待驗而保留；證據在 `.local/verification/ansi-edges-headerless-20261030/`。Windows／Linux原生、實站均未執行；未操作使用者已登入的session。沒有本輪過時App副本／工作樹／分支需要清理，保留共用target與先前交付。
+
+
+2026-10-30 前景補驗完成：上一份等待使用者的native-headerless peer已於900秒逾時，嚴格保留failed／cleanup=false；關窗後該程序已退出。重開自製headerless加連續青色帶的同一測試，使用者取得前景後完整載入45列，按收藏核對精確9階段（一次PageDown、Q、列表、#、AID、Q、返回、Right、:23），保存1筆、label=null而顯示#00000101@Stella。真實本機副本首三行保留原無標頭文字，End可見REPLY0045，返回文章仍保留原閱讀位置。PNG匯出獨立解碼960×576；沒有因展開對話框或縮放更改來源尺寸。最終surface-probe status=passed、Close acknowledged、listeners／file／connection／credential worker皆joined、process exit0，pgrep確認無本輪殘留。
+
+同一WebView在100%／125%／150%取同回合AX與screenshot；實際工具回傳JPEG，副檔名已修正為.jpg，色彩帶有螢幕轉換，不能以其RGB當原ANSI色值。Pillow獨立解碼三張圖，以21px中央帶的逐行median檢查內部缺線：三次dark rows均0，green median最小115／115／117；色帶寬196／244／292px，實際縮放已改變。保留來源PNG與原始截圖，未編輯畫面。Ctrl+0在本輪原生輸入環境未復位，已使用設定「符合視窗」確認從150%回100%；沒有把這個工具按鍵結果當快捷鍵驗收。原生座標右鍵仍在送出前回報noWindowsAvailable，更新推文情境入口保留JS通過／原生not_ready，沒有用合成點擊冒充實體右鍵。
+
+最終交付改為 `dist/macos-ansi-archive-acceptance/PTTStella.app`（相同生產修正，僅合成fixture增加青色帶），strict ad-hoc驗證通過。補跑Refresh四案及全targets Clippy均通過，前輪完整gate仍有效；新包與雜湊、像素與保存／清理證據在 `.local/verification/ansi-edges-headerless-20261030/validation.json`。尚未推送或發佈，原生Windows／Linux及實站仍未執行。
+
+
+## 2026-10-30 第一層收藏與列表標題收藏
+
+使用者要求收藏移至浮球第一層，文章列表可對標題右鍵從浮球收藏。本批維持develop／0.3.0-dev.2，不推送、不發佈。五類為導覽、收藏、擷取、連線、設定；原目前文章與清單控制搬入收藏群組，同一DOM ID／handler。書籤格式與容量不變。
+
+列表右鍵保存指定列的畫面lease，採Rust提供title_start及bookmark准入；刪除列、過期畫面不退回光棒另一篇。作者／網址／反白保留既有優先權，關閉右鍵浮球時保留標題情境收藏。ListArticle重用Session Open／唯一writer，以有限方向鍵只移游標、核對原列、Q身分、返回同列後Right，支援無標頭閱讀頁。UI FromList綁初始operation、article id／規則版本、ACK及reading gate；同一全文loader完整後才重用目前文章收藏，第二次核對AID必須等於列表取得的身分，之後Files單一原子交易。完成停在該文章，未假裝不進入文章即可取得完整內文。
+
+取消、失焦、手動輸入／換篇、模式／規則／世代改變、錯板／列變更、載入停止或超量均不能串存。開文底層5秒／30秒保留，UI另35秒收束未取得Reaching的狀態，有明確同迴圈deadline，沒有第二個sender或讀取task。開始保存後仍保留檔案owner至完成，不能假裝撤回已保存bytes。JS取消single-flight避免重複blur排入多筆取消。
+
+離線最終通過：desktop lib185、bin172（1個父測試使用的helper）、JS323、多程序保存9（1個helper）、core14commands／2replays、全targets Clippy／fmt／Fluent／docs。新增production Session精確Up／Q／空白／Right與無標頭成功；列變更、錯板及取消後晚Q零續送。FromList核對owned Reached、完整scope及gate，故障／遺失scope／取消／世代／其他operation拒絕；JS核對標題row與cursor不同、舊lease、刪除列不fallback、終端機／busy／遠端mouse／untrusted拒絕、blur只送一次取消與五分類到4K非重疊。第一次編譯少Context import、helper借用不符、Clippy指出擴大Open使Refresh enum過大及測試模組後項目，已正確匯入／借用、Box化Open及移動fixture項目，保留failed log；未抑制gate或改expected掩蓋問題。
+
+本機合成bookmark_list的候選已開啟：AX可見第一層「收藏」及兩項入口，trusted合成控制選第一篇（初始cursor第二篇），peer獨立確認Up／Q／同列返回／Right四步，已開對應無標頭文章。全文暫留23行，因非前景按原規則暫停；已請使用者點標題列，尚未完成自動全文保存／離線讀回，不記原生passed，也不把probe row控制當實體右鍵驗收。最終診斷包 `dist/macos-list-bookmarks-final/PTTStella.app`（release／arm64／strict ad-hoc、未公證）另含tooltip修正、取消single-flight／刪除列lease及Refresh Box修正；前述候選不冒充最終二進位完整原生驗收。證據 `.local/verification/list-bookmark-20261030/validation.json`。保留current候選為活動驗收窗、final為交付、唯一證據與共用target，沒有分支／工作樹或其他過時本輪輸出可刪。未操作使用者實站session，Windows／Linux原生not_ready。
+
+
+2026-10-30 列表收藏最終原生補驗完成：舊current候選在等待前景期間超過900秒，保留native-list failed／cleanup=false；關窗後該程序已結束，不把它計入通過。使用最終交付包重開同一bookmark_list案例後，不需再次手動登入／介入；原生AX確認五個第一層分類及「收藏」，指定第一篇（初始光棒第二篇）後自動完成全文及收藏，沒有另外按「收藏目前文章」。peer獨立核對Up／Q／空白／Right，再逐筆核對PageDown與既有收藏Q／#／AID／重開／尾頁，共13步且零額外輸入。bookmarks主檔只有Stella/#00000101一筆、45列原始archive；實際本機End讀到第45行REPLY0045，返回仍為原來1～23／51%。第一層、離線末頁及返回AX／原生screenshot均保存；圖片工具本輪回傳JPEG，明確使用.jpg。
+
+同一最終App另完成原始PNG匯出；surface-probe status=passed、bookmark_saves=1／archive_reads=1／full_png=true、Close acknowledged、listeners及file／connection／credential worker全部joined、process exit0。pgrep確認兩份本輪probe程序皆不存在。最終App仍為 `dist/macos-list-bookmarks-final/PTTStella.app`，來源與上一筆feature commit相同，未修改生產程式。實體標題右鍵受原生工具限制仍未驗收；trusted row-selection probe只驗共同lease及完整保存，不冒充實體右鍵，實際producer分流及stale／deleted列由JS獨立expected核對。
+
+驗收後刪除本輪已無使用者的過時候選 `/Users/ladesine/Documents/Github/PTTStella/dist/macos-list-bookmarks-current`（確認resolved path非symlink、只有自己打包的App、process已退出並記錄SHA-256），保留final交付、唯一成功／失敗證據、共用Cargo target與先前已交付基線；沒有建立或刪除分支／worktree。精確結果在 `.local/verification/list-bookmark-20261030/validation.json`。本輪保持develop，未推送或發佈。

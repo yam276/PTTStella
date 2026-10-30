@@ -34,7 +34,10 @@
 
 - 本專案不屬於 Diolama 系列，不套用 Diolama 的資源 harness；建置與測試直接使用本 repo 的 Cargo／tooling 流程，不占用或清除其他專案的共用 target。
 
-- 日常開發與功能 PR 使用 `develop`；`main` 只放發佈版本，以標題 `release: v<package version>` 的 develop → main PR 推進，Cargo.toml／Cargo.lock 版本必須一致且遞增。不要因修改 CI 直接提高版本或發佈產品，流程與實際分支保護狀態見 [自動發佈](docs/releases.md)。
+- 本 repo 的產物清理採 task-owned 結案規則，見 [開發 harness](docs/development-harness.md#產物清理與結案)。每個工作結案前盤點自己建立的 App／編譯快取／fixture output，檢查 resolved path、symlink、內容與仍在使用的程序，移除已完成且被取代的產物；保留最新必要交付、source／assets、使用者資料與獨特失敗證據。不得把 `.local`、`dist` 整包刪除，或因 target 名稱像別的專案就推定歸屬。共用／活動／不明外部 target 保留並記原因；不為結案要求其他 Agent 釋放或等待。使用 Cargo 原生 clean 清理本 repo 已無使用者的編譯 profile，不繞過 native lock；只改清理文件時不重建 Rust。每次記 exact removed paths、保留例外與 filesystem free before／after；du、Cargo 宣告清除量和實際空間變化分開，不把其他工作並行釋放的空間全歸因於自己。
+- 發佈授權：除非使用者明確要求發佈該版本，日常開發、修正、Critic、測試、提交與一般推送都只在 `develop` 執行，工作分支保持 `develop`；不自行切換或推進 `main`／`master`、建立其他工作／發佈分支、改成正式版號，或建立／合併 Release PR、Tag、GitHub Release。測試通過、功能完成及先前版本的發佈授權都不等於本次發佈授權；使用者另有明確分支指示時依其指示。
+- 分支版號：`main`／`master` 的當前產品版號只准使用正式版號（如 `0.2.2`），不得使用 `-dev`、`-alpha`、`-beta`、`-rc` 等預發佈後綴或 `+build` metadata；只有 `develop` 使用 dev 版號（如 `0.3.0-dev.2`）。本 repo 的正式分支名稱為 `main`；若存在 `master`，適用相同規則，不因此另建或改名分支。Cargo.toml／Cargo.lock、README 當前版本與版本徽章須一致。
+- 使用者明確要求發佈後，才在 `develop` 更新 Cargo.toml／Cargo.lock、README、版本徽章與該版 Release notes，統一為目標正式版號；完成驗證後，以標題 `release: v<package version>` 的 develop → main PR 推進，正式版號須高於當前 `main`。合併與發佈後，把 `main` 整合回 `develop`，再讓 `develop` 恢復下一個 dev 版號；不得把恢復 dev 版號的提交同步回 `main`／`master`。不要因修改 CI 直接提高版本或發佈產品，流程與實際分支保護狀態見 [自動發佈](docs/releases.md)。
 - 把目標寫成可觀察的輸入、結果及驗收。可逆且已授權的工作持續完成；只為實質缺少資訊或授權詢問，不為例行選擇反覆確認。
 - 保持方法與狀態責任清楚；第二份非平凡近似實作出現時找共同擁有者。修 bug 檢查產生邊界及直接消費者，移除被取代路徑，不混入無關重構。
 - 執行 [對應 gate](CONTRIBUTING.md)。缺 runner／案例／backend 回報 not_ready，未執行不算 passed；空 trace、全 skip 或只改 expected 不能結案。

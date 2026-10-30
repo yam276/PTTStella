@@ -43,10 +43,10 @@ function expandSurfacePaint(paint){
     return {...paint,frame:expandSurfaceFrame(paint.frame),source_frame:expandSurfaceFrame(paint.source_frame)};
 }
 function createSurfaceRouter(handlers) {
-    const kinds=["localization","diagnostics","update_status","station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
+    const kinds=["localization","diagnostics","update_status","article_updates","station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
         "hover_settings","tools_opacity","tools_access","sites_open","sites_result","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error",
         "media_external","media_reset","reading_move","inline_open","inline_image","inline_error","inline_reset","settings_visibility","settings_close","settings_open","font_catalog","font_preview","profile_result","settings_saved",
-        "selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","link_result","export_result"];
+        "selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","archive","bookmark_capture","link_result","export_result"];
     const table=new Map(kinds.map(kind=>{
         if(typeof handlers[kind]!=="function")throw new Error("Missing surface handler: "+kind);
         return [kind,handlers[kind]];
@@ -58,6 +58,7 @@ function createSurfaceRouter(handlers) {
         if(packet.kind!=="media_reset"&&!Object.hasOwn(packet,"payload"))throw new Error("Missing surface payload: "+packet.kind);
         let data=packet.payload;
         if(packet.kind==="paint")data=expandSurfacePaint(data);
+        else if(packet.kind==="archive"&&data.article)data={...data,article:{...data.article,frame:expandSurfaceFrame(data.article.frame)}};
         else if(packet.kind==="settings_open")data={...data,sample:expandSurfacePaint(data.sample)};
         else if(packet.kind==="font_preview"&&data.packet)data={...data,packet:expandSurfacePaint(data.packet)};
         else if(packet.kind==="profile_result"&&data.profile)data={...data,profile:{...data.profile,sample:expandSurfacePaint(data.profile.sample)}};

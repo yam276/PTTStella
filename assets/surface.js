@@ -15,7 +15,7 @@ const exportRows=document.getElementById("export-rows");
 const copyPng=document.getElementById("copy-png"),copyRowsPng=document.getElementById("copy-rows-png");
 const keepAlive=document.getElementById("keep-alive");
 const stationMouseButton=document.getElementById("station-mouse"),stationMouseStatus=document.getElementById("station-mouse-status");
-const hoverPosition=document.getElementById("hover-position");
+
 let hoverPreference="top_right",hoverCandidate=null,hoverTimer=0,hoverSequence=0,pointerClient=null;
 let pasteConfirmProbe=false;
 function cancelHover(forget=false) {
@@ -36,13 +36,13 @@ function previewHover(index) {
         candidate.started=true;send({kind:"hover",presentation:candidate.presentation,sequence:candidate.sequence,stamp:candidate.stamp,index:candidate.index,trusted:candidate.trusted});
     },350);
 }
-function changeHoverPreference(e){send({kind:"hover_preference",position:hoverPosition.value,trusted:e.isTrusted});}
+
 const vimToggle=document.getElementById("vim-toggle"),vimOnce=document.getElementById("vim-once"),vimStatus=document.getElementById("vim-status");
 let settingsActive=false,settingsSnapshot={last:null,error:null};
 let keyboardState={enabled:false,mode:"input",pending:false,prefix:""};
 function policy(action,e,code="") {send({kind:"keyboard_state",action,code,generation,trusted:e?.isTrusted??true});}
-function toggleVim(e){policy("toggle",e);restoreEditingFocus();}
-function armNative(e){policy("once",e);restoreEditingFocus();}
+function toggleVim(e){policy("toggle",e);if(!document.querySelector("dialog[open]"))restoreEditingFocus();}
+function armNative(e){policy("once",e);if(!document.querySelector("dialog[open]"))restoreEditingFocus();}
 function keyup(e){if(inlineImages.keyup(e))e.preventDefault();if(!e.metaKey)policy("release",e,e.code);}
 function receiveKeyboard(state){keyboardState=state;vimToggle.textContent=state.enabled?tr("vim-on"):tr("vim-off");
     keyboard.readOnly=state.enabled&&!["input","once"].includes(state.mode);
@@ -95,7 +95,7 @@ let navigationSequence=0;
 let pendingReadingMove=null;
 let exportBusy=false, exportTask=null;
 let keepAliveGate=null;
-let tools=null,contextMenu=null,articleFind=null;
+let tools=null,contextMenu=null,articleFind=null,editorColor=null,articleUpdates=null;
 let toolAccess={right_click_menu:true,show_floating_button:true};
 let toolsProbeEnabled=false;
 const send=value=>{ sent++; dioxus.send(value); };
@@ -109,7 +109,7 @@ function toggleStationMouse(e){
     if(!e.isTrusted||stopped||!latest)return;
     stationMouse.revoke();
     send({kind:"station_mouse_enabled",generation,enabled:!latest.mouse.enabled,trusted:true});
-    focus();
+    if(!document.querySelector("dialog[open]"))focus();
 }
 function refreshStationMouse(){
     const state=latest?.mouse;
@@ -332,7 +332,6 @@ function hasSelection(){return selectionActive;}
 function clearSelection() {
     if(!stopped)revokeSurfaceSelection(send,selectionCache,selectionBusy);
     selectionActive=false;selectionFingerprint=null;selectionNext=null;selectionCache=null;selectionLayer.replaceChildren();
-    surfaceNote.textContent="";
     delete surface.dataset.selectionReady;
     refreshExportControls();
 }
@@ -357,7 +356,7 @@ function receiveSelection(reply) {
     if(!selectionBusy||selectionBusy.request!==reply.request) return;
     selectionBusy=null;
     if(selectionActive&&!latest?.output_pending&&!selectionNext&&reply.generation===generation&&reply.revision===revision&&reply.presentation===latest?.presentation&&!filterUi.blocked()&&reply.value) {
-        selectionCache=reply;surfaceNote.textContent="";surface.dataset.selectionReady=String(reply.request);drawSelection();
+        selectionCache=reply;surface.dataset.selectionReady=String(reply.request);drawSelection();
     }
     refreshExportControls();
     flushSelection();
@@ -471,7 +470,7 @@ function pointerHit(point,event) {
     const clipped=point===null&&event.clientX>=bounds.left&&event.clientX<bounds.right?
         (grid?.reading?.clippedAt((event.clientY-bounds.top)*grid.ratio)??-1):-1;
     if(image<0&&clipped<0)return hitAt(point,event.clientY);
-    if(blocked()||dragging?.moved||!stationMouse.local()||!canNavigate()||latest?.navigation.kind!=="article_reading")return null;
+    if(blocked()||dragging?.moved||!stationMouse.local()||!canNavigate()||latest?.navigation?.kind!=="article_reading")return null;
     const back=navigationBackRegion(latest.navigation,latest.article);
     const hit=(event.clientX-bounds.left)*grid.ratio<grid.x(back.end)?{kind:"back"}:readingPageAt(null,event.clientY);
     return hit?{...hit,...(image>=0?{image}:{clipped})}:null;
@@ -618,13 +617,13 @@ function contextIdentity(){
 function accountWordAt(point){
     return point&&latest?.account_words?.find(w=>w.row===point.row&&w.start<=point.col&&point.col<w.end)||null;
 }
-function contextState(index,word=null,replyRow=null){
+function contextState(index,word=null,replyRow=null,articleRow=null){
     const ready=!!latest&&!latest.output_pending&&!filterUi.blocked();
     const selectionReady=ready&&!!selectionCache&&selectionCache.presentation===latest.presentation
         &&selectionCache.generation===generation&&selectionCache.revision===revision;
     const picture=inlineImages.pictureState(index);
     return {picture:!!picture,pictureReady:!!picture?.ready,word,replyRow,editor:!!latest?.editor,focused:!!latest?.reply_focus,link:index,selection:hasSelection(),selectionReady,rowsReady:selectionReady&&!exportBusy&&selectionCache.value.rows.end-selectionCache.value.rows.start<=24,
-        ready,exportReady:ready&&!exportBusy,local:stationMouse.local(),ptt:!!latest?.ptt_features,
+        ready,bookmark:bookmarksUi.available(),listBookmark:articleRow!==null&&bookmarksUi.listAvailable(articleRow),updates:articleUpdates?.available(),pending:!!latest?.input_pending,exportReady:ready&&!exportBusy,local:stationMouse.local(),ptt:!!latest?.ptt_features,
         reading:latest?.navigation.kind==="article_reading",authors:latest?.navigation.kind==="article_list",images:!!latest?.image_links.length,
         inlineReady:inlineShortcut({key:"Enter"},keyboardState,latest),navigate:canNavigate(),
         first:latest?.navigation.first_line===1,last:latest?.navigation.percent===100};
@@ -637,13 +636,18 @@ function openContextMenu(e) {
     const point=cellAt(e,false),index=Math.max(linkAt(point),inlineImages.linkAtPoint(e));
     const word=index<0&&stationMouse.local()?accountWordAt(point):null;
     const replyRow=index<0&&point&&stationMouse.local()&&latest.reply_rows?.includes(point.row)?point.row:null;
-    if(index<0&&!word&&!latest?.reply_focus&&!latest?.editor&&stationMouse.local()&&!e.shiftKey&&toolAccess.right_click_menu&&!hasSelection()){
+    const title=point&&index<0&&!word&&!hasSelection()&&latest?.navigation?.kind==="article_list"?latest.navigation.articles?.find(a=>a.row===point.row&&point.col>=a.title_start):null;
+    if(title&&stationMouse.local()&&!e.shiftKey&&toolAccess.right_click_menu){
+        if(tools.showAt(e))bookmarksUi.setListTarget(title.row);
+        return;
+    }
+    if(index<0&&!word&&!latest?.reply_focus&&!latest?.editor&&latest?.navigation?.kind!=="article_reading"&&stationMouse.local()&&!e.shiftKey&&toolAccess.right_click_menu&&!hasSelection()){
         tools.showAt(e);return;
     }
-    contextMenu.open(e,{index,word,replyRow,entries:contextMenuItems(contextState(index,word,replyRow))});
+    contextMenu.open(e,{index,word,replyRow,...(title?{articleRow:title.row}:{}),entries:contextMenuItems(contextState(index,word,replyRow,title?.row??null))});
 }
 function contextAction(action,context,e){
-    if(!e.isTrusted||stopped||blocked()||contextMenuItems(contextState(context.index,context.word,context.replyRow)).get(action)!==true)return;
+    if(!e.isTrusted||stopped||blocked()||contextMenuItems(contextState(context.index,context.word,context.replyRow,context.articleRow??null)).get(action)!==true)return;
     if(action==="copy"||action==="copy-ansi"||action==="copy-link")send({kind:"copy_text",presentation:latest.presentation,generation,revision,
         target:action!=="copy-link"?{kind:action==="copy-ansi"?"selection_ansi":"selection",request:selectionCache.request}:{kind:"link",index:context.index},trusted:true});
     else if(action==="paste"){
@@ -651,6 +655,7 @@ function contextAction(action,context,e){
         cancelComposition();cancelDrag();clearSelection();pastePending=true;
         sendInput({kind:"paste_clipboard",presentation:latest.presentation,stamp:stamp(),trusted:true});
     }
+    else if(action==="editor-color")editorColor.open(selectionCache,stamp());
     else if(["account-mask","account-mask-row","account-allow","account-remove-mask","account-remove-mask-row","account-remove-allow"].includes(action)){
         const remove=action.startsWith("account-remove-");
         const policy={"account-mask":"mask","account-mask-row":"mask_row","account-allow":"allow"}[action.replace("account-remove-","account-")];
@@ -672,8 +677,9 @@ function contextAction(action,context,e){
     else if(action==="previous")browseUp(e);
     else if(action==="next")browseDown(e);
     else if(action==="bookmarks")bookmarksUi.show(e);
-    else if(action==="filters")filterUi.show(e);
-    else if(action==="vim")toggleVim(e);
+    else if(action==="bookmark-current")bookmarksUi.capture(e);
+    else if(action==="bookmark-list")bookmarksUi.capture(e,context.articleRow);
+    else if(action==="article-updates")articleUpdates.toggle(e);
     else if(action==="settings")settingsUi.request(e);
 }
 function activate() { if(!articleFind?.ownsFocus()&&!contextMenu?.isOpen()&&!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); refreshKeepAlive(); }
@@ -726,6 +732,7 @@ function refreshKeepAlive() {
     const ready=!settingsActive&&!articleFind?.isOpen()&&!!latest?.keep_alive&&!inlineImages.active()&&canNavigate()&&!tools?.busy()&&!stationMouse.active()&&!dragging&&!released&&!hasSelection()&&!exportBusy&&!keyboardState.pending;
     const reason=readingPauseReason(),reading=!!latest?.article&&!reason;
     refreshArticleLoad(reason);
+    articleUpdates?.refresh(reason);
     const current=stamp(),key=JSON.stringify([current,latest?.presentation,latest?.article?.id,ready,reading,latest?.keep_alive_ready,latest?.keep_alive]);
     keepAlive.textContent=latest?.keep_alive?tr("keepalive-on"):tr("keepalive-off");
     keepAlive.setAttribute("aria-pressed",String(!!latest?.keep_alive));
@@ -776,7 +783,7 @@ function zoomTo(value) {
     stationMouse.revoke();
     zoom=Math.max(.25,Math.min(4,value)); draw(latest);
     viewport.scrollLeft=Math.max(0,(surface.offsetWidth-viewport.clientWidth)/2);
-    viewport.scrollTop=Math.max(0,(surface.offsetHeight-viewport.clientHeight)/2); focus();
+    viewport.scrollTop=Math.max(0,(surface.offsetHeight-viewport.clientHeight)/2); if(!document.querySelector("dialog[open]"))focus();
 }
 function wheel(e) {
     // Only the Rust-projected article is a scrollable document. Overflow from
@@ -801,7 +808,7 @@ function wheel(e) {
 }
 const zoomIn=()=>zoomTo(zoom+.25), zoomOut=()=>zoomTo(zoom-.25), zoomFit=()=>zoomTo(1);
 const media=installMedia({tr,send,prepare:()=>{articleFind?.close(false);stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();clearSelection();released=null;setHover(null);},changed:refreshControls,restore:restoreEditingFocus});
-function refreshControls(){refreshNavigation();refreshExportControls();inlineImages.refreshAnimations();}
+function refreshControls(){refreshNavigation();refreshExportControls();inlineImages.refreshAnimations();bookmarksUi.update();}
 const sitesUi=createSitesDialog({tr,send,manage:e=>settingsUi.manage("sites",e),present:dialog=>dialog.show(),visible:()=>settingsUi.visible("sites"),finished:()=>settingsUi.close({isTrusted:true}),prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreSettingsPanelFocus,changed:refreshControls});
 const settingsUi=createSurfaceSettings({document,send,tr,loadFonts,fontLoadNote,invalidateFonts,render,
     features:()=>({sites:sitesUi,filters:filterUi,account:loginUi}),
@@ -811,11 +818,12 @@ const loginUi=createLoginDialog({tr,send,stamp,manage:e=>settingsUi.manage("acco
     prepare:e=>{stationMouse.revoke();cancelHover(true);policy("reset",e);cancelComposition();clearSelection();},
     restore:restoreSettingsPanelFocus,changed:refreshControls,focus});
 const destinationUi=createNavigationDialog({tr,send,stamp,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,current:()=>latest,isEditing:()=>composing||pastePending});
-const bookmarksUi=createBookmarksDialog({tr,send,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,openDestination:destinationUi.openDraft,current:()=>latest});
+const bookmarksUi=createBookmarksDialog({tr,send,render,window,notice:text=>{surfaceNote.textContent=text;},prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,openDestination:destinationUi.openDraft,current:()=>latest});
 const filterUi=createFiltersDialog({tr,send,manage:e=>settingsUi.manage("filters",e),present:dialog=>dialog.show(),visible:()=>settingsUi.visible("filters"),current:()=>latest,invalidate:invalidatePresentation,
     reset:e=>policy("reset",e),restore:restoreSettingsPanelFocus,changed:refreshControls});
 tools=createFloatingTools({root:chrome,ball:document.getElementById("tools-ball"),fan:document.getElementById("tools-fan"),panel:toolbar,window,document,tr,
-    onSettings:e=>settingsUi.request(e),prepare:()=>{revokeNavigation();stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();released=null;},restore:restoreEditingFocus,changed:refreshKeepAlive});
+    onSettings:e=>settingsUi.request(e),prepare:()=>{bookmarksUi.clearListTarget();revokeNavigation();stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();released=null;},restore:restoreEditingFocus,changed:refreshKeepAlive});
+editorColor=createEditorColor({root:document.getElementById("editor-color-dialog"),document,palette,tr,identity:contextIdentity,send,restore:focus,changed:refreshControls});
 contextMenu=createSurfaceContextMenu({root:document.getElementById("surface-context-menu"),document,window,
     snapshot:contextIdentity,prepare:()=>{revokeNavigation();stationMouse.cancel();tools.close();cancelHover(true);cancelDrag();released=null;setHover(null);},
     execute:contextAction,restore:focus,changed:refreshControls});
@@ -829,6 +837,10 @@ function requestInline(target,e){
 }
 const inlineImages=installInlineImages({surface,canvas,viewport,tr,render,find:articleFind,redraw:()=>{if(latest)draw(latest);},changed:refreshKeepAlive,notice:text=>{surfaceNote.textContent=text;},
     allowed:()=>!stopped&&!blocked()&&!tools?.busy()&&inlineShortcut({key:"Enter"},keyboardState,latest),request:requestInline});
+articleUpdates=createArticleUpdates({root:document.getElementById("article-updates"),status:document.getElementById("article-updates-status"),toggle:document.getElementById("article-updates-toggle"),fresh:document.getElementById("article-updates-new"),station:document.getElementById("article-updates-station"),tr,current:()=>latest,send,
+    menuToggle:document.querySelector('[data-context-action="article-updates"] span'),
+    bottom:()=>Math.max(0,surface.offsetTop+(grid?.height??0)/(grid?.ratio??1)-viewport.clientHeight),position:()=>viewport.scrollTop,
+    move:top=>{viewport.scrollTop=top;repaint();},restore:focus,changed:refreshKeepAlive});
 let viewportProbe=false,viewportCapture=0;
 function captureViewport(event){
     if(!viewportProbe||stopped||!event.isTrusted||viewportCapture>=8)return;
@@ -839,7 +851,8 @@ function captureViewport(event){
         window:[innerWidth,innerHeight],dpr:devicePixelRatio||1,
         draws});
 }
-const bindings=[...articleFind.bindings,...inlineImages.bindings,...contextMenu.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
+const toast=createSurfaceToast({root:document.getElementById("surface-toast"),message:surfaceNote,dismiss:document.getElementById("toast-dismiss"),document,MutationObserver,restore:restoreEditingFocus});
+const bindings=[...articleUpdates.bindings,[viewport,"scroll",()=>articleUpdates.scroll()],...toast.bindings,...articleFind.bindings,...inlineImages.bindings,...contextMenu.bindings,...editorColor.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
     [keyboard,"beforeinput",beforeinput],
@@ -854,13 +867,31 @@ const bindings=[...articleFind.bindings,...inlineImages.bindings,...contextMenu.
     [pasteSend,"click",confirmPaste],[pasteCancel,"click",cancelPaste],[pasteDialog,"cancel",cancelPaste],
     [exportButton,"click",exportScreen],[exportRows,"click",exportSelected],[copyPng,"click",copyPageImage],[copyRowsPng,"click",copySelectedImage],
     [keepAlive,"click",toggleKeepAlive],[stationMouseButton,"click",toggleStationMouse],
-    [hoverPosition,"change",changeHoverPreference],
+
     [browseBack,"click",browseReturn],[browsePrevious,"click",browseUp],[browseNext,"click",browseDown],
     [plus,"click",zoomIn],[minus,"click",zoomOut],[fit,"click",zoomFit],
     [document,"visibilitychange",refreshKeepAlive],
     [viewport,"scroll",repaint],[viewport,"wheel",wheel,{passive:false}],[window,"resize",repaint],[window,"focus",activate],[window,"blur",deactivate],
     [articleLoadCancel,"click",cancelArticleLoad],[articleLoadResume,"click",resumeArticleLoad],
 ];
+// Explicit loopback-fixture controls. They select a known range, without
+// synthesising a trusted pointer event or weakening the production colour gate.
+// Only the self-authored loopback list fixture exposes this trusted control.
+// It exercises the same right-click row lease without fabricating a pointer.
+const bookmarkProbeFirst=document.getElementById("bookmark-probe-first");
+if(bookmarkProbeFirst)bindings.push([bookmarkProbeFirst,"click",e=>{if(e.isTrusted)bookmarksUi.setListTarget(3);}]);
+const colourProbeSelect=document.getElementById("editor-color-probe-select"),colourProbeOpen=document.getElementById("editor-color-probe-open");
+let editorColourProbe=false;
+if(colourProbeSelect&&colourProbeOpen){
+    bindings.push([colourProbeSelect,"click",e=>{if(e.isTrusted&&editorColourProbe&&!blocked()){requestSelection({mode:"range",anchor:{row:0,col:1},focus:{row:2,col:5}});focus();}}],
+        [colourProbeOpen,"click",e=>{if(e.isTrusted&&editorColourProbe)contextAction("editor-color",{index:-1},e);}]);
+}
+// Only present in the explicit live_updates loopback fixture. Trusted AX
+// clicks exercise the production local movement owner, without synthetic keys.
+for(const [id,action] of [["live-updates-home","first"],["live-updates-end","last"]]) {
+    const button=document.getElementById(id);
+    if(button)bindings.push([button,"click",e=>{if(e.isTrusted){readingMove({action},e);focus();}}]);
+}
 for(const [target,event,callback,options] of bindings) target.addEventListener(event,callback,options);
 const diagnostics=createSurfaceDiagnostics({send,document,window,snapshot:()=>{
     const states=[latest?.connected,latest?.input_pending,latest?.output_pending,navigationLocked,navigationRequest,
@@ -970,7 +1001,7 @@ async function paint(packet) {
     const previousFailure=latest?.keep_alive_failure;
     const failureChanged=packet.keep_alive_failure!==previousFailure;
     stationMouse.update(packet);
-    generation=packet.generation;revision=packet.frame.revision;latest=packet;contextMenu?.validate();filterUi.paint(packet);refreshStationMouse();
+    generation=packet.generation;revision=packet.frame.revision;latest=packet;contextMenu?.validate();editorColor?.validate();filterUi.paint(packet);refreshStationMouse();
     surface.dataset.presentation=String(packet.presentation);surface.dataset.maskedPushes=String(packet.masked_pushes);surface.dataset.revealed=String(packet.revealed);
     if(changed&&hoverCandidate) {
         const lease=packet.hover,candidate=hoverCandidate;
@@ -984,7 +1015,7 @@ async function paint(packet) {
         else if(surfaceNote.textContent===previousFailure) surfaceNote.textContent="";
     }
     refreshNavigation();refreshArticleLoad();
-    const geometry=draw(packet);resumeReadingMove();send({kind:"painted",presentation:packet.presentation,revision,generation});if(packet.probe) probe(packet,geometry);
+    const geometry=draw(packet);articleUpdates?.afterPaint(packet);resumeReadingMove();send({kind:"painted",presentation:packet.presentation,revision,generation});if(packet.probe) probe(packet,geometry);
     surface.dataset.revision=String(revision);
     surface.dataset.fontSize=String(packet.settings.font_size);surface.dataset.baseline=String(packet.settings.baseline);
     surface.dataset.cursorRow=String(packet.frame.cursor[1]);surface.dataset.inputEpoch=String(packet.input_epoch);
@@ -993,16 +1024,17 @@ async function paint(packet) {
     surface.dataset.keepAliveSent=String(packet.keep_alive_sent);
     loginUi.update(packet);destinationUi.update(packet);bookmarksUi.update();
     document.getElementById("site-current").textContent=packet.site.endpoint+" · "+({uao:"Big5-UAO",big5:"Big5",gbk:"GBK"})[packet.site.encoding];
-    for(const id of ["destination-open","bookmarks-open","filters-open","vim-toggle","keep-alive"])document.getElementById(id).disabled=!packet.ptt_features;
+    for(const id of ["destination-open","vim-toggle","keep-alive"]){const node=document.getElementById(id);if(node)node.disabled=!packet.ptt_features;}
 }
 focus();
 function revokeSurface(){
-    stopped=true;articleFind.destroy();revokeNavigation();inlineImages.suspend();contextMenu?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
+    stopped=true;articleUpdates.destroy();toast.destroy();articleFind.destroy();revokeNavigation();inlineImages.suspend();contextMenu?.destroy();editorColor?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
     for(const [target,event,callback,options] of bindings)target.removeEventListener(event,callback,options);
 }
 const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
 let cleanupClean=false;
 function runSurfaceProbe(mode){
+            editorColourProbe=mode==="editor_color";
             toolsProbeEnabled=true;
             if(mode==="fullscreen")viewportProbe=true;
             else if(mode==="sites"||mode==="sites_restart")surfaceNote.textContent="Local station probe: loopback Big5/GBK peers only; station favourites, default, input, PNG and shutdown";
@@ -1060,11 +1092,11 @@ const route=createSurfaceRouter({
     filters_open:filterUi.open,filters_result:filterUi.receive,
     login_result:loginUi.receive,
     recent_boards:destinationUi.receiveRecent,destination_result:destinationUi.receive,keyboard_state:receiveKeyboard,
-    bookmarks_open:bookmarksUi.receiveOpen,bookmarks_result:bookmarksUi.receive,
+    bookmarks_open:bookmarksUi.receiveOpen,bookmarks_result:bookmarksUi.receive,archive:bookmarksUi.receiveArchive,bookmark_capture:bookmarksUi.captureStage,
     sites_open:sitesUi.receiveOpen,sites_result:sitesUi.receive,
     tools_opacity:percent=>tools.setOpacity(percent),
     tools_access:access=>{toolAccess=access;tools.setVisible(access.show_floating_button);},
-    hover_settings:position=>{hoverPreference=position;hoverPosition.value=position;surface.dataset.hoverPosition=position;
+    hover_settings:position=>{hoverPreference=position;surface.dataset.hoverPosition=position;
         if(position==="off")cancelHover(true);else if(pointerClient)media.locate(pointerClient,position);},
     media_hover:data=>{if(hoverCandidate?.sequence===data.sequence){media.hover(data);media.locate(pointerClient,hoverPreference);}},
     hover_reset:data=>{cancelHover();if(data.media)media.reset();},
@@ -1076,6 +1108,7 @@ const route=createSurfaceRouter({
     settings_close:()=>settingsUi.escape(),settings_open:settingsUi.open,font_catalog:settingsUi.catalog,font_preview:settingsUi.preview,
     profile_result:async data=>{await settingsUi.profile(data);showNotice(data.notice);},
     update_status:settingsUi.updateStatus,
+    article_updates:data=>articleUpdates.receive(data),
     settings_saved:data=>{settingsUi.saved(data);showNotice(data.notice);},
     selection:receiveSelection,
     paste_result:data=>{
@@ -1118,10 +1151,9 @@ finally {
     keyboard.dispatchEvent(new InputEvent("input",{data:"a",inputType:"insertText",bubbles:true}));
     surface.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true}));window.dispatchEvent(new Event("resize"));plus.click();
     chrome.dispatchEvent(new PointerEvent("pointerenter"));
-    document.getElementById("font-settings").click();
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
-    cleanupClean=mediaClean&&articleFind.clean()&&contextMenu.clean()&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
+    cleanupClean=mediaClean&&toast.clean()&&articleFind.clean()&&editorColor.clean()&&contextMenu.clean()&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
         &&sitesUi.clean()&&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&destinationUi.clean()&&bookmarksUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
     try {send({kind:"stopped",clean:cleanupClean,...(toolsProbeEnabled?{tools:tools.observations()}:{})});} catch(_) { /* join still acknowledges cleanup */ }
 }

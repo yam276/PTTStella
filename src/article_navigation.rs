@@ -22,6 +22,14 @@ pub enum Error {
     Missing,
     Timeout,
 }
+
+/// Read only the standard author/header row, including PTT's leading padding.
+/// This does not establish article identity; the caller must still verify Q.
+pub fn header_board(header: &str) -> Option<board::BoardName> {
+    let author = header.trim_start_matches(' ').strip_prefix("作者")?;
+    let (_, name) = author.rsplit_once("看板")?;
+    board::BoardName::parse(name.trim()).ok()
+}
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -41,23 +49,31 @@ struct Selected {
 }
 impl Selected {
     fn from(frame: &Frame) -> Option<Self> {
+        Self::at(frame, frame.cursor.1)
+    }
+    fn at(frame: &Frame, row: usize) -> Option<Self> {
         let Context::ArticleList { articles, .. } = navigation::analyze(frame) else {
             return None;
         };
-        let row = frame.cursor.1;
-        if !articles.iter().any(|article| article.row == row) {
+        if !articles
+            .iter()
+            .any(|article| article.row == row && article.bookmark)
+        {
             return None;
         }
         let rows = text::rows(frame)?;
         rows[row].mapped().then(|| Self {
             row,
-            text: rows[row].text.clone(),
+            // The station moves its pointer in the first two ASCII cells.
+            // The article number/date/author/title suffix must stay unchanged.
+            text: rows[row].text.chars().skip(2).collect(),
         })
     }
     fn preserved(&self, frame: &Frame) -> bool {
         text::rows(frame).is_some_and(|rows| {
-            rows.get(self.row)
-                .is_some_and(|row| row.mapped() && row.text == self.text)
+            rows.get(self.row).is_some_and(|row| {
+                row.mapped() && row.text.chars().skip(2).collect::<String>() == self.text
+            })
         })
     }
     fn restored(&self, frame: &Frame) -> bool {
@@ -66,6 +82,7 @@ impl Selected {
 }
 enum Stage {
     Board(Switch),
+    Position(Selected),
     Prompt,
     Selected,
     Information(Selected),
@@ -74,11 +91,14 @@ enum Stage {
     Finished,
 }
 pub struct Open {
-    target: ArticleTarget,
+    target: Option<ArticleTarget>,
+    board: board::BoardName,
+    from_list: bool,
     stage: Stage,
     revision: u64,
     deadline: Instant,
     step_deadline: Instant,
+    reentry_head: Option<[String; 3]>,
 }
 impl Open {
     pub fn begin(
@@ -96,14 +116,60 @@ impl Open {
             };
         Ok((
             Self {
-                target,
+                board: target.board().clone(),
+                target: Some(target),
+                from_list: false,
                 stage,
                 revision: frame.revision,
                 deadline: now + board::TOTAL_LIMIT,
                 step_deadline: now + board::STEP_LIMIT,
+                reentry_head: None,
             },
             bytes,
         ))
+    }
+    /// Explicit list-row collection verifies Q before opening. It never
+    /// invents an AID from a title or trusts a previous navigation result.
+    pub fn from_list(frame: &Frame, row: usize, now: Instant) -> Result<(Self, Vec<u8>), Error> {
+        let board = board::current_board(frame).ok_or(Error::Manual)?;
+        let selected = Selected::at(frame, row).ok_or(Error::Missing)?;
+        let cursor = frame.cursor.1;
+        let (stage, bytes) = if row == cursor {
+            (Stage::Information(selected), b"Q".to_vec())
+        } else {
+            let bytes = navigation::plan(
+                &navigation::analyze(frame),
+                navigation::Intent::Lines {
+                    down: row > cursor,
+                    count: row.abs_diff(cursor),
+                },
+            )
+            .map_err(|_| Error::Manual)?;
+            (Stage::Position(selected), bytes)
+        };
+        Ok((
+            Self {
+                target: None,
+                board,
+                from_list: true,
+                stage,
+                revision: frame.revision,
+                deadline: now + board::TOTAL_LIMIT,
+                step_deadline: now + board::STEP_LIMIT,
+                reentry_head: None,
+            },
+            bytes,
+        ))
+    }
+    pub(crate) fn begin_reentry(
+        frame: &Frame,
+        target: ArticleTarget,
+        head: [String; 3],
+        now: Instant,
+    ) -> Result<(Self, Vec<u8>), Error> {
+        let (mut flow, bytes) = Self::begin(frame, target, now)?;
+        flow.reentry_head = Some(head);
+        Ok((flow, bytes))
     }
     pub fn needs_frame(&self, revision: u64) -> bool {
         !matches!(self.stage, Stage::Finished) && revision > self.revision
@@ -143,7 +209,11 @@ impl Open {
                 board::Advance::Wait => Ok(Advance::Wait),
                 board::Advance::Send(bytes) => Ok(Advance::Send(bytes)),
                 board::Advance::Reached(board) => {
-                    self.target.confirm_board(board);
+                    self.board = board.clone();
+                    self.target
+                        .as_mut()
+                        .ok_or(Error::Identity)?
+                        .confirm_board(board);
                     Ok(self.send(Stage::Prompt, b"#".to_vec(), now))
                 }
             };
@@ -155,9 +225,15 @@ impl Open {
         if let Stage::Information(selected) = &self.stage
             && let Some(identity) = information(frame, selected)
         {
-            if !identity.board().same(self.target.board()) || identity.aid() != self.target.aid() {
+            if !identity.board().same(&self.board)
+                || self
+                    .target
+                    .as_ref()
+                    .is_some_and(|target| identity.aid() != target.aid())
+            {
                 return Err(Error::Identity);
             }
+            self.target = Some(identity);
             let selected = selected.clone();
             return Ok(self.send(Stage::Return(selected), b" ".to_vec(), now));
         }
@@ -172,20 +248,37 @@ impl Open {
         let current = board::current_board(frame);
         if current
             .as_ref()
-            .is_some_and(|board| !board.same(self.target.board()))
+            .is_some_and(|board| !board.same(&self.board))
         {
             return Err(Error::Identity);
         }
         match &self.stage {
+            Stage::Position(selected) => {
+                if !selected.preserved(frame) {
+                    return Err(Error::Identity);
+                }
+                if !selected.restored(frame) {
+                    return Ok(Advance::Wait);
+                }
+                let selected = selected.clone();
+                Ok(self.send(Stage::Information(selected), b"Q".to_vec(), now))
+            }
             Stage::Prompt if search_prompt(frame) => {
-                let mut bytes = self.target.aid().as_str().as_bytes().to_vec();
+                let mut bytes = self
+                    .target
+                    .as_ref()
+                    .ok_or(Error::Identity)?
+                    .aid()
+                    .as_str()
+                    .as_bytes()
+                    .to_vec();
                 bytes.push(b'\r');
                 Ok(self.send(Stage::Selected, bytes, now))
             }
             Stage::Selected
                 if current
                     .as_ref()
-                    .is_some_and(|board| board.same(self.target.board())) =>
+                    .is_some_and(|board| board.same(&self.board)) =>
             {
                 let Some(selected) = Selected::from(frame) else {
                     return Err(Error::Missing);
@@ -195,7 +288,7 @@ impl Open {
             Stage::Return(selected)
                 if current
                     .as_ref()
-                    .is_some_and(|board| board.same(self.target.board())) =>
+                    .is_some_and(|board| board.same(&self.board)) =>
             {
                 if !selected.restored(frame) {
                     return Err(Error::Identity);
@@ -209,18 +302,32 @@ impl Open {
                 ) =>
             {
                 let rows = text::rows(frame).ok_or(Error::Identity)?;
-                let header = rows[0].text.trim_end();
-                let board = header
-                    .starts_with("作者")
-                    .then(|| header.rsplit_once("看板").map(|(_, name)| name.trim()))
-                    .flatten()
-                    .and_then(|name| board::BoardName::parse(name).ok())
-                    .ok_or(Error::Identity)?;
-                if !board.same(self.target.board()) {
+                if let Some(head) = &self.reentry_head {
+                    // Only an owned refresh can use this path, after Q verified
+                    // the selected AID and the same list row was restored.
+                    if head
+                        .iter()
+                        .enumerate()
+                        .any(|(i, line)| rows[i].text.trim_end() != line)
+                    {
+                        return Err(Error::Identity);
+                    }
+                    return Ok(Advance::Reached(
+                        self.target.clone().ok_or(Error::Identity)?,
+                    ));
+                }
+                if self.from_list {
+                    return Ok(Advance::Reached(
+                        self.target.clone().ok_or(Error::Identity)?,
+                    ));
+                }
+                let board = header_board(&rows[0].text).ok_or(Error::Identity)?;
+                if !board.same(&self.board) {
                     return Err(Error::Identity);
                 }
-                self.target.confirm_board(board);
-                Ok(Advance::Reached(self.target.clone()))
+                let target = self.target.as_mut().ok_or(Error::Identity)?;
+                target.confirm_board(board);
+                Ok(Advance::Reached(target.clone()))
             }
             _ => Ok(Advance::Wait),
         }
@@ -263,43 +370,66 @@ fn information(frame: &Frame, selected: &Selected) -> Option<ArticleTarget> {
         return None;
     }
     let rows = text::rows(frame)?;
-    let top = format!("┌{}┐", "─".repeat(37));
-    let bottom = "└──────────────────────── [再按 Q 切換價格列表]  ─┘";
     for height in [4, 5] {
         let mut first = selected.row + 1;
         if first + height > 23 || selected.row >= 15 {
             first = selected.row.checked_sub(height)?;
         }
-        let last = first + height - 1;
-        if !rows[first].mapped() || rows[first].text.trim_end() != top {
-            continue;
+        if let Some(target) = information_box(&rows, first, height) {
+            return Some(target);
         }
-        if !rows[last].mapped() || rows[last].text.trim_end() != bottom {
-            continue;
-        }
-        let line = &rows[first + 1];
-        if !line.mapped() {
-            continue;
-        }
-        let rest = line.text.strip_prefix("│ 文章代碼(AID): ")?;
-        let mut parts = rest.split_whitespace();
-        let aid = parts.next()?;
-        let board = parts.next()?.strip_prefix('(')?.strip_suffix(')')?;
-        if parts.next() != Some("[ptt.cc]") || !line.text.trim_end().ends_with('│') {
-            return None;
-        }
-        let start = line.text.find(aid)?;
-        if !line
-            .spans
-            .iter()
-            .filter(|span| span.bytes.start < start + aid.len() && span.bytes.end > start)
-            .all(|span| span.glyph.left.bright && span.glyph.right.bright)
-        {
-            return None;
-        }
-        return ArticleTarget::new(board, aid).ok();
     }
     None
+}
+
+/// Only an owned Q query from a reading page may consume this bottom information box.
+pub(crate) fn reading_information(frame: &Frame) -> Option<ArticleTarget> {
+    if !matches!(navigation::analyze(frame), Context::ContinuePrompt) {
+        return None;
+    }
+    let rows = text::rows(frame)?;
+    for height in [4, 5] {
+        for first in 17..=19 {
+            if first + height <= 23
+                && let Some(target) = information_box(&rows, first, height)
+            {
+                return Some(target);
+            }
+        }
+    }
+    None
+}
+fn information_box(rows: &[text::Row<'_>], first: usize, height: usize) -> Option<ArticleTarget> {
+    let top = format!("┌{}┐", "─".repeat(37));
+    let bottom = "└──────────────────────── [再按 Q 切換價格列表]  ─┘";
+    let last = first + height - 1;
+    if !rows[first].mapped() || rows[first].text.trim_end() != top {
+        return None;
+    }
+    if !rows[last].mapped() || rows[last].text.trim_end() != bottom {
+        return None;
+    }
+    let line = &rows[first + 1];
+    if !line.mapped() {
+        return None;
+    }
+    let rest = line.text.strip_prefix("│ 文章代碼(AID): ")?;
+    let mut parts = rest.split_whitespace();
+    let aid = parts.next()?;
+    let board = parts.next()?.strip_prefix('(')?.strip_suffix(')')?;
+    if parts.next() != Some("[ptt.cc]") || !line.text.trim_end().ends_with('│') {
+        return None;
+    }
+    let start = line.text.find(aid)?;
+    if !line
+        .spans
+        .iter()
+        .filter(|span| span.bytes.start < start + aid.len() && span.bytes.end > start)
+        .all(|span| span.glyph.left.bright && span.glyph.right.bright)
+    {
+        return None;
+    }
+    ArticleTarget::new(board, aid).ok()
 }
 
 #[cfg(test)]
@@ -365,6 +495,41 @@ mod tests {
         );
         assert!(!open.needs_frame(screen.revision() + 1));
         assert!(open.observe(&screen.frame(), now).is_err());
+    }
+    #[test]
+    fn padded_author_header_preserves_verified_board_and_rejects_wrong_or_missing_labels() {
+        for (header, accepted) in [
+            (" 作者  Sample (合成)                 看板  Stella   ", true),
+            ("作者 Sample (合成) 看板 Stella", true),
+            (" 作者 Sample (合成) 看板 Other", false),
+            ("Sample (合成) 看板 Stella", false),
+            (" 作者 Sample (合成)", false),
+        ] {
+            let (mut screen, mut open, now) = ready_information();
+            screen.feed(&scene("information"));
+            assert_eq!(
+                open.observe(&screen.frame(), now).unwrap(),
+                Advance::Send(b" ".to_vec())
+            );
+            screen.feed(&scene("articles"));
+            assert_eq!(
+                open.observe(&screen.frame(), now).unwrap(),
+                Advance::Send(b"\x1b[C".to_vec())
+            );
+            screen.feed(&scene("reading"));
+            screen.feed(
+                &encoding::encode(&format!("\x1b[1;1H\x1b[2K{header}\x1b[24;80H\x1b[?25l"))
+                    .unwrap(),
+            );
+            let expected = if accepted {
+                Ok(Advance::Reached(
+                    ArticleTarget::new("Stella", "00000101").unwrap(),
+                ))
+            } else {
+                Err(Error::Identity)
+            };
+            assert_eq!(open.observe(&screen.frame(), now), expected, "{header:?}");
+        }
     }
     #[test]
     fn composing_with_board_switch_preserves_each_confirmed_step_and_the_total_deadline() {

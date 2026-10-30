@@ -2,9 +2,13 @@
 
 目前產品為 [terminal 外觀的 BBS 介面](docs/active/minimal-browser.md)，以 PTT 為預設站，並有按需的 [媒體預覽](docs/media.md)。核心、Dioxus 視窗、WebSocket／Telnet 及 [站點與編碼](docs/sites.md) 已實作；手動登入的實測狀態見 active plan。沒有 shell／PTY 或一般系統終端功能。
 
+已完成工作須依 [產物清理與結案](docs/development-harness.md#產物清理與結案) 移除自己已用完的輸出；局部 temp／owner 清理不等於 App 與 Cargo cache 已回收。
+
 ## 當前 gate
 
-日常功能以 `develop` 為 base；`main` 只接受遞增版本的 Release PR。工作流程、人工驗收邊界與目前 GitHub 方案的分支保護限制見 [自動發佈](docs/releases.md)。發佈 tooling 變更須跑 `python -m unittest discover -s tooling -p 'test_*.py'`、docs、`actionlint .github/workflows/*.yml`，並手動執行 workflow 的 verify 模式，核對各平台實際建置；不能以一台機器的測試代替其他 runner。
+除非使用者明確要求發佈該版本，開發、修正、Critic、測試、提交與一般推送都保持在 `develop`。不自行切換或推進 `main`／`master`、建立其他工作／發佈分支或啟動 Release 流程；功能完成、測試通過及舊版本的發佈授權都不視為本次授權。使用者另有明確分支指示時依其指示。
+
+日常功能以 `develop` 為 base，使用 dev 版號；`main`／`master` 的當前產品版號只放正式版，不使用 dev、alpha、beta 或 rc 後綴。收到該版本的明確發佈要求後，才在 `develop` 更新正式版號、README／版本徽章與 Release notes 並準備 Release PR，發佈後恢復 dev 的提交只留 `develop`；`main` 只接受遞增正式版本的 Release PR。工作流程、人工驗收邊界與目前 GitHub 方案的分支保護限制見 [自動發佈](docs/releases.md)。發佈 tooling 變更須跑 `python -m unittest discover -s tooling -p 'test_*.py'`、docs、`actionlint .github/workflows/*.yml`，並手動執行 workflow 的 verify 模式，核對各平台實際建置；不能以一台機器的測試代替其他 runner。
 
 需要 Python 3.11+；Git 用於提交與歷史檢查。RTK 是個人 shell 包裝，產品與 gate 不依賴它。
 
@@ -167,6 +171,12 @@ AID 核心另核對 article_navigation 的自製 article-open fixture 與 naviga
 
 一般黑名單變更須跑 core 的 filters suite、desktop lib store 與 bin presentation admission 案例。`--probe-filters OUTPUT_DIRECTORY` 提供自製推文、獨立名單檔與本機 peer，不開 DevTools port、不連 PTT。原生視窗驗證新增／同 ID 更新／移除、拒絕與保存失敗、遮黑與暫時顯示、系統剪貼簿讀回、整頁／選取行 PNG；獨立解碼確認變更只在命中 cell 範圍、選取行與整頁對應裁切完全相同。peer 僅接受 PageDown／PageUp 往返及 Close，管理名單不能送其他 PTT bytes。檢查 `filters-probe.json`，並另以新程序確認規則保存；不能只以畫面有黑色或 DOM 元素存在當作通過。
 
+編輯器框選上色變更另跑 core、desktop lib／bin、完整 JS、Fluent、Clippy 與 docs。`editor_color` 核心涵蓋兩種顯示／插入模式、DBCS 開關、多行與空行、中文半格、既有 SGR 覆寫與未選取尾字原色、截斷／未知色碼拒絕及 23×79 格頁面有界指令；Connection loopback 必須獨立核對原始 bytes、分片回覆、手動打斷、排隊撤銷與重連不重送。`--probe-surface OUTPUT_DIRECTORY editor_color` 需原生框選含空行的三行、色表取消後重開／亮紅黑底套用、匯出 PNG 及正常 Close，由 peer 核對全篇 bytes 與原模式。不得把工具無法點擊或未套用當成通過。
+
+通知／重連介面變更另跑 desktop lib／bin、core、完整 JS／Fluent、Clippy 與 docs；一般通知須只有一個 observer 與 timer，核對取代、8 秒到期、hover／焦點的剩餘時間、明確關閉、純文字與清理，不能因刷新或選取清掉通知。原生 `--probe-surface OUTPUT_DIRECTORY toast_reconnect` 僅連同一個 owned loopback peer 的兩個 session，第一次自動斷線，原生按重新連線後第二次拒絕全部登入／重送 bytes；讀回持續斷線卡與一般卡、匯出 PNG、關閉通知及正常 Close／全部 owner join。此 case 專用開放重連，其他合成 probe 仍禁用；背景擷取或未執行不能算視覺通過。
+
+目前文章收藏／封存變更另跑 desktop lib/bin、`multi_instance` integration、完整JS、core、Clippy與docs。以未過濾原文、中文／雙色、既有名單、末段少於23列、raw leading-reset overlap、取消／切篇／錯operation及壞檔／版本升級／共同保存衝突驗證。原生 `bookmark_archive`、`bookmark_archive_cancel`、`bookmarks_archive_restart` 沿用本機 synthetic peer，不連真實PTT；核對副本45列完整且不含錯篇、重啟後本機End最後行與零站端輸入，canvas不得覆蓋翻頁／返回／關閉。移入設定的控制項須在modal內保持焦點，扇形只有4類；缺原生焦點時記not_ready，不放寬失焦保護。
+
 ## 資產與提交
 
 資產與依賴須有來源、授權與版本；合成 fixture 保存獨立 expected。提交前檢查實際 diff，維持獨立 checkout 可建置及驗證。
@@ -192,7 +202,7 @@ Enter 文章內圖片變更另跑 desktop lib／bin、`node --test tooling/test_
 自訂右鍵另跑 `node --test tooling/test_surface_context_menu.mjs tooling/test_surface_links.mjs tooling/test_surface_mouse.mjs tooling/test_inline_images.mjs`、desktop lib／bin、Fluent、core 與 Clippy。原生 `context_menu` 探針、剪貼簿讀回、選單不穿透／按鍵不送站端、PNG 與正常關閉的要求見 [右鍵操作契約](docs/context-menu.md)。圖片原圖輸出另跑 `picture_menu`，依同一契約核對 inline／modal 兩次 OS 圖片讀回、原始檔 bytes、完整網址、來源 PNG 與清理。剪貼簿單元使用注入 writer，不操作開發者的系統剪貼簿；原生探針才在明確測試操作時寫入自製內容。
 
 
-黑白名單／匯入變更另跑 filters 核心與 store、filter_import owner、Files、SurfaceState、所有 JS／Fluent 及 Clippy。自製格式案例涵蓋 UTF-8 BOM、完整 ID、備註分隔、白名單衝突、未支援項目、容量及取消／舊 request。原生 `account_lists` 使用固定測試路徑，確認先預覽、取消零保存、合併後白名單只標示 ID、兩種黑名單分別遮內容／整行、選取複製與 PNG 一致、正常斷線及清理。`account_articles` 使用自製文章列表補驗相同三策略，核對遮內容的作者保留、整行 80 欄全黑、白名單只有 ID 改色、揭露與保存後重啟。兩種模式的原生 PNG 以獨立解碼核對範圍，複製讀回不得含被遮內容；站端零輸入且完整 Close／owner 清理。此探針不代替原生選檔視窗驗收。整行／左緣導覽另核對 `test_surface_links.mjs` 及 `desktop_navigation.py` 的真實 pointer、Shift 選取、光棒範圍與 Canvas 不變；缺平台 runner 仍記 not_ready。
+黑白名單／匯入變更另跑 filters 核心與 store、filter_import owner、Files、SurfaceState、所有 JS／Fluent 及 Clippy。自製格式案例涵蓋 UTF-8 BOM、完整 ID、備註分隔、白名單衝突、未支援項目、容量及取消／舊 request。數字分類標記另驗 1–9 固定色、多標記最小值、不把 B／C 轉白名單、無分類的有色標記、既有個別色保留／明確色覆寫、共用色不變及預覽／保存／重載一致。原生 `account_lists` 使用固定測試路徑，確認先預覽、取消零保存、合併後白名單只標示 ID、兩種黑名單分別遮內容／整行、選取複製與 PNG 一致、正常斷線及清理。`account_articles` 使用自製文章列表補驗相同三策略，核對遮內容的作者保留、整行 80 欄全黑、白名單只有 ID 改色、揭露與保存後重啟。兩種模式的原生 PNG 以獨立解碼核對範圍，複製讀回不得含被遮內容；站端零輸入且完整 Close／owner 清理。此探針不代替原生選檔視窗驗收。整行／左緣導覽另核對 `test_surface_links.mjs` 及 `desktop_navigation.py` 的真實 pointer、Shift 選取、光棒範圍與 Canvas 不變；缺平台 runner 仍記 not_ready。
 
 文章快速名單與暫時篩選使用 `--probe-surface OUTPUT_DIRECTORY account_actions`：保持標準閱讀頁與頁尾游標，在 Alice 字串右鍵分別執行 mask／mask_row／allow，核對三次保存、備註與實際 PNG；以右鍵推文選單（或另行人工左鍵）啟用／取消只看此 ID，核對其他推文全黑、恢復像素相同、永久規則未改。探針須至少三次 account action／保存、兩次 focus action、PNG、零額外站端 bytes、Close acknowledged 與全部 owner 清理。單次動作計數不能代替像素、檔案或操作者；CUA 無視窗／逾時須明記 not_ready，不降低條件。關閉後勿再次要求原生工具讀取已退出 App，以免工具重啟正常副本；用 runner 退出結果核對。
 
@@ -237,3 +247,8 @@ Control 與工具列焦點使用 `--probe-surface OUTPUT_DIRECTORY control_input
 共用設定、黑白名單、書籤、站點與最近看板的保存變更，另跑 `cargo test --locked --features desktop --test multi_instance`、desktop lib／bin 與全 targets Clippy。此測試使用獨立子程序及暫存目錄，核對同步修改、刪除、同項衝突、合併後容量拒絕、歷史清空、鎖定逾時與程序結束釋鎖；不碰使用者資料或連線 PTT。標為 ignored 的 `process_child` 是父測試以 `--ignored` 啟動的輔助入口，不能單獨當成通過證據。
 
 診斷 desktop bin 測試另以兩個子程序同時寫同一根目錄，核對不同 PID／獨立事件檔與 Finish，並驗證舊紀錄保留上限不刪活動或未知資料。原生驗證應同時啟動兩個 Dioxus 合成視窗，指定相同診斷根目錄、各自獨立的 probe 輸出，完成 PNG 與正常 Close／全部 owner join。多開不解除 PTT 的同帳號連線限制；保存契約與舊版並行限制見 [多開](docs/multi-instance.md)。
+
+
+文章推文更新變更另跑 desktop lib／bin、核心 gate、全部 JS／Fluent、Clippy 與 docs。獨立 expected 核對 Q／AID／重新進入／原尾行、錯誤身分與標頭、未知／分段提示、逾時、尾段追加／修改、scope 撤銷、取消及手動輸入後晚到查詢零續送。JS 覆蓋原底部／中段／圖片內位置不變／新增提示、明確跳轉、停用與舊 scope、未授權按鈕及清理。`--probe-surface OUTPUT_DIRECTORY live_updates --media-origin LOOPBACK_ORIGIN` 使用自製 45→48→51 行文章，peer 只接受最初 PageDown 及兩次精確 Q／空白／#／AID／Q／空白／Right／原尾行／PageDown，之後接受最多 64 次相同驗證路徑的無新內容檢查（不能多送 PageDown）及 Close；需在實際 WebView 核對更新後原底部與往回讀均保持位置、只提示、點提示跳轉、同一圖片 batch／一次 HTTP、暫停後無額外輸入、PNG、Close acknowledged、全部 owner join 及 exit 0。前景限制不得為探針放寬；合成成功不代替實站部署的資訊框／新推文驗證。
+
+五秒推文更新回歸另覆蓋：舊底部也不自動跟隨；watch 略過 Active 直接 Reached 的 operation 驗證；取消／失焦／逾時保留已 ACK 閱讀／圖片；相對鍵與滑鼠返回均拒絕；明確 raw／切篇／世代清理與 trusted 站端恢復。current-thread production Connection 檢查一般佇列 64 格全滿仍可靠取消、排隊開始前撤銷零 bytes、同 stamp 新請求能重新開始、舊／未來取消不污染新工作。`live_updates_cancel` 延遲 Q 回覆 6 秒，需在 busy 時明確暫停、保留 45 行與圖片且可本機移動，晚到資訊框零續送，再明確顯示站端、PNG 與正常 Close；不為測試放寬失焦、deadline 或准入。

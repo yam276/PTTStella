@@ -47,6 +47,8 @@ pub(super) fn mouse_case(case: Option<&str>) -> bool {
 
 #[derive(Default)]
 pub(super) struct Checks {
+    pub(super) editor_colors: usize,
+    pub(super) archive_reads: usize,
     pub(super) image_copies: usize,
     pub(super) viewport_captures: u8,
     pub(super) picture_saves: usize,
@@ -107,6 +109,9 @@ pub(super) struct Checks {
     pub(super) rows_export_checked: bool,
     pub(super) settings_saved: bool,
     pub(super) navigation_requests: usize,
+    pub(super) reply_updates: usize,
+    pub(super) reply_update_cancels: usize,
+    pub(super) reply_retained_restores: usize,
     pub(super) load_cancels: usize,
     pub(super) load_resumes: usize,
     pub(super) paste_single: bool,
@@ -542,11 +547,20 @@ pub(super) fn surface_sample(
             encoding::encode(&format!("\x1b[2J\x1b[HShort article image links\x1b[2;1H{origin}/colours.png\x1b[3;1H\x1b]8;;{origin}/colours-two.png\x07Explicit image\x1b]8;;\x07\x1b[24;1H\x1b[7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~3 行 (h)說明 (←)離開\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
         }
         Some("control_input") => Ok(b"\x1b[2J\x1b[HCONTROL INPUT 0/3 - Ctrl+X, Ctrl+Z, Ctrl+A\x1b[24;1HLocal editor fixture; no real station or mail\x1b[?25l".to_vec()),
+        Some("toast_reconnect") => Ok(b"\x1b[2J\x1b[HLOCAL TOAST AND RECONNECT TEST - no external server\x1b[5;1HThe connection closes once. Reconnect, export PNG, dismiss notification, then close.\x1b[1;1H".to_vec()),
+        Some("editor_color") => Ok(pttstella::editor_color::fixture::Editor::new(&["P\x1b[32m中\x1b[0m文\x1b[34mQ","","第三行"],true,false,true).wire()),
         Some("editor_clipboard") => encoding::encode("\x1b[2J\x1b[HEDITOR CLIPBOARD 0/4 - local only\x1b[5;1H\x1b[1;31mANSI colour selection\x1b[0m\x1b[24;1H\x1b[34;46m 編輯文章 \x1b[30;47m (^X)存檔 (^C)色碼 (Esc-h)按鍵 (^Z)說明 插入 | user | 1:1\x1b[0m\x1b[3;1H").map_err(|e|e.to_string()),
-        Some("reading_rows" | "wide_last_row" | "diagnostics") => {
+        Some("reading_rows" | "ansi_zoom" | "wide_last_row" | "diagnostics") => {
             let mut sample = String::from("\x1b[2J\x1b[H");
             for row in 1..=23 {
                 sample.push_str(&format!("\x1b[{row};1H\x1b[0mROW {row:02} - complete text row\x1b[{row};31H\x1b[1;{}m{}", if row % 2 == 1 {31} else {32}, "█".repeat(10)));
+            }
+            if case == Some("ansi_zoom") {
+                // Same full-colour band across every physical row: any dark
+                // horizontal line here is a renderer/compositor seam.
+                for row in 1..=23 {
+                    sample.push_str(&format!("\x1b[{row};51H\x1b[0;36;46m{}\x1b[0m", " ".repeat(20)));
+                }
             }
             if case == Some("wide_last_row") {
                 let origin = media_origin.ok_or("wide last row probe requires a loopback media origin")?;

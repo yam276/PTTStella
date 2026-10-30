@@ -269,6 +269,7 @@ async fn run(
         include_str!("../../assets/surface-fonts.js"),
         include_str!("../../assets/surface-renderer.js"),
         include_str!("../../assets/article-find.js"),
+        include_str!("../../assets/article-updates.js"),
         include_str!("../../assets/settings-catalog.js"),
         include_str!("../../assets/surface-settings.js"),
         include_str!("../../assets/surface-settings-host.js"),
@@ -280,6 +281,8 @@ async fn run(
         include_str!("../../assets/surface-mouse.js"),
         include_str!("../../assets/surface-tools.js"),
         include_str!("../../assets/surface-context-menu.js"),
+        include_str!("../../assets/surface-editor-color.js"),
+        include_str!("../../assets/surface-toast.js"),
         include_str!("../../assets/surface-diagnostics.js"),
         include_str!("../../assets/surface.js"),
     ]
@@ -373,9 +376,55 @@ async fn run(
     let mut diagnostic_tick = tokio::time::interval(std::time::Duration::from_secs(1));
     diagnostic_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut diagnostic_failed = false;
+    let mut updates_status = None;
+    let mut bookmark_capture: Option<super::bookmarks::Acquisition> = None;
+    let mut list_bookmark: Option<super::bookmarks::FromList> = None;
     let (complete, probe_checked) = loop {
         if *closing.borrow() {
             break (false, false);
+        }
+        if let Some(operation) = screen.cancelled_update()
+            && let Err(error) = connection.cancel_navigation(operation)
+        {
+            eval.send(Packet::Notice(error))
+                .map_err(|e| e.to_string())?;
+        }
+        let status = screen.updates_status();
+        if status != updates_status {
+            updates_status = status.clone();
+            eval.send(Packet::ArticleUpdates(status))
+                .map_err(|e| e.to_string())?;
+        }
+        if let Some(result) = bookmark_capture.as_ref().and_then(|capture| {
+            capture.resolve(
+                &receiver.borrow(),
+                screen
+                    .updates_status()
+                    .is_none_or(|s| s.failed || s.recovery),
+            )
+        }) && let Some(capture) = bookmark_capture.take()
+        {
+            let request = capture.request;
+            let result = result
+                .and_then(|target| capture.into_write(&bookmarks, target))
+                .and_then(|write| {
+                    files.start(|permit| files::save_archive(permit, request, write))
+                });
+            if let Err(error) = result {
+                screen.fail_updates();
+                eval.send(Packet::BookmarksResult {
+                    request,
+                    data: bookmarks.snapshot(),
+                    feedback: Feedback::new(SaveStatus::Rejected, error),
+                })
+                .map_err(|e| e.to_string())?;
+            } else {
+                eval.send(Packet::BookmarkCapture {
+                    request,
+                    cancellable: false,
+                })
+                .map_err(|e| e.to_string())?;
+            }
         }
         screen.set_article_boundary_navigation(preferences.app().article_boundary_navigation);
         if screen.set_article_mode(if window_probe || filters_probe {
@@ -399,6 +448,60 @@ async fn run(
             inline_images.close();
             eval.send(Packet::InlineReset(true))
                 .map_err(|e| e.to_string())?;
+        }
+        let list_result = list_bookmark.as_mut().and_then(|capture| {
+            capture.observe(
+                &receiver.borrow(),
+                screen.reading_scope(),
+                screen.reading_progress(),
+                reading_gate,
+            )
+        });
+        if let Some(result) = list_result {
+            let ready = !commands.busy()
+                && !files.busy()
+                && !settings_visible
+                && !login_open
+                && pending_paste.read().is_none()
+                && screen.navigation_shown(receiver.borrow().stamp());
+            if (result.is_err() || ready)
+                && let Some(capture) = list_bookmark.take()
+            {
+                let request = capture.request;
+                let result = result.and_then(|(id, target)| {
+                    bookmarks.check_write()?;
+                    let view = receiver.borrow().clone();
+                    super::bookmarks::start_capture(
+                        &mut screen,
+                        commands,
+                        &connection,
+                        &view,
+                        request,
+                        view.stamp(),
+                        id,
+                    )
+                    .map(|capture| capture.expect(target))
+                });
+                match result {
+                    Ok(capture) => bookmark_capture = Some(capture),
+                    Err(error) => {
+                        let _ = connection.cancel_navigation(capture.stamp);
+                        screen.stop_full_load();
+                        if commands.is(CommandKind::BookmarkOpen)
+                            || commands.is(CommandKind::Preload)
+                        {
+                            cancel_commands(commands, &eval)?;
+                        }
+                        checks.bookmark_rejected += 1;
+                        eval.send(Packet::BookmarksResult {
+                            request,
+                            data: bookmarks.snapshot(),
+                            feedback: Feedback::new(SaveStatus::Rejected, error),
+                        })
+                        .map_err(|e| e.to_string())?;
+                    }
+                }
+            }
         }
         if commands.is(CommandKind::Preload) && !screen.full_load_active() {
             cancel_commands(commands, &eval)?;
@@ -472,6 +575,27 @@ async fn run(
             }
         }
         let interactions_checked = checks.interactions_complete(complete);
+        let updates_allowed = !commands.busy()
+            && !files.busy()
+            && !settings_visible
+            && !login_open
+            && pending_paste.read().is_none()
+            && reading_gate.is_some()
+            && reading_gate == screen.reading_scope()
+            && media_preview.active().is_none();
+        if updates_allowed && let Some(destination) = screen.next_update(&receiver.borrow()) {
+            let view = receiver.borrow().clone();
+            if commands
+                .start(CommandKind::ReplyUpdate, view.generation, || {
+                    connection
+                        .request_go_to(view.stamp(), destination)
+                        .map(|reply| reply.wait())
+                })
+                .is_err()
+            {
+                screen.fail_updates();
+            }
+        }
         let probe_checked = if reload_settings {
             checks.probe_started && !screen.has_in_flight()
         } else {
@@ -572,11 +696,26 @@ async fn run(
         }
         #[cfg(target_os = "macos")]
         native_menu.settings_visible(settings_visible);
+        let list_bookmark_deadline = list_bookmark
+            .as_ref()
+            .and_then(|capture| capture.deadline());
         let load_deadline = screen.full_load_deadline();
+        let updates_deadline = screen.updates_deadline(
+            updates_allowed
+                && !screen.has_in_flight()
+                && !screen.dirty()
+                && screen.update_ready(&receiver.borrow()),
+        );
         let paint_deadline =
             (preload_paint && screen.dirty() && !screen.has_in_flight() && !reading_paint_due)
                 .then_some(reading_paint_at);
         tokio::select! {
+            _ = async {if let Some(deadline)=list_bookmark_deadline {tokio::time::sleep_until(deadline).await;}else{std::future::pending::<()>().await;}} => {
+                if let Some(capture)=list_bookmark.as_mut(){capture.fail();}
+            },
+            _ = async {if let Some(at)=updates_deadline {tokio::time::sleep_until(at).await;}else{std::future::pending::<()>().await;}} => {
+                if screen.updates_holding(){screen.fail_updates();let view=receiver.borrow().clone();screen.update(&view);}
+            },
             status = updates.next() => {
                 eval.send(Packet::UpdateStatus(status)).map_err(|e|e.to_string())?;
             },
@@ -621,6 +760,7 @@ async fn run(
                         let feedback=sites.complete(result.map_err(|e|e.to_string()));
                         Packet::SitesResult{request,data:sites.snapshot(receiver.borrow().site.clone()),feedback}
                     },
+                    FileCompletion::Archive{request,result}=>{match result {Ok(article)=>{checks.archive_reads+=1;Packet::Archive{request,article:Some(article),message:None}},Err(e)=>Packet::Archive{request,article:None,message:Some(e.to_string())}}},
                     FileCompletion::Bookmarks {request,result}=>{
                         if result.is_ok() {checks.bookmark_saves=checks.bookmark_saves.saturating_add(1);} else {checks.bookmark_rejected=checks.bookmark_rejected.saturating_add(1);}
                         let feedback=bookmarks.complete(result.map_err(|e|e.to_string()));
@@ -735,6 +875,9 @@ async fn run(
                         if probe.is_some() && done.result.is_ok() {checks.navigation_requests+=1;}
                         continue;
                     },
+                    CommandKind::BookmarkOpen=>{if done.result.is_err()&&let Some(capture)=list_bookmark.as_mut(){capture.fail();}continue;},
+                    CommandKind::Bookmark=>{if done.result.is_err(){screen.fail_updates();}continue;},
+                    CommandKind::ReplyUpdate => {if done.result.is_err(){screen.fail_updates();}else if probe.is_some(){checks.reply_updates+=1;}continue;},
                     CommandKind::Navigate => {
                         let feedback=match done.result {
                             Ok(()) => {if probe.is_some(){checks.navigation_requests+=1;}Feedback::quiet(NavigationStatus::Sent)},
@@ -748,6 +891,7 @@ async fn run(
                         Ok(()) => continue,
                         Err(error) => Packet::Notice(error),
                     },
+                    CommandKind::EditorColor => Packet::Notice(match done.result {Ok(())=>{checks.editor_colors+=1;pttstella::msg!("editor-color-done")},Err(error)=>error}),
                     CommandKind::Destination => {
                         let Some((request,_))=destination_request.take() else {continue;};
                         Packet::DestinationResult {request,feedback:match done.result {
@@ -818,6 +962,13 @@ async fn run(
                     }
                     event.discard();eval.send(Packet::Notice(pttstella::msg!("site-ptt-only"))).map_err(|e|e.to_string())?;continue;
                 }
+                if event.interrupts_list_bookmark()&&let Some(capture)=list_bookmark.take(){
+                    connection.cancel_navigation(capture.stamp)?;
+                    screen.stop_full_load();
+                    if commands.is(CommandKind::BookmarkOpen)||commands.is(CommandKind::Preload){cancel_commands(commands,&eval)?;}
+                    checks.bookmark_rejected+=1;
+                    eval.send(Packet::BookmarksResult{request:capture.request,data:bookmarks.snapshot(),feedback:Feedback::new(SaveStatus::Rejected,pttstella::msg!("bookmarks-capture-cancelled"))}).map_err(|e|e.to_string())?;
+                }
                 if matches!(&event,
                     SurfaceEvent::DestinationSubmit{..}|SurfaceEvent::SitesConnect{..}|SurfaceEvent::LoginSubmit{..}|SurfaceEvent::Paste{..}|SurfaceEvent::PasteConfirm{..}) {
                     screen.clear_article();
@@ -864,6 +1015,48 @@ async fn run(
                     SurfaceEvent::StationMouseEnabled { generation, enabled, .. } => {
                         if super::probe::mouse_case(surface_probe.as_deref()) && checks.mouse_toggles.len()<8 {checks.mouse_toggles.push(enabled);}
                         connection.mouse_enabled(generation, enabled);
+                    },
+                    SurfaceEvent::BookmarkCurrent{request,stamp,article,..}=>{
+                        let result=(|| {
+                            if bookmark_capture.is_some() || list_bookmark.is_some() || commands.busy() || files.busy() || settings_visible || login_open || pending_paste.read().is_some(){return Err(pttstella::msg!("command-busy"));}
+                            bookmarks.check_write()?;
+                            let view=receiver.borrow().clone();
+                            bookmark_capture=Some(super::bookmarks::start_capture(&mut screen,commands,&connection,&view,request,stamp,article)?);
+                            Ok(())
+                        })();
+                        if let Err(error)=result {eval.send(Packet::BookmarksResult{request,data:bookmarks.snapshot(),feedback:Feedback::new(SaveStatus::Rejected,error)}).map_err(|e|e.to_string())?;}
+                    },
+                    SurfaceEvent::BookmarkList{request,stamp,row,..}=>{
+                        let result=(|| {
+                            if bookmark_capture.is_some()||list_bookmark.is_some()||commands.busy()||files.busy()||settings_visible||login_open||pending_paste.read().is_some(){return Err(pttstella::msg!("command-busy"));}
+                            bookmarks.check_write()?;
+                            let view=receiver.borrow().clone();
+                            if preferences.app().article_mode!=pttstella::settings::ArticleMode::Web||!screen.navigation_shown(stamp)||view.stamp()!=stamp||view.input_pending||view.output_pending||view.mouse.route!=pttstella::mouse::input::Route::Local{return Err(pttstella::msg!("bookmarks-current-unavailable"));}
+                            let board=pttstella::board_navigation::current_board(&view.frame).ok_or(pttstella::msg!("bookmarks-current-unavailable"))?;
+                            if !matches!(view.context(),navigation::Context::ArticleList{articles,..} if articles.iter().any(|a|a.row==row&&a.bookmark)){return Err(pttstella::msg!("bookmarks-current-unavailable"));}
+                            let target=pttstella::navigation_job::Destination::ListArticle{board,row};
+                            commands.start(CommandKind::BookmarkOpen,view.generation,||connection.request_go_to(stamp,target).map(|reply|reply.wait()))?;
+                            list_bookmark=Some(super::bookmarks::FromList::new(request,stamp));
+                            Ok(())
+                        })();
+                        if let Err(error)=result {checks.bookmark_rejected+=1;eval.send(Packet::BookmarksResult{request,data:bookmarks.snapshot(),feedback:Feedback::new(SaveStatus::Rejected,error)}).map_err(|e|e.to_string())?;}
+                    },
+                    SurfaceEvent::BookmarkCancel{request,..}=>{
+                        if list_bookmark.as_ref().is_some_and(|c|c.request==request){
+                            if let Some(capture)=list_bookmark.take(){connection.cancel_navigation(capture.stamp)?;}
+                            screen.stop_full_load();
+                            if commands.is(CommandKind::BookmarkOpen)||commands.is(CommandKind::Preload){cancel_commands(commands,&eval)?;}
+                            checks.bookmark_rejected+=1;
+                            eval.send(Packet::BookmarksResult{request,data:bookmarks.snapshot(),feedback:Feedback::new(SaveStatus::Rejected,pttstella::msg!("bookmarks-capture-cancelled"))}).map_err(|e|e.to_string())?;
+                        }
+                        if bookmark_capture.as_ref().is_some_and(|c|c.request==request){
+                            bookmark_capture=None;screen.fail_updates();checks.bookmark_rejected+=1;
+                            eval.send(Packet::BookmarksResult{request,data:bookmarks.snapshot(),feedback:Feedback::new(SaveStatus::Rejected,pttstella::msg!("bookmarks-capture-cancelled"))}).map_err(|e|e.to_string())?;
+                        }
+                    },
+                    SurfaceEvent::ArchiveOpen{request,value,..}=>{
+                        let result=bookmarks.read(&value,screen.rules().clone(),preferences.display().clone()).and_then(|read|files.start(|permit|files::read_archive(permit,request,read)));
+                        if let Err(e)=result {eval.send(Packet::Archive{request,article:None,message:Some(e)}).map_err(|e|e.to_string())?;}
                     },
                     SurfaceEvent::BookmarksOpen {request,..}=>{
                         checks.bookmark_opens=checks.bookmark_opens.saturating_add(1);
@@ -1112,6 +1305,7 @@ async fn run(
                     }
                     SurfaceEvent::KeepAliveGate { stamp, ready, reading, article } => {
                         reading_gate=if reading {article.and_then(|id|screen.authorize_reading(stamp,id))}else{None};
+                        if !reading {screen.pause_updates();}
                         connection.keep_alive_gate(
                             stamp,
                             ready
@@ -1127,6 +1321,23 @@ async fn run(
                             if !resume && commands.is(CommandKind::Preload) {cancel_commands(commands,&eval)?;}
                         }
                     },
+                    SurfaceEvent::ArticleUpdates {generation,article,enabled,trusted:_} => {
+                        let busy=screen.updates_status().is_some_and(|s|s.busy);
+                        if screen.updates_action(generation,article,enabled) && !enabled {
+                            if busy && probe.is_some(){checks.reply_update_cancels+=1;}
+                            screen.interrupt_full_load();if commands.is(CommandKind::Preload){cancel_commands(commands,&eval)?;}
+                            let view=receiver.borrow().clone();screen.update(&view);
+                        }
+                    },
+                    SurfaceEvent::ArticleStationRestore{generation,article,trusted:_} => {
+                        let retained=screen.reading_progress().is_some_and(|(id,first,last,load)|id==article&&first==1&&last==45&&load==Some(super::article_cache::LoadState::Complete));
+                        if screen.restore_station(generation,article) {
+                            if retained && probe.is_some(){checks.reply_retained_restores+=1;}
+                            inline_images.close();media_preview.close();
+                            eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
+                            eval.send(Packet::HoverReset{media:true}).map_err(|e|e.to_string())?;
+                            let view=receiver.borrow().clone();screen.update(&view);}
+                    },
                     SurfaceEvent::Navigate {
                         request,
                         stamp,
@@ -1135,6 +1346,7 @@ async fn run(
                         trusted: _,
                     } => {
                         let ticket=super::protocol::NavigationTicket {request,generation:stamp.generation};
+                        if screen.updates_holding() {eval.send(ticket.finish(Feedback::new(NavigationStatus::Rejected,pttstella::msg!("article-updates-retained")))).map_err(|e|e.to_string())?;continue;}
                         if let navigation::Intent::AdjacentArticle { down } = intent
                             && (source != navigation::Source::Keyboard || !screen.adjacent_article_allowed(stamp, down, &receiver.borrow())) {
                             eval.send(ticket.finish(Feedback::new(NavigationStatus::Rejected,navigation::Error::Unavailable.to_string()))).map_err(|e|e.to_string())?;
@@ -1388,6 +1600,18 @@ async fn run(
                         let reply = queue_paste(prepared, generation, &connection, &receiver, pending_paste, &mut checks, probe.is_some());
                         eval.send(reply).map_err(|e| e.to_string())?;
                     }
+                    SurfaceEvent::EditorColor {presentation,stamp,request,color,trusted:_} => {
+                        let view=receiver.borrow().clone();
+                        let identity=Identity{presentation,generation:stamp.generation,revision:stamp.revision};
+                        let result=(|| {
+                            let keyboard=keyboard_policy.status(&view.context());
+                            if view.stamp()!=stamp || view.input_pending || view.output_pending || pending_paste.read().is_some()
+                                || keyboard.enabled && keyboard.mode!="input" {return Err(pttstella::msg!("editor-color-stale"));}
+                            let selection=screen.editor_selection(identity,request,&view).ok_or_else(||pttstella::msg!("editor-color-stale"))?;
+                            commands.start(CommandKind::EditorColor,stamp.generation,||connection.request_editor_color(stamp,selection,color).map(|reply|reply.wait()))
+                        })();
+                        if let Err(error)=result {eval.send(Packet::Notice(error)).map_err(|e|e.to_string())?;}
+                    },
                     SurfaceEvent::PasteClipboard { presentation, stamp, trusted: _ } => {
                         let view = receiver.borrow().clone();
                         let identity = Identity { presentation, generation: stamp.generation, revision: stamp.revision };
@@ -1501,7 +1725,7 @@ async fn run(
                             checks.copied_selection == Some((generation, revision, request));
                     }
                     SurfaceEvent::InlineExpand {presentation,stamp,key,target,trusted:_} => {
-                        if matches!(surface_probe.as_deref(),Some("inline"|"wide_last_row"|"inline_replies"|"inline_pages"|"full_load"|"long_load"|"short_overlap"|"short_links"|"context_menu"|"picture_menu")) {checks.inline_requests+=1;if checks.inline_targets.len()>=128{return Err("too many inline probe requests".into());}checks.inline_targets.push(target);}
+                        if matches!(surface_probe.as_deref(),Some("inline"|"wide_last_row"|"inline_replies"|"inline_pages"|"full_load"|"long_load"|"short_overlap"|"short_links"|"context_menu"|"picture_menu"|"live_updates"|"live_updates_cancel")) {checks.inline_requests+=1;if checks.inline_targets.len()>=128{return Err("too many inline probe requests".into());}checks.inline_targets.push(target);}
                         let view=receiver.borrow().clone();
                         if !view.site.ptt_features() || !keyboard_policy.inline_images_key(&key,&view.context())
                             || pending_paste.read().is_some() || commands.busy() || login_open {continue;}
@@ -1510,7 +1734,7 @@ async fn run(
                             if probe.is_some() && paint.image_links.iter().any(|index|media_origin.as_ref().is_none_or(|origin|!paint.links[*index].url.starts_with(&format!("{origin}/")))) {continue;}
                             let old_batch=inline_images.batch();
                             if let Some(open)=inline_images.open(paint,target)? {
-                                if matches!(surface_probe.as_deref(),Some("inline"|"wide_last_row"|"inline_replies"|"inline_pages"|"full_load"|"long_load"|"short_overlap"|"short_links"|"context_menu"|"picture_menu"))  && old_batch!=Some(open.batch) {checks.inline_expands+=1;}
+                                if matches!(surface_probe.as_deref(),Some("inline"|"wide_last_row"|"inline_replies"|"inline_pages"|"full_load"|"long_load"|"short_overlap"|"short_links"|"context_menu"|"picture_menu"|"live_updates"|"live_updates_cancel"))  && old_batch!=Some(open.batch) {checks.inline_expands+=1;}
                                 eval.send(Packet::InlineOpen(open)).map_err(|e|e.to_string())?;
                             }
                         }
@@ -1573,6 +1797,7 @@ async fn run(
                         if let Some(intent)=super::article_cache::reading_intent(&bytes) && let Some(packet)=screen.reading_move(&view,intent) {
                             eval.send(packet).map_err(|e|e.to_string())?;continue;
                         }
+                        if screen.retained_relative_key(&key) {eval.send(Packet::Notice(pttstella::msg!("article-updates-retained"))).map_err(|e|e.to_string())?;continue;}
                         screen.article_input(&view,&bytes);
                         if inline_images.input(&context,&bytes) {
                             eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
@@ -1685,7 +1910,7 @@ async fn run(
                     media_preview.close();
                     eval.send(Packet::HoverReset{media:false}).map_err(|e|e.to_string())?;
                 }
-                if inline_images.observe(&view) {eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;}
+                if !screen.updates_holding() && inline_images.observe(&view) {eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;}
                 if keyboard_generation!=view.generation || view.phase!=Phase::Connected {
                     if let Some((request,_))=destination_request.take() {
                         eval.send(Packet::DestinationResult {request,feedback:Feedback::new(DestinationStatus::Rejected,pttstella::msg!("command-stale"))}).map_err(|error|error.to_string())?;
@@ -1700,9 +1925,9 @@ async fn run(
                 if view.login_guidance != login_guidance && view.login_guidance.needs_input() {
                     keyboard_policy.use_native_input();
                 }
-                if matches!(surface_probe.as_deref(),Some("boards"|"boards_close")) && checks.board_reached.len()<3 && let pttstella::navigation_job::Progress::Reached{serial,target}=&view.destination && checks.board_reached.last().is_none_or(|(seen,_)|seen!=serial) {checks.board_reached.push((*serial,target.board().as_str().to_owned()));}
+                if matches!(surface_probe.as_deref(),Some("boards"|"boards_close")) && checks.board_reached.len()<3 && let pttstella::navigation_job::Progress::Reached{serial,target,..}=&view.destination && checks.board_reached.last().is_none_or(|(seen,_)|seen!=serial) && let Some(board)=target.board() {checks.board_reached.push((*serial,board.as_str().to_owned()));}
                 if matches!(surface_probe.as_deref(),Some("articles"|"articles_close")) {
-                    if checks.article_reached.len()<3 && let pttstella::navigation_job::Progress::Reached{serial,target:pttstella::navigation_job::Destination::Article(target)}=&view.destination && checks.article_reached.last().is_none_or(|(seen,_)|seen!=serial) { checks.article_reached.push((*serial,target.aid().as_str().to_owned())); }
+                    if checks.article_reached.len()<3 && let pttstella::navigation_job::Progress::Reached{serial,target:pttstella::navigation_job::Destination::Article(target),..}=&view.destination && checks.article_reached.last().is_none_or(|(seen,_)|seen!=serial) { checks.article_reached.push((*serial,target.aid().as_str().to_owned())); }
                     checks.article_missing |= view.message==pttstella::msg!("article-open-missing");
                 }
                 login_guidance = view.login_guidance;
@@ -1744,7 +1969,7 @@ async fn run(
                 || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB")
                 || case=="recent" && recent_clears>=1 && recent.packet().boards.is_empty() && recent.packet().notice==Some(pttstella::msg!("recent-cleared"))
                 || checks.bookmarks_passed(&case,&initial_bookmarks,&bookmarks.snapshot(),&receiver.borrow().destination)
-                || case=="boards_close" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && matches!(&receiver.borrow().destination,pttstella::navigation_job::Progress::Active{target,..} if target.board().as_str()=="Beta")
+                || case=="boards_close" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && matches!(&receiver.borrow().destination,pttstella::navigation_job::Progress::Active{target,..} if target.board().is_some_and(|b|b.as_str()=="Beta"))
                 || matches!(case.as_str(),"articles"|"articles_close") && checks.article_reached==[(1,"00000101".to_owned()),(2,"00000102".to_owned())] && checks.article_missing && checks.article_rejected>=2
                     && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
                     && (case=="articles" && checks.article_cancelled || case=="articles_close" && matches!(&receiver.borrow().destination,pttstella::navigation_job::Progress::Active{serial:4,target:pttstella::navigation_job::Destination::Article(target),..} if target.aid().as_str()=="00000104"))
@@ -1752,6 +1977,11 @@ async fn run(
                 || matches!(case.as_str(),"mouse"|"mouse_boundary") && checks.mouse_passed(case=="mouse_boundary") && receiver.borrow().mouse.active.is_none()
                 || matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") && checks.mouse_samples_passed(&case) && receiver.borrow().mouse.active.is_none() && receiver.borrow().mouse.modes.tracking()==pttstella::mouse::Tracking::Highlight
                 || case=="pointer_rows" && checks.navigation_requests==7 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
+                || matches!(case.as_str(),"bookmark_archive"|"bookmark_headerless"|"bookmark_list") && checks.bookmark_saves==1 && checks.archive_reads>=1 && bookmarks.snapshot().entries.len()==1 && reading.as_ref().is_some_and(|r|r.first_line==1&&r.last_line==45&&r.load==Some(super::article_cache::LoadState::Complete))
+                || case=="bookmark_archive_cancel" && checks.bookmark_saves==0 && checks.bookmark_rejected>=1 && bookmarks.snapshot().entries.is_empty() && screen.updates_status().is_some_and(|s|s.recovery)
+                || case=="bookmarks_archive_restart" && checks.archive_reads>=1 && bookmarks.snapshot().entries.len()==1 && checks.bookmark_saves==0
+                || case=="live_updates_cancel" && checks.reply_updates==1 && checks.reply_update_cancels==1 && checks.reply_retained_restores==1 && checks.navigation_requests==1 && checks.export_checked && checks.inline_expands==1 && screen.reading_progress().is_none() && receiver.borrow().context().kind()=="continue_prompt"
+                || case=="live_updates" && checks.reply_updates>=2 && checks.navigation_requests==3 && checks.export_checked && checks.inline_requests>=1 && checks.inline_expands==1 && screen.updates_status().is_some_and(|s|!s.enabled&&!s.busy&&!s.failed) && reading.as_ref().is_some_and(|r|r.first_line==1 && r.last_line==51 && r.reply_count==12 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
                 || case=="article_switch" && checks.navigation_requests==5 && checks.export_checked && reading.as_ref().is_some_and(|r|r.first_line==1 && r.last_line==45 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
                 || case=="list_boundary" && checks.navigation_requests==3 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
                 || case=="filter_colors" && checks.filter_edits>=4 && checks.export_checked && screen.rules().allow_color==10
@@ -1760,6 +1990,8 @@ async fn run(
                 || matches!(case.as_str(),"account_lists"|"account_articles") && checks.filter_edits>=3 && checks.context_copies>=1 && checks.export_checked
                 || case=="short_overlap" && checks.navigation_requests==1 && checks.inline_requests>=2 && checks.inline_expands==1 && checks.link_requests>=1 && checks.export_checked && reading.as_ref().is_some_and(|r| r.first_line==1 && r.last_line==32 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
                 || case=="control_input" && checks.export_checked && receiver.borrow().frame.glyphs.iter().map(|g|g.text.as_str()).collect::<String>().contains("CONTROL INPUT 3/3 VERIFIED")
+                || case=="toast_reconnect" && checks.export_checked && receiver.borrow().generation==2 && receiver.borrow().phase==Phase::Connected
+                || case=="editor_color" && checks.export_checked && checks.editor_colors==1
                 || case=="editor_clipboard" && checks.export_checked && receiver.borrow().frame.glyphs.iter().map(|g|g.text.as_str()).collect::<String>().contains("EDITOR CLIPBOARD 4/4 VERIFIED")
                 || case=="terminal_pages" && checks.export_checked && !screen.full_load_active()
                 || case=="long_load" && checks.navigation_requests==37 && checks.export_checked && checks.inline_requests>=2 && checks.inline_expands==1 && reading.as_ref().is_some_and(|r|r.first_line==1 && r.last_line==837 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
@@ -1771,13 +2003,13 @@ async fn run(
                 || case=="fonts" && checks.font_catalog_reads>=2 && !checks.font_sources.is_empty() && checks.export_checked
                 || checks.sites_passed(&case,&receiver.borrow().site,&sites.default_target(),&receiver.borrow().frame)
                 || case=="fullscreen" && checks.viewport_captures>=4 && checks.export_checked
-                || matches!(case.as_str(),"tools"|"short_reading"|"reading_rows"|"sgr66"|"sgr66_legacy") && checks.export_checked
+                || matches!(case.as_str(),"tools"|"short_reading"|"reading_rows"|"ansi_zoom"|"sgr66"|"sgr66_legacy") && checks.export_checked
                 || case=="dialogs" && checks.settings_saved && checks.export_checked && checks.rows_export_checked && checks.media_external>=1 {"passed"} else {"failed"},
             "recent_initial":initial_recent,"recent_final":recent.packet().boards,"recent_clears":recent_clears,
             "bookmarks_initial":initial_bookmarks,"bookmarks_final":bookmarks.snapshot(),"bookmark_opens":checks.bookmark_opens,"bookmark_saves":checks.bookmark_saves,"bookmark_rejected":checks.bookmark_rejected,
             "article_reached":checks.article_reached,"article_missing":checks.article_missing,"article_rejected":checks.article_rejected,"article_cancelled":checks.article_cancelled,
             "board_reached":checks.board_reached,"board_rejected":checks.board_rejected,"board_cancelled":checks.board_cancelled,
-            "scope":if matches!(case.as_str(),"sites"|"sites_restart") {"synthetic loopback station UI; owned external test peers independently verify Big5/GBK bytes and EOF; explicit TCP shutdown is not a WebSocket acknowledgement"} else if case=="article_switch" {"synthetic A/B/C articles: exact staged Home then Up, direct Down at station end, three complete two-page loads, PNG and Close"} else if case=="long_load" {"synthetic 38-page reading: thirty-seven exact PageDown commands, leading ink reset at page 31, retained 837 rows, explicit images, PNG and Close"} else if case=="full_load" {"synthetic full reading: nineteen exact PageDown commands, cancellation and explicit resume, retained 441 rows, explicit image expansion, PNG and Close"} else if case=="terminal_pages" {"synthetic terminal reading: no automatic load or image requests; one manual PageDown, PNG and Close"} else if case=="inline_pages" {"synthetic cached reading: one exact PageDown, fragmented response, local history without further station bytes, PNG and Close"} else if case=="editor_clipboard" {"synthetic editor: three exact Ctrl+V commands, one confirmed ANSI-to-Ctrl+U Chinese paste, native ANSI clipboard readback preview/cancel, PNG and Close"} else if case=="control_input" {"synthetic editor: peer requires exactly Ctrl+X, Ctrl+Z, Ctrl+A followed by Close; rejects extra or missing input"} else if case=="tools" {"local tools playground: PNG and Close smoke only; gestures are observations, not an A/B acceptance test; peer rejects all station input"} else if matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") {"synthetic native pointer samples: bounded independent exact cells, required final gesture, no local keys or duplicate path, PNG and Close"} else if case=="mouse_boundary" {"synthetic station mouse boundary: one exact press, no release or local keys after leaving the grid; owned cancellation and Close"} else if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
+            "scope":if matches!(case.as_str(),"sites"|"sites_restart") {"synthetic loopback station UI; owned external test peers independently verify Big5/GBK bytes and EOF; explicit TCP shutdown is not a WebSocket acknowledgement"} else if case=="live_updates" {"synthetic two verified refreshes; exact Q/AID/open/tail/PageDown plus bounded unchanged checks, retained article and image batch, pause, PNG and Close"} else if case=="article_switch" {"synthetic A/B/C articles: exact staged Home then Up, direct Down at station end, three complete two-page loads, PNG and Close"} else if case=="long_load" {"synthetic 38-page reading: thirty-seven exact PageDown commands, leading ink reset at page 31, retained 837 rows, explicit images, PNG and Close"} else if case=="full_load" {"synthetic full reading: nineteen exact PageDown commands, cancellation and explicit resume, retained 441 rows, explicit image expansion, PNG and Close"} else if case=="terminal_pages" {"synthetic terminal reading: no automatic load or image requests; one manual PageDown, PNG and Close"} else if case=="inline_pages" {"synthetic cached reading: one exact PageDown, fragmented response, local history without further station bytes, PNG and Close"} else if case=="toast_reconnect" {"synthetic loopback: exactly two sessions, deliberate first disconnect, native reconnect, PNG and no login/replayed station bytes"} else if case=="editor_clipboard" {"synthetic editor: three exact Ctrl+V commands, one confirmed ANSI-to-Ctrl+U Chinese paste, native ANSI clipboard readback preview/cancel, PNG and Close"} else if case=="control_input" {"synthetic editor: peer requires exactly Ctrl+X, Ctrl+Z, Ctrl+A followed by Close; rejects extra or missing input"} else if case=="tools" {"local tools playground: PNG and Close smoke only; gestures are observations, not an A/B acceptance test; peer rejects all station input"} else if matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") {"synthetic native pointer samples: bounded independent exact cells, required final gesture, no local keys or duplicate path, PNG and Close"} else if case=="mouse_boundary" {"synthetic station mouse boundary: one exact press, no release or local keys after leaving the grid; owned cancellation and Close"} else if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
             "mouse":mouse_report,
             "tools":checks.tools,
             "inline_requests":checks.inline_requests,"inline_expands":checks.inline_expands,
@@ -1790,6 +2022,12 @@ async fn run(
             "paste_preview_preserved":pending_paste.read().is_some(),
             "settings_saved":checks.settings_saved,"full_png":checks.export_checked,"rows_png":checks.rows_export_checked,"media_external_requests":checks.media_external,
         });
+        surface_report["archive_reads"] = checks.archive_reads.into();
+        surface_report["reply_update_cancels"] = checks.reply_update_cancels.into();
+        surface_report["reply_retained_restores"] = checks.reply_retained_restores.into();
+        surface_report["reply_updates"] = checks.reply_updates.into();
+        surface_report["navigation_requests"] = checks.navigation_requests.into();
+        surface_report["editor_colours_completed"] = checks.editor_colors.into();
         surface_report["viewport_captures"] = checks.viewport_captures.into();
         surface_report["article_reading"] =
             serde_json::to_value(reading).map_err(|e| e.to_string())?;

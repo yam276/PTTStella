@@ -68,7 +68,7 @@ test('returning to the foreground refreshes the reading gate even without a new 
 test('article-scoped UI permission survives station page transitions but pauses for local interaction',()=>{
     const sent=[],c={articleFind:null,navigationSequence:0,stopped:false,showNotice(){},latest:{connected:true,input_pending:true,output_pending:true,presentation:2,article:{id:7}},document:{hasFocus:()=>true,visibilityState:'visible'},settingsActive:false,stopped:false,
         blocked:()=>false,canNavigate:()=>false,inlineImages:{active:()=>false},tools:{busy:()=>false},stationMouse:{active:()=>false},dragging:null,released:null,
-        hasSelection:()=>false,exportBusy:false,keyboardState:{pending:false},navigationLocked:false,navigationRequest:false,stamp:()=>({generation:1,revision:9,input_epoch:3}),keepAliveGate:null,keepAlive:{setAttribute(){}},tr:k=>k,send:p=>sent.push(p)};
+        hasSelection:()=>false,exportBusy:false,keyboardState:{pending:false},navigationLocked:false,navigationRequest:false,stamp:()=>({generation:1,revision:9,input_epoch:3}),articleUpdates:null,keepAliveGate:null,keepAlive:{setAttribute(){}},tr:k=>k,send:p=>sent.push(p)};
     c.refreshArticleLoad=()=>{};
     vm.runInNewContext(source.slice(source.indexOf('function readingPauseReason()'),source.indexOf('function refreshArticleLoad(')),c);
     vm.runInNewContext(source.slice(source.indexOf('function refreshKeepAlive()'),source.indexOf('function toggleKeepAlive(')),c);

@@ -1,4 +1,5 @@
 //! Synthetic round trip through the production connection owner.
+pub(super) mod live_updates;
 pub(super) mod round_trip;
 use futures_util::{SinkExt, StreamExt};
 use tokio::{
@@ -11,23 +12,40 @@ use tokio_tungstenite::tungstenite::{
 };
 
 pub(super) enum Scenario {
-    Desktop { reload_settings: bool },
+    Desktop {
+        reload_settings: bool,
+    },
     Window,
     Login,
     Login2fa,
     Boards,
     Articles,
     Bookmarks,
-    Mouse { boundary: bool },
+    BookmarkList,
+    BookmarkArchive {
+        headerless: bool,
+    },
+    Mouse {
+        boundary: bool,
+    },
     MouseSamples(MouseSampleProbe),
     Filters,
     Surface,
     ControlInput,
     EditorClipboard,
+    EditorColor,
+    ToastReconnect,
     PointerRows,
     ListBoundary,
     ArticleSwitch,
-    InlinePages { pages: Vec<Vec<u8>>, delay_ms: u64 },
+    LiveUpdates {
+        origin: Option<String>,
+        cancelled: bool,
+    },
+    InlinePages {
+        pages: Vec<Vec<u8>>,
+        delay_ms: u64,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -669,10 +687,55 @@ pub(super) async fn serve(
     bytes: Vec<u8>,
     scenario: Scenario,
 ) -> Result<(), String> {
+    if matches!(scenario, Scenario::ToastReconnect) {
+        return timeout(Duration::from_secs(900), async {
+            for stage in 1..=2 {
+                let (stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
+                let mut socket = tokio_tungstenite::accept_async(stream)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                let mut wire = bytes.clone();
+                wire.extend(
+                    format!("\x1b[3;1HSESSION {stage}/2 - no login or replay allowed").into_bytes(),
+                );
+                socket
+                    .send(Message::Binary(wire.into()))
+                    .await
+                    .map_err(|e| e.to_string())?;
+                if stage == 1 {
+                    tokio::time::sleep(Duration::from_millis(300)).await;
+                    socket
+                        .send(Message::Close(Some(CloseFrame {
+                            code: CloseCode::Normal,
+                            reason: "Synthetic reconnect test".into(),
+                        })))
+                        .await
+                        .map_err(|e| e.to_string())?;
+                }
+                match socket.next().await {
+                    Some(Ok(Message::Close(_))) => {
+                        socket.flush().await.map_err(|e| e.to_string())?
+                    }
+                    _ => {
+                        return Err(
+                            "reconnect probe forbids login, replay and all station input".into(),
+                        );
+                    }
+                }
+            }
+            Ok(())
+        })
+        .await
+        .map_err(|_| "reconnect probe deadline expired".to_owned())?;
+    }
     let deadline = if matches!(
         scenario,
         Scenario::Filters
+            | Scenario::EditorColor
             | Scenario::ArticleSwitch
+            | Scenario::LiveUpdates { .. }
+            | Scenario::BookmarkList
+            | Scenario::BookmarkArchive { .. }
             | Scenario::MouseSamples(MouseSampleProbe::RoundTrip)
     ) {
         900
@@ -709,6 +772,9 @@ pub(super) async fn serve(
         if matches!(scenario, Scenario::Window) {
             return window(&mut socket).await;
         }
+        if matches!(scenario,Scenario::BookmarkList) {return live_updates::bookmark_list(&mut socket).await;}
+        if let Scenario::BookmarkArchive { headerless } = scenario {return live_updates::bookmark(&mut socket, headerless).await;}
+        if let Scenario::LiveUpdates {origin,cancelled} = scenario {return if cancelled {live_updates::cancel(&mut socket,origin.as_deref()).await}else{live_updates::run(&mut socket,origin.as_deref()).await};}
         if let Scenario::InlinePages {pages,delay_ms} = scenario {
             let started=std::time::Instant::now();
             for (index, second) in pages.into_iter().enumerate() {
@@ -821,6 +887,26 @@ pub(super) async fn serve(
                 Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e|e.to_string()),
                 _ => Err("list boundary probe expected Close without extra input".into()),
             };
+        }
+        if matches!(scenario, Scenario::EditorColor) {
+            let mut editor=crate::editor_color::fixture::Editor::new(&["P\x1b[32m中\x1b[0m文\x1b[34mQ","","第三行"],true,false,true);
+            for _ in 0..4096 {
+                match socket.next().await {
+                    Some(Ok(Message::Binary(bytes)))=>{
+                        if bytes.len()>4096{return Err("editor colour probe input too large".into());}
+                        editor.accept(&bytes);
+                        socket.send(Message::Binary(editor.wire().into())).await.map_err(|e|e.to_string())?;
+                    },
+                    Some(Ok(Message::Close(_)))=>{
+                        socket.flush().await.map_err(|e|e.to_string())?;
+                        let expected=["P\x1b[32m\x1b[0;1;31;40m中\x1b[0m\x1b[0;1;31;40m文\x1b[34m\x1b[0;1;31;40mQ\x1b[m","","\x1b[0;1;31;40m第三行\x1b[m"];
+                        let expected=expected.iter().map(|s|crate::encoding::encode(s).map_err(|e|e.to_string())).collect::<Result<Vec<_>,_>>()?;
+                        return if editor.lines==expected && editor.preview && !editor.insert {Ok(())}else{Err("editor colour probe document/mode differs from independent expected".into())};
+                    },
+                    _=>return Err("editor colour probe expected bounded input or Close".into()),
+                }
+            }
+            return Err("editor colour probe exceeded input bound".into());
         }
         if matches!(scenario, Scenario::EditorClipboard) {
             for (index, expected) in [b"\x16".as_slice(), b"\x16", b"ANSI clipboard check:\x15[31m\xa4\xa4\x15[0m\rEND", b"\x16"].into_iter().enumerate() {

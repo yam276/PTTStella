@@ -175,6 +175,36 @@ fn displayed(state: &mut SurfaceState, view: &View) -> Identity {
     state.acknowledge(identity).unwrap();
     identity
 }
+#[test]
+fn editor_colouring_consumes_only_the_acknowledged_rust_selection() {
+    let mut current = view();
+    current.frame =
+        pttstella::editor_color::fixture::Editor::new(&["Ab中文", "下一行"], true, true, true)
+            .frame();
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let identity = displayed(&mut state, &current);
+    let selection = Selection::Range {
+        anchor: selection::Position { row: 0, col: 3 },
+        focus: selection::Position { row: 1, col: 5 },
+    };
+    assert!(state.editor_selection(identity, 11, &current).is_none());
+    state.select(identity, 11, &selection, &current).unwrap();
+    let Selection::Range { anchor, focus } =
+        state.editor_selection(identity, 11, &current).unwrap()
+    else {
+        panic!()
+    };
+    assert_eq!((anchor.row, anchor.col, focus.row, focus.col), (0, 2, 1, 5));
+    assert!(state.editor_selection(identity, 12, &current).is_none());
+    let mut intervened = current.clone();
+    intervened.input_epoch += 1;
+    assert!(state.editor_selection(identity, 11, &intervened).is_none());
+    let mut reconnected = current.clone();
+    reconnected.generation += 1;
+    assert!(state.editor_selection(identity, 11, &reconnected).is_none());
+    state.clear_selection(identity, 11);
+    assert!(state.editor_selection(identity, 11, &current).is_none());
+}
 fn hover(state: &mut SurfaceState, identity: Identity, view: &View) {
     let link = state.current(identity, view).unwrap().links[0].clone();
     state.begin_hover(Lease {
@@ -1455,4 +1485,411 @@ fn adjacent_switch_cannot_recapture_the_queued_old_article() {
         reading.load,
         Some(super::super::article_cache::LoadState::Complete)
     );
+}
+
+fn refresh_fixture() -> (SurfaceState, View, Screen) {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut source = Screen::new(80, 24).unwrap();
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/article-open.json")).unwrap();
+    source.feed(
+        &pttstella::encoding::encode(
+            &fixture["screens"]["reading"]
+                .as_str()
+                .unwrap()
+                .replace("1/3 頁 (33%)", "1/1 頁 (100%)"),
+        )
+        .unwrap(),
+    );
+    view.frame = source.frame();
+    displayed(&mut state, &view);
+    (state, view, source)
+}
+#[test]
+fn refresh_holds_the_acknowledged_article_until_verified_reentry_and_cancels_on_switch() {
+    use pttstella::article_target::ArticleTarget;
+    use pttstella::navigation_job::{Destination, Progress};
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut source = Screen::new(80, 24).unwrap();
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/article-open.json")).unwrap();
+    source.feed(
+        &pttstella::encoding::encode(
+            &fixture["screens"]["reading"]
+                .as_str()
+                .unwrap()
+                .replace("1/3 頁 (33%)", "1/1 頁 (100%)"),
+        )
+        .unwrap(),
+    );
+    view.frame = source.frame();
+    let original = displayed(&mut state, &view);
+    let id = state.reading_progress().unwrap().0;
+    assert!(state.updates_status().unwrap().available);
+    assert!(!state.updates_action(6, id, true));
+    assert!(state.updates_action(7, id, true));
+    assert!(matches!(
+        state.next_update(&view),
+        Some(Destination::Refresh { .. })
+    ));
+    let stamp = view.stamp();
+    view.destination = Progress::Active {
+        serial: 1,
+        operation: stamp,
+        target: Destination::Board {
+            board: pttstella::board_navigation::BoardName::parse("Stella").unwrap(),
+        },
+    };
+    state.update(&view);
+    assert!(state.updates_holding());
+    source.feed(b"\x1b[2J\x1b[Hsynthetic intermediate query");
+    view.frame = source.frame();
+    view.input_epoch += 1;
+    state.update(&view);
+    assert!(state.queue(&view, false, &Default::default()).is_none());
+    assert_eq!(
+        state
+            .displayed
+            .as_ref()
+            .unwrap()
+            .article
+            .as_ref()
+            .unwrap()
+            .id,
+        id
+    );
+    source.feed(
+        &pttstella::encoding::encode(
+            &fixture["screens"]["reading"]
+                .as_str()
+                .unwrap()
+                .replace("1/3 頁 (33%)", "1/1 頁 (100%)"),
+        )
+        .unwrap(),
+    );
+    view.frame = source.frame();
+    view.destination = Progress::Reached {
+        serial: 1,
+        operation: stamp,
+        target: Destination::Article(ArticleTarget::new("Stella", "00000101").unwrap()),
+    };
+    state.update(&view);
+    assert!(!state.updates_holding());
+    let refreshed = displayed(&mut state, &view);
+    assert_ne!(refreshed, original);
+    assert_eq!(state.reading_progress().unwrap().0, id);
+    assert!(state.updates_status().unwrap().enabled);
+    assert!(!state.updates_status().unwrap().busy);
+    state.article_input(&view, b"\x1b[D");
+    assert!(state.updates_status().is_none());
+    assert!(!state.updates_action(7, id, true));
+    assert!(state.next_update(&view).is_none());
+}
+
+#[test]
+fn cancelling_reentry_preserves_local_reading_until_explicit_station_restore_or_scope_change() {
+    use pttstella::navigation_job::{Destination, Progress};
+    for action in [
+        "cancel",
+        "background",
+        "failed",
+        "foreign_done",
+        "generation",
+        "raw",
+    ] {
+        let (mut state, mut view, mut source) = refresh_fixture();
+        let before = state.reading_progress();
+        let id = before.unwrap().0;
+        assert!(state.updates_action(7, id, true));
+        assert!(state.next_update(&view).is_some());
+        let operation = view.stamp();
+        view.destination = Progress::Active {
+            serial: 1,
+            operation,
+            target: Destination::Board {
+                board: pttstella::board_navigation::BoardName::parse("Stella").unwrap(),
+            },
+        };
+        source.feed(
+            &pttstella::encoding::encode(
+                "\x1b[2J\x1b[24;1H\x1b[37;44m 請按任意鍵繼續 \x1b[0m\x1b[24;80H",
+            )
+            .unwrap(),
+        );
+        view.frame = source.frame();
+        view.input_epoch += 1;
+        state.update(&view);
+        match action {
+            "cancel" => assert!(state.updates_action(7, id, false)),
+            "background" => state.pause_updates(),
+            "failed" => state.fail_updates(),
+            "foreign_done" => {
+                view.destination = Progress::Reached {
+                    serial: 2,
+                    operation: Stamp {
+                        input_epoch: operation.input_epoch + 1,
+                        ..operation
+                    },
+                    target: Destination::Article(
+                        pttstella::article_target::ArticleTarget::new("Stella", "00000102")
+                            .unwrap(),
+                    ),
+                }
+            }
+            "generation" => view.generation += 1,
+            "raw" => state.article_input(&view, b"Q"),
+            _ => unreachable!(),
+        }
+        state.update(&view);
+        if ["generation", "raw"].contains(&action) {
+            assert!(state.reading_progress().is_none());
+            continue;
+        }
+        assert_eq!(state.reading_progress(), before, "{action}");
+        assert!(
+            !state.navigation_shown(operation),
+            "stale relative Back must be rejected before clearing the projection"
+        );
+        assert!(!state.browse_shown(view.generation, &view.context()));
+        for key in ["ArrowLeft", "ArrowRight", "Enter", "Backspace"] {
+            let key = pttstella::vim::Key {
+                key: key.into(),
+                code: String::new(),
+                ctrl: false,
+                alt: false,
+                shift: false,
+                repeat: false,
+            };
+            assert!(state.retained_relative_key(&key));
+            assert!(!state.retained_relative_key(&pttstella::vim::Key { ctrl: true, ..key }));
+        }
+        assert!(!state.retained_relative_key(&pttstella::vim::Key {
+            key: "q".into(),
+            code: "KeyQ".into(),
+            ctrl: false,
+            alt: false,
+            shift: false,
+            repeat: false
+        }));
+        let status = state.updates_status().unwrap();
+        assert!(status.recovery);
+        assert!(!status.available && !status.enabled && !status.busy);
+        assert!(state.queue(&view, false, &Default::default()).is_none());
+        assert!(
+            state
+                .reading_move(&view, pttstella::navigation::Intent::First)
+                .is_some()
+        );
+        assert!(state.next_full_page(&view).is_none());
+        assert!(state.next_update(&view).is_none());
+        assert_eq!(state.cancelled_update(), Some(operation));
+        assert!(state.cancelled_update().is_none());
+        assert!(!state.restore_station(8, id));
+        assert!(!state.restore_station(7, id + 1));
+        assert!(state.restore_station(7, id));
+        state.update(&view);
+        assert!(state.reading_progress().is_none());
+        let actual = displayed(&mut state, &view);
+        assert!(state.current(actual, &view).unwrap().article.is_none());
+    }
+}
+
+#[test]
+fn current_bookmark_requires_complete_ack_and_owns_verified_identity_until_cancel() {
+    use pttstella::{
+        article_target::ArticleTarget,
+        navigation_job::{Destination, Progress},
+    };
+    let (mut state, mut view, _) = refresh_fixture();
+    let id = state.reading_progress().unwrap().0;
+    let bad = Stamp {
+        revision: view.frame.revision + 1,
+        ..view.stamp()
+    };
+    assert!(state.bookmark_current(bad, id, &view).is_err());
+    assert!(state.bookmark_current(view.stamp(), id + 1, &view).is_err());
+    // A past update failure cannot poison a newly authorized capture.
+    state.fail_updates();
+    assert!(state.updates_status().unwrap().failed);
+    let (snapshot, target) = state.bookmark_current(view.stamp(), id, &view).unwrap();
+    assert!(matches!(target, Destination::Refresh { .. }));
+    assert!(!state.updates_status().unwrap().failed);
+    let capture = super::super::bookmarks::Acquisition::new(10, view.stamp(), snapshot);
+    assert!(capture.resolve(&view, false).is_none());
+    let operation = view.stamp();
+    view.destination = Progress::Reached {
+        serial: 3,
+        operation: bad,
+        target: Destination::Article(ArticleTarget::new("Other", "00000101").unwrap()),
+    };
+    assert!(capture.resolve(&view, false).is_none());
+    view.destination = Progress::Reached {
+        serial: 4,
+        operation,
+        target: Destination::Article(ArticleTarget::new("Stella", "00000101").unwrap()),
+    };
+    assert_eq!(
+        capture
+            .resolve(&view, false)
+            .unwrap()
+            .unwrap()
+            .board()
+            .as_str(),
+        "Stella"
+    );
+    assert!(capture.resolve(&view, true).unwrap().is_err());
+    view.generation += 1;
+    assert!(capture.resolve(&view, false).unwrap().is_err());
+}
+
+#[test]
+fn padded_author_header_keeps_refresh_board_and_exact_reentry_text() {
+    let (_, mut view, mut source) = refresh_fixture();
+    source.feed(
+        &pttstella::encoding::encode(
+            "\x1b[1;1H\x1b[2K 作者 Sample (合成) 看板 Stella\x1b[24;80H\x1b[?25l",
+        )
+        .unwrap(),
+    );
+    view.frame = source.frame();
+    let mut state = SurfaceState::new(filters::Rules::default());
+    displayed(&mut state, &view);
+    let id = state.reading_progress().unwrap().0;
+    let (_, destination) = state.bookmark_current(view.stamp(), id, &view).unwrap();
+    let pttstella::navigation_job::Destination::Refresh {
+        board: Some(board),
+        head,
+    } = destination
+    else {
+        panic!("standard padded author header must preserve its board");
+    };
+    assert_eq!(board.as_str(), "Stella");
+    assert!(
+        head[0].starts_with(" 作者 Sample"),
+        "reentry still compares the exact original text"
+    );
+}
+
+#[test]
+fn headerless_complete_article_can_pin_a_bookmark_without_guessing_its_board() {
+    let (_, mut view, mut source) = refresh_fixture();
+    let mut state = SurfaceState::new(filters::Rules::default());
+    source.feed(&pttstella::encoding::encode("\x1b[1;1H\x1b[0m\x1b[2K第一行 ANSI 圖\x1b[2;1H\x1b[2K第二行圖\x1b[3;1H\x1b[2K第三行圖\x1b[24;80H\x1b[?25l").unwrap());
+    view.frame = source.frame();
+    displayed(&mut state, &view);
+    let id = state.reading_progress().unwrap().0;
+    let (snapshot, destination) = state.bookmark_current(view.stamp(), id, &view).unwrap();
+    assert!(matches!(
+        destination,
+        pttstella::navigation_job::Destination::Refresh { board: None, .. }
+    ));
+    assert_eq!(
+        snapshot.title(),
+        "",
+        "do not label an art row as the article title"
+    );
+    let frame = snapshot.frame();
+    assert!(
+        pttstella::text::rows(&frame).unwrap()[0]
+            .text
+            .starts_with("第一行 ANSI 圖")
+    );
+}
+
+#[test]
+fn list_bookmark_waits_for_owned_reached_complete_cache_ack_and_foreground_gate() {
+    use super::super::article_cache::LoadState;
+    use super::super::bookmarks::FromList;
+    use pttstella::{
+        article_target::ArticleTarget,
+        navigation_job::{Destination, Progress},
+    };
+    let (_, mut view, _) = refresh_fixture();
+    let operation = view.stamp();
+    let scope = (view.generation, 21, 0);
+    let mut capture = FromList::new(12, operation);
+    assert!(capture.observe(&view, None, None, None).is_none());
+    view.destination = Progress::Reached {
+        serial: 1,
+        operation,
+        target: Destination::Article(ArticleTarget::new("Stella", "00000101").unwrap()),
+    };
+    assert!(
+        capture
+            .observe(
+                &view,
+                Some(scope),
+                Some((21, 1, 23, Some(LoadState::Loading))),
+                Some(scope)
+            )
+            .is_none()
+    );
+    let (id, target) = capture
+        .observe(
+            &view,
+            Some(scope),
+            Some((21, 1, 45, Some(LoadState::Complete))),
+            Some(scope),
+        )
+        .unwrap()
+        .unwrap();
+    assert_eq!(id, 21);
+    assert_eq!(target.aid().as_str(), "00000101");
+    for failure in [
+        "gate",
+        "scope",
+        "load",
+        "generation",
+        "operation",
+        "missing",
+        "cancel",
+        "progress",
+    ] {
+        let mut view = view.clone();
+        let mut capture = FromList::new(12, operation);
+        assert!(
+            capture
+                .observe(
+                    &view,
+                    Some(scope),
+                    Some((21, 1, 23, Some(LoadState::Loading))),
+                    Some(scope)
+                )
+                .is_none()
+        );
+        let mut next_scope = Some(scope);
+        let mut gate = Some(scope);
+        let mut progress = Some((21, 1, 45, Some(LoadState::Complete)));
+        match failure {
+            "gate" => gate = None,
+            "scope" => next_scope = Some((view.generation, 22, 0)),
+            "load" => progress = Some((21, 1, 23, Some(LoadState::Cancelled))),
+            "generation" => view.generation += 1,
+            "operation" => {
+                view.destination = Progress::Active {
+                    serial: 2,
+                    operation: Stamp {
+                        input_epoch: operation.input_epoch + 1,
+                        ..operation
+                    },
+                    target: Destination::Board {
+                        board: pttstella::board_navigation::BoardName::parse("Other").unwrap(),
+                    },
+                }
+            }
+            "missing" => next_scope = None,
+            "cancel" => capture.fail(),
+            "progress" => progress = Some((22, 1, 45, Some(LoadState::Complete))),
+            _ => unreachable!(),
+        }
+        assert!(
+            capture
+                .observe(&view, next_scope, progress, gate)
+                .unwrap()
+                .is_err(),
+            "{failure}"
+        );
+    }
 }

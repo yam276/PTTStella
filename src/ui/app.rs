@@ -45,6 +45,11 @@ pub fn app(props: AppProps) -> Element {
     let filters_probe = props.filters_probe;
     let surface_probe = props.surface_probe.clone();
     let surface_probing = surface_probe.is_some();
+    let editor_color_probing = surface_probe.as_deref() == Some("editor_color");
+    let live_updates_probing = matches!(
+        surface_probe.as_deref(),
+        Some("live_updates" | "live_updates_cancel")
+    );
     let sample_case = surface_probe.clone();
     let boards_probing = matches!(surface_probe.as_deref(), Some("boards" | "boards_close"));
     let articles_probing = matches!(
@@ -66,6 +71,7 @@ pub fn app(props: AppProps) -> Element {
                 | "inline"
                 | "short_reading"
                 | "reading_rows"
+                | "ansi_zoom"
                 | "wide_last_row"
                 | "diagnostics"
                 | "inline_replies"
@@ -84,10 +90,33 @@ pub fn app(props: AppProps) -> Element {
     let owner = use_hook(move || {
         super::probe::surface_sample(sample_case.as_deref(), probing, media_origin.as_deref())
             .and_then(|bytes| {
-                if sample_case.as_deref() == Some("control_input") {
+                if sample_case.as_deref() == Some("bookmark_list") {
+                    Connection::start_bookmark_list_probe()
+                } else if matches!(
+                    sample_case.as_deref(),
+                    Some("bookmark_archive" | "bookmark_headerless")
+                ) {
+                    Connection::start_bookmark_archive_probe(
+                        sample_case.as_deref() == Some("bookmark_headerless"),
+                    )
+                } else if sample_case.as_deref() == Some("bookmark_archive_cancel") {
+                    Connection::start_live_updates_probe(None, true)
+                } else if matches!(
+                    sample_case.as_deref(),
+                    Some("live_updates" | "live_updates_cancel")
+                ) {
+                    Connection::start_live_updates_probe(
+                        media_origin.clone(),
+                        sample_case.as_deref() == Some("live_updates_cancel"),
+                    )
+                } else if sample_case.as_deref() == Some("control_input") {
                     Connection::start_control_input_probe(bytes)
                 } else if sample_case.as_deref() == Some("editor_clipboard") {
                     Connection::start_editor_clipboard_probe(bytes)
+                } else if sample_case.as_deref() == Some("editor_color") {
+                    Connection::start_editor_color_probe(bytes)
+                } else if sample_case.as_deref() == Some("toast_reconnect") {
+                    Connection::start_toast_reconnect_probe(bytes)
                 } else if boards_probing {
                     Connection::start_board_probe()
                 } else if matches!(sample_case.as_deref(), Some("full_load" | "long_load")) {
@@ -195,7 +224,7 @@ pub fn app(props: AppProps) -> Element {
             }
         });
     }
-    let phase = use_signal(|| Phase::Disconnected);
+    let mut phase = use_signal(|| Phase::Disconnected);
     let mut started = use_signal(|| false);
     let mut fatal = use_signal(|| false);
     let pending_paste = use_signal(|| None::<PendingPaste>);
@@ -280,6 +309,45 @@ pub fn app(props: AppProps) -> Element {
     let media_origin = props.media_origin.clone();
     let connect = connection.clone();
     let disconnect = connection.clone();
+    let synthetic = props.probe.is_some();
+    let reconnect_probe = surface_probe.as_deref() == Some("toast_reconnect");
+    let closing_connection = closing.1.clone();
+    let connect_action = use_callback(move |_| {
+        if !can_reconnect(
+            phase(),
+            fatal(),
+            synthetic,
+            reconnect_probe,
+            *closing_connection.borrow(),
+        ) {
+            return;
+        }
+        let current_phase = connect.updates.borrow().phase;
+        if matches!(current_phase, Phase::Connecting | Phase::Connected) {
+            phase.set(current_phase);
+            return;
+        }
+        match connect.connect() {
+            // Immediate local feedback also closes the duplicate-click window
+            // before the worker's first Connecting view reaches the renderer.
+            Ok(()) => phase.set(Phase::Connecting),
+            Err(error) => message.set(error),
+        }
+    });
+    let connection_title = if fatal() {
+        pttstella::msg!("toast-reopen-title")
+    } else if phase() == Phase::Connecting {
+        pttstella::msg!("toast-connecting-title")
+    } else if phase() == Phase::Error {
+        pttstella::msg!("toast-connection-error-title")
+    } else {
+        pttstella::msg!("toast-disconnected-title")
+    };
+    let reconnect_label = if phase() == Phase::Connecting {
+        pttstella::msg!("toast-connecting-action")
+    } else {
+        pttstella::msg!("toast-reconnect")
+    };
     rsx! {
         style { {include_str!("../../assets/app.css")} }
         main {
@@ -292,31 +360,19 @@ pub fn app(props: AppProps) -> Element {
                 }
                 nav { id: "tools-fan", class: "tools-fan", hidden: true, "aria-label": pttstella::msg!("tools-title"),
                     ToolPetal { group: "navigate", label: pttstella::msg!("tools-navigate"), icon: rsx!{ Compass { size: 22 } } }
-                    ToolPetal { group: "display", label: pttstella::msg!("tools-display"), icon: rsx!{ Type { size: 22 } } }
+                    ToolPetal { group: "bookmarks", label: pttstella::msg!("tools-bookmarks"), icon: rsx!{ Star { size: 22 } } }
                     ToolPetal { group: "capture", label: pttstella::msg!("tools-capture"), icon: rsx!{ Camera { size: 22 } } }
-                    ToolPetal { group: "input", label: pttstella::msg!("tools-input"), icon: rsx!{ Keyboard { size: 22 } } }
                     ToolPetal { group: "session", label: pttstella::msg!("tools-session"), icon: rsx!{ Plug { size: 22 } } }
-                    ToolPetal { group: "filters", label: pttstella::msg!("tools-filters"), icon: rsx!{ Shield { size: 22 } } }
                     ToolPetal { group: "settings", label: pttstella::msg!("settings-center-title"), icon: rsx!{ Settings { size: 22 } } }
-                }
-                if fatal() || matches!(phase(), Phase::Error | Phase::Disconnected) {
-                    output { class: "tools-alert", role: "status", "{message}" }
                 }
             header { id: "tools-panel", hidden: true, "aria-label": pttstella::msg!("tools-title"),
                 div { class: "brand", "PTTStella" }
                 span { class: "status", title: "{message}", "{message}" }
                 section { "data-tools-group": "session",
                 button { disabled: fatal() || props.probe.is_some() || matches!(phase(), Phase::Connecting | Phase::Connected),
-                    onclick: move |_| { if let Err(error) = connect.connect() { message.set(error); } }, {pttstella::msg!("connect")} }
+                    onclick: move |event| connect_action.call(event), {pttstella::msg!("connect")} }
                 button { disabled: fatal() || props.probe.is_some() || !matches!(phase(), Phase::Connecting | Phase::Connected),
                     onclick: move |_| { if let Err(error) = disconnect.disconnect() { message.set(error); } }, {pttstella::msg!("disconnect")} }
-                }
-                section { "data-tools-group": "display",
-                button { id: "zoom-out", "aria-label": pttstella::msg!("zoom-out"), "－" }
-                span { id: "zoom-level", "100%" }
-                button { id: "zoom-in", "aria-label": pttstella::msg!("zoom-in"), "＋" }
-                button { id: "zoom-fit", {pttstella::msg!("zoom-fit")} }
-                button { id: "font-settings", class:"settings-entry", BrandSettingsCaption{} }
                 }
                 section { "data-tools-group": "capture",
                 button { id: "select-all", {pttstella::msg!("select-all")} }
@@ -329,36 +385,24 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "copy-rows-png", disabled: true, title: pttstella::msg!("export-rows-hint"), {pttstella::msg!("copy-rows-png")} }
 
                 }
-                section { "data-tools-group": "filters",
-                button { id: "filters-open", {pttstella::msg!("filters-title")} }
-                button { id: "filters-reveal", hidden: true, {pttstella::msg!("filters-reveal")} }
-                output { id: "filters-status", role: "status" }
-                label { title: pttstella::msg!("hover-help"),
-                    {pttstella::msg!("hover-label")}
-                    select { id: "hover-position", "aria-label": pttstella::msg!("hover-position"),
-                        option { value: "top_right", {pttstella::msg!("hover-top-right")} }
-                        option { value: "follow_cursor", {pttstella::msg!("hover-follow")} }
-                        option { value: "off", {pttstella::msg!("close")} }
-                    }
-                }
-                }
-                section { "data-tools-group": "input",
-                button { id: "vim-toggle", "aria-pressed": "false", {pttstella::msg!("vim-off")} }
-                button { id: "vim-once", hidden: true, {pttstella::msg!("vim-once-button")} }
-                output { id: "vim-status", role: "status" }
-                button { id: "station-mouse", r#type: "button", "aria-pressed": "true", title: pttstella::msg!("station-mouse-help"), {pttstella::msg!("station-mouse-on")} }
-                output { id: "station-mouse-status", role: "status" }
-                }
                 section { "data-tools-group": "session",
                 button { id: "sites-open", SettingsCaption {label:pttstella::msg!("sites-title"),icon:rsx!{Globe{size:18}}} }
                 output { id: "site-current" }
-                  button { id: "keep-alive", r#type: "button", "aria-pressed": "true", {pttstella::msg!("keepalive-on")} }
+
                 button { id: "login-open", "data-platform-supported":cfg!(target_os="macos").to_string(), disabled: !cfg!(target_os="macos"), {pttstella::msg!("login")} }
                 button { id: "login-stop", hidden: true, {pttstella::msg!("login-cancel-attempt")} }
                 }
-                section { "data-tools-group": "navigate",
-                button { id: "destination-open", {pttstella::msg!("destination-open")} }
+                section { "data-tools-group": "bookmarks",
+                button {id:"bookmarks-current",disabled:true,title:pttstella::msg!("bookmarks-current-unavailable"),{pttstella::msg!("bookmarks-current")}}
                 button { id: "bookmarks-open", {pttstella::msg!("bookmarks-title")} }
+                p {{pttstella::msg!("bookmarks-list-hint")}}
+                if surface_probe.as_deref()==Some("bookmark_list") {button{id:"bookmark-probe-first","測試：指定第一篇（光棒在第二篇）"}}
+
+                }
+                section { "data-tools-group": "navigate",
+                button {id:"filters-reveal",hidden:true,{pttstella::msg!("filters-reveal")}}
+                output {id:"filters-status",role:"status"}
+                button { id: "destination-open", {pttstella::msg!("destination-open")} }
                 button { id: "destination-stop", hidden: true, {pttstella::msg!("destination-stop")} }
                 div { id: "browse-controls", hidden: true,
                     button { id: "browse-back", disabled: true, {pttstella::msg!("browse-back")} }
@@ -369,12 +413,28 @@ pub fn app(props: AppProps) -> Element {
                 }
             }
             }
+            div {id:"bookmarks-capture",class:"article-load",hidden:true,
+                output {id:"bookmarks-capture-status",role:"status"}
+                button {id:"bookmarks-current-cancel",{pttstella::msg!("cancel")}}
+            }
             div { id: "article-load", class: "article-load", hidden: true,
                 output { id: "article-load-status", role: "status" }
                 button { id: "article-load-cancel", {pttstella::msg!("article-load-cancel")} }
                 button { id: "article-load-resume", hidden: true, {pttstella::msg!("article-load-resume")} }
             }
             div { class: "settings-host", SettingsForm{filters_probe} }
+            div { id: "article-updates", class: "article-updates", hidden: true,
+                output { id: "article-updates-status", role: "status" }
+                button { id: "article-updates-toggle", {pttstella::msg!("article-updates-start")} }
+                button { id: "article-updates-station", hidden:true, {pttstella::msg!("article-updates-station")} }
+                button { id: "article-updates-new", hidden: true, {pttstella::msg!("article-updates-new",count=0)} }
+            }
+            if live_updates_probing {
+                div { style: "position:fixed;right:12px;top:160px;z-index:5;display:flex;gap:8px",
+                    button { id:"live-updates-home", "Local Home (probe)" }
+                    button { id:"live-updates-end", "Local End (probe)" }
+                }
+            }
             div { id: "article-find", class: "article-find", role: "search", hidden: true,
                 input { id: "article-find-input", r#type: "text", maxlength: "256", autocomplete: "off", spellcheck: "false" }
                 output { id: "article-find-status", role: "status", "aria-live": "polite" }
@@ -408,11 +468,46 @@ pub fn app(props: AppProps) -> Element {
                     canvas { id: "screen", "aria-label": pttstella::msg!("screen-label") }
                     div { id: "selection", "aria-hidden": "true" }
                     div { id: "navigation-marker", "aria-hidden": "true", hidden: true }
-                    output { id: "surface-note", role: "status" }
                     textarea { id: "keyboard", "aria-label": pttstella::msg!("keyboard-label"), autocomplete: "off", autocapitalize: "off", "autocorrect": "off", wrap: "off", spellcheck: "false" }
                 }
             }
+            div {id:"toast-dock",class:"toast-dock","aria-label":pttstella::msg!("toast-region"),
+                if fatal() || phase()!=Phase::Connected {
+                    section {id:"connection-toast",class:"stella-toast connection-toast",role:if fatal()||phase()==Phase::Error{"alert"}else{"status"},"aria-atomic":"true",
+                        "data-level":if fatal()||phase()==Phase::Error{"error"}else{"connection"},
+                        img {class:"toast-mark",src:"{tools_mark}",alt:"","aria-hidden":"true"}
+                        div {class:"toast-content",
+                            span {class:"toast-brand","PTTSTELLA"}
+                            strong {class:"toast-title","{connection_title}"}
+                            p {class:"toast-message","{message}"}
+                            if !fatal() {
+                                button {id:"toast-reconnect",r#type:"button",class:"toast-action",disabled:!can_reconnect(phase(),fatal(),synthetic,reconnect_probe,*closing.1.borrow()),
+                                    onclick:move |event|connect_action.call(event),
+                                    RefreshCw {size:19}
+                                    "{reconnect_label}"
+                                }
+                            }
+                        }
+                    }
+                }
+                section {id:"surface-toast",class:"stella-toast",role:"status","aria-atomic":"true",hidden:true,
+                    img {class:"toast-mark",src:"{tools_mark}",alt:"","aria-hidden":"true"}
+                    div {class:"toast-content",
+                        span {class:"toast-brand","PTTSTELLA"}
+                        strong {class:"toast-title",{pttstella::msg!("toast-notice-title")}}
+                        p {id:"surface-note",class:"toast-message"}
+                    }
+                    button {id:"toast-dismiss",r#type:"button",class:"toast-dismiss","aria-label":pttstella::msg!("toast-dismiss"),X {size:20}}
+                }
+            }
             {context_menu()}
+            {editor_color_dialog()}
+            if editor_color_probing {
+                div {class:"editor-color-probe-controls",style:"position:fixed;top:8px;left:8px;z-index:30;display:flex;gap:8px",
+                    button {id:"editor-color-probe-select",r#type:"button","選取三行合成範圍"}
+                    button {id:"editor-color-probe-open",r#type:"button","顯示測試色彩表"}
+                }
+            }
             dialog { id: "destination-dialog", class: "paste-preview", "aria-labelledby": "destination-title",
                 h2 { id: "destination-title", {pttstella::msg!("destination-title")} }
                 p { {pttstella::msg!("destination-dialog-hint")} }
@@ -430,6 +525,7 @@ pub fn app(props: AppProps) -> Element {
             }
             dialog { id: "bookmarks-dialog", class: "paste-preview font-dialog", "aria-labelledby": "bookmarks-title",
                 h2 { id: "bookmarks-title", {pttstella::msg!("bookmarks-title")} }
+                div {id:"bookmarks-editor",
                 p { {pttstella::msg!("bookmarks-description")} }
                 label { {pttstella::msg!("bookmarks-list")} select { id: "bookmarks-list", size: "6", "aria-label": pttstella::msg!("bookmarks-list") } }
                 button { id: "bookmarks-new", {pttstella::msg!("bookmarks-new")} }
@@ -439,9 +535,23 @@ pub fn app(props: AppProps) -> Element {
                 div { class: "dialog-actions",
                     button { id: "bookmarks-remove", {pttstella::msg!("bookmarks-remove")} }
                     button { id: "bookmarks-save", class: "primary", {pttstella::msg!("bookmarks-save")} }
+                    button {id:"bookmarks-read",disabled:true,{pttstella::msg!("bookmarks-read")}}
                     button { id: "bookmarks-go", class: "primary", {pttstella::msg!("bookmarks-go")} }
-                    button { id: "bookmarks-close", {pttstella::msg!("close")} }
                 }
+                }
+                section {id:"bookmarks-reader",hidden:true,
+                    p {id:"bookmarks-archive-info",role:"status"}
+                    canvas {id:"bookmarks-canvas",width:"960",height:"552",tabindex:"0","aria-label":pttstella::msg!("bookmarks-read")}
+                    div {class:"dialog-actions",
+                        button {id:"bookmarks-first","Home"}
+                        button {id:"bookmarks-prev",{pttstella::msg!("context-previous")}}
+                        output {id:"bookmarks-position",role:"status"}
+                        button {id:"bookmarks-next",{pttstella::msg!("context-next")}}
+                        button {id:"bookmarks-last","End"}
+                        button {id:"bookmarks-reader-back",{pttstella::msg!("bookmarks-list")}}
+                    }
+                }
+                button { id: "bookmarks-close", {pttstella::msg!("close")} }
             }
             dialog { id: "paste-dialog", class: "paste-preview",
                 "data-active": if pending_paste.read().is_some() { "true" } else { "false" },
@@ -507,6 +617,37 @@ fn SettingsCaption(label: String, icon: Element) -> Element {
 }
 
 // Static, localized controls; the surface owner supplies context and admission.
+fn can_reconnect(
+    phase: Phase,
+    fatal: bool,
+    synthetic: bool,
+    reconnect_probe: bool,
+    closing: bool,
+) -> bool {
+    !fatal
+        && !closing
+        && (!synthetic || reconnect_probe)
+        && matches!(phase, Phase::Disconnected | Phase::Error)
+}
+
+#[cfg(test)]
+mod reconnect_tests {
+    use super::*;
+    #[test]
+    fn reconnect_requires_a_live_ui_and_an_offline_connection() {
+        for phase in [Phase::Disconnected, Phase::Error] {
+            assert!(can_reconnect(phase, false, false, false, false));
+            assert!(!can_reconnect(phase, true, false, false, false));
+            assert!(!can_reconnect(phase, false, false, false, true));
+            assert!(!can_reconnect(phase, false, true, false, false));
+            assert!(can_reconnect(phase, false, true, true, false));
+        }
+        for phase in [Phase::Connected, Phase::Connecting] {
+            assert!(!can_reconnect(phase, false, false, false, false));
+        }
+    }
+}
+
 fn context_menu() -> Element {
     rsx! {
         div { id: "surface-context-menu", class: "surface-context-menu", role: "menu", hidden: true,
@@ -545,6 +686,9 @@ fn context_menu() -> Element {
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "paste",
                 Copy { size: 18 } span { {pttstella::msg!("menu-paste")} }
             }
+            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "editor-color",
+                Type {size:18} span {{pttstella::msg!("editor-color-title")}}
+            }
             PictureActions {}
             LinkActions {}
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "copy-image-page",
@@ -574,17 +718,40 @@ fn context_menu() -> Element {
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "next",
                 ArrowDown { size: 18 } span { {pttstella::msg!("context-next")} }
             }
+            button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"bookmark-list",
+                Star {size:18} span {{pttstella::msg!("bookmarks-list-current")}}
+            }
+            button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"bookmark-current",
+                Star {size:18} span {{pttstella::msg!("bookmarks-current")}}
+            }
+            button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"article-updates",
+                ArrowDown {size:18} span {{pttstella::msg!("article-updates-start")}}
+            }
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "bookmarks",
                 Star { size: 18 } span { {pttstella::msg!("context-bookmarks")} }
             }
-            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "filters",
-                Shield { size: 18 } span { {pttstella::msg!("context-filters")} }
-            }
-            button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "vim",
-                Keyboard { size: 18 } span { {pttstella::msg!("context-vim")} }
-            }
+
+
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "settings", class:"settings-entry",
                 BrandSettingsCaption{}
+            }
+        }
+    }
+}
+
+fn editor_color_dialog() -> Element {
+    rsx! {
+        dialog {id:"editor-color-dialog",class:"editor-color-dialog","aria-labelledby":"editor-color-title",
+            h2 {id:"editor-color-title",{pttstella::msg!("editor-color-title")}}
+            p {{pttstella::msg!("editor-color-help")}}
+            fieldset {legend {{pttstella::msg!("editor-color-foreground")}} div {id:"editor-color-foreground",class:"editor-color-grid"}}
+            fieldset {legend {{pttstella::msg!("editor-color-background")}} div {id:"editor-color-background",class:"editor-color-grid"}}
+            div {id:"editor-color-preview",class:"editor-color-preview",{pttstella::msg!("editor-color-sample")}}
+            code {id:"editor-color-code"}
+            div {class:"editor-color-actions",
+                button {r#type:"button",id:"editor-color-reset",{pttstella::msg!("editor-color-reset")}}
+                button {r#type:"button",id:"editor-color-cancel",{pttstella::msg!("editor-color-cancel")}}
+                button {r#type:"button",id:"editor-color-apply",{pttstella::msg!("editor-color-apply")}}
             }
         }
     }
@@ -622,213 +789,226 @@ fn LinkActions() -> Element {
 pub(super) fn SettingsForm(filters_probe: bool) -> Element {
     let _language = use_context::<Signal<pttstella::i18n::Language>>()();
     rsx! {
-            dialog { id: "font-dialog", class: "paste-preview font-dialog", "aria-labelledby": "font-title settings-window-label",
-                header { class: "settings-window-header",
-                    h2 { id: "font-title", class: "settings-brand", SettingsBrandMark{} span { "PTTStella" } }
-                    span { id: "settings-window-label", class: "settings-window-label", {pttstella::msg!("settings-center-title")} }
-                }
-                div { class: "settings-layout",
-                aside { class: "settings-sidebar",
-                    label { r#for: "settings-search", {pttstella::msg!("settings-search-label")} }
-                    input { id: "settings-search", r#type:"search", maxlength:"128", placeholder:pttstella::msg!("settings-search-placeholder") }
-                    nav { id:"settings-categories", "aria-label":pttstella::msg!("settings-center-title"),
-                        for (id,key) in [("general","settings-general"),("appearance","settings-appearance"),("input","settings-input"),("media","settings-media"),("sites","sites-title"),("filters","filters-title"),("account","settings-account"),("about","settings-about")] {
-                            button { "data-settings-category":id,
-                                SettingsCaption {label:pttstella::i18n::application().loader().get(key),icon:match id {
-                                    "general"=>rsx!{Languages{size:18}},"appearance"=>rsx!{Type{size:18}},"input"=>rsx!{Keyboard{size:18}},"media"=>rsx!{Image{size:18}},"sites"=>rsx!{Globe{size:18}},"filters"=>rsx!{Shield{size:18}},"account"=>rsx!{Plug{size:18}},_=>rsx!{FileText{size:18}}}}
+                dialog { id: "font-dialog", class: "paste-preview font-dialog", "aria-labelledby": "font-title settings-window-label",
+                    header { class: "settings-window-header",
+                        h2 { id: "font-title", class: "settings-brand", SettingsBrandMark{} span { "PTTStella" } }
+                        span { id: "settings-window-label", class: "settings-window-label", {pttstella::msg!("settings-center-title")} }
+                    }
+                    div { class: "settings-layout",
+                    aside { class: "settings-sidebar",
+                        label { r#for: "settings-search", {pttstella::msg!("settings-search-label")} }
+                        input { id: "settings-search", r#type:"search", maxlength:"128", placeholder:pttstella::msg!("settings-search-placeholder") }
+                        nav { id:"settings-categories", "aria-label":pttstella::msg!("settings-center-title"),
+                            for (id,key) in [("general","settings-general"),("appearance","settings-appearance"),("input","settings-input"),("media","settings-media"),("sites","sites-title"),("filters","filters-title"),("account","settings-account"),("about","settings-about")] {
+                                button { "data-settings-category":id,
+                                    SettingsCaption {label:pttstella::i18n::application().loader().get(key),icon:match id {
+                                        "general"=>rsx!{Languages{size:18}},"appearance"=>rsx!{Type{size:18}},"input"=>rsx!{Keyboard{size:18}},"media"=>rsx!{Image{size:18}},"sites"=>rsx!{Globe{size:18}},"filters"=>rsx!{Shield{size:18}},"account"=>rsx!{Plug{size:18}},_=>rsx!{FileText{size:18}}}}
+                                }
                             }
                         }
                     }
-                }
-                div { class:"settings-content",
-                header { class: "settings-page-header",
-                    h2 { id: "settings-page-title", {pttstella::msg!("settings-general")} }
-                }
-                div { id:"settings-results", hidden:true, "aria-live":"polite" }
-                section { "data-settings-page":"general", class:"settings-section",
-                    label {
-                        SettingsCaption { label: pttstella::msg!("language-label"), icon: rsx! { Languages { size: 18 } } }
-                        select { id: "interface-language", "aria-describedby": "settings-language-help",
-                            option { value: "zh-TW", "繁體中文" }
-                            option { value: "en-US", "English" }
+                    div { class:"settings-content",
+                    header { class: "settings-page-header",
+                        h2 { id: "settings-page-title", {pttstella::msg!("settings-general")} }
+                    }
+                    div { id:"settings-results", hidden:true, "aria-live":"polite" }
+                    section { "data-settings-page":"general", class:"settings-section",
+                        label {
+                            SettingsCaption { label: pttstella::msg!("language-label"), icon: rsx! { Languages { size: 18 } } }
+                            select { id: "interface-language", "aria-describedby": "settings-language-help",
+                                option { value: "zh-TW", "繁體中文" }
+                                option { value: "en-US", "English" }
+                            }
                         }
+                        p { id: "settings-language-help", class: "settings-help", {pttstella::msg!("language-restart")} }
                     }
-                    p { id: "settings-language-help", class: "settings-help", {pttstella::msg!("language-restart")} }
-                }
-                section { "data-settings-page":"input", class:"settings-section",
-                    label {
-                        SettingsCaption { label: pttstella::msg!("settings-opacity"), icon: rsx! { Eye { size: 18 } } }
-                        div { class: "settings-range",
-                            input { id: "tools-opacity", r#type: "range", min: "20", max: "100", step: "1", value: "100", "aria-label": pttstella::msg!("settings-opacity"), "aria-describedby": "settings-opacity-help" }
-                            output { id: "tools-opacity-value", "for": "tools-opacity" }
-                        }
-                    }
-                    p { id: "settings-opacity-help", class: "settings-help", {pttstella::msg!("settings-opacity-help")} }
-                    label { class: "settings-check",
-                        input { id: "tools-right-click", r#type: "checkbox", checked: true }
-                        SettingsCaption { label: pttstella::msg!("settings-right-click"), icon: rsx! { Compass { size: 18 } } }
-                    }
-                    label { class: "settings-check",
-                        input { id: "tools-show-ball", r#type: "checkbox", checked: true }
-                        SettingsCaption { label: pttstella::msg!("settings-show-ball"), icon: rsx! { Star { size: 18 } } }
-                    }
-                    p { class: "settings-help", {pttstella::msg!("settings-tool-access-help")} }
-                }
-                section { "data-settings-page":"appearance", class: "settings-section",
-                    label {
-                        SettingsCaption { label: pttstella::msg!("font-preset"), icon: rsx! { Type { size: 18 } } }
-                        select { id: "font-preset",
-                            option { value: "platform", {pttstella::msg!("font-platform")} }
-                            option { value: "custom", {pttstella::msg!("font-custom")} }
-                            option { value: "bundled", {pttstella::msg!("font-bundled")} }
-                            option { value: "windows", {pttstella::msg!("font-windows-modern")} }
-                            option { value: "windows_classic", {pttstella::msg!("font-windows-classic")} }
-                            option { value: "macos_bbs", {pttstella::msg!("font-macos-bbs")} }
-                            option { value: "macos", {pttstella::msg!("font-macos-sans")} }
-                            option { value: "linux", "Linux" }
-                            option { value: "macos_serif", {pttstella::msg!("font-macos-serif")} }
-                        }
-                    }
-                    label {
-                        SettingsCaption { label: pttstella::msg!("font-ascii"), icon: rsx! { Type { size: 18 } } }
-                        input { id: "font-ascii", r#type: "text", maxlength: "128" }
-                    }
-                    label {
-                        SettingsCaption { label: pttstella::msg!("settings-local-ascii"), icon: rsx! { List { size: 18 } } }
-                        select { id: "font-local-ascii", disabled: true,
-                            option { value: "", {pttstella::msg!("font-local-choose")} }
-                        }
-                    }
-                    label {
-                        SettingsCaption { label: pttstella::msg!("font-cjk"), icon: rsx! { Type { size: 18 } } }
-                        input { id: "font-cjk", r#type: "text", maxlength: "128" }
-                    }
-                    label {
-                        SettingsCaption { label: pttstella::msg!("settings-local-cjk"), icon: rsx! { List { size: 18 } } }
-                        select { id: "font-local-cjk", disabled: true,
-                            option { value: "", {pttstella::msg!("font-local-choose")} }
-                        }
-                    }
-                    div { class: "dialog-actions settings-actions",
-                        button { id: "font-refresh", title: pttstella::msg!("font-refresh"),
-                            SettingsCaption { label: pttstella::msg!("settings-refresh"), icon: rsx! { RefreshCw { size: 18 } } }
-                        }
-                    }
-                    output { id: "font-local-status", role: "status" }
-                }
-                section { "data-settings-page":"appearance", class: "settings-section",
-                    label {
-                        SettingsCaption { label: pttstella::msg!("font-size"), icon: rsx! { ALargeSmall { size: 18 } } }
-                        input { id: "font-size", r#type: "number", min: "8", max: "24", step: "1" }
-                    }
-                    label {
-                        SettingsCaption { label: pttstella::msg!("font-baseline"), icon: rsx! { AlignVerticalJustifyEnd { size: 18 } } }
-                        input { id: "font-baseline", r#type: "number", min: "0", max: "24", step: "1", "aria-describedby": "settings-baseline-help" }
-                    }
-                    p { id: "settings-baseline-help", class: "settings-help", {pttstella::msg!("settings-baseline-help")} }
-                    p { class: "settings-preview-label",
-                        SettingsCaption { label: pttstella::msg!("settings-preview"), icon: rsx! { Eye { size: 18 } } }
-                    }
-                    canvas { id: "font-preview", width: "576", height: "192", "aria-label": pttstella::msg!("font-preview-label") }
-                    output { id: "font-availability", role: "status" }
-                    p { class: "settings-help", {pttstella::msg!("font-help")} }
-                }
-                details { id: "font-sources", "data-settings-page":"appearance",
-                    summary {
-                        SettingsCaption { label: pttstella::msg!("font-source-title"), icon: rsx! { ExternalLink { size: 18 } } }
-                    }
-                    p { {pttstella::msg!("font-windows-explained")} }
-                    p { {pttstella::msg!("font-source-help")} }
-                    div { class: "dialog-actions font-sources settings-actions",
-                        for source in crate::fonts::Source::ALL {
-                            { let help=source.help(); rsx! { button {
-                                id: "font-source-{help.id}",
-                                "data-font-source": help.id,
-                                "data-font-families": help.families.join("\n"),
-                                hidden: true,
-                                SettingsCaption { label: help.label, icon: rsx! { ExternalLink { size: 18 } } }
-                            } } }
-                        }
-                    }
-                }
-                section { "data-settings-page":"about", class:"settings-section",
-                    h3 { "PTTStella" }
-                    p { class:"settings-help", {pttstella::msg!("about-author", author = env!("CARGO_PKG_AUTHORS"))} }
-                    p { class:"settings-help", {pttstella::msg!("about-version", version = env!("CARGO_PKG_VERSION"))} }
-                    button { id:"about-repository", r#type:"button", {env!("CARGO_PKG_REPOSITORY")} }
-                    div { class:"dialog-actions settings-actions",
-                        button { id:"update-check", r#type:"button", {pttstella::msg!("update-check")} }
-                        button { id:"update-open", r#type:"button", hidden:true, {pttstella::msg!("update-open")} }
-                    }
-                    p { id:"update-status", class:"settings-help", role:"status", "aria-live":"polite" }
-                    p { class:"settings-help", {pttstella::msg!("update-help")} }
-
-                    h3 { SettingsCaption { label: pttstella::msg!("settings-licenses"), icon: rsx! { FileText { size: 18 } } } }
-                    p { class: "settings-help", {pttstella::msg!("font-license")} }
-                    pre { class: "font-license settings-license-text", {include_str!("../../assets/fonts/NOTICE.txt")} }
-                    pre { class: "font-license settings-license-text", {include_str!("../../assets/fonts/Cascadia-OFL.txt")} }
-                    pre { class: "font-license settings-license-text", {include_str!("../../assets/fonts/NotoSansCJK-OFL.txt")} }
-                }
-                section { "data-settings-page":"appearance", class: "settings-section",
-                    label {
-                        SettingsCaption { label: pttstella::msg!("profile-name"), icon: rsx! { FileText { size: 18 } } }
-                        input { id: "font-profile-name", r#type: "text", maxlength: "128", initial_value: pttstella::msg!("profile-default-name") }
-                    }
-                    div { class: "dialog-actions settings-actions",
-                        button { id: "profile-import", title: pttstella::msg!("profile-import"), "aria-describedby": "settings-profile-help",
-                            SettingsCaption { label: pttstella::msg!("settings-import"), icon: rsx! { FolderOpen { size: 18 } } }
-                        }
-                        button { id: "profile-export", title: pttstella::msg!("profile-export"), "aria-describedby": "settings-profile-help",
-                            SettingsCaption { label: pttstella::msg!("settings-export"), icon: rsx! { FileDown { size: 18 } } }
-                        }
-                    }
-                    p { id: "settings-profile-help", class: "settings-help", {pttstella::msg!("settings-profile-help")} }
-                }
-                section { "data-settings-page":"media", class:"settings-section",
-                    label { SettingsCaption {label:pttstella::msg!("article-mode"),icon:rsx!{FileText{size:18}}}
-                        select {id:"article-mode",
-                            option {value:"web",{pttstella::msg!("article-mode-web")}}
-                            option {value:"terminal",{pttstella::msg!("article-mode-terminal")}}
-                        }
-                    }
-                    p {class:"settings-help",{pttstella::msg!("article-mode-help")}}
-                    label { class:"settings-check",
-                        input { id:"article-boundary-navigation", r#type:"checkbox" }
-                        span { {pttstella::msg!("article-boundary-navigation")} }
-                    }
-                    p {class:"settings-help",{pttstella::msg!("article-boundary-help")}}
-
-
-                    label { SettingsCaption {label:pttstella::msg!("hover-position"),icon:rsx!{Image{size:18}}}
-                        select {id:"settings-hover",
-                            option {value:"top_right",{pttstella::msg!("hover-top-right")}}
-                            option {value:"follow_cursor",{pttstella::msg!("hover-follow")}}
-                            option {value:"off",{pttstella::msg!("hover-disabled")}}
-                        }
-                    }
-                }
-                section { "data-settings-page":"sites", class:"settings-section", SitesSettings{} }
-                section { "data-settings-page":"filters", class:"settings-section", FiltersSettings{filters_probe} }
-                section { "data-settings-page":"account", class:"settings-section",
-                    p { class:"settings-help", {pttstella::msg!("settings-privacy-description")} }
-                    LoginSettings{}
-                }
-                }
-                }
-                div { class: "dialog-actions settings-actions settings-footer",
-                    output { id: "font-note", role: "status", "aria-live":"polite" }
-                    button { id: "font-defaults",
-                        SettingsCaption { label: pttstella::msg!("settings-defaults"), icon: rsx! { RotateCcw { size: 18 } } }
-                    }
-                    button { id: "font-cancel",
-                        SettingsCaption { label: pttstella::msg!("close"), icon: rsx! { X { size: 18 } } }
-                    }
-                    button { id: "font-save", class: "primary",
-                        SettingsCaption { label: pttstella::msg!("settings-retry"), icon: rsx! { Save { size: 18 } } }
-                    }
-                }
-            }
+                    section { "data-settings-page":"input", class:"settings-section",
+                    div {class:"settings-quick-controls",                button { id: "vim-toggle", "aria-pressed": "false", {pttstella::msg!("vim-off")} }
+                    button { id: "vim-once", hidden: true, {pttstella::msg!("vim-once-button")} }
+                    output { id: "vim-status", role: "status" }
+                    button { id: "station-mouse", r#type: "button", "aria-pressed": "true", title: pttstella::msg!("station-mouse-help"), {pttstella::msg!("station-mouse-on")} }
+                    output { id: "station-mouse-status", role: "status" }
     }
+
+                        label {
+                            SettingsCaption { label: pttstella::msg!("settings-opacity"), icon: rsx! { Eye { size: 18 } } }
+                            div { class: "settings-range",
+                                input { id: "tools-opacity", r#type: "range", min: "20", max: "100", step: "1", value: "100", "aria-label": pttstella::msg!("settings-opacity"), "aria-describedby": "settings-opacity-help" }
+                                output { id: "tools-opacity-value", "for": "tools-opacity" }
+                            }
+                        }
+                        p { id: "settings-opacity-help", class: "settings-help", {pttstella::msg!("settings-opacity-help")} }
+                        label { class: "settings-check",
+                            input { id: "tools-right-click", r#type: "checkbox", checked: true }
+                            SettingsCaption { label: pttstella::msg!("settings-right-click"), icon: rsx! { Compass { size: 18 } } }
+                        }
+                        label { class: "settings-check",
+                            input { id: "tools-show-ball", r#type: "checkbox", checked: true }
+                            SettingsCaption { label: pttstella::msg!("settings-show-ball"), icon: rsx! { Star { size: 18 } } }
+                        }
+                        p { class: "settings-help", {pttstella::msg!("settings-tool-access-help")} }
+                    }
+                    section { "data-settings-page":"appearance", class: "settings-section",
+                    div {class:"settings-quick-controls",                button { id: "zoom-out", "aria-label": pttstella::msg!("zoom-out"), "－" }
+                    span { id: "zoom-level", "100%" }
+                    button { id: "zoom-in", "aria-label": pttstella::msg!("zoom-in"), "＋" }
+                    button { id: "zoom-fit", {pttstella::msg!("zoom-fit")} }
+    }
+
+                        label {
+                            SettingsCaption { label: pttstella::msg!("font-preset"), icon: rsx! { Type { size: 18 } } }
+                            select { id: "font-preset",
+                                option { value: "platform", {pttstella::msg!("font-platform")} }
+                                option { value: "custom", {pttstella::msg!("font-custom")} }
+                                option { value: "bundled", {pttstella::msg!("font-bundled")} }
+                                option { value: "windows", {pttstella::msg!("font-windows-modern")} }
+                                option { value: "windows_classic", {pttstella::msg!("font-windows-classic")} }
+                                option { value: "macos_bbs", {pttstella::msg!("font-macos-bbs")} }
+                                option { value: "macos", {pttstella::msg!("font-macos-sans")} }
+                                option { value: "linux", "Linux" }
+                                option { value: "macos_serif", {pttstella::msg!("font-macos-serif")} }
+                            }
+                        }
+                        label {
+                            SettingsCaption { label: pttstella::msg!("font-ascii"), icon: rsx! { Type { size: 18 } } }
+                            input { id: "font-ascii", r#type: "text", maxlength: "128" }
+                        }
+                        label {
+                            SettingsCaption { label: pttstella::msg!("settings-local-ascii"), icon: rsx! { List { size: 18 } } }
+                            select { id: "font-local-ascii", disabled: true,
+                                option { value: "", {pttstella::msg!("font-local-choose")} }
+                            }
+                        }
+                        label {
+                            SettingsCaption { label: pttstella::msg!("font-cjk"), icon: rsx! { Type { size: 18 } } }
+                            input { id: "font-cjk", r#type: "text", maxlength: "128" }
+                        }
+                        label {
+                            SettingsCaption { label: pttstella::msg!("settings-local-cjk"), icon: rsx! { List { size: 18 } } }
+                            select { id: "font-local-cjk", disabled: true,
+                                option { value: "", {pttstella::msg!("font-local-choose")} }
+                            }
+                        }
+                        div { class: "dialog-actions settings-actions",
+                            button { id: "font-refresh", title: pttstella::msg!("font-refresh"),
+                                SettingsCaption { label: pttstella::msg!("settings-refresh"), icon: rsx! { RefreshCw { size: 18 } } }
+                            }
+                        }
+                        output { id: "font-local-status", role: "status" }
+                    }
+                    section { "data-settings-page":"appearance", class: "settings-section",
+                        label {
+                            SettingsCaption { label: pttstella::msg!("font-size"), icon: rsx! { ALargeSmall { size: 18 } } }
+                            input { id: "font-size", r#type: "number", min: "8", max: "24", step: "1" }
+                        }
+                        label {
+                            SettingsCaption { label: pttstella::msg!("font-baseline"), icon: rsx! { AlignVerticalJustifyEnd { size: 18 } } }
+                            input { id: "font-baseline", r#type: "number", min: "0", max: "24", step: "1", "aria-describedby": "settings-baseline-help" }
+                        }
+                        p { id: "settings-baseline-help", class: "settings-help", {pttstella::msg!("settings-baseline-help")} }
+                        p { class: "settings-preview-label",
+                            SettingsCaption { label: pttstella::msg!("settings-preview"), icon: rsx! { Eye { size: 18 } } }
+                        }
+                        canvas { id: "font-preview", width: "576", height: "192", "aria-label": pttstella::msg!("font-preview-label") }
+                        output { id: "font-availability", role: "status" }
+                        p { class: "settings-help", {pttstella::msg!("font-help")} }
+                    }
+                    details { id: "font-sources", "data-settings-page":"appearance",
+                        summary {
+                            SettingsCaption { label: pttstella::msg!("font-source-title"), icon: rsx! { ExternalLink { size: 18 } } }
+                        }
+                        p { {pttstella::msg!("font-windows-explained")} }
+                        p { {pttstella::msg!("font-source-help")} }
+                        div { class: "dialog-actions font-sources settings-actions",
+                            for source in crate::fonts::Source::ALL {
+                                { let help=source.help(); rsx! { button {
+                                    id: "font-source-{help.id}",
+                                    "data-font-source": help.id,
+                                    "data-font-families": help.families.join("\n"),
+                                    hidden: true,
+                                    SettingsCaption { label: help.label, icon: rsx! { ExternalLink { size: 18 } } }
+                                } } }
+                            }
+                        }
+                    }
+                    section { "data-settings-page":"about", class:"settings-section",
+                        h3 { "PTTStella" }
+                        p { class:"settings-help", {pttstella::msg!("about-author", author = env!("CARGO_PKG_AUTHORS"))} }
+                        p { class:"settings-help", {pttstella::msg!("about-version", version = env!("CARGO_PKG_VERSION"))} }
+                        button { id:"about-repository", r#type:"button", {env!("CARGO_PKG_REPOSITORY")} }
+                        div { class:"dialog-actions settings-actions",
+                            button { id:"update-check", r#type:"button", {pttstella::msg!("update-check")} }
+                            button { id:"update-open", r#type:"button", hidden:true, {pttstella::msg!("update-open")} }
+                        }
+                        p { id:"update-status", class:"settings-help", role:"status", "aria-live":"polite" }
+                        p { class:"settings-help", {pttstella::msg!("update-help")} }
+
+                        h3 { SettingsCaption { label: pttstella::msg!("settings-licenses"), icon: rsx! { FileText { size: 18 } } } }
+                        p { class: "settings-help", {pttstella::msg!("font-license")} }
+                        pre { class: "font-license settings-license-text", {include_str!("../../assets/fonts/NOTICE.txt")} }
+                        pre { class: "font-license settings-license-text", {include_str!("../../assets/fonts/Cascadia-OFL.txt")} }
+                        pre { class: "font-license settings-license-text", {include_str!("../../assets/fonts/NotoSansCJK-OFL.txt")} }
+                    }
+                    section { "data-settings-page":"appearance", class: "settings-section",
+                        label {
+                            SettingsCaption { label: pttstella::msg!("profile-name"), icon: rsx! { FileText { size: 18 } } }
+                            input { id: "font-profile-name", r#type: "text", maxlength: "128", initial_value: pttstella::msg!("profile-default-name") }
+                        }
+                        div { class: "dialog-actions settings-actions",
+                            button { id: "profile-import", title: pttstella::msg!("profile-import"), "aria-describedby": "settings-profile-help",
+                                SettingsCaption { label: pttstella::msg!("settings-import"), icon: rsx! { FolderOpen { size: 18 } } }
+                            }
+                            button { id: "profile-export", title: pttstella::msg!("profile-export"), "aria-describedby": "settings-profile-help",
+                                SettingsCaption { label: pttstella::msg!("settings-export"), icon: rsx! { FileDown { size: 18 } } }
+                            }
+                        }
+                        p { id: "settings-profile-help", class: "settings-help", {pttstella::msg!("settings-profile-help")} }
+                    }
+                    section { "data-settings-page":"media", class:"settings-section",
+                        label { SettingsCaption {label:pttstella::msg!("article-mode"),icon:rsx!{FileText{size:18}}}
+                            select {id:"article-mode",
+                                option {value:"web",{pttstella::msg!("article-mode-web")}}
+                                option {value:"terminal",{pttstella::msg!("article-mode-terminal")}}
+                            }
+                        }
+                        p {class:"settings-help",{pttstella::msg!("article-mode-help")}}
+                        label { class:"settings-check",
+                            input { id:"article-boundary-navigation", r#type:"checkbox" }
+                            span { {pttstella::msg!("article-boundary-navigation")} }
+                        }
+                        p {class:"settings-help",{pttstella::msg!("article-boundary-help")}}
+
+
+                        label { SettingsCaption {label:pttstella::msg!("hover-position"),icon:rsx!{Image{size:18}}}
+                            select {id:"settings-hover",
+                                option {value:"top_right",{pttstella::msg!("hover-top-right")}}
+                                option {value:"follow_cursor",{pttstella::msg!("hover-follow")}}
+                                option {value:"off",{pttstella::msg!("hover-disabled")}}
+                            }
+                        }
+                    }
+                    section { "data-settings-page":"sites", class:"settings-section",                   button { id: "keep-alive", r#type: "button", "aria-pressed": "true", {pttstella::msg!("keepalive-on")} } SitesSettings{} }
+                    section { "data-settings-page":"filters", class:"settings-section", FiltersSettings{filters_probe} }
+                    section { "data-settings-page":"account", class:"settings-section",
+                        p { class:"settings-help", {pttstella::msg!("settings-privacy-description")} }
+                        LoginSettings{}
+                    }
+                    }
+                    }
+                    div { class: "dialog-actions settings-actions settings-footer",
+                        output { id: "font-note", role: "status", "aria-live":"polite" }
+                        button { id: "font-defaults",
+                            SettingsCaption { label: pttstella::msg!("settings-defaults"), icon: rsx! { RotateCcw { size: 18 } } }
+                        }
+                        button { id: "font-cancel",
+                            SettingsCaption { label: pttstella::msg!("close"), icon: rsx! { X { size: 18 } } }
+                        }
+                        button { id: "font-save", class: "primary",
+                            SettingsCaption { label: pttstella::msg!("settings-retry"), icon: rsx! { Save { size: 18 } } }
+                        }
+                    }
+                }
+        }
 }
 
 #[component]

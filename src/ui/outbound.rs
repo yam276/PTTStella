@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 pub(super) enum Packet<'a> {
     Diagnostics(bool),
     UpdateStatus(pttstella::updates::Status),
+    ArticleUpdates(Option<super::article_updates::Status>),
     SitesOpen {
         request: u64,
         data: super::sites::Snapshot,
@@ -25,6 +26,15 @@ pub(super) enum Packet<'a> {
     StationMouseRejected {
         lease: pttstella::mouse::input::Lease,
         message: String,
+    },
+    BookmarkCapture {
+        request: u64,
+        cancellable: bool,
+    },
+    Archive {
+        request: u64,
+        article: Option<super::bookmarks::LocalArticle>,
+        message: Option<String>,
     },
     BookmarksOpen {
         request: u64,

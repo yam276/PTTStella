@@ -153,9 +153,9 @@ test("each account policy survives selection and is sent explicitly on save",()=
 
 test("the tagged router delivers independent wire examples once and rejects legacy/unknown envelopes",()=>{
     const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8")+"\ncreateSurfaceRouter");
-    const kinds=["localization","diagnostics","update_status","station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
+    const kinds=["localization","diagnostics","update_status","article_updates","station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
         "hover_settings","tools_opacity","tools_access","sites_open","sites_result","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error","media_external",
-        "media_reset","reading_move","inline_open","inline_image","inline_error","inline_reset","settings_visibility","settings_close","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","link_result","export_result"];
+        "media_reset","reading_move","inline_open","inline_image","inline_error","inline_reset","settings_visibility","settings_close","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","archive","bookmark_capture","link_result","export_result"];
     const calls=[],handlers=Object.fromEntries(kinds.map(kind=>[kind,payload=>calls.push({kind,payload})]));
     const route=create(handlers),examples=JSON.parse(readFileSync(new URL("../tests/fixtures/ui-packets.json",import.meta.url),"utf8"));
     for(const {packet} of examples){
@@ -440,6 +440,27 @@ test("shared color changes regroup allowlist rows, and live translation preserve
     env.node("filters-default-color").value="14";env.fire("filters-default-color-save");ui.receive({state:"rejected",message:"failed"});
     assert.deepEqual(f.ids(),["Alice","Bob"]);assert.equal(env.node("filters-default-color").value,"10");ui.destroy();
 });
+test("imported marker colours are readable in preview and cancellation restores local colours",()=>{
+    const local=[{id:"Alice",policy:"allow",note:"local",color:13}];
+    const f=filterFixture(local),{env,ui}=f;
+    env.fire("filters-import");const request=env.sent.at(-1).request;
+    ui.receive({state:"preview",request,entries:[{id:"Alice",policy:"allow",note:"imported",color:10}],message:"preview"});
+    env.fire("filters-tab-allow");
+    assert.ok(env.node("filters-list").children[0].textContent.startsWith("Alice · 亮綠"));
+    env.node("filters-list").value="Alice";env.fire("filters-list","change");
+    assert.equal(env.node("filters-color").value,"10");
+    assert.equal(env.sent.filter(packet=>packet.kind==="filters_import_apply").length,0);
+    env.fire("filters-import-cancel");
+    assert.ok(env.node("filters-list").children[0].textContent.startsWith("Alice · 亮紫"));
+    env.fire("filters-import");const next=env.sent.at(-1).request;
+    ui.receive({state:"preview",request:next,entries:[{id:"Alice",policy:"allow",note:"imported",color:10}],message:"preview"});
+    env.fire("filters-import-apply");
+    assert.equal(env.sent.at(-1).kind,"filters_import_apply");
+    assert.equal(env.sent.at(-1).request,next);
+    ui.receive({state:"saved",allow_color:14,entries:[{id:"Alice",policy:"allow",note:"imported",color:10}],message:"saved"});
+    assert.ok(env.node("filters-list").children[0].textContent.startsWith("Alice · 亮綠"));ui.destroy();
+});
+
 test("import preview can be inspected across tabs and sort modes before cancellation restores saved entries",()=>{
     const f=filterFixture([{id:"Local",policy:"allow",note:""}]),{env,ui}=f;
     env.fire("filters-import");const request=env.sent.at(-1).request;
