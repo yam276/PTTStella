@@ -470,7 +470,7 @@ function pointerHit(point,event) {
     const clipped=point===null&&event.clientX>=bounds.left&&event.clientX<bounds.right?
         (grid?.reading?.clippedAt((event.clientY-bounds.top)*grid.ratio)??-1):-1;
     if(image<0&&clipped<0)return hitAt(point,event.clientY);
-    if(blocked()||dragging?.moved||!stationMouse.local()||!canNavigate()||latest?.navigation.kind!=="article_reading")return null;
+    if(blocked()||dragging?.moved||!stationMouse.local()||!canNavigate()||latest?.navigation?.kind!=="article_reading")return null;
     const back=navigationBackRegion(latest.navigation,latest.article);
     const hit=(event.clientX-bounds.left)*grid.ratio<grid.x(back.end)?{kind:"back"}:readingPageAt(null,event.clientY);
     return hit?{...hit,...(image>=0?{image}:{clipped})}:null;
@@ -623,7 +623,7 @@ function contextState(index,word=null,replyRow=null){
         &&selectionCache.generation===generation&&selectionCache.revision===revision;
     const picture=inlineImages.pictureState(index);
     return {picture:!!picture,pictureReady:!!picture?.ready,word,replyRow,editor:!!latest?.editor,focused:!!latest?.reply_focus,link:index,selection:hasSelection(),selectionReady,rowsReady:selectionReady&&!exportBusy&&selectionCache.value.rows.end-selectionCache.value.rows.start<=24,
-        ready,bookmark:bookmarksUi.available(),pending:!!latest?.input_pending,exportReady:ready&&!exportBusy,local:stationMouse.local(),ptt:!!latest?.ptt_features,
+        ready,bookmark:bookmarksUi.available(),updates:articleUpdates?.available(),pending:!!latest?.input_pending,exportReady:ready&&!exportBusy,local:stationMouse.local(),ptt:!!latest?.ptt_features,
         reading:latest?.navigation.kind==="article_reading",authors:latest?.navigation.kind==="article_list",images:!!latest?.image_links.length,
         inlineReady:inlineShortcut({key:"Enter"},keyboardState,latest),navigate:canNavigate(),
         first:latest?.navigation.first_line===1,last:latest?.navigation.percent===100};
@@ -636,7 +636,7 @@ function openContextMenu(e) {
     const point=cellAt(e,false),index=Math.max(linkAt(point),inlineImages.linkAtPoint(e));
     const word=index<0&&stationMouse.local()?accountWordAt(point):null;
     const replyRow=index<0&&point&&stationMouse.local()&&latest.reply_rows?.includes(point.row)?point.row:null;
-    if(index<0&&!word&&!latest?.reply_focus&&!latest?.editor&&stationMouse.local()&&!e.shiftKey&&toolAccess.right_click_menu&&!hasSelection()){
+    if(index<0&&!word&&!latest?.reply_focus&&!latest?.editor&&latest?.navigation?.kind!=="article_reading"&&stationMouse.local()&&!e.shiftKey&&toolAccess.right_click_menu&&!hasSelection()){
         tools.showAt(e);return;
     }
     contextMenu.open(e,{index,word,replyRow,entries:contextMenuItems(contextState(index,word,replyRow))});
@@ -673,6 +673,7 @@ function contextAction(action,context,e){
     else if(action==="next")browseDown(e);
     else if(action==="bookmarks")bookmarksUi.show(e);
     else if(action==="bookmark-current")bookmarksUi.capture(e);
+    else if(action==="article-updates")articleUpdates.toggle(e);
     else if(action==="settings")settingsUi.request(e);
 }
 function activate() { if(!articleFind?.ownsFocus()&&!contextMenu?.isOpen()&&!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); refreshKeepAlive(); }
@@ -831,6 +832,7 @@ function requestInline(target,e){
 const inlineImages=installInlineImages({surface,canvas,viewport,tr,render,find:articleFind,redraw:()=>{if(latest)draw(latest);},changed:refreshKeepAlive,notice:text=>{surfaceNote.textContent=text;},
     allowed:()=>!stopped&&!blocked()&&!tools?.busy()&&inlineShortcut({key:"Enter"},keyboardState,latest),request:requestInline});
 articleUpdates=createArticleUpdates({root:document.getElementById("article-updates"),status:document.getElementById("article-updates-status"),toggle:document.getElementById("article-updates-toggle"),fresh:document.getElementById("article-updates-new"),station:document.getElementById("article-updates-station"),tr,current:()=>latest,send,
+    menuToggle:document.querySelector('[data-context-action="article-updates"] span'),
     bottom:()=>Math.max(0,surface.offsetTop+(grid?.height??0)/(grid?.ratio??1)-viewport.clientHeight),position:()=>viewport.scrollTop,
     move:top=>{viewport.scrollTop=top;repaint();},restore:focus,changed:refreshKeepAlive});
 let viewportProbe=false,viewportCapture=0;

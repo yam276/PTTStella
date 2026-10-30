@@ -5,14 +5,14 @@ import vm from 'node:vm';
 import {translator} from './i18n_test_support.mjs';
 const create=vm.runInNewContext(readFileSync(new URL('../assets/article-updates.js',import.meta.url),'utf8')+'\ncreateArticleUpdates');
 function setup(enabled=true){
-    const node=()=>({hidden:true,textContent:'',setAttribute(){}}),root=node(),status=node(),toggle=node(),fresh=node(),station=node(),sent=[],moves=[];
+    const node=()=>({hidden:true,textContent:'',setAttribute(){}}),root=node(),status=node(),toggle=node(),fresh=node(),station=node(),menuToggle=node(),sent=[],moves=[];
     let packet={generation:7,connected:true,article:{id:1,load:'complete',reply_count:10}},at=700,end=700;
-    const ui=create({root,status,toggle,fresh,station,tr:translator('zh-TW'),current:()=>packet,send:v=>sent.push(v),bottom:()=>end,position:()=>at,move:v=>{at=v;moves.push(v);},restore(){},changed(){}});
+    const ui=create({root,status,toggle,fresh,station,menuToggle,tr:translator('zh-TW'),current:()=>packet,send:v=>sent.push(v),bottom:()=>end,position:()=>at,move:v=>{at=v;moves.push(v);},restore(){},changed(){}});
     const paint=(count,{generation=7,id=1,bottom=end}={})=>{packet={...packet,generation,article:{id,load:'complete',reply_count:count}};end=bottom;ui.afterPaint(packet);};
     const receive=(patch={})=>ui.receive({generation:7,article:1,enabled:true,available:true,busy:false,failed:false,recovery:false,...patch});
     const click=(target,trusted=true)=>ui.bindings.find(([n])=>n===target)[2]({isTrusted:trusted});
     ui.afterPaint(packet,false);receive({enabled});
-    return {ui,root,status,toggle,fresh,station,sent,moves,paint,receive,click,scroll:v=>{at=v;ui.scroll();},at:()=>at};
+    return {ui,root,status,toggle,fresh,station,menuToggle,sent,moves,paint,receive,click,scroll:v=>{at=v;ui.scroll();},at:()=>at};
 }
 test('updates preserve every reading position, including the old bottom; only an explicit jump moves',()=>{
     const e=setup();e.paint(13,{bottom:800});assert.equal(e.at(),700);assert.deepEqual(e.moves,[]);assert.equal(e.fresh.hidden,false);assert.ok(e.fresh.textContent.includes('3'));
@@ -42,6 +42,19 @@ test('initial full loading is the baseline, never new replies before opting in',
     e.receive();e.scroll(200);e.paint(43);assert.ok(e.fresh.textContent.includes('3'));
     e.receive({enabled:false});e.paint(43);assert.equal(e.fresh.hidden,false,'pausing retains already unread replies');
     e.paint(2,{id:2});assert.equal(e.fresh.hidden,true,'another article has its own baseline');
+});
+
+test('disabled updates have no permanent overlay and remain available from the article menu',()=>{
+    const e=setup(false);assert.equal(e.root.hidden,true);assert.equal(e.status.textContent,'');
+    assert.equal(e.ui.available(),true);assert.equal(e.menuToggle.textContent,'更新推文');
+    e.ui.toggle({isTrusted:true});assert.equal(e.sent.at(-1).enabled,true);
+    e.receive();assert.equal(e.root.hidden,false);assert.equal(e.menuToggle.textContent,'暫停更新');
+    e.ui.toggle({isTrusted:true});assert.equal(e.sent.at(-1).enabled,false);
+    e.receive({enabled:false});assert.equal(e.root.hidden,true);
+    e.receive({enabled:false,failed:true});assert.equal(e.root.hidden,false,'failure remains actionable');
+    e.paint(10,{id:2});assert.equal(e.root.hidden,true);assert.equal(e.ui.available(),false);
+    e.ui.toggle({isTrusted:true});assert.equal(e.sent.length,2);
+    e.ui.destroy();assert.equal(e.ui.available(),false);
 });
 
 test('cancelled reentry keeps the local viewport; only trusted current recovery reveals the station',()=>{
