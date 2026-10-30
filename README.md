@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="Cargo.toml"><img src="assets/readme/version.svg" width="146" height="24" alt="開發版本 0.3.0-dev.2"></a>
-  <a href="https://github.com/yam276/PTTStella/releases/latest"><img src="assets/readme/status.svg" width="150" height="24" alt="狀態：開發中"></a>
+  <a href="Cargo.toml"><img src="assets/readme/version.svg" width="146" height="24" alt="版本 0.3.0"></a>
+  <a href="https://github.com/yam276/PTTStella/releases/latest"><img src="assets/readme/status.svg" width="150" height="24" alt="狀態：正式版"></a>
   <a href="#下載與安裝"><img src="assets/readme/platforms.svg" width="241" height="24" alt="目標平台：Windows、macOS、Linux"></a>
 </p>
 
@@ -30,7 +30,7 @@ PTTStella 是一款 PTT 桌面瀏覽器，保留熟悉的 BBS 排版、ANSI 色�
 
 ## 下載與安裝
 
-此頁對應 `0.3.0-dev.2` 開發版；最新正式版為 `0.2.2`。請從 [Releases 下載頁](https://github.com/yam276/PTTStella/releases/latest) 取得正式版，並選擇符合電腦平台與架構的檔案：
+此頁對應 `0.3.0`。正式下載以 [Releases 下載頁](https://github.com/yam276/PTTStella/releases/latest) 提供的版本為準，請選擇符合電腦平台與架構的檔案：
 
 | 平台 | 使用方式與需求 |
 | --- | --- |

@@ -1,6 +1,6 @@
 [package]
 name = "pttstella"
-version = "0.3.0-dev.2"
+version = "0.3.0"
 authors = ["yam276"]
 repository = "https://github.com/yam276/PTTStella"
 edition = "2024"
