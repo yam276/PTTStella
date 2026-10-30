@@ -2,6 +2,8 @@
 
 目前產品為 [terminal 外觀的 BBS 介面](docs/active/minimal-browser.md)，以 PTT 為預設站，並有按需的 [媒體預覽](docs/media.md)。核心、Dioxus 視窗、WebSocket／Telnet 及 [站點與編碼](docs/sites.md) 已實作；手動登入的實測狀態見 active plan。沒有 shell／PTY 或一般系統終端功能。
 
+已完成工作須依 [產物清理與結案](docs/development-harness.md#產物清理與結案) 移除自己已用完的輸出；局部 temp／owner 清理不等於 App 與 Cargo cache 已回收。
+
 ## 當前 gate
 
 除非使用者明確要求發佈該版本，開發、修正、Critic、測試、提交與一般推送都保持在 `develop`。不自行切換或推進 `main`／`master`、建立其他工作／發佈分支或啟動 Release 流程；功能完成、測試通過及舊版本的發佈授權都不視為本次授權。使用者另有明確分支指示時依其指示。
