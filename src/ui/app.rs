@@ -707,6 +707,9 @@ fn context_menu() -> Element {
             button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"bookmark-current",
                 Star {size:18} span {{pttstella::msg!("bookmarks-current")}}
             }
+            button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"article-updates",
+                ArrowDown {size:18} span {{pttstella::msg!("article-updates-start")}}
+            }
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "bookmarks",
                 Star { size: 18 } span { {pttstella::msg!("context-bookmarks")} }
             }

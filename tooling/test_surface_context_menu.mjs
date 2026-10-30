@@ -174,13 +174,13 @@ test('editor paste action requests the owned clipboard by exact stamp, never cli
 
 test('ordinary native editor right-click opens paste menu while browsing background still opens floating tools',()=>{
     const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
-    for(const editor of [true,false]){
-        const calls=[],f={stopped:false,composing:false,pastePending:false,document:{querySelector:()=>null},latest:{editor,reply_rows:[]},
+    for(const [editor,reading] of [[true,false],[false,false],[false,true]]){
+        const calls=[],f={stopped:false,composing:false,pastePending:false,document:{querySelector:()=>null},latest:{editor,reply_rows:[],navigation:{kind:reading?'article_reading':'article_list'}},
           stationMouse:{local:()=>true},filterUi:{blocked:()=>false},contextMenu:{close(){},open:()=>calls.push('menu')},
           cellAt:()=>null,linkAt:()=>-1,inlineImages:{linkAtPoint:()=>-1},accountWordAt:()=>null,
           hasSelection:()=>false,toolAccess:{right_click_menu:true},tools:{showAt:()=>calls.push('tools')},contextState:()=>({}),contextMenuItems:()=>new Map()};
         vm.createContext(f);vm.runInContext(surface.slice(surface.indexOf('function openContextMenu('),surface.indexOf('function contextAction(')),f);
-        f.openContextMenu({isTrusted:true,shiftKey:false,preventDefault(){}});assert.deepEqual(calls,[editor?'menu':'tools']);
+        f.openContextMenu({isTrusted:true,shiftKey:false,preventDefault(){}});assert.deepEqual(calls,[editor||reading?'menu':'tools']);
     }
 });
 
@@ -188,4 +188,12 @@ test('bookmark action agrees with full current-article availability instead of s
  assert.equal(contextMenuItems({...base,reading:true,bookmark:false}).get('bookmark-current'),false);
  assert.equal(contextMenuItems({...base,reading:true,bookmark:true}).get('bookmark-current'),base.ready);
  assert.equal(contextMenuItems({...base,reading:true,bookmark:true,selection:true}).has('bookmark-current'),false);
+});
+
+test('article update toggle is confined to ordinary article background menus',()=>{
+ const state={...base,reading:true,updates:true};
+ assert.equal(contextMenuItems(state).get('article-updates'),base.ready&&base.local);
+ for(const patch of [{reading:false},{updates:false},{word:{id:'Alice'}},{selection:true},{link:0},{picture:true},{editor:true}]){
+  assert.equal(contextMenuItems({...state,...patch}).has('article-updates'),false);
+ }
 });

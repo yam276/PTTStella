@@ -20,6 +20,7 @@ function contextMenuItems(state) {
     if(state.word||state.selection||state.link>=0)return entries;
     add("select-all",state.ready);add("export-page",state.exportReady);add("copy-image-page",state.exportReady);
     if(state.reading){
+        if(state.updates)add("article-updates",state.ready&&state.local);
         if(state.images)add("inline",state.inlineReady);
         add("back",state.navigate);add("previous",state.navigate&&!state.first);add("next",state.navigate&&!state.last);
     }

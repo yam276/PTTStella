@@ -34,7 +34,7 @@ PTT 頁尾回報邏輯文章行號，折行可能占用多個畫面列。Rust �
 
 ## 目前文章的推文更新
 
-網頁全文完成且標準作者標頭可辨識時才提供「更新推文」。預設關閉，每篇需明確開啟；開啟先查一次，成功後每 5 秒再檢查，不保存偏好、不追蹤其他文章。Rust surface 擁有唯一 deadline，沿用 Connection 的 destination 工作與單一送鍵 owner，不建立輪詢 task、額外連線或另一份站端文字 parser。
+網頁全文完成且標準作者標頭可辨識時才提供文章背景右鍵「更新推文」。未啟用不顯示右上常駐提示；啟用、失敗／恢復或有未讀推文時才顯示狀態及相關按鈕。預設關閉，每篇需明確開啟；開啟先查一次，成功後每 5 秒再檢查，不保存偏好、不追蹤其他文章。Rust surface 擁有唯一 deadline，沿用 Connection 的 destination 工作與單一送鍵 owner，不建立輪詢 task、額外連線或另一份站端文字 parser。
 
 PTT 閱讀器開啟檔案時保存當時長度，重繪或 End 不等於重新讀取檔案。因此更新先在完整尾頁送 Q，只有共同閱讀辨識及嚴格底部資訊框確認看板／AID 後才送空白返回列表；再使用既有 `Open` 流程定位 AID、Q 核對選取項目、進入同篇並核對原作者／標題／時間三行，最後以 PTT `:<原尾頁起行>` 回到原尾段。重新進入的中間畫面不替換閱讀投影、不撤銷原圖片 batch；收到同一 operation serial 的成功結果才允許接頁。依據為 [PTT pmore](https://github.com/ptt/pttbbs/blob/c591f7ca0222da541fa5098656a03f4668af2b5d/mbbsd/pmore.c) 與 [文章資訊／進出流程](https://github.com/ptt/pttbbs/blob/c591f7ca0222da541fa5098656a03f4668af2b5d/mbbsd/bbs.c)，實站不同部署仍需各自驗證。
 
