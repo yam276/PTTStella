@@ -68,8 +68,16 @@ async fn editor_colour_transport_preserves_multiline_chinese_and_existing_sgr() 
                 .unwrap()
             {
                 Message::Binary(bytes) => {
+                    let before = editor.wire();
                     editor.accept(&bytes);
                     let wire = editor.wire();
+                    // The real editor's screen diff can be silent for an
+                    // already-cancelled mark or End at the current line end.
+                    // An explicit redraw is the only no-op that guarantees a
+                    // fresh response. Do not manufacture ACKs for other no-ops.
+                    if wire == before && !bytes.contains(&0x0c) {
+                        continue;
+                    }
                     let split = wire.len() / 2;
                     ws.send(Message::Binary(wire[..split].to_vec().into()))
                         .await
@@ -131,7 +139,7 @@ async fn manual_key_cancels_colour_wait_without_replaying_a_step() {
         .unwrap();
     assert_eq!(
         ws.next().await.unwrap().unwrap().into_data().as_ref(),
-        b"\x1bu"
+        b"\x1bu\x0c"
     );
     connection.input(view.generation, vec![1]).unwrap();
     assert_eq!(
@@ -186,7 +194,7 @@ async fn expired_or_dropped_selection_never_writes_and_disconnect_revokes_the_jo
         .unwrap();
     assert_eq!(
         ws.next().await.unwrap().unwrap().into_data().as_ref(),
-        b"\x1bu"
+        b"\x1bu\x0c"
     );
     ws.close(None).await.unwrap();
     assert!(reply.wait().await.is_err());
