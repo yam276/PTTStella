@@ -297,10 +297,10 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
-    pub fn start_bookmark_archive_probe() -> Result<Self, String> {
+    pub fn start_bookmark_archive_probe(headerless: bool) -> Result<Self, String> {
         let connection = Self::start_owned_probe(
-            probe::live_updates::page(1, 23, 45, None)?,
-            probe::Scenario::BookmarkArchive,
+            probe::live_updates::bookmark_page(1, 23, headerless)?,
+            probe::Scenario::BookmarkArchive { headerless },
         )?;
         connection.keep_alive(false)?;
         Ok(connection)

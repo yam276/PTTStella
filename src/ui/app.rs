@@ -71,6 +71,7 @@ pub fn app(props: AppProps) -> Element {
                 | "inline"
                 | "short_reading"
                 | "reading_rows"
+                | "ansi_zoom"
                 | "wide_last_row"
                 | "diagnostics"
                 | "inline_replies"
@@ -89,8 +90,13 @@ pub fn app(props: AppProps) -> Element {
     let owner = use_hook(move || {
         super::probe::surface_sample(sample_case.as_deref(), probing, media_origin.as_deref())
             .and_then(|bytes| {
-                if sample_case.as_deref() == Some("bookmark_archive") {
-                    Connection::start_bookmark_archive_probe()
+                if matches!(
+                    sample_case.as_deref(),
+                    Some("bookmark_archive" | "bookmark_headerless")
+                ) {
+                    Connection::start_bookmark_archive_probe(
+                        sample_case.as_deref() == Some("bookmark_headerless"),
+                    )
                 } else if sample_case.as_deref() == Some("bookmark_archive_cancel") {
                     Connection::start_live_updates_probe(None, true)
                 } else if matches!(

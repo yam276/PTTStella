@@ -1177,7 +1177,7 @@ async fn board_switch_serializes_confirmed_steps_and_never_uses_a_synchronized_p
     ws.send(Message::Binary(board_page("articles").into()))
         .await
         .unwrap();
-    let reached=wait(&connection,|v|matches!(&v.destination,NavigationProgress::Reached{target,..} if target.board().as_str()=="Stella")).await;
+    let reached=wait(&connection,|v|matches!(&v.destination,NavigationProgress::Reached{target,..} if target.board().is_some_and(|b|b.as_str()=="Stella"))).await;
     assert!(!reached.input_pending);
     connection
         .request_switch_board(reached.stamp(), BoardName::parse("STELLA").unwrap())
@@ -1233,7 +1233,7 @@ async fn board_switch_from_list_with_pinned_display_author_uses_only_confirmed_s
     ws.send(Message::Binary(board_page("empty_articles").into()))
         .await
         .unwrap();
-    wait(&connection, |v| matches!(&v.destination, NavigationProgress::Reached { target, .. } if target.board().as_str() == "Stella")).await;
+    wait(&connection, |v| matches!(&v.destination, NavigationProgress::Reached { target, .. } if target.board().is_some_and(|b|b.as_str() == "Stella"))).await;
     assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
     finish_board_peer(&connection, ws).await;
 }
@@ -1287,7 +1287,7 @@ async fn board_switch_from_reading_pauses_keepalive_and_waits_for_each_back_befo
     ws.send(Message::Binary(board_page("empty_articles").into()))
         .await
         .unwrap();
-    wait(&connection,|v|matches!(&v.destination,NavigationProgress::Reached{target,..} if target.board().as_str()=="Stella")).await;
+    wait(&connection,|v|matches!(&v.destination,NavigationProgress::Reached{target,..} if target.board().is_some_and(|b|b.as_str()=="Stella"))).await;
     assert!(timeout(Duration::from_millis(40), ws.next()).await.is_err());
     finish_board_peer(&connection, ws).await;
 }
@@ -2979,7 +2979,7 @@ async fn article_refresh_cancellation_and_manual_input_revoke_late_query_steps()
             .request_go_to(
                 view.stamp(),
                 crate::navigation_job::Destination::Refresh {
-                    board: BoardName::parse("Stella").unwrap(),
+                    board: Some(BoardName::parse("Stella").unwrap()),
                     head,
                 },
             )
@@ -3051,7 +3051,7 @@ async fn refresh_cancellation_has_priority_over_full_queue_and_a_queued_start() 
             .request_go_to(
                 view.stamp(),
                 crate::navigation_job::Destination::Refresh {
-                    board: BoardName::parse("Stella").unwrap(),
+                    board: Some(BoardName::parse("Stella").unwrap()),
                     head,
                 },
             )
@@ -3066,7 +3066,7 @@ async fn refresh_cancellation_has_priority_over_full_queue_and_a_queued_start() 
                 .request_go_to(
                     view.stamp(),
                     crate::navigation_job::Destination::Refresh {
-                        board: BoardName::parse("Stella").unwrap(),
+                        board: Some(BoardName::parse("Stella").unwrap()),
                         head,
                     },
                 )

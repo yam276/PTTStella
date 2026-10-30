@@ -550,10 +550,17 @@ pub(super) fn surface_sample(
         Some("toast_reconnect") => Ok(b"\x1b[2J\x1b[HLOCAL TOAST AND RECONNECT TEST - no external server\x1b[5;1HThe connection closes once. Reconnect, export PNG, dismiss notification, then close.\x1b[1;1H".to_vec()),
         Some("editor_color") => Ok(pttstella::editor_color::fixture::Editor::new(&["P\x1b[32m中\x1b[0m文\x1b[34mQ","","第三行"],true,false,true).wire()),
         Some("editor_clipboard") => encoding::encode("\x1b[2J\x1b[HEDITOR CLIPBOARD 0/4 - local only\x1b[5;1H\x1b[1;31mANSI colour selection\x1b[0m\x1b[24;1H\x1b[34;46m 編輯文章 \x1b[30;47m (^X)存檔 (^C)色碼 (Esc-h)按鍵 (^Z)說明 插入 | user | 1:1\x1b[0m\x1b[3;1H").map_err(|e|e.to_string()),
-        Some("reading_rows" | "wide_last_row" | "diagnostics") => {
+        Some("reading_rows" | "ansi_zoom" | "wide_last_row" | "diagnostics") => {
             let mut sample = String::from("\x1b[2J\x1b[H");
             for row in 1..=23 {
                 sample.push_str(&format!("\x1b[{row};1H\x1b[0mROW {row:02} - complete text row\x1b[{row};31H\x1b[1;{}m{}", if row % 2 == 1 {31} else {32}, "█".repeat(10)));
+            }
+            if case == Some("ansi_zoom") {
+                // Same full-colour band across every physical row: any dark
+                // horizontal line here is a renderer/compositor seam.
+                for row in 1..=23 {
+                    sample.push_str(&format!("\x1b[{row};51H\x1b[0;36;46m{}\x1b[0m", " ".repeat(20)));
+                }
             }
             if case == Some("wide_last_row") {
                 let origin = media_origin.ok_or("wide last row probe requires a loopback media origin")?;

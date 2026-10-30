@@ -79,6 +79,7 @@ pub struct Open {
     revision: u64,
     deadline: Instant,
     step_deadline: Instant,
+    reentry_head: Option<[String; 3]>,
 }
 impl Open {
     pub fn begin(
@@ -101,9 +102,20 @@ impl Open {
                 revision: frame.revision,
                 deadline: now + board::TOTAL_LIMIT,
                 step_deadline: now + board::STEP_LIMIT,
+                reentry_head: None,
             },
             bytes,
         ))
+    }
+    pub(crate) fn begin_reentry(
+        frame: &Frame,
+        target: ArticleTarget,
+        head: [String; 3],
+        now: Instant,
+    ) -> Result<(Self, Vec<u8>), Error> {
+        let (mut flow, bytes) = Self::begin(frame, target, now)?;
+        flow.reentry_head = Some(head);
+        Ok((flow, bytes))
     }
     pub fn needs_frame(&self, revision: u64) -> bool {
         !matches!(self.stage, Stage::Finished) && revision > self.revision
@@ -209,6 +221,18 @@ impl Open {
                 ) =>
             {
                 let rows = text::rows(frame).ok_or(Error::Identity)?;
+                if let Some(head) = &self.reentry_head {
+                    // Only an owned refresh can use this path, after Q verified
+                    // the selected AID and the same list row was restored.
+                    if head
+                        .iter()
+                        .enumerate()
+                        .any(|(i, line)| rows[i].text.trim_end() != line)
+                    {
+                        return Err(Error::Identity);
+                    }
+                    return Ok(Advance::Reached(self.target.clone()));
+                }
                 let header = rows[0].text.trim_end();
                 let board = header
                     .starts_with("作者")

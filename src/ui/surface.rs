@@ -1836,7 +1836,7 @@ async fn run(
                 if view.login_guidance != login_guidance && view.login_guidance.needs_input() {
                     keyboard_policy.use_native_input();
                 }
-                if matches!(surface_probe.as_deref(),Some("boards"|"boards_close")) && checks.board_reached.len()<3 && let pttstella::navigation_job::Progress::Reached{serial,target,..}=&view.destination && checks.board_reached.last().is_none_or(|(seen,_)|seen!=serial) {checks.board_reached.push((*serial,target.board().as_str().to_owned()));}
+                if matches!(surface_probe.as_deref(),Some("boards"|"boards_close")) && checks.board_reached.len()<3 && let pttstella::navigation_job::Progress::Reached{serial,target,..}=&view.destination && checks.board_reached.last().is_none_or(|(seen,_)|seen!=serial) && let Some(board)=target.board() {checks.board_reached.push((*serial,board.as_str().to_owned()));}
                 if matches!(surface_probe.as_deref(),Some("articles"|"articles_close")) {
                     if checks.article_reached.len()<3 && let pttstella::navigation_job::Progress::Reached{serial,target:pttstella::navigation_job::Destination::Article(target),..}=&view.destination && checks.article_reached.last().is_none_or(|(seen,_)|seen!=serial) { checks.article_reached.push((*serial,target.aid().as_str().to_owned())); }
                     checks.article_missing |= view.message==pttstella::msg!("article-open-missing");
@@ -1880,7 +1880,7 @@ async fn run(
                 || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB")
                 || case=="recent" && recent_clears>=1 && recent.packet().boards.is_empty() && recent.packet().notice==Some(pttstella::msg!("recent-cleared"))
                 || checks.bookmarks_passed(&case,&initial_bookmarks,&bookmarks.snapshot(),&receiver.borrow().destination)
-                || case=="boards_close" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && matches!(&receiver.borrow().destination,pttstella::navigation_job::Progress::Active{target,..} if target.board().as_str()=="Beta")
+                || case=="boards_close" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && matches!(&receiver.borrow().destination,pttstella::navigation_job::Progress::Active{target,..} if target.board().is_some_and(|b|b.as_str()=="Beta"))
                 || matches!(case.as_str(),"articles"|"articles_close") && checks.article_reached==[(1,"00000101".to_owned()),(2,"00000102".to_owned())] && checks.article_missing && checks.article_rejected>=2
                     && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
                     && (case=="articles" && checks.article_cancelled || case=="articles_close" && matches!(&receiver.borrow().destination,pttstella::navigation_job::Progress::Active{serial:4,target:pttstella::navigation_job::Destination::Article(target),..} if target.aid().as_str()=="00000104"))
@@ -1888,7 +1888,7 @@ async fn run(
                 || matches!(case.as_str(),"mouse"|"mouse_boundary") && checks.mouse_passed(case=="mouse_boundary") && receiver.borrow().mouse.active.is_none()
                 || matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") && checks.mouse_samples_passed(&case) && receiver.borrow().mouse.active.is_none() && receiver.borrow().mouse.modes.tracking()==pttstella::mouse::Tracking::Highlight
                 || case=="pointer_rows" && checks.navigation_requests==7 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
-                || case=="bookmark_archive" && checks.bookmark_saves==1 && checks.archive_reads>=1 && bookmarks.snapshot().entries.len()==1 && reading.as_ref().is_some_and(|r|r.first_line==1&&r.last_line==45&&r.load==Some(super::article_cache::LoadState::Complete))
+                || matches!(case.as_str(),"bookmark_archive"|"bookmark_headerless") && checks.bookmark_saves==1 && checks.archive_reads>=1 && bookmarks.snapshot().entries.len()==1 && reading.as_ref().is_some_and(|r|r.first_line==1&&r.last_line==45&&r.load==Some(super::article_cache::LoadState::Complete))
                 || case=="bookmark_archive_cancel" && checks.bookmark_saves==0 && checks.bookmark_rejected>=1 && bookmarks.snapshot().entries.is_empty() && screen.updates_status().is_some_and(|s|s.recovery)
                 || case=="bookmarks_archive_restart" && checks.archive_reads>=1 && bookmarks.snapshot().entries.len()==1 && checks.bookmark_saves==0
                 || case=="live_updates_cancel" && checks.reply_updates==1 && checks.reply_update_cancels==1 && checks.reply_retained_restores==1 && checks.navigation_requests==1 && checks.export_checked && checks.inline_expands==1 && screen.reading_progress().is_none() && receiver.borrow().context().kind()=="continue_prompt"
@@ -1914,7 +1914,7 @@ async fn run(
                 || case=="fonts" && checks.font_catalog_reads>=2 && !checks.font_sources.is_empty() && checks.export_checked
                 || checks.sites_passed(&case,&receiver.borrow().site,&sites.default_target(),&receiver.borrow().frame)
                 || case=="fullscreen" && checks.viewport_captures>=4 && checks.export_checked
-                || matches!(case.as_str(),"tools"|"short_reading"|"reading_rows"|"sgr66"|"sgr66_legacy") && checks.export_checked
+                || matches!(case.as_str(),"tools"|"short_reading"|"reading_rows"|"ansi_zoom"|"sgr66"|"sgr66_legacy") && checks.export_checked
                 || case=="dialogs" && checks.settings_saved && checks.export_checked && checks.rows_export_checked && checks.media_external>=1 {"passed"} else {"failed"},
             "recent_initial":initial_recent,"recent_final":recent.packet().boards,"recent_clears":recent_clears,
             "bookmarks_initial":initial_bookmarks,"bookmarks_final":bookmarks.snapshot(),"bookmark_opens":checks.bookmark_opens,"bookmark_saves":checks.bookmark_saves,"bookmark_rejected":checks.bookmark_rejected,

@@ -67,3 +67,5 @@ Files 背景建立／校驗 archive、建立 draft，經共同鎖與三方 merge
 開啟「閱讀本機副本」不連站，Files 依目前名單將原文切成完整24列 pmore projection（末段補空白）後套相同 Rust filter，再只傳過濾後本機 frame。此封包不帶 Connected、Stamp、送鍵、keepalive 或推文 timer。JS 使用同一 renderer／固定80×23 canvas，row index只畫可見23列，PageUp/Down重疊一列，Home/End及上下/滾輪均只移動本機viewport。圖片只保存網址，不發HTTP；雙色字、原始格線及文字不交由第二個ANSI parser。關閉釋放frame／row index，晚到讀取不能重開或蓋下一份選取。
 
 原生新增 `bookmark_archive`（45列完整載入→核對一次AID→保存→讀本機）、`bookmark_archive_cancel`（Q延遲6秒、取消後零續送／零保存），以及 `bookmarks_archive_restart`（新程序只讀保存的副本、peer拒絕站端輸入）。各案均需Close acknowledged／owner join；讀取末行、返回、關閉與canvas未遮住按鈕另由真實Dioxus畫面確認。驗證狀態見active plan，不能以核心或DOM測試代替原生驗收。
+
+無作者／標題／時間標頭的文章也可收藏。Refresh 的已知看板可為空，只從本工作尾頁 Q 的完整資訊框取得板名／AID；再核對返回同板列表、#定位、第二次Q身分及原選取列。僅此已核對重開路徑可用原文前三列比對取代一般 Open 的作者／板名標頭要求；一般快速前往維持原條件。缺原標頭不把圖畫／內文當成標題；收藏顯示可回退至 #AID@看板。身分或前三列不一致、取消、逾時與舊 operation 仍拒絕。

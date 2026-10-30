@@ -121,20 +121,34 @@ where
     Err("live updates exceeded 64 unchanged checks".into())
 }
 
-pub(super) async fn bookmark<S>(socket: &mut WebSocketStream<S>) -> Result<(), String>
+pub(in crate::connection) fn bookmark_page(
+    first: usize,
+    last: usize,
+    headerless: bool,
+) -> Result<Vec<u8>, String> {
+    let mut bytes = page(first, last, 45, None)?;
+    if headerless && first == 1 {
+        bytes.extend(crate::encoding::encode("\x1b[1;1H\x1b[0m\x1b[2K無標頭的 ANSI 圖\x1b[2;1H\x1b[2K第二行 ANSI 圖\x1b[3;1H\x1b[2K第三行 ANSI 圖\x1b[24;80H\x1b[?25l").map_err(|e|e.to_string())?);
+    }
+    Ok(bytes)
+}
+pub(super) async fn bookmark<S>(
+    socket: &mut WebSocketStream<S>,
+    headerless: bool,
+) -> Result<(), String>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
     for (index, (expected, response)) in [
-        (b"\x1b[6~".as_slice(), page(23, 45, 45, None)?),
+        (b"\x1b[6~".as_slice(), bookmark_page(23, 45, headerless)?),
         (b"Q", information()?),
         (b" ", super::article_page("articles")?),
         (b"#", super::article_page("aid_prompt")?),
         (b"00000101\r", super::article_page("articles")?),
         (b"Q", super::article_page("information")?),
         (b" ", super::article_page("articles")?),
-        (b"\x1b[C", page(1, 23, 45, None)?),
-        (b":23\r", page(23, 45, 45, None)?),
+        (b"\x1b[C", bookmark_page(1, 23, headerless)?),
+        (b":23\r", bookmark_page(23, 45, headerless)?),
     ]
     .into_iter()
     .enumerate()

@@ -1743,3 +1743,29 @@ fn current_bookmark_requires_complete_ack_and_owns_verified_identity_until_cance
     view.generation += 1;
     assert!(capture.resolve(&view, false).unwrap().is_err());
 }
+
+#[test]
+fn headerless_complete_article_can_pin_a_bookmark_without_guessing_its_board() {
+    let (_, mut view, mut source) = refresh_fixture();
+    let mut state = SurfaceState::new(filters::Rules::default());
+    source.feed(&pttstella::encoding::encode("\x1b[1;1H\x1b[0m\x1b[2K第一行 ANSI 圖\x1b[2;1H\x1b[2K第二行圖\x1b[3;1H\x1b[2K第三行圖\x1b[24;80H\x1b[?25l").unwrap());
+    view.frame = source.frame();
+    displayed(&mut state, &view);
+    let id = state.reading_progress().unwrap().0;
+    let (snapshot, destination) = state.bookmark_current(view.stamp(), id, &view).unwrap();
+    assert!(matches!(
+        destination,
+        pttstella::navigation_job::Destination::Refresh { board: None, .. }
+    ));
+    assert_eq!(
+        snapshot.title(),
+        "",
+        "do not label an art row as the article title"
+    );
+    let frame = snapshot.frame();
+    assert!(
+        pttstella::text::rows(&frame).unwrap()[0]
+            .text
+            .starts_with("第一行 ANSI 圖")
+    );
+}

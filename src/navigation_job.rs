@@ -17,7 +17,7 @@ pub enum Destination {
     },
     Article(ArticleTarget),
     Refresh {
-        board: BoardName,
+        board: Option<BoardName>,
         #[serde(skip)]
         head: [String; 3],
     },
@@ -40,11 +40,11 @@ impl Destination {
                 .map_err(|error| error.to_string())
         }
     }
-    pub fn board(&self) -> &BoardName {
+    pub fn board(&self) -> Option<&BoardName> {
         match self {
-            Self::Board { board } => board,
-            Self::Article(target) => target.board(),
-            Self::Refresh { board, .. } => board,
+            Self::Board { board } => Some(board),
+            Self::Article(target) => Some(target.board()),
+            Self::Refresh { board, .. } => board.as_ref(),
         }
     }
 }
