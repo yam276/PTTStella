@@ -1,7 +1,7 @@
 """Probe discovery must stay bounded and never select a foreign browser."""
 import json
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import desktop_input
 
@@ -42,12 +42,34 @@ class SettingsTargetTests(unittest.TestCase):
         main.call = Mock()
         main.click = Mock()
         main.wait = Mock()
+        main.evaluate = Mock(return_value=False)
         with patch.object(desktop_input, 'debug_pages') as discovery:
             self.assertIs(main.open_settings(), main)
             self.assertIs(main.open_settings(), main)
             discovery.assert_not_called()
-        self.assertEqual(main.click.call_count, 2)
+        self.assertEqual(main.click.call_args_list, [
+            call('#tools-ball'), call('[data-tools-target="settings"]'),
+            call('#tools-ball'), call('[data-tools-target="settings"]'),
+        ])
+        self.assertEqual(main.call.call_args_list, [call('Page.bringToFront')] * 2)
         self.assertEqual(main.wait.call_count, 2)
+
+    def test_settings_closes_an_open_tool_group_before_opening_root_settings(self):
+        main = desktop_input.DevTools.__new__(desktop_input.DevTools)
+        main.call = Mock()
+        main.click = Mock()
+        main.wait = Mock()
+        main.evaluate = Mock(side_effect=[True, True])
+        with patch.object(desktop_input, 'debug_pages') as discovery:
+            self.assertIs(main.open_settings(), main)
+            discovery.assert_not_called()
+        # Back to the root, close the fan, then reopen at the settings entry.
+        self.assertEqual(main.click.call_args_list, [call('#tools-ball')] * 3 + [
+            call('[data-tools-target="settings"]'),
+        ])
+        main.wait.assert_called_once_with(
+            'document.getElementById("font-dialog").open',
+            'in-app settings did not become ready')
 
 
 if __name__ == '__main__':
