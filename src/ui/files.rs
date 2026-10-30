@@ -72,6 +72,10 @@ pub(super) enum Completion {
         request: u64,
         result: FileResult<pttstella::bookmarks::Bookmarks>,
     },
+    Archive {
+        request: u64,
+        result: FileResult<super::bookmarks::LocalArticle>,
+    },
     Recent(super::files_recent::Completed),
     Loaded(FileResult<Box<Initial>>),
     Fonts {
@@ -104,6 +108,7 @@ impl Completion {
             Self::Picture { result, .. } => result.err(),
             Self::Sites { result, .. } => result.err(),
             Self::Bookmarks { result, .. } => result.err(),
+            Self::Archive { result, .. } => result.err(),
             Self::Recent(done) => done.result.err().map(Error::Failed),
             Self::Loaded(result) => result.err(),
             Self::Fonts { result, .. } => result.err(),
@@ -298,6 +303,26 @@ pub(super) async fn save_filters(
     rules: Result<filters::Rules, String>,
 ) -> Completion {
     Completion::Filters(blocking(permit, move || store?.save_from(&base, rules?)).await)
+}
+pub(super) async fn read_archive(
+    permit: Permit,
+    request: u64,
+    read: super::bookmarks::Read,
+) -> Completion {
+    Completion::Archive {
+        request,
+        result: blocking(permit, move || Ok(read.run())).await,
+    }
+}
+pub(super) async fn save_archive(
+    permit: Permit,
+    request: u64,
+    write: super::bookmarks::ArchiveWrite,
+) -> Completion {
+    Completion::Bookmarks {
+        request,
+        result: blocking(permit, move || write.run()).await,
+    }
 }
 pub(super) async fn save_bookmarks(
     permit: Permit,

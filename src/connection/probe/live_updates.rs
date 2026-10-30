@@ -121,6 +121,42 @@ where
     Err("live updates exceeded 64 unchanged checks".into())
 }
 
+pub(super) async fn bookmark<S>(socket: &mut WebSocketStream<S>) -> Result<(), String>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    for (index, (expected, response)) in [
+        (b"\x1b[6~".as_slice(), page(23, 45, 45, None)?),
+        (b"Q", information()?),
+        (b" ", super::article_page("articles")?),
+        (b"#", super::article_page("aid_prompt")?),
+        (b"00000101\r", super::article_page("articles")?),
+        (b"Q", super::article_page("information")?),
+        (b" ", super::article_page("articles")?),
+        (b"\x1b[C", page(1, 23, 45, None)?),
+        (b":23\r", page(23, 45, 45, None)?),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let received = socket.next().await;
+        if !matches!(&received,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected) {
+            return Err(format!("bookmark step {index} rejected {received:?}"));
+        }
+        eprintln!("bookmark peer verified step {index}");
+        socket
+            .send(Message::Binary(response.into()))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    match socket.next().await {
+        Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e| e.to_string()),
+        other => Err(format!(
+            "local archive must not send station input: {other:?}"
+        )),
+    }
+}
+
 /// Cancellation is a local command. A delayed station query may still arrive,
 /// but the peer must receive no dismissal/re-entry bytes after the owned Q.
 pub(super) async fn cancel<S>(

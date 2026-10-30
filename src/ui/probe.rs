@@ -48,6 +48,7 @@ pub(super) fn mouse_case(case: Option<&str>) -> bool {
 #[derive(Default)]
 pub(super) struct Checks {
     pub(super) editor_colors: usize,
+    pub(super) archive_reads: usize,
     pub(super) image_copies: usize,
     pub(super) viewport_captures: u8,
     pub(super) picture_saves: usize,

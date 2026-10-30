@@ -2,7 +2,7 @@
 use super::outbound::{Feedback, SaveStatus};
 use pttstella::{
     article_target::ArticleTarget,
-    bookmarks::{Bookmarks, Entry, store::Store},
+    bookmarks::{Bookmarks, archive::Archive, store::Store},
 };
 use serde::Serialize;
 use std::{
@@ -12,10 +12,129 @@ use std::{
 
 #[derive(Serialize)]
 pub(super) struct Snapshot {
-    pub entries: Vec<Entry>,
+    pub entries: Vec<Summary>,
     pub writable: bool,
     pub warning: Option<String>,
 }
+#[derive(Serialize)]
+pub(super) struct Summary {
+    #[serde(flatten)]
+    target: ArticleTarget,
+    label: Option<String>,
+    created_at: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cached_at: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    lines: Option<usize>,
+}
+impl Summary {
+    pub fn target(&self) -> &ArticleTarget {
+        &self.target
+    }
+    pub fn label(&self) -> Option<&str> {
+        self.label.as_deref()
+    }
+}
+#[derive(Serialize)]
+pub(super) struct LocalArticle {
+    pub target: ArticleTarget,
+    pub saved_at: u64,
+    #[serde(serialize_with = "pttstella::render_wire::serialize_frame")]
+    pub frame: pttstella::screen::Frame,
+    pub settings: pttstella::settings::DisplaySettings,
+}
+pub(super) struct Read {
+    target: ArticleTarget,
+    archive: std::sync::Arc<Archive>,
+    rules: pttstella::filters::Rules,
+    settings: pttstella::settings::DisplaySettings,
+}
+impl Read {
+    pub fn run(self) -> LocalArticle {
+        LocalArticle {
+            target: self.target,
+            saved_at: self.archive.saved_at(),
+            frame: self.archive.filtered(&self.rules),
+            settings: self.settings,
+        }
+    }
+}
+pub(super) fn now() -> Result<u64, String> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .map_err(|_| pttstella::msg!("bookmarks-time-invalid"))
+}
+pub(super) struct Acquisition {
+    pub request: u64,
+    stamp: pttstella::navigation::Stamp,
+    frame: super::article_cache::ArchiveSnapshot,
+}
+impl Acquisition {
+    pub fn new(
+        request: u64,
+        stamp: pttstella::navigation::Stamp,
+        frame: super::article_cache::ArchiveSnapshot,
+    ) -> Self {
+        Self {
+            request,
+            stamp,
+            frame,
+        }
+    }
+    pub fn resolve(
+        &self,
+        view: &pttstella::connection::View,
+        failed: bool,
+    ) -> Option<Result<ArticleTarget, String>> {
+        use pttstella::navigation_job::{Destination, Progress};
+        if view.generation != self.stamp.generation
+            || view.phase != pttstella::connection::Phase::Connected
+            || failed
+        {
+            return Some(Err(pttstella::msg!("bookmarks-capture-failed")));
+        }
+        match &view.destination {
+            Progress::Reached {
+                operation,
+                target: Destination::Article(target),
+                ..
+            } if *operation == self.stamp => Some(Ok(target.clone())),
+            Progress::Active { operation, .. } if *operation != self.stamp => {
+                Some(Err(pttstella::msg!("bookmarks-capture-failed")))
+            }
+            _ => None,
+        }
+    }
+    pub fn into_write(self, state: &State, target: ArticleTarget) -> Result<ArchiveWrite, String> {
+        if let Some(warning) = &state.warning {
+            return Err(warning.clone());
+        }
+        Ok(ArchiveWrite {
+            base: state.bookmarks.clone(),
+            store: state.store.clone()?,
+            target,
+            label: self.frame.title(),
+            snapshot: self.frame,
+        })
+    }
+}
+pub(super) struct ArchiveWrite {
+    base: Bookmarks,
+    store: Store,
+    target: ArticleTarget,
+    label: String,
+    snapshot: super::article_cache::ArchiveSnapshot,
+}
+impl ArchiveWrite {
+    pub fn run(self) -> Result<Bookmarks, String> {
+        let time = now()?;
+        let archive = Archive::new(&self.snapshot.frame(), time)?;
+        let draft = self.base.archive(self.target, &self.label, time, archive)?;
+        self.store.save_from(&self.base, draft)
+    }
+}
+
 pub(super) struct Write {
     pub base: Bookmarks,
     pub store: Store,
@@ -43,9 +162,26 @@ impl State {
             warning,
         }
     }
+    pub(super) fn check_write(&self) -> Result<(), String> {
+        if let Some(error) = &self.warning {
+            return Err(error.clone());
+        }
+        self.store.as_ref().map(|_| ()).map_err(Clone::clone)
+    }
     pub(super) fn snapshot(&self) -> Snapshot {
         Snapshot {
-            entries: self.bookmarks.entries().to_vec(),
+            entries: self
+                .bookmarks
+                .entries()
+                .iter()
+                .map(|e| Summary {
+                    target: e.target().clone(),
+                    label: e.label().map(str::to_owned),
+                    created_at: e.created_at(),
+                    cached_at: e.archive().map(Archive::saved_at),
+                    lines: e.archive().map(Archive::row_count),
+                })
+                .collect(),
             writable: self.warning.is_none(),
             warning: self.warning.clone(),
         }
@@ -68,6 +204,29 @@ impl State {
             base: self.bookmarks.clone(),
             store: self.store.clone()?,
             draft,
+        })
+    }
+    pub(super) fn read(
+        &self,
+        value: &str,
+        rules: pttstella::filters::Rules,
+        settings: pttstella::settings::DisplaySettings,
+    ) -> Result<Read, String> {
+        let target = ArticleTarget::parse(value).map_err(|e| e.to_string())?;
+        let entry = self
+            .bookmarks
+            .entries()
+            .iter()
+            .find(|e| e.target().board().same(target.board()) && e.target().aid() == target.aid())
+            .ok_or(pttstella::msg!("bookmarks-not-found"))?;
+        let archive = entry
+            .archive_handle()
+            .ok_or(pttstella::msg!("bookmarks-no-archive"))?;
+        Ok(Read {
+            target: entry.target().clone(),
+            archive,
+            rules,
+            settings,
         })
     }
     pub(super) fn complete(&mut self, result: Result<Bookmarks, String>) -> Feedback<SaveStatus> {

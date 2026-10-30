@@ -1,12 +1,15 @@
 //! Explicit local article identities, independent of the current screen/session.
 use crate::article_target::ArticleTarget;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+pub mod archive;
 
 #[cfg(feature = "desktop")]
 pub mod store;
 
 pub const LIMIT: usize = 500;
-pub const MAX_BYTES: usize = 512 * 1024;
+/// One bounded, transactional collection including local article copies.
+pub const MAX_BYTES: usize = 32 * 1024 * 1024;
 pub const LABEL_LIMIT: usize = 128;
 pub const MAX_CREATED_AT: u64 = 253_402_300_799; // Last Unix second in year 9999.
 
@@ -16,8 +19,25 @@ pub struct Entry {
     target: ArticleTarget,
     label: Option<String>,
     created_at: u64,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_archive"
+    )]
+    archive: Option<Arc<archive::Archive>>,
+}
+fn serialize_archive<S: serde::Serializer>(
+    value: &Option<Arc<archive::Archive>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    value.as_deref().serialize(serializer)
 }
 impl Entry {
+    pub fn archive(&self) -> Option<&archive::Archive> {
+        self.archive.as_deref()
+    }
+    pub fn archive_handle(&self) -> Option<Arc<archive::Archive>> {
+        self.archive.clone()
+    }
     pub fn target(&self) -> &ArticleTarget {
         &self.target
     }
@@ -66,9 +86,27 @@ impl Bookmarks {
                     target,
                     label,
                     created_at,
+                    archive: None,
                 },
             );
         }
+        Ok(next)
+    }
+    pub fn archive(
+        &self,
+        target: ArticleTarget,
+        label: &str,
+        created_at: u64,
+        archive: archive::Archive,
+    ) -> Result<Self, String> {
+        archive.validate()?;
+        let mut next = self.upsert(target.clone(), label, created_at)?;
+        let entry = next
+            .entries
+            .iter_mut()
+            .find(|e| e.matches(&target))
+            .ok_or("missing bookmark")?;
+        entry.archive = Some(Arc::new(archive));
         Ok(next)
     }
     pub fn remove(&self, target: &ArticleTarget) -> Result<Self, String> {
@@ -87,14 +125,34 @@ impl Bookmarks {
         if self.entries.len() > LIMIT {
             return Err(crate::msg!("bookmarks-full"));
         }
-        let bytes = serde_json::to_vec_pretty(&serde_json::json!({
-            "version": 1,
-            "entries": self.entries,
-        }))
-        .map_err(|e| e.to_string())?;
-        if bytes.len() > MAX_BYTES {
-            return Err(crate::msg!("bookmarks-invalid"));
+        #[derive(Serialize)]
+        struct DocumentRef<'a> {
+            version: u8,
+            entries: &'a [Entry],
         }
+        struct Bounded(Vec<u8>);
+        impl std::io::Write for Bounded {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                if bytes.len() > MAX_BYTES.saturating_sub(self.0.len()) {
+                    return Err(std::io::Error::other("bookmark storage is full"));
+                }
+                self.0.extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let mut output = Bounded(Vec::new());
+        serde_json::to_writer(
+            &mut output,
+            &DocumentRef {
+                version: 2,
+                entries: &self.entries,
+            },
+        )
+        .map_err(|_| crate::msg!("bookmarks-storage-full"))?;
+        let bytes = output.0;
         Ok(bytes)
     }
     pub fn decode(bytes: &[u8]) -> Result<Self, String> {
@@ -103,7 +161,7 @@ impl Bookmarks {
         }
         let document: Document =
             serde_json::from_slice(bytes).map_err(|_| crate::msg!("bookmarks-invalid"))?;
-        if document.version != 1 || document.entries.len() > LIMIT {
+        if !matches!(document.version, 1 | 2) || document.entries.len() > LIMIT {
             return Err(crate::msg!("bookmarks-invalid"));
         }
         let mut entries = Vec::with_capacity(document.entries.len());
@@ -120,10 +178,17 @@ impl Bookmarks {
             {
                 return Err(crate::msg!("bookmarks-invalid"));
             }
+            if document.version == 1 && stored.archive.is_some() {
+                return Err(crate::msg!("bookmarks-invalid"));
+            }
+            if let Some(archive) = &stored.archive {
+                archive.validate()?;
+            }
             entries.push(Entry {
                 target,
                 label,
                 created_at: stored.created_at,
+                archive: stored.archive.map(Arc::new),
             });
         }
         Ok(Self { entries })
@@ -146,7 +211,11 @@ fn normalize_label(value: &str) -> Result<Option<String>, String> {
 #[serde(deny_unknown_fields)]
 struct Document {
     version: u32,
+    #[serde(deserialize_with = "read_entries")]
     entries: Vec<StoredEntry>,
+}
+fn read_entries<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<StoredEntry>, D::Error> {
+    archive::limited::<D, StoredEntry, LIMIT>(d)
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -155,6 +224,8 @@ struct StoredEntry {
     aid: String,
     label: Option<String>,
     created_at: u64,
+    #[serde(default)]
+    archive: Option<archive::Archive>,
 }
 
 #[cfg(test)]
@@ -250,7 +321,10 @@ mod tests {
         assert_eq!(bookmarks.entries[1].label(), None);
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&bookmarks.encode().unwrap()).unwrap(),
-            serde_json::from_slice::<serde_json::Value>(fixture).unwrap()
+            serde_json::json!({"version":2,"entries":[
+                {"board":"Stella","aid":"00000101","label":"自製合成書籤","created_at":100},
+                {"board":"Other","aid":"1AbCdE-_","label":null,"created_at":200}
+            ]})
         );
         let original: serde_json::Value = serde_json::from_slice(fixture).unwrap();
         for (key, value) in [
@@ -279,7 +353,7 @@ mod tests {
         for bad in [
             b"broken".to_vec(),
             vec![b' '; MAX_BYTES + 1],
-            br#"{"version":2,"entries":[]}"#.to_vec(),
+            br#"{"version":3,"entries":[]}"#.to_vec(),
             br#"{"version":1,"entries":[],"account":"unused"}"#.to_vec(),
         ] {
             assert!(Bookmarks::decode(&bad).is_err());

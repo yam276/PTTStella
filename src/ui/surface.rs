@@ -377,6 +377,7 @@ async fn run(
     diagnostic_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut diagnostic_failed = false;
     let mut updates_status = None;
+    let mut bookmark_capture: Option<super::bookmarks::Acquisition> = None;
     let (complete, probe_checked) = loop {
         if *closing.borrow() {
             break (false, false);
@@ -392,6 +393,37 @@ async fn run(
             updates_status = status.clone();
             eval.send(Packet::ArticleUpdates(status))
                 .map_err(|e| e.to_string())?;
+        }
+        if let Some(result) = bookmark_capture.as_ref().and_then(|capture| {
+            capture.resolve(
+                &receiver.borrow(),
+                screen
+                    .updates_status()
+                    .is_none_or(|s| s.failed || s.recovery),
+            )
+        }) && let Some(capture) = bookmark_capture.take()
+        {
+            let request = capture.request;
+            let result = result
+                .and_then(|target| capture.into_write(&bookmarks, target))
+                .and_then(|write| {
+                    files.start(|permit| files::save_archive(permit, request, write))
+                });
+            if let Err(error) = result {
+                screen.fail_updates();
+                eval.send(Packet::BookmarksResult {
+                    request,
+                    data: bookmarks.snapshot(),
+                    feedback: Feedback::new(SaveStatus::Rejected, error),
+                })
+                .map_err(|e| e.to_string())?;
+            } else {
+                eval.send(Packet::BookmarkCapture {
+                    request,
+                    cancellable: false,
+                })
+                .map_err(|e| e.to_string())?;
+            }
         }
         screen.set_article_boundary_navigation(preferences.app().article_boundary_navigation);
         if screen.set_article_mode(if window_probe || filters_probe {
@@ -667,6 +699,7 @@ async fn run(
                         let feedback=sites.complete(result.map_err(|e|e.to_string()));
                         Packet::SitesResult{request,data:sites.snapshot(receiver.borrow().site.clone()),feedback}
                     },
+                    FileCompletion::Archive{request,result}=>{match result {Ok(article)=>{checks.archive_reads+=1;Packet::Archive{request,article:Some(article),message:None}},Err(e)=>Packet::Archive{request,article:None,message:Some(e.to_string())}}},
                     FileCompletion::Bookmarks {request,result}=>{
                         if result.is_ok() {checks.bookmark_saves=checks.bookmark_saves.saturating_add(1);} else {checks.bookmark_rejected=checks.bookmark_rejected.saturating_add(1);}
                         let feedback=bookmarks.complete(result.map_err(|e|e.to_string()));
@@ -781,6 +814,7 @@ async fn run(
                         if probe.is_some() && done.result.is_ok() {checks.navigation_requests+=1;}
                         continue;
                     },
+                    CommandKind::Bookmark=>{if done.result.is_err(){screen.fail_updates();}continue;},
                     CommandKind::ReplyUpdate => {if done.result.is_err(){screen.fail_updates();}else if probe.is_some(){checks.reply_updates+=1;}continue;},
                     CommandKind::Navigate => {
                         let feedback=match done.result {
@@ -912,6 +946,28 @@ async fn run(
                     SurfaceEvent::StationMouseEnabled { generation, enabled, .. } => {
                         if super::probe::mouse_case(surface_probe.as_deref()) && checks.mouse_toggles.len()<8 {checks.mouse_toggles.push(enabled);}
                         connection.mouse_enabled(generation, enabled);
+                    },
+                    SurfaceEvent::BookmarkCurrent{request,stamp,article,..}=>{
+                        let result=(|| {
+                            if bookmark_capture.is_some() || commands.busy() || files.busy() || settings_visible || login_open || pending_paste.read().is_some(){return Err(pttstella::msg!("command-busy"));}
+                            bookmarks.check_write()?;
+                            let view=receiver.borrow().clone();
+                            let (frame,destination)=screen.bookmark_current(stamp,article,&view)?;
+                            if let Err(e)=commands.start(CommandKind::Bookmark,view.generation,||connection.request_go_to(stamp,destination).map(|reply|reply.wait())){screen.fail_updates();return Err(e);}
+                            bookmark_capture=Some(super::bookmarks::Acquisition::new(request,stamp,frame));
+                            Ok(())
+                        })();
+                        if let Err(error)=result {eval.send(Packet::BookmarksResult{request,data:bookmarks.snapshot(),feedback:Feedback::new(SaveStatus::Rejected,error)}).map_err(|e|e.to_string())?;}
+                    },
+                    SurfaceEvent::BookmarkCancel{request,..}=>{
+                        if bookmark_capture.as_ref().is_some_and(|c|c.request==request){
+                            bookmark_capture=None;screen.fail_updates();checks.bookmark_rejected+=1;
+                            eval.send(Packet::BookmarksResult{request,data:bookmarks.snapshot(),feedback:Feedback::new(SaveStatus::Rejected,pttstella::msg!("bookmarks-capture-cancelled"))}).map_err(|e|e.to_string())?;
+                        }
+                    },
+                    SurfaceEvent::ArchiveOpen{request,value,..}=>{
+                        let result=bookmarks.read(&value,screen.rules().clone(),preferences.display().clone()).and_then(|read|files.start(|permit|files::read_archive(permit,request,read)));
+                        if let Err(e)=result {eval.send(Packet::Archive{request,article:None,message:Some(e)}).map_err(|e|e.to_string())?;}
                     },
                     SurfaceEvent::BookmarksOpen {request,..}=>{
                         checks.bookmark_opens=checks.bookmark_opens.saturating_add(1);
@@ -1832,6 +1888,9 @@ async fn run(
                 || matches!(case.as_str(),"mouse"|"mouse_boundary") && checks.mouse_passed(case=="mouse_boundary") && receiver.borrow().mouse.active.is_none()
                 || matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") && checks.mouse_samples_passed(&case) && receiver.borrow().mouse.active.is_none() && receiver.borrow().mouse.modes.tracking()==pttstella::mouse::Tracking::Highlight
                 || case=="pointer_rows" && checks.navigation_requests==7 && checks.export_checked && receiver.borrow().context().kind()=="article_list"
+                || case=="bookmark_archive" && checks.bookmark_saves==1 && checks.archive_reads>=1 && bookmarks.snapshot().entries.len()==1 && reading.as_ref().is_some_and(|r|r.first_line==1&&r.last_line==45&&r.load==Some(super::article_cache::LoadState::Complete))
+                || case=="bookmark_archive_cancel" && checks.bookmark_saves==0 && checks.bookmark_rejected>=1 && bookmarks.snapshot().entries.is_empty() && screen.updates_status().is_some_and(|s|s.recovery)
+                || case=="bookmarks_archive_restart" && checks.archive_reads>=1 && bookmarks.snapshot().entries.len()==1 && checks.bookmark_saves==0
                 || case=="live_updates_cancel" && checks.reply_updates==1 && checks.reply_update_cancels==1 && checks.reply_retained_restores==1 && checks.navigation_requests==1 && checks.export_checked && checks.inline_expands==1 && screen.reading_progress().is_none() && receiver.borrow().context().kind()=="continue_prompt"
                 || case=="live_updates" && checks.reply_updates>=2 && checks.navigation_requests==3 && checks.export_checked && checks.inline_requests>=1 && checks.inline_expands==1 && screen.updates_status().is_some_and(|s|!s.enabled&&!s.busy&&!s.failed) && reading.as_ref().is_some_and(|r|r.first_line==1 && r.last_line==51 && r.reply_count==12 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
                 || case=="article_switch" && checks.navigation_requests==5 && checks.export_checked && reading.as_ref().is_some_and(|r|r.first_line==1 && r.last_line==45 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
@@ -1874,6 +1933,7 @@ async fn run(
             "paste_preview_preserved":pending_paste.read().is_some(),
             "settings_saved":checks.settings_saved,"full_png":checks.export_checked,"rows_png":checks.rows_export_checked,"media_external_requests":checks.media_external,
         });
+        surface_report["archive_reads"] = checks.archive_reads.into();
         surface_report["reply_update_cancels"] = checks.reply_update_cancels.into();
         surface_report["reply_retained_restores"] = checks.reply_retained_restores.into();
         surface_report["reply_updates"] = checks.reply_updates.into();

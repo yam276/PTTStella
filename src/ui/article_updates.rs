@@ -102,6 +102,8 @@ impl Updates {
             && self.next.is_some_and(|at| now >= at)
     }
     pub fn begin(&mut self, stamp: Stamp, now: Instant) {
+        self.failed = false;
+        self.preserved = false;
         self.next = None;
         self.operation = Some((stamp, None, now + Duration::from_secs(30)));
     }

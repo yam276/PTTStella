@@ -89,7 +89,11 @@ pub fn app(props: AppProps) -> Element {
     let owner = use_hook(move || {
         super::probe::surface_sample(sample_case.as_deref(), probing, media_origin.as_deref())
             .and_then(|bytes| {
-                if matches!(
+                if sample_case.as_deref() == Some("bookmark_archive") {
+                    Connection::start_bookmark_archive_probe()
+                } else if sample_case.as_deref() == Some("bookmark_archive_cancel") {
+                    Connection::start_live_updates_probe(None, true)
+                } else if matches!(
                     sample_case.as_deref(),
                     Some("live_updates" | "live_updates_cancel")
                 ) {
@@ -410,6 +414,7 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "login-stop", hidden: true, {pttstella::msg!("login-cancel-attempt")} }
                 }
                 section { "data-tools-group": "navigate",
+                button {id:"bookmarks-current",disabled:true,title:pttstella::msg!("bookmarks-current-unavailable"),{pttstella::msg!("bookmarks-current")}}
                 button { id: "destination-open", {pttstella::msg!("destination-open")} }
                 button { id: "bookmarks-open", {pttstella::msg!("bookmarks-title")} }
                 button { id: "destination-stop", hidden: true, {pttstella::msg!("destination-stop")} }
@@ -421,6 +426,10 @@ pub fn app(props: AppProps) -> Element {
                 span { id: "browse-hint" }
                 }
             }
+            }
+            div {id:"bookmarks-capture",class:"article-load",hidden:true,
+                output {id:"bookmarks-capture-status",role:"status"}
+                button {id:"bookmarks-current-cancel",{pttstella::msg!("cancel")}}
             }
             div { id: "article-load", class: "article-load", hidden: true,
                 output { id: "article-load-status", role: "status" }
@@ -530,6 +539,7 @@ pub fn app(props: AppProps) -> Element {
             }
             dialog { id: "bookmarks-dialog", class: "paste-preview font-dialog", "aria-labelledby": "bookmarks-title",
                 h2 { id: "bookmarks-title", {pttstella::msg!("bookmarks-title")} }
+                div {id:"bookmarks-editor",
                 p { {pttstella::msg!("bookmarks-description")} }
                 label { {pttstella::msg!("bookmarks-list")} select { id: "bookmarks-list", size: "6", "aria-label": pttstella::msg!("bookmarks-list") } }
                 button { id: "bookmarks-new", {pttstella::msg!("bookmarks-new")} }
@@ -539,9 +549,23 @@ pub fn app(props: AppProps) -> Element {
                 div { class: "dialog-actions",
                     button { id: "bookmarks-remove", {pttstella::msg!("bookmarks-remove")} }
                     button { id: "bookmarks-save", class: "primary", {pttstella::msg!("bookmarks-save")} }
+                    button {id:"bookmarks-read",disabled:true,{pttstella::msg!("bookmarks-read")}}
                     button { id: "bookmarks-go", class: "primary", {pttstella::msg!("bookmarks-go")} }
-                    button { id: "bookmarks-close", {pttstella::msg!("close")} }
                 }
+                }
+                section {id:"bookmarks-reader",hidden:true,
+                    p {id:"bookmarks-archive-info",role:"status"}
+                    canvas {id:"bookmarks-canvas",width:"960",height:"552",tabindex:"0","aria-label":pttstella::msg!("bookmarks-read")}
+                    div {class:"dialog-actions",
+                        button {id:"bookmarks-first","Home"}
+                        button {id:"bookmarks-prev",{pttstella::msg!("context-previous")}}
+                        output {id:"bookmarks-position",role:"status"}
+                        button {id:"bookmarks-next",{pttstella::msg!("context-next")}}
+                        button {id:"bookmarks-last","End"}
+                        button {id:"bookmarks-reader-back",{pttstella::msg!("bookmarks-list")}}
+                    }
+                }
+                button { id: "bookmarks-close", {pttstella::msg!("close")} }
             }
             dialog { id: "paste-dialog", class: "paste-preview",
                 "data-active": if pending_paste.read().is_some() { "true" } else { "false" },
@@ -707,6 +731,9 @@ fn context_menu() -> Element {
             }
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "next",
                 ArrowDown { size: 18 } span { {pttstella::msg!("context-next")} }
+            }
+            button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"bookmark-current",
+                Star {size:18} span {{pttstella::msg!("bookmarks-current")}}
             }
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "bookmarks",
                 Star { size: 18 } span { {pttstella::msg!("context-bookmarks")} }

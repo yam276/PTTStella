@@ -8,7 +8,7 @@ use pttstella::{
     screen::{Frame, Glyph, Style, hyperlinks::Hyperlink},
 };
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 use tokio::time::{Duration, Instant};
 
 const MAX_FETCH_STEPS: usize = 14;
@@ -65,16 +65,27 @@ struct CachedPage {
     number: Option<usize>,
     styles: Vec<Style>,
 }
+#[derive(Clone)]
+struct OriginalRow {
+    glyphs: Vec<Glyph>,
+    hyperlinks: Vec<Hyperlink>,
+}
 struct Row {
+    original: Option<OriginalRow>,
     reply: Option<pttstella::filters::Push>,
     glyphs: Vec<Glyph>,
     hyperlinks: Vec<Hyperlink>,
+}
+impl Row {
+    fn raw_glyphs(&self) -> &[Glyph] {
+        self.original.as_ref().map_or(&self.glyphs, |r| &r.glyphs)
+    }
 }
 #[derive(Default)]
 pub(super) struct ArticleCache {
     serial: u64,
     scope: Option<(u64, u64)>,
-    rows: BTreeMap<usize, Row>,
+    rows: BTreeMap<usize, Arc<Row>>,
     end: Option<usize>,
     // One uncommitted blank screen row may be the next page's overlap.
     trailing: Option<Row>,
@@ -87,6 +98,69 @@ pub(super) struct ArticleCache {
     refreshing: bool,
 }
 
+pub(super) struct ArchiveSnapshot {
+    rows: Vec<Arc<Row>>,
+    source: Frame,
+}
+impl ArchiveSnapshot {
+    pub fn title(&self) -> String {
+        let Some(row) = self.rows.get(1) else {
+            return String::new();
+        };
+        let glyphs = row.original.as_ref().map_or(&row.glyphs, |r| &r.glyphs);
+        let text = glyphs.iter().map(|g| g.text.as_str()).collect::<String>();
+        text.trim()
+            .strip_prefix("標題")
+            .unwrap_or(text.trim())
+            .trim()
+            .chars()
+            .take(128)
+            .collect()
+    }
+    /// Only the Files blocking owner expands the pinned row references.
+    pub fn frame(self) -> Frame {
+        let footer = self
+            .source
+            .glyphs
+            .iter()
+            .filter(|g| g.row + 1 == self.source.rows)
+            .cloned()
+            .map(|mut g| {
+                g.row = self.rows.len();
+                g
+            })
+            .collect::<Vec<_>>();
+        let mut frame = Frame {
+            rows: self.rows.len() + 1,
+            glyphs: Vec::new(),
+            hyperlinks: Vec::new(),
+            cursor_visible: false,
+            ..self.source
+        };
+        frame.glyphs.clear();
+        frame.hyperlinks.clear();
+        for (row, data) in self.rows.iter().enumerate() {
+            let (glyphs, links) = data
+                .original
+                .as_ref()
+                .map_or((&data.glyphs, &data.hyperlinks), |r| {
+                    (&r.glyphs, &r.hyperlinks)
+                });
+            frame.glyphs.extend(glyphs.iter().cloned().map(|mut g| {
+                g.row = row;
+                g
+            }));
+            frame.hyperlinks.extend(links.iter().cloned().map(|mut l| {
+                for s in &mut l.spans {
+                    s.row = row;
+                }
+                l
+            }));
+        }
+        frame.glyphs.extend(footer);
+        frame
+    }
+}
 struct Fetch {
     target: usize,
     down: bool,
@@ -435,7 +509,16 @@ impl ArticleCache {
             self.clear();
         }
     }
+    #[cfg(test)]
     pub(super) fn capture(&mut self, paint: &Paint) {
+        self.capture_source(paint, None);
+    }
+    pub(super) fn capture_source(&mut self, paint: &Paint, original: Option<&Frame>) {
+        // Most pages have no masking/highlighting differences. Do one bounded
+        // comparison instead of allocating a second glyph vector for every row.
+        let original = original.filter(|frame| {
+            frame.glyphs != paint.frame.glyphs || frame.hyperlinks != paint.frame.hyperlinks
+        });
         if self
             .scope
             .is_some_and(|scope| scope != (paint.generation, paint.presentation))
@@ -516,7 +599,8 @@ impl ArticleCache {
                 }
                 self.scope = Some((paint.generation, paint.presentation));
                 let mut incoming = Vec::new();
-                let body_rows = source
+                let body_rows = original
+                    .unwrap_or(&source)
                     .glyphs
                     .iter()
                     .filter(|g| {
@@ -532,10 +616,10 @@ impl ArticleCache {
                     .unwrap_or(0)
                     .max(last_line - first_line + 1);
                 for row in 0..body_rows {
-                    incoming.push((first_line + row, source_row(paint, row)));
+                    incoming.push((first_line + row, source_row(paint, row, original)));
                 }
                 let trailing = (percent < 100 && body_rows + 2 == source.rows)
-                    .then(|| source_row(paint, body_rows));
+                    .then(|| source_row(paint, body_rows, original));
                 {
                     if let Some((sent, old_first, old_last, down, _)) = self.loader.awaiting
                         && source.revision != sent
@@ -563,7 +647,7 @@ impl ArticleCache {
                             let expected =
                                 last_line.saturating_add(1).saturating_sub(previous_first);
                             let before = incoming.iter().map(|(_, row)| row).collect::<Vec<_>>();
-                            let after = self.rows.values().collect::<Vec<_>>();
+                            let after = self.rows.values().map(Arc::as_ref).collect::<Vec<_>>();
                             let overlap = page_overlap(
                                 &before,
                                 &after,
@@ -584,7 +668,7 @@ impl ArticleCache {
                         } else {
                             let expected =
                                 previous_last.saturating_add(1).saturating_sub(first_line);
-                            let before = self.rows.values().collect::<Vec<_>>();
+                            let before = self.rows.values().map(Arc::as_ref).collect::<Vec<_>>();
                             let after = incoming.iter().map(|(_, row)| row).collect::<Vec<_>>();
                             let matched = page_overlap(
                                 &before,
@@ -657,7 +741,11 @@ impl ArticleCache {
                 if self.refreshing
                     && incoming.iter().enumerate().any(|(i, (line, row))| {
                         self.rows.get(line).is_some_and(|known| {
-                            !same_glyphs_with_leading_reset(&known.glyphs, &row.glyphs, i == 0)
+                            !same_glyphs_with_leading_reset(
+                                known.raw_glyphs(),
+                                row.raw_glyphs(),
+                                i == 0,
+                            )
                         })
                     })
                 {
@@ -678,6 +766,20 @@ impl ArticleCache {
                 {
                     row.glyphs.clone_from(&known.glyphs);
                 }
+                if let Some((line, row)) = incoming.first_mut()
+                    && let Some(known) = self.rows.get(line)
+                    && same_glyphs_with_leading_reset(known.raw_glyphs(), row.raw_glyphs(), true)
+                    && !same_glyphs(known.raw_glyphs(), row.raw_glyphs())
+                {
+                    row.original = Some(OriginalRow {
+                        glyphs: known.raw_glyphs().to_vec(),
+                        hyperlinks: known
+                            .original
+                            .as_ref()
+                            .map_or(&known.hyperlinks, |r| &r.hyperlinks)
+                            .clone(),
+                    });
+                }
                 let page_start = incoming.first().map_or(first_line, |(n, _)| *n);
                 let page_end = page_start + body_rows - 1;
                 self.pages.insert(
@@ -689,7 +791,8 @@ impl ArticleCache {
                         styles: page_styles,
                     },
                 );
-                self.rows.extend(incoming);
+                self.rows
+                    .extend(incoming.into_iter().map(|(n, r)| (n, Arc::new(r))));
                 self.trailing = trailing;
                 if percent == 100 {
                     let end = page_end;
@@ -721,6 +824,18 @@ impl ArticleCache {
     pub(super) fn project(&mut self, paint: &mut Paint) {
         self.capture(paint);
         self.render(paint);
+    }
+    pub(super) fn archive_snapshot(&self, source: &Frame) -> Option<ArchiveSnapshot> {
+        if self.load_state() != Some(LoadState::Complete)
+            || self.rows.first_key_value()?.0 != &1
+            || self.end != Some(self.rows.len())
+        {
+            return None;
+        }
+        Some(ArchiveSnapshot {
+            rows: self.rows.values().cloned().collect(),
+            source: source.clone(),
+        })
     }
     pub(super) fn render(&self, paint: &mut Paint) {
         if self.scope != Some((paint.generation, paint.presentation)) {
@@ -951,8 +1066,9 @@ fn footer_cells(
     Some(cells)
 }
 
-fn source_row(paint: &Paint, row: usize) -> Row {
-    Row {
+fn source_row(paint: &Paint, row: usize, original: Option<&Frame>) -> Row {
+    let mut result = Row {
+        original: None,
         glyphs: paint
             .frame
             .glyphs
@@ -986,7 +1102,43 @@ fn source_row(paint: &Paint, row: usize) -> Row {
             })
             .collect(),
         reply: paint.replies.iter().find(|reply| reply.row == row).cloned(),
+    };
+    if let Some(frame) = original {
+        let glyphs: Vec<_> = frame
+            .glyphs
+            .iter()
+            .filter(|g| g.row == row)
+            .cloned()
+            .map(|mut g| {
+                g.row = 0;
+                g
+            })
+            .collect();
+        let hyperlinks: Vec<_> = frame
+            .hyperlinks
+            .iter()
+            .filter_map(|l| {
+                let spans: Vec<_> = l
+                    .spans
+                    .iter()
+                    .filter(|s| s.row == row)
+                    .cloned()
+                    .map(|mut s| {
+                        s.row = 0;
+                        s
+                    })
+                    .collect();
+                (!spans.is_empty()).then(|| Hyperlink {
+                    target: l.target.clone(),
+                    spans,
+                })
+            })
+            .collect();
+        if glyphs != result.glyphs || hyperlinks != result.hyperlinks {
+            result.original = Some(OriginalRow { glyphs, hyperlinks });
+        }
     }
+    result
 }
 
 // Footer ranges are logical lines, and a final-page clamp may land inside a
@@ -1006,7 +1158,11 @@ fn page_overlap(
                 .zip(after)
                 .enumerate()
                 .all(|(row, (a, b))| {
-                    same_glyphs_with_leading_reset(&a.glyphs, &b.glyphs, leading_reset && row == 0)
+                    same_glyphs_with_leading_reset(
+                        a.raw_glyphs(),
+                        b.raw_glyphs(),
+                        leading_reset && row == 0,
+                    )
                 })
         })
         .min_by_key(|n| n.abs_diff(expected))
@@ -1041,7 +1197,21 @@ fn same_glyphs_with_leading_reset(a: &[Glyph], b: &[Glyph], leading_reset: bool)
 }
 
 fn row_bytes(row: &Row) -> usize {
-    row.glyphs.capacity() * std::mem::size_of::<Glyph>()
+    let original = row.original.as_ref().map_or(0, |r| {
+        r.glyphs.capacity() * std::mem::size_of::<Glyph>()
+            + r.glyphs.iter().map(|g| g.text.capacity()).sum::<usize>()
+            + r.hyperlinks.capacity() * std::mem::size_of::<Hyperlink>()
+            + r.hyperlinks
+                .iter()
+                .map(|l| {
+                    l.target.as_ref().map_or(0, String::capacity)
+                        + l.spans.capacity()
+                            * std::mem::size_of::<pttstella::screen::hyperlinks::Span>()
+                })
+                .sum::<usize>()
+    });
+    original
+        + row.glyphs.capacity() * std::mem::size_of::<Glyph>()
         + row.glyphs.iter().map(|g| g.text.capacity()).sum::<usize>()
         + row.reply.as_ref().map_or(0, |reply| reply.id.capacity())
         + row.hyperlinks.capacity() * std::mem::size_of::<Hyperlink>()
