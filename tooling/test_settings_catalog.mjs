@@ -7,14 +7,14 @@ const {settingsCatalog,searchSettings}=vm.runInNewContext(readFileSync(new URL('
 test('both UI languages find independently expected Chinese, English, case and multiword aliases',()=>{
  for(const language of ['zh-TW','en-US']){
   const index=settingsCatalog(translator(language));
-  for(const [query,id]of [['中文字體','font-cjk'],['CJK FONT','font-cjk'],['透明度','tools-opacity'],['FLOATING OPACITY','tools-opacity'],['文章模式','article-mode'],['Article mode','article-mode'],['語言','interface-language'],['language','interface-language'],['right click','tools-right-click'],['白名單',null]]){
+  for(const [query,id]of [['中文字體','font-cjk'],['CJK FONT','font-cjk'],['透明度','tools-opacity'],['FLOATING OPACITY','tools-opacity'],['文章模式','article-mode'],['Article mode','article-mode'],['語言','interface-language'],['language','interface-language'],['right click','tools-right-click'],['白名單',null],['縮放','zoom-fit'],['experimental keyboard','vim-toggle'],['站端 滑鼠','station-mouse'],['keepalive','keep-alive']]){
    assert.ok(searchSettings(index,query).some(entry=>entry.id===id),language+' '+query);
   }
   assert.equal(searchSettings(index,'').length,0);assert.equal(searchSettings(index,'PTTStellaPassword123').length,0);
  }
 });
 test('settings search contains only the fixed product index and closed navigation targets',()=>{
- const entries=settingsCatalog(translator('en-US'));assert.equal(entries.length,17);
+ const entries=settingsCatalog(translator('en-US'));assert.equal(entries.length,21);
  assert.ok(entries.every(entry=>['general','appearance','input','media','sites','filters','account','about'].includes(entry.page)));
  assert.equal(searchSettings(entries,'<img src=x onerror=alert(1)>').length,0);
  assert.equal(searchSettings(entries,'x'.repeat(10000)).length,0);

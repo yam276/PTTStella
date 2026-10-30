@@ -14,7 +14,7 @@ test('station editor offers paste instead of browsing tools, and retains ANSI se
     assert.equal(contextMenuItems({...base,editor:true,ready:false}).get('paste'),false);
 });
 test("items follow selected content and capabilities, without inactive feature placeholders",()=>{
-    assert.deepEqual([...contextMenuItems(base).keys()],["select-all","export-page","copy-image-page","bookmarks","filters","vim","settings"]);
+    assert.deepEqual([...contextMenuItems(base).keys()],["select-all","export-page","copy-image-page","bookmarks","settings"]);
     const entries=contextMenuItems({...base,link:1,selection:true,selectionReady:false,rowsReady:false,local:false,reading:true,images:true,inlineReady:false,navigate:true,first:true,last:false});
     assert.equal(entries.get("copy"),false);assert.equal(entries.get("copy-link"),true);assert.equal(entries.get("open-link"),false);
     assert.deepEqual([...entries.keys()],["copy","copy-ansi","export-rows","copy-image-rows","copy-link","open-link","select-link"]);

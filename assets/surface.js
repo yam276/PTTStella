@@ -15,7 +15,7 @@ const exportRows=document.getElementById("export-rows");
 const copyPng=document.getElementById("copy-png"),copyRowsPng=document.getElementById("copy-rows-png");
 const keepAlive=document.getElementById("keep-alive");
 const stationMouseButton=document.getElementById("station-mouse"),stationMouseStatus=document.getElementById("station-mouse-status");
-const hoverPosition=document.getElementById("hover-position");
+
 let hoverPreference="top_right",hoverCandidate=null,hoverTimer=0,hoverSequence=0,pointerClient=null;
 let pasteConfirmProbe=false;
 function cancelHover(forget=false) {
@@ -36,13 +36,13 @@ function previewHover(index) {
         candidate.started=true;send({kind:"hover",presentation:candidate.presentation,sequence:candidate.sequence,stamp:candidate.stamp,index:candidate.index,trusted:candidate.trusted});
     },350);
 }
-function changeHoverPreference(e){send({kind:"hover_preference",position:hoverPosition.value,trusted:e.isTrusted});}
+
 const vimToggle=document.getElementById("vim-toggle"),vimOnce=document.getElementById("vim-once"),vimStatus=document.getElementById("vim-status");
 let settingsActive=false,settingsSnapshot={last:null,error:null};
 let keyboardState={enabled:false,mode:"input",pending:false,prefix:""};
 function policy(action,e,code="") {send({kind:"keyboard_state",action,code,generation,trusted:e?.isTrusted??true});}
-function toggleVim(e){policy("toggle",e);restoreEditingFocus();}
-function armNative(e){policy("once",e);restoreEditingFocus();}
+function toggleVim(e){policy("toggle",e);if(!document.querySelector("dialog[open]"))restoreEditingFocus();}
+function armNative(e){policy("once",e);if(!document.querySelector("dialog[open]"))restoreEditingFocus();}
 function keyup(e){if(inlineImages.keyup(e))e.preventDefault();if(!e.metaKey)policy("release",e,e.code);}
 function receiveKeyboard(state){keyboardState=state;vimToggle.textContent=state.enabled?tr("vim-on"):tr("vim-off");
     keyboard.readOnly=state.enabled&&!["input","once"].includes(state.mode);
@@ -109,7 +109,7 @@ function toggleStationMouse(e){
     if(!e.isTrusted||stopped||!latest)return;
     stationMouse.revoke();
     send({kind:"station_mouse_enabled",generation,enabled:!latest.mouse.enabled,trusted:true});
-    focus();
+    if(!document.querySelector("dialog[open]"))focus();
 }
 function refreshStationMouse(){
     const state=latest?.mouse;
@@ -673,8 +673,6 @@ function contextAction(action,context,e){
     else if(action==="next")browseDown(e);
     else if(action==="bookmarks")bookmarksUi.show(e);
     else if(action==="bookmark-current")bookmarksUi.capture(e);
-    else if(action==="filters")filterUi.show(e);
-    else if(action==="vim")toggleVim(e);
     else if(action==="settings")settingsUi.request(e);
 }
 function activate() { if(!articleFind?.ownsFocus()&&!contextMenu?.isOpen()&&!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); refreshKeepAlive(); }
@@ -778,7 +776,7 @@ function zoomTo(value) {
     stationMouse.revoke();
     zoom=Math.max(.25,Math.min(4,value)); draw(latest);
     viewport.scrollLeft=Math.max(0,(surface.offsetWidth-viewport.clientWidth)/2);
-    viewport.scrollTop=Math.max(0,(surface.offsetHeight-viewport.clientHeight)/2); focus();
+    viewport.scrollTop=Math.max(0,(surface.offsetHeight-viewport.clientHeight)/2); if(!document.querySelector("dialog[open]"))focus();
 }
 function wheel(e) {
     // Only the Rust-projected article is a scrollable document. Overflow from
@@ -861,7 +859,7 @@ const bindings=[...articleUpdates.bindings,[viewport,"scroll",()=>articleUpdates
     [pasteSend,"click",confirmPaste],[pasteCancel,"click",cancelPaste],[pasteDialog,"cancel",cancelPaste],
     [exportButton,"click",exportScreen],[exportRows,"click",exportSelected],[copyPng,"click",copyPageImage],[copyRowsPng,"click",copySelectedImage],
     [keepAlive,"click",toggleKeepAlive],[stationMouseButton,"click",toggleStationMouse],
-    [hoverPosition,"change",changeHoverPreference],
+
     [browseBack,"click",browseReturn],[browsePrevious,"click",browseUp],[browseNext,"click",browseDown],
     [plus,"click",zoomIn],[minus,"click",zoomOut],[fit,"click",zoomFit],
     [document,"visibilitychange",refreshKeepAlive],
@@ -1014,7 +1012,7 @@ async function paint(packet) {
     surface.dataset.keepAliveSent=String(packet.keep_alive_sent);
     loginUi.update(packet);destinationUi.update(packet);bookmarksUi.update();
     document.getElementById("site-current").textContent=packet.site.endpoint+" · "+({uao:"Big5-UAO",big5:"Big5",gbk:"GBK"})[packet.site.encoding];
-    for(const id of ["destination-open","filters-open","vim-toggle","keep-alive"])document.getElementById(id).disabled=!packet.ptt_features;
+    for(const id of ["destination-open","vim-toggle","keep-alive"]){const node=document.getElementById(id);if(node)node.disabled=!packet.ptt_features;}
 }
 focus();
 function revokeSurface(){
@@ -1086,7 +1084,7 @@ const route=createSurfaceRouter({
     sites_open:sitesUi.receiveOpen,sites_result:sitesUi.receive,
     tools_opacity:percent=>tools.setOpacity(percent),
     tools_access:access=>{toolAccess=access;tools.setVisible(access.show_floating_button);},
-    hover_settings:position=>{hoverPreference=position;hoverPosition.value=position;surface.dataset.hoverPosition=position;
+    hover_settings:position=>{hoverPreference=position;surface.dataset.hoverPosition=position;
         if(position==="off")cancelHover(true);else if(pointerClient)media.locate(pointerClient,position);},
     media_hover:data=>{if(hoverCandidate?.sequence===data.sequence){media.hover(data);media.locate(pointerClient,hoverPreference);}},
     hover_reset:data=>{cancelHover();if(data.media)media.reset();},
@@ -1141,7 +1139,6 @@ finally {
     keyboard.dispatchEvent(new InputEvent("input",{data:"a",inputType:"insertText",bubbles:true}));
     surface.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true}));window.dispatchEvent(new Event("resize"));plus.click();
     chrome.dispatchEvent(new PointerEvent("pointerenter"));
-    document.getElementById("font-settings").click();
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
     cleanupClean=mediaClean&&toast.clean()&&articleFind.clean()&&editorColor.clean()&&contextMenu.clean()&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
