@@ -22,6 +22,14 @@ pub enum Error {
     Missing,
     Timeout,
 }
+
+/// Read only the standard author/header row, including PTT's leading padding.
+/// This does not establish article identity; the caller must still verify Q.
+pub fn header_board(header: &str) -> Option<board::BoardName> {
+    let author = header.trim_start_matches(' ').strip_prefix("作者")?;
+    let (_, name) = author.rsplit_once("看板")?;
+    board::BoardName::parse(name.trim()).ok()
+}
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -313,13 +321,7 @@ impl Open {
                         self.target.clone().ok_or(Error::Identity)?,
                     ));
                 }
-                let header = rows[0].text.trim_end();
-                let board = header
-                    .starts_with("作者")
-                    .then(|| header.rsplit_once("看板").map(|(_, name)| name.trim()))
-                    .flatten()
-                    .and_then(|name| board::BoardName::parse(name).ok())
-                    .ok_or(Error::Identity)?;
+                let board = header_board(&rows[0].text).ok_or(Error::Identity)?;
                 if !board.same(&self.board) {
                     return Err(Error::Identity);
                 }
@@ -493,6 +495,41 @@ mod tests {
         );
         assert!(!open.needs_frame(screen.revision() + 1));
         assert!(open.observe(&screen.frame(), now).is_err());
+    }
+    #[test]
+    fn padded_author_header_preserves_verified_board_and_rejects_wrong_or_missing_labels() {
+        for (header, accepted) in [
+            (" 作者  Sample (合成)                 看板  Stella   ", true),
+            ("作者 Sample (合成) 看板 Stella", true),
+            (" 作者 Sample (合成) 看板 Other", false),
+            ("Sample (合成) 看板 Stella", false),
+            (" 作者 Sample (合成)", false),
+        ] {
+            let (mut screen, mut open, now) = ready_information();
+            screen.feed(&scene("information"));
+            assert_eq!(
+                open.observe(&screen.frame(), now).unwrap(),
+                Advance::Send(b" ".to_vec())
+            );
+            screen.feed(&scene("articles"));
+            assert_eq!(
+                open.observe(&screen.frame(), now).unwrap(),
+                Advance::Send(b"\x1b[C".to_vec())
+            );
+            screen.feed(&scene("reading"));
+            screen.feed(
+                &encoding::encode(&format!("\x1b[1;1H\x1b[2K{header}\x1b[24;80H\x1b[?25l"))
+                    .unwrap(),
+            );
+            let expected = if accepted {
+                Ok(Advance::Reached(
+                    ArticleTarget::new("Stella", "00000101").unwrap(),
+                ))
+            } else {
+                Err(Error::Identity)
+            };
+            assert_eq!(open.observe(&screen.frame(), now), expected, "{header:?}");
+        }
     }
     #[test]
     fn composing_with_board_switch_preserves_each_confirmed_step_and_the_total_deadline() {
