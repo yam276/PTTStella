@@ -4,7 +4,7 @@
 
 ## 目標
 
-目前最新開發診斷交付為 `dist/macos-bookmark-archive-current/PTTStella.app`（0.3.0-dev.2，新增目前文章一鍵收藏／離線文字與 ANSI 副本，浮球精簡四類，完整驗證見文末）；前版 `dist/macos-reply-5s-final/PTTStella.app` 保留供比較；前版 `dist/macos-toast-verified/PTTStella.app` 保留供比較；前版 `dist/macos-editor-colour-verified/PTTStella.app` 保留供比較；前版 `dist/macos-030-multi-instance-critic/PTTStella.app` 保留供比較。穩定版診斷交付 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修）保留。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前進入 `0.3.0` 發佈準備：develop 的 Cargo／lock、README／徽章與版專用說明已更新為正式0.3.0，準備develop→main的Release PR；main及公開正式下載仍為0.2.2，尚未合併或發佈。本輪實站／操作／20輪827行長文與四架構verify結果見下節。最新未發佈本機候選為 `dist/macos-030-release-candidate/PTTStella.app`（正常視窗、非診斷；原生About確認0.3.0）；本輪實站診斷基線為 `dist/macos-030-freeze-final/PTTStella.app`（實際0.3.0-dev.2）。歷史交付與驗證範圍保留於後續各節，過時副本依task-owned清理規則處理。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
@@ -29,6 +29,14 @@ PTTStella 專用帳號實站登入，Steam／NBA／Equestrian／Test 切板與�
 最終診斷App `dist/macos-030-freeze-final/PTTStella.app`（macOS arm64／strict ad-hoc／未公證；不等於正式版）完整讀到827行。相同827行／38頁長文重讀20輪皆可到805～827行，量測CPU seconds、RSS及vmmap physical footprint，完整方法與數據見本機 `performance.json`；含CUA輸入與Home／End／AX觀察的單輪約2.1秒，不能與舊0.7秒Paint ACK量測直接比較。RSS含shared／empty allocator pages，與physical footprint分開；未宣稱低階實機FPS或整日無洩漏。額外嘗試因失焦保護暫停，立即停止續送／取消回列表，不記通過；未為測試放寬失焦規則。先前兩個App及其WebKit cohort正常退出，診斷finish run_ok／cleanup_ok均true。
 
 最終本機gate：Python81、JS323、desktop lib186／bin173、多程序保存9、core14commands／2replays、Clippy／fmt／Fluent／docs通過；ignored為父測試實際使用的子程序helper，未算成通過數。先前Python設定helper mock缺Runtime boolean回覆，補上root/group狀態後通過，原失敗紀錄保留。下一步推送develop並執行release.yml的verify（Windows x64、macOS arm64／x64、Linux x64）；目前未以舊版CI當作本版通過，也沒有建立PR／Tag／Release。所有新證據保留 `.local/verification/release-030-freeze-20261030/`，跨平台GUI／低階硬體及長時段實站追加推文仍為明示驗證邊界。
+
+### 四架構建置通過，準備 0.3.0 Release PR
+
+[verify 41034914069](https://github.com/yam276/PTTStella/actions/runs/41034914069) 在乾淨develop `4a39995` 完成 Windows x64、macOS arm64／x64、Linux x64 全部測試與打包；publish依verify模式skipped。取回同次原始artifacts，用production `validate_assets` 核對四份manifest、六個下載、來源commit／version／release profile／dirty=false、全部逐檔SHA-256與完整白名單均通過，沒有建立Tag或GitHub Release。
+
+依本次「確認後準備發佈0.3.0」授權，現在只在develop把Cargo／lock、README／徽章與版專用說明改為正式0.3.0，準備develop→main的Release PR供審閱，不自行合併或發佈。前述原生與四架構驗證針對同一產品程式；此步只有版本／文件，不把dev下載改名冒充正式下載。正式套件仍由合併後的main發佈流程重新建置並校驗。診斷App `dist/macos-030-freeze-final/PTTStella.app` 仍標示實際0.3.0-dev.2；不宣稱它是正式下載。
+
+本輪全部App及WebKit cohort已退出，最終finish run_ok／cleanup_ok true、診斷無丟紀錄；取樣工具也已join。保留來源／失敗／成功與CPU／RSS／vmmap證據，自己的過時中間App已清理；明確清單及保留理由在本輪cleanup-owned-output.json。平台GUI與低階實機範圍仍按前述限制，不因CI通過擴大宣稱。
 
 ## 0.3.0 後續需求與順序（2026-10-29）
 
