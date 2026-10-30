@@ -27,6 +27,15 @@ pub(super) enum Packet<'a> {
         lease: pttstella::mouse::input::Lease,
         message: String,
     },
+    BookmarkCapture {
+        request: u64,
+        cancellable: bool,
+    },
+    Archive {
+        request: u64,
+        article: Option<super::bookmarks::LocalArticle>,
+        message: Option<String>,
+    },
     BookmarksOpen {
         request: u64,
         data: super::bookmarks::Snapshot,

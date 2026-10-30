@@ -1695,3 +1695,51 @@ fn cancelling_reentry_preserves_local_reading_until_explicit_station_restore_or_
         assert!(state.current(actual, &view).unwrap().article.is_none());
     }
 }
+
+#[test]
+fn current_bookmark_requires_complete_ack_and_owns_verified_identity_until_cancel() {
+    use pttstella::{
+        article_target::ArticleTarget,
+        navigation_job::{Destination, Progress},
+    };
+    let (mut state, mut view, _) = refresh_fixture();
+    let id = state.reading_progress().unwrap().0;
+    let bad = Stamp {
+        revision: view.frame.revision + 1,
+        ..view.stamp()
+    };
+    assert!(state.bookmark_current(bad, id, &view).is_err());
+    assert!(state.bookmark_current(view.stamp(), id + 1, &view).is_err());
+    // A past update failure cannot poison a newly authorized capture.
+    state.fail_updates();
+    assert!(state.updates_status().unwrap().failed);
+    let (snapshot, target) = state.bookmark_current(view.stamp(), id, &view).unwrap();
+    assert!(matches!(target, Destination::Refresh { .. }));
+    assert!(!state.updates_status().unwrap().failed);
+    let capture = super::super::bookmarks::Acquisition::new(10, view.stamp(), snapshot);
+    assert!(capture.resolve(&view, false).is_none());
+    let operation = view.stamp();
+    view.destination = Progress::Reached {
+        serial: 3,
+        operation: bad,
+        target: Destination::Article(ArticleTarget::new("Other", "00000101").unwrap()),
+    };
+    assert!(capture.resolve(&view, false).is_none());
+    view.destination = Progress::Reached {
+        serial: 4,
+        operation,
+        target: Destination::Article(ArticleTarget::new("Stella", "00000101").unwrap()),
+    };
+    assert_eq!(
+        capture
+            .resolve(&view, false)
+            .unwrap()
+            .unwrap()
+            .board()
+            .as_str(),
+        "Stella"
+    );
+    assert!(capture.resolve(&view, true).unwrap().is_err());
+    view.generation += 1;
+    assert!(capture.resolve(&view, false).unwrap().is_err());
+}

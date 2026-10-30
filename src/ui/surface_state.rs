@@ -561,6 +561,39 @@ impl SurfaceState {
         self.updates.stop(true);
         self.dirty = true;
     }
+    pub(super) fn bookmark_current(
+        &mut self,
+        stamp: Stamp,
+        id: u64,
+        view: &View,
+    ) -> Result<
+        (
+            super::article_cache::ArchiveSnapshot,
+            pttstella::navigation_job::Destination,
+        ),
+        String,
+    > {
+        if self.authorize_reading(stamp, id).is_none()
+            || !self.cached_reading(stamp, view)
+            || stamp != view.stamp()
+            || view.input_pending
+            || view.output_pending
+            || self.updates.holding()
+            || self.updates.status().is_some_and(|s| s.busy)
+        {
+            return Err(pttstella::msg!("bookmarks-current-unavailable"));
+        }
+        let destination = self
+            .article
+            .refresh_destination()
+            .ok_or(pttstella::msg!("bookmarks-current-unavailable"))?;
+        let frame = self
+            .article
+            .archive_snapshot(&view.frame)
+            .ok_or(pttstella::msg!("bookmarks-current-unavailable"))?;
+        self.updates.begin(stamp, tokio::time::Instant::now());
+        Ok((frame, destination))
+    }
     pub(super) fn next_update(
         &mut self,
         view: &View,
@@ -655,7 +688,7 @@ impl SurfaceState {
             return;
         }
         let packet = paint(view, false, &DisplaySettings::default(), &self.filters);
-        self.article.capture(&packet);
+        self.article.capture_source(&packet, Some(&view.frame));
         self.captured = Some(identity);
         self.updates.sync(
             self.article

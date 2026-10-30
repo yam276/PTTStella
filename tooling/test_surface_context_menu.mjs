@@ -183,3 +183,9 @@ test('ordinary native editor right-click opens paste menu while browsing backgro
         f.openContextMenu({isTrusted:true,shiftKey:false,preventDefault(){}});assert.deepEqual(calls,[editor?'menu':'tools']);
     }
 });
+
+test('bookmark action agrees with full current-article availability instead of silently accepting a loading page',()=>{
+ assert.equal(contextMenuItems({...base,reading:true,bookmark:false}).get('bookmark-current'),false);
+ assert.equal(contextMenuItems({...base,reading:true,bookmark:true}).get('bookmark-current'),base.ready);
+ assert.equal(contextMenuItems({...base,reading:true,bookmark:true,selection:true}).has('bookmark-current'),false);
+});

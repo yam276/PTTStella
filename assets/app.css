@@ -315,3 +315,6 @@ button.primary .settings-icon { color: inherit; }
 .inline-expand-trigger[hidden] { display:none; }
 @keyframes inline-expand-breathe { 0%, 100% { opacity:.75; } 50% { opacity:.85; } }
 @media (prefers-reduced-motion: reduce) { .inline-expand-trigger { animation:none; } }
+
+#bookmarks-canvas{position:static;inset:auto;display:block;width:100%;height:auto;max-height:58vh;object-fit:contain;background:#000;outline-offset:3px}
+#bookmarks-reader .dialog-actions{flex-wrap:wrap}

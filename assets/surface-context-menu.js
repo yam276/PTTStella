@@ -23,7 +23,7 @@ function contextMenuItems(state) {
         if(state.images)add("inline",state.inlineReady);
         add("back",state.navigate);add("previous",state.navigate&&!state.first);add("next",state.navigate&&!state.last);
     }
-    if(state.ptt){add("bookmarks");add("filters");add("vim");}
+    if(state.ptt){if(state.reading)add("bookmark-current",state.ready&&!!state.bookmark);add("bookmarks");add("filters");add("vim");}
     add("settings");return entries;
 }
 function contextMenuPosition(x,y,width,height,viewportWidth,viewportHeight) {

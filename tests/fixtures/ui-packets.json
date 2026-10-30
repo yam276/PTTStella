@@ -10,6 +10,8 @@
     "name": "station_mouse_rejected",
     "packet": {"kind":"station_mouse_rejected","payload":{"lease":{"stamp":{"generation":7,"revision":4,"input_epoch":2},"mode_epoch":5,"policy_epoch":3,"transaction":9},"message":"滑鼠事件未送出"}}
   },
+  {"name":"bookmark_capture","packet":{"kind":"bookmark_capture","payload":{"request":13,"cancellable":false}}},
+  {"name":"archive_missing","packet":{"kind":"archive","payload":{"request":14,"article":null,"message":"尚無本機副本"}}},
   {
     "name": "bookmarks_open",
     "packet": {"kind":"bookmarks_open","payload":{"request":10,"data":{"entries":[{"board":"Stella","aid":"00000101","label":"自製合成書籤","created_at":100},{"board":"Other","aid":"1AbCdE-_","label":null,"created_at":200}],"writable":true,"warning":null}}}

@@ -69,6 +69,21 @@ pub(super) enum SurfaceEvent {
         enabled: bool,
         trusted: bool,
     },
+    BookmarkCurrent {
+        request: u64,
+        stamp: Stamp,
+        article: u64,
+        trusted: bool,
+    },
+    BookmarkCancel {
+        request: u64,
+        trusted: bool,
+    },
+    ArchiveOpen {
+        request: u64,
+        value: String,
+        trusted: bool,
+    },
     BookmarksOpen {
         request: u64,
         trusted: bool,
@@ -410,8 +425,7 @@ impl SurfaceEvent {
                 | Self::LoginSubmit { .. }
                 | Self::LoginForget { .. }
                 | Self::DestinationSubmit { .. }
-                | Self::BookmarksOpen { .. }
-                | Self::BookmarksEdit { .. }
+                | Self::BookmarkCurrent { .. }
                 | Self::RecentBoardsClear { .. }
                 | Self::FiltersOpen { .. }
                 | Self::FiltersEdit { .. }
@@ -526,6 +540,9 @@ impl SurfaceEvent {
             SitesOpen { trusted, .. }
             | SitesEdit { trusted, .. }
             | SitesConnect { trusted, .. }
+            | BookmarkCurrent { trusted, .. }
+            | BookmarkCancel { trusted, .. }
+            | ArchiveOpen { trusted, .. }
             | BookmarksOpen { trusted, .. }
             | BookmarksEdit { trusted, .. }
             | FiltersOpen { trusted }

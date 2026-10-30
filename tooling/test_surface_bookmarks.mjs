@@ -7,21 +7,21 @@ import {translator} from "./i18n_test_support.mjs";
 
 const entries=JSON.parse(readFileSync(new URL("../tests/fixtures/bookmarks.json",import.meta.url),"utf8")).entries;
 function environment(){
-    const nodes=new Map(),sent=[],focus=[],destinations=[];let active=false,foreign=false;
+    const nodes=new Map(),sent=[],focus=[],destinations=[],painted=[],notices=[];let active=false,foreign=false,packet={};
     const node=id=>{if(!nodes.has(id))nodes.set(id,{id,value:"",textContent:"",disabled:false,open:false,children:[],
         showModal(){this.open=true;},close(){this.open=false;},focus(){focus.push(id);},replaceChildren(...children){this.children=children;}});return nodes.get(id);};
     const document={getElementById:node,createElement:()=>({}),querySelector:()=>foreign?{}:[...nodes.values()].find(node=>node.open)};
     const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-bookmarks.js",import.meta.url),"utf8")+"\ncreateBookmarksDialog",{document});
     const ui=create({tr:translator("en-US"),send:value=>sent.push(JSON.parse(JSON.stringify(value))),prepare(){},restore:()=>focus.push("restore"),changed(){},
-        openDestination:(e,value)=>{destinations.push(value);return true;},current:()=>({destination:active?{state:"active"}:{state:"idle"}})});
+        openDestination:(e,value)=>{destinations.push(value);return true;},render:(canvas,paint)=>painted.push(paint),notice:v=>notices.push(v),current:()=>({...packet,destination:active?{state:"active"}:{state:"idle"}})});
     function fire(id,event="click",extra={}){
-        const e={target:node(id),isTrusted:true,preventDefault(){},...extra};
+        const e={target:node(id),isTrusted:true,preventDefault(){},stopPropagation(){},...extra};
         const binding=ui.bindings.find(([target,type])=>target===node(id)&&type===event);assert.ok(binding,`${id} ${event}`);binding[2](e);
     }
     const snapshot=(rows=entries,writable=true)=>({entries:rows,writable,warning:writable?null:"invalid source"});
     function load(rows=entries,writable=true){ui.receiveOpen({request:sent.at(-1).request,data:snapshot(rows,writable)});}
     function result(request,status="saved",rows=entries){ui.receive({request,data:snapshot(rows),feedback:{status,notice:status==="saved"?"saved":"failure"}});}
-    return {node,ui,sent,focus,destinations,fire,load,result,snapshot,active:value=>{active=value;ui.update();},foreign:value=>foreign=value};
+    return {node,ui,sent,focus,destinations,painted,notices,setCurrent:value=>{packet=value;ui.update();},fire,load,result,snapshot,active:value=>{active=value;ui.update();},foreign:value=>foreign=value};
 }
 test("opening and selection stay local, and Go hands one explicit draft to the existing destination owner",()=>{
     const env=environment();env.fire("bookmarks-open");assert.deepEqual(env.sent,[{kind:"bookmarks_open",request:1,trusted:true}]);
@@ -85,4 +85,36 @@ test("untrusted, readonly, foreign-modal and disposed operations cannot edit or 
     for(const id of ["bookmarks-open","bookmarks-save","bookmarks-remove","bookmarks-go"])env.fire(id);
     env.fire("bookmarks-dialog","compositionstart");env.ui.update();assert.equal(env.ui.clean(),true);
     assert.equal(env.sent.length,1);assert.deepEqual(env.destinations,[]);
+});
+
+const reading={generation:7,input_epoch:2,connected:true,ptt_features:true,mouse:{route:"local"},frame:{revision:4},article:{id:9,first_line:1,end:true,load:"complete"}};
+test("current article capture sends only acknowledged identity, stays single-flight and updates an already open list",()=>{
+ const e=environment();e.setCurrent({...reading,article:{...reading.article,load:"loading"}});e.fire("bookmarks-current");assert.equal(e.sent.length,0);
+ e.setCurrent(reading);e.fire("bookmarks-current","click",{isTrusted:false});assert.equal(e.sent.length,0);
+ e.fire("bookmarks-current");assert.equal(e.node("bookmarks-capture").hidden,false);assert.deepEqual(e.sent[0],{kind:"bookmark_current",request:1,stamp:{generation:7,revision:4,input_epoch:2},article:9,trusted:true});
+ e.fire("bookmarks-current");assert.equal(e.sent.length,1);e.ui.captureStage({request:1,cancellable:false});assert.equal(e.node("bookmarks-current-cancel").disabled,true);
+ e.fire("bookmarks-current-cancel");assert.equal(e.sent.length,1);
+ e.fire("bookmarks-open");e.load([]);const saved=[{...entries[0],cached_at:100,lines:45}];e.result(1,"saved",saved);
+ assert.equal(e.node("bookmarks-list").children.length,1);assert.ok(e.node("bookmarks-list").children[0].textContent.includes("Local copy"));assert.equal(e.notices.at(-1),"saved");
+});
+test("capture cancellation preserves its request and failure never claims a saved local copy",()=>{
+ const e=environment();e.setCurrent(reading);e.fire("bookmarks-current");e.fire("bookmarks-current-cancel");
+ assert.deepEqual(e.sent[1],{kind:"bookmark_cancel",request:1,trusted:true});e.result(1,"failed",[]);
+ assert.equal(e.node("bookmarks-current-cancel").hidden,true);assert.equal(e.node("bookmarks-capture").hidden,true);assert.equal(e.node("bookmarks-current").disabled,false);assert.equal(e.notices.at(-1),"failure");
+});
+function archive(){return {target:{board:"Stella",aid:"00000101"},saved_at:100,settings:{},frame:{rows:45,cols:80,glyphs:Array.from({length:45},(_,row)=>({row,col:0,width:1,text:String(row)}))}};}
+test("offline reader uses the shared renderer with bounded visible rows and never sends navigation or text",()=>{
+ const e=environment();e.fire("bookmarks-open");e.load([{...entries[0],cached_at:100,lines:45}]);e.node("bookmarks-list").value="#00000101@Stella";e.fire("bookmarks-list","change");e.fire("bookmarks-read");
+ assert.deepEqual(e.sent[1],{kind:"archive_open",request:2,value:"#00000101@Stella",trusted:true});e.ui.receiveArchive({request:2,article:archive(),message:null});
+ assert.ok(e.node("bookmarks-archive-info").textContent.startsWith("#00000101@Stella"));assert.equal(e.node("bookmarks-reader").hidden,false);assert.equal(e.painted.at(-1).frame.rows,23);
+ e.fire("bookmarks-next");assert.equal(e.painted.at(-1).frame.glyphs[0].text,"22");assert.equal(e.painted.at(-1).frame.glyphs[0].row,0);
+ e.fire("bookmarks-first");assert.equal(e.painted.at(-1).frame.glyphs[0].text,"0");
+ e.fire("bookmarks-reader","keydown",{key:"End"});assert.equal(e.painted.at(-1).frame.glyphs.at(-1).text,"44");assert.equal(e.focus.at(-1),"bookmarks-canvas");
+ e.fire("bookmarks-reader","keydown",{key:"ArrowUp"});assert.equal(e.painted.at(-1).frame.glyphs[0].text,"21");
+ assert.equal(e.sent.length,2);assert.deepEqual(e.destinations,[]);e.ui.destroy();assert.equal(e.ui.clean(),true);
+});
+test("closing and reopening cannot show a late local article or replace another selection",()=>{
+ const e=environment();e.fire("bookmarks-open");e.load([{...entries[0],cached_at:100}]);e.node("bookmarks-list").value="#00000101@Stella";e.fire("bookmarks-list","change");e.fire("bookmarks-read");
+ e.fire("bookmarks-close");e.fire("bookmarks-open");const before=e.focus.length;e.ui.receiveArchive({request:2,article:archive()});
+ assert.equal(e.painted.length,0);assert.equal(e.focus.length,before);assert.equal(e.node("bookmarks-reader").hidden,true);
 });

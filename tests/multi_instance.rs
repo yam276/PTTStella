@@ -78,6 +78,21 @@ fn process_child() {
     let root = PathBuf::from(std::env::var_os("PTTSTELLA_TEST_SHARED_ROOT").unwrap());
     let mode = std::env::var("PTTSTELLA_TEST_MODE").unwrap();
     let role = std::env::var("PTTSTELLA_TEST_ROLE").unwrap();
+    if mode == "archives" {
+        let store = bookmarks::store::Store::at(root.join("bookmarks.json"));
+        let base = store.load().unwrap();
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("fixtures/filters.json")).unwrap();
+        let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
+        screen.feed(&pttstella::encoding::encode(fixture["reading"].as_str().unwrap()).unwrap());
+        let archive = bookmarks::archive::Archive::new(&screen.frame(), 100).unwrap();
+        let target =
+            ArticleTarget::new(if role == "a" { "Alpha" } else { "Beta" }, "00000101").unwrap();
+        let draft = base.archive(target, &role, 100, archive).unwrap();
+        ready(&root, &role);
+        store.save_from(&base, draft).unwrap();
+        return;
+    }
     if mode == "hold" {
         let lock = std::fs::OpenOptions::new()
             .read(true)
@@ -383,4 +398,80 @@ fn merged_bookmarks_over_capacity_reject_without_damaging_saved_data() {
         backup
     );
     assert_eq!(bookmarks::store::Store::at(path).load().unwrap(), draft_a);
+}
+
+#[test]
+fn archived_bookmarks_merge_independent_articles_and_reject_delete_update_conflicts() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("bookmarks.json");
+    let a = bookmarks::store::Store::at(path.clone());
+    let b = bookmarks::store::Store::at(path.clone());
+    let empty = bookmarks::Bookmarks::default();
+    let mut screen = pttstella::screen::Screen::new(80, 24).unwrap();
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/filters.json")).unwrap();
+    screen.feed(&pttstella::encoding::encode(fixture["reading"].as_str().unwrap()).unwrap());
+    let archive = bookmarks::archive::Archive::new(&screen.frame(), 100).unwrap();
+    let first = ArticleTarget::new("Stella", "00000101").unwrap();
+    let second = ArticleTarget::new("Other", "00000101").unwrap();
+    let draft_a = empty
+        .archive(first.clone(), "first", 100, archive.clone())
+        .unwrap();
+    let draft_b = empty
+        .archive(second.clone(), "second", 101, archive.clone())
+        .unwrap();
+    a.save_from(&empty, draft_a).unwrap();
+    let merged = b.save_from(&empty, draft_b).unwrap();
+    let restart = bookmarks::store::Store::at(path.clone()).load().unwrap();
+    assert_eq!(restart, merged);
+    assert_eq!(restart.entries().len(), 2);
+    assert!(
+        restart
+            .entries()
+            .iter()
+            .all(|e| e.archive().unwrap().row_count() == 23)
+    );
+    let removed = a
+        .save_from(&restart, restart.remove(&first).unwrap())
+        .unwrap();
+    let stale = restart
+        .archive(first.clone(), "stale", 102, archive)
+        .unwrap();
+    assert!(b.save_from(&restart, stale).is_err());
+    assert_eq!(a.load().unwrap(), removed);
+    assert_eq!(removed.entries()[0].target(), &second);
+    assert!(removed.entries()[0].archive().is_some());
+}
+
+#[test]
+fn independent_processes_preserve_both_archives_in_one_atomic_collection() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let a = Worker::start(root, "archives", "a");
+    let b = Worker::start(root, "archives", "b");
+    wait(&root.join("ready-a"));
+    wait(&root.join("ready-b"));
+    std::fs::write(root.join("release"), b"go").unwrap();
+    a.finish();
+    b.finish();
+    let saved = bookmarks::store::Store::at(root.join("bookmarks.json"))
+        .load()
+        .unwrap();
+    assert_eq!(saved.entries().len(), 2);
+    for board in ["Alpha", "Beta"] {
+        let entry = saved
+            .entries()
+            .iter()
+            .find(|e| e.target().board().as_str() == board)
+            .unwrap();
+        let archive = entry.archive().unwrap();
+        assert_eq!(archive.row_count(), 23);
+        assert!(
+            archive
+                .filtered(&filters::Rules::default())
+                .glyphs
+                .iter()
+                .any(|g| g.row == 5 && g.text == "機")
+        );
+    }
 }

@@ -84,6 +84,21 @@ fn outbound_results_match_the_shared_wire_examples() {
             },
         ),
         (
+            "bookmark_capture",
+            Packet::BookmarkCapture {
+                request: 13,
+                cancellable: false,
+            },
+        ),
+        (
+            "archive_missing",
+            Packet::Archive {
+                request: 14,
+                article: None,
+                message: Some("尚無本機副本".into()),
+            },
+        ),
+        (
             "bookmarks_open",
             Packet::BookmarksOpen {
                 request: 10,
