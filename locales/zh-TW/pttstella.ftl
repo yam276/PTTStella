@@ -763,3 +763,7 @@ bookmarks-archive-invalid = 文章副本無效或超出單篇上限（4096 行�
 bookmarks-storage-full = 收藏儲存空間已滿（32 MiB），請移除不需要的收藏後再試。
 bookmarks-archive-readonly = 離線唯讀；圖片僅保留網址，不自動下載。
 bookmarks-lines = 第 { $first }～{ $last } 行／共 { $total } 行
+settings-alias-zoom = 縮放 比例 符合視窗 zoom fit scale
+settings-alias-vim = Vim 實驗中 鍵盤 瀏覽 experimental keyboard navigation
+settings-alias-station-mouse = 站端 滑鼠 回報 mouse terminal reporting
+settings-alias-keepalive = 防閒置 保活 閒置 keepalive idle connection

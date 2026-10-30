@@ -4,7 +4,7 @@
 
 ## 目標
 
-目前最新開發診斷交付為 `dist/macos-reply-5s-final/PTTStella.app`（0.3.0-dev.2，含五秒且保留閱讀位置的目前文章推文更新、名單標記轉色與藍金通知，合成驗證範圍見下節）；前版 `dist/macos-toast-verified/PTTStella.app` 保留供比較；前版 `dist/macos-editor-colour-verified/PTTStella.app` 保留供比較；前版 `dist/macos-030-multi-instance-critic/PTTStella.app` 保留供比較。穩定版診斷交付 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修）保留。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
+目前最新開發診斷交付為 `dist/macos-bookmark-archive-current/PTTStella.app`（0.3.0-dev.2，新增目前文章一鍵收藏／離線文字與 ANSI 副本，浮球精簡四類，完整驗證見文末）；前版 `dist/macos-reply-5s-final/PTTStella.app` 保留供比較；前版 `dist/macos-toast-verified/PTTStella.app` 保留供比較；前版 `dist/macos-editor-colour-verified/PTTStella.app` 保留供比較；前版 `dist/macos-030-multi-instance-critic/PTTStella.app` 保留供比較。穩定版診斷交付 `dist/macos-021-editor-help/PTTStella.app`（0.2.1 編輯器底列補修）保留。上一輪診斷交付為 `dist/macos-reading-page-overlap/PTTStella.app`（2026-10-28，0.2.0、macOS arm64 release／ad-hoc、自動本機 log），包含文章翻頁保留一行銜接、靠近浮球的工具選單、文章內本機尋找、等寬圖片底部多空一行修正與 GitHub 正式版本檢查；Release PR #2 已合併至 main，v0.2.0 已正式公開，包含三平台四架構下載與 SHA256SUMS；儲存庫由使用者改為 Public。前版 `dist/macos-footer-cache-fixed/PTTStella.app` 保留供比較。版本檢查與上一輪快取釋放結果分列於下節。上次功能交付 `dist/macos-list-edges/PTTStella.app` 保留供比較：網頁文章自動載入全文，支援取消／繼續，終端機仍逐頁操作；保留中段頁尾辨識修復、固定的 PTT 資訊列（網頁百分比隨閱讀位置更新）及 Vim「實驗中／experimental」標示。既有回歸版修復短文章格線、快取頁尾連結及清除閱讀投影後舊版本仍可使用的問題。包含先前文章模式、滑鼠提示、黑白名單、連續 ID 合併及快速名單／暫時篩選。快速名單已支援右鍵移除，暫時篩選改為推文底色標示；相關原生正文手勢仍待驗收；正文滑鼠由使用者手動驗收，其他平台未以 macOS 結果代替。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
@@ -1645,3 +1645,21 @@ core 13 命令／2 replay、desktop lib 142 項、bin 85 項、全 targets Clipp
 保留 ID 的黑名單改為亮紅色；整行塗黑仍不畫出 ID，暫時揭露後以亮紅色辨識。白名單預設共用亮青色，可選 15 種可見 ANSI 前景色，另允許每 ID 覆寫或選回共用色。schema v4 保存全域共用色與 optional entry color，v1～v3 保留原策略並遷移至共用亮青、無覆寫；只在明確保存時改寫，備份／錯誤保留與名單上限不變。快取、來源 PNG、選取／複製及媒體皆消費同一 Rust 投影；連續推文後續 ID 的黑色合併仍優先。
 
 core 13 命令／2 replay（filters 18 項）、desktop lib 143、bin 115、全 targets Clippy、JS 187、fmt 與 docs 通過。macOS arm64 `filter_colors` 實際表單四次保存後，WebView 可見黑名單紅 ID 與內容遮罩、共用綠 ID 及個別紫 ID；獨立 PNG 解碼確認兩列內容全黑、三種 ID RGB 為 red／green／magenta，960×576，名單 v4 寫入值相符。Close acknowledged、全部 owner joined、exit 0。首輪 probe 漏接案例分派而進主選單，保留 failed 記錄，修正分派、bin／Clippy 重跑並另打包後才驗證；沒有用該次退出碼 0 當通過。證據 .local/verification/filter-colors，交付 dist/macos-filter-colors-final/PTTStella.app 為 release／arm64／ad-hoc，未公證。使用者隨後回覆「我測試成功了」，實站名單遮罩修復記為使用者確認；Windows／Linux 原生本輪 not_ready，正文滑鼠仍由使用者驗收。
+
+
+## 2026-10-30 目前文章收藏／本機副本與浮球精簡
+
+使用者要求：不手打 AID 即可收藏目前文章、保存文章防站端刪除；右鍵浮球請 SubAgent Critic，只保留常用項目，進階項目進設定。本批保持 develop／0.3.0-dev.2，不發佈。
+
+驗收輸入與結果：網頁全文 complete 時按「收藏目前文章」，pin 同一 article 的 unfiltered 原文列（含雙色、推文、連結），沿既有 Q／AID／重開／tail 核對流程，只有匹配 operation 的正式 Article Reached 才交 Files 背景建立副本並原子保存。取消／失焦／切篇／未知畫面不得串存或續送；不保存登入、信件、編輯器或不完整全文。離線副本走同一 renderer，固定 80×23 本機頁面，不帶 Connected／Stamp，不送站端按鍵，也不自動下載圖片。
+
+保存採單一 bookmarks.json v2 原子交易（讀入 v1，保存升 v2），500筆／32 MiB，單篇4096行／8 MiB，一代備份；複用共同鎖及三方合併，不同文章修改合併，同篇衝突拒絕。Entry 以 Arc 共用封存，UI Summary 不傳原文，Files 才展開 pin／驗證／套目前名單。原文差異保留計入既有閱讀32MiB上限；名單不寫死進副本。移除收藏移除主檔副本，一代備份保留既有語意，不宣稱安全清除。
+
+浮球預設四類：導覽、擷取、連線、設定；原縮放／Vim實驗中／站端滑鼠／防閒置控制搬到統一設定，沿用單一 DOM ID 與 handler，設定內不把焦點交回 BBS。暫時解除遮蔽保留於導覽。圖片／ID／網址／反白／編輯器的情境選單維持；背景右鍵也刪除進階設定快捷項。兩位 SubAgent Critic 的阻塞已逐項修正，最終複審通過。
+
+
+本批最終驗證：desktop lib 182、bin 170（另1個由父測試啟動的ignored helper）、multi_instance 9（另1個真正子程序helper）、JS 315、core14 commands／2replays、Clippy／fmt／Fluent／docs均通過。新增真正兩程序同時各存archive並保留兩篇，另測同篇刪除／更新衝突與壞archive主／備檔不覆蓋。Critic先後發現的raw過濾永久化、UI做全文序列化、舊failed污染、末段缺padding、raw leading-reset色彩、pin漏footer、Summary普通編譯及Canvas定位等均修正並補驗證；不改expected掩蓋失敗。
+
+最終 App `dist/macos-bookmark-archive-current/PTTStella.app` 為 macOS arm64 release／strict ad-hoc、未公證、診斷置頂且初始不搶焦點。`native-current-save` 精確9步核對、保存Stella/#00000101完整45列，實際離線End看到REPLY0045，返回仍1～23／51%；`native-restart` 新程序讀回先前實際保存的檔案，本機End／Up／Home＋PageDown讀到45列、重疊一行，peer拒絕所有站端bytes。Canvas位於資訊下／按鈕上，Back／Close可用；末端按鈕停用後明確恢復Canvas焦點，返回清單恢復提示。真正設定Ctrl/Cmd+,入口、Vim on/off及125%/fit均留在設定焦點，關閉回鍵盤。`native-cancel-atomic` 在Q延遲6秒時以當下完整AX讀取按取消，沒有建立bookmarks檔、零保存、晚到Q零續送，仍可本機End讀45列。三案皆passed、Close acknowledged、renderer／file／connection／credential owner join；已核對程序均結束且無殘留。先前一份來源PNG另由獨立解碼為960×576，不含本機對話框或展圖。
+
+失敗證據保留：第一個新Scenario未列入互動900秒而於90秒失敗，已加入相同測試窗期限，不放寬任何站端5秒回應期限；兩次取消工具回合超過期限／解析AX diff未辨識+標記，嚴格記failed，之後改同一CUA回合讀完整最新AX再按取消才通過。沒有以自動逾時冒充明確取消。完整證據在 `.local/verification/bookmarks-archive-20261030/`；不連實站、不取鑰匙圈、不發文／寄信，不把macOS合成結果當成Windows／Linux或低階硬體驗收。清理本批三份過時打包，保留current交付、上一輪已交付App、唯一證據與共用target；精確清單見該目錄cleanup-owned-output.json。保持develop與0.3.0-dev.2，本次僅本機提交，不推送或發佈。

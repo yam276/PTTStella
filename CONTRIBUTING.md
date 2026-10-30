@@ -173,6 +173,8 @@ AID 核心另核對 article_navigation 的自製 article-open fixture 與 naviga
 
 通知／重連介面變更另跑 desktop lib／bin、core、完整 JS／Fluent、Clippy 與 docs；一般通知須只有一個 observer 與 timer，核對取代、8 秒到期、hover／焦點的剩餘時間、明確關閉、純文字與清理，不能因刷新或選取清掉通知。原生 `--probe-surface OUTPUT_DIRECTORY toast_reconnect` 僅連同一個 owned loopback peer 的兩個 session，第一次自動斷線，原生按重新連線後第二次拒絕全部登入／重送 bytes；讀回持續斷線卡與一般卡、匯出 PNG、關閉通知及正常 Close／全部 owner join。此 case 專用開放重連，其他合成 probe 仍禁用；背景擷取或未執行不能算視覺通過。
 
+目前文章收藏／封存變更另跑 desktop lib/bin、`multi_instance` integration、完整JS、core、Clippy與docs。以未過濾原文、中文／雙色、既有名單、末段少於23列、raw leading-reset overlap、取消／切篇／錯operation及壞檔／版本升級／共同保存衝突驗證。原生 `bookmark_archive`、`bookmark_archive_cancel`、`bookmarks_archive_restart` 沿用本機 synthetic peer，不連真實PTT；核對副本45列完整且不含錯篇、重啟後本機End最後行與零站端輸入，canvas不得覆蓋翻頁／返回／關閉。移入設定的控制項須在modal內保持焦點，扇形只有4類；缺原生焦點時記not_ready，不放寬失焦保護。
+
 ## 資產與提交
 
 資產與依賴須有來源、授權與版本；合成 fixture 保存獨立 expected。提交前檢查實際 diff，維持獨立 checkout 可建置及驗證。

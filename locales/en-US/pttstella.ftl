@@ -769,3 +769,7 @@ bookmarks-archive-invalid = Invalid article copy or article limit exceeded (4096
 bookmarks-storage-full = Bookmark storage is full (32 MiB). Remove unneeded bookmarks and try again.
 bookmarks-archive-readonly = Offline, read only. Image URLs are retained without automatic downloads.
 bookmarks-lines = Lines { $first }–{ $last } of { $total }
+settings-alias-zoom = zoom fit scale 縮放 比例 符合視窗
+settings-alias-vim = Vim experimental keyboard navigation 實驗中 鍵盤 瀏覽
+settings-alias-station-mouse = mouse terminal reporting 站端 滑鼠 回報
+settings-alias-keepalive = keepalive idle connection 防閒置 保活 閒置

@@ -2,6 +2,10 @@
 function settingsCatalog(tr){
     return [
         ['interface-language','general','language-label','settings-alias-language'],
+        ['zoom-fit','appearance','zoom-fit','settings-alias-zoom'],
+        ['vim-toggle','input','context-vim','settings-alias-vim'],
+        ['station-mouse','input','station-mouse-on','settings-alias-station-mouse'],
+        ['keep-alive','sites','keepalive-on','settings-alias-keepalive'],
         ['font-preset','appearance','font-preset','settings-alias-font'],
         ['font-ascii','appearance','font-ascii','settings-alias-ascii'],
         ['font-cjk','appearance','font-cjk','settings-alias-cjk'],
