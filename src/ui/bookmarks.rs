@@ -69,6 +69,7 @@ pub(super) struct Acquisition {
     pub request: u64,
     stamp: pttstella::navigation::Stamp,
     frame: super::article_cache::ArchiveSnapshot,
+    expected: Option<ArticleTarget>,
 }
 impl Acquisition {
     pub fn new(
@@ -80,7 +81,12 @@ impl Acquisition {
             request,
             stamp,
             frame,
+            expected: None,
         }
+    }
+    pub fn expect(mut self, target: ArticleTarget) -> Self {
+        self.expected = Some(target);
+        self
     }
     pub fn resolve(
         &self,
@@ -99,7 +105,15 @@ impl Acquisition {
                 operation,
                 target: Destination::Article(target),
                 ..
-            } if *operation == self.stamp => Some(Ok(target.clone())),
+            } if *operation == self.stamp => Some(
+                if self.expected.as_ref().is_none_or(|expected| {
+                    expected.board().same(target.board()) && expected.aid() == target.aid()
+                }) {
+                    Ok(target.clone())
+                } else {
+                    Err(pttstella::msg!("bookmarks-capture-failed"))
+                },
+            ),
             Progress::Active { operation, .. } if *operation != self.stamp => {
                 Some(Err(pttstella::msg!("bookmarks-capture-failed")))
             }
@@ -117,6 +131,133 @@ impl Acquisition {
             label: self.frame.title(),
             snapshot: self.frame,
         })
+    }
+}
+
+pub(super) fn start_capture(
+    screen: &mut super::surface_state::SurfaceState,
+    commands: &mut super::commands::Pending,
+    connection: &pttstella::connection::Connection,
+    view: &pttstella::connection::View,
+    request: u64,
+    stamp: pttstella::navigation::Stamp,
+    id: u64,
+) -> Result<Acquisition, String> {
+    let (frame, destination) = screen.bookmark_current(stamp, id, view)?;
+    if let Err(e) = commands.start(super::commands::Kind::Bookmark, view.generation, || {
+        connection
+            .request_go_to(stamp, destination)
+            .map(|reply| reply.wait())
+    }) {
+        screen.fail_updates();
+        return Err(e);
+    }
+    Ok(Acquisition::new(request, stamp, frame))
+}
+
+/// An explicitly selected list row opens through the Session, then the normal
+/// full-load owner gathers it. No background reader, second writer or queue.
+pub(super) struct FromList {
+    pub request: u64,
+    pub stamp: pttstella::navigation::Stamp,
+    target: Option<ArticleTarget>,
+    scope: Option<(u64, u64, u64)>,
+    gate_seen: bool,
+    failed: bool,
+    active_seen: bool,
+    deadline: tokio::time::Instant,
+}
+impl FromList {
+    pub fn new(request: u64, stamp: pttstella::navigation::Stamp) -> Self {
+        Self {
+            request,
+            stamp,
+            target: None,
+            scope: None,
+            gate_seen: false,
+            failed: false,
+            active_seen: false,
+            deadline: tokio::time::Instant::now() + tokio::time::Duration::from_secs(35),
+        }
+    }
+    pub fn deadline(&self) -> Option<tokio::time::Instant> {
+        self.target.is_none().then_some(self.deadline)
+    }
+    pub fn fail(&mut self) {
+        self.failed = true;
+    }
+    pub fn observe(
+        &mut self,
+        view: &pttstella::connection::View,
+        scope: Option<(u64, u64, u64)>,
+        progress: Option<(u64, usize, usize, Option<super::article_cache::LoadState>)>,
+        gate: Option<(u64, u64, u64)>,
+    ) -> Option<Result<(u64, ArticleTarget), String>> {
+        use super::article_cache::LoadState;
+        use pttstella::navigation_job::{Destination, Progress};
+        let bad = || Some(Err(pttstella::msg!("bookmarks-capture-failed")));
+        if self.target.is_none() && tokio::time::Instant::now() >= self.deadline {
+            self.failed = true;
+        }
+        if matches!(&view.destination,Progress::Active{operation,..} if *operation==self.stamp) {
+            self.active_seen = true;
+        }
+        if self.active_seen && matches!(view.destination, Progress::Idle) {
+            self.failed = true;
+        }
+        if self.failed
+            || view.generation != self.stamp.generation
+            || view.phase != pttstella::connection::Phase::Connected
+        {
+            return bad();
+        }
+        if self.target.is_some()
+            && !matches!(&view.destination,
+            Progress::Reached{operation,target:Destination::Article(target),..}
+                if *operation==self.stamp&&self.target.as_ref().is_some_and(|expected|expected.board().same(target.board())&&expected.aid()==target.aid()))
+        {
+            return bad();
+        }
+        if self.target.is_none() {
+            match &view.destination {
+                Progress::Reached {
+                    operation,
+                    target: Destination::Article(target),
+                    ..
+                } if *operation == self.stamp => self.target = Some(target.clone()),
+                Progress::Active { operation, .. } if *operation != self.stamp => return bad(),
+                _ => return None,
+            }
+        }
+        let Some(scope) = scope else {
+            return if self.scope.is_some() { bad() } else { None };
+        };
+        if let Some(previous) = self.scope {
+            if previous != scope {
+                return bad();
+            }
+        } else {
+            self.scope = Some(scope);
+        }
+        if gate == Some(scope) {
+            self.gate_seen = true;
+        } else if self.gate_seen {
+            return bad();
+        }
+        let (id, first, _, load) = progress?;
+        if id != scope.1 {
+            return bad();
+        }
+        if matches!(
+            load,
+            Some(LoadState::Cancelled | LoadState::Stopped | LoadState::Changed | LoadState::Limit)
+        ) {
+            return bad();
+        }
+        if first == 1 && load == Some(LoadState::Complete) && gate == Some(scope) {
+            return Some(Ok((scope.1, self.target.clone()?)));
+        }
+        None
     }
 }
 pub(super) struct ArchiveWrite {

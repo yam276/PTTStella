@@ -14,7 +14,7 @@ mod tests;
 enum Stage {
     Information,
     Return(ArticleTarget),
-    Open(Open),
+    Open(Box<Open>),
     Tail(ArticleTarget),
     Finished,
 }
@@ -108,7 +108,7 @@ impl Refresh {
                 }
                 let (flow, bytes) =
                     Open::begin_reentry(frame, target.clone(), self.head.clone(), now)?;
-                self.stage = Stage::Open(flow);
+                self.stage = Stage::Open(Box::new(flow));
                 Advance::Send(bytes)
             }
             Stage::Open(flow) => match flow.observe(frame, now)? {

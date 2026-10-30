@@ -21,6 +21,7 @@ pub(super) enum Scenario {
     Boards,
     Articles,
     Bookmarks,
+    BookmarkList,
     BookmarkArchive {
         headerless: bool,
     },
@@ -733,6 +734,7 @@ pub(super) async fn serve(
             | Scenario::EditorColor
             | Scenario::ArticleSwitch
             | Scenario::LiveUpdates { .. }
+            | Scenario::BookmarkList
             | Scenario::BookmarkArchive { .. }
             | Scenario::MouseSamples(MouseSampleProbe::RoundTrip)
     ) {
@@ -770,6 +772,7 @@ pub(super) async fn serve(
         if matches!(scenario, Scenario::Window) {
             return window(&mut socket).await;
         }
+        if matches!(scenario,Scenario::BookmarkList) {return live_updates::bookmark_list(&mut socket).await;}
         if let Scenario::BookmarkArchive { headerless } = scenario {return live_updates::bookmark(&mut socket, headerless).await;}
         if let Scenario::LiveUpdates {origin,cancelled} = scenario {return if cancelled {live_updates::cancel(&mut socket,origin.as_deref()).await}else{live_updates::run(&mut socket,origin.as_deref()).await};}
         if let Scenario::InlinePages {pages,delay_ms} = scenario {

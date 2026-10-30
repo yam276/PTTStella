@@ -27,6 +27,8 @@ pub struct Article {
     pub row: usize,
     pub start: usize,
     pub end: usize,
+    pub title_start: usize,
+    pub bookmark: bool,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -717,6 +719,8 @@ fn article(line: &Row<'_>, row: usize) -> Option<Article> {
         row,
         start: 2,
         end: 8,
+        title_start: 30,
+        bookmark: !deleted,
     })
 }
 fn reading_commands(footer: &Row<'_>) -> bool {

@@ -1,5 +1,5 @@
 // Owns only the local editor/request lifetime. Rust owns validation and disk commits.
-function createBookmarksDialog({tr,send,prepare,restore,changed,openDestination,current,render=()=>{},notice=()=>{}}) {
+function createBookmarksDialog({tr,send,prepare,restore,changed,openDestination,current,window=null,render=()=>{},notice=()=>{}}) {
     const button=document.getElementById("bookmarks-open"),dialog=document.getElementById("bookmarks-dialog");
     const list=document.getElementById("bookmarks-list"),value=document.getElementById("bookmarks-target"),label=document.getElementById("bookmarks-label");
     const save=document.getElementById("bookmarks-save"),remove=document.getElementById("bookmarks-remove"),fresh=document.getElementById("bookmarks-new"),go=document.getElementById("bookmarks-go"),closeButton=document.getElementById("bookmarks-close"),note=document.getElementById("bookmarks-note");
@@ -7,13 +7,25 @@ function createBookmarksDialog({tr,send,prepare,restore,changed,openDestination,
     const editor=document.getElementById("bookmarks-editor"),reader=document.getElementById("bookmarks-reader"),canvas=document.getElementById("bookmarks-canvas");
     const first=document.getElementById("bookmarks-first"),previous=document.getElementById("bookmarks-prev"),next=document.getElementById("bookmarks-next"),last=document.getElementById("bookmarks-last"),back=document.getElementById("bookmarks-reader-back");
     const captureBar=document.getElementById("bookmarks-capture"),captureStatus=document.getElementById("bookmarks-capture-status");
-    let capturePending=null,local=null,localRows=[],top=0;
+    let capturePending=null,local=null,localRows=[],top=0,listTarget=null;
     let disposed=false,composing=false,sequence=0,view=0,opening=null,pending=null,entries=[],writable=false;
     const identity=entry=>"#"+entry.aid+"@"+entry.board;
+    const listIdentity=p=>JSON.stringify([p?.generation,p?.frame?.revision,p?.input_epoch,p?.presentation]);
+    function listRow(){
+        const p=current();
+        if(listTarget&&listTarget.identity!==listIdentity(p))return null;
+        return listTarget?.row??p?.navigation?.cursor_row??null;
+    }
+    function listAvailable(row=listRow()){
+        const p=current();return !disposed&&!capturePending&&!!p?.connected&&!!p?.ptt_features&&p?.mouse?.route==="local"&&p?.article_mode==="web"&&!p?.input_pending&&!p?.output_pending&&p?.navigation?.kind==="article_list"&&p.navigation.articles?.some(a=>a.row===row&&a.bookmark===true);
+    }
     function available(){
         const packet=current(),article=packet?.article;
-        return !disposed&&!capturePending&&!!packet?.connected&&!!packet?.ptt_features&&packet?.mouse?.route==="local"&&article?.load==="complete"&&article?.first_line===1&&!!article?.end;
+        return listAvailable()||!disposed&&!capturePending&&!!packet?.connected&&!!packet?.ptt_features&&packet?.mouse?.route==="local"&&article?.load==="complete"&&article?.first_line===1&&!!article?.end;
     }
+    function clearListTarget(){listTarget=null;working();}
+    function setListTarget(row){const p=current();if(disposed||capturePending||p?.navigation?.kind!=="article_list"||!p.navigation.articles?.some(a=>a.row===row))return false;listTarget={row,identity:listIdentity(p)};working();return listAvailable(row);}
+
     function working(){
         const busy=opening!==null||pending!==null;
         for(const node of [list,value,label,fresh])node.disabled=busy;
@@ -21,10 +33,10 @@ function createBookmarksDialog({tr,send,prepare,restore,changed,openDestination,
         go.disabled=busy||!value.value||current()?.destination?.state==="active";
         const selected=entries.find(e=>identity(e)===list.value);
         if(readButton)readButton.disabled=busy||!selected?.cached_at;
-        if(currentButton){currentButton.disabled=!available();currentButton.title=tr(currentButton.disabled?"bookmarks-current-unavailable":"bookmarks-current");}
+        if(currentButton){currentButton.disabled=!available();currentButton.textContent=tr(current()?.navigation?.kind==="article_list"?"bookmarks-list-current":"bookmarks-current");currentButton.title=tr(currentButton.disabled?"bookmarks-current-unavailable":current()?.navigation?.kind==="article_list"?"bookmarks-list-hint":"bookmarks-current");}
         if(captureBar)captureBar.hidden=!capturePending;
         if(captureStatus)captureStatus.textContent=capturePending?tr(capturePending.cancellable?"bookmarks-capturing":"saving"):"";
-        if(cancelCapture){cancelCapture.hidden=!capturePending;cancelCapture.disabled=capturePending?.cancellable===false;}
+        if(cancelCapture){cancelCapture.hidden=!capturePending;cancelCapture.disabled=capturePending?.cancellable===false||!!capturePending?.cancelling;}
 
     }
     function rows(){
@@ -87,15 +99,17 @@ function createBookmarksDialog({tr,send,prepare,restore,changed,openDestination,
         rows();note.textContent=packet.feedback.notice||packet.data.warning||"";
         if(sameView)value.focus();
     }
-    function capture(e){
+    function capture(e,row=null){
         if(disposed||!e.isTrusted||capturePending||document.querySelector("dialog[open]"))return;
-        const packet=current(),article=packet?.article;
-        working();if(!available()||!article){notice(tr("bookmarks-current-unavailable"));return;}
-        prepare(e);restore();capturePending={request:++sequence,cancellable:true};working();
-        send({kind:"bookmark_current",request:capturePending.request,stamp:{generation:packet.generation,revision:packet.frame.revision,input_epoch:packet.input_epoch},article:article.id,trusted:true});
+        if(row!==null&&!setListTarget(row))return;
+        const packet=current(),article=packet?.article,selected=listRow(),fromList=!article&&listAvailable(selected);
+        working();if(!available()||!article&&!fromList){notice(tr("bookmarks-current-unavailable"));return;}
+        prepare(e);restore();capturePending={request:++sequence,cancellable:true,list:fromList};working();
+        const stamp={generation:packet.generation,revision:packet.frame.revision,input_epoch:packet.input_epoch};
+        send(fromList?{kind:"bookmark_list",request:capturePending.request,stamp,row:selected,trusted:true}:{kind:"bookmark_current",request:capturePending.request,stamp,article:article.id,trusted:true});
     }
     function captureStage(packet){if(!disposed&&capturePending?.request===packet.request){capturePending.cancellable=packet.cancellable;working();}}
-    function cancelCurrent(e){if(disposed||!e.isTrusted||!capturePending?.cancellable)return;send({kind:"bookmark_cancel",request:capturePending.request,trusted:true});restore();}
+    function cancelCurrent(e){if(disposed||!e.isTrusted||!capturePending?.cancellable||capturePending.cancelling)return;capturePending.cancelling=true;working();send({kind:"bookmark_cancel",request:capturePending.request,trusted:true});restore();}
     function readLocal(e){
         if(disposed||!e.isTrusted||!dialog.open||pending||opening!==null||readButton.disabled)return;
         pending={request:++sequence,view,archive:true};working();note.textContent=tr("bookmarks-loading");
@@ -128,12 +142,14 @@ function createBookmarksDialog({tr,send,prepare,restore,changed,openDestination,
         if(delta!==undefined){moveLocal(delta,e);}
     }
     function backToList(e){if(disposed||!e.isTrusted||!local)return;leaveReader();note.textContent=tr("bookmarks-hint");working();list.focus();}
-    function revoke(){disposed=true;opening=null;pending=null;capturePending=null;composing=false;entries=[];value.value="";label.value="";if(captureBar)captureBar.hidden=true;if(captureStatus)captureStatus.textContent="";leaveReader();}
+    function revoke(){disposed=true;listTarget=null;opening=null;pending=null;capturePending=null;composing=false;entries=[];value.value="";label.value="";if(captureBar)captureBar.hidden=true;if(captureStatus)captureStatus.textContent="";leaveReader();}
     function destroy(){revoke();list.replaceChildren();if(dialog.open)dialog.close();}
-    return {show:open,capture,available,captureStage,receiveArchive,receiveOpen,receive,revoke,destroy,update:()=>{if(!disposed)working();},
+    return {show:open,capture,available,listAvailable,setListTarget,clearListTarget,captureStage,receiveArchive,receiveOpen,receive,revoke,destroy,update:()=>{if(!disposed)working();},
         clean:()=>disposed&&!dialog.open&&!pending&&!capturePending&&!local&&!localRows.length&&opening===null&&!composing&&!entries.length&&!value.value&&!label.value,
         bindings:[[button,"click",open],[closeButton,"click",close],[dialog,"cancel",close],[list,"change",choose],
-            [currentButton,"click",capture],[cancelCapture,"click",cancelCurrent],[readButton,"click",readLocal],
+            [currentButton,"click",e=>capture(e)],
+            [window,"blur",e=>{if(capturePending?.list&&capturePending.cancellable)cancelCurrent({isTrusted:true});}],
+            [document,"visibilitychange",()=>{if(document.visibilityState==="hidden"&&capturePending?.list&&capturePending.cancellable)cancelCurrent({isTrusted:true});}],[cancelCapture,"click",cancelCurrent],[readButton,"click",readLocal],
             [first,"click",e=>moveLocal(-Infinity,e)],[previous,"click",e=>moveLocal(-22,e)],[next,"click",e=>moveLocal(22,e)],[last,"click",e=>moveLocal(Infinity,e)],[back,"click",backToList],
             [reader,"keydown",localKeys],[canvas,"wheel",e=>{if(e.deltaY&&!e.ctrlKey&&!e.metaKey)moveLocal(e.deltaY>0?3:-3,e);}],
             [fresh,"click",newDraft],[save,"click",e=>edit(e)],[remove,"click",e=>edit(e,true)],[go,"click",goTo],[value,"input",working],

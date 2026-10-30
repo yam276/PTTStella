@@ -1769,3 +1769,99 @@ fn headerless_complete_article_can_pin_a_bookmark_without_guessing_its_board() {
             .starts_with("第一行 ANSI 圖")
     );
 }
+
+#[test]
+fn list_bookmark_waits_for_owned_reached_complete_cache_ack_and_foreground_gate() {
+    use super::super::article_cache::LoadState;
+    use super::super::bookmarks::FromList;
+    use pttstella::{
+        article_target::ArticleTarget,
+        navigation_job::{Destination, Progress},
+    };
+    let (_, mut view, _) = refresh_fixture();
+    let operation = view.stamp();
+    let scope = (view.generation, 21, 0);
+    let mut capture = FromList::new(12, operation);
+    assert!(capture.observe(&view, None, None, None).is_none());
+    view.destination = Progress::Reached {
+        serial: 1,
+        operation,
+        target: Destination::Article(ArticleTarget::new("Stella", "00000101").unwrap()),
+    };
+    assert!(
+        capture
+            .observe(
+                &view,
+                Some(scope),
+                Some((21, 1, 23, Some(LoadState::Loading))),
+                Some(scope)
+            )
+            .is_none()
+    );
+    let (id, target) = capture
+        .observe(
+            &view,
+            Some(scope),
+            Some((21, 1, 45, Some(LoadState::Complete))),
+            Some(scope),
+        )
+        .unwrap()
+        .unwrap();
+    assert_eq!(id, 21);
+    assert_eq!(target.aid().as_str(), "00000101");
+    for failure in [
+        "gate",
+        "scope",
+        "load",
+        "generation",
+        "operation",
+        "missing",
+        "cancel",
+        "progress",
+    ] {
+        let mut view = view.clone();
+        let mut capture = FromList::new(12, operation);
+        assert!(
+            capture
+                .observe(
+                    &view,
+                    Some(scope),
+                    Some((21, 1, 23, Some(LoadState::Loading))),
+                    Some(scope)
+                )
+                .is_none()
+        );
+        let mut next_scope = Some(scope);
+        let mut gate = Some(scope);
+        let mut progress = Some((21, 1, 45, Some(LoadState::Complete)));
+        match failure {
+            "gate" => gate = None,
+            "scope" => next_scope = Some((view.generation, 22, 0)),
+            "load" => progress = Some((21, 1, 23, Some(LoadState::Cancelled))),
+            "generation" => view.generation += 1,
+            "operation" => {
+                view.destination = Progress::Active {
+                    serial: 2,
+                    operation: Stamp {
+                        input_epoch: operation.input_epoch + 1,
+                        ..operation
+                    },
+                    target: Destination::Board {
+                        board: pttstella::board_navigation::BoardName::parse("Other").unwrap(),
+                    },
+                }
+            }
+            "missing" => next_scope = None,
+            "cancel" => capture.fail(),
+            "progress" => progress = Some((22, 1, 45, Some(LoadState::Complete))),
+            _ => unreachable!(),
+        }
+        assert!(
+            capture
+                .observe(&view, next_scope, progress, gate)
+                .unwrap()
+                .is_err(),
+            "{failure}"
+        );
+    }
+}

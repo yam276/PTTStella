@@ -767,3 +767,8 @@ settings-alias-zoom = 縮放 比例 符合視窗 zoom fit scale
 settings-alias-vim = Vim 實驗中 鍵盤 瀏覽 experimental keyboard navigation
 settings-alias-station-mouse = 站端 滑鼠 回報 mouse terminal reporting
 settings-alias-keepalive = 防閒置 保活 閒置 keepalive idle connection
+
+tools-bookmarks = 收藏
+bookmarks-list-current = 收藏這篇文章
+bookmarks-list-loading = 正在開啟並載入文章，完成後保存全文副本…
+bookmarks-list-hint = 在文章列表對標題按右鍵，可收藏指定文章；會先開啟並完整載入，期間可取消。

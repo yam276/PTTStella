@@ -41,23 +41,31 @@ struct Selected {
 }
 impl Selected {
     fn from(frame: &Frame) -> Option<Self> {
+        Self::at(frame, frame.cursor.1)
+    }
+    fn at(frame: &Frame, row: usize) -> Option<Self> {
         let Context::ArticleList { articles, .. } = navigation::analyze(frame) else {
             return None;
         };
-        let row = frame.cursor.1;
-        if !articles.iter().any(|article| article.row == row) {
+        if !articles
+            .iter()
+            .any(|article| article.row == row && article.bookmark)
+        {
             return None;
         }
         let rows = text::rows(frame)?;
         rows[row].mapped().then(|| Self {
             row,
-            text: rows[row].text.clone(),
+            // The station moves its pointer in the first two ASCII cells.
+            // The article number/date/author/title suffix must stay unchanged.
+            text: rows[row].text.chars().skip(2).collect(),
         })
     }
     fn preserved(&self, frame: &Frame) -> bool {
         text::rows(frame).is_some_and(|rows| {
-            rows.get(self.row)
-                .is_some_and(|row| row.mapped() && row.text == self.text)
+            rows.get(self.row).is_some_and(|row| {
+                row.mapped() && row.text.chars().skip(2).collect::<String>() == self.text
+            })
         })
     }
     fn restored(&self, frame: &Frame) -> bool {
@@ -66,6 +74,7 @@ impl Selected {
 }
 enum Stage {
     Board(Switch),
+    Position(Selected),
     Prompt,
     Selected,
     Information(Selected),
@@ -74,7 +83,9 @@ enum Stage {
     Finished,
 }
 pub struct Open {
-    target: ArticleTarget,
+    target: Option<ArticleTarget>,
+    board: board::BoardName,
+    from_list: bool,
     stage: Stage,
     revision: u64,
     deadline: Instant,
@@ -97,7 +108,42 @@ impl Open {
             };
         Ok((
             Self {
-                target,
+                board: target.board().clone(),
+                target: Some(target),
+                from_list: false,
+                stage,
+                revision: frame.revision,
+                deadline: now + board::TOTAL_LIMIT,
+                step_deadline: now + board::STEP_LIMIT,
+                reentry_head: None,
+            },
+            bytes,
+        ))
+    }
+    /// Explicit list-row collection verifies Q before opening. It never
+    /// invents an AID from a title or trusts a previous navigation result.
+    pub fn from_list(frame: &Frame, row: usize, now: Instant) -> Result<(Self, Vec<u8>), Error> {
+        let board = board::current_board(frame).ok_or(Error::Manual)?;
+        let selected = Selected::at(frame, row).ok_or(Error::Missing)?;
+        let cursor = frame.cursor.1;
+        let (stage, bytes) = if row == cursor {
+            (Stage::Information(selected), b"Q".to_vec())
+        } else {
+            let bytes = navigation::plan(
+                &navigation::analyze(frame),
+                navigation::Intent::Lines {
+                    down: row > cursor,
+                    count: row.abs_diff(cursor),
+                },
+            )
+            .map_err(|_| Error::Manual)?;
+            (Stage::Position(selected), bytes)
+        };
+        Ok((
+            Self {
+                target: None,
+                board,
+                from_list: true,
                 stage,
                 revision: frame.revision,
                 deadline: now + board::TOTAL_LIMIT,
@@ -155,7 +201,11 @@ impl Open {
                 board::Advance::Wait => Ok(Advance::Wait),
                 board::Advance::Send(bytes) => Ok(Advance::Send(bytes)),
                 board::Advance::Reached(board) => {
-                    self.target.confirm_board(board);
+                    self.board = board.clone();
+                    self.target
+                        .as_mut()
+                        .ok_or(Error::Identity)?
+                        .confirm_board(board);
                     Ok(self.send(Stage::Prompt, b"#".to_vec(), now))
                 }
             };
@@ -167,9 +217,15 @@ impl Open {
         if let Stage::Information(selected) = &self.stage
             && let Some(identity) = information(frame, selected)
         {
-            if !identity.board().same(self.target.board()) || identity.aid() != self.target.aid() {
+            if !identity.board().same(&self.board)
+                || self
+                    .target
+                    .as_ref()
+                    .is_some_and(|target| identity.aid() != target.aid())
+            {
                 return Err(Error::Identity);
             }
+            self.target = Some(identity);
             let selected = selected.clone();
             return Ok(self.send(Stage::Return(selected), b" ".to_vec(), now));
         }
@@ -184,20 +240,37 @@ impl Open {
         let current = board::current_board(frame);
         if current
             .as_ref()
-            .is_some_and(|board| !board.same(self.target.board()))
+            .is_some_and(|board| !board.same(&self.board))
         {
             return Err(Error::Identity);
         }
         match &self.stage {
+            Stage::Position(selected) => {
+                if !selected.preserved(frame) {
+                    return Err(Error::Identity);
+                }
+                if !selected.restored(frame) {
+                    return Ok(Advance::Wait);
+                }
+                let selected = selected.clone();
+                Ok(self.send(Stage::Information(selected), b"Q".to_vec(), now))
+            }
             Stage::Prompt if search_prompt(frame) => {
-                let mut bytes = self.target.aid().as_str().as_bytes().to_vec();
+                let mut bytes = self
+                    .target
+                    .as_ref()
+                    .ok_or(Error::Identity)?
+                    .aid()
+                    .as_str()
+                    .as_bytes()
+                    .to_vec();
                 bytes.push(b'\r');
                 Ok(self.send(Stage::Selected, bytes, now))
             }
             Stage::Selected
                 if current
                     .as_ref()
-                    .is_some_and(|board| board.same(self.target.board())) =>
+                    .is_some_and(|board| board.same(&self.board)) =>
             {
                 let Some(selected) = Selected::from(frame) else {
                     return Err(Error::Missing);
@@ -207,7 +280,7 @@ impl Open {
             Stage::Return(selected)
                 if current
                     .as_ref()
-                    .is_some_and(|board| board.same(self.target.board())) =>
+                    .is_some_and(|board| board.same(&self.board)) =>
             {
                 if !selected.restored(frame) {
                     return Err(Error::Identity);
@@ -231,7 +304,14 @@ impl Open {
                     {
                         return Err(Error::Identity);
                     }
-                    return Ok(Advance::Reached(self.target.clone()));
+                    return Ok(Advance::Reached(
+                        self.target.clone().ok_or(Error::Identity)?,
+                    ));
+                }
+                if self.from_list {
+                    return Ok(Advance::Reached(
+                        self.target.clone().ok_or(Error::Identity)?,
+                    ));
                 }
                 let header = rows[0].text.trim_end();
                 let board = header
@@ -240,11 +320,12 @@ impl Open {
                     .flatten()
                     .and_then(|name| board::BoardName::parse(name).ok())
                     .ok_or(Error::Identity)?;
-                if !board.same(self.target.board()) {
+                if !board.same(&self.board) {
                     return Err(Error::Identity);
                 }
-                self.target.confirm_board(board);
-                Ok(Advance::Reached(self.target.clone()))
+                let target = self.target.as_mut().ok_or(Error::Identity)?;
+                target.confirm_board(board);
+                Ok(Advance::Reached(target.clone()))
             }
             _ => Ok(Advance::Wait),
         }

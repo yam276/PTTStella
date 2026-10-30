@@ -10,9 +10,10 @@ function environment(){
     const nodes=new Map(),sent=[],focus=[],destinations=[],painted=[],notices=[];let active=false,foreign=false,packet={};
     const node=id=>{if(!nodes.has(id))nodes.set(id,{id,value:"",textContent:"",disabled:false,open:false,children:[],
         showModal(){this.open=true;},close(){this.open=false;},focus(){focus.push(id);},replaceChildren(...children){this.children=children;}});return nodes.get(id);};
+    const window={};
     const document={getElementById:node,createElement:()=>({}),querySelector:()=>foreign?{}:[...nodes.values()].find(node=>node.open)};
     const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-bookmarks.js",import.meta.url),"utf8")+"\ncreateBookmarksDialog",{document});
-    const ui=create({tr:translator("en-US"),send:value=>sent.push(JSON.parse(JSON.stringify(value))),prepare(){},restore:()=>focus.push("restore"),changed(){},
+    const ui=create({window,tr:translator("en-US"),send:value=>sent.push(JSON.parse(JSON.stringify(value))),prepare(){},restore:()=>focus.push("restore"),changed(){},
         openDestination:(e,value)=>{destinations.push(value);return true;},render:(canvas,paint)=>painted.push(paint),notice:v=>notices.push(v),current:()=>({...packet,destination:active?{state:"active"}:{state:"idle"}})});
     function fire(id,event="click",extra={}){
         const e={target:node(id),isTrusted:true,preventDefault(){},stopPropagation(){},...extra};
@@ -21,7 +22,7 @@ function environment(){
     const snapshot=(rows=entries,writable=true)=>({entries:rows,writable,warning:writable?null:"invalid source"});
     function load(rows=entries,writable=true){ui.receiveOpen({request:sent.at(-1).request,data:snapshot(rows,writable)});}
     function result(request,status="saved",rows=entries){ui.receive({request,data:snapshot(rows),feedback:{status,notice:status==="saved"?"saved":"failure"}});}
-    return {node,ui,sent,focus,destinations,painted,notices,setCurrent:value=>{packet=value;ui.update();},fire,load,result,snapshot,active:value=>{active=value;ui.update();},foreign:value=>foreign=value};
+    return {node,ui,sent,window,focus,destinations,painted,notices,setCurrent:value=>{packet=value;ui.update();},fire,load,result,snapshot,active:value=>{active=value;ui.update();},foreign:value=>foreign=value};
 }
 test("opening and selection stay local, and Go hands one explicit draft to the existing destination owner",()=>{
     const env=environment();env.fire("bookmarks-open");assert.deepEqual(env.sent,[{kind:"bookmarks_open",request:1,trusted:true}]);
@@ -117,4 +118,29 @@ test("closing and reopening cannot show a late local article or replace another 
  const e=environment();e.fire("bookmarks-open");e.load([{...entries[0],cached_at:100}]);e.node("bookmarks-list").value="#00000101@Stella";e.fire("bookmarks-list","change");e.fire("bookmarks-read");
  e.fire("bookmarks-close");e.fire("bookmarks-open");const before=e.focus.length;e.ui.receiveArchive({request:2,article:archive()});
  assert.equal(e.painted.length,0);assert.equal(e.focus.length,before);assert.equal(e.node("bookmarks-reader").hidden,true);
+});
+
+const articleList={generation:7,input_epoch:2,presentation:1,connected:true,ptt_features:true,mouse:{route:'local'},frame:{revision:4},article_mode:'web',navigation:{kind:'article_list',cursor_row:4,articles:[{row:3,title_start:30,bookmark:true},{row:4,title_start:30,bookmark:true},{row:5,title_start:30,bookmark:false}]}};
+test('list capture pins the right-click row rather than the highlighted article and rejects stale targets',()=>{
+ const e=environment();e.setCurrent(articleList);assert.equal(e.ui.listAvailable(),true);
+ assert.equal(e.ui.setListTarget(3),true);e.fire('bookmarks-current');
+ assert.deepEqual(e.sent[0],{kind:'bookmark_list',request:1,stamp:{generation:7,revision:4,input_epoch:2},row:3,trusted:true});
+ assert.equal(e.node('bookmarks-current').disabled,true);e.result(1,'failed',[]);
+ e.setCurrent({...articleList,frame:{revision:5}});assert.equal(e.ui.available(),false,'never retarget to the cursor after a stale right-click');e.fire('bookmarks-current');assert.equal(e.sent.length,1);
+ e.ui.clearListTarget();assert.equal(e.ui.listAvailable(),true);e.fire('bookmarks-current');assert.equal(e.sent.at(-1).row,4);
+});
+test('list collection excludes deleted rows, terminal mode, stale input, remote mouse and untrusted actions',()=>{
+ const e=environment();e.setCurrent(articleList);assert.equal(e.ui.setListTarget(5),false);assert.equal(e.ui.available(),false,'deleted title never falls back to the cursor');e.ui.clearListTarget();
+ e.ui.capture({isTrusted:false},3);assert.equal(e.sent.length,0);
+ for(const patch of [{article_mode:'terminal'},{input_pending:true},{output_pending:true},{ptt_features:false},{connected:false},{mouse:{route:'station'}}]){
+  e.setCurrent({...articleList,...patch});assert.equal(e.ui.listAvailable(3),false);e.ui.capture({isTrusted:true},3);assert.equal(e.sent.length,0);
+ }
+});
+
+test('losing window focus cancels a list collection once and never starts another article',()=>{
+ const e=environment();e.setCurrent(articleList);e.fire('bookmarks-current');
+ const blur=e.ui.bindings.find(([target,event])=>target===e.window&&event==='blur')[2];
+ blur({isTrusted:true});blur({isTrusted:true});
+ assert.equal(e.sent.length,2);assert.deepEqual(e.sent[1],{kind:'bookmark_cancel',request:1,trusted:true});
+ e.result(1,'failed',[]);e.setCurrent({...articleList,generation:8});blur({isTrusted:true});assert.equal(e.sent.length,2);
 });

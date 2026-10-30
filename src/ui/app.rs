@@ -90,7 +90,9 @@ pub fn app(props: AppProps) -> Element {
     let owner = use_hook(move || {
         super::probe::surface_sample(sample_case.as_deref(), probing, media_origin.as_deref())
             .and_then(|bytes| {
-                if matches!(
+                if sample_case.as_deref() == Some("bookmark_list") {
+                    Connection::start_bookmark_list_probe()
+                } else if matches!(
                     sample_case.as_deref(),
                     Some("bookmark_archive" | "bookmark_headerless")
                 ) {
@@ -358,6 +360,7 @@ pub fn app(props: AppProps) -> Element {
                 }
                 nav { id: "tools-fan", class: "tools-fan", hidden: true, "aria-label": pttstella::msg!("tools-title"),
                     ToolPetal { group: "navigate", label: pttstella::msg!("tools-navigate"), icon: rsx!{ Compass { size: 22 } } }
+                    ToolPetal { group: "bookmarks", label: pttstella::msg!("tools-bookmarks"), icon: rsx!{ Star { size: 22 } } }
                     ToolPetal { group: "capture", label: pttstella::msg!("tools-capture"), icon: rsx!{ Camera { size: 22 } } }
                     ToolPetal { group: "session", label: pttstella::msg!("tools-session"), icon: rsx!{ Plug { size: 22 } } }
                     ToolPetal { group: "settings", label: pttstella::msg!("settings-center-title"), icon: rsx!{ Settings { size: 22 } } }
@@ -389,12 +392,17 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "login-open", "data-platform-supported":cfg!(target_os="macos").to_string(), disabled: !cfg!(target_os="macos"), {pttstella::msg!("login")} }
                 button { id: "login-stop", hidden: true, {pttstella::msg!("login-cancel-attempt")} }
                 }
-                section { "data-tools-group": "navigate",
+                section { "data-tools-group": "bookmarks",
                 button {id:"bookmarks-current",disabled:true,title:pttstella::msg!("bookmarks-current-unavailable"),{pttstella::msg!("bookmarks-current")}}
+                button { id: "bookmarks-open", {pttstella::msg!("bookmarks-title")} }
+                p {{pttstella::msg!("bookmarks-list-hint")}}
+                if surface_probe.as_deref()==Some("bookmark_list") {button{id:"bookmark-probe-first","測試：指定第一篇（光棒在第二篇）"}}
+
+                }
+                section { "data-tools-group": "navigate",
                 button {id:"filters-reveal",hidden:true,{pttstella::msg!("filters-reveal")}}
                 output {id:"filters-status",role:"status"}
                 button { id: "destination-open", {pttstella::msg!("destination-open")} }
-                button { id: "bookmarks-open", {pttstella::msg!("bookmarks-title")} }
                 button { id: "destination-stop", hidden: true, {pttstella::msg!("destination-stop")} }
                 div { id: "browse-controls", hidden: true,
                     button { id: "browse-back", disabled: true, {pttstella::msg!("browse-back")} }
@@ -709,6 +717,9 @@ fn context_menu() -> Element {
             }
             button { r#type: "button", role: "menuitem", tabindex: "-1", "data-context-action": "next",
                 ArrowDown { size: 18 } span { {pttstella::msg!("context-next")} }
+            }
+            button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"bookmark-list",
+                Star {size:18} span {{pttstella::msg!("bookmarks-list-current")}}
             }
             button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"bookmark-current",
                 Star {size:18} span {{pttstella::msg!("bookmarks-current")}}
