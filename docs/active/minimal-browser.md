@@ -4,7 +4,7 @@
 
 ## 目標
 
-目前進入 `0.3.0` 發佈準備：develop 的 Cargo／lock、README／徽章與版專用說明已更新為正式0.3.0，準備develop→main的Release PR；main及公開正式下載仍為0.2.2，尚未合併或發佈。本輪實站／操作／20輪827行長文與四架構verify結果見下節。最新未發佈本機候選為 `dist/macos-030-release-candidate/PTTStella.app`（正常視窗、非診斷；原生About確認0.3.0）；本輪實站診斷基線為 `dist/macos-030-freeze-final/PTTStella.app`（實際0.3.0-dev.2）。歷史交付與驗證範圍保留於後續各節，過時副本依task-owned清理規則處理。
+正式版 [0.3.0](https://github.com/yam276/PTTStella/releases/tag/v0.3.0) 已於2026-11-02由Release PR #6合併至main並公開；main保留0.3.0，develop已整合main並進入 `0.4.0-dev.1`。本輪實站／操作／20輪827行長文與四架構驗證結果見下節，正式發佈結果見本節末尾。本機候選 `dist/macos-030-release-candidate/PTTStella.app`（正常視窗、非診斷）與實站診斷基線 `dist/macos-030-freeze-final/PTTStella.app`（實際0.3.0-dev.2）保留為歷史驗收證據；正式下載請使用Release附件。歷史交付與驗證範圍保留於後續各節，過時副本依task-owned清理規則處理。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
@@ -12,7 +12,7 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
-## 0.3.0 功能凍結與發佈前驗收（2026-10-30，進行中）
+## 0.3.0 功能凍結與發佈前驗收（2026-10-30，已完成指定範圍）
 
 使用者要求凍結功能，先完成剩餘實站、操作與效能回歸，再跑 Windows x64、macOS arm64／x64、Linux x64 的 verify 建置；全部必要項通過後才準備 0.3.0。保持 develop／0.3.0-dev.2，不因測試完成自行合併或發佈。當前最新診斷 App 是 `dist/macos-list-bookmarks-final/PTTStella.app`；舊段落的其他 App 路徑屬歷史紀錄，已被取代的測試副本依結案規則清理，不能當作仍存在的交付。
 
@@ -37,6 +37,15 @@ PTTStella 專用帳號實站登入，Steam／NBA／Equestrian／Test 切板與�
 依本次「確認後準備發佈0.3.0」授權，現在只在develop把Cargo／lock、README／徽章與版專用說明改為正式0.3.0，準備develop→main的Release PR供審閱，不自行合併或發佈。前述原生與四架構驗證針對同一產品程式；此步只有版本／文件，不把dev下載改名冒充正式下載。正式套件仍由合併後的main發佈流程重新建置並校驗。診斷App `dist/macos-030-freeze-final/PTTStella.app` 仍標示實際0.3.0-dev.2；不宣稱它是正式下載。
 
 本輪全部App及WebKit cohort已退出，最終finish run_ok／cleanup_ok true、診斷無丟紀錄；取樣工具也已join。保留來源／失敗／成功與CPU／RSS／vmmap證據，自己的過時中間App已清理；明確清單及保留理由在本輪cleanup-owned-output.json。平台GUI與低階實機範圍仍按前述限制，不因CI通過擴大宣稱。
+
+
+## 0.3.0 發佈結果（2026-11-02）
+
+使用者明確授權合併發佈後，Release PR [#6](https://github.com/yam276/PTTStella/pull/6) 以merge commit `ad81691a40f1173be6215a894d6b4423743e12bc` 推進main；正式 [41381604505](https://github.com/yam276/PTTStella/actions/runs/41381604505) 的來源檢查、Windows x64、macOS arm64／x64、Linux x64測試／原生打包及publisher全部成功。[v0.3.0](https://github.com/yam276/PTTStella/releases/tag/v0.3.0) 已公開為Latest stable，tag精確指向該合併提交。
+
+取回同次正式run的原始artifacts，用未修改的production `validate_assets` 核對乾淨來源、版本／release profile、四份manifest、六個套件、完整白名單及全部逐檔SHA-256；另獨立核對公開七個附件的GitHub digest／大小、六筆SHA256SUMS、版本專用中英說明及Latest狀態，全部通過。公開只含六個下載與SHA256SUMS，沒有JSON；建置manifest仍保留Actions artifacts。下載及獨特校驗證據保留repo外與 `.local/verification/release-030-publish-20261102/`。本機校驗曾在Windows artifact尚未下載完成時因缺manifest停止，待兩個下載程序正常結束後完整重跑通過，未略過或放寬校驗。
+
+main已整合回develop，develop同步Cargo／lock、README與徽章為 `0.4.0-dev.1`，main保持正式 `0.3.0`。本輪只做發佈與版本／文件更新，未新增產品功能，也未把CI當成Windows／Linux GUI或低階實機驗收。沒有建立臨時分支、worktree或本機App／Cargo編譯產物；保留同次正式下載及唯一發佈證據，未刪除其他工作的產物。
 
 ## 0.3.0 後續需求與順序（2026-10-29）
 

@@ -106,3 +106,12 @@ Release PR #4 通過政策並合併至 main `1ac078b5a5f2b883f21be657505c823a081
 ## 0.2.2 發佈結果（2026-10-29）
 
 SubAgent Critic 提出的書籤合併超量與設定關窗保存基準問題修正後，Release PR #5 政策及 develop verify [40820260479](https://github.com/yam276/PTTStella/actions/runs/40820260479) 四架構全部通過，合併為 main `029b318d55bcad5d0cac3b37de05c89c18c3f73c`。正式 [40821773621](https://github.com/yam276/PTTStella/actions/runs/40821773621) 四架構測試／打包與 publisher 成功，[v0.2.2](https://github.com/yam276/PTTStella/releases/tag/v0.2.2) 為 Latest stable。公開六個平台下載與 SHA256SUMS，共七個附件，無 JSON；取回同次原始 artifacts，逐項核對四份 manifest、全部校驗、來源／版本、公開 digest／大小與說明通過。多程序整合測試已納入所有架構，CI 不取代 Windows／Linux GUI、IME 或實站登入驗收。main 已整合回 develop，恢復 0.3.0-dev.2；正式 tag 與下載保持不變。
+
+
+## 0.3.0 發佈結果（2026-11-02）
+
+使用者明確授權合併發佈後，Release PR [#6](https://github.com/yam276/PTTStella/pull/6) 以merge commit `ad81691a40f1173be6215a894d6b4423743e12bc` 推進main；正式 [41381604505](https://github.com/yam276/PTTStella/actions/runs/41381604505) 的來源檢查、Windows x64、macOS arm64／x64、Linux x64測試／原生打包及publisher全部成功。[v0.3.0](https://github.com/yam276/PTTStella/releases/tag/v0.3.0) 已公開為Latest stable，tag精確指向該合併提交。
+
+取回同次正式run的原始artifacts，用未修改的production `validate_assets` 核對乾淨來源、版本／release profile、四份manifest、六個套件、完整白名單及全部逐檔SHA-256；另獨立核對公開七個附件的GitHub digest／大小、六筆SHA256SUMS、版本專用中英說明及Latest狀態，全部通過。公開只含六個下載與SHA256SUMS，沒有JSON；建置manifest仍保留Actions artifacts。下載及獨特校驗證據保留repo外與 `.local/verification/release-030-publish-20261102/`。本機校驗曾在Windows artifact尚未下載完成時因缺manifest停止，待兩個下載程序正常結束後完整重跑通過，未略過或放寬校驗。
+
+main已整合回develop，develop同步Cargo／lock、README與徽章為 `0.4.0-dev.1`，main保持正式 `0.3.0`。本輪只做發佈與版本／文件更新，未新增產品功能，也未把CI當成Windows／Linux GUI或低階實機驗收。沒有建立臨時分支、worktree或本機App／Cargo編譯產物；保留同次正式下載及唯一發佈證據，未刪除其他工作的產物。
