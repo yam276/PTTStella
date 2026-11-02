@@ -99,7 +99,9 @@ class DevTools:
 
     def open_settings(self):
         self.call('Page.bringToFront')
-        self.click('#font-settings')
+        self.close_tools()
+        self.click('#tools-ball')
+        self.click('[data-tools-target="settings"]')
         self.wait('document.getElementById("font-dialog").open', 'in-app settings did not become ready')
         return self
 
@@ -194,7 +196,7 @@ class DevTools:
         for kind in ('mousePressed', 'mouseReleased'):
             self.call('Input.dispatchMouseEvent', type=kind, **position, button='left',
                       buttons=1 if kind == 'mousePressed' else 0, clickCount=1)
-        opens_dialog = selector in ('#font-settings', '#filters-open', '#login-open',
+        opens_dialog = selector in ('#login-open',
                                     '#destination-open', '#bookmarks-open', '#sites-open')
         if group and not opens_dialog and self.evaluate('document.querySelector('+json.dumps(selector)+').tagName === "BUTTON" && !document.querySelector("dialog[open]")'):
             # A still-open tool page intentionally consumes the next outside

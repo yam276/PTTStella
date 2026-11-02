@@ -15,15 +15,16 @@ function contextMenuItems(state) {
     if(state.word&&state.replyRow!==null&&state.replyRow!==undefined&&state.local)add("reply-focus",state.ready);
     if(state.focused&&state.local&&(state.word||!state.selection&&state.link<0))add("reply-focus-clear",state.ready);
     if(state.selection){add("copy",state.selectionReady);add("copy-ansi",state.selectionReady);add("export-rows",state.rowsReady);add("copy-image-rows",state.rowsReady);}
-    if(state.editor){add("paste",state.ready&&state.local);return entries;}
+    if(state.editor){add("paste",state.ready&&state.local);if(state.selection&&state.ptt)add("editor-color",state.selectionReady&&state.local&&!state.pending);return entries;}
     if(state.link>=0){add("copy-link");add("open-link",state.local);add("select-link");}
     if(state.word||state.selection||state.link>=0)return entries;
     add("select-all",state.ready);add("export-page",state.exportReady);add("copy-image-page",state.exportReady);
     if(state.reading){
+        if(state.updates)add("article-updates",state.ready&&state.local);
         if(state.images)add("inline",state.inlineReady);
         add("back",state.navigate);add("previous",state.navigate&&!state.first);add("next",state.navigate&&!state.last);
     }
-    if(state.ptt){add("bookmarks");add("filters");add("vim");}
+    if(state.ptt){if(state.listBookmark)add("bookmark-list",state.ready);if(state.reading)add("bookmark-current",state.ready&&!!state.bookmark);add("bookmarks");}
     add("settings");return entries;
 }
 function contextMenuPosition(x,y,width,height,viewportWidth,viewportHeight) {

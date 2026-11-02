@@ -17,15 +17,17 @@ def run(d,output,server):
         for kind in ('mousePressed','mouseReleased'):d.call('Input.dispatchMouseEvent',type=kind,**p,button='left',clickCount=1)
     def choose(index,value):
         d.call('Input.dispatchMouseEvent',type='mouseMoved',x=20,y=2)
-        d.reveal_tools('#hover-position')
+        d.open_settings()
+        d.click('[data-settings-category="media"]')
         # Focus a closed select: the OS popup cannot be driven by CDP.
-        d.evaluate('document.getElementById("hover-position").focus()')
+        d.evaluate('document.getElementById("settings-hover").focus()')
         for n,(name,vk) in enumerate([('Home',36)]+[('ArrowDown',40)]*index):
             for kind in ('keyDown','keyUp'):d.call('Input.dispatchKeyEvent',type=kind,key=name,code=name,windowsVirtualKeyCode=vk)
             expected=['top_right','follow_cursor','off'][n]
             d.wait(surface+'.dataset.hoverPosition === '+repr(expected),'hover setting was not acknowledged by its Rust store')
-        d.wait('document.getElementById("hover-position").value === '+repr(value),'hover preference did not persist')
-        d.close_tools()
+        d.wait('document.getElementById("settings-hover").value === '+repr(value),'hover preference did not persist')
+        d.click('#font-cancel')
+        d.wait('!document.getElementById("font-dialog").open','settings did not finish saving')
         click(70,4.5)
     def count(path):
         with server.lock:return server.counts.get(path,0)

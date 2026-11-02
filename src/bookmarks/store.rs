@@ -1,4 +1,4 @@
-//! Bounded local article references; no page contents or account data.
+//! Bounded local bookmarks and article copies, committed together under the shared document lock.
 use super::{Bookmarks, MAX_BYTES};
 use crate::storage::{
     ReadError,
@@ -107,7 +107,7 @@ mod tests {
         for bytes in [
             b"broken".to_vec(),
             vec![b'x'; MAX_BYTES + 1],
-            br#"{"version":2,"entries":[]}"#.to_vec(),
+            br#"{"version":3,"entries":[]}"#.to_vec(),
         ] {
             std::fs::write(&path, &bytes).unwrap();
             assert!(store.load().is_err());
@@ -154,5 +154,37 @@ mod tests {
         assert!(store.save(one()).is_err());
         assert!(path.is_dir());
         assert!(!backup.exists());
+    }
+    #[test]
+    fn corrupt_archive_is_read_only_and_never_replaces_either_saved_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bookmarks.json");
+        let store = Store::at(path.clone());
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/filters.json")).unwrap();
+        let mut screen = crate::screen::Screen::new(80, 24).unwrap();
+        screen.feed(&crate::encoding::encode(fixture["reading"].as_str().unwrap()).unwrap());
+        let data = one()
+            .archive(
+                ArticleTarget::new("Stella", "00000101").unwrap(),
+                "自製",
+                100,
+                super::super::archive::Archive::new(&screen.frame(), 100).unwrap(),
+            )
+            .unwrap();
+        store.save(data).unwrap();
+        let mut corrupt: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        corrupt["entries"][0]["archive"]["rows"][0][0][3] = serde_json::json!(16);
+        let bytes = serde_json::to_vec(&corrupt).unwrap();
+        std::fs::write(&path, &bytes).unwrap();
+        std::fs::write(path.with_extension("json.bak"), b"retained backup").unwrap();
+        assert!(store.load().is_err());
+        assert!(store.save(one()).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        assert_eq!(
+            std::fs::read(path.with_extension("json.bak")).unwrap(),
+            b"retained backup"
+        );
     }
 }

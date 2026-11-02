@@ -989,3 +989,118 @@ fn terminal_article_edges_only_switch_on_fresh_arrows_when_enabled() {
         assert_eq!(terminal_arrow_boundary(&key, &context, true), None);
     }
 }
+
+#[test]
+fn refresh_appends_overlapping_tail_without_replacing_scope_and_rejects_tail_edits() {
+    for changed in [false, true] {
+        let mut cache = ArticleCache::default();
+        cache.project(&mut page(1, 23, 51));
+        let mut old = page(23, 45, 100);
+        cache.project(&mut old);
+        let id = old.article.as_ref().unwrap().id;
+        assert_eq!(
+            old.article.as_ref().unwrap().load,
+            Some(LoadState::Complete)
+        );
+        cache.begin_refresh();
+        let mut refreshed = page(23, 45, 93);
+        if changed {
+            refreshed
+                .frame
+                .glyphs
+                .iter_mut()
+                .find(|g| g.row == 4 && g.col == 0)
+                .unwrap()
+                .text = "X".into();
+        }
+        cache.project(&mut refreshed);
+        assert_eq!(refreshed.article.as_ref().unwrap().id, id);
+        if changed {
+            assert_eq!(
+                refreshed.article.as_ref().unwrap().load,
+                Some(LoadState::Changed)
+            );
+            assert_eq!(lines(&refreshed), lines(&old));
+        } else {
+            assert_eq!(
+                refreshed.article.as_ref().unwrap().load,
+                Some(LoadState::Loading)
+            );
+            let mut appended = page(26, 48, 100);
+            cache.project(&mut appended);
+            assert_eq!(appended.article.as_ref().unwrap().id, id);
+            assert_eq!(
+                appended.article.as_ref().unwrap().load,
+                Some(LoadState::Complete)
+            );
+            assert_eq!(
+                lines(&appended),
+                (1..=48).map(|n| format!("line {n:04}")).collect::<Vec<_>>()
+            );
+            cache.begin_refresh();
+            let mut unchanged = page(26, 48, 100);
+            cache.project(&mut unchanged);
+            assert_eq!(
+                unchanged.article.as_ref().unwrap().load,
+                Some(LoadState::Complete)
+            );
+            assert_eq!(lines(&unchanged), lines(&appended));
+        }
+    }
+}
+
+#[test]
+fn archive_pins_original_rows_across_masking_reset_and_cache_replacement() {
+    let mut cache = ArticleCache::default();
+    let mut first = page(1, 23, 50);
+    let raw_first = first.frame.clone();
+    // A black-mask projection loses text; raw source must be pinned separately.
+    for g in first.frame.glyphs.iter_mut().filter(|g| g.row == 22) {
+        g.text = "█".into();
+        g.left = Style {
+            fg: 0,
+            ..Default::default()
+        };
+        g.right = g.left;
+    }
+    let mut raw_first = raw_first;
+    for g in raw_first.glyphs.iter_mut().filter(|g| g.row == 22) {
+        g.left.fg = 3;
+        g.left.bright = true;
+        g.right = g.left;
+    }
+    cache.capture_source(&first, Some(&raw_first));
+    assert!(cache.archive_snapshot(&raw_first).is_none());
+    let mut tail = page(23, 45, 100);
+    let mut footer = Screen::new(80, 24).unwrap();
+    footer.feed(&encoding::encode("\x1b[24;1H\x1b[30;47m瀏覽 第 2/2 頁 (100%) 目前顯示: 第 23~45 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H").unwrap());
+    tail.frame.glyphs.retain(|g| g.row != 23);
+    tail.frame
+        .glyphs
+        .extend(footer.frame().glyphs.into_iter().filter(|g| g.row == 23));
+    let raw_tail = tail.frame.clone();
+    for g in tail.frame.glyphs.iter_mut().filter(|g| g.row == 0) {
+        g.text = "█".into();
+        g.left = Style {
+            fg: 0,
+            ..Default::default()
+        };
+        g.right = g.left;
+    }
+    cache.capture_source(&tail, Some(&raw_tail));
+    assert_eq!(cache.load_state(), Some(LoadState::Complete));
+    let pin = cache.archive_snapshot(&raw_tail).unwrap();
+    cache.clear();
+    let raw = pin.frame();
+    let archive = pttstella::bookmarks::archive::Archive::new(&raw, 100).unwrap();
+    assert_eq!(archive.row_count(), 45);
+    assert_eq!(raw.rows, 46);
+    assert!(raw.glyphs.iter().any(|g| g.row == 22 && g.text == "l"));
+    assert!(
+        raw.glyphs
+            .iter()
+            .filter(|g| g.row == 22)
+            .all(|g| g.left.fg == 3 && g.left.bright)
+    );
+    assert!(raw.glyphs.iter().any(|g| g.row == 44 && g.text == "5"));
+}

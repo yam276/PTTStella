@@ -69,6 +69,27 @@ pub(super) enum SurfaceEvent {
         enabled: bool,
         trusted: bool,
     },
+    BookmarkCurrent {
+        request: u64,
+        stamp: Stamp,
+        article: u64,
+        trusted: bool,
+    },
+    BookmarkList {
+        request: u64,
+        stamp: Stamp,
+        row: usize,
+        trusted: bool,
+    },
+    BookmarkCancel {
+        request: u64,
+        trusted: bool,
+    },
+    ArchiveOpen {
+        request: u64,
+        value: String,
+        trusted: bool,
+    },
     BookmarksOpen {
         request: u64,
         trusted: bool,
@@ -199,6 +220,17 @@ pub(super) enum SurfaceEvent {
         resume: bool,
         trusted: bool,
     },
+    ArticleUpdates {
+        generation: u64,
+        article: u64,
+        enabled: bool,
+        trusted: bool,
+    },
+    ArticleStationRestore {
+        generation: u64,
+        article: u64,
+        trusted: bool,
+    },
     DestinationSubmit {
         request: u64,
         stamp: Stamp,
@@ -327,6 +359,13 @@ pub(super) enum SurfaceEvent {
         target: CopyTarget,
         trusted: bool,
     },
+    EditorColor {
+        presentation: u64,
+        stamp: Stamp,
+        request: u64,
+        color: pttstella::editor_color::Color,
+        trusted: bool,
+    },
     Copied {
         presentation: u64,
         generation: u64,
@@ -375,6 +414,22 @@ pub(super) enum SurfaceEvent {
 }
 
 impl SurfaceEvent {
+    pub(super) fn interrupts_list_bookmark(&self) -> bool {
+        matches!(
+            self,
+            Self::Key { .. }
+                | Self::Text { .. }
+                | Self::Navigate { .. }
+                | Self::DestinationSubmit { .. }
+                | Self::SitesConnect { .. }
+                | Self::LoginSubmit { .. }
+                | Self::SettingsOpen { .. }
+                | Self::Paste { .. }
+                | Self::PasteClipboard { .. }
+                | Self::PasteConfirm { .. }
+                | Self::ArticleLoad { resume: false, .. }
+        )
+    }
     pub(super) fn navigation_ticket(&self) -> Option<NavigationTicket> {
         match self {
             Self::Navigate { request, stamp, .. } => Some(NavigationTicket {
@@ -392,8 +447,8 @@ impl SurfaceEvent {
                 | Self::LoginSubmit { .. }
                 | Self::LoginForget { .. }
                 | Self::DestinationSubmit { .. }
-                | Self::BookmarksOpen { .. }
-                | Self::BookmarksEdit { .. }
+                | Self::BookmarkCurrent { .. }
+                | Self::BookmarkList { .. }
                 | Self::RecentBoardsClear { .. }
                 | Self::FiltersOpen { .. }
                 | Self::FiltersEdit { .. }
@@ -406,7 +461,10 @@ impl SurfaceEvent {
                 | Self::FiltersReveal { .. }
                 | Self::Navigate { .. }
                 | Self::ArticleLoad { .. }
+                | Self::ArticleUpdates { .. }
+                | Self::ArticleStationRestore { .. }
                 | Self::KeepAlive { .. }
+                | Self::EditorColor { .. }
         )
     }
     /// Admit user actions before any state change, encoding or station enqueue.
@@ -432,6 +490,7 @@ impl SurfaceEvent {
             AccountRule { trusted, stamp, .. }
             | ReplyFocus { trusted, stamp, .. }
             | InlineExpand { trusted, stamp, .. }
+            | EditorColor { trusted, stamp, .. }
             | PasteClipboard { trusted, stamp, .. } => *trusted && stamp.generation == generation,
             Key {
                 trusted,
@@ -485,6 +544,16 @@ impl SurfaceEvent {
                 generation: source,
                 ..
             } => *trusted && *source == generation,
+            ArticleUpdates {
+                trusted,
+                generation: source,
+                ..
+            }
+            | ArticleStationRestore {
+                trusted,
+                generation: source,
+                ..
+            } => *trusted && *source == generation,
             LoginSubmit { trusted, stamp, .. } | DestinationSubmit { trusted, stamp, .. } => {
                 *trusted && stamp.generation == generation
             }
@@ -494,6 +563,10 @@ impl SurfaceEvent {
             SitesOpen { trusted, .. }
             | SitesEdit { trusted, .. }
             | SitesConnect { trusted, .. }
+            | BookmarkCurrent { trusted, .. }
+            | BookmarkList { trusted, .. }
+            | BookmarkCancel { trusted, .. }
+            | ArchiveOpen { trusted, .. }
             | BookmarksOpen { trusted, .. }
             | BookmarksEdit { trusted, .. }
             | FiltersOpen { trusted }
@@ -903,6 +976,21 @@ mod article_load_tests {
             };
             assert!(event.requires_ptt());
             assert_eq!(event.admitted(7), expected);
+            let updates = SurfaceEvent::ArticleUpdates {
+                generation,
+                article: 42,
+                enabled: true,
+                trusted,
+            };
+            assert!(updates.requires_ptt());
+            assert_eq!(updates.admitted(7), expected);
+            let restore = SurfaceEvent::ArticleStationRestore {
+                generation,
+                article: 42,
+                trusted,
+            };
+            assert!(restore.requires_ptt());
+            assert_eq!(restore.admitted(7), expected);
         }
     }
 }
@@ -955,6 +1043,34 @@ mod picture_tests {
                 serde_json::from_value::<SurfaceEvent>(invalid)
                     .map_or(true, |event| !event.admitted(7))
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod editor_color_tests {
+    use super::*;
+    #[test]
+    fn colour_request_is_typed_trusted_and_scoped_to_the_session() {
+        let value = serde_json::json!({"kind":"editor_color","presentation":3,"stamp":{"generation":7,"revision":4,"input_epoch":2},"request":11,"color":{"foreground":9,"background":0},"trusted":true});
+        let event: SurfaceEvent = serde_json::from_value(value.clone()).unwrap();
+        assert!(event.admitted(7));
+        assert!(!event.admitted(8));
+        assert!(event.requires_ptt());
+        let mut invalid = value.clone();
+        invalid["trusted"] = false.into();
+        assert!(
+            !serde_json::from_value::<SurfaceEvent>(invalid)
+                .unwrap()
+                .admitted(7)
+        );
+        for color in [
+            serde_json::json!({"foreground":"red","background":0}),
+            serde_json::json!({"foreground":9,"background":0,"bytes":"arbitrary"}),
+        ] {
+            let mut invalid = value.clone();
+            invalid["color"] = color;
+            assert!(serde_json::from_value::<SurfaceEvent>(invalid).is_err());
         }
     }
 }

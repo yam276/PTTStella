@@ -73,8 +73,17 @@ struct LoginAttempt {
 struct NavigationJob {
     flow: Flow,
     operation: Stamp,
+    sequence: u64,
     serial: u64,
     epoch: u64,
+}
+struct EditorJob {
+    flow: crate::editor_color::Flow,
+    reply: tokio::sync::oneshot::Sender<Result<(), String>>,
+    deadline: Instant,
+    step_deadline: Instant,
+    quiet_until: Instant,
+    steps: usize,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -97,7 +106,9 @@ struct Session {
     login_attempt: Option<LoginAttempt>,
     login_followup: Option<login::FollowUp>,
     navigation_job: Option<NavigationJob>,
+    editor_job: Option<EditorJob>,
     navigation_serial: u64,
+    navigation_cancelled: Option<(Stamp, u64)>,
     visits: crate::recent_boards::Visits,
     visit_serial: u64,
     last_close: CloseOutcome,
@@ -112,7 +123,7 @@ pub(super) async fn run(
     mut commands: mpsc::Receiver<Command>,
     updates: watch::Sender<View>,
     timing: liveness::Timing,
-    mut gates: watch::Receiver<Option<(Stamp, bool)>>,
+    mut gates: watch::Receiver<super::SessionControls>,
     mut mouse_gates: watch::Receiver<mouse_control::Controls>,
 ) {
     let mut session = Session::new(screen, endpoint, updates, timing);
@@ -123,6 +134,7 @@ pub(super) async fn run(
         tokio::select! {
             command = commands.recv() => {
                 if matches!(mouse_gates.has_changed(),Ok(true)) {session.mouse_controls(*mouse_gates.borrow_and_update());}
+                if matches!(gates.has_changed(),Ok(true)){session.ui_controls(*gates.borrow_and_update());}
                 if session.command(command).await { break; }
             }
             changed=mouse_gates.changed()=>{
@@ -131,9 +143,7 @@ pub(super) async fn run(
             }
             changed = gates.changed() => {
                 if changed.is_err() { session.stop().await; break; }
-                if let Some((stamp, ready)) = *gates.borrow_and_update() {
-                    session.gate(stamp, ready);
-                }
+                session.ui_controls(*gates.borrow_and_update());
             }
             result = async {
                 match session.dialing.as_mut() { Some(task) => task.await, None => pending().await }
@@ -141,7 +151,7 @@ pub(super) async fn run(
             incoming = async {
                 match session.socket.as_mut() { Some(socket) => socket.next().await, None => pending().await }
             } => session.receive(incoming).await,
-            _ = clock.tick(), if session.dirty || session.output.active() || session.navigation_job.is_some() || session.has_list_refresh() || matches!(session.pending_input, Some(PendingInput::Adjacent { .. })) => {
+            _ = clock.tick(), if session.dirty || session.output.active() || session.navigation_job.is_some() || session.editor_job.is_some() || session.has_list_refresh() || matches!(session.pending_input, Some(PendingInput::Adjacent { .. })) => {
                 if session.output.expire(Instant::now()) {
                     session.screen.release_synchronized_output();
                     session.continue_login().await;
@@ -153,6 +163,7 @@ pub(super) async fn run(
                 // Automatic steps yield to already queued manual input/UI state.
                 if commands.is_empty() && matches!(gates.has_changed(),Ok(false)) {
                     session.advance_navigation(Instant::now()).await;
+                    session.advance_editor(Instant::now()).await;
                     session.advance_adjacent(Instant::now()).await;
                     session.refresh_unanswered_list_move(Instant::now()).await;
                 }
@@ -169,6 +180,7 @@ pub(super) async fn run(
         }
         // A response wait cannot outlive its connection or replace its close reason.
         if session.view.phase != Phase::Connected {
+            session.stop_editor();
             session.mouse.interrupt();
             session.pending_input = None;
             session.login_attempt = None;
@@ -183,6 +195,73 @@ pub(super) async fn run(
 }
 
 impl Session {
+    fn ui_controls(&mut self, controls: super::SessionControls) {
+        if let Some((operation, through)) = controls.cancel_through {
+            self.cancel_navigation(operation, through);
+        }
+        if let Some((stamp, ready)) = controls.keep_alive {
+            self.gate(stamp, ready);
+        }
+    }
+    fn stop_editor(&mut self) {
+        if let Some(job) = self.editor_job.take() {
+            let _ = job.reply.send(Err(crate::msg!("editor-color-stopped")));
+            self.dirty = true;
+        }
+    }
+    async fn advance_editor(&mut self, now: Instant) {
+        let Some(mut job) = self.editor_job.take() else {
+            return;
+        };
+        if job.reply.is_closed()
+            || now >= job.deadline
+            || now >= job.step_deadline
+            || job.steps >= 4096
+            || self.view.phase != Phase::Connected
+        {
+            let _ = job.reply.send(Err(crate::msg!("editor-color-stopped")));
+            self.dirty = true;
+            return;
+        }
+        if now < job.quiet_until
+            || !self.screen.control_complete()
+            || self.screen.synchronized_since().is_some()
+        {
+            self.editor_job = Some(job);
+            return;
+        }
+        match job.flow.next(&self.screen.frame()) {
+            Ok(crate::editor_color::Action::Send(bytes)) => {
+                if bytes.len() > crate::input::MAX_INPUT_BYTES {
+                    let _ = job.reply.send(Err(crate::msg!("editor-color-stopped")));
+                    return;
+                }
+                job.steps += 1;
+                job.step_deadline = now + Duration::from_secs(5);
+                self.idle.activity(now);
+                match self.write_input(&bytes).await {
+                    Ok(()) => self.editor_job = Some(job),
+                    Err(error) => {
+                        let _ = job.reply.send(Err(error));
+                    }
+                }
+                self.dirty = true;
+            }
+            Ok(crate::editor_color::Action::Wait) => self.editor_job = Some(job),
+            Ok(crate::editor_color::Action::Done(result)) => {
+                let _ = job.reply.send(result);
+                self.dirty = true;
+            }
+            Err(error) => {
+                let _ = job.reply.send(Err(if job.flow.changed() {
+                    crate::msg!("editor-color-partial", error = error)
+                } else {
+                    error
+                }));
+                self.dirty = true;
+            }
+        }
+    }
     fn new(
         screen: Screen,
         endpoint: String,
@@ -205,7 +284,9 @@ impl Session {
             login_attempt: None,
             login_followup: None,
             navigation_job: None,
+            editor_job: None,
             navigation_serial: 0,
+            navigation_cancelled: None,
             visits: crate::recent_boards::Visits::default(),
             visit_serial: 0,
             last_close: CloseOutcome::NoConnection,
@@ -236,6 +317,7 @@ impl Session {
                 && self.login_attempt.is_none()
                 && self.login_followup.is_none()
                 && self.navigation_job.is_none()
+                && self.editor_job.is_none()
                 && matches!(self.pending_input, None | Some(PendingInput::Mouse { .. })),
             cols,
             rows,
@@ -356,6 +438,52 @@ impl Session {
             }
             Some(Command::Disconnect) => self.disconnect().await,
             Some(Command::Input { generation, bytes }) => self.input(generation, &bytes).await,
+            Some(Command::EditorColor {
+                stamp,
+                selection,
+                color,
+                reply,
+            }) => {
+                if !reply.is_closed() {
+                    let result = (|| {
+                        self.clear_answered_input();
+                        if self.stamp() != stamp
+                            || self.view.phase != Phase::Connected
+                            || self.socket.is_none()
+                            || !self.view.site.ptt_features()
+                            || self.pending_input.is_some()
+                            || self.editor_job.is_some()
+                            || self.navigation_job.is_some()
+                            || self.login_attempt.is_some()
+                            || self.login_followup.is_some()
+                            || self.screen.synchronized_since().is_some()
+                            || self.mouse.snapshot(self.mouse_context()).route
+                                != crate::mouse::input::Route::Local
+                        {
+                            return Err(crate::msg!("editor-color-stale"));
+                        }
+                        crate::editor_color::Flow::new(&self.screen.frame(), &selection, color)
+                    })();
+                    match result {
+                        Ok(flow) => {
+                            let now = Instant::now();
+                            self.mouse.intervene();
+                            self.editor_job = Some(EditorJob {
+                                flow,
+                                reply,
+                                deadline: now + Duration::from_secs(180),
+                                step_deadline: now + Duration::from_secs(5),
+                                quiet_until: now,
+                                steps: 0,
+                            });
+                            self.dirty = true;
+                        }
+                        Err(error) => {
+                            let _ = reply.send(Err(error));
+                        }
+                    }
+                }
+            }
             Some(Command::CancelLogin) => {
                 self.login_attempt = None;
                 self.login_followup = None;
@@ -364,19 +492,19 @@ impl Session {
                 self.dirty = true;
             }
             Some(Command::GoTo {
+                sequence,
                 stamp,
                 destination,
                 reply,
             }) => {
                 if !reply.is_closed() {
-                    let result = self.go_to(stamp, destination).await;
+                    let result = self.go_to(stamp, sequence, destination).await;
                     let started = result.is_ok();
                     if reply.send(result).is_err() && started {
-                        self.cancel_navigation(stamp);
+                        self.cancel_navigation(stamp, sequence);
                     }
                 }
             }
-            Some(Command::CancelNavigation { operation }) => self.cancel_navigation(operation),
             Some(Command::Login {
                 stamp,
                 credentials,
@@ -453,6 +581,7 @@ impl Session {
     }
 
     async fn stop(&mut self) -> CloseOutcome {
+        self.stop_editor();
         self.mouse.interrupt();
         let context = crate::mouse::input::Context {
             ready: false,
@@ -683,6 +812,7 @@ impl Session {
             self.dirty = true;
             return;
         }
+        self.stop_editor();
         self.mouse.intervene();
         if self.navigation_job.is_some() {
             self.stop_navigation(crate::msg!("navigation-job-cancelled"));
@@ -703,6 +833,7 @@ impl Session {
     }
 
     async fn login(&mut self, stamp: Stamp, credentials: Credentials) -> Result<(), String> {
+        self.stop_editor();
         if !self.view.site.ptt_features() {
             return Err(crate::msg!("site-ptt-only"));
         }
@@ -729,7 +860,13 @@ impl Session {
         Ok(())
     }
 
-    async fn go_to(&mut self, stamp: Stamp, target: Destination) -> Result<(), String> {
+    async fn go_to(
+        &mut self,
+        stamp: Stamp,
+        sequence: u64,
+        target: Destination,
+    ) -> Result<(), String> {
+        self.stop_editor();
         if !self.view.site.ptt_features() {
             return Err(crate::msg!("site-ptt-only"));
         }
@@ -746,12 +883,19 @@ impl Session {
         if self.pending_input.is_some() {
             return Err(navigation::Error::AwaitingScreen.to_string());
         }
+        if self.navigation_cancelled.is_some_and(|(old, limit)| {
+            old.generation == stamp.generation
+                && sequence <= limit
+                && super::stamp_order(stamp) <= super::stamp_order(old)
+        }) {
+            return Err(crate::msg!("navigation-job-cancelled"));
+        }
         let start = Flow::begin(&self.screen.frame(), target.clone(), Instant::now())?;
         self.mouse.intervene();
         self.navigation_serial = self.navigation_serial.saturating_add(1);
         match start {
             navigation_job::Start::Reached(target) => {
-                self.reached_destination(self.navigation_serial, target)
+                self.reached_destination(self.navigation_serial, stamp, target)
             }
             navigation_job::Start::Run { flow, bytes } => {
                 self.view.destination = NavigationProgress::Active {
@@ -768,10 +912,13 @@ impl Session {
                         board = article.board().as_str(),
                         aid = article.aid().as_str()
                     ),
+                    Destination::ListArticle { .. } => crate::msg!("bookmarks-list-loading"),
+                    Destination::Refresh { .. } => crate::msg!("article-updates-refreshing"),
                 };
                 self.navigation_job = Some(NavigationJob {
                     flow,
                     operation: stamp,
+                    sequence,
                     serial: self.navigation_serial,
                     epoch: self.view.input_epoch,
                 });
@@ -814,19 +961,20 @@ impl Session {
             return;
         }
         let serial = job.serial;
+        let operation = job.operation;
         match job.flow.observe(&self.screen.frame(), now) {
             Ok(navigation_job::Advance::Wait) => {}
             Ok(navigation_job::Advance::Send(bytes)) => {
                 let _ = self.send_navigation_step(&bytes).await;
             }
             Ok(navigation_job::Advance::Reached(target)) => {
-                self.reached_destination(serial, target)
+                self.reached_destination(serial, operation, target)
             }
             Err(error) => self.stop_navigation(error.to_string()),
         }
     }
 
-    fn reached_destination(&mut self, serial: u64, target: Destination) {
+    fn reached_destination(&mut self, serial: u64, operation: Stamp, target: Destination) {
         self.navigation_job = None;
         self.view.message = match &target {
             Destination::Board { board } => {
@@ -837,14 +985,30 @@ impl Session {
                 board = article.board().as_str(),
                 aid = article.aid().as_str()
             ),
+            Destination::ListArticle { .. } => crate::msg!("bookmarks-list-loading"),
+            Destination::Refresh { .. } => crate::msg!("article-updates-refreshing"),
         };
-        self.view.destination = NavigationProgress::Reached { serial, target };
+        self.view.destination = NavigationProgress::Reached {
+            serial,
+            operation,
+            target,
+        };
         self.dirty = true;
     }
 
-    fn cancel_navigation(&mut self, operation: Stamp) {
+    fn cancel_navigation(&mut self, operation: Stamp, through: u64) {
+        if operation.generation != self.view.generation {
+            return;
+        }
+        if self.navigation_cancelled.is_none_or(|(old, limit)| {
+            (super::stamp_order(operation), through) > (super::stamp_order(old), limit)
+        }) {
+            self.navigation_cancelled = Some((operation, through));
+        }
         if self.navigation_job.as_ref().is_some_and(|job| {
-            job.operation == operation && operation.generation == self.view.generation
+            job.operation.generation == operation.generation
+                && job.sequence <= through
+                && super::stamp_order(job.operation) <= super::stamp_order(operation)
         }) {
             self.stop_navigation(crate::msg!("navigation-job-cancelled"));
         }
@@ -872,6 +1036,7 @@ impl Session {
         intent: Intent,
         source: navigation::Source,
     ) -> Result<(), String> {
+        self.stop_editor();
         if !self.view.site.ptt_features() {
             return Err(crate::msg!("site-ptt-only"));
         }
@@ -1056,6 +1221,11 @@ impl Session {
     async fn receive_bytes(&mut self, bytes: &[u8]) {
         self.view.received = self.view.received.saturating_add(bytes.len());
         let (display, reply) = self.framing.feed(bytes, 80, 24);
+        if !display.is_empty()
+            && let Some(job) = &mut self.editor_job
+        {
+            job.quiet_until = Instant::now() + Duration::from_millis(32);
+        }
         self.screen.feed(&display);
         self.sync_mouse();
         self.output
@@ -1180,7 +1350,9 @@ impl Session {
     fn publish(&mut self) {
         self.clear_answered_input();
         self.sync_mouse();
-        self.view.input_pending = (self.pending_input.is_some() || self.navigation_job.is_some())
+        self.view.input_pending = (self.pending_input.is_some()
+            || self.navigation_job.is_some()
+            || self.editor_job.is_some())
             && self.view.phase == Phase::Connected;
         self.view.login_pending = self.login_attempt.is_some() || self.login_followup.is_some();
         self.view.output_pending = self.screen.synchronized_since().is_some();

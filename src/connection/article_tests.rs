@@ -1,6 +1,7 @@
 //! Production Session and loopback peer; every expected write is independent.
 use super::*;
 use crate::article_target::ArticleTarget;
+use crate::navigation::Context;
 use crate::navigation_job::Destination;
 type LocalSocket = tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>;
 fn page(name: &str) -> Vec<u8> {
@@ -104,6 +105,7 @@ async fn article_destination_uses_the_one_writer_through_canonical_board_and_ver
         reached.destination,
         NavigationProgress::Reached {
             serial: 1,
+            operation: initial.stamp(),
             target: Destination::Article(target())
         }
     );
@@ -310,4 +312,130 @@ async fn confirmed_board_fact_survives_a_pending_article_job_and_later_unknown_p
     .await;
     assert_eq!(stopped.board_visit, Some(fact));
     finish_board_peer(&connection, ws).await;
+}
+
+fn selected_first() -> String {
+    let f: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/article-open.json")).unwrap();
+    f["screens"]["articles"]
+        .as_str()
+        .unwrap()
+        .replace(">   121", "    121")
+        .replace("    120", ">   120")
+        + "\x1b[4;1H"
+}
+fn first_information(board: &str) -> Vec<u8> {
+    let s = selected_first()
+        + &format!(
+            "\x1b[5;1H\x1b[0m\x1b[2K┌{}┐\x1b[6;1H\x1b[2K│ 文章代碼(AID): \x1b[1m#00000101\x1b[0m ({board}) [ptt.cc] local\x1b[6;77H│\x1b[7;1H\x1b[2K│ 文章網址: synthetic\x1b[7;77H│\x1b[8;1H\x1b[2K│ 這一篇文章值 0 Ptt幣\x1b[8;77H│\x1b[9;1H\x1b[2K└──────────────────────── [再按 Q 切換價格列表]  ─┘\x1b[24;1H\x1b[37;44m\x1b[2K 請按任意鍵繼續 \x1b[0m\x1b[24;80H",
+            "─".repeat(37)
+        );
+    crate::encoding::encode(&s).unwrap()
+}
+#[tokio::test]
+async fn list_collection_targets_the_clicked_row_verifies_q_and_opens_headerless_articles() {
+    let (_listener, connection, mut ws, initial) = connected("articles").await;
+    connection.keep_alive(false).unwrap();
+    connection
+        .request_go_to(
+            initial.stamp(),
+            Destination::ListArticle {
+                board: BoardName::parse("Stella").unwrap(),
+                row: 3,
+            },
+        )
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    expect(&mut ws, b"\x1b[A").await;
+    ws.send(Message::Binary(
+        crate::encoding::encode(&selected_first()).unwrap().into(),
+    ))
+    .await
+    .unwrap();
+    expect(&mut ws, b"Q").await;
+    ws.send(Message::Binary(first_information("Stella").into()))
+        .await
+        .unwrap();
+    expect(&mut ws, b" ").await;
+    ws.send(Message::Binary(
+        crate::encoding::encode(&selected_first()).unwrap().into(),
+    ))
+    .await
+    .unwrap();
+    expect(&mut ws, b"\x1b[C").await;
+    let mut headerless = page("reading");
+    headerless.extend(crate::encoding::encode("\x1b[1;1H\x1b[0m\x1b[2KANSI artwork without metadata\x1b[2;1H\x1b[2Kart row two\x1b[3;1H\x1b[2Kart row three\x1b[24;80H").unwrap());
+    ws.send(Message::Binary(headerless.into())).await.unwrap();
+    let reached=wait(&connection,|v|matches!(&v.destination,NavigationProgress::Reached{operation,target:Destination::Article(target),..} if *operation==initial.stamp()&&target==&self::target())).await;
+    assert!(matches!(
+        reached.context(),
+        Context::ArticleReading { first_line: 1, .. }
+    ));
+    finish_board_peer(&connection, ws).await;
+}
+#[tokio::test]
+async fn list_collection_rejects_changed_rows_wrong_board_and_cancelled_late_q() {
+    for failure in ["row", "board", "cancel"] {
+        let (_listener, connection, mut ws, initial) = connected("articles").await;
+        connection.keep_alive(false).unwrap();
+        connection
+            .request_go_to(
+                initial.stamp(),
+                Destination::ListArticle {
+                    board: BoardName::parse("Stella").unwrap(),
+                    row: 3,
+                },
+            )
+            .unwrap()
+            .wait()
+            .await
+            .unwrap();
+        expect(&mut ws, b"\x1b[A").await;
+        if failure == "row" {
+            ws.send(Message::Binary(
+                crate::encoding::encode(
+                    &selected_first().replace("合成文章一", "changed first row"),
+                )
+                .unwrap()
+                .into(),
+            ))
+            .await
+            .unwrap();
+        } else {
+            ws.send(Message::Binary(
+                crate::encoding::encode(&selected_first()).unwrap().into(),
+            ))
+            .await
+            .unwrap();
+            expect(&mut ws, b"Q").await;
+            if failure == "cancel" {
+                connection.cancel_navigation(initial.stamp()).unwrap();
+                wait(&connection, |v| {
+                    !matches!(v.destination, NavigationProgress::Active { .. })
+                })
+                .await;
+            }
+            ws.send(Message::Binary(
+                first_information(if failure == "board" {
+                    "Other"
+                } else {
+                    "Stella"
+                })
+                .into(),
+            ))
+            .await
+            .unwrap();
+        }
+        wait(&connection, |v| {
+            !matches!(v.destination, NavigationProgress::Active { .. })
+        })
+        .await;
+        assert!(
+            timeout(Duration::from_millis(80), ws.next()).await.is_err(),
+            "must not continue {failure}"
+        );
+        finish_board_peer(&connection, ws).await;
+    }
 }

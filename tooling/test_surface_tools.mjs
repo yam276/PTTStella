@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {translator} from './i18n_test_support.mjs';
 
 const create=vm.runInNewContext(readFileSync(new URL('../assets/surface-tools.js',import.meta.url),'utf8')+'\ncreateFloatingTools');
-function fixture({width=900,height=700,reduced=false,language='zh-TW',withSettings=false}={}){
+function fixture({width=900,height=700,reduced=false,language='zh-TW',withSettings=false,compact=false}={}){
     let clock=0,next=0,prepared=0,restored=0,settingsOpened=0;
     const frames=new Map(),classes=new Set();
     const element=()=>({hidden:true,attrs:{},dataset:{},style:{setProperty(k,v){this[k]=v;}},
@@ -13,7 +13,7 @@ function fixture({width=900,height=700,reduced=false,language='zh-TW',withSettin
         contains(target){return target===this;}});
     const root=element(),ball=element(),fan=element(),panel=element(),keyboard=element();
     root.classList={add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v)};
-    const petals=['navigate','display','capture','input','session','filters',...(withSettings?['settings']:[])].map(group=>{const p=element();p.dataset.toolsTarget=group;return p;});
+    const petals=(compact?['navigate','bookmarks','capture','session','settings']:['navigate','display','capture','input','session','filters',...(withSettings?['settings']:[])]).map(group=>{const p=element();p.dataset.toolsTarget=group;return p;});
     const groups=petals.filter(p=>p.dataset.toolsTarget!=="settings").map(p=>{const group=element();group.dataset.toolsGroup=p.dataset.toolsTarget;return group;});
     const document={activeElement:null,hidden:false,querySelector:()=>null},window={innerWidth:width,innerHeight:height};
     const captures=new Set();ball.setPointerCapture=id=>captures.add(id);ball.hasPointerCapture=id=>captures.has(id);ball.releasePointerCapture=id=>captures.delete(id);
@@ -353,4 +353,22 @@ test('low opacity preference remains intact through both open paths, category Ba
         assert.equal(f.root.style['--tools-opacity'],'0.2');
     }
     f.menu.destroy();assert.equal(f.menu.clean(),true);
+});
+
+test('five common categories including bookmarks keep all controls reachable without hidden focus or offscreen hit boxes',()=>{
+ for(const [width,height] of [[320,240],[640,480],[900,700],[1920,1080]]){
+  const f=fixture({width,height,compact:true});f.menu.showAt({isTrusted:true,clientX:width/2,clientY:height/2});
+  assert.equal(f.petals.length,5);for(const petal of f.petals){f.fire(petal,'click');if(petal.dataset.toolsTarget!=='settings')f.fire(f.ball,'click');else assert.equal(f.counts().settingsOpened,1);}
+  f.menu.destroy();assert.equal(f.menu.clean(),true);
+ }
+});
+
+test('the five production petals, including Bookmarks, never overlap through 4K',()=>{
+ for(const [width,height] of [[900,700],[1280,800],[1920,1080],[3840,2160]]){
+  const f=fixture({width,height,compact:true});f.fire(f.ball,'click');const {scale,point}=f.menu.snapshot();
+  const rects=f.petals.map(p=>({x:point.x+parseFloat(p.style['--petal-x']),y:point.y+parseFloat(p.style['--petal-y']),w:62*scale,h:62*scale}));
+  for(let i=0;i<rects.length;i++)for(let j=i+1;j<rects.length;j++)assert.equal(overlaps(rects[i],rects[j]),false);
+  const bookmark=f.petals.find(p=>p.dataset.toolsTarget==='bookmarks');f.fire(bookmark,'click');assert.equal(f.menu.snapshot().selected,'bookmarks');
+  f.fire(f.ball,'click');assert.equal(f.document.activeElement,bookmark);f.menu.destroy();assert.equal(f.menu.clean(),true);
+ }
 });

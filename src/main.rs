@@ -107,19 +107,73 @@ fn main() {
             .as_deref()
         {
             Some(
-                case @ ("fullscreen" | "decode" | "painted" | "send" | "renderer_error"
-                | "untrusted" | "confirm" | "slow" | "dialogs" | "tools" | "sites"
-                | "sites_restart" | "files" | "files_slow" | "fonts" | "sgr66"
-                | "sgr66_legacy" | "login_2fa" | "osc8" | "filter_colors" | "inline"
-                | "inline_pages" | "full_load" | "long_load" | "terminal_pages"
-                | "short_overlap" | "short_reading" | "reading_rows" | "control_input"
-                | "editor_clipboard" | "wide_last_row" | "diagnostics" | "inline_replies"
-                | "short_links" | "picture_menu" | "context_menu" | "account_lists"
-                | "merged_replies" | "account_actions" | "account_articles"
-                | "pointer_rows" | "list_boundary" | "article_switch" | "boards"
-                | "boards_close" | "recent" | "articles" | "articles_close" | "bookmarks"
-                | "bookmarks_restart" | "bookmarks_empty" | "bookmarks_corrupt" | "mouse"
-                | "mouse_boundary" | "mouse_drag" | "mouse_round_trip" | "mouse_motion"
+                case @ ("fullscreen"
+                | "decode"
+                | "painted"
+                | "send"
+                | "renderer_error"
+                | "untrusted"
+                | "confirm"
+                | "slow"
+                | "dialogs"
+                | "tools"
+                | "sites"
+                | "sites_restart"
+                | "files"
+                | "files_slow"
+                | "fonts"
+                | "sgr66"
+                | "sgr66_legacy"
+                | "login_2fa"
+                | "osc8"
+                | "filter_colors"
+                | "inline"
+                | "inline_pages"
+                | "full_load"
+                | "long_load"
+                | "terminal_pages"
+                | "short_overlap"
+                | "short_reading"
+                | "reading_rows"
+                | "ansi_zoom"
+                | "control_input"
+                | "editor_clipboard"
+                | "editor_color"
+                | "toast_reconnect"
+                | "wide_last_row"
+                | "diagnostics"
+                | "inline_replies"
+                | "short_links"
+                | "picture_menu"
+                | "context_menu"
+                | "account_lists"
+                | "merged_replies"
+                | "account_actions"
+                | "account_articles"
+                | "pointer_rows"
+                | "list_boundary"
+                | "article_switch"
+                | "bookmark_archive"
+                | "bookmark_headerless"
+                | "bookmark_list"
+                | "bookmark_archive_cancel"
+                | "bookmarks_archive_restart"
+                | "live_updates"
+                | "live_updates_cancel"
+                | "boards"
+                | "boards_close"
+                | "recent"
+                | "articles"
+                | "articles_close"
+                | "bookmarks"
+                | "bookmarks_restart"
+                | "bookmarks_empty"
+                | "bookmarks_corrupt"
+                | "mouse"
+                | "mouse_boundary"
+                | "mouse_drag"
+                | "mouse_round_trip"
+                | "mouse_motion"
                 | "mouse_wheel"),
             ) => Some(case.to_owned()),
             _ => {
@@ -238,6 +292,8 @@ fn main() {
         event_loop.set_activate_ignoring_other_apps(false);
         config = config.with_event_loop(event_loop);
     }
+    let editor_color_probe = surface_probe.as_deref() == Some("editor_color");
+    let toast_reconnect_probe = surface_probe.as_deref() == Some("toast_reconnect");
     let props = ui::AppProps {
         probe,
         window_probe,
@@ -248,7 +304,11 @@ fn main() {
         media_origin,
     };
     let window = dioxus::desktop::WindowBuilder::new()
-        .with_title(if ui::diagnostics::diagnostic_build() {
+        .with_title(if editor_color_probe {
+            "PTTStella — 編輯上色測試（本機）"
+        } else if toast_reconnect_probe {
+            "PTTStella — 通知與重連測試（本機）"
+        } else if ui::diagnostics::diagnostic_build() {
             "PTTStella（診斷版）"
         } else {
             "PTTStella"
