@@ -4,10 +4,12 @@ pub mod article_refresh;
 pub mod article_target;
 pub mod board_navigation;
 pub mod bookmarks;
+pub mod composer;
 #[cfg(feature = "desktop")]
 pub mod connection;
 pub mod drafts;
 pub mod editor_color;
+pub mod editor_source;
 pub mod encoding;
 pub mod export;
 pub mod filters;

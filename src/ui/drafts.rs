@@ -27,6 +27,7 @@ pub(super) enum Reply {
         request: u64,
         scope: Scope,
         entries: Vec<Summary>,
+        can_create: bool,
     },
     Selected {
         token: u64,
@@ -45,7 +46,19 @@ pub(super) enum Reply {
     },
     Colored {
         token: u64,
-        body: String,
+        revision: u64,
+        changes: Vec<pttstella::composer::Change>,
+    },
+    Projected {
+        token: u64,
+        revision: u64,
+        decorations: Vec<pttstella::composer::Decoration>,
+    },
+    DecorationError {
+        token: u64,
+        revision: u64,
+        coloring: bool,
+        message: String,
     },
     Deleted {
         id: String,
@@ -79,6 +92,7 @@ pub(super) struct State {
     queued: Option<Edit>,
     last_error: Option<String>,
     latest: Option<Edit>,
+    pub(super) template: Option<pttstella::editor_source::Snapshot>,
 }
 impl Default for State {
     fn default() -> Self {
@@ -101,6 +115,7 @@ impl State {
             queued: None,
             last_error: None,
             latest: None,
+            template: None,
         }
     }
     pub(super) fn busy(&self) -> bool {
@@ -113,6 +128,13 @@ impl State {
     }
     pub(super) fn scope(&self) -> Option<&Scope> {
         self.scope.as_ref()
+    }
+    pub(super) fn owns(&self, token: u64) -> Result<(), String> {
+        if self.active.is_some() && self.token == token {
+            Ok(())
+        } else {
+            Err(pttstella::msg!("draft-invalid"))
+        }
     }
     pub(super) fn active(&self, token: u64) -> Result<&Entry, String> {
         self.active
@@ -162,6 +184,9 @@ impl State {
             .scope
             .clone()
             .ok_or(pttstella::msg!("draft-unavailable"))?;
+        if id.is_none() && !self.template.as_ref().is_some_and(|t| t.scope.same(&scope)) {
+            return Err(pttstella::msg!("draft-unavailable"));
+        }
         self.base = if let Some(id) = id {
             Some(
                 self.entries
@@ -175,10 +200,20 @@ impl State {
         };
         let entry = self.base.clone().unwrap_or_else(|| Entry {
             id: self.id(),
-            scope,
+            scope: scope.clone(),
             revision: 0,
-            title: String::new(),
-            body: String::new(),
+            title: self
+                .template
+                .as_ref()
+                .filter(|t| t.scope.same(&scope))
+                .map(|t| t.title.clone())
+                .unwrap_or_default(),
+            body: self
+                .template
+                .as_ref()
+                .filter(|t| t.scope.same(&scope))
+                .map(|t| t.body.clone())
+                .unwrap_or_default(),
             saved_at: now(),
             conflict: false,
         });
@@ -278,6 +313,10 @@ impl State {
                         self.base = None;
                         Reply::List {
                             request,
+                            can_create: self
+                                .template
+                                .as_ref()
+                                .is_some_and(|t| t.scope.same(&scope)),
                             scope,
                             entries: self
                                 .entries
@@ -368,28 +407,6 @@ pub(super) fn scope(view: &pttstella::connection::View) -> Option<Scope> {
         board: pttstella::board_navigation::current_board(&view.frame)?,
     })
 }
-pub(super) fn preview(body: &str, first: usize) -> Result<pttstella::screen::Frame, String> {
-    if body.len() > pttstella::drafts::MAX_BODY || first > 4096 {
-        return Err(pttstella::msg!("draft-limit"));
-    }
-    // Validate using the same safe SGR grammar before feeding the production
-    // terminal core. No renderer-side ANSI parser or HTML source interpolation.
-    pttstella::drafts::transfer(body, pttstella::encoding::TextEncoding::Uao)
-        .map_err(|e| e.to_string())?;
-    let lines: Vec<_> = body.split('\n').collect();
-    if first >= lines.len() {
-        return Err(pttstella::msg!("draft-invalid"));
-    }
-    let end = (first + 23).min(lines.len());
-    let prefix = lines[..end].join("\r\n");
-    let mut screen = pttstella::screen::Screen::new(80, 24).map_err(str::to_owned)?;
-    screen.feed(&pttstella::encoding::encode(&prefix).map_err(|e| e.to_string())?);
-    // Pad the last page too: its first requested source row must be at the
-    // top, not mixed with earlier rows left in the terminal ring.
-    screen.feed(&b"\r\n".repeat(first + 24 - end));
-    Ok(screen.frame())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -403,6 +420,11 @@ mod tests {
     async fn create(state: &mut State) {
         state.open(1, scope()).unwrap();
         assert!(matches!(state.next().await, Reply::List { .. }));
+        state.template = Some(pttstella::editor_source::Snapshot {
+            scope: scope(),
+            title: String::new(),
+            body: String::new(),
+        });
         state.choose(None).unwrap();
     }
     fn edit(state: &State, sequence: u64, body: &str) -> Edit {
@@ -413,22 +435,30 @@ mod tests {
             body: body.into(),
         }
     }
-    #[test]
-    fn preview_last_page_keeps_requested_top_and_carries_prior_ansi() {
-        let body = (0..25)
-            .map(|n| format!("{}LINE{n:02}", if n == 0 { "\x1b[31m" } else { "" }))
+    #[tokio::test]
+    async fn new_document_requires_imported_same_board_template_and_seeds_title_and_offscreen_source()
+     {
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = State::new(Some(dir.path()));
+        state.open(1, scope()).unwrap();
+        state.next().await;
+        assert!(state.choose(None).is_err());
+        let body = (0..32)
+            .map(|n| format!("範本第{n}行"))
             .collect::<Vec<_>>()
             .join("\n");
-        let frame = preview(&body, 23).unwrap();
-        let rows = pttstella::text::rows(&frame).unwrap();
-        assert!(rows[0].text.starts_with("LINE23"));
-        assert!(rows[1].text.starts_with("LINE24"));
-        assert!(rows[2].text.trim().is_empty());
-        assert_eq!(rows[0].spans[0].glyph.left.fg, 1);
-        let short = preview("第一行\n\x1b[32m中文", 0).unwrap();
-        let rows = pttstella::text::rows(&short).unwrap();
-        assert!(rows[0].text.starts_with("第一行"));
-        assert!(rows[1].text.starts_with("中文"));
+        state.template = Some(pttstella::editor_source::Snapshot {
+            scope: scope(),
+            title: "[分類] 範本".into(),
+            body: body.clone(),
+        });
+        let Reply::Selected { entry, .. } = state.choose(None).unwrap() else {
+            panic!()
+        };
+        assert_eq!(entry.body, body);
+        assert_eq!(entry.title, "[分類] 範本");
+        state.template.as_mut().unwrap().scope.account = "Other".into();
+        assert!(state.choose(None).is_err());
     }
     #[tokio::test]
     async fn shutdown_joins_earlier_saves_and_flushes_final_debounced_ansi_source() {

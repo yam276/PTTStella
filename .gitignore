@@ -23,3 +23,6 @@ Thumbs.db
 *.log
 __pycache__/
 *.pyc
+
+# Reproducible local composer tooling; runtime bundle is checked in.
+/tooling/composer/node_modules/

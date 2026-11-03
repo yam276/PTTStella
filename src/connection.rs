@@ -53,7 +53,8 @@ pub struct View {
     pub login_pending: bool,
     pub login_guidance: crate::login::Guidance,
     pub account: Option<String>,
-    pub draft_post_token: Option<u64>,
+    pub draft_post_scope: Option<crate::drafts::Scope>,
+    pub draft_source: Option<std::sync::Arc<crate::editor_source::Snapshot>>,
     pub destination: NavigationProgress,
     pub board_visit: Option<crate::recent_boards::BoardVisit>,
     pub frame: Frame,
@@ -95,11 +96,9 @@ enum Command {
         generation: u64,
         bytes: Vec<u8>,
     },
-    DraftPost {
+    DraftSource {
         stamp: Stamp,
-        scope: crate::drafts::Scope,
-        token: u64,
-        body: Option<String>,
+        replacement: Option<crate::editor_source::Replacement>,
         reply: oneshot::Sender<Result<(), String>>,
     },
     EditorColor {
@@ -192,7 +191,8 @@ impl Connection {
             login_pending: false,
             login_guidance: crate::login::Guidance::Idle,
             account: None,
-            draft_post_token: None,
+            draft_post_scope: None,
+            draft_source: None,
             destination: NavigationProgress::Idle,
             board_visit: None,
             frame: screen.frame(),
@@ -589,30 +589,20 @@ impl Connection {
             closed: crate::msg!("navigation-service-unavailable"),
         })
     }
-    pub fn request_draft_post(
+    pub fn request_draft_source(
         &self,
         stamp: Stamp,
-        scope: crate::drafts::Scope,
-        token: u64,
-        body: Option<String>,
+        replacement: Option<crate::editor_source::Replacement>,
     ) -> Result<Reply, String> {
-        if body
-            .as_ref()
-            .is_some_and(|b| b.len() > crate::drafts::MAX_BODY)
-        {
-            return Err(crate::msg!("draft-limit"));
-        }
         let (reply, answer) = oneshot::channel();
-        self.enqueue(Command::DraftPost {
+        self.enqueue(Command::DraftSource {
             stamp,
-            scope,
-            token,
-            body,
+            replacement,
             reply,
         })?;
         Ok(Reply {
             answer,
-            deadline: tokio::time::Instant::now() + Duration::from_secs(6),
+            deadline: tokio::time::Instant::now() + Duration::from_secs(185),
             expired: crate::msg!("draft-transfer-stopped"),
             closed: crate::msg!("draft-transfer-stopped"),
         })

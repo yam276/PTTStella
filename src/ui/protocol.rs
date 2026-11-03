@@ -47,6 +47,9 @@ pub(super) enum MediaAction {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(super) enum SurfaceEvent {
+    DraftCancel {
+        trusted: bool,
+    },
     DraftOpen {
         request: u64,
         trusted: bool,
@@ -65,23 +68,20 @@ pub(super) enum SurfaceEvent {
     },
     DraftColor {
         token: u64,
-        start: usize,
-        end: usize,
+        revision: u64,
+        body: String,
+        ranges: Vec<pttstella::composer::Range>,
         color: pttstella::editor_color::Color,
         trusted: bool,
     },
-    DraftPreview {
+    DraftProject {
         token: u64,
-        first: usize,
+        revision: u64,
+        body: String,
         trusted: bool,
     },
     DraftStation {
         token: u64,
-        stamp: Stamp,
-        transfer: bool,
-        trusted: bool,
-    },
-    DraftNative {
         stamp: Stamp,
         trusted: bool,
     },
@@ -482,7 +482,6 @@ impl SurfaceEvent {
         matches!(
             self,
             Self::DraftStation { .. }
-                | Self::DraftNative { .. }
                 | Self::LoginOpen { .. }
                 | Self::LoginSubmit { .. }
                 | Self::LoginForget { .. }
@@ -528,7 +527,6 @@ impl SurfaceEvent {
             StationMouseCancel { lease } => lease.stamp.generation == generation,
             StationMouseRevoke { generation: source } => *source == generation,
             DraftStation { trusted, stamp, .. }
-            | DraftNative { trusted, stamp, .. }
             | AccountRule { trusted, stamp, .. }
             | ReplyFocus { trusted, stamp, .. }
             | InlineExpand { trusted, stamp, .. }
@@ -602,12 +600,13 @@ impl SurfaceEvent {
             DestinationCancel { trusted, operation } => {
                 *trusted && operation.generation == generation
             }
-            DraftOpen { trusted, .. }
+            DraftCancel { trusted }
+            | DraftOpen { trusted, .. }
             | DraftDelete { trusted, .. }
             | DraftChoose { trusted, .. }
             | DraftEdit { trusted, .. }
-            | DraftPreview { trusted, .. }
             | DraftColor { trusted, .. }
+            | DraftProject { trusted, .. }
             | SitesOpen { trusted, .. }
             | SitesEdit { trusted, .. }
             | SitesConnect { trusted, .. }

@@ -143,7 +143,6 @@ function keydown(e) {
     const pause=latest?.navigation.kind==="continue_prompt"&&!["Dead","Shift","Control","Alt","Meta","CapsLock","NumLock","ScrollLock","Fn","FnLock","Symbol","SymbolLock","Hyper","Super"].includes(e.key);
     const physical=browsing&&/^(Key[A-Z]|Digit[0-9])$/.test(e.code)||control!==null;
     if(e.isComposing||composing||((e.keyCode===229||e.key==="Process")&&!physical)||e.metaKey) return;
-    if(control==="p"&&!e.repeat&&latest?.draft_scope){e.preventDefault();draftUi.open(e);return;}
     // Let the native copy action fire; copy data is already prepared by Rust.
     if(control==="c"&&hasSelection()) return;
     // PTT editor Ctrl+V toggles ANSI preview; shifted/system paste stays native.
@@ -1101,7 +1100,7 @@ const route=createSurfaceRouter({
     filters_open:filterUi.open,filters_result:filterUi.receive,
     login_result:loginUi.receive,
     recent_boards:destinationUi.receiveRecent,destination_result:destinationUi.receive,keyboard_state:receiveKeyboard,
-    draft:draftUi.receive,draft_preview:draftUi.receivePreview,
+    draft:draftUi.receive,
     bookmarks_open:bookmarksUi.receiveOpen,bookmarks_result:bookmarksUi.receive,archive:bookmarksUi.receiveArchive,bookmark_capture:bookmarksUi.captureStage,
     sites_open:sitesUi.receiveOpen,sites_result:sitesUi.receive,
     tools_opacity:percent=>tools.setOpacity(percent),

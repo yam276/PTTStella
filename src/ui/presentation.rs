@@ -13,7 +13,7 @@ use serde::Serialize;
 #[derive(Clone, Serialize)]
 pub(super) struct Paint {
     pub(super) draft_scope: Option<pttstella::drafts::Scope>,
-    pub(super) draft_post_token: Option<u64>,
+    pub(super) draft_post_scope: Option<pttstella::drafts::Scope>,
     #[serde(skip)]
     pub(super) replies: Vec<filters::Push>,
     pub(super) account_words: Vec<filters::AccountWord>,
@@ -87,7 +87,7 @@ pub(super) fn paint(
     };
     let mut paint = Paint {
         draft_scope: crate::ui::drafts::scope(view),
-        draft_post_token: view.draft_post_token,
+        draft_post_scope: view.draft_post_scope.clone(),
         replies: if view.site.ptt_features() {
             filters::pushes(&view.frame)
         } else {
@@ -170,7 +170,8 @@ pub(super) fn merge_replies(paint: &mut Paint, source_replies: &[filters::Push])
 pub(super) fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint {
     Paint {
         draft_scope: None,
-        draft_post_token: None,
+        draft_post_scope: None,
+
         replies: Vec::new(),
         account_words: Vec::new(),
         reply_rows: Vec::new(),
@@ -242,7 +243,8 @@ mod filter_tests {
             login_pending: false,
             login_guidance: pttstella::login::Guidance::Idle,
             account: None,
-            draft_post_token: None,
+            draft_post_scope: None,
+            draft_source: None,
             destination: pttstella::navigation_job::Progress::Idle,
             board_visit: None,
             phase: Phase::Connected,

@@ -38,7 +38,8 @@ impl Editor {
     pub fn wire(&self) -> Vec<u8> {
         let mut wire = Vec::new();
         wire.extend_from_slice(b"\x1b[2J");
-        for (index, line) in self.lines.iter().take(23).enumerate() {
+        let top = self.line.saturating_sub(22);
+        for (index, line) in self.lines.iter().skip(top).take(23).enumerate() {
             wire.extend_from_slice(format!("\x1b[{};1H\x1b[0m", index + 1).as_bytes());
             if self.preview {
                 wire.extend_from_slice(line);
@@ -57,7 +58,7 @@ impl Editor {
         } else {
             self.pos
         };
-        wire.extend_from_slice(&encoding::encode(&format!("\x1b[24;1H\x1b[30;47m編輯文章 (^X)存檔 (^C)色碼 (^V)彩色║{}│{}ipr║{}:{}\x1b[0m\x1b[{};{}H",if self.insert{"插入"}else{"取代"},if self.preview{"A"}else{"a"},self.line+1,col+1,self.line+1,col.min(79)+1)).unwrap());
+        wire.extend_from_slice(&encoding::encode(&format!("\x1b[24;1H\x1b[30;47m編輯文章 (^X)存檔 (^C)色碼 (^V)彩色║{}│{}ipr║{}:{}\x1b[0m\x1b[{};{}H",if self.insert{"插入"}else{"取代"},if self.preview{"A"}else{"a"},self.line+1,col+1,self.line-top+1,col.min(79)+1)).unwrap());
         wire
     }
     pub fn accept(&mut self, bytes: &[u8]) {
@@ -65,6 +66,29 @@ impl Editor {
         let mut i = 0;
         while i < bytes.len() {
             match bytes[i] {
+                29 => {
+                    self.line = 0;
+                    self.pos = 0;
+                }
+                20 => {
+                    self.line = self.lines.len() - 1;
+                    self.pos = 0;
+                }
+                25 => {
+                    if self.lines.len() > 1 {
+                        self.lines.remove(self.line);
+                        self.line = self.line.min(self.lines.len() - 1);
+                    } else {
+                        self.lines[0].clear();
+                    }
+                    self.pos = 0;
+                }
+                13 => {
+                    let next = self.lines[self.line].split_off(self.pos);
+                    self.line += 1;
+                    self.lines.insert(self.line, next);
+                    self.pos = 0;
+                }
                 0x0c => {} // Explicit redraw; document and cursor stay unchanged.
                 0x16 => self.preview = !self.preview,
                 0x0f => self.insert = !self.insert,
@@ -118,7 +142,7 @@ impl Editor {
                     }
                     i += 2;
                 }
-                c if c.is_ascii_graphic() || c == b' ' => {
+                c if c.is_ascii_graphic() || c == b' ' || c >= 0x80 => {
                     assert!(self.insert, "must explicitly enable insert mode");
                     self.lines[self.line].insert(self.pos, c);
                     self.pos += 1;

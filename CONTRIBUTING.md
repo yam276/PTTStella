@@ -255,3 +255,5 @@ Control 與工具列焦點使用 `--probe-surface OUTPUT_DIRECTORY control_input
 
 
 本機草稿變更另跑desktop lib／bin、multi_instance、全部JS、core、Clippy／Fluent／docs，契約見[本機草稿](docs/drafts.md)。原生`drafts`先保存自製三行中文／原始SGR，`drafts_restart`在新程序讀回相同檔案後由使用者明確開始／確認正文帶入。peer只接受一次Ctrl+P、精確ANSI正文與Close，拒絕發表／重送。須核對主檔內容、預覽與恢復、Close acknowledged、最後快照／disk owner join及真正程序退出；不以合成測試代表實站發文。
+
+本機編輯器變更另跑 desktop lib／bin、multi_instance、完整 JS、core、Fluent、Clippy 與 Python tooling。編輯元件來源另用 `npm ci --ignore-scripts --prefix tooling/composer`、`npm run build --prefix tooling/composer`、`npm test --prefix tooling/composer` 核對 bundle、授權與實際 DOM／history。`cargo test --release --locked --lib composer::tests::benchmark -- --ignored --nocapture` 以相同240行矩形比較逐區重掃與單次掃描，另量2048行投影；只輸出時間／數量，不記錄本文。原生 `drafts` 須取得範本、一次以上上色、保存標準三行稿；`drafts_restart` 先原生 Ctrl+P，再開本機恢復稿件、明確確認帶回一次。兩者要求正常 Close、完整 owner 清理與程序退出，不把一般 DOM 或程式派發事件算作原生滑鼠／注音輸入證據。

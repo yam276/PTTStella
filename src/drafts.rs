@@ -54,8 +54,9 @@ impl Entry {
         {
             return Err(crate::msg!("draft-invalid"));
         }
-        // Incomplete SGR edits are saved faithfully. Transfer and preview require
-        // complete safe SGR; unrelated control keys are never accepted.
+        // Incomplete SGR edits are saved faithfully and remain visible in local
+        // projections. Transfer requires complete safe SGR; unrelated controls
+        // are never accepted.
         if self
             .body
             .chars()
@@ -154,7 +155,6 @@ pub fn transfer(body: &str, encoding: crate::encoding::TextEncoding) -> Result<V
         .map(|p| p.bytes)
         .map_err(|e| e.to_string())
 }
-#[cfg(feature = "desktop")]
 pub fn empty_editor(frame: &crate::screen::Frame) -> bool {
     crate::navigation::article_editor(frame)
         && frame.cursor == (0, 0)

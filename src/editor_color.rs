@@ -90,6 +90,22 @@ pub fn status(frame: &Frame) -> Option<Status> {
     })
 }
 
+/// A complete raw logical row, admitted only after native End proves its length.
+pub fn source_row(frame: &Frame) -> Result<String, String> {
+    let state = status(frame).ok_or(crate::msg!("editor-color-unsupported"))?;
+    Row::capture(
+        frame,
+        state,
+        Span {
+            row: frame.cursor.1,
+            start: 0,
+            end: state.col,
+        },
+        state.line,
+    )
+    .map(|r| r.raw)
+}
+
 #[derive(Clone, Debug)]
 struct Token {
     start: usize,
@@ -873,20 +889,47 @@ pub fn local_source(
     end: usize,
     color: Color,
 ) -> Result<String, String> {
-    let boundary = |offset: usize| -> Option<usize> {
-        let mut units = 0;
-        for (byte, ch) in source.char_indices() {
-            if units == offset {
-                return Some(byte);
-            }
+    local_ranges(source, &[(start, end)], color)
+}
+/// One lexical pass for whole-line or rectangular multi-line selections.
+pub fn local_ranges(
+    source: &str,
+    ranges: &[(usize, usize)],
+    color: Color,
+) -> Result<String, String> {
+    if ranges.is_empty()
+        || ranges.len() > 4096
+        || ranges.iter().any(|(a, b)| a >= b)
+        || ranges.windows(2).any(|w| w[0].1 > w[1].0)
+    {
+        return Err(crate::msg!("editor-color-empty"));
+    }
+    let mut units = 0;
+    let mut boundaries = source
+        .char_indices()
+        .map(|(byte, ch)| {
+            let pair = (units, byte);
             units += ch.len_utf16();
-        }
-        (units == offset).then_some(source.len())
+            pair
+        })
+        .collect::<Vec<_>>();
+    boundaries.push((units, source.len()));
+    let boundary = |offset| {
+        boundaries
+            .binary_search_by_key(&offset, |(n, _)| *n)
+            .ok()
+            .map(|i| boundaries[i].1)
     };
-    let start = boundary(start).ok_or(crate::msg!("editor-color-empty"))?;
-    let end = boundary(end)
-        .filter(|e| *e > start)
-        .ok_or(crate::msg!("editor-color-empty"))?;
+    let ranges = ranges
+        .iter()
+        .map(|(a, b)| {
+            Ok((
+                boundary(*a).ok_or(crate::msg!("editor-color-empty"))?,
+                boundary(*b).ok_or(crate::msg!("editor-color-empty"))?,
+            ))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let mut range = 0;
     crate::input::prepare_editor_source(
         source,
         crate::encoding::TextEncoding::Uao,
@@ -898,6 +941,20 @@ pub fn local_source(
     let mut result = String::new();
     let mut offset = 0;
     for line in source.split_inclusive('\n') {
+        while range < ranges.len() && ranges[range].1 <= offset {
+            range += 1;
+        }
+        let (start, end) = ranges
+            .get(range)
+            .copied()
+            .filter(|(a, _)| *a < offset + line.len())
+            .unwrap_or((source.len(), source.len()));
+        if ranges
+            .get(range + 1)
+            .is_some_and(|(a, _)| *a < offset + line.trim_end_matches('\n').len())
+        {
+            return Err(crate::msg!("editor-color-unsupported"));
+        }
         let mut tokens = Vec::new();
         let mut cursor = 0;
         while cursor < line.len() {

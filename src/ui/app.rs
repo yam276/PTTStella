@@ -543,31 +543,23 @@ pub fn app(props: AppProps) -> Element {
                     button{id:"draft-delete-cancel",{pttstella::msg!("cancel")}}
                 }
                 div {id:"draft-editor",hidden:true,
-                    label {r#for:"draft-title",{pttstella::msg!("draft-title")}}
-                    input {id:"draft-title",maxlength:"128",autocomplete:"off"}
+                    div {class:"draft-title-row",label {r#for:"draft-title",{pttstella::msg!("draft-title")}} input {id:"draft-title",maxlength:"128",autocomplete:"off"}}
                     div {class:"draft-editor-tools",
-                        button {id:"draft-preview",{pttstella::msg!("draft-preview")}}
-                        button {id:"draft-source",hidden:true,{pttstella::msg!("draft-source")}}
-                        button {id:"draft-colors",{pttstella::msg!("editor-color-title")}}
-                        button {id:"draft-save",{pttstella::msg!("draft-save")}}
-                    }
-                    div {id:"draft-color-panel",hidden:true,
-                        fieldset {legend{{pttstella::msg!("editor-color-foreground")}}div{id:"draft-foreground",class:"editor-color-grid"}}
-                        fieldset {legend{{pttstella::msg!("editor-color-background")}}div{id:"draft-background",class:"editor-color-grid"}}
-                        button {id:"draft-color-apply",{pttstella::msg!("editor-color-apply")}}
-                    }
-                    label {r#for:"draft-body",{pttstella::msg!("draft-body")}}
-                    textarea {id:"draft-body",wrap:"off",spellcheck:"false",autocomplete:"off",autocapitalize:"off","autocorrect":"off"}
-                    div {id:"draft-preview-panel",hidden:true,
-                        canvas{id:"draft-canvas",width:"960",height:"576","aria-label":pttstella::msg!("draft-preview")}
-                        div {class:"dialog-actions",
-                            button{id:"draft-prev","↑"}output{id:"draft-position"}button{id:"draft-next","↓"}
+                        div {role:"group","aria-label":pttstella::msg!("draft-view"),
+                            button {id:"draft-mode-color","aria-pressed":"true",{pttstella::msg!("draft-wysiwyg")}}
+                            button {id:"draft-mode-plain","aria-pressed":"false",{pttstella::msg!("draft-plain")}}
+                            button {id:"draft-mode-source","aria-pressed":"false",{pttstella::msg!("draft-source")}}
+                        }
+                        div {role:"group","aria-label":pttstella::msg!("draft-selection"),
+                            button {id:"draft-select-line","aria-pressed":"true",{pttstella::msg!("draft-select-line")}}
+                            button {id:"draft-select-rectangle","aria-pressed":"false",{pttstella::msg!("draft-select-rectangle")}}
                         }
                     }
-                    p {class:"draft-help",{pttstella::msg!("draft-help")}}
-                    div {class:"dialog-actions",
-                        button {id:"draft-begin",{pttstella::msg!("draft-begin")}}
-                        button {id:"draft-transfer",hidden:true,{pttstella::msg!("draft-transfer")}}
+                    div {id:"draft-body"}
+                    div {id:"draft-color-panel",hidden:true,
+                        button {id:"draft-color-close","aria-label":pttstella::msg!("cancel"),"×"}
+                        fieldset {legend{{pttstella::msg!("editor-color-foreground")}}div{id:"draft-foreground",class:"editor-color-grid"}}
+                        fieldset {legend{{pttstella::msg!("editor-color-background")}}div{id:"draft-background",class:"editor-color-grid"}}
                     }
                     div {id:"draft-confirm",hidden:true,
                         p{{pttstella::msg!("draft-confirm")}}
@@ -575,7 +567,11 @@ pub fn app(props: AppProps) -> Element {
                         button{id:"draft-transfer-cancel",{pttstella::msg!("cancel")}}
                     }
                 }
-                footer {class:"dialog-actions",button{id:"draft-close",{pttstella::msg!("draft-close")}}}
+                footer {class:"dialog-actions",
+                    button {id:"draft-save",{pttstella::msg!("draft-save")}}
+                    button {id:"draft-transfer",{pttstella::msg!("draft-transfer")}}
+                    button{id:"draft-close",{pttstella::msg!("draft-close")}}
+                }
             }
             dialog { id: "destination-dialog", class: "paste-preview", "aria-labelledby": "destination-title",
                 h2 { id: "destination-title", {pttstella::msg!("destination-title")} }

@@ -77,8 +77,39 @@ struct NavigationJob {
     serial: u64,
     epoch: u64,
 }
+enum EditorFlow {
+    Color(crate::editor_color::Flow),
+    Source(crate::editor_source::Flow),
+}
+enum EditorAction {
+    Send(Vec<u8>),
+    Wait,
+    Done(Option<crate::editor_source::Snapshot>),
+}
+impl EditorFlow {
+    fn changed(&self) -> bool {
+        match self {
+            Self::Color(f) => f.changed(),
+            Self::Source(f) => f.changed(),
+        }
+    }
+    fn next(&mut self, frame: &crate::screen::Frame) -> Result<EditorAction, String> {
+        match self {
+            Self::Color(f) => match f.next(frame)? {
+                crate::editor_color::Action::Send(b) => Ok(EditorAction::Send(b)),
+                crate::editor_color::Action::Wait => Ok(EditorAction::Wait),
+                crate::editor_color::Action::Done(r) => r.map(|()| EditorAction::Done(None)),
+            },
+            Self::Source(f) => match f.next(frame)? {
+                crate::editor_source::Action::Send(b) => Ok(EditorAction::Send(b)),
+                crate::editor_source::Action::Wait => Ok(EditorAction::Wait),
+                crate::editor_source::Action::Done(s) => Ok(EditorAction::Done(Some(s))),
+            },
+        }
+    }
+}
 struct EditorJob {
-    flow: crate::editor_color::Flow,
+    flow: EditorFlow,
     reply: tokio::sync::oneshot::Sender<Result<(), String>>,
     deadline: Instant,
     step_deadline: Instant,
@@ -95,7 +126,6 @@ enum InputEffect {
 struct DraftPost {
     stamp: Stamp,
     scope: crate::drafts::Scope,
-    token: u64,
     expires: Instant,
 }
 struct Session {
@@ -224,7 +254,7 @@ impl Session {
         if job.reply.is_closed()
             || now >= job.deadline
             || now >= job.step_deadline
-            || job.steps >= 4096
+            || job.steps >= 16384
             || self.view.phase != Phase::Connected
         {
             let _ = job.reply.send(Err(crate::msg!("editor-color-stopped")));
@@ -239,8 +269,14 @@ impl Session {
             return;
         }
         match job.flow.next(&self.screen.frame()) {
-            Ok(crate::editor_color::Action::Send(bytes)) => {
-                if bytes.len() > crate::input::MAX_INPUT_BYTES {
+            Ok(EditorAction::Send(bytes)) => {
+                if bytes.len()
+                    > if matches!(job.flow, EditorFlow::Source(_)) {
+                        crate::drafts::MAX_BODY * 2 + 8
+                    } else {
+                        crate::input::MAX_INPUT_BYTES
+                    }
+                {
                     let _ = job.reply.send(Err(crate::msg!("editor-color-stopped")));
                     return;
                 }
@@ -255,9 +291,13 @@ impl Session {
                 }
                 self.dirty = true;
             }
-            Ok(crate::editor_color::Action::Wait) => self.editor_job = Some(job),
-            Ok(crate::editor_color::Action::Done(result)) => {
-                let _ = job.reply.send(result);
+            Ok(EditorAction::Wait) => self.editor_job = Some(job),
+            Ok(EditorAction::Done(snapshot)) => {
+                if let Some(snapshot) = snapshot {
+                    self.view.draft_source = Some(std::sync::Arc::new(snapshot));
+                }
+                self.publish();
+                let _ = job.reply.send(Ok(()));
                 self.dirty = true;
             }
             Err(error) => {
@@ -448,16 +488,70 @@ impl Session {
             }
             Some(Command::Disconnect) => self.disconnect().await,
             Some(Command::Input { generation, bytes }) => self.input(generation, &bytes).await,
-            Some(Command::DraftPost {
+            Some(Command::DraftSource {
                 stamp,
-                scope,
-                token,
-                body,
+                replacement,
                 reply,
             }) => {
                 if !reply.is_closed() {
-                    let result = self.draft_post(stamp, scope, token, body).await;
-                    let _ = reply.send(result);
+                    let result = (|| {
+                        self.clear_answered_input();
+                        let lease = self
+                            .draft_post
+                            .as_ref()
+                            .filter(|l| {
+                                l.stamp.generation == stamp.generation && Instant::now() < l.expires
+                            })
+                            .ok_or(crate::msg!("draft-transfer-stopped"))?;
+                        if self.view.site != lease.scope.site
+                            || !self
+                                .view
+                                .account
+                                .as_ref()
+                                .is_some_and(|a| a.eq_ignore_ascii_case(&lease.scope.account))
+                            || stamp != self.stamp()
+                            || self.view.phase != Phase::Connected
+                            || self.socket.is_none()
+                            || self.pending_input.is_some()
+                            || self.editor_job.is_some()
+                            || self.navigation_job.is_some()
+                            || self.login_attempt.is_some()
+                            || self.login_followup.is_some()
+                            || self.screen.synchronized_since().is_some()
+                            || self.mouse.snapshot(self.mouse_context()).route
+                                != crate::mouse::input::Route::Local
+                        {
+                            return Err(crate::msg!("draft-transfer-stopped"));
+                        }
+                        if let Some(r) = &replacement
+                            && self.view.draft_source.as_deref() != Some(&r.baseline)
+                        {
+                            return Err(crate::msg!("draft-transfer-stopped"));
+                        }
+                        crate::editor_source::Flow::new(
+                            &self.screen.frame(),
+                            lease.scope.clone(),
+                            replacement,
+                        )
+                    })();
+                    match result {
+                        Ok(flow) => {
+                            let now = Instant::now();
+                            self.mouse.intervene();
+                            self.editor_job = Some(EditorJob {
+                                flow: EditorFlow::Source(flow),
+                                reply,
+                                deadline: now + Duration::from_secs(180),
+                                step_deadline: now + Duration::from_secs(5),
+                                quiet_until: now,
+                                steps: 0,
+                            });
+                            self.dirty = true;
+                        }
+                        Err(e) => {
+                            let _ = reply.send(Err(e));
+                        }
+                    }
                 }
             }
             Some(Command::EditorColor {
@@ -491,7 +585,7 @@ impl Session {
                             let now = Instant::now();
                             self.mouse.intervene();
                             self.editor_job = Some(EditorJob {
-                                flow,
+                                flow: EditorFlow::Color(flow),
                                 reply,
                                 deadline: now + Duration::from_secs(180),
                                 step_deadline: now + Duration::from_secs(5),
@@ -615,7 +709,8 @@ impl Session {
         self.account_identity = login::AccountIdentity::default();
         self.view.account = None;
         self.draft_post = None;
-        self.view.draft_post_token = None;
+        self.view.draft_post_scope = None;
+        self.view.draft_source = None;
         self.updates.send_replace(self.view.clone());
         transport::stop(&mut self.socket, &mut self.dialing).await
     }
@@ -827,78 +922,6 @@ impl Session {
         self.dirty = true;
     }
 
-    async fn draft_post(
-        &mut self,
-        stamp: Stamp,
-        scope: crate::drafts::Scope,
-        token: u64,
-        body: Option<String>,
-    ) -> Result<(), String> {
-        self.clear_answered_input();
-        if stamp != self.stamp()
-            || self.view.phase != Phase::Connected
-            || self.socket.is_none()
-            || self.pending_input.is_some()
-            || self.editor_job.is_some()
-            || self.navigation_job.is_some()
-            || self.login_attempt.is_some()
-            || self.login_followup.is_some()
-            || self.screen.synchronized_since().is_some()
-            || !self.screen.frame().control_complete
-            || self.mouse.snapshot(self.mouse_context()).route != crate::mouse::input::Route::Local
-            || !scope.valid()
-            || self.view.site != scope.site
-            || !self
-                .view
-                .account
-                .as_ref()
-                .is_some_and(|a| a.eq_ignore_ascii_case(&scope.account))
-        {
-            return Err(crate::msg!("draft-transfer-stopped"));
-        }
-        if let Some(body) = body {
-            let lease = self
-                .draft_post
-                .as_ref()
-                .filter(|lease| {
-                    lease.token == token
-                        && lease.stamp.generation == stamp.generation
-                        && lease.scope.same(&scope)
-                        && Instant::now() < lease.expires
-                })
-                .ok_or(crate::msg!("draft-transfer-stopped"))?;
-            let _ = lease;
-            if !crate::drafts::empty_editor(&self.screen.frame()) {
-                return Err(crate::msg!("draft-empty-editor"));
-            }
-            let bytes = crate::drafts::transfer(&body, self.view.site.encoding)?;
-            // Consume before the first write. Never retry, send Ctrl+X, or save
-            // a post. A failed/partial transport leaves the local original.
-            self.draft_post = None;
-            self.idle.activity(Instant::now());
-            self.write_input(&bytes).await?;
-            self.wait_for_input(false);
-            self.dirty = true;
-            Ok(())
-        } else {
-            if !crate::board_navigation::current_board(&self.screen.frame())
-                .is_some_and(|b| b.same(&scope.board))
-            {
-                return Err(crate::msg!("draft-unavailable"));
-            }
-            self.write_input(&[16]).await?;
-            self.wait_for_input(false);
-            self.draft_post = Some(DraftPost {
-                stamp,
-                scope,
-                token,
-                expires: Instant::now() + Duration::from_secs(600),
-            });
-            self.dirty = true;
-            Ok(())
-        }
-    }
-
     async fn input(&mut self, generation: u64, bytes: &[u8]) {
         self.login_attempt = None;
         // Preserve the peer/transport's last reason when typing after closure.
@@ -910,8 +933,27 @@ impl Session {
             self.dirty = true;
             return;
         }
-        if bytes.iter().any(|b| matches!(b, 16 | 24)) || bytes == [27] {
+        if bytes == [16] {
+            self.draft_post = crate::board_navigation::current_board(&self.screen.frame())
+                .zip(self.view.account.clone())
+                .filter(|_| {
+                    self.view.site.ptt_features()
+                        && !self.view.input_pending
+                        && !self.view.output_pending
+                })
+                .map(|(board, account)| DraftPost {
+                    stamp: self.stamp(),
+                    scope: crate::drafts::Scope {
+                        site: self.view.site.clone(),
+                        account,
+                        board,
+                    },
+                    expires: Instant::now() + Duration::from_secs(3600),
+                });
+            self.view.draft_source = None;
+        } else if bytes.contains(&24) || bytes == [27] {
             self.draft_post = None;
+            self.view.draft_source = None;
         }
         self.stop_editor();
         self.mouse.intervene();
@@ -1506,7 +1548,10 @@ impl Session {
         }) {
             self.draft_post = None;
         }
-        self.view.draft_post_token = self.draft_post.as_ref().map(|p| p.token);
+        self.view.draft_post_scope = self.draft_post.as_ref().map(|p| p.scope.clone());
+        if self.draft_post.is_none() {
+            self.view.draft_source = None;
+        }
         self.updates.send_replace(self.view.clone());
         self.dirty = false;
     }

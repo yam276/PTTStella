@@ -6,9 +6,13 @@ function colours(style) {
     return style.inverse?[palette[bg],palette[fg]]:[palette[fg],palette[bg]];
 }
 // Filled BBS graphics follow the grid, independent of font metrics/fallback.
-function graphic(ctx,text,x,y,w,h) {
-    if([...text].length!==1) return false;
+function graphicCode(text){
+    if([...text].length!==1)return null;
     const code=text.codePointAt(0);
+    return code>=0x2580&&code<=0x2590||code===0x2594||code===0x2595||code>=0x2596&&code<=0x259f||code>=0x25e2&&code<=0x25e5?code:null;
+}
+function graphic(ctx,text,x,y,w,h) {
+    const code=graphicCode(text);if(code===null)return false;
     const rect=(l,t,r,b)=>{
         const left=Math.round(x+w*l),top=Math.round(y+h*t);
         ctx.fillRect(left,top,Math.round(x+w*r)-left,Math.round(y+h*b)-top);

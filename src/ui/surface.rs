@@ -258,6 +258,7 @@ async fn run(
         drafts,
         settings,
     } = resources;
+    let mut draft_capture_request = None;
     let script = [
         "const fluent = (() => {const exports = {}; const module = {exports};\n",
         include_str!("../../assets/vendor/fluent/index.js"),
@@ -285,6 +286,7 @@ async fn run(
         include_str!("../../assets/surface-tools.js"),
         include_str!("../../assets/surface-context-menu.js"),
         include_str!("../../assets/surface-editor-color.js"),
+        include_str!("../../assets/vendor/composer/editor.js"),
         include_str!("../../assets/surface-drafts.js"),
         include_str!("../../assets/surface-toast.js"),
         include_str!("../../assets/surface-diagnostics.js"),
@@ -866,7 +868,7 @@ async fn run(
             },
             done = commands.next() => {
                 if done.generation != receiver.borrow().generation {
-                    if matches!(done.kind,CommandKind::DraftStart|CommandKind::DraftTransfer){eval.send(Packet::Draft(super::drafts::Reply::Error{message:pttstella::msg!("draft-transfer-stopped")})).map_err(|e|e.to_string())?;}
+                    if matches!(done.kind,CommandKind::DraftCapture|CommandKind::DraftTransfer){eval.send(Packet::Draft(super::drafts::Reply::Error{message:pttstella::msg!("draft-transfer-stopped")})).map_err(|e|e.to_string())?;}
                     if let Some(ticket)=done.navigation {eval.send(ticket.finish(Feedback::quiet(NavigationStatus::Cancelled))).map_err(|e|e.to_string())?;}
                     continue;
                 }
@@ -897,7 +899,14 @@ async fn run(
                         Ok(()) => continue,
                         Err(error) => Packet::Notice(error),
                     },
-                    CommandKind::DraftStart=>Packet::Draft(match done.result {Ok(())=>super::drafts::Reply::Transferred{message:pttstella::msg!("draft-station-guide")},Err(message)=>super::drafts::Reply::Error{message}}),
+                    CommandKind::DraftCapture=>{
+                        let result=done.result.and_then(|()| {
+                            let source=receiver.borrow().draft_source.as_deref().cloned().ok_or(pttstella::msg!("draft-template-unavailable"))?;
+                            let request=draft_capture_request.take().ok_or(pttstella::msg!("draft-invalid"))?;
+                            checks.draft_captures+=1;drafts.template=Some(source.clone());drafts.open(request,source.scope)
+                        });
+                        if let Err(message)=result {Packet::Draft(super::drafts::Reply::Error{message})} else {continue;}
+                    },
                     CommandKind::DraftTransfer=>Packet::Draft(match done.result {Ok(())=>{checks.draft_transfers+=1;super::drafts::Reply::Transferred{message:pttstella::msg!("draft-transferred")}},Err(message)=>super::drafts::Reply::Error{message}}),
                     CommandKind::EditorColor => Packet::Notice(match done.result {Ok(())=>{checks.editor_colors+=1;pttstella::msg!("editor-color-done")},Err(error)=>error}),
                     CommandKind::Destination => {
@@ -983,34 +992,40 @@ async fn run(
                     inline_images.close();eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
                 }
                 match event {
+                    SurfaceEvent::DraftCancel{..}=>{if commands.is(CommandKind::DraftCapture)||commands.is(CommandKind::DraftTransfer){commands.cancel();draft_capture_request=None;}},
                     SurfaceEvent::DraftOpen{request,..}=>{
-                        let view=receiver.borrow().clone();let scope=super::drafts::scope(&view).or_else(||(view.phase!=Phase::Connected||view.draft_post_token.is_some()).then(||drafts.scope().cloned()).flatten());
-                        let result=scope.ok_or(pttstella::msg!("draft-unavailable")).and_then(|scope|drafts.open(request,scope));
+                        let view=receiver.borrow().clone();
+                        let result=if view.draft_post_scope.is_some() && pttstella::navigation::article_editor(&view.frame) {
+                            if !screen.navigation_shown(view.stamp()) || pending_paste.read().is_some() || settings_visible || login_open {Err(pttstella::msg!("draft-transfer-stopped"))}
+                            else {drafts.template=None;draft_capture_request=Some(request);commands.start(CommandKind::DraftCapture,view.generation,||connection.request_draft_source(view.stamp(),None).map(|r|r.wait()))}
+                        } else {
+                            drafts.template=None;
+                            let scope=super::drafts::scope(&view).or_else(||(view.phase!=Phase::Connected).then(||drafts.scope().cloned()).flatten());
+                            scope.ok_or(pttstella::msg!("draft-unavailable")).and_then(|scope|drafts.open(request,scope))
+                        };
                         if let Err(message)=result{eval.send(Packet::Draft(super::drafts::Reply::Error{message})).map_err(|e|e.to_string())?;}
                     },
                     SurfaceEvent::DraftDelete{id,..}=>{if let Err(message)=drafts.delete(id){eval.send(Packet::Draft(super::drafts::Reply::Error{message})).map_err(|e|e.to_string())?;}},
                     SurfaceEvent::DraftChoose{id,..}=>{if id.is_some(){checks.draft_restores+=1;}let reply=drafts.choose(id).unwrap_or_else(|message|super::drafts::Reply::Error{message});eval.send(Packet::Draft(reply)).map_err(|e|e.to_string())?;},
                     SurfaceEvent::DraftEdit{edit,..}=>{if let Err(message)=drafts.edit(edit){eval.send(Packet::Draft(super::drafts::Reply::Error{message})).map_err(|e|e.to_string())?;}},
-                    SurfaceEvent::DraftColor{token,start,end,color,..}=>{
-                        let reply=match drafts.active(token).and_then(|e|pttstella::editor_color::local_source(&e.body,start,end,color)){Ok(body)=>super::drafts::Reply::Colored{token,body},Err(message)=>super::drafts::Reply::Error{message}};
+                    SurfaceEvent::DraftColor{token,revision,body,ranges,color,..}=>{
+                        let reply=match drafts.owns(token).and_then(|()|pttstella::composer::color(&body,&ranges,color)){Ok(changes)=>{checks.draft_colors+=1;super::drafts::Reply::Colored{token,revision,changes}},Err(message)=>super::drafts::Reply::DecorationError{token,revision,coloring:true,message}};
                         eval.send(Packet::Draft(reply)).map_err(|e|e.to_string())?;
                     },
-                    SurfaceEvent::DraftPreview{token,first,..}=>{
-                        let result=drafts.active(token).and_then(|entry|super::drafts::preview(&entry.body,first));
-                        match result{Ok(frame)=>{eval.send(Packet::DraftPreview{token,first,packet:Box::new(super::presentation::sample_packet(&frame,preferences.display()))}).map_err(|e|e.to_string())?;},Err(message)=>{eval.send(Packet::Draft(super::drafts::Reply::Error{message})).map_err(|e|e.to_string())?;}}
+                    SurfaceEvent::DraftProject{token,revision,body,..}=>{
+                        let reply=match drafts.owns(token).and_then(|()|pttstella::composer::project(&body)){Ok(decorations)=>super::drafts::Reply::Projected{token,revision,decorations},Err(message)=>super::drafts::Reply::DecorationError{token,revision,coloring:false,message}};
+                        eval.send(Packet::Draft(reply)).map_err(|e|e.to_string())?;
                     },
-                    SurfaceEvent::DraftStation{token,stamp,transfer,..}=>{
+                    SurfaceEvent::DraftStation{token,stamp,..}=>{
                         let view=receiver.borrow().clone();
                         let result=(||{
                             if !screen.navigation_shown(stamp)||view.stamp()!=stamp||pending_paste.read().is_some()||settings_visible||login_open{return Err(pttstella::msg!("draft-transfer-stopped"));}
-                            let entry=drafts.active(token)?;let scope=entry.scope.clone();
-                            let body=if transfer {Some(entry.body.clone())}else{pttstella::drafts::transfer(&entry.body,scope.site.encoding)?;None};
-                            commands.start(if transfer{CommandKind::DraftTransfer}else{CommandKind::DraftStart},stamp.generation,||connection.request_draft_post(stamp,scope,token,body).map(|r|r.wait()))
+                            let entry=drafts.active(token)?;
+                            let baseline=drafts.template.clone().filter(|t|t.scope.same(&entry.scope)).ok_or(pttstella::msg!("draft-transfer-stopped"))?;
+                            let replacement=pttstella::editor_source::Replacement{baseline,title:entry.title.clone(),body:entry.body.clone()};
+                            commands.start(CommandKind::DraftTransfer,stamp.generation,||connection.request_draft_source(stamp,Some(replacement)).map(|r|r.wait()))
                         })();
                         if let Err(message)=result{eval.send(Packet::Draft(super::drafts::Reply::Error{message})).map_err(|e|e.to_string())?;}
-                    },
-                    SurfaceEvent::DraftNative{stamp,..}=>{
-                        let view=receiver.borrow().clone();if view.stamp()==stamp&&screen.navigation_shown(stamp)&&super::drafts::scope(&view).is_some()&&!commands.busy()&&pending_paste.read().is_none(){connection.input(stamp.generation,vec![16])?;}
                     },
                     SurfaceEvent::Diagnostics { trace } => {diagnostics.web(trace);},
                     SurfaceEvent::StationMouse { event, .. } => {
@@ -2014,7 +2029,11 @@ async fn run(
             && reply_navigation.mine_rows == [6, 14];
         let mut mouse_report = checks.mouse_observations();
         mouse_report["final"] = serde_json::json!(receiver.borrow().mouse);
-        let drafts_passed = case == "drafts" && checks.draft_saves >= 1 && drafts.fixture_matches()
+        let drafts_passed = case == "drafts"
+            && checks.draft_captures >= 1
+            && checks.draft_colors >= 1
+            && checks.draft_saves >= 1
+            && drafts.fixture_matches()
             || case == "drafts_restart"
                 && checks.draft_restores >= 1
                 && checks.draft_transfers == 1
@@ -2079,7 +2098,7 @@ async fn run(
             "paste_preview_preserved":pending_paste.read().is_some(),
             "settings_saved":checks.settings_saved,"full_png":checks.export_checked,"rows_png":checks.rows_export_checked,"media_external_requests":checks.media_external,
         });
-        surface_report["drafts"] = serde_json::json!({"saves":checks.draft_saves,"restores":checks.draft_restores,"transfers":checks.draft_transfers,"fixture_matches":drafts.fixture_matches()});
+        surface_report["drafts"] = serde_json::json!({"captures":checks.draft_captures,"colors":checks.draft_colors,"saves":checks.draft_saves,"restores":checks.draft_restores,"transfers":checks.draft_transfers,"fixture_matches":drafts.fixture_matches()});
         surface_report["reply_navigation"] =
             serde_json::to_value(reply_navigation).map_err(|e| e.to_string())?;
         surface_report["archive_reads"] = checks.archive_reads.into();

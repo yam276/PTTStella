@@ -3142,99 +3142,93 @@ async fn public_login_echo_confirms_reply_identity_without_saved_credentials_and
 }
 
 #[tokio::test]
-async fn local_draft_transfer_requires_owned_fresh_empty_editor_and_never_publishes_or_retries() {
-    let connection = Connection::start_drafts_probe().unwrap();
-    connection.connect().unwrap();
-    let view = wait(&connection, |v| {
+async fn local_draft_capture_and_replacement_require_native_post_scope_and_never_publish() {
+    let c = Connection::start_drafts_probe().unwrap();
+    c.connect().unwrap();
+    let v = wait(&c, |v| {
         !v.output_pending
             && v.account.is_some()
             && crate::board_navigation::current_board(&v.frame).is_some()
     })
     .await;
-    let scope = crate::drafts::Scope {
-        site: view.site.clone(),
-        account: "StellaTest".into(),
-        board: BoardName::parse("Stella").unwrap(),
+    assert!(
+        c.request_draft_source(v.stamp(), None)
+            .unwrap()
+            .wait()
+            .await
+            .is_err()
+    );
+    c.input(v.generation, vec![16]).unwrap();
+    let v = wait(&c, |v| {
+        !v.input_pending && !v.output_pending && crate::navigation::article_editor(&v.frame)
+    })
+    .await;
+    assert!(v.draft_post_scope.is_some());
+    c.input(v.generation - 1, vec![24]).unwrap();
+    wait(&c, |v| v.message == crate::msg!("input-stale")).await;
+    assert!(c.updates.borrow().draft_post_scope.is_some());
+    assert!(
+        c.request_draft_source(
+            crate::navigation::Stamp {
+                revision: 0,
+                ..v.stamp()
+            },
+            None
+        )
+        .unwrap()
+        .wait()
+        .await
+        .is_err()
+    );
+    // Revoking the queued read must not send Ctrl+X or enter a menu.
+    let cancelled = c.request_draft_source(v.stamp(), None).unwrap();
+    drop(cancelled);
+    c.input(v.generation, vec![12]).unwrap();
+    let v = wait(&c, |fresh| {
+        fresh.frame.revision > v.frame.revision && !fresh.input_pending
+    })
+    .await;
+    c.request_draft_source(v.stamp(), None)
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    let v = c.updates.borrow().clone();
+    let baseline = v.draft_source.as_deref().unwrap().clone();
+    assert_eq!(baseline.body, "看板預設格式\n\x1b[32m請依格式填寫\x1b[m\n");
+    let r = crate::editor_source::Replacement {
+        baseline,
+        title: "[測試] 新標題".into(),
+        body: "中文\n\x1b[1;31m紅色\x1b[m".into(),
     };
-    let mut foreign = scope.clone();
-    foreign.account = "Other".into();
-    assert!(
-        connection
-            .request_draft_post(view.stamp(), foreign, 1, None)
-            .unwrap()
-            .wait()
-            .await
-            .is_err()
-    );
-    let body = "第一行中文\n\x1b[1;31m亮紅中文\x1b[m\n第三行";
-    assert!(
-        connection
-            .request_draft_post(view.stamp(), scope.clone(), 1, Some(body.into()))
-            .unwrap()
-            .wait()
-            .await
-            .is_err()
-    );
-    connection
-        .request_draft_post(view.stamp(), scope.clone(), 1, None)
+    let stamp = c.updates.borrow().stamp();
+    c.request_draft_source(stamp, Some(r.clone()))
         .unwrap()
         .wait()
         .await
         .unwrap();
-    let editor = wait(&connection, |v| {
-        !v.input_pending && !v.output_pending && crate::drafts::empty_editor(&v.frame)
-    })
-    .await;
-    assert_eq!(editor.draft_post_token, Some(1));
-    connection.input(editor.generation - 1, vec![24]).unwrap();
-    wait(&connection, |v| v.message == crate::msg!("input-stale")).await;
-    assert_eq!(connection.updates.borrow().draft_post_token, Some(1));
-    assert!(
-        connection
-            .request_draft_post(view.stamp(), scope.clone(), 1, Some(body.into()))
-            .unwrap()
-            .wait()
-            .await
-            .is_err()
-    );
-    assert!(
-        connection
-            .request_draft_post(editor.stamp(), scope.clone(), 2, Some(body.into()))
-            .unwrap()
-            .wait()
-            .await
-            .is_err()
-    );
-    assert!(
-        connection
-            .request_draft_post(editor.stamp(), scope.clone(), 1, Some("danger\x18".into()))
-            .unwrap()
-            .wait()
-            .await
-            .is_err()
-    );
-    connection
-        .request_draft_post(editor.stamp(), scope.clone(), 1, Some(body.into()))
-        .unwrap()
-        .wait()
-        .await
-        .unwrap();
-    let received = wait(&connection, |v| {
-        !v.output_pending
-            && crate::text::rows(&v.frame)
-                .is_some_and(|r| r[0].text.contains("DRAFT BODY RECEIVED"))
-    })
-    .await;
-    assert!(
-        connection
-            .request_draft_post(received.stamp(), scope, 1, Some(body.into()))
-            .unwrap()
-            .wait()
-            .await
-            .is_err()
-    );
     assert_eq!(
-        connection.shutdown().await.unwrap(),
-        CloseOutcome::Acknowledged
+        c.updates.borrow().draft_source.as_ref().unwrap().body,
+        "中文\n\x1b[1;31m紅色\x1b[m"
     );
+    let stamp = c.updates.borrow().stamp();
+    assert!(
+        c.request_draft_source(stamp, Some(r))
+            .unwrap()
+            .wait()
+            .await
+            .is_err(),
+        "a completed transfer cannot be replayed with the old template"
+    );
+    c.input(v.generation, vec![24]).unwrap();
+    wait(&c, |v| v.draft_post_scope.is_none()).await;
+    let stamp = c.updates.borrow().stamp();
+    assert!(
+        c.request_draft_source(stamp, None)
+            .unwrap()
+            .wait()
+            .await
+            .is_err()
+    );
+    assert_eq!(c.shutdown().await.unwrap(), CloseOutcome::Acknowledged);
 }

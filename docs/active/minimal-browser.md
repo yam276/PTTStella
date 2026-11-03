@@ -3,13 +3,26 @@
 狀態：**畫面核心、Windows 視窗與 WSS 登入前連線已驗證；macOS 專用帳號已觀察手動登入與部分實站瀏覽，平台與案例範圍分列如下**。第一個驗收平台為 Windows；Rust／Dioxus 維持可攜，macOS／Linux 後續各自驗證。
 
 
+## 2026-11-03 本機編輯器第二版（已實作；原生拖曳／注音待驗）
+
+恢復 PTT 原生 Ctrl+P：使用者先選分類／標題、取得看板範本，再按本機編輯入口。範本有界逐行核對原始碼與 EOF、包含畫面外內容；同板草稿提示在此步出現，列表只能管理／恢復已有稿件，不能另建繞過範本的空白新稿。帶回前重讀並比對站端完整標題／正文及 scope／世代，變更則停止；僅核對 T 改標題，清除已知範本後送正文，不選 S 或發表，不重送。特殊長原文行無法證明完整時明確拒絕，保留站端人工流程。
+
+CodeMirror 6 管理本機輸入、IME、undo 與矩形選取，Rust Screen 衍生 SGR 隱藏範圍與左右樣式；圖形重用共同 Canvas renderer，不重解站端 bytes。介面以標題／大面積正文為主，三種顯示共用完整 ANSI 原稿；文字模式整行（含換行邊界），ANSI 圖模式矩形字格。右鍵浮動色票保存開啟當下的範圍、點色即套用，與保存無關；停頓2秒／自動寫入最少間隔5秒，內部焦點不寫檔。多開衝突副本、最後快照、斷線／重開與錯誤不丟稿保護保留。固定套件、來源、MIT notices 和可重現 bundle 皆入 repo，Cargo 不需 npm。已移除舊唯讀預覽及舊 UI 發文捷徑。
+
+離線：desktop lib204／bin178／multi_instance10（ignored 的 helper由父測試啟動，效能案例另明確執行）、JS351、CodeMirror實際DOM／history測試、Python82、core14命令／2replay、Clippy、fmt及docs通過。重播保護另確認完成帶回後不能拿舊範本重送。相同240行矩形上色，比較逐區重掃108.6ms與單次掃描0.36ms，結果逐字相同；2048行／83967 bytes投影9.7ms，僅此機release模式合成量測，不冒充舊機或實站成績。
+
+macOS真正Dioxus：原生Ctrl+P、範本／標題匯入、中文與空行／已有色碼、多行右鍵立即上色、一次undo恢復、三種顯示、末尾空行的全選替換、保存／新程序恢復及一次明確帶回都通過。`native-verified`初稿與`native-final`最新交付版皆passed，完整操作回歸為capture1／color1／restore1／save3／transfer1，移除舊介面後的交付包另以capture1／restore1／transfer1重測通過，精確三行ANSI原文與標題一致；peer拒絕發表，Close acknowledged、listeners／file／connection owner清理完整、測試程序已退出。Documents路徑的一次恢復探針停在macOS系統`open`，保留stack與失敗證據；同份自製資料在獨立暫存目錄恢復／帶回及正常關閉均通過，不因此放寬程式權限或保護。
+
+原生座標拖曳工具回報`noWindowsAvailable`，整行／矩形拖曳手勢與真正注音IME仍需人工驗收；AX／原生鍵盤、右鍵和DOM結果不能代替這些。Windows／Linux GUI及各實站看板範本尚未執行。交付`dist/macos-local-editor-latest/PTTStella.app`，證據`.local/verification/composer-redesign-20261103/`；使用者正在使用的舊App（PID26184）未關閉或操作。保持develop本機提交，不推送／發佈。產物盤點及exact removed paths／空間前後另記同證據目錄的cleanup記錄。
+
+
 ## 2026-11-03 原PO／自己側標文字裁切修正
 
 細線與文字原本共用3px盒，text-align與padding使第一字向左溢出並遭容器裁切。改用獨立intrinsic-width span，依真實label尺寸／viewport留白及實際行高判斷；原PO、自己與雙身分、中英文共用。有完整空間才顯示標籤，不足則只在已驗證的空白分隔欄畫側線；連推後續列不顯示重複標籤。每次layout每種身分最多量測一次（最多3次），不放大64-marker上限、不更改Rust來源Frame／黑白名單／連推合併。
 
 JS347通過，覆蓋窄邊界、長雙身分／英文、25%～200%行高、縮放後重用節點與有界量測。macOS真正Dioxus在75%設定縮放後，原PO與自己標籤皆完整顯示；100%滿寬時保留分隔欄側線。150%畫面水平停在中央，不能拿該截圖當左側側線驗收。原生匯出PNG與先前相同自製fixture逐byte一致（960×576），沒有UI標籤混入；surface probe passed、零站端輸入、Close acknowledged與全部清理，測試程序已退出。使用者另開的本機撰寫App不屬於本案測試程序，未操作或關閉。
 
-交付 `dist/macos-reply-labels/PTTStella.app`，證據 `.local/verification/reply-label-clip-20261103/`。僅develop本機提交，不推送或發佈。接續同一使用者要求重做草稿編輯體驗，release cache將供該工作重用，整輪結案再依task-owned規則清理；本案小型launcher在無程序使用後移除，source留在證據中。Windows／Linux原生未執行。
+原交付 `dist/macos-reply-labels/PTTStella.app` 已由本機編輯器新版整合取代，舊App清理；證據 `.local/verification/reply-label-clip-20261103/`。僅develop本機提交，不推送或發佈。接續本機編輯器工作已重用release cache，整輪結案依task-owned規則清理；本案小型launcher在無程序使用後移除，source留在證據中。Windows／Linux原生未執行。
 
 
 ## 2026-11-03 本機撰寫與持久草稿（已完成指定範圍）

@@ -127,7 +127,8 @@ mod tests {
             login_pending: false,
             login_guidance: pttstella::login::Guidance::Idle,
             account: None,
-            draft_post_token: None,
+            draft_post_scope: None,
+            draft_source: None,
             destination: pttstella::navigation_job::Progress::Idle,
             board_visit: match scene {
                 "articles" => Some(pttstella::recent_boards::BoardVisit {
