@@ -3,6 +3,15 @@
 狀態：**畫面核心、Windows 視窗與 WSS 登入前連線已驗證；macOS 專用帳號已觀察手動登入與部分實站瀏覽，平台與案例範圍分列如下**。第一個驗收平台為 Windows；Rust／Dioxus 維持可攜，macOS／Linux 後續各自驗證。
 
 
+## 2026-11-03 原PO／自己側標文字裁切修正
+
+細線與文字原本共用3px盒，text-align與padding使第一字向左溢出並遭容器裁切。改用獨立intrinsic-width span，依真實label尺寸／viewport留白及實際行高判斷；原PO、自己與雙身分、中英文共用。有完整空間才顯示標籤，不足則只在已驗證的空白分隔欄畫側線；連推後續列不顯示重複標籤。每次layout每種身分最多量測一次（最多3次），不放大64-marker上限、不更改Rust來源Frame／黑白名單／連推合併。
+
+JS347通過，覆蓋窄邊界、長雙身分／英文、25%～200%行高、縮放後重用節點與有界量測。macOS真正Dioxus在75%設定縮放後，原PO與自己標籤皆完整顯示；100%滿寬時保留分隔欄側線。150%畫面水平停在中央，不能拿該截圖當左側側線驗收。原生匯出PNG與先前相同自製fixture逐byte一致（960×576），沒有UI標籤混入；surface probe passed、零站端輸入、Close acknowledged與全部清理，測試程序已退出。使用者另開的本機撰寫App不屬於本案測試程序，未操作或關閉。
+
+交付 `dist/macos-reply-labels/PTTStella.app`，證據 `.local/verification/reply-label-clip-20261103/`。僅develop本機提交，不推送或發佈。接續同一使用者要求重做草稿編輯體驗，release cache將供該工作重用，整輪結案再依task-owned規則清理；本案小型launcher在無程序使用後移除，source留在證據中。Windows／Linux原生未執行。
+
+
 ## 2026-11-03 本機撰寫與持久草稿（已完成指定範圍）
 
 使用者授權在develop新增本機撰寫，不推送、不發佈。契約見[本機草稿](../drafts.md)。本機保存完整UTF-8與ESC SGR，從已確認身分的看板列表Ctrl+P／浮球導覽開啟；同scope草稿先列標題／時間／衝突標記，明確繼續或另寫。保留原生編輯器選項。現有站端viewport不當作全文備份；帶入後站端修改不回存。分類與標題依站端手動完成，正文另按兩次確認，原稿繼續保留，永不自動發表。

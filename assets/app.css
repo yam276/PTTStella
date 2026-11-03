@@ -321,7 +321,8 @@ button.primary .settings-icon { color: inherit; }
 
 .reply-markers { position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:2; }
 .reply-side-mark { position:absolute;width:3px;box-sizing:border-box;background:#d8bd72;color:#d8bd72;font:11px/1.2 monospace;white-space:nowrap;text-align:right; }
-.reply-side-mark:not(:empty) { padding-right:7px; }
+.reply-side-label { position:absolute;right:calc(100% + 5px);top:0;width:max-content;white-space:nowrap;line-height:1.2; }
+.reply-side-label[hidden] { display:none; }
 .reply-side-mark[data-role="mine"] { background:#65cfdf;color:#65cfdf; }
 .reply-side-mark[data-role="both"] { width:5px;background:linear-gradient(to right,#d8bd72 0 40%,transparent 40% 60%,#65cfdf 60%); }
 .reply-navigation { position:fixed;top:12px;left:12px;z-index:4;display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--ui-panel);color:var(--ui-text);border:1px solid var(--ui-border);border-left:3px solid var(--ui-gold);max-width:calc(100vw - 24px);box-sizing:border-box;flex-wrap:wrap; }

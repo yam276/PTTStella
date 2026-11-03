@@ -42,7 +42,7 @@ function createReplyNavigation({document,tr,current,allowed,prepare,restore,jump
         if(dead)return;update(p);
         if(!scope||!grid?.reading){clearMarks();return;}
         const host=layer.parentElement.getBoundingClientRect(),bounds=surface.getBoundingClientRect(),view=viewport.getBoundingClientRect(),ratio=grid.ratio;
-        const footerTop=view.bottom-(grid.footerHeight??0),entries=p.reply_navigation?.marks??[];let used=0,low=0,high=entries.length;
+        const footerTop=view.bottom-(grid.footerHeight??0),entries=p.reply_navigation?.marks??[],labelSizes=new Map();let used=0,low=0,high=entries.length;
         // Metadata is row-sorted by Rust. A long article must not walk all its
         // replies for every wheel frame; only visit the visible range.
         while(low<high){const mid=(low+high)>>>1;if(bounds.top+grid.reading.rowTop(entries[mid].row)/ratio<view.top-.01)low=mid+1;else high=mid;}
@@ -51,16 +51,22 @@ function createReplyNavigation({document,tr,current,allowed,prepare,restore,jump
             if(top>=footerTop)break;
             if(top<view.top-.01||bottom>footerTop+.01||bottom<=top||grid.reading.clippedAt?.(grid.reading.rowTop(mark.row))===mark.row)continue;
             if(used===64)break;
-            let node=marks[used];if(!node){node=document.createElement("div");node.className="reply-side-mark";layer.append(node);marks.push(node);}
+            let node=marks[used];if(!node){node=document.createElement("div");node.className="reply-side-mark";const label=document.createElement("span");label.className="reply-side-label";node.append(label);layer.append(node);marks.push(node);}
             node.dataset.role=mark.author&&mark.mine?"both":mark.author?"author":"mine";
-            // Standard replies have an independently verified blank separator
-            // between the push symbol and ID. Use it when no outer gutter fits;
-            // unlike the far right edge it remains visible while zoomed in.
-            const outside=bounds.left-host.left>=54;
+            const label=node.firstElementChild,text=tr("reply-navigation-"+(mark.author&&mark.mine?"both":mark.author?"author":"mine"));
+            label.textContent=text;label.hidden=false;
+            // Text needs its own intrinsic-width box. Putting it in the 3px
+            // rail made text-align/padding overflow clip the leading glyph.
+            if(!labelSizes.has(text)){const rect=label.getBoundingClientRect();labelSizes.set(text,{width:rect.width,height:rect.height});}
+            const labelSize=labelSizes.get(text);
+            const clipLeft=Math.max(host.left,view.left),clipRight=Math.min(host.right,view.right);
+            const outside=labelSize.width>0&&labelSize.height>0&&labelSize.height<=bottom-top&&bounds.left-clipLeft>=labelSize.width+10&&bounds.left<=clipRight;
+            // Without enough gutter, keep only the rail in the verified blank
+            // separator column. Never put a shortened label over BBS glyphs.
             const left=outside?bounds.left-host.left-5:bounds.left-host.left+grid.x(2)/ratio+1;
             Object.assign(node.style,{left:left+"px",top:(top-host.top)+"px",height:(bottom-top)+"px",width:Math.max(1,Math.min(mark.author&&mark.mine?5:3,(grid.x(3)-grid.x(2))/ratio-2))+"px"});
-            node.textContent=outside&&mark.first?tr("reply-navigation-"+(mark.author&&mark.mine?"both":mark.author?"author":"mine")):"";
-            node.setAttribute("aria-label",tr("reply-navigation-"+(mark.author&&mark.mine?"both":mark.author?"author":"mine")));
+            label.hidden=!outside||!mark.first;
+            node.setAttribute("aria-label",text);
             used++;
         }
         while(marks.length>used)marks.pop().remove();
