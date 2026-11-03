@@ -1,5 +1,16 @@
 # PTTStella 最簡 terminal 計畫
 
+
+## 2026-11-04 BBS 四周留白滑鼠導覽
+
+使用者要求框體外仍可上下左右操作。共用 pointerHit 新增僅供導覽的留白命中：上下留白翻頁、左側返回、右側沿 Rust Forward 進入目前站端光棒項目（文章內下一頁），角落優先上下，畫面最頂／最底保留 Home／End。主選單左側及說明頁右側不提供無效意圖；未知／空列表／進板繼續提示不擴張。workspace 共用藍金方向游標，不新增覆蓋層、不虛構文字格或連結。Shift／拖曳、站端滑鼠、modal、輸出等待、來源及按下至放開的幾何保護不變。
+
+離線 core14命令／2replay、desktop lib204／bin178（各有1個原有ignored案例）、全targets Clippy、JS355（循序完整執行）、i18n與docs通過。新增四邊／角落、目前項目Forward、網頁本機捲動、連點不重送、scrollbar、拖曳不選字、舊geometry／session及所有拒絕條件。首次並行JS執行有1個inline suite程序失敗，該suite單獨50項及完整循序355項均通過，保留原log，未修改圖片產品程式。
+
+macOS真正Dioxus啟動與75%縮放後四周留白已觀察；座標click兩次（含AX Raise後）均在送出前回報noWindowsAvailable，因此實體四邊點擊／游標仍not_ready，不能當成通過。未完成互動的pointer_rows探針依預期記failed、零導覽；關閉後cleanup_completed=false且程序停留AppKit事件迴圈，保留report／diagnostic／sample後終止本案已關閉的合成PID87425，不冒稱正常清理通過。沒有連PTT／登入／發文，也沒有操作使用者視窗。Windows／Linux原生未執行。
+
+最新診斷App為 `dist/macos-margin-navigation/PTTStella.app`（0.4.0-dev.1／arm64／ad-hoc，僅診斷置頂且啟動不搶焦點）。證據與exact removed paths／保留例外及空間前後記錄在 `.local/verification/margin-navigation-20261104/`。保留上一個已完成原生驗證的本機編輯器App作為fallback；本輪只提交develop，不推送或發佈。
+
 狀態：**畫面核心、Windows 視窗與 WSS 登入前連線已驗證；macOS 專用帳號已觀察手動登入與部分實站瀏覽，平台與案例範圍分列如下**。第一個驗收平台為 Windows；Rust／Dioxus 維持可攜，macOS／Linux 後續各自驗證。
 
 

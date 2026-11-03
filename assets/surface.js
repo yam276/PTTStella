@@ -458,13 +458,24 @@ function hitAt(point,clientY) {
 }
 // Inserted images remain outside terminal cells. Only navigation uses their
 // physical position; text selection and the image context menu keep their owners.
+function navigationMarginAt(event) {
+    if(!grid||!hasPageEdges(latest?.navigation))return null;
+    const visible=viewport.getBoundingClientRect(),bounds=surface.getBoundingClientRect();
+    const {clientX:x,clientY:y}=event;
+    if(x<visible.left||x>=visible.left+viewport.clientWidth||y<visible.top||y>=visible.top+viewport.clientHeight)return null;
+    const outsideY=y<bounds.top||y>=bounds.bottom;
+    if(!outsideY&&x>=bounds.left&&x<bounds.right)return null;
+    // Keep Home/End at the physical viewport edges, including the corners.
+    const edge=navigationPageAt(null,y,{first:0,last:latest.frame.rows-1},false,true);
+    if(edge)return edge;
+    if(outsideY)return {kind:"page",action:y<bounds.top?"previous_page":"next_page"};
+    if(x<bounds.left)return navigationBackRegion(latest.navigation,latest.article)?{kind:"back"}:null;
+    // Enter the current station selection; margins never invent text cells or rows.
+    return latest.navigation.kind!=="command_help"?{kind:"page",action:"forward"}:null;
+}
 function pointerHit(point,event) {
     if(!point&&!blocked()&&!dragging?.moved&&stationMouse.local()&&canNavigate()){
-        const visible=viewport.getBoundingClientRect();
-        if(event.clientX>=visible.left&&event.clientX<visible.left+viewport.clientWidth
-            &&event.clientY>=visible.top&&event.clientY<visible.top+viewport.clientHeight){
-            const edge=listEdgeAt(null,event.clientY);if(edge)return edge;
-        }
+        const margin=navigationMarginAt(event);if(margin)return margin;
     }
     const image=inlineImages.linkAtPoint(event);
     const bounds=surface.getBoundingClientRect();

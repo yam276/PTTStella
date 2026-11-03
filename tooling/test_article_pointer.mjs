@@ -311,11 +311,13 @@ test('list Home/End also reach the physical viewport edges outside the centered 
             assert.deepEqual(f.selections,[]);
         }
     }
-    // Keep both the old grid-edge target and the inert middle of the margin.
+    // Keep the old grid-edge targets while the rest of the margin now pages.
     for(const [y,action] of [[117,'first'],[662,'last'],[680,'last']]){
         const f=letterboxedList();f.tap(40,y);assert.deepEqual(f.sent.map(p=>p.intent),[{action}]);
     }
-    for(const y of [60,730]){const f=letterboxedList();f.tap(40,y);assert.deepEqual(f.sent,[]);}
+    for(const [y,action] of [[60,'previous_page'],[730,'next_page']]){
+        const f=letterboxedList();f.tap(40,y);assert.deepEqual(f.sent.map(p=>p.intent),[{action}]);assert.deepEqual(f.selections,[]);
+    }
 });
 test('viewport margin Home/End reject stale geometry, Shift, drags, foreign routes and outside-window points',()=>{
     for(const reason of ['shift','drag','untrusted','remote','blocked','pending','output','no-grid','profile','held-resize','released-scroll','outside-left','outside-top','outside-right','outside-bottom']){
@@ -336,7 +338,7 @@ test('viewport margin Home/End reject stale geometry, Shift, drags, foreign rout
         if(reason==='released-scroll')f.viewport.scrollTop=24;
         f.click(e);assert.deepEqual(f.sent,[],reason);
     }
-    for(const kind of ['unknown','empty_list','continue_prompt','article_reading']){
+    for(const kind of ['unknown','empty_list','continue_prompt']){
         const f=letterboxedList(kind);f.tap(40,5);assert.deepEqual(f.sent,[],kind);
     }
 });
@@ -369,4 +371,71 @@ test('status-row End retains pointer admission and leaves article footers unchan
     for(const kind of ['unknown','empty_list','article_reading']){
         const f=listFixture(kind);f.tap(4,565);assert.deepEqual(f.sent,[],kind);
     }
+});
+
+function surrounded(kind='article_list'){
+    const f=letterboxedList(kind);f.viewport.clientWidth=1200;
+    f.surface.getBoundingClientRect=()=>({top:152,left:120,right:1080,bottom:728,width:960,height:576});
+    f.at=(x,y,extra={})=>f.event(0,0,{clientX:x,clientY:y,...extra});
+    f.tapAt=(x,y,extra={})=>{const e=f.at(x,y,extra);f.pointerdown(e);f.pointerup(e);f.click(e);};
+    return f;
+}
+test('all four margins navigate without creating cells, links, selections or row openings',()=>{
+    for(const kind of ['system_menu','document_list','board_list','article_list','command_help','article_reading']){
+        for(const [x,y,action] of [[20,400,'back'],[1180,400,'forward'],[600,100,'previous_page'],[600,780,'next_page']]){
+            const f=surrounded(kind);assert.equal(f.cellAt(f.at(x,y),false),null);
+            f.linkAt=point=>{assert.equal(point,null);return -1;};
+            f.tapAt(x,y);f.tapAt(x,y);
+            assert.deepEqual(f.sent.map(p=>p.intent),kind==='command_help'&&action==='forward'?[]:[{action}],kind+' '+action);
+            assert.deepEqual(f.selections,[]);
+        }
+    }
+    const main=surrounded('main_menu');main.tapAt(20,400);assert.deepEqual(main.sent,[]);
+    const enter=surrounded('main_menu');enter.tapAt(1180,400);assert.deepEqual(enter.sent.map(p=>p.intent),[{action:'forward'}]);
+    // Corners use vertical navigation; outermost strips retain Home/End.
+    for(const [x,y,action] of [[20,45,'first'],[1180,835,'last'],[20,100,'previous_page'],[1180,780,'next_page']]){
+        const f=surrounded();f.tapAt(x,y);assert.deepEqual(f.sent.map(p=>p.intent),[{action}]);
+    }
+});
+test('cached reading uses local page movement in side and vertical margins',()=>{
+    for(const [x,y,expected] of [[1180,300,1200],[600,100,0],[600,780,1200]]){
+        const f=surrounded('article_reading');f.latest.article={id:1,first_line:1,last_line:80,end:true};
+        f.grid.height=2000;f.viewport.scrollTop=480;
+        f.tapAt(x,y);assert.equal(f.viewport.scrollTop,expected);assert.deepEqual(f.sent,[]);
+    }
+});
+test('every margin retains transaction guards and never selects text while dragging from blank space',()=>{
+    for(const [x,y] of [[20,400],[1180,400],[600,100],[600,780]]){
+        for(const reason of ['shift','drag','untrusted','remote','blocked','pending','output','disconnected','unknown','no-grid','stale','generation','held-resize','released-scroll','cross-action','outside']){
+            const f=surrounded(),e=f.at(x,y,{shiftKey:reason==='shift',isTrusted:reason!=='untrusted'});
+            if(reason==='remote')f.stationMouse.local=()=>false;
+            if(reason==='blocked')f.blocked=()=>true;
+            if(reason==='pending')f.latest.input_pending=true;
+            if(reason==='output')f.latest.output_pending=true;
+            if(reason==='disconnected')f.latest.connected=false;
+            if(reason==='unknown')f.latest.navigation.kind='unknown';
+            if(reason==='no-grid')f.grid=null;
+            if(reason==='outside')e.clientX=1200;
+            f.pointerdown(e);
+            if(reason==='stale')f.latest.presentation++;
+            if(reason==='generation')f.generation++;
+            if(reason==='held-resize')f.viewport.clientWidth=1180;
+            f.pointerup(reason==='drag'?{...e,clientX:e.clientX+10}:reason==='cross-action'?f.at(600,45):e);
+            if(reason==='released-scroll')f.viewport.scrollTop=24;
+            f.click(e);assert.deepEqual(f.sent,[],reason);assert.deepEqual(f.selections,[],reason);
+        }
+    }
+    const scrollbar=surrounded();scrollbar.viewport.clientWidth=1190;scrollbar.tapAt(1195,400);assert.deepEqual(scrollbar.sent,[]);
+});
+test('margin cursors follow the same hit test and clear when navigation becomes unavailable',()=>{
+    const f=surrounded();f.navigationMarker={style:{},dataset:{}};f.surface.style={};
+    f.hoveredLink=-1;f.pointerClient=null;f.previewHover=()=>{};f.draw=()=>{};f.tr=key=>key;
+    vm.runInContext(source.slice(source.indexOf('function setHover('),source.indexOf('function refreshNavigation(')),f);
+    for(const [x,y,action] of [[20,400,'back'],[1180,400,'forward'],[600,100,'previous_page'],[600,780,'next_page']]){
+        f.setHover(null,false,false,f.at(x,y));assert.equal(f.viewport.dataset.pointerAction,action);
+        assert.equal(f.surface.style.cursor,'');assert.equal(f.surface.title,'');assert.equal(f.navigationMarker.hidden,true);
+    }
+    f.latest.input_pending=true;f.setHover(null,false,false,f.at(20,400));assert.equal(f.viewport.dataset.pointerAction,'none');
+    const css=readFileSync(new URL('../assets/app.css',import.meta.url),'utf8');
+    for(const action of ['back','forward','previous_page','next_page','first','last'])assert.ok(css.includes(`.workspace[data-pointer-action="${action}"]`));
 });
