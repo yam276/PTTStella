@@ -243,6 +243,62 @@ pub fn password_prompt(frame: &Frame, account: &str) -> bool {
         && rows[20].text.trim() == format!("請輸入代號，或以 guest 參觀，或以 new 註冊: {account}")
 }
 
+/// Public account identity observed on this connection, never a saved credential.
+/// Empty account prompt resets it; password echo is a candidate until a real
+/// main menu is recognized. Generation/disconnect prevent cross-session reuse.
+#[derive(Default)]
+pub struct AccountIdentity {
+    generation: Option<u64>,
+    candidate: Option<String>,
+    account: Option<String>,
+}
+impl AccountIdentity {
+    pub fn observe(&mut self, generation: u64, connected: bool, frame: &Frame) -> Option<String> {
+        if self.generation != Some(generation) || !connected {
+            self.generation = Some(generation);
+            self.candidate = None;
+            self.account = None;
+        }
+        if !connected || !frame.control_complete {
+            return None;
+        }
+        let context = crate::navigation::analyze(frame);
+        if matches!(context, crate::navigation::Context::MainMenu { .. })
+            && self.candidate.is_some()
+        {
+            self.account = self.candidate.take();
+        }
+        if !matches!(context, crate::navigation::Context::Unknown { .. }) {
+            return self.account.clone();
+        }
+        match prompt(frame) {
+            Some(Prompt::Account) => {
+                self.candidate = None;
+                self.account = None;
+            }
+            Some(Prompt::Password) => {
+                self.account = None;
+                self.candidate = login_rows(frame)
+                    .and_then(|rows| {
+                        rows[20]
+                            .text
+                            .trim()
+                            .strip_prefix("請輸入代號，或以 guest 參觀，或以 new 註冊: ")
+                            .map(str::to_owned)
+                    })
+                    .filter(|id| {
+                        crate::filters::valid_id(id)
+                            && !["guest", "new", "register", "recover"]
+                                .iter()
+                                .any(|v| id.eq_ignore_ascii_case(v))
+                    });
+            }
+            None => {}
+        }
+        self.account.clone()
+    }
+}
+
 #[cfg(all(test, feature = "desktop", target_os = "macos"))]
 mod tests {
     use super::*;
@@ -263,6 +319,53 @@ mod tests {
             b"StellaTest\0",
         ] {
             assert!(Credentials::from_stored(Zeroizing::new(bytes.to_vec())).is_err());
+        }
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+    fn frame(text: &str) -> Frame {
+        let mut s = crate::screen::Screen::new(80, 24).unwrap();
+        s.feed(&crate::encoding::encode(text).unwrap());
+        s.frame()
+    }
+    #[test]
+    fn only_station_password_echo_then_main_menu_confirm_the_current_session() {
+        let data: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/navigation.json")).unwrap();
+        let menu = frame(data["main_menu"].as_str().unwrap());
+        let password = frame(
+            "\x1b[2J\x1b[21;1H請輸入代號，或以 guest 參觀，或以 new 註冊: StellaTest\x1b[22;1H請輸入您的密碼: ",
+        );
+        let mut id = AccountIdentity::default();
+        assert_eq!(id.observe(1, true, &menu), None);
+        assert_eq!(id.observe(1, true, &password), None);
+        assert_eq!(id.observe(1, true, &menu), Some("StellaTest".into()));
+        assert_eq!(id.observe(1, false, &menu), None);
+        assert_eq!(id.observe(1, true, &menu), None);
+        id.observe(2, true, &password);
+        assert_eq!(id.observe(3, true, &menu), None);
+        id.observe(3, true, &password);
+        assert_eq!(id.observe(3, true, &menu), Some("StellaTest".into()));
+        let account = frame("\x1b[2J\x1b[21;1H請輸入代號，或以 guest 參觀，或以 new 註冊: ");
+        assert_eq!(id.observe(3, true, &account), None);
+        assert_eq!(id.observe(3, true, &menu), None);
+    }
+    #[test]
+    fn guest_or_body_text_never_confirms_a_saved_account() {
+        let data: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/navigation.json")).unwrap();
+        let menu = frame(data["main_menu"].as_str().unwrap());
+        for text in [
+            "作者 Alice 提及 StellaTest",
+            "\x1b[21;1H請輸入代號，或以 guest 參觀，或以 new 註冊: guest\x1b[22;1H請輸入您的密碼: ",
+            "\x1b[21;1H請輸入代號，或以 guest 參觀，或以 new 註冊: Bob!\x1b[22;1H請輸入您的密碼: ",
+        ] {
+            let mut id = AccountIdentity::default();
+            id.observe(1, true, &frame(text));
+            assert_eq!(id.observe(1, true, &menu), None);
         }
     }
 }

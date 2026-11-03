@@ -778,3 +778,13 @@ tools-bookmarks = Bookmarks
 bookmarks-list-current = Bookmark this article
 bookmarks-list-loading = Opening and loading the article before saving its full local copy…
 bookmarks-list-hint = Right-click a title in the article list to bookmark it. The article opens and loads fully first; you can cancel.
+
+reply-navigation-title = Find replies
+reply-navigation-author = Author
+reply-navigation-mine = Me
+reply-navigation-both = Author · Me
+reply-navigation-focused = Highlighted ID
+reply-navigation-count = { $current } / { $total } replies
+reply-navigation-prev = Previous reply
+reply-navigation-next = Next reply
+reply-navigation-unconfirmed = Me (account not identified)

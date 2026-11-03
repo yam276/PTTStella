@@ -318,3 +318,17 @@ button.primary .settings-icon { color: inherit; }
 #bookmarks-canvas{position:static;inset:auto;display:block;width:100%;height:auto;max-height:58vh;object-fit:contain;background:#000;outline-offset:3px}
 .settings-quick-controls{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px}
 #bookmarks-reader .dialog-actions{flex-wrap:wrap}
+
+.reply-markers { position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:2; }
+.reply-side-mark { position:absolute;width:3px;box-sizing:border-box;background:#d8bd72;color:#d8bd72;font:11px/1.2 monospace;white-space:nowrap;text-align:right; }
+.reply-side-mark:not(:empty) { padding-right:7px; }
+.reply-side-mark[data-role="mine"] { background:#65cfdf;color:#65cfdf; }
+.reply-side-mark[data-role="both"] { width:5px;background:linear-gradient(to right,#d8bd72 0 40%,transparent 40% 60%,#65cfdf 60%); }
+.reply-navigation { position:fixed;top:12px;left:12px;z-index:4;display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--ui-panel);color:var(--ui-text);border:1px solid var(--ui-border);border-left:3px solid var(--ui-gold);max-width:calc(100vw - 24px);box-sizing:border-box;flex-wrap:wrap; }
+.reply-navigation[hidden] { display:none; }
+#reply-navigation-group { display:flex;gap:4px; }
+#reply-navigation-group button { border-radius:0; }
+#reply-navigation-group [data-reply-group="author"] { color:#d8bd72; }
+#reply-navigation-group [data-reply-group="mine"] { color:#65cfdf; }
+#reply-navigation-group [aria-pressed="true"] { background:var(--ui-control-hover);border-bottom:2px solid currentColor; }
+.reply-navigation[data-group="mine"] { border-left-color:#65cfdf; }

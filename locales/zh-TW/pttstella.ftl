@@ -772,3 +772,13 @@ tools-bookmarks = 收藏
 bookmarks-list-current = 收藏這篇文章
 bookmarks-list-loading = 正在開啟並載入文章，完成後保存全文副本…
 bookmarks-list-hint = 在文章列表對標題按右鍵，可收藏指定文章；會先開啟並完整載入，期間可取消。
+
+reply-navigation-title = 推文定位
+reply-navigation-author = 原PO
+reply-navigation-mine = 自己
+reply-navigation-both = 原PO・自己
+reply-navigation-focused = 目前標記的人
+reply-navigation-count = 第 { $current }／{ $total } 則
+reply-navigation-prev = 上一則推文
+reply-navigation-next = 下一則推文
+reply-navigation-unconfirmed = 自己（尚未辨識登入帳號）

@@ -52,6 +52,7 @@ pub struct View {
     pub input_pending: bool,
     pub login_pending: bool,
     pub login_guidance: crate::login::Guidance,
+    pub account: Option<String>,
     pub destination: NavigationProgress,
     pub board_visit: Option<crate::recent_boards::BoardVisit>,
     pub frame: Frame,
@@ -182,6 +183,7 @@ impl Connection {
             input_pending: false,
             login_pending: false,
             login_guidance: crate::login::Guidance::Idle,
+            account: None,
             destination: NavigationProgress::Idle,
             board_visit: None,
             frame: screen.frame(),
@@ -294,6 +296,12 @@ impl Connection {
             probe::switch_page('A', false)?,
             probe::Scenario::ArticleSwitch,
         )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    pub fn start_reply_navigation_probe() -> Result<Self, String> {
+        let connection =
+            Self::start_owned_probe(probe::password_page()?, probe::Scenario::ReplyNavigation)?;
         connection.keep_alive(false)?;
         Ok(connection)
     }

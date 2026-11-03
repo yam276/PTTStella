@@ -41,3 +41,8 @@ Connection 是唯一送出者。按登入時核對 generation、revision、input
 `--probe-login OUTPUT_DIRECTORY` 明確使用 owned loopback、獨立 WebView 資料目錄與專用 synthetic Keychain service，從不讀寫正常帳號項目。只使用自製帳密；peer 逐筆比對後必須收到 Close，任何額外輸入失敗。macOS 原生視窗驗證保存、重啟留空取用、錯帳號／非登入畫面拒絕及移除後重讀；產物報告不含帳密。實站、Windows／Linux 安全儲存及正式 Developer ID 更新後的存取結果各自驗收，不能以本機往返宣稱實站登入通過。
 
 `--probe-surface OUTPUT_DIRECTORY login_2fa` 使用相同隔離環境與 production Connection。peer 只接受一次合成帳密、使用者明確輸入的六位錯碼與八位救援碼，接著只接受 Close；報告要求 UI 曾看到驗證／錯碼／瀏覽狀態，且明確 Esc 後回到 Vim Normal。這不代替實站 2FA 或原生 IME 驗收。
+
+
+## 閱讀時的帳號身分
+
+Session另持有有界、無密碼的AccountIdentity，僅供網頁文章標示「自己」的推文。標準密碼提示前一列必須精確回顯合法帳號，之後同generation實際辨識到主選單才確認；沒有候選、訪客、其他站點、部分控制碼、文章中的同名文字及新generation均不能確認。按鈕登入與手動登入消費同一來源，不讀鑰匙圈帳號作為登入成功證據，不自動登入，也不將帳號加入診斷事件。空帳號提示、斷線及stop會清除，連線View不保留已結束session的身分。

@@ -22,6 +22,7 @@ pub(super) enum Scenario {
     Articles,
     Bookmarks,
     BookmarkList,
+    ReplyNavigation,
     BookmarkArchive {
         headerless: bool,
     },
@@ -745,6 +746,7 @@ pub(super) async fn serve(
             | Scenario::Login
             | Scenario::Login2fa
             | Scenario::Surface
+            | Scenario::ReplyNavigation
             | Scenario::ControlInput
             | Scenario::EditorClipboard
             | Scenario::PointerRows
@@ -769,6 +771,16 @@ pub(super) async fn serve(
             .send(Message::Binary(bytes.into()))
             .await
             .map_err(|e| e.to_string())?;
+        if matches!(scenario,Scenario::ReplyNavigation) {
+            tokio::time::sleep(Duration::from_millis(120)).await;
+            socket.send(Message::Binary(navigation_page("main_menu")?.into())).await.map_err(|e|e.to_string())?;
+            tokio::time::sleep(Duration::from_millis(120)).await;
+            socket.send(Message::Binary(reply_navigation_page()?.into())).await.map_err(|e|e.to_string())?;
+            return match socket.next().await {
+                Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
+                _=>Err("reply navigation is local only; peer rejects all station keys".into()),
+            };
+        }
         if matches!(scenario, Scenario::Window) {
             return window(&mut socket).await;
         }
@@ -1123,6 +1135,25 @@ where
         return Err("unknown screen received unintended navigation input".into());
     }
     Ok(())
+}
+
+pub(super) fn reply_navigation_page() -> Result<Vec<u8>, String> {
+    let mut page = String::from(
+        "\x1b[2J\x1b[H 作者 Alice (Synthetic Author) 看板 Stella\x1b[2;1H標題 [測試] Blue and gold reply navigation - local only",
+    );
+    for (row, id) in [
+        (4, "Alice"),
+        (5, "Alice"),
+        (7, "StellaTest"),
+        (8, "Bob"),
+        (11, "Alice"),
+        (15, "StellaTest"),
+        (19, "Alice"),
+    ] {
+        page.push_str(&format!("\x1b[{row};1H\x1b[1;37m推 \x1b[33m{id}\x1b[0;33m: Synthetic reply at row {row:02}\x1b[{row};67H\x1b[0m 11/03 12:34"));
+    }
+    page.push_str("\x1b[23;1H\x1b[0mEND OF LOCAL ARTICLE\x1b[24;1H\x1b[30;47m\x1b[2K瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[?25l");
+    crate::encoding::encode(&page).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

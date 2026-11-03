@@ -58,7 +58,7 @@ const articleLoad=document.getElementById("article-load"),articleLoadStatus=docu
 const articleLoadCancel=document.getElementById("article-load-cancel"),articleLoadResume=document.getElementById("article-load-resume");
 function readingPauseReason() {
     if(!document.hasFocus()||document.visibilityState==="hidden")return "background";
-    return stopped||!latest?.connected||settingsActive||articleFind?.isOpen()||blocked()||navigationLocked||navigationRequest
+    return stopped||!latest?.connected||settingsActive||articleFind?.isOpen()||replyNavigator?.ownsFocus()||blocked()||navigationLocked||navigationRequest
         ||tools?.busy()||stationMouse.active()||dragging||hasSelection()||exportBusy||keyboardState.pending?"interaction":null;
 }
 function refreshArticleLoad(reason=readingPauseReason()) {
@@ -95,7 +95,7 @@ let navigationSequence=0;
 let pendingReadingMove=null;
 let exportBusy=false, exportTask=null;
 let keepAliveGate=null;
-let tools=null,contextMenu=null,articleFind=null,editorColor=null,articleUpdates=null;
+let tools=null,contextMenu=null,articleFind=null,editorColor=null,articleUpdates=null,replyNavigator=null;
 let toolAccess={right_click_menu:true,show_floating_button:true};
 let toolsProbeEnabled=false;
 const send=value=>{ sent++; dioxus.send(value); };
@@ -623,7 +623,7 @@ function contextState(index,word=null,replyRow=null,articleRow=null){
         &&selectionCache.generation===generation&&selectionCache.revision===revision;
     const picture=inlineImages.pictureState(index);
     return {picture:!!picture,pictureReady:!!picture?.ready,word,replyRow,editor:!!latest?.editor,focused:!!latest?.reply_focus,link:index,selection:hasSelection(),selectionReady,rowsReady:selectionReady&&!exportBusy&&selectionCache.value.rows.end-selectionCache.value.rows.start<=24,
-        ready,bookmark:bookmarksUi.available(),listBookmark:articleRow!==null&&bookmarksUi.listAvailable(articleRow),updates:articleUpdates?.available(),pending:!!latest?.input_pending,exportReady:ready&&!exportBusy,local:stationMouse.local(),ptt:!!latest?.ptt_features,
+        ready,replyNavigation:!!latest?.article&&["author_rows","mine_rows","focused_rows"].some(k=>latest?.reply_navigation?.[k]?.length),bookmark:bookmarksUi.available(),listBookmark:articleRow!==null&&bookmarksUi.listAvailable(articleRow),updates:articleUpdates?.available(),pending:!!latest?.input_pending,exportReady:ready&&!exportBusy,local:stationMouse.local(),ptt:!!latest?.ptt_features,
         reading:latest?.navigation.kind==="article_reading",authors:latest?.navigation.kind==="article_list",images:!!latest?.image_links.length,
         inlineReady:inlineShortcut({key:"Enter"},keyboardState,latest),navigate:canNavigate(),
         first:latest?.navigation.first_line===1,last:latest?.navigation.percent===100};
@@ -679,10 +679,11 @@ function contextAction(action,context,e){
     else if(action==="bookmarks")bookmarksUi.show(e);
     else if(action==="bookmark-current")bookmarksUi.capture(e);
     else if(action==="bookmark-list")bookmarksUi.capture(e,context.articleRow);
+    else if(action==="reply-navigation")replyNavigator.open(e);
     else if(action==="article-updates")articleUpdates.toggle(e);
     else if(action==="settings")settingsUi.request(e);
 }
-function activate() { if(!articleFind?.ownsFocus()&&!contextMenu?.isOpen()&&!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); refreshKeepAlive(); }
+function activate() { if(!articleFind?.ownsFocus()&&!replyNavigator?.ownsFocus()&&!contextMenu?.isOpen()&&!document.querySelector("dialog[open]")&&!chrome.contains(document.activeElement)) focus(); refreshKeepAlive(); }
 function paste(e) {
     if(!e.isTrusted||stopped)return;
     stationMouse.revoke();
@@ -852,7 +853,10 @@ function captureViewport(event){
         draws});
 }
 const toast=createSurfaceToast({root:document.getElementById("surface-toast"),message:surfaceNote,dismiss:document.getElementById("toast-dismiss"),document,MutationObserver,restore:restoreEditingFocus});
-const bindings=[...articleUpdates.bindings,[viewport,"scroll",()=>articleUpdates.scroll()],...toast.bindings,...articleFind.bindings,...inlineImages.bindings,...contextMenu.bindings,...editorColor.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
+replyNavigator=createReplyNavigation({document,tr,current:()=>latest,allowed:opening=>!stopped&&!blocked()&&(opening||!tools?.busy())&&!!latest?.connected,
+    prepare:e=>{tools?.close();articleFind?.close(false);cancelDrag();clearSelection();cancelHover(true);},restore:focus,jump:findArticleMatch,changed:refreshKeepAlive,
+    anchor:()=>({first:grid?.rowAt(Math.max(0,viewport.scrollTop-surface.offsetTop)*grid.ratio,true)??0,last:grid?.rowAt(Math.max(0,viewport.scrollTop-surface.offsetTop+viewport.clientHeight-(grid.footerHeight??0))*grid.ratio,true)??Infinity})});
+const bindings=[...replyNavigator.bindings,...articleUpdates.bindings,[viewport,"scroll",()=>articleUpdates.scroll()],...toast.bindings,...articleFind.bindings,...inlineImages.bindings,...contextMenu.bindings,...editorColor.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
     [keyboard,"beforeinput",beforeinput],
@@ -931,6 +935,7 @@ function draw(packet) {
     if(!packet.article)surface.style.height=canvas.height/ratio+"px";
     level.textContent=Math.round(physical/ratio/fitting*100)+"%";
     grid={...inlineImages.layout(packet,render(canvas,{...packet,frame},{cursor:!packet.article,hovered:hoveredLink,linkHints:true,highlight:packet.article?null:articleFind.highlighter()}),ratio),ratio,packet};
+    replyNavigator?.layout(packet,grid,surface,viewport);
     positionKeyboard();drawSelection();drawNavigationMarker();draws++;return grid;
 }
 function repaint() {
@@ -1028,7 +1033,7 @@ async function paint(packet) {
 }
 focus();
 function revokeSurface(){
-    stopped=true;articleUpdates.destroy();toast.destroy();articleFind.destroy();revokeNavigation();inlineImages.suspend();contextMenu?.destroy();editorColor?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
+    stopped=true;replyNavigator?.destroy();articleUpdates.destroy();toast.destroy();articleFind.destroy();revokeNavigation();inlineImages.suspend();contextMenu?.destroy();editorColor?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
     for(const [target,event,callback,options] of bindings)target.removeEventListener(event,callback,options);
 }
 const lifetime=createSurfaceLifetime(dioxus,window,revokeSurface);
@@ -1140,7 +1145,7 @@ finally {
     stopped=true;latest=null;observer.disconnect();pasteObserver.disconnect();if(animation){cancelAnimationFrame(animation);animation=0;}
     const inlineClean=await inlineImages.destroy();
     const mediaClean=await media.destroy()&&inlineClean;
-    articleFind.destroy();sitesUi.destroy();settingsUi.destroy();loginUi.destroy();filterUi.destroy();destinationUi.destroy();bookmarksUi.destroy();
+    replyNavigator?.destroy();articleFind.destroy();sitesUi.destroy();settingsUi.destroy();loginUi.destroy();filterUi.destroy();destinationUi.destroy();bookmarksUi.destroy();
     tools.destroy();
     if(exportTask)await exportTask;
     if(pasteDialog.open)pasteDialog.close();
@@ -1154,7 +1159,7 @@ finally {
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
     cleanupClean=mediaClean&&toast.clean()&&articleFind.clean()&&editorColor.clean()&&contextMenu.clean()&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
-        &&sitesUi.clean()&&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&destinationUi.clean()&&bookmarksUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
+        &&replyNavigator.clean()&&sitesUi.clean()&&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&destinationUi.clean()&&bookmarksUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
     try {send({kind:"stopped",clean:cleanupClean,...(toolsProbeEnabled?{tools:tools.observations()}:{})});} catch(_) { /* join still acknowledges cleanup */ }
 }
 return {clean:cleanupClean,tools:toolsProbeEnabled?tools.observations():null,settings:settingsSnapshot};

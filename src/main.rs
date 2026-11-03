@@ -142,6 +142,7 @@ fn main() {
                 | "toast_reconnect"
                 | "wide_last_row"
                 | "diagnostics"
+                | "reply_navigation"
                 | "inline_replies"
                 | "short_links"
                 | "picture_menu"

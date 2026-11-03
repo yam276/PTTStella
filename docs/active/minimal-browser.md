@@ -12,6 +12,24 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## 0.4.0 藍金身分側標與推文快速定位（2026-11-03）
+
+使用者授權本輪先做兩項，測試後留develop、不發佈；本機草稿下一步另做。最新診斷交付為 `dist/macos-reply-navigation/PTTStella.app`（0.4.0-dev.1／arm64 release／strict ad-hoc／未公證，僅測試置頂、啟動不搶焦點），歷史0.3.0候選及收藏交付不當作本輪最新版。
+
+網頁文章從同一Rust Push／ArticleCache建立作者、自己及既有reply_focus的定位索引。作者只在完整first_line=1的標準作者／板名列成立；自己由本次Session標準密碼提示前的帳號回顯及後續主選單確認，不讀鑰匙圈帳號當登入證據。手動登入與按鈕／2FA流程均有測試；新generation、空帳號提示、斷線與stop清除。無法確認的身分不猜，未提供新的登入／自動登入或密碼保存行為。
+
+作者金色、自己青藍、重疊雙線，連推只在首列帶標籤、後續細線連續。優先外側留白；無留白時使用標準推文已核對的類型與ID間空白格，不改Frame或source_frame、不蓋文字，不更動黑白名單色彩與merge_push_ids。未暫時揭露的MaskRow不產生側標或定位列／數量；Mask保留ID可定位，Allow自訂色保留。終端機模式沿用原體驗。
+
+文章空白右鍵或浮球導覽可開同一定位工具，原PO／自己／目前標記的人三個直接按鈕、上一則／下一則、計數及關閉。從目前可見行附近開始，可循環；只跳已載入列，沿既有搜尋幾何保留展圖／水平位置，零站端命令。scope、原始packet、互動gate及銷毀均檢查，規則更新不自行跳轉。側標用排序列二分定位，每次最多64個DOM，4000列測試核對可見範圍查找而非全表掃描；黑名單比對以固定12-byte不配置字串key的集合避免逐推文掃整份規則。這是算法／有界資源測試，不宣稱低階實機FPS。
+
+離線驗證：JS336、Python82、core14commands／2replays、desktop lib192／bin174、多程序保存9、全targets Clippy／fmt／Fluent／docs通過；兩個ignored入口仍由父測試實際啟動，不計入通過。新增同人兼作者／自己、連推首列／後續列、Mask／MaskRow／Allow、缺標頭／中段假標頭、換篇／世代／取消／遲到、角色切換、完整行／footer、4000列與舊圖片保留回歸。Source與PNG不受側標影響。
+
+macOS實際Dioxus合成peer先送帳號回顯→主選單→一頁23行文章，只接受Close、拒絕所有站端按鍵。最終交付的自己定位第1／2則與原PO4則索引、側標及連推ID隱藏確認；相同UI在前一個候選的150%原生操作可跳到原PO第4／4則（9～23行）與自己第2／2則（7～21行）。實際交付重測後surface-probe passed、navigation_requests=0、原PO列[3,4,10,18]／自己列[6,14]、來源PNG960×576、Close acknowledged，renderer／connection／credential／file owner清理完成且程序退出。獨立Pillow解碼核對兩次來源PNG像素完全相同，七個推文分隔格純黑，沒有側標進入匯出。原生ID座標點擊與同時原PO／自己的雙線未獨立操作，分列Rust／JS通過；Windows／Linux GUI未執行。背景截圖的既有WebKit文字繪製缺漏不拿來宣稱完整前景像素驗收。
+
+失敗／修正保留於 `.local/verification/reply-roles-20261103/`：初版JS函式double未提供新owner；新增身份清除test發現stop遺留帳號；原生工具入口自擋；review移除send_input對舊View的重複帳號觀察並補按鈕2FA確認；report擴充碰到serde macro recursion，改在macro外計算／附資料而未提高限制；fixture函式移到測試模組前。全部對應gate重跑，不改expected掩蓋問題。中途native未匯出或未完成項目不記完整通過。
+
+本輪只本機提交develop，不推送、不發佈。五個自己的過時App、四個測試launcher及本repo已用完Cargo profiles已依task-owned規則清理，保留唯一失敗／成功證據、launcher來源及最新交付；其他專案／前輪產品／外部cache未刪。精確路徑、SHA-256、工具宣告量與filesystem free before／after分列cleanup-owned-output.json及logs。未建立工作分支／worktree。本機草稿未實作。
+
 ## 0.4.0 收藏直接開清單（2026-11-03）
 
 依使用者修正後的要求，浮球第一層「收藏」直接開啟既有書籤清單，列表、閱讀頁與斷線都可查看；不再先顯示無法收藏的工具頁與提示。一般文章空白、網址、圖片、ID與反白的右鍵選單保持原樣。清單載入後焦點在已存項目，選擇後仍可前往或閱讀本機副本；目前文章／列表指定列符合既有條件時，清單內另顯示收藏按鈕，否則隱藏。

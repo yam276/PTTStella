@@ -93,6 +93,7 @@ enum InputEffect {
 }
 
 struct Session {
+    account_identity: login::AccountIdentity,
     mouse: crate::mouse::input::State,
     screen: Screen,
     endpoint: String,
@@ -270,6 +271,7 @@ impl Session {
     ) -> Self {
         let view = updates.borrow().clone();
         Self {
+            account_identity: login::AccountIdentity::default(),
             mouse: crate::mouse::input::State::default(),
             screen,
             endpoint,
@@ -590,6 +592,8 @@ impl Session {
         };
         self.mouse.observe(context, Instant::now());
         self.view.mouse = self.mouse.snapshot(context);
+        self.account_identity = login::AccountIdentity::default();
+        self.view.account = None;
         self.updates.send_replace(self.view.clone());
         transport::stop(&mut self.socket, &mut self.dialing).await
     }
@@ -1227,6 +1231,13 @@ impl Session {
             job.quiet_until = Instant::now() + Duration::from_millis(32);
         }
         self.screen.feed(&display);
+        if self.login_attempt.is_some() {
+            self.view.account = self.account_identity.observe(
+                self.view.generation,
+                self.view.phase == Phase::Connected && self.view.site.ptt_features(),
+                &self.screen.frame(),
+            );
+        }
         self.sync_mouse();
         self.output
             .track(self.screen.synchronized_since(), Instant::now());
@@ -1376,6 +1387,13 @@ impl Session {
             && !self.view.login_pending
             && !self.mouse.active()
             && self.view.context().allows_keepalive();
+        if !self.view.output_pending || self.view.phase != Phase::Connected {
+            self.view.account = self.account_identity.observe(
+                self.view.generation,
+                self.view.phase == Phase::Connected && self.view.site.ptt_features(),
+                &self.view.frame,
+            );
+        }
         self.updates.send_replace(self.view.clone());
         self.dirty = false;
     }

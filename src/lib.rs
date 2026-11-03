@@ -20,6 +20,7 @@ pub mod navigation;
 pub mod navigation_job;
 pub mod recent_boards;
 pub mod render_wire;
+pub mod reply_navigation;
 pub mod screen;
 pub mod selection;
 pub mod settings;

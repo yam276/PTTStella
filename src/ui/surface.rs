@@ -269,6 +269,7 @@ async fn run(
         include_str!("../../assets/surface-fonts.js"),
         include_str!("../../assets/surface-renderer.js"),
         include_str!("../../assets/article-find.js"),
+        include_str!("../../assets/reply-navigation.js"),
         include_str!("../../assets/article-updates.js"),
         include_str!("../../assets/settings-catalog.js"),
         include_str!("../../assets/surface-settings.js"),
@@ -1962,11 +1963,25 @@ async fn run(
                 .and_then(|identity| screen.current(identity, &view))
                 .and_then(|paint| paint.article.clone())
         };
+        let reply_navigation = {
+            let view = receiver.borrow();
+            screen
+                .inline_identity(&view)
+                .and_then(|id| screen.current(id, &view))
+                .map(|p| p.reply_navigation.clone())
+                .unwrap_or_default()
+        };
+        let reply_navigation_passed = case == "reply_navigation"
+            && checks.export_checked
+            && checks.navigation_requests == 0
+            && reply_navigation.author_rows == [3, 4, 10, 18]
+            && reply_navigation.mine_rows == [6, 14];
         let mut mouse_report = checks.mouse_observations();
         mouse_report["final"] = serde_json::json!(receiver.borrow().mouse);
         let mut surface_report = serde_json::json!({
             "status":if case=="slow" && commands.busy() || case=="files_slow" && files.busy() || matches!(case.as_str(),"files"|"diagnostics") && checks.export_checked || case=="untrusted" && surface_probe_clean && rejected_events==3
                 || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB")
+                || reply_navigation_passed
                 || case=="recent" && recent_clears>=1 && recent.packet().boards.is_empty() && recent.packet().notice==Some(pttstella::msg!("recent-cleared"))
                 || checks.bookmarks_passed(&case,&initial_bookmarks,&bookmarks.snapshot(),&receiver.borrow().destination)
                 || case=="boards_close" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && matches!(&receiver.borrow().destination,pttstella::navigation_job::Progress::Active{target,..} if target.board().is_some_and(|b|b.as_str()=="Beta"))
@@ -2022,6 +2037,8 @@ async fn run(
             "paste_preview_preserved":pending_paste.read().is_some(),
             "settings_saved":checks.settings_saved,"full_png":checks.export_checked,"rows_png":checks.rows_export_checked,"media_external_requests":checks.media_external,
         });
+        surface_report["reply_navigation"] =
+            serde_json::to_value(reply_navigation).map_err(|e| e.to_string())?;
         surface_report["archive_reads"] = checks.archive_reads.into();
         surface_report["reply_update_cancels"] = checks.reply_update_cancels.into();
         surface_report["reply_retained_restores"] = checks.reply_retained_restores.into();

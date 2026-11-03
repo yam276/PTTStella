@@ -76,6 +76,7 @@ fn snapshot() -> (
         input_pending: false,
         login_pending: false,
         login_guidance: pttstella::login::Guidance::Idle,
+        account: None,
         destination: pttstella::navigation_job::Progress::Idle,
         board_visit: None,
         phase: Phase::Connected,

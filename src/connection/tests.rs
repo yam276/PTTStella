@@ -528,6 +528,7 @@ async fn verification_is_manual_and_checks_wrong_code_then_recovery_without_rese
     })
     .await;
     assert_eq!(view.context().kind(), "main_menu");
+    assert_eq!(view.account.as_deref(), Some("StellaTest"));
     assert!(!view.login_pending);
     assert_eq!(
         connection.shutdown().await.unwrap(),
@@ -3109,4 +3110,33 @@ async fn refresh_cancellation_has_priority_over_full_queue_and_a_queued_start() 
         );
         finish_board_peer(&connection, ws).await;
     }
+}
+
+#[tokio::test]
+async fn public_login_echo_confirms_reply_identity_without_saved_credentials_and_disconnect_clears_it()
+ {
+    let connection = Connection::start_reply_navigation_probe().unwrap();
+    connection.connect().unwrap();
+    let view = wait(&connection, |v| {
+        !v.output_pending && v.context().kind() == "article_reading"
+    })
+    .await;
+    assert_eq!(view.account.as_deref(), Some("StellaTest"));
+    let replies = crate::filters::pushes(&view.frame);
+    assert_eq!(replies.len(), 7);
+    let index = crate::reply_navigation::index(
+        &replies,
+        &crate::filters::Rules::default(),
+        false,
+        crate::reply_navigation::author(&view.frame),
+        view.account.as_deref(),
+        None,
+    );
+    assert_eq!(index.author_rows, vec![3, 4, 10, 18]);
+    assert_eq!(index.mine_rows, vec![6, 14]);
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+    assert!(connection.updates.borrow().account.is_none());
 }

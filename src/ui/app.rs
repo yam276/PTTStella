@@ -90,7 +90,9 @@ pub fn app(props: AppProps) -> Element {
     let owner = use_hook(move || {
         super::probe::surface_sample(sample_case.as_deref(), probing, media_origin.as_deref())
             .and_then(|bytes| {
-                if sample_case.as_deref() == Some("bookmark_list") {
+                if sample_case.as_deref() == Some("reply_navigation") {
+                    Connection::start_reply_navigation_probe()
+                } else if sample_case.as_deref() == Some("bookmark_list") {
                     Connection::start_bookmark_list_probe()
                 } else if matches!(
                     sample_case.as_deref(),
@@ -401,6 +403,7 @@ pub fn app(props: AppProps) -> Element {
                     button { id: "browse-back", disabled: true, {pttstella::msg!("browse-back")} }
                     button { id: "browse-previous", disabled: true, {pttstella::msg!("browse-previous")} }
                     button { id: "browse-next", disabled: true, {pttstella::msg!("browse-next")} }
+                    button {id:"reply-navigation-open",hidden:true,{pttstella::msg!("reply-navigation-title")}}
                 }
                 span { id: "browse-hint" }
                 }
@@ -427,6 +430,18 @@ pub fn app(props: AppProps) -> Element {
                     button { id:"live-updates-home", "Local Home (probe)" }
                     button { id:"live-updates-end", "Local End (probe)" }
                 }
+            }
+            div {id:"reply-markers",class:"reply-markers","aria-hidden":"true"}
+            div {id:"reply-navigation",class:"reply-navigation",role:"toolbar",hidden:true,
+                div {id:"reply-navigation-group",role:"group","aria-label":pttstella::msg!("reply-navigation-title"),
+                    button {"data-reply-group":"author",{pttstella::msg!("reply-navigation-author")}}
+                    button {"data-reply-group":"mine",{pttstella::msg!("reply-navigation-mine")}}
+                    button {"data-reply-group":"focused",{pttstella::msg!("reply-navigation-focused")}}
+                }
+                output {id:"reply-navigation-count",role:"status"}
+                button {id:"reply-navigation-prev","↑"}
+                button {id:"reply-navigation-next","↓"}
+                button {id:"reply-navigation-close","×"}
             }
             div { id: "article-find", class: "article-find", role: "search", hidden: true,
                 input { id: "article-find-input", r#type: "text", maxlength: "256", autocomplete: "off", spellcheck: "false" }
@@ -719,6 +734,9 @@ fn context_menu() -> Element {
             }
             button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"bookmark-current",
                 Star {size:18} span {{pttstella::msg!("bookmarks-current")}}
+            }
+            button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"reply-navigation",
+                ArrowDown {size:18} span {{pttstella::msg!("reply-navigation-title")}}
             }
             button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"article-updates",
                 ArrowDown {size:18} span {{pttstella::msg!("article-updates-start")}}
