@@ -6,6 +6,7 @@ pub mod board_navigation;
 pub mod bookmarks;
 #[cfg(feature = "desktop")]
 pub mod connection;
+pub mod drafts;
 pub mod editor_color;
 pub mod encoding;
 pub mod export;

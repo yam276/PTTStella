@@ -45,6 +45,7 @@ pub fn app(props: AppProps) -> Element {
     let filters_probe = props.filters_probe;
     let surface_probe = props.surface_probe.clone();
     let surface_probing = surface_probe.is_some();
+    let drafts_probing = matches!(surface_probe.as_deref(), Some("drafts" | "drafts_restart"));
     let editor_color_probing = surface_probe.as_deref() == Some("editor_color");
     let live_updates_probing = matches!(
         surface_probe.as_deref(),
@@ -90,7 +91,9 @@ pub fn app(props: AppProps) -> Element {
     let owner = use_hook(move || {
         super::probe::surface_sample(sample_case.as_deref(), probing, media_origin.as_deref())
             .and_then(|bytes| {
-                if sample_case.as_deref() == Some("reply_navigation") {
+                if matches!(sample_case.as_deref(), Some("drafts" | "drafts_restart")) {
+                    Connection::start_drafts_probe()
+                } else if sample_case.as_deref() == Some("reply_navigation") {
                     Connection::start_reply_navigation_probe()
                 } else if sample_case.as_deref() == Some("bookmark_list") {
                     Connection::start_bookmark_list_probe()
@@ -373,7 +376,7 @@ pub fn app(props: AppProps) -> Element {
                 section { "data-tools-group": "session",
                 button { disabled: fatal() || props.probe.is_some() || matches!(phase(), Phase::Connecting | Phase::Connected),
                     onclick: move |event| connect_action.call(event), {pttstella::msg!("connect")} }
-                button { disabled: fatal() || props.probe.is_some() || !matches!(phase(), Phase::Connecting | Phase::Connected),
+                button { disabled: fatal() || props.probe.is_some() && !drafts_probing || !matches!(phase(), Phase::Connecting | Phase::Connected),
                     onclick: move |_| { if let Err(error) = disconnect.disconnect() { message.set(error); } }, {pttstella::msg!("disconnect")} }
                 }
                 section { "data-tools-group": "capture",
@@ -397,6 +400,7 @@ pub fn app(props: AppProps) -> Element {
                 section { "data-tools-group": "navigate",
                 button {id:"filters-reveal",hidden:true,{pttstella::msg!("filters-reveal")}}
                 output {id:"filters-status",role:"status"}
+                button {id:"draft-open",{pttstella::msg!("draft-open")}}
                 button { id: "destination-open", {pttstella::msg!("destination-open")} }
                 button { id: "destination-stop", hidden: true, {pttstella::msg!("destination-stop")} }
                 div { id: "browse-controls", hidden: true,
@@ -515,6 +519,63 @@ pub fn app(props: AppProps) -> Element {
                     button {id:"editor-color-probe-select",r#type:"button","選取三行合成範圍"}
                     button {id:"editor-color-probe-open",r#type:"button","顯示測試色彩表"}
                 }
+            }
+            div {id:"draft-station-bar",class:"article-load",hidden:true,
+                output {id:"draft-station-status",role:"status",{pttstella::msg!("draft-ready")}}
+                button {id:"draft-station-open",{pttstella::msg!("draft-open")}}
+            }
+            dialog {id:"draft-dialog",class:"draft-dialog","aria-labelledby":"draft-heading",
+                header {h2{id:"draft-heading",{pttstella::msg!("draft-open")}} output{id:"draft-scope"}}
+                p {id:"draft-notice",role:"status","aria-live":"polite"}
+                div {id:"draft-chooser",
+                    p {{pttstella::msg!("draft-found")}}
+                    select {id:"draft-list",size:"5","aria-label":pttstella::msg!("draft-list")}
+                    div {class:"dialog-actions",
+                        button {id:"draft-delete",{pttstella::msg!("draft-delete")}}
+                        button {id:"draft-restore",{pttstella::msg!("draft-restore")}}
+                        button {id:"draft-new",{pttstella::msg!("draft-new")}}
+                        button {id:"draft-native",{pttstella::msg!("draft-native")}}
+                    }
+                }
+                div {id:"draft-delete-panel",hidden:true,
+                    p{{pttstella::msg!("draft-delete-confirm")}}
+                    button{id:"draft-delete-confirm",{pttstella::msg!("draft-delete")}}
+                    button{id:"draft-delete-cancel",{pttstella::msg!("cancel")}}
+                }
+                div {id:"draft-editor",hidden:true,
+                    label {r#for:"draft-title",{pttstella::msg!("draft-title")}}
+                    input {id:"draft-title",maxlength:"128",autocomplete:"off"}
+                    div {class:"draft-editor-tools",
+                        button {id:"draft-preview",{pttstella::msg!("draft-preview")}}
+                        button {id:"draft-source",hidden:true,{pttstella::msg!("draft-source")}}
+                        button {id:"draft-colors",{pttstella::msg!("editor-color-title")}}
+                        button {id:"draft-save",{pttstella::msg!("draft-save")}}
+                    }
+                    div {id:"draft-color-panel",hidden:true,
+                        fieldset {legend{{pttstella::msg!("editor-color-foreground")}}div{id:"draft-foreground",class:"editor-color-grid"}}
+                        fieldset {legend{{pttstella::msg!("editor-color-background")}}div{id:"draft-background",class:"editor-color-grid"}}
+                        button {id:"draft-color-apply",{pttstella::msg!("editor-color-apply")}}
+                    }
+                    label {r#for:"draft-body",{pttstella::msg!("draft-body")}}
+                    textarea {id:"draft-body",wrap:"off",spellcheck:"false",autocomplete:"off",autocapitalize:"off","autocorrect":"off"}
+                    div {id:"draft-preview-panel",hidden:true,
+                        canvas{id:"draft-canvas",width:"960",height:"576","aria-label":pttstella::msg!("draft-preview")}
+                        div {class:"dialog-actions",
+                            button{id:"draft-prev","↑"}output{id:"draft-position"}button{id:"draft-next","↓"}
+                        }
+                    }
+                    p {class:"draft-help",{pttstella::msg!("draft-help")}}
+                    div {class:"dialog-actions",
+                        button {id:"draft-begin",{pttstella::msg!("draft-begin")}}
+                        button {id:"draft-transfer",hidden:true,{pttstella::msg!("draft-transfer")}}
+                    }
+                    div {id:"draft-confirm",hidden:true,
+                        p{{pttstella::msg!("draft-confirm")}}
+                        button{id:"draft-transfer-confirm",{pttstella::msg!("draft-transfer-confirm")}}
+                        button{id:"draft-transfer-cancel",{pttstella::msg!("cancel")}}
+                    }
+                }
+                footer {class:"dialog-actions",button{id:"draft-close",{pttstella::msg!("draft-close")}}}
             }
             dialog { id: "destination-dialog", class: "paste-preview", "aria-labelledby": "destination-title",
                 h2 { id: "destination-title", {pttstella::msg!("destination-title")} }

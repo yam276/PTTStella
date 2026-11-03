@@ -252,3 +252,6 @@ Control 與工具列焦點使用 `--probe-surface OUTPUT_DIRECTORY control_input
 文章推文更新變更另跑 desktop lib／bin、核心 gate、全部 JS／Fluent、Clippy 與 docs。獨立 expected 核對 Q／AID／重新進入／原尾行、錯誤身分與標頭、未知／分段提示、逾時、尾段追加／修改、scope 撤銷、取消及手動輸入後晚到查詢零續送。JS 覆蓋原底部／中段／圖片內位置不變／新增提示、明確跳轉、停用與舊 scope、未授權按鈕及清理。`--probe-surface OUTPUT_DIRECTORY live_updates --media-origin LOOPBACK_ORIGIN` 使用自製 45→48→51 行文章，peer 只接受最初 PageDown 及兩次精確 Q／空白／#／AID／Q／空白／Right／原尾行／PageDown，之後接受最多 64 次相同驗證路徑的無新內容檢查（不能多送 PageDown）及 Close；需在實際 WebView 核對更新後原底部與往回讀均保持位置、只提示、點提示跳轉、同一圖片 batch／一次 HTTP、暫停後無額外輸入、PNG、Close acknowledged、全部 owner join 及 exit 0。前景限制不得為探針放寬；合成成功不代替實站部署的資訊框／新推文驗證。
 
 五秒推文更新回歸另覆蓋：舊底部也不自動跟隨；watch 略過 Active 直接 Reached 的 operation 驗證；取消／失焦／逾時保留已 ACK 閱讀／圖片；相對鍵與滑鼠返回均拒絕；明確 raw／切篇／世代清理與 trusted 站端恢復。current-thread production Connection 檢查一般佇列 64 格全滿仍可靠取消、排隊開始前撤銷零 bytes、同 stamp 新請求能重新開始、舊／未來取消不污染新工作。`live_updates_cancel` 延遲 Q 回覆 6 秒，需在 busy 時明確暫停、保留 45 行與圖片且可本機移動，晚到資訊框零續送，再明確顯示站端、PNG 與正常 Close；不為測試放寬失焦、deadline 或准入。
+
+
+本機草稿變更另跑desktop lib／bin、multi_instance、全部JS、core、Clippy／Fluent／docs，契約見[本機草稿](docs/drafts.md)。原生`drafts`先保存自製三行中文／原始SGR，`drafts_restart`在新程序讀回相同檔案後由使用者明確開始／確認正文帶入。peer只接受一次Ctrl+P、精確ANSI正文與Close，拒絕發表／重送。須核對主檔內容、預覽與恢復、Close acknowledged、最後快照／disk owner join及真正程序退出；不以合成測試代表實站發文。

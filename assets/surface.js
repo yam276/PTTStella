@@ -95,7 +95,8 @@ let navigationSequence=0;
 let pendingReadingMove=null;
 let exportBusy=false, exportTask=null;
 let keepAliveGate=null;
-let tools=null,contextMenu=null,articleFind=null,editorColor=null,articleUpdates=null,replyNavigator=null;
+let tools=null,contextMenu=null,articleFind=null,editorColor=null,articleUpdates=null,replyNavigator=null,draftUi=null;
+let draftSnapshot=null;
 let toolAccess={right_click_menu:true,show_floating_button:true};
 let toolsProbeEnabled=false;
 const send=value=>{ sent++; dioxus.send(value); };
@@ -142,6 +143,7 @@ function keydown(e) {
     const pause=latest?.navigation.kind==="continue_prompt"&&!["Dead","Shift","Control","Alt","Meta","CapsLock","NumLock","ScrollLock","Fn","FnLock","Symbol","SymbolLock","Hyper","Super"].includes(e.key);
     const physical=browsing&&/^(Key[A-Z]|Digit[0-9])$/.test(e.code)||control!==null;
     if(e.isComposing||composing||((e.keyCode===229||e.key==="Process")&&!physical)||e.metaKey) return;
+    if(control==="p"&&!e.repeat&&latest?.draft_scope){e.preventDefault();draftUi.open(e);return;}
     // Let the native copy action fire; copy data is already prepared by Rust.
     if(control==="c"&&hasSelection()) return;
     // PTT editor Ctrl+V toggles ANSI preview; shifted/system paste stays native.
@@ -819,6 +821,7 @@ const loginUi=createLoginDialog({tr,send,stamp,manage:e=>settingsUi.manage("acco
     prepare:e=>{stationMouse.revoke();cancelHover(true);policy("reset",e);cancelComposition();clearSelection();},
     restore:restoreSettingsPanelFocus,changed:refreshControls,focus});
 const destinationUi=createNavigationDialog({tr,send,stamp,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,current:()=>latest,isEditing:()=>composing||pastePending});
+draftUi=createDraftEditor({document,window,tr,send,current:()=>latest,palette,render,notice:text=>{surfaceNote.textContent=text;},prepare:e=>{policy("reset",e);invalidatePresentation();tools?.close();},restore:restoreEditingFocus,changed:refreshControls});
 const bookmarksUi=createBookmarksDialog({tr,send,render,window,notice:text=>{surfaceNote.textContent=text;},prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,openDestination:destinationUi.openDraft,current:()=>latest});
 const filterUi=createFiltersDialog({tr,send,manage:e=>settingsUi.manage("filters",e),present:dialog=>dialog.show(),visible:()=>settingsUi.visible("filters"),current:()=>latest,invalidate:invalidatePresentation,
     reset:e=>policy("reset",e),restore:restoreSettingsPanelFocus,changed:refreshControls});
@@ -856,7 +859,7 @@ const toast=createSurfaceToast({root:document.getElementById("surface-toast"),me
 replyNavigator=createReplyNavigation({document,tr,current:()=>latest,allowed:opening=>!stopped&&!blocked()&&(opening||!tools?.busy())&&!!latest?.connected,
     prepare:e=>{tools?.close();articleFind?.close(false);cancelDrag();clearSelection();cancelHover(true);},restore:focus,jump:findArticleMatch,changed:refreshKeepAlive,
     anchor:()=>({first:grid?.rowAt(Math.max(0,viewport.scrollTop-surface.offsetTop)*grid.ratio,true)??0,last:grid?.rowAt(Math.max(0,viewport.scrollTop-surface.offsetTop+viewport.clientHeight-(grid.footerHeight??0))*grid.ratio,true)??Infinity})});
-const bindings=[...replyNavigator.bindings,...articleUpdates.bindings,[viewport,"scroll",()=>articleUpdates.scroll()],...toast.bindings,...articleFind.bindings,...inlineImages.bindings,...contextMenu.bindings,...editorColor.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
+const bindings=[...replyNavigator.bindings,...draftUi.bindings,...articleUpdates.bindings,[viewport,"scroll",()=>articleUpdates.scroll()],...toast.bindings,...articleFind.bindings,...inlineImages.bindings,...contextMenu.bindings,...editorColor.bindings,...sitesUi.bindings,...tools.bindings,...settingsUi.bindings,...loginUi.bindings,...filterUi.bindings,...destinationUi.bindings,...bookmarksUi.bindings,
     [keyboard,"keydown",keydown],[keyboard,"keyup",keyup],[keyboard,"input",input],
     [vimToggle,"click",toggleVim],[vimOnce,"click",armNative],
     [keyboard,"beforeinput",beforeinput],
@@ -1027,12 +1030,13 @@ async function paint(packet) {
     surface.dataset.outputPending=String(!!packet.output_pending);
     surface.dataset.keepAlive=String(packet.keep_alive);surface.dataset.keepAliveReady=String(packet.keep_alive_ready);
     surface.dataset.keepAliveSent=String(packet.keep_alive_sent);
-    loginUi.update(packet);destinationUi.update(packet);bookmarksUi.update();
+    loginUi.update(packet);destinationUi.update(packet);bookmarksUi.update();draftUi.update();
     document.getElementById("site-current").textContent=packet.site.endpoint+" · "+({uao:"Big5-UAO",big5:"Big5",gbk:"GBK"})[packet.site.encoding];
     for(const id of ["destination-open","vim-toggle","keep-alive"]){const node=document.getElementById(id);if(node)node.disabled=!packet.ptt_features;}
 }
 focus();
 function revokeSurface(){
+    draftSnapshot=draftUi?.snapshot()??draftSnapshot;draftUi?.destroy();
     stopped=true;replyNavigator?.destroy();articleUpdates.destroy();toast.destroy();articleFind.destroy();revokeNavigation();inlineImages.suspend();contextMenu?.destroy();editorColor?.destroy();stationMouse.destroy();sitesUi.revoke();settingsUi.revoke();loginUi.revoke();filterUi.revoke();destinationUi.revoke();bookmarksUi.revoke();
     for(const [target,event,callback,options] of bindings)target.removeEventListener(event,callback,options);
 }
@@ -1097,6 +1101,7 @@ const route=createSurfaceRouter({
     filters_open:filterUi.open,filters_result:filterUi.receive,
     login_result:loginUi.receive,
     recent_boards:destinationUi.receiveRecent,destination_result:destinationUi.receive,keyboard_state:receiveKeyboard,
+    draft:draftUi.receive,draft_preview:draftUi.receivePreview,
     bookmarks_open:bookmarksUi.receiveOpen,bookmarks_result:bookmarksUi.receive,archive:bookmarksUi.receiveArchive,bookmark_capture:bookmarksUi.captureStage,
     sites_open:sitesUi.receiveOpen,sites_result:sitesUi.receive,
     tools_opacity:percent=>tools.setOpacity(percent),
@@ -1158,8 +1163,8 @@ finally {
     chrome.dispatchEvent(new PointerEvent("pointerenter"));
     browseNext.click();exportRows.click();keepAlive.click();viewport.dispatchEvent(new WheelEvent("wheel",{deltaY:120,bubbles:true}));
     document.getElementById("media-close").click();document.getElementById("media-motion").click();
-    cleanupClean=mediaClean&&toast.clean()&&articleFind.clean()&&editorColor.clean()&&contextMenu.clean()&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
+    cleanupClean=mediaClean&&draftUi.clean()&&toast.clean()&&articleFind.clean()&&editorColor.clean()&&contextMenu.clean()&&stationMouse.clean()&&tools.clean()&&sent===before&&draws===beforeDraws&&zoom===beforeZoom&&animation===0
         &&replyNavigator.clean()&&sitesUi.clean()&&settingsUi.clean()&&loginUi.clean()&&filterUi.clean()&&destinationUi.clean()&&bookmarksUi.clean()&&hoverTimer===0&&hoverCandidate===null&&!chrome.classList.contains("open")&&document.activeElement!==keyboard;
     try {send({kind:"stopped",clean:cleanupClean,...(toolsProbeEnabled?{tools:tools.observations()}:{})});} catch(_) { /* join still acknowledges cleanup */ }
 }
-return {clean:cleanupClean,tools:toolsProbeEnabled?tools.observations():null,settings:settingsSnapshot};
+return {draft:draftSnapshot,clean:cleanupClean,tools:toolsProbeEnabled?tools.observations():null,settings:settingsSnapshot};

@@ -11,6 +11,12 @@ use std::collections::BTreeMap;
 #[derive(Serialize)]
 #[serde(tag = "kind", content = "payload", rename_all = "snake_case")]
 pub(super) enum Packet<'a> {
+    Draft(super::drafts::Reply),
+    DraftPreview {
+        token: u64,
+        first: usize,
+        packet: Box<Paint>,
+    },
     Diagnostics(bool),
     UpdateStatus(pttstella::updates::Status),
     ArticleUpdates(Option<super::article_updates::Status>),

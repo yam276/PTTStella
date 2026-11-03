@@ -3140,3 +3140,101 @@ async fn public_login_echo_confirms_reply_identity_without_saved_credentials_and
     );
     assert!(connection.updates.borrow().account.is_none());
 }
+
+#[tokio::test]
+async fn local_draft_transfer_requires_owned_fresh_empty_editor_and_never_publishes_or_retries() {
+    let connection = Connection::start_drafts_probe().unwrap();
+    connection.connect().unwrap();
+    let view = wait(&connection, |v| {
+        !v.output_pending
+            && v.account.is_some()
+            && crate::board_navigation::current_board(&v.frame).is_some()
+    })
+    .await;
+    let scope = crate::drafts::Scope {
+        site: view.site.clone(),
+        account: "StellaTest".into(),
+        board: BoardName::parse("Stella").unwrap(),
+    };
+    let mut foreign = scope.clone();
+    foreign.account = "Other".into();
+    assert!(
+        connection
+            .request_draft_post(view.stamp(), foreign, 1, None)
+            .unwrap()
+            .wait()
+            .await
+            .is_err()
+    );
+    let body = "第一行中文\n\x1b[1;31m亮紅中文\x1b[m\n第三行";
+    assert!(
+        connection
+            .request_draft_post(view.stamp(), scope.clone(), 1, Some(body.into()))
+            .unwrap()
+            .wait()
+            .await
+            .is_err()
+    );
+    connection
+        .request_draft_post(view.stamp(), scope.clone(), 1, None)
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    let editor = wait(&connection, |v| {
+        !v.input_pending && !v.output_pending && crate::drafts::empty_editor(&v.frame)
+    })
+    .await;
+    assert_eq!(editor.draft_post_token, Some(1));
+    connection.input(editor.generation - 1, vec![24]).unwrap();
+    wait(&connection, |v| v.message == crate::msg!("input-stale")).await;
+    assert_eq!(connection.updates.borrow().draft_post_token, Some(1));
+    assert!(
+        connection
+            .request_draft_post(view.stamp(), scope.clone(), 1, Some(body.into()))
+            .unwrap()
+            .wait()
+            .await
+            .is_err()
+    );
+    assert!(
+        connection
+            .request_draft_post(editor.stamp(), scope.clone(), 2, Some(body.into()))
+            .unwrap()
+            .wait()
+            .await
+            .is_err()
+    );
+    assert!(
+        connection
+            .request_draft_post(editor.stamp(), scope.clone(), 1, Some("danger\x18".into()))
+            .unwrap()
+            .wait()
+            .await
+            .is_err()
+    );
+    connection
+        .request_draft_post(editor.stamp(), scope.clone(), 1, Some(body.into()))
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    let received = wait(&connection, |v| {
+        !v.output_pending
+            && crate::text::rows(&v.frame)
+                .is_some_and(|r| r[0].text.contains("DRAFT BODY RECEIVED"))
+    })
+    .await;
+    assert!(
+        connection
+            .request_draft_post(received.stamp(), scope, 1, Some(body.into()))
+            .unwrap()
+            .wait()
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+}

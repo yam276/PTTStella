@@ -78,6 +78,22 @@ fn process_child() {
     let root = PathBuf::from(std::env::var_os("PTTSTELLA_TEST_SHARED_ROOT").unwrap());
     let mode = std::env::var("PTTSTELLA_TEST_MODE").unwrap();
     let role = std::env::var("PTTSTELLA_TEST_ROLE").unwrap();
+    if mode == "drafts" || mode == "drafts-new" {
+        let store = pttstella::drafts::store::Store::at(root.join("drafts.json"));
+        let base = store.load().unwrap().entries.first().cloned();
+        let mut entry = base
+            .clone()
+            .unwrap_or_else(|| draft_entry(if role == "a" { "first" } else { "second" }));
+        entry.title = format!("視窗 {role}");
+        entry.body = if role == "a" {
+            "中文 A\n\x1b[31m紅\x1b[m".into()
+        } else {
+            "中文 B\n\x1b[32m綠\x1b[m".into()
+        };
+        ready(&root, &role);
+        store.save(base, entry, format!("copy-{role}")).unwrap();
+        return;
+    }
     if mode == "archives" {
         let store = bookmarks::store::Store::at(root.join("bookmarks.json"));
         let base = store.load().unwrap();
@@ -472,6 +488,50 @@ fn independent_processes_preserve_both_archives_in_one_atomic_collection() {
                 .glyphs
                 .iter()
                 .any(|g| g.row == 5 && g.text == "機")
+        );
+    }
+}
+
+fn draft_entry(id: &str) -> pttstella::drafts::Entry {
+    pttstella::drafts::Entry {
+        id: id.into(),
+        scope: pttstella::drafts::Scope {
+            site: Default::default(),
+            account: "StellaTest".into(),
+            board: BoardName::parse("Stella").unwrap(),
+        },
+        revision: 0,
+        title: "原稿".into(),
+        body: "原始中文".into(),
+        saved_at: 1,
+        conflict: false,
+    }
+}
+#[test]
+fn independent_draft_editors_keep_both_conflicting_sources_and_disjoint_new_drafts() {
+    for mode in ["drafts", "drafts-new"] {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let store = pttstella::drafts::store::Store::at(root.join("drafts.json"));
+        if mode == "drafts" {
+            store
+                .save(None, draft_entry("original"), "unused".into())
+                .unwrap();
+        }
+        let a = Worker::start(root, mode, "a");
+        let b = Worker::start(root, mode, "b");
+        wait(&root.join("ready-a"));
+        wait(&root.join("ready-b"));
+        std::fs::write(root.join("release"), b"go").unwrap();
+        a.finish();
+        b.finish();
+        let entries = store.load().unwrap().entries;
+        assert_eq!(entries.len(), 2);
+        assert!(entries.iter().any(|e| e.body == "中文 A\n\x1b[31m紅\x1b[m"));
+        assert!(entries.iter().any(|e| e.body == "中文 B\n\x1b[32m綠\x1b[m"));
+        assert_eq!(
+            entries.iter().filter(|e| e.conflict).count(),
+            usize::from(mode == "drafts")
         );
     }
 }

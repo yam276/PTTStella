@@ -6,6 +6,7 @@ mod bookmarks;
 mod bridge;
 mod commands;
 pub(crate) mod diagnostics;
+mod drafts;
 mod files;
 mod files_recent;
 mod filter_import;

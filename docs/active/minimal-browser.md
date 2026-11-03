@@ -2,6 +2,20 @@
 
 狀態：**畫面核心、Windows 視窗與 WSS 登入前連線已驗證；macOS 專用帳號已觀察手動登入與部分實站瀏覽，平台與案例範圍分列如下**。第一個驗收平台為 Windows；Rust／Dioxus 維持可攜，macOS／Linux 後續各自驗證。
 
+
+## 2026-11-03 本機撰寫與持久草稿（已完成指定範圍）
+
+使用者授權在develop新增本機撰寫，不推送、不發佈。契約見[本機草稿](../drafts.md)。本機保存完整UTF-8與ESC SGR，從已確認身分的看板列表Ctrl+P／浮球導覽開啟；同scope草稿先列標題／時間／衝突標記，明確繼續或另寫。保留原生編輯器選項。現有站端viewport不當作全文備份；帶入後站端修改不回存。分類與標題依站端手動完成，正文另按兩次確認，原稿繼續保留，永不自動發表。
+
+Document kernel lock／baseline／revision確保多程序同稿修改或刪除後另存衝突副本，不同稿保留彼此。磁碟task與最新快照有單一retained owner；180ms debounce／IME／關閉最終快照、失敗重開重試、來源ESC及literal marker可逆。正常退出join寫入，未保存的強制終止不保證。Rust共同Screen／Canvas提供預覽與選色；最後短頁補齊空行，不混入前頁。Connection僅對fresh stamp、同帳號／板／generation／post token、空白標準編輯器開頭游標送一次安全正文；舊世代Ctrl+X不撤銷新流程，錯token／控制碼／重送拒絕。正文每行79欄／510編碼bytes、128KiB／4096行，64稿容量滿拒絕不淘汰。
+
+離線最終：desktop lib199／bin178（另1個父測試實際啟動的helper）、多程序10（另1個helper）、JS344、Python82、core14commands／2replays、全targets Clippy／fmt／Fluent／docs通過。真正兩子程序同時修改同稿與新增不同稿，主檔精確保留兩份中文／SGR。最後快照、失敗／損壞不覆寫、刪除衝突、跨帳號scope、長於普通clipboard的正文、安全SGR／行寬／UTF-16選取與原色恢復都有獨立expected。新增wire fixture第一次順序與actual不一致，修正actual順序保留失敗log；沒有改expected掩蓋產品錯誤。
+
+原生macOS：初輪Draft封包漏白名單而失敗，已補共同router與compact preview consumer；第二輪發現Canvas沿用absolute且預設300×150造成遮擋／模糊，修正為static／960×576後重跑，失敗截圖與候選報告保留。native-final-save在真正Dioxus輸入中文標題及三行含ESC原稿，兩次保存逐字讀回；新程序native-current-restart讀相同檔案，同板Ctrl+P顯示清單、恢復及清晰紅色預覽。明確開始與二次確認後peer精確只接受Ctrl+P及一次ANSI正文，畫面顯示NOT PUBLISHED；之後正常斷線，再從浮球恢復同稿並離線保存，實際2次restore／1次transfer／1次離線save。來源仍完全相同，Close acknowledged／renderer與disk／connection／credential清理通過，process已全部退出。未連PTT／取鑰匙圈／發文；分類與標題特殊板型、原生注音候選、Windows／Linux GUI不冒稱已測。
+
+交付為 `dist/macos-local-composer-final/PTTStella.app`（0.4.0-dev.1／macOS arm64 release／strict ad-hoc／未公證；只有診斷版置頂、啟動不搶焦點）。證據 `.local/verification/local-drafts-20261103/`。自己產生且已被取代的App／launcher及Cargo profile依task-owned規則清理，精確removed／retained與filesystem free before／after分列cleanup-owned-output.json；保留最新交付、唯一失敗／成功證據及外部／shared cache，沒有工作分支或worktree需刪除。
+
+
 ## 目標
 
 正式版 [0.3.0](https://github.com/yam276/PTTStella/releases/tag/v0.3.0) 已於2026-11-02由Release PR #6合併至main並公開；main保留0.3.0，develop已整合main並進入 `0.4.0-dev.1`。本輪實站／操作／20輪827行長文與四架構驗證結果見下節，正式發佈結果見本節末尾。本機候選 `dist/macos-030-release-candidate/PTTStella.app`（正常視窗、非診斷）與實站診斷基線 `dist/macos-030-freeze-final/PTTStella.app`（實際0.3.0-dev.2）保留為歷史驗收證據；正式下載請使用Release附件。歷史交付與驗證範圍保留於後續各節，過時副本依task-owned清理規則處理。

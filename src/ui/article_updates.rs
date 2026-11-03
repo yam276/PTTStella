@@ -196,6 +196,7 @@ mod tests {
             login_pending: false,
             login_guidance: pttstella::login::Guidance::Idle,
             account: None,
+            draft_post_token: None,
             destination: Progress::Idle,
             board_visit: None,
             phase: pttstella::connection::Phase::Connected,

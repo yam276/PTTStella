@@ -23,6 +23,7 @@ pub(super) enum Scenario {
     Bookmarks,
     BookmarkList,
     ReplyNavigation,
+    Drafts,
     BookmarkArchive {
         headerless: bool,
     },
@@ -747,6 +748,7 @@ pub(super) async fn serve(
             | Scenario::Login2fa
             | Scenario::Surface
             | Scenario::ReplyNavigation
+            | Scenario::Drafts
             | Scenario::ControlInput
             | Scenario::EditorClipboard
             | Scenario::PointerRows
@@ -771,6 +773,22 @@ pub(super) async fn serve(
             .send(Message::Binary(bytes.into()))
             .await
             .map_err(|e| e.to_string())?;
+        if matches!(scenario,Scenario::Drafts) {
+            tokio::time::sleep(Duration::from_millis(120)).await;
+            socket.send(Message::Binary(navigation_page("main_menu")?.into())).await.map_err(|e|e.to_string())?;
+            tokio::time::sleep(Duration::from_millis(120)).await;
+            socket.send(Message::Binary(navigation_page("list")?.into())).await.map_err(|e|e.to_string())?;
+            match socket.next().await {
+                Some(Ok(Message::Close(_)))=>return socket.flush().await.map_err(|e|e.to_string()),
+                Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==[16]=>{},
+                _=>return Err("draft probe expected explicit post start or Close".into()),
+            }
+            socket.send(Message::Binary(draft_empty_editor()?.into())).await.map_err(|e|e.to_string())?;
+            let expected=crate::encoding::encode("第一行中文\r\x15[1;31m亮紅中文\x15[m\r第三行").map_err(|e|e.to_string())?;
+            if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected){return Err("draft probe rejected missing/changed body, duplicate keys or publish command".into());}
+            socket.send(Message::Binary(crate::encoding::encode("\x1b[2J\x1b[HDRAFT BODY RECEIVED - NOT PUBLISHED\x1b[24;1H\x1b[34;46m 編輯文章 (^X)存檔 (^V)預覽 插入 | StellaTest | 1:1\x1b[0m\x1b[1;1H").map_err(|e|e.to_string())?.into())).await.map_err(|e|e.to_string())?;
+            return match socket.next().await {Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),_=>Err("draft transfer must never publish or resend".into())};
+        }
         if matches!(scenario,Scenario::ReplyNavigation) {
             tokio::time::sleep(Duration::from_millis(120)).await;
             socket.send(Message::Binary(navigation_page("main_menu")?.into())).await.map_err(|e|e.to_string())?;
@@ -1154,6 +1172,10 @@ pub(super) fn reply_navigation_page() -> Result<Vec<u8>, String> {
     }
     page.push_str("\x1b[23;1H\x1b[0mEND OF LOCAL ARTICLE\x1b[24;1H\x1b[30;47m\x1b[2K瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[?25l");
     crate::encoding::encode(&page).map_err(|e| e.to_string())
+}
+
+pub(super) fn draft_empty_editor() -> Result<Vec<u8>, String> {
+    crate::encoding::encode("\x1b[2J\x1b[H\x1b[24;1H\x1b[34;46m 編輯文章 (^X)存檔 (^V)預覽 插入 | StellaTest | 1:1\x1b[0m\x1b[1;1H").map_err(|e|e.to_string())
 }
 
 #[cfg(test)]

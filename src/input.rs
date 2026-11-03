@@ -80,10 +80,19 @@ pub fn prepare_editor_paste(
     text: &str,
     selected: encoding::TextEncoding,
 ) -> Result<PreparedPaste, InputError> {
+    prepare_editor_source(text, selected, MAX_INPUT_BYTES)
+}
+
+/// Bounded full local draft transfer; the normal clipboard limit stays intact.
+pub fn prepare_editor_source(
+    text: &str,
+    selected: encoding::TextEncoding,
+    maximum: usize,
+) -> Result<PreparedPaste, InputError> {
     if text.is_empty() {
         return Err(InputError::Empty);
     }
-    if text.len() > MAX_INPUT_TEXT_BYTES {
+    if text.len() > maximum.saturating_mul(4) {
         return Err(InputError::TooLong);
     }
     let text = text.replace("\r\n", "\n").replace('\r', "\n");
@@ -107,7 +116,12 @@ pub fn prepare_editor_paste(
             rest = &rest[ch.len_utf8()..];
         }
     }
-    let bytes = encode_with(&text.replace('\x1b', "\x15").replace('\n', "\r"), selected)?;
+    let bytes = selected
+        .encode(&text.replace('\x1b', "\x15").replace('\n', "\r"))
+        .map_err(|_| InputError::Unencodable)?;
+    if bytes.len() > maximum {
+        return Err(InputError::TooLong);
+    }
     let lines = text.split('\n').count();
     Ok(PreparedPaste { text, bytes, lines })
 }

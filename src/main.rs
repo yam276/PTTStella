@@ -142,6 +142,8 @@ fn main() {
                 | "toast_reconnect"
                 | "wide_last_row"
                 | "diagnostics"
+                | "drafts"
+                | "drafts_restart"
                 | "reply_navigation"
                 | "inline_replies"
                 | "short_links"

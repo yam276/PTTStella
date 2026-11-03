@@ -429,6 +429,22 @@ fn outbound_results_match_the_shared_wire_examples() {
             },
         ),
         ("settings_visibility", Packet::SettingsVisibility(true)),
+        (
+            "draft_saved",
+            Packet::Draft(super::drafts::Reply::Saved {
+                token: 2,
+                sequence: 3,
+                conflicted: false,
+            }),
+        ),
+        (
+            "draft_conflict",
+            Packet::Draft(super::drafts::Reply::Saved {
+                token: 2,
+                sequence: 4,
+                conflicted: true,
+            }),
+        ),
     ];
     let expected: Vec<Value> =
         serde_json::from_str(include_str!("../../tests/fixtures/ui-packets.json")).unwrap();

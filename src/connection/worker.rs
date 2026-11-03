@@ -92,7 +92,14 @@ enum InputEffect {
     PointerMotion,
 }
 
+struct DraftPost {
+    stamp: Stamp,
+    scope: crate::drafts::Scope,
+    token: u64,
+    expires: Instant,
+}
 struct Session {
+    draft_post: Option<DraftPost>,
     account_identity: login::AccountIdentity,
     mouse: crate::mouse::input::State,
     screen: Screen,
@@ -287,6 +294,7 @@ impl Session {
             login_followup: None,
             navigation_job: None,
             editor_job: None,
+            draft_post: None,
             navigation_serial: 0,
             navigation_cancelled: None,
             visits: crate::recent_boards::Visits::default(),
@@ -440,6 +448,18 @@ impl Session {
             }
             Some(Command::Disconnect) => self.disconnect().await,
             Some(Command::Input { generation, bytes }) => self.input(generation, &bytes).await,
+            Some(Command::DraftPost {
+                stamp,
+                scope,
+                token,
+                body,
+                reply,
+            }) => {
+                if !reply.is_closed() {
+                    let result = self.draft_post(stamp, scope, token, body).await;
+                    let _ = reply.send(result);
+                }
+            }
             Some(Command::EditorColor {
                 stamp,
                 selection,
@@ -594,6 +614,8 @@ impl Session {
         self.view.mouse = self.mouse.snapshot(context);
         self.account_identity = login::AccountIdentity::default();
         self.view.account = None;
+        self.draft_post = None;
+        self.view.draft_post_token = None;
         self.updates.send_replace(self.view.clone());
         transport::stop(&mut self.socket, &mut self.dialing).await
     }
@@ -805,6 +827,78 @@ impl Session {
         self.dirty = true;
     }
 
+    async fn draft_post(
+        &mut self,
+        stamp: Stamp,
+        scope: crate::drafts::Scope,
+        token: u64,
+        body: Option<String>,
+    ) -> Result<(), String> {
+        self.clear_answered_input();
+        if stamp != self.stamp()
+            || self.view.phase != Phase::Connected
+            || self.socket.is_none()
+            || self.pending_input.is_some()
+            || self.editor_job.is_some()
+            || self.navigation_job.is_some()
+            || self.login_attempt.is_some()
+            || self.login_followup.is_some()
+            || self.screen.synchronized_since().is_some()
+            || !self.screen.frame().control_complete
+            || self.mouse.snapshot(self.mouse_context()).route != crate::mouse::input::Route::Local
+            || !scope.valid()
+            || self.view.site != scope.site
+            || !self
+                .view
+                .account
+                .as_ref()
+                .is_some_and(|a| a.eq_ignore_ascii_case(&scope.account))
+        {
+            return Err(crate::msg!("draft-transfer-stopped"));
+        }
+        if let Some(body) = body {
+            let lease = self
+                .draft_post
+                .as_ref()
+                .filter(|lease| {
+                    lease.token == token
+                        && lease.stamp.generation == stamp.generation
+                        && lease.scope.same(&scope)
+                        && Instant::now() < lease.expires
+                })
+                .ok_or(crate::msg!("draft-transfer-stopped"))?;
+            let _ = lease;
+            if !crate::drafts::empty_editor(&self.screen.frame()) {
+                return Err(crate::msg!("draft-empty-editor"));
+            }
+            let bytes = crate::drafts::transfer(&body, self.view.site.encoding)?;
+            // Consume before the first write. Never retry, send Ctrl+X, or save
+            // a post. A failed/partial transport leaves the local original.
+            self.draft_post = None;
+            self.idle.activity(Instant::now());
+            self.write_input(&bytes).await?;
+            self.wait_for_input(false);
+            self.dirty = true;
+            Ok(())
+        } else {
+            if !crate::board_navigation::current_board(&self.screen.frame())
+                .is_some_and(|b| b.same(&scope.board))
+            {
+                return Err(crate::msg!("draft-unavailable"));
+            }
+            self.write_input(&[16]).await?;
+            self.wait_for_input(false);
+            self.draft_post = Some(DraftPost {
+                stamp,
+                scope,
+                token,
+                expires: Instant::now() + Duration::from_secs(600),
+            });
+            self.dirty = true;
+            Ok(())
+        }
+    }
+
     async fn input(&mut self, generation: u64, bytes: &[u8]) {
         self.login_attempt = None;
         // Preserve the peer/transport's last reason when typing after closure.
@@ -815,6 +909,9 @@ impl Session {
             self.view.message = crate::msg!("input-stale");
             self.dirty = true;
             return;
+        }
+        if bytes.iter().any(|b| matches!(b, 16 | 24)) || bytes == [27] {
+            self.draft_post = None;
         }
         self.stop_editor();
         self.mouse.intervene();
@@ -1394,6 +1491,22 @@ impl Session {
                 &self.view.frame,
             );
         }
+        if self.draft_post.as_ref().is_some_and(|lease| {
+            self.view.generation != lease.stamp.generation
+                || self.view.phase != Phase::Connected
+                || !self.view.output_pending
+                    && self.view.frame.revision != lease.stamp.revision
+                    && matches!(
+                        self.view.context(),
+                        Context::ArticleList { .. }
+                            | Context::MainMenu { .. }
+                            | Context::ArticleReading { .. }
+                            | Context::BoardList { .. }
+                    )
+        }) {
+            self.draft_post = None;
+        }
+        self.view.draft_post_token = self.draft_post.as_ref().map(|p| p.token);
         self.updates.send_replace(self.view.clone());
         self.dirty = false;
     }

@@ -42,3 +42,12 @@ test('typed compact transport expands every paint consumer before its handler',(
     assert.throws(()=>router({kind:'paint',payload:{...paint,source_frame:{...fixture.compact,cols:0}}}));
     assert.equal(calls.length,good);
 });
+
+
+test('local draft preview expands compact Rust glyphs before the dedicated handler',()=>{
+    const kinds=source.match(/const kinds=\[([\s\S]*?)\];/)[1].match(/"([^"]+)"/g).map(v=>JSON.parse(v));
+    let received;const handlers=Object.fromEntries(kinds.map(kind=>[kind,data=>{if(kind==='draft_preview')received=data;} ]));
+    const frame={cols:80,rows:24,glyph_encoding:'runs_v1',runs:[[0,0,2,1,1,false,['中']]]};
+    createSurfaceRouter(handlers)({kind:'draft_preview',payload:{token:3,first:0,packet:{frame}}});
+    assert.equal(received.packet.frame.glyphs[0].text,'中');assert.equal(received.packet.frame.glyphs[0].left.fg,1);
+});

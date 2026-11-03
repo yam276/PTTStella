@@ -863,3 +863,107 @@ impl Flow {
         }
     }
 }
+
+/// Apply a local UTF-16 textarea selection without touching station state.
+/// Existing controls are parsed in Rust and outside-selection styles restored
+/// independently on every line. A selection cannot bisect an SGR or surrogate.
+pub fn local_source(
+    source: &str,
+    start: usize,
+    end: usize,
+    color: Color,
+) -> Result<String, String> {
+    let boundary = |offset: usize| -> Option<usize> {
+        let mut units = 0;
+        for (byte, ch) in source.char_indices() {
+            if units == offset {
+                return Some(byte);
+            }
+            units += ch.len_utf16();
+        }
+        (units == offset).then_some(source.len())
+    };
+    let start = boundary(start).ok_or(crate::msg!("editor-color-empty"))?;
+    let end = boundary(end)
+        .filter(|e| *e > start)
+        .ok_or(crate::msg!("editor-color-empty"))?;
+    crate::input::prepare_editor_source(
+        source,
+        crate::encoding::TextEncoding::Uao,
+        crate::drafts::MAX_BODY,
+    )
+    .map_err(|e| e.to_string())?;
+    let code = color.sgr()?;
+    let mut attributes = Attributes::default();
+    let mut result = String::new();
+    let mut offset = 0;
+    for line in source.split_inclusive('\n') {
+        let mut tokens = Vec::new();
+        let mut cursor = 0;
+        while cursor < line.len() {
+            let rest = &line[cursor..];
+            let begin = cursor;
+            let sgr = if let Some(rest) = rest.strip_prefix("\x1b[") {
+                let close = rest
+                    .find('m')
+                    .ok_or(crate::msg!("editor-color-unsupported"))?;
+                let values = rest[..close]
+                    .split(';')
+                    .map(|v| if v.is_empty() { Ok(0) } else { v.parse::<u8>() })
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|_| crate::msg!("editor-color-unsupported"))?;
+                cursor += close + 3;
+                Some(values)
+            } else {
+                cursor += rest
+                    .chars()
+                    .next()
+                    .ok_or(crate::msg!("editor-color-empty"))?
+                    .len_utf8();
+                None
+            };
+            if sgr.is_some()
+                && ((offset + begin < start && start < offset + cursor)
+                    || (offset + begin < end && end < offset + cursor))
+            {
+                return Err(crate::msg!("editor-color-unsupported"));
+            }
+            if let Some(values) = &sgr {
+                attributes.apply(values)?;
+            }
+            tokens.push((begin, cursor, sgr, attributes.clone()));
+        }
+        let selected: Vec<_> = tokens
+            .iter()
+            .filter(|(a, b, sgr, _)| {
+                sgr.is_none() && &line[*a..*b] != "\n" && offset + *a >= start && offset + *b <= end
+            })
+            .collect();
+        if selected
+            .iter()
+            .any(|(a, b, _, _)| !line[*a..*b].chars().all(char::is_whitespace))
+        {
+            let first = selected[0].0;
+            let last = selected[selected.len() - 1];
+            result.push_str(&line[..first]);
+            result.push_str(&code);
+            for (a, b, sgr, _) in tokens
+                .iter()
+                .filter(|(a, b, _, _)| *a >= first && *b <= last.1)
+            {
+                if sgr.is_none() {
+                    result.push_str(&line[*a..*b]);
+                }
+            }
+            result.push_str(&last.3.sgr());
+            result.push_str(&line[last.1..]);
+        } else {
+            result.push_str(line);
+        }
+        offset += line.len();
+    }
+    if result.len() > crate::drafts::MAX_BODY {
+        return Err(crate::msg!("draft-limit"));
+    }
+    Ok(result)
+}

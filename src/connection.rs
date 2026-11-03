@@ -53,6 +53,7 @@ pub struct View {
     pub login_pending: bool,
     pub login_guidance: crate::login::Guidance,
     pub account: Option<String>,
+    pub draft_post_token: Option<u64>,
     pub destination: NavigationProgress,
     pub board_visit: Option<crate::recent_boards::BoardVisit>,
     pub frame: Frame,
@@ -93,6 +94,13 @@ enum Command {
     Input {
         generation: u64,
         bytes: Vec<u8>,
+    },
+    DraftPost {
+        stamp: Stamp,
+        scope: crate::drafts::Scope,
+        token: u64,
+        body: Option<String>,
+        reply: oneshot::Sender<Result<(), String>>,
     },
     EditorColor {
         stamp: Stamp,
@@ -184,6 +192,7 @@ impl Connection {
             login_pending: false,
             login_guidance: crate::login::Guidance::Idle,
             account: None,
+            draft_post_token: None,
             destination: NavigationProgress::Idle,
             board_visit: None,
             frame: screen.frame(),
@@ -296,6 +305,11 @@ impl Connection {
             probe::switch_page('A', false)?,
             probe::Scenario::ArticleSwitch,
         )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    pub fn start_drafts_probe() -> Result<Self, String> {
+        let connection = Self::start_owned_probe(probe::password_page()?, probe::Scenario::Drafts)?;
         connection.keep_alive(false)?;
         Ok(connection)
     }
@@ -573,6 +587,34 @@ impl Connection {
             deadline: tokio::time::Instant::now() + Duration::from_secs(6),
             expired: crate::msg!("navigation-timeout"),
             closed: crate::msg!("navigation-service-unavailable"),
+        })
+    }
+    pub fn request_draft_post(
+        &self,
+        stamp: Stamp,
+        scope: crate::drafts::Scope,
+        token: u64,
+        body: Option<String>,
+    ) -> Result<Reply, String> {
+        if body
+            .as_ref()
+            .is_some_and(|b| b.len() > crate::drafts::MAX_BODY)
+        {
+            return Err(crate::msg!("draft-limit"));
+        }
+        let (reply, answer) = oneshot::channel();
+        self.enqueue(Command::DraftPost {
+            stamp,
+            scope,
+            token,
+            body,
+            reply,
+        })?;
+        Ok(Reply {
+            answer,
+            deadline: tokio::time::Instant::now() + Duration::from_secs(6),
+            expired: crate::msg!("draft-transfer-stopped"),
+            closed: crate::msg!("draft-transfer-stopped"),
         })
     }
     pub fn request_editor_color(
