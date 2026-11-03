@@ -822,7 +822,7 @@ const bookmarksUi=createBookmarksDialog({tr,send,render,window,notice:text=>{sur
 const filterUi=createFiltersDialog({tr,send,manage:e=>settingsUi.manage("filters",e),present:dialog=>dialog.show(),visible:()=>settingsUi.visible("filters"),current:()=>latest,invalidate:invalidatePresentation,
     reset:e=>policy("reset",e),restore:restoreSettingsPanelFocus,changed:refreshControls});
 tools=createFloatingTools({root:chrome,ball:document.getElementById("tools-ball"),fan:document.getElementById("tools-fan"),panel:toolbar,window,document,tr,
-    onSettings:e=>settingsUi.request(e),prepare:()=>{bookmarksUi.clearListTarget();revokeNavigation();stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();released=null;},restore:restoreEditingFocus,changed:refreshKeepAlive});
+    onSettings:e=>settingsUi.request(e),onBookmarks:e=>bookmarksUi.show(e),prepare:()=>{bookmarksUi.clearListTarget();revokeNavigation();stationMouse.revoke();cancelHover(true);cancelComposition();cancelDrag();released=null;},restore:restoreEditingFocus,changed:refreshKeepAlive});
 editorColor=createEditorColor({root:document.getElementById("editor-color-dialog"),document,palette,tr,identity:contextIdentity,send,restore:focus,changed:refreshControls});
 contextMenu=createSurfaceContextMenu({root:document.getElementById("surface-context-menu"),document,window,
     snapshot:contextIdentity,prepare:()=>{revokeNavigation();stationMouse.cancel();tools.close();cancelHover(true);cancelDrag();released=null;setHover(null);},

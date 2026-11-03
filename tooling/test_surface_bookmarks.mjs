@@ -17,6 +17,7 @@ function environment(){
         openDestination:(e,value)=>{destinations.push(value);return true;},render:(canvas,paint)=>painted.push(paint),notice:v=>notices.push(v),current:()=>({...packet,destination:active?{state:"active"}:{state:"idle"}})});
     function fire(id,event="click",extra={}){
         const e={target:node(id),isTrusted:true,preventDefault(){},stopPropagation(){},...extra};
+        if(id==="bookmarks-open"&&event==="click"){ui.show(e);return;}
         const binding=ui.bindings.find(([target,type])=>target===node(id)&&type===event);assert.ok(binding,`${id} ${event}`);binding[2](e);
     }
     const snapshot=(rows=entries,writable=true)=>({entries:rows,writable,warning:writable?null:"invalid source"});
@@ -143,4 +144,33 @@ test('losing window focus cancels a list collection once and never starts anothe
  blur({isTrusted:true});blur({isTrusted:true});
  assert.equal(e.sent.length,2);assert.deepEqual(e.sent[1],{kind:'bookmark_cancel',request:1,trusted:true});
  e.result(1,'failed',[]);e.setCurrent({...articleList,generation:8});blur({isTrusted:true});assert.equal(e.sent.length,2);
+});
+
+
+test('Bookmarks opens the saved list directly from any screen, focuses entries and hides unavailable capture',()=>{
+ for(const packet of [{},articleList,{connected:false},{...reading,article:{...reading.article,load:'loading'}}]){
+  const e=environment();e.setCurrent(packet);e.ui.show({isTrusted:true});e.load();
+  assert.equal(e.node('bookmarks-dialog').open,true);assert.equal(e.node('bookmarks-list').children.length,2);
+  assert.equal(e.focus.at(-1),'bookmarks-list');assert.equal(e.sent.length,1);assert.equal(e.sent[0].kind,'bookmarks_open');
+  assert.equal(e.node('bookmarks-current').hidden,!e.ui.available());
+ }
+});
+test('capture from the list dialog closes it and retains the explicitly chosen title instead of the cursor',()=>{
+ const e=environment();e.setCurrent(articleList);e.ui.setListTarget(3);e.ui.show({isTrusted:true});
+ assert.equal(e.node('bookmarks-current').disabled,true,'loading the bookmark collection is single flight');
+ e.fire('bookmarks-current');assert.equal(e.sent.length,1);e.load();e.fire('bookmarks-current');
+ assert.equal(e.node('bookmarks-dialog').open,false);assert.deepEqual(e.sent.at(-1),{kind:'bookmark_list',request:2,stamp:{generation:7,revision:4,input_epoch:2},row:3,trusted:true});
+ e.fire('bookmarks-current');assert.equal(e.sent.length,2,'one capture only');
+});
+test('capture dialog cannot fall back to another row after repaint, or submit while editing or reading a copy',()=>{
+ const e=environment();e.setCurrent(articleList);e.ui.setListTarget(3);e.ui.show({isTrusted:true});e.load();
+ e.setCurrent({...articleList,frame:{revision:5}});assert.equal(e.node('bookmarks-current').hidden,true);e.fire('bookmarks-current');assert.equal(e.sent.length,1);
+ const f=environment();f.setCurrent(reading);f.ui.show({isTrusted:true});f.load([{...entries[0],cached_at:100}]);
+ f.fire('bookmarks-dialog','compositionstart');f.fire('bookmarks-current');assert.equal(f.sent.length,1);f.fire('bookmarks-dialog','compositionend');
+ f.node('bookmarks-list').value='#00000101@Stella';f.fire('bookmarks-list','change');f.fire('bookmarks-read');
+ f.fire('bookmarks-current');assert.equal(f.sent.length,2);f.ui.receiveArchive({request:2,article:archive()});f.fire('bookmarks-current');assert.equal(f.sent.length,2);
+});
+test('current article can still be captured from its dialog without sending a local selection as article identity',()=>{
+ const e=environment();e.setCurrent(reading);e.ui.show({isTrusted:true});e.load();e.node('bookmarks-list').value='#00000102@Other';e.fire('bookmarks-list','change');
+ e.fire('bookmarks-current');assert.equal(e.node('bookmarks-dialog').open,false);assert.deepEqual(e.sent.at(-1),{kind:'bookmark_current',request:2,stamp:{generation:7,revision:4,input_epoch:2},article:9,trusted:true});
 });

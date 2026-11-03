@@ -174,6 +174,12 @@ class DevTools:
         # Hidden toolbar controls have no clickable rectangle until their
         # category is selected; moving to the former top hover area does nothing.
         group = self.evaluate('document.querySelector('+json.dumps(selector)+')?.closest("[data-tools-group]")?.dataset.toolsGroup ?? null')
+        direct = not group and self.evaluate('document.querySelector('+json.dumps(selector)+')?.dataset.toolsTarget ?? null')
+        if direct and self.evaluate('document.getElementById("tools-fan").hidden'):
+            # Direct dialog petals have no tool page. Reveal the root once;
+            # click() will activate that petal through the same trusted route.
+            self.click('#tools-ball')
+            self.wait('!document.getElementById("tools-fan").hidden', 'tool categories did not open')
         if group:
             ready = '(()=>{const n=document.querySelector('+json.dumps(selector)+');return !!n && n.getClientRects().length>0 && !!n.closest("[data-tools-group]") && !n.closest("[data-tools-group]").hidden;})()'
             if not self.evaluate(ready):

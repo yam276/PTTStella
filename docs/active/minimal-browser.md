@@ -12,6 +12,16 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
+## 0.4.0 收藏直接開清單（2026-11-03）
+
+依使用者修正後的要求，浮球第一層「收藏」直接開啟既有書籤清單，列表、閱讀頁與斷線都可查看；不再先顯示無法收藏的工具頁與提示。一般文章空白、網址、圖片、ID與反白的右鍵選單保持原樣。清單載入後焦點在已存項目，選擇後仍可前往或閱讀本機副本；目前文章／列表指定列符合既有條件時，清單內另顯示收藏按鈕，否則隱藏。
+
+列表標題右鍵的lease不因點收藏入口而清空；從清單明確收藏才關閉dialog，交給原本同一核對／全文loader／Files流程。過期列不回退至光棒，讀取中、保存中、組字及本機閱讀期間拒絕再啟動。首層入口沿既有onSettings模式加入同一owner的onBookmarks，不留不可達的工具頁或重複DOM ID；原生CDP helper同步支援直接dialog petal。
+
+驗證：JS328、Python82、core14commands／2replays、desktop lib186／bin173、多程序保存9、全targets Clippy／fmt／docs通過，ignored為父測試使用的子程序helper。macOS arm64診斷App已在真正Dioxus視窗確認浮球第一層收藏直接顯示書籤清單，並由清單指定第一篇（光棒在第二篇）後成功進入對應無標頭文章。全文依原保護停23行，AX Raise／輸入焦點及原生座標均無法取得前景（noWindowsAvailable），已請使用者點標題列；本次完整保存與離線讀回尚待該前景操作，未記為原生passed。沒有為測試放寬前景、期限或輸入保護，沒有連實站。
+
+交付 `dist/macos-bookmarks-direct-final/PTTStella.app`（實際0.4.0-dev.1／release／arm64／strict ad-hoc／未公證，僅診斷置頂且啟動不搶焦點），證據 `.local/verification/bookmarks-direct-20261103/`。本輪保持develop，只本機提交，不推送或發佈。測試窗與唯一證據因待驗保留，已用完的本repo Cargo profiles依原生clean清理；精確路徑、工具宣告量與filesystem free before／after分列cleanup-owned-output.json及cleanup logs。Windows／Linux原生未執行；本輪沒有建立工作分支／worktree或刪除其他工作的產物。
+
 ## 0.3.0 功能凍結與發佈前驗收（2026-10-30，已完成指定範圍）
 
 使用者要求凍結功能，先完成剩餘實站、操作與效能回歸，再跑 Windows x64、macOS arm64／x64、Linux x64 的 verify 建置；全部必要項通過後才準備 0.3.0。保持 develop／0.3.0-dev.2，不因測試完成自行合併或發佈。當前最新診斷 App 是 `dist/macos-list-bookmarks-final/PTTStella.app`；舊段落的其他 App 路徑屬歷史紀錄，已被取代的測試副本依結案規則清理，不能當作仍存在的交付。

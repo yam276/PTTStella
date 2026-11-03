@@ -392,13 +392,6 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "login-open", "data-platform-supported":cfg!(target_os="macos").to_string(), disabled: !cfg!(target_os="macos"), {pttstella::msg!("login")} }
                 button { id: "login-stop", hidden: true, {pttstella::msg!("login-cancel-attempt")} }
                 }
-                section { "data-tools-group": "bookmarks",
-                button {id:"bookmarks-current",disabled:true,title:pttstella::msg!("bookmarks-current-unavailable"),{pttstella::msg!("bookmarks-current")}}
-                button { id: "bookmarks-open", {pttstella::msg!("bookmarks-title")} }
-                p {{pttstella::msg!("bookmarks-list-hint")}}
-                if surface_probe.as_deref()==Some("bookmark_list") {button{id:"bookmark-probe-first","測試：指定第一篇（光棒在第二篇）"}}
-
-                }
                 section { "data-tools-group": "navigate",
                 button {id:"filters-reveal",hidden:true,{pttstella::msg!("filters-reveal")}}
                 output {id:"filters-status",role:"status"}
@@ -527,6 +520,8 @@ pub fn app(props: AppProps) -> Element {
                 h2 { id: "bookmarks-title", {pttstella::msg!("bookmarks-title")} }
                 div {id:"bookmarks-editor",
                 p { {pttstella::msg!("bookmarks-description")} }
+                button {id:"bookmarks-current",hidden:true,disabled:true,{pttstella::msg!("bookmarks-current")}}
+                if surface_probe.as_deref()==Some("bookmark_list") {button{id:"bookmark-probe-first","測試：指定第一篇（光棒在第二篇）"}}
                 label { {pttstella::msg!("bookmarks-list")} select { id: "bookmarks-list", size: "6", "aria-label": pttstella::msg!("bookmarks-list") } }
                 button { id: "bookmarks-new", {pttstella::msg!("bookmarks-new")} }
                 label { {pttstella::msg!("bookmarks-target")} input { id: "bookmarks-target", maxlength: (pttstella::article_target::MAX_INPUT+1).to_string(), autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
@@ -598,9 +593,10 @@ pub fn app(props: AppProps) -> Element {
 fn ToolPetal(group: &'static str, label: String, icon: Element) -> Element {
     rsx! {
         button { class: "tools-petal", r#type: "button", "data-tools-target": group,
-            "aria-controls": if group=="settings" {"font-dialog"} else {"tools-panel"},
-            "aria-expanded": if group=="settings" {None} else {Some("false")},
-            "aria-haspopup": if group=="settings" {Some("dialog")} else {None},
+            id: if group=="bookmarks" {Some("bookmarks-open")} else {None},
+            "aria-controls": match group {"settings"=>"font-dialog","bookmarks"=>"bookmarks-dialog",_=>"tools-panel"},
+            "aria-expanded": if matches!(group,"settings"|"bookmarks") {None} else {Some("false")},
+            "aria-haspopup": if matches!(group,"settings"|"bookmarks") {Some("dialog")} else {None},
             {icon} span { "{label}" }
         }
     }

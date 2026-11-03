@@ -1,5 +1,5 @@
 // Owns only tool chrome geometry and pointer capture; never sends station input.
-function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,restore,onSettings=()=>{},changed=()=>{},
+function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,restore,onSettings=()=>{},onBookmarks=()=>{},changed=()=>{},
     raf=window.requestAnimationFrame.bind(window),caf=window.cancelAnimationFrame.bind(window),
     now=()=>performance.now(),reduced=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches}) {
     const petals=[...fan.querySelectorAll('[data-tools-target]')];
@@ -49,7 +49,7 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
         }
         animation=raf(frame);
     }
-    function expanded(p,value){if(p.dataset.toolsTarget==='settings')p.removeAttribute('aria-expanded');else p.setAttribute('aria-expanded',String(value));}
+    function expanded(p,value){if(['settings','bookmarks'].includes(p.dataset.toolsTarget))p.removeAttribute('aria-expanded');else p.setAttribute('aria-expanded',String(value));}
     function close(focus=false){opened=false;selected=null;root.classList.remove('open');fan.hidden=true;panel.hidden=true;
         if(parked){point=parked;parked=null;place();}
         updateTrigger();petals.forEach(p=>expanded(p,false));
@@ -114,7 +114,11 @@ function createFloatingTools({root,ball,fan,panel,window,document,tr,prepare,res
         visible=value;updateTrigger();
     }
     function choose(event){if(stopped||!opened)return;
-        if(event.currentTarget.dataset.toolsTarget==="settings"){close();onSettings(event);return;}
+        const target=event.currentTarget.dataset.toolsTarget;
+        if(target==="settings"||target==="bookmarks"){
+            if(!event.isTrusted)return;
+            close();if(target==="settings")onSettings(event);else onBookmarks(event);return;
+        }
         selected=event.currentTarget.dataset.toolsTarget;
         groups.forEach(group=>group.hidden=group.dataset.toolsGroup!==selected);
         petals.forEach(p=>expanded(p,p.dataset.toolsTarget===selected));
