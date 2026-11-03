@@ -1,6 +1,17 @@
 # PTTStella 最簡 terminal 計畫
 
 
+## 2026-11-04 完整圖片預覽滾輪縮放與拖曳
+
+使用者要求完整圖片視窗可滾輪放大／縮小及左鍵拖曳。media單一owner以游標位置作縮放錨點，pixel／line／page delta同一有界倍率、1%～800%，保留工具列原尺寸／符合。只有已解碼的完整圖片攔截垂直滾輪；超出view時左鍵capture平移及grab／grabbing游標，scrollbar／修飾鍵／右鍵保留各自操作。切換、關閉、重試、失焦、隱藏、resize及capture取消撤銷拖曳。只改CSS及scroll，不重抓／重建Canvas／重啟GIF；hover與影片不接手勢。原圖／GIF／四項圖片右鍵及Esc原路徑不變。
+
+離線core14命令／2replay、desktop lib204／bin178（各1個原有ignored）、Clippy全targets、JS360（media12項）、i18n與docs通過。涵蓋錨點／比例、三種delta、極值／非有限輸入、拖曳capture及真實範圍模型、停止後舊事件、Fit清除scroll、GIF資源不變、選單／影片／hover／loading拒絕與所有listener釋放。
+
+真實IAB瀏覽器載入production media.js／app.css，六種視窗／長寬與大小圖layout及decoder案例皆passed，另修補既有layout probe遺漏的GIF owner script。可信CDP滾輪由1倍至1.2840254倍再回1倍，游標圖像錨點誤差小於1個CSS px；可信左鍵拖90×60使scroll由434／494至524／554，capture中cursor=grabbing、放開為grab。Fit恢復0／0與0.4733333倍，整段沿用同一Blob；關閉後open=false／resources=0。這是瀏覽器可信事件，不能當成Dioxus App或實體滑鼠驗收；macOS原生座標工具的noWindowsAvailable限制仍未解除，Windows／Linux原生亦未執行。未連PTT或操作帳密。
+
+交付 `dist/macos-media-pan-zoom/PTTStella.app`（0.4.0-dev.1／macOS arm64 release／ad-hoc，診斷置頂且不搶焦點），包含上一筆四邊留白導覽。證據 `.local/verification/media-pan-zoom-20261104/`；清掉自己的Cargo profiles與被取代的macos-margin-navigation App，保留上一個已完成原生驗證的本機編輯器App與unique evidence。exact removed／retained與空間前後另記cleanup.json。只提交develop，不推送／發佈。
+
+
 ## 2026-11-04 BBS 四周留白滑鼠導覽
 
 使用者要求框體外仍可上下左右操作。共用 pointerHit 新增僅供導覽的留白命中：上下留白翻頁、左側返回、右側沿 Rust Forward 進入目前站端光棒項目（文章內下一頁），角落優先上下，畫面最頂／最底保留 Home／End。主選單左側及說明頁右側不提供無效意圖；未知／空列表／進板繼續提示不擴張。workspace 共用藍金方向游標，不新增覆蓋層、不虛構文字格或連結。Shift／拖曳、站端滑鼠、modal、輸出等待、來源及按下至放開的幾何保護不變。
@@ -9,7 +20,7 @@
 
 macOS真正Dioxus啟動與75%縮放後四周留白已觀察；座標click兩次（含AX Raise後）均在送出前回報noWindowsAvailable，因此實體四邊點擊／游標仍not_ready，不能當成通過。未完成互動的pointer_rows探針依預期記failed、零導覽；關閉後cleanup_completed=false且程序停留AppKit事件迴圈，保留report／diagnostic／sample後終止本案已關閉的合成PID87425，不冒稱正常清理通過。沒有連PTT／登入／發文，也沒有操作使用者視窗。Windows／Linux原生未執行。
 
-最新診斷App為 `dist/macos-margin-navigation/PTTStella.app`（0.4.0-dev.1／arm64／ad-hoc，僅診斷置頂且啟動不搶焦點）。證據與exact removed paths／保留例外及空間前後記錄在 `.local/verification/margin-navigation-20261104/`。保留上一個已完成原生驗證的本機編輯器App作為fallback；本輪只提交develop，不推送或發佈。
+原診斷交付 `dist/macos-margin-navigation/PTTStella.app` 已由同日圖片手勢新版整合取代並清理（0.4.0-dev.1／arm64／ad-hoc，僅診斷置頂且啟動不搶焦點）。證據與exact removed paths／保留例外及空間前後記錄在 `.local/verification/margin-navigation-20261104/`。保留上一個已完成原生驗證的本機編輯器App作為fallback；本輪只提交develop，不推送或發佈。
 
 狀態：**畫面核心、Windows 視窗與 WSS 登入前連線已驗證；macOS 專用帳號已觀察手動登入與部分實站瀏覽，平台與案例範圍分列如下**。第一個驗收平台為 Windows；Rust／Dioxus 維持可攜，macOS／Linux 後續各自驗證。
 

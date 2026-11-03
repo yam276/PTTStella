@@ -38,9 +38,10 @@ if (!query.has("child")) {
       <button id="media-retry">Retry</button><button id="media-external">Open externally</button><button id="media-close">Close</button></div>
       <p id="media-url"></p><output id="media-status"></output><div id="media-viewport"></div></dialog>
       <aside id="media-hover" hidden><output id="media-hover-status"></output><div id="media-hover-viewport"></div></aside>`;
+    const gif = document.createElement("script"); gif.src = "../assets/gif-playback.js";
     const code = document.createElement("script"); code.src = "../assets/media.js";
-    const ready = Promise.all([new Promise((resolve,reject)=>{css.onload=resolve;css.onerror=reject;}),new Promise((resolve,reject)=>{code.onload=resolve;code.onerror=reject;})]);
-    document.head.append(css, code);
+    const ready = Promise.all([new Promise((resolve,reject)=>{css.onload=resolve;css.onerror=reject;}),new Promise((resolve,reject)=>{code.onload=resolve;code.onerror=reject;}),new Promise((resolve,reject)=>{gif.onload=resolve;gif.onerror=reject;})]);
+    document.head.append(css, gif, code);
     const tick = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const facts = {kind:"media-layout", case:index, viewport:[vw,vh], image:[width,height], passed:false};
     const check = (condition, message) => {if (!condition) throw new Error(message);};
@@ -80,7 +81,19 @@ if (!query.has("child")) {
         // Programmatic clicks check controller behaviour, not trusted admission.
         document.getElementById("media-original").click();await tick();
         const original=image.getBoundingClientRect();check(Math.abs(original.width-width)<1&&Math.abs(original.height-height)<1,"Original-size control failed");
+        // A second zoom around the viewport center must retain the same image
+        // point when both axes overflow. This uses real layout/scroll clamping.
+        const view=document.getElementById("media-viewport"),vr=view.getBoundingClientRect();
+        if(width>view.clientWidth*2&&height>view.clientHeight*2){
+            view.scrollLeft=width/2-view.clientWidth/2;view.scrollTop=height/2-view.clientHeight/2;
+            const x=vr.left+view.clientWidth/2,y=vr.top+view.clientHeight/2,before=image.getBoundingClientRect();
+            const center=[(x-before.left)/before.width,(y-before.top)/before.height];
+            document.getElementById("media-plus").click();await tick();const after=image.getBoundingClientRect();
+            check(Math.abs((x-after.left)/after.width-center[0])<.01&&Math.abs((y-after.top)/after.height-center[1])<.01,"Zoom lost image center");
+            facts.zoomAnchor=true;
+        }
         document.getElementById("media-fit").click();await tick();check(bounded(image.getBoundingClientRect()),"Fit after original failed");
+        check(view.scrollLeft===0&&view.scrollTop===0,"Fit retained a stale scroll offset");
         check(await ui.destroy(),"Resource cleanup failed");ui=null;facts.passed=true;
     })().catch(error=>{facts.error=String(error);}).finally(async()=>{if(ui)facts.cleanup=await ui.destroy();parent.postMessage(facts,location.origin);});
 }
