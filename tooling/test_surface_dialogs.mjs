@@ -47,7 +47,7 @@ test("the production clearSelection sends a scoped revocation before dropping it
     vm.runInNewContext(source.slice(start,end)+"\nclearSelection();",context);
     assert.equal(events.length,0);
 });
-const openData=()=>({language:"zh-TW",tools_opacity:100,tools_access:{right_click_menu:true,show_floating_button:true},profile:{fonts:{kind:"platform_default"}},values:{...display},defaults:{...display},presets:{},sample:{settings:{...display}},warning:null});
+const openData=()=>({language:"zh-TW",tools_opacity:100,tools_access:{right_click_menu:true,show_floating_button:true},profile:{fonts:{kind:"platform_default"}},values:{...display},defaults:{...display,ascii_font:'MingLiU',cjk_font:'MingLiU',font_size:23},default_profile:{fonts:{kind:'preset',preset:'windows_classic'},font_size:23,baseline:20,font_width:100},platform:{...display},presets:{},sample:{settings:{...display}},warning:null});
 test("trusted tool edits autosave, coalesce while writing, and retain failures for retry",async()=>{
     const env=environment("surface-settings.js","createSettingsDialog"),ui=env.create();
     await ui.open(openData());env.node("tools-show-ball").checked=false;
@@ -544,7 +544,21 @@ test('text width autosaves and previews, preserves presets, and font-only reset 
  assert.equal(Number(env.node('font-width').value),120);assert.equal(env.sent.at(-1).values.font_width,120);ui.saved({status:'saved'});
  env.fire('font-reset','click',false);env.tick();assert.equal(Number(env.node('font-width').value),120);
  env.node('font-size').value='18';env.node('font-baseline').value='19';env.fire('font-reset');env.tick();
- const reset=env.sent.at(-1);assert.equal(reset.values.font_width,100);assert.equal(reset.values.font_size,20);assert.equal(reset.values.baseline,20);
- assert.equal(reset.values.fonts.kind,'platform_default');assert.equal(reset.language,'en-US');assert.equal(reset.article_mode,'terminal');assert.equal(reset.tools_opacity,40);
+ const reset=env.sent.at(-1);assert.equal(reset.values.font_width,100);assert.equal(reset.values.font_size,23);assert.equal(reset.values.baseline,20);
+ assert.equal(reset.values.fonts.kind,'preset');assert.equal(reset.values.fonts.preset,'windows_classic');assert.equal(reset.language,'en-US');assert.equal(reset.article_mode,'terminal');assert.equal(reset.tools_opacity,40);
+ ui.saved({status:'saved'});ui.destroy();
+});
+
+
+test('new classic defaults and an explicit platform choice keep separate font intent',async()=>{
+ const env=environment('surface-settings.js','createSettingsDialog'),ui=env.create(),data=openData();
+ data.profile=data.default_profile;data.values={...data.defaults};
+ await ui.open(data);
+ assert.equal(env.node('font-preset').value,'windows_classic');
+ assert.equal(Number(env.node('font-size').value),23);
+ env.node('font-preset').value='platform';env.fire('font-preset','change');env.tick();
+ assert.equal(env.node('font-ascii').value,'ASCII');assert.equal(env.node('font-cjk').value,'中文');
+ assert.equal(Number(env.node('font-size').value),23);
+ assert.equal(env.sent.at(-1).values.fonts.kind,'platform_default');
  ui.saved({status:'saved'});ui.destroy();
 });

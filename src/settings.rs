@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 pub mod store;
 
 pub const MAX_SETTINGS_BYTES: usize = 8192;
+const DEFAULT_FONT_SIZE: f64 = 23.0;
 
 fn default_font_width() -> f64 {
     100.0
@@ -59,8 +60,10 @@ pub struct DisplayProfile {
 impl Default for DisplayProfile {
     fn default() -> Self {
         Self {
-            fonts: Fonts::PlatformDefault {},
-            font_size: 20.0,
+            fonts: Fonts::Preset {
+                preset: Preset::WindowsClassic,
+            },
+            font_size: DEFAULT_FONT_SIZE,
             baseline: 20.0,
             font_width: default_font_width(),
         }
@@ -69,7 +72,7 @@ impl Default for DisplayProfile {
 impl DisplayProfile {
     pub fn resolve(&self) -> Result<DisplaySettings, String> {
         let mut resolved = match &self.fonts {
-            Fonts::PlatformDefault {} => DisplaySettings::default(),
+            Fonts::PlatformDefault {} => DisplaySettings::platform_default(),
             Fonts::Preset { preset } => DisplaySettings::preset(preset.name()),
             Fonts::Custom {
                 ascii_font,
@@ -305,6 +308,12 @@ pub struct DisplaySettings {
 }
 impl Default for DisplaySettings {
     fn default() -> Self {
+        Self::preset("windows_classic")
+    }
+}
+impl DisplaySettings {
+    /// An explicit saved platform choice keeps its original OS font intent.
+    pub fn platform_default() -> Self {
         Self::preset(if cfg!(target_os = "windows") {
             "windows"
         } else if cfg!(target_os = "macos") {
@@ -313,8 +322,6 @@ impl Default for DisplaySettings {
             "linux"
         })
     }
-}
-impl DisplaySettings {
     fn preset(name: &str) -> Self {
         let (ascii, cjk) = match name {
             "bundled" => ("Cascadia Mono", "Noto Sans CJK TC"),
@@ -329,7 +336,7 @@ impl DisplaySettings {
             version: 1,
             ascii_font: ascii.into(),
             cjk_font: cjk.into(),
-            font_size: 20.0,
+            font_size: DEFAULT_FONT_SIZE,
             baseline: 20.0,
             font_width: default_font_width(),
         }

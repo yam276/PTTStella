@@ -71,10 +71,18 @@ fn v1_explicit_names_always_migrate_to_custom_even_when_equal_to_defaults() {
 #[test]
 fn portable_format_rejects_duplicate_unknown_and_invalid_fields_as_a_whole() {
     let good = String::from_utf8(
-        PortableProfile::new("A".into(), DisplayProfile::default())
-            .unwrap()
-            .encode()
-            .unwrap(),
+        PortableProfile::new(
+            "A".into(),
+            DisplayProfile {
+                fonts: Fonts::PlatformDefault {},
+                font_size: 20.0,
+                baseline: 20.0,
+                font_width: 100.0,
+            },
+        )
+        .unwrap()
+        .encode()
+        .unwrap(),
     )
     .unwrap();
     for bad in [
@@ -303,4 +311,45 @@ fn text_width_defaults_for_legacy_files_and_rejects_invalid_values() {
     }
     let old = br#"{"version":1,"ascii_font":"Mono","cjk_font":"CJK","font_size":20,"baseline":20}"#;
     assert_eq!(AppSettings::decode(old).unwrap().display.font_width, 100.0);
+}
+
+#[test]
+fn new_install_defaults_to_classic_bbs_at_23_but_saved_platform_choices_keep_their_fonts() {
+    let app = AppSettings::default();
+    assert_eq!(
+        app.display.fonts,
+        Fonts::Preset {
+            preset: Preset::WindowsClassic
+        }
+    );
+    assert_eq!(
+        (
+            app.display.font_size,
+            app.display.baseline,
+            app.display.font_width
+        ),
+        (23.0, 20.0, 100.0)
+    );
+    let display = app.display.resolve().unwrap();
+    assert_eq!(
+        (&*display.ascii_font, &*display.cjk_font),
+        ("MingLiU", "MingLiU")
+    );
+    assert_eq!(display, DisplaySettings::default());
+    let old = br#"{"version":2,"display":{"fonts":{"kind":"platform_default"},"font_size":20,"baseline":19},"hover":"off"}"#;
+    let saved = AppSettings::decode(old).unwrap();
+    assert_eq!(saved.display.fonts, Fonts::PlatformDefault {});
+    assert_eq!(
+        (saved.display.font_size, saved.display.baseline),
+        (20.0, 19.0)
+    );
+    let resolved = saved.display.resolve().unwrap();
+    let expected = if cfg!(target_os = "windows") {
+        ("Cascadia Mono", "Microsoft JhengHei")
+    } else if cfg!(target_os = "macos") {
+        ("Menlo", "PingFang TC")
+    } else {
+        ("DejaVu Sans Mono", "Noto Sans Mono CJK TC")
+    };
+    assert_eq!((&*resolved.ascii_font, &*resolved.cjk_font), expected);
 }

@@ -503,6 +503,18 @@ fn frame_and_preview_packets_keep_typed_identity_and_data_under_payload() {
     let mut preferences = Preferences::load(Some(directory.path())).unwrap();
     let open = serde_json::to_value(preferences.open_packet()).unwrap();
     assert_eq!(open["kind"], "settings_open");
+    assert_eq!(
+        open["payload"]["profile"]["fonts"],
+        serde_json::json!({"kind":"preset","preset":"windows_classic"})
+    );
+    assert_eq!(
+        open["payload"]["default_profile"]["fonts"],
+        open["payload"]["profile"]["fonts"]
+    );
+    assert_eq!(open["payload"]["values"]["font_size"], 23.0);
+    assert_eq!(open["payload"]["defaults"]["font_size"], 23.0);
+    assert_eq!(open["payload"]["defaults"]["ascii_font"], "MingLiU");
+
     assert!(open["payload"]["sample"]["frame"].is_object());
     assert_eq!(
         open["payload"]["sample"]["frame"]["glyph_encoding"],

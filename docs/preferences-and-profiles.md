@@ -16,9 +16,9 @@
 | Linux | DejaVu Sans Mono | Noto Sans Mono CJK TC |
 | macOS 宋體 | Menlo | Songti TC |
 
-所有組合皆為字高 20、基線 20、文字寬度 100%。沒有既存有效設定時，依編譯平台選初始值（macOS 為黑體）；已保存的有效設定直接載入。平台名稱描述字型組合，**不限制使用平台**。兩個 macOS 組合保留相同 Menlo 英數字型，讓中文可明確在黑體／宋體間切換；宋體識別為 `macos_serif`，既有 `macos` 設定不改意圖。
+新安裝與「重設字型預設值」採 Windows 傳統 BBS（MingLiU／細明體）、字高 23、基線 20、文字寬度 100%，各平台一致。已保存的有效設定直接載入，不修改其字高或字型；明確選擇「依平台初始值」仍依 OS 解析原有平台字型。切換字型組合保留目前字高、基線與文字寬度。平台名稱描述字型組合，**不限制使用平台**。兩個 macOS 組合保留相同 Menlo 英數字型，讓中文可明確在黑體／宋體間切換；宋體識別為 `macos_serif`，既有 `macos` 設定不改意圖。
 
-本機保存使用 version 6 JSON（保留 v1–v5 讀入遷移）、8 KiB 讀取上限、欄位驗證、原始 bytes 備份 `settings.json.bak` 與原子替換。載入失敗使用平台初始值並顯示原因，不自動覆寫壞檔。先前明確保存／取消及重啟像素已在 Windows gate 驗證；目前的主視窗內的設定對話框與自動儲存另列於 active plan，不能沿用舊 GUI 結果。可攜檔透過明確選檔／另存入口使用。
+本機保存使用 version 6 JSON（保留 v1–v5 讀入遷移）、8 KiB 讀取上限、欄位驗證、原始 bytes 備份 `settings.json.bak` 與原子替換。載入失敗使用產品預設值並顯示原因，不自動覆寫壞檔。先前明確保存／取消及重啟像素已在 Windows gate 驗證；目前的主視窗內的設定對話框與自動儲存另列於 active plan，不能沿用舊 GUI 結果。可攜檔透過明確選檔／另存入口使用。
 
 設定目錄由 [Store](../src/settings/store.rs) 與鎖定的 directories 6.0.0 決定：Windows `%APPDATA%\PTTStella\config`、macOS `~/Library/Application Support/PTTStella`、Linux `$XDG_CONFIG_HOME/pttstella` 或 `~/.config/pttstella`。macOS／Linux 路徑為庫來源推導，沒有在這台 Windows 主機執行。
 
@@ -26,7 +26,7 @@
 
 在既有顯示設定介面提供「依平台初始值／內建跨平台／Windows／macOS 黑體／Linux／macOS 宋體／自訂」及「另存設定檔／載入設定檔」。使用者可將自己的組合另存成有名稱的 `*.pttstella.json`，保留多份檔案並自由搬移；第一版以明確開檔／另存入口使用，不建立雲端同步或字型下載系統。
 
-Mac 上明確選擇 Windows 組合，重啟與再次匯入仍保留該選擇；不得因執行平台而換回 Menlo。編輯其中一個字型後成為自訂組合，其他欄位保留；按「恢復依平台初始值」才重新依 OS 解析。
+Mac 上明確選擇 Windows 組合，重啟與再次匯入仍保留該選擇；不得因執行平台而換回 Menlo。編輯其中一個字型後成為自訂組合，其他欄位保留；選「依平台初始值」才重新依 OS 解析；「重設字型預設值」則回到 Windows 傳統 BBS 與字高 23。
 
 匯入先填入同一個預覽草稿，展示雙色中文、英數、圓形符號與框線。可以保持匯入的組合、改選另一個內建組合，或手動調整。有效匯入會自動保存並套用主畫面；無效匯入不改設定或來源檔。匯出只使用已成功保存的生效顯示設定；若尚有修改，先完成保存，再由使用者點擊匯出。原生選檔視窗的取消仍不更改偏好。
 

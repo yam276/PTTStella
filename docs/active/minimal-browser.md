@@ -1,5 +1,15 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-04 開箱字型與字高預設
+
+新安裝與「重設字型預設值」統一使用Windows傳統BBS（MingLiU細明體）、字高23、baseline20及字寬100%。已保存的字型／數值不改寫；明確保存的「依平台初始值」仍解析成原OS字型，設定選單的同名選項與產品預設分開。切換組合仍保留目前數值。細明體須有合法本機安裝，既有缺字型提示、官方來源及內建替代選項保留，沒有新增字型散布。
+
+驗證：core14命令／2replay、desktop lib208／bin178／multi_instance10（各1個原有ignored）、JS372／Fluent、全targets Clippy／fmt與docs通過。新增案例覆蓋新安裝、重設、舊platform設定保留、UI封包與平台選項切換；負面格式測試使用明確舊設定，避免預設變更使字串替換失效。macOS真正Dioxus的兩個獨立fonts probe皆passed：首次顯示MingLiU23、調整至18／baseline19後重設並保存23／20，第二程序直接讀回同一份設定，960×576 PNG逐byte及解壓後scanline完全相同，設定檔亦未改寫。兩次catalog讀取／來源sink／PNG與Close acknowledged、完整owner join通過。Windows／Linux原生GUI本輪未驗。
+
+第二程序早期停在OS開啟Documents內的合成設定檔，stack與逾時保留；把同一份資料移至task-owned暫存目錄後完成讀回，沒有調整系統權限或放寬產品保護。工具曾另啟隔離App的一般啟動實例，已關閉，沒有登入或送使用者輸入，未當成實站驗收。使用者現有App與設定未操作。
+
+交付 `dist/macos-classic-defaults/PTTStella.app`（0.4.0-dev.1／arm64 release／strict ad-hoc，診斷置頂且不搶焦點）。證據 `.local/verification/classic-defaults-20261104/`。清除自己的隔離App／launcher／暫存資料及Cargo dev／release profiles，成功讀回與唯一失敗證據另存；保留最新交付、使用者執行中的macos-composer-grid-fixed及前版macos-draft-transfer-fixed實站重測基線，其他非本輪產物保留。exact paths、du／Cargo宣告量與filesystem free前後見cleanup-before.json及cleanup.json。只提交develop，不推送或發佈。
+
 ## 2026-11-04 本機草稿帶回的分段回覆誤判
 
 使用者實站回報帶回PTT時顯示「上色中途停止…畫面或發文流程已改變」。錯誤字串由共用editor worker包裝Source flow而來；新增獨立合成案例先在舊程式得到相同內層錯誤：改標題後先回到原游標、稍後才執行Ctrl+]，或Ctrl+Y批次只完成部分行時，都可能形成完整但非最終的editor frame。舊Source flow把第一個fresh frame直接作為Clear／Empty最終回覆。原生框選上色的既有flow不是這次回報的路徑。

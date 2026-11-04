@@ -107,11 +107,11 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
         fontTimer=setTimeout(()=>{fontTimer=0;fontPreviewNext={request:fontRequest,values:readFonts()};flushFontPreview();},150);
     }
     function editFont(e){if(!e.isTrusted||disposed)return;if(e.target===fontFields.ascii_font||e.target===fontFields.cjk_font)fontPreset.value="custom";previewFonts();scheduleSave(e);}
-    function chooseFontPreset(e){if(!e.isTrusted||disposed)return;const values=fontPreset.value==="platform"?fontDraft?.defaults:fontDraft?.presets[fontPreset.value];
+    function chooseFontPreset(e){if(!e.isTrusted||disposed)return;const values=fontPreset.value==="platform"?fontDraft?.platform:fontDraft?.presets[fontPreset.value];
         if(values) {const size=fontFields.font_size.value,baseline=fontFields.baseline.value,width=fontFields.font_width.value;fillFonts(values);fontFields.font_size.value=size;fontFields.baseline.value=baseline;fontFields.font_width.value=width;previewFonts();scheduleSave(e);}}
     function resetDisplay(e){
         if(!e.isTrusted||!fontDraft||disposed||!fontDialog.open)return;
-        fillFonts(fontDraft.defaults);fontPreset.value="platform";previewFonts();scheduleSave(e);
+        fillFonts(fontDraft.defaults);fontPreset.value=profileChoice(fontDraft.default_profile);previewFonts();scheduleSave(e);
     }
     function resetFonts(e){
         if(!e.isTrusted||!fontDraft||disposed)return;

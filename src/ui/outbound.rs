@@ -217,6 +217,8 @@ pub(super) struct SettingsOpen {
     pub profile: DisplayProfile,
     pub values: DisplaySettings,
     pub defaults: DisplaySettings,
+    pub default_profile: DisplayProfile,
+    pub platform: DisplaySettings,
     pub presets: BTreeMap<&'static str, DisplaySettings>,
     pub warning: Option<String>,
     pub sample: Paint,

@@ -130,6 +130,8 @@ impl Preferences {
             language: self.app.language,
             values: self.display.clone(),
             defaults: DisplaySettings::default(),
+            default_profile: DisplayProfile::default(),
+            platform: DisplaySettings::platform_default(),
             presets: DisplaySettings::presets(),
             warning: self.warning.clone(),
             sample: sample_packet(&self.sample, &self.display),
