@@ -551,7 +551,8 @@ pub fn app(props: AppProps) -> Element {
                             button {id:"draft-mode-source","aria-pressed":"false",{pttstella::msg!("draft-source")}}
                         }
                         div {role:"group","aria-label":pttstella::msg!("draft-selection"),
-                            button {id:"draft-select-line","aria-pressed":"true",{pttstella::msg!("draft-select-line")}}
+                            button {id:"draft-select-text","aria-pressed":"true",{pttstella::msg!("draft-select-text")}}
+                            button {id:"draft-select-line","aria-pressed":"false",{pttstella::msg!("draft-select-line")}}
                             button {id:"draft-select-rectangle","aria-pressed":"false",{pttstella::msg!("draft-select-rectangle")}}
                         }
                     }

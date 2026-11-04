@@ -1,5 +1,15 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-04 本機編輯器部分選字與固定可視字格
+
+預設由強制整行改成「文字選取」，可選同列中的幾個字與跨行文字；保留獨立「整行選取」和既有ANSI矩形模式。放大標題、按鈕、輸入欄與色票；正文以79欄、23列可視範圍及1:2半形字格依容器縮放，中文在三種顯示模式維持2格。字型載入完成及容器resize才重算尺寸，destroy撤銷observer／fallback listener。長文仍捲動，縮放／選取不改寫正文，不自動裁切或重排已有ANSI；帶回PTT的79欄／編碼bytes限制保留。色票按實際尺寸限制位置，沒有另寫ANSI parser。
+
+驗證：實際CodeMirror測部分／跨行選取、整行切換、三模式中文寬度、原文、undo／redo及observer清理；完整JS371、core14命令／2replay、desktop lib205／bin178／multi_instance10（各1個原有ignored）、全targets Clippy／fmt、Fluent、Python82及docs通過。相同240行上色benchmark的逐區／批次約96.14／0.37ms，2048行投影約9.58ms，未改Rust上色演算法，不宣稱是本輪效能提升。真實瀏覽器可信拖曳核對部分範圍2～5、正反跨行2～13與整行0～17；79字ASCII寬556.70px、可視正文寬556.39px（小於1px取整差），行高14.09px、中文字寬14.08px，23列可視高度正確。此為實際DOM，不能代替原生手勢或特定IME。
+
+macOS真正Dioxus交付binary的drafts／drafts_restart皆passed：取得範本、行中部分中文字反白、右鍵色票套色、三模式切換、五次保存、精確中文／SGR主檔、新程序恢復及二次確認帶回一次，最後停在原生編輯器，沒有發表；Close acknowledged、listeners／connection／files／credentials完整join與程序退出。早期背景清單讀取等待的取消案例保留，未把取消當通過；臨時狀態標記已還原，最終無標記binary再次完成恢復／帶回。原生座標拖曳仍noWindowsAvailable，部分選字以原生AX／鍵盤與實際色票證明；Windows／Linux與真實注音IME本輪未重驗。重新綁定隔離App時工具曾另啟一般啟動實例自動連預設站，隨即關閉，沒有登入或輸入，未當成實站驗收。
+
+交付 `dist/macos-composer-grid-fixed/PTTStella.app`（0.4.0-dev.1／macOS arm64 release／strict ad-hoc，診斷置頂且不搶焦點）。證據 `.local/verification/composer-grid-selection-20261104/`。清除自己的臨時App／launcher、兩份臨時診斷打包、npm安裝目錄及Cargo dev／release profiles，關閉loopback server／瀏覽器測試分頁；保留最新交付、上一版字型fallback及唯一成功／失敗證據，exact paths與filesystem free前後在cleanup.json。只提交develop，不推送或發佈。
+
 ## 2026-11-04 非整數縮放的英文字高與基線錯位
 
 使用者回報放大後英文字母歪斜。以同一MingLiU24／baseline20／width100重現：187.5%時整數字格交替22／23px，原renderer把該欄寬用於整個字形等比縮放，導致同列相同字母的vertical scale交替1／0.9777778，基線交替36／36.2。一般文字改用未取整的邏輯字格計算長寬比例與字寬上限；背景、左右裁切、連接框線及ANSI幾何仍使用實際整數邊界。原本的墨跡上下界保護與雙半共同transform保留，不更動使用者設定或欄位位置。

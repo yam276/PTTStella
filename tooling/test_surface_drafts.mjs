@@ -7,10 +7,10 @@ const source=readFileSync(new URL('../assets/surface-drafts.js',import.meta.url)
 function fixture(){
  let clock=10000,timer=0,packet={connected:true,generation:7,frame:{revision:3},input_epoch:2,draft_scope:{board:'Stella',account:'StellaTest'},draft_post_scope:{board:'Stella',account:'StellaTest'},editor:true};
  const nodes=new Map(),sent=[],timers=new Map();
- const node=id=>{if(!nodes.has(id))nodes.set(id,{id,open:false,hidden:false,value:'',children:[],dataset:{},style:{},attrs:{},setAttribute(k,v){this.attrs[k]=v;},append(n){this.children.push(n);},replaceChildren(...n){this.children=n;},showModal(){this.open=true;},close(){this.open=false;},focus(){},getBoundingClientRect:()=>({left:0,top:0,width:1000,height:700})});return nodes.get(id);};
+ const node=id=>{if(!nodes.has(id))nodes.set(id,{id,open:false,hidden:false,value:'',children:[],dataset:{},style:{},attrs:{},setAttribute(k,v){this.attrs[k]=v;},append(n){this.children.push(n);},replaceChildren(...n){this.children=n;},showModal(){this.open=true;},close(){this.open=false;},focus(){},getBoundingClientRect:()=>({left:0,top:0,width:id==='draft-color-panel'?334:1000,height:id==='draft-color-panel'?218:700})});return nodes.get(id);};
  const document={getElementById:node,createElement:()=>node('option-'+nodes.size),querySelector:()=>node('draft-dialog').open?node('draft-dialog'):null};
  const window={setTimeout:(fn,ms)=>{timers.set(++timer,{fn,at:clock+ms});return timer;},clearTimeout:id=>timers.delete(id)};
- let options,value='',selection=[],mode='color',select='line',dead=false,projected=null;
+ let options,value='',selection=[],mode='color',select='text',dead=false,projected=null;
  const editor={value:()=>value,load:v=>{value=v;},ranges:()=>selection,apply:changes=>{for(const c of [...changes].reverse())value=value.slice(0,c.from)+c.insert+value.slice(c.to);options.onChange();},project:d=>projected=d,mode:m=>mode=m,selection:m=>select=m,readOnly(){},composing:()=>false,focus(){},destroy(){dead=true;}};
  const createDraftEditor=vm.runInNewContext(source+'\ncreateDraftEditor',{TextEncoder,graphicCode:()=>null,Date:class extends Date{static now(){return clock;}}});
  const ui=createDraftEditor({document,window,tr:translator('zh-TW'),send:e=>sent.push(JSON.parse(JSON.stringify(e))),current:()=>packet,prepare(){},restore(){},changed(){},notice(){},palette:Array(16).fill('#000'),createEditor:o=>{options=o;return editor;}});
@@ -44,10 +44,10 @@ test('failed save preserves live source; transfer needs separate confirmation an
  f.fire('save');f.ui.receive({state:'saved',token:1,sequence:saves(f).at(-1).edit.sequence});f.fire('transfer');assert.equal(f.node('confirm').hidden,false);f.fire('transfer-confirm');assert.equal(f.sent.at(-1).kind,'draft_station');assert.ok(!f.sent.some(e=>e.kind==='key'||e.kind==='text'));
 });
 test('right-click palette preserves ranges and applies immediately without saving or moving document layout',()=>{
- const f=fixture();f.open();f.edit('中文\n\n\x1b[32m第三行\x1b[m');f.select([{from:0,to:f.value().length}]);f.context();assert.equal(f.node('color-panel').hidden,false);assert.equal(f.node('color-panel').style.left,'650px');
+ const f=fixture();f.open();f.edit('中文\n\n\x1b[32m第三行\x1b[m');f.select([{from:0,to:f.value().length}]);f.context();assert.equal(f.node('color-panel').hidden,false);assert.equal(f.node('color-panel').style.left,'658px');assert.equal(f.node('color-panel').style.top,'474px');
  const b=f.node('foreground').children[9];f.select([]);f.fire('color-panel','click',{target:{closest:()=>b}});const color=f.sent.at(-1);assert.equal(color.kind,'draft_color');assert.equal(color.color.foreground,9);assert.equal(color.body,f.value());assert.equal(saves(f).length,0);
  f.ui.receive({state:'colored',token:1,revision:color.revision,changes:[{from:0,to:2,insert:'\x1b[31m中文\x1b[m'}]});assert.match(f.value(),/^\x1b\[31m中文/);assert.equal(f.node('color-panel').hidden,true);
- f.fire('mode-source');assert.equal(f.mode(),'source');f.fire('mode-plain');assert.equal(f.mode(),'plain');f.fire('select-rectangle');assert.equal(f.selection(),'rectangle');
+ f.fire('mode-source');assert.equal(f.mode(),'source');f.fire('mode-plain');assert.equal(f.mode(),'plain');f.fire('select-line');assert.equal(f.selection(),'line');f.fire('select-text');assert.equal(f.selection(),'text');f.fire('select-rectangle');assert.equal(f.selection(),'rectangle');
 });
 test('late projections and color errors cannot overwrite live source or acknowledge an unrelated save',()=>{
  const f=fixture();f.open();f.edit('中文');f.advance(32);const p=f.sent.at(-1);assert.equal(p.kind,'draft_project');f.edit('新中文');f.fire('save');

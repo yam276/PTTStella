@@ -94,7 +94,7 @@ function createDraftEditor({document,window,tr,send,current,prepare,restore,chan
     function transfer(event){if(!event.isTrusted||!editable()||dirty||saving||confirm.hidden)return;const p=current();if(!p?.editor||!p.draft_post_scope)return;awaiting=true;repaint();send({kind:'draft_station',token,stamp:{generation:p.generation,revision:p.frame.revision,input_epoch:p.input_epoch},trusted:true});}
     function openColors(event){if(!event.isTrusted||!editable())return;const ranges=editor.ranges();if(!ranges.length)return;colorSelection={ranges,revision};event.preventDefault();colors.hidden=false;
         // The palette is a top-layer popover, independent of editor layout/scroll.
-        const r=root.getBoundingClientRect();colors.style.left=Math.max(8,Math.min(event.clientX-r.left, r.width-350))+'px';colors.style.top=Math.max(8,Math.min(event.clientY-r.top,r.height-250))+'px';
+        const r=root.getBoundingClientRect(),box=colors.getBoundingClientRect();colors.style.left=Math.max(8,Math.min(event.clientX-r.left,r.width-box.width-8))+'px';colors.style.top=Math.max(8,Math.min(event.clientY-r.top,r.height-box.height-8))+'px';
     }
     const swatches=[];
     for(const [group,count]of [['foreground',16],['background',8]])for(let i=0;i<count;i++){
@@ -117,6 +117,6 @@ function createDraftEditor({document,window,tr,send,current,prepare,restore,chan
             [node('transfer'),'click',station],[node('transfer-confirm'),'click',transfer],[node('transfer-cancel'),'click',e=>{if(e.isTrusted)confirm.hidden=true;}],
             [colors,'mousedown',e=>e.preventDefault()],[colors,'click',swatch],[node('color-close'),'click',e=>{if(e.isTrusted){colors.hidden=true;editor.focus();}}],
             ...['color','plain','source'].map(mode=>[node('mode-'+mode),'click',e=>{if(e.isTrusted&&editable()){editor.mode(mode);for(const m of ['color','plain','source'])node('mode-'+m).setAttribute('aria-pressed',String(mode===m));project();}}]),
-            ...['line','rectangle'].map(mode=>[node('select-'+mode),'click',e=>{if(e.isTrusted&&editable()){editor.selection(mode);for(const m of ['line','rectangle'])node('select-'+m).setAttribute('aria-pressed',String(mode===m));}}]),
+            ...['text','line','rectangle'].map(mode=>[node('select-'+mode),'click',e=>{if(e.isTrusted&&editable()){editor.selection(mode);for(const m of ['text','line','rectangle'])node('select-'+m).setAttribute('aria-pressed',String(mode===m));}}]),
             [window,'blur',flush],[document,'visibilitychange',()=>{if(document.visibilityState==='hidden')flush();}]]};
 }
