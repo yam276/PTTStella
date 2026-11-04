@@ -1,5 +1,9 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-04 0.4.0 正式發佈準備
+
+使用者明確授權發佈0.4.0，在develop統一Cargo／lock、README與徽章為正式0.4.0，新增中文為主、英文摘要的版本說明。納入本機中文／ANSI草稿與範本、身分側標／推文定位、留白導覽、圖片縮放拖曳、字型與文字比例修正及成功通知淡出；最後實站草稿修正的驗收見下節。沿既有develop → main Release PR與四架構建置流程，只有全部檢查／打包成功才發佈；公開保留六個套件與SHA256SUMS，manifest仍在Actions artifacts。發佈完成後main保持正式版號，develop整合main並恢復0.5.0-dev.1。CI不代替Windows／Linux GUI或新的實體滑鼠／IME驗收。
+
 ## 2026-11-04 實站本機稿帶回卡在檔尾標記
 
 依使用者授權，以PTTStella帳號到Test板操作，僅到內文貼上、不發表。舊版macos-toast-expiry-verified可讀範本與保存，但把同一份兩行中文帶回時停在空白站端編輯器並逾時；畫面第2～23列有PTT的檔尾顯示標記 `~`。原empty_editor要求所有列空白，因而把標記當正文。原合成站沒有這些標記，先補上相同EOF顯示的獨立fixture，舊生產flow確實失敗，證據保留。
