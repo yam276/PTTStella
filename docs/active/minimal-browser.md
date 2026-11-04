@@ -1,5 +1,15 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-04 非整數縮放的英文字高與基線錯位
+
+使用者回報放大後英文字母歪斜。以同一MingLiU24／baseline20／width100重現：187.5%時整數字格交替22／23px，原renderer把該欄寬用於整個字形等比縮放，導致同列相同字母的vertical scale交替1／0.9777778，基線交替36／36.2。一般文字改用未取整的邏輯字格計算長寬比例與字寬上限；背景、左右裁切、連接框線及ANSI幾何仍使用實際整數邊界。原本的墨跡上下界保護與雙半共同transform保留，不更動使用者設定或欄位位置。
+
+新增回歸先在舊程式失敗，修正後完整JS371項、core14命令／2replay、desktop lib205／bin178（各1個原有ignored）、全targets Clippy／fmt通過。真實Canvas的100／110／125／137.5／187.5／203.125%共6案，相同英文字母的比例與基線一致；獨立自然字形參考保留左右格內裁切、放開垂直裁切，6案全部逐像素零差異且墨跡像素數相同。舊程式在其中4個非整數比例分別有2961／2285／3222／4178個差異像素。初次參考未保留必要的左右裁切，整數比例也誤報字母overhang，已保留該失敗報告並修正參考邊界，沒有據此修改產品或放寬像素判定。
+
+macOS實際Dioxus隔離fonts probe通過：MingLiU24／20／100的原生預覽及125%主畫面已留成對AX／截圖，字母、括號、下伸字母與雙色中文完整；字型catalog2、官方來源sink、960×576來源PNG、Close acknowledged及所有owner join通過，測試程序已退出。來源PNG與上一版整數比例的合成案例完全相同（含編碼bytes）。沒有連PTT、存取帳密或操作使用者的兩個舊App；Windows／Linux實際rasterizer與特定IME本輪未驗。
+
+交付 `dist/macos-font-alignment-fixed/PTTStella.app`（0.4.0-dev.1／macOS arm64 release／strict ad-hoc，診斷置頂且不搶焦點）。證據 `.local/verification/font-baseline-alignment-20261104/`；自己的隔離App／launcher、loopback server及Cargo profiles依owned清理，保留仍執行的macos-font-width／macos-font-height-fixed及上一個本機編輯器fallback，精確清理與空間前後見cleanup.json。只提交develop，不推送或發佈。
+
 ## 2026-11-04 文件歷史整理驗證
 
 在獨立清理分支與隔離Git副本整理文件歷史，外部完整bundle已驗證可讀並保留原始refs及提交對照表。逐一核對原294個提交：只修改6個文件路徑與2則提交訊息，其他檔案內容／模式、作者／提交者／日期及父子拓撲保持；清理後develop的原有最新檔案樹與清理前完全相同。本筆另新增驗證紀錄，不改產品程式或版號。歷史文字文件殘留引用掃描為零，完整JS370項、develop與各正式版來源的docs gate、diff及完整Git物件檢查通過；沒有重建Rust或App。

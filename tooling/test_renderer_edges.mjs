@@ -57,6 +57,20 @@ test('font height 24 fits the measured MingLiU descenders on one baseline withou
   for(const clip of clips)assert.equal(clip[3],24*factor);
  }
 });
+test('fractional column rounding does not change the height or baseline of neighbouring Latin letters',()=>{
+ for(const [pixels,height,rows,row,baseline] of [[1056,634,24,1,21],[1320,792,24,1,26],[1800,1080,24,1,36],[1950,1170,24,1,39],[1800,45,1,0,36]]){
+  const factor=pixels/960,draws=[],clips=[];let origin,zoom;
+  const ctx={font:'',setTransform(){},fillRect(){},save(){},restore(){},beginPath(){},rect(...v){clips.push(v);},clip(){},translate(...v){origin=v;},scale(...v){zoom=v;},fillText(text){draws.push({text,origin,zoom});},
+   measureText(text){return {width:(text==='中'?24:12)*factor,actualBoundingBoxAscent:18.28125*factor,actualBoundingBoxDescent:4.7578125*factor};}};
+  const style={fg:7,bg:0,bright:false,inverse:false};let col=0;
+  const glyphs=[...'RRRRRMMMMMwwwwwgggggyyyyy[]中'].map(text=>{const width=text==='中'?2:1,glyph={text,col,row,width,left:style,right:{...style,fg:1}};col+=width;return glyph;});
+  render({width:pixels,height,getContext:()=>ctx},{frame:{cols:80,rows,cursor_visible:false,glyphs},settings:{font_size:24,baseline:20,font_width:100},links:[]},{cursor:false});
+  const top=Math.round(row*height/rows);
+  for(const draw of draws){assert.deepEqual(draw.zoom,[1,1],`${pixels}px ${draw.text}: rounded column changed the glyph proportions`);assert.equal(draw.origin[1]-top,baseline);}
+  // Exact integer clip widths still alternate at half-pixel column boundaries.
+  if(pixels===1800)assert.deepEqual([...new Set(clips.map(v=>v[2]))].sort((a,b)=>a-b),[22,23]);
+ }
+});
 test('tall fallback ink fits proportionally and its two colours retain identical transforms',()=>{
  const transforms=[];let origin,zoom;
  const ctx={font:'',setTransform(){},fillRect(){},save(){},restore(){},beginPath(){},rect(){},clip(){},translate(...v){origin=v;},scale(...v){zoom=v;},fillText(){transforms.push({origin,zoom});},measureText(text){return {width:24,actualBoundingBoxAscent:text==='X'?40:18,actualBoundingBoxDescent:text==='X'?16:5};}};

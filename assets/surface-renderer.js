@@ -55,10 +55,13 @@ function render(target,packet,{cursor=true,hovered=-1,linkHints=false,highlight=
         ctx.font=fontDescription(packet.settings,glyph.width===2,scale);
         const left=x(glyph.col),top=y(glyph.row),span=x(glyph.col+glyph.width)-left,h=y(glyph.row+1)-top;
         const metrics=ctx.measureText(glyph.text),advance=Math.max(metrics.width,1);
-        // Text keeps the font's aspect ratio; narrow symbols are centred instead
-        // of stretched into ovals. Connected box/shade glyphs retain grid fitting.
+        // Text fits the unrounded logical span. Rounded pixel columns can differ
+        // by one pixel; feeding that into font scaling tilts neighbouring Latin
+        // letters through different heights/baselines. Clips stay integer-aligned.
+        // Connected box/shade glyphs instead retain their exact grid fitting.
         const code=glyph.text.codePointAt(0),connected=[...glyph.text].length===1&&code>=0x2500&&code<=0x2593;
-        let fitting=connected?span/advance:Math.min(1,span/advance),baseline=packet.settings.baseline*scale;
+        const textSpan=glyph.width*12*scale;
+        let fitting=connected?span/advance:Math.min(1,textSpan/advance),baseline=packet.settings.baseline*scale;
         if(!connected){
             // Font line boxes contain leading and can dwarf the visible ink.
             // A shared ink sample keeps ordinary letters/CJK on one baseline;
@@ -77,7 +80,7 @@ function render(target,packet,{cursor=true,hovered=-1,linkHints=false,highlight=
         }
         // Optional horizontal width fills more/less of the same cell without
         // moving columns or changing text height. Connected ANSI geometry stays fitted.
-        const horizontal=connected?fitting:Math.min(span/advance,fitting*(packet.settings.font_width??100)/100);
+        const horizontal=connected?fitting:Math.min(textSpan/advance,fitting*(packet.settings.font_width??100)/100);
         const origin=connected?left:left+(span-advance*horizontal)/2;
         for(let half=0;half<glyph.width;half++) {
             const [fg]=colours(highlight?.(glyph)??(half===0?glyph.left:glyph.right)),col=glyph.col+half;
