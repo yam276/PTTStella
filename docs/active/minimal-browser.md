@@ -1,6 +1,17 @@
 # PTTStella 最簡 terminal 計畫
 
 
+## 2026-11-04 細明體24字高中括號下緣裁切
+
+使用者回報24字高的 `[]` 下緣消失。只讀確認目前display為windows_classic／24／baseline20／width100，沒有修改使用者設定。實際MingLiU24的括號descent約4.76px，基線20使墨跡到24.76，原逐格clip裁掉底端；不是來源文章缺字。共同renderer每paint用至多兩種font的固定ink sample，加上當前glyph的actualBoundingBox，向外取整後限制基線；墨跡本身過高才等比縮小，仍保留使用者字寬。常見字共用font sample基線，不按每個括號任意上下抖動；稀有fallback以自身ink補正。雙色兩半共用相同transform，背景／字格／選取／連接框線與幾何ANSI不改。保存的baseline仍保留要求值，沒有自動改檔。預覽加入 `[] gjpqy_`，基線中英文help補上安全範圍說明。
+
+驗證：core14命令／2replay、desktop lib205／bin178（各1個原有ignored）、Clippy／fmt／JS370／i18n／docs通過。新增獨立MingLiU數值expected驗證三種backing比例的完整基線與原字寬、tall fallback等比縮小及雙半相同transform。真實Canvas以獨立無裁切參考、明確安全baseline比對 `[ ] g y 中`，100／125／187.5／200%共20例全部逐像素0差異且墨跡像素數相同；187.5%同使用者截圖的45px行高方向。沒有拿font line box的leading誤當成墨跡縮小所有字。
+
+macOS真正Dioxus：全新隔離fonts probe預設細明體24／baseline20／width100，搜尋定位正常預覽，實際 `[]` 底邊及gjpqy_、雙色中文／框線皆完整。設定仍讀回24／20／100，沒有為驗收改成別的數值。字型catalog2、MingLiU來源sink、960×576 PNG、probe passed、Close acknowledged及listeners／connection／files／credentials完整join，測試程序已退出。圖與資料皆合成，不連PTT；未驗其他OS字型的實際rasterizer。
+
+交付 `dist/macos-font-height-fixed/PTTStella.app`（0.4.0-dev.1／arm64／strict ad-hoc，診斷置頂且不搶焦點）。證據 `.local/verification/font-vertical-fit-20261104/`。使用者現正使用PID3486的macos-font-width App，保留且未操作；原macos-media-pan-zoom已無使用者，在核對舊hash後清除。保留最後完整原生編輯器fallback與唯一失敗／成功證據，清掉自己的隔離probe App／launcher及Cargo profiles；exact paths與空間前後在cleanup.json。只提交develop，未推送／發佈。
+
+
 ## 2026-11-04 文字寬度偏好與字型區重設
 
 使用者希望縮小字間留白並在字型區加重設。一般字形原本以自然advance置中字格，因此字型20px放在24px雙欄時會有留白。新增「文字寬度（%）」50～150、預設100，僅調一般字形橫向墨跡並限制於自身欄位，原字高／來源空白／80×24／選取、link hit與雙色clip不改；連接框線與自畫ANSI圖忽略此偏好。預覽、主畫面、cached strips與PNG共用renderer，預設100沿舊運算結果。若希望明體文字更接近填滿字格，可先選macOS傳統BBS宋體替代、24字高、100%字寬，再依預覽調整；實際筆形與留白仍取決於本機字型。

@@ -43,3 +43,25 @@ test('text width changes ink within fixed columns while height, dual clips and A
  assert.equal(wide.last,960);assert.deepEqual(wide.fills,normal.fills);
  for(const text of ['─','█','◢'])assert.deepEqual(inspect(text,2,150),inspect(text,2,100));
 });
+
+test('font height 24 fits the measured MingLiU descenders on one baseline without changing the glyph width',()=>{
+ for(const [pixels,expectedBaseline] of [[960,19],[1200,24],[720,14]]){
+  const factor=pixels/960,draws=[],clips=[],sampleReads=[];let origin,zoom;
+  const ctx={font:'',setTransform(){},fillRect(){},save(){},restore(){},beginPath(){},rect(...v){clips.push(v);},clip(){},translate(...v){origin=v;},scale(...v){zoom=v;},fillText(text){draws.push({text,origin,zoom});},
+   measureText(text){if(text==='[](){}Agjpqy_中文')sampleReads.push(text);return {width:(text==='中'?24:12)*factor,actualBoundingBoxAscent:18.28125*factor,actualBoundingBoxDescent:4.7578125*factor};}};
+  const style={fg:7,bg:0,bright:false,inverse:false};
+  const glyphs=['[',']','g','y','中'].map((text,col)=>({text,col,row:0,width:text==='中'?2:1,left:style,right:{...style,fg:1}}));
+  render({width:pixels,height:24*factor,getContext:()=>ctx},{frame:{cols:80,rows:1,cursor_visible:false,glyphs},settings:{font_size:24,baseline:20,font_width:100},links:[]},{cursor:false});
+  assert.equal(sampleReads.length,1);
+  for(const draw of draws){assert.equal(draw.origin[1],expectedBaseline);assert.deepEqual(draw.zoom,[1,1]);}
+  for(const clip of clips)assert.equal(clip[3],24*factor);
+ }
+});
+test('tall fallback ink fits proportionally and its two colours retain identical transforms',()=>{
+ const transforms=[];let origin,zoom;
+ const ctx={font:'',setTransform(){},fillRect(){},save(){},restore(){},beginPath(){},rect(){},clip(){},translate(...v){origin=v;},scale(...v){zoom=v;},fillText(){transforms.push({origin,zoom});},measureText(text){return {width:24,actualBoundingBoxAscent:text==='X'?40:18,actualBoundingBoxDescent:text==='X'?16:5};}};
+ const style={fg:1,bg:0,bright:false,inverse:false};
+ render({width:960,height:24,getContext:()=>ctx},{frame:{cols:80,rows:1,cursor_visible:false,glyphs:[{text:'X',col:0,row:0,width:2,left:style,right:{...style,fg:2}}]},settings:{baseline:20,font_width:100},links:[]},{cursor:false});
+ assert.deepEqual(transforms[0],transforms[1]);assert.deepEqual(transforms[0].zoom,[3/7,3/7]);
+ assert.ok(Math.abs(transforms[0].origin[1]-120/7)<1e-10);
+});

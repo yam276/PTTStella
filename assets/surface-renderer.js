@@ -49,15 +49,32 @@ function render(target,packet,{cursor=true,hovered=-1,linkHints=false,highlight=
         ctx.fillStyle=bg; ctx.fillRect(x(col),y(glyph.row),x(col+1)-x(col),y(glyph.row+1)-y(glyph.row));
     }
     ctx.textBaseline="alphabetic";
+    const fontInk=new Map(),finite=value=>Number.isFinite(value)?value:0;
     for(const glyph of frame.glyphs) {
         if(glyph.text===" ") continue;
         ctx.font=fontDescription(packet.settings,glyph.width===2,scale);
         const left=x(glyph.col),top=y(glyph.row),span=x(glyph.col+glyph.width)-left,h=y(glyph.row+1)-top;
-        const advance=Math.max(ctx.measureText(glyph.text).width,1);
+        const metrics=ctx.measureText(glyph.text),advance=Math.max(metrics.width,1);
         // Text keeps the font's aspect ratio; narrow symbols are centred instead
         // of stretched into ovals. Connected box/shade glyphs retain grid fitting.
         const code=glyph.text.codePointAt(0),connected=[...glyph.text].length===1&&code>=0x2500&&code<=0x2593;
-        const fitting=connected?span/advance:Math.min(1,span/advance);
+        let fitting=connected?span/advance:Math.min(1,span/advance),baseline=packet.settings.baseline*scale;
+        if(!connected){
+            // Font line boxes contain leading and can dwarf the visible ink.
+            // A shared ink sample keeps ordinary letters/CJK on one baseline;
+            // the actual glyph also contributes for taller fallback characters.
+            let ink=fontInk.get(ctx.font);
+            if(!ink){
+                const sample=ctx.measureText("[](){}Agjpqy_中文");
+                ink={ascent:sample.actualBoundingBoxAscent,descent:sample.actualBoundingBoxDescent};fontInk.set(ctx.font,ink);
+            }
+            const ascent=Math.ceil(Math.max(0,finite(ink.ascent),finite(metrics.actualBoundingBoxAscent)));
+            const descent=Math.ceil(Math.max(0,finite(ink.descent),finite(metrics.actualBoundingBoxDescent)));
+            if(ascent+descent>0){
+                fitting=Math.min(fitting,h/(ascent+descent));
+                baseline=Math.max(ascent*fitting,Math.min(baseline,h-descent*fitting));
+            }
+        }
         // Optional horizontal width fills more/less of the same cell without
         // moving columns or changing text height. Connected ANSI geometry stays fitted.
         const horizontal=connected?fitting:Math.min(span/advance,fitting*(packet.settings.font_width??100)/100);
@@ -66,7 +83,7 @@ function render(target,packet,{cursor=true,hovered=-1,linkHints=false,highlight=
             const [fg]=colours(highlight?.(glyph)??(half===0?glyph.left:glyph.right)),col=glyph.col+half;
             ctx.save(); ctx.beginPath(); ctx.rect(x(col),top,x(col+1)-x(col),h); ctx.clip(); ctx.fillStyle=fg;
             if(!graphic(ctx,glyph.text,left,top,span,h)) {
-                ctx.translate(origin,top+packet.settings.baseline*scale); ctx.scale(horizontal,connected?1:fitting); ctx.fillText(glyph.text,0,0);
+                ctx.translate(origin,top+baseline); ctx.scale(horizontal,connected?1:fitting); ctx.fillText(glyph.text,0,0);
             }
             ctx.restore();
         }
