@@ -473,6 +473,7 @@ fn frame_and_preview_packets_keep_typed_identity_and_data_under_payload() {
         cjk_font: "中文".into(),
         font_size: 18.0,
         baseline: 19.0,
+        font_width: 100.0,
     };
     let paint = sample_packet(&screen.frame(), &settings);
     let value = serde_json::to_value(Packet::Paint(&paint)).unwrap();

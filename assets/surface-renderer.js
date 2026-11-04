@@ -58,12 +58,15 @@ function render(target,packet,{cursor=true,hovered=-1,linkHints=false,highlight=
         // of stretched into ovals. Connected box/shade glyphs retain grid fitting.
         const code=glyph.text.codePointAt(0),connected=[...glyph.text].length===1&&code>=0x2500&&code<=0x2593;
         const fitting=connected?span/advance:Math.min(1,span/advance);
-        const origin=connected?left:left+(span-advance*fitting)/2;
+        // Optional horizontal width fills more/less of the same cell without
+        // moving columns or changing text height. Connected ANSI geometry stays fitted.
+        const horizontal=connected?fitting:Math.min(span/advance,fitting*(packet.settings.font_width??100)/100);
+        const origin=connected?left:left+(span-advance*horizontal)/2;
         for(let half=0;half<glyph.width;half++) {
             const [fg]=colours(highlight?.(glyph)??(half===0?glyph.left:glyph.right)),col=glyph.col+half;
             ctx.save(); ctx.beginPath(); ctx.rect(x(col),top,x(col+1)-x(col),h); ctx.clip(); ctx.fillStyle=fg;
             if(!graphic(ctx,glyph.text,left,top,span,h)) {
-                ctx.translate(origin,top+packet.settings.baseline*scale); ctx.scale(fitting,connected?1:fitting); ctx.fillText(glyph.text,0,0);
+                ctx.translate(origin,top+packet.settings.baseline*scale); ctx.scale(horizontal,connected?1:fitting); ctx.fillText(glyph.text,0,0);
             }
             ctx.restore();
         }

@@ -18,7 +18,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
     const fontPreview=document.getElementById("font-preview"),fontNote=document.getElementById("font-note");
     const fontAvailability=document.getElementById("font-availability");
     const fontPreset=document.getElementById("font-preset"),fontSave=document.getElementById("font-save"),fontCancel=document.getElementById("font-cancel");
-    const fontDefaults=document.getElementById("font-defaults");
+    const fontDefaults=document.getElementById("font-defaults"),fontReset=document.getElementById("font-reset");
     const profileImport=document.getElementById("profile-import"),profileExport=document.getElementById("profile-export"),profileName=document.getElementById("font-profile-name");
     const hoverPosition=document.getElementById("settings-hover");
     const articleMode=document.getElementById("article-mode");
@@ -87,16 +87,16 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
     const importProfile=e=>profileAction("import",e),exportProfile=e=>profileAction("export",e);
     function profileChoice(profile){return profile.fonts.kind==="platform_default"?"platform":profile.fonts.kind==="preset"?profile.fonts.preset:"custom";}
     const fontFields={ascii_font:document.getElementById("font-ascii"),cjk_font:document.getElementById("font-cjk"),
-        font_size:document.getElementById("font-size"),baseline:document.getElementById("font-baseline")};
+        font_width:document.getElementById("font-width"),font_size:document.getElementById("font-size"),baseline:document.getElementById("font-baseline")};
     function openFonts(e){beforeRequest(e);send({kind:"settings_open",trusted:e.isTrusted});}
     function fillFonts(values) {
-        for(const [name,field] of Object.entries(fontFields)) field.value=values[name];
+        for(const [name,field] of Object.entries(fontFields)) field.value=values[name]??(name==="font_width"?100:"");
         syncChoices();
     }
     function readFonts() {
         const selected=fontPreset.value,fonts=selected==="custom"?{kind:"custom",ascii_font:fontFields.ascii_font.value,cjk_font:fontFields.cjk_font.value}:
             selected==="platform"?{kind:"platform_default"}:{kind:"preset",preset:selected};
-        return {fonts,font_size:Number(fontFields.font_size.value),baseline:Number(fontFields.baseline.value)};
+        return {fonts,font_width:Number(fontFields.font_width.value),font_size:Number(fontFields.font_size.value),baseline:Number(fontFields.baseline.value)};
     }
     function flushFontPreview() {
         if(fontPreviewBusy||!fontPreviewNext||!fontDialog.open||disposed) return;
@@ -108,13 +108,17 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
     }
     function editFont(e){if(!e.isTrusted||disposed)return;if(e.target===fontFields.ascii_font||e.target===fontFields.cjk_font)fontPreset.value="custom";previewFonts();scheduleSave(e);}
     function chooseFontPreset(e){if(!e.isTrusted||disposed)return;const values=fontPreset.value==="platform"?fontDraft?.defaults:fontDraft?.presets[fontPreset.value];
-        if(values) {const size=fontFields.font_size.value,baseline=fontFields.baseline.value;fillFonts(values);fontFields.font_size.value=size;fontFields.baseline.value=baseline;previewFonts();scheduleSave(e);}}
+        if(values) {const size=fontFields.font_size.value,baseline=fontFields.baseline.value,width=fontFields.font_width.value;fillFonts(values);fontFields.font_size.value=size;fontFields.baseline.value=baseline;fontFields.font_width.value=width;previewFonts();scheduleSave(e);}}
+    function resetDisplay(e){
+        if(!e.isTrusted||!fontDraft||disposed||!fontDialog.open)return;
+        fillFonts(fontDraft.defaults);fontPreset.value="platform";previewFonts();scheduleSave(e);
+    }
     function resetFonts(e){
         if(!e.isTrusted||!fontDraft||disposed)return;
         if(page()==="general")language.value="zh-TW";
         else if(page()==="input"){toolsOpacity.value="100";rightClickMenu.checked=true;showFloatingButton.checked=true;updateOpacity();}
         else if(page()==="media"){articleMode.value="web";articleBoundary.checked=false;hoverPosition.value="top_right";hoverTouched=true;hoverVersion++;}
-        else if(page()==="appearance"){fillFonts(fontDraft.defaults);fontPreset.value="platform";previewFonts();}
+        else if(page()==="appearance"){resetDisplay(e);return;}
         else return;
         scheduleSave(e);
     }
@@ -168,7 +172,7 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
             if(data.packet){
                 await preview(data.packet.settings,data.packet,()=>fontDialog.open&&request===fontRequest&&opening===epoch);
                 if(!disposed&&fontDialog.open&&request===fontRequest&&opening===epoch){
-                    fontPreview.dataset.request=String(request);fontPreview.dataset.fontSize=String(data.packet.settings.font_size);fontPreview.dataset.baseline=String(data.packet.settings.baseline);
+                    fontPreview.dataset.request=String(request);fontPreview.dataset.fontSize=String(data.packet.settings.font_size);fontPreview.dataset.baseline=String(data.packet.settings.baseline);fontPreview.dataset.fontWidth=String(data.packet.settings.font_width??100);
                 }
             }
             if(data.error)fontNote.textContent=data.error;
@@ -218,6 +222,6 @@ function createSettingsDialog({send,beforeRequest,beforeShow,restore,changed,tr,
             ...sourceButtons.map(button=>[button,"click",e=>openSource(button,e)]),
             [profileImport,"click",importProfile],[profileExport,"click",exportProfile],
             ...Object.values(fontFields).map(field=>[field,"input",editFont]),
-            [fontDefaults,"click",resetFonts],[fontCancel,"click",closeFonts],[fontDialog,"cancel",closeFonts],[fontSave,"click",saveFonts],
+            [fontReset,"click",resetDisplay],[fontDefaults,"click",resetFonts],[fontCancel,"click",closeFonts],[fontDialog,"cancel",closeFonts],[fontSave,"click",saveFonts],
         ]};
 }

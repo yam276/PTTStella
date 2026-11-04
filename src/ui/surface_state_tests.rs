@@ -393,6 +393,7 @@ fn a_display_change_during_paint_retains_the_requested_redraw() {
     let settings = DisplaySettings {
         font_size: 18.0,
         baseline: 19.0,
+        font_width: 100.0,
         ..Default::default()
     };
     let packet = state.queue(&view, false, &settings).unwrap();

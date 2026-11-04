@@ -1,6 +1,19 @@
 # PTTStella 最簡 terminal 計畫
 
 
+## 2026-11-04 文字寬度偏好與字型區重設
+
+使用者希望縮小字間留白並在字型區加重設。一般字形原本以自然advance置中字格，因此字型20px放在24px雙欄時會有留白。新增「文字寬度（%）」50～150、預設100，僅調一般字形橫向墨跡並限制於自身欄位，原字高／來源空白／80×24／選取、link hit與雙色clip不改；連接框線與自畫ANSI圖忽略此偏好。預覽、主畫面、cached strips與PNG共用renderer，預設100沿舊運算結果。若希望明體文字更接近填滿字格，可先選macOS傳統BBS宋體替代、24字高、100%字寬，再依預覽調整；實際筆形與留白仍取決於本機字型。
+
+DisplayProfile／DisplaySettings新增可選font_width，所有受支援舊檔缺欄位預設100、讀取不改寫。預覽／autosave／關閉快照／可攜匯入匯出沿同一欄位，切preset保留字寬。Store新增獨立field merge，disjoint字高變更保留其他視窗字寬、同欄衝突拒絕。字型數值旁新增「重設字型預設值」，與appearance分類恢復預設共用一個resetDisplay，恢復平台字型／字高20／baseline20／字寬100，不改其他分類。搜尋支援字距、間距、letter spacing及重設字型，中英文皆更新。
+
+驗證：core14命令／2replay、desktop lib205／bin178／multi_instance10（各1個原有ignored案例）、Clippy全targets／fmt、JS368、i18n及docs通過。新profile案例涵蓋舊檔預設、50／100／120／150往返、NaN／Infinity／超界拒絕；Store覆蓋跨視窗disjoint與衝突不覆寫。renderer獨立expected核對固定背景／欄寬、左右clip、一般文字寬高、上限及框線／方塊不變；UI涵蓋預覽、保存、preset保留、可信reset及其他分類數值不變。
+
+macOS真正Dioxus隔離fonts probe passed：原生AX將100改120，UI顯示已儲存，設定backup精確120；透過正常設定搜尋讓120預覽可見，再點重設恢復100與同一預覽，主檔讀回100。重新讀取字型2次、apple官方來源sink、960×576來源PNG及Close acknowledged通過，listeners／connection／credentials／files owner清理完整，測試程序已退出。座標scroll仍noWindowsAvailable，沒有拿AX操作冒充實體拖曳或特定IME；Windows／Linux原生未執行。截圖皆為自製合成內容，未連PTT或讀使用者資料。
+
+交付 `dist/macos-font-width/PTTStella.app`（0.4.0-dev.1／arm64 release／strict ad-hoc，診斷置頂不搶焦點），包含四邊／全螢幕留白修正及圖片縮放拖曳。證據 `.local/verification/font-width-20261104/`。使用者仍在PID75912的macos-media-pan-zoom App，保留且未操作；上一個已驗原生的本機編輯器App亦保留。自己的隔離測試App／launcher、被取代的macos-fullscreen-margin-fixed App與Cargo profiles依owned清理；exact paths／保留例外與filesystem free前後見cleanup.json。僅提交develop，不推送／發佈。
+
+
 ## 2026-11-04 全螢幕網頁文章外側黑邊修正
 
 使用者實測指出推文左側／時間欄右側仍不能點。前一筆四邊留白只涵蓋workspace內；網頁文章為維持BBS長寬會把workspace縮在main中央，全螢幕真正黑邊是main本身，因此既沒有事件也沒有cursor。改由main單一owner接收pointerdown／move／up／click／dblclick，明確只路由裸main與workspace子樹，工具／通知／對話框不攔。viewport仍保持原本固定長寬與scroll／capture owner；不靠放大文章區修正。游標樣式加到main，外側Home／End以host邊緣判定。cellAt與圖片命中拒絕scrollbar及scrollport裁切外的隱藏內容，幾何租約另含host尺寸／位置，fullscreen／移窗會撤銷舊點擊。
@@ -9,7 +22,7 @@
 
 真實IAB DOM使用production函式與同一root bindings、CSS，以可信CDP點擊驗證1280×720及1920×1080。固定scrollport左右各留60px：右黑邊scroll由900到1575，左黑邊一次Back；1920×1080右黑邊到2520末端、左邊累計Back2，外側Home=0／End=2520；Tool按鈕只累計toolClicks1，selection始終0，左右computed cursor分別forward／back。fixture初次漏載doubleclick而未初始化，補上同一生產函式後重跑；保留唯一fixture與報告。這證明瀏覽器事件／實際DOM，不冒充Rust peer、macOS原生全螢幕或實體滑鼠；原生座標工具先前的noWindowsAvailable仍未解，故App內實體驗收待使用者確認。未連PTT、未操作使用者正在閱讀的App。
 
-交付 `dist/macos-fullscreen-margin-fixed/PTTStella.app`（0.4.0-dev.1／macOS arm64 release／ad-hoc，診斷置頂不搶焦點），保留圖片縮放／拖曳功能。證據 `.local/verification/fullscreen-margin-fix-20261104/`。使用者正用PID75912的 `dist/macos-media-pan-zoom/PTTStella.app`，即使已被新版整合也保留，不關閉或刪除；上一個完成原生驗收的本機編輯器App亦保留。自己的Cargo profiles依原生clean清理，exact paths與空間前後記cleanup.json。僅develop提交，不推送／發佈。
+原交付 `dist/macos-fullscreen-margin-fixed/PTTStella.app` 已由同日字寬新版整合取代並清理（0.4.0-dev.1／macOS arm64 release／ad-hoc，診斷置頂不搶焦點），保留圖片縮放／拖曳功能。證據 `.local/verification/fullscreen-margin-fix-20261104/`。使用者正用PID75912的 `dist/macos-media-pan-zoom/PTTStella.app`，即使已被新版整合也保留，不關閉或刪除；上一個完成原生驗收的本機編輯器App亦保留。自己的Cargo profiles依原生clean清理，exact paths與空間前後記cleanup.json。僅develop提交，不推送／發佈。
 
 
 ## 2026-11-04 完整圖片預覽滾輪縮放與拖曳

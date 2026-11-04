@@ -26,3 +26,20 @@ test('rounded article strips fill every last pixel at fractional zoom and DPR',(
         raster(width,Math.floor(width*24/40),24);
     }
 });
+
+test('text width changes ink within fixed columns while height, dual clips and ANSI geometry remain stable',()=>{
+ const style={fg:7,bg:0,bright:false,inverse:false};
+ function inspect(text,width,percent){
+  const calls={scales:[],origins:[],clips:[],fills:[]};
+  const ctx={setTransform(){},fillRect(...v){calls.fills.push(v);},measureText:()=>({width:20}),save(){},restore(){},beginPath(){},rect(...v){calls.clips.push(v);},clip(){},moveTo(){},lineTo(){},closePath(){},fill(){},translate(...v){calls.origins.push(v);},scale(...v){calls.scales.push(v);},fillText(){}};
+  const geometry=render({width:960,height:24,getContext:()=>ctx},{frame:{cols:80,rows:1,cursor_visible:false,glyphs:[{text,width,row:0,col:2,left:style,right:{...style,fg:1}}]},settings:{baseline:20,...(percent===undefined?{}:{font_width:percent})},links:[]},{cursor:false});
+  return {...calls,last:geometry.x(80)};
+ }
+ const normal=inspect('中',2,100),legacy=inspect('中',2,undefined),wide=inspect('中',2,120),narrow=inspect('中',2,80),limited=inspect('中',2,150);
+ assert.deepEqual(normal,legacy);assert.deepEqual(normal.scales,[[1,1],[1,1]]);
+ assert.deepEqual(wide.scales,[[1.2,1],[1.2,1]]);assert.deepEqual(wide.origins,[[24,20],[24,20]]);
+ assert.deepEqual(narrow.scales,[[.8,1],[.8,1]]);assert.deepEqual(narrow.origins,[[28,20],[28,20]]);
+ assert.deepEqual(limited.scales,wide.scales);assert.deepEqual(wide.clips,[[24,0,12,24],[36,0,12,24]]);
+ assert.equal(wide.last,960);assert.deepEqual(wide.fills,normal.fills);
+ for(const text of ['─','█','◢'])assert.deepEqual(inspect(text,2,150),inspect(text,2,100));
+});

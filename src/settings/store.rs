@@ -69,6 +69,11 @@ impl Store {
                     &draft.display.baseline,
                     &current.display.baseline,
                 )?;
+                merged.display.font_width = shared::field(
+                    &base.display.font_width,
+                    &draft.display.font_width,
+                    &current.display.font_width,
+                )?;
                 merged.language =
                     shared::field(&base.language, &draft.language, &current.language)?;
                 merged.article_mode = shared::field(
@@ -102,6 +107,31 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn text_width_merges_separately_and_conflicts_do_not_overwrite() {
+        let directory = tempfile::tempdir().unwrap();
+        let first = Store::at(directory.path().join("settings.json"));
+        first.save(AppSettings::default()).unwrap();
+        let second = first.clone();
+        let baseline = first.load().unwrap();
+        let mut width = baseline.clone();
+        width.display.font_width = 120.0;
+        first.save_from(&baseline, width).unwrap();
+        let mut size = baseline.clone();
+        size.display.font_size = 18.0;
+        let saved = second.save_from(&baseline, size).unwrap();
+        assert_eq!(saved.display.font_width, 120.0);
+        assert_eq!(saved.display.font_size, 18.0);
+        let mut conflict = baseline.clone();
+        conflict.display.font_width = 80.0;
+        assert!(second.save_from(&baseline, conflict).is_err());
+        assert_eq!(first.load().unwrap(), saved);
+        let mut reset = saved.clone();
+        reset.display = super::super::DisplayProfile::default();
+        let saved_reset = first.save_from(&saved, reset).unwrap();
+        assert_eq!(saved_reset.display.font_width, 100.0);
+        assert_eq!(second.load().unwrap(), saved_reset);
+    }
     #[test]
     fn loading_v1_preserves_source_until_explicit_save_and_backs_up_verbatim() {
         let dir = tempfile::tempdir().unwrap();

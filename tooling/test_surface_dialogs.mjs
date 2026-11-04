@@ -25,7 +25,7 @@ function environment(file,factory){
         tick(){const work=[...timers.values()];timers.clear();for(const fn of work)fn();},
     };
 }
-const display={ascii_font:"ASCII",cjk_font:"中文",font_size:20,baseline:20};
+const display={ascii_font:"ASCII",cjk_font:"中文",font_size:20,baseline:20,font_width:100};
 test("the production clearSelection sends a scoped revocation before dropping its cache",()=>{
     const packetSource=readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8");
     const revoke=vm.runInNewContext(packetSource+"\nrevokeSurfaceSelection");
@@ -531,4 +531,20 @@ test("update checks and download actions require an open trusted settings dialog
     ui.updateStatus({checking:true,available:null,up_to_date:false});
     assert.equal(env.node("update-status").textContent,message);
     const final=env.sent.length;env.fire("update-check");env.fire("update-open");assert.equal(env.sent.length,final);
+});
+
+test('text width autosaves and previews, preserves presets, and font-only reset leaves other preferences intact',async()=>{
+ const env=environment('surface-settings.js','createSettingsDialog'),ui=env.create({page:()=> 'appearance'}),data=openData();
+ data.presets.macos={ascii_font:'Menlo',cjk_font:'PingFang TC',font_size:20,baseline:20,font_width:100};
+ await ui.open(data);env.node('interface-language').value='en-US';env.node('article-mode').value='terminal';env.node('tools-opacity').value='40';
+ env.node('font-width').value='120';env.fire('font-width','input');env.tick();
+ const preview=env.sent.find(p=>p.kind==='settings_preview');assert.equal(preview.values.font_width,120);
+ assert.equal(env.sent.at(-1).values.font_width,120);ui.saved({status:'saved'});
+ env.node('font-preset').value='macos';env.fire('font-preset','change');env.tick();
+ assert.equal(Number(env.node('font-width').value),120);assert.equal(env.sent.at(-1).values.font_width,120);ui.saved({status:'saved'});
+ env.fire('font-reset','click',false);env.tick();assert.equal(Number(env.node('font-width').value),120);
+ env.node('font-size').value='18';env.node('font-baseline').value='19';env.fire('font-reset');env.tick();
+ const reset=env.sent.at(-1);assert.equal(reset.values.font_width,100);assert.equal(reset.values.font_size,20);assert.equal(reset.values.baseline,20);
+ assert.equal(reset.values.fonts.kind,'platform_default');assert.equal(reset.language,'en-US');assert.equal(reset.article_mode,'terminal');assert.equal(reset.tools_opacity,40);
+ ui.saved({status:'saved'});ui.destroy();
 });

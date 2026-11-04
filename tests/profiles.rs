@@ -35,11 +35,13 @@ fn fixed_presets_and_custom_profiles_roundtrip_without_platform_inference() {
             fonts,
             font_size: 18.0,
             baseline: 19.0,
+            font_width: 120.0,
         };
         let profile = PortableProfile::new("合成設定".into(), display.clone()).unwrap();
         let bytes = profile.clone().encode().unwrap();
         assert_eq!(PortableProfile::decode(&bytes).unwrap(), profile);
         assert_eq!(display.resolve().unwrap().font_size, 18.0);
+        assert_eq!(display.resolve().unwrap().font_width, 120.0);
     }
     let windows = DisplayProfile {
         fonts: Fonts::Preset {
@@ -270,4 +272,35 @@ fn article_boundary_preference_defaults_off_migrates_and_round_trips() {
         AppSettings::decode(&serde_json::to_vec(&enabled).unwrap()).unwrap(),
         enabled
     );
+}
+
+#[test]
+fn text_width_defaults_for_legacy_files_and_rejects_invalid_values() {
+    let legacy=br#"{"format":"PTTStella.DisplayProfile","version":1,"name":"Old","display":{"fonts":{"kind":"platform_default"},"font_size":20,"baseline":20}}"#;
+    let profile = PortableProfile::decode(legacy).unwrap();
+    assert_eq!(profile.display.font_width, 100.0);
+    assert_eq!(profile.display.resolve().unwrap().font_width, 100.0);
+    for width in [50.0, 100.0, 120.0, 150.0] {
+        let display = DisplayProfile {
+            font_width: width,
+            ..Default::default()
+        };
+        let bytes = PortableProfile::new("Width".into(), display.clone())
+            .unwrap()
+            .encode()
+            .unwrap();
+        assert_eq!(PortableProfile::decode(&bytes).unwrap().display, display);
+    }
+    for width in [49.0, 151.0, f64::NAN, f64::INFINITY] {
+        assert!(
+            DisplayProfile {
+                font_width: width,
+                ..Default::default()
+            }
+            .validate()
+            .is_err()
+        );
+    }
+    let old = br#"{"version":1,"ascii_font":"Mono","cjk_font":"CJK","font_size":20,"baseline":20}"#;
+    assert_eq!(AppSettings::decode(old).unwrap().display.font_width, 100.0);
 }

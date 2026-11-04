@@ -10,6 +10,8 @@ function settingsCatalog(tr){
         ['font-ascii','appearance','font-ascii','settings-alias-ascii'],
         ['font-cjk','appearance','font-cjk','settings-alias-cjk'],
         ['font-size','appearance','font-size','settings-alias-size'],
+        ['font-width','appearance','font-width','settings-alias-width'],
+        ['font-reset','appearance','font-reset','settings-alias-font-reset'],
         ['font-baseline','appearance','font-baseline','settings-alias-baseline'],
         ['font-profile-name','appearance','profile-name','settings-alias-profile'],
         ['tools-opacity','input','settings-opacity','settings-alias-opacity'],
