@@ -1,5 +1,11 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-04 字型、全螢幕留白與圖片手勢 Critic
+
+依使用者要求，由三位 SubAgent 分別複查字型設定／共同 renderer、全螢幕 host 留白導覽、完整圖片縮放／拖曳；沒有發現可重現的阻擋回歸，未修改產品程式。獨立聚焦 JS 分別49／107／39項通過；主流程重跑完整循序 JS370項、docs與diff檢查通過，並核對同一產品提交既有的core、desktop lib／bin、Clippy及原生fonts probe證據，沒有為純審查重建Rust。
+
+本輪不是新的原生手勢驗收：macOS全螢幕實體留白點擊、圖片可信滾輪／拖曳與字高24／字寬150的原生組字外觀仍未重驗，Windows／Linux實際繪製亦未執行。既有真實瀏覽器CDP與原生字型結果保持各自範圍，不能互相代替。審查紀錄與本輪測試在 `.local/verification/critic-font-nav-media-20261104/`；只新增必要證據，沒有新App／Cargo cache／fixture輸出可清理。核對後僅推送develop，版本維持0.4.0-dev.1，不推進main或發佈。
+
 
 ## 2026-11-04 細明體24字高中括號下緣裁切
 
