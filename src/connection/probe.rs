@@ -788,7 +788,23 @@ pub(super) async fn serve(
             while let Some(message)=socket.next().await {
                 match message.map_err(|e|e.to_string())? {
                     Message::Close(_)=>return socket.flush().await.map_err(|e|e.to_string()),
-                    Message::Binary(bytes)=>{native.accept(&bytes);socket.send(Message::Binary(native.wire().into())).await.map_err(|e|e.to_string())?;},
+                    Message::Binary(bytes)=>{
+                        // The station can flush between commands from one write.
+                        // Exercise complete intermediate editor redraws, rather
+                        // than applying title-return / Ctrl+Y batches atomically.
+                        let split = if bytes.iter().all(|b| matches!(b,25|12)) && bytes.contains(&25) {
+                            Some(1)
+                        } else if bytes.first()==Some(&25) {
+                            bytes.iter().position(|b| *b==13).map(|i|i+1)
+                        } else { None };
+                        if let Some(n)=split.filter(|n| *n<bytes.len()) {
+                            native.accept(&bytes[..n]);
+                            socket.send(Message::Binary(native.wire().into())).await.map_err(|e|e.to_string())?;
+                            tokio::time::sleep(Duration::from_millis(80)).await;
+                            native.accept(&bytes[n..]);
+                        } else { native.accept(&bytes); }
+                        socket.send(Message::Binary(native.wire().into())).await.map_err(|e|e.to_string())?;
+                    },
                     _=>return Err("draft probe rejects non-editor messages".into())
                 }
             }

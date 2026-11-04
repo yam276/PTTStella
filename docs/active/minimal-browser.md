@@ -1,5 +1,17 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-04 本機草稿帶回的分段回覆誤判
+
+使用者實站回報帶回PTT時顯示「上色中途停止…畫面或發文流程已改變」。錯誤字串由共用editor worker包裝Source flow而來；新增獨立合成案例先在舊程式得到相同內層錯誤：改標題後先回到原游標、稍後才執行Ctrl+]，或Ctrl+Y批次只完成部分行時，都可能形成完整但非最終的editor frame。舊Source flow把第一個fresh frame直接作為Clear／Empty最終回覆。原生框選上色的既有flow不是這次回報的路徑。
+
+Source flow改為在原來每步5秒／總180秒期限內等待raw開頭／模式及真正完整空白，等待不重送刪行、不先送正文，也不因收到中間frame延長期限。正文送完還要核對末行／末欄及原顯示／插入模式，不能把只寫入前幾字的editor frame當成功；末欄沿同一Screen核心計算中文／SGR／Tab，沒有加入第二套ANSI parser。來源完整baseline比對、scope／generation／stamp准入、手動取消、斷線及晚到結果保護維持。Source讀取／帶回改用草稿停止與部分修改訊息，Color flow保留原上色訊息。
+
+驗證：core14命令／2replay、desktop lib208／bin178／multi_instance10（各1個原有ignored）、JS371／Fluent、全targets Clippy／fmt及docs通過。核心涵蓋標題返回／部分刪行／部分寫入都先Wait、中文／SGR、兩種顯示×兩種插入模式、尾空行、真實範本改變與不支援內容仍拒絕。loopback peer在標題返回和第一次Ctrl+Y後先回一個完整畫面，80ms後才處理餘下指令；原本scope／重播／取消測試通過。另一peer只刪第一行後保留兩行，先150ms證明無正文／重送／復原指令，再由手動鍵取消，之後亦零自動輸入；錯誤為草稿停止，未再套用上色訊息。
+
+macOS真正Dioxus的drafts_restart通過：先原生Ctrl+P、讀範本、恢復自製三行中文／SGR稿、二次確認、帶回一次；使用上述含80ms完整中間畫面的peer，最終fixture逐byte相符，停在原生編輯器，未發表。Close acknowledged、listeners／connection／credentials／files完整join，probe程序已退出。只讀核對使用者現有App與不含內容的diagnostic狀態，沒有操作其實站稿件、登入或發文；實站同一份草稿仍待使用者以新版確認，不以合成結果代替。Windows／Linux原生本輪未驗。
+
+交付 `dist/macos-draft-transfer-fixed/PTTStella.app`（0.4.0-dev.1／arm64 release／strict ad-hoc，診斷置頂且不搶焦點），保留前一版部分選字、較大UI與固定字格。證據 `.local/verification/draft-transfer-stopped-20261104/`，含舊程式失敗、分段／取消及原生成功；查閱的官方來源副本已移除，僅留URL與hash。清除自己的隔離App／launcher及Cargo dev／release profiles，保留最新交付與使用者正在執行的macos-composer-grid-fixed（PID88351），exact paths、du／Cargo宣告量與filesystem free前後見cleanup.json。只提交develop，不推送或發佈。
+
 ## 2026-11-04 本機編輯器部分選字與固定可視字格
 
 預設由強制整行改成「文字選取」，可選同列中的幾個字與跨行文字；保留獨立「整行選取」和既有ANSI矩形模式。放大標題、按鈕、輸入欄與色票；正文以79欄、23列可視範圍及1:2半形字格依容器縮放，中文在三種顯示模式維持2格。字型載入完成及容器resize才重算尺寸，destroy撤銷observer／fallback listener。長文仍捲動，縮放／選取不改寫正文，不自動裁切或重排已有ANSI；帶回PTT的79欄／編碼bytes限制保留。色票按實際尺寸限制位置，沒有另寫ANSI parser。

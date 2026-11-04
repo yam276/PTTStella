@@ -52,6 +52,7 @@ pub struct Flow {
     deleting: usize,
     replacement: Option<Replacement>,
     changed: bool,
+    written_position: Option<(usize, usize)>,
 }
 impl Flow {
     pub fn new(
@@ -63,6 +64,7 @@ impl Flow {
         if !scope.valid() {
             return Err(crate::msg!("draft-template-unavailable"));
         }
+        let mut written_position = None;
         if let Some(r) = &replacement {
             if !r.baseline.scope.same(&scope) {
                 return Err(crate::msg!("draft-transfer-stopped"));
@@ -76,6 +78,24 @@ impl Flow {
             if title.is_empty() || title.len() > 60 || r.title.chars().any(char::is_control) {
                 return Err(crate::msg!("draft-title-invalid"));
             }
+            // Use the production terminal core for the final encoded column,
+            // including tabs, Chinese and SGR. A partial write is not completion.
+            let last = r.body.rsplit('\n').next().unwrap_or_default();
+            let source = if state.preview {
+                last.to_owned()
+            } else {
+                last.replace('\x1b', "*")
+            };
+            let mut screen = crate::screen::Screen::new(512, 1).map_err(str::to_owned)?;
+            screen.set_encoding(scope.site.encoding);
+            screen.feed(
+                &scope
+                    .site
+                    .encoding
+                    .encode(&source)
+                    .map_err(|e| e.to_string())?,
+            );
+            written_position = Some((r.body.split('\n').count() - 1, screen.frame().cursor.0));
         }
         Ok(Self {
             scope,
@@ -89,6 +109,7 @@ impl Flow {
             deleting: 0,
             replacement,
             changed: false,
+            written_position,
         })
     }
     pub fn changed(&self) -> bool {
@@ -98,6 +119,10 @@ impl Flow {
         self.revision = frame.revision;
         self.stage = stage;
         Ok(Action::Send(bytes))
+    }
+    fn raw_start(&self, frame: &Frame) -> bool {
+        editor_color::status(frame)
+            .is_some_and(|s| s.line == 0 && s.col == 0 && !s.preview && s.insert == self.insert)
     }
     fn menu(frame: &Frame) -> bool {
         crate::text::rows(frame).is_some_and(|r| {
@@ -228,9 +253,11 @@ impl Flow {
                 self.send(frame, Stage::Clear, b)
             }
             Stage::Clear => {
-                editor_color::status(frame)
-                    .filter(|s| s.line == 0 && s.col == 0 && !s.preview)
-                    .ok_or(crate::msg!("draft-transfer-stopped"))?;
+                if !self.raw_start(frame) {
+                    // Returning from the title prompt can redraw the previous
+                    // cursor before the queued document-Home is processed.
+                    return Ok(Action::Wait);
+                }
                 let n = (self.count - self.deleting).min(64);
                 self.deleting += n;
                 let mut b = vec![25; n];
@@ -246,8 +273,11 @@ impl Flow {
                 )
             }
             Stage::Empty => {
-                if !crate::drafts::empty_editor(frame) {
-                    return Err(crate::msg!("draft-transfer-stopped"));
+                if !self.raw_start(frame) || !crate::drafts::empty_editor(frame) {
+                    // Ctrl+Y batches may yield several complete redraws. None
+                    // permits writing until the whole template is gone. The
+                    // connection owner retains its original per-step deadline.
+                    return Ok(Action::Wait);
                 }
                 let r = self
                     .replacement
@@ -268,7 +298,13 @@ impl Flow {
                 self.send(frame, Stage::Written, b)
             }
             Stage::Written => {
-                editor_color::status(frame).ok_or(crate::msg!("draft-transfer-stopped"))?;
+                if editor_color::status(frame).is_none_or(|s| {
+                    Some((s.line, s.col)) != self.written_position
+                        || s.preview != self.preview
+                        || s.insert != self.insert
+                }) {
+                    return Ok(Action::Wait);
+                }
                 let r = self
                     .replacement
                     .as_ref()
@@ -354,6 +390,90 @@ mod tests {
         r.body = "malicious\x18".into();
         assert!(Flow::new(&n.frame(), scope(), Some(r)).is_err());
     }
+    #[test]
+    fn replacement_waits_for_title_return_and_each_delete_batch_to_finish() {
+        let mut native = fixture::Native::new(&["原範本", "第二行", "第三行"], "原標題", true);
+        let baseline = run(&mut native, None).unwrap();
+        let replacement = Replacement {
+            baseline,
+            title: "新標題".into(),
+            body: "中文\n\x1b[1;31m紅色\x1b[m".into(),
+        };
+        let mut flow = Flow::new(&native.frame(), scope(), Some(replacement.clone())).unwrap();
+        let mut title_waited = false;
+        let mut deletion_waited = false;
+        let mut writing_waited = false;
+        for _ in 0..100 {
+            match flow.next(&native.frame()).unwrap() {
+                Action::Send(bytes) => {
+                    if matches!(flow.stage, Stage::Clear) && !title_waited {
+                        // Native editor returns at the prior cursor first; Ctrl+]
+                        // is processed later. Both are complete terminal frames.
+                        let split = bytes.iter().position(|b| *b == 13).unwrap() + 1;
+                        native.accept(&bytes[..split]);
+                        assert!(matches!(flow.next(&native.frame()).unwrap(), Action::Wait));
+                        native.accept(&bytes[split..]);
+                        title_waited = true;
+                    } else if matches!(flow.stage, Stage::Empty) && !deletion_waited {
+                        // A redraw after only one Ctrl+Y is not a changed post.
+                        assert_eq!(bytes, [25, 25, 25, 12]);
+                        native.accept(&bytes[..1]);
+                        assert_eq!(native.editor.lines.len(), 2);
+                        assert!(matches!(flow.next(&native.frame()).unwrap(), Action::Wait));
+                        native.accept(&bytes[1..]);
+                        deletion_waited = true;
+                    } else if matches!(flow.stage, Stage::Written) && !writing_waited {
+                        native.accept(&bytes[..2]);
+                        assert!(matches!(flow.next(&native.frame()).unwrap(), Action::Wait));
+                        native.accept(&bytes[2..]);
+                        writing_waited = true;
+                    } else {
+                        native.accept(&bytes);
+                    }
+                }
+                Action::Wait => panic!("fixture supplied all remaining response bytes"),
+                Action::Done(snapshot) => {
+                    assert!(title_waited && deletion_waited && writing_waited);
+                    assert_eq!(snapshot.body, replacement.body);
+                    assert_eq!(native.title, "新標題");
+                    assert_eq!(
+                        native.editor.lines,
+                        replacement
+                            .body
+                            .split('\n')
+                            .map(|line| crate::encoding::encode(line).unwrap())
+                            .collect::<Vec<_>>()
+                    );
+                    return;
+                }
+            }
+        }
+        panic!("replacement did not terminate");
+    }
+
+    #[test]
+    fn transfer_restores_both_modes_and_waits_for_the_final_chinese_ansi_column() {
+        for preview in [false, true] {
+            for insert in [false, true] {
+                for body in ["中文\n\x1b[1;31m紅色\x1b[m", "中文\n"] {
+                    let mut native = fixture::Native::new(&["原範本"], "原標題", preview);
+                    native.editor.insert = insert;
+                    let baseline = run(&mut native, None).unwrap();
+                    let replacement = Replacement {
+                        baseline,
+                        title: "新標題".into(),
+                        body: body.into(),
+                    };
+                    assert_eq!(run(&mut native, Some(replacement)).unwrap().body, body);
+                    assert_eq!(
+                        (native.editor.preview, native.editor.insert),
+                        (preview, insert)
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn unknown_menu_and_incomplete_or_long_rows_are_not_guessed() {
         let mut n = fixture::Native::new(&[&"x".repeat(90)], "標題", false);

@@ -3232,3 +3232,124 @@ async fn local_draft_capture_and_replacement_require_native_post_scope_and_never
     );
     assert_eq!(c.shutdown().await.unwrap(), CloseOutcome::Acknowledged);
 }
+
+#[tokio::test]
+async fn draft_partial_clear_waits_without_writing_body_and_manual_input_still_cancels() {
+    let (listener, connection) = idle_local().await;
+    connection.keep_alive(false).unwrap();
+    let (held_tx, held_rx) = tokio::sync::oneshot::channel();
+    let peer = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut socket = tokio_tungstenite::accept_async(stream).await.unwrap();
+        for bytes in [
+            probe::password_page().unwrap(),
+            probe::navigation_page("main_menu").unwrap(),
+            probe::navigation_page("list").unwrap(),
+        ] {
+            socket.send(Message::Binary(bytes.into())).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(60)).await;
+        }
+        assert_eq!(
+            socket.next().await.unwrap().unwrap().into_data().as_ref(),
+            [16]
+        );
+        let mut native = crate::editor_source::fixture::Native::new(
+            &["原範本", "第二行", "第三行"],
+            "原標題",
+            true,
+        );
+        socket
+            .send(Message::Binary(native.wire().into()))
+            .await
+            .unwrap();
+        loop {
+            let bytes = timeout(Duration::from_secs(5), socket.next())
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap()
+                .into_data();
+            if bytes.as_ref() == [25, 25, 25, 12] {
+                native.accept(&[25]);
+                socket
+                    .send(Message::Binary(native.wire().into()))
+                    .await
+                    .unwrap();
+                assert!(
+                    timeout(Duration::from_millis(150), socket.next())
+                        .await
+                        .is_err(),
+                    "no body, retry or recovery command may follow a partial clear"
+                );
+                held_tx.send(()).unwrap();
+                assert_eq!(
+                    socket.next().await.unwrap().unwrap().into_data().as_ref(),
+                    [1]
+                );
+                assert!(
+                    timeout(Duration::from_millis(150), socket.next())
+                        .await
+                        .is_err(),
+                    "cancelled transfer must not resume"
+                );
+                assert!(matches!(socket.next().await, Some(Ok(Message::Close(_)))));
+                socket.flush().await.unwrap();
+                assert_eq!(
+                    native.editor.lines,
+                    vec![
+                        crate::encoding::encode("第二行").unwrap(),
+                        crate::encoding::encode("第三行").unwrap()
+                    ]
+                );
+                return;
+            }
+            native.accept(&bytes);
+            socket
+                .send(Message::Binary(native.wire().into()))
+                .await
+                .unwrap();
+        }
+    });
+    connection.connect().unwrap();
+    let view = wait(&connection, |v| {
+        !v.output_pending
+            && v.account.is_some()
+            && crate::board_navigation::current_board(&v.frame).is_some()
+    })
+    .await;
+    connection.input(view.generation, vec![16]).unwrap();
+    let view = wait(&connection, |v| {
+        !v.input_pending && !v.output_pending && crate::navigation::article_editor(&v.frame)
+    })
+    .await;
+    connection
+        .request_draft_source(view.stamp(), None)
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    let view = connection.updates.borrow().clone();
+    let baseline = view.draft_source.as_deref().unwrap().clone();
+    let replacement = crate::editor_source::Replacement {
+        baseline,
+        title: "新標題".into(),
+        body: "尚未送出的中文\n\x1b[31m紅色\x1b[m".into(),
+    };
+    let reply = connection
+        .request_draft_source(view.stamp(), Some(replacement))
+        .unwrap();
+    timeout(Duration::from_secs(5), held_rx)
+        .await
+        .unwrap()
+        .unwrap();
+    connection.input(view.generation, vec![1]).unwrap();
+    let error = reply.wait().await.unwrap_err();
+    assert_eq!(error, crate::msg!("draft-transfer-cancelled"));
+    // Let the peer prove no late automatic bytes arrive before closing it.
+    tokio::time::sleep(Duration::from_millis(180)).await;
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+    peer.await.unwrap();
+}

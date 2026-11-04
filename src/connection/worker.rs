@@ -87,6 +87,21 @@ enum EditorAction {
     Done(Option<crate::editor_source::Snapshot>),
 }
 impl EditorFlow {
+    fn stopped(&self) -> String {
+        match self {
+            Self::Color(_) => crate::msg!("editor-color-stopped"),
+            Self::Source(_) => crate::msg!("draft-transfer-cancelled"),
+        }
+    }
+    fn failure(&self, error: String) -> String {
+        if !self.changed() {
+            return error;
+        }
+        match self {
+            Self::Color(_) => crate::msg!("editor-color-partial", error = error),
+            Self::Source(_) => crate::msg!("draft-transfer-partial", error = error),
+        }
+    }
     fn changed(&self) -> bool {
         match self {
             Self::Color(f) => f.changed(),
@@ -243,7 +258,7 @@ impl Session {
     }
     fn stop_editor(&mut self) {
         if let Some(job) = self.editor_job.take() {
-            let _ = job.reply.send(Err(crate::msg!("editor-color-stopped")));
+            let _ = job.reply.send(Err(job.flow.stopped()));
             self.dirty = true;
         }
     }
@@ -257,7 +272,7 @@ impl Session {
             || job.steps >= 16384
             || self.view.phase != Phase::Connected
         {
-            let _ = job.reply.send(Err(crate::msg!("editor-color-stopped")));
+            let _ = job.reply.send(Err(job.flow.stopped()));
             self.dirty = true;
             return;
         }
@@ -277,7 +292,7 @@ impl Session {
                         crate::input::MAX_INPUT_BYTES
                     }
                 {
-                    let _ = job.reply.send(Err(crate::msg!("editor-color-stopped")));
+                    let _ = job.reply.send(Err(job.flow.stopped()));
                     return;
                 }
                 job.steps += 1;
@@ -301,11 +316,7 @@ impl Session {
                 self.dirty = true;
             }
             Err(error) => {
-                let _ = job.reply.send(Err(if job.flow.changed() {
-                    crate::msg!("editor-color-partial", error = error)
-                } else {
-                    error
-                }));
+                let _ = job.reply.send(Err(job.flow.failure(error)));
                 self.dirty = true;
             }
         }
