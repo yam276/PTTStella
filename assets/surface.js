@@ -4,6 +4,7 @@ const tr=createSurfaceI18n(localization,fluent);
 document.documentElement.lang=localization.payload.language;
 const canvas=document.getElementById("screen"), keyboard=document.getElementById("keyboard");
 const surface=document.getElementById("surface"), viewport=document.querySelector(".workspace");
+const navigationHost=viewport.parentElement;
 const chrome=document.getElementById("chrome"), toolbar=chrome.querySelector("header");
 const minus=document.getElementById("zoom-out"), plus=document.getElementById("zoom-in");
 const fit=document.getElementById("zoom-fit"), level=document.getElementById("zoom-level");
@@ -257,6 +258,23 @@ function positionKeyboard() {
 function focus() { if(document.activeElement!==keyboard) keyboard.focus({preventScroll:true}); }
 function restoreEditingFocus(){tools?.close();keyboard.blur();focus();}
 function restoreSettingsPanelFocus(){if(!document.getElementById("font-dialog").open)restoreEditingFocus();}
+function navigationPointer(e,handler) {
+    // Only the BBS scrollport and bare host margins belong to browsing. Tools,
+    // dialogs and other siblings must keep their own pointer/default actions.
+    if(e.target===navigationHost||viewport.contains(e.target))handler(e);
+    else if(e.type==="pointermove")leaveLink();
+}
+function insideScrollport(e) {
+    const bounds=viewport.getBoundingClientRect();
+    return e.clientX>=bounds.left&&e.clientX<bounds.left+viewport.clientWidth&&e.clientY>=bounds.top&&e.clientY<bounds.top+viewport.clientHeight;
+}
+function navigationClient(e) {
+    const bounds=navigationHost.getBoundingClientRect();
+    if(e.clientX<bounds.left||e.clientX>=bounds.left+navigationHost.clientWidth||e.clientY<bounds.top||e.clientY>=bounds.top+navigationHost.clientHeight)return false;
+    const port=viewport.getBoundingClientRect();
+    const onPort=e.clientX>=port.left&&e.clientX<(port.right??port.left+viewport.clientWidth)&&e.clientY>=port.top&&e.clientY<(port.bottom??port.top+viewport.clientHeight);
+    return !onPort||insideScrollport(e);
+}
 function pointerdown(e) {
     pendingReadingMove=null;
     if(stationMouse.down(e))return;
@@ -264,8 +282,7 @@ function pointerdown(e) {
     released=null;
     if(blocked()||latest?.output_pending) return;
     policy("reset",e);
-    const bounds=viewport.getBoundingClientRect();
-    if(e.clientX>=bounds.left+viewport.clientWidth || e.clientY>=bounds.top+viewport.clientHeight) return;
+    if(!navigationClient(e))return;
     // Prevent the scroll container's default focus step from overriding ours.
     e.preventDefault(); focus(); clearSelection();
     const point=cellAt(e,false);
@@ -282,7 +299,7 @@ function pointerdown(e) {
 function cellAt(e,clamp) {
     if(!grid||!latest) return null;
     const bounds=surface.getBoundingClientRect();
-    if(!clamp&&(e.clientX<bounds.left||e.clientX>=bounds.right||e.clientY<bounds.top||e.clientY>=bounds.bottom)) return null;
+    if(!clamp&&(!insideScrollport(e)||e.clientX<bounds.left||e.clientX>=bounds.right||e.clientY<bounds.top||e.clientY>=bounds.bottom)) return null;
     const px=(e.clientX-bounds.left)*grid.ratio,py=(e.clientY-bounds.top)*grid.ratio;
     const locate=(value,count,edge)=>{let at=0;while(at+1<count&&value>=edge(at+1))at++;return at;};
     const row=grid.rowAt?grid.rowAt(py,clamp):locate(py,latest.frame.rows,grid.y);
@@ -407,15 +424,16 @@ function hasPageEdges(context) {
 }
 function pointerView() {
     if(!hasPageEdges(latest?.navigation)&&latest?.navigation.kind!=="continue_prompt")return null;
-    const bounds=surface.getBoundingClientRect(),visible=viewport.getBoundingClientRect();
+    const bounds=surface.getBoundingClientRect(),visible=viewport.getBoundingClientRect(),host=navigationHost.getBoundingClientRect();
     return JSON.stringify([latest.presentation,latest.navigation.kind,latest.article?.id,viewport.scrollTop,viewport.scrollLeft,
-        viewport.clientWidth,viewport.clientHeight,bounds.left,bounds.top,bounds.width,bounds.height,visible.top,visible.left]);
+        viewport.clientWidth,viewport.clientHeight,bounds.left,bounds.top,bounds.width,bounds.height,visible.top,visible.left,host.left,host.top,navigationHost.clientWidth,navigationHost.clientHeight]);
 }
 function navigationPageAt(point,clientY,region,halves,viewportEdges=false) {
     if(point&&(point.row<region.first||point.row>=region.last)||!point&&!Number.isFinite(clientY))return null;
-    const bounds=surface.getBoundingClientRect(),visible=viewport.getBoundingClientRect();
+    const area=viewportEdges==="host"?navigationHost:viewport;
+    const bounds=surface.getBoundingClientRect(),visible=area.getBoundingClientRect();
     const top=viewportEdges?visible.top:Math.max(visible.top,bounds.top+grid.y(region.first)/grid.ratio);
-    const bottom=viewportEdges?visible.top+viewport.clientHeight:Math.min(visible.top+viewport.clientHeight,bounds.top+grid.y(region.last)/grid.ratio);
+    const bottom=viewportEdges?visible.top+area.clientHeight:Math.min(visible.top+viewport.clientHeight,bounds.top+grid.y(region.last)/grid.ratio);
     const y=clientY??bounds.top+(grid.y(point.row)+grid.bottom(point.row))/2/grid.ratio;
     if(y<top||y>=bottom)return null;
     const edge=Math.min((bottom-top)/4,Math.max(16,Math.min(32,(grid.bottom(region.first)-grid.y(region.first))/grid.ratio)));
@@ -460,13 +478,17 @@ function hitAt(point,clientY) {
 // physical position; text selection and the image context menu keep their owners.
 function navigationMarginAt(event) {
     if(!grid||!hasPageEdges(latest?.navigation))return null;
-    const visible=viewport.getBoundingClientRect(),bounds=surface.getBoundingClientRect();
+    if(!navigationClient(event))return null;
+    const port=viewport.getBoundingClientRect(),surfaceBounds=surface.getBoundingClientRect();
+    // A zoomed/scrolled document can extend behind the host margins. Use only
+    // its visible scrollport intersection; hidden cells never become targets.
+    const bounds={left:Math.max(port.left,surfaceBounds.left),right:Math.min(port.left+viewport.clientWidth,surfaceBounds.right),
+        top:Math.max(port.top,surfaceBounds.top),bottom:Math.min(port.top+viewport.clientHeight,surfaceBounds.bottom)};
     const {clientX:x,clientY:y}=event;
-    if(x<visible.left||x>=visible.left+viewport.clientWidth||y<visible.top||y>=visible.top+viewport.clientHeight)return null;
     const outsideY=y<bounds.top||y>=bounds.bottom;
     if(!outsideY&&x>=bounds.left&&x<bounds.right)return null;
     // Keep Home/End at the physical viewport edges, including the corners.
-    const edge=navigationPageAt(null,y,{first:0,last:latest.frame.rows-1},false,true);
+    const edge=navigationPageAt(null,y,{first:0,last:latest.frame.rows-1},false,"host");
     if(edge)return edge;
     if(outsideY)return {kind:"page",action:y<bounds.top?"previous_page":"next_page"};
     if(x<bounds.left)return navigationBackRegion(latest.navigation,latest.article)?{kind:"back"}:null;
@@ -474,6 +496,7 @@ function navigationMarginAt(event) {
     return latest.navigation.kind!=="command_help"?{kind:"page",action:"forward"}:null;
 }
 function pointerHit(point,event) {
+    if(!navigationClient(event))return null;
     if(!point&&!blocked()&&!dragging?.moved&&stationMouse.local()&&canNavigate()){
         const margin=navigationMarginAt(event);if(margin)return margin;
     }
@@ -493,6 +516,7 @@ function setHover(point,redraw=true,preview=true,event=null) {
     hoveredRow=['article','menu'].includes(hit?.kind)?{row:hit.row,start:0,kind:hit.kind}:null;
     surface.dataset.pointerAction=hit?.kind==="page"?hit.action:hit?.kind||"none";
     viewport.dataset.pointerAction=surface.dataset.pointerAction;
+    navigationHost.dataset.pointerAction=surface.dataset.pointerAction;
     surface.style.cursor=["back","page"].includes(hit?.kind)?"":hit?"pointer":"default";
     surface.title=index>=0?latest.links[index].url:"";
     if(preview)previewHover(index);
@@ -875,12 +899,12 @@ const bindings=[...replyNavigator.bindings,...draftUi.bindings,...articleUpdates
     [keyboard,"beforeinput",beforeinput],
     [keyboard,"blur",cancelComposition],
     [keyboard,"compositionstart",compositionstart],[keyboard,"compositionend",compositionend],
-    [keyboard,"paste",paste],[viewport,"pointerdown",pointerdown],
-    [viewport,"pointermove",pointermove],[viewport,"pointerup",pointerup],
-    [viewport,"click",click],[viewport,"dblclick",doubleclick],
+    [keyboard,"paste",paste],
+    ...[["pointerdown",pointerdown],["pointermove",pointermove],["pointerup",pointerup],["click",click],["dblclick",doubleclick]]
+        .map(([event,handler])=>[navigationHost,event,e=>navigationPointer(e,handler)]),
     [viewport,"pointercancel",pointercancel],[viewport,"lostpointercapture",lostcapture],
     [selectAll,"click",selectPage],[document,"copy",copy],
-    [viewport,"contextmenu",openContextMenu],[surface,"pointerleave",leaveLink],
+    [viewport,"contextmenu",openContextMenu],[navigationHost,"pointerleave",leaveLink],
     [pasteSend,"click",confirmPaste],[pasteCancel,"click",cancelPaste],[pasteDialog,"cancel",cancelPaste],
     [exportButton,"click",exportScreen],[exportRows,"click",exportSelected],[copyPng,"click",copyPageImage],[copyRowsPng,"click",copySelectedImage],
     [keepAlive,"click",toggleKeepAlive],[stationMouseButton,"click",toggleStationMouse],

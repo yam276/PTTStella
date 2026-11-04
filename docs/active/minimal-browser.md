@@ -1,6 +1,17 @@
 # PTTStella 最簡 terminal 計畫
 
 
+## 2026-11-04 全螢幕網頁文章外側黑邊修正
+
+使用者實測指出推文左側／時間欄右側仍不能點。前一筆四邊留白只涵蓋workspace內；網頁文章為維持BBS長寬會把workspace縮在main中央，全螢幕真正黑邊是main本身，因此既沒有事件也沒有cursor。改由main單一owner接收pointerdown／move／up／click／dblclick，明確只路由裸main與workspace子樹，工具／通知／對話框不攔。viewport仍保持原本固定長寬與scroll／capture owner；不靠放大文章區修正。游標樣式加到main，外側Home／End以host邊緣判定。cellAt與圖片命中拒絕scrollbar及scrollport裁切外的隱藏內容，幾何租約另含host尺寸／位置，fullscreen／移窗會撤銷舊點擊。
+
+離線JS365（新增5項真實host／fitted viewport分離的回歸）、core14命令／2replay、desktop lib204／bin178（各1個原有ignored）、Clippy與docs通過。新測試涵蓋長文已捲動、左右外層、zoom內容藏在黑邊後、兄弟UI不攔截、不重複送鍵、scrollbar與host resize／move／來源保護；前一輪測試把viewport當整個host，沒有覆蓋此幾何，這次已補正。
+
+真實IAB DOM使用production函式與同一root bindings、CSS，以可信CDP點擊驗證1280×720及1920×1080。固定scrollport左右各留60px：右黑邊scroll由900到1575，左黑邊一次Back；1920×1080右黑邊到2520末端、左邊累計Back2，外側Home=0／End=2520；Tool按鈕只累計toolClicks1，selection始終0，左右computed cursor分別forward／back。fixture初次漏載doubleclick而未初始化，補上同一生產函式後重跑；保留唯一fixture與報告。這證明瀏覽器事件／實際DOM，不冒充Rust peer、macOS原生全螢幕或實體滑鼠；原生座標工具先前的noWindowsAvailable仍未解，故App內實體驗收待使用者確認。未連PTT、未操作使用者正在閱讀的App。
+
+交付 `dist/macos-fullscreen-margin-fixed/PTTStella.app`（0.4.0-dev.1／macOS arm64 release／ad-hoc，診斷置頂不搶焦點），保留圖片縮放／拖曳功能。證據 `.local/verification/fullscreen-margin-fix-20261104/`。使用者正用PID75912的 `dist/macos-media-pan-zoom/PTTStella.app`，即使已被新版整合也保留，不關閉或刪除；上一個完成原生驗收的本機編輯器App亦保留。自己的Cargo profiles依原生clean清理，exact paths與空間前後記cleanup.json。僅develop提交，不推送／發佈。
+
+
 ## 2026-11-04 完整圖片預覽滾輪縮放與拖曳
 
 使用者要求完整圖片視窗可滾輪放大／縮小及左鍵拖曳。media單一owner以游標位置作縮放錨點，pixel／line／page delta同一有界倍率、1%～800%，保留工具列原尺寸／符合。只有已解碼的完整圖片攔截垂直滾輪；超出view時左鍵capture平移及grab／grabbing游標，scrollbar／修飾鍵／右鍵保留各自操作。切換、關閉、重試、失焦、隱藏、resize及capture取消撤銷拖曳。只改CSS及scroll，不重抓／重建Canvas／重啟GIF；hover與影片不接手勢。原圖／GIF／四項圖片右鍵及Esc原路徑不變。
