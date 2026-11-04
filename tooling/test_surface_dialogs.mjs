@@ -25,7 +25,7 @@ function environment(file,factory){
         tick(){const work=[...timers.values()];timers.clear();for(const fn of work)fn();},
     };
 }
-const display={ascii_font:"ASCII",cjk_font:"中文",font_size:20,baseline:20};
+const display={ascii_font:"ASCII",cjk_font:"中文",font_size:20,baseline:20,font_width:100};
 test("the production clearSelection sends a scoped revocation before dropping its cache",()=>{
     const packetSource=readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8");
     const revoke=vm.runInNewContext(packetSource+"\nrevokeSurfaceSelection");
@@ -47,7 +47,7 @@ test("the production clearSelection sends a scoped revocation before dropping it
     vm.runInNewContext(source.slice(start,end)+"\nclearSelection();",context);
     assert.equal(events.length,0);
 });
-const openData=()=>({language:"zh-TW",tools_opacity:100,tools_access:{right_click_menu:true,show_floating_button:true},profile:{fonts:{kind:"platform_default"}},values:{...display},defaults:{...display},presets:{},sample:{settings:{...display}},warning:null});
+const openData=()=>({language:"zh-TW",tools_opacity:100,tools_access:{right_click_menu:true,show_floating_button:true},profile:{fonts:{kind:"platform_default"}},values:{...display},defaults:{...display,ascii_font:'MingLiU',cjk_font:'MingLiU',font_size:23},default_profile:{fonts:{kind:'preset',preset:'windows_classic'},font_size:23,baseline:20,font_width:100},platform:{...display},presets:{},sample:{settings:{...display}},warning:null});
 test("trusted tool edits autosave, coalesce while writing, and retain failures for retry",async()=>{
     const env=environment("surface-settings.js","createSettingsDialog"),ui=env.create();
     await ui.open(openData());env.node("tools-show-ball").checked=false;
@@ -153,7 +153,7 @@ test("each account policy survives selection and is sent explicitly on save",()=
 
 test("the tagged router delivers independent wire examples once and rejects legacy/unknown envelopes",()=>{
     const create=vm.runInNewContext(readFileSync(new URL("../assets/surface-packets.js",import.meta.url),"utf8")+"\ncreateSurfaceRouter");
-    const kinds=["localization","diagnostics","update_status","article_updates","station_mouse_rejected","paint","notice","surface_probe","filters_open","filters_result","login_result","keyboard_state",
+    const kinds=["localization","draft","diagnostics","update_status","article_updates","station_mouse_rejected","paint","notice","toast","surface_probe","filters_open","filters_result","login_result","keyboard_state",
         "hover_settings","tools_opacity","tools_access","sites_open","sites_result","media_hover","hover_reset","hover_rejected","media_open","media_image","media_error","media_external",
         "media_reset","reading_move","inline_open","inline_image","inline_error","inline_reset","settings_visibility","settings_close","settings_open","font_catalog","font_preview","profile_result","settings_saved","selection","paste_result","input_rejected","navigation_result","destination_result","recent_boards","bookmarks_open","bookmarks_result","archive","bookmark_capture","link_result","export_result"];
     const calls=[],handlers=Object.fromEntries(kinds.map(kind=>[kind,payload=>calls.push({kind,payload})]));
@@ -531,4 +531,34 @@ test("update checks and download actions require an open trusted settings dialog
     ui.updateStatus({checking:true,available:null,up_to_date:false});
     assert.equal(env.node("update-status").textContent,message);
     const final=env.sent.length;env.fire("update-check");env.fire("update-open");assert.equal(env.sent.length,final);
+});
+
+test('text width autosaves and previews, preserves presets, and font-only reset leaves other preferences intact',async()=>{
+ const env=environment('surface-settings.js','createSettingsDialog'),ui=env.create({page:()=> 'appearance'}),data=openData();
+ data.presets.macos={ascii_font:'Menlo',cjk_font:'PingFang TC',font_size:20,baseline:20,font_width:100};
+ await ui.open(data);env.node('interface-language').value='en-US';env.node('article-mode').value='terminal';env.node('tools-opacity').value='40';
+ env.node('font-width').value='120';env.fire('font-width','input');env.tick();
+ const preview=env.sent.find(p=>p.kind==='settings_preview');assert.equal(preview.values.font_width,120);
+ assert.equal(env.sent.at(-1).values.font_width,120);ui.saved({status:'saved'});
+ env.node('font-preset').value='macos';env.fire('font-preset','change');env.tick();
+ assert.equal(Number(env.node('font-width').value),120);assert.equal(env.sent.at(-1).values.font_width,120);ui.saved({status:'saved'});
+ env.fire('font-reset','click',false);env.tick();assert.equal(Number(env.node('font-width').value),120);
+ env.node('font-size').value='18';env.node('font-baseline').value='19';env.fire('font-reset');env.tick();
+ const reset=env.sent.at(-1);assert.equal(reset.values.font_width,100);assert.equal(reset.values.font_size,23);assert.equal(reset.values.baseline,20);
+ assert.equal(reset.values.fonts.kind,'preset');assert.equal(reset.values.fonts.preset,'windows_classic');assert.equal(reset.language,'en-US');assert.equal(reset.article_mode,'terminal');assert.equal(reset.tools_opacity,40);
+ ui.saved({status:'saved'});ui.destroy();
+});
+
+
+test('new classic defaults and an explicit platform choice keep separate font intent',async()=>{
+ const env=environment('surface-settings.js','createSettingsDialog'),ui=env.create(),data=openData();
+ data.profile=data.default_profile;data.values={...data.defaults};
+ await ui.open(data);
+ assert.equal(env.node('font-preset').value,'windows_classic');
+ assert.equal(Number(env.node('font-size').value),23);
+ env.node('font-preset').value='platform';env.fire('font-preset','change');env.tick();
+ assert.equal(env.node('font-ascii').value,'ASCII');assert.equal(env.node('font-cjk').value,'中文');
+ assert.equal(Number(env.node('font-size').value),23);
+ assert.equal(env.sent.at(-1).values.fonts.kind,'platform_default');
+ ui.saved({status:'saved'});ui.destroy();
 });

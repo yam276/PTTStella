@@ -208,3 +208,10 @@ test('a list title uses Bookmarks at the pointer and retains its row even when i
  f.openContextMenu({isTrusted:true,shiftKey:false,preventDefault(){}});assert.deepEqual(calls,['fan']);assert.deepEqual(chosen,[3]);assert.equal(menus.length,0);
  f.toolAccess.right_click_menu=false;f.openContextMenu({isTrusted:true,shiftKey:false,preventDefault(){}});assert.equal(menus.at(-1).articleRow,3);
 });
+
+
+test('reply locator belongs only to ordinary web article context and never replaces image, ID, selection or editor actions',()=>{
+ assert.equal(contextMenuItems({...base,reading:true,replyNavigation:true}).get('reply-navigation'),true);
+ for(const patch of [{selection:true},{word:{id:'Alice'}},{picture:true},{link:0},{editor:true},{reading:false}])assert.equal(contextMenuItems({...base,reading:true,replyNavigation:true,...patch}).has('reply-navigation'),false);
+ assert.equal(contextMenuItems({...base,reading:true,replyNavigation:true,local:false}).get('reply-navigation'),false);
+});

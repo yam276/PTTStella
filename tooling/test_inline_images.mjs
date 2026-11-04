@@ -208,7 +208,7 @@ test('production draw never temporarily collapses a cached scroll container to t
     const viewport={dataset:{},style:{},scrollTop:500,getBoundingClientRect:()=>({width:960,height:576}),parentElement:{getBoundingClientRect:()=>({width:960,height:576})}};
     let height=1600,layoutCalls=0;
     const style={set height(value){height=parseFloat(value);if(height<viewport.scrollTop+576)viewport.scrollTop=Math.max(0,height-576);},get height(){return height+'px';}};
-    const context={articleFind:{update(){},highlighter:()=>null},devicePixelRatio:1,viewport,surface:{style},canvas:{width:960,height:576},level:{},zoom:1,draws:0,hoveredLink:-1,
+    const context={replyNavigator:null,articleFind:{update(){},highlighter:()=>null},devicePixelRatio:1,viewport,surface:{style},canvas:{width:960,height:576},level:{},zoom:1,draws:0,hoveredLink:-1,
         render:()=>({x:c=>c*12,y:r=>r*24}),inlineImages:{layout(packet,base){layoutCalls++;assert.equal(viewport.scrollTop,500);return base;}},
         positionKeyboard(){},drawSelection(){},drawNavigationMarker(){}};
     vm.runInNewContext(surface.slice(surface.indexOf('function draw(packet)'),surface.indexOf('function repaint()')),context);
@@ -224,7 +224,7 @@ test('production draw never temporarily collapses a cached scroll container to t
 test('web reading keeps the fitted source BBS viewport through full loading, images, zoom and host resize',()=>{
     const source=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
     const host={width:1040,height:740},viewport={dataset:{},style:{},getBoundingClientRect:()=>host,parentElement:{getBoundingClientRect:()=>host}};
-    const context={articleFind:{update(){},highlighter:()=>null},devicePixelRatio:2,viewport,surface:{style:{}},canvas:{},level:{},zoom:1,draws:0,hoveredLink:-1,
+    const context={replyNavigator:null,articleFind:{update(){},highlighter:()=>null},devicePixelRatio:2,viewport,surface:{style:{}},canvas:{},level:{},zoom:1,draws:0,hoveredLink:-1,
         render:()=>({}),inlineImages:{layout:(packet,base)=>base},positionKeyboard(){},drawSelection(){},drawNavigationMarker(){}};
     vm.runInNewContext(source.slice(source.indexOf('function draw(packet)'),source.indexOf('function repaint()')),context);
     const draw=rows=>context.draw({article:{id:1},frame:{rows,cols:80},source_frame:{rows:24,cols:80}});

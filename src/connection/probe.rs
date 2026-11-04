@@ -22,6 +22,8 @@ pub(super) enum Scenario {
     Articles,
     Bookmarks,
     BookmarkList,
+    ReplyNavigation,
+    Drafts,
     BookmarkArchive {
         headerless: bool,
     },
@@ -730,7 +732,8 @@ pub(super) async fn serve(
     }
     let deadline = if matches!(
         scenario,
-        Scenario::Filters
+        Scenario::Drafts
+            | Scenario::Filters
             | Scenario::EditorColor
             | Scenario::ArticleSwitch
             | Scenario::LiveUpdates { .. }
@@ -745,6 +748,7 @@ pub(super) async fn serve(
             | Scenario::Login
             | Scenario::Login2fa
             | Scenario::Surface
+            | Scenario::ReplyNavigation
             | Scenario::ControlInput
             | Scenario::EditorClipboard
             | Scenario::PointerRows
@@ -769,6 +773,53 @@ pub(super) async fn serve(
             .send(Message::Binary(bytes.into()))
             .await
             .map_err(|e| e.to_string())?;
+        if matches!(scenario,Scenario::Drafts) {
+            tokio::time::sleep(Duration::from_millis(120)).await;
+            socket.send(Message::Binary(navigation_page("main_menu")?.into())).await.map_err(|e|e.to_string())?;
+            tokio::time::sleep(Duration::from_millis(120)).await;
+            socket.send(Message::Binary(navigation_page("list")?.into())).await.map_err(|e|e.to_string())?;
+            match socket.next().await {
+                Some(Ok(Message::Close(_)))=>return socket.flush().await.map_err(|e|e.to_string()),
+                Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==[16]=>{},
+                _=>return Err("draft probe expected explicit post start or Close".into()),
+            }
+            let mut native=crate::editor_source::fixture::Native::new(&["看板預設格式","\x1b[32m請依格式填寫\x1b[m",""],"[測試] 範本標題",true);
+            socket.send(Message::Binary(native.wire().into())).await.map_err(|e|e.to_string())?;
+            while let Some(message)=socket.next().await {
+                match message.map_err(|e|e.to_string())? {
+                    Message::Close(_)=>return socket.flush().await.map_err(|e|e.to_string()),
+                    Message::Binary(bytes)=>{
+                        // The station can flush between commands from one write.
+                        // Exercise complete intermediate editor redraws, rather
+                        // than applying title-return / Ctrl+Y batches atomically.
+                        let split = if bytes.iter().all(|b| matches!(b,25|12)) && bytes.contains(&25) {
+                            Some(1)
+                        } else if bytes.first()==Some(&25) {
+                            bytes.iter().position(|b| *b==13).map(|i|i+1)
+                        } else { None };
+                        if let Some(n)=split.filter(|n| *n<bytes.len()) {
+                            native.accept(&bytes[..n]);
+                            socket.send(Message::Binary(native.wire().into())).await.map_err(|e|e.to_string())?;
+                            tokio::time::sleep(Duration::from_millis(80)).await;
+                            native.accept(&bytes[n..]);
+                        } else { native.accept(&bytes); }
+                        socket.send(Message::Binary(native.wire().into())).await.map_err(|e|e.to_string())?;
+                    },
+                    _=>return Err("draft probe rejects non-editor messages".into())
+                }
+            }
+            return Err("draft peer did not receive Close".into());
+        }
+        if matches!(scenario,Scenario::ReplyNavigation) {
+            tokio::time::sleep(Duration::from_millis(120)).await;
+            socket.send(Message::Binary(navigation_page("main_menu")?.into())).await.map_err(|e|e.to_string())?;
+            tokio::time::sleep(Duration::from_millis(120)).await;
+            socket.send(Message::Binary(reply_navigation_page()?.into())).await.map_err(|e|e.to_string())?;
+            return match socket.next().await {
+                Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
+                _=>Err("reply navigation is local only; peer rejects all station keys".into()),
+            };
+        }
         if matches!(scenario, Scenario::Window) {
             return window(&mut socket).await;
         }
@@ -1123,6 +1174,25 @@ where
         return Err("unknown screen received unintended navigation input".into());
     }
     Ok(())
+}
+
+pub(super) fn reply_navigation_page() -> Result<Vec<u8>, String> {
+    let mut page = String::from(
+        "\x1b[2J\x1b[H 作者 Alice (Synthetic Author) 看板 Stella\x1b[2;1H標題 [測試] Blue and gold reply navigation - local only",
+    );
+    for (row, id) in [
+        (4, "Alice"),
+        (5, "Alice"),
+        (7, "StellaTest"),
+        (8, "Bob"),
+        (11, "Alice"),
+        (15, "StellaTest"),
+        (19, "Alice"),
+    ] {
+        page.push_str(&format!("\x1b[{row};1H\x1b[1;37m推 \x1b[33m{id}\x1b[0;33m: Synthetic reply at row {row:02}\x1b[{row};67H\x1b[0m 11/03 12:34"));
+    }
+    page.push_str("\x1b[23;1H\x1b[0mEND OF LOCAL ARTICLE\x1b[24;1H\x1b[30;47m\x1b[2K瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[?25l");
+    crate::encoding::encode(&page).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

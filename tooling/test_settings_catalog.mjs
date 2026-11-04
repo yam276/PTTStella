@@ -14,7 +14,7 @@ test('both UI languages find independently expected Chinese, English, case and m
  }
 });
 test('settings search contains only the fixed product index and closed navigation targets',()=>{
- const entries=settingsCatalog(translator('en-US'));assert.equal(entries.length,21);
+ const entries=settingsCatalog(translator('en-US'));assert.equal(entries.length,23);
  assert.ok(entries.every(entry=>['general','appearance','input','media','sites','filters','account','about'].includes(entry.page)));
  assert.equal(searchSettings(entries,'<img src=x onerror=alert(1)>').length,0);
  assert.equal(searchSettings(entries,'x'.repeat(10000)).length,0);
@@ -89,4 +89,13 @@ test('closing a nonmodal account panel restores the visible search field after b
  navigation.changed(null,'account');assert.equal(closed,1);assert.equal(focused,1);
  search.closest=()=>({hidden:true});account.open=true;navigation.changed('sites','account');assert.equal(focused,1);
  ui.destroy();
+});
+
+test('text width and font reset are searchable appearance controls',()=>{
+ for(const language of ['zh-TW','en-US']){
+  const entries=settingsCatalog(translator(language));
+  for(const [query,id] of [['字距','font-width'],['letter spacing','font-width'],['reset font','font-reset']]){
+   assert.ok(searchSettings(entries,query).some(e=>e.id===id&&e.page==='appearance'),query);
+  }
+ }
 });

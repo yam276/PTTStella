@@ -52,6 +52,9 @@ pub struct View {
     pub input_pending: bool,
     pub login_pending: bool,
     pub login_guidance: crate::login::Guidance,
+    pub account: Option<String>,
+    pub draft_post_scope: Option<crate::drafts::Scope>,
+    pub draft_source: Option<std::sync::Arc<crate::editor_source::Snapshot>>,
     pub destination: NavigationProgress,
     pub board_visit: Option<crate::recent_boards::BoardVisit>,
     pub frame: Frame,
@@ -92,6 +95,11 @@ enum Command {
     Input {
         generation: u64,
         bytes: Vec<u8>,
+    },
+    DraftSource {
+        stamp: Stamp,
+        replacement: Option<crate::editor_source::Replacement>,
+        reply: oneshot::Sender<Result<(), String>>,
     },
     EditorColor {
         stamp: Stamp,
@@ -182,6 +190,9 @@ impl Connection {
             input_pending: false,
             login_pending: false,
             login_guidance: crate::login::Guidance::Idle,
+            account: None,
+            draft_post_scope: None,
+            draft_source: None,
             destination: NavigationProgress::Idle,
             board_visit: None,
             frame: screen.frame(),
@@ -294,6 +305,17 @@ impl Connection {
             probe::switch_page('A', false)?,
             probe::Scenario::ArticleSwitch,
         )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    pub fn start_drafts_probe() -> Result<Self, String> {
+        let connection = Self::start_owned_probe(probe::password_page()?, probe::Scenario::Drafts)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    pub fn start_reply_navigation_probe() -> Result<Self, String> {
+        let connection =
+            Self::start_owned_probe(probe::password_page()?, probe::Scenario::ReplyNavigation)?;
         connection.keep_alive(false)?;
         Ok(connection)
     }
@@ -565,6 +587,24 @@ impl Connection {
             deadline: tokio::time::Instant::now() + Duration::from_secs(6),
             expired: crate::msg!("navigation-timeout"),
             closed: crate::msg!("navigation-service-unavailable"),
+        })
+    }
+    pub fn request_draft_source(
+        &self,
+        stamp: Stamp,
+        replacement: Option<crate::editor_source::Replacement>,
+    ) -> Result<Reply, String> {
+        let (reply, answer) = oneshot::channel();
+        self.enqueue(Command::DraftSource {
+            stamp,
+            replacement,
+            reply,
+        })?;
+        Ok(Reply {
+            answer,
+            deadline: tokio::time::Instant::now() + Duration::from_secs(185),
+            expired: crate::msg!("draft-transfer-stopped"),
+            closed: crate::msg!("draft-transfer-stopped"),
         })
     }
     pub fn request_editor_color(

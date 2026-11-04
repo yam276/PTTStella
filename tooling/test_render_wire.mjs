@@ -42,3 +42,11 @@ test('typed compact transport expands every paint consumer before its handler',(
     assert.throws(()=>router({kind:'paint',payload:{...paint,source_frame:{...fixture.compact,cols:0}}}));
     assert.equal(calls.length,good);
 });
+
+
+test('production router has a handler for every admitted packet kind',()=>{
+ const kinds=source.match(/const kinds=\[([\s\S]*?)\];/)[1].match(/"([^"]+)"/g).map(v=>JSON.parse(v));
+ const surface=readFileSync(new URL('../assets/surface.js',import.meta.url),'utf8');
+ const handlers=surface.slice(surface.indexOf('const route=createSurfaceRouter({'),surface.indexOf('const lifetime=',surface.indexOf('const route=createSurfaceRouter({')));
+ for(const kind of kinds)assert.match(handlers,new RegExp('\\b'+kind+'\\s*[:,]'),'missing production handler '+kind);
+});

@@ -12,12 +12,15 @@ use serde::Serialize;
 
 #[derive(Clone, Serialize)]
 pub(super) struct Paint {
+    pub(super) draft_scope: Option<pttstella::drafts::Scope>,
+    pub(super) draft_post_scope: Option<pttstella::drafts::Scope>,
     #[serde(skip)]
     pub(super) replies: Vec<filters::Push>,
     pub(super) account_words: Vec<filters::AccountWord>,
     pub(super) reply_rows: Vec<usize>,
     pub(super) reply_author_words: Vec<usize>,
     pub(super) reply_focus: Option<String>,
+    pub(super) reply_navigation: pttstella::reply_navigation::Index,
     pub(super) article_mode: pttstella::settings::ArticleMode,
     pub(super) article_boundary_navigation: bool,
     pub(super) article: Option<super::article_cache::Reading>,
@@ -83,6 +86,8 @@ pub(super) fn paint(
         }
     };
     let mut paint = Paint {
+        draft_scope: crate::ui::drafts::scope(view),
+        draft_post_scope: view.draft_post_scope.clone(),
         replies: if view.site.ptt_features() {
             filters::pushes(&view.frame)
         } else {
@@ -92,6 +97,7 @@ pub(super) fn paint(
         reply_rows: Vec::new(),
         reply_author_words: Vec::new(),
         reply_focus: None,
+        reply_navigation: Default::default(),
         article_mode: Default::default(),
         article_boundary_navigation: false,
         article: None,
@@ -163,11 +169,15 @@ pub(super) fn merge_replies(paint: &mut Paint, source_replies: &[filters::Push])
 
 pub(super) fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint {
     Paint {
+        draft_scope: None,
+        draft_post_scope: None,
+
         replies: Vec::new(),
         account_words: Vec::new(),
         reply_rows: Vec::new(),
         reply_author_words: Vec::new(),
         reply_focus: None,
+        reply_navigation: Default::default(),
         article_mode: Default::default(),
         article_boundary_navigation: false,
         article: None,
@@ -203,7 +213,7 @@ pub(super) fn sample_packet(frame: &Frame, settings: &DisplaySettings) -> Paint 
 
 pub(super) fn font_sample() -> Result<Frame, String> {
     let mut sample = Screen::new(24, 4).map_err(|error| error.to_string())?;
-    sample.feed(b"ASCII xyz 0123456789\r\n\x1b[31;44m\xa4\x1b[32;45m\xa4\x1b[0m ");
+    sample.feed(b"ASCII xyz [] gjpqy_\r\n\x1b[31;44m\xa4\x1b[32;45m\xa4\x1b[0m ");
     sample.feed(&encoding::encode("中文字型\r\n").map_err(|e| e.to_string())?);
     sample.feed(b"\x1b[31;44m");
     sample.feed(&encoding::encode("█▌◢◣◤◥ ●○◎⊙").map_err(|e| e.to_string())?);
@@ -232,6 +242,9 @@ mod filter_tests {
             input_pending: false,
             login_pending: false,
             login_guidance: pttstella::login::Guidance::Idle,
+            account: None,
+            draft_post_scope: None,
+            draft_source: None,
             destination: pttstella::navigation_job::Progress::Idle,
             board_visit: None,
             phase: Phase::Connected,

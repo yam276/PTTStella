@@ -6,7 +6,7 @@ import {translator} from './i18n_test_support.mjs';
 
 const create=vm.runInNewContext(readFileSync(new URL('../assets/surface-tools.js',import.meta.url),'utf8')+'\ncreateFloatingTools');
 function fixture({width=900,height=700,reduced=false,language='zh-TW',withSettings=false,compact=false}={}){
-    let clock=0,next=0,prepared=0,restored=0,settingsOpened=0;
+    let clock=0,next=0,prepared=0,restored=0,settingsOpened=0,bookmarksOpened=0;
     const frames=new Map(),classes=new Set();
     const element=()=>({hidden:true,attrs:{},dataset:{},style:{setProperty(k,v){this[k]=v;}},
         setAttribute(k,v){this.attrs[k]=v;},removeAttribute(k){delete this.attrs[k];},focus(){document.activeElement=this;},
@@ -14,18 +14,18 @@ function fixture({width=900,height=700,reduced=false,language='zh-TW',withSettin
     const root=element(),ball=element(),fan=element(),panel=element(),keyboard=element();
     root.classList={add:v=>classes.add(v),remove:v=>classes.delete(v),contains:v=>classes.has(v)};
     const petals=(compact?['navigate','bookmarks','capture','session','settings']:['navigate','display','capture','input','session','filters',...(withSettings?['settings']:[])]).map(group=>{const p=element();p.dataset.toolsTarget=group;return p;});
-    const groups=petals.filter(p=>p.dataset.toolsTarget!=="settings").map(p=>{const group=element();group.dataset.toolsGroup=p.dataset.toolsTarget;return group;});
+    const groups=petals.filter(p=>!['settings','bookmarks'].includes(p.dataset.toolsTarget)).map(p=>{const group=element();group.dataset.toolsGroup=p.dataset.toolsTarget;return group;});
     const document={activeElement:null,hidden:false,querySelector:()=>null},window={innerWidth:width,innerHeight:height};
     const captures=new Set();ball.setPointerCapture=id=>captures.add(id);ball.hasPointerCapture=id=>captures.has(id);ball.releasePointerCapture=id=>captures.delete(id);
     fan.querySelectorAll=()=>petals;fan.contains=target=>petals.includes(target);
     panel.querySelectorAll=()=>groups;panel.querySelector=()=>null;
     root.contains=target=>[root,ball,fan,panel,...petals,...groups].includes(target);
-    const menu=create({root,ball,fan,panel,window,document,tr:translator(language),prepare:()=>prepared++,restore:()=>{restored++;keyboard.focus();},onSettings:()=>settingsOpened++,
+    const menu=create({root,ball,fan,panel,window,document,tr:translator(language),prepare:()=>prepared++,restore:()=>{restored++;keyboard.focus();},onSettings:()=>settingsOpened++,onBookmarks:()=>bookmarksOpened++,
         raf:callback=>{frames.set(++next,callback);return next;},caf:id=>frames.delete(id),now:()=>clock,reduced:()=>reduced});
-    function fire(target,type,values={}){const e={pointerId:1,button:0,buttons:1,isPrimary:true,clientX:820,clientY:455,detail:1,preventDefault(){this.prevented=true;},stopPropagation(){this.stopped=true;},...values};
+    function fire(target,type,values={}){const e={pointerId:1,button:0,buttons:1,isPrimary:true,clientX:820,clientY:455,detail:1,isTrusted:true,preventDefault(){this.prevented=true;},stopPropagation(){this.stopped=true;},...values};
         for(const [node,event,callback] of menu.bindings)if(node===target&&event===type)callback({...e,currentTarget:target});return e;}
     function advance(ms=16){clock+=ms;const queued=[...frames.values()];frames.clear();queued.forEach(fn=>fn(clock));}
-    return {menu,fire,advance,root,ball,fan,panel,keyboard,petals,groups,window,document,captures,frames,counts:()=>({prepared,restored,settingsOpened})};
+    return {menu,fire,advance,root,ball,fan,panel,keyboard,petals,groups,window,document,captures,frames,counts:()=>({prepared,restored,settingsOpened,bookmarksOpened})};
 }
 test('the floating trigger returns from every category before another tap closes the menu',()=>{
     for(const [language,label] of [['zh-TW','返回工具分類'],['en-US','Back to categories']]){
@@ -358,7 +358,7 @@ test('low opacity preference remains intact through both open paths, category Ba
 test('five common categories including bookmarks keep all controls reachable without hidden focus or offscreen hit boxes',()=>{
  for(const [width,height] of [[320,240],[640,480],[900,700],[1920,1080]]){
   const f=fixture({width,height,compact:true});f.menu.showAt({isTrusted:true,clientX:width/2,clientY:height/2});
-  assert.equal(f.petals.length,5);for(const petal of f.petals){f.fire(petal,'click');if(petal.dataset.toolsTarget!=='settings')f.fire(f.ball,'click');else assert.equal(f.counts().settingsOpened,1);}
+  assert.equal(f.petals.length,5);for(const petal of f.petals){if(!f.menu.open())f.fire(f.ball,'click');f.fire(petal,'click');if(!['settings','bookmarks'].includes(petal.dataset.toolsTarget))f.fire(f.ball,'click');}assert.equal(f.counts().settingsOpened,1);assert.equal(f.counts().bookmarksOpened,1);
   f.menu.destroy();assert.equal(f.menu.clean(),true);
  }
 });
@@ -368,7 +368,19 @@ test('the five production petals, including Bookmarks, never overlap through 4K'
   const f=fixture({width,height,compact:true});f.fire(f.ball,'click');const {scale,point}=f.menu.snapshot();
   const rects=f.petals.map(p=>({x:point.x+parseFloat(p.style['--petal-x']),y:point.y+parseFloat(p.style['--petal-y']),w:62*scale,h:62*scale}));
   for(let i=0;i<rects.length;i++)for(let j=i+1;j<rects.length;j++)assert.equal(overlaps(rects[i],rects[j]),false);
-  const bookmark=f.petals.find(p=>p.dataset.toolsTarget==='bookmarks');f.fire(bookmark,'click');assert.equal(f.menu.snapshot().selected,'bookmarks');
-  f.fire(f.ball,'click');assert.equal(f.document.activeElement,bookmark);f.menu.destroy();assert.equal(f.menu.clean(),true);
+  const bookmark=f.petals.find(p=>p.dataset.toolsTarget==='bookmarks');f.fire(bookmark,'click');assert.equal(f.menu.open(),false);assert.equal(f.menu.snapshot().selected,null);assert.equal(f.counts().bookmarksOpened,1);
+  assert.equal(f.counts().restored,0);f.menu.destroy();assert.equal(f.menu.clean(),true);
  }
+});
+
+
+test('Bookmarks is a trusted direct dialog action, preserves right-click title context and never restores terminal focus',()=>{
+ const f=fixture({compact:true});const petal=f.petals.find(p=>p.dataset.toolsTarget==='bookmarks');
+ f.menu.showAt({isTrusted:true,clientX:300,clientY:300});const prepared=f.counts().prepared;
+ assert.equal(petal.attrs['aria-expanded'],undefined);f.fire(petal,'click',{isTrusted:false});
+ assert.equal(f.menu.open(),true);assert.equal(f.counts().bookmarksOpened,0);
+ f.fire(petal,'click');assert.equal(f.menu.open(),false);assert.equal(f.menu.snapshot().selected,null);
+ assert.equal(f.counts().bookmarksOpened,1);assert.equal(f.counts().prepared,prepared,'do not reset pinned list row again');assert.equal(f.counts().restored,0);
+ f.fire(petal,'click');assert.equal(f.counts().bookmarksOpened,1,'closed chrome cannot reopen a dialog');
+ f.menu.destroy();f.fire(petal,'click');assert.equal(f.counts().bookmarksOpened,1);assert.equal(f.menu.clean(),true);
 });

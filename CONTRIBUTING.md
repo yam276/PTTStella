@@ -155,6 +155,8 @@ UI 准入與生命週期變更另跑 `cargo test --locked --features desktop --b
 
 UI owner／封包變更再跑 `node --test tooling/test_surface_dialogs.mjs`。使用明確 DOM／clock doubles 核對晚到字型結果、關閉／revoke、舊預覽、登入草稿清除、名單 busy／失敗恢復及 router 拒絕未知／legacy envelope；這些不是原生 trusted 操作證據。[ui-packets](tests/fixtures/ui-packets.json) 是獨立編寫的 synthetic wire expected，Rust bin 比對生產 Packet 的 serde 結果，JS 測試核對分派，沒有用序列化往返當 expected。Paint 與內嵌預覽另檢查結構，完整呈現仍由原生 PNG／畫面驗收。
 
+通知變更另跑 `node --test tooling/test_surface_toast.mjs tooling/test_surface_bookmarks.mjs`。成功結果以明確類型區分複製2秒、保存3秒與其後500ms淡出，不依翻譯文字分類；錯誤保留且不被晚到成功蓋掉，自動保存只更新介面狀態。驗證hover／focus暫停、重複內容重新計時、過期callback撤銷、減少動態效果與destroy後無timer／listener。原生 `toast_reconnect` probe核對持續斷線卡、明確重連及PNG／剪貼簿成功提示實際顯示後收起，正常關閉須兩次loopback連線、零站端輸入與完整清理；受控clock不能冒充原生hover或精確動畫時間。
+
 AID 核心另核對 article_navigation 的自製 article-open fixture 與 navigation_job typed progress。production Connection 的 article_tests 需精確比對切板、# 提示、八碼／CR、Q 資訊、空白返回及方向右；錯誤、權限提示、過期輸入、所有取消階段與晚到正確資訊不得續送。同步資訊框保持零空白且可 Pong，整體／每步期限不被碎片延長，重連零重播。BoardVisit 另證明導覽仍待輸入時已發布原 session 的到達事實，重連不得重貼舊 generation。既有 boards／window 原生結果只算共同 consumer 回歸，不能代替待接 AID 入口的原生驗收。
 
 最近清單另核對 lib 的 recent_boards model／store 與 bin 的 Files writer／recent state 測試：正式到達、大小寫去重、20 筆上限、損壞／超量保留、備份、清除失敗、慢寫入合併、picker 期間保存與關閉 drain。`boards` 原生結果須保留 `[Other, Stella]` 並排除取消的 Beta；將該合成資料複製至新程序的 probe-recent-boards.json，用 `--probe-surface OUTPUT_DIRECTORY recent` 開啟切板視窗、確認順序、清除、等待完成後關閉，再以清除後檔案啟動第三個程序確認仍空。獨立讀取主檔與 .bak 均須為空；peer 拒絕所有站端 bytes。`boards_close` 另在第二次到達後開始 Beta，同一次 UI 呼叫確認「停止導覽」可見後立即 ⌘Q，檢查等待中的工作停止、Close acknowledged、各 owner join 與只保留兩個正式到達。兩個新 probe 不取用正式帳號／本機真實清單。
@@ -252,3 +254,8 @@ Control 與工具列焦點使用 `--probe-surface OUTPUT_DIRECTORY control_input
 文章推文更新變更另跑 desktop lib／bin、核心 gate、全部 JS／Fluent、Clippy 與 docs。獨立 expected 核對 Q／AID／重新進入／原尾行、錯誤身分與標頭、未知／分段提示、逾時、尾段追加／修改、scope 撤銷、取消及手動輸入後晚到查詢零續送。JS 覆蓋原底部／中段／圖片內位置不變／新增提示、明確跳轉、停用與舊 scope、未授權按鈕及清理。`--probe-surface OUTPUT_DIRECTORY live_updates --media-origin LOOPBACK_ORIGIN` 使用自製 45→48→51 行文章，peer 只接受最初 PageDown 及兩次精確 Q／空白／#／AID／Q／空白／Right／原尾行／PageDown，之後接受最多 64 次相同驗證路徑的無新內容檢查（不能多送 PageDown）及 Close；需在實際 WebView 核對更新後原底部與往回讀均保持位置、只提示、點提示跳轉、同一圖片 batch／一次 HTTP、暫停後無額外輸入、PNG、Close acknowledged、全部 owner join 及 exit 0。前景限制不得為探針放寬；合成成功不代替實站部署的資訊框／新推文驗證。
 
 五秒推文更新回歸另覆蓋：舊底部也不自動跟隨；watch 略過 Active 直接 Reached 的 operation 驗證；取消／失焦／逾時保留已 ACK 閱讀／圖片；相對鍵與滑鼠返回均拒絕；明確 raw／切篇／世代清理與 trusted 站端恢復。current-thread production Connection 檢查一般佇列 64 格全滿仍可靠取消、排隊開始前撤銷零 bytes、同 stamp 新請求能重新開始、舊／未來取消不污染新工作。`live_updates_cancel` 延遲 Q 回覆 6 秒，需在 busy 時明確暫停、保留 45 行與圖片且可本機移動，晚到資訊框零續送，再明確顯示站端、PNG 與正常 Close；不為測試放寬失焦、deadline 或准入。
+
+
+本機草稿變更另跑desktop lib／bin、multi_instance、全部JS、core、Clippy／Fluent／docs，契約見[本機草稿](docs/drafts.md)。原生`drafts`先保存自製三行中文／原始SGR，`drafts_restart`在新程序讀回相同檔案後由使用者明確開始／確認正文帶入。peer只接受一次Ctrl+P、精確ANSI正文與Close，拒絕發表／重送。須核對主檔內容、預覽與恢復、Close acknowledged、最後快照／disk owner join及真正程序退出；不以合成測試代表實站發文。
+
+本機編輯器變更另跑 desktop lib／bin、multi_instance、完整 JS、core、Fluent、Clippy 與 Python tooling。編輯元件來源另用 `npm ci --ignore-scripts --prefix tooling/composer`、`npm run build --prefix tooling/composer`、`npm test --prefix tooling/composer` 核對 bundle、授權與實際 DOM／history。`cargo test --release --locked --lib composer::tests::benchmark -- --ignored --nocapture` 以相同240行矩形比較逐區重掃與單次掃描，另量2048行投影；只輸出時間／數量，不記錄本文。原生 `drafts` 須取得範本、一次以上上色、保存標準三行稿；`drafts_restart` 先原生 Ctrl+P，再開本機恢復稿件、明確確認帶回一次。兩者要求正常 Close、完整 owner 清理與程序退出，不把一般 DOM 或程式派發事件算作原生滑鼠／注音輸入證據。

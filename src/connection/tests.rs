@@ -528,6 +528,7 @@ async fn verification_is_manual_and_checks_wrong_code_then_recovery_without_rese
     })
     .await;
     assert_eq!(view.context().kind(), "main_menu");
+    assert_eq!(view.account.as_deref(), Some("StellaTest"));
     assert!(!view.login_pending);
     assert_eq!(
         connection.shutdown().await.unwrap(),
@@ -3109,4 +3110,246 @@ async fn refresh_cancellation_has_priority_over_full_queue_and_a_queued_start() 
         );
         finish_board_peer(&connection, ws).await;
     }
+}
+
+#[tokio::test]
+async fn public_login_echo_confirms_reply_identity_without_saved_credentials_and_disconnect_clears_it()
+ {
+    let connection = Connection::start_reply_navigation_probe().unwrap();
+    connection.connect().unwrap();
+    let view = wait(&connection, |v| {
+        !v.output_pending && v.context().kind() == "article_reading"
+    })
+    .await;
+    assert_eq!(view.account.as_deref(), Some("StellaTest"));
+    let replies = crate::filters::pushes(&view.frame);
+    assert_eq!(replies.len(), 7);
+    let index = crate::reply_navigation::index(
+        &replies,
+        &crate::filters::Rules::default(),
+        false,
+        crate::reply_navigation::author(&view.frame),
+        view.account.as_deref(),
+        None,
+    );
+    assert_eq!(index.author_rows, vec![3, 4, 10, 18]);
+    assert_eq!(index.mine_rows, vec![6, 14]);
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+    assert!(connection.updates.borrow().account.is_none());
+}
+
+#[tokio::test]
+async fn local_draft_capture_and_replacement_require_native_post_scope_and_never_publish() {
+    let c = Connection::start_drafts_probe().unwrap();
+    c.connect().unwrap();
+    let v = wait(&c, |v| {
+        !v.output_pending
+            && v.account.is_some()
+            && crate::board_navigation::current_board(&v.frame).is_some()
+    })
+    .await;
+    assert!(
+        c.request_draft_source(v.stamp(), None)
+            .unwrap()
+            .wait()
+            .await
+            .is_err()
+    );
+    c.input(v.generation, vec![16]).unwrap();
+    let v = wait(&c, |v| {
+        !v.input_pending && !v.output_pending && crate::navigation::article_editor(&v.frame)
+    })
+    .await;
+    assert!(v.draft_post_scope.is_some());
+    c.input(v.generation - 1, vec![24]).unwrap();
+    wait(&c, |v| v.message == crate::msg!("input-stale")).await;
+    assert!(c.updates.borrow().draft_post_scope.is_some());
+    assert!(
+        c.request_draft_source(
+            crate::navigation::Stamp {
+                revision: 0,
+                ..v.stamp()
+            },
+            None
+        )
+        .unwrap()
+        .wait()
+        .await
+        .is_err()
+    );
+    // Revoking the queued read must not send Ctrl+X or enter a menu.
+    let cancelled = c.request_draft_source(v.stamp(), None).unwrap();
+    drop(cancelled);
+    c.input(v.generation, vec![12]).unwrap();
+    let v = wait(&c, |fresh| {
+        fresh.frame.revision > v.frame.revision && !fresh.input_pending
+    })
+    .await;
+    c.request_draft_source(v.stamp(), None)
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    let v = c.updates.borrow().clone();
+    let baseline = v.draft_source.as_deref().unwrap().clone();
+    assert_eq!(baseline.body, "看板預設格式\n\x1b[32m請依格式填寫\x1b[m\n");
+    let r = crate::editor_source::Replacement {
+        baseline,
+        title: "[測試] 新標題".into(),
+        body: "中文\n\x1b[1;31m紅色\x1b[m".into(),
+    };
+    let stamp = c.updates.borrow().stamp();
+    c.request_draft_source(stamp, Some(r.clone()))
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    assert_eq!(
+        c.updates.borrow().draft_source.as_ref().unwrap().body,
+        "中文\n\x1b[1;31m紅色\x1b[m"
+    );
+    let stamp = c.updates.borrow().stamp();
+    assert!(
+        c.request_draft_source(stamp, Some(r))
+            .unwrap()
+            .wait()
+            .await
+            .is_err(),
+        "a completed transfer cannot be replayed with the old template"
+    );
+    c.input(v.generation, vec![24]).unwrap();
+    wait(&c, |v| v.draft_post_scope.is_none()).await;
+    let stamp = c.updates.borrow().stamp();
+    assert!(
+        c.request_draft_source(stamp, None)
+            .unwrap()
+            .wait()
+            .await
+            .is_err()
+    );
+    assert_eq!(c.shutdown().await.unwrap(), CloseOutcome::Acknowledged);
+}
+
+#[tokio::test]
+async fn draft_partial_clear_waits_without_writing_body_and_manual_input_still_cancels() {
+    let (listener, connection) = idle_local().await;
+    connection.keep_alive(false).unwrap();
+    let (held_tx, held_rx) = tokio::sync::oneshot::channel();
+    let peer = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut socket = tokio_tungstenite::accept_async(stream).await.unwrap();
+        for bytes in [
+            probe::password_page().unwrap(),
+            probe::navigation_page("main_menu").unwrap(),
+            probe::navigation_page("list").unwrap(),
+        ] {
+            socket.send(Message::Binary(bytes.into())).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(60)).await;
+        }
+        assert_eq!(
+            socket.next().await.unwrap().unwrap().into_data().as_ref(),
+            [16]
+        );
+        let mut native = crate::editor_source::fixture::Native::new(
+            &["原範本", "第二行", "第三行"],
+            "原標題",
+            true,
+        );
+        socket
+            .send(Message::Binary(native.wire().into()))
+            .await
+            .unwrap();
+        loop {
+            let bytes = timeout(Duration::from_secs(5), socket.next())
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap()
+                .into_data();
+            if bytes.as_ref() == [25, 25, 25, 12] {
+                native.accept(&[25]);
+                socket
+                    .send(Message::Binary(native.wire().into()))
+                    .await
+                    .unwrap();
+                assert!(
+                    timeout(Duration::from_millis(150), socket.next())
+                        .await
+                        .is_err(),
+                    "no body, retry or recovery command may follow a partial clear"
+                );
+                held_tx.send(()).unwrap();
+                assert_eq!(
+                    socket.next().await.unwrap().unwrap().into_data().as_ref(),
+                    [1]
+                );
+                assert!(
+                    timeout(Duration::from_millis(150), socket.next())
+                        .await
+                        .is_err(),
+                    "cancelled transfer must not resume"
+                );
+                assert!(matches!(socket.next().await, Some(Ok(Message::Close(_)))));
+                socket.flush().await.unwrap();
+                assert_eq!(
+                    native.editor.lines,
+                    vec![
+                        crate::encoding::encode("第二行").unwrap(),
+                        crate::encoding::encode("第三行").unwrap()
+                    ]
+                );
+                return;
+            }
+            native.accept(&bytes);
+            socket
+                .send(Message::Binary(native.wire().into()))
+                .await
+                .unwrap();
+        }
+    });
+    connection.connect().unwrap();
+    let view = wait(&connection, |v| {
+        !v.output_pending
+            && v.account.is_some()
+            && crate::board_navigation::current_board(&v.frame).is_some()
+    })
+    .await;
+    connection.input(view.generation, vec![16]).unwrap();
+    let view = wait(&connection, |v| {
+        !v.input_pending && !v.output_pending && crate::navigation::article_editor(&v.frame)
+    })
+    .await;
+    connection
+        .request_draft_source(view.stamp(), None)
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    let view = connection.updates.borrow().clone();
+    let baseline = view.draft_source.as_deref().unwrap().clone();
+    let replacement = crate::editor_source::Replacement {
+        baseline,
+        title: "新標題".into(),
+        body: "尚未送出的中文\n\x1b[31m紅色\x1b[m".into(),
+    };
+    let reply = connection
+        .request_draft_source(view.stamp(), Some(replacement))
+        .unwrap();
+    timeout(Duration::from_secs(5), held_rx)
+        .await
+        .unwrap()
+        .unwrap();
+    connection.input(view.generation, vec![1]).unwrap();
+    let error = reply.wait().await.unwrap_err();
+    assert_eq!(error, crate::msg!("draft-transfer-cancelled"));
+    // Let the peer prove no late automatic bytes arrive before closing it.
+    tokio::time::sleep(Duration::from_millis(180)).await;
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+    peer.await.unwrap();
 }

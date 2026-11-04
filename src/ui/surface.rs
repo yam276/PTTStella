@@ -22,7 +22,7 @@ use super::{
     outbound::{
         DestinationStatus, ExportStatus, Feedback, FiltersOpen, FiltersResult, LinkStatus,
         LoginResult, MediaHover, MediaImage, MediaOpen, NavigationStatus, Packet, PasteStatus,
-        SaveStatus, SelectionReply,
+        SaveStatus, SelectionReply, ToastKind,
     },
     probe::Checks,
     surface_state::{Identity, SurfaceState},
@@ -240,6 +240,7 @@ async fn run(
         rules,
         mut filter_warning,
     } = *loaded;
+    resources.drafts = super::drafts::State::new(probe.as_deref());
     let initial_recent = recent.packet().boards;
     let initial_bookmarks = bookmarks.snapshot();
     let mut recent_clears = 0usize;
@@ -254,8 +255,10 @@ async fn run(
         commands,
         files,
         tools: _,
+        drafts,
         settings,
     } = resources;
+    let mut draft_capture_request = None;
     let script = [
         "const fluent = (() => {const exports = {}; const module = {exports};\n",
         include_str!("../../assets/vendor/fluent/index.js"),
@@ -269,6 +272,7 @@ async fn run(
         include_str!("../../assets/surface-fonts.js"),
         include_str!("../../assets/surface-renderer.js"),
         include_str!("../../assets/article-find.js"),
+        include_str!("../../assets/reply-navigation.js"),
         include_str!("../../assets/article-updates.js"),
         include_str!("../../assets/settings-catalog.js"),
         include_str!("../../assets/surface-settings.js"),
@@ -282,6 +286,8 @@ async fn run(
         include_str!("../../assets/surface-tools.js"),
         include_str!("../../assets/surface-context-menu.js"),
         include_str!("../../assets/surface-editor-color.js"),
+        include_str!("../../assets/vendor/composer/editor.js"),
+        include_str!("../../assets/surface-drafts.js"),
         include_str!("../../assets/surface-toast.js"),
         include_str!("../../assets/surface-diagnostics.js"),
         include_str!("../../assets/surface.js"),
@@ -753,6 +759,7 @@ async fn run(
                     break (complete, probe_checked);
                 }
             },
+            reply=drafts.next(),if !*closing.borrow()=>{if matches!(reply,super::drafts::Reply::Saved{..}){checks.draft_saves+=1;}eval.send(Packet::Draft(reply)).map_err(|e|e.to_string())?;},
             done=files.next(), if !*closing.borrow()=>{
                 let packet=match done {
                     FileCompletion::Sites {request,action,result}=>{
@@ -766,7 +773,10 @@ async fn run(
                         let feedback=bookmarks.complete(result.map_err(|e|e.to_string()));
                         Packet::BookmarksResult {request, data:bookmarks.snapshot(), feedback}
                     },
-                    FileCompletion::Clipboard(result)=>Packet::Notice(result.map(|_|{checks.context_copies+=1;pttstella::msg!("context-copied")}).unwrap_or_else(|e|if e==files::Error::Stale {pttstella::msg!("copy-not-ready")}else{e.to_string()})),
+                    FileCompletion::Clipboard(result)=>match result {
+                        Ok(())=>{checks.context_copies+=1;Packet::Toast{message:pttstella::msg!("context-copied"),kind:ToastKind::Copy}},
+                        Err(e)=>Packet::Notice(if e==files::Error::Stale {pttstella::msg!("copy-not-ready")}else{e.to_string()}),
+                    },
                     FileCompletion::ClipboardPaste { identity, stamp, result } => {
                         let current = receiver.borrow();
                         let valid = !current.input_pending && current.stamp() == stamp && screen.current(identity, &current).is_some_and(|paint| paint.editor)
@@ -775,12 +785,12 @@ async fn run(
                         let prepared = if valid { result.map_err(|e|e.to_string()) } else { Err(pttstella::msg!("paste-stale")) };
                         queue_paste(prepared, stamp.generation, &connection, &receiver, pending_paste, &mut checks, probe.is_some())
                     },
-                    FileCompletion::Picture{destination,result}=>Packet::Notice(match result {
-                        Ok(true) if destination==files::ExportDestination::Clipboard=>{checks.image_copies+=1;pttstella::msg!("context-copied")},
-                        Ok(true)=>{checks.picture_saves+=1;pttstella::msg!("picture-saved")},
-                        Ok(false)=>pttstella::msg!("export-cancelled"),
-                        Err(error)=>error.to_string(),
-                    }),
+                    FileCompletion::Picture{destination,result}=>match result {
+                        Ok(true) if destination==files::ExportDestination::Clipboard=>{checks.image_copies+=1;Packet::Toast{message:pttstella::msg!("context-copied"),kind:ToastKind::Copy}},
+                        Ok(true)=>{checks.picture_saves+=1;Packet::Toast{message:pttstella::msg!("picture-saved"),kind:ToastKind::Success}},
+                        Ok(false)=>Packet::Toast{message:pttstella::msg!("export-cancelled"),kind:ToastKind::Success},
+                        Err(error)=>Packet::Notice(error.to_string()),
+                    },
                     FileCompletion::Recent(done)=>{recent.complete(done);Packet::RecentBoards(recent.packet())},
                     FileCompletion::Viewport(result)=>{
                         result.map_err(|e|e.to_string())?;
@@ -837,7 +847,7 @@ async fn run(
                         }
                     },
                     FileCompletion::Filters(result)=>{
-                        eval.send(Packet::Notice(match &result { Ok(_) => pttstella::msg!("filters-saved"), Err(error) => error.to_string() })).map_err(|e|e.to_string())?;
+                        eval.send(match &result { Ok(_) => Packet::Toast{message:pttstella::msg!("filters-saved"),kind:ToastKind::Success}, Err(error) => Packet::Notice(error.to_string()) }).map_err(|e|e.to_string())?;
                         match result {
                         Ok(rules)=>{
                             inline_images.close();eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
@@ -861,6 +871,7 @@ async fn run(
             },
             done = commands.next() => {
                 if done.generation != receiver.borrow().generation {
+                    if matches!(done.kind,CommandKind::DraftCapture|CommandKind::DraftTransfer){eval.send(Packet::Draft(super::drafts::Reply::Error{message:pttstella::msg!("draft-transfer-stopped")})).map_err(|e|e.to_string())?;}
                     if let Some(ticket)=done.navigation {eval.send(ticket.finish(Feedback::quiet(NavigationStatus::Cancelled))).map_err(|e|e.to_string())?;}
                     continue;
                 }
@@ -891,7 +902,16 @@ async fn run(
                         Ok(()) => continue,
                         Err(error) => Packet::Notice(error),
                     },
-                    CommandKind::EditorColor => Packet::Notice(match done.result {Ok(())=>{checks.editor_colors+=1;pttstella::msg!("editor-color-done")},Err(error)=>error}),
+                    CommandKind::DraftCapture=>{
+                        let result=done.result.and_then(|()| {
+                            let source=receiver.borrow().draft_source.as_deref().cloned().ok_or(pttstella::msg!("draft-template-unavailable"))?;
+                            let request=draft_capture_request.take().ok_or(pttstella::msg!("draft-invalid"))?;
+                            checks.draft_captures+=1;drafts.template=Some(source.clone());drafts.open(request,source.scope)
+                        });
+                        if let Err(message)=result {Packet::Draft(super::drafts::Reply::Error{message})} else {continue;}
+                    },
+                    CommandKind::DraftTransfer=>Packet::Draft(match done.result {Ok(())=>{checks.draft_transfers+=1;super::drafts::Reply::Transferred{message:pttstella::msg!("draft-transferred")}},Err(message)=>super::drafts::Reply::Error{message}}),
+                    CommandKind::EditorColor => match done.result {Ok(())=>{checks.editor_colors+=1;Packet::Toast{message:pttstella::msg!("editor-color-done"),kind:ToastKind::Success}},Err(error)=>Packet::Notice(error)},
                     CommandKind::Destination => {
                         let Some((request,_))=destination_request.take() else {continue;};
                         Packet::DestinationResult {request,feedback:match done.result {
@@ -975,6 +995,41 @@ async fn run(
                     inline_images.close();eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
                 }
                 match event {
+                    SurfaceEvent::DraftCancel{..}=>{if commands.is(CommandKind::DraftCapture)||commands.is(CommandKind::DraftTransfer){commands.cancel();draft_capture_request=None;}},
+                    SurfaceEvent::DraftOpen{request,..}=>{
+                        let view=receiver.borrow().clone();
+                        let result=if view.draft_post_scope.is_some() && pttstella::navigation::article_editor(&view.frame) {
+                            if !screen.navigation_shown(view.stamp()) || pending_paste.read().is_some() || settings_visible || login_open {Err(pttstella::msg!("draft-transfer-stopped"))}
+                            else {drafts.template=None;draft_capture_request=Some(request);commands.start(CommandKind::DraftCapture,view.generation,||connection.request_draft_source(view.stamp(),None).map(|r|r.wait()))}
+                        } else {
+                            drafts.template=None;
+                            let scope=super::drafts::scope(&view).or_else(||(view.phase!=Phase::Connected).then(||drafts.scope().cloned()).flatten());
+                            scope.ok_or(pttstella::msg!("draft-unavailable")).and_then(|scope|drafts.open(request,scope))
+                        };
+                        if let Err(message)=result{eval.send(Packet::Draft(super::drafts::Reply::Error{message})).map_err(|e|e.to_string())?;}
+                    },
+                    SurfaceEvent::DraftDelete{id,..}=>{if let Err(message)=drafts.delete(id){eval.send(Packet::Draft(super::drafts::Reply::Error{message})).map_err(|e|e.to_string())?;}},
+                    SurfaceEvent::DraftChoose{id,..}=>{if id.is_some(){checks.draft_restores+=1;}let reply=drafts.choose(id).unwrap_or_else(|message|super::drafts::Reply::Error{message});eval.send(Packet::Draft(reply)).map_err(|e|e.to_string())?;},
+                    SurfaceEvent::DraftEdit{edit,..}=>{if let Err(message)=drafts.edit(edit){eval.send(Packet::Draft(super::drafts::Reply::Error{message})).map_err(|e|e.to_string())?;}},
+                    SurfaceEvent::DraftColor{token,revision,body,ranges,color,..}=>{
+                        let reply=match drafts.owns(token).and_then(|()|pttstella::composer::color(&body,&ranges,color)){Ok(changes)=>{checks.draft_colors+=1;super::drafts::Reply::Colored{token,revision,changes}},Err(message)=>super::drafts::Reply::DecorationError{token,revision,coloring:true,message}};
+                        eval.send(Packet::Draft(reply)).map_err(|e|e.to_string())?;
+                    },
+                    SurfaceEvent::DraftProject{token,revision,body,..}=>{
+                        let reply=match drafts.owns(token).and_then(|()|pttstella::composer::project(&body)){Ok(decorations)=>super::drafts::Reply::Projected{token,revision,decorations},Err(message)=>super::drafts::Reply::DecorationError{token,revision,coloring:false,message}};
+                        eval.send(Packet::Draft(reply)).map_err(|e|e.to_string())?;
+                    },
+                    SurfaceEvent::DraftStation{token,stamp,..}=>{
+                        let view=receiver.borrow().clone();
+                        let result=(||{
+                            if !screen.navigation_shown(stamp)||view.stamp()!=stamp||pending_paste.read().is_some()||settings_visible||login_open{return Err(pttstella::msg!("draft-transfer-stopped"));}
+                            let entry=drafts.active(token)?;
+                            let baseline=drafts.template.clone().filter(|t|t.scope.same(&entry.scope)).ok_or(pttstella::msg!("draft-transfer-stopped"))?;
+                            let replacement=pttstella::editor_source::Replacement{baseline,title:entry.title.clone(),body:entry.body.clone()};
+                            commands.start(CommandKind::DraftTransfer,stamp.generation,||connection.request_draft_source(stamp,Some(replacement)).map(|r|r.wait()))
+                        })();
+                        if let Err(message)=result{eval.send(Packet::Draft(super::drafts::Reply::Error{message})).map_err(|e|e.to_string())?;}
+                    },
                     SurfaceEvent::Diagnostics { trace } => {diagnostics.web(trace);},
                     SurfaceEvent::StationMouse { event, .. } => {
                         if super::probe::mouse_case(surface_probe.as_deref()) && checks.mouse_edges.len()<16 {checks.mouse_edges.push(event.report);}
@@ -1962,11 +2017,35 @@ async fn run(
                 .and_then(|identity| screen.current(identity, &view))
                 .and_then(|paint| paint.article.clone())
         };
+        let reply_navigation = {
+            let view = receiver.borrow();
+            screen
+                .inline_identity(&view)
+                .and_then(|id| screen.current(id, &view))
+                .map(|p| p.reply_navigation.clone())
+                .unwrap_or_default()
+        };
+        let reply_navigation_passed = case == "reply_navigation"
+            && checks.export_checked
+            && checks.navigation_requests == 0
+            && reply_navigation.author_rows == [3, 4, 10, 18]
+            && reply_navigation.mine_rows == [6, 14];
         let mut mouse_report = checks.mouse_observations();
         mouse_report["final"] = serde_json::json!(receiver.borrow().mouse);
+        let drafts_passed = case == "drafts"
+            && checks.draft_captures >= 1
+            && checks.draft_colors >= 1
+            && checks.draft_saves >= 1
+            && drafts.fixture_matches()
+            || case == "drafts_restart"
+                && checks.draft_restores >= 1
+                && checks.draft_transfers == 1
+                && drafts.fixture_matches();
         let mut surface_report = serde_json::json!({
             "status":if case=="slow" && commands.busy() || case=="files_slow" && files.busy() || matches!(case.as_str(),"files"|"diagnostics") && checks.export_checked || case=="untrusted" && surface_probe_clean && rejected_events==3
+                || drafts_passed
                 || case=="confirm" && surface_probe_clean && rejected_events==1 && pending_paste.read().as_ref().is_some_and(|p|p.prepared.text=="A\nB")
+                || reply_navigation_passed
                 || case=="recent" && recent_clears>=1 && recent.packet().boards.is_empty() && recent.packet().notice==Some(pttstella::msg!("recent-cleared"))
                 || checks.bookmarks_passed(&case,&initial_bookmarks,&bookmarks.snapshot(),&receiver.borrow().destination)
                 || case=="boards_close" && checks.board_reached==[(1,"Stella".to_owned()),(2,"Other".to_owned())] && matches!(&receiver.borrow().destination,pttstella::navigation_job::Progress::Active{target,..} if target.board().is_some_and(|b|b.as_str()=="Beta"))
@@ -2022,6 +2101,9 @@ async fn run(
             "paste_preview_preserved":pending_paste.read().is_some(),
             "settings_saved":checks.settings_saved,"full_png":checks.export_checked,"rows_png":checks.rows_export_checked,"media_external_requests":checks.media_external,
         });
+        surface_report["drafts"] = serde_json::json!({"captures":checks.draft_captures,"colors":checks.draft_colors,"saves":checks.draft_saves,"restores":checks.draft_restores,"transfers":checks.draft_transfers,"fixture_matches":drafts.fixture_matches()});
+        surface_report["reply_navigation"] =
+            serde_json::to_value(reply_navigation).map_err(|e| e.to_string())?;
         surface_report["archive_reads"] = checks.archive_reads.into();
         surface_report["reply_update_cancels"] = checks.reply_update_cancels.into();
         surface_report["reply_retained_restores"] = checks.reply_retained_restores.into();

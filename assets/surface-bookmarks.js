@@ -1,6 +1,6 @@
 // Owns only the local editor/request lifetime. Rust owns validation and disk commits.
 function createBookmarksDialog({tr,send,prepare,restore,changed,openDestination,current,window=null,render=()=>{},notice=()=>{}}) {
-    const button=document.getElementById("bookmarks-open"),dialog=document.getElementById("bookmarks-dialog");
+    const dialog=document.getElementById("bookmarks-dialog");
     const list=document.getElementById("bookmarks-list"),value=document.getElementById("bookmarks-target"),label=document.getElementById("bookmarks-label");
     const save=document.getElementById("bookmarks-save"),remove=document.getElementById("bookmarks-remove"),fresh=document.getElementById("bookmarks-new"),go=document.getElementById("bookmarks-go"),closeButton=document.getElementById("bookmarks-close"),note=document.getElementById("bookmarks-note");
     const currentButton=document.getElementById("bookmarks-current"),cancelCapture=document.getElementById("bookmarks-current-cancel"),readButton=document.getElementById("bookmarks-read");
@@ -33,7 +33,7 @@ function createBookmarksDialog({tr,send,prepare,restore,changed,openDestination,
         go.disabled=busy||!value.value||current()?.destination?.state==="active";
         const selected=entries.find(e=>identity(e)===list.value);
         if(readButton)readButton.disabled=busy||!selected?.cached_at;
-        if(currentButton){currentButton.disabled=!available();currentButton.textContent=tr(current()?.navigation?.kind==="article_list"?"bookmarks-list-current":"bookmarks-current");currentButton.title=tr(currentButton.disabled?"bookmarks-current-unavailable":current()?.navigation?.kind==="article_list"?"bookmarks-list-hint":"bookmarks-current");}
+        if(currentButton){currentButton.hidden=!available();currentButton.disabled=!available()||busy;currentButton.textContent=tr(current()?.navigation?.kind==="article_list"?"bookmarks-list-current":"bookmarks-current");currentButton.title=tr(currentButton.disabled?"bookmarks-current-unavailable":current()?.navigation?.kind==="article_list"?"bookmarks-list-hint":"bookmarks-current");}
         if(captureBar)captureBar.hidden=!capturePending;
         if(captureStatus)captureStatus.textContent=capturePending?tr(capturePending.cancellable?"bookmarks-capturing":"saving"):"";
         if(cancelCapture){cancelCapture.hidden=!capturePending;cancelCapture.disabled=capturePending?.cancellable===false||!!capturePending?.cancelling;}
@@ -87,11 +87,11 @@ function createBookmarksDialog({tr,send,prepare,restore,changed,openDestination,
         if(disposed||!dialog.open||packet.request!==opening)return;
         opening=null;entries=packet.data.entries;writable=packet.data.writable;rows();
         note.textContent=pending?tr("saving"):packet.data.warning||tr("bookmarks-hint");
-        if(!pending)value.focus();
+        if(!pending)list.focus();
     }
     function receive(packet){
         if(disposed)return;
-        if(capturePending?.request===packet.request){capturePending=null;entries=packet.data.entries;writable=packet.data.writable;if(dialog.open)rows();else working();notice(packet.feedback.notice||"");return;}
+        if(capturePending?.request===packet.request){capturePending=null;entries=packet.data.entries;writable=packet.data.writable;if(dialog.open)rows();else working();notice(packet.feedback.notice||"",packet.feedback.status==="saved"?"success":"error");return;}
         if(!pending||packet.request!==pending.request)return;
         const sameView=pending.view===view;pending=null;
         entries=packet.data.entries;writable=packet.data.writable;
@@ -100,10 +100,13 @@ function createBookmarksDialog({tr,send,prepare,restore,changed,openDestination,
         if(sameView)value.focus();
     }
     function capture(e,row=null){
-        if(disposed||!e.isTrusted||capturePending||document.querySelector("dialog[open]"))return;
+        if(disposed||!e.isTrusted||capturePending||opening!==null||pending||composing||local)return;
+        const modal=document.querySelector("dialog[open]");
+        if(modal&&modal!==dialog)return;
         if(row!==null&&!setListTarget(row))return;
         const packet=current(),article=packet?.article,selected=listRow(),fromList=!article&&listAvailable(selected);
         working();if(!available()||!article&&!fromList){notice(tr("bookmarks-current-unavailable"));return;}
+        if(dialog.open)close(e,false);
         prepare(e);restore();capturePending={request:++sequence,cancellable:true,list:fromList};working();
         const stamp={generation:packet.generation,revision:packet.frame.revision,input_epoch:packet.input_epoch};
         send(fromList?{kind:"bookmark_list",request:capturePending.request,stamp,row:selected,trusted:true}:{kind:"bookmark_current",request:capturePending.request,stamp,article:article.id,trusted:true});
@@ -146,7 +149,7 @@ function createBookmarksDialog({tr,send,prepare,restore,changed,openDestination,
     function destroy(){revoke();list.replaceChildren();if(dialog.open)dialog.close();}
     return {show:open,capture,available,listAvailable,setListTarget,clearListTarget,captureStage,receiveArchive,receiveOpen,receive,revoke,destroy,update:()=>{if(!disposed)working();},
         clean:()=>disposed&&!dialog.open&&!pending&&!capturePending&&!local&&!localRows.length&&opening===null&&!composing&&!entries.length&&!value.value&&!label.value,
-        bindings:[[button,"click",open],[closeButton,"click",close],[dialog,"cancel",close],[list,"change",choose],
+        bindings:[[closeButton,"click",close],[dialog,"cancel",close],[list,"change",choose],
             [currentButton,"click",e=>capture(e)],
             [window,"blur",e=>{if(capturePending?.list&&capturePending.cancellable)cancelCurrent({isTrusted:true});}],
             [document,"visibilitychange",()=>{if(document.visibilityState==="hidden"&&capturePending?.list&&capturePending.cancellable)cancelCurrent({isTrusted:true});}],[cancelCapture,"click",cancelCurrent],[readButton,"click",readLocal],

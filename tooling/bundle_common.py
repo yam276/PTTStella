@@ -56,6 +56,7 @@ def copy_licenses(destination, target):
     for name in ('NOTICE.txt', 'Cascadia-OFL.txt', 'NotoSansCJK-OFL.txt'):
         shutil.copy2(ROOT/'assets/fonts'/name, destination/name)
     shutil.copy2(ROOT/'assets/vendor/fluent/LICENSE', destination/'fluent-Apache-2.0.txt')
+    shutil.copy2(ROOT/'assets/vendor/composer/LICENSES.txt', destination/'composer-MIT.txt')
     result = subprocess.run(['cargo', 'metadata', '--locked', '--format-version=1',
                              '--filter-platform', target, '--features', 'desktop'],
                             cwd=ROOT, capture_output=True, check=True, encoding='utf-8')

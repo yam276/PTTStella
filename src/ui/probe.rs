@@ -47,6 +47,11 @@ pub(super) fn mouse_case(case: Option<&str>) -> bool {
 
 #[derive(Default)]
 pub(super) struct Checks {
+    pub(super) draft_saves: usize,
+    pub(super) draft_captures: usize,
+    pub(super) draft_colors: usize,
+    pub(super) draft_restores: usize,
+    pub(super) draft_transfers: usize,
     pub(super) editor_colors: usize,
     pub(super) archive_reads: usize,
     pub(super) image_copies: usize,

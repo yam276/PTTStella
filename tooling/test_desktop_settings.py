@@ -72,5 +72,17 @@ class SettingsTargetTests(unittest.TestCase):
             'in-app settings did not become ready')
 
 
+    def test_direct_bookmarks_petal_reveals_root_without_an_empty_tool_page(self):
+        for hidden in (False, True):
+            with self.subTest(hidden=hidden):
+                main = desktop_input.DevTools.__new__(desktop_input.DevTools)
+                main.evaluate = Mock(side_effect=[None, 'bookmarks', hidden])
+                main.click = Mock()
+                main.wait = Mock()
+                self.assertIsNone(main.reveal_tools('#bookmarks-open'))
+                self.assertEqual(main.click.call_args_list, [call('#tools-ball')] if hidden else [])
+                self.assertEqual(main.wait.call_count, int(hidden))
+
+
 if __name__ == '__main__':
     unittest.main()

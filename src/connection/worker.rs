@@ -77,8 +77,54 @@ struct NavigationJob {
     serial: u64,
     epoch: u64,
 }
+enum EditorFlow {
+    Color(crate::editor_color::Flow),
+    Source(crate::editor_source::Flow),
+}
+enum EditorAction {
+    Send(Vec<u8>),
+    Wait,
+    Done(Option<crate::editor_source::Snapshot>),
+}
+impl EditorFlow {
+    fn stopped(&self) -> String {
+        match self {
+            Self::Color(_) => crate::msg!("editor-color-stopped"),
+            Self::Source(_) => crate::msg!("draft-transfer-cancelled"),
+        }
+    }
+    fn failure(&self, error: String) -> String {
+        if !self.changed() {
+            return error;
+        }
+        match self {
+            Self::Color(_) => crate::msg!("editor-color-partial", error = error),
+            Self::Source(_) => crate::msg!("draft-transfer-partial", error = error),
+        }
+    }
+    fn changed(&self) -> bool {
+        match self {
+            Self::Color(f) => f.changed(),
+            Self::Source(f) => f.changed(),
+        }
+    }
+    fn next(&mut self, frame: &crate::screen::Frame) -> Result<EditorAction, String> {
+        match self {
+            Self::Color(f) => match f.next(frame)? {
+                crate::editor_color::Action::Send(b) => Ok(EditorAction::Send(b)),
+                crate::editor_color::Action::Wait => Ok(EditorAction::Wait),
+                crate::editor_color::Action::Done(r) => r.map(|()| EditorAction::Done(None)),
+            },
+            Self::Source(f) => match f.next(frame)? {
+                crate::editor_source::Action::Send(b) => Ok(EditorAction::Send(b)),
+                crate::editor_source::Action::Wait => Ok(EditorAction::Wait),
+                crate::editor_source::Action::Done(s) => Ok(EditorAction::Done(Some(s))),
+            },
+        }
+    }
+}
 struct EditorJob {
-    flow: crate::editor_color::Flow,
+    flow: EditorFlow,
     reply: tokio::sync::oneshot::Sender<Result<(), String>>,
     deadline: Instant,
     step_deadline: Instant,
@@ -92,7 +138,14 @@ enum InputEffect {
     PointerMotion,
 }
 
+struct DraftPost {
+    stamp: Stamp,
+    scope: crate::drafts::Scope,
+    expires: Instant,
+}
 struct Session {
+    draft_post: Option<DraftPost>,
+    account_identity: login::AccountIdentity,
     mouse: crate::mouse::input::State,
     screen: Screen,
     endpoint: String,
@@ -205,7 +258,7 @@ impl Session {
     }
     fn stop_editor(&mut self) {
         if let Some(job) = self.editor_job.take() {
-            let _ = job.reply.send(Err(crate::msg!("editor-color-stopped")));
+            let _ = job.reply.send(Err(job.flow.stopped()));
             self.dirty = true;
         }
     }
@@ -216,10 +269,10 @@ impl Session {
         if job.reply.is_closed()
             || now >= job.deadline
             || now >= job.step_deadline
-            || job.steps >= 4096
+            || job.steps >= 16384
             || self.view.phase != Phase::Connected
         {
-            let _ = job.reply.send(Err(crate::msg!("editor-color-stopped")));
+            let _ = job.reply.send(Err(job.flow.stopped()));
             self.dirty = true;
             return;
         }
@@ -231,9 +284,15 @@ impl Session {
             return;
         }
         match job.flow.next(&self.screen.frame()) {
-            Ok(crate::editor_color::Action::Send(bytes)) => {
-                if bytes.len() > crate::input::MAX_INPUT_BYTES {
-                    let _ = job.reply.send(Err(crate::msg!("editor-color-stopped")));
+            Ok(EditorAction::Send(bytes)) => {
+                if bytes.len()
+                    > if matches!(job.flow, EditorFlow::Source(_)) {
+                        crate::drafts::MAX_BODY * 2 + 8
+                    } else {
+                        crate::input::MAX_INPUT_BYTES
+                    }
+                {
+                    let _ = job.reply.send(Err(job.flow.stopped()));
                     return;
                 }
                 job.steps += 1;
@@ -247,17 +306,17 @@ impl Session {
                 }
                 self.dirty = true;
             }
-            Ok(crate::editor_color::Action::Wait) => self.editor_job = Some(job),
-            Ok(crate::editor_color::Action::Done(result)) => {
-                let _ = job.reply.send(result);
+            Ok(EditorAction::Wait) => self.editor_job = Some(job),
+            Ok(EditorAction::Done(snapshot)) => {
+                if let Some(snapshot) = snapshot {
+                    self.view.draft_source = Some(std::sync::Arc::new(snapshot));
+                }
+                self.publish();
+                let _ = job.reply.send(Ok(()));
                 self.dirty = true;
             }
             Err(error) => {
-                let _ = job.reply.send(Err(if job.flow.changed() {
-                    crate::msg!("editor-color-partial", error = error)
-                } else {
-                    error
-                }));
+                let _ = job.reply.send(Err(job.flow.failure(error)));
                 self.dirty = true;
             }
         }
@@ -270,6 +329,7 @@ impl Session {
     ) -> Self {
         let view = updates.borrow().clone();
         Self {
+            account_identity: login::AccountIdentity::default(),
             mouse: crate::mouse::input::State::default(),
             screen,
             endpoint,
@@ -285,6 +345,7 @@ impl Session {
             login_followup: None,
             navigation_job: None,
             editor_job: None,
+            draft_post: None,
             navigation_serial: 0,
             navigation_cancelled: None,
             visits: crate::recent_boards::Visits::default(),
@@ -438,6 +499,72 @@ impl Session {
             }
             Some(Command::Disconnect) => self.disconnect().await,
             Some(Command::Input { generation, bytes }) => self.input(generation, &bytes).await,
+            Some(Command::DraftSource {
+                stamp,
+                replacement,
+                reply,
+            }) => {
+                if !reply.is_closed() {
+                    let result = (|| {
+                        self.clear_answered_input();
+                        let lease = self
+                            .draft_post
+                            .as_ref()
+                            .filter(|l| {
+                                l.stamp.generation == stamp.generation && Instant::now() < l.expires
+                            })
+                            .ok_or(crate::msg!("draft-transfer-stopped"))?;
+                        if self.view.site != lease.scope.site
+                            || !self
+                                .view
+                                .account
+                                .as_ref()
+                                .is_some_and(|a| a.eq_ignore_ascii_case(&lease.scope.account))
+                            || stamp != self.stamp()
+                            || self.view.phase != Phase::Connected
+                            || self.socket.is_none()
+                            || self.pending_input.is_some()
+                            || self.editor_job.is_some()
+                            || self.navigation_job.is_some()
+                            || self.login_attempt.is_some()
+                            || self.login_followup.is_some()
+                            || self.screen.synchronized_since().is_some()
+                            || self.mouse.snapshot(self.mouse_context()).route
+                                != crate::mouse::input::Route::Local
+                        {
+                            return Err(crate::msg!("draft-transfer-stopped"));
+                        }
+                        if let Some(r) = &replacement
+                            && self.view.draft_source.as_deref() != Some(&r.baseline)
+                        {
+                            return Err(crate::msg!("draft-transfer-stopped"));
+                        }
+                        crate::editor_source::Flow::new(
+                            &self.screen.frame(),
+                            lease.scope.clone(),
+                            replacement,
+                        )
+                    })();
+                    match result {
+                        Ok(flow) => {
+                            let now = Instant::now();
+                            self.mouse.intervene();
+                            self.editor_job = Some(EditorJob {
+                                flow: EditorFlow::Source(flow),
+                                reply,
+                                deadline: now + Duration::from_secs(180),
+                                step_deadline: now + Duration::from_secs(5),
+                                quiet_until: now,
+                                steps: 0,
+                            });
+                            self.dirty = true;
+                        }
+                        Err(e) => {
+                            let _ = reply.send(Err(e));
+                        }
+                    }
+                }
+            }
             Some(Command::EditorColor {
                 stamp,
                 selection,
@@ -469,7 +596,7 @@ impl Session {
                             let now = Instant::now();
                             self.mouse.intervene();
                             self.editor_job = Some(EditorJob {
-                                flow,
+                                flow: EditorFlow::Color(flow),
                                 reply,
                                 deadline: now + Duration::from_secs(180),
                                 step_deadline: now + Duration::from_secs(5),
@@ -590,6 +717,11 @@ impl Session {
         };
         self.mouse.observe(context, Instant::now());
         self.view.mouse = self.mouse.snapshot(context);
+        self.account_identity = login::AccountIdentity::default();
+        self.view.account = None;
+        self.draft_post = None;
+        self.view.draft_post_scope = None;
+        self.view.draft_source = None;
         self.updates.send_replace(self.view.clone());
         transport::stop(&mut self.socket, &mut self.dialing).await
     }
@@ -811,6 +943,28 @@ impl Session {
             self.view.message = crate::msg!("input-stale");
             self.dirty = true;
             return;
+        }
+        if bytes == [16] {
+            self.draft_post = crate::board_navigation::current_board(&self.screen.frame())
+                .zip(self.view.account.clone())
+                .filter(|_| {
+                    self.view.site.ptt_features()
+                        && !self.view.input_pending
+                        && !self.view.output_pending
+                })
+                .map(|(board, account)| DraftPost {
+                    stamp: self.stamp(),
+                    scope: crate::drafts::Scope {
+                        site: self.view.site.clone(),
+                        account,
+                        board,
+                    },
+                    expires: Instant::now() + Duration::from_secs(3600),
+                });
+            self.view.draft_source = None;
+        } else if bytes.contains(&24) || bytes == [27] {
+            self.draft_post = None;
+            self.view.draft_source = None;
         }
         self.stop_editor();
         self.mouse.intervene();
@@ -1227,6 +1381,13 @@ impl Session {
             job.quiet_until = Instant::now() + Duration::from_millis(32);
         }
         self.screen.feed(&display);
+        if self.login_attempt.is_some() {
+            self.view.account = self.account_identity.observe(
+                self.view.generation,
+                self.view.phase == Phase::Connected && self.view.site.ptt_features(),
+                &self.screen.frame(),
+            );
+        }
         self.sync_mouse();
         self.output
             .track(self.screen.synchronized_since(), Instant::now());
@@ -1376,6 +1537,32 @@ impl Session {
             && !self.view.login_pending
             && !self.mouse.active()
             && self.view.context().allows_keepalive();
+        if !self.view.output_pending || self.view.phase != Phase::Connected {
+            self.view.account = self.account_identity.observe(
+                self.view.generation,
+                self.view.phase == Phase::Connected && self.view.site.ptt_features(),
+                &self.view.frame,
+            );
+        }
+        if self.draft_post.as_ref().is_some_and(|lease| {
+            self.view.generation != lease.stamp.generation
+                || self.view.phase != Phase::Connected
+                || !self.view.output_pending
+                    && self.view.frame.revision != lease.stamp.revision
+                    && matches!(
+                        self.view.context(),
+                        Context::ArticleList { .. }
+                            | Context::MainMenu { .. }
+                            | Context::ArticleReading { .. }
+                            | Context::BoardList { .. }
+                    )
+        }) {
+            self.draft_post = None;
+        }
+        self.view.draft_post_scope = self.draft_post.as_ref().map(|p| p.scope.clone());
+        if self.draft_post.is_none() {
+            self.view.draft_source = None;
+        }
         self.updates.send_replace(self.view.clone());
         self.dirty = false;
     }

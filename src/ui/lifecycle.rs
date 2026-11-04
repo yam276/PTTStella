@@ -18,12 +18,15 @@ pub(super) struct Resources {
     pub(super) commands: Pending,
     pub(super) files: Files,
     pub(super) settings: super::settings_finish::RetainedEdits,
+    pub(super) drafts: super::drafts::State,
     pub(super) tools: Option<super::protocol::ToolsObservation>,
 }
 
 #[derive(serde::Deserialize)]
 struct RendererFinished {
     clean: bool,
+    #[serde(default)]
+    draft: Option<super::drafts::Edit>,
     #[serde(default)]
     settings: super::settings_finish::Snapshot,
     #[serde(default)]
@@ -142,6 +145,7 @@ impl Resources {
                 Some(eval) => renderer(eval).await,
                 None => Ok(RendererFinished {
                     clean: true,
+                    draft: None,
                     settings: Default::default(),
                     tools: None,
                 }), // Preflight failed before JS was created.
@@ -168,7 +172,7 @@ impl Resources {
             Duration::from_secs(5),
         )
         .await;
-        let (renderer, snapshot) = match renderer {
+        let (renderer, snapshot, draft) = match renderer {
             Ok(finished) => {
                 self.tools = finished.tools;
                 (
@@ -178,16 +182,19 @@ impl Resources {
                         Err(pttstella::msg!("cleanup-listeners-stopped"))
                     },
                     finished.settings,
+                    finished.draft,
                 )
             }
-            Err(error) => (Err(error), Default::default()),
+            Err(error) => (Err(error), Default::default(), None),
         };
+        let drafts = self.drafts.finish(draft).await;
         let settings = retained_wait(
             self.settings.finish(snapshot),
             || message.set(pttstella::msg!("cleanup-wait")),
             Duration::from_secs(5),
         )
         .await;
+        let settings = settings.and(drafts);
         let files = match (files, settings) {
             (Ok(()), result) => result,
             (Err(error), Ok(())) => Err(error),

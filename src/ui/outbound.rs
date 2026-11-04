@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 #[derive(Serialize)]
 #[serde(tag = "kind", content = "payload", rename_all = "snake_case")]
 pub(super) enum Packet<'a> {
+    Draft(super::drafts::Reply),
     Diagnostics(bool),
     UpdateStatus(pttstella::updates::Status),
     ArticleUpdates(Option<super::article_updates::Status>),
@@ -53,6 +54,10 @@ pub(super) enum Packet<'a> {
     Paint(&'a Paint),
     Stop,
     Notice(String),
+    Toast {
+        message: String,
+        kind: ToastKind,
+    },
     SurfaceProbe(String),
     KeyboardState(vim::Status),
     LoginResult(LoginResult),
@@ -131,6 +136,13 @@ impl super::protocol::NavigationTicket {
             feedback,
         }
     }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum ToastKind {
+    Copy,
+    Success,
 }
 
 #[derive(Serialize)]
@@ -216,6 +228,8 @@ pub(super) struct SettingsOpen {
     pub profile: DisplayProfile,
     pub values: DisplaySettings,
     pub defaults: DisplaySettings,
+    pub default_profile: DisplayProfile,
+    pub platform: DisplaySettings,
     pub presets: BTreeMap<&'static str, DisplaySettings>,
     pub warning: Option<String>,
     pub sample: Paint,

@@ -47,6 +47,44 @@ pub(super) enum MediaAction {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(super) enum SurfaceEvent {
+    DraftCancel {
+        trusted: bool,
+    },
+    DraftOpen {
+        request: u64,
+        trusted: bool,
+    },
+    DraftDelete {
+        id: String,
+        trusted: bool,
+    },
+    DraftChoose {
+        id: Option<String>,
+        trusted: bool,
+    },
+    DraftEdit {
+        edit: super::drafts::Edit,
+        trusted: bool,
+    },
+    DraftColor {
+        token: u64,
+        revision: u64,
+        body: String,
+        ranges: Vec<pttstella::composer::Range>,
+        color: pttstella::editor_color::Color,
+        trusted: bool,
+    },
+    DraftProject {
+        token: u64,
+        revision: u64,
+        body: String,
+        trusted: bool,
+    },
+    DraftStation {
+        token: u64,
+        stamp: Stamp,
+        trusted: bool,
+    },
     Diagnostics {
         trace: super::diagnostics::WebTrace,
     },
@@ -443,7 +481,8 @@ impl SurfaceEvent {
     pub(super) fn requires_ptt(&self) -> bool {
         matches!(
             self,
-            Self::LoginOpen { .. }
+            Self::DraftStation { .. }
+                | Self::LoginOpen { .. }
                 | Self::LoginSubmit { .. }
                 | Self::LoginForget { .. }
                 | Self::DestinationSubmit { .. }
@@ -487,7 +526,8 @@ impl SurfaceEvent {
             // Revocation grants no input; it still cannot cross a session.
             StationMouseCancel { lease } => lease.stamp.generation == generation,
             StationMouseRevoke { generation: source } => *source == generation,
-            AccountRule { trusted, stamp, .. }
+            DraftStation { trusted, stamp, .. }
+            | AccountRule { trusted, stamp, .. }
             | ReplyFocus { trusted, stamp, .. }
             | InlineExpand { trusted, stamp, .. }
             | EditorColor { trusted, stamp, .. }
@@ -560,7 +600,14 @@ impl SurfaceEvent {
             DestinationCancel { trusted, operation } => {
                 *trusted && operation.generation == generation
             }
-            SitesOpen { trusted, .. }
+            DraftCancel { trusted }
+            | DraftOpen { trusted, .. }
+            | DraftDelete { trusted, .. }
+            | DraftChoose { trusted, .. }
+            | DraftEdit { trusted, .. }
+            | DraftColor { trusted, .. }
+            | DraftProject { trusted, .. }
+            | SitesOpen { trusted, .. }
             | SitesEdit { trusted, .. }
             | SitesConnect { trusted, .. }
             | BookmarkCurrent { trusted, .. }

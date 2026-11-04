@@ -1,10 +1,189 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-04 0.4.0 正式發佈準備
+
+使用者明確授權發佈0.4.0，在develop統一Cargo／lock、README與徽章為正式0.4.0，新增中文為主、英文摘要的版本說明。納入本機中文／ANSI草稿與範本、身分側標／推文定位、留白導覽、圖片縮放拖曳、字型與文字比例修正及成功通知淡出；最後實站草稿修正的驗收見下節。沿既有develop → main Release PR與四架構建置流程，只有全部檢查／打包成功才發佈；公開保留六個套件與SHA256SUMS，manifest仍在Actions artifacts。發佈完成後main保持正式版號，develop整合main並恢復0.5.0-dev.1。CI不代替Windows／Linux GUI或新的實體滑鼠／IME驗收。
+
+## 2026-11-04 實站本機稿帶回卡在檔尾標記
+
+依使用者授權，以PTTStella帳號到Test板操作，僅到內文貼上、不發表。舊版macos-toast-expiry-verified可讀範本與保存，但把同一份兩行中文帶回時停在空白站端編輯器並逾時；畫面第2～23列有PTT的檔尾顯示標記 `~`。原empty_editor要求所有列空白，因而把標記當正文。原合成站沒有這些標記，先補上相同EOF顯示的獨立fixture，舊生產flow確實失敗，證據保留。
+
+空白候選畫面允許首列後的單一 `~` 顯示列，但不以可見畫面單獨准入：清除後另查文件EOF與該行End，必須回到第一個邏輯行第0欄、完整空白候選才可送正文。字面的 `~`、多個空白行或空格會在此查詢被拒絕，沒有續送正文。只查一次、不重送刪行、不放寬期限；baseline、stamp／scope、取消及分段回覆等待保護維持。Source合成站預設帶EOF標記，原生上色fixture仍可保留原配置。
+
+驗證：先在舊程式重現新EOF回歸失敗，再通過全部source七案、core14命令／2replay、desktop lib210／bin178／multi_instance10（各1個原有ignored）、JS375、全targets Clippy／fmt及docs。涵蓋31行中文／ANSI與尾空行讀取、兩種預覽與插入模式、部分回覆、取消不重送、真正模板改變拒絕，以及保留字面tilde／隱藏空白行／空格時零正文寫入。合成loopback亦使用含EOF標記的同一生產flow完成帶回，沒有為測試放寬站端准入。
+
+修正版同一實站重測通過：重新登入後恢復先前保存的兩行中文，成功帶回且逐行可見；再讀回該非空白站端內文作為新baseline，把同一份本機測試稿改成六行（中文、亮紅SGR、字面 `~`、空白行、尾端換行）後再次帶回。PTT原文模式正確顯示 `*[1;31m`／`*[m`，原生Ctrl+V切成亮紅色預覽，footer為第6行第1欄，最後一行與空白行皆完整。兩次都回到原生編輯器、未發表；舊版失敗稿已明確選A放棄，站端顯示「文章沒有存入」。PTT檔案處理選單的「即將發表」為通用提示，輔助流程只走T改標題、返回正文，沒有選S／V或預設發表。
+
+交付 `dist/macos-draft-eof-fixed/PTTStella.app`（0.4.0-dev.1／arm64 release／strict ad-hoc，診斷置頂不搶焦點），實站最後停在未發表的六行ANSI稿供使用者核對，本機測試稿亦保留。原yam276連線保持，沒有取用其草稿或發文。異常／成功AX與screenshot均取同一次原生觀察，證據 `.local/verification/live-draft-transfer-20261104/`，只保存自製測試稿畫面與不含內容／帳密的診斷。Windows／Linux原生未驗。清理本輪Cargo dev／release profiles，保留正在使用的新版與其他既有交付，exact paths、du／Cargo宣告量及free前後見cleanup.json。只提交develop，不推送或發佈。
+
+## 2026-11-04 成功通知淡出與錯誤保留
+
+複製文字／網址／ANSI／圖片成功停留2秒，PNG／圖片存檔、收藏、黑白名單變更、設定檔匯出及上色完成停留3秒，再以500ms淡出。結果由Rust封包或既有typed status分類，不依中文／英文訊息比對；未分類通知保守保留。需要處理的錯誤不自動消失，也不被晚到成功覆蓋；斷線卡維持獨立重連。設定與草稿自動保存只更新原介面狀態，草稿帶回後的手動檢查提醒持續顯示。
+
+所有surface通知改經單一owner，移除文字MutationObserver；最多一個timer、一個系統動態偏好listener，沒有interval或逐frame工作。hover／鍵盤focus暫停等待與淡出，離開才依剩餘時間續行；新通知（含相同內容）重設期限並撤銷舊callback，錯誤可手動關閉。減少動態效果跳過淡出，偏好切換亦保留hover／focus暫停。destroy移除timer／listener，收起通知不搶鍵盤焦點，僅使用純文字。
+
+驗證：JS375項、core14命令／2replay、desktop lib208／bin178／multi_instance10（各1個原有ignored）、Clippy全targets、fmt及docs通過。新增通知計時、重複resume不增timer、fade中暫停／取代／舊callback、減少動態效果、錯誤優先、清理及生產feedback路由回歸；收藏成功／失敗分類與草稿自動保存／衝突inline、帶回提醒／錯誤分類另驗。首次Rust wire expected因新增fixture擺放順序與列表不一致而失敗，調整新增案例順序後完整通過，未改產品判斷或既有expected。最後資產調整後重跑全部JS、desktop bin及實際打包。
+
+macOS真正Dioxus／WKWebView的兩輪toast_reconnect皆passed，各自恰兩次loopback session、零登入／重送／站端輸入。第一輪原生AX／截圖讀回斷線卡超過9秒仍保留，重連後圖片複製與PNG保存提示可見、等候後自動收起；最終交付binary再驗重連、PNG成功提示手動關閉與圖片複製自動收起。兩輪PNG、Close acknowledged、所有owner join、finish run_ok／cleanup_ok通過，程序已退出。精確2／3秒、500ms及hover／focus／系統動態偏好由受控clock與生產CSS驗證，不冒充原生hover／逐幀動畫時間或其他OS實機驗收。未連PTT、未操作使用者App或設定。
+
+交付 `dist/macos-toast-expiry-verified/PTTStella.app`（0.4.0-dev.1／arm64 release／strict ad-hoc，診斷置頂且不搶焦點），確認嵌入的所有變更資產與工作樹相同。證據 `.local/verification/toast-expiry-20261104/`。清除本輪兩個中間App、隔離App／launcher／暫存資料、暫存syntax檔及Cargo dev／release profiles；保留最新交付、使用者正在執行的macos-classic-defaults（PID34509）與其他非本輪交付。exact paths、du／Cargo宣告量及filesystem free前後見cleanup.json。只提交develop，不推送或發佈。
+
+## 2026-11-04 開箱字型與字高預設
+
+新安裝與「重設字型預設值」統一使用Windows傳統BBS（MingLiU細明體）、字高23、baseline20及字寬100%。已保存的字型／數值不改寫；明確保存的「依平台初始值」仍解析成原OS字型，設定選單的同名選項與產品預設分開。切換組合仍保留目前數值。細明體須有合法本機安裝，既有缺字型提示、官方來源及內建替代選項保留，沒有新增字型散布。
+
+驗證：core14命令／2replay、desktop lib208／bin178／multi_instance10（各1個原有ignored）、JS372／Fluent、全targets Clippy／fmt與docs通過。新增案例覆蓋新安裝、重設、舊platform設定保留、UI封包與平台選項切換；負面格式測試使用明確舊設定，避免預設變更使字串替換失效。macOS真正Dioxus的兩個獨立fonts probe皆passed：首次顯示MingLiU23、調整至18／baseline19後重設並保存23／20，第二程序直接讀回同一份設定，960×576 PNG逐byte及解壓後scanline完全相同，設定檔亦未改寫。兩次catalog讀取／來源sink／PNG與Close acknowledged、完整owner join通過。Windows／Linux原生GUI本輪未驗。
+
+第二程序早期停在OS開啟Documents內的合成設定檔，stack與逾時保留；把同一份資料移至task-owned暫存目錄後完成讀回，沒有調整系統權限或放寬產品保護。工具曾另啟隔離App的一般啟動實例，已關閉，沒有登入或送使用者輸入，未當成實站驗收。使用者現有App與設定未操作。
+
+交付 `dist/macos-classic-defaults/PTTStella.app`（0.4.0-dev.1／arm64 release／strict ad-hoc，診斷置頂且不搶焦點）。證據 `.local/verification/classic-defaults-20261104/`。清除自己的隔離App／launcher／暫存資料及Cargo dev／release profiles，成功讀回與唯一失敗證據另存；保留最新交付、使用者執行中的macos-composer-grid-fixed及前版macos-draft-transfer-fixed實站重測基線，其他非本輪產物保留。exact paths、du／Cargo宣告量與filesystem free前後見cleanup-before.json及cleanup.json。只提交develop，不推送或發佈。
+
+## 2026-11-04 本機草稿帶回的分段回覆誤判
+
+使用者實站回報帶回PTT時顯示「上色中途停止…畫面或發文流程已改變」。錯誤字串由共用editor worker包裝Source flow而來；新增獨立合成案例先在舊程式得到相同內層錯誤：改標題後先回到原游標、稍後才執行Ctrl+]，或Ctrl+Y批次只完成部分行時，都可能形成完整但非最終的editor frame。舊Source flow把第一個fresh frame直接作為Clear／Empty最終回覆。原生框選上色的既有flow不是這次回報的路徑。
+
+Source flow改為在原來每步5秒／總180秒期限內等待raw開頭／模式及真正完整空白，等待不重送刪行、不先送正文，也不因收到中間frame延長期限。正文送完還要核對末行／末欄及原顯示／插入模式，不能把只寫入前幾字的editor frame當成功；末欄沿同一Screen核心計算中文／SGR／Tab，沒有加入第二套ANSI parser。來源完整baseline比對、scope／generation／stamp准入、手動取消、斷線及晚到結果保護維持。Source讀取／帶回改用草稿停止與部分修改訊息，Color flow保留原上色訊息。
+
+驗證：core14命令／2replay、desktop lib208／bin178／multi_instance10（各1個原有ignored）、JS371／Fluent、全targets Clippy／fmt及docs通過。核心涵蓋標題返回／部分刪行／部分寫入都先Wait、中文／SGR、兩種顯示×兩種插入模式、尾空行、真實範本改變與不支援內容仍拒絕。loopback peer在標題返回和第一次Ctrl+Y後先回一個完整畫面，80ms後才處理餘下指令；原本scope／重播／取消測試通過。另一peer只刪第一行後保留兩行，先150ms證明無正文／重送／復原指令，再由手動鍵取消，之後亦零自動輸入；錯誤為草稿停止，未再套用上色訊息。
+
+macOS真正Dioxus的drafts_restart通過：先原生Ctrl+P、讀範本、恢復自製三行中文／SGR稿、二次確認、帶回一次；使用上述含80ms完整中間畫面的peer，最終fixture逐byte相符，停在原生編輯器，未發表。Close acknowledged、listeners／connection／credentials／files完整join，probe程序已退出。只讀核對使用者現有App與不含內容的diagnostic狀態，沒有操作其實站稿件、登入或發文；實站同一份草稿仍待使用者以新版確認，不以合成結果代替。Windows／Linux原生本輪未驗。
+
+交付 `dist/macos-draft-transfer-fixed/PTTStella.app`（0.4.0-dev.1／arm64 release／strict ad-hoc，診斷置頂且不搶焦點），保留前一版部分選字、較大UI與固定字格。證據 `.local/verification/draft-transfer-stopped-20261104/`，含舊程式失敗、分段／取消及原生成功；查閱的官方來源副本已移除，僅留URL與hash。清除自己的隔離App／launcher及Cargo dev／release profiles，保留最新交付與使用者正在執行的macos-composer-grid-fixed（PID88351），exact paths、du／Cargo宣告量與filesystem free前後見cleanup.json。只提交develop，不推送或發佈。
+
+## 2026-11-04 本機編輯器部分選字與固定可視字格
+
+預設由強制整行改成「文字選取」，可選同列中的幾個字與跨行文字；保留獨立「整行選取」和既有ANSI矩形模式。放大標題、按鈕、輸入欄與色票；正文以79欄、23列可視範圍及1:2半形字格依容器縮放，中文在三種顯示模式維持2格。字型載入完成及容器resize才重算尺寸，destroy撤銷observer／fallback listener。長文仍捲動，縮放／選取不改寫正文，不自動裁切或重排已有ANSI；帶回PTT的79欄／編碼bytes限制保留。色票按實際尺寸限制位置，沒有另寫ANSI parser。
+
+驗證：實際CodeMirror測部分／跨行選取、整行切換、三模式中文寬度、原文、undo／redo及observer清理；完整JS371、core14命令／2replay、desktop lib205／bin178／multi_instance10（各1個原有ignored）、全targets Clippy／fmt、Fluent、Python82及docs通過。相同240行上色benchmark的逐區／批次約96.14／0.37ms，2048行投影約9.58ms，未改Rust上色演算法，不宣稱是本輪效能提升。真實瀏覽器可信拖曳核對部分範圍2～5、正反跨行2～13與整行0～17；79字ASCII寬556.70px、可視正文寬556.39px（小於1px取整差），行高14.09px、中文字寬14.08px，23列可視高度正確。此為實際DOM，不能代替原生手勢或特定IME。
+
+macOS真正Dioxus交付binary的drafts／drafts_restart皆passed：取得範本、行中部分中文字反白、右鍵色票套色、三模式切換、五次保存、精確中文／SGR主檔、新程序恢復及二次確認帶回一次，最後停在原生編輯器，沒有發表；Close acknowledged、listeners／connection／files／credentials完整join與程序退出。早期背景清單讀取等待的取消案例保留，未把取消當通過；臨時狀態標記已還原，最終無標記binary再次完成恢復／帶回。原生座標拖曳仍noWindowsAvailable，部分選字以原生AX／鍵盤與實際色票證明；Windows／Linux與真實注音IME本輪未重驗。重新綁定隔離App時工具曾另啟一般啟動實例自動連預設站，隨即關閉，沒有登入或輸入，未當成實站驗收。
+
+交付 `dist/macos-composer-grid-fixed/PTTStella.app`（0.4.0-dev.1／macOS arm64 release／strict ad-hoc，診斷置頂且不搶焦點）。證據 `.local/verification/composer-grid-selection-20261104/`。清除自己的臨時App／launcher、兩份臨時診斷打包、npm安裝目錄及Cargo dev／release profiles，關閉loopback server／瀏覽器測試分頁；保留最新交付、上一版字型fallback及唯一成功／失敗證據，exact paths與filesystem free前後在cleanup.json。只提交develop，不推送或發佈。
+
+## 2026-11-04 非整數縮放的英文字高與基線錯位
+
+使用者回報放大後英文字母歪斜。以同一MingLiU24／baseline20／width100重現：187.5%時整數字格交替22／23px，原renderer把該欄寬用於整個字形等比縮放，導致同列相同字母的vertical scale交替1／0.9777778，基線交替36／36.2。一般文字改用未取整的邏輯字格計算長寬比例與字寬上限；背景、左右裁切、連接框線及ANSI幾何仍使用實際整數邊界。原本的墨跡上下界保護與雙半共同transform保留，不更動使用者設定或欄位位置。
+
+新增回歸先在舊程式失敗，修正後完整JS371項、core14命令／2replay、desktop lib205／bin178（各1個原有ignored）、全targets Clippy／fmt通過。真實Canvas的100／110／125／137.5／187.5／203.125%共6案，相同英文字母的比例與基線一致；獨立自然字形參考保留左右格內裁切、放開垂直裁切，6案全部逐像素零差異且墨跡像素數相同。舊程式在其中4個非整數比例分別有2961／2285／3222／4178個差異像素。初次參考未保留必要的左右裁切，整數比例也誤報字母overhang，已保留該失敗報告並修正參考邊界，沒有據此修改產品或放寬像素判定。
+
+macOS實際Dioxus隔離fonts probe通過：MingLiU24／20／100的原生預覽及125%主畫面已留成對AX／截圖，字母、括號、下伸字母與雙色中文完整；字型catalog2、官方來源sink、960×576來源PNG、Close acknowledged及所有owner join通過，測試程序已退出。來源PNG與上一版整數比例的合成案例完全相同（含編碼bytes）。沒有連PTT、存取帳密或操作使用者的兩個舊App；Windows／Linux實際rasterizer與特定IME本輪未驗。
+
+交付 `dist/macos-font-alignment-fixed/PTTStella.app`（0.4.0-dev.1／macOS arm64 release／strict ad-hoc，診斷置頂且不搶焦點）。證據 `.local/verification/font-baseline-alignment-20261104/`；自己的隔離App／launcher、loopback server及Cargo profiles依owned清理，保留仍執行的macos-font-width／macos-font-height-fixed及上一個本機編輯器fallback，精確清理與空間前後見cleanup.json。只提交develop，不推送或發佈。
+
+## 2026-11-04 文件歷史整理驗證
+
+在獨立清理分支與隔離Git副本整理文件歷史，外部完整bundle已驗證可讀並保留原始refs及提交對照表。逐一核對原294個提交：只修改6個文件路徑與2則提交訊息，其他檔案內容／模式、作者／提交者／日期及父子拓撲保持；清理後develop的原有最新檔案樹與清理前完全相同。本筆另新增驗證紀錄，不改產品程式或版號。歷史文字文件殘留引用掃描為零，完整JS370項、develop與各正式版來源的docs gate、diff及完整Git物件檢查通過；沒有重建Rust或App。
+
+依使用者確認，同步更新main、develop與既有正式版Tag的歷史，保留main至develop的祖先關係及各版正式／開發版號；不建立新Release或重建既有附件。6個原有簽章對改寫後的提交不再有效，原簽署物件保留於外部備份；既有PR引用及其他clone仍可能保留舊歷史，不能宣稱從所有副本抹除。取代遠端時使用逐ref舊值保護及原子推送，避免覆蓋期間的新提交；整理完回到develop並清理自己的臨時分支與隔離副本。
+
+## 2026-11-04 文件聚焦產品功能
+
+功能與開發文件改以PTTStella的行為、支援格式、驗證範圍及限制說明，移除無關的產品比較、研究交接與跨專案操作敘述。實際依賴、資產來源、授權與既有測試結果保留；沒有變更產品程式、版號或既有Git歷史。45份受Git追蹤的文字文件殘留引用掃描為零，docs gate（含21項回歸）與diff檢查通過；不重建App或Rust快取，沒有新的建置產物需清理。驗證後只推送develop，不發佈。
+
+## 2026-11-04 字型、全螢幕留白與圖片手勢 Critic
+
+依使用者要求，由三位 SubAgent 分別複查字型設定／共同 renderer、全螢幕 host 留白導覽、完整圖片縮放／拖曳；沒有發現可重現的阻擋回歸，未修改產品程式。獨立聚焦 JS 分別49／107／39項通過；主流程重跑完整循序 JS370項、docs與diff檢查通過，並核對同一產品提交既有的core、desktop lib／bin、Clippy及原生fonts probe證據，沒有為純審查重建Rust。
+
+本輪不是新的原生手勢驗收：macOS全螢幕實體留白點擊、圖片可信滾輪／拖曳與字高24／字寬150的原生組字外觀仍未重驗，Windows／Linux實際繪製亦未執行。既有真實瀏覽器CDP與原生字型結果保持各自範圍，不能互相代替。審查紀錄與本輪測試在 `.local/verification/critic-font-nav-media-20261104/`；只新增必要證據，沒有新App／Cargo cache／fixture輸出可清理。核對後僅推送develop，版本維持0.4.0-dev.1，不推進main或發佈。
+
+
+## 2026-11-04 細明體24字高中括號下緣裁切
+
+使用者回報24字高的 `[]` 下緣消失。只讀確認目前display為windows_classic／24／baseline20／width100，沒有修改使用者設定。實際MingLiU24的括號descent約4.76px，基線20使墨跡到24.76，原逐格clip裁掉底端；不是來源文章缺字。共同renderer每paint用至多兩種font的固定ink sample，加上當前glyph的actualBoundingBox，向外取整後限制基線；墨跡本身過高才等比縮小，仍保留使用者字寬。常見字共用font sample基線，不按每個括號任意上下抖動；稀有fallback以自身ink補正。雙色兩半共用相同transform，背景／字格／選取／連接框線與幾何ANSI不改。保存的baseline仍保留要求值，沒有自動改檔。預覽加入 `[] gjpqy_`，基線中英文help補上安全範圍說明。
+
+驗證：core14命令／2replay、desktop lib205／bin178（各1個原有ignored）、Clippy／fmt／JS370／i18n／docs通過。新增獨立MingLiU數值expected驗證三種backing比例的完整基線與原字寬、tall fallback等比縮小及雙半相同transform。真實Canvas以獨立無裁切參考、明確安全baseline比對 `[ ] g y 中`，100／125／187.5／200%共20例全部逐像素0差異且墨跡像素數相同；187.5%同使用者截圖的45px行高方向。沒有拿font line box的leading誤當成墨跡縮小所有字。
+
+macOS真正Dioxus：全新隔離fonts probe預設細明體24／baseline20／width100，搜尋定位正常預覽，實際 `[]` 底邊及gjpqy_、雙色中文／框線皆完整。設定仍讀回24／20／100，沒有為驗收改成別的數值。字型catalog2、MingLiU來源sink、960×576 PNG、probe passed、Close acknowledged及listeners／connection／files／credentials完整join，測試程序已退出。圖與資料皆合成，不連PTT；未驗其他OS字型的實際rasterizer。
+
+交付 `dist/macos-font-height-fixed/PTTStella.app`（0.4.0-dev.1／arm64／strict ad-hoc，診斷置頂且不搶焦點）。證據 `.local/verification/font-vertical-fit-20261104/`。使用者現正使用PID3486的macos-font-width App，保留且未操作；原macos-media-pan-zoom已無使用者，在核對舊hash後清除。保留最後完整原生編輯器fallback與唯一失敗／成功證據，清掉自己的隔離probe App／launcher及Cargo profiles；exact paths與空間前後在cleanup.json。只提交develop，未推送／發佈。
+
+
+## 2026-11-04 文字寬度偏好與字型區重設
+
+使用者希望縮小字間留白並在字型區加重設。一般字形原本以自然advance置中字格，因此字型20px放在24px雙欄時會有留白。新增「文字寬度（%）」50～150、預設100，僅調一般字形橫向墨跡並限制於自身欄位，原字高／來源空白／80×24／選取、link hit與雙色clip不改；連接框線與自畫ANSI圖忽略此偏好。預覽、主畫面、cached strips與PNG共用renderer，預設100沿舊運算結果。若希望明體文字更接近填滿字格，可先選macOS傳統BBS宋體替代、24字高、100%字寬，再依預覽調整；實際筆形與留白仍取決於本機字型。
+
+DisplayProfile／DisplaySettings新增可選font_width，所有受支援舊檔缺欄位預設100、讀取不改寫。預覽／autosave／關閉快照／可攜匯入匯出沿同一欄位，切preset保留字寬。Store新增獨立field merge，disjoint字高變更保留其他視窗字寬、同欄衝突拒絕。字型數值旁新增「重設字型預設值」，與appearance分類恢復預設共用一個resetDisplay，恢復平台字型／字高20／baseline20／字寬100，不改其他分類。搜尋支援字距、間距、letter spacing及重設字型，中英文皆更新。
+
+驗證：core14命令／2replay、desktop lib205／bin178／multi_instance10（各1個原有ignored案例）、Clippy全targets／fmt、JS368、i18n及docs通過。新profile案例涵蓋舊檔預設、50／100／120／150往返、NaN／Infinity／超界拒絕；Store覆蓋跨視窗disjoint與衝突不覆寫。renderer獨立expected核對固定背景／欄寬、左右clip、一般文字寬高、上限及框線／方塊不變；UI涵蓋預覽、保存、preset保留、可信reset及其他分類數值不變。
+
+macOS真正Dioxus隔離fonts probe passed：原生AX將100改120，UI顯示已儲存，設定backup精確120；透過正常設定搜尋讓120預覽可見，再點重設恢復100與同一預覽，主檔讀回100。重新讀取字型2次、apple官方來源sink、960×576來源PNG及Close acknowledged通過，listeners／connection／credentials／files owner清理完整，測試程序已退出。座標scroll仍noWindowsAvailable，沒有拿AX操作冒充實體拖曳或特定IME；Windows／Linux原生未執行。截圖皆為自製合成內容，未連PTT或讀使用者資料。
+
+交付 `dist/macos-font-width/PTTStella.app`（0.4.0-dev.1／arm64 release／strict ad-hoc，診斷置頂不搶焦點），包含四邊／全螢幕留白修正及圖片縮放拖曳。證據 `.local/verification/font-width-20261104/`。使用者仍在PID75912的macos-media-pan-zoom App，保留且未操作；上一個已驗原生的本機編輯器App亦保留。自己的隔離測試App／launcher、被取代的macos-fullscreen-margin-fixed App與Cargo profiles依owned清理；exact paths／保留例外與filesystem free前後見cleanup.json。僅提交develop，不推送／發佈。
+
+
+## 2026-11-04 全螢幕網頁文章外側黑邊修正
+
+使用者實測指出推文左側／時間欄右側仍不能點。前一筆四邊留白只涵蓋workspace內；網頁文章為維持BBS長寬會把workspace縮在main中央，全螢幕真正黑邊是main本身，因此既沒有事件也沒有cursor。改由main單一owner接收pointerdown／move／up／click／dblclick，明確只路由裸main與workspace子樹，工具／通知／對話框不攔。viewport仍保持原本固定長寬與scroll／capture owner；不靠放大文章區修正。游標樣式加到main，外側Home／End以host邊緣判定。cellAt與圖片命中拒絕scrollbar及scrollport裁切外的隱藏內容，幾何租約另含host尺寸／位置，fullscreen／移窗會撤銷舊點擊。
+
+離線JS365（新增5項真實host／fitted viewport分離的回歸）、core14命令／2replay、desktop lib204／bin178（各1個原有ignored）、Clippy與docs通過。新測試涵蓋長文已捲動、左右外層、zoom內容藏在黑邊後、兄弟UI不攔截、不重複送鍵、scrollbar與host resize／move／來源保護；前一輪測試把viewport當整個host，沒有覆蓋此幾何，這次已補正。
+
+真實IAB DOM使用production函式與同一root bindings、CSS，以可信CDP點擊驗證1280×720及1920×1080。固定scrollport左右各留60px：右黑邊scroll由900到1575，左黑邊一次Back；1920×1080右黑邊到2520末端、左邊累計Back2，外側Home=0／End=2520；Tool按鈕只累計toolClicks1，selection始終0，左右computed cursor分別forward／back。fixture初次漏載doubleclick而未初始化，補上同一生產函式後重跑；保留唯一fixture與報告。這證明瀏覽器事件／實際DOM，不冒充Rust peer、macOS原生全螢幕或實體滑鼠；原生座標工具先前的noWindowsAvailable仍未解，故App內實體驗收待使用者確認。未連PTT、未操作使用者正在閱讀的App。
+
+原交付 `dist/macos-fullscreen-margin-fixed/PTTStella.app` 已由同日字寬新版整合取代並清理（0.4.0-dev.1／macOS arm64 release／ad-hoc，診斷置頂不搶焦點），保留圖片縮放／拖曳功能。證據 `.local/verification/fullscreen-margin-fix-20261104/`。使用者正用PID75912的 `dist/macos-media-pan-zoom/PTTStella.app`，即使已被新版整合也保留，不關閉或刪除；上一個完成原生驗收的本機編輯器App亦保留。自己的Cargo profiles依原生clean清理，exact paths與空間前後記cleanup.json。僅develop提交，不推送／發佈。
+
+
+## 2026-11-04 完整圖片預覽滾輪縮放與拖曳
+
+使用者要求完整圖片視窗可滾輪放大／縮小及左鍵拖曳。media單一owner以游標位置作縮放錨點，pixel／line／page delta同一有界倍率、1%～800%，保留工具列原尺寸／符合。只有已解碼的完整圖片攔截垂直滾輪；超出view時左鍵capture平移及grab／grabbing游標，scrollbar／修飾鍵／右鍵保留各自操作。切換、關閉、重試、失焦、隱藏、resize及capture取消撤銷拖曳。只改CSS及scroll，不重抓／重建Canvas／重啟GIF；hover與影片不接手勢。原圖／GIF／四項圖片右鍵及Esc原路徑不變。
+
+離線core14命令／2replay、desktop lib204／bin178（各1個原有ignored）、Clippy全targets、JS360（media12項）、i18n與docs通過。涵蓋錨點／比例、三種delta、極值／非有限輸入、拖曳capture及真實範圍模型、停止後舊事件、Fit清除scroll、GIF資源不變、選單／影片／hover／loading拒絕與所有listener釋放。
+
+真實IAB瀏覽器載入production media.js／app.css，六種視窗／長寬與大小圖layout及decoder案例皆passed，另修補既有layout probe遺漏的GIF owner script。可信CDP滾輪由1倍至1.2840254倍再回1倍，游標圖像錨點誤差小於1個CSS px；可信左鍵拖90×60使scroll由434／494至524／554，capture中cursor=grabbing、放開為grab。Fit恢復0／0與0.4733333倍，整段沿用同一Blob；關閉後open=false／resources=0。這是瀏覽器可信事件，不能當成Dioxus App或實體滑鼠驗收；macOS原生座標工具的noWindowsAvailable限制仍未解除，Windows／Linux原生亦未執行。未連PTT或操作帳密。
+
+交付 `dist/macos-media-pan-zoom/PTTStella.app`（0.4.0-dev.1／macOS arm64 release／ad-hoc，診斷置頂且不搶焦點），包含上一筆四邊留白導覽。證據 `.local/verification/media-pan-zoom-20261104/`；清掉自己的Cargo profiles與被取代的macos-margin-navigation App，保留上一個已完成原生驗證的本機編輯器App與unique evidence。exact removed／retained與空間前後另記cleanup.json。只提交develop，不推送／發佈。
+
+
+## 2026-11-04 BBS 四周留白滑鼠導覽
+
+使用者要求框體外仍可上下左右操作。共用 pointerHit 新增僅供導覽的留白命中：上下留白翻頁、左側返回、右側沿 Rust Forward 進入目前站端光棒項目（文章內下一頁），角落優先上下，畫面最頂／最底保留 Home／End。主選單左側及說明頁右側不提供無效意圖；未知／空列表／進板繼續提示不擴張。workspace 共用藍金方向游標，不新增覆蓋層、不虛構文字格或連結。Shift／拖曳、站端滑鼠、modal、輸出等待、來源及按下至放開的幾何保護不變。
+
+離線 core14命令／2replay、desktop lib204／bin178（各有1個原有ignored案例）、全targets Clippy、JS355（循序完整執行）、i18n與docs通過。新增四邊／角落、目前項目Forward、網頁本機捲動、連點不重送、scrollbar、拖曳不選字、舊geometry／session及所有拒絕條件。首次並行JS執行有1個inline suite程序失敗，該suite單獨50項及完整循序355項均通過，保留原log，未修改圖片產品程式。
+
+macOS真正Dioxus啟動與75%縮放後四周留白已觀察；座標click兩次（含AX Raise後）均在送出前回報noWindowsAvailable，因此實體四邊點擊／游標仍not_ready，不能當成通過。未完成互動的pointer_rows探針依預期記failed、零導覽；關閉後cleanup_completed=false且程序停留AppKit事件迴圈，保留report／diagnostic／sample後終止本案已關閉的合成PID87425，不冒稱正常清理通過。沒有連PTT／登入／發文，也沒有操作使用者視窗。Windows／Linux原生未執行。
+
+原診斷交付 `dist/macos-margin-navigation/PTTStella.app` 已由同日圖片手勢新版整合取代並清理（0.4.0-dev.1／arm64／ad-hoc，僅診斷置頂且啟動不搶焦點）。證據與exact removed paths／保留例外及空間前後記錄在 `.local/verification/margin-navigation-20261104/`。保留上一個已完成原生驗證的本機編輯器App作為fallback；本輪只提交develop，不推送或發佈。
+
 狀態：**畫面核心、Windows 視窗與 WSS 登入前連線已驗證；macOS 專用帳號已觀察手動登入與部分實站瀏覽，平台與案例範圍分列如下**。第一個驗收平台為 Windows；Rust／Dioxus 維持可攜，macOS／Linux 後續各自驗證。
+
+
+## 2026-11-03 本機編輯器第二版（已實作；原生拖曳／注音待驗）
+
+恢復 PTT 原生 Ctrl+P：使用者先選分類／標題、取得看板範本，再按本機編輯入口。範本有界逐行核對原始碼與 EOF、包含畫面外內容；同板草稿提示在此步出現，列表只能管理／恢復已有稿件，不能另建繞過範本的空白新稿。帶回前重讀並比對站端完整標題／正文及 scope／世代，變更則停止；僅核對 T 改標題，清除已知範本後送正文，不選 S 或發表，不重送。特殊長原文行無法證明完整時明確拒絕，保留站端人工流程。
+
+CodeMirror 6 管理本機輸入、IME、undo 與矩形選取，Rust Screen 衍生 SGR 隱藏範圍與左右樣式；圖形重用共同 Canvas renderer，不重解站端 bytes。介面以標題／大面積正文為主，三種顯示共用完整 ANSI 原稿；文字模式整行（含換行邊界），ANSI 圖模式矩形字格。右鍵浮動色票保存開啟當下的範圍、點色即套用，與保存無關；停頓2秒／自動寫入最少間隔5秒，內部焦點不寫檔。多開衝突副本、最後快照、斷線／重開與錯誤不丟稿保護保留。固定套件、來源、MIT notices 和可重現 bundle 皆入 repo，Cargo 不需 npm。已移除舊唯讀預覽及舊 UI 發文捷徑。
+
+離線：desktop lib204／bin178／multi_instance10（ignored 的 helper由父測試啟動，效能案例另明確執行）、JS351、CodeMirror實際DOM／history測試、Python82、core14命令／2replay、Clippy、fmt及docs通過。重播保護另確認完成帶回後不能拿舊範本重送。相同240行矩形上色，比較逐區重掃108.6ms與單次掃描0.36ms，結果逐字相同；2048行／83967 bytes投影9.7ms，僅此機release模式合成量測，不冒充舊機或實站成績。
+
+macOS真正Dioxus：原生Ctrl+P、範本／標題匯入、中文與空行／已有色碼、多行右鍵立即上色、一次undo恢復、三種顯示、末尾空行的全選替換、保存／新程序恢復及一次明確帶回都通過。`native-verified`初稿與`native-final`最新交付版皆passed，完整操作回歸為capture1／color1／restore1／save3／transfer1，移除舊介面後的交付包另以capture1／restore1／transfer1重測通過，精確三行ANSI原文與標題一致；peer拒絕發表，Close acknowledged、listeners／file／connection owner清理完整、測試程序已退出。Documents路徑的一次恢復探針停在macOS系統`open`，保留stack與失敗證據；同份自製資料在獨立暫存目錄恢復／帶回及正常關閉均通過，不因此放寬程式權限或保護。
+
+原生座標拖曳工具回報`noWindowsAvailable`，整行／矩形拖曳手勢與真正注音IME仍需人工驗收；AX／原生鍵盤、右鍵和DOM結果不能代替這些。Windows／Linux GUI及各實站看板範本尚未執行。交付`dist/macos-local-editor-latest/PTTStella.app`，證據`.local/verification/composer-redesign-20261103/`；使用者正在使用的舊App（PID26184）未關閉或操作。保持develop本機提交，不推送／發佈。產物盤點及exact removed paths／空間前後另記同證據目錄的cleanup記錄。
+
+
+## 2026-11-03 原PO／自己側標文字裁切修正
+
+細線與文字原本共用3px盒，text-align與padding使第一字向左溢出並遭容器裁切。改用獨立intrinsic-width span，依真實label尺寸／viewport留白及實際行高判斷；原PO、自己與雙身分、中英文共用。有完整空間才顯示標籤，不足則只在已驗證的空白分隔欄畫側線；連推後續列不顯示重複標籤。每次layout每種身分最多量測一次（最多3次），不放大64-marker上限、不更改Rust來源Frame／黑白名單／連推合併。
+
+JS347通過，覆蓋窄邊界、長雙身分／英文、25%～200%行高、縮放後重用節點與有界量測。macOS真正Dioxus在75%設定縮放後，原PO與自己標籤皆完整顯示；100%滿寬時保留分隔欄側線。150%畫面水平停在中央，不能拿該截圖當左側側線驗收。原生匯出PNG與先前相同自製fixture逐byte一致（960×576），沒有UI標籤混入；surface probe passed、零站端輸入、Close acknowledged與全部清理，測試程序已退出。使用者另開的本機撰寫App不屬於本案測試程序，未操作或關閉。
+
+原交付 `dist/macos-reply-labels/PTTStella.app` 已由本機編輯器新版整合取代，舊App清理；證據 `.local/verification/reply-label-clip-20261103/`。僅develop本機提交，不推送或發佈。接續本機編輯器工作已重用release cache，整輪結案依task-owned規則清理；本案小型launcher在無程序使用後移除，source留在證據中。Windows／Linux原生未執行。
+
+
+## 2026-11-03 本機撰寫與持久草稿（已完成指定範圍）
+
+使用者授權在develop新增本機撰寫，不推送、不發佈。契約見[本機草稿](../drafts.md)。本機保存完整UTF-8與ESC SGR，從已確認身分的看板列表Ctrl+P／浮球導覽開啟；同scope草稿先列標題／時間／衝突標記，明確繼續或另寫。保留原生編輯器選項。現有站端viewport不當作全文備份；帶入後站端修改不回存。分類與標題依站端手動完成，正文另按兩次確認，原稿繼續保留，永不自動發表。
+
+Document kernel lock／baseline／revision確保多程序同稿修改或刪除後另存衝突副本，不同稿保留彼此。磁碟task與最新快照有單一retained owner；180ms debounce／IME／關閉最終快照、失敗重開重試、來源ESC及literal marker可逆。正常退出join寫入，未保存的強制終止不保證。Rust共同Screen／Canvas提供預覽與選色；最後短頁補齊空行，不混入前頁。Connection僅對fresh stamp、同帳號／板／generation／post token、空白標準編輯器開頭游標送一次安全正文；舊世代Ctrl+X不撤銷新流程，錯token／控制碼／重送拒絕。正文每行79欄／510編碼bytes、128KiB／4096行，64稿容量滿拒絕不淘汰。
+
+離線最終：desktop lib199／bin178（另1個父測試實際啟動的helper）、多程序10（另1個helper）、JS344、Python82、core14commands／2replays、全targets Clippy／fmt／Fluent／docs通過。真正兩子程序同時修改同稿與新增不同稿，主檔精確保留兩份中文／SGR。最後快照、失敗／損壞不覆寫、刪除衝突、跨帳號scope、長於普通clipboard的正文、安全SGR／行寬／UTF-16選取與原色恢復都有獨立expected。新增wire fixture第一次順序與actual不一致，修正actual順序保留失敗log；沒有改expected掩蓋產品錯誤。
+
+原生macOS：初輪Draft封包漏白名單而失敗，已補共同router與compact preview consumer；第二輪發現Canvas沿用absolute且預設300×150造成遮擋／模糊，修正為static／960×576後重跑，失敗截圖與候選報告保留。native-final-save在真正Dioxus輸入中文標題及三行含ESC原稿，兩次保存逐字讀回；新程序native-current-restart讀相同檔案，同板Ctrl+P顯示清單、恢復及清晰紅色預覽。明確開始與二次確認後peer精確只接受Ctrl+P及一次ANSI正文，畫面顯示NOT PUBLISHED；之後正常斷線，再從浮球恢復同稿並離線保存，實際2次restore／1次transfer／1次離線save。來源仍完全相同，Close acknowledged／renderer與disk／connection／credential清理通過，process已全部退出。未連PTT／取鑰匙圈／發文；分類與標題特殊板型、原生注音候選、Windows／Linux GUI不冒稱已測。
+
+交付為 `dist/macos-local-composer-final/PTTStella.app`（0.4.0-dev.1／macOS arm64 release／strict ad-hoc／未公證；只有診斷版置頂、啟動不搶焦點）。證據 `.local/verification/local-drafts-20261103/`。自己產生且已被取代的App／launcher及Cargo profile依task-owned規則清理，精確removed／retained與filesystem free before／after分列cleanup-owned-output.json；保留最新交付、唯一失敗／成功證據及外部／shared cache，沒有工作分支或worktree需刪除。
+
 
 ## 目標
 
-目前進入 `0.3.0` 發佈準備：develop 的 Cargo／lock、README／徽章與版專用說明已更新為正式0.3.0，準備develop→main的Release PR；main及公開正式下載仍為0.2.2，尚未合併或發佈。本輪實站／操作／20輪827行長文與四架構verify結果見下節。最新未發佈本機候選為 `dist/macos-030-release-candidate/PTTStella.app`（正常視窗、非診斷；原生About確認0.3.0）；本輪實站診斷基線為 `dist/macos-030-freeze-final/PTTStella.app`（實際0.3.0-dev.2）。歷史交付與驗證範圍保留於後續各節，過時副本依task-owned清理規則處理。
+正式版 [0.3.0](https://github.com/yam276/PTTStella/releases/tag/v0.3.0) 已於2026-11-02由Release PR #6合併至main並公開；main保留0.3.0，develop已整合main並進入 `0.4.0-dev.1`。本輪實站／操作／20輪827行長文與四架構驗證結果見下節，正式發佈結果見本節末尾。本機候選 `dist/macos-030-release-candidate/PTTStella.app`（正常視窗、非診斷）與實站診斷基線 `dist/macos-030-freeze-final/PTTStella.app`（實際0.3.0-dev.2）保留為歷史驗收證據；正式下載請使用Release附件。歷史交付與驗證範圍保留於後續各節，過時副本依task-owned清理規則處理。
 
 開啟視窗、自動連上 PTT、手動輸入帳號密碼、看見登入後畫面，最後可正常斷線。文字、固定排版與雙色字由核心與 renderer 實作。
 
@@ -12,7 +191,35 @@
 
 初期 terminal surface 已擴充本機操作功能、依 [導覽契約](../navigation.md) 的最小滑鼠導覽，以及目前畫面連續行 PNG 截圖。本階段依 [媒體 MVP 規格](../media.md) 加入按需媒體預覽。後續依使用者授權加入有界的 [文章閱讀快取](../article-reading.md)，沒有啟動時自動登入或背景追蹤；後續依使用者明確授權加入 [按鈕登入與鑰匙圈保存](../login.md)，以及下列有界快速切板計畫。
 
-## 0.3.0 功能凍結與發佈前驗收（2026-10-30，進行中）
+## 0.4.0 藍金身分側標與推文快速定位（2026-11-03）
+
+使用者授權本輪先做兩項，測試後留develop、不發佈；本機草稿下一步另做。最新診斷交付為 `dist/macos-reply-navigation/PTTStella.app`（0.4.0-dev.1／arm64 release／strict ad-hoc／未公證，僅測試置頂、啟動不搶焦點），歷史0.3.0候選及收藏交付不當作本輪最新版。
+
+網頁文章從同一Rust Push／ArticleCache建立作者、自己及既有reply_focus的定位索引。作者只在完整first_line=1的標準作者／板名列成立；自己由本次Session標準密碼提示前的帳號回顯及後續主選單確認，不讀鑰匙圈帳號當登入證據。手動登入與按鈕／2FA流程均有測試；新generation、空帳號提示、斷線與stop清除。無法確認的身分不猜，未提供新的登入／自動登入或密碼保存行為。
+
+作者金色、自己青藍、重疊雙線，連推只在首列帶標籤、後續細線連續。優先外側留白；無留白時使用標準推文已核對的類型與ID間空白格，不改Frame或source_frame、不蓋文字，不更動黑白名單色彩與merge_push_ids。未暫時揭露的MaskRow不產生側標或定位列／數量；Mask保留ID可定位，Allow自訂色保留。終端機模式沿用原體驗。
+
+文章空白右鍵或浮球導覽可開同一定位工具，原PO／自己／目前標記的人三個直接按鈕、上一則／下一則、計數及關閉。從目前可見行附近開始，可循環；只跳已載入列，沿既有搜尋幾何保留展圖／水平位置，零站端命令。scope、原始packet、互動gate及銷毀均檢查，規則更新不自行跳轉。側標用排序列二分定位，每次最多64個DOM，4000列測試核對可見範圍查找而非全表掃描；黑名單比對以固定12-byte不配置字串key的集合避免逐推文掃整份規則。這是算法／有界資源測試，不宣稱低階實機FPS。
+
+離線驗證：JS336、Python82、core14commands／2replays、desktop lib192／bin174、多程序保存9、全targets Clippy／fmt／Fluent／docs通過；兩個ignored入口仍由父測試實際啟動，不計入通過。新增同人兼作者／自己、連推首列／後續列、Mask／MaskRow／Allow、缺標頭／中段假標頭、換篇／世代／取消／遲到、角色切換、完整行／footer、4000列與舊圖片保留回歸。Source與PNG不受側標影響。
+
+macOS實際Dioxus合成peer先送帳號回顯→主選單→一頁23行文章，只接受Close、拒絕所有站端按鍵。最終交付的自己定位第1／2則與原PO4則索引、側標及連推ID隱藏確認；相同UI在前一個候選的150%原生操作可跳到原PO第4／4則（9～23行）與自己第2／2則（7～21行）。實際交付重測後surface-probe passed、navigation_requests=0、原PO列[3,4,10,18]／自己列[6,14]、來源PNG960×576、Close acknowledged，renderer／connection／credential／file owner清理完成且程序退出。獨立Pillow解碼核對兩次來源PNG像素完全相同，七個推文分隔格純黑，沒有側標進入匯出。原生ID座標點擊與同時原PO／自己的雙線未獨立操作，分列Rust／JS通過；Windows／Linux GUI未執行。背景截圖的既有WebKit文字繪製缺漏不拿來宣稱完整前景像素驗收。
+
+失敗／修正保留於 `.local/verification/reply-roles-20261103/`：初版JS函式double未提供新owner；新增身份清除test發現stop遺留帳號；原生工具入口自擋；review移除send_input對舊View的重複帳號觀察並補按鈕2FA確認；report擴充碰到serde macro recursion，改在macro外計算／附資料而未提高限制；fixture函式移到測試模組前。全部對應gate重跑，不改expected掩蓋問題。中途native未匯出或未完成項目不記完整通過。
+
+本輪只本機提交develop，不推送、不發佈。五個自己的過時App、四個測試launcher及本repo已用完Cargo profiles已依task-owned規則清理，保留唯一失敗／成功證據、launcher來源及最新交付；其他專案／前輪產品／外部cache未刪。精確路徑、SHA-256、工具宣告量與filesystem free before／after分列cleanup-owned-output.json及logs。未建立工作分支／worktree。本機草稿未實作。
+
+## 0.4.0 收藏直接開清單（2026-11-03）
+
+依使用者修正後的要求，浮球第一層「收藏」直接開啟既有書籤清單，列表、閱讀頁與斷線都可查看；不再先顯示無法收藏的工具頁與提示。一般文章空白、網址、圖片、ID與反白的右鍵選單保持原樣。清單載入後焦點在已存項目，選擇後仍可前往或閱讀本機副本；目前文章／列表指定列符合既有條件時，清單內另顯示收藏按鈕，否則隱藏。
+
+列表標題右鍵的lease不因點收藏入口而清空；從清單明確收藏才關閉dialog，交給原本同一核對／全文loader／Files流程。過期列不回退至光棒，讀取中、保存中、組字及本機閱讀期間拒絕再啟動。首層入口沿既有onSettings模式加入同一owner的onBookmarks，不留不可達的工具頁或重複DOM ID；原生CDP helper同步支援直接dialog petal。
+
+驗證：JS328、Python82、core14commands／2replays、desktop lib186／bin173、多程序保存9、全targets Clippy／fmt／docs通過，ignored為父測試使用的子程序helper。macOS arm64診斷App已在真正Dioxus視窗確認浮球第一層收藏直接顯示書籤清單，並由清單指定第一篇（光棒在第二篇）後成功進入對應無標頭文章。全文依原保護停23行，AX Raise／輸入焦點及原生座標均無法取得前景（noWindowsAvailable），已請使用者點標題列；本次完整保存與離線讀回尚待該前景操作，未記為原生passed。沒有為測試放寬前景、期限或輸入保護，沒有連實站。
+
+交付 `dist/macos-bookmarks-direct-final/PTTStella.app`（實際0.4.0-dev.1／release／arm64／strict ad-hoc／未公證，僅診斷置頂且啟動不搶焦點），證據 `.local/verification/bookmarks-direct-20261103/`。本輪保持develop，只本機提交，不推送或發佈。測試窗與唯一證據因待驗保留，已用完的本repo Cargo profiles依原生clean清理；精確路徑、工具宣告量與filesystem free before／after分列cleanup-owned-output.json及cleanup logs。Windows／Linux原生未執行；本輪沒有建立工作分支／worktree或刪除其他工作的產物。
+
+## 0.3.0 功能凍結與發佈前驗收（2026-10-30，已完成指定範圍）
 
 使用者要求凍結功能，先完成剩餘實站、操作與效能回歸，再跑 Windows x64、macOS arm64／x64、Linux x64 的 verify 建置；全部必要項通過後才準備 0.3.0。保持 develop／0.3.0-dev.2，不因測試完成自行合併或發佈。當前最新診斷 App 是 `dist/macos-list-bookmarks-final/PTTStella.app`；舊段落的其他 App 路徑屬歷史紀錄，已被取代的測試副本依結案規則清理，不能當作仍存在的交付。
 
@@ -37,6 +244,15 @@ PTTStella 專用帳號實站登入，Steam／NBA／Equestrian／Test 切板與�
 依本次「確認後準備發佈0.3.0」授權，現在只在develop把Cargo／lock、README／徽章與版專用說明改為正式0.3.0，準備develop→main的Release PR供審閱，不自行合併或發佈。前述原生與四架構驗證針對同一產品程式；此步只有版本／文件，不把dev下載改名冒充正式下載。正式套件仍由合併後的main發佈流程重新建置並校驗。診斷App `dist/macos-030-freeze-final/PTTStella.app` 仍標示實際0.3.0-dev.2；不宣稱它是正式下載。
 
 本輪全部App及WebKit cohort已退出，最終finish run_ok／cleanup_ok true、診斷無丟紀錄；取樣工具也已join。保留來源／失敗／成功與CPU／RSS／vmmap證據，自己的過時中間App已清理；明確清單及保留理由在本輪cleanup-owned-output.json。平台GUI與低階實機範圍仍按前述限制，不因CI通過擴大宣稱。
+
+
+## 0.3.0 發佈結果（2026-11-02）
+
+使用者明確授權合併發佈後，Release PR [#6](https://github.com/yam276/PTTStella/pull/6) 以merge commit `ad81691a40f1173be6215a894d6b4423743e12bc` 推進main；正式 [41381604505](https://github.com/yam276/PTTStella/actions/runs/41381604505) 的來源檢查、Windows x64、macOS arm64／x64、Linux x64測試／原生打包及publisher全部成功。[v0.3.0](https://github.com/yam276/PTTStella/releases/tag/v0.3.0) 已公開為Latest stable，tag精確指向該合併提交。
+
+取回同次正式run的原始artifacts，用未修改的production `validate_assets` 核對乾淨來源、版本／release profile、四份manifest、六個套件、完整白名單及全部逐檔SHA-256；另獨立核對公開七個附件的GitHub digest／大小、六筆SHA256SUMS、版本專用中英說明及Latest狀態，全部通過。公開只含六個下載與SHA256SUMS，沒有JSON；建置manifest仍保留Actions artifacts。下載及獨特校驗證據保留repo外與 `.local/verification/release-030-publish-20261102/`。本機校驗曾在Windows artifact尚未下載完成時因缺manifest停止，待兩個下載程序正常結束後完整重跑通過，未略過或放寬校驗。
+
+main已整合回develop，develop同步Cargo／lock、README與徽章為 `0.4.0-dev.1`，main保持正式 `0.3.0`。本輪只做發佈與版本／文件更新，未新增產品功能，也未把CI當成Windows／Linux GUI或低階實機驗收。沒有建立臨時分支、worktree或本機App／Cargo編譯產物；保留同次正式下載及唯一發佈證據，未刪除其他工作的產物。
 
 ## 0.3.0 後續需求與順序（2026-10-29）
 

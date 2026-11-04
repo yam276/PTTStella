@@ -123,6 +123,20 @@ fn outbound_results_match_the_shared_wire_examples() {
         ),
         ("stop", Packet::Stop),
         ("notice", Packet::Notice("訊息".into())),
+        (
+            "toast_copy",
+            Packet::Toast {
+                message: "已複製".into(),
+                kind: ToastKind::Copy,
+            },
+        ),
+        (
+            "toast_success",
+            Packet::Toast {
+                message: "已保存".into(),
+                kind: ToastKind::Success,
+            },
+        ),
         ("surface_probe", Packet::SurfaceProbe("decode".into())),
         ("login_idle", Packet::LoginResult(LoginResult::Idle)),
         (
@@ -429,6 +443,22 @@ fn outbound_results_match_the_shared_wire_examples() {
             },
         ),
         ("settings_visibility", Packet::SettingsVisibility(true)),
+        (
+            "draft_saved",
+            Packet::Draft(super::drafts::Reply::Saved {
+                token: 2,
+                sequence: 3,
+                conflicted: false,
+            }),
+        ),
+        (
+            "draft_conflict",
+            Packet::Draft(super::drafts::Reply::Saved {
+                token: 2,
+                sequence: 4,
+                conflicted: true,
+            }),
+        ),
     ];
     let expected: Vec<Value> =
         serde_json::from_str(include_str!("../../tests/fixtures/ui-packets.json")).unwrap();
@@ -457,6 +487,7 @@ fn frame_and_preview_packets_keep_typed_identity_and_data_under_payload() {
         cjk_font: "中文".into(),
         font_size: 18.0,
         baseline: 19.0,
+        font_width: 100.0,
     };
     let paint = sample_packet(&screen.frame(), &settings);
     let value = serde_json::to_value(Packet::Paint(&paint)).unwrap();
@@ -486,6 +517,18 @@ fn frame_and_preview_packets_keep_typed_identity_and_data_under_payload() {
     let mut preferences = Preferences::load(Some(directory.path())).unwrap();
     let open = serde_json::to_value(preferences.open_packet()).unwrap();
     assert_eq!(open["kind"], "settings_open");
+    assert_eq!(
+        open["payload"]["profile"]["fonts"],
+        serde_json::json!({"kind":"preset","preset":"windows_classic"})
+    );
+    assert_eq!(
+        open["payload"]["default_profile"]["fonts"],
+        open["payload"]["profile"]["fonts"]
+    );
+    assert_eq!(open["payload"]["values"]["font_size"], 23.0);
+    assert_eq!(open["payload"]["defaults"]["font_size"], 23.0);
+    assert_eq!(open["payload"]["defaults"]["ascii_font"], "MingLiU");
+
     assert!(open["payload"]["sample"]["frame"].is_object());
     assert_eq!(
         open["payload"]["sample"]["frame"]["glyph_encoding"],

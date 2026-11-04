@@ -6,6 +6,11 @@ use std::collections::BTreeMap;
 pub mod store;
 
 pub const MAX_SETTINGS_BYTES: usize = 8192;
+const DEFAULT_FONT_SIZE: f64 = 23.0;
+
+fn default_font_width() -> f64 {
+    100.0
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -49,20 +54,25 @@ pub struct DisplayProfile {
     pub fonts: Fonts,
     pub font_size: f64,
     pub baseline: f64,
+    #[serde(default = "default_font_width")]
+    pub font_width: f64,
 }
 impl Default for DisplayProfile {
     fn default() -> Self {
         Self {
-            fonts: Fonts::PlatformDefault {},
-            font_size: 20.0,
+            fonts: Fonts::Preset {
+                preset: Preset::WindowsClassic,
+            },
+            font_size: DEFAULT_FONT_SIZE,
             baseline: 20.0,
+            font_width: default_font_width(),
         }
     }
 }
 impl DisplayProfile {
     pub fn resolve(&self) -> Result<DisplaySettings, String> {
         let mut resolved = match &self.fonts {
-            Fonts::PlatformDefault {} => DisplaySettings::default(),
+            Fonts::PlatformDefault {} => DisplaySettings::platform_default(),
             Fonts::Preset { preset } => DisplaySettings::preset(preset.name()),
             Fonts::Custom {
                 ascii_font,
@@ -75,6 +85,7 @@ impl DisplayProfile {
         };
         resolved.font_size = self.font_size;
         resolved.baseline = self.baseline;
+        resolved.font_width = self.font_width;
         resolved.validate()
     }
     pub fn validate(mut self) -> Result<Self, String> {
@@ -97,6 +108,7 @@ impl From<DisplaySettings> for DisplayProfile {
             },
             font_size: old.font_size,
             baseline: old.baseline,
+            font_width: old.font_width,
         }
     }
 }
@@ -291,9 +303,17 @@ pub struct DisplaySettings {
     pub cjk_font: String,
     pub font_size: f64,
     pub baseline: f64,
+    #[serde(default = "default_font_width")]
+    pub font_width: f64,
 }
 impl Default for DisplaySettings {
     fn default() -> Self {
+        Self::preset("windows_classic")
+    }
+}
+impl DisplaySettings {
+    /// An explicit saved platform choice keeps its original OS font intent.
+    pub fn platform_default() -> Self {
         Self::preset(if cfg!(target_os = "windows") {
             "windows"
         } else if cfg!(target_os = "macos") {
@@ -302,8 +322,6 @@ impl Default for DisplaySettings {
             "linux"
         })
     }
-}
-impl DisplaySettings {
     fn preset(name: &str) -> Self {
         let (ascii, cjk) = match name {
             "bundled" => ("Cascadia Mono", "Noto Sans CJK TC"),
@@ -318,8 +336,9 @@ impl DisplaySettings {
             version: 1,
             ascii_font: ascii.into(),
             cjk_font: cjk.into(),
-            font_size: 20.0,
+            font_size: DEFAULT_FONT_SIZE,
             baseline: 20.0,
+            font_width: default_font_width(),
         }
     }
     pub fn presets() -> BTreeMap<&'static str, Self> {
@@ -350,6 +369,8 @@ impl DisplaySettings {
             || !(8.0..=24.0).contains(&self.font_size)
             || !self.baseline.is_finite()
             || !(0.0..=24.0).contains(&self.baseline)
+            || !self.font_width.is_finite()
+            || !(50.0..=150.0).contains(&self.font_width)
         {
             return Err(crate::msg!("font-geometry-invalid"));
         }

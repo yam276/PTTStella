@@ -75,7 +75,7 @@ Files 背景建立／校驗 archive、建立 draft，經共同鎖與三方 merge
 
 ## 從列表收藏
 
-浮球第一層有「收藏」分類，包含當前／指定文章收藏與書籤清單。文章列表的標題命中起點與可收藏狀態由Rust Article提供，JS不解析標題或從文字猜AID；刪除列不提供收藏。普通標題右鍵先開浮球並保存該列、generation／revision／input_epoch／presentation的lease，不能退回目前cursor；舊畫面失效後拒絕，重新開浮球才回到當前選取列。作者／網址／選字仍優先專用選單；關閉右鍵浮球或Shift時使用標題情境收藏。
+浮球第一層「收藏」直接開啟既有書籤清單，開啟後焦點在已存項目，列表、閱讀或斷線時均可查看／閱讀本機副本；不需先進入文章。清單內僅在目前文章／指定列表列符合條件時顯示收藏按鈕，明確點擊後關閉清單並沿同一核對流程保存。開啟清單不送站端導覽；正在讀取、保存、組字或閱讀本機副本時不能啟動收藏核對。文章列表的標題命中起點與可收藏狀態由Rust Article提供，JS不解析標題或從文字猜AID；刪除列不提供收藏。普通標題右鍵先開浮球並保存該列、generation／revision／input_epoch／presentation的lease，不能退回目前cursor；舊畫面失效後拒絕，重新開浮球才回到當前選取列。作者／網址／選字仍優先專用選單；關閉右鍵浮球或Shift時使用標題情境收藏。
 
 `ListArticle`沿用Session的同一Open reducer與唯一writer：用有界方向鍵移至指定列，核對除pointer外的完整原列，Q驗證AID／同板，返回相同列才Right開啟。此來源已有明確列及Q身分，允許無標頭的標準閱讀頁；一般快速前往仍保留既有標頭要求。進入後由同一ArticleCache／全文loader取得文章，綁初始operation、後續article id／規則版本與實際reading gate，完整且已ACK才交既有目前文章收藏再核對一次；最終AID須與列表查得的身分相同。不同operation／世代／scope／首尾不完整、載入錯誤、手動換篇／輸入、設定、取消或失焦都不能串存。開啟階段另有35秒UI收束期限，底層每步5秒／整體30秒不變，不另開sender、reader或輪詢task。
 

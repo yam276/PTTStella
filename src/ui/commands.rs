@@ -12,6 +12,8 @@ pub(super) enum Kind {
     Browse,
     Destination,
     EditorColor,
+    DraftCapture,
+    DraftTransfer,
 }
 pub(super) struct Completion {
     pub(super) kind: Kind,

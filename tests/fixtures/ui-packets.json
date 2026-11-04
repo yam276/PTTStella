@@ -37,6 +37,8 @@
       "payload": "訊息"
     }
   },
+  {"name":"toast_copy","packet":{"kind":"toast","payload":{"message":"已複製","kind":"copy"}}},
+  {"name":"toast_success","packet":{"kind":"toast","payload":{"message":"已保存","kind":"success"}}},
   {
     "name": "surface_probe",
     "packet": {
@@ -483,5 +485,7 @@
   {"name": "inline_open", "packet": {"kind": "inline_open", "payload": {"batch": 2, "presentation": 3, "generation": 7, "revision": 4, "first_line": 1, "article_id": 2, "entries": [{"index": 1, "row": 8, "key": 0}], "limited": false}}},
   {"name": "inline_error", "packet": {"kind": "inline_error", "payload": {"batch": 2, "index": 1, "message": "失敗"}}},
   {"name": "inline_image", "packet": {"kind": "inline_image", "payload": {"batch": 2, "index": 1, "image": {"request": 2, "data": "AQID", "mime": "image/png", "width": 2, "height": 1, "animated": false, "cached": false}}}},
-  {"name": "settings_visibility", "packet": {"kind": "settings_visibility", "payload": true}}
+  {"name": "settings_visibility", "packet": {"kind": "settings_visibility", "payload": true}},
+  {"name": "draft_saved", "packet": {"kind": "draft", "payload": {"state": "saved", "token": 2, "sequence": 3, "conflicted": false}}},
+  {"name": "draft_conflict", "packet": {"kind": "draft", "payload": {"state": "saved", "token": 2, "sequence": 4, "conflicted": true}}}
 ]

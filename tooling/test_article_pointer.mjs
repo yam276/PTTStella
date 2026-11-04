@@ -24,8 +24,9 @@ function fixture({cached=true}={}){
         stamp:()=>({generation:f.generation,revision:f.revision,input_epoch:0}),sameStamp:(a,b)=>JSON.stringify(a)===JSON.stringify(b),
         policy(){},focus(){},clearSelection(){},cancelHover(){},refreshKeepAlive(){},refreshNavigation(){},setHover(){},repaint(){},
         requestSelection:value=>selections.push(value),media:{locate(){}},hoverPreference:'off',inlineImages:{linkAtPoint:()=>-1}};
+    f.navigationHost=f.viewport;f.viewport.contains=target=>target===f.surface||target===f.viewport;
     vm.createContext(f);
-    for(const [first,last] of [['navigationBackRegion','setHover'],['pointerdown','cancelDrag'],['readingMove',null]]){
+    for(const [first,last] of [['navigationBackRegion','setHover'],['navigationPointer','cancelDrag'],['readingMove',null]]){
         const end=last?source.indexOf(`function ${last}(`):source.indexOf('const browseReturn=');
         vm.runInContext(source.slice(source.indexOf(`function ${first}(`),end),f);
     }
@@ -311,11 +312,13 @@ test('list Home/End also reach the physical viewport edges outside the centered 
             assert.deepEqual(f.selections,[]);
         }
     }
-    // Keep both the old grid-edge target and the inert middle of the margin.
+    // Keep the old grid-edge targets while the rest of the margin now pages.
     for(const [y,action] of [[117,'first'],[662,'last'],[680,'last']]){
         const f=letterboxedList();f.tap(40,y);assert.deepEqual(f.sent.map(p=>p.intent),[{action}]);
     }
-    for(const y of [60,730]){const f=letterboxedList();f.tap(40,y);assert.deepEqual(f.sent,[]);}
+    for(const [y,action] of [[60,'previous_page'],[730,'next_page']]){
+        const f=letterboxedList();f.tap(40,y);assert.deepEqual(f.sent.map(p=>p.intent),[{action}]);assert.deepEqual(f.selections,[]);
+    }
 });
 test('viewport margin Home/End reject stale geometry, Shift, drags, foreign routes and outside-window points',()=>{
     for(const reason of ['shift','drag','untrusted','remote','blocked','pending','output','no-grid','profile','held-resize','released-scroll','outside-left','outside-top','outside-right','outside-bottom']){
@@ -336,7 +339,7 @@ test('viewport margin Home/End reject stale geometry, Shift, drags, foreign rout
         if(reason==='released-scroll')f.viewport.scrollTop=24;
         f.click(e);assert.deepEqual(f.sent,[],reason);
     }
-    for(const kind of ['unknown','empty_list','continue_prompt','article_reading']){
+    for(const kind of ['unknown','empty_list','continue_prompt']){
         const f=letterboxedList(kind);f.tap(40,5);assert.deepEqual(f.sent,[],kind);
     }
 });
@@ -369,4 +372,152 @@ test('status-row End retains pointer admission and leaves article footers unchan
     for(const kind of ['unknown','empty_list','article_reading']){
         const f=listFixture(kind);f.tap(4,565);assert.deepEqual(f.sent,[],kind);
     }
+});
+
+function surrounded(kind='article_list'){
+    const f=letterboxedList(kind);f.viewport.clientWidth=1200;
+    f.surface.getBoundingClientRect=()=>({top:152,left:120,right:1080,bottom:728,width:960,height:576});
+    f.at=(x,y,extra={})=>f.event(0,0,{clientX:x,clientY:y,...extra});
+    f.tapAt=(x,y,extra={})=>{const e=f.at(x,y,extra);f.pointerdown(e);f.pointerup(e);f.click(e);};
+    return f;
+}
+test('all four margins navigate without creating cells, links, selections or row openings',()=>{
+    for(const kind of ['system_menu','document_list','board_list','article_list','command_help','article_reading']){
+        for(const [x,y,action] of [[20,400,'back'],[1180,400,'forward'],[600,100,'previous_page'],[600,780,'next_page']]){
+            const f=surrounded(kind);assert.equal(f.cellAt(f.at(x,y),false),null);
+            f.linkAt=point=>{assert.equal(point,null);return -1;};
+            f.tapAt(x,y);f.tapAt(x,y);
+            assert.deepEqual(f.sent.map(p=>p.intent),kind==='command_help'&&action==='forward'?[]:[{action}],kind+' '+action);
+            assert.deepEqual(f.selections,[]);
+        }
+    }
+    const main=surrounded('main_menu');main.tapAt(20,400);assert.deepEqual(main.sent,[]);
+    const enter=surrounded('main_menu');enter.tapAt(1180,400);assert.deepEqual(enter.sent.map(p=>p.intent),[{action:'forward'}]);
+    // Corners use vertical navigation; outermost strips retain Home/End.
+    for(const [x,y,action] of [[20,45,'first'],[1180,835,'last'],[20,100,'previous_page'],[1180,780,'next_page']]){
+        const f=surrounded();f.tapAt(x,y);assert.deepEqual(f.sent.map(p=>p.intent),[{action}]);
+    }
+});
+test('cached reading uses local page movement in side and vertical margins',()=>{
+    for(const [x,y,expected] of [[1180,300,1200],[600,100,0],[600,780,1200]]){
+        const f=surrounded('article_reading');f.latest.article={id:1,first_line:1,last_line:80,end:true};
+        f.grid.height=2000;f.viewport.scrollTop=480;
+        f.tapAt(x,y);assert.equal(f.viewport.scrollTop,expected);assert.deepEqual(f.sent,[]);
+    }
+});
+test('every margin retains transaction guards and never selects text while dragging from blank space',()=>{
+    for(const [x,y] of [[20,400],[1180,400],[600,100],[600,780]]){
+        for(const reason of ['shift','drag','untrusted','remote','blocked','pending','output','disconnected','unknown','no-grid','stale','generation','held-resize','released-scroll','cross-action','outside']){
+            const f=surrounded(),e=f.at(x,y,{shiftKey:reason==='shift',isTrusted:reason!=='untrusted'});
+            if(reason==='remote')f.stationMouse.local=()=>false;
+            if(reason==='blocked')f.blocked=()=>true;
+            if(reason==='pending')f.latest.input_pending=true;
+            if(reason==='output')f.latest.output_pending=true;
+            if(reason==='disconnected')f.latest.connected=false;
+            if(reason==='unknown')f.latest.navigation.kind='unknown';
+            if(reason==='no-grid')f.grid=null;
+            if(reason==='outside')e.clientX=1200;
+            f.pointerdown(e);
+            if(reason==='stale')f.latest.presentation++;
+            if(reason==='generation')f.generation++;
+            if(reason==='held-resize')f.viewport.clientWidth=1180;
+            f.pointerup(reason==='drag'?{...e,clientX:e.clientX+10}:reason==='cross-action'?f.at(600,45):e);
+            if(reason==='released-scroll')f.viewport.scrollTop=24;
+            f.click(e);assert.deepEqual(f.sent,[],reason);assert.deepEqual(f.selections,[],reason);
+        }
+    }
+    const scrollbar=surrounded();scrollbar.viewport.clientWidth=1190;scrollbar.tapAt(1195,400);assert.deepEqual(scrollbar.sent,[]);
+});
+test('margin cursors follow the same hit test and clear when navigation becomes unavailable',()=>{
+    const f=surrounded();f.navigationMarker={style:{},dataset:{}};f.surface.style={};
+    f.hoveredLink=-1;f.pointerClient=null;f.previewHover=()=>{};f.draw=()=>{};f.tr=key=>key;
+    vm.runInContext(source.slice(source.indexOf('function setHover('),source.indexOf('function refreshNavigation(')),f);
+    for(const [x,y,action] of [[20,400,'back'],[1180,400,'forward'],[600,100,'previous_page'],[600,780,'next_page']]){
+        f.setHover(null,false,false,f.at(x,y));assert.equal(f.viewport.dataset.pointerAction,action);
+        assert.equal(f.surface.style.cursor,'');assert.equal(f.surface.title,'');assert.equal(f.navigationMarker.hidden,true);
+    }
+    f.latest.input_pending=true;f.setHover(null,false,false,f.at(20,400));assert.equal(f.viewport.dataset.pointerAction,'none');
+    const css=readFileSync(new URL('../assets/app.css',import.meta.url),'utf8');
+    for(const action of ['back','forward','previous_page','next_page','first','last'])assert.ok(css.includes(`.workspace[data-pointer-action="${action}"]`));
+});
+
+// This matches the web reader: a fixed fitted scrollport INSIDE a larger host.
+// Earlier margin tests used the scrollport itself as the whole window and missed
+// both event bubbling and this extra clipping boundary.
+function fittedReader(){
+    const f=fixture();f.navigationHost={dataset:{},clientWidth:1920,clientHeight:1080,getBoundingClientRect:()=>({left:0,top:0,right:1920,bottom:1080,width:1920,height:1080})};
+    f.viewport.clientWidth=1800;f.viewport.clientHeight=1080;f.viewport.scrollTop=900;f.viewport.scrollHeight=3600;
+    f.viewport.getBoundingClientRect=()=>({left:60,top:0,right:1860,bottom:1080,width:1800,height:1080});
+    f.surface.getBoundingClientRect=()=>({left:60,top:-f.viewport.scrollTop,right:1860,bottom:3600-f.viewport.scrollTop,width:1800,height:3600});
+    f.grid.x=col=>col*22.5;f.grid.y=row=>row*45;f.grid.bottom=row=>(row+1)*45;f.grid.height=3600;
+    f.latest.article.end=true;
+    f.leaveLink=()=>f.leftOverlay=true;
+    f.at=(x,y,extra={})=>f.event(0,0,{target:f.navigationHost,type:'pointermove',clientX:x,clientY:y,...extra});
+    f.routedTap=(x,y,extra={})=>{const e=f.at(x,y,extra);for(const handler of [f.pointerdown,f.pointerup,f.click])f.navigationPointer(e,handler);};
+    return f;
+}
+test('a fullscreen fitted web reader routes actual host margins while keeping the scrollport fixed',()=>{
+    for(const [x,action] of [[20,'back'],[1900,'forward']]){
+        const f=fittedReader();const before=[f.viewport.clientWidth,f.viewport.clientHeight];
+        assert.equal(f.cellAt(f.at(x,500),false),null);f.routedTap(x,500);
+        if(action==='back')assert.deepEqual(f.sent.map(p=>p.intent),[{action}]);
+        else {assert.equal(f.viewport.scrollTop,1935);assert.deepEqual(f.sent,[]);}
+        assert.deepEqual([f.viewport.clientWidth,f.viewport.clientHeight],before);assert.deepEqual(f.selections,[]);
+    }
+    // Window top/bottom strips work even in the host margin alongside a long,
+    // scrolled document, rather than treating its full height as the viewport.
+    for(const [x,y,expected] of [[20,5,0],[1900,1075,2520]]){
+        const f=fittedReader();f.routedTap(x,y);assert.equal(f.viewport.scrollTop,expected);assert.deepEqual(f.sent,[]);
+    }
+});
+test('clipped zoomed cells outside the fitted scrollport remain navigation-only margins',()=>{
+    for(const [x,action] of [[20,'back'],[1900,'forward']]){
+        const f=fittedReader();f.surface.getBoundingClientRect=()=>({left:-300,top:-900,right:2300,bottom:2700,width:2600,height:3600});
+        assert.equal(f.cellAt(f.at(x,500),false),null);
+        f.linkAt=point=>{assert.equal(point,null);return -1;};
+        f.routedTap(x,500);
+        if(action==='back')assert.deepEqual(f.sent.map(p=>p.intent),[{action}]);
+        else {assert.equal(f.viewport.scrollTop,1935);assert.deepEqual(f.sent,[]);}
+        assert.deepEqual(f.selections,[]);
+    }
+});
+test('host routing ignores tools, dialogs and notifications without preventing their defaults or duplicating input',()=>{
+    for(const type of ['pointerdown','pointerup','click','dblclick','pointermove']){
+        const f=fittedReader(),e=f.at(1900,500,{target:{id:'tool-button'},type});let calls=0;
+        f.navigationPointer(e,()=>{calls++;});assert.equal(calls,0);assert.equal(e.prevented,undefined);
+        assert.equal(f.leftOverlay,type==='pointermove'?true:undefined);
+    }
+    const f=fittedReader();let calls=0;
+    for(const target of [f.navigationHost,f.surface,f.viewport])f.navigationPointer(f.at(500,500,{target}),()=>calls++);
+    assert.equal(calls,3);
+    // The production binding has one owner, so bubbling viewport clicks cannot
+    // invoke a second handler on the outer host.
+    assert.ok(source.includes('[navigationHost,event,e=>navigationPointer(e,handler)]'));
+    assert.equal(source.includes('[viewport,"pointerdown",pointerdown]'),false);
+});
+test('fullscreen margins preserve guards, scrollbar ownership and host geometry leases',()=>{
+    for(const reason of ['shift','drag','pending','output','remote','blocked','untrusted','host-resize','host-move','scroll','outside']){
+        const f=fittedReader(),e=f.at(1900,500,{shiftKey:reason==='shift',isTrusted:reason!=='untrusted'});
+        if(reason==='pending')f.latest.input_pending=true;
+        if(reason==='output')f.latest.output_pending=true;
+        if(reason==='remote')f.stationMouse.local=()=>false;
+        if(reason==='blocked')f.blocked=()=>true;
+        if(reason==='outside')e.clientX=1920;
+        f.navigationPointer(e,f.pointerdown);
+        if(reason==='host-resize')f.navigationHost.clientWidth=1930;
+        if(reason==='host-move')f.navigationHost.getBoundingClientRect=()=>({left:1,top:0,width:1920,height:1080});
+        if(reason==='scroll')f.viewport.scrollTop=950;
+        f.navigationPointer(reason==='drag'?{...e,clientX:1890}:e,f.pointerup);
+        const top=f.viewport.scrollTop;f.navigationPointer(e,f.click);assert.equal(f.viewport.scrollTop,top,reason);assert.deepEqual(f.sent,[],reason);assert.deepEqual(f.selections,[],reason);
+    }
+    const scrollbar=fittedReader();scrollbar.viewport.clientWidth=1785;
+    scrollbar.routedTap(1850,500);assert.equal(scrollbar.viewport.scrollTop,900);assert.deepEqual(scrollbar.sent,[]);
+    assert.equal(scrollbar.pointerHit(null,scrollbar.at(1850,500)),null);
+});
+test('the outer host receives arrow cursors for fitted fullscreen margins',()=>{
+    const f=fittedReader();f.navigationMarker={style:{},dataset:{}};f.surface.style={};f.hoveredLink=-1;f.pointerClient=null;f.previewHover=()=>{};f.draw=()=>{};
+    vm.runInContext(source.slice(source.indexOf('function setHover('),source.indexOf('function refreshNavigation(')),f);
+    for(const [x,action] of [[20,'back'],[1900,'forward']]){f.setHover(null,false,false,f.at(x,500));assert.equal(f.navigationHost.dataset.pointerAction,action);}
+    const css=readFileSync(new URL('../assets/app.css',import.meta.url),'utf8');
+    for(const action of ['back','forward','previous_page','next_page','first','last'])assert.ok(css.includes(`main[data-pointer-action="${action}"]`));
 });

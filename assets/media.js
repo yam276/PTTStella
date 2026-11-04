@@ -8,12 +8,13 @@ function installMedia({tr,send,prepare,changed,restore}) {
     const pictureBindings=[];
     let current=null,image=null,video=null,still=null,stage=null,objectUrl=null,conversion=null,dead=false,gif=null;
     const gifs=createGifPlayback({document,window:typeof window!=="undefined"?window:null,limit:1});
-    let width=0,height=0,scale=1,fit=true,playing=false,animated=false;
+    let width=0,height=0,scale=1,fit=true,playing=false,animated=false,pan=null;
     let presentation="inspect",point={x:0,y:0},position="top_right",positionFrame=0,state="closed",message="";
     const owner=()=>presentation==="hover"?hover:dialog,container=()=>presentation==="hover"?hoverView:view;
     const jobs=new Set();
     const note=(text,value)=>{message=text;state=value;(presentation==="hover"?hoverNote:status).textContent=text;owner().dataset.state=value;if(presentation==="hover")place();};
     function dispose() {
+        stopPan();delete view.dataset.pannable;view.scrollLeft=0;view.scrollTop=0;
         pictureMenu?.close(false);
         gif?.remove();gif=null;
         conversion?.abort();conversion=null;
@@ -32,6 +33,7 @@ function installMedia({tr,send,prepare,changed,restore}) {
         if(fit) scale=Math.min(1,Math.max(.01,view.clientWidth/width),Math.max(.01,view.clientHeight/height));
         stage.style.width=(width*scale)+"px";stage.style.height=(height*scale)+"px";
         dialog.dataset.scale=String(scale);
+        view.dataset.pannable=String(width*scale>view.clientWidth||height*scale>view.clientHeight);
     }
     function close(e,notify=true) {
         if(e) e.preventDefault();
@@ -69,6 +71,7 @@ function installMedia({tr,send,prepare,changed,restore}) {
     function open(packet) {
         const promote=presentation==="hover"&&current?.request===packet.request;
         const oldState=state,oldMessage=message,cached=hover.dataset.cached;
+        stopPan();
         if(!promote)dispose();current=packet;presentation="inspect";hover.hidden=true;fit=true;scale=1;
         if(promote&&stage)view.append(stage);
         title.textContent=packet.target.kind==="video"?tr("video-title"):tr("image-title");
@@ -176,24 +179,65 @@ function installMedia({tr,send,prepare,changed,restore}) {
                 },restore:()=>buttons.close.focus({preventScroll:true}),changed});
             for(const binding of pictureMenu.bindings){const [target,event,callback,options]=binding;target.addEventListener(event,callback,options);pictureBindings.push(binding);}
         }
-        pictureMenu.open(e,{entries:contextMenuItems({picture:true,pictureReady:state==="ready",ready:true,link:0,local:true})});
+        stopPan();pictureMenu.open(e,{entries:contextMenuItems({picture:true,pictureReady:state==="ready",ready:true,link:0,local:true})});
     }
     function external(e) {if(current&&e.isTrusted) send({kind:"media",request:current.request,action:"external",trusted:e.isTrusted});}
-    function zoom(delta) {if(width){fit=false;scale=Math.max(.05,Math.min(8,scale+delta));resize();}}
+    function inspectable() {return !dead&&presentation==="inspect"&&dialog.open&&current?.target.kind==="image"&&state==="ready"&&!!stage&&width>0&&height>0;}
+    function stopPan() {
+        const pointer=pan?.pointer;pan=null;delete view.dataset.panning;
+        if(pointer!==undefined&&view.hasPointerCapture(pointer))view.releasePointerCapture(pointer);
+    }
+    function zoomTo(value,anchor=null) {
+        if(!inspectable()||!Number.isFinite(value))return;
+        stopPan();
+        const bounds=view.getBoundingClientRect(),old=stage.getBoundingClientRect();
+        const x=anchor?.clientX??bounds.left+view.clientWidth/2,y=anchor?.clientY??bounds.top+view.clientHeight/2;
+        const u=Math.max(0,Math.min(1,(x-old.left)/(width*scale))),v=Math.max(0,Math.min(1,(y-old.top)/(height*scale)));
+        fit=false;scale=Math.max(.01,Math.min(8,value));resize();
+        const next=stage.getBoundingClientRect();
+        view.scrollLeft+=next.left+u*width*scale-x;view.scrollTop+=next.top+v*height*scale-y;
+    }
+    function wheel(e) {
+        if(!e.isTrusted||!inspectable()||pictureMenu?.isOpen()||!Number.isFinite(e.deltaY)||!e.deltaY)return;
+        e.preventDefault();e.stopPropagation();
+        const unit=e.deltaMode===1?16:e.deltaMode===2?view.clientHeight:1;
+        const delta=Math.max(-120,Math.min(120,e.deltaY*unit));
+        zoomTo(scale*Math.exp(-delta*.0025),e);
+    }
+    function panDown(e) {
+        if(!e.isTrusted||e.button!==0||!e.isPrimary||e.ctrlKey||e.metaKey||e.altKey||e.shiftKey||!inspectable()||pictureMenu?.isOpen()||pan)return;
+        const bounds=view.getBoundingClientRect();
+        if(e.clientX<bounds.left||e.clientX>=bounds.left+view.clientWidth||e.clientY<bounds.top||e.clientY>=bounds.top+view.clientHeight
+            ||width*scale<=view.clientWidth&&height*scale<=view.clientHeight)return;
+        e.preventDefault();e.stopPropagation();
+        pan={pointer:e.pointerId,x:e.clientX,y:e.clientY,left:view.scrollLeft,top:view.scrollTop};
+        view.setPointerCapture(e.pointerId);view.dataset.panning="true";
+    }
+    function panMove(e) {
+        if(!pan||e.pointerId!==pan.pointer)return;
+        if(!e.isTrusted||!inspectable()||e.buttons===0){stopPan();return;}
+        e.preventDefault();e.stopPropagation();
+        view.scrollLeft=pan.left+pan.x-e.clientX;view.scrollTop=pan.top+pan.y-e.clientY;
+    }
+    function panEnd(e) {if(pan&&e.pointerId===pan.pointer)stopPan();}
+    function hidden() {if(document.visibilityState==="hidden")stopPan();}
     const bindings=[...gifs.bindings,
         [buttons.close,"click",close],[dialog,"cancel",close],[view,"contextmenu",pictureContext],
-        [buttons.minus,"click",()=>zoom(-.25)],[buttons.plus,"click",()=>zoom(.25)],
-        [buttons.fit,"click",()=>{fit=true;resize();}],[buttons.original,"click",()=>{fit=false;scale=1;resize();}],
+        [view,"wheel",wheel,{passive:false}],[view,"pointerdown",panDown],[view,"pointermove",panMove],
+        [view,"pointerup",panEnd],[view,"pointercancel",panEnd],[view,"lostpointercapture",panEnd],
+        [document,"visibilitychange",hidden],...(typeof window!=="undefined"?[[window,"blur",stopPan]]:[]),
+        [buttons.minus,"click",()=>zoomTo(scale-.25)],[buttons.plus,"click",()=>zoomTo(scale+.25)],
+        [buttons.fit,"click",()=>{stopPan();fit=true;view.scrollLeft=0;view.scrollTop=0;resize();}],[buttons.original,"click",()=>zoomTo(1)],
         [buttons.retry,"click",retry],[buttons.motion,"click",motion],[buttons.external,"click",external],
     ];
-    for(const [target,event,callback] of bindings) target.addEventListener(event,callback);
-    const observer=new ResizeObserver(resize);observer.observe(view);observer.observe(document.querySelector(".workspace"));observer.observe(document.getElementById("chrome"));
+    for(const [target,event,callback,options] of bindings) target.addEventListener(event,callback,options);
+    const observer=new ResizeObserver(()=>{stopPan();resize();});observer.observe(view);observer.observe(document.querySelector(".workspace"));observer.observe(document.getElementById("chrome"));
     return {
         notice(value){if(current&&presentation==="inspect"&&dialog.open){status.textContent=value;return true;}return false;},
         open,receiveImage,fail,hover:openHover,hideHover,locate,reset:()=>close(null,false),
         externalResult(packet){if(current?.request===packet.request){dialog.dataset.external=String(packet.ok);if(!packet.ok) status.textContent=packet.message;}},
-        async destroy(){dead=true;pictureMenu?.destroy();for(const [target,event,callback,options] of pictureBindings)target.removeEventListener(event,callback,options);pictureBindings.length=0;gifs.destroy();for(const [target,event,callback] of bindings) target.removeEventListener(event,callback);
+        async destroy(){dead=true;pictureMenu?.destroy();for(const [target,event,callback,options] of pictureBindings)target.removeEventListener(event,callback,options);pictureBindings.length=0;gifs.destroy();for(const [target,event,callback,options] of bindings) target.removeEventListener(event,callback,options);
             observer.disconnect();close(null,false);await Promise.allSettled([...jobs]);
-            return !objectUrl&&!conversion&&!dialog.open&&!view.childElementCount&&!hoverView.childElementCount&&!positionFrame&&!jobs.size;},
+            return !pan&&!objectUrl&&!conversion&&!dialog.open&&!view.childElementCount&&!hoverView.childElementCount&&!positionFrame&&!jobs.size;},
     };
 }

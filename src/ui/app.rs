@@ -45,6 +45,7 @@ pub fn app(props: AppProps) -> Element {
     let filters_probe = props.filters_probe;
     let surface_probe = props.surface_probe.clone();
     let surface_probing = surface_probe.is_some();
+    let drafts_probing = matches!(surface_probe.as_deref(), Some("drafts" | "drafts_restart"));
     let editor_color_probing = surface_probe.as_deref() == Some("editor_color");
     let live_updates_probing = matches!(
         surface_probe.as_deref(),
@@ -90,7 +91,11 @@ pub fn app(props: AppProps) -> Element {
     let owner = use_hook(move || {
         super::probe::surface_sample(sample_case.as_deref(), probing, media_origin.as_deref())
             .and_then(|bytes| {
-                if sample_case.as_deref() == Some("bookmark_list") {
+                if matches!(sample_case.as_deref(), Some("drafts" | "drafts_restart")) {
+                    Connection::start_drafts_probe()
+                } else if sample_case.as_deref() == Some("reply_navigation") {
+                    Connection::start_reply_navigation_probe()
+                } else if sample_case.as_deref() == Some("bookmark_list") {
                     Connection::start_bookmark_list_probe()
                 } else if matches!(
                     sample_case.as_deref(),
@@ -371,7 +376,7 @@ pub fn app(props: AppProps) -> Element {
                 section { "data-tools-group": "session",
                 button { disabled: fatal() || props.probe.is_some() || matches!(phase(), Phase::Connecting | Phase::Connected),
                     onclick: move |event| connect_action.call(event), {pttstella::msg!("connect")} }
-                button { disabled: fatal() || props.probe.is_some() || !matches!(phase(), Phase::Connecting | Phase::Connected),
+                button { disabled: fatal() || props.probe.is_some() && !drafts_probing || !matches!(phase(), Phase::Connecting | Phase::Connected),
                     onclick: move |_| { if let Err(error) = disconnect.disconnect() { message.set(error); } }, {pttstella::msg!("disconnect")} }
                 }
                 section { "data-tools-group": "capture",
@@ -392,22 +397,17 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "login-open", "data-platform-supported":cfg!(target_os="macos").to_string(), disabled: !cfg!(target_os="macos"), {pttstella::msg!("login")} }
                 button { id: "login-stop", hidden: true, {pttstella::msg!("login-cancel-attempt")} }
                 }
-                section { "data-tools-group": "bookmarks",
-                button {id:"bookmarks-current",disabled:true,title:pttstella::msg!("bookmarks-current-unavailable"),{pttstella::msg!("bookmarks-current")}}
-                button { id: "bookmarks-open", {pttstella::msg!("bookmarks-title")} }
-                p {{pttstella::msg!("bookmarks-list-hint")}}
-                if surface_probe.as_deref()==Some("bookmark_list") {button{id:"bookmark-probe-first","測試：指定第一篇（光棒在第二篇）"}}
-
-                }
                 section { "data-tools-group": "navigate",
                 button {id:"filters-reveal",hidden:true,{pttstella::msg!("filters-reveal")}}
                 output {id:"filters-status",role:"status"}
+                button {id:"draft-open",{pttstella::msg!("draft-open")}}
                 button { id: "destination-open", {pttstella::msg!("destination-open")} }
                 button { id: "destination-stop", hidden: true, {pttstella::msg!("destination-stop")} }
                 div { id: "browse-controls", hidden: true,
                     button { id: "browse-back", disabled: true, {pttstella::msg!("browse-back")} }
                     button { id: "browse-previous", disabled: true, {pttstella::msg!("browse-previous")} }
                     button { id: "browse-next", disabled: true, {pttstella::msg!("browse-next")} }
+                    button {id:"reply-navigation-open",hidden:true,{pttstella::msg!("reply-navigation-title")}}
                 }
                 span { id: "browse-hint" }
                 }
@@ -434,6 +434,18 @@ pub fn app(props: AppProps) -> Element {
                     button { id:"live-updates-home", "Local Home (probe)" }
                     button { id:"live-updates-end", "Local End (probe)" }
                 }
+            }
+            div {id:"reply-markers",class:"reply-markers","aria-hidden":"true"}
+            div {id:"reply-navigation",class:"reply-navigation",role:"toolbar",hidden:true,
+                div {id:"reply-navigation-group",role:"group","aria-label":pttstella::msg!("reply-navigation-title"),
+                    button {"data-reply-group":"author",{pttstella::msg!("reply-navigation-author")}}
+                    button {"data-reply-group":"mine",{pttstella::msg!("reply-navigation-mine")}}
+                    button {"data-reply-group":"focused",{pttstella::msg!("reply-navigation-focused")}}
+                }
+                output {id:"reply-navigation-count",role:"status"}
+                button {id:"reply-navigation-prev","↑"}
+                button {id:"reply-navigation-next","↓"}
+                button {id:"reply-navigation-close","×"}
             }
             div { id: "article-find", class: "article-find", role: "search", hidden: true,
                 input { id: "article-find-input", r#type: "text", maxlength: "256", autocomplete: "off", spellcheck: "false" }
@@ -508,6 +520,60 @@ pub fn app(props: AppProps) -> Element {
                     button {id:"editor-color-probe-open",r#type:"button","顯示測試色彩表"}
                 }
             }
+            div {id:"draft-station-bar",class:"article-load",hidden:true,
+                output {id:"draft-station-status",role:"status",{pttstella::msg!("draft-ready")}}
+                button {id:"draft-station-open",{pttstella::msg!("draft-open")}}
+            }
+            dialog {id:"draft-dialog",class:"draft-dialog","aria-labelledby":"draft-heading",
+                header {h2{id:"draft-heading",{pttstella::msg!("draft-open")}} output{id:"draft-scope"}}
+                p {id:"draft-notice",role:"status","aria-live":"polite"}
+                div {id:"draft-chooser",
+                    p {{pttstella::msg!("draft-found")}}
+                    select {id:"draft-list",size:"5","aria-label":pttstella::msg!("draft-list")}
+                    div {class:"dialog-actions",
+                        button {id:"draft-delete",{pttstella::msg!("draft-delete")}}
+                        button {id:"draft-restore",{pttstella::msg!("draft-restore")}}
+                        button {id:"draft-new",{pttstella::msg!("draft-new")}}
+                        button {id:"draft-native",{pttstella::msg!("draft-native")}}
+                    }
+                }
+                div {id:"draft-delete-panel",hidden:true,
+                    p{{pttstella::msg!("draft-delete-confirm")}}
+                    button{id:"draft-delete-confirm",{pttstella::msg!("draft-delete")}}
+                    button{id:"draft-delete-cancel",{pttstella::msg!("cancel")}}
+                }
+                div {id:"draft-editor",hidden:true,
+                    div {class:"draft-title-row",label {r#for:"draft-title",{pttstella::msg!("draft-title")}} input {id:"draft-title",maxlength:"128",autocomplete:"off"}}
+                    div {class:"draft-editor-tools",
+                        div {role:"group","aria-label":pttstella::msg!("draft-view"),
+                            button {id:"draft-mode-color","aria-pressed":"true",{pttstella::msg!("draft-wysiwyg")}}
+                            button {id:"draft-mode-plain","aria-pressed":"false",{pttstella::msg!("draft-plain")}}
+                            button {id:"draft-mode-source","aria-pressed":"false",{pttstella::msg!("draft-source")}}
+                        }
+                        div {role:"group","aria-label":pttstella::msg!("draft-selection"),
+                            button {id:"draft-select-text","aria-pressed":"true",{pttstella::msg!("draft-select-text")}}
+                            button {id:"draft-select-line","aria-pressed":"false",{pttstella::msg!("draft-select-line")}}
+                            button {id:"draft-select-rectangle","aria-pressed":"false",{pttstella::msg!("draft-select-rectangle")}}
+                        }
+                    }
+                    div {id:"draft-body"}
+                    div {id:"draft-color-panel",hidden:true,
+                        button {id:"draft-color-close","aria-label":pttstella::msg!("cancel"),"×"}
+                        fieldset {legend{{pttstella::msg!("editor-color-foreground")}}div{id:"draft-foreground",class:"editor-color-grid"}}
+                        fieldset {legend{{pttstella::msg!("editor-color-background")}}div{id:"draft-background",class:"editor-color-grid"}}
+                    }
+                    div {id:"draft-confirm",hidden:true,
+                        p{{pttstella::msg!("draft-confirm")}}
+                        button{id:"draft-transfer-confirm",{pttstella::msg!("draft-transfer-confirm")}}
+                        button{id:"draft-transfer-cancel",{pttstella::msg!("cancel")}}
+                    }
+                }
+                footer {class:"dialog-actions",
+                    button {id:"draft-save",{pttstella::msg!("draft-save")}}
+                    button {id:"draft-transfer",{pttstella::msg!("draft-transfer")}}
+                    button{id:"draft-close",{pttstella::msg!("draft-close")}}
+                }
+            }
             dialog { id: "destination-dialog", class: "paste-preview", "aria-labelledby": "destination-title",
                 h2 { id: "destination-title", {pttstella::msg!("destination-title")} }
                 p { {pttstella::msg!("destination-dialog-hint")} }
@@ -527,6 +593,8 @@ pub fn app(props: AppProps) -> Element {
                 h2 { id: "bookmarks-title", {pttstella::msg!("bookmarks-title")} }
                 div {id:"bookmarks-editor",
                 p { {pttstella::msg!("bookmarks-description")} }
+                button {id:"bookmarks-current",hidden:true,disabled:true,{pttstella::msg!("bookmarks-current")}}
+                if surface_probe.as_deref()==Some("bookmark_list") {button{id:"bookmark-probe-first","測試：指定第一篇（光棒在第二篇）"}}
                 label { {pttstella::msg!("bookmarks-list")} select { id: "bookmarks-list", size: "6", "aria-label": pttstella::msg!("bookmarks-list") } }
                 button { id: "bookmarks-new", {pttstella::msg!("bookmarks-new")} }
                 label { {pttstella::msg!("bookmarks-target")} input { id: "bookmarks-target", maxlength: (pttstella::article_target::MAX_INPUT+1).to_string(), autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
@@ -598,9 +666,10 @@ pub fn app(props: AppProps) -> Element {
 fn ToolPetal(group: &'static str, label: String, icon: Element) -> Element {
     rsx! {
         button { class: "tools-petal", r#type: "button", "data-tools-target": group,
-            "aria-controls": if group=="settings" {"font-dialog"} else {"tools-panel"},
-            "aria-expanded": if group=="settings" {None} else {Some("false")},
-            "aria-haspopup": if group=="settings" {Some("dialog")} else {None},
+            id: if group=="bookmarks" {Some("bookmarks-open")} else {None},
+            "aria-controls": match group {"settings"=>"font-dialog","bookmarks"=>"bookmarks-dialog",_=>"tools-panel"},
+            "aria-expanded": if matches!(group,"settings"|"bookmarks") {None} else {Some("false")},
+            "aria-haspopup": if matches!(group,"settings"|"bookmarks") {Some("dialog")} else {None},
             {icon} span { "{label}" }
         }
     }
@@ -723,6 +792,9 @@ fn context_menu() -> Element {
             }
             button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"bookmark-current",
                 Star {size:18} span {{pttstella::msg!("bookmarks-current")}}
+            }
+            button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"reply-navigation",
+                ArrowDown {size:18} span {{pttstella::msg!("reply-navigation-title")}}
             }
             button {r#type:"button",role:"menuitem",tabindex:"-1","data-context-action":"article-updates",
                 ArrowDown {size:18} span {{pttstella::msg!("article-updates-start")}}
@@ -902,10 +974,18 @@ pub(super) fn SettingsForm(filters_probe: bool) -> Element {
                             input { id: "font-size", r#type: "number", min: "8", max: "24", step: "1" }
                         }
                         label {
+                            SettingsCaption { label: pttstella::msg!("font-width"), icon: rsx! { ALargeSmall { size: 18 } } }
+                            input { id: "font-width", r#type: "number", min: "50", max: "150", step: "1", "aria-describedby": "settings-width-help" }
+                        }
+                        p { id: "settings-width-help", class: "settings-help", {pttstella::msg!("settings-width-help")} }
+                        label {
                             SettingsCaption { label: pttstella::msg!("font-baseline"), icon: rsx! { AlignVerticalJustifyEnd { size: 18 } } }
                             input { id: "font-baseline", r#type: "number", min: "0", max: "24", step: "1", "aria-describedby": "settings-baseline-help" }
                         }
                         p { id: "settings-baseline-help", class: "settings-help", {pttstella::msg!("settings-baseline-help")} }
+                        div { class: "dialog-actions settings-actions",
+                            button { id: "font-reset", r#type: "button", {pttstella::msg!("font-reset")} }
+                        }
                         p { class: "settings-preview-label",
                             SettingsCaption { label: pttstella::msg!("settings-preview"), icon: rsx! { Eye { size: 18 } } }
                         }

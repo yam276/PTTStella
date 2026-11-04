@@ -205,6 +205,20 @@ impl SurfaceState {
                 .find(|entry| entry.id.eq_ignore_ascii_case(&word.id))
                 .map(|entry| entry.policy);
         }
+        if packet.article.is_some() && view.site.ptt_features() {
+            packet.reply_navigation = pttstella::reply_navigation::index(
+                &packet.replies,
+                self.rules(),
+                packet.revealed,
+                packet
+                    .article
+                    .as_ref()
+                    .filter(|a| a.first_line == 1)
+                    .and_then(|_| pttstella::reply_navigation::author(&packet.frame)),
+                view.account.as_deref(),
+                packet.reply_focus.as_deref(),
+            );
+        }
         super::presentation::refresh_links(&mut packet);
         packet.hover = self
             .hover

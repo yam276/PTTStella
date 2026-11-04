@@ -16,6 +16,9 @@ fn view() -> View {
         input_pending: false,
         login_pending: false,
         login_guidance: pttstella::login::Guidance::Idle,
+        account: None,
+        draft_post_scope: None,
+        draft_source: None,
         destination: pttstella::navigation_job::Progress::Idle,
         board_visit: None,
         phase: Phase::Connected,
@@ -390,6 +393,7 @@ fn a_display_change_during_paint_retains_the_requested_redraw() {
     let settings = DisplaySettings {
         font_size: 18.0,
         baseline: 19.0,
+        font_width: 100.0,
         ..Default::default()
     };
     let packet = state.queue(&view, false, &settings).unwrap();
@@ -1890,6 +1894,51 @@ fn list_bookmark_waits_for_owned_reached_complete_cache_ack_and_foreground_gate(
                 .unwrap()
                 .is_err(),
             "{failure}"
+        );
+    }
+}
+
+#[test]
+fn reply_roles_do_not_change_filtered_frames_export_or_merged_ids_and_reset_with_session() {
+    for policy in [
+        filters::Policy::Mask,
+        filters::Policy::MaskRow,
+        filters::Policy::Allow,
+    ] {
+        let rules = filters::Rules::default()
+            .edit_policy("Alice", "", policy, false)
+            .unwrap();
+        let mut state = SurfaceState::new(rules.clone());
+        let mut v = view();
+        v.account = Some("Alice".into());
+        let identity = displayed(&mut state, &v);
+        let paint = state.current(identity, &v).unwrap();
+        let filtered = filters::project(&v.frame, &rules, false);
+        let mut frame = filtered.frame;
+        filters::merge_push_ids(&mut frame, &filters::pushes(&v.frame));
+        assert_eq!(paint.source_frame.as_ref().unwrap(), &frame);
+        let expected_rows = if policy == filters::Policy::MaskRow {
+            vec![]
+        } else {
+            vec![5, 6]
+        };
+        assert_eq!(paint.reply_navigation.mine_rows, expected_rows);
+        assert!(
+            paint.reply_navigation.author.is_none(),
+            "middle page header is not original article metadata"
+        );
+        assert_eq!(state.rules(), &rules);
+        v.generation += 1;
+        v.account = None;
+        state.update(&v);
+        let fresh = displayed(&mut state, &v);
+        assert!(
+            state
+                .current(fresh, &v)
+                .unwrap()
+                .reply_navigation
+                .mine_rows
+                .is_empty()
         );
     }
 }
