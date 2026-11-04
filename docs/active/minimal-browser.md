@@ -1,8 +1,12 @@
 # PTTStella 最簡 terminal 計畫
 
-## 2026-11-04 0.4.0 正式發佈準備
+## 2026-11-04 0.4.0 正式發佈完成
 
-使用者明確授權發佈0.4.0，在develop統一Cargo／lock、README與徽章為正式0.4.0，新增中文為主、英文摘要的版本說明。納入本機中文／ANSI草稿與範本、身分側標／推文定位、留白導覽、圖片縮放拖曳、字型與文字比例修正及成功通知淡出；最後實站草稿修正的驗收見下節。沿既有develop → main Release PR與四架構建置流程，只有全部檢查／打包成功才發佈；公開保留六個套件與SHA256SUMS，manifest仍在Actions artifacts。發佈完成後main保持正式版號，develop整合main並恢復0.5.0-dev.1。CI不代替Windows／Linux GUI或新的實體滑鼠／IME驗收。
+使用者明確授權發佈0.4.0，在develop統一Cargo／lock、README與徽章為正式0.4.0，新增中文為主、英文摘要的版本說明。納入本機中文／ANSI草稿與範本、身分側標／推文定位、留白導覽、圖片縮放拖曳、字型與文字比例修正及成功通知淡出；最後實站草稿修正的驗收見下節。Release PR [#7](https://github.com/yam276/PTTStella/pull/7)政策與四架構verify [41820264264](https://github.com/yam276/PTTStella/actions/runs/41820264264)全部通過後合併main `96ff7ff2f74819f219a60294c5142e85f89cf635`；正式 [41822690206](https://github.com/yam276/PTTStella/actions/runs/41822690206) 的來源檢查、四架構測試／原生打包與publisher全部成功。[v0.4.0](https://github.com/yam276/PTTStella/releases/tag/v0.4.0)為Latest stable，tag精確指向該合併提交。
+
+取回verify及正式run各自完整原始artifacts，分別以未修改production validate_assets核對四份manifest、六個套件、來源commit／clean／release profile、完整白名單及所有逐檔SHA-256。公開七附件只含六個下載與SHA256SUMS，無JSON；公開digest／大小、六筆校驗、版本專用中英說明與Latest狀態亦獨立核對通過。manifest仍保留Actions artifacts。本機JS曾有一次Node/V8垃圾回收SIGSEGV，保留崩潰摘要與失敗log；單檔及完整375項重跑通過，四架構的verify與正式測試也皆成功，沒有為此修改產品或略過測試。
+
+main已整合回develop，後者同步Cargo／lock、README與徽章為0.5.0-dev.1；main保持正式0.4.0，預設分支仍main。未新增產品功能、臨時分支、worktree或本機App／Cargo編譯產物。證據 `.local/verification/release-040-20261104/`；清除已被正式下載取代的本輪verify-artifacts，正式下載與manifest移至repo外保存，保留唯一校驗／失敗證據，exact path及free前後見cleanup.json。先前正在使用的診斷App及未發表草稿保持，不屬本輪可清產物。CI不代替Windows／Linux GUI或新的實體滑鼠／IME驗收。
 
 ## 2026-11-04 實站本機稿帶回卡在檔尾標記
 
