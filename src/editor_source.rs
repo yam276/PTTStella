@@ -38,6 +38,7 @@ enum Stage {
     WriteTitle,
     Clear,
     Empty,
+    VerifyEmpty,
     Written,
 }
 pub struct Flow {
@@ -279,6 +280,16 @@ impl Flow {
                     // connection owner retains its original per-step deadline.
                     return Ok(Action::Wait);
                 }
+                // PTT draws ~ on rows beyond EOF. A blank-looking viewport
+                // alone cannot distinguish them from literal ~ or hidden blank
+                // document lines. Query EOF and line End once, in order, before
+                // authorizing any replacement bytes.
+                self.send(frame, Stage::VerifyEmpty, vec![20, 5, 12])
+            }
+            Stage::VerifyEmpty => {
+                if !self.raw_start(frame) || !crate::drafts::empty_editor(frame) {
+                    return Ok(Action::Wait);
+                }
                 let r = self
                     .replacement
                     .as_ref()
@@ -471,6 +482,73 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn replacement_accepts_native_eof_markers_after_proving_single_empty_document() {
+        let mut native = fixture::Native::new(&[""], "測試標題", false);
+        let baseline = run(&mut native, None).unwrap();
+        let replacement = Replacement {
+            baseline,
+            title: "測試標題".into(),
+            body: "兩行中文\n\x1b[1;31m紅色\x1b[m".into(),
+        };
+        let mut flow = Flow::new(&native.frame(), scope(), Some(replacement.clone())).unwrap();
+        for _ in 0..80 {
+            match flow.next(&native.frame()).unwrap() {
+                Action::Send(bytes) => native.accept(&bytes),
+                Action::Wait => {}
+                Action::Done(result) => {
+                    assert_eq!(result.body, replacement.body);
+                    return;
+                }
+            }
+        }
+        panic!("EOF display markers must not prevent a verified replacement");
+    }
+
+    #[test]
+    fn eof_probe_rejects_literal_tildes_hidden_blank_lines_and_spaces_without_writing() {
+        for lines in [vec!["", "~"], vec!["", "", ""], vec!["   "]] {
+            let mut native = fixture::Native::new(&lines, "原標題", false);
+            let baseline = run(&mut native, None).unwrap();
+            let original = native.editor.lines.clone();
+            let replacement = Replacement {
+                baseline,
+                title: "新標題".into(),
+                body: "MUST NOT WRITE".into(),
+            };
+            let mut flow = Flow::new(&native.frame(), scope(), Some(replacement)).unwrap();
+            let mut deletion_held = false;
+            let mut eof_queried = false;
+            for _ in 0..80 {
+                match flow.next(&native.frame()).unwrap() {
+                    Action::Send(bytes) => {
+                        if matches!(flow.stage, Stage::Empty) {
+                            // Simulate a complete redraw while deletion has not
+                            // removed these blank/tilde-looking document rows.
+                            assert_eq!(bytes.last(), Some(&12));
+                            native.accept(&[12]);
+                            deletion_held = true;
+                        } else {
+                            if matches!(flow.stage, Stage::VerifyEmpty) {
+                                assert_eq!(bytes, [20, 5, 12]);
+                                eof_queried = true;
+                            }
+                            assert!(!matches!(flow.stage, Stage::Written));
+                            native.accept(&bytes);
+                        }
+                    }
+                    Action::Wait => {
+                        assert!(deletion_held && eof_queried);
+                        assert_eq!(native.editor.lines, original);
+                        break;
+                    }
+                    Action::Done(_) => panic!("nonempty document must not authorize replacement"),
+                }
+            }
+            assert!(deletion_held && eof_queried);
         }
     }
 

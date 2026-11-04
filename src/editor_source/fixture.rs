@@ -13,8 +13,10 @@ pub struct Native {
 }
 impl Native {
     pub fn new(lines: &[&str], title: &str, preview: bool) -> Self {
+        let mut editor = Editor::new(lines, preview, true, true);
+        editor.eof_markers = true;
         Self {
-            editor: Editor::new(lines, preview, true, true),
+            editor,
             title: title.into(),
             mode: 0,
             revision: 0,

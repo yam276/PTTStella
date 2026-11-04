@@ -10,6 +10,7 @@ pub struct Editor {
     pos: usize,
     pub preview: bool,
     pub insert: bool,
+    pub eof_markers: bool,
     revision: u64,
     pub commands: Vec<Vec<u8>>,
     dbcs: bool,
@@ -22,6 +23,7 @@ impl Editor {
             pos: 0,
             preview,
             insert,
+            eof_markers: false,
             revision: 1,
             commands: Vec::new(),
             dbcs,
@@ -51,6 +53,11 @@ impl Editor {
                         .take(79)
                         .collect::<Vec<_>>(),
                 );
+            }
+        }
+        if self.eof_markers {
+            for row in self.lines.len().saturating_sub(top)..23 {
+                wire.extend_from_slice(format!("\x1b[{};1H\x1b[0m~", row + 1).as_bytes());
             }
         }
         let col = if self.preview {

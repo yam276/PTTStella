@@ -155,13 +155,15 @@ pub fn transfer(body: &str, encoding: crate::encoding::TextEncoding) -> Result<V
         .map(|p| p.bytes)
         .map_err(|e| e.to_string())
 }
+/// Visible empty-editor candidate. The source flow must also query document EOF
+/// and line End: a literal tilde or blank line can look like an EOF display row.
 pub fn empty_editor(frame: &crate::screen::Frame) -> bool {
     crate::navigation::article_editor(frame)
         && frame.cursor == (0, 0)
         && crate::text::rows(frame).is_some_and(|rows| {
-            rows[..frame.rows - 1]
-                .iter()
-                .all(|r| r.mapped() && r.text.trim().is_empty())
+            rows[..frame.rows - 1].iter().enumerate().all(|(index, r)| {
+                r.mapped() && (r.text.trim().is_empty() || index > 0 && r.text.trim_end() == "~")
+            })
         })
 }
 #[cfg(test)]
