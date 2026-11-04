@@ -37,6 +37,8 @@ main { height: 100vh; position: relative; }
 .chrome header .brand { width: 100%; }
 .toast-dock { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow: auto; display: grid; gap: 12px; z-index: 40; pointer-events: none; }
 .stella-toast { display: flex; align-items: flex-start; gap: 16px; padding: 20px; color: var(--ui-text); background: linear-gradient(110deg, #122a43, #0c1c30 72%); border: 1px solid #b69a59; border-left: 4px solid var(--ui-gold); border-radius: 4px; box-shadow: 0 12px 32px #000a, inset 0 1px #f4d99514; pointer-events: auto; }
+.stella-toast[data-fading="true"] { opacity: 0; transition-property: opacity; transition-timing-function: ease-out; }
+@media (prefers-reduced-motion: reduce) { .stella-toast { transition: none !important; } }
 .stella-toast[hidden] { display: none; }
 .toast-mark { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 50%; }
 .toast-content { min-width: 0; flex: 1; }

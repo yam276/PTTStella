@@ -123,6 +123,20 @@ fn outbound_results_match_the_shared_wire_examples() {
         ),
         ("stop", Packet::Stop),
         ("notice", Packet::Notice("訊息".into())),
+        (
+            "toast_copy",
+            Packet::Toast {
+                message: "已複製".into(),
+                kind: ToastKind::Copy,
+            },
+        ),
+        (
+            "toast_success",
+            Packet::Toast {
+                message: "已保存".into(),
+                kind: ToastKind::Success,
+            },
+        ),
         ("surface_probe", Packet::SurfaceProbe("decode".into())),
         ("login_idle", Packet::LoginResult(LoginResult::Idle)),
         (

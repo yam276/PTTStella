@@ -54,6 +54,10 @@ pub(super) enum Packet<'a> {
     Paint(&'a Paint),
     Stop,
     Notice(String),
+    Toast {
+        message: String,
+        kind: ToastKind,
+    },
     SurfaceProbe(String),
     KeyboardState(vim::Status),
     LoginResult(LoginResult),
@@ -132,6 +136,13 @@ impl super::protocol::NavigationTicket {
             feedback,
         }
     }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum ToastKind {
+    Copy,
+    Success,
 }
 
 #[derive(Serialize)]

@@ -50,7 +50,7 @@ function createDraftEditor({document,window,tr,send,current,prepare,restore,chan
     function open(event){
         if(disposed||!event.isTrusted||document.querySelector('dialog[open]'))return;
         if(token!==null&&(saving||dirty)){root.showModal();repaint();changed();editor.focus();return;}
-        if(awaiting||opening!==null){notice(tr('draft-save-first'));return;}
+        if(awaiting||opening!==null){notice(tr('draft-save-first'),'persistent');return;}
         prepare(event);opening=++request;token=null;entries=[];projectAgain=false;projectPending=false;node('editor').hidden=true;node('chooser').hidden=true;node('delete-panel').hidden=true;confirm.hidden=true;status('draft-loading');root.showModal();changed();repaint();
         send({kind:'draft_open',request:opening,trusted:true});
     }
@@ -84,9 +84,9 @@ function createDraftEditor({document,window,tr,send,current,prepare,restore,chan
             if(reply.token!==token)return;if(reply.coloring)colorPending=false;else projectPending=false;
             if(reply.revision===revision)note.textContent=reply.message;
         }else if(reply.state==='transferred'){
-            awaiting=false;if(root.open)root.close();notice(reply.message);restore();changed();
+            awaiting=false;if(root.open)root.close();notice(reply.message,"persistent");restore();changed();
         }else if(reply.state==='error'){
-            const failedSave=saving;saving=false;awaiting=false;opening=null;colorPending=false;projectPending=false;projectAgain=false;if(failedSave)dirty=true;note.textContent=reply.message;if(!root.open)notice(reply.message);
+            const failedSave=saving;saving=false;awaiting=false;opening=null;colorPending=false;projectPending=false;projectAgain=false;if(failedSave)dirty=true;note.textContent=reply.message;if(!root.open)notice(reply.message,"error");
         }
         repaint();
     }

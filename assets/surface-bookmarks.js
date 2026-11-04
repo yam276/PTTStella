@@ -91,7 +91,7 @@ function createBookmarksDialog({tr,send,prepare,restore,changed,openDestination,
     }
     function receive(packet){
         if(disposed)return;
-        if(capturePending?.request===packet.request){capturePending=null;entries=packet.data.entries;writable=packet.data.writable;if(dialog.open)rows();else working();notice(packet.feedback.notice||"");return;}
+        if(capturePending?.request===packet.request){capturePending=null;entries=packet.data.entries;writable=packet.data.writable;if(dialog.open)rows();else working();notice(packet.feedback.notice||"",packet.feedback.status==="saved"?"success":"error");return;}
         if(!pending||packet.request!==pending.request)return;
         const sameView=pending.view===view;pending=null;
         entries=packet.data.entries;writable=packet.data.writable;

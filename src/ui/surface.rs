@@ -22,7 +22,7 @@ use super::{
     outbound::{
         DestinationStatus, ExportStatus, Feedback, FiltersOpen, FiltersResult, LinkStatus,
         LoginResult, MediaHover, MediaImage, MediaOpen, NavigationStatus, Packet, PasteStatus,
-        SaveStatus, SelectionReply,
+        SaveStatus, SelectionReply, ToastKind,
     },
     probe::Checks,
     surface_state::{Identity, SurfaceState},
@@ -773,7 +773,10 @@ async fn run(
                         let feedback=bookmarks.complete(result.map_err(|e|e.to_string()));
                         Packet::BookmarksResult {request, data:bookmarks.snapshot(), feedback}
                     },
-                    FileCompletion::Clipboard(result)=>Packet::Notice(result.map(|_|{checks.context_copies+=1;pttstella::msg!("context-copied")}).unwrap_or_else(|e|if e==files::Error::Stale {pttstella::msg!("copy-not-ready")}else{e.to_string()})),
+                    FileCompletion::Clipboard(result)=>match result {
+                        Ok(())=>{checks.context_copies+=1;Packet::Toast{message:pttstella::msg!("context-copied"),kind:ToastKind::Copy}},
+                        Err(e)=>Packet::Notice(if e==files::Error::Stale {pttstella::msg!("copy-not-ready")}else{e.to_string()}),
+                    },
                     FileCompletion::ClipboardPaste { identity, stamp, result } => {
                         let current = receiver.borrow();
                         let valid = !current.input_pending && current.stamp() == stamp && screen.current(identity, &current).is_some_and(|paint| paint.editor)
@@ -782,12 +785,12 @@ async fn run(
                         let prepared = if valid { result.map_err(|e|e.to_string()) } else { Err(pttstella::msg!("paste-stale")) };
                         queue_paste(prepared, stamp.generation, &connection, &receiver, pending_paste, &mut checks, probe.is_some())
                     },
-                    FileCompletion::Picture{destination,result}=>Packet::Notice(match result {
-                        Ok(true) if destination==files::ExportDestination::Clipboard=>{checks.image_copies+=1;pttstella::msg!("context-copied")},
-                        Ok(true)=>{checks.picture_saves+=1;pttstella::msg!("picture-saved")},
-                        Ok(false)=>pttstella::msg!("export-cancelled"),
-                        Err(error)=>error.to_string(),
-                    }),
+                    FileCompletion::Picture{destination,result}=>match result {
+                        Ok(true) if destination==files::ExportDestination::Clipboard=>{checks.image_copies+=1;Packet::Toast{message:pttstella::msg!("context-copied"),kind:ToastKind::Copy}},
+                        Ok(true)=>{checks.picture_saves+=1;Packet::Toast{message:pttstella::msg!("picture-saved"),kind:ToastKind::Success}},
+                        Ok(false)=>Packet::Toast{message:pttstella::msg!("export-cancelled"),kind:ToastKind::Success},
+                        Err(error)=>Packet::Notice(error.to_string()),
+                    },
                     FileCompletion::Recent(done)=>{recent.complete(done);Packet::RecentBoards(recent.packet())},
                     FileCompletion::Viewport(result)=>{
                         result.map_err(|e|e.to_string())?;
@@ -844,7 +847,7 @@ async fn run(
                         }
                     },
                     FileCompletion::Filters(result)=>{
-                        eval.send(Packet::Notice(match &result { Ok(_) => pttstella::msg!("filters-saved"), Err(error) => error.to_string() })).map_err(|e|e.to_string())?;
+                        eval.send(match &result { Ok(_) => Packet::Toast{message:pttstella::msg!("filters-saved"),kind:ToastKind::Success}, Err(error) => Packet::Notice(error.to_string()) }).map_err(|e|e.to_string())?;
                         match result {
                         Ok(rules)=>{
                             inline_images.close();eval.send(Packet::InlineReset(true)).map_err(|e|e.to_string())?;
@@ -908,7 +911,7 @@ async fn run(
                         if let Err(message)=result {Packet::Draft(super::drafts::Reply::Error{message})} else {continue;}
                     },
                     CommandKind::DraftTransfer=>Packet::Draft(match done.result {Ok(())=>{checks.draft_transfers+=1;super::drafts::Reply::Transferred{message:pttstella::msg!("draft-transferred")}},Err(message)=>super::drafts::Reply::Error{message}}),
-                    CommandKind::EditorColor => Packet::Notice(match done.result {Ok(())=>{checks.editor_colors+=1;pttstella::msg!("editor-color-done")},Err(error)=>error}),
+                    CommandKind::EditorColor => match done.result {Ok(())=>{checks.editor_colors+=1;Packet::Toast{message:pttstella::msg!("editor-color-done"),kind:ToastKind::Success}},Err(error)=>Packet::Notice(error)},
                     CommandKind::Destination => {
                         let Some((request,_))=destination_request.take() else {continue;};
                         Packet::DestinationResult {request,feedback:match done.result {

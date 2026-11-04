@@ -394,13 +394,13 @@ function drawSelection() {
 function copy(e) {
     if(!hasSelection()||document.activeElement!==keyboard) return;
     e.preventDefault();
-    if(!selectionCache||latest?.output_pending||filterUi.blocked()||selectionCache.presentation!==latest?.presentation) {surfaceNote.textContent=tr("copy-not-ready");return;}
-    if(!e.clipboardData) {surfaceNote.textContent=tr("copy-event-unavailable");return;}
+    if(!selectionCache||latest?.output_pending||filterUi.blocked()||selectionCache.presentation!==latest?.presentation) {toast.show(tr("copy-not-ready"),"error");return;}
+    if(!e.clipboardData) {toast.show(tr("copy-event-unavailable"),"error");return;}
     try {
         e.clipboardData.setData("text/plain",selectionCache.value.text);
         const {presentation,generation,revision,request}=selectionCache;
         send({kind:"copied",presentation,generation,revision,request,trusted:e.isTrusted});
-    } catch(_) { surfaceNote.textContent=tr("copy-failed"); }
+    } catch(_) { toast.show(tr("copy-failed"),"error"); }
 }
 function doubleclick(e) {
     if(clickSequenceAction||blocked()||!stationMouse.local()&&!e.shiftKey) return;
@@ -687,7 +687,7 @@ function contextAction(action,context,e){
     if(action==="copy"||action==="copy-ansi"||action==="copy-link")send({kind:"copy_text",presentation:latest.presentation,generation,revision,
         target:action!=="copy-link"?{kind:action==="copy-ansi"?"selection_ansi":"selection",request:selectionCache.request}:{kind:"link",index:context.index},trusted:true});
     else if(action==="paste"){
-        if(keyboardState.enabled&&keyboardState.mode!=="input"){policy("reset",e);surfaceNote.textContent=tr("paste-native-first");return;}
+        if(keyboardState.enabled&&keyboardState.mode!=="input"){policy("reset",e);toast.show(tr("paste-native-first"),"error");return;}
         cancelComposition();cancelDrag();clearSelection();pastePending=true;
         sendInput({kind:"paste_clipboard",presentation:latest.presentation,stamp:stamp(),trusted:true});
     }
@@ -726,11 +726,11 @@ function paste(e) {
     cancelHover(true);
     e.preventDefault();
     if(pastePending||pasteDialog.open) return;
-    if(keyboardState.enabled&&keyboardState.mode!=="input") {policy("reset",e);surfaceNote.textContent=tr("paste-native-first");return;}
+    if(keyboardState.enabled&&keyboardState.mode!=="input") {policy("reset",e);toast.show(tr("paste-native-first"),"error");return;}
     const text=e.clipboardData?.getData("text/plain");
     cancelComposition();cancelDrag();clearSelection();
-    if(text===undefined) {surfaceNote.textContent=tr("paste-unavailable");return;}
-    if(text.length>16384) {surfaceNote.textContent=tr("paste-too-long");return;}
+    if(text===undefined) {toast.show(tr("paste-unavailable"),"error");return;}
+    if(text.length>16384) {toast.show(tr("paste-too-long"),"error");return;}
     pastePending=true;surface.dataset.pasteResult="pending";sendInput({kind:"paste",text,generation,trusted:e.isTrusted});
 }
 function confirmPaste(e){if(e.isTrusted&&!stopped)sendInput({kind:"paste_confirm",trusted:true});}
@@ -808,7 +808,7 @@ function exportScreen(e, selected=false, destination="file") {
                 selection_request:selection?.request??null,destination,png,trusted:e.isTrusted});
         } catch(error) {
             exportBusy=false;refreshExportControls();
-            if(!stopped) {surface.dataset.exportResult="failed";surfaceNote.textContent=String(error);restoreEditingFocus();}
+            if(!stopped) {surface.dataset.exportResult="failed";toast.show(String(error),"error");restoreEditingFocus();}
         } finally {target.width=0;target.height=0;full.width=0;full.height=0;}
     })();
 }
@@ -855,8 +855,8 @@ const loginUi=createLoginDialog({tr,send,stamp,manage:e=>settingsUi.manage("acco
     prepare:e=>{stationMouse.revoke();cancelHover(true);policy("reset",e);cancelComposition();clearSelection();},
     restore:restoreSettingsPanelFocus,changed:refreshControls,focus});
 const destinationUi=createNavigationDialog({tr,send,stamp,prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,current:()=>latest,isEditing:()=>composing||pastePending});
-draftUi=createDraftEditor({document,window,tr,send,current:()=>latest,palette,render,notice:text=>{surfaceNote.textContent=text;},prepare:e=>{policy("reset",e);invalidatePresentation();tools?.close();},restore:restoreEditingFocus,changed:refreshControls});
-const bookmarksUi=createBookmarksDialog({tr,send,render,window,notice:text=>{surfaceNote.textContent=text;},prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,openDestination:destinationUi.openDraft,current:()=>latest});
+draftUi=createDraftEditor({document,window,tr,send,current:()=>latest,palette,render,notice:(text,kind)=>showNotice(text,kind),prepare:e=>{policy("reset",e);invalidatePresentation();tools?.close();},restore:restoreEditingFocus,changed:refreshControls});
+const bookmarksUi=createBookmarksDialog({tr,send,render,window,notice:(text,kind)=>showNotice(text,kind),prepare:e=>{policy("reset",e);invalidatePresentation();},restore:restoreEditingFocus,changed:refreshControls,openDestination:destinationUi.openDraft,current:()=>latest});
 const filterUi=createFiltersDialog({tr,send,manage:e=>settingsUi.manage("filters",e),present:dialog=>dialog.show(),visible:()=>settingsUi.visible("filters"),current:()=>latest,invalidate:invalidatePresentation,
     reset:e=>policy("reset",e),restore:restoreSettingsPanelFocus,changed:refreshControls});
 tools=createFloatingTools({root:chrome,ball:document.getElementById("tools-ball"),fan:document.getElementById("tools-fan"),panel:toolbar,window,document,tr,
@@ -873,7 +873,7 @@ function requestInline(target,e){
     send({kind:"inline_expand",presentation:latest.presentation,stamp:stamp(),target,
         key:{key:"Enter",code:"Enter",ctrl:false,alt:false,shift:false,repeat:false},trusted:true});focus();
 }
-const inlineImages=installInlineImages({surface,canvas,viewport,tr,render,find:articleFind,redraw:()=>{if(latest)draw(latest);},changed:refreshKeepAlive,notice:text=>{surfaceNote.textContent=text;},
+const inlineImages=installInlineImages({surface,canvas,viewport,tr,render,find:articleFind,redraw:()=>{if(latest)draw(latest);},changed:refreshKeepAlive,notice:(text,kind)=>showNotice(text,kind),
     allowed:()=>!stopped&&!blocked()&&!tools?.busy()&&inlineShortcut({key:"Enter"},keyboardState,latest),request:requestInline});
 articleUpdates=createArticleUpdates({root:document.getElementById("article-updates"),status:document.getElementById("article-updates-status"),toggle:document.getElementById("article-updates-toggle"),fresh:document.getElementById("article-updates-new"),station:document.getElementById("article-updates-station"),tr,current:()=>latest,send,
     menuToggle:document.querySelector('[data-context-action="article-updates"] span'),
@@ -889,7 +889,7 @@ function captureViewport(event){
         window:[innerWidth,innerHeight],dpr:devicePixelRatio||1,
         draws});
 }
-const toast=createSurfaceToast({root:document.getElementById("surface-toast"),message:surfaceNote,dismiss:document.getElementById("toast-dismiss"),document,MutationObserver,restore:restoreEditingFocus});
+const toast=createSurfaceToast({root:document.getElementById("surface-toast"),message:surfaceNote,dismiss:document.getElementById("toast-dismiss"),document,motion:window.matchMedia("(prefers-reduced-motion: reduce)"),restore:restoreEditingFocus});
 replyNavigator=createReplyNavigation({document,tr,current:()=>latest,allowed:opening=>!stopped&&!blocked()&&(opening||!tools?.busy())&&!!latest?.connected,
     prepare:e=>{tools?.close();articleFind?.close(false);cancelDrag();clearSelection();cancelHover(true);},restore:focus,jump:findArticleMatch,changed:refreshKeepAlive,
     anchor:()=>({first:grid?.rowAt(Math.max(0,viewport.scrollTop-surface.offsetTop)*grid.ratio,true)??0,last:grid?.rowAt(Math.max(0,viewport.scrollTop-surface.offsetTop+viewport.clientHeight-(grid.footerHeight??0))*grid.ratio,true)??Infinity})});
@@ -1053,8 +1053,8 @@ async function paint(packet) {
     }
     if(pointerClient)setHover(cellAt(pointerClient,false),false,true,pointerClient);
     if(failureChanged) {
-        if(packet.keep_alive_failure) surfaceNote.textContent=packet.keep_alive_failure;
-        else if(surfaceNote.textContent===previousFailure) surfaceNote.textContent="";
+        if(packet.keep_alive_failure) toast.show(packet.keep_alive_failure,"error");
+        else if(surfaceNote.textContent===previousFailure) toast.clear();
     }
     refreshNavigation();refreshArticleLoad();
     const geometry=draw(packet);articleUpdates?.afterPaint(packet);resumeReadingMove();send({kind:"painted",presentation:packet.presentation,revision,generation});if(packet.probe) probe(packet,geometry);
@@ -1080,8 +1080,8 @@ function runSurfaceProbe(mode){
             editorColourProbe=mode==="editor_color";
             toolsProbeEnabled=true;
             if(mode==="fullscreen")viewportProbe=true;
-            else if(mode==="sites"||mode==="sites_restart")surfaceNote.textContent="Local station probe: loopback Big5/GBK peers only; station favourites, default, input, PNG and shutdown";
-            else if(mode==="tools")surfaceNote.textContent=tr("tools-probe-freeplay");
+            else if(mode==="sites"||mode==="sites_restart")toast.show("Local station probe: loopback Big5/GBK peers only; station favourites, default, input, PNG and shutdown");
+            else if(mode==="tools")toast.show(tr("tools-probe-freeplay"));
             else if(mode==="decode")send({kind:"synthetic_invalid_event"});
             else if(mode==="painted")send({kind:"painted",presentation:latest.presentation,revision:revision+100,generation});
             else if(mode==="diagnostics"){
@@ -1090,26 +1090,26 @@ function runSurfaceProbe(mode){
                 diagnostics.note("marker",4,0,0,true);
                 const start=performance.now();while(performance.now()-start<1400){}
                 diagnostics.note("marker",5,0,performance.now()-start,true);
-                surfaceNote.textContent="本機診斷探針：已模擬 1.4 秒停頓；測試導覽、問題標記、PNG 與關閉";
+                toast.show("本機診斷探針：已模擬 1.4 秒停頓；測試導覽、問題標記、PNG 與關閉");
             }
             else if(mode==="renderer_error")throw new Error("synthetic renderer failure");
-            else if(mode==="slow")surfaceNote.textContent="慢命令探針：結果等待 60 秒；可開啟字型設定或立即關閉視窗";
-            else if(mode==="files")surfaceNote.textContent="原生選檔探針（本機合成資料）：可匯出 PNG 或匯入／匯出設定檔";
-            else if(mode==="files_slow")surfaceNote.textContent="慢檔案探針：等待本機 runner 釋放；可開啟設定或關閉視窗";
-            else if(mode==="fonts")surfaceNote.textContent="Font selection probe: local synthetic data and external-page sink";
-            else if(mode==="recent")surfaceNote.textContent="Recent-board probe: inspect the restored list, clear it, wait for saved feedback, then close";
-            else if(mode==="bookmarks")surfaceNote.textContent="Bookmark probe: add two entries, rename the first, remove the second, reject a bare board, then open #00000101@Stella through Go to";
-            else if(mode.startsWith("bookmarks_"))surfaceNote.textContent="Bookmark restart probe: inspect restored/empty/corrupt data, remove restored entry explicitly, then close without station input";
-            else if(mode==="articles"||mode==="articles_close")surfaceNote.textContent="Article probe: enable Vim, open URL 00000101 and AID 00000102, fail 00000103 and recover manually, reject foreign URL and long draft, then cancel/close during 00000104";
-            else if(mode==="boards_close")surfaceNote.textContent="Board close probe: visit Stella and Other, start Beta, then close while waiting";
-            else if(mode==="boards")surfaceNote.textContent="Board probe: cancel a draft, visit Stella and Other, reject an invalid name, then start Beta and stop before the delayed board list";
-            else if(mode==="inline_pages")surfaceNote.textContent="Cached reading: press Enter twice. Scroll to the end to load page two, then browse back locally. Peer accepts one PageDown only; PageUp or extra input fails. Export PNG and close.";
-            else if(mode==="inline"||mode==="context_menu")surfaceNote.textContent="Inline probe: press Enter twice, inspect inserted images and text, export PNG, then close. Peer rejects every station byte.";
-            else if(mode==="osc8")surfaceNote.textContent="OSC 8 probe: both wrapped fragments share a complete destination; select/copy, drag and open local media";
-            else if(mode==="login_2fa")surfaceNote.textContent="Verification probe: explicit synthetic login, six digits, then eight-character recovery; Esc returns to Vim";
-            else if(mode==="sgr66"||mode==="sgr66_legacy")surfaceNote.textContent="Dual-color probe: export PNG, then close; local synthetic data only";
-            else if(mode==="dialogs")surfaceNote.textContent="對話框與媒體封包探針（僅本機合成資料）";
-            else if(mode==="confirm"){pasteConfirmProbe=true;surfaceNote.textContent="貼上確認探針：請用原生貼上 A、換行、B";}
+            else if(mode==="slow")toast.show("慢命令探針：結果等待 60 秒；可開啟字型設定或立即關閉視窗");
+            else if(mode==="files")toast.show("原生選檔探針（本機合成資料）：可匯出 PNG 或匯入／匯出設定檔");
+            else if(mode==="files_slow")toast.show("慢檔案探針：等待本機 runner 釋放；可開啟設定或關閉視窗");
+            else if(mode==="fonts")toast.show("Font selection probe: local synthetic data and external-page sink");
+            else if(mode==="recent")toast.show("Recent-board probe: inspect the restored list, clear it, wait for saved feedback, then close");
+            else if(mode==="bookmarks")toast.show("Bookmark probe: add two entries, rename the first, remove the second, reject a bare board, then open #00000101@Stella through Go to");
+            else if(mode.startsWith("bookmarks_"))toast.show("Bookmark restart probe: inspect restored/empty/corrupt data, remove restored entry explicitly, then close without station input");
+            else if(mode==="articles"||mode==="articles_close")toast.show("Article probe: enable Vim, open URL 00000101 and AID 00000102, fail 00000103 and recover manually, reject foreign URL and long draft, then cancel/close during 00000104");
+            else if(mode==="boards_close")toast.show("Board close probe: visit Stella and Other, start Beta, then close while waiting");
+            else if(mode==="boards")toast.show("Board probe: cancel a draft, visit Stella and Other, reject an invalid name, then start Beta and stop before the delayed board list");
+            else if(mode==="inline_pages")toast.show("Cached reading: press Enter twice. Scroll to the end to load page two, then browse back locally. Peer accepts one PageDown only; PageUp or extra input fails. Export PNG and close.");
+            else if(mode==="inline"||mode==="context_menu")toast.show("Inline probe: press Enter twice, inspect inserted images and text, export PNG, then close. Peer rejects every station byte.");
+            else if(mode==="osc8")toast.show("OSC 8 probe: both wrapped fragments share a complete destination; select/copy, drag and open local media");
+            else if(mode==="login_2fa")toast.show("Verification probe: explicit synthetic login, six digits, then eight-character recovery; Esc returns to Vim");
+            else if(mode==="sgr66"||mode==="sgr66_legacy")toast.show("Dual-color probe: export PNG, then close; local synthetic data only");
+            else if(mode==="dialogs")toast.show("對話框與媒體封包探針（僅本機合成資料）");
+            else if(mode==="confirm"){pasteConfirmProbe=true;toast.show("貼上確認探針：請用原生貼上 A、換行、B");}
             else if(mode==="untrusted"){
                 const before=sent,beforePending=pastePending,beforeDialog=pasteDialog.open;
                 const clipboard=new DataTransfer();clipboard.setData("text/plain","synthetic");
@@ -1125,7 +1125,7 @@ function runSurfaceProbe(mode){
             }
 
 }
-function showNotice(message){if(!stopped&&message&&!settingsUi.notice(message)&&!media.notice(message))surfaceNote.textContent=message;}
+function showNotice(message,kind="error"){if(!stopped&&message&&!settingsUi.notice(message)&&!media.notice(message))toast.show(message,kind);}
 const route=createSurfaceRouter({
     diagnostics:enabled=>diagnostics.enable(enabled),
     localization:data=>{tr.update({kind:"localization",payload:data});document.documentElement.lang=data.language;settingsUi.relocalize();filterUi.relocalize();tools.relocalize();articleFind.relocalize();receiveKeyboard(keyboardState);refreshControls();refreshArticleLoad();},
@@ -1150,10 +1150,10 @@ const route=createSurfaceRouter({
     media_external:data=>media.externalResult(data),media_reset:()=>media.reset(),
     settings_visibility:open=>{settingsActive=open;refreshKeepAlive();},
     settings_close:()=>settingsUi.escape(),settings_open:settingsUi.open,font_catalog:settingsUi.catalog,font_preview:settingsUi.preview,
-    profile_result:async data=>{await settingsUi.profile(data);showNotice(data.notice);},
+    profile_result:async data=>{await settingsUi.profile(data);showNotice(data.notice,data.status==="exported"?"success":data.status==="rejected"?"error":"persistent");},
     update_status:settingsUi.updateStatus,
     article_updates:data=>articleUpdates.receive(data),
-    settings_saved:data=>{settingsUi.saved(data);showNotice(data.notice);},
+    settings_saved:data=>{settingsUi.saved(data);if(data.status!=="saved")showNotice(data.notice);},
     selection:receiveSelection,
     paste_result:data=>{
         surface.dataset.pasteResult=data.status;pastePending=data.status==="preview";
@@ -1162,8 +1162,9 @@ const route=createSurfaceRouter({
     },
     input_rejected:message=>{navigationLocked=false;refreshNavigation();showNotice(message);},
     navigation_result:receiveNavigation,
-    link_result:data=>{surface.dataset.linkResult=data.status;showNotice(data.notice);},
-    export_result:data=>{surface.dataset.exportResult=data.status;exportBusy=false;refreshExportControls();restoreEditingFocus();showNotice(data.notice);},
+    link_result:data=>{surface.dataset.linkResult=data.status;showNotice(data.notice,data.status==="requested"?"success":"error");},
+    export_result:data=>{surface.dataset.exportResult=data.status;exportBusy=false;refreshExportControls();restoreEditingFocus();showNotice(data.notice,data.status==="copied"?"copy":data.status==="failed"?"error":"success");},
+    toast:data=>showNotice(data.message,data.kind),
     notice:showNotice,
 });
 try {

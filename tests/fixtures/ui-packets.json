@@ -37,6 +37,8 @@
       "payload": "訊息"
     }
   },
+  {"name":"toast_copy","packet":{"kind":"toast","payload":{"message":"已複製","kind":"copy"}}},
+  {"name":"toast_success","packet":{"kind":"toast","payload":{"message":"已保存","kind":"success"}}},
   {
     "name": "surface_probe",
     "packet": {

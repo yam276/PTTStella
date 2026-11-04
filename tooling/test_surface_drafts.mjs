@@ -6,19 +6,19 @@ import {translator} from './i18n_test_support.mjs';
 const source=readFileSync(new URL('../assets/surface-drafts.js',import.meta.url),'utf8');
 function fixture(){
  let clock=10000,timer=0,packet={connected:true,generation:7,frame:{revision:3},input_epoch:2,draft_scope:{board:'Stella',account:'StellaTest'},draft_post_scope:{board:'Stella',account:'StellaTest'},editor:true};
- const nodes=new Map(),sent=[],timers=new Map();
+ const nodes=new Map(),sent=[],timers=new Map(),notices=[];
  const node=id=>{if(!nodes.has(id))nodes.set(id,{id,open:false,hidden:false,value:'',children:[],dataset:{},style:{},attrs:{},setAttribute(k,v){this.attrs[k]=v;},append(n){this.children.push(n);},replaceChildren(...n){this.children=n;},showModal(){this.open=true;},close(){this.open=false;},focus(){},getBoundingClientRect:()=>({left:0,top:0,width:id==='draft-color-panel'?334:1000,height:id==='draft-color-panel'?218:700})});return nodes.get(id);};
  const document={getElementById:node,createElement:()=>node('option-'+nodes.size),querySelector:()=>node('draft-dialog').open?node('draft-dialog'):null};
  const window={setTimeout:(fn,ms)=>{timers.set(++timer,{fn,at:clock+ms});return timer;},clearTimeout:id=>timers.delete(id)};
  let options,value='',selection=[],mode='color',select='text',dead=false,projected=null;
  const editor={value:()=>value,load:v=>{value=v;},ranges:()=>selection,apply:changes=>{for(const c of [...changes].reverse())value=value.slice(0,c.from)+c.insert+value.slice(c.to);options.onChange();},project:d=>projected=d,mode:m=>mode=m,selection:m=>select=m,readOnly(){},composing:()=>false,focus(){},destroy(){dead=true;}};
  const createDraftEditor=vm.runInNewContext(source+'\ncreateDraftEditor',{TextEncoder,graphicCode:()=>null,Date:class extends Date{static now(){return clock;}}});
- const ui=createDraftEditor({document,window,tr:translator('zh-TW'),send:e=>sent.push(JSON.parse(JSON.stringify(e))),current:()=>packet,prepare(){},restore(){},changed(){},notice(){},palette:Array(16).fill('#000'),createEditor:o=>{options=o;return editor;}});
+ const ui=createDraftEditor({document,window,tr:translator('zh-TW'),send:e=>sent.push(JSON.parse(JSON.stringify(e))),current:()=>packet,prepare(){},restore(){},changed(){},notice:(...args)=>notices.push(args),palette:Array(16).fill('#000'),createEditor:o=>{options=o;return editor;}});
  const event=(extra={})=>({isTrusted:true,preventDefault(){},stopPropagation(){},...extra});
  function fire(id,type='click',extra={}){const n=node('draft-'+id),binding=ui.bindings.find(([target,t])=>target===n&&t===type);assert.ok(binding,id+' '+type);binding[2](event({target:n,...extra}));}
  function open(){ui.open(event());const request=sent.at(-1).request;ui.receive({state:'list',request,scope:packet.draft_scope,can_create:true,entries:[]});ui.receive({state:'selected',token:1,entry:{scope:packet.draft_scope,revision:0,title:'',body:''}});ui.receive({state:'projected',token:1,revision:0,decorations:[]});}
  function advance(ms){clock+=ms;let ready;do{ready=[...timers].filter(([,v])=>v.at<=clock);for(const [id,v]of ready){timers.delete(id);v.fn();}}while(ready.length);}
- return {ui,node:id=>node('draft-'+id),sent,fire,event,open,advance,set(p){packet={...packet,...p};ui.update();},timers,
+ return {ui,node:id=>node('draft-'+id),sent,notices,fire,event,open,advance,set(p){packet={...packet,...p};ui.update();},timers,
  edit(v){value=v;options.onChange();},value:()=>value,select:r=>selection=r,context:()=>options.onContext(event({clientX:990,clientY:690})),mode:()=>mode,selection:()=>select,dead:()=>dead,projected:()=>projected};
 }
 const saves=f=>f.sent.filter(e=>e.kind==='draft_edit');
@@ -75,4 +75,10 @@ test('closing while a color operation is pending cannot discard its later edit',
 test('save before choosing a recovered draft cannot dirty or lock the chooser',()=>{
  const f=fixture();f.ui.open(f.event());const request=f.sent.at(-1).request;f.ui.receive({state:'list',request,scope:{board:'Stella',account:'StellaTest'},can_create:true,entries:[{id:'saved',title:'中文',saved_at:1}]});
  assert.equal(f.node('save').disabled,true);assert.equal(f.node('transfer').disabled,true);f.fire('save');f.fire('restore');assert.equal(f.sent.at(-1).kind,'draft_choose');
+});
+
+test('autosave and conflict status stay inline while transfer instructions and errors retain distinct notice kinds',()=>{
+ const f=fixture();f.open();f.edit('中文');f.fire('save');f.ui.receive({state:'saved',token:1,sequence:1,conflicted:true});assert.equal(f.notices.length,0);assert.match(f.node('notice').textContent,/衝突/);
+ f.ui.receive({state:'transferred',message:'check before posting'});assert.deepEqual(f.notices.at(-1),['check before posting','persistent']);
+ f.ui.receive({state:'error',message:'partial transfer'});assert.deepEqual(f.notices.at(-1),['partial transfer','error']);
 });

@@ -1,5 +1,17 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-04 成功通知淡出與錯誤保留
+
+複製文字／網址／ANSI／圖片成功停留2秒，PNG／圖片存檔、收藏、黑白名單變更、設定檔匯出及上色完成停留3秒，再以500ms淡出。結果由Rust封包或既有typed status分類，不依中文／英文訊息比對；未分類通知保守保留。需要處理的錯誤不自動消失，也不被晚到成功覆蓋；斷線卡維持獨立重連。設定與草稿自動保存只更新原介面狀態，草稿帶回後的手動檢查提醒持續顯示。
+
+所有surface通知改經單一owner，移除文字MutationObserver；最多一個timer、一個系統動態偏好listener，沒有interval或逐frame工作。hover／鍵盤focus暫停等待與淡出，離開才依剩餘時間續行；新通知（含相同內容）重設期限並撤銷舊callback，錯誤可手動關閉。減少動態效果跳過淡出，偏好切換亦保留hover／focus暫停。destroy移除timer／listener，收起通知不搶鍵盤焦點，僅使用純文字。
+
+驗證：JS375項、core14命令／2replay、desktop lib208／bin178／multi_instance10（各1個原有ignored）、Clippy全targets、fmt及docs通過。新增通知計時、重複resume不增timer、fade中暫停／取代／舊callback、減少動態效果、錯誤優先、清理及生產feedback路由回歸；收藏成功／失敗分類與草稿自動保存／衝突inline、帶回提醒／錯誤分類另驗。首次Rust wire expected因新增fixture擺放順序與列表不一致而失敗，調整新增案例順序後完整通過，未改產品判斷或既有expected。最後資產調整後重跑全部JS、desktop bin及實際打包。
+
+macOS真正Dioxus／WKWebView的兩輪toast_reconnect皆passed，各自恰兩次loopback session、零登入／重送／站端輸入。第一輪原生AX／截圖讀回斷線卡超過9秒仍保留，重連後圖片複製與PNG保存提示可見、等候後自動收起；最終交付binary再驗重連、PNG成功提示手動關閉與圖片複製自動收起。兩輪PNG、Close acknowledged、所有owner join、finish run_ok／cleanup_ok通過，程序已退出。精確2／3秒、500ms及hover／focus／系統動態偏好由受控clock與生產CSS驗證，不冒充原生hover／逐幀動畫時間或其他OS實機驗收。未連PTT、未操作使用者App或設定。
+
+交付 `dist/macos-toast-expiry-verified/PTTStella.app`（0.4.0-dev.1／arm64 release／strict ad-hoc，診斷置頂且不搶焦點），確認嵌入的所有變更資產與工作樹相同。證據 `.local/verification/toast-expiry-20261104/`。清除本輪兩個中間App、隔離App／launcher／暫存資料、暫存syntax檔及Cargo dev／release profiles；保留最新交付、使用者正在執行的macos-classic-defaults（PID34509）與其他非本輪交付。exact paths、du／Cargo宣告量及filesystem free前後見cleanup.json。只提交develop，不推送或發佈。
+
 ## 2026-11-04 開箱字型與字高預設
 
 新安裝與「重設字型預設值」統一使用Windows傳統BBS（MingLiU細明體）、字高23、baseline20及字寬100%。已保存的字型／數值不改寫；明確保存的「依平台初始值」仍解析成原OS字型，設定選單的同名選項與產品預設分開。切換組合仍保留目前數值。細明體須有合法本機安裝，既有缺字型提示、官方來源及內建替代選項保留，沒有新增字型散布。
