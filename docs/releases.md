@@ -18,7 +18,7 @@
 ## 發佈一個版本
 
 1. 確認使用者已明確要求發佈該版本。在 `develop` 完成變更與驗收，將 `Cargo.toml` 的 package version 更新為目標正式版號，並以 Cargo 更新 `Cargo.lock` 的本產品版本，同步 README、版本徽章與該版 Release notes；當前版本資訊必須一致。使用正式 SemVer，例如 `0.1.0`；不將 dev 或其他預發佈版號合併到 `main`，也不接受 `+build` metadata。
-2. 將版本變更提交並推送到 `develop`，建立 **develop → main** 的 PR，標題必須為 `release: v0.1.0`（對應實際版本）。版本必須高於當前 `main`。`Release PR policy` 會檢查分支、來源 repo、版本、lockfile、打包回歸與文件；草稿不通過。
+2. 將版本變更提交並推送到 `develop`，建立 **develop → main** 的 PR，標題必須為 `release: v0.1.0`（對應實際版本）。一般版本須高於當前 `main`。已取消且未公開的版本依下方恢復規則辦理。`Release PR policy` 會檢查分支、來源 repo、版本、lockfile、打包回歸與文件；草稿不通過。
    若有 `docs/release-notes/v<version>.md`，發佈時會原樣使用該說明，不另附自動變更清單；沒有版本專用說明時沿用自動摘要。
 3. 檢查變更與驗收結果後，合併該 PR。一般 merge commit 或 squash merge 均可；不要使用 rebase merge，發佈需要 GitHub 記錄的 PR merge commit 與觸發 commit 完全一致。
 4. `main` 的 `Cargo.toml` 更新觸發 `Desktop Release`。先核對剛合併的 PR 與遞增版本，再平行測試／打包四個架構，全部成功後才建立 `v0.1.0` tag 與 GitHub Release、附上下載檔。依目前分支規則只發佈正式版本，標示 Latest。
@@ -95,6 +95,10 @@ Release PR #3 合併至 main `4f194551a02821e7b80ae78591a125774e74487e`。四架
 一般流程維持 develop → main 與版本遞增。只有使用者明確要求替換既有版本時，才可從該發佈提交建立 `codex/reissue-v<version>` → main 的 Release PR，標題仍為 `release: v<version>`。必須提交 `docs/release-replacements/v<version>.json`，只含 `version`、`previous_commit` 與非空 `reason`；版本與父提交必須精確符合被替換的 main，不能套用到其他版本或後來的提交。來源仍須同 repo、乾淨 checkout、唯一已合併 PR 及精確 merge commit。這份紀錄不會自動刪除任何 Release 或移動 tag。
 
 先備份舊 Release metadata、tag、Git bundle 與可下載的舊附件並核對 digest，再回移已驗證修復、通過 Release PR policy，合併後手動在 main 跑四架構 verify。全部實際建置通過後，才依明確授權刪除舊 Release 與 tag；以相同 main 提交及同次 verify 的原始 artifacts，重新執行 production `prepare`、`validate_assets`、`publish`。這個手動出版步驟由使用者的本次替換授權觸發；verify workflow 本身仍不具出版權限。一般 publisher 依然拒絕既有公開 Release 或指向別處的 tag，所有下載上傳完才公開。重發後核對遠端來源、六個套件及 SHA256SUMS，再把 main 整合回 develop，保留 develop 的較新開發版本。
+
+## 恢復已取消且未公開的版本
+
+使用者可要求把後續驗證完成的功能納入已合併但尚未發佈的同一版號。沿用 develop → main 的 Release PR，並在該版的 `docs/release-replacements/v<version>.json` 加入 `cancelled_run`。PR 檢查核對原正式分支提交、被取消的 Desktop Release push、同一正式版號，以及 GitHub 上沒有該版標籤或 Release。正式流程再次核對取消紀錄與合併提交。重試只接受指向該合併提交的標籤及未公開草稿，仍須通過原本的完整產物驗證。
 
 ## 0.2.1 重新發佈結果（2026-10-28）
 

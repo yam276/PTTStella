@@ -76,22 +76,27 @@ def version_at(sha):
 
 
 def replacement_at(sha, previous_sha, version):
-    """An explicit same-version replacement is pinned to one prior commit."""
+    """Read the exact prior commit and, for an unpublished version, its cancelled run."""
     path = 'docs/release-replacements/v'+version+'.json'
     if not command('git', 'ls-tree', '--name-only', sha, '--', path):
         return None
     record = json.loads(command('git', 'show', sha+':'+path))
-    if (not isinstance(record, dict) or set(record) != {'version', 'previous_commit', 'reason'}
+    required = {'version', 'previous_commit', 'reason'}
+    if (not isinstance(record, dict) or set(record) not in (required, required | {'cancelled_run'})
             or record['version'] != version or record['previous_commit'] != previous_sha
             or not isinstance(record['reason'], str) or not record['reason'].strip()
             or len(record['reason']) > 500):
         raise ValueError('Replacement record must identify this exact prior release commit')
+    if 'cancelled_run' in record and (type(record['cancelled_run']) is not int or record['cancelled_run'] <= 0):
+        raise ValueError('Resumption must identify a cancelled Desktop Release run')
     check_sha(previous_sha)
     return record
 
 
 def validate_pr(pr, repository, version, previous, replacement=None):
-    head = 'develop' if replacement is None else 'codex/reissue-v'+version
+    head = 'develop'
+    if replacement is not None and 'cancelled_run' not in replacement:
+        head = 'codex/reissue-v'+version
     if (pr['base']['ref'] != 'main' or pr['head']['ref'] != head
             or pr['base']['repo']['full_name'] != repository
             or (pr['head'].get('repo') or {}).get('full_name') != repository):
@@ -108,12 +113,29 @@ def validate_pr(pr, repository, version, previous, replacement=None):
         raise ValueError(f'Release version must increase: {previous} → {version}')
 
 
-def check_pr(event, repository):
+def validate_resumption(record, github):
+    run_id = record['cancelled_run']
+    run = github.api(f'actions/runs/{run_id}')
+    expected = {'id': run_id, 'path': '.github/workflows/release.yml', 'event': 'push',
+                'head_branch': 'main', 'head_sha': record['previous_commit'],
+                'status': 'completed', 'conclusion': 'cancelled'}
+    if (parse_version(record['version']).pre or not isinstance(run, dict)
+            or any(run.get(field) != value for field, value in expected.items())):
+        raise ValueError('Resumption requires a cancelled Desktop Release push on the exact prior main commit')
+
+
+def check_pr(event, repository, github=None):
     pr = event['pull_request']
     version = version_at(pr['head']['sha'])
     previous = version_at(pr['base']['sha'])
     replacement = replacement_at(pr['head']['sha'], pr['base']['sha'], version) if version == previous else None
     validate_pr(pr, repository, version, previous, replacement)
+    if replacement is not None and 'cancelled_run' in replacement:
+        github = github if github is not None else GitHub(repository)
+        validate_resumption(replacement, github)
+        tag = 'v'+version
+        if github.tag_commit(tag) is not None or github.release_for_tag(tag, missing_ok=True) is not None:
+            raise ValueError('Resumption requires an unpublished version without an existing tag or Release')
     return {'version': version, 'previous_version': previous, 'tag': 'v'+version}
 
 
@@ -197,6 +219,8 @@ def prepare(repository, sha, ref, github):
         raise ValueError('Release commit must be the merge commit of one release PR')
     replacement = replacement_at(sha, parent, version) if version == previous else None
     validate_pr(prs[0], repository, version, previous, replacement)
+    if replacement is not None and 'cancelled_run' in replacement:
+        validate_resumption(replacement, github)
     tag = 'v'+version
     tagged = github.tag_commit(tag)
     if tagged is not None and tagged != sha:
