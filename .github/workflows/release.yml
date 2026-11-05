@@ -111,7 +111,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential pkg-config libwebkit2gtk-4.1-dev libxdo-dev \
             libssl-dev libayatana-appindicator3-dev librsvg2-dev \
-            libfontconfig1-dev libfreetype6-dev dpkg-dev
+            libfontconfig1-dev libfreetype6-dev dpkg-dev dbus-daemon gnome-keyring
       - name: Activate the repository Rust toolchain
         run: |
           rustup show
@@ -135,6 +135,26 @@ jobs:
         run: |
           cargo clippy --locked --features desktop --all-targets -- -D warnings
           cargo test --locked --features desktop --lib --bin pttstella --test multi_instance
+      - name: Verify Windows Credential Manager persistence
+        if: runner.os == 'Windows'
+        timeout-minutes: 5
+        run: cargo test --locked --features desktop --lib login::vault::tests::native_roundtrip -- --ignored --exact
+      - name: Verify Linux Secret Service persistence and unavailable service
+        if: runner.os == 'Linux'
+        timeout-minutes: 5
+        run: |
+          vault_tmp=$(mktemp -d "$RUNNER_TEMP/pttstella-vault.XXXXXX")
+          trap 'rm -rf -- "$vault_tmp"' EXIT
+          export XDG_DATA_HOME="$vault_tmp/data" XDG_CONFIG_HOME="$vault_tmp/config"
+          export XDG_CACHE_HOME="$vault_tmp/cache" XDG_RUNTIME_DIR="$vault_tmp/runtime"
+          mkdir -m 700 "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$XDG_RUNTIME_DIR"
+          unset GNOME_KEYRING_CONTROL
+          dbus-run-session -- bash -euo pipefail -c '
+            printf "%s" "synthetic-keyring-password" | gnome-keyring-daemon --unlock --components=secrets
+            cargo test --locked --features desktop --lib login::vault::tests::native_roundtrip -- --ignored --exact
+          '
+          DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-pttstella-synthetic-bus \
+            cargo test --locked --features desktop --lib login::vault::tests::native_service_unavailable -- --ignored --exact
       - name: Build native release downloads
         run: python tooling/bundle_release.py --out-dir dist/release
       - name: Retain Windows installer policy evidence

@@ -120,6 +120,30 @@ test("login submit clears the draft immediately and destruction ignores late res
     assert.equal(env.node("login-account").value,"");assert.equal(ui.clean(),true);
 });
 
+test("credential-store failure still permits an unchecked single login without refilling secrets",()=>{
+    const env=environment("surface-login.js","createLoginDialog"),ui=env.create();
+    env.node("login-open").dataset.platformSupported="true";
+    env.fire("login-open");
+    assert.equal(env.node("login-remember").checked,false);
+    ui.receive({state:"message",message:"credential store unavailable"});
+    assert.equal(env.node("login-submit").disabled,false);
+    assert.equal(env.node("login-password").value,"");
+    env.node("login-account").value="Synthetic";env.node("login-password").value="single login only";
+    env.fire("login-submit");
+    assert.equal(env.sent.at(-1).kind,"login_submit");
+    assert.equal(env.sent.at(-1).remember,false);
+    assert.equal(env.node("login-password").value,"");
+    env.fire("login-cancel");env.fire("login-open");
+    assert.equal(env.node("login-remember").checked,false);
+    ui.receive({state:"opened",account:"Synthetic",saved:true,message:"saved"});
+    assert.equal(env.node("login-password").value,"");
+    assert.equal(env.node("login-remember").checked,false);
+    env.fire("login-submit");
+    assert.equal(env.sent.at(-1).password,"");
+    assert.equal(env.sent.at(-1).remember,false);
+    ui.destroy();assert.equal(ui.clean(),true);
+});
+
 test("filter edit admission, failure recovery and presentation blocking share one owner",()=>{
     const env=environment("surface-filters.js","createFiltersDialog");
     const ui=env.create({current:()=>({presentation:3,generation:7,frame:{revision:9},revealed:false})});

@@ -115,3 +115,11 @@ SubAgent Critic 提出的書籤合併超量與設定關窗保存基準問題修�
 取回同次正式run的原始artifacts，用未修改的production `validate_assets` 核對乾淨來源、版本／release profile、四份manifest、六個套件、完整白名單及全部逐檔SHA-256；另獨立核對公開七個附件的GitHub digest／大小、六筆SHA256SUMS、版本專用中英說明及Latest狀態，全部通過。公開只含六個下載與SHA256SUMS，沒有JSON；建置manifest仍保留Actions artifacts。下載及獨特校驗證據保留repo外與 `.local/verification/release-030-publish-20261102/`。本機校驗曾在Windows artifact尚未下載完成時因缺manifest停止，待兩個下載程序正常結束後完整重跑通過，未略過或放寬校驗。
 
 main已整合回develop，develop同步Cargo／lock、README與徽章為 `0.4.0-dev.1`，main保持正式 `0.3.0`。本輪只做發佈與版本／文件更新，未新增產品功能，也未把CI當成Windows／Linux GUI或低階實機驗收。沒有建立臨時分支、worktree或本機App／Cargo編譯產物；保留同次正式下載及唯一發佈證據，未刪除其他工作的產物。
+
+## 0.4.0 發佈結果（2026-11-04）
+
+Release PR [#7](https://github.com/yam276/PTTStella/pull/7)政策與四架構verify [41820264264](https://github.com/yam276/PTTStella/actions/runs/41820264264)全部成功後，合併為main `96ff7ff2f74819f219a60294c5142e85f89cf635`。正式 [41822690206](https://github.com/yam276/PTTStella/actions/runs/41822690206) 的來源檢查、Windows x64、macOS arm64／x64、Linux x64測試／打包及publisher全部成功，[v0.4.0](https://github.com/yam276/PTTStella/releases/tag/v0.4.0)已公開為Latest stable，tag精確指向該合併提交。
+
+分別取回verify與正式run的原始artifacts，使用未修改的production `validate_assets`核對版本、乾淨來源、release profile、四份manifest、六個下載與全部逐檔SHA-256。另獨立核對公開七個附件的GitHub digest／大小、六筆SHA256SUMS、版本專用中英說明及Latest狀態，全部通過。公開不附JSON，manifest仍保留Actions artifacts。證據在 `.local/verification/release-040-20261104/`，正式下載保留repo外，已清除本輪被取代的verify下載副本；未建立臨時分支／worktree或本機編譯產物。
+
+main保持正式 `0.4.0`，develop整合main後同步版本、README與徽章為 `0.5.0-dev.1`，預設分支仍為main。CI不代替Windows／Linux原生GUI、IME或新的低階實機驗收。

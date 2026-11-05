@@ -14,4 +14,9 @@ Run ./pttstella from the extracted directory. No Rust or Python is needed.
 
 Downloads are not distribution-signed. Verify the adjacent SHA-256 checksum.
 No account settings or passwords are included. Startup connects to the default
-site; login remains manual. Packaging success is not GUI or live-login acceptance.
+site; login always requires explicit user input or the Login button.
+Optional password saving uses the desktop Secret Service (for example GNOME
+Keyring), a session D-Bus and an unlocked default keyring. A missing/locked
+service never falls back to a file. Uncheck saving and enter credentials for
+a single login, or use the BBS directly. Packaging success is not GUI or
+live-login acceptance.

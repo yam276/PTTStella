@@ -1,6 +1,6 @@
 [package]
 name = "pttstella"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["yam276"]
 repository = "https://github.com/yam276/PTTStella"
 edition = "2024"
@@ -10,7 +10,9 @@ default-run = "pttstella"
 
 [features]
 default = []
-desktop = ["dep:png", "dep:arboard", "dep:dioxus-icons", "dep:dioxus", "dep:tokio", "dep:base64", "dep:tokio-tungstenite", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser", "dep:rfd", "dep:tempfile", "dep:directories", "dep:reqwest", "dep:imagesize", "dep:security-framework", "dep:font-kit", "dep:winresource", "dep:time", "dep:image", "dep:semver"]
+desktop = ["dep:png", "dep:arboard", "dep:dioxus-icons", "dep:dioxus", "dep:tokio", "dep:base64", "dep:tokio-tungstenite", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser", "dep:rfd", "dep:tempfile", "dep:directories", "dep:reqwest", "dep:imagesize", "credential-store", "dep:font-kit", "dep:winresource", "dep:time", "dep:image", "dep:semver"]
+
+credential-store = ["dep:security-framework", "dep:keyring", "dep:tokio"]
 
 [dependencies]
 semver = { version = "=1.0.28", optional = true }
@@ -45,6 +47,12 @@ image = { version = "=0.25.10", default-features = false, features = ["png", "jp
 
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = { version = "=3.7.0", optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "=3.6.3", default-features = false, features = ["windows-native"], optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "=3.6.3", default-features = false, features = ["async-secret-service", "crypto-rust", "tokio"], optional = true }
 
 [[bin]]
 name = "pttstella"
