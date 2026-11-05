@@ -1,5 +1,9 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-05 0.4.1 正式發佈
+
+使用者要求將 SSH／WSS 與 Windows／Linux 系統密碼庫納入 0.4.1。已恢復前次取消且未公開的版號，通過 PR #9、四架構驗證及正式工作。GitHub Latest 為 [v0.4.1](https://github.com/yam276/PTTStella/releases/tag/v0.4.1)。原生密碼庫、SSH 回歸與六個公開套件的雜湊核對通過。發佈來源、核對與清理結果見 [0.4.1 發佈結果](../releases.md#041-發佈結果2026-11-05)。main 保持正式 0.4.1，develop 恢復 0.5.0-dev.3。
+
 ## 2026-11-05 PTT SSH／WSS 與暫停 0.4.1
 
 使用者先要求讓 Windows／Linux 原生密碼庫進入 GitHub 測試，後要求加入 PTT SSH／WSS 切換、停用 Telnet 並暫停 0.4.1。Release PR #8 通過政策。四架構驗證 [41978240650](https://github.com/yam276/PTTStella/actions/runs/41978240650) 通過，含 Windows 認證管理員與 Linux Secret Service 的實際合成保存、跨程序讀回與移除，以及 Linux 缺服務。取回同次產物並核對來源提交、四份 manifest、六個下載及 SHA-256。收到暫停前 PR 已合併為 `4866476843c45dfedb08067381eb42f52c654633`。正式 [41980332119](https://github.com/yam276/PTTStella/actions/runs/41980332119) 已取消，沒有 v0.4.1 tag 或 Release，Latest 仍是 v0.4.0。
