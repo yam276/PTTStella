@@ -3,7 +3,7 @@ use crate::{screen::Frame, text};
 use std::time::{Duration, Instant};
 use zeroize::Zeroizing;
 
-#[cfg(feature = "desktop")]
+#[cfg(feature = "credential-store")]
 pub mod vault;
 
 pub struct Credentials {
@@ -35,14 +35,14 @@ impl Credentials {
         bytes.push(b'\r');
         bytes
     }
-    #[cfg(all(feature = "desktop", target_os = "macos"))]
+    #[cfg(feature = "credential-store")]
     fn stored(&self) -> Zeroizing<Vec<u8>> {
         let mut bytes = Zeroizing::new(self.account.as_bytes().to_vec());
         bytes.push(0);
         bytes.extend_from_slice(&self.password);
         bytes
     }
-    #[cfg(all(feature = "desktop", target_os = "macos"))]
+    #[cfg(feature = "credential-store")]
     fn from_stored(bytes: Zeroizing<Vec<u8>>) -> Result<Self, String> {
         let Some(separator) = bytes.iter().position(|b| *b == 0) else {
             return Err(crate::msg!("vault-record-invalid"));

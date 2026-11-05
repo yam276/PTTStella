@@ -1,5 +1,15 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-05 Windows／Linux 系統密碼庫
+
+使用者要求補齊兩平台安全保存，保持develop／0.5.0-dev.1、不發佈。驗收以「輸入帳密但未勾選不呼叫保存；明確勾選後重開可留空取用；錯帳號拒絕；移除後讀回為空；密碼庫失敗不能產生待送出的登入」為準。啟動／重連不自動登入、取消與generation保護不變。Windows對接Credential Manager generic credential，Linux對接桌面Secret Service預設collection，macOS保留原service／default及既有Keychain項目，不搬移帳密。
+
+Windows／Linux固定keyring3.6.3並顯式建構native credential，不使用全域builder或mock fallback；Linux選擇Secret Service／Tokio／crypto-rust（不新增C密碼庫動態依賴），只有獨立worker呼叫同步介面，使用DH加密session。原帳號＋NUL＋密碼的有界二進位資料、Zeroizing buffer與單一credential job生命週期共用；前端只收到帳號／saved狀態。後端錯誤只傳固定分類，不能顯示原始payload。密碼庫不可用時保持手動原始輸入；登入介面亦允許輸入帳密取消勾選單次使用，不存檔、不自製加密或降級。
+
+三平台登入入口與中英文說明已更新，依平台顯示實際庫名稱；勾選每次開啟仍預設關閉。README、Linux安裝需求、登入契約與依賴授權同步。credential-store feature讓同一生產後端可獨立於GTK／WebView編譯，desktop自動包含；一般測試不接使用者密碼庫，明確native ignored probe才使用唯一synthetic service，另一程序讀回並刪除，不能觸及正式service。驗證通過：core14命令／2replay；macOS desktop lib216／bin178／multi_instance10（分別3／1／1個明確ignored，其中兩個新增native helper不在一般gate操作OS庫）；JS376；全targets Clippy／fmt／docs。六個共同vault回歸與一個JS庫失敗後取消勾選單次登入案例通過。Linux arm64獨立Rust1.97／Debian容器的同生產feature lib87項及Clippy通過；明確native_roundtrip在全新GNOME Keyring／session D-Bus真正寫入、子程序讀回、錯帳號拒絕、兩次刪除與不存在核對通過，native_service_unavailable另通過。macOS同一native_roundtrip亦通過，沒有碰正式項目。Windows x64 GNU後端與全部測試交叉type-check通過，但目前無Windows runner，原生Credential Manager與GUI驗收not_ready；Linux真實桌面解鎖／不同服務及三平台新實站登入未執行，不能以隔離容器或編譯替代。
+
+首輪Clippy因NativeStore的service改為借用而抓到macOS三處多餘borrow，修正後完整重跑通過。Linux初輪sync／vendored測試保留為初步證據，最終改用async底層的同步介面後又完整重測原生／lib／Clippy，不將初輪結果代替最終後端。來源雜湊及成功／失敗證據在 `.local/verification/credential-store-20261105/`。本輪沒有App打包、暫時分支／worktree或使用者視窗操作；清理自己的本機與容器編譯輸出、結束的測試container，保留唯一驗證log／recipe與既有工具快取，exact paths及free前後見cleanup.json。只提交develop，不推送或發佈。
+
 ## 2026-11-04 0.4.0 正式發佈完成
 
 使用者明確授權發佈0.4.0，在develop統一Cargo／lock、README與徽章為正式0.4.0，新增中文為主、英文摘要的版本說明。納入本機中文／ANSI草稿與範本、身分側標／推文定位、留白導覽、圖片縮放拖曳、字型與文字比例修正及成功通知淡出；最後實站草稿修正的驗收見下節。Release PR [#7](https://github.com/yam276/PTTStella/pull/7)政策與四架構verify [41820264264](https://github.com/yam276/PTTStella/actions/runs/41820264264)全部通過後合併main `96ff7ff2f74819f219a60294c5142e85f89cf635`；正式 [41822690206](https://github.com/yam276/PTTStella/actions/runs/41822690206) 的來源檢查、四架構測試／原生打包與publisher全部成功。[v0.4.0](https://github.com/yam276/PTTStella/releases/tag/v0.4.0)為Latest stable，tag精確指向該合併提交。

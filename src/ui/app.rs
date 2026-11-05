@@ -394,7 +394,7 @@ pub fn app(props: AppProps) -> Element {
                 button { id: "sites-open", SettingsCaption {label:pttstella::msg!("sites-title"),icon:rsx!{Globe{size:18}}} }
                 output { id: "site-current" }
 
-                button { id: "login-open", "data-platform-supported":cfg!(target_os="macos").to_string(), disabled: !cfg!(target_os="macos"), {pttstella::msg!("login")} }
+                button { id: "login-open", "data-platform-supported":pttstella::login::vault::supported().to_string(), disabled: !pttstella::login::vault::supported(), {pttstella::msg!("login")} }
                 button { id: "login-stop", hidden: true, {pttstella::msg!("login-cancel-attempt")} }
                 }
                 section { "data-tools-group": "navigate",
@@ -1195,6 +1195,11 @@ fn LoginSettings() -> Element {
     dialog { id: "login-dialog", class: "settings-panel", "aria-labelledby": "login-title",
                     h2 { id: "login-title", {pttstella::msg!("login-title")} }
                     p { {pttstella::msg!("login-description")} }
+                    p { class: "settings-help",
+                        if cfg!(target_os = "macos") { {pttstella::msg!("login-storage-macos")} }
+                        else if cfg!(target_os = "windows") { {pttstella::msg!("login-storage-windows")} }
+                        else if cfg!(target_os = "linux") { {pttstella::msg!("login-storage-linux")} }
+                    }
                     label { {pttstella::msg!("account")} input { id: "login-account", maxlength: "12", autocomplete: "off", autocapitalize: "off", spellcheck: "false" } }
                     label { {pttstella::msg!("password")} input { id: "login-password", r#type: "password", maxlength: "72", autocomplete: "off" } }
                     label { input { id: "login-remember", r#type: "checkbox" } {pttstella::msg!("login-remember")} }
