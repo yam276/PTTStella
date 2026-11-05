@@ -10,7 +10,7 @@ default-run = "pttstella"
 
 [features]
 default = []
-desktop = ["dep:png", "dep:arboard", "dep:dioxus-icons", "dep:dioxus", "dep:tokio", "dep:base64", "dep:tokio-tungstenite", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser", "dep:rfd", "dep:tempfile", "dep:directories", "dep:reqwest", "dep:imagesize", "credential-store", "dep:font-kit", "dep:winresource", "dep:time", "dep:image", "dep:semver"]
+desktop = ["dep:png", "dep:arboard", "dep:dioxus-icons", "dep:dioxus", "dep:tokio", "dep:base64", "dep:tokio-tungstenite", "dep:russh", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser", "dep:rfd", "dep:tempfile", "dep:directories", "dep:reqwest", "dep:imagesize", "credential-store", "dep:font-kit", "dep:winresource", "dep:time", "dep:image", "dep:semver"]
 
 credential-store = ["dep:security-framework", "dep:keyring", "dep:tokio"]
 
@@ -37,6 +37,7 @@ dioxus = { version = "=0.7.10", optional = true, default-features = false, featu
 tokio = { version = "1", optional = true, features = ["rt-multi-thread", "sync", "time", "net", "macros", "io-util"] }
 base64 = { version = "0.22", optional = true }
 tokio-tungstenite = { version = "=0.28.0", optional = true, features = ["rustls-tls-native-roots"] }
+russh = { version = "=0.65.1", optional = true, default-features = false, features = ["ring", "rsa"] }
 futures-util = { version = "0.3", optional = true, features = ["sink"] }
 rustls = { version = "0.23", optional = true, default-features = false, features = ["ring", "std", "tls12"] }
 rustls-native-certs = { version = "0.8", optional = true }

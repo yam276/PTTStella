@@ -365,7 +365,14 @@ async fn run(
     } else if probe.is_some() {
         connection.connect()?;
     } else {
-        connection.connect_to(sites.default_target())?;
+        let target = sites.default_target();
+        if target.validate_connection(false).is_ok() {
+            connection.connect_to(target)?;
+        } else {
+            eval.send(Packet::Notice(pttstella::msg!("sites-default-fallback")))
+                .map_err(|error| error.to_string())?;
+            connection.connect_to(pttstella::sites::Target::default())?;
+        }
     }
     let mut close_deadline = None;
     let mut checks = Checks::new();

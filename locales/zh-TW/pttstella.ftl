@@ -481,7 +481,15 @@ settings-opacity-value = { $percent }%
 settings-opacity-help = 20% 最淡，100% 不透明；套用後調整浮球，選單維持不透明，滑鼠移入或鍵盤聚焦時恢復清晰。斷線與錯誤提示不受影響。
 settings-opacity-invalid = 浮球不透明度需介於 20% 至 100%
 
-site-address-invalid = 請輸入有效的 wss://、ws:// 或 telnet:// 位址（不含帳密、查詢參數或片段）；只輸入主機名稱時使用 Telnet。
+site-address-invalid = 請輸入有效的 WSS 或 PTT SSH 位址，網址不可包含密碼、查詢參數或片段。
+site-ssh-target = SSH 請選擇 PTT（SSH），使用 ssh://bbs@ptt.cc。
+site-ssh-encoding = PTT SSH 請使用 Big5-UAO 編碼。
+site-ssh-host-key = PTT SSH 的主機金鑰與站方公告不符，連線已停止。
+sites-ptt-wss = PTT（WSS）
+sites-ptt-ssh = PTT（SSH）
+sites-ssh-encrypted = SSH 會加密流量，並比對 PTT 站方公布的主機金鑰。
+sites-plaintext-disabled = 一般連線使用 SSH 或 WSS。Telnet 與明文 WebSocket 已停用。
+sites-default-fallback = 舊預設站的連線方式已停用，本次啟動改用 PTT WSS。請在站點設定選擇新的預設站。
 site-raw-input = 此站點使用原始輸入；PTT 專用導覽未啟用
 site-ptt-only = 這項操作僅適用於 PTT 的 Big5-UAO 連線
 sites-invalid = 站點資料格式不正確、重複或超出限制（最多 32 個最愛）
@@ -507,7 +515,6 @@ sites-saved = 站點設定已儲存
 sites-connecting = 正在切換站點…
 sites-probe-local = 合成測試只允許連線至 127.0.0.1
 sites-encrypted = WSS 使用加密連線並驗證站端憑證。
-sites-unencrypted = Telnet／ws 不加密，輸入的帳密也會以明文傳輸。可用時請選 WSS。
 sites-help = 「連線切換」會先關閉目前連線；只有「儲存最愛」或「設為預設」才保存資料。預設站於下次啟動連線，不自動登入。每站可選編碼，切換編碼會重新連線；其他站使用原始輸入，不使用 PTT 專用登入與導覽。
 
 sites-remove = 移除最愛

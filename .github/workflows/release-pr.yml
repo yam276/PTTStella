@@ -6,6 +6,7 @@ on:
     types: [opened, synchronize, reopened, edited, ready_for_review, converted_to_draft]
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -26,6 +27,8 @@ jobs:
         with:
           python-version: '3.12'
       - name: Require a versioned develop release PR
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python tooling/release.py check-pr
       - name: Test release policy and packaging
         run: python -m unittest discover -s tooling -p 'test_*.py'

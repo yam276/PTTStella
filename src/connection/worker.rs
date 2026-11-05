@@ -784,7 +784,7 @@ impl Session {
         self.send_input(bytes, InputEffect::Command).await
     }
 
-    /// One serialized socket path, one escaping pass, no retry.
+    /// One serialized socket path. Only the Telnet-framed transports escape IAC.
     async fn send_input(&mut self, bytes: &[u8], effect: InputEffect) -> Result<(), String> {
         self.sync_mouse();
         let Some(socket) = self.socket.as_mut() else {
@@ -798,7 +798,12 @@ impl Session {
         // Publish explicit-command lease invalidation before the write. Passive
         // motion retains the command epoch and cannot steal a following click.
         self.updates.send_replace(self.view.clone());
-        match transport::send(socket, Message::Binary(telnet::escape(bytes).into())).await {
+        let bytes = if socket.uses_telnet_framing() {
+            telnet::escape(bytes)
+        } else {
+            bytes.to_vec()
+        };
+        match transport::send(socket, Message::Binary(bytes.into())).await {
             Ok(()) => Ok(()),
             Err(error) => {
                 self.fail(error.clone());
@@ -1374,7 +1379,11 @@ impl Session {
 
     async fn receive_bytes(&mut self, bytes: &[u8]) {
         self.view.received = self.view.received.saturating_add(bytes.len());
-        let (display, reply) = self.framing.feed(bytes, 80, 24);
+        let (display, reply) = if self.socket.as_ref().is_none_or(Socket::uses_telnet_framing) {
+            self.framing.feed(bytes, 80, 24)
+        } else {
+            (bytes.to_vec(), Vec::new())
+        };
         if !display.is_empty()
             && let Some(job) = &mut self.editor_job
         {

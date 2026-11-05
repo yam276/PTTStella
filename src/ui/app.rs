@@ -176,7 +176,7 @@ pub fn app(props: AppProps) -> Element {
                     Connection::start_verification_probe()
                 } else if sample_case.as_deref() == Some("sites_restart") {
                     let screen = Screen::new(80, 24).map_err(str::to_owned)?;
-                    Connection::start(screen)
+                    Connection::start_local_station_probe(screen)
                 } else if surface_probing {
                     if dialogs_probing {
                         Connection::start_ui_probe(bytes)
@@ -1221,6 +1221,10 @@ fn SitesSettings() -> Element {
                     h2 { id: "sites-title", SettingsCaption { label:pttstella::msg!("sites-title"),icon:rsx!{Globe{size:18}} } }
                     label { {pttstella::msg!("sites-favourites")} select {id:"sites-list"} }
                     output {id:"sites-default"}
+                    div { class:"dialog-actions",
+                        button { id:"site-ptt-wss", r#type:"button", "data-endpoint":pttstella::sites::PTT, {pttstella::msg!("sites-ptt-wss")} }
+                        button { id:"site-ptt-ssh", r#type:"button", "data-endpoint":pttstella::sites::PTT_SSH, {pttstella::msg!("sites-ptt-ssh")} }
+                    }
                     label { {pttstella::msg!("sites-name")} input {id:"site-name",r#type:"text",maxlength:"128"} }
                     label { {pttstella::msg!("sites-address")} input {id:"site-address",r#type:"text",maxlength:"512",spellcheck:"false",autocapitalize:"off"} }
                     label { {pttstella::msg!("sites-encoding")} select {id:"site-encoding",

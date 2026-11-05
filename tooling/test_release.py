@@ -28,6 +28,7 @@ class FakeGitHub:
         self.prs = [pr or pull_request()]
         self.tag = None
         self.release = None
+        self.runs = {}
         self.calls = []
 
     def tag_commit(self, tag):
@@ -42,6 +43,8 @@ class FakeGitHub:
             return self.prs
         if endpoint.startswith('releases/tags/'):
             return self.release
+        if endpoint.startswith('actions/runs/'):
+            return self.runs[int(endpoint.rsplit('/', 1)[-1])]
         if endpoint == 'git/refs':
             self.tag = payload['sha']
             return {}
@@ -107,6 +110,48 @@ class VersionTests(unittest.TestCase):
 
 
 class AdmissionTests(unittest.TestCase):
+    def resumption(self):
+        pr = pull_request()
+        record = {'version': '0.1.0', 'previous_commit': pr['base']['sha'],
+                  'reason': 'Resume the cancelled, unpublished release.', 'cancelled_run': 42}
+        github = FakeGitHub(pr)
+        github.runs[42] = {'id': 42, 'path': '.github/workflows/release.yml', 'event': 'push',
+                           'head_branch': 'main', 'head_sha': pr['base']['sha'],
+                           'status': 'completed', 'conclusion': 'cancelled'}
+        return pr, record, github
+
+    def test_resumption_pr_requires_cancelled_main_push_and_no_prior_publication(self):
+        pr, record, github = self.resumption()
+        with patch.object(release, 'version_at', return_value='0.1.0'), \
+                patch.object(release, 'replacement_at', return_value=record):
+            self.assertEqual(release.check_pr({'pull_request': pr}, REPOSITORY, github)['tag'], 'v0.1.0')
+            for field, wrong in [('head_sha', 'c'*40), ('head_branch', 'develop'),
+                                 ('path', '.github/workflows/unrelated.yml'),
+                                 ('event', 'workflow_dispatch'), ('conclusion', 'success'),
+                                 ('status', 'in_progress')]:
+                with self.subTest(field=field), patch.dict(github.runs[42], {field: wrong}), \
+                        self.assertRaisesRegex(ValueError, 'cancelled Desktop Release'):
+                    release.check_pr({'pull_request': pr}, REPOSITORY, github)
+            for tag, published in [(COMMIT, None), (None, {'draft': True}), (None, {'draft': False})]:
+                github.tag, github.release = tag, published
+                with self.assertRaisesRegex(ValueError, 'unpublished version'):
+                    release.check_pr({'pull_request': pr}, REPOSITORY, github)
+
+    def test_resumption_publish_rechecks_cancellation_and_can_retry_its_own_draft(self):
+        pr, record, github = self.resumption()
+        with patch.object(release, 'command', side_effect=[COMMIT, '', pr['base']['sha']]*3), \
+                patch.object(release, 'version_at', return_value='0.1.0'), \
+                patch.object(release, 'replacement_at', return_value=record):
+            github.tag, github.release = COMMIT, {'draft': True}
+            self.assertEqual(release.prepare(REPOSITORY, COMMIT, 'refs/heads/main', github)['commit'], COMMIT)
+            github.tag = pr['base']['sha']
+            with self.assertRaisesRegex(ValueError, 'another commit'):
+                release.prepare(REPOSITORY, COMMIT, 'refs/heads/main', github)
+            github.tag = None
+            github.runs[42]['conclusion'] = 'success'
+            with self.assertRaisesRegex(ValueError, 'cancelled Desktop Release'):
+                release.prepare(REPOSITORY, COMMIT, 'refs/heads/main', github)
+
     def test_explicit_replacement_is_limited_to_same_version_and_exact_prior_base(self):
         pr = pull_request()
         pr['head']['ref'] = 'codex/reissue-v0.1.0'
@@ -126,7 +171,8 @@ class AdmissionTests(unittest.TestCase):
 
     def test_replacement_record_is_read_from_committed_source_and_rejects_wrong_anchor(self):
         record = {'version': '0.1.0', 'previous_commit': 'b'*40, 'reason': 'Explicit replacement.'}
-        for change in ({}, {'version': '0.2.0'}, {'previous_commit': 'c'*40}, {'reason': ''}):
+        for change in ({}, {'version': '0.2.0'}, {'previous_commit': 'c'*40}, {'reason': ''},
+                       {'cancelled_run': True}, {'cancelled_run': 0}):
             with patch.object(release, 'command', side_effect=['docs/release-replacements/v0.1.0.json', json.dumps({**record, **change})]):
                 if change:
                     with self.assertRaises(ValueError):
