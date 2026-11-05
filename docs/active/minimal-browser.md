@@ -10,6 +10,8 @@
 
 實站使用新二進位及同一 Connection 分別測試。SSH 到登入提示，沒有未映射字元，傳輸正常關閉。SSH → WSS → SSH 切換三次皆顯示登入提示，generation 2／4／6，input epoch 均為 0，沒有登入或重播。WSS 單獨關閉遇到站端未回覆 Close，0.4.0 正式版對照同樣發生，維持原有診斷判定。證據 `.local/verification/ssh-wss-20261105/`，不記站端流量或帳密。develop 恢復 0.5.0-dev.2，使用 verify 驗證打包。
 
+GitHub [41982395133](https://github.com/yam276/PTTStella/actions/runs/41982395133) 的 Windows SSH 合成往返在關閉時抓到對端 TCP 10053。改為在兩秒總期限內先收 SSH channel close，再結束 session。確認 I/O 工作結束後正常釋放複製的 socket，取消或失敗時保留強制 shutdown。合成 peer 現在必須收到 channel close 並正常結束。macOS 三項 SSH 測試、Clippy 及新版實站登入提示與關閉通過。
+
 ## 2026-11-05 Windows／Linux 系統密碼庫
 
 使用者要求補齊兩平台安全保存，保持develop／0.5.0-dev.1、不發佈。驗收以「輸入帳密但未勾選不呼叫保存；明確勾選後重開可留空取用；錯帳號拒絕；移除後讀回為空；密碼庫失敗不能產生待送出的登入」為準。啟動／重連不自動登入、取消與generation保護不變。Windows對接Credential Manager generic credential，Linux對接桌面Secret Service預設collection，macOS保留原service／default及既有Keychain項目，不搬移帳密。

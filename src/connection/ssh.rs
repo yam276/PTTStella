@@ -31,10 +31,12 @@ impl client::Handler for HostKey {
 
 // russh starts its I/O task during key exchange. Keep a shutdown handle so
 // aborting a dial or dropping a broken session also interrupts that task's I/O.
-struct TransportGuard(std::net::TcpStream);
+struct TransportGuard(Option<std::net::TcpStream>);
 impl Drop for TransportGuard {
     fn drop(&mut self) {
-        let _ = self.0.shutdown(Shutdown::Both);
+        if let Some(stream) = &self.0 {
+            let _ = stream.shutdown(Shutdown::Both);
+        }
     }
 }
 
@@ -64,7 +66,7 @@ async fn open(
     timeout(Duration::from_secs(15), async {
         let tcp = TcpStream::connect(address).await?.into_std()?;
         tcp.set_nodelay(true)?;
-        let transport = TransportGuard(tcp.try_clone()?);
+        let transport = TransportGuard(Some(tcp.try_clone()?));
         let config = client::Config {
             preferred: Preferred {
                 key: Cow::Borrowed(key_algorithms),
@@ -139,12 +141,22 @@ impl Ssh {
 
     pub(super) async fn close(self) -> CloseOutcome {
         let Self {
-            channel,
+            mut channel,
             session,
-            _transport,
+            _transport: mut transport,
         } = self;
         let closed = timeout(Duration::from_secs(2), async {
             channel.close().await?;
+            // Drain the reciprocal CHANNEL_CLOSE before ending the TCP stream.
+            // Leave time to terminate the SSH session if the peer does not reply.
+            let _ = timeout(Duration::from_secs(1), async {
+                while let Some(message) = channel.wait().await {
+                    if matches!(message, ChannelMsg::Close) {
+                        break;
+                    }
+                }
+            })
+            .await;
             session
                 .disconnect(Disconnect::ByApplication, "PTTStella disconnect", "")
                 .await?;
@@ -158,6 +170,9 @@ impl Ssh {
         })
         .await;
         if matches!(closed, Ok(Ok(()))) {
+            // The I/O task has already shut down. Release the cloned socket
+            // normally, avoiding an abortive shutdown on Windows.
+            transport.0.take();
             CloseOutcome::TransportClosed
         } else {
             CloseOutcome::Unconfirmed

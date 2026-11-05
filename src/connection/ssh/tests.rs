@@ -84,6 +84,16 @@ impl server::Handler for Peer {
         self.stage = 5;
         session.data(channel, b"received".to_vec())
     }
+
+    async fn channel_close(
+        &mut self,
+        _: ChannelId,
+        _: &mut server::Session,
+    ) -> Result<(), Self::Error> {
+        assert_eq!(self.stage, 5);
+        self.stage = 6;
+        Ok(())
+    }
 }
 
 async fn fixture() -> (
@@ -138,7 +148,7 @@ async fn pinned_ssh_negotiates_bbs_terminal_and_transports_unmodified_bytes() {
             CloseOutcome::TransportClosed
         );
         peer.await.unwrap().unwrap();
-        assert_eq!(stage.await.unwrap(), 5);
+        assert_eq!(stage.await.unwrap(), 6);
     })
     .await
     .unwrap();
