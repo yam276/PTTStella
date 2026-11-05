@@ -1,0 +1,6 @@
+{
+  "version": "0.4.1",
+  "previous_commit": "4866476843c45dfedb08067381eb42f52c654633",
+  "cancelled_run": 41980332119,
+  "reason": "Resume the unpublished 0.4.1 release with the verified PTT SSH and WSS switching changes."
+}
