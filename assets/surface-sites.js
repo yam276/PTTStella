@@ -4,16 +4,19 @@ function createSitesDialog({tr,send,prepare,restore,changed,manage=null,present=
     const list=document.getElementById("sites-list"),name=document.getElementById("site-name"),address=document.getElementById("site-address"),encoding=document.getElementById("site-encoding");
     const favourite=document.getElementById("site-save"),remove=document.getElementById("site-remove"),makeDefault=document.getElementById("site-default"),connect=document.getElementById("site-connect"),closeButton=document.getElementById("sites-close");
     const note=document.getElementById("sites-note"),defaultNote=document.getElementById("sites-default"),security=document.getElementById("sites-transport");
+    const pttWss=document.getElementById("site-ptt-wss"),pttSsh=document.getElementById("site-ptt-ssh");
     let disposed=false,sequence=0,pending=null,opening=null,writable=false,composing=false,entries=[];
     const encodingName=value=>({uao:"Big5-UAO",big5:"Big5",gbk:"GBK"})[value]??value;
     const description=target=>tr("sites-target",{address:target.endpoint,encoding:encodingName(target.encoding)});
     function controls(){
         const busy=pending!==null||opening!==null;
-        for(const field of [list,name,address,encoding,closeButton])field.disabled=busy;
+        for(const field of [list,name,address,encoding,closeButton,pttWss,pttSsh])field.disabled=busy;
         favourite.disabled=busy||!writable;makeDefault.disabled=busy||!writable;
         remove.disabled=busy||!writable||list.value==="";connect.disabled=busy||!address.value.trim();
         // Address validation remains in Rust; this is only a pre-connection transport explanation.
-        security.textContent=/^wss:\/\//i.test(address.value.trim())||["https://term.ptt.cc","https://term.ptt2.cc","https://term.gamer.com.tw"].includes(address.value.trim().replace(/\/$/,""))?tr("sites-encrypted"):tr("sites-unencrypted");
+        const endpoint=address.value.trim();
+        const wss=/^wss:\/\//i.test(endpoint)||["https://term.ptt.cc","https://term.ptt2.cc","https://term.gamer.com.tw"].includes(endpoint.replace(/\/$/,""));
+        security.textContent=tr(/^ssh:\/\//i.test(endpoint)?"sites-ssh-encrypted":wss?"sites-encrypted":"sites-plaintext-disabled");
     }
     function fill(target,label=""){address.value=target.endpoint;encoding.value=target.encoding;name.value=label;controls();}
     function snapshot(data){
@@ -41,6 +44,11 @@ function createSitesDialog({tr,send,prepare,restore,changed,manage=null,present=
         const entry=list.value!==""?entries[Number(list.value)]:null;
         fill(entry?.target??{endpoint:"",encoding:"uao"},entry?.name??"");
     }
+    function preset(button,e){
+        if(disposed||!e.isTrusted||!dialog.open||pending!==null||opening!==null||composing)return;
+        list.value="";
+        fill({endpoint:button.dataset.endpoint,encoding:"uao"},button.textContent.trim());
+    }
     function edit(action,e){
         if(disposed||!e.isTrusted||!dialog.open||pending!==null||opening!==null||composing||!writable)return;
         const entry=action==="remove"&&list.value!==""?entries[Number(list.value)]:null;
@@ -67,6 +75,7 @@ function createSitesDialog({tr,send,prepare,restore,changed,manage=null,present=
     function destroy(){revoke();if(dialog.open)dialog.close();}
     return {request:open,close,receiveOpen,receive,revoke,destroy,clean:()=>disposed&&!dialog.open&&!pending&&!opening,
         bindings:[[button,"click",open],[list,"change",choose],[address,"input",controls],[encoding,"change",controls],
+            [pttWss,"click",e=>preset(pttWss,e)],[pttSsh,"click",e=>preset(pttSsh,e)],
             [favourite,"click",e=>edit("favourite",e)],[remove,"click",e=>edit("remove",e)],[makeDefault,"click",e=>edit("default",e)],
             [connect,"click",go],[closeButton,"click",close],[dialog,"cancel",close],
             ...[name,address].flatMap(field=>[[field,"compositionstart",()=>{composing=true;}],[field,"compositionend",()=>{composing=false;}]])],

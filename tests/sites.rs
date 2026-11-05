@@ -82,6 +82,60 @@ fn favourites_update_by_target_and_removing_one_does_not_change_default_or_other
 }
 
 #[test]
+fn official_ssh_target_uses_uao_and_legacy_plaintext_settings_cannot_connect() {
+    let ssh = Target::new("ssh://bbs@ptt.cc:22/".into(), TextEncoding::Uao).unwrap();
+    assert_eq!(ssh.endpoint.as_str(), "ssh://bbs@ptt.cc");
+    assert!(ssh.ptt_features());
+    ssh.validate_connection(false).unwrap();
+    for invalid in [
+        "ssh://bbs@ptt.cc.evil.example",
+        "ssh://bbsu@ptt.cc",
+        "ssh://bbs:secret@ptt.cc",
+        "ssh://bbs@ptt.cc:23",
+        "ssh://bbs@ptt.cc?cmd=x",
+        "ssh://bbs@ptt.cc/exec",
+    ] {
+        assert!(Target::new(invalid.into(), TextEncoding::Uao).is_err());
+    }
+    assert!(
+        Target::new("ssh://bbs@ptt.cc".into(), TextEncoding::Gbk)
+            .unwrap()
+            .validate_connection(false)
+            .is_err()
+    );
+
+    let legacy = Target::new("telnet://example.com".into(), TextEncoding::Gbk).unwrap();
+    let mut sites = Sites {
+        default: legacy.clone(),
+        ..Sites::default()
+    };
+    sites
+        .save_favourite("Old station".into(), legacy.clone())
+        .unwrap();
+    let mut restored = Sites::decode(&sites.encode().unwrap()).unwrap();
+    assert_eq!(restored.default, legacy);
+    assert!(restored.default.validate_connection(false).is_err());
+    restored.remove(&legacy);
+    assert!(
+        restored
+            .favourites
+            .iter()
+            .all(|entry| entry.target != legacy)
+    );
+    for address in ["telnet://127.0.0.1:1234", "ws://127.0.0.1:1234/bbs"] {
+        let target = Target::new(address.into(), TextEncoding::Uao).unwrap();
+        assert!(target.validate_connection(false).is_err());
+        target.validate_connection(true).unwrap();
+    }
+    assert!(
+        Target::new("ws://example.com/bbs".into(), TextEncoding::Uao)
+            .unwrap()
+            .validate_connection(true)
+            .is_err()
+    );
+}
+
+#[test]
 fn selected_encoding_owns_glyphs_styles_input_and_paste_across_every_split() {
     // Independently specified bytes: Big5 A4A4 A4E5; GBK D6D0 CEC4 = 中文.
     for (encoding, first, second) in [

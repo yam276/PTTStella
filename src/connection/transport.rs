@@ -17,15 +17,21 @@ use tokio_tungstenite::{
 };
 
 pub(super) enum Socket {
-    WebSocket(Box<WebSocket>),
+    Web(Box<WebSocket>),
+    Ssh(Box<super::ssh::Ssh>),
+    // Explicit loopback diagnostics retain the legacy framing probe.
     Telnet(TcpStream),
 }
 impl Socket {
+    pub(super) fn uses_telnet_framing(&self) -> bool {
+        !matches!(self, Self::Ssh(_))
+    }
     pub(super) async fn next(
         &mut self,
     ) -> Option<Result<Message, tokio_tungstenite::tungstenite::Error>> {
         match self {
-            Self::WebSocket(socket) => socket.next().await,
+            Self::Web(socket) => socket.next().await,
+            Self::Ssh(socket) => socket.next().await,
             Self::Telnet(socket) => {
                 let mut bytes = vec![0; 8192];
                 match socket.read(&mut bytes).await {
@@ -44,7 +50,8 @@ impl Socket {
         message: Message,
     ) -> Result<(), tokio_tungstenite::tungstenite::Error> {
         match self {
-            Self::WebSocket(socket) => socket.send(message).await,
+            Self::Web(socket) => socket.send(message).await,
+            Self::Ssh(socket) => socket.send(message).await,
             Self::Telnet(socket) => match message {
                 Message::Binary(bytes) => socket.write_all(&bytes).await.map_err(Into::into),
                 _ => Ok(()),
@@ -53,13 +60,20 @@ impl Socket {
     }
     pub(super) async fn flush(&mut self) -> Result<(), tokio_tungstenite::tungstenite::Error> {
         match self {
-            Self::WebSocket(socket) => socket.flush().await,
+            Self::Web(socket) => socket.flush().await,
+            Self::Ssh(_) => Ok(()),
             Self::Telnet(socket) => socket.flush().await.map_err(Into::into),
         }
     }
 }
 pub(super) async fn dial(endpoint: String) -> Result<Socket, String> {
     let endpoint = crate::sites::Endpoint::try_from(endpoint)?;
+    endpoint.validate_transport(true)?;
+    if endpoint.as_str() == crate::sites::PTT_SSH {
+        return super::ssh::connect()
+            .await
+            .map(|socket| Socket::Ssh(Box::new(socket)));
+    }
     let url = url::Url::parse(endpoint.as_str()).map_err(|e| e.to_string())?;
     if url.scheme() == "telnet" {
         let host = url
@@ -96,7 +110,7 @@ pub(super) async fn dial(endpoint: String) -> Result<Socket, String> {
     )
     .await
     .map_err(|_| crate::msg!("connection-timeout").to_owned())?
-    .map(|(socket, _)| Socket::WebSocket(Box::new(socket)))
+    .map(|(socket, _)| Socket::Web(Box::new(socket)))
     .map_err(|e| crate::msg!("connection-failed", e = e.to_string()))
 }
 
@@ -114,13 +128,14 @@ pub(super) async fn stop(socket: &mut Option<Socket>, dialing: &mut Option<Dial>
     }
     if let Some(connection) = socket.take() {
         let mut connection = match connection {
+            Socket::Ssh(connection) => return connection.close().await,
             Socket::Telnet(mut stream) => {
                 return match timeout(Duration::from_secs(2), stream.shutdown()).await {
                     Ok(Ok(())) => CloseOutcome::TransportClosed,
                     _ => CloseOutcome::Unconfirmed,
                 };
             }
-            Socket::WebSocket(connection) => connection,
+            Socket::Web(connection) => connection,
         };
         let close = async {
             connection

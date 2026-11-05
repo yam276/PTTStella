@@ -1,5 +1,15 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-05 PTT SSH／WSS 與暫停 0.4.1
+
+使用者先要求讓 Windows／Linux 原生密碼庫進入 GitHub 測試，後要求加入 PTT SSH／WSS 切換、停用 Telnet 並暫停 0.4.1。Release PR #8 通過政策。四架構驗證 [41978240650](https://github.com/yam276/PTTStella/actions/runs/41978240650) 通過，含 Windows 認證管理員與 Linux Secret Service 的實際合成保存、跨程序讀回與移除，以及 Linux 缺服務。取回同次產物並核對來源提交、四份 manifest、六個下載及 SHA-256。收到暫停前 PR 已合併為 `4866476843c45dfedb08067381eb42f52c654633`。正式 [41980332119](https://github.com/yam276/PTTStella/actions/runs/41980332119) 已取消，沒有 v0.4.1 tag 或 Release，Latest 仍是 v0.4.0。
+
+站點頁可選 PTT（WSS）／PTT（SSH），再明確切換或設定預設。SSH 使用固定 `bbs@ptt.cc:22` 的 Big5-UAO 入口、RSA-SHA2 與 PTT 官方 SHA-256 主機金鑰指紋，與 WSS 共用 PTT 登入能力。SSH 傳送原始資料，WSS 保留既有 Telnet framing。切換由同一 connection owner 關閉舊連線並重設 generation，登入仍須使用者操作。一般連線拒絕 Telnet 與明文 WebSocket，舊設定可讀可刪，舊明文預設只在啟動時回退至 PTT WSS。顯式本機合成探針保留 loopback 傳輸。
+
+離線測試驗證固定 SSH 目標、舊設定、選擇不立即連線、拒絕不符主機金鑰、80×24 終端請求、保留原始雙向資料與取消握手。desktop lib219／bin178／multi_instance10、JS377、core14 命令／2 replay、Clippy、fmt 和 docs 通過。初輪測試抓到 russh 正常本機關閉回傳 Disconnect，改以排入關閉與工作結束確認本機傳輸。也補齊顯式 loopback 站點探針的准入。失敗紀錄保留。
+
+實站使用新二進位及同一 Connection 分別測試。SSH 到登入提示，沒有未映射字元，傳輸正常關閉。SSH → WSS → SSH 切換三次皆顯示登入提示，generation 2／4／6，input epoch 均為 0，沒有登入或重播。WSS 單獨關閉遇到站端未回覆 Close，0.4.0 正式版對照同樣發生，維持原有診斷判定。證據 `.local/verification/ssh-wss-20261105/`，不記站端流量或帳密。develop 恢復 0.5.0-dev.2，使用 verify 驗證打包。
+
 ## 2026-11-05 Windows／Linux 系統密碼庫
 
 使用者要求補齊兩平台安全保存，保持develop／0.5.0-dev.1、不發佈。驗收以「輸入帳密但未勾選不呼叫保存；明確勾選後重開可留空取用；錯帳號拒絕；移除後讀回為空；密碼庫失敗不能產生待送出的登入」為準。啟動／重連不自動登入、取消與generation保護不變。Windows對接Credential Manager generic credential，Linux對接桌面Secret Service預設collection，macOS保留原service／default及既有Keychain項目，不搬移帳密。

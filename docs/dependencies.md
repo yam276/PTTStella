@@ -7,6 +7,7 @@ Windows desktop 建置另使用 winresource 0.1.31（MIT，[上游](https://gith
 | 依賴 | 用途 | 上游授權／來源 |
 | --- | --- | --- |
 | serde／serde_json | 產品 frame 與自己編寫的 replay fixture | MIT OR Apache-2.0；[serde](https://serde.rs/)、[serde_json](https://docs.rs/serde_json/) |
+| russh 0.65.1 | PTT SSH 2.0 傳輸，使用 ring 與 RSA-SHA2 | Apache-2.0；[russh](https://docs.rs/crate/russh/0.65.1) |
 | keyring 3.6.3 | Windows Credential Manager／Linux Secret Service 安全 API；Linux 使用 crypto-rust／Tokio，無額外 C 密碼庫函式庫 | MIT OR Apache-2.0；[keyring](https://docs.rs/keyring/3.6.3/keyring/)；傳遞依賴與授權隨 Cargo inventory 提供 |
 | zeroize 1.9.1／security-framework 3.7.0 | Rust 自有密碼 buffer 清除／macOS Keychain 安全 API | Apache-2.0 OR MIT；[zeroize](https://docs.rs/zeroize/1.9.1/)，MIT OR Apache-2.0；[security-framework](https://docs.rs/security-framework/3.7.0/) |
 | encoding_rs 0.8.42 | 標準 Big5 與 GBK 的格線字元／輸入映射 | Apache-2.0 OR MIT；[上游 API 與授權](https://docs.rs/encoding_rs/0.8.42/encoding_rs/) |

@@ -37,6 +37,7 @@ pub(super) struct State {
     store: Result<Store, String>,
     sites: Sites,
     warning: Option<String>,
+    local_probe: bool,
 }
 impl State {
     pub(super) fn load(probe: Option<&Path>) -> Self {
@@ -51,6 +52,7 @@ impl State {
             store,
             sites,
             warning,
+            local_probe: probe.is_some(),
         }
     }
     pub(super) fn warning(&self) -> Option<&str> {
@@ -78,6 +80,9 @@ impl State {
             return Err(warning.clone());
         }
         let target = Target::new(address, encoding)?;
+        if !matches!(action, Edit::Remove) {
+            target.validate_connection(self.local_probe)?;
+        }
         let mut draft = self.sites.clone();
         match action {
             Edit::Favourite => draft.save_favourite(name, target)?,
@@ -113,7 +118,7 @@ mod tests {
         let write = state
             .edit(
                 Edit::Default,
-                "telnet://example.com".into(),
+                "wss://example.com/bbs".into(),
                 TextEncoding::Gbk,
                 String::new(),
             )

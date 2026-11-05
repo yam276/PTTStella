@@ -123,3 +123,7 @@ Release PR [#7](https://github.com/yam276/PTTStella/pull/7)政策與四架構ver
 分別取回verify與正式run的原始artifacts，使用未修改的production `validate_assets`核對版本、乾淨來源、release profile、四份manifest、六個下載與全部逐檔SHA-256。另獨立核對公開七個附件的GitHub digest／大小、六筆SHA256SUMS、版本專用中英說明及Latest狀態，全部通過。公開不附JSON，manifest仍保留Actions artifacts。證據在 `.local/verification/release-040-20261104/`，正式下載保留repo外，已清除本輪被取代的verify下載副本；未建立臨時分支／worktree或本機編譯產物。
 
 main保持正式 `0.4.0`，develop整合main後同步版本、README與徽章為 `0.5.0-dev.1`，預設分支仍為main。CI不代替Windows／Linux原生GUI、IME或新的低階實機驗收。
+
+## 暫停 0.4.1（2026-11-05）
+
+Release PR #8 及四架構驗證 [41978240650](https://github.com/yam276/PTTStella/actions/runs/41978240650) 通過。Windows 認證管理員和 Linux Secret Service 原生測試各自成功，六個驗證下載的來源與 SHA-256 均已核對。PR 合併後收到暫停要求，正式 [41980332119](https://github.com/yam276/PTTStella/actions/runs/41980332119) 已取消。main 指向 `4866476843c45dfedb08067381eb42f52c654633`，未建立 0.4.1 的 tag 或 Release，公開最新版本是 0.4.0。SSH／WSS 開發留在 develop。

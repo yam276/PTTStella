@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="Cargo.toml"><img src="assets/readme/version.svg" width="146" height="24" alt="正式版本 0.4.1"></a>
-  <a href="https://github.com/yam276/PTTStella/releases/latest"><img src="assets/readme/status.svg" width="150" height="24" alt="狀態：正式版"></a>
+  <a href="Cargo.toml"><img src="assets/readme/version.svg" width="146" height="24" alt="開發版本 0.5.0-dev.2"></a>
+  <a href="https://github.com/yam276/PTTStella/releases/latest"><img src="assets/readme/status.svg" width="150" height="24" alt="狀態：開發中"></a>
   <a href="#下載與安裝"><img src="assets/readme/platforms.svg" width="241" height="24" alt="目標平台：Windows、macOS、Linux"></a>
 </p>
 
@@ -30,7 +30,7 @@ PTTStella 是一款 PTT 桌面瀏覽器，保留熟悉的 BBS 排版、ANSI 色�
 
 ## 下載與安裝
 
-目前正式版本為 `0.4.1`。請從 [Releases 下載頁](https://github.com/yam276/PTTStella/releases/latest) 取得正式版，並選擇符合電腦平台與架構的檔案：
+此頁對應 `0.5.0-dev.2` 開發版。最新正式版為 `0.4.0`。請從 [Releases 下載頁](https://github.com/yam276/PTTStella/releases/latest) 取得正式版，並選擇符合電腦平台與架構的檔案：
 
 | 平台 | 使用方式與需求 |
 | --- | --- |
@@ -57,6 +57,8 @@ Windows 安裝與缺少 WebView2 時的處理方式，請見 [Windows 安裝說�
 2. 等待 PTT 的帳號提示，依站端畫面輸入帳號、密碼並登入。
 3. 重複登入、兩階段驗證、公告等後續提示，請依畫面自行操作。
 4. 登入後可照平常使用 PTT 的方式進入我的最愛、選看板與讀文章。
+
+從「連線 → 站點」選擇 **PTT（WSS）** 或 **PTT（SSH）**，再按「連線切換」。可用「設為預設」保存下次啟動的選擇。SSH 使用 PTT 的 Big5 入口，並驗證站方主機金鑰。一般連線只使用加密的 SSH 或 WSS。舊的明文預設會在啟動時改用 PTT WSS，並提示重新選擇。
 
 **自動連線不會自動登入。** 啟動或重新連線時，程式不會重送帳密與先前輸入。
 

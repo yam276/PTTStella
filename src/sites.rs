@@ -6,6 +6,7 @@ use url::Url;
 #[cfg(feature = "desktop")]
 pub mod store;
 pub const PTT: &str = "wss://ws.ptt.cc/bbs";
+pub const PTT_SSH: &str = "ssh://bbs@ptt.cc";
 pub const MAX_SITES: usize = 32;
 pub const MAX_BYTES: usize = 65536;
 
@@ -15,6 +16,19 @@ pub struct Endpoint(String);
 impl Endpoint {
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+    pub(crate) fn is_local_probe(&self) -> bool {
+        Url::parse(&self.0).is_ok_and(|url| {
+            matches!(url.scheme(), "ws" | "telnet") && url.host_str() == Some("127.0.0.1")
+        })
+    }
+    pub(crate) fn validate_transport(&self, local_probe: bool) -> Result<(), String> {
+        if self.0 == PTT_SSH || self.0.starts_with("wss://") || local_probe && self.is_local_probe()
+        {
+            Ok(())
+        } else {
+            Err(crate::msg!("sites-plaintext-disabled"))
+        }
     }
     pub fn origin(&self) -> Result<String, String> {
         let url = Url::parse(&self.0).map_err(|_| crate::msg!("site-address-invalid"))?;
@@ -70,6 +84,21 @@ impl TryFrom<String> for Endpoint {
             }
             url = Url::parse(alias).map_err(|_| crate::msg!("site-address-invalid"))?;
         }
+        if url.scheme() == "ssh" {
+            // The public SSH service account is fixed and carries no PTT password.
+            return if url.host_str() == Some("ptt.cc")
+                && url.username() == "bbs"
+                && url.password().is_none()
+                && matches!(url.port(), None | Some(22))
+                && matches!(url.path(), "" | "/")
+                && url.query().is_none()
+                && url.fragment().is_none()
+            {
+                Ok(Self(PTT_SSH.into()))
+            } else {
+                Err(crate::msg!("site-ssh-target"))
+            };
+        }
         if !matches!(url.scheme(), "wss" | "ws" | "telnet")
             || url.host_str().is_none()
             || !url.username().is_empty()
@@ -120,7 +149,14 @@ impl Target {
         })
     }
     pub fn ptt_features(&self) -> bool {
-        self.endpoint.as_str() == PTT && self.encoding == TextEncoding::Uao
+        matches!(self.endpoint.as_str(), PTT | PTT_SSH) && self.encoding == TextEncoding::Uao
+    }
+    pub fn validate_connection(&self, local_probe: bool) -> Result<(), String> {
+        self.endpoint.validate_transport(local_probe)?;
+        if self.endpoint.as_str() == PTT_SSH && self.encoding != TextEncoding::Uao {
+            return Err(crate::msg!("site-ssh-encoding"));
+        }
+        Ok(())
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -161,10 +197,10 @@ impl Default for Sites {
                     },
                 },
                 Favourite {
-                    name: "SMTH".into(),
+                    name: "PTT SSH".into(),
                     target: Target {
-                        endpoint: Endpoint("telnet://bbs.newsmth.net".into()),
-                        encoding: TextEncoding::Gbk,
+                        endpoint: Endpoint(PTT_SSH.into()),
+                        encoding: TextEncoding::Uao,
                     },
                 },
             ],

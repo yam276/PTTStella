@@ -10,6 +10,8 @@ function fixture(language='zh-TW'){
     const nodes=new Map(),sent=[],focus=[];
     const node=id=>{if(!nodes.has(id))nodes.set(id,{id,value:'',disabled:false,open:false,textContent:'',children:[],showModal(){this.open=true;},close(){this.open=false;},focus(){focus.push(id);},replaceChildren(...children){this.children=children;}});return nodes.get(id);};
     const document={getElementById:node,querySelector:()=>[...nodes.values()].find(n=>n.open),createElement:()=>({value:'',textContent:''})};
+    node('site-ptt-wss').dataset={endpoint:'wss://ws.ptt.cc/bbs'};
+    node('site-ptt-ssh').dataset={endpoint:'ssh://bbs@ptt.cc'};
     const create=vm.runInNewContext(readFileSync(new URL('../assets/surface-sites.js',import.meta.url),'utf8')+'\ncreateSitesDialog',{document});
     const ui=create({tr:translator(language),send:value=>sent.push(JSON.parse(JSON.stringify(value))),prepare(){},restore(){focus.push('restore');},changed(){}});
     function fire(id,type='click',extra={}){const binding=ui.bindings.find(([element,event])=>element===node(id)&&event===type);assert.ok(binding);binding[2]({target:node(id),isTrusted:true,preventDefault(){},...extra});}
@@ -37,10 +39,27 @@ test('untrusted and composition actions do not connect; a rejected address stays
     const f=fixture();f.open();f.sent.length=0;f.fire('site-connect','click',{isTrusted:false});f.fire('site-address','compositionstart');f.fire('site-connect');assert.deepEqual(f.sent,[]);
     f.fire('site-address','compositionend');f.node('site-address').value='https://example.com';f.fire('site-connect');let request=f.sent.at(-1).request;
     f.ui.receive({request,data:data(),feedback:{status:'rejected',notice:'bad address'}});assert.equal(f.node('site-address').value,'https://example.com');assert.equal(f.node('sites-dialog').open,true);
-    f.node('site-address').value='telnet://example.com';f.fire('site-connect');request=f.sent.at(-1).request;
-    assert.deepEqual(f.sent.at(-1),{kind:'sites_connect',request,address:'telnet://example.com',encoding:'gbk',trusted:true});
+    f.node('site-address').value='wss://example.com/bbs';f.fire('site-connect');request=f.sent.at(-1).request;
+    assert.deepEqual(f.sent.at(-1),{kind:'sites_connect',request,address:'wss://example.com/bbs',encoding:'gbk',trusted:true});
     f.ui.receive({request,data:data(),feedback:{status:'connecting'}});assert.equal(f.node('sites-dialog').open,false);assert.equal(f.focus.at(-1),'restore');
     f.ui.destroy();f.ui.receive({request,data:data(),feedback:{status:'saved'}});assert.equal(f.ui.clean(),true);
+});
+
+test('SSH and WSS presets fill UAO and wait for an explicit connection or save',()=>{
+    const f=fixture();f.open();f.sent.length=0;
+    f.fire('site-ptt-ssh','click',{isTrusted:false});
+    assert.equal(f.node('site-address').value,'telnet://example.com');
+    f.fire('site-ptt-ssh');
+    assert.equal(f.node('site-address').value,'ssh://bbs@ptt.cc');
+    assert.equal(f.node('site-encoding').value,'uao');
+    f.fire('site-ptt-wss');
+    assert.equal(f.node('site-address').value,'wss://ws.ptt.cc/bbs');
+    assert.deepEqual(f.sent,[]);
+    f.fire('site-ptt-ssh');f.fire('site-connect');
+    assert.equal(f.sent.at(-1).kind,'sites_connect');
+    assert.equal(f.sent.at(-1).address,'ssh://bbs@ptt.cc');
+    assert.equal(f.sent.at(-1).encoding,'uao');
+    f.ui.destroy();
 });
 test('a corrupt station file disables persistence while allowing a deliberate manual connection',()=>{
     const f=fixture();f.open({...data(),writable:false,warning:'broken'});assert.equal(f.node('site-save').disabled,true);assert.equal(f.node('site-default').disabled,true);

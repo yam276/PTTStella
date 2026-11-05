@@ -137,6 +137,7 @@ fn stamp_order(stamp: Stamp) -> (u64, u64, u64) {
 }
 pub struct Connection {
     commands: mpsc::Sender<Command>,
+    local_probe: bool,
     session_ui: watch::Sender<SessionControls>,
     navigation_sequence: std::sync::atomic::AtomicU64,
     mouse_ui: watch::Sender<mouse_control::Controls>,
@@ -163,6 +164,7 @@ impl Reply {
 impl Connection {
     /// The serialized session owner closes the old transport before opening another.
     pub fn connect_to(&self, target: crate::sites::Target) -> Result<(), String> {
+        target.validate_connection(self.local_probe)?;
         self.enqueue(Command::SwitchSite(target))
     }
     pub fn start(screen: Screen) -> Result<Self, String> {
@@ -175,6 +177,24 @@ impl Connection {
         screen: Screen,
         endpoint: String,
         timing: liveness::Timing,
+    ) -> Result<Self, String> {
+        let local_probe = crate::sites::Endpoint::try_from(endpoint.clone())?.is_local_probe();
+        Self::start_with_policy(screen, endpoint, timing, local_probe)
+    }
+    /// Only the explicit synthetic station probe may use a plaintext loopback peer.
+    pub fn start_local_station_probe(screen: Screen) -> Result<Self, String> {
+        Self::start_with_policy(
+            screen,
+            PTT_ENDPOINT.to_owned(),
+            liveness::Timing::default(),
+            true,
+        )
+    }
+    fn start_with_policy(
+        screen: Screen,
+        endpoint: String,
+        timing: liveness::Timing,
+        local_probe: bool,
     ) -> Result<Self, String> {
         let runtime = tokio::runtime::Handle::try_current().map_err(|e| e.to_string())?;
         let (commands, receiver) = mpsc::channel(64);
@@ -215,6 +235,7 @@ impl Connection {
         ));
         Ok(Self {
             commands,
+            local_probe,
             session_ui,
             navigation_sequence: std::sync::atomic::AtomicU64::new(0),
             mouse_ui,
@@ -716,6 +737,7 @@ mod liveness;
 mod mouse_control;
 mod output;
 mod probe;
+mod ssh;
 #[cfg(test)]
 mod tests;
 mod transport;
@@ -726,13 +748,19 @@ pub async fn probe_live() -> Result<serde_json::Value, String> {
     probe_prelogin(crate::sites::Target::default(), true).await
 }
 pub async fn probe_site(target: crate::sites::Target) -> Result<serde_json::Value, String> {
-    probe_prelogin(target, false).await
+    let require_ptt_prompt = target.ptt_features();
+    probe_prelogin(target, require_ptt_prompt).await
 }
 async fn probe_prelogin(
     target: crate::sites::Target,
     require_ptt_prompt: bool,
 ) -> Result<serde_json::Value, String> {
-    let connection = Connection::start(Screen::new(80, 24).map_err(str::to_owned)?)?;
+    let screen = Screen::new(80, 24).map_err(str::to_owned)?;
+    let connection = if target.endpoint.is_local_probe() {
+        Connection::start_local_station_probe(screen)?
+    } else {
+        Connection::start(screen)?
+    };
     let mut updates = connection.updates.clone();
     connection.connect_to(target.clone())?;
     let observed = timeout(Duration::from_secs(20), async {
@@ -755,7 +783,7 @@ async fn probe_prelogin(
                         "received_bytes": view.received,
                         "unmapped_glyphs": view.frame.glyphs.iter().filter(|glyph| glyph.unmapped).count(),
                         "login_prompt_detected": prompt, "credential_input_sent": false,
-                        "scope": "transport banner only; no authentication or raw traffic saved"
+                        "scope": "pre-login banner only, without BBS credentials or saved traffic"
                     }));
                 }
             }

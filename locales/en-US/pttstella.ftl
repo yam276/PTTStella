@@ -487,7 +487,15 @@ settings-opacity-value = { $percent }%
 settings-opacity-help = 20% is faint; 100% is opaque. Apply to change the floating button; menus stay opaque. Hover or keyboard focus restores full visibility. Disconnection and error notices stay readable.
 settings-opacity-invalid = Floating button opacity must be between 20% and 100%
 
-site-address-invalid = Enter a valid wss://, ws:// or telnet:// address without credentials, query parameters or fragments. A bare hostname uses Telnet.
+site-address-invalid = Enter a valid WSS or PTT SSH address without a password, query parameters or a fragment.
+site-ssh-target = Select PTT (SSH) to use ssh://bbs@ptt.cc.
+site-ssh-encoding = Select Big5-UAO for PTT SSH.
+site-ssh-host-key = The SSH host key differs from the fingerprint published by PTT. Connection stopped.
+sites-ptt-wss = PTT (WSS)
+sites-ptt-ssh = PTT (SSH)
+sites-ssh-encrypted = SSH encrypts traffic and checks the host key published by PTT.
+sites-plaintext-disabled = Regular connections use SSH or WSS. Telnet and plaintext WebSocket are disabled.
+sites-default-fallback = The old default uses a disabled transport. This launch uses PTT WSS. Choose a new default in Stations.
 site-raw-input = Use native input on this site; PTT navigation is unavailable
 site-ptt-only = This action requires a PTT connection using Big5-UAO
 sites-invalid = Invalid or duplicate station data, or more than 32 favourites
@@ -513,7 +521,6 @@ sites-saved = Station settings saved
 sites-connecting = Switching station…
 sites-probe-local = Synthetic tests only allow connections to 127.0.0.1
 sites-encrypted = WSS encrypts traffic and verifies the server certificate.
-sites-unencrypted = Telnet and ws are unencrypted, including any credentials you type. Choose WSS when available.
 sites-help = Switch connection closes the current connection first. Only Save favourite or Set as default stores data. The default connects on the next launch without logging in. Each station can use its own encoding; changing it reconnects. Other stations use native input without PTT login or navigation automation.
 
 sites-remove = Remove favourite
