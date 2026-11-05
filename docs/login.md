@@ -66,3 +66,5 @@ Session另持有有界、無密碼的AccountIdentity，僅供網頁文章標示�
 明確執行 `cargo test --locked --features credential-store --lib login::vault::tests::native_roundtrip -- --ignored --exact` 才測真正 OS 後端：獨立唯一 synthetic service、固定合成帳密、不勾選零保存、勾選寫入、另一個程序讀回、錯帳號拒絕、兩次移除與確認不存在。可能需要使用者處理 OS 解鎖提示；不使用正式 service，不連 PTT。Linux 可在獨立容器的 D-Bus／GNOME Keyring 中驗證，不改使用者桌面密碼庫。`native_read_child` 僅由父程序啟動。
 
 Linux 缺服務另明確執行：`DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-pttstella-synthetic-bus cargo test --locked --features credential-store --lib login::vault::tests::native_service_unavailable -- --ignored --exact`，需確認讀取與勾選保存失敗，但不勾選單次登入仍能準備帳密。交叉編譯、記憶體測試與隔離容器不能冒充 Windows 認證庫、Linux 真實桌面解鎖或三平台實站登入。
+
+GitHub 的 Desktop Release 在打包前使用相同測試。Windows runner 直接操作認證管理員。Linux runner 建立獨立的 D-Bus 工作階段和暫存 GNOME Keyring，並另外執行缺服務案例。
