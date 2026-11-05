@@ -12,6 +12,10 @@
 
 GitHub [41982395133](https://github.com/yam276/PTTStella/actions/runs/41982395133) 的 Windows SSH 合成往返在關閉時抓到對端 TCP 10053。改為在兩秒總期限內先收 SSH channel close，再結束 session。確認 I/O 工作結束後正常釋放複製的 socket，取消或失敗時保留強制 shutdown。合成 peer 現在必須收到 channel close 並正常結束。macOS 三項 SSH 測試、Clippy 及新版實站登入提示與關閉通過。
 
+新版 [41983631454](https://github.com/yam276/PTTStella/actions/runs/41983631454) 核對提交 `03157e89f23ec0c933d31010cef455c773e005ac`。Windows x64、Linux x64、macOS Apple Silicon／Intel 的桌面測試和打包全數成功。核對各架構三項 SSH 測試，以及 Windows 認證管理員往返、Linux Secret Service 往返與缺服務測試，共 15 項實際執行成功。四份測試下載保留在 Actions，發佈 job 跳過。舊驗證因 Windows 失敗被修正版取代，macOS Intel 封裝已取消，沒有列為通過。修正版再次在實站完成 SSH → WSS → SSH 三次到登入提示，最終 SSH 連線正常結束。
+
+本機清理 `target/ssh-wss-20261105` 與兩個合成切換測試的暫存 crate。證據保留在 `.local/verification/ssh-wss-20261105/`，包含 `github-verify-audit.json`、失敗紀錄及 `cleanup.json`。遠端 main 仍在先前 PR #8 的合併提交。0.4.1 的發佈工作維持取消，公開最新仍為 0.4.0。開發版本 `0.5.0-dev.2` 留在 develop。
+
 ## 2026-11-05 Windows／Linux 系統密碼庫
 
 使用者要求補齊兩平台安全保存，保持develop／0.5.0-dev.1、不發佈。驗收以「輸入帳密但未勾選不呼叫保存；明確勾選後重開可留空取用；錯帳號拒絕；移除後讀回為空；密碼庫失敗不能產生待送出的登入」為準。啟動／重連不自動登入、取消與generation保護不變。Windows對接Credential Manager generic credential，Linux對接桌面Secret Service預設collection，macOS保留原service／default及既有Keychain項目，不搬移帳密。
