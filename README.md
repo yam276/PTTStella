@@ -30,7 +30,20 @@
 | macOS | Apple Silicon 選 `arm64`，Intel 選 `x64`。解壓縮 ZIP 後，把 `PTTStella.app` 拖進「應用程式」。[安裝說明](docs/macos-release.txt) |
 | Linux x64 | 提供 `.deb` 和 `.tar.gz`，以 Ubuntu 24.04 為目標。[安裝說明](docs/linux-package.txt) |
 
-**macOS 首次開啟若出現開發者驗證提示**，先關閉提示，再到「系統設定 → 隱私權與安全性 → 安全性」找到 PTTStella，按「強制打開」並依提示確認。[Apple 說明](https://support.apple.com/zh-tw/102445)
+**macOS 首次開啟若出現開發者驗證提示**，先按「完成」關閉提示，再到「系統設定 → 隱私權與安全性 → 安全性」找到 PTTStella，按「強制打開」並依提示確認。[Apple 說明](https://support.apple.com/zh-tw/102445)
+
+<details>
+<summary>查看 macOS 首次開啟圖解</summary>
+
+1. 在「未打開 PTTStella」提示中按「完成」。
+
+   ![macOS 驗證提示，左下角為「完成」按鈕](assets/readme/macos-first-open-alert.png)
+
+2. 在「隱私權與安全性」找到 PTTStella，按紅圈標示的「強制打開」。
+
+   ![macOS 隱私權與安全性，「強制打開」按鈕以紅圈標示](assets/readme/macos-open-anyway.png)
+
+</details>
 
 ## 第一次開啟
 
@@ -53,6 +66,8 @@
 | ![搜尋框顯示命中筆數，推文關鍵字反白](assets/readme/article-find.png) | ![同一個 ID 的推文以藍色底色標示](assets/readme/reply-highlight.png) |
 | **文章收藏** | **WSS／SSH 連線** |
 | ![收藏清單顯示可離線閱讀的本機副本](assets/readme/article-bookmarks.png) | ![站點設定顯示 PTT 的 WSS 和 SSH 選項](assets/readme/site-connection.png) |
+
+### ANSI 圖瀏覽
 
 <p align="center">
   <a href="assets/readme/ansi-article-portrait.png"><img src="assets/readme/ansi-article-portrait.png" width="32%" alt="青白色 ANSI 人物，底部顯示閱讀進度"></a>
