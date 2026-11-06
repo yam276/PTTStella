@@ -440,6 +440,10 @@ async fn run(
             }
         }
         screen.set_article_boundary_navigation(preferences.app().article_boundary_navigation);
+        if inline_images.set_auto_expand(preferences.app().auto_expand_images) {
+            eval.send(Packet::InlineReset(true))
+                .map_err(|e| e.to_string())?;
+        }
         if screen.set_article_mode(if window_probe || filters_probe {
             pttstella::settings::ArticleMode::Terminal
         } else {

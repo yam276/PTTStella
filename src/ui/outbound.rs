@@ -221,6 +221,7 @@ pub(super) struct MediaImage {
 pub(super) struct SettingsOpen {
     pub article_mode: pttstella::settings::ArticleMode,
     pub article_boundary_navigation: bool,
+    pub auto_expand_images: bool,
     pub hover: HoverPosition,
     pub tools_access: pttstella::settings::ToolAccess,
     pub tools_opacity: ToolOpacity,

@@ -57,6 +57,8 @@ pub(super) struct InlineImages {
     article_id: Option<u64>,
     turning: bool,
     expand_all: bool,
+    auto_expand: bool,
+    auto_batch: bool,
     targets: Vec<String>,
     images: BTreeMap<usize, Arc<media::loader::Image>>,
     queue: VecDeque<(usize, String)>,
@@ -71,6 +73,7 @@ impl InlineImages {
         self.article_id = None;
         self.turning = false;
         self.expand_all = false;
+        self.auto_batch = false;
         self.targets.clear();
         self.images.clear();
         self.queue.clear();
@@ -83,6 +86,14 @@ impl InlineImages {
     }
     pub(super) fn active(&self) -> bool {
         self.identity.is_some()
+    }
+    pub(super) fn set_auto_expand(&mut self, enabled: bool) -> bool {
+        self.auto_expand = enabled;
+        if !enabled && self.auto_batch {
+            self.close();
+            return true;
+        }
+        false
     }
     pub(super) fn navigation(
         &mut self,
@@ -130,15 +141,21 @@ impl InlineImages {
         }
     }
     pub(super) fn follow(&mut self, paint: &Paint) -> Result<Option<Open>, String> {
-        if !self.active() {
+        let automatic = self.auto_expand && paint.article.is_some();
+        if !self.active() && (!automatic || paint.links.is_empty()) {
             return Ok(None);
         }
-        self.project(paint, None)
+        self.project(paint, None, automatic)
     }
     pub(super) fn open(&mut self, paint: &Paint, target: Target) -> Result<Option<Open>, String> {
-        self.project(paint, Some(target))
+        self.project(paint, Some(target), false)
     }
-    fn project(&mut self, paint: &Paint, request: Option<Target>) -> Result<Option<Open>, String> {
+    fn project(
+        &mut self,
+        paint: &Paint,
+        request: Option<Target>,
+        automatic: bool,
+    ) -> Result<Option<Open>, String> {
         let identity = Identity {
             presentation: paint.presentation,
             generation: paint.generation,
@@ -149,7 +166,8 @@ impl InlineImages {
             self.close();
         }
         if self.identity == Some(identity)
-            && (request.is_none() || matches!(request, Some(Target::All)) && self.expand_all)
+            && (request.is_none() && (!automatic || self.auto_batch)
+                || matches!(request, Some(Target::All)) && self.expand_all)
         {
             return Ok(None);
         }
@@ -211,12 +229,21 @@ impl InlineImages {
         let previous_count = self.targets.len();
         if matches!(request, Some(Target::All)) {
             self.expand_all = true;
+            self.auto_batch = false;
+        } else if automatic && !self.expand_all {
+            self.auto_batch = true;
         }
         self.turning = false;
         self.identity = Some(identity);
         self.article_id = article_id;
-        let admit_all =
-            matches!(request, Some(Target::All)) || request.is_none() && self.expand_all;
+        let admit_all = automatic
+            || matches!(request, Some(Target::All))
+            || request.is_none() && self.expand_all;
+        let max_added = if automatic {
+            MAX_ARTICLE_IMAGES
+        } else {
+            MAX_IMAGES
+        };
         let mut limited = false;
         let mut added = 0;
         let mut entries = Vec::new();
@@ -226,7 +253,7 @@ impl InlineImages {
             }
             let key = match self.targets.iter().position(|known| known == &url) {
                 Some(key) => key,
-                None if self.targets.len() < MAX_ARTICLE_IMAGES && added < MAX_IMAGES => {
+                None if self.targets.len() < MAX_ARTICLE_IMAGES && added < max_added => {
                     added += 1;
                     let key = self.targets.len();
                     self.targets.push(url.clone());

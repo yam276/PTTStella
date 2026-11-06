@@ -510,6 +510,15 @@ test('article boundary setting defaults off, saves, retries and resets with its 
  ui.destroy();
 });
 
+test('automatic article images default off, save, reopen, and reset on the media page',async()=>{
+ const env=environment('surface-settings.js','createSettingsDialog'),ui=env.create({page:()=>"media"});
+ await ui.open(openData());const control=env.node('auto-expand-images');assert.equal(control.checked,false);
+ control.checked=true;env.fire('auto-expand-images','change');env.tick();
+ assert.equal(env.sent.at(-1).auto_expand_images,true);assert.equal(ui.snapshot().auto_expand_images,true);
+ ui.saved({status:'saved'});ui.close();await ui.open({...openData(),auto_expand_images:true});assert.equal(control.checked,true);
+ env.fire('font-defaults');env.tick();assert.equal(env.sent.at(-1).auto_expand_images,false);ui.destroy();
+});
+
 test('settings Escape owns the gesture, waits for autosave and preserves composition',async()=>{
  const env=environment('surface-settings.js','createSettingsDialog'),ui=env.create();await ui.open(openData());
  const escape=ui.bindings.find(b=>b[0]===env.node('font-dialog'));

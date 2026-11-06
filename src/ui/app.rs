@@ -1053,6 +1053,11 @@ pub(super) fn SettingsForm(filters_probe: bool) -> Element {
                         }
                         p {class:"settings-help",{pttstella::msg!("article-mode-help")}}
                         label { class:"settings-check",
+                            input { id:"auto-expand-images", r#type:"checkbox", "aria-describedby":"auto-expand-images-help" }
+                            span { {pttstella::msg!("auto-expand-images")} }
+                        }
+                        p {id:"auto-expand-images-help",class:"settings-help",{pttstella::msg!("auto-expand-images-help")}}
+                        label { class:"settings-check",
                             input { id:"article-boundary-navigation", r#type:"checkbox" }
                             span { {pttstella::msg!("article-boundary-navigation")} }
                         }

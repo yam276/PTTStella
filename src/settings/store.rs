@@ -86,6 +86,11 @@ impl Store {
                     &draft.article_boundary_navigation,
                     &current.article_boundary_navigation,
                 )?;
+                merged.auto_expand_images = shared::field(
+                    &base.auto_expand_images,
+                    &draft.auto_expand_images,
+                    &current.auto_expand_images,
+                )?;
                 merged.tools_opacity = shared::field(
                     &base.tools_opacity,
                     &draft.tools_opacity,
@@ -107,6 +112,28 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn auto_expand_defaults_off_and_merges_with_unrelated_settings() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        let store = Store::at(path.clone());
+        store.save(AppSettings::default()).unwrap();
+        assert!(
+            !std::fs::read_to_string(path)
+                .unwrap()
+                .contains("auto_expand_images")
+        );
+        let baseline = store.load().unwrap();
+        assert!(!baseline.auto_expand_images);
+        let mut automatic = baseline.clone();
+        automatic.auto_expand_images = true;
+        store.save_from(&baseline, automatic).unwrap();
+        let mut unrelated = baseline.clone();
+        unrelated.hover = super::super::HoverPosition::Off;
+        let saved = store.save_from(&baseline, unrelated).unwrap();
+        assert!(saved.auto_expand_images);
+        assert_eq!(store.load().unwrap(), saved);
+    }
     #[test]
     fn text_width_merges_separately_and_conflicts_do_not_overwrite() {
         let directory = tempfile::tempdir().unwrap();

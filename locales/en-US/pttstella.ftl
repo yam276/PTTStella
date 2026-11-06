@@ -617,7 +617,10 @@ export-cache-page-hint = Export the current 24-row station page, excluding cache
 article-mode = Article mode
 article-mode-web = Web
 article-mode-terminal = Terminal
-article-mode-help = Web mode loads the full article, with cancel and resume; expand images explicitly. Terminal mode keeps station paging, with hover or top-right image previews.
+article-mode-help = Web mode loads the full article, with cancel and resume. Terminal mode keeps station paging, with hover or top-right image previews.
+auto-expand-images = Automatically expand article images
+auto-expand-images-help = Expand images in the article and replies as they load in web mode. You can still open images manually when this is off.
+settings-alias-auto-expand-images = automatic auto expand images inline 自動開圖 展圖 圖片 推文
 settings-alias-article-mode = article mode web terminal 文章模式 網頁 終端機
 
 filters-policy-mask-row = Black out entire row

@@ -181,6 +181,8 @@ pub struct AppSettings {
     pub article_mode: ArticleMode,
     #[serde(default)]
     pub article_boundary_navigation: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub auto_expand_images: bool,
     pub version: u32,
     pub display: DisplayProfile,
     pub hover: HoverPosition,
@@ -197,6 +199,7 @@ impl Default for AppSettings {
             version: 6,
             article_mode: ArticleMode::default(),
             article_boundary_navigation: false,
+            auto_expand_images: false,
             language: crate::i18n::Language::default(),
             tools_opacity: ToolOpacity::default(),
             tools_access: ToolAccess::default(),

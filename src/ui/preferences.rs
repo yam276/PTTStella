@@ -16,6 +16,8 @@ pub(super) struct Change {
     #[serde(default)]
     pub article_boundary_navigation: Option<bool>,
     #[serde(default)]
+    pub auto_expand_images: Option<bool>,
+    #[serde(default)]
     pub language: pttstella::i18n::Language,
     pub tools_opacity: pttstella::settings::ToolOpacity,
     pub tools_access: pttstella::settings::ToolAccess,
@@ -31,6 +33,9 @@ impl Change {
         }
         if let Some(enabled) = self.article_boundary_navigation {
             app.article_boundary_navigation = enabled;
+        }
+        if let Some(enabled) = self.auto_expand_images {
+            app.auto_expand_images = enabled;
         }
         app.tools_opacity = self.tools_opacity;
         app.tools_access = self.tools_access;
@@ -124,6 +129,7 @@ impl Preferences {
             hover: self.app.hover,
             article_mode: self.app.article_mode,
             article_boundary_navigation: self.app.article_boundary_navigation,
+            auto_expand_images: self.app.auto_expand_images,
             profile: self.app.display.clone(),
             tools_opacity: self.app.tools_opacity,
             tools_access: self.app.tools_access,

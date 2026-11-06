@@ -611,7 +611,10 @@ export-cache-page-hint = 匯出目前站端的 24 行畫面；不包含文章快
 article-mode = 文章模式
 article-mode-web = 網頁
 article-mode-terminal = 終端機
-article-mode-help = 網頁模式自動載入全文，可取消並繼續，圖片由你手動展開；終端機模式保持站端格線與逐頁操作，只使用懸停或右上圖片預覽。
+article-mode-help = 網頁模式自動載入全文，可取消並繼續；終端機模式保持站端格線與逐頁操作，只使用懸停或右上圖片預覽。
+auto-expand-images = 自動開啟文章圖片
+auto-expand-images-help = 在網頁模式隨文章載入展開正文和推文圖片。關閉後可繼續手動開圖。
+settings-alias-auto-expand-images = automatic auto expand images inline 自動開圖 展圖 圖片 推文
 settings-alias-article-mode = article mode web terminal 文章模式 網頁 終端機
 
 filters-policy-mask-row = 黑名單（整行塗黑）
