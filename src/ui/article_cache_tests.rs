@@ -516,16 +516,68 @@ fn full_loading_changed_overlap_and_capacity_stop_without_claiming_complete() {
     // A narrow but complete synthetic grid exercises the production row limit
     // without allocating thousands of full-width text frames in the test.
     let mut cache = ArticleCache::default();
+    let mut boundary = None;
     for start in (1..=MAX_FULL_LINES + 22).step_by(22) {
         let mut p = page(start, start + 22, 50);
         p.frame.cols = 1;
         p.frame.glyphs.retain(|g| g.col == 0);
-        cache.project(&mut p);
+        cache.capture(&p);
         assert!(cache.rows.len() <= MAX_FULL_LINES);
+        if cache.load_state() == Some(LoadState::Limit) {
+            boundary = Some(p);
+            break;
+        }
     }
     assert_eq!(cache.load_state(), Some(LoadState::Limit));
     assert_eq!(*cache.rows.first_key_value().unwrap().0, 1);
     assert!(cache.load_deadline().is_none());
+    let mut boundary = boundary.unwrap();
+    let station_line = boundary.frame.revision as usize;
+    boundary.frame.revision += 1;
+    cache.capture(&boundary);
+    let (id, _, last, _) = cache.progress().unwrap();
+    assert!(!cache.advance_segment(
+        id + 1,
+        boundary.generation,
+        &boundary.navigation,
+        boundary.frame.revision
+    ));
+    assert!(!cache.advance_segment(
+        id,
+        boundary.generation + 1,
+        &boundary.navigation,
+        boundary.frame.revision
+    ));
+    assert!(!cache.advance_segment(
+        id,
+        boundary.generation,
+        &boundary.navigation,
+        boundary.frame.revision + 1
+    ));
+    assert!(cache.advance_segment(
+        id,
+        boundary.generation,
+        &boundary.navigation,
+        boundary.frame.revision
+    ));
+    cache.capture(&boundary);
+    assert_eq!(
+        cache.rows.first_key_value().map(|(line, _)| *line),
+        Some(last)
+    );
+    assert_ne!(cache.serial, id);
+    assert_eq!(
+        cache.next_full_page(&boundary.navigation, boundary.frame.revision, now),
+        Some(Intent::NextPage)
+    );
+    let start = station_line + 22;
+    let mut end = page(start, start + 1, 100);
+    end.frame.cols = 1;
+    end.frame.glyphs.retain(|g| g.col == 0);
+    cache.capture(&end);
+    assert_eq!(cache.load_state(), Some(LoadState::Complete));
+    assert_eq!(cache.end, Some(start + 1));
+    assert!(cache.archive_snapshot(&end.frame).is_none());
 }
 
 #[test]

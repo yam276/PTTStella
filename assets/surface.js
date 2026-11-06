@@ -69,8 +69,8 @@ function refreshArticleLoad(reason=readingPauseReason()) {
     articleLoad.dataset.state=display??"";
     articleLoadStatus.textContent=state?tr("article-load-"+display,{lines:article.last_line-article.first_line+1}):"";
     articleLoadCancel.hidden=state!=="loading";
-    articleLoadResume.hidden=!["cancelled","stopped"].includes(state);
-    articleLoadCancel.textContent=tr("article-load-cancel");articleLoadResume.textContent=tr("article-load-resume");
+    articleLoadResume.hidden=!["cancelled","stopped"].includes(state)&&!article?.next_segment;
+    articleLoadCancel.textContent=tr("article-load-cancel");articleLoadResume.textContent=tr(article?.next_segment?"article-load-next-segment":"article-load-resume");
 }
 function changeArticleLoad(e,resume=false) {
     if(!e.isTrusted||stopped||!latest?.article)return;
@@ -592,7 +592,11 @@ function readingMove(intent,e,source="button",fetch=true) {
             navigate({action:"adjacent_article",down:delta>0},e,"keyboard",false);
         return true;
     }
-    if(!fetch||["loading","changed","limit"].includes(article.load))return true;
+    if(!fetch||["loading","changed"].includes(article.load))return true;
+    if(article.load==="limit"&&action!=="first"){
+        if(article.next_segment&&(action==="next_page"||action==="last")&&!navigationRequest&&!navigationLocked)changeArticleLoad(e,true);
+        return true;
+    }
     if(navigate({action},e,source==="keyboard-arrow"?"button":source,false))
         pendingReadingMove={generation:latest.generation,article:article.id,first:article.first_line,last:article.last_line,
             top:viewport.scrollTop,intent:{...intent}};

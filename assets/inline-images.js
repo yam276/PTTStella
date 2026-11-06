@@ -353,9 +353,10 @@ function installInlineImages({surface,canvas,viewport,tr,render,redraw,changed,n
             if(cells&&viewport){
                 // Minimum-height blank padding is not unread article content.
                 const bodyRows=Math.min(row,article.last_line-article.first_line+1);
-                const total=Math.max(1,mapping.y(bodyRows));
-                const seen=Math.max(0,(viewport.scrollTop-surface.offsetTop+viewport.clientHeight)*ratio-height);
-                const percent=article.first_line===1&&article.end?(seen>=total-1?100:Math.min(99,Math.floor(seen/total*100))):null;
+                const earlier=(article.first_line-1)*height;
+                const total=Math.max(1,earlier+mapping.y(bodyRows));
+                const seen=earlier+Math.max(0,(viewport.scrollTop-surface.offsetTop+viewport.clientHeight)*ratio-height);
+                const percent=article.end?(seen>=total-1?100:Math.min(99,Math.floor(seen/total*100))):null;
                 progress=(percent===null?"--":String(percent)).padStart(cells.end-cells.start," ");
                 footerGlyphs=footerGlyphs.map(g=>g.col>=cells.start&&g.col<cells.end?{...g,text:progress[g.col-cells.start]}:g);
             }

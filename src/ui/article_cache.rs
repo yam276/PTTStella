@@ -42,6 +42,7 @@ pub(super) struct Reading {
     pub last_line: usize,
     pub end: bool,
     pub load: Option<LoadState>,
+    pub next_segment: bool,
     pub reply_count: usize,
     pub percent_cells: Option<std::ops::Range<usize>>,
     pub page_cells: Option<std::ops::Range<usize>>,
@@ -76,6 +77,12 @@ struct Row {
     glyphs: Vec<Glyph>,
     hyperlinks: Vec<Hyperlink>,
 }
+#[derive(Clone, Copy)]
+struct SegmentBoundary {
+    range: (usize, usize),
+    revision: u64,
+    start: usize,
+}
 impl Row {
     fn raw_glyphs(&self) -> &[Glyph] {
         self.original.as_ref().map_or(&self.glyphs, |r| &r.glyphs)
@@ -96,6 +103,8 @@ pub(super) struct ArticleCache {
     fetch: Option<Fetch>,
     loader: Loader,
     refreshing: bool,
+    next_segment: Option<SegmentBoundary>,
+    segment_start: Option<usize>,
 }
 
 pub(super) struct ArchiveSnapshot {
@@ -323,6 +332,37 @@ impl ArticleCache {
         }
         true
     }
+    pub(super) fn advance_segment(
+        &mut self,
+        id: u64,
+        generation: u64,
+        context: &Context,
+        revision: u64,
+    ) -> bool {
+        let (
+            Some(boundary),
+            Context::ArticleReading {
+                first_line,
+                last_line,
+                ..
+            },
+        ) = (self.next_segment, context)
+        else {
+            return false;
+        };
+        if self.serial != id
+            || self.loader.state != Some(LoadState::Limit)
+            || self.scope.is_none_or(|scope| scope.0 != generation)
+            || boundary.range != (*first_line, *last_line)
+            || boundary.revision != revision
+        {
+            return false;
+        }
+        self.clear();
+        self.segment_start = Some(boundary.start);
+        self.loader.at_head = true;
+        true
+    }
     pub(super) fn expire_load(&mut self, now: Instant) -> bool {
         if self.load_deadline().is_some_and(|deadline| now >= deadline) {
             self.stop_load(LoadState::Stopped);
@@ -484,6 +524,12 @@ impl ArticleCache {
             return;
         }
         if reading_input(context, bytes) {
+            if self.loader.state == Some(LoadState::Limit)
+                && reading_intent(bytes) == Some(pttstella::navigation::Intent::First)
+            {
+                self.next_segment = None;
+                self.loader.state = Some(LoadState::Cancelled);
+            }
             self.turning = true;
         } else {
             self.clear();
@@ -543,10 +589,12 @@ impl ArticleCache {
         {
             'page: {
                 let page_styles = footer_styles(&source);
-                if matches!(
-                    self.loader.state,
-                    Some(LoadState::Limit | LoadState::Changed)
-                ) {
+                if self.loader.state == Some(LoadState::Changed)
+                    || self.loader.state == Some(LoadState::Limit)
+                        && self
+                            .next_segment
+                            .is_none_or(|boundary| boundary.range != (first_line, last_line))
+                {
                     break 'page;
                 }
                 if first_line == 1 && self.loader.awaiting.is_some_and(|a| !a.3) {
@@ -692,7 +740,7 @@ impl ArticleCache {
                             self.rows.last_key_value().map_or(1, |(n, _)| n + 1) + extra - overlap
                         }
                     } else {
-                        first_line
+                        self.segment_start.take().unwrap_or(first_line)
                     };
                     incoming = incoming
                         .into_iter()
@@ -732,7 +780,17 @@ impl ArticleCache {
                                 .sum::<usize>()
                             > MAX_LINK_BYTES
                     {
-                        self.stop_load(LoadState::Limit);
+                        self.next_segment = self
+                            .rows
+                            .last_key_value()
+                            .filter(|(last, _)| start + body_rows - 1 > **last)
+                            .map(|_| SegmentBoundary {
+                                range: (first_line, last_line),
+                                revision: source.revision,
+                                start,
+                            });
+                        self.loader.state = Some(LoadState::Limit);
+                        self.loader.awaiting = None;
                         break 'page;
                     }
                 }
@@ -806,7 +864,6 @@ impl ArticleCache {
                 self.source_range = Some((first_line, last_line));
                 if self.loading()
                     && self.loader.at_head
-                    && self.rows.first_key_value().is_some_and(|(n, _)| *n == 1)
                     && self
                         .rows
                         .last_key_value()
@@ -935,6 +992,8 @@ impl ArticleCache {
             last_line: last,
             end: self.end == Some(last),
             load: self.loader.state,
+            next_segment: self.loader.state == Some(LoadState::Limit)
+                && self.next_segment.is_some(),
             reply_count: self.rows.values().filter(|row| row.reply.is_some()).count(),
             percent_cells: paint.source_frame.as_ref().and_then(footer_percent_cells),
             range_cells: paint.source_frame.as_ref().and_then(footer_range_cells),
