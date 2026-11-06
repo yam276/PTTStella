@@ -15,7 +15,7 @@ pub(in crate::ui) struct Request {
     pub probe: Option<PathBuf>,
 }
 fn format(image: &Image) -> Result<(image::ImageFormat, &'static str), String> {
-    if image.bytes.len() > pttstella::media::loader::MAX_BYTES
+    if image.bytes.len() > pttstella::media::loader::max_image_bytes(image.mime)
         || image.width == 0
         || image.height == 0
         || image.width > 8192
@@ -184,7 +184,7 @@ mod tests {
         source.mime = "image/png";
         source.bytes.truncate(33);
         assert!(pixels(&source).is_err());
-        source.bytes = vec![0; pttstella::media::loader::MAX_BYTES + 1];
+        source.bytes = vec![0; pttstella::media::loader::max_image_bytes(source.mime) + 1];
         assert!(pixels(&source).is_err());
     }
 }

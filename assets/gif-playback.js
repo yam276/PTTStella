@@ -1,5 +1,5 @@
 // Native image decoding, with a bounded visible set. No animation-frame draw loop.
-function createGifPlayback({document,window=null,limit=2,pixelBudget=67108864}) {
+function createGifPlayback({document,window=null,limit=2,pixelBudget=134217728}) {
     const entries=new Set();let disposed=false,focused=document.hasFocus?.()??true;
     function play(entry,value){
         if(entry.playing===value)return;

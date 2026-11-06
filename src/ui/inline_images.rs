@@ -17,7 +17,7 @@ use std::{
 const MAX_IMAGES: usize = 8;
 const MAX_ARTICLE_IMAGES: usize = 32;
 const MAX_PIXELS: usize = 16 * 1024 * 1024;
-const MAX_BYTES: usize = 24 * 1024 * 1024;
+const MAX_BYTES: usize = 32 * 1024 * 1024;
 #[derive(Clone, Copy, Default, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub(super) enum Target {

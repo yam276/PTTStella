@@ -40,3 +40,10 @@ test('declared decoded frame pixels share one budget, including missing legacy m
  const unknown=add(undefined,-1);assert.equal(unknown.playing(),true);assert.equal(b.playing(),false);assert.equal(c.playing(),false);
  owner.destroy();assert.equal(owner.clean(),true);
 });
+test('a GIF above the previous playback budget can play without admitting a second expensive GIF',()=>{
+ const owner=create({document:{visibilityState:'visible'}});
+ const add=(cost,score)=>owner.add({image:{removeAttribute(){delete this.src;}},still:{},url:'blob:large',cost,score:()=>score});
+ const first=add(100_000_000,0),second=add(100_000_000,1);
+ assert.equal(first.playing(),true);assert.equal(second.playing(),false);
+ first.remove();assert.equal(second.playing(),true);owner.destroy();
+});
