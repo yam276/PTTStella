@@ -156,7 +156,7 @@ jobs:
           '
           DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-pttstella-synthetic-bus \
             cargo test --locked --features desktop --lib login::vault::tests::native_service_unavailable -- --ignored --exact
-      - name: Build native release downloads
+      - name: Build and verify native release downloads
         run: python tooling/bundle_release.py --out-dir dist/release
       - name: Retain Windows installer policy evidence
         if: always() && runner.os == 'Windows'

@@ -53,6 +53,37 @@ class PackageTests(unittest.TestCase):
                 bundle.macos_package(self.root, 'candidate', 'macos-x64')
         runner.assert_not_called()
 
+    def test_macos_disk_image_rejects_missing_shortcut_and_detaches(self):
+        app = self.root/'app'/'PTTStella.app'
+        app.mkdir(parents=True)
+        image = self.root/'candidate.dmg'
+        with patch.object(Path, 'symlink_to'), patch.object(bundle, 'run') as runner:
+            with self.assertRaisesRegex(RuntimeError, 'missing the /Applications shortcut'):
+                bundle.macos_disk_image(app, image)
+        runner.assert_called_with('hdiutil', 'detach', str(self.root/'mounted-dmg'))
+
+    def test_macos_dmg_failure_preserves_atomic_zip_delivery(self):
+        def fake_app(output):
+            app = output/'PTTStella.app'
+            (app/'Contents'/'Resources').mkdir(parents=True)
+            return {'app': str(app), 'architecture': 'arm64'}
+
+        def command(*args):
+            if args[:2] == ('git', 'rev-parse'):
+                return 'a'*40
+            if args[0] == 'ditto':
+                Path(args[-1]).write_bytes(b'synthetic ZIP')
+            return ''
+
+        with patch.object(bundle, 'native_platform', return_value='macos-arm64'), \
+                patch.object(bundle.bundle_macos, 'bundle', side_effect=fake_app), \
+                patch.object(bundle.bundle_common, 'copy_licenses'), \
+                patch.object(bundle, 'run', side_effect=command), \
+                patch.object(bundle, 'macos_disk_image', side_effect=RuntimeError('image failed')):
+            with self.assertRaisesRegex(RuntimeError, 'image failed'):
+                bundle.bundle(self.root)
+        self.assertEqual(list(self.root.iterdir()), [])
+
     def test_native_build_failure_leaves_no_release_downloads(self):
         with patch.object(bundle, 'native_platform', return_value='linux-x64'), \
                 patch.object(bundle, 'run', return_value='a'*40), \

@@ -5,6 +5,10 @@ PTTStella macOS 安裝說明
 請從 https://github.com/yam276/PTTStella/releases/latest 取得正式版本。
 Apple Silicon（M 系列）選 arm64；Intel Mac 選 x64。不需要安裝 Rust 或 Python。
 
+使用 DMG：
+1. 按兩下 DMG，把 PTTStella.app 拖到視窗中的「應用程式」捷徑。
+2. 退出磁碟映像，再從「應用程式」開啟 PTTStella。
+
 使用 ZIP：
 1. 按兩下 ZIP 解壓縮。
 2. 將 PTTStella.app 拖入 Finder 的「應用程式」，再從該處開啟。
@@ -30,9 +34,10 @@ Apple 官方說明：https://support.apple.com/zh-tw/102445
 
 English
 
-Download arm64 for Apple Silicon or x64 for Intel. Extract the ZIP and drag
-PTTStella.app into Applications, then open it from there. No Rust or Python
-installation is required.
+Download arm64 for Apple Silicon or x64 for Intel. Open the DMG and drag
+PTTStella.app onto the Applications shortcut, or extract the ZIP and move the app
+to Applications. If using a DMG, eject the disk image before opening PTTStella
+from Applications. No Rust or Python installation is required.
 
 This App is ad-hoc signed, not Developer ID signed or notarized. If blocked on
 first launch, close the alert, open System Settings > Privacy & Security,

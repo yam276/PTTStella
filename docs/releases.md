@@ -31,11 +31,13 @@
 | 平台 | Runner | 下載 |
 | --- | --- | --- |
 | Windows x64 | `windows-2025` | Setup `.exe` 與免安裝 `-portable.exe`；兩者內嵌 CRT／資產／授權，Setup 可補裝 WebView2 |
-| macOS Apple Silicon | `macos-15` | 包含 `.app` 的 ZIP |
-| macOS Intel | `macos-15-intel` | 包含 `.app` 的 ZIP |
+| macOS Apple Silicon | `macos-15` | 拖曳安裝 DMG、包含 `.app` 的 ZIP |
+| macOS Intel | `macos-15-intel` | 拖曳安裝 DMG、包含 `.app` 的 ZIP |
 | Linux x64 | `ubuntu-24.04` | `.deb` 與 `.tar.gz` |
 
-每個架構有來源 manifest，列出 commit、profile、相依環境及下載檔 SHA-256；公開 Release 的 `SHA256SUMS` 只涵蓋六個平台下載；manifest 及其逐檔校驗保留在 Actions artifacts，不公開附加。下載採完整白名單核對，任何缺檔、混入額外檔案、來源不符、dirty checkout 或雜湊不符均禁止發佈。授權資料從同一 locked Cargo dependency graph 收集。Linux `.deb` 以 `dpkg-shlibdeps` 讀取實際 ELF 依賴；不是通用靜態 Linux 程式，使用方式見 [Linux 套件說明](linux-package.txt)。
+每個架構有來源 manifest，列出 commit、profile、相依環境及下載檔 SHA-256；公開 Release 的 `SHA256SUMS` 涵蓋八個平台下載。Manifest 及其逐檔校驗保留在 Actions artifacts。下載採完整白名單核對，任何缺檔、混入額外檔案、來源不符、dirty checkout 或雜湊不符均禁止發佈。授權資料從同一 locked Cargo dependency graph 收集。Linux `.deb` 以 `dpkg-shlibdeps` 讀取實際 ELF 依賴，使用方式見 [Linux 套件說明](linux-package.txt)。
+
+macOS DMG 和 ZIP 使用同一個已簽章的 App。打包器會驗證磁碟映像，唯讀掛載後確認「應用程式」捷徑指向 `/Applications` 並驗證 App 簽章，卸載成功後才交付兩種檔案。安裝步驟見 [macOS 發佈說明](macos-release.txt)。
 
 所有 runner 執行 Python 打包／政策測試、docs、JS、core、desktop lib／bin、多程序保存整合測試與 desktop Clippy，再以 release profile 編譯。Windows／macOS 沿用原生打包驗證，Linux 核對 ELF／系統 shared libraries／Debian metadata。CI 不啟動產品連線，不把無 GUI 的單元與打包測試當成原生輸入、像素、IME 或實站登入驗收。
 

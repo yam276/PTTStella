@@ -15,8 +15,8 @@ import tomllib
 ROOT = Path(__file__).resolve().parent.parent
 VERSION = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?')
 SHA = re.compile(r'[0-9a-f]{40}')
-PLATFORMS = {'windows-x64': ('-setup.exe', '-portable.exe'), 'macos-arm64': ('.zip',),
-             'macos-x64': ('.zip',), 'linux-x64': ('.deb', '.tar.gz')}
+PLATFORMS = {'windows-x64': ('-setup.exe', '-portable.exe'), 'macos-arm64': ('.dmg', '.zip'),
+             'macos-x64': ('.dmg', '.zip'), 'linux-x64': ('.deb', '.tar.gz')}
 
 
 @total_ordering
@@ -297,7 +297,7 @@ def publish(context, directory, github):
         if release is None:
             notes = temporary/'notes.md'
             notes.write_text(
-                'Windows x64 Setup / portable EXE · macOS Apple Silicon / Intel ZIP · Linux x64 DEB / tar.gz\n\n'
+                'Windows x64 Setup / portable EXE · macOS Apple Silicon / Intel DMG / ZIP · Linux x64 DEB / tar.gz\n\n'
                 'SHA-256 checksums: `SHA256SUMS`. Source: `'+context['commit']+'`.\n\n'
                 'macOS builds are ad-hoc signed and not notarized; Windows builds are not '
                 'Authenticode signed. Windows Setup installs Evergreen WebView2 only if missing '

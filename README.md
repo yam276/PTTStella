@@ -27,7 +27,7 @@
 | 平台 | 安裝方式 |
 | --- | --- |
 | Windows 10／11 x64 | 執行 `-setup.exe` 安裝，或使用 `-portable.exe`。需要 WebView2，安裝版可協助補裝。[安裝說明](docs/windows-installer.md) |
-| macOS | Apple Silicon 選 `arm64`，Intel 選 `x64`。解壓縮 ZIP 後，把 `PTTStella.app` 拖進「應用程式」。[安裝說明](docs/macos-release.txt) |
+| macOS | Apple Silicon 選 `arm64`，Intel 選 `x64`。打開 DMG 或解壓縮 ZIP 後，把 `PTTStella.app` 拖進「應用程式」。[安裝說明](docs/macos-release.txt) |
 | Linux x64 | 提供 `.deb` 和 `.tar.gz`，以 Ubuntu 24.04 為目標。[安裝說明](docs/linux-package.txt) |
 
 **macOS 首次開啟若出現開發者驗證提示**，先按「完成」關閉提示，再到「系統設定 → 隱私權與安全性 → 安全性」找到 PTTStella，按「強制打開」並依提示確認。[Apple 說明](https://support.apple.com/zh-tw/102445)
