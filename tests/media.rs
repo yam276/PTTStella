@@ -24,8 +24,35 @@ fn hover_lease_reauthorizes_only_complete_unchanged_source_without_new_input() {
         revision: 3,
         ..stamp
     };
+    let old = lease.clone();
     assert!(lease.renew(fresh, true, std::slice::from_ref(&link)));
     assert_eq!(lease.stamp, fresh);
+    lease.sequence = 9;
+    lease.index = 3;
+    assert!(lease.same_source(&old));
+    for changed in [
+        Link {
+            start: 2,
+            ..link.clone()
+        },
+        Link {
+            end: 25,
+            ..link.clone()
+        },
+        Link {
+            row: 4,
+            ..link.clone()
+        },
+        Link {
+            url: "https://example.com/a.png?different=1".into(),
+            ..link.clone()
+        },
+    ] {
+        assert!(!lease.same_source(&Lease {
+            link: changed,
+            ..old.clone()
+        }));
+    }
     for (stamp, complete, links) in [
         (
             Stamp {
@@ -54,6 +81,12 @@ fn hover_lease_reauthorizes_only_complete_unchanged_source_without_new_input() {
         ),
         (fresh, true, vec![]),
     ] {
+        if stamp.generation != fresh.generation || stamp.input_epoch != fresh.input_epoch {
+            assert!(!lease.same_source(&Lease {
+                stamp,
+                ..old.clone()
+            }));
+        }
         assert!(!lease.renew(stamp, complete, &links));
     }
 }
