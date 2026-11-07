@@ -81,7 +81,16 @@ impl Decoder {
                 let mut decoder = image::codecs::gif::GifDecoder::new(input(&source))
                     .map_err(|_| Error::Format)?;
                 admit(&mut decoder, &source)?;
-                let looping = decoder.loop_count();
+                // image's GIF adapter conflates absent repetition with infinite
+                // and exposes repeats rather than total cycles. Our admitted
+                // record walker also sees extensions after the first frame.
+                let looping = match super::loader::gif_animation(&source.bytes)?.1 {
+                    None => once(),
+                    Some(0) => LoopCount::Infinite,
+                    Some(n) => LoopCount::Finite(
+                        std::num::NonZeroU32::new(u32::from(n) + 1).ok_or(Error::Format)?,
+                    ),
+                };
                 (Source::Animation(decoder.into_frames()), looping)
             }
             "image/png" => {
@@ -148,7 +157,11 @@ impl Decoder {
                 let micros = u64::from(numerator) * 1000 / u64::from(denominator);
                 (
                     frame.into_buffer(),
-                    Duration::from_micros(micros).max(Duration::from_millis(20)),
+                    if micros <= 10_000 {
+                        Duration::from_millis(100)
+                    } else {
+                        Duration::from_micros(micros)
+                    },
                 )
             }
         };
@@ -209,6 +222,50 @@ mod tests {
             assert_eq!(frame.delay, Duration::from_millis(300));
         }
         assert!(decoder.next_frame().unwrap().is_none());
+    }
+    #[test]
+    fn gif_repetition_counts_initial_cycle_and_reads_late_extensions() {
+        let once = include_bytes!("../../tests/fixtures/media/once.gif");
+        let twice = include_bytes!("../../tests/fixtures/media/twice.gif");
+        for (bytes, total) in [(once.as_slice(), 1), (twice.as_slice(), 2)] {
+            let decoder = Decoder::new(payload(bytes, "image/gif", true)).unwrap();
+            assert!(matches!(decoder.looping, LoopCount::Finite(n) if n.get() == total));
+        }
+        // Put an independently authored repeat=2 extension after both images.
+        let mut late = once[..once.len() - 1].to_vec();
+        late.extend_from_slice(b"\x21\xff\x0bNETSCAPE2.0\x03\x01\x02\0\0\x3b");
+        let decoder = Decoder::new(payload(&late, "image/gif", true)).unwrap();
+        assert!(matches!(decoder.looping, LoopCount::Finite(n) if n.get() == 3));
+        // The same application-looking bytes in a comment must not cause loops.
+        let mut comment = once[..once.len() - 1].to_vec();
+        comment.extend_from_slice(b"\x21\xfe\x13\x21\xff\x0bNETSCAPE2.0\x03\x01\0\0\0\0\x3b");
+        let decoder = Decoder::new(payload(&comment, "image/gif", true)).unwrap();
+        assert!(matches!(decoder.looping, LoopCount::Finite(n) if n.get() == 1));
+    }
+    #[test]
+    fn gif_short_delays_follow_browser_timing_instead_of_flashing_at_50hz() {
+        let mut decoder = Decoder::new(payload(
+            include_bytes!("../../tests/fixtures/media/once.gif"),
+            "image/gif",
+            true,
+        ))
+        .unwrap();
+        for _ in 0..2 {
+            assert_eq!(
+                decoder.next_frame().unwrap().unwrap().delay,
+                Duration::from_millis(100)
+            );
+        }
+        let mut decoder = Decoder::new(payload(
+            include_bytes!("../../tests/fixtures/media/twice.gif"),
+            "image/gif",
+            true,
+        ))
+        .unwrap();
+        assert_eq!(
+            decoder.next_frame().unwrap().unwrap().delay,
+            Duration::from_millis(30)
+        );
     }
     #[test]
     fn admitted_dimensions_are_rechecked_before_decoding() {

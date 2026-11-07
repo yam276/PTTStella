@@ -12,11 +12,12 @@ def png():
     return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 64, 32, 8, 2, 0, 0, 0))
             + chunk(b'IDAT', zlib.compress((b'\0' + row) * 32)) + chunk(b'IEND', b''))
 
-def gif():
+def gif(repeat=0, delays=(30, 30)):
     data = bytearray(b'GIF89a' + struct.pack('<HHBBB', 64, 32, 0x80, 0, 0) + bytes([255, 0, 0, 0, 0, 255]))
-    data.extend(b'\x21\xff\x0bNETSCAPE2.0\x03\x01\0\0\0')
-    for colour in [0, 1]:
-        data.extend(b'\x21\xf9\x04\x04' + struct.pack('<H', 30) + b'\0\0')
+    if repeat is not None:
+        data.extend(b'\x21\xff\x0bNETSCAPE2.0\x03\x01' + struct.pack('<H', repeat) + b'\0')
+    for colour, delay in zip([0, 1], delays):
+        data.extend(b'\x21\xf9\x04\x04' + struct.pack('<H', delay) + b'\0\0')
         data.extend(b'\x2c' + struct.pack('<HHHHB', 0, 0, 64, 32, 0) + b'\x02')
         # Frequent clears keep every LZW code three bits wide, independently decodable.
         codes = [code for _ in range(64 * 32) for code in (4, colour)] + [5]
@@ -44,3 +45,5 @@ if __name__ == '__main__':
     ROOT.mkdir(parents=True, exist_ok=True)
     (ROOT / 'colours.png').write_bytes(png())
     (ROOT / 'motion.gif').write_bytes(gif())
+    (ROOT / 'once.gif').write_bytes(gif(repeat=None, delays=(0, 1)))
+    (ROOT / 'twice.gif').write_bytes(gif(repeat=1, delays=(3, 3)))

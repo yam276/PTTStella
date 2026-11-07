@@ -302,47 +302,70 @@ fn inspect(bytes: Vec<u8>) -> Result<Image, Error> {
     })
 }
 
+// Shared bounded GIF record walker; no pixel decompression or second parser.
+// None means no Netscape/AnimExt repetition request, Some(0) means infinite.
+pub(super) fn gif_animation(bytes: &[u8]) -> Result<(usize, Option<u16>), Error> {
+    if !gif_signature(bytes) || bytes.len() > MAX_GIF_BYTES {
+        return Err(Error::Format);
+    }
+    let mut frames = 0usize;
+    let mut repeats = None;
+    let packed = *bytes.get(10).ok_or(Error::Format)?;
+    let palette = |flags: u8| {
+        if flags & 0x80 != 0 {
+            3 * (2usize << (flags & 7))
+        } else {
+            0
+        }
+    };
+    let mut at = 13 + palette(packed);
+    loop {
+        match bytes.get(at) {
+            Some(0x3b) if frames > 0 => return Ok((frames, repeats)),
+            Some(0x21) => {
+                // Only application extensions, never a byte pattern inside
+                // compressed pixels/comments, can authorize repetition.
+                if bytes.get(at + 1..at + 3) == Some(&[0xff, 11])
+                    && bytes
+                        .get(at + 3..at + 14)
+                        .is_some_and(|id| id == b"NETSCAPE2.0" || id == b"ANIMEXTS1.0")
+                    && let Some(&[3, 1, low, high]) = bytes.get(at + 14..at + 18)
+                {
+                    repeats = Some(u16::from_le_bytes([low, high]));
+                }
+                at += 2;
+            }
+            Some(0x2c) => {
+                frames += 1;
+                if frames > 512 {
+                    return Err(Error::Dimensions);
+                }
+                let packed = *bytes.get(at + 9).ok_or(Error::Format)?;
+                at += 10 + palette(packed) + 1; // descriptor, local palette, LZW minimum size
+            }
+            _ => return Err(Error::Format),
+        }
+        loop {
+            let length = usize::from(*bytes.get(at).ok_or(Error::Format)?);
+            at += 1;
+            if length == 0 {
+                break;
+            }
+            if length > bytes.len().saturating_sub(at) {
+                return Err(Error::Format);
+            }
+            at += length;
+        }
+    }
+}
+
 // Count format records without decompressing pixels. Bound browser animation work
 // before creating a source; the browser remains responsible for actual decoding.
 fn frame_count(bytes: &[u8], mime: &str) -> Result<usize, Error> {
     let mut frames = 0usize;
     let mut declared = 0usize;
     if mime == "image/gif" {
-        let packed = *bytes.get(10).ok_or(Error::Format)?;
-        let palette = |flags: u8| {
-            if flags & 0x80 != 0 {
-                3 * (2usize << (flags & 7))
-            } else {
-                0
-            }
-        };
-        let mut at = 13 + palette(packed);
-        loop {
-            match bytes.get(at) {
-                Some(0x3b) if frames > 0 => return Ok(frames),
-                Some(0x21) => at += 2,
-                Some(0x2c) => {
-                    frames += 1;
-                    if frames > 512 {
-                        return Err(Error::Dimensions);
-                    }
-                    let packed = *bytes.get(at + 9).ok_or(Error::Format)?;
-                    at += 10 + palette(packed) + 1; // descriptor, local palette, LZW minimum size
-                }
-                _ => return Err(Error::Format),
-            }
-            loop {
-                let length = usize::from(*bytes.get(at).ok_or(Error::Format)?);
-                at += 1;
-                if length == 0 {
-                    break;
-                }
-                if length > bytes.len().saturating_sub(at) {
-                    return Err(Error::Format);
-                }
-                at += length;
-            }
-        }
+        return gif_animation(bytes).map(|(frames, _)| frames);
     }
     if mime == "image/webp" || mime == "image/png" {
         let mut at = if mime == "image/webp" {
