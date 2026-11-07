@@ -6,6 +6,8 @@ pub mod hover;
 #[cfg(feature = "desktop")]
 pub mod loader;
 #[cfg(feature = "desktop")]
+pub mod native_image;
+#[cfg(feature = "desktop")]
 pub mod preview;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
