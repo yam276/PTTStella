@@ -172,6 +172,10 @@ impl InlineImages {
     pub fn active(&self) -> bool {
         self.identity.is_some()
     }
+    /// Presentation adapters may discard a late automatic result after opt-out.
+    pub fn automatic_batch(&self) -> bool {
+        self.auto_batch
+    }
     pub fn set_auto_expand(&mut self, enabled: bool) -> bool {
         self.auto_expand = enabled;
         if !enabled && self.auto_batch {
@@ -371,6 +375,18 @@ impl InlineImages {
         let key = self.targets.iter().position(|url| *url == target.url)?;
         self.images.get(&key).cloned()
     }
+    /// Retain only a successfully decoded original from this still-active batch.
+    /// Uses the existing loader TTL/no-store/LRU limits; no second byte cache.
+    pub fn decoded(&mut self, batch: u64, index: usize, loaded: &Loaded) {
+        if self.batch() == Some(batch)
+            && self
+                .images
+                .get(&index)
+                .is_some_and(|image| Arc::ptr_eq(image, &loaded.image))
+        {
+            self.loader.retain(loaded);
+        }
+    }
     fn start_next(&mut self) {
         self.job = self
             .queue
@@ -558,6 +574,26 @@ mod tests {
         assert_eq!(owner.targets, vec!["http://127.0.0.1:9/2.png"]);
         assert!(owner.queue.is_empty());
     }
+    #[test]
+    fn automatic_origin_tracks_opt_out_and_explicit_all_promotion() {
+        let paint = page();
+        let mut projection = Projection::of(&paint);
+        projection.article_id = Some(1);
+        let mut owner = InlineImages::default();
+        owner.set_auto_expand(true);
+        assert!(owner.follow_projection(&projection).unwrap().is_some());
+        assert!(owner.automatic_batch());
+        assert!(owner.set_auto_expand(false));
+        assert!(!owner.automatic_batch() && !owner.active());
+        owner.set_auto_expand(true);
+        owner.follow_projection(&projection).unwrap();
+        owner.open_projection(&projection, Target::All).unwrap();
+        assert!(!owner.automatic_batch());
+        assert!(!owner.set_auto_expand(false));
+        assert!(owner.active());
+        owner.close();
+        assert!(!owner.automatic_batch());
+    }
     #[tokio::test]
     async fn opening_one_image_never_polls_the_other_page_downloads() {
         use tokio::{
@@ -590,6 +626,56 @@ mod tests {
         assert!(owner.update().await.result.is_ok());
         assert!(owner.job.is_none());
         assert!(owner.queue.is_empty());
+        owner.close();
+        server.await.unwrap();
+    }
+    #[tokio::test]
+    async fn only_current_decode_ack_retains_the_original_across_scope_close() {
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            for _ in 0..3 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = [0; 2048];
+                let count = socket.read(&mut request).await.unwrap();
+                assert!(
+                    String::from_utf8_lossy(&request[..count])
+                        .starts_with("GET /fixture.png HTTP/1.1")
+                );
+                let bytes = include_bytes!("../../tests/fixtures/media/colours.png");
+                socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {}\r\nCache-Control: max-age=60\r\nConnection: close\r\n\r\n",bytes.len()).as_bytes()).await.unwrap();
+                socket.write_all(bytes).await.unwrap();
+            }
+            assert!(
+                tokio::time::timeout(std::time::Duration::from_millis(100), listener.accept())
+                    .await
+                    .is_err()
+            );
+        });
+        let mut paint = page();
+        paint.links.truncate(1);
+        paint.links[0].url = format!("http://{address}/fixture.png");
+        let mut owner = InlineImages::default();
+        let first = owner.open(&paint, Target::All).unwrap().unwrap();
+        let first_image = owner.update().await.result.unwrap();
+        owner.close(); // No decoder ACK: must download again.
+        owner.open(&paint, Target::All).unwrap();
+        let second = owner.update().await.result.unwrap();
+        assert!(!second.cached && !Arc::ptr_eq(&first_image.image, &second.image));
+        owner.decoded(first.batch, 0, &first_image); // Old batch cannot admit bytes.
+        owner.close();
+        let third = owner.open(&paint, Target::All).unwrap().unwrap();
+        let third_image = owner.update().await.result.unwrap();
+        assert!(!third_image.cached);
+        owner.decoded(third.batch, 0, &third_image);
+        owner.close();
+        owner.open(&paint, Target::All).unwrap();
+        let cached = owner.update().await.result.unwrap();
+        assert!(cached.cached && Arc::ptr_eq(&third_image.image, &cached.image));
         owner.close();
         server.await.unwrap();
     }
