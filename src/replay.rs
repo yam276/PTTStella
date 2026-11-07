@@ -91,6 +91,26 @@ pub fn full_load_page(page: usize, origin: Option<&str>) -> Result<Vec<u8>, Stri
 pub fn long_load_page(page: usize, origin: Option<&str>) -> Result<Vec<u8>, String> {
     reading_load_page(page, 38, true, origin)
 }
+pub fn native_article_input_page(page: usize) -> Result<Vec<u8>, String> {
+    reading_load_page(page, 2, false, Some("http://127.0.0.1:9"))
+}
+/// Self-authored output fixture: history-only dual-colour text and a redacted
+/// push URL; the footer is an OSC 8 link independent of its visible label.
+pub fn native_article_output_page(page: usize) -> Result<Vec<u8>, String> {
+    let mut bytes = native_article_input_page(page)?;
+    if page == 1 {
+        let patch = "\x1b[1;1H\x1b[2K\x1b[0m作者  Alice                                      看板  Test\x1b[5;1H\x1b[2K\x1b[1;37m推 \x1b[1;33mBlocked\x1b[0;33m:\x1b[0;37m hidden https://example.com/private\x1b[5;67H 01/01 12:34\x1b[6;1H\x1b[2K\x1b[0mSplit \x1b[31;44m";
+        bytes.extend(encoding::encode(patch).map_err(|e| e.to_string())?);
+        bytes.extend(b"\xa4\x1b[32;45m\xa4\x1b[0m");
+    }
+    bytes.extend(
+        encoding::encode(
+            "\x1b[24;2H\x1b[30;47m\x1b]8;;https://example.com/footer\x1b\\瀏覽\x1b]8;;\x1b\\\x1b[0m\x1b[24;80H",
+        )
+        .map_err(|e| e.to_string())?,
+    );
+    Ok(bytes)
+}
 fn reading_load_page(
     page: usize,
     total: usize,
@@ -131,4 +151,78 @@ fn reading_load_page(
     }
     text.push_str(&format!("\x1b[24;1H\x1b[30;47m 瀏覽 第 {page}/{total} 頁 ({}%) 目前顯示: 第 {first}~{} 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H",page*100/total,first+22));
     encoding::encode(&text).map_err(|e| e.to_string())
+}
+
+#[cfg(all(test, feature = "desktop"))]
+mod reading_interaction_tests {
+    use super::*;
+    use crate::{
+        article_cache::{ArticleCache, LoadState},
+        presentation,
+        screen::Screen,
+    };
+    #[test]
+    fn output_fixture_keeps_reading_commands_push_styles_and_both_colour_halves() {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&native_article_output_page(1).unwrap());
+        let frame = screen.frame();
+        assert!(matches!(
+            crate::navigation::analyze(&frame),
+            crate::navigation::Context::ArticleReading {
+                first_line: 1,
+                last_line: 23,
+                percent: 50
+            }
+        ));
+        let pushes = crate::filters::pushes(&frame);
+        assert_eq!(pushes.len(), 1);
+        assert_eq!((pushes[0].row, pushes[0].id.as_str()), (4, "Blocked"));
+        let split = frame
+            .glyphs
+            .iter()
+            .find(|g| g.row == 5 && g.col == 6)
+            .unwrap();
+        assert_eq!(split.text, "中");
+        assert_eq!(
+            (split.left.fg, split.left.bg, split.right.fg, split.right.bg),
+            (1, 4, 2, 5)
+        );
+        let links = crate::links::detect(&frame);
+        assert!(
+            links
+                .iter()
+                .any(|l| l.row == 23 && l.start == 1 && l.url == "https://example.com/footer")
+        );
+        screen.feed(&native_article_output_page(2).unwrap());
+        assert!(matches!(
+            crate::navigation::analyze(&screen.frame()),
+            crate::navigation::Context::ArticleReading {
+                first_line: 23,
+                last_line: 45,
+                percent: 100
+            }
+        ));
+    }
+
+    #[test]
+    fn output_fixture_joins_two_pages_without_changing_the_overlap_background() {
+        let mut cache = ArticleCache::default();
+        let mut screen = Screen::new(80, 24).unwrap();
+        let display = parity_display_profile().resolve().unwrap();
+        for n in 1..=2 {
+            screen.feed(&native_article_output_page(n).unwrap());
+            let frame = screen.frame();
+            let mut paint = presentation::sample_packet(&frame, &display);
+            paint.connected = true;
+            paint.ptt_features = true;
+            paint.generation = 1;
+            cache.capture_source(&paint, Some(&frame));
+        }
+        assert_eq!(
+            cache
+                .progress()
+                .map(|(_, first, last, state)| (first, last, state)),
+            Some((1, 45, Some(LoadState::Complete)))
+        );
+    }
 }
