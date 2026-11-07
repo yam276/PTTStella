@@ -1,4 +1,12 @@
 use super::*;
+use pttstella::{
+    connection::{Phase, View},
+    filters,
+    media::hover::Lease,
+    navigation::Stamp,
+    selection,
+    settings::{ArticleMode, DisplaySettings},
+};
 use pttstella::{screen::Screen, selection::Selection};
 
 fn view() -> View {
@@ -1127,7 +1135,7 @@ fn full_article_loading_does_not_require_ack_preserves_cancelled_data_and_never_
     assert!(state.next_full_page(&view).is_none());
     assert!(state.set_article_mode(ArticleMode::Terminal));
     displayed(&mut state, &view);
-    assert!(state.displayed.as_ref().unwrap().article.is_none());
+    assert!(state.last_displayed().unwrap().article.is_none());
     assert!(!state.full_load_active());
     assert!(state.next_full_page(&view).is_none());
     assert!(!state.full_load_action(view.generation, id, true, &view));
@@ -1590,14 +1598,7 @@ fn refresh_holds_the_acknowledged_article_until_verified_reentry_and_cancels_on_
     state.update(&view);
     assert!(state.queue(&view, false, &Default::default()).is_none());
     assert_eq!(
-        state
-            .displayed
-            .as_ref()
-            .unwrap()
-            .article
-            .as_ref()
-            .unwrap()
-            .id,
+        state.last_displayed().unwrap().article.as_ref().unwrap().id,
         id
     );
     source.feed(
@@ -1977,4 +1978,52 @@ fn reply_roles_do_not_change_filtered_frames_export_or_merged_ids_and_reset_with
                 .is_empty()
         );
     }
+}
+
+#[test]
+fn native_row_windows_use_the_final_merged_projection_and_reject_old_policy() {
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut v = view();
+    let identity = displayed(&mut state, &v);
+    let source = state
+        .article_source(&v, &DisplaySettings::default())
+        .unwrap();
+    let tile = state.article_window(&source, 6..7).unwrap();
+    let expected = expected_merged_fixture(&v);
+    assert_eq!(
+        selection::extract(&tile.paint.frame, &Selection::Line { row: 0 })
+            .unwrap()
+            .text,
+        selection::extract(&expected, &Selection::Line { row: 6 })
+            .unwrap()
+            .text
+    );
+    assert_eq!(
+        tile.body_rows,
+        state.current(identity, &v).unwrap().frame.rows - 1
+    );
+    assert!(
+        tile.paint
+            .frame
+            .glyphs
+            .iter()
+            .filter(|g| g.row == 0 && (3..8).contains(&g.col))
+            .all(|g| g.text == "█")
+    );
+    state.replace_rules(filters::Rules::default().edit("Alice", "", false).unwrap());
+    assert!(state.article_window(&source, 6..7).is_none());
+    displayed(&mut state, &v);
+    let masked = state
+        .article_source(&v, &DisplaySettings::default())
+        .unwrap();
+    let tile = state.article_window(&masked, 6..7).unwrap();
+    assert!(
+        !selection::extract(&tile.paint.frame, &Selection::Line { row: 0 })
+            .unwrap()
+            .text
+            .contains("ALICE")
+    );
+    v.generation += 1;
+    state.update(&v);
+    assert!(state.article_window(&masked, 6..7).is_none());
 }

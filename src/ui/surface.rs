@@ -1837,7 +1837,7 @@ async fn run(
                             }
                             Effect::Browse(intent) => {
                                 if let Some(packet)=screen.reading_move(&view,intent) {
-                                    eval.send(packet).map_err(|e|e.to_string())?;
+                                    eval.send(Packet::from(packet)).map_err(|e|e.to_string())?;
                                     continue;
                                 }
                                 screen.interrupt_full_load();if commands.is(CommandKind::Preload) {cancel_commands(commands,&eval)?;}
@@ -1864,7 +1864,7 @@ async fn run(
                             Effect::Native(bytes) => bytes,
                         };
                         if let Some(intent)=super::article_cache::reading_intent(&bytes) && let Some(packet)=screen.reading_move(&view,intent) {
-                            eval.send(packet).map_err(|e|e.to_string())?;continue;
+                            eval.send(Packet::from(packet)).map_err(|e|e.to_string())?;continue;
                         }
                         if screen.retained_relative_key(&key) {eval.send(Packet::Notice(pttstella::msg!("article-updates-retained"))).map_err(|e|e.to_string())?;continue;}
                         screen.article_input(&view,&bytes);

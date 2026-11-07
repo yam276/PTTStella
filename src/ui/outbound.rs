@@ -8,6 +8,16 @@ use pttstella::{
 use serde::Serialize;
 use std::collections::BTreeMap;
 
+impl From<pttstella::surface_state::ReadingMove> for Packet<'static> {
+    fn from(value: pttstella::surface_state::ReadingMove) -> Self {
+        Self::ReadingMove {
+            generation: value.generation,
+            article: value.article,
+            intent: value.intent,
+        }
+    }
+}
+
 #[derive(Serialize)]
 #[serde(tag = "kind", content = "payload", rename_all = "snake_case")]
 pub(super) enum Packet<'a> {

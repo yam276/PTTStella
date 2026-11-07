@@ -999,13 +999,7 @@ pub(super) struct ProbePixels {
     pub(super) zoom_samples: Vec<[u32; 2]>,
 }
 
-#[derive(Debug, serde::Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub(super) enum CopyTarget {
-    Selection { request: u64 },
-    SelectionAnsi { request: u64 },
-    Link { index: usize },
-}
+pub(super) use pttstella::surface_state::CopyTarget;
 
 #[cfg(test)]
 mod article_load_tests {

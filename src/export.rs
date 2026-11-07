@@ -8,6 +8,46 @@ pub const ROW_HEIGHT: u32 = HEIGHT / ROWS as u32;
 pub const MAX_PNG_BYTES: usize = 3 * 1024 * 1024;
 pub const MAX_BASE64_BYTES: usize = MAX_PNG_BYTES.div_ceil(3) * 4;
 
+#[cfg(feature = "desktop")]
+#[derive(Clone)]
+pub struct Lease {
+    stamp: crate::navigation::Stamp,
+    require_input_epoch: bool,
+    revoked: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+#[cfg(feature = "desktop")]
+impl Lease {
+    pub fn new(stamp: crate::navigation::Stamp, require_input_epoch: bool) -> Self {
+        Self {
+            stamp,
+            require_input_epoch,
+            revoked: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+    pub fn require_input_epoch(mut self, epoch: u64) -> Self {
+        self.require_input_epoch = true;
+        self.stamp.input_epoch = epoch;
+        self
+    }
+    pub fn revoke(&self) {
+        self.revoked
+            .store(true, std::sync::atomic::Ordering::Release);
+    }
+    pub fn check(&self, view: &crate::connection::View) -> Result<(), String> {
+        if view.output_pending
+            || self.revoked.load(std::sync::atomic::Ordering::Acquire)
+            || (view.generation, view.frame.revision)
+                != (self.stamp.generation, self.stamp.revision)
+            || self.require_input_epoch && view.input_epoch != self.stamp.input_epoch
+        {
+            Err(crate::msg!("export-stale"))
+        } else {
+            Ok(())
+        }
+    }
+}
+
 /// This checks bridge shape/budget, not arbitrary PNG image validity.
 pub fn check_export_header(bytes: &[u8], rows: &Range<usize>) -> Result<(), String> {
     if rows.start >= rows.end || rows.end > ROWS {

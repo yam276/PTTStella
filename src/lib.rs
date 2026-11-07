@@ -4,6 +4,8 @@ pub mod article_cache;
 pub mod article_navigation;
 pub mod article_refresh;
 pub mod article_target;
+#[cfg(feature = "desktop")]
+pub mod article_updates;
 pub mod board_navigation;
 pub mod bookmarks;
 pub mod composer;
@@ -37,6 +39,8 @@ pub mod settings;
 pub mod sites;
 #[cfg(feature = "desktop")]
 pub mod storage;
+#[cfg(feature = "desktop")]
+pub mod surface_state;
 pub mod telnet;
 pub mod text;
 #[cfg(feature = "desktop")]
