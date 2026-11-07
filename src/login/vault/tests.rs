@@ -351,3 +351,32 @@ fn native_service_unavailable() {
         b"only native test",
     );
 }
+
+#[test]
+fn candidate_and_candidate_probe_keep_distinct_services_without_changing_legacy_identity() {
+    let product = Vault::for_scope(Scope::Product);
+    let probe = Vault::for_scope(Scope::SyntheticProbe);
+    let candidate = Vault::for_scope(Scope::SlintResearch);
+    let candidate_probe = Vault::for_scope(Scope::SlintSyntheticProbe);
+    assert_eq!(
+        product.service,
+        "io.github.yam276.PTTStella.login.ws.ptt.cc.v1"
+    );
+    assert_eq!(
+        probe.service,
+        "io.github.yam276.PTTStella.login.synthetic-probe.v1"
+    );
+    assert_eq!(Vault::new(false).service, product.service);
+    assert_eq!(Vault::new(true).service, probe.service);
+    let services = [
+        product.service,
+        probe.service,
+        candidate.service,
+        candidate_probe.service,
+    ];
+    for (i, service) in services.iter().enumerate() {
+        for other in &services[i + 1..] {
+            assert_ne!(service, other);
+        }
+    }
+}

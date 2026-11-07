@@ -39,6 +39,15 @@ impl Drop for Job {
 pub struct Vault {
     service: String,
 }
+/// Data identities stay explicit while the native candidate is evaluated.
+/// Switching the candidate to the product service is a separate migration step.
+#[derive(Clone, Copy)]
+pub enum Scope {
+    Product,
+    SyntheticProbe,
+    SlintResearch,
+    SlintSyntheticProbe,
+}
 pub enum Action {
     Open,
     Submit {
@@ -75,11 +84,23 @@ pub const fn supported() -> bool {
 
 impl Vault {
     pub fn new(probe: bool) -> Self {
+        Self::for_scope(if probe {
+            Scope::SyntheticProbe
+        } else {
+            Scope::Product
+        })
+    }
+    pub fn for_scope(scope: Scope) -> Self {
         Self {
-            service: if probe {
-                "io.github.yam276.PTTStella.login.synthetic-probe.v1"
-            } else {
-                "io.github.yam276.PTTStella.login.ws.ptt.cc.v1"
+            service: match scope {
+                Scope::Product => "io.github.yam276.PTTStella.login.ws.ptt.cc.v1",
+                Scope::SyntheticProbe => "io.github.yam276.PTTStella.login.synthetic-probe.v1",
+                Scope::SlintResearch => {
+                    "io.github.yam276.PTTStella.slint-research.login.ws.ptt.cc.v1"
+                }
+                Scope::SlintSyntheticProbe => {
+                    "io.github.yam276.PTTStella.slint-research.login.synthetic-probe.v1"
+                }
             }
             .into(),
         }
