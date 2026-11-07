@@ -223,6 +223,93 @@ fn displayed(state: &mut SurfaceState, view: &View) -> Identity {
     identity
 }
 #[test]
+fn finding_requires_current_ack_epoch_and_filtered_cells_and_releases_on_foreign_scope() {
+    use pttstella::article_find::Action;
+    let mut view = view();
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(&pttstella::replay::native_article_find_page().unwrap());
+    view.frame = screen.frame();
+    let rules = filters::Rules::default()
+        .edit_policy("Blocked", "", filters::Policy::MaskRow, false)
+        .unwrap();
+    let mut state = SurfaceState::new(rules);
+    let pending = Identity::of(
+        state
+            .queue(&view, false, &DisplaySettings::default())
+            .unwrap(),
+    );
+    assert!(!state.find_action(pending, view.stamp(), 1, Action::Open, &view));
+    state.acknowledge(pending).unwrap();
+    assert!(state.find_action(pending, view.stamp(), 2, Action::Open, &view));
+    assert!(state.find_action(
+        pending,
+        view.stamp(),
+        3,
+        Action::Edit {
+            query: "中".into()
+        },
+        &view
+    ));
+    assert_eq!(state.find().reply(0).total, 3);
+    let original = state.last_displayed().unwrap().frame.clone();
+    let mut stale = view.stamp();
+    stale.input_epoch += 1;
+    assert!(!state.find_action(
+        pending,
+        stale,
+        4,
+        Action::Edit {
+            query: "hidden".into()
+        },
+        &view
+    ));
+    let old_stamp = view.stamp();
+    view.input_pending = true;
+    state.update(&view);
+    assert_eq!(state.find().reply(0).total, 0);
+    assert!(!state.find_action(
+        pending,
+        view.stamp(),
+        5,
+        Action::Step { back: false },
+        &view
+    ));
+    view.input_pending = false;
+    view.input_epoch += 1;
+    state.update(&view);
+    let fresh = displayed(&mut state, &view);
+    state.find_sync(&view);
+    assert_eq!(state.find().reply(0).total, 3);
+    assert_eq!(state.last_displayed().unwrap().frame, original);
+    assert!(!state.find_action(pending, old_stamp, 6, Action::Step { back: false }, &view));
+    assert!(state.find_action(fresh, view.stamp(), 7, Action::Step { back: false }, &view));
+    view.phase = Phase::Disconnected;
+    state.update(&view);
+    assert!(!state.find().opened());
+    assert_eq!(state.find().indexed_rows(), 0);
+    assert!(!state.find_action(fresh, view.stamp(), 8, Action::Open, &view));
+    view.phase = Phase::Connected;
+    state.update(&view);
+    let fresh = displayed(&mut state, &view);
+    assert!(state.find_action(fresh, view.stamp(), 9, Action::Open, &view));
+    assert!(state.find_action(
+        fresh,
+        view.stamp(),
+        10,
+        Action::Edit {
+            query: "中".into()
+        },
+        &view
+    ));
+    view.generation += 1;
+    state.update(&view);
+    assert!(!state.find().opened());
+    displayed(&mut state, &view);
+    state.find_sync(&view);
+    assert!(!state.find().opened());
+    assert_eq!(state.find().indexed_rows(), 0);
+}
+#[test]
 fn editor_colouring_consumes_only_the_acknowledged_rust_selection() {
     let mut current = view();
     current.frame =

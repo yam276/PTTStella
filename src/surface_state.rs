@@ -81,6 +81,7 @@ pub struct SurfaceState {
     selected: Option<SelectedRows>,
     hover: Option<Lease>,
     output: Option<ActiveOutput>,
+    find: crate::article_find::Find,
 }
 impl SurfaceState {
     pub fn new(rules: filters::Rules) -> Self {
@@ -100,11 +101,85 @@ impl SurfaceState {
             selected: None,
             hover: None,
             output: None,
+            find: Default::default(),
         }
     }
     /// Read-only retained projection; actions still require current()/leases.
     pub fn last_displayed(&self) -> Option<&Paint> {
         self.displayed.as_ref()
+    }
+    pub fn find(&self) -> &crate::article_find::Find {
+        &self.find
+    }
+    pub fn find_finish(&mut self) {
+        self.find.cancel();
+    }
+    pub fn find_action(
+        &mut self,
+        identity: Identity,
+        stamp: Stamp,
+        request: u64,
+        action: crate::article_find::Action,
+        view: &View,
+    ) -> bool {
+        if matches!(action, crate::article_find::Action::Close) {
+            return identity.generation == view.generation
+                && stamp.generation == view.generation
+                && self.find.close(request);
+        }
+        if view.phase != Phase::Connected
+            || !view.site.ptt_features()
+            || stamp != view.stamp()
+            || !self
+                .current(identity, view)
+                .is_some_and(|p| p.input_epoch == view.input_epoch)
+            || view.input_pending
+            || view.login_pending
+        {
+            return false;
+        }
+        let Some(paint) = self.displayed.as_ref() else {
+            return false;
+        };
+        self.find.action(paint, request, action)
+    }
+    pub fn find_sync(&mut self, view: &View) {
+        let valid = self.displayed.as_ref().is_some_and(|p| {
+            self.current(Identity::of(p), view).is_some()
+                && p.input_epoch == view.input_epoch
+                && !view.input_pending
+                && !view.login_pending
+        });
+        if valid {
+            if let Some(paint) = &self.displayed {
+                self.find.sync(paint);
+            }
+        } else {
+            self.find.suspend();
+        }
+    }
+    pub fn find_decorate(
+        &self,
+        source: &Paint,
+        frame: &mut crate::screen::Frame,
+        first_row: usize,
+    ) {
+        if let Some(p) = &self.displayed
+            && (
+                p.generation,
+                p.frame.revision,
+                p.presentation,
+                p.input_epoch,
+            ) == (
+                source.generation,
+                source.frame.revision,
+                source.presentation,
+                source.input_epoch,
+            )
+        {
+            self.find
+                .decorate(crate::article_find::Source::of(p), frame, first_row);
+        }
     }
     pub fn pending_identity(&self) -> Option<Identity> {
         self.in_flight.as_ref().map(Identity::of)
@@ -703,7 +778,8 @@ impl SurfaceState {
     }
     pub fn next_update(&mut self, view: &View) -> Option<crate::navigation_job::Destination> {
         let now = tokio::time::Instant::now();
-        if !self.updates.due(now)
+        if self.find.opened()
+            || !self.updates.due(now)
             || !self.cached_reading(view.stamp(), view)
             || view.input_pending
             || view.output_pending
@@ -860,7 +936,8 @@ impl SurfaceState {
             .then_some(scope)
     }
     pub fn next_full_page(&mut self, view: &View) -> Option<crate::navigation::Intent> {
-        if self.article_mode != ArticleMode::Web
+        if self.find.opened()
+            || self.article_mode != ArticleMode::Web
             || self.raw_reading
             || self.updates.holding()
             || view.phase != Phase::Connected
@@ -907,6 +984,7 @@ impl SurfaceState {
         self.article.input(&context, bytes);
     }
     fn policy_changed(&mut self) {
+        self.find.suspend();
         self.updates.sync(None);
         self.reply_focus = None;
         self.article.clear();
@@ -935,6 +1013,28 @@ impl SurfaceState {
     /// Even an old in-flight ACK must be drained before queuing the newest view.
     /// Its snapshot stays ineligible for current interactions after this update.
     pub fn update(&mut self, view: &View) -> bool {
+        if self.find.opened()
+            && (view.phase != Phase::Connected
+                || !view.site.ptt_features()
+                || self
+                    .displayed
+                    .as_ref()
+                    .is_some_and(|p| p.generation != view.generation)
+                || (!view.output_pending
+                    && !view.input_pending
+                    && view.frame.control_complete
+                    && !matches!(view.context(), Context::ArticleReading { .. })))
+        {
+            self.find.cancel();
+        } else if self.find.reply(0).source.is_some_and(|source| {
+            (source.generation, source.revision, source.input_epoch)
+                != (view.generation, view.frame.revision, view.input_epoch)
+        }) || view.output_pending
+            || view.input_pending
+            || view.login_pending
+        {
+            self.find.suspend();
+        }
         let holding = self.updates.holding();
         if self.updates.observe(view, tokio::time::Instant::now()) {
             return false;

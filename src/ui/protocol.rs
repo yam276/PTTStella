@@ -258,6 +258,13 @@ pub(super) enum SurfaceEvent {
         resume: bool,
         trusted: bool,
     },
+    ArticleFind {
+        presentation: u64,
+        stamp: Stamp,
+        request: u64,
+        command: pttstella::article_find::Action,
+        trusted: bool,
+    },
     ArticleUpdates {
         generation: u64,
         article: u64,
@@ -500,6 +507,7 @@ impl SurfaceEvent {
                 | Self::FiltersReveal { .. }
                 | Self::Navigate { .. }
                 | Self::ArticleLoad { .. }
+                | Self::ArticleFind { .. }
                 | Self::ArticleUpdates { .. }
                 | Self::ArticleStationRestore { .. }
                 | Self::KeepAlive { .. }
@@ -532,6 +540,16 @@ impl SurfaceEvent {
             | InlineExpand { trusted, stamp, .. }
             | EditorColor { trusted, stamp, .. }
             | PasteClipboard { trusted, stamp, .. } => *trusted && stamp.generation == generation,
+            ArticleFind {
+                trusted,
+                stamp,
+                request,
+                ..
+            } => {
+                *trusted
+                    && stamp.generation == generation
+                    && (1..=9_007_199_254_740_991).contains(request)
+            }
             Key {
                 trusted,
                 generation: source,
@@ -671,6 +689,37 @@ impl SurfaceEvent {
 
 #[cfg(test)]
 mod admission_tests {
+    #[test]
+    fn article_find_accepts_only_typed_trusted_current_generation_requests() {
+        use serde_json::json;
+        let value = json!({"kind":"article_find","presentation":3,"stamp":{"generation":7,"revision":4,"input_epoch":2},"request":1,"command":{"action":"edit","query":"中文"},"trusted":true});
+        let event: super::SurfaceEvent = serde_json::from_value(value.clone()).unwrap();
+        assert!(event.requires_ptt() && event.admitted(7));
+        assert!(!event.admitted(8));
+        for patch in [
+            json!({"trusted":false}),
+            json!({"request":0}),
+            json!({"request":9007199254740992u64}),
+        ] {
+            let mut v = value.clone();
+            for (k, vv) in patch.as_object().unwrap() {
+                v[k] = vv.clone();
+            }
+            assert!(
+                !serde_json::from_value::<super::SurfaceEvent>(v)
+                    .unwrap()
+                    .admitted(7)
+            );
+        }
+        for command in [
+            json!({"action":"send","query":"/"}),
+            json!({"action":"edit","query":"x","bytes":[47]}),
+        ] {
+            let mut v = value.clone();
+            v["command"] = command;
+            assert!(serde_json::from_value::<super::SurfaceEvent>(v).is_err());
+        }
+    }
     #[test]
     fn filter_color_edits_are_typed_trusted_ptt_actions() {
         use serde_json::json;

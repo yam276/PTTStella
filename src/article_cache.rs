@@ -13,10 +13,10 @@ use tokio::time::{Duration, Instant};
 
 const MAX_FETCH_STEPS: usize = 14;
 const MAX_LINK_BYTES: usize = 512 * 1024;
-const MAX_FULL_LINES: usize = 4096;
+pub const MAX_FULL_LINES: usize = 4096;
 /// Maximum body rows materialized by a single native viewport tile.
 pub const MAX_WINDOW_ROWS: usize = 256;
-const MAX_FULL_BYTES: usize = 32 * 1024 * 1024;
+pub const MAX_FULL_BYTES: usize = 32 * 1024 * 1024;
 const LOAD_RESPONSE_TIMEOUT: Duration = Duration::from_secs(6);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]

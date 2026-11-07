@@ -869,7 +869,7 @@ editorColor=createEditorColor({root:document.getElementById("editor-color-dialog
 contextMenu=createSurfaceContextMenu({root:document.getElementById("surface-context-menu"),document,window,
     snapshot:contextIdentity,prepare:()=>{revokeNavigation();stationMouse.cancel();tools.close();cancelHover(true);cancelDrag();released=null;setHover(null);},
     execute:contextAction,restore:focus,changed:refreshControls});
-articleFind=createArticleFind({document,tr,current:()=>latest,allowed:()=>!stopped&&!settingsActive&&!blocked()&&!tools?.busy(),
+articleFind=createArticleFind({document,tr,send,current:()=>latest,allowed:()=>!stopped&&!settingsActive&&!blocked()&&!tools?.busy(),
     prepare:e=>{policy("reset",e);tools?.close();invalidatePresentation();inlineImages.suspend();},restore:focus,
     redraw:()=>{if(!stopped&&latest)draw(latest);},changed:refreshKeepAlive,jump:findArticleMatch});
 function requestInline(target,e){
@@ -1157,6 +1157,7 @@ const route=createSurfaceRouter({
     profile_result:async data=>{await settingsUi.profile(data);showNotice(data.notice,data.status==="exported"?"success":data.status==="rejected"?"error":"persistent");},
     update_status:settingsUi.updateStatus,
     article_updates:data=>articleUpdates.receive(data),
+    article_find:data=>articleFind.receive(data),
     settings_saved:data=>{settingsUi.saved(data);if(data.status!=="saved")showNotice(data.notice);},
     selection:receiveSelection,
     paste_result:data=>{

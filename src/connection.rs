@@ -420,6 +420,15 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    /// Local finding sends nothing. Only an explicit station slash is accepted.
+    pub fn start_article_find_probe() -> Result<Self, String> {
+        let connection = Self::start_owned_probe(
+            crate::replay::native_article_find_page()?,
+            probe::Scenario::ArticleFind,
+        )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     /// Local editor: two ANSI-preview keys, one exact confirmed colour paste,
     /// another preview key, then the normal acknowledged Close.
     pub fn start_editor_clipboard_probe(bytes: Vec<u8>) -> Result<Self, String> {

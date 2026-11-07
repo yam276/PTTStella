@@ -393,11 +393,20 @@ async fn run(
     diagnostic_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut diagnostic_failed = false;
     let mut updates_status = None;
+    let mut find_version = 0;
+    let mut find_data_version = 0;
     let mut bookmark_capture: Option<super::bookmarks::Acquisition> = None;
     let mut list_bookmark: Option<super::bookmarks::FromList> = None;
     let (complete, probe_checked) = loop {
         if *closing.borrow() {
             break (false, false);
+        }
+        if screen.find().version() != find_version {
+            find_version = screen.find().version();
+            let reply = screen.find().reply(find_data_version);
+            find_data_version = reply.data_version;
+            eval.send(Packet::ArticleFind(reply))
+                .map_err(|e| e.to_string())?;
         }
         if let Some(operation) = screen.cancelled_update()
             && let Err(error) = connection.cancel_navigation(operation)
@@ -1390,6 +1399,10 @@ async fn run(
                             if !resume && commands.is(CommandKind::Preload) {cancel_commands(commands,&eval)?;}
                         }
                     },
+                    SurfaceEvent::ArticleFind{presentation,stamp,request,command,trusted:_}=>{
+                        let view=receiver.borrow();
+                        screen.find_action(Identity{presentation,generation:stamp.generation,revision:stamp.revision},stamp,request,command,&view);
+                    },
                     SurfaceEvent::ArticleUpdates {generation,article,enabled,trusted:_} => {
                         let busy=screen.updates_status().is_some_and(|s|s.busy);
                         if screen.updates_action(generation,article,enabled) && !enabled {
@@ -1940,6 +1953,7 @@ async fn run(
                         generation,
                     } => {
                         screen.acknowledge(Identity{presentation,generation,revision})?;
+                        screen.find_sync(&receiver.borrow());
                         reading_timing.record("painted",generation,revision,screen.reading_progress())?;
                         let view=receiver.borrow();
                         if let Some(paint)=screen.inline_page(Identity{presentation,generation,revision},view.stamp(),&view)

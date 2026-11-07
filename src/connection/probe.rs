@@ -36,6 +36,7 @@ pub(super) enum Scenario {
     ControlInput,
     KeepAlive,
     ArticlePaste,
+    ArticleFind,
     EditorClipboard,
     EditorColor,
     ToastReconnect,
@@ -754,6 +755,7 @@ pub(super) async fn serve(
             | Scenario::ControlInput
             | Scenario::KeepAlive
             | Scenario::ArticlePaste
+            | Scenario::ArticleFind
             | Scenario::EditorClipboard
             | Scenario::PointerRows
             | Scenario::ListBoundary
@@ -786,6 +788,16 @@ pub(super) async fn serve(
             return match socket.next().await {
                 Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|error| error.to_string()),
                 _ => Err("keep-alive probe expected Close without additional input".into()),
+            };
+        }
+        if matches!(scenario, Scenario::ArticleFind) {
+            if !matches!(socket.next().await,Some(Ok(Message::Binary(actual))) if actual.as_ref()==b"/") {
+                return Err("article find peer rejects search keystrokes; expected explicit slash".into());
+            }
+            socket.send(Message::Binary(navigation_page("main_menu")?.into())).await.map_err(|e|e.to_string())?;
+            return match socket.next().await {
+                Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
+                _=>Err("article find peer expected Close without extra input".into()),
             };
         }
         if matches!(scenario, Scenario::ArticlePaste) {

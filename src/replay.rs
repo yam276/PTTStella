@@ -98,6 +98,19 @@ pub fn native_article_input_page(page: usize) -> Result<Vec<u8>, String> {
 pub fn native_article_interaction_page() -> Result<Vec<u8>, String> {
     reading_load_page(1, 1, false, Some("http://127.0.0.1:9"))
 }
+/// Complete page with visible split Chinese, a masked reply and concealed ink.
+pub fn native_article_find_page() -> Result<Vec<u8>, String> {
+    let mut bytes = native_article_interaction_page()?;
+    bytes.extend(encoding::encode("\x1b[5;1H\x1b[2K\x1b[1;37m推 \x1b[1;33mBlocked\x1b[0;33m:\x1b[0;37m 中 hidden\x1b[5;67H 01/01 12:34\x1b[6;1H\x1b[2K\x1b[0mSplit \x1b[31;44m").map_err(|e| e.to_string())?);
+    bytes.extend(b"\xa4\x1b[32;45m\xa4\x1b[0m");
+    bytes.extend(
+        encoding::encode(
+            "\x1b[7;1H\x1b[2K\x1b[0m中 中文\x1b[8;1H\x1b[2K\x1b[30;40m中 hidden\x1b[0m\x1b[24;80H",
+        )
+        .map_err(|e| e.to_string())?,
+    );
+    Ok(bytes)
+}
 /// Self-authored output fixture: history-only dual-colour text and a redacted
 /// push URL; the footer is an OSC 8 link independent of its visible label.
 pub fn native_article_output_page(page: usize) -> Result<Vec<u8>, String> {
