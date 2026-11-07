@@ -3,6 +3,8 @@
 pub mod article_cache;
 #[cfg(feature = "desktop")]
 pub mod article_find;
+#[cfg(feature = "desktop")]
+pub mod article_flow;
 pub mod article_navigation;
 pub mod article_refresh;
 pub mod article_target;
