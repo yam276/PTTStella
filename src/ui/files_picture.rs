@@ -4,7 +4,7 @@ use super::{
     write_clipboard_image,
 };
 use crate::ui::surface_state::OutputLease;
-use pttstella::{media::loader::Image, storage};
+use pttstella::media::{loader::Image, picture};
 use std::{path::PathBuf, sync::Arc};
 
 pub(in crate::ui) struct Request {
@@ -13,44 +13,6 @@ pub(in crate::ui) struct Request {
     pub source: tokio::sync::watch::Receiver<pttstella::connection::View>,
     pub destination: ExportDestination,
     pub probe: Option<PathBuf>,
-}
-fn format(image: &Image) -> Result<(image::ImageFormat, &'static str), String> {
-    if image.bytes.len() > pttstella::media::loader::max_image_bytes(image.mime)
-        || image.width == 0
-        || image.height == 0
-        || image.width > 8192
-        || image.height > 8192
-        || image.width.saturating_mul(image.height) > 16 * 1024 * 1024
-    {
-        return Err(pttstella::msg!("image-dimensions"));
-    }
-    Ok(match image.mime {
-        "image/png" => (image::ImageFormat::Png, "png"),
-        "image/jpeg" => (image::ImageFormat::Jpeg, "jpg"),
-        "image/gif" => (image::ImageFormat::Gif, "gif"),
-        "image/webp" => (image::ImageFormat::WebP, "webp"),
-        _ => return Err(pttstella::msg!("image-invalid")),
-    })
-}
-fn pixels(image: &Image) -> Result<arboard::ImageData<'static>, String> {
-    let (format, _) = format(image)?;
-    let mut reader = image::ImageReader::with_format(std::io::Cursor::new(&image.bytes), format);
-    let mut limits = image::Limits::default();
-    limits.max_image_width = Some(8192);
-    limits.max_image_height = Some(8192);
-    limits.max_alloc = Some(128 * 1024 * 1024);
-    reader.limits(limits);
-    let decoded = reader
-        .decode()
-        .map_err(|_| pttstella::msg!("image-decode-failed"))?;
-    if (decoded.width() as usize, decoded.height() as usize) != (image.width, image.height) {
-        return Err(pttstella::msg!("image-size-mismatch"));
-    }
-    Ok(arboard::ImageData {
-        width: image.width,
-        height: image.height,
-        bytes: decoded.to_rgba8().into_raw().into(),
-    })
 }
 async fn pick(extension: &'static str, probe: Option<PathBuf>) -> Option<PathBuf> {
     if let Some(directory) = probe {
@@ -82,7 +44,7 @@ pub(in crate::ui) async fn output(
     let result = async {
         permit.check()?;
         lease.check(&source.borrow()).map_err(|_| Error::Stale)?;
-        let (_, extension) = format(&image).map_err(Error::Failed)?;
+        let extension = picture::extension(&image).map_err(Error::Failed)?;
         let path = if destination == ExportDestination::File {
             pick(extension, probe.clone()).await
         } else {
@@ -95,15 +57,10 @@ pub(in crate::ui) async fn output(
         blocking_result(permit, move || {
             lease.check(&source.borrow()).map_err(|_| Error::Stale)?;
             if let Some(path) = path {
-                if !path.extension().is_some_and(|value| {
-                    value.eq_ignore_ascii_case(extension)
-                        || extension == "jpg" && value.eq_ignore_ascii_case("jpeg")
-                }) {
-                    return Err(Error::Failed(pttstella::msg!("picture-extension")));
-                }
-                storage::replace(&path, &image.bytes).map_err(Error::Failed)?;
+                picture::save(&path, &image, || lease.check(&source.borrow()))
+                    .map_err(Error::Failed)?;
             } else {
-                let pixels = pixels(&image).map_err(Error::Failed)?;
+                let pixels = picture::pixels(image).map_err(Error::Failed)?;
                 lease.check(&source.borrow()).map_err(|_| Error::Stale)?;
                 write_clipboard_image(
                     clipboard,
@@ -133,8 +90,18 @@ mod tests {
             width: 64,
             height: 32,
             animated_format: false,
-            animation_pixels: 0,
+            animation_pixels: 64 * 32 * if mime == "image/gif" { 2 } else { 1 },
         }
+    }
+    fn pixels(source: &Image) -> Result<arboard::ImageData<'static>, String> {
+        picture::pixels(Arc::new(Image {
+            bytes: source.bytes.clone(),
+            mime: source.mime,
+            width: source.width,
+            height: source.height,
+            animated_format: source.animated_format,
+            animation_pixels: source.animation_pixels,
+        }))
     }
     #[test]
     fn original_png_and_gif_first_frame_have_independent_expected_pixels() {
@@ -142,7 +109,7 @@ mod tests {
             "image/png",
             include_bytes!("../../tests/fixtures/media/colours.png"),
         );
-        let pixels = pixels(&png).unwrap();
+        let pixels = picture::pixels(Arc::new(png)).unwrap();
         assert_eq!((pixels.width, pixels.height), (64, 32));
         for y in 0..32 {
             for x in 0..64 {
@@ -160,7 +127,7 @@ mod tests {
             "image/gif",
             include_bytes!("../../tests/fixtures/media/motion.gif"),
         );
-        let first = super::pixels(&gif).unwrap();
+        let first = picture::pixels(Arc::new(gif)).unwrap();
         assert!(
             first
                 .bytes

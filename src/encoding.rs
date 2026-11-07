@@ -11,7 +11,7 @@ impl fmt::Display for Unencodable {
 impl std::error::Error for Unencodable {}
 
 pub fn pair(bytes: [u8; 2]) -> Option<String> {
-    let text = uao_rs::decode(&bytes);
+    let text = uao_rs::decode::<[u8; 2]>(&bytes);
     (!text.is_empty() && !text.contains('\u{fffd}')).then_some(text)
 }
 
