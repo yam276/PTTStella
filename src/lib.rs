@@ -29,6 +29,7 @@ pub mod navigation_job;
 pub mod presentation;
 pub mod recent_boards;
 pub mod render_wire;
+pub mod replay;
 pub mod reply_navigation;
 pub mod screen;
 pub mod selection;
