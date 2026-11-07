@@ -1954,7 +1954,7 @@ async fn run(
                     } => {
                         screen.acknowledge(Identity{presentation,generation,revision})?;
                         screen.find_sync(&receiver.borrow());
-                        reading_timing.record("painted",generation,revision,screen.reading_progress())?;
+                        reading_timing.painted(screen.last_displayed())?;
                         let view=receiver.borrow();
                         if let Some(paint)=screen.inline_page(Identity{presentation,generation,revision},view.stamp(),&view)
                             && (probe.is_none() || paint.image_links.iter().all(|index|media_origin.as_ref().is_some_and(|origin|paint.links[*index].url.starts_with(&format!("{origin}/")))))

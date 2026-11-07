@@ -50,6 +50,7 @@ pub(super) enum Scenario {
     InlinePages {
         pages: Vec<Vec<u8>>,
         delay_ms: u64,
+        fragment_ms: u64,
     },
 }
 
@@ -865,7 +866,7 @@ pub(super) async fn serve(
         if matches!(scenario,Scenario::BookmarkList) {return live_updates::bookmark_list(&mut socket).await;}
         if let Scenario::BookmarkArchive { headerless } = scenario {return live_updates::bookmark(&mut socket, headerless).await;}
         if let Scenario::LiveUpdates {origin,cancelled} = scenario {return if cancelled {live_updates::cancel(&mut socket,origin.as_deref()).await}else{live_updates::run(&mut socket,origin.as_deref()).await};}
-        if let Scenario::InlinePages {pages,delay_ms} = scenario {
+        if let Scenario::InlinePages {pages,delay_ms,fragment_ms} = scenario {
             let started=std::time::Instant::now();
             for (index, second) in pages.into_iter().enumerate() {
             let received=socket.next().await;
@@ -875,10 +876,10 @@ pub(super) async fn serve(
             eprintln!("synthetic article page {} requested at {}ms",index+2,started.elapsed().as_millis());
             // Each response is deliberately fragmented; local history must not refetch.
             // Historical browsing must not send PageUp or refetch old images.
-            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+            if delay_ms > 0 { tokio::time::sleep(Duration::from_millis(delay_ms)).await; }
             let split=second.len()/2;
             socket.send(Message::Binary(second[..split].to_vec().into())).await.map_err(|e|e.to_string())?;
-            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            if fragment_ms > 0 { tokio::time::sleep(Duration::from_millis(fragment_ms)).await; }
             socket.send(Message::Binary(second[split..].to_vec().into())).await.map_err(|e|e.to_string())?;
             }
             return match socket.next().await {

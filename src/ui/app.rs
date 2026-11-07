@@ -126,18 +126,27 @@ pub fn app(props: AppProps) -> Element {
                     Connection::start_board_probe()
                 } else if matches!(sample_case.as_deref(), Some("full_load" | "long_load")) {
                     let long = sample_case.as_deref() == Some("long_load");
-                    Connection::start_article_load_probe(
-                        bytes,
-                        (2..=if long { 38 } else { 20 })
-                            .map(|page| {
-                                if long {
-                                    super::probe::long_load_page(page, media_origin.as_deref())
-                                } else {
-                                    super::probe::full_load_page(page, media_origin.as_deref())
-                                }
-                            })
-                            .collect::<Result<Vec<_>, _>>()?,
-                    )
+                    {
+                        let start = if std::env::var_os("PTTSTELLA_READING_PROBE_FAST").as_deref()
+                            == Some(std::ffi::OsStr::new("1"))
+                        {
+                            Connection::start_fast_article_load_probe
+                        } else {
+                            Connection::start_article_load_probe
+                        };
+                        start(
+                            bytes,
+                            (2..=if long { 38 } else { 20 })
+                                .map(|page| {
+                                    if long {
+                                        super::probe::long_load_page(page, media_origin.as_deref())
+                                    } else {
+                                        super::probe::full_load_page(page, media_origin.as_deref())
+                                    }
+                                })
+                                .collect::<Result<Vec<_>, _>>()?,
+                        )
+                    }
                 } else if matches!(
                     sample_case.as_deref(),
                     Some("inline_pages" | "terminal_pages" | "short_overlap")

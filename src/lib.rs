@@ -33,6 +33,8 @@ pub mod navigation;
 pub mod navigation_job;
 #[cfg(feature = "desktop")]
 pub mod presentation;
+#[cfg(feature = "desktop")]
+pub mod reading_timing;
 pub mod recent_boards;
 pub mod render_wire;
 pub mod replay;

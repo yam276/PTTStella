@@ -439,3 +439,36 @@ async fn list_collection_rejects_changed_rows_wrong_board_and_cancelled_late_q()
         finish_board_peer(&connection, ws).await;
     }
 }
+
+#[tokio::test]
+async fn fast_article_peer_requires_each_exact_page_and_owned_acknowledged_close() {
+    let connection = Connection::start_fast_article_load_probe(
+        crate::replay::full_load_page(1, Some("http://127.0.0.1:9")).unwrap(),
+        vec![crate::replay::full_load_page(2, Some("http://127.0.0.1:9")).unwrap()],
+    )
+    .unwrap();
+    connection.connect().unwrap();
+    let first = wait(&connection, |v| {
+        !v.output_pending && matches!(v.context(), Context::ArticleReading { first_line: 1, .. })
+    })
+    .await;
+    connection
+        .request_navigate(
+            first.stamp(),
+            crate::navigation::Intent::NextPage,
+            crate::navigation::Source::Button,
+        )
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    let second = wait(&connection, |v| {
+        !v.output_pending && matches!(v.context(), Context::ArticleReading { first_line: 23, .. })
+    })
+    .await;
+    assert!(second.received > first.received && second.frame.revision > first.frame.revision);
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+}

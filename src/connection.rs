@@ -453,6 +453,7 @@ impl Connection {
             probe::Scenario::InlinePages {
                 pages: vec![second],
                 delay_ms: 0,
+                fragment_ms: 150,
             },
         )?;
         connection.keep_alive(false)?;
@@ -460,6 +461,22 @@ impl Connection {
     }
     /// Explicit bounded local fixture for cancellable article preloading.
     pub fn start_article_load_probe(first: Vec<u8>, pages: Vec<Vec<u8>>) -> Result<Self, String> {
+        Self::article_load_probe(first, pages, 500, 150)
+    }
+    /// Same exact paging peer with immediate replies for frontend comparisons.
+    /// The ordinary cancellation/fragmentation probe retains its slow schedule.
+    pub fn start_fast_article_load_probe(
+        first: Vec<u8>,
+        pages: Vec<Vec<u8>>,
+    ) -> Result<Self, String> {
+        Self::article_load_probe(first, pages, 0, 0)
+    }
+    fn article_load_probe(
+        first: Vec<u8>,
+        pages: Vec<Vec<u8>>,
+        delay_ms: u64,
+        fragment_ms: u64,
+    ) -> Result<Self, String> {
         if pages.is_empty() || pages.len() > 64 || pages.iter().any(|p| p.len() > 64 * 1024) {
             return Err("invalid article load probe pages".into());
         }
@@ -467,7 +484,8 @@ impl Connection {
             first,
             probe::Scenario::InlinePages {
                 pages,
-                delay_ms: 500,
+                delay_ms,
+                fragment_ms,
             },
         )?;
         connection.keep_alive(false)?;
