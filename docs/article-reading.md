@@ -84,3 +84,5 @@ JS 只為可見文字行及上下兩行建立 Canvas，另由共同雙色 render
 網頁模式的顯示位置與站端位置可不同，換篇由同一 Connection owner 先送 Home／End，保持輸入等待，收到完整且已辨識的對應首尾頁後才送 ↑／↓；站端原本就在該首尾時直接送方向鍵。中間定位頁不開放給文章快取或預讀，逾時、其他輸入、斷線或滑鼠路由變更不晚送方向鍵。Rust 重查設定、當篇快取、首尾是否已取得、ACK／stamp／input epoch、本機滑鼠路由及忙碌狀態；成功排入命令後清除文章快取與媒體作用域；直到來源 session 的 input epoch 與 revision 都前進才重新接收文章，不能在排隊空檔把尚未執行命令的舊畫面重新放入快取。舊載入結果不可污染新文章。終端機模式僅在辨識的閱讀首尾攔截普通 ↑／↓：設定關閉或 repeat 時不送鍵，設定開啟的獨立按鍵才切篇。中間仍沿用原始逐行操作，未知／編輯畫面保持原本輸入。
 
 站端鍵位依 [PTT pmore 命令表](https://github.com/ptt/pttbbs/blob/90f07d655b8d7e85298ef26bdb63f40646fd9d17/mbbsd/pmore.c) 核對；部署版本與實站上下篇邊界仍需人工驗證。
+
+診斷兩前端時，合成 `full_load`／`long_load` 預設刻意每頁等待 500 ms，分段間隔另有 150 ms。明確設 `PTTSTELLA_READING_PROBE_FAST=1` 可讓同一精確 PageDown peer 立即回覆，供本機比較；不影響正常連站或其他探針，原慢速案例仍須通過。`PTTSTELLA_READING_TIMING` 兩入口共用同一有界時鐘，painted 事件描述實際 ACK 的 packet，不能以更新的 cache complete 代替舊畫面內容。這只量到 renderer 安裝／ACK，螢幕呈現與完整 S8 效能另驗。
