@@ -102,6 +102,8 @@ pub fn native_article_output_page(page: usize) -> Result<Vec<u8>, String> {
         let patch = "\x1b[1;1H\x1b[2K\x1b[0m作者  Alice                                      看板  Test\x1b[5;1H\x1b[2K\x1b[1;37m推 \x1b[1;33mBlocked\x1b[0;33m:\x1b[0;37m hidden https://example.com/private\x1b[5;67H 01/01 12:34\x1b[6;1H\x1b[2K\x1b[0mSplit \x1b[31;44m";
         bytes.extend(encoding::encode(patch).map_err(|e| e.to_string())?);
         bytes.extend(b"\xa4\x1b[32;45m\xa4\x1b[0m");
+    } else {
+        bytes.extend(encoding::encode("\x1b[5;1H\x1b[2K\x1b[1;37m推 \x1b[1;33mBlocked\x1b[0;33m:\x1b[0;37m hidden https://example.com/private\x1b[5;67H 01/01 12:34\x1b[0m").map_err(|e| e.to_string())?);
     }
     bytes.extend(
         encoding::encode(
@@ -194,6 +196,9 @@ mod reading_interaction_tests {
                 .any(|l| l.row == 23 && l.start == 1 && l.url == "https://example.com/footer")
         );
         screen.feed(&native_article_output_page(2).unwrap());
+        let pushes = crate::filters::pushes(&screen.frame());
+        assert_eq!(pushes.len(), 1);
+        assert_eq!((pushes[0].row, pushes[0].id.as_str()), (4, "Blocked"));
         assert!(matches!(
             crate::navigation::analyze(&screen.frame()),
             crate::navigation::Context::ArticleReading {
