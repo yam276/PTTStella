@@ -94,6 +94,10 @@ pub fn long_load_page(page: usize, origin: Option<&str>) -> Result<Vec<u8>, Stri
 pub fn native_article_input_page(page: usize) -> Result<Vec<u8>, String> {
     reading_load_page(page, 2, false, Some("http://127.0.0.1:9"))
 }
+/// Complete self-authored page: interactive probes must not need preload keys.
+pub fn native_article_interaction_page() -> Result<Vec<u8>, String> {
+    reading_load_page(1, 1, false, Some("http://127.0.0.1:9"))
+}
 /// Self-authored output fixture: history-only dual-colour text and a redacted
 /// push URL; the footer is an OSC 8 link independent of its visible label.
 pub fn native_article_output_page(page: usize) -> Result<Vec<u8>, String> {
@@ -163,6 +167,32 @@ mod reading_interaction_tests {
         presentation,
         screen::Screen,
     };
+    #[test]
+    fn complete_interaction_page_has_no_missing_edge() {
+        let mut screen = Screen::new(80, 24).unwrap();
+        screen.feed(&native_article_interaction_page().unwrap());
+        let frame = screen.frame();
+        assert_eq!(
+            crate::navigation::analyze(&frame),
+            crate::navigation::Context::ArticleReading {
+                first_line: 1,
+                last_line: 23,
+                percent: 100
+            }
+        );
+        for (row, text) in [
+            (0, "Full article synthetic line 0001"),
+            (22, "Full article synthetic line 0023"),
+        ] {
+            assert_eq!(
+                crate::selection::extract(&frame, &crate::selection::Selection::Line { row })
+                    .unwrap()
+                    .text
+                    .trim_end(),
+                text
+            );
+        }
+    }
     #[test]
     fn output_fixture_keeps_reading_commands_push_styles_and_both_colour_halves() {
         let mut screen = Screen::new(80, 24).unwrap();

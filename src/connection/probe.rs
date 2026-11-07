@@ -34,6 +34,8 @@ pub(super) enum Scenario {
     Filters,
     Surface,
     ControlInput,
+    KeepAlive,
+    ArticlePaste,
     EditorClipboard,
     EditorColor,
     ToastReconnect,
@@ -750,6 +752,8 @@ pub(super) async fn serve(
             | Scenario::Surface
             | Scenario::ReplyNavigation
             | Scenario::ControlInput
+            | Scenario::KeepAlive
+            | Scenario::ArticlePaste
             | Scenario::EditorClipboard
             | Scenario::PointerRows
             | Scenario::ListBoundary
@@ -773,6 +777,29 @@ pub(super) async fn serve(
             .send(Message::Binary(bytes.into()))
             .await
             .map_err(|e| e.to_string())?;
+        if matches!(scenario, Scenario::KeepAlive) {
+            if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref() == b"\x0c\x0c") {
+                return Err("keep-alive probe expected one exact refresh".into());
+            }
+            socket.send(Message::Binary(b"\x1b[2J\x1b[HKEEPALIVE VERIFIED - close this window".as_slice().into()))
+                .await.map_err(|error| error.to_string())?;
+            return match socket.next().await {
+                Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|error| error.to_string()),
+                _ => Err("keep-alive probe expected Close without additional input".into()),
+            };
+        }
+        if matches!(scenario, Scenario::ArticlePaste) {
+            for (expected,reply) in [(b"j".as_slice(),crate::replay::native_article_interaction_page()?),(b"A\r\xa4\xa4".as_slice(),navigation_page("main_menu")?)] {
+                if !matches!(socket.next().await,Some(Ok(Message::Binary(actual))) if actual.as_ref()==expected) {
+                    return Err("article paste peer expected one exact explicit paste".into());
+                }
+                socket.send(Message::Binary(reply.into())).await.map_err(|e|e.to_string())?;
+            }
+            return match socket.next().await {
+                Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
+                _=>Err("article paste peer expected Close without duplicate or cancelled bytes".into()),
+            };
+        }
         if matches!(scenario,Scenario::Drafts) {
             tokio::time::sleep(Duration::from_millis(120)).await;
             socket.send(Message::Binary(navigation_page("main_menu")?.into())).await.map_err(|e|e.to_string())?;

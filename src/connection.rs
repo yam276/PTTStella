@@ -393,6 +393,33 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    /// Synthetic article list with a shortened idle interval and a strict refresh peer.
+    pub fn start_keep_alive_probe() -> Result<Self, String> {
+        Self::start_keep_alive_page_probe(probe::navigation_page("list")?)
+    }
+    pub fn start_article_keep_alive_probe() -> Result<Self, String> {
+        Self::start_keep_alive_page_probe(crate::replay::native_article_interaction_page()?)
+    }
+    fn start_keep_alive_page_probe(bytes: Vec<u8>) -> Result<Self, String> {
+        Self::start_owned_probe_with_timing(
+            bytes,
+            probe::Scenario::KeepAlive,
+            liveness::Timing {
+                idle: Duration::from_secs(3),
+                poll: Duration::from_millis(50),
+                ..liveness::Timing::default()
+            },
+        )
+    }
+    /// Exact plain j, then an explicitly confirmed two-line UAO paste.
+    pub fn start_article_paste_probe() -> Result<Self, String> {
+        let connection = Self::start_owned_probe(
+            crate::replay::native_article_interaction_page()?,
+            probe::Scenario::ArticlePaste,
+        )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     /// Local editor: two ANSI-preview keys, one exact confirmed colour paste,
     /// another preview key, then the normal acknowledged Close.
     pub fn start_editor_clipboard_probe(bytes: Vec<u8>) -> Result<Self, String> {
@@ -438,6 +465,13 @@ impl Connection {
         Ok(connection)
     }
     fn start_owned_probe(bytes: Vec<u8>, scenario: probe::Scenario) -> Result<Self, String> {
+        Self::start_owned_probe_with_timing(bytes, scenario, liveness::Timing::default())
+    }
+    fn start_owned_probe_with_timing(
+        bytes: Vec<u8>,
+        scenario: probe::Scenario,
+        timing: liveness::Timing,
+    ) -> Result<Self, String> {
         let runtime = tokio::runtime::Handle::try_current().map_err(|e| e.to_string())?;
         let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).map_err(|e| e.to_string())?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
@@ -446,9 +480,10 @@ impl Connection {
             listener.local_addr().map_err(|e| e.to_string())?
         );
         let listener = tokio::net::TcpListener::from_std(listener).map_err(|e| e.to_string())?;
-        let connection = Self::start_at(
+        let connection = Self::start_with_timing(
             Screen::new(80, 24).map_err(|error| error.to_string())?,
             endpoint,
+            timing,
         )?;
         let peer = runtime.spawn(probe::serve(listener, bytes, scenario));
         *connection
