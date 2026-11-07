@@ -1,0 +1,411 @@
+[
+  {
+    "when": {
+      "all": [
+        "picture"
+      ]
+    },
+    "entries": [
+      {
+        "action": "copy-picture",
+        "enabled": {
+          "all": [
+            "ready",
+            "pictureReady"
+          ]
+        }
+      },
+      {
+        "action": "save-picture",
+        "enabled": {
+          "all": [
+            "ready",
+            "pictureReady"
+          ]
+        }
+      },
+      {
+        "action": "copy-link",
+        "when": {
+          "all": [
+            "link"
+          ]
+        }
+      },
+      {
+        "action": "open-link",
+        "when": {
+          "all": [
+            "link"
+          ]
+        },
+        "enabled": {
+          "all": [
+            "local"
+          ]
+        }
+      }
+    ],
+    "stop": true
+  },
+  {
+    "when": {
+      "all": [
+        "word",
+        "ptt",
+        "local"
+      ],
+      "any": [
+        "reading",
+        "authors"
+      ]
+    },
+    "entries": [
+      {
+        "action": "account-mask",
+        "enabled": {
+          "all": [
+            "ready"
+          ]
+        },
+        "toggle": {
+          "flag": "mask",
+          "action": "account-remove-mask"
+        }
+      },
+      {
+        "action": "account-mask-row",
+        "enabled": {
+          "all": [
+            "ready"
+          ]
+        },
+        "toggle": {
+          "flag": "maskRow",
+          "action": "account-remove-mask-row"
+        }
+      },
+      {
+        "action": "account-allow",
+        "enabled": {
+          "all": [
+            "ready"
+          ]
+        },
+        "toggle": {
+          "flag": "allow",
+          "action": "account-remove-allow"
+        }
+      }
+    ]
+  },
+  {
+    "when": {
+      "all": [
+        "word",
+        "reply",
+        "local"
+      ]
+    },
+    "entries": [
+      {
+        "action": "reply-focus",
+        "enabled": {
+          "all": [
+            "ready"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "when": {
+      "all": [
+        "focused",
+        "local"
+      ],
+      "any": [
+        "word",
+        "background"
+      ]
+    },
+    "entries": [
+      {
+        "action": "reply-focus-clear",
+        "enabled": {
+          "all": [
+            "ready"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "when": {
+      "all": [
+        "selection"
+      ]
+    },
+    "entries": [
+      {
+        "action": "copy",
+        "enabled": {
+          "all": [
+            "selectionReady"
+          ]
+        }
+      },
+      {
+        "action": "copy-ansi",
+        "enabled": {
+          "all": [
+            "selectionReady"
+          ]
+        }
+      },
+      {
+        "action": "export-rows",
+        "enabled": {
+          "all": [
+            "rowsReady"
+          ]
+        }
+      },
+      {
+        "action": "copy-image-rows",
+        "enabled": {
+          "all": [
+            "rowsReady"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "when": {
+      "all": [
+        "editor"
+      ]
+    },
+    "entries": [
+      {
+        "action": "paste",
+        "enabled": {
+          "all": [
+            "ready",
+            "local"
+          ]
+        }
+      },
+      {
+        "action": "editor-color",
+        "when": {
+          "all": [
+            "selection",
+            "ptt"
+          ]
+        },
+        "enabled": {
+          "all": [
+            "selectionReady",
+            "local"
+          ],
+          "none": [
+            "pending"
+          ]
+        }
+      }
+    ],
+    "stop": true
+  },
+  {
+    "when": {
+      "all": [
+        "link"
+      ]
+    },
+    "entries": [
+      {
+        "action": "copy-link"
+      },
+      {
+        "action": "open-link",
+        "enabled": {
+          "all": [
+            "local"
+          ]
+        }
+      },
+      {
+        "action": "select-link"
+      }
+    ]
+  },
+  {
+    "when": {
+      "any": [
+        "word",
+        "selection",
+        "link"
+      ]
+    },
+    "entries": [],
+    "stop": true
+  },
+  {
+    "when": {},
+    "entries": [
+      {
+        "action": "select-all",
+        "enabled": {
+          "all": [
+            "ready"
+          ]
+        }
+      },
+      {
+        "action": "export-page",
+        "enabled": {
+          "all": [
+            "exportReady"
+          ]
+        }
+      },
+      {
+        "action": "copy-image-page",
+        "enabled": {
+          "all": [
+            "exportReady"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "when": {
+      "all": [
+        "reading"
+      ]
+    },
+    "entries": [
+      {
+        "action": "reply-navigation",
+        "when": {
+          "all": [
+            "replyNavigation"
+          ]
+        },
+        "enabled": {
+          "all": [
+            "ready",
+            "local"
+          ]
+        }
+      },
+      {
+        "action": "article-updates",
+        "when": {
+          "all": [
+            "updates"
+          ]
+        },
+        "enabled": {
+          "all": [
+            "ready",
+            "local"
+          ]
+        }
+      },
+      {
+        "action": "inline",
+        "when": {
+          "all": [
+            "images"
+          ]
+        },
+        "enabled": {
+          "all": [
+            "inlineReady"
+          ]
+        }
+      },
+      {
+        "action": "back",
+        "enabled": {
+          "all": [
+            "navigate"
+          ]
+        }
+      },
+      {
+        "action": "previous",
+        "enabled": {
+          "all": [
+            "navigate"
+          ],
+          "none": [
+            "first"
+          ]
+        }
+      },
+      {
+        "action": "next",
+        "enabled": {
+          "all": [
+            "navigate"
+          ],
+          "none": [
+            "last"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "when": {
+      "all": [
+        "ptt"
+      ]
+    },
+    "entries": [
+      {
+        "action": "bookmark-list",
+        "when": {
+          "all": [
+            "listBookmark"
+          ]
+        },
+        "enabled": {
+          "all": [
+            "ready"
+          ]
+        }
+      },
+      {
+        "action": "bookmark-current",
+        "when": {
+          "all": [
+            "reading"
+          ]
+        },
+        "enabled": {
+          "all": [
+            "ready",
+            "bookmark"
+          ]
+        }
+      },
+      {
+        "action": "bookmarks"
+      }
+    ]
+  },
+  {
+    "when": {},
+    "entries": [
+      {
+        "action": "settings"
+      }
+    ]
+  }
+]

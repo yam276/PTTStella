@@ -1,32 +1,23 @@
 // Menu lifetime and keyboard/focus handling. Actions retain their existing owners.
+// Shared ordered policy data, also consumed by Rust's context_menu owner.
 function contextMenuItems(state) {
+    const flags={...state,word:!!state.word,reply:state.replyRow!==null&&state.replyRow!==undefined,
+        link:state.link>=0,background:!state.selection&&state.link<0,
+        mask:state.word?.policy==="mask",maskRow:state.word?.policy==="mask_row",allow:state.word?.policy==="allow"};
+    const matches=predicate=>(predicate?.all??[]).every(flag=>!!flags[flag])
+        &&(!(predicate?.any?.length)||predicate.any.some(flag=>!!flags[flag]))
+        &&(predicate?.none??[]).every(flag=>!flags[flag]);
     const entries=new Map();
-    const add=(name,enabled=true)=>entries.set(name,enabled);
-    if(state.picture){
-        add("copy-picture",state.ready&&state.pictureReady);
-        add("save-picture",state.ready&&state.pictureReady);
-        if(state.link>=0){add("copy-link");add("open-link",state.local);}
-        return entries;
+    for(const step of CONTEXT_MENU_POLICY){
+        if(!matches(step.when))continue;
+        for(const item of step.entries){
+            if(!matches(item.when))continue;
+            const action=item.toggle&&flags[item.toggle.flag]?item.toggle.action:item.action;
+            entries.set(action,matches(item.enabled));
+        }
+        if(step.stop)break;
     }
-    if(state.word&&state.ptt&&(state.reading||state.authors)&&state.local){
-        for(const [name,policy] of [["mask","mask"],["mask-row","mask_row"],["allow","allow"]])
-            add("account-"+(state.word.policy===policy?"remove-":"")+name,state.ready);
-    }
-    if(state.word&&state.replyRow!==null&&state.replyRow!==undefined&&state.local)add("reply-focus",state.ready);
-    if(state.focused&&state.local&&(state.word||!state.selection&&state.link<0))add("reply-focus-clear",state.ready);
-    if(state.selection){add("copy",state.selectionReady);add("copy-ansi",state.selectionReady);add("export-rows",state.rowsReady);add("copy-image-rows",state.rowsReady);}
-    if(state.editor){add("paste",state.ready&&state.local);if(state.selection&&state.ptt)add("editor-color",state.selectionReady&&state.local&&!state.pending);return entries;}
-    if(state.link>=0){add("copy-link");add("open-link",state.local);add("select-link");}
-    if(state.word||state.selection||state.link>=0)return entries;
-    add("select-all",state.ready);add("export-page",state.exportReady);add("copy-image-page",state.exportReady);
-    if(state.reading){
-        if(state.replyNavigation)add("reply-navigation",state.ready&&state.local);
-        if(state.updates)add("article-updates",state.ready&&state.local);
-        if(state.images)add("inline",state.inlineReady);
-        add("back",state.navigate);add("previous",state.navigate&&!state.first);add("next",state.navigate&&!state.last);
-    }
-    if(state.ptt){if(state.listBookmark)add("bookmark-list",state.ready);if(state.reading)add("bookmark-current",state.ready&&!!state.bookmark);add("bookmarks");}
-    add("settings");return entries;
+    return entries;
 }
 function contextMenuPosition(x,y,width,height,viewportWidth,viewportHeight) {
     return {left:Math.max(8,Math.min(x,viewportWidth-width-8)),top:Math.max(8,Math.min(y,viewportHeight-height-8))};

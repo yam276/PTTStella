@@ -38,6 +38,7 @@ function environment(language,geometry={}){
     const menuButtons=["copy-picture","save-picture","copy-link","open-link","settings","next"].map(action=>{const button=element("button");button.dataset.contextAction=action;return button;});
     const menu=document.getElementById("media-context-menu");menu.hidden=true;menu.append(...menuButtons);menu.querySelectorAll=()=>menuButtons;
     const install=vm.runInNewContext(readFileSync(new URL("../assets/surface-context-menu.js",import.meta.url),"utf8")+"\n"+readFileSync(new URL("../assets/gif-playback.js",import.meta.url),"utf8")+"\n"+readFileSync(new URL("../assets/media.js",import.meta.url),"utf8")+"\ninstallMedia",{
+        CONTEXT_MENU_POLICY:JSON.parse(readFileSync(new URL("../assets/context-menu-policy.json",import.meta.url),"utf8")),
         document,window,AbortController,fetch:async()=>({blob:async()=>({size:1})}),
         URL:{createObjectURL(){const url="blob:"+urls.size;urls.add(url);return url;},revokeObjectURL:url=>urls.delete(url)},
         ResizeObserver:class{constructor(callback){this.callback=callback;observers.push(this);}observe(){}disconnect(){}},requestAnimationFrame:callback=>{frames.set(++nextFrame,callback);return nextFrame;},cancelAnimationFrame:id=>frames.delete(id),

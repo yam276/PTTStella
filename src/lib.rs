@@ -7,6 +7,7 @@ pub mod bookmarks;
 pub mod composer;
 #[cfg(feature = "desktop")]
 pub mod connection;
+pub mod context_menu;
 pub mod drafts;
 pub mod editor_color;
 pub mod editor_source;

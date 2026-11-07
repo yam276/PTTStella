@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import vm from "node:vm";
 const source=readFileSync(new URL("../assets/surface-context-menu.js",import.meta.url),"utf8");
-const scope=vm.createContext({});vm.runInContext(source,scope);
+const scope=vm.createContext({CONTEXT_MENU_POLICY:JSON.parse(readFileSync(new URL("../assets/context-menu-policy.json",import.meta.url),"utf8"))});vm.runInContext(source,scope);
 const {contextMenuItems,contextMenuPosition,createSurfaceContextMenu}=scope;
 const base={link:-1,selection:false,ready:true,exportReady:true,local:true,ptt:true,reading:false};
 test('station editor offers paste instead of browsing tools, and retains ANSI selection copy',()=>{
