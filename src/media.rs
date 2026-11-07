@@ -4,6 +4,8 @@ use url::Url;
 pub mod hover;
 
 #[cfg(feature = "desktop")]
+pub mod inline;
+#[cfg(feature = "desktop")]
 pub mod loader;
 #[cfg(feature = "desktop")]
 pub mod native_image;
