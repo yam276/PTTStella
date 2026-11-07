@@ -14,6 +14,7 @@ pub mod editor_source;
 pub mod encoding;
 pub mod export;
 pub mod filters;
+pub mod floating_tools;
 pub mod i18n;
 pub mod input;
 pub mod links;
