@@ -10,7 +10,6 @@ use crate::{presentation::Paint, surface_state::Identity};
 use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use std::{
-    borrow::Cow,
     collections::{BTreeMap, VecDeque},
     sync::Arc,
 };
@@ -53,12 +52,26 @@ pub struct Update {
 /// Immutable link projection without copying the article's glyph/cell frame.
 /// Constructed by the frontend only from its acknowledged filtered Paint.
 #[derive(Clone)]
+enum ProjectedLinks<'a> {
+    Borrowed(&'a [crate::links::Link]),
+    Owned(Arc<[crate::links::Link]>),
+}
+impl std::ops::Deref for ProjectedLinks<'_> {
+    type Target = [crate::links::Link];
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Borrowed(links) => links,
+            Self::Owned(links) => links,
+        }
+    }
+}
+#[derive(Clone)]
 pub struct Projection<'a> {
     identity: Identity,
     article_id: Option<u64>,
     first_line: usize,
     eligible: bool,
-    links: Cow<'a, [crate::links::Link]>,
+    links: ProjectedLinks<'a>,
 }
 impl<'a> Projection<'a> {
     pub fn of(paint: &'a Paint) -> Self {
@@ -75,7 +88,7 @@ impl<'a> Projection<'a> {
                 && paint.connected
                 && !paint.input_pending
                 && !paint.output_pending,
-            links: Cow::Borrowed(&paint.links),
+            links: ProjectedLinks::Borrowed(&paint.links),
         }
     }
     /// Native worker handoff copies links once, never the article's raster or
@@ -86,8 +99,33 @@ impl<'a> Projection<'a> {
             article_id: self.article_id,
             first_line: self.first_line,
             eligible: self.eligible,
-            links: Cow::Owned(self.links.into_owned()),
+            links: match self.links {
+                ProjectedLinks::Borrowed(links) => ProjectedLinks::Owned(Arc::from(links)),
+                ProjectedLinks::Owned(links) => ProjectedLinks::Owned(links),
+            },
         }
+    }
+    pub fn links(&self) -> &[crate::links::Link] {
+        &self.links
+    }
+    /// The same deduplicated targets and joined-fragment placement feed both
+    /// the resource batch and native expansion controls.
+    pub fn images(&self) -> Vec<(usize, usize, String)> {
+        let mut targets: Vec<(usize, usize, String)> = Vec::new();
+        for (index, link) in self.links.iter().enumerate() {
+            if let Ok(Some(target)) = media::classify(&link.url)
+                && target.kind == media::Kind::Image
+            {
+                if let Some(existing) = targets.iter_mut().find(|(_, _, url)| url == &target.url) {
+                    if link.row <= existing.1.saturating_add(1) {
+                        existing.1 = existing.1.max(link.row);
+                    }
+                } else {
+                    targets.push((index, link.row, target.url));
+                }
+            }
+        }
+        targets
     }
     pub fn identity(&self) -> Identity {
         self.identity
@@ -245,20 +283,7 @@ impl InlineImages {
             }
             _ => None,
         };
-        let mut targets: Vec<(usize, usize, String)> = Vec::new();
-        for (index, link) in paint.links.iter().enumerate() {
-            if let Ok(Some(target)) = media::classify(&link.url)
-                && target.kind == media::Kind::Image
-            {
-                if let Some(existing) = targets.iter_mut().find(|(_, _, url)| url == &target.url) {
-                    if link.row <= existing.1.saturating_add(1) {
-                        existing.1 = existing.1.max(link.row);
-                    }
-                } else {
-                    targets.push((index, link.row, target.url));
-                }
-            }
-        }
+        let targets = paint.images();
         if targets.is_empty() && !self.active() {
             return Ok(None);
         }
@@ -409,10 +434,16 @@ mod tests {
     fn native_handoff_owns_only_the_acknowledged_link_projection() {
         let mut paint = page();
         let borrowed = Projection::of(&paint);
-        assert!(matches!(borrowed.links, Cow::Borrowed(_)));
+        assert!(matches!(borrowed.links, ProjectedLinks::Borrowed(_)));
         assert_eq!(borrowed.links.as_ptr(), paint.links.as_ptr());
         let owned = borrowed.into_owned();
-        assert!(matches!(owned.links, Cow::Owned(_)));
+        assert!(matches!(owned.links, ProjectedLinks::Owned(_)));
+        let cloned = owned.clone();
+        assert_eq!(
+            owned.links.as_ptr(),
+            cloned.links.as_ptr(),
+            "native projection clones share immutable links"
+        );
         let identity = owned.identity();
         paint.links[4].url = "https://example.test/changed.png".into();
         paint.links[4].row = 20;
