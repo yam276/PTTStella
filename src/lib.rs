@@ -1,4 +1,6 @@
 //! PTT-specific screen state. This is not a shell, PTY or general terminal emulator.
+#[cfg(feature = "desktop")]
+pub mod article_cache;
 pub mod article_navigation;
 pub mod article_refresh;
 pub mod article_target;
@@ -23,6 +25,8 @@ pub mod media;
 pub mod mouse;
 pub mod navigation;
 pub mod navigation_job;
+#[cfg(feature = "desktop")]
+pub mod presentation;
 pub mod recent_boards;
 pub mod render_wire;
 pub mod reply_navigation;

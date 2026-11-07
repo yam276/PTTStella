@@ -393,20 +393,7 @@ fn now() -> u64 {
         .as_secs()
 }
 
-pub(super) fn scope(view: &pttstella::connection::View) -> Option<Scope> {
-    if view.phase != pttstella::connection::Phase::Connected
-        || view.input_pending
-        || view.output_pending
-        || !view.site.ptt_features()
-    {
-        return None;
-    }
-    Some(Scope {
-        site: view.site.clone(),
-        account: view.account.clone()?,
-        board: pttstella::board_navigation::current_board(&view.frame)?,
-    })
-}
+pub(super) use pttstella::drafts::scope;
 #[cfg(test)]
 mod tests {
     use super::*;

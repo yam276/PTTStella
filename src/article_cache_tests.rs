@@ -1,5 +1,5 @@
 use super::*;
-use pttstella::{
+use crate::{
     encoding,
     navigation::Intent,
     screen::Screen,
@@ -15,7 +15,7 @@ fn page(first: usize, last: usize, percent: u8) -> Paint {
     screen.feed(b"\x1b[24;1H");
     screen.feed(&encoding::encode(&format!("瀏覽 第 {first}~{last} 行 ({percent}%)")).unwrap());
     let mut paint =
-        super::super::presentation::sample_packet(&screen.frame(), &DisplaySettings::default());
+        crate::presentation::sample_packet(&screen.frame(), &DisplaySettings::default());
     paint.connected = true;
     paint.ptt_features = true;
     paint.navigation = Context::ArticleReading {
@@ -49,7 +49,7 @@ fn reply_page(first: usize, row: usize) -> Paint {
             .unwrap()
             .text = ch.to_string();
     }
-    p.replies = vec![pttstella::filters::Push {
+    p.replies = vec![crate::filters::Push {
         row,
         id: "Alice".into(),
         start: 9,
@@ -64,21 +64,21 @@ fn adjacent_cached_pages_merge_ids_but_standalone_png_and_new_segments_keep_the_
     let mut first = reply_page(1, 22);
     let first_ids = first.replies.clone();
     cache.project(&mut first);
-    super::super::presentation::merge_replies(&mut first, &first_ids);
+    crate::presentation::merge_replies(&mut first, &first_ids);
     assert_eq!(
-        pttstella::text::rows(&first.frame).unwrap()[22].cells(3, 8),
+        crate::text::rows(&first.frame).unwrap()[22].cells(3, 8),
         Some("Alice")
     );
     let mut next = reply_page(24, 0);
     let next_ids = next.replies.clone();
     cache.project(&mut next);
-    super::super::presentation::merge_replies(&mut next, &next_ids);
+    crate::presentation::merge_replies(&mut next, &next_ids);
     assert_eq!(
-        pttstella::text::rows(&next.frame).unwrap()[23].cells(3, 8),
+        crate::text::rows(&next.frame).unwrap()[23].cells(3, 8),
         Some("█████")
     );
     assert_eq!(
-        pttstella::text::rows(next.source_frame.as_ref().unwrap()).unwrap()[0].cells(3, 8),
+        crate::text::rows(next.source_frame.as_ref().unwrap()).unwrap()[0].cells(3, 8),
         Some("Alice")
     );
     assert!(
@@ -93,17 +93,17 @@ fn adjacent_cached_pages_merge_ids_but_standalone_png_and_new_segments_keep_the_
     cache.clear();
     let mut fresh = reply_page(24, 0);
     cache.project(&mut fresh);
-    super::super::presentation::merge_replies(&mut fresh, &next_ids);
+    crate::presentation::merge_replies(&mut fresh, &next_ids);
     assert_eq!(
-        pttstella::text::rows(&fresh.frame).unwrap()[0].cells(3, 8),
+        crate::text::rows(&fresh.frame).unwrap()[0].cells(3, 8),
         Some("Alice")
     );
     cache.stop_load(LoadState::Cancelled);
     let mut gap = reply_page(100, 0);
     cache.project(&mut gap);
-    super::super::presentation::merge_replies(&mut gap, &next_ids);
+    crate::presentation::merge_replies(&mut gap, &next_ids);
     assert_eq!(
-        pttstella::text::rows(&gap.frame).unwrap()[0].cells(3, 8),
+        crate::text::rows(&gap.frame).unwrap()[0].cells(3, 8),
         Some("Alice")
     );
 }
@@ -315,7 +315,7 @@ fn short_articles_keep_the_source_grid_size_and_footer_row() {
         assert_eq!(short.article.as_ref().unwrap().last_line, last);
         assert!(short.frame.glyphs.iter().any(|g| g.row == 23));
         assert!(
-            pttstella::text::rows(&short.frame).is_some(),
+            crate::text::rows(&short.frame).is_some(),
             "short article with {last} lines must retain a complete cell grid"
         );
         assert!(
@@ -356,7 +356,7 @@ fn short_article_padding_preserves_plain_and_explicit_image_links() {
         let selected = selection::extract(&short.frame, &Selection::Link { index: 1 }).unwrap();
         assert_eq!(selected.text, "https://example.com/plain.png");
         assert!(
-            pttstella::filters::account_words(&short.frame)
+            crate::filters::account_words(&short.frame)
                 .iter()
                 .any(|word| word.id == "image")
         );
@@ -676,7 +676,7 @@ fn local_percent_metadata_identifies_only_ascii_status_cells_and_preserves_sourc
     cache.project(&mut p);
     assert_eq!(p.article.as_ref().unwrap().percent_cells, Some(16..19));
     assert_eq!(p.source_frame.as_ref().unwrap(), &original);
-    let rows = pttstella::text::rows(&p.frame).unwrap();
+    let rows = crate::text::rows(&p.frame).unwrap();
     assert_eq!(rows.last().unwrap().cells(16, 19), Some("100"));
     for text in [
         "(101%)",
@@ -711,7 +711,7 @@ fn visible_row_range_metadata_validates_both_fields_without_changing_source_cell
     let source = p.frame.clone();
     cache.project(&mut p);
     let range = p.article.as_ref().unwrap().range_cells.as_ref().unwrap();
-    let rows = pttstella::text::rows(p.source_frame.as_ref().unwrap()).unwrap();
+    let rows = crate::text::rows(p.source_frame.as_ref().unwrap()).unwrap();
     assert_eq!(
         rows.last()
             .unwrap()
@@ -997,7 +997,7 @@ fn terminal_article_edges_only_switch_on_fresh_arrows_when_enabled() {
         ("ArrowDown", b"\x1b[F\x1b[B".as_slice()),
         ("ArrowUp", b"\x1b[H\x1b[A".as_slice()),
     ] {
-        let mut key = pttstella::vim::Key {
+        let mut key = crate::vim::Key {
             key: name.into(),
             code: name.into(),
             ctrl: false,
@@ -1030,7 +1030,7 @@ fn terminal_article_edges_only_switch_on_fresh_arrows_when_enabled() {
         assert_eq!(terminal_arrow_boundary(&key, &middle, true), None);
     }
     for name in ["PageUp", "PageDown", "j", "k", "End", "Home"] {
-        let key = pttstella::vim::Key {
+        let key = crate::vim::Key {
             key: name.into(),
             code: name.into(),
             ctrl: false,
@@ -1141,10 +1141,14 @@ fn archive_pins_original_rows_across_masking_reset_and_cache_replacement() {
     }
     cache.capture_source(&tail, Some(&raw_tail));
     assert_eq!(cache.load_state(), Some(LoadState::Complete));
+    let window = cache.window(&tail, 20..25).unwrap();
+    let masked = selection::extract(&window.paint.frame, &Selection::Line { row: 2 }).unwrap();
+    assert!(masked.text.chars().all(|ch| ch == '█'));
+    assert!(!masked.text.contains("line"));
     let pin = cache.archive_snapshot(&raw_tail).unwrap();
     cache.clear();
     let raw = pin.frame();
-    let archive = pttstella::bookmarks::archive::Archive::new(&raw, 100).unwrap();
+    let archive = crate::bookmarks::archive::Archive::new(&raw, 100).unwrap();
     assert_eq!(archive.row_count(), 45);
     assert_eq!(raw.rows, 46);
     assert!(raw.glyphs.iter().any(|g| g.row == 22 && g.text == "l"));
@@ -1155,4 +1159,98 @@ fn archive_pins_original_rows_across_masking_reset_and_cache_replacement() {
             .all(|g| g.left.fg == 3 && g.left.bright)
     );
     assert!(raw.glyphs.iter().any(|g| g.row == 44 && g.text == "5"));
+}
+
+#[test]
+fn native_window_has_bounded_rows_historical_colour_and_exact_live_footer() {
+    let mut cache = ArticleCache::default();
+    for first in (1..=419).step_by(22) {
+        let mut packet = page(first, first + 22, if first == 419 { 100 } else { 50 });
+        if first == 243 {
+            let glyph = packet
+                .frame
+                .glyphs
+                .iter_mut()
+                .find(|g| g.row == 12 && g.col == 0)
+                .unwrap();
+            glyph.left.fg = 1;
+            glyph.right.fg = 2;
+        }
+        cache.capture(&packet);
+    }
+    let source = page(419, 441, 100);
+    let window = cache.window(&source, 250..277).unwrap();
+    assert_eq!(window.rows, 250..277);
+    assert_eq!(window.body_rows, 441);
+    assert_eq!(window.paint.frame.rows, 28);
+    assert_eq!(
+        lines(&window.paint),
+        (251..=277)
+            .map(|n| format!("line {n:04}"))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(window.paint.source_frame.as_ref(), Some(&source.frame));
+    assert_eq!(window.paint.article.as_ref().unwrap().last_line, 441);
+    let glyph = window
+        .paint
+        .frame
+        .glyphs
+        .iter()
+        .find(|g| g.row == 4 && g.col == 0)
+        .unwrap();
+    assert_eq!((glyph.left.fg, glyph.right.fg), (1, 2));
+    let footer = |f: &Frame| {
+        selection::extract(f, &Selection::Line { row: f.rows - 1 })
+            .unwrap()
+            .text
+    };
+    assert_eq!(footer(&window.paint.frame), footer(&source.frame));
+    assert!(window.paint.frame.glyphs.len() <= 28 * 80);
+    assert!(cache.window(&source, 0..MAX_WINDOW_ROWS + 1).is_none());
+    assert!(cache.window(&source, 441..442).is_none());
+    assert!(cache.window(&source, 1..1).is_none());
+    let tail = cache.window(&source, 435..460).unwrap();
+    assert_eq!(tail.rows, 435..441);
+    assert_eq!(tail.paint.frame.rows, 7);
+    let mut stale = source.clone();
+    stale.generation += 1;
+    assert!(cache.window(&stale, 0..24).is_none());
+    stale = source.clone();
+    stale.presentation += 1;
+    assert!(cache.window(&stale, 0..24).is_none());
+    assert!(cache.window(&window.paint, 0..24).is_none());
+}
+
+#[test]
+fn native_window_preserves_short_article_blank_grid_and_footer_links() {
+    let mut cache = ArticleCache::default();
+    let mut source = page(1, 2, 100);
+    source.frame.hyperlinks.push(Hyperlink {
+        target: Some("https://example.com/footer.png".into()),
+        spans: vec![crate::screen::hyperlinks::Span {
+            row: 23,
+            start: 0,
+            end: 2,
+        }],
+    });
+    cache.capture(&source);
+    let window = cache.window(&source, 0..23).unwrap();
+    assert_eq!(window.body_rows, 23);
+    assert_eq!(window.paint.frame.rows, 24);
+    assert_eq!(&lines(&window.paint)[..2], ["line 0001", "line 0002"]);
+    assert!(lines(&window.paint)[2..].iter().all(String::is_empty));
+    assert!(selection::extract(&window.paint.frame, &Selection::All).is_ok());
+    assert_eq!(window.paint.links.len(), 1);
+    assert_eq!(
+        (
+            window.paint.links[0].row,
+            window.paint.links[0].start,
+            window.paint.links[0].end
+        ),
+        (23, 0, 2)
+    );
+    assert_eq!(window.paint.links[0].url, "https://example.com/footer.png");
+    let tail = cache.window(&source, 20..23).unwrap();
+    assert_eq!(tail.paint.links[0].row, 3);
+    assert_eq!(tail.paint.frame.rows, 4);
 }

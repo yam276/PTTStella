@@ -166,6 +166,23 @@ pub fn empty_editor(frame: &crate::screen::Frame) -> bool {
             })
         })
 }
+/// A confirmed connected editor scope; never derived from pending output.
+#[cfg(feature = "desktop")]
+pub fn scope(view: &crate::connection::View) -> Option<Scope> {
+    if view.phase != crate::connection::Phase::Connected
+        || view.input_pending
+        || view.output_pending
+        || !view.site.ptt_features()
+    {
+        return None;
+    }
+    Some(Scope {
+        site: view.site.clone(),
+        account: view.account.clone()?,
+        board: crate::board_navigation::current_board(&view.frame)?,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
