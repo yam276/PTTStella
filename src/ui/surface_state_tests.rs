@@ -1120,7 +1120,12 @@ fn full_article_loading_does_not_require_ack_preserves_cancelled_data_and_never_
     assert!(state.next_full_page(&view).is_none());
     assert!(!state.full_load_action(view.generation, id + 1, false, &view));
     assert!(state.full_load_action(view.generation, id, false, &view));
-    assert!(state.full_load_deadline().is_none());
+    let outstanding = state.full_load_deadline();
+    assert!(outstanding.is_some());
+    assert!(state.full_load_action(view.generation, id, true, &view));
+    assert!(state.next_full_page(&view).is_none());
+    assert_eq!(state.full_load_deadline(), outstanding);
+    assert!(state.full_load_action(view.generation, id, false, &view));
     let current = displayed(&mut state, &view);
     assert_eq!(
         state
@@ -1137,6 +1142,7 @@ fn full_article_loading_does_not_require_ack_preserves_cancelled_data_and_never_
     displayed(&mut state, &view);
     assert!(state.last_displayed().unwrap().article.is_none());
     assert!(!state.full_load_active());
+    assert!(state.full_load_deadline().is_none());
     assert!(state.next_full_page(&view).is_none());
     assert!(!state.full_load_action(view.generation, id, true, &view));
 }

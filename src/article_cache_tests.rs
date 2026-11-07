@@ -462,6 +462,37 @@ fn full_loading_cancel_keeps_late_page_but_never_restarts_without_a_current_resu
     assert!(cache.load_deadline().is_none());
 }
 #[test]
+fn immediate_resume_waits_for_the_already_requested_page() {
+    let mut cache = ArticleCache::default();
+    let now = Instant::now();
+    let mut first = page(1, 23, 10);
+    cache.project(&mut first);
+    let id = first.article.as_ref().unwrap().id;
+    assert_eq!(
+        cache.next_full_page(&first.navigation, 1, now),
+        Some(Intent::NextPage)
+    );
+    let deadline = cache.load_deadline();
+    assert!(cache.load_action(id, false));
+    assert_eq!(cache.load_deadline(), deadline);
+    assert!(cache.load_action(id, true));
+    assert!(cache.next_full_page(&first.navigation, 2, now).is_none());
+    let mut late = page(22, 44, 20);
+    cache.project(&mut late);
+    assert_eq!(cache.rows.len(), 44);
+    assert!(cache.load_deadline().is_none());
+    assert_eq!(
+        cache.next_full_page(&late.navigation, 22, now),
+        Some(Intent::NextPage)
+    );
+    assert!(cache.load_action(id, false));
+    assert!(cache.expire_load(now + LOAD_RESPONSE_TIMEOUT));
+    assert_eq!(cache.load_state(), Some(LoadState::Cancelled));
+    assert!(cache.load_deadline().is_none());
+    assert!(!cache.expire_load(now + LOAD_RESPONSE_TIMEOUT));
+}
+
+#[test]
 fn full_loading_waits_for_a_real_range_and_times_out_without_retries() {
     let mut cache = ArticleCache::default();
     let now = Instant::now();

@@ -329,12 +329,13 @@ impl ArticleCache {
             }
             self.loader.state = Some(LoadState::Loading);
             self.loader.steps = 0;
-            self.loader.awaiting = None;
         } else {
             if !self.loading() {
                 return false;
             }
-            self.stop_load(LoadState::Cancelled);
+            // A write may already have reached the station. Keep its response
+            // fence so an immediate resume cannot enqueue a second PageDown.
+            self.loader.state = Some(LoadState::Cancelled);
         }
         true
     }
@@ -371,7 +372,12 @@ impl ArticleCache {
     }
     pub fn expire_load(&mut self, now: Instant) -> bool {
         if self.load_deadline().is_some_and(|deadline| now >= deadline) {
-            self.stop_load(LoadState::Stopped);
+            if self.loading() {
+                self.stop_load(LoadState::Stopped);
+            } else {
+                // Cancellation remains cancelled, but its old timer must end.
+                self.loader.awaiting = None;
+            }
             return true;
         }
         false
