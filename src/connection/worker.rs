@@ -485,6 +485,15 @@ impl Session {
     /// Returns true only when the command closes this worker.
     async fn command(&mut self, command: Option<Command>) -> bool {
         match command {
+            Some(Command::MouseRevoke { generation, reply }) => {
+                let result = if generation == self.view.generation {
+                    self.publish();
+                    Ok(())
+                } else {
+                    Err(crate::msg!("station-mouse-stale"))
+                };
+                let _ = reply.send(result);
+            }
             Some(Command::Mouse(event)) => self.mouse_report(event).await,
             Some(Command::MouseSample(sample)) => self.mouse_sample(sample).await,
             Some(Command::KeepAlive(enabled)) => self.keep_alive(enabled),
@@ -768,7 +777,10 @@ impl Session {
                 error = error.to_string()
             )),
         }
-        self.dirty = true;
+        // Publish the lifecycle transition before receiving bytes. A fast peer
+        // can negotiate mouse modes before the next coalesced frame tick; those
+        // pending-output notifications must retain this generation and phase.
+        self.publish();
     }
 
     fn fail(&mut self, error: String) {

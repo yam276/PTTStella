@@ -3353,3 +3353,57 @@ async fn draft_partial_clear_waits_without_writing_body_and_manual_input_still_c
     );
     peer.await.unwrap();
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn mouse_revoke_ack_publishes_policy_before_reply_and_discards_queued_sample() {
+    use crate::mouse::{
+        self,
+        input::{Lease, Sample, SampleReport},
+    };
+    let connection =
+        Connection::start_ui_probe(b"\x1b[2J\x1b[HOWNED MOUSE FENCE\x1b[?1003;1006h".to_vec())
+            .unwrap();
+    assert_eq!(
+        connection.updates.borrow().mouse.route,
+        mouse::input::Route::Local
+    );
+    connection.connect().unwrap();
+    let view = wait(&connection, |view| {
+        view.mouse.route == mouse::input::Route::Station
+    })
+    .await;
+    assert_eq!(view.generation, 1);
+    assert_eq!(view.phase, Phase::Connected);
+    let lease = Lease {
+        stamp: view.stamp(),
+        mode_epoch: view.mouse.modes.epoch(),
+        policy_epoch: view.mouse.policy_epoch,
+        transaction: 1,
+    };
+    connection
+        .mouse_sample(Sample {
+            lease,
+            sequence: 1,
+            report: SampleReport::Motion(mouse::MotionReport {
+                col: 4,
+                row: 4,
+                button: None,
+                modifiers: mouse::Modifiers::default(),
+            }),
+        })
+        .unwrap();
+    connection
+        .request_mouse_revoke(view.generation)
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    let after = connection.updates.borrow().clone();
+    assert!(after.mouse.policy_epoch > view.mouse.policy_epoch);
+    assert!(after.mouse.active.is_none());
+    assert_eq!(after.input_epoch, view.input_epoch);
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+}

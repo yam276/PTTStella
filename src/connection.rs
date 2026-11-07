@@ -88,6 +88,10 @@ impl View {
 enum Command {
     Mouse(crate::mouse::input::Event),
     MouseSample(crate::mouse::input::Sample),
+    MouseRevoke {
+        generation: u64,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
     KeepAlive(bool),
     Connect,
     SwitchSite(crate::sites::Target),
@@ -498,6 +502,18 @@ impl Connection {
     pub fn revoke_mouse(&self, generation: u64) {
         self.mouse_ui
             .send_modify(|controls| controls.revoke(generation));
+    }
+    /// Priority revoke plus a bounded acknowledgement after publishing its snapshot.
+    pub fn request_mouse_revoke(&self, generation: u64) -> Result<Reply, String> {
+        self.revoke_mouse(generation);
+        let (reply, answer) = oneshot::channel();
+        self.enqueue(Command::MouseRevoke { generation, reply })?;
+        Ok(Reply {
+            answer,
+            deadline: tokio::time::Instant::now() + Duration::from_secs(2),
+            expired: crate::msg!("station-mouse-busy"),
+            closed: crate::msg!("connection-service-stopped"),
+        })
     }
     pub async fn login(&self, stamp: Stamp, credentials: Credentials) -> Result<(), String> {
         self.request_login(stamp, credentials)?.wait().await
