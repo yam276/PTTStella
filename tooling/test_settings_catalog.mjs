@@ -103,3 +103,11 @@ test('text width and font reset are searchable appearance controls',()=>{
   }
  }
 });
+
+test('UTF-16 query limit does not create a dangling high surrogate',()=>{
+ for(const language of ['zh-TW','en-US']){
+  const index=settingsCatalog(translator(language));
+  assert.ok(searchSettings(index,'baseline'+' '.repeat(119)+'😀').some(e=>e.id==='font-baseline'));
+  assert.equal(searchSettings(index,'x'.repeat(128)+'baseline').length,0);
+ }
+});

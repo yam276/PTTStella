@@ -3,7 +3,11 @@ function settingsCatalog(tr){
     return SETTINGS_CATALOG.map(([id,page,label,aliases])=>({id,page,label:tr(label),search:(tr(label)+' '+tr(aliases)).normalize('NFKC').toLowerCase()}));
 }
 function searchSettings(entries,query){
-    const words=query.slice(0,128).normalize('NFKC').toLowerCase().trim().split(/\s+/).filter(Boolean);
+    let bounded=query.slice(0,128);
+    // Native strings contain complete Unicode scalars. Avoid creating a lone
+    // high surrogate when the shared UTF-16 limit cuts an astral character.
+    if(/[\uD800-\uDBFF]$/.test(bounded))bounded=bounded.slice(0,-1);
+    const words=bounded.normalize('NFKC').toLowerCase().trim().split(/\s+/).filter(Boolean);
     return words.length?entries.filter(entry=>words.every(word=>entry.search.includes(word))):[];
 }
 function createSettingsNavigation({document,tr,changed=()=>{}}){
