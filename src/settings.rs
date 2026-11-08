@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[cfg(feature = "desktop")]
+pub mod preferences;
+#[cfg(feature = "desktop")]
 pub mod store;
 
 pub const MAX_SETTINGS_BYTES: usize = 8192;
