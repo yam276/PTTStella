@@ -101,71 +101,36 @@ pub(super) fn read(window: &SettingsWindow, base: &AppSettings) -> Result<AppSet
     draft.validate()
 }
 
-/// Static product metadata only. Never searches terminal text, family catalog,
-/// saved site names, credentials or any other user data.
-pub(super) fn search(query: &str) -> Vec<(i32, &'static str)> {
-    const INDEX: [(i32, &str, &str); 12] = [
-        (
-            0,
-            "language-label",
-            "語言 繁體中文 英文 language locale english chinese",
-        ),
-        (
-            0,
-            "article-mode",
-            "文章 網頁 終端機 article mode web terminal",
-        ),
-        (
-            0,
-            "article-boundary-navigation",
-            "上篇 下篇 邊界 boundary previous next arrow",
-        ),
-        (
-            1,
-            "font-preset",
-            "字型 字體 預設 fonts preset windows macos linux",
-        ),
-        (1, "font-ascii", "英數 ascii latin symbols"),
-        (1, "font-cjk", "中文 漢字 chinese cjk"),
-        (1, "font-size", "字高 字級 大小 size height"),
-        (1, "font-baseline", "基線 排版 baseline alignment"),
-        (1, "font-width", "字寬 字距 寬度 spacing width"),
-        (
-            2,
-            "settings-opacity",
-            "透明 浮球 滑鼠 右鍵 opacity ball mouse right click",
-        ),
-        (
-            3,
-            "hover-position",
-            "圖片 自動 預覽 image automatic media hover preview",
-        ),
-        (
-            4,
-            "settings-privacy-description",
-            "帳號 密碼 登入 隱私 account password login privacy",
-        ),
-    ];
-    let query = query.chars().take(256).collect::<String>().to_lowercase();
-    let query = query.trim();
-    if query.is_empty() {
-        return Vec::new();
-    }
-    INDEX
-        .iter()
-        .filter(|(_, _, terms)| query.split_whitespace().all(|q| terms.contains(q)))
-        .map(|(page, key, _)| (*page, *key))
-        .collect()
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn search_is_bounded_static_bilingual_metadata() {
-        assert_eq!(search("baseline"), [(1, "font-baseline")]);
-        assert_eq!(search("字寬"), [(1, "font-width")]);
-        assert!(search("my-private-user-account-123").is_empty());
-        assert!(search("").is_empty());
-        assert!(search(&"x".repeat(20_000)).is_empty());
-    }
+/// Native locations for the shared closed product destinations. The filter
+/// manager is still a separate migration task and has no placeholder result.
+pub(super) fn destination(entry: pttstella::settings::catalog::Entry) -> Option<(i32, i32)> {
+    use pttstella::settings::catalog::{Page, Target};
+    Some(match entry.0 {
+        Some(Target::InterfaceLanguage) => (0, 10),
+        Some(Target::ZoomFit) => (1, 20),
+        Some(Target::VimToggle) => (2, 21),
+        Some(Target::StationMouse) => (2, 22),
+        Some(Target::KeepAlive) => (0, 23),
+        Some(Target::FontPreset) => (1, 11),
+        Some(Target::FontAscii) => (1, 1),
+        Some(Target::FontCjk) => (1, 2),
+        Some(Target::FontSize) => (1, 3),
+        Some(Target::FontBaseline) => (1, 4),
+        Some(Target::FontWidth) => (1, 5),
+        Some(Target::FontReset) => (1, 24),
+        Some(Target::FontProfileName) => (1, 7),
+        Some(Target::ToolsOpacity) => (2, 6),
+        Some(Target::ToolsRightClick) => (2, 12),
+        Some(Target::ToolsShowBall) => (2, 13),
+        Some(Target::ArticleMode) => (0, 14),
+        Some(Target::AutoExpandImages) => (3, 15),
+        Some(Target::ArticleBoundaryNavigation) => (0, 16),
+        Some(Target::SettingsHover) => (3, 17),
+        None => match entry.1 {
+            Page::Sites => (0, 18),
+            Page::Account => (4, 19),
+            Page::About => (5, 25),
+            _ => return None,
+        },
+    })
 }

@@ -1,6 +1,7 @@
 import { Button, CheckBox, ComboBox, LineEdit, ScrollView } from "std-widgets.slint";
 global SettingsInput {
     in-out property <int> focused:-1;
+    in-out property <int> active-target:-1;
     in-out property <int> command;
     in-out property <int> command-sequence;
     in-out property <int> focus-field:-1;
@@ -11,8 +12,8 @@ component EditField inherits LineEdit {
     private property <int> command-sequence:SettingsInput.command-sequence;
     private property <int> focus-sequence:SettingsInput.focus-sequence;
     changed has-focus=>{
-        if self.has-focus {SettingsInput.focused=self.field-id;}
-        else if SettingsInput.focused==self.field-id {SettingsInput.focused=-1;}
+        if self.has-focus {SettingsInput.focused=self.field-id; SettingsInput.active-target=self.field-id;}
+        else {if SettingsInput.focused==self.field-id {SettingsInput.focused=-1;} if SettingsInput.active-target==self.field-id {SettingsInput.active-target=-1;}}
     }
     changed focus-sequence=>{if SettingsInput.focus-field==self.field-id {self.focus();}}
     changed command-sequence=>{
@@ -26,6 +27,24 @@ component EditField inherits LineEdit {
         }
     }
 }
+component FocusButton inherits Button {
+    in property <int> field-id;
+    private property <int> focus-sequence:SettingsInput.focus-sequence;
+    changed focus-sequence=>{if SettingsInput.focus-field==self.field-id {self.focus();}}
+    changed has-focus=>{if self.has-focus {SettingsInput.active-target=self.field-id;} else if SettingsInput.active-target==self.field-id {SettingsInput.active-target=-1;}}
+}
+component FocusCombo inherits ComboBox {
+    in property <int> field-id;
+    private property <int> focus-sequence:SettingsInput.focus-sequence;
+    changed focus-sequence=>{if SettingsInput.focus-field==self.field-id {self.focus();}}
+    changed has-focus=>{if self.has-focus {SettingsInput.active-target=self.field-id;} else if SettingsInput.active-target==self.field-id {SettingsInput.active-target=-1;}}
+}
+component FocusCheck inherits CheckBox {
+    in property <int> field-id;
+    private property <int> focus-sequence:SettingsInput.focus-sequence;
+    changed focus-sequence=>{if SettingsInput.focus-field==self.field-id {self.focus();}}
+    changed has-focus=>{if self.has-focus {SettingsInput.active-target=self.field-id;} else if SettingsInput.active-target==self.field-id {SettingsInput.active-target=-1;}}
+}
 export struct FontSource { id:string,title:string }
 export struct SettingsMatch { title:string, page:int, field:int }
 export component SettingsWindow inherits Window {
@@ -34,6 +53,12 @@ export component SettingsWindow inherits Window {
     min-width: 700px; min-height: 520px;
     background: #171b23;
     in property <[string]> labels;
+    in property <[string]> runtime-labels;
+    in property <[bool]> runtime-states;
+    in property <[bool]> runtime-available;
+    in-out property <string> profile-name;
+    out property <int> focused-target:SettingsInput.active-target;
+    callback runtime-action(int);
     in property <[string]> categories;
     in property <[string]> presets;
     in property <[string]> languages;
@@ -82,11 +107,19 @@ export component SettingsWindow inherits Window {
         if SettingsInput.focused<0 {return false;}
         SettingsInput.command=code;SettingsInput.command-sequence=1-SettingsInput.command-sequence;return true;
     }
+    callback choose-result(int);
+    choose-result(index)=>{
+        if index>=0 && index<root.matches.length {
+            let item=root.matches[index];
+            root.page=item.page;root.query="";root.focus-result(item.field);
+        }
+    }
+    callback cancel-result-focus;
     callback focus-result(int);
     callback focus-field(int);
     focus-field(field)=>{SettingsInput.focus-field=field;SettingsInput.focus-sequence=1-SettingsInput.focus-sequence;}
     callback focus-search;
-    focus-search => { search-box.focus(); }
+    focus-search => { root.cancel-result-focus(); search-box.focus(); }
     VerticalLayout {
         padding:16px;spacing:12px;
         search-box:=EditField {field-id:0; placeholder-text:root.labels[1];text<=>root.query;edited=>{root.search(self.text);} }
@@ -96,7 +129,7 @@ export component SettingsWindow inherits Window {
                 width:154px;spacing:6px;
                 for item[index] in root.categories: Button {
                     text:item;checked:root.page==index && root.query=="";
-                    clicked=>{root.query="";root.page=index;}
+                    clicked=>{root.cancel-result-focus();root.query="";root.page=index;}
                 }
                 Rectangle {vertical-stretch:1;background:transparent;}
             }
@@ -104,22 +137,24 @@ export component SettingsWindow inherits Window {
                 VerticalLayout {
                     padding:8px;spacing:12px;
                     if root.query!="": VerticalLayout {
-                        for item in root.matches: Button { text:item.title;clicked=>{root.page=item.page;root.query="";root.focus-result(item.field);} }
+                        for item[index] in root.matches: Button { text:item.title + " · " + root.categories[item.page];clicked=>{root.choose-result(index);} }
                         if root.matches.length==0: Text { text:root.labels[2];color:#d7dce5;wrap:word-wrap; }
                     }
                     if root.query=="" && root.page==0: VerticalLayout {
-                        if root.sites-available: Button {text:root.sites-label;clicked=>{root.manage-sites();}}
+                        FocusButton {field-id:23;text:root.runtime-labels[3];enabled:root.runtime-available[3];checked:root.runtime-states[3];clicked=>{root.runtime-action(3);}}
+                        if root.sites-available: FocusButton {field-id:18;text:root.sites-label;clicked=>{root.manage-sites();}}
                         Text {text:root.labels[3];color:#d7dce5;}
-                        ComboBox {model:root.languages;current-index<=>root.language;selected=>{root.edit();}}
+                        FocusCombo {field-id:10;model:root.languages;current-index<=>root.language;selected=>{root.edit();}}
                         Text {text:root.labels[4];color:#d7dce5;wrap:word-wrap;}
                         Text {text:root.labels[5];color:#d7dce5;}
-                        ComboBox {model:root.modes;current-index<=>root.article-mode;selected=>{root.edit();}}
+                        FocusCombo {field-id:14;model:root.modes;current-index<=>root.article-mode;selected=>{root.edit();}}
                         Text {text:root.labels[6];color:#d7dce5;wrap:word-wrap;}
-                        CheckBox {text:root.labels[7];checked<=>root.boundary;toggled=>{root.edit();}}
+                        FocusCheck {field-id:16;text:root.labels[7];checked<=>root.boundary;toggled=>{root.edit();}}
                     }
                     if root.query=="" && root.page==1: VerticalLayout {
+                        FocusButton {field-id:20;text:root.runtime-labels[0];clicked=>{root.runtime-action(0);}}
                         Text {text:root.labels[8];color:#d7dce5;}
-                        ComboBox {model:root.presets;current-index<=>root.preset;selected=>{root.font-preset();}}
+                        FocusCombo {field-id:11;model:root.presets;current-index<=>root.preset;selected=>{root.font-preset();}}
                         Text {text:root.labels[9];color:#d7dce5;}
                         ascii-field:=EditField {field-id:1;text<=>root.ascii;edited=>{root.custom-font();}}
                         ComboBox {model:root.families;selected(value)=>{root.family(false,value);}}
@@ -135,6 +170,8 @@ export component SettingsWindow inherits Window {
                         Text {text:root.labels[15];color:#d7dce5;wrap:word-wrap;}
                         Image {source:root.preview;image-fit:contain;height:144px;}
                         Text {text:root.font-status;color:#e4c76e;wrap:word-wrap;}
+                        Text {text:root.labels[33];color:#d7dce5;}
+                        EditField {field-id:7;text<=>root.profile-name;}
                         HorizontalLayout {
                             Button {text:root.labels[16];clicked=>{root.profile(false);}}
                             Button {text:root.labels[17];clicked=>{root.profile(true);}}
@@ -144,24 +181,32 @@ export component SettingsWindow inherits Window {
                             Button {text:source.title;clicked=>{root.font-source(source.id);}}
                     }
                     if root.query=="" && root.page==2: VerticalLayout {
+                        FocusButton {field-id:21;text:root.runtime-labels[1];enabled:root.runtime-available[1];checked:root.runtime-states[1];clicked=>{root.runtime-action(1);}}
+                        FocusButton {field-id:22;text:root.runtime-labels[2];enabled:root.runtime-available[2];checked:root.runtime-states[2];clicked=>{root.runtime-action(2);}}
                         Text {text:root.labels[19];color:#d7dce5;}
                         opacity-field:=EditField {field-id:6;text<=>root.tool-opacity;edited=>{root.edit();}}
-                        CheckBox {text:root.labels[20];checked<=>root.right-click;toggled=>{root.edit();}}
-                        CheckBox {text:root.labels[21];checked<=>root.show-ball;toggled=>{root.edit();}}
+                        FocusCheck {field-id:12;text:root.labels[20];checked<=>root.right-click;toggled=>{root.edit();}}
+                        FocusCheck {field-id:13;text:root.labels[21];checked<=>root.show-ball;toggled=>{root.edit();}}
                         Text {text:root.labels[22];color:#d7dce5;wrap:word-wrap;}
                     }
                     if root.query=="" && root.page==3: VerticalLayout {
                         Text {text:root.labels[23];color:#d7dce5;}
-                        ComboBox {model:root.positions;current-index<=>root.hover;selected=>{root.edit();}}
-                        CheckBox {text:root.labels[24];checked<=>root.automatic;toggled=>{root.edit();}}
+                        FocusCombo {field-id:17;model:root.positions;current-index<=>root.hover;selected=>{root.edit();}}
+                        FocusCheck {field-id:15;text:root.labels[24];checked<=>root.automatic;toggled=>{root.edit();}}
                         Text {text:root.labels[25];color:#d7dce5;wrap:word-wrap;}
                     }
                     if root.query=="" && root.page==4: VerticalLayout {
                         Text {text:root.labels[26];color:#d7dce5;wrap:word-wrap;}
-                        Button {text:root.labels[27];clicked=>{root.manage-account();}}
+                        FocusButton {field-id:19;text:root.labels[27];clicked=>{root.manage-account();}}
                     }
                     if root.query=="" && root.page==5: VerticalLayout {
-                        Text {text:"PTTStella Slint · " + root.labels[28];color:#e4c76e;wrap:word-wrap;}
+                        FocusScope {
+                            height:40px;
+                            private property <int> focus-sequence:SettingsInput.focus-sequence;
+                            changed focus-sequence=>{if SettingsInput.focus-field==25 {self.focus();}}
+                            changed has-focus=>{if self.has-focus {SettingsInput.active-target=25;} else if SettingsInput.active-target==25 {SettingsInput.active-target=-1;}}
+                            Text {text:"PTTStella Slint · " + root.labels[28];color:#e4c76e;wrap:word-wrap;}
+                        }
                         Text {text:root.labels[29];color:#d7dce5;wrap:word-wrap;}
                     }
                 }
@@ -169,7 +214,7 @@ export component SettingsWindow inherits Window {
         }
         Text {text:root.notice;color:root.failed ? #ffb5ac : #d7dce5;wrap:word-wrap;}
         HorizontalLayout {
-            Button {text:root.labels[30];enabled:root.page<4;clicked=>{root.reset();}}
+            FocusButton {field-id:24;text:root.labels[30];enabled:root.page<4;clicked=>{root.reset();}}
             Rectangle {horizontal-stretch:1;background:transparent;}
             if root.failed: Button {text:root.labels[31];clicked=>{root.retry();}}
             Button {text:root.labels[32];clicked=>{root.close-settings();}}

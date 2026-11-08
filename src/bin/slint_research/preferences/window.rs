@@ -5,7 +5,7 @@ use crate::{
 };
 use pttstella::settings::PortableProfile;
 use slint::{
-    ModelRc, VecModel,
+    Model, ModelRc, VecModel,
     winit_030::{
         EventResult, WinitWindowAccessor,
         winit::event::{Ime, WindowEvent},
@@ -111,40 +111,107 @@ impl Preferences {
                 }
             }
         });
+        window.set_profile_name(msg!("profile-default-name").into());
         window.on_search({
+            let owner = Rc::downgrade(self);
             let w = window.as_weak();
             move |query| {
-                if let Some(w) = w.upgrade() {
+                if let (Some(owner), Some(w)) = (owner.upgrade(), w.upgrade()) {
+                    owner.search_focus.stop();
+                    let bounded = pttstella::settings::catalog::bounded_query(&query);
+                    if bounded != w.get_query().as_str() {
+                        w.set_query(bounded.clone().into());
+                    }
+                    let found = owner
+                        .search_index
+                        .borrow()
+                        .as_ref()
+                        .map(|i| i.search(&bounded))
+                        .unwrap_or_default();
                     w.set_matches(ModelRc::new(VecModel::from(
-                        form::search(&query)
+                        found
                             .into_iter()
-                            .map(|(page, key)| SettingsMatch {
-                                field: match key {
-                                    "font-ascii" => 1,
-                                    "font-cjk" => 2,
-                                    "font-size" => 3,
-                                    "font-baseline" => 4,
-                                    "font-width" => 5,
-                                    "settings-opacity" => 6,
-                                    _ => -1,
-                                },
-                                page,
-                                title: pttstella::i18n::application().loader().get(key).into(),
+                            .filter_map(|entry| {
+                                form::destination(entry)
+                                    .filter(|(_, field)| match *field {
+                                        18 => w.get_sites_available(),
+                                        21 => w.get_runtime_available().row_data(1) == Some(true),
+                                        22 => w.get_runtime_available().row_data(2) == Some(true),
+                                        23 => w.get_runtime_available().row_data(3) == Some(true),
+                                        _ => true,
+                                    })
+                                    .map(|(page, field)| SettingsMatch {
+                                        field,
+                                        page,
+                                        title: pttstella::i18n::application()
+                                            .loader()
+                                            .get(entry.2)
+                                            .into(),
+                                    })
                             })
                             .collect::<Vec<_>>(),
                     )));
                 }
             }
         });
+        window.on_cancel_result_focus({
+            let owner = Rc::downgrade(self);
+            move || {
+                if let Some(owner) = owner.upgrade() {
+                    owner.search_focus.stop();
+                }
+            }
+        });
         window.on_focus_result({
+            let owner = Rc::downgrade(self);
             let w = window.as_weak();
             move |field| {
-                let w = w.clone();
-                Timer::single_shot(Duration::from_millis(16), move || {
-                    if let Some(w) = w.upgrade() {
-                        w.invoke_focus_field(field);
-                    }
-                });
+                if let (Some(owner), Some(w)) = (owner.upgrade(), w.upgrade()) {
+                    let expected_page = w.get_page();
+                    let w = w.as_weak();
+                    let owner_weak = Rc::downgrade(&owner);
+                    owner.search_focus.start(
+                        TimerMode::SingleShot,
+                        Duration::from_millis(16),
+                        move || {
+                            if let (Some(owner), Some(w)) = (owner_weak.upgrade(), w.upgrade())
+                                && !owner.stopped.get()
+                                && !owner.closing.get()
+                                && !owner.composing.get()
+                                && w.get_query().is_empty()
+                                && w.get_page() == expected_page
+                                && owner
+                                    .ui
+                                    .upgrade()
+                                    .is_some_and(|u| u.get_settings_open() && !u.get_app_closing())
+                            {
+                                w.invoke_focus_field(field);
+                            }
+                        },
+                    );
+                }
+            }
+        });
+        window.on_runtime_action({
+            let owner = Rc::downgrade(self);
+            move |code| {
+                if let Some(owner) = owner.upgrade()
+                    && !owner.composing.get()
+                    && owner
+                        .ui
+                        .upgrade()
+                        .is_some_and(|u| u.get_settings_open() && !u.get_app_closing())
+                {
+                    let handoff = match code {
+                        0 => Handoff::Fit,
+                        1 => Handoff::Vim,
+                        2 => Handoff::Mouse,
+                        3 => Handoff::KeepAlive,
+                        _ => return,
+                    };
+                    owner.handoff.set(Some(handoff));
+                    owner.request_close();
+                }
             }
         });
         window.on_reset({
@@ -329,10 +396,52 @@ impl Preferences {
         });
         Ok(window)
     }
+    pub(super) fn refresh_runtime(&self, w: &SettingsWindow) {
+        if let Some(ui) = self.ui.upgrade() {
+            w.set_runtime_labels(strings([
+                msg!("zoom-fit"),
+                ui.get_vim_label().to_string(),
+                ui.get_station_mouse_label().to_string(),
+                ui.get_keep_alive_label().to_string(),
+            ]));
+            w.set_runtime_states(ModelRc::new(VecModel::from(vec![
+                false,
+                ui.get_vim_enabled(),
+                ui.get_station_mouse_enabled(),
+                ui.get_keep_alive_enabled(),
+            ])));
+            let unblocked = !ui.get_app_closing()
+                && !ui.get_editor_open()
+                && !ui.get_station_color_open()
+                && !ui.get_login_open()
+                && !ui.get_paste_open()
+                && !ui.get_switching_station();
+            let ptt = ui.get_keep_alive_available() && unblocked;
+            w.set_runtime_available(ModelRc::new(VecModel::from(vec![
+                true,
+                ptt,
+                ui.get_station_mouse_available() && unblocked,
+                ptt,
+            ])));
+            if !w.get_query().is_empty() {
+                w.invoke_search(w.get_query());
+            }
+        }
+    }
     fn localize(&self, w: &SettingsWindow) {
         w.set_sites_label(msg!("sites-title").into());
         w.set_sites_available(self.ui.upgrade().is_some_and(|u| u.get_sites_available()));
         let t = |key: &str| pttstella::i18n::application().loader().get(key);
+        match pttstella::settings::catalog::Index::new(t) {
+            Ok(index) => {
+                self.search_index.replace(Some(index));
+            }
+            Err(error) => {
+                self.search_index.borrow_mut().take();
+                self.notice(error);
+            }
+        }
+        self.refresh_runtime(w);
         let mut labels: Vec<String> = [
             "settings-center-title",
             "settings-search-placeholder",
@@ -367,6 +476,7 @@ impl Preferences {
             "settings-defaults",
             "settings-retry",
             "close",
+            "profile-name",
         ]
         .into_iter()
         .map(t)
@@ -506,6 +616,7 @@ impl Preferences {
     }
     pub(super) fn hide(&self) {
         self.timer.stop();
+        self.search_focus.stop();
         self.export_pending.set(false);
         self.closing.set(false);
         self.composing.set(false);
@@ -522,6 +633,16 @@ impl Preferences {
                 match handoff {
                     Handoff::Account => ui.invoke_login_show(),
                     Handoff::Sites => ui.invoke_sites_show(),
+                    Handoff::Fit => {
+                        ui.set_zoom(1.);
+                        ui.invoke_focus_terminal();
+                    }
+                    Handoff::Vim => {
+                        ui.invoke_keyboard_updated();
+                        ui.invoke_toggle_vim();
+                    }
+                    Handoff::Mouse => ui.invoke_toggle_station_mouse(),
+                    Handoff::KeepAlive => ui.invoke_toggle_keep_alive(),
                 }
             }
         }
@@ -552,6 +673,17 @@ impl Preferences {
                 }
             });
     }
+    pub(super) fn imported(self: &Rc<Self>, profile: PortableProfile) {
+        if let Some(w) = self.window.borrow().as_ref() {
+            let mut draft = self.pending.borrow().clone().unwrap_or_else(|| self.app());
+            draft.display = profile.display;
+            w.set_profile_name(profile.name.into());
+            form::populate(w, &draft);
+            self.preview(w);
+            self.queue(draft, Duration::from_millis(300));
+            self.notice(msg!("slint-profile-imported"));
+        }
+    }
     pub(super) fn profile(self: &Rc<Self>, export: bool) {
         if export && (self.composing.get() || !self.valid.get()) {
             self.notice(msg!("settings-autosave-invalid"));
@@ -580,6 +712,17 @@ impl Preferences {
         let Some(ui) = self.ui.upgrade() else {
             return;
         };
+        let profile = if export {
+            match PortableProfile::new(w.get_profile_name().to_string(), self.app().display) {
+                Ok(profile) => Some(profile),
+                Err(error) => {
+                    self.notice(error);
+                    return;
+                }
+            }
+        } else {
+            None
+        };
         if !self.output.begin_picker(&ui) {
             self.notice(msg!("file-busy"));
             return;
@@ -607,7 +750,6 @@ impl Preferences {
         let Some(ui) = self.ui.upgrade() else {
             return;
         };
-        let display = self.app().display;
         let weak = Rc::downgrade(self);
         self.output.work(
             &ui,
@@ -620,7 +762,7 @@ impl Preferences {
                     }) {
                         return Err(msg!("profile-extension"));
                     }
-                    let profile = PortableProfile::new(msg!("profile-default-name"), display)?;
+                    let profile = profile.ok_or_else(|| msg!("profile-missing"))?;
                     pttstella::storage::replace(&path, &profile.encode()?)?;
                     Ok(None)
                 } else {
@@ -633,22 +775,13 @@ impl Preferences {
                         pttstella::storage::ReadError::TooLarge => msg!("settings-too-large"),
                     })?
                     .ok_or_else(|| msg!("profile-missing"))?;
-                    Ok(Some(PortableProfile::decode(&bytes)?.display))
+                    Ok(Some(PortableProfile::decode(&bytes)?))
                 }
             },
             move |_, _, result| {
                 if let Some(o) = weak.upgrade() {
                     match result {
-                        Ok(Some(display)) => {
-                            if let Some(w) = o.window.borrow().as_ref() {
-                                let mut draft =
-                                    o.pending.borrow().clone().unwrap_or_else(|| o.app());
-                                draft.display = display;
-                                form::populate(w, &draft);
-                                o.preview(w);
-                                o.queue(draft, Duration::from_millis(300));
-                            }
-                        }
+                        Ok(Some(profile)) => o.imported(profile),
                         Ok(None) => o.notice(msg!("profile-exported")),
                         Err(error) => o.notice(error),
                     }

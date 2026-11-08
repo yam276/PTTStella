@@ -560,8 +560,14 @@ fn run(
 
     // Probe settings live only in this owned temporary namespace; retain it
     // until output workers have drained at both normal and capture shutdown.
+    let settings_probe = options.probe == Some(Probe::Session(session::Probe::Media))
+        && std::env::var_os("PTTSTELLA_SLINT_SETTINGS_PROBE").is_some();
+    let settings_search_probe = options.probe == Some(Probe::Session(session::Probe::Media))
+        && std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").as_deref() == Ok("search");
     let sites_probe_store = if options.probe == Some(Probe::Session(session::Probe::Media))
-        && (std::env::var_os("PTTSTELLA_SLINT_SITES_PROBE").is_some() || site_peers.is_some())
+        && (std::env::var_os("PTTSTELLA_SLINT_SITES_PROBE").is_some()
+            || site_peers.is_some()
+            || settings_search_probe)
     {
         let directory = tempfile::Builder::new()
             .prefix("pttstella-slint-sites-")
@@ -959,7 +965,8 @@ fn run(
                             | session::Probe::Login
                             | session::Probe::Login2fa
                     )
-            ) {
+            ) || settings_probe
+            {
                 keep_alive::mount(
                     &ui,
                     connection.clone(),
@@ -971,7 +978,8 @@ fn run(
                 &mode,
                 session::Mode::Live(_)
                     | session::Mode::Probe(session::Probe::Login | session::Probe::Login2fa)
-            ) {
+            ) || settings_probe
+            {
                 login_owner = Some(login::Login::mount(
                     &ui,
                     connection.clone(),
@@ -1260,7 +1268,7 @@ fn run(
     } else if let Some((directory, owner)) = options
         .verify_media
         .as_ref()
-        .filter(|_| sites_probe_store.is_some())
+        .filter(|_| sites_probe_store.is_some() && !settings_search_probe)
         .zip(sites_owner.as_ref())
     {
         if let Some(peers) = &site_peers {

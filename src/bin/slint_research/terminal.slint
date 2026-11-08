@@ -25,6 +25,13 @@ export component TerminalWindow inherits Window {
     in property <bool> settings-available;
     in property <bool> settings-open;
     callback settings-show;
+    callback settings-runtime-updated;
+    changed station-mouse-enabled=>{root.settings-runtime-updated();}
+    changed keep-alive-enabled=>{root.settings-runtime-updated();}
+    changed keep-alive-available=>{root.settings-runtime-updated();}
+    changed vim-label=>{root.settings-runtime-updated();}
+    changed station-mouse-label=>{root.settings-runtime-updated();}
+    changed keep-alive-label=>{root.settings-runtime-updated();}
     in property <bool> sites-available;
     in property <bool> sites-open;
     in property <string> sites-label;
@@ -177,7 +184,7 @@ export component TerminalWindow inherits Window {
     callback inline-enter(bool,bool,bool) -> bool;
     changed keyboard-read-only => {root.inline-updated();}
     changed keyboard-pending => {root.inline-updated();}
-    changed vim-enabled => {root.inline-updated();}
+    changed vim-enabled => {root.inline-updated();root.settings-runtime-updated();}
     changed native-composing => {root.inline-updated();root.station-color-updated();}
     in property <image> article-footer;
     in property <length> article-line-height;
@@ -305,6 +312,7 @@ export component TerminalWindow inherits Window {
     in property <int> native-pointer-buttons;
     in property <bool> frame-paint-pending;
     in property <bool> keep-alive-available;
+    in property <bool> keep-alive-enabled;
     in property <string> keep-alive-label;
     out property <bool> keep-alive-surface-ready: !root.app-closing && !root.sites-open && !root.settings-open && !root.editor-open && !root.station-color-open && !root.media-open && !root.find-open && root.native-foreground
         && (root.article-active ? root.article-focused : root.terminal-input-focused) && !root.native-composing && !root.native-pointer-down
@@ -375,6 +383,7 @@ export component TerminalWindow inherits Window {
     callback grid-wheel(float) -> bool;
     callback link-activated(string);
     in property <bool> station-mouse-available;
+    in property <bool> station-mouse-enabled;
     in property <bool> station-mouse-held;
     in property <string> station-mouse-label;
     in property <string> station-mouse-status;

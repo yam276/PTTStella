@@ -2,6 +2,7 @@
 //! Output owns the one file worker. UI drafts never become effective on edit.
 mod form;
 mod probe;
+mod search_probe;
 mod window;
 
 use crate::{TerminalWindow, output::Output};
@@ -20,6 +21,10 @@ use std::{
 enum Handoff {
     Account,
     Sites,
+    Fit,
+    Vim,
+    Mouse,
+    KeepAlive,
 }
 type Apply = Box<dyn Fn(&AppSettings) -> Result<(), String>>;
 type Saved = crate::file_job::ResultSlot<AppSettings>;
@@ -40,6 +45,8 @@ pub struct Preferences {
     effects: RefCell<Vec<Apply>>,
     timer: Timer,
     composing: Cell<bool>,
+    search_index: RefCell<Option<pttstella::settings::catalog::Index>>,
+    search_focus: Timer,
     closing: Cell<bool>,
     handoff: Cell<Option<Handoff>>,
     export_pending: Cell<bool>,
@@ -61,6 +68,8 @@ impl Preferences {
             effects: RefCell::new(Vec::new()),
             timer: Timer::default(),
             composing: Cell::new(false),
+            search_index: RefCell::new(None),
+            search_focus: Timer::default(),
             closing: Cell::new(false),
             handoff: Cell::new(None),
             export_pending: Cell::new(false),
@@ -73,6 +82,17 @@ impl Preferences {
             move || {
                 if let Some(owner) = weak.upgrade() {
                     owner.open();
+                }
+            }
+        });
+        ui.on_settings_runtime_updated({
+            let owner = Rc::downgrade(&owner);
+            move || {
+                if let Some(owner) = owner.upgrade()
+                    && !owner.stopped.get()
+                    && let Some(window) = owner.window.borrow().as_ref()
+                {
+                    owner.refresh_runtime(window);
                 }
             }
         });
@@ -280,6 +300,8 @@ impl Preferences {
     pub fn finish(&self) -> Result<(), String> {
         self.stopped.set(true);
         self.timer.stop();
+        self.search_focus.stop();
+        self.search_index.borrow_mut().take();
         let joined = self.output.finish();
         let collected = self.collect(false);
         let pending = self.pending.borrow_mut().take();

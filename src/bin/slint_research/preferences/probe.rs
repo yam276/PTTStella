@@ -216,6 +216,9 @@ impl Preferences {
         dir: &Path,
         settings_path: &Path,
     ) -> Result<(), String> {
+        if std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").as_deref() == Ok("search") {
+            return self.verify_search(ui, dir).await;
+        }
         self.verify_language(ui, dir).await?;
         let original = self.app();
         let store = self.model.borrow().store()?;

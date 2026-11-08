@@ -904,3 +904,5 @@ slint-draft-render-limit = Editor dimensions exceed the rendering limit
 
 slint-sites-current = Current connection: { $target }
 slint-sites-field-size = Input exceeds { $bytes } bytes or contains controls; the previous value is retained.
+
+slint-profile-imported = Display profile loaded. Valid changes are saved automatically.

@@ -898,3 +898,5 @@ slint-draft-render-limit = 編輯區尺寸超過繪圖上限
 
 slint-sites-current = 目前連線：{ $target }
 slint-sites-field-size = 輸入超過 { $bytes } bytes 或含控制字元，保留前一個值。
+
+slint-profile-imported = 已載入顯示設定；有效變更會自動儲存。

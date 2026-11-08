@@ -210,6 +210,7 @@ impl StationMouse {
             let view = self.connection.updates.borrow();
             (view.mouse.enabled, view.mouse.route)
         };
+        ui.set_station_mouse_enabled(status.0);
         if self.status.replace(Some(status)) != Some(status) {
             let label = if status.0 {
                 pttstella::msg!("station-mouse-on")

@@ -89,6 +89,7 @@ pub fn mount(
                 connection.keep_alive_gate(stamp, ready);
             }
             ui.set_keep_alive_available(available);
+            ui.set_keep_alive_enabled(enabled);
             ui.set_keep_alive_label(
                 if enabled {
                     msg!("keepalive-on")
