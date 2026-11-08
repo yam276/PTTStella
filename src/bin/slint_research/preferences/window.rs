@@ -26,7 +26,7 @@ impl Preferences {
         }
         if self.ui.upgrade().is_some_and(|u| {
             u.get_app_closing()
-                || u.get_sites_open()
+                || u.get_manager_open()
                 || u.get_native_composing()
                 || u.get_editor_composing()
                 || u.get_login_open()
@@ -135,6 +135,7 @@ impl Preferences {
                                 form::destination(entry)
                                     .filter(|(_, field)| match *field {
                                         18 => w.get_sites_available(),
+                                        26 => w.get_filters_available(),
                                         21 => w.get_runtime_available().row_data(1) == Some(true),
                                         22 => w.get_runtime_available().row_data(2) == Some(true),
                                         23 => w.get_runtime_available().row_data(3) == Some(true),
@@ -341,6 +342,15 @@ impl Preferences {
                 }
             }
         });
+        window.on_manage_filters({
+            let weak = Rc::downgrade(self);
+            move || {
+                if let Some(o) = weak.upgrade() {
+                    o.handoff.set(Some(Handoff::Filters));
+                    o.request_close();
+                }
+            }
+        });
         window.on_manage_account({
             let weak = Rc::downgrade(self);
             move || {
@@ -429,6 +439,8 @@ impl Preferences {
         }
     }
     fn localize(&self, w: &SettingsWindow) {
+        w.set_filters_label(msg!("filters-title").into());
+        w.set_filters_available(self.ui.upgrade().is_some_and(|u| u.get_filters_available()));
         w.set_sites_label(msg!("sites-title").into());
         w.set_sites_available(self.ui.upgrade().is_some_and(|u| u.get_sites_available()));
         let t = |key: &str| pttstella::i18n::application().loader().get(key);
@@ -496,6 +508,8 @@ impl Preferences {
                 "settings-appearance",
                 "settings-input",
                 "settings-media",
+                "sites-title",
+                "filters-title",
                 "settings-account",
                 "settings-about",
             ]
@@ -633,6 +647,7 @@ impl Preferences {
                 match handoff {
                     Handoff::Account => ui.invoke_login_show(),
                     Handoff::Sites => ui.invoke_sites_show(),
+                    Handoff::Filters => ui.invoke_filters_show(),
                     Handoff::Fit => {
                         ui.set_zoom(1.);
                         ui.invoke_focus_terminal();

@@ -21,6 +21,7 @@ use std::{
 enum Handoff {
     Account,
     Sites,
+    Filters,
     Fit,
     Vim,
     Mouse,

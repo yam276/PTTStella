@@ -27,7 +27,7 @@ impl Preferences {
             .ok_or("search window missing")?;
         let mut checked = Vec::new();
         // Independently specified widget destinations, not generated from the index.
-        const CASES: [(&str, i32, i32); 23] = [
+        const CASES: [(&str, i32, i32); 24] = [
             ("language", 0, 10),
             ("zoom fit", 1, 20),
             ("experimental keyboard", 2, 21),
@@ -48,9 +48,10 @@ impl Preferences {
             ("auto expand images", 3, 15),
             ("previous next", 0, 16),
             ("hover", 3, 17),
-            ("site connection", 0, 18),
-            ("privacy", 4, 19),
-            ("about license", 5, 25),
+            ("site connection", 4, 18),
+            ("privacy", 6, 19),
+            ("about license", 7, 25),
+            ("blacklist", 5, 26),
         ];
         for (language, selector) in [(Language::English, 1), (Language::TraditionalChinese, 0)] {
             window.set_language(selector);

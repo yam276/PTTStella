@@ -34,6 +34,7 @@ enum Command {
     Fullscreen,
     Settings,
     Sites,
+    Filters,
 }
 struct PressedAction {
     index: i32,
@@ -366,6 +367,9 @@ impl Tools {
         if category == 3 && ui.get_sites_available() {
             result.push((Command::Sites, pttstella::msg!("sites-title"), true));
         }
+        if category == 4 && ui.get_filters_available() {
+            result.push((Command::Filters, pttstella::msg!("filters-title"), true));
+        }
         result.retain(|(_, label, _)| !label.is_empty());
         result
     }
@@ -554,6 +558,7 @@ impl Tools {
             Command::Fullscreen => ui.invoke_toggle_fullscreen(),
             Command::Settings => ui.invoke_settings_show(),
             Command::Sites => ui.invoke_sites_show(),
+            Command::Filters => ui.invoke_filters_show(),
         }
     }
     fn key(&self, key: i32, repeat: bool) {

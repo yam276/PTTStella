@@ -101,8 +101,7 @@ pub(super) fn read(window: &SettingsWindow, base: &AppSettings) -> Result<AppSet
     draft.validate()
 }
 
-/// Native locations for the shared closed product destinations. The filter
-/// manager is still a separate migration task and has no placeholder result.
+/// Native locations for the shared closed product destinations.
 pub(super) fn destination(entry: pttstella::settings::catalog::Entry) -> Option<(i32, i32)> {
     use pttstella::settings::catalog::{Page, Target};
     Some(match entry.0 {
@@ -127,9 +126,10 @@ pub(super) fn destination(entry: pttstella::settings::catalog::Entry) -> Option<
         Some(Target::ArticleBoundaryNavigation) => (0, 16),
         Some(Target::SettingsHover) => (3, 17),
         None => match entry.1 {
-            Page::Sites => (0, 18),
-            Page::Account => (4, 19),
-            Page::About => (5, 25),
+            Page::Sites => (4, 18),
+            Page::Filters => (5, 26),
+            Page::Account => (6, 19),
+            Page::About => (7, 25),
             _ => return None,
         },
     })

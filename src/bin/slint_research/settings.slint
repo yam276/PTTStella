@@ -93,6 +93,9 @@ export component SettingsWindow inherits Window {
     callback close-settings;
     callback manage-account;
     callback manage-sites;
+    callback manage-filters;
+    in property <string> filters-label;
+    in property <bool> filters-available;
     in property <string> sites-label;
     in property <bool> sites-available;
     callback font-preset;
@@ -143,7 +146,6 @@ export component SettingsWindow inherits Window {
                     }
                     if root.query=="" && root.page==0: VerticalLayout {
                         FocusButton {field-id:23;text:root.runtime-labels[3];enabled:root.runtime-available[3];checked:root.runtime-states[3];clicked=>{root.runtime-action(3);}}
-                        if root.sites-available: FocusButton {field-id:18;text:root.sites-label;clicked=>{root.manage-sites();}}
                         Text {text:root.labels[3];color:#d7dce5;}
                         FocusCombo {field-id:10;model:root.languages;current-index<=>root.language;selected=>{root.edit();}}
                         Text {text:root.labels[4];color:#d7dce5;wrap:word-wrap;}
@@ -197,10 +199,16 @@ export component SettingsWindow inherits Window {
                         Text {text:root.labels[25];color:#d7dce5;wrap:word-wrap;}
                     }
                     if root.query=="" && root.page==4: VerticalLayout {
+                        if root.sites-available: FocusButton {field-id:18;text:root.sites-label;clicked=>{root.manage-sites();}}
+                    }
+                    if root.query=="" && root.page==5: VerticalLayout {
+                        if root.filters-available: FocusButton {field-id:26;text:root.filters-label;clicked=>{root.manage-filters();}}
+                    }
+                    if root.query=="" && root.page==6: VerticalLayout {
                         Text {text:root.labels[26];color:#d7dce5;wrap:word-wrap;}
                         FocusButton {field-id:19;text:root.labels[27];clicked=>{root.manage-account();}}
                     }
-                    if root.query=="" && root.page==5: VerticalLayout {
+                    if root.query=="" && root.page==7: VerticalLayout {
                         FocusScope {
                             height:40px;
                             private property <int> focus-sequence:SettingsInput.focus-sequence;

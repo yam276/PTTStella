@@ -313,7 +313,7 @@ fn mount_window(
                     ui.invoke_settings_show();return PreventDefault;
                 }
         }
-        if (ui.get_sites_open() || ui.get_settings_open()) && matches!(event,WindowEvent::KeyboardInput{..}|WindowEvent::Ime(_)){return PreventDefault;}
+        if (ui.get_manager_open() || ui.get_settings_open()) && matches!(event,WindowEvent::KeyboardInput{..}|WindowEvent::Ime(_)){return PreventDefault;}
         if ui.get_editor_open() {
             editor_trace.native(event);
         }
@@ -957,7 +957,7 @@ fn refresh(ui: &TerminalWindow, input: &RefCell<Input>, connection: &Connection)
 
 fn actions_available(ui: &TerminalWindow, view: &View) -> bool {
     !ui.get_app_closing()
-        && !ui.get_sites_open()
+        && !ui.get_manager_open()
         && !ui.get_settings_open()
         && !ui.get_editor_open()
         && !ui.get_station_color_open()

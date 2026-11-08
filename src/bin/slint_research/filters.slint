@@ -1,0 +1,95 @@
+import { Button, ComboBox, LineEdit, ListView, ScrollView } from "std-widgets.slint";
+component Field inherits LineEdit {
+    public function edit-key(code:int) {
+        if code==0 {self.select-all();} else if code==1 {self.copy();} else if code==2 {self.cut();}
+        else if code==3 {self.paste();} else if code==4 {self.undo();} else if code==5 {self.redo();}
+    }
+}
+export component FiltersWindow inherits Window {
+    title:root.labels[0];preferred-width:840px;preferred-height:720px;min-width:660px;min-height:550px;background:#171b23;
+    in property <[string]> labels;
+    in property <[string]> entries;
+    in property <[string]> colors;
+    in property <[string]> individual-colors;
+    in property <bool> writable;
+    in property <bool> busy;
+    in property <bool> preview;
+    in property <bool> importing;
+    in property <bool> composing;
+    in property <string> message;
+    in property <string> empty-message;
+    in property <bool> category-sort;
+    in-out property <bool> allow;
+    in-out property <int> choice:-1;
+    in-out property <string> account;
+    in-out property <string> note;
+    in-out property <int> policy;
+    in-out property <int> entry-color;
+    in-out property <int> shared-color:13;
+    callback tab(bool);
+    callback sort;
+    callback choose(int);
+    callback new-entry;
+    callback field-edit(int,string)->string;
+    callback action(int);
+    callback close-filters;
+    public function focus-account() {account-field.focus();}
+    public function edit-key(code:int)->bool {
+        if account-field.has-focus {account-field.edit-key(code);return true;}
+        if note-field.has-focus {note-field.edit-key(code);return true;}
+        return false;
+    }
+    keys:=FocusScope {
+        width:parent.width;height:parent.height;
+        key-pressed(event)=>{if event.text==Key.Escape && !root.composing {root.close-filters();return accept;}return reject;}
+        VerticalLayout {padding:16px;spacing:10px;
+            HorizontalLayout {
+                Button {text:root.labels[1];checked:!root.allow;enabled:!root.composing;clicked=>{root.tab(false);}}
+                Button {text:root.labels[2];checked:root.allow;enabled:!root.composing;clicked=>{root.tab(true);}}
+                Button {text:root.category-sort?root.labels[5]:root.labels[4];enabled:!root.composing;clicked=>{root.sort();}}
+                Button {text:root.labels[3];enabled:root.writable && !root.busy && !root.importing && !root.composing;clicked=>{root.new-entry();}}
+            }
+            ScrollView {height:156px;content-width:self.width;
+                ListView {
+                    for entry[index] in root.entries: Button {
+                        text:entry;checked:root.choice==index;enabled:!root.busy && !root.composing;
+                        clicked=>{root.choose(index);}
+                    }
+                }
+            }
+            if root.entries.length==0: Text {text:root.empty-message;color:#c7d4e7;}
+            HorizontalLayout {
+                VerticalLayout {
+                    Text {text:root.labels[6];color:#c7d4e7;}
+                    account-field:=Field {text<=>root.account;accessible-label:root.labels[6];enabled:root.writable && !root.busy && !root.importing;edited=>{self.text=root.field-edit(0,self.text);}}
+                }
+                VerticalLayout {
+                    Text {text:root.allow?root.labels[9]:root.labels[7];color:#c7d4e7;}
+                    if !root.allow: ComboBox {model:[root.labels[8],root.labels[10]];current-index<=>root.policy;enabled:root.writable && !root.busy && !root.importing && !root.composing;}
+                    if root.allow: ComboBox {model:root.individual-colors;current-index<=>root.entry-color;enabled:root.writable && !root.busy && !root.importing && !root.composing;}
+                }
+            }
+            Text {text:root.labels[11];color:#c7d4e7;}
+            note-field:=Field {text<=>root.note;accessible-label:root.labels[11];enabled:root.writable && !root.busy && !root.importing;edited=>{self.text=root.field-edit(1,self.text);}}
+            HorizontalLayout {
+                Button {text:root.labels[12];enabled:root.writable && !root.busy && !root.importing && !root.composing;clicked=>{root.action(0);}}
+                Button {text:root.labels[13];enabled:root.writable && !root.busy && !root.importing && !root.composing;clicked=>{root.action(1);}}
+            }
+            if root.allow: HorizontalLayout {
+                Text {text:root.labels[14];color:#c7d4e7;}
+                ComboBox {model:root.colors;current-index<=>root.shared-color;enabled:root.writable && !root.busy && !root.importing && !root.composing;}
+                Button {text:root.labels[15];enabled:root.writable && !root.busy && !root.importing && !root.composing;clicked=>{root.action(2);}}
+            }
+            Text {text:root.message;color:#f2cd7d;wrap:word-wrap;vertical-stretch:1;}
+            HorizontalLayout {
+                Button {text:root.labels[16];enabled:root.writable && !root.busy && !root.importing && !root.composing;clicked=>{root.action(3);}}
+                if root.preview: Button {text:root.labels[17];enabled:!root.busy && !root.composing;clicked=>{root.action(4);}}
+                if root.importing: Button {text:root.labels[18];enabled:!root.composing;clicked=>{root.action(5);}}
+                Button {text:root.labels[22];enabled:!root.busy && !root.importing && !root.composing;clicked=>{root.action(6);}}
+                Button {text:root.labels[19];enabled:!root.composing;clicked=>{root.close-filters();}}
+            }
+            Text {text:root.labels[20];color:#9ab5ce;wrap:word-wrap;}
+            Text {text:root.labels[21];color:#9ab5ce;wrap:word-wrap;}
+        }
+    }
+}

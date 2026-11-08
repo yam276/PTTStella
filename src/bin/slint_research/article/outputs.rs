@@ -40,6 +40,9 @@ impl ArticleSession {
             &paint.links,
         )
     }
+    pub fn rules(&self) -> pttstella::filters::Rules {
+        self.core.borrow().rules().clone()
+    }
     pub fn replace_rules(&self, rules: pttstella::filters::Rules) {
         let view = self.connection.updates.borrow().clone();
         {

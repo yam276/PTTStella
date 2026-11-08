@@ -116,7 +116,11 @@ pub fn click(ui: &TerminalWindow, position: slint::LogicalPosition, button: Butt
     ui.window()
         .dispatch_event(Event::PointerReleased { position, button });
 }
-pub fn capture(ui: &TerminalWindow, directory: &std::path::Path, name: &str) -> Result<(), String> {
+pub fn capture<C: ComponentHandle>(
+    ui: &C,
+    directory: &std::path::Path,
+    name: &str,
+) -> Result<(), String> {
     let pixels = ui.window().take_snapshot().map_err(|e| e.to_string())?;
     let file = OpenOptions::new()
         .write(true)

@@ -56,7 +56,7 @@ impl Login {
             move || {
                 let Some(ui) = login.ui.upgrade() else { return };
                 if ui.get_app_closing()
-                    || ui.get_sites_open()
+                    || ui.get_manager_open()
                     || ui.get_settings_open()
                     || login.job.borrow().is_some()
                     || ui.get_paste_open()

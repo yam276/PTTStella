@@ -255,7 +255,7 @@ impl Paste {
     fn current(&self, ui: &TerminalWindow) -> Option<Source> {
         if self.closed.get()
             || ui.get_app_closing()
-            || ui.get_sites_open()
+            || ui.get_manager_open()
             || ui.get_settings_open()
             || ui.get_editor_open()
             || ui.get_station_color_open()

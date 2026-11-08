@@ -12,16 +12,7 @@ use pttstella::{
         session::{Edit, State},
     },
 };
-use slint::{
-    ComponentHandle, ModelRc, VecModel,
-    winit_030::{
-        EventResult, WinitWindowAccessor,
-        winit::{
-            event::{ElementState, Ime, WindowEvent},
-            keyboard::ModifiersState,
-        },
-    },
-};
+use slint::{ComponentHandle, ModelRc, VecModel, winit_030::WinitWindowAccessor};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -243,6 +234,7 @@ impl Manager {
         if self.stopped.get()
             || ui.get_app_closing()
             || self.output.busy()
+            || ui.get_filters_open()
             || ui.get_settings_open()
             || ui.get_editor_open()
             || ui.get_station_color_open()
@@ -381,53 +373,9 @@ impl Manager {
                 slint::CloseRequestResponse::KeepWindowShown
             }
         });
-        let modifiers = Cell::new(ModifiersState::empty());
-        w.window().on_winit_window_event({
-            let o = Rc::downgrade(self);
-            let weak = w.as_weak();
-            move |_, event| {
-                if let WindowEvent::ModifiersChanged(m) = event {
-                    modifiers.set(m.state());
-                }
-                if let Some(o) = o.upgrade()
-                    && let Some(w) = weak.upgrade()
-                {
-                    match event {
-                        WindowEvent::Focused(true) => {
-                            if let Some(ui) = o.ui.upgrade() {
-                                ui.invoke_native_menu_refresh();
-                            }
-                        }
-                        WindowEvent::Focused(false) => {
-                            w.set_composing(false);
-                            modifiers.set(ModifiersState::empty());
-                        }
-                        WindowEvent::Ime(Ime::Preedit(text, _)) => {
-                            w.set_composing(!text.is_empty())
-                        }
-                        WindowEvent::Ime(Ime::Commit(_)) => w.set_composing(false),
-                        WindowEvent::KeyboardInput {
-                            event,
-                            is_synthetic: false,
-                            ..
-                        } if !w.get_composing()
-                            && event.state == ElementState::Pressed
-                            && !event.repeat =>
-                        {
-                            if let Some(code) = crate::native_input::text_edit_shortcut(
-                                event.physical_key,
-                                modifiers.get(),
-                            ) && w.invoke_edit_key(code)
-                            {
-                                return EventResult::PreventDefault;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                EventResult::Propagate
-            }
-        });
+        if let Some(ui) = self.ui.upgrade() {
+            crate::native_text::install(&ui, &w);
+        }
         Ok(w)
     }
     fn action(self: &Rc<Self>, code: i32) {

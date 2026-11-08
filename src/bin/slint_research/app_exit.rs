@@ -14,6 +14,7 @@ pub struct Exit {
     media: Option<Weak<Media>>,
     article: Option<Weak<ArticleSession>>,
     sites: Option<Weak<Manager>>,
+    filters: Option<Weak<crate::filters_manager::Manager>>,
     requested: Rc<Cell<bool>>,
     outcome: Rc<RefCell<Option<Result<(), String>>>>,
     task: RefCell<Option<slint::JoinHandle<()>>>,
@@ -26,6 +27,7 @@ impl Exit {
         media: Option<&Rc<Media>>,
         article: Option<&Rc<ArticleSession>>,
         sites: Option<&Rc<Manager>>,
+        filters: Option<&Rc<crate::filters_manager::Manager>>,
         requested: Rc<Cell<bool>>,
     ) -> Rc<Self> {
         let owner = Rc::new(Self {
@@ -33,6 +35,7 @@ impl Exit {
             media: media.map(Rc::downgrade),
             article: article.map(Rc::downgrade),
             sites: sites.map(Rc::downgrade),
+            filters: filters.map(Rc::downgrade),
             requested,
             outcome: Rc::new(RefCell::new(None)),
             task: RefCell::new(None),
@@ -70,6 +73,7 @@ impl Exit {
         let media = self.media.as_ref().and_then(Weak::upgrade);
         let article = self.article.as_ref().and_then(Weak::upgrade);
         let sites = self.sites.as_ref().and_then(Weak::upgrade);
+        let filters = self.filters.as_ref().and_then(Weak::upgrade);
         let outcome = self.outcome.clone();
         let window = self.window.clone();
         // The future owns only dependencies, never this owner/its JoinHandle.
@@ -79,6 +83,9 @@ impl Exit {
             }
             if let Some(sites) = sites {
                 sites.prepare_app_close();
+            }
+            if let Some(filters) = filters {
+                filters.prepare_app_close();
             }
             if let Some(article) = article {
                 article.shutdown().await;

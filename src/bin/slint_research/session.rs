@@ -244,7 +244,13 @@ pub fn with_probe(
                     connection.connect_to(peers.first.clone())?;
                     Ok(connection)
                 } else {
-                    Connection::start_ui_probe(bytes)
+                    Connection::start_ui_probe(
+                        if std::env::var_os("PTTSTELLA_SLINT_FILTERS_PROBE").is_some() {
+                            pttstella::replay::native_article_find_page()?
+                        } else {
+                            bytes
+                        },
+                    )
                 }
             }
             Probe::ArticleInline => Connection::start_inline_pages_probe(
@@ -445,7 +451,7 @@ pub fn mount(
             if let Some(ui) = weak.upgrade()
                 && !ui.get_app_closing()
                 && ui.get_can_reconnect()
-                && !ui.get_sites_open()
+                && !ui.get_manager_open()
                 && !ui.get_settings_open()
             {
                 request_connection(&ui, &connection, &connecting, 1, || connection.connect());
@@ -510,7 +516,7 @@ pub fn mount(
                     if connecting.get().is_none()
                         && let Some(ui) = weak.upgrade()
                         && !ui.get_app_closing()
-                        && !ui.get_sites_open()
+                        && !ui.get_manager_open()
                         && !ui.get_settings_open()
                         && let Some((_, target)) =
                             usize::try_from(index).ok().and_then(|i| entries.get(i))

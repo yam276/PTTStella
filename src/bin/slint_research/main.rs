@@ -5,6 +5,7 @@ mod clipboard;
 mod context_menu;
 mod editor;
 mod file_job;
+mod filters_manager;
 mod graphics;
 mod ime_probe;
 mod inline_engine;
@@ -19,6 +20,7 @@ mod media_worker;
 mod native_input;
 #[cfg(target_os = "macos")]
 mod native_menu;
+mod native_text;
 mod output;
 mod palette;
 mod paste;
@@ -564,6 +566,17 @@ fn run(
         && std::env::var_os("PTTSTELLA_SLINT_SETTINGS_PROBE").is_some();
     let settings_search_probe = options.probe == Some(Probe::Session(session::Probe::Media))
         && std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").as_deref() == Ok("search");
+    let filters_probe = options.probe == Some(Probe::Session(session::Probe::Media))
+        && std::env::var_os("PTTSTELLA_SLINT_FILTERS_PROBE").is_some();
+    let filters_probe_store = if settings_search_probe || filters_probe {
+        Some(
+            tempfile::Builder::new()
+                .prefix("pttstella-slint-filters-")
+                .tempdir()?,
+        )
+    } else {
+        None
+    };
     let sites_probe_store = if options.probe == Some(Probe::Session(session::Probe::Media))
         && (std::env::var_os("PTTSTELLA_SLINT_SITES_PROBE").is_some()
             || site_peers.is_some()
@@ -796,6 +809,7 @@ fn run(
     let mut paste_owner = None;
     let mut output_owner = None;
     let mut sites_owner = None;
+    let mut filters_owner = None;
     let mut context_owner = None;
     let mut tools_owner = None;
     let mut station_mouse_owner = None;
@@ -842,7 +856,9 @@ fn run(
                             | session::Probe::ArticleStall
                             | session::Probe::ArticleTerminal
                     )
-            ) {
+            ) || settings_search_probe
+                || filters_probe
+            {
                 let mut article_preferences = settings.clone();
                 if !matches!(&mode, session::Mode::Live(_)) {
                     article_preferences.article_mode = if matches!(
@@ -850,7 +866,11 @@ fn run(
                         session::Mode::Probe(
                             session::Probe::ArticleTerminal | session::Probe::ArticleFindTerminal
                         )
-                    ) {
+                    ) || settings_search_probe
+                        || filters_probe
+                            && !std::env::var("PTTSTELLA_SLINT_FILTERS_PROBE")
+                                .is_ok_and(|v| v == "web")
+                    {
                         pttstella::settings::ArticleMode::Terminal
                     } else {
                         pttstella::settings::ArticleMode::Web
@@ -865,12 +885,6 @@ fn run(
                     &article_preferences,
                 )?);
                 article_bridge.replace(article_session_owner.clone());
-            }
-            if matches!(&mode, session::Mode::Live(_)) {
-                article_session_owner
-                    .as_ref()
-                    .ok_or("live projection owner missing")?
-                    .replace_rules(profile::Profile::system()?.filters().load()?);
             }
             if matches!(
                 &mode,
@@ -1125,6 +1139,24 @@ fn run(
                         matches!(&mode, session::Mode::Probe(_)),
                     ));
                 }
+                let filter_store = if matches!(&mode, session::Mode::Live(_)) {
+                    Some(profile::Profile::system().map(|p| p.filters()))
+                } else {
+                    filters_probe_store.as_ref().map(|d| {
+                        Ok(pttstella::filters::store::Store::at(
+                            d.path().join("filters.json"),
+                        ))
+                    })
+                };
+                if let (Some(store), Some(article)) = (filter_store, article_session_owner.as_ref())
+                {
+                    filters_owner = Some(filters_manager::Manager::mount(
+                        &ui,
+                        output.clone(),
+                        article.clone(),
+                        store,
+                    ));
+                }
                 output_owner = Some(output);
             }
             if matches!(
@@ -1159,6 +1191,7 @@ fn run(
                     let editor = editor_owner.as_ref().map(Rc::downgrade);
                     let context = context_owner.as_ref().map(Rc::downgrade);
                     let sites = sites_owner.as_ref().map(Rc::downgrade);
+                    let filters = filters_owner.as_ref().map(Rc::downgrade);
                     let article = article_session_owner.as_ref().map(Rc::downgrade);
                     let media = Rc::downgrade(media);
                     let weak = ui.as_weak();
@@ -1194,6 +1227,9 @@ fn run(
                                 locale::refresh_statuses(&ui, changed.language);
                                 if let Some(sites) = sites.as_ref().and_then(|o| o.upgrade()) {
                                     sites.refresh_labels();
+                                }
+                                if let Some(filters) = filters.as_ref().and_then(|o| o.upgrade()) {
+                                    filters.refresh_labels();
                                 }
                                 if let Some(context) = context.as_ref().and_then(|o| o.upgrade()) {
                                     context.refresh_labels();
@@ -1236,6 +1272,7 @@ fn run(
         media_owner.as_ref(),
         article_session_owner.as_ref(),
         sites_owner.as_ref(),
+        filters_owner.as_ref(),
         quit_requested.clone(),
     );
     let settings_shutdown_directory = if options.probe
@@ -1253,6 +1290,7 @@ fn run(
     } else {
         None
     };
+    let filters_verification_directory = options.verify_media.clone().filter(|_| filters_probe);
     let sites_verification_directory = options
         .verify_media
         .clone()
@@ -1263,8 +1301,27 @@ fn run(
         options.probe == Some(Probe::Session(session::Probe::Media))
             && std::env::var_os("PTTSTELLA_VIDEO_PROBE_EXIT").is_some()
     });
-    let verification = if native_quit_directory.is_some() {
+    let verification = if native_quit_directory.is_some()
+        || std::env::var("PTTSTELLA_SLINT_FILTERS_PROBE").is_ok_and(|v| v == "native")
+    {
         None
+    } else if filters_probe {
+        Some(filters_manager::probe::start(
+            &ui,
+            filters_owner
+                .as_ref()
+                .cloned()
+                .ok_or("filter manager missing")?,
+            options
+                .verify_media
+                .clone()
+                .ok_or("filter verifier directory missing")?,
+            filters_probe_store
+                .as_ref()
+                .ok_or("filter probe store missing")?
+                .path()
+                .join("filters.json"),
+        )?)
     } else if let Some((directory, owner)) = options
         .verify_media
         .as_ref()
@@ -1461,6 +1518,9 @@ fn run(
         if let Some(editor) = &editor_owner {
             editor.finish()?;
         }
+        if let Some(filters) = &filters_owner {
+            filters.finish()?;
+        }
         if let Some(sites) = &sites_owner {
             sites.finish()?;
         }
@@ -1486,6 +1546,17 @@ fn run(
         let editor_close_audit = match (&editor_owner, &draft_verification_directory) {
             (Some(editor), Some(dir)) => {
                 editor::probe::audit_closed(editor, dir, editor_cleanup.is_ok())
+            }
+            _ => Ok(()),
+        };
+        let filters_cleanup = filters_owner.as_ref().map(|s| s.finish()).transpose();
+        let filters_close_audit = match (
+            &filters_owner,
+            &filters_verification_directory,
+            &filters_probe_store,
+        ) {
+            (Some(owner), Some(dir), Some(store)) => {
+                filters_manager::probe::audit_closed(owner, dir, store.path().join("filters.json"))
             }
             _ => Ok(()),
         };
@@ -1567,6 +1638,8 @@ fn run(
         editor_close_audit?;
         sites_cleanup?;
         sites_close_audit?;
+        filters_cleanup?;
+        filters_close_audit?;
         settings_cleanup?;
         media_cleanup?;
         #[cfg(feature = "native-video")]
