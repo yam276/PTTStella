@@ -1,4 +1,4 @@
-//! Local bookmark state commits only completed Files results, never screen guesses.
+//! Local bookmark state commits only completed file results, never screen guesses.
 use crate::{
     article_target::ArticleTarget,
     bookmarks::{Bookmarks, archive::Archive, store::Store},
@@ -27,6 +27,9 @@ pub struct Summary {
     lines: Option<usize>,
 }
 impl Summary {
+    pub fn cached_at(&self) -> Option<u64> {
+        self.cached_at
+    }
     pub fn target(&self) -> &ArticleTarget {
         &self.target
     }

@@ -35,6 +35,7 @@ enum Command {
     Settings,
     Sites,
     Filters,
+    Bookmarks,
 }
 struct PressedAction {
     index: i32,
@@ -307,6 +308,9 @@ impl Tools {
                     ),
                 ]);
             }
+            1 if ui.get_bookmarks_available() => {
+                result.push((Command::Bookmarks, pttstella::msg!("bookmarks-title"), true))
+            }
             2 => {
                 for action in [
                     Action::SelectAll,
@@ -373,6 +377,14 @@ impl Tools {
         result.retain(|(_, label, _)| !label.is_empty());
         result
     }
+    fn category_available(ui: &TerminalWindow, index: usize) -> bool {
+        match index {
+            0 | 2 | 3 => true,
+            1 => ui.get_bookmarks_available(),
+            4 => ui.get_settings_available() || ui.get_filters_available(),
+            _ => false,
+        }
+    }
     fn publish(&self) {
         let Some(ui) = self.ui.upgrade() else { return };
         let (viewport, point, open, busy, dragging, category, selected) = {
@@ -427,7 +439,14 @@ impl Tools {
                 .petals
                 .iter()
                 .enumerate()
-                .map(|(index, rect)| item(index, &labels[index], matches!(index, 0 | 2 | 3), *rect))
+                .map(|(index, rect)| {
+                    item(
+                        index,
+                        &labels[index],
+                        Self::category_available(&ui, index),
+                        *rect,
+                    )
+                })
                 .collect::<Vec<_>>(),
         )));
         if let Some(category) = category {
@@ -468,7 +487,10 @@ impl Tools {
     }
     fn category(&self, index: i32) {
         self.pressed_action.borrow_mut().take();
-        if !matches!(index, 0 | 2 | 3) || !self.state.borrow().open {
+        let Some(ui) = self.ui.upgrade() else { return };
+        if !usize::try_from(index).is_ok_and(|index| Self::category_available(&ui, index))
+            || !self.state.borrow().open
+        {
             return;
         }
         {
@@ -559,6 +581,7 @@ impl Tools {
             Command::Settings => ui.invoke_settings_show(),
             Command::Sites => ui.invoke_sites_show(),
             Command::Filters => ui.invoke_filters_show(),
+            Command::Bookmarks => ui.invoke_bookmarks_show(),
         }
     }
     fn key(&self, key: i32, repeat: bool) {
@@ -599,7 +622,9 @@ impl Tools {
                 .filter_map(|(index, (_, _, enabled))| enabled.then_some(index))
                 .collect::<Vec<_>>()
         } else {
-            vec![0, 2, 3]
+            (0..5)
+                .filter(|index| Self::category_available(&ui, *index))
+                .collect()
         };
         let current = self.state.borrow().selected;
         if let Some(index) = crate::chrome::move_selection(current, &enabled, key) {

@@ -1,0 +1,704 @@
+//! Local-only bookmark form and archive reader. No connection, station stamp,
+//! media downloader or station keyboard route is available to this owner.
+pub mod probe;
+use crate::{
+    BookmarksWindow, TerminalWindow,
+    article::session::ArticleSession,
+    file_job::ResultSlot,
+    output::Output,
+    renderer::{Renderer, Size},
+};
+use pttstella::{
+    article_target::ArticleTarget,
+    bookmarks::{
+        Bookmarks,
+        session::{LocalArticle, State, Summary},
+        store::Store,
+    },
+    msg,
+};
+use slint::{ComponentHandle, Image, ModelRc, VecModel, winit_030::WinitWindowAccessor};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
+
+enum Value {
+    Loaded(State),
+    Saved(Bookmarks),
+    Read(LocalArticle),
+}
+#[derive(Clone, Copy, PartialEq)]
+enum Operation {
+    Load,
+    Save,
+    Read,
+}
+struct Flight {
+    slot: ResultSlot<Value>,
+    operation: Operation,
+    epoch: u64,
+}
+type Work = Box<dyn FnOnce() -> Result<Value, String> + Send>;
+struct Offline {
+    article: LocalArticle,
+    top: usize,
+    renderer: Option<Renderer>,
+    painted: Option<(usize, Size)>,
+}
+pub struct Manager {
+    ui: slint::Weak<TerminalWindow>,
+    output: Rc<Output>,
+    article: Rc<ArticleSession>,
+    store: Result<Store, String>,
+    state: RefCell<Option<State>>,
+    window: RefCell<Option<BookmarksWindow>>,
+    rows: RefCell<Vec<Summary>>,
+    selected: RefCell<Option<ArticleTarget>>,
+    fields: RefCell<[String; 2]>,
+    offline: RefCell<Option<Offline>>,
+    result: RefCell<Option<Flight>>,
+    epoch: Cell<u64>,
+    closing: Cell<bool>,
+    painting: Cell<bool>,
+    stopped: Cell<bool>,
+}
+fn target_text(t: &ArticleTarget) -> String {
+    format!("#{}@{}", t.aid().as_str(), t.board().as_str())
+}
+fn same(a: &ArticleTarget, b: &ArticleTarget) -> bool {
+    a.board().same(b.board()) && a.aid() == b.aid()
+}
+fn strings(items: impl IntoIterator<Item = String>) -> ModelRc<slint::SharedString> {
+    ModelRc::new(VecModel::from(
+        items.into_iter().map(Into::into).collect::<Vec<_>>(),
+    ))
+}
+impl Manager {
+    pub fn mount(
+        ui: &TerminalWindow,
+        output: Rc<Output>,
+        article: Rc<ArticleSession>,
+        store: Result<Store, String>,
+    ) -> Rc<Self> {
+        let owner = Rc::new(Self {
+            ui: ui.as_weak(),
+            output,
+            article,
+            store,
+            state: RefCell::new(None),
+            window: RefCell::new(None),
+            rows: RefCell::new(Vec::new()),
+            selected: RefCell::new(None),
+            fields: RefCell::new(Default::default()),
+            offline: RefCell::new(None),
+            result: RefCell::new(None),
+            epoch: Cell::new(0),
+            closing: Cell::new(false),
+            painting: Cell::new(false),
+            stopped: Cell::new(false),
+        });
+        ui.set_bookmarks_available(true);
+        ui.on_bookmarks_show({
+            let o = Rc::downgrade(&owner);
+            move || {
+                if let Some(o) = o.upgrade() {
+                    o.open();
+                }
+            }
+        });
+        ui.on_bookmarks_updated({
+            let o = Rc::downgrade(&owner);
+            move || {
+                if let Some(o) = o.upgrade() {
+                    o.sync();
+                }
+            }
+        });
+        owner
+    }
+    fn window(&self) -> Option<BookmarksWindow> {
+        self.window
+            .borrow()
+            .as_ref()
+            .and_then(|w| w.as_weak().upgrade())
+    }
+    fn notice(&self, text: String) {
+        if let Some(w) = self.window() {
+            w.set_message(text.into());
+        }
+    }
+    pub fn refresh_labels(&self) {
+        let Some(w) = self.window() else { return };
+        let loader = pttstella::i18n::application().loader();
+        w.set_labels(strings(
+            [
+                "bookmarks-title",
+                "bookmarks-description",
+                "bookmarks-list",
+                "bookmarks-new",
+                "bookmarks-target",
+                "bookmarks-label",
+                "bookmarks-save",
+                "bookmarks-remove",
+                "bookmarks-read",
+                "retry",
+                "close",
+                "bookmarks-archive-readonly",
+                "context-previous",
+                "context-next",
+            ]
+            .map(|key| loader.get(key)),
+        ));
+        self.render();
+        if let Err(e) = self.paint() {
+            self.notice(e);
+        }
+    }
+    fn clear_draft(&self) {
+        self.selected.borrow_mut().take();
+        *self.fields.borrow_mut() = Default::default();
+        if let Some(w) = self.window() {
+            w.set_target("".into());
+            w.set_label("".into());
+            w.set_choice(0);
+        }
+        self.sync();
+    }
+    fn sync(&self) {
+        if let Some(w) = self.window() {
+            w.set_busy(self.output.busy() || self.result.borrow().is_some());
+            w.set_writable(
+                self.state
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|s| s.check_write().is_ok()),
+            );
+            w.set_selected(self.selected.borrow().is_some());
+            w.set_has_copy(self.selected.borrow().as_ref().is_some_and(|t| {
+                self.rows
+                    .borrow()
+                    .iter()
+                    .any(|r| same(r.target(), t) && r.cached_at().is_some())
+            }));
+        }
+    }
+    fn render(&self) {
+        let Some(w) = self.window() else { return };
+        let snapshot = self.state.borrow().as_ref().map(State::snapshot);
+        let rows = snapshot.map(|s| s.entries).unwrap_or_default();
+        w.set_entries(strings(std::iter::once(msg!("bookmarks-new")).chain(
+            rows.iter().map(|r| {
+                let copy = if r.cached_at().is_some() {
+                    format!(" · {}", msg!("bookmarks-local-copy"))
+                } else {
+                    String::new()
+                };
+                format!(
+                    "{}{}{}{}",
+                    r.label().unwrap_or(""),
+                    if r.label().is_some() { "  " } else { "" },
+                    target_text(r.target()),
+                    copy
+                )
+            }),
+        )));
+        let choice = self
+            .selected
+            .borrow()
+            .as_ref()
+            .and_then(|t| rows.iter().position(|r| same(r.target(), t)));
+        if choice.is_none() {
+            self.selected.borrow_mut().take();
+        }
+        w.set_choice(choice.map_or(0, |i| (i + 1) as i32));
+        self.rows.replace(rows);
+        self.sync();
+    }
+    fn choose(&self, index: i32) {
+        if self.output.busy() {
+            return;
+        }
+        if index == 0 {
+            self.clear_draft();
+            return;
+        }
+        let rows = self.rows.borrow();
+        let Some(row) = usize::try_from(index)
+            .ok()
+            .and_then(|i| i.checked_sub(1))
+            .and_then(|i| rows.get(i))
+        else {
+            return;
+        };
+        self.selected.replace(Some(row.target().clone()));
+        let fields = [
+            target_text(row.target()),
+            row.label().unwrap_or("").to_owned(),
+        ];
+        if let Some(w) = self.window() {
+            w.set_target(fields[0].clone().into());
+            w.set_label(fields[1].clone().into());
+            w.set_choice(index);
+        }
+        self.fields.replace(fields);
+        drop(rows);
+        self.sync();
+    }
+    fn open(self: &Rc<Self>) {
+        let Some(ui) = self.ui.upgrade() else { return };
+        if self.stopped.get()
+            || ui.get_app_closing()
+            || self.output.busy()
+            || ui.get_sites_open()
+            || ui.get_filters_open()
+            || ui.get_settings_open()
+            || ui.get_editor_open()
+            || ui.get_station_color_open()
+            || ui.get_media_open()
+            || ui.get_login_open()
+            || ui.get_paste_open()
+            || ui.get_native_composing()
+            || ui.get_find_composing()
+        {
+            return;
+        }
+        if self.window.borrow().is_none() {
+            match self.create_window(&ui) {
+                Ok(w) => {
+                    self.window.replace(Some(w));
+                }
+                Err(e) => {
+                    ui.set_input_notice(e.into());
+                    return;
+                }
+            }
+        }
+        if !ui.get_bookmarks_open() {
+            self.clear_draft();
+        }
+        self.closing.set(false);
+        ui.invoke_tools_dismiss(false);
+        ui.invoke_context_dismiss(false);
+        ui.invoke_reset_keyboard();
+        ui.set_bookmarks_open(true);
+        self.refresh_labels();
+        if let Some(state) = self.state.borrow().as_ref() {
+            self.notice(
+                state
+                    .snapshot()
+                    .warning
+                    .unwrap_or_else(|| msg!("bookmarks-hint")),
+            );
+        }
+        if let Some(w) = self.window() {
+            if let Err(e) = w.show() {
+                ui.set_bookmarks_open(false);
+                ui.set_input_notice(e.to_string().into());
+                return;
+            }
+            w.window().with_winit_window(|w| w.focus_window());
+            w.invoke_focus_target();
+        }
+        if self.state.borrow().is_none() {
+            self.reload();
+        }
+    }
+    fn create_window(self: &Rc<Self>, ui: &TerminalWindow) -> Result<BookmarksWindow, String> {
+        let w = BookmarksWindow::new().map_err(|e| e.to_string())?;
+        w.on_choose({
+            let o = Rc::downgrade(self);
+            move |i| {
+                if let Some(o) = o.upgrade()
+                    && o.admit()
+                {
+                    o.choose(i);
+                }
+            }
+        });
+        w.on_new_entry({
+            let o = Rc::downgrade(self);
+            move || {
+                if let Some(o) = o.upgrade()
+                    && o.admit()
+                {
+                    o.clear_draft();
+                }
+            }
+        });
+        w.on_field_edit({
+            let o = Rc::downgrade(self);
+            move |field, text| {
+                let Some(o) = o.upgrade() else {
+                    return "".into();
+                };
+                let Ok(field) = usize::try_from(field) else {
+                    return "".into();
+                };
+                if field > 1 {
+                    return "".into();
+                }
+                if o.stopped.get()
+                    || o.ui
+                        .upgrade()
+                        .is_none_or(|ui| !ui.get_bookmarks_open() || ui.get_app_closing())
+                {
+                    return o.fields.borrow()[field].clone().into();
+                }
+                let text = text.to_string();
+                let limit = if field == 0 { 256 } else { 512 };
+                if o.output.busy()
+                    || text.len() > limit
+                    || text.chars().any(char::is_control)
+                    || field == 1 && text.chars().count() > 128
+                {
+                    o.notice(if field == 0 {
+                        msg!("destination-input-invalid")
+                    } else {
+                        msg!("bookmarks-label-invalid")
+                    });
+                    return o.fields.borrow()[field].clone().into();
+                }
+                o.fields.borrow_mut()[field] = text.clone();
+                text.into()
+            }
+        });
+        w.on_action({
+            let o = Rc::downgrade(self);
+            move |code| {
+                if let Some(o) = o.upgrade()
+                    && o.admit()
+                {
+                    o.action(code);
+                }
+            }
+        });
+        w.on_close_bookmarks({
+            let o = Rc::downgrade(self);
+            move || {
+                if let Some(o) = o.upgrade() {
+                    o.close();
+                }
+            }
+        });
+        w.on_page_key({
+            let o = Rc::downgrade(self);
+            move |code| {
+                if let Some(o) = o.upgrade() {
+                    o.page(code);
+                }
+            }
+        });
+        w.on_reader_resized({
+            let o = Rc::downgrade(self);
+            move || {
+                if let Some(o) = o.upgrade()
+                    && let Err(e) = o.paint()
+                {
+                    o.notice(e);
+                }
+            }
+        });
+        w.window().on_close_requested({
+            let o = Rc::downgrade(self);
+            move || {
+                if let Some(o) = o.upgrade() {
+                    o.close();
+                }
+                slint::CloseRequestResponse::KeepWindowShown
+            }
+        });
+        crate::native_text::install(ui, &w);
+        Ok(w)
+    }
+    fn admit(&self) -> bool {
+        !self.stopped.get()
+            && !self.output.busy()
+            && self.result.borrow().is_none()
+            && self
+                .ui
+                .upgrade()
+                .is_some_and(|ui| ui.get_bookmarks_open() && !ui.get_app_closing())
+            && self
+                .window()
+                .is_some_and(|w| !w.get_composing() && !w.get_offline())
+    }
+    fn reload(self: &Rc<Self>) {
+        let store = self.store.clone();
+        self.start(
+            Box::new(move || Ok(Value::Loaded(State::with_store(store)))),
+            Operation::Load,
+        );
+    }
+    fn action(self: &Rc<Self>, code: i32) {
+        if code == 3 {
+            self.reload();
+            return;
+        }
+        let work = (|| {
+            let state = self.state.borrow();
+            let state = state.as_ref().ok_or_else(|| msg!("bookmarks-loading"))?;
+            if code == 2 {
+                let target = self
+                    .selected
+                    .borrow()
+                    .as_ref()
+                    .map(target_text)
+                    .ok_or_else(|| msg!("bookmarks-not-found"))?;
+                let settings = self.article.settings();
+                let read = state.read(&target, self.article.rules(), settings)?;
+                return Ok((
+                    Box::new(move || Ok(Value::Read(read.run()))) as Work,
+                    Operation::Read,
+                ));
+            }
+            if !matches!(code, 0 | 1) {
+                return Err(msg!("bookmarks-not-found"));
+            }
+            let fields = self.fields.borrow();
+            let target = if code == 1 {
+                self.selected
+                    .borrow()
+                    .as_ref()
+                    .map(target_text)
+                    .ok_or_else(|| msg!("bookmarks-not-found"))?
+            } else {
+                fields[0].clone()
+            };
+            let write = state.edit(&target, &fields[1], code == 1)?;
+            Ok((
+                Box::new(move || {
+                    write
+                        .store
+                        .save_from(&write.base, write.draft)
+                        .map(Value::Saved)
+                }) as Work,
+                Operation::Save,
+            ))
+        })();
+        match work {
+            Ok((work, kind)) => self.start(work, kind),
+            Err(e) => self.notice(e),
+        }
+    }
+    fn start(self: &Rc<Self>, work: Work, operation: Operation) {
+        let Some(ui) = self.ui.upgrade() else { return };
+        if self.output.busy() || self.result.borrow().is_some() {
+            return;
+        }
+        let slot = ResultSlot::new();
+        self.result.replace(Some(Flight {
+            slot: slot.clone(),
+            operation,
+            epoch: self.epoch.get(),
+        }));
+        self.notice(if operation == Operation::Save {
+            msg!("saving")
+        } else {
+            msg!("bookmarks-loading")
+        });
+        let o = Rc::downgrade(self);
+        self.output.work(
+            &ui,
+            move || slot.publish(work()),
+            move |_, _, _| {
+                if let Some(o) = o.upgrade() {
+                    let success = o.collect().is_ok();
+                    if o.closing.get() && success {
+                        o.hide();
+                    } else if !success {
+                        o.closing.set(false);
+                    }
+                    o.sync();
+                }
+            },
+        );
+        if !ui.get_output_busy() {
+            self.result.borrow_mut().take();
+            self.notice(ui.get_input_notice().to_string());
+        }
+        self.sync();
+    }
+    fn collect(&self) -> Result<(), String> {
+        let Some(flight) = self.result.borrow_mut().take() else {
+            return Ok(());
+        };
+        let value = flight.slot.take();
+        if flight.operation != Operation::Save && flight.epoch != self.epoch.get() {
+            return Ok(());
+        }
+        let result = value.and_then(|v| match v {
+            Value::Loaded(state) => {
+                let warning = state.snapshot().warning;
+                self.state.replace(Some(state));
+                self.render();
+                self.notice(warning.unwrap_or_else(|| msg!("bookmarks-hint")));
+                Ok(())
+            }
+            Value::Saved(saved) => {
+                self.state
+                    .borrow_mut()
+                    .as_mut()
+                    .ok_or_else(|| msg!("bookmarks-loading"))?
+                    .complete(Ok(saved))?;
+                self.render();
+                self.notice(msg!("bookmarks-saved"));
+                Ok(())
+            }
+            Value::Read(article) => {
+                self.offline.replace(Some(Offline {
+                    article,
+                    top: 0,
+                    renderer: None,
+                    painted: None,
+                }));
+                if let Some(w) = self.window() {
+                    w.set_offline(true);
+                    self.paint()?;
+                    w.invoke_focus_reader();
+                }
+                self.notice(msg!("bookmarks-hint"));
+                Ok(())
+            }
+        });
+        if let Err(e) = &result {
+            self.notice(e.clone());
+        }
+        self.sync();
+        result
+    }
+    fn page(&self, code: i32) {
+        if self.stopped.get()
+            || self
+                .window()
+                .is_none_or(|w| !w.get_offline() || w.get_composing())
+        {
+            return;
+        }
+        if code == 6 {
+            self.offline.borrow_mut().take();
+            if let Some(w) = self.window() {
+                w.set_offline(false);
+                w.set_page(Image::default());
+                w.invoke_focus_target();
+            }
+            return;
+        }
+        if let Some(o) = self.offline.borrow_mut().as_mut() {
+            let max = o.article.frame.rows.saturating_sub(23);
+            o.top = match code {
+                0 => o.top.saturating_sub(1),
+                1 => o.top.saturating_add(1).min(max),
+                2 => o.top.saturating_sub(22),
+                3 => o.top.saturating_add(22).min(max),
+                4 => 0,
+                5 => max,
+                _ => return,
+            };
+        }
+        if let Err(e) = self.paint() {
+            self.notice(e);
+        }
+    }
+    fn paint(&self) -> Result<(), String> {
+        if self.painting.replace(true) {
+            return Ok(());
+        }
+        let result = self.paint_inner();
+        self.painting.set(false);
+        result
+    }
+    fn paint_inner(&self) -> Result<(), String> {
+        let Some(w) = self.window() else {
+            return Ok(());
+        };
+        let mut offline = self.offline.borrow_mut();
+        let Some(o) = offline.as_mut() else {
+            return Ok(());
+        };
+        let Some(mut size) = Size::fit(
+            w.get_reader_width(),
+            w.get_reader_height() * 24. / 23.,
+            w.window().scale_factor(),
+            1.,
+        ) else {
+            return Ok(());
+        };
+        size.height = (size.height * 23 / 24).max(1);
+        if o.painted == Some((o.top, size)) {
+            return Ok(());
+        }
+        let end = (o.top + 23).min(o.article.frame.rows);
+        let mut frame = crate::output::crop_rows(&o.article.frame, o.top..end)?;
+        frame.rows = 23;
+        match &mut o.renderer {
+            Some(renderer) => renderer.set_frame(frame),
+            None => {
+                o.renderer = Some(Renderer::new(frame, &o.article.settings).map_err(str::to_owned)?)
+            }
+        }
+        let renderer = o.renderer.as_ref().ok_or("offline renderer missing")?;
+        w.set_page(Image::from_rgba8_premultiplied(
+            renderer.paint(size, false).map_err(str::to_owned)?,
+        ));
+        w.set_progress(
+            format!(
+                "{} · {}",
+                target_text(&o.article.target),
+                msg!(
+                    "bookmarks-lines",
+                    first = (o.top + 1),
+                    last = end,
+                    total = o.article.frame.rows
+                )
+            )
+            .into(),
+        );
+        o.painted = Some((o.top, size));
+        Ok(())
+    }
+    fn close(&self) {
+        if self.window().is_some_and(|w| w.get_composing()) {
+            return;
+        }
+        if self
+            .result
+            .borrow()
+            .as_ref()
+            .is_some_and(|f| f.operation == Operation::Save)
+        {
+            self.closing.set(true);
+        } else {
+            self.hide();
+        }
+    }
+    fn hide(&self) {
+        if let Some(w) = self.window() {
+            if let Err(e) = w.hide() {
+                self.notice(e.to_string());
+                return;
+            }
+            w.set_offline(false);
+            w.set_page(Image::default());
+        }
+        self.epoch.set(self.epoch.get().wrapping_add(1));
+        self.offline.borrow_mut().take();
+        self.clear_draft();
+        self.closing.set(false);
+        if let Some(ui) = self.ui.upgrade() {
+            ui.set_bookmarks_open(false);
+        }
+    }
+    pub fn prepare_app_close(&self) {
+        self.hide();
+    }
+    pub fn finish(&self) -> Result<(), String> {
+        self.stopped.set(true);
+        let joined = self.output.finish();
+        let collected = self.collect();
+        self.hide();
+        self.window.borrow_mut().take();
+        joined?;
+        collected
+    }
+}

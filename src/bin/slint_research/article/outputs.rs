@@ -40,6 +40,9 @@ impl ArticleSession {
             &paint.links,
         )
     }
+    pub fn settings(&self) -> pttstella::settings::DisplaySettings {
+        self.display.borrow().clone()
+    }
     pub fn rules(&self) -> pttstella::filters::Rules {
         self.core.borrow().rules().clone()
     }

@@ -251,10 +251,17 @@ async fn verify(
             ui.get_terminal_origin_y()
                 + (geometry.top + geometry.size.height as f32 * 12.5 / 24.) / geometry.dpi,
         );
+        require(
+            matches!(
+                connection.updates.borrow().context(),
+                pttstella::navigation::Context::ArticleReading { .. }
+            ),
+            "tools reading-priority fixture is not an article",
+        )?;
         click(ui, point, Button::Right);
         wait(
-            || ui.get_tools_open(),
-            "visible closed ball intercepted background right click",
+            || ui.get_context_open() && !ui.get_tools_open(),
+            "reading background did not retain the content menu",
         )
         .await?;
         key(ui, Key::Escape);
@@ -265,15 +272,15 @@ async fn verify(
         ui.set_tools_visible(false);
         click(ui, point, Button::Right);
         wait(
-            || ui.get_tools_open(),
-            "background right click did not open tools",
+            || ui.get_context_open() && !ui.get_tools_open(),
+            "hidden floating button intercepted the reading content menu",
         )
         .await?;
         require(
-            !ui.get_context_open(),
-            "background opened both tools and content menu",
+            ui.get_context_open() && !ui.get_tools_open(),
+            "reading background opened both menus",
         )?;
-        capture(ui, directory, "hidden-trigger-revealed.png")?;
+        capture(ui, directory, "hidden-trigger-content.png")?;
         key(ui, Key::Escape);
         require(
             (ui.get_tools_x(), ui.get_tools_y()) == parked,

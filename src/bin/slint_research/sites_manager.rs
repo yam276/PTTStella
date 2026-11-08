@@ -234,6 +234,7 @@ impl Manager {
         if self.stopped.get()
             || ui.get_app_closing()
             || self.output.busy()
+            || ui.get_bookmarks_open()
             || ui.get_filters_open()
             || ui.get_settings_open()
             || ui.get_editor_open()

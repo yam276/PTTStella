@@ -26,7 +26,11 @@ macro_rules! text_window {
         }
     )+};
 }
-text_window!(crate::SitesWindow, crate::FiltersWindow);
+text_window!(
+    crate::SitesWindow,
+    crate::FiltersWindow,
+    crate::BookmarksWindow
+);
 
 pub fn install<W: TextWindow>(root: &TerminalWindow, window: &W) {
     let root = root.as_weak();

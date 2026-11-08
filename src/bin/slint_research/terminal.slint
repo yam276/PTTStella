@@ -1,3 +1,4 @@
+export { BookmarksWindow } from "bookmarks.slint";
 export { FiltersWindow } from "filters.slint";
 export { SitesWindow } from "sites.slint";
 export { UiLabels } from "labels.slint";
@@ -44,7 +45,13 @@ export component TerminalWindow inherits Window {
     callback filter-reveal;
     callback filter-status-refresh;
     callback filters-updated;
-    out property <bool> manager-open:root.sites-open || root.filters-open;
+    in property <bool> bookmarks-available;
+    in property <bool> bookmarks-open;
+    in property <string> bookmarks-label;
+    callback bookmarks-show;
+    callback bookmarks-updated;
+    changed bookmarks-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
+    out property <bool> manager-open:root.sites-open || root.filters-open || root.bookmarks-open;
     changed filters-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
     in property <bool> sites-available;
     in property <bool> sites-open;
@@ -366,7 +373,7 @@ export component TerminalWindow inherits Window {
     in property <bool> selection-dragging;
     in property <bool> output-available;
     in property <bool> output-busy;
-    changed output-busy=>{root.sites-updated();root.filters-updated();}
+    changed output-busy=>{root.sites-updated();root.filters-updated();root.bookmarks-updated();}
     callback output-idle;
     in property <bool> navigation-busy;
     in property <[SelectionRect]> navigation-rects;

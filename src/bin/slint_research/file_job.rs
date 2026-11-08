@@ -1,5 +1,5 @@
 //! A single owned file result survives event-loop shutdown. Output still owns
-//! and joins the worker; both settings and station editors consume this slot.
+//! and joins the worker; auxiliary editors consume this slot.
 use std::sync::{Arc, Mutex};
 pub struct ResultSlot<T>(Arc<Mutex<Option<Result<T, String>>>>);
 impl<T> Clone for ResultSlot<T> {

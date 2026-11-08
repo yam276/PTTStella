@@ -5,6 +5,7 @@ use std::path::PathBuf;
 pub const APPLICATION: &str = "PTTStellaSlintResearch";
 pub struct Profile {
     config: PathBuf,
+    data: PathBuf,
 }
 impl Profile {
     pub fn system() -> Result<Self, String> {
@@ -12,6 +13,7 @@ impl Profile {
             .ok_or_else(|| pttstella::msg!("settings-directory-missing"))?;
         Ok(Self {
             config: dirs.config_dir().to_owned(),
+            data: dirs.data_local_dir().to_owned(),
         })
     }
     /// Report paths without reading stores or opening an OS credential provider.
@@ -21,6 +23,7 @@ impl Profile {
             "application": APPLICATION,
             "config_directory": path(self.config.clone())?,
             "settings": path(self.config.join("settings.json"))?,
+            "bookmarks": path(self.data.join("bookmarks.json"))?,
             "sites": path(self.config.join("sites.json"))?,
             "filters": path(self.config.join("filters.json"))?,
             "credential_scope": "SlintResearch",
@@ -43,6 +46,9 @@ impl Profile {
     pub fn drafts(&self) -> pttstella::drafts::store::Store {
         pttstella::drafts::store::Store::at(self.config.join("drafts.json"))
     }
+    pub fn bookmarks(&self) -> pttstella::bookmarks::store::Store {
+        pttstella::bookmarks::store::Store::at(self.data.join("bookmarks.json"))
+    }
     pub fn filters(&self) -> pttstella::filters::store::Store {
         pttstella::filters::store::Store::at(self.config.join("filters.json"))
     }
@@ -63,6 +69,7 @@ mod tests {
         assert_ne!(research.config, product.config_dir());
         assert!(!research.config.starts_with(product.config_dir()));
         assert!(!product.config_dir().starts_with(&research.config));
+        assert_ne!(research.data, product.data_local_dir());
     }
 
     #[test]
@@ -94,6 +101,7 @@ mod tests {
         std::fs::write(product.join("filters.json"), &filter_bytes).unwrap();
         let candidate = Profile {
             config: temp.path().join("candidate"),
+            data: temp.path().join("candidate-data"),
         };
         assert_eq!(candidate.settings().load().unwrap(), AppSettings::default());
         assert_eq!(candidate.sites().load().unwrap(), Sites::default());
@@ -137,6 +145,7 @@ mod tests {
         std::fs::write(&source, &old).unwrap();
         let candidate = Profile {
             config: temp.path().join("candidate"),
+            data: temp.path().join("candidate-data"),
         };
         std::fs::create_dir(&candidate.config).unwrap();
         std::fs::copy(&source, candidate.config.join("settings.json")).unwrap();
