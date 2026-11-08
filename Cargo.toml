@@ -15,9 +15,13 @@ desktop-services = ["dep:getrandom", "dep:png", "dep:arboard", "dep:tokio", "dep
 
 native-video = ["desktop-services", "dep:mpv-sys", "dep:glow"]
 
+slint-research = ["desktop-services", "dep:slint", "dep:slint-build", "dep:skia-safe"]
+
 credential-store = ["dep:security-framework", "dep:keyring", "dep:tokio"]
 
 [dependencies]
+skia-safe = { version = "=0.153.3", default-features = false, features = ["binary-cache"], optional = true }
+slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-skia", "accessibility", "unstable-winit-030"], optional = true }
 mpv-sys = { package = "libmpv2-sys", version = "=4.0.1", optional = true }
 glow = { version = "=0.18.0", optional = true }
 getrandom = { version = "=0.3.4", optional = true }
@@ -74,4 +78,10 @@ path = "src/bin/replay.rs"
 fluent-syntax = "=0.12.0"
 
 [build-dependencies]
+slint-build = { version = "=1.18.1", optional = true }
 winresource = { version = "=0.1.31", default-features = false, optional = true }
+
+[[bin]]
+name = "pttstella-slint"
+path = "src/bin/slint_research/main.rs"
+required-features = ["slint-research"]

@@ -867,3 +867,5 @@ draft-template-changed = The native title or body changed. Transfer stopped; reo
 draft-title-invalid = The title must be nonempty, contain no controls, and fit within 60 encoded bytes.
 
 draft-editor-unavailable = Unable to start the local composer. Continue in the PTT editor.
+
+context-open-link-external = Open link in browser

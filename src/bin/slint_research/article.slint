@@ -1,0 +1,205 @@
+import { SelectionRect } from "selection.slint";
+export struct ArticleTile { image: image, y: length, height: length }
+
+component ArticlePointer inherits TouchArea {
+    in property <length> offset-y;
+    callback pointer(int,length,length,bool);
+    callback context-pointer(int,length,length,bool);
+    callback focus-requested;
+    changed has-hover => { if !self.has-hover { root.pointer(5,self.mouse-x,self.mouse-y+root.offset-y,false); } }
+    pointer-event(event) => {
+        let kind = event.kind == PointerEventKind.down ? 0 : event.kind == PointerEventKind.up ? 2 : event.kind == PointerEventKind.cancel ? 3 : 1;
+        let y = self.mouse-y + root.offset-y;
+        if event.kind == PointerEventKind.cancel {
+            root.pointer(3,self.mouse-x,y,event.modifiers.shift);
+            root.context-pointer(3,self.mouse-x,y,event.modifiers.shift);
+        } else if event.button == PointerEventButton.right {
+            root.context-pointer(kind,self.mouse-x,y,event.modifiers.shift);
+        } else if event.button == PointerEventButton.left || event.kind == PointerEventKind.move {
+            root.pointer(event.kind == PointerEventKind.move && !self.pressed ? 4 : kind,self.mouse-x,y,event.modifiers.shift);
+        }
+    }
+    double-clicked => { root.pointer(6,self.mouse-x,self.mouse-y+root.offset-y,false); }
+    clicked => { root.focus-requested(); }
+}
+
+// Only the current Rust-projected tiles exist; document height has no bitmap.
+export component ArticleViewport inherits Rectangle {
+    background: black;
+    clip: true;
+    in property <[ArticleTile]> tiles;
+    in property <image> footer;
+    in property <length> line-height;
+    in property <length> line-width;
+    in property <length> body-height;
+    in property <length> document-height;
+    in property <length> offset-y;
+    in property <length> offset-x;
+    in property <bool> blocked;
+    in property <bool> native-input;
+    in property <bool> composing;
+    in property <bool> read-only;
+    in property <[SelectionRect]> selection;
+    in property <int> pointer-cursor;
+    callback pointer(int,length,length,bool);
+    callback context-pointer(int,length,length,bool);
+    callback layout-changed;
+    callback scroll(float, bool);
+    callback navigate(int);
+    callback scroll-to(bool,float);
+    callback zoom-request(float);
+    out property <bool> focused: keys.has-focus || article-input.has-focus;
+    callback focus-article;
+    changed width => { root.vertical-drag = false; root.horizontal-drag = false; root.layout-changed(); }
+    changed height => { root.vertical-drag = false; root.horizontal-drag = false; root.layout-changed(); }
+    focus-article => { if root.visible { if root.native-input { article-input.focus(); } else { keys.focus(); } } }
+    private property <bool> vertical-drag;
+    private property <bool> horizontal-drag;
+    private property <length> vertical-grab;
+    private property <length> horizontal-grab;
+    changed blocked => { root.vertical-drag = false; root.horizontal-drag = false; }
+    changed body-height => { root.vertical-drag = false; root.horizontal-drag = false; }
+    changed line-width => { root.vertical-drag = false; root.horizontal-drag = false; }
+    private property <length> body-width: max(0px, root.width - 12px);
+    private property <length> text-left: max(0px, (root.body-width - root.line-width)/2) - root.offset-x;
+    private property <length> maximum-y: max(0px, root.document-height - root.body-height);
+    private property <length> thumb-height: min(root.body-height, max(24px, root.body-height * root.body-height / max(1px, root.document-height)));
+    private property <length> maximum-x: max(0px, root.line-width - root.body-width);
+    private property <length> thumb-width: min(root.body-width, max(24px, root.body-width * root.body-width / max(1px, root.line-width)));
+
+    keys := FocusScope {
+        width: root.width; height: root.height;
+        key-pressed(event) => {
+            if (root.blocked || event.modifiers.control || event.modifiers.meta || event.modifiers.alt) { return reject; }
+            if (event.text == Key.UpArrow || event.text == "k") { root.navigate(0); return accept; }
+            if (event.text == Key.DownArrow || event.text == "j") { root.navigate(1); return accept; }
+            if (event.text == Key.PageUp) { root.navigate(2); return accept; }
+            if (event.text == Key.PageDown || event.text == " ") { root.navigate(3); return accept; }
+            if (event.text == Key.Home) { root.navigate(4); return accept; }
+            if (event.text == Key.End) { root.navigate(5); return accept; }
+            return reject;
+        }
+    }
+    Rectangle {
+        x: 0px; y: 0px;
+        width: root.body-width; height: root.body-height;
+        clip: true;
+        for tile in root.tiles: Image {
+            x: root.text-left;
+            y: tile.y - root.offset-y;
+            width: root.line-width; height: tile.height;
+            source: tile.image;
+            image-fit: fill;
+        }
+        ArticlePointer {
+            enabled: !root.blocked;
+            width: parent.width; height: parent.height;
+            mouse-cursor: root.pointer-cursor == 1 ? MouseCursor.pointer : root.pointer-cursor == 2 ? MouseCursor.w-resize : MouseCursor.text;
+            pointer(kind,x,y,shift) => { root.pointer(kind,x,y,shift); }
+            context-pointer(kind,x,y,shift) => { root.context-pointer(kind,x,y,shift); }
+            focus-requested => { root.focus-article(); }
+            scroll-event(event) => {
+                if (event.modifiers.control && !event.modifiers.alt && !event.modifiers.meta) {
+                    root.zoom-request(event.delta-y / 1px); return accept;
+                }
+                if (event.modifiers.alt || event.modifiers.meta) { return reject; }
+                if (event.modifiers.shift) { root.scroll(event.delta-y / 1px, true); }
+                else {
+                    if (event.delta-x != 0px) { root.scroll(event.delta-x / 1px, true); }
+                    if (event.delta-y != 0px) { root.scroll(event.delta-y / 1px, false); }
+                }
+                return accept;
+            }
+        }
+    }
+    Rectangle {
+        x: 0px;
+        y: root.body-height;
+        width: root.body-width; height: root.line-height;
+        clip: true;
+        Image { x: root.text-left; width: root.line-width; height: root.line-height; source: root.footer; image-fit: fill; }
+        ArticlePointer {
+            enabled: !root.blocked;
+            width: parent.width; height: parent.height;
+            offset-y: root.body-height;
+            pointer(kind,x,y,shift) => { root.pointer(kind,x,y,shift); }
+            context-pointer(kind,x,y,shift) => { root.context-pointer(kind,x,y,shift); }
+            focus-requested => { root.focus-article(); }
+        }
+    }
+    Rectangle {
+        x: root.body-width; y: 0px; width: 12px; height: root.body-height;
+        background: #101318;
+        if root.maximum-y > 0px: Rectangle {
+            x: 2px; width: 8px;
+            y: (root.body-height - root.thumb-height) * root.offset-y / max(1px,root.maximum-y);
+            height: root.thumb-height;
+            background: vertical.has-hover ? #9cabbc : #586576;
+            border-radius: 4px;
+        }
+        vertical := TouchArea {
+            enabled: !root.blocked && root.maximum-y > 0px;
+            width: parent.width; height: parent.height;
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                    let top = (root.body-height - root.thumb-height) * root.offset-y / max(1px,root.maximum-y);
+                    root.vertical-grab = self.mouse-y >= top && self.mouse-y <= top + root.thumb-height ? self.mouse-y - top : root.thumb-height / 2;
+                    root.vertical-drag = true;
+                    root.focus-article();
+                }
+                if (root.vertical-drag && (event.kind == PointerEventKind.down || (event.kind == PointerEventKind.move && self.pressed))) {
+                    root.scroll-to(true, (self.mouse-y - root.vertical-grab) / max(1px,root.body-height - root.thumb-height));
+                }
+                if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel || (event.kind == PointerEventKind.move && !self.pressed)) { root.vertical-drag = false; }
+            }
+        }
+    }
+    Rectangle {
+        x: 0px; y: root.height - 12px; width: root.body-width; height: 12px;
+        background: #101318;
+        if root.maximum-x > 0px: Rectangle {
+            y: 2px; height: 8px;
+            x: (root.body-width - root.thumb-width)*root.offset-x/max(1px,root.maximum-x);
+            width: root.thumb-width;
+            background: horizontal.has-hover ? #9cabbc : #586576;
+            border-radius: 4px;
+        }
+        horizontal := TouchArea {
+            enabled: !root.blocked && root.maximum-x > 0px;
+            width: parent.width; height: parent.height;
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                    let left = (root.body-width - root.thumb-width) * root.offset-x / max(1px,root.maximum-x);
+                    root.horizontal-grab = self.mouse-x >= left && self.mouse-x <= left + root.thumb-width ? self.mouse-x - left : root.thumb-width / 2;
+                    root.horizontal-drag = true;
+                    root.focus-article();
+                }
+                if (root.horizontal-drag && (event.kind == PointerEventKind.down || (event.kind == PointerEventKind.move && self.pressed))) {
+                    root.scroll-to(false, (self.mouse-x - root.horizontal-grab)/max(1px,root.body-width - root.thumb-width));
+                }
+                if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel || (event.kind == PointerEventKind.move && !self.pressed)) { root.horizontal-drag = false; }
+            }
+        }
+    }
+    for span in root.selection: Rectangle {
+        x: span.x; y: span.y; width: span.width; height: span.height;
+        background: #4387d655;
+    }
+    Rectangle {
+        visible: root.composing;
+        x: max(0px, root.text-left); y: 0px;
+        width: root.composing ? min(220px, root.body-width) : 1px; height: root.line-height;
+        background: #1e2733;
+    }
+    article-input := TextInput {
+        visible: root.native-input;
+        x: max(0px, root.text-left); y: 0px;
+        width: root.composing ? min(220px, root.body-width) : 1px; height: root.line-height;
+        accessible-label: "文章中的站端輸入";
+        color: #e3e8ee;
+        font-size: max(8px, root.line-height * 0.85);
+        text-cursor-width: 0px;
+        single-line: true;
+        read-only: root.read-only;
+    }
+}

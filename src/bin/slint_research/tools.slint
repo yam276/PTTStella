@@ -1,0 +1,140 @@
+export struct ToolItem { id: int, label: string, enabled: bool, x: length, y: length, width: length, height: length }
+component ToolTile inherits Rectangle {
+    in property <string> label;
+    in property <bool> enabled;
+    in property <bool> selected;
+    in property <float> ui-scale: 1;
+    in property <bool> owned-pointer;
+    callback pointer(int);
+    callback choose;
+    background: root.enabled && (root.selected || touch.has-hover) ? #315074 : #202b40;
+    border-color: root.selected ? #f0d994 : #526178;
+    border-width: 1px;
+    border-radius: 12px;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if (root.enabled) { root.choose(); } }
+    Text { font-size: 12px * root.ui-scale; text: root.label; color: root.enabled ? #e7c879 : #8290a4; horizontal-alignment: center; vertical-alignment: center; wrap: word-wrap; width: parent.width - 8px; x: 4px; height: parent.height; }
+    touch := TouchArea {
+        clicked => { if (root.enabled && !root.owned-pointer) { root.choose(); } }
+        pointer-event(event) => { if (root.owned-pointer && root.enabled && event.button == PointerEventButton.left) {
+            if (event.kind == PointerEventKind.down) { root.pointer(0); }
+            else if (event.kind == PointerEventKind.up) {
+                if (self.mouse-x >= 0px && self.mouse-x < self.width && self.mouse-y >= 0px && self.mouse-y < self.height) { root.pointer(2); }
+                else { root.pointer(3); }
+            }
+        } else if (event.kind == PointerEventKind.cancel) { root.pointer(3); } }
+    }
+}
+export component FloatingTools inherits Rectangle {
+    in property <bool> opened;
+    in property <bool> dragging;
+    in property <bool> visible-ball;
+    in property <bool> blocked;
+    in property <bool> compact;
+    in property <float> ball-opacity;
+    in property <float> scale;
+    in property <length> ball-x;
+    in property <length> ball-y;
+    in property <length> panel-x;
+    in property <length> panel-y;
+    in property <length> panel-width;
+    in property <length> panel-height;
+    in property <length> grid-height;
+    in property <int> category: -1;
+    in property <int> selected;
+    in property <[ToolItem]> categories;
+    in property <[ToolItem]> actions;
+    in property <string> title;
+    in property <string> ball-label;
+    callback ball-pointer(int,length,length);
+    callback toggle;
+    callback choose-category(int);
+    callback choose-action(int);
+    callback action-pointer(int,int);
+    callback dismiss(bool);
+    callback key(int,bool);
+    public function focus-tools() { focus.focus(); }
+    background: transparent;
+    if root.opened: TouchArea { width: parent.width; height: parent.height; pointer-event(event) => { if (event.kind == PointerEventKind.down) { root.dismiss(true); } } }
+    focus := FocusScope {
+        enabled: !root.blocked && (root.visible-ball || root.opened);
+        x: root.opened ? 0px : root.ball-x - 3px;
+        y: root.opened ? 0px : root.ball-y - 3px;
+        width: root.opened ? parent.width : 56px * root.scale + 6px;
+        height: root.opened ? parent.height : 56px * root.scale + 6px;
+        key-pressed(event) => {
+            if (!root.opened) { if (event.text == Key.Return || event.text == " ") { if (!event.repeat) { root.toggle(); } return accept; } return reject; }
+            if (event.text == Key.Escape) { root.key(0,event.repeat); }
+            else if (event.text == Key.Tab) { root.key(1,event.repeat); }
+            else if (event.text == Key.UpArrow) { root.key(2,event.repeat); }
+            else if (event.text == Key.DownArrow) { root.key(3,event.repeat); }
+            else if (event.text == Key.Home) { root.key(4,event.repeat); }
+            else if (event.text == Key.End) { root.key(5,event.repeat); }
+            else if (event.text == Key.Return || event.text == " ") { root.key(6,event.repeat); }
+            else if (event.text == Key.LeftArrow) { root.key(7,event.repeat); }
+            return accept;
+        }
+        key-released(event) => { return root.opened ? accept : reject; }
+        if root.opened && root.category < 0 && !root.compact: Rectangle {
+            width: parent.width; height: parent.height; background: transparent;
+            for item[index] in root.categories: ToolTile { x: item.x; y: item.y; width: item.width; height: item.height; ui-scale: root.scale; label: item.label; enabled: item.enabled; selected: root.selected == index; choose => { root.choose-category(item.id); } }
+        }
+        if root.opened && (root.category >= 0 || root.compact): Rectangle {
+            x: root.panel-x; y: root.panel-y; width: root.panel-width; height: root.panel-height;
+            background: #141d30; border-color: #d9ae5b; border-width: 1px; border-radius: 12px;
+            TouchArea { width: parent.width; height: parent.height; }
+            if root.category < 0: Flickable {
+                in property <int> keyboard-index: root.selected;
+                changed keyboard-index => {
+                    if (root.selected >= 0 && root.selected < root.categories.length) {
+                        let y = root.categories[root.selected].y - root.panel-y;
+                        if (y < -self.content-y) { self.content-y = -y; }
+                        else if (y + root.categories[root.selected].height > -self.content-y + self.height) { self.content-y = min(0px,self.height - y - root.categories[root.selected].height); }
+                    }
+                }
+                width: parent.width; height: parent.height; content-width: self.width; content-height: root.grid-height;
+                for item[index] in root.categories: ToolTile { x: item.x - root.panel-x; y: item.y - root.panel-y; width: item.width; height: item.height; ui-scale: root.scale; label: item.label; enabled: item.enabled; selected: root.selected == index; choose => { root.choose-category(item.id); } }
+            }
+            if root.category >= 0: VerticalLayout {
+                padding: 12px; spacing: 8px;
+                Text { text: root.title; color: #e7c879; font-weight: 700; height: 24px * root.scale; }
+                action-port := Flickable {
+                    changed content-y => { root.action-pointer(3,-1); }
+                    in property <int> keyboard-index: root.selected;
+                    changed keyboard-index => {
+                        if (root.selected >= 0 && root.selected < root.actions.length) {
+                            if (root.actions[root.selected].y < -self.content-y) { self.content-y = -root.actions[root.selected].y; }
+                            else if (root.actions[root.selected].y + root.actions[root.selected].height > -self.content-y + self.height) { self.content-y = min(0px,self.height - root.actions[root.selected].y - root.actions[root.selected].height); }
+                        }
+                    }
+                    vertical-stretch: 1; content-width: self.width;
+                    content-height: ceil(root.actions.length / 2) * 42px * root.scale;
+                    for item[index] in root.actions: ToolTile { x: item.x; y: item.y; width: item.width; height: item.height; ui-scale: root.scale; label: item.label; enabled: item.enabled; selected: root.selected == index; owned-pointer: true; pointer(kind) => { root.action-pointer(kind,item.id); } choose => { root.choose-action(item.id); } }
+                }
+            }
+        }
+        if root.visible-ball: Rectangle {
+            x: root.opened ? root.ball-x - 3px : 0px; y: root.opened ? root.ball-y - 3px : 0px; width: 56px * root.scale + 6px; height: self.width;
+            border-radius: self.width/2; border-width: 2px; border-color: #e7c879; background: #182030;
+            opacity: root.opened || root.dragging || ball-touch.has-hover || focus.has-focus ? 1 : root.ball-opacity;
+            Rectangle {
+                x: 3px; y: 3px; width: parent.width - 6px; height: self.width; border-radius: self.width/2; clip: true;
+                Image { width: parent.width; height: parent.height; source: @image-url("../../../assets/icons/pttstella.png"); image-fit: cover; }
+                if root.category >= 0: Rectangle { width: parent.width; height: parent.height; background: #182030; Text { width: parent.width; height: parent.height; text: "←"; font-size: 28px * root.scale; color: #e7c879; horizontal-alignment: center; vertical-alignment: center; } }
+            }
+            accessible-role: button; accessible-label: root.ball-label; accessible-enabled: !root.blocked;
+            accessible-action-default => { if (!root.blocked) { root.toggle(); } }
+            ball-touch := TouchArea {
+                enabled: !root.blocked; mouse-cursor: self.pressed ? MouseCursor.grabbing : MouseCursor.grab;
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.cancel) { root.ball-pointer(3,0px,0px); }
+                    else if (event.kind == PointerEventKind.move) { root.ball-pointer(1,root.ball-x + self.mouse-x,root.ball-y + self.mouse-y); }
+                    else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) { root.ball-pointer(0,root.ball-x + self.mouse-x,root.ball-y + self.mouse-y); }
+                    else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.up) { root.ball-pointer(2,root.ball-x + self.mouse-x,root.ball-y + self.mouse-y); }
+                }
+            }
+        }
+    }
+}

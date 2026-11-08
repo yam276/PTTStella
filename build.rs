@@ -24,6 +24,8 @@ fn main() -> std::io::Result<()> {
         println!("cargo:rustc-link-search=native={}", directory.display());
     }
 
+    #[cfg(feature = "slint-research")]
+    slint_build::compile("src/bin/slint_research/terminal.slint").map_err(std::io::Error::other)?;
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=PTTSTELLA_NOTICES_FILE");
     let notices = match std::env::var_os("PTTSTELLA_NOTICES_FILE") {

@@ -1,0 +1,86 @@
+import { Button, CheckBox, LineEdit } from "std-widgets.slint";
+
+export component LoginPopup inherits PopupWindow {
+    in property <string> title;
+    in property <string> account-label;
+    in property <string> password-label;
+    in property <string> remember-label;
+    in property <string> forget-label;
+    in property <string> submit-label;
+    in property <string> cancel-label;
+    in property <string> message;
+    in-out property <string> account;
+    in-out property <string> password;
+    in-out property <bool> remember;
+    in property <bool> busy;
+    in property <bool> saved;
+    callback submit(string, string, bool);
+    callback cancel;
+    callback forget;
+    callback limit-text(string, int) -> string;
+    forward-focus: account-field;
+    close-policy: PopupClosePolicy.no-auto-close;
+
+    FocusScope {
+        width: parent.width;
+        height: parent.height;
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                root.cancel();
+                return accept;
+            }
+            return reject;
+        }
+        Rectangle {
+            width: parent.width;
+            height: parent.height;
+            background: #20252b;
+            border-radius: 6px;
+            border-width: 1px;
+            border-color: #6d7b87;
+            VerticalLayout {
+                padding: 16px;
+                spacing: 12px;
+                Text { text: root.title; color: #e3e8ee; font-weight: 700; }
+                Text { text: root.account-label; color: #e3e8ee; }
+                account-field := LineEdit {
+                    text <=> root.account;
+                    accessible-label: root.account-label;
+                    enabled: !root.busy;
+                    input-method-hints: { capitalization: none, auto-correct: false, auto-complete: false };
+                    edited(text) => { self.text = root.limit-text(text, 12); }
+                }
+                Text { text: root.password-label; color: #e3e8ee; }
+                password-field := LineEdit {
+                    text <=> root.password;
+                    input-type: InputType.password;
+                    accessible-label: root.password-label;
+                    enabled: !root.busy;
+                    input-method-hints: { capitalization: none, auto-correct: false, auto-complete: false };
+                    edited(text) => { self.text = root.limit-text(text, 72); }
+                    accepted => {
+                        if (!root.busy) {
+                            root.submit(account-field.text, self.text, remember.checked);
+                            self.text = "";
+                        }
+                    }
+                }
+                remember := CheckBox { checked <=> root.remember; text: root.remember-label; enabled: !root.busy; }
+                Text { text: root.message; color: #b7c1ce; wrap: word-wrap; vertical-stretch: 1; }
+                HorizontalLayout {
+                    spacing: 8px;
+                    Button { text: root.forget-label; enabled: !root.busy && root.saved; clicked => { root.forget(); } }
+                    Button { text: root.cancel-label; clicked => { root.cancel(); } }
+                    Button {
+                        text: root.submit-label;
+                        enabled: !root.busy;
+                        clicked => {
+                            root.submit(account-field.text, password-field.text, remember.checked);
+                            password-field.text = "";
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

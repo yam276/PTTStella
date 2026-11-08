@@ -861,3 +861,5 @@ draft-template-changed = 站端標題或正文已修改，已停止帶入。請�
 draft-title-invalid = 標題不可空白、含控制字元，或超過 PTT 的 60 編碼 bytes。
 
 draft-editor-unavailable = 無法啟動本機編輯器，請先繼續使用 PTT 編輯器。
+
+context-open-link-external = 在瀏覽器開啟連結

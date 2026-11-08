@@ -1,0 +1,673 @@
+import { AboutSlint, Button, ComboBox, LineEdit, TextEdit } from "std-widgets.slint";
+import { LoginPopup } from "login.slint";
+import { ContextMenuOverlay, MenuEntry } from "context-menu.slint";
+import { FloatingTools, ToolItem } from "tools.slint";
+import { ArticleViewport, ArticleTile } from "article.slint";
+import { SelectionRect } from "selection.slint";
+
+export component TerminalWindow inherits Window {
+    title: root.live-session ? "PTTStella Slint" : (root.session-active ? "PTTStella Slint · 本機連線探針" : "PTTStella Slint · 離線原型");
+    background: #101318;
+    preferred-width: 1000px;
+    preferred-height: 690px;
+    min-width: 580px;
+    min-height: 360px;
+
+    in property <bool> article-active;
+    in property <bool> article-station;
+    callback article-resume-reading;
+    callback article-keyboard-mode(bool);
+    in property <[ArticleTile]> article-tiles;
+    in property <image> article-footer;
+    in property <length> article-line-height;
+    in property <length> article-line-width;
+    in property <length> article-body-height;
+    in property <length> article-document-height;
+    in property <length> article-offset-y;
+    in property <length> article-offset-x;
+    out property <bool> article-focused: article-view.focused;
+    changed article-focused => { root.terminal-focus-changed(); }
+    out property <bool> article-reading-ready: root.native-foreground && root.article-focused && !root.article-blocked && !root.switching-station && !root.native-pointer-down && !root.login-busy && !root.paste-reading && !root.output-busy && !root.selection-active && !root.selection-dragging && !root.keyboard-pending && !root.navigation-busy && !root.station-mouse-held && !root.context-pending;
+    changed article-reading-ready => { root.article-session-updated(); }
+    out property <bool> article-blocked: root.show-about || root.login-open || root.paste-open || root.tools-busy || root.context-open || root.native-composing;
+    callback article-layout-changed;
+    callback article-rendered;
+    callback article-session-updated;
+    callback article-load-action(bool);
+    in property <bool> article-load-available;
+    in property <bool> article-load-active;
+    in property <bool> article-load-can-resume;
+    in property <bool> article-load-next-segment;
+    in property <string> article-load-status;
+    callback article-scroll(float,bool);
+    callback article-navigate(int);
+    callback article-scroll-to(bool,float);
+    callback article-zoom-request(float);
+    callback focus-article;
+    focus-article => { article-view.focus-article(); }
+
+    in property <bool> tools-available;
+    in property <bool> tools-open;
+    in property <bool> tools-busy;
+    in property <bool> tools-dragging;
+    in property <bool> tools-visible: true;
+    in property <bool> tools-right-click: true;
+    in property <bool> tools-reduced-motion: true;
+    in property <float> tools-opacity: 1;
+    in property <float> tools-scale: 1;
+    in property <length> tools-x;
+    in property <length> tools-y;
+    in property <bool> tools-compact;
+    in property <SelectionRect> tools-panel;
+    in property <length> tools-grid-height;
+    in property <int> tools-category: -1;
+    in property <int> tools-selected;
+    in property <[ToolItem]> tools-categories;
+    in property <[ToolItem]> tools-actions;
+    in property <string> tools-title;
+    in property <string> tools-ball-label;
+    out property <bool> tools-source-blocked: !root.native-foreground || root.native-composing || root.show-about || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy;
+    out property <bool> pointer-shift-held: root.pointer-shift;
+    callback tools-pointer(int,length,length);
+    callback tools-toggle;
+    callback tools-dismiss(bool);
+    callback tools-category-choose(int);
+    callback tools-action-choose(int);
+    callback tools-action-pointer(int,int);
+    callback tools-key(int,bool);
+    callback tools-updated;
+    callback tools-resized;
+    callback tools-cancel-gesture;
+    callback tools-show-at(length,length) -> bool;
+    callback focus-tools;
+    changed width => { root.tools-resized(); }
+    changed height => { root.tools-resized(); }
+    changed tools-source-blocked => { root.tools-updated(); }
+    in property <image> terminal-image;
+    in property <string> result: "輸入探針只在本機驗證編碼";
+    out property <length> view-width: viewport.width;
+    out property <length> view-height: viewport.height;
+    out property <length> raster-left: viewport.content-x + raster.x;
+    out property <length> raster-top: viewport.content-y + raster.y;
+    in-out property <float> zoom: 1;
+    in property <length> raster-width;
+    in property <length> raster-height;
+    in property <bool> terminal-input;
+    in property <bool> keyboard-read-only;
+    in property <bool> keyboard-pending;
+    in property <bool> vim-available;
+    in property <bool> vim-enabled;
+    in property <bool> vim-once-available;
+    in property <string> vim-label;
+    in property <string> vim-once-label;
+    in property <string> keyboard-label;
+    callback toggle-vim;
+    callback vim-once;
+    callback keyboard-updated;
+    callback reset-keyboard;
+    in property <length> caret-left;
+    in property <length> caret-top;
+    in property <length> caret-height;
+    out property <bool> terminal-input-focused: grid-input.has-focus;
+    callback terminal-focus-changed;
+    callback focus-terminal;
+    callback session-updated;
+    callback geometry-changed;
+    callback submit(string);
+    in property <bool> session-active;
+    in property <bool> live-session;
+    in property <bool> show-reconnect;
+    in property <bool> switching-station;
+    in property <string> session-warning;
+    in property <[string]> stations;
+    callback switch-station(int);
+    in property <bool> can-reconnect;
+    callback reconnect;
+    callback toggle-fullscreen;
+    callback leave-fullscreen() -> bool;
+    in property <string> input-notice;
+    in property <bool> paste-open;
+    in property <string> paste-title;
+    in property <string> paste-preview;
+    in property <string> paste-cancel-label;
+    in property <string> paste-send-label;
+    callback paste-cancel;
+    callback paste-request;
+    callback paste-confirm;
+    callback show-paste-preview;
+    callback hide-paste-preview(bool);
+    in property <bool> paste-reading;
+    in property <bool> native-foreground;
+    in property <bool> native-composing;
+    in property <bool> native-pointer-down;
+    in property <int> native-pointer-buttons;
+    in property <bool> frame-paint-pending;
+    in property <bool> keep-alive-available;
+    in property <string> keep-alive-label;
+    out property <bool> keep-alive-surface-ready: root.native-foreground
+        && root.terminal-input-focused && !root.native-composing && !root.native-pointer-down
+        && !root.show-about && !root.switching-station && !root.paste-open && !root.paste-reading
+        && !root.frame-paint-pending && !root.login-open && !root.login-busy
+        && !root.selection-active && !root.selection-dragging && !root.output-busy
+        && !root.keyboard-pending && !root.navigation-busy && !root.station-mouse-held && !root.context-open && !root.context-pending && !root.tools-busy;
+    callback keep-alive-changed;
+    callback toggle-keep-alive;
+    in property <bool> login-open;
+    in property <bool> login-busy;
+    in property <bool> login-saved;
+    in property <bool> login-available;
+    in property <bool> login-pending;
+    in property <string> login-label;
+    in property <string> login-title;
+    in property <string> login-account-label;
+    in property <string> login-password-label;
+    in property <string> login-remember-label;
+    in property <string> login-forget-label;
+    in property <string> login-cancel-label;
+    in property <string> login-cancel-attempt-label;
+    in property <string> login-message;
+    in-out property <string> login-account;
+    callback login-show;
+    callback login-submit(string, string, bool);
+    callback login-cancel;
+    callback login-forget;
+    callback login-updated;
+    callback show-login-popup;
+    callback hide-login-popup(bool);
+    callback clear-login-password;
+    callback login-limit-text(string, int) -> string;
+    in property <[SelectionRect]> selection-rects;
+    in property <bool> selection-active;
+    in property <bool> selection-rows-ready;
+    in property <bool> selection-dragging;
+    in property <bool> output-available;
+    in property <bool> output-busy;
+    in property <bool> navigation-busy;
+    in property <[SelectionRect]> navigation-rects;
+    in property <int> pointer-cursor;
+    in property <string> pointer-url;
+    out property <bool> context-source-blocked: !root.native-foreground || root.native-composing
+        || root.show-about || root.switching-station || root.frame-paint-pending
+        || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy || root.tools-busy;
+    out property <bool> terminal-pointer-blocked: root.context-source-blocked || root.context-open || root.context-pending;
+    out property <bool> context-focus-restorable: root.native-foreground && !root.native-composing
+        && !root.show-about && !root.switching-station && !root.login-open && !root.login-busy && !root.paste-open && !root.paste-reading;
+    in property <bool> context-open;
+    in property <bool> context-pending;
+    in property <[MenuEntry]> context-entries;
+    in property <int> context-selected;
+    in property <length> context-x;
+    in property <length> context-y;
+    callback context-pointer(int,length,length);
+    callback context-dismiss(bool);
+    out property <length> terminal-origin-x: terminal-box.x;
+    out property <length> terminal-origin-y: terminal-box.y;
+    callback context-updated;
+    callback context-key(int,bool);
+    callback context-choose(int);
+    callback focus-context;
+    in-out property <bool> pan-mode;
+    callback grid-pointer(int, length, length, bool);
+    callback grid-wheel(float) -> bool;
+    callback link-activated(string);
+    in property <bool> station-mouse-available;
+    in property <bool> station-mouse-held;
+    in property <string> station-mouse-label;
+    in property <string> station-mouse-status;
+    out property <bool> station-pointer-blocked: !root.native-foreground || root.native-composing
+        || root.show-about || root.switching-station || root.login-open || root.login-busy
+        || root.paste-open || root.paste-reading || root.output-busy || root.pan-mode || root.context-open || root.context-pending || root.tools-busy;
+    callback station-pointer(int, int, length, length, bool, bool, bool, bool) -> bool;
+    callback station-wheel(length, length, float, bool, bool, bool, bool) -> bool;
+    callback station-mouse-updated;
+    callback station-mouse-cancel;
+    callback toggle-station-mouse;
+    callback clear-selection;
+    callback copy-selection(bool);
+    callback output-action(int);
+    callback output-updated;
+    callback output-geometry-changed;
+    private property <length> physical-pixel: 1phx;
+    private property <bool> show-about: false;
+    private property <string> login-password;
+    private property <bool> login-remember;
+    private property <bool> pointer-shift;
+
+    changed view-width => { root.context-updated(); root.station-mouse-cancel(); root.geometry-changed(); }
+    changed view-height => { root.context-updated(); root.station-mouse-cancel(); root.geometry-changed(); }
+    changed terminal-input-focused => { root.terminal-focus-changed(); }
+    changed keep-alive-surface-ready => { root.keep-alive-changed(); }
+    changed switching-station => { root.session-updated(); }
+    changed zoom => {
+        root.tools-cancel-gesture();
+        root.station-mouse-cancel();
+        viewport.content-x = 0px;
+        viewport.content-y = 0px;
+        root.geometry-changed();
+        root.article-layout-changed();
+    }
+    changed article-blocked => { root.article-session-updated(); }
+    changed native-foreground => { root.article-session-updated(); }
+    changed physical-pixel => { root.tools-cancel-gesture(); root.station-mouse-cancel(); root.geometry-changed(); root.article-layout-changed(); }
+    changed pan-mode => { root.station-mouse-cancel(); root.clear-selection(); }
+    changed terminal-pointer-blocked => { root.output-updated(); }
+    changed raster-left => { root.station-mouse-cancel(); root.clear-selection(); }
+    changed raster-top => { root.station-mouse-cancel(); root.clear-selection(); }
+    changed station-pointer-blocked => { root.station-mouse-updated(); }
+    changed context-source-blocked => { root.context-updated(); }
+
+    FocusScope {
+        width: parent.width;
+        height: parent.height;
+        key-pressed(event) => {
+            if (event.text == Key.Escape && root.leave-fullscreen()) {
+                return accept;
+            }
+            return reject;
+        }
+        VerticalLayout {
+            padding: 12px;
+            spacing: 8px;
+
+            HorizontalLayout {
+                spacing: 8px;
+                Text {
+                    text: root.article-active ? "PTTStella  /  文章閱讀" : "PTTStella  /  80 × 24";
+                    color: #e3e8ee;
+                    font-weight: 700;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+                Button { text: "100%"; clicked => { root.zoom = 1; } }
+                Button { text: "125%"; clicked => { root.zoom = 1.25; } }
+                Button { text: "150%"; clicked => { root.zoom = 1.5; } }
+                Button { text: "全螢幕"; clicked => { root.toggle-fullscreen(); } }
+                Button { text: "關於"; clicked => { root.show-about = !root.show-about; } }
+            }
+
+            terminal-box := Rectangle {
+                vertical-stretch: 1;
+                background: black;
+                clip: true;
+                viewport := Flickable {
+                    visible: !root.article-active;
+                    width: parent.width;
+                    height: parent.height;
+                    content-width: max(self.width, root.raster-width);
+                    content-height: max(self.height, root.raster-height);
+                    interactive: (!root.output-available || root.pan-mode) && (self.content-width > self.width || self.content-height > self.height);
+                    raster := Image {
+                        x: (viewport.content-width - self.width) / 2;
+                        y: (viewport.content-height - self.height) / 2;
+                        width: root.raster-width;
+                        height: root.raster-height;
+                        source: root.terminal-image;
+                        image-fit: fill;
+                    }
+                    for span in root.selection-rects: Rectangle {
+                        x: raster.x + span.x;
+                        y: raster.y + span.y;
+                        width: span.width;
+                        height: span.height;
+                        background: #4387d655;
+                    }
+                    for span in root.navigation-rects: Rectangle {
+                        x: raster.x + span.x;
+                        y: raster.y + span.y;
+                        width: span.width;
+                        height: span.height;
+                        background: #4387d647;
+                        border-color: #d9ae5b;
+                        border-width: 1px;
+                        Rectangle { width: 3px; height: parent.height; background: #d9ae5b; }
+                        Rectangle { x: parent.width - 3px; width: 3px; height: parent.height; background: #d9ae5b; }
+                    }
+                    grid-input := TextInput {
+                        visible: root.terminal-input;
+                        accessible-label: "終端輸入";
+                        x: raster.x + root.caret-left;
+                        y: raster.y + root.caret-top;
+                        width: min(220px, viewport.content-width - self.x);
+                        height: root.caret-height;
+                        font-size: max(8px, root.caret-height * 0.85);
+                        color: #e3e8ee;
+                        text-cursor-width: root.live-session ? 0px : 1px;
+                        single-line: true;
+                        read-only: root.keyboard-read-only;
+                    }
+                    if root.terminal-input && !root.live-session && !root.terminal-input-focused: Rectangle {
+                        x: grid-input.x;
+                        y: grid-input.y + grid-input.height - 2px;
+                        width: root.caret-height / 2;
+                        height: 2px;
+                        background: #53b7e8;
+                    }
+                }
+                    TouchArea {
+                        width: viewport.width;
+                        height: viewport.height;
+                        enabled: root.terminal-input && !root.pan-mode && !root.article-active;
+                        mouse-cursor: root.selection-dragging ? MouseCursor.text :
+                            root.pointer-cursor == 1 ? MouseCursor.pointer :
+                            root.pointer-cursor == 2 ? MouseCursor.w-resize :
+                            root.pointer-cursor == 3 ? MouseCursor.n-resize :
+                            root.pointer-cursor == 4 ? MouseCursor.s-resize : MouseCursor.text;
+                        changed has-hover => { if (!self.has-hover) { root.grid-pointer(5, self.mouse-x, self.mouse-y, false); } }
+                        pointer-event(event) => {
+                            root.pointer-shift = event.modifiers.shift;
+                            let button = event.button == PointerEventButton.left ? 1 : event.button == PointerEventButton.middle ? 2 : event.button == PointerEventButton.right ? 3 : 0;
+                            if (event.kind == PointerEventKind.cancel) {
+                                root.context-pointer(3, self.mouse-x, self.mouse-y);
+                                root.station-mouse-cancel();
+                                root.grid-pointer(3, self.mouse-x, self.mouse-y, event.modifiers.shift);
+                            } else if (event.kind == PointerEventKind.move) {
+                                if (!root.station-pointer(1, 0, self.mouse-x, self.mouse-y, event.modifiers.shift, event.modifiers.alt, event.modifiers.control, event.modifiers.meta)) {
+                                    root.grid-pointer(self.pressed ? 1 : 4, self.mouse-x, self.mouse-y, event.modifiers.shift);
+                                }
+                            } else if (event.kind == PointerEventKind.down) {
+                                if (!root.station-pointer(0, button, self.mouse-x, self.mouse-y, event.modifiers.shift, event.modifiers.alt, event.modifiers.control, event.modifiers.meta)) {
+                                    if (button == 1) { root.grid-pointer(0, self.mouse-x, self.mouse-y, event.modifiers.shift); }
+                                    else if (button == 3) { root.context-pointer(0, self.mouse-x, self.mouse-y); }
+                                }
+                            } else if (event.kind == PointerEventKind.up) {
+                                if (!root.station-pointer(2, button, self.mouse-x, self.mouse-y, event.modifiers.shift, event.modifiers.alt, event.modifiers.control, event.modifiers.meta)) {
+                                    if (button == 1) { root.grid-pointer(2, self.mouse-x, self.mouse-y, event.modifiers.shift); }
+                                    else if (button == 3) { root.context-pointer(2, self.mouse-x, self.mouse-y); }
+                                }
+                            }
+                        }
+                        double-clicked => { root.grid-pointer(6, self.mouse-x, self.mouse-y, root.pointer-shift); }
+                        clicked => { grid-input.focus(); }
+                        scroll-event(event) => {
+                            if (root.terminal-pointer-blocked) { return reject; }
+                            if (event.delta-y != 0px && !event.modifiers.meta && !event.modifiers.shift) {
+                                if (event.modifiers.control) {
+                                    root.zoom = clamp(root.zoom + (event.delta-y > 0px ? 0.25 : -0.25),0.25,4);
+                                    return accept;
+                                }
+                                if (viewport.content-width > viewport.width || viewport.content-height > viewport.height) { return reject; }
+                                if (root.station-wheel(self.mouse-x, self.mouse-y, event.delta-y / 1px, event.modifiers.shift, event.modifiers.alt, event.modifiers.control, event.modifiers.meta)) { return accept; }
+                                if (!event.modifiers.alt && root.grid-wheel(event.delta-y / 1px)) { return accept; }
+                            }
+                            return reject;
+                        }
+                    }
+                article-view := ArticleViewport {
+                    visible: root.article-active;
+                    width: parent.width; height: parent.height;
+                    tiles: root.article-tiles; footer: root.article-footer;
+                    line-height: root.article-line-height; line-width: root.article-line-width;
+                    body-height: root.article-body-height; document-height: root.article-document-height;
+                    offset-y: root.article-offset-y; offset-x: root.article-offset-x;
+                    blocked: root.article-blocked;
+                    native-input: root.terminal-input;
+                    composing: root.native-composing;
+                    read-only: root.keyboard-read-only;
+                    selection: root.selection-rects;
+                    pointer-cursor: root.pointer-cursor;
+                    pointer(kind,x,y,shift) => { root.pointer-shift = shift; root.grid-pointer(kind,x,y,shift); }
+                    context-pointer(kind,x,y,shift) => { root.pointer-shift = shift; root.context-pointer(kind,x,y); }
+                    layout-changed => { root.article-layout-changed(); }
+                    scroll(delta,horizontal) => { root.article-scroll(delta,horizontal); }
+                    navigate(code) => { root.article-navigate(code); }
+                    scroll-to(vertical,fraction) => { root.article-scroll-to(vertical,fraction); }
+                    zoom-request(delta) => { root.article-zoom-request(delta); }
+                }
+                if root.show-about: Rectangle {
+                    width: 200px;
+                    height: 96px;
+                    background: #20252b;
+                    AboutSlint {}
+                }
+                if root.pointer-url != "": Rectangle {
+                    y: parent.height - 26px;
+                    width: parent.width;
+                    height: 26px;
+                    background: #20252bee;
+                    Text { text: root.pointer-url; color: #e3e8ee; overflow: elide; vertical-alignment: center; }
+                }
+            }
+
+            if root.article-load-available: HorizontalLayout {
+                Text { text: root.article-load-status; color: #b7c1ce; horizontal-stretch: 1; vertical-alignment: center; }
+                if root.article-load-active || root.article-load-can-resume: Button { text: root.article-load-active ? "取消載入" : root.article-load-next-segment ? "載入下一段" : "繼續載入"; clicked => { root.article-load-action(!root.article-load-active); } }
+            }
+            if root.article-station: Button { text: "返回網頁閱讀"; clicked => { root.article-resume-reading(); } }
+            if !root.terminal-input && !root.session-active && !root.article-active: HorizontalLayout {
+                spacing: 8px;
+                compose := LineEdit {
+                    placeholder-text: "在此測試繁中輸入法與貼上";
+                    horizontal-stretch: 1;
+                    accepted => { root.submit(self.text); }
+                }
+                Button { text: "驗證輸入"; clicked => { root.submit(compose.text); } }
+            }
+            if root.live-session: HorizontalLayout {
+                spacing: 8px;
+                selector := ComboBox {
+                    model: root.stations;
+                    current-index: 0;
+                    enabled: !root.switching-station;
+                }
+                Button {
+                    text: "連線";
+                    enabled: !root.switching-station && selector.current-index >= 0;
+                    clicked => { root.switch-station(selector.current-index); }
+                }
+                Text {
+                    text: root.session-warning;
+                    color: #f0c987;
+                    overflow: elide;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+            }
+            if root.output-available: HorizontalLayout {
+                spacing: 8px;
+                output-selector := ComboBox {
+                    model: ["複製文字", "複製 ANSI", "匯出整頁 PNG", "匯出選取行 PNG（最多24行）", "複製整頁 PNG", "複製選取行 PNG（最多24行）", "全選", "清除選取"];
+                    current-index: 0;
+                    enabled: !root.output-busy;
+                }
+                Button { text: "執行"; enabled: !root.output-busy && (output-selector.current-index > 1 || root.selection-active) && ((output-selector.current-index != 3 && output-selector.current-index != 5) || root.selection-rows-ready); clicked => { root.output-action(output-selector.current-index); } }
+                if !root.article-active: Button { text: root.pan-mode ? "選取文字" : "拖曳捲動"; clicked => { root.pan-mode = !root.pan-mode; } }
+            }
+            if root.terminal-input: HorizontalLayout {
+                spacing: 8px;
+                Button {
+                    text: root.vim-label;
+                    enabled: root.vim-available;
+                    clicked => { root.toggle-vim(); }
+                }
+                if root.vim-enabled: Button {
+                    text: root.vim-once-label;
+                    enabled: root.vim-once-available;
+                    clicked => { root.vim-once(); }
+                }
+                Text {
+                    text: root.keyboard-label;
+                    color: #f0c987;
+                    vertical-alignment: center;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                }
+            }
+            if root.station-mouse-available: HorizontalLayout {
+                spacing: 8px;
+                Button { text: root.station-mouse-label; clicked => { root.toggle-station-mouse(); } }
+                Text { text: root.station-mouse-status; color: #b7c1ce; overflow: elide; horizontal-stretch: 1; vertical-alignment: center; }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                Text {
+                    text: root.result;
+                    color: #b7c1ce;
+                    overflow: elide;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+                if root.input-notice != "": Text {
+                    text: root.input-notice;
+                    color: #f0c987;
+                    overflow: elide;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+                if root.show-reconnect: Button {
+                    text: "重新連線";
+                    enabled: root.can-reconnect;
+                    clicked => { root.reconnect(); }
+                }
+                if root.keep-alive-available: Button {
+                    text: root.keep-alive-label;
+                    clicked => { root.toggle-keep-alive(); }
+                }
+                if root.login-available: Button {
+                    text: root.login-label;
+                    enabled: !root.login-busy;
+                    clicked => { root.login-show(); }
+                }
+                if root.login-pending: Button {
+                    text: root.login-cancel-attempt-label;
+                    clicked => { root.login-cancel(); }
+                }
+            }
+        }
+    }
+    tools-area := FloatingTools {
+        visible: root.tools-available;
+        width: root.width; height: root.height;
+        opened: root.tools-open; dragging: root.tools-dragging;
+        visible-ball: root.tools-visible || root.tools-open;
+        blocked: root.tools-source-blocked;
+        compact: root.tools-compact;
+        ball-opacity: root.tools-opacity; scale: root.tools-scale;
+        ball-x: root.tools-x; ball-y: root.tools-y;
+        panel-x: root.tools-panel.x; panel-y: root.tools-panel.y;
+        panel-width: root.tools-panel.width; panel-height: root.tools-panel.height;
+        grid-height: root.tools-grid-height;
+        category: root.tools-category; selected: root.tools-selected;
+        categories: root.tools-categories; actions: root.tools-actions;
+        title: root.tools-title; ball-label: root.tools-ball-label;
+        ball-pointer(kind,x,y) => { root.tools-pointer(kind,x,y); }
+        toggle => { root.tools-toggle(); }
+        choose-category(index) => { root.tools-category-choose(index); }
+        choose-action(index) => { root.tools-action-choose(index); }
+        action-pointer(kind,index) => { root.tools-action-pointer(kind,index); }
+        dismiss(focus) => { root.tools-dismiss(focus); }
+        key(code,repeat) => { root.tools-key(code,repeat); }
+    }
+    focus-tools => { tools-area.focus-tools(); }
+    context-area := ContextMenuOverlay {
+        visible: root.context-open;
+        width: root.width;
+        height: root.height;
+        entries: root.context-entries;
+        selected: root.context-selected;
+        anchor-x: terminal-box.x + root.context-x;
+        anchor-y: terminal-box.y + root.context-y;
+        choose(index) => { root.context-choose(index); }
+        dismiss(focus) => { root.context-dismiss(focus); }
+        key(code, repeat) => { root.context-key(code, repeat); }
+    }
+    focus-context => { context-area.focus-menu(); }
+
+    show-login-popup => {
+        root.login-password = "";
+        root.login-remember = false;
+        login-popup.show();
+    }
+    hide-login-popup(restore-focus) => {
+        root.login-password = "";
+        root.login-remember = false;
+        login-popup.close();
+        if (restore-focus) { root.focus-terminal(); }
+    }
+    clear-login-password => { root.login-password = ""; }
+    login-popup := LoginPopup {
+        width: min(600px, root.width - 24px);
+        height: min(450px, root.height - 24px);
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        title: root.login-title;
+        account-label: root.login-account-label;
+        password-label: root.login-password-label;
+        remember-label: root.login-remember-label;
+        forget-label: root.login-forget-label;
+        cancel-label: root.login-cancel-label;
+        submit-label: root.login-label;
+        message: root.login-message;
+        account <=> root.login-account;
+        password <=> root.login-password;
+        remember <=> root.login-remember;
+        busy: root.login-busy;
+        saved: root.login-saved;
+        submit(account, password, remember) => { root.login-submit(account, password, remember); }
+        cancel => { root.login-cancel(); }
+        forget => { root.login-forget(); }
+        limit-text(text, maximum) => { return root.login-limit-text(text, maximum); }
+    }
+
+    show-paste-preview => { paste-dialog.show(); }
+    focus-terminal => { if (root.terminal-input) { grid-input.focus(); } }
+    hide-paste-preview(restore-focus) => {
+        paste-dialog.close();
+        if (restore-focus) { grid-input.focus(); }
+    }
+
+    paste-dialog := PopupWindow {
+        width: min(540px, root.width - 32px);
+        height: min(380px, root.height - 32px);
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        close-policy: PopupClosePolicy.no-auto-close;
+        forward-focus: cancel-paste;
+
+        FocusScope {
+            width: parent.width;
+            height: parent.height;
+            key-pressed(event) => {
+                if (event.text == Key.Escape) {
+                    root.paste-cancel();
+                    return accept;
+                }
+                return reject;
+            }
+            Rectangle {
+                width: parent.width;
+                height: parent.height;
+                background: #20252b;
+                border-radius: 6px;
+                border-width: 1px;
+                border-color: #6d7b87;
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 12px;
+                    Text {
+                        text: root.paste-title;
+                        color: #e3e8ee;
+                        font-weight: 700;
+                    }
+                    TextEdit {
+                        text: root.paste-preview;
+                        accessible-label: root.paste-title;
+                        read-only: true;
+                        vertical-stretch: 1;
+                    }
+                    HorizontalLayout {
+                        alignment: end;
+                        spacing: 8px;
+                        cancel-paste := Button {
+                            text: root.paste-cancel-label;
+                            clicked => { root.paste-cancel(); }
+                        }
+                        Button {
+                            text: root.paste-send-label;
+                            clicked => { root.paste-confirm(); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

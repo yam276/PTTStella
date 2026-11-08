@@ -1,0 +1,77 @@
+export struct MenuEntry { label: string, enabled: bool }
+export component ContextMenuOverlay inherits Rectangle {
+    in property <[MenuEntry]> entries;
+    in property <int> selected;
+    in property <length> anchor-x;
+    in property <length> anchor-y;
+    callback choose(int);
+    callback dismiss(bool);
+    callback key(int, bool);
+    public function focus-menu() { focus.focus(); }
+    changed selected => {
+        if (root.selected * 34px < -port.content-y) { port.content-y = -root.selected * 34px; }
+        else if ((root.selected + 1) * 34px > -port.content-y + port.height) { port.content-y = min(0px,port.height - (root.selected + 1) * 34px); }
+    }
+    background: transparent;
+    TouchArea {
+        width: parent.width;
+        height: parent.height;
+        pointer-event(event) => { if (event.kind == PointerEventKind.down) { root.dismiss(true); } }
+    }
+    focus := FocusScope {
+        width: parent.width;
+        height: parent.height;
+        key-pressed(event) => {
+            if (event.text == Key.Escape) { root.key(0, event.repeat); }
+            else if (event.text == Key.Tab) { root.key(1, event.repeat); }
+            else if (event.text == Key.UpArrow) { root.key(2, event.repeat); }
+            else if (event.text == Key.DownArrow) { root.key(3, event.repeat); }
+            else if (event.text == Key.Home) { root.key(4, event.repeat); }
+            else if (event.text == Key.End) { root.key(5, event.repeat); }
+            else if (event.text == Key.Return || event.text == " ") { root.key(6, event.repeat); }
+            return accept;
+        }
+        key-released(event) => { return accept; }
+        Rectangle {
+            x: clamp(root.anchor-x, 8px, max(8px,root.width - self.width - 8px));
+            y: clamp(root.anchor-y, 8px, max(8px,root.height - self.height - 8px));
+            width: min(300px,root.width - 16px);
+            height: min(root.entries.length * 34px + 12px,root.height - 16px);
+            background: #141d30;
+            border-color: #d9ae5b;
+            border-width: 1px;
+            border-radius: 6px;
+            clip: true;
+            TouchArea { width: parent.width; height: parent.height; }
+            port := Flickable {
+                x: 6px;
+                y: 6px;
+                width: parent.width - 12px;
+                height: parent.height - 12px;
+                content-width: self.width;
+                content-height: root.entries.length * 34px;
+                for entry[index] in root.entries: Rectangle {
+                    y: index * 34px;
+                    width: port.width;
+                    height: 34px;
+                    background: entry.enabled && (root.selected == index || touch.has-hover) ? #315074 : transparent;
+                    border-radius: 3px;
+                    accessible-role: button;
+                    accessible-label: entry.label;
+                    accessible-enabled: entry.enabled;
+                    accessible-action-default => { if (entry.enabled) { root.choose(index); } }
+                    Text {
+                        x: 12px;
+                        width: parent.width - 24px;
+                        height: parent.height;
+                        text: entry.label;
+                        color: entry.enabled ? #e8dfc7 : #8390a2;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    touch := TouchArea { clicked => { if (entry.enabled) { root.choose(index); } } }
+                }
+            }
+        }
+    }
+}
