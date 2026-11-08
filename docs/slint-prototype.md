@@ -1187,3 +1187,25 @@ Dioxus 另用真實 WKWebView 對照 App，輸入與 signed payload 為 `c61c260
 系統選檔的 Go To 路徑第一次 paste／Return維持舊文字，改以原生 AX欄位填入路徑並確認後成功，沒有推論其原因。這輪沒有驗證注音候選或把繁中貼上當成 IME。使用者已確認先前草稿異常時有其他操作，舊末字異常原因仍未定，不宣稱已修復。建置期曾因 Window保留的 color屬性拒絕編譯，改名為 entry-color後才通過；沒有把建置失敗算成執行通過。
 
 清理盤點記於同目錄 `cleanup-owned.json`。保留必要 App、初始 payload 的來源對照、最終 PNG／合成資料、正常與故障證據及仍供 goal使用的 Cargo profiles；中間被取代的成功探針輸出按確切路徑移除。原 worktree與提交尚未整合，保留；canonical develop、正式入口與遠端未修改。帳號右鍵、暫時揭露、書籤及其餘管理功能、混合 Live、原生 IME／DPI、多平台、資料回退與同負載效能仍待完成，S0–S8 goal持續，S9未執行。
+
+
+## S4 帳號右鍵、揭露與推文標示（2026-11-08）
+
+功能提交 `511a048` 接入三策略／移除的原生內容選單、列表作者欄、暫時揭露、同 ID 推文底色及取消。Menu target由當前 ACK Paint的 account_words／reply metadata和原生 cell geometry產生，保留 generation／revision／presentation／input epoch、滑鼠路由與選取／幾何快照；UI不重新解析原文。規則保存交給既有名單 manager與單一 Output worker，沿用 Store三方合併與備份，成功才 commit到 article owner，保存失敗維持原有效規則與檔案並顯示錯誤。
+
+切篇／切站等來源 scope變更、永久名單與揭露走同一 presentation失效流程，撤銷舊輸出與媒體。只有 reducer成功接受的推文底色變更，才重綁同 generation／article的已確認呈現版本，保留文章錨點、圖片間隙、已解碼原始 Arc、GIF、等寬選擇與錯誤狀態；舊 hover／預覽與點擊租約仍撤銷。文章列像素快取重建以畫出新底色，已展開圖片不重抓。滑鼠命中不 clone整個來源 Frame；用核心按列排序的 word metadata限縮至命中列。
+
+補測連點同一 ID時發現真正的事件順序問題：Slint 1.18.1在 Released中先回呼 clicked／double_clicked，再送 pointer_event(up)。原通用雙擊處理提前清掉第二次 gesture，導致不能再次點 ID取消。現僅為已辨識作者且沒有 Shift的點擊保留該次放開；其他雙擊與選取路徑不變。修正前的狀態紀錄確認來源、cell、作者 metadata、前景及准入均有效，修正後兩種閱讀模式的連點、右鍵切換／取消及 Shift拖曳選取均通過。依賴版本與本機來源位置記於下述證據，沒有改 Slint套件。
+
+證據位於 `.local/verification/slint-account-actions/`：
+
+- 功能 CLI SHA256 `3e8012a744a225ccbe35a1626ca68cda62213618438d0260f7c977c644ebebbd` 的 `terminal-complete/`／`web-complete/`，驗證右鍵策略與移除、保留既有備註、備份受阻不改有效／磁碟規則、列表作者欄留白對應完整 ID、遮蔽作者不從 hit metadata出現、來源行 PNG完全黑色、選取文字與連結沒有原文旁路、揭露撤銷舊選取／輸出租約。真實本機 peer送來新列表後，舊選單及 target均不能寫規則，臨時揭露重設。
+- 兩案的左鍵 ID優先於返回，連點與右鍵均可取消；合併 ID的黑色遮罩不被底色揭露。Shift拖曳確認原作者字串的行／欄選取。網頁案另以真實 worker狀態和原始 Arc核對三個已解碼資源、非空等寬選擇及閱讀位置保留，並從實際 image model看到 GIF像素繼續改變。兩案均為0自動取頁，只有探針明確推進來源的一筆 `1b5b367e`；peer正常 Close acknowledged。網頁 PNG／GIF／once各只有1筆 HTTP，terminal則0筆，全部 joined。這是單頁閱讀→列表的合成負載，不是完整混合 Live、可信 OS手勢或效能驗收。
+- 同一 payload的 `form-regression/`、既有兩種右鍵路由及 `article-output/` 回歸通過。library360／bin76／multi-instance10通過，另4／1／1明確 ignored；all-target Clippy、選用 native-video的 all-target check、fmt與 release build通過。沒有修改本輪共用 library／Dioxus／JS選定來源，因此未把先前 desktop／JS結果冒充重跑。
+- 隨後 `d405f9a` 修正內容選單既有 Settings action沒有對應 label、退回空字串的問題。CLI `90f1eea307e71f0f8924b2f180cb7999a11afd5b25a4667733c5d0b7e0da6985` 的 `background-label-local/`／`background-label-station/` 重跑原兩種右鍵流程，新增獨立的背景選單非空標籤及本地化設定文字斷言，並保留實際視窗 PNG；all-target Clippy與fmt通過。這個較晚 payload未被說成前述帳號案例的相同 executable。
+
+負向證據分開保留。`terminal-first`是新探針漏加 terminal letterbox offset而點錯列；`terminal-point-fix`是自製推文時間欄未切回標準 ANSI白色，修正 fixture後才有標準推文 metadata，沒有放寬辨識。`terminal-final`／`click-diagnostic`則是上述真實雙擊失去第二次放開，兩份來源 patch及紀錄可重建。建置曾拒絕探針誤用不存在的 frame_count欄位，修正後才重建。所有失敗均未列為通過，沒有因退出／清理錯誤把失敗當成成功。
+
+清理明細為同目錄 `cleanup-owned.json`：移除被最終案例取代的成功探針、對應 log／run metadata及中間成功 patch，保留失敗來源、最終 PNG／結果與已封存的建置拒絕紀錄；精確路徑、UID、symlink、內容與 lsof盤點一併記錄。du合計2224KiB，filesystem free由243301842944到243304148992 bytes，變化2306048 bytes，分開記帳而不把其他並行空間變化歸因於本次。仍使用的 Cargo profiles、未整合 worktree與提交保留，沒有移動 canonical develop、推送或發佈。
+
+接續書籤、快速前往／最近看板、推文導覽／更新與完整混合功能矩陣；可信 OS手勢／IME、四架構包、舊資料往返與同負載效能仍待完成。S0–S8 goal維持 active，S9未切換／發佈。
