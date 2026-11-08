@@ -17,14 +17,34 @@ impl Selection {
         self.anchor.min(self.head)..self.anchor.max(self.head)
     }
 }
+/// Semantic selection belongs to the document transaction, not the viewport.
+/// Rectangle columns retain the projection in which the gesture was made, so
+/// history can restore exact glyph ranges even after switching display modes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SelectionShape {
+    #[default]
+    Text,
+    All,
+    Lines,
+    Rectangle {
+        anchor: Position,
+        head: Position,
+        mode: Mode,
+    },
+}
+#[derive(Clone, Copy)]
+struct SelectionState {
+    primary: Selection,
+    shape: SelectionShape,
+}
 struct Transaction {
     from: usize,
     removed: String,
     inserted: String,
     title_before: String,
     title_after: String,
-    selection_before: Selection,
-    selection_after: Selection,
+    selection_before: SelectionState,
+    selection_after: SelectionState,
 }
 impl Transaction {
     fn bytes(&self) -> usize {
@@ -43,6 +63,7 @@ pub struct Document {
     revision: u64,
     mode: Mode,
     selection: Selection,
+    shape: SelectionShape,
     cache: Cache,
     undo: VecDeque<Transaction>,
     redo: Vec<Transaction>,
@@ -81,6 +102,7 @@ impl Document {
             revision: 0,
             mode: Mode::Color,
             selection: Selection::default(),
+            shape: SelectionShape::Text,
             cache,
             undo: VecDeque::new(),
             redo: Vec::new(),
@@ -106,10 +128,22 @@ impl Document {
         self.mode
     }
     pub fn set_mode(&mut self, mode: Mode) {
+        if mode != self.mode && matches!(self.shape, SelectionShape::Rectangle { .. }) {
+            self.shape = SelectionShape::Text;
+        }
         self.mode = mode;
     }
     pub fn selection(&self) -> Selection {
         self.selection
+    }
+    pub fn selection_shape(&self) -> SelectionShape {
+        self.shape
+    }
+    fn selection_state(&self) -> SelectionState {
+        SelectionState {
+            primary: self.selection,
+            shape: self.shape,
+        }
     }
     pub fn rows(&self) -> &[Arc<Row>] {
         &self.cache.rows
@@ -137,12 +171,72 @@ impl Document {
         }
     }
     pub fn select(&mut self, version: Version, selection: Selection) -> Result<(), String> {
+        self.select_with_shape(version, selection, SelectionShape::Text)
+    }
+    pub fn select_with_shape(
+        &mut self,
+        version: Version,
+        selection: Selection,
+        shape: SelectionShape,
+    ) -> Result<(), String> {
         self.owns(version)?;
         if !self.offset_valid(selection.anchor) || !self.offset_valid(selection.head) {
             return Err(invalid());
         }
+        match shape {
+            SelectionShape::Rectangle { anchor, head, mode }
+                if anchor.row >= self.rows().len()
+                    || head.row >= self.rows().len()
+                    || mode != self.mode =>
+            {
+                return Err(invalid());
+            }
+            SelectionShape::All if selection.range() != (0..self.source.len()) => {
+                return Err(invalid());
+            }
+            SelectionShape::Lines
+                if [selection.anchor, selection.head].into_iter().any(|p| {
+                    p != self.source.len() && self.row_start(self.cache.row_at(p)) != Some(p)
+                }) =>
+            {
+                return Err(invalid());
+            }
+            _ => {}
+        }
         self.selection = selection;
+        self.shape = shape;
         Ok(())
+    }
+    pub fn selected_ranges(&self) -> Result<Vec<Range<usize>>, String> {
+        match self.shape {
+            SelectionShape::All | SelectionShape::Lines => {
+                Ok(std::iter::once(self.selection.range()).collect())
+            }
+            SelectionShape::Rectangle { anchor, head, mode } if anchor.col == head.col => {
+                (anchor.row.min(head.row)..=anchor.row.max(head.row))
+                    .map(|row| {
+                        let at = self
+                            .cache
+                            .offset(
+                                mode,
+                                Position {
+                                    row,
+                                    col: anchor.col,
+                                },
+                                Affinity::After,
+                            )
+                            .ok_or_else(invalid)?;
+                        Ok(at..at)
+                    })
+                    .collect()
+            }
+            SelectionShape::Rectangle { anchor, head, mode } => self.rectangle_in(
+                mode,
+                anchor.row.min(head.row)..anchor.row.max(head.row) + 1,
+                anchor.col.min(head.col)..anchor.col.max(head.col),
+            ),
+            SelectionShape::Text => Ok(std::iter::once(self.selected_range()?).collect()),
+        }
     }
     pub fn position(&self, raw: usize) -> Result<Position, String> {
         if !self.offset_valid(raw) {
@@ -162,6 +256,14 @@ impl Document {
         rows: Range<usize>,
         columns: Range<usize>,
     ) -> Result<Vec<Range<usize>>, String> {
+        self.rectangle_in(self.mode, rows, columns)
+    }
+    fn rectangle_in(
+        &self,
+        mode: Mode,
+        rows: Range<usize>,
+        columns: Range<usize>,
+    ) -> Result<Vec<Range<usize>>, String> {
         if rows.start > rows.end || rows.end > self.cache.rows.len() || columns.start > columns.end
         {
             return Err(invalid());
@@ -171,20 +273,28 @@ impl Document {
             return Ok(result);
         }
         for row in rows {
-            let a = self.offset(
-                Position {
-                    row,
-                    col: columns.start,
-                },
-                Affinity::Before,
-            )?;
-            let b = self.offset(
-                Position {
-                    row,
-                    col: columns.end,
-                },
-                Affinity::After,
-            )?;
+            let a = self
+                .cache
+                .offset(
+                    mode,
+                    Position {
+                        row,
+                        col: columns.start,
+                    },
+                    Affinity::Before,
+                )
+                .ok_or_else(invalid)?;
+            let b = self
+                .cache
+                .offset(
+                    mode,
+                    Position {
+                        row,
+                        col: columns.end,
+                    },
+                    Affinity::After,
+                )
+                .ok_or_else(invalid)?;
             if a < b {
                 result.push(a..b);
             }
@@ -209,7 +319,33 @@ impl Document {
         Ok(from..to.max(from))
     }
     pub fn replace_selection(&mut self, revision: Version, insert: &str) -> Result<Update, String> {
-        let range = self.selected_range()?;
+        self.owns(revision)?;
+        if matches!(self.shape, SelectionShape::Rectangle { .. }) {
+            let ranges = self.selected_ranges()?;
+            if let (Some(first), Some(last)) = (ranges.first(), ranges.last()) {
+                let removed: usize = ranges.iter().map(|r| r.len()).sum();
+                let inserted = insert
+                    .len()
+                    .checked_mul(ranges.len())
+                    .ok_or_else(|| crate::msg!("draft-limit"))?;
+                if inserted > MAX_BODY || self.source.len() - removed > MAX_BODY - inserted {
+                    return Err(crate::msg!("draft-limit"));
+                }
+                let mut replacement = String::new();
+                let mut at = first.start;
+                for range in &ranges {
+                    replacement.push_str(&self.source[at..range.start]);
+                    replacement.push_str(insert);
+                    at = range.end;
+                }
+                return self.replace(revision, first.start..last.end, &replacement);
+            }
+        }
+        let range = if matches!(self.shape, SelectionShape::All | SelectionShape::Lines) {
+            self.selection.range()
+        } else {
+            self.selected_range()?
+        };
         self.replace(revision, range, insert)
     }
     pub fn replace(
@@ -261,11 +397,14 @@ impl Document {
         source.replace_range(range.clone(), insert);
         validate(&title, &source)?;
         let selection = if source == self.source {
-            self.selection
+            self.selection_state()
         } else {
-            Selection {
-                anchor: range.start + insert.len(),
-                head: range.start + insert.len(),
+            SelectionState {
+                primary: Selection {
+                    anchor: range.start + insert.len(),
+                    head: range.start + insert.len(),
+                },
+                shape: SelectionShape::Text,
             }
         };
         let transaction = Transaction {
@@ -274,7 +413,7 @@ impl Document {
             inserted: insert.into(),
             title_before: self.title.clone(),
             title_after: title.clone(),
-            selection_before: self.selection,
+            selection_before: self.selection_state(),
             selection_after: selection,
         };
         let update = if source == self.source {
@@ -288,7 +427,8 @@ impl Document {
         self.source = source;
         self.title = title;
         self.revision = next;
-        self.selection = selection;
+        self.selection = selection.primary;
+        self.shape = selection.shape;
         self.history_bytes -= self.redo.iter().map(Transaction::bytes).sum::<usize>();
         self.redo.clear();
         self.history_bytes += transaction.bytes();
@@ -322,7 +462,8 @@ impl Document {
         }
         self.source = source;
         self.title = tx.title_before.clone();
-        self.selection = tx.selection_before;
+        self.selection = tx.selection_before.primary;
+        self.shape = tx.selection_before.shape;
         self.revision = next;
         if let Some(tx) = self.undo.pop_back() {
             self.redo.push(tx);
@@ -349,7 +490,8 @@ impl Document {
         }
         self.source = source;
         self.title = tx.title_after.clone();
-        self.selection = tx.selection_after;
+        self.selection = tx.selection_after.primary;
+        self.shape = tx.selection_after.shape;
         self.revision = next;
         if let Some(tx) = self.redo.pop() {
             self.undo.push_back(tx);
@@ -407,12 +549,41 @@ impl Document {
         let from = utf16_byte(&self.source, change.from)?;
         let to = utf16_byte(&self.source, change.to)?;
         let before = self.selection;
+        let shape = self.shape;
+        let selection_mode = match shape {
+            SelectionShape::Rectangle { mode, .. } => mode,
+            _ => self.mode,
+        };
         let (anchor, head) = (
-            self.position(self.selection.anchor)?,
-            self.position(self.selection.head)?,
+            self.cache.position(selection_mode, self.selection.anchor),
+            self.cache.position(selection_mode, self.selection.head),
         );
         let update = self.replace(revision, from..to, &change.insert)?;
-        self.selection = if self.mode == Mode::Source {
+        self.selection = if shape == SelectionShape::All {
+            if before.anchor <= before.head {
+                Selection {
+                    anchor: 0,
+                    head: self.source.len(),
+                }
+            } else {
+                Selection {
+                    anchor: self.source.len(),
+                    head: 0,
+                }
+            }
+        } else if shape == SelectionShape::Lines {
+            let boundary = |p: Position| {
+                if p.col == 0 {
+                    self.row_start(p.row).unwrap_or(self.source.len())
+                } else {
+                    self.source.len()
+                }
+            };
+            Selection {
+                anchor: boundary(anchor),
+                head: boundary(head),
+            }
+        } else if selection_mode == Mode::Source {
             // The source view includes inserted SGR columns: the old physical
             // columns would select the new escape syntax instead of the text.
             let map = |position: usize, after: bool| {
@@ -432,12 +603,25 @@ impl Document {
             }
         } else {
             Selection {
-                anchor: self.offset(anchor, Affinity::After)?,
-                head: self.offset(head, Affinity::After)?,
+                anchor: self
+                    .cache
+                    .offset(selection_mode, anchor, Affinity::After)
+                    .ok_or_else(invalid)?,
+                head: self
+                    .cache
+                    .offset(selection_mode, head, Affinity::After)
+                    .ok_or_else(invalid)?,
             }
         };
+        self.shape = match shape {
+            SelectionShape::Rectangle {
+                mode: Mode::Source, ..
+            } => SelectionShape::Text,
+            _ => shape,
+        };
+        let after = self.selection_state();
         if let Some(tx) = self.undo.back_mut() {
-            tx.selection_after = self.selection;
+            tx.selection_after = after;
         }
         Ok(update)
     }

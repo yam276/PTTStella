@@ -276,3 +276,216 @@ fn source_mode_colour_tracks_the_changed_raw_selection_through_history() {
     doc.redo(doc.version()).unwrap();
     assert_eq!(doc.selection(), after);
 }
+
+#[test]
+fn rectangle_color_and_title_history_restore_shape_even_in_another_view() {
+    let original = "A中B\nC文D\n";
+    let mut doc = document(original);
+    let shape = SelectionShape::Rectangle {
+        anchor: Position { row: 0, col: 2 },
+        head: Position { row: 1, col: 3 },
+        mode: Mode::Color,
+    };
+    doc.select_with_shape(
+        doc.version(),
+        Selection {
+            anchor: 1,
+            head: 10,
+        },
+        shape,
+    )
+    .unwrap();
+    let ranges = doc.selected_ranges().unwrap();
+    assert_eq!(ranges, [1..4, 7..10]);
+    doc.color(
+        doc.version(),
+        &ranges,
+        Color {
+            foreground: 10,
+            background: 4,
+        },
+    )
+    .unwrap();
+    let colored = doc.source().to_owned();
+    let after = doc.selected_ranges().unwrap();
+    assert_eq!(doc.selection_shape(), shape);
+    for (row, range) in after.iter().enumerate() {
+        assert_eq!(
+            doc.cache.position(Mode::Color, range.start),
+            Position { row, col: 1 }
+        );
+        assert_eq!(
+            doc.cache.position(Mode::Color, range.end),
+            Position { row, col: 3 }
+        );
+        let glyphs = doc.rows()[row].glyphs(Mode::Color).collect::<Vec<_>>();
+        assert_eq!((glyphs[0].left.fg, glyphs[0].left.bg), (7, 0));
+        assert_eq!(
+            (glyphs[1].left.fg, glyphs[1].left.bg, glyphs[1].left.bright),
+            (2, 4, true)
+        );
+        assert_eq!((glyphs[2].left.fg, glyphs[2].left.bg), (7, 0));
+    }
+    doc.edit_title(doc.version(), "新標題".into()).unwrap();
+    doc.set_mode(Mode::Source);
+    assert_eq!(doc.selection_shape(), SelectionShape::Text);
+    doc.undo(doc.version()).unwrap();
+    assert_eq!(doc.mode(), Mode::Source);
+    assert_eq!(doc.title(), "中文標題");
+    assert_eq!(doc.selection_shape(), shape);
+    assert_eq!(doc.selected_ranges().unwrap(), after);
+    doc.undo(doc.version()).unwrap();
+    assert_eq!(doc.source(), original);
+    assert_eq!(doc.selected_ranges().unwrap(), [1..4, 7..10]);
+    doc.redo(doc.version()).unwrap();
+    assert_eq!(doc.source(), colored);
+    assert_eq!(doc.selected_ranges().unwrap(), after);
+}
+
+#[test]
+fn whole_source_and_line_selections_keep_hidden_boundaries_through_color_and_history() {
+    let original = "\x1b[31mA\x1b[m\n中\n末";
+    let mut doc = document(original);
+    doc.select_with_shape(
+        doc.version(),
+        Selection {
+            anchor: 0,
+            head: original.len(),
+        },
+        SelectionShape::All,
+    )
+    .unwrap();
+    doc.replace_selection(doc.version(), "X").unwrap();
+    doc.undo(doc.version()).unwrap();
+    assert_eq!(doc.selection_shape(), SelectionShape::All);
+    doc.replace_selection(doc.version(), "Y").unwrap();
+    assert_eq!(doc.source(), "Y");
+    assert!(!doc.can_redo());
+    let mut doc = document(original);
+    let end = doc.row_start(2).unwrap();
+    doc.select_with_shape(
+        doc.version(),
+        Selection {
+            anchor: end,
+            head: 0,
+        },
+        SelectionShape::Lines,
+    )
+    .unwrap();
+    let ranges = doc.selected_ranges().unwrap();
+    doc.color(
+        doc.version(),
+        &ranges,
+        Color {
+            foreground: 9,
+            background: 0,
+        },
+    )
+    .unwrap();
+    let colored_end = doc.row_start(2).unwrap();
+    assert_eq!(
+        doc.selection(),
+        Selection {
+            anchor: colored_end,
+            head: 0
+        }
+    );
+    let colored = doc.source().to_owned();
+    doc.undo(doc.version()).unwrap();
+    assert_eq!(doc.source(), original);
+    assert_eq!(doc.selection_shape(), SelectionShape::Lines);
+    assert_eq!(
+        doc.selection(),
+        Selection {
+            anchor: end,
+            head: 0
+        }
+    );
+    doc.redo(doc.version()).unwrap();
+    assert_eq!(doc.source(), colored);
+    doc.replace_selection(doc.version(), "X\n").unwrap();
+    assert_eq!(doc.source(), "X\n末");
+}
+
+#[test]
+fn rectangular_insertion_and_source_color_restore_the_exact_prior_selection() {
+    let mut doc = document("A中B\nC文D\n");
+    let shape = SelectionShape::Rectangle {
+        anchor: Position { row: 0, col: 1 },
+        head: Position { row: 1, col: 1 },
+        mode: Mode::Color,
+    };
+    doc.select_with_shape(doc.version(), Selection { anchor: 1, head: 7 }, shape)
+        .unwrap();
+    assert_eq!(doc.selected_ranges().unwrap(), [1..1, 7..7]);
+    doc.replace_selection(doc.version(), "X").unwrap();
+    assert_eq!(doc.source(), "AX中B\nCX文D\n");
+    doc.undo(doc.version()).unwrap();
+    assert_eq!(doc.source(), "A中B\nC文D\n");
+    assert_eq!(doc.selection_shape(), shape);
+    assert_eq!(doc.selected_ranges().unwrap(), [1..1, 7..7]);
+    let mut doc = document("ABC\nDEF");
+    doc.set_mode(Mode::Source);
+    let shape = SelectionShape::Rectangle {
+        anchor: Position { row: 0, col: 1 },
+        head: Position { row: 1, col: 2 },
+        mode: Mode::Source,
+    };
+    doc.select_with_shape(doc.version(), Selection { anchor: 1, head: 6 }, shape)
+        .unwrap();
+    let ranges = doc.selected_ranges().unwrap();
+    doc.color(
+        doc.version(),
+        &ranges,
+        Color {
+            foreground: 9,
+            background: 0,
+        },
+    )
+    .unwrap();
+    assert_eq!(doc.selection_shape(), SelectionShape::Text);
+    let colored = doc.source().to_owned();
+    doc.undo(doc.version()).unwrap();
+    assert_eq!(doc.source(), "ABC\nDEF");
+    assert_eq!(doc.selection_shape(), shape);
+    assert_eq!(doc.selected_ranges().unwrap(), [1..2, 5..6]);
+    doc.redo(doc.version()).unwrap();
+    assert_eq!(doc.source(), colored);
+    assert_eq!(doc.selection_shape(), SelectionShape::Text);
+}
+
+#[test]
+fn stale_and_inconsistent_shapes_are_rejected_without_changing_selection_or_history() {
+    let mut doc = document("ABC\n中");
+    let primary = Selection { anchor: 1, head: 2 };
+    doc.select(doc.version(), primary).unwrap();
+    for shape in [
+        SelectionShape::All,
+        SelectionShape::Lines,
+        SelectionShape::Rectangle {
+            anchor: Position { row: 2, col: 0 },
+            head: Position { row: 0, col: 1 },
+            mode: Mode::Color,
+        },
+        SelectionShape::Rectangle {
+            anchor: Position { row: 0, col: 0 },
+            head: Position { row: 0, col: 1 },
+            mode: Mode::Source,
+        },
+    ] {
+        assert!(
+            doc.select_with_shape(doc.version(), primary, shape)
+                .is_err()
+        );
+        assert_eq!(doc.selection(), primary);
+        assert_eq!(doc.selection_shape(), SelectionShape::Text);
+        assert!(!doc.can_undo());
+    }
+    doc.edit_title(doc.version(), "新標題".into()).unwrap();
+    assert!(
+        doc.select_with_shape(version(0), primary, SelectionShape::Text)
+            .is_err()
+    );
+    assert_eq!(doc.selection(), primary);
+    assert_eq!(doc.revision(), 1);
+}
