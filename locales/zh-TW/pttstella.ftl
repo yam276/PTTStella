@@ -865,3 +865,9 @@ draft-editor-unavailable = 無法啟動本機編輯器，請先繼續使用 PTT 
 context-open-link-external = 在瀏覽器開啟連結
 
 draft-stop-requested = 已要求停止，不會重送；站端可能已有部分修改，請依畫面確認。本機草稿仍保留。
+
+editor-color-palette-hint = 方向鍵選色 · Tab 前往套用 · Esc 取消
+
+editor-color-working = 正在核對及上色，請稍候…
+
+editor-color-stop-requested = 已要求停止；已送出的色碼可能保留，請檢查站端畫面。

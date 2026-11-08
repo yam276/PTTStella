@@ -32,11 +32,39 @@ struct Input {
     generation: Option<u64>,
     guidance: pttstella::login::Guidance,
     ime_allowed: Option<bool>,
+    modal_activation: u8,
 }
 
 struct Composition {
     generation: Option<u64>,
     active: bool,
+}
+
+#[cfg(test)]
+mod modal_tests {
+    use super::*;
+    #[test]
+    fn popup_activation_cannot_repeat_into_the_bbs_after_it_closes() {
+        for code in [
+            KeyCode::Enter,
+            KeyCode::NumpadEnter,
+            KeyCode::Space,
+            KeyCode::Escape,
+            KeyCode::Tab,
+        ] {
+            let mut input = Input::default();
+            let key = PhysicalKey::Code(code);
+            assert!(!input.modal_edge(key, true, false, true));
+            assert!(input.modal_edge(key, true, true, false));
+            assert!(input.modal_edge(key, false, false, false));
+            assert!(!input.modal_edge(key, true, false, false));
+        }
+        let mut input = Input::default();
+        let key = PhysicalKey::Code(KeyCode::Enter);
+        input.modal_edge(key, true, false, true);
+        // An independent new physical down is allowed if OS focus transfer lost keyup.
+        assert!(!input.modal_edge(key, true, false, false));
+    }
 }
 
 fn inline_key_eligible(status: &vim::Status, modifiers: ModifiersState, composing: bool) -> bool {
@@ -52,6 +80,33 @@ fn inline_key_eligible(status: &vim::Status, modifiers: ModifiersState, composin
 }
 
 impl Input {
+    // Preserve popup activation edges until physical release, even when an
+    // Enter/Space/Esc closes it and focus immediately returns to the BBS.
+    fn modal_edge(&mut self, key: PhysicalKey, pressed: bool, repeat: bool, modal: bool) -> bool {
+        let bit = match key {
+            PhysicalKey::Code(KeyCode::Enter) => 1,
+            PhysicalKey::Code(KeyCode::NumpadEnter) => 2,
+            PhysicalKey::Code(KeyCode::Space) => 4,
+            PhysicalKey::Code(KeyCode::Escape) => 8,
+            PhysicalKey::Code(KeyCode::Tab) => 16,
+            _ => return false,
+        };
+        if modal {
+            if pressed {
+                self.modal_activation |= bit;
+            } else {
+                self.modal_activation &= !bit;
+            }
+            return false;
+        }
+        if self.modal_activation & bit == 0 {
+            return false;
+        }
+        if !pressed || !repeat {
+            self.modal_activation &= !bit;
+        }
+        !pressed || repeat
+    }
     fn observe(&mut self, view: &View) -> pttstella::navigation::Context {
         let context = view.context();
         if self.generation != Some(view.generation) {
@@ -248,6 +303,10 @@ fn mount_window(
         let Some(ui) = weak.upgrade() else {
             return Propagate;
         };
+        if let WindowEvent::KeyboardInput {event,is_synthetic:false,..}=event {
+            let modal=ui.get_station_color_open() || ui.get_editor_open() && ui.global::<EditorState>().get_palette_open();
+            if input.borrow_mut().modal_edge(event.physical_key,event.state==ElementState::Pressed,event.repeat,modal){return PreventDefault;}
+        }
         if ui.get_article_active()
             && ui.get_article_focused()
             && matches!(event, WindowEvent::Ime(Ime::Preedit(text, _)) if !text.is_empty())
@@ -263,6 +322,7 @@ fn mount_window(
             ..
         } = event
             && !ui.get_editor_open()
+            && !ui.get_station_color_open()
             && event.logical_key == Key::Named(NamedKey::Enter)
         {
             let eligible = {
@@ -422,6 +482,15 @@ fn mount_window(
                     ..
                 } => {}
                 _ => return Propagate,
+            }
+            if ui.get_station_color_open() {
+                drop(input);
+                if ui.global::<crate::StationColorState>().get_busy()
+                    && matches!(event,WindowEvent::KeyboardInput{event,..} if event.state==ElementState::Pressed && !event.repeat && matches!(event.logical_key,Key::Character(_) | Key::Named(NamedKey::Backspace | NamedKey::Delete))) {
+                    ui.global::<crate::StationColorState>().invoke_action(2);
+                    return PreventDefault;
+                }
+                return Propagate;
             }
             // Local draft input never enters the session keyboard, including
             // disconnected sessions and Vim normal mode. Native fields own IME.
@@ -873,6 +942,7 @@ fn refresh(ui: &TerminalWindow, input: &RefCell<Input>, connection: &Connection)
 
 fn actions_available(ui: &TerminalWindow, view: &View) -> bool {
     !ui.get_editor_open()
+        && !ui.get_station_color_open()
         && view.site.ptt_features()
         && view.phase == Phase::Connected
         && !ui.get_switching_station()

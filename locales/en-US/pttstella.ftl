@@ -871,3 +871,9 @@ draft-editor-unavailable = Unable to start the local composer. Continue in the P
 context-open-link-external = Open link in browser
 
 draft-stop-requested = Stop requested; nothing will be resent. The station may contain partial changes. Check its screen; your local draft is retained.
+
+editor-color-palette-hint = Arrows choose colours · Tab for Apply · Esc cancels
+
+editor-color-working = Verifying and applying colours…
+
+editor-color-stop-requested = Stop requested; sent colour codes may remain. Check the station screen.

@@ -1,0 +1,83 @@
+import { Button, ScrollView } from "std-widgets.slint";
+import { ColorPalette } from "color-palette.slint";
+export global StationColorState {
+    in-out property <bool> open;
+    in-out property <bool> busy;
+    in-out property <bool> cancelling;
+    in-out property <int> foreground:15;
+    in-out property <int> background;
+    in-out property <int> selected:15;
+    in-out property <[string]> labels;
+    in-out property <string> title;
+    in-out property <string> help;
+    in-out property <string> foreground-label;
+    in-out property <string> background-label;
+    in-out property <string> sample;
+    in-out property <string> hint;
+    in-out property <string> code;
+    in-out property <string> reset-label;
+    in-out property <string> cancel-label;
+    in-out property <string> apply-label;
+    in-out property <string> status;
+    callback action(int);
+    callback choose(int);
+}
+export component StationColor inherits Rectangle {
+    background:#080c1477;
+    property <int> selected-action:2;
+    public function focus-picker() {picker.focus-palette();}
+    public function focus-actions() {root.selected-action=1;actions.focus();}
+    TouchArea {pointer-event(event)=>{if event.kind==PointerEventKind.down {StationColorState.action(2);}} scroll-event(event)=>{StationColorState.action(2);return accept;}}
+    panel := Rectangle {
+        width:min(420px,root.width - 24px);height:min(450px,root.height - 24px);
+        x:(root.width - self.width)/2;y:(root.height - self.height)/2;
+        background:#141d30;border-color:#d9ae5b;border-width:1px;border-radius:6px;
+        TouchArea { }
+        ScrollView {
+            width:parent.width;height:parent.height;
+            content-width:self.width;content-height:430px;
+            VerticalLayout {
+                padding:12px;spacing:6px;
+                Text {text:StationColorState.title;color:#f2cd7d;font-size:18px;}
+                Text {text:StationColorState.help;color:#c7d4e7;wrap:word-wrap;}
+                picker := ColorPalette {
+                    interactive:!StationColorState.busy;embedded:true;height:224px;
+                    labels:StationColorState.labels;foreground-label:StationColorState.foreground-label;background-label:StationColorState.background-label;
+                    foreground-index:StationColorState.foreground;background-index:StationColorState.background;selected<=>StationColorState.selected;hint:StationColorState.hint;
+                    choose(index)=>{StationColorState.choose(index);}
+                    dismiss(focus)=>{StationColorState.action(2);}
+                    tab-out(back)=>{root.selected-action=back ? 0 : 2;actions.focus();}
+                }
+                Rectangle {
+                    height:32px;background:picker.preview-background;
+                    Text {text:StationColorState.sample;color:picker.preview-foreground;horizontal-alignment:center;vertical-alignment:center;}
+                }
+                Text {text:StationColorState.code;color:#c7d4e7;}
+                Text {text:StationColorState.status;color:#f2cd7d;wrap:word-wrap;}
+                actions := FocusScope {
+                    height:36px;
+                    key-pressed(event)=>{
+                        if event.text==Key.Escape {if !event.repeat {StationColorState.action(2);}}
+                        else if event.text==Key.Tab {picker.focus-palette();}
+                        else if event.text==Key.LeftArrow || event.text==Key.UpArrow {root.selected-action=Math.mod(root.selected-action+2,3);}
+                        else if event.text==Key.RightArrow || event.text==Key.DownArrow {root.selected-action=Math.mod(root.selected-action+1,3);}
+                        else if event.text==Key.Return || event.text==" " {if !event.repeat {StationColorState.action(root.selected-action==0 ? 3 : root.selected-action==1 ? 2 : 1);}}
+                        return accept;
+                    }
+                    key-released(event)=>{return accept;}
+                    HorizontalLayout {spacing:8px;
+                        Rectangle {horizontal-stretch:1;border-width:actions.has-focus && root.selected-action==0 ? 2px : 0px;border-color:#68b7ff;
+                            Button {x:2px;y:2px;width:parent.width - 4px;height:parent.height - 4px;text:StationColorState.reset-label;enabled:!StationColorState.busy;clicked=>{StationColorState.action(3);} }
+                        }
+                        Rectangle {horizontal-stretch:1;border-width:actions.has-focus && root.selected-action==1 ? 2px : 0px;border-color:#68b7ff;
+                            Button {x:2px;y:2px;width:parent.width - 4px;height:parent.height - 4px;text:StationColorState.cancel-label;enabled:!StationColorState.cancelling;clicked=>{StationColorState.action(2);} }
+                        }
+                        Rectangle {horizontal-stretch:1;border-width:actions.has-focus && root.selected-action==2 ? 2px : 0px;border-color:#68b7ff;
+                            Button {x:2px;y:2px;width:parent.width - 4px;height:parent.height - 4px;text:StationColorState.apply-label;enabled:!StationColorState.busy;clicked=>{StationColorState.action(1);} }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

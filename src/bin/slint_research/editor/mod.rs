@@ -295,33 +295,7 @@ impl Editor {
             .map_err(|e| e.to_string())?,
         ));
         let state = ui.global::<EditorState>();
-        let names = [
-            pttstella::msg!("editor-color-name-0"),
-            pttstella::msg!("editor-color-name-1"),
-            pttstella::msg!("editor-color-name-2"),
-            pttstella::msg!("editor-color-name-3"),
-            pttstella::msg!("editor-color-name-4"),
-            pttstella::msg!("editor-color-name-5"),
-            pttstella::msg!("editor-color-name-6"),
-            pttstella::msg!("editor-color-name-7"),
-        ];
-        let labels = (0..24)
-            .map(|i| {
-                let name = &names[i % 8];
-                let group = if i < 16 {
-                    pttstella::msg!("editor-color-foreground")
-                } else {
-                    pttstella::msg!("editor-color-background")
-                };
-                let bright = if (8..16).contains(&i) {
-                    format!("{} · ", pttstella::msg!("editor-color-bright"))
-                } else {
-                    String::new()
-                };
-                format!("{group} · {bright}{name}").into()
-            })
-            .collect::<Vec<_>>();
-        state.set_palette_labels(ModelRc::new(VecModel::from(labels)));
+        state.set_palette_labels(crate::palette::labels());
         state.set_foreground_label(pttstella::msg!("editor-color-foreground").into());
         state.set_background_label(pttstella::msg!("editor-color-background").into());
         state.set_selection_labels(ModelRc::new(VecModel::from(vec![

@@ -15,11 +15,13 @@ mod media_playback;
 mod media_worker;
 mod native_input;
 mod output;
+mod palette;
 mod paste;
 mod pointer;
 mod profile;
 mod renderer;
 mod session;
+mod station_color;
 mod station_mouse;
 mod stations;
 mod tools;
@@ -124,12 +126,13 @@ struct Options {
     verify_article: Option<PathBuf>,
     verify_article_session: Option<PathBuf>,
     verify_media: Option<PathBuf>,
+    verify_color: Option<PathBuf>,
     verify_drafts: Option<PathBuf>,
     probe: Option<Probe>,
 }
 
 fn options() -> Result<Options, &'static str> {
-    const USAGE: &str = "usage: pttstella-slint [--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
+    const USAGE: &str = "usage: pttstella-slint [--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
     let mut zoom = None;
     let mut capture = None;
     let mut probe = None;
@@ -140,9 +143,16 @@ fn options() -> Result<Options, &'static str> {
     let mut verify_article_session = None;
     let mut verify_media = None;
     let mut verify_drafts = None;
+    let mut verify_color = None;
     let mut args = std::env::args_os().skip(1);
     while let Some(arg) = args.next() {
         match arg.to_str() {
+            Some("--verify-editor-color") if verify_color.is_none() => {
+                verify_color = Some(args.next().ok_or(USAGE)?.into());
+            }
+            Some("--probe-editor-color") if probe.is_none() => {
+                probe = Some(Probe::Session(session::Probe::EditorColor));
+            }
             Some("--verify-drafts") if verify_drafts.is_none() => {
                 verify_drafts = Some(args.next().ok_or(USAGE)?.into());
             }
@@ -361,7 +371,20 @@ fn options() -> Result<Options, &'static str> {
     {
         return Err(USAGE);
     }
+    if verify_color.is_some()
+        && (probe != Some(Probe::Session(session::Probe::EditorColor))
+            || capture.is_some()
+            || verify_drafts.is_some()
+            || verify_media.is_some()
+            || verify_context.is_some()
+            || verify_tools.is_some()
+            || verify_article.is_some()
+            || verify_article_session.is_some())
+    {
+        return Err(USAGE);
+    }
     Ok(Options {
+        verify_color,
         verify_drafts,
         verify_media,
         verify_article_session,
@@ -384,6 +407,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         &options.verify_article_session,
         &options.verify_media,
         &options.verify_drafts,
+        &options.verify_color,
     ]
     .into_iter()
     .flatten()
@@ -695,6 +719,7 @@ fn run(
     let mut station_mouse_owner = None;
     let mut media_owner = None;
     let mut editor_owner = None;
+    let mut station_color_owner = None;
     let drafts_probe_directory = if options.probe == Some(Probe::Session(session::Probe::Drafts))
         && std::env::var_os("PTTSTELLA_SLINT_DRAFTS_PROBE_DIR").is_none()
     {
@@ -819,6 +844,7 @@ fn run(
                 &mode,
                 session::Mode::Probe(
                     session::Probe::Drafts
+                        | session::Probe::EditorColor
                         | session::Probe::Media
                         | session::Probe::Input
                         | session::Probe::Clipboard
@@ -880,7 +906,8 @@ fn run(
                 &mode,
                 session::Mode::Live(_)
                     | session::Mode::Probe(
-                        session::Probe::Media
+                        session::Probe::EditorColor
+                            | session::Probe::Media
                             | session::Probe::ArticleInline
                             | session::Probe::ArticleFull
                             | session::Probe::ArticleInput
@@ -915,6 +942,11 @@ fn run(
                     clipboard.clone(),
                     article_session_owner.clone(),
                 );
+                station_color_owner = Some(station_color::StationColor::mount(
+                    &ui,
+                    connection.clone(),
+                    output.clone(),
+                ));
                 context_owner = Some(context_menu::ContextMenu::mount(
                     &ui,
                     connection.clone(),
@@ -1013,7 +1045,16 @@ fn run(
             })
         })
         .transpose()?;
-    let verification = if let Some(directory) = options.verify_drafts {
+    let verification = if let Some(directory) = options.verify_color {
+        Some(station_color::probe::start(
+            &ui,
+            station_color_owner
+                .as_ref()
+                .cloned()
+                .ok_or("station color owner missing")?,
+            directory,
+        )?)
+    } else if let Some(directory) = options.verify_drafts {
         Some(editor::probe::start(
             &ui,
             editor_owner
@@ -1159,6 +1200,9 @@ fn run(
         });
         slint::run_event_loop()?;
         ui.hide()?;
+        if let Some(color) = &station_color_owner {
+            color.finish();
+        }
         if let Some(editor) = &editor_owner {
             editor.finish()?;
         }
@@ -1184,6 +1228,9 @@ fn run(
         }
         if let Some(tools) = tools_owner {
             tools.finish();
+        }
+        if let Some(color) = station_color_owner {
+            color.finish();
         }
         if let Some(context) = context_owner {
             context.finish();

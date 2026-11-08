@@ -544,6 +544,7 @@ fn supported(action: Action) -> bool {
             | Action::Previous
             | Action::Next
             | Action::Paste
+            | Action::EditorColor
     )
 }
 pub(super) fn label(action: Action) -> String {
@@ -563,6 +564,7 @@ pub(super) fn label(action: Action) -> String {
         A::Back => pttstella::msg!("context-back"),
         A::Previous => pttstella::msg!("context-previous"),
         A::Next => pttstella::msg!("context-next"),
+        A::EditorColor => pttstella::msg!("editor-color-title"),
         A::Paste => pttstella::msg!("menu-paste"),
         A::CopyImageRows => pttstella::msg!("copy-rows-png"),
         A::CopyImagePage => pttstella::msg!("copy-png"),

@@ -43,6 +43,7 @@ impl FrameGate {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Probe {
+    EditorColor,
     Drafts,
     Media,
     Reconnect,
@@ -93,6 +94,20 @@ pub fn with_probe(
     bytes: Vec<u8>,
     show: impl FnOnce(Rc<Connection>) -> Result<(), Box<dyn Error>>,
 ) -> Result<(), Box<dyn Error>> {
+    let color_failure = if probe == Probe::EditorColor {
+        match std::env::var("PTTSTELLA_STATION_COLOR_CASE")
+            .ok()
+            .as_deref()
+        {
+            None => None,
+            Some("cancel") => Some(pttstella::connection::EditorColorFailure::Cancel),
+            Some("unsupported") => Some(pttstella::connection::EditorColorFailure::Unsupported),
+            Some("partial") => Some(pttstella::connection::EditorColorFailure::Partial),
+            _ => return Err("unknown station colour fixture".into()),
+        }
+    } else {
+        None
+    };
     let slow_drafts = probe == Probe::Drafts
         && std::env::var_os("PTTSTELLA_SLINT_DRAFTS_SLOW").as_deref()
             == Some(std::ffi::OsStr::new("1"));
@@ -108,12 +123,25 @@ pub fn with_probe(
     } else {
         None
     };
+    let bytes = if probe == Probe::EditorColor {
+        pttstella::editor_color::fixture::Editor::new(
+            &["P\x1b[32m中\x1b[0m文\x1b[34mQ", "", "第三行"],
+            true,
+            false,
+            true,
+        )
+        .wire()
+    } else {
+        bytes
+    };
     let bytes = match media.as_ref() {
         Some(f) if probe == Probe::ArticleInline => f.article_page(1)?,
         Some(f) => f.page(),
         None => bytes,
     };
     let fixture = match probe {
+        Probe::EditorColor if color_failure.is_some() => "slint_editor_color_negative",
+        Probe::EditorColor => "slint_editor_color",
         Probe::Drafts if slow_drafts => "slint_drafts_slow",
         Probe::Drafts => "slint_drafts",
         Probe::Media => "slint_native_media",
@@ -148,6 +176,10 @@ pub fn with_probe(
     };
     let result = with_connection(
         || match probe {
+            Probe::EditorColor => match color_failure {
+                Some(case) => Connection::start_editor_color_failure_probe(case),
+                None => Connection::start_editor_color_probe(bytes),
+            },
             Probe::Drafts => {
                 if slow_drafts {
                     Connection::start_drafts_slow_probe()
@@ -381,6 +413,7 @@ pub fn mount(
             ui.invoke_output_updated();
             ui.invoke_station_mouse_updated();
             ui.invoke_context_updated();
+            ui.invoke_station_color_updated();
             ui.invoke_tools_updated();
             ui.invoke_keyboard_updated();
             ui.invoke_keep_alive_changed();

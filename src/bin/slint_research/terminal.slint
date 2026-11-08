@@ -10,7 +10,17 @@ import { MediaHover } from "media-hover.slint";
 export { EditorState, DraftItem } from "editor.slint";
 import { NativeEditor, EditorState } from "editor.slint";
 
+export { StationColorState } from "station-color.slint";
+import { StationColor, StationColorState } from "station-color.slint";
+
 export component TerminalWindow inherits Window {
+    out property <bool> station-color-open:StationColorState.open;
+    callback station-color-updated;
+    callback focus-station-color;
+    focus-station-color=>{station-color-view.focus-picker();}
+    callback focus-station-color-actions;
+    focus-station-color-actions=>{station-color-view.focus-actions();}
+    changed station-color-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-color-updated();root.station-mouse-cancel();}
     out property <bool> editor-open: EditorState.open;
     out property <bool> editor-focused: EditorState.body-focused || EditorState.title-focused;
     out property <bool> editor-body-focused: EditorState.body-focused;
@@ -29,7 +39,7 @@ export component TerminalWindow inherits Window {
     callback editor-title-edit-key(int);
     editor-title-edit-key(code) => {editor-view.title-edit-key(code);}
     callback editor-composition(bool);
-    changed editor-open => { root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.find-state-changed();root.station-mouse-cancel(); }
+    changed editor-open => { root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-color-updated();root.find-state-changed();root.station-mouse-cancel(); }
     in property <bool> media-available;
     in property <string> media-auto-label;
     in property <string> media-auto-help;
@@ -53,7 +63,7 @@ export component TerminalWindow inherits Window {
     callback media-hover-preference(int);
     in property <bool> media-open;
     in property <bool> media-video;
-    out property <bool> media-video-visible: !root.editor-open && root.media-open && root.media-video && !root.show-about && !root.login-open && !root.paste-open && !root.context-open;
+    out property <bool> media-video-visible: !root.editor-open && !root.station-color-open && root.media-open && root.media-video && !root.show-about && !root.login-open && !root.paste-open && !root.context-open;
     in property <float> media-position;
     in property <float> media-duration;
     out property <SelectionRect> media-video-bounds: {x:media-preview.video-left,y:media-preview.video-top,width:media-preview.video-width,height:media-preview.video-height};
@@ -74,7 +84,7 @@ export component TerminalWindow inherits Window {
     in property <string> media-external-label;
     in property <string> media-fit-label;
     in property <string> media-original-label;
-    out property <bool> media-play-allowed: !root.editor-open && root.media-open && root.native-foreground && !root.output-busy && !root.show-about && !root.login-open && !root.paste-open;
+    out property <bool> media-play-allowed: !root.editor-open && !root.station-color-open && root.media-open && root.native-foreground && !root.output-busy && !root.show-about && !root.login-open && !root.paste-open;
     changed media-play-allowed => {root.media-updated();}
     callback media-request(int);
     callback media-action(int);
@@ -100,7 +110,7 @@ export component TerminalWindow inherits Window {
     in property <bool> find-has-matches;
     in-out property <string> find-query;
     out property <bool> find-focused: root.find-open && find-input.has-focus;
-    out property <bool> find-blocked: root.editor-open || root.media-open || !root.native-foreground || root.native-composing || root.show-about
+    out property <bool> find-blocked: root.editor-open || root.station-color-open || root.media-open || !root.native-foreground || root.native-composing || root.show-about
         || root.switching-station || root.login-open || root.login-busy || root.paste-open || root.output-busy;
     callback find-action(int);
     callback find-edit(string);
@@ -145,7 +155,7 @@ export component TerminalWindow inherits Window {
     changed keyboard-read-only => {root.inline-updated();}
     changed keyboard-pending => {root.inline-updated();}
     changed vim-enabled => {root.inline-updated();}
-    changed native-composing => {root.inline-updated();}
+    changed native-composing => {root.inline-updated();root.station-color-updated();}
     in property <image> article-footer;
     in property <length> article-line-height;
     in property <length> article-line-width;
@@ -157,7 +167,7 @@ export component TerminalWindow inherits Window {
     changed article-focused => { root.terminal-focus-changed(); root.inline-updated(); }
     out property <bool> article-reading-ready: root.native-foreground && root.article-focused && !root.article-blocked && !root.switching-station && !root.native-pointer-down && !root.login-busy && !root.paste-reading && !root.output-busy && !root.selection-active && !root.selection-dragging && !root.keyboard-pending && !root.navigation-busy && !root.station-mouse-held && !root.context-pending;
     changed article-reading-ready => { root.article-session-updated(); }
-    out property <bool> article-blocked: root.editor-open || root.media-open || root.find-open || root.show-about || root.login-open || root.paste-open || root.tools-busy || root.context-open || root.native-composing;
+    out property <bool> article-blocked: root.editor-open || root.station-color-open || root.media-open || root.find-open || root.show-about || root.login-open || root.paste-open || root.tools-busy || root.context-open || root.native-composing;
     callback article-layout-changed;
     callback article-rendered;
     callback article-session-updated;
@@ -194,7 +204,7 @@ export component TerminalWindow inherits Window {
     in property <[ToolItem]> tools-actions;
     in property <string> tools-title;
     in property <string> tools-ball-label;
-    out property <bool> tools-source-blocked: root.editor-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing || root.show-about || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy;
+    out property <bool> tools-source-blocked: root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing || root.show-about || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy;
     out property <bool> pointer-shift-held: root.pointer-shift;
     callback native-shift-held() -> bool;
     callback tools-pointer(int,length,length);
@@ -273,7 +283,7 @@ export component TerminalWindow inherits Window {
     in property <bool> frame-paint-pending;
     in property <bool> keep-alive-available;
     in property <string> keep-alive-label;
-    out property <bool> keep-alive-surface-ready: !root.editor-open && !root.media-open && !root.find-open && root.native-foreground
+    out property <bool> keep-alive-surface-ready: !root.editor-open && !root.station-color-open && !root.media-open && !root.find-open && root.native-foreground
         && (root.article-active ? root.article-focused : root.terminal-input-focused) && !root.native-composing && !root.native-pointer-down
         && !root.show-about && !root.switching-station && !root.paste-open && !root.paste-reading
         && !root.frame-paint-pending && !root.login-open && !root.login-busy
@@ -315,7 +325,7 @@ export component TerminalWindow inherits Window {
     in property <[SelectionRect]> navigation-rects;
     in property <int> pointer-cursor;
     in property <string> pointer-url;
-    out property <bool> context-source-blocked: root.editor-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing
+    out property <bool> context-source-blocked: root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing
         || root.show-about || root.switching-station || root.frame-paint-pending
         || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy || root.tools-busy;
     out property <bool> terminal-pointer-blocked: root.context-source-blocked || root.context-open || root.context-pending;
@@ -343,7 +353,7 @@ export component TerminalWindow inherits Window {
     in property <bool> station-mouse-held;
     in property <string> station-mouse-label;
     in property <string> station-mouse-status;
-    out property <bool> station-pointer-blocked: root.editor-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing
+    out property <bool> station-pointer-blocked: root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing
         || root.show-about || root.switching-station || root.login-open || root.login-busy
         || root.paste-open || root.paste-reading || root.output-busy || root.pan-mode || root.context-open || root.context-pending || root.tools-busy;
     callback station-pointer(int, int, length, length, bool, bool, bool, bool) -> bool;
@@ -363,11 +373,11 @@ export component TerminalWindow inherits Window {
     private property <bool> login-remember;
     private property <bool> pointer-shift;
 
-    changed view-width => { root.context-updated(); root.station-mouse-cancel(); root.geometry-changed(); root.article-layout-changed(); }
-    changed view-height => { root.context-updated(); root.station-mouse-cancel(); root.geometry-changed(); root.article-layout-changed(); }
+    changed view-width => { root.context-updated();root.station-color-updated(); root.station-mouse-cancel(); root.geometry-changed(); root.article-layout-changed(); }
+    changed view-height => { root.context-updated();root.station-color-updated(); root.station-mouse-cancel(); root.geometry-changed(); root.article-layout-changed(); }
     changed terminal-input-focused => { root.terminal-focus-changed(); }
     changed keep-alive-surface-ready => { root.keep-alive-changed(); }
-    changed switching-station => { root.session-updated(); }
+    changed switching-station => {root.station-color-updated(); root.session-updated(); }
     changed zoom => {
         root.tools-cancel-gesture();
         root.station-mouse-cancel();
@@ -377,14 +387,14 @@ export component TerminalWindow inherits Window {
         root.article-layout-changed();
     }
     changed article-blocked => { root.article-session-updated(); root.inline-updated(); }
-    changed native-foreground => { root.article-session-updated(); root.inline-updated(); }
+    changed native-foreground => {root.station-color-updated(); root.article-session-updated(); root.inline-updated(); }
     changed physical-pixel => { root.tools-cancel-gesture(); root.station-mouse-cancel(); root.geometry-changed(); root.article-layout-changed(); }
     changed pan-mode => { root.station-mouse-cancel(); root.clear-selection(); }
     changed terminal-pointer-blocked => { root.output-updated(); }
     changed raster-left => { root.station-mouse-cancel(); root.clear-selection(); }
     changed raster-top => { root.station-mouse-cancel(); root.clear-selection(); }
     changed station-pointer-blocked => { root.station-mouse-updated(); }
-    changed context-source-blocked => { root.context-updated(); }
+    changed context-source-blocked => { root.context-updated();root.station-color-updated(); }
 
     FocusScope {
         width: parent.width;
@@ -490,7 +500,7 @@ export component TerminalWindow inherits Window {
                         Rectangle { x: parent.width - 3px; width: 3px; height: parent.height; background: #d9ae5b; }
                     }
                     grid-input := TextInput {
-                        enabled: !root.editor-open;
+                        enabled: !root.editor-open && !root.station-color-open;
                         visible: root.terminal-input;
                         accessible-label: "終端輸入";
                         x: raster.x + root.caret-left;
@@ -897,4 +907,6 @@ export component TerminalWindow inherits Window {
         }
     }
     editor-view := NativeEditor { visible:EditorState.open; width:parent.width;height:parent.height; }
+    station-color-view := StationColor {visible:StationColorState.open;width:root.width;height:root.height;}
+
 }

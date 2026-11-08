@@ -342,6 +342,7 @@ impl Output {
                     }
                     output.overlay(&ui);
                     output.hover_overlay(&ui);
+                    ui.invoke_station_color_updated();
                     ui.invoke_media_updated();
                 }
             }
@@ -889,6 +890,7 @@ impl Output {
         ui.set_selection_dragging(selected.gesture.is_some());
         drop(selected);
         ui.invoke_context_updated();
+        ui.invoke_station_color_updated();
         ui.invoke_keep_alive_changed();
     }
     pub fn selection_key(&self) -> Option<(Range<usize>, Vec<selection::Span>)> {
@@ -979,6 +981,7 @@ impl Output {
         use pttstella::context_menu::Action as A;
         let Some(ui) = self.ui.upgrade() else { return };
         match action {
+            A::EditorColor => ui.global::<crate::StationColorState>().invoke_action(0),
             A::Copy => self.copy(false),
             A::CopyAnsi => self.copy(true),
             A::ExportRows => self.export(true, false),
