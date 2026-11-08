@@ -17,7 +17,7 @@ use tokio::{
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 pub const PTT_ENDPOINT: &str = crate::sites::PTT;
-pub use probe::MouseSampleProbe;
+pub use probe::{EditorColorFailure, MouseSampleProbe};
 type WebSocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 use transport::Socket;
 type Dial = JoinHandle<Result<Socket, String>>;
@@ -445,6 +445,12 @@ impl Connection {
     }
     pub fn start_editor_color_probe(bytes: Vec<u8>) -> Result<Self, String> {
         let connection = Self::start_owned_probe(bytes, probe::Scenario::EditorColor)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    pub fn start_editor_color_failure_probe(case: EditorColorFailure) -> Result<Self, String> {
+        let connection =
+            Self::start_owned_probe(case.wire(), probe::Scenario::EditorColorFailure(case))?;
         connection.keep_alive(false)?;
         Ok(connection)
     }

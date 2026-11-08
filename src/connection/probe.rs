@@ -40,6 +40,7 @@ pub(super) enum Scenario {
     ArticleFind,
     EditorClipboard,
     EditorColor,
+    EditorColorFailure(EditorColorFailure),
     ToastReconnect,
     PointerRows,
     ListBoundary,
@@ -53,6 +54,34 @@ pub(super) enum Scenario {
         delay_ms: u64,
         fragment_ms: u64,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EditorColorFailure {
+    Cancel,
+    Unsupported,
+    Partial,
+}
+impl EditorColorFailure {
+    fn editor(self) -> crate::editor_color::fixture::Editor {
+        crate::editor_color::fixture::Editor::new(
+            &[
+                if self == Self::Unsupported {
+                    "P\x1b[31;66;34m中文Q"
+                } else {
+                    "P\x1b[32m中\x1b[0m文\x1b[34mQ"
+                },
+                "",
+                "第三行",
+            ],
+            true,
+            false,
+            true,
+        )
+    }
+    pub fn wire(self) -> Vec<u8> {
+        self.editor().wire()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -741,6 +770,7 @@ pub(super) async fn serve(
             | Scenario::DraftsSlow
             | Scenario::Filters
             | Scenario::EditorColor
+            | Scenario::EditorColorFailure(_)
             | Scenario::ArticleSwitch
             | Scenario::LiveUpdates { .. }
             | Scenario::BookmarkList
@@ -984,17 +1014,40 @@ pub(super) async fn serve(
                 _ => Err("list boundary probe expected Close without extra input".into()),
             };
         }
-        if matches!(scenario, Scenario::EditorColor) {
-            let mut editor=crate::editor_color::fixture::Editor::new(&["P\x1b[32m中\x1b[0m文\x1b[34mQ","","第三行"],true,false,true);
+        if matches!(scenario, Scenario::EditorColor | Scenario::EditorColorFailure(_)) {
+            let failure=match scenario {Scenario::EditorColorFailure(case)=>Some(case),_=>None};
+            let mut editor=failure.unwrap_or(EditorColorFailure::Cancel).editor();
+            let original=editor.lines.clone();
+            let mut interrupted=false;
             for _ in 0..4096 {
                 match socket.next().await {
                     Some(Ok(Message::Binary(bytes)))=>{
                         if bytes.len()>4096{return Err("editor colour probe input too large".into());}
+                        if interrupted {return Err("editor colour probe forbids commands after partial failure".into());}
                         editor.accept(&bytes);
-                        socket.send(Message::Binary(editor.wire().into())).await.map_err(|e|e.to_string())?;
+                        let mut wire=editor.wire();
+                        if failure==Some(EditorColorFailure::Cancel){tokio::time::sleep(Duration::from_millis(350)).await;}
+                        let first_code=b"\x1b[m";
+                        if failure==Some(EditorColorFailure::Partial) && editor.lines.iter().any(|line|line.windows(first_code.len()).any(|part|part==first_code)) {
+                            interrupted=true;
+                            wire.extend_from_slice(b"\x1b[24;1H\x1b[2KSYNTHETIC STATUS REVOKED AFTER FIRST INSERT");
+                        }
+                        socket.send(Message::Binary(wire.into())).await.map_err(|e|e.to_string())?;
                     },
                     Some(Ok(Message::Close(_)))=>{
                         socket.flush().await.map_err(|e|e.to_string())?;
+                        if let Some(case)=failure {
+                            return match case {
+                                EditorColorFailure::Cancel if editor.lines==original && !editor.commands.is_empty()=>Ok(()),
+                                EditorColorFailure::Unsupported if editor.lines==original && editor.preview && !editor.insert=>Ok(()),
+                                EditorColorFailure::Partial=>{
+                                    let expected=["P\x1b[32m中\x1b[0m文\x1b[34mQ","","第三行\x1b[m"];
+                                    let expected=expected.iter().map(|s|crate::encoding::encode(s).map_err(|e|e.to_string())).collect::<Result<Vec<_>,_>>()?;
+                                    if interrupted && editor.lines==expected {Ok(())}else{Err("partial colour fixture did not preserve exact first-insert-only document".into())}
+                                }
+                                _=>Err("editor colour negative fixture document/mode differs".into()),
+                            };
+                        }
                         let expected=["P\x1b[32m\x1b[0;1;31;40m中\x1b[0m\x1b[0;1;31;40m文\x1b[34m\x1b[0;1;31;40mQ\x1b[m","","\x1b[0;1;31;40m第三行\x1b[m"];
                         let expected=expected.iter().map(|s|crate::encoding::encode(s).map_err(|e|e.to_string())).collect::<Result<Vec<_>,_>>()?;
                         return if editor.lines==expected && editor.preview && !editor.insert {Ok(())}else{Err("editor colour probe document/mode differs from independent expected".into())};
