@@ -344,6 +344,10 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    /// Strict template read only; local storage probes cannot replace station text.
+    pub fn start_drafts_storage_probe() -> Result<Self, String> {
+        Self::start_drafts_failure_probe(DraftFailure::LocalOnly)
+    }
     /// Explicit slow loopback fixture for native capture/transfer cancellation.
     pub fn start_drafts_slow_probe() -> Result<Self, String> {
         let connection =

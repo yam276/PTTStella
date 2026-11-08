@@ -12,6 +12,8 @@ use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DraftFailure {
+    /// Local-editor storage checks may read the template but never replace it.
+    LocalOnly,
     ChangedTemplate,
     AfterTitle,
     AfterDelete,
@@ -41,7 +43,7 @@ fn expected(native: &Native, case: DraftFailure, injected: bool) -> Result<(), S
         DraftFailure::AfterWrite | DraftFailure::Disconnect => {
             ("本機草稿測試", vec!["第一行中文", ""])
         }
-        DraftFailure::CloseCapture | DraftFailure::CloseTransfer => (
+        DraftFailure::LocalOnly | DraftFailure::CloseCapture | DraftFailure::CloseTransfer => (
             "[測試] 範本標題",
             vec!["看板預設格式", "\x1b[32m請依格式填寫\x1b[m", ""],
         ),
@@ -51,7 +53,7 @@ fn expected(native: &Native, case: DraftFailure, injected: bool) -> Result<(), S
         .map(|s| crate::encoding::encode(s).map_err(|e| e.to_string()))
         .collect::<Result<Vec<_>, _>>()?;
     let entered = match case {
-        DraftFailure::CloseCapture => native.menu_count >= 1,
+        DraftFailure::LocalOnly | DraftFailure::CloseCapture => native.menu_count >= 1,
         DraftFailure::CloseTransfer => native.menu_count >= 2,
         _ => injected,
     };
@@ -118,7 +120,8 @@ pub(super) async fn run(
                 if matches!(
                     case,
                     Some(
-                        DraftFailure::CloseCapture
+                        DraftFailure::LocalOnly
+                            | DraftFailure::CloseCapture
                             | DraftFailure::CloseTransfer
                             | DraftFailure::ChangedTemplate
                     )
