@@ -338,6 +338,13 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    /// Explicit slow loopback fixture for native capture/transfer cancellation.
+    pub fn start_drafts_slow_probe() -> Result<Self, String> {
+        let connection =
+            Self::start_owned_probe(probe::password_page()?, probe::Scenario::DraftsSlow)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     pub fn start_reply_navigation_probe() -> Result<Self, String> {
         let connection =
             Self::start_owned_probe(probe::password_page()?, probe::Scenario::ReplyNavigation)?;

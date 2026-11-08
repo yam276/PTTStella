@@ -24,6 +24,7 @@ pub(super) enum Scenario {
     BookmarkList,
     ReplyNavigation,
     Drafts,
+    DraftsSlow,
     BookmarkArchive {
         headerless: bool,
     },
@@ -737,6 +738,7 @@ pub(super) async fn serve(
     let deadline = if matches!(
         scenario,
         Scenario::Drafts
+            | Scenario::DraftsSlow
             | Scenario::Filters
             | Scenario::EditorColor
             | Scenario::ArticleSwitch
@@ -813,7 +815,7 @@ pub(super) async fn serve(
                 _=>Err("article paste peer expected Close without duplicate or cancelled bytes".into()),
             };
         }
-        if matches!(scenario,Scenario::Drafts) {
+        if matches!(scenario,Scenario::Drafts | Scenario::DraftsSlow) {
             tokio::time::sleep(Duration::from_millis(120)).await;
             socket.send(Message::Binary(navigation_page("main_menu")?.into())).await.map_err(|e|e.to_string())?;
             tokio::time::sleep(Duration::from_millis(120)).await;
@@ -843,6 +845,9 @@ pub(super) async fn serve(
                             tokio::time::sleep(Duration::from_millis(80)).await;
                             native.accept(&bytes[n..]);
                         } else { native.accept(&bytes); }
+                        // Explicit negative fixture for human/native cancellation.
+                        // Only server replies are delayed; production transport is unchanged.
+                        if matches!(scenario,Scenario::DraftsSlow){tokio::time::sleep(Duration::from_millis(350)).await;}
                         socket.send(Message::Binary(native.wire().into())).await.map_err(|e|e.to_string())?;
                     },
                     _=>return Err("draft probe rejects non-editor messages".into())
