@@ -16,20 +16,21 @@ pub struct Geometry {
     pub height: f32,
     pub dpi: f32,
 }
-/// The article has uniform physical rows and a separately pinned source footer.
+/// Text rows are separated by non-cell image gaps and a pinned source footer.
 /// This is geometry only: document height never allocates a raster.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ArticleGeometry {
     pub left: f32,
     pub width: f32,
     pub body_height: f32,
-    pub offset: f32,
+    pub offset: f64,
+    pub flow: std::rc::Rc<pttstella::article_flow::Flow>,
     pub line_width: u32,
     pub row: u32,
     pub body_rows: usize,
     pub dpi: f32,
 }
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum SurfaceGeometry {
     Terminal(Geometry),
     Article(ArticleGeometry),
@@ -47,13 +48,13 @@ impl SurfaceGeometry {
             None
         }
     }
-    pub fn dpi(self) -> f32 {
+    pub fn dpi(&self) -> f32 {
         match self {
             Self::Terminal(g) => g.dpi,
             Self::Article(g) => g.dpi,
         }
     }
-    pub fn contains(self, point: (f32, f32)) -> bool {
+    pub fn contains(&self, point: (f32, f32)) -> bool {
         match self {
             Self::Terminal(g) => g.contains(point),
             Self::Article(g) => {
@@ -66,7 +67,7 @@ impl SurfaceGeometry {
             }
         }
     }
-    pub fn cell(self, point: (f32, f32), frame: &Frame) -> Option<Position> {
+    pub fn cell(&self, point: (f32, f32), frame: &Frame) -> Option<Position> {
         match self {
             Self::Terminal(g) => g.cell(point, frame),
             Self::Article(g) => {
@@ -74,7 +75,9 @@ impl SurfaceGeometry {
                     return None;
                 }
                 let y = if point.1 < g.body_height {
-                    point.1 + g.offset
+                    let document_y = f64::from(point.1) + g.offset;
+                    let row = g.flow.hit(document_y)?;
+                    (row as f64 * f64::from(g.row) + document_y - g.flow.top(row) as f64) as f32
                 } else {
                     g.body_rows as f32 * g.row as f32 + point.1 - g.body_height
                 };
@@ -90,7 +93,11 @@ impl SurfaceGeometry {
     }
     /// Article rectangles are clipped in viewport space. Terminal rectangles
     /// retain the raster-local coordinates consumed by its Flickable.
-    pub fn span(self, span: &pttstella::selection::Span, frame: &Frame) -> Option<skia_safe::Rect> {
+    pub fn span(
+        &self,
+        span: &pttstella::selection::Span,
+        frame: &Frame,
+    ) -> Option<skia_safe::Rect> {
         match self {
             Self::Terminal(g) => {
                 Some(
@@ -119,12 +126,8 @@ impl SurfaceGeometry {
                         g.body_height + g.row as f32,
                     )
                 } else {
-                    (
-                        rect.top - g.offset,
-                        rect.bottom - g.offset,
-                        0.,
-                        g.body_height,
-                    )
+                    let top = (g.flow.top(span.row) as f64 - g.offset) as f32;
+                    (top, top + g.row as f32, 0., g.body_height)
                 };
                 let r = skia_safe::Rect::new(
                     (rect.left + g.left).max(0.),
@@ -158,7 +161,7 @@ impl Geometry {
     pub fn contains(self, (x, y): (f32, f32)) -> bool {
         x.is_finite() && y.is_finite() && x >= 0. && y >= 0. && x < self.width && y < self.height
     }
-    pub fn cell(self, point: (f32, f32), frame: &Frame) -> Option<Position> {
+    pub fn cell(&self, point: (f32, f32), frame: &Frame) -> Option<Position> {
         self.contains(point)
             .then(|| {
                 self.size

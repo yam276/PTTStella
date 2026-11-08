@@ -45,6 +45,7 @@ impl FrameGate {
 pub enum Probe {
     Media,
     Reconnect,
+    ArticleInline,
     ArticleFull,
     ArticleInput,
     ArticleOutput,
@@ -91,14 +92,26 @@ pub fn with_probe(
     bytes: Vec<u8>,
     show: impl FnOnce(Rc<Connection>) -> Result<(), Box<dyn Error>>,
 ) -> Result<(), Box<dyn Error>> {
-    let mut media = if probe == Probe::Media {
-        Some(crate::media_fixture::Fixtures::start()?)
+    let menu_probe = if probe == Probe::ArticleInline {
+        std::env::var("PTTSTELLA_INLINE_MENU_PROBE").ok()
     } else {
         None
     };
-    let bytes = media.as_ref().map(|f| f.page()).unwrap_or(bytes);
+    let mut media = if matches!(probe, Probe::Media | Probe::ArticleInline) {
+        Some(crate::media_fixture::Fixtures::start(
+            menu_probe.as_deref(),
+        )?)
+    } else {
+        None
+    };
+    let bytes = match media.as_ref() {
+        Some(f) if probe == Probe::ArticleInline => f.article_page(1)?,
+        Some(f) => f.page(),
+        None => bytes,
+    };
     let fixture = match probe {
         Probe::Media => "slint_native_media",
+        Probe::ArticleInline => "slint_native_inline",
         Probe::Reconnect => "slint_session",
         Probe::ArticleFull => "slint_full_load",
         Probe::ArticleInput => "slint_article_input",
@@ -130,6 +143,13 @@ pub fn with_probe(
     let result = with_connection(
         || match probe {
             Probe::Media => Connection::start_ui_probe(bytes),
+            Probe::ArticleInline => Connection::start_inline_pages_probe(
+                bytes,
+                media
+                    .as_ref()
+                    .ok_or("inline fixtures missing")?
+                    .article_page(2)?,
+            ),
             Probe::Reconnect => Connection::start_toast_reconnect_probe(bytes),
             Probe::ArticleFull | Probe::ArticleLong => {
                 let long = probe == Probe::ArticleLong;
@@ -140,12 +160,21 @@ pub fn with_probe(
                         pttstella::replay::full_load_page(n, Some("http://127.0.0.1:9"))
                     }
                 };
-                Connection::start_article_load_probe(
-                    page(1)?,
-                    (2..=if long { 38 } else { 20 })
-                        .map(page)
-                        .collect::<Result<Vec<_>, _>>()?,
-                )
+                {
+                    let start = if std::env::var_os("PTTSTELLA_READING_PROBE_FAST").as_deref()
+                        == Some(std::ffi::OsStr::new("1"))
+                    {
+                        Connection::start_fast_article_load_probe
+                    } else {
+                        Connection::start_article_load_probe
+                    };
+                    start(
+                        page(1)?,
+                        (2..=if long { 38 } else { 20 })
+                            .map(page)
+                            .collect::<Result<Vec<_>, _>>()?,
+                    )
+                }
             }
             Probe::ArticleInput => Connection::start_article_input_probe(
                 pttstella::replay::native_article_input_page(1)?,

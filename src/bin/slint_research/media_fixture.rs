@@ -7,7 +7,7 @@ pub struct Fixtures {
     once: Server,
 }
 impl Fixtures {
-    pub fn start() -> Result<Self, String> {
+    pub fn start(menu_probe: Option<&str>) -> Result<Self, String> {
         let files = tempfile::Builder::new()
             .prefix("pttstella-native-images-")
             .tempdir()
@@ -17,7 +17,11 @@ impl Fixtures {
         let once = files.path().join("once.gif");
         std::fs::write(
             &once,
-            include_bytes!("../../../tests/fixtures/media/once.gif"),
+            if menu_probe == Some("error") {
+                b"invalid-owned-gif".as_slice()
+            } else {
+                include_bytes!("../../../tests/fixtures/media/once.gif").as_slice()
+            },
         )
         .map_err(|e| e.to_string())?;
         std::fs::write(
@@ -33,12 +37,32 @@ impl Fixtures {
         Ok(Self {
             png: Server::start_cached(&png)?,
             gif: Server::start(&gif, false)?,
-            once: Server::start(&once, false)?,
+            once: Server::start(&once, menu_probe == Some("stall"))?,
             _files: files,
         })
     }
     pub fn page(&self) -> Vec<u8> {
         format!("\x1b[2J\x1b[HNative image preview / owned loopback fixtures\r\n\r\nPNG {}\r\n\r\nGIF {}\r\n\r\nOnce {}\r\n\r\nClose preview before returning to BBS. No station keys are expected.",self.png.url(),self.gif.url(),self.once.url()).into_bytes()
+    }
+    pub fn article_page(&self, page: usize) -> Result<Vec<u8>, String> {
+        if !(1..=2).contains(&page) {
+            return Err("inline fixture page out of range".into());
+        }
+        let first = if page == 1 { 1 } else { 23 };
+        let mut text = String::from("\x1b[0m\x1b[2J\x1b[H");
+        for line in first..first + 23 {
+            let content = match line {
+                2 => self.png.url(),
+                4 => self.gif.url(),
+                6 => self.once.url(),
+                8 => self.png.url(),
+                _ => format!("Native inline synthetic line {line:04}"),
+            };
+            text.push_str(&content);
+            text.push_str("\r\n");
+        }
+        text.push_str(&format!("\x1b[24;1H\x1b[30;47m\x1b[2K瀏覽 第 {page}/2 頁 ({}%) 目前顯示: 第 {first}~{} 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[24;80H",if page==1{50}else{100},first+22));
+        pttstella::encoding::encode(&text).map_err(|e| e.to_string())
     }
     pub fn finish(&mut self) -> Result<(), String> {
         let png = self.png.finish()?;

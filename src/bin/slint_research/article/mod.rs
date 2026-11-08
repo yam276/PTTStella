@@ -1,5 +1,6 @@
 //! Native long-text viewport. Station loading and input use separate owners.
 mod find_probe;
+pub mod inline;
 mod layout;
 mod output_probe;
 pub mod probe;
@@ -15,6 +16,7 @@ use crate::{
 use layout::Layout;
 use pttstella::{
     article_cache::{ArticleCache, LoadState},
+    article_flow::{Anchor, Flow},
     presentation::{self, Paint},
     screen::Screen,
     settings::DisplaySettings,
@@ -34,6 +36,7 @@ struct RasterKey {
     width: u32,
     row: u32,
     dpi: f32,
+    flow: Rc<Flow>,
 }
 
 type RowProjection = Box<dyn Fn(&Paint, Range<usize>) -> Option<pttstella::article_cache::Window>>;
@@ -46,9 +49,12 @@ pub struct ArticleView {
     scope: Cell<Option<(u64, u64, u64, usize)>>,
     renderer: RefCell<Renderer>,
     layout: Cell<Option<Layout>>,
-    anchor: Cell<f64>,
+    anchor: Cell<Anchor>,
+    gaps: RefCell<Vec<(usize, u32)>>,
+    flow: RefCell<Option<Rc<Flow>>>,
     x: Cell<f32>,
     painted: RefCell<Option<RasterKey>>,
+    painted_anchor: Cell<Option<Anchor>>,
     footer_size: Cell<Option<Size>>,
     row_size: Cell<Option<Size>>,
     row_cache: RefCell<BTreeMap<usize, Image>>,
@@ -111,9 +117,12 @@ impl ArticleView {
             rows: Cell::new(rows),
             scope: Cell::new(None),
             layout: Cell::new(None),
-            anchor: Cell::new(0.),
+            anchor: Cell::new(Anchor::default()),
+            gaps: RefCell::new(Vec::new()),
+            flow: RefCell::new(None),
             x: Cell::new(0.),
             painted: RefCell::new(None),
+            painted_anchor: Cell::new(None),
             footer_size: Cell::new(None),
             row_size: Cell::new(None),
             row_cache: RefCell::new(BTreeMap::new()),
@@ -140,8 +149,8 @@ impl ArticleView {
                         );
                         owner.publish();
                     }
-                } else if let Some(layout) = owner.layout.get() {
-                    owner.scroll(owner.anchor.get() - f64::from(delta / layout.line_height()));
+                } else if let (Some(layout), Some(flow)) = (owner.layout.get(), owner.flow()) {
+                    owner.scroll_pixels(owner.position(&flow) - f64::from(delta * layout.dpi));
                 }
             }
         });
@@ -177,7 +186,12 @@ impl ArticleView {
                 };
                 let fraction = fraction.clamp(0., 1.);
                 if vertical {
-                    owner.scroll(layout.maximum() * f64::from(fraction));
+                    if let Some(flow) = owner.flow() {
+                        owner.scroll_pixels(
+                            flow.maximum(f64::from(layout.body_height * layout.dpi))
+                                * f64::from(fraction),
+                        );
+                    }
                 } else {
                     owner
                         .x
@@ -221,25 +235,75 @@ impl ArticleView {
         let Some(layout) = self.layout.get() else {
             return;
         };
-        let anchor = self.anchor.get();
+        let Some(flow) = self.flow() else { return };
+        let anchor = self.position(&flow);
+        let line = f64::from(layout.row);
+        let viewport = f64::from(layout.body_height * layout.dpi);
         let target = match intent {
             Intent::Lines { down, count } => {
-                anchor + if down { count as f64 } else { -(count as f64) }
+                anchor
+                    + if down {
+                        count as f64 * line
+                    } else {
+                        -(count as f64) * line
+                    }
             }
-            Intent::PreviousPage => layout.page(anchor, false),
-            Intent::NextPage | Intent::Forward => layout.page(anchor, true),
+            Intent::PreviousPage => {
+                (anchor / line).ceil() * line - (viewport / line).floor() * line + line
+            }
+            Intent::NextPage | Intent::Forward => {
+                ((anchor + viewport) / line).floor() * line - line
+            }
             Intent::First => 0.,
-            Intent::Last => layout.maximum(),
+            Intent::Last => flow.maximum(f64::from(layout.body_height * layout.dpi)),
             _ => return,
         };
-        self.scroll(target);
+        let target = match intent {
+            Intent::NextPage | Intent::Forward if target <= anchor => anchor + line,
+            Intent::PreviousPage if target >= anchor => anchor - line,
+            _ => target,
+        };
+        self.scroll_pixels(target);
+    }
+    fn flow(&self) -> Option<Rc<Flow>> {
+        self.flow.borrow().clone()
+    }
+    fn position(&self, flow: &Flow) -> f64 {
+        flow.position(self.anchor.get())
+    }
+    /// Numeric text anchor for the original uniform-row conformance workload.
+    fn row_anchor(&self) -> f64 {
+        let a = self.anchor.get();
+        a.row as f64 + a.within
+    }
+    pub(super) fn set_gaps(self: &Rc<Self>, gaps: Vec<(usize, u32)>) -> Result<(), String> {
+        let Some(layout) = self.layout.get() else {
+            return Err("article layout missing".into());
+        };
+        let flow =
+            Flow::new(self.rows.get(), layout.row, gaps.iter().copied()).map_err(str::to_owned)?;
+        if *self.gaps.borrow() == gaps {
+            return Ok(());
+        }
+        self.gaps.replace(gaps);
+        self.flow.replace(Some(Rc::new(flow)));
+        self.painted.take();
+        if let Some(ui) = self.ui.upgrade() {
+            ui.invoke_output_geometry_changed();
+        }
+        self.scroll_pixels(self.position(&flow));
+        Ok(())
     }
     pub fn geometry(&self) -> Option<crate::pointer::SurfaceGeometry> {
         let ui = self.ui.upgrade()?;
-        if self.closed.get() || !ui.get_article_active() || self.timer.running() {
+        if self.closed.get()
+            || !ui.get_article_active()
+            || self.painted_anchor.get() != Some(self.anchor.get())
+        {
             return None;
         }
         let l = self.layout.get()?;
+        let flow = self.flow()?;
         if Some(l)
             != Layout::fit(
                 ui.get_view_width(),
@@ -252,10 +316,11 @@ impl ArticleView {
             return None;
         }
         let key = RasterKey {
-            rows: l.visible(self.anchor.get()),
+            rows: flow.visible(self.position(&flow), f64::from(l.body_height * l.dpi), 2),
             width: l.width,
             row: l.row,
             dpi: l.dpi,
+            flow: flow.clone(),
         };
         if self.painted.borrow().as_ref() != Some(&key) {
             return None;
@@ -266,7 +331,8 @@ impl ArticleView {
                     * l.dpi,
                 width: l.view_width * l.dpi,
                 body_height: l.body_height * l.dpi,
-                offset: ui.get_article_offset_y() * l.dpi,
+                offset: self.position(&flow),
+                flow,
                 line_width: l.width,
                 row: l.row,
                 body_rows: self.rows.get(),
@@ -286,12 +352,13 @@ impl ArticleView {
         let Some(layout) = self.layout.get() else {
             return;
         };
+        let Some(flow) = self.flow() else { return };
         let visible = layout.body_height / layout.line_height();
         self.x.set(
             (hit.start as f32 - (layout.view_width / layout.line_height() * 2.) / 2.)
                 .clamp(0., layout.maximum_x() / (layout.line_height() / 2.)),
         );
-        self.scroll(hit.row as f64 - f64::from(visible) / 2.);
+        self.scroll_pixels(flow.top(hit.row) as f64 - f64::from(visible * layout.row as f32) / 2.);
     }
     fn resize(self: &Rc<Self>) {
         let Some(ui) = self.ui.upgrade() else { return };
@@ -309,8 +376,27 @@ impl ArticleView {
             ui.invoke_output_geometry_changed();
         }
         self.layout.set(layout);
+        self.flow.replace(None);
         if let Some(layout) = layout {
-            self.anchor.set(layout.clamp(self.anchor.get()));
+            let flow = match Flow::new(
+                self.rows.get(),
+                layout.row,
+                self.gaps.borrow().iter().copied(),
+            ) {
+                Ok(flow) => flow,
+                Err(error) => {
+                    ui.set_input_notice(error.into());
+                    ui.set_article_tiles(ModelRc::default());
+                    ui.set_article_footer(Image::default());
+                    self.painted.take();
+                    return;
+                }
+            };
+            self.flow.replace(Some(Rc::new(flow)));
+            self.anchor.set(flow.anchor(flow.clamp(
+                self.position(&flow),
+                f64::from(layout.body_height * layout.dpi),
+            )));
             self.x.set(
                 self.x
                     .get()
@@ -327,11 +413,13 @@ impl ArticleView {
             self.row_size.set(None);
         }
     }
-    fn scroll(self: &Rc<Self>, anchor: f64) {
+    fn scroll_pixels(self: &Rc<Self>, position: f64) {
         let Some(layout) = self.layout.get() else {
             return;
         };
-        self.anchor.set(layout.clamp(anchor));
+        let Some(flow) = self.flow() else { return };
+        self.anchor
+            .set(flow.anchor(flow.clamp(position, f64::from(layout.body_height * layout.dpi))));
         self.publish();
         self.schedule();
     }
@@ -340,11 +428,12 @@ impl ArticleView {
         let Some(layout) = self.layout.get() else {
             return;
         };
+        let Some(flow) = self.flow() else { return };
         ui.set_article_line_height(layout.line_height());
         ui.set_article_line_width(layout.logical_width());
         ui.set_article_body_height(layout.body_height);
-        ui.set_article_document_height(self.rows.get() as f32 * layout.line_height());
-        ui.set_article_offset_y(self.anchor.get() as f32 * layout.line_height());
+        ui.set_article_document_height(flow.height() as f32 / layout.dpi);
+        ui.set_article_offset_y((self.position(&flow) / f64::from(layout.dpi)) as f32);
         ui.set_article_offset_x(self.x.get() * layout.line_height() / 2.);
     }
     fn schedule(self: &Rc<Self>) {
@@ -376,11 +465,17 @@ impl ArticleView {
         let Some(layout) = self.layout.get() else {
             return Ok(());
         };
+        let flow = self.flow().ok_or("article row geometry unavailable")?;
         let key = RasterKey {
-            rows: layout.visible(self.anchor.get()),
+            rows: flow.visible(
+                self.position(&flow),
+                f64::from(layout.body_height * layout.dpi),
+                2,
+            ),
             width: layout.width,
             row: layout.row,
             dpi: layout.dpi,
+            flow: flow.clone(),
         };
         if self.painted.borrow().as_ref() != Some(&key) {
             let size = Size {
@@ -431,24 +526,27 @@ impl ArticleView {
                     self.row_raster_count.set(self.row_raster_count.get() + 1);
                 }
             }
-            let tiles = key
-                .rows
-                .clone()
-                .map(|row| {
-                    let image = cached
-                        .get(&row)
-                        .ok_or("confirmed article row raster is missing")?;
-                    Ok(ArticleTile {
-                        image: image.clone(),
-                        y: row as f32 * layout.line_height(),
-                        height: layout.line_height(),
-                    })
-                })
-                .collect::<Result<Vec<_>, &str>>()?;
-            ui.set_article_tiles(ModelRc::new(VecModel::from(tiles)));
-            self.painted.replace(Some(key));
+            self.painted.replace(Some(key.clone()));
             self.raster_count.set(self.raster_count.get() + 1);
         }
+        let cached = self.row_cache.borrow();
+        let tiles = key
+            .rows
+            .clone()
+            .map(|row| {
+                let image = cached
+                    .get(&row)
+                    .ok_or("confirmed article row raster is missing")?;
+                Ok(ArticleTile {
+                    image: image.clone(),
+                    y: ((flow.top(row) as f64 - self.position(&flow)) / f64::from(layout.dpi))
+                        as f32,
+                    height: layout.line_height(),
+                })
+            })
+            .collect::<Result<Vec<_>, &str>>()?;
+        ui.set_article_tiles(ModelRc::new(VecModel::from(tiles)));
+        drop(cached);
         let size = Size {
             width: layout.width,
             height: layout.row,
@@ -470,6 +568,7 @@ impl ArticleView {
             ));
             self.footer_size.set(Some(size));
         }
+        self.painted_anchor.set(Some(self.anchor.get()));
         ui.invoke_article_rendered();
         Ok(())
     }
@@ -496,7 +595,8 @@ impl ArticleView {
             return true;
         }
         if self.scope.replace(Some(scope)) != Some(scope) {
-            self.anchor.set(0.);
+            self.anchor.set(Anchor::default());
+            self.gaps.borrow_mut().clear();
             self.x.set(0.);
             self.row_cache.borrow_mut().clear();
             self.row_size.set(None);
@@ -515,6 +615,9 @@ impl ArticleView {
         self.retire_paint();
         self.row_cache.borrow_mut().clear();
         self.scope.set(None);
+        self.flow.replace(None);
+        self.gaps.borrow_mut().clear();
+        self.anchor.set(Anchor::default());
         if let Some(ui) = self.ui.upgrade() {
             ui.set_article_active(false);
             ui.set_article_tiles(ModelRc::default());
@@ -529,6 +632,8 @@ impl ArticleView {
     }
     pub fn finish(&self) {
         self.closed.set(true);
+        self.flow.replace(None);
+        self.gaps.borrow_mut().clear();
         self.timer.stop();
         self.row_cache.borrow_mut().clear();
         self.row_size.set(None);

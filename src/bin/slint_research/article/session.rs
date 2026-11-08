@@ -57,6 +57,7 @@ pub struct ArticleSession {
     raw_generation: Cell<Option<u64>>,
     focus_after_paint: Cell<bool>,
     input_trace_left: Cell<u8>,
+    timing: RefCell<pttstella::reading_timing::ReadingTiming>,
     find_timer: Timer,
     find_draft: RefCell<Option<String>>,
     find_serial: Cell<u64>,
@@ -113,6 +114,7 @@ impl ArticleSession {
             find_draft: RefCell::new(None),
             find_serial: Cell::new(0),
             find_version: Cell::new(0),
+            timing: RefCell::new(pttstella::reading_timing::ReadingTiming::new()?),
             requests: Cell::new(0),
         });
         owner.install_find(ui);
@@ -263,8 +265,12 @@ impl ArticleSession {
             }
         }
         self.core.borrow_mut().update(view);
+        self.reading_timing("cached", view);
         self.retire_stale_projection(view);
         self.find_sync_ui();
+        if let Some(ui) = self.ui.upgrade() {
+            ui.invoke_inline_updated();
+        }
     }
     fn retire_stale_projection(&self, view: &View) {
         let (no_article, scope_changed, stale_packet) = {
@@ -344,6 +350,23 @@ impl ArticleSession {
         ui.invoke_keep_alive_changed();
         self.notify.notify_one();
     }
+    fn reading_timing(&self, event: &str, view: &View) {
+        let result = if event == "painted" {
+            self.timing
+                .borrow_mut()
+                .painted(self.core.borrow().last_displayed())
+        } else {
+            self.timing.borrow_mut().record(
+                event,
+                view.generation,
+                view.frame.revision,
+                self.core.borrow().reading_progress(),
+            )
+        };
+        if let Err(error) = result {
+            self.notice(error);
+        }
+    }
     fn rendered(&self) {
         if self.closed.get() {
             return;
@@ -359,6 +382,7 @@ impl ArticleSession {
         // Never retain a watch read guard across a reentrant UI callback.
         let view = self.connection.updates.borrow().clone();
         let generation = view.generation;
+        self.reading_timing("painted", &view);
         self.core.borrow_mut().find_sync(&view);
         self.find_sync_ui();
         self.find_retry_draft();
@@ -396,6 +420,7 @@ impl ArticleSession {
             ui.invoke_output_updated();
             ui.invoke_paste_updated();
             ui.invoke_keep_alive_changed();
+            ui.invoke_inline_updated();
         }
         self.notify.notify_one();
     }
@@ -455,6 +480,34 @@ impl ArticleSession {
             }
         });
         ui.set_article_load_status(label.into());
+        // Match the Dioxus surface: dispatch the next verified station request
+        // before projecting/rasterizing the UI. Painting cannot pace the fetch.
+        if !self.busy.get() && self.allowed(&ui) && view.phase == Phase::Connected {
+            let intent = self.core.borrow_mut().next_full_page(view);
+            if let Some(intent) = intent {
+                self.reading_timing("request", view);
+                match self.connection.request_cancellable_navigate(
+                    view.stamp(),
+                    intent,
+                    pttstella::navigation::Source::Button,
+                ) {
+                    Ok((reply, cancellation)) => {
+                        if let Ok(bytes) = pttstella::navigation::plan(&view.context(), intent) {
+                            self.core.borrow_mut().article_input(view, &bytes);
+                        }
+                        self.busy.set(true);
+                        self.cancellation.replace(Some(cancellation));
+                        self.requests.set(self.requests.get() + 1);
+                        self.serial.set(self.serial.get().wrapping_add(1));
+                        self.reply.replace(Some(reply));
+                    }
+                    Err(error) => {
+                        self.core.borrow_mut().stop_full_load();
+                        self.notice(error);
+                    }
+                }
+            }
+        }
         if self.core.borrow().dirty()
             && self.composition_handoff.get().is_none()
             && !self.core.borrow().has_in_flight()
@@ -474,6 +527,7 @@ impl ArticleSession {
                 })
             };
             if let Some((identity, article, rows, terminal)) = packet {
+                self.reading_timing("paint_pending", view);
                 if let Some(article) = article {
                     self.terminal_pending.set(None);
                     self.terminal_shown.set(None);
@@ -555,31 +609,6 @@ impl ArticleSession {
         {
             ui.invoke_focus_article();
             self.focus_after_paint.set(!ui.get_article_focused());
-        }
-        if !self.busy.get() && self.allowed(&ui) && view.phase == Phase::Connected {
-            let intent = self.core.borrow_mut().next_full_page(view);
-            if let Some(intent) = intent {
-                match self.connection.request_cancellable_navigate(
-                    view.stamp(),
-                    intent,
-                    pttstella::navigation::Source::Button,
-                ) {
-                    Ok((reply, cancellation)) => {
-                        if let Ok(bytes) = pttstella::navigation::plan(&view.context(), intent) {
-                            self.core.borrow_mut().article_input(view, &bytes);
-                        }
-                        self.busy.set(true);
-                        self.cancellation.replace(Some(cancellation));
-                        self.requests.set(self.requests.get() + 1);
-                        self.serial.set(self.serial.get().wrapping_add(1));
-                        self.reply.replace(Some(reply));
-                    }
-                    Err(error) => {
-                        self.core.borrow_mut().stop_full_load();
-                        self.notice(error);
-                    }
-                }
-            }
         }
         // Completion/cancel should not wait for the loading paint throttle.
         if !self.core.borrow().full_load_active()

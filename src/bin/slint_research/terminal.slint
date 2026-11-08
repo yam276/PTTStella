@@ -1,14 +1,19 @@
-import { AboutSlint, Button, ComboBox, LineEdit, TextEdit } from "std-widgets.slint";
+import { AboutSlint, Button, CheckBox, ComboBox, LineEdit, TextEdit } from "std-widgets.slint";
 import { LoginPopup } from "login.slint";
 import { ContextMenuOverlay, MenuEntry } from "context-menu.slint";
 import { FloatingTools, ToolItem } from "tools.slint";
-import { ArticleViewport, ArticleTile } from "article.slint";
+import { ArticleViewport, ArticleTile, InlineArrow, InlinePicture } from "article.slint";
 import { SelectionRect } from "selection.slint";
 import { MediaPreview } from "media.slint";
 import { MediaHover } from "media-hover.slint";
 
 export component TerminalWindow inherits Window {
     in property <bool> media-available;
+    in property <string> media-auto-label;
+    in property <string> media-auto-help;
+    in property <bool> media-auto-enabled;
+    in-out property <bool> media-auto-choice;
+    callback media-auto-preference(bool);
     in property <bool> media-hover-open;
     in property <length> media-hover-x;
     in property <length> media-hover-y;
@@ -99,6 +104,20 @@ export component TerminalWindow inherits Window {
     callback article-resume-reading;
     callback article-keyboard-mode(bool);
     in property <[ArticleTile]> article-tiles;
+    in property <[InlineArrow]> inline-arrows;
+    in property <[InlinePicture]> inline-pictures;
+    in property <bool> inline-enabled;
+    out property <bool> inline-blocked: root.article-blocked || root.terminal-pointer-blocked || root.selection-active || root.selection-dragging || root.keyboard-pending || root.station-mouse-held;
+    changed inline-blocked=>{root.inline-updated();}
+    changed article-active=>{root.inline-updated();}
+    callback inline-updated;
+    callback inline-pointer(int,int,string);
+    callback inline-context(int,int,string,length,length);
+    callback inline-enter(bool,bool,bool) -> bool;
+    changed keyboard-read-only => {root.inline-updated();}
+    changed keyboard-pending => {root.inline-updated();}
+    changed vim-enabled => {root.inline-updated();}
+    changed native-composing => {root.inline-updated();}
     in property <image> article-footer;
     in property <length> article-line-height;
     in property <length> article-line-width;
@@ -107,7 +126,7 @@ export component TerminalWindow inherits Window {
     in property <length> article-offset-y;
     in property <length> article-offset-x;
     out property <bool> article-focused: article-view.focused;
-    changed article-focused => { root.terminal-focus-changed(); }
+    changed article-focused => { root.terminal-focus-changed(); root.inline-updated(); }
     out property <bool> article-reading-ready: root.native-foreground && root.article-focused && !root.article-blocked && !root.switching-station && !root.native-pointer-down && !root.login-busy && !root.paste-reading && !root.output-busy && !root.selection-active && !root.selection-dragging && !root.keyboard-pending && !root.navigation-busy && !root.station-mouse-held && !root.context-pending;
     changed article-reading-ready => { root.article-session-updated(); }
     out property <bool> article-blocked: root.media-open || root.find-open || root.show-about || root.login-open || root.paste-open || root.tools-busy || root.context-open || root.native-composing;
@@ -149,6 +168,7 @@ export component TerminalWindow inherits Window {
     in property <string> tools-ball-label;
     out property <bool> tools-source-blocked: root.media-open || root.find-open || !root.native-foreground || root.native-composing || root.show-about || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy;
     out property <bool> pointer-shift-held: root.pointer-shift;
+    callback native-shift-held() -> bool;
     callback tools-pointer(int,length,length);
     callback tools-toggle;
     callback tools-dismiss(bool);
@@ -315,8 +335,8 @@ export component TerminalWindow inherits Window {
     private property <bool> login-remember;
     private property <bool> pointer-shift;
 
-    changed view-width => { root.context-updated(); root.station-mouse-cancel(); root.geometry-changed(); }
-    changed view-height => { root.context-updated(); root.station-mouse-cancel(); root.geometry-changed(); }
+    changed view-width => { root.context-updated(); root.station-mouse-cancel(); root.geometry-changed(); root.article-layout-changed(); }
+    changed view-height => { root.context-updated(); root.station-mouse-cancel(); root.geometry-changed(); root.article-layout-changed(); }
     changed terminal-input-focused => { root.terminal-focus-changed(); }
     changed keep-alive-surface-ready => { root.keep-alive-changed(); }
     changed switching-station => { root.session-updated(); }
@@ -328,8 +348,8 @@ export component TerminalWindow inherits Window {
         root.geometry-changed();
         root.article-layout-changed();
     }
-    changed article-blocked => { root.article-session-updated(); }
-    changed native-foreground => { root.article-session-updated(); }
+    changed article-blocked => { root.article-session-updated(); root.inline-updated(); }
+    changed native-foreground => { root.article-session-updated(); root.inline-updated(); }
     changed physical-pixel => { root.tools-cancel-gesture(); root.station-mouse-cancel(); root.geometry-changed(); root.article-layout-changed(); }
     changed pan-mode => { root.station-mouse-cancel(); root.clear-selection(); }
     changed terminal-pointer-blocked => { root.output-updated(); }
@@ -342,6 +362,14 @@ export component TerminalWindow inherits Window {
         width: parent.width;
         height: parent.height;
         visible: !root.media-open;
+        capture-key-released(event) => {
+            if event.text == Key.Return && root.inline-enter(false,event.repeat,!event.modifiers.control && !event.modifiers.alt && !event.modifiers.meta && !event.modifiers.shift) {return accept;}
+            return reject;
+        }
+        capture-key-pressed(event) => {
+            if event.text == Key.Return && root.inline-enter(true,event.repeat,!event.modifiers.control && !event.modifiers.alt && !event.modifiers.meta && !event.modifiers.shift) {return accept;}
+            return reject;
+        }
         key-pressed(event) => {
             if (event.text == Key.Escape && root.leave-fullscreen()) {
                 return accept;
@@ -379,6 +407,19 @@ export component TerminalWindow inherits Window {
                 if root.media-hover-choice != root.media-hover-position: Button {
                     text:root.media-retry-label;enabled:!root.output-busy;
                     clicked=>{root.media-hover-preference(root.media-hover-choice);}
+                }
+            }
+
+            if root.media-available: HorizontalLayout {
+                spacing:8px;
+                CheckBox {
+                    text:root.media-auto-label;checked <=> root.media-auto-choice;enabled:!root.output-busy;
+                    toggled => {root.media-auto-preference(self.checked);}
+                }
+                Text {text:root.media-auto-help;color:#a7b6c8;overflow:elide;horizontal-stretch:1;vertical-alignment:center;}
+                if root.media-auto-choice != root.media-auto-enabled: Button {
+                    text:root.media-retry-label;enabled:!root.output-busy;
+                    clicked=>{root.media-auto-preference(root.media-auto-choice);}
                 }
             }
 
@@ -493,6 +534,9 @@ export component TerminalWindow inherits Window {
                     visible: root.article-active;
                     width: parent.width; height: parent.height;
                     tiles: root.article-tiles; footer: root.article-footer;
+                    inline-arrows:root.inline-arrows;inline-pictures:root.inline-pictures;inline-enabled:root.inline-enabled;
+                    inline-pointer(kind,index,stamp)=>{root.inline-pointer(kind,index,stamp);}
+                    inline-context(kind,index,stamp,x,y)=>{root.inline-context(kind,index,stamp,x,y);}
                     line-height: root.article-line-height; line-width: root.article-line-width;
                     body-height: root.article-body-height; document-height: root.article-document-height;
                     offset-y: root.article-offset-y; offset-x: root.article-offset-x;

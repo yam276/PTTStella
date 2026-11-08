@@ -40,7 +40,7 @@ pub fn start(
                 delta_y: -3. * layout.line_height(),
             });
             require(
-                (owner.anchor.get() - 3.).abs() < 0.001,
+                (owner.row_anchor() - 3.).abs() < 0.001,
                 "native wheel missed article body",
             )?;
             verification::key(&ui, Key::Home);
@@ -50,15 +50,15 @@ pub fn start(
             );
             verification::click(&ui, track, Button::Right);
             require(
-                owner.anchor.get() == 0.,
+                owner.row_anchor() == 0.,
                 "right button moved article scrollbar",
             )?;
             verification::click(&ui, track, Button::Left);
             require(
-                owner.anchor.get() > 100.,
+                owner.row_anchor() > 100.,
                 "native vertical scrollbar did not move",
             )?;
-            let before = owner.anchor.get();
+            let before = owner.row_anchor();
             let thumb = (layout.body_height * layout.body_height
                 / (owner.rows.get() as f32 * layout.line_height()))
             .max(24.)
@@ -70,7 +70,7 @@ pub fn start(
                 button: Button::Left,
             });
             require(
-                (owner.anchor.get() - before).abs() < 0.001,
+                (owner.row_anchor() - before).abs() < 0.001,
                 "thumb press lost original grab offset",
             )?;
             let to = slint::LogicalPosition::new(grab.x, grab.y + 40.);
@@ -83,10 +83,10 @@ pub fn start(
             let expected_drag =
                 before + 40. / f64::from(layout.body_height - thumb) * layout.maximum();
             require(
-                (owner.anchor.get() - expected_drag).abs() < 0.01,
+                (owner.row_anchor() - expected_drag).abs() < 0.01,
                 "thumb drag did not keep grab offset",
             )?;
-            let held = owner.anchor.get();
+            let held = owner.row_anchor();
             let top = (layout.body_height - thumb) * held as f32 / layout.maximum() as f32;
             let held_position =
                 slint::LogicalPosition::new(track.x, ui.get_terminal_origin_y() + top + 5.);
@@ -125,7 +125,7 @@ pub fn start(
                 button: Button::Left,
             });
             require(
-                (owner.anchor.get() - held).abs() < 0.01,
+                (owner.row_anchor() - held).abs() < 0.01,
                 "width-only resize retained old scrollbar grab",
             )?;
             verification::key(&ui, Key::Home);
@@ -133,12 +133,12 @@ pub fn start(
             let expected = layout.page(0., true);
             verification::key(&ui, Key::PageDown);
             wait(
-                || (owner.anchor.get() - expected).abs() < 0.001,
+                || (owner.row_anchor() - expected).abs() < 0.001,
                 "PageDown did not preserve last full line",
             )
             .await?;
             verification::key(&ui, Key::Home);
-            wait(|| owner.anchor.get() == 0., "Home did not reach first row").await?;
+            wait(|| owner.row_anchor() == 0., "Home did not reach first row").await?;
             ui.invoke_article_scroll(-650.25 * layout.line_height(), false);
             wait(
                 || {
@@ -182,7 +182,7 @@ pub fn start(
                 "row-up raster did not return",
             )
             .await?;
-            let anchor = owner.anchor.get();
+            let anchor = owner.row_anchor();
             let count = owner.raster_count.get();
             ui.invoke_article_scroll(-0.1 * layout.line_height(), false);
             tokio::time::sleep(Duration::from_millis(30)).await;
@@ -206,7 +206,7 @@ pub fn start(
                 .await?;
                 tokio::time::sleep(Duration::from_millis(30)).await;
                 require(
-                    (owner.anchor.get() - anchor).abs() < 0.001,
+                    (owner.row_anchor() - anchor).abs() < 0.001,
                     "zoom lost article row anchor",
                 )?;
             }
@@ -222,14 +222,14 @@ pub fn start(
             ui.set_zoom(1.5);
             tokio::time::sleep(Duration::from_millis(30)).await;
             require(
-                (owner.anchor.get() - anchor).abs() < 0.001,
+                (owner.row_anchor() - anchor).abs() < 0.001,
                 "horizontal controls changed row anchor",
             )?;
             ui.set_native_composing(true);
             ui.invoke_article_scroll(-zoomed.line_height(), false);
             verification::key(&ui, Key::Home);
             require(
-                (owner.anchor.get() - anchor).abs() < 0.001,
+                (owner.row_anchor() - anchor).abs() < 0.001,
                 "composing gate allowed article scroll",
             )?;
             ui.set_native_composing(false);
@@ -237,7 +237,7 @@ pub fn start(
             ui.window().set_size(slint::LogicalSize::new(740., 520.));
             tokio::time::sleep(Duration::from_millis(60)).await;
             require(
-                (owner.anchor.get() - anchor).abs() < 0.001,
+                (owner.row_anchor() - anchor).abs() < 0.001,
                 "resize lost article row anchor",
             )?;
             let resized = owner.layout.get().ok_or("resized layout missing")?;
@@ -267,7 +267,7 @@ pub fn start(
             verification::capture(&ui, &directory, "last-row.png")?;
             let last = owner.layout.get().ok_or("last layout missing")?;
             require(
-                (owner.anchor.get() - last.maximum()).abs() < 0.001,
+                (owner.row_anchor() - last.maximum()).abs() < 0.001,
                 "End did not clamp to real document edge",
             )?;
             let model = ui.get_article_tiles();
@@ -355,7 +355,80 @@ pub fn start(
                 &format!("last row does not match visible native pixels: {mismatches}"),
             )?;
 
-            let final_anchor = owner.anchor.get();
+            // Synthetic image slots exercise the real viewport without HTTP or
+            // huge images. A separate inline-media probe must prove decoding.
+            let row = last.row;
+            owner.scroll_pixels(650.25 * f64::from(row));
+            let text_anchor = owner.anchor.get();
+            owner.set_gaps(vec![(649, row * 20)])?;
+            wait(
+                || owner.geometry().is_some(),
+                "gap layout was not installed",
+            )
+            .await?;
+            require(
+                owner.anchor.get() == text_anchor,
+                "image arrival moved text anchor",
+            )?;
+            let gap_flow = owner.flow().ok_or("gap flow missing")?;
+            require(
+                (owner.position(&gap_flow) - 670.25 * f64::from(row)).abs() < 0.001,
+                "image spacing did not precede the retained row",
+            )?;
+            let gap_model = ui.get_article_tiles();
+            let painted_rows = owner
+                .painted
+                .borrow()
+                .as_ref()
+                .ok_or("gap raster key missing")?
+                .rows
+                .clone();
+            for (index, text_row) in painted_rows.enumerate() {
+                let tile = gap_model.row_data(index).ok_or("gap tile missing")?;
+                let expected = (gap_flow.top(text_row) as f64 - owner.position(&gap_flow))
+                    / f64::from(last.dpi);
+                require(
+                    (f64::from(tile.y) - expected).abs() < 0.001,
+                    "tile used document-global float coordinates",
+                )?;
+            }
+            verification::capture(&ui, &directory, "gap-text-anchor.png")?;
+            // Within-image position scales with its gap, while the next text
+            // row retains an exact independent source-cell position.
+            owner.scroll_pixels(gap_flow.top(649) as f64 + f64::from(row) * 11.);
+            require(
+                (owner.anchor.get().within - 1.5).abs() < 0.001,
+                "gap midpoint anchor lost",
+            )?;
+            let image_anchor = owner.anchor.get();
+            owner.set_gaps(vec![(649, row * 40)])?;
+            wait(
+                || owner.geometry().is_some(),
+                "resized gap was not installed",
+            )
+            .await?;
+            require(
+                owner.anchor.get() == image_anchor,
+                "gap resize lost fractional image anchor",
+            )?;
+            let installed = owner.flow().ok_or("resized gap flow missing")?;
+            require(
+                installed.hit(owner.position(&installed)).is_none(),
+                "image gap became a text cell",
+            )?;
+            require(
+                owner.set_gaps(vec![(837, 1)]).is_err() && owner.flow() == Some(installed),
+                "invalid gap changed installed geometry",
+            )?;
+            owner.set_gaps(Vec::new())?;
+            verification::key(&ui, Key::End);
+            wait(
+                || owner.geometry().is_some(),
+                "uniform layout was not restored",
+            )
+            .await?;
+
+            let final_anchor = owner.row_anchor();
             let final_rows = owner
                 .painted
                 .borrow()
@@ -371,7 +444,7 @@ pub fn start(
                     && !ui.get_article_active(),
                 "closed article view retained timer or raster model",
             )?;
-            let record = serde_json::json!({"scope":"offline native viewport; toolkit events only; no station/HTTP/input owner acceptance", "rows":owner.rows.get(),"layout":format!("{last:?}"),"view":[ui.get_view_width(),ui.get_view_height()],"tile_text":tile_text,"line_height":last.line_height(),"offset_y":final_offset,"last_anchor":final_anchor,"visible_rows":final_rows,"tiles":model.row_count(),"last_row_pixel_mismatches":mismatches,"native_wheel_scrollbars":true,"width_only_resize_cancels_grab":true,"owned_timer_model_cleanup":true,"horizontal_column_anchor":true,"last_row_screen_origin":[target_x,target_y],"body_pixels":pixels,"raster_count":owner.raster_count.get(),"row_raster_count":owner.row_raster_count.get(),"retained_rows_reused":true,"fractional_scroll_reuses_raster":true,"zoom_resize_preserve_anchor":true});
+            let record = serde_json::json!({"gap_slots_only_not_image_decode":true,"gap_text_and_image_anchor":true,"gap_invalid_rejected":true,"local_tile_coordinates":true,"scope":"offline native viewport; toolkit events only; no station/HTTP/input owner acceptance", "rows":owner.rows.get(),"layout":format!("{last:?}"),"view":[ui.get_view_width(),ui.get_view_height()],"tile_text":tile_text,"line_height":last.line_height(),"offset_y":final_offset,"last_anchor":final_anchor,"visible_rows":final_rows,"tiles":model.row_count(),"last_row_pixel_mismatches":mismatches,"native_wheel_scrollbars":true,"width_only_resize_cancels_grab":true,"owned_timer_model_cleanup":true,"horizontal_column_anchor":true,"last_row_screen_origin":[target_x,target_y],"body_pixels":pixels,"raster_count":owner.raster_count.get(),"row_raster_count":owner.row_raster_count.get(),"retained_rows_reused":true,"fractional_scroll_reuses_raster":true,"zoom_resize_preserve_anchor":true});
             let mut file = OpenOptions::new()
                 .write(true)
                 .create_new(true)

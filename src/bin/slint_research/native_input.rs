@@ -39,6 +39,18 @@ struct Composition {
     active: bool,
 }
 
+fn inline_key_eligible(status: &vim::Status, modifiers: ModifiersState, composing: bool) -> bool {
+    !status.pending
+        && (!status.enabled || status.mode == "normal")
+        && !modifiers.intersects(
+            ModifiersState::SHIFT
+                | ModifiersState::CONTROL
+                | ModifiersState::ALT
+                | ModifiersState::SUPER,
+        )
+        && !composing
+}
+
 impl Input {
     fn observe(&mut self, view: &View) -> pttstella::navigation::Context {
         let context = view.context();
@@ -130,6 +142,10 @@ fn mount_window(
 ) -> Rc<Paste> {
     ui.set_terminal_input(true);
     let input = Rc::new(RefCell::new(Input::default()));
+    ui.on_native_shift_held({
+        let input = input.clone();
+        move || input.borrow().modifiers.shift_key()
+    });
     let paste = Paste::mount(
         ui,
         connection.clone(),
@@ -238,6 +254,30 @@ fn mount_window(
             && let Some(article) = &article
         {
             article.begin_composition();
+        }
+        // Enter expansion owns both edges before the native TextInput or BBS
+        // keyboard. Borrowing the keyboard ends before any UI/worker callback.
+        if let WindowEvent::KeyboardInput {
+            event,
+            is_synthetic: false,
+            ..
+        } = event
+            && event.logical_key == Key::Named(NamedKey::Enter)
+        {
+            let eligible = {
+                let mut state = input.borrow_mut();
+                let context = state.observe(&connection.updates.borrow());
+                let status = state.keyboard.status(&context);
+                inline_key_eligible(
+                    &status,
+                    state.modifiers,
+                    state.composition.as_ref().is_some_and(|c| c.active),
+                )
+            };
+            if ui.invoke_inline_enter(event.state == ElementState::Pressed, event.repeat, eligible)
+            {
+                return PreventDefault;
+            }
         }
         let result = (|| {
             let mut input = input.borrow_mut();
@@ -997,6 +1037,46 @@ mod tests {
             alt: false,
             shift: text == "G",
             repeat: false,
+        }
+    }
+
+    #[test]
+    fn inline_enter_preserves_once_input_prefix_and_ime_confirm() {
+        let context = pttstella::navigation::Context::ArticleReading {
+            first_line: 1,
+            last_line: 23,
+            percent: 50,
+        };
+        let mut keyboard = Keyboard::default();
+        let permitted = |keyboard: &Keyboard| {
+            inline_key_eligible(&keyboard.status(&context), ModifiersState::empty(), false)
+        };
+        assert!(permitted(&keyboard));
+        keyboard.toggle();
+        keyboard.context(&context);
+        assert!(permitted(&keyboard));
+        keyboard.arm();
+        assert!(!permitted(&keyboard));
+        keyboard.reset();
+        keyboard.key(&key("i"), &context);
+        assert!(!permitted(&keyboard));
+        keyboard.key(&key("Escape"), &context);
+        assert!(permitted(&keyboard));
+        keyboard.key(&key("2"), &context);
+        assert!(!permitted(&keyboard));
+        keyboard.reset();
+        keyboard.key(&key("g"), &context);
+        assert!(!permitted(&keyboard));
+        keyboard.reset();
+        let status = keyboard.status(&context);
+        assert!(!inline_key_eligible(&status, ModifiersState::empty(), true));
+        for modifiers in [
+            ModifiersState::SHIFT,
+            ModifiersState::CONTROL,
+            ModifiersState::ALT,
+            ModifiersState::SUPER,
+        ] {
+            assert!(!inline_key_eligible(&status, modifiers, false));
         }
     }
 

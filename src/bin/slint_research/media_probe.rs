@@ -138,6 +138,12 @@ pub fn start(
                 "promotion replaced original/request",
             )?;
             verification::capture(&ui, &directory, "promoted.png")?;
+            ui.invoke_media_action(4);
+            wait(
+                || !ui.get_output_busy() && ui.get_media_status() == msg!("export-copied"),
+                "shared preview PNG copy failed",
+            )
+            .await?;
             ui.invoke_media_action(0);
             moved(&ui, slint::LogicalPosition::new(2., 2.));
             let gif = point(&ui, &output, 4, 20.)?;
@@ -171,6 +177,17 @@ pub fn start(
             require(
                 owner.sequence.get() == first.request,
                 "GIF promotion replaced request",
+            )?;
+            ui.invoke_media_action(4);
+            wait(
+                || !ui.get_output_busy() && ui.get_media_status() == msg!("export-copied"),
+                "shared preview GIF copy failed",
+            )
+            .await?;
+            tokio::time::sleep(Duration::from_millis(340)).await;
+            require(
+                ui.get_media_status() == msg!("export-copied"),
+                "GIF frame replaced copy feedback",
             )?;
             ui.invoke_media_action(0);
             moved(&ui, slint::LogicalPosition::new(2., 2.));

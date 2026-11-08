@@ -11,7 +11,7 @@ fn position(index: i32) -> Option<HoverPosition> {
         _ => None,
     }
 }
-fn index(position: HoverPosition) -> i32 {
+pub(super) fn index(position: HoverPosition) -> i32 {
     match position {
         HoverPosition::TopRight => 0,
         HoverPosition::FollowCursor => 1,
@@ -108,52 +108,9 @@ impl Media {
         );
     }
     fn preference(self: &Rc<Self>, value: i32) {
-        let Some(ui) = self.ui.upgrade() else {
-            return;
-        };
         let Some(position) = position(value) else {
             return;
         };
-        if self.closed.get() || self.output.busy() || !ui.get_native_foreground() {
-            return;
-        }
-        self.output.forget_hover();
-        if self.presentation.get() == Presentation::Hover {
-            self.close(false);
-        }
-        let baseline = self.settings.borrow().clone();
-        if baseline.hover == position {
-            ui.set_media_hover_position(value);
-            return;
-        }
-        let mut draft = baseline.clone();
-        draft.hover = position;
-        let store = self.store.clone();
-        let weak = Rc::downgrade(self);
-        ui.set_input_notice(msg!("settings-saving").into());
-        self.output.work(
-            &ui,
-            move || store.save_from(&baseline, draft),
-            move |_, ui, result| {
-                let Some(owner) = weak.upgrade() else {
-                    return;
-                };
-                if owner.closed.get() {
-                    return;
-                }
-                match result {
-                    Ok(saved) => {
-                        owner.settings.replace(saved);
-                        ui.set_media_hover_position(value);
-                        ui.set_input_notice(msg!("settings-saved").into());
-                    }
-                    Err(error) => {
-                        ui.set_input_notice(
-                            format!("{} {error}", msg!("settings-save-failed")).into(),
-                        );
-                    }
-                }
-            },
-        );
+        self.save_preference(super::preferences::Change::Hover(position));
     }
 }

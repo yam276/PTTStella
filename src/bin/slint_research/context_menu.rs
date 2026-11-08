@@ -1,8 +1,10 @@
 //! Content menu lifetime, source snapshot and typed action dispatch.
+mod picture;
 pub mod probe;
 use crate::{
     MenuEntry, TerminalWindow, output::Output, pointer::SurfaceGeometry, renderer::Renderer,
 };
+pub use picture::Picture;
 use pttstella::{
     connection::{Connection, Phase},
     context_menu::{self, Action, Capabilities, Entry, Flag},
@@ -14,7 +16,7 @@ use slint::{ComponentHandle, ModelRc, VecModel};
 use std::{
     cell::{Cell, RefCell},
     ops::Range,
-    rc::Rc,
+    rc::{Rc, Weak},
 };
 #[derive(Clone, PartialEq)]
 struct Source {
@@ -30,12 +32,14 @@ struct Press {
     shift: bool,
     source: Source,
     point: (f32, f32),
+    picture: Option<Picture>,
 }
 struct Menu {
     source: Source,
     link: Option<usize>,
     entries: Vec<Entry>,
     selected: usize,
+    picture: Option<Picture>,
 }
 pub struct ContextMenu {
     ui: slint::Weak<TerminalWindow>,
@@ -47,6 +51,8 @@ pub struct ContextMenu {
     pending: RefCell<Option<Rc<Source>>>,
     job: RefCell<Option<slint::JoinHandle<()>>>,
     closed: Cell<bool>,
+    media: RefCell<Weak<crate::media::Media>>,
+    trace_left: Cell<u8>,
 }
 impl ContextMenu {
     pub fn mount(
@@ -65,6 +71,12 @@ impl ContextMenu {
             pending: RefCell::new(None),
             job: RefCell::new(None),
             closed: Cell::new(false),
+            media: RefCell::new(Weak::new()),
+            trace_left: Cell::new(if std::env::var_os("PTTSTELLA_INLINE_TRACE").is_some() {
+                8
+            } else {
+                0
+            }),
         });
         ui.on_context_pointer({
             let owner = owner.clone();
@@ -86,7 +98,14 @@ impl ContextMenu {
             let owner = owner.clone();
             move |index| owner.choose(index)
         });
+        ui.on_inline_context({
+            let owner = owner.clone();
+            move |kind, index, tag, x, y| owner.picture_pointer(kind, index, tag.as_str(), (x, y))
+        });
         owner
+    }
+    pub fn attach_media(&self, media: &Rc<crate::media::Media>) {
+        self.media.replace(Rc::downgrade(media));
     }
     fn source(&self, ui: &TerminalWindow) -> Option<Source> {
         if self.closed.get() || ui.get_context_source_blocked() {
@@ -122,25 +141,37 @@ impl ContextMenu {
             return;
         };
         if kind == 0 {
+            let pointer_shift = ui.get_pointer_shift_held();
+            let native_shift = ui.invoke_native_shift_held();
+            if let Some(left) = self.trace_left.get().checked_sub(1) {
+                self.trace_left.set(left);
+                eprintln!(
+                    "context modifier pointer_shift={pointer_shift} native_shift={native_shift}"
+                );
+            }
             self.press.replace(Some(Press {
                 source,
                 point,
-                shift: ui.get_pointer_shift_held(),
+                shift: pointer_shift || native_shift,
+                picture: None,
             }));
+            return;
+        }
+        if kind == 1 {
+            if self
+                .press
+                .borrow()
+                .as_ref()
+                .is_some_and(|p| !press_matches(&source, p, point))
+            {
+                self.press.take();
+            }
             return;
         }
         let Some(press) = self.press.borrow_mut().take() else {
             return;
         };
-        if kind != 2
-            || source.stamp != press.source.stamp
-            || source.policy != press.source.policy
-            || source.geometry != press.source.geometry
-            || source.selected != press.source.selected
-            || source.mouse.modes != press.source.mouse.modes
-            || source.mouse.route != press.source.mouse.route
-            || (point.0 - press.point.0).hypot(point.1 - press.point.1) >= 3.
-        {
+        if kind != 2 || press.picture.is_some() || !press_matches(&source, &press, point) {
             return;
         }
         let editor = self.connection.updates.borrow().site.ptt_features()
@@ -220,6 +251,7 @@ impl ContextMenu {
         ui: &TerminalWindow,
         source: &Source,
         link: Option<usize>,
+        picture: Option<&Picture>,
     ) -> Capabilities {
         let view = self.connection.updates.borrow();
         let context = view.context();
@@ -270,10 +302,30 @@ impl ContextMenu {
         if editor && ui.get_keyboard_read_only() {
             flags.set(Flag::Ready, false);
         }
+        let inline = self.media.borrow().upgrade().and_then(|m| m.inline_owner());
+        flags.set(
+            Flag::Images,
+            ui.get_article_active() && inline.as_ref().is_some_and(|i| i.has_images()),
+        );
+        flags.set(
+            Flag::InlineReady,
+            inline.as_ref().is_some_and(|i| i.menu_ready()),
+        );
+        flags.set(Flag::Picture, picture.is_some());
+        flags.set(
+            Flag::PictureReady,
+            picture.is_some_and(|p| p.image.is_some()),
+        );
         flags
     }
-    fn entries(&self, ui: &TerminalWindow, source: &Source, link: Option<usize>) -> Vec<Entry> {
-        match context_menu::items(self.capabilities(ui, source, link)) {
+    fn entries(
+        &self,
+        ui: &TerminalWindow,
+        source: &Source,
+        link: Option<usize>,
+        picture: Option<&Picture>,
+    ) -> Vec<Entry> {
+        match context_menu::items(self.capabilities(ui, source, link, picture)) {
             Ok(entries) => entries
                 .into_iter()
                 .filter(|entry| supported(entry.action))
@@ -309,7 +361,17 @@ impl ContextMenu {
             return;
         }
         let link = self.link_at(ui, &source, point);
-        let entries = self.entries(ui, &source, link);
+        let entries = self.entries(ui, &source, link, None);
+        self.install_menu(ui, source, link, None, entries);
+    }
+    fn install_menu(
+        &self,
+        ui: &TerminalWindow,
+        source: Source,
+        link: Option<usize>,
+        picture: Option<Picture>,
+        entries: Vec<Entry>,
+    ) {
         if entries.is_empty() {
             self.dismiss(true);
             return;
@@ -329,6 +391,7 @@ impl ContextMenu {
             link,
             entries,
             selected,
+            picture,
         }));
         ui.set_context_selected(selected as i32);
         ui.set_context_open(true);
@@ -365,11 +428,13 @@ impl ContextMenu {
             }
             return;
         }
-        let valid = self
-            .menu
-            .borrow()
-            .as_ref()
-            .is_none_or(|menu| self.source(&ui).as_ref() == Some(&menu.source));
+        let valid = self.menu.borrow().as_ref().is_none_or(|menu| {
+            self.source(&ui).as_ref() == Some(&menu.source)
+                && menu
+                    .picture
+                    .as_ref()
+                    .is_none_or(|p| self.picture_current(p))
+        });
         if !valid {
             self.dismiss(ui.get_context_focus_restorable());
         }
@@ -429,16 +494,29 @@ impl ContextMenu {
                     .ok()
                     .and_then(|i| menu.entries.get(i))
                     .filter(|entry| entry.enabled)
-                    .map(|e| (menu.source.clone(), menu.link, *e))
+                    .map(|e| (menu.source.clone(), menu.link, *e, menu.picture.clone()))
             })
         };
-        let valid = action.as_ref().is_some_and(|(source, link, entry)| {
-            self.source(&ui).as_ref() == Some(source)
-                && self.entries(&ui, source, *link).contains(entry)
-        });
+        let valid = action
+            .as_ref()
+            .is_some_and(|(source, link, entry, picture)| {
+                self.source(&ui).as_ref() == Some(source)
+                    && picture.as_ref().is_none_or(|p| self.picture_current(p))
+                    && self
+                        .entries(&ui, source, *link, picture.as_ref())
+                        .contains(entry)
+            });
         self.dismiss(true);
-        if valid && let Some((_, link, entry)) = action {
-            self.output.context_action(entry.action, link);
+        if valid && let Some((_, link, entry, picture)) = action {
+            if let Some(picture) = picture {
+                self.picture_action(&ui, picture, entry.action);
+            } else if entry.action == Action::Inline {
+                if let Some(inline) = self.media.borrow().upgrade().and_then(|m| m.inline_owner()) {
+                    inline.expand_all();
+                }
+            } else {
+                self.output.context_action(entry.action, link);
+            }
         }
     }
     pub fn finish(&self) {
@@ -450,6 +528,9 @@ fn supported(action: Action) -> bool {
     matches!(
         action,
         Action::Copy
+            | Action::CopyPicture
+            | Action::SavePicture
+            | Action::Inline
             | Action::CopyAnsi
             | Action::CopyLink
             | Action::OpenLink
@@ -469,6 +550,9 @@ pub(super) fn label(action: Action) -> String {
     use Action as A;
     match action {
         A::Copy => pttstella::msg!("context-copy"),
+        A::CopyPicture => pttstella::msg!("context-copy-picture"),
+        A::SavePicture => pttstella::msg!("context-save-picture"),
+        A::Inline => pttstella::msg!("context-inline"),
         A::CopyAnsi => pttstella::msg!("context-copy-ansi"),
         A::CopyLink => pttstella::msg!("context-copy-link"),
         A::OpenLink => pttstella::msg!("context-open-link-external"),
@@ -484,4 +568,13 @@ pub(super) fn label(action: Action) -> String {
         A::CopyImagePage => pttstella::msg!("copy-png"),
         _ => String::new(),
     }
+}
+fn press_matches(source: &Source, press: &Press, point: (f32, f32)) -> bool {
+    source.stamp == press.source.stamp
+        && source.policy == press.source.policy
+        && source.geometry == press.source.geometry
+        && source.selected == press.source.selected
+        && source.mouse.modes == press.source.mouse.modes
+        && source.mouse.route == press.source.mouse.route
+        && (point.0 - press.point.0).hypot(point.1 - press.point.1) < 3.
 }

@@ -1,5 +1,6 @@
 //! Physical-pixel row geometry. Anchors are article row plus fractional row.
 use pttstella::article_cache::MAX_WINDOW_ROWS;
+#[cfg(test)]
 use std::ops::Range;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -72,6 +73,7 @@ impl Layout {
     pub fn maximum_x(self) -> f32 {
         (self.logical_width() - self.view_width).max(0.)
     }
+    #[cfg(test)]
     pub fn visible(self, anchor: f64) -> Range<usize> {
         let anchor = self.clamp(anchor);
         let first = (anchor.floor() as usize).saturating_sub(2);

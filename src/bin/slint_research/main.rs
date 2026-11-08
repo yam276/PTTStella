@@ -4,11 +4,13 @@ mod clipboard;
 mod context_menu;
 mod graphics;
 mod ime_probe;
+mod inline_engine;
 mod keep_alive;
 mod login;
 mod loopback;
 mod media;
 mod media_fixture;
+mod media_playback;
 mod media_worker;
 mod native_input;
 mod output;
@@ -125,7 +127,7 @@ struct Options {
 }
 
 fn options() -> Result<Options, &'static str> {
-    const USAGE: &str = "usage: pttstella-slint [--connect|--show-profile|--probe-grid|--probe-media|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
+    const USAGE: &str = "usage: pttstella-slint [--connect|--show-profile|--probe-grid|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
     let mut zoom = None;
     let mut capture = None;
     let mut probe = None;
@@ -140,6 +142,9 @@ fn options() -> Result<Options, &'static str> {
         match arg.to_str() {
             Some("--verify-media") if verify_media.is_none() => {
                 verify_media = Some(args.next().ok_or(USAGE)?.into());
+            }
+            Some("--probe-inline") if probe.is_none() => {
+                probe = Some(Probe::Session(session::Probe::ArticleInline))
             }
             Some("--probe-media") if probe.is_none() => {
                 probe = Some(Probe::Session(session::Probe::Media))
@@ -323,8 +328,12 @@ fn options() -> Result<Options, &'static str> {
         return Err(USAGE);
     }
     if verify_media.is_some()
-        && (probe != Some(Probe::Session(session::Probe::Media))
-            || capture.is_some()
+        && (!matches!(
+            probe,
+            Some(Probe::Session(
+                session::Probe::Media | session::Probe::ArticleInline
+            ))
+        ) || capture.is_some()
             || verify_article_session.is_some()
             || verify_article.is_some()
             || verify_tools.is_some()
@@ -458,7 +467,12 @@ fn run(
     let ui = TerminalWindow::new()?;
     // Probe settings live only in this owned temporary namespace; retain it
     // until output workers have drained at both normal and capture shutdown.
-    let media_probe_settings = if options.probe == Some(Probe::Session(session::Probe::Media)) {
+    let media_probe_settings = if matches!(
+        options.probe,
+        Some(Probe::Session(
+            session::Probe::Media | session::Probe::ArticleInline
+        ))
+    ) {
         Some(
             tempfile::Builder::new()
                 .prefix("pttstella-slint-media-settings-")
@@ -669,7 +683,8 @@ fn run(
                 &mode,
                 session::Mode::Live(_)
                     | session::Mode::Probe(
-                        session::Probe::ArticleFull
+                        session::Probe::ArticleInline
+                            | session::Probe::ArticleFull
                             | session::Probe::ArticleInput
                             | session::Probe::ArticleOutput
                             | session::Probe::ArticleKeepAlive
@@ -737,7 +752,8 @@ fn run(
                 &mode,
                 session::Mode::Live(_)
                     | session::Mode::Probe(
-                        session::Probe::ArticleFull
+                        session::Probe::ArticleInline
+                            | session::Probe::ArticleFull
                             | session::Probe::ArticleInput
                             | session::Probe::ArticleOutput
                             | session::Probe::ArticleKeepAlive
@@ -824,6 +840,7 @@ fn run(
                 session::Mode::Live(_)
                     | session::Mode::Probe(
                         session::Probe::Media
+                            | session::Probe::ArticleInline
                             | session::Probe::ArticleFull
                             | session::Probe::ArticleInput
                             | session::Probe::ArticleOutput
@@ -885,13 +902,21 @@ fn run(
                 });
                 if matches!(
                     &mode,
-                    session::Mode::Live(_) | session::Mode::Probe(session::Probe::Media)
+                    session::Mode::Live(_)
+                        | session::Mode::Probe(
+                            session::Probe::Media | session::Probe::ArticleInline
+                        )
                 ) {
                     media_owner = Some(media::Media::mount(
                         &ui,
                         connection.clone(),
                         output.clone(),
-                        matches!(&mode, session::Mode::Probe(session::Probe::Media)),
+                        matches!(
+                            &mode,
+                            session::Mode::Probe(
+                                session::Probe::Media | session::Probe::ArticleInline
+                            )
+                        ),
                         settings.clone(),
                         if let Some(directory) = &media_probe_settings {
                             pttstella::settings::store::Store::at(
@@ -901,6 +926,12 @@ fn run(
                             profile::Profile::system()?.settings()
                         },
                     ));
+                }
+                if let (Some(media), Some(article)) = (&media_owner, &article_session_owner) {
+                    media.mount_inline(&ui, article);
+                    if let Some(context) = &context_owner {
+                        context.attach_media(media);
+                    }
                 }
                 output_owner = Some(output);
             }
@@ -916,7 +947,30 @@ fn run(
             })
         })
         .transpose()?;
-    let verification = if let Some(directory) = options.verify_media {
+    let verification = if options.probe == Some(Probe::Session(session::Probe::ArticleInline))
+        && options.verify_media.is_some()
+    {
+        Some(article::inline::probe::start(
+            &ui,
+            media_owner
+                .as_ref()
+                .and_then(|m| m.inline_owner())
+                .ok_or("inline owner missing")?,
+            article_session_owner
+                .as_ref()
+                .cloned()
+                .ok_or("inline article missing")?,
+            options
+                .verify_media
+                .clone()
+                .ok_or("inline verification directory missing")?,
+            media_probe_settings
+                .as_ref()
+                .ok_or("isolated media settings missing")?
+                .path()
+                .join("settings.json"),
+        )?)
+    } else if let Some(directory) = options.verify_media {
         Some(media::probe::start(
             &ui,
             media_owner

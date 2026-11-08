@@ -1,4 +1,6 @@
 import { SelectionRect } from "selection.slint";
+export struct InlineArrow { index:int, stamp:string, x:length, y:length, size:length, opened:bool }
+export struct InlinePicture { index:int, key:int, stamp:string, x:length, y:length, width:length, height:length, image-y:length, image-height:length, source-y:int, source-height:int, source-width:int, image:image, status:string }
 export struct ArticleTile { image: image, y: length, height: length }
 
 component ArticlePointer inherits TouchArea {
@@ -29,6 +31,11 @@ export component ArticleViewport inherits Rectangle {
     clip: true;
     in property <[ArticleTile]> tiles;
     in property <image> footer;
+    in property <[InlineArrow]> inline-arrows;
+    in property <[InlinePicture]> inline-pictures;
+    in property <bool> inline-enabled;
+    callback inline-pointer(int,int,string);
+    callback inline-context(int,int,string,length,length);
     in property <length> line-height;
     in property <length> line-width;
     in property <length> body-height;
@@ -48,6 +55,14 @@ export component ArticleViewport inherits Rectangle {
     callback navigate(int);
     callback scroll-to(bool,float);
     callback zoom-request(float);
+    function wheel(dx:length,dy:length,shift:bool,control:bool,alt:bool,meta:bool)->bool {
+        if root.blocked || alt || meta {return false;}
+        if control {root.zoom-request(dy/1px);return true;}
+        if shift {root.scroll(dy/1px,true);}
+        else {if dx != 0px {root.scroll(dx/1px,true);} if dy != 0px {root.scroll(dy/1px,false);}}
+        return true;
+    }
+
     out property <bool> focused: keys.has-focus || article-input.has-focus;
     callback focus-article;
     changed width => { root.vertical-drag = false; root.horizontal-drag = false; root.layout-changed(); }
@@ -86,7 +101,7 @@ export component ArticleViewport inherits Rectangle {
         clip: true;
         for tile in root.tiles: Image {
             x: root.text-left;
-            y: tile.y - root.offset-y;
+            y: tile.y;
             width: root.line-width; height: tile.height;
             source: tile.image;
             image-fit: fill;
@@ -99,16 +114,70 @@ export component ArticleViewport inherits Rectangle {
             context-pointer(kind,x,y,shift) => { root.context-pointer(kind,x,y,shift); }
             focus-requested => { root.focus-article(); }
             scroll-event(event) => {
-                if (event.modifiers.control && !event.modifiers.alt && !event.modifiers.meta) {
-                    root.zoom-request(event.delta-y / 1px); return accept;
+                if root.wheel(event.delta-x,event.delta-y,event.modifiers.shift,event.modifiers.control,event.modifiers.alt,event.modifiers.meta) {return accept;}
+                return reject;
+            }
+        }
+        for picture in root.inline-pictures: Rectangle {
+            x:picture.x;y:picture.y;width:picture.width;height:picture.height;
+            background:#101318;clip:true;
+            Image {y:picture.image-y;width:parent.width;height:picture.image-height;source:picture.image;source-clip-y:picture.source-y;source-clip-width:picture.source-width;source-clip-height:picture.source-height;image-fit:fill;}
+            if picture.status != "": Text {text:picture.status;color:#c4cbd4;wrap:word-wrap;width:parent.width;height:parent.height;}
+            TouchArea {
+                enabled:!root.blocked;
+                mouse-cursor:MouseCursor.pointer;
+                accessible-role:button;accessible-label:"開啟完整圖片預覽";
+                private property <length> down-x;
+                private property <length> down-y;
+                private property <bool> tap-dragged;
+                pointer-event(event)=>{
+                    if event.kind == PointerEventKind.move && self.pressed && (((self.mouse-x - self.down-x)/1px)*((self.mouse-x - self.down-x)/1px) + ((self.mouse-y - self.down-y)/1px)*((self.mouse-y - self.down-y)/1px) >= 9) {self.tap-dragged=true;}
+                    if event.kind == PointerEventKind.cancel {root.inline-context(3,picture.index,picture.stamp,picture.x+self.mouse-x,picture.y+self.mouse-y);}
+                    else if event.button == PointerEventButton.right || (event.kind == PointerEventKind.move && self.pressed) {
+                        root.inline-context(event.kind == PointerEventKind.down ? 0 : event.kind == PointerEventKind.up ? 2 : 1,picture.index,picture.stamp,picture.x+self.mouse-x,picture.y+self.mouse-y);
+                    }
+                    if event.button == PointerEventButton.right {root.inline-pointer(2,picture.index,picture.stamp);return;}
+                    if event.modifiers.shift || event.modifiers.control || event.modifiers.alt || event.modifiers.meta {root.inline-pointer(2,picture.index,picture.stamp);return;}
+                    if event.kind == PointerEventKind.cancel {root.inline-pointer(2,picture.index,picture.stamp);}
+                    else if event.button == PointerEventButton.left {
+                        if event.kind == PointerEventKind.down {self.down-x=self.mouse-x;self.down-y=self.mouse-y;self.tap-dragged=false;root.inline-pointer(0,picture.index,picture.stamp);}
+                        else if event.kind == PointerEventKind.up {root.inline-pointer(self.has-hover && !self.tap-dragged ? 3 : 2,picture.index,picture.stamp);}
+                    }
                 }
-                if (event.modifiers.alt || event.modifiers.meta) { return reject; }
-                if (event.modifiers.shift) { root.scroll(event.delta-y / 1px, true); }
-                else {
-                    if (event.delta-x != 0px) { root.scroll(event.delta-x / 1px, true); }
-                    if (event.delta-y != 0px) { root.scroll(event.delta-y / 1px, false); }
+                scroll-event(event)=>{
+                    if root.wheel(event.delta-x,event.delta-y,event.modifiers.shift,event.modifiers.control,event.modifiers.alt,event.modifiers.meta) {return accept;}
+                    return reject;
                 }
-                return accept;
+            }
+        }
+        for arrow in root.inline-arrows: Rectangle {
+            x:arrow.x;y:arrow.y;width:arrow.size;height:arrow.size;
+            background:#377dbb99;border-radius:2px;
+            Text {text:arrow.opened ? "✓" : "▾";color:white;font-size:max(8px,arrow.size*0.8);horizontal-alignment:center;vertical-alignment:center;}
+            TouchArea {
+                enabled:!root.blocked;
+                mouse-cursor:MouseCursor.pointer;
+                accessible-role:button;accessible-label:"展開這張圖片";
+                private property <length> down-x;
+                private property <length> down-y;
+                private property <bool> tap-dragged;
+                scroll-event(event)=>{
+                    if root.wheel(event.delta-x,event.delta-y,event.modifiers.shift,event.modifiers.control,event.modifiers.alt,event.modifiers.meta) {return accept;}
+                    return reject;
+                }
+                pointer-event(event)=>{
+                    if event.kind == PointerEventKind.move && self.pressed && (((self.mouse-x - self.down-x)/1px)*((self.mouse-x - self.down-x)/1px) + ((self.mouse-y - self.down-y)/1px)*((self.mouse-y - self.down-y)/1px) >= 9) {self.tap-dragged=true;}
+                    if event.modifiers.shift || event.modifiers.control || event.modifiers.alt || event.modifiers.meta {
+                        root.inline-pointer(2,arrow.index,arrow.stamp);
+                        if event.modifiers.shift {root.pointer(event.kind==PointerEventKind.down ? 0 : event.kind==PointerEventKind.up ? 2 : event.kind==PointerEventKind.cancel ? 3 : 1,arrow.x+self.mouse-x,arrow.y+self.mouse-y,true);}
+                        return;
+                    }
+                    if event.kind == PointerEventKind.cancel {root.inline-pointer(2,arrow.index,arrow.stamp);}
+                    else if event.button == PointerEventButton.left {
+                        if event.kind == PointerEventKind.down {self.down-x=self.mouse-x;self.down-y=self.mouse-y;self.tap-dragged=false;root.inline-pointer(0,arrow.index,arrow.stamp);}
+                        else if event.kind == PointerEventKind.up {root.inline-pointer(self.has-hover && !self.tap-dragged ? 1 : 2,arrow.index,arrow.stamp);}
+                    }
+                }
             }
         }
     }

@@ -1,6 +1,10 @@
 //! Native preview adapter: only links from the acknowledged filtered projection.
 #[path = "media_hover.rs"]
 mod hover;
+#[path = "media_settings.rs"]
+mod preferences;
+#[path = "media_settings_probe.rs"]
+mod preferences_probe;
 #[path = "media_probe.rs"]
 pub mod probe;
 use crate::{
@@ -16,7 +20,6 @@ use pttstella::{
     msg,
 };
 use slint::ComponentHandle;
-use slint::winit_030::WinitWindowAccessor;
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -30,6 +33,7 @@ pub struct Media {
     sequence: Cell<u64>,
     worker: RefCell<Option<Worker>>,
     task: RefCell<Option<slint::JoinHandle<()>>>,
+    inline: RefCell<Option<Rc<crate::article::inline::Inline>>>,
     state: RefCell<State>,
     feedback: RefCell<Option<String>>,
     closed: Cell<bool>,
@@ -65,6 +69,7 @@ impl Media {
             sequence: Cell::new(0),
             worker: RefCell::new(None),
             task: RefCell::new(None),
+            inline: RefCell::new(None),
             state: RefCell::new(State::default()),
             feedback: RefCell::new(None),
             closed: Cell::new(false),
@@ -88,6 +93,7 @@ impl Media {
             move || owner.update()
         });
         owner.mount_hover(ui);
+        owner.mount_preferences(ui);
         owner
     }
     fn valid(&self, ui: &TerminalWindow, scope: &Scope) -> bool {
@@ -115,16 +121,30 @@ impl Media {
             return Ok(());
         }
         let (mut worker, mut updates) = Worker::start()?;
+        worker.inline_automatic(self.settings.borrow().auto_expand_images);
+        let mut inline_updates = worker.inline_updates();
         let weak = Rc::downgrade(self);
         let task = slint::spawn_local(async move {
+            let (mut preview_dirty, mut inline_dirty) = (true, true);
             loop {
-                let state = updates.borrow_and_update().clone();
                 if let Some(owner) = weak.upgrade() {
-                    owner.install(state);
+                    if preview_dirty {
+                        owner.install(updates.borrow_and_update().clone());
+                    }
+                    if inline_dirty {
+                        let state = inline_updates.borrow_and_update().clone();
+                        let inline = owner.inline.borrow().clone();
+                        if let Some(inline) = inline {
+                            inline.install(state);
+                        }
+                    }
                 } else {
                     break;
                 }
-                if updates.changed().await.is_err() {
+                let (preview, closed) = tokio::select! {r=updates.changed()=>(true,r.is_err()),r=inline_updates.changed()=>(false,r.is_err())};
+                preview_dirty = preview;
+                inline_dirty = !preview;
+                if closed {
                     if let Some(owner) = weak.upgrade()
                         && !owner.closed.get()
                         && let Some(ui) = owner.ui.upgrade()
@@ -154,6 +174,68 @@ impl Media {
         self.task.replace(Some(task));
         Ok(())
     }
+    pub fn mount_inline(
+        self: &Rc<Self>,
+        ui: &TerminalWindow,
+        article: &Rc<crate::article::session::ArticleSession>,
+    ) {
+        let inline = crate::article::inline::Inline::mount(
+            ui,
+            article,
+            self,
+            self.connection.clone(),
+            self.settings.borrow().auto_expand_images,
+        );
+        self.inline.replace(Some(inline));
+    }
+    pub fn inline_owner(&self) -> Option<Rc<crate::article::inline::Inline>> {
+        self.inline.borrow().clone()
+    }
+    pub fn inline_picture(&self, index: i32, tag: &str) -> Option<crate::context_menu::Picture> {
+        let index = usize::try_from(index).ok()?;
+        let inline = self.inline_owner()?;
+        if !inline.picture_visible(index, tag) {
+            return None;
+        }
+        let ui = self.ui.upgrade()?;
+        let scope = self.output.media_lease(&ui, index, 0)?;
+        let image = inline.original(&scope);
+        Some(crate::context_menu::Picture {
+            scope,
+            image,
+            probe: self.probe,
+            tag: tag.to_owned(),
+        })
+    }
+    pub fn inline_scope(&self, epoch: u64) {
+        if let Some(worker) = self.worker.borrow().as_ref() {
+            worker.inline_scope(epoch);
+        }
+    }
+    pub fn inline_controls(&self, controls: crate::inline_engine::Controls) {
+        if let Some(worker) = self.worker.borrow().as_ref() {
+            worker.inline_controls(controls);
+        }
+    }
+    pub fn inline_command(self: &Rc<Self>, epoch: u64, command: Command) -> Result<(), String> {
+        self.ensure_worker()?;
+        let worker = self.worker.borrow();
+        let worker = worker.as_ref().ok_or("media worker missing")?;
+        worker.inline_scope(epoch);
+        worker.command(command)
+    }
+    pub fn open_inline(
+        self: &Rc<Self>,
+        index: usize,
+        image: std::sync::Arc<pttstella::media::loader::Image>,
+    ) {
+        let Some(ui) = self.ui.upgrade() else {
+            return;
+        };
+        if let Some(scope) = self.output.media_lease(&ui, index, 0) {
+            self.begin_original(&ui, scope, Presentation::Inspect, Some(image));
+        }
+    }
     fn open(self: &Rc<Self>, index: i32) {
         let Some(ui) = self.ui.upgrade() else { return };
         if self.closed.get() || ui.get_context_source_blocked() {
@@ -167,13 +249,27 @@ impl Media {
         };
         match media::classify(&scope.link.url) {
             Ok(Some(target)) if target.kind == Kind::Image => {
-                self.begin(&ui, scope, Presentation::Inspect)
+                let original = self
+                    .inline
+                    .borrow()
+                    .as_ref()
+                    .and_then(|i| i.original(&scope));
+                self.begin_original(&ui, scope, Presentation::Inspect, original)
             }
             Ok(_) => ui.invoke_link_activated(scope.link.url.into()),
             Err(e) => ui.set_input_notice(e.into()),
         }
     }
-    fn begin(self: &Rc<Self>, ui: &TerminalWindow, mut scope: Scope, presentation: Presentation) {
+    fn begin(self: &Rc<Self>, ui: &TerminalWindow, scope: Scope, presentation: Presentation) {
+        self.begin_original(ui, scope, presentation, None)
+    }
+    fn begin_original(
+        self: &Rc<Self>,
+        ui: &TerminalWindow,
+        mut scope: Scope,
+        presentation: Presentation,
+        original: Option<std::sync::Arc<pttstella::media::loader::Image>>,
+    ) {
         if !self.output.renew_media(ui, &mut scope) {
             return;
         }
@@ -225,9 +321,12 @@ impl Media {
         if presentation == Presentation::Inspect {
             ui.invoke_focus_media();
         }
+        ui.invoke_inline_updated();
         let result = if let Some(worker) = self.worker.borrow().as_ref() {
             worker.scope(request, ui.get_media_play_allowed());
-            worker.command(if promote {
+            worker.command(if let Some(image) = original {
+                Command::OpenOriginal { request, image }
+            } else if promote {
                 Command::Promote(request)
             } else {
                 Command::Open {
@@ -349,96 +448,28 @@ impl Media {
         }
     }
     fn picture_output(self: &Rc<Self>, ui: &TerminalWindow, scope: &Scope, action: i32) {
+        use crate::output::picture::PictureAction;
+        let action = match action {
+            4 => PictureAction::Copy,
+            5 => PictureAction::Save,
+            6 => PictureAction::CopyUrl,
+            _ => return,
+        };
         let image = self.state.borrow().original.clone();
-        if action != 6 && image.is_none() {
-            self.feedback(ui, msg!("copy-not-ready"));
-            return;
-        }
-        let (lease, phase) = match self.output.media_output_lease(ui, scope) {
-            Ok(lease) => lease,
-            Err(error) => {
-                self.feedback(ui, error);
-                return;
-            }
-        };
-        let path = if action == 5 {
-            let extension = match image.as_ref().map(|image| media::picture::extension(image)) {
-                Some(Ok(extension)) => extension,
-                _ => {
-                    self.feedback(ui, msg!("image-invalid"));
-                    return;
-                }
-            };
-            let path = ui
-                .window()
-                .with_winit_window(|window| {
-                    rfd::FileDialog::new()
-                        .set_parent(window)
-                        .set_title(msg!("picture-save-title"))
-                        .add_filter("Image", &[extension])
-                        .set_file_name(format!("PTTStella-image.{extension}"))
-                        .save_file()
-                })
-                .flatten();
-            let Some(path) = path else {
-                self.feedback(ui, msg!("export-cancelled"));
-                return;
-            };
-            Some(path)
-        } else {
-            None
-        };
-        let clipboard = self.output.clipboard();
-        let source = self.connection.updates.clone();
-        let url = scope.link.url.clone();
         let request = scope.sequence;
-        let probe = self.probe;
         let weak = Rc::downgrade(self);
-        self.output.work(
-            ui,
-            move || {
-                let verify = || crate::output::check_output(&lease, &source.borrow(), phase);
-                verify()?;
-                if action == 6 {
-                    clipboard.write_text(url.clone(), verify)?;
-                    if probe {
-                        crate::media_fixture::verify_url(&clipboard, &url)?;
-                    }
-                    return Ok(());
-                }
-                let image = image.ok_or_else(|| msg!("copy-not-ready"))?;
-                if let Some(path) = path {
-                    media::picture::save(&path, &image, verify)
-                } else {
-                    let mime = image.mime;
-                    let pixels = media::picture::pixels(image)?;
-                    clipboard.write_image(pixels, verify)?;
-                    if probe {
-                        crate::media_fixture::verify_picture(&clipboard, mime)?;
-                    }
-                    Ok(())
-                }
-            },
-            move |_, ui, result| {
+        self.output
+            .picture_output(ui, scope, image, action, self.probe, move |ui, message| {
                 if let Some(owner) = weak.upgrade() {
                     let scope = owner.active.borrow().clone();
                     if let Some(scope) = scope
                         && scope.sequence == request
                         && owner.valid(ui, &scope)
                     {
-                        owner.feedback(
-                            ui,
-                            match result {
-                                Ok(()) if action == 5 => msg!("picture-saved"),
-                                Ok(()) if action == 6 => msg!("context-copied"),
-                                Ok(()) => msg!("export-copied"),
-                                Err(error) => error,
-                            },
-                        );
+                        owner.feedback(ui, message);
                     }
                 }
-            },
-        );
+            });
     }
     fn feedback(&self, ui: &TerminalWindow, message: String) {
         self.feedback.replace(Some(message.clone()));
@@ -492,6 +523,9 @@ impl Media {
         }
     }
     pub fn finish(&self) -> Result<(), String> {
+        if let Some(inline) = self.inline.borrow().as_ref() {
+            inline.finish();
+        }
         self.closed.set(true);
         self.close(false);
         if let Some(task) = self.task.borrow_mut().take() {

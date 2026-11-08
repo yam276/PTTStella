@@ -194,6 +194,7 @@ fn article_hit_and_visible_spans_share_odd_pixel_columns_and_pinned_footer() {
         width: 700.,
         body_height: 287.5,
         offset: 6256.25,
+        flow: std::rc::Rc::new(pttstella::article_flow::Flow::new(837, 25, []).unwrap()),
         line_width: 1000,
         row: 25,
         body_rows: 837,
@@ -227,4 +228,54 @@ fn article_hit_and_visible_spans_share_odd_pixel_columns_and_pinned_footer() {
     );
     assert!(geometry.span(&span(100), &frame).is_none());
     assert!(geometry.span(&span(262), &frame).is_none());
+}
+
+#[test]
+fn article_image_gaps_reject_cells_and_keep_visible_spans_precise_past_u32_height() {
+    let mut frame = Screen::new(80, 24).unwrap().frame();
+    frame.rows = 5;
+    let flow = pttstella::article_flow::Flow::new(4, 24, [(0, u32::MAX)]).unwrap();
+    let mut article = ArticleGeometry {
+        left: 0.,
+        width: 960.,
+        body_height: 100.,
+        offset: flow.top(1) as f64 - 12.,
+        flow: std::rc::Rc::new(flow),
+        line_width: 960,
+        row: 24,
+        body_rows: 4,
+        dpi: 1.,
+    };
+    let geometry = SurfaceGeometry::Article(article.clone());
+    assert_eq!(geometry.cell((6., 0.), &frame), None);
+    assert_eq!(geometry.cell((6., 11.99), &frame), None);
+    assert_eq!(
+        geometry.cell((6., 12.), &frame),
+        Some(Position { col: 0, row: 1 })
+    );
+    assert_eq!(
+        geometry.cell((6., 35.99), &frame),
+        Some(Position { col: 0, row: 1 })
+    );
+    assert_eq!(
+        geometry.cell((6., 36.), &frame),
+        Some(Position { col: 0, row: 2 })
+    );
+    assert_eq!(
+        geometry.cell((6., 100.), &frame),
+        Some(Position { col: 0, row: 4 })
+    );
+    let span = pttstella::selection::Span {
+        row: 1,
+        start: 0,
+        end: 2,
+    };
+    assert_eq!(
+        geometry.span(&span, &frame),
+        Some(skia_safe::Rect::new(0., 12., 24., 36.))
+    );
+    article.offset = 1_000_000.;
+    let geometry = SurfaceGeometry::Article(article.clone());
+    assert_eq!(geometry.cell((6., 50.), &frame), None);
+    assert_eq!(geometry.span(&span, &frame), None);
 }

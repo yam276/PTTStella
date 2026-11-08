@@ -1,4 +1,6 @@
 //! Native selection and explicit exports consume one acknowledged terminal frame.
+#[path = "output_picture.rs"]
+pub(crate) mod picture;
 #[cfg(test)]
 #[path = "output_tests.rs"]
 mod tests;
@@ -166,7 +168,7 @@ struct Projection {
     context: Context,
     links: Vec<Link>,
 }
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, PartialEq)]
 struct Hover {
     stamp: Option<Stamp>,
     policy: u64,
@@ -187,13 +189,14 @@ pub struct Output {
     article: Option<Rc<crate::article::session::ArticleSession>>,
     registered: Cell<Option<(Identity, u64)>>,
     selection_sequence: Cell<u64>,
-    last_geometry: Cell<Option<SurfaceGeometry>>,
+    last_geometry: RefCell<Option<SurfaceGeometry>>,
     worker: RefCell<Option<JoinHandle<()>>>,
+    picker: Cell<bool>,
     closed: Cell<bool>,
     phase: Cell<Phase>,
     projection: RefCell<Option<Projection>>,
     hover: Cell<Option<(f32, f32)>>,
-    hover_state: Cell<Option<Hover>>,
+    hover_state: RefCell<Option<Hover>>,
     navigation: RefCell<Option<slint::JoinHandle<()>>>,
     navigation_cancel: RefCell<Option<NavigationCancellation>>,
     pending_navigation: Cell<Option<Stamp>>,
@@ -225,7 +228,7 @@ impl Output {
             selected: RefCell::new(Selected::default()),
             projection: RefCell::new(None),
             hover: Cell::new(None),
-            hover_state: Cell::new(None),
+            hover_state: RefCell::new(None),
             navigation: RefCell::new(None),
             navigation_cancel: RefCell::new(None),
             pending_navigation: Cell::new(None),
@@ -234,8 +237,9 @@ impl Output {
             article,
             registered: Cell::new(None),
             selection_sequence: Cell::new(0),
-            last_geometry: Cell::new(None),
+            last_geometry: RefCell::new(None),
             worker: RefCell::new(None),
+            picker: Cell::new(false),
             closed: Cell::new(false),
         });
         ui.set_output_available(true);
@@ -297,7 +301,7 @@ impl Output {
                         output.clear(&ui);
                     }
                     let geometry = output.geometry(&ui);
-                    let previous = output.last_geometry.replace(geometry);
+                    let previous = output.last_geometry.replace(geometry.clone());
                     if previous.is_some() && previous != geometry {
                         output.revoke();
                     }
@@ -327,7 +331,7 @@ impl Output {
                             })
                             || selected.gesture.as_ref().is_some_and(|gesture| {
                                 Some(gesture.stamp) != current
-                                    || output.geometry(&ui) != Some(gesture.geometry)
+                                    || output.geometry(&ui) != Some(gesture.geometry.clone())
                             })
                     };
                     if stale
@@ -515,7 +519,7 @@ impl Output {
         &self,
         ui: &TerminalWindow,
         stamp: Stamp,
-        geometry: SurfaceGeometry,
+        geometry: &SurfaceGeometry,
         point: (f32, f32),
     ) -> Option<Hit> {
         if !self.project(ui, stamp) {
@@ -528,12 +532,17 @@ impl Output {
                 &projection.context,
                 &projection.links,
                 frame,
-                g,
+                *g,
                 point,
                 self.can_navigate(ui),
             ),
             SurfaceGeometry::Article(g) => {
-                if !geometry.contains(point) {
+                if !geometry.contains(point)
+                    || point.1 < g.body_height
+                        && g.flow.hit(g.offset + f64::from(point.1)).is_none()
+                {
+                    // Images have their own controls; a gap must not fall
+                    // through to text selection, Back or half-page navigation.
                     return None;
                 }
                 let cell = geometry.cell(point, frame);
@@ -623,10 +632,10 @@ impl Output {
         let position = self
             .with_frame(&ui, |frame| geometry.cell(point, frame))
             .flatten();
-        let result = self
-            .selected
-            .borrow_mut()
-            .track(position, stamp, geometry, kind, point, shift);
+        let result =
+            self.selected
+                .borrow_mut()
+                .track(position, stamp, geometry.clone(), kind, point, shift);
         match result.selection {
             SelectionUpdate::Keep => {}
             SelectionUpdate::Clear => self.clear_text(),
@@ -636,8 +645,8 @@ impl Output {
         self.hover.set((kind != 3).then_some(point));
         if let Some(click) = result.click {
             self.click_acted.set(false);
-            let from = self.hit(&ui, stamp, geometry, click.from);
-            let to = self.hit(&ui, stamp, geometry, click.to);
+            let from = self.hit(&ui, stamp, &geometry, click.from);
+            let to = self.hit(&ui, stamp, &geometry, click.to);
             if from == to {
                 match to {
                     Some(Hit::Navigate(intent)) => self.navigate(&ui, stamp, intent),
@@ -672,9 +681,9 @@ impl Output {
             && self.connection.updates.borrow().mouse.route == pttstella::mouse::input::Route::Local
         {
             stamp
-                .zip(geometry)
+                .zip(geometry.clone())
                 .zip(self.hover.get())
-                .and_then(|((stamp, geometry), point)| self.hit(ui, stamp, geometry, point))
+                .and_then(|((stamp, geometry), point)| self.hit(ui, stamp, &geometry, point))
         } else {
             None
         };
@@ -684,7 +693,7 @@ impl Output {
             geometry,
             hit,
         };
-        if self.hover_state.replace(Some(state)) == Some(state) {
+        if self.hover_state.replace(Some(state.clone())) == Some(state) {
             return;
         }
         let mut rectangles = Vec::new();
@@ -805,7 +814,7 @@ impl Output {
         self.clipboard.clone()
     }
     pub(super) fn busy(&self) -> bool {
-        self.worker.borrow().is_some()
+        self.picker.get() || self.worker.borrow().is_some()
     }
     pub(super) fn media_output_lease(
         &self,
@@ -922,7 +931,7 @@ impl Output {
         let stamp = self.current(ui)?;
         let geometry = self.geometry(ui)?;
         let point = self.hover.get()?;
-        let Hit::Link(index) = self.hit(ui, stamp, geometry, point)? else {
+        let Hit::Link(index) = self.hit(ui, stamp, &geometry, point)? else {
             return None;
         };
         let scope = self.media_lease(ui, index, 0)?;
@@ -1000,7 +1009,7 @@ impl Output {
                                 == pttstella::mouse::input::Route::Local
                         {
                             ui.invoke_link_activated(url.into());
-                        } else if action == A::CopyLink && self.worker.borrow().is_none() {
+                        } else if action == A::CopyLink && !self.busy() {
                             let phase = self.phase.get();
                             let Some(lease) = self.new_lease(&ui, stamp, false) else {
                                 return;
@@ -1114,7 +1123,7 @@ impl Output {
     }
     fn copy(self: &Rc<Self>, ansi: bool) {
         let Some(ui) = self.ui.upgrade() else { return };
-        if self.worker.borrow().is_some() {
+        if self.busy() {
             return;
         }
         let (text, lease, phase) = match self.prepare_copy(&ui, ansi) {
@@ -1194,7 +1203,7 @@ impl Output {
     }
     fn export(self: &Rc<Self>, selected: bool, clipboard: bool) {
         let Some(ui) = self.ui.upgrade() else { return };
-        if self.worker.borrow().is_some() {
+        if self.busy() {
             return;
         }
         let (frame, rows, lease, phase) = match self.prepare_export(&ui, selected) {
@@ -1338,6 +1347,9 @@ impl Output {
                 if output.worker.borrow().is_none() {
                     ui.set_output_busy(false);
                 }
+                // Completion is outside the native keyboard borrow. Retire
+                // the cached disabled actions after this worker has joined.
+                ui.invoke_keyboard_updated();
                 ui.invoke_keep_alive_changed();
             }
         }) {
