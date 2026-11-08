@@ -2,6 +2,8 @@
 use crate::{board_navigation::BoardName, sites::Target};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "desktop")]
+pub mod session;
+#[cfg(feature = "desktop")]
 pub mod store;
 pub const MAX_BODY: usize = 128 * 1024;
 pub const MAX_DRAFTS: usize = 64;
