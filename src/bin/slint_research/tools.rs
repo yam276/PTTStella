@@ -33,6 +33,7 @@ enum Command {
     Zoom(f32),
     Fullscreen,
     Settings,
+    Sites,
 }
 struct PressedAction {
     index: i32,
@@ -362,6 +363,9 @@ impl Tools {
             )),
             _ => {}
         }
+        if category == 3 && ui.get_sites_available() {
+            result.push((Command::Sites, pttstella::msg!("sites-title"), true));
+        }
         result.retain(|(_, label, _)| !label.is_empty());
         result
     }
@@ -549,6 +553,7 @@ impl Tools {
             Command::Zoom(zoom) => ui.set_zoom(zoom),
             Command::Fullscreen => ui.invoke_toggle_fullscreen(),
             Command::Settings => ui.invoke_settings_show(),
+            Command::Sites => ui.invoke_sites_show(),
         }
     }
     fn key(&self, key: i32, repeat: bool) {

@@ -379,7 +379,9 @@ impl Editor {
     }
     fn open(self: &Rc<Self>) {
         let Some(ui) = self.ui.upgrade() else { return };
-        if ui.get_editor_open()
+        if ui.get_sites_open()
+            || ui.get_settings_open()
+            || ui.get_editor_open()
             || ui.get_native_composing()
             || ui.get_find_open()
             || ui.get_media_open()

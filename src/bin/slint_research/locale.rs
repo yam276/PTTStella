@@ -4,6 +4,7 @@ use crate::{EditorState, StationColorState, TerminalWindow, UiLabels};
 use pttstella::msg;
 use slint::{ComponentHandle, ModelRc, VecModel};
 pub fn refresh(ui: &TerminalWindow) {
+    ui.set_sites_label(msg!("sites-title").into());
     let labels = ui.global::<UiLabels>();
     labels.set_editor_modes(ModelRc::new(VecModel::from(vec![
         msg!("draft-wysiwyg").into(),

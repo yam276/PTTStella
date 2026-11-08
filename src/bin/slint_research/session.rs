@@ -376,8 +376,46 @@ pub fn mount(
         move || {
             if let Some(ui) = weak.upgrade()
                 && ui.get_can_reconnect()
+                && !ui.get_sites_open()
+                && !ui.get_settings_open()
             {
                 request_connection(&ui, &connection, &connecting, 1, || connection.connect());
+            }
+        }
+    });
+    ui.on_sites_connect({
+        let weak = ui.as_weak();
+        let connection = connection.clone();
+        let connecting = connecting.clone();
+        move |address, encoding| {
+            let Some(ui) = weak.upgrade() else {
+                return false;
+            };
+            if connecting.get().is_some() {
+                return false;
+            }
+            let target = crate::sites_manager::encoding(encoding)
+                .and_then(|e| pttstella::sites::Target::new(address.to_string(), e))
+                .and_then(|t| {
+                    if !live
+                        && url::Url::parse(t.endpoint.as_str())
+                            .ok()
+                            .and_then(|u| u.host_str().map(str::to_owned))
+                            .as_deref()
+                            != Some("127.0.0.1")
+                    {
+                        return Err(pttstella::msg!("sites-probe-local"));
+                    }
+                    Ok(t)
+                });
+            match target {
+                Ok(target) => request_connection(&ui, &connection, &connecting, 2, || {
+                    connection.connect_to(target)
+                }),
+                Err(error) => {
+                    ui.set_result(error.into());
+                    false
+                }
             }
         }
     });
@@ -397,11 +435,15 @@ pub fn mount(
                 let connection = connection.clone();
                 let connecting = connecting.clone();
                 move |index| {
+                    let entries =
+                        crate::stations::Stations::choices(stations.state.borrow().sites().clone())
+                            .0;
                     if connecting.get().is_none()
                         && let Some(ui) = weak.upgrade()
-                        && let Some((_, target)) = usize::try_from(index)
-                            .ok()
-                            .and_then(|i| stations.entries.get(i))
+                        && !ui.get_sites_open()
+                        && !ui.get_settings_open()
+                        && let Some((_, target)) =
+                            usize::try_from(index).ok().and_then(|i| entries.get(i))
                     {
                         request_connection(&ui, &connection, &connecting, 2, || {
                             connection.connect_to(target.clone())
@@ -488,7 +530,7 @@ fn request_connection(
     connecting: &Cell<Option<u64>>,
     advances: u64,
     enqueue: impl FnOnce() -> Result<(), String>,
-) {
+) -> bool {
     let generation = connection.updates.borrow().generation;
     match enqueue() {
         Ok(()) => {
@@ -498,8 +540,12 @@ fn request_connection(
             ui.set_can_reconnect(false);
             ui.invoke_keep_alive_changed();
             ui.invoke_focus_terminal();
+            true
         }
-        Err(error) => ui.set_result(error.into()),
+        Err(error) => {
+            ui.set_result(error.into());
+            false
+        }
     }
 }
 

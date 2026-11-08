@@ -919,3 +919,7 @@ slint-draft-worker-unconfirmed = 草稿儲存工作未確認結束
 slint-draft-no-document = 沒有開啟草稿
 
 slint-draft-render-limit = 編輯區尺寸超過繪圖上限
+
+slint-sites-current = 目前連線：{ $target }
+
+slint-sites-field-size = 輸入超過 { $bytes } bytes 或含控制字元，保留前一個值。

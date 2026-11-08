@@ -3,6 +3,7 @@ mod chrome;
 mod clipboard;
 mod context_menu;
 mod editor;
+mod file_job;
 mod graphics;
 mod ime_probe;
 mod inline_engine;
@@ -25,6 +26,7 @@ mod preferences;
 mod profile;
 mod renderer;
 mod session;
+mod sites_manager;
 mod station_color;
 mod station_mouse;
 mod stations;
@@ -552,6 +554,27 @@ fn run(
 
     // Probe settings live only in this owned temporary namespace; retain it
     // until output workers have drained at both normal and capture shutdown.
+    let sites_probe_store = if options.probe == Some(Probe::Session(session::Probe::Media))
+        && std::env::var_os("PTTSTELLA_SLINT_SITES_PROBE").is_some()
+    {
+        let directory = tempfile::Builder::new()
+            .prefix("pttstella-slint-sites-")
+            .tempdir()?;
+        let path = directory.path().join("sites.json");
+        let store = pttstella::sites::store::Store::at(path);
+        let mut seed = pttstella::sites::Sites::default();
+        seed.favourites.push(pttstella::sites::Favourite {
+            name: "Legacy synthetic".into(),
+            target: pttstella::sites::Target::new(
+                "telnet://legacy.example:2323".into(),
+                pttstella::encoding::TextEncoding::Gbk,
+            )?,
+        });
+        store.save(seed)?;
+        Some((directory, store))
+    } else {
+        None
+    };
     let media_probe_settings = if matches!(
         options.probe,
         Some(Probe::Session(
@@ -747,6 +770,7 @@ fn run(
     let mut login_owner = None;
     let mut paste_owner = None;
     let mut output_owner = None;
+    let mut sites_owner = None;
     let mut context_owner = None;
     let mut tools_owner = None;
     let mut station_mouse_owner = None;
@@ -1054,6 +1078,27 @@ fn run(
                         context.attach_media(media);
                     }
                 }
+                let sites_state = match &mode {
+                    session::Mode::Live(stations) => Some(stations.state.clone()),
+                    session::Mode::Probe(session::Probe::Media) => {
+                        sites_probe_store.as_ref().map(|(_, store)| {
+                            Rc::new(RefCell::new(pttstella::sites::session::State::load(
+                                Ok(store.clone()),
+                                true,
+                            )))
+                        })
+                    }
+                    _ => None,
+                };
+                if let Some(state) = sites_state {
+                    sites_owner = Some(sites_manager::Manager::mount(
+                        &ui,
+                        connection.clone(),
+                        output.clone(),
+                        state,
+                        matches!(&mode, session::Mode::Probe(_)),
+                    ));
+                }
                 output_owner = Some(output);
             }
             if matches!(
@@ -1087,6 +1132,7 @@ fn run(
                     let output = output_owner.as_ref().map(Rc::downgrade);
                     let editor = editor_owner.as_ref().map(Rc::downgrade);
                     let context = context_owner.as_ref().map(Rc::downgrade);
+                    let sites = sites_owner.as_ref().map(Rc::downgrade);
                     let article = article_session_owner.as_ref().map(Rc::downgrade);
                     let media = Rc::downgrade(media);
                     let weak = ui.as_weak();
@@ -1120,6 +1166,9 @@ fn run(
                             if changed.language != settings.language {
                                 locale::refresh(&ui);
                                 locale::refresh_statuses(&ui, changed.language);
+                                if let Some(sites) = sites.as_ref().and_then(|o| o.upgrade()) {
+                                    sites.refresh_labels();
+                                }
                                 if let Some(context) = context.as_ref().and_then(|o| o.upgrade()) {
                                     context.refresh_labels();
                                 }
@@ -1156,6 +1205,19 @@ fn run(
             })
         })
         .transpose()?;
+    ui.window().on_close_requested({
+        let preferences = media_owner.as_ref().map(|m| Rc::downgrade(&m.preferences));
+        let sites = sites_owner.as_ref().map(Rc::downgrade);
+        move || {
+            if let Some(p) = preferences.as_ref().and_then(|p| p.upgrade()) {
+                p.prepare_app_close();
+            }
+            if let Some(s) = sites.as_ref().and_then(|s| s.upgrade()) {
+                s.prepare_app_close();
+            }
+            slint::CloseRequestResponse::HideWindow
+        }
+    });
     let settings_shutdown_directory = if options.probe
         == Some(Probe::Session(session::Probe::Media))
         && std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").is_ok_and(|v| v == "shutdown")
@@ -1171,9 +1233,30 @@ fn run(
     } else {
         None
     };
+    let sites_verification_directory = options
+        .verify_media
+        .clone()
+        .filter(|_| sites_owner.is_some());
     let draft_verification_directory = options.verify_drafts.clone();
     let verification = if native_quit_directory.is_some() {
         None
+    } else if let Some((directory, owner)) = options
+        .verify_media
+        .as_ref()
+        .filter(|_| sites_probe_store.is_some())
+        .zip(sites_owner.as_ref())
+    {
+        Some(sites_manager::probe::start(
+            &ui,
+            owner.clone(),
+            directory.clone(),
+            sites_probe_store
+                .as_ref()
+                .ok_or("site probe store missing")?
+                .0
+                .path()
+                .join("sites.json"),
+        )?)
     } else if let Some(directory) = options.verify_color {
         Some(station_color::probe::start(
             &ui,
@@ -1340,6 +1423,9 @@ fn run(
         if let Some(editor) = &editor_owner {
             editor.finish()?;
         }
+        if let Some(sites) = &sites_owner {
+            sites.finish()?;
+        }
         if let Some(media) = &media_owner {
             media.preferences.finish()?;
             media.finish()?;
@@ -1361,6 +1447,11 @@ fn run(
             (Some(editor), Some(dir)) => {
                 editor::probe::audit_closed(editor, dir, editor_cleanup.is_ok())
             }
+            _ => Ok(()),
+        };
+        let sites_cleanup = sites_owner.as_ref().map(|s| s.finish()).transpose();
+        let sites_close_audit = match (&sites_owner, &sites_verification_directory) {
+            (Some(owner), Some(dir)) => sites_manager::probe::audit_closed(owner, dir),
             _ => Ok(()),
         };
         let settings_cleanup = media_owner
@@ -1422,6 +1513,8 @@ fn run(
         result?;
         editor_cleanup?;
         editor_close_audit?;
+        sites_cleanup?;
+        sites_close_audit?;
         settings_cleanup?;
         media_cleanup?;
         output_cleanup?;

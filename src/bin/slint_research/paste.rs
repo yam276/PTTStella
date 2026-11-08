@@ -253,7 +253,14 @@ impl Paste {
     }
 
     fn current(&self, ui: &TerminalWindow) -> Option<Source> {
-        if self.closed.get() || ui.get_switching_station() || ui.get_frame_paint_pending() {
+        if self.closed.get()
+            || ui.get_sites_open()
+            || ui.get_settings_open()
+            || ui.get_editor_open()
+            || ui.get_station_color_open()
+            || ui.get_switching_station()
+            || ui.get_frame_paint_pending()
+        {
             return None;
         }
         let Some(article) = &self.article else {

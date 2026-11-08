@@ -1,25 +1,33 @@
 //! Read the existing profile and station list without mutating either store.
+use pttstella::sites::session::State;
 use pttstella::sites::{Sites, Target};
 use slint::SharedString;
+use std::{cell::RefCell, rc::Rc};
 
 pub struct Stations {
     pub entries: Vec<(SharedString, Target)>,
     pub warnings: Vec<String>,
+    pub state: Rc<RefCell<State>>,
 }
 
 impl Stations {
     pub fn load(profile: &crate::profile::Profile) -> Self {
         let mut warnings = Vec::new();
-        let sites = profile.sites().load().unwrap_or_else(|error| {
-            warnings.push(error);
-            Sites::default()
-        });
+        let state = State::load(Ok(profile.sites()), false);
+        if let Some(error) = state.warning() {
+            warnings.push(error.to_owned());
+        }
+        let sites = state.sites().clone();
         let (entries, warning) = Self::choices(sites);
         warnings.extend(warning);
-        Self { entries, warnings }
+        Self {
+            entries,
+            warnings,
+            state: Rc::new(RefCell::new(state)),
+        }
     }
 
-    fn choices(sites: Sites) -> (Vec<(SharedString, Target)>, Option<String>) {
+    pub fn choices(sites: Sites) -> (Vec<(SharedString, Target)>, Option<String>) {
         let warning = sites.default.validate_connection(false).err();
         let default = if warning.is_some() {
             Target::default()

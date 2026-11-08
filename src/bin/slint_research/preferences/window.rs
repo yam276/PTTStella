@@ -25,7 +25,8 @@ impl Preferences {
             return;
         }
         if self.ui.upgrade().is_some_and(|u| {
-            u.get_native_composing()
+            u.get_sites_open()
+                || u.get_native_composing()
                 || u.get_editor_composing()
                 || u.get_login_open()
                 || u.get_paste_open()
@@ -263,11 +264,20 @@ impl Preferences {
                 EventResult::Propagate
             }
         });
+        window.on_manage_sites({
+            let weak = Rc::downgrade(self);
+            move || {
+                if let Some(o) = weak.upgrade() {
+                    o.handoff.set(Some(Handoff::Sites));
+                    o.request_close();
+                }
+            }
+        });
         window.on_manage_account({
             let weak = Rc::downgrade(self);
             move || {
                 if let Some(o) = weak.upgrade() {
-                    o.account_handoff.set(true);
+                    o.handoff.set(Some(Handoff::Account));
                     o.request_close();
                 }
             }
@@ -319,6 +329,8 @@ impl Preferences {
         Ok(window)
     }
     fn localize(&self, w: &SettingsWindow) {
+        w.set_sites_label(msg!("sites-title").into());
+        w.set_sites_available(self.ui.upgrade().is_some_and(|u| u.get_sites_available()));
         let t = |key: &str| pttstella::i18n::application().loader().get(key);
         let mut labels: Vec<String> = [
             "settings-center-title",
@@ -503,8 +515,13 @@ impl Preferences {
         }
         if let Some(ui) = self.ui.upgrade() {
             ui.set_settings_open(false);
-            if self.account_handoff.replace(false) && !self.stopped.get() {
-                ui.invoke_login_show();
+            if let Some(handoff) = self.handoff.replace(None)
+                && !self.stopped.get()
+            {
+                match handoff {
+                    Handoff::Account => ui.invoke_login_show(),
+                    Handoff::Sites => ui.invoke_sites_show(),
+                }
             }
         }
     }

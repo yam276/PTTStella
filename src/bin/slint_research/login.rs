@@ -55,7 +55,11 @@ impl Login {
             let login = login.clone();
             move || {
                 let Some(ui) = login.ui.upgrade() else { return };
-                if login.job.borrow().is_some() || ui.get_paste_open() || ui.get_switching_station()
+                if ui.get_sites_open()
+                    || ui.get_settings_open()
+                    || login.job.borrow().is_some()
+                    || ui.get_paste_open()
+                    || ui.get_switching_station()
                 {
                     return;
                 }

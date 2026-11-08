@@ -13,12 +13,16 @@ use slint::{ComponentHandle, Timer, TimerMode};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
-    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
+#[derive(Clone, Copy)]
+enum Handoff {
+    Account,
+    Sites,
+}
 type Apply = Box<dyn Fn(&AppSettings) -> Result<(), String>>;
-type Saved = Arc<Mutex<Option<Result<AppSettings, String>>>>;
+type Saved = crate::file_job::ResultSlot<AppSettings>;
 struct InFlight {
     draft: AppSettings,
     result: Saved,
@@ -37,7 +41,7 @@ pub struct Preferences {
     timer: Timer,
     composing: Cell<bool>,
     closing: Cell<bool>,
-    account_handoff: Cell<bool>,
+    handoff: Cell<Option<Handoff>>,
     export_pending: Cell<bool>,
     failed: Cell<bool>,
     stopped: Cell<bool>,
@@ -58,7 +62,7 @@ impl Preferences {
             timer: Timer::default(),
             composing: Cell::new(false),
             closing: Cell::new(false),
-            account_handoff: Cell::new(false),
+            handoff: Cell::new(None),
             export_pending: Cell::new(false),
             failed: Cell::new(false),
             stopped: Cell::new(false),
@@ -86,19 +90,11 @@ impl Preferences {
                 }
             }
         });
-        ui.window().on_close_requested({
-            let weak = Rc::downgrade(&owner);
-            move || {
-                // Hide the owned secondary window before Slint decides whether
-                // the last application window has closed. finish() drains writes.
-                if let Some(owner) = weak.upgrade() {
-                    owner.account_handoff.set(false);
-                    owner.hide();
-                }
-                slint::CloseRequestResponse::HideWindow
-            }
-        });
         owner
+    }
+    pub fn prepare_app_close(&self) {
+        self.handoff.set(None);
+        self.hide();
     }
     pub fn app(&self) -> AppSettings {
         self.model.borrow().app().clone()
@@ -193,7 +189,7 @@ impl Preferences {
             self.pending.replace(Some(draft));
             return;
         };
-        let result = Arc::new(Mutex::new(None));
+        let result = Saved::new();
         self.inflight.replace(Some(InFlight {
             draft: draft.clone(),
             result: result.clone(),
@@ -202,14 +198,7 @@ impl Preferences {
         let weak = Rc::downgrade(self);
         self.output.work(
             &ui,
-            move || {
-                let saved = store.save_from(&baseline, draft);
-                let mut slot = result
-                    .lock()
-                    .map_err(|_| "settings result lock poisoned".to_owned())?;
-                *slot = Some(saved.clone());
-                saved
-            },
+            move || result.publish(store.save_from(&baseline, draft)),
             move |_, _, _| {
                 if let Some(owner) = weak.upgrade() {
                     if let Err(error) = owner.collect(true) {
@@ -233,12 +222,7 @@ impl Preferences {
         let Some(job) = self.inflight.borrow_mut().take() else {
             return Ok(());
         };
-        let result = match job.result.lock() {
-            Ok(mut slot) => slot
-                .take()
-                .unwrap_or_else(|| Err("settings worker finished without a result".to_owned())),
-            Err(_) => Err("settings result lock poisoned".to_owned()),
-        };
+        let result = job.result.take();
         match result {
             Ok(saved) => {
                 let mut model = self.model.borrow_mut();

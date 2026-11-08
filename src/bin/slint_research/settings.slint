@@ -66,6 +66,9 @@ export component SettingsWindow inherits Window {
     callback retry;
     callback close-settings;
     callback manage-account;
+    callback manage-sites;
+    in property <string> sites-label;
+    in property <bool> sites-available;
     callback font-preset;
     callback custom-font;
     callback profile(bool);
@@ -105,6 +108,7 @@ export component SettingsWindow inherits Window {
                         if root.matches.length==0: Text { text:root.labels[2];color:#d7dce5;wrap:word-wrap; }
                     }
                     if root.query=="" && root.page==0: VerticalLayout {
+                        if root.sites-available: Button {text:root.sites-label;clicked=>{root.manage-sites();}}
                         Text {text:root.labels[3];color:#d7dce5;}
                         ComboBox {model:root.languages;current-index<=>root.language;selected=>{root.edit();}}
                         Text {text:root.labels[4];color:#d7dce5;wrap:word-wrap;}
