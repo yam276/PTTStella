@@ -3,6 +3,10 @@ use serde::Serialize;
 use url::Url;
 pub mod hover;
 #[cfg(feature = "desktop-services")]
+pub mod video_stream;
+#[cfg(feature = "desktop-services")]
+pub mod probe_server;
+#[cfg(feature = "desktop-services")]
 mod http;
 
 #[cfg(feature = "desktop-services")]

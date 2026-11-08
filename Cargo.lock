@@ -4924,6 +4924,7 @@ dependencies = [
  "fluent-syntax",
  "font-kit",
  "futures-util",
+ "getrandom 0.3.4",
  "i18n-embed",
  "i18n-embed-fl",
  "image",

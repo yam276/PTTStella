@@ -11,11 +11,12 @@ default-run = "pttstella"
 [features]
 default = []
 desktop = ["desktop-services", "dep:base64", "dep:dioxus", "dep:dioxus-icons", "dep:winresource"]
-desktop-services = ["dep:png", "dep:arboard", "dep:tokio", "dep:tokio-tungstenite", "dep:russh", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser", "dep:rfd", "dep:tempfile", "dep:directories", "dep:reqwest", "dep:imagesize", "credential-store", "dep:font-kit", "dep:time", "dep:image", "dep:semver"]
+desktop-services = ["dep:getrandom", "dep:png", "dep:arboard", "dep:tokio", "dep:tokio-tungstenite", "dep:russh", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser", "dep:rfd", "dep:tempfile", "dep:directories", "dep:reqwest", "dep:imagesize", "credential-store", "dep:font-kit", "dep:time", "dep:image", "dep:semver"]
 
 credential-store = ["dep:security-framework", "dep:keyring", "dep:tokio"]
 
 [dependencies]
+getrandom = { version = "=0.3.4", optional = true }
 semver = { version = "=1.0.28", optional = true }
 arboard = { version = "=3.7.0", default-features = false, features = ["image-data"], optional = true }
 png = { version = "=0.18.1", optional = true }
