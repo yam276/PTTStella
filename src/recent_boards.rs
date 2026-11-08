@@ -3,7 +3,11 @@ use crate::{board_navigation::BoardName, navigation, screen::Frame};
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "desktop-services")]
+pub mod session;
+#[cfg(feature = "desktop-services")]
 pub mod store;
+#[cfg(feature = "desktop-services")]
+pub mod writer;
 pub const LIMIT: usize = 20;
 pub const MAX_BYTES: usize = 4096;
 

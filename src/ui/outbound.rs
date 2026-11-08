@@ -156,11 +156,7 @@ pub(super) enum ToastKind {
     Success,
 }
 
-#[derive(Serialize)]
-pub(super) struct RecentBoardsPacket {
-    pub boards: Vec<pttstella::board_navigation::BoardName>,
-    pub notice: Option<String>,
-}
+pub(super) use pttstella::recent_boards::session::Snapshot as RecentBoardsPacket;
 
 #[derive(Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
