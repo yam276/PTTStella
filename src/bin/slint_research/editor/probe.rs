@@ -48,6 +48,53 @@ fn set_body(ui: &TerminalWindow, body: &str) -> Result<(), String> {
         "body edit rejected",
     )
 }
+fn verify_language(ui: &TerminalWindow, owner: &Editor, directory: &Path) -> Result<(), String> {
+    use pttstella::i18n::{Language, application};
+    let snapshot = || {
+        let document = owner.document.borrow();
+        let d = document.as_ref().ok_or("language draft missing")?;
+        let viewport = owner.viewport.borrow();
+        Ok::<_, String>((
+            d.source().to_owned(),
+            d.title().to_owned(),
+            d.version(),
+            d.selection(),
+            d.mode(),
+            viewport.top,
+            viewport.left,
+        ))
+    };
+    let original = snapshot()?;
+    let pixels = ui.global::<EditorState>().get_pixels();
+    let focus = ui.get_editor_body_focused();
+    let mut previous = application().language();
+    for (language, save_label, capture_name) in [
+        (Language::English, "Save now", "language-en-editor.png"),
+        (
+            Language::TraditionalChinese,
+            "立即保存",
+            "language-zh-editor.png",
+        ),
+    ] {
+        application().select(language);
+        crate::locale::refresh(ui);
+        crate::locale::refresh_statuses(ui, previous);
+        owner.refresh_language();
+        require(
+            snapshot()? == original
+                && ui.global::<EditorState>().get_pixels() == pixels
+                && ui.get_editor_body_focused() == focus,
+            "locale changed document/history/selection/viewport/pixels/focus",
+        )?;
+        require(
+            ui.global::<crate::UiLabels>().get_editor_save() == save_label,
+            "open editor chrome retained old language",
+        )?;
+        capture(ui, directory, capture_name)?;
+        previous = language;
+    }
+    std::fs::write(directory.join("language-editor.json"), br#"{"status":"passed","source_title_version_selection_mode_viewport_pixels_focus_unchanged":true,"scope":"actual editor widgets; direct diagnostic language change through production refresh methods, not persisted settings or OS input"}"#).map_err(|e|e.to_string())
+}
 fn point(ui: &TerminalWindow, col: f32, row: f32) -> slint::LogicalPosition {
     let b = ui.get_editor_grid_bounds();
     slint::LogicalPosition::new(b.x + b.width * col / 79., b.y + b.height * row / 23.)
@@ -219,6 +266,7 @@ async fn verify(ui: &TerminalWindow, owner: &Rc<Editor>, directory: &Path) -> Re
             "title not in shared undo",
         )?;
         ui.invoke_editor_edit_key(5);
+        verify_language(ui, owner, directory)?;
         // The real body TouchArea resolves either half of a Chinese character.
         let before_selection_image = ui.global::<EditorState>().get_pixels();
         let a = point(ui, 0.1, 0.5);

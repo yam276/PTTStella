@@ -94,9 +94,9 @@ impl Storage {
             let saved = match self.commands.send(Command::Close(final_edit, done)).await {
                 Ok(()) => wait
                     .await
-                    .map_err(|_| "草稿儲存工作未確認結束".to_string())
+                    .map_err(|_| pttstella::msg!("slint-draft-worker-unconfirmed"))
                     .and_then(|r| r),
-                Err(_) => Err("草稿儲存工作已停止".to_string()),
+                Err(_) => Err(pttstella::msg!("slint-draft-worker-stopped")),
             };
             let joined = task.await.map_err(|e| e.to_string()).and_then(|r| r);
             saved.and(joined)

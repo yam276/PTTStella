@@ -56,14 +56,6 @@ impl Media {
         probe: bool,
         preferences: pttstella::settings::preferences::Preferences,
     ) -> Rc<Self> {
-        ui.set_media_close_label(msg!("close").into());
-        ui.set_media_retry_label(msg!("retry").into());
-        ui.set_media_external_label(msg!("media-external").into());
-        ui.set_media_fit_label(msg!("media-fit").into());
-        ui.set_media_original_label(msg!("media-original").into());
-        ui.set_media_copy_label(msg!("context-copy-picture").into());
-        ui.set_media_save_label(msg!("context-save-picture").into());
-        ui.set_media_copy_url_label(msg!("context-copy-link").into());
         let owner = Rc::new(Self {
             ui: ui.as_weak(),
             connection,

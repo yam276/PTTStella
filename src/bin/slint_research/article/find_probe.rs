@@ -82,6 +82,49 @@ pub fn start(
                     == [(5, 6, 8), (6, 0, 2), (6, 3, 5)],
                 "independent Chinese cell ranges differ",
             )?;
+            // Changing language must not rebuild/search the index, consume a
+            // synthetic preedit, reveal another hit, or send station input.
+            let find_state = || {
+                let core = owner.core.borrow();
+                let find = core.find();
+                (
+                    find.version(),
+                    find.data_version(),
+                    find.query().to_owned(),
+                    find.reply(0).active,
+                    find.reply(0).total,
+                )
+            };
+            let original_find = find_state();
+            ui.set_find_composing(true);
+            let mut previous = pttstella::i18n::application().language();
+            for (language, title) in [
+                (pttstella::i18n::Language::English, "Find in article"),
+                (
+                    pttstella::i18n::Language::TraditionalChinese,
+                    "在文章中尋找",
+                ),
+            ] {
+                pttstella::i18n::application().select(language);
+                crate::locale::refresh(&ui);
+                crate::locale::refresh_statuses(&ui, previous);
+                owner.refresh_language();
+                require(
+                    find_state() == original_find
+                        && ui.get_find_query() == "中"
+                        && ui.get_find_composing()
+                        && ui.get_find_focused()
+                        && owner.requests.get() == 0,
+                    "language changed active query/index/preedit/focus or sent a page",
+                )?;
+                require(
+                    ui.get_find_title() == title && ui.get_find_status() == "1 / 3",
+                    "localized search chrome/status differs",
+                )?;
+                previous = language;
+            }
+            ui.set_find_composing(false);
+            std::fs::write(directory.join("language-find.json"),br#"{"status":"passed","query_index_active_total_preedit_focus_requests_unchanged":true,"scope":"actual search widgets; synthetic preedit and direct diagnostic language selection through production refresh methods"}"#).map_err(|e|e.to_string())?;
             tokio::time::sleep(Duration::from_millis(80)).await;
             verification::capture(&ui, &directory, "chinese-find.png")?;
             // Retain an accepted edit across deactivation without searching or

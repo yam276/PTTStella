@@ -289,17 +289,20 @@ impl Tools {
                     (
                         Command::Pan,
                         if ui.get_pan_mode() {
-                            "選取文字"
+                            pttstella::msg!("slint-select-text")
                         } else {
-                            "拖曳捲動"
-                        }
-                        .into(),
+                            pttstella::msg!("slint-drag-scroll")
+                        },
                         ready,
                     ),
                     (Command::Zoom(1.), "100%".into(), true),
                     (Command::Zoom(1.25), "125%".into(), true),
                     (Command::Zoom(1.5), "150%".into(), true),
-                    (Command::Fullscreen, "全螢幕".into(), true),
+                    (
+                        Command::Fullscreen,
+                        pttstella::msg!("menu-fullscreen"),
+                        true,
+                    ),
                 ]);
             }
             2 => {

@@ -1,3 +1,5 @@
+export { UiLabels } from "labels.slint";
+import { UiLabels } from "labels.slint";
 export { SettingsWindow, SettingsMatch, FontSource } from "settings.slint";
 import { AboutSlint, Button, CheckBox, ComboBox, LineEdit, TextEdit } from "std-widgets.slint";
 import { LoginPopup } from "login.slint";
@@ -20,6 +22,7 @@ export component TerminalWindow inherits Window {
     in property <bool> settings-available;
     in property <bool> settings-open;
     callback settings-show;
+    in-out property <int> output-choice;
     changed settings-open => {root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
 
     out property <bool> station-color-open:StationColorState.open;
@@ -430,7 +433,7 @@ export component TerminalWindow inherits Window {
             HorizontalLayout {
                 spacing: 8px;
                 Text {
-                    text: root.article-active ? "PTTStella  /  文章閱讀" : "PTTStella  /  80 × 24";
+                    text: root.article-active ? UiLabels.article-heading : "PTTStella  /  80 × 24";
                     color: #e3e8ee;
                     font-weight: 700;
                     vertical-alignment: center;
@@ -439,9 +442,9 @@ export component TerminalWindow inherits Window {
                 Button { text: "100%"; clicked => { root.zoom = 1; } }
                 Button { text: "125%"; clicked => { root.zoom = 1.25; } }
                 Button { text: "150%"; clicked => { root.zoom = 1.5; } }
-                Button { text: "全螢幕"; clicked => { root.toggle-fullscreen(); } }
-                if EditorState.available: Button {text:"本機草稿";clicked=>{EditorState.action(0);} }
-                Button { text: "關於"; clicked => { root.show-about = !root.show-about; } }
+                Button { text: UiLabels.fullscreen; clicked => { root.toggle-fullscreen(); } }
+                if EditorState.available: Button {text:UiLabels.local-drafts;clicked=>{EditorState.action(0);} }
+                Button { text: UiLabels.about; clicked => { root.show-about = !root.show-about; } }
             }
             if root.media-available: HorizontalLayout {
                 spacing:8px;
@@ -511,7 +514,7 @@ export component TerminalWindow inherits Window {
                     grid-input := TextInput {
                         enabled: !root.editor-open && !root.station-color-open;
                         visible: root.terminal-input;
-                        accessible-label: "終端輸入";
+                        accessible-label: UiLabels.terminal-input;
                         x: raster.x + root.caret-left;
                         y: raster.y + root.caret-top;
                         width: min(220px, viewport.content-width - self.x);
@@ -625,9 +628,9 @@ export component TerminalWindow inherits Window {
 
             if root.article-load-available: HorizontalLayout {
                 Text { text: root.article-load-status; color: #b7c1ce; horizontal-stretch: 1; vertical-alignment: center; }
-                if root.article-load-active || root.article-load-can-resume: Button { text: root.article-load-active ? "取消載入" : root.article-load-next-segment ? "載入下一段" : "繼續載入"; clicked => { root.article-load-action(!root.article-load-active); } }
+                if root.article-load-active || root.article-load-can-resume: Button { text: root.article-load-active ? UiLabels.cancel-load : root.article-load-next-segment ? UiLabels.next-section : UiLabels.resume-load; clicked => { root.article-load-action(!root.article-load-active); } }
             }
-            if root.article-station: Button { text: "返回網頁閱讀"; clicked => { root.article-resume-reading(); } }
+            if root.article-station: Button { text: UiLabels.resume-reading; clicked => { root.article-resume-reading(); } }
             if !root.terminal-input && !root.session-active && !root.article-active: HorizontalLayout {
                 spacing: 8px;
                 compose := LineEdit {
@@ -645,7 +648,7 @@ export component TerminalWindow inherits Window {
                     enabled: !root.switching-station;
                 }
                 Button {
-                    text: "連線";
+                    text: UiLabels.connect;
                     enabled: !root.switching-station && selector.current-index >= 0;
                     clicked => { root.switch-station(selector.current-index); }
                 }
@@ -660,12 +663,12 @@ export component TerminalWindow inherits Window {
             if root.output-available: HorizontalLayout {
                 spacing: 8px;
                 output-selector := ComboBox {
-                    model: ["複製文字", "複製 ANSI", "匯出整頁 PNG", "匯出選取行 PNG（最多24行）", "複製整頁 PNG", "複製選取行 PNG（最多24行）", "全選", "清除選取"];
-                    current-index: 0;
+                    model: UiLabels.output-actions;
+                    current-index <=> root.output-choice;
                     enabled: !root.output-busy;
                 }
-                Button { text: "執行"; enabled: !root.output-busy && (output-selector.current-index > 1 || root.selection-active) && ((output-selector.current-index != 3 && output-selector.current-index != 5) || root.selection-rows-ready); clicked => { root.output-action(output-selector.current-index); } }
-                if !root.article-active: Button { text: root.pan-mode ? "選取文字" : "拖曳捲動"; clicked => { root.pan-mode = !root.pan-mode; } }
+                Button { text: UiLabels.execute; enabled: !root.output-busy && (output-selector.current-index > 1 || root.selection-active) && ((output-selector.current-index != 3 && output-selector.current-index != 5) || root.selection-rows-ready); clicked => { root.output-action(output-selector.current-index); } }
+                if !root.article-active: Button { text: root.pan-mode ? UiLabels.select-text : UiLabels.drag-scroll; clicked => { root.pan-mode = !root.pan-mode; } }
             }
             if root.terminal-input: HorizontalLayout {
                 spacing: 8px;
@@ -709,7 +712,7 @@ export component TerminalWindow inherits Window {
                     horizontal-stretch: 1;
                 }
                 if root.show-reconnect: Button {
-                    text: "重新連線";
+                    text: UiLabels.reconnect;
                     enabled: root.can-reconnect;
                     clicked => { root.reconnect(); }
                 }

@@ -84,8 +84,6 @@ impl Paste {
             send_job: RefCell::new(None),
             closed: Cell::new(false),
         });
-        ui.set_paste_cancel_label(msg!("cancel").into());
-        ui.set_paste_send_label(msg!("paste-send").into());
         ui.on_paste_confirm({
             let (weak, paste) = (ui.as_weak(), paste.clone());
             move || {

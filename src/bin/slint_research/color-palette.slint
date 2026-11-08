@@ -1,8 +1,9 @@
+import { UiLabels } from "labels.slint";
 // Shared native 16/8 palette. The consumer owns the source lease and transaction.
 export component ColorPalette inherits Rectangle {
     in property <bool> interactive:true;
     in property <bool> embedded;
-    in property <string> hint:"Esc 返回 · 方向鍵選色 · Enter 套用";
+    in property <string> hint:UiLabels.palette-hint;
     property <[color]> colors:[#000000,#800000,#008000,#808000,#000080,#800080,#008080,#c0c0c0,#808080,#ff0000,#00ff00,#ffff00,#0000ff,#ff00ff,#00ffff,#ffffff];
     out property <color> preview-foreground:root.colors[root.foreground-index];
     out property <color> preview-background:root.colors[root.background-index];

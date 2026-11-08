@@ -7,6 +7,7 @@ mod graphics;
 mod ime_probe;
 mod inline_engine;
 mod keep_alive;
+mod locale;
 mod login;
 mod loopback;
 mod media;
@@ -532,6 +533,7 @@ fn run(
             .select()?;
     }
     let ui = TerminalWindow::new()?;
+    locale::refresh(&ui);
     let quit_requested = Rc::new(Cell::new(false));
     ui.on_app_quit({
         let quit_requested = quit_requested.clone();
@@ -1084,6 +1086,7 @@ fn run(
                     let previous = previous.clone();
                     let output = output_owner.as_ref().map(Rc::downgrade);
                     let editor = editor_owner.as_ref().map(Rc::downgrade);
+                    let context = context_owner.as_ref().map(Rc::downgrade);
                     let article = article_session_owner.as_ref().map(Rc::downgrade);
                     let media = Rc::downgrade(media);
                     let weak = ui.as_weak();
@@ -1114,6 +1117,19 @@ fn run(
                         }
                         pttstella::i18n::application().select(settings.language);
                         if let Some(ui) = weak.upgrade() {
+                            if changed.language != settings.language {
+                                locale::refresh(&ui);
+                                locale::refresh_statuses(&ui, changed.language);
+                                if let Some(context) = context.as_ref().and_then(|o| o.upgrade()) {
+                                    context.refresh_labels();
+                                }
+                                if let Some(article) = article.as_ref().and_then(|o| o.upgrade()) {
+                                    article.refresh_language();
+                                }
+                                if let Some(editor) = editor.as_ref().and_then(|o| o.upgrade()) {
+                                    editor.refresh_language();
+                                }
+                            }
                             ui.set_tools_opacity(settings.tools_opacity.percent() as f32 / 100.);
                             ui.set_tools_visible(settings.tools_access.show_floating_button);
                             ui.set_tools_right_click(settings.tools_access.right_click_menu);

@@ -66,16 +66,6 @@ impl StationColor {
             closed: Cell::new(false),
         });
         let state = ui.global::<StationColorState>();
-        state.set_labels(crate::palette::labels());
-        state.set_title(pttstella::msg!("editor-color-title").into());
-        state.set_help(pttstella::msg!("editor-color-help").into());
-        state.set_foreground_label(pttstella::msg!("editor-color-foreground").into());
-        state.set_background_label(pttstella::msg!("editor-color-background").into());
-        state.set_sample(pttstella::msg!("editor-color-sample").into());
-        state.set_hint(pttstella::msg!("editor-color-palette-hint").into());
-        state.set_reset_label(pttstella::msg!("editor-color-reset").into());
-        state.set_cancel_label(pttstella::msg!("editor-color-cancel").into());
-        state.set_apply_label(pttstella::msg!("editor-color-apply").into());
         state.on_action({
             let o = owner.clone();
             move |code| match code {

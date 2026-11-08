@@ -423,6 +423,7 @@ impl Preferences {
     pub(crate) fn refresh_labels(&self) {
         if let Some(w) = self.window.borrow().as_ref() {
             self.localize(w);
+            w.invoke_search(w.get_query());
         }
     }
     fn edited(self: &Rc<Self>) {

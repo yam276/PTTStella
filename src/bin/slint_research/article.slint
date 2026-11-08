@@ -1,3 +1,4 @@
+import { UiLabels } from "labels.slint";
 import { SelectionRect } from "selection.slint";
 export struct InlineArrow { index:int, stamp:string, x:length, y:length, size:length, opened:bool }
 export struct InlinePicture { index:int, key:int, stamp:string, x:length, y:length, width:length, height:length, image-y:length, image-height:length, source-y:int, source-height:int, source-width:int, image:image, status:string }
@@ -126,7 +127,7 @@ export component ArticleViewport inherits Rectangle {
             TouchArea {
                 enabled:!root.blocked;
                 mouse-cursor:MouseCursor.pointer;
-                accessible-role:button;accessible-label:"開啟完整圖片預覽";
+                accessible-role:button;accessible-label:UiLabels.preview-image;
                 private property <length> down-x;
                 private property <length> down-y;
                 private property <bool> tap-dragged;
@@ -157,7 +158,7 @@ export component ArticleViewport inherits Rectangle {
             TouchArea {
                 enabled:!root.blocked;
                 mouse-cursor:MouseCursor.pointer;
-                accessible-role:button;accessible-label:"展開這張圖片";
+                accessible-role:button;accessible-label:UiLabels.expand-image;
                 private property <length> down-x;
                 private property <length> down-y;
                 private property <bool> tap-dragged;
@@ -264,7 +265,7 @@ export component ArticleViewport inherits Rectangle {
         visible: root.native-input;
         x: max(0px, root.text-left); y: 0px;
         width: root.composing ? min(220px, root.body-width) : 1px; height: root.line-height;
-        accessible-label: "文章中的站端輸入";
+        accessible-label: UiLabels.article-input;
         color: #e3e8ee;
         font-size: max(8px, root.line-height * 0.85);
         text-cursor-width: 0px;

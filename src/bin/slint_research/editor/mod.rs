@@ -298,17 +298,24 @@ impl Editor {
             })
             .map_err(|e| e.to_string())?,
         ));
-        let state = ui.global::<EditorState>();
-        state.set_palette_labels(crate::palette::labels());
-        state.set_foreground_label(pttstella::msg!("editor-color-foreground").into());
-        state.set_background_label(pttstella::msg!("editor-color-background").into());
-        state.set_selection_labels(ModelRc::new(VecModel::from(vec![
-            pttstella::msg!("draft-select-text").into(),
-            pttstella::msg!("draft-select-line").into(),
-            pttstella::msg!("draft-select-rectangle").into(),
-        ])));
         owner.availability();
         Ok(owner)
+    }
+    pub fn refresh_language(&self) {
+        if let Some(ui) = self.ui.upgrade()
+            && let Some(d) = self.document.borrow().as_ref()
+            && let Ok(p) = d.position(d.selection().head)
+        {
+            ui.global::<EditorState>().set_position(
+                pttstella::msg!(
+                    "slint-draft-position",
+                    row = (p.row + 1).to_string(),
+                    column = (p.col + 1).to_string(),
+                    lines = d.rows().len().to_string()
+                )
+                .into(),
+            );
+        }
     }
     fn notice(&self, text: impl Into<slint::SharedString>) {
         if let Some(ui) = self.ui.upgrade() {
@@ -324,7 +331,7 @@ impl Editor {
                 true
             }
             Err(_) => {
-                self.notice("草稿工作忙碌，請稍後再試");
+                self.notice(pttstella::msg!("slint-draft-busy"));
                 false
             }
         }
@@ -396,7 +403,7 @@ impl Editor {
         state.set_selected(false);
         state.set_can_create(false);
         state.set_transfer_confirm(false);
-        state.set_status("讀取草稿…".into());
+        state.set_status(pttstella::msg!("draft-loading").into());
         // This is an explicit Open action, including accessibility activation
         // from a background window. Match settings: activate the host as well
         // as its widget, while startup itself continues without taking focus.
@@ -474,7 +481,7 @@ impl Editor {
                         .map(|e| DraftItem {
                             id: e.id.clone().into(),
                             title: if e.title.is_empty() {
-                                "（無標題）".into()
+                                pttstella::msg!("draft-untitled").into()
                             } else {
                                 e.title.clone().into()
                             },
@@ -484,7 +491,7 @@ impl Editor {
                 )));
                 state.set_can_create(*can_create);
                 state.set_busy(false);
-                self.notice("選擇草稿，或從完整站端範本建立");
+                self.notice(pttstella::msg!("slint-draft-choose"));
             }
             Reply::Selected { token, entry } => {
                 match Document::new(*token, entry.title.clone(), entry.body.clone()) {
@@ -499,7 +506,7 @@ impl Editor {
                         state.set_selection_mode(0);
                         state.set_selected(true);
                         state.set_busy(false);
-                        state.set_status("本機編輯，不會自動送到站端".into());
+                        state.set_status(pttstella::msg!("slint-draft-local").into());
                         self.paint();
                         ui.invoke_focus_editor();
                         if entry.revision == 0 {
@@ -530,9 +537,9 @@ impl Editor {
                     if current {
                         self.edited_at.set(None);
                         self.notice(if *conflicted {
-                            "已保存為衝突副本"
+                            pttstella::msg!("draft-conflict-saved")
                         } else {
-                            "已保存"
+                            pttstella::msg!("draft-saved")
                         });
                     }
                     if current && self.closing.get() {
@@ -553,7 +560,7 @@ impl Editor {
                     .collect::<Vec<_>>();
                 state.set_drafts(ModelRc::new(VecModel::from(retained)));
                 state.set_busy(false);
-                self.notice("已刪除草稿");
+                self.notice(pttstella::msg!("draft-deleted"));
             }
             _ => {}
         }
@@ -610,7 +617,7 @@ impl Editor {
     fn changed(self: &Rc<Self>) {
         self.dismiss_palette(false);
         self.edited_at.set(Some(Instant::now()));
-        self.notice("尚未保存");
+        self.notice(pttstella::msg!("draft-unsaved"));
         if let Some(ui) = self.ui.upgrade() {
             ui.global::<EditorState>().set_transfer_confirm(false);
         }
@@ -668,13 +675,13 @@ impl Editor {
             self.debounce.stop();
             self.offered_at.set(Some(Instant::now()));
             if self.storage.borrow().edits.send(Some(edit)).is_err() {
-                self.notice("草稿保存工作已停止");
+                self.notice(pttstella::msg!("slint-draft-worker-stopped"));
                 self.closing.set(false);
             } else {
-                self.notice("保存中…");
+                self.notice(pttstella::msg!("draft-saving"));
             }
         } else if explicit {
-            self.notice("已保存");
+            self.notice(pttstella::msg!("draft-saved"));
         }
     }
     fn mode(&self, mode: i32) {
@@ -858,7 +865,9 @@ impl Editor {
             1 | 2 => {
                 let result = (|| {
                     let document = self.document.borrow();
-                    let d = document.as_ref().ok_or("沒有開啟草稿")?;
+                    let d = document
+                        .as_ref()
+                        .ok_or_else(|| pttstella::msg!("slint-draft-no-document"))?;
                     let ranges = self.viewport.borrow().ranges(d)?;
                     let text = ranges
                         .iter()
@@ -963,7 +972,7 @@ impl Editor {
             height: (height * dpi).clamp(1., 8192.) as u32,
         };
         if u64::from(size.width) * u64::from(size.height) > 16 * 1024 * 1024 {
-            self.notice("編輯區尺寸超過繪圖上限");
+            self.notice(pttstella::msg!("slint-draft-render-limit"));
             return;
         }
         let view = self.viewport.borrow();
@@ -995,7 +1004,13 @@ impl Editor {
                     && p.row < view.top + ROWS,
             );
             state.set_position(
-                format!("{}:{} · {} 行", p.row + 1, p.col + 1, d.rows().len()).into(),
+                pttstella::msg!(
+                    "slint-draft-position",
+                    row = (p.row + 1).to_string(),
+                    column = (p.col + 1).to_string(),
+                    lines = d.rows().len().to_string()
+                )
+                .into(),
             );
         }
         match view.highlights(d) {

@@ -14,12 +14,6 @@ use std::{rc::Rc, time::Duration};
 
 impl ArticleSession {
     pub(super) fn install_find(self: &Rc<Self>, ui: &TerminalWindow) {
-        ui.set_find_title(pttstella::msg!("article-find-title").into());
-        ui.set_find_placeholder(pttstella::msg!("article-find-placeholder").into());
-        ui.set_find_hint(pttstella::msg!("article-find-hint").into());
-        ui.set_find_previous_label(pttstella::msg!("article-find-previous").into());
-        ui.set_find_next_label(pttstella::msg!("article-find-next").into());
-        ui.set_find_close_label(pttstella::msg!("article-find-close").into());
         ui.on_find_action({
             let owner = Rc::downgrade(self);
             move |action| {
@@ -210,13 +204,15 @@ impl ArticleSession {
             )
         };
         ui.set_find_available(available);
+        // Status has localized text even when the search/version is unchanged.
+        // Keep the query, pending draft, focus and reveal position intact.
+        ui.set_find_status(status.into());
         if self.find_version.replace(version) == version {
             return;
         }
         let was_open = ui.get_find_open();
         let had_focus = ui.get_find_focused();
         ui.set_find_open(opened);
-        ui.set_find_status(status.into());
         ui.set_find_has_matches(any);
         if !opened {
             self.find_timer.stop();

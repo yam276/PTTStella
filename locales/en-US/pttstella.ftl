@@ -883,3 +883,45 @@ slint-font-face-status = Requested: Latin { $requested_ascii } / CJK { $requeste
 slint-menu-about = About PTTStella Slint
 
 slint-menu-services = Services
+
+slint-article-heading = PTTStella  /  Article reading
+
+slint-execute = Run
+
+slint-select-text = Select text
+
+slint-drag-scroll = Drag to scroll
+
+slint-terminal-input = Terminal input
+
+slint-article-input = Station input in article
+
+slint-preview-image = Open full image preview
+
+slint-expand-image = Expand this image
+
+slint-stop-requested = Stopping…
+
+slint-cancel-job = Cancel task
+
+slint-draft-color-hint = Select text, then right-click to color
+
+slint-resume-reading = Return to article reading
+
+slint-clear-selection = Clear selection
+
+slint-draft-position = { $row }:{ $column } · { $lines } lines
+
+slint-draft-busy = Draft storage is busy; try again shortly
+
+slint-draft-choose = Choose a draft or create one from the full station template
+
+slint-draft-local = Editing locally; nothing is sent to the station automatically
+
+slint-draft-worker-stopped = Draft storage worker stopped
+
+slint-draft-worker-unconfirmed = Draft storage worker did not confirm completion
+
+slint-draft-no-document = No draft is open
+
+slint-draft-render-limit = Editor dimensions exceed the rendering limit

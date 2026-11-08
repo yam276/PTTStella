@@ -269,7 +269,7 @@ async fn disk(
         || {
             !owner.closing.get()
                 && !state.get_status().is_empty()
-                && state.get_status().as_str() != "保存中…"
+                && state.get_status().as_str() != pttstella::msg!("draft-saving")
         },
         "storage failure did not reach the actual UI",
     )
@@ -284,7 +284,7 @@ async fn disk(
     )?;
     let message = state.get_status().to_string();
     require(
-        message != "已保存" && message != "尚未保存",
+        message != pttstella::msg!("draft-saved") && message != pttstella::msg!("draft-unsaved"),
         "storage error was not surfaced",
     )?;
     let rejected = std::fs::read(path).map_err(|e| e.to_string())?;
@@ -360,7 +360,8 @@ async fn concurrent(
     };
     set_body(ui, body)?;
     save(ui, owner).await?;
-    let conflict = ui.global::<EditorState>().get_status().as_str() == "已保存為衝突副本";
+    let conflict =
+        ui.global::<EditorState>().get_status().as_str() == pttstella::msg!("draft-conflict-saved");
     require(
         conflict == (case == Case::SameB),
         "wrong cross-process conflict notice",
@@ -369,7 +370,7 @@ async fn concurrent(
         set_body(ui, &format!("{body}\n副本後續修改"))?;
         save(ui, owner).await?;
         require(
-            ui.global::<EditorState>().get_status().as_str() == "已保存",
+            ui.global::<EditorState>().get_status().as_str() == pttstella::msg!("draft-saved"),
             "second edit did not continue the existing conflict copy",
         )?;
     }

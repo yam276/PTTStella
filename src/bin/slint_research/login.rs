@@ -45,14 +45,6 @@ impl Login {
             generation: Cell::new(None),
             submitting: Cell::new(None),
         });
-        ui.set_login_label(msg!("login").into());
-        ui.set_login_title(msg!("login-title").into());
-        ui.set_login_account_label(msg!("account").into());
-        ui.set_login_password_label(msg!("password").into());
-        ui.set_login_remember_label(msg!("login-remember").into());
-        ui.set_login_forget_label(msg!("login-forget").into());
-        ui.set_login_cancel_label(msg!("cancel").into());
-        ui.set_login_cancel_attempt_label(msg!("login-cancel-attempt").into());
         ui.on_login_limit_text(|text, maximum| {
             text.chars()
                 .take(maximum.clamp(0, 72) as usize)

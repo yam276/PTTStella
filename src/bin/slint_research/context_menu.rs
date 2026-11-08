@@ -398,6 +398,21 @@ impl ContextMenu {
         ui.set_context_pending(false);
         ui.invoke_focus_context();
     }
+    pub fn refresh_labels(&self) {
+        if let Some(ui) = self.ui.upgrade()
+            && let Some(menu) = self.menu.borrow().as_ref()
+        {
+            ui.set_context_entries(ModelRc::new(VecModel::from(
+                menu.entries
+                    .iter()
+                    .map(|e| MenuEntry {
+                        label: label(e.action).into(),
+                        enabled: e.enabled,
+                    })
+                    .collect::<Vec<_>>(),
+            )));
+        }
+    }
     fn update(&self) {
         let Some(ui) = self.ui.upgrade() else { return };
         if self.closed.get() {

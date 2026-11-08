@@ -459,6 +459,39 @@ impl ArticleSession {
         }
         self.notify.notify_one();
     }
+    pub fn refresh_language(&self) {
+        self.find_sync_ui();
+        if let Some(ui) = self.ui.upgrade() {
+            self.refresh_load_label(&ui);
+        }
+    }
+    fn refresh_load_label(&self, ui: &TerminalWindow) {
+        let progress = self.core.borrow().reading_progress();
+        let label = progress.map_or_else(String::new, |(_, first, last, state)| {
+            use pttstella::article_cache::LoadState;
+            let lines = last.saturating_sub(first).saturating_add(1).to_string();
+            match state {
+                Some(LoadState::Loading) if !ui.get_native_foreground() => {
+                    pttstella::msg!("article-load-paused-background", lines = lines)
+                }
+                Some(LoadState::Loading) if !self.allowed(ui) => {
+                    pttstella::msg!("article-load-paused-interaction", lines = lines)
+                }
+                Some(LoadState::Loading) => pttstella::msg!("article-load-loading", lines = lines),
+                Some(LoadState::Complete) => {
+                    pttstella::msg!("article-load-complete", lines = lines)
+                }
+                Some(LoadState::Cancelled) => {
+                    pttstella::msg!("article-load-cancelled", lines = lines)
+                }
+                Some(LoadState::Stopped) => pttstella::msg!("article-load-stopped", lines = lines),
+                Some(LoadState::Changed) => pttstella::msg!("article-load-changed"),
+                Some(LoadState::Limit) => pttstella::msg!("article-load-limit", lines = lines),
+                None => String::new(),
+            }
+        });
+        ui.set_article_load_status(label.into());
+    }
     fn step(self: &Rc<Self>, view: &View) {
         if self.closed.get() {
             return;
@@ -491,30 +524,7 @@ impl ArticleSession {
                     )
                 }),
         );
-        let label = progress.map_or_else(String::new, |(_, first, last, state)| {
-            use pttstella::article_cache::LoadState;
-            let lines = last.saturating_sub(first).saturating_add(1).to_string();
-            match state {
-                Some(LoadState::Loading) if !ui.get_native_foreground() => {
-                    pttstella::msg!("article-load-paused-background", lines = lines)
-                }
-                Some(LoadState::Loading) if !self.allowed(&ui) => {
-                    pttstella::msg!("article-load-paused-interaction", lines = lines)
-                }
-                Some(LoadState::Loading) => pttstella::msg!("article-load-loading", lines = lines),
-                Some(LoadState::Complete) => {
-                    pttstella::msg!("article-load-complete", lines = lines)
-                }
-                Some(LoadState::Cancelled) => {
-                    pttstella::msg!("article-load-cancelled", lines = lines)
-                }
-                Some(LoadState::Stopped) => pttstella::msg!("article-load-stopped", lines = lines),
-                Some(LoadState::Changed) => pttstella::msg!("article-load-changed"),
-                Some(LoadState::Limit) => pttstella::msg!("article-load-limit", lines = lines),
-                None => String::new(),
-            }
-        });
-        ui.set_article_load_status(label.into());
+        self.refresh_load_label(&ui);
         // Match the Dioxus surface: dispatch the next verified station request
         // before projecting/rasterizing the UI. Painting cannot pace the fetch.
         if !self.busy.get() && self.allowed(&ui) && view.phase == Phase::Connected {

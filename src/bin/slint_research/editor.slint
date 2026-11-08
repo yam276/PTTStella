@@ -1,3 +1,4 @@
+import { UiLabels } from "labels.slint";
 import { Button, ComboBox, ScrollView } from "std-widgets.slint";
 import { ColorPalette } from "color-palette.slint";
 import { SelectionRect } from "selection.slint";
@@ -83,21 +84,21 @@ export component NativeEditor inherits Rectangle {
     VerticalLayout {
         padding:12px;spacing:8px;
         HorizontalLayout {
-            Text { text:"本機草稿 · " + EditorState.scope; color:#c7d4e7;vertical-alignment:center;horizontal-stretch:1;overflow:elide; }
-            Button {text:"保存";enabled:EditorState.selected && !EditorState.composing;clicked=>{EditorState.action(1);} }
-            Button {text:"帶回站端";enabled:EditorState.can-transfer && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(2);} }
-            if EditorState.source-busy: Button {text:EditorState.source-cancelling ? "停止中…" : "取消工作";enabled:!EditorState.source-cancelling;clicked=>{EditorState.action(9);} }
-            Button {text:"關閉";enabled:!EditorState.busy && !EditorState.composing;clicked=>{EditorState.action(3);} }
+            Text { text:UiLabels.local-drafts + " · " + EditorState.scope; color:#c7d4e7;vertical-alignment:center;horizontal-stretch:1;overflow:elide; }
+            Button {text:UiLabels.editor-save;enabled:EditorState.selected && !EditorState.composing;clicked=>{EditorState.action(1);} }
+            Button {text:UiLabels.editor-transfer;enabled:EditorState.can-transfer && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(2);} }
+            if EditorState.source-busy: Button {text:EditorState.source-cancelling ? UiLabels.editor-stop : UiLabels.editor-cancel-job;enabled:!EditorState.source-cancelling;clicked=>{EditorState.action(9);} }
+            Button {text:UiLabels.editor-close;enabled:!EditorState.busy && !EditorState.composing;clicked=>{EditorState.action(3);} }
         }
         Rectangle {
             visible:!EditorState.selected;min-height:0px;max-height:EditorState.selected ? 0px : 100000px;vertical-stretch:1;
             VerticalLayout {
-            Button { text:"從目前範本建立";enabled:EditorState.can-create && !EditorState.busy;clicked=>{EditorState.choose("");} }
+            Button { text:UiLabels.editor-new;enabled:EditorState.can-create && !EditorState.busy;clicked=>{EditorState.choose("");} }
             ScrollView {
                 VerticalLayout {
                     for item in EditorState.drafts: HorizontalLayout {min-height:38px;max-height:38px;
-                        Button { text:item.title + (item.conflict ? " · 衝突副本" : "");horizontal-stretch:1;enabled:!EditorState.busy;clicked=>{EditorState.choose(item.id);} }
-                        Button { text:"刪除";enabled:!EditorState.busy;clicked=>{EditorState.delete(item.id);} }
+                        Button { text:item.title + (item.conflict ? " · " + UiLabels.editor-conflict : "");horizontal-stretch:1;enabled:!EditorState.busy;clicked=>{EditorState.choose(item.id);} }
+                        Button { text:UiLabels.editor-delete;enabled:!EditorState.busy;clicked=>{EditorState.delete(item.id);} }
                     }
                 }
             }
@@ -107,25 +108,25 @@ export component NativeEditor inherits Rectangle {
           visible:EditorState.selected;min-height:0px;max-height:EditorState.selected ? 100000px : 0px;vertical-stretch:1;
           VerticalLayout { spacing:8px;
         HorizontalLayout {
-            Text {horizontal-stretch:0;text:"標題";color:#cad5e5;vertical-alignment:center;}
+            Text {horizontal-stretch:0;text:UiLabels.editor-title;color:#cad5e5;vertical-alignment:center;}
             Rectangle {
                 background:#080c12;min-height:30px;horizontal-stretch:1;
                 title-field := TextInput {
                     x:8px;y:3px;width:parent.width - 16px;height:parent.height - 6px;
                     text <=> EditorState.title;single-line:true;color:#e3e8ee;
                     enabled:!EditorState.busy && !EditorState.transfer-confirm && !EditorState.palette-open;
-                    accessible-label:"草稿標題";
+                    accessible-label:UiLabels.editor-title;
                     edited=>{EditorState.title-edit(self.text);}
                 }
             }
-            ComboBox {preferred-width:120px;max-width:150px; model:["彩色","隱藏色碼","原文"];current-index:EditorState.mode;enabled:!EditorState.composing && !EditorState.busy;selected(value)=>{EditorState.mode-edit(self.current-index);} }
-            Button {text:"復原";enabled:EditorState.can-undo && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(4);} }
-            Button {text:"重做";enabled:EditorState.can-redo && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(5);} }
+            ComboBox {preferred-width:120px;max-width:150px; model:UiLabels.editor-modes;current-index:EditorState.mode;enabled:!EditorState.composing && !EditorState.busy;selected(value)=>{EditorState.mode-edit(self.current-index);} }
+            Button {text:UiLabels.editor-undo;enabled:EditorState.can-undo && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(4);} }
+            Button {text:UiLabels.editor-redo;enabled:EditorState.can-redo && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(5);} }
         }
         HorizontalLayout {
-            ComboBox {accessible-label:"框選方式";preferred-width:180px;max-width:220px;model:EditorState.selection-labels;current-index:EditorState.selection-mode;enabled:!EditorState.composing && !EditorState.busy && !EditorState.palette-open;selected(value)=>{EditorState.selection-edit(self.current-index);} }
-            Button {text:"色票";enabled:!EditorState.composing && !EditorState.busy;clicked=>{EditorState.palette-request(-1,-1);} }
-            Text {text:"選取後按右鍵上色";color:#9ab0ca;vertical-alignment:center;horizontal-stretch:1;}
+            ComboBox {accessible-label:UiLabels.editor-selection;preferred-width:180px;max-width:220px;model:EditorState.selection-labels;current-index:EditorState.selection-mode;enabled:!EditorState.composing && !EditorState.busy && !EditorState.palette-open;selected(value)=>{EditorState.selection-edit(self.current-index);} }
+            Button {text:UiLabels.editor-palette;enabled:!EditorState.composing && !EditorState.busy;clicked=>{EditorState.palette-request(-1,-1);} }
+            Text {text:UiLabels.editor-color-hint;color:#9ab0ca;vertical-alignment:center;horizontal-stretch:1;}
         }
         area := Rectangle {
             vertical-stretch:1;clip:true;background:black;
@@ -145,7 +146,7 @@ export component NativeEditor inherits Rectangle {
                         width:parent.width;height:parent.height;font-size:max(8px,area.unit*1.7);
                         color:#e3e8ee;single-line:true;text-cursor-width:EditorState.caret-visible ? 1px : 0px;
                         enabled:!EditorState.busy && !EditorState.transfer-confirm && !EditorState.palette-open;
-                        accessible-label:"草稿正文輸入";
+                        accessible-label:UiLabels.editor-body;
                         edited=>{ if EditorState.insert(self.text) {self.text="";} }
                     }
                 }
@@ -187,9 +188,9 @@ export component NativeEditor inherits Rectangle {
           }
         }
         if EditorState.transfer-confirm: HorizontalLayout {
-            Text {text:"確認以本機正文取代站端範本？完成後請在站端檢查。";color:#ffcf77;wrap:word-wrap;horizontal-stretch:1;}
-            Button {text:"確認帶回";enabled:!EditorState.busy;clicked=>{EditorState.action(6);} }
-            Button {text:"取消";enabled:!EditorState.busy;clicked=>{EditorState.action(7);} }
+            Text {text:UiLabels.editor-confirm;color:#ffcf77;wrap:word-wrap;horizontal-stretch:1;}
+            Button {text:UiLabels.editor-confirm-transfer;enabled:!EditorState.busy;clicked=>{EditorState.action(6);} }
+            Button {text:UiLabels.editor-cancel;enabled:!EditorState.busy;clicked=>{EditorState.action(7);} }
         }
         HorizontalLayout {
             Text {text:EditorState.status;color:#c7d4e7;horizontal-stretch:1;overflow:elide;}

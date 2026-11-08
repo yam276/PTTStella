@@ -416,6 +416,10 @@ pub fn mount(
     let weak = ui.as_weak();
     let mut updates = connection.updates.clone();
     Ok(slint::spawn_local(async move {
+        // Connection messages commonly persist across hundreds of byte/frame
+        // updates. Resolve their canonical locale once per message/language,
+        // rather than formatting both catalogs for every screen update.
+        let mut message_cache: Option<(pttstella::i18n::Language, String, String)> = None;
         while let Some(ui) = weak.upgrade() {
             let (message, can_reconnect, frame) = {
                 let view = updates.borrow_and_update();
@@ -442,7 +446,17 @@ pub fn mount(
                 (view.message.clone(), can_reconnect, frame)
             };
             if connecting.get().is_none() {
-                ui.set_result(message.into());
+                let language = pttstella::i18n::application().language();
+                if message_cache
+                    .as_ref()
+                    .is_none_or(|(l, raw, _)| *l != language || raw != &message)
+                {
+                    let localized = crate::locale::connection_status(&message);
+                    message_cache = Some((language, message, localized));
+                }
+                if let Some((_, _, localized)) = &message_cache {
+                    ui.set_result(localized.as_str().into());
+                }
             }
             ui.set_can_reconnect(can_reconnect);
             ui.set_switching_station(connecting.get().is_some());

@@ -8,8 +8,6 @@ pub(super) enum Change {
 }
 impl Media {
     pub(super) fn mount_preferences(self: &Rc<Self>, ui: &TerminalWindow) {
-        ui.set_media_auto_label(msg!("auto-expand-images").into());
-        ui.set_media_auto_help(msg!("auto-expand-images-help").into());
         let enabled = self.preferences.app().auto_expand_images;
         ui.set_media_auto_enabled(enabled);
         ui.set_media_auto_choice(enabled);

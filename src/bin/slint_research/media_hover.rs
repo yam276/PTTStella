@@ -20,13 +20,6 @@ pub(super) fn index(position: HoverPosition) -> i32 {
 }
 impl Media {
     pub(super) fn mount_hover(self: &Rc<Self>, ui: &TerminalWindow) {
-        ui.set_media_hover_label(msg!("hover-position").into());
-        ui.set_media_hover_help(msg!("hover-help").into());
-        ui.set_media_hover_choices(slint::ModelRc::new(slint::VecModel::from(vec![
-            msg!("hover-top-right").into(),
-            msg!("hover-follow").into(),
-            msg!("close").into(),
-        ])));
         let value = index(self.preferences.model.borrow().app().hover);
         ui.set_media_hover_position(value);
         ui.set_media_hover_choice(value);
