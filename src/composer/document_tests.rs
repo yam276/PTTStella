@@ -489,3 +489,27 @@ fn stale_and_inconsistent_shapes_are_rejected_without_changing_selection_or_hist
     assert_eq!(doc.selection(), primary);
     assert_eq!(doc.revision(), 1);
 }
+
+#[test]
+fn rectangle_beyond_short_or_empty_rows_cannot_delete_the_intervening_newline() {
+    for source in ["\n\n", "A\nB"] {
+        let mut doc = document(source);
+        let primary = Selection {
+            anchor: doc.row_start(1).unwrap() - 1,
+            head: source.len(),
+        };
+        let shape = SelectionShape::Rectangle {
+            anchor: Position { row: 0, col: 10 },
+            head: Position { row: 1, col: 12 },
+            mode: Mode::Color,
+        };
+        doc.select_with_shape(doc.version(), primary, shape)
+            .unwrap();
+        assert!(doc.selected_ranges().unwrap().is_empty());
+        doc.replace_selection(doc.version(), "X").unwrap();
+        assert_eq!(doc.source(), source);
+        assert_eq!(doc.revision(), 0);
+        assert_eq!(doc.selection_shape(), shape);
+        assert!(!doc.can_undo());
+    }
+}

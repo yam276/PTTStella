@@ -340,6 +340,12 @@ impl Document {
                 }
                 return self.replace(revision, first.start..last.end, &replacement);
             }
+            // No selected glyphs (e.g. a box beyond short/empty rows) must
+            // never fall through to a linear edit that consumes newlines.
+            return Ok(Update {
+                reparsed_rows: 0,
+                reused_rows: self.cache.rows.len(),
+            });
         }
         let range = if matches!(self.shape, SelectionShape::All | SelectionShape::Lines) {
             self.selection.range()
