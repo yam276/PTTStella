@@ -9,7 +9,6 @@ pub(crate) mod diagnostics;
 mod drafts;
 mod files;
 mod files_recent;
-mod filter_import;
 mod inline_images;
 mod lifecycle;
 mod outbound;

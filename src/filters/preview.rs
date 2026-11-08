@@ -1,8 +1,8 @@
 //! One pending import preview; files are never applied without confirmation.
-use pttstella::filters::{Entry, Policy, Rules};
+use super::{Entry, Policy, Rules};
 
 #[derive(Default)]
-pub(super) struct Import {
+pub struct Import {
     request: Option<u64>,
     preview: Option<(Rules, Rules)>,
 }
@@ -30,7 +30,7 @@ impl Import {
         entries: &[Entry],
     ) -> Result<Rules, String> {
         if !self.accepts(request) {
-            return Err(pttstella::msg!("filters-import-stale"));
+            return Err(crate::msg!("filters-import-stale"));
         }
         let mut merged = current.clone();
         for entry in entries {
@@ -60,14 +60,14 @@ impl Import {
     }
     pub fn apply(&mut self, request: u64, current: &Rules) -> Result<Rules, String> {
         if !self.accepts(request) {
-            return Err(pttstella::msg!("filters-import-stale"));
+            return Err(crate::msg!("filters-import-stale"));
         }
         let Some((base, next)) = self.preview.as_ref() else {
-            return Err(pttstella::msg!("filters-import-stale"));
+            return Err(crate::msg!("filters-import-stale"));
         };
         if base != current {
             self.clear();
-            return Err(pttstella::msg!("filters-import-stale"));
+            return Err(crate::msg!("filters-import-stale"));
         }
         let next = next.clone();
         self.clear();
@@ -88,7 +88,7 @@ mod tests {
             .unwrap()
             .edit_color("Bob", "local", Policy::Allow, Some(12), false)
             .unwrap();
-        let imported = pttstella::filters::import::parse(
+        let imported = super::super::import::parse(
             b"alice=W2:imported\nBob=W:no marker\nCarol=W:shared\nDave=C9:row\nEve=B2:content",
         )
         .unwrap();

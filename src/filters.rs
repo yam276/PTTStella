@@ -7,6 +7,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 pub mod import;
+pub mod preview;
 #[cfg(feature = "desktop-services")]
 pub mod store;
 

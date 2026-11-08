@@ -245,7 +245,7 @@ async fn run(
     let initial_bookmarks = bookmarks.snapshot();
     let mut recent_clears = 0usize;
     let mut screen = SurfaceState::new(rules);
-    let mut filter_import = super::filter_import::Import::default();
+    let mut filter_import = pttstella::filters::preview::Import::default();
     let mut receiver = connection.updates.clone();
     let Resources {
         eval: owned_eval,
