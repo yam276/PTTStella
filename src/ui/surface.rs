@@ -796,7 +796,7 @@ async fn run(
                     FileCompletion::Archive{request,result}=>{match result {Ok(article)=>{checks.archive_reads+=1;Packet::Archive{request,article:Some(article),message:None}},Err(e)=>Packet::Archive{request,article:None,message:Some(e.to_string())}}},
                     FileCompletion::Bookmarks {request,result}=>{
                         if result.is_ok() {checks.bookmark_saves=checks.bookmark_saves.saturating_add(1);} else {checks.bookmark_rejected=checks.bookmark_rejected.saturating_add(1);}
-                        let feedback=bookmarks.complete(result.map_err(|e|e.to_string()));
+                        let feedback=match bookmarks.complete(result.map_err(|e|e.to_string())) {Ok(())=>Feedback::new(SaveStatus::Saved,pttstella::msg!("bookmarks-saved")),Err(error)=>Feedback::new(SaveStatus::Rejected,error)};
                         Packet::BookmarksResult {request, data:bookmarks.snapshot(), feedback}
                     },
                     FileCompletion::Clipboard(result)=>match result {
