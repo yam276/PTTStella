@@ -73,52 +73,11 @@ pub fn start(
         "native-video",
         move |ui, directory| async move {
             let checked = async {
-                if std::env::var_os("PTTSTELLA_VIDEO_PROBE_NATIVE_WAIT").is_some() {
-                    let mut active = false;
-                    for _ in 0..6_000 {
-                        if ui.get_native_foreground() { active = true; break; }
-                        tokio::time::sleep(Duration::from_millis(20)).await;
-                    }
-                    require(active, "native video probe did not receive foreground activation")?;
-                }
-            wait(
-                || {
-                    verification::foreground(&ui, true);
-                    output.current(&ui).is_some()
-                },
-                "video input never ready",
-            )
-            .await?;
-            let video = media
-                .video
-                .borrow()
-                .clone()
-                .ok_or("native video owner missing")?;
-            ui.invoke_media_request(3);
-            wait(
-                || ui.get_media_video() && ui.get_media_ready(),
-                "video did not become ready without playback",
-            )
-            .await?;
-            require(
-                !ui.get_media_playing() && ui.get_media_duration() == 0.,
-                "video autoloaded",
-            )?;
+                let video = ready(&ui, &media, &output).await?;
             if std::env::var_os("PTTSTELLA_VIDEO_PROBE_FAIL_READY").is_some() {
                 return Err("deliberate video verifier failure after renderer setup".into());
             }
-            // The diagnostic window never claims native focus at launch.
-            // Explicitly activate this toolkit gesture, then give the same
-            // production permit binding one UI turn before pressing Play.
-            // Match other full-App probes: let initial Focused/Occluded
-            // notifications settle before this explicit foreground gesture.
-            tokio::time::sleep(Duration::from_millis(300)).await;
-            let activated = std::cell::Cell::new(false);
-            wait(|| {
-                verification::foreground(&ui, true);
-                activated.replace(true) && ui.get_media_play_allowed()
-            }, "video toolkit Play was not admitted").await?;
-            ui.invoke_media_action(2);
+            play(&ui).await?;
             if std::env::var_os("PTTSTELLA_VIDEO_STALL").is_some() {
                 wait(
                     || {
@@ -252,4 +211,70 @@ pub fn start(
             .map_err(|e| e.to_string())
         },
     )
+}
+
+/// Shared explicit toolkit setup for content and lifetime probes.
+pub(super) async fn ready(
+    ui: &TerminalWindow,
+    media: &Media,
+    output: &Output,
+) -> Result<Rc<Video>, String> {
+    if std::env::var_os("PTTSTELLA_VIDEO_PROBE_NATIVE_WAIT").is_some() {
+        let mut active = false;
+        for _ in 0..6_000 {
+            if ui.get_native_foreground() {
+                active = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        require(
+            active,
+            "native video probe did not receive foreground activation",
+        )?;
+    }
+    wait(
+        || {
+            verification::foreground(ui, true);
+            output.current(ui).is_some()
+        },
+        "video input never ready",
+    )
+    .await?;
+    let video = media
+        .video
+        .borrow()
+        .clone()
+        .ok_or("native video owner missing")?;
+    ui.invoke_media_request(3);
+    wait(
+        || ui.get_media_video() && ui.get_media_ready(),
+        "video did not become ready without playback",
+    )
+    .await?;
+    require(
+        !ui.get_media_playing() && ui.get_media_duration() == 0.,
+        "video autoloaded",
+    )?;
+    Ok(video)
+}
+
+pub(super) async fn play(ui: &TerminalWindow) -> Result<(), String> {
+    // The diagnostic window never claims native focus at launch.
+    // Explicitly activate this toolkit gesture, then give the same
+    // production permit binding one UI turn before pressing Play.
+    // Match other full-App probes: let initial Focused/Occluded
+    // notifications settle before this explicit foreground gesture.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let activated = std::cell::Cell::new(false);
+    wait(
+        || {
+            verification::foreground(ui, true);
+            activated.replace(true) && ui.get_media_play_allowed()
+        },
+        "video toolkit Play was not admitted",
+    )
+    .await?;
+    ui.invoke_media_action(2);
+    Ok(())
 }

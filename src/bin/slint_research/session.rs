@@ -443,6 +443,7 @@ pub fn mount(
         let connecting = connecting.clone();
         move || {
             if let Some(ui) = weak.upgrade()
+                && !ui.get_app_closing()
                 && ui.get_can_reconnect()
                 && !ui.get_sites_open()
                 && !ui.get_settings_open()
@@ -459,7 +460,7 @@ pub fn mount(
             let Some(ui) = weak.upgrade() else {
                 return false;
             };
-            if connecting.get().is_some() {
+            if ui.get_app_closing() || connecting.get().is_some() {
                 return false;
             }
             let target = crate::sites_manager::encoding(encoding)
@@ -508,6 +509,7 @@ pub fn mount(
                             .0;
                     if connecting.get().is_none()
                         && let Some(ui) = weak.upgrade()
+                        && !ui.get_app_closing()
                         && !ui.get_sites_open()
                         && !ui.get_settings_open()
                         && let Some((_, target)) =

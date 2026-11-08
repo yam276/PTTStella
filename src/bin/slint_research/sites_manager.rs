@@ -241,6 +241,7 @@ impl Manager {
     fn open(self: &Rc<Self>) {
         let Some(ui) = self.ui.upgrade() else { return };
         if self.stopped.get()
+            || ui.get_app_closing()
             || self.output.busy()
             || ui.get_settings_open()
             || ui.get_editor_open()

@@ -304,6 +304,7 @@ fn mount_window(
         let Some(ui) = weak.upgrade() else {
             return Propagate;
         };
+        if ui.get_app_closing() && matches!(event, WindowEvent::KeyboardInput {..} | WindowEvent::Ime(_) | WindowEvent::MouseInput {..} | WindowEvent::MouseWheel {..} | WindowEvent::Touch(_)) { return PreventDefault; }
         if let WindowEvent::KeyboardInput{event,is_synthetic:false,..}=event {
             let modifiers=input.borrow().modifiers;
             let command=if cfg!(target_os="macos"){modifiers.super_key() && !modifiers.control_key()}else{modifiers.control_key() && !modifiers.super_key()};
@@ -955,7 +956,8 @@ fn refresh(ui: &TerminalWindow, input: &RefCell<Input>, connection: &Connection)
 }
 
 fn actions_available(ui: &TerminalWindow, view: &View) -> bool {
-    !ui.get_sites_open()
+    !ui.get_app_closing()
+        && !ui.get_sites_open()
         && !ui.get_settings_open()
         && !ui.get_editor_open()
         && !ui.get_station_color_open()

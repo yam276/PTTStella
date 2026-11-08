@@ -1,5 +1,7 @@
 //! Main-window native video lifetime. One session plus one replaceable pending
 //! request; GL retirement precedes cancellation/join and late status is scoped.
+#[path = "media_exit_probe.rs"]
+pub mod exit_probe;
 #[path = "media_video_probe.rs"]
 pub mod probe;
 
@@ -147,9 +149,12 @@ impl Video {
         }
     }
     fn step(&self) {
-        let Some(ui) = self.ui.upgrade() else {
-            return;
-        };
+        let ui = self.ui.upgrade();
+        // Session cleanup must continue after the root component/GL surface
+        // has gone. No new offer may be created for an absent window.
+        if ui.is_none() {
+            self.close();
+        }
         let sequence = self.current.borrow().as_ref().map(|v| v.sequence);
         if let Some(sequence) = sequence
             && self
@@ -172,7 +177,9 @@ impl Video {
                 // Unclaimed offers can be dropped here: no render context was
                 // created for them. Claimed render references retire in GL.
                 self.bridge.offer.borrow_mut().take();
-                ui.window().request_redraw();
+                if let Some(ui) = &ui {
+                    ui.window().request_redraw();
+                }
                 if self.bridge.rendered.get().is_none() {
                     live.session.stop();
                 }
@@ -180,7 +187,9 @@ impl Video {
             let state = live.session.updates().borrow().clone();
             if state.stage == Stage::Stopped {
                 let report = live.session.finish();
-                if let Err(error) = self.record(live.sequence, report) {
+                if let Err(error) = self.record(live.sequence, report)
+                    && let Some(ui) = &ui
+                {
                     ui.set_input_notice(error.into());
                 }
                 if wanted == Some(live.sequence) {
@@ -191,7 +200,10 @@ impl Video {
                 self.done.notify_waiters();
                 return;
             }
-            if wanted == Some(live.sequence) && state.stage == Stage::Ready {
+            if wanted == Some(live.sequence)
+                && state.stage == Stage::Ready
+                && let Some(ui) = &ui
+            {
                 if !live.offered {
                     match live.session.take_core() {
                         Ok(Some(core)) => {
@@ -241,6 +253,9 @@ impl Video {
             }
             return;
         }
+        let Some(ui) = ui else {
+            return;
+        };
         let pending = self.pending.borrow().clone();
         if let Some((sequence, url)) = pending {
             let weak = ui.as_weak();

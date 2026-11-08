@@ -25,7 +25,8 @@ impl Preferences {
             return;
         }
         if self.ui.upgrade().is_some_and(|u| {
-            u.get_sites_open()
+            u.get_app_closing()
+                || u.get_sites_open()
                 || u.get_native_composing()
                 || u.get_editor_composing()
                 || u.get_login_open()

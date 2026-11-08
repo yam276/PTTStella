@@ -1,3 +1,4 @@
+mod app_exit;
 mod article;
 mod chrome;
 mod clipboard;
@@ -554,18 +555,6 @@ fn run(
     let ui = TerminalWindow::new()?;
     locale::refresh(&ui);
     let quit_requested = Rc::new(Cell::new(false));
-    ui.on_app_quit({
-        let quit_requested = quit_requested.clone();
-        let weak = ui.as_weak();
-        move || {
-            quit_requested.set(true);
-            if let Err(error) = slint::quit_event_loop()
-                && let Some(ui) = weak.upgrade()
-            {
-                ui.set_input_notice(error.to_string().into());
-            }
-        }
-    });
     #[cfg(target_os = "macos")]
     let _native_menu = native_menu::Menu::mount(&ui)?;
 
@@ -1103,7 +1092,6 @@ fn run(
                 }
                 if let (Some(media), Some(article)) = (&media_owner, &article_session_owner) {
                     media.mount_inline(&ui, article);
-                    article.attach_media(media);
                     if let Some(context) = &context_owner {
                         context.attach_media(media);
                     }
@@ -1235,19 +1223,13 @@ fn run(
             })
         })
         .transpose()?;
-    ui.window().on_close_requested({
-        let preferences = media_owner.as_ref().map(|m| Rc::downgrade(&m.preferences));
-        let sites = sites_owner.as_ref().map(Rc::downgrade);
-        move || {
-            if let Some(p) = preferences.as_ref().and_then(|p| p.upgrade()) {
-                p.prepare_app_close();
-            }
-            if let Some(s) = sites.as_ref().and_then(|s| s.upgrade()) {
-                s.prepare_app_close();
-            }
-            slint::CloseRequestResponse::HideWindow
-        }
-    });
+    let app_exit = app_exit::Exit::mount(
+        &ui,
+        media_owner.as_ref(),
+        article_session_owner.as_ref(),
+        sites_owner.as_ref(),
+        quit_requested.clone(),
+    );
     let settings_shutdown_directory = if options.probe
         == Some(Probe::Session(session::Probe::Media))
         && std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").is_ok_and(|v| v == "shutdown")
@@ -1268,6 +1250,11 @@ fn run(
         .clone()
         .filter(|_| sites_owner.is_some());
     let draft_verification_directory = options.verify_drafts.clone();
+    #[cfg(feature = "native-video")]
+    let video_exit_directory = options.verify_media.clone().filter(|_| {
+        options.probe == Some(Probe::Session(session::Probe::Media))
+            && std::env::var_os("PTTSTELLA_VIDEO_PROBE_EXIT").is_some()
+    });
     let verification = if native_quit_directory.is_some() {
         None
     } else if let Some((directory, owner)) = options
@@ -1341,7 +1328,11 @@ fn run(
         let start = media::probe::start;
         #[cfg(feature = "native-video")]
         let start = if std::env::var_os("PTTSTELLA_VIDEO_FIXTURE").is_some() {
-            media::video::probe::start
+            if std::env::var_os("PTTSTELLA_VIDEO_PROBE_EXIT").is_some() {
+                media::video::exit_probe::start
+            } else {
+                media::video::probe::start
+            }
         } else {
             start
         };
@@ -1449,13 +1440,13 @@ fn run(
                     Ok(())
                 })();
                 outcome.replace(Some(result));
-                if let Err(error) = slint::quit_event_loop() {
-                    outcome.replace(Some(Err(error.into())));
+                if let Some(ui) = weak.upgrade() {
+                    ui.invoke_app_quit();
                 }
             }
         });
-        slint::run_event_loop()?;
-        ui.hide()?;
+        app_exit.run(ui)?;
+        let exit_cleanup = app_exit.finish();
         if let Some(color) = &station_color_owner {
             color.finish();
         }
@@ -1475,9 +1466,11 @@ fn run(
         if let Some(article) = &article_owner {
             article.finish();
         }
+        exit_cleanup?;
         outcome.take().ok_or("snapshot callback did not run")??;
     } else {
-        let result = ui.run();
+        let result = app_exit.run(ui);
+        let exit_cleanup = app_exit.finish();
         let editor_cleanup = editor_owner
             .as_ref()
             .map(|editor| editor.finish())
@@ -1509,7 +1502,18 @@ fn run(
                 Ok::<_, String>(())
             })
             .transpose();
-        let media_cleanup = media_owner.map(|media| media.finish()).transpose();
+        let media_cleanup = media_owner.as_ref().map(|media| media.finish()).transpose();
+        #[cfg(feature = "native-video")]
+        let video_exit_audit = video_exit_directory
+            .as_ref()
+            .map(|dir| {
+                app_exit.finish()?;
+                media::video::exit_probe::audit_closed(
+                    media_owner.as_ref().ok_or("exit media owner missing")?,
+                    dir,
+                )
+            })
+            .transpose();
         if let Some(article) = &article_session_owner {
             article.finish();
         }
@@ -1550,12 +1554,15 @@ fn run(
             }
         }
         result?;
+        exit_cleanup?;
         editor_cleanup?;
         editor_close_audit?;
         sites_cleanup?;
         sites_close_audit?;
         settings_cleanup?;
         media_cleanup?;
+        #[cfg(feature = "native-video")]
+        video_exit_audit?;
         output_cleanup?;
         paste_cleanup?;
         verification_result?;

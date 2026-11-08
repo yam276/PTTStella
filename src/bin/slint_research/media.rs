@@ -580,6 +580,7 @@ impl Media {
         Ok(())
     }
     pub async fn shutdown(&self) -> Result<(), String> {
+        self.closed.set(true);
         self.close(false);
         #[cfg(feature = "native-video")]
         {

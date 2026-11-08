@@ -24,6 +24,34 @@ impl Verification {
         F: FnOnce(TerminalWindow, PathBuf) -> Fut + 'static,
         Fut: Future<Output = Result<(), String>> + 'static,
     {
+        Self::start_inner(ui, directory, name, true, run)
+    }
+    /// A successful preparation leaves the native window for actual OS close.
+    /// Preparation errors still use the normal exit owner and remain failures.
+    #[cfg(feature = "native-video")]
+    pub fn prepare_for_native_close<F, Fut>(
+        ui: &TerminalWindow,
+        directory: PathBuf,
+        name: &'static str,
+        run: F,
+    ) -> Result<Self, Box<dyn Error>>
+    where
+        F: FnOnce(TerminalWindow, PathBuf) -> Fut + 'static,
+        Fut: Future<Output = Result<(), String>> + 'static,
+    {
+        Self::start_inner(ui, directory, name, false, run)
+    }
+    fn start_inner<F, Fut>(
+        ui: &TerminalWindow,
+        directory: PathBuf,
+        name: &'static str,
+        automatic_close: bool,
+        run: F,
+    ) -> Result<Self, Box<dyn Error>>
+    where
+        F: FnOnce(TerminalWindow, PathBuf) -> Fut + 'static,
+        Fut: Future<Output = Result<(), String>> + 'static,
+    {
         ui.window().set_size(slint::LogicalSize::new(1100., 960.));
         let outcome = Rc::new(RefCell::new(None));
         let result = outcome.clone();
@@ -33,9 +61,10 @@ impl Verification {
                 Some(ui) => run(ui, directory).await,
                 None => Err(format!("{name} probe window closed before verification")),
             };
+            let should_close = automatic_close || checked.is_err();
             result.replace(Some(checked));
-            if let Err(error) = slint::quit_event_loop() {
-                result.replace(Some(Err(error.to_string())));
+            if should_close && let Some(ui) = weak.upgrade() {
+                ui.invoke_app_quit();
             }
         })?;
         Ok(Self { job, outcome, name })
