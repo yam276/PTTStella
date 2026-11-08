@@ -298,11 +298,15 @@ fn mount_window(
     });
     let weak = ui.as_weak();
     let paste_owner = paste.clone();
+    let editor_trace = crate::editor::probe::Trace::new("native");
     ui.window().on_winit_window_event(move |_, event| {
         use EventResult::{PreventDefault, Propagate};
         let Some(ui) = weak.upgrade() else {
             return Propagate;
         };
+        if ui.get_editor_open() {
+            editor_trace.native(event);
+        }
         if let WindowEvent::KeyboardInput {event,is_synthetic:false,..}=event {
             let modal=ui.get_station_color_open() || ui.get_editor_open() && ui.global::<EditorState>().get_palette_open();
             if input.borrow_mut().modal_edge(event.physical_key,event.state==ElementState::Pressed,event.repeat,modal){return PreventDefault;}

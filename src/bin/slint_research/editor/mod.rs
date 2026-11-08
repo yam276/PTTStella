@@ -68,6 +68,7 @@ pub struct Editor {
     operation: RefCell<Option<slint::JoinHandle<()>>>,
     source_cancel: RefCell<Option<tokio::sync::oneshot::Sender<()>>>,
     palette: RefCell<Option<palette::Lease>>,
+    trace: probe::Trace,
 }
 impl Editor {
     pub fn mount(
@@ -103,6 +104,7 @@ impl Editor {
             operation: RefCell::new(None),
             source_cancel: RefCell::new(None),
             palette: RefCell::new(None),
+            trace: probe::Trace::new("document"),
         });
         ui.global::<EditorState>().on_action({
             let owner = Rc::downgrade(&owner);
@@ -447,6 +449,7 @@ impl Editor {
         self.command(Command::Choose(id));
     }
     fn reply(self: &Rc<Self>, reply: &Reply) {
+        self.trace.record("reply", || serde_json::json!({"state":match reply {Reply::Saved{..}=>"saved",Reply::Error{..}=>"error",_=>"other"}}));
         let Some(ui) = self.ui.upgrade() else { return };
         let state = ui.global::<EditorState>();
         match reply {
@@ -563,7 +566,10 @@ impl Editor {
                 return false;
             };
             let before = d.version();
-            change(d).map(|()| before != d.version())
+            let before_bytes = d.source().len();
+            let result = change(d).map(|()| before != d.version());
+            self.trace.record("edit",|| serde_json::json!({"before_bytes":before_bytes,"after_bytes":d.source().len(),"changed":result.as_ref().ok()}));
+            result
         };
         match result {
             Ok(changed) => {
@@ -587,6 +593,8 @@ impl Editor {
         }
     }
     fn insert(self: &Rc<Self>, text: &str) -> bool {
+        self.trace
+            .record("insert", || serde_json::json!({"bytes":text.len()}));
         if text.is_empty() {
             return true;
         }
@@ -792,6 +800,8 @@ impl Editor {
         }
     }
     pub fn key(self: &Rc<Self>, key: i32, extend: bool) {
+        self.trace
+            .record("key", || serde_json::json!({"code":key,"extend":extend}));
         if let Some(ui) = self.ui.upgrade()
             && (ui.get_editor_composing() || ui.global::<EditorState>().get_busy())
         {
@@ -822,6 +832,8 @@ impl Editor {
         }
     }
     fn clipboard_key(self: &Rc<Self>, code: i32) {
+        self.trace
+            .record("clipboard", || serde_json::json!({"code":code}));
         if let Some(ui) = self.ui.upgrade()
             && (ui.get_editor_composing() || ui.global::<EditorState>().get_busy())
         {
@@ -1013,6 +1025,8 @@ impl Editor {
         }
     }
     fn action(self: &Rc<Self>, code: i32) {
+        self.trace
+            .record("action", || serde_json::json!({"code":code}));
         match code {
             0 => self.open(),
             1 => self.save(true),

@@ -1,12 +1,17 @@
 //! Complete main-window editor conformance. Strict loopback, synthetic toolkit
 //! input only; native IME/clipboard and accessibility require separate OS proof.
 mod failure;
+mod store_checks;
 use super::Editor;
 use crate::{
     EditorState, TerminalWindow,
     verification::{Verification, capture, click, foreground, require, wait},
 };
 pub use failure::audit_closed;
+pub(crate) use store_checks::Trace;
+pub fn uses_storage_case() -> Result<bool, String> {
+    Ok(store_checks::case()?.is_some())
+}
 use slint::{
     ComponentHandle, Model,
     platform::{Key, PointerEventButton as Button, WindowEvent as Event},
@@ -114,8 +119,11 @@ async fn verify(ui: &TerminalWindow, owner: &Rc<Editor>, directory: &Path) -> Re
         )
         .await?;
     }
+    let storage_case = store_checks::case()?;
     let restored = std::env::var_os("PTTSTELLA_SLINT_DRAFTS_RESTORE").is_some();
-    if restored {
+    if let Some(case) = storage_case {
+        store_checks::choose(ui, case)?;
+    } else if restored {
         let drafts = ui.global::<EditorState>().get_drafts();
         require(
             drafts.row_count() == 1,
@@ -145,6 +153,9 @@ async fn verify(ui: &TerminalWindow, owner: &Rc<Editor>, directory: &Path) -> Re
     )?;
     if let Some(case) = failure_case {
         return failure::verify(ui, owner, directory, case).await;
+    }
+    if let Some(case) = storage_case {
+        return store_checks::verify(ui, owner, directory, case).await;
     }
     require(
         ui.get_terminal_pointer_blocked() && !ui.get_vim_available(),

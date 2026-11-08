@@ -99,6 +99,10 @@ pub fn with_probe(
     } else {
         None
     };
+    let storage_drafts = probe == Probe::Drafts && crate::editor::probe::uses_storage_case()?;
+    if storage_drafts && draft_failure.is_some() {
+        return Err("draft storage and station failure probes must be separate".into());
+    }
     let color_failure = if probe == Probe::EditorColor {
         match std::env::var("PTTSTELLA_STATION_COLOR_CASE")
             .ok()
@@ -147,6 +151,7 @@ pub fn with_probe(
     let fixture = match probe {
         Probe::EditorColor if color_failure.is_some() => "slint_editor_color_negative",
         Probe::EditorColor => "slint_editor_color",
+        Probe::Drafts if storage_drafts => "slint_drafts_storage",
         Probe::Drafts if draft_failure.is_some() => "slint_drafts_failure",
         Probe::Drafts if slow_drafts => "slint_drafts_slow",
         Probe::Drafts => "slint_drafts",
@@ -187,7 +192,9 @@ pub fn with_probe(
                 None => Connection::start_editor_color_probe(bytes),
             },
             Probe::Drafts => {
-                if let Some(case) = draft_failure {
+                if storage_drafts {
+                    Connection::start_drafts_storage_probe()
+                } else if let Some(case) = draft_failure {
                     Connection::start_drafts_failure_probe(case)
                 } else if slow_drafts {
                     Connection::start_drafts_slow_probe()
