@@ -5,6 +5,7 @@ pub struct Fixtures {
     png: Server,
     gif: Server,
     once: Server,
+    video: Option<Server>,
 }
 impl Fixtures {
     pub fn start(menu_probe: Option<&str>) -> Result<Self, String> {
@@ -38,11 +39,24 @@ impl Fixtures {
             png: Server::start_cached(&png)?,
             gif: Server::start(&gif, false)?,
             once: Server::start(&once, menu_probe == Some("stall"))?,
+            video: std::env::var_os("PTTSTELLA_VIDEO_FIXTURE")
+                .map(|path| {
+                    Server::start(
+                        std::path::Path::new(&path),
+                        std::env::var_os("PTTSTELLA_VIDEO_STALL").is_some(),
+                    )
+                })
+                .transpose()?,
             _files: files,
         })
     }
     pub fn page(&self) -> Vec<u8> {
-        format!("\x1b[2J\x1b[HNative image preview / owned loopback fixtures\r\n\r\nPNG {}\r\n\r\nGIF {}\r\n\r\nOnce {}\r\n\r\nClose preview before returning to BBS. No station keys are expected.",self.png.url(),self.gif.url(),self.once.url()).into_bytes()
+        let video = self
+            .video
+            .as_ref()
+            .map(|s| format!("Video {}\r\n\r\n", s.url()))
+            .unwrap_or_default();
+        format!("\x1b[2J\x1b[HNative image preview / owned loopback fixtures\r\n\r\nPNG {}\r\n\r\nGIF {}\r\n\r\nOnce {}\r\n\r\n{video}Close preview before returning to BBS. No station keys are expected.",self.png.url(),self.gif.url(),self.once.url()).into_bytes()
     }
     pub fn article_page(&self, page: usize) -> Result<Vec<u8>, String> {
         if !(1..=2).contains(&page) {
@@ -68,9 +82,10 @@ impl Fixtures {
         let png = self.png.finish()?;
         let gif = self.gif.finish()?;
         let once = self.once.finish()?;
+        let video = self.video.as_mut().map(Server::finish).transpose()?;
         eprintln!(
             "{}",
-            serde_json::json!({"native_media_http":{"png":png,"gif":gif,"once":once}})
+            serde_json::json!({"native_media_http":{"png":png,"gif":gif,"once":once,"video":video}})
         );
         Ok(())
     }

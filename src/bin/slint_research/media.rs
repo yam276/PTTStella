@@ -7,6 +7,9 @@ mod preferences;
 mod preferences_probe;
 #[path = "media_probe.rs"]
 pub mod probe;
+#[cfg(feature = "native-video")]
+#[path = "media_video.rs"]
+pub(crate) mod video;
 use crate::{
     TerminalWindow,
     media_worker::{Command, State, Worker},
@@ -43,6 +46,8 @@ pub struct Media {
     candidate: RefCell<Option<Scope>>,
     settings: RefCell<pttstella::settings::AppSettings>,
     store: pttstella::settings::store::Store,
+    #[cfg(feature = "native-video")]
+    video: RefCell<Option<Rc<video::Video>>>,
 }
 impl Media {
     pub fn mount(
@@ -79,7 +84,16 @@ impl Media {
             candidate: RefCell::new(None),
             settings: RefCell::new(settings),
             store,
+            #[cfg(feature = "native-video")]
+            video: RefCell::new(None),
         });
+        #[cfg(feature = "native-video")]
+        match video::Video::mount(ui, Rc::downgrade(&owner)) {
+            Ok(video) => {
+                owner.video.replace(Some(video));
+            }
+            Err(error) => ui.set_input_notice(error.into()),
+        }
         ui.on_media_request({
             let owner = owner.clone();
             move |index| owner.open(index)
@@ -256,6 +270,10 @@ impl Media {
                     .and_then(|i| i.original(&scope));
                 self.begin_original(&ui, scope, Presentation::Inspect, original)
             }
+            #[cfg(feature = "native-video")]
+            Ok(Some(target)) if target.kind == Kind::Video && self.video.borrow().is_some() => {
+                self.begin_video(&ui, scope);
+            }
             Ok(_) => ui.invoke_link_activated(scope.link.url.into()),
             Err(e) => ui.set_input_notice(e.into()),
         }
@@ -277,6 +295,11 @@ impl Media {
             Ok(Some(target)) if target.kind == Kind::Image => target,
             _ => return,
         };
+        #[cfg(feature = "native-video")]
+        if let Some(video) = self.video.borrow().as_ref() {
+            video.close();
+        }
+        ui.set_media_video(false);
         let previous = self.active.borrow().clone();
         let promote = presentation == Presentation::Inspect
             && self.presentation.get() == Presentation::Hover
@@ -416,6 +439,21 @@ impl Media {
             self.close(false);
             return;
         }
+        #[cfg(feature = "native-video")]
+        if ui.get_media_video() {
+            match action {
+                1 => self.begin_video(&ui, scope),
+                2 => {
+                    if let Some(video) = self.video.borrow().as_ref() {
+                        video.toggle();
+                    }
+                }
+                3 => ui.invoke_link_activated(scope.link.url.into()),
+                6 => self.picture_output(&ui, &scope, 6),
+                _ => {}
+            }
+            return;
+        }
         let command = match action {
             1 => {
                 match media::classify(&scope.link.url) {
@@ -491,6 +529,13 @@ impl Media {
             self.close(false);
             return;
         }
+        #[cfg(feature = "native-video")]
+        if ui.get_media_video() {
+            if let Some(video) = self.video.borrow().as_ref() {
+                video.permit(ui.get_media_play_allowed());
+            }
+            return;
+        }
         if let Some(worker) = self.worker.borrow().as_ref() {
             worker.scope(scope.sequence, ui.get_media_play_allowed());
         }
@@ -498,6 +543,10 @@ impl Media {
     fn close(&self, focus: bool) {
         self.dwell.stop();
         self.candidate.borrow_mut().take();
+        #[cfg(feature = "native-video")]
+        if let Some(video) = self.video.borrow().as_ref() {
+            video.close();
+        }
         let active = self.active.borrow_mut().take();
         if active.is_none() {
             return;
@@ -513,6 +562,7 @@ impl Media {
         if let Some(ui) = self.ui.upgrade() {
             ui.set_media_hover_open(false);
             ui.set_media_open(false);
+            ui.set_media_video(false);
             ui.set_media_ready(false);
             ui.set_media_image(slint::Image::default());
             ui.set_media_animated(false);
@@ -528,6 +578,10 @@ impl Media {
         }
         self.closed.set(true);
         self.close(false);
+        #[cfg(feature = "native-video")]
+        if let Some(video) = self.video.borrow().as_ref() {
+            video.finish()?;
+        }
         if let Some(task) = self.task.borrow_mut().take() {
             task.abort();
         }
@@ -535,5 +589,59 @@ impl Media {
             worker.finish()?;
         }
         Ok(())
+    }
+    pub async fn shutdown(&self) -> Result<(), String> {
+        self.close(false);
+        #[cfg(feature = "native-video")]
+        {
+            let video = self.video.borrow().clone();
+            if let Some(video) = video {
+                video.shutdown().await?;
+            }
+        }
+        Ok(())
+    }
+    #[cfg(feature = "native-video")]
+    fn video_valid(&self, sequence: u64) -> bool {
+        let scope = self.active.borrow().clone();
+        let Some(ui) = self.ui.upgrade() else {
+            return false;
+        };
+        scope.is_some_and(|scope| scope.sequence == sequence && self.valid(&ui, &scope))
+    }
+    #[cfg(feature = "native-video")]
+    fn begin_video(&self, ui: &TerminalWindow, mut scope: Scope) {
+        if !self.output.renew_media(ui, &mut scope) {
+            return;
+        }
+        let Some(sequence) = self.sequence.get().checked_add(1) else {
+            ui.set_input_notice(msg!("media-sequence-exhausted").into());
+            return;
+        };
+        self.close(false);
+        self.sequence.set(sequence);
+        scope.sequence = sequence;
+        self.active.replace(Some(scope.clone()));
+        self.presentation.set(Presentation::Inspect);
+        self.output.revoke();
+        self.output.prepare_context(ui);
+        ui.invoke_reset_keyboard();
+        ui.set_media_key(sequence.to_string().into());
+        ui.set_media_url(scope.link.url.clone().into());
+        ui.set_media_image(slint::Image::default());
+        ui.set_media_animated(false);
+        ui.set_media_playing(false);
+        ui.set_media_ready(false);
+        ui.set_media_video(true);
+        ui.set_media_position(0.);
+        ui.set_media_duration(0.);
+        ui.set_media_motion_label(msg!("video-play").into());
+        ui.set_media_status(msg!("video-ready").into());
+        ui.set_media_open(true);
+        ui.invoke_focus_media();
+        ui.invoke_inline_updated();
+        if let Some(video) = self.video.borrow().as_ref() {
+            video.open(sequence, scope.link.url);
+        }
     }
 }

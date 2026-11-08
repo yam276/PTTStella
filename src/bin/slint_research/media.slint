@@ -1,4 +1,4 @@
-import {Button} from "std-widgets.slint";
+import {Button, Slider} from "std-widgets.slint";
 import {ContextMenuOverlay} from "context-menu.slint";
 export component MediaPreview inherits Rectangle {
     in property <image> pixels;
@@ -6,6 +6,14 @@ export component MediaPreview inherits Rectangle {
     in property <string> url;
     in property <string> status;
     in property <bool> ready;
+    in property <bool> video;
+    in property <float> position;
+    in property <float> duration;
+    out property <length> video-left: view.absolute-position.x;
+    out property <length> video-top: view.absolute-position.y;
+    out property <length> video-width: view.width;
+    out property <length> video-height: view.height;
+    callback seek(float);
     in property <bool> busy;
     in property <string> copy-label;
     in property <string> save-label;
@@ -34,7 +42,7 @@ export component MediaPreview inherits Rectangle {
     property <length> menu-x;
     property <length> menu-y;
     function open-menu(x:length,y:length) {
-        if !root.busy && root.foreground {
+        if !root.video && !root.busy && root.foreground {
             root.dragging=false;root.menu-x=x;root.menu-y=y;
             root.menu-index=root.ready ? 0 : 2;root.menu-open=true;menu.focus-menu();
         }
@@ -71,9 +79,9 @@ export component MediaPreview inherits Rectangle {
                 Text {text:root.url;color:#cdd9e8;overflow:elide;}
                 Text {text:root.status;color:#e9edf4;wrap:word-wrap;}
                 view := Rectangle {vertical-stretch:1;min-height:100px;clip:true;background:#080a0e;
-                    Image {source:root.pixels;width:root.pixels.width * root.actual * 1px;height:root.pixels.height * root.actual * 1px;
+                    if !root.video: Image {source:root.pixels;width:root.pixels.width * root.actual * 1px;height:root.pixels.height * root.actual * 1px;
                         x:(parent.width - self.width)/2 + root.pan-x;y:(parent.height - self.height)/2 + root.pan-y;image-fit:fill;}
-                    pointer := TouchArea {enabled:root.ready && root.foreground;
+                    pointer := TouchArea {enabled:!root.video && root.ready && root.foreground;
                         pointer-event(event) => {
                             if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
                                 root.open-menu(view.x + 12px + self.mouse-x,view.y + 12px + self.mouse-y);
@@ -87,16 +95,22 @@ export component MediaPreview inherits Rectangle {
                         scroll-event(event) => {root.zoom-by(event.delta-y > 0px ? 1.1 : 1/1.1,self.mouse-x,self.mouse-y);return accept;}
                     }
                 }
-                HorizontalLayout {spacing:6px;
+                if !root.video: HorizontalLayout {spacing:6px;
                     Button {text:"−";enabled:root.ready;clicked=>{root.zoom-by(1/1.25,view.width/2,view.height/2);}}
                     Button {text:"+";enabled:root.ready;clicked=>{root.zoom-by(1.25,view.width/2,view.height/2);}}
                     Button {text:root.fit-label;enabled:root.ready;clicked=>{root.fit=true;root.pan-x=0px;root.pan-y=0px;}}
                     Button {text:root.original-label;enabled:root.ready;clicked=>{root.fit=false;root.scale=1;root.pan-x=0px;root.pan-y=0px;}}
                     if root.animated: Button {text:root.motion-label;enabled:root.ready;clicked=>{root.action(2);}}
                 }
+                if root.video: HorizontalLayout {spacing:6px;
+                    Button {text:root.motion-label;enabled:root.ready && root.foreground && !root.busy;clicked=>{root.action(2);}}
+                    Slider {minimum:0;maximum:max(1,root.duration);value:root.position;enabled:root.duration > 0 && root.foreground && !root.busy;
+                        changed(value)=>{root.seek(value);} }
+                    Text {text:round(root.position) + " / " + round(root.duration) + " s";color:#cdd9e8;vertical-alignment:center;}
+                }
                 HorizontalLayout {spacing:6px;
-                    Button {text:root.copy-label;enabled:root.ready && !root.busy;clicked=>{root.action(4);}}
-                    Button {text:root.save-label;enabled:root.ready && !root.busy;clicked=>{root.action(5);}}
+                    if !root.video: Button {text:root.copy-label;enabled:root.ready && !root.busy;clicked=>{root.action(4);}}
+                    if !root.video: Button {text:root.save-label;enabled:root.ready && !root.busy;clicked=>{root.action(5);}}
                     Button {text:root.copy-url-label;enabled:!root.busy;clicked=>{root.action(6);}}
                 }
                 HorizontalLayout {spacing:6px;

@@ -457,8 +457,14 @@ fn run(
     connection: Option<(session::Mode, Rc<Connection>)>,
     settings: AppSettings,
 ) -> Result<(), Box<dyn Error>> {
+    #[cfg(feature = "native-video")]
+    slint::BackendSelector::new()
+        .backend_name("winit".into())
+        .renderer_name("skia".into())
+        .require_opengl_with_version(3, 3)
+        .select()?;
     // The macOS fixture used less physical memory with Skia's CPU compositor.
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", not(feature = "native-video")))]
     if std::env::var_os("SLINT_BACKEND").is_none() {
         slint::BackendSelector::new()
             .backend_name("winit-skia-software".into())
@@ -929,6 +935,7 @@ fn run(
                 }
                 if let (Some(media), Some(article)) = (&media_owner, &article_session_owner) {
                     media.mount_inline(&ui, article);
+                    article.attach_media(media);
                     if let Some(context) = &context_owner {
                         context.attach_media(media);
                     }
@@ -971,7 +978,14 @@ fn run(
                 .join("settings.json"),
         )?)
     } else if let Some(directory) = options.verify_media {
-        Some(media::probe::start(
+        let start = media::probe::start;
+        #[cfg(feature = "native-video")]
+        let start = if std::env::var_os("PTTSTELLA_VIDEO_FIXTURE").is_some() {
+            media::video::probe::start
+        } else {
+            start
+        };
+        Some(start(
             &ui,
             media_owner
                 .as_ref()

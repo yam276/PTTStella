@@ -63,6 +63,7 @@ pub struct ArticleSession {
     find_serial: Cell<u64>,
     find_version: Cell<u64>,
     pub requests: Cell<usize>,
+    close_media: RefCell<Option<std::rc::Weak<crate::media::Media>>>,
 }
 impl ArticleSession {
     pub fn mount(
@@ -77,6 +78,7 @@ impl ArticleSession {
         let mut core = SurfaceState::new(filters::Rules::default());
         core.set_article_mode(mode);
         let owner = Rc::new(Self {
+            close_media: RefCell::new(None),
             ui: ui.as_weak(),
             connection,
             core: Rc::new(RefCell::new(core)),
@@ -214,6 +216,17 @@ impl ArticleSession {
                     let closer = owner.clone();
                     match slint::spawn_local(async move {
                         closer.shutdown().await;
+                        let media = closer
+                            .close_media
+                            .borrow()
+                            .as_ref()
+                            .and_then(|m| m.upgrade());
+                        if let Some(media) = media
+                            && let Err(error) = media.shutdown().await
+                        {
+                            closer.notice(error);
+                            return;
+                        }
                         if let Some(ui) = closer.ui.upgrade() {
                             let _ = ui.hide();
                         }
@@ -231,6 +244,9 @@ impl ArticleSession {
             }
         });
         Ok(owner)
+    }
+    pub fn attach_media(&self, media: &Rc<crate::media::Media>) {
+        self.close_media.replace(Some(Rc::downgrade(media)));
     }
     fn allowed(&self, ui: &TerminalWindow) -> bool {
         ui.get_article_reading_ready()
