@@ -534,6 +534,7 @@ context-copy = Copy selected text
 context-copy-ansi = Copy with ANSI colours
 context-copy-link = Copy full URL
 context-open-link = Open link / preview image
+context-open-link-external = Open link in browser
 context-select-link = Select full URL
 context-select-all = Select page text
 context-export-rows = Export selected rows as PNG…
@@ -868,64 +869,38 @@ draft-title-invalid = The title must be nonempty, contain no controls, and fit w
 
 draft-editor-unavailable = Unable to start the local composer. Continue in the PTT editor.
 
-context-open-link-external = Open link in browser
-
 draft-stop-requested = Stop requested; nothing will be resent. The station may contain partial changes. Check its screen; your local draft is retained.
 
 editor-color-palette-hint = Arrows choose colours · Tab for Apply · Esc cancels
-
 editor-color-working = Verifying and applying colours…
-
 editor-color-stop-requested = Stop requested; sent colour codes may remain. Check the station screen.
 
 slint-font-face-status = Requested: Latin { $requested_ascii } / CJK { $requested_cjk }. Drawing faces: { $ascii } / { $cjk }; missing glyphs may still use fallback faces.
 
 slint-menu-about = About PTTStella Slint
-
 slint-menu-services = Services
 
 slint-article-heading = PTTStella  /  Article reading
-
 slint-execute = Run
-
 slint-select-text = Select text
-
 slint-drag-scroll = Drag to scroll
-
 slint-terminal-input = Terminal input
-
 slint-article-input = Station input in article
-
 slint-preview-image = Open full image preview
-
 slint-expand-image = Expand this image
-
 slint-stop-requested = Stopping…
-
 slint-cancel-job = Cancel task
-
 slint-draft-color-hint = Select text, then right-click to color
-
 slint-resume-reading = Return to article reading
-
 slint-clear-selection = Clear selection
-
 slint-draft-position = { $row }:{ $column } · { $lines } lines
-
 slint-draft-busy = Draft storage is busy; try again shortly
-
 slint-draft-choose = Choose a draft or create one from the full station template
-
 slint-draft-local = Editing locally; nothing is sent to the station automatically
-
 slint-draft-worker-stopped = Draft storage worker stopped
-
 slint-draft-worker-unconfirmed = Draft storage worker did not confirm completion
-
 slint-draft-no-document = No draft is open
-
 slint-draft-render-limit = Editor dimensions exceed the rendering limit
 
 slint-sites-current = Current connection: { $target }
-
 slint-sites-field-size = Input exceeds { $bytes } bytes or contains controls; the previous value is retained.

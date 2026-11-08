@@ -3,11 +3,9 @@ use serde::Serialize;
 use url::Url;
 pub mod hover;
 #[cfg(feature = "desktop-services")]
-pub mod video_stream;
-#[cfg(feature = "desktop-services")]
-pub mod probe_server;
-#[cfg(feature = "desktop-services")]
 mod http;
+#[cfg(feature = "desktop-services")]
+pub mod video_stream;
 
 #[cfg(feature = "desktop-services")]
 pub mod inline;
@@ -19,6 +17,8 @@ pub mod native_image;
 pub mod picture;
 #[cfg(feature = "desktop-services")]
 pub mod preview;
+#[cfg(feature = "desktop-services")]
+pub mod probe_server;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]

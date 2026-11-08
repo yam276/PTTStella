@@ -11,20 +11,23 @@ default-run = "pttstella"
 [features]
 default = []
 desktop = ["desktop-services", "dep:base64", "dep:dioxus", "dep:dioxus-icons", "dep:winresource"]
-desktop-services = ["dep:getrandom", "dep:png", "dep:arboard", "dep:tokio", "dep:tokio-tungstenite", "dep:russh", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser", "dep:rfd", "dep:tempfile", "dep:directories", "dep:reqwest", "dep:imagesize", "credential-store", "dep:font-kit", "dep:time", "dep:image", "dep:semver"]
+desktop-services = [
+    "credential-store", "dep:getrandom", "dep:arboard", "dep:directories", "dep:font-kit", "dep:futures-util",
+    "dep:image", "dep:imagesize", "dep:png", "dep:reqwest", "dep:rfd", "dep:russh",
+    "dep:rustls", "dep:rustls-native-certs", "dep:semver", "dep:tempfile", "dep:time",
+    "dep:tokio-tungstenite", "dep:webbrowser",
+]
+slint-research = ["desktop-services", "dep:slint", "dep:slint-build", "dep:skia-safe", "dep:objc2", "dep:objc2-app-kit", "dep:objc2-foundation"]
 
 native-video = ["desktop-services", "dep:mpv-sys", "dep:glow"]
-
-slint-research = ["desktop-services", "dep:slint", "dep:slint-build", "dep:skia-safe", "dep:objc2", "dep:objc2-app-kit", "dep:objc2-foundation"]
+native-player-probe = ["slint-research", "native-video"]
 
 credential-store = ["dep:security-framework", "dep:keyring", "dep:tokio"]
 
 [dependencies]
-skia-safe = { version = "=0.153.3", default-features = false, features = ["binary-cache"], optional = true }
-slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-skia", "accessibility", "unstable-winit-030"], optional = true }
+getrandom = { version = "=0.3.4", optional = true }
 mpv-sys = { package = "libmpv2-sys", version = "=4.0.1", optional = true }
 glow = { version = "=0.18.0", optional = true }
-getrandom = { version = "=0.3.4", optional = true }
 semver = { version = "=1.0.28", optional = true }
 arboard = { version = "=3.7.0", default-features = false, features = ["image-data"], optional = true }
 png = { version = "=0.18.1", optional = true }
@@ -55,11 +58,13 @@ reqwest = { version = "=0.13.5", default-features = false, features = ["rustls-n
 imagesize = { version = "=0.15.0", default-features = false, features = ["jpeg", "png", "gif", "webp"], optional = true }
 time = { version = "=0.3.55", features = ["local-offset"], optional = true }
 image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp"], optional = true }
+slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-skia", "accessibility", "unstable-winit-030"], optional = true }
+skia-safe = { version = "=0.153.3", default-features = false, features = ["binary-cache"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSObject", "NSString"], optional = true }
-objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSApplication", "NSEvent", "NSMenu", "NSMenuItem"], optional = true }
 objc2 = { version = "=0.6.5", optional = true }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSApplication", "NSEvent", "NSMenu", "NSMenuItem"], optional = true }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSObject", "NSString"], optional = true }
 security-framework = { version = "=3.7.0", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
@@ -77,14 +82,23 @@ required-features = ["desktop"]
 name = "replay"
 path = "src/bin/replay.rs"
 
+[[bin]]
+name = "pttstella-slint"
+path = "src/bin/slint_research/main.rs"
+required-features = ["slint-research"]
+
 [dev-dependencies]
 fluent-syntax = "=0.12.0"
 
 [build-dependencies]
-slint-build = { version = "=1.18.1", optional = true }
 winresource = { version = "=0.1.31", default-features = false, optional = true }
+slint-build = { version = "=1.18.1", optional = true }
 
 [[bin]]
-name = "pttstella-slint"
-path = "src/bin/slint_research/main.rs"
+name = "pttstella-slint-player"
+path = "src/bin/slint_player/main.rs"
+required-features = ["native-player-probe"]
+
+[[example]]
+name = "slint_picture_repro"
 required-features = ["slint-research"]

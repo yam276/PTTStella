@@ -528,6 +528,7 @@ context-copy = 複製選取文字
 context-copy-ansi = 複製含 ANSI 色碼
 context-copy-link = 複製完整網址
 context-open-link = 開啟連結／預覽圖片
+context-open-link-external = 在瀏覽器開啟連結
 context-select-link = 選取完整網址
 context-select-all = 選取整頁文字
 context-export-rows = 匯出選取行 PNG…
@@ -862,64 +863,38 @@ draft-title-invalid = 標題不可空白、含控制字元，或超過 PTT 的 6
 
 draft-editor-unavailable = 無法啟動本機編輯器，請先繼續使用 PTT 編輯器。
 
-context-open-link-external = 在瀏覽器開啟連結
-
 draft-stop-requested = 已要求停止，不會重送；站端可能已有部分修改，請依畫面確認。本機草稿仍保留。
 
 editor-color-palette-hint = 方向鍵選色 · Tab 前往套用 · Esc 取消
-
 editor-color-working = 正在核對及上色，請稍候…
-
 editor-color-stop-requested = 已要求停止；已送出的色碼可能保留，請檢查站端畫面。
 
 slint-font-face-status = 已選用：英數 { $requested_ascii }／中文 { $requested_cjk }。繪圖 face：{ $ascii }／{ $cjk }；個別缺字仍可能使用替代字型。
 
 slint-menu-about = 關於 PTTStella Slint
-
 slint-menu-services = 服務
 
 slint-article-heading = PTTStella  /  文章閱讀
-
 slint-execute = 執行
-
 slint-select-text = 選取文字
-
 slint-drag-scroll = 拖曳捲動
-
 slint-terminal-input = 終端輸入
-
 slint-article-input = 文章中的站端輸入
-
 slint-preview-image = 開啟完整圖片預覽
-
 slint-expand-image = 展開這張圖片
-
 slint-stop-requested = 停止中…
-
 slint-cancel-job = 取消工作
-
 slint-draft-color-hint = 選取後按右鍵上色
-
 slint-resume-reading = 返回網頁閱讀
-
 slint-clear-selection = 清除選取
-
 slint-draft-position = { $row }:{ $column } · { $lines } 行
-
 slint-draft-busy = 草稿工作忙碌，請稍後再試
-
 slint-draft-choose = 選擇草稿，或從完整站端範本建立
-
 slint-draft-local = 本機編輯，不會自動送到站端
-
 slint-draft-worker-stopped = 草稿儲存工作已停止
-
 slint-draft-worker-unconfirmed = 草稿儲存工作未確認結束
-
 slint-draft-no-document = 沒有開啟草稿
-
 slint-draft-render-limit = 編輯區尺寸超過繪圖上限
 
 slint-sites-current = 目前連線：{ $target }
-
 slint-sites-field-size = 輸入超過 { $bytes } bytes 或含控制字元，保留前一個值。
