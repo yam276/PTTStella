@@ -51,14 +51,15 @@ def build(target=None, env=None):
     return executable
 
 
-def copy_licenses(destination, target):
+def copy_licenses(destination, target, *, feature="desktop"):
     destination.mkdir()
     for name in ('NOTICE.txt', 'Cascadia-OFL.txt', 'NotoSansCJK-OFL.txt'):
         shutil.copy2(ROOT/'assets/fonts'/name, destination/name)
-    shutil.copy2(ROOT/'assets/vendor/fluent/LICENSE', destination/'fluent-Apache-2.0.txt')
-    shutil.copy2(ROOT/'assets/vendor/composer/LICENSES.txt', destination/'composer-MIT.txt')
+    if feature == 'desktop':
+        shutil.copy2(ROOT/'assets/vendor/fluent/LICENSE', destination/'fluent-Apache-2.0.txt')
+        shutil.copy2(ROOT/'assets/vendor/composer/LICENSES.txt', destination/'composer-MIT.txt')
     result = subprocess.run(['cargo', 'metadata', '--locked', '--format-version=1',
-                             '--filter-platform', target, '--features', 'desktop'],
+                             '--filter-platform', target, '--features', feature],
                             cwd=ROOT, capture_output=True, check=True, encoding='utf-8')
     inventory = []
     for package in json.loads(result.stdout)['packages']:
@@ -68,11 +69,15 @@ def copy_licenses(destination, target):
         label = package['name']+'-'+package['version']
         files = {p for pattern in ('LICENSE*', 'LICENCE*', 'COPYING*', 'NOTICE*')
                  for p in source.glob(pattern) if p.is_file()}
+        files.update(p for p in (source/'LICENSES').glob('*') if p.is_file())
         if package.get('license_file'):
             files.add(source/package['license_file'])
         for file in sorted(files):
-            (destination/label).mkdir(exist_ok=True)
-            shutil.copy2(file, destination/label/file.name)
+            package_notices = destination/label
+            if file.parent == source/'LICENSES':
+                package_notices /= 'LICENSES'
+            package_notices.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(file, package_notices/file.name)
         inventory.append({key: package.get(key) for key in
                           ('name', 'version', 'license', 'repository', 'source')})
     (destination/'rust-dependencies.json').write_text(
