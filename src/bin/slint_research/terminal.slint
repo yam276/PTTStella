@@ -15,6 +15,8 @@ export { StationColorState } from "station-color.slint";
 import { StationColor, StationColorState } from "station-color.slint";
 
 export component TerminalWindow inherits Window {
+    callback app-quit;
+    callback native-menu-refresh;
     in property <bool> settings-available;
     in property <bool> settings-open;
     callback settings-show;

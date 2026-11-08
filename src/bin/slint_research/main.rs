@@ -14,6 +14,8 @@ mod media_fixture;
 mod media_playback;
 mod media_worker;
 mod native_input;
+#[cfg(target_os = "macos")]
+mod native_menu;
 mod output;
 mod palette;
 mod paste;
@@ -459,6 +461,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                 display: replay::parity_display_profile(),
                 ..Default::default()
             };
+            if probe == session::Probe::ArticleFull
+                && std::env::var_os("PTTSTELLA_SLINT_STARTUP_BOUNDARY_PROBE").is_some()
+            {
+                settings.article_boundary_navigation = true;
+            }
             if matches!(probe, session::Probe::Tools | session::Probe::ToolsStation) {
                 settings.tools_opacity = pttstella::settings::ToolOpacity::try_from(20)?;
             }
@@ -525,6 +532,22 @@ fn run(
             .select()?;
     }
     let ui = TerminalWindow::new()?;
+    let quit_requested = Rc::new(Cell::new(false));
+    ui.on_app_quit({
+        let quit_requested = quit_requested.clone();
+        let weak = ui.as_weak();
+        move || {
+            quit_requested.set(true);
+            if let Err(error) = slint::quit_event_loop()
+                && let Some(ui) = weak.upgrade()
+            {
+                ui.set_input_notice(error.to_string().into());
+            }
+        }
+    });
+    #[cfg(target_os = "macos")]
+    let _native_menu = native_menu::Menu::mount(&ui)?;
+
     // Probe settings live only in this owned temporary namespace; retain it
     // until output workers have drained at both normal and capture shutdown.
     let media_probe_settings = if matches!(
@@ -769,16 +792,9 @@ fn run(
                             | session::Probe::ArticleTerminal
                     )
             ) {
-                article_session_owner = Some(article::session::ArticleSession::mount(
-                    &ui,
-                    connection.clone(),
-                    renderer.clone(),
-                    previous.clone(),
-                    presented.clone(),
-                    display.clone(),
-                    if matches!(&mode, session::Mode::Live(_)) {
-                        settings.article_mode
-                    } else if matches!(
+                let mut article_preferences = settings.clone();
+                if !matches!(&mode, session::Mode::Live(_)) {
+                    article_preferences.article_mode = if matches!(
                         &mode,
                         session::Mode::Probe(
                             session::Probe::ArticleTerminal | session::Probe::ArticleFindTerminal
@@ -787,7 +803,15 @@ fn run(
                         pttstella::settings::ArticleMode::Terminal
                     } else {
                         pttstella::settings::ArticleMode::Web
-                    },
+                    };
+                }
+                article_session_owner = Some(article::session::ArticleSession::mount(
+                    &ui,
+                    connection.clone(),
+                    renderer.clone(),
+                    previous.clone(),
+                    presented.clone(),
+                    &article_preferences,
                 )?);
                 article_bridge.replace(article_session_owner.clone());
             }
@@ -1094,6 +1118,7 @@ fn run(
                             ui.set_tools_visible(settings.tools_access.show_floating_button);
                             ui.set_tools_right_click(settings.tools_access.right_click_menu);
                             ui.invoke_tools_updated();
+                            ui.invoke_native_menu_refresh();
                         }
                         applied.replace(settings.clone());
                         if let Some(media) = media.upgrade() {
@@ -1123,8 +1148,17 @@ fn run(
     } else {
         None
     };
+    let native_quit_directory = if options.probe == Some(Probe::Session(session::Probe::Media))
+        && std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").is_ok_and(|v| v == "native-quit")
+    {
+        options.verify_media.clone()
+    } else {
+        None
+    };
     let draft_verification_directory = options.verify_drafts.clone();
-    let verification = if let Some(directory) = options.verify_color {
+    let verification = if native_quit_directory.is_some() {
+        None
+    } else if let Some(directory) = options.verify_color {
         Some(station_color::probe::start(
             &ui,
             station_color_owner
@@ -1320,6 +1354,12 @@ fn run(
                 if let Some(dir) = &settings_shutdown_directory {
                     media.preferences.audit_shutdown(dir)?;
                 }
+                if let Some(dir) = &native_quit_directory {
+                    media
+                        .preferences
+                        .audit_native_quit(dir, quit_requested.get())?;
+                }
+
                 Ok::<_, String>(())
             })
             .transpose();
@@ -1353,6 +1393,16 @@ fn run(
         let verification_result = verification
             .map(|verification| verification.finish())
             .transpose();
+        #[cfg(target_os = "macos")]
+        {
+            _native_menu.stop();
+            if let Some(dir) = &native_quit_directory {
+                if !_native_menu.stopped() {
+                    return Err("native menu cleanup incomplete".into());
+                }
+                std::fs::write(dir.join("native-menu-closed.json"),br#"{"stopped":true,"timer_running":false,"actions_retained":false,"weak_targets_retained":false}"#)?;
+            }
+        }
         result?;
         editor_cleanup?;
         editor_close_audit?;

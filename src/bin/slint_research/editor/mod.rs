@@ -20,7 +20,9 @@ use pttstella::{
     },
     editor_color::Color,
 };
-use slint::{ComponentHandle, Image, Model, ModelRc, Timer, VecModel};
+use slint::{
+    ComponentHandle, Image, Model, ModelRc, Timer, VecModel, winit_030::WinitWindowAccessor,
+};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -395,6 +397,11 @@ impl Editor {
         state.set_can_create(false);
         state.set_transfer_confirm(false);
         state.set_status("讀取草稿…".into());
+        // This is an explicit Open action, including accessibility activation
+        // from a background window. Match settings: activate the host as well
+        // as its widget, while startup itself continues without taking focus.
+        ui.window()
+            .with_winit_window(|window| window.focus_window());
         ui.invoke_focus_editor_dialog();
         if view.draft_post_scope.is_some() && pttstella::navigation::article_editor(&view.frame) {
             if !self.shown() {

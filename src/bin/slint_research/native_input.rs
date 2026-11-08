@@ -363,6 +363,7 @@ fn mount_window(
             }
             match event {
                 WindowEvent::Focused(focused) => {
+                    if *focused {ui.invoke_native_menu_refresh();}
                     input.window_focused = *focused;
                     let foreground = *focused && !input.occluded;
                     if !focused {

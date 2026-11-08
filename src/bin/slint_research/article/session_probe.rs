@@ -89,6 +89,20 @@ pub fn start(
                 "article station first frame missing",
             )
             .await?;
+            if std::env::var_os("PTTSTELLA_SLINT_STARTUP_BOUNDARY_PROBE").is_some()
+                && case == crate::session::Probe::ArticleFull
+            {
+                wait(
+                    || owner.diagnostics()["article_boundary_navigation"] == true,
+                    "saved startup boundary preference missing from first native projection",
+                )
+                .await?;
+                std::fs::write(
+                    directory.join("startup-boundary.json"),
+                    serde_json::to_vec_pretty(&owner.diagnostics()).map_err(|e| e.to_string())?,
+                )
+                .map_err(|e| e.to_string())?;
+            }
             if terminal {
                 require(output.is_some(), "terminal output owner missing")?;
                 wait(

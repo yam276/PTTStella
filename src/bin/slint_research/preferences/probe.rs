@@ -6,6 +6,31 @@ use slint::{Model, winit_030::WinitWindowAccessor};
 use std::{fs::OpenOptions, path::Path};
 
 impl Preferences {
+    /// Passive acceptance requires the media loopback, a new verification
+    /// directory and explicit native-quit mode. The outer session peer still
+    /// independently requires acknowledged Close after this app scope returns.
+    pub(crate) fn audit_native_quit(&self, dir: &Path, quit_requested: bool) -> Result<(), String> {
+        require(
+            quit_requested,
+            "native Quit did not reach the application callback",
+        )?;
+        require(
+            self.stopped.get()
+                && self.inflight.borrow().is_none()
+                && self.pending.borrow().is_none()
+                && !self.timer.running()
+                && self.window.borrow().is_none(),
+            "native Quit retained settings work",
+        )?;
+        let saved = self.model.borrow().store()?.load()?;
+        require(
+            saved == self.app(),
+            "native Quit file/effective state differs",
+        )?;
+        std::fs::write(dir.join("native-quit.json"),serde_json::to_vec_pretty(&serde_json::json!({"quit_callback":true,"settings_saved":saved,
+            "pending":false,"inflight":false,"timer_running":false,"child_window_retained":false,
+            "scope":"passive native loopback probe; peer Close and process exit are separate evidence"})).map_err(|e|e.to_string())?).map_err(|e|e.to_string())
+    }
     pub(crate) fn prepare_shutdown(self: &Rc<Self>, dir: &Path) -> Result<(), String> {
         let mut expected = self.model.borrow().store()?.load()?;
         expected.display.font_size = 22.;

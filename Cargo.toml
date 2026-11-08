@@ -15,7 +15,7 @@ desktop-services = ["dep:getrandom", "dep:png", "dep:arboard", "dep:tokio", "dep
 
 native-video = ["desktop-services", "dep:mpv-sys", "dep:glow"]
 
-slint-research = ["desktop-services", "dep:slint", "dep:slint-build", "dep:skia-safe"]
+slint-research = ["desktop-services", "dep:slint", "dep:slint-build", "dep:skia-safe", "dep:objc2", "dep:objc2-app-kit", "dep:objc2-foundation"]
 
 credential-store = ["dep:security-framework", "dep:keyring", "dep:tokio"]
 
@@ -57,6 +57,9 @@ time = { version = "=0.3.55", features = ["local-offset"], optional = true }
 image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSObject", "NSString"], optional = true }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSApplication", "NSEvent", "NSMenu", "NSMenuItem"], optional = true }
+objc2 = { version = "=0.6.5", optional = true }
 security-framework = { version = "=3.7.0", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]

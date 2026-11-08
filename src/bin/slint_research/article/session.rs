@@ -8,7 +8,7 @@ use crate::{
 use pttstella::{
     connection::{Connection, NavigationCancellation, Phase, Reply, View},
     filters,
-    settings::{ArticleMode, DisplaySettings},
+    settings::{AppSettings, DisplaySettings},
     surface_state::{Identity, SurfaceState},
 };
 use slint::{ComponentHandle, Timer};
@@ -90,11 +90,12 @@ impl ArticleSession {
         renderer: Rc<RefCell<Renderer>>,
         terminal_size: Rc<Cell<Option<Size>>>,
         terminal_presented: Rc<Cell<Option<FrameId>>>,
-        display: DisplaySettings,
-        mode: ArticleMode,
+        settings: &AppSettings,
     ) -> Result<Rc<Self>, String> {
+        let display = settings.display.resolve()?;
         let mut core = SurfaceState::new(filters::Rules::default());
-        core.set_article_mode(mode);
+        core.set_article_mode(settings.article_mode);
+        core.set_article_boundary_navigation(settings.article_boundary_navigation);
         let owner = Rc::new(Self {
             close_media: RefCell::new(None),
             ui: ui.as_weak(),
@@ -739,6 +740,7 @@ impl ArticleSession {
             "input_pending":view.input_pending,"closed":self.closed.get(),
             "reading_scope": core.reading_scope(), "permit": self.permit.get(),
             "shown": self.shown.get(), "pending": format!("{:?}", core.pending_identity()),
+            "article_boundary_navigation":core.last_displayed().map(|p|p.article_boundary_navigation),
             "dirty": core.dirty(), "progress": format!("{:?}", self.progress()),
             "busy": self.busy.get(), "requests": self.requests.get(),
             "raw_generation": self.raw_generation.get(), "vim_handoff": self.vim_handoff.get(),

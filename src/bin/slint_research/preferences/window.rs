@@ -245,6 +245,11 @@ impl Preferences {
                                 }
                             });
                         }
+                        WindowEvent::Focused(true) => {
+                            if let Some(ui) = o.ui.upgrade() {
+                                ui.invoke_native_menu_refresh();
+                            }
+                        }
                         WindowEvent::Focused(false) => {
                             modifiers.set(Default::default());
                             o.composing.set(false);
