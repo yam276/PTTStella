@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 #[cfg(feature = "desktop")]
+pub mod session;
+#[cfg(feature = "desktop")]
 pub mod store;
 pub const PTT: &str = "wss://ws.ptt.cc/bbs";
 pub const PTT_SSH: &str = "ssh://bbs@ptt.cc";
