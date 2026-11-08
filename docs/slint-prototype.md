@@ -1209,3 +1209,34 @@ Dioxus 另用真實 WKWebView 對照 App，輸入與 signed payload 為 `c61c260
 清理明細為同目錄 `cleanup-owned.json`：移除被最終案例取代的成功探針、對應 log／run metadata及中間成功 patch，保留失敗來源、最終 PNG／結果與已封存的建置拒絕紀錄；精確路徑、UID、symlink、內容與 lsof盤點一併記錄。du合計2224KiB，filesystem free由243301842944到243304148992 bytes，變化2306048 bytes，分開記帳而不把其他並行空間變化歸因於本次。仍使用的 Cargo profiles、未整合 worktree與提交保留，沒有移動 canonical develop、推送或發佈。
 
 接續書籤、快速前往／最近看板、推文導覽／更新與完整混合功能矩陣；可信 OS手勢／IME、四架構包、舊資料往返與同負載效能仍待完成。S0–S8 goal維持 active，S9未切換／發佈。
+
+
+## S4／S7 書籤管理與離線閱讀（2026-11-09）
+
+`e704fc1267e345d30744a9109cd6fd97976aec92` 將 Dioxus adapter 的書籤狀態、檔案交易草稿、離線投影、Acquisition 與 FromList 移至 [共用 session](../src/bookmarks/session.rs)。Dioxus 只保留命令送出和 Feedback 對應，兩個狀態測試隨擁有者移動，直接消費者的檔案測試核對 Result。格式仍是既有 v1／v2、500 筆／32 MiB、單篇 4096 行／8 MiB，沒有另建 Slint 格式或放寬壞檔驗證。
+
+`577f927` 新增 [原生管理 owner](../src/bin/slint_research/bookmarks_manager.rs) 與 [視窗](../src/bin/slint_research/bookmarks.slint)。研究版在自己的 data_local_dir 使用同一 Store。第一次開啟才由既有 Output 單一檔案 worker 載入；編輯、移除、重試及讀取共用一個結果槽，沒有另一個 reader、檔案 queue 或 idle polling。有效模型只提交已成功保存的結果。關閉讀取撤銷 epoch，晚到結果不開窗；關閉時仍在保存則等待結果，失敗保留表單修改。App Quit 經既有退出 owner 隱藏管理視窗、join worker 並收集結果。
+
+未選取時清單明示「新增書籤」，保存 identity 與表單目的地各自管理；移除跟隨選取書籤。清單標示可用的本機副本。離線閱讀只接收已驗證 Archive 的當前 Rules 投影，沒有 Connection、站端 Stamp 或媒體下載器。沿用同一 Renderer、80×23 viewport、22 行重疊翻頁，以及方向鍵、Home／End、空白及滾輪；只快取目前頁的 raster，回表單或關閉會釋放閱讀模型和 raster。manager-open 會暫停主畫面輸入、保活與媒體互動。文章收藏的身分取得雖已共用，原生的目前文章／列表文章收藏、前往及最近看板仍待接線，沒有從畫面猜 AID。
+
+完整元件以 [probe](../src/bin/slint_research/bookmarks_manager/probe.rs) 和本機嚴格 peer 驗證。最新普通 CLI SHA-256 是 `8d5da509de93cff69c37ccfd0a2558128815337d3d1cdd9bb62ef996b39f1ce6`；`.local/verification/slint-bookmarks/accepted/` 的三個程序分別覆蓋：
+
+- 表單新增／大小寫去重／更名、編輯目的地後移除保存 identity、45 行離線副本、當前整行遮罩及中文左右不同色、80×23／22 行重疊、實際 toolkit PageDown、Home／End、備份失敗後保留末字與重試、取消後晚到讀取、壞檔唯讀及明確修復重載。
+- 新程序讀取上一程序保存的副本，先正常斷線，再從浮球進入離線閱讀；沒有重連，資料時間與 45 行不變。
+- 新程序在明確保存已啟動、尚未完成時正常 App Quit；關窗後獨立讀檔核對「退出前保存末字」、副本及 worker／結果槽／視窗／閱讀模型均已清理。
+
+三個程序均嚴格 Close acknowledged，合成站台沒有額外按鍵，PNG／GIF／Once HTTP 全為零且 worker joined。普通浮球的本機／站端滑鼠與名單表單亦以同一 CLI 單獨重跑通過。文章內右鍵維持內容選單；一般 Unknown 背景開浮球，兩種路徑各有獨立情境。這些是 toolkit／本機 peer 證據，並非可信 OS 輸入或 S8 效能數據。可在 NEW_DIR 重跑第一組，再以 `restart`／`save-exit` 與其保存檔重跑後兩組：
+
+```sh
+PTTSTELLA_SLINT_BOOKMARKS_PROBE=1 target/release/pttstella-slint --probe-media --verify-media NEW_DIR
+PTTSTELLA_SLINT_BOOKMARKS_PROBE=restart PTTSTELLA_SLINT_BOOKMARKS_SOURCE=NEW_DIR/bookmarks.json target/release/pttstella-slint --probe-media --verify-media NEW_RESTART_DIR
+PTTSTELLA_SLINT_BOOKMARKS_PROBE=save-exit PTTSTELLA_SLINT_BOOKMARKS_SOURCE=NEW_DIR/bookmarks.json target/release/pttstella-slint --probe-media --verify-media NEW_EXIT_DIR
+```
+
+macOS arm64 實際 CUA 有三個分立檢查點。第一包發現原型 Tools 的分類出版、選取及鍵盤路徑仍寫死 0／2／3，收藏無法開啟；已改為單一 category_available，依已掛載 owner 決定。第二包驗證繁中貼上保存、閱讀、PageDown／Home、重開及管理窗中 ⌘Q，另觀察未選取卻顯示第一項及舊讀取提示。最後 `Native-Bookmarks-Current.app` 的 input 是 `87847b881efd0a9df057bd9241792f772d597e059f99f7d725dc5d4e248d3e2b`、簽署後 SHA-256 是 `8ee14d7e319f3fbeff27ae2e12a40796104e06489f6cf78faf959c3eef8907ca`：實際浮球開管理，新增狀態清楚、選取副本、⌘A／貼上「最終書籤驗收末字」、明確保存、PageDown 1–23 → 23–45、Escape 返回已清除讀取提示。浮球設定分類也能交接實際設定視窗，從設定 ⌘Q 後 App inventory 已無該 App。獨立 JSON 核對完整名稱、created_at=100、45 行及前一代備份，Close ACK 與零 HTTP／join 分列。LaunchServices exit code 沒有直接觀測。這份 OS 包之後只修改兩個 probe 的背景案例；普通最新 CLI 與此 OS 包的 hash 分開記錄。
+
+負向紀錄均保留：第一個 bookmark flag 未掛載 article owner，錯跑一般 media verifier，exit 0 不算書籤通過，現在缺 owner 直接拒絕；斷線後的過早合成浮球操作失敗，補上新畫面 ACK 及前景就緒等待；舊 Tools probe 仍預期文章背景開浮球，依既有內容選單優先契約修正並補 Unknown 背景案例。另外一次與其他自有原生探針重疊時失敗，同一 binary 單獨重跑通過；只能推定可能受焦點干擾，沒有證明原因或更改正式失焦保護。最後 OS getApp 首次 timeout，但 inventory 顯示程序已啟動，選取既有 bundle ID 成功，沒有重新啟動同一輸出。編譯時的 consumer Result、Slint scope 及型別錯誤亦保留原 log。
+
+驗證：Slint release lib／bin／multi_instance 合計 448 passed、6 ignored；Dioxus 同組合計 498 passed、6 ignored；兩個 feature 的 all-target Clippy、fmt、native-video all-target check、383 組 JS 回歸及文件 gate 通過。Dioxus Clippy 的既有第三方 block 0.1.6 future-incompat 提示另記，不是本專案警告。未新增 Windows／Linux／Intel 原生結果，未驗 OS IME 候選或完整資料回退，沒有因繁中貼上通過宣稱舊草稿末字異常已修復。
+
+本輪 exact cleanup、程序與來源重放記錄在 `.local/verification/slint-bookmarks/`。`cleanup-owned.json` 逐項列出移除的 30 個路徑，包含兩個已被取代的 App、冗餘成功輸出及已封存的三份 RTK 原 log；檢查 resolved path、symlink、UID、內容與開啟 handle 後移除。du 為 132,316 KiB；filesystem free 243,219,046,400 → 243,354,611,712 bytes，兩者分開，不將並行釋放空間全歸因本輪。最新必要 App、原生資料、成功與獨特失敗證據保留。debug／release profiles 留供 active goal 後續共用；worktree 尚未整合，亦保留。完整 S0–S8 goal 繼續；S9 未切換、整合或發佈。
