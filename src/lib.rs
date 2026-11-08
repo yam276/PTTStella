@@ -56,3 +56,6 @@ mod tls;
 #[cfg(feature = "desktop-services")]
 pub mod updates;
 pub mod vim;
+
+#[cfg(feature = "native-video")]
+pub mod native_video;

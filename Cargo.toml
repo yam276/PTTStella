@@ -13,9 +13,13 @@ default = []
 desktop = ["desktop-services", "dep:base64", "dep:dioxus", "dep:dioxus-icons", "dep:winresource"]
 desktop-services = ["dep:getrandom", "dep:png", "dep:arboard", "dep:tokio", "dep:tokio-tungstenite", "dep:russh", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser", "dep:rfd", "dep:tempfile", "dep:directories", "dep:reqwest", "dep:imagesize", "credential-store", "dep:font-kit", "dep:time", "dep:image", "dep:semver"]
 
+native-video = ["desktop-services", "dep:mpv-sys", "dep:glow"]
+
 credential-store = ["dep:security-framework", "dep:keyring", "dep:tokio"]
 
 [dependencies]
+mpv-sys = { package = "libmpv2-sys", version = "=4.0.1", optional = true }
+glow = { version = "=0.18.0", optional = true }
 getrandom = { version = "=0.3.4", optional = true }
 semver = { version = "=1.0.28", optional = true }
 arboard = { version = "=3.7.0", default-features = false, features = ["image-data"], optional = true }
