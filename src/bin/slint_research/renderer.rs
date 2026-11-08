@@ -255,6 +255,14 @@ impl Renderer {
         size: Size,
         cursor: bool,
     ) -> Result<SharedPixelBuffer<Rgba8Pixel>, &'static str> {
+        self.paint_with_find(size, cursor, None)
+    }
+    pub fn paint_with_find(
+        &self,
+        size: Size,
+        cursor: bool,
+        find: Option<&pttstella::article_find::Find>,
+    ) -> Result<SharedPixelBuffer<Rgba8Pixel>, &'static str> {
         let mut pixels = SharedPixelBuffer::new(size.width, size.height);
         let info = ImageInfo::new(
             (size.width as i32, size.height as i32),
@@ -272,8 +280,10 @@ impl Renderer {
             .min(size.height as f32 / (frame.rows as f32 * CELL_HEIGHT));
         let mut paint = Paint::default();
         for glyph in &frame.glyphs {
+            let highlight = find.and_then(|f| f.style(glyph.row, glyph.col, glyph.width));
             for half in 0..glyph.width {
-                let (_, background) = colours(if half == 0 { glyph.left } else { glyph.right });
+                let (_, background) =
+                    colours(highlight.unwrap_or(if half == 0 { glyph.left } else { glyph.right }));
                 if background != Color::BLACK {
                     paint.set_color(background);
                     canvas.draw_rect(size.cell(glyph.col + half, glyph.row, 1, frame), &paint);
@@ -286,8 +296,9 @@ impl Renderer {
                 continue;
             }
             let cell = size.cell(glyph.col, glyph.row, glyph.width, frame);
-            let left = colours(glyph.left).0;
-            let right = colours(glyph.right).0;
+            let highlight = find.and_then(|f| f.style(glyph.row, glyph.col, glyph.width));
+            let left = colours(highlight.unwrap_or(glyph.left)).0;
+            let right = colours(highlight.unwrap_or(glyph.right)).0;
             let split = glyph.width == 2 && left != right;
             let ink = self.ink[glyph.width - 1].get(&glyph.text);
             let text = ink.map(|ink| {

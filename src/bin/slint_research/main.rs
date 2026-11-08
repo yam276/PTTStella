@@ -42,6 +42,7 @@ fn update_grid(
     ui: &TerminalWindow,
     renderer: &Renderer,
     previous: &Cell<Option<Size>>,
+    article: Option<&article::session::ArticleSession>,
 ) -> Result<(), &'static str> {
     if ui.get_article_active() {
         previous.set(None);
@@ -59,7 +60,12 @@ fn update_grid(
     };
     if previous.get() != Some(size) {
         let start = Instant::now();
-        let pixels = renderer.paint(size, !ui.get_terminal_input() || ui.get_live_session())?;
+        let cursor = !ui.get_terminal_input() || ui.get_live_session();
+        let pixels = if let Some(article) = article {
+            article.paint_terminal_find(renderer, size, cursor)?
+        } else {
+            renderer.paint(size, cursor)?
+        };
         ui.set_terminal_image(Image::from_rgba8_premultiplied(pixels));
         previous.set(Some(size));
         if std::env::var_os("PTTSTELLA_SLINT_TIMINGS").is_some() {
@@ -115,7 +121,7 @@ struct Options {
 }
 
 fn options() -> Result<Options, &'static str> {
-    const USAGE: &str = "usage: pttstella-slint [--connect|--show-profile|--probe-grid|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
+    const USAGE: &str = "usage: pttstella-slint [--connect|--show-profile|--probe-grid|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
     let mut zoom = None;
     let mut capture = None;
     let mut probe = None;
@@ -135,6 +141,18 @@ fn options() -> Result<Options, &'static str> {
             }
             Some("--probe-article-input") if probe.is_none() => {
                 probe = Some(Probe::Session(session::Probe::ArticleInput))
+            }
+            Some("--probe-article-keepalive") if probe.is_none() => {
+                probe = Some(Probe::Session(session::Probe::ArticleKeepAlive))
+            }
+            Some("--probe-article-find") if probe.is_none() => {
+                probe = Some(Probe::Session(session::Probe::ArticleFind))
+            }
+            Some("--probe-terminal-find") if probe.is_none() => {
+                probe = Some(Probe::Session(session::Probe::ArticleFindTerminal))
+            }
+            Some("--probe-article-paste") if probe.is_none() => {
+                probe = Some(Probe::Session(session::Probe::ArticlePaste))
             }
             Some("--probe-article-output") if probe.is_none() => {
                 probe = Some(Probe::Session(session::Probe::ArticleOutput))
@@ -278,6 +296,10 @@ fn options() -> Result<Options, &'static str> {
                 session::Probe::ArticleFull
                     | session::Probe::ArticleInput
                     | session::Probe::ArticleOutput
+                    | session::Probe::ArticleKeepAlive
+                    | session::Probe::ArticlePaste
+                    | session::Probe::ArticleFind
+                    | session::Probe::ArticleFindTerminal
                     | session::Probe::ArticleLong
                     | session::Probe::ArticleStall
                     | session::Probe::ArticleTerminal
@@ -479,7 +501,12 @@ fn run(
             Timer::single_shot(Duration::ZERO, move || {
                 pending.set(false);
                 if let Some(ui) = weak.upgrade() {
-                    match update_grid(&ui, &renderer.borrow(), &previous) {
+                    match update_grid(
+                        &ui,
+                        &renderer.borrow(),
+                        &previous,
+                        article_bridge.borrow().as_deref(),
+                    ) {
                         Err(error) => {
                             presented.set(None);
                             ui.set_result(error.into());
@@ -551,8 +578,41 @@ fn run(
         }
     });
     ui.set_zoom(options.zoom);
+    // Search changes only display styles; do not revoke geometry/output leases.
+    let find_paint = Rc::new(Timer::default());
+    ui.on_find_redraw({
+        let (weak, renderer, previous, bridge, timer) = (
+            ui.as_weak(),
+            renderer.clone(),
+            previous.clone(),
+            article_bridge.clone(),
+            find_paint.clone(),
+        );
+        move || {
+            let (weak, renderer, previous, bridge) = (
+                weak.clone(),
+                renderer.clone(),
+                previous.clone(),
+                bridge.clone(),
+            );
+            timer.start(slint::TimerMode::SingleShot, Duration::ZERO, move || {
+                if let Some(ui) = weak.upgrade() {
+                    previous.set(None);
+                    if let Err(error) = update_grid(
+                        &ui,
+                        &renderer.borrow(),
+                        &previous,
+                        bridge.borrow().as_deref(),
+                    ) {
+                        ui.set_result(error.into());
+                    }
+                }
+            });
+        }
+    });
     let mut article_session_owner = None;
     let mut login_owner = None;
+    let mut paste_owner = None;
     let mut output_owner = None;
     let mut context_owner = None;
     let mut tools_owner = None;
@@ -577,6 +637,10 @@ fn run(
                         session::Probe::ArticleFull
                             | session::Probe::ArticleInput
                             | session::Probe::ArticleOutput
+                            | session::Probe::ArticleKeepAlive
+                            | session::Probe::ArticlePaste
+                            | session::Probe::ArticleFind
+                            | session::Probe::ArticleFindTerminal
                             | session::Probe::ArticleLong
                             | session::Probe::ArticleStall
                             | session::Probe::ArticleTerminal
@@ -591,8 +655,12 @@ fn run(
                     display.clone(),
                     if matches!(&mode, session::Mode::Live(_)) {
                         settings.article_mode
-                    } else if matches!(&mode, session::Mode::Probe(session::Probe::ArticleTerminal))
-                    {
+                    } else if matches!(
+                        &mode,
+                        session::Mode::Probe(
+                            session::Probe::ArticleTerminal | session::Probe::ArticleFindTerminal
+                        )
+                    ) {
                         pttstella::settings::ArticleMode::Terminal
                     } else {
                         pttstella::settings::ArticleMode::Web
@@ -606,7 +674,14 @@ fn run(
                     .ok_or("live projection owner missing")?
                     .replace_rules(profile::Profile::system()?.filters().load()?);
             }
-            if matches!(&mode, session::Mode::Probe(session::Probe::ArticleOutput)) {
+            if matches!(
+                &mode,
+                session::Mode::Probe(
+                    session::Probe::ArticleOutput
+                        | session::Probe::ArticleFind
+                        | session::Probe::ArticleFindTerminal
+                )
+            ) {
                 article_session_owner
                     .as_ref()
                     .ok_or("article rules owner missing")?
@@ -630,11 +705,15 @@ fn run(
                         session::Probe::ArticleFull
                             | session::Probe::ArticleInput
                             | session::Probe::ArticleOutput
+                            | session::Probe::ArticleKeepAlive
+                            | session::Probe::ArticlePaste
+                            | session::Probe::ArticleFind
+                            | session::Probe::ArticleFindTerminal
                             | session::Probe::ArticleLong
                             | session::Probe::ArticleStall
                     )
             ) {
-                native_input::mount_article(
+                paste_owner = Some(native_input::mount_article(
                     &ui,
                     connection.clone(),
                     presented.clone(),
@@ -643,7 +722,7 @@ fn run(
                         .as_ref()
                         .ok_or("article input owner missing")?
                         .clone(),
-                );
+                ));
             }
             if matches!(
                 &mode,
@@ -668,23 +747,29 @@ fn run(
                         | session::Probe::MouseRoundTrip
                 )
             ) {
-                native_input::mount(
+                paste_owner = Some(native_input::mount(
                     &ui,
                     connection.clone(),
                     presented.clone(),
                     clipboard.clone(),
-                );
+                ));
             }
             if matches!(
                 &mode,
                 session::Mode::Live(_)
                     | session::Mode::Probe(
                         session::Probe::KeepAlive
+                            | session::Probe::ArticleKeepAlive
                             | session::Probe::Login
                             | session::Probe::Login2fa
                     )
             ) {
-                keep_alive::mount(&ui, connection.clone(), presented.clone());
+                keep_alive::mount(
+                    &ui,
+                    connection.clone(),
+                    presented.clone(),
+                    article_session_owner.clone(),
+                );
             }
             if matches!(
                 &mode,
@@ -705,6 +790,10 @@ fn run(
                         session::Probe::ArticleFull
                             | session::Probe::ArticleInput
                             | session::Probe::ArticleOutput
+                            | session::Probe::ArticleKeepAlive
+                            | session::Probe::ArticlePaste
+                            | session::Probe::ArticleFind
+                            | session::Probe::ArticleFindTerminal
                             | session::Probe::ArticleLong
                             | session::Probe::ArticleStall
                             | session::Probe::Selection
@@ -769,6 +858,7 @@ fn run(
                 .clone()
                 .ok_or("article probe connection missing")?,
             output_owner.as_ref().cloned(),
+            paste_owner.as_ref().cloned(),
             directory,
             match options.probe {
                 Some(Probe::Session(case)) => case,
@@ -830,7 +920,7 @@ fn run(
                             return Err("snapshot article has no visible rows".into());
                         }
                     } else {
-                        update_grid(&ui, &renderer, &previous)?;
+                        update_grid(&ui, &renderer, &previous, None)?;
                         previous.get().ok_or("snapshot terminal has no layout")?;
                     }
                     save_png(&ui.window().take_snapshot()?, &path)?;
@@ -851,6 +941,9 @@ fn run(
         });
         slint::run_event_loop()?;
         ui.hide()?;
+        if let Some(paste) = &paste_owner {
+            paste.finish()?;
+        }
         if let Some(article) = &article_owner {
             article.finish();
         }
@@ -876,6 +969,7 @@ fn run(
             login.finish();
         }
         let output_cleanup = output_owner.map(|output| output.finish()).transpose();
+        let paste_cleanup = paste_owner.map(|paste| paste.finish()).transpose();
         if let Some(watcher) = watcher {
             watcher.abort();
         }
@@ -884,6 +978,7 @@ fn run(
             .transpose();
         result?;
         output_cleanup?;
+        paste_cleanup?;
         verification_result?;
     }
     Ok(())

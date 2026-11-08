@@ -1,0 +1,209 @@
+//! Full native component proof; toolkit text is distinct from real OS IME.
+use super::session::ArticleSession;
+use crate::{
+    TerminalWindow,
+    output::{self, Output},
+    verification::{self, Verification, require, wait},
+};
+use pttstella::{connection::Connection, navigation::Context};
+use slint::{
+    ComponentHandle,
+    platform::{Key, WindowEvent},
+};
+use std::{error::Error, path::PathBuf, rc::Rc, time::Duration};
+
+pub fn start(
+    ui: &TerminalWindow,
+    owner: Rc<ArticleSession>,
+    connection: Rc<Connection>,
+    output: Rc<Output>,
+    directory: PathBuf,
+) -> Result<Verification, Box<dyn Error>> {
+    Verification::start(
+        ui,
+        directory,
+        "article-find",
+        move |ui, directory| async move {
+            wait(
+                || {
+                    verification::foreground(&ui, true);
+                    ui.invoke_focus_terminal();
+                    output.current(&ui).is_some() && ui.get_find_available()
+                },
+                "find source not installed",
+            )
+            .await?;
+            require(
+                owner.requests.get() == 0,
+                "complete find fixture unexpectedly preloaded",
+            )?;
+            let original = owner
+                .core
+                .borrow()
+                .last_displayed()
+                .ok_or("find displayed source missing")?
+                .frame
+                .clone();
+            let display = pttstella::replay::parity_display_profile().resolve()?;
+            let before = output::render_png(original.clone(), display.clone(), 0..24)?;
+            ui.invoke_find_action(0);
+            require(
+                ui.get_find_open() && ui.get_find_focused(),
+                "find did not take native field focus",
+            )?;
+            require(
+                !ui.get_article_reading_ready() && !ui.get_keep_alive_surface_ready(),
+                "finding retained BBS background readiness",
+            )?;
+            ui.window()
+                .dispatch_event(WindowEvent::KeyPressed { text: "中".into() });
+            ui.window()
+                .dispatch_event(WindowEvent::KeyReleased { text: "中".into() });
+            wait(
+                || {verification::foreground(&ui,true);owner.core.borrow().find().reply(0).total == 3},
+                "visible Chinese hit count differs (mask/concealed)",
+            )
+            .await.map_err(|e| {
+                let _=verification::capture(&ui,&directory,"find-timeout.png");
+                let core=owner.core.borrow();let find=core.find();
+                format!("{e}: {}",serde_json::json!({"readiness":owner.diagnostics(),
+                    "ui_query":ui.get_find_query().as_str(),"query":find.query(),"find":find.reply(0),
+                    "focused":ui.get_find_focused(),"composing":ui.get_find_composing(),"blocked":ui.get_find_blocked()}))
+            })?;
+            let hits = {
+                let core = owner.core.borrow();
+                let r = core.find().reply(0);
+                r.hits.ok_or("find hits missing")?.to_vec()
+            };
+            require(
+                hits.iter()
+                    .map(|h| (h.row, h.start, h.end))
+                    .collect::<Vec<_>>()
+                    == [(5, 6, 8), (6, 0, 2), (6, 3, 5)],
+                "independent Chinese cell ranges differ",
+            )?;
+            tokio::time::sleep(Duration::from_millis(80)).await;
+            verification::capture(&ui, &directory, "chinese-find.png")?;
+            // Retain an accepted edit across deactivation without searching or
+            // sending bytes while blocked. Resume the same bounded draft.
+            ui.invoke_find_edit("中".into());
+            verification::foreground(&ui, false);
+            tokio::time::sleep(Duration::from_millis(180)).await;
+            require(
+                owner.core.borrow().find().reply(0).total == 0,
+                "background ran a pending query",
+            )?;
+            verification::foreground(&ui, true);
+            wait(
+                || {
+                    verification::foreground(&ui, true);
+                    owner.core.borrow().find().reply(0).total == 3
+                },
+                "foreground did not resume retained query",
+            )
+            .await?;
+            verification::key(&ui, Key::Return);
+            require(
+                owner.core.borrow().find().reply(0).active == Some(1),
+                "native Enter failed to step",
+            )?;
+            ui.invoke_find_action(1);
+            require(
+                owner.core.borrow().find().reply(0).active == Some(0),
+                "previous match failed",
+            )?;
+            ui.invoke_find_action(1);
+            require(
+                owner.core.borrow().find().reply(0).active == Some(2),
+                "previous match did not wrap",
+            )?;
+            ui.set_find_composing(true);
+            verification::key(&ui, Key::Escape);
+            verification::key(&ui, Key::Return);
+            require(
+                ui.get_find_open() && owner.core.borrow().find().reply(0).active == Some(2),
+                "candidate keys escaped local composition",
+            )?;
+            ui.set_find_composing(false);
+            require(
+                owner
+                    .core
+                    .borrow()
+                    .last_displayed()
+                    .is_some_and(|p| p.frame == original),
+                "highlight mutated source cells",
+            )?;
+            let after = output::render_png(
+                owner
+                    .core
+                    .borrow()
+                    .last_displayed()
+                    .ok_or("find source gone")?
+                    .frame
+                    .clone(),
+                display,
+                0..24,
+            )?;
+            require(
+                before.png == after.png,
+                "display highlights leaked into source PNG",
+            )?;
+            std::fs::write(directory.join("source.png"), after.png).map_err(|e| e.to_string())?;
+            ui.invoke_find_edit("missing".into());
+            require(
+                owner.core.borrow().find().reply(0).total == 0,
+                "pending edit kept old highlights",
+            )?;
+            ui.invoke_find_action(3);
+            tokio::time::sleep(Duration::from_millis(180)).await;
+            require(
+                !ui.get_find_open() && owner.core.borrow().find().indexed_rows() == 0,
+                "close retained find timer/index",
+            )?;
+            require(
+                if ui.get_article_active() {
+                    ui.get_article_focused()
+                } else {
+                    ui.get_terminal_input_focused()
+                },
+                "find close lost terminal focus",
+            )?;
+            ui.invoke_find_action(0);
+            ui.set_find_query("中".into());
+            ui.invoke_find_edit("中".into());
+            wait(
+                || owner.core.borrow().find().reply(0).total == 3,
+                "reopened find did not rebuild",
+            )
+            .await?;
+            ui.invoke_find_action(3);
+            verification::capture(&ui, &directory, "closed-find.png")?;
+            // Station input enters the production typed path. OS Winit keys
+            // require their own evidence, separate from toolkit text above.
+            let generation = connection.updates.borrow().generation;
+            owner.route_input(generation, b"/".to_vec())?;
+            wait(
+                || {
+                    matches!(
+                        connection.updates.borrow().context(),
+                        Context::MainMenu { .. }
+                    )
+                },
+                "explicit station slash did not reach strict peer",
+            )
+            .await?;
+            wait(
+                || !ui.get_find_available(),
+                "foreign screen retained local reader search",
+            )
+            .await?;
+            let result = serde_json::json!({"status":"passed","events":"Slint toolkit; synthetic foreground; no OS IME claim","hits":hits,"source_unchanged":true,"png_unchanged":true,"queries_release_index":true,"preload_requests":owner.requests.get(),"peer_bytes":[47],"mode_at_start":if original.rows==24 {"confirmed reading"}else{"cached reading"}});
+            std::fs::write(
+                directory.join("article-find.json"),
+                serde_json::to_vec_pretty(&result).map_err(|e| e.to_string())?,
+            )
+            .map_err(|e| e.to_string())?;
+            Ok(())
+        },
+    )
+}

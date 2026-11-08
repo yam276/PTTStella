@@ -47,6 +47,10 @@ pub enum Probe {
     ArticleFull,
     ArticleInput,
     ArticleOutput,
+    ArticleKeepAlive,
+    ArticlePaste,
+    ArticleFind,
+    ArticleFindTerminal,
     ArticleLong,
     ArticleStall,
     ArticleTerminal,
@@ -91,6 +95,9 @@ pub fn with_probe(
         Probe::ArticleFull => "slint_full_load",
         Probe::ArticleInput => "slint_article_input",
         Probe::ArticleOutput => "slint_article_output",
+        Probe::ArticleKeepAlive => "slint_article_keepalive",
+        Probe::ArticlePaste => "slint_article_paste",
+        Probe::ArticleFind | Probe::ArticleFindTerminal => "slint_article_find",
         Probe::ArticleLong => "slint_long_load",
         Probe::ArticleStall => "slint_stalled_article",
         Probe::ArticleTerminal => "slint_terminal_pages",
@@ -135,6 +142,11 @@ pub fn with_probe(
                 pttstella::replay::native_article_input_page(1)?,
                 pttstella::replay::native_article_input_page(2)?,
             ),
+            Probe::ArticleKeepAlive => Connection::start_article_keep_alive_probe(),
+            Probe::ArticlePaste => Connection::start_article_paste_probe(),
+            Probe::ArticleFind | Probe::ArticleFindTerminal => {
+                Connection::start_article_find_probe()
+            }
             Probe::ArticleOutput => Connection::start_article_load_probe(
                 pttstella::replay::native_article_output_page(1)?,
                 vec![pttstella::replay::native_article_output_page(2)?],

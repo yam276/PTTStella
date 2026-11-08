@@ -25,9 +25,41 @@ pub fn start(
     owner: Rc<ArticleSession>,
     connection: Rc<Connection>,
     output: Option<Rc<crate::output::Output>>,
+    paste: Option<Rc<crate::paste::Paste>>,
     directory: PathBuf,
     case: crate::session::Probe,
 ) -> Result<Verification, Box<dyn Error>> {
+    if matches!(
+        case,
+        crate::session::Probe::ArticleFind | crate::session::Probe::ArticleFindTerminal
+    ) {
+        return super::find_probe::start(
+            ui,
+            owner,
+            connection,
+            output.ok_or("find output missing")?,
+            directory,
+        );
+    }
+    if case == crate::session::Probe::ArticleKeepAlive {
+        return crate::keep_alive::probe::start(
+            ui,
+            owner,
+            connection,
+            output.ok_or("article keepalive output missing")?,
+            directory,
+        );
+    }
+    if case == crate::session::Probe::ArticlePaste {
+        return crate::paste::probe::start(
+            ui,
+            owner,
+            connection,
+            output.ok_or("article paste output missing")?,
+            paste.ok_or("article paste owner missing")?,
+            directory,
+        );
+    }
     if case == crate::session::Probe::ArticleOutput {
         return super::output_probe::start(
             ui,
@@ -312,6 +344,10 @@ pub fn start(
                 }
                 until(
                     || {
+                        // This is a synthetic toolkit run. Keep its explicit
+                        // activation after testing background pause above.
+                        verification::foreground(&ui, true);
+                        ui.invoke_focus_article();
                         owner.progress().is_some_and(|(_, _, last, state)| {
                             last == if long { 837 } else { 441 }
                                 && state == Some(LoadState::Complete)

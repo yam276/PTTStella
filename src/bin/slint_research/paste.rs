@@ -5,15 +5,25 @@ use pttstella::{
     input::{self, PreparedPaste},
     msg,
     navigation::{self, Stamp},
+    surface_state::Identity,
 };
 use slint::ComponentHandle;
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
+    thread::JoinHandle,
 };
+#[path = "article_paste_probe.rs"]
+pub mod probe;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Source {
+    stamp: Stamp,
+    identity: Option<Identity>,
+}
 struct Pending {
     stamp: Stamp,
+    identity: Option<Identity>,
     prepared: PreparedPaste,
 }
 
@@ -25,7 +35,17 @@ impl Pending {
             input::prepare_paste_with(text, view.site.encoding)
         }
         .map_err(|error| error.to_string())?;
-        Ok(Self { stamp, prepared })
+        Ok(Self {
+            stamp,
+            identity: None,
+            prepared,
+        })
+    }
+    fn source(&self) -> Source {
+        Source {
+            stamp: self.stamp,
+            identity: self.identity,
+        }
     }
 }
 
@@ -33,9 +53,14 @@ pub struct Paste {
     connection: Rc<Connection>,
     presented: Rc<Cell<Option<FrameId>>>,
     reading: Cell<bool>,
-    read_stamp: Cell<Option<Stamp>>,
+    read_source: Cell<Option<Source>>,
     pending: RefCell<Option<Pending>>,
     clipboard: Clipboard,
+    article: Option<Rc<crate::article::session::ArticleSession>>,
+    worker: RefCell<Option<JoinHandle<()>>>,
+    read_job: RefCell<Option<slint::JoinHandle<()>>>,
+    send_job: RefCell<Option<slint::JoinHandle<()>>>,
+    closed: Cell<bool>,
 }
 
 impl Paste {
@@ -44,14 +69,20 @@ impl Paste {
         connection: Rc<Connection>,
         presented: Rc<Cell<Option<FrameId>>>,
         clipboard: Clipboard,
+        article: Option<Rc<crate::article::session::ArticleSession>>,
     ) -> Rc<Self> {
         let paste = Rc::new(Self {
             connection,
             presented,
             reading: Cell::new(false),
-            read_stamp: Cell::new(None),
+            read_source: Cell::new(None),
             pending: RefCell::new(None),
             clipboard,
+            article,
+            worker: RefCell::new(None),
+            read_job: RefCell::new(None),
+            send_job: RefCell::new(None),
+            closed: Cell::new(false),
         });
         ui.set_paste_cancel_label(msg!("cancel").into());
         ui.set_paste_send_label(msg!("paste-send").into());
@@ -79,21 +110,15 @@ impl Paste {
             let (weak, paste) = (ui.as_weak(), paste.clone());
             move || {
                 if let Some(ui) = weak.upgrade() {
-                    let current = paste.current(&ui);
-                    let obsolete = paste
-                        .pending
-                        .borrow()
-                        .as_ref()
-                        .is_some_and(|pending| Some(pending.stamp) != current);
-                    if obsolete
-                        || paste
-                            .read_stamp
-                            .get()
-                            .is_some_and(|stamp| Some(stamp) != current)
-                    {
-                        paste.cancel(&ui, !ui.get_switching_station());
-                        ui.set_input_notice(msg!("paste-stale").into());
-                    }
+                    paste.updated(&ui);
+                }
+            }
+        });
+        ui.on_paste_updated({
+            let (weak, paste) = (ui.as_weak(), paste.clone());
+            move || {
+                if let Some(ui) = weak.upgrade() {
+                    paste.updated(&ui)
                 }
             }
         });
@@ -101,52 +126,125 @@ impl Paste {
     }
 
     pub fn request(self: &Rc<Self>, ui: &TerminalWindow) {
-        if self.reading.get() || ui.get_paste_open() {
+        let clipboard = self.clipboard.clone();
+        self.request_with(ui, move || clipboard.read_text());
+    }
+
+    // Production and explicit synthetic conformance use the same owned worker;
+    // only the source of the clipboard bytes differs. Automated conformance
+    // supplies owned text; ordinary user paste reads the native clipboard.
+    fn request_with(
+        self: &Rc<Self>,
+        ui: &TerminalWindow,
+        read: impl FnOnce() -> Result<String, String> + Send + 'static,
+    ) {
+        if self.closed.get()
+            || self.reading.get()
+            || self.send_job.borrow().is_some()
+            || ui.get_paste_open()
+        {
             return;
         }
-        let Some(stamp) = self.current(ui) else {
+        if !ui.get_context_focus_restorable() || !self.field_focused(ui) {
+            ui.set_input_notice(msg!("paste-stale").into());
+            return;
+        }
+        let Some(source) = self.current(ui) else {
             ui.set_input_notice(msg!("paste-stale").into());
             return;
         };
         self.reading.set(true);
-        self.read_stamp.set(Some(stamp));
+        self.read_source.set(Some(source));
         ui.set_paste_reading(true);
         ui.invoke_keep_alive_changed();
         ui.set_input_notice("".into());
-        let (weak, paste) = (ui.as_weak(), self.clone());
-        if let Err(error) = slint::spawn_local(async move {
-            if paste.read_stamp.get() != Some(stamp) {
-                paste.reading.set(false);
-                if let Some(ui) = weak.upgrade() {
-                    ui.set_paste_reading(false);
-                    ui.invoke_keep_alive_changed();
-                }
+        let (send, receive) = tokio::sync::oneshot::channel();
+        let worker = match std::thread::Builder::new()
+            .name("pttstella-slint-paste".into())
+            .spawn(move || {
+                let _ = send.send(read());
+            }) {
+            Ok(worker) => worker,
+            Err(error) => {
+                self.reading.set(false);
+                self.cancel_read();
+                ui.set_paste_reading(false);
+                ui.invoke_keep_alive_changed();
+                ui.set_input_notice(error.to_string().into());
                 return;
             }
-            let clipboard = paste.clipboard.clone();
-            let result = tokio::task::spawn_blocking(move || clipboard.read_text())
+        };
+        self.worker.replace(Some(worker));
+        let (weak, paste) = (ui.as_weak(), Rc::downgrade(self));
+        match slint::spawn_local(async move {
+            let result = receive
                 .await
                 .unwrap_or_else(|_| Err(msg!("paste-unavailable")));
+            let Some(paste) = paste.upgrade() else { return };
+            let joined = paste.worker.borrow_mut().take().map(|worker| worker.join());
+            paste.read_job.borrow_mut().take();
             paste.reading.set(false);
-            let current = paste.read_stamp.take();
+            let current = paste.read_source.take();
+            if paste.closed.get() {
+                return;
+            }
             if let Some(ui) = weak.upgrade() {
-                if current == Some(stamp) {
-                    paste.complete(&ui, stamp, result);
+                if current == Some(source) {
+                    let result = if joined.is_some_and(|r| r.is_err()) {
+                        Err(msg!("paste-unavailable"))
+                    } else {
+                        result
+                    };
+                    paste.complete(&ui, source, result);
                 }
                 ui.set_paste_reading(false);
                 ui.invoke_keep_alive_changed();
             }
         }) {
-            self.reading.set(false);
-            self.cancel_read();
-            ui.set_paste_reading(false);
-            ui.invoke_keep_alive_changed();
-            ui.set_input_notice(error.to_string().into());
+            Ok(job) => {
+                self.read_job.replace(Some(job));
+            }
+            Err(error) => {
+                self.cancel_read();
+                self.reading.set(false);
+                self.worker.borrow_mut().take().map(|worker| worker.join());
+                ui.set_paste_reading(false);
+                ui.invoke_keep_alive_changed();
+                ui.set_input_notice(error.to_string().into());
+            }
+        }
+    }
+
+    fn field_focused(&self, ui: &TerminalWindow) -> bool {
+        if ui.get_article_active() {
+            ui.get_article_focused()
+        } else {
+            ui.get_terminal_input_focused()
+        }
+    }
+    fn updated(&self, ui: &TerminalWindow) {
+        if self.closed.get() || self.pending.borrow().is_none() && self.read_source.get().is_none()
+        {
+            return;
+        }
+        let current = self.current(ui);
+        let obsolete = self
+            .pending
+            .borrow()
+            .as_ref()
+            .is_some_and(|p| Some(p.source()) != current)
+            || self
+                .read_source
+                .get()
+                .is_some_and(|source| Some(source) != current);
+        if obsolete {
+            self.cancel(ui, !ui.get_switching_station());
+            ui.set_input_notice(msg!("paste-stale").into());
         }
     }
 
     pub fn cancel_read(&self) {
-        self.read_stamp.set(None);
+        self.read_source.set(None);
     }
 
     pub fn cancel(&self, ui: &TerminalWindow, restore_focus: bool) {
@@ -156,24 +254,51 @@ impl Paste {
         }
     }
 
-    fn current(&self, ui: &TerminalWindow) -> Option<Stamp> {
-        if ui.get_switching_station() {
+    fn current(&self, ui: &TerminalWindow) -> Option<Source> {
+        if self.closed.get() || ui.get_switching_station() || ui.get_frame_paint_pending() {
             return None;
         }
-        let view = self.connection.updates.borrow();
-        paste_stamp(&view, self.presented.get())
+        let Some(article) = &self.article else {
+            return paste_stamp(&self.connection.updates.borrow(), self.presented.get()).map(
+                |stamp| Source {
+                    stamp,
+                    identity: None,
+                },
+            );
+        };
+        let view = self.connection.updates.borrow().clone();
+        if view.phase != Phase::Connected
+            || view.input_pending
+            || view.output_pending
+            || view.login_pending
+        {
+            return None;
+        }
+        let identity = article.output_identity(&view)?;
+        Some(Source {
+            stamp: view.stamp(),
+            identity: Some(identity),
+        })
     }
 
-    fn complete(&self, ui: &TerminalWindow, stamp: Stamp, read: Result<String, String>) {
+    fn complete(
+        self: &Rc<Self>,
+        ui: &TerminalWindow,
+        source: Source,
+        read: Result<String, String>,
+    ) {
         let prepared = read.and_then(|text| {
-            let view = self.connection.updates.borrow();
-            if !ui.get_terminal_input_focused()
-                || ui.get_switching_station()
-                || paste_stamp(&view, self.presented.get()) != Some(stamp)
+            if !self.field_focused(ui)
+                || !ui.get_native_foreground()
+                || ui.get_native_composing()
+                || self.current(ui) != Some(source)
             {
                 return Err(msg!("paste-stale"));
             }
-            Pending::prepare(&view, stamp, &text)
+            let mut pending =
+                Pending::prepare(&self.connection.updates.borrow(), source.stamp, &text)?;
+            pending.identity = source.identity;
+            Ok(pending)
         });
         match prepared {
             Ok(pending) if pending.prepared.requires_confirmation() => {
@@ -194,28 +319,72 @@ impl Paste {
         }
     }
 
-    fn send(&self, ui: &TerminalWindow, pending: Pending) {
+    fn send(self: &Rc<Self>, ui: &TerminalWindow, pending: Pending) {
         let stamp = pending.stamp;
-        if self.current(ui) != Some(stamp) {
+        if self.closed.get()
+            || self.send_job.borrow().is_some()
+            || !ui.get_native_foreground()
+            || ui.get_native_composing()
+            || self.current(ui) != Some(pending.source())
+        {
             ui.set_input_notice(msg!("paste-stale").into());
             return;
         }
+        if let Some(article) = &self.article {
+            article.station_handoff();
+        }
         match self.connection.request_paste(stamp, pending.prepared.bytes) {
             Ok(reply) => {
-                let (weak, connection) = (ui.as_weak(), self.connection.clone());
-                if let Err(error) = slint::spawn_local(async move {
-                    if let Err(error) = reply.wait().await
-                        && connection.updates.borrow().generation == stamp.generation
+                let (weak, paste) = (ui.as_weak(), Rc::downgrade(self));
+                match slint::spawn_local(async move {
+                    let result = reply.wait().await;
+                    let Some(paste) = paste.upgrade() else { return };
+                    paste.send_job.borrow_mut().take();
+                    if paste.closed.get() {
+                        return;
+                    }
+                    if let Err(error) = result
+                        && paste.connection.updates.borrow().generation == stamp.generation
                         && let Some(ui) = weak.upgrade()
                     {
                         ui.set_input_notice(error.into());
                     }
                 }) {
-                    ui.set_input_notice(error.to_string().into());
+                    Ok(job) => {
+                        self.send_job.replace(Some(job));
+                    }
+                    Err(error) => ui.set_input_notice(error.to_string().into()),
                 }
             }
             Err(error) => ui.set_input_notice(error.into()),
         }
+    }
+
+    pub fn finish(&self) -> Result<(), String> {
+        self.closed.set(true);
+        self.cancel_read();
+        self.pending.borrow_mut().take();
+        if let Some(job) = self.read_job.borrow_mut().take() {
+            job.abort();
+        }
+        if let Some(job) = self.send_job.borrow_mut().take() {
+            job.abort();
+        }
+        let joined = self.worker.borrow_mut().take().map(|worker| worker.join());
+        self.reading.set(false);
+        if joined.is_some_and(|r| r.is_err()) {
+            return Err(msg!("paste-unavailable"));
+        }
+        Ok(())
+    }
+    pub fn stopped(&self) -> bool {
+        self.closed.get()
+            && !self.reading.get()
+            && self.worker.borrow().is_none()
+            && self.read_job.borrow().is_none()
+            && self.send_job.borrow().is_none()
+            && self.pending.borrow().is_none()
+            && self.read_source.get().is_none()
     }
 
     fn dismiss(ui: &TerminalWindow, restore_focus: bool) {
@@ -229,6 +398,8 @@ impl Paste {
 fn paste_stamp(view: &View, presented: Option<FrameId>) -> Option<Stamp> {
     let stamp = view.stamp();
     (view.phase == Phase::Connected
+        && !view.input_pending
+        && !view.login_pending
         && !view.output_pending
         && presented
             == Some(FrameId {

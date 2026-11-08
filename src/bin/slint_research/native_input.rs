@@ -108,8 +108,8 @@ pub fn mount(
     connection: Rc<Connection>,
     presented: Rc<Cell<Option<FrameId>>>,
     clipboard: Clipboard,
-) {
-    mount_window(ui, connection, presented, clipboard, None);
+) -> Rc<Paste> {
+    mount_window(ui, connection, presented, clipboard, None)
 }
 /// The article and terminal share this observer and the same Keyboard reducer.
 pub fn mount_article(
@@ -118,8 +118,8 @@ pub fn mount_article(
     presented: Rc<Cell<Option<FrameId>>>,
     clipboard: Clipboard,
     article: Rc<crate::article::session::ArticleSession>,
-) {
-    mount_window(ui, connection, presented, clipboard, Some(article));
+) -> Rc<Paste> {
+    mount_window(ui, connection, presented, clipboard, Some(article))
 }
 fn mount_window(
     ui: &TerminalWindow,
@@ -127,10 +127,16 @@ fn mount_window(
     presented: Rc<Cell<Option<FrameId>>>,
     clipboard: Clipboard,
     article: Option<Rc<crate::article::session::ArticleSession>>,
-) {
+) -> Rc<Paste> {
     ui.set_terminal_input(true);
     let input = Rc::new(RefCell::new(Input::default()));
-    let paste = Paste::mount(ui, connection.clone(), presented.clone(), clipboard);
+    let paste = Paste::mount(
+        ui,
+        connection.clone(),
+        presented.clone(),
+        clipboard,
+        article.clone(),
+    );
     ui.on_paste_request({
         let weak = ui.as_weak();
         let paste = paste.clone();
@@ -203,7 +209,10 @@ fn mount_window(
         let (weak, input, paste) = (ui.as_weak(), input.clone(), paste.clone());
         move || {
             if let Some(ui) = weak.upgrade() {
-                if !ui.get_terminal_input_focused() && !ui.get_article_focused() {
+                if !ui.get_find_focused()
+                    && !ui.get_terminal_input_focused()
+                    && !ui.get_article_focused()
+                {
                     input.borrow_mut().reset();
                     if !ui.get_context_open() && !ui.get_context_pending() && !ui.get_tools_busy() {
                         ui.invoke_station_mouse_cancel();
@@ -217,6 +226,7 @@ fn mount_window(
         }
     });
     let weak = ui.as_weak();
+    let paste_owner = paste.clone();
     ui.window().on_winit_window_event(move |_, event| {
         use EventResult::{PreventDefault, Propagate};
         let Some(ui) = weak.upgrade() else {
@@ -253,6 +263,7 @@ fn mount_window(
                             article.end_composition();
                         }
                         ui.set_native_composing(false);
+                        ui.set_find_composing(false);
                         ui.set_native_pointer_down(false);
                         ui.set_native_pointer_buttons(0);
                         ui.invoke_station_mouse_cancel();
@@ -277,6 +288,7 @@ fn mount_window(
                             article.end_composition();
                         }
                         ui.set_native_composing(false);
+                        ui.set_find_composing(false);
                         ui.set_native_pointer_down(false);
                         ui.set_native_pointer_buttons(0);
                         ui.invoke_station_mouse_cancel();
@@ -350,6 +362,7 @@ fn mount_window(
                         article.end_composition();
                     }
                     ui.set_native_composing(false);
+                    ui.set_find_composing(false);
                     ui.invoke_keep_alive_changed();
                     return Propagate;
                 }
@@ -359,6 +372,63 @@ fn mount_window(
                     ..
                 } => {}
                 _ => return Propagate,
+            }
+            // Local search owns its native text field, including IME and paste.
+            // Route it before the BBS focus/keyboard gates (Vim may be normal).
+            if let WindowEvent::KeyboardInput { event, .. } = event
+                && ui.get_find_available()
+                && !ui.get_find_blocked()
+                && !ui.get_find_composing()
+                && !input.composition.as_ref().is_some_and(|c| c.active)
+                && find_shortcut(event.physical_key, input.modifiers)
+            {
+                let activate = event.state == ElementState::Pressed && !event.repeat;
+                drop(input);
+                if activate {
+                    ui.invoke_find_action(0);
+                }
+                return PreventDefault;
+            }
+            if ui.get_find_open() {
+                let composing = ui.get_find_composing();
+                let back = input.modifiers.shift_key();
+                if let WindowEvent::KeyboardInput { event, .. } = event
+                    && ui.get_find_focused()
+                    && !composing
+                    && !ui.get_find_blocked()
+                    && let Some(code) = find_edit_shortcut(event.physical_key, input.modifiers)
+                {
+                    let activate = event.state == ElementState::Pressed && !event.repeat;
+                    drop(input);
+                    if activate {
+                        ui.invoke_find_edit_key(code);
+                    }
+                    return PreventDefault;
+                }
+                drop(input);
+                match event {
+                    WindowEvent::Ime(Ime::Preedit(text, _)) => {
+                        ui.set_find_composing(!text.is_empty())
+                    }
+                    WindowEvent::Ime(Ime::Commit(_)) => ui.set_find_composing(false),
+                    WindowEvent::KeyboardInput { event, .. }
+                        if !composing && !ui.get_find_blocked() =>
+                    {
+                        let action = match event.logical_key {
+                            Key::Named(NamedKey::Enter) => Some(if back { 1 } else { 2 }),
+                            Key::Named(NamedKey::Escape) => Some(3),
+                            _ => None,
+                        };
+                        if let Some(action) = action {
+                            if event.state == ElementState::Pressed && !event.repeat {
+                                ui.invoke_find_action(action);
+                            }
+                            return PreventDefault;
+                        }
+                    }
+                    _ => {}
+                }
+                return Propagate;
             }
             let article_focused =
                 ui.get_article_active() && ui.get_article_focused() && article.is_some();
@@ -491,9 +561,6 @@ fn mount_window(
                     ) {
                         if event.state == ElementState::Pressed && !event.repeat {
                             drop(input);
-                            if let Some(article) = &article {
-                                article.station_handoff();
-                            }
                             paste.request(&ui);
                         }
                         return PreventDefault;
@@ -599,6 +666,7 @@ fn mount_window(
         result
     });
     ui.invoke_keyboard_updated();
+    paste_owner
 }
 
 fn refresh(ui: &TerminalWindow, input: &RefCell<Input>, connection: &Connection) {
@@ -608,8 +676,11 @@ fn refresh(ui: &TerminalWindow, input: &RefCell<Input>, connection: &Connection)
         let context = input.observe(&view);
         let status = input.keyboard.status(&context);
         let available = actions_available(ui, &view);
-        let allowed = matches!(status.mode, "input" | "once");
-        let ime_update = if !ui.get_terminal_input_focused() && !ui.get_article_focused() {
+        let allowed = ui.get_find_focused() || matches!(status.mode, "input" | "once");
+        let ime_update = if !ui.get_find_focused()
+            && !ui.get_terminal_input_focused()
+            && !ui.get_article_focused()
+        {
             input.ime_allowed = None;
             None
         } else if input.ime_allowed != Some(allowed) {
@@ -653,6 +724,31 @@ fn actions_available(ui: &TerminalWindow, view: &View) -> bool {
         && !ui.get_login_open()
         && !ui.get_login_busy()
         && !ui.get_output_busy()
+}
+
+fn find_shortcut(physical: PhysicalKey, modifiers: ModifiersState) -> bool {
+    physical == PhysicalKey::Code(KeyCode::KeyF)
+        && modifiers.control_key() != modifiers.super_key()
+        && !modifiers.alt_key()
+        && !modifiers.shift_key()
+}
+fn find_edit_shortcut(physical: PhysicalKey, modifiers: ModifiersState) -> Option<i32> {
+    let command = if cfg!(target_os = "macos") {
+        modifiers.super_key() && !modifiers.control_key()
+    } else {
+        modifiers.control_key() && !modifiers.super_key()
+    };
+    if !command || modifiers.alt_key() {
+        return None;
+    }
+    match physical {
+        PhysicalKey::Code(KeyCode::KeyZ) => Some(if modifiers.shift_key() { 5 } else { 4 }),
+        PhysicalKey::Code(KeyCode::KeyA) if !modifiers.shift_key() => Some(0),
+        PhysicalKey::Code(KeyCode::KeyC) if !modifiers.shift_key() => Some(1),
+        PhysicalKey::Code(KeyCode::KeyX) if !modifiers.shift_key() => Some(2),
+        PhysicalKey::Code(KeyCode::KeyV) if !modifiers.shift_key() => Some(3),
+        _ => None,
+    }
 }
 
 fn clipboard_shortcut(
@@ -771,6 +867,52 @@ fn physical_code(code: KeyCode) -> Option<String> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn find_uses_physical_f_and_preserves_fullscreen_and_composition_modifiers() {
+        let f = PhysicalKey::Code(KeyCode::KeyF);
+        assert!(find_shortcut(f, ModifiersState::CONTROL));
+        assert!(find_shortcut(f, ModifiersState::SUPER));
+        for modifiers in [
+            ModifiersState::empty(),
+            ModifiersState::CONTROL | ModifiersState::SUPER,
+            ModifiersState::CONTROL | ModifiersState::ALT,
+            ModifiersState::CONTROL | ModifiersState::SHIFT,
+        ] {
+            assert!(!find_shortcut(f, modifiers));
+        }
+        assert!(!find_shortcut(
+            PhysicalKey::Code(KeyCode::Slash),
+            ModifiersState::CONTROL
+        ));
+        let command = if cfg!(target_os = "macos") {
+            ModifiersState::SUPER
+        } else {
+            ModifiersState::CONTROL
+        };
+        for (key, code) in [
+            (KeyCode::KeyA, 0),
+            (KeyCode::KeyC, 1),
+            (KeyCode::KeyX, 2),
+            (KeyCode::KeyV, 3),
+            (KeyCode::KeyZ, 4),
+        ] {
+            assert_eq!(
+                find_edit_shortcut(PhysicalKey::Code(key), command),
+                Some(code)
+            );
+            assert_eq!(
+                find_edit_shortcut(PhysicalKey::Code(key), command | ModifiersState::ALT),
+                None
+            );
+        }
+        assert_eq!(
+            find_edit_shortcut(
+                PhysicalKey::Code(KeyCode::KeyZ),
+                command | ModifiersState::SHIFT
+            ),
+            Some(5)
+        );
+    }
     #[test]
     fn native_adapter_uses_cjk_physical_keys_only_for_browsing_and_control_shortcuts() {
         let context = pttstella::navigation::Context::ArticleReading {

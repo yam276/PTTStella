@@ -20,12 +20,17 @@ impl ArticleSession {
         self.next_paint.set(tokio::time::Instant::now());
         if let Some(ui) = self.ui.upgrade() {
             ui.invoke_output_updated();
+            ui.invoke_paste_updated();
+            ui.invoke_keep_alive_changed();
         }
         self.notify.notify_one();
     }
     pub fn output_identity(&self, view: &View) -> Option<Identity> {
         let ui = self.ui.upgrade()?;
-        if self.closed.get() || self.composition_handoff.get().is_some() {
+        if self.closed.get()
+            || ui.get_frame_paint_pending()
+            || self.composition_handoff.get().is_some()
+        {
             return None;
         }
         let core = self.core.borrow();

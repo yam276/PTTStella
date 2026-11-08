@@ -11,7 +11,7 @@ use pttstella::{
     settings::{ArticleMode, DisplaySettings},
     surface_state::{Identity, SurfaceState},
 };
-use slint::ComponentHandle;
+use slint::{ComponentHandle, Timer};
 use std::{
     cell::{Cell, RefCell},
     future::Future,
@@ -22,6 +22,8 @@ use std::{
 use tokio::{sync::Notify, time::Instant};
 
 type ReplyWait = Pin<Box<dyn Future<Output = Result<(), String>>>>;
+#[path = "find.rs"]
+mod find;
 #[path = "input.rs"]
 mod input;
 #[path = "outputs.rs"]
@@ -55,6 +57,10 @@ pub struct ArticleSession {
     raw_generation: Cell<Option<u64>>,
     focus_after_paint: Cell<bool>,
     input_trace_left: Cell<u8>,
+    find_timer: Timer,
+    find_draft: RefCell<Option<String>>,
+    find_serial: Cell<u64>,
+    find_version: Cell<u64>,
     pub requests: Cell<usize>,
 }
 impl ArticleSession {
@@ -103,8 +109,13 @@ impl ArticleSession {
                     0
                 },
             ),
+            find_timer: Timer::default(),
+            find_draft: RefCell::new(None),
+            find_serial: Cell::new(0),
+            find_version: Cell::new(0),
             requests: Cell::new(0),
         });
+        owner.install_find(ui);
         ui.on_article_rendered({
             let owner = owner.clone();
             move || owner.rendered()
@@ -159,13 +170,15 @@ impl ArticleSession {
         let mut updates = owner.connection.updates.clone();
         let job=slint::spawn_local(async move {
             let mut changed=true;
+            // The reducer and queue must consume the same immutable snapshot.
+            let mut observed=None;
             let mut pending:Option<(u64,ReplyWait)>=None;
             loop {
                 let Some(owner)=weak.upgrade() else {break};if owner.closed.get(){break;}
                 if pending.as_ref().is_some_and(|(serial,_)|*serial!=owner.serial.get()){pending=None;}
-                if changed {let view=updates.borrow_and_update().clone();owner.observe(&view);}
+                if changed {let view=updates.borrow_and_update().clone();owner.observe(&view);observed=Some(view);}
                 if pending.as_ref().is_some_and(|(serial,_)|*serial!=owner.serial.get()){pending=None;}
-                owner.step();
+                if let Some(view)=observed.as_ref(){owner.step(view);}
                 if let Some(reply)=owner.reply.take() {pending=Some((owner.serial.get(),Box::pin(reply.wait())));}
                 let deadline=owner.deadline();drop(owner);
                 tokio::select! {
@@ -251,6 +264,7 @@ impl ArticleSession {
         }
         self.core.borrow_mut().update(view);
         self.retire_stale_projection(view);
+        self.find_sync_ui();
     }
     fn retire_stale_projection(&self, view: &View) {
         let (no_article, scope_changed, stale_packet) = {
@@ -320,7 +334,14 @@ impl ArticleSession {
         }
         self.terminal_pending.set(None);
         self.terminal_shown.set(Some(identity));
+        self.core
+            .borrow_mut()
+            .find_sync(&self.connection.updates.borrow());
+        self.find_sync_ui();
+        self.find_retry_draft();
         ui.invoke_output_updated();
+        ui.invoke_paste_updated();
+        ui.invoke_keep_alive_changed();
         self.notify.notify_one();
     }
     fn rendered(&self) {
@@ -336,7 +357,11 @@ impl ArticleSession {
         }
         // Native callbacks may read the watch again while the writer is queued.
         // Never retain a watch read guard across a reentrant UI callback.
-        let generation = self.connection.updates.borrow().generation;
+        let view = self.connection.updates.borrow().clone();
+        let generation = view.generation;
+        self.core.borrow_mut().find_sync(&view);
+        self.find_sync_ui();
+        self.find_retry_draft();
         let scope = {
             let core = self.core.borrow();
             core.last_displayed().and_then(|p| {
@@ -357,6 +382,7 @@ impl ArticleSession {
             if let Some(scope) = scope {
                 if (previous != Some(scope) || self.focus_after_paint.get())
                     && ui.get_native_foreground()
+                    && !ui.get_find_open()
                 {
                     ui.invoke_focus_article();
                     self.focus_after_paint.set(!ui.get_article_focused());
@@ -368,18 +394,19 @@ impl ArticleSession {
         }
         if let Some(ui) = self.ui.upgrade() {
             ui.invoke_output_updated();
+            ui.invoke_paste_updated();
+            ui.invoke_keep_alive_changed();
         }
         self.notify.notify_one();
     }
-    fn step(self: &Rc<Self>) {
+    fn step(self: &Rc<Self>, view: &View) {
         if self.closed.get() {
             return;
         }
         let Some(ui) = self.ui.upgrade() else { return };
         let now = Instant::now();
         self.core.borrow_mut().expire_full_load(now);
-        let view = self.connection.updates.borrow().clone();
-        self.retire_stale_projection(&view);
+        self.retire_stale_projection(view);
         let progress = self.core.borrow().reading_progress();
         ui.set_article_load_available(progress.is_some());
         ui.set_article_load_active(self.core.borrow().full_load_active());
@@ -437,7 +464,7 @@ impl ArticleSession {
         {
             let packet = {
                 let mut core = self.core.borrow_mut();
-                core.queue(&view, false, &self.display).map(|p| {
+                core.queue(view, false, &self.display).map(|p| {
                     (
                         Identity::of(p),
                         p.article.clone(),
@@ -450,7 +477,7 @@ impl ArticleSession {
                 if let Some(article) = article {
                     self.terminal_pending.set(None);
                     self.terminal_shown.set(None);
-                    let source = self.core.borrow().article_source(&view, &self.display);
+                    let source = self.core.borrow().article_source(view, &self.display);
                     if let Some(source) = source {
                         let scope = (
                             view.generation,
@@ -459,12 +486,12 @@ impl ArticleSession {
                         );
                         self.shown.set(Some(scope));
                         let mut slot = self.view.borrow_mut();
-                        if let Some(native) = slot.as_ref() {
+                        let reused = if let Some(native) = slot.as_ref() {
                             native.update(
                                 source,
                                 rows,
                                 (scope.0, scope.1, scope.2, article.first_line),
-                            );
+                            )
                         } else {
                             let renderer = self.renderer.borrow().fork(source.frame.clone());
                             match ArticleView::mount_shared(
@@ -485,14 +512,32 @@ impl ArticleSession {
                                 }
                                 Err(error) => self.notice(error),
                             }
+                            false
+                        };
+                        drop(slot);
+                        if reused {
+                            self.rendered();
                         }
                         self.next_paint.set(now + Duration::from_millis(250));
                     }
                 } else {
+                    let reused = self.terminal_shown.get() == Some(identity)
+                        && self.terminal_size.get().is_some()
+                        && !ui.get_frame_paint_pending()
+                        && self.terminal_presented.get()
+                            == Some(FrameId {
+                                generation: identity.generation,
+                                revision: identity.revision,
+                            })
+                        && terminal
+                            .as_ref()
+                            .is_some_and(|frame| self.renderer.borrow().frame() == frame);
                     self.terminal_pending.set(Some(identity));
                     self.terminal_shown.set(None);
-                    self.terminal_presented.set(None);
-                    if let Some(frame) = terminal {
+                    if reused {
+                        self.terminal_rendered();
+                    } else if let Some(frame) = terminal {
+                        self.terminal_presented.set(None);
                         self.renderer.borrow_mut().set_frame(frame);
                         self.terminal_size.set(None);
                         ui.invoke_geometry_changed();
@@ -506,13 +551,13 @@ impl ArticleSession {
             && !ui.get_article_blocked()
             && !self.core.borrow().has_in_flight()
             && !self.core.borrow().dirty()
-            && self.input_context(&view).is_some()
+            && self.input_context(view).is_some()
         {
             ui.invoke_focus_article();
             self.focus_after_paint.set(!ui.get_article_focused());
         }
         if !self.busy.get() && self.allowed(&ui) && view.phase == Phase::Connected {
-            let intent = self.core.borrow_mut().next_full_page(&view);
+            let intent = self.core.borrow_mut().next_full_page(view);
             if let Some(intent) = intent {
                 match self.connection.request_cancellable_navigate(
                     view.stamp(),
@@ -521,7 +566,7 @@ impl ArticleSession {
                 ) {
                     Ok((reply, cancellation)) => {
                         if let Ok(bytes) = pttstella::navigation::plan(&view.context(), intent) {
-                            self.core.borrow_mut().article_input(&view, &bytes);
+                            self.core.borrow_mut().article_input(view, &bytes);
                         }
                         self.busy.set(true);
                         self.cancellation.replace(Some(cancellation));
@@ -571,6 +616,9 @@ impl ArticleSession {
     }
     pub fn finish(&self) {
         self.closed.set(true);
+        self.find_timer.stop();
+        self.find_draft.take();
+        self.core.borrow_mut().find_finish();
         self.cancel_command();
         self.notify.notify_one();
         self.permit.set(None);
@@ -596,6 +644,12 @@ impl ArticleSession {
             && self.reply.borrow().is_none()
             && !self.busy.get()
     }
+    pub fn raster_count(&self) -> usize {
+        self.view
+            .borrow()
+            .as_ref()
+            .map_or(0, |view| view.raster_count.get())
+    }
     pub fn progress(
         &self,
     ) -> Option<(
@@ -606,10 +660,17 @@ impl ArticleSession {
     )> {
         self.core.borrow().reading_progress()
     }
-    pub(super) fn diagnostics(&self) -> serde_json::Value {
+    pub(crate) fn diagnostics(&self) -> serde_json::Value {
         let core = self.core.borrow();
         let ui = self.ui.upgrade();
+        let view = self.connection.updates.borrow();
+        let id = |p: Option<Identity>| p.map(|p| (p.generation, p.revision, p.presentation));
         serde_json::json!({
+            "displayed":id(core.last_displayed().map(Identity::of)),"in_flight":id(core.pending_identity()),
+            "terminal_pending":id(self.terminal_pending.get()),"terminal_shown":id(self.terminal_shown.get()),
+            "terminal_presented":self.terminal_presented.get().map(|f|(f.generation,f.revision)),
+            "size_installed":self.terminal_size.get().is_some(),"stamp":view.stamp(),"output_pending":view.output_pending,
+            "input_pending":view.input_pending,"closed":self.closed.get(),
             "reading_scope": core.reading_scope(), "permit": self.permit.get(),
             "shown": self.shown.get(), "pending": format!("{:?}", core.pending_identity()),
             "dirty": core.dirty(), "progress": format!("{:?}", self.progress()),

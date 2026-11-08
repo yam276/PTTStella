@@ -7,6 +7,8 @@ use pttstella::{
 };
 use slint::ComponentHandle;
 use std::{cell::Cell, rc::Rc};
+#[path = "article_keepalive_probe.rs"]
+pub mod probe;
 
 #[derive(Default)]
 struct Admission {
@@ -52,6 +54,7 @@ pub fn mount(
     ui: &TerminalWindow,
     connection: Rc<Connection>,
     presented: Rc<Cell<Option<FrameId>>>,
+    article: Option<Rc<crate::article::session::ArticleSession>>,
 ) {
     ui.on_keep_alive_changed({
         let weak = ui.as_weak();
@@ -59,10 +62,25 @@ pub fn mount(
         let connection = connection.clone();
         move || {
             let Some(ui) = weak.upgrade() else { return };
+            let surface_ready = ui.get_keep_alive_surface_ready();
+            // Drop the watch guard before asking native geometry/properties.
+            // The source page is always the bounded terminal View (80x24).
+            let shown = if surface_ready && ui.get_article_active() {
+                let view = connection.updates.borrow().clone();
+                article
+                    .as_ref()
+                    .and_then(|article| article.output_identity(&view))
+                    .map(|id| FrameId {
+                        generation: id.generation,
+                        revision: id.revision,
+                    })
+            } else {
+                presented.get()
+            };
             let (signal, available, enabled) = {
                 let view = connection.updates.borrow();
                 (
-                    admission.update(&view, presented.get(), ui.get_keep_alive_surface_ready()),
+                    admission.update(&view, shown, surface_ready),
                     view.phase == Phase::Connected && view.site.ptt_features(),
                     view.keep_alive,
                 )

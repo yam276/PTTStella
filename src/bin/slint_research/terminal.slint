@@ -13,6 +13,46 @@ export component TerminalWindow inherits Window {
     min-width: 580px;
     min-height: 360px;
 
+    in property <bool> find-available;
+    in property <bool> find-open;
+    in property <bool> find-composing;
+    in property <string> find-title;
+    in property <string> find-placeholder;
+    in property <string> find-hint;
+    in property <string> find-previous-label;
+    in property <string> find-next-label;
+    in property <string> find-close-label;
+    in property <string> find-status;
+    in property <bool> find-has-matches;
+    in-out property <string> find-query;
+    out property <bool> find-focused: root.find-open && find-input.has-focus;
+    out property <bool> find-blocked: !root.native-foreground || root.native-composing || root.show-about
+        || root.switching-station || root.login-open || root.login-busy || root.paste-open || root.output-busy;
+    callback find-action(int);
+    callback find-edit(string);
+    callback find-edit-key(int);
+    callback find-redraw;
+    callback find-composition-changed;
+    callback find-state-changed;
+    callback focus-find(bool);
+    callback find-terminal-reveal(int,int);
+    changed find-focused => { root.terminal-focus-changed(); }
+    changed find-composing => { root.find-composition-changed(); }
+    changed find-blocked => { root.find-state-changed(); }
+    focus-find(select) => { find-input.focus(); if select { find-input.select-all(); } }
+    find-edit-key(code) => {
+        if code == 0 { find-input.select-all(); }
+        else if code == 1 { find-input.copy(); }
+        else if code == 2 { find-input.cut(); }
+        else if code == 3 { find-input.paste(); }
+        else if code == 4 { find-input.undo(); }
+        else if code == 5 { find-input.redo(); }
+    }
+    find-terminal-reveal(row,col) => {
+        viewport.content-y = clamp(viewport.height / 2 - root.raster-height * (row + 0.5) / 24, min(0px, viewport.height - viewport.content-height), 0px);
+        viewport.content-x = clamp(viewport.width / 2 - raster.x - root.raster-width * col / 80, min(0px, viewport.width - viewport.content-width), 0px);
+    }
+
     in property <bool> article-active;
     in property <bool> article-station;
     callback article-resume-reading;
@@ -29,7 +69,7 @@ export component TerminalWindow inherits Window {
     changed article-focused => { root.terminal-focus-changed(); }
     out property <bool> article-reading-ready: root.native-foreground && root.article-focused && !root.article-blocked && !root.switching-station && !root.native-pointer-down && !root.login-busy && !root.paste-reading && !root.output-busy && !root.selection-active && !root.selection-dragging && !root.keyboard-pending && !root.navigation-busy && !root.station-mouse-held && !root.context-pending;
     changed article-reading-ready => { root.article-session-updated(); }
-    out property <bool> article-blocked: root.show-about || root.login-open || root.paste-open || root.tools-busy || root.context-open || root.native-composing;
+    out property <bool> article-blocked: root.find-open || root.show-about || root.login-open || root.paste-open || root.tools-busy || root.context-open || root.native-composing;
     callback article-layout-changed;
     callback article-rendered;
     callback article-session-updated;
@@ -66,7 +106,7 @@ export component TerminalWindow inherits Window {
     in property <[ToolItem]> tools-actions;
     in property <string> tools-title;
     in property <string> tools-ball-label;
-    out property <bool> tools-source-blocked: !root.native-foreground || root.native-composing || root.show-about || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy;
+    out property <bool> tools-source-blocked: root.find-open || !root.native-foreground || root.native-composing || root.show-about || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy;
     out property <bool> pointer-shift-held: root.pointer-shift;
     callback tools-pointer(int,length,length);
     callback tools-toggle;
@@ -144,8 +184,8 @@ export component TerminalWindow inherits Window {
     in property <bool> frame-paint-pending;
     in property <bool> keep-alive-available;
     in property <string> keep-alive-label;
-    out property <bool> keep-alive-surface-ready: root.native-foreground
-        && root.terminal-input-focused && !root.native-composing && !root.native-pointer-down
+    out property <bool> keep-alive-surface-ready: !root.find-open && root.native-foreground
+        && (root.article-active ? root.article-focused : root.terminal-input-focused) && !root.native-composing && !root.native-pointer-down
         && !root.show-about && !root.switching-station && !root.paste-open && !root.paste-reading
         && !root.frame-paint-pending && !root.login-open && !root.login-busy
         && !root.selection-active && !root.selection-dragging && !root.output-busy
@@ -186,7 +226,7 @@ export component TerminalWindow inherits Window {
     in property <[SelectionRect]> navigation-rects;
     in property <int> pointer-cursor;
     in property <string> pointer-url;
-    out property <bool> context-source-blocked: !root.native-foreground || root.native-composing
+    out property <bool> context-source-blocked: root.find-open || !root.native-foreground || root.native-composing
         || root.show-about || root.switching-station || root.frame-paint-pending
         || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy || root.tools-busy;
     out property <bool> terminal-pointer-blocked: root.context-source-blocked || root.context-open || root.context-pending;
@@ -214,7 +254,7 @@ export component TerminalWindow inherits Window {
     in property <bool> station-mouse-held;
     in property <string> station-mouse-label;
     in property <string> station-mouse-status;
-    out property <bool> station-pointer-blocked: !root.native-foreground || root.native-composing
+    out property <bool> station-pointer-blocked: root.find-open || !root.native-foreground || root.native-composing
         || root.show-about || root.switching-station || root.login-open || root.login-busy
         || root.paste-open || root.paste-reading || root.output-busy || root.pan-mode || root.context-open || root.context-pending || root.tools-busy;
     callback station-pointer(int, int, length, length, bool, bool, bool, bool) -> bool;
@@ -227,6 +267,7 @@ export component TerminalWindow inherits Window {
     callback output-action(int);
     callback output-updated;
     callback output-geometry-changed;
+    callback paste-updated;
     private property <length> physical-pixel: 1phx;
     private property <bool> show-about: false;
     private property <string> login-password;
@@ -572,6 +613,44 @@ export component TerminalWindow inherits Window {
     }
     focus-context => { context-area.focus-menu(); }
 
+    Rectangle {
+        visible: root.find-open;
+        x: root.width - self.width - 12px;
+        y: 44px;
+        width: min(560px, root.width - 24px);
+        height: 108px;
+        background: #252d38;
+        border-width: 1px;
+        border-color: #67768b;
+        border-radius: 6px;
+        VerticalLayout {
+            padding: 10px;
+            spacing: 6px;
+            HorizontalLayout {
+                spacing: 6px;
+                find-input := LineEdit {
+                    text <=> root.find-query;
+                    placeholder-text: root.find-placeholder;
+                    accessible-label: root.find-title;
+                    horizontal-stretch: 1;
+                    edited(text) => { root.find-edit(text); }
+                    key-pressed(event) => {
+                        if (!root.find-composing && !root.find-blocked) {
+                            if (event.text == Key.Return) { root.find-action(event.modifiers.shift ? 1 : 2); return accept; }
+                            if (event.text == Key.Escape) { root.find-action(3); return accept; }
+                        }
+                        return reject;
+                    }
+                }
+                Button { text: "↑"; accessible-label: root.find-previous-label; enabled: root.find-has-matches; clicked => { root.find-action(1); } }
+                Button { text: "↓"; accessible-label: root.find-next-label; enabled: root.find-has-matches; clicked => { root.find-action(2); } }
+                Button { text: "×"; accessible-label: root.find-close-label; clicked => { root.find-action(3); } }
+            }
+            Text { text: root.find-status; color: #e3e8ee; }
+            Text { text: root.find-hint; color: #b6c4d5; font-size: 11px; wrap: word-wrap; }
+        }
+    }
+
     show-login-popup => {
         root.login-password = "";
         root.login-remember = false;
@@ -609,10 +688,10 @@ export component TerminalWindow inherits Window {
     }
 
     show-paste-preview => { paste-dialog.show(); }
-    focus-terminal => { if (root.terminal-input) { grid-input.focus(); } }
+    focus-terminal => { if root.article-active { root.focus-article(); } else if (root.terminal-input) { grid-input.focus(); } }
     hide-paste-preview(restore-focus) => {
         paste-dialog.close();
-        if (restore-focus) { grid-input.focus(); }
+        if (restore-focus) { root.focus-terminal(); }
     }
 
     paste-dialog := PopupWindow {

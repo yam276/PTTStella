@@ -1,4 +1,5 @@
 //! Native long-text viewport. Station loading and input use separate owners.
+mod find_probe;
 mod layout;
 mod output_probe;
 pub mod probe;
@@ -87,7 +88,12 @@ impl ArticleView {
             source,
             rows,
             renderer,
-            Box::new(move |source, rows| core.borrow().article_window(source, rows)),
+            Box::new(move |source, rows| {
+                let core = core.borrow();
+                let mut window = core.article_window(source, rows.clone())?;
+                core.find_decorate(source, &mut window.paint.frame, rows.start);
+                Some(window)
+            }),
         )
     }
     fn mount_projected(
@@ -267,6 +273,25 @@ impl ArticleView {
                 dpi: l.dpi,
             },
         ))
+    }
+    pub(super) fn find_changed(self: &Rc<Self>) {
+        if self.closed.get() || self.ui.upgrade().is_none_or(|ui| !ui.get_article_active()) {
+            return;
+        }
+        self.row_cache.borrow_mut().clear();
+        self.painted.take();
+        self.schedule();
+    }
+    pub(super) fn find_reveal(self: &Rc<Self>, hit: pttstella::article_find::Hit) {
+        let Some(layout) = self.layout.get() else {
+            return;
+        };
+        let visible = layout.body_height / layout.line_height();
+        self.x.set(
+            (hit.start as f32 - (layout.view_width / layout.line_height() * 2.) / 2.)
+                .clamp(0., layout.maximum_x() / (layout.line_height() / 2.)),
+        );
+        self.scroll(hit.row as f64 - f64::from(visible) / 2.);
     }
     fn resize(self: &Rc<Self>) {
         let Some(ui) = self.ui.upgrade() else { return };
@@ -448,7 +473,28 @@ impl ArticleView {
         ui.invoke_article_rendered();
         Ok(())
     }
-    pub fn update(self: &Rc<Self>, source: Paint, rows: usize, scope: (u64, u64, u64, usize)) {
+    /// Reuse installed pixels for a status-only packet. The caller acknowledges
+    /// after releasing its view slot, so UI callbacks cannot reborrow that slot.
+    pub fn update(
+        self: &Rc<Self>,
+        source: Paint,
+        rows: usize,
+        scope: (u64, u64, u64, usize),
+    ) -> bool {
+        let unchanged = self.scope.get() == Some(scope)
+            && self.rows.get() == rows
+            && self.geometry().is_some()
+            && {
+                let old = self.source.borrow();
+                old.generation == source.generation
+                    && old.presentation == source.presentation
+                    && old.frame == source.frame
+                    && old.settings == source.settings
+            };
+        if unchanged {
+            self.source.replace(source);
+            return true;
+        }
         if self.scope.replace(Some(scope)) != Some(scope) {
             self.anchor.set(0.);
             self.x.set(0.);
@@ -463,6 +509,7 @@ impl ArticleView {
             ui.set_article_active(true);
         }
         self.resize();
+        false
     }
     pub fn hide(&self) {
         self.retire_paint();
