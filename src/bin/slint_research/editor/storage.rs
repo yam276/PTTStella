@@ -28,6 +28,9 @@ pub struct Storage {
     task: Option<tokio::task::JoinHandle<Result<(), String>>>,
 }
 impl Storage {
+    pub fn stopped(&self) -> bool {
+        self.task.is_none()
+    }
     pub fn start(store: Result<Store, String>) -> Self {
         let (commands, mut receive) = mpsc::channel(8);
         let (edits, mut latest) = watch::channel::<Option<Edit>>(None);

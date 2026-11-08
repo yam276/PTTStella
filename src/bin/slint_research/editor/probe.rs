@@ -1,10 +1,12 @@
 //! Complete main-window editor conformance. Strict loopback, synthetic toolkit
 //! input only; native IME/clipboard and accessibility require separate OS proof.
+mod failure;
 use super::Editor;
 use crate::{
     EditorState, TerminalWindow,
     verification::{Verification, capture, click, foreground, require, wait},
 };
+pub use failure::audit_closed;
 use slint::{
     ComponentHandle, Model,
     platform::{Key, PointerEventButton as Button, WindowEvent as Event},
@@ -80,6 +82,10 @@ async fn verify(ui: &TerminalWindow, owner: &Rc<Editor>, directory: &Path) -> Re
     }
     let before_capture = owner.connection.updates.borrow().frame.revision;
     ui.global::<EditorState>().invoke_action(0);
+    let failure_case = crate::session::draft_failure()?;
+    if failure_case == Some(pttstella::connection::DraftFailure::CloseCapture) {
+        return failure::close_busy(ui, owner, directory, before_capture, "capture").await;
+    }
     if matches!(cancel_case.as_deref(), Some("capture" | "capture-live")) {
         if cancel_case.as_deref() == Some("capture-live") {
             wait(
@@ -96,14 +102,18 @@ async fn verify(ui: &TerminalWindow, owner: &Rc<Editor>, directory: &Path) -> Re
         )
         .await;
     }
-    wait(
-        || {
-            let s = ui.global::<EditorState>();
-            s.get_open() && s.get_can_create() && !s.get_busy()
-        },
-        "template capture/list did not finish",
-    )
-    .await?;
+    if failure_case.is_some() {
+        failure::wait_template(ui).await?;
+    } else {
+        wait(
+            || {
+                let s = ui.global::<EditorState>();
+                s.get_open() && s.get_can_create() && !s.get_busy()
+            },
+            "template capture/list did not finish",
+        )
+        .await?;
+    }
     let restored = std::env::var_os("PTTSTELLA_SLINT_DRAFTS_RESTORE").is_some();
     if restored {
         let drafts = ui.global::<EditorState>().get_drafts();
@@ -133,6 +143,9 @@ async fn verify(ui: &TerminalWindow, owner: &Rc<Editor>, directory: &Path) -> Re
         !ui.get_keep_alive_surface_ready(),
         "editor did not suspend BBS keepalive",
     )?;
+    if let Some(case) = failure_case {
+        return failure::verify(ui, owner, directory, case).await;
+    }
     require(
         ui.get_terminal_pointer_blocked() && !ui.get_vim_available(),
         "editor did not block terminal tools/input",

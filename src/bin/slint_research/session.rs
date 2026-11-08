@@ -94,6 +94,11 @@ pub fn with_probe(
     bytes: Vec<u8>,
     show: impl FnOnce(Rc<Connection>) -> Result<(), Box<dyn Error>>,
 ) -> Result<(), Box<dyn Error>> {
+    let draft_failure = if probe == Probe::Drafts {
+        draft_failure()?
+    } else {
+        None
+    };
     let color_failure = if probe == Probe::EditorColor {
         match std::env::var("PTTSTELLA_STATION_COLOR_CASE")
             .ok()
@@ -142,6 +147,7 @@ pub fn with_probe(
     let fixture = match probe {
         Probe::EditorColor if color_failure.is_some() => "slint_editor_color_negative",
         Probe::EditorColor => "slint_editor_color",
+        Probe::Drafts if draft_failure.is_some() => "slint_drafts_failure",
         Probe::Drafts if slow_drafts => "slint_drafts_slow",
         Probe::Drafts => "slint_drafts",
         Probe::Media => "slint_native_media",
@@ -181,7 +187,9 @@ pub fn with_probe(
                 None => Connection::start_editor_color_probe(bytes),
             },
             Probe::Drafts => {
-                if slow_drafts {
+                if let Some(case) = draft_failure {
+                    Connection::start_drafts_failure_probe(case)
+                } else if slow_drafts {
                     Connection::start_drafts_slow_probe()
                 } else {
                     Connection::start_drafts_probe()
@@ -271,7 +279,14 @@ pub fn with_probe(
                 pttstella::connection::MouseSampleProbe::RoundTrip,
             ),
         },
-        Some(fixture),
+        Some((
+            fixture,
+            if draft_failure == Some(pttstella::connection::DraftFailure::Disconnect) {
+                CloseOutcome::NoConnection
+            } else {
+                CloseOutcome::Acknowledged
+            },
+        )),
         show,
     );
     if let Some(media) = &mut media {
@@ -280,9 +295,27 @@ pub fn with_probe(
     result
 }
 
+pub fn draft_failure() -> Result<Option<pttstella::connection::DraftFailure>, String> {
+    use pttstella::connection::DraftFailure as F;
+    match std::env::var("PTTSTELLA_DRAFTS_SOURCE_CASE")
+        .ok()
+        .as_deref()
+    {
+        None => Ok(None),
+        Some("changed-template") => Ok(Some(F::ChangedTemplate)),
+        Some("after-title") => Ok(Some(F::AfterTitle)),
+        Some("after-delete") => Ok(Some(F::AfterDelete)),
+        Some("after-write") => Ok(Some(F::AfterWrite)),
+        Some("disconnect") => Ok(Some(F::Disconnect)),
+        Some("close-capture") => Ok(Some(F::CloseCapture)),
+        Some("close-transfer") => Ok(Some(F::CloseTransfer)),
+        _ => Err("unknown draft failure fixture".into()),
+    }
+}
+
 fn with_connection(
     start: impl FnOnce() -> Result<Connection, String>,
-    fixture: Option<&str>,
+    fixture: Option<(&str, CloseOutcome)>,
     show: impl FnOnce(Rc<Connection>) -> Result<(), Box<dyn Error>>,
 ) -> Result<(), Box<dyn Error>> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -296,11 +329,12 @@ fn with_connection(
     };
     let close = runtime.block_on(connection.shutdown());
     match (result, close, fixture) {
-        (Ok(()), Ok(CloseOutcome::Acknowledged), Some(fixture)) => {
+        (Ok(()), Ok(outcome), Some((fixture, expected))) if outcome == expected => {
             eprintln!(
                 "{}",
                 serde_json::json!({
-                    "status": "passed", "fixture": fixture, "close": CloseOutcome::Acknowledged,
+                    "status": "passed", "fixture": fixture, "close": outcome,
+                    "expected_close":expected,
                 })
             );
             Ok(())

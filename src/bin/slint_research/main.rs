@@ -1045,6 +1045,7 @@ fn run(
             })
         })
         .transpose()?;
+    let draft_verification_directory = options.verify_drafts.clone();
     let verification = if let Some(directory) = options.verify_color {
         Some(station_color::probe::start(
             &ui,
@@ -1218,7 +1219,16 @@ fn run(
         outcome.take().ok_or("snapshot callback did not run")??;
     } else {
         let result = ui.run();
-        let editor_cleanup = editor_owner.map(|editor| editor.finish()).transpose();
+        let editor_cleanup = editor_owner
+            .as_ref()
+            .map(|editor| editor.finish())
+            .transpose();
+        let editor_close_audit = match (&editor_owner, &draft_verification_directory) {
+            (Some(editor), Some(dir)) => {
+                editor::probe::audit_closed(editor, dir, editor_cleanup.is_ok())
+            }
+            _ => Ok(()),
+        };
         let media_cleanup = media_owner.map(|media| media.finish()).transpose();
         if let Some(article) = &article_session_owner {
             article.finish();
@@ -1251,6 +1261,7 @@ fn run(
             .transpose();
         result?;
         editor_cleanup?;
+        editor_close_audit?;
         media_cleanup?;
         output_cleanup?;
         paste_cleanup?;
