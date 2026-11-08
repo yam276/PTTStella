@@ -1086,3 +1086,41 @@ Windows 將 executable 改為對應 `.exe`。這只是可攜的驅動方式，�
 最新根目錄確切來源通過 release：library359 passed／4 ignored、Slint bin77／1、播放器 bin1／0、multi_instance10／1及screen22／0；`native-player-probe` all-target Clippy 成功。Python 共93測試通過。恢復普通 Slint binary 後 SHA-256 仍為 `b85200cc51769fc5d09f64e4f1b4af7bbd43c26e806dbb36e66cc12a4c528c16`。本輪中間提交的 toolkit 程序沒有取代上一輪分 hash 的原生操作證據；未新增原生 Windows 包。現有 Windows 打包腳本只覆蓋 S1，不是完整 S8 候選交付。
 
 下一步補正常產品 active-video 的 App Quit／關窗清理、名單與書籤管理、完整設定搜尋、混合 Live 等效 fixture、同 endpoint 編碼與預設站重啟／不登入、OS I/O／modal 退出、原生 IME 候選與可及性，再完成四架構原生完整包、runtime／音訊、舊資料往返及同負載效能。現有功能已提交不等於功能 parity 或 S8 通過；完整 goal active，S9 未切換／發佈。
+
+
+## S5／S7 正常影片退出與根視窗所有權（2026-11-08）
+
+狀態：**正常根視窗 Close 與 App Quit 的指定 GL 清理已通過，修正提交為 `1b2bb96`；Dock、modal、OS I/O、其他平台等退出邊界仍待驗。** 前一輪只有影片 verifier 自己 await shutdown。檢查正常入口發現 App Quit 直接停止事件迴圈，而主視窗的 close handler 又覆蓋了 ArticleSession 先前安裝的非同步 handler，因此正常帶著 renderer 退出仍可能在 Media.finish 回報尚未退場。
+
+新增單一 Exit owner，根視窗 Close、原生 App 選單及正常 probe 完成都走同一 callback。第一次請求立即撤銷主視窗輸入／媒體／保活等准入，重複請求不再建立工作；延後的貼上、設定／站點開窗、重新連線及切站亦拒絕 closing root。依原有 owner 停止文章工作、隱藏管理視窗，再釋放根元件，讓 renderer 在自己 current GL context 的 RenderingTeardown 釋放 surface／mpv render references。唯一明確的事件迴圈繼續等待 video session，之後才 quit；既有草稿、設定、站點、檔案及連線的同步 join 仍在 main／session 統一執行。移除被覆蓋的文章 close handler 和只為該 handler 保存的 media weak link。
+
+Video.step 在 UI 消失後仍能取消 pending、消費 Stopped、join session 與保存清理結果，不能因 weak UI 無法 upgrade 就跳過資源退場；也不替已消失的 UI 建立新 renderer。Exit 的 future 只持有依賴，不持有它自己的 owner／JoinHandle，避免退出中的 Rc cycle。普通閒置期間沒有新增 thread、timer、輪詢或逐 frame 工作。
+
+### 本輪負向與界線
+
+第一個版本誤以為 hide 會銷毀 renderer，ready-quit 在30秒期限後由父程序終止自己直接啟動的 child，沒有 Close 或成功清理報告。已保留 `failed-hide.patch`、tree、binary hash、準備 marker 和原始 log，未當成通過。查鎖定 Slint backend 原始碼確認：這個 macOS／Winit 路徑只隱藏原生視窗，仍保存 surface。後續改為由 Exit 唯一持有根元件，hide 後 drop，實際驗證最小化也不依賴恢復視窗或 redraw。
+
+下一個 playing-close 探針在剛回報 loaded／playing 時立刻做 GPU 檢查而失敗；正常退出 owner 仍完成 core destroyed、control joined 和 HTTP stopped。該次沒有保存原始 GPU samples，不能確定第一幀的實際像素或把它宣稱為產品顯示缺陷。最後探針先要求播放位置超過0.2秒，再做同一四象限獨立 expected 檢查並保存 samples；沒有修改顏色期望或容差。這是明確探針的等待條件，不是產品啟動延遲或 S8 效能數據。最初 probe closure 的泛型型別錯誤已在 runtime 前修正；另一次文章回歸使用了不存在的 CLI flag，只得到 usage，改用既有 `--probe-stalled-article` 後才列通過。
+
+### 完整程序及原生操作
+
+證據在 `.local/verification/slint-app-exit/`。最後 optional-video CLI SHA-256 為 `5eff144ad294bc611c415c62ff1f6f63f4acf21030e073be50d7aee436c45c82`。四個正常完整程序各自在退出前確認 renderer／session 仍由生產 owner 持有，然後走正常入口，不由 exit probe 呼叫 Media.shutdown：
+
+| 案例 | 獨立結果 |
+| --- | --- |
+| ready-quit | 尚未 Play，零上游請求；正常 Quit 後 GL／core／control／relay 皆結束 |
+| playing-close | 四象限 GPU pixels 正確、播放中根視窗 Close；一個影片 HTTP 請求 |
+| stalled-quit | 一個 HTTP 請求、零 bytes、一個取消中的 stream；正常 Quit 完成 join |
+| minimized-quit | Winit backend 確認 minimized 後 Quit，沒有恢復視窗才能清理的依賴 |
+
+四例都重複要求退出，核對立即撤銷 permit 及延後設定／站點／媒體請求無法重新進入；事後 audit 要求 renderer retired、pending／offer 空、session／video task／image worker 清空。每例皆有嚴格 BBS Close acknowledged 和 HTTP workers joined。原有 MP4 GPU、seek／pause／resume、失焦不自動恢復及影片換圖片的完整程序亦以同一 binary 通過。
+
+兩個不同原生 App 分別用 CUA 實際 Raise、seek 到0、點播放，再以 ⌘Q 或標題列原生 close button 退出。兩次均觀察到「播放中」，最後全域 App inventory 中兩程序都消失；獨立 log 與 JSON 核對相同的 GL／session 清理、HTTP join 及 BBS Close。LaunchServices 的退出狀態碼沒有直接觀測，不捏造 exit=0。native 與 toolkit 證據分列，沒有把它們當成音訊可聽性、Dock Quit、OS modal、其他 OS 或完整 runtime 包通過。
+
+恢復普通 Slint CLI 後 SHA-256 為 `d4293939fa958902db8507917d0742ff03c90a8f2da49476b0cd11ec31d1075e`。設定第一份在途＋最新待存修改、完整切站、停滯文章取消，以及草稿讀取／帶回中退出各完成嚴格 Close；公開儲存 driver 再跑8程序，7個正常 Close、1個指定邊界 kill、2組獨立磁碟核對通過。這些證明根視窗釋放後既有資料 owner 仍能排空，不等於任意 OS I/O 阻塞已解決。確切最新 Rust 來源通過 release library359 passed／4 ignored、Slint bin77／1、multi_instance10／1、screen22／0，以及普通 Slint／optional-video 的 all-target Clippy／編譯與 fmt。
+
+打包工具的93項 Python 與文件 gate 已在本輪前半段通過；本輪沒有修改 workflow。補查 actionlint 時本機找不到執行檔，記為 `not_ready`，沒有把完整打包 gate 宣稱通過。四架構完整包、依賴／notices／乾淨機器及音訊仍依 S8 待驗。
+
+清理紀錄分列：前半段移除 `.local/verification/slint-editor-commits/validation-source`（du28,516KiB，471個 tracked 檔逐 byte 與 HEAD 相同，另24個自產 Python cache）和已 join 的 replay index。此階段在確認兩個 native payload 逐 byte 相同、無 open files 後，把 Native-Video-Quit.app 的非 payload 檔案與完整重建 manifest 保存到 `native-quit-app-metadata`，再移除重複 App（du62,608KiB）；保留 Native-Video-Close.app 和先前站點輸入基準。兩個 cleanup-owned.json 分別記 exact path、UID、symlink／lsof 檢查、filesystem 前後與保留例外，空間差值不全歸因於清理。失敗 snapshot 的小型 alternate index 已另移除，但當時未記單獨 filesystem 前後，該量測缺口明列於 ledger。持續使用的 Cargo profiles、唯一失敗證據、未整合 worktree／commits 及所有權不明的 OS 暫存保留。
+
+接續完整名單／書籤管理與設定搜尋，並補混合 Live 等效、同 endpoint 編碼／預設站重啟、其他原生退出／IME／可及性、舊資料雙版本往返、四架構候選及同負載效能。完整 S0–S8 goal active；S9 未切換、整合 canonical、推送或發佈。
