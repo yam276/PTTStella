@@ -27,6 +27,16 @@ impl Job {
             .await
             .map_err(|_| crate::msg!("vault-incomplete").to_owned())?
     }
+    /// Native event loops poll only while this owned operation is active.
+    pub fn try_wait(&mut self) -> Result<Option<Outcome>, String> {
+        match self.result.try_recv() {
+            Ok(result) => result.map(Some),
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => Ok(None),
+            Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
+                Err(crate::msg!("vault-incomplete"))
+            }
+        }
+    }
 }
 impl Drop for Job {
     fn drop(&mut self) {

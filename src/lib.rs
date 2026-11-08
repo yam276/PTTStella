@@ -48,6 +48,8 @@ pub mod storage;
 #[cfg(feature = "desktop-services")]
 pub mod surface_state;
 pub mod telnet;
+#[cfg(feature = "desktop-services")]
+pub mod terminal_fonts;
 pub mod text;
 #[cfg(feature = "desktop-services")]
 mod tls;

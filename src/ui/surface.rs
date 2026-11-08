@@ -68,7 +68,7 @@ fn queue_paste(
         if current.phase != Phase::Connected || current.generation != generation {
             return Err(pttstella::msg!("paste-stale"));
         }
-        if prepared.lines > 1 || prepared.text.contains('\x1b') {
+        if prepared.requires_confirmation() {
             pending.set(Some(PendingPaste {
                 generation,
                 stamp: current.stamp(),
@@ -2002,7 +2002,7 @@ async fn run(
                         cancel_commands(commands,&eval)?;
                         eval.send(Packet::LoginResult(LoginResult::Message{message:pttstella::msg!("command-stale")})).map_err(|e|e.to_string())?;
                     }
-                    keyboard_policy.reset();keyboard_generation=view.generation;
+                    keyboard_policy.new_session();keyboard_generation=view.generation;
                     if !view.site.ptt_features() && keyboard_policy.status(&view.context()).enabled {keyboard_policy.toggle();}
                 }
                 if view.login_guidance != login_guidance && view.login_guidance.needs_input() {
