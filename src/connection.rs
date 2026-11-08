@@ -334,6 +334,14 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    /// Native context actions that do not send terminal input; peer rejects bytes.
+    pub fn start_context_menu_probe(station_mouse: bool) -> Result<Self, String> {
+        let mut bytes = probe::navigation_page("reading_middle")?;
+        if station_mouse {
+            bytes.extend_from_slice(b"\x1b[?1003;1006h");
+        }
+        Self::start_ui_probe(bytes)
+    }
     pub fn start_pointer_rows_probe() -> Result<Self, String> {
         let connection =
             Self::start_owned_probe(probe::pointer_menu()?, probe::Scenario::PointerRows)?;
@@ -434,6 +442,14 @@ impl Connection {
         connection.keep_alive(false)?;
         Ok(connection)
     }
+    /// Native input fixture adds one printable key and one UAO commit to the Control-key sequence.
+    pub fn start_native_input_probe() -> Result<Self, String> {
+        let bytes =
+            b"\x1b[2J\x1b[HINPUT 0/5 - Ctrl+X, Ctrl+Z, Ctrl+A, p, then IME\x1b[22;5H\x1b[?25h";
+        let connection = Self::start_owned_probe(bytes.to_vec(), probe::Scenario::NativeInput)?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
     /// Synthetic article list with a shortened idle interval and a strict refresh peer.
     pub fn start_keep_alive_probe() -> Result<Self, String> {
         Self::start_keep_alive_page_probe(probe::navigation_page("list")?)
@@ -501,8 +517,15 @@ impl Connection {
                 pages: vec![second],
                 delay_ms: 0,
                 fragment_ms: 150,
+                native_input: false,
             },
         )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    /// One exact PageDown without a response, then Close; rejects retries.
+    pub fn start_article_stall_probe(first: Vec<u8>) -> Result<Self, String> {
+        let connection = Self::start_owned_probe(first, probe::Scenario::ArticleStall)?;
         connection.keep_alive(false)?;
         Ok(connection)
     }
@@ -533,6 +556,24 @@ impl Connection {
                 pages,
                 delay_ms,
                 fragment_ms,
+                native_input: false,
+            },
+        )?;
+        connection.keep_alive(false)?;
+        Ok(connection)
+    }
+    /// Two-page native cache followed by exact q and one UAO Chinese commit.
+    pub fn start_article_input_probe(first: Vec<u8>, second: Vec<u8>) -> Result<Self, String> {
+        if second.len() > 64 * 1024 {
+            return Err("invalid native article input fixture".into());
+        }
+        let connection = Self::start_owned_probe(
+            first,
+            probe::Scenario::InlinePages {
+                pages: vec![second],
+                delay_ms: 500,
+                fragment_ms: 150,
+                native_input: true,
             },
         )?;
         connection.keep_alive(false)?;

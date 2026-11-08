@@ -2107,6 +2107,7 @@ async fn run(
                 || case=="picture_menu" && checks.inline_requests>=1 && checks.inline_expands==1 && checks.image_copies>=2 && checks.picture_saves>=1 && checks.context_copies>=1 && checks.export_checked
                 || case=="osc8" && checks.osc8_open_rows==[8,9] && checks.osc8_copy_rows==[8,9] && checks.osc8_dragged && checks.osc8_media_decoded>=2 && checks.export_checked
                 || case=="login_2fa" && checks.verification_required && checks.verification_rejected && checks.verification_browsing && keyboard_policy.status(&receiver.borrow().context()).mode=="normal"
+                || case=="parity_grid" && checks.export_checked && pttstella::replay::verify_parity_grid(&receiver.borrow().frame).is_ok()
                 || case=="fonts" && checks.font_catalog_reads>=2 && !checks.font_sources.is_empty() && checks.export_checked
                 || checks.sites_passed(&case,&receiver.borrow().site,&sites.default_target(),&receiver.borrow().frame)
                 || case=="fullscreen" && checks.viewport_captures>=4 && checks.export_checked

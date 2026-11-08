@@ -38,6 +38,7 @@ pub(super) enum Scenario {
     Filters,
     Surface,
     ControlInput,
+    NativeInput,
     KeepAlive,
     ArticlePaste,
     ArticleFind,
@@ -52,10 +53,12 @@ pub(super) enum Scenario {
         origin: Option<String>,
         cancelled: bool,
     },
+    ArticleStall,
     InlinePages {
         pages: Vec<Vec<u8>>,
         delay_ms: u64,
         fragment_ms: u64,
+        native_input: bool,
     },
 }
 
@@ -790,12 +793,14 @@ pub(super) async fn serve(
             | Scenario::Surface
             | Scenario::ReplyNavigation
             | Scenario::ControlInput
+            | Scenario::NativeInput
             | Scenario::KeepAlive
             | Scenario::ArticlePaste
             | Scenario::ArticleFind
             | Scenario::EditorClipboard
             | Scenario::PointerRows
             | Scenario::ListBoundary
+            | Scenario::ArticleStall
             | Scenario::InlinePages { .. }
             | Scenario::Boards
             | Scenario::Articles
@@ -870,7 +875,15 @@ pub(super) async fn serve(
         if matches!(scenario,Scenario::BookmarkList) {return live_updates::bookmark_list(&mut socket).await;}
         if let Scenario::BookmarkArchive { headerless } = scenario {return live_updates::bookmark(&mut socket, headerless).await;}
         if let Scenario::LiveUpdates {origin,cancelled} = scenario {return if cancelled {live_updates::cancel(&mut socket,origin.as_deref()).await}else{live_updates::run(&mut socket,origin.as_deref()).await};}
-        if let Scenario::InlinePages {pages,delay_ms,fragment_ms} = scenario {
+        if matches!(scenario,Scenario::ArticleStall) {
+            let first=socket.next().await;
+            if !matches!(&first,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"\x1b[6~") {return Err("stalled article expected exactly one PageDown".into());}
+            return match socket.next().await {
+                Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
+                _=>Err("stalled article must not retry before Close".into()),
+            };
+        }
+        if let Scenario::InlinePages {pages,delay_ms,fragment_ms,native_input} = scenario {
             let started=std::time::Instant::now();
             for (index, second) in pages.into_iter().enumerate() {
             let received=socket.next().await;
@@ -885,6 +898,14 @@ pub(super) async fn serve(
             socket.send(Message::Binary(second[..split].to_vec().into())).await.map_err(|e|e.to_string())?;
             if fragment_ms > 0 { tokio::time::sleep(Duration::from_millis(fragment_ms)).await; }
             socket.send(Message::Binary(second[split..].to_vec().into())).await.map_err(|e|e.to_string())?;
+            }
+            if native_input {
+                for expected in [b"q".as_slice(), b"\xa4\xa4".as_slice()] {
+                    if !matches!(socket.next().await,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==expected) {
+                        return Err("native article expected one raw handoff then one Chinese commit".into());
+                    }
+                    socket.send(Message::Binary(navigation_page("main_menu")?.into())).await.map_err(|e|e.to_string())?;
+                }
             }
             return match socket.next().await {
                 Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
@@ -1044,12 +1065,24 @@ pub(super) async fn serve(
                 _ => Err("editor clipboard probe expected Close without extra input".into()),
             };
         }
-        if matches!(scenario, Scenario::ControlInput) {
-            for (index, expected) in [24_u8, 26, 1].into_iter().enumerate() {
-                if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==[expected]) {
+        if matches!(scenario, Scenario::ControlInput | Scenario::NativeInput) {
+            let native = matches!(scenario, Scenario::NativeInput);
+            let expected: &[&[u8]] = if native {
+                &[b"\x18", b"\x1a", b"\x01", b"p", b"\xa4\xa4"]
+            } else {
+                &[b"\x18", b"\x1a", b"\x01"]
+            };
+            let label = if native { "INPUT" } else { "CONTROL INPUT" };
+            for (index, bytes_expected) in expected.iter().enumerate() {
+                if !matches!(socket.next().await, Some(Ok(Message::Binary(bytes))) if bytes.as_ref() == *bytes_expected) {
                     return Err(format!("control input probe rejected step {}", index + 1));
                 }
-                socket.send(Message::Binary(format!("\x1b[1;1H\x1b[2KCONTROL INPUT {}/3 VERIFIED",index+1).into_bytes().into()))
+                let mut wire = format!("\x1b[1;1H\x1b[2K{label} {}/{} VERIFIED", index + 1, expected.len());
+                if native {
+                    wire.insert_str(0, "\x1b7");
+                    wire.push_str("\x1b8");
+                }
+                socket.send(Message::Binary(wire.into_bytes().into()))
                     .await.map_err(|e| e.to_string())?;
             }
             return match socket.next().await {

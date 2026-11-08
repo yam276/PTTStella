@@ -66,6 +66,7 @@ pub fn app(props: AppProps) -> Element {
                 | "tools"
                 | "sites"
                 | "fonts"
+                | "parity_grid"
                 | "sgr66"
                 | "sgr66_legacy"
                 | "osc8"
