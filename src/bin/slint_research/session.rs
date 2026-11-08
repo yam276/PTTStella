@@ -43,6 +43,7 @@ impl FrameGate {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Probe {
+    Media,
     Reconnect,
     ArticleFull,
     ArticleInput,
@@ -90,7 +91,14 @@ pub fn with_probe(
     bytes: Vec<u8>,
     show: impl FnOnce(Rc<Connection>) -> Result<(), Box<dyn Error>>,
 ) -> Result<(), Box<dyn Error>> {
+    let mut media = if probe == Probe::Media {
+        Some(crate::media_fixture::Fixtures::start()?)
+    } else {
+        None
+    };
+    let bytes = media.as_ref().map(|f| f.page()).unwrap_or(bytes);
     let fixture = match probe {
+        Probe::Media => "slint_native_media",
         Probe::Reconnect => "slint_session",
         Probe::ArticleFull => "slint_full_load",
         Probe::ArticleInput => "slint_article_input",
@@ -119,8 +127,9 @@ pub fn with_probe(
         Probe::MouseWheel => "slint_mouse_wheel",
         Probe::MouseRoundTrip => "slint_mouse_round_trip",
     };
-    with_connection(
+    let result = with_connection(
         || match probe {
+            Probe::Media => Connection::start_ui_probe(bytes),
             Probe::Reconnect => Connection::start_toast_reconnect_probe(bytes),
             Probe::ArticleFull | Probe::ArticleLong => {
                 let long = probe == Probe::ArticleLong;
@@ -190,7 +199,11 @@ pub fn with_probe(
         },
         Some(fixture),
         show,
-    )
+    );
+    if let Some(media) = &mut media {
+        media.finish()?;
+    }
+    result
 }
 
 fn with_connection(

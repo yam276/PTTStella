@@ -27,6 +27,13 @@ impl Clipboard {
         })
         .map_err(|_| pttstella::msg!("paste-unavailable"))
     }
+    pub fn read_image(&self) -> Result<arboard::ImageData<'static>, String> {
+        self.with(|clipboard| {
+            clipboard
+                .get_image()
+                .map_err(|_| pttstella::msg!("copy-failed"))
+        })
+    }
     pub fn write_text(
         &self,
         text: String,

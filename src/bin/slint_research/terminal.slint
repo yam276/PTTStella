@@ -4,8 +4,49 @@ import { ContextMenuOverlay, MenuEntry } from "context-menu.slint";
 import { FloatingTools, ToolItem } from "tools.slint";
 import { ArticleViewport, ArticleTile } from "article.slint";
 import { SelectionRect } from "selection.slint";
+import { MediaPreview } from "media.slint";
+import { MediaHover } from "media-hover.slint";
 
 export component TerminalWindow inherits Window {
+    in property <bool> media-available;
+    in property <bool> media-hover-open;
+    in property <length> media-hover-x;
+    in property <length> media-hover-y;
+    in property <int> media-hover-position;
+    in-out property <int> media-hover-choice;
+    in property <[string]> media-hover-choices;
+    in property <string> media-hover-label;
+    in property <string> media-hover-help;
+    out property <SelectionRect> media-hover-bounds: {x:hover-card.card-left,y:hover-card.card-top,width:hover-card.card-width,height:hover-card.card-height};
+    out property <bool> media-hover-blocked: !root.media-available || root.terminal-pointer-blocked || root.selection-active
+        || root.keyboard-pending || root.station-mouse-held || (root.pan-mode && !root.article-active)
+        || (root.native-pointer-down && !root.media-hover-open);
+    changed media-hover-blocked => {root.media-updated();}
+    callback media-hover-changed;
+    callback media-hover-preference(int);
+    in property <bool> media-open;
+    in property <image> media-image;
+    in property <bool> media-ready;
+    in property <bool> media-animated;
+    in property <bool> media-playing;
+    in property <string> media-key;
+    in property <string> media-url;
+    in property <string> media-status;
+    in property <string> media-copy-label;
+    in property <string> media-save-label;
+    in property <string> media-copy-url-label;
+    in property <string> media-close-label;
+    in property <string> media-retry-label;
+    in property <string> media-motion-label;
+    in property <string> media-external-label;
+    in property <string> media-fit-label;
+    in property <string> media-original-label;
+    out property <bool> media-play-allowed: root.media-open && root.native-foreground && !root.output-busy && !root.show-about && !root.login-open && !root.paste-open;
+    changed media-play-allowed => {root.media-updated();}
+    callback media-request(int);
+    callback media-action(int);
+    callback media-updated;
+    callback focus-media;
     title: root.live-session ? "PTTStella Slint" : (root.session-active ? "PTTStella Slint · 本機連線探針" : "PTTStella Slint · 離線原型");
     background: #101318;
     preferred-width: 1000px;
@@ -26,7 +67,7 @@ export component TerminalWindow inherits Window {
     in property <bool> find-has-matches;
     in-out property <string> find-query;
     out property <bool> find-focused: root.find-open && find-input.has-focus;
-    out property <bool> find-blocked: !root.native-foreground || root.native-composing || root.show-about
+    out property <bool> find-blocked: root.media-open || !root.native-foreground || root.native-composing || root.show-about
         || root.switching-station || root.login-open || root.login-busy || root.paste-open || root.output-busy;
     callback find-action(int);
     callback find-edit(string);
@@ -69,7 +110,7 @@ export component TerminalWindow inherits Window {
     changed article-focused => { root.terminal-focus-changed(); }
     out property <bool> article-reading-ready: root.native-foreground && root.article-focused && !root.article-blocked && !root.switching-station && !root.native-pointer-down && !root.login-busy && !root.paste-reading && !root.output-busy && !root.selection-active && !root.selection-dragging && !root.keyboard-pending && !root.navigation-busy && !root.station-mouse-held && !root.context-pending;
     changed article-reading-ready => { root.article-session-updated(); }
-    out property <bool> article-blocked: root.find-open || root.show-about || root.login-open || root.paste-open || root.tools-busy || root.context-open || root.native-composing;
+    out property <bool> article-blocked: root.media-open || root.find-open || root.show-about || root.login-open || root.paste-open || root.tools-busy || root.context-open || root.native-composing;
     callback article-layout-changed;
     callback article-rendered;
     callback article-session-updated;
@@ -106,7 +147,7 @@ export component TerminalWindow inherits Window {
     in property <[ToolItem]> tools-actions;
     in property <string> tools-title;
     in property <string> tools-ball-label;
-    out property <bool> tools-source-blocked: root.find-open || !root.native-foreground || root.native-composing || root.show-about || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy;
+    out property <bool> tools-source-blocked: root.media-open || root.find-open || !root.native-foreground || root.native-composing || root.show-about || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy;
     out property <bool> pointer-shift-held: root.pointer-shift;
     callback tools-pointer(int,length,length);
     callback tools-toggle;
@@ -184,7 +225,7 @@ export component TerminalWindow inherits Window {
     in property <bool> frame-paint-pending;
     in property <bool> keep-alive-available;
     in property <string> keep-alive-label;
-    out property <bool> keep-alive-surface-ready: !root.find-open && root.native-foreground
+    out property <bool> keep-alive-surface-ready: !root.media-open && !root.find-open && root.native-foreground
         && (root.article-active ? root.article-focused : root.terminal-input-focused) && !root.native-composing && !root.native-pointer-down
         && !root.show-about && !root.switching-station && !root.paste-open && !root.paste-reading
         && !root.frame-paint-pending && !root.login-open && !root.login-busy
@@ -226,11 +267,11 @@ export component TerminalWindow inherits Window {
     in property <[SelectionRect]> navigation-rects;
     in property <int> pointer-cursor;
     in property <string> pointer-url;
-    out property <bool> context-source-blocked: root.find-open || !root.native-foreground || root.native-composing
+    out property <bool> context-source-blocked: root.media-open || root.find-open || !root.native-foreground || root.native-composing
         || root.show-about || root.switching-station || root.frame-paint-pending
         || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy || root.tools-busy;
     out property <bool> terminal-pointer-blocked: root.context-source-blocked || root.context-open || root.context-pending;
-    out property <bool> context-focus-restorable: root.native-foreground && !root.native-composing
+    out property <bool> context-focus-restorable: !root.media-open && root.native-foreground && !root.native-composing
         && !root.show-about && !root.switching-station && !root.login-open && !root.login-busy && !root.paste-open && !root.paste-reading;
     in property <bool> context-open;
     in property <bool> context-pending;
@@ -254,7 +295,7 @@ export component TerminalWindow inherits Window {
     in property <bool> station-mouse-held;
     in property <string> station-mouse-label;
     in property <string> station-mouse-status;
-    out property <bool> station-pointer-blocked: root.find-open || !root.native-foreground || root.native-composing
+    out property <bool> station-pointer-blocked: root.media-open || root.find-open || !root.native-foreground || root.native-composing
         || root.show-about || root.switching-station || root.login-open || root.login-busy
         || root.paste-open || root.paste-reading || root.output-busy || root.pan-mode || root.context-open || root.context-pending || root.tools-busy;
     callback station-pointer(int, int, length, length, bool, bool, bool, bool) -> bool;
@@ -300,6 +341,7 @@ export component TerminalWindow inherits Window {
     FocusScope {
         width: parent.width;
         height: parent.height;
+        visible: !root.media-open;
         key-pressed(event) => {
             if (event.text == Key.Escape && root.leave-fullscreen()) {
                 return accept;
@@ -324,6 +366,20 @@ export component TerminalWindow inherits Window {
                 Button { text: "150%"; clicked => { root.zoom = 1.5; } }
                 Button { text: "全螢幕"; clicked => { root.toggle-fullscreen(); } }
                 Button { text: "關於"; clicked => { root.show-about = !root.show-about; } }
+            }
+            if root.media-available: HorizontalLayout {
+                spacing:8px;
+                Text {text:root.media-hover-help;color:#a7b6c8;overflow:elide;horizontal-stretch:1;vertical-alignment:center;}
+                ComboBox {
+                    preferred-width:120px;max-width:150px;
+                    accessible-label:root.media-hover-label;model:root.media-hover-choices;
+                    current-index <=> root.media-hover-choice;enabled:!root.output-busy;
+                    selected(value)=>{root.media-hover-preference(self.current-index);}
+                }
+                if root.media-hover-choice != root.media-hover-position: Button {
+                    text:root.media-retry-label;enabled:!root.output-busy;
+                    clicked=>{root.media-hover-preference(root.media-hover-choice);}
+                }
             }
 
             terminal-box := Rectangle {
@@ -466,6 +522,11 @@ export component TerminalWindow inherits Window {
                     height: 26px;
                     background: #20252bee;
                     Text { text: root.pointer-url; color: #e3e8ee; overflow: elide; vertical-alignment: center; }
+                }
+                hover-card := MediaHover {
+                    visible:root.media-hover-open;width:parent.width;height:parent.height;
+                    pixels:root.media-image;ready:root.media-ready;status:root.media-status;
+                    follow:root.media-hover-position==1;cursor-x:root.media-hover-x;cursor-y:root.media-hover-y;
                 }
             }
 
@@ -649,6 +710,17 @@ export component TerminalWindow inherits Window {
             Text { text: root.find-status; color: #e3e8ee; }
             Text { text: root.find-hint; color: #b6c4d5; font-size: 11px; wrap: word-wrap; }
         }
+    }
+
+    focus-media => {media-preview.focus-preview();}
+    media-preview := MediaPreview {
+        x:0px;y:0px;width:root.width;height:root.height;visible:root.media-open;
+        busy:root.output-busy;copy-label:root.media-copy-label;save-label:root.media-save-label;copy-url-label:root.media-copy-url-label;
+        pixels:root.media-image;source-key:root.media-key;url:root.media-url;status:root.media-status;
+        ready:root.media-ready;animated:root.media-animated;playing:root.media-playing;foreground:root.native-foreground;
+        close-label:root.media-close-label;retry-label:root.media-retry-label;motion-label:root.media-motion-label;
+        external-label:root.media-external-label;fit-label:root.media-fit-label;original-label:root.media-original-label;
+        action(code)=>{root.media-action(code);}
     }
 
     show-login-popup => {

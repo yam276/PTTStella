@@ -7,6 +7,9 @@ mod ime_probe;
 mod keep_alive;
 mod login;
 mod loopback;
+mod media;
+mod media_fixture;
+mod media_worker;
 mod native_input;
 mod output;
 mod paste;
@@ -117,11 +120,12 @@ struct Options {
     verify_tools: Option<PathBuf>,
     verify_article: Option<PathBuf>,
     verify_article_session: Option<PathBuf>,
+    verify_media: Option<PathBuf>,
     probe: Option<Probe>,
 }
 
 fn options() -> Result<Options, &'static str> {
-    const USAGE: &str = "usage: pttstella-slint [--connect|--show-profile|--probe-grid|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
+    const USAGE: &str = "usage: pttstella-slint [--connect|--show-profile|--probe-grid|--probe-media|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
     let mut zoom = None;
     let mut capture = None;
     let mut probe = None;
@@ -130,9 +134,16 @@ fn options() -> Result<Options, &'static str> {
     let mut verify_tools = None;
     let mut verify_article = None;
     let mut verify_article_session = None;
+    let mut verify_media = None;
     let mut args = std::env::args_os().skip(1);
     while let Some(arg) = args.next() {
         match arg.to_str() {
+            Some("--verify-media") if verify_media.is_none() => {
+                verify_media = Some(args.next().ok_or(USAGE)?.into());
+            }
+            Some("--probe-media") if probe.is_none() => {
+                probe = Some(Probe::Session(session::Probe::Media))
+            }
             Some("--connect") if probe.is_none() => probe = Some(Probe::Connect),
             Some("--show-profile") if probe.is_none() => probe = Some(Probe::ProfileInfo),
             Some("--probe-grid") if probe.is_none() => probe = Some(Probe::Grid),
@@ -311,7 +322,18 @@ fn options() -> Result<Options, &'static str> {
     {
         return Err(USAGE);
     }
+    if verify_media.is_some()
+        && (probe != Some(Probe::Session(session::Probe::Media))
+            || capture.is_some()
+            || verify_article_session.is_some()
+            || verify_article.is_some()
+            || verify_tools.is_some()
+            || verify_context.is_some())
+    {
+        return Err(USAGE);
+    }
     Ok(Options {
+        verify_media,
         verify_article_session,
         verify_article,
         verify_tools,
@@ -330,6 +352,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         &options.verify_tools,
         &options.verify_article,
         &options.verify_article_session,
+        &options.verify_media,
     ]
     .into_iter()
     .flatten()
@@ -433,6 +456,17 @@ fn run(
             .select()?;
     }
     let ui = TerminalWindow::new()?;
+    // Probe settings live only in this owned temporary namespace; retain it
+    // until output workers have drained at both normal and capture shutdown.
+    let media_probe_settings = if options.probe == Some(Probe::Session(session::Probe::Media)) {
+        Some(
+            tempfile::Builder::new()
+                .prefix("pttstella-slint-media-settings-")
+                .tempdir()?,
+        )
+    } else {
+        None
+    };
     ui.on_link_activated({
         let weak = ui.as_weak();
         let live = options.probe == Some(Probe::Connect);
@@ -617,6 +651,7 @@ fn run(
     let mut context_owner = None;
     let mut tools_owner = None;
     let mut station_mouse_owner = None;
+    let mut media_owner = None;
     let clipboard = clipboard::Clipboard::default();
     let verification_connection = if options.verify_context.is_some()
         || options.verify_tools.is_some()
@@ -727,7 +762,8 @@ fn run(
             if matches!(
                 &mode,
                 session::Mode::Probe(
-                    session::Probe::Input
+                    session::Probe::Media
+                        | session::Probe::Input
                         | session::Probe::Clipboard
                         | session::Probe::KeepAlive
                         | session::Probe::Login
@@ -787,7 +823,8 @@ fn run(
                 &mode,
                 session::Mode::Live(_)
                     | session::Mode::Probe(
-                        session::Probe::ArticleFull
+                        session::Probe::Media
+                            | session::Probe::ArticleFull
                             | session::Probe::ArticleInput
                             | session::Probe::ArticleOutput
                             | session::Probe::ArticleKeepAlive
@@ -833,6 +870,38 @@ fn run(
                     settings.tools_opacity,
                     settings.tools_access,
                 ));
+                ui.on_media_request({
+                    let weak = ui.as_weak();
+                    let output = output.clone();
+                    move |index| {
+                        if let Some(ui) = weak.upgrade()
+                            && let Some(url) = usize::try_from(index)
+                                .ok()
+                                .and_then(|i| output.media_url(&ui, i))
+                        {
+                            ui.invoke_link_activated(url.into());
+                        }
+                    }
+                });
+                if matches!(
+                    &mode,
+                    session::Mode::Live(_) | session::Mode::Probe(session::Probe::Media)
+                ) {
+                    media_owner = Some(media::Media::mount(
+                        &ui,
+                        connection.clone(),
+                        output.clone(),
+                        matches!(&mode, session::Mode::Probe(session::Probe::Media)),
+                        settings.clone(),
+                        if let Some(directory) = &media_probe_settings {
+                            pttstella::settings::store::Store::at(
+                                directory.path().join("settings.json"),
+                            )
+                        } else {
+                            profile::Profile::system()?.settings()
+                        },
+                    ));
+                }
                 output_owner = Some(output);
             }
             let (renderer, previous) = (renderer.clone(), previous.clone());
@@ -847,7 +916,20 @@ fn run(
             })
         })
         .transpose()?;
-    let verification = if let Some(directory) = options.verify_article_session {
+    let verification = if let Some(directory) = options.verify_media {
+        Some(media::probe::start(
+            &ui,
+            media_owner
+                .as_ref()
+                .cloned()
+                .ok_or("media probe owner missing")?,
+            output_owner
+                .as_ref()
+                .cloned()
+                .ok_or("media probe output missing")?,
+            directory,
+        )?)
+    } else if let Some(directory) = options.verify_article_session {
         Some(article::session_probe::start(
             &ui,
             article_session_owner
@@ -941,6 +1023,9 @@ fn run(
         });
         slint::run_event_loop()?;
         ui.hide()?;
+        if let Some(media) = &media_owner {
+            media.finish()?;
+        }
         if let Some(paste) = &paste_owner {
             paste.finish()?;
         }
@@ -950,6 +1035,7 @@ fn run(
         outcome.take().ok_or("snapshot callback did not run")??;
     } else {
         let result = ui.run();
+        let media_cleanup = media_owner.map(|media| media.finish()).transpose();
         if let Some(article) = &article_session_owner {
             article.finish();
         }
@@ -977,6 +1063,7 @@ fn run(
             .map(|verification| verification.finish())
             .transpose();
         result?;
+        media_cleanup?;
         output_cleanup?;
         paste_cleanup?;
         verification_result?;

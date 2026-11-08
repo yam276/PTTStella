@@ -9,6 +9,37 @@ use pttstella::{
 };
 
 impl ArticleSession {
+    pub fn lease_media_output(&self, view: &View) -> Option<OutputLease> {
+        if self.closed.get() {
+            return None;
+        }
+        let mut core = self.core.borrow_mut();
+        let id = Identity::of(core.last_displayed()?);
+        core.current(id, view)?;
+        Some(core.lease_picture(id, view.input_epoch))
+    }
+    /// An already-authorized preview survives geometry-only repainting. New
+    /// gestures still require output_identity and its installed geometry ACK.
+    pub fn renew_media(&self, view: &View, lease: &mut pttstella::media::hover::Lease) -> bool {
+        if self.closed.get() {
+            return false;
+        }
+        let core = self.core.borrow();
+        let Some(displayed) = core.last_displayed() else {
+            return false;
+        };
+        let Some(paint) = core.current(Identity::of(displayed), view) else {
+            return false;
+        };
+        lease.renew(
+            view.stamp(),
+            view.phase == pttstella::connection::Phase::Connected
+                && !view.output_pending
+                && !view.input_pending
+                && view.frame.control_complete,
+            &paint.links,
+        )
+    }
     pub fn replace_rules(&self, rules: pttstella::filters::Rules) {
         let view = self.connection.updates.borrow().clone();
         {

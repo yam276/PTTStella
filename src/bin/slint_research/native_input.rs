@@ -432,7 +432,8 @@ fn mount_window(
             }
             let article_focused =
                 ui.get_article_active() && ui.get_article_focused() && article.is_some();
-            if ui.get_paste_open()
+            if ui.get_media_open()
+                || ui.get_paste_open()
                 || ui.get_login_open()
                 || ui.get_context_open()
                 || ui.get_context_pending()
@@ -721,6 +722,7 @@ fn actions_available(ui: &TerminalWindow, view: &View) -> bool {
         && view.phase == Phase::Connected
         && !ui.get_switching_station()
         && !ui.get_paste_open()
+        && !ui.get_media_open()
         && !ui.get_login_open()
         && !ui.get_login_busy()
         && !ui.get_output_busy()

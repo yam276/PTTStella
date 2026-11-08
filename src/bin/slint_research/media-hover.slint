@@ -1,0 +1,27 @@
+// No TouchArea or focusable child: this preview cannot intercept BBS input.
+export component MediaHover inherits Rectangle {
+    in property <image> pixels;
+    in property <bool> ready;
+    in property <string> status;
+    in property <bool> follow;
+    in property <length> cursor-x;
+    in property <length> cursor-y;
+    out property <length> card-left:card.x;
+    out property <length> card-top:card.y;
+    out property <length> card-width:card.width;
+    out property <length> card-height:card.height;
+    property <length> cap-width:max(1px,min(560px,min(root.width * 0.55,root.width - 24px)));
+    property <length> cap-height:max(1px,min(root.height * 0.6,root.height - 24px));
+    property <float> ratio:root.ready ? max(0,min(1,min((root.cap-width - 16px) / max(1px,root.pixels.width * 1px),(root.cap-height - 52px) / max(1px,root.pixels.height * 1px)))) : 0;
+    property <length> image-width:root.pixels.width * root.ratio * 1px;
+    property <length> image-height:root.pixels.height * root.ratio * 1px;
+    card := Rectangle {
+        width:min(root.cap-width,max(180px,root.image-width + 16px));
+        height:min(root.cap-height,root.image-height + 52px);
+        x:root.follow ? clamp(root.cursor-x + 16px + self.width <= root.width - 12px ? root.cursor-x + 16px : root.cursor-x - self.width - 16px,12px,max(12px,root.width - self.width - 12px)) : root.width - self.width - 12px;
+        y:root.follow ? clamp(root.cursor-y + 16px + self.height <= root.height - 12px ? root.cursor-y + 16px : root.cursor-y - self.height - 16px,12px,max(12px,root.height - self.height - 12px)) : 12px;
+        background:#172334ee;border-color:#d9ae5b;border-width:1px;border-radius:5px;clip:true;
+        Text {x:8px;y:6px;width:parent.width - 16px;height:min(36px,max(0px,parent.height - 12px));text:root.status;color:#e3e8ee;wrap:word-wrap;overflow:elide;}
+        Image {x:(parent.width - self.width)/2;y:44px;width:root.image-width;height:root.image-height;source:root.pixels;image-fit:fill;}
+    }
+}

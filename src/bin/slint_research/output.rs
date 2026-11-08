@@ -338,6 +338,7 @@ impl Output {
                     }
                     output.overlay(&ui);
                     output.hover_overlay(&ui);
+                    ui.invoke_media_updated();
                 }
             }
         });
@@ -652,7 +653,7 @@ impl Output {
                             && links::validate(&url).is_ok()
                         {
                             self.click_acted.set(true);
-                            ui.invoke_link_activated(url.into());
+                            ui.invoke_media_request(index as i32);
                         }
                     }
                     None => {}
@@ -662,6 +663,7 @@ impl Output {
         self.hover_overlay(&ui);
     }
     fn hover_overlay(&self, ui: &TerminalWindow) {
+        ui.invoke_media_hover_changed();
         let (stamp, geometry) = (self.current(ui), self.geometry(ui));
         let hit = if !ui.get_terminal_pointer_blocked()
             && !ui.get_selection_active()
@@ -787,7 +789,7 @@ impl Output {
             }
         }
     }
-    fn revoke(&self) {
+    pub(super) fn revoke(&self) {
         if let Some(active) = self.lease.borrow_mut().take() {
             match active.lease {
                 WorkLease::Terminal(lease) => lease.revoke(),
@@ -798,6 +800,38 @@ impl Output {
                 }
             }
         }
+    }
+    pub(super) fn clipboard(&self) -> Clipboard {
+        self.clipboard.clone()
+    }
+    pub(super) fn busy(&self) -> bool {
+        self.worker.borrow().is_some()
+    }
+    pub(super) fn media_output_lease(
+        &self,
+        ui: &TerminalWindow,
+        scope: &pttstella::media::hover::Lease,
+    ) -> Result<(WorkLease, Phase), String> {
+        let mut scope = scope.clone();
+        if !self.renew_media(ui, &mut scope) {
+            return Err(msg!("export-stale"));
+        }
+        self.revoke();
+        let view = self.connection.updates.borrow();
+        let lease = if let Some(article) = &self.article {
+            WorkLease::Article(
+                article
+                    .lease_media_output(&view)
+                    .ok_or_else(|| msg!("export-stale"))?,
+            )
+        } else {
+            WorkLease::Terminal(Lease::new(view.stamp(), true))
+        };
+        self.lease.replace(Some(ActiveLease {
+            lease: lease.clone(),
+            selected: false,
+        }));
+        Ok((lease, view.phase))
     }
     fn revoke_selection(&self) {
         if self
@@ -861,6 +895,72 @@ impl Output {
         self.hover.set(None);
         self.overlay(ui);
         self.hover_overlay(ui);
+    }
+    pub fn media_url(&self, ui: &TerminalWindow, index: usize) -> Option<String> {
+        self.media_lease(ui, index, 0).map(|lease| lease.link.url)
+    }
+    pub fn forget_hover(&self) {
+        self.hover.set(None);
+    }
+    /// Hover may survive a stationary press to promote the same download.
+    /// Selection/drag/Shift still cancel before a new image can be admitted.
+    pub fn media_hover_source(
+        &self,
+        ui: &TerminalWindow,
+    ) -> Option<(pttstella::media::hover::Lease, (f32, f32))> {
+        if ui.get_media_hover_blocked()
+            || self
+                .selected
+                .borrow()
+                .gesture
+                .as_ref()
+                .is_some_and(|g| g.moved || g.shift)
+            || self.connection.updates.borrow().mouse.route != pttstella::mouse::input::Route::Local
+        {
+            return None;
+        }
+        let stamp = self.current(ui)?;
+        let geometry = self.geometry(ui)?;
+        let point = self.hover.get()?;
+        let Hit::Link(index) = self.hit(ui, stamp, geometry, point)? else {
+            return None;
+        };
+        let scope = self.media_lease(ui, index, 0)?;
+        Some((scope, (point.0 / geometry.dpi(), point.1 / geometry.dpi())))
+    }
+    pub fn media_lease(
+        &self,
+        ui: &TerminalWindow,
+        index: usize,
+        sequence: u64,
+    ) -> Option<pttstella::media::hover::Lease> {
+        let stamp = self.current(ui)?;
+        if !self.project(ui, stamp) {
+            return None;
+        }
+        let link = self.projection.borrow().as_ref()?.links.get(index)?.clone();
+        Some(pttstella::media::hover::Lease {
+            sequence,
+            stamp,
+            index,
+            link,
+        })
+    }
+    pub fn renew_media(
+        &self,
+        ui: &TerminalWindow,
+        lease: &mut pttstella::media::hover::Lease,
+    ) -> bool {
+        let view = self.connection.updates.borrow();
+        if let Some(article) = &self.article {
+            return article.renew_media(&view, lease);
+        }
+        let complete = view.phase == Phase::Connected
+            && !view.output_pending
+            && !view.input_pending
+            && view.frame.control_complete;
+        let _ = ui;
+        lease.renew(view.stamp(), complete, &links::detect(&view.frame))
     }
     pub fn context_action(
         self: &Rc<Self>,
@@ -1195,6 +1295,10 @@ impl Output {
         work: impl FnOnce() -> Result<T, String> + Send + 'static,
         complete: impl FnOnce(&Rc<Self>, &TerminalWindow, Result<T, String>) + 'static,
     ) {
+        if self.busy() {
+            ui.set_input_notice(msg!("file-busy").into());
+            return;
+        }
         ui.set_output_busy(true);
         ui.invoke_keep_alive_changed();
         let (send, receive) = tokio::sync::oneshot::channel();
