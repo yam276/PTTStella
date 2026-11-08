@@ -134,3 +134,28 @@ fn live_status_refresh_changes_only_known_app_labels_and_preserves_diagnostics()
         None
     );
 }
+
+#[test]
+fn canonical_chrome_refresh_preserves_details_and_respects_the_owner_keys() {
+    let live = Localizer::new(Language::TraditionalChinese).unwrap();
+    let saved = live.loader().get("draft-saved");
+    let diagnostic = format!("{saved}: /private/example.json");
+    live.select(Language::English);
+    assert_eq!(
+        live.relocalize_labels(Language::TraditionalChinese, &saved, &["draft-saved"]),
+        Some("Saved locally".into())
+    );
+    assert_eq!(
+        live.relocalize_labels(Language::TraditionalChinese, &saved, &["image-ready"]),
+        None
+    );
+    assert_eq!(
+        live.relocalize_labels(Language::TraditionalChinese, &diagnostic, &["draft-saved"]),
+        None
+    );
+    live.select(Language::TraditionalChinese);
+    assert_eq!(
+        live.relocalize_labels(Language::English, "Saved locally", &["draft-saved"]),
+        Some(saved)
+    );
+}
