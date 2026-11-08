@@ -1,6 +1,8 @@
 //! Synthetic round trip through the production connection owner.
+pub(super) mod drafts;
 pub(super) mod live_updates;
 pub(super) mod round_trip;
+pub use drafts::DraftFailure;
 use futures_util::{SinkExt, StreamExt};
 use tokio::{
     net::TcpListener,
@@ -25,6 +27,7 @@ pub(super) enum Scenario {
     ReplyNavigation,
     Drafts,
     DraftsSlow,
+    DraftFailure(DraftFailure),
     BookmarkArchive {
         headerless: bool,
     },
@@ -768,6 +771,7 @@ pub(super) async fn serve(
         scenario,
         Scenario::Drafts
             | Scenario::DraftsSlow
+            | Scenario::DraftFailure(_)
             | Scenario::Filters
             | Scenario::EditorColor
             | Scenario::EditorColorFailure(_)
@@ -845,45 +849,10 @@ pub(super) async fn serve(
                 _=>Err("article paste peer expected Close without duplicate or cancelled bytes".into()),
             };
         }
-        if matches!(scenario,Scenario::Drafts | Scenario::DraftsSlow) {
-            tokio::time::sleep(Duration::from_millis(120)).await;
-            socket.send(Message::Binary(navigation_page("main_menu")?.into())).await.map_err(|e|e.to_string())?;
-            tokio::time::sleep(Duration::from_millis(120)).await;
-            socket.send(Message::Binary(navigation_page("list")?.into())).await.map_err(|e|e.to_string())?;
-            match socket.next().await {
-                Some(Ok(Message::Close(_)))=>return socket.flush().await.map_err(|e|e.to_string()),
-                Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==[16]=>{},
-                _=>return Err("draft probe expected explicit post start or Close".into()),
-            }
-            let mut native=crate::editor_source::fixture::Native::new(&["看板預設格式","\x1b[32m請依格式填寫\x1b[m",""],"[測試] 範本標題",true);
-            socket.send(Message::Binary(native.wire().into())).await.map_err(|e|e.to_string())?;
-            while let Some(message)=socket.next().await {
-                match message.map_err(|e|e.to_string())? {
-                    Message::Close(_)=>return socket.flush().await.map_err(|e|e.to_string()),
-                    Message::Binary(bytes)=>{
-                        // The station can flush between commands from one write.
-                        // Exercise complete intermediate editor redraws, rather
-                        // than applying title-return / Ctrl+Y batches atomically.
-                        let split = if bytes.iter().all(|b| matches!(b,25|12)) && bytes.contains(&25) {
-                            Some(1)
-                        } else if bytes.first()==Some(&25) {
-                            bytes.iter().position(|b| *b==13).map(|i|i+1)
-                        } else { None };
-                        if let Some(n)=split.filter(|n| *n<bytes.len()) {
-                            native.accept(&bytes[..n]);
-                            socket.send(Message::Binary(native.wire().into())).await.map_err(|e|e.to_string())?;
-                            tokio::time::sleep(Duration::from_millis(80)).await;
-                            native.accept(&bytes[n..]);
-                        } else { native.accept(&bytes); }
-                        // Explicit negative fixture for human/native cancellation.
-                        // Only server replies are delayed; production transport is unchanged.
-                        if matches!(scenario,Scenario::DraftsSlow){tokio::time::sleep(Duration::from_millis(350)).await;}
-                        socket.send(Message::Binary(native.wire().into())).await.map_err(|e|e.to_string())?;
-                    },
-                    _=>return Err("draft probe rejects non-editor messages".into())
-                }
-            }
-            return Err("draft peer did not receive Close".into());
+        if matches!(scenario,Scenario::Drafts | Scenario::DraftsSlow | Scenario::DraftFailure(_)) {
+            let slow=matches!(scenario,Scenario::DraftsSlow);
+            let case=match scenario {Scenario::DraftFailure(case)=>Some(case),_=>None};
+            return drafts::run(&mut socket,slow,case).await;
         }
         if matches!(scenario,Scenario::ReplyNavigation) {
             tokio::time::sleep(Duration::from_millis(120)).await;
