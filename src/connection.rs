@@ -838,6 +838,8 @@ mod liveness;
 mod mouse_control;
 mod output;
 mod probe;
+#[doc(hidden)]
+pub mod site_probe;
 mod ssh;
 #[cfg(test)]
 mod tests;
