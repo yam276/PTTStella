@@ -1,19 +1,19 @@
 //! PTT-specific screen state. This is not a shell, PTY or general terminal emulator.
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod article_cache;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod article_find;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod article_flow;
 pub mod article_navigation;
 pub mod article_refresh;
 pub mod article_target;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod article_updates;
 pub mod board_navigation;
 pub mod bookmarks;
 pub mod composer;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod connection;
 pub mod context_menu;
 pub mod drafts;
@@ -31,9 +31,9 @@ pub mod media;
 pub mod mouse;
 pub mod navigation;
 pub mod navigation_job;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod presentation;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod reading_timing;
 pub mod recent_boards;
 pub mod render_wire;
@@ -43,14 +43,14 @@ pub mod screen;
 pub mod selection;
 pub mod settings;
 pub mod sites;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod storage;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod surface_state;
 pub mod telnet;
 pub mod text;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 mod tls;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod updates;
 pub mod vim;

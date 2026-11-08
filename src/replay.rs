@@ -172,7 +172,7 @@ fn reading_load_page(
     encoding::encode(&text).map_err(|e| e.to_string())
 }
 
-#[cfg(all(test, feature = "desktop"))]
+#[cfg(all(test, feature = "desktop-services"))]
 mod reading_interaction_tests {
     use super::*;
     use crate::{

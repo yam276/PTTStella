@@ -3,9 +3,9 @@ use crate::encoding::TextEncoding;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod session;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod store;
 pub const PTT: &str = "wss://ws.ptt.cc/bbs";
 pub const PTT_SSH: &str = "ssh://bbs@ptt.cc";

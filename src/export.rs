@@ -8,7 +8,7 @@ pub const ROW_HEIGHT: u32 = HEIGHT / ROWS as u32;
 pub const MAX_PNG_BYTES: usize = 3 * 1024 * 1024;
 pub const MAX_BASE64_BYTES: usize = MAX_PNG_BYTES.div_ceil(3) * 4;
 
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 #[derive(Clone)]
 pub struct Lease {
     stamp: crate::navigation::Stamp,
@@ -16,7 +16,7 @@ pub struct Lease {
     revoked: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 impl Lease {
     pub fn new(stamp: crate::navigation::Stamp, require_input_epoch: bool) -> Self {
         Self {

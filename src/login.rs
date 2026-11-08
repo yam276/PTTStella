@@ -299,7 +299,7 @@ impl AccountIdentity {
     }
 }
 
-#[cfg(all(test, feature = "desktop", target_os = "macos"))]
+#[cfg(all(test, feature = "desktop-services", target_os = "macos"))]
 mod tests {
     use super::*;
     #[test]

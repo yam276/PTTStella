@@ -1,9 +1,9 @@
 //! Full local source; never reconstructed from a terminal viewport.
 use crate::{board_navigation::BoardName, sites::Target};
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod session;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod store;
 pub const MAX_BODY: usize = 128 * 1024;
 pub const MAX_DRAFTS: usize = 64;
@@ -169,7 +169,7 @@ pub fn empty_editor(frame: &crate::screen::Frame) -> bool {
         })
 }
 /// A confirmed connected editor scope; never derived from pending output.
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub fn scope(view: &crate::connection::View) -> Option<Scope> {
     if view.phase != crate::connection::Phase::Connected
         || view.input_pending

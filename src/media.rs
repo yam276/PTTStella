@@ -3,15 +3,15 @@ use serde::Serialize;
 use url::Url;
 pub mod hover;
 
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod inline;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod loader;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod native_image;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod picture;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod preview;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]

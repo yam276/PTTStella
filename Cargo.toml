@@ -10,7 +10,8 @@ default-run = "pttstella"
 
 [features]
 default = []
-desktop = ["dep:png", "dep:arboard", "dep:dioxus-icons", "dep:dioxus", "dep:tokio", "dep:base64", "dep:tokio-tungstenite", "dep:russh", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser", "dep:rfd", "dep:tempfile", "dep:directories", "dep:reqwest", "dep:imagesize", "credential-store", "dep:font-kit", "dep:winresource", "dep:time", "dep:image", "dep:semver"]
+desktop = ["desktop-services", "dep:base64", "dep:dioxus", "dep:dioxus-icons", "dep:winresource"]
+desktop-services = ["dep:png", "dep:arboard", "dep:tokio", "dep:tokio-tungstenite", "dep:russh", "dep:futures-util", "dep:rustls", "dep:rustls-native-certs", "dep:webbrowser", "dep:rfd", "dep:tempfile", "dep:directories", "dep:reqwest", "dep:imagesize", "credential-store", "dep:font-kit", "dep:time", "dep:image", "dep:semver"]
 
 credential-store = ["dep:security-framework", "dep:keyring", "dep:tokio"]
 

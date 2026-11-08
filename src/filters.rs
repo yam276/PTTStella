@@ -7,7 +7,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 pub mod import;
-#[cfg(feature = "desktop")]
+#[cfg(feature = "desktop-services")]
 pub mod store;
 
 pub const MAX_BYTES: usize = 256 * 1024;
