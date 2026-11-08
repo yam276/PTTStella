@@ -2,6 +2,8 @@
 use serde::Serialize;
 use url::Url;
 pub mod hover;
+#[cfg(feature = "desktop-services")]
+mod http;
 
 #[cfg(feature = "desktop-services")]
 pub mod inline;

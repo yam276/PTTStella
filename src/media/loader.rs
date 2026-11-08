@@ -1,6 +1,6 @@
 //! One cancellable future per preview. No spawned HTTP/decoder tasks to abandon.
 use futures_util::{StreamExt, future::BoxFuture};
-use reqwest::{Client, header, redirect::Policy};
+use reqwest::{Client, header};
 use std::{
     collections::VecDeque,
     fmt,
@@ -79,33 +79,7 @@ impl Default for Loader {
 }
 impl Loader {
     pub fn new() -> Self {
-        let client = crate::tls::client_config()
-            .map_err(Error::Setup)
-            .and_then(|tls| {
-                Client::builder()
-                    .use_preconfigured_tls(tls)
-                    .connect_timeout(Duration::from_secs(8))
-                    .pool_max_idle_per_host(1)
-                    .referer(false)
-                    // Image hosts may close requests that omit an application identity.
-                    .user_agent(concat!("PTTStella/", env!("CARGO_PKG_VERSION")))
-                    .redirect(Policy::custom(|attempt| {
-                        let url = attempt.url();
-                        let downgrade = attempt.previous().last().is_some_and(|previous| {
-                            previous.scheme() == "https" && url.scheme() != "https"
-                        });
-                        if attempt.previous().len() > 5
-                            || downgrade
-                            || super::validate(url.as_str()).is_err()
-                        {
-                            attempt.error("media redirect rejected")
-                        } else {
-                            attempt.follow()
-                        }
-                    }))
-                    .build()
-                    .map_err(|_| Error::Setup(crate::msg!("http-client-failed")))
-            });
+        let client = super::http::client().map_err(Error::Setup);
         Self {
             client,
             cache: VecDeque::new(),
