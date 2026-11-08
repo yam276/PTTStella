@@ -863,3 +863,5 @@ draft-title-invalid = 標題不可空白、含控制字元，或超過 PTT 的 6
 draft-editor-unavailable = 無法啟動本機編輯器，請先繼續使用 PTT 編輯器。
 
 context-open-link-external = 在瀏覽器開啟連結
+
+draft-stop-requested = 已要求停止，不會重送；站端可能已有部分修改，請依畫面確認。本機草稿仍保留。

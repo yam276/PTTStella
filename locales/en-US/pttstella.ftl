@@ -869,3 +869,5 @@ draft-title-invalid = The title must be nonempty, contain no controls, and fit w
 draft-editor-unavailable = Unable to start the local composer. Continue in the PTT editor.
 
 context-open-link-external = Open link in browser
+
+draft-stop-requested = Stop requested; nothing will be resent. The station may contain partial changes. Check its screen; your local draft is retained.

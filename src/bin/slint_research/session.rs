@@ -93,6 +93,9 @@ pub fn with_probe(
     bytes: Vec<u8>,
     show: impl FnOnce(Rc<Connection>) -> Result<(), Box<dyn Error>>,
 ) -> Result<(), Box<dyn Error>> {
+    let slow_drafts = probe == Probe::Drafts
+        && std::env::var_os("PTTSTELLA_SLINT_DRAFTS_SLOW").as_deref()
+            == Some(std::ffi::OsStr::new("1"));
     let menu_probe = if probe == Probe::ArticleInline {
         std::env::var("PTTSTELLA_INLINE_MENU_PROBE").ok()
     } else {
@@ -111,6 +114,7 @@ pub fn with_probe(
         None => bytes,
     };
     let fixture = match probe {
+        Probe::Drafts if slow_drafts => "slint_drafts_slow",
         Probe::Drafts => "slint_drafts",
         Probe::Media => "slint_native_media",
         Probe::ArticleInline => "slint_native_inline",
@@ -144,7 +148,13 @@ pub fn with_probe(
     };
     let result = with_connection(
         || match probe {
-            Probe::Drafts => Connection::start_drafts_probe(),
+            Probe::Drafts => {
+                if slow_drafts {
+                    Connection::start_drafts_slow_probe()
+                } else {
+                    Connection::start_drafts_probe()
+                }
+            }
             Probe::Media => Connection::start_ui_probe(bytes),
             Probe::ArticleInline => Connection::start_inline_pages_probe(
                 bytes,

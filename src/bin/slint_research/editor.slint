@@ -1,4 +1,5 @@
 import { Button, ComboBox, ScrollView } from "std-widgets.slint";
+import { ColorPalette } from "color-palette.slint";
 import { SelectionRect } from "selection.slint";
 export struct DraftItem { id:string, title:string, conflict:bool }
 export global EditorState {
@@ -9,6 +10,17 @@ export global EditorState {
     in-out property <bool> title-focused;
     in-out property <bool> selected;
     in-out property <bool> busy;
+    in-out property <bool> source-busy;
+    in-out property <bool> source-cancelling;
+    in-out property <bool> palette-open;
+    in-out property <length> palette-x;
+    in-out property <length> palette-y;
+    in-out property <int> palette-selected:15;
+    in-out property <[string]> palette-labels;
+    in-out property <string> foreground-label;
+    in-out property <string> background-label;
+    in-out property <[string]> selection-labels;
+    in-out property <int> selection-mode;
     in-out property <bool> can-create;
     in-out property <bool> can-undo;
     in-out property <bool> can-redo;
@@ -19,7 +31,7 @@ export global EditorState {
     in-out property <string> position;
     in-out property <string> scope;
     in-out property <int> mode;
-    in-out property <int> foreground:7;
+    in-out property <int> foreground:15;
     in-out property <int> background;
     in-out property <[DraftItem]> drafts;
     in-out property <[SelectionRect]> spans;
@@ -35,7 +47,10 @@ export global EditorState {
     callback insert(string) -> bool;
     callback title-edit(string);
     callback mode-edit(int);
-    callback color;
+    callback palette-request(float,float);
+    callback palette-dismiss(bool);
+    callback palette-choose(int);
+    callback selection-edit(int);
     callback pointer(int,float,float,bool,bool);
     callback scroll(int,int);
     callback layout;
@@ -57,8 +72,13 @@ export component NativeEditor inherits Rectangle {
         else if code==2 {title-field.cut();}
         else if code==3 {title-field.paste();}
     }
+    public function focus-dialog() {dialog-keys.focus();}
+    public function focus-palette() {palette.focus-palette();}
     public function clear-input() { body-field.text=""; }
     public function focus-body() { body-field.focus(); }
+    dialog-keys := FocusScope {
+      width:parent.width;height:parent.height;
+      key-pressed(event)=>{if event.text==Key.Escape && !EditorState.composing {EditorState.action(EditorState.source-busy ? 9 : 3);return accept;}return reject;}
     TouchArea { }
     VerticalLayout {
         padding:12px;spacing:8px;
@@ -66,6 +86,7 @@ export component NativeEditor inherits Rectangle {
             Text { text:"本機草稿 · " + EditorState.scope; color:#c7d4e7;vertical-alignment:center;horizontal-stretch:1;overflow:elide; }
             Button {text:"保存";enabled:EditorState.selected && !EditorState.composing;clicked=>{EditorState.action(1);} }
             Button {text:"帶回站端";enabled:EditorState.can-transfer && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(2);} }
+            if EditorState.source-busy: Button {text:EditorState.source-cancelling ? "停止中…" : "取消工作";enabled:!EditorState.source-cancelling;clicked=>{EditorState.action(9);} }
             Button {text:"關閉";enabled:!EditorState.busy && !EditorState.composing;clicked=>{EditorState.action(3);} }
         }
         Rectangle {
@@ -74,7 +95,7 @@ export component NativeEditor inherits Rectangle {
             Button { text:"從目前範本建立";enabled:EditorState.can-create && !EditorState.busy;clicked=>{EditorState.choose("");} }
             ScrollView {
                 VerticalLayout {
-                    for item in EditorState.drafts: HorizontalLayout {
+                    for item in EditorState.drafts: HorizontalLayout {min-height:38px;max-height:38px;
                         Button { text:item.title + (item.conflict ? " · 衝突副本" : "");horizontal-stretch:1;enabled:!EditorState.busy;clicked=>{EditorState.choose(item.id);} }
                         Button { text:"刪除";enabled:!EditorState.busy;clicked=>{EditorState.delete(item.id);} }
                     }
@@ -92,7 +113,7 @@ export component NativeEditor inherits Rectangle {
                 title-field := TextInput {
                     x:8px;y:3px;width:parent.width - 16px;height:parent.height - 6px;
                     text <=> EditorState.title;single-line:true;color:#e3e8ee;
-                    enabled:!EditorState.busy && !EditorState.transfer-confirm;
+                    enabled:!EditorState.busy && !EditorState.transfer-confirm && !EditorState.palette-open;
                     accessible-label:"草稿標題";
                     edited=>{EditorState.title-edit(self.text);}
                 }
@@ -102,22 +123,9 @@ export component NativeEditor inherits Rectangle {
             Button {text:"重做";enabled:EditorState.can-redo && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(5);} }
         }
         HorizontalLayout {
-            spacing:4px;
-            Text {horizontal-stretch:0;text:"字";color:#cad5e5;vertical-alignment:center;}
-            for color[index] in [#000000,#800000,#008000,#808000,#000080,#800080,#008080,#c0c0c0,#808080,#ff0000,#00ff00,#ffff00,#0000ff,#ff00ff,#00ffff,#ffffff]: Rectangle {
-                width:18px;height:22px;background:color;
-                border-width:EditorState.foreground==index ? 2px : 1px;
-                border-color:EditorState.foreground==index ? #68b7ff : #77808a;
-                TouchArea {enabled:!EditorState.busy && !EditorState.composing;clicked=>{EditorState.foreground=index;} }
-            }
-            Text {horizontal-stretch:0;text:"底";color:#cad5e5;vertical-alignment:center;}
-            for color[index] in [#000000,#800000,#008000,#808000,#000080,#800080,#008080,#c0c0c0]: Rectangle {
-                width:18px;height:22px;background:color;
-                border-width:EditorState.background==index ? 2px : 1px;
-                border-color:EditorState.background==index ? #68b7ff : #77808a;
-                TouchArea {enabled:!EditorState.busy && !EditorState.composing;clicked=>{EditorState.background=index;} }
-            }
-            Button {text:"套用";enabled:!EditorState.composing && !EditorState.busy;clicked=>{EditorState.color();} }
+            ComboBox {accessible-label:"框選方式";preferred-width:180px;max-width:220px;model:EditorState.selection-labels;current-index:EditorState.selection-mode;enabled:!EditorState.composing && !EditorState.busy && !EditorState.palette-open;selected(value)=>{EditorState.selection-edit(self.current-index);} }
+            Button {text:"色票";enabled:!EditorState.composing && !EditorState.busy;clicked=>{EditorState.palette-request(-1,-1);} }
+            Text {text:"選取後按右鍵上色";color:#9ab0ca;vertical-alignment:center;horizontal-stretch:1;}
         }
         area := Rectangle {
             vertical-stretch:1;clip:true;background:black;
@@ -136,19 +144,35 @@ export component NativeEditor inherits Rectangle {
                     body-field := TextInput {
                         width:parent.width;height:parent.height;font-size:max(8px,area.unit*1.7);
                         color:#e3e8ee;single-line:true;text-cursor-width:EditorState.caret-visible ? 1px : 0px;
-                        enabled:!EditorState.busy && !EditorState.transfer-confirm;
+                        enabled:!EditorState.busy && !EditorState.transfer-confirm && !EditorState.palette-open;
                         accessible-label:"草稿正文輸入";
                         edited=>{ if EditorState.insert(self.text) {self.text="";} }
                     }
                 }
                 TouchArea {
-                    enabled:!EditorState.busy && !EditorState.composing && !EditorState.transfer-confirm;
+                    enabled:!EditorState.busy && !EditorState.composing && !EditorState.transfer-confirm && !EditorState.palette-open;
                     mouse-cursor:text;
+                    property <bool> left-held;
+                    property <bool> right-held;
+                    property <length> press-x;
+                    property <length> press-y;
+                    property <bool> drag-distance:Math.abs(self.mouse-x - self.press-x)>=3px || Math.abs(self.mouse-y - self.press-y)>=3px;
                     pointer-event(event)=>{
-                        if event.button == PointerEventButton.left || event.kind == PointerEventKind.move || event.kind == PointerEventKind.cancel {
-                            let kind=event.kind==PointerEventKind.down ? 0 : event.kind==PointerEventKind.move ? 1 : event.kind==PointerEventKind.up ? 2 : 3;
-                            EditorState.pointer(kind,self.mouse-x/1px,self.mouse-y/1px,event.modifiers.shift,event.modifiers.alt);
-                            if event.kind==PointerEventKind.down {body-field.focus();}
+                        if event.kind==PointerEventKind.cancel {
+                            self.left-held=false;self.right-held=false;EditorState.pointer(3,self.mouse-x/1px,self.mouse-y/1px,false,false);
+                        } else if event.kind==PointerEventKind.down {
+                            self.press-x=self.mouse-x;self.press-y=self.mouse-y;
+                            if event.button==PointerEventButton.left {self.left-held=true;EditorState.pointer(0,self.mouse-x/1px,self.mouse-y/1px,event.modifiers.shift,event.modifiers.alt);body-field.focus();}
+                            else if event.button==PointerEventButton.right {self.right-held=true;}
+                        } else if event.kind==PointerEventKind.move {
+                            if self.right-held && self.drag-distance {self.right-held=false;}
+                            if self.left-held && self.drag-distance {EditorState.pointer(1,self.mouse-x/1px,self.mouse-y/1px,event.modifiers.shift,event.modifiers.alt);}
+                        } else if event.kind==PointerEventKind.up {
+                            if event.button==PointerEventButton.left && self.left-held {
+                                self.left-held=false;EditorState.pointer(self.drag-distance ? 2 : 6,self.mouse-x/1px,self.mouse-y/1px,event.modifiers.shift,event.modifiers.alt);
+                            } else if event.button==PointerEventButton.right && self.right-held {
+                                self.right-held=false;EditorState.palette-request((root.grid-left+self.mouse-x)/1px,(root.grid-top+self.mouse-y)/1px);
+                            }
                         }
                     }
                     double-clicked=>{EditorState.pointer(4,self.mouse-x/1px,self.mouse-y/1px,false,false);}
@@ -171,5 +195,14 @@ export component NativeEditor inherits Rectangle {
             Text {text:EditorState.status;color:#c7d4e7;horizontal-stretch:1;overflow:elide;}
             Text {text:EditorState.position;color:#9ab0ca;}
         }
+    }
+    palette := ColorPalette {
+        visible:EditorState.palette-open;width:parent.width;height:parent.height;
+        anchor-x:EditorState.palette-x;anchor-y:EditorState.palette-y;
+        labels:EditorState.palette-labels;foreground-label:EditorState.foreground-label;background-label:EditorState.background-label;
+        foreground-index:EditorState.foreground;background-index:EditorState.background;selected <=> EditorState.palette-selected;
+        choose(index)=>{EditorState.palette-choose(index);}
+        dismiss(restore)=>{EditorState.palette-dismiss(restore);}
+    }
     }
 }

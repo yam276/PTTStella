@@ -1,0 +1,65 @@
+// Shared native 16/8 palette. The consumer owns the source lease and transaction.
+export component ColorPalette inherits Rectangle {
+    in property <length> anchor-x;
+    in property <length> anchor-y;
+    in property <[string]> labels;
+    in property <string> foreground-label;
+    in property <string> background-label;
+    in property <int> foreground-index:15;
+    in property <int> background-index;
+    in-out property <int> selected:15;
+    callback choose(int);
+    callback dismiss(bool);
+    public function focus-palette() {keys.focus();}
+    background:transparent;
+    TouchArea {
+        pointer-event(event)=>{if event.kind==PointerEventKind.down {root.dismiss(true);}}
+        scroll-event(event)=>{root.dismiss(true);return accept;}
+    }
+    keys := FocusScope {
+        width:parent.width;height:parent.height;
+        key-pressed(event)=>{
+            if event.text==Key.Escape {if !event.repeat {root.dismiss(true);} }
+            else if event.text==Key.Tab {root.selected=Math.mod(root.selected+(event.modifiers.shift ? 23 : 1),24);}
+            else if event.text==Key.LeftArrow {root.selected=Math.mod(root.selected+23,24);}
+            else if event.text==Key.RightArrow {root.selected=Math.mod(root.selected+1,24);}
+            else if event.text==Key.UpArrow {root.selected=Math.mod(root.selected+16,24);}
+            else if event.text==Key.DownArrow {root.selected=Math.mod(root.selected+8,24);}
+            else if event.text==Key.Home {root.selected=0;}
+            else if event.text==Key.End {root.selected=23;}
+            else if event.text==Key.Return || event.text==" " {if !event.repeat {root.choose(root.selected);} }
+            return accept;
+        }
+        key-released(event)=>{return accept;}
+        panel := Rectangle {
+            x:clamp(root.anchor-x,8px,max(8px,root.width - self.width - 8px));
+            y:clamp(root.anchor-y,8px,max(8px,root.height - self.height - 8px));
+            width:min(360px,root.width - 16px);height:min(224px,root.height - 16px);
+            background:#141d30;border-color:#d9ae5b;border-width:1px;border-radius:6px;clip:true;
+            TouchArea { }
+            Text {x:12px;y:8px;height:24px;text:root.foreground-label;color:#e8dfc7;}
+            for color[index] in [#000000,#800000,#008000,#808000,#000080,#800080,#008080,#c0c0c0,#808080,#ff0000,#00ff00,#ffff00,#0000ff,#ff00ff,#00ffff,#ffffff]: Rectangle {
+                x:12px+Math.mod(index,8)*(panel.width - 24px)/8;y:36px+Math.floor(index/8)*36px;
+                width:(panel.width - 24px)/8 - 4px;height:32px;background:color;
+                border-width:root.selected==index ? 3px : root.foreground-index==index ? 2px : 1px;
+                border-color:root.selected==index ? #68b7ff : root.foreground-index==index ? #f2cd7d : #77808a;
+                accessible-role:button;accessible-label:root.labels[index];
+                accessible-action-default=>{root.choose(index);}
+                Text {width:parent.width;height:parent.height;text:index>=8 ? "1;"+(30+Math.mod(index,8)) : ""+(30+index);color:Math.mod(index,8)==0 || Math.mod(index,8)==1 || Math.mod(index,8)==4 || Math.mod(index,8)==5 ? white : black;horizontal-alignment:center;vertical-alignment:center;}
+                TouchArea {clicked=>{root.choose(index);}}
+            }
+            Text {x:12px;y:112px;height:24px;text:root.background-label;color:#e8dfc7;}
+            for color[index] in [#000000,#800000,#008000,#808000,#000080,#800080,#008080,#c0c0c0]: Rectangle {
+                x:12px+index*(panel.width - 24px)/8;y:144px;
+                width:(panel.width - 24px)/8 - 4px;height:32px;background:color;
+                border-width:root.selected==index+16 ? 3px : root.background-index==index ? 2px : 1px;
+                border-color:root.selected==index+16 ? #68b7ff : root.background-index==index ? #f2cd7d : #77808a;
+                accessible-role:button;accessible-label:root.labels[index+16];
+                accessible-action-default=>{root.choose(index+16);}
+                Text {width:parent.width;height:parent.height;text:""+(40+index);color:index==0 || index==1 || index==4 || index==5 ? white : black;horizontal-alignment:center;vertical-alignment:center;}
+                TouchArea {clicked=>{root.choose(index+16);}}
+            }
+            Text {x:12px;y:188px;width:parent.width - 24px;height:24px;text:"Esc 返回 · 方向鍵選色 · Enter 套用";color:#a7b6c8;overflow:elide;}
+        }
+    }
+}

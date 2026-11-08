@@ -426,6 +426,10 @@ fn mount_window(
             // Local draft input never enters the session keyboard, including
             // disconnected sessions and Vim normal mode. Native fields own IME.
             if ui.get_editor_open() {
+                if ui.global::<EditorState>().get_palette_open() {
+                    drop(input);
+                    return Propagate;
+                }
                 let composing = ui.get_editor_composing();
                 let body = ui.get_editor_body_focused();
                 let shift = input.modifiers.shift_key();
@@ -442,8 +446,19 @@ fn mount_window(
                         && event.physical_key == PhysicalKey::Code(KeyCode::KeyS)
                     {
                         Some(1)
-                    } else if event.logical_key == Key::Named(NamedKey::Escape) {
-                        Some(3)
+                    } else if event.logical_key == Key::Named(NamedKey::Escape)
+                        && (ui.get_editor_focused() || ui.global::<EditorState>().get_source_busy())
+                    {
+                        Some(if ui.global::<EditorState>().get_source_busy() {
+                            9
+                        } else {
+                            3
+                        })
+                    } else if body
+                        && (event.logical_key == Key::Named(NamedKey::ContextMenu)
+                            || shift && event.logical_key == Key::Named(NamedKey::F10))
+                    {
+                        Some(10)
                     } else {
                         None
                     };

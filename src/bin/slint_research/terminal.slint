@@ -16,6 +16,10 @@ export component TerminalWindow inherits Window {
     out property <bool> editor-body-focused: EditorState.body-focused;
     out property <bool> editor-composing: EditorState.composing;
     out property <SelectionRect> editor-grid-bounds:{x:editor-view.grid-left,y:editor-view.grid-top,width:editor-view.grid-width,height:editor-view.grid-height};
+    callback focus-editor-dialog;
+    focus-editor-dialog=>{editor-view.focus-dialog();}
+    callback focus-editor-palette;
+    focus-editor-palette=>{editor-view.focus-palette();}
     callback focus-editor;
     callback clear-editor-input;
     focus-editor => { if EditorState.selected {editor-view.focus-body();} }
@@ -486,6 +490,7 @@ export component TerminalWindow inherits Window {
                         Rectangle { x: parent.width - 3px; width: 3px; height: parent.height; background: #d9ae5b; }
                     }
                     grid-input := TextInput {
+                        enabled: !root.editor-open;
                         visible: root.terminal-input;
                         accessible-label: "終端輸入";
                         x: raster.x + root.caret-left;

@@ -1,5 +1,6 @@
 //! Native local editor. Document owns source/history; the retained draft actor
 //! owns disk state; Connection alone captures and replaces the station source.
+mod palette;
 pub mod probe;
 mod storage;
 mod viewport;
@@ -26,7 +27,12 @@ use std::{
     time::{Duration, Instant},
 };
 use storage::{Command, Storage};
-use viewport::{COLUMNS, ROWS, Viewport};
+use viewport::{COLUMNS, ROWS, SelectionMode, Viewport};
+
+enum SourceResult {
+    Captured(pttstella::editor_source::Snapshot),
+    Transferred,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct PaintStamp {
@@ -60,6 +66,8 @@ pub struct Editor {
     replies: RefCell<Option<slint::JoinHandle<()>>>,
     updates: RefCell<Option<slint::JoinHandle<()>>>,
     operation: RefCell<Option<slint::JoinHandle<()>>>,
+    source_cancel: RefCell<Option<tokio::sync::oneshot::Sender<()>>>,
+    palette: RefCell<Option<palette::Lease>>,
 }
 impl Editor {
     pub fn mount(
@@ -93,6 +101,8 @@ impl Editor {
             replies: RefCell::new(None),
             updates: RefCell::new(None),
             operation: RefCell::new(None),
+            source_cancel: RefCell::new(None),
+            palette: RefCell::new(None),
         });
         ui.global::<EditorState>().on_action({
             let owner = Rc::downgrade(&owner);
@@ -138,11 +148,35 @@ impl Editor {
                 }
             }
         });
-        ui.global::<EditorState>().on_color({
+        ui.global::<EditorState>().on_palette_request({
             let owner = Rc::downgrade(&owner);
-            move || {
+            move |x, y| {
                 if let Some(owner) = owner.upgrade() {
-                    owner.color();
+                    owner.open_palette(x, y);
+                }
+            }
+        });
+        ui.global::<EditorState>().on_palette_dismiss({
+            let owner = Rc::downgrade(&owner);
+            move |restore| {
+                if let Some(owner) = owner.upgrade() {
+                    owner.dismiss_palette(restore);
+                }
+            }
+        });
+        ui.global::<EditorState>().on_palette_choose({
+            let owner = Rc::downgrade(&owner);
+            move |index| {
+                if let Some(owner) = owner.upgrade() {
+                    owner.choose_color(index);
+                }
+            }
+        });
+        ui.global::<EditorState>().on_selection_edit({
+            let owner = Rc::downgrade(&owner);
+            move |mode| {
+                if let Some(owner) = owner.upgrade() {
+                    owner.selection_mode(mode);
                 }
             }
         });
@@ -150,6 +184,7 @@ impl Editor {
             let owner = Rc::downgrade(&owner);
             move || {
                 if let Some(owner) = owner.upgrade() {
+                    owner.dismiss_palette(false);
                     owner.paint();
                 }
             }
@@ -158,6 +193,7 @@ impl Editor {
             let owner = Rc::downgrade(&owner);
             move |rows, cols| {
                 if let Some(owner) = owner.upgrade() {
+                    owner.dismiss_palette(false);
                     if let Some(d) = owner.document.borrow().as_ref() {
                         owner.viewport.borrow_mut().scroll(d, rows, cols);
                     }
@@ -206,6 +242,15 @@ impl Editor {
                 if let Some(owner) = owner.upgrade()
                     && let Some(ui) = owner.ui.upgrade()
                 {
+                    if active {
+                        owner.dismiss_palette(false);
+                        if let Some(d) = owner.document.borrow().as_ref()
+                            && let Err(error) = owner.viewport.borrow_mut().reveal(d)
+                        {
+                            owner.notice(error);
+                        }
+                        owner.paint();
+                    }
                     ui.global::<EditorState>().set_composing(active);
                     if !active {
                         owner.schedule();
@@ -249,6 +294,41 @@ impl Editor {
             })
             .map_err(|e| e.to_string())?,
         ));
+        let state = ui.global::<EditorState>();
+        let names = [
+            pttstella::msg!("editor-color-name-0"),
+            pttstella::msg!("editor-color-name-1"),
+            pttstella::msg!("editor-color-name-2"),
+            pttstella::msg!("editor-color-name-3"),
+            pttstella::msg!("editor-color-name-4"),
+            pttstella::msg!("editor-color-name-5"),
+            pttstella::msg!("editor-color-name-6"),
+            pttstella::msg!("editor-color-name-7"),
+        ];
+        let labels = (0..24)
+            .map(|i| {
+                let name = &names[i % 8];
+                let group = if i < 16 {
+                    pttstella::msg!("editor-color-foreground")
+                } else {
+                    pttstella::msg!("editor-color-background")
+                };
+                let bright = if (8..16).contains(&i) {
+                    format!("{} · ", pttstella::msg!("editor-color-bright"))
+                } else {
+                    String::new()
+                };
+                format!("{group} · {bright}{name}").into()
+            })
+            .collect::<Vec<_>>();
+        state.set_palette_labels(ModelRc::new(VecModel::from(labels)));
+        state.set_foreground_label(pttstella::msg!("editor-color-foreground").into());
+        state.set_background_label(pttstella::msg!("editor-color-background").into());
+        state.set_selection_labels(ModelRc::new(VecModel::from(vec![
+            pttstella::msg!("draft-select-text").into(),
+            pttstella::msg!("draft-select-line").into(),
+            pttstella::msg!("draft-select-rectangle").into(),
+        ])));
         owner.availability();
         Ok(owner)
     }
@@ -331,11 +411,15 @@ impl Editor {
         ui.invoke_station_mouse_cancel();
         let view = self.connection.updates.borrow().clone();
         let state = ui.global::<EditorState>();
+        self.dismiss_palette(false);
+        state.set_drafts(ModelRc::default());
+        state.set_position("".into());
         state.set_open(true);
         state.set_selected(false);
         state.set_can_create(false);
         state.set_transfer_confirm(false);
         state.set_status("讀取草稿…".into());
+        ui.invoke_focus_editor_dialog();
         if view.draft_post_scope.is_some() && pttstella::navigation::article_editor(&view.frame) {
             if !self.shown() {
                 self.notice(pttstella::msg!("draft-transfer-stopped"));
@@ -348,40 +432,19 @@ impl Editor {
                     return;
                 }
             };
-            state.set_busy(true);
             self.template.set(false);
-            let owner = Rc::downgrade(self);
-            match slint::spawn_local(async move {
-                let result = reply.wait().await;
-                let Some(owner) = owner.upgrade() else { return };
-                if let Some(ui) = owner.ui.upgrade() {
-                    ui.global::<EditorState>().set_busy(false);
-                }
-                match result.and_then(|()| {
-                    owner
-                        .connection
-                        .updates
-                        .borrow()
-                        .draft_source
-                        .as_deref()
-                        .cloned()
-                        .ok_or_else(|| pttstella::msg!("draft-template-unavailable"))
-                }) {
-                    Ok(template) => {
-                        owner.template.set(true);
-                        owner.command(Command::Open(template.scope.clone(), Some(template)));
-                    }
-                    Err(e) => owner.notice(e),
-                }
-            }) {
-                Ok(task) => {
-                    self.operation.replace(Some(task));
-                }
-                Err(e) => {
-                    state.set_busy(false);
-                    self.notice(e.to_string());
-                }
-            }
+            let connection = self.connection.clone();
+            self.start_source(async move {
+                reply.wait().await?;
+                let template = connection
+                    .updates
+                    .borrow()
+                    .draft_source
+                    .as_deref()
+                    .cloned()
+                    .ok_or_else(|| pttstella::msg!("draft-template-unavailable"))?;
+                Ok(SourceResult::Captured(template))
+            });
         } else {
             self.template.set(false);
             let scope = pttstella::drafts::scope(&view).or_else(|| {
@@ -398,7 +461,13 @@ impl Editor {
         }
     }
     fn choose(&self, id: Option<String>) {
-        if self.document.borrow().is_some() {
+        let Some(ui) = self.ui.upgrade() else { return };
+        let state = ui.global::<EditorState>();
+        if self.document.borrow().is_some()
+            || !state.get_open()
+            || state.get_busy()
+            || id.is_none() && !state.get_can_create()
+        {
             return;
         }
         self.command(Command::Choose(id));
@@ -443,6 +512,7 @@ impl Editor {
                         self.closing.set(false);
                         self.document.replace(Some(document));
                         self.viewport.replace(Viewport::default());
+                        state.set_selection_mode(0);
                         state.set_selected(true);
                         state.set_busy(false);
                         state.set_status("本機編輯，不會自動送到站端".into());
@@ -524,7 +594,7 @@ impl Editor {
         match result {
             Ok(changed) => {
                 if changed {
-                    self.viewport.borrow_mut().clear_rectangle();
+                    self.viewport.borrow_mut().reset_motion();
                     if let Some(d) = self.document.borrow().as_ref()
                         && let Err(e) = self.viewport.borrow_mut().reveal(d)
                     {
@@ -549,6 +619,7 @@ impl Editor {
         self.edit(|d| self.viewport.borrow_mut().replace(d, text))
     }
     fn changed(self: &Rc<Self>) {
+        self.dismiss_palette(false);
         self.edited_at.set(Some(Instant::now()));
         self.notice("尚未保存");
         if let Some(ui) = self.ui.upgrade() {
@@ -618,6 +689,7 @@ impl Editor {
         }
     }
     fn mode(&self, mode: i32) {
+        self.dismiss_palette(false);
         if let Some(ui) = self.ui.upgrade()
             && !ui.get_editor_composing()
             && let Some(d) = self.document.borrow_mut().as_mut()
@@ -627,30 +699,122 @@ impl Editor {
                 2 => Mode::Source,
                 _ => Mode::Color,
             });
-            self.viewport.borrow_mut().clear_rectangle();
+            self.viewport.borrow_mut().reset_motion();
         }
         self.paint();
     }
-    fn color(self: &Rc<Self>) {
+    fn selection_mode(&self, mode: i32) {
         let Some(ui) = self.ui.upgrade() else { return };
-        if ui.get_editor_composing() {
+        let state = ui.global::<EditorState>();
+        if state.get_busy() || state.get_composing() {
             return;
         }
-        let state = ui.global::<EditorState>();
-        let color = Color {
-            foreground: state.get_foreground() as u8,
-            background: state.get_background() as u8,
+        let mode = match mode {
+            0 => SelectionMode::Text,
+            1 => SelectionMode::Line,
+            2 => SelectionMode::Rectangle,
+            _ => return,
         };
-        let ranges = {
+        self.dismiss_palette(false);
+        let result = {
+            let mut document = self.document.borrow_mut();
+            document
+                .as_mut()
+                .map(|d| self.viewport.borrow_mut().set_selection_mode(d, mode))
+        };
+        if let Some(Err(e)) = result {
+            self.notice(e);
+        }
+        state.set_selection_mode(match mode {
+            SelectionMode::Text => 0,
+            SelectionMode::Line => 1,
+            SelectionMode::Rectangle => 2,
+        });
+        self.paint();
+    }
+    fn dismiss_palette(&self, restore: bool) {
+        self.palette.take();
+        if let Some(ui) = self.ui.upgrade() {
+            let state = ui.global::<EditorState>();
+            let open = state.get_palette_open();
+            state.set_palette_open(false);
+            if open && restore {
+                ui.invoke_focus_editor();
+            }
+        }
+    }
+    fn open_palette(&self, x: f32, y: f32) {
+        let Some(ui) = self.ui.upgrade() else { return };
+        let state = ui.global::<EditorState>();
+        if !state.get_selected()
+            || state.get_busy()
+            || state.get_composing()
+            || state.get_transfer_confirm()
+            || !x.is_finite()
+            || !y.is_finite()
+        {
+            return;
+        }
+        let lease = {
             let document = self.document.borrow();
             let Some(d) = document.as_ref() else { return };
-            self.viewport.borrow().ranges(d)
+            palette::Lease::new(d, &self.viewport.borrow())
         };
-        match ranges {
-            Ok(ranges) => {
-                self.edit(|d| d.color(d.version(), &ranges, color).map(|_| ()));
+        match lease {
+            Ok(lease) => {
+                self.viewport.borrow_mut().stop_gesture();
+                self.palette.replace(Some(lease));
+                let bounds = ui.get_editor_grid_bounds();
+                state.set_palette_x(if x < 0. {
+                    bounds.x + state.get_caret_column() * bounds.width / COLUMNS as f32
+                } else {
+                    x
+                });
+                state.set_palette_y(if y < 0. {
+                    bounds.y + (state.get_caret_row() + 1.) * bounds.height / ROWS as f32
+                } else {
+                    y
+                });
+                state.set_palette_selected(state.get_foreground());
+                state.set_palette_open(true);
+                ui.invoke_focus_editor_palette();
             }
             Err(e) => self.notice(e),
+        }
+    }
+    fn choose_color(self: &Rc<Self>, index: i32) {
+        if !(0..24).contains(&index) {
+            return;
+        }
+        let Some(ui) = self.ui.upgrade() else { return };
+        let state = ui.global::<EditorState>();
+        if !state.get_palette_open() || state.get_busy() || state.get_composing() {
+            return;
+        }
+        let Some(lease) = self.palette.take() else {
+            return;
+        };
+        let color = Color {
+            foreground: if index < 16 {
+                index as u8
+            } else {
+                state.get_foreground() as u8
+            },
+            background: if index >= 16 {
+                (index - 16) as u8
+            } else {
+                state.get_background() as u8
+            },
+        };
+        let accepted = self.edit(|d| lease.apply(d, &self.viewport.borrow(), color));
+        if accepted {
+            self.paint();
+            state.set_foreground(color.foreground.into());
+            state.set_background(color.background.into());
+            self.dismiss_palette(false);
+            ui.invoke_focus_editor();
+        } else {
+            self.palette.replace(Some(lease));
         }
     }
     pub fn key(self: &Rc<Self>, key: i32, extend: bool) {
@@ -768,7 +932,10 @@ impl Editor {
             })
         };
         match result {
-            Some(Ok(true)) => self.paint(),
+            Some(Ok(true)) => {
+                self.dismiss_palette(false);
+                self.paint();
+            }
             Some(Err(e)) => self.notice(e),
             _ => {}
         }
@@ -848,6 +1015,7 @@ impl Editor {
         }
     }
     fn hide(&self) {
+        self.dismiss_palette(false);
         self.debounce.stop();
         self.document.replace(None);
         self.painted.set(None);
@@ -882,6 +1050,14 @@ impl Editor {
                 }
             }
             3 => {
+                if self
+                    .ui
+                    .upgrade()
+                    .is_some_and(|ui| ui.global::<EditorState>().get_palette_open())
+                {
+                    self.dismiss_palette(true);
+                    return;
+                }
                 if let Some(ui) = self.ui.upgrade()
                     && !ui.global::<EditorState>().get_busy()
                     && !ui.get_editor_composing()
@@ -907,9 +1083,12 @@ impl Editor {
                 }
             }
             8 => {
+                self.dismiss_palette(false);
                 self.viewport.borrow_mut().stop_gesture();
                 self.save(false);
             }
+            9 => self.cancel_source(),
+            10 => self.open_palette(-1., -1.),
             _ => {}
         }
     }
@@ -933,44 +1112,90 @@ impl Editor {
             return;
         }
         let stamp = self.connection.updates.borrow().stamp();
-        let owner = Rc::downgrade(self);
-        match slint::spawn_local(async move {
+        let connection = self.connection.clone();
+        let presented = self.presented.clone();
+        self.start_source(async move {
             let replacement = wait
                 .await
                 .map_err(|_| pttstella::msg!("draft-transfer-stopped"))
-                .and_then(|r| r);
-            let Some(owner) = owner.upgrade() else { return };
-            let result = match replacement.and_then(|replacement| {
-                if !owner.shown() || owner.connection.updates.borrow().stamp() != stamp {
+                .and_then(|r| r)?;
+            {
+                let view = connection.updates.borrow();
+                if view.input_pending
+                    || view.output_pending
+                    || view.stamp() != stamp
+                    || presented.get()
+                        != Some(FrameId {
+                            generation: view.generation,
+                            revision: view.frame.revision,
+                        })
+                {
                     return Err(pttstella::msg!("draft-transfer-stopped"));
                 }
-                owner
-                    .connection
-                    .request_draft_source(stamp, Some(replacement))
-            }) {
-                Ok(reply) => reply.wait().await,
-                Err(e) => Err(e),
-            };
-            if let Some(ui) = owner.ui.upgrade() {
-                ui.global::<EditorState>().set_busy(false);
-                ui.global::<EditorState>().set_transfer_confirm(false);
             }
+            connection
+                .request_draft_source(stamp, Some(replacement))?
+                .wait()
+                .await?;
+            Ok(SourceResult::Transferred)
+        });
+    }
+    fn cancel_source(&self) {
+        if let Some(cancel) = self.source_cancel.take() {
+            if let Some(ui) = self.ui.upgrade() {
+                ui.global::<EditorState>().set_source_cancelling(true);
+            }
+            let _ = cancel.send(());
+        }
+    }
+    fn start_source(
+        self: &Rc<Self>,
+        work: impl std::future::Future<Output = Result<SourceResult, String>> + 'static,
+    ) {
+        let Some(ui) = self.ui.upgrade() else { return };
+        let state = ui.global::<EditorState>();
+        self.dismiss_palette(false);
+        state.set_busy(true);
+        state.set_source_busy(true);
+        state.set_source_cancelling(false);
+        let (cancel, mut cancelled) = tokio::sync::oneshot::channel();
+        self.source_cancel.replace(Some(cancel));
+        let owner = Rc::downgrade(self);
+        match slint::spawn_local(async move {
+            let result = tokio::select! {biased;_= &mut cancelled=>None,result=work=>Some(result)};
+            let Some(owner) = owner.upgrade() else { return };
+            owner.source_cancel.take();
+            owner.operation.take();
+            if owner.closed.get() {
+                return;
+            }
+            let Some(ui) = owner.ui.upgrade() else { return };
+            let state = ui.global::<EditorState>();
+            state.set_source_busy(false);
+            state.set_source_cancelling(false);
+            state.set_busy(false);
+            state.set_transfer_confirm(false);
             match result {
-                Ok(()) => {
-                    owner.hide();
-                    if let Some(ui) = owner.ui.upgrade() {
-                        ui.set_result(pttstella::msg!("draft-transferred").into());
-                    }
+                Some(Ok(SourceResult::Captured(template))) => {
+                    owner.template.set(true);
+                    owner.command(Command::Open(template.scope.clone(), Some(template)));
                 }
-                Err(e) => owner.notice(e),
+                Some(Ok(SourceResult::Transferred)) => {
+                    owner.hide();
+                    ui.set_result(pttstella::msg!("draft-transferred").into());
+                }
+                Some(Err(error)) => owner.notice(error),
+                None => owner.notice(pttstella::msg!("draft-stop-requested")),
             }
         }) {
             Ok(task) => {
                 self.operation.replace(Some(task));
             }
-            Err(e) => {
+            Err(error) => {
+                self.source_cancel.take();
+                state.set_source_busy(false);
                 state.set_busy(false);
-                self.notice(e.to_string());
+                self.notice(error.to_string());
             }
         }
     }
@@ -979,6 +1204,7 @@ impl Editor {
             return Ok(());
         }
         self.debounce.stop();
+        self.cancel_source();
         for job in [&self.replies, &self.updates, &self.operation] {
             if let Some(job) = job.take() {
                 job.abort();
