@@ -100,6 +100,11 @@ enum Command {
         generation: u64,
         bytes: Vec<u8>,
     },
+    Paste {
+        stamp: Stamp,
+        bytes: Vec<u8>,
+        reply: oneshot::Sender<Result<(), String>>,
+    },
     DraftSource {
         stamp: Stamp,
         replacement: Option<crate::editor_source::Replacement>,
@@ -127,14 +132,22 @@ enum Command {
         stamp: Stamp,
         intent: Intent,
         source: navigation::Source,
+        cancellation: Option<NavigationCancellation>,
         reply: oneshot::Sender<Result<(), String>>,
     },
     Shutdown(oneshot::Sender<CloseOutcome>),
 }
 #[derive(Clone, Copy, Default)]
 struct SessionControls {
-    keep_alive: Option<(Stamp, bool)>,
+    keep_alive: Option<KeepAliveGate>,
     cancel_through: Option<(Stamp, u64)>,
+}
+
+#[derive(Clone, Copy)]
+struct KeepAliveGate {
+    stamp: Stamp,
+    ready: bool,
+    interruptions: u64,
 }
 fn stamp_order(stamp: Stamp) -> (u64, u64, u64) {
     (stamp.generation, stamp.input_epoch, stamp.revision)
@@ -156,6 +169,17 @@ pub struct Reply {
     deadline: tokio::time::Instant,
     expired: String,
     closed: String,
+}
+/// Revokes a queued navigation immediately, independently of a UI future's next poll.
+#[derive(Clone, Default)]
+pub struct NavigationCancellation(std::sync::Arc<std::sync::atomic::AtomicBool>);
+impl NavigationCancellation {
+    pub fn cancel(&self) {
+        self.0.store(true, std::sync::atomic::Ordering::Release);
+    }
+    fn cancelled(&self) -> bool {
+        self.0.load(std::sync::atomic::Ordering::Acquire)
+    }
 }
 impl Reply {
     pub async fn wait(self) -> Result<(), String> {
@@ -552,15 +576,39 @@ impl Connection {
         self.enqueue(Command::KeepAlive(enabled))
     }
     pub fn keep_alive_gate(&self, stamp: Stamp, ready: bool) {
-        // A blocked UI cannot lose its pause request to a full input queue.
-        self.session_ui
-            .send_modify(|ui| ui.keep_alive = Some((stamp, ready)));
+        // Preserve a pause even if pause and resume collapse into one watch update.
+        self.session_ui.send_modify(|ui| {
+            let interruptions = ui.keep_alive.map_or(0, |gate| gate.interruptions);
+            ui.keep_alive = Some(KeepAliveGate {
+                stamp,
+                ready,
+                interruptions: interruptions.saturating_add(u64::from(!ready)),
+            });
+        });
     }
     pub fn input(&self, generation: u64, bytes: Vec<u8>) -> Result<(), String> {
         if bytes.is_empty() || bytes.len() > MAX_INPUT_BYTES {
             return Err(crate::msg!("input-too-large"));
         }
         self.enqueue(Command::Input { generation, bytes })
+    }
+    /// Recheck the preview's full stamp on the single writer before sending.
+    pub fn request_paste(&self, stamp: Stamp, bytes: Vec<u8>) -> Result<Reply, String> {
+        if bytes.is_empty() || bytes.len() > MAX_INPUT_BYTES {
+            return Err(crate::msg!("input-too-large"));
+        }
+        let (reply, answer) = oneshot::channel();
+        self.enqueue(Command::Paste {
+            stamp,
+            bytes,
+            reply,
+        })?;
+        Ok(Reply {
+            answer,
+            deadline: tokio::time::Instant::now() + Duration::from_secs(6),
+            expired: crate::msg!("paste-send-unconfirmed"),
+            closed: crate::msg!("connection-service-stopped"),
+        })
     }
     pub fn mouse_report(&self, event: crate::mouse::input::Event) -> Result<(), String> {
         // Keep capacity for an admitted release, manual keys and shutdown.
@@ -697,11 +745,31 @@ impl Connection {
         intent: Intent,
         source: navigation::Source,
     ) -> Result<Reply, String> {
+        self.request_navigation(stamp, intent, source, None)
+    }
+    pub fn request_cancellable_navigate(
+        &self,
+        stamp: Stamp,
+        intent: Intent,
+        source: navigation::Source,
+    ) -> Result<(Reply, NavigationCancellation), String> {
+        let cancellation = NavigationCancellation::default();
+        let reply = self.request_navigation(stamp, intent, source, Some(cancellation.clone()))?;
+        Ok((reply, cancellation))
+    }
+    fn request_navigation(
+        &self,
+        stamp: Stamp,
+        intent: Intent,
+        source: navigation::Source,
+        cancellation: Option<NavigationCancellation>,
+    ) -> Result<Reply, String> {
         let (reply, answer) = oneshot::channel();
         self.enqueue(Command::Navigate {
             stamp,
             intent,
             source,
+            cancellation,
             reply,
         })?;
         Ok(Reply {

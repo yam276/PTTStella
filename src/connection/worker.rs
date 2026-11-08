@@ -166,6 +166,7 @@ struct Session {
     visit_serial: u64,
     last_close: CloseOutcome,
     idle: liveness::Idle,
+    keep_alive_interruptions: u64,
     timing: liveness::Timing,
     output: output::Deadline,
 }
@@ -252,8 +253,17 @@ impl Session {
         if let Some((operation, through)) = controls.cancel_through {
             self.cancel_navigation(operation, through);
         }
-        if let Some((stamp, ready)) = controls.keep_alive {
-            self.gate(stamp, ready);
+        if let Some(gate) = controls.keep_alive
+            && gate.stamp.generation == self.view.generation
+        {
+            let now = Instant::now();
+            if self.keep_alive_interruptions != gate.interruptions {
+                self.keep_alive_interruptions = gate.interruptions;
+                self.idle.activity(now);
+            }
+            self.idle
+                .gate(gate.stamp, gate.ready && gate.stamp == self.stamp(), now);
+            self.dirty = true;
         }
     }
     fn stop_editor(&mut self) {
@@ -352,6 +362,7 @@ impl Session {
             visit_serial: 0,
             last_close: CloseOutcome::NoConnection,
             idle: liveness::Idle::new(Instant::now(), timing),
+            keep_alive_interruptions: 0,
             output: output::Deadline::default(),
         }
     }
@@ -507,7 +518,26 @@ impl Session {
                 self.connect();
             }
             Some(Command::Disconnect) => self.disconnect().await,
-            Some(Command::Input { generation, bytes }) => self.input(generation, &bytes).await,
+            Some(Command::Input { generation, bytes }) => {
+                let _ = self.input(generation, &bytes).await;
+            }
+            Some(Command::Paste {
+                stamp,
+                bytes,
+                reply,
+            }) => {
+                if !reply.is_closed() {
+                    let result = if self.view.phase == Phase::Connected
+                        && self.stamp() == stamp
+                        && self.screen.synchronized_since().is_none()
+                    {
+                        self.input(stamp.generation, &bytes).await
+                    } else {
+                        Err(crate::msg!("paste-stale"))
+                    };
+                    let _ = reply.send(result);
+                }
+            }
             Some(Command::DraftSource {
                 stamp,
                 replacement,
@@ -656,11 +686,17 @@ impl Session {
                 stamp,
                 intent,
                 source,
+                cancellation,
                 reply,
             }) => {
                 // An expired request must never execute later from the queue.
                 if !reply.is_closed() {
-                    let _ = reply.send(self.navigate(stamp, intent, source).await);
+                    let result = if cancellation.is_some_and(|cancel| cancel.cancelled()) {
+                        Err(navigation::Error::Stale.to_string())
+                    } else {
+                        self.navigate(stamp, intent, source).await
+                    };
+                    let _ = reply.send(result);
                 }
             }
             Some(Command::Shutdown(done)) => {
@@ -950,16 +986,16 @@ impl Session {
         self.dirty = true;
     }
 
-    async fn input(&mut self, generation: u64, bytes: &[u8]) {
+    async fn input(&mut self, generation: u64, bytes: &[u8]) -> Result<(), String> {
         self.login_attempt = None;
         // Preserve the peer/transport's last reason when typing after closure.
         if self.socket.is_none() && self.view.generation > 0 {
-            return;
+            return Err(crate::msg!("input-stale"));
         }
         if generation != self.view.generation || self.socket.is_none() {
             self.view.message = crate::msg!("input-stale");
             self.dirty = true;
-            return;
+            return Err(self.view.message.clone());
         }
         if bytes == [16] {
             self.draft_post = crate::board_navigation::current_board(&self.screen.frame())
@@ -989,7 +1025,8 @@ impl Session {
             self.stop_navigation(crate::msg!("navigation-job-cancelled"));
         }
         self.idle.activity(Instant::now());
-        if self.write_input(bytes).await.is_ok() {
+        let sent = self.write_input(bytes).await;
+        if sent.is_ok() {
             self.wait_for_input(false);
             if bytes.contains(&b'\r')
                 && let Some(state) = self
@@ -1001,6 +1038,7 @@ impl Session {
             }
         }
         self.dirty = true;
+        sent
     }
 
     async fn login(&mut self, stamp: Stamp, credentials: Credentials) -> Result<(), String> {
@@ -1416,16 +1454,11 @@ impl Session {
             // Revoke leases before awaiting any write and before the UI reads
             // this change. The retained frame may still be visible until flush.
             self.view.output_pending = true;
-            if !self.updates.borrow().output_pending {
-                let mouse = self.view.mouse;
-                self.updates.send_modify(|view| {
-                    view.output_pending = true;
-                    view.mouse = mouse;
-                });
-            } else {
-                let mouse = self.view.mouse;
-                self.updates.send_modify(|view| view.mouse = mouse);
-            }
+            let mouse = self.view.mouse;
+            self.updates.send_modify(|view| {
+                view.output_pending = true;
+                view.mouse = mouse;
+            });
         }
         if !reply.is_empty()
             && let Some(socket) = self.socket.as_mut()
@@ -1488,14 +1521,6 @@ impl Session {
                 self.login_followup = None;
             }
             self.show_login_guidance(state);
-        }
-    }
-
-    fn gate(&mut self, stamp: Stamp, ready: bool) {
-        if stamp.generation == self.view.generation {
-            self.idle
-                .gate(stamp, ready && stamp == self.stamp(), Instant::now());
-            self.dirty = true;
         }
     }
 

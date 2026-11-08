@@ -99,6 +99,7 @@ profile-unknown-action = Unknown profile operation
 link-open-failed = Cannot open URL: { $e }
 link-stale = The screen changed; select the link again
 paste-stale = The connection changed; paste was not sent
+paste-send-unconfirmed = Paste delivery could not be confirmed
 cleanup-listeners-failed = Screen listener cleanup could not be verified
 command-stale = The connection changed; the result is unconfirmed and will not be resent
 probe-timeout = Screen probe timed out waiting for interaction

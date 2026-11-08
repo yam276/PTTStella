@@ -99,6 +99,7 @@ profile-unknown-action = 未知設定檔操作
 link-open-failed = 無法開啟網址：{ $e }
 link-stale = 畫面已更新，請重新選取網址
 paste-stale = 連線已變更；貼上未送出
+paste-send-unconfirmed = 貼上送出狀態未確認
 cleanup-listeners-failed = 畫面監聽器清理驗證失敗
 command-stale = 連線已變更；操作結果未確認，不會重送
 probe-timeout = 畫面探針等待操作逾時

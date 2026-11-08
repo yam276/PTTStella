@@ -1996,6 +1996,7 @@ async fn navigation_admission_checks_real_frame_input_order_and_one_pending_oper
     connection
         .enqueue(Command::Navigate {
             source: navigation::Source::Pointer,
+            cancellation: None,
             stamp: returned.stamp(),
             intent: Intent::Open { row: 4 },
             reply,
@@ -2006,6 +2007,146 @@ async fn navigation_admission_checks_real_frame_input_order_and_one_pending_oper
         .await
         .unwrap()
         .unwrap();
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn explicit_navigation_cancellation_reaches_owner_before_ui_future_is_polled() {
+    let (listener, connection) = local().await;
+    let server = tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.unwrap();
+        let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+        ws.send(Message::Binary(navigation_page("list").into()))
+            .await
+            .unwrap();
+        assert!(matches!(ws.next().await, Some(Ok(Message::Close(_)))));
+        ws.flush().await.unwrap();
+    });
+    connection.connect().unwrap();
+    let view = wait(&connection, |v| {
+        matches!(v.context(), navigation::Context::ArticleList { .. })
+    })
+    .await;
+    let (reply, cancel) = connection
+        .request_cancellable_navigate(
+            view.stamp(),
+            Intent::Open { row: 4 },
+            navigation::Source::Pointer,
+        )
+        .unwrap();
+    // The single-thread runtime cannot poll the worker between enqueue and cancel.
+    // Keep the reply alive to prove receiver-drop is not what rejects this command.
+    cancel.cancel();
+    cancel.cancel();
+    assert_eq!(
+        reply.wait().await,
+        Err(navigation::Error::Stale.to_string())
+    );
+    assert_eq!(connection.updates.borrow().input_epoch, view.input_epoch);
+    assert_eq!(
+        connection.shutdown().await.unwrap(),
+        CloseOutcome::Acknowledged
+    );
+    timeout(Duration::from_secs(4), server)
+        .await
+        .unwrap()
+        .unwrap();
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn stamped_paste_rejects_queued_old_preview_and_abandoned_delivery() {
+    let (listener, connection) = idle_local().await;
+    connection.keep_alive(false).unwrap();
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(
+        b"\x1b[2J\x1b[HPASTE PREVIEW".to_vec().into(),
+    ))
+    .await
+    .unwrap();
+    let first = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
+    // Both intents queue before the single-thread worker can run. The first
+    // changes input_epoch without changing generation, invalidating the preview.
+    connection.input(first.generation, b"k".to_vec()).unwrap();
+    let stale = connection
+        .request_paste(first.stamp(), b"STALE".to_vec())
+        .unwrap();
+    assert_eq!(stale.wait().await, Err(crate::msg!("paste-stale")));
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"k");
+    ws.send(Message::Binary(
+        b"\x1b[HREADY FOR NEW PASTE".to_vec().into(),
+    ))
+    .await
+    .unwrap();
+    let ready = wait(&connection, |v| {
+        v.input_epoch > first.input_epoch && !v.input_pending && !v.output_pending
+    })
+    .await;
+    connection
+        .request_paste(ready.stamp(), vec![0xa4, 0xa4])
+        .unwrap()
+        .wait()
+        .await
+        .unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        &[0xa4, 0xa4]
+    );
+    ws.send(Message::Binary(
+        b"\x1b[HREADY FOR ABANDONED PASTE".to_vec().into(),
+    ))
+    .await
+    .unwrap();
+    let current = wait(&connection, |v| {
+        v.input_epoch > ready.input_epoch && !v.input_pending && !v.output_pending
+    })
+    .await
+    .stamp();
+    drop(
+        connection
+            .request_paste(current, b"ABANDONED".to_vec())
+            .unwrap(),
+    );
+    assert!(
+        timeout(Duration::from_millis(100), ws.next())
+            .await
+            .is_err()
+    );
+    finish_board_peer(&connection, ws).await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn coalesced_pause_resume_restarts_keepalive_idle_window() {
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    ws.send(Message::Binary(navigation_page("list").into()))
+        .await
+        .unwrap();
+    let first = wait(&connection, |v| v.received > 0 && !v.output_pending).await;
+    connection.keep_alive_gate(first.stamp(), true);
+    wait(&connection, |v| v.keep_alive_ready).await;
+    // No worker poll during this bounded stall or the two watch writes. The
+    // original idle deadline has elapsed, but the latest value is ready again.
+    std::thread::sleep(Duration::from_millis(180));
+    connection.keep_alive_gate(first.stamp(), false);
+    connection.keep_alive_gate(first.stamp(), true);
+    assert!(
+        timeout(Duration::from_millis(70), ws.next()).await.is_err(),
+        "a collapsed pause must prevent an immediately overdue refresh"
+    );
+    assert_eq!(
+        timeout(Duration::from_secs(2), ws.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap()
+            .into_data()
+            .as_ref(),
+        b"\x0c\x0c"
+    );
+    finish_board_peer(&connection, ws).await;
 }
 
 #[tokio::test]
