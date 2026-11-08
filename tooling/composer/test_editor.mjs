@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
 const dom=new JSDOM('<!doctype html><body><div id="editor"></div>',{pretendToBeVisual:true});
 for(const name of ['window','document','MutationObserver','HTMLElement','Node','Window'])globalThis[name]=dom.window[name];
@@ -7,6 +8,9 @@ Object.defineProperty(globalThis,'navigator',{value:dom.window.navigator,configu
 globalThis.requestAnimationFrame=dom.window.requestAnimationFrame.bind(dom.window);globalThis.cancelAnimationFrame=dom.window.cancelAnimationFrame.bind(dom.window);
 // jsdom supplies editing DOM but no layout. Geometry is deliberately not claimed here.
 dom.window.Range.prototype.getClientRects=()=>[];dom.window.Range.prototype.getBoundingClientRect=()=>({left:0,right:0,top:0,bottom:0,width:0,height:0});
+const genericCanvas=readFileSync(new URL('../../assets/app.css',import.meta.url),'utf8').match(/^canvas \{[^}]+\}/m);
+assert.ok(genericCanvas,'the product canvas rule must be exercised');
+const style=document.createElement('style');style.textContent=genericCanvas[0];document.head.append(style);
 const observers=[];dom.window.ResizeObserver=class{constructor(callback){this.callback=callback;this.connected=false;observers.push(this);}observe(target){this.target=target;this.connected=true;}disconnect(){this.connected=false;}};
 const {create}=await import('./editor.js');
 const {undo,redo}=await import('@codemirror/commands');
@@ -27,6 +31,9 @@ test('actual editor preserves Chinese/ANSI through all modes, coloring is undoab
  e.load('新的文章');assert.equal(undo(e.view),false);assert.equal(e.value(),'新的文章');
  e.load('中文\n\n');e.selection('line');e.view.dispatch({selection:EditorSelection.single(0,4)});assert.deepEqual(e.ranges(),[{from:0,to:4}]);
  e.load('█中');e.project([{from:0,to:2,width:2,left:{fg:1,bg:0},right:{fg:1,bg:0}}]);assert.equal(graphics,1);assert.equal(e.value(),'█中');assert.equal(e.view.contentDOM.querySelectorAll('canvas').length,1);
+ const graphic=e.view.contentDOM.querySelector('canvas');const css=window.getComputedStyle(graphic);
+ assert.equal(css.position,'static');assert.equal(css.display,'inline-block');assert.equal(graphic.style.inset,'auto');
+ assert.equal(graphic.style.width,'2ch');assert.equal(graphic.style.height,'2ch');
  e.load('中A');e.project([{from:0,to:1,width:2,left:{fg:1,bg:0},right:{fg:1,bg:0}}]);
  for(const mode of ['color','plain','source']){e.mode(mode);assert.equal(e.view.contentDOM.querySelector('span').style.width,'2ch');assert.equal(e.value(),'中A');}
  assert.ok(observers.some(o=>o.target===document.getElementById('editor')&&o.connected));

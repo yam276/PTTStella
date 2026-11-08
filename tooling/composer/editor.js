@@ -25,7 +25,7 @@ export function create({parent,onChange,onContext,palette,label,graphicCode=()=>
     class Graphic extends WidgetType {
         constructor(text,data){super();this.text=text;this.data=data;}
         eq(other){return this.text===other.text&&JSON.stringify(this.data.left)===JSON.stringify(other.data.left)&&JSON.stringify(this.data.right)===JSON.stringify(other.data.right);}
-        toDOM(){const canvas=parent.ownerDocument.createElement('canvas');canvas.width=this.data.width*12;canvas.height=24;canvas.style.cssText='width:'+this.data.width+'ch;height:2ch;vertical-align:bottom';canvas.setAttribute('aria-label',this.text);renderGlyph(canvas,this.text,this.data);return canvas;}
+        toDOM(){const canvas=parent.ownerDocument.createElement('canvas');canvas.width=this.data.width*12;canvas.height=24;canvas.style.cssText='position:static;inset:auto;display:inline-block;width:'+this.data.width+'ch;height:2ch;vertical-align:bottom';canvas.setAttribute('aria-label',this.text);renderGlyph(canvas,this.text,this.data);return canvas;}
         ignoreEvent(){return false;}
     }
     const editable=new Compartment();
