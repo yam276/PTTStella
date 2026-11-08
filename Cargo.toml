@@ -34,6 +34,7 @@ png = { version = "=0.18.1", optional = true }
 dioxus-icons = { version = "=0.1.0", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+icu_normalizer = { version = "=2.3.0", default-features = false, features = ["compiled_data"] }
 i18n-embed = { version = "=0.16.0", default-features = false, features = ["fluent-system", "rust-embed"] }
 i18n-embed-fl = "=0.10.1"
 rust-embed = { version = "=8.13.0", features = ["debug-embed"] }

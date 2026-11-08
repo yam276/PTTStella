@@ -6813,6 +6813,7 @@ dependencies = [
  "glow",
  "i18n-embed",
  "i18n-embed-fl",
+ "icu_normalizer",
  "image",
  "imagesize",
  "keyring",

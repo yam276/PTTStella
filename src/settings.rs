@@ -1,4 +1,5 @@
 //! Display preferences do not change cell geometry or terminal colours.
+pub mod catalog;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

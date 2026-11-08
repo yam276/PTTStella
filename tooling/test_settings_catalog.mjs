@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {translator} from './i18n_test_support.mjs';
-const {settingsCatalog,searchSettings}=vm.runInNewContext(readFileSync(new URL('../assets/settings-catalog.js',import.meta.url),'utf8')+'\n({settingsCatalog,searchSettings})');
+const SETTINGS_CATALOG=JSON.parse(readFileSync(new URL('../assets/settings-catalog.json',import.meta.url),'utf8'));
+const {settingsCatalog,searchSettings}=vm.runInNewContext(readFileSync(new URL('../assets/settings-catalog.js',import.meta.url),'utf8')+'\n({settingsCatalog,searchSettings})',{SETTINGS_CATALOG});
 test('both UI languages find independently expected Chinese, English, case and multiword aliases',()=>{
  for(const language of ['zh-TW','en-US']){
   const index=settingsCatalog(translator(language));
-  for(const [query,id]of [['中文字體','font-cjk'],['CJK FONT','font-cjk'],['透明度','tools-opacity'],['FLOATING OPACITY','tools-opacity'],['文章模式','article-mode'],['Article mode','article-mode'],['語言','interface-language'],['language','interface-language'],['right click','tools-right-click'],['白名單',null],['縮放','zoom-fit'],['experimental keyboard','vim-toggle'],['站端 滑鼠','station-mouse'],['keepalive','keep-alive']]){
+  for(const [query,id]of [['ＢＡＳＥＬＩＮＥ','font-baseline'],['ﬂoating opacity','tools-opacity'],['中文字體','font-cjk'],['CJK FONT','font-cjk'],['透明度','tools-opacity'],['FLOATING OPACITY','tools-opacity'],['文章模式','article-mode'],['Article mode','article-mode'],['語言','interface-language'],['language','interface-language'],['right click','tools-right-click'],['白名單',null],['縮放','zoom-fit'],['experimental keyboard','vim-toggle'],['站端 滑鼠','station-mouse'],['keepalive','keep-alive']]){
    assert.ok(searchSettings(index,query).some(entry=>entry.id===id),language+' '+query);
   }
   assert.equal(searchSettings(index,'').length,0);assert.equal(searchSettings(index,'PTTStellaPassword123').length,0);
@@ -70,7 +71,7 @@ test('search leaves the visible management page and reopening it restores its co
  const sections=['general','account','sites','filters','about'].map(page=>({dataset:{settingsPage:page},hidden:true}));
  const categories=sections.map(section=>({dataset:{settingsCategory:section.dataset.settingsPage},setAttribute(){}}));
  const document={getElementById:node,querySelectorAll:selector=>selector==='[data-settings-page]'?sections:selector==='[data-settings-category]'?categories:[],createElement:()=>({addEventListener(){}})};
- const create=vm.runInNewContext(source+'\ncreateSettingsNavigation');
+ const create=vm.runInNewContext(source+'\ncreateSettingsNavigation',{SETTINGS_CATALOG});
  const ui=create({document,tr:translator('zh-TW'),changed:(page,previous)=>changes.push([page,previous])});
  ui.show('account');assert.equal(ui.visible(),'account');assert.equal(node('settings-page-title').textContent,'帳號與隱私');node('settings-search').value='站點';
  ui.bindings.find(([target,type])=>target===node('settings-search')&&type==='input')[2]();
