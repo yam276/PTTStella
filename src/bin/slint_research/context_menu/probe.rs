@@ -201,6 +201,50 @@ async fn verify(
     ui.invoke_context_updated();
     require(!ui.get_context_open(), "foreground loss retained menu")?;
     crate::verification::foreground(ui, true);
+    // Independently require a visible Settings label on a background menu.
+    let g = output
+        .geometry(ui)
+        .and_then(crate::pointer::SurfaceGeometry::terminal)
+        .ok_or("background menu geometry missing")?;
+    let p = slint::LogicalPosition::new(
+        ui.get_terminal_origin_x() + (g.left + g.size.width as f32 * 40.5 / 80.) / g.dpi,
+        ui.get_terminal_origin_y() + (g.top + g.size.height as f32 * 10.5 / 24.) / g.dpi,
+    );
+    require(
+        output
+            .link_at(
+                ui,
+                (
+                    (p.x - ui.get_terminal_origin_x()) * g.dpi,
+                    (p.y - ui.get_terminal_origin_y()) * g.dpi,
+                ),
+            )
+            .is_none(),
+        "background menu test point is a link",
+    )?;
+    ui.window().dispatch_event(Event::KeyPressed {
+        text: Key::Shift.into(),
+    });
+    click(ui, p, Button::Right);
+    ui.window().dispatch_event(Event::KeyReleased {
+        text: Key::Shift.into(),
+    });
+    wait(|| ui.get_context_open(), "background menu did not open").await?;
+    let entries = ui.get_context_entries();
+    require(
+        (0..entries.row_count())
+            .filter_map(|i| entries.row_data(i))
+            .all(|e| !e.label.trim().is_empty()),
+        "background menu exposed an unlabeled action",
+    )?;
+    require(
+        (0..entries.row_count())
+            .filter_map(|i| entries.row_data(i))
+            .any(|e| e.label == pttstella::msg!("settings-center-title")),
+        "background Settings action has no localized label",
+    )?;
+    capture(ui, directory, "background-settings-label.png")?;
+    key(ui, Key::Escape);
     open(ui, output, station).await?;
     ui.set_zoom(1.25);
     wait(

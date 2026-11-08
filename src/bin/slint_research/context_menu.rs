@@ -675,6 +675,7 @@ pub(super) fn label(action: Action) -> String {
         A::AccountRemoveAllow => pttstella::msg!("account-remove-allow"),
         A::ReplyFocus => pttstella::msg!("reply-focus"),
         A::ReplyFocusClear => pttstella::msg!("reply-focus-clear"),
+        A::Settings => pttstella::msg!("settings-center-title"),
         A::Copy => pttstella::msg!("context-copy"),
         A::CopyPicture => pttstella::msg!("context-copy-picture"),
         A::SavePicture => pttstella::msg!("context-save-picture"),
