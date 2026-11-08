@@ -1124,3 +1124,45 @@ Video.step 在 UI 消失後仍能取消 pending、消費 Stopped、join session 
 清理紀錄分列：前半段移除 `.local/verification/slint-editor-commits/validation-source`（du28,516KiB，471個 tracked 檔逐 byte 與 HEAD 相同，另24個自產 Python cache）和已 join 的 replay index。此階段在確認兩個 native payload 逐 byte 相同、無 open files 後，把 Native-Video-Quit.app 的非 payload 檔案與完整重建 manifest 保存到 `native-quit-app-metadata`，再移除重複 App（du62,608KiB）；保留 Native-Video-Close.app 和先前站點輸入基準。兩個 cleanup-owned.json 分別記 exact path、UID、symlink／lsof 檢查、filesystem 前後與保留例外，空間差值不全歸因於清理。失敗 snapshot 的小型 alternate index 已另移除，但當時未記單獨 filesystem 前後，該量測缺口明列於 ledger。持續使用的 Cargo profiles、唯一失敗證據、未整合 worktree／commits 及所有權不明的 OS 暫存保留。
 
 接續完整名單／書籤管理與設定搜尋，並補混合 Live 等效、同 endpoint 編碼／預設站重啟、其他原生退出／IME／可及性、舊資料雙版本往返、四架構候選及同負載效能。完整 S0–S8 goal active；S9 未切換、整合 canonical、推送或發佈。
+
+
+## S7 共用搜尋目錄、原生定位與具名設定檔（2026-11-08）
+
+狀態：**目前可用的23個 Slint 設定目標已有搜尋與原生焦點路徑；全功能設定搜尋仍須接上未完成的名單管理。** 本輪沒有把缺少管理介面的結果做成無作用按鈕，也沒有將局部目錄覆蓋率算成完整 S7／S8。
+
+| 提交 | 內容 |
+| --- | --- |
+| `bae1852` | 從既有 Dioxus 提取24項固定目錄至 `assets/settings-catalog.json`，兩版共用 closed targets／page／Fluent label 和 alias keys；Rust 新增有界索引 |
+| `8195c7c` | JS 在128 UTF-16 units 邊界不製造孤立 high surrogate，與原生完整 Unicode scalar 行為對齊 |
+| `b2af0a4` | 原生搜尋結果切分類、聚焦與捲入可視範圍、單一可取消焦點 timer、暫時操作開關及具名 profile 匯入／匯出 |
+| `a1dee9a` | 搜尋欄經一般 focus 路徑重新取得焦點時，也取消舊定位 |
+
+Rust 索引在設定視窗更新語言／標籤時由固定產品 metadata 建立，查詢重用既有索引；一般閒置時不重建。查詢前截至128 UTF-16 units、不切 scalar，再以 NFKC、大小寫和空白分詞處理，每個詞都須命中產品標籤或別名的子字串。大小寫、全形 `ＢＡＳＥＬＩＮＥ` 與 ligature `ﬂoating` 都有獨立 expected。查詢空白／未知／私有名稱／HTML 片段不產生結果，不讀終端、帳密、字型清單、最愛站名或使用者設定檔名稱。Dioxus 保留既有 adapter 及導覽行為，Rust／JS 消費同一 JSON；不增加 WebView 依賴至 Slint。
+
+NFKC 使用已鎖定的 ICU normalizer 2.3.0。逐 package 比較 Cargo.lock，package 數、版本、checksum 與既有解析邊完全相同，只增加 root 對該既有 package 的直接相依；沒有為此更新其他套件。索引最多64項，實際24；原生未完成的 filter manager 沒有對應 widget，因此暫不顯示該結果。站點與暫時操作也依實際可用的 owner／狀態決定，不提供無法取得焦點的 disabled 目標。
+
+搜尋結果涵蓋語言、字型組合／英數／中文／字高／基線／寬度／重設、顯示 profile 名稱、縮放、Vim、站端滑鼠、防閒置、浮球透明度／右鍵／可見、文章模式／首尾、hover／自動開圖、站點、帳號與關於。選結果只改導覽與焦點；實際縮放／暫時開關仍須再明確按鈕啟動，先排空設定待存修改，再交給原有 root owner。開關顯示用 typed bool，不靠解析中英文通知文字。這些暫時狀態不新增至 AppSettings 或 display profile。
+
+焦點排程由 Preferences 唯一持有，新的結果取代舊 timer；換查詢、回搜尋欄、切分類、關設定與 App 退出會取消。回呼再次核對同一頁、空查詢、視窗開啟、非組字／非退出等條件。原生 ComboBox／CheckBox／Button 與文字欄分別取得焦點；Cmd/Ctrl 的文字編輯快捷鍵只由真正的文字欄消費。搜尋不重新填入表單，不丟無效中間值、使用者名稱或待存草稿。
+
+### 完整元件、負向與基準
+
+證據在 `.local/verification/slint-settings-search/`。第一輪46目標中的站點定位失敗：當時普通 media probe 沒有掛站點 owner，索引卻給了無法聚焦的按鈕。已保存該確切修改檔／SHA／binary 與 log；修正結果可用性檢查，並為明確的設定搜尋 fixture 建立隔離站點 store。接著暫時開關檢查遇到防閒置未切換，進一步查明 media probe 沒有掛 KeepAlive owner；不是由標籤或一次 timeout 推定傳輸故障。明確設定探針現在掛上與 live 同一 KeepAlive／Login owner，普通產品路徑不換 owner、不放寬准入。新增 typed 狀態同時用於按鈕 checked，避免把翻譯文字當成執行結果。最初增加 changed callback 時曾與既有 Vim handler 重複，編譯器拒絕後合併同一 handler；未放寬測試。
+
+`b2af0a4` 對應的三個完整 Slint 程序為搜尋、原有完整設定與 in-flight＋latest pending 的關閉保存。搜尋用手寫23個 query／page／field expected，在中英文各完成一次，共46次；另驗 whitespace／未知／注入樣式文字、私有名稱不進索引、過時焦點不搶新查詢、無效字高草稿保留、四種暫時操作的明確啟動與恢復、無效 profile 名稱在 picker／worker 前拒絕，以及匯入名稱／通知。AppSettings 與原 seed bytes 還原一致，三程序各有嚴格 peer Close acknowledged 及 HTTP join。此檢查點普通 Slint CLI 為 `d83be7824453d9ac7e505cbd9d3fe1ca0a24e9641bc95747956d30a55d714773`。
+
+共用變更先通過 core14命令／2 replay、Dioxus release library358 passed／4 ignored、bin130／1、multi_instance10／1與 all-target Clippy。最後 Slint release library358／4、bin76／1（舊私有索引測試移除，由共用2個測試與完整元件接手）、multi_instance10／1、all-target Clippy、Slint＋native-video all-target check、fmt 與兩版 release build 通過。383組 JS 零 skip 通過。這些計數不含原生 OS、所有平台或效能驗收。
+
+收尾另補一般 focus 的競態：建立待處理的結果定位後，以欄位本身的正常 focus 路徑回搜尋欄，不經原先已有取消功能的 focus-search callback。第一次 probe 直接對尚未建立的條件 widget 要求焦點，只得到 setup failure，不算產品回歸；改由既有延後定位完成 setup 後，未修正來源明確以「pending result stole ordinary native search focus」失敗。`a1dee9a` 在 focused-target 回0時取消同一 timer；相同完整程序在中英文、46個目標與 runtime／profile 案例全部通過，嚴格 Close acknowledged。bin76／1、all-target Clippy 及 optional-video check 再通過。最新普通 CLI 為 `0a6da4c46fd1dfd13c3ec2858cec3c181b8aa3d1773e682909910a778e1d7c98`；負向 log／binary hash、獨立 expected 與 test patch 另存，沒有把 setup failure 當成已修復的產品缺陷。
+
+### macOS 實際視窗與設定檔
+
+第一個原生 Slint App SHA-256 為 `57525d1a3925b706be37c83ba971d887788fd150c40486c3489d7729a536d86d`（input 與 ad-hoc signed payload 相同）。CUA 從 ⌘, 開設定，原生貼上全形查詢、點結果後 AX 明確顯示基線欄位20取得焦點。再以「設定檔」查詢定位名稱欄，貼入自製「原生搜尋驗收」，經原生 Save picker 寫入 task-owned `/private/tmp` 目錄。獨立 JSON 核對 name、format／version、bundled 字型、23／20／100；檔案251 bytes，SHA-256 `b0c3ca1b40f646cbc6e254595c4b12764cf74e03da96ab4f187c66ea2dc6991f`。改欄位為另一名稱，再經原生 Open picker 讀同一檔，AX 顯示名稱還原。⌘Q 後 settings／sites／menu 清理、零HTTP、BBS Close 與程序消失分列，沒有觀測 LaunchServices exit code。
+
+這輪另看到相同 display 匯入後仍留下先前的匯出通知。最後來源將成功匯入抽成單一 typed consumer，填回檔案名稱、排入原有自動保存，並清楚顯示「已載入顯示設定；有效變更會自動儲存」。新的完整元件用同一 consumer 驗證通知與名稱；上述原生 App 為通知修正前的 hash，兩者 scope 不混稱。profile 名稱先用共用 PortableProfile validator 驗證，無效名稱不開 picker；匯出仍只含有效 display 與使用者名稱，不含 app 偏好或字型檔。原生 IME 候選和其他平台沒有由貼上結果推定通過。
+
+Dioxus 另用真實 WKWebView 對照 App，輸入與 signed payload 為 `c61c260f9895a1ab37b2a62896a3ba8c56533f346eaae47bdc8c71434bcc79a1`。實際 ⌘,、貼入全形查詢、點結果後，AX 顯示基線 number field20取得焦點，證明合併 script 的共用 JSON 初始化與 adapter 正常。之後從浮球擷取輸出 parity-grid PNG、原生關窗，`surface-probe.json` 為 passed、full_png=true，`cleanup.json` 為 run_completed／cleanup_completed=true、disconnect=acknowledged，程序消失。第一個 PNG 嘗試因 Agent 沒有依舊 Dioxus probe 契約先建立輸出目錄而得到明確缺 parent 錯誤；建立唯一指定的自有空目錄、手動關通知並明確重試後才列通過。這是 harness 準備修正，沒有修改或偷偷重送產品 I/O。
+
+本輪所有操作只用隔離合成 store／loopback／自製設定檔。未取用 production 資料、vault 或 PTT。兩個實際 App、獨立 negative 證據、最後 CLI 與 source patch 保留；唯一 `/private/tmp/pttstella-slint-search-d1slhunf` 已核對 resolved path、UID、單一內容、與證據副本逐 byte 相同及 lsof 無使用後移除，du4KiB，filesystem 差4,096 bytes。exact path、前後 free 與保留例外見 cleanup-owned.json；不將 shared filesystem delta 全歸因於自己。Cargo profiles 仍供整體目標使用，worktree／未整合 commits 保留。
+
+接續完整名單／書籤管理，並接上最後的名單搜尋目標。混合 Live 等效、完整原生輸入／可及性、四架構候選、音訊／runtime、舊資料雙版本往返、同負載效能及完整候選重跑仍未完成。S0–S8 goal active，S9 未切換、整合 canonical、推送或發佈。
