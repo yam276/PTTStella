@@ -2,7 +2,7 @@
 mod find_probe;
 pub mod inline;
 mod layout;
-mod output_probe;
+pub(crate) mod output_probe;
 pub mod probe;
 pub mod session;
 pub mod session_probe;
@@ -610,6 +610,18 @@ impl ArticleView {
         }
         self.resize();
         false
+    }
+    pub(super) fn rebase_reply_focus(&self, old: (u64, u64, u64), new: (u64, u64, u64)) {
+        if let Some(scope) = self.scope.get()
+            && (scope.0, scope.1, scope.2) == old
+        {
+            self.timer.stop();
+            self.scope.set(Some((new.0, new.1, new.2, scope.3)));
+            self.row_cache.borrow_mut().clear();
+            self.row_size.set(None);
+            self.footer_size.set(None);
+            self.painted.take();
+        }
     }
     pub fn hide(&self) {
         self.retire_paint();

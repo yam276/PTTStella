@@ -58,6 +58,11 @@ impl Fixtures {
             .unwrap_or_default();
         format!("\x1b[2J\x1b[HNative image preview / owned loopback fixtures\r\n\r\nPNG {}\r\n\r\nGIF {}\r\n\r\nOnce {}\r\n\r\n{video}Close preview before returning to BBS. No station keys are expected.",self.png.url(),self.gif.url(),self.once.url()).into_bytes()
     }
+    pub fn accounts_page(&self) -> Result<Vec<u8>, String> {
+        let mut bytes = pttstella::replay::native_article_find_page()?;
+        bytes.extend(pttstella::encoding::encode(&format!("\x1b[2;1H\x1b[2K{}\x1b[3;1H\x1b[2K{}\x1b[5;1H\x1b[2K\x1b[1;37m推 \x1b[1;33mBlocked\x1b[0;33m:\x1b[0;37m hidden https://example.com/private.png\x1b[5;67H 01/01 12:34\x1b[8;1H\x1b[2K\x1b[0m{}\x1b[9;1H\x1b[2K\x1b[1;37m推 \x1b[1;33mAlice\x1b[0;33m:\x1b[0;37m visible focus text\x1b[9;67H 01/01 12:34\x1b[10;1H\x1b[2K\x1b[1;31m→ \x1b[1;33mALICE\x1b[0;33m:\x1b[0;37m merged author\x1b[10;67H 01/01 12:34\x1b[0m\x1b[24;80H",self.png.url(),self.gif.url(),self.once.url())).map_err(|e|e.to_string())?);
+        Ok(bytes)
+    }
     pub fn article_page(&self, page: usize) -> Result<Vec<u8>, String> {
         if !(1..=2).contains(&page) {
             return Err("inline fixture page out of range".into());

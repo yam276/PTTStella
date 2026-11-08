@@ -655,3 +655,49 @@ async fn verify_keys(
     .map_err(|e| e.to_string())?;
     Ok(())
 }
+
+// Inspect the real worker-delivered state for the account interaction probe.
+// Arc identity proves decoded originals survive, including offscreen resources.
+pub(crate) struct FocusResources {
+    epoch: u64,
+    wide: std::collections::BTreeSet<usize>,
+    images: Vec<(usize, std::sync::Arc<pttstella::media::loader::Image>)>,
+    errors: Vec<(usize, Option<String>)>,
+}
+pub(crate) fn focus_resources(owner: &Inline) -> FocusResources {
+    let state = owner.state.borrow();
+    FocusResources {
+        epoch: owner.epoch.get(),
+        wide: owner.wide.borrow().clone(),
+        images: state
+            .resources
+            .iter()
+            .filter_map(|(k, r)| Some((*k, r.original.clone()?)))
+            .collect(),
+        errors: state
+            .resources
+            .iter()
+            .map(|(k, r)| (*k, r.error.clone()))
+            .collect(),
+    }
+}
+impl FocusResources {
+    pub(crate) fn decoded(&self) -> usize {
+        self.images.len()
+    }
+    pub(crate) fn wide(&self) -> bool {
+        !self.wide.is_empty()
+    }
+    pub(crate) fn retained(&self, owner: &Inline) -> bool {
+        let next = focus_resources(owner);
+        self.epoch == next.epoch
+            && self.wide == next.wide
+            && self.errors == next.errors
+            && self.images.len() == next.images.len()
+            && self.images.iter().all(|(key, image)| {
+                next.images
+                    .iter()
+                    .any(|(k, p)| key == k && std::sync::Arc::ptr_eq(image, p))
+            })
+    }
+}

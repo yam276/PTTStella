@@ -31,6 +31,10 @@ use std::{
     thread::JoinHandle,
 };
 
+#[path = "output_accounts.rs"]
+mod accounts;
+pub use accounts::AccountContext;
+
 struct Gesture {
     stamp: Stamp,
     geometry: SurfaceGeometry,
@@ -340,6 +344,7 @@ impl Output {
                     {
                         output.clear(&ui);
                     }
+                    output.filter_status(&ui);
                     output.overlay(&ui);
                     output.hover_overlay(&ui);
                     ui.invoke_station_color_updated();
@@ -369,6 +374,22 @@ impl Output {
                     }
                     7 => output.clear(&ui),
                     _ => {}
+                }
+            }
+        });
+        ui.on_filter_status_refresh({
+            let output = output.clone();
+            move || {
+                if let Some(ui) = output.ui.upgrade() {
+                    output.filter_status(&ui);
+                }
+            }
+        });
+        ui.on_filter_reveal({
+            let output = output.clone();
+            move || {
+                if let Some(article) = &output.article {
+                    article.toggle_reveal();
                 }
             }
         });
@@ -526,8 +547,23 @@ impl Output {
         if !self.project(ui, stamp) {
             return None;
         }
+        let account = self
+            .account_context(ui, point)
+            .filter(|target| target.author && target.reply.is_some());
         let projection = self.projection.borrow();
         let projection = projection.as_ref()?;
+        if self.can_navigate(ui)
+            && let Some(target) = account
+            && !target.cell.is_some_and(|(row, col)| {
+                projection
+                    .links
+                    .iter()
+                    .any(|l| l.row == row && l.start <= col && col < l.end)
+            })
+            && let Some(row) = target.reply
+        {
+            return Some(Hit::Reply { row });
+        }
         self.with_frame(ui, |frame| match geometry {
             SurfaceGeometry::Terminal(g) => pointer::hit(
                 &projection.context,
@@ -618,6 +654,23 @@ impl Output {
             return;
         }
         if kind == 6 {
+            // Slint dispatches double-clicked before the second pointer-up.
+            // An author click is a toggle: keep its pending release, while
+            // Shift selection and other double-click actions retain their path.
+            if self.click_acted.get()
+                && !shift
+                && !self
+                    .selected
+                    .borrow()
+                    .gesture
+                    .as_ref()
+                    .is_some_and(|g| g.shift)
+                && self
+                    .account_context(&ui, point)
+                    .is_some_and(|a| a.author && a.reply.is_some())
+            {
+                return;
+            }
             self.selected.borrow_mut().gesture = None;
             if !self.click_acted.get()
                 && let Some(position) = self
@@ -650,6 +703,11 @@ impl Output {
             let to = self.hit(&ui, stamp, &geometry, click.to);
             if from == to {
                 match to {
+                    Some(Hit::Reply { .. }) => {
+                        if let Some(target) = self.account_context(&ui, click.to) {
+                            self.click_acted.set(self.focus_account(&target, false));
+                        }
+                    }
                     Some(Hit::Navigate(intent)) => self.navigate(&ui, stamp, intent),
                     Some(Hit::Link(index)) => {
                         let url = self
@@ -699,7 +757,7 @@ impl Output {
         }
         let mut rectangles = Vec::new();
         ui.set_pointer_cursor(match hit {
-            Some(Hit::Link(_)) => 1,
+            Some(Hit::Link(_) | Hit::Reply { .. }) => 1,
             Some(Hit::Navigate(Intent::Back)) => 2,
             Some(Hit::Navigate(Intent::First | Intent::PreviousPage)) => 3,
             Some(Hit::Navigate(Intent::Last | Intent::NextPage)) => 4,

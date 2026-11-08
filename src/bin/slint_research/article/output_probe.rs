@@ -45,7 +45,7 @@ fn point(
         ui.get_terminal_origin_y() + (rect.top + rect.bottom) / 2. / g.dpi(),
     ))
 }
-fn drag(ui: &TerminalWindow, a: slint::LogicalPosition, b: slint::LogicalPosition) {
+pub(crate) fn drag(ui: &TerminalWindow, a: slint::LogicalPosition, b: slint::LogicalPosition) {
     ui.window().dispatch_event(Event::KeyPressed {
         text: Key::Shift.into(),
     });
@@ -67,7 +67,7 @@ fn drag(ui: &TerminalWindow, a: slint::LogicalPosition, b: slint::LogicalPositio
         text: Key::Shift.into(),
     });
 }
-async fn png(
+pub(crate) async fn png(
     ui: &TerminalWindow,
     output: &Rc<Output>,
     connection: &Connection,
@@ -107,7 +107,7 @@ async fn png(
     )
     .await
 }
-fn pixels(path: &Path) -> Result<(u32, u32, Vec<u8>), String> {
+pub(crate) fn pixels(path: &Path) -> Result<(u32, u32, Vec<u8>), String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     let mut reader = png::Decoder::new(std::io::Cursor::new(bytes))
         .read_info()

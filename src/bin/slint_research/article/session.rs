@@ -22,6 +22,8 @@ use std::{
 use tokio::{sync::Notify, time::Instant};
 
 type ReplyWait = Pin<Box<dyn Future<Output = Result<(), String>>>>;
+#[path = "accounts.rs"]
+mod accounts;
 #[path = "find.rs"]
 mod find;
 #[path = "input.rs"]
@@ -32,6 +34,7 @@ mod outputs;
 pub struct ArticleSession {
     ui: slint::Weak<TerminalWindow>,
     connection: Rc<Connection>,
+    presentation_media: RefCell<std::rc::Weak<crate::media::Media>>,
     pub(super) core: Rc<RefCell<SurfaceState>>,
     display: RefCell<DisplaySettings>,
     renderer: Rc<RefCell<Renderer>>,
@@ -65,6 +68,9 @@ pub struct ArticleSession {
     pub requests: Cell<usize>,
 }
 impl ArticleSession {
+    pub fn attach_presentation_media(&self, media: &Rc<crate::media::Media>) {
+        self.presentation_media.replace(Rc::downgrade(media));
+    }
     pub fn preferences_changed(
         &self,
         settings: &pttstella::settings::AppSettings,
@@ -99,6 +105,7 @@ impl ArticleSession {
             ui: ui.as_weak(),
             connection,
             core: Rc::new(RefCell::new(core)),
+            presentation_media: RefCell::new(std::rc::Weak::new()),
             display: RefCell::new(display),
             renderer,
             terminal_size,

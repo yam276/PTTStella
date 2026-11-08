@@ -831,6 +831,8 @@ fn run(
     let verification_connection = if options.verify_context.is_some()
         || options.verify_tools.is_some()
         || options.verify_article_session.is_some()
+        || options.probe == Some(Probe::Session(session::Probe::Media))
+            && std::env::var_os("PTTSTELLA_SLINT_ACCOUNT_ACTIONS").is_some()
     {
         connection
             .as_ref()
@@ -1157,6 +1159,9 @@ fn run(
                         store,
                     ));
                 }
+                if let (Some(context), Some(filters)) = (&context_owner, &filters_owner) {
+                    context.attach_filters(filters);
+                }
                 output_owner = Some(output);
             }
             if matches!(
@@ -1305,6 +1310,30 @@ fn run(
         || std::env::var("PTTSTELLA_SLINT_FILTERS_PROBE").is_ok_and(|v| v == "native")
     {
         None
+    } else if filters_probe && std::env::var_os("PTTSTELLA_SLINT_ACCOUNT_ACTIONS").is_some() {
+        Some(filters_manager::account_probe::start(
+            &ui,
+            filters_owner
+                .as_ref()
+                .cloned()
+                .ok_or("account filter owner missing")?,
+            verification_connection
+                .clone()
+                .ok_or("account connection missing")?,
+            media_owner
+                .as_ref()
+                .cloned()
+                .ok_or("account media missing")?,
+            options
+                .verify_media
+                .clone()
+                .ok_or("account output directory missing")?,
+            filters_probe_store
+                .as_ref()
+                .ok_or("account store missing")?
+                .path()
+                .join("filters.json"),
+        )?)
     } else if filters_probe {
         Some(filters_manager::probe::start(
             &ui,

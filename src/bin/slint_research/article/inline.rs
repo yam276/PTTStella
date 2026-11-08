@@ -244,6 +244,16 @@ impl Inline {
         self.update();
         self.schedule();
     }
+    pub fn rebase_reply_focus(&self, old: (u64, u64, u64), new: (u64, u64, u64)) {
+        if let Some(scope) = self.scope.get()
+            && (scope.0, scope.1, scope.2) == old
+        {
+            self.cancel_enter();
+            self.press.take();
+            self.tag.borrow_mut().clear();
+            self.scope.set(Some((new.0, new.1, new.2, scope.3)));
+        }
+    }
     fn reset(&self, ui: &TerminalWindow) {
         self.cancel_enter();
         if self.active.replace(false)

@@ -2,7 +2,10 @@
 mod picture;
 pub mod probe;
 use crate::{
-    MenuEntry, TerminalWindow, output::Output, pointer::SurfaceGeometry, renderer::Renderer,
+    MenuEntry, TerminalWindow,
+    output::{AccountContext, Output},
+    pointer::SurfaceGeometry,
+    renderer::Renderer,
 };
 pub use picture::Picture;
 use pttstella::{
@@ -40,6 +43,7 @@ struct Menu {
     entries: Vec<Entry>,
     selected: usize,
     picture: Option<Picture>,
+    account: Option<AccountContext>,
 }
 pub struct ContextMenu {
     ui: slint::Weak<TerminalWindow>,
@@ -52,6 +56,7 @@ pub struct ContextMenu {
     job: RefCell<Option<slint::JoinHandle<()>>>,
     closed: Cell<bool>,
     media: RefCell<Weak<crate::media::Media>>,
+    filters: RefCell<Weak<crate::filters_manager::Manager>>,
     trace_left: Cell<u8>,
 }
 impl ContextMenu {
@@ -72,6 +77,7 @@ impl ContextMenu {
             job: RefCell::new(None),
             closed: Cell::new(false),
             media: RefCell::new(Weak::new()),
+            filters: RefCell::new(Weak::new()),
             trace_left: Cell::new(if std::env::var_os("PTTSTELLA_INLINE_TRACE").is_some() {
                 8
             } else {
@@ -103,6 +109,9 @@ impl ContextMenu {
             move |kind, index, tag, x, y| owner.picture_pointer(kind, index, tag.as_str(), (x, y))
         });
         owner
+    }
+    pub fn attach_filters(&self, filters: &Rc<crate::filters_manager::Manager>) {
+        self.filters.replace(Rc::downgrade(filters));
     }
     pub fn attach_media(&self, media: &Rc<crate::media::Media>) {
         self.media.replace(Rc::downgrade(media));
@@ -176,7 +185,16 @@ impl ContextMenu {
         }
         let editor = self.connection.updates.borrow().site.ptt_features()
             && navigation::article_editor(self.renderer.borrow().frame());
+        let account = self.account_at(&ui, point);
+        let reading = matches!(
+            self.connection.updates.borrow().context(),
+            Context::ArticleReading { .. }
+        );
         if !press.shift
+            && !reading
+            && account
+                .as_ref()
+                .is_none_or(|a| a.word.is_none() && !a.focused)
             && ui.get_tools_available()
             && ui.get_tools_right_click()
             && source.selected.is_none()
@@ -252,15 +270,48 @@ impl ContextMenu {
         source: &Source,
         link: Option<usize>,
         picture: Option<&Picture>,
+        account: Option<&AccountContext>,
     ) -> Capabilities {
         let view = self.connection.updates.borrow();
         let context = view.context();
         let editor =
             view.site.ptt_features() && navigation::article_editor(self.renderer.borrow().frame());
         let selected = source.selected.is_some();
-        let ready = !editor || source.phase == Phase::Connected;
+        let ready = (!editor || source.phase == Phase::Connected)
+            && account.is_none_or(|a| {
+                (a.word.is_none() && !a.focused)
+                    || source.phase == Phase::Connected
+                        && !source.pending
+                        && !view.output_pending
+                        && !view.login_pending
+            });
         let mut flags = Capabilities::default();
         for (flag, value) in [
+            (Flag::Word, account.is_some_and(|a| a.word.is_some())),
+            (
+                Flag::Authors,
+                matches!(context, Context::ArticleList { .. }),
+            ),
+            (
+                Flag::Mask,
+                account
+                    .and_then(|a| a.word.as_ref())
+                    .is_some_and(|w| w.policy == Some(pttstella::filters::Policy::Mask)),
+            ),
+            (
+                Flag::MaskRow,
+                account
+                    .and_then(|a| a.word.as_ref())
+                    .is_some_and(|w| w.policy == Some(pttstella::filters::Policy::MaskRow)),
+            ),
+            (
+                Flag::Allow,
+                account
+                    .and_then(|a| a.word.as_ref())
+                    .is_some_and(|w| w.policy == Some(pttstella::filters::Policy::Allow)),
+            ),
+            (Flag::Reply, account.is_some_and(|a| a.reply.is_some())),
+            (Flag::Focused, account.is_some_and(|a| a.focused)),
             (Flag::Link, link.is_some()),
             (Flag::Selection, selected),
             (Flag::SelectionReady, selected),
@@ -324,17 +375,35 @@ impl ContextMenu {
         source: &Source,
         link: Option<usize>,
         picture: Option<&Picture>,
+        account: Option<&AccountContext>,
     ) -> Vec<Entry> {
-        match context_menu::items(self.capabilities(ui, source, link, picture)) {
+        match context_menu::items(self.capabilities(ui, source, link, picture, account)) {
             Ok(entries) => entries
                 .into_iter()
                 .filter(|entry| supported(entry.action))
+                .map(|mut entry| {
+                    if account_policy(entry.action).is_some()
+                        && !self
+                            .filters
+                            .borrow()
+                            .upgrade()
+                            .is_some_and(|f| f.writable())
+                    {
+                        entry.enabled = false;
+                    }
+                    entry
+                })
                 .collect(),
             Err(error) => {
                 ui.set_input_notice(error.into());
                 Vec::new()
             }
         }
+    }
+    fn account_at(&self, ui: &TerminalWindow, point: (f32, f32)) -> Option<AccountContext> {
+        let dpi = ui.window().scale_factor();
+        self.output
+            .account_context(ui, (point.0 * dpi, point.1 * dpi))
     }
     fn link_at(&self, ui: &TerminalWindow, source: &Source, point: (f32, f32)) -> Option<usize> {
         let dpi = ui.window().scale_factor();
@@ -361,8 +430,13 @@ impl ContextMenu {
             return;
         }
         let link = self.link_at(ui, &source, point);
-        let entries = self.entries(ui, &source, link, None);
-        self.install_menu(ui, source, link, None, entries);
+        let account = if link.is_none() {
+            self.account_at(ui, point)
+        } else {
+            None
+        };
+        let entries = self.entries(ui, &source, link, None, account.as_ref());
+        self.install_menu(ui, source, link, None, account, entries);
     }
     fn install_menu(
         &self,
@@ -370,6 +444,7 @@ impl ContextMenu {
         source: Source,
         link: Option<usize>,
         picture: Option<Picture>,
+        account: Option<AccountContext>,
         entries: Vec<Entry>,
     ) {
         if entries.is_empty() {
@@ -381,7 +456,7 @@ impl ContextMenu {
             entries
                 .iter()
                 .map(|e| MenuEntry {
-                    label: label(e.action).into(),
+                    label: target_label(e.action, account.as_ref()).into(),
                     enabled: e.enabled,
                 })
                 .collect::<Vec<_>>(),
@@ -392,6 +467,7 @@ impl ContextMenu {
             entries,
             selected,
             picture,
+            account,
         }));
         ui.set_context_selected(selected as i32);
         ui.set_context_open(true);
@@ -406,7 +482,7 @@ impl ContextMenu {
                 menu.entries
                     .iter()
                     .map(|e| MenuEntry {
-                        label: label(e.action).into(),
+                        label: target_label(e.action, menu.account.as_ref()).into(),
                         enabled: e.enabled,
                     })
                     .collect::<Vec<_>>(),
@@ -509,22 +585,39 @@ impl ContextMenu {
                     .ok()
                     .and_then(|i| menu.entries.get(i))
                     .filter(|entry| entry.enabled)
-                    .map(|e| (menu.source.clone(), menu.link, *e, menu.picture.clone()))
+                    .map(|e| {
+                        (
+                            menu.source.clone(),
+                            menu.link,
+                            *e,
+                            menu.picture.clone(),
+                            menu.account.clone(),
+                        )
+                    })
             })
         };
         let valid = action
             .as_ref()
-            .is_some_and(|(source, link, entry, picture)| {
+            .is_some_and(|(source, link, entry, picture, account)| {
                 self.source(&ui).as_ref() == Some(source)
                     && picture.as_ref().is_none_or(|p| self.picture_current(p))
                     && self
-                        .entries(&ui, source, *link, picture.as_ref())
+                        .entries(&ui, source, *link, picture.as_ref(), account.as_ref())
                         .contains(entry)
             });
         self.dismiss(true);
-        if valid && let Some((_, link, entry, picture)) = action {
+        if valid && let Some((_, link, entry, picture, account)) = action {
             if let Some(picture) = picture {
                 self.picture_action(&ui, picture, entry.action);
+            } else if let Some((policy, remove)) = account_policy(entry.action) {
+                if let (Some(owner), Some(target)) = (self.filters.borrow().upgrade(), account) {
+                    owner.account_action(&target, policy, remove);
+                }
+            } else if matches!(entry.action, Action::ReplyFocus | Action::ReplyFocusClear) {
+                if let Some(target) = account {
+                    self.output
+                        .focus_account(&target, entry.action == Action::ReplyFocusClear);
+                }
             } else if entry.action == Action::Inline {
                 if let Some(inline) = self.media.borrow().upgrade().and_then(|m| m.inline_owner()) {
                     inline.expand_all();
@@ -542,7 +635,15 @@ impl ContextMenu {
 fn supported(action: Action) -> bool {
     matches!(
         action,
-        Action::Copy
+        Action::AccountMask
+            | Action::AccountMaskRow
+            | Action::AccountAllow
+            | Action::AccountRemoveMask
+            | Action::AccountRemoveMaskRow
+            | Action::AccountRemoveAllow
+            | Action::ReplyFocus
+            | Action::ReplyFocusClear
+            | Action::Copy
             | Action::CopyPicture
             | Action::SavePicture
             | Action::Inline
@@ -566,6 +667,14 @@ fn supported(action: Action) -> bool {
 pub(super) fn label(action: Action) -> String {
     use Action as A;
     match action {
+        A::AccountMask => pttstella::msg!("account-mask"),
+        A::AccountMaskRow => pttstella::msg!("account-mask-row"),
+        A::AccountAllow => pttstella::msg!("account-allow"),
+        A::AccountRemoveMask => pttstella::msg!("account-remove-mask"),
+        A::AccountRemoveMaskRow => pttstella::msg!("account-remove-mask-row"),
+        A::AccountRemoveAllow => pttstella::msg!("account-remove-allow"),
+        A::ReplyFocus => pttstella::msg!("reply-focus"),
+        A::ReplyFocusClear => pttstella::msg!("reply-focus-clear"),
         A::Copy => pttstella::msg!("context-copy"),
         A::CopyPicture => pttstella::msg!("context-copy-picture"),
         A::SavePicture => pttstella::msg!("context-save-picture"),
@@ -595,4 +704,27 @@ fn press_matches(source: &Source, press: &Press, point: (f32, f32)) -> bool {
         && source.mouse.modes == press.source.mouse.modes
         && source.mouse.route == press.source.mouse.route
         && (point.0 - press.point.0).hypot(point.1 - press.point.1) < 3.
+}
+
+fn account_policy(action: Action) -> Option<(pttstella::filters::Policy, bool)> {
+    use {Action as A, pttstella::filters::Policy as P};
+    Some(match action {
+        A::AccountMask => (P::Mask, false),
+        A::AccountMaskRow => (P::MaskRow, false),
+        A::AccountAllow => (P::Allow, false),
+        A::AccountRemoveMask => (P::Mask, true),
+        A::AccountRemoveMaskRow => (P::MaskRow, true),
+        A::AccountRemoveAllow => (P::Allow, true),
+        _ => return None,
+    })
+}
+fn target_label(action: Action, account: Option<&AccountContext>) -> String {
+    let label = label(action);
+    if account_policy(action).is_some()
+        && let Some(word) = account.and_then(|a| a.word.as_ref())
+    {
+        format!("{} · {}", word.id, label)
+    } else {
+        label
+    }
 }

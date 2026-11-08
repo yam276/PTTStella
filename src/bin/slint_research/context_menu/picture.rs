@@ -102,7 +102,13 @@ impl ContextMenu {
         else {
             return;
         };
-        let entries = self.entries(&ui, &source, Some(picture.scope.index), Some(&picture));
+        let entries = self.entries(
+            &ui,
+            &source,
+            Some(picture.scope.index),
+            Some(&picture),
+            None,
+        );
         ui.set_context_x(point.0);
         ui.set_context_y(point.1);
         self.install_menu(
@@ -110,6 +116,7 @@ impl ContextMenu {
             source,
             Some(picture.scope.index),
             Some(picture),
+            None,
             entries,
         );
     }

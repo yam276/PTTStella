@@ -190,6 +190,13 @@ impl Media {
             self.preferences.app().auto_expand_images,
         );
         self.inline.replace(Some(inline));
+        article.attach_presentation_media(self);
+    }
+    pub fn rebase_reply_focus(&self, old: (u64, u64, u64), new: (u64, u64, u64)) {
+        if let Some(inline) = self.inline_owner() {
+            inline.rebase_reply_focus(old, new);
+        }
+        self.close(false);
     }
     pub fn inline_owner(&self) -> Option<Rc<crate::article::inline::Inline>> {
         self.inline.borrow().clone()

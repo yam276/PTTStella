@@ -1,5 +1,6 @@
 //! One native form over the article owner's effective rules. Explicit writes
 //! use the shared Store and Output's joined worker; previews never project.
+pub mod account_probe;
 pub mod probe;
 use crate::{
     FiltersWindow, TerminalWindow, article::session::ArticleSession, file_job::ResultSlot,
@@ -127,7 +128,44 @@ impl Manager {
             .as_ref()
             .and_then(|w| w.as_weak().upgrade())
     }
+    pub fn writable(&self) -> bool {
+        self.warning.borrow().is_none() && !self.stopped.get()
+    }
+    pub fn account_action(
+        self: &Rc<Self>,
+        target: &crate::output::AccountContext,
+        policy: Policy,
+        remove: bool,
+    ) {
+        let Some(ui) = self.ui.upgrade() else { return };
+        if !self.writable()
+            || self.output.busy()
+            || self.result.borrow().is_some()
+            || self.request.get().is_some()
+            || ui.get_context_source_blocked()
+        {
+            ui.set_input_notice(msg!("account-action-stale").into());
+            return;
+        }
+        let Some(cell) = target.cell else { return };
+        let base = self.rules();
+        let work = self
+            .article
+            .account_rule(target.identity, target.stamp, cell, policy, remove)
+            .unwrap_or_else(|| Err(msg!("account-action-stale")))
+            .and_then(|rules| {
+                let store = self.store.clone()?;
+                Ok(Box::new(move || store.save_from(&base, rules).map(Value::Saved)) as Work)
+            });
+        match work {
+            Ok(work) => self.start(work, Operation::Save),
+            Err(e) => self.notice(e),
+        }
+    }
     fn notice(&self, text: String) {
+        if let Some(ui) = self.ui.upgrade() {
+            ui.set_input_notice(text.clone().into());
+        }
         if let Some(w) = self.window() {
             w.set_message(text.into());
         }

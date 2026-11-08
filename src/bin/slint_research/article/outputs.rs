@@ -45,19 +45,8 @@ impl ArticleSession {
     }
     pub fn replace_rules(&self, rules: pttstella::filters::Rules) {
         let view = self.connection.updates.borrow().clone();
-        {
-            let mut core = self.core.borrow_mut();
-            core.replace_rules(rules);
-            core.update(&view);
-        }
-        self.retire_stale_projection(&view);
-        self.next_paint.set(tokio::time::Instant::now());
-        if let Some(ui) = self.ui.upgrade() {
-            ui.invoke_output_updated();
-            ui.invoke_paste_updated();
-            ui.invoke_keep_alive_changed();
-        }
-        self.notify.notify_one();
+        self.core.borrow_mut().replace_rules(rules);
+        self.presentation_changed(&view);
     }
     pub fn output_identity(&self, view: &View) -> Option<Identity> {
         let ui = self.ui.upgrade()?;

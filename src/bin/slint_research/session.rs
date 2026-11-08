@@ -178,6 +178,12 @@ pub fn with_probe(
         bytes
     };
     let bytes = match media.as_ref() {
+        Some(f)
+            if probe == Probe::Media
+                && std::env::var_os("PTTSTELLA_SLINT_ACCOUNT_ACTIONS").is_some() =>
+        {
+            f.accounts_page()?
+        }
         Some(f) if probe == Probe::ArticleInline => f.article_page(1)?,
         Some(f) => f.page(),
         None => bytes,
@@ -189,6 +195,9 @@ pub fn with_probe(
         Probe::Drafts if draft_failure.is_some() => "slint_drafts_failure",
         Probe::Drafts if slow_drafts => "slint_drafts_slow",
         Probe::Drafts => "slint_drafts",
+        Probe::Media if std::env::var_os("PTTSTELLA_SLINT_ACCOUNT_ACTIONS").is_some() => {
+            "slint_account_actions"
+        }
         Probe::Media => "slint_native_media",
         Probe::ArticleInline => "slint_native_inline",
         Probe::Reconnect => "slint_session",
@@ -243,6 +252,18 @@ pub fn with_probe(
                     )?;
                     connection.connect_to(peers.first.clone())?;
                     Ok(connection)
+                } else if std::env::var_os("PTTSTELLA_SLINT_ACCOUNT_ACTIONS").is_some() {
+                    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+                        "../../../tests/fixtures/navigation.json"
+                    ))
+                    .map_err(|e| e.to_string())?;
+                    let list = fixture["list"]
+                        .as_str()
+                        .ok_or("account list fixture missing")?;
+                    Connection::start_inline_pages_probe(
+                        bytes,
+                        pttstella::encoding::encode(list).map_err(|e| e.to_string())?,
+                    )
                 } else {
                     Connection::start_ui_probe(
                         if std::env::var_os("PTTSTELLA_SLINT_FILTERS_PROBE").is_some() {

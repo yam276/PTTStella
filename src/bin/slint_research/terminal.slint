@@ -36,6 +36,13 @@ export component TerminalWindow inherits Window {
     in property <bool> filters-available;
     in property <bool> filters-open;
     callback filters-show;
+    in property <int> filter-count;
+    in property <bool> filter-ready;
+    in property <bool> filter-revealed;
+    in property <string> filter-label;
+    in property <string> filter-status;
+    callback filter-reveal;
+    callback filter-status-refresh;
     callback filters-updated;
     out property <bool> manager-open:root.sites-open || root.filters-open;
     changed filters-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
@@ -504,6 +511,10 @@ export component TerminalWindow inherits Window {
                 }
             }
 
+            if root.filter-count>0: HorizontalLayout {
+                Text {text:root.filter-status;color:#e4c76e;vertical-alignment:center;horizontal-stretch:1;}
+                Button {text:root.filter-label;enabled:root.filter-ready && !root.context-source-blocked;clicked=>{root.filter-reveal();}}
+            }
             terminal-box := Rectangle {
                 vertical-stretch: 1;
                 background: black;

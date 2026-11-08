@@ -142,6 +142,7 @@ impl SurfaceGeometry {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Hit {
+    Reply { row: usize },
     Navigate(Intent),
     Link(usize),
 }
