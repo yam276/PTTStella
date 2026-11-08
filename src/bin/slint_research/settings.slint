@@ -58,6 +58,7 @@ export component SettingsWindow inherits Window {
     in property <[bool]> runtime-available;
     in-out property <string> profile-name;
     out property <int> focused-target:SettingsInput.active-target;
+    changed focused-target=>{if root.focused-target==0 {root.cancel-result-focus();}}
     callback runtime-action(int);
     in property <[string]> categories;
     in property <[string]> presets;

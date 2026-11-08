@@ -127,6 +127,25 @@ impl Preferences {
                     && !self.search_focus.running(),
                 "obsolete result stole focus from the new query",
             )?;
+            // Focus may also return through the native field's normal focus
+            // path rather than the explicit focus-search callback.
+            window.set_query("".into());
+            window.set_page(1);
+            window.invoke_focus_result(3);
+            wait(
+                || window.get_focused_target() == 3,
+                "native field focus setup failed",
+            )
+            .await?;
+            window.set_query("baseline".into());
+            window.invoke_search(window.get_query());
+            window.invoke_choose_result(0);
+            window.invoke_focus_field(0);
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            require(
+                window.get_focused_target() == 0 && !self.search_focus.running(),
+                "pending result stole ordinary native search focus",
+            )?;
         }
         // Search never repopulates or indexes an incomplete widget draft/name.
         window.set_font_size("".into());
