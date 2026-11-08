@@ -121,7 +121,23 @@ pub struct Screen {
     hyperlinks: Hyperlinks,
     mouse: crate::mouse::Modes,
 }
+/// Local document projection checkpoint, never a second ANSI interpreter.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct SourceRendition {
+    pub(crate) style: Style,
+    next_cell_style: Option<Style>,
+}
 impl Screen {
+    pub(crate) fn source_rendition(&self) -> SourceRendition {
+        SourceRendition {
+            style: self.style,
+            next_cell_style: self.next_cell_style,
+        }
+    }
+    pub(crate) fn restore_source_rendition(&mut self, state: SourceRendition) {
+        self.style = state.style;
+        self.next_cell_style = state.next_cell_style;
+    }
     /// Reuse the production rendition/parser for a local source glyph without
     /// injecting a terminal C0 command. A synthetic CR would cancel SGR 66's
     /// pending byte style before the first byte of a double-width character.

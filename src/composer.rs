@@ -4,6 +4,21 @@ use crate::{
     screen::{Screen, Style},
 };
 use serde::{Deserialize, Serialize};
+pub mod document;
+mod projection;
+
+fn safe_sgr(rest: &str) -> Option<&str> {
+    rest.strip_prefix("\x1b[")
+        .and_then(|r| {
+            r.bytes()
+                .take(65)
+                .position(|b| b == b'm')
+                .map(|n| &rest[..n + 3])
+        })
+        .filter(|s| {
+            crate::input::prepare_editor_source(s, crate::encoding::TextEncoding::Uao, 128).is_ok()
+        })
+}
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Range {
@@ -36,18 +51,7 @@ pub fn project(source: &str) -> Result<Vec<Decoration>, String> {
     let mut offset = 0;
     while byte < source.len() {
         let rest = &source[byte..];
-        let sgr = rest
-            .strip_prefix("\x1b[")
-            .and_then(|r| {
-                r.bytes()
-                    .take(65)
-                    .position(|b| b == b'm')
-                    .map(|n| &rest[..n + 3])
-            })
-            .filter(|s| {
-                crate::input::prepare_editor_source(s, crate::encoding::TextEncoding::Uao, 128)
-                    .is_ok()
-            });
+        let sgr = safe_sgr(rest);
         if let Some(s) = sgr {
             result.push(Decoration {
                 from: offset,
