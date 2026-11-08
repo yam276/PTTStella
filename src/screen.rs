@@ -122,6 +122,21 @@ pub struct Screen {
     mouse: crate::mouse::Modes,
 }
 impl Screen {
+    /// Reuse the production rendition/parser for a local source glyph without
+    /// injecting a terminal C0 command. A synthetic CR would cancel SGR 66's
+    /// pending byte style before the first byte of a double-width character.
+    /// Only the local 2x1 composer projection calls this; live byte streams
+    /// continue to advance exclusively through feed.
+    pub(crate) fn project_source_glyph(&mut self, encoded: &[u8]) -> Option<(Style, Style)> {
+        if self.cols != 2 || self.rows != 1 || !(1..=2).contains(&encoded.len()) {
+            return None;
+        }
+        self.x = 0;
+        self.y = 0;
+        self.wrap = false;
+        self.feed(encoded);
+        Some((self.cells[0].style, self.cells[encoded.len() - 1].style))
+    }
     pub fn new(cols: usize, rows: usize) -> Result<Self, &'static str> {
         if cols == 0 || rows == 0 || cols.checked_mul(rows).is_none_or(|n| n > MAX_CELLS) {
             return Err("unsupported screen dimensions");

@@ -66,30 +66,32 @@ pub fn project(source: &str) -> Result<Vec<Decoration>, String> {
         let len = c.len_utf16();
         if !c.is_control()
             && let Ok(encoded) = crate::encoding::encode(c.encode_utf8(&mut [0; 4]))
+            && let Some((left, right)) = core.project_source_glyph(&encoded)
         {
-            core.feed(b"\r");
-            core.feed(&encoded);
-            if let (Some(a), Some(b)) = (core.cell(0, 0), core.cell(encoded.len().min(2) - 1, 0)) {
-                if let Some(last) = result.last_mut().filter(|d| {
-                    !d.hidden
-                        && a.style == b.style
-                        && d.to == offset
-                        && d.left == a.style
-                        && d.right == b.style
-                        && d.width == encoded.len()
-                }) {
-                    last.to += len;
-                } else {
-                    result.push(Decoration {
-                        from: offset,
-                        to: offset + len,
-                        hidden: false,
-                        left: a.style,
-                        right: b.style,
-                        width: encoded.len(),
-                    });
-                }
+            if let Some(last) = result.last_mut().filter(|d| {
+                !d.hidden
+                    && left == right
+                    && d.to == offset
+                    && d.left == left
+                    && d.right == right
+                    && d.width == encoded.len()
+            }) {
+                last.to += len;
+            } else {
+                result.push(Decoration {
+                    from: offset,
+                    to: offset + len,
+                    hidden: false,
+                    left,
+                    right,
+                    width: encoded.len(),
+                });
             }
+        }
+        if matches!(c, '\n' | '\t') {
+            // Real source C0 boundaries cancel a pending byte latch. Incomplete
+            // or unsupported escape text remains editable and is never fed.
+            core.feed(c.encode_utf8(&mut [0; 4]).as_bytes());
         }
         byte += c.len_utf8();
         offset += len;
@@ -127,6 +129,28 @@ pub fn color(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn projection_preserves_sgr66_byte_halves_and_real_control_boundaries() {
+        let source = "\x1b[31m\x1b[66;34m中A\x1b[66;32m\n文";
+        let projected = project(source).unwrap();
+        let at = |needle: &str| {
+            source[..source.find(needle).unwrap()]
+                .encode_utf16()
+                .count()
+        };
+        let chinese = projected.iter().find(|d| d.from == at("中")).unwrap();
+        assert_eq!(
+            (chinese.width, chinese.left.fg, chinese.right.fg),
+            (2, 1, 4)
+        );
+        let ascii = projected.iter().find(|d| d.from == at("A")).unwrap();
+        assert_eq!((ascii.left.fg, ascii.right.fg), (4, 4));
+        let next_line = projected.iter().find(|d| d.from == at("文")).unwrap();
+        assert_eq!((next_line.left.fg, next_line.right.fg), (2, 2));
+        let tab = project("\x1b[31;66;34m\t文").unwrap();
+        let after_tab = tab.last().unwrap();
+        assert_eq!((after_tab.left.fg, after_tab.right.fg), (4, 4));
+    }
     #[test]
     fn projection_keeps_utf16_chinese_existing_sgr_and_incomplete_source() {
         let p = project("中\x1b[1;31m紅\x1b[m\n\x1b[").unwrap();
