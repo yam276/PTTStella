@@ -1166,3 +1166,24 @@ Dioxus 另用真實 WKWebView 對照 App，輸入與 signed payload 為 `c61c260
 本輪所有操作只用隔離合成 store／loopback／自製設定檔。未取用 production 資料、vault 或 PTT。兩個實際 App、獨立 negative 證據、最後 CLI 與 source patch 保留；唯一 `/private/tmp/pttstella-slint-search-d1slhunf` 已核對 resolved path、UID、單一內容、與證據副本逐 byte 相同及 lsof 無使用後移除，du4KiB，filesystem 差4,096 bytes。exact path、前後 free 與保留例外見 cleanup-owned.json；不將 shared filesystem delta 全歸因於自己。Cargo profiles 仍供整體目標使用，worktree／未整合 commits 保留。
 
 接續完整名單／書籤管理，並接上最後的名單搜尋目標。混合 Live 等效、完整原生輸入／可及性、四架構候選、音訊／runtime、舊資料雙版本往返、同負載效能及完整候選重跑仍未完成。S0–S8 goal active，S9 未切換、整合 canonical、推送或發佈。
+
+
+## S7 原生名單管理與完整設定分類（2026-11-08）
+
+共用匯入准入提交 `3e3ffde`，原生表單提交 `2f3e01e`。既有 Dioxus 匯入 owner 移到 `filters::preview::Import`，仍核對 request、取消與原規則快照，保留白名單優先及匯入色覆寫規則；兩個原有案例跟著移入 library。Slint 表單沿用 `Rules`、文字 parser、同一 `Store::save_from` 和 Output 的單一檔案 worker，article owner 保持唯一有效規則來源。只有保存成功的結果才更新 presentation，預覽不改檔案或畫面。
+
+表單提供黑／白名單分頁、ID／分類排序、新增／更新／移除、兩種黑名單遮罩、15 色共用及個別覆寫，以及系統選檔、預覽、取消與明確合併。切分頁清除未保存欄位，排序保留草稿。讀取錯誤保持原有效規則並將表單設為唯讀，明確重試讀回有效檔案才恢復；保存失敗保留欄位和原有效規則。匯入取消／關閉後的成功或錯誤都不能恢復舊預覽。退出保留在途結果槽，加入精確 worker 後再收結果，不依賴 UI callback。
+
+設定補齊一般、外觀、輸入、媒體、站點、名單、帳號、關於八分類，固定索引24項皆可定位到原生欄位／按鈕。名單結果僅定位，明確按管理按鈕才關閉設定、交接表單；原 autosave drain 路徑維持。站點與名單共用原生文字視窗的 IME／編輯捷徑橋接，以同一 manager-open 准入阻擋 BBS 輸入、保活、滑鼠和其他相斥操作。沒有新增 idle timer 或檔案 worker。
+
+證據根目錄 `.local/verification/slint-filters/`：
+
+- 共用重構：core 14 命令／2 replay；Dioxus release library360／bin128／multi-instance10通過，另4／1／1明確 ignored；desktop all-target Clippy通過。完整 JS383通過，零 skip。
+- 原生來源：Slint release library360／bin76／multi-instance10通過，另4／1／1 ignored；all-target Clippy、選用 native-video 的 all-target check、fmt及 release build通過。後續只增加診斷斷言／退出稽核，原 bin76回歸仍通過，最終 all-target Clippy另驗證編譯。
+- 最終 CLI `743955772777c95d8edb617609ed2b04d6b1d846dd8596209803d75d6067c631`：`final-component/` 與 `final-web/` 明確核對各自實際閱讀模式、兩種遮罩的 ACK 投影、CRUD／大小寫更新／顏色、排序、預覽取消／確認、晚到成功與錯誤、備份受阻保留草稿、壞檔唯讀及重讀。兩案及 `final-shutdown/` 均為0取頁、peer零輸入、正常 Close acknowledged、HTTP零請求且全部 joined。退出 audit核對 window／preview／結果槽清理及磁碟與有效規則一致；shutdown案另驗證事件迴圈退出時仍在途的授權保存沒有遺失。
+- `settings-search/` 在前一 CLI `213adf0dd89ff866e7cd6a244874234a4c15b1cb1bf5df7a2ade0a08c38fc206` 完成24項×中英文＝48次定位及既有焦點／設定檔／runtime案例；同 payload 的站點表單與待保存設定退出回歸亦通過。此後的來源差異是明確 filter probe模式與清理斷言，不將不同 payload 說成相同 executable。
+- `Native-Filters.app` 的 input同為上述 `213ad…`，簽署後 native SHA256為 `5d51154f243e6951b6bcf20d099b8ddff368cc8c5070c002c1db33548af3942b`，對應 `candidate-before-component.patch` 及其基準。macOS arm64實際 ⌘,、搜尋 blacklist、結果聚焦與明確交接、繁中貼上保存／重新選取均可觀察；系統選檔讀入自製94-byte文字，先預覽2筆、略過1筆、調整2筆，再明確合併。讀回主檔獨立預期 NativeA／NativeB／NativeW三筆、白名單ANSI10，備份為先前只有NativeA的一筆，原 bytes已保留。名單開啟時 ⌘Q，後續 App inventory無該 App、peer Close acknowledged、HTTP零請求且 joined；LaunchServices退出碼沒有直接觀察，不宣稱 exit0。
+
+系統選檔的 Go To 路徑第一次 paste／Return維持舊文字，改以原生 AX欄位填入路徑並確認後成功，沒有推論其原因。這輪沒有驗證注音候選或把繁中貼上當成 IME。使用者已確認先前草稿異常時有其他操作，舊末字異常原因仍未定，不宣稱已修復。建置期曾因 Window保留的 color屬性拒絕編譯，改名為 entry-color後才通過；沒有把建置失敗算成執行通過。
+
+清理盤點記於同目錄 `cleanup-owned.json`。保留必要 App、初始 payload 的來源對照、最終 PNG／合成資料、正常與故障證據及仍供 goal使用的 Cargo profiles；中間被取代的成功探針輸出按確切路徑移除。原 worktree與提交尚未整合，保留；canonical develop、正式入口與遠端未修改。帳號右鍵、暫時揭露、書籤及其餘管理功能、混合 Live、原生 IME／DPI、多平台、資料回退與同負載效能仍待完成，S0–S8 goal持續，S9未執行。
