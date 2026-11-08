@@ -443,6 +443,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     ..Default::default()
                 },
                 None,
+                None,
             );
         }
         Some(Probe::Grid) => {
@@ -455,6 +456,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         display: replay::parity_display_profile(),
                         ..Default::default()
                     },
+                    None,
                     None,
                 )
             });
@@ -472,15 +474,21 @@ fn main() -> Result<(), Box<dyn Error>> {
             if matches!(probe, session::Probe::Tools | session::Probe::ToolsStation) {
                 settings.tools_opacity = pttstella::settings::ToolOpacity::try_from(20)?;
             }
-            return session::with_probe(probe, bytes, |connection| {
-                run(
-                    options,
-                    screen.frame(),
-                    Some((session::Mode::Probe(probe), connection)),
-                    settings,
-                    None,
-                )
-            });
+            return session::with_probe(
+                probe,
+                bytes,
+                options.verify_media.clone(),
+                |connection, site_peers| {
+                    run(
+                        options,
+                        screen.frame(),
+                        Some((session::Mode::Probe(probe), connection)),
+                        settings,
+                        None,
+                        site_peers,
+                    )
+                },
+            );
         }
         Some(Probe::Connect) => {
             let profile = profile::Profile::system()?;
@@ -500,6 +508,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     Some((session::Mode::Live(stations), connection)),
                     settings,
                     Some(preferences),
+                    None,
                 )
             });
         }
@@ -511,7 +520,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         // A blank row with a real Screen cursor gives the native field an exact grid anchor.
         screen.feed(b"\x1b[22;5H\x1b[?25h");
     }
-    run(options, screen.frame(), None, AppSettings::default(), None)
+    run(
+        options,
+        screen.frame(),
+        None,
+        AppSettings::default(),
+        None,
+        None,
+    )
 }
 
 fn run(
@@ -520,6 +536,7 @@ fn run(
     connection: Option<(session::Mode, Rc<Connection>)>,
     settings: AppSettings,
     mut loaded_preferences: Option<pttstella::settings::preferences::Preferences>,
+    site_peers: Option<Rc<pttstella::connection::site_probe::Peers>>,
 ) -> Result<(), Box<dyn Error>> {
     #[cfg(feature = "native-video")]
     slint::BackendSelector::new()
@@ -555,7 +572,7 @@ fn run(
     // Probe settings live only in this owned temporary namespace; retain it
     // until output workers have drained at both normal and capture shutdown.
     let sites_probe_store = if options.probe == Some(Probe::Session(session::Probe::Media))
-        && std::env::var_os("PTTSTELLA_SLINT_SITES_PROBE").is_some()
+        && (std::env::var_os("PTTSTELLA_SLINT_SITES_PROBE").is_some() || site_peers.is_some())
     {
         let directory = tempfile::Builder::new()
             .prefix("pttstella-slint-sites-")
@@ -570,6 +587,19 @@ fn run(
                 pttstella::encoding::TextEncoding::Gbk,
             )?,
         });
+        if let Some(peers) = &site_peers {
+            for (name, target) in [
+                ("FIRST UAO peer", &peers.first),
+                ("GBK peer", &peers.gbk),
+                ("UAO peer", &peers.uao),
+                ("Held dial peer", &peers.hanging),
+            ] {
+                seed.favourites.push(pttstella::sites::Favourite {
+                    name: name.into(),
+                    target: target.clone(),
+                });
+            }
+        }
         store.save(seed)?;
         Some((directory, store))
     } else {
@@ -1246,17 +1276,26 @@ fn run(
         .filter(|_| sites_probe_store.is_some())
         .zip(sites_owner.as_ref())
     {
-        Some(sites_manager::probe::start(
-            &ui,
-            owner.clone(),
-            directory.clone(),
-            sites_probe_store
-                .as_ref()
-                .ok_or("site probe store missing")?
-                .0
-                .path()
-                .join("sites.json"),
-        )?)
+        if let Some(peers) = &site_peers {
+            Some(sites_manager::switch_probe::start(
+                &ui,
+                owner.clone(),
+                peers.clone(),
+                directory.clone(),
+            )?)
+        } else {
+            Some(sites_manager::probe::start(
+                &ui,
+                owner.clone(),
+                directory.clone(),
+                sites_probe_store
+                    .as_ref()
+                    .ok_or("site probe store missing")?
+                    .0
+                    .path()
+                    .join("sites.json"),
+            )?)
+        }
     } else if let Some(directory) = options.verify_color {
         Some(station_color::probe::start(
             &ui,

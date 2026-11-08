@@ -92,8 +92,42 @@ pub fn with_live(
 pub fn with_probe(
     probe: Probe,
     bytes: Vec<u8>,
-    show: impl FnOnce(Rc<Connection>) -> Result<(), Box<dyn Error>>,
+    directory: Option<std::path::PathBuf>,
+    show: impl FnOnce(
+        Rc<Connection>,
+        Option<Rc<pttstella::connection::site_probe::Peers>>,
+    ) -> Result<(), Box<dyn Error>>,
 ) -> Result<(), Box<dyn Error>> {
+    use pttstella::connection::site_probe::{Case, Peers};
+    let site_peers = if probe == Probe::Media {
+        std::env::var("PTTSTELLA_SLINT_SITE_SWITCH")
+            .ok()
+            .map(|case| {
+                let case = match case.as_str() {
+                    "connected" => Case::Connected,
+                    "disconnected" => Case::Disconnected,
+                    "cancel" => Case::CancelDial,
+                    "native" => Case::Native,
+                    _ => return Err("unknown site-switch case".to_string()),
+                };
+                if case == Case::Native
+                    && std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").as_deref()
+                        != Ok("native-quit")
+                {
+                    return Err("native site-switch requires passive native-quit mode".into());
+                }
+                Peers::start(
+                    case,
+                    directory
+                        .as_deref()
+                        .ok_or("site-switch probe needs a new verify-media directory")?,
+                )
+                .map(Rc::new)
+            })
+            .transpose()?
+    } else {
+        None
+    };
     let draft_failure = if probe == Probe::Drafts {
         draft_failure()?
     } else {
@@ -202,7 +236,17 @@ pub fn with_probe(
                     Connection::start_drafts_probe()
                 }
             }
-            Probe::Media => Connection::start_ui_probe(bytes),
+            Probe::Media => {
+                if let Some(peers) = &site_peers {
+                    let connection = Connection::start_local_station_probe(
+                        Screen::new(80, 24).map_err(|e| e.to_string())?,
+                    )?;
+                    connection.connect_to(peers.first.clone())?;
+                    Ok(connection)
+                } else {
+                    Connection::start_ui_probe(bytes)
+                }
+            }
             Probe::ArticleInline => Connection::start_inline_pages_probe(
                 bytes,
                 media
@@ -294,12 +338,36 @@ pub fn with_probe(
                 CloseOutcome::Acknowledged
             },
         )),
-        show,
+        |connection| show(connection, site_peers.clone()),
     );
+    let peer_result = site_peers
+        .as_ref()
+        .map(|peers| peers.finish(result.is_err()))
+        .transpose();
+    if let Some(peers) = &site_peers
+        && let Some(directory) = &directory
+    {
+        let report = match &peer_result {
+            Ok(Some(audit)) => serde_json::to_value(audit)?,
+            Err(error) => {
+                serde_json::json!({"passed":false,"error":error,"audit":peers.audit().ok()})
+            }
+            _ => serde_json::json!({"passed":false}),
+        };
+        std::fs::write(
+            directory.join("site-peer-final.json"),
+            serde_json::to_vec_pretty(&report)?,
+        )?;
+    }
     if let Some(media) = &mut media {
         media.finish()?;
     }
-    result
+    match (result, peer_result) {
+        (Ok(()), Ok(_)) => Ok(()),
+        (Err(e), Ok(_)) => Err(e),
+        (Ok(()), Err(e)) => Err(e.into()),
+        (Err(e), Err(cleanup)) => Err(format!("{e}; site peers: {cleanup}").into()),
+    }
 }
 
 pub fn draft_failure() -> Result<Option<pttstella::connection::DraftFailure>, String> {

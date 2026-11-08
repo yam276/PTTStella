@@ -1,6 +1,7 @@
 //! Native station form. The shared model owns validation/baselines; Output owns
 //! the only file worker and Connection owns every transport transition.
 pub mod probe;
+pub mod switch_probe;
 use crate::{SitesWindow, TerminalWindow, file_job::ResultSlot, output::Output};
 use pttstella::{
     connection::Connection,
