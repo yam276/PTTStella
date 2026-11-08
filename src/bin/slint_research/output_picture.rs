@@ -32,10 +32,10 @@ impl Output {
             let path = if matches!(action, PictureAction::Save) {
                 let extension =
                     picture::extension(image.as_ref().ok_or_else(|| msg!("copy-not-ready"))?)?;
-                self.picker.set(true);
+                if !self.begin_picker(ui) {
+                    return Err(msg!("file-busy"));
+                }
                 picker_opened = true;
-                ui.set_output_busy(true);
-                ui.invoke_keep_alive_changed();
                 Some(
                     ui.window()
                         .with_winit_window(|window| {
@@ -57,15 +57,12 @@ impl Output {
             }
             Ok((lease, phase, path))
         })();
-        self.picker.set(false);
+        if picker_opened {
+            self.end_picker(ui);
+        }
         let (lease, phase, path) = match prepared {
             Ok(p) => p,
             Err(e) => {
-                if picker_opened {
-                    ui.set_output_busy(false);
-                    ui.invoke_keyboard_updated();
-                    ui.invoke_keep_alive_changed();
-                }
                 complete(ui, e);
                 return;
             }

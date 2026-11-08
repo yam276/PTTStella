@@ -18,6 +18,7 @@ mod output;
 mod palette;
 mod paste;
 mod pointer;
+mod preferences;
 mod profile;
 mod renderer;
 mod session;
@@ -436,6 +437,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     display: replay::parity_display_profile(),
                     ..Default::default()
                 },
+                None,
             );
         }
         Some(Probe::Grid) => {
@@ -448,6 +450,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         display: replay::parity_display_profile(),
                         ..Default::default()
                     },
+                    None,
                 )
             });
         }
@@ -465,12 +468,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                     screen.frame(),
                     Some((session::Mode::Probe(probe), connection)),
                     settings,
+                    None,
                 )
             });
         }
         Some(Probe::Connect) => {
             let profile = profile::Profile::system()?;
-            let (settings, warning) = profile.load_settings();
+            let preferences = profile.load_preferences()?;
+            let settings = preferences.app().clone();
+            let warning = preferences.warning().map(str::to_owned);
             pttstella::i18n::initialize(settings.language)?;
             let mut stations = stations::Stations::load(&profile);
             if let Some(warning) = warning {
@@ -483,6 +489,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     frame,
                     Some((session::Mode::Live(stations), connection)),
                     settings,
+                    Some(preferences),
                 )
             });
         }
@@ -494,7 +501,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         // A blank row with a real Screen cursor gives the native field an exact grid anchor.
         screen.feed(b"\x1b[22;5H\x1b[?25h");
     }
-    run(options, screen.frame(), None, AppSettings::default())
+    run(options, screen.frame(), None, AppSettings::default(), None)
 }
 
 fn run(
@@ -502,6 +509,7 @@ fn run(
     frame: Frame,
     connection: Option<(session::Mode, Rc<Connection>)>,
     settings: AppSettings,
+    mut loaded_preferences: Option<pttstella::settings::preferences::Preferences>,
 ) -> Result<(), Box<dyn Error>> {
     #[cfg(feature = "native-video")]
     slint::BackendSelector::new()
@@ -980,6 +988,26 @@ fn run(
                             session::Probe::Media | session::Probe::ArticleInline
                         )
                 ) {
+                    let preferences = match loaded_preferences.take() {
+                        Some(preferences) => preferences,
+                        None => {
+                            let directory = media_probe_settings
+                                .as_ref()
+                                .ok_or("isolated settings seed missing")?;
+                            let store = pttstella::settings::store::Store::at(
+                                directory.path().join("settings.json"),
+                            );
+                            // The shared Store merges against its actual document. A
+                            // synthetic in-memory baseline must have the same seed,
+                            // rather than treating the product defaults as external edits.
+                            store.save(settings.clone())?;
+                            pttstella::settings::preferences::Preferences::loaded(
+                                Ok(store),
+                                settings.clone(),
+                                None,
+                            )?
+                        }
+                    };
                     media_owner = Some(media::Media::mount(
                         &ui,
                         connection.clone(),
@@ -990,14 +1018,7 @@ fn run(
                                 session::Probe::Media | session::Probe::ArticleInline
                             )
                         ),
-                        settings.clone(),
-                        if let Some(directory) = &media_probe_settings {
-                            pttstella::settings::store::Store::at(
-                                directory.path().join("settings.json"),
-                            )
-                        } else {
-                            profile::Profile::system()?.settings()
-                        },
+                        preferences,
                     ));
                 }
                 if let (Some(media), Some(article)) = (&media_owner, &article_session_owner) {
@@ -1033,6 +1054,55 @@ fn run(
                     store,
                 )?);
             }
+            if let Some(media) = &media_owner {
+                media.preferences.subscribe({
+                    let renderer = renderer.clone();
+                    let previous = previous.clone();
+                    let output = output_owner.as_ref().map(Rc::downgrade);
+                    let editor = editor_owner.as_ref().map(Rc::downgrade);
+                    let article = article_session_owner.as_ref().map(Rc::downgrade);
+                    let media = Rc::downgrade(media);
+                    let weak = ui.as_weak();
+                    let applied = RefCell::new(settings.clone());
+                    move |settings| {
+                        let changed = applied.borrow().clone();
+                        if changed.display != settings.display {
+                            let display = settings.display.resolve()?;
+                            renderer
+                                .borrow_mut()
+                                .configure(&display)
+                                .map_err(str::to_owned)?;
+                            previous.set(None);
+                            if let Some(output) = output.as_ref().and_then(|o| o.upgrade()) {
+                                output.set_display(display);
+                            }
+                            if let Some(editor) = editor.as_ref().and_then(|o| o.upgrade()) {
+                                editor.copy_display(&renderer.borrow());
+                            }
+                        }
+                        if (changed.display != settings.display
+                            || changed.article_mode != settings.article_mode
+                            || changed.article_boundary_navigation
+                                != settings.article_boundary_navigation)
+                            && let Some(article) = article.as_ref().and_then(|o| o.upgrade())
+                        {
+                            article.preferences_changed(settings)?;
+                        }
+                        pttstella::i18n::application().select(settings.language);
+                        if let Some(ui) = weak.upgrade() {
+                            ui.set_tools_opacity(settings.tools_opacity.percent() as f32 / 100.);
+                            ui.set_tools_visible(settings.tools_access.show_floating_button);
+                            ui.set_tools_right_click(settings.tools_access.right_click_menu);
+                            ui.invoke_tools_updated();
+                        }
+                        applied.replace(settings.clone());
+                        if let Some(media) = media.upgrade() {
+                            media.preferences.refresh_labels();
+                        }
+                        Ok(())
+                    }
+                });
+            }
             let (renderer, previous) = (renderer.clone(), previous.clone());
             session::mount(&ui, connection, mode, frame_gate, move |ui, frame| {
                 // The shared owner rasterizes its filtered projection. The
@@ -1045,6 +1115,14 @@ fn run(
             })
         })
         .transpose()?;
+    let settings_shutdown_directory = if options.probe
+        == Some(Probe::Session(session::Probe::Media))
+        && std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").is_ok_and(|v| v == "shutdown")
+    {
+        options.verify_media.clone()
+    } else {
+        None
+    };
     let draft_verification_directory = options.verify_drafts.clone();
     let verification = if let Some(directory) = options.verify_color {
         Some(station_color::probe::start(
@@ -1106,6 +1184,11 @@ fn run(
                 .cloned()
                 .ok_or("media probe output missing")?,
             directory,
+            media_probe_settings
+                .as_ref()
+                .ok_or("isolated media settings missing")?
+                .path()
+                .join("settings.json"),
         )?)
     } else if let Some(directory) = options.verify_article_session {
         Some(article::session_probe::start(
@@ -1208,6 +1291,7 @@ fn run(
             editor.finish()?;
         }
         if let Some(media) = &media_owner {
+            media.preferences.finish()?;
             media.finish()?;
         }
         if let Some(paste) = &paste_owner {
@@ -1229,6 +1313,16 @@ fn run(
             }
             _ => Ok(()),
         };
+        let settings_cleanup = media_owner
+            .as_ref()
+            .map(|media| {
+                media.preferences.finish()?;
+                if let Some(dir) = &settings_shutdown_directory {
+                    media.preferences.audit_shutdown(dir)?;
+                }
+                Ok::<_, String>(())
+            })
+            .transpose();
         let media_cleanup = media_owner.map(|media| media.finish()).transpose();
         if let Some(article) = &article_session_owner {
             article.finish();
@@ -1262,6 +1356,7 @@ fn run(
         result?;
         editor_cleanup?;
         editor_close_audit?;
+        settings_cleanup?;
         media_cleanup?;
         output_cleanup?;
         paste_cleanup?;

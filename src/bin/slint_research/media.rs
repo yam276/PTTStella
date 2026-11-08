@@ -44,8 +44,7 @@ pub struct Media {
     presentation: Cell<Presentation>,
     dwell: slint::Timer,
     candidate: RefCell<Option<Scope>>,
-    settings: RefCell<pttstella::settings::AppSettings>,
-    store: pttstella::settings::store::Store,
+    pub(crate) preferences: Rc<crate::preferences::Preferences>,
     #[cfg(feature = "native-video")]
     video: RefCell<Option<Rc<video::Video>>>,
 }
@@ -55,8 +54,7 @@ impl Media {
         connection: Rc<Connection>,
         output: Rc<Output>,
         probe: bool,
-        settings: pttstella::settings::AppSettings,
-        store: pttstella::settings::store::Store,
+        preferences: pttstella::settings::preferences::Preferences,
     ) -> Rc<Self> {
         ui.set_media_close_label(msg!("close").into());
         ui.set_media_retry_label(msg!("retry").into());
@@ -69,7 +67,7 @@ impl Media {
         let owner = Rc::new(Self {
             ui: ui.as_weak(),
             connection,
-            output,
+            output: output.clone(),
             active: RefCell::new(None),
             sequence: Cell::new(0),
             worker: RefCell::new(None),
@@ -82,8 +80,7 @@ impl Media {
             presentation: Cell::new(Presentation::Hover),
             dwell: slint::Timer::default(),
             candidate: RefCell::new(None),
-            settings: RefCell::new(settings),
-            store,
+            preferences: crate::preferences::Preferences::mount(ui, output.clone(), preferences),
             #[cfg(feature = "native-video")]
             video: RefCell::new(None),
         });
@@ -135,7 +132,7 @@ impl Media {
             return Ok(());
         }
         let (mut worker, mut updates) = Worker::start()?;
-        worker.inline_automatic(self.settings.borrow().auto_expand_images);
+        worker.inline_automatic(self.preferences.app().auto_expand_images);
         let mut inline_updates = worker.inline_updates();
         let weak = Rc::downgrade(self);
         let task = slint::spawn_local(async move {
@@ -198,7 +195,7 @@ impl Media {
             article,
             self,
             self.connection.clone(),
-            self.settings.borrow().auto_expand_images,
+            self.preferences.app().auto_expand_images,
         );
         self.inline.replace(Some(inline));
     }

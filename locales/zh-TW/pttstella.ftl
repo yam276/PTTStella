@@ -871,3 +871,5 @@ editor-color-palette-hint = 方向鍵選色 · Tab 前往套用 · Esc 取消
 editor-color-working = 正在核對及上色，請稍候…
 
 editor-color-stop-requested = 已要求停止；已送出的色碼可能保留，請檢查站端畫面。
+
+slint-font-face-status = 已選用：英數 { $requested_ascii }／中文 { $requested_cjk }。繪圖 face：{ $ascii }／{ $cjk }；個別缺字仍可能使用替代字型。

@@ -139,12 +139,22 @@ pub struct Renderer {
     ink: [HashMap<String, Ink>; 2],
     font_manager: FontMgr,
     faces: [Typeface; 2],
+    requested_faces: [String; 2],
     font_size: f32,
     baseline: f32,
     font_width: f32,
 }
 
 impl Renderer {
+    pub fn font_status(&self, requested: &DisplaySettings) -> String {
+        pttstella::msg!(
+            "slint-font-face-status",
+            ascii = self.faces[0].family_name(),
+            cjk = self.faces[1].family_name(),
+            requested_ascii = requested.ascii_font.clone(),
+            requested_cjk = requested.cjk_font.clone()
+        )
+    }
     pub fn frame(&self) -> &Frame {
         &self.frame
     }
@@ -161,6 +171,7 @@ impl Renderer {
             ink: [HashMap::new(), HashMap::new()],
             font_manager: mgr,
             faces: [ascii, cjk],
+            requested_faces: [display.ascii_font.clone(), display.cjk_font.clone()],
             font_size: display.font_size as f32,
             baseline: display.baseline as f32,
             font_width: display.font_width as f32 / 100.,
@@ -177,12 +188,44 @@ impl Renderer {
             ink: [HashMap::new(), HashMap::new()],
             font_manager: self.font_manager.clone(),
             faces: self.faces.clone(),
+            requested_faces: self.requested_faces.clone(),
             font_size: self.font_size,
             baseline: self.baseline,
             font_width: self.font_width,
         };
         renderer.cache_glyphs();
         renderer
+    }
+
+    /// Replace only drawing resources; terminal bytes and projection identity stay owned
+    /// by the existing screen/session reducers. A failed preparation leaves this intact.
+    pub fn configure(&mut self, display: &DisplaySettings) -> Result<(), &'static str> {
+        let names = [display.ascii_font.clone(), display.cjk_font.clone()];
+        if self.requested_faces != names {
+            let prepared = Self::new(self.frame.clone(), display)?;
+            *self = prepared;
+        } else if self.font_size != display.font_size as f32
+            || self.baseline != display.baseline as f32
+            || self.font_width != display.font_width as f32 / 100.
+        {
+            self.font_size = display.font_size as f32;
+            self.baseline = display.baseline as f32;
+            self.font_width = display.font_width as f32 / 100.;
+            self.ink.iter_mut().for_each(HashMap::clear);
+            self.cache_glyphs();
+        }
+        Ok(())
+    }
+
+    pub fn copy_display(&mut self, source: &Self) {
+        self.font_manager = source.font_manager.clone();
+        self.faces = source.faces.clone();
+        self.requested_faces = source.requested_faces.clone();
+        self.font_size = source.font_size;
+        self.baseline = source.baseline;
+        self.font_width = source.font_width;
+        self.ink.iter_mut().for_each(HashMap::clear);
+        self.cache_glyphs();
     }
 
     pub fn set_frame(&mut self, frame: Frame) {
@@ -379,6 +422,38 @@ fn face(mgr: &FontMgr, family: &str) -> Option<Typeface> {
 mod tests {
     use super::*;
     use pttstella::screen::Screen;
+
+    #[test]
+    fn runtime_display_rebuilds_metrics_and_preserves_projection() {
+        let frame = pttstella::presentation::font_sample().unwrap();
+        let mut display = pttstella::settings::DisplaySettings::presets()["bundled"].clone();
+        let mut renderer = Renderer::new(frame.clone(), &display).unwrap();
+        let size = Size {
+            width: 576,
+            height: 192,
+        };
+        let before = renderer.paint(size, false).unwrap();
+        display.font_size = 18.;
+        display.baseline = 17.;
+        display.font_width = 110.;
+        renderer.configure(&display).unwrap();
+        assert_eq!(renderer.frame(), &frame);
+        let changed = renderer.paint(size, false).unwrap();
+        assert_ne!(before.as_bytes(), changed.as_bytes());
+        let fresh = Renderer::new(frame.clone(), &display).unwrap();
+        assert_eq!(
+            changed.as_bytes(),
+            fresh.paint(size, false).unwrap().as_bytes()
+        );
+        // Article/editor forks already have cached glyph metrics of their own.
+        let mut fork = Renderer::new(frame.clone(), &DisplaySettings::default()).unwrap();
+        fork.copy_display(&renderer);
+        assert_eq!(fork.frame(), &frame);
+        assert_eq!(
+            fork.paint(size, false).unwrap().as_bytes(),
+            changed.as_bytes()
+        );
+    }
 
     #[test]
     fn editor_offset_clips_the_same_wide_glyph_pixels_without_relayout() {

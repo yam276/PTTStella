@@ -182,7 +182,7 @@ pub struct Output {
     renderer: Rc<RefCell<Renderer>>,
     size: Rc<Cell<Option<Size>>>,
     presented: Rc<Cell<Option<FrameId>>>,
-    display: DisplaySettings,
+    display: RefCell<DisplaySettings>,
     clipboard: Clipboard,
     selected: RefCell<Selected>,
     lease: RefCell<Option<ActiveLease>>,
@@ -223,7 +223,7 @@ impl Output {
             renderer,
             size,
             presented,
-            display,
+            display: RefCell::new(display),
             clipboard,
             selected: RefCell::new(Selected::default()),
             projection: RefCell::new(None),
@@ -981,6 +981,7 @@ impl Output {
         use pttstella::context_menu::Action as A;
         let Some(ui) = self.ui.upgrade() else { return };
         match action {
+            A::Settings => ui.invoke_settings_show(),
             A::EditorColor => ui.global::<crate::StationColorState>().invoke_action(0),
             A::Copy => self.copy(false),
             A::CopyAnsi => self.copy(true),
@@ -1216,7 +1217,7 @@ impl Output {
                 return;
             }
         };
-        let display = self.display.clone();
+        let display = self.display.borrow().clone();
         let source = self.connection.updates.clone();
         let render_lease = lease.clone();
         let render_source = source.clone();
@@ -1301,6 +1302,25 @@ impl Output {
             },
         );
     }
+    pub(super) fn begin_picker(&self, ui: &TerminalWindow) -> bool {
+        if self.closed.get() || self.busy() {
+            return false;
+        }
+        self.picker.set(true);
+        ui.set_output_busy(true);
+        ui.invoke_keep_alive_changed();
+        true
+    }
+    pub(super) fn end_picker(&self, ui: &TerminalWindow) {
+        self.picker.set(false);
+        if self.worker.borrow().is_none() {
+            ui.set_output_busy(false);
+            ui.invoke_output_idle();
+        }
+        ui.invoke_keyboard_updated();
+        ui.invoke_keep_alive_changed();
+    }
+
     pub(super) fn work<T: Send + 'static>(
         self: &Rc<Self>,
         ui: &TerminalWindow,
@@ -1354,6 +1374,9 @@ impl Output {
                 // the cached disabled actions after this worker has joined.
                 ui.invoke_keyboard_updated();
                 ui.invoke_keep_alive_changed();
+                if !output.busy() {
+                    ui.invoke_output_idle();
+                }
             }
         }) {
             self.revoke();
@@ -1362,6 +1385,15 @@ impl Output {
             ui.set_input_notice(error.to_string().into());
         }
     }
+    pub fn set_display(&self, display: DisplaySettings) {
+        self.revoke();
+        self.display.replace(display);
+        self.size.set(None);
+        if let Some(ui) = self.ui.upgrade() {
+            ui.invoke_geometry_changed();
+        }
+    }
+
     pub fn finish(&self) -> Result<(), String> {
         self.closed.set(true);
         if let Some(ui) = self.ui.upgrade() {

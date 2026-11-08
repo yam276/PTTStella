@@ -1,3 +1,4 @@
+export { SettingsWindow, SettingsMatch, FontSource } from "settings.slint";
 import { AboutSlint, Button, CheckBox, ComboBox, LineEdit, TextEdit } from "std-widgets.slint";
 import { LoginPopup } from "login.slint";
 import { ContextMenuOverlay, MenuEntry } from "context-menu.slint";
@@ -14,6 +15,11 @@ export { StationColorState } from "station-color.slint";
 import { StationColor, StationColorState } from "station-color.slint";
 
 export component TerminalWindow inherits Window {
+    in property <bool> settings-available;
+    in property <bool> settings-open;
+    callback settings-show;
+    changed settings-open => {root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
+
     out property <bool> station-color-open:StationColorState.open;
     callback station-color-updated;
     callback focus-station-color;
@@ -63,7 +69,7 @@ export component TerminalWindow inherits Window {
     callback media-hover-preference(int);
     in property <bool> media-open;
     in property <bool> media-video;
-    out property <bool> media-video-visible: !root.editor-open && !root.station-color-open && root.media-open && root.media-video && !root.show-about && !root.login-open && !root.paste-open && !root.context-open;
+    out property <bool> media-video-visible: !root.settings-open && !root.editor-open && !root.station-color-open && root.media-open && root.media-video && !root.show-about && !root.login-open && !root.paste-open && !root.context-open;
     in property <float> media-position;
     in property <float> media-duration;
     out property <SelectionRect> media-video-bounds: {x:media-preview.video-left,y:media-preview.video-top,width:media-preview.video-width,height:media-preview.video-height};
@@ -84,7 +90,7 @@ export component TerminalWindow inherits Window {
     in property <string> media-external-label;
     in property <string> media-fit-label;
     in property <string> media-original-label;
-    out property <bool> media-play-allowed: !root.editor-open && !root.station-color-open && root.media-open && root.native-foreground && !root.output-busy && !root.show-about && !root.login-open && !root.paste-open;
+    out property <bool> media-play-allowed: !root.settings-open && !root.editor-open && !root.station-color-open && root.media-open && root.native-foreground && !root.output-busy && !root.show-about && !root.login-open && !root.paste-open;
     changed media-play-allowed => {root.media-updated();}
     callback media-request(int);
     callback media-action(int);
@@ -110,7 +116,7 @@ export component TerminalWindow inherits Window {
     in property <bool> find-has-matches;
     in-out property <string> find-query;
     out property <bool> find-focused: root.find-open && find-input.has-focus;
-    out property <bool> find-blocked: root.editor-open || root.station-color-open || root.media-open || !root.native-foreground || root.native-composing || root.show-about
+    out property <bool> find-blocked: root.settings-open || root.editor-open || root.station-color-open || root.media-open || !root.native-foreground || root.native-composing || root.show-about
         || root.switching-station || root.login-open || root.login-busy || root.paste-open || root.output-busy;
     callback find-action(int);
     callback find-edit(string);
@@ -167,7 +173,7 @@ export component TerminalWindow inherits Window {
     changed article-focused => { root.terminal-focus-changed(); root.inline-updated(); }
     out property <bool> article-reading-ready: root.native-foreground && root.article-focused && !root.article-blocked && !root.switching-station && !root.native-pointer-down && !root.login-busy && !root.paste-reading && !root.output-busy && !root.selection-active && !root.selection-dragging && !root.keyboard-pending && !root.navigation-busy && !root.station-mouse-held && !root.context-pending;
     changed article-reading-ready => { root.article-session-updated(); }
-    out property <bool> article-blocked: root.editor-open || root.station-color-open || root.media-open || root.find-open || root.show-about || root.login-open || root.paste-open || root.tools-busy || root.context-open || root.native-composing;
+    out property <bool> article-blocked: root.settings-open || root.editor-open || root.station-color-open || root.media-open || root.find-open || root.show-about || root.login-open || root.paste-open || root.tools-busy || root.context-open || root.native-composing;
     callback article-layout-changed;
     callback article-rendered;
     callback article-session-updated;
@@ -204,7 +210,7 @@ export component TerminalWindow inherits Window {
     in property <[ToolItem]> tools-actions;
     in property <string> tools-title;
     in property <string> tools-ball-label;
-    out property <bool> tools-source-blocked: root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing || root.show-about || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy;
+    out property <bool> tools-source-blocked: root.settings-open || root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing || root.show-about || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy;
     out property <bool> pointer-shift-held: root.pointer-shift;
     callback native-shift-held() -> bool;
     callback tools-pointer(int,length,length);
@@ -283,7 +289,7 @@ export component TerminalWindow inherits Window {
     in property <bool> frame-paint-pending;
     in property <bool> keep-alive-available;
     in property <string> keep-alive-label;
-    out property <bool> keep-alive-surface-ready: !root.editor-open && !root.station-color-open && !root.media-open && !root.find-open && root.native-foreground
+    out property <bool> keep-alive-surface-ready: !root.settings-open && !root.editor-open && !root.station-color-open && !root.media-open && !root.find-open && root.native-foreground
         && (root.article-active ? root.article-focused : root.terminal-input-focused) && !root.native-composing && !root.native-pointer-down
         && !root.show-about && !root.switching-station && !root.paste-open && !root.paste-reading
         && !root.frame-paint-pending && !root.login-open && !root.login-busy
@@ -321,11 +327,12 @@ export component TerminalWindow inherits Window {
     in property <bool> selection-dragging;
     in property <bool> output-available;
     in property <bool> output-busy;
+    callback output-idle;
     in property <bool> navigation-busy;
     in property <[SelectionRect]> navigation-rects;
     in property <int> pointer-cursor;
     in property <string> pointer-url;
-    out property <bool> context-source-blocked: root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing
+    out property <bool> context-source-blocked: root.settings-open || root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing
         || root.show-about || root.switching-station || root.frame-paint-pending
         || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy || root.tools-busy;
     out property <bool> terminal-pointer-blocked: root.context-source-blocked || root.context-open || root.context-pending;
@@ -353,7 +360,7 @@ export component TerminalWindow inherits Window {
     in property <bool> station-mouse-held;
     in property <string> station-mouse-label;
     in property <string> station-mouse-status;
-    out property <bool> station-pointer-blocked: root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing
+    out property <bool> station-pointer-blocked: root.settings-open || root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing
         || root.show-about || root.switching-station || root.login-open || root.login-busy
         || root.paste-open || root.paste-reading || root.output-busy || root.pan-mode || root.context-open || root.context-pending || root.tools-busy;
     callback station-pointer(int, int, length, length, bool, bool, bool, bool) -> bool;

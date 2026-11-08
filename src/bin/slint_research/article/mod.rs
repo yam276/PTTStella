@@ -626,6 +626,14 @@ impl ArticleView {
     }
     /// Superseded source packets stop painting without removing the focused
     /// article component. Its next update installs the new source and geometry.
+    pub fn copy_display(&self, source: &Renderer) {
+        self.renderer.borrow_mut().copy_display(source);
+        self.row_cache.borrow_mut().clear();
+        self.row_size.set(None);
+        self.footer_size.set(None);
+        self.painted.take();
+    }
+
     pub fn retire_paint(&self) {
         self.timer.stop();
         self.painted.take();

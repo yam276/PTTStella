@@ -57,6 +57,7 @@ pub fn start(
     owner: Rc<Media>,
     output: Rc<Output>,
     directory: PathBuf,
+    settings_path: PathBuf,
 ) -> Result<Verification, Box<dyn Error>> {
     Verification::start(
         ui,
@@ -79,6 +80,17 @@ pub fn start(
                 "media toolkit focus did not settle",
             )
             .await?;
+            if std::env::var_os("PTTSTELLA_SLINT_SETTINGS_PROBE").is_some() {
+                owner
+                    .preferences
+                    .verify(&ui, &directory, &settings_path)
+                    .await?;
+                wait(
+                    || output.current(&ui).is_some(),
+                    "source did not resume after settings",
+                )
+                .await?;
+            }
             moved(&ui, slint::LogicalPosition::new(2., 2.));
             let original = source(&ui, &output)?;
             verification::capture(&ui, &directory, "before.png")?;
@@ -239,7 +251,10 @@ pub fn start(
                 "focus alone revived stale hover",
             )?;
             let saved = owner
-                .store
+                .preferences
+                .model
+                .borrow()
+                .store()?
                 .read()?
                 .ok_or("hover settings were not written")?;
             let settings = pttstella::settings::AppSettings::decode(&saved)?;
@@ -250,10 +265,15 @@ pub fn start(
             std::fs::write(directory.join("saved-settings.json"), saved)
                 .map_err(|e| e.to_string())?;
             // A concurrent same-field write must not silently win in this UI.
-            let baseline = owner.settings.borrow().clone();
+            let baseline = owner.preferences.model.borrow().app().clone();
             let mut external = baseline.clone();
             external.hover = pttstella::settings::HoverPosition::Off;
-            owner.store.clone().save_from(&baseline, external)?;
+            owner
+                .preferences
+                .model
+                .borrow()
+                .store()?
+                .save_from(&baseline, external)?;
             ui.set_media_hover_choice(0);
             ui.invoke_media_hover_preference(0);
             wait(
@@ -267,7 +287,8 @@ pub fn start(
                     && ui
                         .get_input_notice()
                         .starts_with(&msg!("settings-save-failed"))
-                    && owner.store.load()?.hover == pttstella::settings::HoverPosition::Off,
+                    && owner.preferences.model.borrow().store()?.load()?.hover
+                        == pttstella::settings::HoverPosition::Off,
                 "same-field conflict changed the applied value, lost the draft, or overwrote external data",
             )?;
             wait(
@@ -279,7 +300,13 @@ pub fn start(
                 source(&ui, &output)? == original,
                 "hover operations modified terminal source",
             )?;
+            // Explicitly withdraw this failed edit back to the still-effective
+            // choice. The external conflicting file remains unchanged.
+            preference(&ui, 1).await?;
             std::fs::write(directory.join("result.json"),serde_json::to_vec_pretty(&serde_json::json!({"status":"passed","scope":"actual Slint component toolkit pointer gestures and isolated settings, synthetic foreground; OS pointer/focus not covered","quick_pass_worker_started":false,"dwell_ms":350,"same_link_dwell_preserved":true,"png_promoted_same_request_and_arc":true,"gif_hover_static_ms":650,"gif_promotion_playing":true,"disabled_hover_starts":0,"follow_and_four_synthetic_corner_bounds":true,"focus_alone_revives":false,"terminal_source_unchanged":true,"settings_written_via_shared_store":true,"disabled_media_preserves_link_hints":true,"save_conflict_preserves_draft_applied_value_and_external_data":true})).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
+            if std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").is_ok_and(|v| v == "shutdown") {
+                owner.preferences.prepare_shutdown(&directory)?;
+            }
             Ok(())
         },
     )

@@ -27,7 +27,7 @@ impl Media {
             msg!("hover-follow").into(),
             msg!("close").into(),
         ])));
-        let value = index(self.settings.borrow().hover);
+        let value = index(self.preferences.model.borrow().app().hover);
         ui.set_media_hover_position(value);
         ui.set_media_hover_choice(value);
         ui.on_media_hover_changed({

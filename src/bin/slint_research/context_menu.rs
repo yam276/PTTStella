@@ -544,6 +544,7 @@ fn supported(action: Action) -> bool {
             | Action::Previous
             | Action::Next
             | Action::Paste
+            | Action::Settings
             | Action::EditorColor
     )
 }

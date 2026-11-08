@@ -32,6 +32,7 @@ enum Command {
     Pan,
     Zoom(f32),
     Fullscreen,
+    Settings,
 }
 struct PressedAction {
     index: i32,
@@ -351,6 +352,11 @@ impl Tools {
                     ui.get_keep_alive_available(),
                 ),
             ]),
+            4 => result.push((
+                Command::Settings,
+                pttstella::msg!("settings-center-title"),
+                ui.get_settings_available(),
+            )),
             _ => {}
         }
         result.retain(|(_, label, _)| !label.is_empty());
@@ -539,6 +545,7 @@ impl Tools {
             Command::Pan => ui.set_pan_mode(!ui.get_pan_mode()),
             Command::Zoom(zoom) => ui.set_zoom(zoom),
             Command::Fullscreen => ui.invoke_toggle_fullscreen(),
+            Command::Settings => ui.invoke_settings_show(),
         }
     }
     fn key(&self, key: i32, repeat: bool) {

@@ -33,7 +33,7 @@ pub struct ArticleSession {
     ui: slint::Weak<TerminalWindow>,
     connection: Rc<Connection>,
     pub(super) core: Rc<RefCell<SurfaceState>>,
-    display: DisplaySettings,
+    display: RefCell<DisplaySettings>,
     renderer: Rc<RefCell<Renderer>>,
     terminal_size: Rc<Cell<Option<Size>>>,
     terminal_presented: Rc<Cell<Option<FrameId>>>,
@@ -66,6 +66,24 @@ pub struct ArticleSession {
     close_media: RefCell<Option<std::rc::Weak<crate::media::Media>>>,
 }
 impl ArticleSession {
+    pub fn preferences_changed(
+        &self,
+        settings: &pttstella::settings::AppSettings,
+    ) -> Result<(), String> {
+        self.display.replace(settings.display.resolve()?);
+        if let Some(view) = self.view.borrow().as_ref() {
+            view.copy_display(&self.renderer.borrow());
+        }
+        let mut core = self.core.borrow_mut();
+        core.set_article_mode(settings.article_mode);
+        core.set_article_boundary_navigation(settings.article_boundary_navigation);
+        core.display_changed();
+        drop(core);
+        self.terminal_size.set(None);
+        self.notify.notify_one();
+        Ok(())
+    }
+
     pub fn mount(
         ui: &TerminalWindow,
         connection: Rc<Connection>,
@@ -82,7 +100,7 @@ impl ArticleSession {
             ui: ui.as_weak(),
             connection,
             core: Rc::new(RefCell::new(core)),
-            display,
+            display: RefCell::new(display),
             renderer,
             terminal_size,
             terminal_presented,
@@ -533,7 +551,7 @@ impl ArticleSession {
         {
             let packet = {
                 let mut core = self.core.borrow_mut();
-                core.queue(view, false, &self.display).map(|p| {
+                core.queue(view, false, &self.display.borrow()).map(|p| {
                     (
                         Identity::of(p),
                         p.article.clone(),
@@ -547,7 +565,10 @@ impl ArticleSession {
                 if let Some(article) = article {
                     self.terminal_pending.set(None);
                     self.terminal_shown.set(None);
-                    let source = self.core.borrow().article_source(view, &self.display);
+                    let source = self
+                        .core
+                        .borrow()
+                        .article_source(view, &self.display.borrow());
                     if let Some(source) = source {
                         let scope = (
                             view.generation,

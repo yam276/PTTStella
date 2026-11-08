@@ -926,6 +926,12 @@ impl Editor {
             _ => {}
         }
     }
+    pub fn copy_display(&self, source: &Renderer) {
+        self.renderer.borrow_mut().copy_display(source);
+        self.painted.set(None);
+        self.paint();
+    }
+
     fn paint(&self) {
         let Some(ui) = self.ui.upgrade() else { return };
         let state = ui.global::<EditorState>();

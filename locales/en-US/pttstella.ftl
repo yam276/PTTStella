@@ -877,3 +877,5 @@ editor-color-palette-hint = Arrows choose colours · Tab for Apply · Esc cancel
 editor-color-working = Verifying and applying colours…
 
 editor-color-stop-requested = Stop requested; sent colour codes may remain. Check the station screen.
+
+slint-font-face-status = Requested: Latin { $requested_ascii } / CJK { $requested_cjk }. Drawing faces: { $ascii } / { $cjk }; missing glyphs may still use fallback faces.

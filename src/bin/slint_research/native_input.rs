@@ -304,6 +304,15 @@ fn mount_window(
         let Some(ui) = weak.upgrade() else {
             return Propagate;
         };
+        if let WindowEvent::KeyboardInput{event,is_synthetic:false,..}=event {
+            let modifiers=input.borrow().modifiers;
+            let command=if cfg!(target_os="macos"){modifiers.super_key() && !modifiers.control_key()}else{modifiers.control_key() && !modifiers.super_key()};
+            if event.state==ElementState::Pressed && !event.repeat && event.physical_key==PhysicalKey::Code(KeyCode::Comma)
+                && command && !modifiers.alt_key() && !modifiers.shift_key() && ui.get_settings_available() {
+                    ui.invoke_settings_show();return PreventDefault;
+                }
+        }
+        if ui.get_settings_open() && matches!(event,WindowEvent::KeyboardInput{..}|WindowEvent::Ime(_)){return PreventDefault;}
         if ui.get_editor_open() {
             editor_trace.native(event);
         }
@@ -544,7 +553,7 @@ fn mount_window(
                         return PreventDefault;
                     }
                     if ui.get_editor_focused()
-                        && let Some(code) = find_edit_shortcut(event.physical_key, input.modifiers)
+                        && let Some(code) = text_edit_shortcut(event.physical_key, input.modifiers)
                     {
                         let pressed = event.state == ElementState::Pressed && !event.repeat;
                         drop(input);
@@ -620,7 +629,7 @@ fn mount_window(
                     && ui.get_find_focused()
                     && !composing
                     && !ui.get_find_blocked()
-                    && let Some(code) = find_edit_shortcut(event.physical_key, input.modifiers)
+                    && let Some(code) = text_edit_shortcut(event.physical_key, input.modifiers)
                 {
                     let activate = event.state == ElementState::Pressed && !event.repeat;
                     drop(input);
@@ -945,7 +954,8 @@ fn refresh(ui: &TerminalWindow, input: &RefCell<Input>, connection: &Connection)
 }
 
 fn actions_available(ui: &TerminalWindow, view: &View) -> bool {
-    !ui.get_editor_open()
+    !ui.get_settings_open()
+        && !ui.get_editor_open()
         && !ui.get_station_color_open()
         && view.site.ptt_features()
         && view.phase == Phase::Connected
@@ -963,7 +973,7 @@ fn find_shortcut(physical: PhysicalKey, modifiers: ModifiersState) -> bool {
         && !modifiers.alt_key()
         && !modifiers.shift_key()
 }
-fn find_edit_shortcut(physical: PhysicalKey, modifiers: ModifiersState) -> Option<i32> {
+pub(crate) fn text_edit_shortcut(physical: PhysicalKey, modifiers: ModifiersState) -> Option<i32> {
     let command = if cfg!(target_os = "macos") {
         modifiers.super_key() && !modifiers.control_key()
     } else {
@@ -1128,16 +1138,16 @@ mod tests {
             (KeyCode::KeyZ, 4),
         ] {
             assert_eq!(
-                find_edit_shortcut(PhysicalKey::Code(key), command),
+                text_edit_shortcut(PhysicalKey::Code(key), command),
                 Some(code)
             );
             assert_eq!(
-                find_edit_shortcut(PhysicalKey::Code(key), command | ModifiersState::ALT),
+                text_edit_shortcut(PhysicalKey::Code(key), command | ModifiersState::ALT),
                 None
             );
         }
         assert_eq!(
-            find_edit_shortcut(
+            text_edit_shortcut(
                 PhysicalKey::Code(KeyCode::KeyZ),
                 command | ModifiersState::SHIFT
             ),

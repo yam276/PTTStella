@@ -65,6 +65,7 @@ pub fn start(
     media: Rc<Media>,
     output: Rc<Output>,
     directory: PathBuf,
+    _settings_path: PathBuf,
 ) -> Result<Verification, Box<dyn Error>> {
     Verification::start(
         ui,

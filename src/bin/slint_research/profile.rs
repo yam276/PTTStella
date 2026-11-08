@@ -32,14 +32,10 @@ impl Profile {
     pub fn settings(&self) -> SettingsStore {
         SettingsStore::at(self.config.join("settings.json"))
     }
-    pub fn load_settings(&self) -> (pttstella::settings::AppSettings, Option<String>) {
-        match self.settings().load() {
-            Ok(settings) => (settings, None),
-            Err(error) => (
-                pttstella::settings::AppSettings::default(),
-                Some(pttstella::msg!("settings-load-default", error = error)),
-            ),
-        }
+    pub fn load_preferences(
+        &self,
+    ) -> Result<pttstella::settings::preferences::Preferences, String> {
+        pttstella::settings::preferences::Preferences::load(Ok(self.settings()))
     }
     pub fn sites(&self) -> SiteStore {
         SiteStore::at(self.config.join("sites.json"))
@@ -105,7 +101,9 @@ mod tests {
             candidate.filters().load().unwrap(),
             pttstella::filters::Rules::default()
         );
-        let (loaded, warning) = candidate.load_settings();
+        let preferences = candidate.load_preferences().unwrap();
+        let loaded = preferences.app().clone();
+        let warning = preferences.warning();
         let stations = crate::stations::Stations::load(&candidate);
         assert_eq!(loaded, AppSettings::default());
         assert_eq!(stations.entries[0].1, pttstella::sites::Target::default());
@@ -158,7 +156,9 @@ mod tests {
         assert_eq!(std::fs::read(&source).unwrap(), old);
         std::fs::write(candidate.config.join("settings.json"), b"broken").unwrap();
         assert!(candidate.settings().load().is_err());
-        let (loaded, warning) = candidate.load_settings();
+        let preferences = candidate.load_preferences().unwrap();
+        let loaded = preferences.app().clone();
+        let warning = preferences.warning();
         assert_eq!(loaded, AppSettings::default());
         assert!(warning.is_some());
         assert_eq!(
@@ -166,5 +166,19 @@ mod tests {
             b"broken"
         );
         assert_eq!(std::fs::read(&source).unwrap(), old);
+        // The same loaded store must retain its observation of the corrupt
+        // bytes. A new Store here would reject this explicit recovery.
+        let mut recovered = loaded;
+        recovered.hover = pttstella::settings::HoverPosition::Off;
+        let saved = preferences
+            .store()
+            .unwrap()
+            .save_from(preferences.edit_base(), recovered)
+            .unwrap();
+        assert_eq!(saved.hover, pttstella::settings::HoverPosition::Off);
+        assert_eq!(
+            std::fs::read(candidate.config.join("settings.json.bak")).unwrap(),
+            b"broken"
+        );
     }
 }

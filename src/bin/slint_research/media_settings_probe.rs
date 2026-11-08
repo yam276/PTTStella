@@ -23,11 +23,15 @@ impl Media {
             .with_frame(ui, serde_json::to_vec)
             .ok_or("automatic source missing")?
             .map_err(|e| e.to_string())?;
-        let baseline = self.settings.borrow().clone();
+        let baseline = self.preferences.model.borrow().app().clone();
         let mut external = baseline.clone();
         external.hover = pttstella::settings::HoverPosition::Off;
         external.display.font_width = 110.;
-        self.store.save_from(&baseline, external)?;
+        self.preferences
+            .model
+            .borrow()
+            .store()?
+            .save_from(&baseline, external)?;
         ui.set_media_auto_choice(true);
         ui.invoke_media_auto_preference(true);
         require(
@@ -145,7 +149,13 @@ impl Media {
                 .is_some_and(|s| !s.automatic && s.resources.len() == 3),
             "opt-out removed explicitly promoted manual batch",
         )?;
-        let before = self.store.read()?.ok_or("saved settings missing")?;
+        let before = self
+            .preferences
+            .model
+            .borrow()
+            .store()?
+            .read()?
+            .ok_or("saved settings missing")?;
         let bad = br#"{"version":999}"#;
         std::fs::write(path, bad).map_err(|e| e.to_string())?;
         ui.set_media_auto_choice(true);
