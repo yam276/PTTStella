@@ -263,6 +263,17 @@ impl Renderer {
         cursor: bool,
         find: Option<&pttstella::article_find::Find>,
     ) -> Result<SharedPixelBuffer<Rgba8Pixel>, &'static str> {
+        self.paint_viewport(size, cursor, find, 0)
+    }
+    /// Clip a horizontal document viewport without discarding a wide glyph
+    /// straddling its left edge. The source remains in full glyph coordinates.
+    pub fn paint_viewport(
+        &self,
+        size: Size,
+        cursor: bool,
+        find: Option<&pttstella::article_find::Find>,
+        left_column: usize,
+    ) -> Result<SharedPixelBuffer<Rgba8Pixel>, &'static str> {
         let mut pixels = SharedPixelBuffer::new(size.width, size.height);
         let info = ImageInfo::new(
             (size.width as i32, size.height as i32),
@@ -276,6 +287,7 @@ impl Renderer {
         canvas.clear(Color::BLACK);
 
         let frame = &self.frame;
+        canvas.translate((-edge(left_column, frame.cols, size.width), 0.));
         let scale = (size.width as f32 / (frame.cols as f32 * CELL_WIDTH))
             .min(size.height as f32 / (frame.rows as f32 * CELL_HEIGHT));
         let mut paint = Paint::default();
@@ -368,6 +380,37 @@ mod tests {
     use super::*;
     use pttstella::screen::Screen;
 
+    #[test]
+    fn editor_offset_clips_the_same_wide_glyph_pixels_without_relayout() {
+        let mut screen = Screen::new(79, 23).unwrap();
+        screen.feed(b"\x1b[91;44;66;92;45m\xa4\xa4\x1b[mABC");
+        let display = pttstella::replay::parity_display_profile()
+            .resolve()
+            .unwrap();
+        let renderer = Renderer::new(screen.frame(), &display).unwrap();
+        for size in [
+            Size {
+                width: 790,
+                height: 460,
+            },
+            Size {
+                width: 987,
+                height: 575,
+            },
+        ] {
+            let full = renderer.paint(size, false).unwrap();
+            let clip = renderer.paint_viewport(size, false, None, 1).unwrap();
+            let shift = edge(1, 79, size.width) as usize;
+            for y in 0..size.height as usize {
+                for x in 0..size.width as usize - shift {
+                    assert_eq!(
+                        clip.as_slice()[y * size.width as usize + x],
+                        full.as_slice()[y * size.width as usize + x + shift]
+                    );
+                }
+            }
+        }
+    }
     #[test]
     fn asymmetric_backgrounds_and_one_glyph_survive_fractional_resize() {
         for (width, height) in [(960, 576), (1201, 720), (1441, 865)] {

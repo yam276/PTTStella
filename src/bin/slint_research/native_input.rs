@@ -1,5 +1,5 @@
 //! Native keyboard and IME events feed the existing session writer.
-use crate::{TerminalWindow, clipboard::Clipboard, paste::Paste, session::FrameId};
+use crate::{EditorState, TerminalWindow, clipboard::Clipboard, paste::Paste, session::FrameId};
 use pttstella::{
     connection::{Connection, Phase, View},
     encoding::TextEncoding,
@@ -262,6 +262,7 @@ fn mount_window(
             is_synthetic: false,
             ..
         } = event
+            && !ui.get_editor_open()
             && event.logical_key == Key::Named(NamedKey::Enter)
         {
             let eligible = {
@@ -304,6 +305,10 @@ fn mount_window(
                         }
                         ui.set_native_composing(false);
                         ui.set_find_composing(false);
+                        ui.invoke_editor_composition(false);
+                        if ui.get_editor_open() {
+                            ui.global::<EditorState>().invoke_action(8);
+                        }
                         ui.set_native_pointer_down(false);
                         ui.set_native_pointer_buttons(0);
                         ui.invoke_station_mouse_cancel();
@@ -329,6 +334,10 @@ fn mount_window(
                         }
                         ui.set_native_composing(false);
                         ui.set_find_composing(false);
+                        ui.invoke_editor_composition(false);
+                        if ui.get_editor_open() {
+                            ui.global::<EditorState>().invoke_action(8);
+                        }
                         ui.set_native_pointer_down(false);
                         ui.set_native_pointer_buttons(0);
                         ui.invoke_station_mouse_cancel();
@@ -403,6 +412,7 @@ fn mount_window(
                     }
                     ui.set_native_composing(false);
                     ui.set_find_composing(false);
+                    ui.invoke_editor_composition(false);
                     ui.invoke_keep_alive_changed();
                     return Propagate;
                 }
@@ -412,6 +422,92 @@ fn mount_window(
                     ..
                 } => {}
                 _ => return Propagate,
+            }
+            // Local draft input never enters the session keyboard, including
+            // disconnected sessions and Vim normal mode. Native fields own IME.
+            if ui.get_editor_open() {
+                let composing = ui.get_editor_composing();
+                let body = ui.get_editor_body_focused();
+                let shift = input.modifiers.shift_key();
+                let command = if cfg!(target_os = "macos") {
+                    input.modifiers.super_key() && !input.modifiers.control_key()
+                } else {
+                    input.modifiers.control_key() && !input.modifiers.super_key()
+                };
+                if let WindowEvent::KeyboardInput { event, .. } = event
+                    && !composing
+                {
+                    let action = if command
+                        && !input.modifiers.alt_key()
+                        && event.physical_key == PhysicalKey::Code(KeyCode::KeyS)
+                    {
+                        Some(1)
+                    } else if event.logical_key == Key::Named(NamedKey::Escape) {
+                        Some(3)
+                    } else {
+                        None
+                    };
+                    if let Some(action) = action {
+                        let pressed = event.state == ElementState::Pressed && !event.repeat;
+                        drop(input);
+                        if pressed {
+                            ui.global::<EditorState>().invoke_action(action);
+                        }
+                        return PreventDefault;
+                    }
+                    if ui.get_editor_focused()
+                        && let Some(code) = find_edit_shortcut(event.physical_key, input.modifiers)
+                    {
+                        let pressed = event.state == ElementState::Pressed && !event.repeat;
+                        drop(input);
+                        if pressed {
+                            if body || code >= 4 {
+                                ui.invoke_editor_edit_key(code);
+                            } else {
+                                ui.invoke_editor_title_edit_key(code);
+                            }
+                        }
+                        return PreventDefault;
+                    }
+                    if body
+                        && !input.modifiers.alt_key()
+                        && !input.modifiers.control_key()
+                        && !input.modifiers.super_key()
+                    {
+                        let code = match event.logical_key {
+                            Key::Named(NamedKey::ArrowLeft) => Some(0),
+                            Key::Named(NamedKey::ArrowRight) => Some(1),
+                            Key::Named(NamedKey::ArrowUp) => Some(2),
+                            Key::Named(NamedKey::ArrowDown) => Some(3),
+                            Key::Named(NamedKey::Home) => Some(4),
+                            Key::Named(NamedKey::End) => Some(5),
+                            Key::Named(NamedKey::PageUp) => Some(6),
+                            Key::Named(NamedKey::PageDown) => Some(7),
+                            Key::Named(NamedKey::Backspace) => Some(10),
+                            Key::Named(NamedKey::Delete) => Some(11),
+                            Key::Named(NamedKey::Enter) => Some(12),
+                            Key::Named(NamedKey::Tab) if !shift => Some(13),
+                            _ => None,
+                        };
+                        if let Some(code) = code {
+                            let pressed = event.state == ElementState::Pressed;
+                            drop(input);
+                            if pressed {
+                                ui.invoke_editor_key(code, shift);
+                            }
+                            return PreventDefault;
+                        }
+                    }
+                }
+                drop(input);
+                match event {
+                    WindowEvent::Ime(Ime::Preedit(text, _)) => {
+                        ui.invoke_editor_composition(!text.is_empty())
+                    }
+                    WindowEvent::Ime(Ime::Commit(_)) => ui.invoke_editor_composition(false),
+                    _ => {}
+                }
+                return Propagate;
             }
             // Local search owns its native text field, including IME and paste.
             // Route it before the BBS focus/keyboard gates (Vim may be normal).
@@ -717,8 +813,11 @@ fn refresh(ui: &TerminalWindow, input: &RefCell<Input>, connection: &Connection)
         let context = input.observe(&view);
         let status = input.keyboard.status(&context);
         let available = actions_available(ui, &view);
-        let allowed = ui.get_find_focused() || matches!(status.mode, "input" | "once");
-        let ime_update = if !ui.get_find_focused()
+        let allowed = ui.get_editor_focused()
+            || ui.get_find_focused()
+            || matches!(status.mode, "input" | "once");
+        let ime_update = if !ui.get_editor_focused()
+            && !ui.get_find_focused()
             && !ui.get_terminal_input_focused()
             && !ui.get_article_focused()
         {
@@ -758,7 +857,8 @@ fn refresh(ui: &TerminalWindow, input: &RefCell<Input>, connection: &Connection)
 }
 
 fn actions_available(ui: &TerminalWindow, view: &View) -> bool {
-    view.site.ptt_features()
+    !ui.get_editor_open()
+        && view.site.ptt_features()
         && view.phase == Phase::Connected
         && !ui.get_switching_station()
         && !ui.get_paste_open()

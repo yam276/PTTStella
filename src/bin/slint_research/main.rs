@@ -2,6 +2,7 @@ mod article;
 mod chrome;
 mod clipboard;
 mod context_menu;
+mod editor;
 mod graphics;
 mod ime_probe;
 mod inline_engine;
@@ -123,11 +124,12 @@ struct Options {
     verify_article: Option<PathBuf>,
     verify_article_session: Option<PathBuf>,
     verify_media: Option<PathBuf>,
+    verify_drafts: Option<PathBuf>,
     probe: Option<Probe>,
 }
 
 fn options() -> Result<Options, &'static str> {
-    const USAGE: &str = "usage: pttstella-slint [--connect|--show-profile|--probe-grid|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
+    const USAGE: &str = "usage: pttstella-slint [--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
     let mut zoom = None;
     let mut capture = None;
     let mut probe = None;
@@ -137,14 +139,21 @@ fn options() -> Result<Options, &'static str> {
     let mut verify_article = None;
     let mut verify_article_session = None;
     let mut verify_media = None;
+    let mut verify_drafts = None;
     let mut args = std::env::args_os().skip(1);
     while let Some(arg) = args.next() {
         match arg.to_str() {
+            Some("--verify-drafts") if verify_drafts.is_none() => {
+                verify_drafts = Some(args.next().ok_or(USAGE)?.into());
+            }
             Some("--verify-media") if verify_media.is_none() => {
                 verify_media = Some(args.next().ok_or(USAGE)?.into());
             }
             Some("--probe-inline") if probe.is_none() => {
                 probe = Some(Probe::Session(session::Probe::ArticleInline))
+            }
+            Some("--probe-drafts") if probe.is_none() => {
+                probe = Some(Probe::Session(session::Probe::Drafts))
             }
             Some("--probe-media") if probe.is_none() => {
                 probe = Some(Probe::Session(session::Probe::Media))
@@ -341,7 +350,19 @@ fn options() -> Result<Options, &'static str> {
     {
         return Err(USAGE);
     }
+    if verify_drafts.is_some()
+        && (probe != Some(Probe::Session(session::Probe::Drafts))
+            || capture.is_some()
+            || verify_context.is_some()
+            || verify_tools.is_some()
+            || verify_article.is_some()
+            || verify_article_session.is_some()
+            || verify_media.is_some())
+    {
+        return Err(USAGE);
+    }
     Ok(Options {
+        verify_drafts,
         verify_media,
         verify_article_session,
         verify_article,
@@ -362,6 +383,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         &options.verify_article,
         &options.verify_article_session,
         &options.verify_media,
+        &options.verify_drafts,
     ]
     .into_iter()
     .flatten()
@@ -672,6 +694,18 @@ fn run(
     let mut tools_owner = None;
     let mut station_mouse_owner = None;
     let mut media_owner = None;
+    let mut editor_owner = None;
+    let drafts_probe_directory = if options.probe == Some(Probe::Session(session::Probe::Drafts))
+        && std::env::var_os("PTTSTELLA_SLINT_DRAFTS_PROBE_DIR").is_none()
+    {
+        Some(
+            tempfile::Builder::new()
+                .prefix("PTTStella-Slint-Drafts-")
+                .tempdir()?,
+        )
+    } else {
+        None
+    };
     let clipboard = clipboard::Clipboard::default();
     let verification_connection = if options.verify_context.is_some()
         || options.verify_tools.is_some()
@@ -784,7 +818,8 @@ fn run(
             if matches!(
                 &mode,
                 session::Mode::Probe(
-                    session::Probe::Media
+                    session::Probe::Drafts
+                        | session::Probe::Media
                         | session::Probe::Input
                         | session::Probe::Clipboard
                         | session::Probe::KeepAlive
@@ -875,7 +910,7 @@ fn run(
                     connection.clone(),
                     renderer.clone(),
                     previous.clone(),
-                    presented,
+                    presented.clone(),
                     display.clone(),
                     clipboard.clone(),
                     article_session_owner.clone(),
@@ -942,6 +977,30 @@ fn run(
                 }
                 output_owner = Some(output);
             }
+            if matches!(
+                &mode,
+                session::Mode::Live(_) | session::Mode::Probe(session::Probe::Drafts)
+            ) {
+                let store = if matches!(&mode, session::Mode::Probe(session::Probe::Drafts)) {
+                    let directory = std::env::var_os("PTTSTELLA_SLINT_DRAFTS_PROBE_DIR")
+                        .map(PathBuf::from)
+                        .or_else(|| drafts_probe_directory.as_ref().map(|d| d.path().to_owned()))
+                        .ok_or("isolated drafts directory missing")?;
+                    Ok(pttstella::drafts::store::Store::at(
+                        directory.join("probe-drafts.json"),
+                    ))
+                } else {
+                    profile::Profile::system().map(|p| p.drafts())
+                };
+                editor_owner = Some(editor::Editor::mount(
+                    &ui,
+                    connection.clone(),
+                    presented.clone(),
+                    clipboard.clone(),
+                    &renderer.borrow(),
+                    store,
+                )?);
+            }
             let (renderer, previous) = (renderer.clone(), previous.clone());
             session::mount(&ui, connection, mode, frame_gate, move |ui, frame| {
                 // The shared owner rasterizes its filtered projection. The
@@ -954,7 +1013,16 @@ fn run(
             })
         })
         .transpose()?;
-    let verification = if options.probe == Some(Probe::Session(session::Probe::ArticleInline))
+    let verification = if let Some(directory) = options.verify_drafts {
+        Some(editor::probe::start(
+            &ui,
+            editor_owner
+                .as_ref()
+                .cloned()
+                .ok_or("editor owner missing")?,
+            directory,
+        )?)
+    } else if options.probe == Some(Probe::Session(session::Probe::ArticleInline))
         && options.verify_media.is_some()
     {
         Some(article::inline::probe::start(
@@ -1091,6 +1159,9 @@ fn run(
         });
         slint::run_event_loop()?;
         ui.hide()?;
+        if let Some(editor) = &editor_owner {
+            editor.finish()?;
+        }
         if let Some(media) = &media_owner {
             media.finish()?;
         }
@@ -1103,6 +1174,7 @@ fn run(
         outcome.take().ok_or("snapshot callback did not run")??;
     } else {
         let result = ui.run();
+        let editor_cleanup = editor_owner.map(|editor| editor.finish()).transpose();
         let media_cleanup = media_owner.map(|media| media.finish()).transpose();
         if let Some(article) = &article_session_owner {
             article.finish();
@@ -1131,6 +1203,7 @@ fn run(
             .map(|verification| verification.finish())
             .transpose();
         result?;
+        editor_cleanup?;
         media_cleanup?;
         output_cleanup?;
         paste_cleanup?;

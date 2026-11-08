@@ -43,6 +43,7 @@ impl FrameGate {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Probe {
+    Drafts,
     Media,
     Reconnect,
     ArticleInline,
@@ -110,6 +111,7 @@ pub fn with_probe(
         None => bytes,
     };
     let fixture = match probe {
+        Probe::Drafts => "slint_drafts",
         Probe::Media => "slint_native_media",
         Probe::ArticleInline => "slint_native_inline",
         Probe::Reconnect => "slint_session",
@@ -142,6 +144,7 @@ pub fn with_probe(
     };
     let result = with_connection(
         || match probe {
+            Probe::Drafts => Connection::start_drafts_probe(),
             Probe::Media => Connection::start_ui_probe(bytes),
             Probe::ArticleInline => Connection::start_inline_pages_probe(
                 bytes,

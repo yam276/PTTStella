@@ -1,0 +1,175 @@
+import { Button, ComboBox, ScrollView } from "std-widgets.slint";
+import { SelectionRect } from "selection.slint";
+export struct DraftItem { id:string, title:string, conflict:bool }
+export global EditorState {
+    in-out property <bool> available;
+    in-out property <bool> open;
+    in-out property <bool> composing;
+    in-out property <bool> body-focused;
+    in-out property <bool> title-focused;
+    in-out property <bool> selected;
+    in-out property <bool> busy;
+    in-out property <bool> can-create;
+    in-out property <bool> can-undo;
+    in-out property <bool> can-redo;
+    in-out property <bool> transfer-confirm;
+    in-out property <bool> can-transfer;
+    in-out property <string> title;
+    in-out property <string> status;
+    in-out property <string> position;
+    in-out property <string> scope;
+    in-out property <int> mode;
+    in-out property <int> foreground:7;
+    in-out property <int> background;
+    in-out property <[DraftItem]> drafts;
+    in-out property <[SelectionRect]> spans;
+    in-out property <image> pixels;
+    in-out property <float> caret-column;
+    in-out property <float> caret-row;
+    in-out property <bool> caret-visible;
+    in-out property <length> view-width;
+    in-out property <length> view-height;
+    callback action(int);
+    callback choose(string);
+    callback delete(string);
+    callback insert(string) -> bool;
+    callback title-edit(string);
+    callback mode-edit(int);
+    callback color;
+    callback pointer(int,float,float,bool,bool);
+    callback scroll(int,int);
+    callback layout;
+    callback focus-changed;
+}
+export component NativeEditor inherits Rectangle {
+    background:#131923;
+    out property <length> grid-left:content.x + area.x + grid.x;
+    out property <length> grid-top:content.y + area.y + grid.y;
+    out property <length> grid-width:grid.width;
+    out property <length> grid-height:grid.height;
+    property <bool> title-focused:title-field.has-focus;
+    property <bool> body-focused:body-field.has-focus;
+    changed title-focused => { EditorState.title-focused=self.title-focused; EditorState.focus-changed(); }
+    changed body-focused => { EditorState.body-focused=self.body-focused; EditorState.focus-changed(); }
+    public function title-edit-key(code:int) {
+        if code==0 {title-field.select-all();}
+        else if code==1 {title-field.copy();}
+        else if code==2 {title-field.cut();}
+        else if code==3 {title-field.paste();}
+    }
+    public function clear-input() { body-field.text=""; }
+    public function focus-body() { body-field.focus(); }
+    TouchArea { }
+    VerticalLayout {
+        padding:12px;spacing:8px;
+        HorizontalLayout {
+            Text { text:"本機草稿 · " + EditorState.scope; color:#c7d4e7;vertical-alignment:center;horizontal-stretch:1;overflow:elide; }
+            Button {text:"保存";enabled:EditorState.selected && !EditorState.composing;clicked=>{EditorState.action(1);} }
+            Button {text:"帶回站端";enabled:EditorState.can-transfer && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(2);} }
+            Button {text:"關閉";enabled:!EditorState.busy && !EditorState.composing;clicked=>{EditorState.action(3);} }
+        }
+        Rectangle {
+            visible:!EditorState.selected;min-height:0px;max-height:EditorState.selected ? 0px : 100000px;vertical-stretch:1;
+            VerticalLayout {
+            Button { text:"從目前範本建立";enabled:EditorState.can-create && !EditorState.busy;clicked=>{EditorState.choose("");} }
+            ScrollView {
+                VerticalLayout {
+                    for item in EditorState.drafts: HorizontalLayout {
+                        Button { text:item.title + (item.conflict ? " · 衝突副本" : "");horizontal-stretch:1;enabled:!EditorState.busy;clicked=>{EditorState.choose(item.id);} }
+                        Button { text:"刪除";enabled:!EditorState.busy;clicked=>{EditorState.delete(item.id);} }
+                    }
+                }
+            }
+        }
+        }
+        content := Rectangle {
+          visible:EditorState.selected;min-height:0px;max-height:EditorState.selected ? 100000px : 0px;vertical-stretch:1;
+          VerticalLayout { spacing:8px;
+        HorizontalLayout {
+            Text {horizontal-stretch:0;text:"標題";color:#cad5e5;vertical-alignment:center;}
+            Rectangle {
+                background:#080c12;min-height:30px;horizontal-stretch:1;
+                title-field := TextInput {
+                    x:8px;y:3px;width:parent.width - 16px;height:parent.height - 6px;
+                    text <=> EditorState.title;single-line:true;color:#e3e8ee;
+                    enabled:!EditorState.busy && !EditorState.transfer-confirm;
+                    accessible-label:"草稿標題";
+                    edited=>{EditorState.title-edit(self.text);}
+                }
+            }
+            ComboBox {preferred-width:120px;max-width:150px; model:["彩色","隱藏色碼","原文"];current-index:EditorState.mode;enabled:!EditorState.composing && !EditorState.busy;selected(value)=>{EditorState.mode-edit(self.current-index);} }
+            Button {text:"復原";enabled:EditorState.can-undo && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(4);} }
+            Button {text:"重做";enabled:EditorState.can-redo && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(5);} }
+        }
+        HorizontalLayout {
+            spacing:4px;
+            Text {horizontal-stretch:0;text:"字";color:#cad5e5;vertical-alignment:center;}
+            for color[index] in [#000000,#800000,#008000,#808000,#000080,#800080,#008080,#c0c0c0,#808080,#ff0000,#00ff00,#ffff00,#0000ff,#ff00ff,#00ffff,#ffffff]: Rectangle {
+                width:18px;height:22px;background:color;
+                border-width:EditorState.foreground==index ? 2px : 1px;
+                border-color:EditorState.foreground==index ? #68b7ff : #77808a;
+                TouchArea {enabled:!EditorState.busy && !EditorState.composing;clicked=>{EditorState.foreground=index;} }
+            }
+            Text {horizontal-stretch:0;text:"底";color:#cad5e5;vertical-alignment:center;}
+            for color[index] in [#000000,#800000,#008000,#808000,#000080,#800080,#008080,#c0c0c0]: Rectangle {
+                width:18px;height:22px;background:color;
+                border-width:EditorState.background==index ? 2px : 1px;
+                border-color:EditorState.background==index ? #68b7ff : #77808a;
+                TouchArea {enabled:!EditorState.busy && !EditorState.composing;clicked=>{EditorState.background=index;} }
+            }
+            Button {text:"套用";enabled:!EditorState.composing && !EditorState.busy;clicked=>{EditorState.color();} }
+        }
+        area := Rectangle {
+            vertical-stretch:1;clip:true;background:black;
+            property <length> unit:min(self.width/79,self.height/46);
+            grid := Rectangle {
+                x:(parent.width - self.width)/2;y:(parent.height - self.height)/2;
+                width:area.unit*79;height:area.unit*46;clip:true;
+                changed width=>{EditorState.view-width=self.width;EditorState.layout();}
+                changed height=>{EditorState.view-height=self.height;EditorState.layout();}
+                Image {width:parent.width;height:parent.height;source:EditorState.pixels;image-fit:fill;}
+                for span in EditorState.spans: Rectangle {x:span.x;y:span.y;width:span.width;height:span.height;background:#4387d666;}
+                Rectangle {
+                    x:clamp(EditorState.caret-column,0,78)*area.unit;y:clamp(EditorState.caret-row,0,22)*2*area.unit;
+                    width:max(1px,grid.width - self.x);height:2*area.unit;
+                    background:EditorState.composing ? black : transparent;
+                    body-field := TextInput {
+                        width:parent.width;height:parent.height;font-size:max(8px,area.unit*1.7);
+                        color:#e3e8ee;single-line:true;text-cursor-width:EditorState.caret-visible ? 1px : 0px;
+                        enabled:!EditorState.busy && !EditorState.transfer-confirm;
+                        accessible-label:"草稿正文輸入";
+                        edited=>{ if EditorState.insert(self.text) {self.text="";} }
+                    }
+                }
+                TouchArea {
+                    enabled:!EditorState.busy && !EditorState.composing && !EditorState.transfer-confirm;
+                    mouse-cursor:text;
+                    pointer-event(event)=>{
+                        if event.button == PointerEventButton.left || event.kind == PointerEventKind.move || event.kind == PointerEventKind.cancel {
+                            let kind=event.kind==PointerEventKind.down ? 0 : event.kind==PointerEventKind.move ? 1 : event.kind==PointerEventKind.up ? 2 : 3;
+                            EditorState.pointer(kind,self.mouse-x/1px,self.mouse-y/1px,event.modifiers.shift,event.modifiers.alt);
+                            if event.kind==PointerEventKind.down {body-field.focus();}
+                        }
+                    }
+                    double-clicked=>{EditorState.pointer(4,self.mouse-x/1px,self.mouse-y/1px,false,false);}
+                    scroll-event(event)=>{
+                        if event.delta-y!=0px {EditorState.scroll(event.modifiers.shift ? 0 : (event.delta-y>0px ? -3 : 3), event.modifiers.shift ? (event.delta-y>0px ? -3 : 3) : 0);}
+                        else if event.delta-x!=0px {EditorState.scroll(0,event.delta-x>0px ? -3 : 3);}
+                        return accept;
+                    }
+                }
+            }
+        }
+          }
+        }
+        if EditorState.transfer-confirm: HorizontalLayout {
+            Text {text:"確認以本機正文取代站端範本？完成後請在站端檢查。";color:#ffcf77;wrap:word-wrap;horizontal-stretch:1;}
+            Button {text:"確認帶回";enabled:!EditorState.busy;clicked=>{EditorState.action(6);} }
+            Button {text:"取消";enabled:!EditorState.busy;clicked=>{EditorState.action(7);} }
+        }
+        HorizontalLayout {
+            Text {text:EditorState.status;color:#c7d4e7;horizontal-stretch:1;overflow:elide;}
+            Text {text:EditorState.position;color:#9ab0ca;}
+        }
+    }
+}

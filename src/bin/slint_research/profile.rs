@@ -44,6 +44,9 @@ impl Profile {
     pub fn sites(&self) -> SiteStore {
         SiteStore::at(self.config.join("sites.json"))
     }
+    pub fn drafts(&self) -> pttstella::drafts::store::Store {
+        pttstella::drafts::store::Store::at(self.config.join("drafts.json"))
+    }
     pub fn filters(&self) -> pttstella::filters::store::Store {
         pttstella::filters::store::Store::at(self.config.join("filters.json"))
     }
