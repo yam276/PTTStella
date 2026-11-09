@@ -1352,3 +1352,5 @@ Slint 只管理已 ACK文章的回覆總數、已讀數與本機閱讀位置。�
 重跑使用新verification目錄；完整圖片案例需明確loopback origin，例如在`tests/fixtures/media`啟動只綁127.0.0.1的HTTP server，再設定 `PTTSTELLA_SLINT_UPDATES_PROBE=append`（或cancel／blur）、`PTTSTELLA_SLINT_UPDATES_ORIGIN=http://127.0.0.1:<port>/`，執行 `pttstella-slint --probe-media --verify-media <NEW_DIR>`。只在此明示探針接受origin，拒絕非loopback／額外path／帳密；其餘預設不連本測試端點。`PTTSTELLA_SLINT_UPDATES_NATIVE_CHECK=1`留在toolkit準備後的閱讀復原畫面，=2留在已驗證的站端復原畫面，交給原生工具擷圖／關窗；不當成真實按更新按鈕的證據。`.local`保存兩個Python runner、source patch／tree、各次hash、原生紀錄、結果與負向證據。
 
 S4完整實體推文控制、列表實體右鍵／新程序離線操作及混合Live，S1／S2平台與IME，S5峰值與四架構，S6–S8資料回退／原生包／同負載效能仍待完成；完整goal保持active，沒有整合、push、PR、正式入口切換或發佈。
+
+本批 `384c899` 驗收後，以 Cargo原生clean清掉本Slint target/release（Removed 8385 files, 2.7GiB total），並移除已被同binary推文回歸涵蓋的舊 `slint-reply-navigation/Native-Replies.app`及3個冗餘正向PNG。target剩12KiB；最新一般配置改為 `slint-reply-updates/Native-Updates.app`，影片配置與Windows S1 ZIP保留。267個source檔與必要包hash皆不變；exact paths、owner／symlink／lsof、du與free前後見 `.local/verification/slint-reply-updates/cleanup.json`。舊App僅壓縮launcher／plist等非執行紀錄，沒有另存完整binary；獨特負向、來源patch、擷圖失配及原生紀錄保留。未合併worktree因S0–S8仍active保留，未操作其他聊天的程序或產物。

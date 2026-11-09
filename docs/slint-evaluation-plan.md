@@ -237,3 +237,5 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 推文導覽批次 `40e4749` 驗收後再清理 target/release（Cargo2.7GiB）、上一個收藏 App與冗餘正向影像；target回到12KiB。必要一般配置最新包改為 `.local/verification/slint-reply-navigation/Native-Replies.app`，影片配置與Windows S1 ZIP保留；來源265檔及必要包hash不變。第二份 exact清單與free前後在 `.local/verification/slint-reply-navigation/cleanup.json`，仍依每批規則執行。
 
 2026-11-09：Slint 推文自動更新已接入同一 SurfaceState、5秒 deadline與單一 receipt owner；預設關閉、顯式開啟、未讀提示／跳底、操作暫停、取消／失焦保留原文與圖片及站端復原皆有完整 App證據。與 Dioxus 共用的既有 peer 驗兩次追加、一次未變尾段核對與晚到 Q；三種圖片案例各只下載一次，10個最終 native CLI案例皆通過。macOS 實體長按 Right／Enter、復原按鈕、150%無輔助縮放的站端游標可見及正常關窗另通過；完整更新控制／混合 Live、IME與四架構仍待驗。已補同來源幾何 ACK 的游標捲動，沒有新增更新 timer／sender task。詳細來源／負向／擷圖限制見 [原型紀錄](slint-prototype.md#s4-原生推文更新與站端復原2026-11-09)。S0–S8仍 active；S9未執行。
+
+推文更新批次 `384c899` 驗收後再清理自己的release profile、上一個推文定位App與3個冗餘正向PNG，target回到12KiB；必要一般配置最新包改為 `.local/verification/slint-reply-updates/Native-Updates.app`。清理前後、保留包hash及source267檔不變在同批 `cleanup.json`。接續混合Live時仍須核對保留／復原中的推文側標、底色、尋找與媒體交互及完整可信OS控制；本批三個Live fixture不涵蓋所有角色標記組合。
