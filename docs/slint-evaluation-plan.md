@@ -233,3 +233,5 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 2026-11-09：`502cdb7` 接上目前／指定列表文章收藏，沿用共用 Acquisition／FromList、同一 Session 核對及原子封存交易。最終五組 strict peer 核對目前、無標頭、指定列、取消與失焦；macOS 實際浮球收藏、離線讀至第45行及 Quit 有分立證據。新程序已解碼／保存相同副本，但原生重開操作未完成；列表實體右鍵、完整焦點／IME 與其他平台仍待驗，不推定同時操作就是失敗原因。詳細來源、負向紀錄、回歸及清理見 [原型紀錄](slint-prototype.md#s4-目前與列表文章收藏2026-11-09)。S0–S8 goal 持續，S9 尚未切換／整合／發佈。
 
 2026-11-09：Slint 已接入共用 Rust 原PO／確認登入的自己／指定帳號推文索引、原生群組與循環定位、可見側標、背景右鍵入口。完整元件測試核對縮放／捲動、搜尋交接、遮罩／還原、模式與 scope 清理、重繪 ACK 保護和零站端輸入。這批 native bin79項、全 target Clippy、native-player-probe 編譯與全文／輸出／收藏回歸通過；列表收藏一次取消、同 binary 獨立重跑通過，負向紀錄保留。macOS 原生視窗可顯示側標，但 CUA 點擊未取得前景焦點，實體按鈕／鍵盤保持 not_ready；兩次獨立原生重試 CmdQ 的 Close ACK／零額外輸入／HTTP joined 有記錄，不把正常退出替代操作驗收。細節見 [原型紀錄](slint-prototype.md#s4-原生推文定位與身分側標2026-11-09)。S4、S8 及完整 S0–S8 尚未完成，S9 未執行。
+
+推文導覽批次 `40e4749` 驗收後再清理 target/release（Cargo2.7GiB）、上一個收藏 App與冗餘正向影像；target回到12KiB。必要一般配置最新包改為 `.local/verification/slint-reply-navigation/Native-Replies.app`，影片配置與Windows S1 ZIP保留；來源265檔及必要包hash不變。第二份 exact清單與free前後在 `.local/verification/slint-reply-navigation/cleanup.json`，仍依每批規則執行。

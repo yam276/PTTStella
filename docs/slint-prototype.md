@@ -1324,3 +1324,5 @@ Slint 直接消費共用 `reply_navigation::Index`，不重新判斷原始 bytes
 macOS strict ad-hoc `Native-Replies.app` 可正常顯示23行合成文章與金／青側標。CUA 的 AX 文章欄點擊後再點「推文定位」仍失去前景可操作性；Raise／標題點擊未恢復，座標工具回報 `noWindowsAvailable`。因此實體按鈕、Tab、長按及 OS IME 操作仍 `not_ready`，不放寬生產焦點保護。首份固定輸出路徑 launcher 的重啟覆寫 log，不能證明該輪清理；後改成每次 invocation 的獨立目錄，兩份 retry log 均 Close ACK、strict peer零額外輸入、HTTP joined，CmdQ後 inventory及pgrep皆無本 App。退出結果與 UI 操作驗收分開。IMK warning 保留，不據此判定輸入法。
 
 這批沒有整合、push、PR、正式入口切換或發佈。S4 推文更新、推文定位實體操作、列表實體右鍵／新程序離線操作與混合 Live 尚未結案；S0–S8 goal 持續。
+
+本批驗收後按 task-owned 規則清掉 Slint target/release（Cargo 宣告Removed 8385 files, 2.7GiB total）、已被同功能回歸涵蓋的舊 `slint-capture/Native-Capture.app` 及前一輪成功的冗餘 component-reopen 影像目錄。du 原編譯 profile 約2.72GiB，舊 App 約63.5MiB；free 前後為獨立觀察值，不把其他寫入歸給本批。target剩12KiB；最新 `Native-Replies.app`、影片配置包及 Windows S1 ZIP 的雜湊均不變，265個來源檔不變。清理 exact paths、lsof／owner／symlink 檢查及 free 數值在 `.local/verification/slint-reply-navigation/cleanup.json`；首份34個舊 App與29GiB歷史清理仍見前一份總清單。唯一負向證據及未合併 worktree保留，沒有動其他聊天程序。
