@@ -1271,3 +1271,38 @@ Rust release Slint lib／bin／multi_instance 合計 453 passed、6 ignored；Di
 本輪 `cleanup-owned.json` 列出移除的 13 個 exact paths：被較完整案例取代的第一輪成功輸出／來源副本及已封存的 RTK 原 log。先核對 resolved path、symlink、UID、內容及 lsof；du 264 KiB，filesystem free 187,958,575,104 → 187,958,853,632 bytes，兩者分開，不將其他任務釋放量歸入。最新 App、完整元件／OS／直接 consumer 的證據與唯一失敗 log 保留。active goal 仍會使用 debug／release profiles，worktree 尚未整合，均保留。
 
 目前／列表文章收藏仍須接原生 Acquisition／FromList 的全篇及身分核對；推文導覽／更新、混合 Live、四架構原生／IME、資料回退與效能仍未結案。完整 S0–S8 goal active，S9 未切換、整合或發佈。
+
+
+## S4 目前與列表文章收藏（2026-11-09）
+
+`502cdb798949b297a2b832acc3ad4ff72fcae97c` 在獨立 Slint worktree 接上目前文章及指定列表標題的收藏。共用的 [Acquisition／FromList](../src/bookmarks/session.rs) 與 [SurfaceState](../src/surface_state.rs) 仍擁有完整全文、原始列、核對結果及保存條件；原生 adapter 只租用已確認的 presentation／stamp／article 或 clicked cell，經既有 ArticleSession 的單一 command receipt 發出 typed Refresh／ListArticle。沒有另建連線、取頁器、ANSI parser 或站端 writer。
+
+目前文章限 Web、PTT、本機滑鼠路由、完整首行至結尾並有實際畫面 ACK；先 pin Arc 原始列，再由 Q／AID／板名、前三行及尾頁重入核對。初次需要讀入書籤時，沿用有界單一 file worker，完成後重驗原 lease，不開對話框或改用新來源。列表標題保存實際 clicked row，作者／網址／選取及圖片維持共同 policy 的優先權；不退回游標另一列。FromList 等同一 Session 完成身分核對與同一全文 loader 的完整 ACK，再用第二次目前文章核對，結果必須等於列表取得的 target。35秒只限初始列表導覽，取得 target 後解除這個 timer，後續取頁仍用既有 loader 的期限／容量；目前核對為30秒。原生新增的 timer 有 owner、弱 callback、取消與退出條件，沒有輪詢 task。
+
+浮球收藏分類分開提供「文章書籤」、「收藏目前文章」及核對期間的取消；列表標題右鍵使用共同 bookmark-list action，閱讀背景可收藏目前文章。失焦、raw handoff、modal／選取／組字、世代／operation／scope 改變、錯誤或明確取消會撤銷尚未寫入的 acquisition；不把收到舊回覆當成成功。通過核對後才交既有 ArchiveWrite／Store 原子交易，檔案交易開始後收集其實際結果，退出也 join，沒有假裝取消可以回滾已完成的寫入。離線 reader 仍只持 LocalArticle 與 renderer，80×23／22行翻頁，不持有站端 stamp、送鍵或媒體下載路徑。
+
+證據在 worktree `.local/verification/slint-capture/`。最終 CLI SHA-256 為 `bb761185fe120165ff4d6a4ce53b25dc9f5fc93b448b96d54facbf3fce396b50`；相對 `9d4cefb` 的來源 patch SHA-256 為 `2b42641fa4edb76eb6f533884e2394bccfb30bda1fc0f3a8e1203396c31431b0`，原生 Git 以獨立 index 重放 tree，與 feature commit 的 `f61f63f107d2b2d536265a54b6d859a641a7e90e` 相同，最後核對不改 real index。初次 audit 以 git write-tree 讀 expected 而更新 native cache-tree，造成 index bytes assertion 失敗；已改以 committed tree 作唯讀比較，保留這項工具紀錄，沒有改寫 feature commit。
+
+重跑方式（NEW_DIR 必須尚不存在）：
+
+```sh
+PTTSTELLA_SLINT_CAPTURE_PROBE=current target/release/pttstella-slint --probe-media --verify-media NEW_CURRENT_DIR
+PTTSTELLA_SLINT_CAPTURE_PROBE=headerless target/release/pttstella-slint --probe-media --verify-media NEW_HEADERLESS_DIR
+PTTSTELLA_SLINT_CAPTURE_PROBE=list target/release/pttstella-slint --probe-media --verify-media NEW_LIST_DIR
+PTTSTELLA_SLINT_CAPTURE_PROBE=cancel target/release/pttstella-slint --probe-media --verify-media NEW_CANCEL_DIR
+PTTSTELLA_SLINT_CAPTURE_PROBE=blur target/release/pttstella-slint --probe-media --verify-media NEW_BLUR_DIR
+```
+
+最終五案全數 exit0、Close acknowledged，檔案 worker／timer／window 清理通過，HTTP 全為零且 server joined。目前／無標頭逐筆核對9步；列表初始光棒在第二列，真正 Slint TouchArea 的 toolkit 右鍵指定第一列，拒絕舊 stamp 與非標題 cell，再核對4＋9步並保存對應的無標頭45列。成功案另外以新 Store 讀回唯一 `#00000101@Stella`、45行與原始末列 `REPLY 0045`，無標頭保留前三行且 label 為空，再從本機 reader 到23～45行。取消／失焦在 Q 送出後停住，等待6.3秒涵蓋晚到回覆，沒有 bookmarks 檔、續送或下載。這些是 toolkit／synthetic foreground 的完整元件驗證，不冒充實體 OS 右鍵或候選窗。
+
+同一最終 CLI 的直接消費者回歸包含快速前往 boards／articles、完整20頁全文與遮罩／輸出，以及既有書籤管理、全新程序斷線重開與 save-exit。全部最終成功並 join；全文仍恰有19筆取頁，保留500ms＋150ms／頁的合成延遲，13.86秒的本輪案例 wall time 不代表 S8 效能。Rust Slint 453 passed／6 ignored、desktop 498 passed／6 ignored，兩入口 all-target Clippy、fmt、host native-video all-target check、JavaScript383項通過；desktop 仍僅有既有 block 0.1.6 future-incompat note。一般測試沒有連實站、讀取私人帳密或送出文章。
+
+macOS arm64 的 `Native-Capture.app` 為 strict ad-hoc、未公證的本機診斷包，簽章後 native SHA-256 `73848e79536314cdea5ce4bd147dc97e8ed8ec6da90d59a18092131f436aac8f`。CUA 實際點文章取得前景，全文45行後由浮球「收藏 → 收藏目前文章」核對保存；再選清單的該筆本機副本，實際 PageDown 到23～45行，OS screenshot 可見末行 REPLY 0045 與推文色彩。Escape 返回、關閉對話框、Cmd+Q 後 inventory 已無 App；獨立 JSON 核對45行、正確板名／AID，peer9步、Close ACK、HTTP0與清理 marker 皆吻合。LaunchServices 沒有提供 exit code，不把 absence 當成 exit0。IMK mach-port warning 留在 log，不據此推定 IME 結果。
+
+負向與限制分開保留。第一個驗證目錄預建造成 AlreadyExists；新 probe 漏掛文章 owner，在未開始核對時被 fail closed，已修正 fixture 接線。初次原始末行 expected 漏空白，檔案實際為 `REPLY 0045`，修正獨立 expected；列表曾把 article-number 的 end=8 當成標題邊界，改用 title_start 至實際欄寬，最終 TouchArea 指定列通過。第一輪無標頭在第二次 Q 前中止，加入診斷後最終 binary 完整重跑通過，未推定取消原因或聲稱修好焦點問題。書籤 restart 一輪 toolkit PageDown 未移至22，原 binary 隔離重跑及 save-exit 通過，失敗保留而未改 production guard。
+
+另外兩個新程序皆已將先前實際收藏的資料由共用 Store 解碼並保存到各自獨立路徑，解碼結果逐欄相同、45行及原時間戳保留；但原生工具顯示輸入 AX focus 後，浮球仍 disabled，第一次還有裁切／noWindowsAvailable。改用自己的 in-bundle Mach-O 也未完成原生重開操作，兩次均由 Cmd+Q 正常關閉、Close ACK、零站端 bytes／HTTP 並確認 absence。這兩個 UI 範圍保持 not_ready；不能由已知有其他操作就判定原因。列表實體右鍵、這個新程序原生重開、完整焦點／IME、跨平台、混合 Live 及 S8 效能仍待驗。舊草稿末字異常也沒有因此結案。
+
+本批驗收後檢查 resolved path、UID、symlink、內容雜湊、lsof 與已退出程序，刪除11個精確自有過時路徑（列於 cleanup-owned.json）：初次空目錄、被最終結果取代的5組正向 payload、兩個重開實驗 App 及三個重複 runner。重開包的最小 launcher／plist／簽章紀錄保留，重複 native Mach-O 與仍保留的 Native-Capture.app 雜湊完全相同；獨特負向資料／log 未刪。du 合計65,740 KiB；filesystem free 219,341,672,448 → 219,409,010,688 bytes，觀察差額67,338,240 bytes，未把其他工作並行釋放都歸因本批。獨立 replay index49,200 bytes 另刪並記錄，沒有刪 lock。保留最新 App、最終案例與回歸、唯一失敗證據，以及 active goal 會沿用的 target/debug／release；未清其他工作產物或停止他人程序。
+
+canonical develop 仍只領先 origin/develop 一筆及原未提交計畫；本批只在已授權 detached Slint worktree 提交，沒有 push、PR、整合、正式入口切換或發佈。接續推文導覽／更新與其餘 S0–S8 缺項，S9 仍另行核可。
