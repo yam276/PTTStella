@@ -1572,3 +1572,7 @@ PTTSTELLA_SLINT_CAPTURE_PROBE=current PTTSTELLA_SLINT_CAPTURE_TRACE=1 \
 CUA另以真正macOS焦點與按鈕完成45行全文、浮球收藏目前文章、保存成功提示、管理器選擇已存副本、唯讀本機下一頁至23～45行及⌘Q。磁碟獨立核對version2／一筆`#00000101@Stella`／45行×80欄、首行Stella、第23行ROW0023及末行REPLY0045；全檔SHA-256 `91065b28a953089b407511cfcd076a996ec6cca34579e4ea7bbf65fba59db132`。同時有原始cold-load trace、9個strict peer步驟及Close ACK、零HTTP請求／HTTP joined、exit0與capture／timer／file／result／window清理。OS末頁畫面在CUA工具紀錄，未宣稱另存PNG。這是目前文章cold load的原生操作證據，不能代替其餘IME或四架構矩陣。
 
 本批基準`8b269b3`、凍結patch、trace前後、全部53份合成案例（24＋29）、native結果與manifest保存在 `.local/verification/slint-capture-ack/`；`accepted-result.json`列出各scope，舊失敗報告保持原樣。這一個收藏停滯問題已有修正及分立驗證；完整S0–S8的跨平台、資料回退UI、對應來源交付及同負載效能等仍待完成，S9未執行。
+
+修正以`3cf91c2`提交後結束本批，清掉自有 `slint-capture-ack/target/release`（Cargo8417檔／2.7GiB；target du2908708KiB→8KiB）。新候選已涵蓋兩配置及原生收藏／讀回，移除被取代的 `slint-startup/package-current` App／ZIP／DMG與先前專供對照的 `slint-native-list/Native-Bookmarks.app`（payload du343544KiB）；舊包只留必要manifest／plist／文字launcher／hash，不留binary archive。舊native-list收藏檔及本輪native-current收藏檔均保留。
+
+本輪worktree du3971412KiB→719176KiB，filesystem available233442390016→236464750592bytes僅記觀測差額、不全部歸因於本次清理。496份來源／文件與1185份保留交付／資料hash不變；最新完整候選只保留 `slint-capture-ack/package-current`，Windows S1唯一ZIP、原始失敗、必要來源／素材／資料及未整合worktree保留，canonical Dioxus及其他聊天產物未動。精確5筆刪除路徑、owner／resolved path／symlink／lsof、du、Cargo、free與保留理由在 `.local/verification/slint-capture-ack/cleanup/ledger.json`；清理後未重建Rust。
