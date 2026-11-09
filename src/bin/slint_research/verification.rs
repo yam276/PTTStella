@@ -41,7 +41,7 @@ impl Verification {
     {
         Self::start_inner(ui, directory, name, false, run)
     }
-    fn start_inner<F, Fut>(
+    pub(crate) fn start_inner<F, Fut>(
         ui: &TerminalWindow,
         directory: PathBuf,
         name: &'static str,

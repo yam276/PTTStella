@@ -22,6 +22,17 @@ export { StationColorState } from "station-color.slint";
 import { StationColor, StationColorState } from "station-color.slint";
 
 export component TerminalWindow inherits Window {
+    in property <bool> article-updates-available;
+    in property <bool> article-updates-visible;
+    in property <bool> article-updates-enabled;
+    in property <bool> article-updates-recovery;
+    in property <int> article-updates-unread;
+    in property <string> article-updates-status;
+    in property <string> article-updates-toggle-label;
+    in property <string> article-updates-new-label;
+    out property <bool> article-updates-blocked: root.reply-navigation-blocked || root.find-open;
+    callback article-updates-action(int);
+    callback article-updates-scrolled;
     in property <bool> reply-navigation-available;
     in property <bool> reply-navigation-ready;
     in property <bool> reply-navigation-open;
@@ -202,6 +213,7 @@ export component TerminalWindow inherits Window {
     callback find-state-changed;
     callback focus-find(bool);
     callback find-terminal-reveal(int,int);
+    callback terminal-reveal(int,int);
     changed find-focused => { root.terminal-focus-changed(); }
     changed find-composing => { root.find-composition-changed(); }
     changed find-blocked => { root.find-state-changed(); }
@@ -214,7 +226,8 @@ export component TerminalWindow inherits Window {
         else if code == 4 { find-input.undo(); }
         else if code == 5 { find-input.redo(); }
     }
-    find-terminal-reveal(row,col) => {
+    find-terminal-reveal(row,col) => {root.terminal-reveal(row,col);}
+    terminal-reveal(row,col) => {
         viewport.content-y = clamp(viewport.height / 2 - root.raster-height * (row + 0.5) / 24, min(0px, viewport.height - viewport.content-height), 0px);
         viewport.content-x = clamp(viewport.width / 2 - raster.x - root.raster-width * col / 80, min(0px, viewport.width - viewport.content-width), 0px);
     }
@@ -709,6 +722,16 @@ export component TerminalWindow inherits Window {
             if root.article-load-available: HorizontalLayout {
                 Text { text: root.article-load-status; color: #b7c1ce; horizontal-stretch: 1; vertical-alignment: center; }
                 if root.article-load-active || root.article-load-can-resume: Button { text: root.article-load-active ? UiLabels.cancel-load : root.article-load-next-segment ? UiLabels.next-section : UiLabels.resume-load; clicked => { root.article-load-action(!root.article-load-active); } }
+            }
+            if root.article-updates-available || root.article-updates-visible: HorizontalLayout {
+                spacing:6px;
+                if root.article-updates-available || root.article-updates-enabled: Button {
+                    text:root.article-updates-toggle-label;enabled:!root.article-updates-blocked;
+                    clicked=>{root.article-updates-action(0);}
+                }
+                Text {text:root.article-updates-status;vertical-alignment:center;horizontal-stretch:1;}
+                if root.article-updates-unread>0: Button {text:root.article-updates-new-label;enabled:!root.article-updates-blocked;clicked=>{root.article-updates-action(1);} }
+                if root.article-updates-recovery: Button {text:UiLabels.updates-station;enabled:!root.article-updates-blocked;clicked=>{root.article-updates-action(2);} }
             }
             if root.reply-navigation-available && !root.reply-navigation-open: Button {
                 text:UiLabels.reply-title;enabled:!root.reply-navigation-opening-blocked && root.reply-navigation-ready;clicked=>{root.reply-navigation-action(0);}

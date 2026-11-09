@@ -38,9 +38,12 @@ mod input;
 mod outputs;
 #[path = "replies.rs"]
 mod replies;
+#[path = "updates.rs"]
+mod updates;
 
 pub struct ArticleSession {
     reply_navigation: RefCell<replies::Navigation>,
+    live_updates: RefCell<updates::Presentation>,
     ui: slint::Weak<TerminalWindow>,
     connection: Rc<Connection>,
     presentation_media: RefCell<std::rc::Weak<crate::media::Media>>,
@@ -51,6 +54,7 @@ pub struct ArticleSession {
     terminal_presented: Rc<Cell<Option<FrameId>>>,
     terminal_pending: Cell<Option<Identity>>,
     terminal_shown: Cell<Option<Identity>>,
+    terminal_recovery: Cell<Option<pttstella::navigation::Stamp>>,
     pub(super) view: RefCell<Option<Rc<ArticleView>>>,
     permit: Cell<Option<(u64, u64, u64)>>,
     shown: Cell<Option<(u64, u64, u64)>>,
@@ -113,6 +117,7 @@ impl ArticleSession {
         core.set_article_boundary_navigation(settings.article_boundary_navigation);
         let owner = Rc::new(Self {
             reply_navigation: RefCell::new(Default::default()),
+            live_updates: RefCell::new(Default::default()),
             ui: ui.as_weak(),
             connection,
             core: Rc::new(RefCell::new(core)),
@@ -123,6 +128,7 @@ impl ArticleSession {
             terminal_presented,
             terminal_pending: Cell::new(None),
             terminal_shown: Cell::new(None),
+            terminal_recovery: Cell::new(None),
             view: RefCell::new(None),
             permit: Cell::new(None),
             shown: Cell::new(None),
@@ -157,6 +163,7 @@ impl ArticleSession {
         });
         owner.install_find(ui);
         owner.install_replies(ui);
+        owner.install_updates(ui);
         ui.on_article_rendered({
             let owner = owner.clone();
             move || owner.rendered()
@@ -254,6 +261,13 @@ impl ArticleSession {
     }
     fn observe(&self, view: &View) {
         if self
+            .terminal_recovery
+            .get()
+            .is_some_and(|stamp| stamp != view.stamp() || view.phase != Phase::Connected)
+        {
+            self.terminal_recovery.set(None);
+        }
+        if self
             .composition_handoff
             .get()
             .is_some_and(|generation| generation != view.generation)
@@ -340,7 +354,7 @@ impl ArticleSession {
             .is_some_and(|p| (p.generation, p.revision) == (frame.generation, frame.revision))
     }
     pub fn terminal_rendered(&self) {
-        let Some(identity) = self.terminal_pending.get() else {
+        let Some(identity) = self.terminal_pending.get().or(self.terminal_shown.get()) else {
             return;
         };
         if self.closed.get()
@@ -356,21 +370,45 @@ impl ArticleSession {
         if ui.get_article_active() || self.terminal_size.get().is_none() {
             return;
         }
-        if self.core.borrow().pending_identity() != Some(identity) {
-            return;
+        if self.terminal_pending.get() == Some(identity) {
+            if self.core.borrow().pending_identity() != Some(identity) {
+                return;
+            }
+            if let Err(error) = self.core.borrow_mut().acknowledge(identity) {
+                self.notice(error);
+                return;
+            }
+            self.terminal_pending.set(None);
+            self.terminal_shown.set(Some(identity));
+        } else {
+            let core = self.core.borrow();
+            if core.pending_identity().is_some()
+                || core.last_displayed().map(Identity::of) != Some(identity)
+            {
+                return;
+            }
         }
-        if let Err(error) = self.core.borrow_mut().acknowledge(identity) {
-            self.notice(error);
-            return;
+        if self.focus_after_paint.get() && ui.get_context_focus_restorable() {
+            // The formerly hidden grid input must not scroll its viewport using
+            // the article's stale caret/raster geometry during station recovery.
+            ui.invoke_focus_terminal();
+            self.focus_after_paint.set(false);
         }
-        self.terminal_pending.set(None);
-        self.terminal_shown.set(Some(identity));
         self.core
             .borrow_mut()
             .find_sync(&self.connection.updates.borrow());
         self.find_sync_ui();
         self.find_retry_draft();
         self.reply_sync_ui();
+        self.updates_sync_ui();
+        if self.terminal_recovery.get() == Some(self.connection.updates.borrow().stamp())
+            && ui.get_context_focus_restorable()
+        {
+            // Status controls can settle the viewport over more than one grid
+            // ACK. Reapply only for this exact recovered station frame.
+            let (col, row) = self.renderer.borrow().frame().cursor;
+            ui.invoke_terminal_reveal(row as i32, col as i32);
+        }
         ui.invoke_output_updated();
         ui.invoke_paste_updated();
         ui.invoke_keep_alive_changed();
@@ -414,6 +452,7 @@ impl ArticleSession {
         self.find_sync_ui();
         self.find_retry_draft();
         self.reply_sync_ui();
+        self.updates_sync_ui();
         let scope = {
             let core = self.core.borrow();
             core.last_displayed().and_then(|p| {
@@ -456,6 +495,7 @@ impl ArticleSession {
     pub fn refresh_language(&self) {
         self.find_sync_ui();
         self.reply_language_changed();
+        self.updates_language_changed();
         if let Some(ui) = self.ui.upgrade() {
             self.refresh_load_label(&ui);
         }
@@ -494,6 +534,7 @@ impl ArticleSession {
         let Some(ui) = self.ui.upgrade() else { return };
         let now = Instant::now();
         self.core.borrow_mut().expire_full_load(now);
+        self.updates_step(view, &ui);
         self.retire_stale_projection(view);
         let progress = self.core.borrow().reading_progress();
         ui.set_article_load_available(progress.is_some());
@@ -664,10 +705,23 @@ impl ArticleSession {
         // Observe after ACK/projection work and outside all reducer borrows.
         ui.invoke_bookmarks_capture_updated();
         self.reply_sync_ui();
+        self.updates_sync_ui();
     }
     fn deadline(&self) -> Option<Instant> {
         let core = self.core.borrow();
         let load = core.full_load_deadline();
+        let updates = core.updates_deadline(
+            self.ui.upgrade().is_some_and(|ui| self.allowed(&ui))
+                && !core.dirty()
+                && !core.has_in_flight()
+                && !self.ui.upgrade().is_some_and(|ui| ui.get_find_open())
+                && !self.busy.get()
+                && core.update_ready(&self.connection.updates.borrow()),
+        );
+        let load = match (load, updates) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
         let paint = (core.dirty() && !core.has_in_flight())
             .then_some(self.next_paint.get())
             .filter(|at| *at > Instant::now());
@@ -734,7 +788,9 @@ impl ArticleSession {
     }
     pub fn finish(&self) {
         self.closed.set(true);
+        self.terminal_recovery.set(None);
         self.reply_finish();
+        self.updates_finish();
         self.find_timer.stop();
         self.find_draft.take();
         self.core.borrow_mut().find_finish();
@@ -763,6 +819,8 @@ impl ArticleSession {
             && self.reply.borrow().is_none()
             && !self.busy.get()
             && self.replies_stopped()
+            && self.live_updates.borrow().stopped()
+            && self.terminal_recovery.get().is_none()
     }
     pub fn raster_count(&self) -> usize {
         self.view

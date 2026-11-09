@@ -1326,3 +1326,29 @@ macOS strict ad-hoc `Native-Replies.app` 可正常顯示23行合成文章與金�
 這批沒有整合、push、PR、正式入口切換或發佈。S4 推文更新、推文定位實體操作、列表實體右鍵／新程序離線操作與混合 Live 尚未結案；S0–S8 goal 持續。
 
 本批驗收後按 task-owned 規則清掉 Slint target/release（Cargo 宣告Removed 8385 files, 2.7GiB total）、已被同功能回歸涵蓋的舊 `slint-capture/Native-Capture.app` 及前一輪成功的冗餘 component-reopen 影像目錄。du 原編譯 profile 約2.72GiB，舊 App 約63.5MiB；free 前後為獨立觀察值，不把其他寫入歸給本批。target剩12KiB；最新 `Native-Replies.app`、影片配置包及 Windows S1 ZIP 的雜湊均不變，265個來源檔不變。清理 exact paths、lsof／owner／symlink 檢查及 free 數值在 `.local/verification/slint-reply-navigation/cleanup.json`；首份34個舊 App與29GiB歷史清理仍見前一份總清單。唯一負向證據及未合併 worktree保留，沒有動其他聊天程序。
+
+## S4 原生推文更新與站端復原（2026-11-09）
+
+ArticleSession 將既有 `SurfaceState::next_update`、`updates_deadline`、取消 stamp 與狀態接進目前同一事件迴圈；沒有另一個輪詢 timer、sender task 或並行命令欄位。預設關閉，明確開啟後沿用原5秒週期及驗證進文／尾段比對，receipt及後續 PageDown仍由同一 Connection序列化。尋找、組字、選取、工具／modal、失焦及原 scope失效遵從原閱讀 gate；未開啟自動更新的收藏 acquisition由既有收藏 owner處理環境／取消，不因新 gate誤取消。
+
+Slint 只管理已 ACK文章的回覆總數、已讀數與本機閱讀位置。新增提示可跳至文件底部；原文、圖片間隙與已解碼 Arc沿用。背景右鍵沿用共用 ArticleUpdates capability，開啟後改顯示暫停字樣。停止重新進文時保留既有閱讀，晚到Q資訊不附加到文章；顯式「顯示站端畫面」才清理本機投影。相對 Left／Right／Enter／Backspace在原始 bytes與原生鍵盤政策之前由共用 retained guard拒絕，避免先本機翻頁或送入站端。開始新站端輸入、換來源及關窗撤銷復原定位 stamp。
+
+實體驗收抓到150%下復原只見放大格線的空白上方，需要再縮放才看到下緣資訊。現在焦點在終端安裝／ACK後還原，游標定位共用終端尋找的原生捲動計算；工具列收合後，同一來源的幾何重繪也能確認，不須有另一筆新Paint。定位只維持目前復原 stamp，新的來源／輸入／尋找／關窗撤銷，不改使用者縮放。最終測試等待實際終端來源與幾何、核對游標及 raster界線；不以切換標題或文章 UI消失就判定復原完成。
+
+最終 CLI SHA-256 `a0415e87e0c49573c7d55b90e2933ebe4a28cc475e22f8c905da3291b48943b9`。`.local/verification/slint-reply-updates/`的 accepted三案與七項 regression均為同一binary，均exit0／Close ACK且工作已joined：
+
+- append：原45行6則推文，兩次完整驗證重新進文及尾段後增至51行12則；原錨點不動，未讀3→6。操作超過5秒不加出站輸入，未變的下一輪只走8步尾段核對、不加PageDown、不改未讀；跳底清除未讀，暫停後超過5秒無後續命令，終端模式清除更新控制。
+- cancel／blur：發出 owned Q後取消或失焦，等6.3秒讓資訊晚到，保留45行完整原始來源 frame、行／圖片錨點、有效可見文字 tile與回復控制；相對鍵不移動或送站端，顯式復原後核對 continue_prompt及當前終端 ACK／游標。三案各有唯一 loopback PNG請求；append另核對同一 decoded Arc，HTTP server皆joined。
+- 回歸：推文定位、目前收藏9步、指定列表首篇收藏13步、全文19次PageDown、文章輸出、行內PNG／GIF及終端尋找。全文500ms＋每頁150ms fixture延遲保留；行內PNG／GIF各一次HTTP，沒有多餘BBS輸入。
+
+同批 Rust lib367／bin79／multi10通過（456 passed／6明確ignored）；最後 native bin79／1 ignored再通過。全target Clippy `-D warnings`、`native-player-probe`全target check及fmt通過。最後只改native adapter／probe，共用庫與JS沒有變更；不把type-check、toolkit事件或macOS結果當作跨平台／Dioxus host結果。
+
+最終 strict ad-hoc `Native-Updates.app` 的 signed native SHA-256 `4cae8d94dafe68fbe8cc9b80211d3a6a3cadd2e4f9eea7ced3be548ea029cb89`。原生run `native-retained-16559`先以toolkit準備取消情境，CUA實際長按Right及Return各650ms；OS擷圖仍見ROW0016～0030，peer在關窗後核對沒有額外站端bytes。實際點「顯示站端畫面」後，不另按縮放，即見150%下站端資訊右側、查詢框及藍色繼續列，游標在可視區；水平溢出依目前縮放裁切，不宣稱此crop看見完整AID。CmdQ、最終inventory／pgrep不存在、Close ACK與HTTP joined分開確認；LaunchServices未提供exit code，absence不當成exit0。完整更新開關／未讀按鈕的可信OS操作仍待補驗。
+
+工具擷取的限制另保留：Slint `take_snapshot()`的保留正文呈黑色，但其20個有效RAM tile各有文字ink且實際OS擷圖有正文；明示skia-software重跑亦保留同一現象，尚未證明工具擷取失配的內部原因。未為此停用正常cache／改整體繪圖；產品PNG另走共同Rust輸出，文章輸出回歸通過。原生OS畫面與toolkit snapshot不互相替代。
+
+負向紀錄不覆寫：最初相對Right先本機翻頁，改先retained guard後取消／失焦通過；第二輪錨點只有正規化fraction約7e-16差，列號相同，改以同列且1e-6 fraction界線（小於0.001實體像素）判定。另一次first append未發後續PageDown、一次first-anchor失敗沒有足夠診斷，原因不推定為其他操作；保留原binary hash／log。復原初版只看UI切換不足，原生補驗、游標col/row誤用及第二次geometry ACK漏接皆有負向結果，最終加強游標可視驗收後通過。初輪未用匯入／窮盡match警告、Clippy巢狀if及native-check型別變更的編譯失敗另留log，不算passed。
+
+重跑使用新verification目錄；完整圖片案例需明確loopback origin，例如在`tests/fixtures/media`啟動只綁127.0.0.1的HTTP server，再設定 `PTTSTELLA_SLINT_UPDATES_PROBE=append`（或cancel／blur）、`PTTSTELLA_SLINT_UPDATES_ORIGIN=http://127.0.0.1:<port>/`，執行 `pttstella-slint --probe-media --verify-media <NEW_DIR>`。只在此明示探針接受origin，拒絕非loopback／額外path／帳密；其餘預設不連本測試端點。`PTTSTELLA_SLINT_UPDATES_NATIVE_CHECK=1`留在toolkit準備後的閱讀復原畫面，=2留在已驗證的站端復原畫面，交給原生工具擷圖／關窗；不當成真實按更新按鈕的證據。`.local`保存兩個Python runner、source patch／tree、各次hash、原生紀錄、結果與負向證據。
+
+S4完整實體推文控制、列表實體右鍵／新程序離線操作及混合Live，S1／S2平台與IME，S5峰值與四架構，S6–S8資料回退／原生包／同負載效能仍待完成；完整goal保持active，沒有整合、push、PR、正式入口切換或發佈。

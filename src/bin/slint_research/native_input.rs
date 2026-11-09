@@ -864,6 +864,9 @@ fn mount_window(
                         input.keyboard.release(&key.code);
                         return PreventDefault;
                     }
+                    if article.as_ref().is_some_and(|article| article.retained_key(&key)) {
+                        return PreventDefault;
+                    }
                     if key.key == "Escape" && ui.invoke_leave_fullscreen() {
                         return PreventDefault;
                     }

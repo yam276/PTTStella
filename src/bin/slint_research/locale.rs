@@ -8,6 +8,7 @@ pub fn refresh(ui: &TerminalWindow) {
     ui.set_bookmarks_label(msg!("bookmarks-title").into());
     ui.set_sites_label(msg!("sites-title").into());
     let labels = ui.global::<UiLabels>();
+    labels.set_updates_station(msg!("article-updates-station").into());
     labels.set_reply_title(msg!("reply-navigation-title").into());
     labels.set_reply_author(msg!("reply-navigation-author").into());
     labels.set_reply_mine(msg!("reply-navigation-mine").into());

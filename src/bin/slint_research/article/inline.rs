@@ -7,6 +7,8 @@ mod key;
 mod menu_probe;
 #[path = "inline_probe.rs"]
 pub mod probe;
+#[path = "updates_probe.rs"]
+pub mod updates_probe;
 use super::session::ArticleSession;
 use crate::{
     InlineArrow, InlinePicture, TerminalWindow,

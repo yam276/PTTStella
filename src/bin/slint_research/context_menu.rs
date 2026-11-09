@@ -383,6 +383,10 @@ impl ContextMenu {
             inline.as_ref().is_some_and(|i| i.menu_ready()),
         );
         flags.set(Flag::Picture, picture.is_some());
+        flags.set(
+            Flag::Updates,
+            ui.get_article_updates_available() || ui.get_article_updates_enabled(),
+        );
         flags.set(Flag::ListBookmark, self.list_bookmark(account).is_some());
         flags.set(Flag::Bookmark, ui.get_bookmarks_current_available());
         flags.set(
@@ -488,7 +492,12 @@ impl ContextMenu {
             entries
                 .iter()
                 .map(|e| MenuEntry {
-                    label: target_label(e.action, account.as_ref()).into(),
+                    label: target_label(
+                        e.action,
+                        account.as_ref(),
+                        ui.get_article_updates_enabled(),
+                    )
+                    .into(),
                     enabled: e.enabled,
                 })
                 .collect::<Vec<_>>(),
@@ -514,7 +523,12 @@ impl ContextMenu {
                 menu.entries
                     .iter()
                     .map(|e| MenuEntry {
-                        label: target_label(e.action, menu.account.as_ref()).into(),
+                        label: target_label(
+                            e.action,
+                            menu.account.as_ref(),
+                            ui.get_article_updates_enabled(),
+                        )
+                        .into(),
                         enabled: e.enabled,
                     })
                     .collect::<Vec<_>>(),
@@ -664,6 +678,8 @@ impl ContextMenu {
                 {
                     owner.capture_source(source);
                 }
+            } else if entry.action == Action::ArticleUpdates {
+                ui.invoke_article_updates_action(0);
             } else if entry.action == Action::ReplyNavigation {
                 ui.invoke_reply_navigation_action(0);
             } else {
@@ -710,6 +726,7 @@ fn supported(action: Action) -> bool {
             | Action::BookmarkCurrent
             | Action::BookmarkList
             | Action::ReplyNavigation
+            | Action::ArticleUpdates
     )
 }
 pub(super) fn label(action: Action) -> String {
@@ -732,6 +749,7 @@ pub(super) fn label(action: Action) -> String {
         A::BookmarkCurrent => pttstella::msg!("bookmarks-current"),
         A::BookmarkList => pttstella::msg!("bookmarks-list-current"),
         A::ReplyNavigation => pttstella::msg!("reply-navigation-title"),
+        A::ArticleUpdates => pttstella::msg!("article-updates-start"),
         A::CopyAnsi => pttstella::msg!("context-copy-ansi"),
         A::CopyLink => pttstella::msg!("context-copy-link"),
         A::OpenLink => pttstella::msg!("context-open-link-external"),
@@ -746,7 +764,6 @@ pub(super) fn label(action: Action) -> String {
         A::Paste => pttstella::msg!("menu-paste"),
         A::CopyImageRows => pttstella::msg!("copy-rows-png"),
         A::CopyImagePage => pttstella::msg!("copy-png"),
-        _ => String::new(),
     }
 }
 fn press_matches(source: &Source, press: &Press, point: (f32, f32)) -> bool {
@@ -771,8 +788,12 @@ fn account_policy(action: Action) -> Option<(pttstella::filters::Policy, bool)> 
         _ => return None,
     })
 }
-fn target_label(action: Action, account: Option<&AccountContext>) -> String {
-    let label = label(action);
+fn target_label(action: Action, account: Option<&AccountContext>, updates_enabled: bool) -> String {
+    let label = if action == Action::ArticleUpdates && updates_enabled {
+        pttstella::msg!("article-updates-pause")
+    } else {
+        label(action)
+    };
     if account_policy(action).is_some()
         && let Some(word) = account.and_then(|a| a.word.as_ref())
     {

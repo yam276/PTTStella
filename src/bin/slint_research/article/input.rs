@@ -42,7 +42,35 @@ impl ArticleSession {
 
     /// Returns true for cache-only navigation. Otherwise invalidates the old
     /// article before the caller enqueues the actual user bytes exactly once.
+    pub fn retained_key(&self, key: &pttstella::vim::Key) -> bool {
+        if self.core.borrow().retained_relative_key(key) {
+            self.notice(pttstella::msg!("article-updates-retained"));
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn before_input(&self, view: &View, bytes: &[u8]) -> bool {
+        let relative = match bytes {
+            b"\x1b[D" => Some("ArrowLeft"),
+            b"\x1b[C" => Some("ArrowRight"),
+            b"\r" => Some("Enter"),
+            b"\x7f" | b"\x08" => Some("Backspace"),
+            _ => None,
+        };
+        if relative.is_some_and(|key| {
+            self.retained_key(&pttstella::vim::Key {
+                key: key.into(),
+                code: String::new(),
+                ctrl: false,
+                alt: false,
+                shift: false,
+                repeat: false,
+            })
+        }) {
+            return true;
+        }
         if let Some(intent) = article_cache::reading_intent(bytes)
             && self.local_intent(intent)
         {
@@ -81,6 +109,7 @@ impl ArticleSession {
     }
 
     pub fn station_handoff(&self) {
+        self.terminal_recovery.set(None);
         self.raw_generation
             .set(Some(self.connection.updates.borrow().generation));
         self.core.borrow_mut().interrupt_full_load();

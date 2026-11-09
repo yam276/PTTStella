@@ -574,6 +574,8 @@ fn run(
         && std::env::var_os("PTTSTELLA_SLINT_BOOKMARKS_PROBE").is_some();
     let capture_probe = options.probe == Some(Probe::Session(session::Probe::Media))
         && std::env::var_os("PTTSTELLA_SLINT_CAPTURE_PROBE").is_some();
+    let updates_probe = options.probe == Some(Probe::Session(session::Probe::Media))
+        && std::env::var_os("PTTSTELLA_SLINT_UPDATES_PROBE").is_some();
     let replies_probe = options.probe == Some(Probe::Session(session::Probe::Media))
         && std::env::var_os("PTTSTELLA_SLINT_REPLIES_PROBE").is_some();
     let filters_probe = options.probe == Some(Probe::Session(session::Probe::Media))
@@ -842,6 +844,7 @@ fn run(
     let clipboard = clipboard::Clipboard::default();
     let verification_connection = if bookmarks_probe
         || replies_probe
+        || updates_probe
         || options.verify_context.is_some()
         || options.verify_tools.is_some()
         || options.verify_article_session.is_some()
@@ -877,6 +880,7 @@ fn run(
                 || bookmarks_probe
                 || capture_probe
                 || replies_probe
+                || updates_probe
                 || filters_probe
             {
                 let mut article_preferences = settings.clone();
@@ -949,6 +953,7 @@ fn run(
                     )
             ) || capture_probe
                 || replies_probe
+                || updates_probe
             {
                 paste_owner = Some(native_input::mount_article(
                     &ui,
@@ -988,6 +993,7 @@ fn run(
                 )
             ) && !capture_probe
                 && !replies_probe
+                && !updates_probe
             {
                 paste_owner = Some(native_input::mount(
                     &ui,
@@ -1422,11 +1428,33 @@ fn run(
             && std::env::var("PTTSTELLA_SLINT_BOOKMARKS_PROBE").as_deref() == Ok("native")
         || capture_probe
             && std::env::var("PTTSTELLA_SLINT_CAPTURE_PROBE").as_deref() == Ok("native")
+        || updates_probe
+            && std::env::var("PTTSTELLA_SLINT_UPDATES_PROBE").as_deref() == Ok("native")
         || replies_probe
             && std::env::var("PTTSTELLA_SLINT_REPLIES_PROBE").as_deref() == Ok("native")
         || std::env::var("PTTSTELLA_SLINT_FILTERS_PROBE").is_ok_and(|v| v == "native")
     {
         None
+    } else if updates_probe {
+        Some(article::inline::updates_probe::start(
+            &ui,
+            media_owner
+                .as_ref()
+                .and_then(|m| m.inline_owner())
+                .ok_or("updates inline owner missing")?,
+            article_session_owner
+                .as_ref()
+                .cloned()
+                .ok_or("updates article owner missing")?,
+            verification_connection
+                .as_ref()
+                .cloned()
+                .ok_or("updates connection missing")?,
+            options
+                .verify_media
+                .clone()
+                .ok_or("updates directory missing")?,
+        )?)
     } else if replies_probe {
         Some(article::replies_probe::start(
             &ui,

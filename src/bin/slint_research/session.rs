@@ -201,6 +201,9 @@ pub fn with_probe(
         Probe::Media if std::env::var_os("PTTSTELLA_SLINT_DESTINATION_PROBE").is_some() => {
             "slint_native_destination"
         }
+        Probe::Media if std::env::var_os("PTTSTELLA_SLINT_UPDATES_PROBE").is_some() => {
+            "slint_native_updates"
+        }
         Probe::Media if std::env::var_os("PTTSTELLA_SLINT_REPLIES_PROBE").is_some() => {
             "slint_native_replies"
         }
@@ -252,7 +255,32 @@ pub fn with_probe(
                 }
             }
             Probe::Media => {
-                if let Ok(case) = std::env::var("PTTSTELLA_SLINT_REPLIES_PROBE") {
+                if let Ok(case) = std::env::var("PTTSTELLA_SLINT_UPDATES_PROBE") {
+                    if !matches!(case.as_str(), "append" | "cancel" | "blur" | "native") {
+                        return Err("unknown native updates case".into());
+                    }
+                    let origin = std::env::var("PTTSTELLA_SLINT_UPDATES_ORIGIN").ok();
+                    if let Some(origin) = origin.as_ref() {
+                        let url = reqwest::Url::parse(origin).map_err(|e| e.to_string())?;
+                        if url.scheme() != "http"
+                            || url.host_str() != Some("127.0.0.1")
+                            || url.port().is_none()
+                            || url.path() != "/"
+                            || url.query().is_some()
+                            || url.fragment().is_some()
+                            || !url.username().is_empty()
+                            || url.password().is_some()
+                        {
+                            return Err(
+                                "native updates image server must be loopback origin".into()
+                            );
+                        }
+                    }
+                    Connection::start_live_updates_probe(
+                        origin.map(|s| s.trim_end_matches('/').to_owned()),
+                        matches!(case.as_str(), "cancel" | "blur"),
+                    )
+                } else if let Ok(case) = std::env::var("PTTSTELLA_SLINT_REPLIES_PROBE") {
                     match case.as_str() {
                         "1" | "native" => Connection::start_reply_navigation_probe(),
                         _ => Err("unknown reply navigation probe case".into()),

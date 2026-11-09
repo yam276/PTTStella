@@ -443,6 +443,7 @@ impl ArticleView {
         ui.set_article_offset_y((self.position(&flow) / f64::from(layout.dpi)) as f32);
         ui.set_article_offset_x(self.x.get() * layout.line_height() / 2.);
         self.reply_marks();
+        ui.invoke_article_updates_scrolled();
     }
     fn schedule(self: &Rc<Self>) {
         if self.timer.running() {

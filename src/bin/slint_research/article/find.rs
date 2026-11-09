@@ -79,6 +79,7 @@ impl ArticleSession {
         }
         match action {
             0 if ui.get_find_available() => {
+                self.terminal_recovery.set(None);
                 self.reply_close(false);
                 ui.invoke_context_dismiss(false);
                 ui.invoke_tools_dismiss(false);
