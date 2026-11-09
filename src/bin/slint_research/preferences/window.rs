@@ -76,6 +76,30 @@ impl Preferences {
     }
     fn create_window(self: &Rc<Self>) -> Result<SettingsWindow, String> {
         let window = SettingsWindow::new().map_err(|e| e.to_string())?;
+        window.on_release_check({
+            let weak = Rc::downgrade(self);
+            move || {
+                if let Some(owner) = weak.upgrade() {
+                    owner.check_release();
+                }
+            }
+        });
+        window.on_release_open({
+            let weak = Rc::downgrade(self);
+            move || {
+                if let Some(owner) = weak.upgrade() {
+                    owner.open_release(false);
+                }
+            }
+        });
+        window.on_repository_open({
+            let weak = Rc::downgrade(self);
+            move || {
+                if let Some(owner) = weak.upgrade() {
+                    owner.open_release(true);
+                }
+            }
+        });
         window.on_edit({
             let weak = Rc::downgrade(self);
             move || {
@@ -454,6 +478,7 @@ impl Preferences {
             }
         }
         self.refresh_runtime(w);
+        self.refresh_releases(w);
         let mut labels: Vec<String> = [
             "settings-center-title",
             "settings-search-placeholder",

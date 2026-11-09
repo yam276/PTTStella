@@ -1229,6 +1229,7 @@ fn run(
                             )
                         ),
                         preferences,
+                        matches!(&mode, session::Mode::Live(_)),
                     ));
                 }
                 if let (Some(media), Some(article)) = (&media_owner, &article_session_owner) {
@@ -1505,6 +1506,13 @@ fn run(
         },
         quit_requested.clone(),
     );
+    let release_probe_directory = if options.probe == Some(Probe::Session(session::Probe::Media))
+        && std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").as_deref() == Ok("releases")
+    {
+        options.verify_media.clone()
+    } else {
+        None
+    };
     let settings_shutdown_directory = if options.probe
         == Some(Probe::Session(session::Probe::Media))
         && std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").is_ok_and(|v| v == "shutdown")
@@ -1967,6 +1975,9 @@ fn run(
             .as_ref()
             .map(|media| {
                 media.preferences.finish()?;
+                if let Some(dir) = &release_probe_directory {
+                    media.preferences.audit_release_probe(dir)?;
+                }
                 if let Some(dir) = &settings_shutdown_directory {
                     media.preferences.audit_shutdown(dir)?;
                 }

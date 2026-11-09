@@ -7,6 +7,12 @@ pub(crate) fn client_config() -> Result<rustls::ClientConfig, String> {
     if roots.is_empty() {
         return Err(crate::msg!("tls-no-roots"));
     }
+    client_config_with_roots(roots)
+}
+
+pub(crate) fn client_config_with_roots(
+    roots: rustls::RootCertStore,
+) -> Result<rustls::ClientConfig, String> {
     rustls::ClientConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
         .with_safe_default_protocol_versions()
         .map_err(|e| e.to_string())

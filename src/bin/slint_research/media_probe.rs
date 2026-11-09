@@ -80,6 +80,9 @@ pub fn start(
                 "media toolkit focus did not settle",
             )
             .await?;
+            if std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").as_deref() == Ok("releases") {
+                return owner.preferences.verify_releases(&ui, &directory).await;
+            }
             if std::env::var_os("PTTSTELLA_SLINT_SETTINGS_PROBE").is_some() {
                 owner
                     .preferences

@@ -86,6 +86,14 @@ export component SettingsWindow inherits Window {
     in property <string> font-status;
     in property <string> notice;
     in property <bool> failed;
+    in property <bool> release-enabled;
+    in property <bool> release-checking;
+    in property <bool> release-available;
+    in property <string> release-status;
+    in property <[string]> release-labels;
+    callback release-check;
+    callback release-open;
+    callback repository-open;
     callback edit;
     callback search(string);
     callback reset;
@@ -216,6 +224,11 @@ export component SettingsWindow inherits Window {
                             changed has-focus=>{if self.has-focus {SettingsInput.active-target=25;} else if SettingsInput.active-target==25 {SettingsInput.active-target=-1;}}
                             Text {text:"PTTStella Slint · " + root.labels[28];color:#e4c76e;wrap:word-wrap;}
                         }
+                        FocusButton {field-id:27;text:root.release-labels[0];enabled:root.release-enabled && !root.release-checking;clicked=>{root.release-check();}}
+                        if root.release-available: FocusButton {field-id:28;text:root.release-labels[1];enabled:root.release-enabled;clicked=>{root.release-open();}}
+                        Text {text:root.release-status;color:#e4c76e;wrap:word-wrap;}
+                        Text {text:root.release-labels[2];color:#d7dce5;wrap:word-wrap;}
+                        FocusButton {field-id:29;text:root.release-labels[3];clicked=>{root.repository-open();}}
                         Text {text:root.labels[29];color:#d7dce5;wrap:word-wrap;}
                     }
                 }

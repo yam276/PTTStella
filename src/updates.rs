@@ -115,20 +115,73 @@ async fn check() -> Result<Option<Release>, Error> {
     fetch(client, ENDPOINT, env!("CARGO_PKG_VERSION"), DEADLINE).await
 }
 
+#[derive(Default)]
+enum Source {
+    #[default]
+    Published,
+    Loopback {
+        endpoint: String,
+        client: Client,
+    },
+}
+
 /// Polled by the surface select loop, never spawned. Dropping this owner cancels
 /// the request on every surface exit; no detached worker can update a new UI.
 #[derive(Default)]
 pub struct Checker {
     request: Option<Request>,
     status: Status,
+    source: Source,
 }
 impl Checker {
+    /// Explicit synthetic checks never fall back to the public endpoint, even
+    /// after failure/retry. This is not a configurable product update server.
+    pub fn loopback(endpoint: &str) -> Result<Self, String> {
+        let url = url::Url::parse(endpoint).map_err(|_| "invalid update fixture URL")?;
+        if url.scheme() != "http"
+            || url.host_str() != Some("127.0.0.1")
+            || url.port().is_none()
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.query().is_some()
+            || url.fragment().is_some()
+        {
+            return Err("update fixture must use an explicit IPv4 loopback port".into());
+        }
+        let client = Client::builder()
+            // The fixture admits HTTP only. Still configure reqwest's pinned
+            // per-client provider; never install a process-global provider.
+            .use_preconfigured_tls(crate::tls::client_config_with_roots(
+                rustls::RootCertStore::empty(),
+            )?)
+            .no_proxy()
+            .redirect(Policy::none())
+            .user_agent(concat!("PTTStella/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .map_err(|error| format!("update fixture client: {error:?}"))?;
+        Ok(Self {
+            source: Source::Loopback {
+                endpoint: url.into(),
+                client,
+            },
+            ..Self::default()
+        })
+    }
     pub fn status(&self) -> &Status {
         &self.status
     }
     pub fn start(&mut self) {
         if self.request.is_none() {
-            self.request = Some(Box::pin(check()));
+            self.request = Some(match &self.source {
+                Source::Published => Box::pin(check()),
+                Source::Loopback { endpoint, client } => {
+                    let endpoint = endpoint.clone();
+                    let client = client.clone();
+                    Box::pin(async move {
+                        fetch(client, &endpoint, env!("CARGO_PKG_VERSION"), DEADLINE).await
+                    })
+                }
+            });
             self.status.checking = true;
             self.status.up_to_date = false;
         }
@@ -146,6 +199,76 @@ impl Checker {
         }
         // Failure leaves no error message, and never claims a successful check.
         self.status.clone()
+    }
+}
+
+/// Native adapters share the same Checker on their existing Tokio runtime.
+/// One bounded command slot and one latest status; no thread, timer or retry
+/// loop is added. The adapter must await shutdown before claiming cleanup.
+pub struct Worker {
+    commands: Option<tokio::sync::mpsc::Sender<()>>,
+    status: tokio::sync::watch::Receiver<Status>,
+    task: Option<tokio::task::JoinHandle<()>>,
+}
+impl Worker {
+    pub fn start(mut checker: Checker, automatic: bool) -> Result<Self, String> {
+        let runtime = tokio::runtime::Handle::try_current().map_err(|e| e.to_string())?;
+        if automatic {
+            checker.start();
+        }
+        let (commands, mut requests) = tokio::sync::mpsc::channel(1);
+        let (send, status) = tokio::sync::watch::channel(checker.status().clone());
+        let task = runtime.spawn(async move {
+            loop {
+                tokio::select! {
+                    biased;
+                    command = requests.recv() => {
+                        if command.is_none() || requests.is_closed() { break; }
+                        checker.start();
+                        send.send_replace(checker.status().clone());
+                    }
+                    status = checker.next() => { send.send_replace(status); }
+                }
+            }
+            // Drop the in-flight response here, before the join resolves.
+            drop(checker);
+        });
+        Ok(Self {
+            commands: Some(commands),
+            status,
+            task: Some(task),
+        })
+    }
+    pub fn updates(&self) -> tokio::sync::watch::Receiver<Status> {
+        self.status.clone()
+    }
+    pub fn request(&self) -> bool {
+        !self.status.borrow().checking
+            && self
+                .commands
+                .as_ref()
+                .is_some_and(|send| send.try_send(()).is_ok())
+    }
+    pub async fn shutdown(&mut self) -> Result<(), String> {
+        self.cancel();
+        if let Some(task) = self.task.take() {
+            task.await.map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+    /// Revoke queued checks immediately; retain the task for the later join.
+    pub fn cancel(&mut self) {
+        self.commands.take();
+    }
+}
+impl Drop for Worker {
+    fn drop(&mut self) {
+        self.commands.take();
+        if let Some(task) = &self.task {
+            // Exceptional adapter destruction cancels work; only shutdown's
+            // successful join proves cleanup, never this fallback.
+            task.abort();
+        }
     }
 }
 

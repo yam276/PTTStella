@@ -2,6 +2,8 @@
 //! Output owns the one file worker. UI drafts never become effective on edit.
 mod form;
 mod probe;
+mod releases;
+mod releases_probe;
 mod search_probe;
 mod window;
 
@@ -53,9 +55,19 @@ pub struct Preferences {
     export_pending: Cell<bool>,
     failed: Cell<bool>,
     stopped: Cell<bool>,
+    release_worker: RefCell<Option<pttstella::updates::Worker>>,
+    release_task: RefCell<Option<slint::JoinHandle<()>>>,
+    release_status: RefCell<pttstella::updates::Status>,
+    release_listener_joined: Cell<bool>,
+    release_probe: RefCell<Option<releases_probe::Fixture>>,
 }
 impl Preferences {
-    pub fn mount(ui: &TerminalWindow, output: Rc<Output>, model: Model) -> Rc<Self> {
+    pub fn mount(
+        ui: &TerminalWindow,
+        output: Rc<Output>,
+        model: Model,
+        check_releases: bool,
+    ) -> Rc<Self> {
         let owner = Rc::new(Self {
             model: RefCell::new(model),
             ui: ui.as_weak(),
@@ -76,6 +88,11 @@ impl Preferences {
             export_pending: Cell::new(false),
             failed: Cell::new(false),
             stopped: Cell::new(false),
+            release_worker: RefCell::new(None),
+            release_task: RefCell::new(None),
+            release_status: RefCell::new(pttstella::updates::Status::default()),
+            release_listener_joined: Cell::new(true),
+            release_probe: RefCell::new(None),
         });
         ui.set_settings_available(true);
         ui.on_settings_show({
@@ -111,10 +128,18 @@ impl Preferences {
                 }
             }
         });
+        if check_releases
+            && let Err(error) = owner.start_releases(pttstella::updates::Checker::default(), true)
+        {
+            owner.notice(error);
+        }
         owner
     }
     pub fn prepare_app_close(&self) {
         self.handoff.set(None);
+        if let Some(worker) = self.release_worker.borrow_mut().as_mut() {
+            worker.cancel();
+        }
         self.hide();
     }
     pub fn app(&self) -> AppSettings {
@@ -300,6 +325,7 @@ impl Preferences {
     /// authorized valid draft using the same Store/baseline. No detached tasks.
     pub fn finish(&self) -> Result<(), String> {
         self.stopped.set(true);
+        let releases = self.finish_releases();
         self.timer.stop();
         self.search_focus.stop();
         self.search_index.borrow_mut().take();
@@ -333,6 +359,7 @@ impl Preferences {
         joined?;
         collected?;
         saved?;
+        releases?;
         Ok(())
     }
 }

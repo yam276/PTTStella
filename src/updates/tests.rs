@@ -51,6 +51,7 @@ fn pending(request: Request) -> Checker {
             checking: true,
             ..Status::default()
         },
+        source: Source::Published,
     }
 }
 
@@ -276,4 +277,152 @@ async fn closing_owner_cancels_an_active_http_body_without_waiting_for_the_deadl
     }
     drop(owner);
     server.await.unwrap();
+}
+
+#[test]
+fn synthetic_update_sources_cannot_contact_a_remote_or_ambient_proxy_target() {
+    for url in [
+        "https://github.com/yam276/PTTStella/releases/latest",
+        "http://localhost:1234/latest",
+        "http://127.0.0.1/latest",
+        "http://127.0.0.2:1234/latest",
+        "http://user:secret@127.0.0.1:1234/latest",
+        "http://127.0.0.1:1234/latest?redirect=remote",
+        "file:///tmp/release.json",
+    ] {
+        assert!(Checker::loopback(url).is_err(), "{url}");
+    }
+    assert!(Checker::loopback("http://127.0.0.1:1234/latest").is_ok());
+}
+
+async fn read_request(socket: &mut tokio::net::TcpStream) -> String {
+    let mut bytes = Vec::new();
+    while !bytes.ends_with(b"\r\n\r\n") {
+        bytes.push(socket.read_u8().await.unwrap());
+        assert!(bytes.len() < 16384);
+    }
+    let request = String::from_utf8(bytes).unwrap();
+    let headers = request.to_ascii_lowercase();
+    assert!(
+        !headers.contains("authorization:")
+            && !headers.contains("cookie:")
+            && !headers.contains("referer:")
+    );
+    request
+}
+
+async fn within<T>(future: impl Future<Output = T>) -> T {
+    tokio::time::timeout(Duration::from_secs(3), future)
+        .await
+        .expect("bounded update fixture did not make progress")
+}
+
+#[tokio::test]
+async fn native_worker_deduplicates_retries_locally_and_retains_a_valid_offer_on_failure() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}/latest", listener.local_addr().unwrap());
+    let (ready, started) = tokio::sync::oneshot::channel();
+    let (release, held) = tokio::sync::oneshot::channel();
+    let (done, mut responses) = tokio::sync::mpsc::channel(1);
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        read_request(&mut socket).await;
+        ready.send(()).unwrap();
+        held.await.unwrap();
+        socket
+            .write_all(reply("429 Too Many Requests", "wait").as_bytes())
+            .await
+            .unwrap();
+        drop(socket);
+        done.send(1).await.unwrap();
+        for (index, body) in [
+            (
+                2,
+                r#"{"tag_name":"v999.0.0","draft":false,"prerelease":false,"html_url":"https://evil.invalid/"}"#,
+            ),
+            (3, "invalid JSON"),
+        ] {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            read_request(&mut socket).await;
+            socket
+                .write_all(reply("200 OK", body).as_bytes())
+                .await
+                .unwrap();
+            drop(socket);
+            done.send(index).await.unwrap();
+        }
+    });
+    let mut worker = Worker::start(Checker::loopback(&endpoint).unwrap(), true).unwrap();
+    let mut statuses = worker.updates();
+    within(started).await.unwrap();
+    for _ in 0..100 {
+        assert!(!worker.request());
+    }
+    release.send(()).unwrap();
+    assert_eq!(within(responses.recv()).await, Some(1));
+    within(statuses.wait_for(|s| !s.checking)).await.unwrap();
+    assert_eq!(*statuses.borrow(), Status::default());
+    for index in [2, 3] {
+        assert!(worker.request());
+        assert_eq!(within(responses.recv()).await, Some(index));
+        within(statuses.wait_for(|s| !s.checking && s.available.is_some()))
+            .await
+            .unwrap();
+        assert_eq!(
+            statuses.borrow().available.as_ref().unwrap().url,
+            "https://github.com/yam276/PTTStella/releases/tag/v999.0.0"
+        );
+        assert!(!statuses.borrow().up_to_date);
+    }
+    worker.shutdown().await.unwrap();
+    within(server).await.unwrap();
+}
+
+#[tokio::test]
+async fn native_worker_shutdown_joins_and_closes_a_stalled_http_response() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}/latest", listener.local_addr().unwrap());
+    let (ready, started) = tokio::sync::oneshot::channel();
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        read_request(&mut socket).await;
+        socket
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 999\r\n\r\n{")
+            .await
+            .unwrap();
+        ready.send(()).unwrap();
+        let mut byte = [0];
+        match tokio::time::timeout(Duration::from_secs(2), socket.read(&mut byte))
+            .await
+            .unwrap()
+        {
+            Ok(0) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::ConnectionReset => {}
+            other => panic!("expected cancellation EOF/reset, got {other:?}"),
+        }
+    });
+    let mut worker = Worker::start(Checker::loopback(&endpoint).unwrap(), true).unwrap();
+    within(started).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(2), worker.shutdown())
+        .await
+        .unwrap()
+        .unwrap();
+    within(server).await.unwrap();
+    worker.shutdown().await.unwrap(); // Idempotent, no detached handle.
+}
+
+#[tokio::test]
+async fn cancellation_discards_a_check_queued_before_the_worker_gets_polled() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}/latest", listener.local_addr().unwrap());
+    let mut worker = Worker::start(Checker::loopback(&endpoint).unwrap(), false).unwrap();
+    assert!(worker.request());
+    worker.cancel();
+    assert!(!worker.request());
+    worker.shutdown().await.unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_millis(30), listener.accept())
+            .await
+            .is_err()
+    );
 }

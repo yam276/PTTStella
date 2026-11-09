@@ -55,6 +55,7 @@ impl Media {
         output: Rc<Output>,
         probe: bool,
         preferences: pttstella::settings::preferences::Preferences,
+        check_releases: bool,
     ) -> Rc<Self> {
         let owner = Rc::new(Self {
             ui: ui.as_weak(),
@@ -72,7 +73,12 @@ impl Media {
             presentation: Cell::new(Presentation::Hover),
             dwell: slint::Timer::default(),
             candidate: RefCell::new(None),
-            preferences: crate::preferences::Preferences::mount(ui, output.clone(), preferences),
+            preferences: crate::preferences::Preferences::mount(
+                ui,
+                output.clone(),
+                preferences,
+                check_releases,
+            ),
             #[cfg(feature = "native-video")]
             video: RefCell::new(None),
         });
@@ -589,14 +595,18 @@ impl Media {
     pub async fn shutdown(&self) -> Result<(), String> {
         self.closed.set(true);
         self.close(false);
+        let releases = self.preferences.shutdown_releases().await;
         #[cfg(feature = "native-video")]
         {
             let video = self.video.borrow().clone();
             if let Some(video) = video {
-                video.shutdown().await?;
+                let stopped = video.shutdown().await;
+                releases?;
+                stopped?;
+                return Ok(());
             }
         }
-        Ok(())
+        releases
     }
     #[cfg(feature = "native-video")]
     fn video_valid(&self, sequence: u64) -> bool {

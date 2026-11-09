@@ -176,7 +176,10 @@ impl Video {
         let ui = self.ui.upgrade();
         // Session cleanup must continue after the root component/GL surface
         // has gone. No new offer may be created for an absent window.
-        if ui.is_none() {
+        if ui.is_none() && !self.closed.replace(true) {
+            // Root teardown can precede another owner's asynchronous join.
+            // Revoke once and let the watcher finish/drain; repeatedly calling
+            // close() here consumes its own Notify forever while idle.
             self.close();
         }
         let sequence = self.current.borrow().as_ref().map(|v| v.sequence);
