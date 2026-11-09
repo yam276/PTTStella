@@ -4,7 +4,10 @@ use crate::{
     verification::{self, Verification, require, wait},
 };
 use pttstella::connection::{Connection, Phase};
-use slint::{ComponentHandle, Model, platform::Key};
+use slint::{
+    ComponentHandle, Model,
+    platform::{Key, PointerEventButton},
+};
 use std::{error::Error, path::PathBuf, rc::Rc};
 
 async fn choose(ui: &TerminalWindow, category: i32, label: &str) -> Result<(), String> {
@@ -115,7 +118,15 @@ pub fn start(
                 ui.get_shell_notice_dismissible(),
                 "local error cannot be acknowledged",
             )?;
-            ui.invoke_notice_dismiss();
+            // Hit the actual standard button: calling the callback directly
+            // would skip the focus acquired by a real notification click.
+            let width = ui.window().size().width as f32 / ui.window().scale_factor();
+            let panel_width = 620_f32.min(width - 32.);
+            verification::click(
+                &ui,
+                slint::LogicalPosition::new(width / 2. + panel_width / 2. - 24., 36.),
+                PointerEventButton::Left,
+            );
             require(
                 !ui.get_shell_notice_dismissible(),
                 "persistent connection state exposes a no-op dismiss button",
@@ -124,6 +135,11 @@ pub fn start(
                 !ui.get_shell_status_visible(),
                 "acknowledged local error stayed open",
             )?;
+            wait(
+                || ui.get_terminal_input_focused(),
+                "notice dismissal did not restore terminal focus",
+            )
+            .await?;
             require(
                 connection.updates.borrow().input_epoch == 0,
                 "shell controls sent station input",
