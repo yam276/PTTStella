@@ -36,6 +36,8 @@ enum Command {
     Sites,
     Filters,
     Bookmarks,
+    Destination,
+    StopDestination,
 }
 struct PressedAction {
     index: i32,
@@ -260,6 +262,18 @@ impl Tools {
         let mut result = Vec::new();
         match category {
             0 => {
+                if ui.get_destination_available() {
+                    result.push((
+                        Command::Destination,
+                        pttstella::msg!("destination-title"),
+                        true,
+                    ));
+                    result.push((
+                        Command::StopDestination,
+                        pttstella::msg!("destination-stop"),
+                        ui.get_destination_active(),
+                    ));
+                }
                 for (action, intent) in [
                     (Action::Back, Intent::Back),
                     (Action::Previous, Intent::PreviousPage),
@@ -582,6 +596,8 @@ impl Tools {
             Command::Sites => ui.invoke_sites_show(),
             Command::Filters => ui.invoke_filters_show(),
             Command::Bookmarks => ui.invoke_bookmarks_show(),
+            Command::Destination => ui.invoke_destination_show(),
+            Command::StopDestination => ui.invoke_destination_stop(),
         }
     }
     fn key(&self, key: i32, repeat: bool) {

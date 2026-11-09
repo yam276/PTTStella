@@ -29,7 +29,8 @@ macro_rules! text_window {
 text_window!(
     crate::SitesWindow,
     crate::FiltersWindow,
-    crate::BookmarksWindow
+    crate::BookmarksWindow,
+    crate::DestinationWindow
 );
 
 pub fn install<W: TextWindow>(root: &TerminalWindow, window: &W) {
@@ -37,6 +38,20 @@ pub fn install<W: TextWindow>(root: &TerminalWindow, window: &W) {
     let weak = window.as_weak();
     let modifiers = Cell::new(ModifiersState::empty());
     window.window().on_winit_window_event(move |_, event| {
+        if let WindowEvent::KeyboardInput {
+            event,
+            is_synthetic: false,
+            ..
+        } = event
+            && let Some(root) = root.upgrade()
+        {
+            crate::native_input::auxiliary_key(
+                &root,
+                event.physical_key,
+                event.state == ElementState::Pressed,
+                event.repeat,
+            );
+        }
         if let WindowEvent::ModifiersChanged(m) = event {
             modifiers.set(m.state());
         }

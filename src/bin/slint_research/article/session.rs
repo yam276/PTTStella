@@ -21,6 +21,10 @@ use std::{
 };
 use tokio::{sync::Notify, time::Instant};
 
+struct DestinationWait {
+    stamp: pttstella::navigation::Stamp,
+    complete: Box<dyn FnOnce(Result<(), String>)>,
+}
 type ReplyWait = Pin<Box<dyn Future<Output = Result<(), String>>>>;
 #[path = "accounts.rs"]
 mod accounts;
@@ -48,6 +52,7 @@ pub struct ArticleSession {
     notify: Rc<Notify>,
     job: RefCell<Option<slint::JoinHandle<()>>>,
     reply: RefCell<Option<Reply>>,
+    destination_wait: RefCell<Option<DestinationWait>>,
     cancellation: RefCell<Option<NavigationCancellation>>,
     busy: Cell<bool>,
     serial: Cell<u64>,
@@ -118,6 +123,7 @@ impl ArticleSession {
             notify: Rc::new(Notify::new()),
             job: RefCell::new(None),
             reply: RefCell::new(None),
+            destination_wait: RefCell::new(None),
             cancellation: RefCell::new(None),
             busy: Cell::new(false),
             serial: Cell::new(0),
@@ -217,7 +223,9 @@ impl ArticleSession {
                         if let Some(owner)=weak.upgrade() && !owner.closed.get() && owner.serial.get()==result.0 {
                             owner.busy.set(false);
                             if let Some(cancel)=owner.cancellation.take() && result.1.is_err(){cancel.cancel();}
-                            if let Err(error)=result.1 {owner.core.borrow_mut().stop_full_load();owner.notice(error);}
+                            let destination=owner.destination_wait.borrow_mut().take();
+                            if let Some(destination)=destination {(destination.complete)(result.1);}
+                            else if let Err(error)=result.1 {owner.core.borrow_mut().stop_full_load();owner.notice(error);}
                         }
                         notify.notify_one();
                     }
@@ -264,12 +272,18 @@ impl ArticleSession {
                 ui.set_article_station(false);
             }
         }
+        if self.destination_wait.borrow().as_ref().is_some_and(|d| {
+            d.stamp.generation != view.generation || view.phase != Phase::Connected
+        }) {
+            self.cancel_command();
+        }
         self.core.borrow_mut().update(view);
         self.reading_timing("cached", view);
         self.retire_stale_projection(view);
         self.find_sync_ui();
         if let Some(ui) = self.ui.upgrade() {
             ui.invoke_inline_updated();
+            ui.invoke_destination_updated();
         }
     }
     fn retire_stale_projection(&self, view: &View) {
@@ -290,7 +304,11 @@ impl ArticleSession {
         if no_article || scope_changed {
             self.permit.set(None);
             self.shown.set(None);
-            self.cancel_command();
+            // Destination receipts share this slot but are valid on menu/list
+            // screens with no article. Only a reading request depends on scope.
+            if self.destination_wait.borrow().is_none() {
+                self.cancel_command();
+            }
             if let Some(view) = self.view.borrow().as_ref() {
                 view.hide();
             }
@@ -643,11 +661,54 @@ impl ArticleSession {
             (a, b) => a.or(b),
         }
     }
+    /// Synchronously enqueue through the same Session and native receipt slot.
+    /// A successful receipt means started, not reached.
+    pub fn go_to(
+        &self,
+        stamp: pttstella::navigation::Stamp,
+        target: pttstella::navigation_job::Destination,
+        complete: impl FnOnce(Result<(), String>) + 'static,
+    ) -> Result<(), String> {
+        if self.closed.get() || self.busy.get() {
+            return Err(pttstella::msg!("command-busy"));
+        }
+        let reply = self.connection.request_go_to(stamp, target)?;
+        self.core.borrow_mut().interrupt_full_load();
+        self.destination_wait.replace(Some(DestinationWait {
+            stamp,
+            complete: Box::new(complete),
+        }));
+        self.busy.set(true);
+        self.serial.set(self.serial.get().wrapping_add(1));
+        self.reply.replace(Some(reply));
+        self.notify.notify_one();
+        Ok(())
+    }
+    pub fn cancel_destination(&self, stamp: pttstella::navigation::Stamp) -> Result<(), String> {
+        let result = self.connection.cancel_navigation(stamp);
+        if self
+            .destination_wait
+            .borrow()
+            .as_ref()
+            .is_some_and(|d| d.stamp == stamp)
+        {
+            self.cancel_command();
+            self.notify.notify_one();
+        }
+        result
+    }
     fn cancel_command(&self) {
         if let Some(cancel) = self.cancellation.take() {
             cancel.cancel();
         }
         self.reply.take();
+        let destination = self.destination_wait.borrow_mut().take();
+        if let Some(destination) = destination {
+            let cancelled = self.connection.cancel_navigation(destination.stamp);
+            (destination.complete)(Err(cancelled
+                .err()
+                .unwrap_or_else(|| pttstella::msg!("command-stale"))));
+        }
         self.serial.set(self.serial.get().wrapping_add(1));
         self.busy.set(false);
     }

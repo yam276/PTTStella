@@ -23,6 +23,7 @@ impl Profile {
             "application": APPLICATION,
             "config_directory": path(self.config.clone())?,
             "settings": path(self.config.join("settings.json"))?,
+            "recent_boards":path(self.data.join("recent-boards.json"))?,
             "bookmarks": path(self.data.join("bookmarks.json"))?,
             "sites": path(self.config.join("sites.json"))?,
             "filters": path(self.config.join("filters.json"))?,
@@ -45,6 +46,9 @@ impl Profile {
     }
     pub fn drafts(&self) -> pttstella::drafts::store::Store {
         pttstella::drafts::store::Store::at(self.config.join("drafts.json"))
+    }
+    pub fn recent(&self) -> pttstella::recent_boards::store::Store {
+        pttstella::recent_boards::store::Store::at(self.data.join("recent-boards.json"))
     }
     pub fn bookmarks(&self) -> pttstella::bookmarks::store::Store {
         pttstella::bookmarks::store::Store::at(self.data.join("bookmarks.json"))

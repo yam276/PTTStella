@@ -9,6 +9,14 @@ use std::{
     rc::{Rc, Weak},
 };
 
+#[derive(Default)]
+pub struct Managers<'a> {
+    pub sites: Option<&'a Rc<Manager>>,
+    pub filters: Option<&'a Rc<crate::filters_manager::Manager>>,
+    pub bookmarks: Option<&'a Rc<crate::bookmarks_manager::Manager>>,
+    pub destination: Option<&'a Rc<crate::destination::Manager>>,
+}
+
 pub struct Exit {
     ui: slint::Weak<TerminalWindow>,
     media: Option<Weak<Media>>,
@@ -16,6 +24,7 @@ pub struct Exit {
     sites: Option<Weak<Manager>>,
     filters: Option<Weak<crate::filters_manager::Manager>>,
     bookmarks: Option<Weak<crate::bookmarks_manager::Manager>>,
+    destination: Option<Weak<crate::destination::Manager>>,
     requested: Rc<Cell<bool>>,
     outcome: Rc<RefCell<Option<Result<(), String>>>>,
     task: RefCell<Option<slint::JoinHandle<()>>>,
@@ -27,18 +36,17 @@ impl Exit {
         ui: &TerminalWindow,
         media: Option<&Rc<Media>>,
         article: Option<&Rc<ArticleSession>>,
-        sites: Option<&Rc<Manager>>,
-        filters: Option<&Rc<crate::filters_manager::Manager>>,
-        bookmarks: Option<&Rc<crate::bookmarks_manager::Manager>>,
+        managers: Managers<'_>,
         requested: Rc<Cell<bool>>,
     ) -> Rc<Self> {
         let owner = Rc::new(Self {
             ui: ui.as_weak(),
             media: media.map(Rc::downgrade),
             article: article.map(Rc::downgrade),
-            sites: sites.map(Rc::downgrade),
-            filters: filters.map(Rc::downgrade),
-            bookmarks: bookmarks.map(Rc::downgrade),
+            sites: managers.sites.map(Rc::downgrade),
+            filters: managers.filters.map(Rc::downgrade),
+            bookmarks: managers.bookmarks.map(Rc::downgrade),
+            destination: managers.destination.map(Rc::downgrade),
             requested,
             outcome: Rc::new(RefCell::new(None)),
             task: RefCell::new(None),
@@ -78,6 +86,7 @@ impl Exit {
         let sites = self.sites.as_ref().and_then(Weak::upgrade);
         let filters = self.filters.as_ref().and_then(Weak::upgrade);
         let bookmarks = self.bookmarks.as_ref().and_then(Weak::upgrade);
+        let destination = self.destination.as_ref().and_then(Weak::upgrade);
         let outcome = self.outcome.clone();
         let window = self.window.clone();
         // The future owns only dependencies, never this owner/its JoinHandle.
@@ -93,6 +102,9 @@ impl Exit {
             }
             if let Some(bookmarks) = bookmarks {
                 bookmarks.prepare_app_close();
+            }
+            if let Some(destination) = destination {
+                destination.shutdown().await;
             }
             if let Some(article) = article {
                 article.shutdown().await;

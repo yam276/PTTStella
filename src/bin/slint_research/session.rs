@@ -198,6 +198,9 @@ pub fn with_probe(
         Probe::Media if std::env::var_os("PTTSTELLA_SLINT_ACCOUNT_ACTIONS").is_some() => {
             "slint_account_actions"
         }
+        Probe::Media if std::env::var_os("PTTSTELLA_SLINT_DESTINATION_PROBE").is_some() => {
+            "slint_native_destination"
+        }
         Probe::Media => "slint_native_media",
         Probe::ArticleInline => "slint_native_inline",
         Probe::Reconnect => "slint_session",
@@ -246,7 +249,13 @@ pub fn with_probe(
                 }
             }
             Probe::Media => {
-                if let Some(peers) = &site_peers {
+                if let Ok(case) = std::env::var("PTTSTELLA_SLINT_DESTINATION_PROBE") {
+                    match case.as_str() {
+                        "boards" | "native" => Connection::start_board_probe(),
+                        "articles" => Connection::start_article_probe(),
+                        _ => Err("unknown destination probe case".into()),
+                    }
+                } else if let Some(peers) = &site_peers {
                     let connection = Connection::start_local_station_probe(
                         Screen::new(80, 24).map_err(|e| e.to_string())?,
                     )?;

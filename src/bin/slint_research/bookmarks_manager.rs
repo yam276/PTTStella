@@ -117,7 +117,7 @@ impl Manager {
         });
         owner
     }
-    fn window(&self) -> Option<BookmarksWindow> {
+    pub(crate) fn window(&self) -> Option<BookmarksWindow> {
         self.window
             .borrow()
             .as_ref()
@@ -147,6 +147,7 @@ impl Manager {
                 "bookmarks-archive-readonly",
                 "context-previous",
                 "context-next",
+                "bookmarks-go",
             ]
             .map(|key| loader.get(key)),
         ));
@@ -175,6 +176,11 @@ impl Manager {
                     .is_some_and(|s| s.check_write().is_ok()),
             );
             w.set_selected(self.selected.borrow().is_some());
+            w.set_go_ready(
+                self.ui
+                    .upgrade()
+                    .is_some_and(|ui| ui.get_destination_available()),
+            );
             w.set_has_copy(self.selected.borrow().as_ref().is_some_and(|t| {
                 self.rows
                     .borrow()
@@ -250,6 +256,7 @@ impl Manager {
         if self.stopped.get()
             || ui.get_app_closing()
             || self.output.busy()
+            || ui.get_destination_open()
             || ui.get_sites_open()
             || ui.get_filters_open()
             || ui.get_settings_open()
@@ -431,6 +438,18 @@ impl Manager {
         );
     }
     fn action(self: &Rc<Self>, code: i32) {
+        if code == 4 {
+            if let Some(ui) = self.ui.upgrade()
+                && ui.get_destination_available()
+            {
+                let target = self.selected.borrow().as_ref().map(target_text);
+                if let Some(target) = target {
+                    self.hide();
+                    ui.invoke_destination_fill(target.into());
+                }
+            }
+            return;
+        }
         if code == 3 {
             self.reload();
             return;

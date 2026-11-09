@@ -197,6 +197,23 @@ fn mount_window(
 ) -> Rc<Paste> {
     ui.set_terminal_input(true);
     let input = Rc::new(RefCell::new(Input::default()));
+    ui.on_auxiliary_key({
+        let input = input.clone();
+        move |code, pressed, repeat| {
+            let keys = [
+                KeyCode::Enter,
+                KeyCode::NumpadEnter,
+                KeyCode::Space,
+                KeyCode::Escape,
+                KeyCode::Tab,
+            ];
+            if let Some(key) = usize::try_from(code).ok().and_then(|i| keys.get(i)) {
+                input
+                    .borrow_mut()
+                    .modal_edge(PhysicalKey::Code(*key), pressed, repeat, true);
+            }
+        }
+    });
     ui.on_native_shift_held({
         let input = input.clone();
         move || input.borrow().modifiers.shift_key()
@@ -608,6 +625,13 @@ fn mount_window(
                 }
                 return Propagate;
             }
+            if let WindowEvent::KeyboardInput{event,is_synthetic:false,..}=event
+                && ui.get_destination_available() && !ui.get_tools_source_blocked()
+                && !input.composition.as_ref().is_some_and(|c|c.active)
+                && client_shortcut(event.physical_key,input.modifiers,KeyCode::KeyK) {
+                let activate=event.state==ElementState::Pressed && !event.repeat;
+                drop(input);if activate {ui.invoke_destination_show();}return PreventDefault;
+            }
             // Local search owns its native text field, including IME and paste.
             // Route it before the BBS focus/keyboard gates (Vim may be normal).
             if let WindowEvent::KeyboardInput { event, .. } = event
@@ -971,8 +995,27 @@ fn actions_available(ui: &TerminalWindow, view: &View) -> bool {
         && !ui.get_output_busy()
 }
 
+/// Auxiliary windows feed activation edges to the same root hold guard so an
+/// Enter/Space/Esc that closes them cannot repeat into a newly focused BBS.
+pub(crate) fn auxiliary_key(ui: &TerminalWindow, key: PhysicalKey, pressed: bool, repeat: bool) {
+    let keys = [
+        KeyCode::Enter,
+        KeyCode::NumpadEnter,
+        KeyCode::Space,
+        KeyCode::Escape,
+        KeyCode::Tab,
+    ];
+    if let PhysicalKey::Code(key) = key
+        && let Some(index) = keys.iter().position(|code| *code == key)
+    {
+        ui.invoke_auxiliary_key(index as i32, pressed, repeat);
+    }
+}
 fn find_shortcut(physical: PhysicalKey, modifiers: ModifiersState) -> bool {
-    physical == PhysicalKey::Code(KeyCode::KeyF)
+    client_shortcut(physical, modifiers, KeyCode::KeyF)
+}
+fn client_shortcut(physical: PhysicalKey, modifiers: ModifiersState, code: KeyCode) -> bool {
+    physical == PhysicalKey::Code(code)
         && modifiers.control_key() != modifiers.super_key()
         && !modifiers.alt_key()
         && !modifiers.shift_key()

@@ -1,3 +1,4 @@
+export { DestinationWindow } from "destination.slint";
 export { BookmarksWindow } from "bookmarks.slint";
 export { FiltersWindow } from "filters.slint";
 export { SitesWindow } from "sites.slint";
@@ -20,6 +21,16 @@ export { StationColorState } from "station-color.slint";
 import { StationColor, StationColorState } from "station-color.slint";
 
 export component TerminalWindow inherits Window {
+    callback destination-updated;
+    callback auxiliary-key(int,bool,bool);
+    in property <bool> destination-available;
+    in property <bool> destination-open;
+    in property <bool> destination-active;
+    callback destination-show;
+    callback destination-fill(string);
+    callback destination-stop;
+    changed destination-active=>{root.tools-updated();}
+    changed destination-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
     callback app-quit;
     in property <bool> app-closing;
     changed app-closing => {root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
@@ -51,7 +62,7 @@ export component TerminalWindow inherits Window {
     callback bookmarks-show;
     callback bookmarks-updated;
     changed bookmarks-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
-    out property <bool> manager-open:root.sites-open || root.filters-open || root.bookmarks-open;
+    out property <bool> manager-open:root.sites-open || root.filters-open || root.bookmarks-open || root.destination-open;
     changed filters-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
     in property <bool> sites-available;
     in property <bool> sites-open;

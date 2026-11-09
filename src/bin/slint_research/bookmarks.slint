@@ -15,6 +15,7 @@ export component BookmarksWindow inherits Window {
     in property <bool> composing;
     in property <bool> selected;
     in property <bool> has-copy;
+    in property <bool> go-ready;
     in property <bool> offline;
     in property <image> page;
     in property <string> progress;
@@ -56,6 +57,7 @@ export component BookmarksWindow inherits Window {
                 Button {text:root.labels[6];enabled:root.writable && !root.busy && !root.composing;clicked=>{root.action(0);}}
                 Button {text:root.labels[7];enabled:root.writable && root.selected && !root.busy && !root.composing;clicked=>{root.action(1);}}
                 Button {text:root.labels[8];enabled:root.has-copy && !root.busy && !root.composing;clicked=>{root.action(2);}}
+                Button {text:root.labels[14];enabled:root.go-ready && root.selected && !root.busy && !root.composing;clicked=>{root.action(4);}}
             }
             Text {text:root.message;color:#f2cd7d;wrap:word-wrap;vertical-stretch:1;}
             HorizontalLayout {
