@@ -103,3 +103,7 @@ required-features = ["native-player-probe"]
 [[example]]
 name = "slint_picture_repro"
 required-features = ["slint-research"]
+
+[[example]]
+name = "store_compatibility"
+required-features = ["desktop-services"]

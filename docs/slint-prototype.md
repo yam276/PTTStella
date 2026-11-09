@@ -1416,3 +1416,36 @@ pttstella-slint --probe-media --verify-media <NEW_REOPEN_DIR>
 本批證明macOS基本列表指定收藏及新程序斷線讀回；完整鍵盤／IME／focus／其他平台、全資料雙版本往返與四架構候選包仍待驗。測試App是開發用本機launcher，依賴此owned資料路徑，不冒充S8可攜發佈包。完整S0–S8維持active，S9未切換／整合／推送／發佈。
 
 列表原生驗收批次 `c3c75e6` 完成後，以Cargo原生clean移除本Slint target/release（8385檔、2.7GiB；du原2848280KiB），並清掉上一個 `slint-mixed-reading/Native-Mixed.app`（du65736KiB）及11個被最終同案取代的首輪正向generated目錄。舊App僅留2571bytes非binary metadata ZIP；來源／hash／log、唯一啟動失敗及原始OS擷圖保留。target回到12KiB，最新一般配置測試包改為 `slint-native-list/Native-Bookmarks.app`，同一收藏檔、影片配置與Windows S1 ZIP保留且hash不變，267份src不變。精確刪除路徑、逐檔hash、owner／symlink／lsof及保留例外見 `.local/verification/slint-native-list/cleanup.json`。filesystem available 238569623552→241283104768 bytes只記觀測差額；不全歸因於本批，不重建Rust，也不刪其他聊天產物或未整合worktree。
+
+## S7 三版本生產 store 往返與回退界線（2026-11-09）
+
+新增 [headless driver](../examples/store_compatibility.rs)、[往返驗收工具](../tooling/verify_store_compatibility.py) 及其五個負向自測。driver 使用該 revision 的 `settings`、`sites`、`filters`、`bookmarks`、`drafts`、`recent_boards` 生產 Store 與 `PortableProfile`，沒有另一份格式解析／合併實作。必須指定目錄，且目錄內須有精確 synthetic marker 才能操作；不使用 system path、GUI、網路或密碼庫。資料與獨立 expected 均為自製 CC0，無帳密或實站流量。
+
+實際分開編譯的來源為候選 `1b979740882aec190ef640cdce13360e91276c96`、指定 Dioxus 基準 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，以及公開 v0.4.1 tag `e304be283a4ad12772145c22da4cfc9eca4277b5`。後者與當時 remote main 不同，沒有以 main 代替正式版。候選僅增加 example／manifest，兩個舊版 checkout 僅複製同一個 example，tracked sources 與 Cargo.lock 未改。各 driver 的 `--describe`、binary SHA-256、ref、命令和生產來源雜湊保留在 `.local/verification/slint-store-roundtrip/`。GitHub release 查詢同時確認 v0.4.1 為公開非 prerelease；這是該次觀測，不代表未來最新版本。
+
+macOS arm64 實跑28案、155次 driver 呼叫，`supported-run/report.json` 為 passed，所有 owned children 已 joined：
+
+- 12個往返案例：兩個舊版各設定 v1–v6。先讀舊資料，再由候選保存、舊版讀寫、候選再保存並由舊版重開；每次比對七份文件的完整 normalized values。六種 Store 的 `.bak` 必須逐 byte 等於前一版；portable profile 是明確匯出，沒有聲稱 Store 備份。
+- 7份毀損文件、1份未來設定版本：三個實際 revision 均須拒讀，主檔／備份 hash 不變。未標記的 root 三版均拒絕，且不建立 Store 檔案。
+- 6個兩程序案例：每個舊版與候選共同讀同一初始資料，再以只屬於這兩個 fixture actor 的就緒訊號開始。不同設定欄位合併；同欄只有一個成功；同稿同時保存保留兩份正文，一份原稿 revision 4、一份 conflict revision 1。使用原有 OS Store 鎖，沒有全域資源協調機制。
+- 1個新欄位回退反例：候選與指定基準接受 `auto_expand_images=true`，v0.4.1 拒讀且不改檔。此案通過表示正確識別不支援，**不是 v0.4.1 支援新格式**；完整新欄位的回退目標為 `5ea9ad6`。公開版往返只用其實際支援、沒有後加欄位的 v1–v6 文件。
+
+獨立 expected 核對原始收藏四列各80欄、中文字左右不同 style、原始 OSC8 link、標籤及時間、同端點不同編碼站點、黑白名單 policy／color／Unicode note、未修改草稿的尾空行，以及半成品 ANSI。讀取不寫入舊檔；同稿競爭的完整 expected 由 fixture 與勝負結果推導，沒有把實際 snapshot 複製為 expected。五個工具自測另確認已有 output 不被覆寫、exit0但資料失真仍失敗、拒讀卻改檔仍失敗、錯誤出口只 join 自己孩子，以及空案例不能通過。
+
+重跑時先為上列兩個精確舊 ref 建立自己的 detached worktree，把同一 `examples/store_compatibility.rs` 複製至各自的 examples 目錄；不要改舊版生產來源或 Cargo.lock。候選使用 `desktop-services`，兩個舊版使用 `desktop`。在各自 checkout 依下列命令建置，`REF`／`FEATURE`／`OWNED_TARGET` 置換為該版 ref／feature 與已確認的自有目錄；每次建完立即將 `OWNED_TARGET/release/examples/store_compatibility` 複製為對應的 `DRIVERS/candidate`、`baseline` 或 `release`，再建下一版，避免覆蓋前一版 driver。
+
+```sh
+CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 \
+PTTSTELLA_COMPAT_REF=<REF> cargo build --locked --release --features <FEATURE> \
+  --example store_compatibility --target-dir <OWNED_TARGET>
+
+PYTHONDONTWRITEBYTECODE=1 python3 tooling/verify_store_compatibility.py \
+  --candidate <DRIVERS>/candidate --baseline <DRIVERS>/baseline \
+  --release <DRIVERS>/release --output <NEW_OUTPUT_DIR>
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tooling \
+  -p test_verify_store_compatibility.py -v
+```
+
+本批 driver source SHA-256 `6a6ff448ca4ebb2751ce089bc7687f743742b05d8785ecebbc0518d446699885`；Rust lib368及multi-instance10 passed、5個明示 ignored，example Clippy `-D warnings` 與fmt通過。初期 fixture 字級超過契約、閱讀 footer 缺指令，以及公開版遇到後加欄位的失敗原樣保留；先修正自製 fixture 的有效範圍，再將真實格式差異列為回退限制，沒有修改生產 decoder 或刪掉後加資料來通過。
+
+驗收後已清掉三個可重建 driver、獨立 target/release（Cargo宣告1.8GiB）及兩個臨時 checkout；來源／patch、報告與唯一失敗證據保留，詳見同批 `cleanup/ledger.json`。本批只證明檔案／schema／交易層；完整前端、產品路徑／vault、鎖逾時／容量／清空屏障的跨版本等效、Windows／Linux、S8安裝回退與效能仍需各自證據。完整S0–S8保持active，S9未執行。
