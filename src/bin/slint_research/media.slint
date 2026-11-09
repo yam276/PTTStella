@@ -7,7 +7,7 @@ export component MediaPreview inherits Rectangle {
     in property <string> status;
     in property <bool> ready;
     in property <bool> video;
-    in property <float> position;
+    in-out property <float> position;
     in property <float> duration;
     out property <length> video-left: view.absolute-position.x;
     out property <length> video-top: view.absolute-position.y;
@@ -104,7 +104,8 @@ export component MediaPreview inherits Rectangle {
                 }
                 if root.video: HorizontalLayout {spacing:6px;
                     Button {text:root.motion-label;enabled:root.ready && root.foreground && !root.busy;clicked=>{root.action(2);}}
-                    Slider {minimum:0;maximum:max(1,root.duration);value:root.position;enabled:root.duration > 0 && root.foreground && !root.busy;
+                    // Keep the shared position binding after a user changes the slider.
+                    Slider {minimum:0;maximum:max(1,root.duration);value <=> root.position;enabled:root.duration > 0 && root.foreground && !root.busy;
                         changed(value)=>{root.seek(value);} }
                     Text {text:round(root.position) + " / " + round(root.duration) + " s";color:#cdd9e8;vertical-alignment:center;}
                 }
