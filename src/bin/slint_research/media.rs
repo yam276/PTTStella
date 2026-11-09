@@ -87,7 +87,7 @@ impl Media {
             Ok(video) => {
                 owner.video.replace(Some(video));
             }
-            Err(error) => ui.set_input_notice(error.into()),
+            Err(error) => crate::notice::error(ui, error),
         }
         ui.on_media_request({
             let owner = owner.clone();
@@ -277,7 +277,7 @@ impl Media {
                 self.begin_video(&ui, scope);
             }
             Ok(_) => ui.invoke_link_activated(scope.link.url.into()),
-            Err(e) => ui.set_input_notice(e.into()),
+            Err(e) => crate::notice::error(&ui, e),
         }
     }
     fn begin(self: &Rc<Self>, ui: &TerminalWindow, scope: Scope, presentation: Presentation) {
@@ -311,11 +311,11 @@ impl Media {
         } else {
             self.sequence.get().checked_add(1)
         }) else {
-            ui.set_input_notice(msg!("media-sequence-exhausted").into());
+            crate::notice::error(ui, msg!("media-sequence-exhausted"));
             return;
         };
         if let Err(e) = self.ensure_worker() {
-            ui.set_input_notice(e.into());
+            crate::notice::error(ui, e);
             return;
         }
         self.dwell.stop();
@@ -367,7 +367,7 @@ impl Media {
         if let Err(error) = result {
             self.close(presentation == Presentation::Inspect);
             if presentation == Presentation::Inspect {
-                ui.set_input_notice(error.into());
+                crate::notice::error(ui, error);
             }
         }
     }
@@ -498,8 +498,13 @@ impl Media {
         let image = self.state.borrow().original.clone();
         let request = scope.sequence;
         let weak = Rc::downgrade(self);
-        self.output
-            .picture_output(ui, scope, image, action, self.probe, move |ui, message| {
+        self.output.picture_output(
+            ui,
+            scope,
+            image,
+            action,
+            self.probe,
+            move |ui, message, _kind| {
                 if let Some(owner) = weak.upgrade() {
                     let scope = owner.active.borrow().clone();
                     if let Some(scope) = scope
@@ -509,7 +514,8 @@ impl Media {
                         owner.feedback(ui, message);
                     }
                 }
-            });
+            },
+        );
     }
     fn feedback(&self, ui: &TerminalWindow, message: String) {
         self.feedback.replace(Some(message.clone()));
@@ -622,7 +628,7 @@ impl Media {
             return;
         }
         let Some(sequence) = self.sequence.get().checked_add(1) else {
-            ui.set_input_notice(msg!("media-sequence-exhausted").into());
+            crate::notice::error(ui, msg!("media-sequence-exhausted"));
             return;
         };
         self.close(false);

@@ -325,7 +325,7 @@ impl Manager {
                     self.window.replace(Some(w));
                 }
                 Err(e) => {
-                    ui.set_input_notice(e.into());
+                    crate::notice::error(&ui, e);
                     return;
                 }
             }
@@ -350,7 +350,7 @@ impl Manager {
         if let Some(w) = self.window() {
             if let Err(e) = w.show() {
                 ui.set_bookmarks_open(false);
-                ui.set_input_notice(e.to_string().into());
+                crate::notice::error(&ui, e.to_string());
                 return;
             }
             w.window().with_winit_window(|w| w.focus_window());
@@ -614,7 +614,7 @@ impl Manager {
                 self.render();
                 self.notice(msg!("bookmarks-saved"));
                 if let Some(ui) = self.ui.upgrade() {
-                    ui.set_input_notice(msg!("bookmarks-saved").into());
+                    crate::notice::success(&ui, msg!("bookmarks-saved"));
                 }
                 Ok(())
             }
@@ -637,7 +637,7 @@ impl Manager {
         if let Err(e) = &result {
             self.notice(e.clone());
             if let Some(ui) = self.ui.upgrade() {
-                ui.set_input_notice(e.clone().into());
+                crate::notice::error(&ui, e.clone());
             }
         }
         self.sync();

@@ -116,7 +116,7 @@ pub fn mount(
             };
             connection.keep_alive_gate(stamp, false);
             if let Err(error) = connection.keep_alive(!enabled) {
-                ui.set_input_notice(error.into());
+                crate::notice::error(&ui, error);
             }
             ui.invoke_focus_terminal();
         }

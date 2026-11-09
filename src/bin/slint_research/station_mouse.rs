@@ -202,7 +202,7 @@ impl StationMouse {
                 let generation = self.connection.updates.borrow().generation;
                 self.state.borrow_mut().revoke(generation);
                 self.connection.revoke_mouse(generation);
-                ui.set_input_notice(error.into());
+                crate::notice::error(ui, error);
                 break;
             }
         }

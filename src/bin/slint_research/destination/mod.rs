@@ -103,11 +103,14 @@ impl Manager {
             .and_then(|w| w.as_weak().upgrade())
     }
     fn notice(&self, value: String) {
-        if let Some(w) = self.window() {
-            w.set_message(value.clone().into());
-        }
+        self.inline_notice(value.clone());
         if let Some(ui) = self.ui.upgrade() {
-            ui.set_input_notice(value.into());
+            crate::notice::error(&ui, value);
+        }
+    }
+    fn inline_notice(&self, value: String) {
+        if let Some(w) = self.window() {
+            w.set_message(value.into());
         }
     }
     pub fn refresh_labels(&self) {
@@ -292,7 +295,7 @@ impl Manager {
         ui.invoke_context_dismiss(false);
         ui.invoke_reset_keyboard();
         if !ui.get_destination_open() && self.pending.get().is_none() {
-            self.notice(String::new());
+            self.inline_notice(String::new());
         }
         ui.set_destination_open(true);
         self.refresh_labels();
@@ -349,7 +352,7 @@ impl Manager {
             Ok(())
         })();
         match result {
-            Ok(()) => self.notice(msg!("destination-dialog-starting")),
+            Ok(()) => self.inline_notice(msg!("destination-dialog-starting")),
             Err(e) => self.notice(e),
         }
         self.render();
@@ -440,7 +443,7 @@ impl Manager {
             if ended {
                 self.active.set(None);
                 if !message.is_empty() {
-                    self.notice(message);
+                    self.inline_notice(message);
                 }
             }
         }

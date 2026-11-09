@@ -613,7 +613,7 @@ pub fn mount(
                     connection.connect_to(target)
                 }),
                 Err(error) => {
-                    ui.set_result(error.into());
+                    crate::notice::error(&ui, error);
                     false
                 }
             }
@@ -751,7 +751,7 @@ fn request_connection(
             true
         }
         Err(error) => {
-            ui.set_result(error.into());
+            crate::notice::error(ui, error);
             false
         }
     }

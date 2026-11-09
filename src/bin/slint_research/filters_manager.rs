@@ -144,7 +144,7 @@ impl Manager {
             || self.request.get().is_some()
             || ui.get_context_source_blocked()
         {
-            ui.set_input_notice(msg!("account-action-stale").into());
+            crate::notice::error(&ui, msg!("account-action-stale"));
             return;
         }
         let Some(cell) = target.cell else { return };
@@ -164,8 +164,11 @@ impl Manager {
     }
     fn notice(&self, text: String) {
         if let Some(ui) = self.ui.upgrade() {
-            ui.set_input_notice(text.clone().into());
+            crate::notice::error(&ui, text.clone());
         }
+        self.inline_notice(text);
+    }
+    fn inline_notice(&self, text: String) {
         if let Some(w) = self.window() {
             w.set_message(text.into());
         }
@@ -321,7 +324,7 @@ impl Manager {
                     self.window.replace(Some(w));
                 }
                 Err(e) => {
-                    ui.set_input_notice(e.into());
+                    crate::notice::error(&ui, e);
                     return;
                 }
             }
@@ -344,7 +347,7 @@ impl Manager {
         if let Some(w) = self.window() {
             if let Err(e) = w.show() {
                 ui.set_filters_open(false);
-                ui.set_input_notice(e.to_string().into());
+                crate::notice::error(&ui, e.to_string());
                 return;
             }
             w.window().with_winit_window(|w| w.focus_window());
@@ -530,7 +533,7 @@ impl Manager {
         }
         if code == 5 && self.request.get().is_some() {
             self.cancel_import();
-            self.notice(msg!("filters-import-cancelled"));
+            self.inline_notice(msg!("filters-import-cancelled"));
             return;
         }
         if self.output.busy() || self.result.borrow().is_some() {
@@ -614,7 +617,7 @@ impl Manager {
             slot: slot.clone(),
             operation,
         }));
-        self.notice(msg!("saving"));
+        self.inline_notice(msg!("saving"));
         let o = Rc::downgrade(self);
         self.output.work(
             &ui,
@@ -659,7 +662,7 @@ impl Manager {
                     w.set_shared_color(i32::from(self.rules().allow_color) - 1);
                 }
                 self.render();
-                self.notice(msg!("filters-saved"));
+                self.inline_notice(msg!("filters-saved"));
                 Ok(())
             }
             Value::Imported(request, parsed) => {
@@ -676,7 +679,7 @@ impl Manager {
                         self.preview.replace(Some(rules));
                         self.clear_draft();
                         self.render();
-                        self.notice(msg!(
+                        self.inline_notice(msg!(
                             "filters-import-preview",
                             count = parsed.entries.len(),
                             skipped = parsed.skipped,
@@ -685,7 +688,7 @@ impl Manager {
                     }
                     None => {
                         self.cancel_import();
-                        self.notice(msg!("filters-import-cancelled"));
+                        self.inline_notice(msg!("filters-import-cancelled"));
                     }
                 }
                 Ok(())

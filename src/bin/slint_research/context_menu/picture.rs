@@ -139,7 +139,7 @@ impl ContextMenu {
             picture.image,
             action,
             picture.probe,
-            |ui, message| ui.set_input_notice(message.into()),
+            crate::notice::show,
         );
     }
 }

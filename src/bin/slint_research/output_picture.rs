@@ -17,13 +17,14 @@ impl Output {
         image: Option<Arc<Image>>,
         action: PictureAction,
         probe: bool,
-        complete: impl FnOnce(&TerminalWindow, String) + 'static,
+        complete: impl FnOnce(&TerminalWindow, String, pttstella::notification::Kind) + 'static,
     ) {
         if self.closed.get() || self.busy() {
-            complete(ui, msg!("file-busy"));
+            complete(ui, msg!("file-busy"), pttstella::notification::Kind::Error);
             return;
         }
         let mut picker_opened = false;
+        let mut cancelled = false;
         let prepared = (|| {
             if !matches!(action, PictureAction::CopyUrl) && image.is_none() {
                 return Err(msg!("copy-not-ready"));
@@ -36,19 +37,19 @@ impl Output {
                     return Err(msg!("file-busy"));
                 }
                 picker_opened = true;
-                Some(
-                    ui.window()
-                        .with_winit_window(|window| {
-                            rfd::FileDialog::new()
-                                .set_parent(window)
-                                .set_title(msg!("picture-save-title"))
-                                .add_filter("Image", &[extension])
-                                .set_file_name(format!("PTTStella-image.{extension}"))
-                                .save_file()
-                        })
-                        .flatten()
-                        .ok_or_else(|| msg!("export-cancelled"))?,
-                )
+                let path = ui
+                    .window()
+                    .with_winit_window(|window| {
+                        rfd::FileDialog::new()
+                            .set_parent(window)
+                            .set_title(msg!("picture-save-title"))
+                            .add_filter("Image", &[extension])
+                            .set_file_name(format!("PTTStella-image.{extension}"))
+                            .save_file()
+                    })
+                    .flatten();
+                cancelled = path.is_none();
+                Some(path.ok_or_else(|| msg!("export-cancelled"))?)
             } else {
                 None
             };
@@ -63,7 +64,15 @@ impl Output {
         let (lease, phase, path) = match prepared {
             Ok(p) => p,
             Err(e) => {
-                complete(ui, e);
+                complete(
+                    ui,
+                    e,
+                    if cancelled {
+                        pttstella::notification::Kind::Persistent
+                    } else {
+                        pttstella::notification::Kind::Error
+                    },
+                );
                 return;
             }
         };
@@ -96,17 +105,16 @@ impl Output {
                 Ok(())
             },
             move |_, ui, result| {
-                complete(
-                    ui,
-                    match result {
-                        Ok(()) => match action {
-                            PictureAction::Save => msg!("picture-saved"),
-                            PictureAction::CopyUrl => msg!("context-copied"),
-                            PictureAction::Copy => msg!("export-copied"),
-                        },
-                        Err(e) => e,
+                use pttstella::notification::Kind;
+                let (message, kind) = match result {
+                    Ok(()) => match action {
+                        PictureAction::Save => (msg!("picture-saved"), Kind::Success),
+                        PictureAction::CopyUrl => (msg!("context-copied"), Kind::Copy),
+                        PictureAction::Copy => (msg!("export-copied"), Kind::Copy),
                     },
-                )
+                    Err(e) => (e, Kind::Error),
+                };
+                complete(ui, message, kind)
             },
         );
     }

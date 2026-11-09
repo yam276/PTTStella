@@ -819,7 +819,7 @@ impl Output {
             {
                 Ok(reply) => reply,
                 Err(error) => {
-                    ui.set_input_notice(error.into());
+                    crate::notice::error(ui, error);
                     return;
                 }
             };
@@ -842,7 +842,7 @@ impl Output {
                 if let Err(error) = result
                     && output.connection.updates.borrow().generation == stamp.generation
                 {
-                    ui.set_input_notice(error.into());
+                    crate::notice::error(&ui, error);
                 }
                 output.hover_overlay(&ui);
                 ui.invoke_keep_alive_changed();
@@ -853,7 +853,7 @@ impl Output {
             }
             Err(error) => {
                 self.cancel_navigation(ui);
-                ui.set_input_notice(error.to_string().into());
+                crate::notice::error(ui, error.to_string());
             }
         }
     }
@@ -1086,14 +1086,9 @@ impl Output {
                                         check_output(&lease, &source.borrow(), phase)
                                     })
                                 },
-                                |_, ui, result| {
-                                    ui.set_input_notice(
-                                        match result {
-                                            Ok(()) => msg!("context-copied"),
-                                            Err(e) => e,
-                                        }
-                                        .into(),
-                                    );
+                                |_, ui, result| match result {
+                                    Ok(()) => crate::notice::copied(ui, msg!("context-copied")),
+                                    Err(e) => crate::notice::error(ui, e),
                                 },
                             );
                         }
@@ -1191,7 +1186,7 @@ impl Output {
         let (text, lease, phase) = match self.prepare_copy(&ui, ansi) {
             Ok(prepared) => prepared,
             Err(error) => {
-                ui.set_input_notice(error.into());
+                crate::notice::error(&ui, error);
                 return;
             }
         };
@@ -1203,10 +1198,9 @@ impl Output {
                 check_output(&lease, &source.borrow(), phase)?;
                 clipboard.write_text(text, || check_output(&lease, &source.borrow(), phase))
             },
-            |_, ui, result| {
-                if let Err(error) = result {
-                    ui.set_input_notice(error.into());
-                }
+            |_, ui, result| match result {
+                Ok(()) => crate::notice::copied(ui, msg!("context-copied")),
+                Err(error) => crate::notice::error(ui, error),
             },
         );
     }
@@ -1271,7 +1265,7 @@ impl Output {
         let (frame, rows, lease, phase) = match self.prepare_export(&ui, selected) {
             Ok(prepared) => prepared,
             Err(error) => {
-                ui.set_input_notice(error.into());
+                crate::notice::error(&ui, error);
                 return;
             }
         };
@@ -1289,12 +1283,12 @@ impl Output {
                 let image = match result {
                     Ok(image) => image,
                     Err(error) => {
-                        ui.set_input_notice(error.into());
+                        crate::notice::error(ui, error);
                         return;
                     }
                 };
                 if let Err(error) = check_output(&lease, &source.borrow(), phase) {
-                    ui.set_input_notice(error.into());
+                    crate::notice::error(ui, error);
                     return;
                 }
                 if clipboard {
@@ -1307,14 +1301,9 @@ impl Output {
                                 check_output(&lease, &source.borrow(), phase)
                             })
                         },
-                        |_, ui, result| {
-                            ui.set_input_notice(
-                                match result {
-                                    Ok(()) => msg!("export-copied"),
-                                    Err(error) => error,
-                                }
-                                .into(),
-                            )
+                        |_, ui, result| match result {
+                            Ok(()) => crate::notice::copied(ui, msg!("export-copied")),
+                            Err(error) => crate::notice::error(ui, error),
                         },
                     );
                 } else {
@@ -1331,7 +1320,7 @@ impl Output {
                         })
                         .flatten();
                     let Some(path) = path else {
-                        ui.set_input_notice(msg!("export-cancelled").into());
+                        crate::notice::persistent(ui, msg!("export-cancelled"));
                         return;
                     };
                     output.work(
@@ -1346,14 +1335,9 @@ impl Output {
                             }
                             pttstella::storage::replace(&path, &image.png)
                         },
-                        |_, ui, result| {
-                            ui.set_input_notice(
-                                match result {
-                                    Ok(()) => msg!("export-saved"),
-                                    Err(error) => error,
-                                }
-                                .into(),
-                            )
+                        |_, ui, result| match result {
+                            Ok(()) => crate::notice::success(ui, msg!("export-saved")),
+                            Err(error) => crate::notice::error(ui, error),
                         },
                     );
                 }
@@ -1398,7 +1382,7 @@ impl Output {
         complete: impl FnOnce(&Rc<Self>, &TerminalWindow, Result<T, String>) + 'static,
     ) {
         if self.busy() {
-            ui.set_input_notice(msg!("file-busy").into());
+            crate::notice::error(ui, msg!("file-busy"));
             return;
         }
         ui.set_output_busy(true);
@@ -1413,7 +1397,7 @@ impl Output {
             Err(error) => {
                 ui.set_output_busy(false);
                 ui.invoke_keep_alive_changed();
-                ui.set_input_notice(error.to_string().into());
+                crate::notice::error(ui, error.to_string());
                 return;
             }
         };
@@ -1452,7 +1436,7 @@ impl Output {
             self.revoke();
             self.worker.borrow_mut().take().map(|worker| worker.join());
             ui.set_output_busy(false);
-            ui.set_input_notice(error.to_string().into());
+            crate::notice::error(ui, error.to_string());
         }
     }
     pub fn set_display(&self, display: DisplaySettings) {

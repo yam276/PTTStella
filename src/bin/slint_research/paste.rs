@@ -144,18 +144,18 @@ impl Paste {
             return;
         }
         if !ui.get_context_focus_restorable() || !self.field_focused(ui) {
-            ui.set_input_notice(msg!("paste-stale").into());
+            crate::notice::error(ui, msg!("paste-stale"));
             return;
         }
         let Some(source) = self.current(ui) else {
-            ui.set_input_notice(msg!("paste-stale").into());
+            crate::notice::error(ui, msg!("paste-stale"));
             return;
         };
         self.reading.set(true);
         self.read_source.set(Some(source));
         ui.set_paste_reading(true);
         ui.invoke_keep_alive_changed();
-        ui.set_input_notice("".into());
+        crate::notice::clear(ui);
         let (send, receive) = tokio::sync::oneshot::channel();
         let worker = match std::thread::Builder::new()
             .name("pttstella-slint-paste".into())
@@ -168,7 +168,7 @@ impl Paste {
                 self.cancel_read();
                 ui.set_paste_reading(false);
                 ui.invoke_keep_alive_changed();
-                ui.set_input_notice(error.to_string().into());
+                crate::notice::error(ui, error.to_string());
                 return;
             }
         };
@@ -208,7 +208,7 @@ impl Paste {
                 self.worker.borrow_mut().take().map(|worker| worker.join());
                 ui.set_paste_reading(false);
                 ui.invoke_keep_alive_changed();
-                ui.set_input_notice(error.to_string().into());
+                crate::notice::error(ui, error.to_string());
             }
         }
     }
@@ -237,7 +237,7 @@ impl Paste {
                 .is_some_and(|source| Some(source) != current);
         if obsolete {
             self.cancel(ui, !ui.get_switching_station());
-            ui.set_input_notice(msg!("paste-stale").into());
+            crate::notice::error(ui, msg!("paste-stale"));
         }
     }
 
@@ -321,7 +321,7 @@ impl Paste {
                 ui.invoke_show_paste_preview();
             }
             Ok(pending) => self.send(ui, pending),
-            Err(error) => ui.set_input_notice(error.into()),
+            Err(error) => crate::notice::error(ui, error),
         }
     }
 
@@ -333,7 +333,7 @@ impl Paste {
             || ui.get_native_composing()
             || self.current(ui) != Some(pending.source())
         {
-            ui.set_input_notice(msg!("paste-stale").into());
+            crate::notice::error(ui, msg!("paste-stale"));
             return;
         }
         if let Some(article) = &self.article {
@@ -353,16 +353,16 @@ impl Paste {
                         && paste.connection.updates.borrow().generation == stamp.generation
                         && let Some(ui) = weak.upgrade()
                     {
-                        ui.set_input_notice(error.into());
+                        crate::notice::error(&ui, error);
                     }
                 }) {
                     Ok(job) => {
                         self.send_job.replace(Some(job));
                     }
-                    Err(error) => ui.set_input_notice(error.to_string().into()),
+                    Err(error) => crate::notice::error(ui, error.to_string()),
                 }
             }
-            Err(error) => ui.set_input_notice(error.into()),
+            Err(error) => crate::notice::error(ui, error),
         }
     }
 

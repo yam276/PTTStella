@@ -314,7 +314,7 @@ impl Inline {
             self.reset(&ui);
             self.scope.set(scope);
             let Some(next) = self.epoch.get().checked_add(1) else {
-                ui.set_input_notice("inline epoch exhausted".into());
+                crate::notice::error(&ui, "inline epoch exhausted");
                 self.closed.set(true);
                 return;
             };
@@ -377,7 +377,7 @@ impl Inline {
                 && self.sent.get() != Some(id)
                 && let Err(e) = self.request(None)
             {
-                ui.set_input_notice(e.into());
+                crate::notice::error(&ui, e);
             }
         }
         let Some(layout) = native.layout.get() else {
@@ -410,14 +410,14 @@ impl Inline {
                 };
                 let physical = ((height + 8.) * f64::from(layout.dpi)).ceil();
                 if !physical.is_finite() || physical > f64::from(u32::MAX) {
-                    ui.set_input_notice("inline image geometry exceeds limit".into());
+                    crate::notice::error(&ui, "inline image geometry exceeds limit");
                     continue;
                 }
                 gaps.push((entry.row, physical as u32));
                 let prior = offsets.entry(entry.row).or_default();
                 boxes.push((entry.clone(), width, height, *prior));
                 let Some(next) = prior.checked_add(physical as u32) else {
-                    ui.set_input_notice("inline row gap exceeds limit".into());
+                    crate::notice::error(&ui, "inline row gap exceeds limit");
                     return;
                 };
                 *prior = next;
@@ -425,7 +425,7 @@ impl Inline {
         }
         // Preserve the row/image anchor; the viewport applies and ACKs this map.
         if let Err(e) = native.set_gaps(gaps) {
-            ui.set_input_notice(e.into());
+            crate::notice::error(&ui, e);
             return;
         }
         let ready = ready && native.geometry().is_some();
@@ -604,7 +604,7 @@ impl Inline {
             && let Err(error) = self.request(Some(Target::All))
             && let Some(ui) = self.ui.upgrade()
         {
-            ui.set_input_notice(error.into());
+            crate::notice::error(&ui, error);
         }
     }
     fn request(self: &Rc<Self>, target: Option<Target>) -> Result<(), String> {
@@ -693,7 +693,7 @@ impl Inline {
         };
         if kind == 1 {
             if let Err(e) = self.request(Some(Target::Link { index })) {
-                ui.set_input_notice(e.into());
+                crate::notice::error(&ui, e);
             }
         } else {
             let state = self.state.borrow();

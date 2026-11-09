@@ -783,7 +783,7 @@ impl ArticleSession {
     }
     fn notice(&self, error: String) {
         if let Some(ui) = self.ui.upgrade() {
-            ui.set_input_notice(error.into());
+            crate::notice::error(&ui, error);
         }
     }
     pub fn finish(&self) {

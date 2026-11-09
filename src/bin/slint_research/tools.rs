@@ -604,7 +604,7 @@ impl Tools {
             Command::Reconnect => ui.invoke_reconnect(),
             Command::Disconnect => {
                 if let Err(error) = self.connection.disconnect() {
-                    ui.set_input_notice(error.into());
+                    crate::notice::error(&ui, error);
                 }
             }
             Command::Login => ui.invoke_login_show(),

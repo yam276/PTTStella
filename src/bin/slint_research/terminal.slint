@@ -59,7 +59,7 @@ export component TerminalWindow inherits Window {
     changed destination-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
     callback app-quit;
     in property <bool> app-closing;
-    changed app-closing => {root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
+    changed app-closing => {root.notice-interaction();root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
     callback native-menu-refresh;
     in property <bool> settings-available;
     in property <bool> settings-open;
@@ -356,6 +356,17 @@ export component TerminalWindow inherits Window {
     in property <string> connection-status;
     in property <bool> connection-attention;
     callback notice-dismiss;
+    callback notice-publish(string, int);
+    callback notice-interaction;
+    in property <bool> notice-fading;
+    in property <bool> notice-error;
+    in property <duration> notice-fade-duration;
+    out property <bool> notice-hovered: status-touch.has-hover;
+    out property <bool> notice-focused: status-close.has-focus || status-reconnect.has-focus || status-cancel.has-focus;
+    changed notice-hovered => {root.notice-interaction();}
+    changed notice-focused => {root.notice-interaction();}
+    changed tools-reduced-motion => {root.notice-interaction();}
+    private property <bool> shell-persistent-status: root.connection-attention || root.session-warning != "" || root.login-pending || (root.result != "" && root.result != root.connection-status);
     out property <bool> shell-notice-dismissible: root.input-notice != "" || root.result != root.connection-status;
     out property <bool> shell-status-visible: !root.prototype-chrome && !root.media-open && !root.editor-open
         && (root.connection-attention || root.input-notice != "" || root.session-warning != ""
@@ -874,25 +885,42 @@ export component TerminalWindow inherits Window {
         border-width: 1px;
         border-color: #c6ab6a;
         border-radius: 6px;
+        opacity: root.notice-fading && !root.shell-persistent-status ? 0 : 1;
+        animate opacity {duration:root.notice-fading ? root.notice-fade-duration : 0ms;}
         // Empty space in a notification must not click through to the BBS.
-        TouchArea { width:parent.width; height:parent.height; clicked=>{} }
+        status-touch := TouchArea {
+        width:parent.width; height:parent.height; clicked=>{}
         ScrollView {
             width:parent.width;height:parent.height;content-width:self.width;
         status-layout := VerticalLayout {
             padding:12px; spacing:6px;
-            if root.shell-notice-dismissible: HorizontalLayout {
+            HorizontalLayout {
+                visible: root.shell-notice-dismissible;
+                min-height: 0px;
+                max-height: self.visible ? root.height : 0px;
                 Rectangle {horizontal-stretch:1;}
-                Button {text:"×";accessible-label:UiLabels.close;clicked=>{root.notice-dismiss();}}
+                status-close := Button {text:"×";accessible-label:UiLabels.close;clicked=>{
+                    if self.has-focus {root.notice-dismiss();if root.context-focus-restorable && !root.find-open && !root.app-closing {root.focus-terminal();}}
+                    else {root.notice-dismiss();}
+                }}
             }
             if root.connection-attention: Text {text:root.connection-status;color:#e7ca87;wrap:word-wrap;}
             if root.result != "" && root.result != root.connection-status: Text {text:root.result;color:#edf1f6;wrap:word-wrap;}
-            if root.input-notice != "": Text {text:root.input-notice;color:#edf1f6;wrap:word-wrap;}
-            if root.session-warning != "": Text {text:root.session-warning;color:#e7ca87;wrap:word-wrap;}
-            if root.can-reconnect || root.login-pending: HorizontalLayout {
-                spacing:8px;
-                if root.can-reconnect: Button {text:UiLabels.reconnect;clicked=>{root.reconnect();}}
-                if root.login-pending: Button {text:root.login-cancel-attempt-label;clicked=>{root.login-cancel();}}
+            if root.input-notice != "": Text {
+                text:root.input-notice;color:root.notice-error ? #f4b1a8 : #edf1f6;wrap:word-wrap;
+                opacity: root.notice-fading && root.shell-persistent-status ? 0 : 1;
+                animate opacity {duration:root.notice-fading ? root.notice-fade-duration : 0ms;}
             }
+            if root.session-warning != "": Text {text:root.session-warning;color:#e7ca87;wrap:word-wrap;}
+            HorizontalLayout {
+                visible:root.can-reconnect || root.login-pending;
+                min-height: 0px;
+                max-height: self.visible ? root.height : 0px;
+                spacing:8px;
+                status-reconnect := Button {visible:root.can-reconnect;text:UiLabels.reconnect;clicked=>{root.reconnect();}}
+                status-cancel := Button {visible:root.login-pending;text:root.login-cancel-attempt-label;clicked=>{root.login-cancel();}}
+            }
+        }
         }
         }
     }

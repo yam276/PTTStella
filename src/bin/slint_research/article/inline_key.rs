@@ -102,7 +102,7 @@ impl Inline {
                 if let Err(error) = owner.request(Some(Target::All))
                     && let Some(ui) = owner.ui.upgrade()
                 {
-                    ui.set_input_notice(error.into());
+                    crate::notice::error(&ui, error);
                 }
             },
         );
@@ -144,7 +144,7 @@ impl Inline {
             let index = *index;
             drop(state);
             if let Err(error) = self.request(Some(Target::Link { index })) {
-                ui.set_input_notice(error.into());
+                crate::notice::error(&ui, error);
             }
             return;
         }

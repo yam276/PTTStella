@@ -28,6 +28,7 @@ async fn choose(ui: &TerminalWindow, category: i32, label: &str) -> Result<(), S
 
 pub fn start(
     ui: &TerminalWindow,
+    notices: Rc<crate::notice::Owner>,
     connection: Rc<Connection>,
     directory: PathBuf,
 ) -> Result<Verification, Box<dyn Error>> {
@@ -144,6 +145,11 @@ pub fn start(
                 connection.updates.borrow().input_epoch == 0,
                 "shell controls sent station input",
             )?;
+            crate::notice_probe::run(&ui, &notices, &directory).await?;
+            require(
+                connection.updates.borrow().input_epoch == 0,
+                "notification Tab/hover sent station input",
+            )?;
             choose(&ui, 3, &pttstella::msg!("disconnect")).await?;
             wait(
                 || {
@@ -162,6 +168,11 @@ pub fn start(
                 "disconnected status lost text or changed geometry",
             )?;
             verification::capture(&ui, &directory, "shell-disconnected.png")?;
+            crate::notice::copied(&ui, "pending at close");
+            require(
+                notices.timer_active(),
+                "exit probe has no live notification timer to cancel",
+            )?;
             let file = std::fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)

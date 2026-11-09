@@ -246,7 +246,7 @@ impl ContextMenu {
             Ok(reply) => reply,
             Err(error) => {
                 self.dismiss(true);
-                ui.set_input_notice(error.into());
+                crate::notice::error(&ui, error);
                 return;
             }
         };
@@ -266,7 +266,7 @@ impl ContextMenu {
                         Ok(()) => owner.open(&ui, point),
                         Err(error) => {
                             owner.dismiss(ui.get_context_focus_restorable());
-                            ui.set_input_notice(error.into());
+                            crate::notice::error(&ui, error);
                         }
                     }
                 }
@@ -277,7 +277,7 @@ impl ContextMenu {
             }
             Err(e) => {
                 self.dismiss(true);
-                ui.set_input_notice(e.to_string().into());
+                crate::notice::error(&ui, e.to_string());
             }
         }
     }
@@ -431,7 +431,7 @@ impl ContextMenu {
                 })
                 .collect(),
             Err(error) => {
-                ui.set_input_notice(error.into());
+                crate::notice::error(ui, error);
                 Vec::new()
             }
         }

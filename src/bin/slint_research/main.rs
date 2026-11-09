@@ -26,6 +26,8 @@ mod native_input;
 #[cfg(target_os = "macos")]
 mod native_menu;
 mod native_text;
+mod notice;
+mod notice_probe;
 mod output;
 mod palette;
 mod paste;
@@ -622,15 +624,8 @@ fn run(
             .select()?;
     }
     let ui = TerminalWindow::new()?;
-    ui.on_notice_dismiss({
-        let weak = ui.as_weak();
-        move || {
-            if let Some(ui) = weak.upgrade() {
-                ui.set_input_notice("".into());
-                ui.set_result(ui.get_connection_status());
-            }
-        }
-    });
+    let notice_owner = notice::Owner::mount(&ui)?;
+    let notice_audit_directory = options.benchmark.clone().filter(|_| options.verify_shell);
     ui.set_media_video_software(software_renderer);
     locale::refresh(&ui);
     let quit_requested = Rc::new(Cell::new(false));
@@ -724,10 +719,10 @@ fn run(
                         webbrowser::open(url.as_str())
                             .map_err(|e| pttstella::msg!("link-open-failed", e = e.to_string()))
                     }) {
-                        ui.set_input_notice(error.into());
+                        crate::notice::error(&ui, error);
                     }
                 } else {
-                    ui.set_input_notice(url);
+                    crate::notice::success(&ui, url);
                 }
             }
         }
@@ -790,7 +785,7 @@ fn run(
                     ) {
                         Err(error) => {
                             presented.set(None);
-                            ui.set_result(error.into());
+                            crate::notice::error(&ui, error);
                         }
                         Ok(()) if previous.get().is_some() => {
                             if let Some(id) = frame_gate.borrow().staged()
@@ -885,7 +880,7 @@ fn run(
                         &previous,
                         bridge.borrow().as_deref(),
                     ) {
-                        ui.set_result(error.into());
+                        crate::notice::error(&ui, error);
                     }
                 }
             });
@@ -1548,6 +1543,7 @@ fn run(
     let verification = if options.verify_shell {
         Some(shell_probe::start(
             &ui,
+            notice_owner.clone(),
             verification_connection
                 .as_ref()
                 .cloned()
@@ -1897,6 +1893,7 @@ fn run(
             }
         });
         app_exit.run(ui)?;
+        notice_owner.stop();
         let exit_cleanup = app_exit.finish();
         if let Some(color) = &station_color_owner {
             color.finish();
@@ -1930,6 +1927,13 @@ fn run(
         outcome.take().ok_or("snapshot callback did not run")??;
     } else {
         let result = app_exit.run(ui);
+        notice_owner.stop();
+        if !notice_owner.clean() {
+            return Err("notification timer did not stop".into());
+        }
+        if let Some(dir) = &notice_audit_directory {
+            notice_owner.audit_closed(dir)?;
+        }
         let exit_cleanup = app_exit.finish();
         let editor_cleanup = editor_owner
             .as_ref()

@@ -31,6 +31,7 @@ pub mod media;
 pub mod mouse;
 pub mod navigation;
 pub mod navigation_job;
+pub mod notification;
 #[cfg(feature = "desktop-services")]
 pub mod presentation;
 #[cfg(feature = "desktop-services")]

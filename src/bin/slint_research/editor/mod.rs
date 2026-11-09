@@ -1201,7 +1201,7 @@ impl Editor {
                 }
                 Some(Ok(SourceResult::Transferred)) => {
                     owner.hide();
-                    ui.set_result(pttstella::msg!("draft-transferred").into());
+                    crate::notice::persistent(&ui, pttstella::msg!("draft-transferred"));
                 }
                 Some(Err(error)) => owner.notice(error),
                 None => owner.notice(pttstella::msg!("draft-stop-requested")),

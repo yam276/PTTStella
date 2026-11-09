@@ -236,10 +236,10 @@ impl Login {
                                 && connection.updates.borrow().generation == stamp.generation
                                 && let Some(ui) = weak.upgrade()
                             {
-                                ui.set_input_notice(error.into());
+                                crate::notice::error(&ui, error);
                             }
                         }) {
-                            ui.set_input_notice(error.to_string().into());
+                            crate::notice::error(ui, error.to_string());
                         }
                     }
                     Err(error) => ui.set_login_message(error.into()),
@@ -260,7 +260,7 @@ impl Login {
             ui.invoke_hide_login_popup(restore_focus);
             ui.invoke_keep_alive_changed();
             if let Err(error) = self.connection.cancel_login() {
-                ui.set_input_notice(error.into());
+                crate::notice::error(&ui, error);
             }
         }
     }

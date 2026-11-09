@@ -149,11 +149,14 @@ impl Preferences {
         self.effects.borrow_mut().push(Box::new(effect));
     }
     fn notice(&self, text: String) {
-        if let Some(window) = self.window.borrow().as_ref() {
-            window.set_notice(text.clone().into());
-        }
+        self.inline_notice(text.clone());
         if let Some(ui) = self.ui.upgrade() {
-            ui.set_input_notice(text.into());
+            crate::notice::error(&ui, text);
+        }
+    }
+    fn inline_notice(&self, text: String) {
+        if let Some(window) = self.window.borrow().as_ref() {
+            window.set_notice(text.into());
         }
     }
     fn queue(self: &Rc<Self>, draft: AppSettings, delay: Duration) {
@@ -240,7 +243,7 @@ impl Preferences {
             draft: draft.clone(),
             result: result.clone(),
         }));
-        self.notice(msg!("settings-saving"));
+        self.inline_notice(msg!("settings-saving"));
         let weak = Rc::downgrade(self);
         self.output.work(
             &ui,
@@ -283,10 +286,10 @@ impl Preferences {
                 if let Some(window) = self.window.borrow().as_ref() {
                     window.set_failed(false);
                 }
-                self.notice(match applied {
-                    Ok(()) => msg!("settings-saved"),
-                    Err(error) => format!("{} {error}", msg!("settings-saved")),
-                });
+                match applied {
+                    Ok(()) => self.inline_notice(msg!("settings-saved")),
+                    Err(error) => self.notice(format!("{} {error}", msg!("settings-saved"))),
+                }
                 Ok(())
             }
             Err(error) => {

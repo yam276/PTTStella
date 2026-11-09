@@ -223,7 +223,7 @@ impl Video {
                 if let Err(error) = self.record(live.sequence, report)
                     && let Some(ui) = &ui
                 {
-                    ui.set_input_notice(error.into());
+                    crate::notice::error(ui, error);
                 }
                 if wanted == Some(live.sequence) {
                     self.pending.borrow_mut().take();

@@ -881,7 +881,7 @@ fn mount_window(
                                 connection.input(stamp.generation, bytes)
                             };
                             if let Err(error) = result {
-                                ui.set_result(error.into());
+                                crate::notice::error(&ui, error);
                             }
                         }
                         Effect::None if input.keyboard.accept_text(false) => {
@@ -923,16 +923,16 @@ fn mount_window(
                                                 == stamp.generation
                                             && let Some(ui) = weak.upgrade()
                                         {
-                                            ui.set_result(error.into());
+                                            crate::notice::error(&ui, error);
                                         }
                                     }) {
-                                        ui.set_result(error.to_string().into());
+                                        crate::notice::error(&ui, error.to_string());
                                     }
                                 }
-                                Err(error) => ui.set_result(error.into()),
+                                Err(error) => crate::notice::error(&ui, error),
                             }
                         }
-                        Effect::Notice(notice) => ui.set_result(notice.into()),
+                        Effect::Notice(notice) => crate::notice::persistent(&ui, notice),
                         Effect::Browse(_) | Effect::None => {}
                     }
                     PreventDefault
@@ -1101,7 +1101,7 @@ fn send_text(
             }
         });
     if let Err(error) = result {
-        ui.set_result(error.into());
+        crate::notice::error(ui, error);
     }
 }
 

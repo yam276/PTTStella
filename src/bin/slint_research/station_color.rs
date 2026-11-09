@@ -153,7 +153,7 @@ impl StationColor {
                 state.set_open(true);
                 ui.invoke_focus_station_color();
             }
-            None => ui.set_input_notice(stale().into()),
+            None => crate::notice::error(&ui, stale()),
         }
     }
     fn valid(&self, ui: &TerminalWindow) -> bool {
@@ -170,7 +170,7 @@ impl StationColor {
         }
         if !self.valid(&ui) {
             self.dismiss(false);
-            ui.set_input_notice(stale().into());
+            crate::notice::error(&ui, stale());
             return;
         }
         if index < 16 {
@@ -211,7 +211,7 @@ impl StationColor {
         }
         if !self.valid(&ui) {
             self.dismiss(false);
-            ui.set_input_notice(stale().into());
+            crate::notice::error(&ui, stale());
             return;
         }
         let Some(source) = self.source.borrow().clone() else {
@@ -235,7 +235,7 @@ impl StationColor {
         let reply = match reply {
             Ok(r) => r,
             Err(e) => {
-                ui.set_input_notice(e.into());
+                crate::notice::error(&ui, e);
                 self.dismiss(true);
                 return;
             }
@@ -259,14 +259,16 @@ impl StationColor {
                         owner.connection.updates.borrow().generation == source.stamp.generation;
                     owner.dismiss(same && ui.get_native_foreground());
                     if same {
-                        ui.set_input_notice(
-                            match result {
-                                Some(Ok(())) => pttstella::msg!("editor-color-done"),
-                                Some(Err(e)) => e,
-                                None => pttstella::msg!("editor-color-stopped"),
+                        match result {
+                            Some(Ok(())) => {
+                                crate::notice::success(&ui, pttstella::msg!("editor-color-done"))
                             }
-                            .into(),
-                        );
+                            Some(Err(e)) => crate::notice::error(&ui, e),
+                            None => crate::notice::persistent(
+                                &ui,
+                                pttstella::msg!("editor-color-stopped"),
+                            ),
+                        }
                     }
                 }
             }
@@ -277,7 +279,7 @@ impl StationColor {
             Err(e) => {
                 self.cancel.borrow_mut().take();
                 self.dismiss(true);
-                ui.set_input_notice(e.to_string().into());
+                crate::notice::error(&ui, e.to_string());
             }
         }
     }
@@ -323,7 +325,7 @@ impl StationColor {
             }
         } else if !self.valid(&ui) {
             self.dismiss(ui.get_context_focus_restorable());
-            ui.set_input_notice(stale().into());
+            crate::notice::error(&ui, stale());
         }
     }
     pub fn finish(&self) {

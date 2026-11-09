@@ -721,7 +721,7 @@ impl Preferences {
             form::populate(w, &draft);
             self.preview(w);
             self.queue(draft, Duration::from_millis(300));
-            self.notice(msg!("slint-profile-imported"));
+            self.inline_notice(msg!("slint-profile-imported"));
         }
     }
     pub(super) fn profile(self: &Rc<Self>, export: bool) {
@@ -822,7 +822,12 @@ impl Preferences {
                 if let Some(o) = weak.upgrade() {
                     match result {
                         Ok(Some(profile)) => o.imported(profile),
-                        Ok(None) => o.notice(msg!("profile-exported")),
+                        Ok(None) => {
+                            o.inline_notice(msg!("profile-exported"));
+                            if let Some(ui) = o.ui.upgrade() {
+                                crate::notice::success(&ui, msg!("profile-exported"));
+                            }
+                        }
                         Err(error) => o.notice(error),
                     }
                 }

@@ -396,7 +396,7 @@ impl ArticleView {
             ) {
                 Ok(flow) => flow,
                 Err(error) => {
-                    ui.set_input_notice(error.into());
+                    crate::notice::error(&ui, error);
                     ui.set_article_tiles(ModelRc::default());
                     ui.set_article_footer(Image::default());
                     self.painted.take();
@@ -463,7 +463,7 @@ impl ArticleView {
                     if let Err(error) = owner.paint()
                         && let Some(ui) = owner.ui.upgrade()
                     {
-                        ui.set_input_notice(error.into());
+                        crate::notice::error(&ui, error);
                     }
                 }
             });

@@ -65,9 +65,9 @@ impl Manager {
             && !ui.get_switching_station()
             && !ui.get_station_mouse_held()
     }
-    fn capture_notice(&self, text: String) {
+    fn capture_notice(&self, text: String, kind: pttstella::notification::Kind) {
         if let Some(ui) = self.ui.upgrade() {
-            ui.set_input_notice(text.clone().into());
+            crate::notice::show(&ui, text.clone(), kind);
         }
         self.notice(text);
     }
@@ -128,7 +128,10 @@ impl Manager {
             .bookmark_source(&self.connection.updates.borrow(), source.cell)
             != Some(source)
         {
-            self.capture_notice(msg!("bookmarks-current-unavailable"));
+            self.capture_notice(
+                msg!("bookmarks-current-unavailable"),
+                pttstella::notification::Kind::Error,
+            );
             return;
         }
         self.capture_serial
@@ -190,7 +193,10 @@ impl Manager {
             acquisition,
         }));
         self.capture_timer(Duration::from_secs(30));
-        self.capture_notice(msg!("bookmarks-capturing"));
+        self.capture_notice(
+            msg!("bookmarks-capturing"),
+            pttstella::notification::Kind::Persistent,
+        );
         self.capture_go(source.stamp, destination)
     }
     pub fn capture_tick(self: &Rc<Self>) {
@@ -251,7 +257,10 @@ impl Manager {
                             source.stamp,
                         ))));
                         self.capture_timer(Duration::from_secs(35));
-                        self.capture_notice(msg!("bookmarks-list-loading"));
+                        self.capture_notice(
+                            msg!("bookmarks-list-loading"),
+                            pttstella::notification::Kind::Persistent,
+                        );
                         self.capture_go(source.stamp, target)
                     }
                 })
@@ -323,7 +332,7 @@ impl Manager {
             if self.capture.borrow().is_some() {
                 self.cancel_capture_with(e);
             } else {
-                self.capture_notice(e);
+                self.capture_notice(e, pttstella::notification::Kind::Error);
             }
         }
     }
@@ -342,7 +351,10 @@ impl Manager {
             Capture::Current { stamp, .. } => self.article.bookmark_abort(stamp, false),
             Capture::List(capture) => self.article.bookmark_abort(capture.stamp, true),
         };
-        self.capture_notice(result.err().unwrap_or(message));
+        match result {
+            Ok(()) => self.capture_notice(message, pttstella::notification::Kind::Persistent),
+            Err(error) => self.capture_notice(error, pttstella::notification::Kind::Error),
+        }
         if let Some(ui) = self.ui.upgrade() {
             ui.set_bookmarks_capturing(false);
             ui.invoke_tools_updated();

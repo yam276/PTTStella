@@ -142,7 +142,7 @@ impl Exit {
                 // No dependency was changed: allow a later explicit retry.
                 self.requested.set(false);
                 ui.set_app_closing(false);
-                ui.set_input_notice(error.to_string().into());
+                crate::notice::error(&ui, error.to_string());
             }
         }
     }
