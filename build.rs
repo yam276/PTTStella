@@ -5,6 +5,20 @@ fn main() -> std::io::Result<()> {
         let directory = if let Some(path) = std::env::var_os("MPV_LIB_DIR") {
             std::path::PathBuf::from(path)
         } else {
+            let host = std::env::var("HOST").map_err(|error| {
+                std::io::Error::other(format!("native-video requires Cargo HOST: {error}"))
+            })?;
+            let target = std::env::var("TARGET").map_err(|error| {
+                std::io::Error::other(format!("native-video requires Cargo TARGET: {error}"))
+            })?;
+            // pkg-config here describes the build machine. Never let a cross
+            // build silently select that machine's library search directory.
+            if host != target {
+                return Err(std::io::Error::other(format!(
+                    "Cross-compiling native-video ({host} -> {target}) requires MPV_LIB_DIR \
+                     for the target libmpv; host pkg-config is not used"
+                )));
+            }
             let result = std::process::Command::new("pkg-config")
                 .args(["--variable=libdir", "mpv"])
                 .output()?;
