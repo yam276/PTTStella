@@ -256,7 +256,16 @@ pub fn with_probe(
             }
             Probe::Media => {
                 if let Ok(case) = std::env::var("PTTSTELLA_SLINT_UPDATES_PROBE") {
-                    if !matches!(case.as_str(), "append" | "cancel" | "blur" | "native") {
+                    if !matches!(
+                        case.as_str(),
+                        "append"
+                            | "cancel"
+                            | "blur"
+                            | "native"
+                            | "mixed-append"
+                            | "mixed-cancel"
+                            | "mixed-blur"
+                    ) {
                         return Err("unknown native updates case".into());
                     }
                     let origin = std::env::var("PTTSTELLA_SLINT_UPDATES_ORIGIN").ok();
@@ -276,9 +285,16 @@ pub fn with_probe(
                             );
                         }
                     }
-                    Connection::start_live_updates_probe(
+                    let mixed = case.starts_with("mixed-");
+                    let case = case.strip_prefix("mixed-").unwrap_or(&case);
+                    let start = if mixed {
+                        Connection::start_live_updates_roles_probe
+                    } else {
+                        Connection::start_live_updates_probe
+                    };
+                    start(
                         origin.map(|s| s.trim_end_matches('/').to_owned()),
-                        matches!(case.as_str(), "cancel" | "blur"),
+                        matches!(case, "cancel" | "blur"),
                     )
                 } else if let Ok(case) = std::env::var("PTTSTELLA_SLINT_REPLIES_PROBE") {
                     match case.as_str() {

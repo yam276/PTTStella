@@ -996,6 +996,21 @@ fn focused_id_survives_contiguous_pages_but_not_a_new_article_segment() {
         serde_json::from_str(include_str!("../../tests/fixtures/filters.json")).unwrap();
     let mut screen = Screen::new(80, 24).unwrap();
     state.article_input(&view, b"\x1b[6~");
+    // The first chunk of an encoded page can be unrecognizable while the
+    // cache still owns its page turn. It must not retire the focused account.
+    view.frame.revision += 50;
+    view.frame.glyphs[0].unmapped = true;
+    view.input_epoch += 1;
+    assert!(matches!(
+        view.context(),
+        pttstella::navigation::Context::Unknown { .. }
+    ));
+    state.update(&view);
+    let intermediate = displayed(&mut state, &view);
+    let partial = state.current(intermediate, &view).unwrap();
+    assert_eq!(partial.article.as_ref().unwrap().id, article);
+    assert_eq!(partial.reply_focus.as_deref(), Some("Alice"));
+    assert_eq!(intermediate.presentation, focused.presentation);
     screen.feed(
         &pttstella::encoding::encode(
             &fixture["reading"]
@@ -1732,8 +1747,12 @@ fn cancelling_reentry_preserves_local_reading_until_explicit_station_restore_or_
         "foreign_done",
         "generation",
         "raw",
+        "rules",
+        "terminal",
     ] {
         let (mut state, mut view, mut source) = refresh_fixture();
+        let frozen = Identity::of(state.last_displayed().unwrap());
+        assert!(state.retained_reading_identity(&view).is_none());
         let before = state.reading_progress();
         let id = before.unwrap().0;
         assert!(state.updates_action(7, id, true));
@@ -1755,6 +1774,27 @@ fn cancelling_reentry_preserves_local_reading_until_explicit_station_restore_or_
         view.frame = source.frame();
         view.input_epoch += 1;
         state.update(&view);
+        assert_eq!(state.retained_reading_identity(&view), Some(frozen));
+        let mut owned_input = view.clone();
+        owned_input.mouse.policy_epoch += 1;
+        assert_eq!(state.retained_reading_identity(&owned_input), Some(frozen));
+        assert!(state.current(frozen, &view).is_none());
+        // Fresh policy/session changes revoke frozen metadata even before the
+        // reducer observes them. No old index can escape into another scope.
+        for change in ["generation", "disconnect", "route", "login"] {
+            let mut fresh = view.clone();
+            match change {
+                "generation" => fresh.generation += 1,
+                "disconnect" => fresh.phase = Phase::Disconnected,
+                "route" => fresh.mouse.route = pttstella::mouse::input::Route::Station,
+                "login" => fresh.login_pending = true,
+                _ => unreachable!(),
+            }
+            assert!(
+                state.retained_reading_identity(&fresh).is_none(),
+                "{change}"
+            );
+        }
         match action {
             "cancel" => assert!(state.updates_action(7, id, false)),
             "background" => state.pause_updates(),
@@ -1774,13 +1814,19 @@ fn cancelling_reentry_preserves_local_reading_until_explicit_station_restore_or_
             }
             "generation" => view.generation += 1,
             "raw" => state.article_input(&view, b"Q"),
+            "rules" => state.replace_rules(state.rules().clone()),
+            "terminal" => {
+                state.set_article_mode(ArticleMode::Terminal);
+            }
             _ => unreachable!(),
         }
         state.update(&view);
-        if ["generation", "raw"].contains(&action) {
+        if ["generation", "raw", "rules", "terminal"].contains(&action) {
             assert!(state.reading_progress().is_none());
+            assert!(state.retained_reading_identity(&view).is_none());
             continue;
         }
+        assert_eq!(state.retained_reading_identity(&view), Some(frozen));
         assert_eq!(state.reading_progress(), before, "{action}");
         assert!(
             !state.navigation_shown(operation),
@@ -1823,6 +1869,7 @@ fn cancelling_reentry_preserves_local_reading_until_explicit_station_restore_or_
         assert!(!state.restore_station(8, id));
         assert!(!state.restore_station(7, id + 1));
         assert!(state.restore_station(7, id));
+        assert!(state.retained_reading_identity(&view).is_none());
         state.update(&view);
         assert!(state.reading_progress().is_none());
         let actual = displayed(&mut state, &view);

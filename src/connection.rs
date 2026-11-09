@@ -413,9 +413,31 @@ impl Connection {
         origin: Option<String>,
         cancelled: bool,
     ) -> Result<Self, String> {
+        Self::live_updates_probe(origin, cancelled, false)
+    }
+    pub fn start_live_updates_roles_probe(
+        origin: Option<String>,
+        cancelled: bool,
+    ) -> Result<Self, String> {
+        Self::live_updates_probe(origin, cancelled, true)
+    }
+    fn live_updates_probe(
+        origin: Option<String>,
+        cancelled: bool,
+        roles: bool,
+    ) -> Result<Self, String> {
+        let initial = if roles {
+            probe::password_page()?
+        } else {
+            probe::live_updates::page(1, 23, 45, origin.as_deref())?
+        };
         let connection = Self::start_owned_probe(
-            probe::live_updates::page(1, 23, 45, origin.as_deref())?,
-            probe::Scenario::LiveUpdates { origin, cancelled },
+            initial,
+            probe::Scenario::LiveUpdates {
+                origin,
+                cancelled,
+                roles,
+            },
         )?;
         connection.keep_alive(false)?;
         Ok(connection)

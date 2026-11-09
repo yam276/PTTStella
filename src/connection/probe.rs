@@ -52,6 +52,7 @@ pub(super) enum Scenario {
     LiveUpdates {
         origin: Option<String>,
         cancelled: bool,
+        roles: bool,
     },
     ArticleStall,
     InlinePages {
@@ -859,10 +860,12 @@ pub(super) async fn serve(
             let case=match scenario {Scenario::DraftFailure(case)=>Some(case),_=>None};
             return drafts::run(&mut socket,slow,case).await;
         }
-        if matches!(scenario,Scenario::ReplyNavigation) {
+        if matches!(scenario,Scenario::ReplyNavigation|Scenario::LiveUpdates{roles:true,..}) {
             tokio::time::sleep(Duration::from_millis(120)).await;
             socket.send(Message::Binary(navigation_page("main_menu")?.into())).await.map_err(|e|e.to_string())?;
             tokio::time::sleep(Duration::from_millis(120)).await;
+        }
+        if matches!(scenario,Scenario::ReplyNavigation) {
             socket.send(Message::Binary(reply_navigation_page()?.into())).await.map_err(|e|e.to_string())?;
             return match socket.next().await {
                 Some(Ok(Message::Close(_)))=>socket.flush().await.map_err(|e|e.to_string()),
@@ -874,7 +877,10 @@ pub(super) async fn serve(
         }
         if matches!(scenario,Scenario::BookmarkList) {return live_updates::bookmark_list(&mut socket).await;}
         if let Scenario::BookmarkArchive { headerless } = scenario {return live_updates::bookmark(&mut socket, headerless).await;}
-        if let Scenario::LiveUpdates {origin,cancelled} = scenario {return if cancelled {live_updates::cancel(&mut socket,origin.as_deref()).await}else{live_updates::run(&mut socket,origin.as_deref()).await};}
+        if let Scenario::LiveUpdates {origin,cancelled,roles} = scenario {
+            if roles {socket.send(Message::Binary(live_updates::roles_page(1,23,45,origin.as_deref())?.into())).await.map_err(|e|e.to_string())?;}
+            return if cancelled {live_updates::cancel(&mut socket,origin.as_deref(),roles).await}else{live_updates::run(&mut socket,origin.as_deref(),roles).await};
+        }
         if matches!(scenario,Scenario::ArticleStall) {
             let first=socket.next().await;
             if !matches!(&first,Some(Ok(Message::Binary(bytes))) if bytes.as_ref()==b"\x1b[6~") {return Err("stalled article expected exactly one PageDown".into());}

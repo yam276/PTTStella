@@ -42,7 +42,12 @@ pub fn start(
         "reply-updates",
         !matches!(native_check.as_str(), "1" | "2"),
         move |ui, directory| async move {
-            let case = std::env::var("PTTSTELLA_SLINT_UPDATES_PROBE").map_err(|e| e.to_string())?;
+            let requested_case =
+                std::env::var("PTTSTELLA_SLINT_UPDATES_PROBE").map_err(|e| e.to_string())?;
+            let mixed = requested_case.starts_with("mixed-");
+            let case = requested_case
+                .strip_prefix("mixed-")
+                .unwrap_or(&requested_case);
             wait(
                 &ui,
                 || {
@@ -85,6 +90,70 @@ pub fn start(
             } else {
                 None
             };
+            let resources = if mixed && with_image {
+                wait(
+                    &ui,
+                    || {
+                        super::probe::focus_resources(&inline).decoded() == 2
+                            && ui.get_inline_enabled()
+                    },
+                    "mixed PNG/GIF originals did not both decode",
+                )
+                .await?;
+                require(
+                    ui.invoke_inline_enter(true, false, true)
+                        && ui.invoke_inline_enter(false, false, true),
+                    "mixed wide choice was rejected",
+                )?;
+                wait(
+                    &ui,
+                    || super::probe::focus_resources(&inline).wide(),
+                    "mixed image did not enter wide mode",
+                )
+                .await?;
+                Some(super::probe::focus_resources(&inline))
+            } else {
+                None
+            };
+            if mixed {
+                wait(
+                    &ui,
+                    || {
+                        article
+                            .output_identity(&connection.updates.borrow())
+                            .is_some()
+                    },
+                    "mixed wide geometry did not ACK before account focus",
+                )
+                .await?;
+                require(
+                    connection.updates.borrow().account.as_deref() == Some("StellaTest"),
+                    "mixed own role was not confirmed by Session",
+                )?;
+                let view = connection.updates.borrow().clone();
+                let id = article
+                    .output_identity(&view)
+                    .ok_or("mixed focus source missing")?;
+                require(
+                    article.focus_reply(id, view.stamp(), Some(40)),
+                    "mixed Bob highlight refused acknowledged reply",
+                )?;
+                wait(
+                    &ui,
+                    || {
+                        article
+                            .output_identity(&connection.updates.borrow())
+                            .is_some()
+                            && article.core.borrow().last_displayed().is_some_and(|p| {
+                                p.reply_navigation.author_rows == [41, 44]
+                                    && p.reply_navigation.mine_rows == [39, 42]
+                                    && p.reply_navigation.focused_rows == [40, 43]
+                            })
+                    },
+                    "mixed shared role index not installed",
+                )
+                .await?;
+            }
             ui.set_zoom(1.5);
             wait(
                 &ui,
@@ -97,10 +166,14 @@ pub fn start(
             )
             .await?;
             let native = article.view.borrow().clone().ok_or("reader missing")?;
-            native.navigate(Intent::Lines {
-                down: true,
-                count: 15,
-            });
+            if mixed {
+                native.navigate(Intent::Last);
+            } else {
+                native.navigate(Intent::Lines {
+                    down: true,
+                    count: 15,
+                });
+            }
             wait(
                 &ui,
                 || {
@@ -111,6 +184,44 @@ pub fn start(
                 "middle reading anchor missing",
             )
             .await?;
+            if mixed {
+                ui.invoke_reply_navigation_action(0);
+                wait(
+                    &ui,
+                    || {
+                        let ready = article.output_identity(&connection.updates.borrow()).is_some();
+                        if ready && ui.get_reply_side_marks().row_count() != 4 {
+                            // Resource and toolbar reflow preserve a row anchor,
+                            // so position at the tail only after their geometry ACK.
+                            native.navigate(Intent::Last);
+                        }
+                        ready && ui.get_reply_side_marks().row_count() == 4
+                    },
+                    "mixed visible role marks not ready",
+                )
+                .await.map_err(|e| format!("{e}: marks={},open={},ready={},geometry={},anchor={:?},layout={:?},scope={:?},index={:?}",ui.get_reply_side_marks().row_count(),ui.get_reply_navigation_open(),ui.get_reply_navigation_ready(),native.geometry().is_some(),native.anchor.get(),native.layout.get(),native.scope.get(),article.core.borrow().last_displayed().map(|p| &p.reply_navigation)))?;
+                ui.invoke_reply_navigation_action(6);
+                ui.invoke_reply_navigation_action(3);
+                wait(
+                    &ui,
+                    || {
+                        article
+                            .output_identity(&connection.updates.borrow())
+                            .is_some()
+                    },
+                    "mixed focused reply navigation not ready",
+                )
+                .await?;
+                require(
+                    article.core.borrow().last_displayed().is_some_and(|p| {
+                        p.frame
+                            .glyphs
+                            .iter()
+                            .any(|g| g.row == 40 && g.col == 3 && g.left.bg == 4)
+                    }),
+                    "mixed Bob reply highlight not blue",
+                )?;
+            }
             let anchor = native.anchor.get();
             let retained_frame = native.source.borrow().frame.clone();
             eprintln!(
@@ -125,7 +236,7 @@ pub fn start(
                 ui.get_article_updates_enabled(),
                 "explicit update action was rejected",
             )?;
-            if matches!(case.as_str(), "cancel" | "blur") {
+            if matches!(case, "cancel" | "blur") {
                 wait(
                     &ui,
                     || connection.updates.borrow().input_epoch > initial_epoch,
@@ -186,6 +297,41 @@ pub fn start(
                     ),
                 )?;
                 verification::foreground(&ui, true);
+                if mixed {
+                    require(
+                        ui.get_reply_side_marks().row_count() == 4
+                            && ui.get_reply_navigation_ready(),
+                        "retained mixed role marks or local navigation disappeared",
+                    )?;
+                    require(
+                        resources.as_ref().is_none_or(|r| r.retained(&inline)),
+                        "retained mixed PNG/GIF originals or wide choice changed",
+                    )?;
+                    let view = connection.updates.borrow().clone();
+                    require(
+                        article.export_output(&view, None).is_err(),
+                        "retained local roles accidentally authorized stale export",
+                    )?;
+                    ui.invoke_reply_navigation_action(3);
+                    require(
+                        ui.get_reply_navigation_count()
+                            == pttstella::msg!(
+                                "reply-navigation-count",
+                                current = 2i64,
+                                total = 2i64
+                            ),
+                        "retained focused replies did not navigate locally",
+                    )?;
+                    require(
+                        article.core.borrow().last_displayed().is_some_and(|p| {
+                            p.frame
+                                .glyphs
+                                .iter()
+                                .any(|g| g.row == 40 && g.col == 3 && g.left.bg == 4)
+                        }),
+                        "retained mixed Bob highlight disappeared",
+                    )?;
+                }
                 let tiles = ui.get_article_tiles();
                 let tile_details=tiles.iter().map(|t| {
                     let pixels=t.image.to_rgba8();
@@ -348,7 +494,17 @@ pub fn start(
                     "first append unread count incorrect",
                 )?;
                 let paused_epoch = connection.updates.borrow().input_epoch;
-                ui.set_native_pointer_down(true);
+                if mixed {
+                    ui.invoke_find_action(0);
+                    ui.invoke_find_edit("REPLY".into());
+                    verification::wait(
+                        || article.core.borrow().find().reply(0).total == 9,
+                        "mixed find did not match nine projected replies",
+                    )
+                    .await?;
+                } else {
+                    ui.set_native_pointer_down(true);
+                }
                 for _ in 0..300 {
                     verification::foreground(&ui, true);
                     tokio::time::sleep(Duration::from_millis(20)).await;
@@ -357,7 +513,24 @@ pub fn start(
                     connection.updates.borrow().input_epoch == paused_epoch,
                     "interaction did not suspend five-second refresh",
                 )?;
-                ui.set_native_pointer_down(false);
+                wait(
+                    &ui,
+                    || {
+                        article
+                            .output_identity(&connection.updates.borrow())
+                            .is_some()
+                    },
+                    "interaction layout did not ACK before refresh resumed",
+                )
+                .await?;
+                // Finding deliberately reveals its first match. The next append
+                // must preserve that new user position, not the pre-search one.
+                let second_anchor = native.anchor.get();
+                if mixed {
+                    ui.invoke_find_action(3);
+                } else {
+                    ui.set_native_pointer_down(false);
+                }
                 wait(
                     &ui,
                     || {
@@ -376,9 +549,9 @@ pub fn start(
                 )
                 .await?;
                 require(
-                    same_anchor(native.anchor.get(), anchor),
+                    same_anchor(native.anchor.get(), second_anchor),
                     &format!(
-                        "second refresh moved local reading anchor: before={anchor:?},after={:?},scope={:?},progress={:?},layout={:?}",
+                        "second refresh moved local reading anchor: before={second_anchor:?},after={:?},scope={:?},progress={:?},layout={:?}",
                         native.anchor.get(),
                         native.scope.get(),
                         article.progress(),
@@ -397,6 +570,20 @@ pub fn start(
                                 .is_some_and(|r| Arc::ptr_eq(r, original))
                         }),
                         "refresh lost the decoded original image",
+                    )?;
+                }
+                if mixed {
+                    require(
+                        article.core.borrow().last_displayed().is_some_and(|p| {
+                            p.reply_navigation.author_rows == [41, 44, 47, 50]
+                                && p.reply_navigation.mine_rows == [39, 42, 45, 48]
+                                && p.reply_navigation.focused_rows == [40, 43, 46, 49]
+                        }),
+                        "mixed updated role index did not extend all three groups",
+                    )?;
+                    require(
+                        resources.as_ref().is_none_or(|r| r.retained(&inline)),
+                        "mixed updates or search changed PNG/GIF originals/wide choice",
                     )?;
                 }
                 let before_unchanged = connection.updates.borrow().input_epoch;
@@ -422,7 +609,7 @@ pub fn start(
                     "unchanged refresh fetched pages or changed unread replies",
                 )?;
                 require(
-                    same_anchor(native.anchor.get(), anchor),
+                    same_anchor(native.anchor.get(), second_anchor),
                     "unchanged refresh moved the reading anchor",
                 )?;
                 verification::capture(&ui, &directory, "new-replies.png")?;
@@ -475,7 +662,7 @@ pub fn start(
                 )
                 .await?;
             }
-            std::fs::write(directory.join("updates-result.json"),serde_json::to_vec_pretty(&serde_json::json!({"case":case,"with_image":with_image,"strict_shared_peer":true,"actual_OS_input":false,"anchor_preserved":true,"explicit_opt_in":true,"cancel_recovery":matches!(case.as_str(),"cancel"|"blur")})).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
+            std::fs::write(directory.join("updates-result.json"),serde_json::to_vec_pretty(&serde_json::json!({"case":case,"mixed":mixed,"with_image":with_image,"strict_shared_peer":true,"actual_OS_input":false,"anchor_preserved":true,"explicit_opt_in":true,"cancel_recovery":matches!(case,"cancel"|"blur")})).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
             Ok(())
         },
     )

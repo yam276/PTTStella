@@ -1354,3 +1354,23 @@ Slint 只管理已 ACK文章的回覆總數、已讀數與本機閱讀位置。�
 S4完整實體推文控制、列表實體右鍵／新程序離線操作及混合Live，S1／S2平台與IME，S5峰值與四架構，S6–S8資料回退／原生包／同負載效能仍待完成；完整goal保持active，沒有整合、push、PR、正式入口切換或發佈。
 
 本批 `384c899` 驗收後，以 Cargo原生clean清掉本Slint target/release（Removed 8385 files, 2.7GiB total），並移除已被同binary推文回歸涵蓋的舊 `slint-reply-navigation/Native-Replies.app`及3個冗餘正向PNG。target剩12KiB；最新一般配置改為 `slint-reply-updates/Native-Updates.app`，影片配置與Windows S1 ZIP保留。267個source檔與必要包hash皆不變；exact paths、owner／symlink／lsof、du與free前後見 `.local/verification/slint-reply-updates/cleanup.json`。舊App僅壓縮launcher／plist等非執行紀錄，沒有另存完整binary；獨特負向、來源patch、擷圖失配及原生紀錄保留。未合併worktree因S0–S8仍active保留，未操作其他聊天的程序或產物。
+
+## S4 混合推文角色、尋找與媒體保留（2026-11-09）
+
+混合 loopback fixture 沿用原重新進文與逐筆 bytes 核對劇本，加入原PO Alice、Session確認登入的 StellaTest、指定底色 Bob，以及PNG／GIF兩個公開自製fixture。原先沒有這些角色的更新案例保留原payload與延遲。明示 `PTTSTELLA_SLINT_UPDATES_PROBE=mixed-append`／`mixed-cancel`／`mixed-blur`，其他origin限制及啟動參數與上一節相同；一般Live入口未改成測試路徑。
+
+實際反例有兩個共同原因：更新取消後，current來源失效時原生adapter同時丟掉保留文章的側標／本機推文索引；另在分段編碼頁暫時為Unknown時，核心比文章cache更早清掉指定帳號底色，導致presentation改變並跳回開頭。現在共用 `retained_reading_identity` 只提供同一已ACK文章、generation及政策版本的凍結metadata，本機定位還需原生geometry ACK；current、輸出lease、站端輸入與媒體手勢不因此放行。焦點壽命由同一文章cache判定，中途暫時Unknown但仍屬同篇翻頁時保留；斷線、換篇、raw／terminal或改名單仍撤銷。滑鼠policy_epoch也隨正常送鍵變更，不能把該計數當作換篇；fresh route、phase、generation、登入及真正政策scope的負向另測。
+
+viewport另分開「請求的行／圖片anchor」與經viewport界線夾限的實際position。控制列暫時重排或縮放時不永久覆寫文字anchor；明確捲動才更新它。圖片gap重排亦沿用同一規則，維持可見列及緩衝列快取，沒有全面停用快取或增加全文bitmap。尋找會刻意定位第一筆命中，因此後續更新核對尋找後的新anchor，不誤把合法搜尋移動當成更新跳頁。
+
+最終CLI SHA-256 `55f36c8f98544e1b11bfe59f6eedb00926626f60b8c3fadc01aa9deea81bfc76`；來源patch與267個src檔逐檔hash在 `.local/verification/slint-mixed-reading/accepted-source.json`。六案及九項回歸是同一binary，各自exit0、程序已joined：混合追加／取消／失焦，原追加／取消／失焦，以及離線837列viewport、文章尋找、推文定位、目前／列表收藏、全文19次PageDown、文章輸出、行內圖片及終端尋找。混合三案各僅兩筆HTTP（PNG與GIF各一次）、server joined；核對同一decoded Arc、wide選擇、原PO／自己／指定帳號索引、藍底、搜尋9筆與超過5秒暫停、未讀3→6、未變尾段檢查零多餘PageDown。取消／失焦保留四個角色側標及本機定位，舊匯出仍拒絕，顯式站端復原另核對游標及來源ACK。全文既有500ms＋150ms延遲保留。
+
+共用／兩前端 Rust release gate實跑lib368、Dioxus bin121、Slint bin79及multi10，合計578 passed／7明示ignored；修改的部分頁焦點與保留來源負向都在Dioxus adapter測試實際執行。早先誤用lib篩選跑到0項，不當成通過，後續完整gate已補足。最後僅改探針anchor預期後，Slint bin79／1 ignored與全target Clippy再通過；共用及兩前端全target Clippy、native-player-probe全target check、fmt與JavaScript383項亦通過。Dioxus真實host及其他平台不由以上編譯／單元結果代替。
+
+中間失敗保留：探針在wide變更後未等geometry ACK；側標預期未考慮末列只露一部分；搜尋後仍沿用搜尋前anchor；診斷格式使用未實作Debug的型別。最終同binary的混合追加及原追加各有一次在取頁中觀察到foreground=false而取消，獨立重跑通過；不歸因於外部操作、不放寬失焦保護，也不覆寫負向log。詳見同批 `verification-summary.json`。
+
+macOS strict ad-hoc `Native-Mixed.app` signed native SHA-256 `ad9a676613f5abd7bbb4f60c279ac7b6daab3922765dfc9298a10061cc7663b3`。原生run53028等native-ready後，實際點自己群組／下一則（0／2→1／2）、原PO／下一則，畫面可見ROW0031～0039、六則推文、Bob藍底及青／金側標。這個launcher沒有HTTP origin，PNG／GIF實際資源與wide只由上述完整元件案例證明。第一次run52746在native-ready前被Agent點下一則，與準備程序自動定位衝突並退出，屬探針交接錯誤，未算產品驗收。
+
+原生畫面仍有未解限制：一張OS擷圖正文只剩底色，後續相同縮放再次有文字；兩者分別保存在 `native-retained-53028/os-author.png` 與 `os-visible.png`，不能推定內部原因或聲稱已修復。控制也曾因失焦變成disabled，標題／Raise／輸入欄點擊未能完整驗證恢復，本輪沒有宣稱站端復原實體操作或完整OS矩陣通過。CmdQ後inventory及程序不存在、peer Close ACK且無額外站端bytes分開確認；LaunchServices無exit code，不把absence當成exit0。沒有以cache停用或失焦豁免迴避這些限制。
+
+本批完成上述可獨立驗證的修正；後續先釐清原生畫面／焦點一致性，並繼續完整更新控制、列表右鍵、新程序離線、IME、四架構打包／回退與同負載效能。S0–S8保持active，S9未整合、推送或發佈。

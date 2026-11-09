@@ -8,6 +8,8 @@ use std::{ops::Range, rc::Rc};
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Controls {
     valid: bool,
+    retained: bool,
+    ready: bool,
     source: Option<Identity>,
     group: usize,
     groups: [bool; 4],
@@ -172,6 +174,11 @@ impl ArticleSession {
         let Some(ui) = self.ui.upgrade() else { return };
         let view = self.connection.updates.borrow();
         let id = self.output_identity(&view);
+        let native_ready = self.view.borrow().as_ref().is_some_and(|native| {
+            native.geometry().is_some()
+                && self.reply_navigation.borrow().source
+                    == Some(Identity::of(&native.source.borrow()))
+        });
         let (controls, index, changed) = {
             let core = self.core.borrow();
             let mut state = self.reply_navigation.borrow_mut();
@@ -191,12 +198,16 @@ impl ArticleSession {
                 false
             };
             let total = state.rows().len();
+            let retained =
+                state.source.is_some() && core.retained_reading_identity(&view) == state.source;
             let current = state
                 .active
                 .and_then(|row| state.rows().binary_search(&row).ok())
                 .map_or(0, |at| at + 1);
             let controls = Controls {
                 valid,
+                retained,
+                ready: valid || retained && native_ready,
                 source: state.source,
                 group: state.group,
                 groups: state.groups(),
@@ -213,6 +224,8 @@ impl ArticleSession {
         }
         let Controls {
             valid,
+            retained,
+            ready,
             source,
             group,
             groups,
@@ -223,11 +236,11 @@ impl ArticleSession {
         // Keep chrome in place while the same article is repainting. Geometry
         // ACK controls permission, rather than repeatedly changing the layout.
         let available = source.is_some() && groups[..3].iter().any(|b| *b);
-        ui.set_reply_navigation_ready(valid);
+        ui.set_reply_navigation_ready(ready);
         ui.set_reply_navigation_available(available);
         ui.set_reply_navigation_groups(ModelRc::new(VecModel::from(groups.to_vec())));
         ui.set_reply_navigation_group(group as i32);
-        ui.set_reply_navigation_count(if valid {
+        ui.set_reply_navigation_count(if valid || retained {
             pttstella::msg!(
                 "reply-navigation-count",
                 current = (current as i64),
@@ -239,7 +252,7 @@ impl ArticleSession {
         });
         ui.set_reply_navigation_open(open);
         if let Some(native) = self.view.borrow().as_ref() {
-            native.set_reply_index(if valid {
+            native.set_reply_index(if valid || retained {
                 source.map(|source| (source, index))
             } else {
                 None

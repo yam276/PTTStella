@@ -241,3 +241,5 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 推文更新批次 `384c899` 驗收後再清理自己的release profile、上一個推文定位App與3個冗餘正向PNG，target回到12KiB；必要一般配置最新包改為 `.local/verification/slint-reply-updates/Native-Updates.app`。清理前後、保留包hash及source267檔不變在同批 `cleanup.json`。接續混合Live時仍須核對保留／復原中的推文側標、底色、尋找與媒體交互及完整可信OS控制；本批三個Live fixture不涵蓋所有角色標記組合。
 
 2026-11-09 清理追補：使用者再次要求先處理磁碟產物，已在確認沒有程序／open files 使用後，以 Cargo 原生 clean 移除 Slint worktree 的 `target/release`（5658 檔、Cargo 宣告2.0GiB；du由2122336KiB降至12KiB）。本次 filesystem available由245599801344增至247608643584 bytes，僅記觀測差額，不全部歸因於本次刪除。混合閱讀探針尚未通過，保留該版完整未提交patch、來源基準、binary hash及失敗報告，沒有把失敗標為驗收。485份來源／資產／文件hash與3份必要交付hash均不變。exact path、lsof及前後記錄在 `.local/verification/slint-artifact-cleanup-20261109-followup/cleanup.json`；其餘聊天產物和未整合worktree保留。後續仍逐批清理，不因goal持續而累積歷代target或App；本次清理後不為驗證清理而重建Rust。
+
+2026-11-09：混合推文角色、指定帳號底色、PNG／GIF與wide／搜尋交互已補完整元件證據，修正取消後側標／本機定位消失、部分編碼頁清掉焦點及暫時viewport夾限覆寫anchor。最終同binary六案及九項回歸通過；Rust共用／兩前端578項、JS383項與Clippy／native-player-probe編譯通過。兩輪更新失焦取消保留原log，同binary獨立重跑通過。macOS實際群組／下一則有部分證據，但擷圖正文暫時缺字後恢復、焦點／disabled控制仍未釐清，不宣稱完整OS驗收或已修復呈現問題。完整來源、hash、負向與剩餘範圍見 [原型紀錄](slint-prototype.md#s4-混合推文角色尋找與媒體保留2026-11-09)。S0–S8持續，S9未執行。

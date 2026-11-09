@@ -276,7 +276,10 @@ impl ArticleView {
         self.flow.borrow().clone()
     }
     fn position(&self, flow: &Flow) -> f64 {
-        flow.position(self.anchor.get())
+        let position = flow.position(self.anchor.get());
+        self.layout.get().map_or(position, |layout| {
+            flow.clamp(position, f64::from(layout.body_height * layout.dpi))
+        })
     }
     /// Numeric text anchor for the original uniform-row conformance workload.
     fn row_anchor(&self) -> f64 {
@@ -298,7 +301,8 @@ impl ArticleView {
         if let Some(ui) = self.ui.upgrade() {
             ui.invoke_output_geometry_changed();
         }
-        self.scroll_pixels(self.position(&flow));
+        self.publish();
+        self.schedule();
         Ok(())
     }
     pub fn geometry(&self) -> Option<crate::pointer::SurfaceGeometry> {
@@ -400,10 +404,10 @@ impl ArticleView {
                 }
             };
             self.flow.replace(Some(Rc::new(flow)));
-            self.anchor.set(flow.anchor(flow.clamp(
-                self.position(&flow),
-                f64::from(layout.body_height * layout.dpi),
-            )));
+            // Layout may temporarily expose more rows while controls reflow.
+            // Clamp the effective viewport, not the requested text/image anchor;
+            // a later layout or append must not inherit that transient clamp.
+            // Explicit scrolling owns changes to the requested anchor.
             self.x.set(
                 self.x
                     .get()

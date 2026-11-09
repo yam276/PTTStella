@@ -521,6 +521,36 @@ impl SurfaceState {
                 )
         })
     }
+    /// Frozen metadata for local scrolling during owned refresh/recovery.
+    /// This does not authorize input, selection, exports or media gestures;
+    /// those consumers must continue to use current() and their output leases.
+    pub fn retained_reading_identity(&self, view: &View) -> Option<Identity> {
+        if !self.updates.holding()
+            || view.phase != Phase::Connected
+            || !view.site.ptt_features()
+            || view.login_pending
+            || view.mouse.route != crate::mouse::input::Route::Local
+        {
+            return None;
+        }
+        let scope = self.reading_scope()?;
+        self.displayed
+            .as_ref()
+            .filter(|p| {
+                p.connected
+                    && p.ptt_features
+                    && !p.output_pending
+                    && p.article_mode == self.article_mode
+                    && p.mouse.route == crate::mouse::input::Route::Local
+                    && (
+                        p.generation,
+                        p.article.as_ref().map(|a| a.id),
+                        p.presentation,
+                    ) == (view.generation, Some(scope.1), scope.2)
+                    && p.generation == scope.0
+            })
+            .map(Identity::of)
+    }
     pub fn inline_page(&self, identity: Identity, stamp: Stamp, view: &View) -> Option<&Paint> {
         self.current(identity, view).filter(|p| {
             self.inline_identity(view) == Some(identity)
@@ -1052,7 +1082,15 @@ impl SurfaceState {
             || (!view.output_pending
                 && !view.input_pending
                 && view.frame.control_complete
-                && !matches!(view.context(), Context::ArticleReading { .. })))
+                && !matches!(view.context(), Context::ArticleReading { .. })
+                // The cache already decides whether an intermediate screen is
+                // part of an owned page turn. Keep focus on that same article
+                // while a split encoded response is temporarily unrecognizable.
+                && !self.reply_focus.as_ref().is_some_and(|(generation, article, _)| {
+                    self.reading_scope().is_some_and(|scope| {
+                        scope.0 == *generation && Some(scope.1) == *article
+                    })
+                })))
             && self.reply_focus.take().is_some()
         {
             self.focus_changed();
