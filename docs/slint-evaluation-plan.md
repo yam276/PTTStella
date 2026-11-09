@@ -28,6 +28,12 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 - 每階段做成可獨立驗收的變更，遵守 [AGENTS.md](../AGENTS.md) 的分支、提交與清理規則。需要新分支、推送、實站操作、切換正式入口或發佈時，依本 repo 規則和使用者當時授權執行。測試與研究 App 使用獨立 App ID、設定／資料目錄、診斷及密碼庫服務，合成探針只連本機。
 - 候選版須通過所有既有功能、四個目標架構安裝、舊資料讀寫與回退，以及下文效能門檻。S8 交付可審閱的候選包、可逆切換方案與結論。使用者接受後才進入 S9。若 `develop` 推進，切換前以待整合的實際 commit 重跑變更相關項目和整體效能，新增功能納入驗收。
 
+## 產物保留規則（2026-11-09 使用者要求）
+
+已測完且被取代的產物包含過去累積與之後新增，均於每個可獨立驗收批次完成時清理，沿用 [task-owned 清理流程](development-harness.md#產物清理與結案)。不再為每階段各留 App，也不因完整 goal active 就長期保留 target/debug／release；只在同一批工作中重用。一般 dev／test 命令明示 `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`，release 設定不變。已確認無使用者的編譯快取用 Cargo 原生 clean，必要候選包與最小來源／驗收／失敗證據移出 target，保留原因及 exact removed paths 另記。不啟動背景刪除服務。
+
+2026-11-09 已回收 main Slint target 的 dev／release、獨立 Windows 交叉編譯 target，以及34份過時 macOS 測試 App。當前只保留 Slint 一般候選、影片配置候選及唯一 Windows S1 ZIP；兩個最小 reopen bundle metadata 目錄沒有 native executable。被刪 App 的非執行紀錄／授權／測試資源壓成約3.2MB ZIP，完整 binaries 不存進 archive。精確清單、來源雜湊、lsof、Cargo 輸出與空間前後在 `.local/verification/slint-artifact-cleanup-20261109/`。Slint target 12KiB、verification 約416MiB；原始碼、未提交的推文導覽工作及必要交付內容不變。canonical checkout 的其他聊天產物不屬於本 Slint goal 所有權，保留而未跨案刪除。
+
 ## 共用 Rust 邊界
 
 | 擁有者 | 實作與介面 |

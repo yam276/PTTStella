@@ -58,4 +58,12 @@ cargo clean --release --target-dir <已核對的本 repo target 絕對路徑>
 
 4. 用 `df` 或 filesystem API 在操作前後記錄實際 available bytes；另外記 `du` 的 allocated size 與 Cargo 顯示的清除量。APFS clone／snapshot、hardlink 及其他工作可使三者不同，不把 logical size 當成實際回收量。確認最新交付仍存在且 hash 不變，記下 exact removed paths 與保留例外後才結案。
 
-此流程不在每次 gate 後立刻刪快取，避免同一工作反覆編譯；結案清理也不為證明清理而重跑 Rust build。一般 docs、Python helper 單元測試可在清完後執行，不重建 target。若工作在硬中斷後恢復，只重新盤點自己的殘留，不啟動 legacy guard 或猜測清掉外部共享路徑。
+使用者於2026-11-09明確要求清理已測完的 artifacts，包含過去累積與之後新增的產物。Slint 評估因此以「每個可獨立驗收的批次」為清理單位，不等整個 S0–S8 goal 結束：
+
+- 同一批仍在編譯／驗證時可以重用自己的 profile；該批驗收完且必要交付已移出 target，確認無活動使用者後，就用上列 Cargo 原生 clean 清掉已用完的 profile。長期 goal 仍 active 不構成持續保留 debug／release 快取的理由。
+- 只保留每個仍有必要的平台／執行配置的最新候選包，不為每個功能階段各保留一份 App。新候選涵蓋舊功能後，清掉已測舊包；尚缺平台驗收的唯一交付可以保留並說明。不得以測試包副本充當唯一來源備份。
+- 歷次證據保留來源 commit／patch、binary hash、必要結果、最小重現資料與獨特失敗紀錄。舊 bundle 的 launcher／plist／授權／資源可以壓成小型紀錄；不再把完整可重建 executable／dylib 一起存進每階段的證據目錄。來源、原始 assets、使用者資料、已安裝工具與 registry cache 仍保護。
+- 後續 Slint goal 的一般 dev／test 建置明示 `CARGO_INCREMENTAL=0`、`CARGO_PROFILE_DEV_DEBUG=0`、`CARGO_PROFILE_TEST_DEBUG=0`，減少多代 incremental 與完整 debug symbols。這是該命令的 Cargo 標準選項，不改全機設定或 release profile；需要符號診斷時只在該批明示調整，完成後照樣清理。
+- 每批記錄 exact removed paths、保留例外、du、Cargo 宣告量與 filesystem free 前後。共用／活動／不明項目保留原因；不啟動 daemon、定時刪除或 owner-release 流程，不跨案刪別人的產物。
+
+結案清理不為證明清理而重跑 Rust build。一般 docs、Python helper 單元測試可在清完後執行，使用 `PYTHONDONTWRITEBYTECODE=1` 避免再次產生 pycache；不重建 target。若工作在硬中斷後恢復，只重新盤點自己的殘留，不啟動 legacy guard 或猜測清掉外部共享路徑。
