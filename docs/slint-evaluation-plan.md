@@ -4,7 +4,7 @@
 
 Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分段接續長文、大型 GIF 與選用的自動開圖。Slint 起點為獨立 worktree 內的 `slint-research`／`pttstella-slint` 原型。原型已在 macOS arm64 實測雙色字、80×24、放大拖曳、全螢幕及獨立輸入欄的威注音。實體 Retina、終端內組字、跨平台原生輸入和與 Dioxus 的同負載效能比較仍待驗。實驗數據及已知差異見 [離線原型紀錄](slint-prototype.md)。
 
-## 目前進度（2026-11-09）
+## 目前進度（2026-11-10）
 
 **尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
 
@@ -18,7 +18,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、三格式錯色負向對照 | MP4 GPU 像素偶發失敗仍未重現／解決、多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
 | S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
 | S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔及正常退出 owner；三版本實際 store 往返與並行保存28案 | 其他管理入口、完整 Dock／modal／OS I/O 退出矩陣、實際前端／平台路徑及 vault 往返 |
-| S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG，封裝 libmpv、搬移與無 Homebrew sandbox 檢查 | 完整四架構候選包、乾淨機器／來源交付／完整原生驗收、使用者 Windows 驗收、回退及同負載效能；尚未通過 |
+| S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG及無Homebrew sandbox；Windows x64含libmpv的GUI主程式交叉編譯、全目標Clippy及ZIP靜態核對 | macOS x64／Linux x64完整候選包，Windows與其他平台原生執行、VC runtime／乾淨安裝、完整來源交付、資料回退及同負載效能；尚未通過 |
 
 接續完整鍵盤／焦點與其他平台、跨平台列表／重開、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
 
@@ -289,3 +289,11 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 2026-11-10 S0／S8跨平台影片建置邊界：原 `build.rs` 在交叉編譯且未設 `MPV_LIB_DIR` 時會執行主機pkg-config，合成Windows目標已重現它輸出主機library search path。現改為比對Cargo HOST／TARGET；交叉編譯必須明示目標libmpv目錄，缺少Cargo identity也報錯，不嘗試主機pkg-config。原生編譯仍可使用pkg-config，明示有效目錄的原生／交叉編譯沿用原路徑；目錄存在不代表library架構／ABI／runtime已驗收。`tooling/test_mpv_build.py` 直接編譯並執行同一production build.rs，以本機可執行的pkg-config替身驗證7案（包含前述red→green、明示路徑、錯誤、無影片配置）；不編譯Slint相依，也不冒充跨平台link或原生執行。全133個Python測試及core gate 14命令／2replay通過；來源、修前／修後結果及清理ledger在 `.local/verification/slint-mpv-cross-discovery/`。Windows／Linux／macOS x64的實際libmpv來源交付、連結、打包與原生驗收仍待完成。
 
 上述跨平台建置檢查完成後，以Cargo原生clean移除 `slint-mpv-cross-discovery/target/debug`（1561檔／268.3MiB），target的du由279660KiB降至8KiB；測試的獨立rustc執行檔由TemporaryDirectory清理，無殘留。1546份受保護來源／資產／交付hash不變。filesystem free 230992998400→231269281792 bytes只記觀測差額；清理後不重建Rust。exact paths、du、Cargo與open-file檢查在同批 `cleanup.json`。
+
+2026-11-10 Windows x64完整主程式候選：重用既有cargo-xwin0.23.1／Windows SDK，以Rust1.97在macOS arm64交叉編譯 `native-player-probe`／`pttstella-slint`，包含桌面服務與播放器；不只S1探針。首輪實際PE顯示CUI子系統，已加上與Dioxus相同的release Windows GUI屬性，重建後由共用PE parser及獨立LLVM工具確認x64／GUI與libmpv匯入。取用mpv官方v0.42.0 LGPL x64 ZIP（SHA256 `8e5f77430efc53ef175804ba6618527e3af0448a0dcabf04d3cc72659d1a6fce`），原GNU COFF import archive僅改副檔名為mpv.lib，MSVC／LLD小型連結與完整主程式均通過；沒有把主機mpv用於目標連結。[mpv官方版本](https://github.com/mpv-player/mpv/releases/tag/v0.42.0)
+
+新增 `tooling/bundle_slint_windows.py`，只消費已建執行檔、匹配的來源／binary hash、runtime來源紀錄及自製CC0三格式影片；沿用既有Windows PE普通／延遲匯入parser，遞迴核對主程式可達DLL、拒絕未知／WebView依賴及未用DLL，明列尚需安裝的MSVCP140／VCRUNTIME140。共用parser預設仍嚴格要求GUI，只有顯式runtime檢查允許CUI。ZIP含原生主程式、libmpv、Rust／Skia／libmpv授權、三格式fixture及離線／格線／IME／閱讀／持久合成草稿／影片／show-profile入口。離線入口只連合成loopback；一般exe仍會連研究設定的預設站、不自動登入。所有驗收cmd入口清掉繼承的診斷變數、各次log與探針輸出不覆寫；草稿明示重用包內evidence/drafts供重開驗收。
+
+最新完整Windows候選為 `.local/verification/slint-windows-candidate/package-current/PTTStella-Slint-Candidate-0.5.0-dev.3-windows-x64.zip`，SHA256 `d733f7f5f8508c7b4c67c7de8749a141f70530318463d9b3741b14aa96fd3b59`。Windows target release/all-target Clippy、全143個Python測試、四target／兩配置8案依賴gate、fmt、docs、actionlint與diff檢查通過；獨立ZIP驗證核對CRC、912個payload hash與LLVM匯入表。首輪驗證器曾因同一DLL不同大小寫的重複LLVM條目錯比set，改成先lower再去重，沒有修改產品／ZIP來配合expected。執行環境仍是macOS，未執行Windows exe：原生啟動、注音／鍵盤、播放器圖像／聲音、profile實際路徑、無WebView2啟動、乾淨安裝及完整來源交付仍not_run／not_ready，不宣稱S1／S5／S8完成；尚需Visual C++ x64 Runtime，未內附CRT。原S1無libmpv的ZIP暫留，作為獨立無影片配置的原生比較，不再為新功能保留額外Windows執行檔副本。命令、SDK路徑、source ref／patch、首輪CUI與最終GUI binary hash、兩個runtime的LLVM報告、封裝／依賴／測試結果在 `.local/verification/slint-windows-candidate/`。
+
+Windows候選批次清理：保存最終ZIP及必要授權／來源／唯一失敗紀錄後，先用Cargo profile clean清掉969.3MiB，但交叉target仍有1985388KiB，因此未宣稱清完；再對同一個已確認無使用者、專屬本批的target執行Cargo原生完整clean（5687檔／1.9GiB），target目錄已不存在。另刪首輪被取代的ZIP、下載的重複runtime ZIP、已封裝的DLL副本、重複import archive與小型smoke執行檔／PDB及自己的pycache。保留一份小型mpv.lib與必要license供下一批、既有cargo-xwin／SDK不刪。1644份受保護來源／資產／交付hash不變，Windows批次約98MiB，Slint整個worktree約794MiB；後續清理free 221845131264→223943602176 bytes僅為觀測。首輪cleanup assertion中斷前的完整du／free-before未持久保存，沒有補造數字；兩段Cargo輸出、後續盤點、exact paths與已取代包的前後hash見 `.local/verification/slint-windows-candidate/cleanup/ledger.json`。首次docs gate指出smoke.exe尚在，完成清理後重跑已通過，沒有放寬gate。清理後不重建Rust。

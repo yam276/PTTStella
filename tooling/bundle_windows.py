@@ -28,7 +28,7 @@ def digest(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
-def inspect_pe(path):
+def inspect_pe(path, *, require_gui=True):
     """Check architecture/subsystem and read actual imported DLL names (PE32+)."""
     data = path.read_bytes()
     pe = struct.unpack_from('<I', data, 0x3c)[0]
@@ -39,8 +39,11 @@ def inspect_pe(path):
     opt = pe+24
     if machine != 0x8664 or struct.unpack_from('<H', data, opt)[0] != 0x20b:
         raise ValueError('Expected an x64 PE32+ executable')
-    if struct.unpack_from('<H', data, opt+68)[0] != 2:
+    subsystem = struct.unpack_from('<H', data, opt+68)[0]
+    if require_gui and subsystem != 2:
         raise ValueError('Expected Windows GUI subsystem (release build)')
+    if subsystem not in (2, 3):
+        raise ValueError('Expected Windows GUI or CUI subsystem')
     sections = [struct.unpack_from('<IIII', data, opt+optional_size+i*40+8) for i in range(count)]
 
     def offset(rva, length=1):
@@ -90,7 +93,7 @@ def inspect_pe(path):
             raise ValueError('Unterminated delay import directory')
     elif size:
         raise ValueError('PE delay import directory is missing its RVA')
-    return {'machine': 'AMD64', 'subsystem': 'Windows GUI',
+    return {'machine': 'AMD64', 'subsystem': 'Windows GUI' if subsystem == 2 else 'Windows CUI',
             'imports': sorted(set(imports+delayed)), 'delay_imports': sorted(set(delayed))}
 
 
