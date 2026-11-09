@@ -43,6 +43,14 @@ macOS 原生案例驗證獨立 root、fork child、同名 decoy 排除、CPU clo
 
 ## 接續正式比較的必要條件
 
+2026-11-10 已新增 `pttstella-slint --probe-benchmark NEW_DIRECTORY`。舊 `--probe-grid` 在 UI 外持有 loopback Connection，視窗只接靜態 Frame，不能與完整 Dioxus host 比資源。新入口用與 Live 共用的完整服務判斷，掛載文章、輸入、輸出、媒體／設定、草稿、站點、名單、收藏、前往、登入、保活、滑鼠／選單及 connection watch；16項實際 owner／mount 檢查完成後才輸出 `prepared.json`、固定960×576的 `source.png` 與 toolkit `snapshot.png`。唯一20ms準備 timer 在完成或5秒失敗時停止；成功不自動輸入、合成前景或關窗。正式資料路徑、vault 及正常啟動行為不變；新入口的所有 store 在指定新目錄，憑證仍走 synthetic scope，peer 拒絕任何站端輸入。
+
+`.local/verification/slint-benchmark-session/accepted-result.json` 記錄最終 release native hash。macOS arm64 在禁止讀 Homebrew、禁止讀寫產品／研究版一般資料、對外連線僅允許 localhost 的 sandbox 裡，16項服務及格線／幾何已安裝。CUA 實見雙色「中」、16色與第24行，⌘Q後程序exit0、嚴格peer Close ACK及既有各owner finish完成。Raise與標題點擊沒有證明前景啟用，工具仍disabled；不宣稱可輸入或完整焦點驗收。先前兩個被SIGTERM結束的實例及sandbox／staging失敗各自保留，不能合併成正常退出通過。未最佳化及strip後未最佳化執行檔都超出打包器128MiB上限，未放寬限制；改用release後成功。
+
+這次同樣1040×740外視窗內的 Slint viewport 是1016×442、格線736×442；原型常駐工具列占用了畫面，外視窗相同並不等於共同工作量。因此先前及本次閒置採樣都不產生與Dioxus的改善比例。下一步應依產品浮球工具列契約移除正常視窗的原型常駐列，保留全部操作入口與持續可見的斷線／錯誤提示，再驗證兩個host的實際viewport及前景。不能為跑分關掉服務或只在benchmark隱藏產品仍有的工作。
+
+本批Rust為native-player-probe的lib373、bin83、多程序10項通過，另有6個既有明確ignored；全target Clippy通過。release打包closure的50個dylib與上一個候選的原始hash相同；加上主程式manifest共51筆，並非新增了另一個runtime依賴。診斷App的CFBundleExecutable先指向script，CUA無法綁定；改成與實際native主程式一致並重簽後可綁定，產品packager原本即採native。這是診斷staging修正，沒有改產品識別。
+
 先讓兩個完整 host 的顯式 probe 接受相同 viewport／DPI／字型、工作負載和開始／結束觀測點，核對輸入 bytes、畫面及 Close。區分 native OS 前景與合成 toolkit foreground，不能為跑分放寬生產失焦保護。首個可見且可輸入 frame、輸入到顯示器呈現、下載／取頁及 bitmap 計算分開記錄。
 
 cold／warm 要記錄定義；macOS WebKit 會在 `Library/WebKit/<task bundle id>` 和 `Library/Caches/<task bundle id>` 留下資料，僅換 probe 目錄不足以稱 cold。只能清自己 namespace，不能清系統 cache 或其他 App 資料。兩版順序交錯，各至少10次啟動及每組100次操作；閒置、長文、雙GIF、影片、草稿、多開、反覆切換／回收後各自觀測。穩定區間工具可重用，membership churn 的階段另補完整 lifetime 記帳。

@@ -1,5 +1,6 @@
 mod app_exit;
 mod article;
+mod benchmark;
 mod bookmarks_manager;
 mod chrome;
 mod clipboard;
@@ -129,6 +130,7 @@ enum Probe {
 }
 
 struct Options {
+    benchmark: Option<PathBuf>,
     software_renderer: bool,
     zoom: f32,
     capture: Option<PathBuf>,
@@ -150,8 +152,9 @@ fn options() -> Result<Options, &'static str> {
 fn options_from(
     mut args: impl Iterator<Item = std::ffi::OsString>,
 ) -> Result<Options, &'static str> {
-    const USAGE: &str = "usage: pttstella-slint [--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--software-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
+    const USAGE: &str = "usage: pttstella-slint [--probe-benchmark NEW_DIR|--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--software-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
     let mut zoom = None;
+    let mut benchmark = None;
     let mut software_renderer = false;
     let mut capture = None;
     let mut probe = None;
@@ -165,6 +168,10 @@ fn options_from(
     let mut verify_color = None;
     while let Some(arg) = args.next() {
         match arg.to_str() {
+            Some("--probe-benchmark") if probe.is_none() => {
+                benchmark = Some(args.next().ok_or(USAGE)?.into());
+                probe = Some(Probe::Session(session::Probe::Benchmark));
+            }
             Some("--software-renderer") if !software_renderer => software_renderer = true,
             Some("--verify-editor-color") if verify_color.is_none() => {
                 verify_color = Some(args.next().ok_or(USAGE)?.into());
@@ -410,6 +417,7 @@ fn options_from(
         Probe::Connect
     }));
     Ok(Options {
+        benchmark,
         software_renderer,
         verify_color,
         verify_drafts,
@@ -428,6 +436,7 @@ fn options_from(
 fn main() -> Result<(), Box<dyn Error>> {
     let options = options()?;
     for directory in [
+        &options.benchmark,
         &options.verify_context,
         &options.verify_tools,
         &options.verify_article,
@@ -495,6 +504,17 @@ fn main() -> Result<(), Box<dyn Error>> {
             if matches!(probe, session::Probe::Tools | session::Probe::ToolsStation) {
                 settings.tools_opacity = pttstella::settings::ToolOpacity::try_from(20)?;
             }
+            let preferences = if let Some(directory) = &options.benchmark {
+                let store = pttstella::settings::store::Store::at(directory.join("settings.json"));
+                store.save(settings.clone())?;
+                Some(pttstella::settings::preferences::Preferences::loaded(
+                    Ok(store),
+                    settings.clone(),
+                    None,
+                )?)
+            } else {
+                None
+            };
             return session::with_probe(
                 probe,
                 bytes,
@@ -505,7 +525,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         screen.frame(),
                         Some((session::Mode::Probe(probe), connection)),
                         settings,
-                        None,
+                        preferences,
                         site_peers,
                     )
                 },
@@ -853,6 +873,7 @@ fn run(
     });
     let mut article_session_owner = None;
     let mut login_owner = None;
+    let mut keep_alive_mounted = false;
     let mut paste_owner = None;
     let mut output_owner = None;
     let mut sites_owner = None;
@@ -894,10 +915,11 @@ fn run(
     };
     let watcher = connection
         .map(|(mode, connection)| {
-            if matches!(
-                &mode,
-                session::Mode::Live(_)
-                    | session::Mode::Probe(
+            let full_services = mode.full_services();
+            if full_services
+                || matches!(
+                    &mode,
+                    session::Mode::Probe(
                         session::Probe::ArticleInline
                             | session::Probe::ArticleFull
                             | session::Probe::ArticleInput
@@ -910,7 +932,8 @@ fn run(
                             | session::Probe::ArticleStall
                             | session::Probe::ArticleTerminal
                     )
-            ) || settings_search_probe
+                )
+                || settings_search_probe
                 || destination_probe
                 || bookmarks_probe
                 || capture_probe
@@ -919,7 +942,7 @@ fn run(
                 || filters_probe
             {
                 let mut article_preferences = settings.clone();
-                if !matches!(&mode, session::Mode::Live(_)) {
+                if !full_services {
                     article_preferences.article_mode = if matches!(
                         &mode,
                         session::Mode::Probe(
@@ -971,10 +994,10 @@ fn run(
                 previous.clone(),
                 presented.clone(),
             ));
-            if matches!(
-                &mode,
-                session::Mode::Live(_)
-                    | session::Mode::Probe(
+            if full_services
+                || matches!(
+                    &mode,
+                    session::Mode::Probe(
                         session::Probe::ArticleInline
                             | session::Probe::ArticleFull
                             | session::Probe::ArticleInput
@@ -986,7 +1009,8 @@ fn run(
                             | session::Probe::ArticleLong
                             | session::Probe::ArticleStall
                     )
-            ) || capture_probe
+                )
+                || capture_probe
                 || replies_probe
                 || updates_probe
             {
@@ -1037,16 +1061,17 @@ fn run(
                     clipboard.clone(),
                 ));
             }
-            if matches!(
-                &mode,
-                session::Mode::Live(_)
-                    | session::Mode::Probe(
+            if full_services
+                || matches!(
+                    &mode,
+                    session::Mode::Probe(
                         session::Probe::KeepAlive
                             | session::Probe::ArticleKeepAlive
                             | session::Probe::Login
                             | session::Probe::Login2fa
                     )
-            ) || settings_probe
+                )
+                || settings_probe
             {
                 keep_alive::mount(
                     &ui,
@@ -1054,12 +1079,14 @@ fn run(
                     presented.clone(),
                     article_session_owner.clone(),
                 );
+                keep_alive_mounted = true;
             }
-            if matches!(
-                &mode,
-                session::Mode::Live(_)
-                    | session::Mode::Probe(session::Probe::Login | session::Probe::Login2fa)
-            ) || settings_probe
+            if full_services
+                || matches!(
+                    &mode,
+                    session::Mode::Probe(session::Probe::Login | session::Probe::Login2fa)
+                )
+                || settings_probe
             {
                 login_owner = Some(login::Login::mount(
                     &ui,
@@ -1068,10 +1095,10 @@ fn run(
                     matches!(&mode, session::Mode::Probe(_)),
                 ));
             }
-            if matches!(
-                &mode,
-                session::Mode::Live(_)
-                    | session::Mode::Probe(
+            if full_services
+                || matches!(
+                    &mode,
+                    session::Mode::Probe(
                         session::Probe::EditorColor
                             | session::Probe::Media
                             | session::Probe::ArticleInline
@@ -1097,7 +1124,8 @@ fn run(
                             | session::Probe::MouseWheel
                             | session::Probe::MouseRoundTrip
                     )
-            ) {
+                )
+            {
                 let output = output::Output::mount(
                     &ui,
                     connection.clone(),
@@ -1139,13 +1167,12 @@ fn run(
                         }
                     }
                 });
-                if matches!(
-                    &mode,
-                    session::Mode::Live(_)
-                        | session::Mode::Probe(
-                            session::Probe::Media | session::Probe::ArticleInline
-                        )
-                ) {
+                if full_services
+                    || matches!(
+                        &mode,
+                        session::Mode::Probe(session::Probe::Media | session::Probe::ArticleInline)
+                    )
+                {
                     let preferences = match loaded_preferences.take() {
                         Some(preferences) => preferences,
                         None => {
@@ -1186,6 +1213,16 @@ fn run(
                     }
                 }
                 let sites_state = match &mode {
+                    session::Mode::Probe(session::Probe::Benchmark) => {
+                        options.benchmark.as_ref().map(|directory| {
+                            Rc::new(RefCell::new(pttstella::sites::session::State::load(
+                                Ok(pttstella::sites::store::Store::at(
+                                    directory.join("sites.json"),
+                                )),
+                                true,
+                            )))
+                        })
+                    }
                     session::Mode::Live(stations) => Some(stations.state.clone()),
                     session::Mode::Probe(session::Probe::Media) => {
                         sites_probe_store.as_ref().map(|(_, store)| {
@@ -1206,7 +1243,11 @@ fn run(
                         matches!(&mode, session::Mode::Probe(_)),
                     ));
                 }
-                let filter_store = if matches!(&mode, session::Mode::Live(_)) {
+                let filter_store = if let Some(directory) = &options.benchmark {
+                    Some(Ok(pttstella::filters::store::Store::at(
+                        directory.join("filters.json"),
+                    )))
+                } else if matches!(&mode, session::Mode::Live(_)) {
                     Some(profile::Profile::system().map(|p| p.filters()))
                 } else {
                     filters_probe_store.as_ref().map(|d| {
@@ -1227,7 +1268,11 @@ fn run(
                 if let (Some(context), Some(filters)) = (&context_owner, &filters_owner) {
                     context.attach_filters(filters);
                 }
-                let bookmark_store = if matches!(&mode, session::Mode::Live(_)) {
+                let bookmark_store = if let Some(directory) = &options.benchmark {
+                    Some(Ok(pttstella::bookmarks::store::Store::at(
+                        directory.join("bookmarks.json"),
+                    )))
+                } else if matches!(&mode, session::Mode::Live(_)) {
                     Some(profile::Profile::system().map(|p| p.bookmarks()))
                 } else if options.probe == Some(Probe::Session(session::Probe::Media))
                     && (std::env::var_os("PTTSTELLA_SLINT_BOOKMARKS_PROBE").is_some()
@@ -1269,7 +1314,11 @@ fn run(
                 if let (Some(context), Some(bookmarks)) = (&context_owner, &bookmarks_owner) {
                     context.attach_bookmarks(bookmarks);
                 }
-                let recent_store = if matches!(&mode, session::Mode::Live(_)) {
+                let recent_store = if let Some(directory) = &options.benchmark {
+                    Some(Ok(pttstella::recent_boards::store::Store::at(
+                        directory.join("recent-boards.json"),
+                    )))
+                } else if matches!(&mode, session::Mode::Live(_)) {
                     Some(profile::Profile::system().map(|p| p.recent()))
                 } else if destination_probe {
                     Some(
@@ -1298,11 +1347,12 @@ fn run(
                 }
                 output_owner = Some(output);
             }
-            if matches!(
-                &mode,
-                session::Mode::Live(_) | session::Mode::Probe(session::Probe::Drafts)
-            ) {
-                let store = if matches!(&mode, session::Mode::Probe(session::Probe::Drafts)) {
+            if full_services || matches!(&mode, session::Mode::Probe(session::Probe::Drafts)) {
+                let store = if let Some(directory) = &options.benchmark {
+                    Ok(pttstella::drafts::store::Store::at(
+                        directory.join("drafts.json"),
+                    ))
+                } else if matches!(&mode, session::Mode::Probe(session::Probe::Drafts)) {
                     let directory = std::env::var_os("PTTSTELLA_SLINT_DRAFTS_PROBE_DIR")
                         .map(PathBuf::from)
                         .or_else(|| drafts_probe_directory.as_ref().map(|d| d.path().to_owned()))
@@ -1754,6 +1804,19 @@ fn run(
     } else {
         None
     };
+    let benchmark_preparation = options.benchmark.clone().map(|directory| {
+        benchmark::Preparation::start(&ui, renderer.clone(), previous.clone(), presented.clone(), directory,
+            serde_json::json!({
+                "article":article_session_owner.is_some(), "input":paste_owner.is_some(),
+                "output":output_owner.is_some(), "login":login_owner.is_some(),
+                "keep_alive":keep_alive_mounted, "connection_watch":watcher.is_some(),
+                "sites":sites_owner.is_some(), "filters":filters_owner.is_some(),
+                "bookmarks":bookmarks_owner.is_some(), "destination":destination_owner.is_some(),
+                "context":context_owner.is_some(), "tools":tools_owner.is_some(),
+                "station_mouse":station_mouse_owner.is_some(), "media_settings":media_owner.is_some(),
+                "editor":editor_owner.is_some(), "station_color":station_color_owner.is_some(),
+            }))
+    });
     if let Some(path) = options.capture {
         ui.show()?;
         ui.window().set_size(slint::LogicalSize::new(1000., 690.));
@@ -1920,6 +1983,7 @@ fn run(
         let verification_result = verification
             .map(|verification| verification.finish())
             .transpose();
+        let benchmark_result = benchmark_preparation.map(|p| p.finish()).transpose();
         #[cfg(target_os = "macos")]
         {
             _native_menu.stop();
@@ -1949,6 +2013,7 @@ fn run(
         output_cleanup?;
         paste_cleanup?;
         verification_result?;
+        benchmark_result?;
     }
     Ok(())
 }
@@ -1979,6 +2044,7 @@ mod startup_tests {
             &["--probe-grid"][..],
             &["--probe-ime"][..],
             &["--probe-media"][..],
+            &["--probe-benchmark", "new-benchmark"][..],
             &["--show-profile"][..],
             &["--capture", "new.png"][..],
             &["--software-renderer", "--capture", "new.png"][..],
@@ -1994,5 +2060,21 @@ mod startup_tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn benchmark_requires_its_own_directory_and_cannot_mix_with_other_probes() {
+        let parsed = parse(&["--probe-benchmark", "new-benchmark"]);
+        assert_eq!(parsed.benchmark, Some(PathBuf::from("new-benchmark")));
+        assert!(parsed.probe == Some(Probe::Session(session::Probe::Benchmark)));
+        for args in [
+            &["--probe-benchmark"][..],
+            &["--probe-benchmark", "a", "--connect"][..],
+            &["--probe-grid", "--probe-benchmark", "a"][..],
+            &["--probe-benchmark", "a", "--capture", "image.png"][..],
+            &["--probe-benchmark", "a", "--verify-media", "b"][..],
+        ] {
+            assert!(options_from(args.iter().map(std::ffi::OsString::from)).is_err());
+        }
     }
 }

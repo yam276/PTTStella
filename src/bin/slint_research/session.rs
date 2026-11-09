@@ -43,6 +43,7 @@ impl FrameGate {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Probe {
+    Benchmark,
     EditorColor,
     Drafts,
     Media,
@@ -80,6 +81,26 @@ pub enum Probe {
 pub enum Mode {
     Probe(Probe),
     Live(Stations),
+}
+
+impl Mode {
+    /// Explicit loopback benchmarks mount the same service owners as Live.
+    /// Transport, data paths and credential scope remain synthetic.
+    pub fn full_services(&self) -> bool {
+        matches!(self, Self::Live(_) | Self::Probe(Probe::Benchmark))
+    }
+}
+
+#[cfg(test)]
+mod service_policy_tests {
+    use super::*;
+
+    #[test]
+    fn full_service_benchmark_does_not_inherit_a_reduced_probe_owner_set() {
+        assert!(Mode::Probe(Probe::Benchmark).full_services());
+        assert!(!Mode::Probe(Probe::Selection).full_services());
+        assert!(!Mode::Probe(Probe::Media).full_services());
+    }
 }
 
 pub fn with_live(
@@ -189,6 +210,7 @@ pub fn with_probe(
         None => bytes,
     };
     let fixture = match probe {
+        Probe::Benchmark => "slint_full_parity_grid",
         Probe::EditorColor if color_failure.is_some() => "slint_editor_color_negative",
         Probe::EditorColor => "slint_editor_color",
         Probe::Drafts if storage_drafts => "slint_drafts_storage",
@@ -239,6 +261,7 @@ pub fn with_probe(
     };
     let result = with_connection(
         || match probe {
+            Probe::Benchmark => Connection::start_ui_probe(bytes),
             Probe::EditorColor => match color_failure {
                 Some(case) => Connection::start_editor_color_failure_probe(case),
                 None => Connection::start_editor_color_probe(bytes),
