@@ -1204,7 +1204,13 @@ fn run(
                             .verify_media
                             .as_ref()
                             .map(|d| {
-                                pttstella::bookmarks::store::Store::at(d.join("bookmarks.json"))
+                                // Explicit loopback probes may reopen the same
+                                // data file while keeping each evidence run new.
+                                // Live mode above always uses its normal profile.
+                                let file = std::env::var_os("PTTSTELLA_SLINT_BOOKMARKS_PROBE_FILE")
+                                    .map(PathBuf::from)
+                                    .unwrap_or_else(|| d.join("bookmarks.json"));
+                                pttstella::bookmarks::store::Store::at(file)
                             })
                             .ok_or_else(|| "bookmark verification directory missing".to_owned()),
                     )
@@ -1427,7 +1433,10 @@ fn run(
         || bookmarks_probe
             && std::env::var("PTTSTELLA_SLINT_BOOKMARKS_PROBE").as_deref() == Ok("native")
         || capture_probe
-            && std::env::var("PTTSTELLA_SLINT_CAPTURE_PROBE").as_deref() == Ok("native")
+            && matches!(
+                std::env::var("PTTSTELLA_SLINT_CAPTURE_PROBE").as_deref(),
+                Ok("native" | "native-list")
+            )
         || updates_probe
             && std::env::var("PTTSTELLA_SLINT_UPDATES_PROBE").as_deref() == Ok("native")
         || replies_probe

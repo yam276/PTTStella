@@ -1388,3 +1388,29 @@ run66584再暫時把同App的launcher設為現有 `PTTSTELLA_SLINT_UPDATES_PROBE
 原生按鈕基本路徑、座標進入文章和取消後復原已有這兩輪證據；先前AX呼叫未取得可操作性不能推定為產品焦點永久失效。完整長按／鍵盤／IME／多modal、背景取消與恢復、其他平台仍需自己的矩陣。原始byte、PNG數值、JPEG、AX及peer結果在 `.local/verification/slint-native-observation/`；其中 `inspect_png.py`可直接用Python標準庫重讀原PNG，核對chunk CRC、解filter與不透明文字像素，`png-text-pixels-opaque.json`保留完整命令；原生顯示以保存的原始內容與實際操作結果核對，不再僅依內嵌縮圖下結論。
 
 測完已關閉自己App並還原原launcher、重新strict ad-hoc驗證；native hash及三份必要交付不變。沒有新增另一份App或編譯快取，target維持12KiB。本批只保留必要影像／AX／最小紀錄；先前產物清理規則不變，完整S0–S8仍active，S9未執行。
+
+## S4 列表指定收藏與新程序斷線讀回（2026-11-09）
+
+新增明示 `PTTSTELLA_SLINT_CAPTURE_PROBE=native-list`，沿用原 `start_bookmark_list_probe`及4步列表＋9步收藏peer，但不建立自動Verification owner。另在既有ProbeMedia的書籤store分支接受 `PTTSTELLA_SLINT_BOOKMARKS_PROBE_FILE`，讓每次驗證仍使用全新目錄，資料檔則可跨程序沿用同一路徑；未指定仍使用該驗證目錄的bookmarks.json。正常Live分支維持原profile，沒有改存檔格式、Store交易、收藏狀態機或正常前端操作。
+
+最終CLI SHA-256 `dc8616aec9d547389ff3b646f6b2df679a364fc1c5bc7cb6a3189d8861c5d43b`；strict ad-hoc `Native-Bookmarks.app` signed native為 `3591a7228873fd25df792a7c09229911dd10b09f0cfacd8afcd76a2cbeb4fc82`。來源patch及267份src hash在 `.local/verification/slint-native-list/source.json`。同一最終CLI的11案均exit0／工作已joined：目前與列表收藏、837行viewport、文章與終端尋找、推文定位、全文19次PageDown、文章輸出、PNG／GIF文內圖，以及混合更新取消／追加。最後兩案各只有PNG／GIF各一次HTTP且server joined。Rust lib368／native bin79／multi10共457 passed、6明示ignored；全target Clippy、native-player-probe全target編譯及fmt通過。這批只改Slint探針接線，未以macOS或編譯結果代替其他平台／Dioxus host。
+
+macOS原生run90899：初始游標在第二篇121，實際座標在第一篇120的標題按右鍵，再點「收藏這篇文章」。peer必須先收到Up，核對第一篇Q資訊、回到同列再Right，才能進入既有完整快取收藏流程；13步全部精確核對，UI顯示45行及保存成功。獨立JSON檢查只有Stella #00000101，45行各80欄連續，45個原始文字前綴、無標頭前三行、REPLY0045及時間符合自製expected；第4～45行原始青色帶10欄的左右style均為0x606，沒有使用UI合併ID／遮罩後內容當原始副本。實際CmdQ後capture／timer／file worker／result／window均釋放，Close ACK、inventory與程序不存在另驗。
+
+run91562用同一signed binary新程序、同一 `native-state/bookmarks.json`，launcher只指定PROBE_FILE，沒有指定BOOKMARKS_SOURCE或提供替代seed。先由浮球「連線→斷線」，UI明示站端已回覆關閉，再開「收藏→文章書籤」，選#00000101@Stella本機副本及「閱讀本機副本」。第一頁為1～23／45，實際按下一頁到23～45／45；原始OS JPEG可見無標頭的前三行、連續青色帶與末行REPLY0045。從收藏完成、第一程序退出到第二程序離線閱讀退出，檔案SHA-256不變，沒有改寫原始副本。第二程序在離線閱讀視窗內CmdQ後，bookmarks audit確認offline／window／worker釋放，HTTP PNG／GIF／once請求均0且joined，Close ACK且無站端閱讀命令。LaunchServices無exit code，不把absence說成exit0。
+
+新資料與證據路徑刻意分開：
+
+```text
+PTTSTELLA_SLINT_CAPTURE_PROBE=native-list
+PTTSTELLA_SLINT_BOOKMARKS_PROBE_FILE=<OWNED_BOOKMARK_FILE>
+pttstella-slint --probe-media --verify-media <NEW_CAPTURE_DIR>
+
+PTTSTELLA_SLINT_BOOKMARKS_PROBE=native
+PTTSTELLA_SLINT_BOOKMARKS_PROBE_FILE=<SAME_BOOKMARK_FILE>
+pttstella-slint --probe-media --verify-media <NEW_REOPEN_DIR>
+```
+
+上列為環境設定及命令示意；verification目錄不得預建，資料檔路徑只選自己擁有的合成資料。首次launcher誤將已建目錄交給verify-media，入口在啟動session前以AlreadyExists拒絕；負向log與舊來源／binary hash保留，未算原生通過。最終手動案例沒有合成foreground或代按右鍵／選單。資料檔、13步peer、close audit、原始JPEG／AX與11案結果分別保存在本批 `native-captured.json`、`native-reopen.json`及`verification-summary.json`。
+
+本批證明macOS基本列表指定收藏及新程序斷線讀回；完整鍵盤／IME／focus／其他平台、全資料雙版本往返與四架構候選包仍待驗。測試App是開發用本機launcher，依賴此owned資料路徑，不冒充S8可攜發佈包。完整S0–S8維持active，S9未切換／整合／推送／發佈。

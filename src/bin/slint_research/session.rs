@@ -305,7 +305,7 @@ pub fn with_probe(
                     match case.as_str() {
                         "current" | "native" => Connection::start_bookmark_archive_probe(false),
                         "headerless" => Connection::start_bookmark_archive_probe(true),
-                        "list" => Connection::start_bookmark_list_probe(),
+                        "list" | "native-list" => Connection::start_bookmark_list_probe(),
                         "cancel" | "blur" => Connection::start_live_updates_probe(None, true),
                         _ => Err("unknown capture probe case".into()),
                     }

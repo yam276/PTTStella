@@ -14,13 +14,13 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 | S1 | 格線／雙色字／縮放、macOS 原生輸入的分立證據 | 候選窗與跨螢幕 DPI、可及性、Windows／Linux 原生 |
 | S2 | 共用 Connection、登入／保活、站點表單、嚴格切站／雙編碼 bytes | 同 endpoint 編碼切換、預設站重啟／不登入、完整信任／vault 原生矩陣 |
 | S3 | 選取、輸出、浮球／選單及原生互動的分立證據 | 全部快捷鍵／pointer／modal／可及性操作矩陣 |
-| S4 | 雙閱讀模式、長文取頁、尋找、名單／右鍵／揭露／底色、書籤／離線、快速前往與最近看板、目前／指定列表文章收藏、共用推文索引／原生定位與側標、推文更新／未讀／保留與復原；macOS基本按鈕與座標操作補驗 | 跨平台推文控制／定位與完整鍵盤／焦點矩陣、列表實體右鍵及新程序離線操作補驗、混合 Live 等效與全功能回歸 |
+| S4 | 雙閱讀模式、長文取頁、尋找、名單／右鍵／揭露／底色、書籤／離線、快速前往與最近看板、目前／指定列表文章收藏、共用推文索引／原生定位與側標、推文更新／未讀／保留與復原；macOS基本按鈕、列表右鍵指定收藏與新程序斷線讀回補驗 | 跨平台推文控制／定位與完整鍵盤／焦點矩陣、其他平台列表右鍵及新程序離線操作、混合 Live 等效與全功能回歸 |
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理 | 多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
 | S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
 | S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔及正常退出 owner | 其他管理入口、完整 Dock／modal／OS I/O 退出矩陣、雙版本資料往返 |
 | S8 | S1 Windows 探針及 macOS 本機實驗工具 | 完整四架構候選包、使用者 Windows 原生驗收、回退及同負載效能；尚未通過 |
 
-接續推文完整鍵盤／焦點與其他平台、列表實體右鍵與新程序離線操作、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
+接續完整鍵盤／焦點與其他平台、跨平台列表／重開、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
 
 ## 執行方式與完成條件
 
@@ -247,3 +247,5 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 混合閱讀修正 `c817538` 驗收後依逐批規則清掉本Slint `target/release`（Cargo宣告12936檔、4.9GiB；target的du由5251928KiB降至12KiB），並移除已被同功能回歸涵蓋的舊 `slint-reply-updates/Native-Updates.app`（du65708KiB）。該App只留2574bytes非執行metadata ZIP；最新一般配置改為 `slint-mixed-reading/Native-Mixed.app`，影片配置與Windows S1 ZIP仍保留。267份src及3份必要交付hash不變，未重建Rust；精確resolved paths、owner、symlink／lsof、保留例外及free前後在 `.local/verification/slint-mixed-reading/cleanup.json`。filesystem available 237879652352→242873319424 bytes只記觀測差額，不全歸因於清理；原生正反畫面、未整合source／worktree及其他聊天產物保留。
 
 2026-11-09：重讀原始JPEG、確認兩份曾被判成不同呈現的PNG逐byte相同並解碼文字像素後，撤回先前「cache／snapshot漏字」推論，沒有為內嵌輸出改產品繪圖。既有binary補驗macOS座標推文定位／150%站端復原，以及完全不代按或合成前景的手動更新／51行／6未讀／查看／暫停51.57秒零新命令／Quit。舊AX與焦點負向保留，完整鍵盤／IME／其他平台不由基本按鈕路徑替代。原始證據與範圍見 [原型紀錄](slint-prototype.md#s4-原始影像複核與手動原生更新2026-11-09)。沒有重建Rust或新增App副本，target仍12KiB；S0–S8持續，S9未執行。
+
+2026-11-09：新增不代按的native-list loopback入口及僅探針使用的持久資料檔選項，macOS實際右鍵第一篇（站端游標起初在第二篇）完成13步指定收藏；新程序直接讀同一檔，實際斷線後開啟副本、翻至45行並在離線視窗Quit。原始45行／80欄／ANSI青帶及全檔hash、零HTTP／零站端閱讀命令、兩程序close與worker回收分開驗證。最終binary11案、Rust457項、Clippy／native-player-probe編譯與fmt通過。原先預建verification目錄被安全拒絕的負向保留。完整scope與原始證據見 [原型紀錄](slint-prototype.md#s4-列表指定收藏與新程序斷線讀回2026-11-09)；其他平台、完整資料回退及候選打包仍未結案，S9未執行。
