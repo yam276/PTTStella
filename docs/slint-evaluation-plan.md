@@ -18,7 +18,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、三格式錯色負向對照 | MP4 GPU 像素偶發失敗仍未重現／解決、多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
 | S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
 | S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔及正常退出 owner；三版本實際 store 往返與並行保存28案 | 其他管理入口、完整 Dock／modal／OS I/O 退出矩陣、實際前端／平台路徑及 vault 往返 |
-| S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG及無Homebrew sandbox；Windows x64含libmpv的GUI主程式交叉編譯、全目標Clippy及ZIP靜態核對 | macOS x64／Linux x64完整候選包，Windows與其他平台原生執行、VC runtime／乾淨安裝、完整來源交付、資料回退及同負載效能；尚未通過 |
+| S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG及無Homebrew sandbox；Windows x64含libmpv的GUI主程式交叉編譯、全目標Clippy及ZIP靜態核對；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、交叉Clippy、fresh Ubuntu安裝與software六案 | macOS x64完整候選包；Linux搜尋暫停失敗待查；Windows與其他平台原生執行、VC runtime／完整乾淨安裝、完整來源交付、資料回退及同負載效能；尚未通過 |
 
 接續完整鍵盤／焦點與其他平台、跨平台列表／重開、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
 
@@ -303,3 +303,9 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 最新完整Windows候選為 `.local/verification/slint-windows-candidate/package-current/PTTStella-Slint-Candidate-0.5.0-dev.3-windows-x64.zip`，SHA256 `d733f7f5f8508c7b4c67c7de8749a141f70530318463d9b3741b14aa96fd3b59`。Windows target release/all-target Clippy、全143個Python測試、四target／兩配置8案依賴gate、fmt、docs、actionlint與diff檢查通過；獨立ZIP驗證核對CRC、912個payload hash與LLVM匯入表。首輪驗證器曾因同一DLL不同大小寫的重複LLVM條目錯比set，改成先lower再去重，沒有修改產品／ZIP來配合expected。執行環境仍是macOS，未執行Windows exe：原生啟動、注音／鍵盤、播放器圖像／聲音、profile實際路徑、無WebView2啟動、乾淨安裝及完整來源交付仍not_run／not_ready，不宣稱S1／S5／S8完成；尚需Visual C++ x64 Runtime，未內附CRT。原S1無libmpv的ZIP暫留，作為獨立無影片配置的原生比較，不再為新功能保留額外Windows執行檔副本。命令、SDK路徑、source ref／patch、首輪CUI與最終GUI binary hash、兩個runtime的LLVM報告、封裝／依賴／測試結果在 `.local/verification/slint-windows-candidate/`。
 
 Windows候選批次清理：保存最終ZIP及必要授權／來源／唯一失敗紀錄後，先用Cargo profile clean清掉969.3MiB，但交叉target仍有1985388KiB，因此未宣稱清完；再對同一個已確認無使用者、專屬本批的target執行Cargo原生完整clean（5687檔／1.9GiB），target目錄已不存在。另刪首輪被取代的ZIP、下載的重複runtime ZIP、已封裝的DLL副本、重複import archive與小型smoke執行檔／PDB及自己的pycache。保留一份小型mpv.lib與必要license供下一批、既有cargo-xwin／SDK不刪。1644份受保護來源／資產／交付hash不變，Windows批次約98MiB，Slint整個worktree約794MiB；後續清理free 221845131264→223943602176 bytes僅為觀測。首輪cleanup assertion中斷前的完整du／free-before未持久保存，沒有補造數字；兩段Cargo輸出、後續盤點、exact paths與已取代包的前後hash見 `.local/verification/slint-windows-candidate/cleanup/ledger.json`。首次docs gate指出smoke.exe尚在，完成清理後重跑已通過，沒有放寬gate。清理後不重建Rust。
+
+2026-11-10 Linux x64完整主程式候選：以macOS原生Rust／Clang／LLD及經hash核對的target sysroot完成release連結與all-target Clippy，沿用Windows的完整 `native-player-probe` 功能，沒有改release最佳化或Rust來源。新增Linux打包入口，重用既有Linux deb／tar layout，Windows／Linux共用build-record及CC0 fixture admission；既有Dioxus預設名稱不變。fresh Ubuntu24.04實際安裝抓出ELF相依之外的dlopen runtime缺漏，已明列X11／Wayland／GL套件，以同一ELF重封裝，隔離執行檔／套件／桌面ID。最新deb／tar、確切hash、來源／建置方法、入口及限制見[Linux候選說明](slint-linux-candidate.md)。全150個Python測試、docs、fmt、actionlint與diff通過；既有Windows ZIP hash不變，未重建Rust。
+
+此批component證據為Ubuntu QEMU／Xvfb software的shell／relocated launcher／三格式影片／草稿六案通過，原生OS／IME／聲音／GPU／效能仍未驗收。搜尋以正確 `xvfb-run ... dbus-run-session` 順序重用同一ELF：文章兩案仍失敗、終端一案通過且Close ACK，排除DBus順序作為唯一解釋；不能把wrapper exit0寫成三案passed，也尚未區分「背景套用」與「編輯被拒而保留舊命中」。逐案命令、receipt及反例在 `.local/verification/slint-linux-runtime-recheck/recheck.json`，下一步須在接受編輯／Pending／deactivation邊界補診斷。
+
+上述受控重跑沒有新Rust建置；匯出最小證據後，核對task label／container ID與無mounts，再正常stop／rm `pttstella-slint-linux-recheck-20261110`，並移除已無使用者的臨時Ubuntu image。共用VM只做線上TRIM，不關機、不compact／prune。10135份受保護檔案hash不變；filesystem available 221296967680→222357221376 bytes僅記觀測。exact container／guest paths、程序、du／可寫層大小、來源／候選保留理由見 `slint-linux-runtime-recheck/cleanup/ledger.json`。未留下第二套Linux執行檔或測試環境；最新必要交付、來源及獨特失敗保留，S0–S8繼續，S9未執行。

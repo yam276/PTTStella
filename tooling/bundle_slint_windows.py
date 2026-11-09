@@ -9,6 +9,7 @@ import zipfile
 
 import bundle_common
 from bundle_windows import SYSTEM_DLLS, TARGET, digest, inspect_pe
+from slint_candidate_common import inspect_build_record, media_inputs
 
 # Additional Windows components imported by Slint/Skia and the native player.
 SYSTEM = SYSTEM_DLLS | frozenset('avicap32 avrt cfgmgr32 d2d1 d3d11 d3d12 d3dcompiler_47 '
@@ -103,12 +104,7 @@ libmpv與Rust／Skia授權在licenses；自製影片為CC0，詳fixtures/manifes
 
 def bundle(executable, runtime_dlls, skia_license, mpv_license, provenance, build_record,
            fixture_directory, output):
-    record = json.loads(build_record.read_text(encoding='utf-8'))
-    if not (record.get('target') == TARGET and record.get('features') == 'native-player-probe'
-            and record.get('build_exit') == 0 and record.get('exe_sha256') == digest(executable)
-            and re.fullmatch(r'[0-9a-f]{40}', record.get('source_ref', ''))
-            and re.fullmatch(r'\d+\.\d+\.\d+-dev\.\d+', record.get('version', ''))):
-        raise ValueError('Expected a matching full-candidate build record')
+    record = inspect_build_record(build_record, executable, TARGET)
     images, required_crt = inspect_payload(executable, runtime_dlls)
     origin = json.loads(provenance.read_text(encoding='utf-8'))
     mpv = next(path for path in runtime_dlls if path.name.lower() == MPV)
@@ -118,21 +114,7 @@ def bundle(executable, runtime_dlls, skia_license, mpv_license, provenance, buil
     for license in [skia_license, mpv_license]:
         if not 0 < license.stat().st_size <= 4 * 1024 * 1024:
             raise ValueError('A bounded nonempty runtime license is required')
-    manifest_path = fixture_directory / 'manifest.json'
-    manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
-    if manifest.get('license') != 'CC0-1.0':
-        raise ValueError('Expected self-authored CC0 media fixtures')
-    media = {}
-    for entry in manifest.get('files', []):
-        name = entry.get('file')
-        if name not in ('quadrants.mp4', 'quadrants.webm', 'quadrants.ogv') or name in media:
-            raise ValueError('Unexpected fixture member')
-        path = fixture_directory / name
-        if not 0 < path.stat().st_size <= 24 * 1024 * 1024 or digest(path) != entry.get('sha256'):
-            raise ValueError('Fixture checksum mismatch')
-        media[name] = path
-    if len(media) != 3:
-        raise ValueError('All three media formats are required')
+    manifest_path, media = media_inputs(fixture_directory)
     inputs += [manifest_path, *media.values()]
     original = {str(path): digest(path) for path in inputs}
     output.mkdir(parents=True, exist_ok=False)
