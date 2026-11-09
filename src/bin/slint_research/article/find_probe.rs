@@ -129,12 +129,51 @@ pub fn start(
             verification::capture(&ui, &directory, "chinese-find.png")?;
             // Retain an accepted edit across deactivation without searching or
             // sending bytes while blocked. Resume the same bounded draft.
+            // A snapshot/native activation event may have revoked our earlier
+            // synthetic foreground. Establish an eligible edit first; otherwise
+            // a correctly rejected edit leaves old hits and proves no pause bug.
+            wait(
+                || {
+                    verification::foreground(&ui, true);
+                    ui.invoke_focus_find(false);
+                    ui.get_find_open()
+                        && ui.get_find_focused()
+                        && !ui.get_find_blocked()
+                        && !ui.get_find_composing()
+                },
+                "search edit precondition did not become ready",
+            )
+            .await?;
+            let before_edit = owner.diagnostics();
             ui.invoke_find_edit("中".into());
-            verification::foreground(&ui, false);
-            tokio::time::sleep(Duration::from_millis(180)).await;
+            let after_edit = owner.diagnostics();
             require(
-                owner.core.borrow().find().reply(0).total == 0,
-                "background ran a pending query",
+                after_edit["find"]["draft_retained"].as_bool() == Some(true)
+                    && after_edit["find"]["hits"].as_u64() == Some(0),
+                "foreground edit was not accepted as pending",
+            )?;
+            verification::foreground(&ui, false);
+            let after_deactivation = owner.diagnostics();
+            tokio::time::sleep(Duration::from_millis(180)).await;
+            let after_background = owner.diagnostics();
+            std::fs::write(
+                directory.join("find-pause.json"),
+                serde_json::to_vec_pretty(&serde_json::json!({
+                    "before_edit":before_edit,"after_edit":after_edit,
+                    "after_deactivation":after_deactivation,"after_background":after_background,
+                    "scope":"synthetic toolkit activation; no OS foreground claim"
+                }))
+                .map_err(|e| e.to_string())?,
+            )
+            .map_err(|e| e.to_string())?;
+            require(
+                !ui.get_native_foreground() && ui.get_find_blocked(),
+                "synthetic deactivation was not retained",
+            )?;
+            require(
+                after_background["find"]["draft_retained"].as_bool() == Some(true)
+                    && owner.core.borrow().find().reply(0).total == 0,
+                "background discarded or applied the pending query",
             )?;
             verification::foreground(&ui, true);
             wait(

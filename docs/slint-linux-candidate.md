@@ -8,12 +8,12 @@
 
 | 檔案 | SHA-256 |
 | --- | --- |
-| `PTTStella-Slint-Candidate-0.5.0-dev.3-linux-x64.tar.gz` | `e006df23f7c0c10d600b1808d7ac282538628fbd64eae23a1cc746610e31c0e2` |
-| `PTTStella-Slint-Candidate-0.5.0-dev.3-linux-x64.deb` | `e944977208807a83afd383aeb83f6f0eb892bc7d2ef2cec23fe43764bd14b1c0` |
+| `PTTStella-Slint-Candidate-0.5.0-dev.3-linux-x64.tar.gz` | `73d88928b3d83d48e68f2f3ac76ea9c3b488b7e459407a926ffdfbf57ffc8fa5` |
+| `PTTStella-Slint-Candidate-0.5.0-dev.3-linux-x64.deb` | `8e34ac7547eaee9a9ed55547ae7bf2df783a6c1517fa7435219c23d07920e334` |
 
-執行檔 SHA-256 為 `a7c00a9dc78abf3ea7598f91034e3b2b077be57729e6a09e3f439a051f3a888f`，91,524,800 bytes。Rust 來源為 `5046f2f6bfd220a3ee89309c550851f02c78045f`，沒有 Rust source patch；建置時打包 helper 的未提交變更與來源狀態另記在建置證據。來源 commit 不是完整第三方來源交付，`source_delivery` 仍為 `not_ready`。
+執行檔 SHA-256 為 `9b68eb81ed5348f4dd44f3e05ab5a1a8284a89b884a7240f6c6df22bd7c6d5f7`，91,524,232 bytes。Rust 來源為 `6d70196` 加同批 `slint-find-pause/fixed-source.patch`，僅補診斷及修正搜尋探針先決條件，生產搜尋／失焦保護未改。建置來源、環境及 binary hash 在 `slint-find-pause/fixed-build.json`；其他打包來源狀態另記在證據。來源 commit 不是完整第三方來源交付，`source_delivery` 仍為 `not_ready`。
 
-使用 macOS arm64 的 Rust 1.97.0／Clang／Rust LLD 交叉編譯 Linux GNU x64，連結經逐檔 hash 核對的 Debian x64 sysroot；保持既有 release 最佳化，不使用主機 libmpv。ELF、`libmpv.so.2`、target loader 的實際相依解析及 release all-target Clippy 已核對。先前嘗試在 2GiB ARM VM 內以原生 ARM rustc 交叉編譯，最後的主程式 rustc 被 OOM kill；x64 rustc 的 QEMU 試跑亦未成功。這些不是 native Linux x64 編譯通過證據。確切命令、來源、套件版本、失敗與清理結果見同批 `mac-build-final.json`、`cross-clippy-exit.json`、`sysroot-inventory.json` 及 `oom-inspection.json`。
+使用 macOS arm64 的 Rust 1.97.0／Clang／Rust LLD 交叉編譯 Linux GNU x64，連結經逐檔 hash 核對的 Debian x64 sysroot；保持既有 release 最佳化，不使用主機 libmpv。ELF、`libmpv.so.2`、target loader 的實際相依解析及 release all-target Clippy 已核對。先前嘗試在 2GiB ARM VM 內以原生 ARM rustc 交叉編譯，最後的主程式 rustc 被 OOM kill；x64 rustc 的 QEMU 試跑亦未成功。這些不是 native Linux x64 編譯通過證據。本輪確切命令、來源、套件版本及 Clippy 見 `slint-find-pause/fixed-build.json`、`clippy-exit.json` 與 `sysroot-inventory.json`；先前建置失敗仍保留於 `slint-linux-candidate/oom-inspection.json` 等紀錄。
 
 ## 在 Linux 驗收
 
@@ -46,8 +46,12 @@ deb 使用獨立套件、執行檔及桌面 ID；`--show-profile` 只顯示研�
 
 修正包實際安裝於 fresh Ubuntu 24.04 amd64 容器，以 QEMU／Xvfb software 執行；安裝 shell、含空格路徑的 portable shell、MP4／WebM／OGV 及草稿共六案 exit0，嚴格本機 peer 均收到 Close ACK。三格式影片核對像素及 session／render owner 清理。安裝清單沒有 WebKit／JavaScriptCore。Debian 的 software shell 與三格式影片另有分立結果。這些是套件安裝與模擬環境的 component 證據，不證明實體 Linux 視窗、X11／Wayland 原生操作、IME、聲音、GPU 或效能。
 
-文章搜尋在背景暫停檢查失敗（`background ran a pending query`），沒有 Close ACK，保留結果，仍待追查。首輪測試把 DBus 放在 Xvfb 外，portal 因沒有 DISPLAY 產生警告；改成 `xvfb-run ... dbus-run-session -- ...`，以同一 ELF 重跑後，文章模式兩次仍在相同檢查失敗，終端模式通過獨立命中範圍、背景暫停、來源／PNG不變及關閉釋放，收到 Close ACK。因此不能把失敗歸因於 DBus 順序，也尚未證明是「背景重新執行」或「編輯未被接受而保留舊命中」；需在編輯接受與暫停邊界補診斷。原始七案結果位於 `slint-linux-candidate/ubuntu-final-evidence/ubuntu-execution.json`，三案受控重跑的命令／個別 exit／receipt 位於 `slint-linux-runtime-recheck/recheck.json`；重跑 wrapper exit0只表示完成紀錄，不能解讀為三案通過。
+先前文章搜尋報 `background ran a pending query`。新增分階段診斷後確認：Ubuntu文章案例在送出測試編輯前已 `foreground=false`、`find_blocked=true`、輸入欄失焦；編輯被正確拒絕，draft仍無、timer未啟動、版本4及三筆舊命中完全不變。這份結果不能證明產品在背景重新搜尋，先前的產品失敗解讀撤回；獨特反例與來源／binary hash仍保留。
 
-封裝以 `tooling/bundle_slint_linux.py` 消費已建 ELF、匹配的 build record、Skia 授權及三格式 CC0 fixture，不自行編譯或啟動 GUI。沿用 `tooling/bundle_release.py` 的 Linux layout／相依處理，既有 Dioxus 預設名稱及流程保留。Windows／Linux 共用 build-record 與 fixture admission。全150個Python測試（包含新增7個Linux打包案例）、文件、fmt、actionlint及diff gate通過；Linux target release/all-target Clippy先前已通過，本次沒有Rust變更或重建。完整 S8 仍依[總計畫](slint-evaluation-plan.md)驗收。
+探針現先建立可接受編輯的synthetic toolkit foreground／field focus，立即確認已保留draft並清空舊命中，再停用，確認blocked／零命中／draft保留，最後恢復並完成搜尋。生產 `find_edit`、debounce與失焦保護完全未改。Debian與Ubuntu文章／終端模式共六案（含Ubuntu重跑）通過，逐案驗證receipt與Close ACK；新包重新安裝到原本的Ubuntu runtime root，Depends逐字不變，shell／relocated launcher／三格式影片／兩種尋找／草稿八案通過。這一輪是reinstall回歸，沒有冒充另一個fresh clean install。命令、診斷前後值、source patch、各binary hash及receipt見 `slint-find-pause/` 的 `ubuntu-diagnostic-results.json`、`ubuntu-fixed-results.json`、`package-acceptance.json` 與 `package-evidence/ubuntu-execution.json`；最初的失敗仍在舊批證據中。
+
+以上搜尋只使用toolkit text／synthetic activation；未宣稱OS焦點、繁中IME或原生背景操作完成。八案中的草稿也未驗證新程序讀回，影片未證明聲音可聽；各receipt保留實際scope。
+
+封裝以 `tooling/bundle_slint_linux.py` 消費已建 ELF、匹配的 build record、Skia 授權及三格式 CC0 fixture，不自行編譯或啟動 GUI。沿用 `tooling/bundle_release.py` 的 Linux layout／相依處理，既有 Dioxus 預設名稱及流程保留。Windows／Linux 共用 build-record 與 fixture admission。全150個Python測試（包含7個Linux打包案例）、文件、fmt、actionlint及diff gate通過；本輪Linux target release/all-target Clippy亦通過。完整 S8 仍依[總計畫](slint-evaluation-plan.md)驗收。
 
 候選包的 `native_acceptance: not_run`、`source_delivery: not_ready` 與 unsigned 標示保留。建置 target、暫存 sysroot／磁碟映像、解包副本與驗收容器按批次清理；只保留最新包與最小來源／結果／獨特失敗證據，清理不等於產品驗收完成。

@@ -18,7 +18,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、三格式錯色負向對照 | MP4 GPU 像素偶發失敗仍未重現／解決、多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
 | S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
 | S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔及正常退出 owner；三版本實際 store 往返與並行保存28案 | 其他管理入口、完整 Dock／modal／OS I/O 退出矩陣、實際前端／平台路徑及 vault 往返 |
-| S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG及無Homebrew sandbox；Windows x64含libmpv的GUI主程式交叉編譯、全目標Clippy及ZIP靜態核對；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、交叉Clippy、fresh Ubuntu安裝與software六案 | macOS x64完整候選包；Linux搜尋暫停失敗待查；Windows與其他平台原生執行、VC runtime／完整乾淨安裝、完整來源交付、資料回退及同負載效能；尚未通過 |
+| S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG及無Homebrew sandbox；Windows x64含libmpv的GUI主程式交叉編譯、全目標Clippy及ZIP靜態核對；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、交叉Clippy、Ubuntu安裝／software八案及搜尋暫停探針 | macOS x64完整候選包；Windows與其他平台原生執行、VC runtime／完整乾淨安裝、完整來源交付、資料回退及同負載效能；尚未通過 |
 
 接續完整鍵盤／焦點與其他平台、跨平台列表／重開、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
 
@@ -309,3 +309,10 @@ Windows候選批次清理：保存最終ZIP及必要授權／來源／唯一失�
 此批component證據為Ubuntu QEMU／Xvfb software的shell／relocated launcher／三格式影片／草稿六案通過，原生OS／IME／聲音／GPU／效能仍未驗收。搜尋以正確 `xvfb-run ... dbus-run-session` 順序重用同一ELF：文章兩案仍失敗、終端一案通過且Close ACK，排除DBus順序作為唯一解釋；不能把wrapper exit0寫成三案passed，也尚未區分「背景套用」與「編輯被拒而保留舊命中」。逐案命令、receipt及反例在 `.local/verification/slint-linux-runtime-recheck/recheck.json`，下一步須在接受編輯／Pending／deactivation邊界補診斷。
 
 上述受控重跑沒有新Rust建置；匯出最小證據後，核對task label／container ID與無mounts，再正常stop／rm `pttstella-slint-linux-recheck-20261110`，並移除已無使用者的臨時Ubuntu image。共用VM只做線上TRIM，不關機、不compact／prune。10135份受保護檔案hash不變；filesystem available 221296967680→222357221376 bytes僅記觀測。exact container／guest paths、程序、du／可寫層大小、來源／候選保留理由見 `slint-linux-runtime-recheck/cleanup/ledger.json`。未留下第二套Linux執行檔或測試環境；最新必要交付、來源及獨特失敗保留，S0–S8繼續，S9未執行。
+
+
+2026-11-10 Linux搜尋暫停反例完成定位：診斷版在Ubuntu文章案例送出編輯前已foreground=false／find_blocked=true且欄位失焦，編輯後draft仍無、timer未啟動，版本與三筆舊命中不變。先前「背景執行待查詢」解讀撤回；生產拒絕背景編輯的保護正確，未修改find_edit／debounce／失焦邊界。探針先確認可接受的synthetic foreground／field focus，接著確認Pending已保留draft／清空命中，再驗證停用仍blocked、零命中與draft保留，最後恢復查詢。Debian與Ubuntu文章／終端六案（含Ubuntu重跑）均通過且Close ACK；分階段診斷與原失敗保留於 `slint-find-pause/`。此為toolkit證據，原生OS焦點與IME仍待驗。
+
+新版Linux候選使用同一完整配置，ELF SHA256為 `9b68eb81ed5348f4dd44f3e05ab5a1a8284a89b884a7240f6c6df22bd7c6d5f7`，取代原a7c00a9包；路徑仍為 `slint-linux-candidate/package-current`。Depends逐字相同，新包在原Ubuntu runtime root重新安裝，shell／含空格路徑portable launcher／三格式影片／草稿／兩種尋找八案均通過、逐案receipt及Close ACK已核對，不冒充另一個fresh clean install。影片另核對非空四色像素樣本、render退休與session join；草稿未測新程序讀回，不擴大scope。Linux release/all-target Clippy、150個Python測試、fmt／actionlint／diff通過，詳[Linux候選說明](slint-linux-candidate.md)；native_acceptance與完整來源交付仍not_run／not_ready。
+
+本批驗證後以Cargo原生完整clean移除 `slint-find-pause/target`（9706檔／3.1GiB，du3247480KiB），卸載並刪除case-sensitive SDK映像、wrapper／外部LLD捷徑、smoke及重複baseline CLI，外部Rust工具不動；兩個自有Debian／Ubuntu容器與無使用者的臨時Ubuntu image已正常移除。舊完整包刪除，只留最小manifest／hash；42張byte-identical generated PNG以保留位置／SHA映射取代（allocated2854912bytes）。10304份受保護檔案hash不變；worktree du889336KiB，filesystem available 214002139136→221830262784bytes只記觀測，不全歸因於本批刪檔。exact paths、owner／resolved path／symlink、lsof／程序、Cargo／du、保留例外及共享VM線上TRIM紀錄在 `slint-find-pause/cleanup/ledger.json`。清理後不重建Rust，S0–S8持續，S9未執行。

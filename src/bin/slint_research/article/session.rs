@@ -855,8 +855,11 @@ impl ArticleSession {
             "dirty": core.dirty(), "progress": format!("{:?}", self.progress()),
             "busy": self.busy.get(), "requests": self.requests.get(),
             "raw_generation": self.raw_generation.get(), "vim_handoff": self.vim_handoff.get(),
+            "find": {"timer_running":self.find_timer.running(),"draft_retained":self.find_draft.borrow().is_some(),
+                "hits":core.find().reply(0).total,"version":core.find().version()},
             "ui":ui.map(|ui|serde_json::json!({"active":ui.get_article_active(),"focused":ui.get_article_focused(),
                 "ready":ui.get_article_reading_ready(),"foreground":ui.get_native_foreground(),
+                "find_blocked":ui.get_find_blocked(),"find_composing":ui.get_find_composing(),"find_focused":ui.get_find_focused(),
                 "blocked":ui.get_article_blocked(),"frame_pending":ui.get_frame_paint_pending(),
                 "keyboard_pending":ui.get_keyboard_pending(),"selection":ui.get_selection_active()}))
         })
