@@ -1414,3 +1414,5 @@ pttstella-slint --probe-media --verify-media <NEW_REOPEN_DIR>
 上列為環境設定及命令示意；verification目錄不得預建，資料檔路徑只選自己擁有的合成資料。首次launcher誤將已建目錄交給verify-media，入口在啟動session前以AlreadyExists拒絕；負向log與舊來源／binary hash保留，未算原生通過。最終手動案例沒有合成foreground或代按右鍵／選單。資料檔、13步peer、close audit、原始JPEG／AX與11案結果分別保存在本批 `native-captured.json`、`native-reopen.json`及`verification-summary.json`。
 
 本批證明macOS基本列表指定收藏及新程序斷線讀回；完整鍵盤／IME／focus／其他平台、全資料雙版本往返與四架構候選包仍待驗。測試App是開發用本機launcher，依賴此owned資料路徑，不冒充S8可攜發佈包。完整S0–S8維持active，S9未切換／整合／推送／發佈。
+
+列表原生驗收批次 `c3c75e6` 完成後，以Cargo原生clean移除本Slint target/release（8385檔、2.7GiB；du原2848280KiB），並清掉上一個 `slint-mixed-reading/Native-Mixed.app`（du65736KiB）及11個被最終同案取代的首輪正向generated目錄。舊App僅留2571bytes非binary metadata ZIP；來源／hash／log、唯一啟動失敗及原始OS擷圖保留。target回到12KiB，最新一般配置測試包改為 `slint-native-list/Native-Bookmarks.app`，同一收藏檔、影片配置與Windows S1 ZIP保留且hash不變，267份src不變。精確刪除路徑、逐檔hash、owner／symlink／lsof及保留例外見 `.local/verification/slint-native-list/cleanup.json`。filesystem available 238569623552→241283104768 bytes只記觀測差額；不全歸因於本批，不重建Rust，也不刪其他聊天產物或未整合worktree。
