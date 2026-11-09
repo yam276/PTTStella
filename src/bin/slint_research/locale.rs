@@ -8,6 +8,14 @@ pub fn refresh(ui: &TerminalWindow) {
     ui.set_bookmarks_label(msg!("bookmarks-title").into());
     ui.set_sites_label(msg!("sites-title").into());
     let labels = ui.global::<UiLabels>();
+    labels.set_reply_title(msg!("reply-navigation-title").into());
+    labels.set_reply_author(msg!("reply-navigation-author").into());
+    labels.set_reply_mine(msg!("reply-navigation-mine").into());
+    labels.set_reply_both(msg!("reply-navigation-both").into());
+    labels.set_reply_focused(msg!("reply-navigation-focused").into());
+    labels.set_reply_unconfirmed(msg!("reply-navigation-unconfirmed").into());
+    labels.set_reply_previous(msg!("reply-navigation-prev").into());
+    labels.set_reply_next(msg!("reply-navigation-next").into());
     labels.set_editor_modes(ModelRc::new(VecModel::from(vec![
         msg!("draft-wysiwyg").into(),
         msg!("draft-plain").into(),

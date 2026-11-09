@@ -9,7 +9,8 @@ import { AboutSlint, Button, CheckBox, ComboBox, LineEdit, TextEdit } from "std-
 import { LoginPopup } from "login.slint";
 import { ContextMenuOverlay, MenuEntry } from "context-menu.slint";
 import { FloatingTools, ToolItem } from "tools.slint";
-import { ArticleViewport, ArticleTile, InlineArrow, InlinePicture } from "article.slint";
+import { ArticleViewport, ArticleTile, InlineArrow, InlinePicture, ReplySideMark } from "article.slint";
+import { ReplyNavigationBar } from "reply-navigation.slint";
 import { SelectionRect } from "selection.slint";
 import { MediaPreview } from "media.slint";
 import { MediaHover } from "media-hover.slint";
@@ -21,6 +22,20 @@ export { StationColorState } from "station-color.slint";
 import { StationColor, StationColorState } from "station-color.slint";
 
 export component TerminalWindow inherits Window {
+    in property <bool> reply-navigation-available;
+    in property <bool> reply-navigation-ready;
+    in property <bool> reply-navigation-open;
+    in property <[bool]> reply-navigation-groups;
+    in property <int> reply-navigation-group;
+    in property <string> reply-navigation-count;
+    in property <[ReplySideMark]> reply-side-marks;
+    out property <bool> reply-navigation-focused: root.reply-navigation-open && reply-nav.focused;
+    out property <bool> reply-navigation-opening-blocked: root.find-blocked || root.find-composing || root.context-open || root.context-pending || root.tools-busy || root.paste-reading;
+    out property <bool> reply-navigation-blocked: root.reply-navigation-opening-blocked || root.selection-active || root.selection-dragging;
+    callback reply-navigation-action(int);
+    callback focus-reply-navigation;
+    focus-reply-navigation => {reply-nav.focus-navigation();}
+    changed reply-navigation-focused => {root.keep-alive-changed();root.inline-updated();}
     callback destination-updated;
     callback auxiliary-key(int,bool,bool);
     in property <bool> destination-available;
@@ -212,7 +227,7 @@ export component TerminalWindow inherits Window {
     in property <[InlineArrow]> inline-arrows;
     in property <[InlinePicture]> inline-pictures;
     in property <bool> inline-enabled;
-    out property <bool> inline-blocked: root.article-blocked || root.terminal-pointer-blocked || root.selection-active || root.selection-dragging || root.keyboard-pending || root.station-mouse-held;
+    out property <bool> inline-blocked: root.article-blocked || root.terminal-pointer-blocked || root.reply-navigation-focused || root.selection-active || root.selection-dragging || root.keyboard-pending || root.station-mouse-held;
     changed inline-blocked=>{root.inline-updated();}
     changed article-active=>{root.inline-updated();}
     callback inline-updated;
@@ -651,6 +666,7 @@ export component TerminalWindow inherits Window {
                     width: parent.width; height: parent.height;
                     tiles: root.article-tiles; footer: root.article-footer;
                     inline-arrows:root.inline-arrows;inline-pictures:root.inline-pictures;inline-enabled:root.inline-enabled;
+                    reply-side-marks:root.reply-side-marks;
                     inline-pointer(kind,index,stamp)=>{root.inline-pointer(kind,index,stamp);}
                     inline-context(kind,index,stamp,x,y)=>{root.inline-context(kind,index,stamp,x,y);}
                     line-height: root.article-line-height; line-width: root.article-line-width;
@@ -693,6 +709,15 @@ export component TerminalWindow inherits Window {
             if root.article-load-available: HorizontalLayout {
                 Text { text: root.article-load-status; color: #b7c1ce; horizontal-stretch: 1; vertical-alignment: center; }
                 if root.article-load-active || root.article-load-can-resume: Button { text: root.article-load-active ? UiLabels.cancel-load : root.article-load-next-segment ? UiLabels.next-section : UiLabels.resume-load; clicked => { root.article-load-action(!root.article-load-active); } }
+            }
+            if root.reply-navigation-available && !root.reply-navigation-open: Button {
+                text:UiLabels.reply-title;enabled:!root.reply-navigation-opening-blocked && root.reply-navigation-ready;clicked=>{root.reply-navigation-action(0);}
+            }
+            reply-nav := ReplyNavigationBar {
+                visible:root.reply-navigation-open;
+                blocked:root.reply-navigation-blocked || !root.reply-navigation-ready;
+                groups:root.reply-navigation-groups;group:root.reply-navigation-group;count:root.reply-navigation-count;
+                action(code)=>{root.reply-navigation-action(code);}
             }
             if root.article-station: Button { text: UiLabels.resume-reading; clicked => { root.article-resume-reading(); } }
             if !root.terminal-input && !root.session-active && !root.article-active: HorizontalLayout {

@@ -574,6 +574,8 @@ fn run(
         && std::env::var_os("PTTSTELLA_SLINT_BOOKMARKS_PROBE").is_some();
     let capture_probe = options.probe == Some(Probe::Session(session::Probe::Media))
         && std::env::var_os("PTTSTELLA_SLINT_CAPTURE_PROBE").is_some();
+    let replies_probe = options.probe == Some(Probe::Session(session::Probe::Media))
+        && std::env::var_os("PTTSTELLA_SLINT_REPLIES_PROBE").is_some();
     let filters_probe = options.probe == Some(Probe::Session(session::Probe::Media))
         && std::env::var_os("PTTSTELLA_SLINT_FILTERS_PROBE").is_some();
     let filters_probe_store = if settings_search_probe || filters_probe {
@@ -839,6 +841,7 @@ fn run(
     };
     let clipboard = clipboard::Clipboard::default();
     let verification_connection = if bookmarks_probe
+        || replies_probe
         || options.verify_context.is_some()
         || options.verify_tools.is_some()
         || options.verify_article_session.is_some()
@@ -873,6 +876,7 @@ fn run(
                 || destination_probe
                 || bookmarks_probe
                 || capture_probe
+                || replies_probe
                 || filters_probe
             {
                 let mut article_preferences = settings.clone();
@@ -944,6 +948,7 @@ fn run(
                             | session::Probe::ArticleStall
                     )
             ) || capture_probe
+                || replies_probe
             {
                 paste_owner = Some(native_input::mount_article(
                     &ui,
@@ -982,6 +987,7 @@ fn run(
                         | session::Probe::MouseRoundTrip
                 )
             ) && !capture_probe
+                && !replies_probe
             {
                 paste_owner = Some(native_input::mount(
                     &ui,
@@ -1416,9 +1422,27 @@ fn run(
             && std::env::var("PTTSTELLA_SLINT_BOOKMARKS_PROBE").as_deref() == Ok("native")
         || capture_probe
             && std::env::var("PTTSTELLA_SLINT_CAPTURE_PROBE").as_deref() == Ok("native")
+        || replies_probe
+            && std::env::var("PTTSTELLA_SLINT_REPLIES_PROBE").as_deref() == Ok("native")
         || std::env::var("PTTSTELLA_SLINT_FILTERS_PROBE").is_ok_and(|v| v == "native")
     {
         None
+    } else if replies_probe {
+        Some(article::replies_probe::start(
+            &ui,
+            article_session_owner
+                .as_ref()
+                .cloned()
+                .ok_or("reply navigation owner missing")?,
+            verification_connection
+                .as_ref()
+                .cloned()
+                .ok_or("reply navigation connection missing")?,
+            options
+                .verify_media
+                .clone()
+                .ok_or("reply navigation directory missing")?,
+        )?)
     } else if capture_probe {
         Some(bookmarks_manager::capture_probe::start(
             &ui,

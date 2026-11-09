@@ -36,8 +36,11 @@ mod find;
 mod input;
 #[path = "outputs.rs"]
 mod outputs;
+#[path = "replies.rs"]
+mod replies;
 
 pub struct ArticleSession {
+    reply_navigation: RefCell<replies::Navigation>,
     ui: slint::Weak<TerminalWindow>,
     connection: Rc<Connection>,
     presentation_media: RefCell<std::rc::Weak<crate::media::Media>>,
@@ -109,6 +112,7 @@ impl ArticleSession {
         core.set_article_mode(settings.article_mode);
         core.set_article_boundary_navigation(settings.article_boundary_navigation);
         let owner = Rc::new(Self {
+            reply_navigation: RefCell::new(Default::default()),
             ui: ui.as_weak(),
             connection,
             core: Rc::new(RefCell::new(core)),
@@ -152,6 +156,7 @@ impl ArticleSession {
             requests: Cell::new(0),
         });
         owner.install_find(ui);
+        owner.install_replies(ui);
         ui.on_article_rendered({
             let owner = owner.clone();
             move || owner.rendered()
@@ -365,6 +370,7 @@ impl ArticleSession {
             .find_sync(&self.connection.updates.borrow());
         self.find_sync_ui();
         self.find_retry_draft();
+        self.reply_sync_ui();
         ui.invoke_output_updated();
         ui.invoke_paste_updated();
         ui.invoke_keep_alive_changed();
@@ -407,6 +413,7 @@ impl ArticleSession {
         self.core.borrow_mut().find_sync(&view);
         self.find_sync_ui();
         self.find_retry_draft();
+        self.reply_sync_ui();
         let scope = {
             let core = self.core.borrow();
             core.last_displayed().and_then(|p| {
@@ -448,6 +455,7 @@ impl ArticleSession {
     }
     pub fn refresh_language(&self) {
         self.find_sync_ui();
+        self.reply_language_changed();
         if let Some(ui) = self.ui.upgrade() {
             self.refresh_load_label(&ui);
         }
@@ -655,6 +663,7 @@ impl ArticleSession {
         }
         // Observe after ACK/projection work and outside all reducer borrows.
         ui.invoke_bookmarks_capture_updated();
+        self.reply_sync_ui();
     }
     fn deadline(&self) -> Option<Instant> {
         let core = self.core.borrow();
@@ -725,6 +734,7 @@ impl ArticleSession {
     }
     pub fn finish(&self) {
         self.closed.set(true);
+        self.reply_finish();
         self.find_timer.stop();
         self.find_draft.take();
         self.core.borrow_mut().find_finish();
@@ -752,6 +762,7 @@ impl ArticleSession {
             && self.job.borrow().is_none()
             && self.reply.borrow().is_none()
             && !self.busy.get()
+            && self.replies_stopped()
     }
     pub fn raster_count(&self) -> usize {
         self.view

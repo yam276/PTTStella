@@ -3,6 +3,7 @@ import { SelectionRect } from "selection.slint";
 export struct InlineArrow { index:int, stamp:string, x:length, y:length, size:length, opened:bool }
 export struct InlinePicture { index:int, key:int, stamp:string, x:length, y:length, width:length, height:length, image-y:length, image-height:length, source-y:int, source-height:int, source-width:int, image:image, status:string }
 export struct ArticleTile { image: image, y: length, height: length }
+export struct ReplySideMark { row:int, y:length, author:bool, mine:bool, first:bool }
 
 component ArticlePointer inherits TouchArea {
     in property <length> offset-y;
@@ -34,6 +35,7 @@ export component ArticleViewport inherits Rectangle {
     in property <image> footer;
     in property <[InlineArrow]> inline-arrows;
     in property <[InlinePicture]> inline-pictures;
+    in property <[ReplySideMark]> reply-side-marks;
     in property <bool> inline-enabled;
     callback inline-pointer(int,int,string);
     callback inline-context(int,int,string,length,length);
@@ -180,6 +182,25 @@ export component ArticleViewport inherits Rectangle {
                     }
                 }
             }
+        }
+    }
+    // Decorations are separate from the raster/exports and never receive input.
+    for mark in root.reply-side-marks: Rectangle {
+        private property <bool> outside: root.text-left >= role-label.preferred-width + 10px && role-label.preferred-height <= root.line-height;
+        x: self.outside ? root.text-left - 5px : root.text-left + root.line-width / 40 + 1px;
+        y: mark.y;
+        height: root.line-height;
+        width: max(1px,min(mark.author && mark.mine ? 5px : 3px,root.line-width / 80 - 2px));
+        background: mark.author && mark.mine ? transparent : mark.author ? #d8bd72 : #65cfdf;
+        visible: mark.y>=0px && mark.y+root.line-height<=root.body-height;
+        if mark.author && mark.mine: Rectangle {width:parent.width*0.4;height:parent.height;background:#d8bd72;}
+        if mark.author && mark.mine: Rectangle {x:parent.width*0.6;width:parent.width*0.4;height:parent.height;background:#65cfdf;}
+        role-label := Text {
+            text:mark.author && mark.mine ? UiLabels.reply-both : mark.author ? UiLabels.reply-author : UiLabels.reply-mine;
+            width:self.preferred-width;height:parent.height;x:-self.width - 5px;
+            visible:parent.outside && mark.first;
+            font-family:"monospace";font-size:min(11px,root.line-height*0.8);
+            color:mark.author ? #d8bd72 : #65cfdf;vertical-alignment:center;
         }
     }
     Rectangle {

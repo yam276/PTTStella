@@ -386,6 +386,10 @@ impl ContextMenu {
         flags.set(Flag::ListBookmark, self.list_bookmark(account).is_some());
         flags.set(Flag::Bookmark, ui.get_bookmarks_current_available());
         flags.set(
+            Flag::ReplyNavigation,
+            ui.get_reply_navigation_available() && ui.get_reply_navigation_ready(),
+        );
+        flags.set(
             Flag::PictureReady,
             picture.is_some_and(|p| p.image.is_some()),
         );
@@ -660,6 +664,8 @@ impl ContextMenu {
                 {
                     owner.capture_source(source);
                 }
+            } else if entry.action == Action::ReplyNavigation {
+                ui.invoke_reply_navigation_action(0);
             } else {
                 self.output.context_action(entry.action, link);
             }
@@ -703,6 +709,7 @@ fn supported(action: Action) -> bool {
             | Action::Bookmarks
             | Action::BookmarkCurrent
             | Action::BookmarkList
+            | Action::ReplyNavigation
     )
 }
 pub(super) fn label(action: Action) -> String {
@@ -724,6 +731,7 @@ pub(super) fn label(action: Action) -> String {
         A::Bookmarks => pttstella::msg!("bookmarks-title"),
         A::BookmarkCurrent => pttstella::msg!("bookmarks-current"),
         A::BookmarkList => pttstella::msg!("bookmarks-list-current"),
+        A::ReplyNavigation => pttstella::msg!("reply-navigation-title"),
         A::CopyAnsi => pttstella::msg!("context-copy-ansi"),
         A::CopyLink => pttstella::msg!("context-copy-link"),
         A::OpenLink => pttstella::msg!("context-open-link-external"),

@@ -4,6 +4,7 @@ pub mod inline;
 mod layout;
 pub(crate) mod output_probe;
 pub mod probe;
+pub mod replies_probe;
 pub mod session;
 pub mod session_probe;
 #[cfg(test)]
@@ -40,6 +41,10 @@ struct RasterKey {
 }
 
 type RowProjection = Box<dyn Fn(&Paint, Range<usize>) -> Option<pttstella::article_cache::Window>>;
+type ReplyIndex = Option<(
+    pttstella::surface_state::Identity,
+    Rc<pttstella::reply_navigation::Index>,
+)>;
 
 pub struct ArticleView {
     ui: slint::Weak<TerminalWindow>,
@@ -62,6 +67,7 @@ pub struct ArticleView {
     timer: Timer,
     closed: Cell<bool>,
     raster_count: Cell<usize>,
+    reply_index: RefCell<ReplyIndex>,
 }
 impl ArticleView {
     pub fn mount(
@@ -130,6 +136,7 @@ impl ArticleView {
             timer: Timer::default(),
             closed: Cell::new(false),
             raster_count: Cell::new(0),
+            reply_index: RefCell::new(None),
         });
         ui.on_article_layout_changed({
             let owner = owner.clone();
@@ -435,6 +442,7 @@ impl ArticleView {
         ui.set_article_document_height(flow.height() as f32 / layout.dpi);
         ui.set_article_offset_y((self.position(&flow) / f64::from(layout.dpi)) as f32);
         ui.set_article_offset_x(self.x.get() * layout.line_height() / 2.);
+        self.reply_marks();
     }
     fn schedule(self: &Rc<Self>) {
         if self.timer.running() {
@@ -569,6 +577,7 @@ impl ArticleView {
             self.footer_size.set(Some(size));
         }
         self.painted_anchor.set(Some(self.anchor.get()));
+        self.reply_marks();
         ui.invoke_article_rendered();
         Ok(())
     }
@@ -624,6 +633,7 @@ impl ArticleView {
         }
     }
     pub fn hide(&self) {
+        self.reply_index.borrow_mut().take();
         self.retire_paint();
         self.row_cache.borrow_mut().clear();
         self.scope.set(None);
@@ -634,6 +644,7 @@ impl ArticleView {
             ui.set_article_active(false);
             ui.set_article_tiles(ModelRc::default());
             ui.set_article_footer(Image::default());
+            ui.set_reply_side_marks(ModelRc::default());
         }
     }
     /// Superseded source packets stop painting without removing the focused

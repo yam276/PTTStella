@@ -335,7 +335,7 @@ fn mount_window(
             editor_trace.native(event);
         }
         if let WindowEvent::KeyboardInput {event,is_synthetic:false,..}=event {
-            let modal=ui.get_station_color_open() || ui.get_editor_open() && ui.global::<EditorState>().get_palette_open();
+            let modal=ui.get_reply_navigation_focused() || ui.get_station_color_open() || ui.get_editor_open() && ui.global::<EditorState>().get_palette_open();
             if input.borrow_mut().modal_edge(event.physical_key,event.state==ElementState::Pressed,event.repeat,modal){return PreventDefault;}
         }
         if ui.get_article_active()
@@ -354,6 +354,7 @@ fn mount_window(
         } = event
             && !ui.get_editor_open()
             && !ui.get_station_color_open()
+            && !ui.get_reply_navigation_focused()
             && event.logical_key == Key::Named(NamedKey::Enter)
         {
             let eligible = {
@@ -686,6 +687,29 @@ fn mount_window(
                         }
                     }
                     _ => {}
+                }
+                return Propagate;
+            }
+            if ui.get_reply_navigation_focused() {
+                let modified = input.modifiers.intersects(
+                    ModifiersState::ALT | ModifiersState::CONTROL | ModifiersState::SUPER,
+                );
+                drop(input);
+                if let WindowEvent::KeyboardInput { event, is_synthetic:false, .. } = event
+                    && !ui.get_reply_navigation_blocked()
+                    && !ui.get_native_composing()
+                    && !modified
+                {
+                    let action = match event.logical_key {
+                        Key::Named(NamedKey::Escape) => Some(1),
+                        Key::Named(NamedKey::ArrowUp) => Some(2),
+                        Key::Named(NamedKey::ArrowDown) => Some(3),
+                        _ => None,
+                    };
+                    if let Some(action) = action {
+                        if event.state==ElementState::Pressed && !event.repeat {ui.invoke_reply_navigation_action(action);}
+                        return PreventDefault;
+                    }
                 }
                 return Propagate;
             }

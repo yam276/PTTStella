@@ -1306,3 +1306,21 @@ macOS arm64 的 `Native-Capture.app` 為 strict ad-hoc、未公證的本機診�
 本批驗收後檢查 resolved path、UID、symlink、內容雜湊、lsof 與已退出程序，刪除11個精確自有過時路徑（列於 cleanup-owned.json）：初次空目錄、被最終結果取代的5組正向 payload、兩個重開實驗 App 及三個重複 runner。重開包的最小 launcher／plist／簽章紀錄保留，重複 native Mach-O 與仍保留的 Native-Capture.app 雜湊完全相同；獨特負向資料／log 未刪。du 合計65,740 KiB；filesystem free 219,341,672,448 → 219,409,010,688 bytes，觀察差額67,338,240 bytes，未把其他工作並行釋放都歸因本批。獨立 replay index49,200 bytes 另刪並記錄，沒有刪 lock。保留最新 App、最終案例與回歸、唯一失敗證據，以及 active goal 會沿用的 target/debug／release；未清其他工作產物或停止他人程序。
 
 canonical develop 仍只領先 origin/develop 一筆及原未提交計畫；本批只在已授權 detached Slint worktree 提交，沒有 push、PR、整合、正式入口切換或發佈。接續推文導覽／更新與其餘 S0–S8 缺項，S9 仍另行核可。
+
+## S4 原生推文定位與身分側標（2026-11-09）
+
+Slint 直接消費共用 `reply_navigation::Index`，不重新判斷原始 bytes、原PO 或登入帳號。ArticleSession 擁有同 generation／article scope 的群組與目前列，ArticleView 只計算實際已確認幾何的可見側標及本機置中捲動。按原PO／自己／目前標記的人只改群組，上一則／下一則依可見錨點循環；沒有新增站端 writer、下載或 timer。原生背景右鍵提供推文定位，帳號字詞選單仍優先提供帳號操作。
+
+側標不進 Rust frame、PNG 或複製結果。作者金色、自己青色，兩者皆符合時分列細軌；只在外側留白足夠時顯示完整角色字樣與連推段首，否則用既有保留空白欄細軌。只提供完整可見列，最多64個；圖片間隙、部分行與 DPI 共用 ArticleFlow。整列遮罩不保留索引／標記，明確還原後由同一 Rust 投影恢復；名單更新產生新 article scope 會關閉舊工具列。
+
+已確認的同篇索引在重繪期間保留工具列版面，但 `ready` 必須取得目前 geometry ACK 才允許開啟／操作，避免顯示／隱藏按鈕導致反覆重排。開啟定位先取得來源租約，只有搜尋列確實開啟時才清理搜尋並交接。群組／前後／關閉按鈕與原生焦點接線，輸入法組字、失焦及原來源失效時不前進；按鍵 modal edge 保留到 keyup，避免關閉後 Enter／Escape 重複穿透至站端。關閉／切模式清除控制項、Rc 索引、側標與來源。
+
+最終無修改 CLI SHA-256 `0429c1665289b24b62780ae33e73fdba5b13e5192201eb982f77a8e5eacbf427`。`.local/verification/slint-reply-navigation/component-accepted/` 完整 App toolkit 測試核對 author `[3,4,10,18]`、Session 確認 mine `[6,14]`、focused `[7]`；實際 Slint 右鍵事件、群組不跳動、循環前後、搜尋交接、遮罩／還原、50%／200% 縮放與本機捲動、組字／背景拒絕、規則 scope 重設、關閉／重開與終端模式清理皆通過。strict peer 全程零站端輸入、Close ACK、HTTP0且 joined。擷圖已檢視：窄邊細軌與寬邊完整角色字樣；群組操作前後 Rust 匯出 frame 完全相同。
+
+同來源 release native bin79項通過／1項明確 ignored，全 target Clippy `-D warnings`、`native-player-probe` 全 target check、fmt 通過。較早同批 lib367／bin79／multi10通過（共456／6 ignored）、JS383通過；最後只改 native adapter／probe，故不以重建 desktop 冒充 Dioxus host 驗證。直接消費者回歸：目前收藏9步、列表指定首篇13步、全文19次取頁及文章輸出皆 exit0／Close ACK；全文 fixture 的500ms＋每頁150ms延遲維持。列表第一次回歸在第3步前取消、相同 binary 獨立重跑通過，原因尚未確認，保留兩份紀錄，不以重跑覆蓋負向結果。
+
+初輪編譯錯誤、閒置搜尋清理錯誤導致幾何 ACK 失效、規則 scope 與關閉重排後 probe 未等待 ACK等中間結果，分別保留來源／hash／log。最終另有重繪中保留 chrome 且禁止 stale 操作的明確測試。一次呼叫者預建 verification 目錄被入口 AlreadyExists 拒絕；影片 gate 曾使用不存在的 feature，改用 Cargo 已宣告的 `native-player-probe` 後通過；這些不列入成功。
+
+macOS strict ad-hoc `Native-Replies.app` 可正常顯示23行合成文章與金／青側標。CUA 的 AX 文章欄點擊後再點「推文定位」仍失去前景可操作性；Raise／標題點擊未恢復，座標工具回報 `noWindowsAvailable`。因此實體按鈕、Tab、長按及 OS IME 操作仍 `not_ready`，不放寬生產焦點保護。首份固定輸出路徑 launcher 的重啟覆寫 log，不能證明該輪清理；後改成每次 invocation 的獨立目錄，兩份 retry log 均 Close ACK、strict peer零額外輸入、HTTP joined，CmdQ後 inventory及pgrep皆無本 App。退出結果與 UI 操作驗收分開。IMK warning 保留，不據此判定輸入法。
+
+這批沒有整合、push、PR、正式入口切換或發佈。S4 推文更新、推文定位實體操作、列表實體右鍵／新程序離線操作與混合 Live 尚未結案；S0–S8 goal 持續。

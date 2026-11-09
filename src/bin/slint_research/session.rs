@@ -201,6 +201,9 @@ pub fn with_probe(
         Probe::Media if std::env::var_os("PTTSTELLA_SLINT_DESTINATION_PROBE").is_some() => {
             "slint_native_destination"
         }
+        Probe::Media if std::env::var_os("PTTSTELLA_SLINT_REPLIES_PROBE").is_some() => {
+            "slint_native_replies"
+        }
         Probe::Media => "slint_native_media",
         Probe::ArticleInline => "slint_native_inline",
         Probe::Reconnect => "slint_session",
@@ -249,7 +252,12 @@ pub fn with_probe(
                 }
             }
             Probe::Media => {
-                if let Ok(case) = std::env::var("PTTSTELLA_SLINT_CAPTURE_PROBE") {
+                if let Ok(case) = std::env::var("PTTSTELLA_SLINT_REPLIES_PROBE") {
+                    match case.as_str() {
+                        "1" | "native" => Connection::start_reply_navigation_probe(),
+                        _ => Err("unknown reply navigation probe case".into()),
+                    }
+                } else if let Ok(case) = std::env::var("PTTSTELLA_SLINT_CAPTURE_PROBE") {
                     match case.as_str() {
                         "current" | "native" => Connection::start_bookmark_archive_probe(false),
                         "headerless" => Connection::start_bookmark_archive_probe(true),
