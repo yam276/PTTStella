@@ -46,25 +46,29 @@ def inspect(path):
     return parse_commands(run('otool', '-l', str(path)))
 
 
+def expand_loader_path(value, owner, executable):
+    for token, base in (('@loader_path', owner.parent),
+                        ('@executable_path', executable.parent)):
+        if value == token:
+            return base
+        if value.startswith(token + '/'):
+            return base / value[len(token) + 1:]
+    if value.startswith('/') or Path(value).is_absolute():
+        return Path(value)
+    raise ValueError(f'Unsupported loader path: {value}')
+
+
 def resolve_import(name, owner, executable, rpaths, allowed):
     if name.startswith(SYSTEM):
         if '..' in Path(name).parts:
             raise ValueError(f'Parent traversal in system loader path: {name}')
         return None
 
-    def expand(value):
-        if value.startswith('@loader_path/'):
-            return owner.parent / value[len('@loader_path/'):]
-        if value.startswith('@executable_path/'):
-            return executable.parent / value[len('@executable_path/'):]
-        if value.startswith('/'):
-            return Path(value)
-        raise ValueError(f'Unsupported loader path: {value}')
-
     if name.startswith('@rpath/'):
-        candidates = [expand(path) / name[len('@rpath/'):] for path in rpaths]
+        candidates = [expand_loader_path(path, owner, executable) / name[len('@rpath/'):]
+                      for path in rpaths]
     else:
-        candidates = [expand(name)]
+        candidates = [expand_loader_path(name, owner, executable)]
     for candidate in candidates:
         if candidate.is_file():
             resolved = candidate.resolve(strict=True)
@@ -77,10 +81,10 @@ def resolve_import(name, owner, executable, rpaths, allowed):
 def closure(executable, allowed):
     executable = executable.resolve(strict=True)
     allowed = tuple(p.resolve(strict=True) for p in allowed)
-    queue, records, names = [executable], {}, {}
+    queue, records, names = [(executable, ())], {}, {}
     total = 0
     while queue:
-        path = queue.pop()
+        path, inherited_rpaths = queue.pop()
         if path in records:
             continue
         if len(records) >= 129:
@@ -96,12 +100,18 @@ def closure(executable, allowed):
                 raise ValueError(f'Colliding library basename: {path.name}')
             names[path.name] = path
         info = inspect(path)
+        # dyld searches the loading chain's run paths. Expand a parent's
+        # @loader_path in that parent's context before passing it to a child.
+        search = tuple(dict.fromkeys([
+            *(str(expand_loader_path(value, path, executable)) for value in info['rpaths']),
+            *inherited_rpaths,
+        ]))
         edges = {}
         for name in info['imports']:
-            resolved = resolve_import(name, path, executable, info['rpaths'], allowed)
+            resolved = resolve_import(name, path, executable, search, allowed)
             if resolved:
                 edges[name] = resolved
-                queue.append(resolved)
+                queue.append((resolved, search))
         records[path] = {**info, 'edges': edges, 'sha256': digest(path), 'bytes': size}
     return records
 
@@ -143,12 +153,16 @@ def source_notices(source, archive, destination):
     return records
 
 
-def copy_notices(records, destination, source_archives=None):
+def copy_notices(records, destination, source_archives=None, *, executable=None):
     """Keep the installed formula, source hashes, receipt, SBOM and actual notices.
 
     This inventory is not a declaration of distribution readiness or a substitute
     for corresponding-source delivery. The caller records that separate gate.
     """
+    unknown = [path for path in records if path != executable and 'Cellar' not in path.parts]
+    if unknown:
+        raise ValueError('Runtime needs explicit source/notice provenance: '
+                         + ', '.join(str(path) for path in unknown))
     destination.mkdir()
     packages = {}
     for path in records:
@@ -193,6 +207,8 @@ def copy_notices(records, destination, source_archives=None):
 
 def install(executable, binary, frameworks, notices, allowed, source_archives=None):
     records = closure(executable, allowed)
+    inventory = copy_notices(records, notices, source_archives,
+                             executable=executable.resolve(strict=True))
     frameworks.mkdir()
     mapping = {}
     for original in records:
@@ -200,7 +216,6 @@ def install(executable, binary, frameworks, notices, allowed, source_archives=No
         shutil.copy2(original, out)
         out.chmod(0o755)
         mapping[original] = out
-    inventory = copy_notices(records, notices, source_archives)
     manifest = []
     for original, out in mapping.items():
         record = records[original]
@@ -211,14 +226,20 @@ def install(executable, binary, frameworks, notices, allowed, source_archives=No
             command += ['-change', name, '@rpath/' + child.name]
         for path in dict.fromkeys(record['rpaths']):
             command += ['-delete_rpath', path]
-        command += ['-add_rpath', '@executable_path/../Frameworks', str(out)]
+        # The executable owns the run path; dependent dylibs inherit it. Adding
+        # the same path to every dylib is unnecessary and may exceed a vendor
+        # library's load-command header space.
+        expected_rpaths = ['@executable_path/../Frameworks'] if out == binary else []
+        for path in expected_rpaths:
+            command += ['-add_rpath', path]
+        command += [str(out)]
         run(*command)
         check = inspect(out)
         for name in check['imports']:
             if not name.startswith(SYSTEM) and not (
                     name.startswith('@rpath/') and (frameworks / name[len('@rpath/'):]).is_file()):
                 raise ValueError(f'Unbundled relocated dependency: {name}')
-        if check['rpaths'] != ['@executable_path/../Frameworks']:
+        if check['rpaths'] != expected_rpaths:
             raise ValueError(f'Unexpected relocated rpaths: {out}')
         run('codesign', '--force', '--sign', '-', '--timestamp=none', str(out))
         manifest.append({'file': str(out.relative_to(binary.parent.parent)),

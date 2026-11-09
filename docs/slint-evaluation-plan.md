@@ -18,7 +18,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、三格式錯色負向對照 | MP4 GPU 像素偶發失敗仍未重現／解決、多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
 | S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
 | S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔及正常退出 owner；三版本實際 store 往返與並行保存28案 | 其他管理入口、完整 Dock／modal／OS I/O 退出矩陣、實際前端／平台路徑及 vault 往返 |
-| S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG及無Homebrew sandbox；Windows x64含libmpv的GUI主程式交叉編譯、全目標Clippy及ZIP靜態核對；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、交叉Clippy、Ubuntu安裝／software八案及搜尋暫停探針 | macOS x64完整候選包；Windows與其他平台原生執行、VC runtime／完整乾淨安裝、完整來源交付、資料回退及同負載效能；尚未通過 |
+| S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG及無Homebrew sandbox；Windows x64含libmpv的GUI主程式交叉編譯、全目標Clippy及ZIP靜態核對；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64完整CLI](slint-macos-x64.md)、交叉Clippy及Rosetta13案 | macOS x64外部runtime來源／notice admission與App／ZIP／DMG；Windows與其他平台原生執行、VC runtime／完整乾淨安裝、完整來源交付、資料回退及同負載效能；尚未通過 |
 
 接續完整鍵盤／焦點與其他平台、跨平台列表／重開、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
 
@@ -316,3 +316,12 @@ Windows候選批次清理：保存最終ZIP及必要授權／來源／唯一失�
 新版Linux候選使用同一完整配置，ELF SHA256為 `9b68eb81ed5348f4dd44f3e05ab5a1a8284a89b884a7240f6c6df22bd7c6d5f7`，取代原a7c00a9包；路徑仍為 `slint-linux-candidate/package-current`。Depends逐字相同，新包在原Ubuntu runtime root重新安裝，shell／含空格路徑portable launcher／三格式影片／草稿／兩種尋找八案均通過、逐案receipt及Close ACK已核對，不冒充另一個fresh clean install。影片另核對非空四色像素樣本、render退休與session join；草稿未測新程序讀回，不擴大scope。Linux release/all-target Clippy、150個Python測試、fmt／actionlint／diff通過，詳[Linux候選說明](slint-linux-candidate.md)；native_acceptance與完整來源交付仍not_run／not_ready。
 
 本批驗證後以Cargo原生完整clean移除 `slint-find-pause/target`（9706檔／3.1GiB，du3247480KiB），卸載並刪除case-sensitive SDK映像、wrapper／外部LLD捷徑、smoke及重複baseline CLI，外部Rust工具不動；兩個自有Debian／Ubuntu容器與無使用者的臨時Ubuntu image已正常移除。舊完整包刪除，只留最小manifest／hash；42張byte-identical generated PNG以保留位置／SHA映射取代（allocated2854912bytes）。10304份受保護檔案hash不變；worktree du889336KiB，filesystem available 214002139136→221830262784bytes只記觀測，不全歸因於本批刪檔。exact paths、owner／resolved path／symlink、lsof／程序、Cargo／du、保留例外及共享VM線上TRIM紀錄在 `slint-find-pause/cleanup/ledger.json`。清理後不重建Rust，S0–S8持續，S9未執行。
+
+
+2026-11-10 macOS x64完整主程式已建置：Rust1.97.0／Apple Clang從arm64交叉編譯完整native-player-probe，Rust來源仍為d37190d、Rust patch為空；CLI SHA256 `b1e810584025eb0d4fc65992045c7eb99ae5b25bdd0e4e9bbed6831453731e64`。實際x64 libmpv已在Rosetta初始化，完整CLI的軟體／OpenGL shell、兩種尋找、三格式影片及軟體草稿共13案exit0／Close ACK，逐一檢查非空像素樣本、render退休、session join及搜尋Pending／背景保留／恢復；這是Apple Silicon Rosetta component證據，不算Intel實機／OS輸入／IME／可聽音訊／效能。x64 release/all-target Clippy及154個Python測試通過；新增Mac原生Clang／dyld fixture與可跨host執行的loader／notice負向測試，沒有把skip或wrapper exit0當案例通過。細節與尚缺欄位見[macOS x64待封裝輸入](slint-macos-x64.md)。
+
+x64 runtime暫取自經GitHub digest及完整簽章核對的IINA1.5.1，僅保留44個可達x64 dylib，實際回報mpv0.41.0／FFmpeg9.0.1，與arm64的Homebrew0.42不同。釋出日recipe版本及Credits不能直接代替此binary的精確來源／完整notices，封裝gate仍not_ready；尚未產出x64 App／ZIP／DMG。共用collector已修正dyld父層RPATH繼承，保留各owner上下文與allowed-prefix拒絕；只由主執行檔擁有Frameworks RPATH，避免在沒有headerpad的vendor dylib重複加路徑。非Cellar相依缺來源／notice owner時明確拒絕，不能默默跳過並輸出空清單。這份CLI留本機developer RPATH，不能當可攜包移交；後續來源不變時重用它做Python封裝，不重建Rust。
+
+同輪DYLD shell追蹤仍有六筆System WebKit／JavaScriptCore相關映射，同時載入WritingTools／WritingToolsUI；沒有以source無直接WebView依賴換算成執行期零映射，也未宣稱由此證明WebView實例或完整IME的成因。此差異持續依S8處理；新Rosetta／不同runtime的影片通過不結案原arm64 MP4偶發問題。
+
+本批以Cargo原生clean移除8281檔／2.5GiB（target du2634744KiB），刪除完整IINA DMG／掛載、完成的C fixture執行檔、自有pycache及17張重複generated PNG。10497份受保護檔案hash未變；待封裝CLI及必要44個dylib、來源／簽章／版本／獨特失敗與最小圖像證據保留。清理後以同一CLI及自有runtime重跑MP4 OpenGL，像素／清理／Close ACK通過，證明該案例不依賴已刪target或掛載。batch du130928KiB、Slint worktree1020184KiB，filesystem available 218310406144→221069762560 bytes只記並行觀測。exact paths、owner／resolved path／symlink、lsof、Cargo／du及保留例外在 `slint-macos-x64-candidate/cleanup/ledger.json`；新增Rust x64 target屬已安裝工具保留，未動共用VM或其他聊天。清理後沒有Rust產品重建，Python gate的獨立C／rustc fixture在TemporaryDirectory自動清理；S0–S8仍active，S9未執行。
