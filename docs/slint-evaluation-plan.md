@@ -34,6 +34,8 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 2026-11-09 已回收 main Slint target 的 dev／release、獨立 Windows 交叉編譯 target，以及34份過時 macOS 測試 App。當前只保留 Slint 一般候選、影片配置候選及唯一 Windows S1 ZIP；兩個最小 reopen bundle metadata 目錄沒有 native executable。被刪 App 的非執行紀錄／授權／測試資源壓成約3.2MB ZIP，完整 binaries 不存進 archive。精確清單、來源雜湊、lsof、Cargo 輸出與空間前後在 `.local/verification/slint-artifact-cleanup-20261109/`。Slint target 12KiB、verification 約416MiB；原始碼、未提交的推文導覽工作及必要交付內容不變。canonical checkout 的其他聊天產物不屬於本 Slint goal 所有權，保留而未跨案刪除。
 
+後續三版本 store 往返批次驗收後，另清掉 `.local/verification/slint-store-roundtrip/target/release`、`drivers/candidate`、`drivers/baseline`、`drivers/release`，並正常移除 `checkouts/baseline` 與 `checkouts/release` 兩個臨時 worktree。Cargo 宣告6932檔／1.8GiB；filesystem free 由238467133440增至240648839168 bytes，這是並行工作期間的觀測值，不全歸因於本次清理。28案例結果、唯一失敗資料、來源 patch、各 ref／driver hash 均保留，原始碼與必要交付 hash 不變。主 target 與這批獨立 target 各12KiB，整個 Slint worktree 約497MiB（`.local` 約441MiB、Windows ZIP 約28MiB）。目前保留的一般候選為 `slint-native-list/Native-Bookmarks.app` 及其同檔重開所需 `native-state/bookmarks.json`，影片候選仍為 `slint-app-exit/Native-Video-Close.app`，Windows S1 ZIP 未更動。精確清單／du／Cargo輸出／空間前後記在 `.local/verification/slint-store-roundtrip/cleanup/ledger.json`；版本對照臨時 checkout 與 headless driver 納入往後每批清理，不保留可重建執行檔副本。
+
 ## 共用 Rust 邊界
 
 | 擁有者 | 實作與介面 |
