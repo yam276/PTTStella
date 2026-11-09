@@ -1533,3 +1533,17 @@ CPU renderer由單一具名worker擁有，建立與釋放render context都在該
 本批macOS arm64候選App使用相同source binary，搬移loader paths及ad-hoc簽名後native SHA-256 `ff24429ea149468b5f5d19fec25ce379dce32b6d12357aa1038aa7e3657a636b`。CUA實際OS畫面顯示紅／藍／黃／青與白色marker；實際slider座標點擊後為1秒，Play後1.25秒，再Pause為1.3333334秒，按⌘Q的owned child exit0。軟體worker87frames、max_buffer_bytes2995200、joined／renderer_retired均true，control joined／core destroyed、stream stopped、Close ACK與HTTP joined另有log。OS畫面保留在CUA工具紀錄，未宣稱另存PNG或實際聽見音訊。退出後的AX讀取意外重開無參數App，另以⌘Q關閉，最後inventory無候選程序；這份意外啟動揭露無參數仍落離線原型，先前候選README的「正常啟動自動連線」尚未由程式實現，須接續修正，不能當成已通過的主程式啟動驗收。
 
 原始命令、初次失敗、18案逐筆審核、閱讀／混合報告、Clippy失敗及修正後結果、native observation及候選manifest在 `.local/verification/slint-video-software/`。本批尚未解決既有GL MP4偶發像素失敗；三格式這次通過不構成重複性修復。四架構原生、對應來源交付、音訊、乾淨機器、資料回退UI及同負載效能仍待驗，S0–S8持續、S9未執行。
+
+## S2／S8 候選無參數啟動與收藏反例（2026-11-09）
+
+原候選無參數啟動只繪製離線parity grid，先前README及本文件的「正常啟動連預設站」描述超出程式行為。現在只有Slint研究入口的普通啟動改用既有 `Probe::Connect`／Live owner，載入獨立研究設定並選擇預設站，不新增自動登入。`--connect`仍可明確指定；明確探針／`--show-profile`與只有`--capture`的PNG擷取保持離線，後者使用既有Grid探針。產品Dioxus入口、身份／資料路徑與S9均未切換。CLI解析可用明確iterator測試；新增兩案涵蓋無參數／renderer／zoom啟動、明確探針、capture與衝突參數。最終Slint bin81 passed／1明示ignored、native-player-probe all-targets Clippy與建置通過。
+
+最新macOS arm64候選在 `.local/verification/slint-startup/package-current/`，原CLI SHA-256 `9fce99140adb3e7fd782c26e8b6bd4ce33c52e5cc9471ec02150d7d7a75be365`，封裝後native `9c0edfad6105bd9dea19a702d4744dcd57a19359248129e2adc52c7aa5fdb90a`；來源為 `4a7db4c` 加本次啟動修正，manifest保留dirty狀態。ZIP／DMG與50份runtime閉包hash在同目錄report；ad-hoc、未公證，對應來源交付仍not_ready。
+
+以禁止所有outbound network及拒讀Homebrew的sandbox啟動**無參數**native，CUA看到一般`PTTStella Slint`視窗、終端輸入／站點／浮球／重新連線及持續的連線失敗提示，沒有落回離線原型。實際⌘Q後owned child exit0、joined；正式與研究namespace的JSON資料hash均不變。這證明啟動路由及失敗介面，不代表實站連線／登入／保存預設站重開驗收完成。dyld1066個image，App外無非系統映射，仍有6份系統WebKit／WebCore／JavaScriptCore；未聲稱零WebKit。原始OS畫面在CUA紀錄，磁碟上保存normal log、參數／sandbox、store hash及runtime報告。
+
+同一**最終封裝binary**在拒讀Homebrew的sandbox跑18組影片（正常與指定錯色負向）全部符合預期；兩組混合推文／PNG-GIF取消及追加也通過、HTTP joined。9組閱讀回歸中8組通過，**收藏目前文章失敗**：未保存文章，strict peer等待下一個Q卻收到關閉，原錯誤及cleanup failure均保留。舊helper逐案失敗仍exit0，最外層逐筆檢查正確拒絕整體通過；曾因只看helper結束而提早報「9組全過」，已更正。另以同binary做3次CPU實驗得2通過／1失敗，3次GL實驗也2通過／1失敗；舊Native-Bookmarks軟體配置3次通過，不能據此推定原因或替新版消除反例。失敗當時diagnostic有完整45行、畫面尺寸未安裝與來源lease檢查拒絕，但這些只是觀測，尚未證明根因。
+
+完整首輪、所有重複實驗與未變binary hash均在 `.local/verification/slint-startup/`，`final-result.json`明列failed，不以重跑成功改寫結果。下一步需在cold store讀取的Loading、原始source identity／stamp及bookmark_begin／畫面ACK邊界補精確證據，再修正生產owner；不放寬stale來源或獨立封存expected，也不推定外部操作造成失敗。這份反例使完整S4／S8仍未達成；其他跨平台／IME／效能缺項與既有GPU偶發問題仍保留，S0–S8 goal active。
+
+另以本次CPU實作以前的完整GL候選native（SHA-256 `92e9e18ea2b7aedb6459ae8f8605c780cd858a04f5cb4592e5328f59a8ac5490`）做同一收藏案例3次，得到1失敗／2通過，失敗同樣停在peer step1等待Q。這證明相同行為在舊完整候選也能重現，不能把新版CPU worker當成已證明的原因；根因仍待來源／ACK邊界證據。舊binary未修改，原始結果另存`capture-old-gl.json`，沒有拿舊版的重跑通過覆蓋反例。
