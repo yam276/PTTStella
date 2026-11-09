@@ -1345,7 +1345,7 @@ Slint 只管理已 ACK文章的回覆總數、已讀數與本機閱讀位置。�
 
 最終 strict ad-hoc `Native-Updates.app` 的 signed native SHA-256 `4cae8d94dafe68fbe8cc9b80211d3a6a3cadd2e4f9eea7ced3be548ea029cb89`。原生run `native-retained-16559`先以toolkit準備取消情境，CUA實際長按Right及Return各650ms；OS擷圖仍見ROW0016～0030，peer在關窗後核對沒有額外站端bytes。實際點「顯示站端畫面」後，不另按縮放，即見150%下站端資訊右側、查詢框及藍色繼續列，游標在可視區；水平溢出依目前縮放裁切，不宣稱此crop看見完整AID。CmdQ、最終inventory／pgrep不存在、Close ACK與HTTP joined分開確認；LaunchServices未提供exit code，absence不當成exit0。完整更新開關／未讀按鈕的可信OS操作仍待補驗。
 
-工具擷取的限制另保留：Slint `take_snapshot()`的保留正文呈黑色，但其20個有效RAM tile各有文字ink且實際OS擷圖有正文；明示skia-software重跑亦保留同一現象，尚未證明工具擷取失配的內部原因。未為此停用正常cache／改整體繪圖；產品PNG另走共同Rust輸出，文章輸出回歸通過。原生OS畫面與toolkit snapshot不互相替代。
+影像判讀追補更正：先前將 `take_snapshot()`及明示skia-software的內嵌呈現判成正文黑掉，但2026-11-09重新讀取原始PNG後，`pixels-cancel`與`software-pixels-cancel`實際逐byte相同（SHA-256 `4ce02c2cc1103451f0de2e83ce26268f29d9d4ecfefca87c3d6a9bf82dc53358`）。stdlib解碼確認15個正文行帶均有文字像素，合計70594個中性色文字像素。這些檔案不支持「Slint擷取／cache漏字」的原判斷，該推論撤回；沒有改產品cache或renderer來迎合內嵌輸出。詳見後續原始影像複核紀錄。
 
 負向紀錄不覆寫：最初相對Right先本機翻頁，改先retained guard後取消／失焦通過；第二輪錨點只有正規化fraction約7e-16差，列號相同，改以同列且1e-6 fraction界線（小於0.001實體像素）判定。另一次first append未發後續PageDown、一次first-anchor失敗沒有足夠診斷，原因不推定為其他操作；保留原binary hash／log。復原初版只看UI切換不足，原生補驗、游標col/row誤用及第二次geometry ACK漏接皆有負向結果，最終加強游標可視驗收後通過。初輪未用匯入／窮盡match警告、Clippy巢狀if及native-check型別變更的編譯失敗另留log，不算passed。
 
@@ -1371,8 +1371,20 @@ viewport另分開「請求的行／圖片anchor」與經viewport界線夾限的�
 
 macOS strict ad-hoc `Native-Mixed.app` signed native SHA-256 `ad9a676613f5abd7bbb4f60c279ac7b6daab3922765dfc9298a10061cc7663b3`。原生run53028等native-ready後，實際點自己群組／下一則（0／2→1／2）、原PO／下一則，畫面可見ROW0031～0039、六則推文、Bob藍底及青／金側標。這個launcher沒有HTTP origin，PNG／GIF實際資源與wide只由上述完整元件案例證明。第一次run52746在native-ready前被Agent點下一則，與準備程序自動定位衝突並退出，屬探針交接錯誤，未算產品驗收。
 
-原生畫面仍有未解限制：一張OS擷圖正文只剩底色，後續相同縮放再次有文字；兩者分別保存在 `native-retained-53028/os-author.jpg` 與 `os-visible.jpg`，不能推定內部原因或聲稱已修復。控制也曾因失焦變成disabled，標題／Raise／輸入欄點擊未能完整驗證恢復，本輪沒有宣稱站端復原實體操作或完整OS矩陣通過。CmdQ後inventory及程序不存在、peer Close ACK且無額外站端bytes分開確認；LaunchServices無exit code，不把absence當成exit0。沒有以cache停用或失焦豁免迴避這些限制。
+原生畫面判讀追補更正：先前依內嵌輸出將 `native-retained-53028/os-author.jpg`判為正文只剩底色，但重新直接讀取原始JPEG後，它與`os-visible.jpg`均有完整ROW0031～0039及推文。這不是一組產品缺字／恢復的正反證據，原判斷撤回。較早AX／標題／Raise嘗試的控制disabled紀錄保留；後續run64072用實際座標進入文章、操作自己／下一則並復原站端成功，沒有失焦豁免。兩輪CmdQ後inventory及程序不存在、peer Close ACK且無額外站端bytes分開確認；LaunchServices無exit code，不把absence當成exit0。
 
 本批完成上述可獨立驗證的修正；後續先釐清原生畫面／焦點一致性，並繼續完整更新控制、列表右鍵、新程序離線、IME、四架構打包／回退與同負載效能。S0–S8保持active，S9未整合、推送或發佈。
 
 混合閱讀修正 `c817538` 驗收後依逐批規則清掉本Slint `target/release`（Cargo宣告12936檔、4.9GiB；target的du由5251928KiB降至12KiB），並移除已被同功能回歸涵蓋的舊 `slint-reply-updates/Native-Updates.app`（du65708KiB）。該App只留2574bytes非執行metadata ZIP；最新一般配置改為 `slint-mixed-reading/Native-Mixed.app`，影片配置與Windows S1 ZIP仍保留。267份src及3份必要交付hash不變，未重建Rust；精確resolved paths、owner、symlink／lsof、保留例外及free前後在 `.local/verification/slint-mixed-reading/cleanup.json`。filesystem available 237879652352→242873319424 bytes只記觀測差額，不全歸因於清理；原生正反畫面、未整合source／worktree及其他聊天產物保留。
+
+## S4 原始影像複核與手動原生更新（2026-11-09）
+
+沿用 `c817538`的同一signed native（SHA-256 `ad9a676613f5abd7bbb4f60c279ac7b6daab3922765dfc9298a10061cc7663b3`），沒有重建Rust或修改產品。先直接讀原始JPEG／PNG，並以stdlib PNG解碼及逐byte雜湊補驗，撤回先前由內嵌呈現推定的cache／snapshot漏字。原始圖片保留，沒有改expected或重畫圖片。15行文字像素僅補強正文存在證據，不能替代格線／字型／雙色字及跨平台驗收。
+
+run64072先等明示native-ready才交給原生工具；以座標點標題、自己群組及下一則，得到1／2；座標點「顯示站端畫面」後，維持150%即見站端查詢右側／下緣框線及藍色繼續列，終端輸入取得焦點。水平crop仍不包含左側完整AID或繼續文字，不宣稱該crop看見那些內容。CmdQ、Close ACK、程序與inventory消失另驗。這輪用toolkit準備取消情境，原生操作範圍分開記於 `.local/verification/slint-native-observation/coordinate-result.json`。
+
+run66584再暫時把同App的launcher設為現有 `PTTSTELLA_SLINT_UPDATES_PROBE=native`。此模式依main現有分支不建立Verification owner，因此沒有自動按鈕、合成foreground、zoom或搜尋。初始背景載入暫停在23行，實際座標點文章後繼續至45行；座標按「更新推文」，AX實見「暫停更新／正在更新」，嚴格peer核對19步指定bytes完成兩次追加，文章51行並有6則未讀。座標暫停後按「查看」，原始OS JPEG可見ROW0029～0039及REPLY0040～0051，完整AX只有「更新推文」而無未讀提示。暫停後51.57秒同一live程序的peer log大小／操作序列不變，沒有新增更新命令；不是效能測量。實際CmdQ後Close ACK、HTTP工作joined、程序及inventory不存在；不宣稱LaunchServices提供exit0。此輪無HTTP origin，圖片／GIF交互仍由前批完整元件證據證明。
+
+原生按鈕基本路徑、座標進入文章和取消後復原已有這兩輪證據；先前AX呼叫未取得可操作性不能推定為產品焦點永久失效。完整長按／鍵盤／IME／多modal、背景取消與恢復、其他平台仍需自己的矩陣。原始byte、PNG數值、JPEG、AX及peer結果在 `.local/verification/slint-native-observation/`；其中 `inspect_png.py`可直接用Python標準庫重讀原PNG，核對chunk CRC、解filter與不透明文字像素，`png-text-pixels-opaque.json`保留完整命令；原生顯示以保存的原始內容與實際操作結果核對，不再僅依內嵌縮圖下結論。
+
+測完已關閉自己App並還原原launcher、重新strict ad-hoc驗證；native hash及三份必要交付不變。沒有新增另一份App或編譯快取，target維持12KiB。本批只保留必要影像／AX／最小紀錄；先前產物清理規則不變，完整S0–S8仍active，S9未執行。

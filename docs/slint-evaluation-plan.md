@@ -14,13 +14,13 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 | S1 | 格線／雙色字／縮放、macOS 原生輸入的分立證據 | 候選窗與跨螢幕 DPI、可及性、Windows／Linux 原生 |
 | S2 | 共用 Connection、登入／保活、站點表單、嚴格切站／雙編碼 bytes | 同 endpoint 編碼切換、預設站重啟／不登入、完整信任／vault 原生矩陣 |
 | S3 | 選取、輸出、浮球／選單及原生互動的分立證據 | 全部快捷鍵／pointer／modal／可及性操作矩陣 |
-| S4 | 雙閱讀模式、長文取頁、尋找、名單／右鍵／揭露／底色、書籤／離線、快速前往與最近看板、目前／指定列表文章收藏、共用推文索引／原生定位與側標、推文更新／未讀／保留與復原 | 推文控制完整實體操作、推文定位實體操作、列表實體右鍵及新程序離線操作補驗、混合 Live 等效與全功能回歸 |
+| S4 | 雙閱讀模式、長文取頁、尋找、名單／右鍵／揭露／底色、書籤／離線、快速前往與最近看板、目前／指定列表文章收藏、共用推文索引／原生定位與側標、推文更新／未讀／保留與復原；macOS基本按鈕與座標操作補驗 | 跨平台推文控制／定位與完整鍵盤／焦點矩陣、列表實體右鍵及新程序離線操作補驗、混合 Live 等效與全功能回歸 |
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理 | 多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
 | S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
 | S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔及正常退出 owner | 其他管理入口、完整 Dock／modal／OS I/O 退出矩陣、雙版本資料往返 |
 | S8 | S1 Windows 探針及 macOS 本機實驗工具 | 完整四架構候選包、使用者 Windows 原生驗收、回退及同負載效能；尚未通過 |
 
-接續推文控制／定位實體操作、列表實體右鍵與新程序離線操作、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
+接續推文完整鍵盤／焦點與其他平台、列表實體右鍵與新程序離線操作、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
 
 ## 執行方式與完成條件
 
@@ -242,6 +242,8 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 2026-11-09 清理追補：使用者再次要求先處理磁碟產物，已在確認沒有程序／open files 使用後，以 Cargo 原生 clean 移除 Slint worktree 的 `target/release`（5658 檔、Cargo 宣告2.0GiB；du由2122336KiB降至12KiB）。本次 filesystem available由245599801344增至247608643584 bytes，僅記觀測差額，不全部歸因於本次刪除。混合閱讀探針尚未通過，保留該版完整未提交patch、來源基準、binary hash及失敗報告，沒有把失敗標為驗收。485份來源／資產／文件hash與3份必要交付hash均不變。exact path、lsof及前後記錄在 `.local/verification/slint-artifact-cleanup-20261109-followup/cleanup.json`；其餘聊天產物和未整合worktree保留。後續仍逐批清理，不因goal持續而累積歷代target或App；本次清理後不為驗證清理而重建Rust。
 
-2026-11-09：混合推文角色、指定帳號底色、PNG／GIF與wide／搜尋交互已補完整元件證據，修正取消後側標／本機定位消失、部分編碼頁清掉焦點及暫時viewport夾限覆寫anchor。最終同binary六案及九項回歸通過；Rust共用／兩前端578項、JS383項與Clippy／native-player-probe編譯通過。兩輪更新失焦取消保留原log，同binary獨立重跑通過。macOS實際群組／下一則有部分證據，但擷圖正文暫時缺字後恢復、焦點／disabled控制仍未釐清，不宣稱完整OS驗收或已修復呈現問題。完整來源、hash、負向與剩餘範圍見 [原型紀錄](slint-prototype.md#s4-混合推文角色尋找與媒體保留2026-11-09)。S0–S8持續，S9未執行。
+2026-11-09：混合推文角色、指定帳號底色、PNG／GIF與wide／搜尋交互已補完整元件證據，修正取消後側標／本機定位消失、部分編碼頁清掉焦點及暫時viewport夾限覆寫anchor。最終同binary六案及九項回歸通過；Rust共用／兩前端578項、JS383項與Clippy／native-player-probe編譯通過。兩輪更新失焦取消保留原log，同binary獨立重跑通過。macOS實際群組／下一則有部分證據。影像追補：重新讀取原始JPEG／PNG後撤回「正文缺字後恢復」推論；後續座標定位／復原及無自動代按的更新控制另驗。完整OS矩陣仍未完成。完整來源、hash、負向與剩餘範圍見 [原型紀錄](slint-prototype.md#s4-混合推文角色尋找與媒體保留2026-11-09)。S0–S8持續，S9未執行。
 
 混合閱讀修正 `c817538` 驗收後依逐批規則清掉本Slint `target/release`（Cargo宣告12936檔、4.9GiB；target的du由5251928KiB降至12KiB），並移除已被同功能回歸涵蓋的舊 `slint-reply-updates/Native-Updates.app`（du65708KiB）。該App只留2574bytes非執行metadata ZIP；最新一般配置改為 `slint-mixed-reading/Native-Mixed.app`，影片配置與Windows S1 ZIP仍保留。267份src及3份必要交付hash不變，未重建Rust；精確resolved paths、owner、symlink／lsof、保留例外及free前後在 `.local/verification/slint-mixed-reading/cleanup.json`。filesystem available 237879652352→242873319424 bytes只記觀測差額，不全歸因於清理；原生正反畫面、未整合source／worktree及其他聊天產物保留。
+
+2026-11-09：重讀原始JPEG、確認兩份曾被判成不同呈現的PNG逐byte相同並解碼文字像素後，撤回先前「cache／snapshot漏字」推論，沒有為內嵌輸出改產品繪圖。既有binary補驗macOS座標推文定位／150%站端復原，以及完全不代按或合成前景的手動更新／51行／6未讀／查看／暫停51.57秒零新命令／Quit。舊AX與焦點負向保留，完整鍵盤／IME／其他平台不由基本按鈕路徑替代。原始證據與範圍見 [原型紀錄](slint-prototype.md#s4-原始影像複核與手動原生更新2026-11-09)。沒有重建Rust或新增App副本，target仍12KiB；S0–S8持續，S9未執行。
