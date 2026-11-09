@@ -10,6 +10,9 @@ import tarfile
 SYSTEM = ('/System/Library/', '/usr/lib/')
 LOADS = {'LC_LOAD_DYLIB', 'LC_LOAD_WEAK_DYLIB', 'LC_REEXPORT_DYLIB',
          'LC_LOAD_UPWARD_DYLIB', 'LC_LAZY_LOAD_DYLIB'}
+# Full source exports include checked-out submodules (libjxl is about 123 MiB).
+# Notice extraction has its own much smaller per-file and aggregate limits.
+SOURCE_ARCHIVE_LIMIT = 128 * 1024 * 1024
 
 
 def run(*command):
@@ -118,7 +121,7 @@ def closure(executable, allowed):
 
 def source_notices(source, archive, destination):
     expected = next(c['checksumValue'] for c in source['checksums'] if c['algorithm'] == 'SHA256')
-    if archive.stat().st_size > 32 * 1024 * 1024 or digest(archive) != expected:
+    if archive.stat().st_size > SOURCE_ARCHIVE_LIMIT or digest(archive) != expected:
         raise ValueError('Source archive digest/size mismatch')
     destination.mkdir()
     records = []
@@ -129,6 +132,7 @@ def source_notices(source, archive, destination):
             if not member.isfile() or not parts or '..' in parts or member.name.startswith('/'):
                 continue
             if not (parts[-1].casefold().startswith(('license', 'licence', 'copying', 'copyright', 'notice'))
+                    or parts[-1].casefold() in ('ftl.txt', 'gplv2.txt')
                     or any(p.casefold() in ('licenses', 'licences') for p in parts[:-1])):
                 continue
             if member.size > 128 * 1024:
@@ -153,13 +157,101 @@ def source_notices(source, archive, destination):
     return records
 
 
-def copy_notices(records, destination, source_archives=None, *, executable=None):
+def external_sources(records, executable, manifest):
+    """Admit source-built dylibs through bounded local hashes, never a fake keg."""
+    if manifest is None:
+        return [], set()
+    manifest = manifest.resolve(strict=True)
+    if not 0 < manifest.stat().st_size <= 2 * 1024 * 1024:
+        raise ValueError('Invalid runtime source manifest size')
+    root = manifest.parent
+    data = json.loads(manifest.read_text(encoding='utf-8'))
+    if not isinstance(data, dict):
+        raise ValueError('Expected a runtime source manifest object')
+    packages = data.get('packages')
+    if data.get('schema') != 1 or not isinstance(packages, list) or not 0 < len(packages) <= 128:
+        raise ValueError('Expected runtime source manifest schema 1 with bounded packages')
+
+    def local_file(value):
+        if not isinstance(value, str) or Path(value).is_absolute() or '..' in Path(value).parts:
+            raise ValueError('Invalid runtime source input path')
+        path = (root / value).resolve(strict=True)
+        if not path.is_file() or not path.is_relative_to(root):
+            raise ValueError('Runtime source input escapes its manifest directory')
+        return path
+
+    def checked(value, maximum):
+        if (not isinstance(value, dict) or not isinstance(value.get('sha256'), str)
+                or not re.fullmatch(r'[0-9a-f]{64}', value['sha256'])):
+            raise ValueError('Expected a SHA256-bound runtime source input')
+        path = local_file(value.get('file'))
+        if not 0 < path.stat().st_size <= maximum:
+            raise ValueError('Runtime source input exceeds size limit')
+        if digest(path) != value['sha256']:
+            raise ValueError('Runtime source input hash mismatch: ' + str(path))
+        return path
+
+    accepted, covered, labels = [], set(), set()
+    for package in packages:
+        if not isinstance(package, dict):
+            raise ValueError('Expected a runtime source package object')
+        label, source = package.get('package'), package.get('source')
+        if not isinstance(label, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.+-]{0,127}', label):
+            raise ValueError('Invalid runtime source package label')
+        if label in labels:
+            raise ValueError('Duplicate runtime source package')
+        labels.add(label)
+        if not isinstance(source, dict) or any(
+                not isinstance(source.get(key), str) or not 0 < len(source[key]) <= 4096
+                for key in ('name', 'versionInfo', 'downloadLocation')):
+            raise ValueError('Expected explicit runtime source identity')
+        checksums = source.get('checksums')
+        if not isinstance(checksums, list) or len(checksums) != 1 or not isinstance(checksums[0], dict) or checksums[0].get('algorithm') != 'SHA256':
+            raise ValueError('Expected one runtime source archive SHA256')
+        archive = checked({'file': package.get('archive'), 'sha256': checksums[0].get('checksumValue')},
+                          SOURCE_ARCHIVE_LIMIT)
+        receipt = checked(package.get('build_record'), 2 * 1024 * 1024)
+        build = json.loads(receipt.read_text(encoding='utf-8'))
+        if not isinstance(build, dict) or build.get('status') != 'completed' or build.get('exit') != 0:
+            raise ValueError('Runtime source build did not complete successfully')
+        if build.get('source_archive_sha256') != checksums[0]['checksumValue']:
+            raise ValueError('Runtime build record does not match its source archive')
+        libraries = package.get('libraries')
+        if not isinstance(libraries, list) or len(libraries) > 128:
+            raise ValueError('Invalid runtime source library list')
+        kind = package.get('kind', 'runtime')
+        if kind not in ('runtime', 'build-input') or (kind == 'runtime') != bool(libraries):
+            raise ValueError('Runtime owners and source-only build inputs must be explicit')
+        owned = []
+        for library in libraries:
+            path = checked(library, 128 * 1024 * 1024)
+            if path == executable or 'Cellar' in path.parts or path not in records:
+                raise ValueError('Source manifest library is not an external reachable runtime')
+            if path in covered:
+                raise ValueError('Duplicate runtime source ownership')
+            if records[path]['sha256'] != library['sha256']:
+                raise ValueError('Source manifest does not match inspected runtime')
+            if not isinstance(build.get('runtime_outputs'), dict) or build['runtime_outputs'].get(
+                    library['file']) != library['sha256']:
+                raise ValueError('Runtime build record does not match its output library')
+            covered.add(path)
+            owned.append(path)
+        accepted.append({'package': label, 'source': source, 'archive': archive,
+                         'build_record': receipt, 'build_record_sha256': package['build_record']['sha256'],
+                         'libraries': owned, 'kind': kind})
+    return accepted, covered
+
+
+def copy_notices(records, destination, source_archives=None, *, executable=None,
+                 source_manifest=None):
     """Keep the installed formula, source hashes, receipt, SBOM and actual notices.
 
     This inventory is not a declaration of distribution readiness or a substitute
     for corresponding-source delivery. The caller records that separate gate.
     """
-    unknown = [path for path in records if path != executable and 'Cellar' not in path.parts]
+    external, covered = external_sources(records, executable, source_manifest)
+    unknown = [path for path in records if path != executable and 'Cellar' not in path.parts
+               and path not in covered]
     if unknown:
         raise ValueError('Runtime needs explicit source/notice provenance: '
                          + ', '.join(str(path) for path in unknown))
@@ -201,19 +293,32 @@ def copy_notices(records, destination, source_archives=None, *, executable=None)
         packages[keg] = {'package': label, 'source': source, 'files': notices,
                          'notice_files_found': True, 'notices_from_archive': not found}
     inventory = list(packages.values())
+    for package in external:
+        target = destination / ('source-built-' + package['package'])
+        notices = source_notices(package['source'], package['archive'], target)
+        shutil.copy2(package['build_record'], target / 'build-record.json')
+        if digest(target / 'build-record.json') != package['build_record_sha256']:
+            raise ValueError('Runtime build record changed during notice collection')
+        inventory.append({'package': package['package'], 'source': package['source'],
+                          'kind': package['kind'], 'libraries': [str(p) for p in package['libraries']],
+                          'files': notices, 'notice_files_found': True, 'notices_from_archive': True,
+                          'build_record_sha256': package['build_record_sha256']})
     (destination / 'inventory.json').write_text(json.dumps(inventory, indent=2) + '\n')
     return inventory
 
 
-def install(executable, binary, frameworks, notices, allowed, source_archives=None):
+def install(executable, binary, frameworks, notices, allowed, source_archives=None, *,
+            source_manifest=None):
     records = closure(executable, allowed)
     inventory = copy_notices(records, notices, source_archives,
-                             executable=executable.resolve(strict=True))
+                             executable=executable.resolve(strict=True), source_manifest=source_manifest)
     frameworks.mkdir()
     mapping = {}
     for original in records:
         out = binary if original == executable.resolve() else frameworks / original.name
         shutil.copy2(original, out)
+        if digest(out) != records[original]['sha256']:
+            raise ValueError('Runtime input changed during staging: ' + str(original))
         out.chmod(0o755)
         mapping[original] = out
     manifest = []

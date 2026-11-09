@@ -21,6 +21,7 @@ import bundle_common
 import bundle_macos
 import bundle_release
 import native_runtime_macos as runtime
+from slint_candidate_common import inspect_build_record
 
 ROOT = Path(__file__).resolve().parent.parent
 NAME = 'PTTStella Slint Candidate'
@@ -28,7 +29,8 @@ IDENTIFIER = 'io.github.yam276.pttstella.slint.candidate'
 TARGETS = {'arm64': 'aarch64-apple-darwin', 'x86_64': 'x86_64-apple-darwin'}
 
 
-def stage_runtime(executable, contents, skia_license, allowed, source_archives=None):
+def stage_runtime(executable, contents, skia_license, allowed, source_archives=None, *,
+                  source_manifest=None):
     """Shared native Slint/libmpv payload for the main app and player probe."""
     if not skia_license.is_file() or not 0 < skia_license.stat().st_size <= 4 * 1024 * 1024:
         raise ValueError('The built Skia license is required and must be bounded')
@@ -39,8 +41,9 @@ def stage_runtime(executable, contents, skia_license, allowed, source_archives=N
     binary.parent.mkdir(parents=True)
     resources = contents / 'Resources'
     resources.mkdir(exist_ok=True)
+    options = {'source_manifest': source_manifest} if source_manifest is not None else {}
     manifest = runtime.install(executable, binary, contents / 'Frameworks',
-                               resources / 'NativeRuntimeNotices', allowed, source_archives)
+                               resources / 'NativeRuntimeNotices', allowed, source_archives, **options)
     if not any(Path(entry['file']).name.startswith('libmpv.') for entry in manifest['files']):
         raise ValueError('Full native-video candidate requires a bundled libmpv')
     for entry in manifest['files']:
@@ -67,13 +70,22 @@ def inspect_profile(binary):
     return profile
 
 
-def bundle(executable, skia_license, output, allowed, source_archives=None):
+def bundle(executable, skia_license, output, allowed, source_archives=None, *, source_manifest=None,
+           build_record=None):
     if sys.platform != 'darwin':
         raise ValueError('Native macOS packaging tools are required')
     # Each candidate gets a new owned directory. Existing deliveries, evidence,
     # and even empty caller directories are preserved before any tool is run.
     output.mkdir(parents=True, exist_ok=False)
     version = tomllib.loads((ROOT / 'Cargo.toml').read_text(encoding='utf-8'))['package']['version']
+    build = None
+    if build_record is not None:
+        build_arch = runtime.run('lipo', '-archs', str(executable)).strip()
+        if build_arch not in TARGETS:
+            raise ValueError('Expected one supported macOS build architecture')
+        build = inspect_build_record(build_record, executable, TARGETS[build_arch])
+        if build['version'] != version:
+            raise ValueError('Candidate build and package version differ')
     numeric_version = version.split('-', 1)[0].split('+', 1)[0]
     if not re.fullmatch(r'\d+\.\d+\.\d+', numeric_version):
         raise ValueError('Cargo version must have three numeric components')
@@ -82,7 +94,9 @@ def bundle(executable, skia_license, output, allowed, source_archives=None):
         app = stage / 'app' / (NAME + '.app')
         contents = app / 'Contents'
         source_hash = runtime.digest(executable)
-        binary, arch, manifest = stage_runtime(executable, contents, skia_license, allowed, source_archives)
+        options = {'source_manifest': source_manifest} if source_manifest is not None else {}
+        binary, arch, manifest = stage_runtime(executable, contents, skia_license, allowed,
+                                              source_archives, **options)
         if (runtime.digest(executable) != source_hash
                 or next(entry['original_sha256'] for entry in manifest['files']
                         if entry['file'] == 'MacOS/native') != source_hash):
@@ -110,10 +124,14 @@ def bundle(executable, skia_license, output, allowed, source_archives=None):
             '完整對應原始碼交付、乾淨機器／其他架構／功能矩陣及效能仍待驗收。\n'
             '此包使用 ad-hoc 簽名，未公證；安裝時勿覆蓋正式 PTTStella。\n', encoding='utf-8')
         profile = inspect_profile(binary)
+        packaging_ref = runtime.run('git', '-C', str(ROOT), 'rev-parse', 'HEAD').strip()
+        packaging_dirty = bool(runtime.run('git', '-C', str(ROOT), 'status', '--porcelain').strip())
         report = {'status': 'bundled', 'version': version, 'architecture': arch,
                   'target': TARGETS[arch], 'features': 'native-player-probe',
-                  'source_ref': runtime.run('git', '-C', str(ROOT), 'rev-parse', 'HEAD').strip(),
-                  'source_dirty': bool(runtime.run('git', '-C', str(ROOT), 'status', '--porcelain').strip()),
+                  'source_ref': build['source_ref'] if build is not None else packaging_ref,
+                  'source_dirty': build.get('source_dirty', True) if build is not None else packaging_dirty,
+                  'packaging_ref': packaging_ref, 'packaging_dirty': packaging_dirty,
+                  'build': build,
                   'source_executable_sha256': source_hash,
                   'profile': profile, 'signing': 'ad_hoc', 'notarized': False,
                   'native_acceptance': 'not_run', 'source_delivery': manifest['source_delivery'],
@@ -149,9 +167,12 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--allow-prefix', type=Path, action='append', required=True)
     parser.add_argument('--source-archives', type=Path)
+    parser.add_argument('--source-manifest', type=Path)
+    parser.add_argument('--build-record', type=Path)
     args = parser.parse_args()
     print(json.dumps(bundle(args.executable.resolve(strict=True), args.skia_license.resolve(strict=True),
-                            args.output.resolve(), args.allow_prefix, args.source_archives), indent=2))
+                            args.output.resolve(), args.allow_prefix, args.source_archives,
+                            source_manifest=args.source_manifest, build_record=args.build_record), indent=2))
 
 
 if __name__ == '__main__':

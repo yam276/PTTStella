@@ -9,6 +9,39 @@ import bundle_slint_macos as bundle
 
 
 class SlintCandidateBundleTests(unittest.TestCase):
+    def test_mismatched_build_record_cannot_stage_or_publish(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            executable = root / 'native'
+            executable.write_bytes(b'synthetic executable')
+            record = root / 'build.json'
+            record.write_text(json.dumps({'target': 'x86_64-apple-darwin',
+                'features': 'native-player-probe', 'build_exit': 0, 'exe_sha256': '0' * 64,
+                'source_ref': 'a' * 40, 'version': '0.5.0-dev.3'}))
+            output = root / 'new'
+            with mock.patch.object(bundle.sys, 'platform', 'darwin'), \
+                    mock.patch.object(bundle.runtime, 'run', return_value='x86_64\n'), \
+                    mock.patch.object(bundle, 'stage_runtime') as stage:
+                with self.assertRaisesRegex(ValueError, 'matching full-candidate build record'):
+                    bundle.bundle(executable, root / 'license', output, [], build_record=record)
+                stage.assert_not_called()
+            self.assertEqual(list(output.iterdir()), [])
+
+    def test_explicit_source_manifest_reaches_the_shared_runtime_owner(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            license = root / 'LICENSE_SKIA'
+            license.write_text('synthetic license')
+            source_manifest = root / 'runtime-sources.json'
+            manifest = {'files': [{'file': 'MacOS/native'}, {'file': 'Frameworks/libmpv.2.dylib'}]}
+            with mock.patch.object(bundle.runtime, 'run', return_value='x86_64\n'), \
+                    mock.patch.object(bundle.runtime, 'install', return_value=manifest) as install, \
+                    mock.patch.object(bundle.bundle_common, 'copy_licenses',
+                                      side_effect=lambda dest, *args, **kwargs: dest.mkdir()):
+                bundle.stage_runtime(root / 'native', root / 'Contents', license, [],
+                                     source_manifest=source_manifest)
+            self.assertEqual(install.call_args.kwargs['source_manifest'], source_manifest)
+
     def test_existing_candidate_and_evidence_are_preserved_before_tools_run(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
