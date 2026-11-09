@@ -22,6 +22,7 @@ cargo run --locked --features desktop --bin pttstella
 | --- | --- |
 | 文件 | `python tooling/check.py docs` |
 | Rust 核心 | `python tooling/check.py core` |
+| Slint 依賴／feature | `python tooling/verify_slint_dependencies.py --output <新證據目錄>`、`python -m unittest discover -s tooling -p test_verify_slint_dependencies.py`；檢查四 target／兩配置的選用依賴，不代表編譯或原生驗收 |
 | 桌面介面 | `cargo test --locked --features desktop --lib --bin pttstella --test multi_instance`、`cargo clippy --locked --features desktop --all-targets -- -D warnings`、`node --test tooling/test_*.mjs` |
 | Windows 原生視窗 | `python tooling/check.py desktop` |
 | 打包或發佈 | `python -m unittest discover -s tooling -p 'test_*.py'`、文件檢查、`actionlint .github/workflows/*.yml`，再以 GitHub Actions 的 `verify` 模式核對各平台產物。 |

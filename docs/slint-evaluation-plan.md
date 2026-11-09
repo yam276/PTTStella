@@ -10,7 +10,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 | 階段 | 目前已有 | 尚須完成 |
 | --- | --- | --- |
-| S0 | 共用 Rust 服務、獨立 Slint 入口及可編譯提交序列 | 完整功能案例對照、四 target 依賴與最終基準重跑 |
+| S0 | 共用 Rust 服務、獨立 Slint 入口及可編譯提交序列；四 target 的一般／播放器兩配置 Cargo 依賴 gate | 完整功能案例對照、各平台連結／runtime 依賴與最終基準重跑 |
 | S1 | 格線／雙色字／縮放、macOS 原生輸入的分立證據 | 候選窗與跨螢幕 DPI、可及性、Windows／Linux 原生 |
 | S2 | 共用 Connection、登入／保活、站點表單、嚴格切站／雙編碼 bytes | 同 endpoint 編碼切換、預設站重啟／不登入、完整信任／vault 原生矩陣 |
 | S3 | 選取、輸出、浮球／選單及原生互動的分立證據 | 全部快捷鍵／pointer／modal／可及性操作矩陣 |

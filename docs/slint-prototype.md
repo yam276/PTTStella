@@ -1449,3 +1449,18 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tooling \
 本批 driver source SHA-256 `6a6ff448ca4ebb2751ce089bc7687f743742b05d8785ecebbc0518d446699885`；Rust lib368及multi-instance10 passed、5個明示 ignored，example Clippy `-D warnings` 與fmt通過。初期 fixture 字級超過契約、閱讀 footer 缺指令，以及公開版遇到後加欄位的失敗原樣保留；先修正自製 fixture 的有效範圍，再將真實格式差異列為回退限制，沒有修改生產 decoder 或刪掉後加資料來通過。
 
 驗收後已清掉三個可重建 driver、獨立 target/release（Cargo宣告1.8GiB）及兩個臨時 checkout；來源／patch、報告與唯一失敗證據保留，詳見同批 `cleanup/ledger.json`。本批只證明檔案／schema／交易層；完整前端、產品路徑／vault、鎖逾時／容量／清空屏障的跨版本等效、Windows／Linux、S8安裝回退與效能仍需各自證據。完整S0–S8保持active，S9未執行。
+
+## S0 四目標 Slint 選用依賴 gate（2026-11-09）
+
+[依賴檢查工具](../tooling/verify_slint_dependencies.py) 對 Windows x64、macOS arm64／x64、Linux x64，分別解析 `slint-research` 與含主視窗原生播放器的 `native-player-probe`，共8格。每格用 locked／no-default-features 的 `cargo tree` 讀取 normal／build dependencies，要求產品、Slint、winit backend 與 Skia renderer；播放器配置另要求 libmpv2-sys。選入 Dioxus、Wry、Tao、WebView2、WebKitGTK／JavaScriptCore Rust bindings、空樹、缺 backend 或未知輸出均失敗。首次失敗時保存已執行格及 failed report，不以部分成功算整體通過；既有 output 不被覆寫。
+
+來源 `6615304` 加新工具的實跑8格全部passed。Windows兩配置各489／490個不同package name，macOS arm64為481／482、x64為483／484，Linux為561／562；各名的全部版本及原始 tree hash保留。五項工具負向自測通過，另包含「Cargo exit0但只有產品根節點」必須留下failed report。完整樹與命令在 `.local/verification/slint-four-target-dependencies/accepted-final/`，此批沒有Rust編譯／App／臨時checkout；Cargo解析會更新小型target metadata，主target為16KiB、前批獨立target為12KiB，沒有debug／release profile。
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 tooling/verify_slint_dependencies.py \
+  --output <NEW_OUTPUT_DIR>
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tooling \
+  -p test_verify_slint_dependencies.py -v
+```
+
+這是選用Cargo依賴的證據，沒有證明四架構可編譯、native library import／installer prerequisite／實際runtime。OS間接載入WebKit、mpv的各平台runtime與授權／來源交付仍沿用S5／S8各自的驗收。初步4份未去重樹在確認與最終播放器四格的package／version集合相同後刪除，只保留小型來源／hash清單；最終8份去重樹保留，避免把相同依賴展開上百次當成必要證據。S0其餘案例／平台、S1–S8及S9邊界不變。
