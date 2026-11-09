@@ -1240,3 +1240,34 @@ macOS arm64 實際 CUA 有三個分立檢查點。第一包發現原型 Tools �
 驗證：Slint release lib／bin／multi_instance 合計 448 passed、6 ignored；Dioxus 同組合計 498 passed、6 ignored；兩個 feature 的 all-target Clippy、fmt、native-video all-target check、383 組 JS 回歸及文件 gate 通過。Dioxus Clippy 的既有第三方 block 0.1.6 future-incompat 提示另記，不是本專案警告。未新增 Windows／Linux／Intel 原生結果，未驗 OS IME 候選或完整資料回退，沒有因繁中貼上通過宣稱舊草稿末字異常已修復。
 
 本輪 exact cleanup、程序與來源重放記錄在 `.local/verification/slint-bookmarks/`。`cleanup-owned.json` 逐項列出移除的 30 個路徑，包含兩個已被取代的 App、冗餘成功輸出及已封存的三份 RTK 原 log；檢查 resolved path、symlink、UID、內容與開啟 handle 後移除。du 為 132,316 KiB；filesystem free 243,219,046,400 → 243,354,611,712 bytes，兩者分開，不將並行釋放空間全歸因本輪。最新必要 App、原生資料、成功與獨特失敗證據保留。debug／release profiles 留供 active goal 後續共用；worktree 尚未整合，亦保留。完整 S0–S8 goal 繼續；S9 未切換、整合或發佈。
+
+
+## S4／S7 快速前往與最近看板（2026-11-09）
+
+`576f40e4d28d2b2fa8ed70b6195664a351dc61c6` 將 [最近看板狀態](../src/recent_boards/session.rs) 及 [待寫佇列](../src/recent_boards/writer.rs) 移到 desktop-services。Dioxus 保留 Files 的 enqueue adapter；packet 直接序列化同一 Snapshot，原五個狀態／writer 測試隨擁有者移動。兩個前端共用 Session 確認的 BoardVisit、generation／serial 去重、最多 20 筆、4 KiB 格式、最新待寫合併，以及失敗後仍保留的清除屏障。
+
+`42e86a9e95435f7fd1ab6a83dbebdf8ca8177987` 新增 [原生快速前往](../src/bin/slint_research/destination/mod.rs)、[視窗](../src/bin/slint_research/destination.slint) 及 [最近看板的原生排程](../src/bin/slint_research/destination/recent.rs)。浮球導覽、⌘K／Ctrl+K、最近項目與書籤前往均只建立本機草稿；選取最近項目不送鍵，書籤前往跟隨保存的 identity，未提交的目的地修改不改變交接目標。非組字的明確 Enter／按鈕才要求開始，超過板名限制的草稿保留給 Rust 拒絕，總長仍在 trim 前限制 256 bytes。取消清空草稿；舊 request ID 的 receipt 不會關閉新視窗。
+
+原生 ArticleSession 的同一 receipt 欄位接納 Destination，沒有第二個 UI 命令 queue 或送鍵 task。沒有 article scope 的選單／列表不能撤銷這種 receipt；成功只表示開始，實際到達仍讀 Session 的 Progress。立即 Reached 即使先於 receipt 被觀察，也會在收取 receipt 後重新核對，不留下永久 busy。切站、手動操作、取消與晚到結果維持原 operation／generation 的隔離，Session 的每步 5 秒／全程 30 秒與辨識流程不變。原生輔助窗的 Enter／Space／Esc／Tab 實體邊緣亦交給既有 modal hold guard，避免關窗後同一按鍵續送 BBS。
+
+最近資料在 event loop 啟動前由已 join 的 blocking worker 載入。保存與互動式 picker 分離，只有一個 native file worker 及共用 Queue 中的一份最新待寫資料。thread、結果槽與 UI waiter 分別有 owner；正常退出先 drain，backend 錯誤出口也會 join／收取，沒有 detached 保存。到訪觀察只複製小型 BoardVisit，不再複製 terminal Frame；隱藏的導覽窗不重建 UI model。保存失敗只改最近清單的訊息，不把已成功切板改判失敗，也不自動重送失敗 snapshot。
+
+`.local/verification/slint-destination/component-audited/` 的兩個完整 App 使用普通 CLI SHA-256 `bd8e8dab27c30ec2d77e5e89602e0c48092e42b64c835da57957f2ead5c6b733`，來源為 `576f40e` 加 `source.patch`，patch SHA-256 `aabced1b8557db73b5e9211f0311fef29d78bc7c62587c1894e0582c8e8a4f98`。獨立嚴格 peer 核對既有完整流程：
+
+- boards：未送出的取消、過長／外站 URL 拒絕且草稿保留、組字期間不提交、Enter 到 Stella、同板立即 Reached 而零額外鍵、最近項目只填草稿、到 Other、最近順序、主檔及備份清空、備份失敗後原檔不變且訊息可見、明確重試、書籤編輯目的地後仍交接保存 identity、Beta 工作取消及 3.3 秒晚到畫面不續送。最後明確建立一份待收集工作及一份待寫 clear；不再 await 就要求退出，關窗後核對最新 clear 的結果已收取、兩檔均空、receipt／視窗／worker／pending 均釋放。
+- articles：先後由 AID 及真實語法的 PTT URL 開啟兩篇，保留 Q 資訊核對等完整步驟；第三篇不存在時停止，只有測試中明確的使用者空白鍵才回到列表。第四篇送出 Q（input epoch=22）後取消，延遲資訊回來不再續送。
+
+兩個 App 都 Close acknowledged、零媒體 HTTP 且 worker joined。相同普通 CLI 另通過原有完整文章取頁、文章遮罩／輸出，以及三程序書籤管理／新程序斷線讀取／退出保存回歸。合成長文原有延遲未修改；程序 elapsed 只是驗收紀錄，沒有當成 S8 效能量測。來源與結果在暫停／繼續後再次核對 hash，沒有重新啟動已完成的程序。
+
+```sh
+PTTSTELLA_SLINT_DESTINATION_PROBE=boards target/release/pttstella-slint --probe-media --verify-media NEW_BOARDS_DIR
+PTTSTELLA_SLINT_DESTINATION_PROBE=articles target/release/pttstella-slint --probe-media --verify-media NEW_ARTICLES_DIR
+```
+
+macOS arm64 的 `Native-Destination.app` input 同為上述 CLI，ad-hoc signed SHA-256 為 `69e3be7e414918c0acc863f18f22917b4b37d982c702a8f2e1ab6510b4854948`。實際 CUA 從 root 欄位 ⌘K 打開並聚焦草稿，貼 Stella、按住 Return 700ms，主畫面顯示已到達；再次明確送同板立即到達且沒有舊 busy，再以按鈕前往 Other。原生 popup 顯示 Other／Stella 的順序，選 Other 只填草稿；明確清除後顯示主檔與備份已清除。最後輸入 Beta、按前往後立即 ⌘Q，後續 App inventory 已無程序，嚴格 peer Close ACK、所有 HTTP 零且 joined；獨立 JSON 核對兩份檔案都為 version 1 空清單，close marker 證明 receipt、視窗及 recent worker 已釋放。LaunchServices exit code 未直接觀測。700ms hold 沒有量到實際 repeat event 數，不據此宣稱原生 IME／重複鍵矩陣通過；OS AID／URL、書籤 Go 與其他平台也未以這份 OS 包驗收。
+
+Rust release Slint lib／bin／multi_instance 合計 453 passed、6 ignored；Dioxus 同組合計 498 passed、6 ignored；recent suite 11 passed。兩 feature 的 all-target Clippy、fmt、native-video host all-target check 與 383 組 JS 通過；Dioxus 既有 block 0.1.6 future-incompat note 保留。原生型別檢查時的 private diagnostic getter 與 collapsible-if 編譯拒絕原 log 已封存，沒有列為 runtime 通過。
+
+本輪 `cleanup-owned.json` 列出移除的 13 個 exact paths：被較完整案例取代的第一輪成功輸出／來源副本及已封存的 RTK 原 log。先核對 resolved path、symlink、UID、內容及 lsof；du 264 KiB，filesystem free 187,958,575,104 → 187,958,853,632 bytes，兩者分開，不將其他任務釋放量歸入。最新 App、完整元件／OS／直接 consumer 的證據與唯一失敗 log 保留。active goal 仍會使用 debug／release profiles，worktree 尚未整合，均保留。
+
+目前／列表文章收藏仍須接原生 Acquisition／FromList 的全篇及身分核對；推文導覽／更新、混合 Live、四架構原生／IME、資料回退與效能仍未結案。完整 S0–S8 goal active，S9 未切換、整合或發佈。
