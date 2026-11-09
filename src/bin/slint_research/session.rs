@@ -664,7 +664,7 @@ pub fn mount(
         // rather than formatting both catalogs for every screen update.
         let mut message_cache: Option<(pttstella::i18n::Language, String, String)> = None;
         while let Some(ui) = weak.upgrade() {
-            let (message, can_reconnect, frame) = {
+            let (message, can_reconnect, frame, attention) = {
                 let view = updates.borrow_and_update();
                 let id = FrameId {
                     generation: view.generation,
@@ -686,8 +686,14 @@ pub fn mount(
                     && connecting.get().is_none()
                     && (live || view.generation == 1)
                     && matches!(view.phase, Phase::Disconnected | Phase::Error);
-                (view.message.clone(), can_reconnect, frame)
+                (
+                    view.message.clone(),
+                    can_reconnect,
+                    frame,
+                    view.phase != Phase::Connected,
+                )
             };
+            ui.set_connection_attention(attention || connecting.get().is_some());
             if connecting.get().is_none() {
                 let language = pttstella::i18n::application().language();
                 if message_cache
@@ -695,10 +701,9 @@ pub fn mount(
                     .is_none_or(|(l, raw, _)| *l != language || raw != &message)
                 {
                     let localized = crate::locale::connection_status(&message);
-                    message_cache = Some((language, message, localized));
-                }
-                if let Some((_, _, localized)) = &message_cache {
+                    ui.set_connection_status(localized.as_str().into());
                     ui.set_result(localized.as_str().into());
+                    message_cache = Some((language, message, localized));
                 }
             }
             ui.set_can_reconnect(can_reconnect);
@@ -737,6 +742,8 @@ fn request_connection(
         Ok(()) => {
             connecting.set(Some(generation.saturating_add(advances)));
             ui.set_result(pttstella::msg!("status-connecting").into());
+            ui.set_connection_status(pttstella::msg!("status-connecting").into());
+            ui.set_connection_attention(true);
             ui.set_switching_station(true);
             ui.set_can_reconnect(false);
             ui.invoke_keep_alive_changed();

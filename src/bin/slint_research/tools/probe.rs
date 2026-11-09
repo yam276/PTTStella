@@ -128,11 +128,11 @@ async fn verify(
         !ui.get_tools_categories()
             .row_data(1)
             .is_some_and(|v| v.enabled)
-            && !ui
+            && ui
                 .get_tools_categories()
                 .row_data(4)
                 .is_some_and(|v| v.enabled),
-        "unregistered dialog owners were exposed",
+        "bookmark category or always-available license entry is incorrect",
     )?;
     require(
         image == ui.get_terminal_image(),

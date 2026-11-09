@@ -1,6 +1,6 @@
 //! Native tool chrome; terminal, output, keyboard and session owners admit actions.
 pub mod probe;
-use crate::{SelectionRect, TerminalWindow, ToolItem, output::Output};
+use crate::{EditorState, SelectionRect, TerminalWindow, ToolItem, output::Output};
 use pttstella::floating_tools::{
     State,
     geometry::{Point, Rect, Viewport},
@@ -40,6 +40,8 @@ enum Command {
     BookmarkCancel,
     Destination,
     StopDestination,
+    Drafts,
+    About,
 }
 struct PressedAction {
     index: i32,
@@ -324,19 +326,24 @@ impl Tools {
                     ),
                 ]);
             }
-            1 if ui.get_bookmarks_available() => {
-                result.push((
-                    Command::Bookmarks,
-                    pttstella::msg!("bookmarks-title"),
-                    !ui.get_bookmarks_capturing(),
-                ));
-                result.push((
-                    Command::BookmarkCurrent,
-                    pttstella::msg!("bookmarks-current"),
-                    ui.get_bookmarks_current_available(),
-                ));
-                if ui.get_bookmarks_capturing() {
-                    result.push((Command::BookmarkCancel, pttstella::msg!("cancel"), true));
+            1 => {
+                if ui.get_bookmarks_available() {
+                    result.push((
+                        Command::Bookmarks,
+                        pttstella::msg!("bookmarks-title"),
+                        !ui.get_bookmarks_capturing(),
+                    ));
+                    result.push((
+                        Command::BookmarkCurrent,
+                        pttstella::msg!("bookmarks-current"),
+                        ui.get_bookmarks_current_available(),
+                    ));
+                    if ui.get_bookmarks_capturing() {
+                        result.push((Command::BookmarkCancel, pttstella::msg!("cancel"), true));
+                    }
+                }
+                if ui.global::<EditorState>().get_available() {
+                    result.push((Command::Drafts, pttstella::msg!("draft-open"), true));
                 }
             }
             2 => {
@@ -402,14 +409,17 @@ impl Tools {
         if category == 4 && ui.get_filters_available() {
             result.push((Command::Filters, pttstella::msg!("filters-title"), true));
         }
+        if category == 4 {
+            result.push((Command::About, pttstella::msg!("settings-about"), true));
+        }
         result.retain(|(_, label, _)| !label.is_empty());
         result
     }
     fn category_available(ui: &TerminalWindow, index: usize) -> bool {
         match index {
             0 | 2 | 3 => true,
-            1 => ui.get_bookmarks_available(),
-            4 => ui.get_settings_available() || ui.get_filters_available(),
+            1 => ui.get_bookmarks_available() || ui.global::<EditorState>().get_available(),
+            4 => true,
             _ => false,
         }
     }
@@ -614,6 +624,8 @@ impl Tools {
             Command::BookmarkCancel => ui.invoke_bookmarks_capture_cancel(),
             Command::Destination => ui.invoke_destination_show(),
             Command::StopDestination => ui.invoke_destination_stop(),
+            Command::Drafts => ui.global::<EditorState>().invoke_action(0),
+            Command::About => ui.invoke_about_show(),
         }
     }
     fn key(&self, key: i32, repeat: bool) {

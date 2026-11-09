@@ -43,6 +43,16 @@ macOS 原生案例驗證獨立 root、fork child、同名 decoy 排除、CPU clo
 
 ## 接續正式比較的必要條件
 
+2026-11-10 接續修正：正常Live及完整服務benchmark現在使用同一個產品shell，隱藏常駐的原型標題、媒體開關、站點selector、輸出、Vim／滑鼠及footer列；沒有關閉服務。這個無文章控制列的終端viewport已到1040×740、格線1040×624。閱讀中的載入／更新／推文等情境控制仍保留，其他工作負載要各自核對實際viewport。縮放、擷取、連線與設定沿用浮球；補上收藏分類的草稿入口及設定分類的Slint授權面板。有效站端scope的草稿新入口仍待完整操作矩陣，不能只由掛接宣稱已驗。
+
+連線狀態另有來自Connection phase的attention欄位，不由翻譯字串推測；正常連線訊息不常駐遮住格線，斷線／錯誤／警告浮層保持可見。操作通知可明確關閉，純連線狀態不顯示無效關閉鈕；同一連線訊息的後續frame不再覆蓋本機操作結果。浮層不參與終端版面，長訊息可捲動，沒有改PNG、原始格線或輸入准入。完整成功淡出、通知焦點、原生IME及全功能操作矩陣仍在S3／S7範圍內待驗。
+
+新增 `--verify-shell NEW_DIRECTORY`，以同一16項owner及嚴格peer驗證完整viewport、授權面板／Escape／焦點、浮球縮放選擇、拒絕未選行的實際匯出錯誤、通知及明確斷線；使用toolkit回呼／synthetic foreground，不能當OS輸入。最終完整候選native SHA-256 `c9413d395939e76dfd76cc31d16cc7b8559232ee7d0e9addb4a75c7c1301c0d3` 的CPU／GL兩案、兩種浮球及18影片＋9閱讀＋2混合共33案通過。固定960×576的source PNG仍逐byte等於上一輪，SHA-256 `294df2bbe92bff771a2fc36480935f3c10904547f9c89850032e6cfcf49e4e37`。
+
+macOS arm64最終封裝另以CUA實見浮球→設定→Slint授權、Escape後AX焦點回到終端、明確斷線後持續狀態且無無效X，以及⌘Q／exit0／Close ACK；來源為 `.local/verification/slint-shell-chrome-final/native-accepted.json`。前一份native hash `7d9c9ba1…` 的實際125%／100%、面板捲動及第24行有證據，但監督程序在240秒逾時終止該實例，exit -15，未列為正常退出。原生觀察因此促成移除純連線狀態的無效X；舊負向保留。最終退出的OS IMK mach-port訊息仍保留，未用這次結果宣稱IME正常或異常已修。
+
+本批release Rust373＋83＋10通過、6個既有明確ignored，兩配置全target Clippy、Python126及fmt通過。actionlint未安裝、workflow來源未修改，該工具檢查為not_ready；其他架構／乾淨機器／對應來源與完整效能仍未由此包證明。最終App／ZIP／DMG位於同批 `package-current/`；先前包與本批編譯／暫存依逐批清理，來源與唯一反例保留。
+
 2026-11-10 已新增 `pttstella-slint --probe-benchmark NEW_DIRECTORY`。舊 `--probe-grid` 在 UI 外持有 loopback Connection，視窗只接靜態 Frame，不能與完整 Dioxus host 比資源。新入口用與 Live 共用的完整服務判斷，掛載文章、輸入、輸出、媒體／設定、草稿、站點、名單、收藏、前往、登入、保活、滑鼠／選單及 connection watch；16項實際 owner／mount 檢查完成後才輸出 `prepared.json`、固定960×576的 `source.png` 與 toolkit `snapshot.png`。唯一20ms準備 timer 在完成或5秒失敗時停止；成功不自動輸入、合成前景或關窗。正式資料路徑、vault 及正常啟動行為不變；新入口的所有 store 在指定新目錄，憑證仍走 synthetic scope，peer 拒絕任何站端輸入。
 
 `.local/verification/slint-benchmark-session/accepted-result.json` 記錄最終 release native hash。macOS arm64 在禁止讀 Homebrew、禁止讀寫產品／研究版一般資料、對外連線僅允許 localhost 的 sandbox 裡，16項服務及格線／幾何已安裝。CUA 實見雙色「中」、16色與第24行，⌘Q後程序exit0、嚴格peer Close ACK及既有各owner finish完成。Raise與標題點擊沒有證明前景啟用，工具仍disabled；不宣稱可輸入或完整焦點驗收。先前兩個被SIGTERM結束的實例及sandbox／staging失敗各自保留，不能合併成正常退出通過。未最佳化及strip後未最佳化執行檔都超出打包器128MiB上限，未放寬限制；改用release後成功。

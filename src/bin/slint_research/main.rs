@@ -32,6 +32,7 @@ mod preferences;
 mod profile;
 mod renderer;
 mod session;
+mod shell_probe;
 mod sites_manager;
 mod station_color;
 mod station_mouse;
@@ -80,7 +81,7 @@ fn update_grid(
     };
     if previous.get() != Some(size) {
         let start = Instant::now();
-        let cursor = !ui.get_terminal_input() || ui.get_live_session();
+        let cursor = !ui.get_terminal_input() || !ui.get_prototype_chrome();
         let pixels = if let Some(article) = article {
             article.paint_terminal_find(renderer, size, cursor)?
         } else {
@@ -131,6 +132,7 @@ enum Probe {
 
 struct Options {
     benchmark: Option<PathBuf>,
+    verify_shell: bool,
     software_renderer: bool,
     zoom: f32,
     capture: Option<PathBuf>,
@@ -152,9 +154,10 @@ fn options() -> Result<Options, &'static str> {
 fn options_from(
     mut args: impl Iterator<Item = std::ffi::OsString>,
 ) -> Result<Options, &'static str> {
-    const USAGE: &str = "usage: pttstella-slint [--probe-benchmark NEW_DIR|--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--software-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
+    const USAGE: &str = "usage: pttstella-slint [--verify-shell NEW_DIR|--probe-benchmark NEW_DIR|--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--software-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
     let mut zoom = None;
     let mut benchmark = None;
+    let mut verify_shell = false;
     let mut software_renderer = false;
     let mut capture = None;
     let mut probe = None;
@@ -168,6 +171,11 @@ fn options_from(
     let mut verify_color = None;
     while let Some(arg) = args.next() {
         match arg.to_str() {
+            Some("--verify-shell") if probe.is_none() => {
+                benchmark = Some(args.next().ok_or(USAGE)?.into());
+                verify_shell = true;
+                probe = Some(Probe::Session(session::Probe::Benchmark));
+            }
             Some("--probe-benchmark") if probe.is_none() => {
                 benchmark = Some(args.next().ok_or(USAGE)?.into());
                 probe = Some(Probe::Session(session::Probe::Benchmark));
@@ -418,6 +426,7 @@ fn options_from(
     }));
     Ok(Options {
         benchmark,
+        verify_shell,
         software_renderer,
         verify_color,
         verify_drafts,
@@ -611,6 +620,15 @@ fn run(
             .select()?;
     }
     let ui = TerminalWindow::new()?;
+    ui.on_notice_dismiss({
+        let weak = ui.as_weak();
+        move || {
+            if let Some(ui) = weak.upgrade() {
+                ui.set_input_notice("".into());
+                ui.set_result(ui.get_connection_status());
+            }
+        }
+    });
     ui.set_media_video_software(software_renderer);
     locale::refresh(&ui);
     let quit_requested = Rc::new(Cell::new(false));
@@ -899,6 +917,7 @@ fn run(
     };
     let clipboard = clipboard::Clipboard::default();
     let verification_connection = if bookmarks_probe
+        || options.verify_shell
         || replies_probe
         || updates_probe
         || options.verify_context.is_some()
@@ -916,6 +935,10 @@ fn run(
     let watcher = connection
         .map(|(mode, connection)| {
             let full_services = mode.full_services();
+            ui.set_prototype_chrome(!full_services);
+            if full_services {
+                ui.set_result("".into());
+            }
             if full_services
                 || matches!(
                     &mode,
@@ -1512,7 +1535,19 @@ fn run(
         options.probe == Some(Probe::Session(session::Probe::Media))
             && std::env::var_os("PTTSTELLA_VIDEO_PROBE_EXIT").is_some()
     });
-    let verification = if native_quit_directory.is_some()
+    let verification = if options.verify_shell {
+        Some(shell_probe::start(
+            &ui,
+            verification_connection
+                .as_ref()
+                .cloned()
+                .ok_or("shell connection owner missing")?,
+            options
+                .benchmark
+                .clone()
+                .ok_or("shell output directory missing")?,
+        )?)
+    } else if native_quit_directory.is_some()
         || destination_probe
             && std::env::var("PTTSTELLA_SLINT_DESTINATION_PROBE").as_deref() == Ok("native")
         || bookmarks_probe
@@ -2067,6 +2102,7 @@ mod startup_tests {
         let parsed = parse(&["--probe-benchmark", "new-benchmark"]);
         assert_eq!(parsed.benchmark, Some(PathBuf::from("new-benchmark")));
         assert!(parsed.probe == Some(Probe::Session(session::Probe::Benchmark)));
+        assert!(parse(&["--verify-shell", "new-shell"]).verify_shell);
         for args in [
             &["--probe-benchmark"][..],
             &["--probe-benchmark", "a", "--connect"][..],
