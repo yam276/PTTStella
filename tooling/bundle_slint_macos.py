@@ -104,6 +104,7 @@ def bundle(executable, skia_license, output, allowed, source_archives=None):
             '不自動讀取、搬移或覆寫原 PTTStella 資料；舊資料只以副本驗收。\n'
             '無需 Homebrew 或外部 WebView runtime；libmpv 閉包包含於 Frameworks。\n'
             '離線格線可執行 Contents/MacOS/native --probe-grid；輸入法用 --probe-ime。\n'
+            '軟體繪製可加 --software-renderer；影片沿用原生CPU路徑，輸出最高1280×720。\n'
             '命令 --show-profile 只列路徑，不開啟資料或密碼庫。\n'
             '第三方文字與來源清單在 RustNotices／NativeRuntimeNotices。\n'
             '完整對應原始碼交付、乾淨機器／其他架構／功能矩陣及效能仍待驗收。\n'

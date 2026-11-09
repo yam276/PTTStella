@@ -7,6 +7,7 @@ export component MediaPreview inherits Rectangle {
     in property <string> status;
     in property <bool> ready;
     in property <bool> video;
+    in property <bool> software-video;
     in-out property <float> position;
     in property <float> duration;
     out property <length> video-left: view.absolute-position.x;
@@ -79,6 +80,7 @@ export component MediaPreview inherits Rectangle {
                 Text {text:root.url;color:#cdd9e8;overflow:elide;}
                 Text {text:root.status;color:#e9edf4;wrap:word-wrap;}
                 view := Rectangle {vertical-stretch:1;min-height:100px;clip:true;background:#080a0e;
+                    if root.video && root.software-video: Image {source:root.pixels;width:parent.width;height:parent.height;image-fit:contain;}
                     if !root.video: Image {source:root.pixels;width:root.pixels.width * root.actual * 1px;height:root.pixels.height * root.actual * 1px;
                         x:(parent.width - self.width)/2 + root.pan-x;y:(parent.height - self.height)/2 + root.pan-y;image-fit:fill;}
                     pointer := TouchArea {enabled:!root.video && root.ready && root.foreground;

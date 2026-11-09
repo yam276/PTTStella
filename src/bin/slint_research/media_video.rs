@@ -13,6 +13,7 @@ use pttstella::{
         gl_state::Saved,
         mpv,
         session::{Session, Stage},
+        software::{Software, View},
         surface::Surface,
     },
 };
@@ -34,18 +35,22 @@ struct Offer {
 }
 #[derive(Default)]
 struct Bridge {
+    software: Cell<bool>,
     desired: Cell<Option<u64>>,
     offer: RefCell<Option<Offer>>,
     rendered: Cell<Option<u64>>,
-    wake: Notify,
+    wake: Arc<Notify>,
     capture: Cell<bool>,
     samples: RefCell<Vec<serde_json::Value>>,
     error: RefCell<Option<String>>,
 }
 struct Live {
     sequence: u64,
+    // Drop/join the CPU renderer before Session drops its normal API owner.
+    software: Option<Software>,
     session: Session,
     offered: bool,
+    frame_serial: u64,
 }
 pub struct Video {
     ui: slint::Weak<TerminalWindow>,
@@ -61,7 +66,15 @@ pub struct Video {
 impl Video {
     pub fn mount(ui: &TerminalWindow, media: Weak<Media>) -> Result<Rc<Self>, String> {
         let bridge = Rc::new(Bridge::default());
-        mount_renderer(ui, bridge.clone())?;
+        if ui.get_media_video_software() {
+            bridge.software.set(true);
+        } else {
+            match mount_renderer(ui, bridge.clone()) {
+                Ok(()) => {}
+                Err(slint::SetRenderingNotifierError::Unsupported) => bridge.software.set(true),
+                Err(error) => return Err(error.to_string()),
+            }
+        }
         let owner = Rc::new(Self {
             ui: ui.as_weak(),
             media,
@@ -87,12 +100,15 @@ impl Video {
                 let Some(owner)=weak.upgrade() else {break;};
                 let mut updates=owner.current.borrow().as_ref().map(|v|v.session.updates());
                 if let Some(updates)=&mut updates{updates.borrow_and_update();}
+                let mut software_updates=owner.current.borrow().as_ref().and_then(|v|v.software.as_ref()).map(Software::updates);
+                if let Some(updates)=&mut software_updates{updates.borrow_and_update();}
                 owner.step();
                 if owner.closed.get() && owner.current.borrow().is_none() {owner.done.notify_waiters();break;}
                 let bridge=owner.bridge.clone();drop(owner);
                 tokio::select! {
                     _=bridge.wake.notified()=>{},
                     _=async {if let Some(updates)=&mut updates{let _=updates.changed().await;}else{std::future::pending::<()>().await;}}=>{}
+                    _=async {if let Some(updates)=&mut software_updates{let _=updates.changed().await;}else{std::future::pending::<()>().await;}}=>{}
                 }
             }
         }).map_err(|e|e.to_string())?;
@@ -118,6 +134,7 @@ impl Video {
         if let Some(live) = self.current.borrow().as_ref() {
             live.session.permit(value);
         }
+        self.bridge.wake.notify_one();
     }
     pub fn toggle(&self) {
         let Some(ui) = self.ui.upgrade() else {
@@ -128,6 +145,13 @@ impl Video {
         } else {
             Command::Play
         });
+    }
+    fn capture(&self) {
+        self.bridge.capture.set(true);
+        self.bridge.wake.notify_one();
+        if let Some(ui) = self.ui.upgrade() {
+            ui.window().request_redraw();
+        }
     }
     fn seek(&self, seconds: f32) {
         self.command(Command::Seek(f64::from(seconds)));
@@ -180,7 +204,13 @@ impl Video {
                 if let Some(ui) = &ui {
                     ui.window().request_redraw();
                 }
-                if self.bridge.rendered.get().is_none() {
+                if let Some(software) = &mut live.software {
+                    software.stop();
+                    if software.updates().borrow().stopped {
+                        self.retire_software(live);
+                    }
+                }
+                if self.bridge.rendered.get().is_none() && live.software.is_none() {
                     live.session.stop();
                 }
             }
@@ -218,6 +248,9 @@ impl Video {
                         }
                         _ => ui.set_media_status(msg!("video-play-failed").into()),
                     }
+                }
+                if self.bridge.software.get() {
+                    self.step_software(live, ui);
                 }
                 ui.set_media_ready(
                     self.bridge.rendered.get() == Some(live.sequence)
@@ -268,6 +301,8 @@ impl Video {
                         sequence,
                         session,
                         offered: false,
+                        software: None,
+                        frame_serial: 0,
                     });
                     self.bridge.wake.notify_one();
                 }
@@ -277,6 +312,92 @@ impl Video {
                 }
             }
         }
+    }
+    fn step_software(&self, live: &mut Live, ui: &TerminalWindow) {
+        ui.set_media_video_software(true);
+        if live.software.is_none()
+            && let Some(offer) = self.bridge.offer.borrow_mut().take()
+        {
+            let wake = self.bridge.wake.clone();
+            let weak = ui.as_weak();
+            let queued = Arc::new(AtomicBool::new(false));
+            let notify = Arc::new(move || {
+                wake.notify_one();
+                if !queued.swap(true, Ordering::AcqRel) {
+                    let queued = queued.clone();
+                    let _ = weak.upgrade_in_event_loop(move |_| {
+                        queued.store(false, Ordering::Release);
+                    });
+                }
+            });
+            match Software::start(offer.core, offer.gate, notify) {
+                Ok(software) => live.software = Some(software),
+                Err(error) => {
+                    self.bridge.error.replace(Some(error));
+                    self.close();
+                }
+            }
+        }
+        let Some(software) = &live.software else {
+            return;
+        };
+        let snapshot = software.updates().borrow().clone();
+        if snapshot.stopped {
+            if let Some(error) = &snapshot.error {
+                self.bridge.error.replace(Some(error.clone()));
+            }
+            self.retire_software(live);
+            self.close();
+            return;
+        }
+        if snapshot.ready {
+            self.bridge.rendered.set(Some(live.sequence));
+        }
+        let bounds = ui.get_media_video_bounds();
+        let dpi = ui.window().scale_factor();
+        if let Err(error) = software.set_view(View {
+            width: (bounds.width * dpi).max(0.) as u32,
+            height: (bounds.height * dpi).max(0.) as u32,
+            active: ui.get_media_video_visible() && ui.get_media_play_allowed(),
+        }) {
+            self.bridge.error.replace(Some(error));
+            self.close();
+            return;
+        }
+        if let Some(frame) = &snapshot.frame {
+            if frame.serial() != live.frame_serial {
+                let [width, height] = frame.size();
+                let buffer = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(
+                    frame.pixels(),
+                    width,
+                    height,
+                );
+                ui.set_media_image(slint::Image::from_rgba8_premultiplied(buffer));
+                live.frame_serial = frame.serial();
+            }
+            if self.bridge.capture.replace(false) && self.bridge.samples.borrow().len() < 8 {
+                self.bridge
+                    .samples
+                    .borrow_mut()
+                    .push(probe::capture_software(frame));
+            }
+        }
+    }
+    fn retire_software(&self, live: &mut Live) {
+        if let Some(mut software) = live.software.take() {
+            match software.finish() {
+                Ok(report) => {
+                    eprintln!(
+                        "{}",
+                        serde_json::json!({"native_video_software":report,"sequence":live.sequence})
+                    );
+                }
+                Err(error) => {
+                    self.cleanup_error.replace(Some(error));
+                }
+            }
+        }
+        self.bridge.rendered.set(None);
     }
     pub async fn shutdown(&self) -> Result<(), String> {
         self.closed.set(true);
@@ -326,6 +447,15 @@ impl Video {
     pub fn finish(&self) -> Result<(), String> {
         self.closed.set(true);
         self.close();
+        if let Some(live) = self.current.borrow_mut().as_mut()
+            && let Some(software) = &live.software
+        {
+            software.stop();
+            if !software.updates().borrow().stopped {
+                return Err("software video renderer has not retired".into());
+            }
+            self.retire_software(live);
+        }
         if self.bridge.rendered.get().is_some() {
             return Err("native video renderer has not retired".into());
         }
@@ -347,181 +477,182 @@ struct Rendered {
     surface: Option<Surface>,
     dirty: Arc<AtomicBool>,
 }
-fn mount_renderer(ui: &TerminalWindow, bridge: Rc<Bridge>) -> Result<(), String> {
+fn mount_renderer(
+    ui: &TerminalWindow,
+    bridge: Rc<Bridge>,
+) -> Result<(), slint::SetRenderingNotifierError> {
     let weak = ui.as_weak();
     let mut gl = None;
     let mut render: Option<Rendered> = None;
-    ui.window()
-        .set_rendering_notifier(move |state, api| {
-            if matches!(state, RenderingState::RenderingSetup) {
-                if let GraphicsAPI::NativeOpenGL { get_proc_address } = api {
-                    // SAFETY: loader/current context are supplied by Slint here.
-                    gl = Some(unsafe {
-                        glow::Context::from_loader_function_cstr(|n| get_proc_address(n))
-                    });
-                } else if let Some(ui) = weak.upgrade() {
-                    ui.set_media_status(msg!("video-unsupported").into());
+    ui.window().set_rendering_notifier(move |state, api| {
+        if matches!(state, RenderingState::RenderingSetup) {
+            if let GraphicsAPI::NativeOpenGL { get_proc_address } = api {
+                // SAFETY: loader/current context are supplied by Slint here.
+                gl = Some(unsafe {
+                    glow::Context::from_loader_function_cstr(|n| get_proc_address(n))
+                });
+            } else {
+                bridge.software.set(true);
+                bridge.wake.notify_one();
+            }
+            return;
+        }
+        let Some(gl) = &gl else {
+            return;
+        };
+        let retire = matches!(state, RenderingState::RenderingTeardown)
+            || (matches!(state, RenderingState::BeforeRendering)
+                && render
+                    .as_ref()
+                    .is_some_and(|r| Some(r.sequence) != bridge.desired.get()));
+        if retire {
+            // SAFETY: Slint guarantees the same current context at retirement.
+            unsafe {
+                let saved = Saved::take(gl).ok();
+                if let Some(s) = &saved {
+                    s.defaults(gl);
                 }
+                if let Some(mut owned) = render.take() {
+                    if let Some(surface) = owned.surface.take() {
+                        surface.destroy(gl);
+                    }
+                    let gate = owned.gate.clone();
+                    drop(owned);
+                    gate.ready(false);
+                }
+                bridge.rendered.set(None);
+                bridge.wake.notify_waiters();
+                if let Some(saved) = saved {
+                    saved.restore(gl);
+                }
+            }
+        }
+        if matches!(state, RenderingState::RenderingTeardown) {
+            return;
+        }
+        if matches!(state, RenderingState::BeforeRendering)
+            && render.is_none()
+            && let Some(offer) = bridge.offer.borrow_mut().take()
+        {
+            if Some(offer.sequence) != bridge.desired.get() {
                 return;
             }
-            let Some(gl) = &gl else {
+            let GraphicsAPI::NativeOpenGL { get_proc_address } = api else {
                 return;
             };
-            let retire = matches!(state, RenderingState::RenderingTeardown)
-                || (matches!(state, RenderingState::BeforeRendering)
-                    && render
-                        .as_ref()
-                        .is_some_and(|r| Some(r.sequence) != bridge.desired.get()));
-            if retire {
-                // SAFETY: Slint guarantees the same current context at retirement.
-                unsafe {
-                    let saved = Saved::take(gl).ok();
-                    if let Some(s) = &saved {
-                        s.defaults(gl);
-                    }
-                    if let Some(mut owned) = render.take() {
-                        if let Some(surface) = owned.surface.take() {
-                            surface.destroy(gl);
-                        }
-                        let gate = owned.gate.clone();
-                        drop(owned);
-                        gate.ready(false);
-                    }
-                    bridge.rendered.set(None);
-                    bridge.wake.notify_waiters();
-                    if let Some(saved) = saved {
-                        saved.restore(gl);
-                    }
-                }
-            }
-            if matches!(state, RenderingState::RenderingTeardown) {
-                return;
-            }
-            if matches!(state, RenderingState::BeforeRendering)
-                && render.is_none()
-                && let Some(offer) = bridge.offer.borrow_mut().take()
-            {
-                if Some(offer.sequence) != bridge.desired.get() {
-                    return;
-                }
-                let GraphicsAPI::NativeOpenGL { get_proc_address } = api else {
-                    return;
-                };
-                // SAFETY: current GL; owned render is destroyed above on this context.
-                let result = unsafe {
-                    (|| {
-                        let saved = Saved::take(gl)?;
-                        saved.defaults(gl);
-                        let dirty = Arc::new(AtomicBool::new(true));
-                        let flag = dirty.clone();
-                        let redraw = weak.clone();
-                        bridge.error.borrow_mut().take();
-                        let player = mpv::Render::new(
-                            offer.core,
-                            get_proc_address,
-                            Box::new(move || {
-                                if flag.swap(true, Ordering::AcqRel) {
-                                    return;
-                                }
-                                let _ =
-                                    redraw.upgrade_in_event_loop(|ui| ui.window().request_redraw());
-                            }),
-                        );
-                        saved.restore(gl);
-                        player.map(|player| Rendered {
-                            sequence: offer.sequence,
-                            player,
-                            gate: offer.gate,
-                            surface: None,
-                            dirty,
-                        })
-                    })()
-                };
-                match result {
-                    Ok(owner) => {
-                        owner.gate.ready(true);
-                        bridge.rendered.set(Some(owner.sequence));
-                        render = Some(owner);
-                        bridge.wake.notify_one();
-                    }
-                    Err(error) => {
-                        bridge.error.replace(Some(error));
-                        if let Some(ui) = weak.upgrade() {
-                            ui.set_media_status(msg!("video-unsupported").into());
-                        }
-                    }
-                }
-            }
-            if !matches!(state, RenderingState::AfterRendering) {
-                return;
-            }
-            let (Some(render), Some(ui)) = (&mut render, weak.upgrade()) else {
-                return;
-            };
-            if !ui.get_media_video_visible() {
-                return;
-            }
-            let rect = ui.get_media_video_bounds();
-            let dpi = ui.window().scale_factor();
-            let size = ui.window().size();
-            let x = (rect.x * dpi).round() as i32;
-            let y = (rect.y * dpi).round() as i32;
-            let w = (rect.width * dpi).round() as i32;
-            let h = (rect.height * dpi).round() as i32;
-            if x < 0
-                || y < 0
-                || w <= 0
-                || h <= 0
-                || x + w > size.width as i32
-                || y + h > size.height as i32
-            {
-                return;
-            }
-            // SAFETY: live current GL; rect lies in drawable, owned FBO pixel budget
-            // is checked before allocation, all shared Slint state restored below.
+            // SAFETY: current GL; owned render is destroyed above on this context.
             let result = unsafe {
                 (|| {
                     let saved = Saved::take(gl)?;
-                    let target = saved.framebuffer();
                     saved.defaults(gl);
-                    let result = (|| {
-                        if render.surface.as_ref().is_none_or(|s| s.size() != [w, h]) {
-                            if let Some(surface) = render.surface.take() {
-                                surface.destroy(gl);
+                    let dirty = Arc::new(AtomicBool::new(true));
+                    let flag = dirty.clone();
+                    let redraw = weak.clone();
+                    bridge.error.borrow_mut().take();
+                    let player = mpv::Render::new(
+                        offer.core,
+                        get_proc_address,
+                        Box::new(move || {
+                            if flag.swap(true, Ordering::AcqRel) {
+                                return;
                             }
-                            render.surface = Some(Surface::new(gl, w, h)?);
-                            render.dirty.store(true, Ordering::Release);
-                        }
-                        if let Some(surface) = &render.surface {
-                            if render.dirty.swap(false, Ordering::AcqRel) {
-                                surface.draw(gl, &render.player)?;
-                            }
-                            surface.blit(
-                                gl,
-                                target,
-                                [x, size.height as i32 - y - h, x + w, size.height as i32 - y],
-                            );
-                        }
-                        if bridge.capture.replace(false) && bridge.samples.borrow().len() < 8 {
-                            bridge.samples.borrow_mut().push(probe::capture(
-                                gl,
-                                target,
-                                [x, y, w, h],
-                                size.height as i32,
-                            )?);
-                            bridge.wake.notify_one();
-                        }
-                        Ok::<(), String>(())
-                    })();
+                            let _ = redraw.upgrade_in_event_loop(|ui| ui.window().request_redraw());
+                        }),
+                    );
                     saved.restore(gl);
-                    result
+                    player.map(|player| Rendered {
+                        sequence: offer.sequence,
+                        player,
+                        gate: offer.gate,
+                        surface: None,
+                        dirty,
+                    })
                 })()
             };
-            if let Err(error) = result {
-                bridge.error.replace(Some(error));
-                ui.set_media_status(msg!("video-unsupported").into());
-                ui.set_media_ready(false);
+            match result {
+                Ok(owner) => {
+                    owner.gate.ready(true);
+                    bridge.rendered.set(Some(owner.sequence));
+                    render = Some(owner);
+                    bridge.wake.notify_one();
+                }
+                Err(error) => {
+                    bridge.error.replace(Some(error));
+                    if let Some(ui) = weak.upgrade() {
+                        ui.set_media_status(msg!("video-unsupported").into());
+                    }
+                }
             }
-        })
-        .map_err(|e| e.to_string())
+        }
+        if !matches!(state, RenderingState::AfterRendering) {
+            return;
+        }
+        let (Some(render), Some(ui)) = (&mut render, weak.upgrade()) else {
+            return;
+        };
+        if !ui.get_media_video_visible() {
+            return;
+        }
+        let rect = ui.get_media_video_bounds();
+        let dpi = ui.window().scale_factor();
+        let size = ui.window().size();
+        let x = (rect.x * dpi).round() as i32;
+        let y = (rect.y * dpi).round() as i32;
+        let w = (rect.width * dpi).round() as i32;
+        let h = (rect.height * dpi).round() as i32;
+        if x < 0
+            || y < 0
+            || w <= 0
+            || h <= 0
+            || x + w > size.width as i32
+            || y + h > size.height as i32
+        {
+            return;
+        }
+        // SAFETY: live current GL; rect lies in drawable, owned FBO pixel budget
+        // is checked before allocation, all shared Slint state restored below.
+        let result = unsafe {
+            (|| {
+                let saved = Saved::take(gl)?;
+                let target = saved.framebuffer();
+                saved.defaults(gl);
+                let result = (|| {
+                    if render.surface.as_ref().is_none_or(|s| s.size() != [w, h]) {
+                        if let Some(surface) = render.surface.take() {
+                            surface.destroy(gl);
+                        }
+                        render.surface = Some(Surface::new(gl, w, h)?);
+                        render.dirty.store(true, Ordering::Release);
+                    }
+                    if let Some(surface) = &render.surface {
+                        if render.dirty.swap(false, Ordering::AcqRel) {
+                            surface.draw(gl, &render.player)?;
+                        }
+                        surface.blit(
+                            gl,
+                            target,
+                            [x, size.height as i32 - y - h, x + w, size.height as i32 - y],
+                        );
+                    }
+                    if bridge.capture.replace(false) && bridge.samples.borrow().len() < 8 {
+                        bridge.samples.borrow_mut().push(probe::capture(
+                            gl,
+                            target,
+                            [x, y, w, h],
+                            size.height as i32,
+                        )?);
+                        bridge.wake.notify_one();
+                    }
+                    Ok::<(), String>(())
+                })();
+                saved.restore(gl);
+                result
+            })()
+        };
+        if let Err(error) = result {
+            bridge.error.replace(Some(error));
+            ui.set_media_status(msg!("video-unsupported").into());
+            ui.set_media_ready(false);
+        }
+    })
 }

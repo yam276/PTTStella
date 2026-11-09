@@ -226,6 +226,9 @@ pub struct Render {
     context: NonNull<ffi::mpv_render_context>,
     wake: Box<RenderWake>,
     _thread: PhantomData<Rc<()>>,
+    software: bool,
+    software_dirty: bool,
+    software_has_frame: bool,
 }
 impl Render {
     /// Called only in RenderingSetup with Slint's current GL context. Drop only
@@ -257,6 +260,16 @@ impl Render {
                 data: ptr::null_mut(),
             },
         ];
+        // SAFETY: caller supplies the live GL context; init/resolver and the
+        // sentinel-terminated parameter array outlive synchronous creation.
+        unsafe { Self::create(core, &mut params, wake, false) }
+    }
+    unsafe fn create(
+        core: Arc<Client>,
+        params: &mut [ffi::mpv_render_param],
+        wake: Box<dyn Fn() + Send + Sync>,
+        software: bool,
+    ) -> Result<Self, String> {
         let mut context = ptr::null_mut();
         // SAFETY: exact repr(C) bindings; sentinel-terminated stack params and
         // loader remain valid for synchronous create. Core is retained by Arc.
@@ -269,6 +282,9 @@ impl Render {
             context,
             wake: Box::new(RenderWake(wake)),
             _thread: PhantomData,
+            software,
+            software_dirty: false,
+            software_has_frame: false,
         };
         // SAFETY: Box allocation is stable, callback has no client/render calls.
         unsafe {
@@ -280,10 +296,108 @@ impl Render {
         };
         Ok(owner)
     }
+    /// Creates the memory-surface API on its dedicated owner thread, without GL.
+    pub fn software(core: Arc<Client>, wake: Box<dyn Fn() + Send + Sync>) -> Result<Self, String> {
+        let mut params = [
+            ffi::mpv_render_param {
+                type_: 1,
+                data: c"sw".as_ptr().cast_mut().cast(),
+            },
+            ffi::mpv_render_param {
+                type_: 0,
+                data: ptr::null_mut(),
+            },
+        ];
+        // SAFETY: software API has no graphics-context precondition. The C
+        // string and terminated array are valid for synchronous creation.
+        unsafe { Self::create(core, &mut params, wake, true) }
+    }
+    pub fn software_update(&mut self) -> Result<(), String> {
+        if !self.software {
+            return Err("software update on a GL renderer".into());
+        }
+        // SAFETY: same owner thread as software creation; no GL state accessed.
+        let flags = unsafe { ffi::mpv_render_context_update(self.context.as_ptr()) };
+        self.software_dirty |=
+            flags & u64::from(ffi::mpv_render_update_flag_MPV_RENDER_UPDATE_FRAME) != 0;
+        Ok(())
+    }
+    pub(super) fn draw_software(
+        &mut self,
+        buffer: &mut super::software::Buffer,
+        force: bool,
+    ) -> Result<bool, String> {
+        self.software_update()?;
+        if !self.software_dirty && !force {
+            return Ok(false);
+        }
+        let mut info = ffi::mpv_render_frame_info {
+            flags: 0,
+            target_time: 0,
+        };
+        // SAFETY: the documented repr(C) frame-info object is initialized and
+        // writable for this synchronous render-API call on its owner thread.
+        result(unsafe {
+            ffi::mpv_render_context_get_info(
+                self.context.as_ptr(),
+                ffi::mpv_render_param {
+                    type_: ffi::mpv_render_param_type_MPV_RENDER_PARAM_NEXT_FRAME_INFO,
+                    data: (&mut info as *mut ffi::mpv_render_frame_info).cast(),
+                },
+            )
+        })?;
+        if !self.software_has_frame
+            && info.flags & u64::from(ffi::mpv_render_frame_info_flag_MPV_RENDER_FRAME_INFO_PRESENT)
+                == 0
+        {
+            return Ok(false);
+        }
+        let (mut size, mut stride, bytes) = buffer.target();
+        let mut block = 0i32;
+        let mut params = [
+            ffi::mpv_render_param {
+                type_: 17,
+                data: size.as_mut_ptr().cast(),
+            },
+            ffi::mpv_render_param {
+                type_: 18,
+                data: c"rgb0".as_ptr().cast_mut().cast(),
+            },
+            ffi::mpv_render_param {
+                type_: 19,
+                data: (&mut stride as *mut usize).cast(),
+            },
+            ffi::mpv_render_param {
+                type_: 20,
+                data: bytes.as_mut_ptr().cast(),
+            },
+            ffi::mpv_render_param {
+                type_: 12,
+                data: (&mut block as *mut i32).cast(),
+            },
+            ffi::mpv_render_param {
+                type_: 0,
+                data: ptr::null_mut(),
+            },
+        ];
+        // SAFETY: Buffer guarantees bounded positive dimensions, initialized
+        // storage with 64-byte pointer/stride alignment, and writable stride*h
+        // bytes including final padding. All parameter pointers remain valid
+        // until this synchronous software render returns; mpv retains none.
+        result(unsafe {
+            ffi::mpv_render_context_render(self.context.as_ptr(), params.as_mut_ptr())
+        })?;
+        self.software_dirty = false;
+        self.software_has_frame = true;
+        Ok(true)
+    }
     /// # Safety
     /// Same current GL context/thread as creation; fbo must be complete, live,
     /// and owned by the caller for the supplied dimensions throughout the call.
     pub unsafe fn draw(&self, fbo: i32, width: i32, height: i32) -> Result<(), String> {
+        if self.software {
+            return Err("GL draw on a software renderer".into());
+        }
         if width <= 0
             || height <= 0
             || width > 8192
@@ -331,8 +445,9 @@ impl Render {
 }
 impl Drop for Render {
     fn drop(&mut self) {
-        // SAFETY: notifier teardown runs on the same current GL context. Context
-        // destruction synchronizes libmpv work before callback Box/Core can drop.
+        // SAFETY: GL contexts retire in their original current-context notifier;
+        // software contexts retire on their original worker without GL. Context
+        // destruction synchronizes libmpv work before callback Box/Core drop.
         unsafe {
             ffi::mpv_render_context_set_update_callback(
                 self.context.as_ptr(),

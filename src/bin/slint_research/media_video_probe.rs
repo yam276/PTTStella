@@ -8,6 +8,32 @@ use crate::{
 use glow::HasContext;
 use std::{error::Error, path::PathBuf, time::Duration};
 
+pub(super) fn capture_software(
+    frame: &pttstella::native_video::software::Frame,
+) -> serde_json::Value {
+    let [width, height] = frame.size();
+    let scale = (f64::from(width) / 320.).min(f64::from(height) / 180.);
+    let vw = 320. * scale;
+    let vh = 180. * scale;
+    let left = (f64::from(width) - vw) / 2.;
+    let top = (f64::from(height) - vh) / 2.;
+    let pixels: Vec<_> = [(0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)]
+        .into_iter()
+        .map(|(x, y)| {
+            let x = (left + vw * x) as usize;
+            let y = (top + vh * y) as usize;
+            let at = (y * width as usize + x) * 4;
+            frame.pixels()[at..at + 4].to_vec()
+        })
+        .collect();
+    let expected = [[255u8, 0, 0], [0, 0, 255], [255, 255, 0], [0, 255, 255]];
+    let passed = pixels
+        .iter()
+        .zip(expected)
+        .all(|(a, b)| a[..3].iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 30));
+    serde_json::json!({"render_path":"software","size":[width,height],"frame_serial":frame.serial(),"pixels":pixels,"expected":expected,"passed":passed})
+}
+
 /// # Safety
 /// Called only after the production blit with the same live current GL context.
 pub(super) unsafe fn capture(
@@ -111,8 +137,7 @@ pub fn start(
                     "video seek/pause not acknowledged",
                 )
                 .await?;
-                video.bridge.capture.set(true);
-                ui.window().request_redraw();
+                video.capture();
                 wait(
                     || !video.bridge.samples.borrow().is_empty(),
                     "GPU capture did not run",
@@ -167,7 +192,7 @@ pub fn start(
             )
             .await?;
             media.close(true);
-            Ok::<_, String>(serde_json::json!({"scope":"main Slint window; actual GPU; synthetic toolkit controls; not OS input/audio audibility/performance","passed":true,"samples":&*video.bridge.samples.borrow(),"error":&*video.bridge.error.borrow(),"render_retired":video.bridge.rendered.get().is_none(),"session_joined":video.current.borrow().is_none()}))
+            Ok::<_, String>(serde_json::json!({"scope":"main Slint window; pixel source identified by render_path; synthetic toolkit controls; not OS input/audio audibility/performance","render_path":if video.bridge.software.get(){"software"}else{"opengl"},"passed":true,"samples":&*video.bridge.samples.borrow(),"error":&*video.bridge.error.borrow(),"render_retired":video.bridge.rendered.get().is_none(),"session_joined":video.current.borrow().is_none()}))
             }.await;
             if let Err(error) = &checked {
                 let state = media.video.borrow().as_ref().map(|video| {
@@ -185,6 +210,7 @@ pub fn start(
                         "samples":&*video.bridge.samples.borrow()})
                 });
                 let audit = serde_json::json!({"status":"failed","error":error,
+                    "render_path":if media.video.borrow().as_ref().is_some_and(|v|v.bridge.software.get()){"software"}else{"opengl"},
                     "foreground":ui.get_native_foreground(),"play_allowed":ui.get_media_play_allowed(),
                     "ready":ui.get_media_ready(),"position":ui.get_media_position(),
                     "duration":ui.get_media_duration(),"video":state});

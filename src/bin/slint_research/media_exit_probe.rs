@@ -69,8 +69,7 @@ pub fn start(
                         "exit fixture did not play",
                     )
                     .await?;
-                    video.bridge.capture.set(true);
-                    ui.window().request_redraw();
+                    video.capture();
                     wait(
                         || !video.bridge.samples.borrow().is_empty(),
                         "exit fixture GPU capture missing",
@@ -78,8 +77,15 @@ pub fn start(
                     .await?;
                     let samples = serde_json::to_vec_pretty(&*video.bridge.samples.borrow())
                         .map_err(|e| e.to_string())?;
-                    std::fs::write(directory.join("gpu-samples.json"), samples)
-                        .map_err(|e| e.to_string())?;
+                    std::fs::write(
+                        directory.join(if video.bridge.software.get() {
+                            "software-samples.json"
+                        } else {
+                            "gpu-samples.json"
+                        }),
+                        samples,
+                    )
+                    .map_err(|e| e.to_string())?;
                     require(
                         video
                             .bridge
@@ -97,8 +103,10 @@ pub fn start(
             )?;
             std::fs::write(directory.join("video-exit-ready.json"), serde_json::to_vec_pretty(&serde_json::json!({
             "status":"prepared", "route":route, "stage":stage,
+            "render_path":if video.bridge.software.get(){"software"}else{"opengl"},
             "renderer_owned":true, "session_owned":true, "playing":ui.get_media_playing(),
-            "gpu_samples":&*video.bridge.samples.borrow(),
+            "samples":&*video.bridge.samples.borrow(),
+            "gpu_samples":if video.bridge.software.get(){serde_json::Value::Null}else{serde_json::json!(&*video.bridge.samples.borrow())},
             "scope":"Preparation only; post-loop resource and peer audits determine exit success"
         })).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
             if route == "native" {

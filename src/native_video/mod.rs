@@ -5,4 +5,5 @@ pub mod mpv;
 pub mod session;
 pub use control::{Command, Status};
 
+pub mod software;
 pub mod surface;

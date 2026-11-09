@@ -129,6 +129,7 @@ enum Probe {
 }
 
 struct Options {
+    software_renderer: bool,
     zoom: f32,
     capture: Option<PathBuf>,
     source_png: Option<PathBuf>,
@@ -143,8 +144,9 @@ struct Options {
 }
 
 fn options() -> Result<Options, &'static str> {
-    const USAGE: &str = "usage: pttstella-slint [--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
+    const USAGE: &str = "usage: pttstella-slint [--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--software-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
     let mut zoom = None;
+    let mut software_renderer = false;
     let mut capture = None;
     let mut probe = None;
     let mut source_png = None;
@@ -158,6 +160,7 @@ fn options() -> Result<Options, &'static str> {
     let mut args = std::env::args_os().skip(1);
     while let Some(arg) = args.next() {
         match arg.to_str() {
+            Some("--software-renderer") if !software_renderer => software_renderer = true,
             Some("--verify-editor-color") if verify_color.is_none() => {
                 verify_color = Some(args.next().ok_or(USAGE)?.into());
             }
@@ -395,6 +398,7 @@ fn options() -> Result<Options, &'static str> {
         return Err(USAGE);
     }
     Ok(Options {
+        software_renderer,
         verify_color,
         verify_drafts,
         verify_media,
@@ -543,20 +547,39 @@ fn run(
     mut loaded_preferences: Option<pttstella::settings::preferences::Preferences>,
     site_peers: Option<Rc<pttstella::connection::site_probe::Peers>>,
 ) -> Result<(), Box<dyn Error>> {
-    #[cfg(feature = "native-video")]
-    slint::BackendSelector::new()
-        .backend_name("winit".into())
-        .renderer_name("skia".into())
-        .require_opengl_with_version(3, 3)
-        .select()?;
-    // The macOS fixture used less physical memory with Skia's CPU compositor.
-    #[cfg(all(target_os = "macos", not(feature = "native-video")))]
-    if std::env::var_os("SLINT_BACKEND").is_none() {
+    let software_renderer = options.software_renderer
+        || std::env::var("SLINT_BACKEND").is_ok_and(|name| name.ends_with("software"));
+    if options.software_renderer {
+        slint::BackendSelector::new()
+            .backend_name("winit".into())
+            .renderer_name("skia-software".into())
+            .select()?;
+    } else if std::env::var_os("SLINT_BACKEND").is_some() {
+        #[cfg(feature = "native-video")]
+        if !software_renderer {
+            slint::BackendSelector::new()
+                .require_opengl_with_version(3, 3)
+                .select()?;
+        } else {
+            slint::BackendSelector::new().select()?;
+        }
+        #[cfg(not(feature = "native-video"))]
+        slint::BackendSelector::new().select()?;
+    } else {
+        #[cfg(feature = "native-video")]
+        slint::BackendSelector::new()
+            .backend_name("winit".into())
+            .renderer_name("skia".into())
+            .require_opengl_with_version(3, 3)
+            .select()?;
+        // The macOS fixture used less physical memory with Skia's CPU compositor.
+        #[cfg(all(target_os = "macos", not(feature = "native-video")))]
         slint::BackendSelector::new()
             .backend_name("winit-skia-software".into())
             .select()?;
     }
     let ui = TerminalWindow::new()?;
+    ui.set_media_video_software(software_renderer);
     locale::refresh(&ui);
     let quit_requested = Rc::new(Cell::new(false));
     #[cfg(target_os = "macos")]

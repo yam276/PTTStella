@@ -159,6 +159,7 @@ export component TerminalWindow inherits Window {
     out property <bool> media-video-visible: !root.manager-open && !root.settings-open && !root.editor-open && !root.station-color-open && root.media-open && root.media-video && !root.show-about && !root.login-open && !root.paste-open && !root.context-open;
     in-out property <float> media-position;
     in property <float> media-duration;
+    in property <bool> media-video-software;
     out property <SelectionRect> media-video-bounds: {x:media-preview.video-left,y:media-preview.video-top,width:media-preview.video-width,height:media-preview.video-height};
     callback media-seek(float);
     in property <image> media-image;
@@ -924,7 +925,7 @@ export component TerminalWindow inherits Window {
     media-preview := MediaPreview {
         x:0px;y:0px;width:root.width;height:root.height;visible:root.media-open;
         busy:root.output-busy;copy-label:root.media-copy-label;save-label:root.media-save-label;copy-url-label:root.media-copy-url-label;
-        video:root.media-video;position <=> root.media-position;duration:root.media-duration;seek(value)=>{root.media-seek(value);}
+        video:root.media-video;software-video:root.media-video-software;position <=> root.media-position;duration:root.media-duration;seek(value)=>{root.media-seek(value);}
         pixels:root.media-image;source-key:root.media-key;url:root.media-url;status:root.media-status;
         ready:root.media-ready;animated:root.media-animated;playing:root.media-playing;foreground:root.native-foreground;
         close-label:root.media-close-label;retry-label:root.media-retry-label;motion-label:root.media-motion-label;

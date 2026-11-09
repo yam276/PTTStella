@@ -1519,3 +1519,17 @@ PTTSTELLA_VIDEO_FIXTURE=<NEW_NEGATIVE_FIXTURE_DIR>/quadrants.mp4 \
 完整feature的Rust482 passed／6明示ignored、全target Clippy、fmt、Python110通過。環境與驗收工具的失敗另記：PATH上的FFmpeg缺libtheora，改用既有ffmpeg-full後三格式生成成功；初步嘗試以symlink重用runtime的診斷App被strict codesign拒絕，未當作有效套件，正式參考App的runtime／簽名均核對不變；舊驗收腳本原先期待故障路徑也有成功路徑才輸出的Close JSON，新增故障audit後重跑六案通過。這些與原始MP4失敗分開記錄，沒有歸因於外部操作。
 
 本批診斷封裝不是新使用者交付，驗收後已移除其App／ZIP／DMG、symlink實驗App、缺encoder的部分素材及被三格式素材取代的首份手工MP4，並用Cargo原生clean清掉8288檔／2.6GiB release profile。保留約8MiB的原始結果／文字trace、source／binary hash、三份小型負向素材與manifest；既有 `slint-main-bundle/package-current`、軟體配置Native-Bookmarks／合成收藏、Windows S1 ZIP及全部source不變。target剩8KiB，filesystem available 233979011072→236865433600 bytes只記並行期間的觀測差額。symlink僅移除自有連結，參考Frameworks未動；精確路徑／owner／symlink／lsof／hash與保留原因在 `.local/verification/slint-video-pixel-sync/cleanup/ledger.json`。完整S5／S8仍not_ready；下一次出現像素失敗時需讀實際失敗資料再判斷，同時繼續其餘平台／軟體繪製等缺項。S0–S8 goal保持active，S9未執行。
+
+## S5 CPU 影片與明確軟體 compositor（2026-11-09）
+
+原完整 native-video 入口強制 OpenGL，因此原先即使指定 `SLINT_BACKEND=winit-skia-software`，影片仍走GL。本批以舊候選binary重現後，新增 `--software-renderer` 並尊重明確環境選擇。未指定的完整native-video入口仍維持GL；非GL notifier或明確software選擇走同一libmpv Session／Control／RenderGate的CPU renderer，不增WebView、獨立下載器或另一個影片控制狀態。
+
+CPU renderer由單一具名worker擁有，建立與釋放render context都在該thread。只保留一個合併wake、一個latest-frame watch與有界view；輸出依可見區等比例縮至最高1280×720，64-byte對齊的rgb0／stride在worker轉成緊密RGBA，alpha明確為255。Slint UI只接收最新frame並更新Image，跨thread的UI喚醒也至多一筆待處理；不在UI做libmpv軟體轉換。隱藏／失焦依既有permit暫停，退出先停止並join renderer，再釋放session／core／HTTP。720p只限制此輸出surface，不能當作整個decoder、UI影像或process memory的上限，也沒有CPU／記憶體效能勝過Dioxus的結論。
+
+初次CPU探針沒有ready／HTTP，是因Skia software接受notifier註冊卻不產生GL setup；已改用啟動時的明確mode hint。暫停時capture也明確wake owner，不等待GL notifier。首輪Clippy抓到test module後還有production items，已調整排列而非加入lint例外。兩項新增lib測試核對alignment／padding／alpha／極端尺寸及真實CPU context在立即取消、ready但未播放時的零HTTP與renderer先於core退休。
+
+同一CLI binary SHA-256 `b9c312a456eb13b8308cf01936b358a4d13ed7e8c5417aaf47093be95d6a12d5`：18案包括CPU／GL各三格式MP4、WebM、OGV與各四種退出（ready、playing、stall、minimized），CPU三份刻意錯色負向及一份環境選擇。正常案例exit0；三份負向預期exit1並核對錯色及完整清理，不計作正常播放成功。CPU report明列`render_path: software`、Frame serial與實際RGB，沒有把CPU buffer比對稱為GPU readback；目前共用舊錯誤字串仍有GPU字樣，判讀以render_path及samples為準。9組文章／收藏／尋找／PNG-GIF／輸出回歸及2組混合取消／追加均exit0，來源hash未變；混合HTTP server均joined。完整Rust測試484 passed／6明示ignored、兩配置all-targets Clippy、fmt及Python110通過，未測項仍依各自矩陣保留。
+
+本批macOS arm64候選App使用相同source binary，搬移loader paths及ad-hoc簽名後native SHA-256 `ff24429ea149468b5f5d19fec25ce379dce32b6d12357aa1038aa7e3657a636b`。CUA實際OS畫面顯示紅／藍／黃／青與白色marker；實際slider座標點擊後為1秒，Play後1.25秒，再Pause為1.3333334秒，按⌘Q的owned child exit0。軟體worker87frames、max_buffer_bytes2995200、joined／renderer_retired均true，control joined／core destroyed、stream stopped、Close ACK與HTTP joined另有log。OS畫面保留在CUA工具紀錄，未宣稱另存PNG或實際聽見音訊。退出後的AX讀取意外重開無參數App，另以⌘Q關閉，最後inventory無候選程序；這份意外啟動揭露無參數仍落離線原型，先前候選README的「正常啟動自動連線」尚未由程式實現，須接續修正，不能當成已通過的主程式啟動驗收。
+
+原始命令、初次失敗、18案逐筆審核、閱讀／混合報告、Clippy失敗及修正後結果、native observation及候選manifest在 `.local/verification/slint-video-software/`。本批尚未解決既有GL MP4偶發像素失敗；三格式這次通過不構成重複性修復。四架構原生、對應來源交付、音訊、乾淨機器、資料回退UI及同負載效能仍待驗，S0–S8持續、S9未執行。
