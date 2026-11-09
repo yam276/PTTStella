@@ -1371,6 +1371,8 @@ viewport另分開「請求的行／圖片anchor」與經viewport界線夾限的�
 
 macOS strict ad-hoc `Native-Mixed.app` signed native SHA-256 `ad9a676613f5abd7bbb4f60c279ac7b6daab3922765dfc9298a10061cc7663b3`。原生run53028等native-ready後，實際點自己群組／下一則（0／2→1／2）、原PO／下一則，畫面可見ROW0031～0039、六則推文、Bob藍底及青／金側標。這個launcher沒有HTTP origin，PNG／GIF實際資源與wide只由上述完整元件案例證明。第一次run52746在native-ready前被Agent點下一則，與準備程序自動定位衝突並退出，屬探針交接錯誤，未算產品驗收。
 
-原生畫面仍有未解限制：一張OS擷圖正文只剩底色，後續相同縮放再次有文字；兩者分別保存在 `native-retained-53028/os-author.png` 與 `os-visible.png`，不能推定內部原因或聲稱已修復。控制也曾因失焦變成disabled，標題／Raise／輸入欄點擊未能完整驗證恢復，本輪沒有宣稱站端復原實體操作或完整OS矩陣通過。CmdQ後inventory及程序不存在、peer Close ACK且無額外站端bytes分開確認；LaunchServices無exit code，不把absence當成exit0。沒有以cache停用或失焦豁免迴避這些限制。
+原生畫面仍有未解限制：一張OS擷圖正文只剩底色，後續相同縮放再次有文字；兩者分別保存在 `native-retained-53028/os-author.jpg` 與 `os-visible.jpg`，不能推定內部原因或聲稱已修復。控制也曾因失焦變成disabled，標題／Raise／輸入欄點擊未能完整驗證恢復，本輪沒有宣稱站端復原實體操作或完整OS矩陣通過。CmdQ後inventory及程序不存在、peer Close ACK且無額外站端bytes分開確認；LaunchServices無exit code，不把absence當成exit0。沒有以cache停用或失焦豁免迴避這些限制。
 
 本批完成上述可獨立驗證的修正；後續先釐清原生畫面／焦點一致性，並繼續完整更新控制、列表右鍵、新程序離線、IME、四架構打包／回退與同負載效能。S0–S8保持active，S9未整合、推送或發佈。
+
+混合閱讀修正 `c817538` 驗收後依逐批規則清掉本Slint `target/release`（Cargo宣告12936檔、4.9GiB；target的du由5251928KiB降至12KiB），並移除已被同功能回歸涵蓋的舊 `slint-reply-updates/Native-Updates.app`（du65708KiB）。該App只留2574bytes非執行metadata ZIP；最新一般配置改為 `slint-mixed-reading/Native-Mixed.app`，影片配置與Windows S1 ZIP仍保留。267份src及3份必要交付hash不變，未重建Rust；精確resolved paths、owner、symlink／lsof、保留例外及free前後在 `.local/verification/slint-mixed-reading/cleanup.json`。filesystem available 237879652352→242873319424 bytes只記觀測差額，不全歸因於清理；原生正反畫面、未整合source／worktree及其他聊天產物保留。
