@@ -68,6 +68,7 @@ cargo clean --release --target-dir <已核對的本 repo target 絕對路徑>
 - 交叉編譯／打包的 task-owned 容器、容器內 target、暫存 sysroot／磁碟映像與解包副本也納入同批清理；先匯出最小結果／失敗證據，核對容器 ID、task label、mounts 與程序後，正常停止及移除自己的容器。只移除已無使用者的自有臨時 image，不執行全域 prune，不停止或刪除共用 VM／磁碟。若稀疏 VM 已刪檔但主機空間尚未回收，可在確認 discard 支援後執行線上 filesystem TRIM；分別記錄 guest free、主機 available 與 sparse disk allocated bytes，TRIM 回報範圍不等於實際回收量。已安裝的 SDK／工具與共用 registry source cache 另列保留理由。
 - macOS 對照 App 的專用 `Library/WebKit/<task bundle id>`、`Library/Caches/<task bundle id>` 及系統暫存目錄也要列入盤點；probe 輸出目錄隔離不代表 WebKit cache 都在其中。只清 exact task namespace，先保存最小必要證據並核對 owner、resolved path、symlink、程序與 open files；共用 WebKit、產品資料和其他聊天 namespace 不刪。後續量測須記錄這些 cache 的 cold／warm 狀態。
 - 後續 Slint goal 的一般 dev／test 建置明示 `CARGO_INCREMENTAL=0`、`CARGO_PROFILE_DEV_DEBUG=0`、`CARGO_PROFILE_TEST_DEBUG=0`，減少多代 incremental 與完整 debug symbols。這是該命令的 Cargo 標準選項，不改全機設定或 release profile；需要符號診斷時只在該批明示調整，完成後照樣清理。
+- 原生 runtime 的 C／C++／Swift 編譯目錄、解壓來源副本與臨時 bootstrap 工具同樣按批清理。中途清理先保存已完成且後續可直接重用的 install prefix、原始來源 archive／SHA、recipe／patch 及必要 config／失敗紀錄，再移除無活動使用者的 objects／build trees。只有 Git checkout 的來源先連同必要 submodule 匯出並逐檔核對，不能只記 commit 就刪掉唯一修改。後續只重建缺少的元件；當批用完的臨時工具及已被候選包涵蓋的 install 副本也要清理，不將其當成永久 SDK。
 - 每批記錄 exact removed paths、保留例外、du、Cargo 宣告量與 filesystem free 前後。共用／活動／不明項目保留原因；不啟動 daemon、定時刪除或 owner-release 流程，不跨案刪別人的產物。
 
 結案清理不為證明清理而重跑 Rust build。一般 docs、Python helper 單元測試可在清完後執行，使用 `PYTHONDONTWRITEBYTECODE=1` 避免再次產生 pycache；不重建 target。若工作在硬中斷後恢復，只重新盤點自己的殘留，不啟動 legacy guard 或猜測清掉外部共享路徑。
