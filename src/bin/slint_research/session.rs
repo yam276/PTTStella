@@ -249,7 +249,15 @@ pub fn with_probe(
                 }
             }
             Probe::Media => {
-                if let Ok(case) = std::env::var("PTTSTELLA_SLINT_DESTINATION_PROBE") {
+                if let Ok(case) = std::env::var("PTTSTELLA_SLINT_CAPTURE_PROBE") {
+                    match case.as_str() {
+                        "current" | "native" => Connection::start_bookmark_archive_probe(false),
+                        "headerless" => Connection::start_bookmark_archive_probe(true),
+                        "list" => Connection::start_bookmark_list_probe(),
+                        "cancel" | "blur" => Connection::start_live_updates_probe(None, true),
+                        _ => Err("unknown capture probe case".into()),
+                    }
+                } else if let Ok(case) = std::env::var("PTTSTELLA_SLINT_DESTINATION_PROBE") {
                     match case.as_str() {
                         "boards" | "native" => Connection::start_board_probe(),
                         "articles" => Connection::start_article_probe(),

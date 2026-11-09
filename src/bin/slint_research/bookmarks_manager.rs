@@ -1,5 +1,7 @@
-//! Local-only bookmark form and archive reader. No connection, station stamp,
-//! media downloader or station keyboard route is available to this owner.
+//! Bookmark form, explicit online acquisition and local archive reader.
+//! Offline rendering has no connection, media downloader or keyboard route.
+mod capture;
+pub mod capture_probe;
 pub mod probe;
 use crate::{
     BookmarksWindow, TerminalWindow,
@@ -50,6 +52,11 @@ pub struct Manager {
     ui: slint::Weak<TerminalWindow>,
     output: Rc<Output>,
     article: Rc<ArticleSession>,
+    connection: Rc<pttstella::connection::Connection>,
+    capture: RefCell<Option<capture::Capture>>,
+    capture_timer: slint::Timer,
+    capture_serial: Cell<u64>,
+    capture_observing: Cell<bool>,
     store: Result<Store, String>,
     state: RefCell<Option<State>>,
     window: RefCell<Option<BookmarksWindow>>,
@@ -79,12 +86,18 @@ impl Manager {
         ui: &TerminalWindow,
         output: Rc<Output>,
         article: Rc<ArticleSession>,
+        connection: Rc<pttstella::connection::Connection>,
         store: Result<Store, String>,
     ) -> Rc<Self> {
         let owner = Rc::new(Self {
             ui: ui.as_weak(),
             output,
             article,
+            connection,
+            capture: RefCell::new(None),
+            capture_timer: slint::Timer::default(),
+            capture_serial: Cell::new(0),
+            capture_observing: Cell::new(false),
             store,
             state: RefCell::new(None),
             window: RefCell::new(None),
@@ -112,6 +125,31 @@ impl Manager {
             move || {
                 if let Some(o) = o.upgrade() {
                     o.sync();
+                    o.capture_tick();
+                }
+            }
+        });
+        ui.on_bookmarks_capture_updated({
+            let o = Rc::downgrade(&owner);
+            move || {
+                if let Some(o) = o.upgrade() {
+                    o.capture_tick();
+                }
+            }
+        });
+        ui.on_bookmarks_capture_current({
+            let o = Rc::downgrade(&owner);
+            move || {
+                if let Some(o) = o.upgrade() {
+                    o.capture_current();
+                }
+            }
+        });
+        ui.on_bookmarks_capture_cancel({
+            let o = Rc::downgrade(&owner);
+            move || {
+                if let Some(o) = o.upgrade() {
+                    o.cancel_capture();
                 }
             }
         });
@@ -254,6 +292,7 @@ impl Manager {
     fn open(self: &Rc<Self>) {
         let Some(ui) = self.ui.upgrade() else { return };
         if self.stopped.get()
+            || self.capture.borrow().is_some()
             || ui.get_app_closing()
             || self.output.busy()
             || ui.get_destination_open()
@@ -562,6 +601,9 @@ impl Manager {
                     .complete(Ok(saved))?;
                 self.render();
                 self.notice(msg!("bookmarks-saved"));
+                if let Some(ui) = self.ui.upgrade() {
+                    ui.set_input_notice(msg!("bookmarks-saved").into());
+                }
                 Ok(())
             }
             Value::Read(article) => {
@@ -582,6 +624,9 @@ impl Manager {
         });
         if let Err(e) = &result {
             self.notice(e.clone());
+            if let Some(ui) = self.ui.upgrade() {
+                ui.set_input_notice(e.clone().into());
+            }
         }
         self.sync();
         result
@@ -709,9 +754,11 @@ impl Manager {
         }
     }
     pub fn prepare_app_close(&self) {
+        self.cancel_capture();
         self.hide();
     }
     pub fn finish(&self) -> Result<(), String> {
+        self.cancel_capture();
         self.stopped.set(true);
         let joined = self.output.finish();
         let collected = self.collect();

@@ -36,6 +36,8 @@ enum Command {
     Sites,
     Filters,
     Bookmarks,
+    BookmarkCurrent,
+    BookmarkCancel,
     Destination,
     StopDestination,
 }
@@ -323,7 +325,19 @@ impl Tools {
                 ]);
             }
             1 if ui.get_bookmarks_available() => {
-                result.push((Command::Bookmarks, pttstella::msg!("bookmarks-title"), true))
+                result.push((
+                    Command::Bookmarks,
+                    pttstella::msg!("bookmarks-title"),
+                    !ui.get_bookmarks_capturing(),
+                ));
+                result.push((
+                    Command::BookmarkCurrent,
+                    pttstella::msg!("bookmarks-current"),
+                    ui.get_bookmarks_current_available(),
+                ));
+                if ui.get_bookmarks_capturing() {
+                    result.push((Command::BookmarkCancel, pttstella::msg!("cancel"), true));
+                }
             }
             2 => {
                 for action in [
@@ -596,6 +610,8 @@ impl Tools {
             Command::Sites => ui.invoke_sites_show(),
             Command::Filters => ui.invoke_filters_show(),
             Command::Bookmarks => ui.invoke_bookmarks_show(),
+            Command::BookmarkCurrent => ui.invoke_bookmarks_capture_current(),
+            Command::BookmarkCancel => ui.invoke_bookmarks_capture_cancel(),
             Command::Destination => ui.invoke_destination_show(),
             Command::StopDestination => ui.invoke_destination_stop(),
         }

@@ -572,6 +572,8 @@ fn run(
         && std::env::var_os("PTTSTELLA_SLINT_DESTINATION_PROBE").is_some();
     let bookmarks_probe = options.probe == Some(Probe::Session(session::Probe::Media))
         && std::env::var_os("PTTSTELLA_SLINT_BOOKMARKS_PROBE").is_some();
+    let capture_probe = options.probe == Some(Probe::Session(session::Probe::Media))
+        && std::env::var_os("PTTSTELLA_SLINT_CAPTURE_PROBE").is_some();
     let filters_probe = options.probe == Some(Probe::Session(session::Probe::Media))
         && std::env::var_os("PTTSTELLA_SLINT_FILTERS_PROBE").is_some();
     let filters_probe_store = if settings_search_probe || filters_probe {
@@ -870,6 +872,7 @@ fn run(
             ) || settings_search_probe
                 || destination_probe
                 || bookmarks_probe
+                || capture_probe
                 || filters_probe
             {
                 let mut article_preferences = settings.clone();
@@ -940,7 +943,8 @@ fn run(
                             | session::Probe::ArticleLong
                             | session::Probe::ArticleStall
                     )
-            ) {
+            ) || capture_probe
+            {
                 paste_owner = Some(native_input::mount_article(
                     &ui,
                     connection.clone(),
@@ -977,7 +981,8 @@ fn run(
                         | session::Probe::MouseWheel
                         | session::Probe::MouseRoundTrip
                 )
-            ) {
+            ) && !capture_probe
+            {
                 paste_owner = Some(native_input::mount(
                     &ui,
                     connection.clone(),
@@ -1179,6 +1184,7 @@ fn run(
                     Some(profile::Profile::system().map(|p| p.bookmarks()))
                 } else if options.probe == Some(Probe::Session(session::Probe::Media))
                     && (std::env::var_os("PTTSTELLA_SLINT_BOOKMARKS_PROBE").is_some()
+                        || capture_probe
                         || destination_probe)
                 {
                     Some(
@@ -1203,8 +1209,12 @@ fn run(
                         &ui,
                         output.clone(),
                         article.clone(),
+                        connection.clone(),
                         store,
                     ));
+                }
+                if let (Some(context), Some(bookmarks)) = (&context_owner, &bookmarks_owner) {
+                    context.attach_bookmarks(bookmarks);
                 }
                 let recent_store = if matches!(&mode, session::Mode::Live(_)) {
                     Some(profile::Profile::system().map(|p| p.recent()))
@@ -1384,7 +1394,10 @@ fn run(
     };
     let destination_verification_directory =
         options.verify_media.clone().filter(|_| destination_probe);
-    let bookmarks_verification_directory = options.verify_media.clone().filter(|_| bookmarks_probe);
+    let bookmarks_verification_directory = options
+        .verify_media
+        .clone()
+        .filter(|_| bookmarks_probe || capture_probe);
     let filters_verification_directory = options.verify_media.clone().filter(|_| filters_probe);
     let sites_verification_directory = options
         .verify_media
@@ -1401,9 +1414,23 @@ fn run(
             && std::env::var("PTTSTELLA_SLINT_DESTINATION_PROBE").as_deref() == Ok("native")
         || bookmarks_probe
             && std::env::var("PTTSTELLA_SLINT_BOOKMARKS_PROBE").as_deref() == Ok("native")
+        || capture_probe
+            && std::env::var("PTTSTELLA_SLINT_CAPTURE_PROBE").as_deref() == Ok("native")
         || std::env::var("PTTSTELLA_SLINT_FILTERS_PROBE").is_ok_and(|v| v == "native")
     {
         None
+    } else if capture_probe {
+        Some(bookmarks_manager::capture_probe::start(
+            &ui,
+            bookmarks_owner
+                .as_ref()
+                .cloned()
+                .ok_or("capture verifier owner missing")?,
+            options
+                .verify_media
+                .clone()
+                .ok_or("capture verification directory missing")?,
+        )?)
     } else if destination_probe {
         Some(destination::probe::start(
             &ui,
@@ -1718,6 +1745,9 @@ fn run(
             };
         let bookmarks_cleanup = bookmarks_owner.as_ref().map(|s| s.finish()).transpose();
         let bookmarks_close_audit = match (&bookmarks_owner, &bookmarks_verification_directory) {
+            (Some(owner), Some(dir)) if capture_probe => {
+                bookmarks_manager::capture_probe::audit_closed(owner, dir)
+            }
             (Some(owner), Some(dir)) => bookmarks_manager::probe::audit_closed(owner, dir),
             _ => Ok(()),
         };

@@ -61,6 +61,11 @@ export component TerminalWindow inherits Window {
     in property <string> bookmarks-label;
     callback bookmarks-show;
     callback bookmarks-updated;
+    in property <bool> bookmarks-current-available;
+    in property <bool> bookmarks-capturing;
+    callback bookmarks-capture-current;
+    callback bookmarks-capture-cancel;
+    callback bookmarks-capture-updated;
     changed bookmarks-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
     out property <bool> manager-open:root.sites-open || root.filters-open || root.bookmarks-open || root.destination-open;
     changed filters-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
@@ -346,7 +351,7 @@ export component TerminalWindow inherits Window {
     in property <bool> keep-alive-available;
     in property <bool> keep-alive-enabled;
     in property <string> keep-alive-label;
-    out property <bool> keep-alive-surface-ready: !root.app-closing && !root.manager-open && !root.settings-open && !root.editor-open && !root.station-color-open && !root.media-open && !root.find-open && root.native-foreground
+    out property <bool> keep-alive-surface-ready: !root.app-closing && !root.bookmarks-capturing && !root.manager-open && !root.settings-open && !root.editor-open && !root.station-color-open && !root.media-open && !root.find-open && root.native-foreground
         && (root.article-active ? root.article-focused : root.terminal-input-focused) && !root.native-composing && !root.native-pointer-down
         && !root.show-about && !root.switching-station && !root.paste-open && !root.paste-reading
         && !root.frame-paint-pending && !root.login-open && !root.login-busy

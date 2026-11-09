@@ -28,6 +28,8 @@ struct DestinationWait {
 type ReplyWait = Pin<Box<dyn Future<Output = Result<(), String>>>>;
 #[path = "accounts.rs"]
 mod accounts;
+#[path = "bookmarks.rs"]
+pub mod bookmarks;
 #[path = "find.rs"]
 mod find;
 #[path = "input.rs"]
@@ -366,6 +368,7 @@ impl ArticleSession {
         ui.invoke_output_updated();
         ui.invoke_paste_updated();
         ui.invoke_keep_alive_changed();
+        ui.invoke_bookmarks_capture_updated();
         self.notify.notify_one();
     }
     fn reading_timing(&self, event: &str, view: &View) {
@@ -439,6 +442,7 @@ impl ArticleSession {
             ui.invoke_paste_updated();
             ui.invoke_keep_alive_changed();
             ui.invoke_inline_updated();
+            ui.invoke_bookmarks_capture_updated();
         }
         self.notify.notify_one();
     }
@@ -649,6 +653,8 @@ impl ArticleSession {
             self.next_paint.set(now);
             self.notify.notify_one();
         }
+        // Observe after ACK/projection work and outside all reducer borrows.
+        ui.invoke_bookmarks_capture_updated();
     }
     fn deadline(&self) -> Option<Instant> {
         let core = self.core.borrow();

@@ -57,6 +57,7 @@ pub struct ContextMenu {
     closed: Cell<bool>,
     media: RefCell<Weak<crate::media::Media>>,
     filters: RefCell<Weak<crate::filters_manager::Manager>>,
+    bookmarks: RefCell<Weak<crate::bookmarks_manager::Manager>>,
     trace_left: Cell<u8>,
 }
 impl ContextMenu {
@@ -78,6 +79,7 @@ impl ContextMenu {
             closed: Cell::new(false),
             media: RefCell::new(Weak::new()),
             filters: RefCell::new(Weak::new()),
+            bookmarks: RefCell::new(Weak::new()),
             trace_left: Cell::new(if std::env::var_os("PTTSTELLA_INLINE_TRACE").is_some() {
                 8
             } else {
@@ -112,6 +114,20 @@ impl ContextMenu {
     }
     pub fn attach_filters(&self, filters: &Rc<crate::filters_manager::Manager>) {
         self.filters.replace(Rc::downgrade(filters));
+    }
+    pub fn attach_bookmarks(&self, bookmarks: &Rc<crate::bookmarks_manager::Manager>) {
+        self.bookmarks.replace(Rc::downgrade(bookmarks));
+    }
+    fn list_bookmark(
+        &self,
+        account: Option<&AccountContext>,
+    ) -> Option<crate::article::session::bookmarks::Source> {
+        let account = account?;
+        self.bookmarks.borrow().upgrade()?.list_source(
+            account.identity,
+            account.stamp,
+            account.cell?,
+        )
     }
     pub fn attach_media(&self, media: &Rc<crate::media::Media>) {
         self.media.replace(Rc::downgrade(media));
@@ -192,6 +208,7 @@ impl ContextMenu {
         );
         if !press.shift
             && !reading
+            && self.list_bookmark(account.as_ref()).is_none()
             && account
                 .as_ref()
                 .is_none_or(|a| a.word.is_none() && !a.focused)
@@ -350,6 +367,9 @@ impl ContextMenu {
         ] {
             flags.set(flag, value);
         }
+        // Native capability owners may read the watch again. Do not retain a
+        // read guard across those calls while a Session publication is queued.
+        drop(view);
         if editor && ui.get_keyboard_read_only() {
             flags.set(Flag::Ready, false);
         }
@@ -363,6 +383,8 @@ impl ContextMenu {
             inline.as_ref().is_some_and(|i| i.menu_ready()),
         );
         flags.set(Flag::Picture, picture.is_some());
+        flags.set(Flag::ListBookmark, self.list_bookmark(account).is_some());
+        flags.set(Flag::Bookmark, ui.get_bookmarks_current_available());
         flags.set(
             Flag::PictureReady,
             picture.is_some_and(|p| p.image.is_some()),
@@ -381,6 +403,12 @@ impl ContextMenu {
             Ok(entries) => entries
                 .into_iter()
                 .filter(|entry| supported(entry.action))
+                .filter(|entry| {
+                    !matches!(
+                        entry.action,
+                        Action::Bookmarks | Action::BookmarkCurrent | Action::BookmarkList
+                    ) || ui.get_bookmarks_available()
+                })
                 .map(|mut entry| {
                     if account_policy(entry.action).is_some()
                         && !self
@@ -622,6 +650,16 @@ impl ContextMenu {
                 if let Some(inline) = self.media.borrow().upgrade().and_then(|m| m.inline_owner()) {
                     inline.expand_all();
                 }
+            } else if entry.action == Action::Bookmarks {
+                ui.invoke_bookmarks_show();
+            } else if entry.action == Action::BookmarkCurrent {
+                ui.invoke_bookmarks_capture_current();
+            } else if entry.action == Action::BookmarkList {
+                if let Some(source) = self.list_bookmark(account.as_ref())
+                    && let Some(owner) = self.bookmarks.borrow().upgrade()
+                {
+                    owner.capture_source(source);
+                }
             } else {
                 self.output.context_action(entry.action, link);
             }
@@ -662,6 +700,9 @@ fn supported(action: Action) -> bool {
             | Action::Paste
             | Action::Settings
             | Action::EditorColor
+            | Action::Bookmarks
+            | Action::BookmarkCurrent
+            | Action::BookmarkList
     )
 }
 pub(super) fn label(action: Action) -> String {
@@ -680,6 +721,9 @@ pub(super) fn label(action: Action) -> String {
         A::CopyPicture => pttstella::msg!("context-copy-picture"),
         A::SavePicture => pttstella::msg!("context-save-picture"),
         A::Inline => pttstella::msg!("context-inline"),
+        A::Bookmarks => pttstella::msg!("bookmarks-title"),
+        A::BookmarkCurrent => pttstella::msg!("bookmarks-current"),
+        A::BookmarkList => pttstella::msg!("bookmarks-list-current"),
         A::CopyAnsi => pttstella::msg!("context-copy-ansi"),
         A::CopyLink => pttstella::msg!("context-copy-link"),
         A::OpenLink => pttstella::msg!("context-open-link-external"),
