@@ -65,6 +65,7 @@ cargo clean --release --target-dir <已核對的本 repo target 絕對路徑>
 - 只保留每個仍有必要的平台／執行配置的最新候選包，不為每個功能階段各保留一份 App。新候選涵蓋舊功能後，清掉已測舊包；尚缺平台驗收的唯一交付可以保留並說明。不得以測試包副本充當唯一來源備份。
 - 歷次證據保留來源 commit／patch、binary hash、必要結果、最小重現資料與獨特失敗紀錄。舊 bundle 的 launcher／plist／授權／資源可以壓成小型紀錄；不再把完整可重建 executable／dylib 一起存進每階段的證據目錄。來源、原始 assets、使用者資料、已安裝工具與 registry cache 仍保護。
 - 獨立 `--target-dir`、headless 驗收 driver 與版本對照用臨時 checkout 也屬於該批產物，不能因不在主 target 內而漏清。保存來源 ref／patch、driver hash 與結果後，確認沒有使用者，清掉已用完的 Cargo profile／driver；臨時 worktree 須確認沒有未保存修改，再用 `git worktree remove` 正常移除，不強制刪除。尚未整合的 Slint 來源 worktree 保留。
+- 交叉編譯／打包的 task-owned 容器、容器內 target、暫存 sysroot／磁碟映像與解包副本也納入同批清理；先匯出最小結果／失敗證據，核對容器 ID、task label、mounts 與程序後，正常停止及移除自己的容器。只移除已無使用者的自有臨時 image，不執行全域 prune，不停止或刪除共用 VM／磁碟。若稀疏 VM 已刪檔但主機空間尚未回收，可在確認 discard 支援後執行線上 filesystem TRIM；分別記錄 guest free、主機 available 與 sparse disk allocated bytes，TRIM 回報範圍不等於實際回收量。已安裝的 SDK／工具與共用 registry source cache 另列保留理由。
 - macOS 對照 App 的專用 `Library/WebKit/<task bundle id>`、`Library/Caches/<task bundle id>` 及系統暫存目錄也要列入盤點；probe 輸出目錄隔離不代表 WebKit cache 都在其中。只清 exact task namespace，先保存最小必要證據並核對 owner、resolved path、symlink、程序與 open files；共用 WebKit、產品資料和其他聊天 namespace 不刪。後續量測須記錄這些 cache 的 cold／warm 狀態。
 - 後續 Slint goal 的一般 dev／test 建置明示 `CARGO_INCREMENTAL=0`、`CARGO_PROFILE_DEV_DEBUG=0`、`CARGO_PROFILE_TEST_DEBUG=0`，減少多代 incremental 與完整 debug symbols。這是該命令的 Cargo 標準選項，不改全機設定或 release profile；需要符號診斷時只在該批明示調整，完成後照樣清理。
 - 每批記錄 exact removed paths、保留例外、du、Cargo 宣告量與 filesystem free 前後。共用／活動／不明項目保留原因；不啟動 daemon、定時刪除或 owner-release 流程，不跨案刪別人的產物。
