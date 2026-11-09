@@ -8,7 +8,7 @@ import shutil
 import sys
 import tempfile
 
-import bundle_common
+import bundle_slint_macos
 import native_runtime_macos as runtime
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -36,12 +36,6 @@ def fixtures(source, destination):
 def bundle(executable, media, skia_license, output, allowed, source_archives=None):
     if sys.platform != 'darwin':
         raise ValueError('Native macOS tooling is required')
-    if not skia_license.is_file():
-        raise ValueError('The built Skia license is required')
-    arch = runtime.run('lipo', '-archs', str(executable)).strip()
-    target = {'arm64': 'aarch64-apple-darwin', 'x86_64': 'x86_64-apple-darwin'}.get(arch)
-    if target is None:
-        raise ValueError('Expected one supported macOS architecture')
     output.mkdir(parents=True, exist_ok=True)
     final = output / NAME
     if os.path.lexists(final):
@@ -49,16 +43,10 @@ def bundle(executable, media, skia_license, output, allowed, source_archives=Non
     with tempfile.TemporaryDirectory(prefix='.native-player-', dir=output) as stage:
         app = Path(stage) / NAME
         contents = app / 'Contents'
-        binary = contents / 'MacOS' / 'native'
-        binary.parent.mkdir(parents=True)
+        binary, arch, manifest = bundle_slint_macos.stage_runtime(
+            executable, contents, skia_license, allowed, source_archives)
         resources = contents / 'Resources'
-        resources.mkdir()
         fixtures(media, resources / 'media')
-        manifest = runtime.install(executable, binary, contents / 'Frameworks',
-                                   resources / 'NativeRuntimeNotices', allowed, source_archives)
-        bundle_common.copy_licenses(resources / 'RustNotices', target, feature='native-player-probe')
-        shutil.copy2(skia_license, resources / 'RustNotices' / 'LICENSE_SKIA')
-        (resources / 'runtime-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
         (resources / 'READ-ME-zh-TW.txt').write_text(
             'PTTStella 原生播放器本機實驗包，並非完整產品或正式發佈。\n'
             '啟動後只連自帶合成影片的 loopback 服務，按播放才載入。\n'

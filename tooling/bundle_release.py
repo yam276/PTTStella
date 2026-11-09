@@ -124,10 +124,10 @@ def linux_package(staging, stem, version):
                             'depends': depends, 'libraries': libraries, 'signed': False}
 
 
-def macos_disk_image(app, image):
+def macos_disk_image(app, image, volume_name='PTTStella'):
     applications = Path('/Applications')
     (app.parent/'Applications').symlink_to(applications)
-    run('hdiutil', 'create', '-volname', 'PTTStella', '-fs', 'HFS+', '-format', 'UDZO',
+    run('hdiutil', 'create', '-volname', volume_name, '-fs', 'HFS+', '-format', 'UDZO',
         '-srcfolder', str(app.parent), str(image))
     run('hdiutil', 'verify', str(image))
 

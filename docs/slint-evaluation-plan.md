@@ -15,10 +15,10 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 | S2 | 共用 Connection、登入／保活、站點表單、嚴格切站／雙編碼 bytes | 同 endpoint 編碼切換、預設站重啟／不登入、完整信任／vault 原生矩陣 |
 | S3 | 選取、輸出、浮球／選單及原生互動的分立證據 | 全部快捷鍵／pointer／modal／可及性操作矩陣 |
 | S4 | 雙閱讀模式、長文取頁、尋找、名單／右鍵／揭露／底色、書籤／離線、快速前往與最近看板、目前／指定列表文章收藏、共用推文索引／原生定位與側標、推文更新／未讀／保留與復原；macOS基本按鈕、列表右鍵指定收藏與新程序斷線讀回補驗 | 跨平台推文控制／定位與完整鍵盤／焦點矩陣、其他平台列表右鍵及新程序離線操作、混合 Live 等效與全功能回歸 |
-| S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理 | 多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
+| S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生影片跳轉後時間軸綁定修正 | MP4 GPU 像素偶發失敗、多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
 | S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
 | S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔及正常退出 owner；三版本實際 store 往返與並行保存28案 | 其他管理入口、完整 Dock／modal／OS I/O 退出矩陣、實際前端／平台路徑及 vault 往返 |
-| S8 | S1 Windows 探針及 macOS 本機實驗工具 | 完整四架構候選包、使用者 Windows 原生驗收、回退及同負載效能；尚未通過 |
+| S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG，封裝 libmpv、搬移與無 Homebrew sandbox 檢查 | 完整四架構候選包、乾淨機器／來源交付／完整原生驗收、使用者 Windows 驗收、回退及同負載效能；尚未通過 |
 
 接續完整鍵盤／焦點與其他平台、跨平台列表／重開、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
 
@@ -35,6 +35,8 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 2026-11-09 已回收 main Slint target 的 dev／release、獨立 Windows 交叉編譯 target，以及34份過時 macOS 測試 App。當前只保留 Slint 一般候選、影片配置候選及唯一 Windows S1 ZIP；兩個最小 reopen bundle metadata 目錄沒有 native executable。被刪 App 的非執行紀錄／授權／測試資源壓成約3.2MB ZIP，完整 binaries 不存進 archive。精確清單、來源雜湊、lsof、Cargo 輸出與空間前後在 `.local/verification/slint-artifact-cleanup-20261109/`。Slint target 12KiB、verification 約416MiB；原始碼、未提交的推文導覽工作及必要交付內容不變。canonical checkout 的其他聊天產物不屬於本 Slint goal 所有權，保留而未跨案刪除。
 
 後續三版本 store 往返批次驗收後，另清掉 `.local/verification/slint-store-roundtrip/target/release`、`drivers/candidate`、`drivers/baseline`、`drivers/release`，並正常移除 `checkouts/baseline` 與 `checkouts/release` 兩個臨時 worktree。Cargo 宣告6932檔／1.8GiB；filesystem free 由238467133440增至240648839168 bytes，這是並行工作期間的觀測值，不全歸因於本次清理。28案例結果、唯一失敗資料、來源 patch、各 ref／driver hash 均保留，原始碼與必要交付 hash 不變。主 target 與這批獨立 target 各12KiB，整個 Slint worktree 約497MiB（`.local` 約441MiB、Windows ZIP 約28MiB）。目前保留的一般候選為 `slint-native-list/Native-Bookmarks.app` 及其同檔重開所需 `native-state/bookmarks.json`，影片候選仍為 `slint-app-exit/Native-Video-Close.app`，Windows S1 ZIP 未更動。精確清單／du／Cargo輸出／空間前後記在 `.local/verification/slint-store-roundtrip/cleanup/ledger.json`；版本對照臨時 checkout 與 headless driver 納入往後每批清理，不保留可重建執行檔副本。
+
+主程式打包批次後，最新 OpenGL／影片配置改保留 `.local/verification/slint-main-bundle/package-current/` 的 App／ZIP／DMG（約271MiB），取代並移除舊 `Native-Video-Close.app`。一般軟體繪製配置的 `Native-Bookmarks.app`、其合成收藏檔與唯一 Windows S1 ZIP 仍有必要，繼續保留。另清掉本批2.6GiB release profile及三個已失敗／被取代的 package目錄，沒有留舊執行檔或完整ZIP／DMG副本；精確路徑、source／交付hash、du及free前後在 `.local/verification/slint-main-bundle/cleanup/ledger.json`。本批target剩8KiB metadata，不因 MP4 重複性缺項而繼續保留編譯快取；最新候選與唯一失敗證據保留供接續查驗。
 
 ## 共用 Rust 邊界
 

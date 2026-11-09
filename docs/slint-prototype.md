@@ -1464,3 +1464,36 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tooling \
 ```
 
 這是選用Cargo依賴的證據，沒有證明四架構可編譯、native library import／installer prerequisite／實際runtime。OS間接載入WebKit、mpv的各平台runtime與授權／來源交付仍沿用S5／S8各自的驗收。初步4份未去重樹在確認與最終播放器四格的package／version集合相同後刪除，只保留小型來源／hash清單；最終8份去重樹保留，避免把相同依賴展開上百次當成必要證據。S0其餘案例／平台、S1–S8及S9邊界不變。
+
+## S5 原生影片跳轉後的時間軸綁定（2026-11-09）
+
+實際操作封裝主程式時發現：拖曳時間軸至約1秒並繼續播放，文字已到3／3秒，滑塊的AX值仍為0.9882353。原先 Slider的 `value: root.position` 在使用者改值後失去持續更新的綁定。修正 `104a4c3` 將MediaPreview、外層terminal的position及Slider改成連續的雙向綁定；seek仍走原有Rust callback／權限與session檢查，沒有新增另一個播放器或計時器。
+
+同批最終 signed native SHA-256 `92e9e18ea2b7aedb6459ae8f8605c780cd858a04f5cb4592e5328f59a8ac5490`。原生座標拖至1秒後，AX為slider1／文字1／3；實際播放後slider前進1.25，緊接著按暫停，AX為已暫停／播放影片、slider1.2916666。CmdQ後candidate從inventory消失，直接啟動的owned child exit0／joined；正常退出audit確認GL／worker／core釋放，peer Close ACK。影片最初準備由既有toolkit探針執行，原生範圍只包含上述滑桿、播放／暫停與Quit，沒有聲稱實際聽見音訊或完整媒體矩陣通過。原始OS畫面在CUA工具紀錄，沒有宣稱另存截圖檔。前後報告及實際命令在 `.local/verification/slint-main-bundle/native-before-seek-fix.json`、`native-seek-fixed.json` 與 `native-fixed-result.json`。
+
+## S8 macOS arm64 主程式候選打包（2026-11-09）
+
+新增 [主程式打包工具](../tooling/bundle_slint_macos.py)，接收已編譯的 `native-player-probe`／`pttstella-slint`，產出一般主程式App、ZIP、DMG與SHA-256；不在工具內另建Rust、切換正式入口或發佈。既有loopback播放器packager改用同一 `stage_runtime`，由原 [runtime工具](../tooling/native_runtime_macos.py) 收集實際閉包、搬移loader paths與授權文字。逐檔檢查目標架構，缺libmpv、錯架構、錯研究profile、輸入binary封裝期間改變或既有output均拒絕交付。圖示與DMG使用共用macOS helper；正式版DMG的預設名稱不變，候選另用自己的volume name。
+
+App名為 `PTTStella Slint Candidate.app`，bundle ID `io.github.yam276.pttstella.slint.candidate`。直接執行main binary，沒有絕對開發路徑、fixture seed或探針shell launcher。正常啟動沿用研究profile的預設站自動連線、不自動登入；設定／資料為 `PTTStellaSlintResearch`，密碼庫scope為 `SlintResearch`。驗收只用明確loopback參數及 `--show-profile`，沒有啟動正常實站流程、讀取production store或開啟vault。原始碼狀態為 `ff76681` 加上等同 `104a4c3` 的兩個Slint檔案修正；所有src hash已核對，packager另有來源patch／hash。
+
+```sh
+CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 \
+cargo build --locked --release --no-default-features --features native-player-probe \
+  --bin pttstella-slint --target-dir <OWNED_TARGET>
+
+PYTHONDONTWRITEBYTECODE=1 python3 tooling/bundle_slint_macos.py \
+  --executable <CARGO_REPORTED_EXECUTABLE> --skia-license <BUILT_LICENSE_SKIA> \
+  --output <NEW_OUTPUT_DIR> --allow-prefix <EXPLICIT_LIB_PREFIX> \
+  --source-archives <EXACT_SBOM_ARCHIVES>
+```
+
+本機使用 `/opt/homebrew/Cellar` 為明示允許來源，只複製實際50個非系統runtime檔案、共66438752bytes，不複製整個prefix。glib缺少安裝後授權文字的部分沿用既有精確SBOM來源archive。最終App strict ad-hoc通過，DMG建立／verify／唯讀掛載後簽名檢查通過；ZIP解壓到全新路徑後簽名及native hash相同，並在拒讀 `/opt/homebrew` 的sandbox中成功執行 `--show-profile`。初始未封裝binary在相同拒讀條件下因libmpv無法載入而退出，負向對照成立。這證明本批路徑搬移與所跑功能，不替代乾淨機器安裝／升級回退。
+
+最終套件的9個閱讀／收藏／輸出／文內圖案例，加2個混合推文取消／追加共11案exit0，包含長文19次PageDown。原生影片7案亦在拒讀Homebrew的sandbox跑MP4／WebM／OGV、ready Quit、playing Close、stalled Quit與minimized Quit。WebM／OGV及4個退出案首跑通過；**MP4首跑GPU像素比對失敗，未改來源／binary重跑通過，重複性仍未解決**。現有failure-state沒有保存失敗像素的實際數值，不能由重跑或原生正常畫面推定其原因，更不能因此宣告完整S5／S8通過。所有首輪失敗保留。runtime trace經 `/usr/bin/env DYLD_PRINT_LIBRARIES=1` 在sandbox入口之後注入，7案分別記錄1066／1067個image，未見App外的非系統映射；仍有6個系統WebKit／WebCore／JavaScriptCore映射，沒有「零WebKit」主張。
+
+完整feature的Rust lib371／native bin79／multi10／screen22，共482 passed、6個明示ignored；全target Clippy／fmt、110項Python測試、文件及兩份workflow的actionlint通過。actionlint不在PATH，找到並沿用既有1.7.12工具，沒有安裝、複製或刪除其他工作的工具。打包新增7個負向測試，確認既有交付、錯profile、loader override、缺mpv、錯架構、icon失敗與輸入binary改變的保護。首輪 `lipo` 參數順序錯誤、第一份套件的一次全文首個取頁未送（同binary重跑通過）、過早啟動的一次封裝仍使用舊build，以及未保留可等待child的啟動嘗試均分開記錄，沒有當成產品通過證據。最終package檢查了Cargo完成結果與manifest來源hash；原始失敗及版本身分不覆寫。
+
+最新交付保留於 `.local/verification/slint-main-bundle/package-current/`：App約139MiB，含ZIP／DMG共約271MiB。這是內部候選，未公證；native／codec／IME／可及性完整矩陣、實際音訊、軟體renderer影片替代、完整對應原始碼交付、乾淨機器及其他三架構、安裝回退與同負載Dioxus效能均待驗收。建置時 `candidate.json` 的native_acceptance仍為not_run，後續有限原生結果在外部報告，不修改已簽名資源。完整證據入口為本批 `verification-summary.json`。
+
+本批結束清掉獨立target/release（Cargo宣告8288檔／2.6GiB）、失敗的 `package`、被取代的 `package-final`／`package-seek-final`，以及舊 `slint-app-exit/Native-Video-Close.app`；舊包只留小型metadata／launcher紀錄ZIP，不存machine binary或完整舊ZIP／DMG。最新App／ZIP／DMG、一般軟體配置的Native-Bookmarks與合成資料、唯一Windows S1 ZIP hash不變。target剩8KiB，filesystem available 234420215808→237588946944 bytes只記觀測差額；其他工作並行變化不全歸因於本次清理。exact paths／owner／symlink／lsof／逐檔hash在 `cleanup/ledger.json`。來源及未整合worktree保留，S0–S8仍active，S9未切換／推送／發佈。
