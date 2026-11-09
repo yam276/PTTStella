@@ -57,6 +57,7 @@ pub struct Manager {
     capture_timer: slint::Timer,
     capture_serial: Cell<u64>,
     capture_observing: Cell<bool>,
+    capture_trace_left: Cell<u8>,
     store: Result<Store, String>,
     state: RefCell<Option<State>>,
     window: RefCell<Option<BookmarksWindow>>,
@@ -98,6 +99,15 @@ impl Manager {
             capture_timer: slint::Timer::default(),
             capture_serial: Cell::new(0),
             capture_observing: Cell::new(false),
+            capture_trace_left: Cell::new(
+                if std::env::var_os("PTTSTELLA_SLINT_CAPTURE_PROBE").is_some()
+                    && std::env::var_os("PTTSTELLA_SLINT_CAPTURE_TRACE").is_some()
+                {
+                    64
+                } else {
+                    0
+                },
+            ),
             store,
             state: RefCell::new(None),
             window: RefCell::new(None),
@@ -589,8 +599,10 @@ impl Manager {
             Value::Loaded(state) => {
                 let warning = state.snapshot().warning;
                 self.state.replace(Some(state));
+                self.capture_trace("store-loaded", None);
                 self.render();
                 self.notice(warning.unwrap_or_else(|| msg!("bookmarks-hint")));
+                self.capture_trace("store-rendered", None);
                 Ok(())
             }
             Value::Saved(saved) => {

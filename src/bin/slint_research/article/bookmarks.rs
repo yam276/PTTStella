@@ -11,7 +11,7 @@ use pttstella::{
     surface_state::Identity,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Source {
     pub identity: Identity,
     pub stamp: Stamp,

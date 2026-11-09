@@ -1373,10 +1373,22 @@ impl Output {
         self.picker.set(false);
         if self.worker.borrow().is_none() {
             ui.set_output_busy(false);
-            ui.invoke_output_idle();
+            self.notify_idle(ui);
         }
         ui.invoke_keyboard_updated();
         ui.invoke_keep_alive_changed();
+    }
+
+    fn notify_idle(&self, ui: &TerminalWindow) {
+        if self.busy() || self.closed.get() {
+            return;
+        }
+        ui.invoke_output_idle();
+        // Slint can coalesce busy=true/false within one event-loop turn.
+        // A cold bookmark load may already have collected its result while
+        // ui.output-busy was still true. Resume after the worker has joined and
+        // the UI gate has retired, without relying on a property-change edge.
+        ui.invoke_bookmarks_capture_updated();
     }
 
     pub(super) fn work<T: Send + 'static>(
@@ -1433,7 +1445,7 @@ impl Output {
                 ui.invoke_keyboard_updated();
                 ui.invoke_keep_alive_changed();
                 if !output.busy() {
-                    ui.invoke_output_idle();
+                    output.notify_idle(&ui);
                 }
             }
         }) {

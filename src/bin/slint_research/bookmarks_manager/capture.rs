@@ -17,6 +17,34 @@ pub(super) enum Capture {
     List(FromList),
 }
 impl Manager {
+    pub(super) fn capture_trace(&self, at: &str, source: Option<Source>) {
+        let remaining = self.capture_trace_left.get();
+        if remaining == 0 {
+            return;
+        }
+        self.capture_trace_left.set(remaining - 1);
+        let stage = match self.capture.borrow().as_ref() {
+            Some(Capture::Loading(_)) => "loading",
+            Some(Capture::Current { .. }) => "current",
+            Some(Capture::List(_)) => "list",
+            None => "none",
+        };
+        let current = source.and_then(|source| {
+            self.article
+                .bookmark_source(&self.connection.updates.borrow(), source.cell)
+        });
+        eprintln!(
+            "{}",
+            serde_json::json!({"bookmark_capture_trace":{
+                "at":at,"serial":self.capture_serial.get(),"stage":stage,
+                "source":format!("{source:?}"),"current_source":format!("{current:?}"),
+                "state_loaded":self.state.borrow().is_some(),
+                "file_result_pending":self.result.borrow().is_some(),"output_busy":self.output.busy(),
+                "ui_output_busy":self.ui.upgrade().map(|ui|ui.get_output_busy()),
+                "article":self.article.diagnostics()
+            }})
+        );
+    }
     fn capture_environment(&self, ui: &TerminalWindow) -> bool {
         !self.stopped.get()
             && !ui.get_app_closing()
@@ -86,6 +114,7 @@ impl Manager {
         }
     }
     pub fn capture_source(self: &Rc<Self>, source: Source) {
+        self.capture_trace("source", Some(source));
         let Some(ui) = self.ui.upgrade() else { return };
         if !self.capture_environment(&ui)
             || self.output.busy()
@@ -105,11 +134,15 @@ impl Manager {
         self.capture_serial
             .set(self.capture_serial.get().wrapping_add(1));
         self.capture.replace(Some(Capture::Loading(source)));
+        // Loading is part of this owned capture, including a failed or stalled
+        // local file job. It must not wait forever before acquisition starts.
+        self.capture_timer(Duration::from_secs(30));
         ui.invoke_tools_dismiss(false);
         ui.invoke_context_dismiss(false);
         ui.invoke_reset_keyboard();
         if self.state.borrow().is_none() {
             self.reload();
+            self.capture_trace("cold-load-started", Some(source));
         }
         self.capture_tick();
     }
@@ -143,9 +176,11 @@ impl Manager {
         source: Source,
         expected: Option<ArticleTarget>,
     ) -> Result<(), String> {
+        self.capture_trace("begin-current", Some(source));
         let (snapshot, destination) = self
             .article
-            .bookmark_begin(source, &self.connection.updates.borrow())?;
+            .bookmark_begin(source, &self.connection.updates.borrow())
+            .inspect_err(|_| self.capture_trace("begin-current-rejected", Some(source)))?;
         let mut acquisition = Acquisition::new(self.capture_serial.get(), source.stamp, snapshot);
         if let Some(expected) = expected {
             acquisition = acquisition.expect(expected);
@@ -197,6 +232,7 @@ impl Manager {
                     self.capture.replace(Some(Capture::Loading(source)));
                     return;
                 }
+                self.capture_trace("loading-ready", Some(source));
                 let checked = self
                     .state
                     .borrow()

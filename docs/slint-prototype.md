@@ -1551,3 +1551,24 @@ CPU renderer由單一具名worker擁有，建立與釋放render context都在該
 本批完成後依逐批／中途清理規則，在所有自有程序與open files退出後，以Cargo原生clean移除 `slint-video-software/checks-target/release`（8385檔、Cargo2.7GiB；target的du2828192KiB→8KiB）；另移除原 `slint-main-bundle/package-current` 與中途 `slint-video-software/package-current` 的兩份App／ZIP／DMG，以及已移出target的舊待驗執行檔，合計payload的du621580KiB。舊包只留小型manifest／plist／README／hash，沒有binary archive。worktree的du4219876KiB→770120KiB，filesystem available233476833280→236733288448bytes僅記觀測差額，不全部歸因於清理。496份來源／文件與1192份保留交付／資料hash不變，沒有在清理後重建Rust。
 
 目前必要完整候選只留 `slint-startup/package-current`；另保留舊 `slint-native-list/Native-Bookmarks.app` 作為不同feature／default-software的收藏對照（本輪3次通過），待source／ACK問題修正後再合併清理。唯一Windows S1 ZIP、原始失敗、CC0小素材、必要授權來源、使用者資料及未整合source worktree均保留；canonical Dioxus及其他聊天產物未動。精確8筆刪除路徑、逐檔owner／resolved path／symlink／lsof、du、Cargo及free前後與保留理由在 `.local/verification/slint-startup/cleanup/ledger.json`。收藏失敗狀態保持failed，清理不構成完整驗收。
+
+## S4 本機檔案完成後恢復收藏（2026-11-09）
+
+以舊行為加有界診斷重現收藏失敗（CLI SHA-256 `90ebb850d8e3c34a8d62f050877333417a527910c365ed7d16adce747cf341f7`）。來源identity／stamp、45行完整快取及ACK均有效；`store-loaded`／`store-rendered`顯示file worker已join、result已收集，但UI的output-busy仍true，收藏停在Loading，後續沒有`loading-ready`。失敗並非由當時的`size_installed=false`證明；網頁文章顯示時原本就不安裝終端raster，不因此更改尺寸或ACK保護。
+
+`Output::work`原先在busy保護內執行結果回呼，再清除UI gate；收藏只仰賴Slint的output-busy changed和其他間接事件繼續，快速的true／false可能被合併。現在同一Output owner在worker join、結果回呼完成並清掉gate後，明確通知收藏；picker結束共用同一idle通知，closed／仍busy則拒絕。未修改source比較、article／session generation、原始快取、輸入串流或封存格式。Loading也使用既有capture timer的30秒deadline，取消／退出會停止同一timer；這限制收藏等待，不宣稱能中止OS內部停滯的檔案read。
+
+診斷由明確的`PTTSTELLA_SLINT_CAPTURE_PROBE`及`PTTSTELLA_SLINT_CAPTURE_TRACE`兩旗標啟用，每個Manager至多64筆，只列來源版本、stage與既有metadata，不記文章或帳密；一般啟動不輸出。來源／重現方法：
+
+```sh
+PTTSTELLA_SLINT_CAPTURE_PROBE=current PTTSTELLA_SLINT_CAPTURE_TRACE=1 \
+  <NATIVE_BINARY> --software-renderer --probe-media --verify-media <NEW_DIRECTORY>
+```
+
+省略software旗標可驗GL；case亦可選list、headerless、cancel及blur。修正後CLI SHA-256 `27f1da316586aae7c8aab9e6cb6922db8405d854664fc601dd0986e00a9c86d3`，CPU／GL各10份全新程序的目前文章收藏，以及列表／無標頭／取消／失焦共24案通過。每案核對獨立45行封存／或取消不落檔、嚴格站端順序、Close ACK、timer停止、file worker joined及result／視窗釋放；trace證明store完成後的`loading-ready`／`begin-current`使用原來相同lease，沒有靠重試或放寬expected消除失敗。原始失敗及最初診斷helper可見性編譯失敗均保留。
+
+最終macOS arm64 App／ZIP／DMG在 `.local/verification/slint-capture-ack/package-current/`；封裝後native SHA-256 `cb329704b0e2f3f9eaebc4952a84f3421c49a08b950ae00da4a5e13b05878749`，仍是獨立研究profile、ad-hoc與未公證候選。拒讀Homebrew的sandbox再跑18組影片、9組文章與2組混合PNG／GIF／推文回歸共29案通過。Rust373 lib＋81 bin＋10 multi_instance＋22 screen＝486 passed，另6個既有明示ignored；兩配置all-targets Clippy及fmt通過。單次影片矩陣未重現既有GL MP4偶發錯色，不能宣告該問題已修復。
+
+CUA另以真正macOS焦點與按鈕完成45行全文、浮球收藏目前文章、保存成功提示、管理器選擇已存副本、唯讀本機下一頁至23～45行及⌘Q。磁碟獨立核對version2／一筆`#00000101@Stella`／45行×80欄、首行Stella、第23行ROW0023及末行REPLY0045；全檔SHA-256 `91065b28a953089b407511cfcd076a996ec6cca34579e4ea7bbf65fba59db132`。同時有原始cold-load trace、9個strict peer步驟及Close ACK、零HTTP請求／HTTP joined、exit0與capture／timer／file／result／window清理。OS末頁畫面在CUA工具紀錄，未宣稱另存PNG。這是目前文章cold load的原生操作證據，不能代替其餘IME或四架構矩陣。
+
+本批基準`8b269b3`、凍結patch、trace前後、全部53份合成案例（24＋29）、native結果與manifest保存在 `.local/verification/slint-capture-ack/`；`accepted-result.json`列出各scope，舊失敗報告保持原樣。這一個收藏停滯問題已有修正及分立驗證；完整S0–S8的跨平台、資料回退UI、對應來源交付及同負載效能等仍待完成，S9未執行。
