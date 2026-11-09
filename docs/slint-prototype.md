@@ -1547,3 +1547,7 @@ CPU renderer由單一具名worker擁有，建立與釋放render context都在該
 完整首輪、所有重複實驗與未變binary hash均在 `.local/verification/slint-startup/`，`final-result.json`明列failed，不以重跑成功改寫結果。下一步需在cold store讀取的Loading、原始source identity／stamp及bookmark_begin／畫面ACK邊界補精確證據，再修正生產owner；不放寬stale來源或獨立封存expected，也不推定外部操作造成失敗。這份反例使完整S4／S8仍未達成；其他跨平台／IME／效能缺項與既有GPU偶發問題仍保留，S0–S8 goal active。
 
 另以本次CPU實作以前的完整GL候選native（SHA-256 `92e9e18ea2b7aedb6459ae8f8605c780cd858a04f5cb4592e5328f59a8ac5490`）做同一收藏案例3次，得到1失敗／2通過，失敗同樣停在peer step1等待Q。這證明相同行為在舊完整候選也能重現，不能把新版CPU worker當成已證明的原因；根因仍待來源／ACK邊界證據。舊binary未修改，原始結果另存`capture-old-gl.json`，沒有拿舊版的重跑通過覆蓋反例。
+
+本批完成後依逐批／中途清理規則，在所有自有程序與open files退出後，以Cargo原生clean移除 `slint-video-software/checks-target/release`（8385檔、Cargo2.7GiB；target的du2828192KiB→8KiB）；另移除原 `slint-main-bundle/package-current` 與中途 `slint-video-software/package-current` 的兩份App／ZIP／DMG，以及已移出target的舊待驗執行檔，合計payload的du621580KiB。舊包只留小型manifest／plist／README／hash，沒有binary archive。worktree的du4219876KiB→770120KiB，filesystem available233476833280→236733288448bytes僅記觀測差額，不全部歸因於清理。496份來源／文件與1192份保留交付／資料hash不變，沒有在清理後重建Rust。
+
+目前必要完整候選只留 `slint-startup/package-current`；另保留舊 `slint-native-list/Native-Bookmarks.app` 作為不同feature／default-software的收藏對照（本輪3次通過），待source／ACK問題修正後再合併清理。唯一Windows S1 ZIP、原始失敗、CC0小素材、必要授權來源、使用者資料及未整合source worktree均保留；canonical Dioxus及其他聊天產物未動。精確8筆刪除路徑、逐檔owner／resolved path／symlink／lsof、du、Cargo及free前後與保留理由在 `.local/verification/slint-startup/cleanup/ledger.json`。收藏失敗狀態保持failed，清理不構成完整驗收。
