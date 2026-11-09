@@ -499,6 +499,18 @@ fn with_connection(
         show(connection.clone())
     };
     let close = runtime.block_on(connection.shutdown());
+    if result.is_err()
+        && let Some((fixture, expected)) = &fixture
+    {
+        eprintln!(
+            "{}",
+            serde_json::json!({
+                "status":"failed", "fixture":fixture,
+                "close":close.as_ref().ok(), "expected_close":expected,
+                "cleanup_error":close.as_ref().err(),
+            })
+        );
+    }
     match (result, close, fixture) {
         (Ok(()), Ok(outcome), Some((fixture, expected))) if outcome == expected => {
             eprintln!(

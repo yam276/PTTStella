@@ -1497,3 +1497,25 @@ PYTHONDONTWRITEBYTECODE=1 python3 tooling/bundle_slint_macos.py \
 最新交付保留於 `.local/verification/slint-main-bundle/package-current/`：App約139MiB，含ZIP／DMG共約271MiB。這是內部候選，未公證；native／codec／IME／可及性完整矩陣、實際音訊、軟體renderer影片替代、完整對應原始碼交付、乾淨機器及其他三架構、安裝回退與同負載Dioxus效能均待驗收。建置時 `candidate.json` 的native_acceptance仍為not_run，後續有限原生結果在外部報告，不修改已簽名資源。完整證據入口為本批 `verification-summary.json`。
 
 本批結束清掉獨立target/release（Cargo宣告8288檔／2.6GiB）、失敗的 `package`、被取代的 `package-final`／`package-seek-final`，以及舊 `slint-app-exit/Native-Video-Close.app`；舊包只留小型metadata／launcher紀錄ZIP，不存machine binary或完整舊ZIP／DMG。最新App／ZIP／DMG、一般軟體配置的Native-Bookmarks與合成資料、唯一Windows S1 ZIP hash不變。target剩8KiB，filesystem available 234420215808→237588946944 bytes只記觀測差額；其他工作並行變化不全歸因於本次清理。exact paths／owner／symlink／lsof／逐檔hash在 `cleanup/ledger.json`。來源及未整合worktree保留，S0–S8仍active，S9未切換／推送／發佈。
+
+## S5 GPU失敗資料與三格式錯色負向對照（2026-11-09）
+
+原先偶發的MP4像素失敗維持未解。本批只增加診斷及可重現的錯色負向素材，沒有改renderer、libmpv設定、取樣時機、四個原始色彩預期或30的容差。診斷版以相同合成MP4新程序連跑三組各16次：直接CLI、加dyld trace的CLI，以及封裝runtime／拒讀Homebrew／dyld trace，共48次均通過；這個觀測不足以證明舊失敗已修正，舊失敗保留為必要缺項。不能由這些結果推定第一幀、cache或GL同步是原因。
+
+`media_video_probe` 的failure-state現在增加最多8筆實際GPU samples、UI時間／duration、完整libmpv status（含decoder／事件數），並保留原有loading／loaded／paused及renderer_error欄位，另加renderer_error_detail。`session::with_connection`在故障探針完成shutdown後也輸出實際Close／expected_close／cleanup_error，status仍為failed，原始探針錯誤照常回傳。一般Live沒有fixture，不增加這份探針audit；沒有新增正常影片frame的readback或常駐紀錄。
+
+[素材產生器](../tooling/generate_native_player_fixtures.py) 新增 `--wrong-quadrant`：只把自製320×180／24fps／3秒影片的左上象限改綠，保留移動方塊及音訊，manifest標示負向用途。GPU verifier仍獨立期待紅／藍／黃／青。未帶旗標時，全部72張原始RGB frame與`23d1014`逐byte等同，串流SHA-256記在 `.local/verification/slint-video-pixel-sync/default-fixture-unchanged.json`。來源與新素材均為CC0，沒有外部影片或使用者流量。
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 tooling/generate_native_player_fixtures.py \
+  <NEW_NEGATIVE_FIXTURE_DIR> --ffmpeg <FFMPEG_WITH_REQUIRED_ENCODERS> --wrong-quadrant
+
+PTTSTELLA_VIDEO_FIXTURE=<NEW_NEGATIVE_FIXTURE_DIR>/quadrants.mp4 \
+  <NATIVE_VIDEO_BINARY> --probe-media --verify-media <NEW_NEGATIVE_OUTPUT>
+```
+
+負向命令應exit1，error為`main preview GPU pixels differ from fixture`；這是正確拒絕錯色資料，不能當成產品正常影片案例的passed。WebM／OGV使用同目錄對應副檔名。完整執行與獨立顏色／退出／cleanup檢查在本批 `run-accepted-pixels.py`，六案結果在 `accepted-pixel-results.json`。最終CLI SHA-256 `46db5e65600146c1532674951b9a9b690903914ae2168f6b7a3150845ea97398`；三個正常格式均exit0，三個刻意錯色格式均exit1。實際左上RGB分別為MP4／WebM的`[0,255,1]`及OGV的`[0,254,0]`，其餘象限仍符合藍／黃／青；failure-state同時保存原始紅色預期及實際像素。三個負向案例均確認載入後暫停於約1秒、Close ACK、control joined／core destroyed、stream stopped及HTTP worker joined，原始錯誤未被cleanup取代。
+
+完整feature的Rust482 passed／6明示ignored、全target Clippy、fmt、Python110通過。環境與驗收工具的失敗另記：PATH上的FFmpeg缺libtheora，改用既有ffmpeg-full後三格式生成成功；初步嘗試以symlink重用runtime的診斷App被strict codesign拒絕，未當作有效套件，正式參考App的runtime／簽名均核對不變；舊驗收腳本原先期待故障路徑也有成功路徑才輸出的Close JSON，新增故障audit後重跑六案通過。這些與原始MP4失敗分開記錄，沒有歸因於外部操作。
+
+本批診斷封裝不是新使用者交付，驗收後已移除其App／ZIP／DMG、symlink實驗App、缺encoder的部分素材及被三格式素材取代的首份手工MP4，並用Cargo原生clean清掉8288檔／2.6GiB release profile。保留約8MiB的原始結果／文字trace、source／binary hash、三份小型負向素材與manifest；既有 `slint-main-bundle/package-current`、軟體配置Native-Bookmarks／合成收藏、Windows S1 ZIP及全部source不變。target剩8KiB，filesystem available 233979011072→236865433600 bytes只記並行期間的觀測差額。symlink僅移除自有連結，參考Frameworks未動；精確路徑／owner／symlink／lsof／hash與保留原因在 `.local/verification/slint-video-pixel-sync/cleanup/ledger.json`。完整S5／S8仍not_ready；下一次出現像素失敗時需讀實際失敗資料再判斷，同時繼續其餘平台／軟體繪製等缺項。S0–S8 goal保持active，S9未執行。

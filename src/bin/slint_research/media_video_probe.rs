@@ -175,15 +175,19 @@ pub fn start(
                         let snapshot = live.session.updates().borrow().clone();
                         serde_json::json!({"stage":format!("{:?}", snapshot.stage),
                             "loading":snapshot.status.loading,"loaded":snapshot.status.loaded,
-                            "paused":snapshot.status.paused})
+                            "paused":snapshot.status.paused,
+                            "status":snapshot.status})
                     });
                     serde_json::json!({"session":session,"rendered":video.bridge.rendered.get(),
                         "offer":video.bridge.offer.borrow().is_some(),
-                        "renderer_error":video.bridge.error.borrow().is_some()})
+                        "renderer_error":video.bridge.error.borrow().is_some(),
+                        "renderer_error_detail":&*video.bridge.error.borrow(),
+                        "samples":&*video.bridge.samples.borrow()})
                 });
                 let audit = serde_json::json!({"status":"failed","error":error,
                     "foreground":ui.get_native_foreground(),"play_allowed":ui.get_media_play_allowed(),
-                    "ready":ui.get_media_ready(),"video":state});
+                    "ready":ui.get_media_ready(),"position":ui.get_media_position(),
+                    "duration":ui.get_media_duration(),"video":state});
                 let saved = serde_json::to_vec_pretty(&audit)
                     .map_err(|e| e.to_string())
                     .and_then(|bytes| {
