@@ -61,6 +61,7 @@ cargo clean --release --target-dir <已核對的本 repo target 絕對路徑>
 使用者於2026-11-09明確要求清理已測完的 artifacts，包含過去累積與之後新增的產物。Slint 評估因此以「每個可獨立驗收的批次」為清理單位，不等整個 S0–S8 goal 結束：
 
 - 同一批仍在編譯／驗證時可以重用自己的 profile；該批驗收完且必要交付已移出 target，確認無活動使用者後，就用上列 Cargo 原生 clean 清掉已用完的 profile。長期 goal 仍 active 不構成持續保留 debug／release 快取的理由。
+- 使用者要求即時清理或批次中途交接時，也先盤點已停止使用的 profile；不能因驗收尚未完成就持續保留整包編譯快取。若後續確實需要同一 binary，只移出一份當前執行檔、必要授權與來源／hash／結果，明列待驗範圍，再清掉 profile；優先重用該執行檔，只有來源變更或缺少必要檢查才重建。中途清理不等於驗收通過，不提前刪掉尚未被完整取代的唯一交付。
 - 只保留每個仍有必要的平台／執行配置的最新候選包，不為每個功能階段各保留一份 App。新候選涵蓋舊功能後，清掉已測舊包；尚缺平台驗收的唯一交付可以保留並說明。不得以測試包副本充當唯一來源備份。
 - 歷次證據保留來源 commit／patch、binary hash、必要結果、最小重現資料與獨特失敗紀錄。舊 bundle 的 launcher／plist／授權／資源可以壓成小型紀錄；不再把完整可重建 executable／dylib 一起存進每階段的證據目錄。來源、原始 assets、使用者資料、已安裝工具與 registry cache 仍保護。
 - 獨立 `--target-dir`、headless 驗收 driver 與版本對照用臨時 checkout 也屬於該批產物，不能因不在主 target 內而漏清。保存來源 ref／patch、driver hash 與結果後，確認沒有使用者，清掉已用完的 Cargo profile／driver；臨時 worktree 須確認沒有未保存修改，再用 `git worktree remove` 正常移除，不強制刪除。尚未整合的 Slint 來源 worktree 保留。
