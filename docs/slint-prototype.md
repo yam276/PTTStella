@@ -1520,6 +1520,17 @@ PTTSTELLA_VIDEO_FIXTURE=<NEW_NEGATIVE_FIXTURE_DIR>/quadrants.mp4 \
 
 本批診斷封裝不是新使用者交付，驗收後已移除其App／ZIP／DMG、symlink實驗App、缺encoder的部分素材及被三格式素材取代的首份手工MP4，並用Cargo原生clean清掉8288檔／2.6GiB release profile。保留約8MiB的原始結果／文字trace、source／binary hash、三份小型負向素材與manifest；既有 `slint-main-bundle/package-current`、軟體配置Native-Bookmarks／合成收藏、Windows S1 ZIP及全部source不變。target剩8KiB，filesystem available 233979011072→236865433600 bytes只記並行期間的觀測差額。symlink僅移除自有連結，參考Frameworks未動；精確路徑／owner／symlink／lsof／hash與保留原因在 `.local/verification/slint-video-pixel-sync/cleanup/ledger.json`。完整S5／S8仍not_ready；下一次出現像素失敗時需讀實際失敗資料再判斷，同時繼續其餘平台／軟體繪製等缺項。S0–S8 goal保持active，S9未執行。
 
+### 2026-11-11 macOS OpenGL 的兩處像素取樣
+
+原候選 `f50ffb46…` 在拒讀 Homebrew 的 sandbox 強制 OpenGL，原版合成 MP4 三次都通過。原始偶發失敗只有 `main preview GPU pixels differ from fixture` 及播放器已暫停的狀態，缺少實際像素，無法定位到 libmpv 或後續呈現。
+
+`--probe-media --verify-media` 現在先按原順序讀主視窗 framebuffer，再讀同一次 blit 的 libmpv 中介 framebuffer。兩處各保存四個 RGBA 取樣、各自的 GL read error、前置 GL error、主視窗 draw buffer 及本次是否重新繪出影片。讀取前核對 pixel pack 狀態及 PBO 是否未綁定，避免在不相容狀態下寫入四位元組 client buffer。維持原四象限期待值、容差及 seek／pause 取樣時機。額外讀回限於明確探針，一般播放沿用原渲染路徑。[libmpv OpenGL API](https://raw.githubusercontent.com/mpv-player/mpv/v0.42.0/include/mpv/render_gl.h)
+
+最終診斷 binary `93a5a6c2…` 借用候選已封裝 runtime，拒讀 Homebrew。正常 MP4／WebM／OGV、刻意錯色三格式、軟體 MP4 和 12 輪新的 OpenGL MP4，共 19 案符合預期。18 筆 GL 兩處 RGBA 完全一致，兩處 read error 均為 0。刻意錯色的左上象限在兩處皆為綠色，三案均 exit 1 且有正常 teardown；其餘 16 案 exit 0。每案皆有嚴格 Close、影片 worker／core 及 HTTP join。這是合成 toolkit／OpenGL framebuffer 證據，原始偶發錯色仍未重現，OS 呈現及音訊仍待獨立驗證。
+
+第一次 staging 的絕對 rpath 超過 Mach-O load command 空間，改用同一暫存目錄的相對 rpath 與唯一 Frameworks symlink。首輪 collector 漏列負向 Close 的 `cleanup_error: null`，三個誤判及實際像素留存；最終嚴格核對該欄再重跑。命令、來源補丁、SHA、原始回報和精確清理清單在 `.local/verification/slint-macos-video-buffers/`。已移除唯一暫存執行檔與 symlink，regular-file 68,592,800 bytes，du 66,988 KiB，filesystem free 242151104512→242219700224 bytes。固定 Cargo target、候選 runtime 與素材保留並核對 SHA。
+
+
 ## S5 CPU 影片與明確軟體 compositor（2026-11-09）
 
 原完整 native-video 入口強制 OpenGL，因此原先即使指定 `SLINT_BACKEND=winit-skia-software`，影片仍走GL。本批以舊候選binary重現後，新增 `--software-renderer` 並尊重明確環境選擇。未指定的完整native-video入口仍維持GL；非GL notifier或明確software選擇走同一libmpv Session／Control／RenderGate的CPU renderer，不增WebView、獨立下載器或另一個影片控制狀態。

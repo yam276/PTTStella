@@ -35,20 +35,99 @@ pub(super) fn capture_software(
 }
 
 /// # Safety
-/// Called only after the production blit with the same live current GL context.
+/// Called only after the production blit with the same live current GL context,
+/// with both framebuffers live.
 pub(super) unsafe fn capture(
     gl: &glow::Context,
     target: i32,
     rect: [i32; 4],
     height: i32,
-) -> Result<serde_json::Value, String> {
+    surface: i32,
+    drew_video: bool,
+) -> serde_json::Value {
+    let expected = [[255u8, 0, 0], [0, 0, 255], [255, 255, 0], [0, 255, 255]];
+    let [_, _, w, h] = rect;
+    // SAFETY: both buffers are live, the target rect is within the drawable,
+    // and the intermediate surface is exactly the size of the rect.
+    let (draw_buffer, pre_read_error, pack) = unsafe {
+        (
+            gl.get_parameter_i32(glow::DRAW_BUFFER0),
+            gl.get_error(),
+            [
+                glow::PIXEL_PACK_BUFFER_BINDING,
+                glow::PACK_ALIGNMENT,
+                glow::PACK_ROW_LENGTH,
+                glow::PACK_SKIP_PIXELS,
+                glow::PACK_SKIP_ROWS,
+            ]
+            .map(|field| gl.get_parameter_i32(field)),
+        )
+    };
+    if pack != [0, 4, 0, 0, 0] {
+        return serde_json::json!({
+            "render_path": "opengl",
+            "rect": rect,
+            "expected": expected,
+            "passed": false,
+            "drew_video": drew_video,
+            "draw_framebuffer": target,
+            "draw_buffer": draw_buffer,
+            "pre_read_error": pre_read_error,
+            "pack_state": pack,
+            "readback_error": "unexpected OpenGL pixel pack state",
+        });
+    }
+    // SAFETY: the checked pack state permits each four-byte client-memory read.
+    let (pixels, target_read_error, surface_pixels, surface_read_error) = unsafe {
+        let pixels = read_quadrants(gl, target, rect, height);
+        let target_read_error = gl.get_error();
+        let surface_pixels = read_quadrants(gl, surface, [0, 0, w, h], h);
+        let surface_read_error = gl.get_error();
+        (
+            pixels,
+            target_read_error,
+            surface_pixels,
+            surface_read_error,
+        )
+    };
+    let matches = |colors: &[[u8; 4]; 4]| {
+        colors
+            .iter()
+            .zip(expected)
+            .all(|(a, b)| a[..3].iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 30))
+    };
+    serde_json::json!({
+        "render_path": "opengl",
+        "rect": rect,
+        "pixels": pixels,
+        "expected": expected,
+        "passed": matches(&pixels),
+        "drew_video": drew_video,
+        "draw_framebuffer": target,
+        "draw_buffer": draw_buffer,
+        "pre_read_error": pre_read_error,
+        "target_read_error": target_read_error,
+        "surface_pixels": surface_pixels,
+        "surface_matches_expected": matches(&surface_pixels),
+        "surface_read_error": surface_read_error,
+    })
+}
+
+/// # Safety
+/// The current GL context must own the framebuffer, and the rectangle must fit
+/// the framebuffer. Client-memory pack state must fit each four-byte RGBA read.
+unsafe fn read_quadrants(
+    gl: &glow::Context,
+    target: i32,
+    rect: [i32; 4],
+    height: i32,
+) -> [[u8; 4]; 4] {
     let [x, y, w, h] = rect;
     let scale = (f64::from(w) / 320.).min(f64::from(h) / 180.);
     let vw = 320. * scale;
     let vh = 180. * scale;
     let left = f64::from(x) + (f64::from(w) - vw) / 2.;
     let bottom = f64::from(height - y - h) + (f64::from(h) - vh) / 2.;
-    let expected = [[255u8, 0, 0], [0, 0, 255], [255, 255, 0], [0, 255, 255]];
     let mut pixels = [[0u8; 4]; 4];
     // SAFETY: rect is validated inside the drawable by the producer. PACK
     // buffer is unbound and default state set. Each read writes four bytes.
@@ -80,11 +159,7 @@ pub(super) unsafe fn capture(
         }
         gl.read_buffer(previous as u32);
     }
-    let passed = pixels
-        .iter()
-        .zip(expected)
-        .all(|(a, b)| a[..3].iter().zip(b).all(|(a, b)| a.abs_diff(b) <= 30));
-    Ok(serde_json::json!({"rect":rect,"pixels":pixels,"expected":expected,"passed":passed}))
+    pixels
 }
 pub fn start(
     ui: &TerminalWindow,

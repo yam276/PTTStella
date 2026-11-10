@@ -628,7 +628,8 @@ fn mount_renderer(
                         render.dirty.store(true, Ordering::Release);
                     }
                     if let Some(surface) = &render.surface {
-                        if render.dirty.swap(false, Ordering::AcqRel) {
+                        let drew_video = render.dirty.swap(false, Ordering::AcqRel);
+                        if drew_video {
                             surface.draw(gl, &render.player)?;
                         }
                         surface.blit(
@@ -636,15 +637,17 @@ fn mount_renderer(
                             target,
                             [x, size.height as i32 - y - h, x + w, size.height as i32 - y],
                         );
-                    }
-                    if bridge.capture.replace(false) && bridge.samples.borrow().len() < 8 {
-                        bridge.samples.borrow_mut().push(probe::capture(
-                            gl,
-                            target,
-                            [x, y, w, h],
-                            size.height as i32,
-                        )?);
-                        bridge.wake.notify_one();
+                        if bridge.capture.replace(false) && bridge.samples.borrow().len() < 8 {
+                            bridge.samples.borrow_mut().push(probe::capture(
+                                gl,
+                                target,
+                                [x, y, w, h],
+                                size.height as i32,
+                                surface.framebuffer(),
+                                drew_video,
+                            ));
+                            bridge.wake.notify_one();
+                        }
                     }
                     Ok::<(), String>(())
                 })();

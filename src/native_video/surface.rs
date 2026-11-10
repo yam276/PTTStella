@@ -75,13 +75,16 @@ impl Surface {
     pub fn size(&self) -> [i32; 2] {
         self.size
     }
+    pub fn framebuffer(&self) -> i32 {
+        self.framebuffer.0.get() as i32
+    }
     /// # Safety
     /// Same current context as creation, with libmpv's default GL state set.
     pub unsafe fn draw(&self, gl: &glow::Context, player: &mpv::Render) -> Result<(), String> {
         // SAFETY: owned complete FBO with exactly these validated dimensions.
         unsafe {
             gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.framebuffer));
-            player.draw(self.framebuffer.0.get() as i32, self.size[0], self.size[1])
+            player.draw(self.framebuffer(), self.size[0], self.size[1])
         }
     }
     /// # Safety
