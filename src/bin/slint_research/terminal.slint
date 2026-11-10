@@ -756,20 +756,39 @@ export component TerminalWindow inherits Window {
                 }
             }
 
-            if root.article-load-available: HorizontalLayout {
+            // Reading capabilities can arrive after the first article paint.
+            // Keep one status row so a late reply action never resizes that
+            // acknowledged viewport or revokes an in-flight source export.
+            if root.article-active || root.article-load-available || root.article-updates-available || root.article-updates-visible: HorizontalLayout {
                 height:32px;
-                Text { text: root.article-load-status; color: #b7c1ce; horizontal-stretch: 1; vertical-alignment: center; }
-                if root.article-load-active || root.article-load-can-resume: Button { text: root.article-load-active ? UiLabels.cancel-load : root.article-load-next-segment ? UiLabels.next-section : UiLabels.resume-load; clicked => { root.article-load-action(!root.article-load-active); } }
-            }
-            if root.article-updates-available || root.article-updates-visible: HorizontalLayout {
                 spacing:6px;
-                if root.article-updates-available || root.article-updates-enabled: Button {
+                Text {
+                    text:root.article-load-available ? root.article-load-status : "";
+                    color:#b7c1ce;horizontal-stretch:1;min-width:0px;
+                    overflow:elide;vertical-alignment:center;
+                }
+                if root.article-load-available && (root.article-load-active || root.article-load-can-resume): Button {
+                    text:root.article-load-active ? UiLabels.cancel-load : root.article-load-next-segment ? UiLabels.next-section : UiLabels.resume-load;
+                    min-width:0px;max-width:200px;
+                    clicked=>{root.article-load-action(!root.article-load-active);}
+                }
+                if (root.article-updates-available || root.article-updates-visible) && (root.article-updates-available || root.article-updates-enabled): Button {
                     text:root.article-updates-toggle-label;enabled:!root.article-updates-blocked;
+                    min-width:0px;max-width:200px;
                     clicked=>{root.article-updates-action(0);}
                 }
-                Text {text:root.article-updates-status;vertical-alignment:center;horizontal-stretch:1;}
-                if root.article-updates-unread>0: Button {text:root.article-updates-new-label;enabled:!root.article-updates-blocked;clicked=>{root.article-updates-action(1);} }
-                if root.article-updates-recovery: Button {text:UiLabels.updates-station;enabled:!root.article-updates-blocked;clicked=>{root.article-updates-action(2);} }
+                if root.article-updates-available || root.article-updates-visible: Text {
+                    text:root.article-updates-status;vertical-alignment:center;
+                    horizontal-stretch:1;min-width:0px;max-width:200px;overflow:elide;
+                }
+                if (root.article-updates-available || root.article-updates-visible) && root.article-updates-unread>0: Button {
+                    text:root.article-updates-new-label;enabled:!root.article-updates-blocked;
+                    min-width:0px;max-width:200px;clicked=>{root.article-updates-action(1);}
+                }
+                if (root.article-updates-available || root.article-updates-visible) && root.article-updates-recovery: Button {
+                    text:UiLabels.updates-station;enabled:!root.article-updates-blocked;
+                    min-width:0px;max-width:200px;clicked=>{root.article-updates-action(2);}
+                }
             }
             if !root.terminal-input && !root.session-active && !root.article-active: HorizontalLayout {
                 spacing: 8px;

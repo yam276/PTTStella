@@ -377,10 +377,38 @@ fn full_and_partial_terminal_views_match_during_inline_and_layout_changes() {
         view.set_article_body_height(610.);
         view.set_article_load_available(true);
         view.set_article_load_status("Article loaded · synthetic 23 lines".into());
-        view.set_article_updates_available(true);
         view.set_article_updates_toggle_label("Update replies".into());
     }
+    check("loaded before reply capability");
+    let before_reply_controls = views.each_ref().map(geometry);
+    for view in &views {
+        view.set_article_updates_available(true);
+    }
     check("new bottom controls");
+    assert_eq!(
+        views.each_ref().map(geometry),
+        before_reply_controls,
+        "late reply capability moved/resized the acknowledged article viewport"
+    );
+    for (available, unread, recovery, busy) in [
+        (false, 0, false, true),
+        (true, 3, true, false),
+        (true, 0, false, false),
+    ] {
+        for view in &views {
+            view.set_article_load_available(available);
+            view.set_article_updates_available(available);
+            view.set_article_updates_unread(unread);
+            view.set_article_updates_recovery(recovery);
+            view.set_output_busy(busy);
+        }
+        check("reading capability and output busy changed");
+        assert_eq!(
+            views.each_ref().map(geometry),
+            before_reply_controls,
+            "reading controls moved/resized the acknowledged article viewport"
+        );
+    }
     let before_loading = views.each_ref().map(geometry);
     for active in [true, false] {
         for view in &views {
