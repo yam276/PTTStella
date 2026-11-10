@@ -8,12 +8,12 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 **尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
 
-本輪另修正使用者回報的文章直接輸入抖動與 macOS `⌃⌘F`；最新 arm64 包已更新，其他三架構尚未包含本次修正。驗證與工具列自動化失敗界線見[輸入穩定與全螢幕](#2026-11-10-文章輸入穩定與原生全螢幕)。
+本輪另修正使用者回報的文章直接輸入抖動與 macOS `⌃⌘F`；四架構包已同步475897f的同一產品來源。驗證與工具列自動化失敗界線見[輸入穩定與全螢幕](#2026-11-10-文章輸入穩定與原生全螢幕)；[同步及Linux補驗](#2026-11-10-輸入修正同步四架構與linux補驗)仍有失敗，並發現最小Linux環境的Slint控制項缺CJK字形。
 
 | 階段 | 目前已有 | 尚須完成 |
 | --- | --- | --- |
 | S0 | 共用 Rust 服務、獨立 Slint 入口及可編譯提交序列；四 target 的一般／播放器兩配置 Cargo 依賴 gate | 完整功能案例對照、各平台連結／runtime 依賴與最終基準重跑 |
-| S1 | 格線／雙色字／縮放、macOS 原生輸入的分立證據；Windows Microsoft注音候選位置／Esc取消／單次提交的使用者人工回報 | 完整候選窗／組字／失焦矩陣、跨螢幕 DPI、可及性與其他平台原生 |
+| S1 | 格線／雙色字／縮放、macOS 原生輸入的分立證據；Windows Microsoft注音候選位置／Esc取消／單次提交的使用者人工回報 | Linux無系統CJK字型時的Slint控制項fallback；完整候選窗／組字／失焦矩陣、跨螢幕 DPI、可及性與其他平台原生 |
 | S2 | 共用 Connection、登入／保活、站點表單、嚴格切站／雙編碼 bytes | 同 endpoint 編碼切換、預設站重啟／不登入、完整信任／vault 原生矩陣 |
 | S3 | 選取、輸出、浮球／選單及原生互動的分立證據 | 全部快捷鍵／pointer／modal／可及性操作矩陣 |
 | S4 | 雙閱讀模式、長文取頁、尋找、名單／右鍵／揭露／底色、書籤／離線、快速前往與最近看板、目前／指定列表文章收藏、共用推文索引／原生定位與側標、推文更新／未讀／保留與復原；macOS基本按鈕、列表右鍵指定收藏與新程序斷線讀回補驗 | 跨平台推文控制／定位與完整鍵盤／焦點矩陣、其他平台列表右鍵及新程序離線操作、混合 Live 等效與全功能回歸 |
@@ -34,7 +34,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 目前最新四架構候選均在 `.local/verification/slint-merged-id-spaces/`，格式、來源、執行檔雜湊與驗證範圍見[最新候選](#2026-11-10-最新候選)。先前 `slint-windows-current/package-current/`、`slint-system-motion/package-current/`、Intel與Linux前份完整包已被取代並清理；保留必要metadata、notices與獨特證據，不要求歷史段落的舊latest路徑繼續存在。
 
-Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人工回報屬舊04249364…執行檔；新c483cd41…只完成交叉建置／封裝，未在Windows重跑。Mac新包完成arm64及Rosetta的software／default shell，不能將Rosetta稱為Intel硬體驗收。Intel／Linux原生依使用者「先包起來」指示不等待，目前仍未驗。
+Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人工回報屬舊04249364…執行檔；目前新69542cb7…尚待使用者晚點實測。最新版Mac的部分conformance已過，shell／通知和Rosetta網頁account仍有failed，詳[最新候選](#2026-11-10-最新候選)，不能將Rosetta稱為Intel硬體驗收。Intel／Linux原生依使用者「先包起來」指示不等待，目前仍未驗。
 
 已測完且被取代的產物包含過去累積與之後新增，均於每個可獨立驗收批次完成時清理，沿用 [task-owned 清理流程](development-harness.md#產物清理與結案)。不再為每階段各留 App，也不因完整 goal active 就長期保留 target/debug／release；只在同一批工作中重用。一般 dev／test 命令明示 `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`，release 設定不變。已確認無使用者的編譯快取用 Cargo 原生 clean，必要候選包與最小來源／驗收／失敗證據移出 target，保留原因及 exact removed paths 另記。不啟動背景刪除服務。
 
@@ -411,6 +411,32 @@ macOS原生選單新增「檢視 → 全螢幕」及系統`⌃⌘F`。原生鍵�
 
 本批Cargo原生clean回報8851檔／2.9GiB，target刪前du3061008KiB、刪後8KiB metadata；正常關閉且join後移除唯一ID原生wrapper，保留其最小metadata／hash。3987份來源、唯一診斷raw與保護交付檔案hash不變。filesystem available288864776192→291833364480 bytes僅為並行觀測，與du及Cargo宣告量分列；exact paths、UID／resolved／symlink／lsof、保留例外在 `slint-shell-state-audit/cleanup/ledger.json`。未重建或修改任何正式／跨平台下載，也未刪其他聊天、共享SDK／registry／VM或未整合來源worktree。
 
+## 2026-11-10 輸入修正同步四架構與Linux補驗
+
+其他三架構以乾淨475897f的臨時detached checkout建置，288份Cargo／build.rs／src／locale與已交付arm64逐份一致；9df42ba只增加conformance診斷，未混入本輪下載。三個release build、all-target Clippy及171項Python打包測試通過。Windows沿用既有cargo-xwin／MSVC SDK；Linux重用固定91729675…SDK archive，3419檔／symlink逐份核對，未重新bootstrap SDK。未推送、整合canonical develop、切換正式入口或發佈。
+
+| 架構 | 下載 SHA-256 |
+| --- | --- |
+| macOS x64 ZIP | `a4ac138d9320cf8fbf0f9b39338edc4b4140d600ad4c3bb10e3e7cd880818676` |
+| macOS x64 DMG | `8fa8c6951d20908f3a4393106920ed4cf3d221f606da73fd71700fe50a34b885` |
+| Windows x64 ZIP | `60f7c551e8d92c90bbe042df0edd879a228e3bc18ba2bfe62d435a80fb0b56a6` |
+| Linux x64 tar.gz | `00e020d80841a9ddbd95e78e348b4fde91b1f27fbc95923a2f24f0e34f0cdad2` |
+| Linux x64 deb | `8c56b0e5ddc02ffd4d9237f6ac3b7ccb5089d12e5730be4eca37d9fb674bab21` |
+
+三份最新資料夾在 `.local/verification/slint-input-cross/`，slint-merged-id-spaces入口已改為零複本symlink。current-candidates仍位於slint-navigation-cross，但內容已更新至本輪。Mac的1216個ZIP payload與App一致、47個runtime／183份前包notice不變，簽章與打包器的唯讀DMG核對通過。Windows的915個payload與前包相同，只有exe／candidate.json改變；normal／delay imports未變。Linux在自有ARM容器中使用實際x64 loader與dpkg封裝，tar／deb各有一個93,507,824-byte ELF，hash皆為0312b460…；這不是原生x64硬體驗收。Windows collector初版誤用macOS的downloads欄位、Linux初版把doc目錄算成第二個ELF，均保留分類失敗，按實際schema／regular-file修正；套件未改動。
+
+Rosetta下software／default輸入與貼上四案、software終端account及兩個renderer推文導覽共七案exit0且唯一嚴格ACK；兩個網頁account案均failed於「focus image placement pending」，三個HTTP資源請求皆零，peer因未收到後續PageDown而cleanup failed。沒有將它歸因於前景、或以其他案例通過覆蓋此失敗；Intel硬體與原生IME／DPI仍未驗。
+
+Linux同一封裝ELF在Xvfb-only最小環境的輸入／貼上兩案先失敗，另有缺session bus的訊息；加上隔離Openbox與session D-Bus後，輸入案通過（exact bytes、viewport不變、exit0與嚴格ACK），貼上仍在「fresh confirmed paste preview missing」failed、peer沒有收到預期貼上。這是改進runner的對照，不證明原失敗已定因，也未改產品或放寬assertion。最早helper因Debian Python不支援tar filter而在啟動app前失敗，後以明確member路徑／型別檢查修正；原log保留。Xvfb／Openbox與子程序均join。實際raw-station PNG另見Slint控制項中文顯示方框，終端內建Noto文字正常；目前未向Slint註冊內建字型，須補齊無系統CJK字型的控制項fallback，不能把輸入probe通過當完整GUI通過。
+
+使用者再次回報IME正常並指定Downloads/evidence。CLI被macOS拒絕讀取，改以Finder Quick Look核對native-results，仍是舊04249364…／Windows10 build19045／PowerShell5.1，未修改或複製原結果。使用者確認新版晚點再測，所以新69542cb7…的原生驗收維持not_run；IME回報沒有可核對的新exe身分。原始101份Windows資料及既有helper修正重驗保持原樣。
+
+證據在slint-input-cross，包括source／各平台build及integrity、x64-checks、Linux兩輪GUI結果與windows-user-evidence-observation。下一步處理Linux控制項CJK缺字與貼上預覽，並接續資料回退、來源重建及同負載效能；S0–S8仍active，S9未執行。
+
+本輪先執行各target的release clean，回報成功但實際仍留下約5.6GiB；沒有把命令成功當整目錄已清空。最後對已確認無open files的task-owned target執行完整Cargo clean，回報18502檔／5.5GiB（當時du5800312KiB），target已不存在；先前各profile的2593／2550／2792檔及宣告量分列於cleanup，不混算實際free。另正常移除乾淨臨時worktree、自有容器d6c081e7…（SizeRw1,229,680,842 bytes）、SDK image／mount、link wrappers、運送／解包／raw副本及四份舊完整包。只保留兩個最小舊Mac native（共用且綁定新版runtime hash）與gzip舊Linux ELF，供未解失敗對照，不為每階段保留App。第一個flat Mac對照因rpath解析失敗，改回原MacOS／Frameworks相對結構後，兩架構皆在禁止Homebrew的sandbox通過profile-only，不讀store／vault；未冒充原App原生驗收。
+
+舊arm64刪除時Finder新建.DS_Store使rmtree在目錄末尾中止；重查只剩該6148-byte檔、無open files後精確移除並接續，未停止Finder或使用force。初段2856份保護hash曾計算但未序列化，不能宣稱有完整初段前後對照；復原階段另保存2856份baseline，四平台下載再按先前report核對，後續hash全數一致。filesystem available初段292240674816、復原前292323188736、最終293019557888 bytes為並行觀測，不全歸因於刪除。exact removed paths、逐檔inventory、最小metadata、各階段free／du／Cargo及缺口見 `slint-input-cross/cleanup/ledger.json`。三個既有Slint target只餘8KiB metadata；新target無profile。來源／assets／使用者資料、最新必要交付、共享SDK／registry／VM與其他聊天保留。
+
 ## 2026-11-10 最新候選
 
 依使用者要求，先交付四架構候選包，不等待目前沒有的 Intel Mac／Linux x64 實機。連續推文的重複 ID 逐欄改為空格，保留第一筆 ID、冒號、內文、時間及複製對齊；既有黑名單整行遮罩仍優先保留。共用 Rust 產品修正為 `26d9947`，未切換正式入口、整合 canonical develop 或發佈。
@@ -427,11 +453,11 @@ macOS原生選單新增「檢視 → 全螢幕」及系統`⌃⌘F`。原生鍵�
 | 執行檔 | 封裝內 SHA-256 |
 | --- | --- |
 | macOS arm64 | `27291aa23dcc368416c0c4b146b190a4ca9cb426ec608f849c9614681acdd9a1` |
-| macOS x64 | `73ff40b3eafc115d879996bca75067690e4055131882831f0898f2336e830ec3` |
-| Windows x64 | `6b1de7df5f9b87043746f6cb581999090f75e8e4730297350bc4b6ef05fca9d8` |
-| Linux x64 | `97ff4f910c52eb955b1b5e5a15ee999e1534fd466c861d1730f358b46b3aeb75` |
+| macOS x64 | `48fe1ce9776a7e2e3f9c5ce37d624f7df51d8951806d4dfd84de54ac3801758d` |
+| Windows x64 | `69542cb7c78f5f7bf8b83fb4c70ff759f240d0f734bbae4b153037509d5aca34` |
+| Linux x64 | `0312b4600eceecbc5439b3ca90f0d7fdab4771b83f8aac98b856bab83ebf7e1a` |
 
-arm64最新實際目錄為 `.local/verification/slint-input-stability/final/arm64-package/`，表列入口是零複本symlink。ZIP SHA-256為76a24447b25641eee3329eb3c396ecc2d98ab3d8a04b7929df3f385dd3b353ed，DMG為e39942979662f8f36c8bbc07d8e098c245d20040160de5e5fd389dee63880655；包含空格、bc380f9導覽及本輪輸入／全螢幕修正。Windows／Intel／Linux仍為乾淨de6245e來源，未同步本輪修正，不能再宣稱四份產品來源相同。這三個表列目錄是指向slint-navigation-cross最新包的symlink；下載與未驗界線見[同步候選](#2026-11-10-四架構同步候選)。前份arm64包暫留作新舊工具列失敗的對照，詳見下節。原7個封裝後合成案例與雙語最小寬度OS操作見[arm64補驗](#2026-11-10-arm64-封裝與雙語導覽補驗)。
+arm64最新實際目錄為 `.local/verification/slint-input-stability/final/arm64-package/`，表列入口是零複本symlink。ZIP SHA-256為76a24447b25641eee3329eb3c396ecc2d98ab3d8a04b7929df3f385dd3b353ed，DMG為e39942979662f8f36c8bbc07d8e098c245d20040160de5e5fd389dee63880655；包含空格、bc380f9導覽及本輪輸入／全螢幕修正。Windows／Intel／Linux已同步乾淨475897f來源，三個入口改指向slint-input-cross最新包；288份產品檔案含locale與arm64逐份一致。下載及未驗界線見[本輪同步](#2026-11-10-輸入修正同步四架構與linux補驗)。舊完整候選包已移除，只保留必要的最小舊執行檔對照及metadata。原7個封裝後合成案例與雙語最小寬度OS操作屬前包，見[arm64補驗](#2026-11-10-arm64-封裝與雙語導覽補驗)，不等於新包完整回歸通過。
 
 以下為首次四架構封裝紀錄；其中舊arm64已由上述包取代。所有下載雜湊、ZIP／App 逐檔對照及 Linux tar／deb 的實際 ELF 核對在 `package-integrity.json`。兩份 Mac ZIP 分別有1230／1214個payload與App一致；Windows917個ZIP項目只有exe與candidate.json改變，其餘915個逐byte等於前包，修正過的PowerShell helper、DLL與fixture未變。Mac／Linux的正式打包工具各自檢查簽章／映像或ELF loader／dpkg Depends；這些不等於安裝、原生輸入或實機驗收。
 
