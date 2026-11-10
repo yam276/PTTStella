@@ -399,11 +399,11 @@ x64 runtime暫取自經GitHub digest及完整簽章核對的IINA1.5.1，僅保�
 | 執行檔 | 封裝內 SHA-256 |
 | --- | --- |
 | macOS arm64 | `060598ec6a8cf5140340df78f675494d83ca2f37e5cde46e929a2ea703d8e130` |
-| macOS x64 | `ae7e2c2642e65f2e86979d4427f105db8d17dddb6a4c8228f1378127ccfbb60b` |
-| Windows x64 | `c483cd41b37f00466e0aea1c9754194633f2f98783397719b5c1de2329c335d2` |
-| Linux x64 | `bca8779f0e6deac18be24002e0a73725845e01a741c8a74ef91d0f8ea77f5a11` |
+| macOS x64 | `73ff40b3eafc115d879996bca75067690e4055131882831f0898f2336e830ec3` |
+| Windows x64 | `6b1de7df5f9b87043746f6cb581999090f75e8e4730297350bc4b6ef05fca9d8` |
+| Linux x64 | `97ff4f910c52eb955b1b5e5a15ee999e1534fd466c861d1730f358b46b3aeb75` |
 
-arm64最新包已包含bc380f9導覽修正；實際目錄為 `.local/verification/slint-reply-overlay/arm64-package/`，原表列arm64路徑是零複本相容symlink。ZIP SHA-256為20d1628c435501fcbcd640c9e0359cd2ecf23d0facb91298adb4f4913a42dd65，DMG為0a16bbe893b04b4ce38125e4a7b0b2e141a7334d36b607ddd2dbed472128bac6；新包1231個ZIP payload與App一致，50個runtime dylib及199份前包notice逐byte不變。Windows／Intel／Linux仍為26d9947的空格修正版，未宣稱已同步本次Slint UI修正。原7個封裝後合成案例與雙語最小寬度OS操作見[arm64補驗](#2026-11-10-arm64-封裝與雙語導覽補驗)。
+arm64最新包已包含bc380f9導覽修正；實際目錄為 `.local/verification/slint-reply-overlay/arm64-package/`，原表列arm64路徑是零複本相容symlink。ZIP SHA-256為20d1628c435501fcbcd640c9e0359cd2ecf23d0facb91298adb4f4913a42dd65，DMG為0a16bbe893b04b4ce38125e4a7b0b2e141a7334d36b607ddd2dbed472128bac6；新包1231個ZIP payload與App一致，50個runtime dylib及199份前包notice逐byte不變。Windows／Intel／Linux已更新為乾淨de6245e來源的候選，286份產品檔案與arm64的bc380f9逐份相同；目前同時包含空格與導覽浮層修正。這三個表列目錄是指向slint-navigation-cross最新包的symlink；全部下載與未驗界線見[同步候選](#2026-11-10-四架構同步候選)。原7個封裝後合成案例與雙語最小寬度OS操作見[arm64補驗](#2026-11-10-arm64-封裝與雙語導覽補驗)。
 
 以下為首次四架構封裝紀錄；其中舊arm64已由上述包取代。所有下載雜湊、ZIP／App 逐檔對照及 Linux tar／deb 的實際 ELF 核對在 `package-integrity.json`。兩份 Mac ZIP 分別有1230／1214個payload與App一致；Windows917個ZIP項目只有exe與candidate.json改變，其餘915個逐byte等於前包，修正過的PowerShell helper、DLL與fixture未變。Mac／Linux的正式打包工具各自檢查簽章／映像或ELF loader／dpkg Depends；這些不等於安裝、原生輸入或實機驗收。
 
@@ -457,3 +457,18 @@ bc380f9的同一產品來源（286份fingerprint一致）已封裝為最新arm64
 驗證完成後，清理前份完整arm64包及已被新包涵蓋的c15fa37d…raw；首次失敗的空staging移除，成功r2正常rename為arm64-package。保留舊manifest／notices／完整file SHA的小型封存，frontend相容symlink改指向新App的同一native，原四平台根目錄下arm64-package亦為相容symlink；沒有再留App／raw副本。exact paths、UID／resolved／symlink／lsof、du／filesystem free與不變hash見slint-reply-overlay/package-cleanup/ledger.json。其他三平台、原Windows101份證據、source與共享SDK／registry／VM／候選共用OS cache均保留。本批無Cargo建置／target，goal S0–S8持續，S9未執行。
 
 本批清理前舊arm64包du279076KiB、冗餘raw68,495,776 bytes；filesystem available 291290202112→291640791040 bytes只記並行觀測，不能將差額全歸因於本批。1326份其他三平台／原Windows證據與286份產品來源hash不變，舊包1180份metadata／notice逐檔SHA封存核對。保留最新交付及獨特成功／失敗證據，不動共用OS cache。
+
+
+## 2026-11-10 四架構同步候選
+
+Windows／macOS x64／Linux的release build與all-target Clippy六個命令皆通過，均為乾淨de6245e；286份產品fingerprint與arm64候選完全相同。新包在slint-navigation-cross/{windows,x64,linux}-package，arm64維持slint-reply-overlay/arm64-package；原slint-merged-id-spaces下四個平台入口均為零複本symlink。完整下載路徑、七個下載SHA、各自真實build record及驗收界線在 `slint-navigation-cross/current-candidates.json`，沒有將不同編譯／封裝來源倒填為同一commit。
+
+Windows917個ZIP payload只有exe與candidate.json不同，其餘915項（含修正過的PowerShell helper／DLL／fixture／授權）逐byte不變，PE匯入及VC runtime需求相同。Mac x64重用47個簽章dylib及182份既有notice，ZIP／App1215個payload一致、deep strict ad-hoc與DMG檢查通過。Linux同一ELF在tar／deb內的SHA均為97ff4f91…，非ELF檔只有build-record.json變動；實際loader／dpkg核對於本批有標記的ARM容器執行，不冒充Linux桌面或原生x64編譯。
+
+Rosetta的初輪七個合成案例為六過／一失敗：software網頁account在第一次展圖前逾時，三個HTTP皆零請求、驗收提早中止使嚴格peer未收到預期PageDown。相同簽章exe的單案新程序重查完整通過，原failed與ACK／join均保留，整體仍記intermittent_not_ready，尚未確定原因，不推定CPU負載、前景或renderer缺陷。default網頁account、終端account、兩種renderer推文導覽及shell／notice退出各自通過。這些是toolkit合成事件／Rosetta；新Windows尚未執行、Intel／Linux原生依使用者要求先不等待打包，舊Windows13案與注音回報不延伸到新6b1de7df…exe。
+
+本輪SDK逐份驗證3419檔，解壓在自有case-sensitive APFS image；使用Apple clang／Rust LLD及精確sysroot。APFSX參數的首輪建立exit1，stderr未保留；查本機help改用Case-sensitive APFS後完成，未宣稱首輪失敗原因已確定。為後續重播／交叉建置只保留一份已安裝的固定SDK工具 `/Users/ladesine/Library/Caches/PTTStella-Slint/linux-cross/bookworm-x64-sdk-91729675/`（archive112,842,618 bytes，另含逐檔inventory／套件版本／export recipe／SHA），不保留Cargo profile、解壓環境或整個容器。不建立背景服務／全域鎖，不清共享SDK／registry／base image／VM或歸屬不明的舊容器。
+
+結案使用Cargo原生clean、本輪image正常卸載及本輪停止容器的非force移除；清理三份舊完整包、三個raw、編譯與封裝input／transfer／linker暫存。新四包、SDK工具、原Windows101份證據及產品來源受hash保護；舊metadata、完整file SHA與最小recipe封存，Rosetta失敗保留在新候選即可重現。exact paths、UID／resolved／symlink／lsof、du／Cargo／filesystem free及保留例外見slint-navigation-cross/cleanup/ledger.json。S0–S8仍需完整原生／資料回退／來源交付／同負載效能驗收，S9未執行。
+
+本輪Cargo原生clean回報21,687檔／7.0GiB，刪前target du7446036KiB；本輪停止容器SizeRw 1455690398 bytes已非force移除，source286份及2568份保護檔hash不變。正式ledger的filesystem available 288739176448→297013121024 bytes是並行觀測，與Cargo／du分列；初輪preflight在掛載helper仍持有本輪image時停止，先正常卸載後重做盤點，前次未序列化的free值沒有補造。舊三包已移除內容並換成指向最新包的symlink；本輪target／image／unpacked sysroot／transfer／raw／link-input均不存在，唯一保留SDK工具如上。

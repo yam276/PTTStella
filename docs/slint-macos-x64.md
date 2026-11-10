@@ -1,12 +1,12 @@
 # Slint macOS x64 候選包
 
-2026-11-10 最新候選已改用 `.local/verification/slint-merged-id-spaces/x64-package/`，包含重複推文 ID 空格修正（產品來源 `26d9947`）。檔案、雜湊及本輪範圍見[最新四架構候選](slint-evaluation-plan.md#2026-11-10-最新候選)。以下原生／模擬與 SHA 紀錄屬先前候選，不能套用成新二進位的實機結果；舊包的必要 metadata／notice 另封存在本批 `retired-package-metadata/`。
+2026-11-10 最新候選位於 `.local/verification/slint-navigation-cross/x64-package/`，來源為乾淨 `de6245e`（產品286份檔案與arm64的bc380f9一致），包含ID空格與推文導覽浮層修正。原 `slint-merged-id-spaces/x64-package/` 是指向新包的零複本相容symlink。新App exe `73ff40b3…`、ZIP `fd4fcd14…`、DMG `64e3ffe1…`。Rosetta有一案首輪展圖未啟動下載、同版重查通過，仍記intermittent_not_ready；不是Intel原生完成。 完整hash、來源／編譯與未驗界線見[四架構同步候選](slint-evaluation-plan.md#2026-11-10-四架構同步候選)及 `slint-navigation-cross/current-candidates.json`。以下舊包、SHA與驗收是歷史紀錄，不能當成新exe的原生結果。
 
 完整 `native-player-probe`／`pttstella-slint` 已封裝為 Intel Mac 候選 App／ZIP／DMG，包含自行從來源建置的 mpv／FFmpeg runtime。此包在 Apple Silicon Mac 的 Rosetta 通過搬移及分立元件檢查；Intel 實機、OS 鍵鼠／IME、可聽音訊、最低 OS、乾淨機器與效能仍未驗收，不替代[總計畫](slint-evaluation-plan.md)的 S8 門檻。
 
-## 交付與啟動
+## 先前交付與一般啟動方式
 
-Slint worktree 的 `.local/verification/slint-macos-x64-candidate/package-current/` 保留唯一最新完整候選：
+Slint worktree 的 `.local/verification/slint-macos-x64-candidate/package-current/` 為當時的完整候選（現已被取代）：
 
 | 項目 | SHA-256 |
 | --- | --- |

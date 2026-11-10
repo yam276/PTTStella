@@ -1,12 +1,12 @@
 # Slint Linux x64 候選包
 
-2026-11-10 最新候選已改用 `.local/verification/slint-merged-id-spaces/linux-package/`，包含重複推文 ID 空格修正（產品來源 `26d9947`）。檔案、雜湊及本輪範圍見[最新四架構候選](slint-evaluation-plan.md#2026-11-10-最新候選)。以下原生／模擬與 SHA 紀錄屬先前候選，不能套用成新二進位的實機結果；舊包的必要 metadata／notice 另封存在本批 `retired-package-metadata/`。
+2026-11-10 最新候選位於 `.local/verification/slint-navigation-cross/linux-package/`，來源為乾淨 `de6245e`（產品286份檔案與arm64的bc380f9一致），包含ID空格與推文導覽浮層修正。原 `slint-merged-id-spaces/linux-package/` 是指向新包的零複本相容symlink。新ELF `97ff4f91…`、tar `c0fbb848…`、deb `d2329729…`；只完成Mac交叉建置與ARM VM的x64 loader／dpkg封裝，未跑原生桌面。 完整hash、來源／編譯與未驗界線見[四架構同步候選](slint-evaluation-plan.md#2026-11-10-四架構同步候選)及 `slint-navigation-cross/current-candidates.json`。以下舊包、SHA與驗收是歷史紀錄，不能當成新exe的原生結果。
 
 此為 S8 內部驗收候選，尚未取代正式 Dioxus 入口。目標為 Ubuntu 24.04 x64，提供獨立名稱的 deb 與 portable tar.gz，包含 `native-player-probe` 主程式。尚未通過 Linux 原生桌面、繁中 IME、DPI、音訊、硬體 GPU、資料回退與效能驗收。
 
-## 目前包與來源
+## 先前候選與來源
 
-檔案位於 Slint worktree 的 `.local/verification/slint-linux-candidate/package-current/`：
+當時檔案位於 Slint worktree 的 `.local/verification/slint-linux-candidate/package-current/`：
 
 | 檔案 | SHA-256 |
 | --- | --- |
