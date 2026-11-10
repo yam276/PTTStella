@@ -280,10 +280,7 @@ impl ArticleSession {
                     && !view.output_pending
                     && !view.input_pending
                     && view.frame.control_complete
-                    && !matches!(
-                        view.context(),
-                        pttstella::navigation::Context::ArticleReading { .. }
-                    ))
+                    && input::raw_context_ended(&view.context()))
         }) && !self.vim_handoff.get()
             && self.composition_handoff.get().is_none()
         {

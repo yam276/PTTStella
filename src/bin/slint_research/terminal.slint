@@ -763,7 +763,6 @@ export component TerminalWindow inherits Window {
                 if root.article-updates-unread>0: Button {text:root.article-updates-new-label;enabled:!root.article-updates-blocked;clicked=>{root.article-updates-action(1);} }
                 if root.article-updates-recovery: Button {text:UiLabels.updates-station;enabled:!root.article-updates-blocked;clicked=>{root.article-updates-action(2);} }
             }
-            if root.article-station: Button { text: UiLabels.resume-reading; clicked => { root.article-resume-reading(); } }
             if !root.terminal-input && !root.session-active && !root.article-active: HorizontalLayout {
                 spacing: 8px;
                 compose := LineEdit {
@@ -887,6 +886,13 @@ export component TerminalWindow inherits Window {
             groups:root.reply-navigation-groups;group:root.reply-navigation-group;count:root.reply-navigation-count;
             action(code)=>{root.reply-navigation-action(code);}
         }
+    }
+    Button {
+        visible:root.article-station;
+        x:12px;y:root.height - self.height - 12px;
+        width:min(240px,root.width - 24px);height:32px;
+        text:UiLabels.resume-reading;
+        clicked=>{root.article-resume-reading();}
     }
     status-panel := Rectangle {
         visible: root.shell-status-visible;

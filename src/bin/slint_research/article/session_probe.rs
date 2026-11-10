@@ -252,9 +252,15 @@ pub fn start(
                 )
                 .await?;
                 let revision = connection.updates.borrow().frame.revision;
+                let station_size = (ui.get_view_width(), ui.get_view_height());
                 owner.route_input(
                     generation,
                     pttstella::input::encode("中").map_err(|e| e.to_string())?,
+                )?;
+                require(
+                    !ui.get_article_station()
+                        && (ui.get_view_width(), ui.get_view_height()) == station_size,
+                    "ordinary station input flashed a return bar or resized the viewport",
                 )?;
                 wait(
                     || {

@@ -7,6 +7,15 @@ use pttstella::{
 };
 use tokio::time::Instant;
 
+pub(super) fn raw_context_ended(context: &Context) -> bool {
+    // A partially redrawn page or a station typing dialog is not evidence
+    // that reading ended. Keep its raw hold until a known context or resume.
+    !matches!(
+        context,
+        Context::ArticleReading { .. } | Context::Unknown { .. }
+    )
+}
+
 impl ArticleSession {
     pub fn input_context(&self, view: &View) -> Option<Context> {
         let ui = self.ui.upgrade()?;
@@ -109,11 +118,18 @@ impl ArticleSession {
     }
 
     pub fn station_handoff(&self) {
+        let generation = self.connection.updates.borrow().generation;
         self.terminal_recovery.set(None);
-        self.raw_generation
-            .set(Some(self.connection.updates.borrow().generation));
-        self.core.borrow_mut().interrupt_full_load();
         self.cancel_command();
+        // Only a cached web article can hand off to station input. Ordinary
+        // terminal typing must not repeatedly create and retire a return bar.
+        if self.raw_generation.get() == Some(generation)
+            || self.core.borrow().reading_scope().is_none()
+        {
+            return;
+        }
+        self.raw_generation.set(Some(generation));
+        self.core.borrow_mut().interrupt_full_load();
         self.core.borrow_mut().set_raw_reading(true);
         if let Some(view) = self.view.borrow().as_ref() {
             view.hide();
@@ -166,5 +182,32 @@ impl ArticleSession {
             self.next_paint.set(Instant::now());
             self.notify.notify_one();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pttstella::navigation::UnknownReason;
+
+    #[test]
+    fn raw_input_survives_unknown_dialogs_but_releases_at_known_station_screens() {
+        assert!(!raw_context_ended(&Context::Unknown {
+            reason: UnknownReason::Unrecognized
+        }));
+        assert!(!raw_context_ended(&Context::Unknown {
+            reason: UnknownReason::Incomplete
+        }));
+        assert!(!raw_context_ended(&Context::ArticleReading {
+            first_line: 1,
+            last_line: 23,
+            percent: 50
+        }));
+        assert!(raw_context_ended(&Context::MainMenu {
+            first_row: 1,
+            last_row: 12,
+            cursor_row: 2
+        }));
+        assert!(raw_context_ended(&Context::EmptyList));
     }
 }
