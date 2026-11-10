@@ -2,6 +2,27 @@
 
 這份文件記錄 S0／S8 的量測工具及目前證據，不是效能通過報告。完整負載、次數與平台門檻仍以[平替計畫](slint-evaluation-plan.md#同負載效能門檻)為準。
 
+## 2026-11-11 雙 GIF 三組交錯比較
+
+在 Mac15,14、macOS 15.7.7 arm64 上，以目前 Slint arm64 封裝 native `f50ffb46`（乾淨 `7466c31`）對照既有 Dioxus native `4a3035b6`（實際 `3c667eb` 加 R3 patch，產品來源核對 `f48e7e4`）。已核對共用閱讀場景與素材產生器在這兩個來源間相同。六輪採 Slint／Dioxus、Dioxus／Slint、Slint／Dioxus 順序，使用相同設定、23 行文章和兩個獨立的 loopback GIF URL。兩圖都是同一份 512×160、32 幀、100ms 幀延遲的合成 GIF。每輪用新程序，重用兩個測試 App 身分。
+
+實際介面展開兩張全尺寸圖片，外窗擷取為 1040×768。採樣前後核對文章輸入焦點和紅藍畫面。Dioxus 的兩張 GIF 在背景可展開，進出全螢幕再點文章空白處後，恢復原窗尺寸和播放。Slint 用 Raise 及文章點擊，首輪另捲回文章頂端。Slint 文章 viewport 實際回報 1040×676，原彙整誤用了歷史 1040×740。Dioxus 圖片置中，Slint 圖片靠左，兩版頁尾與內部版面有差異。首段 Slint 0.287 秒缺少結束時的文章焦點證據，保留原始 trace。重新取得焦點後採用獨立的 `playing-focused` 區間，並觀察到兩張圖都切換紅藍畫面。
+
+| 配對 | Slint CPU 秒 | Dioxus CPU 秒 | Slint footprint MiB | Dioxus footprint MiB |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 0.296 | 0.180 | 127.4 | 700.4 |
+| 2 | 0.287 | 0.279 | 119.8 | 674.5 |
+| 3 | 0.388 | 0.171 | 125.9 | 686.7 |
+| 中位數 | 0.296 | 0.180 | 125.9 | 686.7 |
+
+每段 10 秒、101 筆，程序族成員穩定。相對這次 Dioxus 對照，Slint 取樣 footprint 峰值中位數低 81.7%，RSS 峰值中位數低 42.1%。CPU 中位數高 64.6%，三組配對差距為 64.6%、2.9%、127.5%，幅度有波動。六輪都各取得兩次 GIF GET、正常 exit0 和嚴格 Close，HTTP owner 均 join。Dioxus 另核對兩個 inline 請求／一個 batch、完整 23 行及 960×576 的原始頁 PNG。22 個觀測到的 PID／start 身分均已消失。
+
+第 5 輪在計時採樣之外執行五秒程序堆疊取樣。Skia render 的 131 筆包含 95 筆 softbuffer present、87 筆 `CGContextDrawImage`，其下可見 vImage 像素轉換。實際使用的 softbuffer 0.4.8 macOS backend 在 `present_with_damage` 直接提交整個 surface。後續效能工作可針對這段提交成本，再核對色彩、縮放、兩圖播放及閒置資源。
+
+原始資料、固定設定、執行檔 SHA、堆疊與可重跑控制器在 `.local/verification/slint-dual-gif-comparison/`。將 `compare.py` 複製到同層新目錄後執行 `setup`，逐輪執行 `run N`，以實際 App 操作展開及取得焦點，再從另一個終端執行 `sample N playing`。採樣後核對畫面並 Quit。Dioxus Quit 前匯出原始頁 PNG。兩個 controller 以 exit／Close、HTTP 次數與原始採樣結果保存驗收。清理移除六個自有根路徑共 110,849,788 regular-file bytes，七份 trace 無損壓縮後省 1,471,893 bytes。filesystem free 240004988928→240117846016 bytes 為觀測值。精確路徑、lsof、du、雜湊與壓縮映射見 `cleanup.json`。
+
+這組比較採相同外窗、可見雙 GIF 與端點焦點。連續前景、顯示延遲、冷暖啟動、100 次操作、GPU 記憶體及正式 S8 門檻仍待驗。
+
 ## 2026-11-11 快照損耗待重畫狀態的修補
 
 在同一App重跑保留的 `4a4da212…` 失敗native，確認尚未展圖時頁尾、下方控制列已缺失，之後GIF換幀仍未補回；探針保存的 `snapshot.png` 卻完整。原 `ad01a6d5…` 對照則正常。重現前另發現上一輪把write_bytes產生的0644備份copy2回App，導致診斷副本無執行權限；本輪修回0755、核對access及簽章，實際原版啟動／退出也通過。這是診斷副本還原錯誤，四平台包未被修改；不能只核對binary hash而忽略mode。原始啟動失敗log另存，不算原生渲染案。

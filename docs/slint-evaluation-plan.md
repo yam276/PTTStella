@@ -12,7 +12,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 macOS arm64 已以最新 Slint 候選及原 Dioxus 完成設定 v1–v6 的 18 輪實際前端往返，核對兩次寫入備份、最後讀回與其他資料檔。正式路徑、密碼庫和完整資料操作仍待驗。[前端往返紀錄](slint-store-frontends.md#2026-11-11-同一對前端的-v1v6-設定往返)
 
-macOS預設Skia軟體合成及原生CPU影片已降低閒置圖形記憶體；GIF循環重用與保留raster後，同一雙GIF校準的10秒CPU約1.10秒，較早期約3.60秒下降。這是不同修正階段的校準，未完成正式冷暖次數、100次操作、連續前景／延遲、峰值及所有平台矩陣，不能據此宣布勝過Dioxus或S8通過。CPU影片與GPU共用尺寸／像素預算，保留Full HD／4K及明確GL／Metal選項；MP4 GPU偶發錯色仍未解。詳 [效能與原始限制](slint-macos-measurement.md)。
+macOS arm64 完成三組雙 GIF 交錯比較。Slint 的程序族 footprint 峰值中位數約 126 MiB，Dioxus 約 687 MiB。10 秒 CPU 中位數為 0.296 與 0.180 秒，三組差距幅度有波動。Slint 堆疊取樣主要落在 CoreGraphics 整窗提交與像素轉換。正式冷暖次數、100 次操作、連續前景／顯示延遲及跨平台矩陣仍待驗。MP4 GPU 偶發錯色仍未解。[效能量測紀錄](slint-macos-measurement.md#2026-11-11-雙-gif-三組交錯比較)
 
 | 階段 | 目前已有 | 尚須完成 |
 | --- | --- | --- |
