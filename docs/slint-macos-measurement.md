@@ -2,6 +2,27 @@
 
 這份文件記錄 S0／S8 的量測工具及目前證據，不是效能通過報告。完整負載、次數與平台門檻仍以[平替計畫](slint-evaluation-plan.md#同負載效能門檻)為準。
 
+## 2026-11-10 閒置格線校準與圖形記憶體
+
+新證據在 `.local/verification/slint-perf-equivalence-current/`，機器為 Apple M3 Ultra／256GiB RAM／macOS15.7.7，不能外推其他機型。沿用已封裝的 arm64 Slint native `6841e17e…`，沒有修改或重建 Rust；以獨立 host、responsibility root 和自有 marked-store 執行。兩版設定 bytes 相同：內建 Cascadia Mono／Noto Sans CJK TC、字高23、基線20、字寬100、en-US、hover off，完整 owner 保留。CUA 實見相同格線內容與顯示尺寸；Slint prepared report 為 viewport1040×740、grid1040×624、scale1／zoom1及16個服務存在。Dioxus 的相同顯示幾何由 screenshot 目視，沒有冒充機器讀取的 viewport receipt。
+
+每輪在畫面就緒後進行10秒／101筆穩定程序族採樣，之後正常關窗。下表是校準原始觀測，**不構成兩版效能勝負**：
+
+| 程序／renderer | 取樣 footprint 峰值 bytes | 取樣 RSS 峰值 bytes | CPU seconds／約10秒 wall |
+| --- | --- | --- | --- |
+| Slint 預設 Skia OpenGL，首輪 | 886,086,528 | 220,872,704 | 0.041751084 |
+| 同 native `--software-renderer` | 103,224,960 | 268,075,008 | 0.225581208 |
+| Slint 預設 Skia OpenGL，新程序重測 | 883,185,344 | 221,724,672 | 0.073074500 |
+| Dioxus 格線對照版，原生前景未確認 | 238,693,376 | 453,165,056 | 0.015280126 |
+
+Slint 預設路徑兩次約842–845MiB footprint，software 這一輪約84–98MiB。取樣後對仍在運行的自有 PID 執行 `vmmap -summary`：GPU 主程序 physical footprint829.5M，其中 IOAccelerator (graphics) resident／dirty666.1M，另有64.0M IOAccelerator。這證明圖形配置是主要占用類別，尚未定位是哪個 texture／driver／cache 分配，不能宣稱是洩漏。software 的 CPU 與 RSS 這次較高，須補長文、雙GIF及影片同劇本的取捨，才決定預設 renderer；本輪沒有改產品預設。
+
+原 Dioxus `5ea9ad6` 拒絕 `parity_grid`，該次 exit2，沒有視窗或採樣。真正完成採樣的是既有 `2846dc4` Dioxus 對照 native `948d2a9e…`，含共用核心抽取，不能標成初始基準。它的 titlebar 非作用中，AX 能操作 PNG 匯出及關窗，座標操作仍回報 noWindowsAvailable；修改 diagnostic CFBundleExecutable 為 native 並未解決。該次 codesign 因 unsigned RunFixture subcomponent 失敗，native bytes 未變；只以明確合成 argv 啟動，沒有宣稱新 host 通過簽名。Slint 三輪首尾 AX terminal focus 與作用中 titlebar 可見，仍未連續記錄整段 OS foreground。前景不等、次數不足、未控制 cold／warm，故 S8 比較維持 not_ready，不能用上述數字計算達標比例。
+
+四段採樣皆通過原穩定 membership／counter 規則，family 含相同 responsible PID 的主程式、WebKit／MTL／ThemeWidget helper，沒有按程序名稱拉入別的聊天。正常退出後，最後觀測到的全數 PID＋start 身分已消失；Slint 三輪都有唯一嚴格 Close ACK，Dioxus PNG 匯出／surface／owner audit passed。原始 samples、run／sampling／acceptance、vmmap、硬體與來源 hash 保留。首次 Documents evidence 寫入 EPERM、錯誤 fixture 的語言／未知欄位導致 fallback、原基準不支援案例、前景未確認及簽名失敗，各自保留；後續成功不改寫它們。改用自有 `/private/tmp` 後可啟動，沒有變更 TCC 或系統權限。
+
+本批兩份 host App、已用完的自有暫存資料根與五個專用 OS cache／WebKit／暫存目錄共110,762,516 regular-file bytes已清理；僅保留小型合成資料／影像／原始 trace，沒有保留環境副本。3,016份候選／來源／兩個必要原生對照 hash 不變；Frameworks symlink 不跟隨刪除。exact八個路徑、resolved／UID／symlink／lsof、du及filesystem free247333158912→247453286400 bytes在 `cleanup/ledger.json`，free僅為並行觀測；另4份 byte-identical generated PNG 的SHA與保留位置見 `cleanup/duplicate-pngs.json`。最新四包、必要來源、共享工具與使用者資料未變。接續優先處理 renderer 圖形占用與正式前景觀測，再補完整重複次數／負載／平台矩陣。
+
 ## 程序族與指標
 
 [macos_process_usage.py](../tooling/macos_process_usage.py) 是開發用 Python 工具，沒有新增產品依賴。它讀取本機 SDK 的 `proc_bsdshortinfo`／`rusage_info_v0`，以 PID 加啟動 counter 識別程序；不能用舊 PID 直接延續採樣或發 signal。主要記憶體指標為 live family 的 physical footprint，另列 RSS；RSS 加總可能重複計入共用頁面。這不是 GPU 專用記憶體或系統可用記憶體的差額。

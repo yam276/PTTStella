@@ -10,6 +10,8 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。本輪 macOS arm64／Linux 另納入原生控制項 CJK fallback 與貼上預覽跨重繪修正（289份產品來源對應84e98a3）；Windows／Intel Mac 仍保持475897f，Windows69542cb7…等使用者稍後驗收。各包來源不同，依 [最新候選](#2026-11-10-最新候選) 分別核對；尚未完成全部原生或效能驗收。
 
+最新閒置校準另發現目前 arm64 預設 OpenGL 路徑有約842–845MiB程序族 footprint，主要占用落在圖形配置；同native軟體路徑單輪約84–98MiB，但CPU較高。Dioxus對照的前景尚未確認，因此未產生兩版改善比例；下一步優先處理renderer取捨及前景觀測，詳 [量測紀錄](slint-macos-measurement.md#2026-11-10-閒置格線校準與圖形記憶體)。這不改變S8仍未通過的狀態。
+
 | 階段 | 目前已有 | 尚須完成 |
 | --- | --- | --- |
 | S0 | 共用 Rust 服務、獨立 Slint 入口及可編譯提交序列；四 target 的一般／播放器兩配置 Cargo 依賴 gate | 完整功能案例對照、各平台連結／runtime 依賴與最終基準重跑 |
@@ -584,3 +586,12 @@ exact removed paths、resolved／UID／symlink／lsof、每檔SHA、Cargo宣告�
 首輪typeText只留下ASCII、240秒controller逾時/-15及無Close仍保留failed，原因未確定；後續以同一資料修正重複前綴並使用原生paste成功，不覆寫失敗或推定實體IME正常。含emoji的UAO上色拒絕與之後可編碼正文成功也分別記錄。新建／刪除／多開衝突／帶回站端、其他平台、正式路徑／vault與同負載效能仍待驗。
 
 本輪沒有Rust變更／重建；兩份自有host App及五個專用OS cache／WebKit／暫存目錄已確認退出、lsof無open files後清理，共110,884,103 regular-file bytes。3,026份來源／候選／最終資料hash不變，Frameworks symlink不跟隨刪除；exact paths、inventory、du與filesystem free前後在 slint-draft-roundtrip-current/cleanup/ledger.json，free只記並行觀測。最新四包、原baseline raw與唯一失敗／合成資料證據保留；Windows69542cb7…不變，等使用者稍後實測。S0–S8持續，S9未執行。
+
+
+## 2026-11-10 閒置校準與 renderer 圖形占用
+
+目前arm64 native6841e17e…完成預設OpenGL兩輪及software一輪，各10秒／101筆穩定程序族採樣、完整16 owner與1040×740 viewport／1040×624 grid、scale1／zoom1，原生首尾terminal focus可見；三輪exit0／唯一Close ACK。程序族footprint預設兩次約842–845MiB，software單次約84–98MiB，但後者CPU／RSS較高。預設重測後的vmmap顯示主程序829.5M footprint，IOAccelerator (graphics) resident／dirty666.1M，圖形配置為主要占用類別；未定位個別分配／洩漏，不先更改預設。接續以長文／GIF／影片同劇本核對取捨並處理前景觀測。
+
+既有2846dc4 Dioxus對照948d2a9e…以相同bundled字型／設定bytes及目視相同格線完成101筆採樣，PNG／surface／owner退出passed，最後觀測的所有程序身分消失。其原生前景仍未確認，且不是最初5ea9ad6；後者不接受parity_grid，exit2另保留。Documents EPERM、首份錯誤settings fallback、未確認前景與host簽名失敗均分案保存，沒有放寬權限／保護。完整原始數據與未驗範圍見 [閒置校準](slint-macos-measurement.md#2026-11-10-閒置格線校準與圖形記憶體)。S8沒有兩版改善比例、cold／warm、啟動／操作p95或完整次數／負載結果，仍not_ready。
+
+本輪沒有Rust變更／重建；兩份App、自有temporary根及五個專用OS暫存目錄共110,762,516 regular-file bytes已清理，保留小型合成資料與唯一raw trace／vmmap／失敗。3,016份來源／候選／必要對照hash不變，另移除4份byte-identical PNG；exact paths、UID／resolved／symlink／lsof、du、filesystem free與重複圖映射在 slint-perf-equivalence-current/cleanup/，free僅記並行觀測。Windows等待稍後驗收的包不變，S0–S8繼續，S9未執行。
