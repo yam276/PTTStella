@@ -625,3 +625,15 @@ exact removed paths、resolved／UID／symlink／lsof、每檔SHA、Cargo宣告�
 同一R3 native取樣確認GIF／weezl解碼與Skia software／CoreGraphics提交各有成本。已加入單播放者16MiB／最多512幀的有界循環重用，保留幀延遲、透明／disposal、有限循環與增量fallback。修正後同負載10秒CPU1.93／1.87秒，另一程序恢復後1.71秒；最終Clippy版本另測1.32／1.36秒，較修正前3.66秒低，但仍高於Dioxus。下一步處理剩餘軟體繪製／提交成本；不降低尺寸／幀數／可視圖數，S8仍未通過。
 
 另修正被動準備與焦點權限混用；已取得背景prepared且原生操作後才可輸入的分立證據。超過300秒peer期限的失敗保留，另一快速完整生命週期取得嚴格Close／全部觀測身分退出及HTTP join。完整scope與來源見[循環重用](slint-macos-measurement.md#2026-11-10-gif-循環重用與剩餘繪製成本)；固定worktree／cache及診斷pair繼續復用，四平台下載未替換，S0–S8持續、S9未執行。
+
+## 2026-11-11 保留 raster 與候選封裝
+
+`9a06515` 修正 macOS software buffer 每次清空及 snapshot 消耗視窗 dirty history 的邊界；只保留 buffer 不足以修復頁尾漏畫。獨立完整／局部 Skia 測試在原版 renderer 重現失敗，修補後一般及 native-player 兩配置各 118 對逐像素相同，其中 100 次確實局部更新；另有原生全螢幕／恢復、頁尾與兩張 GIF、設定開關及退出證據。兩次 10 秒校準 CPU 約 1.10 秒，不能代替完整 Dioxus 同負載效能矩陣。來源、原反例及限制見 [macOS 量測](slint-macos-measurement.md)。
+
+新 arm64 App／ZIP／DMG 已更新到原固定 `slint-renderer-api-current/arm64-package/`，native SHA-256 `f211c341c2b7404e44af0ff8fe3b83ffc53e1eb22531b6e089352ac4ebbfbafb`。乾淨9a執行 Cargo 0.32秒命中既有快取，實際原編譯仍列 aff5ac8 dirty，不改寫來源紀錄。App／ZIP 全部1,237份payload一致，strict signature／DMG驗證通過；50份runtime逐byte沿用，203份舊native notice全部保留並加一份前manifest receipt。Rust notice collector現在也收錄local dependency，含renderer三份原授權及兩份修補／來源文件。
+
+同一封裝執行檔在拒讀Homebrew的sandbox通過預設三codec、長文、inline、文章input／paste及三API格線共10案，全部exit0／嚴格Close；影片control／renderer／HTTP均有退出receipt。首兩次MP4逾時的stack停在合成fixture的File::open；inline兩次逾時則停在CoreText建立字型時由getcwd進入open。三個合成影片複製到同一owned暫存目錄並核對SHA後影片通過；inline只改同一暫存CWD後通過。這定位了測試環境存取邊界，但未證明OS權限根因或產品權限修復，原失敗／stack保留，不以重跑抹去。這些是合成toolkit／loopback驗收，不是原生IME／OS輸入延遲或S8完整通過。
+
+新的 [產品來源包](slint-product-source.md) 已完整還原580／546／545檔與tree；ARM一般Slint從還原來源建置103過／1 helper ignored，原checkout來源被sandbox拒讀、固定compiler cache復用。完整第三方來源閉包仍not_ready。三份臨時還原checkout驗後移除，沒有新target。更新candidate index後移除舊09a的完整App／ZIP／DMG，只留小型report／hash；50份library相容連結仍指向同一固定新包，其他三平台下載SHA未變。filesystem available264153116672→264440426496 bytes僅記並行觀測；exact paths、UID／resolved／lsof、du及保留例外在 `slint-renderer-api-current/raster-package-current/cleanup.json`。
+
+本批來源核對、建置、封裝、原失敗與接受結果集中於 `slint-renderer-api-current/raster-package-current/`。Windows69542cb7維持原包，等使用者稍後實測；Intel／Linux實機、其餘原生／資料／效能矩陣及最新修正跨平台同步仍缺。S0–S8持續，S9未執行。
