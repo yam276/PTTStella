@@ -8,7 +8,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 **尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
 
-文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。目前ARM下載包為9a06515來源的保留raster版本，Intel／Linux及另外備妥的Windows包為9db9eda；Windows69542cb7原下載包保持不變，等使用者稍後驗收。最新來源另修正遮黑提示改變文章幾何的問題，五個Rosetta帳號／推文案例已通過，但尚未同步到四份下載包。候選index與各包原始來源分列，不能把最新來源測試當作已交付包驗收。
+文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個Mac固定下載入口已更新為核對6ad8e39的遮黑幾何修正包，各15項封裝後合成案例通過；Linux及另外備妥的Windows包仍為9db9eda。Windows69542cb7原下載包保持不變，等使用者稍後驗收。尚未同步四架構來源，也未完成所有原生／資料／效能矩陣；候選index與各包原始來源分列。
 
 macOS預設Skia軟體合成及原生CPU影片已降低閒置圖形記憶體；GIF循環重用與保留raster後，同一雙GIF校準的10秒CPU約1.10秒，較早期約3.60秒下降。這是不同修正階段的校準，未完成正式冷暖次數、100次操作、連續前景／延遲、峰值及所有平台矩陣，不能據此宣布勝過Dioxus或S8通過。CPU影片與GPU共用尺寸／像素預算，保留Full HD／4K及明確GL／Metal選項；MP4 GPU偶發錯色仍未解。詳 [效能與原始限制](slint-macos-measurement.md)。
 
@@ -673,3 +673,17 @@ ARM同來源raw `59c1c58f`已建置。新輕量原生診斷App雖有本機程序
 Cargo fingerprint另證實host依賴曾因 `MACOSX_DEPLOYMENT_TARGET` 未設定與11.0交替而失效。忽略於Git的固定build config及本機Windows／Linux配方已統一11.0，沿用原target；後續x64只重編實際變動主程式。尚未完成整輪跨target暖建置，不宣稱全部零重編。`cache-environment.json`及兩份x64 build log保留原因與scope，沒有新checkout、target或Cargo clean。
 
 結案核對resolved path／UID／symlink／lsof及SHA後，刪除兩份已取代診斷exe的gzip備份，另清六個已有逐byte證據副本的自有temp目錄，共70,453,084 regular-file bytes；exact八根及保留位置見同目錄 `cleanup.json`。filesystem available252814196736→252885217280 bytes僅記並行觀測。保留固定Cargo cache、目前各平台包、兩個新raw、唯一原始失敗與一份未解CUA最小App；未知系統暫存與共享來源不動。S0–S8持續，S9未執行。
+
+## 2026-11-11 遮黑修正的 Mac 候選同步
+
+兩個Mac固定下載入口已替換為6ad8e39修正的封裝：ARM native `0b2f5786`、Intel native `ae54f0bd`。直接復用上一輪raw59c1／64a2及原runtime，未重編Rust、未新建target。實際原建置a63c303 dirty與frozen三檔patch保留，並確認patch正好等於6ad8e39的產品／測試修改；不將原建置改稱乾淨6ad重編。
+
+封裝後兩個實際exe各通過15案：預設MP4／WebM／OGV、長文、inline、文章input／paste、software／OpenGL／Metal格線、三個account及兩個replies案例，全部exit0／唯一嚴格Close，拒讀Homebrew。格線peer使用parity_grid／received_bytes513的獨立receipt，沒有expected_close欄位；首輪collector誤套其他peer欄位而停下，原exit0／原始receipt與false結果保留，修正schema後核對既有輸出PNG並接續其餘案例，沒有重跑已終結成功的程序或放寬產品斷言。ARM1,238／Intel1,220份App／ZIP payload逐byte一致；50／47個runtime與204／185份原native notice不變，各新增一份runtime重用receipt，簽章及DMG通過。這是合成toolkit／loopback，Intel使用Rosetta，不是原生鍵鼠／IME或S8效能。
+
+既有Dual GIF診斷host亦補試：第一輪launcher停在外部JSON讀取；保存stack後改為內嵌相同合成設定、使用既有owned暫存CWD／log，原生程式確實開始並收到文章。但CUA仍回報running application not found，同時listApps顯示running，沒有可信OS輸入，保持not_ready。兩個自身身分均核對後結束，numeric exit／正常Close仍不成立。此重現取代上一個新ID最小App；原始log／設定／stack保存，過時App已清理。未更改OS權限或操作其他PTTStella視窗。
+
+產品來源交付新增 `filter-current`，同一immutable bundle以hardlink復用，加一份產品patch還原6ad8e39完整580檔／tree，綁定兩個Mac新exe；既有Linux／Windows及歷史mapping保留。沒有再做獨立來源編譯，完整第三方閉包仍not_ready。工具Python178項與實際workflow glob的actionlint通過；首輪指定不存在ci.yml的呼叫失敗另記為命令選擇錯誤，並非workflow驗證通過。
+
+候選index、固定下載alias及來源包已更新。清理兩個過時Mac包的未用部分、一次還原checkout、過時診斷App／exe備份、重複temp證據及39份逐code object核對來源的自產pyc，合計47個exact roots、583,606,841 regular-file bytes。舊ARM App由系統tccd持有native，完整保留於 `filter-package-current/retired-arm64/PTTStella Slint Candidate.app`，不停止系統服務；舊ZIP／DMG已移除。固定Cargo cache、新兩包、Windows待驗包、Linux及來源／對照hash不變。resolved／UID／symlink／lsof／SHA／du及filesystem available251401015296→251989946368 bytes在 `slint-renderer-api-current/cross-current/filter-package-current/cleanup.json`，free只記並行觀測。
+
+本批實際封裝、15案、schema原始結果、來源還原及promotion集中於同目錄；已結束的原生工具限制在 `account-diagnostic/native-known-host/`。下一步同步Windows／Linux幾何修正並處理其餘原生／資料／效能缺項；S0–S8保持active，S9未執行。
