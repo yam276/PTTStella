@@ -104,11 +104,18 @@ async fn open(ui: &TerminalWindow, o: &Manager, row: usize, col: usize) -> Resul
         "probe pointer did not map to the independently specified cell",
     )?;
     verification::click(ui, p, Button::Right);
-    wait(
+    let opened = wait(
         || ui.get_context_open(),
         "account pointer did not open content menu",
     )
-    .await
+    .await;
+    if opened.is_err() {
+        eprintln!(
+            "account open failure diagnostic {}",
+            o.article.diagnostics()
+        );
+    }
+    opened
 }
 async fn choose(ui: &TerminalWindow, o: &Manager, key: &str) -> Result<(), String> {
     eprintln!("account choose {key}");
@@ -442,6 +449,7 @@ pub fn start(
             )?;
             let originals = images(&ui, &media);
             let y = ui.get_article_offset_y();
+            let viewport_before = crate::article::inline::probe::focus_viewport(&ui, &inline);
             author_click(&ui, &o)?;
             wait(
                 || {
@@ -475,7 +483,21 @@ pub fn start(
                     "focus reset decoded images or wide state",
                 )
                 .await?;
-                require(ui.get_article_offset_y() == y, "focus moved the viewport")?;
+                let viewport_after = crate::article::inline::probe::focus_viewport(&ui, &inline);
+                std::fs::write(
+                    directory.join("focus-viewport.json"),
+                    serde_json::to_vec_pretty(&serde_json::json!({
+                        "before":viewport_before,"after":viewport_after,
+                        "scope":"Explicit synthetic account probe; logical anchor and installed geometry, not OS input latency."
+                    })).map_err(|e|e.to_string())?,
+                ).map_err(|e|e.to_string())?;
+                require(
+                    ui.get_article_offset_y() == y,
+                    &format!(
+                        "focus moved the viewport: before={y}, after={}",
+                        ui.get_article_offset_y()
+                    ),
+                )?;
                 let model = ui.get_inline_pictures();
                 let gif = (0..model.row_count())
                     .filter_map(|i| model.row_data(i))

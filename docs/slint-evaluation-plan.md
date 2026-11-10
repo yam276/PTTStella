@@ -418,3 +418,10 @@ Linux使用本批自有ARM容器的已核對x64 sysroot，由Mac的clang／LLD�
 本批已用Cargo原生clean移除31,991檔，Cargo回報10.4GiB、target刪前du11108024KiB；另移除自有SDK image／mount／transfer、自有停止容器（SizeRw1456120849 bytes）、重複raw／封裝input與四份被取代候選的17個頂層產物。舊manifest／notice／逐檔hash封存在 `retired-package-metadata/`，原始成功／失敗及必要source保留；一份當前raw CLI作未解網頁流程的最小重現，frontend相容入口改成指向它的零複本symlink。最新四份交付、Windows原始證據及286份產品來源共2846份保護檔案hash未變。exact paths、owner／resolved／symlink／lsof、Cargo／du／filesystem free及保留例外在 `cleanup/ledger.json`；共享SDK／registry／VM、候選共用OS偏好／cache及使用者資料均保留，不操作其他聊天。重複PNG及歷史文字gzip的SHA／保留位置另在同目錄mapping；free變化只記並行觀測，不全歸因本批。
 
 本批一般gate及缺工具狀態另在 `final-gates.json`：Python169、docs、fmt、diff已通過；目前actionlint缺runner，workflow來源未修改，GitHub Actions未執行，這兩項未計為passed。清理後filesystem available觀測為288026492928 → 299136573440 bytes，與Cargo宣告／du分列；另刪15份byte-identical PNG、保留34份獨特PNG，兩份大型歷史文字gzip逐byte解壓核對。
+
+
+2026-11-10 網頁推文聚焦診斷：目前交付 arm64 App 的 account 合成案例仍在 viewport 檢查失敗；新增只在明確 conformance checkpoint 取得的有界快照，沒有修改正常捲動、前景保護或通過條件。診斷版顯示點作者前後 Anchor 完全同為 row=1、within=1.7876068506485376；可用高度由564變524、行高23變21、wide圖片gap468變428，因此相同錨點對應的offset由414.600006變379.095734。尚未確定是哪個控制列引起40px版面差異，不能宣稱整個網頁流程通過或實際閱讀位置已跳動。原failed、嚴格peer因提前中止而未收到PageDown的cleanup failed，均保留。
+
+診斷來源3d0c874加兩檔patch、raw exe fb35e2ee17d51ffa5f4e0721aa5e70c6224a6d3747cf323c1fc8f2588d265e12；Slint bin91項通過／1項helper ignored、all-target Clippy及release build通過。這是toolkit合成事件／loopback，不是OS輸入或四平台驗收；沒有用診斷版覆蓋最新四份候選包。建置／快照／failed原文在 slint-web-focus-audit/。本批自有target按Cargo原生clean移除，最新最小診斷CLI保留一份，替代前輪raw及frontend零複本相容入口；exact paths、hash／lsof／du／free及保留例外見該目錄cleanup/ledger.json。S0–S8持續，S9未執行。
+
+本輪清理實測：Cargo clean回報8853檔／2.9GiB，刪前target du3062108KiB；另移除被診斷版取代的476dcf97…raw（68,481,664 bytes），frontend symlink已改指向fb35e2ee…單份診斷CLI。2561份當前候選／原Windows證據／必要CLI的hash前後一致，filesystem available 289505865728→292473794560 bytes僅為觀測，未歸因全數回收量。兩筆exact removed paths及保留理由在cleanup/ledger.json。

@@ -79,6 +79,28 @@ fn diagnostics(ui: &TerminalWindow, owner: &Inline) -> String {
         native.as_ref().map(|n| n.timer.running())
     )
 }
+/// One bounded snapshot at an explicit conformance checkpoint, never telemetry.
+pub fn focus_viewport(ui: &TerminalWindow, owner: &Inline) -> serde_json::Value {
+    let article = owner.article.upgrade();
+    let native = article.as_ref().and_then(|a| a.view.borrow().clone());
+    serde_json::json!({
+        "viewport":[ui.get_view_width(),ui.get_view_height()],
+        "offset":[ui.get_article_offset_x(),ui.get_article_offset_y()],
+        "dpi":ui.window().scale_factor(),"zoom":ui.get_zoom(),
+        "foreground":ui.get_native_foreground(),"blocked":ui.get_context_source_blocked(),
+        "inline_enabled":ui.get_inline_enabled(),
+        "pictures":ui.get_inline_pictures().row_count(),
+        "native":native.as_ref().map(|n|serde_json::json!({
+            "scope":n.scope.get(),"rows":n.rows.get(),
+            "anchor":n.anchor.get(),"painted_anchor":n.painted_anchor.get(),
+            "layout":format!("{:?}",n.layout.get()),"gaps":n.gaps.borrow().clone(),
+            "flow_height":n.flow().map(|f|f.height()),
+            "position":n.flow().map(|f|n.position(&f)),
+            "geometry_ready":n.geometry().is_some(),"timer_running":n.timer.running(),
+        })),
+        "article":article.map(|a|a.diagnostics()),
+    })
+}
 pub fn start(
     ui: &TerminalWindow,
     owner: Rc<Inline>,
