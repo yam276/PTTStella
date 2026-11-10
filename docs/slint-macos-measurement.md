@@ -248,3 +248,22 @@ macOS arm64最終封裝另以CUA實見浮球→設定→Slint授權、Escape後A
 cold／warm 要記錄定義；macOS WebKit 會在 `Library/WebKit/<task bundle id>` 和 `Library/Caches/<task bundle id>` 留下資料，僅換 probe 目錄不足以稱 cold。只能清自己 namespace，不能清系統 cache 或其他 App 資料。兩版順序交錯，各至少10次啟動及每組100次操作；閒置、長文、雙GIF、影片、草稿、多開、反覆切換／回收後各自觀測。穩定區間工具可重用，membership churn 的階段另補完整 lifetime 記帳。
 
 本批 release profile、系統暫存與專用 WebKit cache 已依[清理規則](development-harness.md#產物清理與結案)清理，exact五筆路徑及保留理由在同批 `cleanup/ledger.json`；不為工具測試重建 Rust。下一批沿用各一份 Slint候選與Dioxus對照程式，只有來源變更或必要 gate 才重建。低階 Windows門檻、四架構、完整回退及S0–S8功能驗收仍未完成，S9未執行。
+
+## 2026-11-11 macOS 局部呈現實驗
+
+鎖定的 softbuffer 0.4.8 在 macOS 將 `present_with_damage` 轉成整窗提交。實驗以 256×128 像素圖塊提交受影響的區域，首次繪製、超過範圍限制或非支援倍率時走整窗。目標是降低軟體 renderer 在多張 GIF 播放時的 CPU 開銷。[上游 macOS 呈現討論](https://github.com/rust-windowing/softbuffer/issues/83)
+
+同一個 arm64 診斷執行檔 `1db8a1d6…`，按整窗、圖塊、圖塊、整窗順序播放兩張 512×160 的合成 GIF。1040×768 外視窗，每次取樣 10 秒，共 101 筆，觀察取樣前後的文章焦點及紅藍換幀。四次各下載兩個不同 URL 一次，正常退出、嚴格 Close ACK 及 HTTP join 均成立。第三次在取樣後另外確認原生全螢幕 1920×1080 與回復原尺寸的畫面。
+
+| 模式 | 10 秒 CPU | 取樣 footprint 峰值 |
+| --- | ---: | ---: |
+| 整窗 1 | 0.326 s | 117.2 MiB |
+| 圖塊 2 | 0.269 s | 100.0 MiB |
+| 圖塊 3 | 0.271 s | 110.5 MiB |
+| 整窗 4 | 0.314 s | 104.0 MiB |
+
+兩組配對分別少 17.5% 和 13.7% CPU。前一組同視窗的生命週期計數平均每次提交 769,600／352,842 像素，少 54.2%。這是同一 Slint 診斷程式的 A/B；先前 Dioxus 的雙 GIF CPU 中位數 0.180 秒仍低於圖塊組的 0.270 秒。畫面只經實際視窗觀察，尚缺連續焦點、呈現延遲、高 DPI、多螢幕與其他場景驗證。
+
+第一次 staging 缺 LC_RPATH，修正後以既有候選的 runtime 啟動。首次圖塊畫面上下位置顛倒，改用 Core Animation 的垂直原點後重跑全組。Cargo 初次離線重解誤動其他依賴，還原後兩次 locked build 均成功。上述原始紀錄均保留，原生工具在 Quit 後的觀察逾時由實際 exit 0、Close 和程序消失獨立核對。
+
+原始資料、兩份實驗補丁、原始 crate SHA-256 及編譯命令在 `.local/verification/slint-macos-damage-current/`。重跑時以該目錄的 `final-source.json` 所列 commit 為基準，從 `softbuffer-source.json` 核對發布的 0.4.8 crate 並按其檔案清單放入 `vendor/softbuffer`，套用 `final-tracked.patch` 和 `softbuffer-0.4.8-macos-tiles.patch`，沿用 `final-build.json` 命令及 `trial.py` 的模式與合成資料。實驗依賴已退出產品來源，保留四架構候選的現有呈現方式。唯一暫存 App、其專用空 cache 和暫用 vendor 副本已清理，固定 Cargo target 保留。確切路徑、檔案大小和磁碟觀測見 `cleanup.json`。

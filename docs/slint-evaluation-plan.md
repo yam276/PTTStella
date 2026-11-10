@@ -14,6 +14,8 @@ macOS arm64 已以最新 Slint 候選及原 Dioxus 完成設定 v1–v6 的 18 �
 
 macOS arm64 完成三組雙 GIF 交錯比較。Slint 的程序族 footprint 峰值中位數約 126 MiB，Dioxus 約 687 MiB。10 秒 CPU 中位數為 0.296 與 0.180 秒，三組差距幅度有波動。Slint 堆疊取樣主要落在 CoreGraphics 整窗提交與像素轉換。正式冷暖次數、100 次操作、連續前景／顯示延遲及跨平台矩陣仍待驗。MP4 GPU 偶發錯色仍未解。[效能量測紀錄](slint-macos-measurement.md#2026-11-11-雙-gif-三組交錯比較)
 
+macOS 軟體 renderer 局部呈現實驗用同一個執行檔做兩組雙 GIF 對照，CPU 各降 17.5%／13.7%。圖塊組約 0.270 秒／10 秒，先前 Dioxus 基準約 0.180 秒。補丁保留供重跑，候選包沿用現行呈現。S8 效能仍待驗。[局部呈現紀錄](slint-macos-measurement.md#2026-11-11-macos-局部呈現實驗)
+
 | 階段 | 目前已有 | 尚須完成 |
 | --- | --- | --- |
 | S0 | 共用 Rust 服務、獨立 Slint 入口及可編譯提交序列；四 target 的一般／播放器兩配置 Cargo 依賴 gate | 完整功能案例對照、各平台連結／runtime 依賴與最終基準重跑 |
