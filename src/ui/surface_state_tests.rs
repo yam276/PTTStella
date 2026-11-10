@@ -47,7 +47,7 @@ fn expected_merged_fixture(view: &View) -> pttstella::screen::Frame {
         .iter_mut()
         .filter(|g| g.row == 6 && (3..8).contains(&g.col))
     {
-        glyph.text = "█".into();
+        glyph.text = " ".into();
         glyph.left = pttstella::screen::Style {
             fg: 0,
             ..Default::default()
@@ -2148,7 +2148,7 @@ fn native_row_windows_use_the_final_merged_projection_and_reject_old_policy() {
             .glyphs
             .iter()
             .filter(|g| g.row == 0 && (3..8).contains(&g.col))
-            .all(|g| g.text == "█")
+            .all(|g| g.text == " ")
     );
     state.replace_rules(filters::Rules::default().edit("Alice", "", false).unwrap());
     assert!(state.article_window(&source, 6..7).is_none());

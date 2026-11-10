@@ -30,7 +30,7 @@ Rust 建立單一呈現 Frame：被遮 cell 替換為黑底黑字的 `█`，保
 
 網頁文章快取保留每行已辨識 ID 的 Rust metadata，已讀取的相鄰頁可合併；缺頁或新文章清理後重新起組。快取保留套用名單但尚未合併的行，避免移除舊行後新首行的 ID 永久消失。metadata 不傳給 WebView。終端機與單頁 PNG 各自保留該頁第一筆 ID；從網頁歷史選取／複製／行 PNG 則與目前可見快取投影一致。
 
-合併在黑白名單後套用，暫時揭露黑名單不關閉合併。重複 ID 使用黑色 `█`，複製與 PNG 也保留遮罩；該範圍的 OSC 8 連結一併移除，正文連結不受影響。文章列表不合併，不改站端 Frame、行數或送鍵。
+合併在黑白名單後套用，暫時揭露黑名單不關閉合併。重複 ID 逐欄替換為空格，保留 ID 欄寬、冒號、正文與時間的位置；複製得到空格而不是一串方塊，PNG 也只顯示空白。該範圍的 OSC 8 連結一併移除，正文連結不受影響。文章列表不合併，不改站端 Frame、行數或送鍵。黑名單內容／整行遮罩仍依前節規則處理。
 
 ## 作者欄、文章內快速名單與推文底色標示
 
@@ -101,3 +101,12 @@ macOS arm64／WKWebView 原生表單驗證新增、大小寫更新同 ID、備�
 另在正常 App 使用專用測試帳號，實站 SYSOP 公開置底公告的同帳號兩則標準推文可遮黑，保留作者／時間；揭露還原、Ctrl+b／Ctrl+f 往返後重新遮黑，Vim NORMAL。測後由表單移除暫時規則，並只清除本次新建的空名單及測試備份以還原原先不存在的狀態；⌘Q 回報 PeerClosedWithoutReply，程序退出 0。沒有保存實站畫面、文章內容、流量、帳密或私人名單進產品及驗證資料。
 
 一般 core／Clippy、38 個 desktop lib、2 個 bin 與文件 gate 通過；完整 macOS desktop gate 仍為 not_ready，Windows／Linux、其他格式與真實網站 hover 不在本輪通過範圍。
+
+
+## 2026-11-10 重複 ID 改為空格
+
+依使用者回報，連續推文合併 ID 的替代字元由 `█` 改為等寬空格；第一筆 ID、冒號、內文、時間及80欄位置不變。修改共用 Rust 投影，Slint、Dioxus、快取／分頁、選取文字及 PNG 消費同一結果。既有黑名單內容／整行遮罩優先保留，推文高亮不重畫隱藏 ID，ID 範圍的 OSC 8 連結及 account word 不恢復。
+
+本批證據在 `.local/verification/slint-merged-id-spaces/`。最終 release 核心389／Slint91／filters20、desktop library377／binary121／多程序10、JS383及Python166通過；既有ignored另列，不計為已執行，兩配置all-target Clippy通過。原生軟體終端的完整account案例有實際copy／PNG、空格ID／高亮及嚴格peer Close ACK。網頁模式額外案例未通過：先後在選單與viewport保存檢查失敗，舊未改空格候選的對照也在選單步驟失敗；原因尚未確定，不能據此宣稱網頁模式完整原生回歸通過。各原始failed／cleanup紀錄保留；本次不以調整expected或前景保護讓該案過關。
+
+候選打包與原生驗收分列；使用者目前沒有Intel Mac／Linux x64，並要求先打包，不等待這兩種實機。仍不把Rosetta／模擬或編譯算作原生驗收，也沒有切換正式入口或發佈。

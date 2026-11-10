@@ -364,7 +364,7 @@ pub fn project(frame: &Frame, rules: &Rules, revealed: bool) -> Projection {
     }
     let mut output = frame.clone();
     if !revealed {
-        mask_ranges(&mut output, &matches);
+        mask_ranges(&mut output, &matches, '█');
     }
     for glyph in &mut output.glyphs {
         if let Some((_, color)) = highlights.iter().find(|(p, _)| {
@@ -483,23 +483,25 @@ pub fn account_words(frame: &Frame) -> Vec<AccountWord> {
 
 /// Temporary reply focus never changes the persistent account rules.
 pub fn focus_pushes(frame: &mut Frame, replies: &[Push], id: &str) {
-    let marked: std::collections::BTreeSet<_> = replies
+    let marked: std::collections::BTreeMap<_, _> = replies
         .iter()
         .filter(|p| p.id.eq_ignore_ascii_case(id))
-        .map(|p| p.row)
+        .map(|p| (p.row, 3 + p.id.len()))
         .collect();
     let blue_rows: std::collections::BTreeSet<_> = frame
         .glyphs
         .iter()
-        .filter(|g| marked.contains(&g.row) && [g.left, g.right].iter().any(|s| s.fg % 8 == 4))
+        .filter(|g| marked.contains_key(&g.row) && [g.left, g.right].iter().any(|s| s.fg % 8 == 4))
         .map(|g| g.row)
         .collect();
     for glyph in &mut frame.glyphs {
-        if !marked.contains(&glyph.row) {
+        let Some(id_end) = marked.get(&glyph.row) else {
             continue;
-        }
+        };
         // Permanent masks and merged identities remain opaque, even on a marked row.
-        if glyph.text == "█"
+        let merged_id_space =
+            glyph.text == " " && glyph.col >= 3 && glyph.col + glyph.width <= *id_end;
+        if (glyph.text == "█" || merged_id_space)
             && [glyph.left, glyph.right]
                 .iter()
                 .all(|s| s.fg == 0 && s.bg == 0)
@@ -513,7 +515,7 @@ pub fn focus_pushes(frame: &mut Frame, replies: &[Push], id: &str) {
 }
 
 /// Shared cell replacement for content masks and repeated reply identities.
-fn mask_ranges(frame: &mut Frame, ranges: &[Push]) {
+fn mask_ranges(frame: &mut Frame, ranges: &[Push], replacement: char) {
     if ranges.is_empty() {
         return;
     }
@@ -566,12 +568,21 @@ fn mask_ranges(frame: &mut Frame, ranges: &[Push]) {
     frame.glyphs.reserve(original.len());
     for g in original {
         if hidden(g.row, g.col, g.col + g.width) {
+            // A whole-row/content policy already removed this cell. Merging
+            // repeated IDs must not change that stronger redaction's text.
+            if replacement == ' '
+                && g.text == "█"
+                && [g.left, g.right].iter().all(|s| s.fg == 0 && s.bg == 0)
+            {
+                frame.glyphs.push(g);
+                continue;
+            }
             for col in g.col..g.col + g.width {
                 frame.glyphs.push(Glyph {
                     col,
                     row: g.row,
                     width: 1,
-                    text: "█".into(),
+                    text: replacement.to_string(),
                     left: Style {
                         fg: 0,
                         ..Style::default()
@@ -606,7 +617,7 @@ pub fn merge_push_ids(frame: &mut Frame, replies: &[Push]) {
             )
         })
         .collect();
-    mask_ranges(frame, &ranges);
+    mask_ranges(frame, &ranges, ' ');
 }
 
 /// Policy/reveal revision is separate from the immutable source frame revision.

@@ -465,7 +465,7 @@ pub fn start(
                     f.glyphs
                         .iter()
                         .filter(|g| g.row == 9 && (3..8).contains(&g.col))
-                        .all(|g| g.text == "█" && g.left.fg == 0 && g.left.bg == 0)
+                        .all(|g| g.text == " " && g.left.fg == 0 && g.left.bg == 0)
                 }) == Some(true),
                 "reply focus exposed a merged author",
             )?;

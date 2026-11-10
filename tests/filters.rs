@@ -380,19 +380,19 @@ fn article_identity_is_never_inferred_from_mentions_or_deleted_rows() {
 }
 
 #[test]
-fn consecutive_reply_ids_are_masked_without_changing_type_colon_content_or_time() {
+fn consecutive_reply_ids_become_spaces_without_changing_type_colon_content_or_time() {
     let source = frame();
     let mut merged = source.clone();
     filters::merge_push_ids(&mut merged, &filters::pushes(&source));
     let rows = text::rows(&merged).unwrap();
     assert_eq!(rows[5].cells(0, 9), Some("推 Alice:"));
-    assert_eq!(rows[6].cells(0, 9), Some("→ █████:"));
+    assert_eq!(rows[6].cells(0, 9), Some("→      :"));
     assert_eq!(rows[7].cells(0, 10), Some("推 Alice2:"));
     for glyph in &merged.glyphs {
         if glyph.row == 6 && (3..8).contains(&glyph.col) {
             assert_eq!(
                 (glyph.text.as_str(), glyph.left.fg, glyph.left.bg),
-                ("█", 0, 0)
+                (" ", 0, 0)
             );
         } else {
             assert!(source.glyphs.contains(glyph));
@@ -404,7 +404,12 @@ fn consecutive_reply_ids_are_masked_without_changing_type_colon_content_or_time(
         selection::extract(&merged, &Selection::All)
             .unwrap()
             .text
-            .contains("→ █████:")
+            .contains("→      :")
+    );
+    assert!(
+        !filters::account_words(&merged)
+            .iter()
+            .any(|word| word.row == 6 && word.id.eq_ignore_ascii_case("Alice"))
     );
 }
 
@@ -452,7 +457,7 @@ fn merging_uses_row_coordinates_and_masks_an_entire_overlapping_wide_glyph() {
                 masked.left.fg,
                 masked.left.bg
             ),
-            ("█", 1, 0, 0)
+            (" ", 1, 0, 0)
         );
     }
     for glyph in source
@@ -491,7 +496,11 @@ fn merging_follows_account_policies_even_when_revealed_and_removes_id_hyperlinks
             filters::merge_push_ids(&mut projected, &replies);
             assert_eq!(
                 text::rows(&projected).unwrap()[6].cells(3, 8),
-                Some("█████")
+                Some(if policy == filters::Policy::MaskRow && !revealed {
+                    "█████"
+                } else {
+                    "     "
+                })
             );
             assert!(
                 !links::detect(&projected)
@@ -572,6 +581,36 @@ fn reply_focus_marks_matching_rows_preserving_text_links_and_permanent_masks() {
         }
         assert_eq!(links::detect(&masked), links::detect(&before));
     }
+    let mut merged = source.clone();
+    let outside_id_space = merged
+        .glyphs
+        .iter_mut()
+        .find(|g| g.row == 6 && g.col == 2)
+        .unwrap();
+    outside_id_space.text = " ".into();
+    outside_id_space.left.fg = 0;
+    outside_id_space.left.bg = 0;
+    outside_id_space.right = outside_id_space.left;
+    filters::merge_push_ids(&mut merged, &replies);
+    filters::focus_pushes(&mut merged, &replies, "Alice");
+    assert_eq!(text::rows(&merged).unwrap()[6].cells(3, 8), Some("     "));
+    assert!(
+        merged
+            .glyphs
+            .iter()
+            .filter(|g| g.row == 6 && (3..8).contains(&g.col))
+            .all(|g| g.text == " " && g.left.fg == 0 && g.left.bg == 0 && g.right.bg == 0)
+    );
+    assert_eq!(
+        merged
+            .glyphs
+            .iter()
+            .find(|g| g.row == 6 && g.col == 2)
+            .unwrap()
+            .left
+            .bg,
+        4
+    );
     assert_eq!(source, frame());
 }
 

@@ -75,7 +75,7 @@ fn adjacent_cached_pages_merge_ids_but_standalone_png_and_new_segments_keep_the_
     crate::presentation::merge_replies(&mut next, &next_ids);
     assert_eq!(
         crate::text::rows(&next.frame).unwrap()[23].cells(3, 8),
-        Some("█████")
+        Some("     ")
     );
     assert_eq!(
         crate::text::rows(next.source_frame.as_ref().unwrap()).unwrap()[0].cells(3, 8),
