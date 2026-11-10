@@ -25,7 +25,7 @@ pttstella-slint --verify-shell <新的證據目錄>
 
 這兩案使用完整 production owners／同一本機嚴格 peer。`notice_probe.rs` 經 Slint toolkit 移動指標至標準按鈕、以 Tab 遍歷取得通知焦點，再分別離開 hover／焦點，核對 timer 及剩餘時序。另驗相同文字重新計時、錯誤不被晚到成功／舊期限清除、減少動態效果、未知提示無 timer、自動消失保留焦點。關窗前刻意留下真實執行中的通知 timer，退出後 `notice-closed.json` 才驗停止；`notice-result.json` 的 pending 狀態必須連同退出 receipt、exit 0 與 Close ACK 才能算通過。
 
-這是 macOS arm64 的 toolkit／合成 foreground 證據，不是原生 OS 鍵鼠、VoiceOver、IME、Windows／Linux 或其他架構驗收。`tools-reduced-motion` 目前仍沿用原型保守的 true 預設；探針顯式切換兩個值。尚未接上三平台的即時系統偏好，所以不能宣稱系統動畫偏好移植完成。macOS 的正式接線應讀取 [NSWorkspace 的 reduced-motion 屬性及變更通知](https://developer.apple.com/documentation/appkit/nsworkspace/accessibilitydisplayshouldreducemotion)，Linux 的跨桌面標準可參考 [Settings portal](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Settings.html)；舊 portal／缺服務的可用性與 Windows 原生值仍須各自實測。
+這是 macOS arm64 的 toolkit／合成 foreground 證據，不是原生 OS 鍵鼠、VoiceOver、IME、Windows／Linux 或其他架構驗收。通知批次當時使用保守的 true 預設，探針顯式切換兩個值。後續已完成 [三平台系統動畫偏好接線](slint-system-motion.md)：正常入口唯讀訂閱實際 OS，合成探針仍固定來源；macOS 初讀／本機通知回呼及正常退出已驗，真正 OS 改值／還原和其他平台原生仍待驗。
 
 效能比較、完整可及性／modal 矩陣、四架構來源同步及資料回退仍依 active plan 驗收。本批測試的刻意等待不代表文章載入或正常啟動變慢。完成後依 [產物清理流程](development-harness.md#產物清理與結案) 清掉自有 target、被替換包及重複正向圖片，保留最新必要候選與最小證據，不重建 Rust 來證明清理。
 

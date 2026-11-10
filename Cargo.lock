@@ -6802,6 +6802,7 @@ version = "0.5.0-dev.3"
 dependencies = [
  "arboard",
  "base64 0.22.1",
+ "block2 0.6.2",
  "dioxus",
  "dioxus-icons",
  "directories",
@@ -6842,7 +6843,9 @@ dependencies = [
  "uao-rs",
  "url",
  "webbrowser",
+ "windows 0.62.2",
  "winresource",
+ "zbus 5.19.0",
  "zeroize",
 ]
 
@@ -9478,6 +9481,7 @@ version = "1.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cc1186384beb7dd8eedea376413fd654937285ea6c9cfbb928dc3043ea4b606"
 dependencies = [
+ "getrandom 0.4.3",
  "js-sys",
  "serde_core",
  "wasm-bindgen",
@@ -11007,6 +11011,7 @@ dependencies = [
  "rustix 1.1.5",
  "serde",
  "serde_repr",
+ "tokio",
  "tracing",
  "uds_windows",
  "uuid",

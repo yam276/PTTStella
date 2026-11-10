@@ -365,7 +365,7 @@ export component TerminalWindow inherits Window {
     out property <bool> notice-focused: status-close.has-focus || status-reconnect.has-focus || status-cancel.has-focus;
     changed notice-hovered => {root.notice-interaction();}
     changed notice-focused => {root.notice-interaction();}
-    changed tools-reduced-motion => {root.notice-interaction();}
+    changed tools-reduced-motion => {root.notice-interaction();if root.tools-reduced-motion {root.tools-cancel-gesture();}}
     private property <bool> shell-persistent-status: root.connection-attention || root.session-warning != "" || root.login-pending || (root.result != "" && root.result != root.connection-status);
     out property <bool> shell-notice-dismissible: root.input-notice != "" || root.result != root.connection-status;
     out property <bool> shell-status-visible: !root.prototype-chrome && !root.media-open && !root.editor-open

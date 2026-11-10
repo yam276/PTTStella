@@ -28,6 +28,8 @@ pub mod input;
 pub mod links;
 pub mod login;
 pub mod media;
+#[cfg(feature = "system-motion")]
+pub mod motion_preferences;
 pub mod mouse;
 pub mod navigation;
 pub mod navigation_job;

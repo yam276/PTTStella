@@ -41,6 +41,8 @@ mod sites_manager;
 mod station_color;
 mod station_mouse;
 mod stations;
+mod system_motion;
+mod system_motion_probe;
 mod tools;
 mod verification;
 
@@ -137,6 +139,7 @@ enum Probe {
 struct Options {
     benchmark: Option<PathBuf>,
     verify_shell: bool,
+    verify_motion: bool,
     software_renderer: bool,
     zoom: f32,
     capture: Option<PathBuf>,
@@ -158,10 +161,11 @@ fn options() -> Result<Options, &'static str> {
 fn options_from(
     mut args: impl Iterator<Item = std::ffi::OsString>,
 ) -> Result<Options, &'static str> {
-    const USAGE: &str = "usage: pttstella-slint [--verify-shell NEW_DIR|--probe-benchmark NEW_DIR|--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--software-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
+    const USAGE: &str = "usage: pttstella-slint [--verify-motion NEW_DIR|--verify-shell NEW_DIR|--probe-benchmark NEW_DIR|--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--software-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
     let mut zoom = None;
     let mut benchmark = None;
     let mut verify_shell = false;
+    let mut verify_motion = false;
     let mut software_renderer = false;
     let mut capture = None;
     let mut probe = None;
@@ -175,6 +179,11 @@ fn options_from(
     let mut verify_color = None;
     while let Some(arg) = args.next() {
         match arg.to_str() {
+            Some("--verify-motion") if probe.is_none() => {
+                benchmark = Some(args.next().ok_or(USAGE)?.into());
+                verify_motion = true;
+                probe = Some(Probe::Session(session::Probe::Benchmark));
+            }
             Some("--verify-shell") if probe.is_none() => {
                 benchmark = Some(args.next().ok_or(USAGE)?.into());
                 verify_shell = true;
@@ -431,6 +440,7 @@ fn options_from(
     Ok(Options {
         benchmark,
         verify_shell,
+        verify_motion,
         software_renderer,
         verify_color,
         verify_drafts,
@@ -625,6 +635,11 @@ fn run(
     }
     let ui = TerminalWindow::new()?;
     let notice_owner = notice::Owner::mount(&ui)?;
+    let system_motion_owner = system_motion::Owner::mount(
+        &ui,
+        options.verify_motion || matches!(options.probe, Some(Probe::Connect | Probe::Ime)),
+    )?;
+    let motion_audit_directory = options.benchmark.clone().filter(|_| options.verify_motion);
     let notice_audit_directory = options.benchmark.clone().filter(|_| options.verify_shell);
     ui.set_media_video_software(software_renderer);
     locale::refresh(&ui);
@@ -915,6 +930,7 @@ fn run(
     let clipboard = clipboard::Clipboard::default();
     let verification_connection = if bookmarks_probe
         || options.verify_shell
+        || options.verify_motion
         || replies_probe
         || updates_probe
         || options.verify_context.is_some()
@@ -1493,6 +1509,7 @@ fn run(
         &ui,
         media_owner.as_ref(),
         article_session_owner.as_ref(),
+        &system_motion_owner,
         app_exit::Managers {
             sites: sites_owner.as_ref(),
             filters: filters_owner.as_ref(),
@@ -1540,7 +1557,20 @@ fn run(
         options.probe == Some(Probe::Session(session::Probe::Media))
             && std::env::var_os("PTTSTELLA_VIDEO_PROBE_EXIT").is_some()
     });
-    let verification = if options.verify_shell {
+    let verification = if options.verify_motion {
+        Some(system_motion_probe::start(
+            &ui,
+            system_motion_owner.clone(),
+            verification_connection
+                .as_ref()
+                .cloned()
+                .ok_or("motion connection owner missing")?,
+            options
+                .benchmark
+                .clone()
+                .ok_or("motion directory missing")?,
+        )?)
+    } else if options.verify_shell {
         Some(shell_probe::start(
             &ui,
             notice_owner.clone(),
@@ -1894,6 +1924,7 @@ fn run(
         });
         app_exit.run(ui)?;
         notice_owner.stop();
+        let motion_cleanup = system_motion_owner.finish();
         let exit_cleanup = app_exit.finish();
         if let Some(color) = &station_color_owner {
             color.finish();
@@ -1924,10 +1955,16 @@ fn run(
             article.finish();
         }
         exit_cleanup?;
+        motion_cleanup?;
         outcome.take().ok_or("snapshot callback did not run")??;
     } else {
         let result = app_exit.run(ui);
         notice_owner.stop();
+        let motion_cleanup = system_motion_owner.finish();
+        let motion_audit = motion_audit_directory
+            .as_ref()
+            .map(|dir| system_motion_owner.audit_closed(dir))
+            .transpose();
         if !notice_owner.clean() {
             return Err("notification timer did not stop".into());
         }
@@ -2048,6 +2085,8 @@ fn run(
         }
         result?;
         exit_cleanup?;
+        motion_cleanup?;
+        motion_audit?;
         editor_cleanup?;
         editor_close_audit?;
         sites_cleanup?;
