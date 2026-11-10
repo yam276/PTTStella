@@ -354,3 +354,147 @@ def install(executable, binary, frameworks, notices, allowed, source_archives=No
     return {'files': manifest, 'packages': inventory,
             'source_delivery': 'not_ready; inventory has source URLs/hashes and build recipes only',
             'dlopen_dependencies': 'requires runtime trace of each supported codec/backend'}
+
+
+def reuse_candidate(executable, binary, frameworks, notices, candidate):
+    """Reuse byte-identical signed libraries and their recorded source notices.
+
+    The package report binds the old final executable: its signature changes
+    after the earlier link-stage runtime manifest was written. Libraries retain
+    their manifest hashes. This is transport of an existing closure, not a build.
+    """
+    candidate = Path(candidate)
+    if candidate.is_symlink() or not candidate.is_dir():
+        raise ValueError('Expected a regular candidate App directory')
+    candidate = candidate.resolve(strict=True)
+    contents = candidate / 'Contents'
+    resources = contents / 'Resources'
+    if any(path.is_symlink() or not path.is_dir()
+           for path in (contents, resources, contents / 'MacOS', contents / 'Frameworks')):
+        raise ValueError('Candidate payload directories must be regular directories')
+    payloads = [candidate.parent / 'package-report.json',
+                resources / 'candidate.json', resources / 'runtime-manifest.json']
+    records = []
+    for path in payloads:
+        if path.is_symlink() or not path.is_file() or not 0 < path.stat().st_size <= 8 * 1024 * 1024:
+            raise ValueError('Missing or invalid candidate provenance')
+        records.append(json.loads(path.read_text(encoding='utf-8')))
+    report, descriptor, previous = records
+    arch = run('lipo', '-archs', str(executable)).strip()
+    target = {'arm64': 'aarch64-apple-darwin', 'x86_64': 'x86_64-apple-darwin'}.get(arch)
+    if (target is None or any(record.get('target') != target
+                             or record.get('features') != 'native-player-probe'
+                             or record.get('status') != 'bundled'
+                             for record in (report, descriptor))):
+        raise ValueError('Candidate architecture/features differ')
+    old_binary = contents / 'MacOS/native'
+    if (old_binary.is_symlink() or not old_binary.is_file()
+            or digest(old_binary) != report.get('executable_sha256')):
+        raise ValueError('Candidate executable hash mismatch')
+    run('codesign', '--verify', '--deep', '--strict', str(candidate))
+    files = previous.get('files')
+    if not isinstance(files, list) or not 2 <= len(files) <= 129:
+        raise ValueError('Invalid candidate runtime inventory')
+    old_frameworks = contents / 'Frameworks'
+    entries = {}
+    main = 0
+    for entry in files:
+        name = entry['file']
+        if name == 'MacOS/native':
+            main += 1
+            continue
+        if not re.fullmatch(r'Frameworks/[A-Za-z0-9_.+-]+\.dylib', name) or name in entries:
+            raise ValueError('Invalid or duplicate candidate library')
+        path = contents / name
+        if (path.is_symlink() or not path.is_file() or not 0 < path.stat().st_size <= 128 * 1024 * 1024
+                or digest(path) != entry.get('bundled_sha256')):
+            raise ValueError('Candidate library hash mismatch')
+        information = inspect(path)
+        if information['imports'] != entry['imports'] or information['rpaths']:
+            raise ValueError('Candidate library loader metadata mismatch')
+        run('lipo', str(path), '-verify_arch', arch)
+        entries[name] = entry
+    if (main != 1 or sum((contents / name).stat().st_size for name in entries) > 384 * 1024 * 1024
+            or old_frameworks.is_symlink()
+            or {p.name for p in old_frameworks.iterdir()} != {Path(name).name for name in entries}):
+        raise ValueError('Candidate runtime inventory differs from Frameworks')
+    allowed_imports = {'@rpath/' + Path(name).name for name in entries}
+
+    def check_imports(information):
+        for name in information['imports']:
+            if name.startswith(SYSTEM) and '..' not in Path(name).parts:
+                continue
+            if name not in allowed_imports:
+                raise ValueError('Unbundled reused runtime import: ' + name)
+
+    for name in entries:
+        check_imports(inspect(contents / name))
+    source_info = inspect(executable)
+    check_imports(source_info)
+    old_notices = resources / 'NativeRuntimeNotices'
+    if old_notices.is_symlink() or not old_notices.is_dir():
+        raise ValueError('Missing candidate notices')
+    inventory = old_notices / 'inventory.json'
+    if (inventory.is_symlink() or not inventory.is_file()
+            or not 0 < inventory.stat().st_size <= 8 * 1024 * 1024
+            or not isinstance(previous.get('packages'), list) or not previous['packages']
+            or json.loads(inventory.read_text(encoding='utf-8')) != previous['packages']):
+        raise ValueError('Candidate notice inventory differs from provenance')
+    notice_hashes = {}
+    for path in old_notices.rglob('*'):
+        if path.is_symlink() or not (path.is_file() or path.is_dir()):
+            raise ValueError('Candidate notices must be regular files/directories')
+        if path.is_file():
+            # Source archives can contain empty generated LICENSE placeholders
+            # alongside the actual notices. Preserve those exact signed bytes;
+            # this transport does not reinterpret them as license coverage.
+            if path.stat().st_size > 4 * 1024 * 1024 or len(notice_hashes) >= 8192:
+                raise ValueError('Candidate notices exceed bounds')
+            notice_hashes[str(path.relative_to(old_notices))] = digest(path)
+    if not notice_hashes or sum(p.stat().st_size for p in old_notices.rglob('*') if p.is_file()) > 64 * 1024 * 1024:
+        raise ValueError('Candidate notice inventory is empty or too large')
+    before = {str(path): digest(path) for path in [*payloads, old_binary, executable]}
+    frameworks.mkdir()
+    shutil.copytree(old_notices, notices)
+    result = []
+    for name, entry in entries.items():
+        source, destination = contents / name, frameworks / Path(name).name
+        shutil.copy2(source, destination)
+        if digest(destination) != entry['bundled_sha256'] or digest(source) != entry['bundled_sha256']:
+            raise ValueError('Candidate library changed during reuse')
+        result.append({**entry, 'original': str(source), 'original_sha256': digest(source)})
+    shutil.copy2(executable, binary)
+    command = ['install_name_tool']
+    for path in dict.fromkeys(source_info['rpaths']):
+        command += ['-delete_rpath', path]
+    command += ['-add_rpath', '@executable_path/../Frameworks', str(binary)]
+    run(*command)
+    installed = inspect(binary)
+    check_imports(installed)
+    if installed['rpaths'] != ['@executable_path/../Frameworks']:
+        raise ValueError('Unexpected reused executable rpaths')
+    run('codesign', '--force', '--sign', '-', '--timestamp=none', str(binary))
+    for name, checksum in notice_hashes.items():
+        if digest(notices / name) != checksum or digest(old_notices / name) != checksum:
+            raise ValueError('Candidate notices changed during reuse')
+    if before != {str(path): digest(path) for path in [*payloads, old_binary, executable]}:
+        raise ValueError('Candidate provenance changed during reuse')
+    provenance = notices / 'reused-runtime'
+    provenance.mkdir(exist_ok=True)
+    snapshot = provenance / (before[str(payloads[2])] + '.json')
+    if snapshot.exists():
+        if digest(snapshot) != before[str(payloads[2])]:
+            raise ValueError('Conflicting reused runtime provenance')
+    else:
+        shutil.copy2(payloads[2], snapshot)
+    result.insert(0, {'file': 'MacOS/native', 'original': str(executable),
+                      'original_sha256': before[str(executable)], 'bundled_sha256': digest(binary),
+                      'bytes': binary.stat().st_size, 'imports': installed['imports'],
+                      'rpaths': installed['rpaths']})
+    return {'files': result, 'packages': previous['packages'],
+            'source_delivery': previous['source_delivery'],
+            'dlopen_dependencies': previous['dlopen_dependencies'],
+            'reused_candidate': {'executable_sha256': before[str(old_binary)],
+                                 'report_sha256': before[str(payloads[0])],
+                                 'runtime_manifest_sha256': before[str(payloads[2])],
+                                 'scope': 'Unmodified signed runtime closure and notices; not a new runtime build or native acceptance.'}}

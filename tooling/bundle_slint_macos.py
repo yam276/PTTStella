@@ -30,7 +30,7 @@ TARGETS = {'arm64': 'aarch64-apple-darwin', 'x86_64': 'x86_64-apple-darwin'}
 
 
 def stage_runtime(executable, contents, skia_license, allowed, source_archives=None, *,
-                  source_manifest=None):
+                  source_manifest=None, reuse_runtime=None):
     """Shared native Slint/libmpv payload for the main app and player probe."""
     if not skia_license.is_file() or not 0 < skia_license.stat().st_size <= 4 * 1024 * 1024:
         raise ValueError('The built Skia license is required and must be bounded')
@@ -42,8 +42,14 @@ def stage_runtime(executable, contents, skia_license, allowed, source_archives=N
     resources = contents / 'Resources'
     resources.mkdir(exist_ok=True)
     options = {'source_manifest': source_manifest} if source_manifest is not None else {}
-    manifest = runtime.install(executable, binary, contents / 'Frameworks',
-                               resources / 'NativeRuntimeNotices', allowed, source_archives, **options)
+    if reuse_runtime is not None:
+        if allowed or source_archives is not None or source_manifest is not None:
+            raise ValueError('Reused runtime cannot be mixed with fresh runtime inputs')
+        manifest = runtime.reuse_candidate(executable, binary, contents / 'Frameworks',
+                                           resources / 'NativeRuntimeNotices', reuse_runtime)
+    else:
+        manifest = runtime.install(executable, binary, contents / 'Frameworks',
+                                   resources / 'NativeRuntimeNotices', allowed, source_archives, **options)
     if not any(Path(entry['file']).name.startswith('libmpv.') for entry in manifest['files']):
         raise ValueError('Full native-video candidate requires a bundled libmpv')
     for entry in manifest['files']:
@@ -71,7 +77,7 @@ def inspect_profile(binary):
 
 
 def bundle(executable, skia_license, output, allowed, source_archives=None, *, source_manifest=None,
-           build_record=None):
+           build_record=None, reuse_runtime=None):
     if sys.platform != 'darwin':
         raise ValueError('Native macOS packaging tools are required')
     # Each candidate gets a new owned directory. Existing deliveries, evidence,
@@ -95,6 +101,8 @@ def bundle(executable, skia_license, output, allowed, source_archives=None, *, s
         contents = app / 'Contents'
         source_hash = runtime.digest(executable)
         options = {'source_manifest': source_manifest} if source_manifest is not None else {}
+        if reuse_runtime is not None:
+            options['reuse_runtime'] = reuse_runtime
         binary, arch, manifest = stage_runtime(executable, contents, skia_license, allowed,
                                               source_archives, **options)
         if (runtime.digest(executable) != source_hash
@@ -165,14 +173,17 @@ def main():
     parser.add_argument('--executable', type=Path, required=True)
     parser.add_argument('--skia-license', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--allow-prefix', type=Path, action='append', required=True)
+    parser.add_argument('--allow-prefix', type=Path, action='append', default=[])
+    parser.add_argument('--reuse-runtime-candidate', type=Path,
+                        help='Reuse the unchanged signed runtime and notices from an existing candidate App')
     parser.add_argument('--source-archives', type=Path)
     parser.add_argument('--source-manifest', type=Path)
     parser.add_argument('--build-record', type=Path)
     args = parser.parse_args()
     print(json.dumps(bundle(args.executable.resolve(strict=True), args.skia_license.resolve(strict=True),
                             args.output.resolve(), args.allow_prefix, args.source_archives,
-                            source_manifest=args.source_manifest, build_record=args.build_record), indent=2))
+                            source_manifest=args.source_manifest, build_record=args.build_record,
+                            reuse_runtime=args.reuse_runtime_candidate), indent=2))
 
 
 if __name__ == '__main__':

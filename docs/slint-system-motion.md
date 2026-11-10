@@ -1,5 +1,7 @@
 # Slint 系統動畫偏好
 
+2026-11-10 最新候選已改用 `.local/verification/slint-merged-id-spaces/arm64-package/`，包含重複推文 ID 空格修正（產品來源 `26d9947`）。檔案、雜湊及本輪範圍見[最新四架構候選](slint-evaluation-plan.md#2026-11-10-最新候選)。以下原生／模擬與 SHA 紀錄屬先前候選，不能套用成新二進位的實機結果；舊包的必要 metadata／notice 另封存在本批 `retired-package-metadata/`。
+
 Slint 正常入口現在唯讀訂閱作業系統的動畫偏好，將初始值及後續事件送進既有浮球慣性與通知政策；不新增定時查詢、獨立 runtime 或常駐 thread。macOS arm64 已驗實際初始值、本機通知回呼、software／OpenGL 通知及退出。實際切換 OS 偏好、其他三架構的原生事件仍未驗，不將接線或交叉 Clippy 當作 S7／跨平台驗收完成。
 
 ## 來源與降級

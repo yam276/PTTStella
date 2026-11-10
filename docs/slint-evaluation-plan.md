@@ -381,3 +381,40 @@ x64 runtime暫取自經GitHub digest及完整簽章核對的IINA1.5.1，僅保�
 
 
 2026-11-10 草稿資料場景已接到同一 marked-store 入口與完整 owner，`--store-scene drafts` 不重播種資料，仍走嚴格本機 peer。修正原 parity-only 準備檢查後，草稿／預設格線兩個 macOS 原生程序皆完成場景特定 frame／16 owner 檢查、exit0 及嚴格 Close ACK；未修改正常產品入口。操作階段工具因前景保護停用，原生座標啟用不可用，沒有進站端編輯或保存，因此草稿完整 UI 往返仍 not_ready。最近看板正常記入合成 Stella 訪問，其他五 store／可攜檔 byte 不變；首輪診斷失敗與測試漏 connect 的失敗保留。範圍、來源、389／91 個測試與清理見 [前端往返](slint-store-frontends.md#草稿場景準備與格線回歸)。清掉3份臨時App、舊raw與本批Cargo target，最新診斷CLI只留一份；exact paths、du／free及保留例外在 slint-store-scenes/cleanup/ledger.json。S0–S8持續，S9未執行。
+
+
+## 2026-11-10 最新候選
+
+依使用者要求，先交付四架構候選包，不等待目前沒有的 Intel Mac／Linux x64 實機。連續推文的重複 ID 逐欄改為空格，保留第一筆 ID、冒號、內文、時間及複製對齊；既有黑名單整行遮罩仍優先保留。共用 Rust 產品修正為 `26d9947`，未切換正式入口、整合 canonical develop 或發佈。
+
+以下路徑皆在 `.local/verification/slint-merged-id-spaces/`，取代較早各批的完整候選包：
+
+| 架構 | 最新資料夾 | 下載格式 |
+| --- | --- | --- |
+| macOS arm64 | `arm64-package/` | App、ZIP、DMG、SHA-256 |
+| macOS x64 | `x64-package/` | App、ZIP、DMG、SHA-256 |
+| Windows x64 | `windows-package/` | ZIP、SHA-256 |
+| Linux x64 | `linux-package/` | tar.gz、deb、SHA-256 |
+
+| 執行檔 | 封裝內 SHA-256 |
+| --- | --- |
+| macOS arm64 | `2aa5c4798586b7b755a67b5a40b30f36c0518bc3296aa9a37fd934ac9a61dc1a` |
+| macOS x64 | `ae7e2c2642e65f2e86979d4427f105db8d17dddb6a4c8228f1378127ccfbb60b` |
+| Windows x64 | `c483cd41b37f00466e0aea1c9754194633f2f98783397719b5c1de2329c335d2` |
+| Linux x64 | `bca8779f0e6deac18be24002e0a73725845e01a741c8a74ef91d0f8ea77f5a11` |
+
+所有下載雜湊、ZIP／App 逐檔對照及 Linux tar／deb 的實際 ELF 核對在 `package-integrity.json`。兩份 Mac ZIP 分別有1230／1214個payload與App一致；Windows917個ZIP項目只有exe與candidate.json改變，其餘915個逐byte等於前包，修正過的PowerShell helper、DLL與fixture未變。Mac／Linux的正式打包工具各自檢查簽章／映像或ELF loader／dpkg Depends；這些不等於安裝、原生輸入或實機驗收。
+
+arm64／Windows在851aabd加本批patch建置，提交後286份Cargo／build.rs／src fingerprint與26d9947核對一致；x64／Linux產品來源為26d9947。各架構release build與all-target Clippy通過，建置環境、實際命令、dirty狀態及連結／簽章轉換各自留在build record與package report。沒有因診斷／封裝檔的後續提交而倒填產品建置來源。
+
+macOS x64重用前份已簽章候選的47個dylib與notice，沒有重建runtime或改動library bytes。新增明確的 `--reuse-runtime-candidate`，檢查舊最終exe的report hash、簽章、target／feature、完整Frameworks inventory／每檔hash／架構／imports／rpaths與notice inventory，再只改新exe的rpath及簽章；輸入前後hash不變，原runtime manifest另封存。缺report、錯exe／library、額外或重複library、symlink、錯架構、外部import及簽章失敗均拒絕。舊來源封存中本就為空的zstd build/LICENSE副本逐byte保留，未把空檔解讀為授權覆蓋。Python169項通過；此前空檔拒絕的失敗保留，沒有刪去原notice。
+
+Linux使用本批自有ARM容器的已核對x64 sysroot，由Mac的clang／LLD交叉編譯；3419個檔案／連結逐一驗證。Linux大小寫相異的headers先被盤點拒絕放到不分大小寫磁碟，改用自有暫時case-sensitive APFS image。封裝在同一自有容器使用實際x64 loader與dpkg資料；Cargo notices在host產出並逐檔hash綁定運送，沒有在VM假裝完成Rust建置。首次運送撞上仍在寫的tar而失敗；重試先join producer、核對雙端SHA，原失敗保留。
+
+封裝後，兩份Mac App在禁止讀Homebrew的sandbox各跑software／default shell，共四案：16個owner、1040×740 viewport、shell／notice／退出receipt、exit0與唯一嚴格Close ACK均通過。x64是在Rosetta，不能冒充Intel硬體；toolkit synthetic focus／操作也不是OS鍵鼠／IME。Windows新exe沒有在Windows重跑，之前101份原始證據及Microsoft注音人工回報屬舊04249364…exe，保持原樣。Intel／Linux原生矩陣依使用者要求先不等待，仍記not_run／not_ready。
+
+核心／Slint／desktop／filters、JS及打包測試範圍見[空格修正](content-filters.md#2026-11-10-重複-id-改為空格)。額外的網頁account流程有選單／viewport檢查失敗，舊候選對照亦有選單失敗，原因未定，原始failed及清理紀錄保留；終端完整account案例通過。沒有從這次打包推定完整平替、效能改善、影片／音訊／全IME或來源交付已通過。S0–S8仍持續，S9未執行。
+
+本批已用Cargo原生clean移除31,991檔，Cargo回報10.4GiB、target刪前du11108024KiB；另移除自有SDK image／mount／transfer、自有停止容器（SizeRw1456120849 bytes）、重複raw／封裝input與四份被取代候選的17個頂層產物。舊manifest／notice／逐檔hash封存在 `retired-package-metadata/`，原始成功／失敗及必要source保留；一份當前raw CLI作未解網頁流程的最小重現，frontend相容入口改成指向它的零複本symlink。最新四份交付、Windows原始證據及286份產品來源共2846份保護檔案hash未變。exact paths、owner／resolved／symlink／lsof、Cargo／du／filesystem free及保留例外在 `cleanup/ledger.json`；共享SDK／registry／VM、候選共用OS偏好／cache及使用者資料均保留，不操作其他聊天。重複PNG及歷史文字gzip的SHA／保留位置另在同目錄mapping；free變化只記並行觀測，不全歸因本批。
+
+本批一般gate及缺工具狀態另在 `final-gates.json`：Python169、docs、fmt、diff已通過；目前actionlint缺runner，workflow來源未修改，GitHub Actions未執行，這兩項未計為passed。清理後filesystem available觀測為288026492928 → 299136573440 bytes，與Cargo宣告／du分列；另刪15份byte-identical PNG、保留34份獨特PNG，兩份大型歷史文字gzip逐byte解壓核對。
