@@ -1,6 +1,6 @@
 # Slint macOS x64 候選包
 
-2026-11-10 最新候選位於 `.local/verification/slint-input-cross/x64-package/`，產品來源固定 `475897f`（288份建置輸入核對），包含ID空格、推文浮層與輸入／全螢幕修正。App exe `48fe1ce9…`、ZIP `a4ac138d…`、DMG `8fa8c695…`。Rosetta七案通過、兩個網頁account案在HTTP前失敗；不是Intel實機驗收。此次尚未同步84e98a3的字型／貼上修正。最新來源及hash見 [主計畫](slint-evaluation-plan.md#2026-11-10-最新候選) 與 `slint-navigation-cross/current-candidates.json`；產品來源可依 [來源還原](slint-product-source.md) 選 windows-intel-current，完整第三方來源仍not_ready。以下舊包及驗收為歷史紀錄。
+2026-11-11 最新候選位於 `.local/verification/slint-input-cross/x64-package/`，乾淨7466c31完成release／all-target Clippy，包含閱讀狀態列、探針來源就緒與雙色背景檢查修正。App exe `b9fa63fa…`、ZIP `15e56307…`、DMG `eb75dd63…`。封裝後19項toolkit／loopback案例全數exit0／唯一具名peer Close，原程序身分確認消失；Homebrew拒讀、Rosetta執行，不是Intel實機／OS鍵鼠／IME／S8效能驗收。App／ZIP的1,221份payload逐檔相同，47份runtime library與186份原native notices不變，各新增一份reuse receipt；簽名與唯讀DMG檢查通過。完整來源與hash見[主計畫](slint-evaluation-plan.md#2026-11-11-閱讀修正的-mac-與-windows-候選同步)及 `slint-navigation-cross/current-candidates.json`；[來源還原](slint-product-source.md)選reading-cross-current，完整第三方來源仍not_ready。以下舊包及驗收為歷史紀錄。
 
 完整 `native-player-probe`／`pttstella-slint` 已封裝為 Intel Mac 候選 App／ZIP／DMG，包含自行從來源建置的 mpv／FFmpeg runtime。此包在 Apple Silicon Mac 的 Rosetta 通過搬移及分立元件檢查；Intel 實機、OS 鍵鼠／IME、可聽音訊、最低 OS、乾淨機器與效能仍未驗收，不替代[總計畫](slint-evaluation-plan.md)的 S8 門檻。
 

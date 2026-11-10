@@ -8,7 +8,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 **尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
 
-文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩Mac仍為6ad8e39，各15項封裝後合成案例通過；最新Linux已核對fbcfe2e的閱讀狀態列及探針修正，ELF150c1a0d完成14案與四案針對性重測，全部exit0／嚴格Close。GL案例使用QEMU／Xvfb＋Mesa softpipe，原LLVM中止與一次GL逾時的失敗證據仍保留，不能當原生硬體或S8效能通過。另備Windowsac788a45仍為61d1c3f，尚未包含這批新修正；使用者待驗Windows69542cb7入口不變。Intel／Linux實機依使用者指示暫緩，其餘原生／資料／效能矩陣未完成；candidate index分列來源與包SHA。
+文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩Mac最新包已由乾淨7466c31同步閱讀狀態列／探針修正，各19項封裝後合成案例通過；Linux150c1a0d核對fbcfe2e，14案與四案重測通過。這三個新Mac／備妥Windows來源與Linux的380份產品輸入相同，完整580檔只差三份文件。新備妥Windowsfe8872f6仍原生未測，使用者待驗69542cb7入口不變。Intel使用Rosetta，Linux GL案例使用QEMU／Xvfb＋Mesa softpipe；Intel／Linux實機依指示暫緩，其餘原生／資料／效能矩陣未完成。原始GL逾時及LLVM中止證據保留，不能轉填為硬體GPU或S8效能通過。
 
 macOS預設Skia軟體合成及原生CPU影片已降低閒置圖形記憶體；GIF循環重用與保留raster後，同一雙GIF校準的10秒CPU約1.10秒，較早期約3.60秒下降。這是不同修正階段的校準，未完成正式冷暖次數、100次操作、連續前景／延遲、峰值及所有平台矩陣，不能據此宣布勝過Dioxus或S8通過。CPU影片與GPU共用尺寸／像素預算，保留Full HD／4K及明確GL／Metal選項；MP4 GPU偶發錯色仍未解。詳 [效能與原始限制](slint-macos-measurement.md)。
 
@@ -22,7 +22,7 @@ macOS預設Skia軟體合成及原生CPU影片已降低閒置圖形記憶體；GI
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、三格式錯色負向對照 | MP4 GPU 像素偶發失敗仍未重現／解決、多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
 | S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
 | S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔與正常退出；[共用版本檢查／下載入口](slint-release-check.md)、toolkit空白鍵及退出HTTP／listener join；[共用通知政策／原生時序](slint-notifications.md)、hover／Tab焦點暫停及timer退出；[三平台系統動畫偏好來源](slint-system-motion.md)、macOS初讀／本機通知回呼與observer／UI listener退出；三版本store往返28案；[實際前端往返](slint-store-frontends.md)補 macOS v1／v6 設定與站點六輪、名單三輪、可攜設定三輪操作（原儲存位置仍待查）、收藏名稱／離線副本與最近看板清除三輪、同一資料草稿編輯保存三輪 | 實際OS動畫偏好切換／還原及其他平台原生、原生通知／其他管理入口、完整Dock／modal／OS I/O與可及性矩陣、實際前端／平台路徑及vault往返 |
-| S8 | [32套件x64 runtime乾淨重建](slint-native-source-replay.md)、47庫閉包核對（首輪MP4逾時未定因）；[三組產品來源完整還原](slint-product-source.md)、新還原目錄的macOS arm64一般Slint配置97測試通過；S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG（含bc380f9導覽修正）及無Homebrew sandbox；[Windows x64完整GUI候選](slint-windows-candidate.md)，目前包與已測舊exe分列，Windows10實機13案回報經修正helper重驗（原版10過／3個格式誤判），嚴格ACK／像素／join；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64 App／ZIP／DMG](slint-macos-x64.md)、自建47項runtime閉包／32份來源、兩開發prefix不可用的Rosetta13案 | Intel與Linux原生、Windows完整人工操作、IME／DPI／音訊、VC runtime／最低OS／完整乾淨安裝、完整第三方來源交付與播放器重播、資料回退及同負載效能；尚未通過 |
+| S8 | [32套件x64 runtime乾淨重建](slint-native-source-replay.md)、47庫閉包核對（首輪MP4逾時未定因）；[三組產品來源完整還原](slint-product-source.md)、新還原目錄的macOS arm64一般Slint配置106測試通過／1明確原生helper ignored；S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG（含bc380f9導覽修正）及無Homebrew sandbox；[Windows x64完整GUI候選](slint-windows-candidate.md)，目前包與已測舊exe分列，Windows10實機13案回報經修正helper重驗（原版10過／3個格式誤判），嚴格ACK／像素／join；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64 App／ZIP／DMG](slint-macos-x64.md)、自建47項runtime閉包／32份來源、兩開發prefix不可用的Rosetta13案 | Intel與Linux原生、Windows完整人工操作、IME／DPI／音訊、VC runtime／最低OS／完整乾淨安裝、完整第三方來源交付與播放器重播、資料回退及同負載效能；尚未通過 |
 
 接續完整鍵盤／焦點與其他平台、跨平台列表／重開、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
 
@@ -718,3 +718,18 @@ Linux固定下載入口已更新到同一150c ELF，實際loader／dpkg、tar1,1
 核對resolved／UID／symlink／lsof及SHA後，清理舊Linux完整包、已消費的最小包裝input、還原checkout與一份自產pyc；另移除53份逐byte重複PNG，保留映射及全部獨特影像。host合計232,285,435 regular-file bytes，filesystem available244075118592→244295110656 bytes只記並行觀測。容器17根共322,715,968 logical bytes另核對host副本後清除，不當作host釋放量；原安裝工具／runtime保留，具名自有runner已停止，SDK正常卸載但image／固定路徑保留。Cargo固定target為13,012,196KiB，按使用者要求保留中間檔，不clean或新建target／repo。舊ARM App仍由tccd598持有，保留且不停止系統服務；四平台必要交付、Windows待驗包、最小舊native controls及原始失敗保留。
 
 全部實際patch、command、原失敗／14＋4結果、archive payload對照、source restore／build、promotion與exact清理路徑在 `slint-renderer-api-current/cross-current/filter-package-current/chrome-current/refined/`；重複PNG舊路徑由cleanup.json追溯保留副本。其他三架構尚未納入此批新修正，Windows69542cb7待使用者稍後驗收的入口不變；Intel／Linux實機依指示暫緩，完整資料／效能及其餘原生矩陣仍未完成。S0–S8保持active，S9未執行。
+
+
+## 2026-11-11 閱讀修正的 Mac 與 Windows 候選同步
+
+同一worktree／固定target，從乾淨7466c31完成ARM、Intel及Windows release，Intel／Windows各all-target Clippy通過。所有非文件tracked檔與前輪fbcfe2e相同（580檔僅三份文件不同），沿用已驗證106項／兩配置renderer audits，不為文件差異重跑Rust。host deployment target仍11.0；依賴及既有50／47庫runtime復用，沒有新編譯target或完整repo副本，實際有重編的root／vendored renderer由原始log記錄，不宣稱全數零重編。
+
+最新ARM封裝exe `f50ffb46`、Intel `b9fa63fa`各通過19案：預設三codec、long／inline／input／paste、software／OpenGL／Metal格線、三種account、兩種replies、output及updates append／cancel／blur。全部exit0／唯一具名peer Close，原38個PID／start身分均確認消失；Homebrew拒讀，Intel使用Rosetta。這是封裝後toolkit／loopback，不是可信OS鍵鼠／IME、Intel實機、完整GPU影片或S8效能。App與ZIP的1,239／1,221份payload逐檔相同；先前50／47份library與205／186份native notices不變，各增加一份runtime重用receipt，簽名及唯讀DMG驗證通過。
+
+備妥Windows新包 `fe8872f6`取代ac788a45，919份ZIP payload中917份相同，只改exe／candidate.json；125,790,720-byte mpv DLL不變，實際normal／delay PE遞迴imports核對。仍需要VC redistributable、原生未執行；使用者待驗69542cb7下載包保持原hash與入口。更新candidate index時，collector先誤套Mac的downloads欄位到Windows report而中止；確認三個實體rename已完成後，依Windows的zip_sha256恢復彙整並原子更新index，沒有重跑建置／測試或重複搬移。中止及修正receipt都保留。
+
+來源交付同一bundle／同一目錄新增reading-cross-current，還原7466完整580檔／tree `164f4be07417edde599b4f538e70e82b8ae2f6c6`，三個新包與原編譯SHA綁定；Linuxreading-current及既有所有descriptor保留。本輪只做新tree還原／完整hash比較，不再獨立編譯相同產品碼；前輪repo外還原來源106項證據仍分列，完整第三方來源閉包not_ready。
+
+驗後檢查resolved／UID／symlink／lsof／SHA，刪除被取代的兩Mac與Windows完整包、七檔最小Windows包裝input及一次來源還原checkout，共五個exact roots；另刪17張逐byte重複PNG，各保留一份與映射。合計843,823,552 regular-file bytes；filesystem available242773303296→243628793856 bytes只記並行觀測。固定Cargo target13,014,340KiB、目前必要交付、最小舊controls／所有獨特失敗、source kits與小型可重用fixture保留；舊ARM App的tccd保留例外不變，不停止系統服務或其他聊天程序。無新容器／SDK展開、Cargo clean或temporary分支。
+
+原建置／封裝／19案／payload hashes、source reconstruction、promotion原中止及修正、exact cleanup與保留例外集中於 `slint-renderer-api-current/cross-current/reading-package-current/`；已移除的重複PNG由cleanup.json追溯保留副本。正常下載alias及candidate index已更新，沒有推送或發佈。下一步回到同負載原生效能、混合功能與資料回退缺項；Intel／Linux實機依使用者指示暫緩，Windows695待使用者稍後驗收。S0–S8保持active，S9未執行。
