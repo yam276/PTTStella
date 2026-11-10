@@ -138,6 +138,7 @@ enum Probe {
 
 struct Options {
     benchmark: Option<PathBuf>,
+    store_profile: Option<profile::Profile>,
     verify_shell: bool,
     verify_motion: bool,
     software_renderer: bool,
@@ -154,16 +155,17 @@ struct Options {
     probe: Option<Probe>,
 }
 
-fn options() -> Result<Options, &'static str> {
+fn options() -> Result<Options, Box<dyn Error>> {
     options_from(std::env::args_os().skip(1))
 }
 
 fn options_from(
     mut args: impl Iterator<Item = std::ffi::OsString>,
-) -> Result<Options, &'static str> {
-    const USAGE: &str = "usage: pttstella-slint [--verify-motion NEW_DIR|--verify-shell NEW_DIR|--probe-benchmark NEW_DIR|--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--software-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
+) -> Result<Options, Box<dyn Error>> {
+    const USAGE: &str = "usage: pttstella-slint [--probe-store NEW_DIR MARKED_STORE_ROOT|--verify-motion NEW_DIR|--verify-shell NEW_DIR|--probe-benchmark NEW_DIR|--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--software-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
     let mut zoom = None;
     let mut benchmark = None;
+    let mut store_root = None;
     let mut verify_shell = false;
     let mut verify_motion = false;
     let mut software_renderer = false;
@@ -179,6 +181,11 @@ fn options_from(
     let mut verify_color = None;
     while let Some(arg) = args.next() {
         match arg.to_str() {
+            Some("--probe-store") if probe.is_none() => {
+                benchmark = Some(args.next().ok_or(USAGE)?.into());
+                store_root = Some(PathBuf::from(args.next().ok_or(USAGE)?));
+                probe = Some(Probe::Session(session::Probe::Benchmark));
+            }
             Some("--verify-motion") if probe.is_none() => {
                 benchmark = Some(args.next().ok_or(USAGE)?.into());
                 verify_motion = true;
@@ -309,7 +316,7 @@ fn options_from(
                     Some("100") => 1.,
                     Some("125") => 1.25,
                     Some("150") => 1.5,
-                    _ => return Err(USAGE),
+                    _ => return Err(USAGE.into()),
                 });
             }
             Some("--capture") if capture.is_none() => {
@@ -330,7 +337,7 @@ fn options_from(
             Some("--source-png") if source_png.is_none() => {
                 source_png = Some(args.next().ok_or(USAGE)?.into())
             }
-            _ => return Err(USAGE),
+            _ => return Err(USAGE.into()),
         }
     }
     if (matches!(
@@ -340,7 +347,7 @@ fn options_from(
         || (source_png.is_some()
             && (probe != Some(Probe::Grid) || capture.is_none() || source_png == capture))
     {
-        return Err(USAGE);
+        return Err(USAGE.into());
     }
     if verify_context.is_some()
         && (!matches!(
@@ -350,7 +357,7 @@ fn options_from(
             ))
         ) || capture.is_some())
     {
-        return Err(USAGE);
+        return Err(USAGE.into());
     }
     if verify_tools.is_some()
         && (!matches!(
@@ -361,7 +368,7 @@ fn options_from(
         ) || capture.is_some()
             || verify_context.is_some())
     {
-        return Err(USAGE);
+        return Err(USAGE.into());
     }
     if verify_article.is_some()
         && (probe != Some(Probe::Article)
@@ -369,7 +376,7 @@ fn options_from(
             || verify_context.is_some()
             || verify_tools.is_some())
     {
-        return Err(USAGE);
+        return Err(USAGE.into());
     }
     if verify_article_session.is_some()
         && (!matches!(
@@ -391,7 +398,7 @@ fn options_from(
             || verify_tools.is_some()
             || verify_article.is_some())
     {
-        return Err(USAGE);
+        return Err(USAGE.into());
     }
     if verify_media.is_some()
         && (!matches!(
@@ -405,7 +412,7 @@ fn options_from(
             || verify_tools.is_some()
             || verify_context.is_some())
     {
-        return Err(USAGE);
+        return Err(USAGE.into());
     }
     if verify_drafts.is_some()
         && (probe != Some(Probe::Session(session::Probe::Drafts))
@@ -416,7 +423,7 @@ fn options_from(
             || verify_article_session.is_some()
             || verify_media.is_some())
     {
-        return Err(USAGE);
+        return Err(USAGE.into());
     }
     if verify_color.is_some()
         && (probe != Some(Probe::Session(session::Probe::EditorColor))
@@ -428,7 +435,7 @@ fn options_from(
             || verify_article.is_some()
             || verify_article_session.is_some())
     {
-        return Err(USAGE);
+        return Err(USAGE.into());
     }
     // Ordinary app launches enter the saved/default connection flow. A capture
     // without an explicit probe retains the offline grid export behavior.
@@ -439,6 +446,7 @@ fn options_from(
     }));
     Ok(Options {
         benchmark,
+        store_profile: store_root.map(profile::Profile::fixture).transpose()?,
         verify_shell,
         verify_motion,
         software_renderer,
@@ -527,7 +535,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             if matches!(probe, session::Probe::Tools | session::Probe::ToolsStation) {
                 settings.tools_opacity = pttstella::settings::ToolOpacity::try_from(20)?;
             }
-            let preferences = if let Some(directory) = &options.benchmark {
+            let preferences = if let Some(profile) = &options.store_profile {
+                let preferences = profile.load_preferences()?;
+                settings = preferences.app().clone();
+                pttstella::i18n::initialize(settings.language)?;
+                Some(preferences)
+            } else if let Some(directory) = &options.benchmark {
                 let store = pttstella::settings::store::Store::at(directory.join("settings.json"));
                 store.save(settings.clone())?;
                 Some(pttstella::settings::preferences::Preferences::loaded(
@@ -1253,8 +1266,13 @@ fn run(
                     session::Mode::Probe(session::Probe::Benchmark) => {
                         options.benchmark.as_ref().map(|directory| {
                             Rc::new(RefCell::new(pttstella::sites::session::State::load(
-                                Ok(pttstella::sites::store::Store::at(
-                                    directory.join("sites.json"),
+                                Ok(options.store_profile.as_ref().map_or_else(
+                                    || {
+                                        pttstella::sites::store::Store::at(
+                                            directory.join("sites.json"),
+                                        )
+                                    },
+                                    profile::Profile::sites,
                                 )),
                                 true,
                             )))
@@ -1281,8 +1299,9 @@ fn run(
                     ));
                 }
                 let filter_store = if let Some(directory) = &options.benchmark {
-                    Some(Ok(pttstella::filters::store::Store::at(
-                        directory.join("filters.json"),
+                    Some(Ok(options.store_profile.as_ref().map_or_else(
+                        || pttstella::filters::store::Store::at(directory.join("filters.json")),
+                        profile::Profile::filters,
                     )))
                 } else if matches!(&mode, session::Mode::Live(_)) {
                     Some(profile::Profile::system().map(|p| p.filters()))
@@ -1306,8 +1325,9 @@ fn run(
                     context.attach_filters(filters);
                 }
                 let bookmark_store = if let Some(directory) = &options.benchmark {
-                    Some(Ok(pttstella::bookmarks::store::Store::at(
-                        directory.join("bookmarks.json"),
+                    Some(Ok(options.store_profile.as_ref().map_or_else(
+                        || pttstella::bookmarks::store::Store::at(directory.join("bookmarks.json")),
+                        profile::Profile::bookmarks,
                     )))
                 } else if matches!(&mode, session::Mode::Live(_)) {
                     Some(profile::Profile::system().map(|p| p.bookmarks()))
@@ -1352,8 +1372,13 @@ fn run(
                     context.attach_bookmarks(bookmarks);
                 }
                 let recent_store = if let Some(directory) = &options.benchmark {
-                    Some(Ok(pttstella::recent_boards::store::Store::at(
-                        directory.join("recent-boards.json"),
+                    Some(Ok(options.store_profile.as_ref().map_or_else(
+                        || {
+                            pttstella::recent_boards::store::Store::at(
+                                directory.join("recent-boards.json"),
+                            )
+                        },
+                        profile::Profile::recent,
                     )))
                 } else if matches!(&mode, session::Mode::Live(_)) {
                     Some(profile::Profile::system().map(|p| p.recent()))
@@ -1386,8 +1411,9 @@ fn run(
             }
             if full_services || matches!(&mode, session::Mode::Probe(session::Probe::Drafts)) {
                 let store = if let Some(directory) = &options.benchmark {
-                    Ok(pttstella::drafts::store::Store::at(
-                        directory.join("drafts.json"),
+                    Ok(options.store_profile.as_ref().map_or_else(
+                        || pttstella::drafts::store::Store::at(directory.join("drafts.json")),
+                        profile::Profile::drafts,
                     ))
                 } else if matches!(&mode, session::Mode::Probe(session::Probe::Drafts)) {
                     let directory = std::env::var_os("PTTSTELLA_SLINT_DRAFTS_PROBE_DIR")
@@ -2168,5 +2194,33 @@ mod startup_tests {
         ] {
             assert!(options_from(args.iter().map(std::ffi::OsString::from)).is_err());
         }
+    }
+
+    #[test]
+    fn store_probe_requires_marked_data_and_remains_an_explicit_full_service_loopback() {
+        let root = tempfile::tempdir().unwrap();
+        let args = [
+            std::ffi::OsString::from("--probe-store"),
+            root.path().join("new-evidence").into_os_string(),
+            root.path().as_os_str().to_owned(),
+        ];
+        assert!(options_from(args.clone().into_iter()).is_err());
+        std::fs::write(
+            root.path().join(".store-compatibility.json"),
+            br#"{"format":"PTTStella.StoreCompatibility","version":1,"synthetic":true}"#,
+        )
+        .unwrap();
+        let parsed = options_from(args.clone().into_iter()).unwrap();
+        assert!(parsed.probe == Some(Probe::Session(session::Probe::Benchmark)));
+        assert!(parsed.store_profile.is_some());
+        assert!(!parsed.verify_shell && !parsed.verify_motion);
+        assert!(!root.path().join("new-evidence").exists());
+        assert!(!root.path().join("probe-settings.json").exists());
+        for extra in ["--connect", "--probe-grid", "--verify-shell"] {
+            let mut invalid = args.to_vec();
+            invalid.push(extra.into());
+            assert!(options_from(invalid.into_iter()).is_err());
+        }
+        assert!(options_from(["--probe-store", "new"].map(Into::into).into_iter()).is_err());
     }
 }

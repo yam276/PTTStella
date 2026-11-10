@@ -17,7 +17,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 | S4 | 雙閱讀模式、長文取頁、尋找、名單／右鍵／揭露／底色、書籤／離線、快速前往與最近看板、目前／指定列表文章收藏、共用推文索引／原生定位與側標、推文更新／未讀／保留與復原；macOS基本按鈕、列表右鍵指定收藏與新程序斷線讀回補驗 | 跨平台推文控制／定位與完整鍵盤／焦點矩陣、其他平台列表右鍵及新程序離線操作、混合 Live 等效與全功能回歸 |
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、三格式錯色負向對照 | MP4 GPU 像素偶發失敗仍未重現／解決、多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
 | S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
-| S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔與正常退出；[共用版本檢查／下載入口](slint-release-check.md)、toolkit空白鍵及退出HTTP／listener join；[共用通知政策／原生時序](slint-notifications.md)、hover／Tab焦點暫停及timer退出；[三平台系統動畫偏好來源](slint-system-motion.md)、macOS初讀／本機通知回呼與observer／UI listener退出；三版本store往返28案 | 實際OS動畫偏好切換／還原及其他平台原生、原生通知／其他管理入口、完整Dock／modal／OS I/O與可及性矩陣、實際前端／平台路徑及vault往返 |
+| S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔與正常退出；[共用版本檢查／下載入口](slint-release-check.md)、toolkit空白鍵及退出HTTP／listener join；[共用通知政策／原生時序](slint-notifications.md)、hover／Tab焦點暫停及timer退出；[三平台系統動畫偏好來源](slint-system-motion.md)、macOS初讀／本機通知回呼與observer／UI listener退出；三版本store往返28案；[實際前端往返](slint-store-frontends.md)補 macOS v1／v6 設定與站點的六輪操作 | 實際OS動畫偏好切換／還原及其他平台原生、原生通知／其他管理入口、完整Dock／modal／OS I/O與可及性矩陣、實際前端／平台路徑及vault往返 |
 | S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG及無Homebrew sandbox；[Windows x64完整GUI候選](slint-windows-candidate.md)同步c40f7a5，Windows10實機13案回報經修正helper重驗（原版10過／3個格式誤判），嚴格ACK／像素／join；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64 App／ZIP／DMG](slint-macos-x64.md)、自建47項runtime閉包／32份來源、兩開發prefix不可用的Rosetta13案 | Intel與Linux原生、Windows完整人工操作、IME／DPI／音訊、VC runtime／最低OS／完整乾淨安裝、完整產品來源交付與重播、資料回退及同負載效能；尚未通過 |
 
 接續完整鍵盤／焦點與其他平台、跨平台列表／重開、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
@@ -358,3 +358,9 @@ x64 runtime暫取自經GitHub digest及完整簽章核對的IINA1.5.1，僅保�
 2026-11-10 Windows 原生證據回收：使用者的 101 份原始 evidence 保持 hash 不變，確認 Win10 x64 build19045／PowerShell5.1、交付 exe 相符、13 案 exit0／嚴格 Close ACK。原 helper 的三個 OpenGL 影片格式誤判已修正，分別要求 software frame serial／size 或 OpenGL rect，獨立像素與退出檢查保留；原報告 failed 不改寫，13 案既有回報重驗通過。新版包僅改 helper／candidate manifest，其餘915個ZIP項目逐byte一致，未重建Rust。166個Python測試、receipt正反例、docs及diff通過；修正版Windows5.1重跑及人工IME／DPI／音訊仍未驗。
 
 同輪即時清理被取代的Windows完整包與暫時提取的exe／DLL，latest從package-fixed正常rename回package-current；保留原錯誤helper、manifest、hash及使用者原始證據。另確認5個frontend往返測試App沒有open files／活動程序後移除，保留兩種必要raw CLI及獨特成功／失敗證據。Slint設定／站點原生保存有exit0／Close ACK，原Dioxus讀回已觀察，但回退操作輪次逾時，不能將完整資料往返算通過。frontend target與臨時baseline worktree先前已用Cargo／Git原生流程移除。本次exact paths、UID／resolved／symlink／內容／lsof、du及filesystem free前後分別在 `slint-windows-current/runner-fix/cleanup.json`、`slint-frontend-roundtrip/host-cleanup/ledger.json`；空間變化僅記觀測，未刪來源、其他聊天、共用工具或必要交付。S0–S8持續，S9未執行。
+
+
+2026-11-10 實際前端資料往返：新增只收精確 marker／普通檔案的 `--probe-store NEW_DIR MARKED_STORE_ROOT`，用同一生產 Preferences／Store 與完整 Benchmark owner 讀既有副本，不先覆寫預設值。macOS arm64 以原生選單／欄位完成 v1、v6 的 Slint → 原5ea9ad6 Dioxus → Slint 共六輪，皆正常退出及嚴格連線關閉；原 Dioxus 另完整匯出 PNG。設定／站點的完整 expected 與指定輪次的前版備份核對通過，其他四 store 與可攜設定保持 seed hash，不冒充完整 GUI 操作。原 Dioxus 小數字高 step=1 限制、先前超時／工具啟動副作用與 v1 首寫備份證據缺口保留；完整跨平台資料回退仍未通過。CLI、重現 fixture、各輪結果、來源／建置與未驗界線見 [前端往返紀錄](slint-store-frontends.md)。
+
+
+本批即時結案清理另移除5份已退出的frontend測試App，以及3個原Dioxus探針身份的9個WebKit／cache／系統暫存目錄；逐筆確認owner、resolved path、symlink、內容與lsof，保護來源／兩份必要raw CLI／實際保存資料hash一致。filesystem available 261046784000→261337927680 bytes僅為並行觀測，與先前其他聊天釋放空間不混算；du逐筆記錄。重複generated PNG另有保留位置／SHA映射。確切路徑與保留例外見 `slint-frontend-roundtrip/final-cleanup/ledger.json`；沒有Rust重建，沒有清共享runtime／registry或其他聊天產物。
