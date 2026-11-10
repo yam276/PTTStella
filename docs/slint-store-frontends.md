@@ -1,6 +1,6 @@
 # Slint 與原 Dioxus 的資料往返
 
-2026-11-11 已用同一對 macOS arm64 前端完成設定 v1–v6 的 Slint → 原 Dioxus → Slint 往返。各版本以獨立合成資料驗證兩次實際儲存、前一代備份與重開讀取。黑白名單、可攜設定、收藏名稱／離線讀取、最近看板清除及草稿編輯保存的先前證據見後節。完整新增／編輯／刪除、最近看板新增與排序、平台正式路徑、密碼庫及完整產品切換仍待驗。
+2026-11-11 已用同一對 macOS arm64 前端完成設定 v1–v6 的 Slint → 原 Dioxus → Slint 往返。各版本以獨立合成資料驗證兩次實際儲存、前一代備份與重開讀取。黑白名單、可攜設定、收藏名稱／離線讀取、最近看板清除及草稿編輯保存的先前證據見後節。完整新增／編輯／刪除、最近看板新增與排序、平台資料路徑的寫入與回退、密碼庫及完整產品切換仍待驗。
 
 ## 2026-11-11 同一對前端的 v1–v6 設定往返
 
@@ -27,6 +27,16 @@ rtk proxy python3 .local/verification/NEW_RUN/roundtrip_fixture.py 1 return
 ```
 
 小數字高的 Dioxus 寫入、其餘資料的完整操作、正式資料路徑、系統密碼庫及其他平台仍待驗。
+
+## 2026-11-11 macOS 一般啟動與系統資料目錄
+
+沿用已驗的 Slint `f50ffb46…` 與 Dioxus `35c3e275…`，不帶產品探針參數啟動。只覆寫測試程序的 HOME，把合成副本放在 `Library/Application Support/PTTStellaSlintResearch` 與 `Library/Application Support/PTTStella`。Sandbox 拒讀 Homebrew 及實際使用者的兩個產品資料目錄，另拒讀寫其 Keychains 路徑，IP 出站僅准許 loopback。兩個本機測試站各用不同 port，憑證只經該程序的 `SSL_CERT_FILE` 載入，未修改系統信任設定。
+
+兩個一般入口各從自己的 `sites.json` 取到正確端點，以 TLS 1.3 向各自的測試站要求 `GET /bbs`。測試站送出合成畫面，一秒內沒有收到任何客戶端資料，主動送 Close 後兩版均回覆。兩個目錄的七份合成資料雜湊在啟動與連線後保持一致。Slint 的 `--show-profile` 另核對實際設定路徑及查詢時未開 vault。這補上 macOS 系統資料路徑的**預設站讀取**，寫入、回退讀取、vault 操作及一般 App 正常退出仍待驗。
+
+三次實際視窗嘗試都收到本機 frame，但桌面工具未取得可操作的視窗。已保留未註冊、放行 Unix socket 並取消 CFFIXED_USER_HOME 後仍無法綁定，以及經 LaunchServices 啟動後有 App 名稱但無法操作的結果。測試控制器在確認身分後終止自有程序，這些 exit 及最後兩次路徑檢查的 exit 都不是正常 Quit。上一節已有的 `probe-*.json` 寫入往返仍有獨立證據。
+
+證據在 `.local/verification/slint-normal-profile/`，含 `startup-results.json`、兩個實際 sites 副本、前後雜湊及原始 log。重驗時把 `roundtrip.py` 和 `startup-check.py` 放在新的同層證據目錄，先執行 `roundtrip.py setup`，再執行 `startup-check.py`。已清理兩個暫存 App 所在根目錄、唯一測試 TLS 私鑰及專用系統產物，共 110,753,519 regular-file bytes。精確六筆路徑、du、雜湊、程序與 filesystem free 觀測見 `cleanup.json`。全程重用現有兩個執行檔。
 
 ## 同一份資料的入口
 
