@@ -8,12 +8,12 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 **尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
 
-本輪另修正使用者回報的文章直接輸入抖動與 macOS `⌃⌘F`；四架構包已同步475897f的同一產品來源。驗證與工具列自動化失敗界線見[輸入穩定與全螢幕](#2026-11-10-文章輸入穩定與原生全螢幕)；[同步及Linux補驗](#2026-11-10-輸入修正同步四架構與linux補驗)仍有失敗，並發現最小Linux環境的Slint控制項缺CJK字形。
+文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。本輪 macOS arm64／Linux 另納入原生控制項 CJK fallback 與貼上預覽跨重繪修正（289份產品來源對應84e98a3）；Windows／Intel Mac 仍保持475897f，Windows69542cb7…等使用者稍後驗收。各包來源不同，依 [最新候選](#2026-11-10-最新候選) 分別核對；尚未完成全部原生或效能驗收。
 
 | 階段 | 目前已有 | 尚須完成 |
 | --- | --- | --- |
 | S0 | 共用 Rust 服務、獨立 Slint 入口及可編譯提交序列；四 target 的一般／播放器兩配置 Cargo 依賴 gate | 完整功能案例對照、各平台連結／runtime 依賴與最終基準重跑 |
-| S1 | 格線／雙色字／縮放、macOS 原生輸入的分立證據；Windows Microsoft注音候選位置／Esc取消／單次提交的使用者人工回報 | 完整候選窗／組字／失焦矩陣、跨螢幕 DPI、可及性與其他平台原生 |
+| S1 | 格線／雙色字／縮放、無系統CJK字型的控制項fallback及macOS 原生輸入的分立證據；Windows Microsoft注音候選位置／Esc取消／單次提交的使用者人工回報 | 完整候選窗／組字／失焦矩陣、跨螢幕 DPI、可及性與其他平台原生 |
 | S2 | 共用 Connection、登入／保活、站點表單、嚴格切站／雙編碼 bytes | 同 endpoint 編碼切換、預設站重啟／不登入、完整信任／vault 原生矩陣 |
 | S3 | 選取、輸出、浮球／選單及原生互動的分立證據 | 全部快捷鍵／pointer／modal／可及性操作矩陣 |
 | S4 | 雙閱讀模式、長文取頁、尋找、名單／右鍵／揭露／底色、書籤／離線、快速前往與最近看板、目前／指定列表文章收藏、共用推文索引／原生定位與側標、推文更新／未讀／保留與復原；macOS基本按鈕、列表右鍵指定收藏與新程序斷線讀回補驗 | 跨平台推文控制／定位與完整鍵盤／焦點矩陣、其他平台列表右鍵及新程序離線操作、混合 Live 等效與全功能回歸 |
@@ -445,19 +445,21 @@ Linux同一封裝ELF在Xvfb-only最小環境的輸入／貼上兩案先失敗，
 
 | 架構 | 最新資料夾 | 下載格式 |
 | --- | --- | --- |
-| macOS arm64 | `arm64-package/`（symlink指向slint-input-stability/final最新包） | App、ZIP、DMG、SHA-256 |
+| macOS arm64 | `arm64-package/`（symlink指向slint-ui-cjk-fallback最新包） | App、ZIP、DMG、SHA-256 |
 | macOS x64 | `x64-package/` | App、ZIP、DMG、SHA-256 |
 | Windows x64 | `windows-package/` | ZIP、SHA-256 |
 | Linux x64 | `linux-package/` | tar.gz、deb、SHA-256 |
 
 | 執行檔 | 封裝內 SHA-256 |
 | --- | --- |
-| macOS arm64 | `27291aa23dcc368416c0c4b146b190a4ca9cb426ec608f849c9614681acdd9a1` |
+| macOS arm64 | `6841e17e395878d9a90431028410f8e68a3e9d34f5a00f5b181c6f6f76c1d1c1` |
 | macOS x64 | `48fe1ce9776a7e2e3f9c5ce37d624f7df51d8951806d4dfd84de54ac3801758d` |
 | Windows x64 | `69542cb7c78f5f7bf8b83fb4c70ff759f240d0f734bbae4b153037509d5aca34` |
-| Linux x64 | `0312b4600eceecbc5439b3ca90f0d7fdab4771b83f8aac98b856bab83ebf7e1a` |
+| Linux x64 | `4e474a0afc2bd0349ba67ff40e996d9685d952c7c4b821100320f8f47db7909d` |
 
-arm64最新實際目錄為 `.local/verification/slint-input-stability/final/arm64-package/`，表列入口是零複本symlink。ZIP SHA-256為76a24447b25641eee3329eb3c396ecc2d98ab3d8a04b7929df3f385dd3b353ed，DMG為e39942979662f8f36c8bbc07d8e098c245d20040160de5e5fd389dee63880655；包含空格、bc380f9導覽及本輪輸入／全螢幕修正。Windows／Intel／Linux已同步乾淨475897f來源，三個入口改指向slint-input-cross最新包；288份產品檔案含locale與arm64逐份一致。下載及未驗界線見[本輪同步](#2026-11-10-輸入修正同步四架構與linux補驗)。舊完整候選包已移除，只保留必要的最小舊執行檔對照及metadata。原7個封裝後合成案例與雙語最小寬度OS操作屬前包，見[arm64補驗](#2026-11-10-arm64-封裝與雙語導覽補驗)，不等於新包完整回歸通過。
+arm64 與 Linux 的最新實際目錄為 `.local/verification/slint-ui-cjk-fallback/{arm64,linux}-package/`，舊入口改為零複本 symlink。兩者的289份產品來源一致，對應84e98a3，包含空格、推文浮層、輸入／全螢幕、CJK控制項及貼上預覽修正；真實建置來源仍記 c67efdb 加已保存 patch，不倒填為乾淨84e98a3。arm64 ZIP SHA-256 為 dd2ce3c6a34c6ce3ae058ba094f5d26cfacbed7473b7d54f86d1831c3f1626c0，DMG 為 4894288b8cee26d84b2f467a3dfe815dc95261c5c61a1c052b730371e9ced49b。Linux tar 為 c3b31a693cf4e785ae9e16e3b2728ac3090ab0508c23c25a2c9e0b2318318968，deb 為 051970c97af29d07bbaac829fe4a5f030490ee740ce58b79116d437b5e8152b0。
+
+Windows／Intel 維持 `.local/verification/slint-input-cross/` 的固定475897f來源288份產品檔案，並未納入這次字型／貼上修正；各自下載 SHA 沿用[前輪同步](#2026-11-10-輸入修正同步四架構與linux補驗)。完整 index 在 slint-navigation-cross/current-candidates.json，已改為分平台 source_groups，不能再聲稱四包來源相同。新 arm64 封裝在禁止 Homebrew 讀取的 sandbox 通過兩種 renderer 的輸入／貼上四案；Linux 的 grid／輸入／貼上三案為隔離 QEMU／Xvfb／Openbox／session bus，非原生硬體／IME。舊 OS `⌃⌘F`、Windows13案及注音回報只屬各自舊 exe，未轉填到新包。shell／通知、Rosetta網頁account等既有失敗與完整原生／資料／效能缺項仍保留。原7個封裝合成案例及雙語最小寬度OS操作見[arm64補驗](#2026-11-10-arm64-封裝與雙語導覽補驗)，亦不等於本包完整回歸。
 
 以下為首次四架構封裝紀錄；其中舊arm64已由上述包取代。所有下載雜湊、ZIP／App 逐檔對照及 Linux tar／deb 的實際 ELF 核對在 `package-integrity.json`。兩份 Mac ZIP 分別有1230／1214個payload與App一致；Windows917個ZIP項目只有exe與candidate.json改變，其餘915個逐byte等於前包，修正過的PowerShell helper、DLL與fixture未變。Mac／Linux的正式打包工具各自檢查簽章／映像或ELF loader／dpkg Depends；這些不等於安裝、原生輸入或實機驗收。
 
@@ -544,3 +546,12 @@ R5 同一流程的邊界紀錄進一步顯示：讀取完成時來源、前景�
 完整 article-paste 探針新增兩項獨立行為檢查：同來源 frame-paint-pending 期間預覽必須保持；此時按確認必須拒絕且站端零 bytes。之後重新開啟、取消、規則失效、組字拒絕讀取、舊 worker／錯誤、單行 raw handoff、返回閱讀及確認多行 UAO、關窗 join 的原驗收條件不變。R6 在無系統中文的 Linux 隔離 runner 通過 grid／article-input／article-paste 三案，輸入／貼上均 exit 0 與唯一嚴格 ACK；同來源 macOS arm64 raw host 的 software／default 貼上兩案亦通過。這些使用 toolkit 合成前景／輸入與自有剪貼簿來源，不是 OS clipboard／IME 或 Linux 硬體。
 
 來源 c67efdb 加 R6 patch，Linux ELF 4e474a0a…；兩配置各 95 測試通過、1 helper ignored，Linux 與 host release build／all-target Clippy 通過。來源 289 份 fingerprint 前後一致；資料在 slint-ui-cjk-fallback/r6，之前 R3–R5 的 failed 未覆寫。已刪除被取代的 R2／R3／R5 raw 及已消費傳輸 tar 共 418,334,718 bytes，保留小型來源／診斷與獨特結果，exact paths／UID／symlink／lsof／filesystem free 見 obsolete-revisions-cleanup.json；free 變化只記並行觀測。
+
+
+## 2026-11-10 字型與貼上候選封裝、清理
+
+已使用本批既有 release ELF／Mach-O 完成 Linux 與 arm64 封裝，未再重建 Rust。arm64 ZIP／App 1,233 個 payload 逐檔一致，50 個 runtime library 及201份前包 native notice 不變，strict ad-hoc signature 與唯讀 DMG 檢查通過；禁止 Homebrew 的 sandbox 中 software／default 輸入／貼上四案 exit 0 且唯一嚴格 ACK。Linux tar／deb 的同一93,598,360-byte ELF SHA 均為4e474a0a…，實際 loader／dpkg 檢查通過；1,120 個 tar payload 只有 exe／build-record 改變，其餘1,118份逐byte相同。R6格線 PNG 與已目視核對的R3／R4逐byte相同，雜湊 ef9d7df8…；沒有以此宣稱其他 DPI、OS輸入或效能通過。完整 Python171測試通過，workflow未改，本批未執行actionlint／Actions。
+
+本批清理已完成：Cargo 原生 full clean 回報18,844檔／5.8GiB，刪前 target du6,142,788KiB，實際確認 target 不存在；自有容器18c0ece5…正常 stop／rm（SizeRw 1,714,648,165 bytes），SDK image 正常卸載後移除。被替換的兩份舊完整包、R2／R3／R4／R5／R6 raw、已消費傳輸與封裝 input、linker wrapper、pycache及暫存 mount 均已移除；舊包／相容入口為指向最新包的零複本連結。12份逐byte重複PNG改為相對連結，22份獨特PNG保留，原報告路徑仍有效。2,758份最新交付／來源／最小對照保護 hash 前後一致，Mac舊baseline的Frameworks連結亦有效。
+
+exact removed paths、resolved／UID／symlink／lsof、每檔SHA、Cargo宣告／du／SizeRw及filesystem free各自列在 slint-ui-cjk-fallback/cleanup/ledger.json；filesystem free只記並行觀測，不將其他工作的釋放或新增歸因本批。共享SDK／registry／toolchains／VM／base image、未知容器、canonical及使用者資料保留；尚未整合的Slint worktree和必要最小舊對照／shell診斷保留，未刪未整合來源。最新Windows69542cb7…未變，仍等使用者稍後實測；S0–S8持續，S9未執行。
