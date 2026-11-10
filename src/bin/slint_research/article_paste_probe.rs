@@ -204,6 +204,15 @@ pub fn start(
                 "leaving reading retained raw hold or fetched a page",
             )?;
             verification::capture(&ui, &directory, "confirmed-station.png")?;
+            // Snapshot/layout callbacks can retire the source admitted above.
+            // This close test needs a newly admissible read, not a rejected
+            // request that never owned a worker.
+            focus(&ui, &output).await?;
+            wait(
+                || paste.current(&ui).is_some() && ui.get_context_focus_restorable(),
+                "close clipboard source did not become ready",
+            )
+            .await?;
 
             // Dropping the owned provider unblocks the pending native read; finish
             // aborts its UI completion and joins the actual worker before close.

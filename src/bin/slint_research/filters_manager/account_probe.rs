@@ -212,6 +212,10 @@ pub fn start(
         directory,
         "account-actions",
         move |ui, directory| async move {
+            let web = std::env::var("PTTSTELLA_SLINT_FILTERS_PROBE").is_ok_and(|v| v == "web");
+            // The first article paint can precede the reading controller's UI
+            // initialization. Admit the synthetic export only after this PTT
+            // fixture's load and reply capabilities have actually arrived.
             wait(
                 || {
                     verification::foreground(&ui, true);
@@ -221,11 +225,13 @@ pub fn start(
                         ui.invoke_focus_terminal();
                     }
                     o.output.current(&ui).is_some()
+                        && (!web
+                            || ui.get_article_load_available()
+                                && ui.get_article_updates_available())
                 },
-                "account source not painted",
+                "account source or reading controls not ready",
             )
             .await?;
-            let web = std::env::var("PTTSTELLA_SLINT_FILTERS_PROBE").is_ok_and(|v| v == "web");
             require(
                 ui.get_article_active() == web,
                 "wrong account probe reading mode",
@@ -411,6 +417,15 @@ pub fn start(
                 )
                 .await?;
                 for _ in 0..3 {
+                    wait(
+                        || {
+                            ui.get_inline_enabled()
+                                && !ui.get_inline_blocked()
+                                && o.output.current(&ui).is_some()
+                        },
+                        "focus image source not ready after placement",
+                    )
+                    .await?;
                     let model = ui.get_inline_arrows();
                     let a = (0..model.row_count())
                         .filter_map(|i| model.row_data(i))
@@ -425,8 +440,9 @@ pub fn start(
                     let placed = wait(
                         || {
                             ui.get_inline_enabled()
-                                && ui.get_inline_pictures().row_count()
-                                    > (images(&ui, &media).len().saturating_sub(1))
+                                && (0..ui.get_inline_pictures().row_count())
+                                    .filter_map(|i| ui.get_inline_pictures().row_data(i))
+                                    .any(|picture| picture.index == a.index)
                         },
                         "focus image placement pending",
                     )
