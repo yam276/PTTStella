@@ -763,15 +763,6 @@ export component TerminalWindow inherits Window {
                 if root.article-updates-unread>0: Button {text:root.article-updates-new-label;enabled:!root.article-updates-blocked;clicked=>{root.article-updates-action(1);} }
                 if root.article-updates-recovery: Button {text:UiLabels.updates-station;enabled:!root.article-updates-blocked;clicked=>{root.article-updates-action(2);} }
             }
-            if root.reply-navigation-available && !root.reply-navigation-open: Button {
-                text:UiLabels.reply-title;enabled:!root.reply-navigation-opening-blocked && root.reply-navigation-ready;clicked=>{root.reply-navigation-action(0);}
-            }
-            reply-nav := ReplyNavigationBar {
-                visible:root.reply-navigation-open;
-                blocked:root.reply-navigation-blocked || !root.reply-navigation-ready;
-                groups:root.reply-navigation-groups;group:root.reply-navigation-group;count:root.reply-navigation-count;
-                action(code)=>{root.reply-navigation-action(code);}
-            }
             if root.article-station: Button { text: UiLabels.resume-reading; clicked => { root.article-resume-reading(); } }
             if !root.terminal-input && !root.session-active && !root.article-active: HorizontalLayout {
                 spacing: 8px;
@@ -872,6 +863,29 @@ export component TerminalWindow inherits Window {
                     clicked => { root.login-cancel(); }
                 }
             }
+        }
+    }
+    // Navigation controls float above the article. A newly focused author can
+    // make navigation available; that must not resize the reading grid.
+    Button {
+        visible:root.reply-navigation-available && !root.reply-navigation-open;
+        x:12px;y:12px;width:min(180px,root.width - 24px);height:32px;
+        text:UiLabels.reply-title;
+        enabled:!root.reply-navigation-opening-blocked && root.reply-navigation-ready;
+        clicked=>{root.reply-navigation-action(0);}
+    }
+    Rectangle {
+        visible:root.reply-navigation-open;
+        x:12px;y:12px;width:min(760px,root.width - 24px);
+        height:reply-nav.preferred-height + 16px;
+        background:#252d38;border-width:1px;border-color:#67768b;border-radius:6px;
+        TouchArea {width:parent.width;height:parent.height;clicked=>{}}
+        reply-nav := ReplyNavigationBar {
+            x:8px;y:8px;width:parent.width - 16px;height:parent.height - 16px;
+            visible:root.reply-navigation-open;
+            blocked:root.reply-navigation-blocked || !root.reply-navigation-ready;
+            groups:root.reply-navigation-groups;group:root.reply-navigation-group;count:root.reply-navigation-count;
+            action(code)=>{root.reply-navigation-action(code);}
         }
     }
     status-panel := Rectangle {

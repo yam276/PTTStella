@@ -450,6 +450,10 @@ pub fn start(
             let originals = images(&ui, &media);
             let y = ui.get_article_offset_y();
             let viewport_before = crate::article::inline::probe::focus_viewport(&ui, &inline);
+            require(
+                !web || !ui.get_reply_navigation_available(),
+                "fixture already has navigable author or own replies",
+            )?;
             author_click(&ui, &o)?;
             wait(
                 || {
@@ -484,6 +488,10 @@ pub fn start(
                 )
                 .await?;
                 let viewport_after = crate::article::inline::probe::focus_viewport(&ui, &inline);
+                require(
+                    ui.get_reply_navigation_available(),
+                    "focused reply navigation did not become available",
+                )?;
                 std::fs::write(
                     directory.join("focus-viewport.json"),
                     serde_json::to_vec_pretty(&serde_json::json!({
@@ -498,6 +506,42 @@ pub fn start(
                         ui.get_article_offset_y()
                     ),
                 )?;
+                require(
+                    viewport_before["viewport"] == viewport_after["viewport"],
+                    "reply navigation availability resized the article",
+                )?;
+                ui.invoke_reply_navigation_action(0);
+                wait(
+                    || ui.get_reply_navigation_open() && o.output.current(&ui).is_some(),
+                    "focused reply navigation did not open",
+                )
+                .await?;
+                let viewport_open = crate::article::inline::probe::focus_viewport(&ui, &inline);
+                require(
+                    viewport_before["viewport"] == viewport_open["viewport"]
+                        && ui.get_article_offset_y() == y,
+                    "opening reply navigation moved or resized the article",
+                )?;
+                ui.invoke_reply_navigation_action(1);
+                wait(
+                    || !ui.get_reply_navigation_open() && o.output.current(&ui).is_some(),
+                    "focused reply navigation did not close",
+                )
+                .await?;
+                let viewport_closed = crate::article::inline::probe::focus_viewport(&ui, &inline);
+                require(
+                    viewport_before["viewport"] == viewport_closed["viewport"]
+                        && ui.get_article_offset_y() == y,
+                    "closing reply navigation moved or resized the article",
+                )?;
+                std::fs::write(
+                    directory.join("focus-navigation.json"),
+                    serde_json::to_vec_pretty(
+                        &serde_json::json!({"open":viewport_open,"closed":viewport_closed}),
+                    )
+                    .map_err(|e| e.to_string())?,
+                )
+                .map_err(|e| e.to_string())?;
                 let model = ui.get_inline_pictures();
                 let gif = (0..model.row_count())
                     .filter_map(|i| model.row_data(i))

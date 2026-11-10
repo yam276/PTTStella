@@ -30,9 +30,9 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 產物保留規則（2026-11-09 使用者要求）
 
-Windows最新完整包改在 `.local/verification/slint-windows-current/package-current/`，來源c40f7a5，zip SHA256與13案入口／人工界線見 [Windows候選說明](slint-windows-candidate.md)。已收到使用者Windows10 build19045／PowerShell5.1原生證據：原報告10過、3個default影片被helper錯誤要求software frame_serial而failed。修正後離線重驗13案原始receipt／像素／嚴格Close ACK／join通過，原failed原樣保留；並未在Windows重跑修正helper。最新ZIP僅換helper及manifest，Rust exe不變；完整IME矩陣／DPI／音訊／其餘人工操作仍待驗；Microsoft注音三項已有使用者回報，細節及新ZIP hash見候選說明。Windows批次target、原始DLL副本、第一版包及舊完整包已清除，latest正常rename且2878份保護檔hash一致；獨立無影片S1配置保留。exact路徑、native clean及free／du在 `slint-windows-current/cleanup/ledger.json`。
+目前最新四架構候選均在 `.local/verification/slint-merged-id-spaces/`，格式、來源、執行檔雜湊與驗證範圍見[最新候選](#2026-11-10-最新候選)。先前 `slint-windows-current/package-current/`、`slint-system-motion/package-current/`、Intel與Linux前份完整包已被取代並清理；保留必要metadata、notices與獨特證據，不要求歷史段落的舊latest路徑繼續存在。
 
-最新 arm64 候選現在位於 `.local/verification/slint-system-motion/package-current/`，實作為 `91d12e4`，詳見 [系統動畫偏好紀錄](slint-system-motion.md)。它覆蓋上一份候選的五個已驗案例，另有兩種motion初讀／本機通知、播放退出及獨立視窗關閉證據；真正OS改值／還原仍未驗。舊 `slint-shell-chrome-final/package-current` 與重複待驗CLI已移除，23份相同PNG留一份及對照，2876份保護檔hash不變，所有target目錄皆已清掉。exact移除項目、保留例外與free／du見 `.local/verification/slint-system-motion/cleanup/ledger.json`。各歷史段落中的舊latest路徑只代表當時交付，不要求保留舊binary。
+Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人工回報屬舊04249364…執行檔；新c483cd41…只完成交叉建置／封裝，未在Windows重跑。Mac新包完成arm64及Rosetta的software／default shell，不能將Rosetta稱為Intel硬體驗收。Intel／Linux原生依使用者「先包起來」指示不等待，目前仍未驗。
 
 已測完且被取代的產物包含過去累積與之後新增，均於每個可獨立驗收批次完成時清理，沿用 [task-owned 清理流程](development-harness.md#產物清理與結案)。不再為每階段各留 App，也不因完整 goal active 就長期保留 target/debug／release；只在同一批工作中重用。一般 dev／test 命令明示 `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`，release 設定不變。已確認無使用者的編譯快取用 Cargo 原生 clean，必要候選包與最小來源／驗收／失敗證據移出 target，保留原因及 exact removed paths 另記。不啟動背景刪除服務。
 
@@ -425,3 +425,16 @@ Linux使用本批自有ARM容器的已核對x64 sysroot，由Mac的clang／LLD�
 診斷來源3d0c874加兩檔patch、raw exe fb35e2ee17d51ffa5f4e0721aa5e70c6224a6d3747cf323c1fc8f2588d265e12；Slint bin91項通過／1項helper ignored、all-target Clippy及release build通過。這是toolkit合成事件／loopback，不是OS輸入或四平台驗收；沒有用診斷版覆蓋最新四份候選包。建置／快照／failed原文在 slint-web-focus-audit/。本批自有target按Cargo原生clean移除，最新最小診斷CLI保留一份，替代前輪raw及frontend零複本相容入口；exact paths、hash／lsof／du／free及保留例外見該目錄cleanup/ledger.json。S0–S8持續，S9未執行。
 
 本輪清理實測：Cargo clean回報8853檔／2.9GiB，刪前target du3062108KiB；另移除被診斷版取代的476dcf97…raw（68,481,664 bytes），frontend symlink已改指向fb35e2ee…單份診斷CLI。2561份當前候選／原Windows證據／必要CLI的hash前後一致，filesystem available 289505865728→292473794560 bytes僅為觀測，未歸因全數回收量。兩筆exact removed paths及保留理由在cleanup/ledger.json。
+
+
+## 2026-11-10 推文導覽不再擠壓閱讀畫面
+
+確認先前40px變動來自推文導覽入口：合成文章沒有原PO或自己的回覆，聚焦Alice後focused_rows首次非空，原本在VerticalLayout內的按鈕出現並縮小文章。導覽入口與控制列改放同一視窗的浮層，沿用原有callback、讀取lease與前景／組字保護，不改原始串流或閱讀錨點演算法，也未放寬原本精確offset驗收。
+
+macOS arm64實際Slint host的software／default完整網頁account、software終端account與software／default推文導覽共五案，皆exit0、唯一嚴格Close ACK與HTTP worker join。兩種renderer在入口不可用→首次可用→開啟→關閉四階段，viewport、精確offset、Anchor、Layout及圖片gaps全部一致；三張解碼圖片／wide狀態沿用，GIF恢復，後續選單／Shift選取／過期操作拒絕與唯一PageDown亦通過。舊package與舊診斷版failed保留，不將這次通過回填為舊版完成，也不認定之前獨立選單失敗的原因已完全釐清。兩張實際元件PNG已目視核對浮層、推文側標與格線；這些仍是toolkit合成事件，不是OS鍵鼠或其他架構驗收。
+
+來源d08bf5f加本批patch，raw c15fa37d09c45c22e7a83c2467b9a323e6c4574547a6afa403923e60ade28ccd；一般／播放器兩配置Slint bin各91過／1個helper ignored，播放器all-target Clippy與release build通過。初版臨時collector錯用result.json／status解讀無status欄位的reply-navigation.json，原始程序均exit0且app verifier／ACK通過；另按獨立明確row／boolean expected重驗，保留首輪分類與修正紀錄，不重跑或改寫原始報告。證據在slint-reply-overlay/。
+
+最新四架構下載仍為26d9947的空格修正版，本次導覽修正尚未替換下載；只留一份最新raw供下一批封裝／原生驗收，跨平台、最小視窗／語言、原生輸入、完整資料回退與同負載效能仍待驗。自有target與被取代的前輪raw於本批清理，exact paths、UID／resolved／symlink／lsof、du／Cargo／filesystem free與保護雜湊在cleanup/ledger.json。S0–S8持續，S9未執行。
+
+本批即時清理完成：Cargo原生clean回報8881檔／3.2GiB，刪前target du3380808KiB；前輪fb35e2ee…診斷raw已移除，frontend相容symlink改指向本輪單份c15fa37d…。2742份最新交付／原Windows證據／保留檔案hash不變；filesystem available 288987926528→292184289280 bytes只記並行觀測，與du及Cargo宣告量分列。不清共享SDK／registry／VM，不移除尚未整合來源worktree。

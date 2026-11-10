@@ -90,6 +90,8 @@ pub fn focus_viewport(ui: &TerminalWindow, owner: &Inline) -> serde_json::Value 
         "foreground":ui.get_native_foreground(),"blocked":ui.get_context_source_blocked(),
         "inline_enabled":ui.get_inline_enabled(),
         "pictures":ui.get_inline_pictures().row_count(),
+        "reply_navigation":{"available":ui.get_reply_navigation_available(),
+            "open":ui.get_reply_navigation_open(),"group":ui.get_reply_navigation_group()},
         "native":native.as_ref().map(|n|serde_json::json!({
             "scope":n.scope.get(),"rows":n.rows.get(),
             "anchor":n.anchor.get(),"painted_anchor":n.painted_anchor.get(),
