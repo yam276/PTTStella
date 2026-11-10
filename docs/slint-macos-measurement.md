@@ -2,6 +2,18 @@
 
 這份文件記錄 S0／S8 的量測工具及目前證據，不是效能通過報告。完整負載、次數與平台門檻仍以[平替計畫](slint-evaluation-plan.md#同負載效能門檻)為準。
 
+## 2026-11-11 整窗重畫原因與未採用的 shadow 實驗
+
+沿用同一App pair、固定Cargo cache與雙GIF素材。先核對實際選用的softbuffer0.4.8 CoreGraphics、Slint Skia1.18.1 software surface及renderer來源，三個檔案均與本機保存的發布crate逐byte相符。CoreGraphics每次取得buffer都配置全新的零值像素、age固定0，`present_with_damage`忽略damage；Skia雖已開partial rendering，age0仍使其把整個視窗加入dirty region。這是目前依賴的實際路徑，不是缺少一個啟用partial rendering的環境開關；上游亦有[CoreGraphics提交研究](https://github.com/rust-windowing/softbuffer/issues/83)。
+
+以原已驗native `ad01a6d5…` 啟用上游 `SLINT_SKIA_PARTIAL_RENDERING=log`，CUA實際展開兩圖；192筆repaint紀錄、含最近40筆，均為100%。未重編原程式，沒有把log數當OS呈現幀數或CPU比例。唯一嚴格Close ACK通過、root PID消失、HTTP兩URL各一次且owner正常join。退出時一次CUA複合呼叫timeout，後續核對App inventory、peer receipt及PID確認終止，未因此重啟。
+
+接著在同一worktree用小型Cargo path patch試作macOS專用private BGRA shadow：保留最後成功畫面，尺寸／stride改變或render error時age0，其餘age1；完成後複製到softbuffer的獨立target，不改CoreGraphics持有的像素。非macOS及GPU路徑不變，額外保留一張視窗大小buffer。25份原始crate檔及授權以SHA核對後才實驗；兩個實際shadow測試和core392 passed／4 ignored，固定cache下release主程式建置54.94秒。首次選錯Cargo package feature參數被拒絕，改為同時選root與依賴後通過，沒有新建測試repo。離線update曾重新選部分依賴，立即還原，只留當時實驗所需的Skia path來源差異；最終Cargo.toml／lock已全部回復HEAD。
+
+實驗raw `1c01de96…`／staged `4a4da212…` 在雙圖暖機時通常只重畫21.29%，但**首次展開的實際CUA畫面曾缺頁尾／底列，左緣另有青色短線**。全螢幕往返後及開關原生設定後可恢復，不足以證明初始顯示正確；原因仍未定位，故整個patch未採用。另取恢復後10秒／101筆CPU1.149632709秒、footprint峰值126,048,576、RSS543,506,432 bytes；此輪開repaint log且先經fullscreen／Settings，不能和舊輪直接算改善。較早一段0.845429127秒區間與後續工具操作的交界未登記，排除比較。實驗生命週期的唯一嚴格Close及HTTP join通過，不等於畫面驗收通過。
+
+已還原原 `ad01a6d5…` native及原launcher並重新簽章，四架構交付包完全未替換。保留最小失敗native gzip34,055,533 bytes、完整實驗來源與授權tar97,391 bytes及小型設定／packet，供後續釐清dirty invalidation；不留下第二套App。原始紀錄與拒用理由在 `.local/verification/slint-dual-gif-current/render-audit/`。移除 `/Users/ladesine/Documents/Github/PTTStella-slint/vendor/i-slint-renderer-skia` 與該證據根的 `baseline-native` 重複副本前，核對resolved／UID／無symlink／lsof、逐檔archive byte equality及6份保護檔SHA。free265846763520→265915838464 bytes僅為並行觀測，exact inventory見 `cleanup.json`。固定target及可重用中間檔保留，未Cargo clean；cache頂層raw仍是拒用實驗，須經正常Cargo依目前來源重建才可另作驗收，不可把檔名當來源身分。下一步不重做相同age1實驗；先定位實際像素失效，或評估能明確保證dirty／presentation語義的上游方案。S8仍not_ready，S9未執行。
+
 ## 2026-11-10 GIF 循環重用與剩餘繪製成本
 
 接續同一對診斷App、固定Cargo target、marked store及 `47c975f3…` 雙GIF素材，沒有另建repo或整套環境。先用原R3 native `69c32791…` 重測，10秒／101筆CPU3.664067167秒，footprint峰值97,277,696 bytes。其後另用系統 `sample PID 5 1 -file OUTPUT` 取堆疊，沒有開TextEdit；profiler區間不計入前述資源數據。樣本同時出現media Playback→GIF／weezl解碼，以及主執行緒Skia software／softbuffer CoreGraphics present／vImage色彩轉換。這是執行緒狀態抽樣，不把含sleep的stack次數當成CPU百分比。

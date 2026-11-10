@@ -50,7 +50,7 @@ Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人�
 
 2026-11-10 原生 runtime 批次中途清理：確認沒有編譯程序或選定目錄 open files，重新驗證30份原始套件與3份bootstrap工具來源archive的SHA，另將libjxl／libplacebo含submodule的來源逐檔封存核對；保存131份必要config／build診斷及mpv Swift MetalLayer失敗。移除36個精確目錄：32份解壓／Git來源副本、3份工具解壓副本與本批recipes/build，中間產物du合計1658992KiB；exact paths、owner／symlink、程序與保留雜湊在 `.local/verification/slint-artifact-cleanup-20261110-source/ledger.json`。12975份保留檔案hash不變。filesystem available 219806351360→221484134400 bytes是並行觀測；來源封存本身的新增空間與du分開記錄，不能全歸因於刪檔。保留31項已完成的runtime依賴install prefix供僅重試mpv、約22MiB臨時工具、最新各配置交付與最小證據；工具／install待本批用完後清理。兩個Cargo target沒有build profile，未重建Rust；共享SDK／registry／VM與其他聊天產物未動。系統ThemeWidgetControlViewService仍持有已刪舊探針exe，未為清理停止系統程序。首次保留清單遇到APFS來源目錄大小寫別名，已依刪前inventory逐筆核對並另記，不宣稱遺失來源或提前通過runtime驗收。 文件gate另抓出臨時venv附帶的Windows launcher；已刪除用完的pip bootstrap，未放寬gate，重跑通過。另記5個exact移除路徑，最終12086份保留檔案hash一致，Slint worktree du1435912KiB。
 
-後續每批開建置前先檢查上一批target與待驗CLI，來源不變時優先重用保留的單一執行檔。中途收到清理要求也立即清理已停止的profile；批次完成後移除被取代的CLI／App／ZIP／DMG及重複正向證據，保留最新必要交付和獨特失敗。只為清理或更新本紀錄不重建Rust，不把待驗當passed，也不因goal持續而累積歷代binary。
+後續每批開建置前先檢查上一批target與待驗CLI，來源不變時優先重用保留的單一執行檔。中途收到清理要求也依最新復用規則盤點，只清已退役且不再需要的profile，不因暫無程序就清空快取；批次完成後移除被取代的CLI／App／ZIP／DMG及重複正向證據，保留最新必要交付和獨特失敗。只為清理或更新本紀錄不重建Rust，不把待驗當passed，也不因goal持續而累積歷代binary。
 
 2026-11-10 通知批次結案：兩版共用copy／success時長與錯誤優先政策，Slint單一timer完成hover／Tab焦點與淡出暫停、舊期限撤銷、未知提示持續及退出；設定自動保存成功留在管理視窗，草稿帶回PTT的確認提示持續保留。最終arm64封裝software／OpenGL通知、版本檢查、設定搜尋與文章收藏五案皆exit0／Close ACK，1176份App／ZIP／唯讀DMG payload一致；最新包仍位於 `slint-shell-chrome-final/package-current`，exe SHA為 `b5e82341b7c7797fae98a911e696d96374aa969bb33a6732d36d336f4fb891ce`。來源、各gate、原生與未驗範圍見[通知紀錄](slint-notifications.md)。首個搜尋privacy焦點失敗有保留，同版重跑／舊版對照／最終版通過不等於原因已釐清；系統動畫偏好與其他架構同步仍待驗。
 
@@ -192,6 +192,8 @@ Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人�
 4. 依 repo 流程更新 README、安裝說明、測試及 release workflow，重跑 core／native／安裝與回退。正式版號、release PR、tag 與發佈依使用者的該版授權。
 
 ## 驗證與交接紀錄
+
+2026-11-11：同一App及固定Cargo cache確認macOS software整窗重畫根因：softbuffer0.4.8每次新buffer／age0，使Skia1.18.1實際192筆repaint均100%。試作private shadow後暖機通常21.29%，但首次展圖有頁尾像素缺失，故拒用並完整還原Cargo來源／lock、已驗native及launcher；沒有改四平台包。精確原／實驗binary、來源archive、正常Close／HTTP、失敗畫面觀察及清理在[macOS量測紀錄](slint-macos-measurement.md#2026-11-11-整窗重畫原因與未採用的-shadow-實驗)。保留固定中間檔，移除未採用來源副本和重複baseline，不再逐批full clean。缺失原因與完整S8仍待驗，不能以重畫面積縮小宣稱效能／正確性通過；S9未執行。
 
 每階段使用 [CONTRIBUTING](../CONTRIBUTING.md) 的對應 gate，再加 Slint 專屬 unit／Clippy、共用 loopback、真實視窗和各平台 package gate。舊前端仍用既有 JavaScript、Rust、desktop probes 作對照。原生 IME、裝置、vault 或實站缺項各自登記。證據保存在 worktree 的 `.local/verification/`，保留候選包、雜湊、最小重現及原始資料。交接記錄完成階段、下一個入口、缺 runner／授權、實際命令和證據位置。結案先確認 resolved path、程序與所有權，再清理自己被取代的產物並記錄空間前後。 [開發與清理流程](development-harness.md)
 
