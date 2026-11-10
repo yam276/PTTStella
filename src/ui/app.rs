@@ -67,6 +67,7 @@ pub fn app(props: AppProps) -> Element {
                 | "sites"
                 | "fonts"
                 | "parity_grid"
+                | "dual_gifs"
                 | "sgr66"
                 | "sgr66_legacy"
                 | "osc8"

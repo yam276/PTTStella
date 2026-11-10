@@ -123,6 +123,7 @@ fn main() {
                 | "files_slow"
                 | "fonts"
                 | "parity_grid"
+                | "dual_gifs"
                 | "sgr66"
                 | "sgr66_legacy"
                 | "login_2fa"

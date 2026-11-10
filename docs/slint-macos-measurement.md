@@ -2,6 +2,47 @@
 
 這份文件記錄 S0／S8 的量測工具及目前證據，不是效能通過報告。完整負載、次數與平台門檻仍以[平替計畫](slint-evaluation-plan.md#同負載效能門檻)為準。
 
+## 2026-11-10 共用雙 GIF 負載與 CPU 反例
+
+新增兩版共用的 [閱讀頁面](../src/replay/media_benchmark.rs)：23行、完整1/1頁、兩個獨立loopback GIF網址，由同一Rust格線reducer處理。來源只接受明確 `http://127.0.0.1:PORT` origin，拒絕遠端、帳密、path／query／fragment和控制字元；正常Live不使用此來源。Slint以marked-store的 `--store-scene gifs` 掛載與Live相同16項服務；準備檢查核對原始站端frame、已ack的完整閱讀packet及實際article widget，不再錯用web模式下不存在的terminal bitmap presentation。準備timer完成即停止，不合成focus、展圖、輸入或自動退出。
+
+素材由既有CC0標準函式庫generator產出：512×160、32幀、每幀100ms、紅藍交替／無限循環，encoded1,974,503 bytes／SHA `47c975f33f5bfeac5d9cc7b11cc0eb8d90b5d240ba8d00e14b1d361b9dc094f4`。每圖2,621,440 frame pixels，兩圖5,242,880；不是最大GIF成本或瞬間峰值測試。舊generator四種入口產物逐byte不變。原先直接與tracked PNG比較失敗，舊generator本來就有不同encoded PNG；未修改原fixture或expected，改核對old／new generator輸出，失敗另保留。
+
+重跑素材與HTTP owner（輸出目的地須不存在）：
+
+```text
+python3 tooling/generate_media_fixtures.py --dual-gif /ABS/owned.gif
+python3 tooling/desktop_media.py --dual-gif /ABS/owned.gif --output /ABS/new-http
+```
+
+從 `new-http/ready.json` 取origin。結束時建立該目錄的 `stop` 檔或Ctrl+C，`result.json` 保存逐路徑count與join；20分鐘未結束為timeout，不算通過。獨立CLI已實際驗兩個URL的完整SHA／各一次GET與正常join，未使用UI driver。兩版原生參數如下，採相同marked synthetic settings：version6、bundled字型23／20／100、en-US、web閱讀、auto-expand off；`STORE` 含明確 `.store-compatibility.json` marker。完整實際設定bytes、marker與SHA在本輪證據，不能以使用者一般store代替。
+
+```text
+pttstella-slint --probe-store NEW_EVIDENCE STORE --store-scene gifs --media-origin ORIGIN
+pttstella --probe-surface NEW_DIOXUS_STORE dual_gifs --media-origin ORIGIN
+```
+
+兩版在同一worktree／固定Cargo target建置，沒有另建測試repo；診斷App沿用同PID LaunchServices launcher。Dioxus為目前共用核心的對照，並非最初5ea9ad6。R3 raw Slint `79bdaa59…`／診斷 `69c32791…`，Dioxus raw `2c903bab…`／診斷 `4a3035b6…`；真實來源3c667eb加保存patch，沒有倒填為後續乾淨commit。Cargo驗證後target頂層Dioxus binary hash改變，原因未獨立定位；已測診斷App的兩份native hash均不變，記於 `post-gate-binaries.json`，未用新binary替換採樣身分。
+
+CUA實際點兩個箭頭，兩張512×160同時可見，分別觀測到紅／藍相位；首尾焦點回文章輸入，播放／恢復採樣的游標在標題列(520,13)。外視窗均1040×768；Slint左靠排圖並保留原footer，Dioxus置中且投影可視行，未宣稱viewport／OS raster完全相同。開設定、關設定後確認兩圖恢復，再⌘Q正常關窗。各狀態10秒／101筆穩定程序族結果如下；paused列為開啟設定的應用整體，兩版設定面板尺寸／實作不同，只供各自前後對照。
+
+| 前端／狀態 | footprint峰值 bytes | RSS峰值 bytes | CPU seconds |
+| --- | --- | --- | --- |
+| Slint software／兩圖播放 | 98,276,864 | 368,459,776 | 3.603962167 |
+| Dioxus／兩圖播放 | 733,376,192 | 554,745,856 | 1.149564664 |
+| Slint／設定開啟 | 120,722,944 | 409,092,096 | 0.209669166 |
+| Dioxus／設定開啟 | 751,234,816 | 594,083,840 | 0.462977875 |
+| Slint／恢復兩圖 | 123,180,608 | 430,800,896 | 3.504497416 |
+| Dioxus／恢復兩圖 | 753,299,264 | 595,001,344 | 0.745315333 |
+
+**此雙GIF負載下已觀測到Slint CPU成本較高，不能只以低記憶體判為可平替。** 尚未定位是解碼、UI重繪或其他成本；下一步對同一native與素材取樣hot stacks再最佳化，不先降低幀數、可見圖數或解析度。這只是單輪校準：沒有連續OS foreground、完整cold／warm／交錯重複、100次操作或OS顯示延遲，不能計算S8達標比例。開設定時主圖不可見，這些GUI觀察亦沒有獨立數出decoder退休；worker准入／釋放由既有生產owner測試另證，反覆開關後回收與瞬間下載／decode峰值仍待驗。
+
+同一HTTP owner共三個實際程序取圖（Dioxus首輪、Slint R3、Dioxus R3），兩路徑各3次GET；設定開關／恢復沒有重抓，server正常join。Dioxus R3核對23行完整閱讀、兩次顯式請求／一個batch、原始PNG、surface／owner audit及Close；Slint R3準備報告核對16服務／閱讀ack，最後唯一嚴格slint_full_dual_gifs Close ACK passed。最後觀測的全部PID＋start消失。LaunchServices orphan主程序的numeric exit未觀測，不記exit0。原始log／trace／設定／來源與失敗在 `.local/verification/slint-dual-gif-current/`；raw缺rpath的dyld失敗、web準備條件失敗、首輪Dioxus漏計新case的failed audit與編譯錯誤均保留，沒有放寬原expected。
+
+已核對無open files後移除 `/private/tmp/pttstella-dual-gif-q2lzq45q`（regular-file logical214,712 bytes／du256KiB），小型結果先逐檔核SHA保存在 `native-evidence/`；3,058份保護檔hash未變。free266962845696→266963103744 bytes僅為並行觀測，exact path／resolved／UID／lsof／inventory見 `cleanup/ledger.json`。兩份當前診斷App、同一2MB素材及其精確OS namespace保留供尚未完成的CPU profile重用，不另留各階段App；舊一次性store及probe輸出已移除，重跑前須重新配置明確loopback origin與新evidence，不能直接重啟過期launcher。固定Cargo cache未clean，本次cleanup時du4668044KiB；後續core gate仍沿用同一target且開啟dev／test增量。最新四平台下載、來源／最小基準、共享工具及使用者資料保留，Slint worktree尚未整合。
+
+本批core gate14命令／2個replay passed；native-player的lib392 passed／4 ignored、Slint bin97／1；desktop的lib379／4、bin121／1、多程序10／1；一般Slint bin97／1。native-player／一般Slint／desktop三配置all-target release Clippy、fmt、JS383與Python177通過。獨立server CLI另實際核對兩次完整payload SHA與正常join。文件gate通過；這些驗證不等於動畫CPU問題已修或S0–S8完成。
+
 ## 2026-11-10 同程序啟動與原生焦點校準
 
 本輪不重編Rust，重用目前arm64候選與既有2846dc4 Dioxus對照。診斷App改由LaunchServices啟動RunFixture，再以 `os.execve` 於同一PID執行native，不再由Python另spawn主程式。兩者都觀測到PPID1／responsible等於自己的PID；Dioxus的WebKit GPU／WebContent／Networking及ThemeWidget依responsibility歸入，Slint則含native與ThemeWidget。原生CUA現在可在Dioxus點擊標題列、座標點浮球、按Escape關閉選單並返回終端焦點，未再出現前輪noWindowsAvailable。此結果支持使用同PID啟動繼續量測，尚未單獨證明前輪故障的唯一原因。

@@ -10,7 +10,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。macOS arm64 最新候選另含 CJK fallback、貼上預覽、完整 shell 及預設軟體合成（351份產品來源對應09a13da）；Linux 保持含 CJK／貼上修正的84e98a3，Windows／Intel Mac 仍保持475897f，Windows69542cb7…等使用者稍後驗收。各包來源不同，依 [最新候選](#2026-11-10-最新候選) 分別核對；尚未完成全部原生或效能驗收。
 
-本輪來源已將macOS無旗標路徑改為Skia軟體合成及原生CPU影片；同機完整owner閒置峰值約99MiB，較先前OpenGL的842–845MiB低，但CPU較高。CPU影片與GPU共用尺寸／像素預算，保留Full HD／4K；仍有明確GL／Metal選項。原生⌃⌘F與七案功能回歸通過；正式arm64封裝另通過禁止Homebrew讀取的十案，詳最新候選；兩版已補原生鍵鼠／焦點校準，尚未完成連續前景觀測、同負載次數與所有平台效能。詳 [預設合成與影片尺寸](slint-macos-measurement.md#2026-11-10-macos-預設軟體合成與影片尺寸)，S8仍未通過。
+本輪來源已將macOS無旗標路徑改為Skia軟體合成及原生CPU影片；同機完整owner閒置峰值約99MiB，較先前OpenGL的842–845MiB低，但CPU較高。CPU影片與GPU共用尺寸／像素預算，保留Full HD／4K；仍有明確GL／Metal選項。原生⌃⌘F與七案功能回歸通過；正式arm64封裝另通過禁止Homebrew讀取的十案，詳最新候選；兩版已補原生鍵鼠／焦點校準，尚未完成連續前景觀測、同負載次數與所有平台效能。詳 [預設合成與影片尺寸](slint-macos-measurement.md#2026-11-10-macos-預設軟體合成與影片尺寸)，雙GIF新增共用素材及兩版原生校準；Slint播放／恢復CPU明顯較高，下一步須定位解碼與重繪成本，S8仍未通過。
 
 | 階段 | 目前已有 | 尚須完成 |
 | --- | --- | --- |
@@ -607,3 +607,9 @@ exact removed paths、resolved／UID／symlink／lsof、每檔SHA、Cargo宣告�
 重用既有binary，診斷App從LaunchServices以同PID exec進入native，兩版都具有獨立responsibility root。Dioxus已可用原生座標點擊／Escape並回終端焦點；相同設定、80×24名義格線、外視窗與游標條件下，各完成101筆／10秒採樣：Slint無旗標software footprint峰值93,230,720 bytes／CPU0.192464708秒，2846dc4 Dioxus對照642,592,384 bytes／0.370350541秒。兩版CUA⌘Q後全部觀測PID＋start消失，Dioxus surface／cleanup及Slint唯一Close ACK核對通過；LaunchServices orphan的numeric exit未觀測，未填exit0。
 
 這不是初始5ea9ad6基準、完整冷暖重複或OS顯示延遲／S8通過；連續前景、雙GIF與混合功能、100次操作、原生平台矩陣仍缺。首次Dioxus浮球hover採樣與Slint座標點浮球未展開的觀察各自保留。詳細來源／簽名變化、幾何範圍、原始trace及清理見[同程序校準](slint-macos-measurement.md#2026-11-10-同程序啟動與原生焦點校準)。兩份App、自有暫存根及五個精確OS namespace已清理，固定Cargo cache與worktree保留；最新四包／原始來源未改。S0–S8持續、S9未執行。
+
+## 2026-11-10 雙 GIF 原生負載與 CPU 待修
+
+已新增兩版共用loopback閱讀頁面、固定512×160／32幀／100ms素材與可獨立停止／join的HTTP入口；Slint保留完整16服務，正常Live不受影響。兩版CUA實際展開兩張、開關設定／恢復、回文章焦點與⌘Q；Dioxus R3完整閱讀／圖片batch／原始PNG及owner audit passed，Slint R3已ack閱讀packet與唯一嚴格Close passed，全數觀測PID＋start消失。HTTP兩URL各3次（三程序），恢復未重抓。
+
+單輪10秒／101筆的播放CPU為Slint3.603962167秒、Dioxus1.149564664秒；恢復後3.504497416／0.745315333秒。Slint footprint較低但動畫CPU退步，不能宣稱平替或S8通過。先對相同負載profile，再改善decoder／重繪，不降低解析度／幀數／可視圖數取巧。首輪準備與audit失敗、不同版面／footer、單輪／前景／瞬間峰值限制及完整原始證據見[雙GIF負載](slint-macos-measurement.md#2026-11-10-共用雙-gif-負載與-cpu-反例)。固定Cargo cache與當前診斷pair供接續profile復用；四平台下載維持原hash，Windows仍等使用者稍後驗收，S0–S8持續、S9未執行。

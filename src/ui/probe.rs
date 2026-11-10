@@ -534,6 +534,9 @@ pub(super) fn surface_sample(
         Some("parity_grid") => pttstella::replay::parity_grid().map_err(|error| error.to_string()),
         Some("sgr66") => sgr66_sample(true),
         Some("sgr66_legacy") => sgr66_sample(false),
+        Some("dual_gifs") => pttstella::replay::media_benchmark::page(
+            media_origin.ok_or("dual GIF benchmark requires loopback media origin")?
+        ),
         Some("osc8") => osc8_sample(media_origin),
         Some("inline_pages" | "terminal_pages") => inline_sample(media_origin),
         Some("inline" | "picture_menu") => {

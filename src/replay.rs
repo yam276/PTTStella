@@ -4,6 +4,8 @@ use crate::{
     screen::{Frame, Style},
 };
 
+pub mod media_benchmark;
+
 pub fn editor_clipboard() -> Result<Vec<u8>, encoding::Unencodable> {
     encoding::encode(
         "\x1b[2J\x1b[HEDITOR CLIPBOARD 0/4 - local only\x1b[5;1H\x1b[1;31mANSI colour selection\x1b[0m\x1b[24;1H\x1b[34;46m 編輯文章 \x1b[30;47m (^X)存檔 (^C)色碼 (Esc-h)按鍵 (^Z)說明 插入 | user | 1:1\x1b[0m\x1b[3;1H",

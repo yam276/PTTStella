@@ -12,15 +12,15 @@ def png():
     return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 64, 32, 8, 2, 0, 0, 0))
             + chunk(b'IDAT', zlib.compress((b'\0' + row) * 32)) + chunk(b'IEND', b''))
 
-def gif(repeat=0, delays=(30, 30)):
-    data = bytearray(b'GIF89a' + struct.pack('<HHBBB', 64, 32, 0x80, 0, 0) + bytes([255, 0, 0, 0, 0, 255]))
+def gif(repeat=0, delays=(30, 30), *, width=64, height=32):
+    data = bytearray(b'GIF89a' + struct.pack('<HHBBB', width, height, 0x80, 0, 0) + bytes([255, 0, 0, 0, 0, 255]))
     if repeat is not None:
         data.extend(b'\x21\xff\x0bNETSCAPE2.0\x03\x01' + struct.pack('<H', repeat) + b'\0')
-    for colour, delay in zip([0, 1], delays):
+    for colour, delay in ((index % 2, delay) for index, delay in enumerate(delays)):
         data.extend(b'\x21\xf9\x04\x04' + struct.pack('<H', delay) + b'\0\0')
-        data.extend(b'\x2c' + struct.pack('<HHHHB', 0, 0, 64, 32, 0) + b'\x02')
+        data.extend(b'\x2c' + struct.pack('<HHHHB', 0, 0, width, height, 0) + b'\x02')
         # Frequent clears keep every LZW code three bits wide, independently decodable.
-        codes = [code for _ in range(64 * 32) for code in (4, colour)] + [5]
+        codes = [code for _ in range(width * height) for code in (4, colour)] + [5]
         bits = 0
         count = 0
         packed = bytearray()
@@ -42,8 +42,16 @@ def gif(repeat=0, delays=(30, 30)):
     return bytes(data)
 
 if __name__ == '__main__':
-    ROOT.mkdir(parents=True, exist_ok=True)
-    (ROOT / 'colours.png').write_bytes(png())
-    (ROOT / 'motion.gif').write_bytes(gif())
-    (ROOT / 'once.gif').write_bytes(gif(repeat=None, delays=(0, 1)))
-    (ROOT / 'twice.gif').write_bytes(gif(repeat=1, delays=(3, 3)))
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--dual-gif', type=Path, help='new output file for the fixed 512x160,32-frame,100ms dual-URL workload')
+    args = parser.parse_args()
+    if args.dual_gif is not None:
+        with args.dual_gif.open('xb') as output:
+            output.write(gif(delays=(10,) * 32, width=512, height=160))
+    else:
+        ROOT.mkdir(parents=True, exist_ok=True)
+        (ROOT / 'colours.png').write_bytes(png())
+        (ROOT / 'motion.gif').write_bytes(gif())
+        (ROOT / 'once.gif').write_bytes(gif(repeat=None, delays=(0, 1)))
+        (ROOT / 'twice.gif').write_bytes(gif(repeat=1, delays=(3, 3)))

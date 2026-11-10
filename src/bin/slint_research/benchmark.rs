@@ -14,18 +14,27 @@ use std::{
 
 pub enum Fixture {
     ParityGrid,
+    DualGifs {
+        origin: String,
+        connection: Rc<pttstella::connection::Connection>,
+        article: Rc<crate::article::session::ArticleSession>,
+    },
     DraftBoard(Rc<pttstella::connection::Connection>),
 }
 impl Fixture {
     fn name(&self) -> &'static str {
         match self {
             Self::ParityGrid => "benchmark",
+            Self::DualGifs { .. } => "dual-gifs",
             Self::DraftBoard(_) => "draft-board",
         }
     }
     fn accepts(&self, frame: &pttstella::screen::Frame, presented: FrameId) -> bool {
         match self {
             Self::ParityGrid => pttstella::replay::verify_parity_grid(frame).is_ok(),
+            Self::DualGifs { origin, .. } => {
+                pttstella::replay::media_benchmark::verify(frame, origin).is_ok()
+            }
             Self::DraftBoard(connection) => {
                 draft_board_ready(&connection.updates.borrow(), frame, presented)
             }
@@ -71,19 +80,36 @@ impl Preparation {
         let started = Instant::now();
         timer.start(TimerMode::Repeated, Duration::from_millis(20), move || {
             let Some(ui) = weak_ui.upgrade() else { return; };
-            let ready = presented.get().is_some_and(|id| id.revision == renderer.borrow().frame().revision
-                    && fixture.accepts(renderer.borrow().frame(), id))
-                && size.get().is_some() && !ui.get_frame_paint_pending()
-                ;
+            let source = match &fixture {
+                Fixture::DualGifs { connection, .. } => connection.updates.borrow().frame.clone(),
+                _ => renderer.borrow().frame().clone(),
+            };
+            let ready = match &fixture {
+                Fixture::DualGifs { connection, article, .. } => {
+                    let view = connection.updates.borrow();
+                    let id = FrameId { generation: view.generation, revision: view.frame.revision };
+                    fixture.accepts(&source, id) && article.reading_presented(id)
+                        && ui.get_article_active() && ui.get_article_reading_ready()
+                }
+                _ => presented.get().is_some_and(|id| id.revision == source.revision
+                    && fixture.accepts(&source, id)) && size.get().is_some()
+                    && !ui.get_frame_paint_pending(),
+            };
             if !ready && started.elapsed() < Duration::from_secs(5) { return; }
             if let Some(timer) = weak_timer.upgrade() { timer.stop(); }
             let checked = (|| -> Result<(), String> {
-                if !ready { return Err(format!("full-service {} frame was not installed",fixture.name())); }
+                if !ready {
+                    return Err(format!("full-service {} frame was not installed; source={}x{} revision={} terminal_presented={:?} article={:?}", fixture.name(),source.cols,source.rows,source.revision,presented.get(), match &fixture { Fixture::DualGifs { article, .. } => Some(article.diagnostics()), _=>None }));
+                }
                 if !services.as_object().is_some_and(|flags| !flags.is_empty() && flags.values().all(|v| v.as_bool() == Some(true))) {
                     return Err("full-service benchmark is missing a production service owner".into());
                 }
                 let dimensions = ui.window().size();
-                let installed = size.get().ok_or("benchmark grid dimensions missing")?;
+                let installed = size.get();
+                let article = match &fixture {
+                    Fixture::DualGifs { article, .. } => Some(article.diagnostics()),
+                    _ => None,
+                };
                 let report = serde_json::json!({
                     "status":"prepared", "services":services,
                     "fixture":fixture.name(),
@@ -91,11 +117,12 @@ impl Preparation {
                     "window_physical":[dimensions.width,dimensions.height],
                     "scale_factor":ui.window().scale_factor(),
                     "viewport_logical":[ui.get_view_width(),ui.get_view_height()],
-                    "grid_physical":[installed.width,installed.height],
+                    "grid_physical":installed.map(|size|[size.width,size.height]),
+                    "article_presentation":article,
                     "zoom":ui.get_zoom(), "native_foreground_at_preparation":ui.get_native_foreground(),
-                    "frame":{"generation":presented.get().map(|id|id.generation),"revision":renderer.borrow().frame().revision},
+                    "frame":{"generation":match &fixture { Fixture::DualGifs { connection, .. } => Some(connection.updates.borrow().generation), _ => presented.get().map(|id|id.generation) },"revision":source.revision},
                 });
-                let pixels = renderer.borrow().paint(Size{width:960,height:576},false).map_err(str::to_owned)?;
+                let pixels = renderer.borrow().fork(source).paint(Size{width:960,height:576},false).map_err(str::to_owned)?;
                 crate::save_png(&pixels, &directory.join("source.png")).map_err(|e|e.to_string())?;
                 crate::verification::capture(&ui, &directory, "snapshot.png")?;
                 let file = std::fs::OpenOptions::new().write(true).create_new(true)

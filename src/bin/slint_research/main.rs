@@ -159,6 +159,7 @@ impl RenderBackend {
 struct Options {
     benchmark: Option<PathBuf>,
     store_profile: Option<profile::Profile>,
+    media_origin: Option<String>,
     verify_shell: bool,
     verify_motion: bool,
     renderer: RenderBackend,
@@ -182,11 +183,12 @@ fn options() -> Result<Options, Box<dyn Error>> {
 fn options_from(
     mut args: impl Iterator<Item = std::ffi::OsString>,
 ) -> Result<Options, Box<dyn Error>> {
-    const USAGE: &str = "usage: pttstella-slint [--probe-store NEW_DIR MARKED_STORE_ROOT|--verify-motion NEW_DIR|--verify-shell NEW_DIR|--probe-benchmark NEW_DIR|--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--store-scene grid|drafts] [--software-renderer|--opengl-renderer|--metal-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
+    const USAGE: &str = "usage: pttstella-slint [--probe-store NEW_DIR MARKED_STORE_ROOT|--verify-motion NEW_DIR|--verify-shell NEW_DIR|--probe-benchmark NEW_DIR|--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--store-scene grid|drafts|gifs] [--media-origin LOOPBACK_HTTP_ORIGIN] [--software-renderer|--opengl-renderer|--metal-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
     let mut zoom = None;
     let mut benchmark = None;
     let mut store_root = None;
     let mut store_scene = None;
+    let mut media_origin = None;
     let mut verify_shell = false;
     let mut verify_motion = false;
     let mut renderer = None;
@@ -202,10 +204,17 @@ fn options_from(
     let mut verify_color = None;
     while let Some(arg) = args.next() {
         match arg.to_str() {
+            Some("--media-origin") if media_origin.is_none() => {
+                let value = args.next().ok_or(USAGE)?;
+                media_origin = Some(replay::media_benchmark::origin(
+                    value.to_str().ok_or(USAGE)?,
+                )?);
+            }
             Some("--store-scene") if store_scene.is_none() => {
                 store_scene = Some(match args.next().as_deref().and_then(|s| s.to_str()) {
                     Some("grid") => session::Probe::Benchmark,
                     Some("drafts") => session::Probe::Drafts,
+                    Some("gifs") => session::Probe::DualGifs,
                     _ => return Err(USAGE.into()),
                 });
             }
@@ -481,6 +490,9 @@ fn options_from(
         }
         probe = Some(Probe::Session(scene));
     }
+    if (probe == Some(Probe::Session(session::Probe::DualGifs))) != media_origin.is_some() {
+        return Err(USAGE.into());
+    }
     // Ordinary app launches enter the saved/default connection flow. A capture
     // without an explicit probe retains the offline grid export behavior.
     let probe = Some(probe.unwrap_or(if capture.is_some() {
@@ -490,6 +502,7 @@ fn options_from(
     }));
     Ok(Options {
         benchmark,
+        media_origin,
         store_profile: store_root.map(profile::Profile::fixture).transpose()?,
         verify_shell,
         verify_motion,
@@ -530,7 +543,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("{}", profile::Profile::system()?.describe()?);
         return Ok(());
     }
-    let bytes = replay::parity_grid()?;
+    let bytes = match options.media_origin.as_deref() {
+        Some(origin) => replay::media_benchmark::page(origin)?,
+        None => replay::parity_grid()?,
+    };
     let mut screen = Screen::new(80, 24)?;
     match options.probe {
         Some(Probe::Article) => {
@@ -1028,6 +1044,10 @@ fn run(
     } else {
         None
     };
+    let benchmark_connection = options
+        .media_origin
+        .as_ref()
+        .and_then(|_| connection.as_ref().map(|(_, c)| c.clone()));
     let preparation_fixture = if options.store_profile.is_some()
         && options.probe == Some(Probe::Session(session::Probe::Drafts))
     {
@@ -1333,7 +1353,9 @@ fn run(
                         matches!(
                             &mode,
                             session::Mode::Probe(
-                                session::Probe::Media | session::Probe::ArticleInline
+                                session::Probe::Media
+                                    | session::Probe::ArticleInline
+                                    | session::Probe::DualGifs
                             )
                         ),
                         preferences,
@@ -1986,6 +2008,17 @@ fn run(
     } else {
         None
     };
+    let preparation_fixture = if let Some(origin) = &options.media_origin {
+        benchmark::Fixture::DualGifs {
+            origin: origin.clone(),
+            connection: benchmark_connection.ok_or("dual GIF source connection missing")?,
+            article: article_session_owner
+                .clone()
+                .ok_or("dual GIF article owner missing")?,
+        }
+    } else {
+        preparation_fixture
+    };
     let benchmark_preparation = options.benchmark.clone().map(|directory| {
         benchmark::Preparation::start(&ui, renderer.clone(), previous.clone(), presented.clone(), directory,
             serde_json::json!({
@@ -2371,7 +2404,34 @@ mod startup_tests {
             assert!(parsed.store_profile.is_some());
             assert!(!parsed.verify_shell && !parsed.verify_motion);
         }
+        let mut gif_args = base.to_vec();
+        gif_args.extend(
+            [
+                "--store-scene",
+                "gifs",
+                "--media-origin",
+                "http://127.0.0.1:9876",
+            ]
+            .map(Into::into),
+        );
+        let gifs = options_from(gif_args.into_iter()).unwrap();
+        assert!(gifs.probe == Some(Probe::Session(session::Probe::DualGifs)));
+        assert_eq!(gifs.media_origin.as_deref(), Some("http://127.0.0.1:9876"));
         for extra in [
+            vec!["--store-scene", "gifs"],
+            vec!["--media-origin", "http://127.0.0.1:9876"],
+            vec![
+                "--store-scene",
+                "gifs",
+                "--media-origin",
+                "http://example.com:9876",
+            ],
+            vec![
+                "--store-scene",
+                "grid",
+                "--media-origin",
+                "http://127.0.0.1:9876",
+            ],
             vec!["--store-scene", "unknown"],
             vec!["--store-scene"],
             vec!["--store-scene", "drafts", "--store-scene", "grid"],

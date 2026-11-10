@@ -819,6 +819,19 @@ impl ArticleSession {
             && self.live_updates.borrow().stopped()
             && self.terminal_recovery.get().is_none()
     }
+    /// A completed article packet, distinct from terminal bitmap presentation.
+    pub(crate) fn reading_presented(&self, frame: FrameId) -> bool {
+        let core = self.core.borrow();
+        core.pending_identity().is_none()
+            && core.last_displayed().is_some_and(|packet| {
+                packet.generation == frame.generation
+                    && packet.frame.revision == frame.revision
+                    && packet.article.as_ref().is_some_and(|article| {
+                        article.end
+                            && article.load == Some(pttstella::article_cache::LoadState::Complete)
+                    })
+            })
+    }
     pub fn raster_count(&self) -> usize {
         self.view
             .borrow()
