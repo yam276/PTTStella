@@ -663,6 +663,7 @@ fn run(
             .select()?;
     }
     let ui = TerminalWindow::new()?;
+    ui.set_macos_shortcuts(cfg!(target_os = "macos"));
     let notice_owner = notice::Owner::mount(&ui)?;
     let system_motion_owner = system_motion::Owner::mount(
         &ui,

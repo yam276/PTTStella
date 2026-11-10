@@ -380,6 +380,11 @@ export component TerminalWindow inherits Window {
     in property <bool> can-reconnect;
     callback reconnect;
     callback toggle-fullscreen;
+    in property <bool> macos-shortcuts;
+    function fullscreen-key(text:string,control:bool,meta:bool,alt:bool,shift:bool)->bool {
+        return !alt && !shift && ((text == Key.F11 && !control && !meta)
+            || (root.macos-shortcuts && control && meta && (text == "f" || text == "F")));
+    }
     callback leave-fullscreen() -> bool;
     in property <string> input-notice;
     in property <bool> paste-open;
@@ -536,10 +541,15 @@ export component TerminalWindow inherits Window {
         height: parent.height;
         visible: !root.media-open;
         capture-key-released(event) => {
+            if root.fullscreen-key(event.text,event.modifiers.control,event.modifiers.meta,event.modifiers.alt,event.modifiers.shift) {return accept;}
             if event.text == Key.Return && root.inline-enter(false,event.repeat,!event.modifiers.control && !event.modifiers.alt && !event.modifiers.meta && !event.modifiers.shift) {return accept;}
             return reject;
         }
         capture-key-pressed(event) => {
+            if root.fullscreen-key(event.text,event.modifiers.control,event.modifiers.meta,event.modifiers.alt,event.modifiers.shift) {
+                if !event.repeat {root.toggle-fullscreen();}
+                return accept;
+            }
             if event.text == Key.Return && root.inline-enter(true,event.repeat,!event.modifiers.control && !event.modifiers.alt && !event.modifiers.meta && !event.modifiers.shift) {return accept;}
             return reject;
         }

@@ -516,6 +516,17 @@ fn mount_window(
                 } => {}
                 _ => return Propagate,
             }
+            if let WindowEvent::KeyboardInput { event, is_synthetic: false, .. } = event
+                && input.window_focused
+                && !input.occluded
+                && !ui.get_app_closing()
+                && fullscreen_shortcut(event.physical_key, input.modifiers)
+            {
+                let activate = event.state == ElementState::Pressed && !event.repeat;
+                drop(input);
+                if activate { ui.invoke_toggle_fullscreen(); }
+                return PreventDefault;
+            }
             if ui.get_station_color_open() {
                 drop(input);
                 if ui.global::<crate::StationColorState>().get_busy()
@@ -1041,6 +1052,18 @@ pub(crate) fn auxiliary_key(ui: &TerminalWindow, key: PhysicalKey, pressed: bool
 fn find_shortcut(physical: PhysicalKey, modifiers: ModifiersState) -> bool {
     client_shortcut(physical, modifiers, KeyCode::KeyF)
 }
+fn fullscreen_shortcut(physical: PhysicalKey, modifiers: ModifiersState) -> bool {
+    if modifiers.alt_key() || modifiers.shift_key() {
+        return false;
+    }
+    match physical {
+        PhysicalKey::Code(KeyCode::F11) => !modifiers.control_key() && !modifiers.super_key(),
+        PhysicalKey::Code(KeyCode::KeyF) => {
+            cfg!(target_os = "macos") && modifiers.control_key() && modifiers.super_key()
+        }
+        _ => false,
+    }
+}
 fn client_shortcut(physical: PhysicalKey, modifiers: ModifiersState, code: KeyCode) -> bool {
     physical == PhysicalKey::Code(code)
         && modifiers.control_key() != modifiers.super_key()
@@ -1181,6 +1204,34 @@ fn physical_code(code: KeyCode) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fullscreen_uses_physical_keys_before_ime_and_keeps_search_modifiers_distinct() {
+        let f = PhysicalKey::Code(KeyCode::KeyF);
+        let chord = ModifiersState::CONTROL | ModifiersState::SUPER;
+        assert_eq!(fullscreen_shortcut(f, chord), cfg!(target_os = "macos"));
+        for modifiers in [
+            ModifiersState::empty(),
+            ModifiersState::CONTROL,
+            ModifiersState::SUPER,
+            chord | ModifiersState::ALT,
+            chord | ModifiersState::SHIFT,
+        ] {
+            assert!(!fullscreen_shortcut(f, modifiers));
+        }
+        assert!(fullscreen_shortcut(
+            PhysicalKey::Code(KeyCode::F11),
+            ModifiersState::empty()
+        ));
+        assert!(!fullscreen_shortcut(
+            PhysicalKey::Code(KeyCode::F11),
+            ModifiersState::CONTROL
+        ));
+        assert!(!fullscreen_shortcut(
+            PhysicalKey::Code(KeyCode::KeyG),
+            chord
+        ));
+    }
 
     #[test]
     fn find_uses_physical_f_and_preserves_fullscreen_and_composition_modifiers() {

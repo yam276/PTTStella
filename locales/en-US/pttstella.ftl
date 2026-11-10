@@ -347,6 +347,7 @@ menu-select-all = Select All
 menu-minimize = Minimize
 menu-maximize = Zoom
 menu-fullscreen = Toggle Full Screen
+slint-menu-view = View
 menu-close = Close Window
 
 font-local-ascii = Local Latin font

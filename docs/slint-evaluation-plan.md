@@ -8,6 +8,8 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 **尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
 
+本輪另修正使用者回報的文章直接輸入抖動與 macOS `⌃⌘F`；最新 arm64 包已更新，其他三架構尚未包含本次修正。驗證與工具列自動化失敗界線見[輸入穩定與全螢幕](#2026-11-10-文章輸入穩定與原生全螢幕)。
+
 | 階段 | 目前已有 | 尚須完成 |
 | --- | --- | --- |
 | S0 | 共用 Rust 服務、獨立 Slint 入口及可編譯提交序列；四 target 的一般／播放器兩配置 Cargo 依賴 gate | 完整功能案例對照、各平台連結／runtime 依賴與最終基準重跑 |
@@ -383,6 +385,20 @@ x64 runtime暫取自經GitHub digest及完整簽章核對的IINA1.5.1，僅保�
 2026-11-10 草稿資料場景已接到同一 marked-store 入口與完整 owner，`--store-scene drafts` 不重播種資料，仍走嚴格本機 peer。修正原 parity-only 準備檢查後，草稿／預設格線兩個 macOS 原生程序皆完成場景特定 frame／16 owner 檢查、exit0 及嚴格 Close ACK；未修改正常產品入口。操作階段工具因前景保護停用，原生座標啟用不可用，沒有進站端編輯或保存，因此草稿完整 UI 往返仍 not_ready。最近看板正常記入合成 Stella 訪問，其他五 store／可攜檔 byte 不變；首輪診斷失敗與測試漏 connect 的失敗保留。範圍、來源、389／91 個測試與清理見 [前端往返](slint-store-frontends.md#草稿場景準備與格線回歸)。清掉3份臨時App、舊raw與本批Cargo target，最新診斷CLI只留一份；exact paths、du／free及保留例外在 slint-store-scenes/cleanup/ledger.json。S0–S8持續，S9未執行。
 
 
+## 2026-11-10 文章輸入穩定與原生全螢幕
+
+使用者確認抖動發生在文章畫面直接輸入，底下出現「返回網頁閱讀」。原本每次原始輸入都會建立文章交接，即使沒有快取文章；接著非閱讀畫面又撤銷，讓放在VerticalLayout的返回按鈕反覆改變viewport。現在只有快取文章首次交接才切換，普通終端輸入仍取消在途命令但不建立返回列；Unknown組字對話／局部重繪保留原始輸入狀態，直到已知站端畫面或使用者明確返回。返回操作改為浮層，不再佔用終端高度。新增明確Unknown／MainMenu／EmptyList邊界測試，實際Slint host輸入probe另核對主選單提交「中」時按鈕不出現、viewport精確不變。
+
+macOS原生選單新增「檢視 → 全螢幕」及系統`⌃⌘F`。原生鍵盤處理在組字與站端送鍵前辨識physical KeyF，避免注音logical文字影響，消費按下／放開並忽略repeat；一般尋找快捷鍵仍分開。Slint root保留離線視窗fallback與F11。最終raw6652d9ca…用唯一App ID的原生主視窗，在CUA實際按`⌃⌘F`進入1920×1080全螢幕，再按回到1040×768視窗，終端焦點保留；正常關窗exit0，嚴格loopback peer確認零站端輸入與Close ACK。這是最小原生wrapper使用同一raw，不將它冒充正式App完整OS操作。r2僅觀察F11進入、之後timeout；最終F11未觀察到即時變化，完整F11／IME矩陣未驗收。早期失敗／timeout保留，沒有回填為passed。
+
+最終來源為b9dbb4b加已保存patch，288份Cargo／build.rs／src／locale fingerprint一致。Slint播放器配置bin93過／1個明確helper ignored、all-target Clippy、release build及fmt通過。封裝App的native27291aa2…，ZIP內1232份App payload逐檔一致，另將1864份AppleDouble metadata獨立核對magic；初版collector誤把metadata當App payload的分類失敗另記，沒有修改套件。50個runtime檔與前包200份native notice逐byte相同，codesign strict／DMG verify通過。打包工具亦已執行映像唯讀掛載／payload／簽章核對。
+
+最終App在禁止讀Homebrew的sandbox下，software／default的文章輸入及貼上四案均exit0、唯一嚴格Close ACK通過。額外shell兩案及同binary兩次控制重驗仍failed：software為「shell floating tools did not open」，default為「hover consumed readable time or kept a polling timer」；前包060598ec…software對照也failed，為「paused fade expired」。這些不是同一失敗證據，不能由舊版也失敗就判定新版本沒有退步；原因未定，原始failed保留，不放寬前景／pointer保護或改expected。最新候選僅完成上述局部驗證，完整shell／通知回歸仍待解，前包因此暫留作對照，尚未通過全功能平替。
+
+證據在 `.local/verification/slint-input-stability/`，其中final保存封裝、各程序結果、native-observation、package-integrity及source patch。其他三架構尚未重建本修正，實站打字仍待使用者回報；合成通過不能證明私人站端每種輸入狀態。S0–S8持續，S9未執行。
+
+本輪已用Cargo原生clean移除8851檔、回報2.9GiB（target刪前du3062312KiB），target只剩8KiB metadata；另移除10個精確路徑，包括5份raw、3個唯一ID原生wrapper及2份中間App／ZIP／DMG。刪前逐檔盤點、UID／resolved／symlink／lsof檢查完成，必要非binary metadata與hash已壓縮保存。4134份受保護產品來源、最新候選、前包對照、其他平台交付及Windows原始證據hash不變。filesystem available287426174976→291306532864 bytes為並行觀測，不能全歸因本次刪除；exact paths、Cargo與du、保留例外見 `slint-input-stability/cleanup/ledger.json`。共享工具／SDK／registry／VM、使用者資料、其他聊天與未整合來源worktree保留。
+
 ## 2026-11-10 最新候選
 
 依使用者要求，先交付四架構候選包，不等待目前沒有的 Intel Mac／Linux x64 實機。連續推文的重複 ID 逐欄改為空格，保留第一筆 ID、冒號、內文、時間及複製對齊；既有黑名單整行遮罩仍優先保留。共用 Rust 產品修正為 `26d9947`，未切換正式入口、整合 canonical develop 或發佈。
@@ -391,19 +407,19 @@ x64 runtime暫取自經GitHub digest及完整簽章核對的IINA1.5.1，僅保�
 
 | 架構 | 最新資料夾 | 下載格式 |
 | --- | --- | --- |
-| macOS arm64 | `arm64-package/`（symlink指向slint-reply-overlay最新包） | App、ZIP、DMG、SHA-256 |
+| macOS arm64 | `arm64-package/`（symlink指向slint-input-stability/final最新包） | App、ZIP、DMG、SHA-256 |
 | macOS x64 | `x64-package/` | App、ZIP、DMG、SHA-256 |
 | Windows x64 | `windows-package/` | ZIP、SHA-256 |
 | Linux x64 | `linux-package/` | tar.gz、deb、SHA-256 |
 
 | 執行檔 | 封裝內 SHA-256 |
 | --- | --- |
-| macOS arm64 | `060598ec6a8cf5140340df78f675494d83ca2f37e5cde46e929a2ea703d8e130` |
+| macOS arm64 | `27291aa23dcc368416c0c4b146b190a4ca9cb426ec608f849c9614681acdd9a1` |
 | macOS x64 | `73ff40b3eafc115d879996bca75067690e4055131882831f0898f2336e830ec3` |
 | Windows x64 | `6b1de7df5f9b87043746f6cb581999090f75e8e4730297350bc4b6ef05fca9d8` |
 | Linux x64 | `97ff4f910c52eb955b1b5e5a15ee999e1534fd466c861d1730f358b46b3aeb75` |
 
-arm64最新包已包含bc380f9導覽修正；實際目錄為 `.local/verification/slint-reply-overlay/arm64-package/`，原表列arm64路徑是零複本相容symlink。ZIP SHA-256為20d1628c435501fcbcd640c9e0359cd2ecf23d0facb91298adb4f4913a42dd65，DMG為0a16bbe893b04b4ce38125e4a7b0b2e141a7334d36b607ddd2dbed472128bac6；新包1231個ZIP payload與App一致，50個runtime dylib及199份前包notice逐byte不變。Windows／Intel／Linux已更新為乾淨de6245e來源的候選，286份產品檔案與arm64的bc380f9逐份相同；目前同時包含空格與導覽浮層修正。這三個表列目錄是指向slint-navigation-cross最新包的symlink；全部下載與未驗界線見[同步候選](#2026-11-10-四架構同步候選)。原7個封裝後合成案例與雙語最小寬度OS操作見[arm64補驗](#2026-11-10-arm64-封裝與雙語導覽補驗)。
+arm64最新實際目錄為 `.local/verification/slint-input-stability/final/arm64-package/`，表列入口是零複本symlink。ZIP SHA-256為76a24447b25641eee3329eb3c396ecc2d98ab3d8a04b7929df3f385dd3b353ed，DMG為e39942979662f8f36c8bbc07d8e098c245d20040160de5e5fd389dee63880655；包含空格、bc380f9導覽及本輪輸入／全螢幕修正。Windows／Intel／Linux仍為乾淨de6245e來源，未同步本輪修正，不能再宣稱四份產品來源相同。這三個表列目錄是指向slint-navigation-cross最新包的symlink；下載與未驗界線見[同步候選](#2026-11-10-四架構同步候選)。前份arm64包暫留作新舊工具列失敗的對照，詳見下節。原7個封裝後合成案例與雙語最小寬度OS操作見[arm64補驗](#2026-11-10-arm64-封裝與雙語導覽補驗)。
 
 以下為首次四架構封裝紀錄；其中舊arm64已由上述包取代。所有下載雜湊、ZIP／App 逐檔對照及 Linux tar／deb 的實際 ELF 核對在 `package-integrity.json`。兩份 Mac ZIP 分別有1230／1214個payload與App一致；Windows917個ZIP項目只有exe與candidate.json改變，其餘915個逐byte等於前包，修正過的PowerShell helper、DLL與fixture未變。Mac／Linux的正式打包工具各自檢查簽章／映像或ELF loader／dpkg Depends；這些不等於安裝、原生輸入或實機驗收。
 

@@ -341,6 +341,7 @@ menu-select-all = 全選
 menu-minimize = 縮到最小
 menu-maximize = 縮放
 menu-fullscreen = 切換全螢幕
+slint-menu-view = 檢視
 menu-close = 關閉視窗
 
 font-local-ascii = 本機英數字型

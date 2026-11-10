@@ -109,6 +109,17 @@ impl Menu {
         }
         submenu.addItem(&NSMenuItem::separatorItem(mtm));
         submenu.addItem(&quit);
+        let view_entry = NSMenuItem::new(mtm);
+        let view_menu = NSMenu::new(mtm);
+        view_entry.setSubmenu(Some(&view_menu));
+        bar.addItem(&view_entry);
+        system_labels.push((view_entry, "slint-menu-view"));
+        let fullscreen = system_item(mtm, "", sel!(toggleFullScreen:), "f");
+        fullscreen.setKeyEquivalentModifierMask(
+            NSEventModifierFlags::Command | NSEventModifierFlags::Control,
+        );
+        view_menu.addItem(&fullscreen);
+        system_labels.push((fullscreen, "menu-fullscreen"));
         let owner = Rc::new(Self {
             bar,
             settings,
@@ -161,9 +172,11 @@ impl Menu {
                 .is_some_and(|ui| ui.get_settings_available()),
         );
         for (item, key) in &self.system_labels {
-            item.setTitle(&NSString::from_str(
-                &pttstella::i18n::application().loader().get(key),
-            ));
+            let title = NSString::from_str(&pttstella::i18n::application().loader().get(key));
+            item.setTitle(&title);
+            if let Some(submenu) = item.submenu() {
+                submenu.setTitle(&title);
+            }
         }
         self.settings.setTitle(&NSString::from_str(&pttstella::msg!(
             "settings-center-title"
@@ -241,7 +254,7 @@ fn custom_item(
     item
 }
 fn system_item(mtm: MainThreadMarker, title: &str, action: Sel, key: &str) -> Retained<NSMenuItem> {
-    // SAFETY: All callers supply existing NSApplication actions with the void
+    // SAFETY: Callers supply existing NSApplication/NSWindow responder actions with the void
     // sender ABI. No Rust object is installed in the system responder chain.
     let item = unsafe {
         NSMenuItem::initWithTitle_action_keyEquivalent(
