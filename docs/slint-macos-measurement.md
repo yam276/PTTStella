@@ -4,6 +4,14 @@
 
 ## 2026-11-11 整窗重畫原因與未採用的 shadow 實驗
 
+後續已加入 `tests/slint_rendering.rs`，由正常Cargo整合測試直接使用本產品生成的 `TerminalWindow`／`ArticleViewport` 與Slint公開的Skia software surface API。兩個獨立window／renderer各有自己的緩衝：reference每幀age0全畫，另一個保留前幀並回報age1；沒有在同一renderer上另取snapshot而改變其dirty history。固定合成時鐘，逐像素比較BGRA；另用獨立指定的灰色footer及紅／藍圖片防止兩邊都空白仍誤過。一般核心／Dioxus測試不啟用此診斷；兩項直接optional依賴仍是原已選用的Slint1.18.1，只有明確開 `slint-renderer-audit` 才使用，未patch任何依賴或增加新repo。
+
+本機一般Slint及native-player兩配置各118組畫面完全一致，包含terminal→article、focus、載入框→圖片尺寸、重建／退休文章及圖片repeater、頁尾位置和下方控制列變動、100次雙圖換幀、1920×1080放大／還原，以及physical buffer不變時1.25／1.5／1.0倍率往返。每次暖機換幀另要求age1且damage小於整窗，確保不是拿兩個full repaint互比。這100次是合成model更新，不能算S8的100次原生輸入／翻頁或OS掉幀證據。兩配置每案執行約0.44／0.45秒，這是診斷測試wall time，不能算產品效能。
+
+上述對照**尚未重現原生App首次展圖的頁尾缺失**，因此不推翻下面的拒用結論，也未重新採用shadow或替換四平台包。它只縮小了已檢查的離屏情境；Rust owner在實際事件迴圈中的投影順序、window/presentation及瞬間輸入狀態仍需核對。初版Rc弱參照型別推導錯誤、早期成功但有unused DrawOutcome warning的log，以及後續嚴格成功版皆分開保存在 `render-audit/offscreen/`；沒有略過失敗。固定Cargo cache內重用同一套依賴及兩份必要測試執行檔，不建立額外App或測試repo。
+
+原兩種候選feature×四target的依賴選用8案、collector的5項Python測試、含native-player的audit all-target release Clippy、fmt／diff及docs21項gate回歸通過；依賴解析不算跨平台編譯。最終同來源 `cargo test … --no-run` 暖檢查wall0.401秒／Cargo0.34秒，沒有Compiling，測試exe前後SHA同為 `b563d689…`。兩份約31MB測試exe及固定cache（此時盤點6,225,580KiB）保留供後續重用；沒有新增過期App／解壓副本可清，不做Cargo clean。四份保護檔hash不變；本輪removed為空、free前後及cache／exe精確身分在 `offscreen/cleanup.json`，原始資料及範圍在 `offscreen/acceptance.json`。候選App仍為已驗 `ad01a6d5…`；Cargo整合測試的cache頂層CLI另列hash及執行過的Cargo配置，不能當已驗發佈包。
+
 沿用同一App pair、固定Cargo cache與雙GIF素材。先核對實際選用的softbuffer0.4.8 CoreGraphics、Slint Skia1.18.1 software surface及renderer來源，三個檔案均與本機保存的發布crate逐byte相符。CoreGraphics每次取得buffer都配置全新的零值像素、age固定0，`present_with_damage`忽略damage；Skia雖已開partial rendering，age0仍使其把整個視窗加入dirty region。這是目前依賴的實際路徑，不是缺少一個啟用partial rendering的環境開關；上游亦有[CoreGraphics提交研究](https://github.com/rust-windowing/softbuffer/issues/83)。
 
 以原已驗native `ad01a6d5…` 啟用上游 `SLINT_SKIA_PARTIAL_RENDERING=log`，CUA實際展開兩圖；192筆repaint紀錄、含最近40筆，均為100%。未重編原程式，沒有把log數當OS呈現幀數或CPU比例。唯一嚴格Close ACK通過、root PID消失、HTTP兩URL各一次且owner正常join。退出時一次CUA複合呼叫timeout，後續核對App inventory、peer receipt及PID確認終止，未因此重啟。

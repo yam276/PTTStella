@@ -193,6 +193,8 @@ Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人�
 
 ## 驗證與交接紀錄
 
+2026-11-11：新增同repo的 `slint-renderer-audit` 明確診斷feature及正常Cargo整合測試，兩個獨立Skia renderer消費同一生產TerminalWindow／ArticleViewport，每種配置118組full／retained畫面逐像素一致。涵蓋展圖載入／metadata與repeater退休、100次實際partial換幀、頁尾／控制列、focus、尺寸及同physical buffer的倍率往返，並有獨立指定像素色塊防空測試。一般Slint／native-player皆通過，但尚未重現上一筆原生漏畫；不以此採用shadow或宣稱OS呈現／100次原生輸入／S8通過。方法及命令見[量測紀錄](slint-macos-measurement.md#2026-11-11-整窗重畫原因與未採用的-shadow-實驗)與[交付流程](../CONTRIBUTING.md)。沿用固定Cargo cache、無新repo／App。
+
 2026-11-11：同一App及固定Cargo cache確認macOS software整窗重畫根因：softbuffer0.4.8每次新buffer／age0，使Skia1.18.1實際192筆repaint均100%。試作private shadow後暖機通常21.29%，但首次展圖有頁尾像素缺失，故拒用並完整還原Cargo來源／lock、已驗native及launcher；沒有改四平台包。精確原／實驗binary、來源archive、正常Close／HTTP、失敗畫面觀察及清理在[macOS量測紀錄](slint-macos-measurement.md#2026-11-11-整窗重畫原因與未採用的-shadow-實驗)。保留固定中間檔，移除未採用來源副本和重複baseline，不再逐批full clean。缺失原因與完整S8仍待驗，不能以重畫面積縮小宣稱效能／正確性通過；S9未執行。
 
 每階段使用 [CONTRIBUTING](../CONTRIBUTING.md) 的對應 gate，再加 Slint 專屬 unit／Clippy、共用 loopback、真實視窗和各平台 package gate。舊前端仍用既有 JavaScript、Rust、desktop probes 作對照。原生 IME、裝置、vault 或實站缺項各自登記。證據保存在 worktree 的 `.local/verification/`，保留候選包、雜湊、最小重現及原始資料。交接記錄完成階段、下一個入口、缺 runner／授權、實際命令和證據位置。結案先確認 resolved path、程序與所有權，再清理自己被取代的產物並記錄空間前後。 [開發與清理流程](development-harness.md)

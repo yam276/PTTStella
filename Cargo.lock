@@ -6812,6 +6812,8 @@ dependencies = [
  "futures-util",
  "getrandom 0.3.4",
  "glow",
+ "i-slint-core",
+ "i-slint-renderer-skia",
  "i18n-embed",
  "i18n-embed-fl",
  "icu_normalizer",
