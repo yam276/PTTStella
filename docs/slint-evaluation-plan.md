@@ -30,6 +30,8 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 產物保留規則（2026-11-09 使用者要求）
 
+最新 arm64 候選現在位於 `.local/verification/slint-system-motion/package-current/`，實作為 `91d12e4`，詳見 [系統動畫偏好紀錄](slint-system-motion.md)。它覆蓋上一份候選的五個已驗案例，另有兩種motion初讀／本機通知、播放退出及獨立視窗關閉證據；真正OS改值／還原仍未驗。舊 `slint-shell-chrome-final/package-current` 與重複待驗CLI已移除，23份相同PNG留一份及對照，2876份保護檔hash不變，所有target目錄皆已清掉。exact移除項目、保留例外與free／du見 `.local/verification/slint-system-motion/cleanup/ledger.json`。各歷史段落中的舊latest路徑只代表當時交付，不要求保留舊binary。
+
 已測完且被取代的產物包含過去累積與之後新增，均於每個可獨立驗收批次完成時清理，沿用 [task-owned 清理流程](development-harness.md#產物清理與結案)。不再為每階段各留 App，也不因完整 goal active 就長期保留 target/debug／release；只在同一批工作中重用。一般 dev／test 命令明示 `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0`，release 設定不變。已確認無使用者的編譯快取用 Cargo 原生 clean，必要候選包與最小來源／驗收／失敗證據移出 target，保留原因及 exact removed paths 另記。不啟動背景刪除服務。
 
 2026-11-10 使用者再次要求即時處理磁碟增長：先中斷功能擴充，完成系統動畫偏好批次的中途清理。`slint-system-motion/target` 已無 open files，必要的新包及唯一待驗 CLI 已移出；Cargo 原生 clean 移除20,505檔、回報5.7GiB，清理前 du為6032644KiB。285份產品來源與3584份保護交付檔案hash不變；這次清理不代表動畫偏好功能驗收完成，前一份已驗候選仍保留到新包覆蓋回歸。另將96份歷史大型patch／log／盤點JSON無損gzip封存，逐份解壓核對SHA，169483387 bytes縮為33385092 bytes；刪除7份逐byte相同的合成PNG，各留一份及對照。清除歷次只剩metadata的11個target目錄，metadata另封存；沒有殘留自有Slint容器。exact paths、owner／resolved path／symlink／lsof、原生clean結果、保留例外與filesystem觀測見 `.local/verification/slint-artifact-cleanup-20261110-motion/ledger.json`；被壓縮的歷史證據改讀原路徑加`.gz`，映射與SHA見同目錄`historical-plan.json`。本次不重建Rust，不動其他聊天、共用SDK／registry／VM或尚未整合的來源worktree。

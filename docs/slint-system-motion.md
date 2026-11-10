@@ -49,4 +49,6 @@ Linux 四個 Unix socket fixtures 在 Mac 上執行同一個 production D-Bus co
 
 最新候選在 `.local/verification/slint-system-motion/package-current/`：封裝 executable SHA256 `487905a9050da2c29e42fb5ac0ec3b3dec6fffbfb053120d58b3becc22d81857`，ZIP `2b81ee8ca04bf396d0bcc59d3381eb9ef3b3227c8c2c3fd7177b42228a9d9a99`，DMG `6de4ec8e6324b71a14a7d9e860961beec32b15b252c744245458c72d9ff0c730`。來源基準為 `3fbfb44` 加 `source-final.patch`／逐檔hash，保留原本的 precommit dirty provenance；提交後另核對同一產品 bytes。S8 對應來源交付仍為 not_ready。
 
+實作提交為 `91d12e4`，`source-integration.json` 已核對13份 Cargo／產品檔案與建置前hash一致。中途清理已移除整個本批target；驗證後再移除被取代的 `slint-shell-chrome-final/package-current`、重複的 `slint-system-motion/pending-current` 原始CLI及23份byte相同的正向PNG。舊包1077項必要文字metadata／授權封存，完整舊payload只留hash清單；2876份受保護來源、資產、fixture、各配置最新包與必要來源hash不變。最後沒有target目錄，worktree du為1362756KiB；filesystem available 215716057088→216066596864 bytes是觀測，不全歸因於刪檔。exact paths、owner／resolved path／symlink／lsof與保留理由見本批`cleanup/ledger.json`，重複圖片的保留位置同記於該檔；不重建Rust證明清理。
+
 實際 OS 改值／還原、Intel／Windows／Linux 原生、原生通知鍵鼠／可及性、完整前端資料回退和同負載效能門檻仍依 [完整計畫](slint-evaluation-plan.md)。已測快取、被取代包、待驗 CLI 及重複正向影像依 [清理規則](development-harness.md#產物清理與結案) 立即清理，不因整體 goal 持續而保留。
