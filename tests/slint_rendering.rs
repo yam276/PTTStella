@@ -357,8 +357,13 @@ fn full_and_partial_terminal_views_match_during_inline_and_layout_changes() {
     check("new bottom controls");
     for view in &views {
         view.set_article_body_height(620.);
+        // Diagnostic preparation can snapshot a newly installed projection
+        // before it is painted into the window's retained backing buffer.
+        // The snapshot must not consume the pending window damage.
+        let snapshot = view.window().take_snapshot().unwrap();
+        assert_eq!((snapshot.width(), snapshot.height()), (1040, 740));
     }
-    check("footer geometry");
+    check("footer geometry after offscreen snapshot");
     for frame in 0..100 {
         for model in &models {
             for row in 0..2 {

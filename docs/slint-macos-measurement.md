@@ -2,6 +2,20 @@
 
 這份文件記錄 S0／S8 的量測工具及目前證據，不是效能通過報告。完整負載、次數與平台門檻仍以[平替計畫](slint-evaluation-plan.md#同負載效能門檻)為準。
 
+## 2026-11-11 快照損耗待重畫狀態的修補
+
+在同一App重跑保留的 `4a4da212…` 失敗native，確認尚未展圖時頁尾、下方控制列已缺失，之後GIF換幀仍未補回；探針保存的 `snapshot.png` 卻完整。原 `ad01a6d5…` 對照則正常。重現前另發現上一輪把write_bytes產生的0644備份copy2回App，導致診斷副本無執行權限；本輪修回0755、核對access及簽章，實際原版啟動／退出也通過。這是診斷副本還原錯誤，四平台包未被修改；不能只核對binary hash而忽略mode。原始啟動失敗log另存，不算原生渲染案。
+
+根因已由反例驗證：在同一renderer上更新footer位置、於視窗repaint前呼叫 `take_snapshot()`，原發布版Skia使full／retained畫面不一致。Slint快照重用item trackers及dirty history，已把更新當成畫過，但獨立window buffer尚是舊畫面。先前118組測試沒有這個呼叫順序，因此不能重現。新增此順序後原依賴確實失敗；修補快照後標記完整window dirty並request redraw後，一般Slint／native-player兩配置的118組像素比較再次通過，後續100次動畫更新仍要求真正partial damage。這次沒有刪除快照或把準備／原生驗收降級。
+
+專案以Cargo path patch保存發布的Skia1.18.1來源及完整原授權；25份原始檔與發布crate逐檔核對，僅修改 `lib.rs`、`software_surface.rs`，新增 `software_shadow.rs`。前者維護snapshot／window正確性；後兩者只在macOS software保留一張私有BGRA前幀，成功後複製到CoreGraphics獨立target，尺寸／stride／錯誤失效、縮小釋放原配置。不修改shared registry，不改圖片大小／幀數／delay、不共用可變CGImage記憶體。來源SHA／VCS、改動及退役方式在 `vendor/i-slint-renderer-skia/PTTSTELLA-UPSTREAM.json`、`PTTSTELLA-PATCH.md`。這取代下節未採用的shadow-only實驗，舊拒用／失敗紀錄仍保留。
+
+最終native raw `7a78fcba…`／診斷 `43a2b2d9…`（aff5ac8 dirty、native-player-probe）以原launcher關閉診斷trace後驗證：CUA首次文章顯示已含頁尾／控制列，兩張512×160動畫、1920×1080全螢幕及1040×768還原、原生Settings開關及恢復紅藍相位通過；全螢幕往返後由實際Raise／focus恢復操作，沒有合成foreground許可。嚴格peer Close唯一一次passed，觀測PID＋start消失。HTTP兩URL各一次且正常join；第一個失敗版加原版對照另用同一server，各URL合計2次，皆Close通過。LaunchServices orphan仍無數值exit code。影像是原生CUA觀察，toolkit snapshot不冒充OS證據。
+
+同一最終native兩段各10秒／101筆CPU為1.103324417／1.099903833秒，physical footprint峰值104,666,944／107,583,296 bytes、RSS355,024,896／357,941,248 bytes。期間無CUA操作且沒有trace開銷；只算單輪校準，尚無完整交錯cold／warm、100次原生操作、OS顯示延遲或連續foreground，不以相較舊1.32–1.36秒計算正式改善比例。core392 passed／4 ignored、shadow2案、兩配置BIN各103／1、兩配置像素案、含vendor的native／一般all-target release Clippy及Python178案通過。額外實際notice collector已確認本地Skia未被跳過、三份上游license及兩份來源／修補說明逐byte一致；已修正所有無registry source套件被略過的錯誤，只排除本產品root，local path記相對位置。所有新建置沿用固定Cargo cache。紀錄位於 `.local/verification/slint-dual-gif-current/render-audit/native-repeat/`；四平台下載與S8完整判定尚未更新，S9未執行。
+
+依賴解析四target×兩配置8案、fmt／diff及docs21項回歸也通過；actionlint不在PATH，復用canonical checkout既有1.7.12工具通過，沒有重新安裝。GitHub Actions verify尚未針對未公開的本機變更執行。關閉／join全部本輪程序後，移除已被反例與修補驗證取代的 `render-audit/shadow/failure-native.gz`（34,055,533 bytes）及重複的 `native-repeat/fixed/rust-notices-check`（5,600,472 bytes）；先保留578筆notice inventory、5份notice的hash、失敗來源archive／logs與唯一原版ad01控制gzip。兩處resolved／UID／無symlink／lsof均核對，40份來源及交付保護檔hash不變。free264477679616→264520744960 bytes為並行觀測，logical／du分列於 `fixed/cleanup.json`。永久vendor來源、固定Cargo中間檔、當前診斷pair、四平台包及共享工具／SDK／使用者資料保留，沒有Cargo clean。下輪須重新配置loopback與create_new輸出，不能直接重啟過期診斷launcher；下一步更新真正候選包及來源交付，再做完整S8對照。
+
 ## 2026-11-11 整窗重畫原因與未採用的 shadow 實驗
 
 後續已加入 `tests/slint_rendering.rs`，由正常Cargo整合測試直接使用本產品生成的 `TerminalWindow`／`ArticleViewport` 與Slint公開的Skia software surface API。兩個獨立window／renderer各有自己的緩衝：reference每幀age0全畫，另一個保留前幀並回報age1；沒有在同一renderer上另取snapshot而改變其dirty history。固定合成時鐘，逐像素比較BGRA；另用獨立指定的灰色footer及紅／藍圖片防止兩邊都空白仍誤過。一般核心／Dioxus測試不啟用此診斷；兩項直接optional依賴仍是原已選用的Slint1.18.1，只有明確開 `slint-renderer-audit` 才使用，未patch任何依賴或增加新repo。
