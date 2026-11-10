@@ -63,9 +63,10 @@ def copy_licenses(destination, target, *, feature="desktop"):
                             cwd=ROOT, capture_output=True, check=True, encoding='utf-8')
     inventory = []
     for package in json.loads(result.stdout)['packages']:
-        if not package.get('source'):
-            continue
         source = Path(package['manifest_path']).parent
+        if (not package.get('source')
+                and Path(package['manifest_path']).resolve() == (ROOT/'Cargo.toml').resolve()):
+            continue
         label = package['name']+'-'+package['version']
         files = {p for pattern in ('LICENSE*', 'LICENCE*', 'COPYING*', 'NOTICE*')
                  for p in source.glob(pattern) if p.is_file()}
@@ -78,7 +79,20 @@ def copy_licenses(destination, target, *, feature="desktop"):
                 package_notices /= 'LICENSES'
             package_notices.mkdir(parents=True, exist_ok=True)
             shutil.copy2(file, package_notices/file.name)
-        inventory.append({key: package.get(key) for key in
-                          ('name', 'version', 'license', 'repository', 'source')})
+        entry = {key: package.get(key) for key in
+                 ('name', 'version', 'license', 'repository', 'source')}
+        if not package.get('source'):
+            try:
+                entry['local_path'] = source.resolve().relative_to(ROOT.resolve()).as_posix()
+            except ValueError:
+                entry['local_path'] = None
+            # Keep local patch attribution alongside the upstream licenses.
+            for name in ('PTTSTELLA-UPSTREAM.json', 'PTTSTELLA-PATCH.md'):
+                notice = source/name
+                if notice.is_file():
+                    package_notices = destination/label
+                    package_notices.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(notice, package_notices/name)
+        inventory.append(entry)
     (destination/'rust-dependencies.json').write_text(
         json.dumps(inventory, indent=2)+'\n', encoding='utf-8')

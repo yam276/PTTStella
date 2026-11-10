@@ -40,5 +40,49 @@ class CargoBuildTests(unittest.TestCase):
                 bundle.build()
 
 
+class LicenseTests(unittest.TestCase):
+    def test_local_dependency_keeps_licenses_and_patch_attribution(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fonts = root/'assets/fonts'
+            fonts.mkdir(parents=True)
+            for name in ('NOTICE.txt', 'Cascadia-OFL.txt', 'NotoSansCJK-OFL.txt'):
+                (fonts/name).write_text('synthetic font notice')
+            local = root/'vendor/renderer'
+            (local/'LICENSES').mkdir(parents=True)
+            (local/'LICENSES/upstream.txt').write_text('synthetic upstream license')
+            for name in ('PTTSTELLA-UPSTREAM.json', 'PTTSTELLA-PATCH.md'):
+                (local/name).write_text('synthetic patch attribution')
+            (local/'implementation.rs').write_text('not a notice')
+            registry = root/'registry/dependency'
+            registry.mkdir(parents=True)
+            (registry/'LICENSE').write_text('synthetic registry license')
+            packages = [
+                {'name': 'pttstella', 'version': '1.0.0', 'source': None,
+                 'manifest_path': str(root/'Cargo.toml')},
+                {'name': 'renderer', 'version': '1.2.3', 'source': None,
+                 'manifest_path': str(local/'Cargo.toml'), 'license': 'MIT'},
+                {'name': 'dependency', 'version': '2.0.0', 'source': 'registry+synthetic',
+                 'manifest_path': str(registry/'Cargo.toml'), 'license': 'Apache-2.0'},
+            ]
+            result = MagicMock(stdout=json.dumps({'packages': packages}))
+            destination = root/'notices'
+            with patch.object(bundle, 'ROOT', root), patch.object(bundle.subprocess, 'run', return_value=result):
+                bundle.copy_licenses(destination, 'synthetic-target', feature='native-player-probe')
+            inventory = json.loads((destination/'rust-dependencies.json').read_text())
+            self.assertEqual([p['name'] for p in inventory], ['renderer', 'dependency'])
+            self.assertEqual(inventory[0]['local_path'], 'vendor/renderer')
+            self.assertIsNone(inventory[0]['source'])
+            self.assertNotIn(str(root), json.dumps(inventory))
+            self.assertEqual((destination/'renderer-1.2.3/LICENSES/upstream.txt').read_text(),
+                             'synthetic upstream license')
+            self.assertEqual((destination/'dependency-2.0.0/LICENSE').read_text(),
+                             'synthetic registry license')
+            for name in ('PTTSTELLA-UPSTREAM.json', 'PTTSTELLA-PATCH.md'):
+                self.assertEqual((destination/'renderer-1.2.3'/name).read_text(),
+                                 'synthetic patch attribution')
+            self.assertFalse((destination/'renderer-1.2.3/implementation.rs').exists())
+
+
 if __name__ == '__main__':
     unittest.main()
