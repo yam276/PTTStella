@@ -241,12 +241,8 @@ fn backend_errors_are_sanitized_before_crossing_the_bridge() {
     }
 }
 
-// Explicit opt-in native probe. The unique service and fixed synthetic payload
-// cannot address production entries; the child proves cross-process persistence.
-#[test]
-#[ignore = "explicit isolated OS credential-store probe; may require an unlock prompt"]
-fn native_roundtrip() {
-    let vault = Vault {
+fn synthetic_native_vault() -> Vault {
+    Vault {
         service: format!(
             "io.github.yam276.PTTStella.login.synthetic-native.{}.{}",
             std::process::id(),
@@ -255,13 +251,22 @@ fn native_roundtrip() {
                 .unwrap()
                 .as_nanos()
         ),
-    };
-    struct Cleanup<'a>(&'a Vault);
-    impl Drop for Cleanup<'_> {
-        fn drop(&mut self) {
-            let _ = self.0.perform(Action::Forget);
-        }
     }
+}
+
+struct Cleanup<'a>(&'a Vault);
+impl Drop for Cleanup<'_> {
+    fn drop(&mut self) {
+        let _ = self.0.perform(Action::Forget);
+    }
+}
+
+// Explicit opt-in native probe. The unique service and fixed synthetic payload
+// cannot address production entries; the child proves cross-process persistence.
+#[test]
+#[ignore = "explicit isolated OS credential-store probe; may require an unlock prompt"]
+fn native_roundtrip() {
+    let vault = synthetic_native_vault();
     let cleanup = Cleanup(&vault);
     assert!(matches!(
         vault.perform(Action::Open),
@@ -308,13 +313,17 @@ fn native_roundtrip() {
     drop(cleanup);
 }
 
-#[test]
-#[ignore = "child process of native_roundtrip only"]
-fn native_read_child() {
+fn native_child_vault() -> Vault {
     let service = std::env::var("PTTSTELLA_SYNTHETIC_VAULT").expect("parent probe service");
     assert!(service.starts_with("io.github.yam276.PTTStella.login.synthetic-native."));
     assert!(service.len() < 160);
-    let vault = Vault { service };
+    Vault { service }
+}
+
+#[test]
+#[ignore = "child process of native_roundtrip only"]
+fn native_read_child() {
+    let vault = native_child_vault();
     let Ok(Outcome::Opened {
         account,
         saved: true,
@@ -328,6 +337,165 @@ fn native_read_child() {
         "Synthetic",
         b"only native test",
     );
+}
+
+#[cfg(all(target_os = "macos", feature = "desktop-services"))]
+#[test]
+#[ignore = "explicit macOS Keychain probe with an independently signed test copy"]
+fn native_keychain_legacy_and_signing() {
+    use security_framework::os::macos::keychain::SecKeychain;
+
+    let _interaction = SecKeychain::disable_user_interaction().unwrap();
+    let vault = synthetic_native_vault();
+    let cleanup = Cleanup(&vault);
+    let store = NativeStore {
+        service: &vault.service,
+    };
+    assert!(store.load().unwrap().is_none());
+    println!("synthetic_keychain_service={}", vault.service);
+
+    // Independently seed the v0.4.1/Dioxus account-NUL-password format.
+    let legacy = b"Synthetic\0only native test";
+    store.save(legacy).unwrap();
+    let writer = std::env::current_exe().unwrap();
+    let launch = |reader: &std::path::Path, test| {
+        std::process::Command::new(reader)
+            .args(["--ignored", "--exact", test, "--nocapture"])
+            .env("PTTSTELLA_SYNTHETIC_VAULT", &vault.service)
+            .output()
+            .unwrap()
+    };
+    let test = "login::vault::tests::native_keychain_signed_reader";
+    let control = launch(&writer, test);
+    assert!(
+        control.status.success(),
+        "same-identity legacy reader failed"
+    );
+    assert!(
+        String::from_utf8_lossy(&control.stdout)
+            .lines()
+            .any(|line| line == "keychain_read=readable")
+    );
+
+    let directory = tempfile::tempdir().unwrap();
+    let reader = directory.path().join("reissued-native-vault-test");
+    std::fs::copy(&writer, &reader).unwrap();
+    assert!(
+        std::process::Command::new("/usr/bin/codesign")
+            .args([
+                "--force",
+                "--sign",
+                "-",
+                "--identifier",
+                "io.github.yam276.PTTStella.synthetic-native.reissued",
+            ])
+            .arg(&reader)
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        std::process::Command::new("/usr/bin/codesign")
+            .args(["--verify", "--strict"])
+            .arg(&reader)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let cross = launch(&reader, test);
+    let output = String::from_utf8(cross.stdout).unwrap();
+    let diagnostic = output
+        .lines()
+        .find(|line| line.starts_with("keychain_error="));
+    assert!(
+        cross.status.success(),
+        "reissued-identity reader failed: {}, {diagnostic:?}",
+        cross.status
+    );
+    let result = output
+        .lines()
+        .find(|line| line.starts_with("keychain_read="))
+        .expect("missing reissued-identity result");
+    println!("reissued_{result}");
+    let signed_bytes = reader.metadata().unwrap().len();
+    let staging = directory.path().to_owned();
+    directory.close().unwrap();
+    assert!(!staging.exists());
+    println!(
+        "reissued_copy_removed={} regular_bytes={signed_bytes}",
+        staging.display()
+    );
+    assert!(
+        store
+            .load()
+            .unwrap()
+            .is_some_and(|bytes| bytes.as_slice() == legacy)
+    );
+
+    for malformed in [b"missing separator".as_slice(), &[b'x'; 129]] {
+        store.save(malformed).unwrap();
+        assert!(vault.perform(Action::Open).is_err());
+        assert!(vault.perform(submit("Synthetic", b"", true)).is_err());
+        assert!(
+            store
+                .load()
+                .unwrap()
+                .is_some_and(|bytes| bytes.as_slice() == malformed)
+        );
+    }
+    assert!(matches!(
+        vault.perform(Action::Forget),
+        Ok(Outcome::Forgotten)
+    ));
+    assert!(store.load().unwrap().is_none());
+    println!("synthetic_keychain_entry_removed=true");
+    drop(cleanup);
+}
+
+#[cfg(all(target_os = "macos", feature = "desktop-services"))]
+#[test]
+#[ignore = "child process of native_keychain_legacy_and_signing only"]
+fn native_keychain_signed_reader() {
+    use security_framework::os::macos::keychain::SecKeychain;
+
+    let _interaction = SecKeychain::disable_user_interaction().unwrap();
+    assert!(!SecKeychain::user_interaction_allowed().unwrap());
+    let vault = native_child_vault();
+    match vault.perform(Action::Open) {
+        Ok(Outcome::Opened {
+            saved: true,
+            account,
+        }) => {
+            assert_eq!(account, "Synthetic");
+            ready(
+                vault.perform(submit("Synthetic", b"", false)),
+                "Synthetic",
+                b"only native test",
+            );
+            println!("keychain_read=readable");
+        }
+        Err(error) => {
+            // Only accept the platform's documented authorization refusals.
+            let code = [-25308i32, -25315, -25293].into_iter().find(|&code| {
+                let message = crate::msg!("vault-read-failed", value1 = code);
+                error == message
+            });
+            let Some(code) = code else {
+                println!("keychain_error={error}");
+                panic!("unexpected reissued-identity Keychain error");
+            };
+            assert!(
+                matches!(vault.perform(submit("Synthetic", b"", false)), Err(reuse_error) if reuse_error == error)
+            );
+            ready(
+                vault.perform(submit("Synthetic", b"manual fallback", false)),
+                "Synthetic",
+                b"manual fallback",
+            );
+            println!("keychain_read=authorization_refused os_status={code} manual_fallback=true");
+        }
+        _ => panic!("unexpected reissued-identity Keychain response"),
+    }
 }
 
 #[cfg(target_os = "linux")]

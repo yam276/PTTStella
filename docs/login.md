@@ -65,6 +65,16 @@ Session另持有有界、無密碼的AccountIdentity，僅供網頁文章標示�
 
 明確執行 `cargo test --locked --features credential-store --lib login::vault::tests::native_roundtrip -- --ignored --exact` 才測真正 OS 後端：獨立唯一 synthetic service、固定合成帳密、不勾選零保存、勾選寫入、另一個程序讀回、錯帳號拒絕、兩次移除與確認不存在。可能需要使用者處理 OS 解鎖提示；不使用正式 service，不連 PTT。Linux 可在獨立容器的 D-Bus／GNOME Keyring 中驗證，不改使用者桌面密碼庫。`native_read_child` 僅由父程序啟動。
 
+### macOS 舊紀錄與重新簽章驗收
+
+`cargo --config .local/slint-build.toml test --locked --offline --release --features native-player-probe --lib login::vault::tests::native_keychain_legacy_and_signing -- --ignored --exact --nocapture`
+
+合成紀錄以 v0.4.1 和 Dioxus 基準的「帳號、NUL、密碼」格式獨立建立，寫入唯一的測試 service。使用現行生產 vault 的另一個同簽章程序能讀回。將同一測試程式暫存一份，以不同 ad-hoc identifier 重簽且核對簽章後，macOS 在測試程序禁止 Keychain UI 的條件下回報 `-25293`。改簽程序拒絕使用舊密碼，但接受單次手動提供的合成帳密。原寫入者核對紀錄未變，另驗缺少分隔符與超量紀錄都拒讀且保留原 bytes，最後刪除測試項目並確認不存在。[Apple Security Framework 狀態碼](https://developer.apple.com/documentation/security/security-framework-result-codes)
+
+這是兩個簽章身分的原生 Keychain 測試，同一份程式碼隔離了簽章因素。正式 App 更新的授權視窗、使用者重新授權後的讀回與其他平台仍待驗。測試只建立及刪除自己的合成項目，既有 ACL 和正式 service 保持原狀。首輪改簽測試漏報子程序狀態，補上診斷後判定為系統授權拒絕；其原始失敗仍保留。
+
+原始 log、測試 binary SHA、資料格式來源差異和清理記錄在 `.local/verification/slint-keychain-current/`。兩份暫存目錄已確認移除，最終改簽副本為 22,590,352 regular-file bytes；固定 Cargo 快取沿用。
+
 Linux 缺服務另明確執行：`DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-pttstella-synthetic-bus cargo test --locked --features credential-store --lib login::vault::tests::native_service_unavailable -- --ignored --exact`，需確認讀取與勾選保存失敗，但不勾選單次登入仍能準備帳密。交叉編譯、記憶體測試與隔離容器不能冒充 Windows 認證庫、Linux 真實桌面解鎖或三平台實站登入。
 
 GitHub 的 Desktop Release 在打包前使用相同測試。Windows runner 直接操作認證管理員。Linux runner 建立獨立的 D-Bus 工作階段和暫存 GNOME Keyring，並另外執行缺服務案例。

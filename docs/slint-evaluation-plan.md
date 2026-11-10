@@ -10,7 +10,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩Mac最新包已由乾淨7466c31同步閱讀狀態列／探針修正，各19項封裝後合成案例通過；Linux150c1a0d核對fbcfe2e，14案與四案重測通過。這三個新Mac／備妥Windows來源與Linux的380份產品輸入相同，完整580檔只差三份文件。新備妥Windowsfe8872f6仍原生未測，使用者待驗69542cb7入口不變。Intel使用Rosetta，Linux GL案例使用QEMU／Xvfb＋Mesa softpipe；Intel／Linux實機依指示暫緩，其餘原生／資料／效能矩陣未完成。原始GL逾時及LLVM中止證據保留，不能轉填為硬體GPU或S8效能通過。
 
-macOS arm64 已以最新 Slint 候選及原 Dioxus 完成設定 v1–v6 的 18 輪實際前端往返，核對兩次寫入備份、最後讀回與其他資料檔。兩版 macOS 一般入口已各從隔離 HOME 的系統資料目錄讀到不同的預設站，完成本機 WSS、無自動輸入和伺服器 Close 回覆。正式路徑的寫入／回退、密碼庫和完整資料操作仍待驗。[前端往返紀錄](slint-store-frontends.md#2026-11-11-同一對前端的-v1v6-設定往返)
+macOS arm64 已以最新 Slint 候選及原 Dioxus 完成設定 v1–v6 的 18 輪實際前端往返，核對兩次寫入備份、最後讀回與其他資料檔。兩版 macOS 一般入口已各從隔離 HOME 的系統資料目錄讀到不同的預設站，完成本機 WSS、無自動輸入和伺服器 Close 回覆。macOS Keychain 已用獨立合成 service 驗證舊格式同簽章跨程序讀回、改簽拒絕與清理。[Keychain 驗收](login.md#macos-舊紀錄與重新簽章驗收) 正式路徑的寫入／回退、實際 App 升級授權、Windows／Linux 密碼庫和完整資料操作仍待驗。[前端往返紀錄](slint-store-frontends.md#2026-11-11-同一對前端的-v1v6-設定往返)
 
 macOS arm64 完成三組雙 GIF 交錯比較。Slint 的程序族 footprint 峰值中位數約 126 MiB，Dioxus 約 687 MiB。10 秒 CPU 中位數為 0.296 與 0.180 秒，三組差距幅度有波動。Slint 堆疊取樣主要落在 CoreGraphics 整窗提交與像素轉換。正式冷暖次數、100 次操作、連續前景／顯示延遲及跨平台矩陣仍待驗。MP4 GPU 偶發錯色仍未解。[效能量測紀錄](slint-macos-measurement.md#2026-11-11-雙-gif-三組交錯比較)
 
