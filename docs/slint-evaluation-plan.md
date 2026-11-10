@@ -17,7 +17,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 | S4 | 雙閱讀模式、長文取頁、尋找、名單／右鍵／揭露／底色、書籤／離線、快速前往與最近看板、目前／指定列表文章收藏、共用推文索引／原生定位與側標、推文更新／未讀／保留與復原；macOS基本按鈕、列表右鍵指定收藏與新程序斷線讀回補驗 | 跨平台推文控制／定位與完整鍵盤／焦點矩陣、其他平台列表右鍵及新程序離線操作、混合 Live 等效與全功能回歸 |
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、三格式錯色負向對照 | MP4 GPU 像素偶發失敗仍未重現／解決、多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
 | S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
-| S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔與正常退出；[共用版本檢查／下載入口](slint-release-check.md)、toolkit空白鍵及退出HTTP／listener join；[共用通知政策／原生時序](slint-notifications.md)、hover／Tab焦點暫停及timer退出；[三平台系統動畫偏好來源](slint-system-motion.md)、macOS初讀／本機通知回呼與observer／UI listener退出；三版本store往返28案；[實際前端往返](slint-store-frontends.md)補 macOS v1／v6 設定與站點六輪、名單三輪、可攜設定三輪操作（原儲存位置仍待查） | 實際OS動畫偏好切換／還原及其他平台原生、原生通知／其他管理入口、完整Dock／modal／OS I/O與可及性矩陣、實際前端／平台路徑及vault往返 |
+| S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔與正常退出；[共用版本檢查／下載入口](slint-release-check.md)、toolkit空白鍵及退出HTTP／listener join；[共用通知政策／原生時序](slint-notifications.md)、hover／Tab焦點暫停及timer退出；[三平台系統動畫偏好來源](slint-system-motion.md)、macOS初讀／本機通知回呼與observer／UI listener退出；三版本store往返28案；[實際前端往返](slint-store-frontends.md)補 macOS v1／v6 設定與站點六輪、名單三輪、可攜設定三輪操作（原儲存位置仍待查）、收藏名稱／離線副本與最近看板清除三輪 | 實際OS動畫偏好切換／還原及其他平台原生、原生通知／其他管理入口、完整Dock／modal／OS I/O與可及性矩陣、實際前端／平台路徑及vault往返 |
 | S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG及無Homebrew sandbox；[Windows x64完整GUI候選](slint-windows-candidate.md)同步c40f7a5，Windows10實機13案回報經修正helper重驗（原版10過／3個格式誤判），嚴格ACK／像素／join；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64 App／ZIP／DMG](slint-macos-x64.md)、自建47項runtime閉包／32份來源、兩開發prefix不可用的Rosetta13案 | Intel與Linux原生、Windows完整人工操作、IME／DPI／音訊、VC runtime／最低OS／完整乾淨安裝、完整產品來源交付與重播、資料回退及同負載效能；尚未通過 |
 
 接續完整鍵盤／焦點與其他平台、跨平台列表／重開、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
@@ -30,7 +30,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 產物保留規則（2026-11-09 使用者要求）
 
-Windows最新完整包改在 `.local/verification/slint-windows-current/package-current/`，來源c40f7a5，zip SHA256與13案入口／人工界線見 [Windows候選說明](slint-windows-candidate.md)。已收到使用者Windows10 build19045／PowerShell5.1原生證據：原報告10過、3個default影片被helper錯誤要求software frame_serial而failed。修正後離線重驗13案原始receipt／像素／嚴格Close ACK／join通過，原failed原樣保留；並未在Windows重跑修正helper。最新ZIP僅換helper及manifest，Rust exe不變；IME／DPI／音訊／完整人工操作仍未驗，細節及新ZIP hash見候選說明。Windows批次target、原始DLL副本、第一版包及舊完整包已清除，latest正常rename且2878份保護檔hash一致；獨立無影片S1配置保留。exact路徑、native clean及free／du在 `slint-windows-current/cleanup/ledger.json`。
+Windows最新完整包改在 `.local/verification/slint-windows-current/package-current/`，來源c40f7a5，zip SHA256與13案入口／人工界線見 [Windows候選說明](slint-windows-candidate.md)。已收到使用者Windows10 build19045／PowerShell5.1原生證據：原報告10過、3個default影片被helper錯誤要求software frame_serial而failed。修正後離線重驗13案原始receipt／像素／嚴格Close ACK／join通過，原failed原樣保留；並未在Windows重跑修正helper。最新ZIP僅換helper及manifest，Rust exe不變；完整IME矩陣／DPI／音訊／其餘人工操作仍待驗；Microsoft注音三項已有使用者回報，細節及新ZIP hash見候選說明。Windows批次target、原始DLL副本、第一版包及舊完整包已清除，latest正常rename且2878份保護檔hash一致；獨立無影片S1配置保留。exact路徑、native clean及free／du在 `slint-windows-current/cleanup/ledger.json`。
 
 最新 arm64 候選現在位於 `.local/verification/slint-system-motion/package-current/`，實作為 `91d12e4`，詳見 [系統動畫偏好紀錄](slint-system-motion.md)。它覆蓋上一份候選的五個已驗案例，另有兩種motion初讀／本機通知、播放退出及獨立視窗關閉證據；真正OS改值／還原仍未驗。舊 `slint-shell-chrome-final/package-current` 與重複待驗CLI已移除，23份相同PNG留一份及對照，2876份保護檔hash不變，所有target目錄皆已清掉。exact移除項目、保留例外與free／du見 `.local/verification/slint-system-motion/cleanup/ledger.json`。各歷史段落中的舊latest路徑只代表當時交付，不要求保留舊binary。
 
@@ -375,3 +375,6 @@ x64 runtime暫取自經GitHub digest及完整簽章核對的IINA1.5.1，僅保�
 同日Windows人工回報：使用者依Run-IME.cmd題目明確回覆「三項都正常」，Microsoft注音候選位置、Esc取消、選字後單次提交記human_reported_passed。尚未另檢視這輪IME bytes log／截圖／顯示倍率，不推定2 bytes或完整IME／DPI矩陣。原文、scope與預期候選exe hash在 `slint-windows-current/user-ime-20261110.json`；不改寫原13案自動報告，也不把人工回覆擴成整體平台完成。
 
 可攜設定原Documents位置的新程序補驗：即使明確重選原資料夾，Save仍停用，正常取消／退出並有Close ACK，保留not_ready且原因未定。最後1份App及4個已退出探針身份的OS偏好plist另清理，小型plist先留作獨特診斷；source／必要raw CLI不變，補驗重複PNG有保留映射。exact paths與filesystem free 305506803712→305575333888 bytes（僅觀測）、du與保留診斷見 `slint-frontend-roundtrip/filters-portable-cleanup/followup/ledger.json`。本輪未動產品程式或重建Rust，完整平替仍待後續驗收。
+
+
+2026-11-10 收藏／最近看板實際前端補驗：同一v6副本完成Slint → 原5ea9ad6 Dioxus → Slint三輪收藏改名與四行離線閱讀，原created_at、完整archive／footer／link／ANSI左右樣式及尾空白不變，三次收藏前版備份逐byte正確；三個原生畫面在CUA screenshot目視，沒有宣稱精確離線PNG像素稽核。最近看板先讀Stella／Test再清除，兩版主檔與備份皆空，原版重讀／再清除及Slint新程序空清單通過；未按Go，不推定最近新增／排序或站端導覽。三輪exit0／Close與原版owner清理通過；其他資料byte不變，完整scope見 [前端往返](slint-store-frontends.md)。本輪3份App與專用cache已清理，exact paths、free／du與保留例外見 `slint-frontend-roundtrip/bookmarks-cleanup/ledger.json`；沒有Rust修改／重建，完整平替仍未完成。

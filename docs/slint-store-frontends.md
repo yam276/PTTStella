@@ -1,6 +1,6 @@
 # Slint 與原 Dioxus 的資料往返
 
-這是 S7／S8 的部分證據，尚未完成整體資料回退驗收。2026-11-10 已在 macOS arm64 以實際 App 的設定／站點控制，完成 v1、v6 合成資料的 Slint → 原 Dioxus → Slint 往返。後續另補黑白名單與可攜設定的前端往返，結果見後節；收藏、草稿、最近看板、平台正式路徑、密碼庫與完整產品切換仍待驗。
+這是 S7／S8 的部分證據，尚未完成整體資料回退驗收。2026-11-10 已在 macOS arm64 以實際 App 的設定／站點控制，完成 v1、v6 合成資料的 Slint → 原 Dioxus → Slint 往返。後續另補黑白名單與可攜設定的前端往返，結果見後節；收藏名稱／離線讀取及最近看板清除亦有後續證據；草稿、收藏完整CRUD、最近看板新增／排序、平台正式路徑、密碼庫與完整產品切換仍待驗。
 
 ## 同一份資料的入口
 
@@ -80,6 +80,24 @@ Slint 使用原生 NSOpenPanel 載入原 fixture 的 `display.pttstella.json`，
 三個後續輪次皆 exit0／嚴格 Close，原 Dioxus 的 PNG／surface／各 owner 清理也通過，六個 store 的值不受可攜名稱變更影響。Slint 是實際 OS 選檔器；原 Dioxus tools 探針則沿用既有固定 `display.pttstella.json` 路徑，不能算作原 Dioxus 原生選檔器驗收。結果在 `portable-results.json`，最終合成 JSON 另存 `portable-final/`，測試暫存目錄在清理後不保留。
 
 原 Documents 位置在另一新程序明確重選原資料夾後，Save 仍停用；已再次取消並正常退出，`slint-v6-portable-documents` 記 not_ready。原因未確定，不宣稱是 TCC、檔案權限、產品錯誤或輸入工具造成；另一路徑成功也不把原位置改判 passed。小數字高在原 Dioxus 的完整保存限制仍待驗；本次互相匯出採22，只證明該顯示值路徑，沒有據此宣稱所有可攜設定／平台檔案操作完成。
+
+## 收藏副本與最近看板清除
+
+同一份已標記資料再完成三輪 macOS UI 操作，未重建 Rust：
+
+| 前端 | 實際操作 |
+| --- | --- |
+| Slint | 從浮球進收藏，讀到原名稱及本機副本；改名 `Slint 收藏末字🦀` 並保存，開啟四行離線文章；由收藏交接到 Go to… 審閱，讀到 Stella／Test，清除最近看板 |
+| 原 Dioxus | 讀到 Slint 名稱與副本；改名 `Dioxus 收藏末字🦀` 並保存，讀取相同四行；Go to… 顯示空最近清單，再清除一次 |
+| Slint 新程序 | 讀到原版名稱；保存 `Slint 回程收藏末字🦀`，再次開啟副本；Go to… 讀到空清單 |
+
+三次完整 bookmark JSON 均符合獨立 expected，原 `created_at`、完整 archive rows／footer／links／ANSI 左右樣式與尾空白不變，archive canonical SHA 一致；一代收藏備份各等於前一份主檔 bytes。最近看板清除是隱私操作：主檔與備份都為 `version:1, boards:[]`，不要求備份保留被清除的歷史；原 Dioxus 讀回及再次清除後，Slint 重開仍為空。其他四個 store 與可攜檔 byte 不變。
+
+三個實際離線視窗另以 CUA screenshot 目視確認四行、雙色「中」及末行仍存在；影像留在工具對話紀錄，未另存一份本機 screenshot，也沒有把目視當成精確 PNG 像素稽核。原版正常完成的整頁 PNG 另有 CRC／zlib 驗證，但那是原 tools 場景匯出，不冒充離線副本 PNG。
+
+三輪皆 exit0／嚴格 Close；原 Dioxus surface report passed、archive_reads／recent_clears 有實際計數，listeners／各 worker 退出。三輪皆只審閱目的地，未按 Go。結果與前後快照在本批 `bookmarks-results.json`。完整新增／刪除／多頁副本／列表收藏、實際站端前往、最近看板新增／排序與其他平台仍另驗，不能由這三輪推定完成。
+
+本輪3份App與原Dioxus專用WebKit／cache／系統暫存已確認退出／無open files後逐筆清除；來源與實際保存資料、兩份必要raw CLI保持hash不變。exact paths、UID／resolved／symlink、du、filesystem free前後及保留例外在 `bookmarks-cleanup/ledger.json`，重複PNG的保留位置／SHA在同目錄 `duplicate-pngs.json`。沒有修改產品程式、重建Rust、切換正式入口或發佈。
 
 ## 保留的失敗與待驗
 
