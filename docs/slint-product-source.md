@@ -4,15 +4,18 @@
 
 ## 2026-11-11 產品來源包
 
-本機交付位於 `/Users/ladesine/Documents/PTTStella-Slint-Deliverables/product-source-20261111-9a06515/`，包含單一 23,220,799-byte Git bundle、`sources.json`、獨立還原工具及 README。三組來源皆直接從 bundle 還原，不需要 patch。既有 docs gate 禁止 repo 內的 `.bundle`，因此來源交付保留於 repo 外，不放寬檢查。bundle 含 Git ancestry，不包含 worktree 的 `.local`、編譯 target 或未追蹤使用者資料。還原只讀此交付，不連網、不使用原 checkout 的 Git objects，也不覆寫既有目的地。
+本機交付位於 `/Users/ladesine/Documents/PTTStella-Slint-Deliverables/product-source-20261111-9db9eda/`，包含單一 23,220,799-byte Git bundle、10,009-byte 文件 patch、`sources.json`、獨立還原工具及 README。`cross-current` 從 bundle 的9a加文件patch還原9db，其餘三組直接還原。既有 docs gate 禁止 repo 內的 `.bundle`，因此來源交付保留於 repo 外，不放寬檢查。bundle 含 Git ancestry，不包含 worktree 的 `.local`、編譯 target 或未追蹤使用者資料。還原只讀此交付，不連網、不使用原 checkout 的 Git objects，也不覆寫既有目的地。
 
 | 選項 | 對應候選 | 產品核對 commit | 完整 tracked 檔案 | 建置輸入核對 |
 | --- | --- | --- | --- | --- |
 | `macos-arm64-current` | Mac arm64 | `9a06515` | 580 | 380 |
-| `linux-current` | Linux x64 | `84e98a3` | 546 | 289 |
-| `windows-intel-current` | Windows x64／Mac x64 | `475897f` | 545 | 288 |
+| `cross-current` | 最新 Mac x64／Linux x64、另備 Windows 新包 | `9db9eda` | 580 | 380 |
+| `linux-84e-baseline` | 歷史 Linux x64 | `84e98a3` | 546 | 289 |
+| `windows-intel-475-baseline` | 待使用者測試的 Windows69542cb7／歷史 Mac x64 | `475897f` | 545 | 288 |
 
-上述 commit 是已核對產品檔案的版本。arm64 的實際原建置是 `aff5ac8` 加 snapshot／raster 修補；乾淨 `9a06515` 再執行 Cargo 時命中快取，0.32 秒結束且 raw SHA 不變，不能改稱重新編譯。Linux仍是 `c67efdb` 加patch；各包原始 build record 保持不變。新 arm64 封裝 native SHA 為 `f211c341c2b7404e44af0ff8fe3b83ffc53e1eb22531b6e089352ac4ebbfbafb`。manifest 綁定封裝內執行檔 SHA，還原後核對完整 Git tree、所有 tracked 檔案的 SHA-256 與檔案清單，不只核對少數 Rust 檔案。
+上述 commit 是已核對產品檔案的版本。arm64 的實際原建置是 `aff5ac8` 加 snapshot／raster 修補；乾淨 `9a06515` 再執行 Cargo 時命中快取，0.32 秒結束且 raw SHA 不變，不能改稱重新編譯。歷史Linux基準則是 `c67efdb` 加patch；各包原始 build record 保持不變。新 arm64 封裝 native SHA 為 `f211c341c2b7404e44af0ff8fe3b83ffc53e1eb22531b6e089352ac4ebbfbafb`。manifest 綁定封裝內執行檔 SHA，還原後核對完整 Git tree、所有 tracked 檔案的 SHA-256 與檔案清單，不只核對少數 Rust 檔案。
+
+最新三個交叉編譯目標都從乾淨9db9eda完成 release／all-target Clippy；Windows raw487c428b、Intel rawbb3185a3／封裝e232fd01、Linux8fa36bcd分別綁定manifest。它們與ARM9a的380份建置輸入全部相同，完整tracked tree僅差兩份文件。上段c67加patch是歷史Linux基準，不是最新Linux包。`cross-current`已另從同一immutable bundle＋文件patch核對580檔及完整tree，還原暫存目錄驗後移除；沒有再建新Cargo target或宣稱新的獨立跨平台建置。
 
 從來源包目錄執行（Python 3.11+、Git；目的地須尚不存在）：
 
@@ -30,7 +33,7 @@ cargo test --release --locked --no-default-features \
 
 Rust 版本依 `rust-toolchain.toml`；公開 crates、Skia 與平台系統依賴仍需正常取得。本批以 macOS arm64 的公開 Cargo cache／已安裝工具鏈，從新還原目錄建置，103 項測試通過、1 項 helper ignored。sandbox 拒讀原 checkout 的來源，只允許同一固定 compiler cache；log 顯示 root 與 vendored renderer 都從還原目錄編譯，未使用研究 runtime 或交叉 SDK。三組來源完整還原均通過；前輪離線 metadata 與建置結果另存歷史紀錄。這不是冷依賴建置、播放器配置重建、逐 byte 二進位重現或 Windows／Intel／Linux 原生編譯驗收。
 
-新 bundle SHA-256 為 `44cff20e28bf51c85bb1c2533705df67a9a1d5fe1ff96db0500f405b8cf82b26`，包含三個完整來源版本及新增 renderer 修補／授權。先在原 worktree 子目錄還原的建置因 Cargo 搜尋 ancestor manifest 而被 sandbox 拒絕；移動同一 checkout 到原 worktree 之外的來源交付目錄後通過，沒有修改 manifest 來繞過核對。之後依序重用同一臨時路徑核對 Linux、Windows／Intel，580／546／545 檔與完整 tree 全部相符，再確認 Git clean／逐檔 SHA／無 open files 後移除。日常編譯沿用固定 worktree／Cargo cache。舊 `product-source-20261110-09a13da/` 與共用其 immutable bundle 的 `product-source-20261110-c906776/` 保留供歷史交付對照。
+bundle SHA-256 為 `44cff20e28bf51c85bb1c2533705df67a9a1d5fe1ff96db0500f405b8cf82b26`，包含三個完整來源版本及新增 renderer 修補／授權；9db來源包與前一個 `product-source-20261111-9a06515/` 以hardlink共用此immutable bundle，交付時是完整regular file。先前在原 worktree 子目錄還原的建置因 Cargo 搜尋 ancestor manifest 而被 sandbox 拒絕；移動同一 checkout 到原 worktree 之外的來源交付目錄後通過，沒有修改 manifest 來繞過核對。之後依序重用同一臨時路徑核對 Linux、Windows／Intel，580／546／545 檔與完整 tree 全部相符，再確認 Git clean／逐檔 SHA／無 open files 後移除。日常編譯沿用固定 worktree／Cargo cache。舊 `product-source-20261110-09a13da/` 與共用其 immutable bundle 的 `product-source-20261110-c906776/` 保留供歷史交付對照。
 
 ## 工具驗證與剩餘範圍
 

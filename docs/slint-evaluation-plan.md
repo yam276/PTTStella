@@ -637,3 +637,25 @@ exact removed paths、resolved／UID／symlink／lsof、每檔SHA、Cargo宣告�
 新的 [產品來源包](slint-product-source.md) 已完整還原580／546／545檔與tree；ARM一般Slint從還原來源建置103過／1 helper ignored，原checkout來源被sandbox拒讀、固定compiler cache復用。完整第三方來源閉包仍not_ready。三份臨時還原checkout驗後移除，沒有新target。更新candidate index後移除舊09a的完整App／ZIP／DMG，只留小型report／hash；50份library相容連結仍指向同一固定新包，其他三平台下載SHA未變。filesystem available264153116672→264440426496 bytes僅記並行觀測；exact paths、UID／resolved／lsof、du及保留例外在 `slint-renderer-api-current/raster-package-current/cleanup.json`。
 
 本批來源核對、建置、封裝、原失敗與接受結果集中於 `slint-renderer-api-current/raster-package-current/`。Windows69542cb7維持原包，等使用者稍後實測；Intel／Linux實機、其餘原生／資料／效能矩陣及最新修正跨平台同步仍缺。S0–S8持續，S9未執行。
+
+## 2026-11-11 三架構同步與未解帳號案例
+
+乾淨 `9db9eda` 在同一worktree／固定Cargo target完成 Windows x64、macOS x64、Linux x64的release建置及各自all-target Clippy。三者與ARM9a的380份建置輸入逐byte相同，僅兩份tracked文件不同。Windows／Intel／Linux中間檔現在都保留在同一target供後續復用；沒有新建checkout或每架構另開target。
+
+| 候選 | 執行檔 SHA-256 前綴 | 本批驗證與限制 |
+| --- | --- | --- |
+| Windows 新包 | `487c428b` | ZIP919檔，舊包914檔不變；改exe／candidate／Rust inventory，另加renderer兩份來源文件，三份原授權仍在。PE／閉包與hash核對，原生未執行。69542cb7舊ZIP及原下載路徑不變，仍等使用者稍後測試；新包放在index的prepared_updates。 |
+| Intel Mac | `e232fd01` | rawbb3185a3；App／ZIP1,219檔相同，47份runtime與舊native notice不變，簽章／DMG通過。Rosetta十個基礎案例通過，另五個帳號／推文案例三過兩敗；不是Intel實機或IME驗收。 |
+| Linux | `8fa36bcd` | tar1,122／deb1,109份regular files，共同exe／授權／README相符，tar另含明列的15份合成fixture／helper。實際loader／dpkg依賴不含WebKit；QEMU／Xvfb下grid／input／paste／long／inline五案通過，自有Xvfb／Openbox均join。無系統中文字型的grid另目視可讀；不是實機、Wayland、IME或原生安裝驗收。 |
+
+Intel兩個web account案例仍失敗：一例停在inline圖片配置，另一例右鍵選單未開；都尚未送出peer期待的PageDown，HTTP零請求。終端帳號及兩個推文導覽案例通過，同一ARM封裝的software web account另一次通過。這些只證明差異仍可重現，未證明是產品或probe／排程的哪個邊界；原失敗、cleanup失敗及原始log保留，不以十項基礎通過替代此缺項。下一步追查手勢／已確認幾何／inline入口。
+
+來源包新增cross-current，從共用immutable bundle＋10,009-byte文件patch還原9db完整580檔／tree，與新三包SHA綁定；三組歷史來源保留。一次還原目錄驗證後移除，沒有為各平台反覆開還原repo。[來源包與限制](slint-product-source.md)。Python178項及actionlint通過；首次actionlint誤填不存在build.yml後改用實際workflow glob，沒有workflow錯誤；GitHub Actions verify未執行。
+
+Intel／Linux固定下載入口已更新，舊App／ZIP／DMG／tar／deb與消費完的封裝input共7根、462,475,264 logical bytes已移除，原hash與小型report保留；Windows兩份包因使用者待驗而保留。容器裡重複transport／output另核對hash後清除，六份自產pyc核對code object等同來源才刪；自有runner已停止，保留安裝好的工具／runtime供下次復用。SDK正常卸載但保留image與固定mount路徑，重掛helper不重解壓；四架構Cargo cache約12.4GiB繼續保留，不再每批clean。共用／未知的舊Created容器、共享VM／base image／registry／SDK工具、必要對照、原始失敗與使用者資料未動。exact paths、UID／resolved／lsof、du／logical及filesystem free分列於 `slint-renderer-api-current/cross-current/cleanup.json`、`container-cleanup.json`、`container-close.json`、`cache-retention.json`；free只記並行觀測。
+
+全部build／來源／封裝／實際probe／失敗證據在 `slint-renderer-api-current/cross-current/`。完整第三方來源、帳號反例、原生／資料／效能矩陣仍未完成；S0–S8保持active，S9未執行。
+
+快取補驗另發現一次主程式重編：先前build／Clippy及其他架構工作完成後，Windows補驗依賴有復用，但root重編超過60秒觀察deadline；外層xwin被終止，原Cargo／rustc後續均確認消失，沒有重啟仍活動的編譯。其後同一快取Windows再次build exit0、wall0.39秒且無Compiling。第一輪逾時保留，觸發重編原因仍待fingerprint證據；不是三架構暖編譯都通過，也不屬於S8應用程式效能結果。SDK重掛／完整3,419項核對／卸載另已通過，沒有重解壓。
+
+補驗cache raw變為9b992ba8，與已交付487c428b共有12個byte不同；解析PE後確認差異僅在COFF／debug timestamp及CodeView GUID欄位，排除此明列metadata後其餘66,985,984-byte檔案內容完全相同。未聲稱原始binary逐byte重現，也未證明GUID生成或主程式重編的原因。固定ZIP／candidate／原建置SHA保持原樣，不拿後來的cache raw改寫已驗收紀錄。
