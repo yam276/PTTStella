@@ -535,3 +535,12 @@ Slint 原生控制項現在在平台初始化後、第一個視窗顯示前，�
 無系統中文字型的隔離 Linux runtime 中，實際 x64 ELF 透過 QEMU、ARM Xvfb／Openbox／session bus 執行，格線擷取及完整文章輸入皆 exit 0，輸入有唯一嚴格 ACK。已目視核對 r4/grid.png 的中文按鈕及提示可讀；終端文字仍使用 Rust renderer。這不是 Linux x64 硬體、OS 輸入法、其他平台或效能驗收。R4 ELF 0f1a554c…，93,591,968 bytes，完整 Noto bytes 僅出現一次；這個數字不代表 heap／RSS。播放器與一般 Slint 配置各 95 項單元測試通過、1 項 helper ignored，Linux release build／all-target Clippy 通過；兩個新增測試分別驗證既有 collection clone 能取得 fallback，以及已設定字體保留第一順位。依賴檢查八組 target／配置及五個驗證器測試通過。證據與來源 patch 在 slint-ui-cjk-fallback/。
 
 貼上仍是獨立未解項目：舊 ELF、目前交付及字型原型皆在 fresh confirmed paste preview missing 失敗。R4 邊界紀錄證明讀取前來源、前景與欄位焦點有效，讀取已受理，但稍後出現 paste-stale；尚未確定瞬間失效原因，沒有放寬保護或改 expected。最新四份交付仍是 475897f 的固定來源，尚未納入本次字型修正；新版 Windows 69542cb7… 等使用者稍後驗收。S0–S8 持續，S9 未執行。
+
+
+## 2026-11-10 貼上預覽跨幾何重繪
+
+R5 同一流程的邊界紀錄進一步顯示：讀取完成時來源、前景與焦點全部有效，預覽開啟後 frame-paint-pending 變 true，使原先把來源暫不可操作視為來源已過期的維護 callback 撤銷預覽。修正只調整已受理預覽的存續條件：沿用 Rust presentation 的 generation／revision／policy、input epoch、連線及 UI 狀態，幾何重繪不撤銷同來源的預覽；新增讀取、完成讀取及確認送出仍要求已 ACK 的幾何。切換來源、變更規則及失焦等既有撤銷路徑保留。臨時產品邊界輸出已移除，原始診斷 patch／失敗 log 保留。
+
+完整 article-paste 探針新增兩項獨立行為檢查：同來源 frame-paint-pending 期間預覽必須保持；此時按確認必須拒絕且站端零 bytes。之後重新開啟、取消、規則失效、組字拒絕讀取、舊 worker／錯誤、單行 raw handoff、返回閱讀及確認多行 UAO、關窗 join 的原驗收條件不變。R6 在無系統中文的 Linux 隔離 runner 通過 grid／article-input／article-paste 三案，輸入／貼上均 exit 0 與唯一嚴格 ACK；同來源 macOS arm64 raw host 的 software／default 貼上兩案亦通過。這些使用 toolkit 合成前景／輸入與自有剪貼簿來源，不是 OS clipboard／IME 或 Linux 硬體。
+
+來源 c67efdb 加 R6 patch，Linux ELF 4e474a0a…；兩配置各 95 測試通過、1 helper ignored，Linux 與 host release build／all-target Clippy 通過。來源 289 份 fingerprint 前後一致；資料在 slint-ui-cjk-fallback/r6，之前 R3–R5 的 failed 未覆寫。已刪除被取代的 R2／R3／R5 raw 及已消費傳輸 tar 共 418,334,718 bytes，保留小型來源／診斷與獨特結果，exact paths／UID／symlink／lsof／filesystem free 見 obsolete-revisions-cleanup.json；free 變化只記並行觀測。

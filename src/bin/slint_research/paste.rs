@@ -225,12 +225,16 @@ impl Paste {
         {
             return;
         }
+        // A preview owns text and a source version, not pointer coordinates.
+        // Opening its popup can schedule a geometry-only repaint on Linux.
+        // Reads and confirm/send still require the fully acknowledged geometry.
+        let retained = self.source(ui, false);
         let current = self.current(ui);
         let obsolete = self
             .pending
             .borrow()
             .as_ref()
-            .is_some_and(|p| Some(p.source()) != current)
+            .is_some_and(|p| Some(p.source()) != retained)
             || self
                 .read_source
                 .get()
@@ -253,6 +257,10 @@ impl Paste {
     }
 
     fn current(&self, ui: &TerminalWindow) -> Option<Source> {
+        self.source(ui, true)
+    }
+
+    fn source(&self, ui: &TerminalWindow, require_geometry: bool) -> Option<Source> {
         if self.closed.get()
             || ui.get_app_closing()
             || ui.get_manager_open()
@@ -260,7 +268,7 @@ impl Paste {
             || ui.get_editor_open()
             || ui.get_station_color_open()
             || ui.get_switching_station()
-            || ui.get_frame_paint_pending()
+            || require_geometry && ui.get_frame_paint_pending()
         {
             return None;
         }
@@ -280,7 +288,11 @@ impl Paste {
         {
             return None;
         }
-        let identity = article.output_identity(&view)?;
+        let identity = if require_geometry {
+            article.output_identity(&view)?
+        } else {
+            article.retained_output_identity(&view)?
+        };
         Some(Source {
             stamp: view.stamp(),
             identity: Some(identity),

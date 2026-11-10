@@ -53,14 +53,11 @@ impl ArticleSession {
     }
     pub fn output_identity(&self, view: &View) -> Option<Identity> {
         let ui = self.ui.upgrade()?;
-        if self.closed.get()
-            || ui.get_frame_paint_pending()
-            || self.composition_handoff.get().is_some()
-        {
+        if ui.get_frame_paint_pending() {
             return None;
         }
+        let id = self.retained_output_identity(view)?;
         let core = self.core.borrow();
-        let id = Identity::of(core.last_displayed()?);
         let paint = core.current(id, view)?;
         if ui.get_article_active() {
             self.view.borrow().as_ref()?.geometry()?;
@@ -77,6 +74,17 @@ impl ArticleSession {
         {
             return None;
         }
+        (paint.input_epoch == view.input_epoch && !view.input_pending).then_some(id)
+    }
+    /// Keep an already-admitted preview across geometry-only repainting. This
+    /// does not authorize a new gesture or send: those require output_identity.
+    pub fn retained_output_identity(&self, view: &View) -> Option<Identity> {
+        if self.closed.get() || self.composition_handoff.get().is_some() {
+            return None;
+        }
+        let core = self.core.borrow();
+        let id = Identity::of(core.last_displayed()?);
+        let paint = core.current(id, view)?;
         (paint.input_epoch == view.input_epoch && !view.input_pending).then_some(id)
     }
     pub fn with_output<R>(&self, view: &View, read: impl FnOnce(&Paint) -> R) -> Option<R> {

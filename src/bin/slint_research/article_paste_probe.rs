@@ -72,6 +72,25 @@ pub fn start(
                 "preview switched to raw or sent bytes before confirmation",
             )?;
             verification::capture(&ui, &directory, "preview.png")?;
+            // A geometry-only repaint must not revoke admitted preview text;
+            // confirming before the geometry ACK must still send no bytes.
+            ui.set_frame_paint_pending(true);
+            ui.invoke_paste_updated();
+            require(
+                ui.get_paste_open(),
+                "geometry-only repaint revoked the current paste preview",
+            )?;
+            ui.invoke_paste_confirm();
+            require(
+                !ui.get_paste_open()
+                    && connection.updates.borrow().stamp() == original
+                    && ui.get_input_notice().as_str() == pttstella::msg!("paste-stale").as_str(),
+                "unacknowledged geometry admitted paste confirmation",
+            )?;
+            ui.set_frame_paint_pending(false);
+            focus(&ui, &output).await?;
+            read(&paste, &ui, "cancel\r中");
+            wait(|| ui.get_paste_open(), "cancel preview did not reopen").await?;
             ui.invoke_paste_cancel();
             focus(&ui, &output).await?;
             require(
@@ -206,6 +225,7 @@ pub fn start(
             "scope":"actual generated preview/cancel/confirm and production native worker; owned synthetic clipboard source, no OS clipboard or PTT",
             "peer_inputs":[[106],[65,13,164,164]],"cancelled_and_stale_bytes":0,
             "ime_read_attempts":0,"policy_revokes_read_and_preview":true,"failed_read_keeps_article":true,
+            "geometry_repaint_retains_preview":true,"geometry_ack_required_to_send":true,
             "plain_navigation_character_is_raw":true,"multiline_requires_confirmation":true,
             "raw_hold_released_off_reading":true,"preload_commands":0,"pending_worker_and_article_joined":true
         })).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
