@@ -2,7 +2,9 @@
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import struct
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -79,6 +81,12 @@ class CandidateTests(unittest.TestCase):
             self.assertNotIn(str(self.root), software)
             drafts = zipped.read(prefix + 'Run-Drafts.cmd').decode('ascii')
             self.assertIn('PTTSTELLA_SLINT_DRAFTS_PROBE_DIR=%CD%\\evidence\\drafts', drafts)
+            motion = zipped.read(prefix + 'Check-Motion-Software.cmd').decode('ascii')
+            self.assertIn('--software-renderer --verify-motion "%run%"', motion)
+            checks = zipped.read(prefix + 'Check-All.cmd').decode('ascii')
+            self.assertIn('powershell.exe -NoLogo -NoProfile -File', checks)
+            self.assertNotIn('ExecutionPolicy', checks)
+            self.assertEqual(zipped.read(prefix + 'Check-Native.ps1'), bundle.ACCEPTANCE.read_bytes())
 
     def test_missing_player_or_console_main_is_rejected(self):
         with self.assertRaisesRegex(ValueError, 'requires libmpv'):
@@ -145,6 +153,16 @@ class CandidateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'checksum'):
             self.package()
         self.assertFalse(self.output.exists())
+
+    @unittest.skipUnless(shutil.which('pwsh') or shutil.which('powershell.exe'),
+                         'PowerShell receipt-helper runner unavailable; not native Windows acceptance')
+    def test_powershell_receipt_helpers_reject_false_positive_results(self):
+        executable = shutil.which('pwsh') or shutil.which('powershell.exe')
+        result = subprocess.run([executable, '-NoLogo', '-NoProfile', '-NonInteractive', '-File',
+                                 str(Path(__file__).with_name('test_slint_acceptance.ps1'))],
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('Receipt helper fixtures passed', result.stdout)
 
 
 if __name__ == '__main__':

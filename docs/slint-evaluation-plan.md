@@ -18,7 +18,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、三格式錯色負向對照 | MP4 GPU 像素偶發失敗仍未重現／解決、多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
 | S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
 | S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔與正常退出；[共用版本檢查／下載入口](slint-release-check.md)、toolkit空白鍵及退出HTTP／listener join；[共用通知政策／原生時序](slint-notifications.md)、hover／Tab焦點暫停及timer退出；[三平台系統動畫偏好來源](slint-system-motion.md)、macOS初讀／本機通知回呼與observer／UI listener退出；三版本store往返28案 | 實際OS動畫偏好切換／還原及其他平台原生、原生通知／其他管理入口、完整Dock／modal／OS I/O與可及性矩陣、實際前端／平台路徑及vault往返 |
-| S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG及無Homebrew sandbox；Windows x64含libmpv的GUI候選與ZIP核對；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64 App／ZIP／DMG](slint-macos-x64.md)、自建47項runtime閉包／32份來源、兩開發prefix不可用的Rosetta13案 | Intel／Windows與Linux原生執行、IME／DPI／音訊、VC runtime／最低OS／完整乾淨安裝、完整產品來源交付與重播、資料回退及同負載效能；尚未通過 |
+| S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG及無Homebrew sandbox；[Windows x64完整GUI候選](slint-windows-candidate.md)同步c40f7a5，13案離線驗收入口／嚴格receipt檢查與ZIP核對；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64 App／ZIP／DMG](slint-macos-x64.md)、自建47項runtime閉包／32份來源、兩開發prefix不可用的Rosetta13案 | Intel／Windows與Linux原生執行、IME／DPI／音訊、VC runtime／最低OS／完整乾淨安裝、完整產品來源交付與重播、資料回退及同負載效能；尚未通過 |
 
 接續完整鍵盤／焦點與其他平台、跨平台列表／重開、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
 
@@ -29,6 +29,8 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 - 候選版須通過所有既有功能、四個目標架構安裝、舊資料讀寫與回退，以及下文效能門檻。S8 交付可審閱的候選包、可逆切換方案與結論。使用者接受後才進入 S9。若 `develop` 推進，切換前以待整合的實際 commit 重跑變更相關項目和整體效能，新增功能納入驗收。
 
 ## 產物保留規則（2026-11-09 使用者要求）
+
+Windows最新完整包改在 `.local/verification/slint-windows-current/package-current/`，來源c40f7a5，zip SHA256與13案入口／人工界線見 [Windows候選說明](slint-windows-candidate.md)。已交使用者實機驗收，尚無結果，不將交叉編譯或PowerShell helper fixtures算原生passed。Windows批次target、原始DLL副本、第一版包及舊完整包已清除，latest正常rename且2878份保護檔hash一致；獨立無影片S1配置保留。exact路徑、native clean及free／du在 `slint-windows-current/cleanup/ledger.json`。
 
 最新 arm64 候選現在位於 `.local/verification/slint-system-motion/package-current/`，實作為 `91d12e4`，詳見 [系統動畫偏好紀錄](slint-system-motion.md)。它覆蓋上一份候選的五個已驗案例，另有兩種motion初讀／本機通知、播放退出及獨立視窗關閉證據；真正OS改值／還原仍未驗。舊 `slint-shell-chrome-final/package-current` 與重複待驗CLI已移除，23份相同PNG留一份及對照，2876份保護檔hash不變，所有target目錄皆已清掉。exact移除項目、保留例外與free／du見 `.local/verification/slint-system-motion/cleanup/ledger.json`。各歷史段落中的舊latest路徑只代表當時交付，不要求保留舊binary。
 

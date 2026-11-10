@@ -18,6 +18,7 @@ SYSTEM = SYSTEM_DLLS | frozenset('avicap32 avrt cfgmgr32 d2d1 d3d11 d3d12 d3dcom
 CRT = frozenset('msvcp140.dll msvcp140_1.dll msvcp140_2.dll vcruntime140.dll '
                 'vcruntime140_1.dll concrt140.dll'.split())
 MPV = 'libmpv-2.dll'
+ACCEPTANCE = Path(__file__).parent / 'windows' / 'slint_acceptance.ps1'
 
 
 def inspect_payload(executable, runtime_dlls):
@@ -77,9 +78,23 @@ def runner(arguments, *, software=False, video=False, drafts=False):
             'echo Exit: %probe_exit%\necho Log: %run%.log\npause\nexit /b %probe_exit%\n')
 
 
+def checks_runner():
+    return ('@echo off\nsetlocal\ncd /d "%~dp0"\n'
+            'if not exist evidence mkdir evidence\n'
+            'set "log=evidence\\checks-%RANDOM%-%RANDOM%.log"\n'
+            'powershell.exe -NoLogo -NoProfile -File "%CD%\\Check-Native.ps1" >"%log%" 2>&1\n'
+            'set "probe_exit=%ERRORLEVEL%"\ntype "%log%"\n'
+            'echo Exit: %probe_exit%\necho Log: %log%\npause\nexit /b %probe_exit%\n')
+
+
 README = '''PTTStella Slint Windows x64 完整主程式候選（內部驗收）
 
-先執行 Run-Offline.cmd：只連本機合成服務，可試浮球、縮放、設定、關於與關窗。
+先執行 Check-All.cmd：13案只用合成資料與本機服務，逐案核對結果、退出清理及Close ACK。
+每案最多90秒；evidence/native-.../native-results.json保存通過、失敗或not_ready及各案log。
+Exit 0只代表component案例通過，原生IME／DPI／可聽音訊等人工項目仍未驗收。
+本入口使用Windows內建PowerShell，不變更系統設定或執行原則；若無法執行可保留log並用下列入口。
+
+手動操作可執行 Run-Offline.cmd：只連本機合成服務，可試浮球、縮放、設定、關於與關窗。
 正常雙擊 pttstella-slint.exe 會連至研究設定的預設站，初始為 PTT WSS，不自動登入。
 資料使用 PTTStellaSlintResearch、密碼庫使用 SlintResearch；不自動搬移正式版資料。
 
@@ -90,6 +105,8 @@ Run-Reading.cmd：合成文章，可試兩種閱讀模式、尋找及選取。
 Run-Drafts.cmd：合成草稿；請另試注音、末字、儲存、重開與正常退出。
 Run-Video.cmd／Run-Video-Software.cmd：點開合成四色影片，試播放、暫停、拖曳、關閉。
 Check-Shell.cmd／Check-Shell-Software.cmd：自動工具包案例，正常會自行關窗。
+Check-Motion.cmd／Check-Motion-Software.cmd：讀取真實OS動畫偏好並檢查通知與退出，不改系統設定。
+動畫變更事件需要Windows 10 version 2004／build19041以上；不支援時會明確標示not_ready。
 Show-Profile.cmd：只列資料路徑，不開啟資料或密碼庫。
 
 evidence保存各次log與探針結果；輸出目錄不覆寫。探針使用合成資料，不需帳密。
@@ -110,7 +127,7 @@ def bundle(executable, runtime_dlls, skia_license, mpv_license, provenance, buil
     mpv = next(path for path in runtime_dlls if path.name.lower() == MPV)
     if origin.get('files', {}).get(MPV) != digest(mpv):
         raise ValueError('libmpv provenance does not match the DLL')
-    inputs = [executable, *runtime_dlls, skia_license, mpv_license, provenance, build_record]
+    inputs = [executable, *runtime_dlls, skia_license, mpv_license, provenance, build_record, ACCEPTANCE]
     for license in [skia_license, mpv_license]:
         if not 0 < license.stat().st_size <= 4 * 1024 * 1024:
             raise ValueError('A bounded nonempty runtime license is required')
@@ -136,13 +153,16 @@ def bundle(executable, runtime_dlls, skia_license, mpv_license, provenance, buil
         shutil.copy2(manifest_path, fixtures / 'manifest.json')
         for path in media.values():
             shutil.copy2(path, fixtures / path.name)
+        shutil.copy2(ACCEPTANCE, app / 'Check-Native.ps1')
+        (app / 'Check-All.cmd').write_text(checks_runner(), encoding='ascii', newline='\r\n')
         for name, args in {
             'Run-Offline': '--probe-benchmark "%run%"', 'Run-Grid': '--probe-grid',
             'Run-IME': '--probe-ime', 'Run-Reading': '--probe-article',
             'Run-Drafts': '--probe-drafts', 'Run-Video': '--probe-media',
-            'Check-Shell': '--verify-shell "%run%"', 'Show-Profile': '--show-profile',
+            'Check-Shell': '--verify-shell "%run%"', 'Check-Motion': '--verify-motion "%run%"',
+            'Show-Profile': '--show-profile',
         }.items():
-            configurations = [False, True] if name in ('Run-Grid', 'Run-Video', 'Check-Shell') else [False]
+            configurations = [False, True] if name in ('Run-Grid', 'Run-Video', 'Check-Shell', 'Check-Motion') else [False]
             for software in configurations:
                 filename = name + ('-Software' if software else '') + '.cmd'
                 (app / filename).write_text(runner(args, software=software, video=name == 'Run-Video',
