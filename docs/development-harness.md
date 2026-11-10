@@ -49,7 +49,7 @@ PTTStella 使用本 repo 的 Cargo／tooling 流程與原生鎖，不使用全�
 
 1. 在本次 `.local/verification/<task>/` 保留清理清單，逐筆記錄 exact path、owner／用途、resolved path、symlink 與內容、狀態及必要的 hash。列出 latest deliverable／source／assets／使用者資料／獨特失敗證據的保留項目；不從名稱或副檔名猜歸屬。
 2. 檢查自己與 kernel 可見的程序／open files。仍有使用者、共用或歸屬不明的項目保留並說明；不停止別人的程序、不建立鎖或等待所有 owner。已驗收且被取代的測試 App 可刪，不能把相鄰的 screenshot、trace、失敗報告一併刪掉。
-3. 已確認本 repo 的 `target` 沒有活動使用者且必要 App／報告已在 target 外保存時，才在 repo root 用下列原生命令清掉選定 profile；保留 native lock 行為。`--target-dir` 必須是盤點後的絕對路徑，不能直接複製範例或把未知環境變數／歷史 shared cache 當成已授權範圍。
+3. 先確認選定 profile 是否仍供後續編譯復用；Slint依2026-11-10最新指示保留單一固定cache，不逐批清空。只有已退役、不再需要或需重置的profile，且沒有活動使用者、必要App／報告已在target外保存時，才在repo root用下列原生命令清理；保留native lock行為。`--target-dir` 必須是盤點後的絕對路徑，不能直接複製範例或把未知環境變數／歷史 shared cache 當成已授權範圍。
 
 ```text
 cargo clean --profile dev --target-dir <已核對的本 repo target 絕對路徑>
@@ -58,17 +58,17 @@ cargo clean --release --target-dir <已核對的本 repo target 絕對路徑>
 
 4. 用 `df` 或 filesystem API 在操作前後記錄實際 available bytes；另外記 `du` 的 allocated size 與 Cargo 顯示的清除量。APFS clone／snapshot、hardlink 及其他工作可使三者不同，不把 logical size 當成實際回收量。確認最新交付仍存在且 hash 不變，記下 exact removed paths 與保留例外後才結案。
 
-使用者於2026-11-09明確要求清理已測完的 artifacts，包含過去累積與之後新增的產物。Slint 評估因此以「每個可獨立驗收的批次」為清理單位，不等整個 S0–S8 goal 結束：
+使用者於2026-11-09要求清理已測且被取代的artifacts，2026-11-10補充要求持續復用編譯中間檔。Slint每批盤點交付及一次性輸出，固定Cargo cache跨批保留；最新指示取代先前每批清空target的規則：
 
-- 同一批仍在編譯／驗證時可以重用自己的 profile；該批驗收完且必要交付已移出 target，確認無活動使用者後，就用上列 Cargo 原生 clean 清掉已用完的 profile。長期 goal 仍 active 不構成持續保留 debug／release 快取的理由。
-- 使用者要求即時清理或批次中途交接時，也先盤點已停止使用的 profile；不能因驗收尚未完成就持續保留整包編譯快取。若後續確實需要同一 binary，只移出一份當前執行檔、必要授權與來源／hash／結果，明列待驗範圍，再清掉 profile；優先重用該執行檔，只有來源變更或缺少必要檢查才重建。中途清理不等於驗收通過，不提前刪掉尚未被完整取代的唯一交付。
+- 日常實作沿用同一worktree及固定target，Cargo自行依feature／target／profile管理中間檔；保留可復用cache並記用途／大小，不因批次完成或暫時沒有open files就full clean。只清已退役、失效或確定不再需要的輸出。
+- 即時清理或交接時也盤點固定cache，但依最新復用指示保留後續需要的中間檔；優先移除舊App／ZIP、重複解壓與一次性環境。來源相同直接重用binary，來源變更才增量重編；必要交付另存target外。清理不等於驗收通過，不提前刪掉唯一待驗交付。
 - 只保留每個仍有必要的平台／執行配置的最新候選包，不為每個功能階段各保留一份 App。新候選涵蓋舊功能後，清掉已測舊包；尚缺平台驗收的唯一交付可以保留並說明。不得以測試包副本充當唯一來源備份。
 - 歷次證據保留來源 commit／patch、binary hash、必要結果、最小重現資料與獨特失敗紀錄。舊 bundle 的 launcher／plist／授權／資源可以壓成小型紀錄；不再把完整可重建 executable／dylib 一起存進每階段的證據目錄。來源、原始 assets、使用者資料、已安裝工具與 registry cache 仍保護。
-- 獨立 `--target-dir`、headless 驗收 driver 與版本對照用臨時 checkout 也屬於該批產物，不能因不在主 target 內而漏清。保存來源 ref／patch、driver hash 與結果後，確認沒有使用者，清掉已用完的 Cargo profile／driver；臨時 worktree 須確認沒有未保存修改，再用 `git worktree remove` 正常移除，不強制刪除。尚未整合的 Slint 來源 worktree 保留。
+- 固定target可跨批復用；一般測試不另複製repo。獨立來源還原／版本對照等確有必要的checkout及一次性driver仍要盤點，來源ref／patch與結果保存後移除不再需要的副本。臨時worktree確認沒有未保存修改後用Git原生remove，不強制刪除；尚未整合的Slint來源worktree保留。
 - 交叉編譯／打包的 task-owned 容器、容器內 target、暫存 sysroot／磁碟映像與解包副本也納入同批清理；先匯出最小結果／失敗證據，核對容器 ID、task label、mounts 與程序後，正常停止及移除自己的容器。只移除已無使用者的自有臨時 image，不執行全域 prune，不停止或刪除共用 VM／磁碟。若稀疏 VM 已刪檔但主機空間尚未回收，可在確認 discard 支援後執行線上 filesystem TRIM；分別記錄 guest free、主機 available 與 sparse disk allocated bytes，TRIM 回報範圍不等於實際回收量。已安裝的 SDK／工具與共用 registry source cache 另列保留理由。
 - macOS 對照 App 的專用 `Library/WebKit/<task bundle id>`、`Library/Caches/<task bundle id>` 及系統暫存目錄也要列入盤點；probe 輸出目錄隔離不代表 WebKit cache 都在其中。只清 exact task namespace，先保存最小必要證據並核對 owner、resolved path、symlink、程序與 open files；共用 WebKit、產品資料和其他聊天 namespace 不刪。後續量測須記錄這些 cache 的 cold／warm 狀態。
-- 後續 Slint goal 的一般 dev／test 建置明示 `CARGO_INCREMENTAL=0`、`CARGO_PROFILE_DEV_DEBUG=0`、`CARGO_PROFILE_TEST_DEBUG=0`，減少多代 incremental 與完整 debug symbols。這是該命令的 Cargo 標準選項，不改全機設定或 release profile；需要符號診斷時只在該批明示調整，完成後照樣清理。
-- 原生 runtime 的 C／C++／Swift 編譯目錄、解壓來源副本與臨時 bootstrap 工具同樣按批清理。中途清理先保存已完成且後續可直接重用的 install prefix、原始來源 archive／SHA、recipe／patch 及必要 config／失敗紀錄，再移除無活動使用者的 objects／build trees。只有 Git checkout 的來源先連同必要 submodule 匯出並逐檔核對，不能只記 commit 就刪掉唯一修改。後續只重建缺少的元件；當批用完的臨時工具及已被候選包涵蓋的 install 副本也要清理，不將其當成永久 SDK。
+- Slint本機命令使用 `cargo --config .local/slint-build.toml …`，目前指向既有slint-renderer-api-current/target，避免移動cache造成失效。dev／test增量編譯開啟、debug為0；不再一律設CARGO_INCREMENTAL=0。release配置不變，Python等間接呼叫Cargo的gate亦傳入同一CARGO_TARGET_DIR；不改全機設定。
+- 原生runtime的C／C++／Swift日常重編也優先沿用固定來源／build目錄與工具原生增量能力；乾淨來源重建等明確驗收才使用新prefix。原始來源archive／SHA、recipe／patch、必要config與唯一修改均保護；已退役的objects、一次性bootstrap工具和已被交付涵蓋的冗餘install副本再清理，不複製整套環境。
 - 每批記錄 exact removed paths、保留例外、du、Cargo 宣告量與 filesystem free 前後。共用／活動／不明項目保留原因；不啟動 daemon、定時刪除或 owner-release 流程，不跨案刪別人的產物。
 
 結案清理不為證明清理而重跑 Rust build。一般 docs、Python helper 單元測試可在清完後執行，使用 `PYTHONDONTWRITEBYTECODE=1` 避免再次產生 pycache；不重建 target。若工作在硬中斷後恢復，只重新盤點自己的殘留，不啟動 legacy guard 或猜測清掉外部共享路徑。

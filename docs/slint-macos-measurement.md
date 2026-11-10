@@ -16,7 +16,13 @@ R4無旗標的MP4／WebM／OGV三案、837行／37次取頁長文、PNG／單GIF
 
 另以沒有Slint／Skia／媒體或視窗的自製CGL程式定位成本：context current約5.9MB，第一次清除1040×624 FBO後主程序峰值457,721,408 bytes，vmmap圖形392.2M；destroy context後約7.2MB。紅色pixel `[255,0,0,255]` 獨立核對、exit0，原始碼／trace／vmmap在 `slint-gl-allocation-audit/`，臨時exe已清理。此反例證明部分圖形成本不需要Slint快取才會出現，並未定位或宣稱修復driver洩漏。
 
-本輪Rust native library390 passed／4 ignored、兩種Slint配置各97 passed／1 ignored，兩配置all-target release Clippy、fmt、Python177項通過。首輪Metal三案failed、fixture App因外部Frameworks symlink而deep-strict失敗及後續未啟動的runner錯誤均保留；standalone native strict通過，正式封裝仍要求完整閉包及原strict gate。R4最新平台包與清理結果在完成封裝後另記；此處不把診斷wrapper當可分發App，也不把測試通過當S0–S8完成。
+本輪Rust native library390 passed／4 ignored、兩種Slint配置各97 passed／1 ignored，兩配置all-target release Clippy、fmt、Python177項通過。首輪Metal三案failed、fixture App因外部Frameworks symlink而deep-strict失敗及後續未啟動的runner錯誤均保留；standalone native strict通過，正式封裝仍要求完整閉包及原strict gate。R4正式arm64 native為 `08cb87df…`，封裝與清理結果如下；此處不把診斷wrapper當可分發App，也不把測試通過當S0–S8完成。
+
+正式arm64 App／ZIP逐檔1234個payload一致，50庫與202份既有notice未變，另保存一份舊runtime manifest receipt；App deep-strict及DMG驗證通過。封裝native在拒讀Homebrew的sandbox重跑上述七案，加明確software／OpenGL／Metal格線，共十案通過；自動toolkit操作沒有擴大標成OS鍵鼠或S8效能。最初notice collector錯把合法receipt當額外檔案的失敗保留，修正為核對舊manifest原bytes，未修改封裝內容。
+
+依使用者最新指示，保留同一worktree及既有3298516KiB Cargo target；忽略於Git的 `.local/slint-build.toml` 固定指向此cache，dev／test增量開啟、debug0，release不變。同來源warm release wall0.668157292秒／Cargo0.61秒，沒有Compiling、raw SHA完全相同；證據為 `cache-reuse.json`。不再每批full clean；只有來源還原等必要驗證另建隔離checkout。
+
+本輪清理五項：`slint-renderer-api-current/Stella Renderer Lab.app`、`/private/tmp/pttstella-renderer-api-4jmita6y`、同批 `restores/`、舊 `slint-ui-cjk-fallback/arm64-package`（改symlink至新包），及 `/private/var/folders/nd/qb7hn9s118qd524df0l6j1rm0000gn/C/io.github.yam276.pttstella.slint.storefixture.rendererapi`。先核對UID／resolved／symlink／lsof，暫存的非fixture結果複製後逐檔核SHA；共3,025份保護檔hash及cache exe不變。selected regular-file logical bytes合計515,133,931，du分列於 `cleanup/ledger.json`；filesystem available269875634176→270397325312 bytes僅為並行觀測，不全歸因本批。Cargo clean未執行；最新四包、來源／最小基準／唯一失敗證據、使用者資料及共享SDK／registry／VM保留，Slint worktree尚未整合，S0–S8持續。
 
 ## 2026-11-10 閒置格線校準與圖形記憶體
 
