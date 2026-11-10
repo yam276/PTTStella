@@ -18,7 +18,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、三格式錯色負向對照 | MP4 GPU 像素偶發失敗仍未重現／解決、多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
 | S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
 | S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔與正常退出；[共用版本檢查／下載入口](slint-release-check.md)、toolkit空白鍵及退出HTTP／listener join；[共用通知政策／原生時序](slint-notifications.md)、hover／Tab焦點暫停及timer退出；[三平台系統動畫偏好來源](slint-system-motion.md)、macOS初讀／本機通知回呼與observer／UI listener退出；三版本store往返28案 | 實際OS動畫偏好切換／還原及其他平台原生、原生通知／其他管理入口、完整Dock／modal／OS I/O與可及性矩陣、實際前端／平台路徑及vault往返 |
-| S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG及無Homebrew sandbox；[Windows x64完整GUI候選](slint-windows-candidate.md)同步c40f7a5，13案離線驗收入口／嚴格receipt檢查與ZIP核對；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64 App／ZIP／DMG](slint-macos-x64.md)、自建47項runtime閉包／32份來源、兩開發prefix不可用的Rosetta13案 | Intel／Windows與Linux原生執行、IME／DPI／音訊、VC runtime／最低OS／完整乾淨安裝、完整產品來源交付與重播、資料回退及同負載效能；尚未通過 |
+| S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG及無Homebrew sandbox；[Windows x64完整GUI候選](slint-windows-candidate.md)同步c40f7a5，Windows10實機13案回報經修正helper重驗（原版10過／3個格式誤判），嚴格ACK／像素／join；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64 App／ZIP／DMG](slint-macos-x64.md)、自建47項runtime閉包／32份來源、兩開發prefix不可用的Rosetta13案 | Intel與Linux原生、Windows完整人工操作、IME／DPI／音訊、VC runtime／最低OS／完整乾淨安裝、完整產品來源交付與重播、資料回退及同負載效能；尚未通過 |
 
 接續完整鍵盤／焦點與其他平台、跨平台列表／重開、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
 
@@ -30,7 +30,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 產物保留規則（2026-11-09 使用者要求）
 
-Windows最新完整包改在 `.local/verification/slint-windows-current/package-current/`，來源c40f7a5，zip SHA256與13案入口／人工界線見 [Windows候選說明](slint-windows-candidate.md)。已交使用者實機驗收，尚無結果，不將交叉編譯或PowerShell helper fixtures算原生passed。Windows批次target、原始DLL副本、第一版包及舊完整包已清除，latest正常rename且2878份保護檔hash一致；獨立無影片S1配置保留。exact路徑、native clean及free／du在 `slint-windows-current/cleanup/ledger.json`。
+Windows最新完整包改在 `.local/verification/slint-windows-current/package-current/`，來源c40f7a5，zip SHA256與13案入口／人工界線見 [Windows候選說明](slint-windows-candidate.md)。已收到使用者Windows10 build19045／PowerShell5.1原生證據：原報告10過、3個default影片被helper錯誤要求software frame_serial而failed。修正後離線重驗13案原始receipt／像素／嚴格Close ACK／join通過，原failed原樣保留；並未在Windows重跑修正helper。最新ZIP僅換helper及manifest，Rust exe不變；IME／DPI／音訊／完整人工操作仍未驗，細節及新ZIP hash見候選說明。Windows批次target、原始DLL副本、第一版包及舊完整包已清除，latest正常rename且2878份保護檔hash一致；獨立無影片S1配置保留。exact路徑、native clean及free／du在 `slint-windows-current/cleanup/ledger.json`。
 
 最新 arm64 候選現在位於 `.local/verification/slint-system-motion/package-current/`，實作為 `91d12e4`，詳見 [系統動畫偏好紀錄](slint-system-motion.md)。它覆蓋上一份候選的五個已驗案例，另有兩種motion初讀／本機通知、播放退出及獨立視窗關閉證據；真正OS改值／還原仍未驗。舊 `slint-shell-chrome-final/package-current` 與重複待驗CLI已移除，23份相同PNG留一份及對照，2876份保護檔hash不變，所有target目錄皆已清掉。exact移除項目、保留例外與free／du見 `.local/verification/slint-system-motion/cleanup/ledger.json`。各歷史段落中的舊latest路徑只代表當時交付，不要求保留舊binary。
 
@@ -353,3 +353,8 @@ x64 runtime暫取自經GitHub digest及完整簽章核對的IINA1.5.1，僅保�
 本批library377 passed／4 ignored、binary83 passed／1 ignored（影片修正後另重跑binary）、all-target Clippy及165 Python通過，未將ignored算passed。新arm64 App／ZIP／DMG取代原c9413d3，仍在slint-shell-chrome-final/package-current；主程式SHA bbfde96110519ab1d1149b807dc57532bfe6a45df219795a88b473eb1c119ba4，詳候選紀錄。1176份payload跨App／ZIP／唯讀DMG一致、51個Mach-O皆arm64；禁止讀取Homebrew的sandbox下更新CPU／GL、shell及MP4四案有receipt／Close ACK。完整OS／平台來源交付仍not_run／not_ready，其他架構包須同步這批Rust變更。
 
 本批清理Cargo原生8264檔／2.5GiB（du2666732KiB），舊arm64完整包（du277948KiB）、兩個中斷probe的自有OS設定暫存與23張重複generated PNG移除；保留13張獨特圖片、最小來源／失敗／metadata及最新必要交付。最終10289份保護檔案與12份Rust／Slint來源hash一致，worktree du1500908KiB。filesystem available 217673043968→220457906176bytes只記觀測。精確路徑、owner／resolved path／symlink、open files、Cargo／du／free與保留例外在slint-release-check/cleanup/ledger.json；清理後同一候選於無Homebrew sandbox重跑更新／空白鍵／取消／Close ACK通過，沒有重建Rust。未動canonical、其他聊天、共用SDK／registry／VM，未整合來源worktree保留，S0–S8持續，S9未執行。
+
+
+2026-11-10 Windows 原生證據回收：使用者的 101 份原始 evidence 保持 hash 不變，確認 Win10 x64 build19045／PowerShell5.1、交付 exe 相符、13 案 exit0／嚴格 Close ACK。原 helper 的三個 OpenGL 影片格式誤判已修正，分別要求 software frame serial／size 或 OpenGL rect，獨立像素與退出檢查保留；原報告 failed 不改寫，13 案既有回報重驗通過。新版包僅改 helper／candidate manifest，其餘915個ZIP項目逐byte一致，未重建Rust。166個Python測試、receipt正反例、docs及diff通過；修正版Windows5.1重跑及人工IME／DPI／音訊仍未驗。
+
+同輪即時清理被取代的Windows完整包與暫時提取的exe／DLL，latest從package-fixed正常rename回package-current；保留原錯誤helper、manifest、hash及使用者原始證據。另確認5個frontend往返測試App沒有open files／活動程序後移除，保留兩種必要raw CLI及獨特成功／失敗證據。Slint設定／站點原生保存有exit0／Close ACK，原Dioxus讀回已觀察，但回退操作輪次逾時，不能將完整資料往返算通過。frontend target與臨時baseline worktree先前已用Cargo／Git原生流程移除。本次exact paths、UID／resolved／symlink／內容／lsof、du及filesystem free前後分別在 `slint-windows-current/runner-fix/cleanup.json`、`slint-frontend-roundtrip/host-cleanup/ledger.json`；空間變化僅記觀測，未刪來源、其他聊天、共用工具或必要交付。S0–S8持續，S9未執行。

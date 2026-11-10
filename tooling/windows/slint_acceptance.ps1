@@ -117,10 +117,32 @@ function Require-CaseReceipts([string]$Directory, [string]$Kind) {
             }
             $samples = @($ready.samples)
             Require-Check ($samples.Count -gt 0) 'Video pixel samples empty'
+            Require-Check ($ready.render_path -cin @('software', 'opengl')) 'Unknown video render path'
             foreach ($sample in $samples) {
                 Require-True $sample.passed 'Video pixel sample failed'
                 Require-Check ((@($sample.pixels).Count -eq 4) -and
-                    (@($sample.expected).Count -eq 4) -and ($sample.frame_serial -gt 0)) 'Video sample incomplete'
+                    (@($sample.expected).Count -eq 4)) 'Video sample incomplete'
+                if ($ready.render_path -ceq 'software') {
+                    Require-Check (($sample.render_path -ceq 'software') -and
+                        ($sample.frame_serial -is [long] -or $sample.frame_serial -is [int]) -and
+                        ($sample.frame_serial -gt 0)) 'Software frame identity missing'
+                    $dimensions = @($sample.size)
+                    Require-Check ($dimensions.Count -eq 2) 'Software frame size missing'
+                } else {
+                    # The OpenGL producer samples the rendered framebuffer, not a
+                    # software frame. Its identity is the sampled x/y/width/height.
+                    $rect = @($sample.rect)
+                    Require-Check ($rect.Count -eq 4) 'OpenGL sample rectangle missing'
+                    foreach ($origin in @($rect[0], $rect[1])) {
+                        Require-Check (($origin -is [int] -or $origin -is [long]) -and
+                            ($origin -ge 0)) 'Invalid OpenGL sample origin'
+                    }
+                    $dimensions = @($rect[2], $rect[3])
+                }
+                foreach ($dimension in $dimensions) {
+                    Require-Check (($dimension -is [int] -or $dimension -is [long]) -and
+                        ($dimension -gt 0)) 'Invalid video sample dimensions'
+                }
                 $colors = @(@(255, 0, 0), @(0, 0, 255), @(255, 255, 0), @(0, 255, 255))
                 for ($i = 0; $i -lt 4; $i++) {
                     Require-Check ((@($sample.pixels[$i]).Count -eq 4) -and

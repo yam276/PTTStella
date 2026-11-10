@@ -1,6 +1,6 @@
 # Slint Windows x64 完整候選
 
-這是 S8 內部驗收包，含現有 Rust 核心、原生 Slint 主程式與 libmpv，尚未切換正式 Dioxus 入口。Windows 原生啟動、IME、DPI、可聽音訊、硬體 GPU、乾淨安裝、資料回退與效能仍未驗，`native_acceptance: not_run` 保留。
+這是 S8 內部驗收包，含現有 Rust 核心、原生 Slint 主程式與 libmpv，尚未切換正式 Dioxus 入口。已收到 Windows 10 x64 的原生元件證據；13 案經修正腳本後重驗既有回報通過。IME、DPI、可聽音訊、硬體解碼、乾淨安裝、資料回退與效能仍未驗，尚不能平替。包內 `native_acceptance: not_run` 是打包時狀態，後續實機結果見下節。
 
 ## 本次交付與編譯方法
 
@@ -8,13 +8,13 @@
 
 | 檔案 | SHA-256 |
 | --- | --- |
-| `PTTStella-Slint-Candidate-0.5.0-dev.3-windows-x64.zip` | `c6dac792bdfabf96e7384af9dea2cf7426e37d929a48f2873d6ce4a3fcc8f735` |
+| `PTTStella-Slint-Candidate-0.5.0-dev.3-windows-x64.zip` | `c33737bc730cd6c3a176eef37a753a2e6b3bf24c230c8de4f923de1a5f275a7a` |
 | 包內 `pttstella-slint.exe` | `04249364f01389873704de7166fd1ffc30f29bc83174aa12d3e7326f6c7caa91` |
 | 包內 `libmpv-2.dll` | `94fb87247732c59915cd59808bc582e843a71c22214b7b6c1e5563aa8149cef4` |
 
 Rust／Cargo 來源是乾淨提交 `c40f7a5`，已包含通知、正常影片退出、設定搜尋先決條件與系統動畫偏好接線。285份來源 fingerprint 在建置前後一致；主程式為66,856,448 bytes。打包器及批次檢查 helper 是本輪另行變更，`package-final-command.json` 保留當時的 dirty provenance 與兩個輸入檔hash，提交後再核對；不將後來的 commit 冒充建置時狀態。
 
-這份 PE 是在 macOS arm64 用 Rust、cargo-xwin、Windows SDK 與 LLD **交叉編譯**，沒有 Windows runner 執行。沿用已安裝的專用 xwin SDK，將官方 libmpv 的原始 COFF import archive 以 `mpv.lib` 名稱交給 MSVC target 的 LLD；沒有把 macOS dylib 放進 Windows 包。完整命令、工具／環境與實際exit在本批 `cross-build.json`／`clippy.json`。精簡重現入口為：
+這份 PE 是在 macOS arm64 用 Rust、cargo-xwin、Windows SDK 與 LLD **交叉編譯**，建置時沒有 Windows runner 執行；後續使用者提供的原生證據另列。沿用已安裝的專用 xwin SDK，將官方 libmpv 的原始 COFF import archive 以 `mpv.lib` 名稱交給 MSVC target 的 LLD；沒有把 macOS dylib 放進 Windows 包。完整命令、工具／環境與實際exit在本批 `cross-build.json`／`clippy.json`。精簡重現入口為：
 
 ```text
 MPV_LIB_DIR=<已核對的 import archive 目錄> CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 cargo xwin build --release --locked --no-default-features --features native-player-probe --bin pttstella-slint --target x86_64-pc-windows-msvc --target-dir <本批自有絕對路徑>
@@ -41,7 +41,7 @@ PE 一般／延遲匯入已檢查：主程式是 AMD64 Windows GUI，直接連�
 
 motion的來源確實不可用且正常清理時，單列 `not_ready`，不當成功。Windows事件要求Windows10 version2004／build19041以上。[Microsoft UISettings 事件要求](https://learn.microsoft.com/en-us/uwp/api/windows.ui.viewmanagement.uisettings.animationsenabledchanged?view=winrt-26100) 其他錯誤仍列failed。整組結果只有全部13案通過才是 `component_cases_passed_manual_pending`／exit0；有failed回1，有not_ready回2，不以全skip或部分成功冒充整體完成。
 
-批次入口使用系統 `powershell.exe`，不修改執行原則。若本機不允許執行`.ps1`，保留 `evidence/checks-*.log`，可改用 `Check-Shell.cmd`／`Check-Shell-Software.cmd`、`Check-Motion.cmd`／`Check-Motion-Software.cmd`，各自保存結果，不必為驗收更改系統政策。這份script採PowerShell5.1可用語法／Process API；目前只在主機PowerShell7.6.9驗證parser與自製receipt fixtures，Windows PowerShell5.1執行本身仍未驗。
+批次入口使用系統 `powershell.exe`，不修改執行原則。若本機不允許執行`.ps1`，保留 `evidence/checks-*.log`，可改用 `Check-Shell.cmd`／`Check-Shell-Software.cmd`、`Check-Motion.cmd`／`Check-Motion-Software.cmd`，各自保存結果，不必為驗收更改系統政策。這份script採PowerShell5.1可用語法／Process API；目前只在主機PowerShell7.6.9驗證parser與自製receipt fixtures，原版已在Windows PowerShell5.1實際執行；本次helper修正僅在主機PowerShell7.6.9重驗既有原生回報，尚無修正版在5.1的重跑。
 
 手動原生驗收使用下列入口，結果另列，不能由批次推定：
 
@@ -56,6 +56,18 @@ motion的來源確實不可用且正常清理時，單列 `not_ready`，不當�
 | `Show-Profile.cmd` | 只列隔離資料／vault scope，不讀寫store |
 
 正常雙擊exe會連研究設定的預設站（初始PTT WSS），不自動登入；上列合成入口不需要實站帳密。請回報Windows版本、顯示倍率、執行入口及`native-results.json`的status／失敗或not_ready案名。無WebView2的啟動需在原本沒有該runtime的環境另驗，不要求卸載日常使用的WebView2。密碼庫、舊資料回退、實站與同負載效能依 [完整計畫](slint-evaluation-plan.md) 另驗。
+
+## 2026-11-10 Windows 實機回報與腳本修正
+
+使用者提供 Downloads/evidence，透過 Finder 複製到 `.local/verification/slint-windows-current/evidence/`，原始 101 份檔案保持不變。OS 為 Windows 10 x64 build 19045，PowerShell 5.1.19041.6456；顯示倍率未提供。執行檔 hash 與交付包相符。
+
+原始 `native-results.json` 為 failed：10 案 passed，三種格式的 default 影片都在驗收 helper 讀取不存在的 `frame_serial` 時失敗。這是 helper 將軟體 frame 的格式套到 OpenGL framebuffer 回報；三案原生程序皆 exit0、未逾時、已退出，四色像素、資源退休及 Close ACK 皆存在。原始 failed 不覆寫。
+
+修正為依 `render_path` 驗證：software 要求正整數 frame serial／size；OpenGL 要求非負座標與正整數寬高的 rect。兩路都保留非空四色、固定 expected、30 級容差、正常退出／join 和嚴格 Close ACK。新增缺 serial／rect、零尺寸、負座標及未知路徑的反例。以修正版對全部 13 案原始回報與 log 離線重驗通過，記為 `existing_native_receipts_passed_manual_pending`；這不是重新執行 Windows 主程式，也不是人工操作通過。完整回報與原始檔 hash 在 `receipt-recheck.json`。
+
+最新 ZIP 只更新 `Check-Native.ps1` 與相應 `candidate.json` hash，其餘 915 份 ZIP 項目保持逐 byte 一致，未重建 Rust。原包 ZIP hash `c6dac792bdfabf96e7384af9dea2cf7426e37d929a48f2873d6ce4a3fcc8f735`、錯誤 helper、manifest 與逐檔 hash 保存於 `runner-fix/`。舊 ZIP 與打包時暫時提取的 exe／DLL 已清除，僅留最新必要交付；exact paths、du、open-file 檢查及 filesystem free 前後在 `runner-fix/cleanup.json`。
+
+這批證明實機啟動、shell、OS 動畫初值與 listener 清理、版本檢查、設定搜尋、收藏與三格式 software／OpenGL 影片元件。它不證明實體鍵鼠、IME、DPI、可聽音訊、硬體解碼、OS 動畫值變更、無 WebView2 主機、乾淨安裝、資料回退或效能；修正版 helper 的 Windows 5.1 重跑也另列待驗。
 
 ## 本機證據與清理
 

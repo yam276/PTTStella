@@ -51,7 +51,8 @@ try {
 
     $video = @{
         status = 'prepared'; stage = 'playing'; playing = $true; renderer_owned = $true; session_owned = $true
-        samples = @(@{passed = $true; frame_serial = 7
+        render_path = 'software'
+        samples = @(@{passed = $true; render_path = 'software'; frame_serial = 7; size = @(1012,720)
             expected = @(@(255,0,0), @(0,0,255), @(255,255,0), @(0,255,255))
             pixels = @(@(254,0,0,255), @(0,0,254,255), @(255,255,0,255), @(1,255,255,255))})
     }
@@ -60,6 +61,25 @@ try {
         offer_empty = $true; pending_empty = $true}
     Save 'video-exit-ready.json' $video; Save 'video-exit-closed.json' $videoClosed
     Require-CaseReceipts $temp 'video'
+    $video.samples[0].Remove('frame_serial'); Save 'video-exit-ready.json' $video
+    Reject { Require-CaseReceipts $temp 'video' } 'software frame without serial'
+    $video.samples[0].frame_serial = 0; Save 'video-exit-ready.json' $video
+    Reject { Require-CaseReceipts $temp 'video' } 'software frame with zero serial'
+    $video.samples[0].frame_serial = 7
+    $video.render_path = 'opengl'
+    $video.samples[0].Remove('frame_serial'); $video.samples[0].Remove('render_path'); $video.samples[0].Remove('size')
+    $video.samples[0].rect = @(24,68,1052,748); Save 'video-exit-ready.json' $video
+    Require-CaseReceipts $temp 'video'
+    $video.samples[0].rect = @(24,68,0,748); Save 'video-exit-ready.json' $video
+    Reject { Require-CaseReceipts $temp 'video' } 'zero OpenGL sample width'
+    $video.samples[0].rect = @(-1,68,1052,748); Save 'video-exit-ready.json' $video
+    Reject { Require-CaseReceipts $temp 'video' } 'negative OpenGL sample origin'
+    $video.samples[0].Remove('rect'); Save 'video-exit-ready.json' $video
+    Reject { Require-CaseReceipts $temp 'video' } 'OpenGL sample without rectangle'
+    $video.samples[0].rect = @(24,68,1052,748)
+    $video.render_path = 'unknown'; Save 'video-exit-ready.json' $video
+    Reject { Require-CaseReceipts $temp 'video' } 'unknown video renderer'
+    $video.render_path = 'opengl'
     $video.samples[0].pixels[0] = @(0,0,0,255); Save 'video-exit-ready.json' $video
     Reject { Require-CaseReceipts $temp 'video' } 'black pixels with dishonest passed flag'
     $video.samples = @(); Save 'video-exit-ready.json' $video
