@@ -89,7 +89,9 @@ impl Preparation {
                     let view = connection.updates.borrow();
                     let id = FrameId { generation: view.generation, revision: view.frame.revision };
                     fixture.accepts(&source, id) && article.reading_presented(id)
-                        && ui.get_article_active() && ui.get_article_reading_ready()
+                        // Preparation is passive. Input permission also needs
+                        // native focus and is verified separately through the UI.
+                        && ui.get_article_active()
                 }
                 _ => presented.get().is_some_and(|id| id.revision == source.revision
                     && fixture.accepts(&source, id)) && size.get().is_some()
