@@ -1,6 +1,6 @@
 # Slint Windows x64 完整候選
 
-2026-11-10 最新候選位於 `.local/verification/slint-navigation-cross/windows-package/`，來源為乾淨 `de6245e`（產品286份檔案與arm64的bc380f9一致），包含ID空格與推文導覽浮層修正。原 `slint-merged-id-spaces/windows-package/` 是指向新包的零複本相容symlink。新exe `6b1de7df…`、ZIP `a0c58200…`，尚未在Windows執行；舊13案與注音人工回報只屬04249364…exe。 完整hash、來源／編譯與未驗界線見[四架構同步候選](slint-evaluation-plan.md#2026-11-10-四架構同步候選)及 `slint-navigation-cross/current-candidates.json`。以下舊包、SHA與驗收是歷史紀錄，不能當成新exe的原生結果。
+2026-11-10 最新候選位於 `.local/verification/slint-input-cross/windows-package/`，產品來源為固定 `475897f`（288份建置輸入核對），包含ID空格、推文浮層與文章輸入／全螢幕修正。exe `69542cb7…`、ZIP `60f7c551…`；使用者會稍後驗收，當前原生結果仍為 not_run。既有13案與注音回報只屬舊04249364…exe，未轉填。此次尚未同步84e98a3的字型／貼上修正。最新平台來源及hash見 [主計畫](slint-evaluation-plan.md#2026-11-10-最新候選) 與 `slint-navigation-cross/current-candidates.json`；產品來源可依 [來源還原](slint-product-source.md) 選 windows-intel-current，完整第三方來源仍not_ready。以下舊包及驗收為歷史紀錄。
 
 這是 S8 內部驗收包，含現有 Rust 核心、原生 Slint 主程式與 libmpv，尚未切換正式 Dioxus 入口。已收到 Windows 10 x64 的原生元件證據；13 案經修正腳本後重驗既有回報通過。完整 IME 矩陣、DPI、可聽音訊、硬體解碼、乾淨安裝、資料回退與效能仍待驗（Microsoft 注音三項已有使用者人工回報），尚不能平替。包內 `native_acceptance: not_run` 是打包時狀態，後續實機結果見下節。
 

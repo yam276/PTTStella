@@ -1,6 +1,6 @@
 # Slint Linux x64 候選包
 
-2026-11-10 最新候選位於 `.local/verification/slint-navigation-cross/linux-package/`，來源為乾淨 `de6245e`（產品286份檔案與arm64的bc380f9一致），包含ID空格與推文導覽浮層修正。原 `slint-merged-id-spaces/linux-package/` 是指向新包的零複本相容symlink。新ELF `97ff4f91…`、tar `c0fbb848…`、deb `d2329729…`；只完成Mac交叉建置與ARM VM的x64 loader／dpkg封裝，未跑原生桌面。 完整hash、來源／編譯與未驗界線見[四架構同步候選](slint-evaluation-plan.md#2026-11-10-四架構同步候選)及 `slint-navigation-cross/current-candidates.json`。以下舊包、SHA與驗收是歷史紀錄，不能當成新exe的原生結果。
+2026-11-10 最新候選位於 `.local/verification/slint-ui-cjk-fallback/linux-package/`，289份產品建置輸入與 `84e98a3` 核對一致；實際建置仍記c67efdb加patch。ELF `4e474a0a…`、tar `c3b31a69…`、deb `051970c9…`，納入CJK控制項及貼上預覽跨重繪修正。實際loader／dpkg與tar／deb核對通過；無系統中文字型的QEMU x64程式配ARM Xvfb／Openbox／session bus，格線／輸入／貼上三案通過，並非Linux x64硬體或原生IME。最新來源及hash見 [主計畫](slint-evaluation-plan.md#2026-11-10-最新候選) 與 `slint-navigation-cross/current-candidates.json`；產品來源可依 [來源還原](slint-product-source.md) 選 arm64-linux-current，完整第三方來源仍not_ready。以下舊包及驗收為歷史紀錄。
 
 此為 S8 內部驗收候選，尚未取代正式 Dioxus 入口。目標為 Ubuntu 24.04 x64，提供獨立名稱的 deb 與 portable tar.gz，包含 `native-player-probe` 主程式。尚未通過 Linux 原生桌面、繁中 IME、DPI、音訊、硬體 GPU、資料回退與效能驗收。
 

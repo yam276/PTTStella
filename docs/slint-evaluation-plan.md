@@ -20,7 +20,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、三格式錯色負向對照 | MP4 GPU 像素偶發失敗仍未重現／解決、多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
 | S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
 | S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔與正常退出；[共用版本檢查／下載入口](slint-release-check.md)、toolkit空白鍵及退出HTTP／listener join；[共用通知政策／原生時序](slint-notifications.md)、hover／Tab焦點暫停及timer退出；[三平台系統動畫偏好來源](slint-system-motion.md)、macOS初讀／本機通知回呼與observer／UI listener退出；三版本store往返28案；[實際前端往返](slint-store-frontends.md)補 macOS v1／v6 設定與站點六輪、名單三輪、可攜設定三輪操作（原儲存位置仍待查）、收藏名稱／離線副本與最近看板清除三輪 | 實際OS動畫偏好切換／還原及其他平台原生、原生通知／其他管理入口、完整Dock／modal／OS I/O與可及性矩陣、實際前端／平台路徑及vault往返 |
-| S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG（含bc380f9導覽修正）及無Homebrew sandbox；[Windows x64完整GUI候選](slint-windows-candidate.md)，目前包與已測舊exe分列，Windows10實機13案回報經修正helper重驗（原版10過／3個格式誤判），嚴格ACK／像素／join；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64 App／ZIP／DMG](slint-macos-x64.md)、自建47項runtime閉包／32份來源、兩開發prefix不可用的Rosetta13案 | Intel與Linux原生、Windows完整人工操作、IME／DPI／音訊、VC runtime／最低OS／完整乾淨安裝、完整產品來源交付與重播、資料回退及同負載效能；尚未通過 |
+| S8 | [兩組產品來源完整還原](slint-product-source.md)、新還原目錄的macOS arm64一般Slint配置95測試通過；S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG（含bc380f9導覽修正）及無Homebrew sandbox；[Windows x64完整GUI候選](slint-windows-candidate.md)，目前包與已測舊exe分列，Windows10實機13案回報經修正helper重驗（原版10過／3個格式誤判），嚴格ACK／像素／join；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64 App／ZIP／DMG](slint-macos-x64.md)、自建47項runtime閉包／32份來源、兩開發prefix不可用的Rosetta13案 | Intel與Linux原生、Windows完整人工操作、IME／DPI／音訊、VC runtime／最低OS／完整乾淨安裝、完整第三方來源交付與播放器重播、資料回退及同負載效能；尚未通過 |
 
 接續完整鍵盤／焦點與其他平台、跨平台列表／重開、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
 
@@ -555,3 +555,14 @@ R5 同一流程的邊界紀錄進一步顯示：讀取完成時來源、前景�
 本批清理已完成：Cargo 原生 full clean 回報18,844檔／5.8GiB，刪前 target du6,142,788KiB，實際確認 target 不存在；自有容器18c0ece5…正常 stop／rm（SizeRw 1,714,648,165 bytes），SDK image 正常卸載後移除。被替換的兩份舊完整包、R2／R3／R4／R5／R6 raw、已消費傳輸與封裝 input、linker wrapper、pycache及暫存 mount 均已移除；舊包／相容入口為指向最新包的零複本連結。12份逐byte重複PNG改為相對連結，22份獨特PNG保留，原報告路徑仍有效。2,758份最新交付／來源／最小對照保護 hash 前後一致，Mac舊baseline的Frameworks連結亦有效。
 
 exact removed paths、resolved／UID／symlink／lsof、每檔SHA、Cargo宣告／du／SizeRw及filesystem free各自列在 slint-ui-cjk-fallback/cleanup/ledger.json；filesystem free只記並行觀測，不將其他工作的釋放或新增歸因本批。共享SDK／registry／toolchains／VM／base image、未知容器、canonical及使用者資料保留；尚未整合的Slint worktree和必要最小舊對照／shell診斷保留，未刪未整合來源。最新Windows69542cb7…未變，仍等使用者稍後實測；S0–S8持續，S9未執行。
+
+
+## 2026-11-10 候選產品來源獨立還原
+
+新增 repo 內的來源還原工具及六個自製 Git fixture 測試，完成先前 deferred 的產品來源還原。單一23,061,829-byte Git bundle 加 manifest／獨立工具／README，於新目錄還原兩組候選：84e98a3完整546檔、475897f完整545檔；full tree／逐檔SHA／完整tracked清單及289／288份原建置輸入皆核對。manifest綁定四個目前封裝exe SHA，各包原始build ref／dirty／patch不改寫。來源包包含必要產品assets與Git ancestry，不含worktree的.local、target或未追蹤使用者資料。
+
+兩份來源的offline cargo metadata通過，從還原出的84e98a3一般Slint配置於macOS arm64完成release測試95過／1個helper ignored；使用公開Cargo cache與既有工具鏈，不把播放器／跨平台編譯、二進位逐byte重現或完整第三方閉包計為通過。完整Python177項通過；新六案涵蓋原checkout刪除後還原、patch／新檔與hash／tree／路徑／清單／目的地拒絕。首輪測試fixture遺漏移除ls-files結尾NUL造成六個setup error，已修正fixture並保留說明；不是生產還原失敗。
+
+來源包與命令見 [產品來源還原](slint-product-source.md)，證據在 slint-source-reconstruction/；目前candidate index新增獨立來源交付指標，沒有重打包或修改四份二進位。完整第三方來源、播放器重播、原生／資料／效能必要缺項仍未達成，source_delivery維持not_ready，S0–S8繼續、S9未執行。
+
+本批結案已用Cargo原生full clean刪除自有target，並逐檔核對後移除三份臨時還原checkout；來源交付只保留repo外的單一bundle及manifest／工具／README。既有docs gate拒絕repo內.bundle的首輪結果保留，沒有放寬gate。2,764份候選／原產品輸入／工具／來源交付保護hash未變；exact paths、resolved／UID／symlink／lsof、du／Cargo宣告與filesystem free分列在slint-source-reconstruction/cleanup/ledger.json。source worktree、必要候選與共享工具／使用者資料保留，沒有重建Rust來證明清理。
