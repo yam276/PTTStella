@@ -1,6 +1,6 @@
 # Slint Windows x64 完整候選
 
-這是 S8 內部驗收包，含現有 Rust 核心、原生 Slint 主程式與 libmpv，尚未切換正式 Dioxus 入口。已收到 Windows 10 x64 的原生元件證據；13 案經修正腳本後重驗既有回報通過。IME、DPI、可聽音訊、硬體解碼、乾淨安裝、資料回退與效能仍未驗，尚不能平替。包內 `native_acceptance: not_run` 是打包時狀態，後續實機結果見下節。
+這是 S8 內部驗收包，含現有 Rust 核心、原生 Slint 主程式與 libmpv，尚未切換正式 Dioxus 入口。已收到 Windows 10 x64 的原生元件證據；13 案經修正腳本後重驗既有回報通過。完整 IME 矩陣、DPI、可聽音訊、硬體解碼、乾淨安裝、資料回退與效能仍待驗（Microsoft 注音三項已有使用者人工回報），尚不能平替。包內 `native_acceptance: not_run` 是打包時狀態，後續實機結果見下節。
 
 ## 本次交付與編譯方法
 
@@ -68,6 +68,12 @@ motion的來源確實不可用且正常清理時，單列 `not_ready`，不當�
 最新 ZIP 只更新 `Check-Native.ps1` 與相應 `candidate.json` hash，其餘 915 份 ZIP 項目保持逐 byte 一致，未重建 Rust。原包 ZIP hash `c6dac792bdfabf96e7384af9dea2cf7426e37d929a48f2873d6ce4a3fcc8f735`、錯誤 helper、manifest 與逐檔 hash 保存於 `runner-fix/`。舊 ZIP 與打包時暫時提取的 exe／DLL 已清除，僅留最新必要交付；exact paths、du、open-file 檢查及 filesystem free 前後在 `runner-fix/cleanup.json`。
 
 這批證明實機啟動、shell、OS 動畫初值與 listener 清理、版本檢查、設定搜尋、收藏與三格式 software／OpenGL 影片元件。它不證明實體鍵鼠、IME、DPI、可聽音訊、硬體解碼、OS 動畫值變更、無 WebView2 主機、乾淨安裝、資料回退或效能；修正版 helper 的 Windows 5.1 重跑也另列待驗。
+
+## 2026-11-10 Microsoft 注音人工回報
+
+使用者依同一 Windows 包的 `Run-IME.cmd` 提示，回覆「三項都正常」：Microsoft 注音候選窗位置、Esc 取消與選字後單次提交。這三項列為 `human_reported_passed`，紀錄在 `.local/verification/slint-windows-current/user-ime-20261110.json`。
+
+這是使用者的原生操作回報，並未另收到或讀取這一輪的 IME bytes log、截圖或新的執行檔 hash；不把它擴成已核對2 bytes、完整組字／快捷鍵／失焦／DPI矩陣，其他輸入法及音訊仍待驗。先前自動元件證據的 Windows 10 build19045／PowerShell5.1 與這份人工回覆分開保存，顯示倍率仍未提供。
 
 ## 本機證據與清理
 

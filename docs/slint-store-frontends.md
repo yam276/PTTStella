@@ -1,6 +1,6 @@
 # Slint 與原 Dioxus 的資料往返
 
-這是 S7／S8 的部分證據，尚未完成整體資料回退驗收。2026-11-10 已在 macOS arm64 以實際 App 的設定／站點控制，完成 v1、v6 合成資料的 Slint → 原 Dioxus → Slint 往返。其他 store、平台正式路徑、密碼庫與完整產品切換仍待驗。
+這是 S7／S8 的部分證據，尚未完成整體資料回退驗收。2026-11-10 已在 macOS arm64 以實際 App 的設定／站點控制，完成 v1、v6 合成資料的 Slint → 原 Dioxus → Slint 往返。後續另補黑白名單與可攜設定的前端往返，結果見後節；收藏、草稿、最近看板、平台正式路徑、密碼庫與完整產品切換仍待驗。
 
 ## 同一份資料的入口
 
@@ -59,13 +59,41 @@ for key, name in names.items():
 
 每次保存後完整六個 store 的值符合獨立 expected；同端點 UAO／GBK 最愛、預設站、名單、收藏 archive、草稿 ANSI／尾空白、最近看板與可攜設定未受無關修改。後五份檔案各自與 seed 的 SHA-256 一致，這只證明 byte-preservation，不代表它們已完成 GUI 操作。v6 三次保存，以及 v1 原 Dioxus 保存的一代備份，已逐 byte 核對前一份主檔；v1 首次 Slint 保存的備份未在後續覆寫前另存，不補造該項驗收。
 
+## 黑白名單前端往返
+
+同一已標記 v6 profile 的 `probe-filters.json` 為 v4。以相同的兩份 raw CLI，再完成三個 macOS 原生 UI 輪次，沒有 Rust 重建：
+
+| 前端 | 實際讀取與保存 |
+| --- | --- |
+| Slint | 讀到 Alice 整行遮罩、Carol 保留 ID 遮罩、Bob 個別 Magenta（5）與共用 Bright magenta（13）；保存 Alice 備註 `Slint 名單末字🦀`，保留策略 |
+| 原 Dioxus | 讀到完整備註及 mask_row；保存為 `Dioxus 名單末字🦀` 並改為 mask；核對 Bob 個別／共用底色仍正確 |
+| Slint 新程序 | 讀到原 Dioxus 的 mask 與完整備註，再保存 `Slint 回程名單末字🦀`，保留 mask |
+
+三次完整 store 都符合獨立 expected，一代備份各自等於緊接修改前的主檔 bytes，其他五個 store 與可攜設定 byte 不變。三案皆 exit0／嚴格 Close；原 Dioxus 另有 passed surface report、PNG 與 listener／worker 清理。結果在本批 `filters-results.json`，逐階段快照及原始 log 保留。這不代替名單匯入、完整 CRUD、實體 IME、其他平台與正式資料路徑驗收。
+
+## 可攜設定前端往返
+
+Slint 使用原生 NSOpenPanel 載入原 fixture 的 `display.pttstella.json`，正確讀到名稱 `合成可攜設定末字`、字高21.5、基線19、寬102與原字型；存成目前設定後再將字高調22。原位置 NSSavePanel 的 Save／New Folder 停用，因此明確取消，原可攜檔 bytes 不變，正常 Quit／Close。該首輪記 partial，沒有將取消視為匯出成功。
+
+另一輪開始前，將七份合成 JSON 與 marker 放進單一自有暫存目錄，所有前端在這一輪讀寫同一份檔案。未變更權限、系統設定或實作。原生 Save 選到這個位置後啟用，Slint 實際確認覆寫自己的合成可攜檔，匯出名稱 `Slint 可攜末字🦀`、字高22／基線19／寬102及原字型。原 Dioxus 以 Load 實際讀到上述名稱和值，再以 `Dioxus 可攜末字🦀` Export；Slint 新程序透過 NSOpenPanel 讀回完整名稱與相同顯示值。
+
+三個後續輪次皆 exit0／嚴格 Close，原 Dioxus 的 PNG／surface／各 owner 清理也通過，六個 store 的值不受可攜名稱變更影響。Slint 是實際 OS 選檔器；原 Dioxus tools 探針則沿用既有固定 `display.pttstella.json` 路徑，不能算作原 Dioxus 原生選檔器驗收。結果在 `portable-results.json`，最終合成 JSON 另存 `portable-final/`，測試暫存目錄在清理後不保留。
+
+原 Documents 位置在另一新程序明確重選原資料夾後，Save 仍停用；已再次取消並正常退出，`slint-v6-portable-documents` 記 not_ready。原因未確定，不宣稱是 TCC、檔案權限、產品錯誤或輸入工具造成；另一路徑成功也不把原位置改判 passed。小數字高在原 Dioxus 的完整保存限制仍待驗；本次互相匯出採22，只證明該顯示值路徑，沒有據此宣稱所有可攜設定／平台檔案操作完成。
+
 ## 保留的失敗與待驗
 
 - 原 Dioxus HTML 字高欄位 `step=1`：能顯示 Slint 的 22.5，但試存 23.5 會顯示欄位不完整／超界且不寫檔。以 23 保存成功，只驗到整數路徑；小數字高的完整 GUI 回退仍未通過，不能從 store 接受浮點數推定 UI 相容。
 - 首輪有一般入口被操作工具額外啟動，該輪不宣稱全程零外網／vault。後續固定參數 host 只執行明確合成探針，重複 LaunchServices 啟動不回退到一般 Live。
 - 長輪次超過既有 peer 的 300 秒，以及兩個 240 秒 controller deadline，皆保留 failed／終止紀錄。後續短輪次的成功不改寫先前失敗。
-- 原生貼上與 App 選單不是實體 IME、完整鍵鼠、主視窗 foreground／pointer、可及性或跨平台證據。名單、收藏、草稿、最近看板、可攜設定的完整 UI 往返與正式平台路徑／vault 仍須另驗。
+- 原生貼上與 App 選單不是實體 IME、完整鍵鼠、主視窗 foreground／pointer、可及性或跨平台證據。名單完整CRUD／匯入、可攜設定所有顯示值／路徑，以及收藏、草稿、最近看板的完整 UI 往返與正式平台路徑／vault 仍須另驗。
 
 Rust library 389 passed／4 ignored、Slint bin 89 passed／1 ignored，release all-target Clippy 與 CLI build 通過；ignored 項不計成已執行。新增測試涵蓋有界精確 marker、舊檔不重播種、壞檔／未來版保留、非普通檔案／symlink 拒絕及 CLI 互斥。這些 gate 與上列原生證據分開計算。
 
 本批建置 target 與臨時 baseline worktree 已用 Cargo／Git 原生流程移除，必要 raw CLI 各留一份供後續 UI 與封裝；臨時 App 在確認無程序／open files 後逐個清理。exact paths、resolved／UID／symlink、du、filesystem free 前後與保留例外在本批 `compile-cleanup/ledger.json`、`host-cleanup/ledger.json` 及 `final-cleanup/ledger.json`。最後清除5份臨時App與9個本批專用WebKit／cache／系統暫存目錄；重複generated PNG的保留位置與SHA另記 `final-cleanup/duplicate-pngs.json`。既有各平台最新候選未被這份未封裝診斷 CLI 取代；沒有整合正式入口或發佈。
+
+
+名單／可攜設定這一輪的臨時 App、原 Dioxus 專用 cache／WebKit／系統暫存、自有可攜測試目錄及重複 generated PNG，在保存最小資料與證據後逐筆清理；exact paths、owner／resolved／symlink／lsof、du、filesystem free 前後與保留例外記在 `filters-portable-cleanup/ledger.json`。來源與兩份必要 raw CLI 保持 hash 不變，不重建 Rust，也不替換既有各平台候選。
+
+
+原位置補驗的最後1份App亦已清除，並將4個本批探針獨立身份的小型 OS 偏好 plist 封存後移除原檔；全為已退出且沒有 open files 的測試身份，不動共用或正式偏好。這段 exact paths、保留診斷與 free／du 在 `filters-portable-cleanup/followup/ledger.json`，補驗重複 PNG 映射在其 `duplicate-pngs.json`。原位 not_ready 不受後續文件提交影響。

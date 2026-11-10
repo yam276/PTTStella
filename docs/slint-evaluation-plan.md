@@ -11,13 +11,13 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 | 階段 | 目前已有 | 尚須完成 |
 | --- | --- | --- |
 | S0 | 共用 Rust 服務、獨立 Slint 入口及可編譯提交序列；四 target 的一般／播放器兩配置 Cargo 依賴 gate | 完整功能案例對照、各平台連結／runtime 依賴與最終基準重跑 |
-| S1 | 格線／雙色字／縮放、macOS 原生輸入的分立證據 | 候選窗與跨螢幕 DPI、可及性、Windows／Linux 原生 |
+| S1 | 格線／雙色字／縮放、macOS 原生輸入的分立證據；Windows Microsoft注音候選位置／Esc取消／單次提交的使用者人工回報 | 完整候選窗／組字／失焦矩陣、跨螢幕 DPI、可及性與其他平台原生 |
 | S2 | 共用 Connection、登入／保活、站點表單、嚴格切站／雙編碼 bytes | 同 endpoint 編碼切換、預設站重啟／不登入、完整信任／vault 原生矩陣 |
 | S3 | 選取、輸出、浮球／選單及原生互動的分立證據 | 全部快捷鍵／pointer／modal／可及性操作矩陣 |
 | S4 | 雙閱讀模式、長文取頁、尋找、名單／右鍵／揭露／底色、書籤／離線、快速前往與最近看板、目前／指定列表文章收藏、共用推文索引／原生定位與側標、推文更新／未讀／保留與復原；macOS基本按鈕、列表右鍵指定收藏與新程序斷線讀回補驗 | 跨平台推文控制／定位與完整鍵盤／焦點矩陣、其他平台列表右鍵及新程序離線操作、混合 Live 等效與全功能回歸 |
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、三格式錯色負向對照 | MP4 GPU 像素偶發失敗仍未重現／解決、多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
 | S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
-| S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔與正常退出；[共用版本檢查／下載入口](slint-release-check.md)、toolkit空白鍵及退出HTTP／listener join；[共用通知政策／原生時序](slint-notifications.md)、hover／Tab焦點暫停及timer退出；[三平台系統動畫偏好來源](slint-system-motion.md)、macOS初讀／本機通知回呼與observer／UI listener退出；三版本store往返28案；[實際前端往返](slint-store-frontends.md)補 macOS v1／v6 設定與站點的六輪操作 | 實際OS動畫偏好切換／還原及其他平台原生、原生通知／其他管理入口、完整Dock／modal／OS I/O與可及性矩陣、實際前端／平台路徑及vault往返 |
+| S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔與正常退出；[共用版本檢查／下載入口](slint-release-check.md)、toolkit空白鍵及退出HTTP／listener join；[共用通知政策／原生時序](slint-notifications.md)、hover／Tab焦點暫停及timer退出；[三平台系統動畫偏好來源](slint-system-motion.md)、macOS初讀／本機通知回呼與observer／UI listener退出；三版本store往返28案；[實際前端往返](slint-store-frontends.md)補 macOS v1／v6 設定與站點六輪、名單三輪、可攜設定三輪操作（原儲存位置仍待查） | 實際OS動畫偏好切換／還原及其他平台原生、原生通知／其他管理入口、完整Dock／modal／OS I/O與可及性矩陣、實際前端／平台路徑及vault往返 |
 | S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG及無Homebrew sandbox；[Windows x64完整GUI候選](slint-windows-candidate.md)同步c40f7a5，Windows10實機13案回報經修正helper重驗（原版10過／3個格式誤判），嚴格ACK／像素／join；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64 App／ZIP／DMG](slint-macos-x64.md)、自建47項runtime閉包／32份來源、兩開發prefix不可用的Rosetta13案 | Intel與Linux原生、Windows完整人工操作、IME／DPI／音訊、VC runtime／最低OS／完整乾淨安裝、完整產品來源交付與重播、資料回退及同負載效能；尚未通過 |
 
 接續完整鍵盤／焦點與其他平台、跨平台列表／重開、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
@@ -364,3 +364,14 @@ x64 runtime暫取自經GitHub digest及完整簽章核對的IINA1.5.1，僅保�
 
 
 本批即時結案清理另移除5份已退出的frontend測試App，以及3個原Dioxus探針身份的9個WebKit／cache／系統暫存目錄；逐筆確認owner、resolved path、symlink、內容與lsof，保護來源／兩份必要raw CLI／實際保存資料hash一致。filesystem available 261046784000→261337927680 bytes僅為並行觀測，與先前其他聊天釋放空間不混算；du逐筆記錄。重複generated PNG另有保留位置／SHA映射。確切路徑與保留例外見 `slint-frontend-roundtrip/final-cleanup/ledger.json`；沒有Rust重建，沒有清共享runtime／registry或其他聊天產物。
+
+
+2026-11-10 接續實際前端驗收：以32d94ac相同Rust來源／保留CLI完成v4名單三輪 Slint → 原5ea9ad6 Dioxus → Slint，繁中／emoji備註、mask_row→mask、白名單個別與共用底色讀回正確，完整expected／三次各自的前版bytes備份及無關資料不變均通過。可攜設定先由Slint原生選檔器讀原fixture的小數字高，再於自有暫存位置完成Slint原生匯出 → 原Dioxus固定probe路徑的UI匯入／匯出 → Slint原生讀回；採22字高，三輪皆正常退出、Close／owner audit通過。原Documents位置Save停用的首輪明確取消並保留partial，沒有推測原因或更改系統權限；其他路徑成功不結案原位置。完整scope與報告見 [前端往返](slint-store-frontends.md)。本批只新增驗收／文件，沒有Rust重建；完整資料回退、跨平台原生及效能仍未通過，S0–S8持續。
+
+
+名單／可攜設定驗收後已清掉本輪7份App、兩個原Dioxus身份的6個cache／WebKit／系統暫存目錄及單一自有portable測試目錄；最終合成檔與原始成功／partial證據均先保存。來源285份fingerprint、兩份必要raw CLI及其他本批保護檔hash不變，未新增target。filesystem available 305768148992→306195558400 bytes僅記並行觀測，du逐筆另列；原儲存位置的partial不因新位置成功而改寫。exact paths、owner／resolved／symlink／lsof、保留例外在 `slint-frontend-roundtrip/filters-portable-cleanup/ledger.json`，重複generated PNG的SHA與保留位置另在同目錄 `duplicate-pngs.json`。沒有變更系統權限、清共用工具或其他聊天輸出。
+
+
+同日Windows人工回報：使用者依Run-IME.cmd題目明確回覆「三項都正常」，Microsoft注音候選位置、Esc取消、選字後單次提交記human_reported_passed。尚未另檢視這輪IME bytes log／截圖／顯示倍率，不推定2 bytes或完整IME／DPI矩陣。原文、scope與預期候選exe hash在 `slint-windows-current/user-ime-20261110.json`；不改寫原13案自動報告，也不把人工回覆擴成整體平台完成。
+
+可攜設定原Documents位置的新程序補驗：即使明確重選原資料夾，Save仍停用，正常取消／退出並有Close ACK，保留not_ready且原因未定。最後1份App及4個已退出探針身份的OS偏好plist另清理，小型plist先留作獨特診斷；source／必要raw CLI不變，補驗重複PNG有保留映射。exact paths與filesystem free 305506803712→305575333888 bytes（僅觀測）、du與保留診斷見 `slint-frontend-roundtrip/filters-portable-cleanup/followup/ledger.json`。本輪未動產品程式或重建Rust，完整平替仍待後續驗收。
