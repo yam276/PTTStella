@@ -1,6 +1,6 @@
 # Slint 與原 Dioxus 的資料往返
 
-這是 S7／S8 的部分證據，尚未完成整體資料回退驗收。2026-11-10 已在 macOS arm64 以實際 App 的設定／站點控制，完成 v1、v6 合成資料的 Slint → 原 Dioxus → Slint 往返。後續另補黑白名單與可攜設定的前端往返，結果見後節；收藏名稱／離線讀取及最近看板清除亦有後續證據；草稿、收藏完整CRUD、最近看板新增／排序、平台正式路徑、密碼庫與完整產品切換仍待驗。
+這是 S7／S8 的部分證據，尚未完成整體資料回退驗收。2026-11-10 已在 macOS arm64 以實際 App 的設定／站點控制，完成 v1、v6 合成資料的 Slint → 原 Dioxus → Slint 往返。後續另補黑白名單、可攜設定、收藏名稱／離線讀取、最近看板清除及草稿編輯保存往返，結果見後節；完整CRUD、最近看板新增／排序、平台正式路徑、密碼庫與完整產品切換仍待驗。
 
 ## 同一份資料的入口
 
@@ -101,6 +101,26 @@ Slint 使用原生 NSOpenPanel 載入原 fixture 的 `display.pttstella.json`，
 
 本輪3份App與原Dioxus專用WebKit／cache／系統暫存已確認退出／無open files後逐筆清除；來源與實際保存資料、兩份必要raw CLI保持hash不變。exact paths、UID／resolved／symlink、du、filesystem free前後及保留例外在 `bookmarks-cleanup/ledger.json`，重複PNG的保留位置／SHA在同目錄 `duplicate-pngs.json`。沒有修改產品程式、重建Rust、切換正式入口或發佈。
 
+## 草稿原生編輯與保存往返
+
+2026-11-10 在 `.local/verification/slint-draft-roundtrip-current/` 以同一 marked-store 副本完成三輪操作，階段間不重播種。Slint 使用目前 arm64 候選的 native（SHA-256 `6841e17e395878d9a90431028410f8e68a3e9d34f5a00f5b181c6f6f76c1d1c1`）及相同 Frameworks 的 symlink；原 Dioxus 使用乾淨 `5ea9ad6` native（`35c3e27506280f430b364b82355e31f7b101a254fcadccc289ac7063ed6a44e3`）。兩份獨立身份的 host 固定診斷參數，不能回退啟動一般產品或讀使用者 profile。
+
+資料沿用 v6／auto-expand fixture，僅在首輪前把三個草稿標題改為唯一名稱，以免選錯。目標 `edited` 的初始正文為三行，含亮紅 ANSI 及末尾換行；另兩筆分別保留尾空白／兩個換行和未完成 `ESC[1;`。預期結果於各階段啟動前保存，所有輸入走 CUA 原生欄位／滑鼠／貼上，沒有直接修改 UI property 或磁碟正文。
+
+| 階段 | 原生操作與結果 |
+| --- | --- |
+| Slint `slint-corrected` | 讀取既有草稿、修正前輪輸入試探留下的重複 ASCII 前綴，保存完整 `Slint 往返末字🦀`；原亮紅第二行不變。revision 5→6，正常退出／嚴格 Close ACK |
+| 原版 `baseline-first` | Ctrl+P 進入本機 peer 編輯器、捕捉模板、恢復目標草稿，目視讀到 Slint 的全文／顏色；改標題為 `本機草稿測試`，實際完成上色，再以 ANSI source 寫入原版 gate 預先固定的三行正文。revision 6→7→8→9→10，exit0／surface passed |
+| Slint 新程序 `slint-return` | 讀回原版標題、`第一行中文`／亮紅 `亮紅中文`／`第三行`；末端原生貼上換行及 `Slint 再讀回末字🦀`，保存。revision 10→11，正常退出／嚴格 Close ACK |
+
+原版 gate 原有的 capture／color／save 計數及 `fixture_matches` 未放寬，實際為 1／1／4／true；連線、credential、file worker 和 listeners 均完成清理。原版標準正文的 ANSI bytes 是 `第一行中文\n\x1b[1;31m亮紅中文\x1b[m\n第三行`，不是可見的反斜線文字。每輪一代備份逐 byte 等於上一份主檔；有界 observer 每 50ms 記錄改變的 JSON，原版主檔 revision 6–10 全數捕捉，最終備份正是 revision10。其餘兩筆草稿的全部欄位、其他五個 store 及可攜設定皆 byte／value 核對不變。
+
+首輪 `slint-first` 保留 failed：CUA `typeText` 對中文／emoji 只留下 ASCII；後續原生 paste 能保存完整 Unicode，但沒有據此確定首輪原因。該輪也超過 controller 240 秒，被終止為 -15、無 Close ACK；後續成功不改寫失敗。修正輪在同一份資料上移除重複前綴，沒有重新播種。原版對含 emoji 的全選上色先回報 UAO 無法編碼、沒有送站；換成預宣告可編碼正文後上色成功。這些觀察不等同實體 IME 驗收，也未釐清先前末字異常。
+
+`results.json`、各 phase 的 `acceptance.json`／`run.json`／`native.log`／`store-history.json`、預宣告 expected 及前後合成資料保留。CUA 工具紀錄留有兩版讀回和最終四行的 screenshot，未額外保存重複影像。重跑時從 fixture 在新根目錄建立資料，以保存的 host metadata／`launch-current.py` 重建唯一身份 host，依上述操作序列逐個正常退出；`current-phase.json` 指定不存在的新 phase，不能重用既有 evidence 目錄。原生草稿新建／刪除／衝突、多開、帶回站端、實體 IME、其他平台與正式路徑仍待驗，這一項只結案既有草稿的編輯保存往返。
+
+本輪未修改或重建 Rust。退出及 lsof 確認後移除兩份臨時 App 和五個專用 OS cache／WebKit／暫存目錄，共 110,884,103 regular-file bytes；Frameworks symlink 的既有候選內容保留。3,026 份候選／來源／最終合成資料 hash 不變；filesystem free 254630199296→254741151744 bytes 是並行觀測，與 du 分列，不全歸因本批。exact paths、UID／resolved／symlink、逐檔 SHA 與 du 在 `slint-draft-roundtrip-current/cleanup/ledger.json` 及 inventories；最新四包、原 baseline raw、唯一失敗證據、共享工具及使用者資料保留。
+
 ## 保留的失敗與待驗
 
 ### 草稿場景準備與格線回歸
@@ -109,7 +129,7 @@ Slint 使用原生 NSOpenPanel 載入原 fixture 的 `display.pttstella.json`，
 
 首輪草稿場景被原本只接受雙色格線的準備檢查拒絕，exit1／嚴格 Close acknowledged；失敗原樣保留。現在準備檢查依場景核對：grid 仍要求原 parity；drafts 要求已安裝的80×24、完整控制碼／可映射字形、同一 generation／revision，以及共用 `drafts::scope` 確認連線就緒且帳號 StellaTest、看板 Stella。原本5秒期限、幾何／繪製交接和16個完整 owner 檢查保留，沒有放寬前景或輸入保護。
 
-修正後兩個 macOS arm64 原生程序各正常 exit0，分別有 `slint_drafts`、`slint_full_parity_grid` 的唯一嚴格 Close ACK，兩份 `prepared.json` 的16個 owner 皆存在。CUA screenshot 可見草稿用合成看板及原雙色格線。然而準備時的前景狀態不代表之後一直有焦點；操作時工具停用，Raise 未改變狀態，座標啟用回報 `noWindowsAvailable`。Ctrl+P 只留下本機欄位文字，隨後清空並正常關窗；沒有進入站端編輯器或保存。**完整草稿 UI 往返仍為 not_ready**，不以這兩輪正常啟閉代替。
+修正後兩個 macOS arm64 原生程序各正常 exit0，分別有 `slint_drafts`、`slint_full_parity_grid` 的唯一嚴格 Close ACK，兩份 `prepared.json` 的16個 owner 皆存在。CUA screenshot 可見草稿用合成看板及原雙色格線。然而準備時的前景狀態不代表之後一直有焦點；操作時工具停用，Raise 未改變狀態，座標啟用回報 `noWindowsAvailable`。Ctrl+P 只留下本機欄位文字，隨後清空並正常關窗；沒有進入站端編輯器或保存。該歷史輪次的草稿 UI 往返記為 not_ready，不以兩輪正常啟閉代替；後續編輯保存往返的獨立證據見上節。
 
 原六份 store 中，草稿等五份及可攜設定與場景前快照逐 byte 不變；最近看板則由完整 owner 正常記入已確認的合成 Stella 看板，包括第一輪失敗啟動。這是本情境的真實寫入，不宣稱零副作用或重新播種。結果、快照及失敗在 `slint-store-scenes/scene-results.json`、`before-drafts-v6/`、`after-scenes-v6/` 與各 phase。新測試使用真實 peer／連線，涵蓋 scene 互斥、錯帳號、pending、過期 frame 與正常 shutdown；初次測試漏呼叫 connect 的失敗另保留。最終 library389 passed／4 ignored、bin91 passed／1 ignored、release all-target Clippy／build 通過。
 

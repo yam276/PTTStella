@@ -19,7 +19,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 | S4 | 雙閱讀模式、長文取頁、尋找、名單／右鍵／揭露／底色、書籤／離線、快速前往與最近看板、目前／指定列表文章收藏、共用推文索引／原生定位與側標、推文更新／未讀／保留與復原；macOS基本按鈕、列表右鍵指定收藏與新程序斷線讀回補驗 | 跨平台推文控制／定位與完整鍵盤／焦點矩陣、其他平台列表右鍵及新程序離線操作、混合 Live 等效與全功能回歸 |
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、三格式錯色負向對照 | MP4 GPU 像素偶發失敗仍未重現／解決、多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
 | S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
-| S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔與正常退出；[共用版本檢查／下載入口](slint-release-check.md)、toolkit空白鍵及退出HTTP／listener join；[共用通知政策／原生時序](slint-notifications.md)、hover／Tab焦點暫停及timer退出；[三平台系統動畫偏好來源](slint-system-motion.md)、macOS初讀／本機通知回呼與observer／UI listener退出；三版本store往返28案；[實際前端往返](slint-store-frontends.md)補 macOS v1／v6 設定與站點六輪、名單三輪、可攜設定三輪操作（原儲存位置仍待查）、收藏名稱／離線副本與最近看板清除三輪 | 實際OS動畫偏好切換／還原及其他平台原生、原生通知／其他管理入口、完整Dock／modal／OS I/O與可及性矩陣、實際前端／平台路徑及vault往返 |
+| S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔與正常退出；[共用版本檢查／下載入口](slint-release-check.md)、toolkit空白鍵及退出HTTP／listener join；[共用通知政策／原生時序](slint-notifications.md)、hover／Tab焦點暫停及timer退出；[三平台系統動畫偏好來源](slint-system-motion.md)、macOS初讀／本機通知回呼與observer／UI listener退出；三版本store往返28案；[實際前端往返](slint-store-frontends.md)補 macOS v1／v6 設定與站點六輪、名單三輪、可攜設定三輪操作（原儲存位置仍待查）、收藏名稱／離線副本與最近看板清除三輪、同一資料草稿編輯保存三輪 | 實際OS動畫偏好切換／還原及其他平台原生、原生通知／其他管理入口、完整Dock／modal／OS I/O與可及性矩陣、實際前端／平台路徑及vault往返 |
 | S8 | [32套件x64 runtime乾淨重建](slint-native-source-replay.md)、47庫閉包核對（首輪MP4逾時未定因）；[兩組產品來源完整還原](slint-product-source.md)、新還原目錄的macOS arm64一般Slint配置95測試通過；S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG（含bc380f9導覽修正）及無Homebrew sandbox；[Windows x64完整GUI候選](slint-windows-candidate.md)，目前包與已測舊exe分列，Windows10實機13案回報經修正helper重驗（原版10過／3個格式誤判），嚴格ACK／像素／join；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64 App／ZIP／DMG](slint-macos-x64.md)、自建47項runtime閉包／32份來源、兩開發prefix不可用的Rosetta13案 | Intel與Linux原生、Windows完整人工操作、IME／DPI／音訊、VC runtime／最低OS／完整乾淨安裝、完整第三方來源交付與播放器重播、資料回退及同負載效能；尚未通過 |
 
 接續完整鍵盤／焦點與其他平台、跨平台列表／重開、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
@@ -575,3 +575,12 @@ exact removed paths、resolved／UID／symlink／lsof、每檔SHA、Cargo宣告�
 自製獨立client／render thread的C元件fixture，首輪MP4在25秒deadline後被終止，無JSON；WebM／OGV像素與刻意錯色負例符合expected。加有界checkpoint後四案符合expected，原MP4同一exe另三個程序及清理後的最小重現亦通過，但原失敗phase未知，重複性仍not_ready，沒有覆寫failed或稱為修正既有GPU異常。版本collector首版誤漏顯示前綴v，原程式exit0／JSON保持，再按獨立來源version映射核對，與解碼失敗分列。完整來源交付、Rust／Skia／其他架構、原生／資料／效能缺項繼續，四份既有候選bytes未變。
 
 來源／工具／配方及最小未解閉包保留在repo外，路徑、命令、scope見 [來源重建](slint-native-source-replay.md)，candidate index新增分立native_source_replay證據。新展開來源、build／install、工具／venv與冗餘input／fixture／成功binary共11根、64,223 regular files已清理；只保留原失敗CLI及47 raw libraries共64,770,576 bytes，load-path compatibility links核對有效。2,902份原來源與候選保護hash不變，3,151,611-byte build log無損gzip成169,418 bytes。exact paths／UID／resolved／symlink／lsof、du與filesystem free分列在slint-runtime-source-replay/cleanup/ledger.json；free只記並行觀測，不全歸因本批，無Cargo target、未動共享工具／其他工作／使用者資料。S0–S8持續，S9未執行。
+
+
+## 2026-11-10 草稿前端保存往返
+
+目前 arm64 候選6841e17e…與原乾淨5ea9ad6 Dioxus在同一 marked-store 副本完成 Slint → Dioxus → Slint 新程序三輪草稿編輯保存。原版實際讀到 Slint 中文／emoji／亮紅ANSI，再經模板capture、上色及固定正文保存；Slint新程序讀回三行及標題，原生貼上新中文／emoji尾行並保存。原版既有gate為passed，capture／color／save為1／1／4且fixture_matches，三輪exit0／嚴格Close；原版各worker／listener完成退出。一代備份各等於上一主檔，原版revision6–10及回程11有觀察紀錄，其他兩筆草稿、其他五store與可攜檔不變。詳 [草稿原生往返](slint-store-frontends.md#草稿原生編輯與保存往返)。
+
+首輪typeText只留下ASCII、240秒controller逾時/-15及無Close仍保留failed，原因未確定；後續以同一資料修正重複前綴並使用原生paste成功，不覆寫失敗或推定實體IME正常。含emoji的UAO上色拒絕與之後可編碼正文成功也分別記錄。新建／刪除／多開衝突／帶回站端、其他平台、正式路徑／vault與同負載效能仍待驗。
+
+本輪沒有Rust變更／重建；兩份自有host App及五個專用OS cache／WebKit／暫存目錄已確認退出、lsof無open files後清理，共110,884,103 regular-file bytes。3,026份來源／候選／最終資料hash不變，Frameworks symlink不跟隨刪除；exact paths、inventory、du與filesystem free前後在 slint-draft-roundtrip-current/cleanup/ledger.json，free只記並行觀測。最新四包、原baseline raw與唯一失敗／合成資料證據保留；Windows69542cb7…不變，等使用者稍後實測。S0–S8持續，S9未執行。
