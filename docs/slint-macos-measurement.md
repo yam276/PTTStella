@@ -2,6 +2,25 @@
 
 這份文件記錄 S0／S8 的量測工具及目前證據，不是效能通過報告。完整負載、次數與平台門檻仍以[平替計畫](slint-evaluation-plan.md#同負載效能門檻)為準。
 
+## 2026-11-10 同程序啟動與原生焦點校準
+
+本輪不重編Rust，重用目前arm64候選與既有2846dc4 Dioxus對照。診斷App改由LaunchServices啟動RunFixture，再以 `os.execve` 於同一PID執行native，不再由Python另spawn主程式。兩者都觀測到PPID1／responsible等於自己的PID；Dioxus的WebKit GPU／WebContent／Networking及ThemeWidget依responsibility歸入，Slint則含native與ThemeWidget。原生CUA現在可在Dioxus點擊標題列、座標點浮球、按Escape關閉選單並返回終端焦點，未再出現前輪noWindowsAvailable。此結果支持使用同PID啟動繼續量測，尚未單獨證明前輪故障的唯一原因。
+
+證據在 `.local/verification/slint-foreground-current/`。兩版設定SHA相同，bundled Cascadia Mono／Noto Sans CJK TC、23／20／100、en-US、hover off；相同80×24內容及1040×768含標題列外視窗，游標固定標題列(520,13)，首尾CUA終端焦點／Escape有原生證據。Slint prepared另證明16個服務、1040×740 viewport／1040×624 grid、scale1／zoom1；Dioxus幾何由實際screenshot核對，沒有機器viewport receipt。兩版OS字形／baseline並非pixel-identical，未把相同名義尺寸當成所有光柵細節相同。
+
+| 程序／預設renderer | 10秒／101筆footprint峰值 bytes | RSS峰值 bytes | CPU seconds |
+| --- | --- | --- | --- |
+| Dioxus同PID對照，原生輸入可用 | 642,592,384（約613MiB） | 466,550,784 | 0.370350541 |
+| Slint無renderer旗標，macOS software | 93,230,720（約89MiB） | 283,148,288 | 0.192464708 |
+
+此為單輪閒置校準，沒有連續記錄整段OS foreground，未控制／重複cold與warm；不能計算S8達標比例。首輪Dioxus游標仍在浮球上，另有101筆／0.536860208秒CPU，完整保留但不混入表列條件。Slint首個座標點浮球未展開，改用AX點擊後原生Escape成功，原始未變狀態也保留為待查操作觀察，未宣稱所有pointer矩陣完成。
+
+Dioxus產品來源native `948d2a9e…`，重新ad-hoc簽名後 `fd52aa8d…`，仍不是最初5ea9ad6基準；Slint封裝來源 `08cb87df…`，診斷重新簽名後 `dd3a0d4e…`，產品來源核對09a13da，實際原建置8f40e47加R4 patch不變。Dioxus診斷App deep-strict通過；Slint診斷App因外部Frameworks symlink而deep-strict失敗，standalone native strict通過，未當成可分發App。產品四包未改。
+
+CUA明確匯出Dioxus全頁PNG，960×576／SHA `1e25a773…` 逐byte等於前輪原生輸出；Slint source PNG亦為960×576／既有 `294df2bb…`，兩種renderer輸出各自核對，未宣稱彼此bytes相同。Dioxus surface／owner audit passed、connection／credential／file worker join、cleanup完成；Slint唯一嚴格slint_full_parity_grid Close ACK passed。兩版均用CUA⌘Q結束，全部觀測PID＋start消失；LaunchServices啟動的orphan主程序無可wait的parent，numeric exit code未觀測，沒有記成exit0。IMK mach-port訊息仍保留，不推定IME結果。
+
+已清理兩份診斷App、單一暫存資料根及五個精確自有OS cache／WebKit／暫存namespace，合計110,801,856 regular-file logical bytes。exact八條resolved路徑、UID／symlink／lsof、inventory／du及free270185943040→270296879104 bytes在 `cleanup/ledger.json`；free僅為並行觀測。首輪preflight將系統 `/var`→`/private/var` ancestor alias當未知差異而停止，未刪檔；明確核對後用resolved exact path接續，失敗另存。3,037份保護檔hash不變；只留小型來源／啟動器metadata、結果與trace。固定Cargo target／worktree、最新候選、原始對照、來源交付與使用者資料保留，未執行Cargo clean。下一步補雙GIF／混合負載、相同顯示觀測點及完整次數，S8仍not_ready。
+
 ## 2026-11-10 macOS 預設軟體合成與影片尺寸
 
 本輪來源將 macOS 的無旗標路徑改用 Skia 軟體合成及既有原生 CPU 影片 worker。Windows／Linux 的 Auto 選擇保持原邏輯；`SLINT_BACKEND` 仍可覆寫，另可明確指定互斥的 `--software-renderer`、`--opengl-renderer`、macOS `--metal-renderer`。Metal UI 必須在 mount 前選定 CPU 影片：首輪三格式都停在 Ready／offer 尚未被接手，未發 HTTP；修正後三案通過，沒有放寬就緒或像素條件。預設切換僅發生在 Slint 候選，不切換正式 Dioxus 入口。

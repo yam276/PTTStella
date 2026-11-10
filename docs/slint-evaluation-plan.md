@@ -10,7 +10,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。macOS arm64 最新候選另含 CJK fallback、貼上預覽、完整 shell 及預設軟體合成（351份產品來源對應09a13da）；Linux 保持含 CJK／貼上修正的84e98a3，Windows／Intel Mac 仍保持475897f，Windows69542cb7…等使用者稍後驗收。各包來源不同，依 [最新候選](#2026-11-10-最新候選) 分別核對；尚未完成全部原生或效能驗收。
 
-本輪來源已將macOS無旗標路徑改為Skia軟體合成及原生CPU影片；同機完整owner閒置峰值約99MiB，較先前OpenGL的842–845MiB低，但CPU較高。CPU影片與GPU共用尺寸／像素預算，保留Full HD／4K；仍有明確GL／Metal選項。原生⌃⌘F與七案功能回歸通過；正式arm64封裝另通過禁止Homebrew讀取的十案，詳最新候選；尚未完成Dioxus前景／同負載次數與所有平台效能。詳 [預設合成與影片尺寸](slint-macos-measurement.md#2026-11-10-macos-預設軟體合成與影片尺寸)，S8仍未通過。
+本輪來源已將macOS無旗標路徑改為Skia軟體合成及原生CPU影片；同機完整owner閒置峰值約99MiB，較先前OpenGL的842–845MiB低，但CPU較高。CPU影片與GPU共用尺寸／像素預算，保留Full HD／4K；仍有明確GL／Metal選項。原生⌃⌘F與七案功能回歸通過；正式arm64封裝另通過禁止Homebrew讀取的十案，詳最新候選；兩版已補原生鍵鼠／焦點校準，尚未完成連續前景觀測、同負載次數與所有平台效能。詳 [預設合成與影片尺寸](slint-macos-measurement.md#2026-11-10-macos-預設軟體合成與影片尺寸)，S8仍未通過。
 
 | 階段 | 目前已有 | 尚須完成 |
 | --- | --- | --- |
@@ -601,3 +601,9 @@ exact removed paths、resolved／UID／symlink／lsof、每檔SHA、Cargo宣告�
 既有2846dc4 Dioxus對照948d2a9e…以相同bundled字型／設定bytes及目視相同格線完成101筆採樣，PNG／surface／owner退出passed，最後觀測的所有程序身分消失。其原生前景仍未確認，且不是最初5ea9ad6；後者不接受parity_grid，exit2另保留。Documents EPERM、首份錯誤settings fallback、未確認前景與host簽名失敗均分案保存，沒有放寬權限／保護。完整原始數據與未驗範圍見 [閒置校準](slint-macos-measurement.md#2026-11-10-閒置格線校準與圖形記憶體)。S8沒有兩版改善比例、cold／warm、啟動／操作p95或完整次數／負載結果，仍not_ready。
 
 本輪沒有Rust變更／重建；兩份App、自有temporary根及五個專用OS暫存目錄共110,762,516 regular-file bytes已清理，保留小型合成資料與唯一raw trace／vmmap／失敗。3,016份來源／候選／必要對照hash不變，另移除4份byte-identical PNG；exact paths、UID／resolved／symlink／lsof、du、filesystem free與重複圖映射在 slint-perf-equivalence-current/cleanup/，free僅記並行觀測。Windows等待稍後驗收的包不變，S0–S8繼續，S9未執行。
+
+## 2026-11-10 同程序啟動與閒置補驗
+
+重用既有binary，診斷App從LaunchServices以同PID exec進入native，兩版都具有獨立responsibility root。Dioxus已可用原生座標點擊／Escape並回終端焦點；相同設定、80×24名義格線、外視窗與游標條件下，各完成101筆／10秒採樣：Slint無旗標software footprint峰值93,230,720 bytes／CPU0.192464708秒，2846dc4 Dioxus對照642,592,384 bytes／0.370350541秒。兩版CUA⌘Q後全部觀測PID＋start消失，Dioxus surface／cleanup及Slint唯一Close ACK核對通過；LaunchServices orphan的numeric exit未觀測，未填exit0。
+
+這不是初始5ea9ad6基準、完整冷暖重複或OS顯示延遲／S8通過；連續前景、雙GIF與混合功能、100次操作、原生平台矩陣仍缺。首次Dioxus浮球hover採樣與Slint座標點浮球未展開的觀察各自保留。詳細來源／簽名變化、幾何範圍、原始trace及清理見[同程序校準](slint-macos-measurement.md#2026-11-10-同程序啟動與原生焦點校準)。兩份App、自有暫存根及五個精確OS namespace已清理，固定Cargo cache與worktree保留；最新四包／原始來源未改。S0–S8持續、S9未執行。
