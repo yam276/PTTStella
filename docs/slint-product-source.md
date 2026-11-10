@@ -4,17 +4,20 @@
 
 ## 2026-11-11 產品來源包
 
-本機目前交付位於 `/Users/ladesine/Documents/PTTStella-Slint-Deliverables/product-source-20261111-6ad8e39/`，包含單一 23,220,799-byte Git bundle、兩份patch、`sources.json`、獨立還原工具及 README。`filter-current` 從bundle的9a加產品patch還原6ad，`cross-current` 加10,009-byte文件patch還原9db，其餘三組直接還原。bundle以hardlink沿用前份immutable檔案，沒有重複完整bundle。既有 docs gate 禁止 repo 內的 `.bundle`，因此來源交付保留於 repo 外，不放寬檢查。bundle 含 Git ancestry，不包含 worktree 的 `.local`、編譯 target 或未追蹤使用者資料。還原只讀此交付，不連網、不使用原 checkout 的 Git objects，也不覆寫既有目的地。
+本機目前交付位於 `/Users/ladesine/Documents/PTTStella-Slint-Deliverables/product-source-20261111-6ad8e39/`，包含單一 23,220,799-byte Git bundle、三份patch、`sources.json`、獨立還原工具及 README。`filter-current` 從bundle的9a加產品patch還原6ad，`filter-cross-current` 加另一patch還原61d，`cross-current` 加10,009-byte文件patch還原9db，其餘三組直接還原。新cross descriptor擴充既有交付，沒有另建來源包目錄；先前manifest保存在驗收證據。bundle以hardlink沿用前份immutable檔案，沒有重複完整bundle。既有 docs gate 禁止 repo 內的 `.bundle`，因此來源交付保留於 repo 外，不放寬檢查。bundle 含 Git ancestry，不包含 worktree 的 `.local`、編譯 target 或未追蹤使用者資料。還原只讀此交付，不連網、不使用原 checkout 的 Git objects，也不覆寫既有目的地。
 
 | 選項 | 對應候選 | 產品核對 commit | 完整 tracked 檔案 | 建置輸入核對 |
 | --- | --- | --- | --- | --- |
 | `filter-current` | 最新 Mac arm64／x64 | `6ad8e39` | 580 | 380 |
+| `filter-cross-current` | 最新 Linux／另備 Windows 新包ac788a45 | `61d1c3f` | 580 | 380 |
 | `macos-arm64-current` | 歷史 Mac arm64 | `9a06515` | 580 | 380 |
-| `cross-current` | 最新 Linux x64、另備 Windows 新包／歷史 Mac x64 | `9db9eda` | 580 | 380 |
+| `cross-current` | 歷史 Linux／Windows備妥包／Mac x64 | `9db9eda` | 580 | 380 |
 | `linux-84e-baseline` | 歷史 Linux x64 | `84e98a3` | 546 | 289 |
 | `windows-intel-475-baseline` | 待使用者測試的 Windows69542cb7／歷史 Mac x64 | `475897f` | 545 | 288 |
 
 上述 commit 是已核對產品檔案的版本。最新兩Mac實際原建置為a63c303 dirty，加frozen三檔patch；該patch與已提交6ad8e39產品／測試修改逐byte相同。ARM raw59c1c58f／封裝0b2f5786、Intel raw64a2caf1／封裝ae54f0bd，各原始build record保留。本批從新目錄還原filter-current完整580檔及tree `6c9d5b29336cbc36e7eef2a80f481b846d160c05`；只做來源還原，未重做獨立編譯。manifest 綁定封裝內執行檔完整SHA，核對完整 Git tree、所有 tracked 檔案的 SHA-256 與檔案清單，不只核對少數 Rust 檔案。
+
+Linux4fa0a14e與備妥Windowsac788a45從乾淨61d1c3f完成release／all-target Clippy。`filter-cross-current`已在同一可重用暫存路徑重新還原完整580檔／tree `4c9a8f5b97da144e7385d24f472fc764bf6831df`，與Mac6ad只有兩份文件不同，其餘578檔及380份產品選集相同；驗後移除還原目錄。這不是獨立來源編譯或Windows原生結果，Linux七過三敗的實際scope與未解PNG／QEMU反例另見主計畫。後續未採用的probe準備／trace實驗只保存在驗收patch及單一未解CLI，未混入此乾淨來源或封裝SHA。
 
 歷史arm64的原建置是 `aff5ac8` 加 snapshot／raster 修補；乾淨 `9a06515` 再執行Cargo時命中快取，0.32秒結束且raw SHA不變，不能改稱重新編譯。歷史Linux基準則是 `c67efdb` 加patch。舊ARM封裝f211c341等mapping保留供歷史證據核對。
 

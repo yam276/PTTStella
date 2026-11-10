@@ -8,7 +8,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 **尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
 
-文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個Mac固定下載入口已更新為核對6ad8e39的遮黑幾何修正包，各15項封裝後合成案例通過；Linux及另外備妥的Windows包仍為9db9eda。Windows69542cb7原下載包保持不變，等使用者稍後驗收。尚未同步四架構來源，也未完成所有原生／資料／效能矩陣；候選index與各包原始來源分列。
+文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩Mac為核對6ad8e39的遮黑幾何修正包，各15項封裝後合成案例通過；Linux及另外備妥的Windows包已同步61d1c3f，380份產品輸入相同，完整580檔只差兩份文件。Linux新增十案有七過三敗，首次PNG拒絕與QEMU／LLVM反例見文末，未宣稱平替。Windows69542cb7原下載包保持不變，等使用者稍後驗收；新備妥ac788a45原生未測。所有原生／資料／效能矩陣仍未完成，候選index與各包原始來源分列。
 
 macOS預設Skia軟體合成及原生CPU影片已降低閒置圖形記憶體；GIF循環重用與保留raster後，同一雙GIF校準的10秒CPU約1.10秒，較早期約3.60秒下降。這是不同修正階段的校準，未完成正式冷暖次數、100次操作、連續前景／延遲、峰值及所有平台矩陣，不能據此宣布勝過Dioxus或S8通過。CPU影片與GPU共用尺寸／像素預算，保留Full HD／4K及明確GL／Metal選項；MP4 GPU偶發錯色仍未解。詳 [效能與原始限制](slint-macos-measurement.md)。
 
@@ -687,3 +687,19 @@ Cargo fingerprint另證實host依賴曾因 `MACOSX_DEPLOYMENT_TARGET` 未設定�
 候選index、固定下載alias及來源包已更新。清理兩個過時Mac包的未用部分、一次還原checkout、過時診斷App／exe備份、重複temp證據及39份逐code object核對來源的自產pyc，合計47個exact roots、583,606,841 regular-file bytes。舊ARM App由系統tccd持有native，完整保留於 `filter-package-current/retired-arm64/PTTStella Slint Candidate.app`，不停止系統服務；舊ZIP／DMG已移除。固定Cargo cache、新兩包、Windows待驗包、Linux及來源／對照hash不變。resolved／UID／symlink／lsof／SHA／du及filesystem available251401015296→251989946368 bytes在 `slint-renderer-api-current/cross-current/filter-package-current/cleanup.json`，free只記並行觀測。
 
 本批實際封裝、15案、schema原始結果、來源還原及promotion集中於同目錄；已結束的原生工具限制在 `account-diagnostic/native-known-host/`。下一步同步Windows／Linux幾何修正並處理其餘原生／資料／效能缺項；S0–S8保持active，S9未執行。
+
+## 2026-11-11 Windows／Linux 同步與 PNG 反例
+
+同一worktree／固定Cargo target，以乾淨61d1c3f完成Windows及Linux release與各自all-target Clippy；host deployment target保持11.0，未重建整套依賴。Linux SDK只重掛及核對既有3,419項，原有具名容器／已安裝runtime與工具復用，不新增repo或target。Windows新備妥包native `ac788a45`取代原487c428b，919份ZIP payload中917份逐byte不變，只改exe／candidate.json，libmpv相同；原生未執行。使用者待驗69542cb7包與入口保持不變，沒有轉填舊Windows／IME結果。
+
+Linux固定入口更新native `4fa0a14e`，tar1,122／deb1,109份regular files，共同payload／loader／dpkg核對通過，Depends不含WebKit。QEMU／Xvfb十案中格線、input、paste、long、inline、terminal account及software replies七案exit0／唯一嚴格Close；web software account在第一張PNG匯出前後失敗，default web account／replies兩案在LLVM／QEMU中止，不能以七過代替全部通過。無系統CJK字型的格線另目視確認中文控制項與末行可讀。GUI案例的自有Xvfb／Openbox均join；這不是x64硬體、Wayland、IME、音訊或效能驗收。
+
+首次PNG尚未執行遮黑，也沒有送出PageDown或HTTP。以有界trace確認：同一1100×960視窗、origin y118，匯出前viewport為1076×670，output worker繪製期間改為1076×590；幾何回呼撤銷lease，第二次check拒絕寫檔。舊8fa36bcd封裝的同案亦重現相同PNG錯誤，不能歸因本次遮黑修正。僅snapshot／等待ready及另加一次native event-loop turn都未解決；這些未證實的準備更動與trace已保存完整patch／raw hash，tracked source恢復61d，未放寬產品保護或改expected。最新未解診斷raw ff966063保留於固定target，作為後續追查控制列／版面回呼的單一CLI，不當作已封裝產品。
+
+另外依 [Mesa環境變數文件](https://docs.mesa3d.org/envvars.html#gallium-environment-variables)在自有runner選softpipe、DRAW_USE_LLVM=0重測：未改Slint renderer選擇或關閉raster，準備步驟實驗raw2b906b1e的default replies通過，web account仍因PNG失敗。這是替代Mesa路徑的補充證據，不把原LLVM134改成passed，也不轉填到4fa包。原系統driver／硬體GPU仍未驗。
+
+產品來源在既有6ad來源交付新增 `filter-cross-current`，以同一immutable bundle及新patch還原61d完整580檔／tree，綁定Linux4fa及備妥Windowsac；Mac6ad mapping保留。完整tree比較確認578檔相同、只有兩份文件不同，380份產品選集只是補充；本輪未做獨立來源編譯，第三方完整來源仍not_ready。打包器及workflow相對前輪未改，沿用前輪178項Python／actionlint結果，新增實際artifact與上述原始執行證據，不為文件或清理重建Rust。
+
+原始建置、封裝、十案／所有負例、Mesa補測、舊包baseline、來源還原與promotion在 `slint-renderer-api-current/cross-current/filter-package-current/`。原始失敗與獨特PNG／log保留；不再需要的完整舊Windows／Linux包、包裝input及一次還原目錄已逐檔核對後清理；唯一舊8fa exe壓縮保留作反例control。容器內14個已消費的傳輸／output／runner目錄共552,538,706 regular-file bytes另核對清理，自有runner已停止、runtime／工具保留。host exact paths、UID／resolved／symlink／lsof／du、保護hash與free觀測見 `cross-cleanup.json`；容器分列 `container-cleanup.json`，不將VM logical bytes當作host釋放量。SDK正常卸載、image及Cargo cache保留。S0–S8保持active，S9未執行。
+
+host本輪exact五根共444,095,902 regular-file bytes；filesystem available246859952128→247308451840 bytes只記並行觀測，不全歸因本批。舊ARM App仍被tccd持有而保留，未停系統服務。固定Cargo cache的du為13,007,048KiB（約12.4GiB），沒有full clean；八份目前下載及來源manifest／380份產品輸入的最終hash均核對，來源完整580檔還原證據另列，保留單一未解raw與必要舊control。容器內初始sleep與已終結session bus的namespace在正常stop後退出，沒有其他專案或共享VM被停止。

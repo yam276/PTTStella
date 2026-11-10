@@ -1,6 +1,6 @@
 # Slint Linux x64 候選包
 
-2026-11-10 最新候選位於 `.local/verification/slint-ui-cjk-fallback/linux-package/`，289份產品建置輸入與 `84e98a3` 核對一致；實際建置仍記c67efdb加patch。ELF `4e474a0a…`、tar `c3b31a69…`、deb `051970c9…`，納入CJK控制項及貼上預覽跨重繪修正。實際loader／dpkg與tar／deb核對通過；無系統中文字型的QEMU x64程式配ARM Xvfb／Openbox／session bus，格線／輸入／貼上三案通過，並非Linux x64硬體或原生IME。最新來源及hash見 [主計畫](slint-evaluation-plan.md#2026-11-10-最新候選) 與 `slint-navigation-cross/current-candidates.json`；產品來源可依 [來源還原](slint-product-source.md) 選 arm64-linux-current，完整第三方來源仍not_ready。以下舊包及驗收為歷史紀錄。
+2026-11-11 最新候選位於 `.local/verification/slint-ui-cjk-fallback/linux-package/`，乾淨61d1c3f完成release／all-target Clippy，與Mac6ad的380份產品輸入相同，完整580檔只差兩份文件。ELF `4fa0a14e…`含保留raster、CJK／貼上及遮黑狀態列修正；實際loader／dpkg及tar1,122／deb1,109份payload核對通過。QEMU／Xvfb十案七過三敗：web software account首次PNG因幾何變更而撤銷lease；兩個default GL案例在LLVM中止。舊8fa包也重現PNG反例；Mesa softpipe另有不同實驗raw的補充結果，均未轉填。無系統CJK字型的格線另目視確認可讀。這不是x64硬體／IME／Wayland／效能驗收。完整hash與原始結果見 [主計畫](slint-evaluation-plan.md#2026-11-11-windowslinux-同步與-png-反例)及 `slint-navigation-cross/current-candidates.json`；[來源還原](slint-product-source.md)選 `filter-cross-current`，完整第三方來源仍not_ready。以下舊包及驗收為歷史紀錄。
 
 此為 S8 內部驗收候選，尚未取代正式 Dioxus 入口。目標為 Ubuntu 24.04 x64，提供獨立名稱的 deb 與 portable tar.gz，包含 `native-player-probe` 主程式。尚未通過 Linux 原生桌面、繁中 IME、DPI、音訊、硬體 GPU、資料回退與效能驗收。
 
