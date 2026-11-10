@@ -206,8 +206,7 @@ fn selected_png_has_complete_row_width_independent_pixels_and_no_cursor() {
     let mut pixels = vec![0; reader.output_buffer_size().unwrap()];
     let info = reader.next_frame(&mut pixels).unwrap();
     assert_eq!((info.width, info.height), (960, 24));
-    assert_eq!(&pixels[(4 * 12) * 4..(4 * 12) * 4 + 4], &[0, 0, 128, 255]);
-    assert_eq!(&pixels[(5 * 12) * 4..(5 * 12) * 4 + 4], &[128, 0, 128, 255]);
+    crate::verification::check_dual_backgrounds(&pixels, 4).unwrap();
     let full = render_png(frame.clone(), display.clone(), 0..24).unwrap();
     assert_eq!(
         cropped.image.bytes.as_ref(),
@@ -301,9 +300,7 @@ fn history_crop_copies_only_requested_rows_and_keeps_the_dual_glyph_png() {
     assert_eq!((reader.info().width, reader.info().height), (960, 24));
     let mut pixels = vec![0; reader.output_buffer_size().unwrap()];
     reader.next_frame(&mut pixels).unwrap();
-    let pixel = |x: usize, y: usize| &pixels[(y * 960 + x) * 4..(y * 960 + x) * 4 + 4];
-    assert_eq!(pixel(4 * 12, 0), &[0, 0, 128, 255]);
-    assert_eq!(pixel(5 * 12, 0), &[128, 0, 128, 255]);
+    crate::verification::check_dual_backgrounds(&pixels, 4).unwrap();
     assert!(crop_rows(&frame, 660..685).is_err());
     assert!(crop_rows(&frame, 838..839).is_err());
 }
@@ -317,14 +314,6 @@ fn native_acceptance_clipboard_image_matches_the_synthetic_row() {
         image.width == 960 && image.height == 24,
         "clipboard is not the explicit native acceptance fixture"
     );
-    let pixel = |x: usize| &image.bytes[x * 4..x * 4 + 4];
-    assert!(
-        pixel(72) == [0, 0, 128, 255],
-        "fixture left background differs"
-    );
-    assert!(
-        pixel(84) == [128, 0, 128, 255],
-        "fixture right background differs"
-    );
+    crate::verification::check_dual_backgrounds(&image.bytes, 6).unwrap();
     // No clipboard contents or hashes are printed on a mismatch.
 }

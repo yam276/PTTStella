@@ -231,12 +231,7 @@ pub fn start(
             .await?;
             let (w, h, rgba) = pixels(&directory.join("history-row.png"))?;
             require((w, h) == (960, 24), "history PNG dimensions differ")?;
-            for (x, expected) in [(6 * 12, [0, 0, 128, 255]), (7 * 12, [128, 0, 128, 255])] {
-                require(
-                    rgba[x * 4..x * 4 + 4] == expected,
-                    "history PNG background differs from independent expected",
-                )?;
-            }
+            verification::check_dual_backgrounds(&rgba, 6)?;
             verification::capture(&ui, &directory, "selection.png")?;
             // Whole-page exports are source 24 rows and survive a selection clear.
             let (frame, rows, full, phase) = output.prepare_export(&ui, false)?;

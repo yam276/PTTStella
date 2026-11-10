@@ -84,6 +84,29 @@ impl Verification {
 pub fn require(value: bool, message: &str) -> Result<(), String> {
     value.then_some(()).ok_or_else(|| message.to_owned())
 }
+/// The owned history fixture has a thin glyph over blue/magenta half-cells.
+/// Font rasterizers can put ink on a cell corner, so verify each half's opaque
+/// background area instead of assuming that two corner pixels contain no ink.
+pub fn check_dual_backgrounds(rgba: &[u8], first_col: usize) -> Result<(), String> {
+    require(
+        rgba.len() == 960 * 24 * 4 && first_col <= 78,
+        "dual-colour fixture dimensions differ",
+    )?;
+    for (col, expected) in [
+        (first_col, [0, 0, 128, 255]),
+        (first_col + 1, [128, 0, 128, 255]),
+    ] {
+        let matching = (0..24)
+            .flat_map(|y| (col * 12..(col + 1) * 12).map(move |x| (y * 960 + x) * 4))
+            .filter(|&offset| rgba[offset..offset + 4] == expected)
+            .count();
+        require(
+            matching > 12 * 24 / 2,
+            "dual-colour fixture background differs",
+        )?;
+    }
+    Ok(())
+}
 /// An explicit toolkit activation, never an OS focus or a production bypass.
 /// Synthetic foreground alone cannot make a deactivated TextInput own focus.
 pub fn foreground(ui: &TerminalWindow, active: bool) {
@@ -134,4 +157,49 @@ pub fn capture<C: ComponentHandle>(
         .map_err(|e| e.to_string())?
         .write_image_data(pixels.as_bytes())
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::check_dual_backgrounds;
+
+    fn fixture() -> Vec<u8> {
+        let mut image = [0, 0, 0, 255].repeat(960 * 24);
+        for y in 0..24 {
+            for (range, colour) in [(72..84, [0, 0, 128, 255]), (84..96, [128, 0, 128, 255])] {
+                for x in range {
+                    image[(y * 960 + x) * 4..(y * 960 + x) * 4 + 4].copy_from_slice(&colour);
+                }
+            }
+        }
+        image
+    }
+
+    #[test]
+    fn background_fixture_allows_glyph_ink_at_a_corner() {
+        let mut image = fixture();
+        image[84 * 4..84 * 4 + 4].copy_from_slice(&[255, 255, 255, 255]);
+        assert!(check_dual_backgrounds(&image, 6).is_ok());
+    }
+
+    #[test]
+    fn two_correct_corner_pixels_cannot_hide_a_missing_background() {
+        let mut image = [0, 0, 0, 255].repeat(960 * 24);
+        image[72 * 4..72 * 4 + 4].copy_from_slice(&[0, 0, 128, 255]);
+        image[84 * 4..84 * 4 + 4].copy_from_slice(&[128, 0, 128, 255]);
+        assert!(check_dual_backgrounds(&image, 6).is_err());
+    }
+
+    #[test]
+    fn wrong_half_colour_and_invalid_fixture_bounds_are_rejected() {
+        let mut image = fixture();
+        for y in 0..24 {
+            for x in 84..96 {
+                image[(y * 960 + x) * 4..(y * 960 + x) * 4 + 4].copy_from_slice(&[0, 0, 128, 255]);
+            }
+        }
+        assert!(check_dual_backgrounds(&image, 6).is_err());
+        assert!(check_dual_backgrounds(&fixture()[..960 * 24 * 4 - 1], 6).is_err());
+        assert!(check_dual_backgrounds(&fixture(), usize::MAX).is_err());
+    }
 }
