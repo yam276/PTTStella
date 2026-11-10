@@ -13,7 +13,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 | 階段 | 目前已有 | 尚須完成 |
 | --- | --- | --- |
 | S0 | 共用 Rust 服務、獨立 Slint 入口及可編譯提交序列；四 target 的一般／播放器兩配置 Cargo 依賴 gate | 完整功能案例對照、各平台連結／runtime 依賴與最終基準重跑 |
-| S1 | 格線／雙色字／縮放、macOS 原生輸入的分立證據；Windows Microsoft注音候選位置／Esc取消／單次提交的使用者人工回報 | Linux無系統CJK字型時的Slint控制項fallback；完整候選窗／組字／失焦矩陣、跨螢幕 DPI、可及性與其他平台原生 |
+| S1 | 格線／雙色字／縮放、macOS 原生輸入的分立證據；Windows Microsoft注音候選位置／Esc取消／單次提交的使用者人工回報 | 完整候選窗／組字／失焦矩陣、跨螢幕 DPI、可及性與其他平台原生 |
 | S2 | 共用 Connection、登入／保活、站點表單、嚴格切站／雙編碼 bytes | 同 endpoint 編碼切換、預設站重啟／不登入、完整信任／vault 原生矩陣 |
 | S3 | 選取、輸出、浮球／選單及原生互動的分立證據 | 全部快捷鍵／pointer／modal／可及性操作矩陣 |
 | S4 | 雙閱讀模式、長文取頁、尋找、名單／右鍵／揭露／底色、書籤／離線、快速前往與最近看板、目前／指定列表文章收藏、共用推文索引／原生定位與側標、推文更新／未讀／保留與復原；macOS基本按鈕、列表右鍵指定收藏與新程序斷線讀回補驗 | 跨平台推文控制／定位與完整鍵盤／焦點矩陣、其他平台列表右鍵及新程序離線操作、混合 Live 等效與全功能回歸 |
@@ -526,3 +526,12 @@ Rosetta的初輪七個合成案例為六過／一失敗：software網頁account�
 結案使用Cargo原生clean、本輪image正常卸載及本輪停止容器的非force移除；清理三份舊完整包、三個raw、編譯與封裝input／transfer／linker暫存。新四包、SDK工具、原Windows101份證據及產品來源受hash保護；舊metadata、完整file SHA與最小recipe封存，Rosetta失敗保留在新候選即可重現。exact paths、UID／resolved／symlink／lsof、du／Cargo／filesystem free及保留例外見slint-navigation-cross/cleanup/ledger.json。S0–S8仍需完整原生／資料回退／來源交付／同負載效能驗收，S9未執行。
 
 本輪Cargo原生clean回報21,687檔／7.0GiB，刪前target du7446036KiB；本輪停止容器SizeRw 1455690398 bytes已非force移除，source286份及2568份保護檔hash不變。正式ledger的filesystem available 288739176448→297013121024 bytes是並行觀測，與Cargo／du分列；初輪preflight在掛載helper仍持有本輪image時停止，先正常卸載後重做盤點，前次未序列化的free值沒有補造。舊三包已移除內容並換成指向最新包的symlink；本輪target／image／unpacked sysroot／transfer／raw／link-input均不存在，唯一保留SDK工具如上。
+
+
+## 2026-11-10 原生控制項使用內建中文字型
+
+Slint 原生控制項現在在平台初始化後、第一個視窗顯示前，向共享 Fontique collection 註冊既有 Noto Sans CJK TC，補到漢字、注音、假名及韓文字體 fallback 的末端。先保存平台已解析的 fallback 順序，保留系統或使用者的優先選擇。終端與控制項共用同一份 static 字型 bytes，沒有新增字型資產或 WebView 依賴；採用 Slint 1.18.1 對應的 unstable-fontique-011 API，未升級依賴。
+
+無系統中文字型的隔離 Linux runtime 中，實際 x64 ELF 透過 QEMU、ARM Xvfb／Openbox／session bus 執行，格線擷取及完整文章輸入皆 exit 0，輸入有唯一嚴格 ACK。已目視核對 r4/grid.png 的中文按鈕及提示可讀；終端文字仍使用 Rust renderer。這不是 Linux x64 硬體、OS 輸入法、其他平台或效能驗收。R4 ELF 0f1a554c…，93,591,968 bytes，完整 Noto bytes 僅出現一次；這個數字不代表 heap／RSS。播放器與一般 Slint 配置各 95 項單元測試通過、1 項 helper ignored，Linux release build／all-target Clippy 通過；兩個新增測試分別驗證既有 collection clone 能取得 fallback，以及已設定字體保留第一順位。依賴檢查八組 target／配置及五個驗證器測試通過。證據與來源 patch 在 slint-ui-cjk-fallback/。
+
+貼上仍是獨立未解項目：舊 ELF、目前交付及字型原型皆在 fresh confirmed paste preview missing 失敗。R4 邊界紀錄證明讀取前來源、前景與欄位焦點有效，讀取已受理，但稍後出現 paste-stale；尚未確定瞬間失效原因，沒有放寬保護或改 expected。最新四份交付仍是 475897f 的固定來源，尚未納入本次字型修正；新版 Windows 69542cb7… 等使用者稍後驗收。S0–S8 持續，S9 未執行。

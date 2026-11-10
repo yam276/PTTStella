@@ -60,7 +60,7 @@ reqwest = { version = "=0.13.5", default-features = false, features = ["rustls-n
 imagesize = { version = "=0.15.0", default-features = false, features = ["jpeg", "png", "gif", "webp"], optional = true }
 time = { version = "=0.3.55", features = ["local-offset"], optional = true }
 image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp"], optional = true }
-slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-skia", "accessibility", "unstable-winit-030"], optional = true }
+slint = { version = "=1.18.1", default-features = false, features = ["std", "compat-1-2", "backend-winit", "renderer-skia", "accessibility", "unstable-winit-030", "unstable-fontique-011"], optional = true }
 skia-safe = { version = "=0.153.3", default-features = false, features = ["binary-cache"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]

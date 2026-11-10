@@ -44,6 +44,7 @@ mod stations;
 mod system_motion;
 mod system_motion_probe;
 mod tools;
+mod ui_fonts;
 mod verification;
 
 use pttstella::{
@@ -663,6 +664,9 @@ fn run(
             .select()?;
     }
     let ui = TerminalWindow::new()?;
+    // The platform exists now; register process-wide fallbacks before showing
+    // this root or creating any settings/editor/manager windows.
+    ui_fonts::register()?;
     ui.set_macos_shortcuts(cfg!(target_os = "macos"));
     let notice_owner = notice::Owner::mount(&ui)?;
     let system_motion_owner = system_motion::Owner::mount(
