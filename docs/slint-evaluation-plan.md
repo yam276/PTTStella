@@ -378,3 +378,6 @@ x64 runtime暫取自經GitHub digest及完整簽章核對的IINA1.5.1，僅保�
 
 
 2026-11-10 收藏／最近看板實際前端補驗：同一v6副本完成Slint → 原5ea9ad6 Dioxus → Slint三輪收藏改名與四行離線閱讀，原created_at、完整archive／footer／link／ANSI左右樣式及尾空白不變，三次收藏前版備份逐byte正確；三個原生畫面在CUA screenshot目視，沒有宣稱精確離線PNG像素稽核。最近看板先讀Stella／Test再清除，兩版主檔與備份皆空，原版重讀／再清除及Slint新程序空清單通過；未按Go，不推定最近新增／排序或站端導覽。三輪exit0／Close與原版owner清理通過；其他資料byte不變，完整scope見 [前端往返](slint-store-frontends.md)。本輪3份App與專用cache已清理，exact paths、free／du與保留例外見 `slint-frontend-roundtrip/bookmarks-cleanup/ledger.json`；沒有Rust修改／重建，完整平替仍未完成。
+
+
+2026-11-10 草稿資料場景已接到同一 marked-store 入口與完整 owner，`--store-scene drafts` 不重播種資料，仍走嚴格本機 peer。修正原 parity-only 準備檢查後，草稿／預設格線兩個 macOS 原生程序皆完成場景特定 frame／16 owner 檢查、exit0 及嚴格 Close ACK；未修改正常產品入口。操作階段工具因前景保護停用，原生座標啟用不可用，沒有進站端編輯或保存，因此草稿完整 UI 往返仍 not_ready。最近看板正常記入合成 Stella 訪問，其他五 store／可攜檔 byte 不變；首輪診斷失敗與測試漏 connect 的失敗保留。範圍、來源、389／91 個測試與清理見 [前端往返](slint-store-frontends.md#草稿場景準備與格線回歸)。清掉3份臨時App、舊raw與本批Cargo target，最新診斷CLI只留一份；exact paths、du／free及保留例外在 slint-store-scenes/cleanup/ledger.json。S0–S8持續，S9未執行。

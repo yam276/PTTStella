@@ -22,6 +22,8 @@ pttstella-slint --software-renderer --probe-store NEW_EVIDENCE_DIR MARKED_STORE_
 
 這是明確標記的合成副本入口，不會自動搬移正式資料，也不代表可以直接把使用中的產品目錄拿來驗收。原 Dioxus 使用其既有 `pttstella --probe-surface MARKED_STORE_ROOT tools`，兩個程序依序退出後才啟動下一個。兩邊讀寫相同檔案，不在階段間轉換 schema 或重新播種。
 
+需要站端草稿情境時，可在相同入口加 `--store-scene drafts`；省略或明確指定 `--store-scene grid` 都保持原雙色格線。場景旗標不能獨立使用或混入其他 probe／verifier。草稿場景沿用嚴格本機 draft peer、完整 owner 與同一組 `probe-*.json`，不使用一般 profile，也不自動進編輯器或保存草稿。
+
 ## 可重現資料與操作
 
 fixture 直接重用 `tooling/verify_store_compatibility.py` 的自製 CC0 資料。從 repo 根目錄，選一個不存在的新路徑建立：
@@ -100,6 +102,18 @@ Slint 使用原生 NSOpenPanel 載入原 fixture 的 `display.pttstella.json`，
 本輪3份App與原Dioxus專用WebKit／cache／系統暫存已確認退出／無open files後逐筆清除；來源與實際保存資料、兩份必要raw CLI保持hash不變。exact paths、UID／resolved／symlink、du、filesystem free前後及保留例外在 `bookmarks-cleanup/ledger.json`，重複PNG的保留位置／SHA在同目錄 `duplicate-pngs.json`。沒有修改產品程式、重建Rust、切換正式入口或發佈。
 
 ## 保留的失敗與待驗
+
+### 草稿場景準備與格線回歸
+
+後續診斷 CLI 補上上述場景選擇，來源為 `052eb3e` 加 `.local/verification/slint-store-scenes/revision-3/source.patch` 與逐檔 fingerprint，SHA-256 `2301617d9ab3e6570b5bd71fcfb68e7278bb447687745c28aac905f75b87b5c9`。它取代本批先前保留的 Slint raw CLI；原 `5ea9ad6` Dioxus raw CLI 仍保留，平台候選包沒有因此更新。
+
+首輪草稿場景被原本只接受雙色格線的準備檢查拒絕，exit1／嚴格 Close acknowledged；失敗原樣保留。現在準備檢查依場景核對：grid 仍要求原 parity；drafts 要求已安裝的80×24、完整控制碼／可映射字形、同一 generation／revision，以及共用 `drafts::scope` 確認連線就緒且帳號 StellaTest、看板 Stella。原本5秒期限、幾何／繪製交接和16個完整 owner 檢查保留，沒有放寬前景或輸入保護。
+
+修正後兩個 macOS arm64 原生程序各正常 exit0，分別有 `slint_drafts`、`slint_full_parity_grid` 的唯一嚴格 Close ACK，兩份 `prepared.json` 的16個 owner 皆存在。CUA screenshot 可見草稿用合成看板及原雙色格線。然而準備時的前景狀態不代表之後一直有焦點；操作時工具停用，Raise 未改變狀態，座標啟用回報 `noWindowsAvailable`。Ctrl+P 只留下本機欄位文字，隨後清空並正常關窗；沒有進入站端編輯器或保存。**完整草稿 UI 往返仍為 not_ready**，不以這兩輪正常啟閉代替。
+
+原六份 store 中，草稿等五份及可攜設定與場景前快照逐 byte 不變；最近看板則由完整 owner 正常記入已確認的合成 Stella 看板，包括第一輪失敗啟動。這是本情境的真實寫入，不宣稱零副作用或重新播種。結果、快照及失敗在 `slint-store-scenes/scene-results.json`、`before-drafts-v6/`、`after-scenes-v6/` 與各 phase。新測試使用真實 peer／連線，涵蓋 scene 互斥、錯帳號、pending、過期 frame 與正常 shutdown；初次測試漏呼叫 connect 的失敗另保留。最終 library389 passed／4 ignored、bin91 passed／1 ignored、release all-target Clippy／build 通過。
+
+這一輪3份臨時 App、被取代的 raw CLI 與建置 target 已清理；最新診斷 CLI 只留在 `slint-frontend-roundtrip/pending-current/`。exact paths、owner／resolved／symlink／lsof、Cargo 回報、du 與 filesystem free 前後見 `slint-store-scenes/cleanup/ledger.json`。來源與唯一失敗／成功紀錄保留，未整合或發佈。
 
 - 原 Dioxus HTML 字高欄位 `step=1`：能顯示 Slint 的 22.5，但試存 23.5 會顯示欄位不完整／超界且不寫檔。以 23 保存成功，只驗到整數路徑；小數字高的完整 GUI 回退仍未通過，不能從 store 接受浮點數推定 UI 相容。
 - 首輪有一般入口被操作工具額外啟動，該輪不宣稱全程零外網／vault。後續固定參數 host 只執行明確合成探針，重複 LaunchServices 啟動不回退到一般 Live。
