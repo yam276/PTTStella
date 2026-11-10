@@ -8,7 +8,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 **尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
 
-文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩Mac為核對6ad8e39的遮黑幾何修正包，各15項封裝後合成案例通過；Linux及另外備妥的Windows包已同步61d1c3f，380份產品輸入相同，完整580檔只差兩份文件。Linux新增十案有七過三敗，首次PNG拒絕與QEMU／LLVM反例見文末，未宣稱平替。Windows69542cb7原下載包保持不變，等使用者稍後驗收；新備妥ac788a45原生未測。所有原生／資料／效能矩陣仍未完成，候選index與各包原始來源分列。
+文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩Mac仍為6ad8e39，各15項封裝後合成案例通過；最新Linux已核對fbcfe2e的閱讀狀態列及探針修正，ELF150c1a0d完成14案與四案針對性重測，全部exit0／嚴格Close。GL案例使用QEMU／Xvfb＋Mesa softpipe，原LLVM中止與一次GL逾時的失敗證據仍保留，不能當原生硬體或S8效能通過。另備Windowsac788a45仍為61d1c3f，尚未包含這批新修正；使用者待驗Windows69542cb7入口不變。Intel／Linux實機依使用者指示暫緩，其餘原生／資料／效能矩陣未完成；candidate index分列來源與包SHA。
 
 macOS預設Skia軟體合成及原生CPU影片已降低閒置圖形記憶體；GIF循環重用與保留raster後，同一雙GIF校準的10秒CPU約1.10秒，較早期約3.60秒下降。這是不同修正階段的校準，未完成正式冷暖次數、100次操作、連續前景／延遲、峰值及所有平台矩陣，不能據此宣布勝過Dioxus或S8通過。CPU影片與GPU共用尺寸／像素預算，保留Full HD／4K及明確GL／Metal選項；MP4 GPU偶發錯色仍未解。詳 [效能與原始限制](slint-macos-measurement.md)。
 
@@ -703,3 +703,18 @@ Linux固定入口更新native `4fa0a14e`，tar1,122／deb1,109份regular files�
 原始建置、封裝、十案／所有負例、Mesa補測、舊包baseline、來源還原與promotion在 `slint-renderer-api-current/cross-current/filter-package-current/`。原始失敗與獨特PNG／log保留；不再需要的完整舊Windows／Linux包、包裝input及一次還原目錄已逐檔核對後清理；唯一舊8fa exe壓縮保留作反例control。容器內14個已消費的傳輸／output／runner目錄共552,538,706 regular-file bytes另核對清理，自有runner已停止、runtime／工具保留。host exact paths、UID／resolved／symlink／lsof／du、保護hash與free觀測見 `cross-cleanup.json`；容器分列 `container-cleanup.json`，不將VM logical bytes當作host釋放量。SDK正常卸載、image及Cargo cache保留。S0–S8保持active，S9未執行。
 
 host本輪exact五根共444,095,902 regular-file bytes；filesystem available246859952128→247308451840 bytes只記並行觀測，不全歸因本批。舊ARM App仍被tccd持有而保留，未停系統服務。固定Cargo cache的du為13,007,048KiB（約12.4GiB），沒有full clean；八份目前下載及來源manifest／380份產品輸入的最終hash均核對，來源完整580檔還原證據另列，保留單一未解raw與必要舊control。容器內初始sleep與已終結session bus的namespace在正常stop後退出，沒有其他專案或共享VM被停止。
+
+
+## 2026-11-11 閱讀狀態列與 Linux 元件回歸
+
+`94bc250`將全文載入與推文更新合併成一個32px閱讀狀態列，文章啟用時即保留空間；控制項晚到、未讀／復原／output busy改變不再額外擠壓已確認viewport。未改Rust來源lease、輸出／輸入權限或取頁時序。新增獨立Skia完整／局部renderer幾何案例，修改前確實因晚到推文控制改變viewport而失敗，修改後一般／播放器兩配置均通過；本輪不再重跑與先前逐byte相同的UI／audit輸入。
+
+`46d7046`修正合成探針的來源准入：account首個匯出等待真實load／updates能力，每張圖片操作前重新等inline來源就緒，並核對指定index的實際圖片已placement；paste退出案例在snapshot後重取可准入來源，仍須證明實際read worker存在及正常join。沒有放寬生產lease、沒有增加假ready或移除Close斷言。`fbcfe2e`將雙色字PNG背景檢查由兩個字型可能上墨的角落，改成每半格嚴格多數的原始不透明藍／紫像素；獨立負例拒絕只剩兩個正確角落、錯色與非法bounds，未改期望色值或產品renderer。
+
+一般／播放器bin各106過、1項明確原生clipboard helper ignored；兩配置all-target Clippy、Linux release／all-target Clippy與fmt通過。最終ELF `150c1a0dd10ade2e76c1686352c8cbefd7cc930cf6945e04251f2eb6987347c7`是f40e793加七檔patch的實際編譯，完整patch逐byte等同f40e793到fbcfe2e。無系統CJK字型的QEMU／Xvfb十四案（grid、input、paste、long、inline、三種account、兩種replies、output、updates append／cancel／blur）全部exit0／唯一嚴格Close；四個曾失敗的paste／web software／web default／output重測亦全過，兩輪WM／Xvfb均join。GL子集使用Mesa softpipe，不是硬體GPU、OS鍵鼠／IME／Wayland或S8效能。原始LLVM中止、GL逾時及未採用的幾何實驗都留存，重測未證明原GL逾時根因已解。
+
+Linux固定下載入口已更新到同一150c ELF，實際loader／dpkg、tar1,122／deb1,109份payload及所有shared檔案核對通過；對舊4fa tar逐檔比較僅exe／build-record兩份改變，原1,103份Rust notices與fixture逐byte復用，Skia／實際建置receipt另外供應。打包器／Cargo.toml／lock未變。來源交付沿用同一immutable bundle與來源包目錄，增加reading-current還原完整580檔／tree；repo外同一暫存checkout在拒讀原worktree來源的sandbox通過一般Slint106項／1 helper ignored，復用固定compiler cache。第三方完整來源閉包仍not_ready。
+
+核對resolved／UID／symlink／lsof及SHA後，清理舊Linux完整包、已消費的最小包裝input、還原checkout與一份自產pyc；另移除53份逐byte重複PNG，保留映射及全部獨特影像。host合計232,285,435 regular-file bytes，filesystem available244075118592→244295110656 bytes只記並行觀測。容器17根共322,715,968 logical bytes另核對host副本後清除，不當作host釋放量；原安裝工具／runtime保留，具名自有runner已停止，SDK正常卸載但image／固定路徑保留。Cargo固定target為13,012,196KiB，按使用者要求保留中間檔，不clean或新建target／repo。舊ARM App仍由tccd598持有，保留且不停止系統服務；四平台必要交付、Windows待驗包、最小舊native controls及原始失敗保留。
+
+全部實際patch、command、原失敗／14＋4結果、archive payload對照、source restore／build、promotion與exact清理路徑在 `slint-renderer-api-current/cross-current/filter-package-current/chrome-current/refined/`；重複PNG舊路徑由cleanup.json追溯保留副本。其他三架構尚未納入此批新修正，Windows69542cb7待使用者稍後驗收的入口不變；Intel／Linux實機依指示暫緩，完整資料／效能及其餘原生矩陣仍未完成。S0–S8保持active，S9未執行。

@@ -4,16 +4,21 @@
 
 ## 2026-11-11 產品來源包
 
-本機目前交付位於 `/Users/ladesine/Documents/PTTStella-Slint-Deliverables/product-source-20261111-6ad8e39/`，包含單一 23,220,799-byte Git bundle、三份patch、`sources.json`、獨立還原工具及 README。`filter-current` 從bundle的9a加產品patch還原6ad，`filter-cross-current` 加另一patch還原61d，`cross-current` 加10,009-byte文件patch還原9db，其餘三組直接還原。新cross descriptor擴充既有交付，沒有另建來源包目錄；先前manifest保存在驗收證據。bundle以hardlink沿用前份immutable檔案，沒有重複完整bundle。既有 docs gate 禁止 repo 內的 `.bundle`，因此來源交付保留於 repo 外，不放寬檢查。bundle 含 Git ancestry，不包含 worktree 的 `.local`、編譯 target 或未追蹤使用者資料。還原只讀此交付，不連網、不使用原 checkout 的 Git objects，也不覆寫既有目的地。
+本機目前交付位於 `/Users/ladesine/Documents/PTTStella-Slint-Deliverables/product-source-20261111-6ad8e39/`，包含單一 23,220,799-byte Git bundle、四份patch、`sources.json`、獨立還原工具及 README。`filter-current` 從bundle的9a加產品patch還原6ad，`filter-cross-current` 加另一patch還原61d，`cross-current` 加10,009-byte文件patch還原9db，其餘三組直接還原。新cross descriptor擴充既有交付，沒有另建來源包目錄；先前manifest保存在驗收證據。bundle以hardlink沿用前份immutable檔案，沒有重複完整bundle。既有 docs gate 禁止 repo 內的 `.bundle`，因此來源交付保留於 repo 外，不放寬檢查。bundle 含 Git ancestry，不包含 worktree 的 `.local`、編譯 target 或未追蹤使用者資料。還原只讀此交付，不連網、不使用原 checkout 的 Git objects，也不覆寫既有目的地。
 
 | 選項 | 對應候選 | 產品核對 commit | 完整 tracked 檔案 | 建置輸入核對 |
 | --- | --- | --- | --- | --- |
+| `reading-current` | 最新 Linux150c1a0d | `fbcfe2e` | 580 | 380 |
 | `filter-current` | 最新 Mac arm64／x64 | `6ad8e39` | 580 | 380 |
-| `filter-cross-current` | 最新 Linux／另備 Windows 新包ac788a45 | `61d1c3f` | 580 | 380 |
+| `filter-cross-current` | 歷史 Linux4fa／另備 Windows 新包ac788a45 | `61d1c3f` | 580 | 380 |
 | `macos-arm64-current` | 歷史 Mac arm64 | `9a06515` | 580 | 380 |
 | `cross-current` | 歷史 Linux／Windows備妥包／Mac x64 | `9db9eda` | 580 | 380 |
 | `linux-84e-baseline` | 歷史 Linux x64 | `84e98a3` | 546 | 289 |
 | `windows-intel-475-baseline` | 待使用者測試的 Windows69542cb7／歷史 Mac x64 | `475897f` | 545 | 288 |
+
+最新 `reading-current` 在同一交付加入 `product-reading.patch`，保留 immutable bundle 與既有六份descriptor，還原已提交fbcfe2e的完整580檔／tree `f3a4ec30192e3ecf0f510d6494a33bf5d8d6565b`，綁定Linux ELF150c1a0d。原編譯仍記為f40e793 dirty，測過的完整七檔patch與f40e793到fbcfe2e逐byte相同，沒有轉稱乾淨來源重建。
+
+本批另從還原checkout完成macOS arm64一般Slint配置獨立建置：106 passed／1 explicit native helper ignored。sandbox拒讀原worktree來源（Cargo.toml負向control確實被拒），只允許固定Cargo target快取；還原目錄移到repo外同一可重用暫存路徑，避免Cargo搜尋ancestor manifest。原始command／log與580檔SHA核對保存在 `slint-renderer-api-current/cross-current/filter-package-current/chrome-current/refined/`，驗後還原checkout移除。這不是冷依賴建置、native-player／其他架構來源閉包、原生操作或逐byte二進位重現。更新後sources.json SHA為 `400bef10edf0702be2a2d9f4dde750c90a4a5f353ac89c970da1b30840178b17`。
 
 上述 commit 是已核對產品檔案的版本。最新兩Mac實際原建置為a63c303 dirty，加frozen三檔patch；該patch與已提交6ad8e39產品／測試修改逐byte相同。ARM raw59c1c58f／封裝0b2f5786、Intel raw64a2caf1／封裝ae54f0bd，各原始build record保留。本批從新目錄還原filter-current完整580檔及tree `6c9d5b29336cbc36e7eef2a80f481b846d160c05`；只做來源還原，未重做獨立編譯。manifest 綁定封裝內執行檔完整SHA，核對完整 Git tree、所有 tracked 檔案的 SHA-256 與檔案清單，不只核對少數 Rust 檔案。
 
@@ -27,7 +32,7 @@ Linux4fa0a14e與備妥Windowsac788a45從乾淨61d1c3f完成release／all-target 
 
 ```sh
 python3 reconstruct_slint_source.py --manifest sources.json \
-  --candidate filter-current --output /ABS/PATH/new-source
+  --candidate reading-current --output /ABS/PATH/new-source
 ```
 
 一般 Slint 配置可在還原的 checkout 執行：
