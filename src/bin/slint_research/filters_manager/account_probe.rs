@@ -20,6 +20,37 @@ use std::{
     sync::Arc,
 };
 
+fn pointer_checkpoint(
+    ui: &TerminalWindow,
+    o: &Manager,
+    stage: &str,
+    point: slint::LogicalPosition,
+) {
+    if std::env::var_os("PTTSTELLA_INLINE_TRACE").is_none() {
+        return;
+    }
+    let arrows = ui.get_inline_arrows();
+    eprintln!(
+        "account pointer checkpoint {}",
+        serde_json::json!({
+            "stage":stage,"point":[point.x,point.y],
+            "origin":[ui.get_terminal_origin_x(),ui.get_terminal_origin_y()],
+            "viewport":[ui.get_view_width(),ui.get_view_height()],
+            "window":[ui.window().size().width,ui.window().size().height],
+            "dpi":ui.window().scale_factor(),
+            "foreground":ui.get_native_foreground(),
+            "article_blocked":ui.get_article_blocked(),
+            "context_blocked":ui.get_context_source_blocked(),
+            "context_open":ui.get_context_open(),"context_pending":ui.get_context_pending(),
+            "inline_enabled":ui.get_inline_enabled(),"inline_blocked":ui.get_inline_blocked(),
+            "arrows":(0..arrows.row_count()).filter_map(|i|arrows.row_data(i)).map(|a|
+                serde_json::json!({"index":a.index,"rect":[a.x,a.y,a.size],"opened":a.opened})
+            ).collect::<Vec<_>>(),
+            "article":o.article.diagnostics(),
+        })
+    );
+}
+
 fn point(
     ui: &TerminalWindow,
     o: &Manager,
@@ -103,6 +134,7 @@ async fn open(ui: &TerminalWindow, o: &Manager, row: usize, col: usize) -> Resul
             .is_some_and(|a| a.cell == Some((row, col))),
         "probe pointer did not map to the independently specified cell",
     )?;
+    pointer_checkpoint(ui, o, "before-context", p);
     verification::click(ui, p, Button::Right);
     let opened = wait(
         || ui.get_context_open(),
@@ -110,6 +142,7 @@ async fn open(ui: &TerminalWindow, o: &Manager, row: usize, col: usize) -> Resul
     )
     .await;
     if opened.is_err() {
+        pointer_checkpoint(ui, o, "context-failed", p);
         eprintln!(
             "account open failure diagnostic {}",
             o.article.diagnostics()
@@ -387,8 +420,9 @@ pub fn start(
                         ui.get_terminal_origin_x() + a.x + a.size / 2.,
                         ui.get_terminal_origin_y() + a.y + a.size / 2.,
                     );
+                    pointer_checkpoint(&ui, &o, "before-inline", p);
                     verification::click(&ui, p, Button::Left);
-                    wait(
+                    let placed = wait(
                         || {
                             ui.get_inline_enabled()
                                 && ui.get_inline_pictures().row_count()
@@ -396,7 +430,17 @@ pub fn start(
                         },
                         "focus image placement pending",
                     )
-                    .await?;
+                    .await;
+                    if let Err(error) = placed {
+                        pointer_checkpoint(&ui, &o, "inline-failed", p);
+                        if std::env::var_os("PTTSTELLA_INLINE_TRACE").is_some() {
+                            eprintln!(
+                                "account failure capture {:?}",
+                                verification::capture(&ui, &directory, "inline-failed.png")
+                            );
+                        }
+                        return Err(error);
+                    }
                     wait(
                         || {
                             ui.get_inline_arrows().row_data(0).is_some()

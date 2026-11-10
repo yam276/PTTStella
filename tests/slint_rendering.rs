@@ -314,6 +314,29 @@ fn full_and_partial_terminal_views_match_during_inline_and_layout_changes() {
         view.invoke_focus_terminal();
     }
     check("article focus");
+    let geometry = |view: &TerminalWindow| {
+        (
+            view.get_terminal_origin_x(),
+            view.get_terminal_origin_y(),
+            view.get_view_width(),
+            view.get_view_height(),
+        )
+    };
+    let before_filters = views.each_ref().map(geometry);
+    for count in [1, 17, 0] {
+        for view in &views {
+            view.set_filter_count(count);
+            view.set_filter_status(format!("Masked synthetic rows: {count}").into());
+            view.set_filter_label("Temporarily reveal hidden rows".into());
+            view.set_filter_ready(true);
+        }
+        check("filter count changed");
+        assert_eq!(
+            views.each_ref().map(geometry),
+            before_filters,
+            "filter feedback moved/resized the acknowledged article viewport"
+        );
+    }
     for (model, view) in models.iter().zip(&views) {
         model.push(loading(0, 54.));
         tiles(view, [44., 0.]);
@@ -349,14 +372,31 @@ fn full_and_partial_terminal_views_match_during_inline_and_layout_changes() {
     check_colour(&windows[0], [0, 0, 255, 255], "red image");
     check_colour(&windows[0], [255, 0, 0, 255], "blue image");
     for view in &views {
+        // The synthetic footer must fit above the real persistent controls.
+        // It moves again below before snapshotting pending window damage.
+        view.set_article_body_height(610.);
         view.set_article_load_available(true);
         view.set_article_load_status("Article loaded · synthetic 23 lines".into());
         view.set_article_updates_available(true);
         view.set_article_updates_toggle_label("Update replies".into());
     }
     check("new bottom controls");
+    let before_loading = views.each_ref().map(geometry);
+    for active in [true, false] {
+        for view in &views {
+            view.set_article_load_active(active);
+        }
+        check("loading action changed");
+        assert_eq!(
+            views.each_ref().map(geometry),
+            before_loading,
+            "loading action moved/resized the acknowledged article viewport"
+        );
+    }
     for view in &views {
-        view.set_article_body_height(620.);
+        // Keep this fixed synthetic footer inside the smallest logical audit
+        // viewport (1920x1080 at 1.5 DPI) with the real control rows present.
+        view.set_article_body_height(580.);
         // Diagnostic preparation can snapshot a newly installed projection
         // before it is painted into the window's retained backing buffer.
         // The snapshot must not consume the pending window damage.

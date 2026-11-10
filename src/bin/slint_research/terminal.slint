@@ -22,6 +22,7 @@ export { StationColorState } from "station-color.slint";
 import { StationColor, StationColorState } from "station-color.slint";
 
 export component TerminalWindow inherits Window {
+    private property <length> status-height:32px;
     in property <bool> article-updates-available;
     in property <bool> article-updates-visible;
     in property <bool> article-updates-enabled;
@@ -608,10 +609,6 @@ export component TerminalWindow inherits Window {
                 }
             }
 
-            if root.filter-count>0: HorizontalLayout {
-                Text {text:root.filter-status;color:#e4c76e;vertical-alignment:center;horizontal-stretch:1;}
-                Button {text:root.filter-label;enabled:root.filter-ready && !root.context-source-blocked;clicked=>{root.filter-reveal();}}
-            }
             terminal-box := Rectangle {
                 vertical-stretch: 1;
                 background: black;
@@ -760,6 +757,7 @@ export component TerminalWindow inherits Window {
             }
 
             if root.article-load-available: HorizontalLayout {
+                height:32px;
                 Text { text: root.article-load-status; color: #b7c1ce; horizontal-stretch: 1; vertical-alignment: center; }
                 if root.article-load-active || root.article-load-can-resume: Button { text: root.article-load-active ? UiLabels.cancel-load : root.article-load-next-segment ? UiLabels.next-section : UiLabels.resume-load; clicked => { root.article-load-action(!root.article-load-active); } }
             }
@@ -837,37 +835,57 @@ export component TerminalWindow inherits Window {
                 Button { text: root.station-mouse-label; clicked => { root.toggle-station-mouse(); } }
                 Text { text: root.station-mouse-status; color: #b7c1ce; overflow: elide; horizontal-stretch: 1; vertical-alignment: center; }
             }
-            if root.prototype-chrome: HorizontalLayout {
+            // Persistent status space keeps filtering feedback out of the
+            // terminal/article layout. A mask/reveal must not move a pointer's
+            // already acknowledged cell or resize the reading viewport.
+            HorizontalLayout {
+                height:root.status-height;
                 spacing: 8px;
                 Text {
-                    text: root.result;
+                    text: root.prototype-chrome ? root.result : root.connection-status;
                     color: #b7c1ce;
+                    min-width:0px;
                     overflow: elide;
                     vertical-alignment: center;
                     horizontal-stretch: 1;
                 }
-                if root.input-notice != "": Text {
+                if root.prototype-chrome && root.input-notice != "": Text {
                     text: root.input-notice;
                     color: #f0c987;
                     overflow: elide;
+                    min-width:0px;
                     vertical-alignment: center;
                     horizontal-stretch: 1;
                 }
-                if root.show-reconnect: Button {
+                if root.filter-count>0: Text {
+                    text:root.filter-status;color:#e4c76e;vertical-alignment:center;
+                    min-width:0px;max-width:180px;overflow:elide;
+                }
+                if !root.prototype-chrome && root.vim-enabled: Text {
+                    text:root.keyboard-label;color:#e7ca87;vertical-alignment:center;
+                    min-width:0px;max-width:160px;overflow:elide;
+                }
+                if root.filter-count>0: Button {
+                    text:root.filter-label;accessible-label:root.filter-label;
+                    min-width:0px;max-width:240px;
+                    enabled:root.filter-ready && !root.context-source-blocked;
+                    clicked=>{root.filter-reveal();}
+                }
+                if root.prototype-chrome && root.show-reconnect: Button {
                     text: UiLabels.reconnect;
                     enabled: root.can-reconnect;
                     clicked => { root.reconnect(); }
                 }
-                if root.keep-alive-available: Button {
+                if root.prototype-chrome && root.keep-alive-available: Button {
                     text: root.keep-alive-label;
                     clicked => { root.toggle-keep-alive(); }
                 }
-                if root.login-available: Button {
+                if root.prototype-chrome && root.login-available: Button {
                     text: root.login-label;
                     enabled: !root.login-busy;
                     clicked => { root.login-show(); }
                 }
-                if root.login-pending: Button {
+                if root.prototype-chrome && root.login-pending: Button {
                     text: root.login-cancel-attempt-label;
                     clicked => { root.login-cancel(); }
                 }
@@ -899,7 +917,7 @@ export component TerminalWindow inherits Window {
     }
     Button {
         visible:root.article-station;
-        x:12px;y:root.height - self.height - 12px;
+        x:12px;y:root.height - root.status-height - self.height - 12px;
         width:min(240px,root.width - 24px);height:32px;
         text:UiLabels.resume-reading;
         clicked=>{root.article-resume-reading();}
@@ -953,12 +971,6 @@ export component TerminalWindow inherits Window {
         }
         }
         }
-    }
-    if !root.prototype-chrome && root.vim-enabled: Rectangle {
-        x:12px; y:root.height - 28px; width:140px; height:24px;
-        background:#15263be8;
-        TouchArea {width:parent.width;height:parent.height;clicked=>{}}
-        Text {width:parent.width;height:parent.height;text:root.keyboard-label;color:#e7ca87;vertical-alignment:center;horizontal-alignment:center;overflow:elide;}
     }
     tools-area := FloatingTools {
         visible: root.tools-available;

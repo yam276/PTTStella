@@ -4,13 +4,13 @@
 
 Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分段接續長文、大型 GIF 與選用的自動開圖。Slint 起點為獨立 worktree 內的 `slint-research`／`pttstella-slint` 原型。原型已在 macOS arm64 實測雙色字、80×24、放大拖曳、全螢幕及獨立輸入欄的威注音。實體 Retina、終端內組字、跨平台原生輸入和與 Dioxus 的同負載效能比較仍待驗。實驗數據及已知差異見 [離線原型紀錄](slint-prototype.md)。
 
-## 目前進度（2026-11-10）
+## 目前進度（2026-11-11）
 
 **尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
 
-文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。macOS arm64 最新候選另含 CJK fallback、貼上預覽、完整 shell 及預設軟體合成（351份產品來源對應09a13da）；Linux 保持含 CJK／貼上修正的84e98a3，Windows／Intel Mac 仍保持475897f，Windows69542cb7…等使用者稍後驗收。各包來源不同，依 [最新候選](#2026-11-10-最新候選) 分別核對；尚未完成全部原生或效能驗收。
+文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。目前ARM下載包為9a06515來源的保留raster版本，Intel／Linux及另外備妥的Windows包為9db9eda；Windows69542cb7原下載包保持不變，等使用者稍後驗收。最新來源另修正遮黑提示改變文章幾何的問題，五個Rosetta帳號／推文案例已通過，但尚未同步到四份下載包。候選index與各包原始來源分列，不能把最新來源測試當作已交付包驗收。
 
-本輪來源已將macOS無旗標路徑改為Skia軟體合成及原生CPU影片；同機完整owner閒置峰值約99MiB，較先前OpenGL的842–845MiB低，但CPU較高。CPU影片與GPU共用尺寸／像素預算，保留Full HD／4K；仍有明確GL／Metal選項。原生⌃⌘F與七案功能回歸通過；正式arm64封裝另通過禁止Homebrew讀取的十案，詳最新候選；兩版已補原生鍵鼠／焦點校準，尚未完成連續前景觀測、同負載次數與所有平台效能。詳 [預設合成與影片尺寸](slint-macos-measurement.md#2026-11-10-macos-預設軟體合成與影片尺寸)，雙GIF新增共用素材及兩版原生校準；Slint播放／恢復CPU明顯較高，下一步須定位解碼與重繪成本，S8仍未通過。
+macOS預設Skia軟體合成及原生CPU影片已降低閒置圖形記憶體；GIF循環重用與保留raster後，同一雙GIF校準的10秒CPU約1.10秒，較早期約3.60秒下降。這是不同修正階段的校準，未完成正式冷暖次數、100次操作、連續前景／延遲、峰值及所有平台矩陣，不能據此宣布勝過Dioxus或S8通過。CPU影片與GPU共用尺寸／像素預算，保留Full HD／4K及明確GL／Metal選項；MP4 GPU偶發錯色仍未解。詳 [效能與原始限制](slint-macos-measurement.md)。
 
 | 階段 | 目前已有 | 尚須完成 |
 | --- | --- | --- |
@@ -36,7 +36,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 目前最新四架構候選均在 `.local/verification/slint-merged-id-spaces/`，格式、來源、執行檔雜湊與驗證範圍見[最新候選](#2026-11-10-最新候選)。先前 `slint-windows-current/package-current/`、`slint-system-motion/package-current/`、Intel與Linux前份完整包已被取代並清理；保留必要metadata、notices與獨特證據，不要求歷史段落的舊latest路徑繼續存在。
 
-Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人工回報屬舊04249364…執行檔；目前新69542cb7…尚待使用者晚點實測。最新版Mac的部分conformance已過，shell／通知和Rosetta網頁account仍有failed，詳[最新候選](#2026-11-10-最新候選)，不能將Rosetta稱為Intel硬體驗收。Intel／Linux原生依使用者「先包起來」指示不等待，目前仍未驗。
+Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人工回報屬舊04249364…執行檔；目前新69542cb7…尚待使用者晚點實測。已封裝Mac的shell／通知及網頁account失敗紀錄保留；最新來源修正後的五個Rosetta帳號／推文案例已通過，下載包尚未替換，詳文末。不能將Rosetta稱為Intel硬體驗收。Intel／Linux原生依使用者「先包起來」指示不等待，目前仍未驗。
 
 2026-11-10 使用者進一步要求復用編譯中間檔，取代先前「每批清空target」的做法。日常實作固定使用同一Slint worktree與既有 `.local/verification/slint-renderer-api-current/target`；這是持續復用的單一Cargo快取，不隨驗收批次另建target或複製測試repo。本機已建立忽略於Git的 `.local/slint-build.toml`，一般Cargo命令使用 `cargo --config .local/slint-build.toml …`；dev／test保留增量編譯、debug symbols為0，release profile不變。已驗同來源release暖編譯wall0.668秒／Cargo0.61秒，沒有Compiling且exe SHA不變；cache盤點3298516KiB，證據在 slint-renderer-api-current/cache-reuse.json。
 
@@ -659,3 +659,17 @@ Intel／Linux固定下載入口已更新，舊App／ZIP／DMG／tar／deb與消�
 快取補驗另發現一次主程式重編：先前build／Clippy及其他架構工作完成後，Windows補驗依賴有復用，但root重編超過60秒觀察deadline；外層xwin被終止，原Cargo／rustc後續均確認消失，沒有重啟仍活動的編譯。其後同一快取Windows再次build exit0、wall0.39秒且無Compiling。第一輪逾時保留，觸發重編原因仍待fingerprint證據；不是三架構暖編譯都通過，也不屬於S8應用程式效能結果。SDK重掛／完整3,419項核對／卸載另已通過，沒有重解壓。
 
 補驗cache raw變為9b992ba8，與已交付487c428b共有12個byte不同；解析PE後確認差異僅在COFF／debug timestamp及CodeView GUID欄位，排除此明列metadata後其餘66,985,984-byte檔案內容完全相同。未聲稱原始binary逐byte重現，也未證明GUID生成或主程式重編的原因。固定ZIP／candidate／原建置SHA保持原樣，不拿後來的cache raw改寫已驗收紀錄。
+
+## 2026-11-11 遮黑提示幾何修正與快取環境
+
+已定位上批web account的版面邊界：遮黑數從0變1時，在文章上方新增提示列；Rust已確認的座標仍為origin y118，但Slint下一輪layout移到y158、viewport由612縮為572，原定inline點擊因而落入提示列，沒有HTTP請求。右鍵亦可能遇到過期來源幾何。生產UI改用固定32px底部狀態列容納連線／遮黑提示、揭露及Vim標示；載入列固定高度，返回閱讀按鈕避開狀態列。原有來源lease、焦點、輸入及背景保護不變；正常畫面會固定使用32px，後續效能比較須重核實際viewport。
+
+真實生產Slint UI的獨立完整／局部Skia回歸新增遮黑數0→1→17→0及載入按鈕切換的幾何不變斷言。原UI先失敗（origin／height由0／740變32／708），修正後兩個feature配置通過，並保留逐像素、footer及100次局部GIF更新檢查。固定x64 target產出raw `64a2caf1`，輕量診斷App為 `a472985c`；五個web／terminal帳號與推文案例全部exit0／嚴格Close，HTTP join與遮黑copy／PNG／圖片等原斷言保留。首案控制器曾在staging完成前啟動舊binary，按實際SHA排除並單獨重跑；沒有把該failed改成passed。這些是Rosetta下toolkit／loopback，並非Intel硬體或OS輸入驗收。
+
+ARM同來源raw `59c1c58f`已建置。新輕量原生診斷App雖有本機程序與session frame，CUA無法綁定其視窗；未執行可信OS鍵鼠，結果保持not_ready。逐次自身程序均依PID／start／command確認後結束，最終身分已消失，但沒有正常Close／owner join證據。保留一份最小App和原始log／stack／metadata；Unix IPC開放後仍無法綁定，不能宣稱其為根因。後續改用既有可控制診斷host補驗，不把工具限制當產品通過。這輪完整下載包及來源交付尚未更新。
+
+一般及播放器bin各103過／1 ignored；兩配置繪圖audit、兩組all-target Clippy、fmt通過。診斷僅在既有account probe及明確INLINE_TRACE旗標下輸出幾何／狀態，不記文章或帳密。全部before／after、實際binary綁定及原生限制見 `slint-renderer-api-current/cross-current/account-diagnostic/` 的 `geometry-before.json`、`geometry-after-r4.json`、`fixed-account-acceptance.json`、`gates.json`、`native-os/final-attempt.json`。
+
+Cargo fingerprint另證實host依賴曾因 `MACOSX_DEPLOYMENT_TARGET` 未設定與11.0交替而失效。忽略於Git的固定build config及本機Windows／Linux配方已統一11.0，沿用原target；後續x64只重編實際變動主程式。尚未完成整輪跨target暖建置，不宣稱全部零重編。`cache-environment.json`及兩份x64 build log保留原因與scope，沒有新checkout、target或Cargo clean。
+
+結案核對resolved path／UID／symlink／lsof及SHA後，刪除兩份已取代診斷exe的gzip備份，另清六個已有逐byte證據副本的自有temp目錄，共70,453,084 regular-file bytes；exact八根及保留位置見同目錄 `cleanup.json`。filesystem available252814196736→252885217280 bytes僅記並行觀測。保留固定Cargo cache、目前各平台包、兩個新raw、唯一原始失敗與一份未解CUA最小App；未知系統暫存與共享來源不動。S0–S8持續，S9未執行。
