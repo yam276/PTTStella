@@ -613,3 +613,9 @@ exact removed paths、resolved／UID／symlink／lsof、每檔SHA、Cargo宣告�
 已新增兩版共用loopback閱讀頁面、固定512×160／32幀／100ms素材與可獨立停止／join的HTTP入口；Slint保留完整16服務，正常Live不受影響。兩版CUA實際展開兩張、開關設定／恢復、回文章焦點與⌘Q；Dioxus R3完整閱讀／圖片batch／原始PNG及owner audit passed，Slint R3已ack閱讀packet與唯一嚴格Close passed，全數觀測PID＋start消失。HTTP兩URL各3次（三程序），恢復未重抓。
 
 單輪10秒／101筆的播放CPU為Slint3.603962167秒、Dioxus1.149564664秒；恢復後3.504497416／0.745315333秒。Slint footprint較低但動畫CPU退步，不能宣稱平替或S8通過。先對相同負載profile，再改善decoder／重繪，不降低解析度／幀數／可視圖數取巧。首輪準備與audit失敗、不同版面／footer、單輪／前景／瞬間峰值限制及完整原始證據見[雙GIF負載](slint-macos-measurement.md#2026-11-10-共用雙-gif-負載與-cpu-反例)。固定Cargo cache與當前診斷pair供接續profile復用；四平台下載維持原hash，Windows仍等使用者稍後驗收，S0–S8持續、S9未執行。
+
+## 2026-11-10 GIF 快取修正與軟體提交待修
+
+同一R3 native取樣確認GIF／weezl解碼與Skia software／CoreGraphics提交各有成本。已加入單播放者16MiB／最多512幀的有界循環重用，保留幀延遲、透明／disposal、有限循環與增量fallback。修正後同負載10秒CPU1.93／1.87秒，另一程序恢復後1.71秒；最終Clippy版本另測1.32／1.36秒，較修正前3.66秒低，但仍高於Dioxus。下一步處理剩餘軟體繪製／提交成本；不降低尺寸／幀數／可視圖數，S8仍未通過。
+
+另修正被動準備與焦點權限混用；已取得背景prepared且原生操作後才可輸入的分立證據。超過300秒peer期限的失敗保留，另一快速完整生命週期取得嚴格Close／全部觀測身分退出及HTTP join。完整scope與來源見[循環重用](slint-macos-measurement.md#2026-11-10-gif-循環重用與剩餘繪製成本)；固定worktree／cache及診斷pair繼續復用，四平台下載未替換，S0–S8持續、S9未執行。

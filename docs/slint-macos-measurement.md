@@ -2,6 +2,30 @@
 
 這份文件記錄 S0／S8 的量測工具及目前證據，不是效能通過報告。完整負載、次數與平台門檻仍以[平替計畫](slint-evaluation-plan.md#同負載效能門檻)為準。
 
+## 2026-11-10 GIF 循環重用與剩餘繪製成本
+
+接續同一對診斷App、固定Cargo target、marked store及 `47c975f3…` 雙GIF素材，沒有另建repo或整套環境。先用原R3 native `69c32791…` 重測，10秒／101筆CPU3.664067167秒，footprint峰值97,277,696 bytes。其後另用系統 `sample PID 5 1 -file OUTPUT` 取堆疊，沒有開TextEdit；profiler區間不計入前述資源數據。樣本同時出現media Playback→GIF／weezl解碼，以及主執行緒Skia software／softbuffer CoreGraphics present／vImage色彩轉換。這是執行緒狀態抽樣，不把含sleep的stack次數當成CPU百分比。
+
+已在共用Playback加入[有界循環快取](media.md#slint-候選的-gif-循環快取)。首次完整逐幀解碼、合成與驗證EOF後才跳過重複LZW；每個播放者至多16MiB唯一RGBA，逐幀保留delay，像素相同可共用buffer，hash碰撞仍完整比對。超額退回原增量路徑；暫停、自然結束或停止釋放不再需要的循環。沒有變更來源512×160、32幀、100ms與兩圖可見條件。
+
+修正後的raw `f359050a…`／診斷 `bb2322aa…`，真實建置為f48e7e4加保存patch。相同設定／runtime／原生焦點／游標及完整16服務下，取得兩段連續10秒／101筆，然後另外做5秒stack取樣：
+
+| 修正後狀態 | CPU seconds | footprint峰值 bytes | RSS峰值 bytes |
+| --- | --- | --- | --- |
+| 播放 | 1.930350334 | 100,341,696 | 377,225,216 |
+| 接續暖機 | 1.867000249 | 103,421,888 | 380,305,408 |
+| 另一新程序：開關設定後恢復 | 1.705098042 | 109,680,192 | 405,078,016 |
+
+暖機stack樣本未再取到GIF／weezl解碼，仍有Skia render與CoreGraphics present／vImage。這支持先前的重複解碼成本已降低；剩餘UI提交仍需處理，CPU仍高於前輪Dioxus0.745–1.15秒，沒有宣稱S8通過。單輪與不同程序的波動、literal URL port、版面／foreground及OS呈現限制沿用前節，不能以此計算正式平替改善比例或OS掉幀。
+
+最終Clippy將同一整除判定改用is_multiple_of後，raw hash為 `9524b6d6…`／診斷 `ad01a6d5…`，另以這份最終native重跑，兩段10秒／101筆CPU分別1.319630750／1.355970584秒，footprint峰值107,157,376／106,207,104 bytes，RSS417,873,920／416,923,648 bytes。兩圖、設定開關、恢復紅藍相位、文章焦點、嚴格Close及全數觀測身分退出皆核對；HTTP兩URL各一次，恢復未重抓。與中途1.87秒的波動尚未定位，不能歸因於Clippy修整或拿最佳單輪計算正式改善。精確binary、設定、時間與來源核對在 `profile-after/accepted/`。
+
+實際重跑也發現被動準備誤用article_reading_ready（包含原生焦點權限）。現在只核對原始frame、已ack且完整的閱讀packet與widget啟用；準備報告實見foreground=false、ready=false仍能prepared，未合成前景。後續由CUA原生Raise／文章點擊取得焦點及展開兩圖。正式輸入、組字、失焦與原始bytes准入未由此放寬。
+
+第一個完整播放／取樣程序因手動檢視超過既有Surface peer300秒期限而斷線，log為loopback probe timed out，不能列為正常退出通過；其資源取樣與stack在期限內，失敗與畫面保留。另以同一binary／store快速重跑：兩GIF展開、開關設定、恢復紅藍相位與文章焦點、⌘Q，唯一嚴格Close ACK passed，全部觀測PID＋start消失。共兩個真正載圖程序對兩URL各2次GET，恢復未重抓，HTTP owner正常join。numeric exit仍未由LaunchServices orphan觀測。證據分列於 `slint-dual-gif-current/profile-before/`、`profile-after/final/`、`profile-after/lifecycle/`，不合併失敗與成功生命週期。
+
+最終兩種Slint配置各103 passed／1 ignored，包含六項循環快取案例；兩配置all-target release Clippy通過。初次Image clone編譯錯誤與is_multiple_of lint失敗另存，沒有放寬檢查。更新文件與fmt不另重建Rust。已移除 `/private/tmp/pttstella-dual-gif-profile-kpsokzuu` 及 `slint-dual-gif-current/profile-before/baseline` 的舊68,604,528-byte native（Frameworks symlink不跟隨刪除），臨時根另94,665 bytes；兩者均先核對UID／resolved／lsof與inventory。3,244份保護檔hash不變，free266199617536→266268336128 bytes僅為並行觀測；exact paths／du／保留理由在 `profile-after/cleanup/ledger.json`。固定Cargo cache、最新診斷pair／素材、必要舊基準與唯一未解證據、四平台下載、來源及共享工具／使用者資料保留，未執行Cargo clean。接續重跑須先重設過期的loopback origin／runtime與新evidence；S0–S8仍持續，S9未執行。
+
 ## 2026-11-10 共用雙 GIF 負載與 CPU 反例
 
 新增兩版共用的 [閱讀頁面](../src/replay/media_benchmark.rs)：23行、完整1/1頁、兩個獨立loopback GIF網址，由同一Rust格線reducer處理。來源只接受明確 `http://127.0.0.1:PORT` origin，拒絕遠端、帳密、path／query／fragment和控制字元；正常Live不使用此來源。Slint以marked-store的 `--store-scene gifs` 掛載與Live相同16項服務；準備檢查核對原始站端frame、已ack的完整閱讀packet及實際article widget，不再錯用web模式下不存在的terminal bitmap presentation。準備timer完成即停止，不合成focus、展圖、輸入或自動退出。
