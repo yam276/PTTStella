@@ -1,6 +1,32 @@
 # Slint 與原 Dioxus 的資料往返
 
-這是 S7／S8 的部分證據，尚未完成整體資料回退驗收。2026-11-10 已在 macOS arm64 以實際 App 的設定／站點控制，完成 v1、v6 合成資料的 Slint → 原 Dioxus → Slint 往返。後續另補黑白名單、可攜設定、收藏名稱／離線讀取、最近看板清除及草稿編輯保存往返，結果見後節；完整CRUD、最近看板新增／排序、平台正式路徑、密碼庫與完整產品切換仍待驗。
+2026-11-11 已用同一對 macOS arm64 前端完成設定 v1–v6 的 Slint → 原 Dioxus → Slint 往返。各版本以獨立合成資料驗證兩次實際儲存、前一代備份與重開讀取。黑白名單、可攜設定、收藏名稱／離線讀取、最近看板清除及草稿編輯保存的先前證據見後節。完整新增／編輯／刪除、最近看板新增與排序、平台正式路徑、密碼庫及完整產品切換仍待驗。
+
+## 2026-11-11 同一對前端的 v1–v6 設定往返
+
+Slint 使用以 `7466c31` 建置的最新 arm64 候選，封裝 native SHA-256 為 `f50ffb4658b03f8a7ff855d0ead6b1c035d02d8e7c2d4bedf4f763e150c88a32`。原 Dioxus 仍取乾淨 `5ea9ad6` 的 baseline native，SHA-256 為 `35c3e27506280f430b364b82355e31f7b101a254fcadccc289ac7063ed6a44e3`。兩個測試 App 都放在同一個自有系統暫存目錄，重用各自的執行檔。Slint 透過已核對的 Frameworks 連結載入候選 runtime。每一階段由明確參數的本機程序啟動，透過 App 路徑綁定可及性操作，使用標記過的合成資料與本機服務。
+
+各起始版本的字高都是 21.5。Slint 在外觀與字型改存 22，第一次主檔為 v6。原 Dioxus 讀到 22 後改存 23，Slint 再以新程序讀到 23。六組首次儲存的備份逐位元等於各自的起始主檔，Dioxus 的備份逐位元等於 Slint 剛存的主檔。最後一次讀取後，主檔與備份各自保有讀取前的雜湊。v1 的首次遷移備份因此有獨立證據。
+
+六個版本各自完整比對 JSON。v4 起保留透明度 61，v5 起保留關閉右鍵扇形選單。v6 的 Terminal、自動開圖、文章首尾導覽及英文設定都保留，最後一次 Slint 也在介面確認 Terminal 和自動開圖。站點、名單、收藏、草稿、最近看板與可攜設定的原檔雜湊在各階段相同。v2 的 Dioxus 與 Slint 都實際打開同一篇四行收藏，畫面可見雙色「中」與末行，Dioxus 另有一次 `archive_reads` 收據。草稿正文及 ANSI 由完整檔案比對確認。
+
+18 個程序皆正常 exit0，包含 12 份 Slint 的唯一嚴格 Close，以及 6 份 Dioxus 的 Close、listener／worker 退出及工具畫面 PNG。PNG 逐個檢查 CRC 與 zlib 解壓。Slint Quit 後的可及性觀察逾時，退出判定採程序與 Close 收據。v4 第一次讀取存檔提示時仍在儲存中，同一程序後續顯示已儲存，檔案與備份核對通過。
+
+證據位於 `.local/verification/slint-store-v2-current/`。讀取 `results.json`、`snapshot-inventory.json`、各階段的 expected、實際主檔／備份、程序 log 與 Slint probe 收據。v2 的原生操作單獨保存在目錄根部，其餘版本在 `v1/`、`v3/` 到 `v6/`。用 `cleanup.json` 找重複 PNG 保留下來的副本。
+
+程序全部退出後清理自有暫存根目錄、五個測試身份的 OS 產物路徑及十張重複 PNG，共 112,424,076 個 regular-file bytes。清理前後的 filesystem free 是 239500881920 與 239613779968 bytes，另列為觀測值。精確路徑、UID、symlink、lsof、du、雜湊及兩個來源執行檔的保護核對均記在 `cleanup.json`。
+
+重驗時使用上述兩個執行檔，在新的自有系統暫存目錄建立兩個獨立身份的 App。各 App 將 native 放在 `Contents/MacOS/native`，使用可執行的 `RunFixture` 作為 `CFBundleExecutable`，Slint 的 Frameworks 指向相同候選 runtime。將 `roundtrip_fixture.py` 複製到 repo 內新的 `.local/verification/NEW_RUN/`，在同目錄準備 `launch.json` 和 `baseline-launch.json`。前者記錄 `root`、`app` 和 `host_native_sha256`，後者記錄 Dioxus 的 `app` 和 `host_native_sha256`。控制器會寫入固定本機參數並簽署測試 App，核對 native hash 後啟動程序。
+
+從 repo 根目錄對每個版本依序執行以下三階段。每次啟動後以 App 介面完成前述操作並 Quit，等待該命令通過才開始下一階段。原 Dioxus 的工具模式要再匯出一張整頁 PNG。第三階段只讀字高。控制器自動播種第一階段、保留後續同一組檔案、核對各階段的實際內容及備份。
+
+```sh
+rtk proxy python3 .local/verification/NEW_RUN/roundtrip_fixture.py 1 slint
+rtk proxy python3 .local/verification/NEW_RUN/roundtrip_fixture.py 1 baseline
+rtk proxy python3 .local/verification/NEW_RUN/roundtrip_fixture.py 1 return
+```
+
+小數字高的 Dioxus 寫入、其餘資料的完整操作、正式資料路徑、系統密碼庫及其他平台仍待驗。
 
 ## 同一份資料的入口
 

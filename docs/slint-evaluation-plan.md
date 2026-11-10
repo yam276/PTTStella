@@ -10,6 +10,8 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩Mac最新包已由乾淨7466c31同步閱讀狀態列／探針修正，各19項封裝後合成案例通過；Linux150c1a0d核對fbcfe2e，14案與四案重測通過。這三個新Mac／備妥Windows來源與Linux的380份產品輸入相同，完整580檔只差三份文件。新備妥Windowsfe8872f6仍原生未測，使用者待驗69542cb7入口不變。Intel使用Rosetta，Linux GL案例使用QEMU／Xvfb＋Mesa softpipe；Intel／Linux實機依指示暫緩，其餘原生／資料／效能矩陣未完成。原始GL逾時及LLVM中止證據保留，不能轉填為硬體GPU或S8效能通過。
 
+macOS arm64 已以最新 Slint 候選及原 Dioxus 完成設定 v1–v6 的 18 輪實際前端往返，核對兩次寫入備份、最後讀回與其他資料檔。正式路徑、密碼庫和完整資料操作仍待驗。[前端往返紀錄](slint-store-frontends.md#2026-11-11-同一對前端的-v1v6-設定往返)
+
 macOS預設Skia軟體合成及原生CPU影片已降低閒置圖形記憶體；GIF循環重用與保留raster後，同一雙GIF校準的10秒CPU約1.10秒，較早期約3.60秒下降。這是不同修正階段的校準，未完成正式冷暖次數、100次操作、連續前景／延遲、峰值及所有平台矩陣，不能據此宣布勝過Dioxus或S8通過。CPU影片與GPU共用尺寸／像素預算，保留Full HD／4K及明確GL／Metal選項；MP4 GPU偶發錯色仍未解。詳 [效能與原始限制](slint-macos-measurement.md)。
 
 | 階段 | 目前已有 | 尚須完成 |
