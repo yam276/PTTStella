@@ -430,7 +430,33 @@ def reuse_candidate(executable, binary, frameworks, notices, candidate):
     for name in entries:
         check_imports(inspect(contents / name))
     source_info = inspect(executable)
-    check_imports(source_info)
+    relocations = {}
+    source_libraries = {}
+    for name in source_info['imports']:
+        if name in allowed_imports or name.startswith(SYSTEM):
+            continue
+        path = Path(name)
+        if not path.is_absolute() or '..' in path.parts:
+            raise ValueError('Unbundled reused runtime import: ' + name)
+        try:
+            original = path.resolve(strict=True)
+            if not original.is_file() or not 0 < original.stat().st_size <= 128 * 1024 * 1024:
+                raise ValueError('Invalid reused source library: ' + name)
+            checksum = digest(original)
+        except OSError as error:
+            raise ValueError('Missing reused source library: ' + name) from error
+        matches = []
+        for destination, entry in entries.items():
+            link = entry.get('link_source', {'file': entry.get('original'),
+                                              'sha256': entry.get('original_sha256')})
+            if (isinstance(link, dict) and isinstance(link.get('file'), str)
+                    and link['file'] == str(original) and link.get('sha256') == checksum):
+                matches.append(destination)
+        if len(matches) != 1:
+            raise ValueError('Reused import differs from recorded source library: ' + name)
+        relocations[name] = '@rpath/' + Path(matches[0]).name
+        source_libraries[str(original)] = checksum
+    check_imports({'imports': [relocations.get(name, name) for name in source_info['imports']]})
     old_notices = resources / 'NativeRuntimeNotices'
     if old_notices.is_symlink() or not old_notices.is_dir():
         raise ValueError('Missing candidate notices')
@@ -454,6 +480,7 @@ def reuse_candidate(executable, binary, frameworks, notices, candidate):
     if not notice_hashes or sum(p.stat().st_size for p in old_notices.rglob('*') if p.is_file()) > 64 * 1024 * 1024:
         raise ValueError('Candidate notice inventory is empty or too large')
     before = {str(path): digest(path) for path in [*payloads, old_binary, executable]}
+    before.update(source_libraries)
     frameworks.mkdir()
     shutil.copytree(old_notices, notices)
     result = []
@@ -462,9 +489,20 @@ def reuse_candidate(executable, binary, frameworks, notices, candidate):
         shutil.copy2(source, destination)
         if digest(destination) != entry['bundled_sha256'] or digest(source) != entry['bundled_sha256']:
             raise ValueError('Candidate library changed during reuse')
-        result.append({**entry, 'original': str(source), 'original_sha256': digest(source)})
+        reused = {**entry, 'original': str(source), 'original_sha256': digest(source)}
+        # Retain the original link input across repeated package transports.
+        # The immediately previous candidate contains relocated/signed bytes.
+        link = entry.get('link_source', {'file': entry.get('original'),
+                                          'sha256': entry.get('original_sha256')})
+        if (isinstance(link, dict) and isinstance(link.get('file'), str)
+                and Path(link['file']).is_absolute()
+                and re.fullmatch(r'[0-9a-f]{64}', str(link.get('sha256')))):
+            reused['link_source'] = dict(link)
+        result.append(reused)
     shutil.copy2(executable, binary)
     command = ['install_name_tool']
+    for original, destination in relocations.items():
+        command += ['-change', original, destination]
     for path in dict.fromkeys(source_info['rpaths']):
         command += ['-delete_rpath', path]
     command += ['-add_rpath', '@executable_path/../Frameworks', str(binary)]
@@ -477,7 +515,7 @@ def reuse_candidate(executable, binary, frameworks, notices, candidate):
     for name, checksum in notice_hashes.items():
         if digest(notices / name) != checksum or digest(old_notices / name) != checksum:
             raise ValueError('Candidate notices changed during reuse')
-    if before != {str(path): digest(path) for path in [*payloads, old_binary, executable]}:
+    if before != {path: digest(Path(path)) for path in before}:
         raise ValueError('Candidate provenance changed during reuse')
     provenance = notices / 'reused-runtime'
     provenance.mkdir(exist_ok=True)
@@ -497,4 +535,5 @@ def reuse_candidate(executable, binary, frameworks, notices, candidate):
             'reused_candidate': {'executable_sha256': before[str(old_binary)],
                                  'report_sha256': before[str(payloads[0])],
                                  'runtime_manifest_sha256': before[str(payloads[2])],
+                                 'source_import_relocations': relocations,
                                  'scope': 'Unmodified signed runtime closure and notices; not a new runtime build or native acceptance.'}}

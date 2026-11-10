@@ -18,7 +18,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、三格式錯色負向對照 | MP4 GPU 像素偶發失敗仍未重現／解決、多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
 | S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
 | S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔與正常退出；[共用版本檢查／下載入口](slint-release-check.md)、toolkit空白鍵及退出HTTP／listener join；[共用通知政策／原生時序](slint-notifications.md)、hover／Tab焦點暫停及timer退出；[三平台系統動畫偏好來源](slint-system-motion.md)、macOS初讀／本機通知回呼與observer／UI listener退出；三版本store往返28案；[實際前端往返](slint-store-frontends.md)補 macOS v1／v6 設定與站點六輪、名單三輪、可攜設定三輪操作（原儲存位置仍待查）、收藏名稱／離線副本與最近看板清除三輪 | 實際OS動畫偏好切換／還原及其他平台原生、原生通知／其他管理入口、完整Dock／modal／OS I/O與可及性矩陣、實際前端／平台路徑及vault往返 |
-| S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG及無Homebrew sandbox；[Windows x64完整GUI候選](slint-windows-candidate.md)同步c40f7a5，Windows10實機13案回報經修正helper重驗（原版10過／3個格式誤判），嚴格ACK／像素／join；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64 App／ZIP／DMG](slint-macos-x64.md)、自建47項runtime閉包／32份來源、兩開發prefix不可用的Rosetta13案 | Intel與Linux原生、Windows完整人工操作、IME／DPI／音訊、VC runtime／最低OS／完整乾淨安裝、完整產品來源交付與重播、資料回退及同負載效能；尚未通過 |
+| S8 | S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG（含bc380f9導覽修正）及無Homebrew sandbox；[Windows x64完整GUI候選](slint-windows-candidate.md)，目前包與已測舊exe分列，Windows10實機13案回報經修正helper重驗（原版10過／3個格式誤判），嚴格ACK／像素／join；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64 App／ZIP／DMG](slint-macos-x64.md)、自建47項runtime閉包／32份來源、兩開發prefix不可用的Rosetta13案 | Intel與Linux原生、Windows完整人工操作、IME／DPI／音訊、VC runtime／最低OS／完整乾淨安裝、完整產品來源交付與重播、資料回退及同負載效能；尚未通過 |
 
 接續完整鍵盤／焦點與其他平台、跨平台列表／重開、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
 
@@ -391,19 +391,21 @@ x64 runtime暫取自經GitHub digest及完整簽章核對的IINA1.5.1，僅保�
 
 | 架構 | 最新資料夾 | 下載格式 |
 | --- | --- | --- |
-| macOS arm64 | `arm64-package/` | App、ZIP、DMG、SHA-256 |
+| macOS arm64 | `arm64-package/`（symlink指向slint-reply-overlay最新包） | App、ZIP、DMG、SHA-256 |
 | macOS x64 | `x64-package/` | App、ZIP、DMG、SHA-256 |
 | Windows x64 | `windows-package/` | ZIP、SHA-256 |
 | Linux x64 | `linux-package/` | tar.gz、deb、SHA-256 |
 
 | 執行檔 | 封裝內 SHA-256 |
 | --- | --- |
-| macOS arm64 | `2aa5c4798586b7b755a67b5a40b30f36c0518bc3296aa9a37fd934ac9a61dc1a` |
+| macOS arm64 | `060598ec6a8cf5140340df78f675494d83ca2f37e5cde46e929a2ea703d8e130` |
 | macOS x64 | `ae7e2c2642e65f2e86979d4427f105db8d17dddb6a4c8228f1378127ccfbb60b` |
 | Windows x64 | `c483cd41b37f00466e0aea1c9754194633f2f98783397719b5c1de2329c335d2` |
 | Linux x64 | `bca8779f0e6deac18be24002e0a73725845e01a741c8a74ef91d0f8ea77f5a11` |
 
-所有下載雜湊、ZIP／App 逐檔對照及 Linux tar／deb 的實際 ELF 核對在 `package-integrity.json`。兩份 Mac ZIP 分別有1230／1214個payload與App一致；Windows917個ZIP項目只有exe與candidate.json改變，其餘915個逐byte等於前包，修正過的PowerShell helper、DLL與fixture未變。Mac／Linux的正式打包工具各自檢查簽章／映像或ELF loader／dpkg Depends；這些不等於安裝、原生輸入或實機驗收。
+arm64最新包已包含bc380f9導覽修正；實際目錄為 `.local/verification/slint-reply-overlay/arm64-package/`，原表列arm64路徑是零複本相容symlink。ZIP SHA-256為20d1628c435501fcbcd640c9e0359cd2ecf23d0facb91298adb4f4913a42dd65，DMG為0a16bbe893b04b4ce38125e4a7b0b2e141a7334d36b607ddd2dbed472128bac6；新包1231個ZIP payload與App一致，50個runtime dylib及199份前包notice逐byte不變。Windows／Intel／Linux仍為26d9947的空格修正版，未宣稱已同步本次Slint UI修正。原7個封裝後合成案例與雙語最小寬度OS操作見[arm64補驗](#2026-11-10-arm64-封裝與雙語導覽補驗)。
+
+以下為首次四架構封裝紀錄；其中舊arm64已由上述包取代。所有下載雜湊、ZIP／App 逐檔對照及 Linux tar／deb 的實際 ELF 核對在 `package-integrity.json`。兩份 Mac ZIP 分別有1230／1214個payload與App一致；Windows917個ZIP項目只有exe與candidate.json改變，其餘915個逐byte等於前包，修正過的PowerShell helper、DLL與fixture未變。Mac／Linux的正式打包工具各自檢查簽章／映像或ELF loader／dpkg Depends；這些不等於安裝、原生輸入或實機驗收。
 
 arm64／Windows在851aabd加本批patch建置，提交後286份Cargo／build.rs／src fingerprint與26d9947核對一致；x64／Linux產品來源為26d9947。各架構release build與all-target Clippy通過，建置環境、實際命令、dirty狀態及連結／簽章轉換各自留在build record與package report。沒有因診斷／封裝檔的後續提交而倒填產品建置來源。
 
@@ -438,3 +440,20 @@ macOS arm64實際Slint host的software／default完整網頁account、software�
 最新四架構下載仍為26d9947的空格修正版，本次導覽修正尚未替換下載；只留一份最新raw供下一批封裝／原生驗收，跨平台、最小視窗／語言、原生輸入、完整資料回退與同負載效能仍待驗。自有target與被取代的前輪raw於本批清理，exact paths、UID／resolved／symlink／lsof、du／Cargo／filesystem free與保護雜湊在cleanup/ledger.json。S0–S8持續，S9未執行。
 
 本批即時清理完成：Cargo原生clean回報8881檔／3.2GiB，刪前target du3380808KiB；前輪fb35e2ee…診斷raw已移除，frontend相容symlink改指向本輪單份c15fa37d…。2742份最新交付／原Windows證據／保留檔案hash不變；filesystem available 288987926528→292184289280 bytes只記並行觀測，與du及Cargo宣告量分列。不清共享SDK／registry／VM，不移除尚未整合來源worktree。
+
+
+## 2026-11-10 arm64 封裝與雙語導覽補驗
+
+bc380f9的同一產品來源（286份fingerprint一致）已封裝為最新arm64 App／ZIP／DMG；未重建Rust或播放器。原打包器重用路徑只接受新exe的@rpath相依，對arm64原本的 `/opt/homebrew/opt/mpv/lib/libmpv.2.dylib`拒絕，首輪failed保留。現在只對「解析後完整來源路徑與原manifest記錄相同、原始library SHA相同、只有一個對應bundle entry」的絕對import加入明確install_name_tool relocation；不按basename猜測、不複製未知library，也不變更舊dylib。link_source保留最初連結輸入供連續重用，安裝後仍檢查imports／rpath、簽章和輸入hash不變。兩次連續transport正例與不同路徑、變動／缺檔、錯hash／重複來源、未搬移import等負例通過；完整Python171項通過，workflow未變且actionlint缺工具仍not_ready。
+
+新exe060598ec…、ZIP20d1628c…、DMG0a16bbe8…；50個runtime library逐byte相同、199份既有notice相同，新增一份前包runtime manifest來源快照；ZIP／App1231個payload一致，deep strict ad-hoc與唯讀DMG檢查通過，未公證。actual build是d08bf5f加patch（raw c15fa37d…），產品來源核對bc380f9；封裝工具為bc380f9加本批Python patch，dirty與provenance如實保留，不倒填成clean build。
+
+封裝App在禁止讀Homebrew的sandbox完成software／default網頁account、software終端account、software／default推文導覽，加兩種renderer的shell／通知退出，共七案exit0、唯一精確Close ACK；HTTP owner全joined，shell16 owner／1040×740，notice退出timer停止。這是實際host的toolkit合成流程；其他架構、影音完整矩陣與OS輸入不由此推論。
+
+另以同一簽章App的隔離reply fixture做macOS實際CUA操作：導覽控制在最小寬度（拖曳至580附近，截圖含標題列約581×390；沒有聲稱精確backing pixels）繁中／英文皆完整可見。繁中原PO聚焦後Down由0／4變1／4；Esc關閉並回文章輸入。經設定的一般頁選English，顯示保存成功及立即翻譯；英文Next reply由1／4變2／4，Esc再次恢復文章輸入。fixture PID46328正常OS close、exit0、嚴格零站端輸入peer ACK及HTTP join通過。CUA的原始圖／AX觀測在對話工具結果，沒有匯出成PNG，因此不冒充獨立像素驗收或完整鍵盤／可及性／DPI矩陣。
+
+關窗後再讀bound app AX曾出現正常非probe入口，已立即關閉，最後inventory不再列Candidate；該次正常啟動未追蹤網路／store副作用，明確排除於fixture隔離與驗收範圍，不把它宣稱為測試程序零外連。之後關閉只查inventory／已擁有process handle，不在已退出App上讀AX。原PTTStella與其他聊天視窗未操作。
+
+驗證完成後，清理前份完整arm64包及已被新包涵蓋的c15fa37d…raw；首次失敗的空staging移除，成功r2正常rename為arm64-package。保留舊manifest／notices／完整file SHA的小型封存，frontend相容symlink改指向新App的同一native，原四平台根目錄下arm64-package亦為相容symlink；沒有再留App／raw副本。exact paths、UID／resolved／symlink／lsof、du／filesystem free與不變hash見slint-reply-overlay/package-cleanup/ledger.json。其他三平台、原Windows101份證據、source與共享SDK／registry／VM／候選共用OS cache均保留。本批無Cargo建置／target，goal S0–S8持續，S9未執行。
+
+本批清理前舊arm64包du279076KiB、冗餘raw68,495,776 bytes；filesystem available 291290202112→291640791040 bytes只記並行觀測，不能將差額全歸因於本批。1326份其他三平台／原Windows證據與286份產品來源hash不變，舊包1180份metadata／notice逐檔SHA封存核對。保留最新交付及獨特成功／失敗證據，不動共用OS cache。

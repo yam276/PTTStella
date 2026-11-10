@@ -130,3 +130,97 @@ class ReuseTests(unittest.TestCase):
                     with self.assertRaises((ValueError, subprocess.CalledProcessError)):
                         self.reuse(old, source, output)
                 self.assertFalse((output / 'Frameworks').exists())
+
+    def absolute_fixture(self, root):
+        old, source, output = self.fixture(root)
+        original = root / 'source-install/libmpv.2.dylib'
+        original.parent.mkdir()
+        original.write_bytes(b'original link input before relocation and signing')
+        alias = root / 'opt-mpv/libmpv.2.dylib'
+        alias.parent.mkdir()
+        alias.symlink_to(original)
+        manifest_path = old / 'Contents/Resources/runtime-manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['files'][1].update(original=str(original),
+                                    original_sha256=runtime.digest(original))
+        manifest_path.write_text(json.dumps(manifest))
+        return old, source, output, original, alias
+
+    def test_relocates_only_exact_recorded_absolute_link_inputs_across_two_transports(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            old, source, output, original, alias = self.absolute_fixture(root)
+
+            def information(path):
+                value = self.information(path)
+                if path == source:
+                    value['imports'][0] = str(alias)
+                return value
+
+            with patch.object(runtime, 'inspect', side_effect=information), \
+                    patch.object(runtime, 'run', side_effect=self.tools) as commands:
+                report = self.reuse(old, source, output)
+                expected_link = {'file': str(original), 'sha256': runtime.digest(original)}
+                self.assertEqual(report['files'][1]['link_source'], expected_link)
+                self.assertEqual(report['reused_candidate']['source_import_relocations'],
+                                 {str(alias): '@rpath/libmpv.2.dylib'})
+                changes = [call.args for call in commands.call_args_list
+                           if call.args[0] == 'install_name_tool']
+                self.assertEqual(changes[0][1:4],
+                                 ('-change', str(alias), '@rpath/libmpv.2.dylib'))
+                self.assertEqual((output / 'Frameworks/libmpv.2.dylib').read_bytes(),
+                                 b'unchanged library fixture')
+                resources = output / 'Resources'
+                (resources / 'runtime-manifest.json').write_text(json.dumps(report))
+                descriptor = json.loads((old / 'Contents/Resources/candidate.json').read_text())
+                (resources / 'candidate.json').write_text(json.dumps(descriptor))
+                (output.parent.parent / 'package-report.json').write_text(json.dumps({
+                    **descriptor, 'executable_sha256': runtime.digest(output / 'MacOS/native')}))
+                next_output = root / 'next/Contents'
+                (next_output / 'MacOS').mkdir(parents=True)
+                (next_output / 'Resources').mkdir()
+                second = self.reuse(output.parent, source, next_output)
+                self.assertEqual(second['files'][1]['link_source'], expected_link)
+                self.assertEqual(second['reused_candidate']['source_import_relocations'],
+                                 {str(alias): '@rpath/libmpv.2.dylib'})
+
+    def test_rejects_absolute_imports_with_unproven_paths_or_source_bytes(self):
+        for bad in ('different-path', 'mutated-source', 'missing-source', 'wrong-record',
+                    'ambiguous-record', 'unrelocated-output'):
+            with self.subTest(bad=bad), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                old, source, output, original, alias = self.absolute_fixture(root)
+                manifest_path = old / 'Contents/Resources/runtime-manifest.json'
+                if bad == 'different-path':
+                    other = root / 'different/libmpv.2.dylib'
+                    other.parent.mkdir()
+                    other.write_bytes(original.read_bytes())
+                    alias.unlink()
+                    alias.symlink_to(other)
+                elif bad == 'mutated-source':
+                    original.write_bytes(b'different link input')
+                elif bad == 'missing-source':
+                    original.unlink()
+                elif bad in ('wrong-record', 'ambiguous-record'):
+                    manifest = json.loads(manifest_path.read_text())
+                    if bad == 'wrong-record':
+                        manifest['files'][1]['link_source'] = {'file': str(original), 'sha256': '0' * 64}
+                    else:
+                        extra = old / 'Contents/Frameworks/another.dylib'
+                        extra.write_bytes(b'unchanged library fixture')
+                        manifest['files'].append({**manifest['files'][1],
+                                                  'file': 'Frameworks/another.dylib'})
+                    manifest_path.write_text(json.dumps(manifest))
+
+                def information(path):
+                    value = self.information(path)
+                    if path == source or bad == 'unrelocated-output' and path.name == 'native':
+                        value['imports'][0] = str(alias)
+                    return value
+
+                with patch.object(runtime, 'inspect', side_effect=information), \
+                        patch.object(runtime, 'run', side_effect=self.tools):
+                    with self.assertRaises(ValueError):
+                        self.reuse(old, source, output)
+                if bad != 'unrelocated-output':
+                    self.assertFalse((output / 'Frameworks').exists())
