@@ -12,8 +12,67 @@ use std::{
     time::{Duration, Instant},
 };
 
-async fn pause(ms: u64) {
-    tokio::time::sleep(Duration::from_millis(ms)).await;
+/// Only explicit conformance runs sample these flags. No product timer or
+/// callback is replaced and the original deadlines/assertions remain intact.
+struct Trace {
+    started: Instant,
+    samples: Vec<serde_json::Value>,
+    last: Option<serde_json::Value>,
+    omitted: usize,
+}
+impl Trace {
+    fn new() -> Self {
+        Self {
+            started: Instant::now(),
+            samples: Vec::new(),
+            last: None,
+            omitted: 0,
+        }
+    }
+    fn sample(&mut self, ui: &TerminalWindow, owner: &notice::Owner, phase: &str) {
+        let flags = serde_json::json!({
+            "phase":phase,"hover":ui.get_notice_hovered(),"focus":ui.get_notice_focused(),
+            "fading":ui.get_notice_fading(),"timer":owner.timer_active(),
+            "notice_empty":ui.get_input_notice().is_empty(),"error":ui.get_notice_error(),
+            "reduced_motion":ui.get_tools_reduced_motion(),"foreground":ui.get_native_foreground(),
+            "tools_blocked":ui.get_tools_source_blocked(),"terminal_focus":ui.get_terminal_input_focused(),
+            "shell_visible":ui.get_shell_status_visible(),"closing":ui.get_app_closing()
+        });
+        if self.last.as_ref() == Some(&flags) {
+            return;
+        }
+        self.last = Some(flags.clone());
+        if self.samples.len() < 128 {
+            self.samples
+                .push(serde_json::json!({"ms":self.started.elapsed().as_millis(),"flags":flags}));
+        } else {
+            self.omitted += 1;
+        }
+    }
+    async fn pause(&mut self, ui: &TerminalWindow, owner: &notice::Owner, ms: u64, phase: &str) {
+        let until = Instant::now() + Duration::from_millis(ms);
+        self.sample(ui, owner, phase);
+        while Instant::now() < until {
+            tokio::time::sleep(
+                until
+                    .saturating_duration_since(Instant::now())
+                    .min(Duration::from_millis(20)),
+            )
+            .await;
+            self.sample(ui, owner, phase);
+        }
+    }
+    fn write(&self, dir: &Path, result: &Result<(), String>) -> Result<(), String> {
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(dir.join("notice-state-trace.json"))
+            .map_err(|e| e.to_string())?;
+        serde_json::to_writer_pretty(file,&serde_json::json!({
+            "scope":"conformance-only 20ms sampling of UI/timer flags; no OS event trace or text content",
+            "max_samples":128,"omitted":self.omitted,"samples":self.samples,"outcome":result
+        })).map_err(|e|e.to_string())
+    }
 }
 fn move_to(ui: &TerminalWindow, x: f32, y: f32) {
     ui.window().dispatch_event(WindowEvent::PointerMoved {
@@ -22,6 +81,24 @@ fn move_to(ui: &TerminalWindow, x: f32, y: f32) {
 }
 
 pub async fn run(ui: &TerminalWindow, owner: &notice::Owner, dir: &Path) -> Result<(), String> {
+    let mut trace = Trace::new();
+    let result = run_inner(ui, owner, dir, &mut trace).await;
+    trace.sample(ui, owner, "finished");
+    let saved = trace.write(dir, &result);
+    match (result, saved) {
+        (Ok(()), result) => result,
+        (Err(error), Ok(())) => Err(error),
+        (Err(error), Err(trace)) => Err(format!(
+            "{error}; failed to save notice state trace: {trace}"
+        )),
+    }
+}
+async fn run_inner(
+    ui: &TerminalWindow,
+    owner: &notice::Owner,
+    dir: &Path,
+    trace: &mut Trace,
+) -> Result<(), String> {
     let size = ui.window().size();
     let dpi = ui.window().scale_factor();
     let (width, height) = (size.width as f32 / dpi, size.height as f32 / dpi);
@@ -37,7 +114,7 @@ pub async fn run(ui: &TerminalWindow, owner: &notice::Owner, dir: &Path) -> Resu
         owner.timer_active(),
         "copy did not arm the one product timer",
     )?;
-    pause(1000).await;
+    trace.pause(ui, owner, 1000, "initial_readable").await;
     require(
         !ui.get_notice_fading() && !ui.get_input_notice().is_empty(),
         "copy expired before its readable interval",
@@ -49,7 +126,7 @@ pub async fn run(ui: &TerminalWindow, owner: &notice::Owner, dir: &Path) -> Resu
         "notification did not observe hover over its child button",
     )
     .await?;
-    pause(1300).await;
+    trace.pause(ui, owner, 1300, "hover_readable").await;
     require(
         !ui.get_notice_fading() && !owner.timer_active() && !ui.get_input_notice().is_empty(),
         "hover consumed readable time or kept a polling timer",
@@ -57,7 +134,7 @@ pub async fn run(ui: &TerminalWindow, owner: &notice::Owner, dir: &Path) -> Resu
     // Real toolkit Tab traversal, rather than setting a focus property.
     for _ in 0..20 {
         verification::key(ui, Key::Tab);
-        pause(10).await;
+        trace.pause(ui, owner, 10, "tab_to_notice").await;
         if ui.get_notice_focused() {
             break;
         }
@@ -72,7 +149,7 @@ pub async fn run(ui: &TerminalWindow, owner: &notice::Owner, dir: &Path) -> Resu
         "notification hover did not leave",
     )
     .await?;
-    pause(1200).await;
+    trace.pause(ui, owner, 1200, "focused_without_hover").await;
     require(
         !owner.timer_active() && !ui.get_input_notice().is_empty(),
         "focus did not independently pause notification lifetime",
@@ -88,7 +165,7 @@ pub async fn run(ui: &TerminalWindow, owner: &notice::Owner, dir: &Path) -> Resu
         "resuming copy did not enter fade",
     )
     .await?;
-    pause(150).await;
+    trace.pause(ui, owner, 150, "fade_resumed").await;
     verification::capture(ui, dir, "notice-fading.png")?;
     move_to(ui, close_x, 36.);
     wait(
@@ -96,13 +173,15 @@ pub async fn run(ui: &TerminalWindow, owner: &notice::Owner, dir: &Path) -> Resu
         "hover did not restore opacity during fade",
     )
     .await?;
-    pause(650).await;
+    trace.pause(ui, owner, 650, "hover_fade").await;
     require(
         !ui.get_input_notice().is_empty() && !owner.timer_active(),
         "paused fade expired",
     )?;
     ui.set_tools_reduced_motion(true);
-    pause(50).await;
+    trace
+        .pause(ui, owner, 50, "reduced_motion_while_hovered")
+        .await;
     require(
         !ui.get_input_notice().is_empty(),
         "reduced motion dismissed a hovered notice",
@@ -121,9 +200,13 @@ pub async fn run(ui: &TerminalWindow, owner: &notice::Owner, dir: &Path) -> Resu
 
     ui.set_tools_reduced_motion(false);
     notice::copied(ui, "same");
-    pause(1200).await;
+    trace
+        .pause(ui, owner, 1200, "before_identical_replacement")
+        .await;
     notice::copied(ui, "same");
-    pause(1000).await;
+    trace
+        .pause(ui, owner, 1000, "after_identical_replacement")
+        .await;
     require(
         !ui.get_notice_fading() && ui.get_input_notice() == "same",
         "identical replacement inherited the old deadline",
@@ -131,7 +214,7 @@ pub async fn run(ui: &TerminalWindow, owner: &notice::Owner, dir: &Path) -> Resu
     notice::error(ui, "new failure");
     notice::copied(ui, "late copy");
     notice::success(ui, "late save");
-    pause(2600).await;
+    trace.pause(ui, owner, 2600, "error_priority").await;
     require(
         ui.get_input_notice() == "new failure" && ui.get_notice_error() && !owner.timer_active(),
         "a stale timer or late success replaced the error",
@@ -141,7 +224,9 @@ pub async fn run(ui: &TerminalWindow, owner: &notice::Owner, dir: &Path) -> Resu
     outside();
     ui.set_tools_reduced_motion(true);
     notice::copied(ui, "no motion");
-    pause(1500).await;
+    trace
+        .pause(ui, owner, 1500, "reduced_motion_readable")
+        .await;
     require(
         ui.get_input_notice() == "no motion" && !ui.get_notice_fading(),
         "reduced motion skipped readable time",
@@ -156,7 +241,7 @@ pub async fn run(ui: &TerminalWindow, owner: &notice::Owner, dir: &Path) -> Resu
         "reduced-motion expiry animated or took focus",
     )?;
     notice::persistent(ui, "unclassified");
-    pause(2600).await;
+    trace.pause(ui, owner, 2600, "persistent_unknown").await;
     require(
         ui.get_input_notice() == "unclassified" && !owner.timer_active(),
         "unclassified notification was timed",

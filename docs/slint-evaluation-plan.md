@@ -399,6 +399,18 @@ macOS原生選單新增「檢視 → 全螢幕」及系統`⌃⌘F`。原生鍵�
 
 本輪已用Cargo原生clean移除8851檔、回報2.9GiB（target刪前du3062312KiB），target只剩8KiB metadata；另移除10個精確路徑，包括5份raw、3個唯一ID原生wrapper及2份中間App／ZIP／DMG。刪前逐檔盤點、UID／resolved／symlink／lsof檢查完成，必要非binary metadata與hash已壓縮保存。4134份受保護產品來源、最新候選、前包對照、其他平台交付及Windows原始證據hash不變。filesystem available287426174976→291306532864 bytes為並行觀測，不能全歸因本次刪除；exact paths、Cargo與du、保留例外見 `slint-input-stability/cleanup/ledger.json`。共享工具／SDK／registry／VM、使用者資料、其他聊天與未整合來源worktree保留。
 
+## 2026-11-10 工具列與通知失敗狀態追查
+
+沿用475897f後，僅在明確conformance流程補診斷：每個工具操作記錄當時阻擋旗標，通知流程最多保留128筆變化（要求20ms取樣，實際排程可能延遲），不記通知內容、不替換生產callback／timer，也不改assertion或自動重試。原生／組字／前景保護維持原樣。診斷raw使用前述最新包的50個runtime，以明示DYLD_LIBRARY_PATH啟動；這不是無Homebrew或乾淨安裝驗收，不替換最新下載。
+
+兩個診斷流程皆exit1，原始failed保留：software在恢復fade前已foreground=false，最後「automatic expiry changed terminal focus」；default在初始通知約878ms觀察foreground從true變false，hover／Tab／fade／錯誤優先等通知步驟其後通過，但最後斷線工具的blocked=true、foreground=false，所有modal／組字／closing旗標均false。由生產tools-source-blocked可確認此次最後工具失敗是前景准入拒絕，不能宣稱工具toggle壞掉或繞過保護。未取得OS事件級trace，不判定哪個程式或操作撤銷前景；也沒有據此替先前hover失敗定因或回填通過。
+
+唯一ID的原生wrapper另以CUA補驗：Raise並點終端時曾觀察浮球enabled，下一次操作又disabled，未能維持至工具展開；原生完整shell記not_ready。`⌃⌘F`進出與正常關窗仍可操作，loopback零輸入、Close ACK及程序exit0。ScreenCaptureKit另回報-3812，沒有取得截圖，不將AX當像素證據。未操作使用者的正式PTTStella或其他聊天視窗。
+
+診斷來源為475897f加兩個probe檔patch，288份產品fingerprint保存；Slint bin93過／1個helper ignored、all-target Clippy與release build通過。結果在 `.local/verification/slint-shell-state-audit/` 的results、notice-state-trace與native-observation。保留單一診斷raw供後續在可維持原生焦點的環境追查；最新arm64下載與另外三平台包均未變。這次沒有新增產品修正或宣稱shell／通知回歸解決，S0–S8持續。
+
+本批Cargo原生clean回報8851檔／2.9GiB，target刪前du3061008KiB、刪後8KiB metadata；正常關閉且join後移除唯一ID原生wrapper，保留其最小metadata／hash。3987份來源、唯一診斷raw與保護交付檔案hash不變。filesystem available288864776192→291833364480 bytes僅為並行觀測，與du及Cargo宣告量分列；exact paths、UID／resolved／symlink／lsof、保留例外在 `slint-shell-state-audit/cleanup/ledger.json`。未重建或修改任何正式／跨平台下載，也未刪其他聊天、共享SDK／registry／VM或未整合來源worktree。
+
 ## 2026-11-10 最新候選
 
 依使用者要求，先交付四架構候選包，不等待目前沒有的 Intel Mac／Linux x64 實機。連續推文的重複 ID 逐欄改為空格，保留第一筆 ID、冒號、內文、時間及複製對齊；既有黑名單整行遮罩仍優先保留。共用 Rust 產品修正為 `26d9947`，未切換正式入口、整合 canonical develop 或發佈。

@@ -11,8 +11,23 @@ use slint::{
 use std::{error::Error, path::PathBuf, rc::Rc};
 
 async fn choose(ui: &TerminalWindow, category: i32, label: &str) -> Result<(), String> {
+    let state = || {
+        serde_json::json!({
+            "action":label,"category":category,"open":ui.get_tools_open(),
+            "blocked":ui.get_tools_source_blocked(),"foreground":ui.get_native_foreground(),
+            "composing":ui.get_native_composing(),"closing":ui.get_app_closing(),
+            "modal":{"manager":ui.get_manager_open(),"settings":ui.get_settings_open(),
+                "editor":ui.get_editor_open(),"station_color":ui.get_station_color_open(),
+                "media":ui.get_media_open(),"find":ui.get_find_open(),"about":ui.get_about_open(),
+                "login":ui.get_login_open(),"login_busy":ui.get_login_busy(),
+                "paste":ui.get_paste_open(),"paste_reading":ui.get_paste_reading(),"output":ui.get_output_busy()}
+        })
+    };
+    eprintln!("shell_action_before_toggle {}", state());
     ui.invoke_tools_toggle();
-    wait(|| ui.get_tools_open(), "shell floating tools did not open").await?;
+    if let Err(error) = wait(|| ui.get_tools_open(), "shell floating tools did not open").await {
+        return Err(format!("{error}: {}", state()));
+    }
     ui.invoke_tools_category_choose(category);
     let items = ui.get_tools_actions();
     let index = (0..items.row_count())
