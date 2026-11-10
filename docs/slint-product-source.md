@@ -36,3 +36,5 @@ Rust 版本依 `rust-toolchain.toml`；公開 crates、Skia 與平台系統依�
 [六項自製 fixture 測試](../tooling/test_reconstruct_slint_source.py) 涵蓋移除原 checkout 後的完整還原、patch 與新檔、損壞或 symlink bundle、既有目的地保護、路徑／必要清單拒絕，以及錯 tree／hash／遺漏檔案拒絕。fixture 不依賴產品的私有資料或原 repo Git history。
 
 產品來源包已還原，不代表完整第三方對應來源已交付。播放器與其靜態／動態依賴、Skia、各平台工具與可重跑 recipe／來源閉包仍須逐項綁定；候選原 `source_delivery: not_ready` 維持不變。詳細來源、實際命令、工具鏈、還原結果、獨立建置與本批清理紀錄在 `slint-source-reconstruction/`。整體 S0–S8 及 S9 邊界依 [主計畫](slint-evaluation-plan.md)。
+
+後續已完成 [macOS x64 的 32 套件乾淨來源重建](slint-native-source-replay.md)，並核對 47 個 runtime library；首輪 MP4 fixture 逾時仍未定因，解碼重複性與完整跨平台來源交付維持 `not_ready`。

@@ -4,6 +4,8 @@
 
 完整 `native-player-probe`／`pttstella-slint` 已封裝為 Intel Mac 候選 App／ZIP／DMG，包含自行從來源建置的 mpv／FFmpeg runtime。此包在 Apple Silicon Mac 的 Rosetta 通過搬移及分立元件檢查；Intel 實機、OS 鍵鼠／IME、可聽音訊、最低 OS、乾淨機器與效能仍未驗收，不替代[總計畫](slint-evaluation-plan.md)的 S8 門檻。
 
+32 套件已在新 prefix 完成 [乾淨來源重建](slint-native-source-replay.md)，47 個 library 的閉包／架構亦已核對；首輪 MP4 fixture 逾時仍未定因。本次結果供來源驗證，目前候選沿用原 library。
+
 ## 先前交付與一般啟動方式
 
 Slint worktree 的 `.local/verification/slint-macos-x64-candidate/package-current/` 為當時的完整候選（現已被取代）：
