@@ -9,8 +9,8 @@ use std::sync::{
 };
 use tokio::sync::watch;
 
-pub const MAX_WIDTH: u32 = 1280;
-pub const MAX_HEIGHT: u32 = 720;
+pub const MAX_WIDTH: u32 = super::MAX_RENDER_DIMENSION;
+pub const MAX_HEIGHT: u32 = super::MAX_RENDER_DIMENSION;
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub struct View {
@@ -31,6 +31,11 @@ impl Size {
         }
         let factor = (f64::from(MAX_WIDTH) / f64::from(view.width))
             .min(f64::from(MAX_HEIGHT) / f64::from(view.height))
+            .min(
+                (super::MAX_RENDER_PIXELS as f64
+                    / (f64::from(view.width) * f64::from(view.height)))
+                .sqrt(),
+            )
             .min(1.);
         Some(Self {
             width: (f64::from(view.width) * factor).floor().max(1.) as u32,
@@ -51,9 +56,8 @@ pub(super) struct Buffer {
 }
 impl Buffer {
     fn new(size: Size) -> Result<Self, String> {
-        if size.width == 0 || size.height == 0 || size.width > MAX_WIDTH || size.height > MAX_HEIGHT
-        {
-            return Err("software video dimensions exceed 1280x720".into());
+        if !super::render_size_allowed(size.width, size.height) {
+            return Err("software video surface exceeds pixel budget".into());
         }
         let stride = (size.width as usize * 4).div_ceil(64) * 64;
         let count = stride * size.height as usize / 64;
@@ -325,6 +329,10 @@ mod tests {
                 width: 1,
                 height: MAX_HEIGHT + 1,
             },
+            Size {
+                width: 8192,
+                height: 8192,
+            },
         ] {
             assert!(Buffer::new(invalid).is_err());
         }
@@ -338,7 +346,9 @@ mod tests {
         let (_, stride, bytes) = buffer.target();
         assert_eq!((bytes.as_ptr() as usize) % 64, 0);
         assert_eq!(stride % 64, 0);
-        assert!(bytes.len() <= MAX_WIDTH as usize * MAX_HEIGHT as usize * 4);
+        assert!(
+            bytes.len() <= super::super::MAX_RENDER_PIXELS as usize * 4 + MAX_HEIGHT as usize * 63
+        );
         let mut one = Buffer::new(Size {
             width: 1,
             height: 1,
@@ -346,6 +356,53 @@ mod tests {
         .unwrap();
         one.target().2[..4].copy_from_slice(&[10, 20, 30, 7]);
         assert_eq!(one.frame(1).unwrap().pixels(), &[10, 20, 30, 255]);
+    }
+
+    #[test]
+    fn software_keeps_full_hd_and_4k_and_only_scales_views_above_the_shared_budget() {
+        for (view, expected) in [
+            ((1920, 1080), (1920, 1080)),
+            ((3840, 2160), (3840, 2160)),
+            ((8192, 2048), (8192, 2048)),
+            ((8192, 8192), (4096, 4096)),
+            ((u32::MAX, u32::MAX), (4096, 4096)),
+        ] {
+            let size = Size::fit(View {
+                width: view.0,
+                height: view.1,
+                active: true,
+            })
+            .unwrap();
+            assert_eq!((size.width, size.height), expected);
+            assert!(super::super::render_size_allowed(size.width, size.height));
+        }
+        let mut buffer = Buffer::new(Size {
+            width: 3840,
+            height: 2160,
+        })
+        .unwrap();
+        let (_, stride, bytes) = buffer.target();
+        for (x, y, rgb) in [
+            (0, 0, [255, 0, 0]),
+            (3839, 0, [0, 255, 0]),
+            (0, 2159, [0, 0, 255]),
+            (3839, 2159, [255, 255, 0]),
+        ] {
+            let at = y * stride + x * 4;
+            bytes[at..at + 4].copy_from_slice(&[rgb[0], rgb[1], rgb[2], 7]);
+        }
+        let frame = buffer.frame(42).unwrap();
+        assert_eq!(frame.size(), [3840, 2160]);
+        assert_eq!(frame.pixels().len(), 3840 * 2160 * 4);
+        for (x, y, expected) in [
+            (0, 0, [255, 0, 0, 255]),
+            (3839, 0, [0, 255, 0, 255]),
+            (0, 2159, [0, 0, 255, 255]),
+            (3839, 2159, [255, 255, 0, 255]),
+        ] {
+            let at = (y * 3840 + x) * 4;
+            assert_eq!(&frame.pixels()[at..at + 4], &expected);
+        }
     }
     #[tokio::test]
     async fn software_setup_never_fetches_and_cancel_retires_before_core_join() {

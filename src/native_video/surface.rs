@@ -13,12 +13,7 @@ impl Surface {
     /// The caller's GL3.3 context is current for this call and all later uses;
     /// destroy the surface explicitly on that context before it is torn down.
     pub unsafe fn new(gl: &glow::Context, width: i32, height: i32) -> Result<Self, String> {
-        if width <= 0
-            || height <= 0
-            || width > 8192
-            || height > 8192
-            || i64::from(width) * i64::from(height) > 16_777_216
-        {
+        if width <= 0 || height <= 0 || !super::render_size_allowed(width as u32, height as u32) {
             return Err("video surface exceeds pixel budget".into());
         }
         // SAFETY: caller guarantees the current context. Partial allocations

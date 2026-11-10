@@ -2,6 +2,22 @@
 
 這份文件記錄 S0／S8 的量測工具及目前證據，不是效能通過報告。完整負載、次數與平台門檻仍以[平替計畫](slint-evaluation-plan.md#同負載效能門檻)為準。
 
+## 2026-11-10 macOS 預設軟體合成與影片尺寸
+
+本輪來源將 macOS 的無旗標路徑改用 Skia 軟體合成及既有原生 CPU 影片 worker。Windows／Linux 的 Auto 選擇保持原邏輯；`SLINT_BACKEND` 仍可覆寫，另可明確指定互斥的 `--software-renderer`、`--opengl-renderer`、macOS `--metal-renderer`。Metal UI 必須在 mount 前選定 CPU 影片：首輪三格式都停在 Ready／offer 尚未被接手，未發 HTTP；修正後三案通過，沒有放寬就緒或像素條件。預設切換僅發生在 Slint 候選，不切換正式 Dioxus 入口。
+
+同時移除 CPU 影片既有720p上限，與 GPU 共用8192邊／16,777,216像素預算，超出才等比縮小。沿用單一 latest frame、有界通知及 worker 退出；依實際 view 配置，閒置不預配最大 buffer。新增獨立 expected 檢查 Full HD／4K 保持尺寸、超大正方形縮為4096×4096、越界拒絕，以及3840×2160四角 RGB／alpha255和完整 frame 長度。這是實際生產 buffer／轉換測試，尚非4K影片播放速度、4K顯示器或原生音訊驗收。
+
+證據在 `.local/verification/slint-renderer-api-current/`。R4 raw為 `d1fd308f…`，使用既有50庫閉包的診斷 native為 `c8eeab19…`；確切hash、來源8f40e47加patch／351份fingerprint、各revision及命令分開保存。前一輪的同機／字型條件延用，M3 Ultra／256GiB／macOS15.7.7。無 renderer 旗標的完整16-owner視窗、viewport1040×740／grid1040×624，在原生 CUA terminal focus首尾可見下完成10秒／101筆穩定採樣：footprint峰值104,027,712 bytes（約99MiB）、CPU0.207124876秒，RSS峰值260,440,064 bytes。先前 OpenGL 842–845MiB與明確Metal R1校準約574MiB分列，不宣稱已達S8的兩版改善門檻或證明所有機型相同比例。
+
+同一R4實際視窗以原生 `⌃⌘F` 進1920×1080全螢幕，再回1040×768（含標題列），terminal focus保留；兩張 screenshot 在CUA紀錄，沒有另存副本。返回後 family footprint74,061,888 bytes；vmmap主程序57.1M、圖形IOAccelerator resident16K。正常關窗exit0／唯一嚴格Close ACK，最後觀測的PID＋start全數消失。沒有用本輪推定實體IME或F11矩陣完成。
+
+R4無旗標的MP4／WebM／OGV三案、837行／37次取頁長文、PNG／單GIF、文章輸入與貼上共七案皆exit0／嚴格Close，影片核對CPU render_path、四色、暫停／seek／失焦、render退休及session join；HTTP workers全部joined。固定960×576的source PNG與三API控制逐byte相同，仍為 `294df2bb…`。雙GIF峰值、100次操作／cold與warm重複、OS顯示延遲及Dioxus原生前景條件仍須補齊；單GIF案例沒有擴大標成雙GIF。
+
+另以沒有Slint／Skia／媒體或視窗的自製CGL程式定位成本：context current約5.9MB，第一次清除1040×624 FBO後主程序峰值457,721,408 bytes，vmmap圖形392.2M；destroy context後約7.2MB。紅色pixel `[255,0,0,255]` 獨立核對、exit0，原始碼／trace／vmmap在 `slint-gl-allocation-audit/`，臨時exe已清理。此反例證明部分圖形成本不需要Slint快取才會出現，並未定位或宣稱修復driver洩漏。
+
+本輪Rust native library390 passed／4 ignored、兩種Slint配置各97 passed／1 ignored，兩配置all-target release Clippy、fmt、Python177項通過。首輪Metal三案failed、fixture App因外部Frameworks symlink而deep-strict失敗及後續未啟動的runner錯誤均保留；standalone native strict通過，正式封裝仍要求完整閉包及原strict gate。R4最新平台包與清理結果在完成封裝後另記；此處不把診斷wrapper當可分發App，也不把測試通過當S0–S8完成。
+
 ## 2026-11-10 閒置格線校準與圖形記憶體
 
 新證據在 `.local/verification/slint-perf-equivalence-current/`，機器為 Apple M3 Ultra／256GiB RAM／macOS15.7.7，不能外推其他機型。沿用已封裝的 arm64 Slint native `6841e17e…`，沒有修改或重建 Rust；以獨立 host、responsibility root 和自有 marked-store 執行。兩版設定 bytes 相同：內建 Cascadia Mono／Noto Sans CJK TC、字高23、基線20、字寬100、en-US、hover off，完整 owner 保留。CUA 實見相同格線內容與顯示尺寸；Slint prepared report 為 viewport1040×740、grid1040×624、scale1／zoom1及16個服務存在。Dioxus 的相同顯示幾何由 screenshot 目視，沒有冒充機器讀取的 viewport receipt。

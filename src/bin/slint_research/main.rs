@@ -137,12 +137,31 @@ enum Probe {
     Connect,
 }
 
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+enum RenderBackend {
+    #[default]
+    Auto,
+    Software,
+    OpenGl,
+    Metal,
+}
+impl RenderBackend {
+    fn software_video(self, backend_override: Option<&str>) -> bool {
+        match self {
+            Self::Software | Self::Metal => true,
+            Self::OpenGl => false,
+            Self::Auto => backend_override
+                .map_or(cfg!(target_os = "macos"), |name| name.ends_with("software")),
+        }
+    }
+}
+
 struct Options {
     benchmark: Option<PathBuf>,
     store_profile: Option<profile::Profile>,
     verify_shell: bool,
     verify_motion: bool,
-    software_renderer: bool,
+    renderer: RenderBackend,
     zoom: f32,
     capture: Option<PathBuf>,
     source_png: Option<PathBuf>,
@@ -163,14 +182,14 @@ fn options() -> Result<Options, Box<dyn Error>> {
 fn options_from(
     mut args: impl Iterator<Item = std::ffi::OsString>,
 ) -> Result<Options, Box<dyn Error>> {
-    const USAGE: &str = "usage: pttstella-slint [--probe-store NEW_DIR MARKED_STORE_ROOT|--verify-motion NEW_DIR|--verify-shell NEW_DIR|--probe-benchmark NEW_DIR|--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--store-scene grid|drafts] [--software-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
+    const USAGE: &str = "usage: pttstella-slint [--probe-store NEW_DIR MARKED_STORE_ROOT|--verify-motion NEW_DIR|--verify-shell NEW_DIR|--probe-benchmark NEW_DIR|--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--store-scene grid|drafts] [--software-renderer|--opengl-renderer|--metal-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
     let mut zoom = None;
     let mut benchmark = None;
     let mut store_root = None;
     let mut store_scene = None;
     let mut verify_shell = false;
     let mut verify_motion = false;
-    let mut software_renderer = false;
+    let mut renderer = None;
     let mut capture = None;
     let mut probe = None;
     let mut source_png = None;
@@ -209,7 +228,15 @@ fn options_from(
                 benchmark = Some(args.next().ok_or(USAGE)?.into());
                 probe = Some(Probe::Session(session::Probe::Benchmark));
             }
-            Some("--software-renderer") if !software_renderer => software_renderer = true,
+            Some("--software-renderer") if renderer.is_none() => {
+                renderer = Some(RenderBackend::Software);
+            }
+            Some("--opengl-renderer") if renderer.is_none() => {
+                renderer = Some(RenderBackend::OpenGl);
+            }
+            Some("--metal-renderer") if renderer.is_none() => {
+                renderer = Some(RenderBackend::Metal);
+            }
             Some("--verify-editor-color") if verify_color.is_none() => {
                 verify_color = Some(args.next().ok_or(USAGE)?.into());
             }
@@ -466,7 +493,7 @@ fn options_from(
         store_profile: store_root.map(profile::Profile::fixture).transpose()?,
         verify_shell,
         verify_motion,
-        software_renderer,
+        renderer: renderer.unwrap_or_default(),
         verify_color,
         verify_drafts,
         verify_media,
@@ -632,16 +659,35 @@ fn run(
     mut loaded_preferences: Option<pttstella::settings::preferences::Preferences>,
     site_peers: Option<Rc<pttstella::connection::site_probe::Peers>>,
 ) -> Result<(), Box<dyn Error>> {
-    let software_renderer = options.software_renderer
-        || std::env::var("SLINT_BACKEND").is_ok_and(|name| name.ends_with("software"));
-    if options.software_renderer {
+    // Metal draws the UI on the GPU, but doesn't expose an OpenGL context to
+    // libmpv. Select its existing software video bridge before mounting it;
+    // a supported rendering notifier need not deliver a GL setup callback.
+    let software_video = options
+        .renderer
+        .software_video(std::env::var("SLINT_BACKEND").ok().as_deref());
+    if options.renderer == RenderBackend::Software {
         slint::BackendSelector::new()
             .backend_name("winit".into())
             .renderer_name("skia-software".into())
             .select()?;
+    } else if options.renderer == RenderBackend::OpenGl {
+        slint::BackendSelector::new()
+            .backend_name("winit".into())
+            .renderer_name("skia".into())
+            .require_opengl_with_version(3, 3)
+            .select()?;
+    } else if options.renderer == RenderBackend::Metal {
+        #[cfg(target_os = "macos")]
+        slint::BackendSelector::new()
+            .backend_name("winit".into())
+            .renderer_name("skia".into())
+            .require_metal()
+            .select()?;
+        #[cfg(not(target_os = "macos"))]
+        return Err("Metal rendering requires macOS".into());
     } else if std::env::var_os("SLINT_BACKEND").is_some() {
         #[cfg(feature = "native-video")]
-        if !software_renderer {
+        if !software_video {
             slint::BackendSelector::new()
                 .require_opengl_with_version(3, 3)
                 .select()?;
@@ -651,16 +697,19 @@ fn run(
         #[cfg(not(feature = "native-video"))]
         slint::BackendSelector::new().select()?;
     } else {
-        #[cfg(feature = "native-video")]
+        #[cfg(all(feature = "native-video", not(target_os = "macos")))]
         slint::BackendSelector::new()
             .backend_name("winit".into())
             .renderer_name("skia".into())
             .require_opengl_with_version(3, 3)
             .select()?;
-        // The macOS fixture used less physical memory with Skia's CPU compositor.
-        #[cfg(all(target_os = "macos", not(feature = "native-video")))]
+        // The native-video feature must not force a persistent GL context on
+        // macOS. The software compositor keeps the existing CPU video bridge;
+        // explicit GL/Metal choices remain available for measured workloads.
+        #[cfg(target_os = "macos")]
         slint::BackendSelector::new()
-            .backend_name("winit-skia-software".into())
+            .backend_name("winit".into())
+            .renderer_name("skia-software".into())
             .select()?;
     }
     let ui = TerminalWindow::new()?;
@@ -675,7 +724,7 @@ fn run(
     )?;
     let motion_audit_directory = options.benchmark.clone().filter(|_| options.verify_motion);
     let notice_audit_directory = options.benchmark.clone().filter(|_| options.verify_shell);
-    ui.set_media_video_software(software_renderer);
+    ui.set_media_video_software(software_video);
     locale::refresh(&ui);
     let quit_requested = Rc::new(Cell::new(false));
     #[cfg(target_os = "macos")]
@@ -2184,11 +2233,46 @@ mod startup_tests {
         for args in [
             &[][..],
             &["--software-renderer"][..],
+            &["--opengl-renderer"][..],
+            &["--metal-renderer"][..],
             &["--zoom", "150"][..],
             &["--connect"][..],
         ] {
             assert!(parse(args).probe == Some(Probe::Connect));
         }
+    }
+
+    #[test]
+    fn renderer_overrides_are_exclusive_and_preserve_the_selected_probe() {
+        assert_eq!(parse(&[]).renderer, RenderBackend::Auto);
+        let choices = [
+            ("--software-renderer", RenderBackend::Software),
+            ("--opengl-renderer", RenderBackend::OpenGl),
+            ("--metal-renderer", RenderBackend::Metal),
+        ];
+        for (flag, selected) in choices {
+            let options = parse(&[flag, "--probe-grid"]);
+            assert_eq!(options.renderer, selected);
+            assert!(options.probe == Some(Probe::Grid));
+            for (other, _) in choices {
+                assert!(options_from([flag, other].map(Into::into).into_iter()).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn video_bridge_matches_the_requested_api_and_preserves_environment_overrides() {
+        for backend in [None, Some("winit-skia"), Some("winit-skia-software")] {
+            assert!(RenderBackend::Software.software_video(backend));
+            assert!(RenderBackend::Metal.software_video(backend));
+            assert!(!RenderBackend::OpenGl.software_video(backend));
+        }
+        assert_eq!(
+            RenderBackend::Auto.software_video(None),
+            cfg!(target_os = "macos")
+        );
+        assert!(RenderBackend::Auto.software_video(Some("winit-skia-software")));
+        assert!(!RenderBackend::Auto.software_video(Some("winit-skia")));
     }
 
     #[test]

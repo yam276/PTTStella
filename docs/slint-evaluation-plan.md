@@ -10,7 +10,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。本輪 macOS arm64／Linux 另納入原生控制項 CJK fallback 與貼上預覽跨重繪修正（289份產品來源對應84e98a3）；Windows／Intel Mac 仍保持475897f，Windows69542cb7…等使用者稍後驗收。各包來源不同，依 [最新候選](#2026-11-10-最新候選) 分別核對；尚未完成全部原生或效能驗收。
 
-最新閒置校準另發現目前 arm64 預設 OpenGL 路徑有約842–845MiB程序族 footprint，主要占用落在圖形配置；同native軟體路徑單輪約84–98MiB，但CPU較高。Dioxus對照的前景尚未確認，因此未產生兩版改善比例；下一步優先處理renderer取捨及前景觀測，詳 [量測紀錄](slint-macos-measurement.md#2026-11-10-閒置格線校準與圖形記憶體)。這不改變S8仍未通過的狀態。
+本輪來源已將macOS無旗標路徑改為Skia軟體合成及原生CPU影片；同機完整owner閒置峰值約99MiB，較先前OpenGL的842–845MiB低，但CPU較高。CPU影片與GPU共用尺寸／像素預算，保留Full HD／4K；仍有明確GL／Metal選項。原生⌃⌘F與七案功能回歸通過，正式候選封裝另記；尚未完成Dioxus前景／同負載次數與所有平台效能。詳 [預設合成與影片尺寸](slint-macos-measurement.md#2026-11-10-macos-預設軟體合成與影片尺寸)，S8仍未通過。
 
 | 階段 | 目前已有 | 尚須完成 |
 | --- | --- | --- |
