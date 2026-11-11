@@ -500,18 +500,19 @@ impl Tools {
                         .map(|ch| if ch.is_ascii() { 7. } else { 13. })
                         .sum::<f32>();
                     let icon = if *command == Command::Sites { 24. } else { 0. };
-                    let width = if detail {
-                        available
+                    let natural_width = if detail {
+                        text * (12. / 13.) + 4.
                     } else {
-                        ((text + 22. + icon) * scale).min(available)
+                        text + 22. + icon
                     };
+                    let width = (natural_width * scale).min(available);
                     if x > 0. && (x + width > available || *command == Command::Sites) {
                         x = 0.;
                         y += row_height + gap;
                         row_height = 0.;
                     }
                     let height = if detail {
-                        ((text * scale / available).ceil().max(1.) * 16. + 2.) * scale
+                        ((natural_width * scale / width).ceil() * 16. + 2.).max(34.) * scale
                     } else {
                         34. * scale
                     };
@@ -529,7 +530,7 @@ impl Tools {
                     item
                 })
                 .collect::<Vec<_>>();
-            let content_height = items.last().map_or(0., |item| item.y + item.height);
+            let content_height = y + row_height;
             ui.set_tools_action_height(content_height);
             ui.set_tools_panel(SelectionRect {
                 x: layout.panel.x,

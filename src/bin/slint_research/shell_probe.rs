@@ -170,19 +170,31 @@ pub fn start(
                 connection.updates.borrow().input_epoch == 0,
                 "notification Tab/hover sent station input",
             )?;
+            verification::foreground(&ui, true);
             ui.invoke_tools_toggle();
+            wait(
+                || ui.get_tools_open(),
+                "shell tools did not reopen after notice tests",
+            )
+            .await?;
             ui.invoke_tools_category_choose(0);
-            let navigation = ui.get_tools_actions();
+            wait(
+                || ui.get_tools_category() == 0,
+                "shell navigation panel did not open",
+            )
+            .await?;
+            let labels = ui
+                .get_tools_actions()
+                .iter()
+                .map(|item| item.label.to_string())
+                .collect::<Vec<_>>();
             require(
-                navigation
-                    .iter()
-                    .map(|item| item.label.to_string())
-                    .collect::<Vec<_>>()
+                labels
                     == [
                         pttstella::msg!("draft-open"),
                         pttstella::msg!("destination-open"),
                     ],
-                "non-reading navigation included extra controls",
+                &format!("non-reading navigation controls differ: {labels:?}"),
             )?;
             ui.invoke_tools_key(7, false);
             ui.invoke_tools_category_choose(3);

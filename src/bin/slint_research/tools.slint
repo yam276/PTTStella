@@ -36,6 +36,9 @@ component ToolTile inherits Rectangle {
         border-color: root.enabled && (root.selected || touch.has-hover) ? #e7c46a : #786640;
         border-width: 1px;
         border-radius: root.petal ? 22px * root.ui-scale : 7px;
+        drop-shadow-color: root.petal ? #00000088 : transparent;
+        drop-shadow-offset-y: 3px;
+        drop-shadow-blur: 12px;
         opacity: root.unfold;
         transform-scale: 0.75 + 0.25 * root.unfold;
         if root.petal: ToolGlyph {
@@ -160,6 +163,7 @@ export component FloatingTools inherits Rectangle {
         if root.opened && (root.category >= 0 || root.compact): Rectangle {
             x: root.panel-x; y: root.panel-y; width: root.panel-width; height: root.panel-height;
             background: #0c1c30; border-color: #786640; border-width: 1px; border-radius: 16px;
+            drop-shadow-color: #000000aa; drop-shadow-offset-y: 8px; drop-shadow-blur: 30px;
             TouchArea { width: parent.width; height: parent.height; }
             if root.category < 0: Flickable {
                 in property <int> keyboard-index: root.selected;
@@ -229,6 +233,7 @@ export component FloatingTools inherits Rectangle {
                 background: #0c1c30;
                 border-width: 1px;
                 border-color: root.attention ? #d09b7b : #786640;
+                drop-shadow-color: #00000099; drop-shadow-offset-y: 4px; drop-shadow-blur: 18px;
                 opacity: root.opened || root.dragging || ball-touch.pressed ? 1 : root.ball-opacity;
                 Rectangle {
                     x: -3px; y: -3px; width: parent.width + 6px; height: self.width;
