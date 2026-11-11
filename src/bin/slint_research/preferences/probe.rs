@@ -244,7 +244,16 @@ impl Preferences {
             identity == window.window().with_winit_window(|w| w.id()),
             "settings opened a second native window",
         )?;
-        window.set_page(1);
+        require(
+            self.preview_renderer.borrow().is_none() && window.get_preview().size().width == 0,
+            "settings allocated a hidden font preview",
+        )?;
+        window.invoke_show_page(1);
+        wait(
+            || self.preview_renderer.borrow().is_some() && window.get_preview().size().width == 576,
+            "opening appearance did not render the font preview",
+        )
+        .await?;
         window.set_font_size("18".into());
         window.invoke_edit();
         tokio::time::sleep(Duration::from_millis(120)).await;
@@ -380,9 +389,19 @@ impl Preferences {
             "settings search failed",
         )?;
 
+        window.invoke_show_page(1);
         window.invoke_close_settings();
         wait(|| !ui.get_settings_open(), "settings close did not drain").await?;
+        require(
+            self.preview_renderer.borrow().is_none() && window.get_preview().size().width == 0,
+            "settings close retained the font preview",
+        )?;
         ui.invoke_settings_show();
+        wait(
+            || self.preview_renderer.borrow().is_some() && window.get_preview().size().width == 576,
+            "reopening appearance did not recreate the font preview",
+        )
+        .await?;
         require(
             window.get_font_size() == "20" && window.get_font_width() == "110",
             "reopen did not show persisted values",

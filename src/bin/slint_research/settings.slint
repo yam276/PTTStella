@@ -83,6 +83,8 @@ export component SettingsWindow inherits Window {
     in-out property <bool> right-click;
     in-out property <bool> show-ball;
     in property <image> preview;
+    out property <bool> preview-visible: root.query == "" && root.page == 1;
+    callback refresh-preview;
     in property <string> font-status;
     in property <string> notice;
     in property <bool> failed;
@@ -119,11 +121,18 @@ export component SettingsWindow inherits Window {
         if SettingsInput.focused<0 {return false;}
         SettingsInput.command=code;SettingsInput.command-sequence=1-SettingsInput.command-sequence;return true;
     }
+    callback show-page(int);
+    show-page(index) => {
+        root.cancel-result-focus();
+        root.query = "";
+        root.page = index;
+        root.refresh-preview();
+    }
     callback choose-result(int);
     choose-result(index)=>{
         if index>=0 && index<root.matches.length {
             let item=root.matches[index];
-            root.page=item.page;root.query="";root.focus-result(item.field);
+            root.show-page(item.page);root.focus-result(item.field);
         }
     }
     callback cancel-result-focus;
@@ -134,14 +143,14 @@ export component SettingsWindow inherits Window {
     focus-search => { root.cancel-result-focus(); search-box.focus(); }
     VerticalLayout {
         padding:16px;spacing:12px;
-        search-box:=EditField {field-id:0; placeholder-text:root.labels[1];text<=>root.query;edited=>{root.search(self.text);} }
+        search-box:=EditField {field-id:0; placeholder-text:root.labels[1];text<=>root.query;edited=>{root.search(self.text);root.refresh-preview();} }
         HorizontalLayout {
             spacing:16px;
             VerticalLayout {
                 width:154px;spacing:6px;
                 for item[index] in root.categories: Button {
                     text:item;checked:root.page==index && root.query=="";
-                    clicked=>{root.cancel-result-focus();root.query="";root.page=index;}
+                    clicked=>{root.show-page(index);}
                 }
                 Rectangle {vertical-stretch:1;background:transparent;}
             }
@@ -162,7 +171,7 @@ export component SettingsWindow inherits Window {
                         Text {text:root.labels[6];color:#d7dce5;wrap:word-wrap;}
                         FocusCheck {field-id:16;text:root.labels[7];checked<=>root.boundary;toggled=>{root.edit();}}
                     }
-                    if root.query=="" && root.page==1: VerticalLayout {
+                    if root.preview-visible: VerticalLayout {
                         FocusButton {field-id:20;text:root.runtime-labels[0];clicked=>{root.runtime-action(0);}}
                         Text {text:root.labels[8];color:#d7dce5;}
                         FocusCombo {field-id:11;model:root.presets;current-index<=>root.preset;selected=>{root.font-preset();}}

@@ -53,12 +53,12 @@ impl Preferences {
             .as_ref()
             .and_then(|w| w.as_weak().upgrade());
         if let Some(window) = window {
-            if !self.ui.upgrade().is_some_and(|u| u.get_settings_open()) {
+            let opening = !self.ui.upgrade().is_some_and(|u| u.get_settings_open());
+            if opening {
                 self.model.borrow_mut().open();
                 let app = self.pending.borrow().clone().unwrap_or_else(|| self.app());
                 form::populate(&window, &app);
                 self.localize(&window);
-                self.preview(&window);
             }
             if let Some(ui) = self.ui.upgrade() {
                 ui.invoke_tools_dismiss(false);
@@ -69,6 +69,9 @@ impl Preferences {
             if let Err(error) = window.show() {
                 self.notice(error.to_string());
                 return;
+            }
+            if opening {
+                self.preview(&window);
             }
             window.window().with_winit_window(|w| w.focus_window());
             window.invoke_focus_search();
@@ -105,6 +108,15 @@ impl Preferences {
             move || {
                 if let Some(o) = weak.upgrade() {
                     o.edited();
+                }
+            }
+        });
+        window.on_refresh_preview({
+            let owner = Rc::downgrade(self);
+            let window = window.as_weak();
+            move || {
+                if let (Some(owner), Some(window)) = (owner.upgrade(), window.upgrade()) {
+                    owner.preview(&window);
                 }
             }
         });
@@ -613,6 +625,9 @@ impl Preferences {
         }
     }
     fn preview(&self, w: &SettingsWindow) {
+        if !w.get_preview_visible() || !self.ui.upgrade().is_some_and(|ui| ui.get_settings_open()) {
+            return;
+        }
         let result = (|| {
             let draft = form::read(w, self.model.borrow().edit_base())?;
             let display = draft.display.resolve()?;
@@ -659,10 +674,12 @@ impl Preferences {
         self.export_pending.set(false);
         self.closing.set(false);
         self.composing.set(false);
-        if let Some(w) = self.window.borrow().as_ref()
-            && let Err(error) = w.hide()
-        {
-            self.notice(error.to_string());
+        self.preview_renderer.borrow_mut().take();
+        if let Some(w) = self.window.borrow().as_ref() {
+            w.set_preview(slint::Image::default());
+            if let Err(error) = w.hide() {
+                self.notice(error.to_string());
+            }
         }
         if let Some(ui) = self.ui.upgrade() {
             ui.set_settings_open(false);

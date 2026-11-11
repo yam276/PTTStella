@@ -42,6 +42,25 @@
 
 原始紀錄、重跑控制器、每個程序的 CPU delta 和取樣資料在 `.local/verification/slint-gif-minimized/`。複製 `compare.py` 到同層新證據目錄，執行 `setup`，逐輪 `run N`，依上述原生操作在各狀態執行 `sample N playing`、`sample N settings`、`sample N restored`。Dioxus Quit 前匯出整頁 PNG。清理移除六個自有根路徑共 110,624,900 regular-file bytes，12 份 trace 無損壓縮省 2,572,895 bytes。精確路徑、保留雜湊及 filesystem free 觀測見 `cleanup.json`。本輪沿用現有執行檔與固定 Cargo target。
 
+## 2026-11-11 設定重複開關與按需繪製預覽
+
+同一台 macOS arm64、相同 1040×768 文章外窗及兩張 512×160 GIF。兩個現有 Slint 候選程序 `f50ffb46…` 各做 12 次原生「一般」設定開關，然後在同一暫存 App 換上修正後 `a243d3bf…` 的新程序重跑。每次確實進入 Settings 再回文章，採樣點確認雙圖及輸入焦點。每點取樣 5 秒／51 筆，下表使用末 31 筆的程序族中位數。原始峰值、RSS、CPU 與程序身分也保留。
+
+| 版本 | 記憶體指標 | 播放基準 | 首次開啟 | 第 1 次關閉 | 第 4 次 | 第 8 次 | 第 12 次 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 原候選 1 | footprint MiB | 92.3 | 110.3 | 114.3 | 114.6 | 116.2 | 117.9 |
+| 原候選 2 | footprint MiB | 90.5 | 109.3 | 111.8 | 114.7 | 117.8 | 120.6 |
+| 修正後 | footprint MiB | 98.0 | 98.1 | 99.5 | 103.6 | 110.0 | 106.9 |
+| 原候選 1 | RSS MiB | 333.1 | 369.2 | 388.0 | 406.5 | 408.4 | 425.7 |
+| 原候選 2 | RSS MiB | 344.1 | 374.9 | 386.3 | 411.2 | 419.6 | 427.7 |
+| 修正後 | RSS MiB | 348.5 | 361.0 | 372.8 | 385.2 | 391.8 | 399.5 |
+
+原候選的主要 footprint 跳升發生在首次開關。從第 1 到第 12 次，兩輪 footprint 再增 3.6／8.8 MiB，RSS 增 37.7／41.4 MiB，RSS 變動主要出在主程序。程式原來會在一般頁及搜尋時準備字型預覽。現在只有設定已開、外觀頁可見才繪製，關閉會釋放 preview renderer 和圖片，保留設定視窗本身供重用。修正版第 12 次的 footprint 低於兩輪原候選 11.0／13.7 MiB，但 RSS 仍隨開關增加。三輪依序執行且暖機基線有差異，現有結果不足以歸因全部差異或確認長期記憶體回收。
+
+首版用 Slint 的 property change callback 觸發預覽，設定與釋放案通過，但搜尋前往外觀的 Zoom Fit 焦點失敗，原候選同案通過。改成由分類切換、搜尋清空和結果導覽在排定焦點前明確更新。最終設定／搜尋／關閉待存三個完整探針都通過，搜尋包含兩種語言共 48 個定位。設定探針另核對隱藏預覽零配置、外觀預覽尺寸 576、關閉後無 renderer 或圖片、重開後重新繪製。實際視窗也在 12 次取樣後額外驗證外觀頁預覽與關閉重開，看到雙色字、字形與圖形，回文章後雙 GIF 仍切換紅藍。三輪均正常 exit 0、嚴格 Close、HTTP join，兩張圖各只下載一次。[Slint callback 文件](https://docs.slint.dev/latest/docs/slint/reference/language/callbacks/)
+
+原始證據在 `.local/verification/slint-settings-retention/`。用 `compare.py` 在同層新目錄 setup，執行 `run 1`、`run 2`，每輪照順序 `sample N baseline`、`open-01`、`closed-01`、`closed-04`、`closed-08`、`closed-12`。用固定 Cargo target release build，`stage.py` 在同一診斷 App 暫存改動後的 binary，再執行第 3 輪。首次焦點失敗、來源補丁、最終三個探針、Rust bin 106 passed／1 ignored 及 Clippy 各有紀錄。暫存 App 與專用系統 cache 已清理 68,892,153 regular-file bytes，18 份 trace 無損壓縮及 8 份相同 PNG 去重另有清單。四平台候選包尚未納入這筆修正。
+
 ## 2026-11-11 快照損耗待重畫狀態的修補
 
 在同一App重跑保留的 `4a4da212…` 失敗native，確認尚未展圖時頁尾、下方控制列已缺失，之後GIF換幀仍未補回；探針保存的 `snapshot.png` 卻完整。原 `ad01a6d5…` 對照則正常。重現前另發現上一輪把write_bytes產生的0644備份copy2回App，導致診斷副本無執行權限；本輪修回0755、核對access及簽章，實際原版啟動／退出也通過。這是診斷副本還原錯誤，四平台包未被修改；不能只核對binary hash而忽略mode。原始啟動失敗log另存，不算原生渲染案。
