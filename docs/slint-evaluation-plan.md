@@ -803,3 +803,13 @@ Linux 預設路徑兩輪皆通過視窗尺寸與浮球縮放，接著卡在通�
 Linux `68601365` 與先前視窗重測的診斷 ELF 逐位元相同。新版 tar／deb 已核對 1,122／1,109 個 payload、loader 和 amd64 套件 metadata，依賴與前版一致。用 `dpkg --install` 在既有 Debian ARM/QEMU x64 容器重裝同版本，核對安裝位置 SHA-256。安裝後以隔離資料位置執行，`--show-profile` 確認沒有開啟 store 和密碼庫。安裝執行檔的軟體繪圖與免安裝包內 `Check-Shell-Software.sh` 都通過完整視窗、通知及退出檢查，exit 0 且各有唯一嚴格 Close。相同 tar 的 `Check-Shell.sh` 通過尺寸與縮放後，在 2.131 秒才執行預定 1 秒的通知觀察並失敗。另從安裝位置驗證 X11 視窗背景零取頁、取得焦點後完成 837 行及 37 筆取頁，正常關窗與 Close。Linux 實機、GPU、IME、音訊及效能待驗。
 
 同一來源 bundle 加一份 patch 還原全部 580 檔，先前 descriptor 可供對照。Python tooling 178 項、actionlint 和 docs 檢查通過。沿用固定 Cargo target、SDK 及驗證容器，核對後清除六個本機暫存與被取代的候選位置，共 445,143,231 regular-file bytes。容器內清除八個測試輸出與輸入位置，共 269,402,829 logical bytes。macOS 可用空間觀測由 236,250,566,656 增至 236,703,268,864 bytes。交付索引、雜湊及失敗證據在 `.local/verification/slint-navigation-cross/current-candidates.json` 及 `.local/verification/slint-renderer-api-current/cross-current/shell-package-current/`。
+
+## 2026-11-11 移除底部狀態列與浮球調整
+
+一般視窗移除固定底部列及固定閱讀控制列。連線錯誤維持浮動提示，全文載入與推文更新控制按需要浮在文章右上角。浮球沿用藍金配色、圓角及扇形分類，收藏與設定可直接開啟，選取整頁文字後可留在擷取選單繼續匯出。終端與文章 viewport 都核對為 1040×740 邏輯像素，提示出現與消失不會移動內容。
+
+macOS 實際滑鼠測試重現 Slint 把緩衝中的最後一筆 Move 放到 Release 前送出，此時 native 按鍵遮罩已清除。原實作提前取消手勢。修正由工具的 Release 完成點擊或拖曳，保留未收到 Release 時的單次取消。回歸覆蓋兩種順序，兩個浮球探針皆通過。
+
+Apple Silicon 候選 `a2eb95c` 的封裝執行檔 SHA-256 為 `ae62e971c9cf00c3ccff678f4fcc914973dd5a2d06ccf5826230c696d6a0fe12`。macOS OpenGL 與軟體繪圖皆以 OS 滑鼠事件驗證展開、擷取選單、直接開啟收藏與設定、拖至左側停靠及再次展開。軟體繪圖設定案例的 AX 視窗辨識首輪未就緒，待視窗成為可操作後重測通過。退出均有 loopback Close ACK 與 exit 0。八項封裝探針通過，軟體繪圖的通知焦點首輪失敗，同 SHA 單獨重測通過。Rust 106 項通過、1 項既有 ignored，另通過 renderer audit、all-target Clippy、App 簽章及 DMG 核對。其他平台本輪未重新打包。
+
+交付與驗證位於 `.local/verification/slint-floating-chrome-current/`。保留 `package-rechecked/` 的 App 與 DMG、固定 Cargo target、獨特負例和先前跨平台對照。移除兩份本輪重複 ZIP 及被取代的 `package/`，共 352,951,279 regular-file bytes。精確路徑、雜湊與兩次 filesystem available 觀測見 `cleanup.json` 和 `cleanup-rechecked.json`。
