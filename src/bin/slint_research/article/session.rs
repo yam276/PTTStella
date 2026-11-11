@@ -468,15 +468,21 @@ impl ArticleSession {
         if let Some(ui) = self.ui.upgrade() {
             let previous = self.permit.replace(scope);
             if let Some(scope) = scope {
-                if (previous != Some(scope) || self.focus_after_paint.get())
-                    && ui.get_native_foreground()
-                    && !ui.get_find_open()
-                {
-                    ui.invoke_focus_article();
-                    self.focus_after_paint.set(!ui.get_article_focused());
-                }
                 if scope.0 != generation {
                     self.permit.set(None);
+                } else {
+                    // The first article packet can arrive before the OS grants
+                    // foreground. Keep its focus request for the next update.
+                    if previous != Some(scope) {
+                        self.focus_after_paint.set(true);
+                    }
+                    if self.focus_after_paint.get()
+                        && ui.get_native_foreground()
+                        && !ui.get_article_blocked()
+                    {
+                        ui.invoke_focus_article();
+                        self.focus_after_paint.set(!ui.get_article_focused());
+                    }
                 }
             }
         }
@@ -819,16 +825,18 @@ impl ArticleSession {
             && self.live_updates.borrow().stopped()
             && self.terminal_recovery.get().is_none()
     }
-    /// A completed article packet, distinct from terminal bitmap presentation.
-    pub(crate) fn reading_presented(&self, frame: FrameId) -> bool {
+    /// An installed article packet, distinct from terminal bitmap presentation.
+    pub(crate) fn reading_presented(&self, frame: FrameId, require_complete: bool) -> bool {
         let core = self.core.borrow();
         core.pending_identity().is_none()
             && core.last_displayed().is_some_and(|packet| {
                 packet.generation == frame.generation
                     && packet.frame.revision == frame.revision
                     && packet.article.as_ref().is_some_and(|article| {
-                        article.end
-                            && article.load == Some(pttstella::article_cache::LoadState::Complete)
+                        !require_complete
+                            || article.end
+                                && article.load
+                                    == Some(pttstella::article_cache::LoadState::Complete)
                     })
             })
     }

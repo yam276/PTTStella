@@ -81,6 +81,23 @@
 
 重跑用 `.local/verification/slint-macos-startup-latency/` 的 `Capture.swift`、`startup.py`、`matrix.py`、`summarize.py`，沿用同層方向鍵量測目錄的共用程式。於新證據目錄執行 `startup.py setup --dioxus-binary ABSOLUTE_FIXED_TARGET_BINARY`，以 `xcrun swiftc -O -parse-as-library Capture.swift -o capture` 建立擷取器，再執行 `matrix.py` 和 `summarize.py`。原始 ticks、每次快取前後大小、執行檔 SHA、校準失敗與整理結果均保留。結案移除暫存 App／專用快取等 7 個位置，共 110,428,264 regular-file bytes，另記量測期間每次冷快取清除的 exact path。保留固定 Cargo target 與候選包，詳細資料在 `cleanup.json`。
 
+## 2026-11-11 837 行取頁與快取操作
+
+Apple Silicon 上沿用同一份 38 頁／837 行合成文章，兩個嚴格 peer 都只接受 37 筆 `ESC[6~` 和正常 Close。比較採既有明確選用的立即回覆模式。已完成快取及 renderer ACK 後，以原生方向鍵逐行來回，再用 PageDown／PageUp 翻頁來回。依 Slint／Dioxus／Dioxus／Slint 跑四個新程序，各 100 次逐行和 100 次翻頁。相同 1040×768 外窗、位置、字型設定與 60 Hz 螢幕。ScreenCaptureKit 逐筆核對裁切區的目標像素指紋，前景在按鍵與觀察點均核對。兩版頁首的單行操作均移動一行，翻頁依各自可見範圍移動 24 行（Slint）或 22 行（Dioxus）。校準保留前後畫面。
+
+| 場景 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 首頁入快取至 837 行完整快取，兩輪中位數 | 602.9 ms | 516.3 ms |
+| 完整快取到 renderer ACK，兩輪中位數 | 10.6 ms | 29.4 ms |
+| 快取逐行，200 次 p50／p95 | 38.1／42.6 ms | 38.3／73.6 ms |
+| 快取翻頁，200 次 p50／p95 | 37.9／42.5 ms | 39.5／75.0 ms |
+
+Slint 首頁入快取到第一筆取頁為 97–137 ms，Dioxus 為 5–18 ms。第一筆取頁送出到快取完整的兩輪中位數約為 486／505 ms。取頁與 renderer ACK 使用產品共用 `ReadingTiming`，快取操作使用視窗伺服器呈現時鐘。四輪都嚴格 Close、正常退出且量測時零媒體 HTTP。Dioxus 既有綜合 gate 另要求開圖與匯出 PNG，本次保留其未完成結果，文字範圍以 37 筆精確取頁、完整 packet、原生畫面變化和正常清理驗證。
+
+最初 Slint 的被動探針有前景且第一批 23 行已畫出，文章欄位卻未取得焦點，取頁維持暫停。當新文章 packet 在原生前景前安裝時，舊程式會更新授權 scope，後續因 scope 相同而略過焦點請求。現在保留待處理焦點，等真正取得前景且文章可操作再交付。修正未放寬焦點、modal 或站端請求條件。舊探針首輪用了普通視窗標題，後續另有工具點錯位置送出左鍵而被 peer 拒絕的負例。新 `--probe-store … --store-scene long` 沿用合成資料 marker、嚴格 peer 與完整產品服務，保留準備時的焦點狀態。原有每頁 500＋150 ms 的探針另通過原生小樣本，並保留原本取消與恢復測試。
+
+本輪 Slint 為工作樹修正版 `fd45a3ae…`，Dioxus 為既有 `52ac086b…`。固定 macOS 下載包仍為上次驗證版本。原始資料在 `.local/verification/slint-macos-long-reading/`，包含來源差異、準備收據、各按鍵與 peer 時鐘、畫面及負例。重跑沿用固定 Cargo target 建置 `native-player-probe` 的 Slint 和 `desktop` 的 Dioxus，使用 `run.py setup --dioxus-binary ABSOLUTE_FIXED_TARGET_BINARY`、`stage.py LABEL` 及 `xcrun swiftc -O -parse-as-library Capture.swift -o capture`。依序執行 `run.py slint slint_1`、`run.py dioxus dioxus_1`、`run.py dioxus dioxus_2`、`run.py slint slint_2`，再執行 `summarize.py`。共享的測試 App 建立及原生視窗操作程式在同層方向鍵量測目錄。Slint bin 測試 106 項通過、1 項 helper ignored，release all-target Clippy 通過。原本慢速 20 頁取消／恢復與文章輸入各正常退出、嚴格 Close。已清理七個自有測試位置與 20 張逐位元重複 PNG，共 115,151,402 regular-file bytes，保留固定 Cargo target、候選包及獨特證據。精確路徑、對應保留畫面、du 與可用空間觀測在 `cleanup.json`。
+
 ## 2026-11-11 設定重複開關與按需繪製預覽
 
 同一台 macOS arm64、相同 1040×768 文章外窗及兩張 512×160 GIF。兩個現有 Slint 候選程序 `f50ffb46…` 各做 12 次原生「一般」設定開關，然後在同一暫存 App 換上修正後 `a243d3bf…` 的新程序重跑。每次確實進入 Settings 再回文章，採樣點確認雙圖及輸入焦點。每點取樣 5 秒／51 筆，下表使用末 31 筆的程序族中位數。原始峰值、RSS、CPU 與程序身分也保留。

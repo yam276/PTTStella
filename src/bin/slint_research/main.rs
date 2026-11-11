@@ -183,7 +183,7 @@ fn options() -> Result<Options, Box<dyn Error>> {
 fn options_from(
     mut args: impl Iterator<Item = std::ffi::OsString>,
 ) -> Result<Options, Box<dyn Error>> {
-    const USAGE: &str = "usage: pttstella-slint [--probe-store NEW_DIR MARKED_STORE_ROOT|--verify-motion NEW_DIR|--verify-shell NEW_DIR|--probe-benchmark NEW_DIR|--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--store-scene grid|drafts|gifs] [--media-origin LOOPBACK_HTTP_ORIGIN] [--software-renderer|--opengl-renderer|--metal-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
+    const USAGE: &str = "usage: pttstella-slint [--probe-store NEW_DIR MARKED_STORE_ROOT|--verify-motion NEW_DIR|--verify-shell NEW_DIR|--probe-benchmark NEW_DIR|--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--store-scene grid|drafts|gifs|long] [--media-origin LOOPBACK_HTTP_ORIGIN] [--software-renderer|--opengl-renderer|--metal-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
     let mut zoom = None;
     let mut benchmark = None;
     let mut store_root = None;
@@ -215,6 +215,7 @@ fn options_from(
                     Some("grid") => session::Probe::Benchmark,
                     Some("drafts") => session::Probe::Drafts,
                     Some("gifs") => session::Probe::DualGifs,
+                    Some("long") => session::Probe::ArticleLong,
                     _ => return Err(USAGE.into()),
                 });
             }
@@ -1044,10 +1045,15 @@ fn run(
     } else {
         None
     };
-    let benchmark_connection = options
-        .media_origin
-        .as_ref()
-        .and_then(|_| connection.as_ref().map(|(_, c)| c.clone()));
+    let long_store_scene = options.store_profile.is_some()
+        && options.probe == Some(Probe::Session(session::Probe::ArticleLong));
+    let benchmark_connection = if options.media_origin.is_some() || long_store_scene {
+        connection
+            .as_ref()
+            .map(|(_, connection)| connection.clone())
+    } else {
+        None
+    };
     let preparation_fixture = if options.store_profile.is_some()
         && options.probe == Some(Probe::Session(session::Probe::Drafts))
     {
@@ -2016,6 +2022,13 @@ fn run(
                 .clone()
                 .ok_or("dual GIF article owner missing")?,
         }
+    } else if long_store_scene {
+        benchmark::Fixture::LongArticle {
+            connection: benchmark_connection.ok_or("long article source connection missing")?,
+            article: article_session_owner
+                .clone()
+                .ok_or("long article owner missing")?,
+        }
     } else {
         preparation_fixture
     };
@@ -2396,6 +2409,7 @@ mod startup_tests {
         for (name, scene) in [
             ("grid", session::Probe::Benchmark),
             ("drafts", session::Probe::Drafts),
+            ("long", session::Probe::ArticleLong),
         ] {
             let mut args = base.to_vec();
             args.extend(["--store-scene", name].map(Into::into));

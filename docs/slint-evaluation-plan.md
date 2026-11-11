@@ -14,9 +14,11 @@ macOS arm64 已以最新 Slint 候選及原 Dioxus 完成設定 v1–v6 的 18 �
 
 macOS arm64 完成三組雙 GIF 交錯比較。Slint 的程序族 footprint 峰值中位數約 126 MiB，Dioxus 約 687 MiB。10 秒 CPU 中位數為 0.296 與 0.180 秒，三組差距幅度有波動。Slint 堆疊取樣主要落在 CoreGraphics 整窗提交與像素轉換。長文操作、連續前景與跨平台矩陣仍待驗。MP4 GPU 偶發錯色仍未解。[效能量測紀錄](slint-macos-measurement.md#2026-11-11-雙-gif-三組交錯比較)
 
-macOS arm64 已用一般入口交錯跑四輪各 100 次原生方向鍵，對同一合成 WSS 終端畫面量到視窗伺服器呈現。Slint p50／p95 為 37.35／42.06 ms，Dioxus 為 37.33／54.67 ms。快取翻頁、長文捲動及其他平台尚無對應數據。[方向鍵延遲量測](slint-macos-measurement.md#2026-11-11-方向鍵到視窗呈現延遲)
+macOS arm64 已用一般入口交錯跑四輪各 100 次原生方向鍵，對同一合成 WSS 終端畫面量到視窗伺服器呈現。Slint p50／p95 為 37.35／42.06 ms，Dioxus 為 37.33／54.67 ms。其他平台尚無對應數據。[方向鍵延遲量測](slint-macos-measurement.md#2026-11-11-方向鍵到視窗呈現延遲)
 
 macOS arm64 一般入口完成兩版各 10 次應用快取冷啟動與 10 次暖啟動。首個可見終端畫面的 p50 冷／暖，Slint 為 384／379 ms，Dioxus 為 467／457 ms；每次也實測原生方向鍵到 peer 確認。測試使用各版預設視窗大小，OS 快取保留。[啟動量測](slint-macos-measurement.md#2026-11-11-一般入口啟動到可輸入)
+
+macOS arm64 補上 837 行長文的取頁與快取捲動。Slint 首頁在前景前已繪製時，現在會保留文章焦點請求，待原生前景且文章可操作再完成。修正版與 Dioxus 各完成 200 次快取逐行、200 次快取翻頁。Slint 快取操作 p95 較低，首頁至完整快取在此設定約多 87 ms；修正尚待同步候選包。[長文量測](slint-macos-measurement.md#2026-11-11-837-行取頁與快取操作)
 
 macOS 軟體 renderer 局部呈現實驗用同一個執行檔做兩組雙 GIF 對照，CPU 各降 17.5%／13.7%。圖塊組約 0.270 秒／10 秒，先前 Dioxus 基準約 0.180 秒。補丁保留供重跑，候選包沿用現行呈現。S8 效能仍待驗。[局部呈現紀錄](slint-macos-measurement.md#2026-11-11-macos-局部呈現實驗)
 
