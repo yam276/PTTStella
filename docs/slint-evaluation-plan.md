@@ -16,6 +16,8 @@ macOS arm64 完成三組雙 GIF 交錯比較。Slint 的程序族 footprint 峰�
 
 macOS 軟體 renderer 局部呈現實驗用同一個執行檔做兩組雙 GIF 對照，CPU 各降 17.5%／13.7%。圖塊組約 0.270 秒／10 秒，先前 Dioxus 基準約 0.180 秒。補丁保留供重跑，候選包沿用現行呈現。S8 效能仍待驗。[局部呈現紀錄](slint-macos-measurement.md#2026-11-11-macos-局部呈現實驗)
 
+同一對 macOS 候選補驗兩組反序的雙 GIF／設定面板開關。兩版開設定時 CPU 均下降，關閉後實見雙圖恢復且各 URL 僅下載一次。可見播放 CPU 有明顯輪次波動，後續仍須控制暖機並驗證資源回收。[設定開關實測](slint-macos-measurement.md#2026-11-11-雙-gif-在設定開關前後的資源)
+
 | 階段 | 目前已有 | 尚須完成 |
 | --- | --- | --- |
 | S0 | 共用 Rust 服務、獨立 Slint 入口及可編譯提交序列；四 target 的一般／播放器兩配置 Cargo 依賴 gate | 完整功能案例對照、各平台連結／runtime 依賴與最終基準重跑 |
