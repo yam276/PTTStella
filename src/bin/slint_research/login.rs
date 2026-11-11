@@ -57,7 +57,8 @@ impl Login {
                 let Some(ui) = login.ui.upgrade() else { return };
                 if ui.get_app_closing()
                     || ui.get_manager_open()
-                    || ui.get_settings_open()
+                    || ui.get_settings_open() && ui.get_settings_section() != 6
+                    || ui.get_login_open()
                     || login.job.borrow().is_some()
                     || ui.get_paste_open()
                     || ui.get_switching_station()
@@ -76,6 +77,7 @@ impl Login {
                 ui.set_login_account("".into());
                 ui.set_login_saved(false);
                 ui.set_login_message(msg!("vault-reading").into());
+                ui.set_login_embedded(ui.get_settings_open());
                 ui.set_login_open(true);
                 ui.invoke_show_login_popup();
                 ui.invoke_keep_alive_changed();

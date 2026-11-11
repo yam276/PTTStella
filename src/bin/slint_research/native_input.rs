@@ -4,6 +4,7 @@ use pttstella::{
     connection::{Connection, Phase, View},
     encoding::TextEncoding,
     input,
+    navigation::Context,
     vim::{self, Effect, Keyboard},
 };
 use slint::{
@@ -339,9 +340,7 @@ fn mount_window(
                         && let Some(code) = text_edit_shortcut(event.physical_key, input.borrow().modifiers)
                         && !panel_composing(&ui)
                     {
-                        if ui.get_settings_open() {
-                            ui.global::<crate::SettingsState>().invoke_edit_key(code);
-                        } else {
+                        if !ui.get_settings_open() || !ui.global::<crate::SettingsState>().invoke_edit_key(code) {
                             ui.global::<crate::PanelEdit>().invoke_apply(code);
                         }
                         return PreventDefault;
@@ -831,9 +830,10 @@ fn mount_window(
                 )
             };
             input.keyboard.context(&context);
+            let pause = matches!(context, Context::ContinuePrompt);
             match event {
                 WindowEvent::Ime(Ime::Preedit(text, _)) => {
-                    if matches!(input.keyboard.status(&context).mode, "normal" | "suspended") {
+                    if !pause && matches!(input.keyboard.status(&context).mode, "normal" | "suspended") {
                         input.composition = None;
                         ui.set_native_composing(false);
                         return PreventDefault;
@@ -899,8 +899,8 @@ fn mount_window(
                     if input.modifiers.super_key() {
                         return Propagate;
                     }
-                    let read_only =
-                        matches!(input.keyboard.status(&context).mode, "normal" | "suspended");
+                    let read_only = !pause
+                        && matches!(input.keyboard.status(&context).mode, "normal" | "suspended");
                     let Some(key) = terminal_key(event, input.modifiers, read_only) else {
                         return Propagate;
                     };
@@ -1001,15 +1001,15 @@ fn mount_window(
 }
 
 fn refresh(ui: &TerminalWindow, input: &RefCell<Input>, connection: &Connection) {
-    let (status, available, ime_update) = {
+    let (status, available, read_only, ime_update) = {
         let mut input = input.borrow_mut();
         let view = connection.updates.borrow();
         let context = input.observe(&view);
         let status = input.keyboard.status(&context);
         let available = actions_available(ui, &view);
-        let allowed = ui.get_editor_focused()
-            || ui.get_find_focused()
-            || matches!(status.mode, "input" | "once");
+        let read_only = !matches!(context, Context::ContinuePrompt)
+            && matches!(status.mode, "normal" | "suspended");
+        let allowed = ui.get_editor_focused() || ui.get_find_focused() || !read_only;
         let ime_update = if !ui.get_editor_focused()
             && !ui.get_find_focused()
             && !ui.get_terminal_input_focused()
@@ -1023,11 +1023,11 @@ fn refresh(ui: &TerminalWindow, input: &RefCell<Input>, connection: &Connection)
         } else {
             None
         };
-        (status, available, ime_update)
+        (status, available, read_only, ime_update)
     };
     // Changing read-only on a focused Slint TextInput does not update the OS IME.
     // Apply the same mode to Winit, only while this field owns text input.
-    ui.set_keyboard_read_only(matches!(status.mode, "normal" | "suspended"));
+    ui.set_keyboard_read_only(read_only);
     ui.set_keyboard_pending(status.pending);
     ui.set_vim_enabled(status.enabled);
     ui.set_vim_available(available);
@@ -1060,14 +1060,17 @@ fn panel_composing(ui: &TerminalWindow) -> bool {
 }
 
 fn panel_composition(ui: &TerminalWindow, active: bool, committed: bool) {
-    if ui.get_login_open() {
+    let settings = ui.global::<crate::SettingsState>();
+    let settings_field = ui.get_settings_open() && settings.get_focused_target() >= 0;
+    if ui.get_settings_open() {
+        settings.set_composing(active);
+        ui.invoke_settings_composition(active, committed && settings_field);
+    }
+    if ui.get_login_open() && (!active || !settings_field) {
         ui.set_login_composing(active);
-    } else if ui.get_settings_open() {
-        ui.global::<crate::SettingsState>().set_composing(active);
-        ui.invoke_settings_composition(active, committed);
-    } else if ui.get_sites_open() {
+    } else if ui.get_sites_open() && (!active || !settings_field) {
         ui.global::<crate::SitesState>().set_composing(active);
-    } else if ui.get_filters_open() {
+    } else if ui.get_filters_open() && (!active || !settings_field) {
         ui.global::<crate::FiltersState>().set_composing(active);
     } else if ui.get_bookmarks_open() {
         ui.global::<crate::BookmarksState>().set_composing(active);
@@ -1538,7 +1541,9 @@ mod tests {
                 31 => "4j",
                 32 => "l",
                 33 | 39 | 44 | 45 => "h",
-                34..=36 => "j",
+                34 => "l",
+                35 => "\r",
+                36 => " ",
                 37 | 40 => "j",
                 38 | 41 => "k",
                 43 => "G",
@@ -1554,9 +1559,16 @@ mod tests {
                 },
             };
             for text in sequence.chars() {
-                let key = key(&text.to_string());
+                let value = text.to_string();
+                let key = key(if text == '\r' { "Enter" } else { &value });
                 match input.keyboard.key(&key, &view.context()) {
+                    Effect::None if input.keyboard.accept_text(false) => {
+                        connection
+                            .input(view.generation, value.into_bytes())
+                            .unwrap();
+                    }
                     Effect::None => {}
+                    Effect::Native(bytes) => connection.input(view.generation, bytes).unwrap(),
                     Effect::Browse(intent) => {
                         connection
                             .request_browse_key(view.stamp(), intent)

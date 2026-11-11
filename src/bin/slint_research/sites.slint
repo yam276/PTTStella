@@ -30,19 +30,20 @@ export component SitesPanel inherits PanelOverlay {
     heading-icon: LucideIcons.globe;
     panel-width: 800px; panel-height: 650px;
     private property <int> focus-address-sequence: SitesState.focus-address-sequence;
-    changed focus-address-sequence => { address-field.focus(); }
+    changed focus-address-sequence => { if root.visible { address-field.focus(); } }
     keys:=FocusScope {
       width:parent.width;height:parent.height;
-      key-pressed(event)=>{if event.text==Key.Escape && !SitesState.composing {SitesState.close-sites();return accept;}return reject;}
+      key-pressed(event)=>{if !root.embedded && event.text==Key.Escape && !SitesState.composing {SitesState.close-sites();return accept;}return reject;}
       ScrollView {
           content-width: self.width;
-      VerticalLayout {alignment: start; padding:16px;spacing:10px;
+      VerticalLayout {alignment: start; padding:root.embedded ? 0px : 16px;spacing:10px;
         Text {text:SitesState.labels[14];color:#c7d4e7;wrap:word-wrap;}
         Text {text:SitesState.current-note;color:#c7d4e7;wrap:word-wrap;}
         Text {text:SitesState.default-note;color:#f2cd7d;wrap:word-wrap;}
         Text {text:SitesState.labels[1];color:#c7d4e7;}
         PanelCombo {model:SitesState.favourites;current-index<=>SitesState.choice;enabled:root.visible && !SitesState.busy && !SitesState.composing;selected=>{SitesState.choose(self.current-index);} }
         HorizontalLayout {
+            alignment: start; spacing: 8px;
             PanelButton {text:SitesState.labels[10];enabled:!SitesState.busy && !SitesState.composing;clicked=>{SitesState.preset(false);} }
             PanelButton {text:SitesState.labels[11];enabled:!SitesState.busy && !SitesState.composing;clicked=>{SitesState.preset(true);} }
         }
@@ -63,7 +64,7 @@ export component SitesPanel inherits PanelOverlay {
         HorizontalLayout {
             alignment: end; spacing: 8px;
             PanelButton {text:SitesState.labels[13];enabled:!SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(4);} }
-            PanelButton {text:SitesState.labels[12];icon:LucideIcons.x;enabled:!SitesState.composing;clicked=>{SitesState.close-sites();} }
+            if !root.embedded: PanelButton {text:SitesState.labels[12];icon:LucideIcons.x;enabled:!SitesState.composing;clicked=>{SitesState.close-sites();} }
             PanelButton {text:SitesState.labels[9];icon:LucideIcons.plug;primary:true;enabled:!SitesState.busy && !SitesState.composing && SitesState.address!="";clicked=>{SitesState.action(3);} }
         }
       }

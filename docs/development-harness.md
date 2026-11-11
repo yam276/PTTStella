@@ -67,7 +67,7 @@ cargo clean --release --target-dir <已核對的本 repo target 絕對路徑>
 - 固定target可跨批復用；一般測試不另複製repo。獨立來源還原／版本對照等確有必要的checkout及一次性driver仍要盤點，來源ref／patch與結果保存後移除不再需要的副本。臨時worktree確認沒有未保存修改後用Git原生remove，不強制刪除；尚未整合的Slint來源worktree保留。
 - 交叉編譯／打包的 task-owned 容器、容器內 target、暫存 sysroot／磁碟映像與解包副本也納入同批清理；先匯出最小結果／失敗證據，核對容器 ID、task label、mounts 與程序後，正常停止及移除自己的容器。只移除已無使用者的自有臨時 image，不執行全域 prune，不停止或刪除共用 VM／磁碟。若稀疏 VM 已刪檔但主機空間尚未回收，可在確認 discard 支援後執行線上 filesystem TRIM；分別記錄 guest free、主機 available 與 sparse disk allocated bytes，TRIM 回報範圍不等於實際回收量。已安裝的 SDK／工具與共用 registry source cache 另列保留理由。
 - macOS 對照 App 的專用 `Library/WebKit/<task bundle id>`、`Library/Caches/<task bundle id>` 及系統暫存目錄也要列入盤點；probe 輸出目錄隔離不代表 WebKit cache 都在其中。只清 exact task namespace，先保存最小必要證據並核對 owner、resolved path、symlink、程序與 open files；共用 WebKit、產品資料和其他聊天 namespace 不刪。後續量測須記錄這些 cache 的 cold／warm 狀態。
-- Slint本機命令使用 `cargo --config .local/slint-build.toml …`，目前指向既有slint-renderer-api-current/target，避免移動cache造成失效。dev／test增量編譯開啟、debug為0；不再一律設CARGO_INCREMENTAL=0。release配置不變，Python等間接呼叫Cargo的gate亦傳入同一CARGO_TARGET_DIR；不改全機設定。
+- Slint本機命令使用 `cargo --config .local/slint-build.toml …`，讓本機設定指向實際保留的既有 target，避免另外建立快取或移動編譯中間檔。dev／test增量編譯開啟、debug為0；不再一律設CARGO_INCREMENTAL=0。release配置不變，Python等間接呼叫Cargo的gate亦傳入同一CARGO_TARGET_DIR；不改全機設定。
 - 原生runtime的C／C++／Swift日常重編也優先沿用固定來源／build目錄與工具原生增量能力；乾淨來源重建等明確驗收才使用新prefix。原始來源archive／SHA、recipe／patch、必要config與唯一修改均保護；已退役的objects、一次性bootstrap工具和已被交付涵蓋的冗餘install副本再清理，不複製整套環境。
 - 每批記錄 exact removed paths、保留例外、du、Cargo 宣告量與 filesystem free 前後。共用／活動／不明項目保留原因；不啟動 daemon、定時刪除或 owner-release 流程，不跨案刪別人的產物。
 

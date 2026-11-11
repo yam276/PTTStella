@@ -505,7 +505,11 @@ impl Tools {
                     } else {
                         text + 22. + icon
                     };
-                    let width = (natural_width * scale).min(available);
+                    let width = if category == 3 && detail {
+                        available
+                    } else {
+                        (natural_width * scale).min(available)
+                    };
                     if x > 0. && (x + width > available || *command == Command::Sites) {
                         x = 0.;
                         y += row_height + gap;

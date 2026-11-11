@@ -22,9 +22,6 @@ use std::{
 
 #[derive(Clone, Copy)]
 enum Handoff {
-    Account,
-    Sites,
-    Filters,
     Vim,
     Mouse,
     KeepAlive,

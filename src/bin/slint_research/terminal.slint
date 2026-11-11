@@ -1,8 +1,9 @@
 export { PanelEdit } from "panel.slint";
+export { LucideIcons } from "lucide-icons.slint";
 import { PanelButton } from "panel.slint";
 import { SettingsPanel, SettingsState } from "settings.slint";
-import { SitesPanel } from "sites.slint";
-import { FiltersPanel } from "filters.slint";
+import { SitesPanel, SitesState } from "sites.slint";
+import { FiltersPanel, FiltersState } from "filters.slint";
 import { BookmarksPanel } from "bookmarks.slint";
 import { DestinationPanel } from "destination.slint";
 export { DestinationState } from "destination.slint";
@@ -72,6 +73,18 @@ export component TerminalWindow inherits Window {
     callback native-menu-refresh;
     in property <bool> settings-available;
     in property <bool> settings-open;
+    in property <bool> sites-embedded;
+    in property <bool> filters-embedded;
+    in property <bool> login-embedded;
+    out property <int> settings-section: root.settings-open && SettingsState.query == "" ? SettingsState.page : -1;
+    changed settings-section => {
+        if root.sites-open && root.sites-embedded && root.settings-section != 4 { SitesState.close-sites(); }
+        if root.filters-open && root.filters-embedded && root.settings-section != 5 { FiltersState.close-filters(); }
+        if root.login-open && root.login-embedded && root.settings-section != 6 { root.login-cancel(); }
+        if root.settings-section == 4 && !root.sites-open { root.sites-show(); }
+        else if root.settings-section == 5 && !root.filters-open { root.filters-show(); }
+        else if root.settings-section == 6 && !root.login-open { root.login-show(); }
+    }
     callback settings-show;
     callback settings-composition(bool, bool);
     callback settings-runtime-updated;
@@ -478,6 +491,7 @@ export component TerminalWindow inherits Window {
     in property <bool> context-open;
     in property <bool> context-pending;
     in property <[MenuEntry]> context-entries;
+    in property <string> context-target;
     in property <int> context-selected;
     in property <length> context-x;
     in property <length> context-y;
@@ -1081,6 +1095,7 @@ export component TerminalWindow inherits Window {
         width: root.width;
         height: root.height;
         entries: root.context-entries;
+        target: root.context-target;
         selected: root.context-selected;
         anchor-x: terminal-box.x + root.context-x;
         anchor-y: terminal-box.y + root.context-y;
@@ -1165,16 +1180,16 @@ export component TerminalWindow inherits Window {
     show-login-popup => {
         root.login-password = "";
         root.login-remember = false;
-        login-popup.focus();
+        if !root.login-embedded { login-popup.focus(); }
     }
     hide-login-popup(restore-focus) => {
         root.login-password = "";
         root.login-remember = false;
-        if (restore-focus) { root.focus-terminal(); }
+        if (restore-focus && !root.settings-open) { root.focus-terminal(); }
     }
     clear-login-password => { root.login-password = ""; root.login-composing = false; }
     login-popup := LoginPanel {
-        visible: root.login-open;
+        visible: root.login-open && !root.login-embedded;
         width: parent.width;
         height: parent.height;
         composing: root.login-composing;
@@ -1265,9 +1280,36 @@ export component TerminalWindow inherits Window {
     SettingsPanel {
         visible: root.settings-open; width: parent.width; height: parent.height;
         zoom: root.zoom; station-mouse-status: root.station-mouse-status;
+        sites-shown: root.sites-open && root.sites-embedded;
+        filters-shown: root.filters-open && root.filters-embedded;
+        login-shown: root.login-open && root.login-embedded;
+        if root.settings-section == 4 && root.sites-open && root.sites-embedded: SitesPanel {
+            embedded: true; height: 520px;
+        }
+        if root.settings-section == 5 && root.filters-open && root.filters-embedded: FiltersPanel {
+            embedded: true; height: 635px;
+        }
+        if root.settings-section == 6 && root.login-open && root.login-embedded: LoginPanel {
+            embedded: true; height: 280px;
+            composing: root.login-composing;
+            account-label: root.login-account-label;
+            password-label: root.login-password-label;
+            remember-label: root.login-remember-label;
+            forget-label: root.login-forget-label;
+            submit-label: root.login-label;
+            message: root.login-message;
+            account <=> root.login-account;
+            password <=> root.login-password;
+            remember <=> root.login-remember;
+            busy: root.login-busy;
+            saved: root.login-saved;
+            submit(account, password, remember) => { root.login-submit(account, password, remember); }
+            forget => { root.login-forget(); }
+            limit-text(text, maximum) => { return root.login-limit-text(text, maximum); }
+        }
     }
-    SitesPanel { visible: root.sites-open; width: parent.width; height: parent.height; }
-    FiltersPanel { visible: root.filters-open; width: parent.width; height: parent.height; }
+    SitesPanel { visible: root.sites-open && !root.sites-embedded; width: parent.width; height: parent.height; }
+    FiltersPanel { visible: root.filters-open && !root.filters-embedded; width: parent.width; height: parent.height; }
     BookmarksPanel { visible: root.bookmarks-open; width: parent.width; height: parent.height; }
     DestinationPanel { visible: root.destination-open; width: parent.width; height: parent.height; }
 }

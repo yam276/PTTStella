@@ -37,14 +37,15 @@ export component FiltersPanel inherits PanelOverlay {
     heading: FiltersState.labels[0];
     panel-width: 840px; panel-height: 700px;
     private property <int> focus-account-sequence: FiltersState.focus-account-sequence;
-    changed focus-account-sequence => { account-field.focus(); }
+    changed focus-account-sequence => { if root.visible { account-field.focus(); } }
     keys:=FocusScope {
         width:parent.width;height:parent.height;
-        key-pressed(event)=>{if event.text==Key.Escape && !FiltersState.composing {FiltersState.close-filters();return accept;}return reject;}
+        key-pressed(event)=>{if !root.embedded && event.text==Key.Escape && !FiltersState.composing {FiltersState.close-filters();return accept;}return reject;}
         ScrollView {
             content-width: self.width;
-        VerticalLayout {alignment: start; padding:16px;spacing:10px;
+        VerticalLayout {alignment: start; padding:root.embedded ? 0px : 16px;spacing:10px;
             HorizontalLayout {
+                alignment: start; spacing: 8px;
                 PanelButton {text:FiltersState.labels[1];checked:!FiltersState.allow;enabled:!FiltersState.composing;clicked=>{FiltersState.tab(false);}}
                 PanelButton {text:FiltersState.labels[2];checked:FiltersState.allow;enabled:!FiltersState.composing;clicked=>{FiltersState.tab(true);}}
                 PanelButton {text:FiltersState.category-sort?FiltersState.labels[5]:FiltersState.labels[4];icon:LucideIcons.list-filter;icon-size:16px;enabled:!FiltersState.composing;clicked=>{FiltersState.sort();}}
@@ -73,6 +74,7 @@ export component FiltersPanel inherits PanelOverlay {
             Text {text:FiltersState.labels[11];color:#c7d4e7;}
             note-field:=PanelField {text<=>FiltersState.note;accessible-label:FiltersState.labels[11];enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing;edited=>{self.text=FiltersState.field-edit(1,self.text);}}
             HorizontalLayout {
+                alignment: start; spacing: 8px;
                 PanelButton {text:FiltersState.labels[12];enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;clicked=>{FiltersState.action(0);}}
                 PanelButton {text:FiltersState.labels[13];enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;clicked=>{FiltersState.action(1);}}
             }
@@ -83,11 +85,12 @@ export component FiltersPanel inherits PanelOverlay {
             }
             Text {text:FiltersState.message;color:#f2cd7d;wrap:word-wrap;vertical-stretch:1;}
             HorizontalLayout {
+                alignment: start; spacing: 8px;
                 PanelButton {text:FiltersState.labels[16];enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;clicked=>{FiltersState.action(3);}}
                 if FiltersState.preview: PanelButton {text:FiltersState.labels[17];enabled:!FiltersState.busy && !FiltersState.composing;clicked=>{FiltersState.action(4);}}
                 if FiltersState.importing: PanelButton {text:FiltersState.labels[18];enabled:!FiltersState.composing;clicked=>{FiltersState.action(5);}}
                 PanelButton {text:FiltersState.labels[22];enabled:!FiltersState.busy && !FiltersState.importing && !FiltersState.composing;clicked=>{FiltersState.action(6);}}
-                PanelButton {text:FiltersState.labels[19];enabled:!FiltersState.composing;clicked=>{FiltersState.close-filters();}}
+                if !root.embedded: PanelButton {text:FiltersState.labels[19];enabled:!FiltersState.composing;clicked=>{FiltersState.close-filters();}}
             }
             Text {text:FiltersState.labels[20];color:#9ab5ce;wrap:word-wrap;}
             Text {text:FiltersState.labels[21];color:#9ab5ce;wrap:word-wrap;}

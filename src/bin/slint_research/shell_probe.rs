@@ -97,11 +97,43 @@ async fn settings_dropdowns(ui: &TerminalWindow, directory: &Path) -> Result<(),
     settings.invoke_show_page(3);
     verification::capture(ui, directory, "settings-media.png")?;
     settings.invoke_show_page(4);
+    wait(
+        || ui.get_settings_open() && ui.get_sites_open() && ui.get_sites_embedded(),
+        "sites form did not open within settings",
+    )
+    .await?;
     verification::capture(ui, directory, "settings-sites.png")?;
+
+    settings.invoke_show_page(5);
+    wait(
+        || {
+            ui.get_settings_open()
+                && !ui.get_sites_open()
+                && ui.get_filters_open()
+                && ui.get_filters_embedded()
+        },
+        "filters form did not replace the inline sites form",
+    )
+    .await?;
+    verification::capture(ui, directory, "settings-filters.png")?;
+
+    settings.invoke_show_page(6);
+    wait(
+        || {
+            ui.get_settings_open()
+                && !ui.get_filters_open()
+                && ui.get_login_open()
+                && ui.get_login_embedded()
+                && !ui.get_login_busy()
+        },
+        "account form did not replace the inline filters form",
+    )
+    .await?;
+    verification::capture(ui, directory, "settings-account.png")?;
     settings.invoke_close_settings();
     wait(
-        || !ui.get_settings_open(),
-        "settings did not close after edits",
+        || !ui.get_settings_open() && !ui.get_login_open() && ui.get_terminal_input_focused(),
+        "settings did not close the account form and restore terminal focus",
     )
     .await?;
     ui.invoke_settings_show();

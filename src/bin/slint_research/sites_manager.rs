@@ -244,7 +244,7 @@ impl Manager {
             || ui.get_destination_open()
             || ui.get_bookmarks_open()
             || ui.get_filters_open()
-            || ui.get_settings_open()
+            || ui.get_settings_open() && ui.get_settings_section() != 4
             || ui.get_editor_open()
             || ui.get_station_color_open()
             || ui.get_login_open()
@@ -271,6 +271,7 @@ impl Manager {
         ui.invoke_context_dismiss(false);
         ui.invoke_reset_keyboard();
         ui.invoke_paste_cancel();
+        ui.set_sites_embedded(ui.get_settings_open());
         ui.set_sites_open(true);
         ui.invoke_keyboard_updated();
         self.refresh_labels();
@@ -556,7 +557,11 @@ impl Manager {
     }
     fn hide(&self) {
         if let Some(ui) = self.ui.upgrade() {
+            let restore = ui.get_sites_open() && ui.get_sites_embedded();
             ui.set_sites_open(false);
+            if restore && ui.get_context_focus_restorable() {
+                ui.invoke_focus_terminal();
+            }
         }
         self.closing.set(false);
     }

@@ -247,6 +247,9 @@ export global SettingsState {
 export component SettingsPanel inherits PanelOverlay {
     in property <float> zoom: 1;
     in property <string> station-mouse-status;
+    in property <bool> sites-shown;
+    in property <bool> filters-shown;
+    in property <bool> login-shown;
     private property <length> form-width: min(root.width - 32px, root.panel-width);
     private property <length> sidebar-width: root.form-width < 680px ? 165px : 195px;
     private property <length> content-inset: root.form-width < 680px ? 20px : 26px;
@@ -284,6 +287,7 @@ export component SettingsPanel inherits PanelOverlay {
                             text: item; icon: root.category-icons[index]; icon-color: self.label-color;
                             font-size: 15px; min-height: 45px; max-height: 45px; preferred-height: 45px;
                             navigation: true; checked: SettingsState.page == index && SettingsState.query == "";
+                            enabled: !SettingsState.composing;
                             clicked => { SettingsState.show-page(index); }
                         }
                     }
@@ -294,7 +298,24 @@ export component SettingsPanel inherits PanelOverlay {
                         alignment: start; padding-top: 24px; padding-bottom: 24px;
                         padding-left: root.content-inset; padding-right: root.content-inset; spacing: 12px;
                         Rectangle { width: 28px; height: 2px; background: #e7c46a; }
-                        Text { text: SettingsState.query == "" ? SettingsState.categories[SettingsState.page] : SettingsState.labels[1]; color: #ebe7dc; font-size: 20px; }
+                        FocusScope {
+                            private property <int> field-id: SettingsState.page == 4 ? 18 : SettingsState.page == 5 ? 26 : SettingsState.page == 6 ? 19 : -1;
+                            private property <int> focus-sequence: SettingsInput.focus-sequence;
+                            enabled: SettingsState.query == "" && self.field-id >= 0;
+                            focus-on-click: false;
+                            focus-on-tab-navigation: false;
+                            height: heading.preferred-height;
+                            changed focus-sequence => { if self.enabled && SettingsInput.focus-field == self.field-id { self.focus(); } }
+                            changed has-focus => {
+                                if self.has-focus { SettingsInput.active-target = self.field-id; }
+                                else if SettingsInput.active-target == self.field-id { SettingsInput.active-target = -1; }
+                            }
+                            heading := Text {
+                                x: 0px; width: parent.width;
+                                text: SettingsState.query == "" ? SettingsState.categories[SettingsState.page] : SettingsState.labels[1];
+                                color: #ebe7dc; font-size: 20px;
+                            }
+                        }
                         Rectangle { height: 3px; }
                         if SettingsState.query!="": VerticalLayout {
                             alignment: start; spacing: 10px;
@@ -478,16 +499,16 @@ export component SettingsPanel inherits PanelOverlay {
                         if SettingsState.query=="" && SettingsState.page==4: VerticalLayout {
                             alignment: start; spacing: 10px;
                             FocusButton {field-id:23;text:SettingsState.runtime-labels[3];enabled:SettingsState.runtime-available[3];checked:SettingsState.runtime-states[3];clicked=>{SettingsState.runtime-action(3);}}
-                            if SettingsState.sites-available: FocusButton {field-id:18;text:SettingsState.sites-label;icon:LucideIcons.globe;clicked=>{SettingsState.manage-sites();}}
+                            if SettingsState.sites-available && !root.sites-shown: SettingsAction {text:SettingsState.sites-label;icon:LucideIcons.globe;clicked=>{SettingsState.manage-sites();}}
                         }
                         if SettingsState.query=="" && SettingsState.page==5: VerticalLayout {
                             alignment: start; spacing: 10px;
-                            if SettingsState.filters-available: FocusButton {field-id:26;text:SettingsState.filters-label;clicked=>{SettingsState.manage-filters();}}
+                            if SettingsState.filters-available && !root.filters-shown: SettingsAction {text:SettingsState.filters-label;clicked=>{SettingsState.manage-filters();}}
                         }
                         if SettingsState.query=="" && SettingsState.page==6: VerticalLayout {
                             alignment: start; spacing: 10px;
                             Text {text:SettingsState.labels[26];color:#d7dce5;wrap:word-wrap;}
-                            FocusButton {field-id:19;text:SettingsState.labels[27];clicked=>{SettingsState.manage-account();}}
+                            if !root.login-shown: SettingsAction {text:SettingsState.labels[27];clicked=>{SettingsState.manage-account();}}
                         }
                         if SettingsState.query=="" && SettingsState.page==7: VerticalLayout {
                             alignment: start; spacing: 10px;
@@ -507,6 +528,7 @@ export component SettingsPanel inherits PanelOverlay {
                             AboutSlint {}
                             Text {text:SettingsState.labels[29];color:#d7dce5;wrap:word-wrap;}
                         }
+                        @children
                     }
                 }
             }

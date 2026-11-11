@@ -73,8 +73,14 @@ fn item_point(ui: &TerminalWindow, index: usize) -> slint::LogicalPosition {
     let size = ui.window().size();
     let width = size.width as f32 / dpi;
     let height = size.height as f32 / dpi;
-    let menu_width = 300f32.min(width - 16.);
-    let menu_height = (ui.get_context_entries().row_count() as f32 * 34. + 12.).min(height - 16.);
+    let menu_width = 270f32.min(width - 16.);
+    let header = if ui.get_context_target().is_empty() {
+        0.
+    } else {
+        29.
+    };
+    let menu_height =
+        (header + ui.get_context_entries().row_count() as f32 * 34. + 12.).min(height - 16.);
     slint::LogicalPosition::new(
         (ui.get_terminal_origin_x() + ui.get_context_x())
             .clamp(8., (width - menu_width - 8.).max(8.))
@@ -82,6 +88,7 @@ fn item_point(ui: &TerminalWindow, index: usize) -> slint::LogicalPosition {
         (ui.get_terminal_origin_y() + ui.get_context_y())
             .clamp(8., (height - menu_height - 8.).max(8.))
             + 6.
+            + header
             + index as f32 * 34.
             + 17.,
     )

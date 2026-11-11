@@ -1,6 +1,8 @@
-export struct MenuEntry { label: string, enabled: bool }
+export struct MenuEntry { label: string, enabled: bool, icon: image, settings: bool }
 export component ContextMenuOverlay inherits Rectangle {
     in property <[MenuEntry]> entries;
+    in property <string> target;
+    private property <length> target-height: root.target == "" ? 0px : 29px;
     in property <int> selected;
     in property <length> anchor-x;
     in property <length> anchor-y;
@@ -8,9 +10,12 @@ export component ContextMenuOverlay inherits Rectangle {
     callback dismiss(bool);
     callback key(int, bool);
     public function focus-menu() { focus.focus(); }
+    changed visible => { if root.visible { port.content-y = 0px; } }
     changed selected => {
-        if (root.selected * 34px < -port.content-y) { port.content-y = -root.selected * 34px; }
-        else if ((root.selected + 1) * 34px > -port.content-y + port.height) { port.content-y = min(0px,port.height - (root.selected + 1) * 34px); }
+        let top = root.target-height + root.selected * 34px;
+        if (top < -port.content-y && root.selected == 0) { port.content-y = 0px; }
+        else if (top < -port.content-y) { port.content-y = -top; }
+        else if (top + 34px > -port.content-y + port.height) { port.content-y = min(0px, port.height - top - 34px); }
     }
     background: transparent;
     TouchArea {
@@ -35,12 +40,13 @@ export component ContextMenuOverlay inherits Rectangle {
         Rectangle {
             x: clamp(root.anchor-x, 8px, max(8px,root.width - self.width - 8px));
             y: clamp(root.anchor-y, 8px, max(8px,root.height - self.height - 8px));
-            width: min(300px,root.width - 16px);
-            height: min(root.entries.length * 34px + 12px,root.height - 16px);
-            background: #141d30;
-            border-color: #d9ae5b;
+            width: min(270px,root.width - 16px);
+            height: min(root.target-height + root.entries.length * 34px + 12px,root.height - 16px);
+            background: #101d32;
+            border-color: #8e784a;
             border-width: 1px;
-            border-radius: 6px;
+            border-radius: 12px;
+            drop-shadow-color: #00000099; drop-shadow-offset-y: 8px; drop-shadow-blur: 28px;
             clip: true;
             TouchArea { width: parent.width; height: parent.height; }
             port := Flickable {
@@ -49,23 +55,39 @@ export component ContextMenuOverlay inherits Rectangle {
                 width: parent.width - 12px;
                 height: parent.height - 12px;
                 content-width: self.width;
-                content-height: root.entries.length * 34px;
+                content-height: root.target-height + root.entries.length * 34px;
+                if root.target-height > 0px: Text {
+                    x: 12px; y: 0; width: parent.width - 24px; height: root.target-height;
+                    text: root.target; color: #e7c46a; font-weight: 600; font-size: 13px;
+                    vertical-alignment: center; overflow: elide;
+                }
                 for entry[index] in root.entries: Rectangle {
-                    y: index * 34px;
+                    y: root.target-height + index * 34px;
                     width: port.width;
                     height: 34px;
-                    background: entry.enabled && (root.selected == index || touch.has-hover) ? #315074 : transparent;
-                    border-radius: 3px;
+                    private property <bool> highlighted: entry.enabled && (root.selected == index || touch.has-hover);
+                    background: self.highlighted ? #293b55 : transparent;
+                    border-width: self.highlighted ? 1px : 0px;
+                    border-color: #d4b87c;
+                    border-radius: 6px;
                     accessible-role: button;
                     accessible-label: entry.label;
                     accessible-enabled: entry.enabled;
                     accessible-action-default => { if (entry.enabled) { root.choose(index); } }
+                    Image {
+                        x: 10px; y: (parent.height - self.height) / 2;
+                        width: 18px; height: 18px;
+                        source: entry.settings ? @image-url("../../../assets/icons/constellation-flat.svg") : entry.icon;
+                        colorize: entry.settings ? transparent : entry.enabled ? #d4b87c : #756752;
+                        accessible-role: none;
+                    }
                     Text {
-                        x: 12px;
-                        width: parent.width - 24px;
+                        x: 38px;
+                        width: parent.width - self.x - 10px;
                         height: parent.height;
                         text: entry.label;
-                        color: entry.enabled ? #e8dfc7 : #8390a2;
+                        color: !entry.enabled ? #85848a : entry.settings ? #e7c46a : #eee9dc;
+                        font-size: 13px;
                         vertical-alignment: center;
                         overflow: elide;
                     }

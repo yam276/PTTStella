@@ -278,28 +278,30 @@ export component PanelCombo inherits Rectangle {
 }
 
 export component PanelOverlay inherits Rectangle {
+    in property <bool> embedded;
     in property <string> heading;
     in property <length> panel-width: 900px;
     in property <length> panel-height: 700px;
     in property <length> header-height: 52px;
     in property <image> brand-mark: @image-url("../../../assets/icons/pttstella.png");
     in property <image> heading-icon;
-    background: #00000088;
+    background: root.embedded ? transparent : #00000088;
     TouchArea {
-        enabled: root.visible;
+        enabled: root.visible && !root.embedded;
         width: parent.width; height: parent.height;
         clicked => {}
         scroll-event => { return accept; }
     }
     Rectangle {
-        width: min(root.panel-width, parent.width - 32px);
-        height: min(root.panel-height, parent.height - 32px);
+        width: root.embedded ? parent.width : min(root.panel-width, parent.width - 32px);
+        height: root.embedded ? parent.height : min(root.panel-height, parent.height - 32px);
         x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
-        background: #0c1c30; border-color: #34475b; border-width: 1px; border-radius: 3px;
-        drop-shadow-color: #00000099; drop-shadow-offset-y: 12px; drop-shadow-blur: 40px;
+        background: root.embedded ? transparent : #0c1c30;
+        border-color: #34475b; border-width: root.embedded ? 0px : 1px; border-radius: 3px;
+        drop-shadow-color: root.embedded ? transparent : #00000099; drop-shadow-offset-y: 12px; drop-shadow-blur: 40px;
         clip: true;
         VerticalLayout {
-            Rectangle {
+            if !root.embedded: Rectangle {
                 height: root.header-height;
                 HorizontalLayout {
                     padding-left: 22px; padding-right: 22px; spacing: 10px;

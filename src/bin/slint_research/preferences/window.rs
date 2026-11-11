@@ -20,10 +20,9 @@ impl Preferences {
         }
         if self.ui.upgrade().is_some_and(|u| {
             u.get_app_closing()
-                || u.get_manager_open()
+                || !u.get_settings_open() && (u.get_manager_open() || u.get_login_open())
                 || u.get_native_composing()
                 || u.get_editor_composing()
-                || u.get_login_open()
                 || u.get_paste_open()
                 || u.get_station_color_open()
         }) {
@@ -328,29 +327,26 @@ impl Preferences {
             }
         });
         window.global::<crate::SettingsState>().on_manage_sites({
-            let weak = Rc::downgrade(self);
+            let weak = window.as_weak();
             move || {
-                if let Some(o) = weak.upgrade() {
-                    o.handoff.set(Some(Handoff::Sites));
-                    o.request_close();
+                if let Some(ui) = weak.upgrade() {
+                    ui.invoke_sites_show();
                 }
             }
         });
         window.global::<crate::SettingsState>().on_manage_filters({
-            let weak = Rc::downgrade(self);
+            let weak = window.as_weak();
             move || {
-                if let Some(o) = weak.upgrade() {
-                    o.handoff.set(Some(Handoff::Filters));
-                    o.request_close();
+                if let Some(ui) = weak.upgrade() {
+                    ui.invoke_filters_show();
                 }
             }
         });
         window.global::<crate::SettingsState>().on_manage_account({
-            let weak = Rc::downgrade(self);
+            let weak = window.as_weak();
             move || {
-                if let Some(o) = weak.upgrade() {
-                    o.handoff.set(Some(Handoff::Account));
-                    o.request_close();
+                if let Some(ui) = weak.upgrade() {
+                    ui.invoke_login_show();
                 }
             }
         });
@@ -696,9 +692,6 @@ impl Preferences {
                 && !self.stopped.get()
             {
                 match handoff {
-                    Handoff::Account => ui.invoke_login_show(),
-                    Handoff::Sites => ui.invoke_sites_show(),
-                    Handoff::Filters => ui.invoke_filters_show(),
                     Handoff::Vim => {
                         ui.invoke_keyboard_updated();
                         ui.invoke_toggle_vim();

@@ -2,7 +2,7 @@
 mod picture;
 pub mod probe;
 use crate::{
-    MenuEntry, TerminalWindow,
+    LucideIcons, MenuEntry, TerminalWindow,
     output::{AccountContext, Output},
     pointer::SurfaceGeometry,
     renderer::Renderer,
@@ -487,21 +487,17 @@ impl ContextMenu {
             self.dismiss(true);
             return;
         }
+        let mut entries = entries;
+        entries.sort_by_key(|entry| presentation_order(entry.action));
         let selected = entries.iter().position(|e| e.enabled).unwrap_or(0);
-        ui.set_context_entries(ModelRc::new(VecModel::from(
-            entries
-                .iter()
-                .map(|e| MenuEntry {
-                    label: target_label(
-                        e.action,
-                        account.as_ref(),
-                        ui.get_article_updates_enabled(),
-                    )
-                    .into(),
-                    enabled: e.enabled,
-                })
-                .collect::<Vec<_>>(),
-        )));
+        ui.set_context_target(
+            account
+                .as_ref()
+                .and_then(|account| account.word.as_ref())
+                .map_or("", |word| word.id.as_str())
+                .into(),
+        );
+        publish_entries(ui, &entries);
         self.menu.replace(Some(Menu {
             source,
             link,
@@ -519,20 +515,7 @@ impl ContextMenu {
         if let Some(ui) = self.ui.upgrade()
             && let Some(menu) = self.menu.borrow().as_ref()
         {
-            ui.set_context_entries(ModelRc::new(VecModel::from(
-                menu.entries
-                    .iter()
-                    .map(|e| MenuEntry {
-                        label: target_label(
-                            e.action,
-                            menu.account.as_ref(),
-                            ui.get_article_updates_enabled(),
-                        )
-                        .into(),
-                        enabled: e.enabled,
-                    })
-                    .collect::<Vec<_>>(),
-            )));
+            publish_entries(&ui, &menu.entries);
         }
     }
     fn update(&self) {
@@ -788,17 +771,87 @@ fn account_policy(action: Action) -> Option<(pttstella::filters::Policy, bool)> 
         _ => return None,
     })
 }
-fn target_label(action: Action, account: Option<&AccountContext>, updates_enabled: bool) -> String {
-    let label = if action == Action::ArticleUpdates && updates_enabled {
-        pttstella::msg!("article-updates-pause")
-    } else {
-        label(action)
-    };
-    if account_policy(action).is_some()
-        && let Some(word) = account.and_then(|a| a.word.as_ref())
-    {
-        format!("{} · {}", word.id, label)
-    } else {
-        label
+// Match the visible button order in Dioxus' context_menu() and its media menu.
+// The shared policy continues to own visibility and action availability.
+fn presentation_order(action: Action) -> u8 {
+    use Action as A;
+    match action {
+        A::AccountMask | A::AccountRemoveMask => 0,
+        A::AccountMaskRow | A::AccountRemoveMaskRow => 1,
+        A::AccountAllow | A::AccountRemoveAllow => 2,
+        A::ReplyFocus => 3,
+        A::ReplyFocusClear => 4,
+        A::Copy => 5,
+        A::CopyAnsi => 6,
+        A::Paste => 7,
+        A::EditorColor => 8,
+        A::CopyPicture => 9,
+        A::SavePicture => 10,
+        A::CopyLink => 11,
+        A::OpenLink => 12,
+        A::SelectLink => 13,
+        A::CopyImagePage => 14,
+        A::CopyImageRows => 15,
+        A::SelectAll => 16,
+        A::ExportRows => 17,
+        A::ExportPage => 18,
+        A::Inline => 19,
+        A::Back => 20,
+        A::Previous => 21,
+        A::Next => 22,
+        A::BookmarkList => 23,
+        A::BookmarkCurrent => 24,
+        A::ReplyNavigation => 25,
+        A::ArticleUpdates => 26,
+        A::Bookmarks => 27,
+        A::Settings => 28,
     }
+}
+
+fn publish_entries(ui: &TerminalWindow, entries: &[Entry]) {
+    use Action as A;
+    let icons = ui.global::<LucideIcons>();
+    ui.set_context_entries(ModelRc::new(VecModel::from(
+        entries
+            .iter()
+            .map(|entry| MenuEntry {
+                label: if entry.action == A::ArticleUpdates && ui.get_article_updates_enabled() {
+                    pttstella::msg!("article-updates-pause")
+                } else {
+                    label(entry.action)
+                }
+                .into(),
+                enabled: entry.enabled,
+                settings: entry.action == A::Settings,
+                icon: match entry.action {
+                    A::AccountMask
+                    | A::AccountRemoveMask
+                    | A::AccountMaskRow
+                    | A::AccountRemoveMaskRow
+                    | A::AccountAllow
+                    | A::AccountRemoveAllow
+                    | A::ReplyFocus
+                    | A::ReplyFocusClear => icons.get_shield(),
+                    A::Copy
+                    | A::CopyAnsi
+                    | A::Paste
+                    | A::CopyPicture
+                    | A::CopyImagePage
+                    | A::CopyImageRows => icons.get_copy(),
+                    A::SavePicture => icons.get_save(),
+                    A::CopyLink | A::SelectLink => icons.get_link(),
+                    A::OpenLink => icons.get_external_link(),
+                    A::EditorColor => icons.get_type(),
+                    A::SelectAll => icons.get_file_text(),
+                    A::ExportRows | A::ExportPage => icons.get_camera(),
+                    A::Inline => icons.get_picture(),
+                    A::Back => icons.get_arrow_left(),
+                    A::Previous => icons.get_arrow_up(),
+                    A::Next | A::ReplyNavigation | A::ArticleUpdates => icons.get_arrow_down(),
+                    A::BookmarkList | A::BookmarkCurrent | A::Bookmarks => icons.get_star(),
+                    A::Settings => slint::Image::default(),
+                },
+            })
+            .collect::<Vec<_>>(),
+    )));
 }

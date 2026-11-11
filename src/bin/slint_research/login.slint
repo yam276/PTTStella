@@ -28,14 +28,14 @@ export component LoginPanel inherits PanelOverlay {
         width: parent.width;
         height: parent.height;
         key-pressed(event) => {
-            if (event.text == Key.Escape && !root.composing && !event.repeat) {
+            if (!root.embedded && event.text == Key.Escape && !root.composing && !event.repeat) {
                 root.cancel();
                 return accept;
             }
             return reject;
         }
             VerticalLayout {
-                padding: 16px;
+                padding: root.embedded ? 0px : 16px;
                 spacing: 12px;
                 Text { text: root.account-label; color: #e3e8ee; }
                 account-field := PanelField {
@@ -63,9 +63,9 @@ export component LoginPanel inherits PanelOverlay {
                 remember  := PanelCheck { checked <=> root.remember; caption: root.remember-label; enabled: !root.busy; }
                 Text { text: root.message; color: #b7c1ce; wrap: word-wrap; vertical-stretch: 1; }
                 HorizontalLayout {
-                    spacing: 8px;
+                    alignment: end; spacing: 8px;
                     PanelButton { text: root.forget-label; enabled: !root.busy && !root.composing && root.saved; clicked => { root.forget(); } }
-                    PanelButton { text: root.cancel-label; clicked => { root.cancel(); } }
+                    if !root.embedded: PanelButton { text: root.cancel-label; clicked => { root.cancel(); } }
                     PanelButton {
                         text: root.submit-label; primary: true;
                         enabled: !root.busy && !root.composing;
