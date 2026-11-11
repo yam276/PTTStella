@@ -1,6 +1,6 @@
 # Slint 與原 Dioxus 的資料往返
 
-2026-11-11 已用同一對 macOS arm64 前端完成設定 v1–v6 的 Slint → 原 Dioxus → Slint 往返。各版本以獨立合成資料驗證兩次實際儲存、前一代備份與重開讀取。黑白名單、可攜設定、收藏名稱／離線讀取、最近看板清除及草稿編輯保存的先前證據見後節。完整新增／編輯／刪除、最近看板新增與排序、平台資料路徑的寫入與回退、密碼庫及完整產品切換仍待驗。
+2026-11-11 已用同一對 macOS arm64 前端完成設定 v1–v6 的 Slint → 原 Dioxus → Slint 往返。各版本以獨立合成資料驗證兩次實際儲存、前一代備份與重開讀取。黑白名單、可攜設定、收藏名稱／離線讀取、最近看板清除及草稿編輯保存的先前證據見後節。完整新增／編輯／刪除、最近看板新增與排序、macOS 一般入口的自動開圖設定往返也已通過，完整平台資料回退、密碼庫與產品切換仍待驗。
 
 ## 2026-11-11 同一對前端的 v1–v6 設定往返
 
@@ -47,6 +47,24 @@ Slint worktree 的 Dioxus 入口改用 HTML 數字欄位 `step=any`，對齊 Rus
 三次實際視窗嘗試都收到本機 frame，但桌面工具未取得可操作的視窗。已保留未註冊、放行 Unix socket 並取消 CFFIXED_USER_HOME 後仍無法綁定，以及經 LaunchServices 啟動後有 App 名稱但無法操作的結果。測試控制器在確認身分後終止自有程序，這些 exit 及最後兩次路徑檢查的 exit 都不是正常 Quit。上一節已有的 `probe-*.json` 寫入往返仍有獨立證據。
 
 證據在 `.local/verification/slint-normal-profile/`，含 `startup-results.json`、兩個實際 sites 副本、前後雜湊及原始 log。重驗時把 `roundtrip.py` 和 `startup-check.py` 放在新的同層證據目錄，先執行 `roundtrip.py setup`，再執行 `startup-check.py`。已清理兩個暫存 App 所在根目錄、唯一測試 TLS 私鑰及專用系統產物，共 110,753,519 regular-file bytes。精確六筆路徑、du、雜湊、程序與 filesystem free 觀測見 `cleanup.json`。全程重用現有兩個執行檔。
+
+## 2026-11-11 macOS 一般入口的設定回退
+
+使用最新 Apple Silicon 候選 `99949409…` 和同 worktree 的修正版 Dioxus `52ac086b…`。兩版均不帶產品探針參數，從隔離 HOME 下各自的一般 `Library/Application Support` 資料目錄讀寫。沙箱封鎖實際產品目錄和 Keychains 路徑，網路只連合成 WSS peer。各段正常退出後手動複製七份合成資料到下一個目錄，不轉換格式。Dioxus release 建置沿用固定 Cargo target；Slint 沿用既有包的執行檔和播放器函式庫。
+
+| 階段 | 實際視窗操作與結果 |
+| --- | --- |
+| Slint | 從「圖片與媒體」關閉自動開圖。正常保存，v6 主檔按現有 serde 契約省略 false 欄位 |
+| 修正版 Dioxus | 實際讀到未勾選，開啟自動開圖後正常保存為 true |
+| Slint 新程序 | 實際看到設定已勾選，直接正常退出，主檔及備份雜湊相同 |
+
+兩次保存的一代備份都逐位元等於寫入前主檔，字高 21.5 與其餘設定值保留，另六份資料逐位元相同。三段各 exit 0、TLS 1.3、只送正常 Close frame 且 peer 回覆並結束。保留前後畫面、實際儲存 JSON、SHA-256、正常退出和原始 log。
+
+原 Dioxus `5ea9ad6` 能讀回自動開圖關閉，但既有字高 21.5 使 WebView 拒絕保存這個布林設定。主檔逐位元不變、沒有備份。此反例與修正版分列。第一輪桌面控制未綁定而逾時，第二輪改用 macOS 輔助使用 API 可開設定，但合成鍵盤未完成字高編輯，啟動又超出 peer 監聽期限。後續把啟動納入 runner，使用原生選單及實際滑鼠操作。Slint 首次成功保存的收集器原誤要求主檔明寫 false，依現行 schema 另驗原始主檔、備份及其餘雜湊，保留原始收據。
+
+證據位於 `.local/verification/slint-normal-profile-current/`。以新同層證據目錄放置 `roundtrip.py`、`operate.py`、`native-ui.js`，先執行 `roundtrip.py setup --dioxus-binary` 並指定固定 target 的修正版 `release/pttstella`。依序執行 `roundtrip.py upgrade --launch-services`、`rollback --launch-services`、`return --launch-services`，每段從設定的圖片與媒體操作並使用 App 選單正常 Quit。實際操作與資料核對可在 `results.json` 和各階段收據重查。
+
+本次驗證一般入口與 macOS 資料路徑上的合成設定寫入和回讀。實際安裝升級、正式產品身份及 Keychain 授權、完整資料操作、IME 與其他平台仍待驗。退出後清除六個本批專用 App／測試資料／系統暫存位置，共 110,346,431 regular-file bytes，另清三張相同 PNG 共 258,764 bytes。保留候選、固定 target、合成前後資料及獨特失敗證據。精確路徑、du 與並行可用空間觀測見 `cleanup.json`。
 
 ## 同一份資料的入口
 
