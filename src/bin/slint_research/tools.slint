@@ -1,21 +1,53 @@
 export struct ToolItem { id: int, label: string, enabled: bool, x: length, y: length, width: length, height: length }
+component ToolGlyph inherits Path {
+    in property <int> kind;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    stroke: #e7c46a;
+    stroke-width: 1.8px;
+    fill: transparent;
+    // Compass, star, camera, plug, gear and Back.
+    commands: root.kind == 0 ? "M12 2 A10 10 0 1 1 12 22 A10 10 0 1 1 12 2 M16 8 L14 14 L8 16 L10 10 Z"
+        : root.kind == 1 ? "M12 2 L15 8.5 L22 9.5 L17 14.5 L18 22 L12 18.5 L6 22 L7 14.5 L2 9.5 L9 8.5 Z"
+        : root.kind == 2 ? "M3 6 L7 6 L9 3 L15 3 L17 6 L21 6 Q22 6 22 8 L22 19 Q22 21 20 21 L4 21 Q2 21 2 19 L2 8 Q2 6 3 6 Z M12 9 A4 4 0 1 1 12 17 A4 4 0 1 1 12 9"
+        : root.kind == 3 ? "M9 2 L9 8 M15 2 L15 8 M6 8 L18 8 M7 8 L7 12 A5 5 0 0 0 17 12 L17 8 M12 17 L12 22"
+        : root.kind == 4 ? "M10 2 L14 2 L15 5 L17 6 L20 5 L22 9 L20 11 L20 13 L22 15 L20 19 L17 18 L15 19 L14 22 L10 22 L9 19 L7 18 L4 19 L2 15 L4 13 L4 11 L2 9 L4 5 L7 6 L9 5 Z M12 8 A4 4 0 1 1 12 16 A4 4 0 1 1 12 8"
+        : "M20 12 L4 12 M11 5 L4 12 L11 19";
+}
 component ToolTile inherits Rectangle {
     in property <string> label;
     in property <bool> enabled;
     in property <bool> selected;
+    in property <int> icon: -1;
+    private property <bool> petal: root.icon >= 0;
     in property <float> ui-scale: 1;
     in property <bool> owned-pointer;
     callback pointer(int);
     callback choose;
-    background: root.enabled && (root.selected || touch.has-hover) ? #315074 : #202b40;
-    border-color: root.selected ? #f0d994 : #526178;
+    background: root.enabled && (root.selected || touch.has-hover) ? #203b55 : #132c45;
+    border-color: root.enabled && (root.selected || touch.has-hover) ? #e7c46a : #786640;
     border-width: 1px;
-    border-radius: 12px;
+    border-radius: (root.petal ? 22px : 7px) * root.ui-scale;
     accessible-role: button;
     accessible-label: root.label;
     accessible-enabled: root.enabled;
     accessible-action-default => { if (root.enabled) { root.choose(); } }
-    Text { font-size: 12px * root.ui-scale; text: root.label; color: root.enabled ? #e7c879 : #8290a4; horizontal-alignment: center; vertical-alignment: center; wrap: word-wrap; width: parent.width - 8px; x: 4px; height: parent.height; }
+    if root.petal: ToolGlyph {
+        kind: root.icon;
+        width: 22px * root.ui-scale;
+        height: self.width;
+        x: (parent.width - self.width) / 2;
+        y: 9px * root.ui-scale;
+        opacity: root.enabled ? 1 : 0.5;
+    }
+    Text {
+        font-size: (root.petal ? 11px : 13px) * root.ui-scale;
+        text: root.label; color: root.enabled ? #e7c46a : #b5bcc7;
+        horizontal-alignment: center; vertical-alignment: center; wrap: word-wrap;
+        width: parent.width - 8px; x: 4px;
+        y: root.petal ? 32px * root.ui-scale : 0px;
+        height: parent.height - self.y;
+    }
     touch := TouchArea {
         clicked => { if (root.enabled && !root.owned-pointer) { root.choose(); } }
         pointer-event(event) => { if (root.owned-pointer && root.enabled && event.button == PointerEventButton.left) {
@@ -33,6 +65,8 @@ export component FloatingTools inherits Rectangle {
     in property <bool> visible-ball;
     in property <bool> blocked;
     in property <bool> compact;
+    in property <bool> attention;
+    in property <string> status;
     in property <float> ball-opacity;
     in property <float> scale;
     in property <length> ball-x;
@@ -42,11 +76,11 @@ export component FloatingTools inherits Rectangle {
     in property <length> panel-width;
     in property <length> panel-height;
     in property <length> grid-height;
+    in property <length> action-height;
     in property <int> category: -1;
     in property <int> selected;
     in property <[ToolItem]> categories;
     in property <[ToolItem]> actions;
-    in property <string> title;
     in property <string> ball-label;
     callback ball-pointer(int,length,length);
     callback toggle;
@@ -60,14 +94,14 @@ export component FloatingTools inherits Rectangle {
     if root.opened: TouchArea { width: parent.width; height: parent.height; pointer-event(event) => { if (event.kind == PointerEventKind.down) { root.dismiss(true); } } }
     focus := FocusScope {
         enabled: !root.blocked && (root.visible-ball || root.opened);
-        x: root.opened ? 0px : root.ball-x - 3px;
-        y: root.opened ? 0px : root.ball-y - 3px;
-        width: root.opened ? parent.width : 56px * root.scale + 6px;
-        height: root.opened ? parent.height : 56px * root.scale + 6px;
+        x: root.opened ? 0px : root.ball-x;
+        y: root.opened ? 0px : root.ball-y;
+        width: root.opened ? parent.width : 56px * root.scale;
+        height: root.opened ? parent.height : 56px * root.scale;
         key-pressed(event) => {
             if (!root.opened) { if (event.text == Key.Return || event.text == " ") { if (!event.repeat) { root.toggle(); } return accept; } return reject; }
             if (event.text == Key.Escape) { root.key(0,event.repeat); }
-            else if (event.text == Key.Tab) { root.key(1,event.repeat); }
+            else if (event.text == Key.Tab) { root.key(event.modifiers.shift ? 2 : 3,event.repeat); }
             else if (event.text == Key.UpArrow) { root.key(2,event.repeat); }
             else if (event.text == Key.DownArrow) { root.key(3,event.repeat); }
             else if (event.text == Key.Home) { root.key(4,event.repeat); }
@@ -79,11 +113,11 @@ export component FloatingTools inherits Rectangle {
         key-released(event) => { return root.opened ? accept : reject; }
         if root.opened && root.category < 0 && !root.compact: Rectangle {
             width: parent.width; height: parent.height; background: transparent;
-            for item[index] in root.categories: ToolTile { x: item.x; y: item.y; width: item.width; height: item.height; ui-scale: root.scale; label: item.label; enabled: item.enabled; selected: root.selected == index; choose => { root.choose-category(item.id); } }
+            for item[index] in root.categories: ToolTile { x: item.x; y: item.y; width: item.width; height: item.height; ui-scale: root.scale; icon: item.id; label: item.label; enabled: item.enabled; selected: root.selected == index; choose => { root.choose-category(item.id); } }
         }
         if root.opened && (root.category >= 0 || root.compact): Rectangle {
             x: root.panel-x; y: root.panel-y; width: root.panel-width; height: root.panel-height;
-            background: #141d30; border-color: #d9ae5b; border-width: 1px; border-radius: 12px;
+            background: #0c1c30; border-color: #786640; border-width: 1px; border-radius: 16px;
             TouchArea { width: parent.width; height: parent.height; }
             if root.category < 0: Flickable {
                 in property <int> keyboard-index: root.selected;
@@ -95,11 +129,15 @@ export component FloatingTools inherits Rectangle {
                     }
                 }
                 width: parent.width; height: parent.height; content-width: self.width; content-height: root.grid-height;
-                for item[index] in root.categories: ToolTile { x: item.x - root.panel-x; y: item.y - root.panel-y; width: item.width; height: item.height; ui-scale: root.scale; label: item.label; enabled: item.enabled; selected: root.selected == index; choose => { root.choose-category(item.id); } }
+                for item[index] in root.categories: ToolTile { x: item.x - root.panel-x; y: item.y - root.panel-y; width: item.width; height: item.height; ui-scale: root.scale; icon: item.id; label: item.label; enabled: item.enabled; selected: root.selected == index; choose => { root.choose-category(item.id); } }
             }
             if root.category >= 0: VerticalLayout {
                 padding: 12px; spacing: 8px;
-                Text { text: root.title; color: #e7c879; font-weight: 700; height: 24px * root.scale; }
+                VerticalLayout {
+                    height: 40px * root.scale;
+                    Text { text: "PTTStella"; color: #e7c46a; font-weight: 700; font-size: 13px * root.scale; }
+                    Text { text: root.status; color: #b5bcc7; font-size: 12px * root.scale; overflow: elide; }
+                }
                 action-port := Flickable {
                     changed content-y => { root.action-pointer(3,-1); }
                     in property <int> keyboard-index: root.selected;
@@ -110,19 +148,33 @@ export component FloatingTools inherits Rectangle {
                         }
                     }
                     vertical-stretch: 1; content-width: self.width;
-                    content-height: ceil(root.actions.length / 2) * 42px * root.scale;
+                    content-height: root.action-height;
                     for item[index] in root.actions: ToolTile { x: item.x; y: item.y; width: item.width; height: item.height; ui-scale: root.scale; label: item.label; enabled: item.enabled; selected: root.selected == index; owned-pointer: true; pointer(kind) => { root.action-pointer(kind,item.id); } choose => { root.choose-action(item.id); } }
                 }
             }
         }
         if root.visible-ball: Rectangle {
-            x: root.opened ? root.ball-x - 3px : 0px; y: root.opened ? root.ball-y - 3px : 0px; width: 56px * root.scale + 6px; height: self.width;
-            border-radius: self.width/2; border-width: 2px; border-color: #e7c879; background: #182030;
+            x: root.opened ? root.ball-x : 0px; y: root.opened ? root.ball-y : 0px;
+            width: 56px * root.scale; height: self.width;
+            border-radius: self.width / 2;
+            background: #0c1c30;
+            border-width: 1px;
+            border-color: root.attention ? #d09b7b : #786640;
             opacity: root.opened || root.dragging || ball-touch.has-hover || focus.has-focus ? 1 : root.ball-opacity;
             Rectangle {
-                x: 3px; y: 3px; width: parent.width - 6px; height: self.width; border-radius: self.width/2; clip: true;
+                x: -3px; y: -3px; width: parent.width + 6px; height: self.width;
+                border-radius: self.width / 2; border-width: 2px;
+                border-color: ball-touch.has-hover ? #fff0bf : #e7c46a;
+            }
+            if root.category < 0: Rectangle {
+                x: 1px; y: 1px; width: parent.width - 2px; height: self.width;
+                border-radius: self.width / 2; clip: true;
                 Image { width: parent.width; height: parent.height; source: @image-url("../../../assets/icons/pttstella.png"); image-fit: cover; }
-                if root.category >= 0: Rectangle { width: parent.width; height: parent.height; background: #182030; Text { width: parent.width; height: parent.height; text: "←"; font-size: 28px * root.scale; color: #e7c879; horizontal-alignment: center; vertical-alignment: center; } }
+            }
+            if root.category >= 0: ToolGlyph {
+                kind: 5;
+                width: 28px * root.scale; height: self.width;
+                x: (parent.width - self.width) / 2; y: self.x;
             }
             accessible-role: button; accessible-label: root.ball-label; accessible-enabled: !root.blocked;
             accessible-action-default => { if (!root.blocked) { root.toggle(); } }

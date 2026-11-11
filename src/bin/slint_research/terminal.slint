@@ -22,7 +22,6 @@ export { StationColorState } from "station-color.slint";
 import { StationColor, StationColorState } from "station-color.slint";
 
 export component TerminalWindow inherits Window {
-    private property <length> status-height:32px;
     in property <bool> article-updates-available;
     in property <bool> article-updates-visible;
     in property <bool> article-updates-enabled;
@@ -298,11 +297,11 @@ export component TerminalWindow inherits Window {
     in property <bool> tools-compact;
     in property <SelectionRect> tools-panel;
     in property <length> tools-grid-height;
+    in property <length> tools-action-height;
     in property <int> tools-category: -1;
     in property <int> tools-selected;
     in property <[ToolItem]> tools-categories;
     in property <[ToolItem]> tools-actions;
-    in property <string> tools-title;
     in property <string> tools-ball-label;
     out property <bool> tools-source-blocked: root.app-closing || root.manager-open || root.settings-open || root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing || root.show-about || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy;
     out property <bool> pointer-shift-held: root.pointer-shift;
@@ -756,40 +755,6 @@ export component TerminalWindow inherits Window {
                 }
             }
 
-            // Reading capabilities can arrive after the first article paint.
-            // Keep one status row so a late reply action never resizes that
-            // acknowledged viewport or revokes an in-flight source export.
-            if root.article-active || root.article-load-available || root.article-updates-available || root.article-updates-visible: HorizontalLayout {
-                height:32px;
-                spacing:6px;
-                Text {
-                    text:root.article-load-available ? root.article-load-status : "";
-                    color:#b7c1ce;horizontal-stretch:1;min-width:0px;
-                    overflow:elide;vertical-alignment:center;
-                }
-                if root.article-load-available && (root.article-load-active || root.article-load-can-resume): Button {
-                    text:root.article-load-active ? UiLabels.cancel-load : root.article-load-next-segment ? UiLabels.next-section : UiLabels.resume-load;
-                    min-width:0px;max-width:200px;
-                    clicked=>{root.article-load-action(!root.article-load-active);}
-                }
-                if (root.article-updates-available || root.article-updates-visible) && (root.article-updates-available || root.article-updates-enabled): Button {
-                    text:root.article-updates-toggle-label;enabled:!root.article-updates-blocked;
-                    min-width:0px;max-width:200px;
-                    clicked=>{root.article-updates-action(0);}
-                }
-                if root.article-updates-available || root.article-updates-visible: Text {
-                    text:root.article-updates-status;vertical-alignment:center;
-                    horizontal-stretch:1;min-width:0px;max-width:200px;overflow:elide;
-                }
-                if (root.article-updates-available || root.article-updates-visible) && root.article-updates-unread>0: Button {
-                    text:root.article-updates-new-label;enabled:!root.article-updates-blocked;
-                    min-width:0px;max-width:200px;clicked=>{root.article-updates-action(1);}
-                }
-                if (root.article-updates-available || root.article-updates-visible) && root.article-updates-recovery: Button {
-                    text:UiLabels.updates-station;enabled:!root.article-updates-blocked;
-                    min-width:0px;max-width:200px;clicked=>{root.article-updates-action(2);}
-                }
-            }
             if !root.terminal-input && !root.session-active && !root.article-active: HorizontalLayout {
                 spacing: 8px;
                 compose := LineEdit {
@@ -854,41 +819,24 @@ export component TerminalWindow inherits Window {
                 Button { text: root.station-mouse-label; clicked => { root.toggle-station-mouse(); } }
                 Text { text: root.station-mouse-status; color: #b7c1ce; overflow: elide; horizontal-stretch: 1; vertical-alignment: center; }
             }
-            // Persistent status space keeps filtering feedback out of the
-            // terminal/article layout. A mask/reveal must not move a pointer's
-            // already acknowledged cell or resize the reading viewport.
-            HorizontalLayout {
-                height:root.status-height;
+            if root.prototype-chrome: HorizontalLayout {
+                height:32px;
                 spacing: 8px;
                 Text {
-                    text: root.prototype-chrome ? root.result : root.connection-status;
+                    text: root.result;
                     color: #b7c1ce;
                     min-width:0px;
                     overflow: elide;
                     vertical-alignment: center;
                     horizontal-stretch: 1;
                 }
-                if root.prototype-chrome && root.input-notice != "": Text {
+                if root.input-notice != "": Text {
                     text: root.input-notice;
                     color: #f0c987;
                     overflow: elide;
                     min-width:0px;
                     vertical-alignment: center;
                     horizontal-stretch: 1;
-                }
-                if root.filter-count>0: Text {
-                    text:root.filter-status;color:#e4c76e;vertical-alignment:center;
-                    min-width:0px;max-width:180px;overflow:elide;
-                }
-                if !root.prototype-chrome && root.vim-enabled: Text {
-                    text:root.keyboard-label;color:#e7ca87;vertical-alignment:center;
-                    min-width:0px;max-width:160px;overflow:elide;
-                }
-                if root.filter-count>0: Button {
-                    text:root.filter-label;accessible-label:root.filter-label;
-                    min-width:0px;max-width:240px;
-                    enabled:root.filter-ready && !root.context-source-blocked;
-                    clicked=>{root.filter-reveal();}
                 }
                 if root.prototype-chrome && root.show-reconnect: Button {
                     text: UiLabels.reconnect;
@@ -936,7 +884,7 @@ export component TerminalWindow inherits Window {
     }
     Button {
         visible:root.article-station;
-        x:12px;y:root.height - root.status-height - self.height - 12px;
+        x:12px;y:root.height - self.height - 12px;
         width:min(240px,root.width - 24px);height:32px;
         text:UiLabels.resume-reading;
         clicked=>{root.article-resume-reading();}
@@ -991,6 +939,57 @@ export component TerminalWindow inherits Window {
         }
         }
     }
+    // Article controls float above the viewport so late capabilities cannot
+    // move acknowledged text, hit targets or an in-progress selection.
+    if !root.media-open && !root.find-open && !root.reply-navigation-open
+        && ((root.article-load-available && (root.article-load-active || root.article-load-can-resume))
+            || root.article-updates-available || root.article-updates-visible): Rectangle {
+        x: root.width - self.width - 12px;
+        y: root.shell-status-visible ? status-panel.y + status-panel.height + 8px : 12px;
+        width: min(430px, root.width - (root.reply-navigation-available ? 216px : 24px));
+        height: reading-controls.preferred-height;
+        background: #0c1c30;
+        border-color: #786640;
+        border-width: 1px;
+        border-radius: 8px;
+        TouchArea {}
+        reading-controls := VerticalLayout {
+            padding: 8px;
+            spacing: 6px;
+            if root.article-load-available && (root.article-load-active || root.article-load-can-resume): HorizontalLayout {
+                spacing: 8px;
+                Text {
+                    text: root.article-load-status; color: #ebe7dc; vertical-alignment: center;
+                    horizontal-stretch: 1; min-width: 0px; overflow: elide;
+                }
+                Button {
+                    text: root.article-load-active ? UiLabels.cancel-load : root.article-load-next-segment ? UiLabels.next-section : UiLabels.resume-load;
+                    clicked => { root.article-load-action(!root.article-load-active); }
+                }
+            }
+            if root.article-updates-available || root.article-updates-visible: VerticalLayout {
+                spacing: 4px;
+                Text {
+                    text: root.article-updates-status; color: #ebe7dc; overflow: elide;
+                }
+                HorizontalLayout {
+                    spacing: 6px;
+                    if root.article-updates-available || root.article-updates-enabled: Button {
+                        text: root.article-updates-toggle-label; enabled: !root.article-updates-blocked;
+                        min-width: 0px; clicked => { root.article-updates-action(0); }
+                    }
+                    if root.article-updates-unread > 0: Button {
+                        text: root.article-updates-new-label; enabled: !root.article-updates-blocked;
+                        min-width: 0px; clicked => { root.article-updates-action(1); }
+                    }
+                    if root.article-updates-recovery: Button {
+                        text: UiLabels.updates-station; enabled: !root.article-updates-blocked;
+                        min-width: 0px; clicked => { root.article-updates-action(2); }
+                    }
+                }
+            }
+        }
+    }
     tools-area := FloatingTools {
         visible: root.tools-available;
         width: root.width; height: root.height;
@@ -998,14 +997,17 @@ export component TerminalWindow inherits Window {
         visible-ball: root.tools-visible || root.tools-open;
         blocked: root.tools-source-blocked;
         compact: root.tools-compact;
+        attention: root.connection-attention;
+        status: root.tools-category == 0 && root.filter-count > 0 ? root.filter-status : root.connection-status;
         ball-opacity: root.tools-opacity; scale: root.tools-scale;
         ball-x: root.tools-x; ball-y: root.tools-y;
         panel-x: root.tools-panel.x; panel-y: root.tools-panel.y;
         panel-width: root.tools-panel.width; panel-height: root.tools-panel.height;
         grid-height: root.tools-grid-height;
+        action-height: root.tools-action-height;
         category: root.tools-category; selected: root.tools-selected;
         categories: root.tools-categories; actions: root.tools-actions;
-        title: root.tools-title; ball-label: root.tools-ball-label;
+        ball-label: root.tools-ball-label;
         ball-pointer(kind,x,y) => { root.tools-pointer(kind,x,y); }
         toggle => { root.tools-toggle(); }
         choose-category(index) => { root.tools-category-choose(index); }

@@ -216,10 +216,9 @@ pub fn start(
             )?;
             ui.invoke_tools_category_choose(1);
             require(
-                ui.get_tools_category() == 1,
-                "bookmark category did not open",
+                !ui.get_tools_open() && ui.get_tools_category() == -1,
+                "bookmark petal did not dismiss the fan for the dialog",
             )?;
-            ui.invoke_tools_action_choose(0);
 
             idle(&o).await?;
             require(

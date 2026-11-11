@@ -10,8 +10,6 @@ use slint::{
 };
 use std::{error::Error, path::PathBuf, rc::Rc};
 
-const STATUS_ROW_HEIGHT: f32 = 32.;
-
 async fn choose(ui: &TerminalWindow, category: i32, label: &str) -> Result<(), String> {
     let state = || {
         serde_json::json!({
@@ -78,9 +76,9 @@ pub fn start(
             require(
                 !ui.get_article_active()
                     && (dimensions.0 - window_width).abs() < 1.
-                    && (dimensions.1 - (window_height - STATUS_ROW_HEIGHT)).abs() < 1.,
+                    && (dimensions.1 - window_height).abs() < 1.,
                 &format!(
-                    "idle terminal {dimensions:?} must fill the {window_width}×{window_height} logical window above its {STATUS_ROW_HEIGHT}px status row"
+                    "idle terminal {dimensions:?} must fill the {window_width}×{window_height} logical window without a bottom status row"
                 ),
             )?;
             require(
@@ -90,7 +88,7 @@ pub fn start(
             verification::capture(&ui, &directory, "shell-idle.png")?;
             let idle_image = ui.get_terminal_image();
 
-            choose(&ui, 4, &pttstella::msg!("settings-about")).await?;
+            ui.invoke_about_show();
             require(
                 ui.get_about_open()
                     && !ui.get_terminal_input_focused()
@@ -201,7 +199,7 @@ pub fn start(
                 .open(directory.join("shell-result.json"))
                 .map_err(|e| e.to_string())?;
             serde_json::to_writer_pretty(file,&serde_json::json!({"status":"passed","viewport_logical":[dimensions.0,dimensions.1],
-            "window_logical":[window_width,window_height],"scale_factor":dpi,"status_row_logical":window_height-dimensions.1,
+            "window_logical":[window_width,window_height],"scale_factor":dpi,
             "prototype_chrome":false,"about_escape":true,"floating_zoom":true,"invalid_export_visible":true,"disconnected_visible":true,
             "scope":"production owners with synthetic toolkit callbacks/foreground; OS focus, clipboard and pointer untested"})).map_err(|e|e.to_string())
         },

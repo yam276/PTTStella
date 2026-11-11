@@ -323,6 +323,13 @@ fn full_and_partial_terminal_views_match_during_inline_and_layout_changes() {
         )
     };
     let before_filters = views.each_ref().map(geometry);
+    for (_, _, width, height) in before_filters {
+        assert_eq!(
+            (width, height),
+            (1040., 740.),
+            "article viewport must fill the window"
+        );
+    }
     for count in [1, 17, 0] {
         for view in &views {
             view.set_filter_count(count);
@@ -372,7 +379,6 @@ fn full_and_partial_terminal_views_match_during_inline_and_layout_changes() {
     check_colour(&windows[0], [0, 0, 255, 255], "red image");
     check_colour(&windows[0], [255, 0, 0, 255], "blue image");
     for view in &views {
-        // The synthetic footer must fit above the real persistent controls.
         // It moves again below before snapshotting pending window damage.
         view.set_article_body_height(610.);
         view.set_article_load_available(true);
@@ -384,7 +390,7 @@ fn full_and_partial_terminal_views_match_during_inline_and_layout_changes() {
     for view in &views {
         view.set_article_updates_available(true);
     }
-    check("new bottom controls");
+    check("new floating controls");
     assert_eq!(
         views.each_ref().map(geometry),
         before_reply_controls,
@@ -423,7 +429,7 @@ fn full_and_partial_terminal_views_match_during_inline_and_layout_changes() {
     }
     for view in &views {
         // Keep this fixed synthetic footer inside the smallest logical audit
-        // viewport (1920x1080 at 1.5 DPI) with the real control rows present.
+        // viewport (1920x1080 at 1.5 DPI).
         view.set_article_body_height(580.);
         // Diagnostic preparation can snapshot a newly installed projection
         // before it is painted into the window's retained backing buffer.

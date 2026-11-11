@@ -32,16 +32,14 @@ enum Command {
     Pan,
     Zoom(f32),
     Fullscreen,
-    Settings,
     Sites,
     Filters,
-    Bookmarks,
+    Reveal,
     BookmarkCurrent,
     BookmarkCancel,
     Destination,
     StopDestination,
     Drafts,
-    About,
 }
 struct PressedAction {
     index: i32,
@@ -325,14 +323,7 @@ impl Tools {
                         true,
                     ),
                 ]);
-            }
-            1 => {
                 if ui.get_bookmarks_available() {
-                    result.push((
-                        Command::Bookmarks,
-                        pttstella::msg!("bookmarks-title"),
-                        !ui.get_bookmarks_capturing(),
-                    ));
                     result.push((
                         Command::BookmarkCurrent,
                         pttstella::msg!("bookmarks-current"),
@@ -344,6 +335,16 @@ impl Tools {
                 }
                 if ui.global::<EditorState>().get_available() {
                     result.push((Command::Drafts, pttstella::msg!("draft-open"), true));
+                }
+                if ui.get_filters_available() {
+                    result.push((Command::Filters, pttstella::msg!("filters-title"), true));
+                }
+                if ui.get_filter_count() > 0 {
+                    result.push((
+                        Command::Reveal,
+                        ui.get_filter_label().into(),
+                        ready && ui.get_filter_ready(),
+                    ));
                 }
             }
             2 => {
@@ -396,21 +397,10 @@ impl Tools {
                     ui.get_keep_alive_available(),
                 ),
             ]),
-            4 => result.push((
-                Command::Settings,
-                pttstella::msg!("settings-center-title"),
-                ui.get_settings_available(),
-            )),
             _ => {}
         }
         if category == 3 && ui.get_sites_available() {
             result.push((Command::Sites, pttstella::msg!("sites-title"), true));
-        }
-        if category == 4 && ui.get_filters_available() {
-            result.push((Command::Filters, pttstella::msg!("filters-title"), true));
-        }
-        if category == 4 {
-            result.push((Command::About, pttstella::msg!("settings-about"), true));
         }
         result.retain(|(_, label, _)| !label.is_empty());
         result
@@ -418,8 +408,8 @@ impl Tools {
     fn category_available(ui: &TerminalWindow, index: usize) -> bool {
         match index {
             0 | 2 | 3 => true,
-            1 => ui.get_bookmarks_available() || ui.global::<EditorState>().get_available(),
-            4 => true,
+            1 => ui.get_bookmarks_available() && !ui.get_bookmarks_capturing(),
+            4 => ui.get_settings_available(),
             _ => false,
         }
     }
@@ -488,8 +478,6 @@ impl Tools {
                 .collect::<Vec<_>>(),
         )));
         if let Some(category) = category {
-            ui.set_tools_title(labels[category].clone().into());
-            let width = (layout.panel.width - 32. * layout.scale) / 2.;
             let actions = self.commands(&ui, category);
             if !actions
                 .get(selected)
@@ -502,38 +490,71 @@ impl Tools {
                 self.state.borrow_mut().selected = selected;
                 ui.set_tools_selected(selected as i32);
             }
-            ui.set_tools_actions(ModelRc::new(VecModel::from(
-                actions
-                    .iter()
-                    .enumerate()
-                    .map(|(index, (_, label, enabled))| {
-                        item(
-                            index,
-                            label,
-                            *enabled,
-                            Rect {
-                                x: (index % 2) as f32 * (width + 8. * layout.scale),
-                                y: (index / 2) as f32 * 42. * layout.scale,
-                                width,
-                                height: 34. * layout.scale,
-                            },
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-            )));
+            let scale = layout.scale;
+            let gap = 8. * scale;
+            let available = layout.panel.width - 24.;
+            let mut x = 0.;
+            let mut y = 0.;
+            let items = actions
+                .iter()
+                .enumerate()
+                .map(|(index, (_, label, enabled))| {
+                    let text = label
+                        .chars()
+                        .map(|ch| if ch.is_ascii() { 7. } else { 13. })
+                        .sum::<f32>();
+                    let width = ((text + 24.) * scale).min(available);
+                    if x > 0. && x + width > available {
+                        x = 0.;
+                        y += 42. * scale;
+                    }
+                    let rect = Rect {
+                        x,
+                        y,
+                        width,
+                        height: 34. * scale,
+                    };
+                    x += width + gap;
+                    item(index, label, *enabled, rect)
+                })
+                .collect::<Vec<_>>();
+            let content_height = items.last().map_or(0., |item| item.y + item.height);
+            ui.set_tools_action_height(content_height);
+            ui.set_tools_panel(SelectionRect {
+                x: layout.panel.x,
+                y: layout.panel.y,
+                width: layout.panel.width,
+                height: layout.panel.height.min(32. + 40. * scale + content_height),
+            });
+            ui.set_tools_actions(ModelRc::new(VecModel::from(items)));
         }
     }
     fn category(&self, index: i32) {
         self.pressed_action.borrow_mut().take();
         let Some(ui) = self.ui.upgrade() else { return };
-        if !usize::try_from(index).is_ok_and(|index| Self::category_available(&ui, index))
+        let Ok(index) = usize::try_from(index) else {
+            return;
+        };
+        if self.closed.get()
+            || ui.get_tools_source_blocked()
+            || !Self::category_available(&ui, index)
             || !self.state.borrow().open
         {
             return;
         }
+        // These petals are dialog shortcuts in Dioxus.
+        if matches!(index, 1 | 4) {
+            self.dismiss(true);
+            if index == 1 {
+                ui.invoke_bookmarks_show();
+            } else {
+                ui.invoke_settings_show();
+            }
+            return;
+        }
         {
             let mut state = self.state.borrow_mut();
-            state.category = Some(index as usize);
+            state.category = Some(index);
             state.selected = 0;
         }
         self.publish();
@@ -557,7 +578,7 @@ impl Tools {
             .map(|(command, _, _)| command);
         if kind == 0 {
             let source = command.and_then(|command| {
-                let stamp = if matches!(command, Command::Content(_)) {
+                let stamp = if matches!(command, Command::Content(_) | Command::Reveal) {
                     self.output.current(&ui)?
                 } else {
                     self.connection.updates.borrow().stamp()
@@ -598,6 +619,11 @@ impl Tools {
             .filter(|(_, _, enabled)| *enabled)
             .map(|(command, _, _)| command);
         let Some(command) = command else { return };
+        if command == Command::Content(Action::SelectAll) {
+            self.output.context_action(Action::SelectAll, None);
+            self.publish();
+            return;
+        }
         self.dismiss(true);
         match command {
             Command::Content(action) => self.output.context_action(action, None),
@@ -616,20 +642,18 @@ impl Tools {
             Command::Pan => ui.set_pan_mode(!ui.get_pan_mode()),
             Command::Zoom(zoom) => ui.set_zoom(zoom),
             Command::Fullscreen => ui.invoke_toggle_fullscreen(),
-            Command::Settings => ui.invoke_settings_show(),
             Command::Sites => ui.invoke_sites_show(),
             Command::Filters => ui.invoke_filters_show(),
-            Command::Bookmarks => ui.invoke_bookmarks_show(),
+            Command::Reveal => ui.invoke_filter_reveal(),
             Command::BookmarkCurrent => ui.invoke_bookmarks_capture_current(),
             Command::BookmarkCancel => ui.invoke_bookmarks_capture_cancel(),
             Command::Destination => ui.invoke_destination_show(),
             Command::StopDestination => ui.invoke_destination_stop(),
             Command::Drafts => ui.global::<EditorState>().invoke_action(0),
-            Command::About => ui.invoke_about_show(),
         }
     }
     fn key(&self, key: i32, repeat: bool) {
-        if matches!(key, 0 | 1) {
+        if key == 0 {
             self.dismiss(true);
             return;
         }

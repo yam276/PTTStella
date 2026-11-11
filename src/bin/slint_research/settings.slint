@@ -1,4 +1,4 @@
-import { Button, CheckBox, ComboBox, LineEdit, ScrollView } from "std-widgets.slint";
+import { AboutSlint, Button, CheckBox, ComboBox, LineEdit, ScrollView } from "std-widgets.slint";
 global SettingsInput {
     in-out property <int> focused:-1;
     in-out property <int> active-target:-1;
@@ -238,6 +238,7 @@ export component SettingsWindow inherits Window {
                         Text {text:root.release-status;color:#e4c76e;wrap:word-wrap;}
                         Text {text:root.release-labels[2];color:#d7dce5;wrap:word-wrap;}
                         FocusButton {field-id:29;text:root.release-labels[3];clicked=>{root.repository-open();}}
+                        AboutSlint {}
                         Text {text:root.labels[29];color:#d7dce5;wrap:word-wrap;}
                     }
                 }

@@ -51,7 +51,7 @@ fn action_point(ui: &TerminalWindow, index: usize) -> Result<slint::LogicalPosit
     let panel = ui.get_tools_panel();
     Ok(slint::LogicalPosition::new(
         panel.x + 12. + item.x + item.width / 2.,
-        panel.y + 20. + 24. * ui.get_tools_scale() + item.y + item.height / 2.,
+        panel.y + 20. + 40. * ui.get_tools_scale() + item.y + item.height / 2.,
     ))
 }
 async fn open(ui: &TerminalWindow) -> Result<(), String> {
@@ -131,18 +131,18 @@ async fn verify(
             && ui
                 .get_tools_categories()
                 .row_data(4)
-                .is_some_and(|v| v.enabled),
-        "bookmark category or always-available license entry is incorrect",
+                .is_some_and(|v| v.enabled == ui.get_settings_available()),
+        "dialog petals did not respect availability",
     )?;
     require(
         image == ui.get_terminal_image(),
         "opening tools repainted terminal bitmap",
     )?;
     capture(ui, directory, "fan.png")?;
-    key(ui, Key::DownArrow);
+    key(ui, Key::Tab);
     require(
         ui.get_tools_selected() == 2,
-        "fan did not skip unavailable bookmark dialog",
+        "Tab closed the fan or did not skip the unavailable bookmark dialog",
     )?;
     key(ui, Key::Return);
     require(
@@ -152,14 +152,19 @@ async fn verify(
     capture(ui, directory, "capture.png")?;
     key(ui, Key::Return);
     require(
-        !ui.get_tools_open() && ui.get_selection_active() && ui.get_terminal_input_focused(),
-        "select-all action or focus restoration failed",
+        ui.get_tools_open() && ui.get_selection_active() && !ui.get_terminal_input_focused(),
+        "select-all should leave the capture panel ready for export",
     )?;
     require(
         output
             .selection_key()
             .is_some_and(|(rows, _)| rows == (0..24)),
         "capture action did not select all rows",
+    )?;
+    key(ui, Key::Escape);
+    require(
+        ui.get_terminal_input_focused(),
+        "Escape did not restore terminal focus",
     )?;
     ui.invoke_clear_selection();
     open(ui).await?;
@@ -198,9 +203,10 @@ async fn verify(
     )?;
     click(ui, action_point(ui, 0)?, Button::Left);
     require(
-        ui.get_selection_active() && !ui.get_tools_open(),
-        "pointer action did not select all",
+        ui.get_selection_active() && ui.get_tools_open(),
+        "pointer action did not select all or closed the capture panel",
     )?;
+    key(ui, Key::Escape);
     ui.invoke_clear_selection();
     open(ui).await?;
     click(ui, tile(ui, 2)?, Button::Left);
