@@ -11,6 +11,7 @@ export component PanelButton inherits Rectangle {
     in property <bool> enabled: true;
     in-out property <bool> checked;
     in property <bool> navigation;
+    in property <bool> flat;
     in property <bool> primary;
     out property <bool> has-focus: keys.has-focus;
     callback clicked;
@@ -22,21 +23,23 @@ export component PanelButton inherits Rectangle {
     horizontal-stretch: 0;
     min-width: 0px;
     preferred-width: label.preferred-width + 22px;
-    background: root.checked ? #203b55 : root.navigation && !touch.has-hover ? transparent : root.enabled && touch.has-hover ? #203b55 : #132c45;
-    border-width: root.navigation && !root.has-focus ? 0px : 1px;
+    background: root.flat ? (root.enabled && touch.has-hover ? #203b55 : transparent)
+        : root.checked ? #203b55 : root.navigation && !touch.has-hover ? transparent
+        : root.enabled && touch.has-hover ? #203b55 : #132c45;
+    border-width: (root.navigation || root.flat) && !root.has-focus ? 0px : 1px;
     border-color: root.enabled && (root.has-focus || touch.has-hover || root.primary) ? #e7c46a : #34475b;
     accessible-role: button;
     accessible-label: root.text;
     accessible-enabled: root.enabled;
     accessible-action-default => { if (root.enabled) { root.clicked(); } }
 
-    if root.navigation && root.checked: Rectangle {
+    if root.navigation && root.checked && !root.flat: Rectangle {
         x: 0; y: 0; width: 3px; height: parent.height; background: #e7c46a;
     }
     label := Text {
-        x: root.navigation ? 16px : 10px; width: parent.width - self.x - 10px;
+        x: root.flat ? 2px : root.navigation ? 16px : 10px; width: parent.width - self.x - 10px;
         text: root.text; font-size: 13px;
-        color: !root.enabled ? #808b99 : root.navigation && !root.checked ? #b5bcc7 : #e7c46a;
+        color: !root.enabled ? #808b99 : root.flat ? #ebe7dc : root.navigation && !root.checked ? #b5bcc7 : #e7c46a;
         vertical-alignment: center;
         horizontal-alignment: root.navigation ? left : center;
         overflow: elide;

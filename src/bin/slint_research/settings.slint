@@ -28,7 +28,10 @@ component EditField inherits PanelField {
         }
     }
 }
-component FocusButton inherits PanelButton {
+component SettingsAction inherits PanelButton {
+    max-width: self.preferred-width;
+}
+component FocusButton inherits SettingsAction {
     in property <int> field-id;
     private property <int> focus-sequence:SettingsInput.focus-sequence;
     changed focus-sequence=>{if SettingsInput.focus-field==self.field-id {self.focus();}}
@@ -36,12 +39,14 @@ component FocusButton inherits PanelButton {
 }
 component FocusCombo inherits PanelCombo {
     in property <int> field-id;
+    max-width: 280px;
     private property <int> focus-sequence:SettingsInput.focus-sequence;
     changed focus-sequence=>{if SettingsInput.focus-field==self.field-id {self.focus();}}
     changed has-focus=>{if self.has-focus {SettingsInput.active-target=self.field-id;} else if SettingsInput.active-target==self.field-id {SettingsInput.active-target=-1;}}
 }
 component FocusCheck inherits PanelCheck {
     in property <int> field-id;
+    flat: true;
     private property <int> focus-sequence:SettingsInput.focus-sequence;
     changed focus-sequence=>{if SettingsInput.focus-field==self.field-id {self.focus();}}
     changed has-focus=>{if self.has-focus {SettingsInput.active-target=self.field-id;} else if SettingsInput.active-target==self.field-id {SettingsInput.active-target=-1;}}
@@ -156,18 +161,20 @@ export component SettingsPanel inherits PanelOverlay {
             spacing: 0;
             HorizontalLayout {
                 spacing: 0;
-                VerticalLayout {
+                ScrollView {
                     width: parent.width < 680px ? 155px : 195px;
-                    padding-top: 16px; spacing: 8px;
-                    HorizontalLayout {
-                        padding-left: 12px; padding-right: 12px;
-                        EditField { field-id: 0; placeholder-text:SettingsState.labels[1]; text<=>SettingsState.query; edited=>{SettingsState.search(self.text);SettingsState.refresh-preview();} }
+                    content-width: self.visible-width;
+                    VerticalLayout {
+                        alignment: start; padding-top: 16px; spacing: 8px;
+                        HorizontalLayout {
+                            padding-left: 12px; padding-right: 12px;
+                            EditField { field-id: 0; placeholder-text:SettingsState.labels[1]; text<=>SettingsState.query; edited=>{SettingsState.search(self.text);SettingsState.refresh-preview();} }
+                        }
+                        for item[index] in SettingsState.categories: PanelButton {
+                            text: item; navigation: true; checked: SettingsState.page == index && SettingsState.query == "";
+                            clicked => { SettingsState.show-page(index); }
+                        }
                     }
-                    for item[index] in SettingsState.categories: PanelButton {
-                        text: item; navigation: true; checked: SettingsState.page == index && SettingsState.query == "";
-                        clicked => { SettingsState.show-page(index); }
-                    }
-                    Rectangle {vertical-stretch:1;background:transparent;}
                 }
                 Rectangle { width: 1px; background: #34475b; }
                 ScrollView { content-width:self.width;
@@ -194,10 +201,10 @@ export component SettingsPanel inherits PanelOverlay {
                         if SettingsState.preview-visible: VerticalLayout {
                             alignment: start; spacing: 10px;
                             HorizontalLayout {
-                                spacing: 8px;
+                                alignment: start; spacing: 8px;
                                 FocusButton {field-id:20;text:SettingsState.runtime-labels[0];clicked=>{SettingsState.runtime-action(0);}}
-                                PanelButton { text: "125%"; clicked => {SettingsState.runtime-action(6);} }
-                                PanelButton { text: "150%"; clicked => {SettingsState.runtime-action(7);} }
+                                SettingsAction { text: "125%"; clicked => {SettingsState.runtime-action(6);} }
+                                SettingsAction { text: "150%"; clicked => {SettingsState.runtime-action(7);} }
                             }
                             Text {text:SettingsState.labels[8];color:#d7dce5;}
                             FocusCombo {field-id:11;model:SettingsState.presets;current-index<=>SettingsState.preset;selected=>{SettingsState.font-preset();}}
@@ -207,7 +214,7 @@ export component SettingsPanel inherits PanelOverlay {
                             Text {text:SettingsState.labels[10];color:#d7dce5;}
                             cjk-field:=EditField {field-id:2;text<=>SettingsState.cjk;edited=>{SettingsState.custom-font();}}
                             PanelCombo {model:SettingsState.families;selected(value)=>{SettingsState.family(true,value);}}
-                            PanelButton {text:SettingsState.labels[11];clicked=>{SettingsState.catalog();}}
+                            SettingsAction {text:SettingsState.labels[11];clicked=>{SettingsState.catalog();}}
                             HorizontalLayout {
                                 VerticalLayout {Text {text:SettingsState.labels[12];color:#d7dce5;} size-field:=EditField {field-id:3;text<=>SettingsState.font-size;edited=>{SettingsState.edit();}}}
                                 VerticalLayout {Text {text:SettingsState.labels[13];color:#d7dce5;} baseline-field:=EditField {field-id:4;text<=>SettingsState.baseline;edited=>{SettingsState.edit();}}}
@@ -219,23 +226,51 @@ export component SettingsPanel inherits PanelOverlay {
                             Text {text:SettingsState.labels[33];color:#d7dce5;}
                             EditField {field-id:7;text<=>SettingsState.profile-name;}
                             HorizontalLayout {
-                                PanelButton {text:SettingsState.labels[16];clicked=>{SettingsState.profile(false);}}
-                                PanelButton {text:SettingsState.labels[17];clicked=>{SettingsState.profile(true);}}
+                                alignment: start; spacing: 8px;
+                                SettingsAction {text:SettingsState.labels[16];clicked=>{SettingsState.profile(false);}}
+                                SettingsAction {text:SettingsState.labels[17];clicked=>{SettingsState.profile(true);}}
                             }
                             Text {text:SettingsState.labels[18];color:#d7dce5;wrap:word-wrap;}
                             for source in SettingsState.font-sources:
-                                PanelButton {text:source.title;clicked=>{SettingsState.font-source(source.id);}}
+                                SettingsAction {text:source.title;clicked=>{SettingsState.font-source(source.id);}}
                         }
                         if SettingsState.query=="" && SettingsState.page==2: VerticalLayout {
                             alignment: start; spacing: 10px;
-                            FocusButton {field-id:21;text:SettingsState.runtime-labels[1];enabled:SettingsState.runtime-available[1];checked:SettingsState.runtime-states[1];clicked=>{SettingsState.runtime-action(1);}}
-                            FocusButton {field-id:22;text:SettingsState.runtime-labels[2];enabled:SettingsState.runtime-available[2];checked:SettingsState.runtime-states[2];clicked=>{SettingsState.runtime-action(2);}}
-                            if SettingsState.runtime-available[5]: PanelButton {text:SettingsState.runtime-labels[5];clicked=>{SettingsState.runtime-action(5);}}
-                            PanelButton {text:SettingsState.runtime-labels[4];enabled:SettingsState.runtime-available[4];clicked=>{SettingsState.runtime-action(4);}}
-                            Text {text:SettingsState.labels[19];color:#d7dce5;}
-                            opacity-field:=EditField {field-id:6;text<=>SettingsState.tool-opacity;edited=>{SettingsState.edit();}}
+                            Rectangle {
+                                private property <length> gap: 10px;
+                                private property <bool> stack: vim.preferred-width + gap + mouse.preferred-width > self.width;
+                                height: mouse.y + mouse.height;
+                                vim := FocusButton {
+                                    x: 0; y: 0; width: min(parent.width, self.preferred-width); height: self.preferred-height;
+                                    field-id:21;text:SettingsState.runtime-labels[1];enabled:SettingsState.runtime-available[1];checked:SettingsState.runtime-states[1];clicked=>{SettingsState.runtime-action(1);}
+                                }
+                                mouse := FocusButton {
+                                    x: parent.stack ? 0px : vim.width + parent.gap;
+                                    y: parent.stack ? vim.height + parent.gap : 0px;
+                                    width: min(parent.width, self.preferred-width); height: self.preferred-height;
+                                    field-id:22;text:SettingsState.runtime-labels[2];enabled:SettingsState.runtime-available[2];checked:SettingsState.runtime-states[2];clicked=>{SettingsState.runtime-action(2);}
+                                }
+                            }
+                            HorizontalLayout {
+                                alignment: start; spacing: 8px;
+                                if SettingsState.runtime-available[5]: SettingsAction {text:SettingsState.runtime-labels[5];clicked=>{SettingsState.runtime-action(5);}}
+                                SettingsAction {text:SettingsState.runtime-labels[4];enabled:SettingsState.runtime-available[4];clicked=>{SettingsState.runtime-action(4);}}
+                            }
+                            HorizontalLayout {
+                                alignment: start; spacing: 10px;
+                                Text {text:SettingsState.labels[19];color:#d7dce5;vertical-alignment:center;}
+                                opacity-field:=EditField {
+                                    field-id:6; min-width: 64px; max-width: 64px;
+                                    accessible-label: SettingsState.labels[19];
+                                    text<=>SettingsState.tool-opacity;edited=>{SettingsState.edit();}
+                                }
+                                Text {text:"%";color:#d7dce5;vertical-alignment:center;}
+                            }
+                            Rectangle { height: 1px; background: #34475b; }
                             FocusCheck {field-id:12;caption:SettingsState.labels[20];checked<=>SettingsState.right-click;toggled=>{SettingsState.edit();}}
+                            Rectangle { height: 1px; background: #34475b; }
                             FocusCheck {field-id:13;caption:SettingsState.labels[21];checked<=>SettingsState.show-ball;toggled=>{SettingsState.edit();}}
+                            Rectangle { height: 1px; background: #34475b; }
                             Text {text:SettingsState.labels[22];color:#d7dce5;wrap:word-wrap;}
                         }
                         if SettingsState.query=="" && SettingsState.page==3: VerticalLayout {
@@ -281,10 +316,10 @@ export component SettingsPanel inherits PanelOverlay {
             Rectangle { height: 1px; background: #34475b; }
             HorizontalLayout {
                 padding: 14px; spacing: 8px;
-                FocusButton {field-id:24;text:SettingsState.labels[30];enabled:SettingsState.page<4;clicked=>{SettingsState.reset();}}
                 Text {text:SettingsState.notice;color:SettingsState.failed ? #ffb5ac : #b5bcc7;wrap:word-wrap;horizontal-stretch:1;vertical-alignment:center;}
-                if SettingsState.failed: PanelButton {text:SettingsState.labels[31];clicked=>{SettingsState.retry();}}
-                PanelButton {text:SettingsState.labels[32];primary:true;clicked=>{SettingsState.close-settings();}}
+                FocusButton {field-id:24;text:SettingsState.labels[30];enabled:SettingsState.page<4;clicked=>{SettingsState.reset();}}
+                if SettingsState.failed: SettingsAction {text:SettingsState.labels[31];clicked=>{SettingsState.retry();}}
+                SettingsAction {text:SettingsState.labels[32];primary:true;clicked=>{SettingsState.close-settings();}}
             }
         }
     }
