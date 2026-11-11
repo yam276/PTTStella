@@ -170,7 +170,7 @@ pub fn start(
             let panel_width = 620_f32.min(width - 32.);
             verification::click(
                 &ui,
-                slint::LogicalPosition::new(width / 2. + panel_width / 2. - 24., 36.),
+                slint::LogicalPosition::new(width / 2. + panel_width / 2. - 35., 51.),
                 PointerEventButton::Left,
             );
             require(

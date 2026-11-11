@@ -1,4 +1,5 @@
 export { PanelEdit } from "panel.slint";
+import { PanelButton } from "panel.slint";
 import { SettingsPanel } from "settings.slint";
 import { SitesPanel } from "sites.slint";
 import { FiltersPanel } from "filters.slint";
@@ -370,6 +371,8 @@ export component TerminalWindow inherits Window {
     in property <bool> session-active;
     in property <string> connection-status;
     in property <bool> connection-attention;
+    in property <int> connection-phase;
+    out property <bool> notice-mark-ready: status-mark.source.width > 0;
     callback notice-dismiss;
     callback notice-publish(string, int);
     callback notice-interaction;
@@ -907,52 +910,81 @@ export component TerminalWindow inherits Window {
     }
     status-panel := Rectangle {
         visible: root.shell-status-visible;
-        x: (root.width - self.width) / 2;
-        y: 12px;
+        x: (root.width - self.width) / 2; y: 20px;
         width: min(620px, root.width - 32px);
-        height: min(root.height / 3, status-layout.preferred-height);
+        height: min(root.height * 0.45, status-layout.preferred-height);
+        background: @linear-gradient(110deg, #122a43 0%, #0c1c30 72%);
+        border-width: 1px; border-color: #b69a59; border-radius: 4px;
+        drop-shadow-color: #000000aa; drop-shadow-offset-y: 12px; drop-shadow-blur: 32px;
         clip: true;
-        background: #15263bf2;
-        border-width: 1px;
-        border-color: #c6ab6a;
-        border-radius: 6px;
         opacity: root.notice-fading && !root.shell-persistent-status ? 0 : 1;
-        animate opacity {duration:root.notice-fading ? root.notice-fade-duration : 0ms;}
-        // Empty space in a notification must not click through to the BBS.
+        animate opacity {duration: root.notice-fading ? root.notice-fade-duration : 0ms;}
         status-touch := TouchArea {
-        width:parent.width; height:parent.height; clicked=>{}
-        ScrollView {
-            width:parent.width;height:parent.height;content-width:self.width;
-        status-layout := VerticalLayout {
-            padding:12px; spacing:6px;
-            HorizontalLayout {
-                visible: root.shell-notice-dismissible;
-                min-height: 0px;
-                max-height: self.visible ? root.height : 0px;
-                Rectangle {horizontal-stretch:1;}
-                status-close := Button {text:"×";accessible-label:UiLabels.close;clicked=>{
-                    if self.has-focus {root.notice-dismiss();if root.context-focus-restorable && !root.find-open && !root.app-closing {root.focus-terminal();}}
-                    else {root.notice-dismiss();}
-                }}
+            width: parent.width; height: parent.height;
+            Rectangle {
+                x: 0; y: 0; width: 4px; height: parent.height;
+                background: root.notice-error || root.connection-phase == 2 ? #e6a08a : #e7c46a;
             }
-            if root.connection-attention: Text {text:root.connection-status;color:#e7ca87;wrap:word-wrap;}
-            if root.result != "" && root.result != root.connection-status: Text {text:root.result;color:#edf1f6;wrap:word-wrap;}
-            if root.input-notice != "": Text {
-                text:root.input-notice;color:root.notice-error ? #f4b1a8 : #edf1f6;wrap:word-wrap;
-                opacity: root.notice-fading && root.shell-persistent-status ? 0 : 1;
-                animate opacity {duration:root.notice-fading ? root.notice-fade-duration : 0ms;}
+            ScrollView {
+                width: parent.width; height: parent.height; content-width: self.width;
+                status-layout := HorizontalLayout {
+                    padding: 20px; spacing: 16px;
+                    Rectangle {
+                        width: root.width < 480px ? 34px : 44px;
+                        height: self.width;
+                        border-radius: self.width / 2;
+                        clip: true;
+                        status-mark := Image {
+                            source: @image-url("../../../assets/icons/pttstella.png");
+                            width: parent.width; height: parent.height; image-fit: cover;
+                        }
+                    }
+                    VerticalLayout {
+                        spacing: 6px; alignment: start;
+                        padding-right: root.shell-notice-dismissible ? 38px : 0px;
+                        Text { text: "PTTSTELLA"; color: #e7c46a; font-size: 11px; font-weight: 700; }
+                        Text {
+                            text: !root.connection-attention ? UiLabels.toast-title :
+                                root.connection-phase == 1 ? UiLabels.toast-connecting :
+                                root.connection-phase == 2 ? UiLabels.toast-error : UiLabels.toast-disconnected;
+                            color: #ebe7dc; font-size: 21px; font-weight: 650; wrap: word-wrap;
+                        }
+                        if root.connection-attention: Text { text: root.connection-status; color: #ebe7dc; font-size: 16px; wrap: word-wrap; }
+                        if root.result != "" && root.result != root.connection-status: Text {
+                            text: root.result; color: #ebe7dc; font-size: 16px; wrap: word-wrap;
+                        }
+                        if root.input-notice != "": Text {
+                            text: root.input-notice; color: root.notice-error ? #f4b1a8 : #ebe7dc; font-size: 16px; wrap: word-wrap;
+                            opacity: root.notice-fading && root.shell-persistent-status ? 0 : 1;
+                            animate opacity { duration: root.notice-fading ? root.notice-fade-duration : 0ms; }
+                        }
+                        if root.session-warning != "": Text { text: root.session-warning; color: #e7ca87; font-size: 16px; wrap: word-wrap; }
+                        HorizontalLayout {
+                            visible: root.can-reconnect || root.login-pending;
+                            min-height: 0px; max-height: self.visible ? 48px : 0px;
+                            alignment: start; spacing: 8px;
+                            status-reconnect := PanelButton {
+                                visible: root.can-reconnect; enabled: self.visible; primary: true;
+                                text: UiLabels.reconnect; clicked => { root.reconnect(); }
+                            }
+                            status-cancel := PanelButton {
+                                visible: root.login-pending; enabled: self.visible; primary: true;
+                                text: root.login-cancel-attempt-label; clicked => { root.login-cancel(); }
+                            }
+                        }
+                    }
+                }
             }
-            if root.session-warning != "": Text {text:root.session-warning;color:#e7ca87;wrap:word-wrap;}
-            HorizontalLayout {
-                visible:root.can-reconnect || root.login-pending;
-                min-height: 0px;
-                max-height: self.visible ? root.height : 0px;
-                spacing:8px;
-                status-reconnect := Button {visible:root.can-reconnect;text:UiLabels.reconnect;clicked=>{root.reconnect();}}
-                status-cancel := Button {visible:root.login-pending;text:root.login-cancel-attempt-label;clicked=>{root.login-cancel();}}
+            status-close := PanelButton {
+                visible: root.shell-notice-dismissible; enabled: self.visible;
+                x: parent.width - 54px; y: 12px; width: 38px; height: 38px; max-height: 38px;
+                navigation: true; text: "×"; font-size: 20px; accessible-label: UiLabels.toast-dismiss;
+                clicked => {
+                    let restore = self.has-focus && root.context-focus-restorable && !root.find-open && !root.app-closing;
+                    root.notice-dismiss();
+                    if restore { root.focus-terminal(); }
+                }
             }
-        }
-        }
         }
     }
     // Article controls float above the viewport so late capabilities cannot

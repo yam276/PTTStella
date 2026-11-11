@@ -25,6 +25,11 @@ pub fn refresh(ui: &TerminalWindow) {
     labels.set_fullscreen(msg!("menu-fullscreen").into());
     labels.set_about(msg!("settings-about").into());
     labels.set_close(msg!("close").into());
+    labels.set_toast_title(msg!("toast-notice-title").into());
+    labels.set_toast_connecting(msg!("toast-connecting-title").into());
+    labels.set_toast_disconnected(msg!("toast-disconnected-title").into());
+    labels.set_toast_error(msg!("toast-connection-error-title").into());
+    labels.set_toast_dismiss(msg!("toast-dismiss").into());
     labels.set_local_drafts(msg!("draft-open").into());
     labels.set_article_heading(msg!("slint-article-heading").into());
     labels.set_cancel_load(msg!("article-load-cancel").into());

@@ -88,9 +88,15 @@ pub fn start(
                     .preferences
                     .verify(&ui, &directory, &settings_path)
                     .await?;
+                verification::foreground(&ui, true);
+                ui.invoke_focus_terminal();
                 wait(
-                    || output.current(&ui).is_some(),
-                    "source did not resume after settings",
+                    || {
+                        ui.get_terminal_input_focused()
+                            && !ui.get_media_hover_blocked()
+                            && output.current(&ui).is_some()
+                    },
+                    "media focus and source did not resume after settings",
                 )
                 .await?;
             }

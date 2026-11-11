@@ -670,7 +670,7 @@ pub fn mount(
         // rather than formatting both catalogs for every screen update.
         let mut message_cache: Option<(pttstella::i18n::Language, String, String)> = None;
         while let Some(ui) = weak.upgrade() {
-            let (message, can_reconnect, frame, attention) = {
+            let (message, can_reconnect, frame, phase) = {
                 let view = updates.borrow_and_update();
                 let id = FrameId {
                     generation: view.generation,
@@ -692,14 +692,18 @@ pub fn mount(
                     && connecting.get().is_none()
                     && (live || view.generation == 1)
                     && matches!(view.phase, Phase::Disconnected | Phase::Error);
-                (
-                    view.message.clone(),
-                    can_reconnect,
-                    frame,
-                    view.phase != Phase::Connected,
-                )
+                (view.message.clone(), can_reconnect, frame, view.phase)
             };
-            ui.set_connection_attention(attention || connecting.get().is_some());
+            ui.set_connection_attention(phase != Phase::Connected || connecting.get().is_some());
+            ui.set_connection_phase(
+                if phase == Phase::Connecting || connecting.get().is_some() {
+                    1
+                } else if phase == Phase::Error {
+                    2
+                } else {
+                    0
+                },
+            );
             if connecting.get().is_none() {
                 let language = pttstella::i18n::application().language();
                 if message_cache
@@ -750,6 +754,7 @@ fn request_connection(
             ui.set_result(pttstella::msg!("status-connecting").into());
             ui.set_connection_status(pttstella::msg!("status-connecting").into());
             ui.set_connection_attention(true);
+            ui.set_connection_phase(1);
             ui.set_switching_station(true);
             ui.set_can_reconnect(false);
             ui.invoke_keep_alive_changed();

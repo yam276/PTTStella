@@ -102,13 +102,17 @@ async fn run_inner(
     let size = ui.window().size();
     let dpi = ui.window().scale_factor();
     let (width, height) = (size.width as f32 / dpi, size.height as f32 / dpi);
-    let close_x = width / 2. + 620_f32.min(width - 32.) / 2. - 24.;
+    let close_x = width / 2. + 620_f32.min(width - 32.) / 2. - 35.;
     let outside = || move_to(ui, width / 2., height - 80.);
     ui.invoke_focus_terminal();
     outside();
     ui.set_tools_reduced_motion(false);
     notice::clear(ui);
     notice::copied(ui, "<img src=x> 複製通知");
+    require(
+        ui.get_notice_mark_ready() && ui.get_input_notice() == "<img src=x> 複製通知",
+        "notice icon missing or message was interpreted as markup",
+    )?;
     let started = Instant::now();
     require(
         owner.timer_active(),
@@ -120,7 +124,7 @@ async fn run_inner(
         "copy expired before its readable interval",
     )?;
     // Hover over the child standard Button, not just empty panel background.
-    move_to(ui, close_x, 36.);
+    move_to(ui, close_x, 51.);
     wait(
         || ui.get_notice_hovered(),
         "notification did not observe hover over its child button",
@@ -167,7 +171,7 @@ async fn run_inner(
     .await?;
     trace.pause(ui, owner, 150, "fade_resumed").await;
     verification::capture(ui, dir, "notice-fading.png")?;
-    move_to(ui, close_x, 36.);
+    move_to(ui, close_x, 51.);
     wait(
         || ui.get_notice_hovered() && !ui.get_notice_fading(),
         "hover did not restore opacity during fade",
@@ -246,6 +250,9 @@ async fn run_inner(
         ui.get_input_notice() == "unclassified" && !owner.timer_active(),
         "unclassified notification was timed",
     )?;
+    notice::clear(ui);
+    notice::copied(ui, pttstella::msg!("context-copied"));
+    verification::capture(ui, dir, "notice-copy.png")?;
     notice::clear(ui);
     let file = std::fs::OpenOptions::new()
         .write(true)

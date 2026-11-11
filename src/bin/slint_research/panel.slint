@@ -12,6 +12,7 @@ export component PanelButton inherits Rectangle {
     in-out property <bool> checked;
     in property <bool> navigation;
     in property <bool> primary;
+    in property <length> font-size: 13px;
     out property <bool> has-focus: keys.has-focus;
     callback clicked;
     forward-focus: keys;
@@ -35,7 +36,7 @@ export component PanelButton inherits Rectangle {
     }
     label := Text {
         x: root.navigation ? 16px : 10px; width: parent.width - self.x - 10px;
-        text: root.text; font-size: 13px;
+        text: root.text; font-size: root.font-size;
         color: !root.enabled ? #808b99 : root.navigation && !root.checked ? #b5bcc7 : #e7c46a;
         vertical-alignment: center;
         horizontal-alignment: root.navigation ? left : center;
