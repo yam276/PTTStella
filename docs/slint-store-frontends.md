@@ -66,6 +66,27 @@ Slint worktree 的 Dioxus 入口改用 HTML 數字欄位 `step=any`，對齊 Rus
 
 本次驗證一般入口與 macOS 資料路徑上的合成設定寫入和回讀。實際安裝升級、正式產品身份及 Keychain 授權、完整資料操作、IME 與其他平台仍待驗。退出後清除六個本批專用 App／測試資料／系統暫存位置，共 110,346,431 regular-file bytes，另清三張相同 PNG 共 258,764 bytes。保留候選、固定 target、合成前後資料及獨特失敗證據。精確路徑、du 與並行可用空間觀測見 `cleanup.json`。
 
+## 2026-11-11 從 macOS 交付包安裝與回退
+
+在 Apple Silicon 從 [v0.4.1 正式 ZIP](https://github.com/yam276/PTTStella/releases/tag/v0.4.1) 解出 Dioxus App，再將候選 App 從唯讀 Slint DMG 複製到同一隔離 Applications 目錄。ZIP SHA-256 為 `118414cb8e0884e8886279520002c2ec062dff18ba8b91f2d90ba13006f2e274`，DMG SHA-256 為 `4792b9860eb57e249a35cce43cb932d1c743e56433419560623e0bb59b25ff16`。兩個 App 的深層嚴格簽章檢查均通過，Slint 的磁碟映像、安裝副本及封裝 App 逐檔相同。實際啟動原封裝執行檔 Dioxus `d22d5f0a` 和 Slint `793ecb91`，沿用各自的 bundle ID。沙箱限制出站至本機，封鎖實際產品 store 和 Keychains 路徑。合成資料在隔離 HOME 下各自的一般資料目錄，由控制器依序複製原檔。
+
+| 階段 | 原生視窗操作 | 退出後核對 |
+| --- | --- | --- |
+| v0.4.1 基準 | 啟動並顯示合成站畫面，關閉主視窗 | 起始設定未變 |
+| Slint 升級 | 關閉文章首尾方向鍵切篇 | 只改 `article_boundary_navigation`，備份等於寫入前的主檔 |
+| v0.4.1 回退 | 開啟「右鍵開啟工具」 | 只改右鍵偏好，保留 Slint 的文章設定，備份等於 Slint 主檔 |
+| Slint 再次啟動 | 讀到「右鍵開啟工具」已勾選 | 主檔與一代備份逐位元相同 |
+
+另外六份站點、名單、離線收藏、草稿、最近看板和可攜外觀檔在每一步都與起始副本逐位元相同。共八個程序正常 exit 0，合成 WSS 各使用 TLS 1.3，只收到正常 Close，peer 都結束。第一次在背景嘗試從 v0.4.1 選單開設定未開出面板。基準從主視窗正常退出，設定操作在後續前景程序完成。
+
+用已安裝的 Slint 開啟「自動開圖」後，將含 `auto_expand_images: true` 的實際主檔逐位元交給 v0.4.1。舊版顯示未知欄位並改用預設顯示。此時只切換右鍵選項，介面回報已儲存，但主檔的介面語言、字型與字高、浮球透明度及閱讀模式一起變成預設值，自動開圖欄位也消失。第一次儲存仍有完整一代備份，第二次儲存把該備份輪替成預設值版本。另六份檔案都保留。從第一輪獨立保留的備份恢復後，Slint 實際顯示自動開圖仍勾選，主檔逐位元回到原值，SHA-256 為 `612a855747e3e7bb7b414f3b84501cbc54624877534af229a50fb9d485c81f55`。
+
+切換前須選定能讀寫新欄位的 Dioxus 回退包，並另存一份不受 App 備份輪替影響的完整資料。v0.4.1 可讀寫共通設定，但不能直接作為含新欄位資料的回退版。實際產品身份原地替換、Keychain 授權及 Finder 首開仍待驗。
+
+證據位於 `.local/verification/slint-macos-install-rollback/`，包含八階段實際主檔及備份、正負案例畫面、正常退出與 WSS 收據。重跑時保留同層目錄結構，放入校驗過的正式 ZIP 並執行 `install.py`。依序用 `phase.py baseline dioxus`、`upgrade slint --handoff`、`rollback dioxus --handoff`、`return slint --handoff` 啟動並完成表中操作。接著依序執行 `enable-auto slint`、`public-unknown dioxus --handoff`、`public-second-save dioxus`，開啟自動開圖後在舊版各切一次右鍵選項。最後執行 `restore-fixture.py`、`phase.py recovered slint` 及 `verify.py`。啟動控制器與操作使用同一個隔離資料根。各階段須正常退出才開始下一階段。
+
+核對簽章檔案、程序終結、DMG 卸載、resolved path、symlink、所有權和 open files 後，移除本輪隔離安裝位置及下載副本，共 220,889,069 regular-file bytes。filesystem free 觀測由 236,037,439,488 增至 236,264,677,376 bytes。精確路徑、du、SHA-256 與保留清單在 `cleanup.json`。
+
 ## 同一份資料的入口
 
 新增診斷入口：
