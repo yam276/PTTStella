@@ -832,4 +832,6 @@ Apple Silicon 候選 `0a7667f` 的封裝執行檔 SHA-256 為 `2dce1be27d6f667cf
 
 Apple Silicon 候選 `88a68a7` 的封裝執行檔 SHA-256 為 `6e964389d03de1ef80a1b26580363504e3b0e54634edca534adf2cd6c575ff7c`。同一封裝的 OpenGL shell 與軟體繪圖 shell 重測皆通過，核對設定開啟前後視窗尺寸、全螢幕狀態、Esc 焦點還原及通知關閉。軟體繪圖 shell 首輪有原生前景喪失收據。站點、名單、書籤、快速前往看板與文章、遮黑操作、文章輸入及單獨媒體探針通過。設定搜尋本身完成，串接的媒體 hover 仍在焦點／來源／modal 斷言失敗，未將整案列為通過。此批未重驗其他平台和實際 IME。
 
-交付位於 `.local/verification/slint-panel-chrome-current/package-delivery/`，App 簽章和 DMG checksum 已核對。依原始收據、resolved path、owner 與 open files 移除三個被取代的候選位置與一份重複 ZIP，共 855,736,489 regular-file bytes。保留最新 App／DMG、固定 Cargo target 及獨特測試證據。精確清單與空間觀測見 `cleanup-delivery.json`。
+後續用原生滑鼠確認設定關閉鍵的第一次點擊曾被焦點區攔截。候選 `d9d345c` 把點擊交回共用按鈕的觸控區。封裝執行檔 SHA-256 為 `ad582429c2e89e216e28960d7af1f01697a3371adf6cd6a9a96015f11b408a7b`。在同一個 macOS 視窗用浮球兩次開啟設定，一次用滑鼠關閉、一次按 Esc，皆回到原終端畫面並正常退出。軟體繪圖與 OpenGL shell、單獨媒體探針通過。OpenGL 首輪未保住通知 hover，隔離重試通過。設定搜尋首輪有焦點失敗，重試時完成繁中及英文欄位定位，後續媒體 hover 斷言仍失敗。App 簽章、DMG checksum、Clippy 與 178 項打包和工具測試通過。
+
+本機交付位於 `.local/verification/slint-panel-chrome-current/package-input/`。兩次清理依原始收據、resolved path、owner 與 open files 移除被取代的候選與重複 ZIP，共 1,140,703,735 regular-file bytes。保留最新 App／DMG、固定 Cargo target 及獨特測試證據。精確清單與空間觀測見 `cleanup-delivery.json`、`cleanup-input.json`。
