@@ -108,6 +108,24 @@ Slint worktree 的 Dioxus 入口改用 HTML 數字欄位 `step=any`，對齊 Rus
 
 Python 打包與工具測試 178 項、actionlint 及 docs 檢查通過。驗後依簽章檔案、程序終結、resolved path、所有權和 open files 清掉隔離 App 與重複 ZIP 及其校驗檔，共 221,536,247 regular-file bytes。filesystem free 觀測由 235,929,083,904 增至 236,157,456,384 bytes。保留已驗的 DMG、獨立備份及證據。
 
+## 2026-11-11 同一正式 Bundle ID 的 Apple Silicon 隔離演練
+
+兩個 arm64 App 和同輪 Windows x64 ZIP 使用乾淨 `b1085ab2c5b8397d100fcf2df9e28b6da79cb8ce`。隔離位置依序替換同一個 `PTTStella.app`，兩版皆為 `io.github.yam276.pttstella`，通過 ad-hoc 深層簽章檢查。Slint 以現有候選的副本改 bundle metadata 並重簽。兩版讀寫同一個隔離 HOME 的 `Library/Application Support/PTTStella`，Slint 透過該 HOME 內的 `PTTStellaSlintResearch` 目錄連結使用這份資料。
+
+| 階段 | 實際視窗與磁碟結果 |
+| --- | --- |
+| Dioxus 基準 | 顯示本機測試站畫面並退出，七個合成主檔及設定備份雜湊一致 |
+| 升級 Slint | 讀到自動開圖與首尾切篇已開，關閉首尾切篇後正常儲存 |
+| 回退 Dioxus | 讀到首尾切篇已關且自動開圖保留，開啟右鍵工具並正常儲存 |
+| 再開 Slint | 讀到右鍵工具已開，退出後八份檔案的雜湊一致 |
+| 恢復獨立備份 | Dioxus 讀回原始的首尾切篇、自動開圖及右鍵設定，八份檔案逐位元恢復 |
+
+兩次儲存各只改動指定設定。一代備份逐位元等於寫入前的主檔，字高 23.5、基線 19.125、字寬 102.75 及另外六個主檔全程保留。五個有效程序各 exit 0，以 TLS 1.3 連合成 WSS，只送正常 Close。初次沙箱策略的 loopback 語法錯誤，視窗工具在失敗啟動及第一次關窗後各自動開了一個暫存 Dioxus 副本。兩個程序都已終止，未操作設定或登入，日常資料目錄的檔案時間早於演練。有效五段皆重新核對了本機 peer 及程序退出。
+
+本輪證明正式 Bundle ID 下的檔案往返。Slint 仍選用 `SlintResearch` 密碼服務，兩份 ad-hoc 簽章的 designated requirement 各有不同 cdhash。正式 Keychain 授權、Finder 首開與 Gatekeeper 仍待驗。正式入口維持 Dioxus。
+
+本機證據在 `.local/verification/slint-cutover-rehearsal-b1085ab/`，包含五段收據、主檔與備份雜湊、合成副本、相容的 Dioxus 回退 App 及清理清單。[同輪 Windows x64 測試包](slint-windows-candidate.md#2026-11-11-固定來源的-windows-實機待驗包)
+
 ## 同一份資料的入口
 
 新增診斷入口：

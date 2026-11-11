@@ -207,6 +207,8 @@ Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人�
 
 ## 驗證與交接紀錄
 
+2026-11-11：以 `b1085ab` 建立 [Windows x64 新測試 ZIP](slint-windows-candidate.md#2026-11-11-固定來源的-windows-實機待驗包)，原生實機待驗。同一來源在 Apple Silicon 完成 [同一正式 Bundle ID 的隔離升級、回退、重開及備份恢復](slint-store-frontends.md#2026-11-11-同一正式-bundle-id-的-apple-silicon-隔離演練)。Slint 在隔離 HOME 透過目錄連結讀寫共用副本，正式 Keychain 授權與 Finder 首開仍待驗。S9 正式入口維持 Dioxus。
+
 2026-11-11：已定位並修復前筆shadow漏畫：原生探針於window repaint前的toolkit snapshot消耗共用dirty history；補入相同順序的像素反例後，原Skia確實失敗。專案保存可重現的Skia1.18.1 path patch（原25檔／授權核對、只改兩檔及新增shadow helper），快照後保留window全畫，平時macOS software沿用前幀做partial repaint。最終原生首次頁尾、雙GIF、全螢幕、Settings及Close通過，兩段十秒CPU各約1.10秒，僅為校準。兩配置118組像素、BIN103／1、core392／4、shadow2案、兩配置all-target Clippy及Python178通過；本地依賴授權collector亦已補齊原license與patch來源。詳見[快照修補紀錄](slint-macos-measurement.md#2026-11-11-快照損耗待重畫狀態的修補)。沿用同一App／Cargo cache；舊shadow-only拒用紀錄不抹除。診斷還原mode已補回0755並實際核對原版啟退；四平台下載尚未替換，完整S8及S9狀態不變。
 
 2026-11-11：新增同repo的 `slint-renderer-audit` 明確診斷feature及正常Cargo整合測試，兩個獨立Skia renderer消費同一生產TerminalWindow／ArticleViewport，每種配置118組full／retained畫面逐像素一致。涵蓋展圖載入／metadata與repeater退休、100次實際partial換幀、頁尾／控制列、focus、尺寸及同physical buffer的倍率往返，並有獨立指定像素色塊防空測試。一般Slint／native-player皆通過，但尚未重現上一筆原生漏畫；不以此採用shadow或宣稱OS呈現／100次原生輸入／S8通過。方法及命令見[量測紀錄](slint-macos-measurement.md#2026-11-11-整窗重畫原因與未採用的-shadow-實驗)與[交付流程](../CONTRIBUTING.md)。沿用固定Cargo cache、無新repo／App。

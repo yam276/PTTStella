@@ -1,5 +1,18 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-11 固定來源的 Windows 實機待驗包
+
+最新測試 ZIP 位於 Slint worktree 的 `.local/verification/slint-cutover-rehearsal-b1085ab/windows/package/`。Windows x64 與同輪 Apple Silicon 演練固定來源 `b1085ab2c5b8397d100fcf2df9e28b6da79cb8ce`。從乾淨來源用 macOS arm64、Rust 1.97.0、cargo-xwin 0.23.1 及 LLD 交叉編譯 `x86_64-pc-windows-msvc`，沿用 worktree Cargo target。封裝沿用經 SHA-256 核對的 libmpv 0.42.0 LGPL DLL。
+
+| 檔案 | SHA-256 |
+| --- | --- |
+| `PTTStella-Slint-Candidate-0.5.0-dev.3-windows-x64.zip` | `3e38bc06e9563bbdfc078f96b6142099badbd19291918c6aa4f38cac61c49801` |
+| 包內 `pttstella-slint.exe` | `e4e5c8511fbbb5dc5c4eaced14cd1899a91ce34cde344df72f5aa15fc0e7b38b` |
+
+ZIP CRC、執行檔與 DLL 雜湊、PE x64 及一般／延遲 import 檢查通過。import 清單沒有 WebView 相關 DLL，需要 Visual C++ x64 Redistributable 的 `msvcp140.dll` 及 `vcruntime140.dll`。新版實機結果仍為 `not_run`。解壓到新資料夾後執行 `Check-All.cmd` 與 `Run-IME.cmd`，保留 `evidence` 的收據。舊包回報仍按各自的執行檔雜湊追蹤。[同輪 Apple Silicon 演練](slint-store-frontends.md#2026-11-11-同一正式-bundle-id-的-apple-silicon-隔離演練)
+
+## 舊版候選與實機回報
+
 使用者待驗包保持 `.local/verification/slint-input-cross/windows-package/`，產品來源475897f（288份建置輸入），exe `69542cb7…`、ZIP `60f7c551…`；使用者會稍後驗收，原生仍not_run。既有13案與注音回報只屬舊04249364…exe，未轉填。此待驗包尚未包含後續字型／貼上與保留raster修正。
 
 2026-11-11 另備新包於 `.local/verification/slint-renderer-api-current/cross-current/windows-package/`。乾淨 `ff0ae84` 交叉 build 及 all-target Clippy 通過。PE `3a8de2a9…` 含文章焦點及固定狀態列探針修正，`Check-All.cmd` 的兩個 shell 案例使用修正後的檢查。新版 ZIP SHA-256 為 `c4aed301277519179974c1736b0c593add5654ebe376e669baa31ef932f98175`。919 個 payload 中有 917 個與前一另備候選相同，執行檔和候選資訊已更新。已核對一般及延遲 PE imports，仍需 VC runtime，原生實機待驗。新版和 `69542cb7` 各有下載入口與獨立雜湊。[本輪封裝驗收](slint-evaluation-plan.md#2026-11-11-固定狀態列探針的-windows-與-linux-封裝)
