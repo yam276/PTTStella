@@ -1,11 +1,11 @@
 //! Full product shell checks; toolkit actions only, with the production owners.
 use crate::{
-    TerminalWindow,
+    SelectionRect, TerminalWindow,
     verification::{self, Verification, require, wait},
 };
 use pttstella::connection::{Connection, Phase};
 use slint::{
-    ComponentHandle, Model,
+    ComponentHandle, Model, ModelRc, VecModel,
     platform::{Key, PointerEventButton},
 };
 use std::{
@@ -187,6 +187,43 @@ async fn choose(ui: &TerminalWindow, category: i32, label: &str) -> Result<(), S
     require(!ui.get_tools_open(), "shell action did not dismiss tools")
 }
 
+fn navigation_marker(ui: &TerminalWindow, directory: &Path) -> Result<(), String> {
+    let width = ui.get_raster_width();
+    let row = ui.get_raster_height() / 24.;
+    let top = row * 5.;
+    ui.set_navigation_rects(ModelRc::new(VecModel::from(vec![SelectionRect {
+        x: 0.,
+        y: top,
+        width,
+        height: row,
+    }])));
+    let snapshot = ui.window().take_snapshot();
+    ui.set_navigation_rects(ModelRc::default());
+    let pixels = snapshot.map_err(|e| e.to_string())?;
+    let dpi = ui.window().scale_factor();
+    let origin_x = ui.get_terminal_origin_x() + ui.get_raster_left();
+    let y = ((ui.get_terminal_origin_y() + ui.get_raster_top() + top + row / 2.) * dpi).round()
+        as usize;
+    let is_gold = |x: usize| {
+        let offset = (y * pixels.width() as usize + x) * 4;
+        pixels.as_bytes().get(offset..offset + 4) == Some(&[217, 174, 91, 255])
+    };
+    let left_edge = ((origin_x + 1.5) * dpi).round() as usize;
+    let right_edge = ((origin_x + width - 1.5) * dpi).round() as usize;
+    let start = ((origin_x + 4.) * dpi).ceil() as usize;
+    let end = ((origin_x + width - 4.) * dpi).floor() as usize;
+    crate::save_png(&pixels, &directory.join("shell-navigation-marker.png"))
+        .map_err(|error| error.to_string())?;
+    require(
+        start < end
+            && end < pixels.width() as usize
+            && is_gold(left_edge)
+            && is_gold(right_edge)
+            && !(start..end).any(is_gold),
+        "navigation marker must have gold on both sides and none through the middle",
+    )
+}
+
 pub fn start(
     ui: &TerminalWindow,
     notices: Rc<crate::notice::Owner>,
@@ -232,6 +269,7 @@ pub fn start(
                 "connected idle shell retained a status banner",
             )?;
             verification::capture(&ui, &directory, "shell-idle.png")?;
+            navigation_marker(&ui, &directory)?;
             let idle_image = ui.get_terminal_image();
             let fullscreen = ui.window().is_fullscreen();
             ui.invoke_tools_toggle();

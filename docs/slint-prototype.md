@@ -199,7 +199,7 @@ macOS arm64 以實際 Input owner、同一生成 UI、Winit＋Skia 軟體後端�
 
 一般滾輪對已辨識列表／選單／閱讀／說明頁送 Page Up／Down，選取、組字、modal 或拖曳期間不送。Ctrl＋滾輪以 25% 階段縮放，放大溢出後交還 Flickable 做本機捲動，拖曳捲動模式維持明確開關。來源更新期間不重複排入指令。未開始的排隊導覽以 Connection 的原子 cancellation token 立即撤銷，與 Slint future 何時再 poll 分開；已開始的傳輸依既有規則處理，不能回滾 bytes 或宣稱站端成功。關窗撤銷 token 和 owned UI job。
 
-hover 光棒是獨立的整列 28% 藍底、金框與左右 3px 金邊；返回與翻頁使用原生方向游標，網址顯示完整目的地。Context／連結按 stamp 快取，同一行內移動重用同一 model，不重畫 terminal raster。這輪光棒為靜態，OS 減少動態效果感知、呼吸效果與金色自訂箭頭仍待接入。右鍵選單、浮球和推文 ID 優先操作屬後續 S3／S4 項目，尚未以這輪結果結案。
+hover 光棒是獨立的整列 28% 藍底、金框與左右 3px 金邊。金邊明確定位在兩側，視窗探針逐像素核對橫越光棒中央的掃描列。返回與翻頁使用原生方向游標，網址顯示完整目的地。Context／連結按 stamp 快取，同一行內移動重用同一 model，不重畫 terminal raster。這輪光棒為靜態，OS 減少動態效果感知、呼吸效果與金色自訂箭頭仍待接入。右鍵選單、浮球和推文 ID 優先操作屬後續 S3／S4 項目，尚未以這輪結果結案。
 
 ```sh
 cargo build --locked --release --features slint-research --bin pttstella-slint
