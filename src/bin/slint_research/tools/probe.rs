@@ -55,7 +55,22 @@ fn action_point(ui: &TerminalWindow, index: usize) -> Result<slint::LogicalPosit
     ))
 }
 async fn open(ui: &TerminalWindow) -> Result<(), String> {
-    click(ui, ball(ui), Button::Left);
+    let position = ball(ui);
+    ui.set_native_pointer_buttons(1);
+    ui.set_native_pointer_down(true);
+    ui.window().dispatch_event(Event::PointerPressed {
+        position,
+        button: Button::Left,
+    });
+    // The native release hook updates the mask before Slint flushes its
+    // buffered pointer move and dispatches the release to the tool.
+    ui.set_native_pointer_buttons(0);
+    ui.set_native_pointer_down(false);
+    ui.window().dispatch_event(Event::PointerMoved { position });
+    ui.window().dispatch_event(Event::PointerReleased {
+        position,
+        button: Button::Left,
+    });
     wait(|| ui.get_tools_open(), "floating ball did not open fan").await
 }
 async fn verify(
@@ -220,6 +235,34 @@ async fn verify(
         !ui.get_tools_open() && !ui.get_selection_active(),
         "outside click leaked to terminal",
     )?;
+    let position = ball(ui);
+    ui.set_native_pointer_buttons(1);
+    ui.set_native_pointer_down(true);
+    ui.window().dispatch_event(Event::PointerPressed {
+        position,
+        button: Button::Left,
+    });
+    require(
+        tools.state.borrow().dragging(),
+        "lost-release check did not start a grab",
+    )?;
+    ui.set_native_pointer_buttons(0);
+    ui.set_native_pointer_down(false);
+    ui.window().dispatch_event(Event::PointerMoved { position });
+    wait(
+        || !tools.state.borrow().dragging(),
+        "missing release did not cancel the grab",
+    )
+    .await?;
+    ui.window().dispatch_event(Event::PointerReleased {
+        position,
+        button: Button::Left,
+    });
+    require(
+        !ui.get_tools_open(),
+        "late release opened tools after cancellation",
+    )?;
+
     ui.set_tools_reduced_motion(false);
     let from = ball(ui);
     ui.set_native_pointer_buttons(1);

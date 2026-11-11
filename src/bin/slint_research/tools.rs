@@ -199,11 +199,24 @@ impl Tools {
             0 => self.state.borrow_mut().down(point, Instant::now()),
             1 => {
                 if self.state.borrow().dragging() {
-                    self.state.borrow_mut().motion(
-                        point,
-                        Instant::now(),
-                        ui.get_native_pointer_buttons() & 1 != 0,
-                    );
+                    if ui.get_native_pointer_buttons() & 1 == 0 {
+                        // The backend can flush the final move after the native
+                        // release updates the button mask, immediately before
+                        // delivering the toolkit release to the grab owner.
+                        let weak = Rc::downgrade(self);
+                        self.timer
+                            .start(TimerMode::SingleShot, Duration::ZERO, move || {
+                                if let Some(owner) = weak.upgrade()
+                                    && let Some(ui) = owner.ui.upgrade()
+                                    && owner.state.borrow().dragging()
+                                    && ui.get_native_pointer_buttons() & 1 == 0
+                                {
+                                    owner.dismiss(false);
+                                }
+                            });
+                        return;
+                    }
+                    self.state.borrow_mut().motion(point, Instant::now(), true);
                 }
             }
             2 => {
