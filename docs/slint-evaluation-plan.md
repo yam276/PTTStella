@@ -851,3 +851,13 @@ Apple Silicon 候選 `88a68a7` 的封裝執行檔 SHA-256 為 `6e964389d03de1ef8
 候選 `7a1ecf0` 的封裝執行檔 SHA-256 為 `9bc42c21717e1f4766320ddf3a1e08fdbf01d1bc159edf61031c5d28bbe9da47`。封裝的外觀頁、本機字型載入、滑鼠展開、鍵盤選取與取消、軟體繪圖 shell、站點、名單、書籤和快速前往案例通過。設定搜尋及縮放子流程通過，後續圖片懸停的既有斷言仍失敗。原生 macOS 滑鼠腳本遇到前景切換，保留未完成收據。App 簽章、DMG checksum 與九項 macOS 打包測試通過。
 
 本機交付位於 `.local/verification/slint-panel-chrome-current/package-settings-select/`。清理重複 ZIP、無使用中的舊候選及未掛載的舊 DMG，共 285,793,877 regular-file bytes。保留目前仍執行的舊 App 與固定 release Cargo 快取。精確路徑與空間觀測見 `cleanup-settings-select.json`。
+
+## 2026-11-11 設定與浮球圖示
+
+設定側欄、欄位、復原與關閉、站點按鈕、名單排序及浮球分類改用 Dioxus 所使用的 Lucide 圖形。設定標頭使用相同的星座圖。圖示由 Slint 內嵌，依選取及停用狀態套色。[來源與授權](../assets/icons/lucide/SOURCE.md)
+
+搜尋標籤、側欄行高與分隔、欄位間距及頁尾依 Dioxus 設定對照。鍵盤與滑鼠頁使用百分比滑桿，支援滑鼠、方向鍵和既有自動保存。防閒置位於站點頁，文章模式及邊界導覽位於圖片與媒體頁。站點、黑白名單和帳號表單目前仍使用同視窗的管理子面板，待整合到原版的設定分頁。
+
+候選 `415f98c` 的封裝執行檔 SHA-256 為 `cb3300c3e7d72179580af5e3fc6974410f259bbea0e424ac2a154461fe9369b0`。禁止讀取 checkout 圖示和 Homebrew 的同一封裝通過設定、字型選單、滑桿點擊與保存、OpenGL shell、浮球兩個案例、站點及名單測試。軟體繪圖首輪在視窗失去前景後未能驗證重新開啟時的搜尋焦點，單獨重試通過。中英設定搜尋與文字快捷鍵子流程通過，其後圖片懸停的既有斷言仍失敗。App 簽章、DMG checksum、授權檔與 178 項工具測試通過。
+
+本機交付位於 `.local/verification/slint-panel-chrome-current/package-settings-icons-final/`。已清理三份舊封裝與一份重複 ZIP，保留 App、DMG、編譯快取與失敗收據。Finder 在移除舊包目錄時重建了目錄中繼資料，補清後確認四個目標均已移除。精確路徑與補清空間觀測見 `cleanup-settings-icons-final.json`。
