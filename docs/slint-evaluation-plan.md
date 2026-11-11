@@ -835,3 +835,11 @@ Apple Silicon 候選 `88a68a7` 的封裝執行檔 SHA-256 為 `6e964389d03de1ef8
 後續用原生滑鼠確認設定關閉鍵的第一次點擊曾被焦點區攔截。候選 `d9d345c` 把點擊交回共用按鈕的觸控區。封裝執行檔 SHA-256 為 `ad582429c2e89e216e28960d7af1f01697a3371adf6cd6a9a96015f11b408a7b`。在同一個 macOS 視窗用浮球兩次開啟設定，一次用滑鼠關閉、一次按 Esc，皆回到原終端畫面並正常退出。軟體繪圖與 OpenGL shell、單獨媒體探針通過。OpenGL 首輪未保住通知 hover，隔離重試通過。設定搜尋首輪有焦點失敗，重試時完成繁中及英文欄位定位，後續媒體 hover 斷言仍失敗。App 簽章、DMG checksum、Clippy 與 178 項打包和工具測試通過。
 
 本機交付位於 `.local/verification/slint-panel-chrome-current/package-input/`。兩次清理依原始收據、resolved path、owner 與 open files 移除被取代的候選與重複 ZIP，共 1,140,703,735 regular-file bytes。保留最新 App／DMG、固定 Cargo target 及獨特測試證據。精確清單與空間觀測見 `cleanup-delivery.json`、`cleanup-input.json`。
+
+## 2026-11-11 設定操作按鈕寬度
+
+設定的操作按鈕依標籤取寬。Vim 與站端滑鼠在空間足夠時並排，浮球不透明度使用短百分比欄位，勾選項改成平面列。下拉欄位設有寬度上限，恢復預設與關閉在右下角相鄰。側欄在矮視窗獨立捲動，底部按鈕維持可見。
+
+候選 `39e1e9f` 的封裝執行檔 SHA-256 為 `7edb81918ea3e00492ecd70af96625e5daceb7bcb2cc685529dd304a340682e9`。以相符的封裝來源執行檔在 macOS 原生視窗驗證 1040×768 與 580×550，實際點選側欄和窄視窗關閉，重新開啟設定後以 Esc 關閉。新 App 的 AX 自動化未取得指定視窗，保留失敗收據。封裝本身的軟體繪圖與 OpenGL shell、App 簽章、DMG checksum 及九項 macOS 打包測試通過。
+
+交付位於 `.local/verification/slint-panel-chrome-current/package-settings-width/`。移除本輪 dev profile、重複 ZIP 及已被取代且未掛載的 DMG，共 1,383,518,786 regular-file bytes。保留仍在使用的舊 App 及固定 release Cargo 快取。精確路徑、空間觀測及 Cargo 宣告清除量見 `cleanup-settings-width.json`、`cleanup-settings-width-dev.json`。
