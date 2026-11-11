@@ -25,7 +25,6 @@ enum Handoff {
     Account,
     Sites,
     Filters,
-    Zoom(f32),
     Vim,
     Mouse,
     KeepAlive,
@@ -140,12 +139,16 @@ impl Preferences {
             move || {
                 if let Some(owner) = weak.upgrade()
                     && !owner.stopped.get()
-                    && !owner.failed.get()
-                    && (owner.pending.borrow().is_some()
-                        || owner.closing.get()
-                        || owner.export_pending.get())
                 {
-                    owner.arm(Duration::ZERO);
+                    if !owner.failed.get()
+                        && (owner.pending.borrow().is_some()
+                            || owner.closing.get()
+                            || owner.export_pending.get())
+                    {
+                        owner.arm(Duration::ZERO);
+                    } else {
+                        owner.load_font_catalog_if_needed();
+                    }
                 }
             }
         });

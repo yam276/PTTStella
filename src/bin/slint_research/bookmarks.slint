@@ -51,7 +51,7 @@ export component BookmarksPanel inherits PanelOverlay {
         VerticalLayout {alignment: start; padding:16px;spacing:10px;
             Text {text:BookmarksState.labels[1];color:#c7d4e7;wrap:word-wrap;}
             Text {text:BookmarksState.labels[2];color:#c7d4e7;}
-            PanelCombo {model:BookmarksState.entries;current-index<=>BookmarksState.choice;enabled:!BookmarksState.busy && !BookmarksState.composing;selected=>{BookmarksState.choose(self.current-index);}}
+            PanelCombo {model:BookmarksState.entries;current-index<=>BookmarksState.choice;enabled:root.visible && !BookmarksState.busy && !BookmarksState.composing;selected=>{BookmarksState.choose(self.current-index);}}
             PanelButton {text:BookmarksState.labels[3];enabled:!BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.new-entry();}}
             Text {text:BookmarksState.labels[4];color:#c7d4e7;}
             target-field:=PanelField {text<=>BookmarksState.target;accessible-label:BookmarksState.labels[4];enabled:!BookmarksState.busy;edited=>{self.text=BookmarksState.field-edit(0,self.text);}}

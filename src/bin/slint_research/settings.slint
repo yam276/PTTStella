@@ -10,6 +10,7 @@ global SettingsInput {
 }
 component EditField inherits PanelField {
     in property <int> field-id;
+    background: #142b41;
     private property <int> command-sequence:SettingsInput.command-sequence;
     private property <int> focus-sequence:SettingsInput.focus-sequence;
     changed has-focus=>{
@@ -39,10 +40,28 @@ component FocusButton inherits SettingsAction {
 }
 component FocusCombo inherits PanelCombo {
     in property <int> field-id;
-    max-width: 280px;
+    enabled: SettingsState.active && !SettingsState.composing;
     private property <int> focus-sequence:SettingsInput.focus-sequence;
     changed focus-sequence=>{if SettingsInput.focus-field==self.field-id {self.focus();}}
     changed has-focus=>{if self.has-focus {SettingsInput.active-target=self.field-id;} else if SettingsInput.active-target==self.field-id {SettingsInput.active-target=-1;}}
+}
+component SettingsRow inherits VerticalLayout {
+    in property <string> caption;
+    in property <length> caption-width;
+    spacing: 0;
+    HorizontalLayout {
+        spacing: 10px; padding-top: 13px; padding-bottom: 13px;
+        Text {
+            width: root.caption-width;
+            text: root.caption; color: #ebe7dc; font-size: 14px;
+            vertical-alignment: center; wrap: word-wrap;
+        }
+        VerticalLayout {
+            alignment: center;
+            @children
+        }
+    }
+    Rectangle { height: 1px; background: #34475b; }
 }
 component FocusCheck inherits PanelCheck {
     in property <int> field-id;
@@ -55,6 +74,7 @@ export struct FontSource { id:string,title:string }
 export struct SettingsMatch { title:string, page:int, field:int }
 
 export global SettingsState {
+    in-out property <bool> active;
     in-out property <[string]> labels;
     in-out property <[string]> runtime-labels;
     in-out property <[bool]> runtime-states;
@@ -116,6 +136,8 @@ export global SettingsState {
     callback profile(bool);
     callback catalog;
     in-out property <[string]> families;
+    in-out property <string> catalog-status;
+    pure callback installed-family-index([string], string) -> int;
     callback family(bool,string);
     in-out property <[FontSource]> font-sources;
     callback font-source(string);
@@ -148,6 +170,10 @@ export global SettingsState {
 }
 
 export component SettingsPanel inherits PanelOverlay {
+    in property <float> zoom: 1;
+    private property <length> form-width: min(root.width - 32px, root.panel-width);
+    private property <length> sidebar-width: root.form-width < 680px ? 155px : 195px;
+    private property <length> label-width: max(92px, (root.form-width - root.sidebar-width - 45px) * 0.30);
     heading: SettingsState.labels[0];
     FocusScope {
         key-pressed(event) => {
@@ -162,7 +188,7 @@ export component SettingsPanel inherits PanelOverlay {
             HorizontalLayout {
                 spacing: 0;
                 ScrollView {
-                    width: parent.width < 680px ? 155px : 195px;
+                    width: root.sidebar-width;
                     content-width: self.visible-width;
                     VerticalLayout {
                         alignment: start; padding-top: 16px; spacing: 8px;
@@ -177,7 +203,7 @@ export component SettingsPanel inherits PanelOverlay {
                     }
                 }
                 Rectangle { width: 1px; background: #34475b; }
-                ScrollView { content-width:self.width;
+                ScrollView { content-width:self.visible-width;
                     VerticalLayout {
                         alignment: start; padding: 22px; spacing: 12px;
                         Rectangle { width: 28px; height: 2px; background: #e7c46a; }
@@ -190,41 +216,99 @@ export component SettingsPanel inherits PanelOverlay {
                         if SettingsState.query=="" && SettingsState.page==0: VerticalLayout {
                             alignment: start; spacing: 10px;
                             FocusButton {field-id:23;text:SettingsState.runtime-labels[3];enabled:SettingsState.runtime-available[3];checked:SettingsState.runtime-states[3];clicked=>{SettingsState.runtime-action(3);}}
-                            Text {text:SettingsState.labels[3];color:#d7dce5;}
-                            FocusCombo {field-id:10;model:SettingsState.languages;current-index<=>SettingsState.language;selected=>{SettingsState.edit();}}
+                            SettingsRow {
+                                caption-width: root.label-width;
+                                caption: SettingsState.labels[3];
+                                FocusCombo {field-id:10;accessible-label:SettingsState.labels[3];model:SettingsState.languages;current-index<=>SettingsState.language;selected=>{SettingsState.edit();}}
+                            }
                             Text {text:SettingsState.labels[4];color:#d7dce5;wrap:word-wrap;}
-                            Text {text:SettingsState.labels[5];color:#d7dce5;}
-                            FocusCombo {field-id:14;model:SettingsState.modes;current-index<=>SettingsState.article-mode;selected=>{SettingsState.edit();}}
+                            SettingsRow {
+                                caption-width: root.label-width;
+                                caption: SettingsState.labels[5];
+                                FocusCombo {field-id:14;accessible-label:SettingsState.labels[5];model:SettingsState.modes;current-index<=>SettingsState.article-mode;selected=>{SettingsState.edit();}}
+                            }
                             Text {text:SettingsState.labels[6];color:#d7dce5;wrap:word-wrap;}
                             FocusCheck {field-id:16;caption:SettingsState.labels[7];checked<=>SettingsState.boundary;toggled=>{SettingsState.edit();}}
                         }
                         if SettingsState.preview-visible: VerticalLayout {
-                            alignment: start; spacing: 10px;
+                            alignment: start; spacing: 0;
                             HorizontalLayout {
-                                alignment: start; spacing: 8px;
+                                alignment: start; spacing: 8px; padding-bottom: 14px;
+                                SettingsAction {text:"−";accessible-label:SettingsState.labels[37];clicked=>{SettingsState.runtime-action(6);}}
+                                Text {text:round(root.zoom * 100) + "%";color:#ebe7dc;font-size:16px;vertical-alignment:center;}
+                                SettingsAction {text:"+";accessible-label:SettingsState.labels[38];clicked=>{SettingsState.runtime-action(7);}}
                                 FocusButton {field-id:20;text:SettingsState.runtime-labels[0];clicked=>{SettingsState.runtime-action(0);}}
-                                SettingsAction { text: "125%"; clicked => {SettingsState.runtime-action(6);} }
-                                SettingsAction { text: "150%"; clicked => {SettingsState.runtime-action(7);} }
                             }
-                            Text {text:SettingsState.labels[8];color:#d7dce5;}
-                            FocusCombo {field-id:11;model:SettingsState.presets;current-index<=>SettingsState.preset;selected=>{SettingsState.font-preset();}}
-                            Text {text:SettingsState.labels[9];color:#d7dce5;}
-                            ascii-field:=EditField {field-id:1;text<=>SettingsState.ascii;edited=>{SettingsState.custom-font();}}
-                            PanelCombo {model:SettingsState.families;selected(value)=>{SettingsState.family(false,value);}}
-                            Text {text:SettingsState.labels[10];color:#d7dce5;}
-                            cjk-field:=EditField {field-id:2;text<=>SettingsState.cjk;edited=>{SettingsState.custom-font();}}
-                            PanelCombo {model:SettingsState.families;selected(value)=>{SettingsState.family(true,value);}}
-                            SettingsAction {text:SettingsState.labels[11];clicked=>{SettingsState.catalog();}}
+                            SettingsRow {
+                                caption-width: root.label-width;
+                                caption: SettingsState.labels[8];
+                                FocusCombo {field-id:11;accessible-label:SettingsState.labels[8];model:SettingsState.presets;current-index<=>SettingsState.preset;selected=>{SettingsState.font-preset();}}
+                            }
+                            SettingsRow {
+                                caption-width: root.label-width;
+                                caption: SettingsState.labels[9];
+                                EditField {field-id:1;accessible-label:SettingsState.labels[9];text<=>SettingsState.ascii;edited=>{SettingsState.custom-font();}}
+                            }
+                            SettingsRow {
+                                caption-width: root.label-width;
+                                caption: SettingsState.labels[34];
+                                PanelCombo {
+                                    accessible-label: SettingsState.labels[34];
+                                    enabled: SettingsState.active && !SettingsState.composing;
+                                    model: SettingsState.families;
+                                    displayed-index: SettingsState.installed-family-index(SettingsState.families, SettingsState.ascii);
+                                    placeholder-text: SettingsState.labels[36];
+                                    selected(value) => { SettingsState.family(false,value); }
+                                }
+                            }
+                            SettingsRow {
+                                caption-width: root.label-width;
+                                caption: SettingsState.labels[10];
+                                EditField {field-id:2;accessible-label:SettingsState.labels[10];text<=>SettingsState.cjk;edited=>{SettingsState.custom-font();}}
+                            }
+                            SettingsRow {
+                                caption-width: root.label-width;
+                                caption: SettingsState.labels[35];
+                                PanelCombo {
+                                    accessible-label: SettingsState.labels[35];
+                                    enabled: SettingsState.active && !SettingsState.composing;
+                                    model: SettingsState.families;
+                                    displayed-index: SettingsState.installed-family-index(SettingsState.families, SettingsState.cjk);
+                                    placeholder-text: SettingsState.labels[36];
+                                    selected(value) => { SettingsState.family(true,value); }
+                                }
+                            }
                             HorizontalLayout {
-                                VerticalLayout {Text {text:SettingsState.labels[12];color:#d7dce5;} size-field:=EditField {field-id:3;text<=>SettingsState.font-size;edited=>{SettingsState.edit();}}}
-                                VerticalLayout {Text {text:SettingsState.labels[13];color:#d7dce5;} baseline-field:=EditField {field-id:4;text<=>SettingsState.baseline;edited=>{SettingsState.edit();}}}
-                                VerticalLayout {Text {text:SettingsState.labels[14];color:#d7dce5;} width-field:=EditField {field-id:5;text<=>SettingsState.font-width;edited=>{SettingsState.edit();}}}
+                                alignment: end;
+                                SettingsAction {text:SettingsState.labels[11];clicked=>{SettingsState.catalog();}}
                             }
-                            Text {text:SettingsState.labels[15];color:#d7dce5;wrap:word-wrap;}
+                            if SettingsState.catalog-status != "": Text {
+                                text: SettingsState.catalog-status; color: #b5bcc7;
+                                wrap: word-wrap;
+                            }
+                            SettingsRow {
+                                caption-width: root.label-width;
+                                caption: SettingsState.labels[12];
+                                EditField {field-id:3;accessible-label:SettingsState.labels[12];text<=>SettingsState.font-size;edited=>{SettingsState.edit();}}
+                            }
+                            SettingsRow {
+                                caption-width: root.label-width;
+                                caption: SettingsState.labels[14];
+                                EditField {field-id:5;accessible-label:SettingsState.labels[14];text<=>SettingsState.font-width;edited=>{SettingsState.edit();}}
+                            }
+                            SettingsRow {
+                                caption-width: root.label-width;
+                                caption: SettingsState.labels[13];
+                                EditField {field-id:4;accessible-label:SettingsState.labels[13];text<=>SettingsState.baseline;edited=>{SettingsState.edit();}}
+                            }
+                            Text {text:SettingsState.labels[15];color:#b5bcc7;wrap:word-wrap;}
                             Image {source:SettingsState.preview;image-fit:contain;height:144px;}
                             Text {text:SettingsState.font-status;color:#e4c76e;wrap:word-wrap;}
-                            Text {text:SettingsState.labels[33];color:#d7dce5;}
-                            EditField {field-id:7;text<=>SettingsState.profile-name;}
+                            SettingsRow {
+                                caption-width: root.label-width;
+                                caption: SettingsState.labels[33];
+                                EditField {field-id:7;accessible-label:SettingsState.labels[33];text<=>SettingsState.profile-name;}
+                            }
                             HorizontalLayout {
                                 alignment: start; spacing: 8px;
                                 SettingsAction {text:SettingsState.labels[16];clicked=>{SettingsState.profile(false);}}
@@ -275,8 +359,11 @@ export component SettingsPanel inherits PanelOverlay {
                         }
                         if SettingsState.query=="" && SettingsState.page==3: VerticalLayout {
                             alignment: start; spacing: 10px;
-                            Text {text:SettingsState.labels[23];color:#d7dce5;}
-                            FocusCombo {field-id:17;model:SettingsState.positions;current-index<=>SettingsState.hover;selected=>{SettingsState.edit();}}
+                            SettingsRow {
+                                caption-width: root.label-width;
+                                caption: SettingsState.labels[23];
+                                FocusCombo {field-id:17;accessible-label:SettingsState.labels[23];model:SettingsState.positions;current-index<=>SettingsState.hover;selected=>{SettingsState.edit();}}
+                            }
                             FocusCheck {field-id:15;caption:SettingsState.labels[24];checked<=>SettingsState.automatic;toggled=>{SettingsState.edit();}}
                             Text {text:SettingsState.labels[25];color:#d7dce5;wrap:word-wrap;}
                         }

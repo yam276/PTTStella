@@ -1,6 +1,6 @@
 export { PanelEdit } from "panel.slint";
 import { PanelButton } from "panel.slint";
-import { SettingsPanel } from "settings.slint";
+import { SettingsPanel, SettingsState } from "settings.slint";
 import { SitesPanel } from "sites.slint";
 import { FiltersPanel } from "filters.slint";
 import { BookmarksPanel } from "bookmarks.slint";
@@ -118,7 +118,7 @@ export component TerminalWindow inherits Window {
     changed sites-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
 
     in-out property <int> output-choice;
-    changed settings-open => {root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
+    changed settings-open => {SettingsState.active = root.settings-open;root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-mouse-cancel();root.find-state-changed();}
 
     out property <bool> station-color-open:StationColorState.open;
     callback station-color-updated;
@@ -1262,7 +1262,7 @@ export component TerminalWindow inherits Window {
     editor-view := NativeEditor { visible:EditorState.open; width:parent.width;height:parent.height; }
     station-color-view := StationColor {visible:StationColorState.open;width:root.width;height:root.height;}
 
-    SettingsPanel { visible: root.settings-open; width: parent.width; height: parent.height; }
+    SettingsPanel { visible: root.settings-open; width: parent.width; height: parent.height; zoom: root.zoom; }
     SitesPanel { visible: root.sites-open; width: parent.width; height: parent.height; }
     FiltersPanel { visible: root.filters-open; width: parent.width; height: parent.height; }
     BookmarksPanel { visible: root.bookmarks-open; width: parent.width; height: parent.height; }

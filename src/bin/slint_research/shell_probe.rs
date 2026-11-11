@@ -8,7 +8,72 @@ use slint::{
     ComponentHandle, Model,
     platform::{Key, PointerEventButton},
 };
-use std::{error::Error, path::PathBuf, rc::Rc};
+use std::{
+    error::Error,
+    path::{Path, PathBuf},
+    rc::Rc,
+};
+
+async fn settings_dropdowns(ui: &TerminalWindow, directory: &Path) -> Result<(), String> {
+    let settings = ui.global::<crate::SettingsState>();
+    settings.invoke_show_page(1);
+    wait(
+        || settings.get_families().row_count() > 0 && !ui.get_output_busy(),
+        "installed font choices did not load on entry",
+    )
+    .await?;
+    verification::capture(ui, directory, "settings-appearance.png")?;
+    settings.invoke_focus_field(11);
+    wait(
+        || settings.get_focused_target() == 11,
+        "font preset did not focus",
+    )
+    .await?;
+    let original = settings.get_preset();
+    verification::key(ui, Key::Return);
+    verification::capture(ui, directory, "settings-preset-menu.png")?;
+    verification::key(ui, Key::Home);
+    verification::key(ui, Key::DownArrow);
+    verification::key(ui, Key::Escape);
+    require(
+        ui.get_settings_open() && settings.get_preset() == original,
+        "Escape changed the preset or closed settings",
+    )?;
+    verification::key(ui, Key::Return);
+    verification::key(ui, Key::Home);
+    verification::key(ui, Key::DownArrow);
+    verification::key(ui, Key::Return);
+    require(
+        settings.get_preset() == 1,
+        "keyboard did not select the preset",
+    )?;
+
+    let window = ui.window().size();
+    let scale = ui.window().scale_factor();
+    let height = window.height as f32 / scale;
+    let panel_top = (height - 700_f32.min(height - 32.)) / 2.;
+    let font =
+        slint::LogicalPosition::new(window.width as f32 / scale / 2. + 85., panel_top + 322.);
+    verification::click(ui, font, PointerEventButton::Left);
+    verification::capture(ui, directory, "settings-local-font-menu.png")?;
+    let families = settings.get_families();
+    let last = families
+        .row_data(families.row_count() - 1)
+        .ok_or("missing last font choice")?;
+    verification::key(ui, Key::End);
+    verification::key(ui, Key::Return);
+    require(
+        settings.get_ascii() == last && settings.get_preset() == 8,
+        "local font menu did not apply the selected family",
+    )?;
+    verification::capture(ui, directory, "settings-local-font-selected.png")?;
+    settings.invoke_close_settings();
+    wait(
+        || !ui.get_settings_open(),
+        "settings did not close after font selection",
+    )
+    .await
+}
 
 async fn choose(ui: &TerminalWindow, category: i32, label: &str) -> Result<(), String> {
     let state = || {
@@ -106,6 +171,9 @@ pub fn start(
                 "opening settings changed the terminal window or left station focus active",
             )?;
             verification::capture(&ui, &directory, "shell-settings.png")?;
+            if std::env::var_os("PTTSTELLA_SLINT_SETTINGS_LAYOUT").is_some() {
+                return settings_dropdowns(&ui, &directory).await;
+            }
             let scale = ui.window().scale_factor();
             let width = window.width as f32 / scale;
             let height = window.height as f32 / scale;

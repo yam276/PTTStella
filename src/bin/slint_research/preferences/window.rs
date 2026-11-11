@@ -253,20 +253,25 @@ impl Preferences {
             move |code| {
                 if let Some(owner) = owner.upgrade()
                     && !owner.composing.get()
-                    && owner
-                        .ui
-                        .upgrade()
-                        .is_some_and(|u| u.get_settings_open() && !u.get_app_closing())
+                    && let Some(ui) = owner.ui.upgrade()
+                    && ui.get_settings_open()
+                    && !ui.get_app_closing()
                 {
+                    if matches!(code, 0 | 6 | 7) {
+                        let zoom = match code {
+                            6 => ui.get_zoom() - 0.25,
+                            7 => ui.get_zoom() + 0.25,
+                            _ => 1.,
+                        };
+                        ui.set_zoom(zoom.clamp(0.25, 4.));
+                        return;
+                    }
                     let handoff = match code {
-                        0 => Handoff::Zoom(1.),
                         1 => Handoff::Vim,
                         2 => Handoff::Mouse,
                         3 => Handoff::KeepAlive,
                         4 => Handoff::Pan,
                         5 => Handoff::VimOnce,
-                        6 => Handoff::Zoom(1.25),
-                        7 => Handoff::Zoom(1.5),
                         _ => return,
                     };
                     owner.handoff.set(Some(handoff));
@@ -357,6 +362,15 @@ impl Preferences {
                 }
             }
         });
+        window
+            .global::<crate::SettingsState>()
+            .on_installed_family_index(|families, name| {
+                families
+                    .iter()
+                    .position(|family| family == name)
+                    .and_then(|index| i32::try_from(index).ok())
+                    .unwrap_or(-1)
+            });
         window.global::<crate::SettingsState>().on_family({
             let weak = Rc::downgrade(self);
             let w = window.as_weak();
@@ -497,6 +511,11 @@ impl Preferences {
             "settings-retry",
             "close",
             "profile-name",
+            "settings-local-ascii",
+            "settings-local-cjk",
+            "font-local-choose",
+            "zoom-out",
+            "zoom-in",
         ]
         .into_iter()
         .map(t)
@@ -600,12 +619,13 @@ impl Preferences {
             }
         }
     }
-    fn preview(&self, w: &TerminalWindow) {
+    fn preview(self: &Rc<Self>, w: &TerminalWindow) {
         if !w.global::<crate::SettingsState>().get_preview_visible()
             || !self.ui.upgrade().is_some_and(|ui| ui.get_settings_open())
         {
             return;
         }
+        self.load_font_catalog_if_needed();
         let result = (|| {
             let draft = form::read(w, self.model.borrow().edit_base())?;
             let display = draft.display.resolve()?;
@@ -671,10 +691,6 @@ impl Preferences {
                     Handoff::Account => ui.invoke_login_show(),
                     Handoff::Sites => ui.invoke_sites_show(),
                     Handoff::Filters => ui.invoke_filters_show(),
-                    Handoff::Zoom(zoom) => {
-                        ui.set_zoom(zoom);
-                        ui.invoke_focus_terminal();
-                    }
                     Handoff::Vim => {
                         ui.invoke_keyboard_updated();
                         ui.invoke_toggle_vim();
@@ -696,32 +712,53 @@ impl Preferences {
             }
         }
     }
+    pub(super) fn load_font_catalog_if_needed(self: &Rc<Self>) {
+        if let Some(ui) = self.ui.upgrade()
+            && ui.get_settings_open()
+            && ui.global::<crate::SettingsState>().get_preview_visible()
+            && ui
+                .global::<crate::SettingsState>()
+                .get_catalog_status()
+                .is_empty()
+        {
+            self.catalog();
+        }
+    }
     fn catalog(self: &Rc<Self>) {
-        if self.output.busy() || self.inflight.borrow().is_some() {
+        if self.stopped.get()
+            || self.closing.get()
+            || self.output.busy()
+            || self.inflight.borrow().is_some()
+        {
             return;
         }
         let Some(ui) = self.ui.upgrade() else {
             return;
         };
+        ui.global::<crate::SettingsState>()
+            .set_catalog_status(msg!("font-local-loading").into());
         let weak = Rc::downgrade(self);
         self.output
-            .work(&ui, fonts::installed, move |_, _, result| {
-                if let Some(o) = weak.upgrade() {
-                    match result {
+            .work(&ui, fonts::installed, move |_, ui, result| {
+                if weak.upgrade().is_some_and(|owner| !owner.stopped.get()) {
+                    let settings = ui.global::<crate::SettingsState>();
+                    let status = match result {
                         Ok(catalog) => {
                             let count = catalog.families.len();
-                            if let Some(w) = o.window.borrow().as_ref() {
-                                w.global::<crate::SettingsState>()
-                                    .set_families(strings(catalog.families));
-                            }
-                            o.notice(catalog.notice.unwrap_or_else(|| {
+                            settings.set_families(strings(catalog.families));
+                            catalog.notice.unwrap_or_else(|| {
                                 msg!("font-local-count", count = count.to_string())
-                            }));
+                            })
                         }
-                        Err(error) => o.notice(error),
-                    }
+                        Err(error) => error,
+                    };
+                    settings.set_catalog_status(status.into());
                 }
             });
+        if !self.output.busy() {
+            ui.global::<crate::SettingsState>()
+                .set_catalog_status(msg!("export-prepare-failed").into());
+        }
     }
     pub(super) fn imported(self: &Rc<Self>, profile: PortableProfile) {
         if let Some(w) = self.window.borrow().as_ref() {

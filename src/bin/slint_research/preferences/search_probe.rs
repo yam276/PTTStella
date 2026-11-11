@@ -285,8 +285,7 @@ impl Preferences {
             .invoke_close_settings();
         wait(|| !ui.get_settings_open(), "search window did not close").await?;
         require(!self.search_focus.running(), "focus timer survived close")?;
-        // Runtime controls are explicit activations after settings drain, not
-        // side effects of search/category changes. Each toggle is restored.
+        // Zoom acts in place. The other runtime controls hand off after close.
         let zoom = ui.get_zoom();
         ui.set_zoom(1.5);
         ui.invoke_settings_show();
@@ -294,21 +293,28 @@ impl Preferences {
             .global::<crate::SettingsState>()
             .invoke_runtime_action(0);
         wait(
-            || !ui.get_settings_open() && ui.get_zoom() == 1.,
-            "fit handoff did not apply",
+            || ui.get_settings_open() && ui.get_zoom() == 1.,
+            "fit did not apply in place",
         )
         .await?;
-        for (action, expected) in [(6, 1.25), (7, 1.5)] {
-            ui.invoke_settings_show();
+        for (action, expected) in [(6, 0.75), (7, 1.)] {
             window
                 .global::<crate::SettingsState>()
                 .invoke_runtime_action(action);
             wait(
-                || !ui.get_settings_open() && ui.get_zoom() == expected,
-                "zoom preset handoff did not apply",
+                || ui.get_settings_open() && ui.get_zoom() == expected,
+                "zoom step did not apply in place",
             )
             .await?;
         }
+        window
+            .global::<crate::SettingsState>()
+            .invoke_close_settings();
+        wait(
+            || !ui.get_settings_open(),
+            "settings stayed open after zoom",
+        )
+        .await?;
         ui.set_zoom(zoom);
         for action in 1..=4 {
             let value = || match action {

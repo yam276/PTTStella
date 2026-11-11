@@ -1,4 +1,4 @@
-import { ScrollView } from "std-widgets.slint";
+import { ListView } from "std-widgets.slint";
 
 export global PanelEdit {
     in-out property <int> code;
@@ -120,44 +120,124 @@ export component PanelField inherits Rectangle {
     }
 }
 
-// The list expands in the scrolling form. It never creates a native popup.
 export component PanelCombo inherits Rectangle {
     in property <[string]> model;
     in-out property <int> current-index: -1;
+    in property <int> displayed-index: root.current-index;
+    in property <string> placeholder-text;
     in property <bool> enabled: true;
-    private property <bool> expanded;
-    out property <bool> has-focus: trigger.has-focus;
+    private property <bool> available: root.enabled && root.model.length > 0;
+    private property <length> row-height: 32px;
+    private property <int> highlight: -1;
+    private property <string> value: root.displayed-index >= 0 && root.displayed-index < root.model.length
+        ? root.model[root.displayed-index] : root.placeholder-text;
+    out property <bool> has-focus: trigger.has-focus || menu.is-open;
     callback selected(string);
     forward-focus: trigger;
-    min-height: options.min-height;
-    max-height: options.preferred-height;
+    min-height: 34px;
+    max-height: 36px;
     vertical-stretch: 0;
     min-width: 120px;
-    changed enabled => { if !root.enabled { root.expanded = false; } }
-    FocusScope {
-        width: parent.width; height: parent.height;
+    background: pointer.has-hover && root.available ? #203b55 : #142b41;
+    border-width: 1px;
+    border-color: root.has-focus ? #e7c46a : #34475b;
+    accessible-role: combobox;
+    accessible-enabled: root.available;
+    accessible-value: root.value;
+    accessible-expandable: true;
+    accessible-expanded: menu.is-open;
+    accessible-action-default => { root.toggle-menu(); }
+    changed available => { if !root.available && menu.is-open { menu.close(); } }
+    changed model => { if menu.is-open { menu.close(); } }
+
+    function toggle-menu() {
+        if menu.is-open {
+            menu.close();
+        } else if root.available {
+            trigger.focus();
+            root.highlight = max(0, root.displayed-index);
+            menu.show();
+        }
+    }
+    function choose(index: int) {
+        if index >= 0 && index < root.model.length {
+            let value = root.model[index];
+            menu.close();
+            root.current-index = index;
+            root.selected(value);
+        }
+    }
+    Text {
+        x: 10px; width: parent.width - 40px;
+        text: root.value; color: root.available ? #ebe7dc : #9eabb9;
+        font-size: 14px; vertical-alignment: center; overflow: elide;
+    }
+    Text {
+        x: parent.width - 26px; width: 18px;
+        text: "▾"; color: #b5bcc7; font-size: 12px;
+        horizontal-alignment: center; vertical-alignment: center;
+    }
+    trigger := FocusScope {
+        enabled: root.available;
+        focus-on-click: false;
         key-pressed(event) => {
-            if event.text == Key.Escape && root.expanded { root.expanded = false; trigger.focus(); return accept; }
+            if event.text == Key.Return || event.text == " " || event.text == Key.DownArrow || event.text == Key.UpArrow {
+                if !event.repeat { root.toggle-menu(); }
+                return accept;
+            }
             return reject;
         }
-        options := VerticalLayout {
-            trigger := PanelButton {
-                text: (root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "") + "  ▾";
-                enabled: root.enabled;
-                clicked => { root.expanded = !root.expanded; }
+    }
+    pointer := TouchArea {
+        enabled: root.available;
+        clicked => { root.toggle-menu(); }
+    }
+
+    // Winit hosts this anchored list in the parent surface.
+    menu := PopupWindow {
+        x: 0; y: root.height + 2px;
+        width: root.width;
+        height: min(7, root.model.length) * root.row-height + 2px;
+        close-policy: close-on-click-outside;
+        forward-focus: keys;
+        init => { keys.focus(); keys.reveal(root.highlight); }
+        keys := FocusScope {
+            focus-on-click: false;
+            function reveal(index: int) {
+                root.highlight = min(root.model.length - 1, max(0, index));
+                let start = root.highlight * root.row-height;
+                list.content-y = min(-start, max(list.visible-height - start - root.row-height, list.content-y));
             }
-            if root.expanded && root.model.length > 0: ScrollView {
-                height: min(170px, root.model.length * 34px);
-                content-width: self.width;
-                VerticalLayout {
+            key-pressed(event) => {
+                if event.text == Key.Escape {
+                    menu.close();
+                    return accept;
+                }
+                if event.text == Key.Return || event.text == " " {
+                    if !event.repeat { root.choose(root.highlight); }
+                    return accept;
+                }
+                if event.text == Key.DownArrow || event.text == Key.UpArrow {
+                    self.reveal(root.highlight + (event.text == Key.DownArrow ? 1 : -1));
+                    return accept;
+                }
+                if event.text == Key.Home || event.text == Key.End {
+                    self.reveal(event.text == Key.Home ? 0 : root.model.length - 1);
+                    return accept;
+                }
+                if event.text == Key.Tab { menu.close(); }
+                return reject;
+            }
+            Rectangle {
+                background: #142b41;
+                border-width: 1px; border-color: #53697d;
+                list := ListView {
+                    x: 1px; y: 1px; width: parent.width - 2px; height: parent.height - 2px;
+                    content-width: self.visible-width;
                     for entry[index] in root.model: PanelButton {
-                        text: entry; navigation: true; checked: root.current-index == index;
-                        clicked => {
-                            root.current-index = index;
-                            root.expanded = false;
-                            trigger.focus();
-                            root.selected(entry);
-                        }
+                        height: root.row-height;
+                        text: entry; navigation: true; checked: root.highlight == index;
+                        clicked => { root.choose(index); }
                     }
                 }
             }

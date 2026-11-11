@@ -37,7 +37,7 @@ export component DestinationPanel inherits PanelOverlay {
             input:=PanelField {text<=>DestinationState.draft;accessible-label:DestinationState.labels[1];enabled:!DestinationState.busy;edited=>{self.text=DestinationState.field-edit(self.text);}accepted=>{if !DestinationState.composing && !DestinationState.busy {DestinationState.action(0);}}}
             Text {text:DestinationState.labels[2];color:#9ab5ce;wrap:word-wrap;}
             Text {text:DestinationState.labels[3];color:#c7d4e7;}
-            PanelCombo {model:DestinationState.boards;current-index<=>DestinationState.choice;enabled:!DestinationState.busy && !DestinationState.composing;selected=>{DestinationState.choose(self.current-index);}}
+            PanelCombo {model:DestinationState.boards;current-index<=>DestinationState.choice;enabled:root.visible && !DestinationState.busy && !DestinationState.composing;selected=>{DestinationState.choose(self.current-index);}}
             Text {text:DestinationState.history-message;color:#9ab5ce;wrap:word-wrap;}
             PanelButton {text:DestinationState.labels[4];enabled:!DestinationState.composing;clicked=>{DestinationState.action(2);}}
             Text {text:DestinationState.message;color:#f2cd7d;wrap:word-wrap;vertical-stretch:1;}

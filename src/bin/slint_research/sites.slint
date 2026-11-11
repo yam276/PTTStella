@@ -39,7 +39,7 @@ export component SitesPanel inherits PanelOverlay {
         Text {text:SitesState.current-note;color:#c7d4e7;wrap:word-wrap;}
         Text {text:SitesState.default-note;color:#f2cd7d;wrap:word-wrap;}
         Text {text:SitesState.labels[1];color:#c7d4e7;}
-        PanelCombo {model:SitesState.favourites;current-index<=>SitesState.choice;enabled:!SitesState.busy && !SitesState.composing;selected=>{SitesState.choose(self.current-index);} }
+        PanelCombo {model:SitesState.favourites;current-index<=>SitesState.choice;enabled:root.visible && !SitesState.busy && !SitesState.composing;selected=>{SitesState.choose(self.current-index);} }
         HorizontalLayout {
             PanelButton {text:SitesState.labels[10];enabled:!SitesState.busy && !SitesState.composing;clicked=>{SitesState.preset(false);} }
             PanelButton {text:SitesState.labels[11];enabled:!SitesState.busy && !SitesState.composing;clicked=>{SitesState.preset(true);} }
@@ -49,7 +49,7 @@ export component SitesPanel inherits PanelOverlay {
         Text {text:SitesState.labels[4];color:#c7d4e7;}
         address-field:=PanelField {text<=>SitesState.address;accessible-label:SitesState.labels[4];enabled:!SitesState.busy;edited=>{self.text=SitesState.field-edit(1,self.text);} }
         Text {text:SitesState.labels[5];color:#c7d4e7;}
-        PanelCombo {model:["Big5-UAO","Big5","GBK"];current-index<=>SitesState.encoding;enabled:!SitesState.busy && !SitesState.composing;}
+        PanelCombo {model:["Big5-UAO","Big5","GBK"];current-index<=>SitesState.encoding;enabled:root.visible && !SitesState.busy && !SitesState.composing;}
         Text {text:SitesState.security;color:#9ab5ce;wrap:word-wrap;}
         HorizontalLayout {
             PanelButton {text:SitesState.labels[6];enabled:SitesState.writable && !SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(0);} }

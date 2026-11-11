@@ -65,8 +65,8 @@ export component FiltersPanel inherits PanelOverlay {
                 }
                 VerticalLayout {
                     Text {text:FiltersState.allow?FiltersState.labels[9]:FiltersState.labels[7];color:#c7d4e7;}
-                    if !FiltersState.allow: PanelCombo {model:[FiltersState.labels[8],FiltersState.labels[10]];current-index<=>FiltersState.policy;enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;}
-                    if FiltersState.allow: PanelCombo {model:FiltersState.individual-colors;current-index<=>FiltersState.entry-color;enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;}
+                    if !FiltersState.allow: PanelCombo {model:[FiltersState.labels[8],FiltersState.labels[10]];current-index<=>FiltersState.policy;enabled:root.visible && FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;}
+                    if FiltersState.allow: PanelCombo {model:FiltersState.individual-colors;current-index<=>FiltersState.entry-color;enabled:root.visible && FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;}
                 }
             }
             Text {text:FiltersState.labels[11];color:#c7d4e7;}
@@ -77,7 +77,7 @@ export component FiltersPanel inherits PanelOverlay {
             }
             if FiltersState.allow: HorizontalLayout {
                 Text {text:FiltersState.labels[14];color:#c7d4e7;}
-                PanelCombo {model:FiltersState.colors;current-index<=>FiltersState.shared-color;enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;}
+                PanelCombo {model:FiltersState.colors;current-index<=>FiltersState.shared-color;enabled:root.visible && FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;}
                 PanelButton {text:FiltersState.labels[15];enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;clicked=>{FiltersState.action(2);}}
             }
             Text {text:FiltersState.message;color:#f2cd7d;wrap:word-wrap;vertical-stretch:1;}
