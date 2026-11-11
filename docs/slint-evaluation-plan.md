@@ -8,7 +8,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 **尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
 
-文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩Mac最新包已由乾淨7466c31同步閱讀狀態列／探針修正，各19項封裝後合成案例通過；Linux150c1a0d核對fbcfe2e，14案與四案重測通過。這三個新Mac／備妥Windows來源與Linux的380份產品輸入相同，完整580檔只差三份文件。新備妥Windowsfe8872f6仍原生未測，使用者待驗69542cb7入口不變。Intel使用Rosetta，Linux GL案例使用QEMU／Xvfb＋Mesa softpipe；Intel／Linux實機依指示暫緩，其餘原生／資料／效能矩陣未完成。原始GL逾時及LLVM中止證據保留，不能轉填為硬體GPU或S8效能通過。
+文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個 macOS 固定下載入口已更新至乾淨 `dbbce24`，納入設定字型預覽按需繪製與釋放。Apple Silicon `99949409` 和 Intel `4d7e344c` 各通過 23 項封裝後合成案例，Intel 使用 Rosetta。Linux `150c1a0d` 對應 `fbcfe2e`，14 案與四案重測通過，GL 案例使用 QEMU／Xvfb＋Mesa softpipe。另備 Windows `fe8872f6` 仍未原生執行，使用者待驗 `69542cb7` 入口維持。Intel／Linux 實機依指示暫緩，其餘原生操作、資料回退和效能矩陣仍待驗。
 
 macOS arm64 已以最新 Slint 候選及原 Dioxus 完成設定 v1–v6 的 18 輪實際前端往返，核對兩次寫入備份、最後讀回與其他資料檔。兩版 macOS 一般入口已各從隔離 HOME 的系統資料目錄讀到不同的預設站，完成本機 WSS、無自動輸入和伺服器 Close 回覆。macOS Keychain 已用獨立合成 service 驗證舊格式同簽章跨程序讀回、改簽拒絕與清理。[Keychain 驗收](login.md#macos-舊紀錄與重新簽章驗收) 同 worktree 的 Dioxus 設定欄位已修正舊版拒存小數的限制，macOS 已實測 Dioxus 存檔及 Slint 讀回，原 5ea9ad6 執行檔仍有該限制。[小數往返](slint-store-frontends.md#2026-11-11-小數顯示設定回退) 正式路徑的寫入／回退、實際 App 升級授權、Windows／Linux 密碼庫和完整資料操作仍待驗。[前端往返紀錄](slint-store-frontends.md#2026-11-11-同一對前端的-v1v6-設定往返)
 
@@ -18,7 +18,7 @@ macOS 軟體 renderer 局部呈現實驗用同一個執行檔做兩組雙 GIF �
 
 同一對 macOS 候選補驗兩組反序的雙 GIF／設定面板開關。兩版開設定時 CPU 均下降，關閉後實見雙圖恢復且各 URL 僅下載一次。可見播放 CPU 有明顯輪次波動，後續仍須控制暖機並驗證資源回收。[設定開關實測](slint-macos-measurement.md#2026-11-11-雙-gif-在設定開關前後的資源)
 
-macOS 設定開關在三個程序各跑 12 次，原候選的 footprint 主要在首次開關後增加，後續 RSS 仍上升。設定預覽改成外觀頁可見才繪製、關閉釋放，已通過設定保存、搜尋焦點及正常退出回歸。修正版仍需重複驗證記憶體及同步候選包。[重複開關紀錄](slint-macos-measurement.md#2026-11-11-設定重複開關與按需繪製預覽)
+macOS 設定開關在三個程序各跑 12 次，原候選的 footprint 主要在首次開關後增加，後續 RSS 仍上升。設定預覽改成外觀頁可見才繪製、關閉釋放，已通過設定保存、搜尋焦點及正常退出回歸。修正版已同步至兩個 macOS 候選包，長期記憶體回收仍待重複驗證。[重複開關紀錄](slint-macos-measurement.md#2026-11-11-設定重複開關與按需繪製預覽)
 
 | 階段 | 目前已有 | 尚須完成 |
 | --- | --- | --- |
@@ -741,3 +741,16 @@ Linux固定下載入口已更新到同一150c ELF，實際loader／dpkg、tar1,1
 驗後檢查resolved／UID／symlink／lsof／SHA，刪除被取代的兩Mac與Windows完整包、七檔最小Windows包裝input及一次來源還原checkout，共五個exact roots；另刪17張逐byte重複PNG，各保留一份與映射。合計843,823,552 regular-file bytes；filesystem available242773303296→243628793856 bytes只記並行觀測。固定Cargo target13,014,340KiB、目前必要交付、最小舊controls／所有獨特失敗、source kits與小型可重用fixture保留；舊ARM App的tccd保留例外不變，不停止系統服務或其他聊天程序。無新容器／SDK展開、Cargo clean或temporary分支。
 
 原建置／封裝／19案／payload hashes、source reconstruction、promotion原中止及修正、exact cleanup與保留例外集中於 `slint-renderer-api-current/cross-current/reading-package-current/`；已移除的重複PNG由cleanup.json追溯保留副本。正常下載alias及candidate index已更新，沒有推送或發佈。下一步回到同負載原生效能、混合功能與資料回退缺項；Intel／Linux實機依使用者指示暫緩，Windows695待使用者稍後驗收。S0–S8保持active，S9未執行。
+
+
+## 2026-11-11 設定預覽修正的 macOS 候選同步
+
+同一 Slint worktree 從乾淨 `dbbce24` 建置 Apple Silicon 與 Intel 兩個候選，重用固定 Cargo target、50／47 份播放器函式庫及既有原生授權，Intel all-target Clippy 通過。Apple Silicon 沿用同一來源的 106 項 bin 測試通過、1 項 helper ignored 及 Clippy 結果。Python 178 項通過。actionlint 初次從 PATH 呼叫時缺工具，改用既有 1.7.12 執行兩份 workflow 檢查後通過。
+
+封裝後執行檔 `99949409`／`4d7e344c` 各通過 23 項，保留原 19 案並加入設定、兩種語言 48 個搜尋焦點、退出前保存與 OpenGL MP4。每案均正常退出並收到唯一 Close ACK，46 個受測 PID 在驗後均已消失。Intel 使用 Rosetta。兩次 OpenGL MP4 的 libmpv 中介畫面與主視窗取樣相符，先前偶發錯色仍待定位。
+
+ZIP CRC、簽章與下載 SHA-256 均核對，App、ZIP 和唯讀 DMG 分別比對 1,240／1,222 個 payload。第一輪 DMG 驗證器直接比對暫存路徑拼法而失敗，改用解析後路徑重新驗證兩包通過。App 採 ad hoc 簽章，原生安裝、OS 鍵盤／IME、Intel 硬體與 S8 效能仍待驗。Windows 待測包、另備 Windows 包和 Linux 的下載檔 SHA-256 均維持，這批設定修正目前只進入兩個 macOS 下載包。
+
+同一 [產品來源交付](slint-product-source.md) 新增 `settings-macos-current`，從既有 bundle 還原完整 580 個檔案與 `dbbce24` tree。原有來源對應保留。完整第三方來源與從還原目錄重新編譯此版未驗。
+
+下載入口更新後移除舊 Apple Silicon／Intel 完整包、還原 checkout 與暫存 manifest，共 627,120,936 regular-file bytes，`du` 合計 619,508 KiB。filesystem available 為 239,704,743,936 → 240,340,787,200 bytes，包含並行活動。只保留一份 34,055,535-byte 壓縮的舊 Apple Silicon 執行檔供設定／GIF 對照，固定 Cargo 快取與目前交付均保留。兩版完整建置／回歸、檔案 hash、來源重建及精確清理路徑在 `slint-renderer-api-current/cross-current/settings-package-current/`。S0–S8 持續，S9 尚未執行。

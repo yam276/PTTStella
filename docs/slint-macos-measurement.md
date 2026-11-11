@@ -4,7 +4,7 @@
 
 ## 2026-11-11 雙 GIF 三組交錯比較
 
-在 Mac15,14、macOS 15.7.7 arm64 上，以目前 Slint arm64 封裝 native `f50ffb46`（乾淨 `7466c31`）對照既有 Dioxus native `4a3035b6`（實際 `3c667eb` 加 R3 patch，產品來源核對 `f48e7e4`）。已核對共用閱讀場景與素材產生器在這兩個來源間相同。六輪採 Slint／Dioxus、Dioxus／Slint、Slint／Dioxus 順序，使用相同設定、23 行文章和兩個獨立的 loopback GIF URL。兩圖都是同一份 512×160、32 幀、100ms 幀延遲的合成 GIF。每輪用新程序，重用兩個測試 App 身分。
+在 Mac15,14、macOS 15.7.7 arm64 上，以當時 Slint arm64 封裝 native `f50ffb46`（乾淨 `7466c31`）對照既有 Dioxus native `4a3035b6`（實際 `3c667eb` 加 R3 patch，產品來源核對 `f48e7e4`）。已核對共用閱讀場景與素材產生器在這兩個來源間相同。六輪採 Slint／Dioxus、Dioxus／Slint、Slint／Dioxus 順序，使用相同設定、23 行文章和兩個獨立的 loopback GIF URL。兩圖都是同一份 512×160、32 幀、100ms 幀延遲的合成 GIF。每輪用新程序，重用兩個測試 App 身分。
 
 實際介面展開兩張全尺寸圖片，外窗擷取為 1040×768。採樣前後核對文章輸入焦點和紅藍畫面。Dioxus 的兩張 GIF 在背景可展開，進出全螢幕再點文章空白處後，恢復原窗尺寸和播放。Slint 用 Raise 及文章點擊，首輪另捲回文章頂端。Slint 文章 viewport 實際回報 1040×676，原彙整誤用了歷史 1040×740。Dioxus 圖片置中，Slint 圖片靠左，兩版頁尾與內部版面有差異。首段 Slint 0.287 秒缺少結束時的文章焦點證據，保留原始 trace。重新取得焦點後採用獨立的 `playing-focused` 區間，並觀察到兩張圖都切換紅藍畫面。
 
@@ -59,7 +59,7 @@
 
 首版用 Slint 的 property change callback 觸發預覽，設定與釋放案通過，但搜尋前往外觀的 Zoom Fit 焦點失敗，原候選同案通過。改成由分類切換、搜尋清空和結果導覽在排定焦點前明確更新。最終設定／搜尋／關閉待存三個完整探針都通過，搜尋包含兩種語言共 48 個定位。設定探針另核對隱藏預覽零配置、外觀預覽尺寸 576、關閉後無 renderer 或圖片、重開後重新繪製。實際視窗也在 12 次取樣後額外驗證外觀頁預覽與關閉重開，看到雙色字、字形與圖形，回文章後雙 GIF 仍切換紅藍。三輪均正常 exit 0、嚴格 Close、HTTP join，兩張圖各只下載一次。[Slint callback 文件](https://docs.slint.dev/latest/docs/slint/reference/language/callbacks/)
 
-原始證據在 `.local/verification/slint-settings-retention/`。用 `compare.py` 在同層新目錄 setup，執行 `run 1`、`run 2`，每輪照順序 `sample N baseline`、`open-01`、`closed-01`、`closed-04`、`closed-08`、`closed-12`。用固定 Cargo target release build，`stage.py` 在同一診斷 App 暫存改動後的 binary，再執行第 3 輪。首次焦點失敗、來源補丁、最終三個探針、Rust bin 106 passed／1 ignored 及 Clippy 各有紀錄。暫存 App 與專用系統 cache 已清理 68,892,153 regular-file bytes，18 份 trace 無損壓縮及 8 份相同 PNG 去重另有清單。四平台候選包尚未納入這筆修正。
+原始證據在 `.local/verification/slint-settings-retention/`。用 `compare.py` 在同層新目錄 setup，執行 `run 1`、`run 2`，每輪照順序 `sample N baseline`、`open-01`、`closed-01`、`closed-04`、`closed-08`、`closed-12`。用固定 Cargo target release build，`stage.py` 在同一診斷 App 暫存改動後的 binary，再執行第 3 輪。首次焦點失敗、來源補丁、最終三個探針、Rust bin 106 passed／1 ignored 及 Clippy 各有紀錄。暫存 App 與專用系統 cache 已清理 68,892,153 regular-file bytes，18 份 trace 無損壓縮及 8 份相同 PNG 去重另有清單。兩個 macOS 候選包已納入此修正並通過各 23 項封裝後回歸。上述量測使用原先記錄的執行檔，舊 Apple Silicon 對照以 `arm64-f50ffb46-native.gz` 保留於 `slint-renderer-api-current/cross-current/settings-package-current/`。[候選同步紀錄](slint-evaluation-plan.md#2026-11-11-設定預覽修正的-macos-候選同步)
 
 ## 2026-11-11 快照損耗待重畫狀態的修補
 
