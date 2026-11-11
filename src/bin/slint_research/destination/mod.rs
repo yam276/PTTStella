@@ -2,7 +2,7 @@
 //! command receipt and the Connection owns every station workflow and byte.
 pub mod probe;
 mod recent;
-use crate::{DestinationWindow, TerminalWindow, article::session::ArticleSession, output::Output};
+use crate::{TerminalWindow, article::session::ArticleSession, output::Output};
 use pttstella::{
     connection::{Connection, Phase},
     msg,
@@ -10,19 +10,20 @@ use pttstella::{
     navigation_job::{Destination, Progress},
     recent_boards::store::Store,
 };
-use slint::{ComponentHandle, ModelRc, VecModel, winit_030::WinitWindowAccessor};
+use slint::{ComponentHandle, ModelRc, VecModel};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
 };
 
+use crate::DestinationState;
 pub struct Manager {
     ui: slint::Weak<TerminalWindow>,
     connection: Rc<Connection>,
     article: Rc<ArticleSession>,
     output: Rc<Output>,
     history: Rc<recent::Recent>,
-    window: RefCell<Option<DestinationWindow>>,
+    window: RefCell<Option<TerminalWindow>>,
     draft: RefCell<String>,
     serial: Cell<u64>,
     pending: Cell<Option<(u64, Stamp)>>,
@@ -96,7 +97,7 @@ impl Manager {
         owner.update();
         owner
     }
-    fn window(&self) -> Option<DestinationWindow> {
+    fn window(&self) -> Option<TerminalWindow> {
         self.window
             .borrow()
             .as_ref()
@@ -110,13 +111,13 @@ impl Manager {
     }
     fn inline_notice(&self, value: String) {
         if let Some(w) = self.window() {
-            w.set_message(value.into());
+            w.global::<DestinationState>().set_message(value.into());
         }
     }
     pub fn refresh_labels(&self) {
         let Some(w) = self.window() else { return };
         let loader = pttstella::i18n::application().loader();
-        w.set_labels(strings(
+        w.global::<DestinationState>().set_labels(strings(
             [
                 "destination-title",
                 "destination-name",
@@ -141,11 +142,11 @@ impl Manager {
         }
         let Some(w) = self.window() else { return };
         let history = self.history.snapshot();
-        w.set_boards(strings(
+        w.global::<DestinationState>().set_boards(strings(
             std::iter::once(msg!("recent-title"))
                 .chain(history.boards.iter().map(|b| b.as_str().to_owned())),
         ));
-        w.set_history_message(
+        w.global::<DestinationState>().set_history_message(
             history
                 .notice
                 .unwrap_or_else(|| {
@@ -157,12 +158,14 @@ impl Manager {
                 })
                 .into(),
         );
-        w.set_busy(self.pending.get().is_some());
-        w.set_active(self.active.get().is_some() || self.pending.get().is_some());
+        w.global::<DestinationState>()
+            .set_busy(self.pending.get().is_some());
+        w.global::<DestinationState>()
+            .set_active(self.active.get().is_some() || self.pending.get().is_some());
     }
-    fn create_window(self: &Rc<Self>, ui: &TerminalWindow) -> Result<DestinationWindow, String> {
-        let w = DestinationWindow::new().map_err(|e| e.to_string())?;
-        w.on_field_edit({
+    fn create_window(self: &Rc<Self>, _ui: &TerminalWindow) -> Result<TerminalWindow, String> {
+        let w = self.ui.upgrade().ok_or("terminal window closed")?;
+        w.global::<DestinationState>().on_field_edit({
             let o = Rc::downgrade(self);
             move |value| {
                 let Some(o) = o.upgrade() else {
@@ -182,7 +185,7 @@ impl Manager {
                 value.into()
             }
         });
-        w.on_choose({
+        w.global::<DestinationState>().on_choose({
             let o = Rc::downgrade(self);
             move |index| {
                 if let Some(o) = o.upgrade()
@@ -196,14 +199,15 @@ impl Manager {
                     {
                         o.draft.replace(board.as_str().to_owned());
                         if let Some(w) = o.window() {
-                            w.set_draft(board.as_str().into());
-                            w.invoke_focus_draft();
+                            w.global::<DestinationState>()
+                                .set_draft(board.as_str().into());
+                            w.global::<DestinationState>().invoke_focus_draft();
                         }
                     }
                 }
             }
         });
-        w.on_action({
+        w.global::<DestinationState>().on_action({
             let o = Rc::downgrade(self);
             move |code| {
                 if let Some(o) = o.upgrade()
@@ -222,7 +226,7 @@ impl Manager {
                 }
             }
         });
-        w.on_close_destination({
+        w.global::<DestinationState>().on_close_destination({
             let o = Rc::downgrade(self);
             move || {
                 if let Some(o) = o.upgrade() {
@@ -230,16 +234,6 @@ impl Manager {
                 }
             }
         });
-        w.window().on_close_requested({
-            let o = Rc::downgrade(self);
-            move || {
-                if let Some(o) = o.upgrade() {
-                    o.close();
-                }
-                slint::CloseRequestResponse::KeepWindowShown
-            }
-        });
-        crate::native_text::install(ui, &w);
         Ok(w)
     }
     fn admit(&self) -> bool {
@@ -248,7 +242,9 @@ impl Manager {
                 .ui
                 .upgrade()
                 .is_some_and(|ui| ui.get_destination_open() && !ui.get_app_closing())
-            && self.window().is_some_and(|w| !w.get_composing())
+            && self
+                .window()
+                .is_some_and(|w| !w.global::<DestinationState>().get_composing())
     }
     fn open(self: &Rc<Self>, value: Option<String>) {
         let Some(ui) = self.ui.upgrade() else { return };
@@ -300,15 +296,11 @@ impl Manager {
         ui.set_destination_open(true);
         self.refresh_labels();
         if let Some(w) = self.window() {
-            w.set_draft(self.draft.borrow().clone().into());
-            w.set_choice(0);
-            if let Err(e) = w.show() {
-                ui.set_destination_open(false);
-                self.notice(e.to_string());
-                return;
-            }
-            w.window().with_winit_window(|w| w.focus_window());
-            w.invoke_focus_draft();
+            w.global::<DestinationState>()
+                .set_draft(self.draft.borrow().clone().into());
+            w.global::<DestinationState>().set_choice(0);
+
+            w.global::<DestinationState>().invoke_focus_draft();
         }
         if self.connection.updates.borrow().phase != Phase::Connected {
             self.notice(msg!("destination-dialog-disconnected"));
@@ -388,7 +380,10 @@ impl Manager {
         result
     }
     fn close(&self) {
-        if self.window().is_some_and(|w| w.get_composing()) {
+        if self
+            .window()
+            .is_some_and(|w| w.global::<DestinationState>().get_composing())
+        {
             return;
         }
         if let Err(e) = self.stop() {
@@ -398,12 +393,8 @@ impl Manager {
     }
     fn hide(&self) {
         if let Some(w) = self.window() {
-            if let Err(e) = w.hide() {
-                self.notice(e.to_string());
-                return;
-            }
-            w.set_draft("".into());
-            w.set_choice(0);
+            w.global::<DestinationState>().set_draft("".into());
+            w.global::<DestinationState>().set_choice(0);
         }
         self.draft.borrow_mut().clear();
         if let Some(ui) = self.ui.upgrade() {

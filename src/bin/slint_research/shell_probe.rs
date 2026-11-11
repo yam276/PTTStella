@@ -87,6 +87,31 @@ pub fn start(
             )?;
             verification::capture(&ui, &directory, "shell-idle.png")?;
             let idle_image = ui.get_terminal_image();
+            let fullscreen = ui.window().is_fullscreen();
+            ui.invoke_tools_toggle();
+            wait(|| ui.get_tools_open(), "settings tool did not open").await?;
+            ui.invoke_tools_category_choose(4);
+            wait(
+                || {
+                    ui.get_settings_open()
+                        && ui.global::<crate::SettingsState>().get_focused_target() == 0
+                },
+                "settings panel did not focus its search field",
+            )
+            .await?;
+            require(
+                !ui.get_terminal_input_focused()
+                    && ui.window().size() == window
+                    && ui.window().is_fullscreen() == fullscreen,
+                "opening settings changed the terminal window or left station focus active",
+            )?;
+            verification::capture(&ui, &directory, "shell-settings.png")?;
+            verification::key(&ui, Key::Escape);
+            wait(
+                || !ui.get_settings_open() && ui.get_terminal_input_focused(),
+                "settings Escape did not restore terminal focus",
+            )
+            .await?;
 
             ui.invoke_about_show();
             require(

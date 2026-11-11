@@ -330,7 +330,40 @@ fn mount_window(
                     ui.invoke_settings_show();return PreventDefault;
                 }
         }
-        if (ui.get_manager_open() || ui.get_settings_open()) && matches!(event,WindowEvent::KeyboardInput{..}|WindowEvent::Ime(_)){return PreventDefault;}
+        if ui.get_manager_open() || ui.get_settings_open() || ui.get_login_open() {
+            match event {
+                WindowEvent::KeyboardInput { event, is_synthetic: false, .. } => {
+                    let pressed = event.state == ElementState::Pressed;
+                    auxiliary_key(&ui, event.physical_key, pressed, event.repeat);
+                    if pressed && !event.repeat
+                        && let Some(code) = text_edit_shortcut(event.physical_key, input.borrow().modifiers)
+                        && !panel_composing(&ui)
+                    {
+                        if ui.get_settings_open() {
+                            ui.global::<crate::SettingsState>().invoke_edit_key(code);
+                        } else {
+                            ui.global::<crate::PanelEdit>().invoke_apply(code);
+                        }
+                        return PreventDefault;
+                    }
+                    return Propagate;
+                }
+                WindowEvent::Ime(Ime::Preedit(text, _)) => {
+                    panel_composition(&ui, !text.is_empty(), false);
+                    return Propagate;
+                }
+                WindowEvent::Ime(Ime::Commit(_)) => {
+                    panel_composition(&ui, false, true);
+                    return Propagate;
+                }
+                WindowEvent::Ime(Ime::Disabled) => {
+                    panel_composition(&ui, false, false);
+                    return Propagate;
+                }
+                WindowEvent::Focused(false) | WindowEvent::Occluded(true) => panel_composition(&ui, false, false),
+                _ => {}
+            }
+        }
         if ui.get_editor_open() {
             editor_trace.native(event);
         }
@@ -1015,6 +1048,32 @@ fn refresh(ui: &TerminalWindow, input: &RefCell<Input>, connection: &Connection)
             .with_winit_window(|window| window.set_ime_allowed(allowed));
     }
     ui.invoke_keep_alive_changed();
+}
+
+fn panel_composing(ui: &TerminalWindow) -> bool {
+    ui.get_login_open() && ui.get_login_composing()
+        || ui.get_settings_open() && ui.global::<crate::SettingsState>().get_composing()
+        || ui.get_sites_open() && ui.global::<crate::SitesState>().get_composing()
+        || ui.get_filters_open() && ui.global::<crate::FiltersState>().get_composing()
+        || ui.get_bookmarks_open() && ui.global::<crate::BookmarksState>().get_composing()
+        || ui.get_destination_open() && ui.global::<crate::DestinationState>().get_composing()
+}
+
+fn panel_composition(ui: &TerminalWindow, active: bool, committed: bool) {
+    if ui.get_login_open() {
+        ui.set_login_composing(active);
+    } else if ui.get_settings_open() {
+        ui.global::<crate::SettingsState>().set_composing(active);
+        ui.invoke_settings_composition(active, committed);
+    } else if ui.get_sites_open() {
+        ui.global::<crate::SitesState>().set_composing(active);
+    } else if ui.get_filters_open() {
+        ui.global::<crate::FiltersState>().set_composing(active);
+    } else if ui.get_bookmarks_open() {
+        ui.global::<crate::BookmarksState>().set_composing(active);
+    } else if ui.get_destination_open() {
+        ui.global::<crate::DestinationState>().set_composing(active);
+    }
 }
 
 fn actions_available(ui: &TerminalWindow, view: &View) -> bool {

@@ -3,19 +3,19 @@
 pub mod account_probe;
 pub mod probe;
 use crate::{
-    FiltersWindow, TerminalWindow, article::session::ArticleSession, file_job::ResultSlot,
-    output::Output,
+    TerminalWindow, article::session::ArticleSession, file_job::ResultSlot, output::Output,
 };
 use pttstella::{
     filters::{Entry, Policy, Rules, import::Parsed, preview::Import, store::Store},
     msg,
 };
-use slint::{ComponentHandle, ModelRc, VecModel, winit_030::WinitWindowAccessor};
+use slint::{ComponentHandle, ModelRc, VecModel};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
 };
 
+use crate::FiltersState;
 const COLOR_KEYS: [&str; 15] = [
     "filters-color-red",
     "filters-color-green",
@@ -55,7 +55,7 @@ pub struct Manager {
     article: Rc<ArticleSession>,
     store: Result<Store, String>,
     warning: RefCell<Option<String>>,
-    window: RefCell<Option<FiltersWindow>>,
+    window: RefCell<Option<TerminalWindow>>,
     result: RefCell<Option<Flight>>,
     import: RefCell<Import>,
     request: Cell<Option<u64>>,
@@ -122,7 +122,7 @@ impl Manager {
     fn rules(&self) -> Rules {
         self.article.rules()
     }
-    fn window(&self) -> Option<FiltersWindow> {
+    fn window(&self) -> Option<TerminalWindow> {
         self.window
             .borrow()
             .as_ref()
@@ -170,13 +170,13 @@ impl Manager {
     }
     fn inline_notice(&self, text: String) {
         if let Some(w) = self.window() {
-            w.set_message(text.into());
+            w.global::<FiltersState>().set_message(text.into());
         }
     }
     pub fn refresh_labels(&self) {
         let Some(w) = self.window() else { return };
         let loader = pttstella::i18n::application().loader();
-        w.set_labels(strings(
+        w.global::<FiltersState>().set_labels(strings(
             [
                 "filters-title",
                 "filters-tab-block",
@@ -205,8 +205,9 @@ impl Manager {
             .map(|key| loader.get(key)),
         ));
         let colors = COLOR_KEYS.map(|key| loader.get(key));
-        w.set_colors(strings(colors.clone()));
-        w.set_individual_colors(strings(
+        w.global::<FiltersState>()
+            .set_colors(strings(colors.clone()));
+        w.global::<FiltersState>().set_individual_colors(strings(
             std::iter::once(msg!("filters-color-shared")).chain(colors),
         ));
         self.render();
@@ -222,12 +223,12 @@ impl Manager {
         let mut entries: Vec<_> = rules
             .entries
             .into_iter()
-            .filter(|e| (e.policy == Policy::Allow) == w.get_allow())
+            .filter(|e| (e.policy == Policy::Allow) == w.global::<FiltersState>().get_allow())
             .collect();
         entries.sort_by_key(|e| {
             (
-                if w.get_category_sort() {
-                    if w.get_allow() {
+                if w.global::<FiltersState>().get_category_sort() {
+                    if w.global::<FiltersState>().get_allow() {
                         e.color.unwrap_or(rules.allow_color)
                     } else {
                         u8::from(e.policy == Policy::MaskRow)
@@ -238,41 +239,44 @@ impl Manager {
                 e.id.to_ascii_lowercase(),
             )
         });
-        w.set_choice(
+        w.global::<FiltersState>().set_choice(
             entries
                 .iter()
-                .position(|e| e.id.eq_ignore_ascii_case(w.get_account().as_str()))
+                .position(|e| {
+                    e.id.eq_ignore_ascii_case(w.global::<FiltersState>().get_account().as_str())
+                })
                 .map_or(-1, |i| i as i32),
         );
-        w.set_entries(strings(entries.iter().map(|e| {
-            let detail = match e.policy {
-                Policy::Mask => msg!("filters-policy-mask"),
-                Policy::MaskRow => msg!("filters-policy-mask-row"),
-                Policy::Allow => format!(
-                    "{}{}",
-                    pttstella::i18n::application()
-                        .loader()
-                        .get(COLOR_KEYS[usize::from(e.color.unwrap_or(rules.allow_color) - 1)]),
-                    if e.color.is_none() {
-                        format!(" · {}", msg!("filters-color-shared"))
-                    } else {
+        w.global::<FiltersState>()
+            .set_entries(strings(entries.iter().map(|e| {
+                let detail = match e.policy {
+                    Policy::Mask => msg!("filters-policy-mask"),
+                    Policy::MaskRow => msg!("filters-policy-mask-row"),
+                    Policy::Allow => format!(
+                        "{}{}",
+                        pttstella::i18n::application()
+                            .loader()
+                            .get(COLOR_KEYS[usize::from(e.color.unwrap_or(rules.allow_color) - 1)]),
+                        if e.color.is_none() {
+                            format!(" · {}", msg!("filters-color-shared"))
+                        } else {
+                            String::new()
+                        }
+                    ),
+                };
+                format!(
+                    "{} · {}{}",
+                    e.id,
+                    detail,
+                    if e.note.is_empty() {
                         String::new()
+                    } else {
+                        format!(" — {}", e.note)
                     }
-                ),
-            };
-            format!(
-                "{} · {}{}",
-                e.id,
-                detail,
-                if e.note.is_empty() {
-                    String::new()
-                } else {
-                    format!(" — {}", e.note)
-                }
-            )
-        })));
-        w.set_empty_message(
-            if w.get_allow() {
+                )
+            })));
+        w.global::<FiltersState>().set_empty_message(
+            if w.global::<FiltersState>().get_allow() {
                 msg!("filters-empty-allow")
             } else {
                 msg!("filters-empty-block")
@@ -284,20 +288,25 @@ impl Manager {
     fn clear_draft(&self) {
         self.fields.replace(Default::default());
         if let Some(w) = self.window() {
-            w.set_account("".into());
-            w.set_note("".into());
-            w.set_policy(0);
-            w.set_entry_color(0);
-            w.set_choice(-1);
-            w.set_shared_color(i32::from(self.rules().allow_color) - 1);
+            w.global::<FiltersState>().set_account("".into());
+            w.global::<FiltersState>().set_note("".into());
+            w.global::<FiltersState>().set_policy(0);
+            w.global::<FiltersState>().set_entry_color(0);
+            w.global::<FiltersState>().set_choice(-1);
+            w.global::<FiltersState>()
+                .set_shared_color(i32::from(self.rules().allow_color) - 1);
         }
     }
     fn sync(&self) {
         if let Some(w) = self.window() {
-            w.set_busy(self.output.busy() || self.result.borrow().is_some());
-            w.set_writable(self.warning.borrow().is_none());
-            w.set_importing(self.request.get().is_some());
-            w.set_preview(self.preview.borrow().is_some());
+            w.global::<FiltersState>()
+                .set_busy(self.output.busy() || self.result.borrow().is_some());
+            w.global::<FiltersState>()
+                .set_writable(self.warning.borrow().is_none());
+            w.global::<FiltersState>()
+                .set_importing(self.request.get().is_some());
+            w.global::<FiltersState>()
+                .set_preview(self.preview.borrow().is_some());
         }
     }
     fn open(self: &Rc<Self>) {
@@ -345,44 +354,39 @@ impl Manager {
         ui.set_filters_open(true);
         self.refresh_labels();
         if let Some(w) = self.window() {
-            if let Err(e) = w.show() {
-                ui.set_filters_open(false);
-                crate::notice::error(&ui, e.to_string());
-                return;
-            }
-            w.window().with_winit_window(|w| w.focus_window());
-            w.invoke_focus_account();
+            w.global::<FiltersState>().invoke_focus_account();
         }
     }
-    fn create_window(self: &Rc<Self>, ui: &TerminalWindow) -> Result<FiltersWindow, String> {
-        let w = FiltersWindow::new().map_err(|e| e.to_string())?;
-        w.on_tab({
+    fn create_window(self: &Rc<Self>, _ui: &TerminalWindow) -> Result<TerminalWindow, String> {
+        let w = self.ui.upgrade().ok_or("terminal window closed")?;
+        w.global::<FiltersState>().on_tab({
             let o = Rc::downgrade(self);
             move |allow| {
                 if let Some(o) = o.upgrade()
                     && let Some(w) = o.window()
-                    && !w.get_composing()
-                    && w.get_allow() != allow
+                    && !w.global::<FiltersState>().get_composing()
+                    && w.global::<FiltersState>().get_allow() != allow
                 {
-                    w.set_allow(allow);
+                    w.global::<FiltersState>().set_allow(allow);
                     o.clear_draft();
                     o.render();
                 }
             }
         });
-        w.on_sort({
+        w.global::<FiltersState>().on_sort({
             let o = Rc::downgrade(self);
             move || {
                 if let Some(o) = o.upgrade()
                     && let Some(w) = o.window()
-                    && !w.get_composing()
+                    && !w.global::<FiltersState>().get_composing()
                 {
-                    w.set_category_sort(!w.get_category_sort());
+                    w.global::<FiltersState>()
+                        .set_category_sort(!w.global::<FiltersState>().get_category_sort());
                     o.render();
                 }
             }
         });
-        w.on_new_entry({
+        w.global::<FiltersState>().on_new_entry({
             let o = Rc::downgrade(self);
             move || {
                 if let Some(o) = o.upgrade()
@@ -390,34 +394,36 @@ impl Manager {
                 {
                     o.clear_draft();
                     if let Some(w) = o.window() {
-                        w.invoke_focus_account();
+                        w.global::<FiltersState>().invoke_focus_account();
                     }
                 }
             }
         });
-        w.on_choose({
+        w.global::<FiltersState>().on_choose({
             let o = Rc::downgrade(self);
             move |index| {
                 if let Some(o) = o.upgrade()
                     && let Some(w) = o.window()
                     && !o.output.busy()
-                    && !w.get_composing()
+                    && !w.global::<FiltersState>().get_composing()
                 {
                     let entry = usize::try_from(index)
                         .ok()
                         .and_then(|i| o.rows.borrow().get(i).cloned());
                     if let Some(e) = entry {
                         o.fields.replace([e.id.clone(), e.note.clone()]);
-                        w.set_account(e.id.into());
-                        w.set_note(e.note.into());
-                        w.set_policy(i32::from(e.policy == Policy::MaskRow));
-                        w.set_entry_color(e.color.map_or(0, i32::from));
-                        w.set_choice(index);
+                        w.global::<FiltersState>().set_account(e.id.into());
+                        w.global::<FiltersState>().set_note(e.note.into());
+                        w.global::<FiltersState>()
+                            .set_policy(i32::from(e.policy == Policy::MaskRow));
+                        w.global::<FiltersState>()
+                            .set_entry_color(e.color.map_or(0, i32::from));
+                        w.global::<FiltersState>().set_choice(index);
                     }
                 }
             }
         });
-        w.on_field_edit({
+        w.global::<FiltersState>().on_field_edit({
             let o = Rc::downgrade(self);
             move |index, text| {
                 let Some(o) = o.upgrade() else {
@@ -439,7 +445,7 @@ impl Manager {
                 text
             }
         });
-        w.on_action({
+        w.global::<FiltersState>().on_action({
             let o = Rc::downgrade(self);
             move |code| {
                 if let Some(o) = o.upgrade() {
@@ -447,7 +453,7 @@ impl Manager {
                 }
             }
         });
-        w.on_close_filters({
+        w.global::<FiltersState>().on_close_filters({
             let o = Rc::downgrade(self);
             move || {
                 if let Some(o) = o.upgrade() {
@@ -455,16 +461,6 @@ impl Manager {
                 }
             }
         });
-        w.window().on_close_requested({
-            let o = Rc::downgrade(self);
-            move || {
-                if let Some(o) = o.upgrade() {
-                    o.close();
-                }
-                slint::CloseRequestResponse::KeepWindowShown
-            }
-        });
-        crate::native_text::install(ui, &w);
         Ok(w)
     }
     fn editable(&self) -> bool {
@@ -477,7 +473,9 @@ impl Manager {
                 .ui
                 .upgrade()
                 .is_some_and(|u| u.get_filters_open() && !u.get_app_closing())
-            && self.window().is_some_and(|w| !w.get_composing())
+            && self
+                .window()
+                .is_some_and(|w| !w.global::<FiltersState>().get_composing())
     }
     fn cancel_import(&self) {
         self.request.set(None);
@@ -527,7 +525,10 @@ impl Manager {
     fn action(self: &Rc<Self>, code: i32) {
         let Some(ui) = self.ui.upgrade() else { return };
         let Some(w) = self.window() else { return };
-        if self.stopped.get() || ui.get_app_closing() || !ui.get_filters_open() || w.get_composing()
+        if self.stopped.get()
+            || ui.get_app_closing()
+            || !ui.get_filters_open()
+            || w.global::<FiltersState>().get_composing()
         {
             return;
         }
@@ -560,18 +561,20 @@ impl Manager {
             let base = self.rules();
             let next = match code {
                 0 | 1 => base.edit_color(
-                    w.get_account().as_str(),
-                    w.get_note().as_str(),
-                    if w.get_allow() {
+                    w.global::<FiltersState>().get_account().as_str(),
+                    w.global::<FiltersState>().get_note().as_str(),
+                    if w.global::<FiltersState>().get_allow() {
                         Policy::Allow
-                    } else if w.get_policy() == 1 {
+                    } else if w.global::<FiltersState>().get_policy() == 1 {
                         Policy::MaskRow
                     } else {
                         Policy::Mask
                     },
-                    if w.get_allow() && w.get_entry_color() > 0 {
+                    if w.global::<FiltersState>().get_allow()
+                        && w.global::<FiltersState>().get_entry_color() > 0
+                    {
                         Some(
-                            u8::try_from(w.get_entry_color())
+                            u8::try_from(w.global::<FiltersState>().get_entry_color())
                                 .map_err(|_| msg!("filters-color-invalid"))?,
                         )
                     } else {
@@ -580,7 +583,7 @@ impl Manager {
                     code == 1,
                 )?,
                 2 => base.with_allow_color(
-                    u8::try_from(w.get_shared_color() + 1)
+                    u8::try_from(w.global::<FiltersState>().get_shared_color() + 1)
                         .map_err(|_| msg!("filters-color-invalid"))?,
                 )?,
                 4 => {
@@ -659,7 +662,8 @@ impl Manager {
                 self.article.replace_rules(rules);
                 self.warning.borrow_mut().take();
                 if let Some(w) = self.window() {
-                    w.set_shared_color(i32::from(self.rules().allow_color) - 1);
+                    w.global::<FiltersState>()
+                        .set_shared_color(i32::from(self.rules().allow_color) - 1);
                 }
                 self.render();
                 self.inline_notice(msg!("filters-saved"));
@@ -708,7 +712,10 @@ impl Manager {
         result
     }
     fn close(&self) {
-        if self.window().is_some_and(|w| w.get_composing()) {
+        if self
+            .window()
+            .is_some_and(|w| w.global::<FiltersState>().get_composing())
+        {
             return;
         }
         self.closing.set(true);
@@ -720,15 +727,6 @@ impl Manager {
         }
     }
     fn hide(&self) {
-        if let Some(w) = self.window()
-            && let Err(e) = w.hide()
-        {
-            self.notice(e.to_string());
-            return;
-        }
-        self.cancel_import();
-        self.clear_draft();
-        self.closing.set(false);
         if let Some(ui) = self.ui.upgrade() {
             ui.set_filters_open(false);
         }

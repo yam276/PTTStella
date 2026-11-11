@@ -1,16 +1,10 @@
 use super::*;
 use crate::{
-    SettingsMatch, SettingsWindow,
+    SettingsMatch, TerminalWindow,
     renderer::{Renderer, Size},
 };
 use pttstella::settings::PortableProfile;
-use slint::{
-    Model, ModelRc, VecModel,
-    winit_030::{
-        EventResult, WinitWindowAccessor,
-        winit::event::{Ime, WindowEvent},
-    },
-};
+use slint::{Model, ModelRc, VecModel, winit_030::WinitWindowAccessor};
 #[path = "../../../fonts/catalog.rs"]
 mod fonts;
 
@@ -66,20 +60,18 @@ impl Preferences {
                 ui.invoke_reset_keyboard();
                 ui.set_settings_open(true);
             }
-            if let Err(error) = window.show() {
-                self.notice(error.to_string());
-                return;
-            }
             if opening {
                 self.preview(&window);
             }
-            window.window().with_winit_window(|w| w.focus_window());
-            window.invoke_focus_search();
+
+            window
+                .global::<crate::SettingsState>()
+                .invoke_focus_search();
         }
     }
-    fn create_window(self: &Rc<Self>) -> Result<SettingsWindow, String> {
-        let window = SettingsWindow::new().map_err(|e| e.to_string())?;
-        window.on_release_check({
+    fn create_window(self: &Rc<Self>) -> Result<TerminalWindow, String> {
+        let window = self.ui.upgrade().ok_or("terminal window closed")?;
+        window.global::<crate::SettingsState>().on_release_check({
             let weak = Rc::downgrade(self);
             move || {
                 if let Some(owner) = weak.upgrade() {
@@ -87,7 +79,7 @@ impl Preferences {
                 }
             }
         });
-        window.on_release_open({
+        window.global::<crate::SettingsState>().on_release_open({
             let weak = Rc::downgrade(self);
             move || {
                 if let Some(owner) = weak.upgrade() {
@@ -95,7 +87,7 @@ impl Preferences {
                 }
             }
         });
-        window.on_repository_open({
+        window.global::<crate::SettingsState>().on_repository_open({
             let weak = Rc::downgrade(self);
             move || {
                 if let Some(owner) = weak.upgrade() {
@@ -103,7 +95,7 @@ impl Preferences {
                 }
             }
         });
-        window.on_edit({
+        window.global::<crate::SettingsState>().on_edit({
             let weak = Rc::downgrade(self);
             move || {
                 if let Some(o) = weak.upgrade() {
@@ -111,7 +103,7 @@ impl Preferences {
                 }
             }
         });
-        window.on_refresh_preview({
+        window.global::<crate::SettingsState>().on_refresh_preview({
             let owner = Rc::downgrade(self);
             let window = window.as_weak();
             move || {
@@ -120,19 +112,19 @@ impl Preferences {
                 }
             }
         });
-        window.on_custom_font({
+        window.global::<crate::SettingsState>().on_custom_font({
             let weak = Rc::downgrade(self);
             let w = window.as_weak();
             move || {
                 if let Some(w) = w.upgrade() {
-                    w.set_preset(8);
+                    w.global::<crate::SettingsState>().set_preset(8);
                 }
                 if let Some(o) = weak.upgrade() {
                     o.edited();
                 }
             }
         });
-        window.on_font_preset({
+        window.global::<crate::SettingsState>().on_font_preset({
             let weak = Rc::downgrade(self);
             let w = window.as_weak();
             move || {
@@ -140,23 +132,28 @@ impl Preferences {
                     if let Ok(draft) = form::read(&w, o.model.borrow().edit_base())
                         && let Ok(display) = draft.display.resolve()
                     {
-                        w.set_ascii(display.ascii_font.into());
-                        w.set_cjk(display.cjk_font.into());
+                        w.global::<crate::SettingsState>()
+                            .set_ascii(display.ascii_font.into());
+                        w.global::<crate::SettingsState>()
+                            .set_cjk(display.cjk_font.into());
                     }
                     o.edited();
                 }
             }
         });
-        window.set_profile_name(msg!("profile-default-name").into());
-        window.on_search({
+        window
+            .global::<crate::SettingsState>()
+            .set_profile_name(msg!("profile-default-name").into());
+        window.global::<crate::SettingsState>().on_search({
             let owner = Rc::downgrade(self);
             let w = window.as_weak();
             move |query| {
                 if let (Some(owner), Some(w)) = (owner.upgrade(), w.upgrade()) {
                     owner.search_focus.stop();
                     let bounded = pttstella::settings::catalog::bounded_query(&query);
-                    if bounded != w.get_query().as_str() {
-                        w.set_query(bounded.clone().into());
+                    if bounded != w.global::<crate::SettingsState>().get_query().as_str() {
+                        w.global::<crate::SettingsState>()
+                            .set_query(bounded.clone().into());
                     }
                     let found = owner
                         .search_index
@@ -164,47 +161,69 @@ impl Preferences {
                         .as_ref()
                         .map(|i| i.search(&bounded))
                         .unwrap_or_default();
-                    w.set_matches(ModelRc::new(VecModel::from(
-                        found
-                            .into_iter()
-                            .filter_map(|entry| {
-                                form::destination(entry)
-                                    .filter(|(_, field)| match *field {
-                                        18 => w.get_sites_available(),
-                                        26 => w.get_filters_available(),
-                                        21 => w.get_runtime_available().row_data(1) == Some(true),
-                                        22 => w.get_runtime_available().row_data(2) == Some(true),
-                                        23 => w.get_runtime_available().row_data(3) == Some(true),
-                                        _ => true,
-                                    })
-                                    .map(|(page, field)| SettingsMatch {
-                                        field,
-                                        page,
-                                        title: pttstella::i18n::application()
-                                            .loader()
-                                            .get(entry.2)
-                                            .into(),
-                                    })
-                            })
-                            .collect::<Vec<_>>(),
-                    )));
+                    w.global::<crate::SettingsState>()
+                        .set_matches(ModelRc::new(VecModel::from(
+                            found
+                                .into_iter()
+                                .filter_map(|entry| {
+                                    form::destination(entry)
+                                        .filter(|(_, field)| match *field {
+                                            18 => w
+                                                .global::<crate::SettingsState>()
+                                                .get_sites_available(),
+                                            26 => w
+                                                .global::<crate::SettingsState>()
+                                                .get_filters_available(),
+                                            21 => {
+                                                w.global::<crate::SettingsState>()
+                                                    .get_runtime_available()
+                                                    .row_data(1)
+                                                    == Some(true)
+                                            }
+                                            22 => {
+                                                w.global::<crate::SettingsState>()
+                                                    .get_runtime_available()
+                                                    .row_data(2)
+                                                    == Some(true)
+                                            }
+                                            23 => {
+                                                w.global::<crate::SettingsState>()
+                                                    .get_runtime_available()
+                                                    .row_data(3)
+                                                    == Some(true)
+                                            }
+                                            _ => true,
+                                        })
+                                        .map(|(page, field)| SettingsMatch {
+                                            field,
+                                            page,
+                                            title: pttstella::i18n::application()
+                                                .loader()
+                                                .get(entry.2)
+                                                .into(),
+                                        })
+                                })
+                                .collect::<Vec<_>>(),
+                        )));
                 }
             }
         });
-        window.on_cancel_result_focus({
-            let owner = Rc::downgrade(self);
-            move || {
-                if let Some(owner) = owner.upgrade() {
-                    owner.search_focus.stop();
+        window
+            .global::<crate::SettingsState>()
+            .on_cancel_result_focus({
+                let owner = Rc::downgrade(self);
+                move || {
+                    if let Some(owner) = owner.upgrade() {
+                        owner.search_focus.stop();
+                    }
                 }
-            }
-        });
-        window.on_focus_result({
+            });
+        window.global::<crate::SettingsState>().on_focus_result({
             let owner = Rc::downgrade(self);
             let w = window.as_weak();
             move |field| {
                 if let (Some(owner), Some(w)) = (owner.upgrade(), w.upgrade()) {
-                    let expected_page = w.get_page();
+                    let expected_page = w.global::<crate::SettingsState>().get_page();
                     let w = w.as_weak();
                     let owner_weak = Rc::downgrade(&owner);
                     owner.search_focus.start(
@@ -215,21 +234,21 @@ impl Preferences {
                                 && !owner.stopped.get()
                                 && !owner.closing.get()
                                 && !owner.composing.get()
-                                && w.get_query().is_empty()
-                                && w.get_page() == expected_page
+                                && w.global::<crate::SettingsState>().get_query().is_empty()
+                                && w.global::<crate::SettingsState>().get_page() == expected_page
                                 && owner
                                     .ui
                                     .upgrade()
                                     .is_some_and(|u| u.get_settings_open() && !u.get_app_closing())
                             {
-                                w.invoke_focus_field(field);
+                                w.global::<crate::SettingsState>().invoke_focus_field(field);
                             }
                         },
                     );
                 }
             }
         });
-        window.on_runtime_action({
+        window.global::<crate::SettingsState>().on_runtime_action({
             let owner = Rc::downgrade(self);
             move |code| {
                 if let Some(owner) = owner.upgrade()
@@ -255,7 +274,7 @@ impl Preferences {
                 }
             }
         });
-        window.on_reset({
+        window.global::<crate::SettingsState>().on_reset({
             let weak = Rc::downgrade(self);
             let w = window.as_weak();
             move || {
@@ -263,7 +282,7 @@ impl Preferences {
                     let mut draft =
                         form::read(&w, o.model.borrow().edit_base()).unwrap_or_else(|_| o.app());
                     let defaults = AppSettings::default();
-                    match w.get_page() {
+                    match w.global::<crate::SettingsState>().get_page() {
                         0 => {
                             draft.language = defaults.language;
                             draft.article_mode = defaults.article_mode;
@@ -286,7 +305,7 @@ impl Preferences {
                 }
             }
         });
-        window.on_retry({
+        window.global::<crate::SettingsState>().on_retry({
             let weak = Rc::downgrade(self);
             move || {
                 if let Some(o) = weak.upgrade() {
@@ -295,7 +314,7 @@ impl Preferences {
                 }
             }
         });
-        window.on_close_settings({
+        window.global::<crate::SettingsState>().on_close_settings({
             let weak = Rc::downgrade(self);
             move || {
                 if let Some(o) = weak.upgrade() {
@@ -303,77 +322,7 @@ impl Preferences {
                 }
             }
         });
-        window.window().on_close_requested({
-            let weak = Rc::downgrade(self);
-            move || {
-                if let Some(o) = weak.upgrade() {
-                    o.request_close();
-                }
-                slint::CloseRequestResponse::KeepWindowShown
-            }
-        });
-        let modifiers = Cell::new(slint::winit_030::winit::keyboard::ModifiersState::empty());
-        window.window().on_winit_window_event({
-            let weak = Rc::downgrade(self);
-            let window = window.as_weak();
-            move |_, event| {
-                use slint::winit_030::winit::event::ElementState;
-                if let WindowEvent::ModifiersChanged(value) = event {
-                    modifiers.set(value.state());
-                }
-                if let Some(o) = weak.upgrade() {
-                    match event {
-                        WindowEvent::KeyboardInput {
-                            event,
-                            is_synthetic: false,
-                            ..
-                        } if !o.composing.get()
-                            && event.state == ElementState::Pressed
-                            && !event.repeat =>
-                        {
-                            if let Some(code) = crate::native_input::text_edit_shortcut(
-                                event.physical_key,
-                                modifiers.get(),
-                            ) && let Some(w) = window.upgrade()
-                                && w.invoke_edit_key(code)
-                            {
-                                return EventResult::PreventDefault;
-                            }
-                        }
-                        WindowEvent::Ime(Ime::Preedit(text, _)) => {
-                            o.composing.set(!text.is_empty());
-                            if !text.is_empty() {
-                                o.timer.stop();
-                            }
-                        }
-                        WindowEvent::Ime(Ime::Commit(_)) => {
-                            o.composing.set(false);
-                            let weak = Rc::downgrade(&o);
-                            Timer::single_shot(Duration::ZERO, move || {
-                                if let Some(o) = weak.upgrade() {
-                                    o.edited();
-                                }
-                            });
-                        }
-                        WindowEvent::Focused(true) => {
-                            if let Some(ui) = o.ui.upgrade() {
-                                ui.invoke_native_menu_refresh();
-                            }
-                        }
-                        WindowEvent::Focused(false) => {
-                            modifiers.set(Default::default());
-                            o.composing.set(false);
-                        }
-                        WindowEvent::Ime(Ime::Disabled) => {
-                            o.composing.set(false);
-                        }
-                        _ => {}
-                    }
-                }
-                EventResult::Propagate
-            }
-        });
-        window.on_manage_sites({
+        window.global::<crate::SettingsState>().on_manage_sites({
             let weak = Rc::downgrade(self);
             move || {
                 if let Some(o) = weak.upgrade() {
@@ -382,7 +331,7 @@ impl Preferences {
                 }
             }
         });
-        window.on_manage_filters({
+        window.global::<crate::SettingsState>().on_manage_filters({
             let weak = Rc::downgrade(self);
             move || {
                 if let Some(o) = weak.upgrade() {
@@ -391,7 +340,7 @@ impl Preferences {
                 }
             }
         });
-        window.on_manage_account({
+        window.global::<crate::SettingsState>().on_manage_account({
             let weak = Rc::downgrade(self);
             move || {
                 if let Some(o) = weak.upgrade() {
@@ -400,7 +349,7 @@ impl Preferences {
                 }
             }
         });
-        window.on_catalog({
+        window.global::<crate::SettingsState>().on_catalog({
             let weak = Rc::downgrade(self);
             move || {
                 if let Some(o) = weak.upgrade() {
@@ -408,22 +357,22 @@ impl Preferences {
                 }
             }
         });
-        window.on_family({
+        window.global::<crate::SettingsState>().on_family({
             let weak = Rc::downgrade(self);
             let w = window.as_weak();
             move |cjk, name| {
                 if let (Some(o), Some(w)) = (weak.upgrade(), w.upgrade()) {
                     if cjk {
-                        w.set_cjk(name);
+                        w.global::<crate::SettingsState>().set_cjk(name);
                     } else {
-                        w.set_ascii(name);
+                        w.global::<crate::SettingsState>().set_ascii(name);
                     }
-                    w.set_preset(8);
+                    w.global::<crate::SettingsState>().set_preset(8);
                     o.edited();
                 }
             }
         });
-        window.on_profile({
+        window.global::<crate::SettingsState>().on_profile({
             let weak = Rc::downgrade(self);
             move |export| {
                 if let Some(o) = weak.upgrade() {
@@ -431,7 +380,7 @@ impl Preferences {
                 }
             }
         });
-        window.on_font_source({
+        window.global::<crate::SettingsState>().on_font_source({
             let weak = Rc::downgrade(self);
             move |id| {
                 if let Some(o) = weak.upgrade()
@@ -446,28 +395,30 @@ impl Preferences {
         });
         Ok(window)
     }
-    pub(super) fn refresh_runtime(&self, w: &SettingsWindow) {
+    pub(super) fn refresh_runtime(&self, w: &TerminalWindow) {
         if let Some(ui) = self.ui.upgrade() {
-            w.set_runtime_labels(strings([
-                msg!("zoom-fit"),
-                ui.get_vim_label().to_string(),
-                ui.get_station_mouse_label().to_string(),
-                ui.get_keep_alive_label().to_string(),
-                if ui.get_pan_mode() {
-                    msg!("slint-select-text")
-                } else {
-                    msg!("slint-drag-scroll")
-                },
-                ui.get_vim_once_label().to_string(),
-            ]));
-            w.set_runtime_states(ModelRc::new(VecModel::from(vec![
-                false,
-                ui.get_vim_enabled(),
-                ui.get_station_mouse_enabled(),
-                ui.get_keep_alive_enabled(),
-                false,
-                false,
-            ])));
+            w.global::<crate::SettingsState>()
+                .set_runtime_labels(strings([
+                    msg!("zoom-fit"),
+                    ui.get_vim_label().to_string(),
+                    ui.get_station_mouse_label().to_string(),
+                    ui.get_keep_alive_label().to_string(),
+                    if ui.get_pan_mode() {
+                        msg!("slint-select-text")
+                    } else {
+                        msg!("slint-drag-scroll")
+                    },
+                    ui.get_vim_once_label().to_string(),
+                ]));
+            w.global::<crate::SettingsState>()
+                .set_runtime_states(ModelRc::new(VecModel::from(vec![
+                    false,
+                    ui.get_vim_enabled(),
+                    ui.get_station_mouse_enabled(),
+                    ui.get_keep_alive_enabled(),
+                    false,
+                    false,
+                ])));
             let unblocked = !ui.get_app_closing()
                 && !ui.get_editor_open()
                 && !ui.get_station_color_open()
@@ -475,24 +426,30 @@ impl Preferences {
                 && !ui.get_paste_open()
                 && !ui.get_switching_station();
             let ptt = ui.get_keep_alive_available() && unblocked;
-            w.set_runtime_available(ModelRc::new(VecModel::from(vec![
-                true,
-                ptt,
-                ui.get_station_mouse_available() && unblocked,
-                ptt,
-                unblocked,
-                ptt && ui.get_vim_once_available(),
-            ])));
-            if !w.get_query().is_empty() {
-                w.invoke_search(w.get_query());
+            w.global::<crate::SettingsState>()
+                .set_runtime_available(ModelRc::new(VecModel::from(vec![
+                    true,
+                    ptt,
+                    ui.get_station_mouse_available() && unblocked,
+                    ptt,
+                    unblocked,
+                    ptt && ui.get_vim_once_available(),
+                ])));
+            if !w.global::<crate::SettingsState>().get_query().is_empty() {
+                w.global::<crate::SettingsState>()
+                    .invoke_search(w.global::<crate::SettingsState>().get_query());
             }
         }
     }
-    fn localize(&self, w: &SettingsWindow) {
-        w.set_filters_label(msg!("filters-title").into());
-        w.set_filters_available(self.ui.upgrade().is_some_and(|u| u.get_filters_available()));
-        w.set_sites_label(msg!("sites-title").into());
-        w.set_sites_available(self.ui.upgrade().is_some_and(|u| u.get_sites_available()));
+    fn localize(&self, w: &TerminalWindow) {
+        w.global::<crate::SettingsState>()
+            .set_filters_label(msg!("filters-title").into());
+        w.global::<crate::SettingsState>()
+            .set_filters_available(self.ui.upgrade().is_some_and(|u| u.get_filters_available()));
+        w.global::<crate::SettingsState>()
+            .set_sites_label(msg!("sites-title").into());
+        w.global::<crate::SettingsState>()
+            .set_sites_available(self.ui.upgrade().is_some_and(|u| u.get_sites_available()));
         let t = |key: &str| pttstella::i18n::application().loader().get(key);
         match pttstella::settings::catalog::Index::new(t) {
             Ok(index) => {
@@ -552,8 +509,9 @@ impl Preferences {
             include_str!("../../../../assets/fonts/NotoSansCJK-OFL.txt"),
             include_str!(concat!(env!("OUT_DIR"), "/third-party-notices.txt"))
         );
-        w.set_labels(strings(labels));
-        w.set_categories(strings(
+        w.global::<crate::SettingsState>()
+            .set_labels(strings(labels));
+        w.global::<crate::SettingsState>().set_categories(strings(
             [
                 "settings-general",
                 "settings-appearance",
@@ -567,7 +525,7 @@ impl Preferences {
             .into_iter()
             .map(t),
         ));
-        w.set_presets(strings(
+        w.global::<crate::SettingsState>().set_presets(strings(
             [
                 "font-platform",
                 "font-windows-modern",
@@ -588,21 +546,24 @@ impl Preferences {
                 }
             }),
         ));
-        w.set_font_sources(ModelRc::new(VecModel::from(
-            fonts::Source::ALL
-                .into_iter()
-                .map(|s| {
-                    let help = s.help();
-                    crate::FontSource {
-                        id: help.id.into(),
-                        title: format!("{} · {}", help.label, help.families.join(" / ")).into(),
-                    }
-                })
-                .collect::<Vec<_>>(),
-        )));
-        w.set_languages(strings(["繁體中文".into(), "English".into()]));
-        w.set_modes(strings([t("article-mode-web"), t("article-mode-terminal")]));
-        w.set_positions(strings([
+        w.global::<crate::SettingsState>()
+            .set_font_sources(ModelRc::new(VecModel::from(
+                fonts::Source::ALL
+                    .into_iter()
+                    .map(|s| {
+                        let help = s.help();
+                        crate::FontSource {
+                            id: help.id.into(),
+                            title: format!("{} · {}", help.label, help.families.join(" / ")).into(),
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            )));
+        w.global::<crate::SettingsState>()
+            .set_languages(strings(["繁體中文".into(), "English".into()]));
+        w.global::<crate::SettingsState>()
+            .set_modes(strings([t("article-mode-web"), t("article-mode-terminal")]));
+        w.global::<crate::SettingsState>().set_positions(strings([
             t("hover-follow"),
             t("hover-top-right"),
             t("hover-disabled"),
@@ -611,10 +572,11 @@ impl Preferences {
     pub(crate) fn refresh_labels(&self) {
         if let Some(w) = self.window.borrow().as_ref() {
             self.localize(w);
-            w.invoke_search(w.get_query());
+            w.global::<crate::SettingsState>()
+                .invoke_search(w.global::<crate::SettingsState>().get_query());
         }
     }
-    fn edited(self: &Rc<Self>) {
+    pub(super) fn edited(self: &Rc<Self>) {
         self.timer.stop();
         if self.composing.get() {
             return;
@@ -627,19 +589,21 @@ impl Preferences {
         if let Some(w) = window {
             match form::read(&w, self.model.borrow().edit_base()) {
                 Ok(draft) => {
-                    w.set_failed(false);
+                    w.global::<crate::SettingsState>().set_failed(false);
                     self.preview(&w);
                     self.queue(draft, Duration::from_millis(300));
                 }
                 Err(error) => {
                     self.valid.set(false);
-                    w.set_notice(error.into());
+                    w.global::<crate::SettingsState>().set_notice(error.into());
                 }
             }
         }
     }
-    fn preview(&self, w: &SettingsWindow) {
-        if !w.get_preview_visible() || !self.ui.upgrade().is_some_and(|ui| ui.get_settings_open()) {
+    fn preview(&self, w: &TerminalWindow) {
+        if !w.global::<crate::SettingsState>().get_preview_visible()
+            || !self.ui.upgrade().is_some_and(|ui| ui.get_settings_open())
+        {
             return;
         }
         let result = (|| {
@@ -664,12 +628,15 @@ impl Preferences {
                     false,
                 )
                 .map_err(str::to_owned)?;
-            w.set_preview(slint::Image::from_rgba8_premultiplied(image));
-            w.set_font_status(renderer.font_status(&display).into());
+            w.global::<crate::SettingsState>()
+                .set_preview(slint::Image::from_rgba8_premultiplied(image));
+            w.global::<crate::SettingsState>()
+                .set_font_status(renderer.font_status(&display).into());
             Ok::<_, String>(())
         })();
         if let Err(error) = result {
-            w.set_font_status(error.into());
+            w.global::<crate::SettingsState>()
+                .set_font_status(error.into());
         }
     }
     fn request_close(self: &Rc<Self>) {
@@ -690,13 +657,13 @@ impl Preferences {
         self.composing.set(false);
         self.preview_renderer.borrow_mut().take();
         if let Some(w) = self.window.borrow().as_ref() {
-            w.set_preview(slint::Image::default());
-            if let Err(error) = w.hide() {
-                self.notice(error.to_string());
-            }
+            w.global::<crate::SettingsState>()
+                .set_preview(slint::Image::default());
         }
         if let Some(ui) = self.ui.upgrade() {
+            let was_open = ui.get_settings_open();
             ui.set_settings_open(false);
+            ui.global::<crate::SettingsState>().set_composing(false);
             if let Some(handoff) = self.handoff.replace(None)
                 && !self.stopped.get()
             {
@@ -724,6 +691,9 @@ impl Preferences {
                     Handoff::KeepAlive => ui.invoke_toggle_keep_alive(),
                 }
             }
+            if was_open && ui.get_context_focus_restorable() {
+                ui.invoke_focus_terminal();
+            }
         }
     }
     fn catalog(self: &Rc<Self>) {
@@ -741,7 +711,8 @@ impl Preferences {
                         Ok(catalog) => {
                             let count = catalog.families.len();
                             if let Some(w) = o.window.borrow().as_ref() {
-                                w.set_families(strings(catalog.families));
+                                w.global::<crate::SettingsState>()
+                                    .set_families(strings(catalog.families));
                             }
                             o.notice(catalog.notice.unwrap_or_else(|| {
                                 msg!("font-local-count", count = count.to_string())
@@ -756,7 +727,8 @@ impl Preferences {
         if let Some(w) = self.window.borrow().as_ref() {
             let mut draft = self.pending.borrow().clone().unwrap_or_else(|| self.app());
             draft.display = profile.display;
-            w.set_profile_name(profile.name.into());
+            w.global::<crate::SettingsState>()
+                .set_profile_name(profile.name.into());
             form::populate(w, &draft);
             self.preview(w);
             self.queue(draft, Duration::from_millis(300));
@@ -792,7 +764,12 @@ impl Preferences {
             return;
         };
         let profile = if export {
-            match PortableProfile::new(w.get_profile_name().to_string(), self.app().display) {
+            match PortableProfile::new(
+                w.global::<crate::SettingsState>()
+                    .get_profile_name()
+                    .to_string(),
+                self.app().display,
+            ) {
                 Ok(profile) => Some(profile),
                 Err(error) => {
                     self.notice(error);

@@ -61,6 +61,9 @@ impl Verification {
                 Some(ui) => run(ui, directory).await,
                 None => Err(format!("{name} probe window closed before verification")),
             };
+            if let Err(error) = &checked {
+                eprintln!("{name} probe failed: {error}");
+            }
             let should_close = automatic_close || checked.is_err();
             result.replace(Some(checked));
             if should_close && let Some(ui) = weak.upgrade() {

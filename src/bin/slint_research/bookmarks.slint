@@ -1,31 +1,24 @@
-import { Button, ComboBox, LineEdit } from "std-widgets.slint";
-component Field inherits LineEdit {
-    public function edit-key(code:int) {
-        if code==0 {self.select-all();} else if code==1 {self.copy();} else if code==2 {self.cut();}
-        else if code==3 {self.paste();} else if code==4 {self.undo();} else if code==5 {self.redo();}
-    }
-}
-export component BookmarksWindow inherits Window {
-    title:root.labels[0];preferred-width:1000px;preferred-height:760px;min-width:640px;min-height:540px;background:#171b23;
-    in property <[string]> labels;
-    in property <[string]> entries;
-    in property <string> message;
-    in property <bool> writable;
-    in property <bool> busy;
-    in property <bool> composing;
-    in property <bool> selected;
-    in property <bool> has-copy;
-    in property <bool> go-ready;
-    in property <bool> offline;
-    in property <image> page;
-    in property <string> progress;
+import { ScrollView } from "std-widgets.slint";
+import { PanelButton, PanelField, PanelCombo, PanelOverlay } from "panel.slint";
+
+export global BookmarksState {
+    in-out property <[string]> labels;
+    in-out property <[string]> entries;
+    in-out property <string> message;
+    in-out property <bool> writable;
+    in-out property <bool> busy;
+    in-out property <bool> composing;
+    in-out property <bool> selected;
+    in-out property <bool> has-copy;
+    in-out property <bool> go-ready;
+    in-out property <bool> offline;
+    in-out property <image> page;
+    in-out property <string> progress;
     in-out property <int> choice:0;
     in-out property <string> target;
     in-out property <string> label;
-    out property <float> reader-width:reader.width/1px;
-    out property <float> reader-height:reader.height/1px;
-    changed reader-width=>{root.reader-resized();}
-    changed reader-height=>{root.reader-resized();}
+    in-out property <float> reader-width;
+    in-out property <float> reader-height;
     callback reader-resized;
     callback choose(int);
     callback new-entry;
@@ -33,65 +26,77 @@ export component BookmarksWindow inherits Window {
     callback close-bookmarks;
     callback page-key(int);
     callback field-edit(int,string)->string;
-    public function edit-key(code:int)->bool {
-        if root.offline {return false;}
-        if target-field.has-focus {target-field.edit-key(code);return true;}
-        if label-field.has-focus {label-field.edit-key(code);return true;}
-        return false;
-    }
-    public function focus-target() {target-field.focus();}
-    public function focus-reader() {reader-keys.focus();}
+    in-out property <int> focus-target-sequence;
+    public function focus-target() { root.focus-target-sequence += 1; }
+    in-out property <int> focus-reader-sequence;
+    public function focus-reader() { root.focus-reader-sequence += 1; }
+}
+
+export component BookmarksPanel inherits PanelOverlay {
+    heading: BookmarksState.labels[0];
+    panel-width: 900px; panel-height: 700px;
+    private property <int> focus-target-sequence: BookmarksState.focus-target-sequence;
+    changed focus-target-sequence => { target-field.focus(); }
+    private property <int> focus-reader-sequence: BookmarksState.focus-reader-sequence;
+    changed focus-reader-sequence => { reader-keys.focus(); }
+    private property <float> reader-width: reader.width / 1px;
+    private property <float> reader-height: reader.height / 1px;
+    changed reader-width => { BookmarksState.reader-width = self.reader-width; BookmarksState.reader-resized(); }
+    changed reader-height => { BookmarksState.reader-height = self.reader-height; BookmarksState.reader-resized(); }
     FocusScope {
-        visible:!root.offline;
-        key-pressed(event)=>{if event.text==Key.Escape && !root.composing {root.close-bookmarks();return accept;}return reject;}
-        VerticalLayout {padding:16px;spacing:10px;
-            Text {text:root.labels[1];color:#c7d4e7;wrap:word-wrap;}
-            Text {text:root.labels[2];color:#c7d4e7;}
-            ComboBox {model:root.entries;current-index<=>root.choice;enabled:!root.busy && !root.composing;selected=>{root.choose(self.current-index);}}
-            Button {text:root.labels[3];enabled:!root.busy && !root.composing;clicked=>{root.new-entry();}}
-            Text {text:root.labels[4];color:#c7d4e7;}
-            target-field:=Field {text<=>root.target;accessible-label:root.labels[4];enabled:!root.busy;edited=>{self.text=root.field-edit(0,self.text);}}
-            Text {text:root.labels[5];color:#c7d4e7;}
-            label-field:=Field {text<=>root.label;accessible-label:root.labels[5];enabled:!root.busy;edited=>{self.text=root.field-edit(1,self.text);}}
+        visible:!BookmarksState.offline;
+        key-pressed(event)=>{if event.text==Key.Escape && !BookmarksState.composing {BookmarksState.close-bookmarks();return accept;}return reject;}
+        ScrollView {
+            content-width: self.width;
+        VerticalLayout {alignment: start; padding:16px;spacing:10px;
+            Text {text:BookmarksState.labels[1];color:#c7d4e7;wrap:word-wrap;}
+            Text {text:BookmarksState.labels[2];color:#c7d4e7;}
+            PanelCombo {model:BookmarksState.entries;current-index<=>BookmarksState.choice;enabled:!BookmarksState.busy && !BookmarksState.composing;selected=>{BookmarksState.choose(self.current-index);}}
+            PanelButton {text:BookmarksState.labels[3];enabled:!BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.new-entry();}}
+            Text {text:BookmarksState.labels[4];color:#c7d4e7;}
+            target-field:=PanelField {text<=>BookmarksState.target;accessible-label:BookmarksState.labels[4];enabled:!BookmarksState.busy;edited=>{self.text=BookmarksState.field-edit(0,self.text);}}
+            Text {text:BookmarksState.labels[5];color:#c7d4e7;}
+            label-field:=PanelField {text<=>BookmarksState.label;accessible-label:BookmarksState.labels[5];enabled:!BookmarksState.busy;edited=>{self.text=BookmarksState.field-edit(1,self.text);}}
             HorizontalLayout {
-                Button {text:root.labels[6];enabled:root.writable && !root.busy && !root.composing;clicked=>{root.action(0);}}
-                Button {text:root.labels[7];enabled:root.writable && root.selected && !root.busy && !root.composing;clicked=>{root.action(1);}}
-                Button {text:root.labels[8];enabled:root.has-copy && !root.busy && !root.composing;clicked=>{root.action(2);}}
-                Button {text:root.labels[14];enabled:root.go-ready && root.selected && !root.busy && !root.composing;clicked=>{root.action(4);}}
+                PanelButton {text:BookmarksState.labels[6];enabled:BookmarksState.writable && !BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.action(0);}}
+                PanelButton {text:BookmarksState.labels[7];enabled:BookmarksState.writable && BookmarksState.selected && !BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.action(1);}}
+                PanelButton {text:BookmarksState.labels[8];enabled:BookmarksState.has-copy && !BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.action(2);}}
+                PanelButton {text:BookmarksState.labels[14];enabled:BookmarksState.go-ready && BookmarksState.selected && !BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.action(4);}}
             }
-            Text {text:root.message;color:#f2cd7d;wrap:word-wrap;vertical-stretch:1;}
+            Text {text:BookmarksState.message;color:#f2cd7d;wrap:word-wrap;vertical-stretch:1;}
             HorizontalLayout {
-                Button {text:root.labels[9];enabled:!root.busy && !root.composing;clicked=>{root.action(3);}}
-                Button {text:root.labels[10];enabled:!root.composing;clicked=>{root.close-bookmarks();}}
+                PanelButton {text:BookmarksState.labels[9];enabled:!BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.action(3);}}
+                PanelButton {text:BookmarksState.labels[10];enabled:!BookmarksState.composing;clicked=>{BookmarksState.close-bookmarks();}}
             }
+        }
         }
     }
     reader-keys:=FocusScope {
-        visible:root.offline;
+        visible:BookmarksState.offline;
         key-pressed(event)=>{
-            if event.text==Key.Escape {root.page-key(6);return accept;}
-            if event.text==Key.UpArrow {root.page-key(0);return accept;}
-            if event.text==Key.DownArrow {root.page-key(1);return accept;}
-            if event.text==Key.PageUp {root.page-key(2);return accept;}
-            if event.text==Key.PageDown || event.text==" " {root.page-key(3);return accept;}
-            if event.text==Key.Home {root.page-key(4);return accept;}
-            if event.text==Key.End {root.page-key(5);return accept;}
+            if event.text==Key.Escape {BookmarksState.page-key(6);return accept;}
+            if event.text==Key.UpArrow {BookmarksState.page-key(0);return accept;}
+            if event.text==Key.DownArrow {BookmarksState.page-key(1);return accept;}
+            if event.text==Key.PageUp {BookmarksState.page-key(2);return accept;}
+            if event.text==Key.PageDown || event.text==" " {BookmarksState.page-key(3);return accept;}
+            if event.text==Key.Home {BookmarksState.page-key(4);return accept;}
+            if event.text==Key.End {BookmarksState.page-key(5);return accept;}
             return reject;
         }
         VerticalLayout {padding:12px;spacing:8px;
-            Text {text:root.labels[11];color:#f2cd7d;wrap:word-wrap;}
+            Text {text:BookmarksState.labels[11];color:#f2cd7d;wrap:word-wrap;}
             reader:=Rectangle {background:black;vertical-stretch:1;
-                Image {source:root.page;image-fit:contain;}
+                Image {source:BookmarksState.page;image-fit:contain;}
                 TouchArea {
                     clicked=>{reader-keys.focus();}
-                    scroll-event(event)=>{if event.delta-y!=0px {root.page-key(event.delta-y>0px?0:1);}return accept;}
+                    scroll-event(event)=>{if event.delta-y!=0px {BookmarksState.page-key(event.delta-y>0px?0:1);}return accept;}
                 }
             }
-            Text {text:root.progress;color:#c7d4e7;}
+            Text {text:BookmarksState.progress;color:#c7d4e7;}
             HorizontalLayout {
-                Button {text:root.labels[12];clicked=>{root.page-key(2);}}
-                Button {text:root.labels[13];clicked=>{root.page-key(3);}}
-                Button {text:root.labels[10];clicked=>{root.page-key(6);}}
+                PanelButton {text:BookmarksState.labels[12];clicked=>{BookmarksState.page-key(2);}}
+                PanelButton {text:BookmarksState.labels[13];clicked=>{BookmarksState.page-key(3);}}
+                PanelButton {text:BookmarksState.labels[10];clicked=>{BookmarksState.page-key(6);}}
             }
         }
     }

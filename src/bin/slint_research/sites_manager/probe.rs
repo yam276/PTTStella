@@ -1,7 +1,7 @@
 //! Real site widgets/shared transaction, explicit synthetic loopback namespace.
 use super::*;
 use crate::verification::{Verification, require, wait};
-use slint::Model;
+use slint::{Model, winit_030::WinitWindowAccessor};
 use std::{
     error::Error,
     path::{Path, PathBuf},
@@ -11,16 +11,20 @@ async fn idle(owner: &Manager) -> Result<(), String> {
         || {
             owner.result.borrow().is_none()
                 && !owner.output.busy()
-                && owner.window.borrow().as_ref().is_none_or(|w| !w.get_busy())
+                && owner
+                    .window
+                    .borrow()
+                    .as_ref()
+                    .is_none_or(|w| !w.global::<crate::SitesState>().get_busy())
         },
         "station file operation did not settle",
     )
     .await
 }
-fn fill(w: &SitesWindow, name: &str, address: &str, encoding: i32) {
-    w.set_name(name.into());
-    w.set_address(address.into());
-    w.set_encoding(encoding);
+fn fill(w: &TerminalWindow, name: &str, address: &str, encoding: i32) {
+    w.global::<crate::SitesState>().set_name(name.into());
+    w.global::<crate::SitesState>().set_address(address.into());
+    w.global::<crate::SitesState>().set_encoding(encoding);
 }
 pub fn start(
     ui: &TerminalWindow,
@@ -62,37 +66,38 @@ pub fn start(
         ui.invoke_sites_show();
         require(
             w.window().with_winit_window(|w| w.id()) == id
-                && w.get_name() == "unsaved window"
-                && w.get_encoding() == 1,
+                && w.global::<crate::SitesState>().get_name() == "unsaved window"
+                && w.global::<crate::SitesState>().get_encoding() == 1,
             "opening stations twice replaced its window/draft",
         )?;
         let original = std::fs::read(&path).map_err(|e| e.to_string())?;
         fill(&w, "Rejected", "telnet://legacy.example:2323", 2);
-        w.invoke_action(0);
+        w.global::<crate::SitesState>().invoke_action(0);
         require(
             owner.result.borrow().is_none()
                 && std::fs::read(&path).map_err(|e| e.to_string())? == original,
             "new plaintext favourite was written",
         )?;
-        w.invoke_action(3);
+        w.global::<crate::SitesState>().invoke_action(3);
         require(
             owner.connection.updates.borrow().generation == initial.0,
             "rejected nonlocal probe address changed connection",
         )?;
-        w.invoke_preset(true);
+        w.global::<crate::SitesState>().invoke_preset(true);
         require(
-            w.get_address() == pttstella::sites::PTT_SSH && w.get_encoding() == 0,
+            w.global::<crate::SitesState>().get_address() == pttstella::sites::PTT_SSH
+                && w.global::<crate::SitesState>().get_encoding() == 0,
             "SSH preset is not PTT/UAO",
         )?;
-        w.set_encoding(2);
-        w.invoke_action(2);
+        w.global::<crate::SitesState>().set_encoding(2);
+        w.global::<crate::SitesState>().invoke_action(2);
         require(
             owner.result.borrow().is_none()
                 && std::fs::read(&path).map_err(|e| e.to_string())? == original,
             "SSH accepted non-UAO default",
         )?;
         fill(&w, "原生測試", "wss://native.example/bbs", 2);
-        w.invoke_action(0);
+        w.global::<crate::SitesState>().invoke_action(0);
         idle(&owner).await?;
         let store = pttstella::sites::store::Store::at(path.clone());
         let saved = store.load()?;
@@ -113,8 +118,8 @@ pub fn start(
         let external = Target::new("wss://external.example/bbs".into(), TextEncoding::Big5)?;
         other.save_favourite("External".into(), external.clone())?;
         store.save_from(&saved, other)?;
-        w.set_name("改名".into());
-        w.invoke_action(0);
+        w.global::<crate::SitesState>().set_name("改名".into());
+        w.global::<crate::SitesState>().invoke_action(0);
         idle(&owner).await?;
         require(
             store
@@ -130,20 +135,21 @@ pub fn start(
         let held = dir.join("held-sites-backup.json");
         std::fs::rename(&backup, &held).map_err(|e| e.to_string())?;
         std::fs::create_dir(&backup).map_err(|e| e.to_string())?;
-        w.set_name("保存失敗後重試".into());
-        w.invoke_action(0);
+        w.global::<crate::SitesState>()
+            .set_name("保存失敗後重試".into());
+        w.global::<crate::SitesState>().invoke_action(0);
         idle(&owner).await?;
         require(
             std::fs::read(&path).map_err(|e| e.to_string())? == before_failure
                 && owner.state.borrow().sites() == &before_model
-                && w.get_name() == "保存失敗後重試"
-                && !w.get_message().is_empty(),
+                && w.global::<crate::SitesState>().get_name() == "保存失敗後重試"
+                && !w.global::<crate::SitesState>().get_message().is_empty(),
             "failed save changed file/model or lost draft/error",
         )?;
         crate::verification::capture(&ui, &dir, "station-root-suspended.png")?;
         std::fs::remove_dir(&backup).map_err(|e| e.to_string())?;
         std::fs::rename(&held, &backup).map_err(|e| e.to_string())?;
-        w.invoke_action(0);
+        w.global::<crate::SitesState>().invoke_action(0);
         idle(&owner).await?;
         require(
             store
@@ -153,7 +159,7 @@ pub fn start(
                 .any(|f| f.target == target && f.name == "保存失敗後重試"),
             "retry did not save retained form",
         )?;
-        w.invoke_action(2);
+        w.global::<crate::SitesState>().invoke_action(2);
         idle(&owner).await?;
         require(
             store.load()?.default == target,
@@ -173,10 +179,11 @@ pub fn start(
             .position(|f| f.target == target)
             .ok_or("saved favourite absent")? as i32
             + 1;
-        w.set_choice(index);
-        w.invoke_choose(index);
-        w.set_address("invalid".into());
-        w.invoke_action(1);
+        w.global::<crate::SitesState>().set_choice(index);
+        w.global::<crate::SitesState>().invoke_choose(index);
+        w.global::<crate::SitesState>()
+            .set_address("invalid".into());
+        w.global::<crate::SitesState>().invoke_action(1);
         idle(&owner).await?;
         require(
             store.load()?.default == target
@@ -192,9 +199,9 @@ pub fn start(
             .position(|f| f.name == "Legacy synthetic")
             .ok_or("legacy fixture absent")? as i32
             + 1;
-        w.set_choice(legacy);
-        w.invoke_choose(legacy);
-        w.invoke_action(1);
+        w.global::<crate::SitesState>().set_choice(legacy);
+        w.global::<crate::SitesState>().invoke_choose(legacy);
+        w.global::<crate::SitesState>().invoke_action(1);
         idle(&owner).await?;
         require(
             !store
@@ -206,31 +213,32 @@ pub fn start(
         )?;
         let valid = std::fs::read(&path).map_err(|e| e.to_string())?;
         std::fs::write(&path, b"synthetic-corrupt-sites").map_err(|e| e.to_string())?;
-        w.invoke_action(4);
+        w.global::<crate::SitesState>().invoke_action(4);
         idle(&owner).await?;
         require(
-            !w.get_writable() && owner.state.borrow().warning().is_some(),
+            !w.global::<crate::SitesState>().get_writable()
+                && owner.state.borrow().warning().is_some(),
             "corrupt site file not visibly read-only",
         )?;
-        w.invoke_action(0);
+        w.global::<crate::SitesState>().invoke_action(0);
         require(
             std::fs::read(&path).map_err(|e| e.to_string())? == b"synthetic-corrupt-sites",
             "corrupt source overwritten",
         )?;
         std::fs::write(&path, &valid).map_err(|e| e.to_string())?;
-        w.invoke_action(4);
+        w.global::<crate::SitesState>().invoke_action(4);
         idle(&owner).await?;
         require(
-            w.get_writable(),
+            w.global::<crate::SitesState>().get_writable(),
             "explicit reload did not recover writable model",
         )?;
         fill(&w, "Close drains write", "wss://close.example/bbs", 1);
-        w.invoke_action(0);
+        w.global::<crate::SitesState>().invoke_action(0);
         require(
             owner.result.borrow().is_some(),
             "close case did not start worker",
         )?;
-        w.invoke_close_sites();
+        w.global::<crate::SitesState>().invoke_close_sites();
         wait(
             || !ui.get_sites_open() && owner.result.borrow().is_none() && !owner.output.busy(),
             "closing station editor did not drain write",
@@ -252,10 +260,11 @@ pub fn start(
         )
         .await?;
         require(
-            w.get_favourites().row_count() == store.load()?.favourites.len() + 1,
+            w.global::<crate::SitesState>().get_favourites().row_count()
+                == store.load()?.favourites.len() + 1,
             "reopen lost merged favourite model",
         )?;
-        w.invoke_close_sites();
+        w.global::<crate::SitesState>().invoke_close_sites();
         wait(|| !ui.get_sites_open(), "station close failed").await?;
         std::fs::write(dir.join("sites-saved.json"), store.load()?.encode()?)
             .map_err(|e| e.to_string())?;

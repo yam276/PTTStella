@@ -42,9 +42,13 @@ fn go(ui: &TerminalWindow, owner: &Rc<Manager>, target: &Target) -> Result<(), S
         .as_weak()
         .upgrade()
         .ok_or("switch station window dropped")?;
-    window.set_address(target.endpoint.as_str().into());
-    window.set_encoding(index(target.encoding));
-    window.invoke_action(3);
+    window
+        .global::<crate::SitesState>()
+        .set_address(target.endpoint.as_str().into());
+    window
+        .global::<crate::SitesState>()
+        .set_encoding(index(target.encoding));
+    window.global::<crate::SitesState>().invoke_action(3);
     require(
         !ui.get_sites_open(),
         "valid connection intent was not enqueued/closed",

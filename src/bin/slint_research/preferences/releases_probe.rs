@@ -77,12 +77,19 @@ impl Preferences {
             .as_ref()
             .and_then(|w| w.as_weak().upgrade())
             .ok_or("settings window missing")?;
-        window.set_page(7);
+        window.global::<crate::SettingsState>().set_page(7);
         require(
-            !window.get_release_enabled() && !window.get_release_checking(),
+            !window
+                .global::<crate::SettingsState>()
+                .get_release_enabled()
+                && !window
+                    .global::<crate::SettingsState>()
+                    .get_release_checking(),
             "general probe enabled external release check",
         )?;
-        window.invoke_release_check();
+        window
+            .global::<crate::SettingsState>()
+            .invoke_release_check();
         require(
             self.release_worker.borrow().is_none(),
             "synthetic click started public check",
@@ -142,51 +149,85 @@ impl Preferences {
             stage(&mut stages).await? == 1,
             "startup release request missing",
         )?;
-        wait(|| window.get_release_checking(), "checking state missing").await?;
+        wait(
+            || {
+                window
+                    .global::<crate::SettingsState>()
+                    .get_release_checking()
+            },
+            "checking state missing",
+        )
+        .await?;
         for _ in 0..20 {
-            window.invoke_release_check();
+            window
+                .global::<crate::SettingsState>()
+                .invoke_release_check();
         }
         release.send(()).map_err(|_| "release fixture stopped")?;
         wait(
-            || window.get_release_available() && !window.get_release_checking(),
+            || {
+                window
+                    .global::<crate::SettingsState>()
+                    .get_release_available()
+                    && !window
+                        .global::<crate::SettingsState>()
+                        .get_release_checking()
+            },
             "stable offer missing",
         )
         .await?;
         require(
-            window.get_release_status() == msg!("update-available", version = "999.0.0"),
+            window.global::<crate::SettingsState>().get_release_status()
+                == msg!("update-available", version = "999.0.0"),
             "version label differs from shared checker",
         )?;
         require(
-            window.get_release_labels().row_data(0).as_deref()
+            window
+                .global::<crate::SettingsState>()
+                .get_release_labels()
+                .row_data(0)
+                .as_deref()
                 == Some(msg!("update-check").as_str()),
             "localized release check label missing",
         )?;
-        window.invoke_release_open();
+        window
+            .global::<crate::SettingsState>()
+            .invoke_release_open();
         require(
             ui.get_input_notice() == "https://github.com/yam276/PTTStella/releases/tag/v999.0.0",
             "remote JSON URL reached browser adapter",
         )?;
         capture(&window, dir, "release-available.png")?;
         ui.set_input_notice("guard-marker".into());
-        window.set_page(0);
-        window.invoke_release_check();
-        window.invoke_release_open();
-        window.invoke_repository_open();
+        window.global::<crate::SettingsState>().set_page(0);
+        window
+            .global::<crate::SettingsState>()
+            .invoke_release_check();
+        window
+            .global::<crate::SettingsState>()
+            .invoke_release_open();
+        window
+            .global::<crate::SettingsState>()
+            .invoke_repository_open();
         require(
             ui.get_input_notice() == "guard-marker",
             "off-page release action escaped guard",
         )?;
-        window.set_page(7);
+        window.global::<crate::SettingsState>().set_page(7);
         require(
-            window.get_release_enabled(),
+            window
+                .global::<crate::SettingsState>()
+                .get_release_enabled(),
             "release controls did not enable after startup completion",
         )?;
         window
             .window()
             .dispatch_event(slint::platform::WindowEvent::WindowActiveChanged(true));
-        window.invoke_focus_field(27);
+        window
+            .global::<crate::SettingsState>()
+            .invoke_focus_field(27);
         wait(
-            || window.get_focused_target() == 27,
+            || window.global::<crate::SettingsState>().get_focused_target() == 27,
             "release check button could not take toolkit focus",
         )
         .await?;
@@ -201,40 +242,66 @@ impl Preferences {
             "manual retry did not stay on loopback",
         )?;
         wait(
-            || !window.get_release_checking(),
+            || {
+                !window
+                    .global::<crate::SettingsState>()
+                    .get_release_checking()
+            },
             "failed check did not settle",
         )
         .await?;
         require(
-            window.get_release_available()
+            window
+                .global::<crate::SettingsState>()
+                .get_release_available()
                 && !self.release_status.borrow().up_to_date
-                && window.get_release_status() == msg!("update-available", version = "999.0.0"),
+                && window.global::<crate::SettingsState>().get_release_status()
+                    == msg!("update-available", version = "999.0.0"),
             "silent failure lost valid offer or claimed success",
         )?;
-        window.invoke_repository_open();
+        window
+            .global::<crate::SettingsState>()
+            .invoke_repository_open();
         require(
             ui.get_input_notice() == env!("CARGO_PKG_REPOSITORY"),
             "repository adapter target differs",
         )?;
-        window.invoke_release_check();
+        window
+            .global::<crate::SettingsState>()
+            .invoke_release_check();
         require(stage(&mut stages).await? == 3, "third body fixture missing")?;
         wait(
-            || window.get_release_checking(),
+            || {
+                window
+                    .global::<crate::SettingsState>()
+                    .get_release_checking()
+            },
             "stalled check did not remain pending",
         )
         .await?;
         self.hide();
         ui.set_input_notice("closed-guard".into());
-        window.invoke_release_check();
-        window.invoke_release_open();
-        window.invoke_repository_open();
+        window
+            .global::<crate::SettingsState>()
+            .invoke_release_check();
+        window
+            .global::<crate::SettingsState>()
+            .invoke_release_open();
+        window
+            .global::<crate::SettingsState>()
+            .invoke_repository_open();
         require(
             ui.get_input_notice() == "closed-guard" && self.release_status.borrow().checking,
             "closed settings admitted actions or silently cancelled application-scoped check",
         )?;
         ui.invoke_settings_show();
         require(
-            window.get_release_available() && window.get_release_checking(),
+            window
+                .global::<crate::SettingsState>()
+                .get_release_available()
+                && window
+                    .global::<crate::SettingsState>()
+                    .get_release_checking(),
             "reopened settings lost pending/available status",
         )?;
         capture(&window, dir, "release-pending-close.png")?;

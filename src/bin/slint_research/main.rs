@@ -25,7 +25,6 @@ mod media_worker;
 mod native_input;
 #[cfg(target_os = "macos")]
 mod native_menu;
-mod native_text;
 mod notice;
 mod notice_probe;
 mod output;

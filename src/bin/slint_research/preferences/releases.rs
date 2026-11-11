@@ -49,12 +49,18 @@ impl Preferences {
         Ok(())
     }
 
-    pub(super) fn refresh_releases(&self, window: &crate::SettingsWindow) {
+    pub(super) fn refresh_releases(&self, window: &crate::TerminalWindow) {
         let status = self.release_status.borrow();
-        window.set_release_enabled(!self.stopped.get() && self.release_worker.borrow().is_some());
-        window.set_release_checking(status.checking);
-        window.set_release_available(status.available.is_some());
-        window.set_release_status(
+        window
+            .global::<SettingsState>()
+            .set_release_enabled(!self.stopped.get() && self.release_worker.borrow().is_some());
+        window
+            .global::<SettingsState>()
+            .set_release_checking(status.checking);
+        window
+            .global::<SettingsState>()
+            .set_release_available(status.available.is_some());
+        window.global::<SettingsState>().set_release_status(
             match &*status {
                 Status {
                     available: Some(release),
@@ -67,17 +73,19 @@ impl Preferences {
             }
             .into(),
         );
-        window.set_release_labels(slint::ModelRc::new(slint::VecModel::from(vec![
-            if status.checking {
-                msg!("update-checking")
-            } else {
-                msg!("update-check")
-            }
-            .into(),
-            msg!("update-open").into(),
-            msg!("update-help").into(),
-            env!("CARGO_PKG_REPOSITORY").into(),
-        ])));
+        window
+            .global::<SettingsState>()
+            .set_release_labels(slint::ModelRc::new(slint::VecModel::from(vec![
+                if status.checking {
+                    msg!("update-checking")
+                } else {
+                    msg!("update-check")
+                }
+                .into(),
+                msg!("update-open").into(),
+                msg!("update-help").into(),
+                env!("CARGO_PKG_REPOSITORY").into(),
+            ])));
     }
 
     fn release_action_allowed(&self) -> bool {
@@ -88,11 +96,10 @@ impl Preferences {
                 .ui
                 .upgrade()
                 .is_some_and(|ui| !ui.get_app_closing() && ui.get_settings_open())
-            && self
-                .window
-                .borrow()
-                .as_ref()
-                .is_some_and(|w| w.get_page() == 7 && w.get_query().is_empty())
+            && self.window.borrow().as_ref().is_some_and(|w| {
+                w.global::<SettingsState>().get_page() == 7
+                    && w.global::<SettingsState>().get_query().is_empty()
+            })
     }
 
     pub(super) fn check_release(&self) {

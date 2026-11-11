@@ -12,8 +12,11 @@ async fn ready(ui: &TerminalWindow, o: &Manager) -> Result<(), String> {
     )
     .await
 }
-fn fill(w: &DestinationWindow, value: &str) {
-    w.set_draft(w.invoke_field_edit(value.into()));
+fn fill(w: &TerminalWindow, value: &str) {
+    w.global::<crate::DestinationState>().set_draft(
+        w.global::<crate::DestinationState>()
+            .invoke_field_edit(value.into()),
+    );
 }
 async fn reached(ui: &TerminalWindow, o: &Manager, name: &str) -> Result<(), String> {
     wait(||{verification::foreground(ui,true);o.active.get().is_none() && o.pending.get().is_none() && matches!(&o.connection.updates.borrow().destination,Progress::Reached{target,..} if target.board().is_some_and(|b|b.as_str()==name))},"destination never reached its verified target").await?;
@@ -51,23 +54,27 @@ pub fn start(
                 "https://example.org/bbs/Stella/M.1.A.001.html",
             ] {
                 fill(&w, bad);
-                w.invoke_action(0);
+                w.global::<crate::DestinationState>().invoke_action(0);
                 require(
                     o.pending.get().is_none()
-                        && w.get_draft() == bad
-                        && !w.get_message().is_empty(),
+                        && w.global::<crate::DestinationState>().get_draft() == bad
+                        && !w
+                            .global::<crate::DestinationState>()
+                            .get_message()
+                            .is_empty(),
                     "invalid draft was truncated, sent or discarded",
                 )?;
             }
             fill(&w, "Stella");
-            w.set_composing(true);
-            w.invoke_action(0);
+            w.global::<crate::DestinationState>().set_composing(true);
+            w.global::<crate::DestinationState>().invoke_action(0);
             require(
                 o.pending.get().is_none(),
                 "composition submitted a destination",
             )?;
-            w.set_composing(false);
-            w.invoke_close_destination();
+            w.global::<crate::DestinationState>().set_composing(false);
+            w.global::<crate::DestinationState>()
+                .invoke_close_destination();
             require(
                 !ui.get_destination_open() && o.draft.borrow().is_empty(),
                 "cancel did not clear the unsent draft",
@@ -75,7 +82,7 @@ pub fn start(
             if case == "boards" {
                 ui.invoke_destination_show();
                 fill(&w, "Stella");
-                w.invoke_focus_draft();
+                w.global::<crate::DestinationState>().invoke_focus_draft();
                 w.window()
                     .dispatch_event(slint::platform::WindowEvent::KeyPressed {
                         text: slint::platform::Key::Return.into(),
@@ -100,23 +107,25 @@ pub fn start(
                 // must clear the receipt even if watch publication won the race.
                 ui.invoke_destination_show();
                 fill(&w, "Stella");
-                w.invoke_action(0);
+                w.global::<crate::DestinationState>().invoke_action(0);
                 reached(&ui, &o, "Stella").await?;
                 require(
                     !ui.get_destination_open() && !ui.get_destination_active(),
                     "immediate Reached left a stale active receipt",
                 )?;
                 ui.invoke_destination_show();
-                w.invoke_choose(1);
+                w.global::<crate::DestinationState>().invoke_choose(1);
                 require(
-                    w.get_draft() == "Stella" && o.pending.get().is_none(),
+                    w.global::<crate::DestinationState>().get_draft() == "Stella"
+                        && o.pending.get().is_none(),
                     "choosing recent navigated instead of filling",
                 )?;
-                w.invoke_close_destination();
+                w.global::<crate::DestinationState>()
+                    .invoke_close_destination();
                 ready(&ui, &o).await?;
                 ui.invoke_destination_show();
                 fill(&w, "Other");
-                w.invoke_action(0);
+                w.global::<crate::DestinationState>().invoke_action(0);
                 reached(&ui, &o, "Other").await?;
                 files(&o).await?;
                 require(
@@ -142,7 +151,7 @@ pub fn start(
                     "recent disk snapshot differs",
                 )?;
                 ui.invoke_destination_show();
-                w.invoke_action(2);
+                w.global::<crate::DestinationState>().invoke_action(2);
                 files(&o).await?;
                 require(
                     o.history.snapshot().boards.is_empty(),
@@ -159,11 +168,14 @@ pub fn start(
                 std::fs::rename(&backup, &retained).map_err(|e| e.to_string())?;
                 std::fs::create_dir(&backup).map_err(|e| e.to_string())?;
                 let before = std::fs::read(&path).map_err(|e| e.to_string())?;
-                w.invoke_action(2);
+                w.global::<crate::DestinationState>().invoke_action(2);
                 files(&o).await?;
                 require(
-                    !w.get_history_message().is_empty()
-                        && w.get_history_message() != msg!("recent-cleared"),
+                    !w.global::<crate::DestinationState>()
+                        .get_history_message()
+                        .is_empty()
+                        && w.global::<crate::DestinationState>().get_history_message()
+                            != msg!("recent-cleared"),
                     "clear failure was not visible",
                 )?;
                 require(
@@ -173,14 +185,15 @@ pub fn start(
                 )?;
                 std::fs::remove_dir(&backup).map_err(|e| e.to_string())?;
                 std::fs::rename(&retained, &backup).map_err(|e| e.to_string())?;
-                w.invoke_action(2);
+                w.global::<crate::DestinationState>().invoke_action(2);
                 files(&o).await?;
                 require(
                     o.history.last_error().is_none(),
                     "successful explicit retry retained failed result",
                 )?;
                 verification::capture(&w, &directory, "recent-cleared.png")?;
-                w.invoke_close_destination();
+                w.global::<crate::DestinationState>()
+                    .invoke_close_destination();
                 let bookmarks =
                     pttstella::bookmarks::store::Store::at(directory.join("bookmarks.json"));
                 let base = bookmarks.load()?;
@@ -199,21 +212,25 @@ pub fn start(
                 )
                 .await?;
                 let bw = book.window().ok_or("bookmark handoff window missing")?;
-                bw.invoke_choose(1);
-                bw.set_target(bw.invoke_field_edit(0, "#00000102@Other".into()));
-                bw.invoke_action(4);
+                bw.global::<crate::BookmarksState>().invoke_choose(1);
+                bw.global::<crate::BookmarksState>().set_target(
+                    bw.global::<crate::BookmarksState>()
+                        .invoke_field_edit(0, "#00000102@Other".into()),
+                );
+                bw.global::<crate::BookmarksState>().invoke_action(4);
                 require(
                     !ui.get_bookmarks_open()
                         && ui.get_destination_open()
-                        && w.get_draft() == "#00000101@Stella"
+                        && w.global::<crate::DestinationState>().get_draft() == "#00000101@Stella"
                         && o.pending.get().is_none(),
                     "bookmark Go did not fill its selected saved identity without sending",
                 )?;
-                w.invoke_close_destination();
+                w.global::<crate::DestinationState>()
+                    .invoke_close_destination();
                 ready(&ui, &o).await?;
                 ui.invoke_destination_show();
                 fill(&w, "Beta");
-                w.invoke_action(0);
+                w.global::<crate::DestinationState>().invoke_action(0);
                 wait(||matches!(&o.connection.updates.borrow().destination,Progress::Active{target,..} if target.board().is_some_and(|b|b.as_str()=="Beta")),"third navigation did not start").await?;
                 ui.invoke_destination_stop();
                 require(
@@ -228,16 +245,16 @@ pub fn start(
             } else if case == "articles" {
                 ui.invoke_destination_show();
                 fill(&w, "#00000101@Stella");
-                w.invoke_action(0);
+                w.global::<crate::DestinationState>().invoke_action(0);
                 reached(&ui, &o, "Stella").await?;
                 ui.invoke_destination_show();
                 fill(&w, "https://www.ptt.cc/bbs/Stella/M.1.A.002.html");
-                w.invoke_action(0);
+                w.global::<crate::DestinationState>().invoke_action(0);
                 wait(||o.active.get().is_none() && matches!(&o.connection.updates.borrow().destination,Progress::Reached{target:Destination::Article(t),..} if t.aid().as_str()=="00000102"),"second verified article did not open").await?;
                 ready(&ui, &o).await?;
                 ui.invoke_destination_show();
                 fill(&w, "#00000103@Stella");
-                w.invoke_action(0);
+                w.global::<crate::DestinationState>().invoke_action(0);
                 wait(
                     || {
                         o.active.get().is_none()
@@ -263,7 +280,7 @@ pub fn start(
                 ready(&ui, &o).await?;
                 ui.invoke_destination_show();
                 fill(&w, "#00000104@Stella");
-                w.invoke_action(0);
+                w.global::<crate::DestinationState>().invoke_action(0);
                 wait(||o.connection.updates.borrow().input_epoch==22 && matches!(&o.connection.updates.borrow().destination,Progress::Active{target:Destination::Article(t),..} if t.aid().as_str()=="00000104"),"delayed fourth article did not start").await?;
                 // Wait until Q has been sent, then stop before the late identity.
                 ui.invoke_destination_stop();

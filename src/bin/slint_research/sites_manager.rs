@@ -2,7 +2,7 @@
 //! the only file worker and Connection owns every transport transition.
 pub mod probe;
 pub mod switch_probe;
-use crate::{SitesWindow, TerminalWindow, file_job::ResultSlot, output::Output};
+use crate::{SitesState, TerminalWindow, file_job::ResultSlot, output::Output};
 use pttstella::{
     connection::Connection,
     encoding::TextEncoding,
@@ -12,7 +12,7 @@ use pttstella::{
         session::{Edit, State},
     },
 };
-use slint::{ComponentHandle, ModelRc, VecModel, winit_030::WinitWindowAccessor};
+use slint::{ComponentHandle, ModelRc, VecModel};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -26,7 +26,7 @@ pub struct Manager {
     connection: Rc<Connection>,
     output: Rc<Output>,
     state: Rc<RefCell<State>>,
-    window: RefCell<Option<SitesWindow>>,
+    window: RefCell<Option<TerminalWindow>>,
     result: RefCell<Option<ResultSlot<ResultValue>>>,
     selected: RefCell<Option<Target>>,
     fields: RefCell<[String; 2]>,
@@ -113,23 +113,24 @@ impl Manager {
         else {
             return;
         };
-        w.set_labels(ModelRc::new(VecModel::from(vec![
-            msg!("sites-title").into(),
-            msg!("sites-favourites").into(),
-            msg!("sites-manual").into(),
-            msg!("sites-name").into(),
-            msg!("sites-address").into(),
-            msg!("sites-encoding").into(),
-            msg!("sites-save").into(),
-            msg!("sites-remove").into(),
-            msg!("sites-set-default").into(),
-            msg!("sites-connect").into(),
-            msg!("sites-ptt-wss").into(),
-            msg!("sites-ptt-ssh").into(),
-            msg!("close").into(),
-            msg!("retry").into(),
-            msg!("sites-help").into(),
-        ])));
+        w.global::<SitesState>()
+            .set_labels(ModelRc::new(VecModel::from(vec![
+                msg!("sites-title").into(),
+                msg!("sites-favourites").into(),
+                msg!("sites-manual").into(),
+                msg!("sites-name").into(),
+                msg!("sites-address").into(),
+                msg!("sites-encoding").into(),
+                msg!("sites-save").into(),
+                msg!("sites-remove").into(),
+                msg!("sites-set-default").into(),
+                msg!("sites-connect").into(),
+                msg!("sites-ptt-wss").into(),
+                msg!("sites-ptt-ssh").into(),
+                msg!("close").into(),
+                msg!("retry").into(),
+                msg!("sites-help").into(),
+            ])));
         let state = self.state.borrow();
         let mut entries = vec![msg!("sites-manual").into()];
         entries.extend(
@@ -139,29 +140,31 @@ impl Manager {
                 .iter()
                 .map(|f| format!("{} — {}", f.name, describe(&f.target)).into()),
         );
-        w.set_favourites(ModelRc::new(VecModel::from(entries)));
+        w.global::<SitesState>()
+            .set_favourites(ModelRc::new(VecModel::from(entries)));
         let chosen = self.selected.borrow();
-        w.set_choice(
+        w.global::<SitesState>().set_choice(
             chosen
                 .as_ref()
                 .and_then(|t| state.sites().favourites.iter().position(|f| &f.target == t))
                 .map_or(0, |i| i as i32 + 1),
         );
-        w.set_default_note(
+        w.global::<SitesState>().set_default_note(
             msg!(
                 "sites-default-value",
                 target = describe(&state.default_target())
             )
             .into(),
         );
-        w.set_current_note(
+        w.global::<SitesState>().set_current_note(
             msg!(
                 "slint-sites-current",
                 target = describe(&self.connection.updates.borrow().site)
             )
             .into(),
         );
-        w.set_writable(state.warning().is_none());
+        w.global::<SitesState>()
+            .set_writable(state.warning().is_none());
     }
     fn publish_choices(&self, ui: &TerminalWindow) {
         let previous = usize::try_from(ui.get_station_choice())
@@ -183,15 +186,17 @@ impl Manager {
     }
     fn notice(&self, text: String) {
         if let Some(w) = self.window.borrow().as_ref() {
-            w.set_message(text.into());
+            w.global::<SitesState>().set_message(text.into());
         }
     }
-    fn fill(&self, w: &SitesWindow, target: &Target, name: String) {
+    fn fill(&self, w: &TerminalWindow, target: &Target, name: String) {
         self.fields
             .replace([name.clone(), target.endpoint.as_str().to_owned()]);
-        w.set_name(name.into());
-        w.set_address(target.endpoint.as_str().into());
-        w.set_encoding(index(target.encoding));
+        w.global::<SitesState>().set_name(name.into());
+        w.global::<SitesState>()
+            .set_address(target.endpoint.as_str().into());
+        w.global::<SitesState>()
+            .set_encoding(index(target.encoding));
         self.security(w);
     }
     fn security_for(address: &str) -> String {
@@ -202,8 +207,10 @@ impl Manager {
             _ => msg!("sites-plaintext-disabled"),
         }
     }
-    fn security(&self, w: &SitesWindow) {
-        w.set_security(Self::security_for(w.get_address().as_str()).into());
+    fn security(&self, w: &TerminalWindow) {
+        w.global::<SitesState>().set_security(
+            Self::security_for(w.global::<SitesState>().get_address().as_str()).into(),
+        );
     }
     fn choose(&self, choice: i32) {
         let Some(w) = self
@@ -224,9 +231,9 @@ impl Manager {
             self.fill(&w, &f.target, f.name);
         } else {
             self.fields.replace([String::new(), String::new()]);
-            w.set_name("".into());
-            w.set_address("".into());
-            w.set_encoding(0);
+            w.global::<SitesState>().set_name("".into());
+            w.global::<SitesState>().set_address("".into());
+            w.global::<SitesState>().set_encoding(0);
         }
     }
     fn open(self: &Rc<Self>) {
@@ -265,27 +272,25 @@ impl Manager {
         ui.invoke_reset_keyboard();
         ui.invoke_paste_cancel();
         ui.set_sites_open(true);
+        ui.invoke_keyboard_updated();
         self.refresh_labels();
         if let Some(w) = self.window.borrow().as_ref() {
             if !already_open {
                 self.selected.replace(None);
-                w.set_choice(0);
+                w.global::<SitesState>().set_choice(0);
                 self.fill(w, &self.connection.updates.borrow().site, String::new());
-                w.set_message(self.state.borrow().warning().unwrap_or("").into());
+                w.global::<SitesState>()
+                    .set_message(self.state.borrow().warning().unwrap_or("").into());
             }
-            if let Err(e) = w.show() {
-                ui.set_sites_open(false);
-                crate::notice::error(&ui, e.to_string());
-                return;
-            }
-            w.window().with_winit_window(|w| w.focus_window());
-            w.invoke_focus_address();
+
+            use crate::SitesState;
+            w.global::<SitesState>().invoke_focus_address();
         }
         self.sync();
     }
-    fn create_window(self: &Rc<Self>) -> Result<SitesWindow, String> {
-        let w = SitesWindow::new().map_err(|e| e.to_string())?;
-        w.on_choose({
+    fn create_window(self: &Rc<Self>) -> Result<TerminalWindow, String> {
+        let w = self.ui.upgrade().ok_or("terminal window closed")?;
+        w.global::<SitesState>().on_choose({
             let o = Rc::downgrade(self);
             move |i| {
                 if let Some(o) = o.upgrade() {
@@ -293,14 +298,14 @@ impl Manager {
                 }
             }
         });
-        w.on_preset({
+        w.global::<SitesState>().on_preset({
             let o = Rc::downgrade(self);
             move |ssh| {
                 if let Some(o) = o.upgrade()
                     && let Some(w) = o.window.borrow().as_ref()
                 {
                     o.selected.replace(None);
-                    w.set_choice(0);
+                    w.global::<SitesState>().set_choice(0);
                     let target = Target::new(
                         if ssh {
                             pttstella::sites::PTT_SSH
@@ -324,7 +329,7 @@ impl Manager {
                 }
             }
         });
-        w.on_field_edit({
+        w.global::<SitesState>().on_field_edit({
             let o = Rc::downgrade(self);
             move |field, text| {
                 let Some(o) = o.upgrade() else {
@@ -345,12 +350,13 @@ impl Manager {
                 if i == 1
                     && let Some(w) = o.window.borrow().as_ref()
                 {
-                    w.set_security(Self::security_for(text.as_str()).into());
+                    w.global::<SitesState>()
+                        .set_security(Self::security_for(text.as_str()).into());
                 }
                 text
             }
         });
-        w.on_action({
+        w.global::<SitesState>().on_action({
             let o = Rc::downgrade(self);
             move |i| {
                 if let Some(o) = o.upgrade() {
@@ -358,7 +364,7 @@ impl Manager {
                 }
             }
         });
-        w.on_close_sites({
+        w.global::<SitesState>().on_close_sites({
             let o = Rc::downgrade(self);
             move || {
                 if let Some(o) = o.upgrade() {
@@ -366,18 +372,6 @@ impl Manager {
                 }
             }
         });
-        w.window().on_close_requested({
-            let o = Rc::downgrade(self);
-            move || {
-                if let Some(o) = o.upgrade() {
-                    o.request_close();
-                }
-                slint::CloseRequestResponse::KeepWindowShown
-            }
-        });
-        if let Some(ui) = self.ui.upgrade() {
-            crate::native_text::install(&ui, &w);
-        }
         Ok(w)
     }
     fn action(self: &Rc<Self>, code: i32) {
@@ -394,14 +388,14 @@ impl Manager {
         if self.stopped.get()
             || self.output.busy()
             || self.result.borrow().is_some()
-            || w.get_composing()
+            || w.global::<SitesState>().get_composing()
             || !ui.get_sites_open()
         {
             return;
         }
         if code == 3 {
-            let result = encoding(w.get_encoding())
-                .and_then(|e| Target::new(w.get_address().to_string(), e))
+            let result = encoding(w.global::<SitesState>().get_encoding())
+                .and_then(|e| Target::new(w.global::<SitesState>().get_address().to_string(), e))
                 .and_then(|target| {
                     target.validate_connection(self.probe)?;
                     if self.probe
@@ -431,48 +425,49 @@ impl Manager {
             return;
         }
         let store = self.state.borrow().store();
-        let work: Result<Box<dyn FnOnce() -> Result<ResultValue, String> + Send>, String> = if code
-            == 4
-        {
-            store.map(|store| {
-                let local = self.probe;
-                Box::new(move || Ok(ResultValue::Reloaded(State::load(Ok(store), local))))
-                    as Box<dyn FnOnce() -> Result<ResultValue, String> + Send>
-            })
-        } else {
-            let action = match code {
-                0 => Edit::Favourite,
-                1 => Edit::Remove,
-                2 => Edit::Default,
-                _ => return,
-            };
-            let target = if code == 1 {
-                self.selected
-                    .borrow()
-                    .clone()
-                    .ok_or_else(|| msg!("sites-invalid"))
-            } else {
-                encoding(w.get_encoding()).and_then(|e| Target::new(w.get_address().to_string(), e))
-            };
-            target
-                .and_then(|target| {
-                    self.state.borrow().edit(
-                        action,
-                        target.endpoint.as_str().into(),
-                        target.encoding,
-                        w.get_name().to_string(),
-                    )
-                })
-                .map(|write| {
-                    Box::new(move || {
-                        write
-                            .store
-                            .save_from(&write.base, write.draft)
-                            .map(ResultValue::Saved)
-                    })
+        let work: Result<Box<dyn FnOnce() -> Result<ResultValue, String> + Send>, String> =
+            if code == 4 {
+                store.map(|store| {
+                    let local = self.probe;
+                    Box::new(move || Ok(ResultValue::Reloaded(State::load(Ok(store), local))))
                         as Box<dyn FnOnce() -> Result<ResultValue, String> + Send>
                 })
-        };
+            } else {
+                let action = match code {
+                    0 => Edit::Favourite,
+                    1 => Edit::Remove,
+                    2 => Edit::Default,
+                    _ => return,
+                };
+                let target = if code == 1 {
+                    self.selected
+                        .borrow()
+                        .clone()
+                        .ok_or_else(|| msg!("sites-invalid"))
+                } else {
+                    encoding(w.global::<SitesState>().get_encoding()).and_then(|e| {
+                        Target::new(w.global::<SitesState>().get_address().to_string(), e)
+                    })
+                };
+                target
+                    .and_then(|target| {
+                        self.state.borrow().edit(
+                            action,
+                            target.endpoint.as_str().into(),
+                            target.encoding,
+                            w.global::<SitesState>().get_name().to_string(),
+                        )
+                    })
+                    .map(|write| {
+                        Box::new(move || {
+                            write
+                                .store
+                                .save_from(&write.base, write.draft)
+                                .map(ResultValue::Saved)
+                        })
+                            as Box<dyn FnOnce() -> Result<ResultValue, String> + Send>
+                    })
+            };
         let work = match work {
             Ok(work) => work,
             Err(e) => {
@@ -538,7 +533,7 @@ impl Manager {
     }
     fn sync(&self) {
         if let Some(w) = self.window.borrow().as_ref() {
-            w.set_busy(
+            w.global::<SitesState>().set_busy(
                 self.output.busy()
                     || self.result.borrow().is_some()
                     || self.ui.upgrade().is_some_and(|u| u.get_switching_station()),
@@ -550,7 +545,7 @@ impl Manager {
             .window
             .borrow()
             .as_ref()
-            .is_some_and(|w| w.get_composing())
+            .is_some_and(|w| w.global::<SitesState>().get_composing())
         {
             return;
         }
@@ -560,12 +555,6 @@ impl Manager {
         }
     }
     fn hide(&self) {
-        if let Some(w) = self.window.borrow().as_ref()
-            && let Err(e) = w.hide()
-        {
-            self.notice(e.to_string());
-            return;
-        }
         if let Some(ui) = self.ui.upgrade() {
             ui.set_sites_open(false);
         }

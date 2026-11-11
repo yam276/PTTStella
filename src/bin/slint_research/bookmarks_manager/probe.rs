@@ -59,15 +59,22 @@ async fn idle(o: &Manager) -> Result<(), String> {
         || {
             !o.output.busy()
                 && o.result.borrow().is_none()
-                && o.window().is_none_or(|w| !w.get_busy())
+                && o.window()
+                    .is_none_or(|w| !w.global::<crate::BookmarksState>().get_busy())
         },
         "bookmark file worker did not join",
     )
     .await
 }
-fn fill(w: &BookmarksWindow, target: &str, label: &str) {
-    w.set_target(w.invoke_field_edit(0, target.into()));
-    w.set_label(w.invoke_field_edit(1, label.into()));
+fn fill(w: &TerminalWindow, target: &str, label: &str) {
+    w.global::<crate::BookmarksState>().set_target(
+        w.global::<crate::BookmarksState>()
+            .invoke_field_edit(0, target.into()),
+    );
+    w.global::<crate::BookmarksState>().set_label(
+        w.global::<crate::BookmarksState>()
+            .invoke_field_edit(1, label.into()),
+    );
 }
 fn source() -> Result<Frame, String> {
     let fixture: serde_json::Value =
@@ -230,26 +237,41 @@ pub fn start(
             let w = o.window().ok_or("bookmark window missing")?;
             w.window()
                 .dispatch_event(slint::platform::WindowEvent::WindowActiveChanged(true));
+            let epoch = connection.updates.borrow().input_epoch;
+            wait(
+                || !ui.get_terminal_input_focused(),
+                "bookmark form did not take keyboard focus",
+            )
+            .await?;
             ui.window()
                 .dispatch_event(slint::platform::WindowEvent::KeyPressed { text: "x".into() });
             ui.window()
                 .dispatch_event(slint::platform::WindowEvent::KeyReleased { text: "x".into() });
+            require(
+                connection.updates.borrow().input_epoch == epoch
+                    && w.global::<crate::BookmarksState>().get_target() == "x",
+                "bookmark input did not stay in the local field",
+            )?;
+            w.global::<crate::BookmarksState>().set_target(
+                w.global::<crate::BookmarksState>()
+                    .invoke_field_edit(0, "".into()),
+            );
             require(o.rows.borrow().len() == 1, "saved archive did not load")?;
             require(
-                w.get_choice() == 0
-                    && !w.get_selected()
-                    && !w.get_has_copy()
-                    && w.get_target().is_empty(),
+                w.global::<crate::BookmarksState>().get_choice() == 0
+                    && !w.global::<crate::BookmarksState>().get_selected()
+                    && !w.global::<crate::BookmarksState>().get_has_copy()
+                    && w.global::<crate::BookmarksState>().get_target().is_empty(),
                 "new bookmark draft impersonated a selected entry",
             )?;
-            w.invoke_choose(1);
+            w.global::<crate::BookmarksState>().invoke_choose(1);
             o.article.replace_rules(Rules::default().edit_policy(
                 "Alice",
                 "",
                 Policy::MaskRow,
                 false,
             )?);
-            w.invoke_action(2);
+            w.global::<crate::BookmarksState>().invoke_action(2);
             idle(&o).await?;
             wait(
                 || {
@@ -306,24 +328,24 @@ pub fn start(
                 o.offline.borrow().as_ref().is_some_and(|a| a.top == 22),
                 "offline page did not overlap by one line",
             )?;
-            w.invoke_page_key(0);
+            w.global::<crate::BookmarksState>().invoke_page_key(0);
             require(
                 o.offline.borrow().as_ref().is_some_and(|a| a.top == 21),
                 "offline up did not move one line",
             )?;
-            w.invoke_page_key(5);
+            w.global::<crate::BookmarksState>().invoke_page_key(5);
             require(
                 o.offline.borrow().as_ref().is_some_and(|a| a.top == 22),
                 "offline end was unreachable",
             )?;
-            w.invoke_page_key(4);
+            w.global::<crate::BookmarksState>().invoke_page_key(4);
             require(
                 o.offline.borrow().as_ref().is_some_and(|a| a.top == 0),
                 "offline home failed",
             )?;
-            w.invoke_page_key(6);
+            w.global::<crate::BookmarksState>().invoke_page_key(6);
             require(
-                !w.get_offline() && o.offline.borrow().is_none(),
+                !w.global::<crate::BookmarksState>().get_offline() && o.offline.borrow().is_none(),
                 "offline close retained the article or raster",
             )?;
             if matches!(mode.as_str(), "restart" | "save-exit") {
@@ -357,24 +379,24 @@ pub fn start(
                 return Ok(());
             }
             require(
-                w.get_message() != msg!("bookmarks-loading"),
+                w.global::<crate::BookmarksState>().get_message() != msg!("bookmarks-loading"),
                 "completed archive read retained its loading notice",
             )?;
             let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
             fill(&w, "Stella", "invalid");
-            w.invoke_action(0);
+            w.global::<crate::BookmarksState>().invoke_action(0);
             idle(&o).await?;
             require(
                 std::fs::read(&path).map_err(|e| e.to_string())? == bytes,
                 "invalid destination wrote bookmarks",
             )?;
             fill(&w, "#00000102@Stella", "新書籤末字");
-            w.invoke_action(0);
+            w.global::<crate::BookmarksState>().invoke_action(0);
             idle(&o).await?;
             require(o.rows.borrow().len() == 2, "manual bookmark did not save")?;
-            w.invoke_choose(1);
+            w.global::<crate::BookmarksState>().invoke_choose(1);
             fill(&w, "#00000102@stella", "renamed");
-            w.invoke_action(0);
+            w.global::<crate::BookmarksState>().invoke_action(0);
             idle(&o).await?;
             let saved = store.load()?;
             require(
@@ -385,27 +407,27 @@ pub fn start(
                 "case-insensitive update duplicated or dropped an archive",
             )?;
             fill(&w, "#00000101@Stella", "changed unsaved identity");
-            w.invoke_action(1);
+            w.global::<crate::BookmarksState>().invoke_action(1);
             idle(&o).await?;
             require(
                 store.load()?.entries().len() == 1
                     && same(store.load()?.entries()[0].target(), &target),
                 "remove followed the edited field instead of the selected bookmark",
             )?;
-            w.invoke_choose(1);
+            w.global::<crate::BookmarksState>().invoke_choose(1);
             fill(&w, "#00000101@Stella", "保存失敗保留末字");
             let original = std::fs::read(&path).map_err(|e| e.to_string())?;
             let backup = path.with_extension("json.bak");
             let retained = directory.join("backup-before-fault.json");
             std::fs::rename(&backup, &retained).map_err(|e| e.to_string())?;
             std::fs::create_dir(&backup).map_err(|e| e.to_string())?;
-            w.invoke_action(0);
-            w.invoke_close_bookmarks();
+            w.global::<crate::BookmarksState>().invoke_action(0);
+            w.global::<crate::BookmarksState>().invoke_close_bookmarks();
             idle(&o).await?;
             require(
                 ui.get_bookmarks_open()
-                    && w.get_label() == "保存失敗保留末字"
-                    && !w.get_message().is_empty(),
+                    && w.global::<crate::BookmarksState>().get_label() == "保存失敗保留末字"
+                    && !w.global::<crate::BookmarksState>().get_message().is_empty(),
                 "failed save closed the form or discarded its draft",
             )?;
             require(
@@ -415,7 +437,7 @@ pub fn start(
             )?;
             std::fs::remove_dir(&backup).map_err(|e| e.to_string())?;
             std::fs::rename(&retained, &backup).map_err(|e| e.to_string())?;
-            w.invoke_action(0);
+            w.global::<crate::BookmarksState>().invoke_action(0);
             idle(&o).await?;
             require(
                 store.load()?.entries()[0].label() == Some("保存失敗保留末字"),
@@ -433,40 +455,42 @@ pub fn start(
                 }),
                 Operation::Read,
             );
-            w.invoke_close_bookmarks();
+            w.global::<crate::BookmarksState>().invoke_close_bookmarks();
             require(
                 !ui.get_bookmarks_open(),
                 "closing an archive read did not hide the window",
             )?;
             idle(&o).await?;
             require(
-                !ui.get_bookmarks_open() && !w.get_offline() && o.offline.borrow().is_none(),
+                !ui.get_bookmarks_open()
+                    && !w.global::<crate::BookmarksState>().get_offline()
+                    && o.offline.borrow().is_none(),
                 "late archive result reopened the window",
             )?;
             ui.invoke_bookmarks_show();
             idle(&o).await?;
             let valid = std::fs::read(&path).map_err(|e| e.to_string())?;
             std::fs::write(&path, b"broken").map_err(|e| e.to_string())?;
-            w.invoke_action(3);
+            w.global::<crate::BookmarksState>().invoke_action(3);
             idle(&o).await?;
             require(
-                !w.get_writable()
+                !w.global::<crate::BookmarksState>().get_writable()
                     && o.rows.borrow().is_empty()
                     && std::fs::read(&path).map_err(|e| e.to_string())? == b"broken",
                 "corrupt document was not read-only",
             )?;
             fill(&w, "#00000103@Stella", "must not write");
-            w.invoke_action(0);
+            w.global::<crate::BookmarksState>().invoke_action(0);
             idle(&o).await?;
             require(
                 std::fs::read(&path).map_err(|e| e.to_string())? == b"broken",
                 "read-only manager overwrote corrupt data",
             )?;
             std::fs::write(&path, &valid).map_err(|e| e.to_string())?;
-            w.invoke_action(3);
+            w.global::<crate::BookmarksState>().invoke_action(3);
             idle(&o).await?;
             require(
-                w.get_writable() && o.rows.borrow().len() == 1,
+                w.global::<crate::BookmarksState>().get_writable() && o.rows.borrow().len() == 1,
                 "explicit reload did not recover repaired data",
             )?;
             tokio::time::sleep(Duration::from_millis(30)).await;

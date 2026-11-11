@@ -1,12 +1,18 @@
-export { DestinationWindow } from "destination.slint";
-export { BookmarksWindow } from "bookmarks.slint";
-export { FiltersWindow } from "filters.slint";
-export { SitesWindow } from "sites.slint";
+export { PanelEdit } from "panel.slint";
+import { SettingsPanel } from "settings.slint";
+import { SitesPanel } from "sites.slint";
+import { FiltersPanel } from "filters.slint";
+import { BookmarksPanel } from "bookmarks.slint";
+import { DestinationPanel } from "destination.slint";
+export { DestinationState } from "destination.slint";
+export { BookmarksState } from "bookmarks.slint";
+export { FiltersState } from "filters.slint";
+export { SitesState } from "sites.slint";
 export { UiLabels } from "labels.slint";
 import { UiLabels } from "labels.slint";
-export { SettingsWindow, SettingsMatch, FontSource } from "settings.slint";
+export { SettingsState, SettingsMatch, FontSource } from "settings.slint";
 import { AboutSlint, Button, CheckBox, ComboBox, LineEdit, ScrollView, TextEdit } from "std-widgets.slint";
-import { LoginPopup } from "login.slint";
+import { LoginPanel } from "login.slint";
 import { ContextMenuOverlay, MenuEntry } from "context-menu.slint";
 import { FloatingTools, ToolItem } from "tools.slint";
 import { ArticleViewport, ArticleTile, InlineArrow, InlinePicture, ReplySideMark } from "article.slint";
@@ -66,6 +72,7 @@ export component TerminalWindow inherits Window {
     in property <bool> settings-available;
     in property <bool> settings-open;
     callback settings-show;
+    callback settings-composition(bool, bool);
     callback settings-runtime-updated;
     changed station-mouse-enabled=>{root.settings-runtime-updated();}
     changed keep-alive-enabled=>{root.settings-runtime-updated();}
@@ -423,6 +430,7 @@ export component TerminalWindow inherits Window {
     callback keep-alive-changed;
     callback toggle-keep-alive;
     in property <bool> login-open;
+    in-out property <bool> login-composing;
     in property <bool> login-busy;
     in property <bool> login-saved;
     in property <bool> login-available;
@@ -678,7 +686,7 @@ export component TerminalWindow inherits Window {
                     TouchArea {
                         width: viewport.width;
                         height: viewport.height;
-                        enabled: root.terminal-input && !root.pan-mode && !root.article-active;
+                        enabled: root.terminal-input && !root.pan-mode && !root.article-active && !root.settings-open && !root.manager-open && !root.login-open;
                         mouse-cursor: root.selection-dragging ? MouseCursor.text :
                             root.pointer-cursor == 1 ? MouseCursor.pointer :
                             root.pointer-cursor == 2 ? MouseCursor.w-resize :
@@ -1122,20 +1130,19 @@ export component TerminalWindow inherits Window {
     show-login-popup => {
         root.login-password = "";
         root.login-remember = false;
-        login-popup.show();
+        login-popup.focus();
     }
     hide-login-popup(restore-focus) => {
         root.login-password = "";
         root.login-remember = false;
-        login-popup.close();
         if (restore-focus) { root.focus-terminal(); }
     }
-    clear-login-password => { root.login-password = ""; }
-    login-popup := LoginPopup {
-        width: min(600px, root.width - 24px);
-        height: min(450px, root.height - 24px);
-        x: (root.width - self.width) / 2;
-        y: (root.height - self.height) / 2;
+    clear-login-password => { root.login-password = ""; root.login-composing = false; }
+    login-popup := LoginPanel {
+        visible: root.login-open;
+        width: parent.width;
+        height: parent.height;
+        composing: root.login-composing;
         title: root.login-title;
         account-label: root.login-account-label;
         password-label: root.login-password-label;
@@ -1220,4 +1227,9 @@ export component TerminalWindow inherits Window {
     editor-view := NativeEditor { visible:EditorState.open; width:parent.width;height:parent.height; }
     station-color-view := StationColor {visible:StationColorState.open;width:root.width;height:root.height;}
 
+    SettingsPanel { visible: root.settings-open; width: parent.width; height: parent.height; }
+    SitesPanel { visible: root.sites-open; width: parent.width; height: parent.height; }
+    FiltersPanel { visible: root.filters-open; width: parent.width; height: parent.height; }
+    BookmarksPanel { visible: root.bookmarks-open; width: parent.width; height: parent.height; }
+    DestinationPanel { visible: root.destination-open; width: parent.width; height: parent.height; }
 }

@@ -54,8 +54,10 @@ impl Preferences {
             ("blacklist", 5, 26),
         ];
         for (language, selector) in [(Language::English, 1), (Language::TraditionalChinese, 0)] {
-            window.set_language(selector);
-            window.invoke_edit();
+            window
+                .global::<crate::SettingsState>()
+                .set_language(selector);
+            window.global::<crate::SettingsState>().invoke_edit();
             wait(
                 || self.app().language == language && !ui.get_output_busy(),
                 "search language did not save",
@@ -65,31 +67,45 @@ impl Preferences {
                 window
                     .window()
                     .dispatch_event(WindowEvent::WindowActiveChanged(true));
-                window.set_query(query.into());
-                window.invoke_search(query.into());
-                let index = (0..window.get_matches().row_count())
+                window
+                    .global::<crate::SettingsState>()
+                    .set_query(query.into());
+                window
+                    .global::<crate::SettingsState>()
+                    .invoke_search(query.into());
+                let index = (0..window
+                    .global::<crate::SettingsState>()
+                    .get_matches()
+                    .row_count())
                     .find(|index| {
                         window
+                            .global::<crate::SettingsState>()
                             .get_matches()
                             .row_data(*index)
                             .is_some_and(|r| r.page == page && r.field == field)
                     })
                     .ok_or_else(|| format!("missing native settings result for {query}"))?;
                 let before = self.app();
-                window.invoke_choose_result(index as i32);
+                window
+                    .global::<crate::SettingsState>()
+                    .invoke_choose_result(index as i32);
                 wait(
-                    || window.get_focused_target() == field,
+                    || window.global::<crate::SettingsState>().get_focused_target() == field,
                     &format!("result failed to focus {query}: expected {field}"),
                 )
                 .await?;
                 require(
-                    window.get_page() == page
-                        && window.get_query().is_empty()
+                    window.global::<crate::SettingsState>().get_page() == page
+                        && window
+                            .global::<crate::SettingsState>()
+                            .get_query()
+                            .is_empty()
                         && self.app() == before,
                     "search activation changed preferences or failed to navigate",
                 )?;
                 require(
-                    window.invoke_edit_key(0) == matches!(field, 1..=7),
+                    window.global::<crate::SettingsState>().invoke_edit_key(0)
+                        == matches!(field, 1..=7),
                     "text shortcut swallowed by a non-text target",
                 )?;
                 eprintln!(
@@ -107,71 +123,127 @@ impl Preferences {
                 "<img src=x onerror=alert(1)>",
                 "baseline unrelated",
             ] {
-                window.set_query(query.into());
-                window.invoke_search(query.into());
+                window
+                    .global::<crate::SettingsState>()
+                    .set_query(query.into());
+                window
+                    .global::<crate::SettingsState>()
+                    .invoke_search(query.into());
                 require(
-                    window.get_matches().row_count() == 0,
+                    window
+                        .global::<crate::SettingsState>()
+                        .get_matches()
+                        .row_count()
+                        == 0,
                     "search matched a blank/private/unknown value",
                 )?;
             }
             // A new query cancels an already scheduled focus request.
-            window.set_query("baseline".into());
-            window.invoke_search(window.get_query());
-            window.invoke_choose_result(0);
-            window.set_query("opacity".into());
-            window.invoke_search(window.get_query());
-            window.invoke_focus_search();
+            window
+                .global::<crate::SettingsState>()
+                .set_query("baseline".into());
+            window
+                .global::<crate::SettingsState>()
+                .invoke_search(window.global::<crate::SettingsState>().get_query());
+            window
+                .global::<crate::SettingsState>()
+                .invoke_choose_result(0);
+            window
+                .global::<crate::SettingsState>()
+                .set_query("opacity".into());
+            window
+                .global::<crate::SettingsState>()
+                .invoke_search(window.global::<crate::SettingsState>().get_query());
+            window
+                .global::<crate::SettingsState>()
+                .invoke_focus_search();
             tokio::time::sleep(Duration::from_millis(50)).await;
             require(
-                window.get_query() == "opacity"
-                    && window.get_focused_target() == 0
+                window.global::<crate::SettingsState>().get_query() == "opacity"
+                    && window.global::<crate::SettingsState>().get_focused_target() == 0
                     && !self.search_focus.running(),
                 "obsolete result stole focus from the new query",
             )?;
             // Focus may also return through the native field's normal focus
             // path rather than the explicit focus-search callback.
-            window.set_query("".into());
-            window.set_page(1);
-            window.invoke_focus_result(3);
+            window.global::<crate::SettingsState>().set_query("".into());
+            window.global::<crate::SettingsState>().set_page(1);
+            window
+                .global::<crate::SettingsState>()
+                .invoke_focus_result(3);
             wait(
-                || window.get_focused_target() == 3,
+                || window.global::<crate::SettingsState>().get_focused_target() == 3,
                 "native field focus setup failed",
             )
             .await?;
-            window.set_query("baseline".into());
-            window.invoke_search(window.get_query());
-            window.invoke_choose_result(0);
-            window.invoke_focus_field(0);
+            window
+                .global::<crate::SettingsState>()
+                .set_query("baseline".into());
+            window
+                .global::<crate::SettingsState>()
+                .invoke_search(window.global::<crate::SettingsState>().get_query());
+            window
+                .global::<crate::SettingsState>()
+                .invoke_choose_result(0);
+            window
+                .global::<crate::SettingsState>()
+                .invoke_focus_field(0);
             tokio::time::sleep(Duration::from_millis(50)).await;
             require(
-                window.get_focused_target() == 0 && !self.search_focus.running(),
+                window.global::<crate::SettingsState>().get_focused_target() == 0
+                    && !self.search_focus.running(),
                 "pending result stole ordinary native search focus",
             )?;
         }
         // Search never repopulates or indexes an incomplete widget draft/name.
-        window.set_font_size("".into());
-        window.invoke_edit();
-        window.set_profile_name("private-profile-123".into());
-        window.set_query("private-profile-123".into());
-        window.invoke_search(window.get_query());
+        window
+            .global::<crate::SettingsState>()
+            .set_font_size("".into());
+        window.global::<crate::SettingsState>().invoke_edit();
+        window
+            .global::<crate::SettingsState>()
+            .set_profile_name("private-profile-123".into());
+        window
+            .global::<crate::SettingsState>()
+            .set_query("private-profile-123".into());
+        window
+            .global::<crate::SettingsState>()
+            .invoke_search(window.global::<crate::SettingsState>().get_query());
         require(
-            window.get_matches().row_count() == 0,
+            window
+                .global::<crate::SettingsState>()
+                .get_matches()
+                .row_count()
+                == 0,
             "search indexed a user profile name",
         )?;
-        window.set_query("visibility".into());
-        window.invoke_search(window.get_query());
-        window.invoke_choose_result(0);
+        window
+            .global::<crate::SettingsState>()
+            .set_query("visibility".into());
+        window
+            .global::<crate::SettingsState>()
+            .invoke_search(window.global::<crate::SettingsState>().get_query());
+        window
+            .global::<crate::SettingsState>()
+            .invoke_choose_result(0);
         wait(
-            || window.get_focused_target() == 13,
+            || window.global::<crate::SettingsState>().get_focused_target() == 13,
             "search lost incomplete draft focus target",
         )
         .await?;
         require(
-            window.get_font_size().is_empty() && window.get_profile_name() == "private-profile-123",
+            window
+                .global::<crate::SettingsState>()
+                .get_font_size()
+                .is_empty()
+                && window.global::<crate::SettingsState>().get_profile_name()
+                    == "private-profile-123",
             "search replaced the native draft",
         )?;
-        window.set_font_size(original.display.font_size.to_string().into());
-        window.invoke_edit();
+        window
+            .global::<crate::SettingsState>()
+            .set_font_size(original.display.font_size.to_string().into());
+        window.global::<crate::SettingsState>().invoke_edit();
         wait(
             || self.valid.get() && self.pending.borrow().is_none() && !ui.get_output_busy(),
             "restored search draft did not drain",
@@ -184,10 +256,13 @@ impl Preferences {
         )?;
         // Invalid names stop before picker/worker creation; the same typed
         // success consumer used by the real picker restores the imported name.
-        window.set_profile_name("".into());
+        window
+            .global::<crate::SettingsState>()
+            .set_profile_name("".into());
         self.profile(true);
         require(
-            window.get_notice() == msg!("profile-name-invalid") && !self.output.busy(),
+            window.global::<crate::SettingsState>().get_notice() == msg!("profile-name-invalid")
+                && !self.output.busy(),
             "invalid profile name entered OS output",
         )?;
         self.imported(pttstella::settings::PortableProfile::new(
@@ -195,8 +270,9 @@ impl Preferences {
             original.display.clone(),
         )?);
         require(
-            window.get_profile_name() == "自製具名測試"
-                && window.get_notice() == msg!("slint-profile-imported"),
+            window.global::<crate::SettingsState>().get_profile_name() == "自製具名測試"
+                && window.global::<crate::SettingsState>().get_notice()
+                    == msg!("slint-profile-imported"),
             "import retained an obsolete export/error notice or lost the name",
         )?;
         wait(
@@ -204,7 +280,9 @@ impl Preferences {
             "imported settings did not drain",
         )
         .await?;
-        window.invoke_close_settings();
+        window
+            .global::<crate::SettingsState>()
+            .invoke_close_settings();
         wait(|| !ui.get_settings_open(), "search window did not close").await?;
         require(!self.search_focus.running(), "focus timer survived close")?;
         // Runtime controls are explicit activations after settings drain, not
@@ -212,7 +290,9 @@ impl Preferences {
         let zoom = ui.get_zoom();
         ui.set_zoom(1.5);
         ui.invoke_settings_show();
-        window.invoke_runtime_action(0);
+        window
+            .global::<crate::SettingsState>()
+            .invoke_runtime_action(0);
         wait(
             || !ui.get_settings_open() && ui.get_zoom() == 1.,
             "fit handoff did not apply",
@@ -220,7 +300,9 @@ impl Preferences {
         .await?;
         for (action, expected) in [(6, 1.25), (7, 1.5)] {
             ui.invoke_settings_show();
-            window.invoke_runtime_action(action);
+            window
+                .global::<crate::SettingsState>()
+                .invoke_runtime_action(action);
             wait(
                 || !ui.get_settings_open() && ui.get_zoom() == expected,
                 "zoom preset handoff did not apply",
@@ -238,7 +320,9 @@ impl Preferences {
             let before = value();
             for restore in [false, true] {
                 ui.invoke_settings_show();
-                window.invoke_runtime_action(action);
+                window
+                    .global::<crate::SettingsState>()
+                    .invoke_runtime_action(action);
                 wait(
                     || !ui.get_settings_open() && (value() == before) == restore,
                     &format!("runtime settings action {action} did not toggle/restore"),

@@ -1,21 +1,16 @@
-import { Button, ComboBox, LineEdit } from "std-widgets.slint";
-component Field inherits LineEdit {
-    public function edit-key(code:int) {
-        if code==0 {self.select-all();} else if code==1 {self.copy();} else if code==2 {self.cut();}
-        else if code==3 {self.paste();} else if code==4 {self.undo();} else if code==5 {self.redo();}
-    }
-}
-export component SitesWindow inherits Window {
-    title:root.labels[0]; preferred-width:800px;preferred-height:650px;min-width:640px;min-height:520px;background:#171b23;
-    in property <[string]> labels;
-    in property <[string]> favourites;
-    in property <string> default-note;
-    in property <string> current-note;
-    in property <string> message;
-    in property <string> security;
-    in property <bool> writable;
-    in property <bool> busy;
-    in property <bool> composing;
+import { ScrollView } from "std-widgets.slint";
+import { PanelButton, PanelField, PanelCombo, PanelOverlay } from "panel.slint";
+
+export global SitesState {
+    in-out property <[string]> labels;
+    in-out property <[string]> favourites;
+    in-out property <string> default-note;
+    in-out property <string> current-note;
+    in-out property <string> message;
+    in-out property <string> security;
+    in-out property <bool> writable;
+    in-out property <bool> busy;
+    in-out property <bool> composing;
     in-out property <int> choice;
     in-out property <string> name;
     in-out property <string> address;
@@ -25,43 +20,49 @@ export component SitesWindow inherits Window {
     callback action(int);
     callback close-sites;
     callback field-edit(int,string)->string;
-    public function edit-key(code:int)->bool {
-        if name-field.has-focus {name-field.edit-key(code);return true;}
-        if address-field.has-focus {address-field.edit-key(code);return true;}
-        return false;
-    }
-    public function focus-address() {address-field.focus();}
+    in-out property <int> focus-address-sequence;
+    public function focus-address() { root.focus-address-sequence += 1; }
+}
+
+export component SitesPanel inherits PanelOverlay {
+    heading: SitesState.labels[0];
+    panel-width: 800px; panel-height: 650px;
+    private property <int> focus-address-sequence: SitesState.focus-address-sequence;
+    changed focus-address-sequence => { address-field.focus(); }
     keys:=FocusScope {
       width:parent.width;height:parent.height;
-      key-pressed(event)=>{if event.text==Key.Escape && !root.composing {root.close-sites();return accept;}return reject;}
-      VerticalLayout {padding:16px;spacing:10px;
-        Text {text:root.labels[14];color:#c7d4e7;wrap:word-wrap;}
-        Text {text:root.current-note;color:#c7d4e7;wrap:word-wrap;}
-        Text {text:root.default-note;color:#f2cd7d;wrap:word-wrap;}
-        Text {text:root.labels[1];color:#c7d4e7;}
-        ComboBox {model:root.favourites;current-index<=>root.choice;enabled:!root.busy && !root.composing;selected=>{root.choose(self.current-index);} }
+      key-pressed(event)=>{if event.text==Key.Escape && !SitesState.composing {SitesState.close-sites();return accept;}return reject;}
+      ScrollView {
+          content-width: self.width;
+      VerticalLayout {alignment: start; padding:16px;spacing:10px;
+        Text {text:SitesState.labels[14];color:#c7d4e7;wrap:word-wrap;}
+        Text {text:SitesState.current-note;color:#c7d4e7;wrap:word-wrap;}
+        Text {text:SitesState.default-note;color:#f2cd7d;wrap:word-wrap;}
+        Text {text:SitesState.labels[1];color:#c7d4e7;}
+        PanelCombo {model:SitesState.favourites;current-index<=>SitesState.choice;enabled:!SitesState.busy && !SitesState.composing;selected=>{SitesState.choose(self.current-index);} }
         HorizontalLayout {
-            Button {text:root.labels[10];enabled:!root.busy && !root.composing;clicked=>{root.preset(false);} }
-            Button {text:root.labels[11];enabled:!root.busy && !root.composing;clicked=>{root.preset(true);} }
+            PanelButton {text:SitesState.labels[10];enabled:!SitesState.busy && !SitesState.composing;clicked=>{SitesState.preset(false);} }
+            PanelButton {text:SitesState.labels[11];enabled:!SitesState.busy && !SitesState.composing;clicked=>{SitesState.preset(true);} }
         }
-        Text {text:root.labels[3];color:#c7d4e7;}
-        name-field:=Field {text<=>root.name;accessible-label:root.labels[3];enabled:!root.busy;edited=>{self.text=root.field-edit(0,self.text);} }
-        Text {text:root.labels[4];color:#c7d4e7;}
-        address-field:=Field {text<=>root.address;accessible-label:root.labels[4];enabled:!root.busy;edited=>{self.text=root.field-edit(1,self.text);} }
-        Text {text:root.labels[5];color:#c7d4e7;}
-        ComboBox {model:["Big5-UAO","Big5","GBK"];current-index<=>root.encoding;enabled:!root.busy && !root.composing;}
-        Text {text:root.security;color:#9ab5ce;wrap:word-wrap;}
+        Text {text:SitesState.labels[3];color:#c7d4e7;}
+        name-field:=PanelField {text<=>SitesState.name;accessible-label:SitesState.labels[3];enabled:!SitesState.busy;edited=>{self.text=SitesState.field-edit(0,self.text);} }
+        Text {text:SitesState.labels[4];color:#c7d4e7;}
+        address-field:=PanelField {text<=>SitesState.address;accessible-label:SitesState.labels[4];enabled:!SitesState.busy;edited=>{self.text=SitesState.field-edit(1,self.text);} }
+        Text {text:SitesState.labels[5];color:#c7d4e7;}
+        PanelCombo {model:["Big5-UAO","Big5","GBK"];current-index<=>SitesState.encoding;enabled:!SitesState.busy && !SitesState.composing;}
+        Text {text:SitesState.security;color:#9ab5ce;wrap:word-wrap;}
         HorizontalLayout {
-            Button {text:root.labels[6];enabled:root.writable && !root.busy && !root.composing;clicked=>{root.action(0);} }
-            Button {text:root.labels[7];enabled:root.writable && root.choice>0 && !root.busy && !root.composing;clicked=>{root.action(1);} }
-            Button {text:root.labels[8];enabled:root.writable && !root.busy && !root.composing;clicked=>{root.action(2);} }
+            PanelButton {text:SitesState.labels[6];enabled:SitesState.writable && !SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(0);} }
+            PanelButton {text:SitesState.labels[7];enabled:SitesState.writable && SitesState.choice>0 && !SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(1);} }
+            PanelButton {text:SitesState.labels[8];enabled:SitesState.writable && !SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(2);} }
         }
-        Text {text:root.message;color:#f2cd7d;wrap:word-wrap;vertical-stretch:1;}
+        Text {text:SitesState.message;color:#f2cd7d;wrap:word-wrap;vertical-stretch:1;}
         HorizontalLayout {
-            Button {text:root.labels[13];enabled:!root.busy && !root.composing;clicked=>{root.action(4);} }
-            Button {text:root.labels[9];enabled:!root.busy && !root.composing && root.address!="";clicked=>{root.action(3);} }
-            Button {text:root.labels[12];enabled:!root.composing;clicked=>{root.close-sites();} }
+            PanelButton {text:SitesState.labels[13];enabled:!SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(4);} }
+            PanelButton {text:SitesState.labels[9];enabled:!SitesState.busy && !SitesState.composing && SitesState.address!="";clicked=>{SitesState.action(3);} }
+            PanelButton {text:SitesState.labels[12];enabled:!SitesState.composing;clicked=>{SitesState.close-sites();} }
         }
+      }
       }
     }
 }

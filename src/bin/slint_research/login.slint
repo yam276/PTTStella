@@ -1,6 +1,9 @@
-import { Button, CheckBox, LineEdit } from "std-widgets.slint";
+import { PanelButton, PanelCheck, PanelField, PanelOverlay } from "panel.slint";
 
-export component LoginPopup inherits PopupWindow {
+export component LoginPanel inherits PanelOverlay {
+    panel-width: 550px;
+    panel-height: 405px;
+    heading: root.title;
     in property <string> title;
     in property <string> account-label;
     in property <string> password-label;
@@ -14,36 +17,28 @@ export component LoginPopup inherits PopupWindow {
     in-out property <bool> remember;
     in property <bool> busy;
     in property <bool> saved;
+    in property <bool> composing;
     callback submit(string, string, bool);
     callback cancel;
     callback forget;
     callback limit-text(string, int) -> string;
     forward-focus: account-field;
-    close-policy: PopupClosePolicy.no-auto-close;
 
     FocusScope {
         width: parent.width;
         height: parent.height;
         key-pressed(event) => {
-            if (event.text == Key.Escape) {
+            if (event.text == Key.Escape && !root.composing && !event.repeat) {
                 root.cancel();
                 return accept;
             }
             return reject;
         }
-        Rectangle {
-            width: parent.width;
-            height: parent.height;
-            background: #20252b;
-            border-radius: 6px;
-            border-width: 1px;
-            border-color: #6d7b87;
             VerticalLayout {
                 padding: 16px;
                 spacing: 12px;
-                Text { text: root.title; color: #e3e8ee; font-weight: 700; }
                 Text { text: root.account-label; color: #e3e8ee; }
-                account-field := LineEdit {
+                account-field := PanelField {
                     text <=> root.account;
                     accessible-label: root.account-label;
                     enabled: !root.busy;
@@ -51,7 +46,7 @@ export component LoginPopup inherits PopupWindow {
                     edited(text) => { self.text = root.limit-text(text, 12); }
                 }
                 Text { text: root.password-label; color: #e3e8ee; }
-                password-field := LineEdit {
+                password-field := PanelField {
                     text <=> root.password;
                     input-type: InputType.password;
                     accessible-label: root.password-label;
@@ -59,21 +54,21 @@ export component LoginPopup inherits PopupWindow {
                     input-method-hints: { capitalization: none, auto-correct: false, auto-complete: false };
                     edited(text) => { self.text = root.limit-text(text, 72); }
                     accepted => {
-                        if (!root.busy) {
+                        if (!root.busy && !root.composing) {
                             root.submit(account-field.text, self.text, remember.checked);
                             self.text = "";
                         }
                     }
                 }
-                remember := CheckBox { checked <=> root.remember; text: root.remember-label; enabled: !root.busy; }
+                remember  := PanelCheck { checked <=> root.remember; caption: root.remember-label; enabled: !root.busy; }
                 Text { text: root.message; color: #b7c1ce; wrap: word-wrap; vertical-stretch: 1; }
                 HorizontalLayout {
                     spacing: 8px;
-                    Button { text: root.forget-label; enabled: !root.busy && root.saved; clicked => { root.forget(); } }
-                    Button { text: root.cancel-label; clicked => { root.cancel(); } }
-                    Button {
-                        text: root.submit-label;
-                        enabled: !root.busy;
+                    PanelButton { text: root.forget-label; enabled: !root.busy && !root.composing && root.saved; clicked => { root.forget(); } }
+                    PanelButton { text: root.cancel-label; clicked => { root.cancel(); } }
+                    PanelButton {
+                        text: root.submit-label; primary: true;
+                        enabled: !root.busy && !root.composing;
                         clicked => {
                             root.submit(account-field.text, password-field.text, remember.checked);
                             password-field.text = "";
@@ -81,6 +76,5 @@ export component LoginPopup inherits PopupWindow {
                     }
                 }
             }
-        }
     }
 }

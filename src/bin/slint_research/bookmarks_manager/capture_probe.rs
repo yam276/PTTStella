@@ -175,21 +175,21 @@ pub fn start(
                 )
                 .await?;
                 let w = o.window().ok_or("bookmark window absent")?;
-                w.invoke_choose(1);
-                w.invoke_action(2);
+                w.global::<BookmarksState>().invoke_choose(1);
+                w.global::<BookmarksState>().invoke_action(2);
                 wait(
-                    || w.get_offline() && !o.output.busy(),
+                    || w.global::<BookmarksState>().get_offline() && !o.output.busy(),
                     "local reader did not load",
                 )
                 .await?;
-                w.invoke_page_key(5);
+                w.global::<BookmarksState>().invoke_page_key(5);
                 require(
                     o.offline.borrow().as_ref().is_some_and(|r| r.top == 22),
                     "offline End did not reach row 45",
                 )?;
                 verification::capture(&w, &directory, "offline-last-page.png")?;
-                w.invoke_page_key(6);
-                w.invoke_close_bookmarks();
+                w.global::<BookmarksState>().invoke_page_key(6);
+                w.global::<BookmarksState>().invoke_close_bookmarks();
             }
             std::fs::write(directory.join("capture-result.json"), serde_json::to_vec_pretty(&serde_json::json!({"case":case,"strict_station_peer":true,"actual_os_input":false,"saved":!matches!(case.as_str(),"cancel"|"blur")})).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
             Ok(())

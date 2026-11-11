@@ -275,15 +275,21 @@ pub fn start(
             ui.invoke_filters_show();
             let w = o.window().ok_or("account form missing")?;
             w.window().dispatch_event(Event::WindowActiveChanged(true));
-            w.set_account(w.invoke_field_edit(0, "Blocked".into()));
-            w.set_note(w.invoke_field_edit(1, "preserve this note".into()));
-            w.invoke_action(0);
+            w.global::<FiltersState>().set_account(
+                w.global::<FiltersState>()
+                    .invoke_field_edit(0, "Blocked".into()),
+            );
+            w.global::<FiltersState>().set_note(
+                w.global::<FiltersState>()
+                    .invoke_field_edit(1, "preserve this note".into()),
+            );
+            w.global::<FiltersState>().invoke_action(0);
             wait(
                 || !o.output.busy() && o.result.borrow().is_none(),
                 "account form write pending",
             )
             .await?;
-            w.invoke_close_filters();
+            w.global::<FiltersState>().invoke_close_filters();
             wait(
                 || {
                     verification::foreground(&ui, true);

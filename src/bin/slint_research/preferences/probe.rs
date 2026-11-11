@@ -108,15 +108,21 @@ impl Preferences {
         .await?;
         let identity = window.window().with_winit_window(|w| w.id());
         std::fs::write(dir.join("language-window-initialization.json"), serde_json::to_vec_pretty(&serde_json::json!({"immediate":format!("{initial_identity:?}"),"realized":format!("{identity:?}")})).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
-        window.set_query("baseline".into());
-        window.invoke_search(window.get_query());
+        window
+            .global::<crate::SettingsState>()
+            .set_query("baseline".into());
+        window
+            .global::<crate::SettingsState>()
+            .invoke_search(window.global::<crate::SettingsState>().get_query());
         let mut results = Vec::new();
         for (language, selector, save_label, search_label) in [
             (Language::English, 1, "Save now", "Baseline"),
             (Language::TraditionalChinese, 0, "立即保存", "基線位置"),
         ] {
-            window.set_language(selector);
-            window.invoke_edit();
+            window
+                .global::<crate::SettingsState>()
+                .set_language(selector);
+            window.global::<crate::SettingsState>().invoke_edit();
             wait(
                 || !ui.get_output_busy() && self.app().language == language,
                 "language did not save/apply",
@@ -131,12 +137,12 @@ impl Preferences {
             )?;
             require(
                 window.window().with_winit_window(|w| w.id()) == identity
-                    && window.get_query() == "baseline"
+                    && window.global::<crate::SettingsState>().get_query() == "baseline"
                     && ui.get_output_choice() == 5,
                 &format!(
                     "locale reset native window/query/output choice: same_window={}, query={:?}, output_choice={}",
                     window.window().with_winit_window(|w| w.id()) == identity,
-                    window.get_query(),
+                    window.global::<crate::SettingsState>().get_query(),
                     ui.get_output_choice()
                 ),
             )?;
@@ -147,11 +153,16 @@ impl Preferences {
             // Expected catalog wording is independently checked below using
             // literal labels once the saved locale has become effective.
             let found = window
+                .global::<crate::SettingsState>()
                 .get_matches()
                 .row_data(0)
                 .ok_or("language search result lost")?;
             require(
-                window.get_matches().row_count() == 1
+                window
+                    .global::<crate::SettingsState>()
+                    .get_matches()
+                    .row_count()
+                    == 1
                     && found.page == 1
                     && found.title == search_label,
                 "search results retained old language or lost query",
@@ -181,7 +192,9 @@ impl Preferences {
             )?;
             results.push(serde_json::json!({"language":language.tag(), "editor_save":save_label, "search_title":found.title.as_str(), "query_preserved":true, "output_choice_preserved":true}));
         }
-        window.invoke_close_settings();
+        window
+            .global::<crate::SettingsState>()
+            .invoke_close_settings();
         wait(
             || !ui.get_settings_open(),
             "language window close did not drain",
@@ -245,24 +258,42 @@ impl Preferences {
             "settings opened a second native window",
         )?;
         require(
-            self.preview_renderer.borrow().is_none() && window.get_preview().size().width == 0,
+            self.preview_renderer.borrow().is_none()
+                && window
+                    .global::<crate::SettingsState>()
+                    .get_preview()
+                    .size()
+                    .width
+                    == 0,
             "settings allocated a hidden font preview",
         )?;
-        window.invoke_show_page(1);
+        window.global::<crate::SettingsState>().invoke_show_page(1);
         wait(
-            || self.preview_renderer.borrow().is_some() && window.get_preview().size().width == 576,
+            || {
+                self.preview_renderer.borrow().is_some()
+                    && window
+                        .global::<crate::SettingsState>()
+                        .get_preview()
+                        .size()
+                        .width
+                        == 576
+            },
             "opening appearance did not render the font preview",
         )
         .await?;
-        window.set_font_size("18".into());
-        window.invoke_edit();
+        window
+            .global::<crate::SettingsState>()
+            .set_font_size("18".into());
+        window.global::<crate::SettingsState>().invoke_edit();
         tokio::time::sleep(Duration::from_millis(120)).await;
         require(
             store.read()?.as_deref() == Some(initial.as_slice()) && self.app() == original,
             "settings saved/applied before debounce",
         )?;
-        window.set_font_width("110".into());
-        window.invoke_edit();
+        window
+            .global::<crate::SettingsState>()
+            .set_font_width("110".into());
+        window.global::<crate::SettingsState>().invoke_edit();
         tokio::time::sleep(Duration::from_millis(150)).await;
         require(
             store.read()?.as_deref() == Some(initial.as_slice()),
@@ -289,11 +320,15 @@ impl Preferences {
             },
             |_, _, _| {},
         );
-        window.set_font_size("21".into());
-        window.invoke_edit();
+        window
+            .global::<crate::SettingsState>()
+            .set_font_size("21".into());
+        window.global::<crate::SettingsState>().invoke_edit();
         tokio::time::sleep(Duration::from_millis(320)).await;
-        window.set_font_size("22".into());
-        window.invoke_edit();
+        window
+            .global::<crate::SettingsState>()
+            .set_font_size("22".into());
+        window.global::<crate::SettingsState>().invoke_edit();
         require(
             self.pending
                 .borrow()
@@ -323,15 +358,17 @@ impl Preferences {
         let backup = settings_path.with_extension("json.bak");
         std::fs::rename(&backup, &backup_dir).map_err(|e| e.to_string())?;
         std::fs::create_dir(&backup).map_err(|e| e.to_string())?;
-        window.set_font_size("19".into());
-        window.invoke_edit();
+        window
+            .global::<crate::SettingsState>()
+            .set_font_size("19".into());
+        window.global::<crate::SettingsState>().invoke_edit();
         wait(
             || self.failed.get() && !ui.get_output_busy(),
             "backup failure did not reach retry UI",
         )
         .await?;
         require(
-            window.get_font_size() == "19"
+            window.global::<crate::SettingsState>().get_font_size() == "19"
                 && self.app().display.font_size == 22.
                 && store.load()?.display.font_size == 22.,
             "failed save replaced file/effective value or lost draft",
@@ -346,7 +383,7 @@ impl Preferences {
         )?;
         std::fs::remove_dir(&backup).map_err(|e| e.to_string())?;
         std::fs::rename(&backup_dir, &backup).map_err(|e| e.to_string())?;
-        window.invoke_retry();
+        window.global::<crate::SettingsState>().invoke_retry();
         wait(
             || !ui.get_output_busy() && self.app().display.font_size == 19.,
             "settings retry did not recover",
@@ -357,53 +394,81 @@ impl Preferences {
             "retry did not persist",
         )?;
 
-        window.set_font_size("-".into());
-        window.invoke_edit();
+        window
+            .global::<crate::SettingsState>()
+            .set_font_size("-".into());
+        window.global::<crate::SettingsState>().invoke_edit();
         tokio::time::sleep(Duration::from_millis(360)).await;
         require(
             store.load()?.display.font_size == 19. && self.pending.borrow().is_none(),
             "invalid intermediate was saved",
         )?;
-        window.set_font_size("20".into());
+        window
+            .global::<crate::SettingsState>()
+            .set_font_size("20".into());
         self.composing.set(true);
-        window.invoke_edit();
+        window.global::<crate::SettingsState>().invoke_edit();
         tokio::time::sleep(Duration::from_millis(360)).await;
         require(
             store.load()?.display.font_size == 19.,
             "synthetic preedit was saved",
         )?;
         self.composing.set(false);
-        window.invoke_edit();
+        window.global::<crate::SettingsState>().invoke_edit();
         wait(
             || !ui.get_output_busy() && self.app().display.font_size == 20.,
             "committed valid edit was not saved",
         )
         .await?;
-        window.invoke_search("baseline".into());
+        window
+            .global::<crate::SettingsState>()
+            .invoke_search("baseline".into());
         require(
-            window.get_matches().row_count() == 1
+            window
+                .global::<crate::SettingsState>()
+                .get_matches()
+                .row_count()
+                == 1
                 && window
+                    .global::<crate::SettingsState>()
                     .get_matches()
                     .row_data(0)
                     .is_some_and(|m| m.page == 1),
             "settings search failed",
         )?;
 
-        window.invoke_show_page(1);
-        window.invoke_close_settings();
+        window.global::<crate::SettingsState>().invoke_show_page(1);
+        window
+            .global::<crate::SettingsState>()
+            .invoke_close_settings();
         wait(|| !ui.get_settings_open(), "settings close did not drain").await?;
         require(
-            self.preview_renderer.borrow().is_none() && window.get_preview().size().width == 0,
+            self.preview_renderer.borrow().is_none()
+                && window
+                    .global::<crate::SettingsState>()
+                    .get_preview()
+                    .size()
+                    .width
+                    == 0,
             "settings close retained the font preview",
         )?;
         ui.invoke_settings_show();
         wait(
-            || self.preview_renderer.borrow().is_some() && window.get_preview().size().width == 576,
+            || {
+                self.preview_renderer.borrow().is_some()
+                    && window
+                        .global::<crate::SettingsState>()
+                        .get_preview()
+                        .size()
+                        .width
+                        == 576
+            },
             "reopening appearance did not recreate the font preview",
         )
         .await?;
         require(
-            window.get_font_size() == "20" && window.get_font_width() == "110",
+            window.global::<crate::SettingsState>().get_font_size() == "20"
+                && window.global::<crate::SettingsState>().get_font_width() == "110",
             "reopen did not show persisted values",
         )?;
         capture(&window, dir, "settings-saved.png")?;
@@ -412,13 +477,15 @@ impl Preferences {
         // control back to the unchanged media workload and strict peer.
         self.model.borrow_mut().open();
         form::populate(&window, &original);
-        window.invoke_edit();
+        window.global::<crate::SettingsState>().invoke_edit();
         wait(
             || !ui.get_output_busy() && self.app() == original,
             "settings probe restore failed",
         )
         .await?;
-        window.invoke_close_settings();
+        window
+            .global::<crate::SettingsState>()
+            .invoke_close_settings();
         wait(
             || !ui.get_settings_open(),
             "restored settings window remained open",
@@ -430,7 +497,7 @@ impl Preferences {
         Ok(())
     }
 }
-fn capture(window: &crate::SettingsWindow, dir: &Path, name: &str) -> Result<(), String> {
+fn capture(window: &crate::TerminalWindow, dir: &Path, name: &str) -> Result<(), String> {
     let pixels = window.window().take_snapshot().map_err(|e| e.to_string())?;
     let file = OpenOptions::new()
         .write(true)

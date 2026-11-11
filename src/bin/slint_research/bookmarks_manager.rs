@@ -4,7 +4,7 @@ mod capture;
 pub mod capture_probe;
 pub mod probe;
 use crate::{
-    BookmarksWindow, TerminalWindow,
+    TerminalWindow,
     article::session::ArticleSession,
     file_job::ResultSlot,
     output::Output,
@@ -19,12 +19,13 @@ use pttstella::{
     },
     msg,
 };
-use slint::{ComponentHandle, Image, ModelRc, VecModel, winit_030::WinitWindowAccessor};
+use slint::{ComponentHandle, Image, ModelRc, VecModel};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
 };
 
+use crate::BookmarksState;
 enum Value {
     Loaded(State),
     Saved(Bookmarks),
@@ -60,7 +61,7 @@ pub struct Manager {
     capture_trace_left: Cell<u8>,
     store: Result<Store, String>,
     state: RefCell<Option<State>>,
-    window: RefCell<Option<BookmarksWindow>>,
+    window: RefCell<Option<TerminalWindow>>,
     rows: RefCell<Vec<Summary>>,
     selected: RefCell<Option<ArticleTarget>>,
     fields: RefCell<[String; 2]>,
@@ -165,7 +166,7 @@ impl Manager {
         });
         owner
     }
-    pub(crate) fn window(&self) -> Option<BookmarksWindow> {
+    pub(crate) fn window(&self) -> Option<TerminalWindow> {
         self.window
             .borrow()
             .as_ref()
@@ -173,13 +174,13 @@ impl Manager {
     }
     fn notice(&self, text: String) {
         if let Some(w) = self.window() {
-            w.set_message(text.into());
+            w.global::<BookmarksState>().set_message(text.into());
         }
     }
     pub fn refresh_labels(&self) {
         let Some(w) = self.window() else { return };
         let loader = pttstella::i18n::application().loader();
-        w.set_labels(strings(
+        w.global::<BookmarksState>().set_labels(strings(
             [
                 "bookmarks-title",
                 "bookmarks-description",
@@ -208,41 +209,44 @@ impl Manager {
         self.selected.borrow_mut().take();
         *self.fields.borrow_mut() = Default::default();
         if let Some(w) = self.window() {
-            w.set_target("".into());
-            w.set_label("".into());
-            w.set_choice(0);
+            w.global::<BookmarksState>().set_target("".into());
+            w.global::<BookmarksState>().set_label("".into());
+            w.global::<BookmarksState>().set_choice(0);
         }
         self.sync();
     }
     fn sync(&self) {
         if let Some(w) = self.window() {
-            w.set_busy(self.output.busy() || self.result.borrow().is_some());
-            w.set_writable(
+            w.global::<BookmarksState>()
+                .set_busy(self.output.busy() || self.result.borrow().is_some());
+            w.global::<BookmarksState>().set_writable(
                 self.state
                     .borrow()
                     .as_ref()
                     .is_some_and(|s| s.check_write().is_ok()),
             );
-            w.set_selected(self.selected.borrow().is_some());
-            w.set_go_ready(
+            w.global::<BookmarksState>()
+                .set_selected(self.selected.borrow().is_some());
+            w.global::<BookmarksState>().set_go_ready(
                 self.ui
                     .upgrade()
                     .is_some_and(|ui| ui.get_destination_available()),
             );
-            w.set_has_copy(self.selected.borrow().as_ref().is_some_and(|t| {
-                self.rows
-                    .borrow()
-                    .iter()
-                    .any(|r| same(r.target(), t) && r.cached_at().is_some())
-            }));
+            w.global::<BookmarksState>()
+                .set_has_copy(self.selected.borrow().as_ref().is_some_and(|t| {
+                    self.rows
+                        .borrow()
+                        .iter()
+                        .any(|r| same(r.target(), t) && r.cached_at().is_some())
+                }));
         }
     }
     fn render(&self) {
         let Some(w) = self.window() else { return };
         let snapshot = self.state.borrow().as_ref().map(State::snapshot);
         let rows = snapshot.map(|s| s.entries).unwrap_or_default();
-        w.set_entries(strings(std::iter::once(msg!("bookmarks-new")).chain(
-            rows.iter().map(|r| {
+        w.global::<BookmarksState>().set_entries(strings(
+            std::iter::once(msg!("bookmarks-new")).chain(rows.iter().map(|r| {
                 let copy = if r.cached_at().is_some() {
                     format!(" · {}", msg!("bookmarks-local-copy"))
                 } else {
@@ -255,8 +259,8 @@ impl Manager {
                     target_text(r.target()),
                     copy
                 )
-            }),
-        )));
+            })),
+        ));
         let choice = self
             .selected
             .borrow()
@@ -265,7 +269,8 @@ impl Manager {
         if choice.is_none() {
             self.selected.borrow_mut().take();
         }
-        w.set_choice(choice.map_or(0, |i| (i + 1) as i32));
+        w.global::<BookmarksState>()
+            .set_choice(choice.map_or(0, |i| (i + 1) as i32));
         self.rows.replace(rows);
         self.sync();
     }
@@ -291,9 +296,11 @@ impl Manager {
             row.label().unwrap_or("").to_owned(),
         ];
         if let Some(w) = self.window() {
-            w.set_target(fields[0].clone().into());
-            w.set_label(fields[1].clone().into());
-            w.set_choice(index);
+            w.global::<BookmarksState>()
+                .set_target(fields[0].clone().into());
+            w.global::<BookmarksState>()
+                .set_label(fields[1].clone().into());
+            w.global::<BookmarksState>().set_choice(index);
         }
         self.fields.replace(fields);
         drop(rows);
@@ -348,21 +355,15 @@ impl Manager {
             );
         }
         if let Some(w) = self.window() {
-            if let Err(e) = w.show() {
-                ui.set_bookmarks_open(false);
-                crate::notice::error(&ui, e.to_string());
-                return;
-            }
-            w.window().with_winit_window(|w| w.focus_window());
-            w.invoke_focus_target();
+            w.global::<BookmarksState>().invoke_focus_target();
         }
         if self.state.borrow().is_none() {
             self.reload();
         }
     }
-    fn create_window(self: &Rc<Self>, ui: &TerminalWindow) -> Result<BookmarksWindow, String> {
-        let w = BookmarksWindow::new().map_err(|e| e.to_string())?;
-        w.on_choose({
+    fn create_window(self: &Rc<Self>, _ui: &TerminalWindow) -> Result<TerminalWindow, String> {
+        let w = self.ui.upgrade().ok_or("terminal window closed")?;
+        w.global::<BookmarksState>().on_choose({
             let o = Rc::downgrade(self);
             move |i| {
                 if let Some(o) = o.upgrade()
@@ -372,7 +373,7 @@ impl Manager {
                 }
             }
         });
-        w.on_new_entry({
+        w.global::<BookmarksState>().on_new_entry({
             let o = Rc::downgrade(self);
             move || {
                 if let Some(o) = o.upgrade()
@@ -382,7 +383,7 @@ impl Manager {
                 }
             }
         });
-        w.on_field_edit({
+        w.global::<BookmarksState>().on_field_edit({
             let o = Rc::downgrade(self);
             move |field, text| {
                 let Some(o) = o.upgrade() else {
@@ -419,7 +420,7 @@ impl Manager {
                 text.into()
             }
         });
-        w.on_action({
+        w.global::<BookmarksState>().on_action({
             let o = Rc::downgrade(self);
             move |code| {
                 if let Some(o) = o.upgrade()
@@ -429,7 +430,7 @@ impl Manager {
                 }
             }
         });
-        w.on_close_bookmarks({
+        w.global::<BookmarksState>().on_close_bookmarks({
             let o = Rc::downgrade(self);
             move || {
                 if let Some(o) = o.upgrade() {
@@ -437,7 +438,7 @@ impl Manager {
                 }
             }
         });
-        w.on_page_key({
+        w.global::<BookmarksState>().on_page_key({
             let o = Rc::downgrade(self);
             move |code| {
                 if let Some(o) = o.upgrade() {
@@ -445,7 +446,7 @@ impl Manager {
                 }
             }
         });
-        w.on_reader_resized({
+        w.global::<BookmarksState>().on_reader_resized({
             let o = Rc::downgrade(self);
             move || {
                 if let Some(o) = o.upgrade()
@@ -455,16 +456,6 @@ impl Manager {
                 }
             }
         });
-        w.window().on_close_requested({
-            let o = Rc::downgrade(self);
-            move || {
-                if let Some(o) = o.upgrade() {
-                    o.close();
-                }
-                slint::CloseRequestResponse::KeepWindowShown
-            }
-        });
-        crate::native_text::install(ui, &w);
         Ok(w)
     }
     fn admit(&self) -> bool {
@@ -475,9 +466,10 @@ impl Manager {
                 .ui
                 .upgrade()
                 .is_some_and(|ui| ui.get_bookmarks_open() && !ui.get_app_closing())
-            && self
-                .window()
-                .is_some_and(|w| !w.get_composing() && !w.get_offline())
+            && self.window().is_some_and(|w| {
+                !w.global::<BookmarksState>().get_composing()
+                    && !w.global::<BookmarksState>().get_offline()
+            })
     }
     fn reload(self: &Rc<Self>) {
         let store = self.store.clone();
@@ -626,9 +618,9 @@ impl Manager {
                     painted: None,
                 }));
                 if let Some(w) = self.window() {
-                    w.set_offline(true);
+                    w.global::<BookmarksState>().set_offline(true);
                     self.paint()?;
-                    w.invoke_focus_reader();
+                    w.global::<BookmarksState>().invoke_focus_reader();
                 }
                 self.notice(msg!("bookmarks-hint"));
                 Ok(())
@@ -645,18 +637,19 @@ impl Manager {
     }
     fn page(&self, code: i32) {
         if self.stopped.get()
-            || self
-                .window()
-                .is_none_or(|w| !w.get_offline() || w.get_composing())
+            || self.window().is_none_or(|w| {
+                !w.global::<BookmarksState>().get_offline()
+                    || w.global::<BookmarksState>().get_composing()
+            })
         {
             return;
         }
         if code == 6 {
             self.offline.borrow_mut().take();
             if let Some(w) = self.window() {
-                w.set_offline(false);
-                w.set_page(Image::default());
-                w.invoke_focus_target();
+                w.global::<BookmarksState>().set_offline(false);
+                w.global::<BookmarksState>().set_page(Image::default());
+                w.global::<BookmarksState>().invoke_focus_target();
             }
             return;
         }
@@ -693,8 +686,8 @@ impl Manager {
             return Ok(());
         };
         let Some(mut size) = Size::fit(
-            w.get_reader_width(),
-            w.get_reader_height() * 24. / 23.,
+            w.global::<BookmarksState>().get_reader_width(),
+            w.global::<BookmarksState>().get_reader_height() * 24. / 23.,
             w.window().scale_factor(),
             1.,
         ) else {
@@ -714,10 +707,11 @@ impl Manager {
             }
         }
         let renderer = o.renderer.as_ref().ok_or("offline renderer missing")?;
-        w.set_page(Image::from_rgba8_premultiplied(
-            renderer.paint(size, false).map_err(str::to_owned)?,
-        ));
-        w.set_progress(
+        w.global::<BookmarksState>()
+            .set_page(Image::from_rgba8_premultiplied(
+                renderer.paint(size, false).map_err(str::to_owned)?,
+            ));
+        w.global::<BookmarksState>().set_progress(
             format!(
                 "{} · {}",
                 target_text(&o.article.target),
@@ -734,7 +728,10 @@ impl Manager {
         Ok(())
     }
     fn close(&self) {
-        if self.window().is_some_and(|w| w.get_composing()) {
+        if self
+            .window()
+            .is_some_and(|w| w.global::<BookmarksState>().get_composing())
+        {
             return;
         }
         if self
@@ -750,12 +747,8 @@ impl Manager {
     }
     fn hide(&self) {
         if let Some(w) = self.window() {
-            if let Err(e) = w.hide() {
-                self.notice(e.to_string());
-                return;
-            }
-            w.set_offline(false);
-            w.set_page(Image::default());
+            w.global::<BookmarksState>().set_offline(false);
+            w.global::<BookmarksState>().set_page(Image::default());
         }
         self.epoch.set(self.epoch.get().wrapping_add(1));
         self.offline.borrow_mut().take();

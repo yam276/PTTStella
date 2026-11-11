@@ -1,4 +1,5 @@
-import { AboutSlint, Button, CheckBox, ComboBox, LineEdit, ScrollView } from "std-widgets.slint";
+import { AboutSlint, ScrollView } from "std-widgets.slint";
+import { PanelButton, PanelField, PanelCheck, PanelCombo, PanelOverlay } from "panel.slint";
 global SettingsInput {
     in-out property <int> focused:-1;
     in-out property <int> active-target:-1;
@@ -7,7 +8,7 @@ global SettingsInput {
     in-out property <int> focus-field:-1;
     in-out property <int> focus-sequence;
 }
-component EditField inherits LineEdit {
+component EditField inherits PanelField {
     in property <int> field-id;
     private property <int> command-sequence:SettingsInput.command-sequence;
     private property <int> focus-sequence:SettingsInput.focus-sequence;
@@ -27,19 +28,19 @@ component EditField inherits LineEdit {
         }
     }
 }
-component FocusButton inherits Button {
+component FocusButton inherits PanelButton {
     in property <int> field-id;
     private property <int> focus-sequence:SettingsInput.focus-sequence;
     changed focus-sequence=>{if SettingsInput.focus-field==self.field-id {self.focus();}}
     changed has-focus=>{if self.has-focus {SettingsInput.active-target=self.field-id;} else if SettingsInput.active-target==self.field-id {SettingsInput.active-target=-1;}}
 }
-component FocusCombo inherits ComboBox {
+component FocusCombo inherits PanelCombo {
     in property <int> field-id;
     private property <int> focus-sequence:SettingsInput.focus-sequence;
     changed focus-sequence=>{if SettingsInput.focus-field==self.field-id {self.focus();}}
     changed has-focus=>{if self.has-focus {SettingsInput.active-target=self.field-id;} else if SettingsInput.active-target==self.field-id {SettingsInput.active-target=-1;}}
 }
-component FocusCheck inherits CheckBox {
+component FocusCheck inherits PanelCheck {
     in property <int> field-id;
     private property <int> focus-sequence:SettingsInput.focus-sequence;
     changed focus-sequence=>{if SettingsInput.focus-field==self.field-id {self.focus();}}
@@ -47,25 +48,22 @@ component FocusCheck inherits CheckBox {
 }
 export struct FontSource { id:string,title:string }
 export struct SettingsMatch { title:string, page:int, field:int }
-export component SettingsWindow inherits Window {
-    title: root.labels[0];
-    preferred-width: 860px; preferred-height: 680px;
-    min-width: 700px; min-height: 520px;
-    background: #171b23;
-    in property <[string]> labels;
-    in property <[string]> runtime-labels;
-    in property <[bool]> runtime-states;
-    in property <[bool]> runtime-available;
+
+export global SettingsState {
+    in-out property <[string]> labels;
+    in-out property <[string]> runtime-labels;
+    in-out property <[bool]> runtime-states;
+    in-out property <[bool]> runtime-available;
     in-out property <string> profile-name;
     out property <int> focused-target:SettingsInput.active-target;
     changed focused-target=>{if root.focused-target==0 {root.cancel-result-focus();}}
     callback runtime-action(int);
-    in property <[string]> categories;
-    in property <[string]> presets;
-    in property <[string]> languages;
-    in property <[string]> modes;
-    in property <[string]> positions;
-    in property <[SettingsMatch]> matches;
+    in-out property <[string]> categories;
+    in-out property <[string]> presets;
+    in-out property <[string]> languages;
+    in-out property <[string]> modes;
+    in-out property <[string]> positions;
+    in-out property <[SettingsMatch]> matches;
     in-out property <int> page;
     in-out property <string> query;
     in-out property <int> preset;
@@ -82,17 +80,17 @@ export component SettingsWindow inherits Window {
     in-out property <string> tool-opacity;
     in-out property <bool> right-click;
     in-out property <bool> show-ball;
-    in property <image> preview;
+    in-out property <image> preview;
     out property <bool> preview-visible: root.query == "" && root.page == 1;
     callback refresh-preview;
-    in property <string> font-status;
-    in property <string> notice;
-    in property <bool> failed;
-    in property <bool> release-enabled;
-    in property <bool> release-checking;
-    in property <bool> release-available;
-    in property <string> release-status;
-    in property <[string]> release-labels;
+    in-out property <string> font-status;
+    in-out property <string> notice;
+    in-out property <bool> failed;
+    in-out property <bool> release-enabled;
+    in-out property <bool> release-checking;
+    in-out property <bool> release-available;
+    in-out property <string> release-status;
+    in-out property <[string]> release-labels;
     callback release-check;
     callback release-open;
     callback repository-open;
@@ -104,17 +102,17 @@ export component SettingsWindow inherits Window {
     callback manage-account;
     callback manage-sites;
     callback manage-filters;
-    in property <string> filters-label;
-    in property <bool> filters-available;
-    in property <string> sites-label;
-    in property <bool> sites-available;
+    in-out property <string> filters-label;
+    in-out property <bool> filters-available;
+    in-out property <string> sites-label;
+    in-out property <bool> sites-available;
     callback font-preset;
     callback custom-font;
     callback profile(bool);
     callback catalog;
-    in property <[string]> families;
+    in-out property <[string]> families;
     callback family(bool,string);
-    in property <[FontSource]> font-sources;
+    in-out property <[FontSource]> font-sources;
     callback font-source(string);
     callback edit-key(int)->bool;
     edit-key(code)=>{
@@ -140,123 +138,154 @@ export component SettingsWindow inherits Window {
     callback focus-field(int);
     focus-field(field)=>{SettingsInput.focus-field=field;SettingsInput.focus-sequence=1-SettingsInput.focus-sequence;}
     callback focus-search;
-    focus-search => { root.cancel-result-focus(); search-box.focus(); }
-    VerticalLayout {
-        padding:16px;spacing:12px;
-        search-box:=EditField {field-id:0; placeholder-text:root.labels[1];text<=>root.query;edited=>{root.search(self.text);root.refresh-preview();} }
-        HorizontalLayout {
-            spacing:16px;
-            VerticalLayout {
-                width:154px;spacing:6px;
-                for item[index] in root.categories: Button {
-                    text:item;checked:root.page==index && root.query=="";
-                    clicked=>{root.show-page(index);}
-                }
-                Rectangle {vertical-stretch:1;background:transparent;}
+    focus-search => { root.cancel-result-focus(); root.focus-field(0); }
+    in-out property <bool> composing;
+}
+
+export component SettingsPanel inherits PanelOverlay {
+    heading: SettingsState.labels[0];
+    FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape && !SettingsState.composing && !event.repeat {
+                SettingsState.close-settings();
+                return accept;
             }
-            ScrollView { content-width:self.width;
-                VerticalLayout {
-                    padding:8px;spacing:12px;
-                    if root.query!="": VerticalLayout {
-                        for item[index] in root.matches: Button { text:item.title + " · " + root.categories[item.page];clicked=>{root.choose-result(index);} }
-                        if root.matches.length==0: Text { text:root.labels[2];color:#d7dce5;wrap:word-wrap; }
-                    }
-                    if root.query=="" && root.page==0: VerticalLayout {
-                        FocusButton {field-id:23;text:root.runtime-labels[3];enabled:root.runtime-available[3];checked:root.runtime-states[3];clicked=>{root.runtime-action(3);}}
-                        Text {text:root.labels[3];color:#d7dce5;}
-                        FocusCombo {field-id:10;model:root.languages;current-index<=>root.language;selected=>{root.edit();}}
-                        Text {text:root.labels[4];color:#d7dce5;wrap:word-wrap;}
-                        Text {text:root.labels[5];color:#d7dce5;}
-                        FocusCombo {field-id:14;model:root.modes;current-index<=>root.article-mode;selected=>{root.edit();}}
-                        Text {text:root.labels[6];color:#d7dce5;wrap:word-wrap;}
-                        FocusCheck {field-id:16;text:root.labels[7];checked<=>root.boundary;toggled=>{root.edit();}}
-                    }
-                    if root.preview-visible: VerticalLayout {
-                        HorizontalLayout {
-                            spacing: 8px;
-                            FocusButton {field-id:20;text:root.runtime-labels[0];clicked=>{root.runtime-action(0);}}
-                            Button { text: "125%"; clicked => {root.runtime-action(6);} }
-                            Button { text: "150%"; clicked => {root.runtime-action(7);} }
-                        }
-                        Text {text:root.labels[8];color:#d7dce5;}
-                        FocusCombo {field-id:11;model:root.presets;current-index<=>root.preset;selected=>{root.font-preset();}}
-                        Text {text:root.labels[9];color:#d7dce5;}
-                        ascii-field:=EditField {field-id:1;text<=>root.ascii;edited=>{root.custom-font();}}
-                        ComboBox {model:root.families;selected(value)=>{root.family(false,value);}}
-                        Text {text:root.labels[10];color:#d7dce5;}
-                        cjk-field:=EditField {field-id:2;text<=>root.cjk;edited=>{root.custom-font();}}
-                        ComboBox {model:root.families;selected(value)=>{root.family(true,value);}}
-                        Button {text:root.labels[11];clicked=>{root.catalog();}}
-                        HorizontalLayout {
-                            VerticalLayout {Text {text:root.labels[12];color:#d7dce5;} size-field:=EditField {field-id:3;text<=>root.font-size;edited=>{root.edit();}}}
-                            VerticalLayout {Text {text:root.labels[13];color:#d7dce5;} baseline-field:=EditField {field-id:4;text<=>root.baseline;edited=>{root.edit();}}}
-                            VerticalLayout {Text {text:root.labels[14];color:#d7dce5;} width-field:=EditField {field-id:5;text<=>root.font-width;edited=>{root.edit();}}}
-                        }
-                        Text {text:root.labels[15];color:#d7dce5;wrap:word-wrap;}
-                        Image {source:root.preview;image-fit:contain;height:144px;}
-                        Text {text:root.font-status;color:#e4c76e;wrap:word-wrap;}
-                        Text {text:root.labels[33];color:#d7dce5;}
-                        EditField {field-id:7;text<=>root.profile-name;}
-                        HorizontalLayout {
-                            Button {text:root.labels[16];clicked=>{root.profile(false);}}
-                            Button {text:root.labels[17];clicked=>{root.profile(true);}}
-                        }
-                        Text {text:root.labels[18];color:#d7dce5;wrap:word-wrap;}
-                        for source in root.font-sources:
-                            Button {text:source.title;clicked=>{root.font-source(source.id);}}
-                    }
-                    if root.query=="" && root.page==2: VerticalLayout {
-                        FocusButton {field-id:21;text:root.runtime-labels[1];enabled:root.runtime-available[1];checked:root.runtime-states[1];clicked=>{root.runtime-action(1);}}
-                        FocusButton {field-id:22;text:root.runtime-labels[2];enabled:root.runtime-available[2];checked:root.runtime-states[2];clicked=>{root.runtime-action(2);}}
-                        if root.runtime-available[5]: Button {text:root.runtime-labels[5];clicked=>{root.runtime-action(5);}}
-                        Button {text:root.runtime-labels[4];enabled:root.runtime-available[4];clicked=>{root.runtime-action(4);}}
-                        Text {text:root.labels[19];color:#d7dce5;}
-                        opacity-field:=EditField {field-id:6;text<=>root.tool-opacity;edited=>{root.edit();}}
-                        FocusCheck {field-id:12;text:root.labels[20];checked<=>root.right-click;toggled=>{root.edit();}}
-                        FocusCheck {field-id:13;text:root.labels[21];checked<=>root.show-ball;toggled=>{root.edit();}}
-                        Text {text:root.labels[22];color:#d7dce5;wrap:word-wrap;}
-                    }
-                    if root.query=="" && root.page==3: VerticalLayout {
-                        Text {text:root.labels[23];color:#d7dce5;}
-                        FocusCombo {field-id:17;model:root.positions;current-index<=>root.hover;selected=>{root.edit();}}
-                        FocusCheck {field-id:15;text:root.labels[24];checked<=>root.automatic;toggled=>{root.edit();}}
-                        Text {text:root.labels[25];color:#d7dce5;wrap:word-wrap;}
-                    }
-                    if root.query=="" && root.page==4: VerticalLayout {
-                        if root.sites-available: FocusButton {field-id:18;text:root.sites-label;clicked=>{root.manage-sites();}}
-                    }
-                    if root.query=="" && root.page==5: VerticalLayout {
-                        if root.filters-available: FocusButton {field-id:26;text:root.filters-label;clicked=>{root.manage-filters();}}
-                    }
-                    if root.query=="" && root.page==6: VerticalLayout {
-                        Text {text:root.labels[26];color:#d7dce5;wrap:word-wrap;}
-                        FocusButton {field-id:19;text:root.labels[27];clicked=>{root.manage-account();}}
-                    }
-                    if root.query=="" && root.page==7: VerticalLayout {
-                        FocusScope {
-                            height:40px;
-                            private property <int> focus-sequence:SettingsInput.focus-sequence;
-                            changed focus-sequence=>{if SettingsInput.focus-field==25 {self.focus();}}
-                            changed has-focus=>{if self.has-focus {SettingsInput.active-target=25;} else if SettingsInput.active-target==25 {SettingsInput.active-target=-1;}}
-                            Text {text:"PTTStella Slint · " + root.labels[28];color:#e4c76e;wrap:word-wrap;}
-                        }
-                        FocusButton {field-id:27;text:root.release-labels[0];enabled:root.release-enabled && !root.release-checking;clicked=>{root.release-check();}}
-                        if root.release-available: FocusButton {field-id:28;text:root.release-labels[1];enabled:root.release-enabled;clicked=>{root.release-open();}}
-                        Text {text:root.release-status;color:#e4c76e;wrap:word-wrap;}
-                        Text {text:root.release-labels[2];color:#d7dce5;wrap:word-wrap;}
-                        FocusButton {field-id:29;text:root.release-labels[3];clicked=>{root.repository-open();}}
-                        AboutSlint {}
-                        Text {text:root.labels[29];color:#d7dce5;wrap:word-wrap;}
-                    }
-                }
-            }
+            return reject;
         }
-        Text {text:root.notice;color:root.failed ? #ffb5ac : #d7dce5;wrap:word-wrap;}
-        HorizontalLayout {
-            FocusButton {field-id:24;text:root.labels[30];enabled:root.page<4;clicked=>{root.reset();}}
-            Rectangle {horizontal-stretch:1;background:transparent;}
-            if root.failed: Button {text:root.labels[31];clicked=>{root.retry();}}
-            Button {text:root.labels[32];clicked=>{root.close-settings();}}
+        VerticalLayout {
+            spacing: 0;
+            HorizontalLayout {
+                spacing: 0;
+                VerticalLayout {
+                    width: parent.width < 680px ? 155px : 195px;
+                    padding-top: 16px; spacing: 8px;
+                    HorizontalLayout {
+                        padding-left: 12px; padding-right: 12px;
+                        EditField { field-id: 0; placeholder-text:SettingsState.labels[1]; text<=>SettingsState.query; edited=>{SettingsState.search(self.text);SettingsState.refresh-preview();} }
+                    }
+                    for item[index] in SettingsState.categories: PanelButton {
+                        text: item; navigation: true; checked: SettingsState.page == index && SettingsState.query == "";
+                        clicked => { SettingsState.show-page(index); }
+                    }
+                    Rectangle {vertical-stretch:1;background:transparent;}
+                }
+                Rectangle { width: 1px; background: #34475b; }
+                ScrollView { content-width:self.width;
+                    VerticalLayout {
+                        alignment: start; padding: 22px; spacing: 12px;
+                        Rectangle { width: 28px; height: 2px; background: #e7c46a; }
+                        Text { text: SettingsState.query == "" ? SettingsState.categories[SettingsState.page] : SettingsState.labels[1]; color: #ebe7dc; font-size: 20px; }
+                        if SettingsState.query!="": VerticalLayout {
+                            alignment: start; spacing: 10px;
+                            for item[index] in SettingsState.matches: PanelButton { text:item.title + " · " + SettingsState.categories[item.page];clicked=>{SettingsState.choose-result(index);} }
+                            if SettingsState.matches.length==0: Text { text:SettingsState.labels[2];color:#d7dce5;wrap:word-wrap; }
+                        }
+                        if SettingsState.query=="" && SettingsState.page==0: VerticalLayout {
+                            alignment: start; spacing: 10px;
+                            FocusButton {field-id:23;text:SettingsState.runtime-labels[3];enabled:SettingsState.runtime-available[3];checked:SettingsState.runtime-states[3];clicked=>{SettingsState.runtime-action(3);}}
+                            Text {text:SettingsState.labels[3];color:#d7dce5;}
+                            FocusCombo {field-id:10;model:SettingsState.languages;current-index<=>SettingsState.language;selected=>{SettingsState.edit();}}
+                            Text {text:SettingsState.labels[4];color:#d7dce5;wrap:word-wrap;}
+                            Text {text:SettingsState.labels[5];color:#d7dce5;}
+                            FocusCombo {field-id:14;model:SettingsState.modes;current-index<=>SettingsState.article-mode;selected=>{SettingsState.edit();}}
+                            Text {text:SettingsState.labels[6];color:#d7dce5;wrap:word-wrap;}
+                            FocusCheck {field-id:16;caption:SettingsState.labels[7];checked<=>SettingsState.boundary;toggled=>{SettingsState.edit();}}
+                        }
+                        if SettingsState.preview-visible: VerticalLayout {
+                            alignment: start; spacing: 10px;
+                            HorizontalLayout {
+                                spacing: 8px;
+                                FocusButton {field-id:20;text:SettingsState.runtime-labels[0];clicked=>{SettingsState.runtime-action(0);}}
+                                PanelButton { text: "125%"; clicked => {SettingsState.runtime-action(6);} }
+                                PanelButton { text: "150%"; clicked => {SettingsState.runtime-action(7);} }
+                            }
+                            Text {text:SettingsState.labels[8];color:#d7dce5;}
+                            FocusCombo {field-id:11;model:SettingsState.presets;current-index<=>SettingsState.preset;selected=>{SettingsState.font-preset();}}
+                            Text {text:SettingsState.labels[9];color:#d7dce5;}
+                            ascii-field:=EditField {field-id:1;text<=>SettingsState.ascii;edited=>{SettingsState.custom-font();}}
+                            PanelCombo {model:SettingsState.families;selected(value)=>{SettingsState.family(false,value);}}
+                            Text {text:SettingsState.labels[10];color:#d7dce5;}
+                            cjk-field:=EditField {field-id:2;text<=>SettingsState.cjk;edited=>{SettingsState.custom-font();}}
+                            PanelCombo {model:SettingsState.families;selected(value)=>{SettingsState.family(true,value);}}
+                            PanelButton {text:SettingsState.labels[11];clicked=>{SettingsState.catalog();}}
+                            HorizontalLayout {
+                                VerticalLayout {Text {text:SettingsState.labels[12];color:#d7dce5;} size-field:=EditField {field-id:3;text<=>SettingsState.font-size;edited=>{SettingsState.edit();}}}
+                                VerticalLayout {Text {text:SettingsState.labels[13];color:#d7dce5;} baseline-field:=EditField {field-id:4;text<=>SettingsState.baseline;edited=>{SettingsState.edit();}}}
+                                VerticalLayout {Text {text:SettingsState.labels[14];color:#d7dce5;} width-field:=EditField {field-id:5;text<=>SettingsState.font-width;edited=>{SettingsState.edit();}}}
+                            }
+                            Text {text:SettingsState.labels[15];color:#d7dce5;wrap:word-wrap;}
+                            Image {source:SettingsState.preview;image-fit:contain;height:144px;}
+                            Text {text:SettingsState.font-status;color:#e4c76e;wrap:word-wrap;}
+                            Text {text:SettingsState.labels[33];color:#d7dce5;}
+                            EditField {field-id:7;text<=>SettingsState.profile-name;}
+                            HorizontalLayout {
+                                PanelButton {text:SettingsState.labels[16];clicked=>{SettingsState.profile(false);}}
+                                PanelButton {text:SettingsState.labels[17];clicked=>{SettingsState.profile(true);}}
+                            }
+                            Text {text:SettingsState.labels[18];color:#d7dce5;wrap:word-wrap;}
+                            for source in SettingsState.font-sources:
+                                PanelButton {text:source.title;clicked=>{SettingsState.font-source(source.id);}}
+                        }
+                        if SettingsState.query=="" && SettingsState.page==2: VerticalLayout {
+                            alignment: start; spacing: 10px;
+                            FocusButton {field-id:21;text:SettingsState.runtime-labels[1];enabled:SettingsState.runtime-available[1];checked:SettingsState.runtime-states[1];clicked=>{SettingsState.runtime-action(1);}}
+                            FocusButton {field-id:22;text:SettingsState.runtime-labels[2];enabled:SettingsState.runtime-available[2];checked:SettingsState.runtime-states[2];clicked=>{SettingsState.runtime-action(2);}}
+                            if SettingsState.runtime-available[5]: PanelButton {text:SettingsState.runtime-labels[5];clicked=>{SettingsState.runtime-action(5);}}
+                            PanelButton {text:SettingsState.runtime-labels[4];enabled:SettingsState.runtime-available[4];clicked=>{SettingsState.runtime-action(4);}}
+                            Text {text:SettingsState.labels[19];color:#d7dce5;}
+                            opacity-field:=EditField {field-id:6;text<=>SettingsState.tool-opacity;edited=>{SettingsState.edit();}}
+                            FocusCheck {field-id:12;caption:SettingsState.labels[20];checked<=>SettingsState.right-click;toggled=>{SettingsState.edit();}}
+                            FocusCheck {field-id:13;caption:SettingsState.labels[21];checked<=>SettingsState.show-ball;toggled=>{SettingsState.edit();}}
+                            Text {text:SettingsState.labels[22];color:#d7dce5;wrap:word-wrap;}
+                        }
+                        if SettingsState.query=="" && SettingsState.page==3: VerticalLayout {
+                            alignment: start; spacing: 10px;
+                            Text {text:SettingsState.labels[23];color:#d7dce5;}
+                            FocusCombo {field-id:17;model:SettingsState.positions;current-index<=>SettingsState.hover;selected=>{SettingsState.edit();}}
+                            FocusCheck {field-id:15;caption:SettingsState.labels[24];checked<=>SettingsState.automatic;toggled=>{SettingsState.edit();}}
+                            Text {text:SettingsState.labels[25];color:#d7dce5;wrap:word-wrap;}
+                        }
+                        if SettingsState.query=="" && SettingsState.page==4: VerticalLayout {
+                            alignment: start; spacing: 10px;
+                            if SettingsState.sites-available: FocusButton {field-id:18;text:SettingsState.sites-label;clicked=>{SettingsState.manage-sites();}}
+                        }
+                        if SettingsState.query=="" && SettingsState.page==5: VerticalLayout {
+                            alignment: start; spacing: 10px;
+                            if SettingsState.filters-available: FocusButton {field-id:26;text:SettingsState.filters-label;clicked=>{SettingsState.manage-filters();}}
+                        }
+                        if SettingsState.query=="" && SettingsState.page==6: VerticalLayout {
+                            alignment: start; spacing: 10px;
+                            Text {text:SettingsState.labels[26];color:#d7dce5;wrap:word-wrap;}
+                            FocusButton {field-id:19;text:SettingsState.labels[27];clicked=>{SettingsState.manage-account();}}
+                        }
+                        if SettingsState.query=="" && SettingsState.page==7: VerticalLayout {
+                            alignment: start; spacing: 10px;
+                            FocusScope {
+                                height:40px;
+                                private property <int> focus-sequence:SettingsInput.focus-sequence;
+                                changed focus-sequence=>{if SettingsInput.focus-field==25 {self.focus();}}
+                                changed has-focus=>{if self.has-focus {SettingsInput.active-target=25;} else if SettingsInput.active-target==25 {SettingsInput.active-target=-1;}}
+                                Text {text:"PTTStella Slint · " + SettingsState.labels[28];color:#e4c76e;wrap:word-wrap;}
+                            }
+                            FocusButton {field-id:27;text:SettingsState.release-labels[0];enabled:SettingsState.release-enabled && !SettingsState.release-checking;clicked=>{SettingsState.release-check();}}
+                            if SettingsState.release-available: FocusButton {field-id:28;text:SettingsState.release-labels[1];enabled:SettingsState.release-enabled;clicked=>{SettingsState.release-open();}}
+                            Text {text:SettingsState.release-status;color:#e4c76e;wrap:word-wrap;}
+                            Text {text:SettingsState.release-labels[2];color:#d7dce5;wrap:word-wrap;}
+                            FocusButton {field-id:29;text:SettingsState.release-labels[3];clicked=>{SettingsState.repository-open();}}
+                            AboutSlint {}
+                            Text {text:SettingsState.labels[29];color:#d7dce5;wrap:word-wrap;}
+                        }
+                    }
+                }
+            }
+            Rectangle { height: 1px; background: #34475b; }
+            HorizontalLayout {
+                padding: 14px; spacing: 8px;
+                FocusButton {field-id:24;text:SettingsState.labels[30];enabled:SettingsState.page<4;clicked=>{SettingsState.reset();}}
+                Text {text:SettingsState.notice;color:SettingsState.failed ? #ffb5ac : #b5bcc7;wrap:word-wrap;horizontal-stretch:1;vertical-alignment:center;}
+                if SettingsState.failed: PanelButton {text:SettingsState.labels[31];clicked=>{SettingsState.retry();}}
+                PanelButton {text:SettingsState.labels[32];primary:true;clicked=>{SettingsState.close-settings();}}
+            }
         }
     }
 }

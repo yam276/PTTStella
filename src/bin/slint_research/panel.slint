@@ -1,0 +1,195 @@
+import { ScrollView } from "std-widgets.slint";
+
+export global PanelEdit {
+    in-out property <int> code;
+    in-out property <int> sequence;
+    public function apply(value: int) { root.code = value; root.sequence += 1; }
+}
+
+export component PanelButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    in-out property <bool> checked;
+    in property <bool> navigation;
+    in property <bool> primary;
+    out property <bool> has-focus: keys.has-focus;
+    callback clicked;
+    forward-focus: keys;
+    min-height: 34px;
+    max-height: root.navigation ? 40px : 36px;
+    preferred-height: 34px;
+    vertical-stretch: 0;
+    horizontal-stretch: 0;
+    min-width: 0px;
+    preferred-width: label.preferred-width + 22px;
+    background: root.checked ? #203b55 : root.navigation && !touch.has-hover ? transparent : root.enabled && touch.has-hover ? #203b55 : #132c45;
+    border-width: root.navigation && !root.has-focus ? 0px : 1px;
+    border-color: root.enabled && (root.has-focus || touch.has-hover || root.primary) ? #e7c46a : #34475b;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if (root.enabled) { root.clicked(); } }
+
+    if root.navigation && root.checked: Rectangle {
+        x: 0; y: 0; width: 3px; height: parent.height; background: #e7c46a;
+    }
+    label := Text {
+        x: root.navigation ? 16px : 10px; width: parent.width - self.x - 10px;
+        text: root.text; font-size: 13px;
+        color: !root.enabled ? #808b99 : root.navigation && !root.checked ? #b5bcc7 : #e7c46a;
+        vertical-alignment: center;
+        horizontal-alignment: root.navigation ? left : center;
+        overflow: elide;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { keys.focus(); root.clicked(); }
+    }
+    keys := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == Key.Return) {
+                if (!event.repeat) { root.clicked(); }
+                return accept;
+            }
+            return reject;
+        }
+    }
+}
+
+export component PanelCheck inherits PanelButton {
+    callback toggled;
+    in property <string> caption;
+    text: (root.checked ? "☑  " : "☐  ") + root.caption;
+    navigation: true;
+    clicked => { root.checked = !root.checked; root.toggled(); }
+}
+
+export component PanelField inherits Rectangle {
+    in property <bool> enabled: true;
+    in property <string> placeholder-text;
+    in-out property text <=> input.text;
+    out property has-focus <=> input.has-focus;
+    private property <int> edit-sequence: PanelEdit.sequence;
+    changed edit-sequence => { if root.has-focus { root.edit-key(PanelEdit.code); } }
+    in property input-type <=> input.input-type;
+    in property input-method-hints <=> input.input-method-hints;
+    callback edited(string);
+    callback accepted <=> input.accepted;
+    forward-focus: input;
+    min-height: 34px;
+    max-height: 36px;
+    vertical-stretch: 0;
+    min-width: 100px;
+    background: #091727;
+    border-width: 1px;
+    border-color: root.has-focus ? #e7c46a : #34475b;
+    accessible-role: text-input;
+    accessible-enabled: root.enabled;
+    accessible-value: root.input-type == InputType.password ? "" : root.text;
+    accessible-placeholder-text: root.placeholder-text;
+    accessible-action-set-value(value) => { if (root.enabled) { input.text = value; root.edited(value); } }
+    Text {
+        x: 10px; width: parent.width - 20px;
+        text: root.placeholder-text; visible: root.text == "";
+        color: #b5bcc7; font-size: 13px; vertical-alignment: center; overflow: elide;
+    }
+    input := TextInput {
+        x: 10px; width: parent.width - 20px;
+        enabled: root.enabled; single-line: true; font-size: 13px;
+        color: #ebe7dc; selection-background-color: #e7c46a; selection-foreground-color: #102139;
+        vertical-alignment: center;
+        edited => { root.edited(self.text); }
+    }
+    public function select-all() { input.select-all(); }
+    public function copy() { input.copy(); }
+    public function cut() { input.cut(); }
+    public function paste() { input.paste(); }
+    public function undo() { input.undo(); }
+    public function redo() { input.redo(); }
+    public function edit-key(code: int) {
+        if code == 0 { input.select-all(); } else if code == 1 { input.copy(); }
+        else if code == 2 { input.cut(); } else if code == 3 { input.paste(); }
+        else if code == 4 { input.undo(); } else if code == 5 { input.redo(); }
+    }
+}
+
+// The list expands in the scrolling form. It never creates a native popup.
+export component PanelCombo inherits Rectangle {
+    in property <[string]> model;
+    in-out property <int> current-index: -1;
+    in property <bool> enabled: true;
+    private property <bool> expanded;
+    out property <bool> has-focus: trigger.has-focus;
+    callback selected(string);
+    forward-focus: trigger;
+    min-height: options.min-height;
+    max-height: options.preferred-height;
+    vertical-stretch: 0;
+    min-width: 120px;
+    changed enabled => { if !root.enabled { root.expanded = false; } }
+    FocusScope {
+        width: parent.width; height: parent.height;
+        key-pressed(event) => {
+            if event.text == Key.Escape && root.expanded { root.expanded = false; trigger.focus(); return accept; }
+            return reject;
+        }
+        options := VerticalLayout {
+            trigger := PanelButton {
+                text: (root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "") + "  ▾";
+                enabled: root.enabled;
+                clicked => { root.expanded = !root.expanded; }
+            }
+            if root.expanded && root.model.length > 0: ScrollView {
+                height: min(170px, root.model.length * 34px);
+                content-width: self.width;
+                VerticalLayout {
+                    for entry[index] in root.model: PanelButton {
+                        text: entry; navigation: true; checked: root.current-index == index;
+                        clicked => {
+                            root.current-index = index;
+                            root.expanded = false;
+                            trigger.focus();
+                            root.selected(entry);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component PanelOverlay inherits Rectangle {
+    in property <string> heading;
+    in property <length> panel-width: 900px;
+    in property <length> panel-height: 700px;
+    background: #00000088;
+    TouchArea {
+        width: parent.width; height: parent.height;
+        scroll-event => { return accept; }
+    }
+    Rectangle {
+        width: min(root.panel-width, parent.width - 32px);
+        height: min(root.panel-height, parent.height - 32px);
+        x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
+        background: #0c1c30; border-color: #34475b; border-width: 1px; border-radius: 3px;
+        drop-shadow-color: #00000099; drop-shadow-offset-y: 12px; drop-shadow-blur: 40px;
+        clip: true;
+        VerticalLayout {
+            Rectangle {
+                height: 52px;
+                HorizontalLayout {
+                    padding-left: 22px; padding-right: 22px; spacing: 10px;
+                    Rectangle {
+                        width: 24px;
+                        Image { width: 24px; height: 24px; y: (parent.height - self.height) / 2; source: @image-url("../../../assets/icons/pttstella.png"); image-fit: contain; }
+                    }
+                    Text { text: "PTTStella"; color: #ebe7dc; font-size: 16px; vertical-alignment: center; }
+                    Text { text: root.heading; color: #b5bcc7; font-size: 12px; vertical-alignment: center; horizontal-alignment: right; horizontal-stretch: 1; }
+                }
+                Rectangle { y: parent.height - 1px; width: parent.width; height: 1px; background: #34475b; }
+            }
+            Rectangle { vertical-stretch: 1; clip: true; @children }
+        }
+    }
+}

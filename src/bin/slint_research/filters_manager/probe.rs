@@ -10,9 +10,15 @@ async fn idle(o: &Manager) -> Result<(), String> {
     )
     .await
 }
-fn fill(w: &FiltersWindow, id: &str, note: &str) {
-    w.set_account(w.invoke_field_edit(0, id.into()));
-    w.set_note(w.invoke_field_edit(1, note.into()));
+fn fill(w: &TerminalWindow, id: &str, note: &str) {
+    w.global::<crate::FiltersState>().set_account(
+        w.global::<crate::FiltersState>()
+            .invoke_field_edit(0, id.into()),
+    );
+    w.global::<crate::FiltersState>().set_note(
+        w.global::<crate::FiltersState>()
+            .invoke_field_edit(1, note.into()),
+    );
 }
 pub fn start(
     ui: &TerminalWindow,
@@ -48,14 +54,14 @@ pub fn start(
         ui.window()
             .dispatch_event(slint::platform::WindowEvent::KeyReleased { text: "x".into() });
         fill(&w, "1invalid", "draft");
-        w.invoke_action(0);
+        w.global::<crate::FiltersState>().invoke_action(0);
         require(
             o.rules().entries.is_empty() && !path.exists(),
             "invalid ID wrote a filter document",
         )?;
         fill(&w, "Blocked", "synthetic note");
-        w.set_policy(0);
-        w.invoke_action(0);
+        w.global::<crate::FiltersState>().set_policy(0);
+        w.global::<crate::FiltersState>().invoke_action(0);
         idle(&o).await?;
         require(
             o.rules().entries.len() == 1 && o.rules().entries[0].policy == Policy::Mask,
@@ -78,8 +84,8 @@ pub fn start(
         .await?;
         let original = std::fs::read(&path).map_err(|e| e.to_string())?;
         fill(&w, "bLoCkEd", "updated");
-        w.set_policy(1);
-        w.invoke_action(0);
+        w.global::<crate::FiltersState>().set_policy(1);
+        w.global::<crate::FiltersState>().invoke_action(0);
         idle(&o).await?;
         require(
             o.rules().entries.len() == 1
@@ -104,18 +110,18 @@ pub fn start(
             "whole-row mask did not reach the acknowledged projection",
         )
         .await?;
-        w.invoke_tab(true);
+        w.global::<crate::FiltersState>().invoke_tab(true);
         fill(&w, "Alice", "individual");
-        w.set_entry_color(13);
-        w.invoke_action(0);
+        w.global::<crate::FiltersState>().set_entry_color(13);
+        w.global::<crate::FiltersState>().invoke_action(0);
         idle(&o).await?;
-        w.invoke_new_entry();
+        w.global::<crate::FiltersState>().invoke_new_entry();
         fill(&w, "Bob", "shared");
-        w.set_entry_color(0);
-        w.invoke_action(0);
+        w.global::<crate::FiltersState>().set_entry_color(0);
+        w.global::<crate::FiltersState>().invoke_action(0);
         idle(&o).await?;
-        w.set_shared_color(10);
-        w.invoke_action(2);
+        w.global::<crate::FiltersState>().set_shared_color(10);
+        w.global::<crate::FiltersState>().invoke_action(2);
         idle(&o).await?;
         require(
             o.rules().allow_color == 11
@@ -132,9 +138,10 @@ pub fn start(
             "shared color reset an individual override",
         )?;
         fill(&w, "Unsubmitted", "kept while sorting");
-        w.invoke_sort();
+        w.global::<crate::FiltersState>().invoke_sort();
         require(
-            w.get_account() == "Unsubmitted" && w.get_note() == "kept while sorting",
+            w.global::<crate::FiltersState>().get_account() == "Unsubmitted"
+                && w.global::<crate::FiltersState>().get_note() == "kept while sorting",
             "sorting discarded the form draft",
         )?;
         require(
@@ -146,9 +153,9 @@ pub fn start(
                 == ["Bob", "Alice"],
             "allow category sort did not use effective ANSI color",
         )?;
-        w.invoke_tab(false);
+        w.global::<crate::FiltersState>().invoke_tab(false);
         require(
-            w.get_account().is_empty(),
+            w.global::<crate::FiltersState>().get_account().is_empty(),
             "changing tabs retained an unsaved edit",
         )?;
         let saved = o.rules();
@@ -157,13 +164,13 @@ pub fn start(
         o.start(Box::new(move ||Ok(Value::Imported(request,Some(pttstella::filters::import::parse(b"Blocked=C:row\nAlice=W2:green\nALICE=B:must not win\nCarol=W:shared\ninvalid!=W:x")?)))),Operation::Import(request));
         idle(&o).await?;
         require(
-            w.get_preview()
+            w.global::<crate::FiltersState>().get_preview()
                 && o.rules() == saved
                 && std::fs::read(&path).map_err(|e| e.to_string())? == bytes,
             "import preview changed effective rules or disk",
         )?;
-        w.invoke_tab(true);
-        w.invoke_sort();
+        w.global::<crate::FiltersState>().invoke_tab(true);
+        w.global::<crate::FiltersState>().invoke_sort();
         require(
             o.rows
                 .borrow()
@@ -172,9 +179,9 @@ pub fn start(
                 .is_some_and(|e| e.policy == Policy::Allow && e.color == Some(10)),
             "preview lost whitelist precedence or imported color",
         )?;
-        w.invoke_action(5);
+        w.global::<crate::FiltersState>().invoke_action(5);
         require(
-            !w.get_preview() && o.rules() == saved,
+            !w.global::<crate::FiltersState>().get_preview() && o.rules() == saved,
             "cancelled preview became effective",
         )?;
         let request = o.begin_import()?;
@@ -188,7 +195,7 @@ pub fn start(
             }),
             Operation::Import(request),
         );
-        w.invoke_close_filters();
+        w.global::<crate::FiltersState>().invoke_close_filters();
         require(
             !ui.get_filters_open(),
             "closing a reading import did not hide the form",
@@ -214,7 +221,7 @@ pub fn start(
             Operation::Import(request),
         );
         idle(&o).await?;
-        w.invoke_action(4);
+        w.global::<crate::FiltersState>().invoke_action(4);
         idle(&o).await?;
         require(
             o.rules().entries.iter().any(|e| e.id == "Carol")
@@ -230,30 +237,30 @@ pub fn start(
         let before_bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
         std::fs::remove_file(path.with_extension("json.bak")).map_err(|e| e.to_string())?;
         std::fs::create_dir(path.with_extension("json.bak")).map_err(|e| e.to_string())?;
-        w.invoke_tab(false);
+        w.global::<crate::FiltersState>().invoke_tab(false);
         fill(&w, "Failed", "retain this draft");
-        w.invoke_action(0);
+        w.global::<crate::FiltersState>().invoke_action(0);
         idle(&o).await?;
         require(
             o.rules() == before
                 && std::fs::read(&path).map_err(|e| e.to_string())? == before_bytes
-                && w.get_account() == "Failed"
-                && w.get_note() == "retain this draft",
+                && w.global::<crate::FiltersState>().get_account() == "Failed"
+                && w.global::<crate::FiltersState>().get_note() == "retain this draft",
             "save failure lost its draft or changed effective/durable rules",
         )?;
         std::fs::write(
             directory.join("backup-failure-message.txt"),
-            w.get_message().as_str(),
+            w.global::<crate::FiltersState>().get_message().as_str(),
         )
         .map_err(|e| e.to_string())?;
         std::fs::remove_dir(path.with_extension("json.bak")).map_err(|e| e.to_string())?;
-        w.invoke_action(0);
+        w.global::<crate::FiltersState>().invoke_action(0);
         idle(&o).await?;
         require(
             o.rules().entries.iter().any(|e| e.id == "Failed"),
             "explicit retry did not save the retained draft",
         )?;
-        w.invoke_action(1);
+        w.global::<crate::FiltersState>().invoke_action(1);
         idle(&o).await?;
         require(
             !o.rules().entries.iter().any(|e| e.id == "Failed"),
@@ -261,28 +268,32 @@ pub fn start(
         )?;
         let intact = std::fs::read(&path).map_err(|e| e.to_string())?;
         std::fs::write(&path, b"broken synthetic file").map_err(|e| e.to_string())?;
-        w.invoke_action(6);
+        w.global::<crate::FiltersState>().invoke_action(6);
         idle(&o).await?;
         require(
-            !w.get_writable(),
+            !w.global::<crate::FiltersState>().get_writable(),
             "reload error left a corrupt file writable",
         )?;
         fill(&w, "Overwrite", "must be denied");
-        w.invoke_action(0);
+        w.global::<crate::FiltersState>().invoke_action(0);
         idle(&o).await?;
         require(
             std::fs::read(&path).map_err(|e| e.to_string())? == b"broken synthetic file",
             "corrupt filter document was overwritten",
         )?;
         std::fs::write(&path, &intact).map_err(|e| e.to_string())?;
-        w.invoke_action(6);
+        w.global::<crate::FiltersState>().invoke_action(6);
         idle(&o).await?;
         require(
-            w.get_writable() && o.rules() == Store::at(path.clone()).load()?,
+            w.global::<crate::FiltersState>().get_writable()
+                && o.rules() == Store::at(path.clone()).load()?,
             "explicit reload did not restore the validated rules",
         )?;
         require(
-            w.get_writable() && !w.get_busy() && !w.get_importing() && !w.get_composing(),
+            w.global::<crate::FiltersState>().get_writable()
+                && !w.global::<crate::FiltersState>().get_busy()
+                && !w.global::<crate::FiltersState>().get_importing()
+                && !w.global::<crate::FiltersState>().get_composing(),
             "form controls stayed disabled after reload",
         )?;
         // A pending import error is also stale after cancellation.
@@ -294,18 +305,20 @@ pub fn start(
             }),
             Operation::Import(request),
         );
-        w.invoke_action(5);
-        let cancelled = w.get_message();
+        w.global::<crate::FiltersState>().invoke_action(5);
+        let cancelled = w.global::<crate::FiltersState>().get_message();
         idle(&o).await?;
         require(
-            w.get_message() == cancelled && o.preview.borrow().is_none(),
+            w.global::<crate::FiltersState>().get_message() == cancelled
+                && o.preview.borrow().is_none(),
             "cancelled import published a late error",
         )?;
         fill(&w, "Abandoned", "not saved");
-        w.invoke_close_filters();
+        w.global::<crate::FiltersState>().invoke_close_filters();
         ui.invoke_filters_show();
         require(
-            w.get_account().is_empty() && !o.rules().entries.iter().any(|e| e.id == "Abandoned"),
+            w.global::<crate::FiltersState>().get_account().is_empty()
+                && !o.rules().entries.iter().any(|e| e.id == "Abandoned"),
             "close retained an unsaved draft",
         )?;
         require(
@@ -336,7 +349,7 @@ pub fn start(
                 "shutdown did not retain the pending save slot",
             )?;
         } else {
-            w.invoke_close_filters();
+            w.global::<crate::FiltersState>().invoke_close_filters();
         }
         Ok(())
     })

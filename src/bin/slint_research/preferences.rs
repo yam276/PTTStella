@@ -7,6 +7,7 @@ mod releases_probe;
 mod search_probe;
 mod window;
 
+use crate::SettingsState;
 use crate::{TerminalWindow, output::Output};
 use pttstella::{
     msg,
@@ -41,7 +42,7 @@ pub struct Preferences {
     pub(super) model: RefCell<Model>,
     ui: slint::Weak<TerminalWindow>,
     output: Rc<Output>,
-    window: RefCell<Option<crate::SettingsWindow>>,
+    window: RefCell<Option<crate::TerminalWindow>>,
     preview_renderer: RefCell<Option<crate::renderer::Renderer>>,
     pending: RefCell<Option<AppSettings>>,
     due: Cell<Option<Instant>>,
@@ -105,6 +106,24 @@ impl Preferences {
                 }
             }
         });
+        ui.on_settings_composition({
+            let weak = Rc::downgrade(&owner);
+            move |active, committed| {
+                if let Some(owner) = weak.upgrade() {
+                    owner.composing.set(active);
+                    if active {
+                        owner.timer.stop();
+                    } else if committed {
+                        let weak = Rc::downgrade(&owner);
+                        Timer::single_shot(Duration::ZERO, move || {
+                            if let Some(owner) = weak.upgrade() {
+                                owner.edited();
+                            }
+                        });
+                    }
+                }
+            }
+        });
         ui.on_settings_runtime_updated({
             let owner = Rc::downgrade(&owner);
             move || {
@@ -158,7 +177,7 @@ impl Preferences {
     }
     fn inline_notice(&self, text: String) {
         if let Some(window) = self.window.borrow().as_ref() {
-            window.set_notice(text.into());
+            window.global::<SettingsState>().set_notice(text.into());
         }
     }
     fn queue(self: &Rc<Self>, draft: AppSettings, delay: Duration) {
@@ -286,7 +305,7 @@ impl Preferences {
                     Ok(())
                 };
                 if let Some(window) = self.window.borrow().as_ref() {
-                    window.set_failed(false);
+                    window.global::<SettingsState>().set_failed(false);
                 }
                 match applied {
                     Ok(()) => self.inline_notice(msg!("settings-saved")),
@@ -322,7 +341,7 @@ impl Preferences {
         self.failed.set(true);
         self.notice(format!("{} {error}", msg!("settings-save-failed")));
         if let Some(window) = self.window.borrow().as_ref() {
-            window.set_failed(true);
+            window.global::<SettingsState>().set_failed(true);
         }
     }
     /// App shutdown runs after its event loop. Join the exact Output worker,
