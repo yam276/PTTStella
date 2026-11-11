@@ -300,17 +300,35 @@ export component SettingsPanel inherits PanelOverlay {
                         padding-left: root.content-inset; padding-right: root.content-inset; spacing: 12px;
                         Rectangle { width: 28px; height: 2px; background: #e7c46a; }
                         FocusScope {
-                            private property <int> field-id: SettingsState.page == 4 ? 18 : SettingsState.page == 5 ? 26 : SettingsState.page == 6 ? 19 : -1;
+                            private property <int> field-id: SettingsState.page == 4 ? 18
+                                : SettingsState.page == 5 ? 26
+                                : SettingsState.page == 6 ? 19
+                                : SettingsState.page == 7 ? 25 : -1;
                             private property <int> focus-sequence: SettingsInput.focus-sequence;
+                            private property <int> focused-field: -1;
                             enabled: SettingsState.query == "" && self.field-id >= 0;
                             focus-on-click: false;
                             focus-on-tab-navigation: false;
                             height: heading.preferred-height;
-                            changed focus-sequence => { if self.enabled && SettingsInput.focus-field == self.field-id { self.focus(); } }
-                            changed has-focus => {
-                                if self.has-focus { SettingsInput.active-target = self.field-id; }
-                                else if SettingsInput.active-target == self.field-id { SettingsInput.active-target = -1; }
+                            function update-focus() {
+                                if self.has-focus && self.enabled {
+                                    self.focused-field = self.field-id;
+                                    SettingsInput.active-target = self.focused-field;
+                                } else {
+                                    if SettingsInput.active-target == self.focused-field {
+                                        SettingsInput.active-target = -1;
+                                    }
+                                    self.focused-field = -1;
+                                }
                             }
+                            changed focus-sequence => {
+                                if self.enabled && SettingsInput.focus-field == self.field-id {
+                                    self.focus();
+                                    self.update-focus();
+                                }
+                            }
+                            changed has-focus => { self.update-focus(); }
+                            changed enabled => { if !self.enabled { self.update-focus(); } }
                             heading := Text {
                                 x: 0px; width: parent.width;
                                 text: SettingsState.query == "" ? SettingsState.categories[SettingsState.page] : SettingsState.labels[1];
@@ -515,21 +533,7 @@ export component SettingsPanel inherits PanelOverlay {
                             alignment: start; spacing: 10px;
                             AboutBlock {
                                 title: "PTTStella Slint";
-                                FocusScope {
-                                    height: version-text.preferred-height;
-                                    private property <int> focus-sequence: SettingsInput.focus-sequence;
-                                    focus-on-click: false;
-                                    focus-on-tab-navigation: false;
-                                    changed focus-sequence => { if SettingsInput.focus-field == 25 { self.focus(); } }
-                                    changed has-focus => {
-                                        if self.has-focus { SettingsInput.active-target = 25; }
-                                        else if SettingsInput.active-target == 25 { SettingsInput.active-target = -1; }
-                                    }
-                                    version-text := Text {
-                                        x: 0px; width: parent.width;
-                                        text: AboutState.app-version; color: #d7dce5; wrap: word-wrap;
-                                    }
-                                }
+                                Text { text: AboutState.app-version; color: #d7dce5; wrap: word-wrap; }
                                 Text { text: AboutState.app-author; color: #d7dce5; wrap: word-wrap; }
                                 FocusButton {field-id:29;text:SettingsState.release-labels[3];icon:LucideIcons.external-link;clicked=>{SettingsState.repository-open();}}
                                 HorizontalLayout {

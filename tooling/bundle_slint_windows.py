@@ -100,7 +100,9 @@ Exit 0只代表component案例通過，原生IME／DPI／可聽音訊等人工�
 
 Run-Grid.cmd／Run-Grid-Software.cmd：80×24、雙色字、框線、縮放、末行及全螢幕。
 Run-IME.cmd：切 Microsoft 注音，在第22行輸入、選字、Esc取消、再Enter提交「中」。
-候選窗應靠近游標，只有一次提交／2 bytes。這項須由實際鍵盤操作驗收。
+候選窗應靠近游標，只有一次提交／2 bytes。切 Microsoft 日文 IME 後選「あ」並點第22行，
+輸入 konnichiha 後確認組字是「こんにちは」，按 Enter 應增加一次提交／10 bytes。
+底部顯示最後提交內容及 Big5-UAO 結果。log 只記焦點、組字狀態與位元組數，不記輸入文字。
 Run-Reading.cmd：合成文章，可試兩種閱讀模式、尋找及選取。
 Run-Drafts.cmd：合成草稿；請另試注音、末字、儲存、重開與正常退出。
 Run-Video.cmd／Run-Video-Software.cmd：點開合成四色影片，試播放、暫停、拖曳、關閉。

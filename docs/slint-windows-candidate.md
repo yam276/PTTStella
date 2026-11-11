@@ -9,7 +9,13 @@
 | `PTTStella-Slint-Candidate-0.5.0-dev.3-windows-x64.zip` | `3e38bc06e9563bbdfc078f96b6142099badbd19291918c6aa4f38cac61c49801` |
 | 包內 `pttstella-slint.exe` | `e4e5c8511fbbb5dc5c4eaced14cd1899a91ce34cde344df72f5aa15fc0e7b38b` |
 
-ZIP CRC、執行檔與 DLL 雜湊、PE x64 及一般／延遲 import 檢查通過。import 清單沒有 WebView 相關 DLL，需要 Visual C++ x64 Redistributable 的 `msvcp140.dll` 及 `vcruntime140.dll`。新版實機結果仍為 `not_run`。解壓到新資料夾後執行 `Check-All.cmd` 與 `Run-IME.cmd`，保留 `evidence` 的收據。舊包回報仍按各自的執行檔雜湊追蹤。[同輪 Apple Silicon 演練](slint-store-frontends.md#2026-11-11-同一正式-bundle-id-的-apple-silicon-隔離演練)
+ZIP CRC、執行檔與 DLL 雜湊、PE x64 及一般／延遲 import 檢查通過。import 清單沒有 WebView 相關 DLL，需要 Visual C++ x64 Redistributable 的 `msvcp140.dll` 及 `vcruntime140.dll`。解壓到新資料夾後執行 `Check-All.cmd` 與 `Run-IME.cmd`，保留 `evidence` 的收據。[同輪 Apple Silicon 演練](slint-store-frontends.md#2026-11-11-同一正式-bundle-id-的-apple-silicon-隔離演練)
+
+實機回報 `Downloads/evidence(1)` 的來源與 exe SHA-256 均吻合。Windows 10 x64 build 19045、PowerShell 5.1 的 13 案有 12 案通過，整體為 `failed`。唯一失敗是 `settings-search` 的 `privacy` 結果未取得欄位 19 的焦點。原始 log 已收到唯一的 WebSocket Close ACK，外層腳本將探針的失敗狀態報成 `Strict peer Close failed`。修正共用頁首的焦點所有權後，原本已聚焦的頁首也會同步新的目標欄位。Apple Silicon 的中英文 48 個搜尋目標通過。設定搜尋驗完回到終端焦點後結束，圖片懸停保留在既有媒體探針。Windows 修正版待重驗。
+
+使用者另回報切換 Microsoft 日文 IME 後，`Run-IME.cmd` 測試視窗打不出字。舊 log 有六次 Big5-UAO 編碼成功的提交，未記輸入法、組字或編碼失敗事件。新版測試視窗重新取得前景時恢復終端輸入焦點，Windows 會重新啟用該輸入欄的 IME。提交後底部顯示原生事件與編碼結果，日誌只記焦點、組字狀態及位元組數。合成測試確認「こんにちは」為 10 bytes、「中」為 2 bytes，含無法映射字元時仍顯示已收到原生提交。Microsoft 日文 IME 的實機結果待重驗。
+
+日文重驗請選平假名「あ」，點第 22 行，輸入 `konnichiha` 並按 Enter。若底部未顯示提交，保留該次 `evidence/run-*.log`。本機結果與新版包存於 `.local/verification/slint-windows-ime-current/`。
 
 ## 舊版候選與實機回報
 

@@ -80,10 +80,14 @@ pub fn start(
                 "media toolkit focus did not settle",
             )
             .await?;
-            if std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").as_deref() == Ok("releases") {
+            let settings_probe = std::env::var_os("PTTSTELLA_SLINT_SETTINGS_PROBE");
+            if settings_probe
+                .as_ref()
+                .is_some_and(|mode| mode == "releases")
+            {
                 return owner.preferences.verify_releases(&ui, &directory).await;
             }
-            if std::env::var_os("PTTSTELLA_SLINT_SETTINGS_PROBE").is_some() {
+            if let Some(mode) = settings_probe {
                 owner
                     .preferences
                     .verify(&ui, &directory, &settings_path)
@@ -99,6 +103,11 @@ pub fn start(
                     "media focus and source did not resume after settings",
                 )
                 .await?;
+                // The settings-search case ends after restoring terminal focus.
+                // The media probe has its own pointer and HTTP assertions.
+                if mode == "search" {
+                    return Ok(());
+                }
             }
             moved(&ui, slint::LogicalPosition::new(2., 2.));
             let original = source(&ui, &output)?;
