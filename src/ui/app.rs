@@ -982,16 +982,16 @@ pub(super) fn SettingsForm(filters_probe: bool) -> Element {
                     section { "data-settings-page":"appearance", class: "settings-section",
                         label {
                             SettingsCaption { label: pttstella::msg!("font-size"), icon: rsx! { ALargeSmall { size: 18 } } }
-                            input { id: "font-size", r#type: "number", min: "8", max: "24", step: "1" }
+                            input { id: "font-size", r#type: "number", min: "8", max: "24", step: "any", required: true }
                         }
                         label {
                             SettingsCaption { label: pttstella::msg!("font-width"), icon: rsx! { ALargeSmall { size: 18 } } }
-                            input { id: "font-width", r#type: "number", min: "50", max: "150", step: "1", "aria-describedby": "settings-width-help" }
+                            input { id: "font-width", r#type: "number", min: "50", max: "150", step: "any", required: true, "aria-describedby": "settings-width-help" }
                         }
                         p { id: "settings-width-help", class: "settings-help", {pttstella::msg!("settings-width-help")} }
                         label {
                             SettingsCaption { label: pttstella::msg!("font-baseline"), icon: rsx! { AlignVerticalJustifyEnd { size: 18 } } }
-                            input { id: "font-baseline", r#type: "number", min: "0", max: "24", step: "1", "aria-describedby": "settings-baseline-help" }
+                            input { id: "font-baseline", r#type: "number", min: "0", max: "24", step: "any", required: true, "aria-describedby": "settings-baseline-help" }
                         }
                         p { id: "settings-baseline-help", class: "settings-help", {pttstella::msg!("settings-baseline-help")} }
                         div { class: "dialog-actions settings-actions",

@@ -28,6 +28,16 @@ rtk proxy python3 .local/verification/NEW_RUN/roundtrip_fixture.py 1 return
 
 小數字高的 Dioxus 寫入、其餘資料的完整操作、正式資料路徑、系統密碼庫及其他平台仍待驗。
 
+## 2026-11-11 小數顯示設定回退
+
+原 Dioxus `5ea9ad6`（native `35c3e275…`）可顯示合成資料的字高 21.5、基線 19.125、字寬 102.75，但修改字高為 23.5 後，WebView 以 `step=1` 拒絕自動存檔。核對主檔逐位元相同、未建立備份。原版 Quit 先回報欄位無效，第二次退出時程序為 exit 0，但整頁 PNG 和探針清理未通過，原始失敗報告保留。
+
+Slint worktree 的 Dioxus 入口改用 HTML 數字欄位 `step=any`，對齊 Rust 原有的有限浮點數驗證。三個欄位沿用原上下限，並以 `required` 拒絕空白。Rust schema、鎖和備份不變。Windows WebView2 的既有設定測試已加入三個小數值的實際存檔與重開檢查，該平台仍待執行。[HTML 數字欄位規格](https://html.spec.whatwg.org/dev/input.html)
+
+同一組資料在修正版 Dioxus（native `52ac086b…`）經實際設定 UI 將字高存為 23.5。基線 19.125、字寬 102.75、閱讀模式與自動開圖等欄位都保留。主檔完整值符合獨立 expected，一代備份逐位元等於原始主檔，其他六份資料雜湊不變。實際 PNG 通過 CRC／解壓，Dioxus 正常 exit 0、嚴格 Close 及所有既有 worker／listener 清理收據均成立。接著用現有 Slint arm64 候選 `f50ffb46…` 重開，介面讀回三個精確小數值，主檔及備份雜湊不變，exit 0 且有唯一嚴格 Close。
+
+驗證用的是同一 worktree 的修正版 Dioxus 與既有 Slint。固定的 `5ea9ad6` 原執行檔仍有上述限制。原版／修正版／Slint 的命令、來源補丁、原始收據及清理清單在 `.local/verification/slint-fractional-rollback/`。重跑使用固定 Cargo target 的 `cargo --config .local/slint-build.toml build --locked --offline --release --features desktop --bin pttstella`，依 `native.py` 建立合成資料並啟動三階段。測試 Cargo 命令曾更新 target 頂層執行檔，實測 SHA 以每階段啟動前核對的 native 副本為準。已移除測試 App 根目錄及五個專用系統產物，共 110,444,977 regular-file bytes，保留固定編譯快取與原候選。
+
 ## 2026-11-11 macOS 一般啟動與系統資料目錄
 
 沿用已驗的 Slint `f50ffb46…` 與 Dioxus `35c3e275…`，不帶產品探針參數啟動。只覆寫測試程序的 HOME，把合成副本放在 `Library/Application Support/PTTStellaSlintResearch` 與 `Library/Application Support/PTTStella`。Sandbox 拒讀 Homebrew 及實際使用者的兩個產品資料目錄，另拒讀寫其 Keychains 路徑，IP 出站僅准許 loopback。兩個本機測試站各用不同 port，憑證只經該程序的 `SSL_CERT_FILE` 載入，未修改系統信任設定。
