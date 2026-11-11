@@ -45,8 +45,11 @@ function policy(action,e,code="") {send({kind:"keyboard_state",action,code,gener
 function toggleVim(e){policy("toggle",e);if(!document.querySelector("dialog[open]"))restoreEditingFocus();}
 function armNative(e){policy("once",e);if(!document.querySelector("dialog[open]"))restoreEditingFocus();}
 function keyup(e){if(inlineImages.keyup(e))e.preventDefault();if(!e.metaKey)policy("release",e,e.code);}
+function syncKeyboardReadOnly(){
+    keyboard.readOnly=latest?.navigation.kind!=="continue_prompt"&&keyboardState.enabled&&!["input","once"].includes(keyboardState.mode);
+}
 function receiveKeyboard(state){keyboardState=state;vimToggle.textContent=state.enabled?tr("vim-on"):tr("vim-off");
-    keyboard.readOnly=state.enabled&&!["input","once"].includes(state.mode);
+    syncKeyboardReadOnly();
     vimToggle.setAttribute("aria-pressed",String(state.enabled));vimOnce.hidden=!state.enabled||state.mode==="input";
     vimOnce.setAttribute("aria-pressed",String(state.mode==="once"));
     const reason={different_site:tr("site-raw-input"),unsupported_grid:tr("reason-grid"),incomplete:tr("reason-incomplete"),unmapped:tr("reason-unmapped"),unrecognized:tr("reason-unrecognized"),invalid_cursor:tr("reason-cursor"),board_header:tr("reason-board-header"),board_rows:tr("reason-board-rows"),unsupported_layout:tr("reason-layout")}[state.suspended_reason]||tr("reason-unknown");
@@ -138,10 +141,11 @@ function keydown(e) {
     // Older WebKit can end composition before its confirming keydown. That
     // event still carries 229 even though isComposing is already false.
     // Leave the native IME action intact; never forward it as a BBS command.
-    const browsing=keyboardState.enabled&&!["input","once"].includes(keyboardState.mode);
+    const atPause=latest?.navigation.kind==="continue_prompt";
+    const browsing=!atPause&&keyboardState.enabled&&!["input","once"].includes(keyboardState.mode);
     const control=e.ctrlKey&&!e.altKey?(/^[a-z]$/i.test(e.key)?e.key.toLowerCase():
         (e.key==="Process"||/[^\x00-\x7f]/.test(e.key))&&/^Key[A-Z]$/.test(e.code)?e.code.slice(3).toLowerCase():null):null;
-    const pause=latest?.navigation.kind==="continue_prompt"&&!["Dead","Shift","Control","Alt","Meta","CapsLock","NumLock","ScrollLock","Fn","FnLock","Symbol","SymbolLock","Hyper","Super"].includes(e.key);
+    const pause=atPause&&!["Dead","Shift","Control","Alt","Meta","CapsLock","NumLock","ScrollLock","Fn","FnLock","Symbol","SymbolLock","Hyper","Super"].includes(e.key);
     const physical=browsing&&/^(Key[A-Z]|Digit[0-9])$/.test(e.code)||control!==null;
     if(e.isComposing||composing||((e.keyCode===229||e.key==="Process")&&!physical)||e.metaKey) return;
     // Let the native copy action fire; copy data is already prepared by Rust.
@@ -166,8 +170,9 @@ function keydown(e) {
         if(action){e.preventDefault();readingMove(action==="up"||action==="down"?{action:"lines",down:action==="down",count:1}:{action},e);return;}
     }
     const command=commandKeys.has(e.key)||control!==null;
-    if(command||physical||pause||(browsing&&e.key.length===1)) {clearSelection();e.preventDefault();}
-    if(command||physical||pause||e.key.length===1||e.key==="Dead") {
+    const printable=Array.from(e.key).length===1&&!e.ctrlKey;
+    if(command||physical||pause&&!printable||browsing&&printable) {clearSelection();e.preventDefault();}
+    if(command||physical||pause||printable||e.key==="Dead") {
         revokeNavigation();
         inputKey=!command;
         send({kind:"key",key:{key:e.key,code:e.code,ctrl:e.ctrlKey,alt:e.altKey,shift:e.shiftKey,repeat:e.repeat},generation,trusted:e.isTrusted});
@@ -1047,7 +1052,7 @@ async function paint(packet) {
     const previousFailure=latest?.keep_alive_failure;
     const failureChanged=packet.keep_alive_failure!==previousFailure;
     stationMouse.update(packet);
-    generation=packet.generation;revision=packet.frame.revision;latest=packet;contextMenu?.validate();editorColor?.validate();filterUi.paint(packet);refreshStationMouse();
+    generation=packet.generation;revision=packet.frame.revision;latest=packet;syncKeyboardReadOnly();contextMenu?.validate();editorColor?.validate();filterUi.paint(packet);refreshStationMouse();
     surface.dataset.presentation=String(packet.presentation);surface.dataset.maskedPushes=String(packet.masked_pushes);surface.dataset.revealed=String(packet.revealed);
     if(changed&&hoverCandidate) {
         const lease=packet.hover,candidate=hoverCandidate;

@@ -191,14 +191,12 @@ impl Keyboard {
         self.text = Some(false);
     }
     pub fn accept_text(&mut self, composition: bool) -> bool {
-        if self.profile == "continue_prompt" {
-            self.text = Some(false);
-            return false;
-        }
         let allowed = if composition {
             self.composition
         } else {
-            self.text.take().unwrap_or(!self.enabled || self.input)
+            self.text
+                .take()
+                .unwrap_or(self.profile != "continue_prompt" && (!self.enabled || self.input))
         };
         if allowed && self.once {
             self.once = false;
@@ -215,7 +213,8 @@ impl Keyboard {
         // code in browsing modes and explicit Control shortcuts. A CJK input
         // source can report a non-Latin glyph for Ctrl+X even outside Vim.
         // Ordinary text, Alt-produced text and composition keep their owner.
-        let normalized = if self.enabled && !self.input && !self.once
+        let pause = matches!(context, Context::ContinuePrompt);
+        let normalized = if self.enabled && !self.input && !self.once && !pause
             || key.ctrl && !key.alt && !self.composition
         {
             normal_key(key)
@@ -250,14 +249,14 @@ impl Keyboard {
         {
             return Effect::None;
         }
-        // A confirmed pause has one command in every keyboard mode. Never
-        // forward its dismissing key as text or reinterpret it on the next page.
-        if matches!(context, Context::ContinuePrompt) {
-            if key.repeat
-                || self.composition
-                || key.key.is_empty()
-                || matches!(key.key.as_str(), "Dead" | "Process" | "Unidentified")
-            {
+        // The station interprets the actual key. Hold it until keyup so an
+        // OS repeat cannot also act on the screen that follows the prompt.
+        if pause {
+            if key.repeat || self.composition {
+                return Effect::None;
+            }
+            let bytes = native_key(key);
+            if !printable && bytes.is_none() {
                 return Effect::None;
             }
             self.count = 0;
@@ -265,7 +264,8 @@ impl Keyboard {
             self.g = false;
             self.once = false;
             self.continue_hold = Some(key.code.clone());
-            return Effect::Browse(Intent::Continue);
+            self.text = Some(printable);
+            return bytes.map_or(Effect::None, Effect::Native);
         }
         if !self.enabled || self.input || self.once {
             if self.enabled

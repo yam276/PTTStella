@@ -796,12 +796,27 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
                 shift: false,
                 repeat: false,
             };
-            let effect = keyboard.key(&key, &context);
+            let revision = view.frame.revision;
+            let sent = match keyboard.key(&key, &context) {
+                Effect::Browse(intent) => {
+                    connection.browse_key(view.stamp(), intent).await.unwrap();
+                    true
+                }
+                Effect::Native(bytes) => {
+                    connection.input(view.generation, bytes).unwrap();
+                    true
+                }
+                Effect::None if keyboard.accept_text(false) => {
+                    connection
+                        .input(view.generation, value.as_bytes().to_vec())
+                        .unwrap();
+                    true
+                }
+                Effect::None => false,
+                effect => panic!("unexpected {effect:?}"),
+            };
             keyboard.release(&key.code);
-            assert!(!keyboard.accept_text(false));
-            if let Effect::Browse(intent) = effect {
-                let revision = view.frame.revision;
-                connection.browse_key(view.stamp(), intent).await.unwrap();
+            if sent {
                 operations += 1;
                 if !matches!(operations, 31 | 32) {
                     view = wait(&connection, |v| {
@@ -809,8 +824,6 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
                     })
                     .await;
                 }
-            } else {
-                assert_eq!(effect, Effect::None);
             }
             assert_eq!(keyboard.status(&context).mode, "normal");
         }
@@ -819,6 +832,87 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
     // Peer expects 46 translated operations including help and empty-list browsing, then
     // Close. Literal Vim letters/control codes or extra input fail the join.
     connection.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn second_uppercase_q_reaches_the_article_price_prompt() {
+    use crate::navigation::Context;
+    use crate::vim::{Effect, Key, Keyboard};
+    let (listener, connection) = idle_local().await;
+    connection.connect().unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut ws = tokio_tungstenite::accept_async(stream).await.unwrap();
+    let screens: serde_json::Value =
+        serde_json::from_str(include_str!("../../tests/fixtures/article-open.json")).unwrap();
+    let screen =
+        |name: &str| crate::encoding::encode(screens["screens"][name].as_str().unwrap()).unwrap();
+    ws.send(Message::Binary(screen("articles").into()))
+        .await
+        .unwrap();
+    let list = wait(&connection, |view| {
+        matches!(view.context(), Context::ArticleList { .. })
+    })
+    .await;
+    connection.input(list.generation, b"Q".to_vec()).unwrap();
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"Q");
+    ws.send(Message::Binary(screen("information").into()))
+        .await
+        .unwrap();
+    let info = wait(&connection, |view| {
+        view.context() == Context::ContinuePrompt
+    })
+    .await;
+    let mut keyboard = Keyboard::default();
+    keyboard.toggle();
+    let mut q = Key {
+        key: "Q".into(),
+        code: "KeyQ".into(),
+        ctrl: false,
+        alt: false,
+        shift: true,
+        repeat: false,
+    };
+    assert_eq!(keyboard.key(&q, &info.context()), Effect::None);
+    assert!(keyboard.accept_text(false));
+    connection
+        .input(info.generation, crate::encoding::encode(&q.key).unwrap())
+        .unwrap();
+    assert_eq!(ws.next().await.unwrap().unwrap().into_data().as_ref(), b"Q");
+
+    ws.send(Message::Binary(navigation_page("board_entry").into()))
+        .await
+        .unwrap();
+    let notice = wait(&connection, |view| {
+        view.frame.revision > info.frame.revision && view.context() == Context::ContinuePrompt
+    })
+    .await;
+    q.repeat = true;
+    assert_eq!(keyboard.key(&q, &notice.context()), Effect::None);
+    assert!(!keyboard.accept_text(false));
+    keyboard.release(&q.code);
+    assert!(timeout(Duration::from_millis(30), ws.next()).await.is_err());
+
+    let enter = Key {
+        key: "Enter".into(),
+        code: "Enter".into(),
+        shift: false,
+        repeat: false,
+        ..q
+    };
+    let Effect::Native(bytes) = keyboard.key(&enter, &notice.context()) else {
+        panic!("expected the original Enter bytes");
+    };
+    connection.input(notice.generation, bytes).unwrap();
+    assert_eq!(
+        ws.next().await.unwrap().unwrap().into_data().as_ref(),
+        b"\r"
+    );
+    let close = tokio::spawn(async move {
+        let _ = ws.next().await;
+        let _ = ws.flush().await;
+    });
+    connection.shutdown().await.unwrap();
+    close.await.unwrap();
 }
 
 #[tokio::test]
