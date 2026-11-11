@@ -2,7 +2,7 @@
 
 使用者待驗包保持 `.local/verification/slint-input-cross/windows-package/`，產品來源475897f（288份建置輸入），exe `69542cb7…`、ZIP `60f7c551…`；使用者會稍後驗收，原生仍not_run。既有13案與注音回報只屬舊04249364…exe，未轉填。此待驗包尚未包含後續字型／貼上與保留raster修正。
 
-2026-11-11另備妥的新包在 `.local/verification/slint-renderer-api-current/cross-current/windows-package/`，乾淨7466c31交叉build／all-target Clippy通過，exe `fe8872f6…`包含閱讀狀態列與探針來源就緒修正。與兩Mac來源相同；和Linuxfbc的380份產品輸入相同，完整580檔只差三份文件。919份ZIP payload中917份與前備妥ac788a45包相同，僅exe／candidate.json不同，libmpv DLL保持原byte；normal／delay PE遞迴imports核對，仍需VC redistributable，原生未執行。candidate index的prepared_updates分列新包，未覆寫695待驗入口。[主計畫](slint-evaluation-plan.md)與 `slint-navigation-cross/current-candidates.json`提供完整hash；[來源還原](slint-product-source.md)分別選 `reading-cross-current`（fe新包）或`windows-intel-475-baseline`（695待驗包），完整第三方來源仍not_ready。以下舊包及驗收為歷史紀錄。
+2026-11-11 另備新包於 `.local/verification/slint-renderer-api-current/cross-current/windows-package/`。乾淨 `35b43e4` 交叉 build 及 all-target Clippy 通過；PE `b436d99c…` 含文章焦點修正。與最新 Linux 的 580 份 tracked 檔案一致；與最新兩個 macOS 候選有 380 份相同產品輸入，完整 tree 只差四份文件。919 份 ZIP payload 有 917 份與前一另備候選相同，僅 exe／candidate.json 改變。已核對一般／延遲 PE 匯入，仍需 VC runtime；原生未執行。新版另備，未覆寫 `69542cb7` 待驗入口。完整 SHA 在[主計畫](slint-evaluation-plan.md#2026-11-11-文章焦點修正的-windows-與-linux-候選同步)所列索引；[來源還原](slint-product-source.md)選 `article-focus-cross-current` 或 `windows-intel-475-baseline`。完整第三方來源仍待驗。
 
 這是 S8 內部驗收包，含現有 Rust 核心、原生 Slint 主程式與 libmpv，尚未切換正式 Dioxus 入口。已收到 Windows 10 x64 的原生元件證據；13 案經修正腳本後重驗既有回報通過。完整 IME 矩陣、DPI、可聽音訊、硬體解碼、乾淨安裝、資料回退與效能仍待驗（Microsoft 注音三項已有使用者人工回報），尚不能平替。包內 `native_acceptance: not_run` 是打包時狀態，後續實機結果見下節。
 

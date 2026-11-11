@@ -8,7 +8,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 **尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
 
-文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個 macOS 固定下載入口現為乾淨 `c7368b2`，包含設定預覽按需繪製及文章延後取得原生焦點的修正。Apple Silicon `793ecb91` 和 Intel `62ada42e` 各通過 23 項封裝後合成回歸，另各完成原生長文的 37 次取頁及八次快取操作。Intel 使用 Rosetta。Linux `150c1a0d` 與另備 Windows `fe8872f6` 仍對應先前來源，使用者待驗 Windows `69542cb7` 入口維持。Intel／Linux 實機依指示暫緩，其餘原生操作、完整資料回退和跨平台效能矩陣仍待驗。
+文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個 macOS 固定下載入口現為乾淨 `c7368b2`，包含設定預覽按需繪製及文章延後取得原生焦點的修正。Apple Silicon `793ecb91` 和 Intel `62ada42e` 各通過 23 項封裝後合成回歸，另各完成原生長文的 37 次取頁及八次快取操作。Intel 使用 Rosetta。Linux `af476061` 與另備 Windows `b436d99c` 已同步相同的 380 份產品輸入；Linux 在 QEMU 下通過回歸及安裝後格線探針，完整 shell 探針仍有一項版面失敗。新版 Windows 已交叉編譯與核對 ZIP／PE，尚未實機執行；使用者待驗 Windows `69542cb7` 入口維持。詳見[跨平台候選同步](#2026-11-11-文章焦點修正的-windows-與-linux-候選同步)。Intel／Linux 實機依指示暫緩，其餘原生操作、完整資料回退和跨平台效能矩陣仍待驗。
 
 macOS arm64 已以最新 Slint 候選及原 Dioxus 完成設定 v1–v6 的 18 輪實際前端往返，核對兩次寫入備份、最後讀回與其他資料檔。兩版 macOS 一般入口已各從隔離 HOME 的系統資料目錄讀到不同的預設站，完成本機 WSS、無自動輸入和伺服器 Close 回覆。macOS Keychain 已用獨立合成 service 驗證舊格式同簽章跨程序讀回、改簽拒絕與清理。[Keychain 驗收](login.md#macos-舊紀錄與重新簽章驗收) 同 worktree 的 Dioxus 設定欄位已修正舊版拒存小數的限制，macOS 已實測 Dioxus 存檔及 Slint 讀回，原 5ea9ad6 執行檔仍有該限制。[小數往返](slint-store-frontends.md#2026-11-11-小數顯示設定回退) macOS 一般入口已用隔離 HOME 完成自動開圖的 Slint → 修正版 Dioxus → Slint 實際保存回讀；原 Dioxus 仍因舊小數設定拒存。實際安裝升級與授權、Windows／Linux 密碼庫及完整資料操作仍待驗。[一般入口設定回退](slint-store-frontends.md#2026-11-11-macos-一般入口的設定回退)[前端往返紀錄](slint-store-frontends.md#2026-11-11-同一對前端的-v1v6-設定往返)
 
@@ -775,3 +775,13 @@ App、ZIP 與唯讀 DMG 的 1,241／1,223 個 payload 逐檔相同，簽名、�
 查核 resolved path、UID、symlink、lsof 及 SHA 後，移除兩個被取代的完整 Mac 包、來源還原 checkout、暫存 manifest 與擷取器，共五個位置、627,871,203 regular-file bytes；另去重 28 張 PNG 共 1,900,479 bytes。filesystem available 234,234,134,528 → 234,874,318,848 bytes 為並行觀測。保留一份舊 `99949409` 壓縮執行檔供啟動／輸入／資料對照，原 `f50ffb46` 設定／GIF 控制與固定 Cargo 快取也保留。產品 bundle ID 的 macOS 系統 cache 與既有候選共用，未建立本批獨占所有權而保留。Windows 待驗及另備包、Linux 下載檔的 SHA-256 均相同。
 
 原始建置、48 案收據、archive hashes、來源還原、promotion 與 exact cleanup 路徑在 `slint-renderer-api-current/cross-current/article-focus-package-current/`。候選為 ad hoc 簽章，S0–S8 保持 active，S9 未執行。
+
+## 2026-11-11 文章焦點修正的 Windows 與 Linux 候選同步
+
+Windows x64 與 Linux x64 從乾淨 `35b43e4` 完成 release 交叉編譯及 all-target Clippy。兩個 macOS 候選的 `c7368b2` 與本批只有四份文件不同，380 份建置輸入一致。Windows PE `b436d99c` 的 ZIP 核對 919 份 payload，與前一個另備候選只差執行檔和 candidate.json；PE 一般與延遲匯入閉包已核對。封裝未在 Windows 執行，原 `69542cb7` 待驗下載的 SHA-256 保持。
+
+Linux ELF `af476061` 的 20 項合成案例首次通過 18 項。預設繪圖後端的帳號案例在 90 秒控制器限制到達時仍在取頁；單獨給予較長監督時間後，同 ELF 在 82.7 秒通過。設定搜尋首輪卡在原生欄位取得焦點，單獨重測通過，原因仍未定。另以 X11 視窗實測：文章先在背景畫出且零取頁，X server 交付焦點後完成 837 行及 37 筆取頁，透過 WM_DELETE_WINDOW 正常退出並收到唯一 Close。這些在 ARM Debian 的 QEMU x64、Xvfb／Openbox 與 Mesa softpipe 下驗證。
+
+Linux tar 與 deb 的 loader／套件 metadata 及共享 payload 均已核對。裸 dpkg 先解包，APT 補齊兩項桌面 portal 所需套件後完成安裝。從安裝位置執行的實際 ELF 核對 SHA、隔離設定、不開密碼庫、雙 PNG 與 513-byte 格線 peer 的唯一 Close。較完整的 `--verify-shell` 在這個 X11 環境報終端未填滿視窗；失敗和 Close 已保留，格線結果僅證明安裝後啟動。另有無 xauth／無 xprop 的測試環境失敗紀錄。未聲稱 x64 實機、Wayland、音訊、IME 或效能通過。
+
+[來源還原](slint-product-source.md)以同一 bundle 加一份 patch 核對全部 580 檔。沿用固定 Cargo target、SDK 和既有容器，未增開 worktree、驗證容器或 Cargo target。最新下載與舊 Windows 待驗下載經 SHA 保護；移除六個本機已過時的輸入／重複交付及還原暫存位置，共 445,027,137 regular-file bytes，另清理容器內 181,493,596 logical bytes。macOS 可用空間觀測由 233,902,481,408 增至 234,352,615,424 bytes，不全歸因於本次清理。完整收據、負例、精確路徑及新包 SHA 位於 `.local/verification/slint-renderer-api-current/cross-current/focus-cross-current/`；下載索引在 `slint-navigation-cross/current-candidates.json`。

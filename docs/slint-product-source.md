@@ -4,14 +4,15 @@
 
 ## 2026-11-11 產品來源包
 
-本機目前交付位於 `/Users/ladesine/Documents/PTTStella-Slint-Deliverables/product-source-20261111-6ad8e39/`，包含單一 23,220,799-byte Git bundle、七份patch、`sources.json`、獨立還原工具及 README。`filter-current` 從bundle的9a加產品patch還原6ad，`filter-cross-current` 加另一patch還原61d，`cross-current` 加10,009-byte文件patch還原9db，其餘三組直接還原。新cross descriptor擴充既有交付，沒有另建來源包目錄；先前manifest保存在驗收證據。bundle以hardlink沿用前份immutable檔案，沒有重複完整bundle。既有 docs gate 禁止 repo 內的 `.bundle`，因此來源交付保留於 repo 外，不放寬檢查。bundle 含 Git ancestry，不包含 worktree 的 `.local`、編譯 target 或未追蹤使用者資料。還原只讀此交付，不連網、不使用原 checkout 的 Git objects，也不覆寫既有目的地。
+本機目前交付位於 `/Users/ladesine/Documents/PTTStella-Slint-Deliverables/product-source-20261111-6ad8e39/`，包含單一 23,220,799-byte Git bundle、八份 patch、`sources.json`、獨立還原工具及 README。`filter-current` 從bundle的9a加產品patch還原6ad，`filter-cross-current` 加另一patch還原61d，`cross-current` 加10,009-byte文件patch還原9db，其餘三組直接還原。新cross descriptor擴充既有交付，沒有另建來源包目錄；先前manifest保存在驗收證據。bundle以hardlink沿用前份immutable檔案，沒有重複完整bundle。既有 docs gate 禁止 repo 內的 `.bundle`，因此來源交付保留於 repo 外，不放寬檢查。bundle 含 Git ancestry，不包含 worktree 的 `.local`、編譯 target 或未追蹤使用者資料。還原只讀此交付，不連網、不使用原 checkout 的 Git objects，也不覆寫既有目的地。
 
 | 選項 | 對應候選 | 產品核對 commit | 完整 tracked 檔案 | 建置輸入核對 |
 | --- | --- | --- | --- | --- |
+| `article-focus-cross-current` | 最新 Linux／另備 Windows | `35b43e4` | 580 | 380 |
 | `article-focus-macos-current` | 最新 macOS arm64／x64 | `c7368b2` | 580 | 380 |
 | `settings-macos-current` | 歷史 macOS arm64／x64 | `dbbce24` | 580 | 380 |
 | `reading-cross-current` | 歷史兩Mac／另備Windowsfe8872f6 | `7466c31` | 580 | 380 |
-| `reading-current` | 最新 Linux150c1a0d | `fbcfe2e` | 580 | 380 |
+| `reading-current` | 歷史 Linux150c1a0d | `fbcfe2e` | 580 | 380 |
 | `filter-current` | 歷史 Mac arm64／x64 | `6ad8e39` | 580 | 380 |
 | `filter-cross-current` | 歷史 Linux4fa／Windowsac788a45 | `61d1c3f` | 580 | 380 |
 | `macos-arm64-current` | 歷史 Mac arm64 | `9a06515` | 580 | 380 |
@@ -19,13 +20,15 @@
 | `linux-84e-baseline` | 歷史 Linux x64 | `84e98a3` | 546 | 289 |
 | `windows-intel-475-baseline` | 待使用者測試的 Windows69542cb7／歷史 Mac x64 | `475897f` | 545 | 288 |
 
-最新 macOS 用 `article-focus-macos-current`。同一 bundle 加 `product-article-focus-macos.patch` 從新目錄還原乾淨 `c7368b2` 的全部 580 檔與 tree `14badb5cdcf6c01f79e707fdcc9bf041d69bea3d`。綁定 Apple Silicon `793ecb91` 和 Intel `62ada42e`。現行 manifest SHA-256 為 `9d9fdc5f0eab9a7dac7df98c6248001bc36aab8e0f43cc3342b15b2947c159ea`，原 descriptor 全部保留。完整來源還原與這次封裝後回歸各自有收據；獨立還原來源再編譯及第三方完整來源仍待驗。
+最新 Linux `af476061` 與另備 Windows `b436d99c` 用 `article-focus-cross-current`。同一 bundle 加 `product-article-focus-cross.patch` 還原乾淨 `35b43e4` 的全部 580 檔與 tree `40c52d6d226500b0becd12fb2362940425356a0e`。現行 manifest SHA-256 為 `854a75daf0fd0d7900268e019d38578f4713eff67277640dda13530e2f13c0c1`，保留先前 descriptor。與最新 macOS 只差四份文件；在原 worktree 交叉編譯與獨立還原皆通過，未從還原目錄再編譯，也未驗證第三方來源閉包。
 
-歷史 macOS 用 `settings-macos-current`。同一 immutable bundle 加 `product-settings-macos.patch` 可從新目錄還原乾淨 `dbbce24` 的完整 580 檔與 tree `9dc253a72acbeeb20c364efcf9cf2ed54f6057a4`，綁定封裝執行檔 Apple Silicon `99949409` 和 Intel `4d7e344c`。現行 manifest SHA-256 為 `9a8918e80c2593da33721e6bcea132599e1e9dfade020528c65d508c5268e49a`。其餘 descriptor 完整保留。此批驗證還原與完整檔案清單，獨立還原來源編譯及第三方完整來源仍待驗。
+最新 macOS 用 `article-focus-macos-current`。同一 bundle 加 `product-article-focus-macos.patch` 從新目錄還原乾淨 `c7368b2` 的全部 580 檔與 tree `14badb5cdcf6c01f79e707fdcc9bf041d69bea3d`。綁定 Apple Silicon `793ecb91` 和 Intel `62ada42e`。當時 manifest SHA-256 為 `9d9fdc5f0eab9a7dac7df98c6248001bc36aab8e0f43cc3342b15b2947c159ea`，原 descriptor 全部保留。完整來源還原與這次封裝後回歸各自有收據；獨立還原來源再編譯及第三方完整來源仍待驗。
+
+歷史 macOS 用 `settings-macos-current`。同一 immutable bundle 加 `product-settings-macos.patch` 可從新目錄還原乾淨 `dbbce24` 的完整 580 檔與 tree `9dc253a72acbeeb20c364efcf9cf2ed54f6057a4`，綁定封裝執行檔 Apple Silicon `99949409` 和 Intel `4d7e344c`。當時 manifest SHA-256 為 `9a8918e80c2593da33721e6bcea132599e1e9dfade020528c65d508c5268e49a`。其餘 descriptor 完整保留。此批驗證還原與完整檔案清單，獨立還原來源編譯及第三方完整來源仍待驗。
 
 歷史Mac與另備Windows使用 `reading-cross-current`，同一bundle加 `product-reading-cross.patch` 還原乾淨7466完整580檔／tree `164f4be07417edde599b4f538e70e82b8ae2f6c6`，綁定封裝ARMf50ffb46／Intelb9fa63fa／Windowsfe8872f6。三份原始build record保留；與Linuxfbc完整tree只差三份文件，其餘577檔及380份產品選集相同。本輪沒有重做獨立還原來源編譯；前輪fbc一般Slint106項／1 helper ignored屬於相同非文件來源。所有既有descriptor與immutable bundle保持不變，新manifest SHA為 `41093833cc6378214fc235a538e3dca1484b5af7760f201dd024ba7499c7f1bc`。還原checkout使用同一repo外暫存路徑，核對後移除，沒有新Cargo target。
 
-最新 `reading-current` 在同一交付加入 `product-reading.patch`，保留 immutable bundle 與既有六份descriptor，還原已提交fbcfe2e的完整580檔／tree `f3a4ec30192e3ecf0f510d6494a33bf5d8d6565b`，綁定Linux ELF150c1a0d。原編譯仍記為f40e793 dirty，測過的完整七檔patch與f40e793到fbcfe2e逐byte相同，沒有轉稱乾淨來源重建。
+歷史 `reading-current` 在同一交付加入 `product-reading.patch`，保留 immutable bundle 與既有六份descriptor，還原已提交fbcfe2e的完整580檔／tree `f3a4ec30192e3ecf0f510d6494a33bf5d8d6565b`，綁定Linux ELF150c1a0d。原編譯仍記為f40e793 dirty，測過的完整七檔patch與f40e793到fbcfe2e逐byte相同，沒有轉稱乾淨來源重建。
 
 本批另從還原checkout完成macOS arm64一般Slint配置獨立建置：106 passed／1 explicit native helper ignored。sandbox拒讀原worktree來源（Cargo.toml負向control確實被拒），只允許固定Cargo target快取；還原目錄移到repo外同一可重用暫存路徑，避免Cargo搜尋ancestor manifest。原始command／log與580檔SHA核對保存在 `slint-renderer-api-current/cross-current/filter-package-current/chrome-current/refined/`，驗後還原checkout移除。這不是冷依賴建置、native-player／其他架構來源閉包、原生操作或逐byte二進位重現。該輪sources.json SHA為 `400bef10edf0702be2a2d9f4dde750c90a4a5f353ac89c970da1b30840178b17`。
 
@@ -41,7 +44,7 @@ Linux4fa0a14e與備妥Windowsac788a45從乾淨61d1c3f完成release／all-target 
 
 ```sh
 python3 reconstruct_slint_source.py --manifest sources.json \
-  --candidate reading-current --output /ABS/PATH/new-source
+  --candidate article-focus-cross-current --output /ABS/PATH/new-source
 ```
 
 一般 Slint 配置可在還原的 checkout 執行：
