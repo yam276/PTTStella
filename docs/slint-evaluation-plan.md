@@ -8,7 +8,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 **尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
 
-文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個 macOS 固定下載入口現為乾淨 `c7368b2`，包含設定預覽按需繪製及文章延後取得原生焦點的修正。Apple Silicon `793ecb91` 和 Intel `62ada42e` 各通過 23 項封裝後合成回歸，另各完成原生長文的 37 次取頁及八次快取操作。Intel 使用 Rosetta。Linux `af476061` 與另備 Windows `b436d99c` 已同步相同的 380 份產品輸入；Linux 在 QEMU 下通過回歸及安裝後格線探針，完整 shell 探針仍有一項版面失敗。新版 Windows 已交叉編譯與核對 ZIP／PE，尚未實機執行；使用者待驗 Windows `69542cb7` 入口維持。詳見[跨平台候選同步](#2026-11-11-文章焦點修正的-windows-與-linux-候選同步)。Intel／Linux 實機依指示暫緩，其餘原生操作、完整資料回退和跨平台效能矩陣仍待驗。
+文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個 macOS 固定下載入口現為乾淨 `c7368b2`，包含設定預覽按需繪製及文章延後取得原生焦點的修正。Apple Silicon `793ecb91` 和 Intel `62ada42e` 各通過 23 項封裝後合成回歸，另各完成原生長文的 37 次取頁及八次快取操作。Intel 使用 Rosetta。Linux `af476061` 與另備 Windows `b436d99c` 已同步相同的 380 份產品輸入；Linux 在 QEMU 下通過回歸及安裝後格線探針。完整視窗的版面誤判已在來源修正，軟體繪圖通過整套流程，模擬環境的預設繪圖路徑仍卡在通知時序。新版 Windows 已交叉編譯與核對 ZIP／PE，尚未實機執行；使用者待驗 Windows `69542cb7` 入口維持。詳見[跨平台候選同步](#2026-11-11-文章焦點修正的-windows-與-linux-候選同步)。Intel／Linux 實機依指示暫緩，其餘原生操作、完整資料回退和跨平台效能矩陣仍待驗。
 
 macOS arm64 已以最新 Slint 候選及原 Dioxus 完成設定 v1–v6 的 18 輪實際前端往返，核對兩次寫入備份、最後讀回與其他資料檔。兩版 macOS 一般入口已各從隔離 HOME 的系統資料目錄讀到不同的預設站，完成本機 WSS、無自動輸入和伺服器 Close 回覆。macOS Keychain 已用獨立合成 service 驗證舊格式同簽章跨程序讀回、改簽拒絕與清理。[Keychain 驗收](login.md#macos-舊紀錄與重新簽章驗收) 同 worktree 的 Dioxus 設定欄位已修正舊版拒存小數的限制，macOS 已實測 Dioxus 存檔及 Slint 讀回，原 5ea9ad6 執行檔仍有該限制。[小數往返](slint-store-frontends.md#2026-11-11-小數顯示設定回退) macOS 一般入口已用隔離 HOME 完成自動開圖的 Slint → 修正版 Dioxus → Slint 實際保存回讀；原 Dioxus 仍因舊小數設定拒存。實際安裝升級與授權、Windows／Linux 密碼庫及完整資料操作仍待驗。[一般入口設定回退](slint-store-frontends.md#2026-11-11-macos-一般入口的設定回退)[前端往返紀錄](slint-store-frontends.md#2026-11-11-同一對前端的-v1v6-設定往返)
 
@@ -785,3 +785,13 @@ Linux ELF `af476061` 的 20 項合成案例首次通過 18 項。預設繪圖後
 Linux tar 與 deb 的 loader／套件 metadata 及共享 payload 均已核對。裸 dpkg 先解包，APT 補齊兩項桌面 portal 所需套件後完成安裝。從安裝位置執行的實際 ELF 核對 SHA、隔離設定、不開密碼庫、雙 PNG 與 513-byte 格線 peer 的唯一 Close。較完整的 `--verify-shell` 在這個 X11 環境報終端未填滿視窗；失敗和 Close 已保留，格線結果僅證明安裝後啟動。另有無 xauth／無 xprop 的測試環境失敗紀錄。未聲稱 x64 實機、Wayland、音訊、IME 或效能通過。
 
 [來源還原](slint-product-source.md)以同一 bundle 加一份 patch 核對全部 580 檔。沿用固定 Cargo target、SDK 和既有容器，未增開 worktree、驗證容器或 Cargo target。最新下載與舊 Windows 待驗下載經 SHA 保護；移除六個本機已過時的輸入／重複交付及還原暫存位置，共 445,027,137 regular-file bytes，另清理容器內 181,493,596 logical bytes。macOS 可用空間觀測由 233,902,481,408 增至 234,352,615,424 bytes，不全歸因於本次清理。完整收據、負例、精確路徑及新包 SHA 位於 `.local/verification/slint-renderer-api-current/cross-current/focus-cross-current/`；下載索引在 `slint-navigation-cross/current-candidates.json`。
+
+## 2026-11-11 固定狀態列的完整視窗驗收
+
+在同一 Debian 容器重現已安裝 Linux `af476061` 的版面失敗。準備收據為 1040×740 視窗、1040×708 終端 viewport、1040×624 格線。差額來自 `6ad8e39` 為遮黑提示保留的 32 px 狀態列。完整視窗探針仍預期無狀態列，這次修正探針以邏輯像素核對整個可用區域，並保留通知、縮放、斷線的幾何不變及嚴格 Close 檢查。原 ELF 和新探針在軟體繪圖的起始快照及來源格線 PNG 逐位元相同。
+
+修正後 Linux 診斷 ELF `68601365` 在軟體繪圖通過授權視窗、浮球縮放、匯出錯誤、通知焦點與計時器、斷線、退出。首輪收集器誤要求成功 Close 帶上只在失敗時輸出的 `cleanup_error` 欄位。保留原判定後，另核對原始 exit 0、唯一 Close、通知及退出收據。Apple Silicon release 診斷版以預設及明確 OpenGL 各通過同一探針，另有 106 項 bin 測試通過及一項既有原生 helper ignored。Linux release 交叉編譯和 all-target Clippy 通過。
+
+Linux 預設路徑兩輪皆通過視窗尺寸與浮球縮放，接著卡在通知可讀時間。原定 1 秒的取樣在 2.260／2.627 秒才取得，當時已淡出。另試 llvmpipe，LLVM 在模擬環境中止並留下原始紀錄。這些結果未建立實機 GPU 的通知延遲，預設路徑的完整驗收仍待驗。已封裝的 Linux 和另備 Windows 尚含舊探針，下一次封裝須納入修正。原 Windows 待驗包與已驗證的舊證據分列。
+
+沿用固定 Cargo 目錄、既有 SDK 與容器。正常卸載 SDK 並停止自有容器，保留已安裝 runtime。刪除容器內 77 份已有來源或收據的暫存檔，共 94,945,792 logical bytes。另刪除 17 份逐位元重複 PNG，共 847,565 regular-file bytes。macOS 可用空間觀測由 233,881,956,352 增至 233,882,836,992 bytes。精確路徑、獨特負例、指令、SHA-256 和各輪收據在 `.local/verification/slint-renderer-api-current/cross-current/shell-layout-current/`。

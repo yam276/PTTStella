@@ -10,6 +10,8 @@ use slint::{
 };
 use std::{error::Error, path::PathBuf, rc::Rc};
 
+const STATUS_ROW_HEIGHT: f32 = 32.;
+
 async fn choose(ui: &TerminalWindow, category: i32, label: &str) -> Result<(), String> {
     let state = || {
         serde_json::json!({
@@ -71,10 +73,15 @@ pub fn start(
             let dimensions = (ui.get_view_width(), ui.get_view_height());
             let window = ui.window().size();
             let dpi = ui.window().scale_factor();
+            let window_width = window.width as f32 / dpi;
+            let window_height = window.height as f32 / dpi;
             require(
-                (dimensions.0 - window.width as f32 / dpi).abs() < 1.
-                    && (dimensions.1 - window.height as f32 / dpi).abs() < 1.,
-                "idle terminal does not fill the product window",
+                !ui.get_article_active()
+                    && (dimensions.0 - window_width).abs() < 1.
+                    && (dimensions.1 - (window_height - STATUS_ROW_HEIGHT)).abs() < 1.,
+                &format!(
+                    "idle terminal {dimensions:?} must fill the {window_width}×{window_height} logical window above its {STATUS_ROW_HEIGHT}px status row"
+                ),
             )?;
             require(
                 !ui.get_shell_status_visible(),
@@ -194,6 +201,7 @@ pub fn start(
                 .open(directory.join("shell-result.json"))
                 .map_err(|e| e.to_string())?;
             serde_json::to_writer_pretty(file,&serde_json::json!({"status":"passed","viewport_logical":[dimensions.0,dimensions.1],
+            "window_logical":[window_width,window_height],"scale_factor":dpi,"status_row_logical":window_height-dimensions.1,
             "prototype_chrome":false,"about_escape":true,"floating_zoom":true,"invalid_export_visible":true,"disconnected_visible":true,
             "scope":"production owners with synthetic toolkit callbacks/foreground; OS focus, clipboard and pointer untested"})).map_err(|e|e.to_string())
         },

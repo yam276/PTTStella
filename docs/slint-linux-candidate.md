@@ -1,6 +1,6 @@
 # Slint Linux x64 候選包
 
-2026-11-11 最新候選位於 `.local/verification/slint-ui-cjk-fallback/linux-package/`，ELF `af476061…` 以乾淨 `35b43e4` 交叉編譯，包含延後取得原生焦點的修正。release、all-target Clippy、loader／dpkg 及 tar 1,122／deb 1,109 份 payload 均已核對。APT 補齊桌面 portal 後完成安裝，安裝位置的 ELF 通過格線、雙 PNG 及唯一 Close；完整 shell 探針在同環境仍有版面失敗。
+2026-11-11 最新候選位於 `.local/verification/slint-ui-cjk-fallback/linux-package/`，ELF `af476061…` 以乾淨 `35b43e4` 交叉編譯，包含延後取得原生焦點的修正。release、all-target Clippy、loader／dpkg 及 tar 1,122／deb 1,109 份 payload 均已核對。APT 補齊桌面 portal 後完成安裝，安裝位置的 ELF 通過格線、雙 PNG 及唯一 Close；包內完整視窗探針仍預期舊版面。來源已修正，Linux 軟體繪圖通過完整探針，預設繪圖的通知時序仍待驗。詳見[完整視窗重測](slint-evaluation-plan.md#2026-11-11-固定狀態列的完整視窗驗收)。
 
 20 項合成案例首輪 18 項通過；帳號預設後端逾時及設定搜尋焦點失敗在同 ELF 個別重測通過。X11 另驗證背景文章零取頁、取得前景焦點後完成 837 行及 37 次取頁與正常 Close。QEMU／Xvfb／Openbox 只證明上述範圍；實機、Wayland、原生 IME、音訊與效能待驗。完整結果見[主計畫](slint-evaluation-plan.md#2026-11-11-文章焦點修正的-windows-與-linux-候選同步)；[來源還原](slint-product-source.md)選 `article-focus-cross-current`。
 
