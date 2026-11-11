@@ -60,6 +60,27 @@
 
 已移除 8 個自有測試位置，包含兩個 App 的暫存根、專用 WebKit／cache、編譯後的擷取器及未使用的操作腳本，合計 110,572,644 regular-file bytes。保留固定 Cargo target、候選包與量測證據。精確路徑、du、保留例外和並行可用空間在 `cleanup.json`。
 
+## 2026-11-11 一般入口啟動到可輸入
+
+同一台 Apple Silicon Mac、macOS 15.7.7、1920×1080 60 Hz，沿用方向鍵測試的 Slint `99949409…`、Dioxus `52ac086b…`、合成設定與 loopback TLS WebSocket 終端格線。每次建立新程序並使用一般入口。兩版保留實際啟動外窗，Slint 1000×718、Dioxus 1040×768，擷取同一螢幕中央 320×210 區域。此結果適用於兩版預設大小下的啟動，等尺寸啟動的影響仍待量測。
+
+每版各 10 組冷暖配對，前端順序 Slint／Dioxus／Dioxus／Slint 反覆五次。冷啟動清除本輪專用 bundle ID 的 macOS cache／WebKit／暫存位置，保持相同合成設定與已簽章的測試 App。緊接著的暖啟動重用上一程序退出後的快取。Slint 受測快取的常規檔案大小均為 0，Dioxus 暖啟動前均為 679,464 bytes。這個冷暖定義限於上述應用快取，OS／檔案頁快取保留。
+
+螢幕擷取先啟動並排除當時已存在的應用，再從呼叫 `open` 前開始計時。確認本機回覆後出現第一個紅色終端 frame，待其 ScreenCaptureKit `displayTime` 已到且測試程序取得前景，再送一個向上鍵。peer 核對唯一 `1b 5b 41` 後回覆綠色，擷取器確認畫面變化。40 次均正常退出、收到 Close ACK、peer join，設定與資料雜湊不變。以視窗伺服器呈現時間為觀測點，按鍵是否送出另由 peer 確認。[Apple displayTime 文件](https://developer.apple.com/documentation/screencapturekit/scstreamframeinfo/displaytime)
+
+| 前端／快取狀態 | 開啟到終端可見 p50／p95 | 開啟到 peer 確認按鍵 p50／p95 |
+| --- | ---: | ---: |
+| Slint 冷 | 383.9／394.5 ms | 422.6／435.1 ms |
+| Slint 暖 | 378.9／388.5 ms | 415.9／425.9 ms |
+| Dioxus 冷 | 466.8／477.5 ms | 512.7／521.9 ms |
+| Dioxus 暖 | 457.3／472.2 ms | 501.6／511.3 ms |
+
+每組 10 次，nearest-rank p95 為該組最大值。此場景下 Slint 首屏 p50 約低 17–18%。開啟到 peer 開始回覆的 p50，Slint 冷／暖為 239.0／236.7 ms，Dioxus 為 369.3／358.3 ms。從回覆開始到畫面呈現的 p50，Slint 為 147.6／143.9 ms，Dioxus 為 99.3／102.0 ms。這是同一合成終端負載的分段結果，長文、媒體、其他平台與完整 S8 仍各自驗收。
+
+校準保留兩個失敗。控制器初次讀到 PID 時仍在 `sandbox-exec`，改為等同一 PID 執行目標程式；第二次在顯示器擷取模式發現畫面回呼可能早於 `displayTime`，改為同時等待兩者才送按鍵。兩版其後各通過一冷一暖校準，Dioxus 該次冷校準首屏 856.7 ms，保留在固定四十次量測之外。全部正式四十次均納入彙整。
+
+重跑用 `.local/verification/slint-macos-startup-latency/` 的 `Capture.swift`、`startup.py`、`matrix.py`、`summarize.py`，沿用同層方向鍵量測目錄的共用程式。於新證據目錄執行 `startup.py setup --dioxus-binary ABSOLUTE_FIXED_TARGET_BINARY`，以 `xcrun swiftc -O -parse-as-library Capture.swift -o capture` 建立擷取器，再執行 `matrix.py` 和 `summarize.py`。原始 ticks、每次快取前後大小、執行檔 SHA、校準失敗與整理結果均保留。結案移除暫存 App／專用快取等 7 個位置，共 110,428,264 regular-file bytes，另記量測期間每次冷快取清除的 exact path。保留固定 Cargo target 與候選包，詳細資料在 `cleanup.json`。
+
 ## 2026-11-11 設定重複開關與按需繪製預覽
 
 同一台 macOS arm64、相同 1040×768 文章外窗及兩張 512×160 GIF。兩個現有 Slint 候選程序 `f50ffb46…` 各做 12 次原生「一般」設定開關，然後在同一暫存 App 換上修正後 `a243d3bf…` 的新程序重跑。每次確實進入 Settings 再回文章，採樣點確認雙圖及輸入焦點。每點取樣 5 秒／51 筆，下表使用末 31 筆的程序族中位數。原始峰值、RSS、CPU 與程序身分也保留。

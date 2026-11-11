@@ -12,9 +12,11 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 macOS arm64 已以最新 Slint 候選及原 Dioxus 完成設定 v1–v6 的 18 輪實際前端往返，核對兩次寫入備份、最後讀回與其他資料檔。兩版 macOS 一般入口已各從隔離 HOME 的系統資料目錄讀到不同的預設站，完成本機 WSS、無自動輸入和伺服器 Close 回覆。macOS Keychain 已用獨立合成 service 驗證舊格式同簽章跨程序讀回、改簽拒絕與清理。[Keychain 驗收](login.md#macos-舊紀錄與重新簽章驗收) 同 worktree 的 Dioxus 設定欄位已修正舊版拒存小數的限制，macOS 已實測 Dioxus 存檔及 Slint 讀回，原 5ea9ad6 執行檔仍有該限制。[小數往返](slint-store-frontends.md#2026-11-11-小數顯示設定回退) macOS 一般入口已用隔離 HOME 完成自動開圖的 Slint → 修正版 Dioxus → Slint 實際保存回讀；原 Dioxus 仍因舊小數設定拒存。實際安裝升級與授權、Windows／Linux 密碼庫及完整資料操作仍待驗。[一般入口設定回退](slint-store-frontends.md#2026-11-11-macos-一般入口的設定回退)[前端往返紀錄](slint-store-frontends.md#2026-11-11-同一對前端的-v1v6-設定往返)
 
-macOS arm64 完成三組雙 GIF 交錯比較。Slint 的程序族 footprint 峰值中位數約 126 MiB，Dioxus 約 687 MiB。10 秒 CPU 中位數為 0.296 與 0.180 秒，三組差距幅度有波動。Slint 堆疊取樣主要落在 CoreGraphics 整窗提交與像素轉換。冷暖啟動、長文操作、連續前景與跨平台矩陣仍待驗。MP4 GPU 偶發錯色仍未解。[效能量測紀錄](slint-macos-measurement.md#2026-11-11-雙-gif-三組交錯比較)
+macOS arm64 完成三組雙 GIF 交錯比較。Slint 的程序族 footprint 峰值中位數約 126 MiB，Dioxus 約 687 MiB。10 秒 CPU 中位數為 0.296 與 0.180 秒，三組差距幅度有波動。Slint 堆疊取樣主要落在 CoreGraphics 整窗提交與像素轉換。長文操作、連續前景與跨平台矩陣仍待驗。MP4 GPU 偶發錯色仍未解。[效能量測紀錄](slint-macos-measurement.md#2026-11-11-雙-gif-三組交錯比較)
 
-macOS arm64 已用一般入口交錯跑四輪各 100 次原生方向鍵，對同一合成 WSS 終端畫面量到視窗伺服器呈現。Slint p50／p95 為 37.35／42.06 ms，Dioxus 為 37.33／54.67 ms。啟動、快取翻頁、長文捲動及其他平台尚無對應數據。[方向鍵延遲量測](slint-macos-measurement.md#2026-11-11-方向鍵到視窗呈現延遲)
+macOS arm64 已用一般入口交錯跑四輪各 100 次原生方向鍵，對同一合成 WSS 終端畫面量到視窗伺服器呈現。Slint p50／p95 為 37.35／42.06 ms，Dioxus 為 37.33／54.67 ms。快取翻頁、長文捲動及其他平台尚無對應數據。[方向鍵延遲量測](slint-macos-measurement.md#2026-11-11-方向鍵到視窗呈現延遲)
+
+macOS arm64 一般入口完成兩版各 10 次應用快取冷啟動與 10 次暖啟動。首個可見終端畫面的 p50 冷／暖，Slint 為 384／379 ms，Dioxus 為 467／457 ms；每次也實測原生方向鍵到 peer 確認。測試使用各版預設視窗大小，OS 快取保留。[啟動量測](slint-macos-measurement.md#2026-11-11-一般入口啟動到可輸入)
 
 macOS 軟體 renderer 局部呈現實驗用同一個執行檔做兩組雙 GIF 對照，CPU 各降 17.5%／13.7%。圖塊組約 0.270 秒／10 秒，先前 Dioxus 基準約 0.180 秒。補丁保留供重跑，候選包沿用現行呈現。S8 效能仍待驗。[局部呈現紀錄](slint-macos-measurement.md#2026-11-11-macos-局部呈現實驗)
 
