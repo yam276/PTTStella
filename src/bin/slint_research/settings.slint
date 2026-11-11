@@ -1,6 +1,7 @@
-import { AboutSlint, ScrollView, Slider } from "std-widgets.slint";
+import { ScrollView, Slider } from "std-widgets.slint";
 import { PanelButton, PanelField, PanelCheck, PanelCombo, PanelOverlay } from "panel.slint";
 import { LucideIcons } from "lucide-icons.slint";
+import { AboutBlock, AboutState, LicenseSections } from "about.slint";
 global SettingsInput {
     in-out property <int> focused:-1;
     in-out property <int> active-target:-1;
@@ -407,7 +408,7 @@ export component SettingsPanel inherits PanelOverlay {
                             Text {text:SettingsState.labels[15];color:#b5bcc7;wrap:word-wrap;}
                             HorizontalLayout {
                                 alignment: end;
-                                FocusButton {field-id:24;text:SettingsState.labels[44];clicked=>{SettingsState.reset();}}
+                                FocusButton {field-id:24;text:SettingsState.labels[29];clicked=>{SettingsState.reset();}}
                             }
                             SettingsCaption { text: SettingsState.labels[42]; icon: LucideIcons.eye; }
                             Image {source:SettingsState.preview;image-fit:contain;height:144px;}
@@ -489,7 +490,7 @@ export component SettingsPanel inherits PanelOverlay {
                             FocusCheck {field-id:15;caption:SettingsState.labels[24];checked<=>SettingsState.automatic;toggled=>{SettingsState.edit();}}
                             Text {text:SettingsState.labels[25];color:#b5bcc7;wrap:word-wrap;}
                             FocusCheck {field-id:16;caption:SettingsState.labels[7];checked<=>SettingsState.boundary;toggled=>{SettingsState.edit();}}
-                            Text {text:SettingsState.labels[43];color:#b5bcc7;wrap:word-wrap;}
+                            Text {text:SettingsState.labels[28];color:#b5bcc7;wrap:word-wrap;}
                             SettingsRow {
                                 caption-width: root.label-width;
                                 caption: SettingsState.labels[23]; icon: LucideIcons.picture;
@@ -512,21 +513,34 @@ export component SettingsPanel inherits PanelOverlay {
                         }
                         if SettingsState.query=="" && SettingsState.page==7: VerticalLayout {
                             alignment: start; spacing: 10px;
-                            FocusScope {
-                                height:40px;
-                                private property <int> focus-sequence:SettingsInput.focus-sequence;
-                                changed focus-sequence=>{if SettingsInput.focus-field==25 {self.focus();}}
-                                changed has-focus=>{if self.has-focus {SettingsInput.active-target=25;} else if SettingsInput.active-target==25 {SettingsInput.active-target=-1;}}
-                                Text {text:"PTTStella Slint · " + SettingsState.labels[28];color:#e4c76e;wrap:word-wrap;}
+                            AboutBlock {
+                                title: "PTTStella Slint";
+                                FocusScope {
+                                    height: version-text.preferred-height;
+                                    private property <int> focus-sequence: SettingsInput.focus-sequence;
+                                    focus-on-click: false;
+                                    focus-on-tab-navigation: false;
+                                    changed focus-sequence => { if SettingsInput.focus-field == 25 { self.focus(); } }
+                                    changed has-focus => {
+                                        if self.has-focus { SettingsInput.active-target = 25; }
+                                        else if SettingsInput.active-target == 25 { SettingsInput.active-target = -1; }
+                                    }
+                                    version-text := Text {
+                                        x: 0px; width: parent.width;
+                                        text: AboutState.app-version; color: #d7dce5; wrap: word-wrap;
+                                    }
+                                }
+                                Text { text: AboutState.app-author; color: #d7dce5; wrap: word-wrap; }
+                                FocusButton {field-id:29;text:SettingsState.release-labels[3];icon:LucideIcons.external-link;clicked=>{SettingsState.repository-open();}}
+                                HorizontalLayout {
+                                    alignment: start; spacing: 8px;
+                                    FocusButton {field-id:27;text:SettingsState.release-labels[0];enabled:SettingsState.release-enabled && !SettingsState.release-checking;clicked=>{SettingsState.release-check();}}
+                                    if SettingsState.release-available: FocusButton {field-id:28;text:SettingsState.release-labels[1];enabled:SettingsState.release-enabled;clicked=>{SettingsState.release-open();}}
+                                }
+                                if SettingsState.release-status != "": Text {text:SettingsState.release-status;color:#e4c76e;wrap:word-wrap;}
+                                Text {text:SettingsState.release-labels[2];color:#b5bcc7;wrap:word-wrap;}
                             }
-                            FocusButton {field-id:27;text:SettingsState.release-labels[0];enabled:SettingsState.release-enabled && !SettingsState.release-checking;clicked=>{SettingsState.release-check();}}
-                            if SettingsState.release-available: FocusButton {field-id:28;text:SettingsState.release-labels[1];enabled:SettingsState.release-enabled;clicked=>{SettingsState.release-open();}}
-                            Text {text:SettingsState.release-status;color:#e4c76e;wrap:word-wrap;}
-                            Text {text:SettingsState.release-labels[2];color:#d7dce5;wrap:word-wrap;}
-                            FocusButton {field-id:29;text:SettingsState.release-labels[3];clicked=>{SettingsState.repository-open();}}
-                            SettingsCaption {text:SettingsState.labels[45];icon:LucideIcons.file-text;}
-                            AboutSlint {}
-                            Text {text:SettingsState.labels[29];color:#d7dce5;wrap:word-wrap;}
+                            LicenseSections {}
                         }
                         @children
                     }

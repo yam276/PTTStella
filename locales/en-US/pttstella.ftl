@@ -701,6 +701,11 @@ settings-alias-article-boundary = article boundary arrow previous next 上一篇
 settings-close-command = Close Settings
 about-author = Author: { $author }
 about-version = Version: { $version }
+about-font-sources = Font sources
+about-icon-licenses = Icon licenses
+about-dependency-licenses = Third-party component licenses
+about-full-notice = Full notices
+about-package-notices = The installation package includes the remaining third-party license notices.
 
 copy-png = Copy page PNG
 copy-rows-png = Copy selected rows PNG

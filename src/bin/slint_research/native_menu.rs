@@ -24,13 +24,18 @@ define_class!(
     // SAFETY: NSObjectProtocol has no additional safety requirements.
     unsafe impl NSObjectProtocol for MenuTarget {}
     impl MenuTarget {
-        // SAFETY: The selector is installed only on the two NSMenuItems retained
+        // SAFETY: The selector is installed only on the NSMenuItems retained
         // below. Cocoa passes that NSMenuItem as sender, with the void action ABI.
         #[unsafe(method(activate:))]
         fn activate(&self,sender:&NSMenuItem){
             if self.ivars().stopped.get(){return;}
             if let Some(ui)=self.ivars().ui.upgrade(){
-                match sender.tag(){0=>ui.invoke_app_quit(),1=>ui.invoke_settings_show(),_=>{}}
+                match sender.tag(){
+                    0=>ui.invoke_app_quit(),
+                    1=>ui.invoke_settings_show(),
+                    2=>ui.invoke_about_show(),
+                    _=>{}
+                }
             }
         }
     }
@@ -48,6 +53,7 @@ impl MenuTarget {
 }
 pub struct Menu {
     bar: Retained<NSMenu>,
+    about: Retained<NSMenuItem>,
     settings: Retained<NSMenuItem>,
     quit: Retained<NSMenuItem>,
     target: Retained<MenuTarget>,
@@ -82,9 +88,8 @@ impl Menu {
             &pttstella::msg!("settings-center-title"),
         );
         let quit = custom_item(mtm, &target, 0, "q", &pttstella::msg!("menu-quit"));
-        let about = system_item(mtm, "", sel!(orderFrontStandardAboutPanel:), "");
+        let about = custom_item(mtm, &target, 2, "", &pttstella::msg!("slint-menu-about"));
         submenu.addItem(&about);
-        system_labels.push((about, "slint-menu-about"));
         submenu.addItem(&NSMenuItem::separatorItem(mtm));
         submenu.addItem(&settings);
         submenu.addItem(&NSMenuItem::separatorItem(mtm));
@@ -122,6 +127,7 @@ impl Menu {
         system_labels.push((fullscreen, "menu-fullscreen"));
         let owner = Rc::new(Self {
             bar,
+            about,
             settings,
             quit,
             target,
@@ -178,6 +184,8 @@ impl Menu {
                 submenu.setTitle(&title);
             }
         }
+        self.about
+            .setTitle(&NSString::from_str(&pttstella::msg!("slint-menu-about")));
         self.settings.setTitle(&NSString::from_str(&pttstella::msg!(
             "settings-center-title"
         )));
@@ -188,10 +196,9 @@ impl Menu {
         self.stopped.get()
             && self.target.ivars().stopped.get()
             && !self.refresh.running()
-            && self.settings.action().is_none()
-            && self.settings.target().is_none()
-            && self.quit.action().is_none()
-            && self.quit.target().is_none()
+            && [&self.about, &self.settings, &self.quit]
+                .iter()
+                .all(|item| item.action().is_none() && item.target().is_none())
     }
     pub(crate) fn stop(&self) {
         if self.stopped.replace(true) {
@@ -201,11 +208,11 @@ impl Menu {
         self.target.ivars().stopped.set(true);
         // SAFETY: Clear the weak target/action pair before our retained target
         // can be released. None removes the selector; it cannot call freed Rust.
-        unsafe {
-            self.settings.setAction(None);
-            self.settings.setTarget(None);
-            self.quit.setAction(None);
-            self.quit.setTarget(None);
+        for item in [&self.about, &self.settings, &self.quit] {
+            unsafe {
+                item.setAction(None);
+                item.setTarget(None);
+            }
         }
         let app = NSApplication::sharedApplication(self.target.mtm());
         if app
@@ -236,7 +243,7 @@ fn custom_item(
     title: &str,
 ) -> Retained<NSMenuItem> {
     // SAFETY: MenuTarget implements activate: with the NSMenuItem sender ABI.
-    // Menu retains both items and the target; stop clears both weak target
+    // Menu retains the custom items and the target; stop clears the weak target
     // pointers before releasing it, all on the AppKit main thread.
     let item = unsafe {
         NSMenuItem::initWithTitle_action_keyEquivalent(

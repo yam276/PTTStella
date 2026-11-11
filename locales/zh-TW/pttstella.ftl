@@ -695,6 +695,11 @@ settings-alias-article-boundary = article boundary arrow previous next 上一篇
 settings-close-command = 關閉設定
 about-author = 作者：{ $author }
 about-version = 版本：{ $version }
+about-font-sources = 字型來源
+about-icon-licenses = 圖示授權
+about-dependency-licenses = 第三方元件授權
+about-full-notice = 完整授權
+about-package-notices = 其餘第三方元件的授權文件隨安裝包附上。
 
 copy-png = 複製整頁 PNG
 copy-rows-png = 複製選取行 PNG

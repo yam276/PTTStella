@@ -13,8 +13,10 @@ export { SitesState } from "sites.slint";
 export { UiLabels } from "labels.slint";
 import { UiLabels } from "labels.slint";
 export { SettingsState, SettingsMatch, FontSource } from "settings.slint";
-import { AboutSlint, Button, CheckBox, ComboBox, LineEdit, ScrollView, TextEdit } from "std-widgets.slint";
+import { Button, CheckBox, ComboBox, LineEdit, ScrollView, TextEdit } from "std-widgets.slint";
 import { LoginPanel } from "login.slint";
+import { AboutPanel } from "about.slint";
+export { AboutState, LicenseDocument } from "about.slint";
 import { ContextMenuOverlay, MenuEntry } from "context-menu.slint";
 import { FloatingTools, ToolItem } from "tools.slint";
 import { ArticleViewport, ArticleTile, InlineArrow, InlinePicture, ReplySideMark } from "article.slint";
@@ -535,7 +537,7 @@ export component TerminalWindow inherits Window {
         if !root.app-closing && !root.manager-open && !root.settings-open && !root.editor-open
             && !root.station-color-open && !root.media-open && !root.login-open && !root.paste-open {
             root.show-about = true;
-            about-close-button.focus();
+            about-layer.focus();
         }
     }
     about-close => {
@@ -1105,26 +1107,11 @@ export component TerminalWindow inherits Window {
     }
     focus-context => { context-area.focus-menu(); }
 
-    about-layer := FocusScope {
-        visible:root.show-about;
-        width:root.width; height:root.height;
-        key-pressed(event)=>{
-            if event.text == Key.Escape {root.about-close();return accept;}
-            return reject;
-        }
-        Rectangle {width:parent.width;height:parent.height;background:#00000090;
-            TouchArea {width:parent.width;height:parent.height;clicked=>{root.about-close();}}
-        }
-        Rectangle {
-            x:(parent.width - self.width)/2; y:(parent.height - self.height)/2;
-            width:min(420px,parent.width - 32px); height:180px;
-            background:#202b39;border-width:1px;border-color:#c6ab6a;border-radius:6px;
-            TouchArea {width:parent.width;height:parent.height;clicked=>{}}
-            VerticalLayout {padding:16px;spacing:12px;
-                AboutSlint {}
-                about-close-button := Button {text:UiLabels.close;clicked=>{root.about-close();}}
-            }
-        }
+    about-layer := AboutPanel {
+        visible: root.show-about;
+        width: root.width;
+        height: root.height;
+        close => { root.about-close(); }
     }
 
     Rectangle {

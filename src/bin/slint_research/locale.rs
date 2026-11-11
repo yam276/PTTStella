@@ -1,9 +1,34 @@
 //! Same static chrome refresh at startup and after a successful locale save.
 //! Only strings/models of labels change; no controls or user data are recreated.
-use crate::{EditorState, StationColorState, TerminalWindow, UiLabels};
+use crate::{
+    AboutState, EditorState, LicenseDocument, StationColorState, TerminalWindow, UiLabels,
+};
 use pttstella::msg;
 use slint::{ComponentHandle, ModelRc, VecModel};
+const THIRD_PARTY_NOTICES: &str =
+    include_str!(concat!(env!("OUT_DIR"), "/third-party-notices.txt"));
+
 pub fn refresh(ui: &TerminalWindow) {
+    let about = ui.global::<AboutState>();
+    about.set_app_version(msg!("about-version", version = env!("CARGO_PKG_VERSION")).into());
+    about.set_app_author(msg!("about-author", author = env!("CARGO_PKG_AUTHORS")).into());
+    about.set_fonts_title(msg!("settings-licenses").into());
+    about.set_font_sources_title(msg!("about-font-sources").into());
+    about.set_icons_title(msg!("about-icon-licenses").into());
+    about.set_dependencies_title(msg!("about-dependency-licenses").into());
+    about.set_full_notice_label(msg!("about-full-notice").into());
+    about.set_package_notice(msg!("about-package-notices").into());
+    about.set_has_embedded_notices(!THIRD_PARTY_NOTICES.is_empty());
+    about.on_text_for(|document| {
+        match document {
+            LicenseDocument::FontSources => include_str!("../../../assets/fonts/NOTICE.txt"),
+            LicenseDocument::Cascadia => include_str!("../../../assets/fonts/Cascadia-OFL.txt"),
+            LicenseDocument::Noto => include_str!("../../../assets/fonts/NotoSansCJK-OFL.txt"),
+            LicenseDocument::Icons => include_str!("../../../assets/icons/lucide/LICENSE.txt"),
+            LicenseDocument::ThirdParty => THIRD_PARTY_NOTICES,
+        }
+        .into()
+    });
     ui.invoke_filter_status_refresh();
     ui.set_bookmarks_label(msg!("bookmarks-title").into());
     ui.set_sites_label(msg!("sites-title").into());

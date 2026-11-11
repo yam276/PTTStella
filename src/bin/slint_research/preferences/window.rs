@@ -472,7 +472,7 @@ impl Preferences {
         }
         self.refresh_runtime(w);
         self.refresh_releases(w);
-        let mut labels: Vec<String> = [
+        let labels: Vec<String> = [
             "settings-center-title",
             "settings-search-placeholder",
             "settings-search-empty",
@@ -501,8 +501,8 @@ impl Preferences {
             "auto-expand-images-help",
             "settings-privacy-description",
             "login",
-            "about-version",
-            "font-license",
+            "article-boundary-help",
+            "font-reset",
             "settings-defaults",
             "settings-retry",
             "close",
@@ -516,22 +516,10 @@ impl Preferences {
             "settings-opacity-help",
             "settings-width-help",
             "settings-preview",
-            "article-boundary-help",
-            "font-reset",
-            "settings-licenses",
         ]
         .into_iter()
         .map(t)
         .collect();
-        labels[28] = env!("CARGO_PKG_VERSION").into();
-        labels[29] = format!(
-            "{}\n{}\n{}\n{}\n{}",
-            include_str!("../../../../assets/fonts/NOTICE.txt"),
-            include_str!("../../../../assets/fonts/Cascadia-OFL.txt"),
-            include_str!("../../../../assets/fonts/NotoSansCJK-OFL.txt"),
-            include_str!("../../../../assets/icons/lucide/LICENSE.txt"),
-            include_str!(concat!(env!("OUT_DIR"), "/third-party-notices.txt"))
-        );
         w.global::<crate::SettingsState>()
             .set_labels(strings(labels));
         w.global::<crate::SettingsState>().set_categories(strings(

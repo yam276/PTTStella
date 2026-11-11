@@ -130,6 +130,13 @@ async fn settings_dropdowns(ui: &TerminalWindow, directory: &Path) -> Result<(),
     )
     .await?;
     verification::capture(ui, directory, "settings-account.png")?;
+    settings.invoke_show_page(7);
+    wait(
+        || ui.get_settings_open() && !ui.get_login_open(),
+        "switching to licenses did not close the inline account form",
+    )
+    .await?;
+    verification::capture(ui, directory, "settings-about.png")?;
     settings.invoke_close_settings();
     wait(
         || !ui.get_settings_open() && !ui.get_login_open() && ui.get_terminal_input_focused(),

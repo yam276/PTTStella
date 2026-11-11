@@ -1,0 +1,156 @@
+import { AboutSlint, ScrollView } from "std-widgets.slint";
+import { PanelButton, PanelOverlay } from "panel.slint";
+import { LucideIcons } from "lucide-icons.slint";
+import { UiLabels } from "labels.slint";
+
+export enum LicenseDocument { FontSources, Cascadia, Noto, Icons, ThirdParty }
+
+export global AboutState {
+    in-out property <string> app-version;
+    in-out property <string> app-author;
+    in-out property <string> fonts-title;
+    in-out property <string> font-sources-title;
+    in-out property <string> icons-title;
+    in-out property <string> dependencies-title;
+    in-out property <string> full-notice-label;
+    in-out property <string> package-notice;
+    in-out property <bool> has-embedded-notices;
+    pure callback text-for(LicenseDocument) -> string;
+}
+
+export component AboutBlock inherits Rectangle {
+    in property <string> title;
+    border-width: 1px;
+    border-color: #34475b;
+    border-radius: 4px;
+    background: #11243a;
+
+    VerticalLayout {
+        alignment: start;
+        padding: 14px;
+        spacing: 8px;
+        Text {
+            text: root.title;
+            color: #ebe7dc;
+            font-size: 16px;
+            font-weight: 600;
+            wrap: word-wrap;
+        }
+        @children
+    }
+}
+
+component LicenseDetails inherits VerticalLayout {
+    in property <string> caption;
+    in property <LicenseDocument> document;
+    private property <bool> expanded;
+
+    spacing: 8px;
+    PanelButton {
+        text: root.caption;
+        icon: root.expanded ? LucideIcons.arrow-up : LucideIcons.arrow-down;
+        icon-size: 14px;
+        label-color: #ebe7dc;
+        accessible-expandable: true;
+        accessible-expanded: root.expanded;
+        clicked => { root.expanded = !root.expanded; }
+    }
+    if root.expanded: Text {
+        text: AboutState.text-for(root.document);
+        color: #d7dce5;
+        font-size: 13px;
+        wrap: word-wrap;
+    }
+}
+
+export component LicenseSections inherits VerticalLayout {
+    alignment: start;
+    spacing: 12px;
+
+    AboutBlock {
+        title: "Slint";
+        HorizontalLayout {
+            alignment: start;
+            AboutSlint {
+                min-width: 0px;
+                preferred-width: 156px;
+                max-width: 156px;
+                horizontal-stretch: 0;
+                height: self.min-height;
+            }
+        }
+    }
+    AboutBlock {
+        title: AboutState.fonts-title;
+        Text { text: "SIL Open Font License 1.1"; color: #b5bcc7; font-size: 13px; wrap: word-wrap; }
+        LicenseDetails { caption: AboutState.font-sources-title; document: FontSources; }
+        LicenseDetails { caption: "Cascadia Mono"; document: Cascadia; }
+        LicenseDetails { caption: "Noto Sans CJK TC"; document: Noto; }
+    }
+    AboutBlock {
+        title: AboutState.icons-title;
+        LicenseDetails { caption: "Lucide / Feather"; document: Icons; }
+    }
+    AboutBlock {
+        title: AboutState.dependencies-title;
+        if AboutState.has-embedded-notices: LicenseDetails {
+            caption: AboutState.full-notice-label;
+            document: ThirdParty;
+        }
+        if !AboutState.has-embedded-notices: Text {
+            text: AboutState.package-notice;
+            color: #b5bcc7;
+            font-size: 13px;
+            wrap: word-wrap;
+        }
+    }
+}
+
+export component AboutPanel inherits PanelOverlay {
+    panel-width: 620px;
+    panel-height: 590px;
+    heading: UiLabels.about;
+    heading-icon: LucideIcons.file-text;
+    brand-mark: @image-url("../../../assets/icons/constellation-flat.svg");
+    callback close;
+    backdrop-clicked => { root.close(); }
+    forward-focus: close-button;
+
+    FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Escape && !event.repeat { root.close(); return accept; }
+            return reject;
+        }
+        VerticalLayout {
+            spacing: 0;
+            ScrollView {
+                vertical-stretch: 1;
+                content-width: self.visible-width;
+                VerticalLayout {
+                    alignment: start;
+                    padding: 18px;
+                    spacing: 12px;
+                    Text {
+                        text: AboutState.app-version + "   ·   " + AboutState.app-author;
+                        color: #b5bcc7;
+                        font-size: 13px;
+                        wrap: word-wrap;
+                    }
+                    LicenseSections {}
+                }
+            }
+            Rectangle { height: 1px; background: #34475b; }
+            HorizontalLayout {
+                alignment: end;
+                padding: 12px;
+                padding-right: 18px;
+                close-button := PanelButton {
+                    text: UiLabels.close;
+                    icon: LucideIcons.x;
+                    label-color: #ebe7dc;
+                    clicked => { root.close(); }
+                }
+            }
+        }
+    }
+}

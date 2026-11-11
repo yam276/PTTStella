@@ -278,6 +278,7 @@ export component PanelCombo inherits Rectangle {
 }
 
 export component PanelOverlay inherits Rectangle {
+    callback backdrop-clicked;
     in property <bool> embedded;
     in property <string> heading;
     in property <length> panel-width: 900px;
@@ -289,10 +290,15 @@ export component PanelOverlay inherits Rectangle {
     TouchArea {
         enabled: root.visible && !root.embedded;
         width: parent.width; height: parent.height;
-        clicked => {}
+        clicked => {
+            if self.mouse-x < panel.x || self.mouse-x >= panel.x + panel.width
+                || self.mouse-y < panel.y || self.mouse-y >= panel.y + panel.height {
+                root.backdrop-clicked();
+            }
+        }
         scroll-event => { return accept; }
     }
-    Rectangle {
+    panel := Rectangle {
         width: root.embedded ? parent.width : min(root.panel-width, parent.width - 32px);
         height: root.embedded ? parent.height : min(root.panel-height, parent.height - 32px);
         x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
