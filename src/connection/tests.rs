@@ -764,7 +764,7 @@ async fn window_probe_checks_vim_translation_on_realistic_rows_and_owned_shutdow
         ("continue_prompt", ["l"].as_slice()),
         ("continue_prompt", ["Enter"].as_slice()),
         ("continue_prompt", [" "].as_slice()),
-        ("article_list", ["j", "k", "h"].as_slice()),
+        ("article_list", ["Q", "3", "x", "j", "k", "h"].as_slice()),
         ("command_help", ["j", "k", "g", "g", "G", "h"].as_slice()),
         ("empty_list", ["h"].as_slice()),
     ]);

@@ -332,13 +332,53 @@ fn modified_printable_text_is_owned_by_native_editing_not_vim_commands() {
     assert_eq!(p.key(&modified, &c), Effect::None);
     assert!(p.accept_text(false));
     p.toggle();
-    assert!(matches!(p.key(&modified, &c), Effect::Notice(_)));
+    assert_eq!(p.key(&modified, &c), Effect::None);
     assert!(!p.accept_text(false));
     press(&mut p, "f", &c);
     assert_eq!(p.key(&modified, &c), Effect::None);
     assert!(p.accept_text(false));
     assert_eq!(p.status(&c).mode, "normal");
 }
+#[test]
+fn unbound_normal_keys_clear_prefixes_and_allow_the_next_vim_command() {
+    let context = reading(24, 50);
+    let mut keyboard = Keyboard::default();
+    keyboard.toggle();
+    let mut ctrl = key("x");
+    ctrl.ctrl = true;
+    let mut alt = key("g");
+    alt.alt = true;
+
+    for unbound in [key("Q"), key("Backspace"), ctrl, alt] {
+        for prefix in [None, Some("3"), Some("g")] {
+            if let Some(prefix) = prefix {
+                assert_eq!(press(&mut keyboard, prefix, &context), Effect::None);
+            }
+            assert_eq!(keyboard.key(&unbound, &context), Effect::None);
+            assert!(!keyboard.accept_text(false));
+            keyboard.release(&unbound.code);
+            let status = keyboard.status(&context);
+            assert!(status.enabled);
+            assert_eq!(status.mode, "normal");
+            assert!(!status.pending);
+            assert_eq!(
+                press(&mut keyboard, "j", &context),
+                Effect::Browse(Intent::Lines {
+                    down: true,
+                    count: 1
+                })
+            );
+            assert_eq!(
+                press(&mut keyboard, "k", &context),
+                Effect::Browse(Intent::Lines {
+                    down: false,
+                    count: 1
+                })
+            );
+        }
+    }
+}
+
 #[test]
 fn destructive_native_control_is_only_available_in_explicit_native_modes() {
     let c = reading(24, 50);
@@ -381,7 +421,7 @@ fn counts_prefixes_half_scroll_and_unknown_context_never_leak_text() {
     press(&mut p, "g", &c);
     assert_eq!(press(&mut p, "g", &c), Effect::Browse(Intent::First));
     press(&mut p, "g", &c);
-    assert!(matches!(press(&mut p, "h", &c), Effect::Notice(_)));
+    assert_eq!(press(&mut p, "h", &c), Effect::None);
     let mut d = key("d");
     d.ctrl = true;
     press(&mut p, "4", &c);

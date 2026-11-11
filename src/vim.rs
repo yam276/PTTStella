@@ -345,14 +345,14 @@ impl Keyboard {
         self.count = 0;
         if self.g {
             self.g = false;
-            return if key.key == "g" && !key.ctrl && !counted {
+            return if key.key == "g" && !key.ctrl && !key.alt && !counted {
                 Effect::Browse(Intent::First)
             } else {
-                Effect::Notice(crate::msg!("vim-g-unsupported"))
+                Effect::None
             };
         }
         if key.alt {
-            return Effect::Notice(crate::msg!("vim-chord-unsupported"));
+            return Effect::None;
         }
         let action = if key.ctrl {
             match key.key.to_ascii_lowercase().as_str() {
@@ -372,7 +372,7 @@ impl Keyboard {
                 },
                 "f" if !counted => Intent::NextPage,
                 "b" if !counted => Intent::PreviousPage,
-                _ => return Effect::Notice(crate::msg!("vim-chord-count")),
+                _ => return Effect::None,
             }
         } else {
             match key.key.as_str() {
@@ -388,9 +388,7 @@ impl Keyboard {
                 "Home" if !counted => Intent::First,
                 "PageDown" if !counted => Intent::NextPage,
                 "PageUp" if !counted => Intent::PreviousPage,
-                _ => {
-                    return Effect::Notice(crate::msg!("vim-key-unsupported"));
-                }
+                _ => return Effect::None,
             }
         };
         Effect::Browse(action)

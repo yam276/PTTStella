@@ -182,7 +182,7 @@ cargo build --locked --release --features slint-research --bin pttstella-slint
 target/release/pttstella-slint --probe-vim
 ```
 
-此探針重用既有 46 步嚴格本機 peer。開窗後手動啟用 Vim，等右上 `testNN` 更新後才做下一個操作。00–18 每五步依序 `j`、`k`、`gg`、`G`、`l`，19 用 `h`。20–29 偶數步 `l`、奇數步 `h`。30 用 `gg`，31 用 `4j`，這兩步刻意沒有 redraw；32 用 `l`、33 用 `h`、34–36 各按並放開 `j`，37–45 依序 `j`、`k`、`h`、`j`、`k`、`gg`、`G`、`h`、`h`。到 `test46` 後關窗。錯誤或多送的 bytes 會使 peer 失敗，提前關閉不能取得通過結果。此探針要求逐步的實際輸入，不能用單純開窗取代。
+此探針重用既有 46 步嚴格本機 peer。開窗後手動啟用 Vim，等右上 `testNN` 更新後才做下一個操作。00–18 每五步依序 `j`、`k`、`gg`、`G`、`l`，19 用 `h`。20–29 偶數步 `l`、奇數步 `h`。30 用 `gg`，31 用 `4j`，這兩步刻意沒有 redraw；32 用 `l`、33 用 `h`、34–36 依序按 `l`、Enter、空白鍵。37 先按 `Q`、`3`、`x`，確認畫面和通知區沒有變化，再按 `j`。38–45 依序 `k`、`h`、`j`、`k`、`gg`、`G`、`h`、`h`。到 `test46` 後關窗。錯誤或多送的 bytes 會使 peer 失敗，提前關閉不能取得通過結果。此探針要求逐步的實際輸入，不能用單純開窗取代。
 
 Rust 回歸已經由 Slint 的 Input 狀態、共用 Keyboard 與 production Connection 核對這 46 步精確 bytes，包括分段同步畫面、兩筆沒有 redraw 的連續命令與正常 Close。另有 CJK／Unidentified 實體鍵對映、原生一次／IME Disabled 的 repeat 保護、一次組字提交、晚到 Commit、跨代次前綴及捲動重設、驗證碼與非 PTT 交接測試。這些是 headless 本機測試，不代表 Winit 收到 OS 可信按鍵。
 
