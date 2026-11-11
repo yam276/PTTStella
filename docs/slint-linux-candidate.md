@@ -1,8 +1,8 @@
 # Slint Linux x64 候選包
 
-2026-11-11 最新候選位於 `.local/verification/slint-ui-cjk-fallback/linux-package/`，ELF `af476061…` 以乾淨 `35b43e4` 交叉編譯，包含延後取得原生焦點的修正。release、all-target Clippy、loader／dpkg 及 tar 1,122／deb 1,109 份 payload 均已核對。APT 補齊桌面 portal 後完成安裝，安裝位置的 ELF 通過格線、雙 PNG 及唯一 Close；包內完整視窗探針仍預期舊版面。來源已修正，Linux 軟體繪圖通過完整探針，預設繪圖的通知時序仍待驗。詳見[完整視窗重測](slint-evaluation-plan.md#2026-11-11-固定狀態列的完整視窗驗收)。
+2026-11-11 最新候選位於 `.local/verification/slint-ui-cjk-fallback/linux-package/`。ELF `68601365…` 以乾淨 `ff0ae84` 交叉編譯，含文章焦點與固定狀態列探針修正。release、all-target Clippy、loader／dpkg 及 tar 1,122／deb 1,109 個 payload 均已核對。deb 重裝與免安裝包的軟體繪圖完整視窗檢查通過，預設繪圖在 QEMU 下仍遇到通知時序失敗。安裝執行檔也通過 X11 背景零取頁與取得焦點後 37 次取頁的案例。[本輪封裝驗收](slint-evaluation-plan.md#2026-11-11-固定狀態列探針的-windows-與-linux-封裝)
 
-20 項合成案例首輪 18 項通過；帳號預設後端逾時及設定搜尋焦點失敗在同 ELF 個別重測通過。X11 另驗證背景文章零取頁、取得前景焦點後完成 837 行及 37 次取頁與正常 Close。QEMU／Xvfb／Openbox 只證明上述範圍；實機、Wayland、原生 IME、音訊與效能待驗。完整結果見[主計畫](slint-evaluation-plan.md#2026-11-11-文章焦點修正的-windows-與-linux-候選同步)；[來源還原](slint-product-source.md)選 `article-focus-cross-current`。
+較早的 `af476061` ELF 通過 20 項合成案例，包含兩項針對性重測。歷史結果見[文章焦點同步](slint-evaluation-plan.md#2026-11-11-文章焦點修正的-windows-與-linux-候選同步)。QEMU 結果的執行環境為 Xvfb／Openbox，實機、Wayland、原生 IME、音訊和效能待驗。[來源還原](slint-product-source.md)選 `shell-layout-cross-current`。
 
 此為 S8 內部驗收候選，尚未取代正式 Dioxus 入口。目標為 Ubuntu 24.04 x64，提供獨立名稱的 deb 與 portable tar.gz，包含 `native-player-probe` 主程式。尚未通過 Linux 原生桌面、繁中 IME、DPI、音訊、硬體 GPU、資料回退與效能驗收。
 

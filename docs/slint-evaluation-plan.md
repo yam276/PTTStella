@@ -8,7 +8,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 **尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
 
-文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個 macOS 固定下載入口現為乾淨 `c7368b2`，包含設定預覽按需繪製及文章延後取得原生焦點的修正。Apple Silicon `793ecb91` 和 Intel `62ada42e` 各通過 23 項封裝後合成回歸，另各完成原生長文的 37 次取頁及八次快取操作。Intel 使用 Rosetta。Linux `af476061` 與另備 Windows `b436d99c` 已同步相同的 380 份產品輸入；Linux 在 QEMU 下通過回歸及安裝後格線探針。完整視窗的版面誤判已在來源修正，軟體繪圖通過整套流程，模擬環境的預設繪圖路徑仍卡在通知時序。新版 Windows 已交叉編譯與核對 ZIP／PE，尚未實機執行；使用者待驗 Windows `69542cb7` 入口維持。詳見[跨平台候選同步](#2026-11-11-文章焦點修正的-windows-與-linux-候選同步)。Intel／Linux 實機依指示暫緩，其餘原生操作、完整資料回退和跨平台效能矩陣仍待驗。
+文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個 macOS 固定下載入口現為乾淨 `c7368b2`，包含設定預覽按需繪製及文章延後取得原生焦點的修正。Apple Silicon `793ecb91` 和 Intel `62ada42e` 各通過 23 項封裝後合成回歸，另各完成原生長文的 37 次取頁及八次快取操作。Intel 使用 Rosetta。Linux `68601365` 與另備 Windows `3a8de2a9` 已封裝固定狀態列探針修正。Linux 在 QEMU 下通過 deb 安裝、軟體繪圖的完整視窗檢查及 X11 延後焦點的 37 次取頁，免安裝包的預設繪圖仍卡在通知取樣。Windows 交叉編譯與 ZIP／PE 檢查通過，實機待驗。`69542cb7` 為先前的 Windows 待驗下載。[跨平台封裝與驗收](#2026-11-11-固定狀態列探針的-windows-與-linux-封裝)Intel／Linux 實機依指示暫緩，其餘原生操作、完整資料回退和跨平台效能矩陣仍待驗。
 
 macOS arm64 已以最新 Slint 候選及原 Dioxus 完成設定 v1–v6 的 18 輪實際前端往返，核對兩次寫入備份、最後讀回與其他資料檔。兩版 macOS 一般入口已各從隔離 HOME 的系統資料目錄讀到不同的預設站，完成本機 WSS、無自動輸入和伺服器 Close 回覆。macOS Keychain 已用獨立合成 service 驗證舊格式同簽章跨程序讀回、改簽拒絕與清理。[Keychain 驗收](login.md#macos-舊紀錄與重新簽章驗收) 同 worktree 的 Dioxus 設定欄位已修正舊版拒存小數的限制，macOS 已實測 Dioxus 存檔及 Slint 讀回，原 5ea9ad6 執行檔仍有該限制。[小數往返](slint-store-frontends.md#2026-11-11-小數顯示設定回退) macOS 一般入口已用隔離 HOME 完成自動開圖的 Slint → 修正版 Dioxus → Slint 實際保存回讀；原 Dioxus 仍因舊小數設定拒存。實際安裝升級與授權、Windows／Linux 密碼庫及完整資料操作仍待驗。[一般入口設定回退](slint-store-frontends.md#2026-11-11-macos-一般入口的設定回退)[前端往返紀錄](slint-store-frontends.md#2026-11-11-同一對前端的-v1v6-設定往返)
 
@@ -795,3 +795,11 @@ Linux tar 與 deb 的 loader／套件 metadata 及共享 payload 均已核對。
 Linux 預設路徑兩輪皆通過視窗尺寸與浮球縮放，接著卡在通知可讀時間。原定 1 秒的取樣在 2.260／2.627 秒才取得，當時已淡出。另試 llvmpipe，LLVM 在模擬環境中止並留下原始紀錄。這些結果未建立實機 GPU 的通知延遲，預設路徑的完整驗收仍待驗。已封裝的 Linux 和另備 Windows 尚含舊探針，下一次封裝須納入修正。原 Windows 待驗包與已驗證的舊證據分列。
 
 沿用固定 Cargo 目錄、既有 SDK 與容器。正常卸載 SDK 並停止自有容器，保留已安裝 runtime。刪除容器內 77 份已有來源或收據的暫存檔，共 94,945,792 logical bytes。另刪除 17 份逐位元重複 PNG，共 847,565 regular-file bytes。macOS 可用空間觀測由 233,881,956,352 增至 233,882,836,992 bytes。精確路徑、獨特負例、指令、SHA-256 和各輪收據在 `.local/verification/slint-renderer-api-current/cross-current/shell-layout-current/`。
+
+## 2026-11-11 固定狀態列探針的 Windows 與 Linux 封裝
+
+乾淨 `ff0ae84` 的 Windows x64 與 Linux x64 release 交叉編譯及 all-target Clippy 通過。與最新 macOS 包的 380 份建置輸入相比，差異為 `shell_probe.rs`。另備 Windows `3a8de2a9` 的 ZIP SHA-256 為 `c4aed301277519179974c1736b0c593add5654ebe376e669baa31ef932f98175`。919 個 payload 只有執行檔及候選資訊改變。ZIP CRC、逐檔 SHA 與一般及延遲 PE imports 均已核對。Windows 實機及無 WebView2 環境的啟動待驗，先前 `69542cb7` 的測試結果須依該包雜湊對照。
+
+Linux `68601365` 與先前視窗重測的診斷 ELF 逐位元相同。新版 tar／deb 已核對 1,122／1,109 個 payload、loader 和 amd64 套件 metadata，依賴與前版一致。用 `dpkg --install` 在既有 Debian ARM/QEMU x64 容器重裝同版本，核對安裝位置 SHA-256。安裝後以隔離資料位置執行，`--show-profile` 確認沒有開啟 store 和密碼庫。安裝執行檔的軟體繪圖與免安裝包內 `Check-Shell-Software.sh` 都通過完整視窗、通知及退出檢查，exit 0 且各有唯一嚴格 Close。相同 tar 的 `Check-Shell.sh` 通過尺寸與縮放後，在 2.131 秒才執行預定 1 秒的通知觀察並失敗。另從安裝位置驗證 X11 視窗背景零取頁、取得焦點後完成 837 行及 37 筆取頁，正常關窗與 Close。Linux 實機、GPU、IME、音訊及效能待驗。
+
+同一來源 bundle 加一份 patch 還原全部 580 檔，先前 descriptor 可供對照。Python tooling 178 項、actionlint 和 docs 檢查通過。沿用固定 Cargo target、SDK 及驗證容器，核對後清除六個本機暫存與被取代的候選位置，共 445,143,231 regular-file bytes。容器內清除八個測試輸出與輸入位置，共 269,402,829 logical bytes。macOS 可用空間觀測由 236,250,566,656 增至 236,703,268,864 bytes。交付索引、雜湊及失敗證據在 `.local/verification/slint-navigation-cross/current-candidates.json` 及 `.local/verification/slint-renderer-api-current/cross-current/shell-package-current/`。
