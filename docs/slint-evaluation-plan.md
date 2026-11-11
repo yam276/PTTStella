@@ -8,7 +8,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 **尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
 
-文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個 macOS 固定下載入口已更新至乾淨 `dbbce24`，納入設定字型預覽按需繪製與釋放。Apple Silicon `99949409` 和 Intel `4d7e344c` 各通過 23 項封裝後合成案例，Intel 使用 Rosetta。Linux `150c1a0d` 對應 `fbcfe2e`，14 案與四案重測通過，GL 案例使用 QEMU／Xvfb＋Mesa softpipe。另備 Windows `fe8872f6` 仍未原生執行，使用者待驗 `69542cb7` 入口維持。Intel／Linux 實機依指示暫緩，其餘原生操作、資料回退和效能矩陣仍待驗。
+文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個 macOS 固定下載入口現為乾淨 `c7368b2`，包含設定預覽按需繪製及文章延後取得原生焦點的修正。Apple Silicon `793ecb91` 和 Intel `62ada42e` 各通過 23 項封裝後合成回歸，另各完成原生長文的 37 次取頁及八次快取操作。Intel 使用 Rosetta。Linux `150c1a0d` 與另備 Windows `fe8872f6` 仍對應先前來源，使用者待驗 Windows `69542cb7` 入口維持。Intel／Linux 實機依指示暫緩，其餘原生操作、完整資料回退和跨平台效能矩陣仍待驗。
 
 macOS arm64 已以最新 Slint 候選及原 Dioxus 完成設定 v1–v6 的 18 輪實際前端往返，核對兩次寫入備份、最後讀回與其他資料檔。兩版 macOS 一般入口已各從隔離 HOME 的系統資料目錄讀到不同的預設站，完成本機 WSS、無自動輸入和伺服器 Close 回覆。macOS Keychain 已用獨立合成 service 驗證舊格式同簽章跨程序讀回、改簽拒絕與清理。[Keychain 驗收](login.md#macos-舊紀錄與重新簽章驗收) 同 worktree 的 Dioxus 設定欄位已修正舊版拒存小數的限制，macOS 已實測 Dioxus 存檔及 Slint 讀回，原 5ea9ad6 執行檔仍有該限制。[小數往返](slint-store-frontends.md#2026-11-11-小數顯示設定回退) macOS 一般入口已用隔離 HOME 完成自動開圖的 Slint → 修正版 Dioxus → Slint 實際保存回讀；原 Dioxus 仍因舊小數設定拒存。實際安裝升級與授權、Windows／Linux 密碼庫及完整資料操作仍待驗。[一般入口設定回退](slint-store-frontends.md#2026-11-11-macos-一般入口的設定回退)[前端往返紀錄](slint-store-frontends.md#2026-11-11-同一對前端的-v1v6-設定往返)
 
@@ -18,7 +18,7 @@ macOS arm64 已用一般入口交錯跑四輪各 100 次原生方向鍵，對同
 
 macOS arm64 一般入口完成兩版各 10 次應用快取冷啟動與 10 次暖啟動。首個可見終端畫面的 p50 冷／暖，Slint 為 384／379 ms，Dioxus 為 467／457 ms；每次也實測原生方向鍵到 peer 確認。測試使用各版預設視窗大小，OS 快取保留。[啟動量測](slint-macos-measurement.md#2026-11-11-一般入口啟動到可輸入)
 
-macOS arm64 補上 837 行長文的取頁與快取捲動。Slint 首頁在前景前已繪製時，現在會保留文章焦點請求，待原生前景且文章可操作再完成。修正版與 Dioxus 各完成 200 次快取逐行、200 次快取翻頁。Slint 快取操作 p95 較低，首頁至完整快取在此設定約多 87 ms；修正尚待同步候選包。[長文量測](slint-macos-measurement.md#2026-11-11-837-行取頁與快取操作)
+macOS arm64 補上 837 行長文的取頁與快取捲動。Slint 首頁在前景前已繪製時，現在會保留文章焦點請求，待原生前景且文章可操作再完成。修正版與 Dioxus 各完成 200 次快取逐行、200 次快取翻頁。Slint 快取操作 p95 較低，首頁至完整快取在此設定約多 87 ms；兩個 macOS 候選包已同步此修正。[長文量測](slint-macos-measurement.md#2026-11-11-837-行取頁與快取操作)
 
 macOS 軟體 renderer 局部呈現實驗用同一個執行檔做兩組雙 GIF 對照，CPU 各降 17.5%／13.7%。圖塊組約 0.270 秒／10 秒，先前 Dioxus 基準約 0.180 秒。補丁保留供重跑，候選包沿用現行呈現。S8 效能仍待驗。[局部呈現紀錄](slint-macos-measurement.md#2026-11-11-macos-局部呈現實驗)
 
@@ -760,3 +760,18 @@ ZIP CRC、簽章與下載 SHA-256 均核對，App、ZIP 和唯讀 DMG 分別比�
 同一 [產品來源交付](slint-product-source.md) 新增 `settings-macos-current`，從既有 bundle 還原完整 580 個檔案與 `dbbce24` tree。原有來源對應保留。完整第三方來源與從還原目錄重新編譯此版未驗。
 
 下載入口更新後移除舊 Apple Silicon／Intel 完整包、還原 checkout 與暫存 manifest，共 627,120,936 regular-file bytes，`du` 合計 619,508 KiB。filesystem available 為 239,704,743,936 → 240,340,787,200 bytes，包含並行活動。只保留一份 34,055,535-byte 壓縮的舊 Apple Silicon 執行檔供設定／GIF 對照，固定 Cargo 快取與目前交付均保留。兩版完整建置／回歸、檔案 hash、來源重建及精確清理路徑在 `slint-renderer-api-current/cross-current/settings-package-current/`。S0–S8 持續，S9 尚未執行。
+
+
+## 2026-11-11 文章焦點修正的 macOS 候選同步
+
+同一 worktree 從乾淨 `c7368b2` 完成兩個 release 建置，固定 Cargo target 與 50／47 份原生播放器函式庫復用。Intel all-target Clippy 通過。Apple Silicon 沿用同一產品碼的 106 項 bin 測試通過、1 項 helper ignored、Clippy 及慢速文章取消／恢復、輸入案例。封裝工具的 Python 178 項與兩份 workflow 的 actionlint 1.7.12 通過。
+
+App 執行檔 Apple Silicon `793ecb91`、Intel `62ada42e` 各通過原 23 項封裝後合成回歸。另各直接執行封裝內程式的 `--probe-store … --store-scene long`，以原生視窗前景與按鍵驗證 837 行、37 次精確 PageDown、四次逐行與四次翻頁。兩案都收到唯一嚴格 Close，正常退出且隔離設定不變。這兩案的原生輸入範圍限於合成長文，Intel 仍是 Rosetta；原生 IME、實機、完整效能與產品切換繼續驗收。
+
+App、ZIP 與唯讀 DMG 的 1,241／1,223 個 payload 逐檔相同，簽名、架構、下載 SHA-256 與原生 notices 核對通過。既有 runtime 完整復用。兩個固定下載入口已更新。更新後的獨立路徑查詢第一輪沒有完整收據且程序已結束，另以有界診斷確認兩版 `--show-profile` 均 exit 0、沒有讀取 store 或開啟 vault。原生長文的暫存資料目錄均已移除。
+
+同一產品來源交付新增 `article-focus-macos-current`，以原 immutable bundle 加 patch 還原完整 580 檔及 tree `14badb5cdcf6c01f79e707fdcc9bf041d69bea3d`。原 descriptor 全部保留。本批沒有再從還原目錄編譯，第三方完整來源閉包仍待驗。
+
+查核 resolved path、UID、symlink、lsof 及 SHA 後，移除兩個被取代的完整 Mac 包、來源還原 checkout、暫存 manifest 與擷取器，共五個位置、627,871,203 regular-file bytes；另去重 28 張 PNG 共 1,900,479 bytes。filesystem available 234,234,134,528 → 234,874,318,848 bytes 為並行觀測。保留一份舊 `99949409` 壓縮執行檔供啟動／輸入／資料對照，原 `f50ffb46` 設定／GIF 控制與固定 Cargo 快取也保留。產品 bundle ID 的 macOS 系統 cache 與既有候選共用，未建立本批獨占所有權而保留。Windows 待驗及另備包、Linux 下載檔的 SHA-256 均相同。
+
+原始建置、48 案收據、archive hashes、來源還原、promotion 與 exact cleanup 路徑在 `slint-renderer-api-current/cross-current/article-focus-package-current/`。候選為 ad hoc 簽章，S0–S8 保持 active，S9 未執行。
