@@ -823,3 +823,13 @@ Apple Silicon 候選 `a2eb95c` 的封裝執行檔 SHA-256 為 `ae62e971c9cf00c3c
 Apple Silicon 候選 `0a7667f` 的封裝執行檔 SHA-256 為 `2dce1be27d6f667cf4af6ebbe00bf53acb83c7f25de89ac8ebffb7f0cdb48ac7`。九項封裝回歸通過，涵蓋軟體繪圖與 OpenGL 視窗、浮球動畫與減少動態效果、設定交接、收藏、遮黑、推文更新和文章輸入。OS 滑鼠用 SHA-256 與建置收據相符的封裝來源執行檔驗證扇形、三個分類及設定，成功正常退出並收到 Close ACK。另一份舊候選正在執行時，兩次封裝視窗 AX 自動化無法取得目標視窗。保留原始收據，以來源執行檔重驗原生互動。前一輪動畫跳過及 shell 選單探針的失敗亦保留。
 
 本機交付位於 `.local/verification/slint-tools-parity-current/package-final/`。App 簽章、DMG 核對、Clippy、106 項 Rust 測試、含播放器與一般配置的 Skia 像素回歸及 Dioxus 浮球 34 項 JS 測試通過。其他平台本輪未重新打包。移除中間包和重複 ZIP，共 353,301,859 regular-file bytes。保留當前 App／DMG、固定 Cargo target、獨特證據及仍在執行的舊候選。精確路徑、雜湊與可用空間觀測見 `cleanup.json`。
+
+## 2026-11-11 主視窗面板與通知圖示
+
+設定、站點、黑名單、文章書籤、快速前往和登入改在終端主視窗內置中呈現。共用面板採 Dioxus 的深藍與金色、平面按鈕、金色選中側欄及等尺寸控件，下拉清單在表單內展開。設定保存、站點切換、書籤讀寫與各管理器的 Rust owner 沿用。使用者明確選擇匯入或匯出時仍呼叫系統檔案選擇器。
+
+通知從內建 App 資產繪製圖示，並顯示品牌、標題、訊息和關閉鍵。通知訊息維持純文字，合成的 `<img src=x>` 案例確認文字與圖示互不影響。一般複製通知顯示「已複製到剪貼簿」。關閉、hover 暫停、Tab 焦點、淡出及減少動態效果以既有通知 owner 驗證。
+
+Apple Silicon 候選 `88a68a7` 的封裝執行檔 SHA-256 為 `6e964389d03de1ef80a1b26580363504e3b0e54634edca534adf2cd6c575ff7c`。同一封裝的 OpenGL shell 與軟體繪圖 shell 重測皆通過，核對設定開啟前後視窗尺寸、全螢幕狀態、Esc 焦點還原及通知關閉。軟體繪圖 shell 首輪有原生前景喪失收據。站點、名單、書籤、快速前往看板與文章、遮黑操作、文章輸入及單獨媒體探針通過。設定搜尋本身完成，串接的媒體 hover 仍在焦點／來源／modal 斷言失敗，未將整案列為通過。此批未重驗其他平台和實際 IME。
+
+交付位於 `.local/verification/slint-panel-chrome-current/package-delivery/`，App 簽章和 DMG checksum 已核對。依原始收據、resolved path、owner 與 open files 移除三個被取代的候選位置與一份重複 ZIP，共 855,736,489 regular-file bytes。保留最新 App／DMG、固定 Cargo target 及獨特測試證據。精確清單與空間觀測見 `cleanup-delivery.json`。
