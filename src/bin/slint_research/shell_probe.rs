@@ -53,7 +53,7 @@ async fn settings_dropdowns(ui: &TerminalWindow, directory: &Path) -> Result<(),
     let height = window.height as f32 / scale;
     let panel_top = (height - 700_f32.min(height - 32.)) / 2.;
     let font =
-        slint::LogicalPosition::new(window.width as f32 / scale / 2. + 85., panel_top + 322.);
+        slint::LogicalPosition::new(window.width as f32 / scale / 2. + 85., panel_top + 337.);
     verification::click(ui, font, PointerEventButton::Left);
     verification::capture(ui, directory, "settings-local-font-menu.png")?;
     let families = settings.get_families();
@@ -67,10 +67,52 @@ async fn settings_dropdowns(ui: &TerminalWindow, directory: &Path) -> Result<(),
         "local font menu did not apply the selected family",
     )?;
     verification::capture(ui, directory, "settings-local-font-selected.png")?;
+    settings.invoke_show_page(2);
+    verification::capture(ui, directory, "settings-keyboard.png")?;
+    settings.invoke_focus_field(6);
+    wait(
+        || settings.get_focused_target() == 6,
+        "opacity slider did not take focus",
+    )
+    .await?;
+    let opacity = settings.get_tool_opacity();
+    let (key, step) = if opacity > 20 {
+        (Key::LeftArrow, -1)
+    } else {
+        (Key::RightArrow, 1)
+    };
+    verification::key(ui, key);
+    require(
+        settings.get_tool_opacity() == opacity + step,
+        "opacity slider did not update its value",
+    )?;
+    let track =
+        slint::LogicalPosition::new(window.width as f32 / scale / 2. + 120., panel_top + 212.);
+    verification::click(ui, track, PointerEventButton::Left);
+    let selected_opacity = settings.get_tool_opacity();
+    require(
+        (20..=100).contains(&selected_opacity) && selected_opacity != opacity + step,
+        "opacity slider did not respond to a track click",
+    )?;
+    settings.invoke_show_page(3);
+    verification::capture(ui, directory, "settings-media.png")?;
+    settings.invoke_show_page(4);
+    verification::capture(ui, directory, "settings-sites.png")?;
     settings.invoke_close_settings();
     wait(
         || !ui.get_settings_open(),
-        "settings did not close after font selection",
+        "settings did not close after edits",
+    )
+    .await?;
+    ui.invoke_settings_show();
+    require(
+        settings.get_tool_opacity() == selected_opacity,
+        "opacity did not survive closing and reopening settings",
+    )?;
+    settings.invoke_close_settings();
+    wait(
+        || !ui.get_settings_open(),
+        "reopened settings did not close",
     )
     .await
 }

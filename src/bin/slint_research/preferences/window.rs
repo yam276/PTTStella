@@ -290,9 +290,6 @@ impl Preferences {
                     match w.global::<crate::SettingsState>().get_page() {
                         0 => {
                             draft.language = defaults.language;
-                            draft.article_mode = defaults.article_mode;
-                            draft.article_boundary_navigation =
-                                defaults.article_boundary_navigation;
                         }
                         1 => draft.display = defaults.display,
                         2 => {
@@ -300,6 +297,9 @@ impl Preferences {
                             draft.tools_access = defaults.tools_access;
                         }
                         3 => {
+                            draft.article_mode = defaults.article_mode;
+                            draft.article_boundary_navigation =
+                                defaults.article_boundary_navigation;
                             draft.hover = defaults.hover;
                             draft.auto_expand_images = defaults.auto_expand_images;
                         }
@@ -488,7 +488,7 @@ impl Preferences {
             "font-preset",
             "font-ascii",
             "font-cjk",
-            "font-refresh",
+            "settings-refresh",
             "font-size",
             "font-baseline",
             "font-width",
@@ -516,16 +516,24 @@ impl Preferences {
             "font-local-choose",
             "zoom-out",
             "zoom-in",
+            "settings-search-label",
+            "settings-opacity-help",
+            "settings-width-help",
+            "settings-preview",
+            "article-boundary-help",
+            "font-reset",
+            "settings-licenses",
         ]
         .into_iter()
         .map(t)
         .collect();
         labels[28] = env!("CARGO_PKG_VERSION").into();
         labels[29] = format!(
-            "{}\n{}\n{}\n{}",
+            "{}\n{}\n{}\n{}\n{}",
             include_str!("../../../../assets/fonts/NOTICE.txt"),
             include_str!("../../../../assets/fonts/Cascadia-OFL.txt"),
             include_str!("../../../../assets/fonts/NotoSansCJK-OFL.txt"),
+            include_str!("../../../../assets/icons/lucide/LICENSE.txt"),
             include_str!(concat!(env!("OUT_DIR"), "/third-party-notices.txt"))
         );
         w.global::<crate::SettingsState>()

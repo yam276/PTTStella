@@ -71,7 +71,7 @@ pub(super) fn populate(window: &TerminalWindow, app: &AppSettings) {
     });
     window
         .global::<SettingsState>()
-        .set_tool_opacity(app.tools_opacity.percent().to_string().into());
+        .set_tool_opacity(i32::from(app.tools_opacity.percent()));
     window
         .global::<SettingsState>()
         .set_right_click(app.tools_access.right_click_menu);
@@ -117,11 +117,7 @@ pub(super) fn read(window: &TerminalWindow, base: &AppSettings) -> Result<AppSet
         _ => HoverPosition::Off,
     };
     draft.tools_opacity = ToolOpacity::try_from(
-        window
-            .global::<SettingsState>()
-            .get_tool_opacity()
-            .trim()
-            .parse::<u8>()
+        u8::try_from(window.global::<SettingsState>().get_tool_opacity())
             .map_err(|_| pttstella::msg!("settings-opacity-invalid"))?,
     )?;
     draft.tools_access.right_click_menu = window.global::<SettingsState>().get_right_click();
@@ -137,7 +133,7 @@ pub(super) fn destination(entry: pttstella::settings::catalog::Entry) -> Option<
         Some(Target::ZoomFit) => (1, 20),
         Some(Target::VimToggle) => (2, 21),
         Some(Target::StationMouse) => (2, 22),
-        Some(Target::KeepAlive) => (0, 23),
+        Some(Target::KeepAlive) => (4, 23),
         Some(Target::FontPreset) => (1, 11),
         Some(Target::FontAscii) => (1, 1),
         Some(Target::FontCjk) => (1, 2),
@@ -149,9 +145,9 @@ pub(super) fn destination(entry: pttstella::settings::catalog::Entry) -> Option<
         Some(Target::ToolsOpacity) => (2, 6),
         Some(Target::ToolsRightClick) => (2, 12),
         Some(Target::ToolsShowBall) => (2, 13),
-        Some(Target::ArticleMode) => (0, 14),
+        Some(Target::ArticleMode) => (3, 14),
         Some(Target::AutoExpandImages) => (3, 15),
-        Some(Target::ArticleBoundaryNavigation) => (0, 16),
+        Some(Target::ArticleBoundaryNavigation) => (3, 16),
         Some(Target::SettingsHover) => (3, 17),
         None => match entry.1 {
             Page::Sites => (4, 18),

@@ -48,6 +48,9 @@ class LicenseTests(unittest.TestCase):
             fonts.mkdir(parents=True)
             for name in ('NOTICE.txt', 'Cascadia-OFL.txt', 'NotoSansCJK-OFL.txt'):
                 (fonts/name).write_text('synthetic font notice')
+            icons = root/'assets/icons/lucide'
+            icons.mkdir(parents=True)
+            (icons/'LICENSE.txt').write_text('synthetic icon notice')
             local = root/'vendor/renderer'
             (local/'LICENSES').mkdir(parents=True)
             (local/'LICENSES/upstream.txt').write_text('synthetic upstream license')
@@ -74,6 +77,8 @@ class LicenseTests(unittest.TestCase):
             self.assertEqual(inventory[0]['local_path'], 'vendor/renderer')
             self.assertIsNone(inventory[0]['source'])
             self.assertNotIn(str(root), json.dumps(inventory))
+            self.assertEqual((destination/'Lucide-Feather.txt').read_text(),
+                             'synthetic icon notice')
             self.assertEqual((destination/'renderer-1.2.3/LICENSES/upstream.txt').read_text(),
                              'synthetic upstream license')
             self.assertEqual((destination/'dependency-2.0.0/LICENSE').read_text(),

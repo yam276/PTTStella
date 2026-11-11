@@ -8,6 +8,12 @@ export global PanelEdit {
 
 export component PanelButton inherits Rectangle {
     in property <string> text;
+    in property <image> icon;
+    in property <length> icon-size: 18px;
+    in property <length> font-size: 13px;
+    in property <color> label-color: !root.enabled ? #808b99 : root.flat ? #ebe7dc : root.navigation && !root.checked ? #b5bcc7 : #e7c46a;
+    in property <color> icon-color: !root.enabled ? #808b99 : #e7c46a;
+    in property <bool> checkbox;
     in property <bool> enabled: true;
     in-out property <bool> checked;
     in property <bool> navigation;
@@ -22,7 +28,10 @@ export component PanelButton inherits Rectangle {
     vertical-stretch: 0;
     horizontal-stretch: 0;
     min-width: 0px;
-    preferred-width: label.preferred-width + 22px;
+    private property <length> inset: root.flat ? 2px : root.navigation ? 16px : 10px;
+    private property <length> checkbox-width: root.checkbox ? 20px : 0px;
+    private property <length> icon-width: root.icon.width > 0 ? root.icon-size + 8px : 0px;
+    preferred-width: label.preferred-width + root.checkbox-width + root.icon-width + 22px;
     background: root.flat ? (root.enabled && touch.has-hover ? #203b55 : transparent)
         : root.checked ? #203b55 : root.navigation && !touch.has-hover ? transparent
         : root.enabled && touch.has-hover ? #203b55 : #132c45;
@@ -36,12 +45,31 @@ export component PanelButton inherits Rectangle {
     if root.navigation && root.checked && !root.flat: Rectangle {
         x: 0; y: 0; width: 3px; height: parent.height; background: #e7c46a;
     }
+    if root.checkbox: Rectangle {
+        x: root.inset; y: (parent.height - self.height) / 2;
+        width: 12px; height: 12px; border-radius: 2px;
+        border-width: 1px; border-color: #8e98a4;
+        background: root.checked ? #bba05d : #132c45;
+        if root.checked: Image {
+            width: 10px; height: 10px;
+            source: @image-url("../../../assets/icons/lucide/check.svg");
+        }
+    }
+    if root.icon-width > 0px: Image {
+        x: root.inset + root.checkbox-width;
+        y: (parent.height - self.height) / 2;
+        width: root.icon-size; height: root.icon-size;
+        source: root.icon;
+        colorize: root.icon-color;
+        accessible-role: none;
+    }
     label := Text {
-        x: root.flat ? 2px : root.navigation ? 16px : 10px; width: parent.width - self.x - 10px;
-        text: root.text; font-size: 13px;
-        color: !root.enabled ? #808b99 : root.flat ? #ebe7dc : root.navigation && !root.checked ? #b5bcc7 : #e7c46a;
+        x: root.inset + root.checkbox-width + root.icon-width;
+        width: parent.width - self.x - 10px;
+        text: root.text; font-size: root.font-size;
+        color: root.label-color;
         vertical-alignment: center;
-        horizontal-alignment: root.navigation ? left : center;
+        horizontal-alignment: root.navigation || root.icon-width > 0px ? left : center;
         overflow: elide;
     }
     touch := TouchArea {
@@ -66,7 +94,11 @@ export component PanelButton inherits Rectangle {
 export component PanelCheck inherits PanelButton {
     callback toggled;
     in property <string> caption;
-    text: (root.checked ? "☑  " : "☐  ") + root.caption;
+    text: root.caption;
+    checkbox: true;
+    accessible-role: checkbox;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
     navigation: true;
     clicked => { root.checked = !root.checked; root.toggled(); }
 }
@@ -249,6 +281,9 @@ export component PanelOverlay inherits Rectangle {
     in property <string> heading;
     in property <length> panel-width: 900px;
     in property <length> panel-height: 700px;
+    in property <length> header-height: 52px;
+    in property <image> brand-mark: @image-url("../../../assets/icons/pttstella.png");
+    in property <image> heading-icon;
     background: #00000088;
     TouchArea {
         enabled: root.visible;
@@ -265,15 +300,20 @@ export component PanelOverlay inherits Rectangle {
         clip: true;
         VerticalLayout {
             Rectangle {
-                height: 52px;
+                height: root.header-height;
                 HorizontalLayout {
                     padding-left: 22px; padding-right: 22px; spacing: 10px;
                     Rectangle {
                         width: 24px;
-                        Image { width: 24px; height: 24px; y: (parent.height - self.height) / 2; source: @image-url("../../../assets/icons/pttstella.png"); image-fit: contain; }
+                        Image { width: 24px; height: 24px; y: (parent.height - self.height) / 2; source: root.brand-mark; image-fit: contain; }
                     }
                     Text { text: "PTTStella"; color: #ebe7dc; font-size: 16px; vertical-alignment: center; }
-                    Text { text: root.heading; color: #b5bcc7; font-size: 12px; vertical-alignment: center; horizontal-alignment: right; horizontal-stretch: 1; }
+                    Rectangle { horizontal-stretch: 1; }
+                    if root.heading-icon.width > 0: Image {
+                        source: root.heading-icon; width: 18px; height: 18px;
+                        colorize: #e7c46a; y: (parent.height - self.height) / 2;
+                    }
+                    Text { text: root.heading; color: #b5bcc7; font-size: 12px; vertical-alignment: center; horizontal-alignment: right; }
                 }
                 Rectangle { y: parent.height - 1px; width: parent.width; height: 1px; background: #34475b; }
             }

@@ -58,6 +58,8 @@ def copy_licenses(destination, target, *, feature="desktop"):
     if feature == 'desktop':
         shutil.copy2(ROOT/'assets/vendor/fluent/LICENSE', destination/'fluent-Apache-2.0.txt')
         shutil.copy2(ROOT/'assets/vendor/composer/LICENSES.txt', destination/'composer-MIT.txt')
+    else:
+        shutil.copy2(ROOT/'assets/icons/lucide/LICENSE.txt', destination/'Lucide-Feather.txt')
     result = subprocess.run(['cargo', 'metadata', '--locked', '--format-version=1',
                              '--filter-platform', target, '--features', feature],
                             cwd=ROOT, capture_output=True, check=True, encoding='utf-8')

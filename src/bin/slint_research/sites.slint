@@ -1,5 +1,6 @@
 import { ScrollView } from "std-widgets.slint";
 import { PanelButton, PanelField, PanelCombo, PanelOverlay } from "panel.slint";
+import { LucideIcons } from "lucide-icons.slint";
 
 export global SitesState {
     in-out property <[string]> labels;
@@ -26,6 +27,7 @@ export global SitesState {
 
 export component SitesPanel inherits PanelOverlay {
     heading: SitesState.labels[0];
+    heading-icon: LucideIcons.globe;
     panel-width: 800px; panel-height: 650px;
     private property <int> focus-address-sequence: SitesState.focus-address-sequence;
     changed focus-address-sequence => { address-field.focus(); }
@@ -52,15 +54,17 @@ export component SitesPanel inherits PanelOverlay {
         PanelCombo {model:["Big5-UAO","Big5","GBK"];current-index<=>SitesState.encoding;enabled:root.visible && !SitesState.busy && !SitesState.composing;}
         Text {text:SitesState.security;color:#9ab5ce;wrap:word-wrap;}
         HorizontalLayout {
-            PanelButton {text:SitesState.labels[6];enabled:SitesState.writable && !SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(0);} }
-            PanelButton {text:SitesState.labels[7];enabled:SitesState.writable && SitesState.choice>0 && !SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(1);} }
-            PanelButton {text:SitesState.labels[8];enabled:SitesState.writable && !SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(2);} }
+            alignment: start; spacing: 8px;
+            PanelButton {text:SitesState.labels[6];icon:LucideIcons.star;enabled:SitesState.writable && !SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(0);} }
+            PanelButton {text:SitesState.labels[7];icon:LucideIcons.trash-2;enabled:SitesState.writable && SitesState.choice>0 && !SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(1);} }
+            PanelButton {text:SitesState.labels[8];icon:LucideIcons.save;enabled:SitesState.writable && !SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(2);} }
         }
         Text {text:SitesState.message;color:#f2cd7d;wrap:word-wrap;vertical-stretch:1;}
         HorizontalLayout {
+            alignment: end; spacing: 8px;
             PanelButton {text:SitesState.labels[13];enabled:!SitesState.busy && !SitesState.composing;clicked=>{SitesState.action(4);} }
-            PanelButton {text:SitesState.labels[9];enabled:!SitesState.busy && !SitesState.composing && SitesState.address!="";clicked=>{SitesState.action(3);} }
-            PanelButton {text:SitesState.labels[12];enabled:!SitesState.composing;clicked=>{SitesState.close-sites();} }
+            PanelButton {text:SitesState.labels[12];icon:LucideIcons.x;enabled:!SitesState.composing;clicked=>{SitesState.close-sites();} }
+            PanelButton {text:SitesState.labels[9];icon:LucideIcons.plug;primary:true;enabled:!SitesState.busy && !SitesState.composing && SitesState.address!="";clicked=>{SitesState.action(3);} }
         }
       }
       }

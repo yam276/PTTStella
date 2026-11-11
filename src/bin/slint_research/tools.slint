@@ -1,19 +1,17 @@
+import { LucideIcons } from "lucide-icons.slint";
+
 export struct ToolItem { id: int, label: string, enabled: bool, detail: bool, icon: int, x: length, y: length, width: length, height: length }
-component ToolGlyph inherits Path {
+component ToolGlyph inherits Image {
     in property <int> kind;
-    viewbox-width: 24;
-    viewbox-height: 24;
-    stroke: #e7c46a;
-    stroke-width: 1.8px;
-    fill: transparent;
-    // Compass, star, camera, plug, gear, Back and globe.
-    commands: root.kind == 0 ? "M12 2 A10 10 0 1 1 12 22 A10 10 0 1 1 12 2 M16 8 L14 14 L8 16 L10 10 Z"
-        : root.kind == 1 ? "M12 2 L15 8.5 L22 9.5 L17 14.5 L18 22 L12 18.5 L6 22 L7 14.5 L2 9.5 L9 8.5 Z"
-        : root.kind == 2 ? "M3 6 L7 6 L9 3 L15 3 L17 6 L21 6 Q22 6 22 8 L22 19 Q22 21 20 21 L4 21 Q2 21 2 19 L2 8 Q2 6 3 6 Z M12 9 A4 4 0 1 1 12 17 A4 4 0 1 1 12 9"
-        : root.kind == 3 ? "M9 2 L9 8 M15 2 L15 8 M6 8 L18 8 M7 8 L7 12 A5 5 0 0 0 17 12 L17 8 M12 17 L12 22"
-        : root.kind == 4 ? "M10 2 L14 2 L15 5 L17 6 L20 5 L22 9 L20 11 L20 13 L22 15 L20 19 L17 18 L15 19 L14 22 L10 22 L9 19 L7 18 L4 19 L2 15 L4 13 L4 11 L2 9 L4 5 L7 6 L9 5 Z M12 8 A4 4 0 1 1 12 16 A4 4 0 1 1 12 8"
-        : root.kind == 6 ? "M12 2 A10 10 0 1 1 12 22 A10 10 0 1 1 12 2 M2 12 H22 M12 2 C6 7 6 17 12 22 C18 17 18 7 12 2"
-        : "M20 12 L4 12 M11 5 L4 12 L11 19";
+    colorize: #e7c46a;
+    accessible-role: none;
+    source: root.kind == 0 ? LucideIcons.compass
+        : root.kind == 1 ? LucideIcons.star
+        : root.kind == 2 ? LucideIcons.camera
+        : root.kind == 3 ? LucideIcons.plug
+        : root.kind == 4 ? LucideIcons.settings
+        : root.kind == 6 ? LucideIcons.globe
+        : LucideIcons.arrow-left;
 }
 component ToolTile inherits Rectangle {
     in property <string> label;

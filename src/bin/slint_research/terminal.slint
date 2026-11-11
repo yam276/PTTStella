@@ -1262,7 +1262,10 @@ export component TerminalWindow inherits Window {
     editor-view := NativeEditor { visible:EditorState.open; width:parent.width;height:parent.height; }
     station-color-view := StationColor {visible:StationColorState.open;width:root.width;height:root.height;}
 
-    SettingsPanel { visible: root.settings-open; width: parent.width; height: parent.height; zoom: root.zoom; }
+    SettingsPanel {
+        visible: root.settings-open; width: parent.width; height: parent.height;
+        zoom: root.zoom; station-mouse-status: root.station-mouse-status;
+    }
     SitesPanel { visible: root.sites-open; width: parent.width; height: parent.height; }
     FiltersPanel { visible: root.filters-open; width: parent.width; height: parent.height; }
     BookmarksPanel { visible: root.bookmarks-open; width: parent.width; height: parent.height; }

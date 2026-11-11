@@ -1,4 +1,5 @@
 import { PanelButton, PanelField, PanelCombo, PanelOverlay } from "panel.slint";
+import { LucideIcons } from "lucide-icons.slint";
 import { ScrollView, ListView } from "std-widgets.slint";
 
 export global FiltersState {
@@ -46,7 +47,7 @@ export component FiltersPanel inherits PanelOverlay {
             HorizontalLayout {
                 PanelButton {text:FiltersState.labels[1];checked:!FiltersState.allow;enabled:!FiltersState.composing;clicked=>{FiltersState.tab(false);}}
                 PanelButton {text:FiltersState.labels[2];checked:FiltersState.allow;enabled:!FiltersState.composing;clicked=>{FiltersState.tab(true);}}
-                PanelButton {text:FiltersState.category-sort?FiltersState.labels[5]:FiltersState.labels[4];enabled:!FiltersState.composing;clicked=>{FiltersState.sort();}}
+                PanelButton {text:FiltersState.category-sort?FiltersState.labels[5]:FiltersState.labels[4];icon:LucideIcons.list-filter;icon-size:16px;enabled:!FiltersState.composing;clicked=>{FiltersState.sort();}}
                 PanelButton {text:FiltersState.labels[3];enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;clicked=>{FiltersState.new-entry();}}
             }
             ScrollView {height:156px;content-width:self.width;

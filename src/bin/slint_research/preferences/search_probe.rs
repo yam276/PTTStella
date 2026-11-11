@@ -32,7 +32,7 @@ impl Preferences {
             ("zoom fit", 1, 20),
             ("experimental keyboard", 2, 21),
             ("mouse reporting", 2, 22),
-            ("keepalive", 0, 23),
+            ("keepalive", 4, 23),
             ("font preset", 1, 11),
             ("latin", 1, 1),
             ("CJK FONT", 1, 2),
@@ -44,9 +44,9 @@ impl Preferences {
             ("ﬂoating opacity", 2, 6),
             ("right click", 2, 12),
             ("visibility", 2, 13),
-            ("article mode", 0, 14),
+            ("article mode", 3, 14),
             ("auto expand images", 3, 15),
-            ("previous next", 0, 16),
+            ("previous next", 3, 16),
             ("hover", 3, 17),
             ("site connection", 4, 18),
             ("privacy", 6, 19),
@@ -105,7 +105,7 @@ impl Preferences {
                 )?;
                 require(
                     window.global::<crate::SettingsState>().invoke_edit_key(0)
-                        == matches!(field, 1..=7),
+                        == matches!(field, 1..=5 | 7),
                     "text shortcut swallowed by a non-text target",
                 )?;
                 eprintln!(
