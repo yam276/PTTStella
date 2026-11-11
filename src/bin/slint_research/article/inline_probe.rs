@@ -169,6 +169,32 @@ pub fn start(
             let gif = images[1].0 as i32;
             let once = images[2].0 as i32;
             verification::capture(&ui, &directory, "before-arrow.png")?;
+            let shot = ui.window().take_snapshot().map_err(|e| e.to_string())?;
+            let (_, row, start, _) = owner
+                .candidates
+                .borrow()
+                .iter()
+                .copied()
+                .find(|&(index, ..)| index == images[0].0)
+                .ok_or("image URL range missing")?;
+            let dpi = ui.window().scale_factor();
+            let left = ((ui.get_view_width() - 12. - ui.get_article_line_width()) / 2.).max(0.)
+                - ui.get_article_offset_x();
+            let x = ((ui.get_terminal_origin_x()
+                + left
+                + (start + 2) as f32 * ui.get_article_line_width() / 80.)
+                * dpi)
+                .round() as usize;
+            let bottom = ((ui.get_terminal_origin_y()
+                + (row + 1) as f32 * ui.get_article_line_height()
+                - ui.get_article_offset_y())
+                * dpi)
+                .round() as usize;
+            let pixel = ((bottom - 1) * shot.width() as usize + x) * 4;
+            require(
+                shot.as_bytes().get(pixel..pixel + 4) == Some(&[128, 128, 128, 255]),
+                "image URL underline missing from the actual article widget",
+            )?;
             eprintln!(
                 "inline probe point {:?} origin {},{}",
                 arrow(&ui, png)?,
@@ -218,6 +244,10 @@ pub fn start(
             verification::capture(&ui, &directory, "png-inline.png")?;
             let model = ui.get_inline_pictures();
             let tile = model.row_data(0).ok_or("PNG widget missing")?;
+            require(
+                (tile.x + tile.width / 2. - (ui.get_view_width() - 12.) / 2.).abs() < 0.5,
+                "manually expanded PNG was not centered in the article",
+            )?;
             let shot = ui.window().take_snapshot().map_err(|e| e.to_string())?;
             let dpi = ui.window().scale_factor();
             for (x, color) in [(16., [255, 0, 0, 255]), (48., [0, 0, 255, 255])] {

@@ -53,6 +53,12 @@ impl Media {
         )
         .await?;
         require(
+            ui.get_inline_pictures().iter().all(|picture| {
+                (picture.x + picture.width / 2. - (ui.get_view_width() - 12.) / 2.).abs() < 0.5
+            }),
+            "automatically expanded pictures were not centered in the article",
+        )?;
+        require(
             ui.get_media_hover_position() == 2 && ui.get_media_hover_choice() == 2,
             "merged hover preference did not apply",
         )?;

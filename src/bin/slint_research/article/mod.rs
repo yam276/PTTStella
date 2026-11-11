@@ -517,6 +517,12 @@ impl ArticleView {
                     .ok_or("article row source expired")?;
                 let mut template = window.paint.frame;
                 let mut rows = (0..run.len()).map(|_| Vec::new()).collect::<Vec<_>>();
+                let mut links = vec![Vec::new(); run.len()];
+                for link in window.paint.links {
+                    if let Some(columns) = links.get_mut(link.row) {
+                        columns.push(link.start..link.end);
+                    }
+                }
                 for mut glyph in std::mem::take(&mut template.glyphs) {
                     if glyph.row < rows.len() {
                         let row = glyph.row;
@@ -528,13 +534,15 @@ impl ArticleView {
                 template.hyperlinks.clear();
                 template.cursor = (0, 0);
                 template.cursor_visible = false;
-                for (row, glyphs) in rows.into_iter().enumerate() {
+                for (row, (glyphs, columns)) in rows.into_iter().zip(links).enumerate() {
                     let mut frame = template.clone();
                     frame.glyphs = glyphs;
                     renderer.set_frame(frame);
                     cached.insert(
                         run.start + row,
-                        Image::from_rgba8_premultiplied(renderer.paint(size, false)?),
+                        Image::from_rgba8_premultiplied(
+                            renderer.paint_article_row(size, &columns)?,
+                        ),
                     );
                     self.row_raster_count.set(self.row_raster_count.get() + 1);
                 }
@@ -565,7 +573,15 @@ impl ArticleView {
             height: layout.row,
         };
         if self.footer_size.get() != Some(size) {
-            let mut footer = self.source.borrow().frame.clone();
+            let source = self.source.borrow();
+            let mut footer = source.frame.clone();
+            let columns = source
+                .links
+                .iter()
+                .filter(|link| link.row + 1 == footer.rows)
+                .map(|link| link.start..link.end)
+                .collect::<Vec<_>>();
+            drop(source);
             footer.glyphs.retain(|g| g.row + 1 == footer.rows);
             for g in &mut footer.glyphs {
                 g.row = 0;
@@ -577,7 +593,7 @@ impl ArticleView {
             let mut renderer = self.renderer.borrow_mut();
             renderer.set_frame(footer);
             ui.set_article_footer(Image::from_rgba8_premultiplied(
-                renderer.paint(size, false)?,
+                renderer.paint_article_row(size, &columns)?,
             ));
             self.footer_size.set(Some(size));
         }

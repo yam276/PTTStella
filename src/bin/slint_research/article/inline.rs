@@ -465,7 +465,7 @@ impl Inline {
                 index: entry.index as i32,
                 key: entry.key as i32,
                 stamp: self.tag.borrow().as_str().into(),
-                x: left,
+                x: left + ((f64::from(layout.logical_width()) - width).max(0.) / 2.) as f32,
                 y: crop.top,
                 width: width as f32,
                 height: crop.height,

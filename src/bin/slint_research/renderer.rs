@@ -11,7 +11,7 @@ use skia_safe::{
     surfaces,
 };
 use slint::{Rgba8Pixel, SharedPixelBuffer};
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Range};
 
 const CELL_WIDTH: f32 = 12.;
 const CELL_HEIGHT: f32 = 24.;
@@ -317,6 +317,26 @@ impl Renderer {
         find: Option<&pttstella::article_find::Find>,
         left_column: usize,
     ) -> Result<SharedPixelBuffer<Rgba8Pixel>, &'static str> {
+        self.paint_layers(size, cursor, find, left_column, &[])
+    }
+
+    /// Article row rasters are view-only. Source and selection exports use paint().
+    pub fn paint_article_row(
+        &self,
+        size: Size,
+        link_columns: &[Range<usize>],
+    ) -> Result<SharedPixelBuffer<Rgba8Pixel>, &'static str> {
+        self.paint_layers(size, false, None, 0, link_columns)
+    }
+
+    fn paint_layers(
+        &self,
+        size: Size,
+        cursor: bool,
+        find: Option<&pttstella::article_find::Find>,
+        left_column: usize,
+        link_columns: &[Range<usize>],
+    ) -> Result<SharedPixelBuffer<Rgba8Pixel>, &'static str> {
         let mut pixels = SharedPixelBuffer::new(size.width, size.height);
         let info = ImageInfo::new(
             (size.width as i32, size.height as i32),
@@ -399,6 +419,16 @@ impl Renderer {
                 &paint,
             );
         }
+        // Match the Dioxus link hint at the bottom of the projected cell.
+        paint.set_color(PALETTE[8]);
+        let thickness = scale.round().max(1.);
+        for columns in link_columns {
+            let cell = size.cell(columns.start, 0, columns.len(), frame);
+            canvas.draw_rect(
+                Rect::new(cell.left, cell.bottom - thickness, cell.right, cell.bottom),
+                &paint,
+            );
+        }
         drop(surface);
         Ok(pixels)
     }
@@ -422,6 +452,45 @@ fn face(mgr: &FontMgr, family: &str) -> Option<Typeface> {
 mod tests {
     use super::*;
     use pttstella::screen::Screen;
+
+    #[test]
+    fn article_link_hints_cover_only_projected_url_and_osc8_cells() {
+        let mut screen = Screen::new(80, 1).unwrap();
+        screen.feed(b"https://site.test/ https://site.test/a.png \x1b]8;;https://site.test/second\x1b\\link\x1b]8;;\x1b\\ plain");
+        let frame = screen.frame();
+        let mut spans = pttstella::links::detect(&frame)
+            .into_iter()
+            .map(|link| link.start..link.end)
+            .collect::<Vec<_>>();
+        spans.sort_unstable_by_key(|span| span.start);
+        assert_eq!(spans, [0..18, 19..42, 43..47]);
+        let renderer = Renderer::new(frame, &DisplaySettings::default()).unwrap();
+
+        for scale in [1, 2] {
+            let size = Size {
+                width: 960 * scale,
+                height: 24 * scale,
+            };
+            let plain = renderer.paint(size, false).unwrap();
+            let hints = renderer.paint_article_row(size, &spans).unwrap();
+            let mut expected = plain.as_bytes().to_vec();
+            let width = size.width as usize;
+            for y in (size.height - scale)..size.height {
+                for span in &spans {
+                    for x in (span.start * 12 * scale as usize)..(span.end * 12 * scale as usize) {
+                        let pixel = (y as usize * width + x) * 4;
+                        expected[pixel..pixel + 4].copy_from_slice(&[128, 128, 128, 255]);
+                    }
+                }
+            }
+            assert_ne!(expected, plain.as_bytes());
+            assert_eq!(hints.as_bytes(), expected);
+            assert_eq!(
+                renderer.paint(size, false).unwrap().as_bytes(),
+                plain.as_bytes()
+            );
+        }
+    }
 
     #[test]
     fn runtime_display_rebuilds_metrics_and_preserves_projection() {

@@ -282,7 +282,24 @@ impl SurfaceState {
             .collect();
         window.paint.article = full.article.clone();
         window.body_rows = total;
-        super::presentation::refresh_links(&mut window.paint);
+        window.paint.links.clear();
+        window.paint.image_links.clear();
+        for (index, link) in full.links.iter().enumerate() {
+            let row = if link.row == footer {
+                rows.len()
+            } else if rows.contains(&link.row) {
+                link.row - rows.start
+            } else {
+                continue;
+            };
+            if full.image_links.binary_search(&index).is_ok() {
+                window.paint.image_links.push(window.paint.links.len());
+            }
+            window.paint.links.push(crate::links::Link {
+                row,
+                ..link.clone()
+            });
+        }
         Some(window)
     }
     pub fn presentation(&self) -> u64 {
