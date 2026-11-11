@@ -235,14 +235,22 @@ pub fn start(
             .await?;
 
             ui.invoke_settings_show();
-            wait(
+            if let Err(error) = wait(
                 || {
                     ui.get_settings_open()
                         && ui.global::<crate::SettingsState>().get_focused_target() == 0
                 },
                 "reopened settings panel did not focus its search field",
             )
-            .await?;
+            .await
+            {
+                return Err(format!(
+                    "{error}: open={}, foreground={}, target={}",
+                    ui.get_settings_open(),
+                    ui.get_native_foreground(),
+                    ui.global::<crate::SettingsState>().get_focused_target()
+                ));
+            }
             verification::key(&ui, Key::Escape);
             wait(
                 || !ui.get_settings_open() && ui.get_terminal_input_focused(),

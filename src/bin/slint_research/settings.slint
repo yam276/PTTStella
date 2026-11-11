@@ -18,7 +18,15 @@ component EditField inherits PanelField {
         if self.has-focus {SettingsInput.focused=self.field-id; SettingsInput.active-target=self.field-id;}
         else {if SettingsInput.focused==self.field-id {SettingsInput.focused=-1;} if SettingsInput.active-target==self.field-id {SettingsInput.active-target=-1;}}
     }
-    changed focus-sequence=>{if SettingsInput.focus-field==self.field-id {self.focus();}}
+    changed focus-sequence => {
+        if SettingsInput.focus-field == self.field-id {
+            self.focus();
+            if self.has-focus {
+                SettingsInput.focused = self.field-id;
+                SettingsInput.active-target = self.field-id;
+            }
+        }
+    }
     changed command-sequence=>{
         if self.has-focus {
             if SettingsInput.command==0 {self.select-all();}
@@ -129,6 +137,15 @@ export struct SettingsMatch { title:string, page:int, field:int }
 
 export global SettingsState {
     in-out property <bool> active;
+    changed active => {
+        if root.active {
+            if SettingsInput.active-target != 0 { root.focus-search(); }
+        }
+        else {
+            SettingsInput.focused = -1;
+            SettingsInput.active-target = -1;
+        }
+    }
     in-out property <[string]> labels;
     in-out property <[string]> runtime-labels;
     in-out property <[bool]> runtime-states;
@@ -197,12 +214,16 @@ export global SettingsState {
     callback font-source(string);
     callback edit-key(int)->bool;
     edit-key(code)=>{
-        if SettingsInput.focused<0 {return false;}
+        if SettingsInput.focused < 0 || SettingsInput.active-target != SettingsInput.focused {return false;}
         SettingsInput.command=code;SettingsInput.command-sequence=1-SettingsInput.command-sequence;return true;
     }
     callback show-page(int);
     show-page(index) => {
         root.cancel-result-focus();
+        if root.page != index {
+            if SettingsInput.focused > 0 { SettingsInput.focused = -1; }
+            if SettingsInput.active-target > 0 { SettingsInput.active-target = -1; }
+        }
         root.query = "";
         root.page = index;
         root.refresh-preview();
