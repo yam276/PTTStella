@@ -843,3 +843,11 @@ Apple Silicon 候選 `88a68a7` 的封裝執行檔 SHA-256 為 `6e964389d03de1ef8
 候選 `39e1e9f` 的封裝執行檔 SHA-256 為 `7edb81918ea3e00492ecd70af96625e5daceb7bcb2cc685529dd304a340682e9`。以相符的封裝來源執行檔在 macOS 原生視窗驗證 1040×768 與 580×550，實際點選側欄和窄視窗關閉，重新開啟設定後以 Esc 關閉。新 App 的 AX 自動化未取得指定視窗，保留失敗收據。封裝本身的軟體繪圖與 OpenGL shell、App 簽章、DMG checksum 及九項 macOS 打包測試通過。
 
 交付位於 `.local/verification/slint-panel-chrome-current/package-settings-width/`。移除本輪 dev profile、重複 ZIP 及已被取代且未掛載的 DMG，共 1,383,518,786 regular-file bytes。保留仍在使用的舊 App 及固定 release Cargo 快取。精確路徑、空間觀測及 Cargo 宣告清除量見 `cleanup-settings-width.json`、`cleanup-settings-width-dev.json`。
+
+## 2026-11-11 設定表單與下拉選單
+
+一般、外觀與字型、圖片與媒體使用左標籤、右欄位與分隔線。共用下拉選單的文字靠左，箭頭在右，選項浮在同一個 Winit 視窗內。滑鼠可展開選單，方向鍵或 Home／End 移動，Enter 確認，Esc 收合。長清單沿用 Slint ListView。外觀頁按需在背景讀取本機字型，已安裝的現用字型會出現在相應選單，並在頁內顯示讀取狀態。縮放列顯示目前百分比，減、加與符合視窗都在設定內生效。
+
+候選 `7a1ecf0` 的封裝執行檔 SHA-256 為 `9bc42c21717e1f4766320ddf3a1e08fdbf01d1bc159edf61031c5d28bbe9da47`。封裝的外觀頁、本機字型載入、滑鼠展開、鍵盤選取與取消、軟體繪圖 shell、站點、名單、書籤和快速前往案例通過。設定搜尋及縮放子流程通過，後續圖片懸停的既有斷言仍失敗。原生 macOS 滑鼠腳本遇到前景切換，保留未完成收據。App 簽章、DMG checksum 與九項 macOS 打包測試通過。
+
+本機交付位於 `.local/verification/slint-panel-chrome-current/package-settings-select/`。清理重複 ZIP、無使用中的舊候選及未掛載的舊 DMG，共 285,793,877 regular-file bytes。保留目前仍執行的舊 App 與固定 release Cargo 快取。精確路徑與空間觀測見 `cleanup-settings-select.json`。
