@@ -168,15 +168,15 @@ pub fn start(
             // would skip the focus acquired by a real notification click.
             let width = ui.window().size().width as f32 / ui.window().scale_factor();
             let panel_width = 620_f32.min(width - 32.);
-            verification::click(
-                &ui,
-                slint::LogicalPosition::new(width / 2. + panel_width / 2. - 35., 51.),
-                PointerEventButton::Left,
-            );
-            require(
-                !ui.get_shell_notice_dismissible(),
-                "persistent connection state exposes a no-op dismiss button",
-            )?;
+            let close = slint::LogicalPosition::new(width / 2. + panel_width / 2. - 36., 56.);
+            ui.window()
+                .dispatch_event(slint::platform::WindowEvent::PointerMoved { position: close });
+            verification::click(&ui, close, PointerEventButton::Left);
+            wait(
+                || !ui.get_shell_notice_dismissible(),
+                "notification close button did not dismiss the error",
+            )
+            .await?;
             require(
                 !ui.get_shell_status_visible(),
                 "acknowledged local error stayed open",

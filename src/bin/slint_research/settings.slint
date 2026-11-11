@@ -136,7 +136,7 @@ export global SettingsState {
     callback cancel-result-focus;
     callback focus-result(int);
     callback focus-field(int);
-    focus-field(field)=>{SettingsInput.focus-field=field;SettingsInput.focus-sequence=1-SettingsInput.focus-sequence;}
+    focus-field(field)=>{SettingsInput.focus-field=field;SettingsInput.focus-sequence+=1;}
     callback focus-search;
     focus-search => { root.cancel-result-focus(); root.focus-field(0); }
     in-out property <bool> composing;

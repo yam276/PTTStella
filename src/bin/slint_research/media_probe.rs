@@ -121,7 +121,15 @@ pub fn start(
             tokio::time::sleep(Duration::from_millis(220)).await;
             require(
                 ui.get_media_hover_open(),
-                "moving inside one link restarted the dwell",
+                &format!(
+                    "same-link dwell did not open: foreground={}, focused={}, blocked={}, timer={}, candidate={}, sequence={}",
+                    ui.get_native_foreground(),
+                    ui.get_terminal_input_focused(),
+                    ui.get_media_hover_blocked(),
+                    owner.dwell.running(),
+                    owner.candidate.borrow().is_some(),
+                    owner.sequence.get()
+                ),
             )?;
             wait(|| ui.get_media_ready(), "PNG hover did not decode").await?;
             require(

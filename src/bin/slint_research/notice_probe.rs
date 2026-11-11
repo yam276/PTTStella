@@ -102,7 +102,7 @@ async fn run_inner(
     let size = ui.window().size();
     let dpi = ui.window().scale_factor();
     let (width, height) = (size.width as f32 / dpi, size.height as f32 / dpi);
-    let close_x = width / 2. + 620_f32.min(width - 32.) / 2. - 35.;
+    let close_x = width / 2. + 620_f32.min(width - 32.) / 2. - 36.;
     let outside = || move_to(ui, width / 2., height - 80.);
     ui.invoke_focus_terminal();
     outside();
@@ -124,7 +124,7 @@ async fn run_inner(
         "copy expired before its readable interval",
     )?;
     // Hover over the child standard Button, not just empty panel background.
-    move_to(ui, close_x, 51.);
+    move_to(ui, close_x, 56.);
     wait(
         || ui.get_notice_hovered(),
         "notification did not observe hover over its child button",
@@ -171,7 +171,7 @@ async fn run_inner(
     .await?;
     trace.pause(ui, owner, 150, "fade_resumed").await;
     verification::capture(ui, dir, "notice-fading.png")?;
-    move_to(ui, close_x, 51.);
+    move_to(ui, close_x, 56.);
     wait(
         || ui.get_notice_hovered() && !ui.get_notice_fading(),
         "hover did not restore opacity during fade",

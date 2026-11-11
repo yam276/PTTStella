@@ -665,7 +665,7 @@ export component TerminalWindow inherits Window {
                         Rectangle { x: parent.width - 3px; width: 3px; height: parent.height; background: #d9ae5b; }
                     }
                     grid-input := TextInput {
-                        enabled: !root.editor-open && !root.station-color-open;
+                        enabled: !root.editor-open && !root.station-color-open && !root.settings-open && !root.manager-open && !root.login-open;
                         visible: root.terminal-input;
                         accessible-label: UiLabels.terminal-input;
                         x: raster.x + root.caret-left;
@@ -689,7 +689,7 @@ export component TerminalWindow inherits Window {
                     TouchArea {
                         width: viewport.width;
                         height: viewport.height;
-                        enabled: root.terminal-input && !root.pan-mode && !root.article-active && !root.settings-open && !root.manager-open && !root.login-open;
+                        enabled: root.terminal-input && !root.pan-mode && !root.article-active;
                         mouse-cursor: root.selection-dragging ? MouseCursor.text :
                             root.pointer-cursor == 1 ? MouseCursor.pointer :
                             root.pointer-cursor == 2 ? MouseCursor.w-resize :
@@ -921,6 +921,7 @@ export component TerminalWindow inherits Window {
         animate opacity {duration: root.notice-fading ? root.notice-fade-duration : 0ms;}
         status-touch := TouchArea {
             width: parent.width; height: parent.height;
+            clicked => {}
             Rectangle {
                 x: 0; y: 0; width: 4px; height: parent.height;
                 background: root.notice-error || root.connection-phase == 2 ? #e6a08a : #e7c46a;
@@ -941,7 +942,6 @@ export component TerminalWindow inherits Window {
                     }
                     VerticalLayout {
                         spacing: 6px; alignment: start;
-                        padding-right: root.shell-notice-dismissible ? 38px : 0px;
                         Text { text: "PTTSTELLA"; color: #e7c46a; font-size: 11px; font-weight: 700; }
                         Text {
                             text: !root.connection-attention ? UiLabels.toast-title :
@@ -973,16 +973,19 @@ export component TerminalWindow inherits Window {
                             }
                         }
                     }
-                }
-            }
-            status-close := PanelButton {
-                visible: root.shell-notice-dismissible; enabled: self.visible;
-                x: parent.width - 54px; y: 12px; width: 38px; height: 38px; max-height: 38px;
-                navigation: true; text: "×"; font-size: 20px; accessible-label: UiLabels.toast-dismiss;
-                clicked => {
-                    let restore = self.has-focus && root.context-focus-restorable && !root.find-open && !root.app-closing;
-                    root.notice-dismiss();
-                    if restore { root.focus-terminal(); }
+                    VerticalLayout {
+                        width: root.shell-notice-dismissible ? 32px : 0px;
+                        alignment: start;
+                        status-close := Button {
+                            visible: root.shell-notice-dismissible; enabled: self.visible;
+                            width: 32px; height: 32px; text: "×"; accessible-label: UiLabels.toast-dismiss;
+                            clicked => {
+                                let restore = self.has-focus && root.context-focus-restorable && !root.find-open && !root.app-closing;
+                                root.notice-dismiss();
+                                if restore { root.focus-terminal(); }
+                            }
+                        }
+                    }
                 }
             }
         }
