@@ -813,3 +813,13 @@ macOS 實際滑鼠測試重現 Slint 把緩衝中的最後一筆 Move 放到 Rel
 Apple Silicon 候選 `a2eb95c` 的封裝執行檔 SHA-256 為 `ae62e971c9cf00c3ccff678f4fcc914973dd5a2d06ccf5826230c696d6a0fe12`。macOS OpenGL 與軟體繪圖皆以 OS 滑鼠事件驗證展開、擷取選單、直接開啟收藏與設定、拖至左側停靠及再次展開。軟體繪圖設定案例的 AX 視窗辨識首輪未就緒，待視窗成為可操作後重測通過。退出均有 loopback Close ACK 與 exit 0。八項封裝探針通過，軟體繪圖的通知焦點首輪失敗，同 SHA 單獨重測通過。Rust 106 項通過、1 項既有 ignored，另通過 renderer audit、all-target Clippy、App 簽章及 DMG 核對。其他平台本輪未重新打包。
 
 交付與驗證位於 `.local/verification/slint-floating-chrome-current/`。保留 `package-rechecked/` 的 App 與 DMG、固定 Cargo target、獨特負例和先前跨平台對照。移除兩份本輪重複 ZIP 及被取代的 `package/`，共 352,951,279 regular-file bytes。精確路徑、雜湊與兩次 filesystem available 觀測見 `cleanup.json` 和 `cleanup-rechecked.json`。
+
+## 2026-11-11 浮球動畫與選單對照
+
+依 Dioxus 的 `assets/surface-tools.js`、`assets/app.css` 及 `src/ui/app.rs` 對照 Slint 浮球。懸停時以 1.2 秒來回縮放，分類進場採 160 ms 淡入及縮放。停用動態效果時直接呈現。拖曳及停靠沿用原有原生事件路徑。
+
+導覽先列名單揭露、草稿及快速前往，閱讀時再顯示頁面導覽及可用的推文定位。擷取依 Dioxus 的五個動作排列，純文字複製沿用快捷鍵及右鍵。連線顯示當前站點與編碼，依連線狀態呈現登入取消。收藏和設定保持第一層直開，收藏中可由浮動控制取消。縮放預設、拖曳捲動與單次 Vim 操作移到設定，F11 或 macOS 的 ⌃⌘F 仍可切換全螢幕。
+
+Apple Silicon 候選 `0a7667f` 的封裝執行檔 SHA-256 為 `2dce1be27d6f667cf4af6ebbe00bf53acb83c7f25de89ac8ebffb7f0cdb48ac7`。九項封裝回歸通過，涵蓋軟體繪圖與 OpenGL 視窗、浮球動畫與減少動態效果、設定交接、收藏、遮黑、推文更新和文章輸入。OS 滑鼠用 SHA-256 與建置收據相符的封裝來源執行檔驗證扇形、三個分類及設定，成功正常退出並收到 Close ACK。另一份舊候選正在執行時，兩次封裝視窗 AX 自動化無法取得目標視窗。保留原始收據，以來源執行檔重驗原生互動。前一輪動畫跳過及 shell 選單探針的失敗亦保留。
+
+本機交付位於 `.local/verification/slint-tools-parity-current/package-final/`。App 簽章、DMG 核對、Clippy、106 項 Rust 測試、含播放器與一般配置的 Skia 像素回歸及 Dioxus 浮球 34 項 JS 測試通過。其他平台本輪未重新打包。移除中間包和重複 ZIP，共 353,301,859 regular-file bytes。保留當前 App／DMG、固定 Cargo target、獨特證據及仍在執行的舊候選。精確路徑、雜湊與可用空間觀測見 `cleanup.json`。
