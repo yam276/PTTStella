@@ -48,6 +48,8 @@ export component PanelButton inherits Rectangle {
     }
     keys := FocusScope {
         enabled: root.enabled;
+        // Let the TouchArea receive the press and assign focus on activation.
+        focus-on-click: false;
         key-pressed(event) => {
             if (event.text == " " || event.text == Key.Return) {
                 if (!event.repeat) { root.clicked(); }

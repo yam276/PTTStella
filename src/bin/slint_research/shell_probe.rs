@@ -106,6 +106,33 @@ pub fn start(
                 "opening settings changed the terminal window or left station focus active",
             )?;
             verification::capture(&ui, &directory, "shell-settings.png")?;
+            let scale = ui.window().scale_factor();
+            let width = window.width as f32 / scale;
+            let height = window.height as f32 / scale;
+            let settings_close = slint::LogicalPosition::new(
+                (width + 900_f32.min(width - 32.)) / 2. - 38.,
+                (height + 700_f32.min(height - 32.)) / 2. - 31.,
+            );
+            ui.window()
+                .dispatch_event(slint::platform::WindowEvent::PointerMoved {
+                    position: settings_close,
+                });
+            verification::click(&ui, settings_close, PointerEventButton::Left);
+            wait(
+                || !ui.get_settings_open() && ui.get_terminal_input_focused(),
+                "settings close button did not restore terminal focus",
+            )
+            .await?;
+
+            ui.invoke_settings_show();
+            wait(
+                || {
+                    ui.get_settings_open()
+                        && ui.global::<crate::SettingsState>().get_focused_target() == 0
+                },
+                "reopened settings panel did not focus its search field",
+            )
+            .await?;
             verification::key(&ui, Key::Escape);
             wait(
                 || !ui.get_settings_open() && ui.get_terminal_input_focused(),
