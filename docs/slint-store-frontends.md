@@ -87,6 +87,27 @@ Slint worktree 的 Dioxus 入口改用 HTML 數字欄位 `step=any`，對齊 Rus
 
 核對簽章檔案、程序終結、DMG 卸載、resolved path、symlink、所有權和 open files 後，移除本輪隔離安裝位置及下載副本，共 220,889,069 regular-file bytes。filesystem free 觀測由 236,037,439,488 增至 236,264,677,376 bytes。精確路徑、du、SHA-256 與保留清單在 `cleanup.json`。
 
+## 2026-11-11 相容的 Dioxus 回退包與獨立備份
+
+以乾淨 `d66a069` 和既有 macOS 打包流程建立 Apple Silicon Dioxus 回退候選，沿用固定 Cargo target，包含小數外觀設定修正與自動開圖欄位。保留 DMG `PTTStella-0.5.0-dev.3-macos-arm64.dmg`，SHA-256 為 `9e740c0c5b86ce88751593f345babf353f7c7dfac2be10278c581bd848432041`。安裝執行檔為 `14a5ab7f`，Slint 安裝執行檔為 `793ecb91`。從兩個唯讀 DMG 複製簽章 App 到隔離 Applications 目錄後正常卸載，驗證深層簽章與逐檔雜湊。Dioxus 的 ZIP CRC 和所有普通 App 檔也與 DMG 安裝內容一致。這份 DMG 是 S8 的本機回退候選。
+
+一般入口在隔離 HOME 及本機 WSS 依序完成四段操作。
+
+| 階段 | 實際結果 |
+| --- | --- |
+| Slint 保存 | 關閉文章首尾切篇，保存含自動開圖、字高 23.5、基線 19.125 和字寬 102.75 的 v6 設定 |
+| Dioxus 回退 | 讀到原設定，開啟「右鍵開啟工具」並正常儲存。自動開圖、三個小數及其他欄位全部保留 |
+| Slint 重開 | 視窗顯示右鍵偏好已勾選，主檔及一代備份逐位元不變 |
+| Slint 從獨立備份重開 | 在另一個空白 HOME 讀回 Dioxus 儲存前的設定，介面顯示自動開圖已勾選、右鍵偏好未勾選 |
+
+每次正常退出後，站點、名單、離線收藏、草稿、最近看板和可攜外觀六份檔案都與起始副本逐位元相同。兩次儲存的一代備份各等於該次寫入前的主檔。四個程序皆 exit 0，合成 WSS 使用 TLS 1.3，只收到 Close 並完成回覆。
+
+在 Slint 第一次保存並退出後，將七個主檔及現有的 `settings.json.bak` 複製到兩個 App 資料目錄之外，記錄八個檔的長度與 SHA-256。Dioxus 儲存和輪替其一代備份後，從獨立備份恢復至全新隔離 HOME，八份檔案在恢復前後及 Slint 重開退出後逐位元一致。另在備份測試副本中只修改有效 JSON 的一個布林值，恢復在寫入前因雜湊不符而中止，恢復目的地仍不存在。這條路徑保留現有資料版本，並驗證了上節 v0.4.1 一代備份會輪替時可用的獨立副本。
+
+可重跑材料在 `.local/verification/slint-macos-compatible-rollback/`，包含 DMG、package manifest、實際主檔與備份、程式收據及畫面。以 `install.py` 安裝兩包。執行 `phase.py slint-save slint`，關閉文章首尾切篇並正常退出。執行 `backup-fixture.py save`。執行 `phase.py dioxus-rollback dioxus --handoff`，開啟右鍵偏好並退出。接著 `phase.py slint-return slint --handoff` 核對勾選狀態後退出。最後依序執行 `backup-fixture.py restore`、`phase.py restored slint --recovery-home` 和 `verify.py`。備份腳本只操作這輪合成位置。正式原地替換、Finder 首開、Keychain 與其他架構的回退仍待驗。
+
+Python 打包與工具測試 178 項、actionlint 及 docs 檢查通過。驗後依簽章檔案、程序終結、resolved path、所有權和 open files 清掉隔離 App 與重複 ZIP 及其校驗檔，共 221,536,247 regular-file bytes。filesystem free 觀測由 235,929,083,904 增至 236,157,456,384 bytes。保留已驗的 DMG、獨立備份及證據。
+
 ## 同一份資料的入口
 
 新增診斷入口：
