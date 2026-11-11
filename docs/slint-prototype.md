@@ -1531,6 +1531,16 @@ PTTSTELLA_VIDEO_FIXTURE=<NEW_NEGATIVE_FIXTURE_DIR>/quadrants.mp4 \
 第一次 staging 的絕對 rpath 超過 Mach-O load command 空間，改用同一暫存目錄的相對 rpath 與唯一 Frameworks symlink。首輪 collector 漏列負向 Close 的 `cleanup_error: null`，三個誤判及實際像素留存；最終嚴格核對該欄再重跑。命令、來源補丁、SHA、原始回報和精確清理清單在 `.local/verification/slint-macos-video-buffers/`。已移除唯一暫存執行檔與 symlink，regular-file 68,592,800 bytes，du 66,988 KiB，filesystem free 242151104512→242219700224 bytes。固定 Cargo target、候選 runtime 與素材保留並核對 SHA。
 
 
+### 2026-11-11 Apple Silicon 候選的原生影片操作
+
+從目前簽章 App 的封裝執行檔 `793ecb91` 啟動，在拒讀 Homebrew 與限制出站為本機的 sandbox 中重用三份自製影片。明確探針只準備播放器並核對起始像素，之後由 macOS 視窗的實際滑鼠操作跳到時間軸約 1 秒，以 Accessibility 改變視窗尺寸並關閉。WindowServer 的單一視窗 PNG 證明送到合成器的畫面。PNG 解碼核對 CRC，依影片預覽區與 16:9 fit 推導四處像素，另定位素材的移動白塊驗證跳轉。
+
+MP4、WebM、OGV 在預設軟體繪圖和明確 OpenGL 共六案都通過。影片播完時，白塊左緣在來源第 285 欄。原生跳到 1 秒後左緣移到第 97–98 欄。視窗從 1100×970 改成 860×680，白塊的來源欄最多差 1，四象限均在原容差內。OpenGL 的起始 libmpv 中介與主 framebuffer 取樣逐位元相同，讀取未回報 GL error。另跑 OpenGL MP4 的原生最小化案例，恢復後可見四色，間隔 0.6 秒的兩張畫面都停在同一個白塊位置。刻意將左上角改綠的 MP4 經同一視窗播放，獨立 PNG 檢查正確判為不符原素材。
+
+八次關窗均 exit 0，收到唯一嚴格 Close，並核對影片 worker、libmpv core、串流和 HTTP worker 全部退出。每次影片 HTTP 各一筆。這輪是 Apple Silicon、視窗倍率 1 的實際呈現和原生操作證據。先前的偶發錯色未重現，GPU context 遺失、實際可聽音訊及其他平台仍待驗。
+
+收據與重跑入口位於 `.local/verification/slint-native-video-current/`。用 `launch.py opengl-mp4 opengl mp4` 準備首案，依上述步驟操作並保留 WindowServer 擷取，再執行 `native-matrix.py`、`native-minimize.py` 與 `verify.py`。控制器以 PID 及唯一視窗標題選擇探針視窗。沿用既有 App 與素材，清掉一張逐位元重複的 PNG，共 494,610 bytes。精確路徑、保留副本及可用空間觀測見 `cleanup.json`。
+
 ## S5 CPU 影片與明確軟體 compositor（2026-11-09）
 
 原完整 native-video 入口強制 OpenGL，因此原先即使指定 `SLINT_BACKEND=winit-skia-software`，影片仍走GL。本批以舊候選binary重現後，新增 `--software-renderer` 並尊重明確環境選擇。未指定的完整native-video入口仍維持GL；非GL notifier或明確software選擇走同一libmpv Session／Control／RenderGate的CPU renderer，不增WebView、獨立下載器或另一個影片控制狀態。
