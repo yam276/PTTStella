@@ -42,6 +42,24 @@
 
 原始紀錄、重跑控制器、每個程序的 CPU delta 和取樣資料在 `.local/verification/slint-gif-minimized/`。複製 `compare.py` 到同層新證據目錄，執行 `setup`，逐輪 `run N`，依上述原生操作在各狀態執行 `sample N playing`、`sample N settings`、`sample N restored`。Dioxus Quit 前匯出整頁 PNG。清理移除六個自有根路徑共 110,624,900 regular-file bytes，12 份 trace 無損壓縮省 2,572,895 bytes。精確路徑、保留雜湊及 filesystem free 觀測見 `cleanup.json`。本輪沿用現有執行檔與固定 Cargo target。
 
+## 2026-11-11 方向鍵到視窗呈現延遲
+
+在 Mac15,14（Apple M3 Ultra）、macOS 15.7.7、1920×1080 60 Hz 螢幕上，以 Apple Silicon Slint 候選 `99949409…`（`dbbce24`）對照同 worktree 的 release Dioxus `52ac086b…`（`9bd26fd`，含 `cc56bc4`）。兩版使用一般入口、相同的隔離設定、相同的 1040×768 視窗尺寸與位置。使用同一個 localhost TLS WebSocket peer，把 22 行合成終端內容填入 80×24 格線。兩版初始截圖中的終端內容一致，原生視窗的留白及浮球位置有差異。
+
+依 Slint、Dioxus、Dioxus、Slint 的順序，每次用新程序預先連線後按 100 次向上鍵。每次只送一個 OS 按鍵，peer 精確核對 `1b 5b 41`，以同一份合成格線交替回應紅、綠背景。收到預期顏色才開始下一次，按鍵前與觀察後核對前景 PID。以單一視窗的 ScreenCaptureKit `displayTime` 取得視窗伺服器呈現時間，和按鍵、peer 的 Mach 時鐘逐筆比對。所有呈現時間都晚於相應回覆開始，另記 capture callback 時間。這組觀測點在視窗伺服器，螢幕面板反應與持續前景未另量測。[Apple displayTime 文件](https://developer.apple.com/documentation/screencapturekit/scstreamframeinfo/displaytime)
+
+| 量測（各 200 次） | Slint p50／p95 | Dioxus p50／p95 |
+| --- | ---: | ---: |
+| 按鍵到視窗呈現 | 37.35／42.06 ms | 37.33／54.67 ms |
+| 按鍵到 peer 收到資料 | 2.54／4.68 ms | 3.16／7.11 ms |
+| peer 開始回覆到視窗呈現 | 34.86／38.71 ms | 33.90／51.24 ms |
+
+兩輪按鍵到呈現的 p95 分別為 Slint 42.18／41.03 ms、Dioxus 54.67／54.53 ms。合併後此負載的 Slint p95 低約 23%，中位數相近。四輪各 exit 0、peer 回覆 Close 並 join，合成資料雜湊不變。這組結果只涵蓋已連線的合成終端重繪；冷暖啟動、快取翻頁／長文捲動、掉幀、同負載 CPU／記憶體與跨平台矩陣仍待驗。
+
+首輪小樣本擷取器在初始化 WindowServer 前中止，沒有計入。加入 AppKit／CoreGraphics 初始化後，兩版各 4 次小樣本通過，才跑正式四輪。原始 stderr、兩版初始畫面、逐筆 key／peer／capture ticks、硬體／來源及結束收據在 `.local/verification/slint-macos-input-latency/`。重跑時在同層新證據目錄使用保留的 `roundtrip.py`、`drive.py`、`native-ui.js`、`Capture.swift` 與 `summarize.py`。執行 `roundtrip.py setup --dioxus-binary ABSOLUTE_FIXED_TARGET_BINARY`，用 `xcrun swiftc -O -parse-as-library Capture.swift -o capture` 建立擷取器。依次執行 `drive.py slint slint_1`、`drive.py dioxus dioxus_1`、`drive.py dioxus dioxus_2`、`drive.py slint slint_2`，再執行 `summarize.py`。視窗操作與擷取使用此 Mac 既有的 OS 權限。
+
+已移除 8 個自有測試位置，包含兩個 App 的暫存根、專用 WebKit／cache、編譯後的擷取器及未使用的操作腳本，合計 110,572,644 regular-file bytes。保留固定 Cargo target、候選包與量測證據。精確路徑、du、保留例外和並行可用空間在 `cleanup.json`。
+
 ## 2026-11-11 設定重複開關與按需繪製預覽
 
 同一台 macOS arm64、相同 1040×768 文章外窗及兩張 512×160 GIF。兩個現有 Slint 候選程序 `f50ffb46…` 各做 12 次原生「一般」設定開關，然後在同一暫存 App 換上修正後 `a243d3bf…` 的新程序重跑。每次確實進入 Settings 再回文章，採樣點確認雙圖及輸入焦點。每點取樣 5 秒／51 筆，下表使用末 31 筆的程序族中位數。原始峰值、RSS、CPU 與程序身分也保留。
