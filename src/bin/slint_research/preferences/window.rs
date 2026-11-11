@@ -240,10 +240,14 @@ impl Preferences {
                         .is_some_and(|u| u.get_settings_open() && !u.get_app_closing())
                 {
                     let handoff = match code {
-                        0 => Handoff::Fit,
+                        0 => Handoff::Zoom(1.),
                         1 => Handoff::Vim,
                         2 => Handoff::Mouse,
                         3 => Handoff::KeepAlive,
+                        4 => Handoff::Pan,
+                        5 => Handoff::VimOnce,
+                        6 => Handoff::Zoom(1.25),
+                        7 => Handoff::Zoom(1.5),
                         _ => return,
                     };
                     owner.handoff.set(Some(handoff));
@@ -449,12 +453,20 @@ impl Preferences {
                 ui.get_vim_label().to_string(),
                 ui.get_station_mouse_label().to_string(),
                 ui.get_keep_alive_label().to_string(),
+                if ui.get_pan_mode() {
+                    msg!("slint-select-text")
+                } else {
+                    msg!("slint-drag-scroll")
+                },
+                ui.get_vim_once_label().to_string(),
             ]));
             w.set_runtime_states(ModelRc::new(VecModel::from(vec![
                 false,
                 ui.get_vim_enabled(),
                 ui.get_station_mouse_enabled(),
                 ui.get_keep_alive_enabled(),
+                false,
+                false,
             ])));
             let unblocked = !ui.get_app_closing()
                 && !ui.get_editor_open()
@@ -468,6 +480,8 @@ impl Preferences {
                 ptt,
                 ui.get_station_mouse_available() && unblocked,
                 ptt,
+                unblocked,
+                ptt && ui.get_vim_once_available(),
             ])));
             if !w.get_query().is_empty() {
                 w.invoke_search(w.get_query());
@@ -690,8 +704,8 @@ impl Preferences {
                     Handoff::Account => ui.invoke_login_show(),
                     Handoff::Sites => ui.invoke_sites_show(),
                     Handoff::Filters => ui.invoke_filters_show(),
-                    Handoff::Fit => {
-                        ui.set_zoom(1.);
+                    Handoff::Zoom(zoom) => {
+                        ui.set_zoom(zoom);
                         ui.invoke_focus_terminal();
                     }
                     Handoff::Vim => {
@@ -699,6 +713,14 @@ impl Preferences {
                         ui.invoke_toggle_vim();
                     }
                     Handoff::Mouse => ui.invoke_toggle_station_mouse(),
+                    Handoff::Pan => {
+                        ui.set_pan_mode(!ui.get_pan_mode());
+                        ui.invoke_focus_terminal();
+                    }
+                    Handoff::VimOnce => {
+                        ui.invoke_keyboard_updated();
+                        ui.invoke_vim_once();
+                    }
                     Handoff::KeepAlive => ui.invoke_toggle_keep_alive(),
                 }
             }

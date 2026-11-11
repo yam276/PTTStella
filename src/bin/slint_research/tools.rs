@@ -25,18 +25,10 @@ enum Command {
     Disconnect,
     Login,
     CancelLogin,
-    KeepAlive,
-    Vim,
-    Once,
-    Mouse,
-    Pan,
-    Zoom(f32),
-    Fullscreen,
     Sites,
-    Filters,
     Reveal,
-    BookmarkCurrent,
-    BookmarkCancel,
+    ReplyNavigation,
+    Detail,
     Destination,
     StopDestination,
     Drafts,
@@ -266,7 +258,6 @@ impl Tools {
     }
     fn commands(&self, ui: &TerminalWindow, category: usize) -> Vec<(Command, String, bool)> {
         let ready = self.output.current(ui).is_some() && !ui.get_output_busy();
-        let selected = self.output.selection_key().is_some();
         let view = self.connection.updates.borrow();
         let context = view.context();
         let navigate = ready
@@ -277,143 +268,133 @@ impl Tools {
         let mut result = Vec::new();
         match category {
             0 => {
-                if ui.get_destination_available() {
-                    result.push((
-                        Command::Destination,
-                        pttstella::msg!("destination-title"),
-                        true,
-                    ));
-                    result.push((
-                        Command::StopDestination,
-                        pttstella::msg!("destination-stop"),
-                        ui.get_destination_active(),
-                    ));
-                }
-                for (action, intent) in [
-                    (Action::Back, Intent::Back),
-                    (Action::Previous, Intent::PreviousPage),
-                    (Action::Next, Intent::NextPage),
-                ] {
-                    let enabled = navigate
-                        && navigation::plan(&context, intent).is_ok_and(|bytes| !bytes.is_empty());
-                    result.push((
-                        Command::Content(action),
-                        crate::context_menu::label(action),
-                        enabled,
-                    ));
+                if ui.get_filter_count() > 0 {
+                    result.extend([
+                        (
+                            Command::Reveal,
+                            ui.get_filter_label().into(),
+                            ready && ui.get_filter_ready(),
+                        ),
+                        (Command::Detail, ui.get_filter_status().into(), false),
+                    ]);
                 }
                 result.extend([
                     (
-                        Command::Vim,
-                        ui.get_vim_label().to_string(),
-                        ui.get_vim_available(),
+                        Command::Drafts,
+                        pttstella::msg!("draft-open"),
+                        ui.get_editor_mounted(),
                     ),
                     (
-                        Command::Once,
-                        ui.get_vim_once_label().to_string(),
-                        ui.get_vim_once_available(),
-                    ),
-                    (
-                        Command::Mouse,
-                        ui.get_station_mouse_label().to_string(),
-                        ui.get_station_mouse_available(),
-                    ),
-                    (
-                        Command::Pan,
-                        if ui.get_pan_mode() {
-                            pttstella::msg!("slint-select-text")
-                        } else {
-                            pttstella::msg!("slint-drag-scroll")
-                        },
-                        ready,
-                    ),
-                    (Command::Zoom(1.), "100%".into(), true),
-                    (Command::Zoom(1.25), "125%".into(), true),
-                    (Command::Zoom(1.5), "150%".into(), true),
-                    (
-                        Command::Fullscreen,
-                        pttstella::msg!("menu-fullscreen"),
-                        true,
+                        Command::Destination,
+                        pttstella::msg!("destination-open"),
+                        ui.get_destination_available() && view.site.ptt_features(),
                     ),
                 ]);
-                if ui.get_bookmarks_available() {
+                if ui.get_destination_active() {
                     result.push((
-                        Command::BookmarkCurrent,
-                        pttstella::msg!("bookmarks-current"),
-                        ui.get_bookmarks_current_available(),
+                        Command::StopDestination,
+                        pttstella::msg!("destination-stop"),
+                        true,
                     ));
-                    if ui.get_bookmarks_capturing() {
-                        result.push((Command::BookmarkCancel, pttstella::msg!("cancel"), true));
+                }
+                if matches!(context, navigation::Context::ArticleReading { .. }) {
+                    for (action, intent, label) in [
+                        (Action::Back, Intent::Back, pttstella::msg!("browse-back")),
+                        (
+                            Action::Previous,
+                            Intent::PreviousPage,
+                            pttstella::msg!("browse-previous"),
+                        ),
+                        (
+                            Action::Next,
+                            Intent::NextPage,
+                            pttstella::msg!("browse-next"),
+                        ),
+                    ] {
+                        let enabled = navigate
+                            && (ui.get_article_active() && action != Action::Back
+                                || navigation::plan(&context, intent)
+                                    .is_ok_and(|bytes| !bytes.is_empty()));
+                        result.push((Command::Content(action), label, enabled));
+                    }
+                    if ui.get_reply_navigation_available() {
+                        result.push((
+                            Command::ReplyNavigation,
+                            pttstella::msg!("reply-navigation-title"),
+                            ready && ui.get_reply_navigation_ready(),
+                        ));
                     }
                 }
-                if ui.global::<EditorState>().get_available() {
-                    result.push((Command::Drafts, pttstella::msg!("draft-open"), true));
-                }
-                if ui.get_filters_available() {
-                    result.push((Command::Filters, pttstella::msg!("filters-title"), true));
-                }
-                if ui.get_filter_count() > 0 {
-                    result.push((
-                        Command::Reveal,
-                        ui.get_filter_label().into(),
-                        ready && ui.get_filter_ready(),
-                    ));
+                if view.phase == Phase::Connected && view.mouse.route == Route::Local {
+                    let hint = if view.input_pending {
+                        pttstella::msg!("navigation-wait")
+                    } else {
+                        match context {
+                            navigation::Context::ArticleList { .. } => {
+                                pttstella::msg!("article-list-hint")
+                            }
+                            navigation::Context::ArticleReading { .. } => {
+                                pttstella::msg!("article-reading-hint")
+                            }
+                            _ => String::new(),
+                        }
+                    };
+                    result.push((Command::Detail, hint, false));
                 }
             }
             2 => {
-                for action in [
-                    Action::SelectAll,
-                    Action::Copy,
-                    Action::CopyAnsi,
-                    Action::ExportPage,
-                    Action::ExportRows,
-                    Action::CopyImagePage,
-                    Action::CopyImageRows,
+                for (action, label) in [
+                    (Action::SelectAll, pttstella::msg!("select-all")),
+                    (Action::ExportPage, pttstella::msg!("export-png")),
+                    (Action::ExportRows, pttstella::msg!("export-rows")),
+                    (Action::CopyImagePage, pttstella::msg!("copy-png")),
+                    (Action::CopyImageRows, pttstella::msg!("copy-rows-png")),
                 ] {
+                    let rows = matches!(action, Action::ExportRows | Action::CopyImageRows);
                     result.push((
                         Command::Content(action),
-                        crate::context_menu::label(action),
-                        ready
-                            && (!matches!(action, Action::ExportRows | Action::CopyImageRows)
-                                || ui.get_selection_rows_ready())
-                            && (matches!(
-                                action,
-                                Action::SelectAll | Action::ExportPage | Action::CopyImagePage
-                            ) || selected),
+                        label,
+                        ready && (!rows || ui.get_selection_rows_ready()),
                     ));
                 }
             }
-            3 => result.extend([
-                (
-                    Command::Reconnect,
-                    pttstella::msg!("connect"),
-                    ui.get_can_reconnect(),
-                ),
-                (
-                    Command::Disconnect,
-                    pttstella::msg!("disconnect"),
-                    matches!(view.phase, Phase::Connecting | Phase::Connected),
-                ),
-                (
-                    Command::Login,
-                    ui.get_login_label().to_string(),
-                    ui.get_login_available() && !ui.get_login_busy(),
-                ),
-                (
-                    Command::CancelLogin,
-                    ui.get_login_cancel_attempt_label().to_string(),
-                    ui.get_login_pending(),
-                ),
-                (
-                    Command::KeepAlive,
-                    ui.get_keep_alive_label().to_string(),
-                    ui.get_keep_alive_available(),
-                ),
-            ]),
+            3 => {
+                result.extend([
+                    (
+                        Command::Reconnect,
+                        pttstella::msg!("connect"),
+                        ui.get_can_reconnect(),
+                    ),
+                    (
+                        Command::Disconnect,
+                        pttstella::msg!("disconnect"),
+                        matches!(view.phase, Phase::Connecting | Phase::Connected),
+                    ),
+                ]);
+                if ui.get_sites_available() {
+                    result.push((Command::Sites, pttstella::msg!("sites-title"), true));
+                }
+                result.extend([
+                    (
+                        Command::Detail,
+                        crate::sites_manager::describe(&view.site),
+                        false,
+                    ),
+                    (
+                        Command::Login,
+                        pttstella::msg!("login"),
+                        ui.get_login_available() && !ui.get_login_busy(),
+                    ),
+                ]);
+                if ui.get_login_pending() {
+                    result.push((
+                        Command::CancelLogin,
+                        ui.get_login_cancel_attempt_label().to_string(),
+                        true,
+                    ));
+                }
+            }
             _ => {}
-        }
-        if category == 3 && ui.get_sites_available() {
-            result.push((Command::Sites, pttstella::msg!("sites-title"), true));
         }
         result.retain(|(_, label, _)| !label.is_empty());
         result
@@ -505,30 +486,47 @@ impl Tools {
             }
             let scale = layout.scale;
             let gap = 8. * scale;
-            let available = layout.panel.width - 24.;
+            let available = layout.panel.width - 28.;
             let mut x = 0.;
             let mut y = 0.;
+            let mut row_height = 0_f32;
             let items = actions
                 .iter()
                 .enumerate()
-                .map(|(index, (_, label, enabled))| {
+                .map(|(index, (command, label, enabled))| {
+                    let detail = *command == Command::Detail;
                     let text = label
                         .chars()
                         .map(|ch| if ch.is_ascii() { 7. } else { 13. })
                         .sum::<f32>();
-                    let width = ((text + 24.) * scale).min(available);
-                    if x > 0. && x + width > available {
+                    let icon = if *command == Command::Sites { 24. } else { 0. };
+                    let width = if detail {
+                        available
+                    } else {
+                        ((text + 22. + icon) * scale).min(available)
+                    };
+                    if x > 0. && (x + width > available || *command == Command::Sites) {
                         x = 0.;
-                        y += 42. * scale;
+                        y += row_height + gap;
+                        row_height = 0.;
                     }
+                    let height = if detail {
+                        ((text * scale / available).ceil().max(1.) * 16. + 2.) * scale
+                    } else {
+                        34. * scale
+                    };
                     let rect = Rect {
                         x,
                         y,
                         width,
-                        height: 34. * scale,
+                        height,
                     };
                     x += width + gap;
-                    item(index, label, *enabled, rect)
+                    row_height = row_height.max(height);
+                    let mut item = item(index, label, *enabled, rect);
+                    item.detail = detail;
+                    item.icon = if *command == Command::Sites { 6 } else { -1 };
+                    item
                 })
                 .collect::<Vec<_>>();
             let content_height = items.last().map_or(0., |item| item.y + item.height);
@@ -537,7 +535,7 @@ impl Tools {
                 x: layout.panel.x,
                 y: layout.panel.y,
                 width: layout.panel.width,
-                height: layout.panel.height.min(32. + 40. * scale + content_height),
+                height: layout.panel.height.min(28. + 50. * scale + content_height),
             });
             ui.set_tools_actions(ModelRc::new(VecModel::from(items)));
         }
@@ -591,7 +589,10 @@ impl Tools {
             .map(|(command, _, _)| command);
         if kind == 0 {
             let source = command.and_then(|command| {
-                let stamp = if matches!(command, Command::Content(_) | Command::Reveal) {
+                let stamp = if matches!(
+                    command,
+                    Command::Content(_) | Command::Reveal | Command::ReplyNavigation
+                ) {
                     self.output.current(&ui)?
                 } else {
                     self.connection.updates.borrow().stamp()
@@ -648,18 +649,10 @@ impl Tools {
             }
             Command::Login => ui.invoke_login_show(),
             Command::CancelLogin => ui.invoke_login_cancel(),
-            Command::KeepAlive => ui.invoke_toggle_keep_alive(),
-            Command::Vim => ui.invoke_toggle_vim(),
-            Command::Once => ui.invoke_vim_once(),
-            Command::Mouse => ui.invoke_toggle_station_mouse(),
-            Command::Pan => ui.set_pan_mode(!ui.get_pan_mode()),
-            Command::Zoom(zoom) => ui.set_zoom(zoom),
-            Command::Fullscreen => ui.invoke_toggle_fullscreen(),
             Command::Sites => ui.invoke_sites_show(),
-            Command::Filters => ui.invoke_filters_show(),
             Command::Reveal => ui.invoke_filter_reveal(),
-            Command::BookmarkCurrent => ui.invoke_bookmarks_capture_current(),
-            Command::BookmarkCancel => ui.invoke_bookmarks_capture_cancel(),
+            Command::ReplyNavigation => ui.invoke_reply_navigation_action(0),
+            Command::Detail => {}
             Command::Destination => ui.invoke_destination_show(),
             Command::StopDestination => ui.invoke_destination_stop(),
             Command::Drafts => ui.global::<EditorState>().invoke_action(0),
@@ -759,6 +752,8 @@ fn item(id: usize, label: &str, enabled: bool, rect: Rect) -> ToolItem {
     ToolItem {
         id: id as i32,
         label: label.into(),
+        detail: false,
+        icon: -1,
         enabled,
         x: rect.x,
         y: rect.y,

@@ -35,6 +35,8 @@ export component TerminalWindow inherits Window {
     callback article-updates-scrolled;
     in property <bool> reply-navigation-available;
     in property <bool> reply-navigation-ready;
+    changed reply-navigation-available => { root.tools-updated(); }
+    changed reply-navigation-ready => { root.tools-updated(); }
     in property <bool> reply-navigation-open;
     in property <[bool]> reply-navigation-groups;
     in property <int> reply-navigation-group;
@@ -69,6 +71,7 @@ export component TerminalWindow inherits Window {
     changed keep-alive-enabled=>{root.settings-runtime-updated();}
     changed keep-alive-available=>{root.settings-runtime-updated();}
     changed vim-label=>{root.settings-runtime-updated();}
+    changed vim-once-available=>{root.settings-runtime-updated();}
     changed station-mouse-label=>{root.settings-runtime-updated();}
     changed keep-alive-label=>{root.settings-runtime-updated();}
     in property <bool> filters-available;
@@ -77,6 +80,8 @@ export component TerminalWindow inherits Window {
     in property <int> filter-count;
     in property <bool> filter-ready;
     in property <bool> filter-revealed;
+    changed filter-status => {root.tools-updated();}
+    changed filter-ready => {root.tools-updated();}
     in property <string> filter-label;
     in property <string> filter-status;
     callback filter-reveal;
@@ -115,6 +120,7 @@ export component TerminalWindow inherits Window {
     focus-station-color-actions=>{station-color-view.focus-actions();}
     changed station-color-open=>{root.keyboard-updated();root.keep-alive-changed();root.media-updated();root.tools-updated();root.context-updated();root.station-color-updated();root.station-mouse-cancel();}
     out property <bool> editor-open: EditorState.open;
+    in property <bool> editor-mounted;
     out property <bool> editor-available: EditorState.available;
     changed editor-available => {root.tools-updated();}
     out property <bool> editor-focused: EditorState.body-focused || EditorState.title-focused;
@@ -295,6 +301,8 @@ export component TerminalWindow inherits Window {
     in property <length> tools-x;
     in property <length> tools-y;
     in property <bool> tools-compact;
+    out property <float> tools-fan-progress: tools-area.fan-progress;
+    out property <float> tools-ball-visual-scale: tools-area.ball-visual-scale;
     in property <SelectionRect> tools-panel;
     in property <length> tools-grid-height;
     in property <length> tools-action-height;
@@ -942,7 +950,7 @@ export component TerminalWindow inherits Window {
     // Article controls float above the viewport so late capabilities cannot
     // move acknowledged text, hit targets or an in-progress selection.
     if !root.media-open && !root.find-open && !root.reply-navigation-open
-        && ((root.article-load-available && (root.article-load-active || root.article-load-can-resume))
+        && (root.bookmarks-capturing || (root.article-load-available && (root.article-load-active || root.article-load-can-resume))
             || root.article-updates-available || root.article-updates-visible): Rectangle {
         x: root.width - self.width - 12px;
         y: root.shell-status-visible ? status-panel.y + status-panel.height + 8px : 12px;
@@ -956,6 +964,14 @@ export component TerminalWindow inherits Window {
         reading-controls := VerticalLayout {
             padding: 8px;
             spacing: 6px;
+            if root.bookmarks-capturing: HorizontalLayout {
+                spacing: 8px;
+                Text {
+                    text: UiLabels.bookmark-capture; color: #ebe7dc; vertical-alignment: center;
+                    horizontal-stretch: 1; min-width: 0px; overflow: elide;
+                }
+                Button { text: UiLabels.cancel; clicked => { root.bookmarks-capture-cancel(); } }
+            }
             if root.article-load-available && (root.article-load-active || root.article-load-can-resume): HorizontalLayout {
                 spacing: 8px;
                 Text {
@@ -998,7 +1014,7 @@ export component TerminalWindow inherits Window {
         blocked: root.tools-source-blocked;
         compact: root.tools-compact;
         attention: root.connection-attention;
-        status: root.tools-category == 0 && root.filter-count > 0 ? root.filter-status : root.connection-status;
+        status: root.connection-status; reduced-motion: root.tools-reduced-motion;
         ball-opacity: root.tools-opacity; scale: root.tools-scale;
         ball-x: root.tools-x; ball-y: root.tools-y;
         panel-x: root.tools-panel.x; panel-y: root.tools-panel.y;

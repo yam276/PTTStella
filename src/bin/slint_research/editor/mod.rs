@@ -108,6 +108,7 @@ impl Editor {
             palette: RefCell::new(None),
             trace: probe::Trace::new("document"),
         });
+        ui.set_editor_mounted(true);
         ui.global::<EditorState>().on_action({
             let owner = Rc::downgrade(&owner);
             move |code| {

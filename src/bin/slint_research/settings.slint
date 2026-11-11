@@ -172,7 +172,12 @@ export component SettingsWindow inherits Window {
                         FocusCheck {field-id:16;text:root.labels[7];checked<=>root.boundary;toggled=>{root.edit();}}
                     }
                     if root.preview-visible: VerticalLayout {
-                        FocusButton {field-id:20;text:root.runtime-labels[0];clicked=>{root.runtime-action(0);}}
+                        HorizontalLayout {
+                            spacing: 8px;
+                            FocusButton {field-id:20;text:root.runtime-labels[0];clicked=>{root.runtime-action(0);}}
+                            Button { text: "125%"; clicked => {root.runtime-action(6);} }
+                            Button { text: "150%"; clicked => {root.runtime-action(7);} }
+                        }
                         Text {text:root.labels[8];color:#d7dce5;}
                         FocusCombo {field-id:11;model:root.presets;current-index<=>root.preset;selected=>{root.font-preset();}}
                         Text {text:root.labels[9];color:#d7dce5;}
@@ -203,6 +208,8 @@ export component SettingsWindow inherits Window {
                     if root.query=="" && root.page==2: VerticalLayout {
                         FocusButton {field-id:21;text:root.runtime-labels[1];enabled:root.runtime-available[1];checked:root.runtime-states[1];clicked=>{root.runtime-action(1);}}
                         FocusButton {field-id:22;text:root.runtime-labels[2];enabled:root.runtime-available[2];checked:root.runtime-states[2];clicked=>{root.runtime-action(2);}}
+                        if root.runtime-available[5]: Button {text:root.runtime-labels[5];clicked=>{root.runtime-action(5);}}
+                        Button {text:root.runtime-labels[4];enabled:root.runtime-available[4];clicked=>{root.runtime-action(4);}}
                         Text {text:root.labels[19];color:#d7dce5;}
                         opacity-field:=EditField {field-id:6;text<=>root.tool-opacity;edited=>{root.edit();}}
                         FocusCheck {field-id:12;text:root.labels[20];checked<=>root.right-click;toggled=>{root.edit();}}

@@ -28,6 +28,8 @@ pub fn refresh(ui: &TerminalWindow) {
     labels.set_local_drafts(msg!("draft-open").into());
     labels.set_article_heading(msg!("slint-article-heading").into());
     labels.set_cancel_load(msg!("article-load-cancel").into());
+    labels.set_cancel(msg!("cancel").into());
+    labels.set_bookmark_capture(msg!("bookmarks-list-loading").into());
     labels.set_next_section(msg!("article-load-next-segment").into());
     labels.set_resume_load(msg!("article-load-resume").into());
     labels.set_resume_reading(msg!("slint-resume-reading").into());

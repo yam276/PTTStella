@@ -50,7 +50,7 @@ fn index(value: TextEncoding) -> i32 {
         TextEncoding::Gbk => 2,
     }
 }
-fn describe(target: &Target) -> String {
+pub(super) fn describe(target: &Target) -> String {
     msg!(
         "sites-target",
         address = target.endpoint.as_str(),

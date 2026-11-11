@@ -218,12 +218,22 @@ impl Preferences {
             "fit handoff did not apply",
         )
         .await?;
+        for (action, expected) in [(6, 1.25), (7, 1.5)] {
+            ui.invoke_settings_show();
+            window.invoke_runtime_action(action);
+            wait(
+                || !ui.get_settings_open() && ui.get_zoom() == expected,
+                "zoom preset handoff did not apply",
+            )
+            .await?;
+        }
         ui.set_zoom(zoom);
-        for action in 1..=3 {
+        for action in 1..=4 {
             let value = || match action {
                 1 => ui.get_vim_enabled().to_string(),
                 2 => ui.get_station_mouse_enabled().to_string(),
-                _ => ui.get_keep_alive_enabled().to_string(),
+                3 => ui.get_keep_alive_enabled().to_string(),
+                _ => ui.get_pan_mode().to_string(),
             };
             let before = value();
             for restore in [false, true] {
@@ -244,7 +254,7 @@ impl Preferences {
         std::fs::write(dir.join("settings-search.json"),serde_json::to_vec_pretty(&serde_json::json!({
             "status":"passed","cases":checked,"pending_filter_manager":"not included until native manager exists",
             "stale_focus_cancelled":true,"private_name_not_indexed":true,"incomplete_draft_preserved":true,
-            "saved_settings_restored":true,"runtime_fit_and_three_toggles_restored":true,"profile_name_validation_and_import_notice":true,"scope":"real native widgets and production callbacks, synthetic focus; not OS IME/accessibility or all-platform acceptance"
+            "saved_settings_restored":true,"runtime_zoom_and_four_toggles_restored":true,"profile_name_validation_and_import_notice":true,"scope":"real native widgets and production callbacks, synthetic focus; not OS IME/accessibility or all-platform acceptance"
         })).map_err(|e|e.to_string())?).map_err(|e|e.to_string())
     }
 }

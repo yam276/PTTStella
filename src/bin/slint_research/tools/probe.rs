@@ -50,8 +50,8 @@ fn action_point(ui: &TerminalWindow, index: usize) -> Result<slint::LogicalPosit
         .ok_or("missing action")?;
     let panel = ui.get_tools_panel();
     Ok(slint::LogicalPosition::new(
-        panel.x + 12. + item.x + item.width / 2.,
-        panel.y + 20. + 40. * ui.get_tools_scale() + item.y + item.height / 2.,
+        panel.x + 14. + item.x + item.width / 2.,
+        panel.y + 14. + 50. * ui.get_tools_scale() + item.y + item.height / 2.,
     ))
 }
 async fn open(ui: &TerminalWindow) -> Result<(), String> {
@@ -130,7 +130,52 @@ async fn verify(
         .await?;
     }
     let image = ui.get_terminal_image();
+    ui.set_tools_reduced_motion(false);
+    ui.window()
+        .dispatch_event(Event::PointerMoved { position: ball(ui) });
+    wait(
+        || ui.get_tools_ball_visual_scale() > 1.05,
+        "hover did not grow the ball",
+    )
+    .await?;
+    wait(
+        || ui.get_tools_ball_visual_scale() < 1.015,
+        "hover pulse did not return",
+    )
+    .await?;
+    ui.set_tools_reduced_motion(true);
+    wait(
+        || ui.get_tools_ball_visual_scale() == 1.,
+        "reduced motion did not stop hover pulse",
+    )
+    .await?;
     open(ui).await?;
+    wait(
+        || ui.get_tools_fan_progress() == 1.,
+        "reduced-motion fan did not appear",
+    )
+    .await?;
+    key(ui, Key::Escape);
+    wait(
+        || ui.get_tools_fan_progress() == 0.,
+        "closing the fan did not reset unfolding",
+    )
+    .await?;
+    ui.set_tools_reduced_motion(false);
+    open(ui).await?;
+    wait(
+        || {
+            let progress = ui.get_tools_fan_progress();
+            progress > 0. && progress < 1.
+        },
+        "fan skipped the unfolding animation",
+    )
+    .await?;
+    wait(
+        || ui.get_tools_fan_progress() >= 1.,
+        "fan unfolding did not finish",
+    )
+    .await?;
     require(
         !ui.get_terminal_input_focused(),
         "tools did not own keyboard focus",
@@ -163,6 +208,22 @@ async fn verify(
     require(
         ui.get_tools_category() == 2,
         "keyboard did not open capture category",
+    )?;
+    let capture_actions = ui.get_tools_actions();
+    let labels = capture_actions
+        .iter()
+        .map(|item| item.label.to_string())
+        .collect::<Vec<_>>();
+    require(
+        labels
+            == [
+                pttstella::msg!("select-all"),
+                pttstella::msg!("export-png"),
+                pttstella::msg!("export-rows"),
+                pttstella::msg!("copy-png"),
+                pttstella::msg!("copy-rows-png"),
+            ],
+        "capture buttons diverged from the Dioxus list or order",
     )?;
     capture(ui, directory, "capture.png")?;
     key(ui, Key::Return);
@@ -353,6 +414,11 @@ async fn verify(
         ui.get_tools_compact(),
         "small window did not use compact category layout",
     )?;
+    wait(
+        || ui.get_tools_fan_progress() >= 1.,
+        "compact fan unfolding did not finish",
+    )
+    .await?;
     capture(ui, directory, "compact.png")?;
     key(ui, Key::Escape);
     require(

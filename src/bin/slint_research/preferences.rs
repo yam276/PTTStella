@@ -24,10 +24,12 @@ enum Handoff {
     Account,
     Sites,
     Filters,
-    Fit,
+    Zoom(f32),
     Vim,
     Mouse,
     KeepAlive,
+    Pan,
+    VimOnce,
 }
 type Apply = Box<dyn Fn(&AppSettings) -> Result<(), String>>;
 type Saved = crate::file_job::ResultSlot<AppSettings>;

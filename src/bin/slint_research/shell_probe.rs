@@ -106,16 +106,16 @@ pub fn start(
                 idle_image == ui.get_terminal_image(),
                 "license modal repainted the terminal bitmap",
             )?;
-            choose(&ui, 0, "125%").await?;
+            ui.set_zoom(1.25);
             wait(
                 || ui.get_zoom() == 1.25 && !ui.get_frame_paint_pending(),
-                "floating zoom did not install geometry",
+                "viewport zoom did not install geometry",
             )
             .await?;
-            choose(&ui, 0, "100%").await?;
+            ui.set_zoom(1.);
             wait(
                 || ui.get_zoom() == 1. && !ui.get_frame_paint_pending(),
-                "floating zoom did not return to 100 percent",
+                "viewport zoom did not return to 100 percent",
             )
             .await?;
 
@@ -170,6 +170,43 @@ pub fn start(
                 connection.updates.borrow().input_epoch == 0,
                 "notification Tab/hover sent station input",
             )?;
+            ui.invoke_tools_toggle();
+            ui.invoke_tools_category_choose(0);
+            let navigation = ui.get_tools_actions();
+            require(
+                navigation
+                    .iter()
+                    .map(|item| item.label.to_string())
+                    .collect::<Vec<_>>()
+                    == [
+                        pttstella::msg!("draft-open"),
+                        pttstella::msg!("destination-open"),
+                    ],
+                "non-reading navigation included extra controls",
+            )?;
+            ui.invoke_tools_key(7, false);
+            ui.invoke_tools_category_choose(3);
+            let session = ui.get_tools_actions();
+            require(
+                session.row_count() == 5
+                    && session
+                        .row_data(0)
+                        .is_some_and(|item| item.label == pttstella::msg!("connect").as_str())
+                    && session
+                        .row_data(1)
+                        .is_some_and(|item| item.label == pttstella::msg!("disconnect").as_str())
+                    && session
+                        .row_data(2)
+                        .is_some_and(|item| item.label == pttstella::msg!("sites-title").as_str())
+                    && session.row_data(3).is_some_and(|item| {
+                        item.detail && !item.enabled && item.label.contains("Big5-UAO")
+                    })
+                    && session
+                        .row_data(4)
+                        .is_some_and(|item| item.label == pttstella::msg!("login").as_str()),
+                "session menu did not match Dioxus order and station details",
+            )?;
+            ui.invoke_tools_dismiss(true);
             choose(&ui, 3, &pttstella::msg!("disconnect")).await?;
             wait(
                 || {
@@ -200,7 +237,7 @@ pub fn start(
                 .map_err(|e| e.to_string())?;
             serde_json::to_writer_pretty(file,&serde_json::json!({"status":"passed","viewport_logical":[dimensions.0,dimensions.1],
             "window_logical":[window_width,window_height],"scale_factor":dpi,
-            "prototype_chrome":false,"about_escape":true,"floating_zoom":true,"invalid_export_visible":true,"disconnected_visible":true,
+            "prototype_chrome":false,"about_escape":true,"viewport_zoom":true,"invalid_export_visible":true,"disconnected_visible":true,
             "scope":"production owners with synthetic toolkit callbacks/foreground; OS focus, clipboard and pointer untested"})).map_err(|e|e.to_string())
         },
     )
