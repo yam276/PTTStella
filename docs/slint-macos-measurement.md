@@ -2,6 +2,22 @@
 
 這份文件記錄 S0／S8 的量測工具及目前證據，不是效能通過報告。完整負載、次數與平台門檻仍以[平替計畫](slint-evaluation-plan.md#同負載效能門檻)為準。
 
+## 2026-11-12 最小化背景閒置對照
+
+Apple M3 Ultra／macOS 15.7.7 的 Slint `4e28e82` 與相容回退 Dioxus `82bc81f` 各跑三輪。兩份 App 取自現有交付，隔離副本各有專用 Bundle ID 與 ad-hoc 簽章，主程式的 `__TEXT,__text` 各與原交付相同。由 LaunchServices 啟動後在同 PID 進入一般入口，Slint 用預設軟體繪圖，Dioxus 用系統 WebKit `20621.3.11.11.3`。兩版使用相同的合成 v6 設定、bundled 字型和本機 TLS WebSocket 格線，沙盒限制對外連線及一般產品資料。
+
+每輪先確認同螢幕 1040×768 的實際視窗擷取含第 1、22 行標記，再讀回原生最小化狀態。每輪取樣 10 秒，含 101 筆程序族紀錄與 183–188 筆視窗及前景觀察，全程沒有主視窗重新顯示或測試程序回到前景。Dioxus 取樣包含其 WebKit WebContent、GPU、Networking 及 AudioToolbox helper。Slint 在這段只有主程序。關窗後六輪均收到唯一 Close 回覆，全部取樣到的程序身分退出，隔離設定未改寫。LaunchServices 啟動的數字 exit code 無法從控制器取得。
+
+| 10 秒取樣，三輪中位數 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 程序族 physical footprint 峰值 | 99.3 MiB | 680.1 MiB |
+| 程序族 RSS 峰值 | 211.8 MiB | 443.0 MiB |
+| 程序族 CPU 累計 | 4.37 ms | 81.94 ms |
+
+前置校準的 AX 視窗取得、選單列誤算、多螢幕座標偏移與最小化後立即讀回均有原始紀錄。Dioxus 另一輪可見視窗因桌面切換而失去前景，未列入表格。這組對照只覆蓋最小化且連線的穩定閒置區段。可見前景、冷暖啟動、媒體等其他負載及 S8 完整矩陣仍各自驗收。
+
+來源雜湊、六輪樣本、畫面、失敗與清理紀錄位於 `.local/verification/slint-s8-idle-current/`。可用該目錄的 `compare.py setup` 準備暫存副本，再以交錯順序傳入唯一的 `min*-slint:slint` 和 `min*-dioxus:dioxus` 案名。既有候選與回退 App 均未重建。六個專用暫存及快取路徑已清理，合計 192,242,446 regular-file bytes。磁碟可用空間觀測為 217,219,153,920 → 217,333,702,656 bytes，包含並行活動。確切路徑、保留例外與候選雜湊核對見 `cleanup.json`。
+
 ## 2026-11-12 一般入口的 WebKit 程序對照
 
 在 Mac15,14、Apple M3 Ultra、macOS 15.7.7 上，用 Apple Silicon Slint 候選 `100b75f` 和 Dioxus 相容回退版 `82bc81f` 的一般入口。兩版使用相同的 v6 合成設定、隔離 HOME 和本機 TLS 1.3 WebSocket 格線。Slint 執行檔雜湊與 DMG 交付相符。Dioxus 副本改用獨立 Bundle ID 和 ad-hoc 簽章，`__TEXT,__text` 雜湊與回退包相同。沙盒封鎖外部 IP 連線及日常產品資料、Keychains 和原 App 的 WebKit 資料路徑。
