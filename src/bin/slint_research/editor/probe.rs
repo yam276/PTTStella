@@ -73,6 +73,40 @@ fn verify_rejected_input(ui: &TerminalWindow, owner: &Editor) -> Result<(), Stri
         "rejected native input was retained and blocked the next valid character",
     )
 }
+
+fn verify_composition_at_grid_edge(ui: &TerminalWindow, owner: &Editor) -> Result<(), String> {
+    let body = format!("{}{}", "row\n".repeat(28), "A".repeat(79));
+    set_body(ui, &body)?;
+    let state = ui.global::<EditorState>();
+    require(
+        state.get_body_focused()
+            && state.get_caret_visible()
+            && state.get_caret_column() == 78.
+            && state.get_caret_row() == 22.,
+        "composition fixture did not place the caret at the bottom right",
+    )?;
+    let version = owner.document.borrow().as_ref().map(|d| d.version());
+    ui.invoke_editor_composition(true);
+    require(
+        state.get_composing()
+            && state.get_body_focused()
+            && state.get_caret_visible()
+            && state.get_caret_row() == 22.
+            && state.get_caret_column() <= 63.,
+        "right-edge composition did not have room for native preedit",
+    )?;
+    ui.invoke_editor_composition(false);
+    require(
+        source(owner) == body && owner.document.borrow().as_ref().map(|d| d.version()) == version,
+        "cancelled composition changed the committed draft",
+    )?;
+    type_text(ui, "中");
+    require(
+        source(owner) == body + "中",
+        "moving the composition field changed the insertion point",
+    )
+}
+
 fn verify_language(ui: &TerminalWindow, owner: &Editor, directory: &Path) -> Result<(), String> {
     use pttstella::i18n::{Language, application};
     let snapshot = || {
@@ -249,6 +283,7 @@ async fn verify(ui: &TerminalWindow, owner: &Rc<Editor>, directory: &Path) -> Re
             "body native commit did not share Rust undo",
         )?;
         verify_rejected_input(ui, owner)?;
+        verify_composition_at_grid_edge(ui, owner)?;
         // Half-colour graphic fixture uses the production grid painter.
         set_body(ui, "\x1b[31;66;34m田▁▂▃▄▅▆▇█\n\x1b[0mA\t中\n")?;
         capture(ui, directory, "dual-graphic.png")?;

@@ -247,16 +247,18 @@ impl Editor {
                 if let Some(owner) = owner.upgrade()
                     && let Some(ui) = owner.ui.upgrade()
                 {
-                    if active {
+                    let state = ui.global::<EditorState>();
+                    if active && !state.get_composing() {
                         owner.dismiss_palette(false);
-                        if let Some(d) = owner.document.borrow().as_ref()
-                            && let Err(error) = owner.viewport.borrow_mut().reveal(d)
+                        if state.get_body_focused()
+                            && let Some(d) = owner.document.borrow().as_ref()
+                            && let Err(error) = owner.viewport.borrow_mut().reveal_composition(d)
                         {
                             owner.notice(error);
                         }
                         owner.paint();
                     }
-                    ui.global::<EditorState>().set_composing(active);
+                    state.set_composing(active);
                     if !active {
                         owner.schedule();
                     }

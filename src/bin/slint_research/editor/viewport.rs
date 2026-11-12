@@ -25,6 +25,16 @@ pub struct Viewport {
 }
 impl Viewport {
     pub fn reveal(&mut self, document: &Document) -> Result<(), String> {
+        self.reveal_with_room(document, 1)
+    }
+
+    pub fn reveal_composition(&mut self, document: &Document) -> Result<(), String> {
+        // The native input starts at the caret and is clipped at the grid edge.
+        // Leave room for a short phrase of double-width characters.
+        self.reveal_with_room(document, 16)
+    }
+
+    fn reveal_with_room(&mut self, document: &Document, columns: usize) -> Result<(), String> {
         let p = document.position(document.selection().head)?;
         if p.row < self.top {
             self.top = p.row;
@@ -35,9 +45,7 @@ impl Viewport {
         if p.col < self.left {
             self.left = p.col;
         }
-        if p.col >= self.left + COLUMNS {
-            self.left = p.col + 1 - COLUMNS;
-        }
+        self.left = self.left.max(p.col.saturating_sub(COLUMNS - columns));
         self.top = self.top.min(document.rows().len().saturating_sub(ROWS));
         Ok(())
     }
