@@ -103,7 +103,7 @@ Apple Silicon 與 Windows x64 候選均由乾淨的 `73fd1afd53e1d3f1a0b83f6c727
 
 設定修正版 `54964e9` 的 Apple Silicon App／DMG 簽章及封裝驗證通過。影片元件重跑中，MP4 軟體及 OGV 軟體／OpenGL 共三案完成。MP4 OpenGL 與兩個 WebM 案例在同一執行檔再次跑到恢復播放時，視窗前景及播放許可均為 false，影片已解碼並核對畫面、音量與靜音，三案整體仍未通過。用相同素材重跑 `73fd1af`，兩個 WebM 案例通過，MP4 OpenGL 也曾出現失焦。保留兩版與完整紀錄，尚未確認前景變化來源。收據在 `.local/verification/slint-native-interactions/pair/` 的 `media-retry/`、`media-selected-retry/`、`media-baseline-selected/`。
 
-影片、推文更新、設定搜尋與浮球的自動元件驗證使用 Slint 送入的事件。這些明確指定的探針在 Winit 入口隔離系統焦點、遮蔽及鍵盤／指標事件，仍處理重繪、尺寸與關窗。正常啟動、手動影片、等待系統前景及影片退出探針維持原生事件路徑。MP4 軟體與 OpenGL 的開發執行檔均記到系統 `Focused(false)`，驗證仍完成恢復、主動失焦暫停、重新取得焦點後保持暫停及資源退場。刻意在 renderer 就緒後失敗的案例仍以失敗結束，peer 收到嚴格 Close。完整記錄位於 `.local/verification/slint-toolkit-input/`。
+影片、推文更新、設定搜尋、浮球及 `--verify-shell` 的自動元件驗證使用 Slint 送入的事件。這些明確指定的探針在 Winit 入口隔離系統焦點、遮蔽及鍵盤／指標事件，仍處理重繪、尺寸與關窗。正常啟動、手動影片、等待系統前景及影片退出探針維持原生事件路徑。MP4 軟體與 OpenGL 的開發執行檔均記到系統 `Focused(false)`，驗證仍完成恢復、主動失焦暫停、重新取得焦點後保持暫停及資源退場。刻意在 renderer 就緒後失敗的案例仍以失敗結束，peer 收到嚴格 Close。主視窗第一輪未隔離 `--verify-shell`，重開設定時前景變為 false，保留其失敗。完整記錄位於 `.local/verification/slint-toolkit-input/`。
 
 以 `54964e9` 的 Apple Silicon 執行檔另建隔離測試 App，經 macOS 視窗 Raise 後可實際點文章中的 MP4 連結。畫面顯示四色影片，無障礙介面核對音量 28%、靜音與恢復、跳到 1 秒、播放與暫停。關閉影片後回到終端輸入焦點。實際點浮球展開五分類，進入導覽，按 Esc 收合並回到終端焦點。播放期間以標題列關閉 App，三個播放 session 均銷毀 core 並 join，HTTP 結束且收到嚴格 Close。這輪使用合成站，音訊實聽仍待驗。
 
