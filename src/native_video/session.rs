@@ -72,12 +72,14 @@ impl Session {
         let (send, receive) = mpsc::channel(8);
         let status = Arc::new(Mutex::new(Status {
             paused: true,
+            volume: super::DEFAULT_VOLUME,
             ..Default::default()
         }));
         let (output, updates) = watch::channel(Snapshot {
             stage: Stage::Starting,
             status: Status {
                 paused: true,
+                volume: super::DEFAULT_VOLUME,
                 ..Default::default()
             },
             report: None,

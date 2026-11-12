@@ -110,6 +110,9 @@ pub fn refresh(ui: &TerminalWindow) {
     ui.set_login_cancel_label(msg!("cancel").into());
     ui.set_login_cancel_attempt_label(msg!("login-cancel-attempt").into());
     ui.set_media_close_label(msg!("close").into());
+    ui.set_media_volume_label(msg!("video-volume").into());
+    ui.set_media_mute_label(msg!("video-mute").into());
+    ui.set_media_unmute_label(msg!("video-unmute").into());
     ui.set_media_retry_label(msg!("retry").into());
     ui.set_media_external_label(msg!("media-external").into());
     ui.set_media_fit_label(msg!("media-fit").into());

@@ -37,6 +37,7 @@ impl Client {
         let handle =
             NonNull::new(unsafe { ffi::mpv_create() }).ok_or("libmpv allocation failed")?;
         let client = Self(handle, Mutex::new(None));
+        let initial_volume = super::DEFAULT_VOLUME.to_string();
         for (name, value) in [
             ("config", "no"),
             ("terminal", "no"),
@@ -66,7 +67,7 @@ impl Client {
             ("ad-lavc-threads", "2"),
             ("video-margin-ratio-top", top),
             ("video-margin-ratio-bottom", bottom),
-            ("volume", "10"),
+            ("volume", initial_volume.as_str()),
         ] {
             let n = CString::new(name).map_err(|e| e.to_string())?;
             let v = CString::new(value).map_err(|e| e.to_string())?;

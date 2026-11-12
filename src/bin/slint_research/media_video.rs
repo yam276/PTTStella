@@ -9,7 +9,7 @@ use crate::{TerminalWindow, media::Media};
 use pttstella::{
     msg,
     native_video::{
-        Command,
+        Command, DEFAULT_VOLUME,
         gl_state::Saved,
         mpv,
         session::{Session, Stage},
@@ -51,6 +51,7 @@ struct Live {
     session: Session,
     offered: bool,
     frame_serial: u64,
+    volume: u8,
 }
 pub struct Video {
     ui: slint::Weak<TerminalWindow>,
@@ -94,6 +95,25 @@ impl Video {
                 }
             }
         });
+        ui.on_media_set_volume({
+            let weak = Rc::downgrade(&owner);
+            move |value| {
+                if let Some(owner) = weak.upgrade()
+                    && value.is_finite()
+                    && (0. ..=100.).contains(&value)
+                {
+                    owner.command(Command::Volume(value.round() as u8));
+                }
+            }
+        });
+        ui.on_media_set_muted({
+            let weak = Rc::downgrade(&owner);
+            move |muted| {
+                if let Some(owner) = weak.upgrade() {
+                    owner.command(Command::Mute(muted));
+                }
+            }
+        });
         let weak = Rc::downgrade(&owner);
         let task=slint::spawn_local(async move {
             loop {
@@ -133,6 +153,9 @@ impl Video {
     pub fn permit(&self, value: bool) {
         if let Some(live) = self.current.borrow().as_ref() {
             live.session.permit(value);
+            if !value && let Some(ui) = self.ui.upgrade() {
+                ui.set_media_volume(f32::from(live.volume));
+            }
         }
         self.bridge.wake.notify_one();
     }
@@ -163,12 +186,15 @@ impl Video {
         if !ui.get_media_play_allowed() {
             return;
         }
-        let result = self
-            .current
-            .borrow()
-            .as_ref()
-            .map(|v| v.session.command(command));
-        if let Some(Err(_)) = result {
+        let current = self.current.borrow();
+        let pending = self.pending.borrow();
+        if let Some(live) = current.as_ref()
+            && pending
+                .as_ref()
+                .is_some_and(|(sequence, _)| *sequence == live.sequence)
+            && live.session.command(command).is_err()
+        {
+            ui.set_media_volume(f32::from(live.volume));
             ui.set_media_status(msg!("video-play-failed").into());
         }
     }
@@ -271,6 +297,11 @@ impl Video {
                 );
                 ui.set_media_position(state.status.position as f32);
                 ui.set_media_duration(state.status.duration as f32);
+                if live.volume != state.status.volume {
+                    live.volume = state.status.volume;
+                    ui.set_media_volume(f32::from(live.volume));
+                }
+                ui.set_media_muted(state.status.muted);
                 ui.set_media_status(
                     if state.error.is_some() || self.bridge.error.borrow().is_some() {
                         msg!("video-unsupported")
@@ -306,6 +337,7 @@ impl Video {
                         offered: false,
                         software: None,
                         frame_serial: 0,
+                        volume: DEFAULT_VOLUME,
                     });
                     self.bridge.wake.notify_one();
                 }

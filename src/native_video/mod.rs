@@ -4,6 +4,7 @@ pub mod gl_state;
 pub mod mpv;
 pub mod session;
 pub use control::{Command, Status};
+pub const DEFAULT_VOLUME: u8 = 10;
 
 pub mod software;
 pub mod surface;

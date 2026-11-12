@@ -648,6 +648,8 @@ impl Media {
         ui.set_media_video(true);
         ui.set_media_position(0.);
         ui.set_media_duration(0.);
+        ui.set_media_volume(f32::from(pttstella::native_video::DEFAULT_VOLUME));
+        ui.set_media_muted(false);
         ui.set_media_motion_label(msg!("video-play").into());
         ui.set_media_status(msg!("video-ready").into());
         ui.set_media_open(true);

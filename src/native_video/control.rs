@@ -17,6 +17,8 @@ pub struct Status {
     pub position: f64,
     pub duration: f64,
     pub audio_channels: f64,
+    pub volume: u8,
+    pub muted: bool,
     pub decoder: String,
     pub error: Option<String>,
     pub events: u64,
@@ -25,6 +27,8 @@ pub enum Command {
     Play,
     Pause,
     Seek(f64),
+    Volume(u8),
+    Mute(bool),
     Wake,
     Stop,
 }
@@ -44,6 +48,7 @@ impl Control {
         let (ready, result) = mpsc::sync_channel(1);
         let status = Arc::new(Mutex::new(Status {
             paused: true,
+            volume: super::DEFAULT_VOLUME,
             ..Default::default()
         }));
         let state = status.clone();
@@ -68,6 +73,8 @@ impl Control {
                     c"pause",
                     c"eof-reached",
                     c"audio-params",
+                    c"volume",
+                    c"mute",
                     c"hwdec-current",
                 ] {
                     core.observe(name)?;
@@ -102,6 +109,11 @@ impl Control {
                             core.command(&["seek", &seconds.to_string(), "absolute+exact"])
                         }
                         Command::Seek(_) => Err("seek must be finite and non-negative".into()),
+                        Command::Volume(volume) if volume <= 100 => {
+                            core.command(&["set", "volume", &volume.to_string()])
+                        }
+                        Command::Volume(_) => Err("volume must be between 0 and 100".into()),
+                        Command::Mute(muted) => core.flag(c"mute", muted),
                     };
                     let mut error = action.err().or(last_error.take());
                     let mut drained = 0;
@@ -133,6 +145,12 @@ impl Control {
                         position: core.number(c"time-pos").unwrap_or(0.),
                         duration: core.number(c"duration").unwrap_or(0.),
                         audio_channels: core.number(c"audio-params/channel-count").unwrap_or(0.),
+                        volume: core
+                            .number(c"volume")
+                            .map_or(super::DEFAULT_VOLUME, |value| {
+                                value.round().clamp(0., 100.) as u8
+                            }),
+                        muted: core.get_flag(c"mute").unwrap_or(false),
                         decoder: core.text(c"hwdec-current").unwrap_or_default(),
                         error,
                         events,

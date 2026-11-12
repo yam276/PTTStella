@@ -10,6 +10,20 @@ export component MediaPreview inherits Rectangle {
     in property <bool> software-video;
     in-out property <float> position;
     in property <float> duration;
+    in-out property <float> volume;
+    in property <bool> muted;
+    in property <string> volume-label;
+    in property <string> mute-label;
+    in property <string> unmute-label;
+    in property <bool> audio-controls-enabled;
+    callback set-volume(float);
+    callback set-muted(bool);
+    function adjust-volume(value: float) {
+        if root.audio-controls-enabled {
+            root.volume = round(clamp(value, 0, 100));
+            root.set-volume(root.volume);
+        }
+    }
     out property <length> video-left: view.absolute-position.x;
     out property <length> video-top: view.absolute-position.y;
     out property <length> video-width: view.width;
@@ -110,6 +124,38 @@ export component MediaPreview inherits Rectangle {
                     Slider {minimum:0;maximum:max(1,root.duration);value <=> root.position;enabled:root.duration > 0 && root.foreground && !root.busy;
                         changed(value)=>{root.seek(value);} }
                     Text {text:round(root.position) + " / " + round(root.duration) + " s";color:#cdd9e8;vertical-alignment:center;}
+                }
+                if root.video: HorizontalLayout {
+                    spacing: 8px;
+                    Button {
+                        text: root.muted ? root.unmute-label : root.mute-label;
+                        enabled: root.audio-controls-enabled;
+                        clicked => { root.set-muted(!root.muted); }
+                    }
+                    Text { text: root.volume-label; color: #cdd9e8; vertical-alignment: center; }
+                    Slider {
+                        minimum: 0;
+                        maximum: 100;
+                        step: 1;
+                        value <=> root.volume;
+                        enabled: root.audio-controls-enabled;
+                        accessible-label: root.volume-label;
+                        // Commit one value per drag or key press, so the
+                        // bounded player queue also has room for pause/close.
+                        released(value) => { root.adjust-volume(value); }
+                        accessible-action-set-value(value) => {
+                            if value.is-float() { root.adjust-volume(value.to-float()); }
+                        }
+                        accessible-action-increment => { root.adjust-volume(root.volume + 1); }
+                        accessible-action-decrement => { root.adjust-volume(root.volume - 1); }
+                    }
+                    Text {
+                        text: round(root.volume) + "%";
+                        min-width: 42px;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
+                        color: #cdd9e8;
+                    }
                 }
                 HorizontalLayout {spacing:6px;
                     if !root.video: Button {text:root.copy-label;enabled:root.ready && !root.busy;clicked=>{root.action(4);}}

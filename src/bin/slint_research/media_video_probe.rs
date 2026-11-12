@@ -175,6 +175,7 @@ pub fn start(
         move |ui, directory| async move {
             let checked = async {
                 let video = ready(&ui, &media, &output).await?;
+            let mut audio_controls_verified = false;
             if std::env::var_os("PTTSTELLA_VIDEO_PROBE_FAIL_READY").is_some() {
                 return Err("deliberate video verifier failure after renderer setup".into());
             }
@@ -212,6 +213,24 @@ pub fn start(
                     "video seek/pause not acknowledged",
                 )
                 .await?;
+                for (volume, muted) in [(42, false), (42, true), (28, true), (28, false)] {
+                    ui.invoke_media_set_volume(f32::from(volume));
+                    ui.invoke_media_set_muted(muted);
+                    wait(
+                        || {
+                            ui.get_media_muted() == muted
+                                && ui.get_media_volume() == f32::from(volume)
+                                && video.current.borrow().as_ref().is_some_and(|live| {
+                                    live.session.status.lock().is_ok_and(|status| {
+                                        status.volume == volume && status.muted == muted
+                                    })
+                                })
+                        },
+                        "libmpv did not acknowledge volume and mute independently",
+                    )
+                    .await?;
+                }
+                audio_controls_verified = true;
                 video.capture();
                 wait(
                     || !video.bridge.samples.borrow().is_empty(),
@@ -267,7 +286,7 @@ pub fn start(
             )
             .await?;
             media.close(true);
-            Ok::<_, String>(serde_json::json!({"scope":"main Slint window; pixel source identified by render_path; synthetic toolkit controls; not OS input/audio audibility/performance","render_path":if video.bridge.software.get(){"software"}else{"opengl"},"passed":true,"samples":&*video.bridge.samples.borrow(),"error":&*video.bridge.error.borrow(),"render_retired":video.bridge.rendered.get().is_none(),"session_joined":video.current.borrow().is_none()}))
+            Ok::<_, String>(serde_json::json!({"scope":"main Slint window; pixel source identified by render_path; synthetic toolkit controls; not OS input/audio audibility/performance","render_path":if video.bridge.software.get(){"software"}else{"opengl"},"passed":true,"audio_controls_verified":audio_controls_verified,"samples":&*video.bridge.samples.borrow(),"error":&*video.bridge.error.borrow(),"render_retired":video.bridge.rendered.get().is_none(),"session_joined":video.current.borrow().is_none()}))
             }.await;
             if let Err(error) = &checked {
                 let state = media.video.borrow().as_ref().map(|video| {
