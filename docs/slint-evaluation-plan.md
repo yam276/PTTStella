@@ -69,6 +69,10 @@ Windows 候選封裝新增 `Run-Drafts-IME.cmd`。從本機合成看板開啟原
 
 Apple Silicon 的 Slint 視窗探針核對非整數尺寸、有圖間隙的翻頁落點、高圖間隙內推進、滾輪半行、末列像素及畫面清理。站端探針通過 837 行的 37 次取頁、20 頁慢速取消／繼續，以及複製與 PNG，三案均收到 Close ACK。這次 fast 案以 debug 候選及合成前景量到首頁進快取至首筆請求約 132 ms，其中首頁繪製確認後約 107 ms。下一步以同版 release 原生前景追查首筆請求等待的條件；目前取頁准入仍沿用既有前景、焦點與來源核對。結果在 `.local/verification/slint-article-alignment/`。
 
+Apple Silicon 與 Windows x64 的草稿／文章中途驗收包均固定在乾淨 `af48506`。包內 Apple Silicon App 通過 837 行取頁、推文右鍵啟用／取消、設定搜尋和 shell 五案，均收到 Close ACK。release 合成前景下從首頁進快取到首筆請求約 109 ms，從繪製確認到首筆請求約 103 ms。Windows ZIP CRC、921 項內容雜湊及 PE 匯入通過，草稿原生 IME 待使用者稍後驗收。兩包與收據在 `.local/verification/slint-draft-article-pair/`。[Windows 驗收步驟](slint-windows-candidate.md#2026-11-12-草稿-ime-與文章翻頁同步候選)
+
+本輪清理了已取代的 Apple Silicon App／DMG、重複的新 ZIP 及中間視窗探針輸出。保留新 App／DMG、Windows ZIP、舊 Windows 待驗包、驗收收據和固定 Cargo 快取。Windows 封裝暫時提取的 DLL／素材已清除，下一次交叉編譯可沿用 `.local/slint-windows-cross/` 的固定 cargo-xwin 與 import library。實際移除路徑與空間前後見交付目錄的 `cleanup.json`。
+
 ### 3. 推文更新、選單與設定（S3、S4、S7）
 
 - **保留 Slint 的推文操作**　文章右鍵選單用固定「更新推文」標籤與勾選，上方保留更新狀態、未讀跳轉和回到站端。驗證啟用、取消、更新中右鍵、切篇與逾時。用同一合成站核對舊回覆不影響新文章。

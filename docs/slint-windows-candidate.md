@@ -1,5 +1,11 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-12 草稿 IME 與文章翻頁同步候選
+
+目前 Windows x64 ZIP 位於 `.local/verification/slint-draft-article-pair/windows/`，與同目錄的 Apple Silicon App 均由乾淨 `af4850648a2f99064a9f0c3194be9f292d5ddbe1` 建置。macOS arm64 以 Rust 1.97.0、[cargo-xwin 0.23.1](https://github.com/rust-cross/cargo-xwin/releases/tag/v0.23.1) 及 LLD 交叉編譯 Windows，沿用已核對的 libmpv DLL。ZIP SHA-256 為 `599f94ecce001968848c801b88e1415952b1509d9d9badde1c67d5be81dd594e`，包內 exe 為 `f06b7329dcff8051c3b0de887c57a83273655454cb62e5d7b05fe02366f68f6f`。CRC、921 項內容雜湊、PE x64 與一般／延遲匯入均通過。
+
+解壓至新資料夾，照 README 執行 `Run-Drafts-IME.cmd`。入口開本機合成看板，第一次建立「草稿輸入法驗收」，再執行會保留已存稿。在第三行用 Microsoft 注音組字並 Esc 取消，確認候選窗位置，再提交「中」後立即保存。切日文「**あ**」，輸入 `konnichiha` 提交「こんにちは」後立即關閉草稿。重開 App 再進同一稿，第三行應為「中こんにちは」，上方 ANSI 紅字保持。保留 `evidence/draft-ime/` 主檔、備份及兩次 `evidence/run-*.log`。這輪 Windows 實機留待稍後，前次原生回報仍以原 exe 雜湊歸檔。
+
 ## 2026-11-11 固定來源的 Windows 實機待驗包
 
 最新測試 ZIP 位於 Slint worktree 的 `.local/verification/slint-cutover-rehearsal-b1085ab/windows/package/`。Windows x64 與同輪 Apple Silicon 演練固定來源 `b1085ab2c5b8397d100fcf2df9e28b6da79cb8ce`。從乾淨來源用 macOS arm64、Rust 1.97.0、cargo-xwin 0.23.1 及 LLD 交叉編譯 `x86_64-pc-windows-msvc`，沿用 worktree Cargo target。封裝沿用經 SHA-256 核對的 libmpv 0.42.0 LGPL DLL。
