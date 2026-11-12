@@ -139,15 +139,25 @@ libmpv與Rust／Skia授權在licenses；自製影片為CC0，詳fixtures/manifes
 
 
 def bundle(executable, runtime_dlls, skia_license, mpv_license, provenance, build_record,
-           fixture_directory, output):
+           fixture_directory, output, *, with_installer=False, crt_provenance=None):
     record = inspect_build_record(build_record, executable, TARGET)
     images, required_crt = inspect_payload(executable, runtime_dlls)
+    if with_installer and required_crt:
+        raise ValueError('Offline Slint Setup needs a self-contained CRT closure: ' + ', '.join(required_crt))
     origin = json.loads(provenance.read_text(encoding='utf-8'))
     mpv = next(path for path in runtime_dlls if path.name.lower() == MPV)
     if origin.get('files', {}).get(MPV) != digest(mpv):
         raise ValueError('libmpv provenance does not match the DLL')
     inputs = [executable, *runtime_dlls, skia_license, mpv_license, provenance, build_record,
               ACCEPTANCE, DRAFT_IME_SEED]
+    app_local_crt = {path.name.lower(): digest(path) for path in runtime_dlls if path.name.lower() in CRT}
+    if app_local_crt or crt_provenance is not None:
+        if not app_local_crt or crt_provenance is None:
+            raise ValueError('App-local CRT DLLs and their provenance must be supplied together')
+        crt_origin = json.loads(crt_provenance.read_text(encoding='utf-8'))
+        if crt_origin.get('files') != app_local_crt:
+            raise ValueError('App-local CRT provenance does not match the bundled DLLs')
+        inputs.append(crt_provenance)
     for license in [skia_license, mpv_license]:
         if not 0 < license.stat().st_size <= 4 * 1024 * 1024:
             raise ValueError('A bounded nonempty runtime license is required')
@@ -168,6 +178,8 @@ def bundle(executable, runtime_dlls, skia_license, mpv_license, provenance, buil
         shutil.copy2(skia_license, licenses / 'LICENSE_SKIA')
         shutil.copy2(mpv_license, licenses / 'LICENSE_MPV_LGPL')
         shutil.copy2(provenance, licenses / 'libmpv-provenance.json')
+        if crt_provenance is not None:
+            shutil.copy2(crt_provenance, licenses / 'vc-crt-provenance.json')
         fixtures = app / 'fixtures'
         fixtures.mkdir()
         shutil.copy2(manifest_path, fixtures / 'manifest.json')
@@ -208,11 +220,21 @@ def bundle(executable, runtime_dlls, skia_license, mpv_license, provenance, buil
         checksum = stage / (archive.name + '.sha256')
         checksum.write_text(f'{digest(archive)}  {archive.name}\n', encoding='ascii')
         report['zip_sha256'] = digest(archive)
+        downloads = [archive, checksum]
+        if with_installer:
+            from windows_installer import build_slint_candidate
+            setup, installer = build_slint_candidate(app, stage, record['version'])
+            installer['file'] = setup.name
+            installer['sha256'] = digest(setup)
+            report['installer'] = installer
+            setup_checksum = stage / (setup.name + '.sha256')
+            setup_checksum.write_text(f'{installer["sha256"]}  {setup.name}\n', encoding='ascii')
+            downloads.extend((setup, setup_checksum))
         external = stage / 'package-report.json'
         external.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
         if original != {str(path): digest(path) for path in inputs}:
             raise ValueError('Candidate input changed during packaging')
-        bundle_common.publish_files((archive, checksum, external), output)
+        bundle_common.publish_files((*downloads, external), output)
     return report
 
 
@@ -221,9 +243,12 @@ def main():
     for name in ('exe', 'skia-license', 'mpv-license', 'provenance', 'build-record', 'fixtures', 'output'):
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--runtime-dll', type=Path, action='append', required=True)
+    parser.add_argument('--crt-provenance', type=Path, help='source and hashes for app-local Visual C++ DLLs')
+    parser.add_argument('--installer', action='store_true', help='compile a per-user offline Setup with pinned Inno Setup')
     args = parser.parse_args()
     report = bundle(args.exe, args.runtime_dll, args.skia_license, args.mpv_license,
-                    args.provenance, args.build_record, args.fixtures, args.output)
+                    args.provenance, args.build_record, args.fixtures, args.output,
+                    with_installer=args.installer, crt_provenance=args.crt_provenance)
     print(json.dumps({'status': report['status'], 'zip_sha256': report['zip_sha256'],
                       'native_acceptance': report['native_acceptance']}))
 

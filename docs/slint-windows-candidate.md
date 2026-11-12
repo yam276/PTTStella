@@ -1,5 +1,22 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-12 離線 Setup 與便攜 ZIP
+
+兩包位於工作樹旁的 `../PTTStella-candidates/windows-100b75f-offline/`。主程式沿用已與 Apple Silicon 成對的乾淨 `100b75f67e1fcd34f79c6531865a6eebe1272bb3`，SHA-256 仍為 `31c60eb3f16a05d08abed4cef47bc83d00b3438fd4f156ce8a99ec70eb926f1f`。增加三個 app-local DLL（`msvcp140.dll`、`vcruntime140.dll`、`vcruntime140_1.dll`）和其來源清單，其他應用程式檔案逐檔一致。Setup 與 ZIP 核對 926 個檔案逐位元相同，包含 `candidate.json`。PE 匯入核對只需要包內 DLL 和 Windows 系統 DLL，另比對 83 個 Visual C++ 匯入符號。
+
+| 檔案 | SHA-256 |
+| --- | --- |
+| `PTTStella-Slint-Candidate-0.5.0-dev.3-windows-x64-setup.exe` | `41a3933712423079feb1d09c8a002b027473aacffbe6aeeae335dd748ba5606c` |
+| `PTTStella-Slint-Candidate-0.5.0-dev.3-windows-x64.zip` | `c116ef2940a0b3fc8906a9db6464a1ce53e5ccb4a199a2786069836c348767bc` |
+
+Setup 以現有固定 Inno Setup 7.1.0 編譯。獨立安裝識別 `io.github.yam276.pttstella.slint.candidate`，放在 `%LOCALAPPDATA%\Programs\PTTStella Slint Candidate`，開始選單有獨立入口。以同一使用者安裝，不需額外前置程式或線上下載。安裝目錄固定，安裝完成後由使用者開啟。正式 Dioxus 安裝、資料與憑證回退留待正式身分演練。
+
+隔離且無外部網路的 Wine 10 成功執行解包後的 `--show-profile`，載入三個隨附 DLL，回報研究版資料路徑與憑證範圍。Setup 的一般執行及指定 Dioxus 路徑兩案均在 Inno 的平台版本檢查停止，未執行候選安裝目錄檢查。軟體繪圖格線探針在 Slint 的更新率計算遇到除以零，未執行後續媒體探針。Windows 原生安裝、升級、卸載、路徑拒絕及 GUI 仍待驗。
+
+重跑時，向 `tooling/bundle_slint_windows.py` 傳入既有候選建置紀錄、素材及 libmpv，再加 `--installer`、各 app-local DLL 的 `--runtime-dll`，以及 `--crt-provenance`。Inno 入口使用 `INNO_SETUP_COMPILER`。CRT 來源是 Microsoft Visual Studio 2022 的可重散發 VSIX，包內紀錄 URL、VSIX 與 DLL 雜湊。Microsoft CDN 回傳的目錄內容與 channel 宣告的大小／摘要有差異，實際 VSIX 的 SHA-256 與目錄及下載 URL 相符，兩組目錄摘要一併保留。靜態 CRT 試作的 Skia 預建組合回傳 HTTP 404，改沿用已驗主程式。[Microsoft app-local DLL 說明](https://learn.microsoft.com/en-us/cpp/windows/determining-which-dlls-to-redistribute)
+
+逐檔比對、Wine 原始紀錄及清理收據位於 `.local/verification/slint-windows-setup/`。本輪移除專用 Wine 環境、解包副本與重複封裝，保留固定 Cargo target、獨特診斷及先前供原生驗收的候選。
+
 ## 2026-11-12 文內圖片無障礙同步候選
 
 Windows x64 ZIP 與 Apple Silicon App／DMG／ZIP 位於 `.local/verification/slint-current-gif-comparison/pair/`，同取乾淨提交 `100b75f67e1fcd34f79c6531865a6eebe1272bb3`。Windows 以既有 cargo-xwin 和 libmpv DLL 建置，CRC、921 項內容雜湊及 PE x64 一般／延遲匯入已核對。

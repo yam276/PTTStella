@@ -102,6 +102,28 @@ class InstallerTests(unittest.TestCase):
                     installer.build(self.root, self.root, '0.1.0')
             download.assert_not_called()
 
+    def test_slint_setup_uses_its_own_template_and_no_bootstrapper(self):
+        calls = []
+
+        def run(*args):
+            calls.append(args)
+            if args[-1] == '--version':
+                return '7.1.0\n'
+            name = 'PTTStella-Slint-Candidate-0.5.0-dev.3-windows-x64-setup.exe'
+            (self.root/'setup'/name).write_bytes(b'test installer, never executed')
+            return ''
+
+        with patch.object(installer, 'compiler', return_value=Path('ISCC.exe')), \
+                patch.object(installer, 'download_bootstrapper') as download, \
+                patch.object(installer, 'run', side_effect=run), \
+                patch.object(bundle_windows, 'inspect_pe', return_value={'imports': ['kernel32.dll']}):
+            setup, report = installer.build_slint_candidate(self.root, self.root, '0.5.0-dev.3')
+        download.assert_not_called()
+        self.assertTrue(setup.is_file())
+        self.assertTrue(calls[-1][-1].endswith('pttstella-slint.iss'))
+        self.assertFalse(any('Bootstrapper' in arg for arg in calls[-1]))
+        self.assertEqual(report['runtime_installation_acceptance'], 'not_run')
+
 
 class WindowsPublicationTests(unittest.TestCase):
     def setUp(self):

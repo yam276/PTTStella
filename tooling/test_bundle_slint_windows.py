@@ -56,9 +56,65 @@ class CandidateTests(unittest.TestCase):
         destination.mkdir()
         (destination / 'rust-dependencies.json').write_text('[]')
 
-    def package(self):
+    def package(self, *, with_installer=False):
         return bundle.bundle(self.exe, [self.mpv], self.license, self.license,
-                             self.provenance, self.record, self.fixtures, self.output)
+                             self.provenance, self.record, self.fixtures, self.output,
+                             with_installer=with_installer)
+
+    def test_offline_installer_requires_closed_crt_imports(self):
+        with self.assertRaisesRegex(ValueError, 'self-contained CRT closure: msvcp140.dll'):
+            self.package(with_installer=True)
+        self.assertFalse(self.output.exists())
+
+    def test_app_local_crt_must_match_the_recorded_dll_hash(self):
+        crt = self.root / 'msvcp140.dll'
+        self.dll(crt, 'kernel32.dll')
+        manifest = self.root / 'crt-origin.json'
+        for files in ({'msvcp140.dll': '0' * 64}, {'msvcp140.dll': bundle.digest(crt)}):
+            manifest.write_text(json.dumps({'files': files}))
+            args = (self.exe, [self.mpv, crt], self.license, self.license,
+                    self.provenance, self.record, self.fixtures, self.output)
+            if files['msvcp140.dll'] != bundle.digest(crt):
+                with self.assertRaisesRegex(ValueError, 'CRT provenance'):
+                    bundle.bundle(*args, crt_provenance=manifest)
+                self.assertFalse(self.output.exists())
+            else:
+                report = bundle.bundle(*args, crt_provenance=manifest)
+                self.assertEqual(report['required_vc_redist_dlls'], [])
+                self.assertIn('licenses/vc-crt-provenance.json', report['payload_sha256'])
+
+    def test_installer_uses_the_same_complete_payload_as_the_zip(self):
+        self.dll(self.mpv, 'kernel32.dll')
+        self.provenance.write_text(json.dumps({'files': {'libmpv-2.dll': bundle.digest(self.mpv)}}))
+        staged = {}
+
+        def setup(package, stage, version):
+            self.assertEqual(version, '0.5.0-dev.3')
+            staged.update((path.relative_to(package).as_posix(), path.read_bytes())
+                          for path in package.rglob('*') if path.is_file())
+            result = stage / 'candidate-setup.exe'
+            result.write_bytes(b'test installer, never executed')
+            return result, {'runtime_installation_acceptance': 'not_run'}
+
+        with patch('windows_installer.build_slint_candidate', side_effect=setup):
+            report = self.package(with_installer=True)
+        self.assertEqual(report['required_vc_redist_dlls'], [])
+        installed = self.output / report['installer']['file']
+        self.assertEqual(report['installer']['sha256'], bundle.digest(installed))
+        self.assertEqual((self.output / (installed.name + '.sha256')).read_text(),
+                         f'{bundle.digest(installed)}  {installed.name}\n')
+        archive, = self.output.glob('*.zip')
+        with zipfile.ZipFile(archive) as zipped:
+            self.assertEqual({name.split('/', 1)[1]: zipped.read(name) for name in zipped.namelist()},
+                             staged)
+
+    def test_compiler_failure_leaves_no_partial_candidate_download(self):
+        self.dll(self.mpv, 'kernel32.dll')
+        self.provenance.write_text(json.dumps({'files': {'libmpv-2.dll': bundle.digest(self.mpv)}}))
+        with patch('windows_installer.build_slint_candidate', side_effect=RuntimeError('compiler failed')):
+            with self.assertRaisesRegex(RuntimeError, 'compiler failed'):
+                self.package(with_installer=True)
+        self.assertEqual(list(self.output.iterdir()), [])
 
     def test_full_payload_checksums_runners_and_pending_native_scope(self):
         result = self.package()
