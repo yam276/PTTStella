@@ -68,7 +68,7 @@ async fn open(ui: &TerminalWindow, output: &Output, station: bool) -> Result<(),
         )
     })
 }
-fn item_point(ui: &TerminalWindow, index: usize) -> slint::LogicalPosition {
+pub(crate) fn item_point(ui: &TerminalWindow, index: usize) -> slint::LogicalPosition {
     let dpi = ui.window().scale_factor();
     let size = ui.window().size();
     let width = size.width as f32 / dpi;

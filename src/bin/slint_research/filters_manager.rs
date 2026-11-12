@@ -354,7 +354,11 @@ impl Manager {
         ui.set_filters_embedded(ui.get_settings_open());
         ui.set_filters_open(true);
         self.refresh_labels();
-        if let Some(w) = self.window() {
+        // In settings the page or its search result owns the focus handoff.
+        // A standalone manager still opens ready to enter an account.
+        if !ui.get_filters_embedded()
+            && let Some(w) = self.window()
+        {
             w.global::<FiltersState>().invoke_focus_account();
         }
     }

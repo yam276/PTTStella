@@ -9,14 +9,12 @@ use pttstella::{article_cache::LoadState, connection::Connection, navigation::In
 use slint::Model;
 use std::{error::Error, path::PathBuf, rc::Rc, sync::Arc, time::Duration};
 
-fn open_updates_menu(ui: &TerminalWindow, checked: bool) -> Result<i32, String> {
+fn open_updates_menu(ui: &TerminalWindow, checked: bool) -> Result<usize, String> {
     verification::click(
         ui,
         slint::LogicalPosition::new(
-            ui.get_terminal_origin_x() + 32.,
-            ui.get_terminal_origin_y()
-                + ui.get_article_body_height()
-                + ui.get_article_line_height() / 2.,
+            ui.get_terminal_origin_x() + ui.get_view_width() * 0.72,
+            ui.get_terminal_origin_y() + ui.get_article_body_height().min(64.) / 2.,
         ),
         slint::platform::PointerEventButton::Right,
     );
@@ -41,11 +39,22 @@ fn open_updates_menu(ui: &TerminalWindow, checked: bool) -> Result<i32, String> 
                     && entry.checked == checked
             })
         })
-        .ok_or("reply updates menu check state differs")?;
-    Ok(index as i32)
+        .ok_or_else(|| {
+            let items = entries
+                .iter()
+                .map(|entry| (entry.label.to_string(), entry.enabled, entry.checked))
+                .collect::<Vec<_>>();
+            format!("reply updates menu check state differs: expected {checked}, found {items:?}")
+        })?;
+    Ok(index)
 }
 fn toggle_from_menu(ui: &TerminalWindow, checked: bool) -> Result<(), String> {
-    ui.invoke_context_choose(open_updates_menu(ui, checked)?);
+    let index = open_updates_menu(ui, checked)?;
+    verification::click(
+        ui,
+        crate::context_menu::probe::item_point(ui, index),
+        slint::platform::PointerEventButton::Left,
+    );
     require(
         !ui.get_context_open() && ui.get_article_updates_enabled() != checked,
         "reply updates menu did not toggle",
@@ -567,8 +576,9 @@ pub fn start(
                         && (mixed || ui.get_context_open()),
                     "interaction did not suspend five-second refresh",
                 )?;
-                wait(
-                    &ui,
+                // Observe the geometry without moving focus out of the menu or
+                // search field. The user's Escape should own focus restoration.
+                verification::wait(
                     || {
                         article
                             .output_identity(&connection.updates.borrow())
@@ -583,7 +593,12 @@ pub fn start(
                 if mixed {
                     ui.invoke_find_action(3);
                 } else {
-                    ui.invoke_context_dismiss(true);
+                    verification::key(&ui, slint::platform::Key::Escape);
+                    verification::wait(
+                        || !ui.get_context_open() && ui.get_article_focused(),
+                        "Escape did not close the context menu and restore article focus",
+                    )
+                    .await?;
                 }
                 wait(
                     &ui,

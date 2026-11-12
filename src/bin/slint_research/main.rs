@@ -683,15 +683,31 @@ fn run(
         .software_video(std::env::var("SLINT_BACKEND").ok().as_deref());
     let long_store_scene = options.store_profile.is_some()
         && options.probe == Some(Probe::Session(session::Probe::ArticleLong));
+    #[cfg(target_os = "macos")]
+    let passive_updates_probe = options.verify_media.is_some()
+        && options.probe == Some(Probe::Session(session::Probe::Media))
+        && std::env::var("PTTSTELLA_SLINT_UPDATES_PROBE").is_ok_and(|case| case != "native")
+        && !matches!(
+            std::env::var("PTTSTELLA_SLINT_UPDATES_NATIVE_CHECK").as_deref(),
+            Ok("1" | "2")
+        );
+    #[cfg(target_os = "macos")]
+    let passive_settings_probe = options.verify_media.is_some()
+        && options.probe == Some(Probe::Session(session::Probe::Media))
+        && std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").as_deref() == Ok("search");
     let selector = || {
         let selector = slint::BackendSelector::new();
         #[cfg(target_os = "macos")]
-        if long_store_scene {
+        if long_store_scene
+            || passive_updates_probe
+            || passive_settings_probe
+            || options.verify_tools.is_some()
+        {
             use slint::winit_030::{SlintEvent, winit};
             use winit::platform::macos::EventLoopBuilderExtMacOS;
 
-            // The comparison deliberately grants native foreground after the
-            // first article frame. Match the Dioxus diagnostic window startup.
+            // Long-reading comparisons grant foreground explicitly. The
+            // automated verifiers drive only toolkit focus and input.
             let mut builder = winit::event_loop::EventLoop::<SlintEvent>::with_user_event();
             builder.with_activate_ignoring_other_apps(false);
             return selector
