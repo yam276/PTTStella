@@ -2,6 +2,26 @@
 
 2026-11-11 已用同一對 macOS arm64 前端完成設定 v1–v6 的 Slint → 原 Dioxus → Slint 往返。各版本以獨立合成資料驗證兩次實際儲存、前一代備份與重開讀取。黑白名單、可攜設定、收藏名稱／離線讀取、最近看板清除及草稿編輯保存的先前證據見後節。完整新增／編輯／刪除、最近看板新增與排序、macOS 一般入口的自動開圖設定往返也已通過，完整平台資料回退、密碼庫與產品切換仍待驗。
 
+## 2026-11-12 現行 Apple Silicon 候選的原地回退
+
+以現行 Slint `4e28e82` 和相容回退 Dioxus `82bc81f` 的已簽章 App 建立隔離副本。兩個 App 依序佔用同一個暫存 `Applications/PTTStella.app` 路徑，皆使用正式 Bundle ID `io.github.yam276.pttstella`。Dioxus 主程式雜湊和回退包相同。Slint 副本改 Bundle ID 後重新 ad-hoc 簽章，主程式 `__TEXT,__text` 雜湊與候選包相同。兩份副本均通過深層嚴格簽章檢查。
+
+兩版從一般入口啟動，使用同一份隔離 HOME 的合成資料。Slint 經該 HOME 內的目錄連結讀寫同一份 `PTTStella` 資料。沙盒限制網路至本機，封鎖日常產品資料及 Keychains 路徑。設定經原生選單開啟，再從視窗的輔助使用介面讀取及操作核取方塊。
+
+| 階段 | 實際操作及檔案結果 |
+| --- | --- |
+| Dioxus 基準 | 從副本的預設站連到本機，八份檔案未改動 |
+| Slint 升級 | 讀到文章首尾切篇已開，關閉並保存 |
+| Dioxus 回退 | 讀到首尾切篇已關，開啟右鍵工具並保存 |
+| Slint 再次啟動 | 讀到右鍵工具已開，主檔及備份逐位元不變 |
+| Slint 從獨立備份重開 | 在全新的隔離 HOME 讀到首尾切篇已開，八份檔案逐位元恢復 |
+
+兩次保存各只改動指定偏好。一代備份各等於該次寫入前的主檔，六個其他主檔始終逐位元相同。五個程序均正常 exit 0、完成 TLS 1.3，本機測試站只收到 Close 並回覆。Slint 的路徑查詢另確認目前候選仍使用 `SlintResearch` 密碼服務，查詢未開啟 vault。正式簽章的 Keychain 授權、Finder 首開及其他平台回退仍待驗。
+
+前置校準保留控制器參數錯誤、macOS 回報的執行路徑與實際程序不符，以及 Dioxus 浮球未能開出設定的結果。通過的五段以實際程序路徑核對測試身分，使用兩版的原生設定選單。
+
+證據在 `.local/verification/slint-current-rollback/`，含 `verification.json`、五段設定與連線收據、八份獨立合成備份及清理紀錄。可用同目錄的 `roundtrip.py setup` 準備兩個現有 App 的副本，再以 `roundtrip.py` 傳入新的測試名稱。已清理同一個暫存安裝與資料根目錄，共 191,563,667 regular-file bytes，精確路徑、內部連結、`du` 及磁碟可用空間觀測見 `cleanup.json`。
+
 ## 2026-11-11 同一對前端的 v1–v6 設定往返
 
 Slint 使用以 `7466c31` 建置的最新 arm64 候選，封裝 native SHA-256 為 `f50ffb4658b03f8a7ff855d0ead6b1c035d02d8e7c2d4bedf4f763e150c88a32`。原 Dioxus 仍取乾淨 `5ea9ad6` 的 baseline native，SHA-256 為 `35c3e27506280f430b364b82355e31f7b101a254fcadccc289ac7063ed6a44e3`。兩個測試 App 都放在同一個自有系統暫存目錄，重用各自的執行檔。Slint 透過已核對的 Frameworks 連結載入候選 runtime。每一階段由明確參數的本機程序啟動，透過 App 路徑綁定可及性操作，使用標記過的合成資料與本機服務。

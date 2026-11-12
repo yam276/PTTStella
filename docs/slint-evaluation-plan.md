@@ -136,6 +136,8 @@ OpenGL WebM 另有一輪在應用程式前景觀測未中斷時，80% 段末已�
 
 2026-11-12 由乾淨 `82bc81f` 在固定 Cargo target 重新建置支援小數顯示與自動開圖欄位的 Apple Silicon Dioxus 回退 App／DMG。App 的深層簽章及 DMG 檢查通過。回退包、版本雜湊與八個自製合成原始檔的雜湊在 `.local/verification/slint-rollback-audio-candidate/`。這份回退包與 `73fd1af` 的 Apple Silicon Slint 候選已完成實際視窗的合成資料往返。字高由 21.5 → 22.5 → 23.5，Slint 重開讀到 23.5。兩次一代備份均逐位元等於前一版主檔，其他七份檔案雜湊一致。[往返與證據](slint-store-frontends.md#2026-11-12-含影片控制的候選與-dioxus-回退包)
 
+同一相容回退包也與現行 Slint `4e28e82` 在隔離的同一 App 路徑與正式 Bundle ID 完成五段往返。兩版使用一般入口及同一份合成資料，各自的設定修改均由對方讀回，兩次一代備份與最後從獨立備份恢復的八份檔案皆核對通過。此輪的寫入涵蓋兩個設定，其他資料逐位元保留。五個程序均正常退出並收到嚴格 Close。[現行候選的原地回退](slint-store-frontends.md#2026-11-12-現行-apple-silicon-候選的原地回退)
+
 隔離的 macOS Keychain 使用正式服務名與正式 Bundle ID 測試舊資料。重簽候選未沿用舊授權，仍可單次手動登入；原簽章回退讀回未變的紀錄。實際發佈簽章的系統授權提示、重新授權後的讀回和 Finder 首開仍待驗，正式入口維持 Dioxus。[正式服務名的隔離演練](login.md#macos-正式服務名的隔離演練)
 
 ### 2026-11-12 Intel Mac 與 Linux x64 封裝
