@@ -625,13 +625,15 @@ impl ArticleSession {
                             article.id,
                             self.core.borrow().presentation(),
                         );
+                        let first_line = article.first_line;
                         self.shown.set(Some(scope));
                         let mut slot = self.view.borrow_mut();
                         let reused = if let Some(native) = slot.as_ref() {
                             native.update(
                                 source,
                                 rows,
-                                (scope.0, scope.1, scope.2, article.first_line),
+                                (scope.0, scope.1, scope.2, first_line),
+                                article,
                             )
                         } else {
                             let renderer = self.renderer.borrow().fork(source.frame.clone());
@@ -640,15 +642,13 @@ impl ArticleSession {
                                 self.core.clone(),
                                 source,
                                 rows,
+                                article,
                                 renderer,
                             ) {
                                 Ok(native) => {
-                                    native.scope.set(Some((
-                                        scope.0,
-                                        scope.1,
-                                        scope.2,
-                                        article.first_line,
-                                    )));
+                                    native
+                                        .scope
+                                        .set(Some((scope.0, scope.1, scope.2, first_line)));
                                     *slot = Some(native);
                                 }
                                 Err(error) => self.notice(error),

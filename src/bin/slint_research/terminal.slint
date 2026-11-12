@@ -38,7 +38,6 @@ export component TerminalWindow inherits Window {
     in property <bool> article-updates-recovery;
     in property <int> article-updates-unread;
     in property <string> article-updates-status;
-    in property <string> article-updates-toggle-label;
     in property <string> article-updates-new-label;
     out property <bool> article-updates-blocked: root.reply-navigation-blocked || root.find-open;
     callback article-updates-action(int);
@@ -487,9 +486,10 @@ export component TerminalWindow inherits Window {
     in property <[SelectionRect]> navigation-rects;
     in property <int> pointer-cursor;
     in property <string> pointer-url;
-    out property <bool> context-source-blocked: root.app-closing || root.manager-open || root.settings-open || root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing
-        || root.show-about || root.switching-station || root.frame-paint-pending
+    out property <bool> context-interaction-blocked: root.app-closing || root.manager-open || root.settings-open || root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing
+        || root.show-about || root.switching-station
         || root.login-open || root.login-busy || root.paste-open || root.paste-reading || root.output-busy || root.tools-busy;
+    out property <bool> context-source-blocked: root.context-interaction-blocked || root.frame-paint-pending;
     out property <bool> terminal-pointer-blocked: root.context-source-blocked || root.context-open || root.context-pending;
     out property <bool> context-focus-restorable: !root.manager-open && !root.settings-open && !root.editor-open && !root.station-color-open && !root.media-open && root.native-foreground && !root.native-composing
         && !root.show-about && !root.switching-station && !root.login-open && !root.login-busy && !root.paste-open && !root.paste-reading;
@@ -1031,7 +1031,7 @@ export component TerminalWindow inherits Window {
     reading-panel := Rectangle {
         visible: !root.media-open && !root.find-open && !root.reply-navigation-open
             && (root.bookmarks-capturing || (root.article-load-available && (root.article-load-active || root.article-load-can-resume))
-                || root.article-updates-available || root.article-updates-visible);
+                || root.article-updates-visible);
         x: root.width - self.width - 12px;
         y: root.shell-status-visible ? status-panel.y + status-panel.height + 8px : 12px;
         width: min(430px, root.width - (root.reply-navigation-available ? 216px : 24px));
@@ -1063,17 +1063,13 @@ export component TerminalWindow inherits Window {
                     clicked => { root.article-load-action(!root.article-load-active); }
                 }
             }
-            if root.article-updates-available || root.article-updates-visible: VerticalLayout {
+            if root.article-updates-visible: VerticalLayout {
                 spacing: 4px;
                 Text {
                     text: root.article-updates-status; color: #ebe7dc; overflow: elide;
                 }
-                HorizontalLayout {
+                if root.article-updates-unread > 0 || root.article-updates-recovery: HorizontalLayout {
                     spacing: 6px;
-                    if root.article-updates-available || root.article-updates-enabled: Button {
-                        text: root.article-updates-toggle-label; enabled: !root.article-updates-blocked;
-                        min-width: 0px; clicked => { root.article-updates-action(0); }
-                    }
                     if root.article-updates-unread > 0: Button {
                         text: root.article-updates-new-label; enabled: !root.article-updates-blocked;
                         min-width: 0px; clicked => { root.article-updates-action(1); }

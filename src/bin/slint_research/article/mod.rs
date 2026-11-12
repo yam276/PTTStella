@@ -1,5 +1,6 @@
 //! Native long-text viewport. Station loading and input use separate owners.
 mod find_probe;
+mod footer;
 pub mod inline;
 mod layout;
 pub(crate) mod output_probe;
@@ -16,7 +17,7 @@ use crate::{
 };
 use layout::Layout;
 use pttstella::{
-    article_cache::{ArticleCache, LoadState},
+    article_cache::{ArticleCache, LoadState, Reading},
     article_flow::{Anchor, Flow},
     presentation::{self, Paint},
     screen::Screen,
@@ -60,7 +61,8 @@ pub struct ArticleView {
     x: Cell<f32>,
     painted: RefCell<Option<RasterKey>>,
     painted_anchor: Cell<Option<Anchor>>,
-    footer_size: Cell<Option<Size>>,
+    reading: RefCell<Reading>,
+    footer_key: Cell<Option<(Size, footer::Display)>>,
     row_size: Cell<Option<Size>>,
     row_cache: RefCell<BTreeMap<usize, Image>>,
     row_raster_count: Cell<usize>,
@@ -76,14 +78,17 @@ impl ArticleView {
         source: Paint,
         renderer: Renderer,
     ) -> Result<Rc<Self>, String> {
-        let rows = cache
+        let window = cache
             .window(&source, 0..1)
-            .ok_or("article source has no confirmed cache")?
-            .body_rows;
+            .ok_or("article source has no confirmed cache")?;
         Self::mount_projected(
             ui,
             source,
-            rows,
+            window.body_rows,
+            window
+                .paint
+                .article
+                .ok_or("article reading status unavailable")?,
             renderer,
             Box::new(move |source, rows| cache.window(source, rows)),
         )
@@ -93,12 +98,14 @@ impl ArticleView {
         core: Rc<RefCell<pttstella::surface_state::SurfaceState>>,
         source: Paint,
         rows: usize,
+        reading: Reading,
         renderer: Renderer,
     ) -> Result<Rc<Self>, String> {
         Self::mount_projected(
             ui,
             source,
             rows,
+            reading,
             renderer,
             Box::new(move |source, rows| {
                 let core = core.borrow();
@@ -112,6 +119,7 @@ impl ArticleView {
         ui: &TerminalWindow,
         source: Paint,
         rows: usize,
+        reading: Reading,
         renderer: Renderer,
         project: RowProjection,
     ) -> Result<Rc<Self>, String> {
@@ -129,7 +137,8 @@ impl ArticleView {
             x: Cell::new(0.),
             painted: RefCell::new(None),
             painted_anchor: Cell::new(None),
-            footer_size: Cell::new(None),
+            reading: RefCell::new(reading),
+            footer_key: Cell::new(None),
             row_size: Cell::new(None),
             row_cache: RefCell::new(BTreeMap::new()),
             row_raster_count: Cell::new(0),
@@ -419,7 +428,7 @@ impl ArticleView {
             ui.set_article_tiles(ModelRc::default());
             ui.set_article_footer(Image::default());
             self.painted.take();
-            self.footer_size.set(None);
+            self.footer_key.set(None);
             self.row_cache.borrow_mut().clear();
             self.row_size.set(None);
         }
@@ -572,31 +581,34 @@ impl ArticleView {
             width: layout.width,
             height: layout.row,
         };
-        if self.footer_size.get() != Some(size) {
+        let reading = self.reading.borrow();
+        let top = self.position(&flow);
+        let display = footer::display(
+            &reading,
+            &flow,
+            layout.row,
+            top,
+            top + f64::from(layout.body_height * layout.dpi),
+        );
+        let footer_key = (size, display);
+        if self.footer_key.get() != Some(footer_key) {
             let source = self.source.borrow();
-            let mut footer = source.frame.clone();
+            let footer = footer::frame(&source.frame, &reading, display);
             let columns = source
                 .links
                 .iter()
-                .filter(|link| link.row + 1 == footer.rows)
+                .filter(|link| link.row + 1 == source.frame.rows)
                 .map(|link| link.start..link.end)
                 .collect::<Vec<_>>();
             drop(source);
-            footer.glyphs.retain(|g| g.row + 1 == footer.rows);
-            for g in &mut footer.glyphs {
-                g.row = 0;
-            }
-            footer.rows = 1;
-            footer.hyperlinks.clear();
-            footer.cursor_visible = false;
-            footer.cursor = (0, 0);
             let mut renderer = self.renderer.borrow_mut();
             renderer.set_frame(footer);
             ui.set_article_footer(Image::from_rgba8_premultiplied(
                 renderer.paint_article_row(size, &columns)?,
             ));
-            self.footer_size.set(Some(size));
+            self.footer_key.set(Some(footer_key));
         }
+        drop(reading);
         self.painted_anchor.set(Some(self.anchor.get()));
         self.reply_marks();
         ui.invoke_article_rendered();
@@ -609,7 +621,10 @@ impl ArticleView {
         source: Paint,
         rows: usize,
         scope: (u64, u64, u64, usize),
+        reading: Reading,
     ) -> bool {
+        let footer_changed = footer::changed(&self.reading.borrow(), &reading);
+        self.reading.replace(reading);
         let unchanged = self.scope.get() == Some(scope)
             && self.rows.get() == rows
             && self.geometry().is_some()
@@ -622,7 +637,11 @@ impl ArticleView {
             };
         if unchanged {
             self.source.replace(source);
-            return true;
+            if footer_changed {
+                self.footer_key.set(None);
+                self.schedule();
+            }
+            return !footer_changed;
         }
         if self.scope.replace(Some(scope)) != Some(scope) {
             self.anchor.set(Anchor::default());
@@ -634,7 +653,7 @@ impl ArticleView {
         self.source.replace(source);
         self.rows.set(rows);
         self.painted.take();
-        self.footer_size.set(None);
+        self.footer_key.set(None);
         if let Some(ui) = self.ui.upgrade() {
             ui.set_article_active(true);
         }
@@ -649,13 +668,14 @@ impl ArticleView {
             self.scope.set(Some((new.0, new.1, new.2, scope.3)));
             self.row_cache.borrow_mut().clear();
             self.row_size.set(None);
-            self.footer_size.set(None);
+            self.footer_key.set(None);
             self.painted.take();
         }
     }
     pub fn hide(&self) {
         self.reply_index.borrow_mut().take();
         self.retire_paint();
+        self.footer_key.set(None);
         self.row_cache.borrow_mut().clear();
         self.scope.set(None);
         self.flow.replace(None);
@@ -674,7 +694,7 @@ impl ArticleView {
         self.renderer.borrow_mut().copy_display(source);
         self.row_cache.borrow_mut().clear();
         self.row_size.set(None);
-        self.footer_size.set(None);
+        self.footer_key.set(None);
         self.painted.take();
     }
 
@@ -689,7 +709,7 @@ impl ArticleView {
         self.timer.stop();
         self.row_cache.borrow_mut().clear();
         self.row_size.set(None);
-        self.footer_size.set(None);
+        self.footer_key.set(None);
         self.painted.take();
         if let Some(ui) = self.ui.upgrade() {
             ui.set_article_active(false);

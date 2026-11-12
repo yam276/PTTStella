@@ -8,6 +8,49 @@ use crate::{
 use pttstella::{article_cache::LoadState, connection::Connection, navigation::Intent};
 use slint::Model;
 use std::{error::Error, path::PathBuf, rc::Rc, sync::Arc, time::Duration};
+
+fn open_updates_menu(ui: &TerminalWindow, checked: bool) -> Result<i32, String> {
+    verification::click(
+        ui,
+        slint::LogicalPosition::new(
+            ui.get_terminal_origin_x() + 32.,
+            ui.get_terminal_origin_y()
+                + ui.get_article_body_height()
+                + ui.get_article_line_height() / 2.,
+        ),
+        slint::platform::PointerEventButton::Right,
+    );
+    require(
+        ui.get_context_open(),
+        &format!(
+            "article right click did not open the content menu: active={}, article-blocked={}, context-blocked={}, paint-pending={}, updates={}",
+            ui.get_article_active(),
+            ui.get_article_blocked(),
+            ui.get_context_interaction_blocked(),
+            ui.get_frame_paint_pending(),
+            ui.get_article_updates_enabled(),
+        ),
+    )?;
+    let entries = ui.get_context_entries();
+    let index = (0..entries.row_count())
+        .find(|&i| {
+            entries.row_data(i).is_some_and(|entry| {
+                entry.label == pttstella::msg!("article-updates-start").as_str()
+                    && entry.enabled
+                    && entry.checkable
+                    && entry.checked == checked
+            })
+        })
+        .ok_or("reply updates menu check state differs")?;
+    Ok(index as i32)
+}
+fn toggle_from_menu(ui: &TerminalWindow, checked: bool) -> Result<(), String> {
+    ui.invoke_context_choose(open_updates_menu(ui, checked)?);
+    require(
+        !ui.get_context_open() && ui.get_article_updates_enabled() != checked,
+        "reply updates menu did not toggle",
+    )
+}
 async fn wait(
     ui: &TerminalWindow,
     mut test: impl FnMut() -> bool,
@@ -166,6 +209,16 @@ pub fn start(
             )
             .await?;
             let native = article.view.borrow().clone().ok_or("reader missing")?;
+            require(
+                matches!(
+                    native
+                        .footer_key
+                        .get()
+                        .and_then(|(_, display)| display.percent),
+                    Some(crate::article::footer::Percent::Known(0..=99))
+                ),
+                "complete cache showed 100 percent before reaching the article end",
+            )?;
             if mixed {
                 native.navigate(Intent::Last);
             } else {
@@ -231,7 +284,7 @@ pub fn start(
                 native.layout.get()
             );
             let initial_epoch = connection.updates.borrow().input_epoch;
-            ui.invoke_article_updates_action(0);
+            toggle_from_menu(&ui, false)?;
             require(
                 ui.get_article_updates_enabled(),
                 "explicit update action was rejected",
@@ -244,7 +297,7 @@ pub fn start(
                 )
                 .await?;
                 if case == "cancel" {
-                    ui.invoke_article_updates_action(0);
+                    toggle_from_menu(&ui, true)?;
                 } else {
                     verification::foreground(&ui, false);
                 }
@@ -503,14 +556,15 @@ pub fn start(
                     )
                     .await?;
                 } else {
-                    ui.set_native_pointer_down(true);
+                    open_updates_menu(&ui, true)?;
                 }
                 for _ in 0..300 {
                     verification::foreground(&ui, true);
                     tokio::time::sleep(Duration::from_millis(20)).await;
                 }
                 require(
-                    connection.updates.borrow().input_epoch == paused_epoch,
+                    connection.updates.borrow().input_epoch == paused_epoch
+                        && (mixed || ui.get_context_open()),
                     "interaction did not suspend five-second refresh",
                 )?;
                 wait(
@@ -529,7 +583,7 @@ pub fn start(
                 if mixed {
                     ui.invoke_find_action(3);
                 } else {
-                    ui.set_native_pointer_down(false);
+                    ui.invoke_context_dismiss(true);
                 }
                 wait(
                     &ui,
@@ -632,7 +686,17 @@ pub fn start(
                             <= 2.,
                     "new replies action did not reach bottom/clear unread",
                 )?;
-                ui.invoke_article_updates_action(0);
+                require(
+                    matches!(
+                        native
+                            .footer_key
+                            .get()
+                            .and_then(|(_, display)| display.percent),
+                        Some(crate::article::footer::Percent::Known(100))
+                    ),
+                    "local footer did not reach 100 percent at the end",
+                )?;
+                toggle_from_menu(&ui, true)?;
                 require(
                     !ui.get_article_updates_enabled(),
                     "pause action left updates enabled",

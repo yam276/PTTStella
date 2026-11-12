@@ -1,4 +1,4 @@
-export struct MenuEntry { label: string, enabled: bool, icon: image, settings: bool }
+export struct MenuEntry { label: string, enabled: bool, icon: image, settings: bool, checkable: bool, checked: bool }
 export component ContextMenuOverlay inherits Rectangle {
     in property <[MenuEntry]> entries;
     in property <string> target;
@@ -73,6 +73,8 @@ export component ContextMenuOverlay inherits Rectangle {
                     accessible-role: button;
                     accessible-label: entry.label;
                     accessible-enabled: entry.enabled;
+                    accessible-checkable: entry.checkable;
+                    accessible-checked: entry.checked;
                     accessible-action-default => { if (entry.enabled) { root.choose(index); } }
                     Image {
                         x: 10px; y: (parent.height - self.height) / 2;
@@ -83,13 +85,21 @@ export component ContextMenuOverlay inherits Rectangle {
                     }
                     Text {
                         x: 38px;
-                        width: parent.width - self.x - 10px;
+                        width: parent.width - self.x - (entry.checkable ? 34px : 10px);
                         height: parent.height;
                         text: entry.label;
                         color: !entry.enabled ? #85848a : entry.settings ? #e7c46a : #eee9dc;
                         font-size: 13px;
                         vertical-alignment: center;
                         overflow: elide;
+                    }
+                    if entry.checked: Image {
+                        x: parent.width - self.width - 10px;
+                        y: (parent.height - self.height) / 2;
+                        width: 16px; height: 16px;
+                        source: @image-url("../../../assets/icons/lucide/check.svg");
+                        colorize: #e7c46a;
+                        accessible-role: none;
                     }
                     touch := TouchArea { clicked => { if (entry.enabled) { root.choose(index); } } }
                 }

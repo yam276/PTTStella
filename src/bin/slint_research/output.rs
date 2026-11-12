@@ -425,6 +425,11 @@ impl Output {
                 }))
         .then(|| view.stamp())
     }
+    pub(crate) fn updates_stop_scope(&self) -> Option<(u64, u64)> {
+        self.article
+            .as_ref()?
+            .updates_stop_scope(&self.connection.updates.borrow())
+    }
     pub fn geometry(&self, ui: &TerminalWindow) -> Option<SurfaceGeometry> {
         if ui.get_article_active() {
             self.article.as_ref()?.output_geometry()

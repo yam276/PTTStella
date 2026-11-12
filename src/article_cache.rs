@@ -51,12 +51,12 @@ pub struct Reading {
     pub range_cells: Option<ReadingRangeCells>,
     pub pages: Vec<ReadingPage>,
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct ReadingRangeCells {
     pub first: std::ops::Range<usize>,
     pub last: std::ops::Range<usize>,
 }
-#[derive(Clone, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct ReadingPage {
     pub line: usize,
     pub number: usize,

@@ -25,11 +25,12 @@ use std::{
 struct Source {
     stamp: Stamp,
     policy: u64,
-    geometry: SurfaceGeometry,
+    geometry: Option<SurfaceGeometry>,
     selected: Option<(Range<usize>, Vec<Span>)>,
     phase: Phase,
     mouse: Snapshot,
     pending: bool,
+    stop_updates: Option<(u64, u64)>,
 }
 struct Press {
     shift: bool,
@@ -133,23 +134,48 @@ impl ContextMenu {
         self.media.replace(Rc::downgrade(media));
     }
     fn source(&self, ui: &TerminalWindow) -> Option<Source> {
-        if self.closed.get() || ui.get_context_source_blocked() {
+        if self.closed.get() || ui.get_context_interaction_blocked() {
             return None;
         }
-        let stamp = self.output.current(ui)?;
-        let geometry = self.output.geometry(ui)?;
+        let stamp = if ui.get_context_source_blocked() {
+            None
+        } else {
+            self.output.current(ui)
+        };
+        let stop_updates = if stamp.is_none() {
+            Some(self.updates_stop_scope(ui)?)
+        } else {
+            None
+        };
+        let geometry = if stop_updates.is_none() {
+            Some(self.output.geometry(ui)?)
+        } else {
+            None
+        };
         let selected = self.output.selection_key();
         let policy = self.output.policy(ui);
         let view = self.connection.updates.borrow();
-        (view.stamp() == stamp).then_some(Source {
-            stamp,
+        (stamp.is_none_or(|stamp| view.stamp() == stamp)).then_some(Source {
+            stamp: view.stamp(),
             policy,
             geometry,
             selected,
             phase: view.phase,
             mouse: view.mouse,
             pending: view.input_pending,
+            stop_updates,
         })
+    }
+    fn updates_stop_scope(&self, ui: &TerminalWindow) -> Option<(u64, u64)> {
+        if self.closed.get()
+            || ui.get_context_interaction_blocked()
+            || !ui.get_article_active()
+            || ui.get_selection_active()
+            || ui.get_selection_dragging()
+        {
+            return None;
+        }
+        self.output.updates_stop_scope()
     }
     fn pointer(self: &Rc<Self>, kind: i32, point: (f32, f32)) {
         if kind == 3 {
@@ -197,6 +223,24 @@ impl ContextMenu {
             return;
         };
         if kind != 2 || press.picture.is_some() || !press_matches(&source, &press, point) {
+            return;
+        }
+        if source.stop_updates.is_some() {
+            // A refresh can replace the station screen while the cached
+            // article stays visible. Only stopping that refresh is allowed.
+            ui.set_context_x(point.0);
+            ui.set_context_y(point.1);
+            self.install_menu(
+                &ui,
+                source,
+                None,
+                None,
+                None,
+                vec![Entry {
+                    action: Action::ArticleUpdates,
+                    enabled: true,
+                }],
+            );
             return;
         }
         let editor = self.connection.updates.borrow().site.ptt_features()
@@ -529,6 +573,17 @@ impl ContextMenu {
         {
             return;
         }
+        let stop_scope = self
+            .menu
+            .borrow()
+            .as_ref()
+            .and_then(|menu| menu.source.stop_updates);
+        if let Some(scope) = stop_scope {
+            if self.updates_stop_scope(&ui) != Some(scope) {
+                self.dismiss(ui.get_context_focus_restorable());
+            }
+            return;
+        }
         if self.source(&ui).is_none() {
             let active = self.menu.borrow().is_some() || self.pending.borrow().is_some();
             self.dismiss(active && ui.get_context_focus_restorable());
@@ -628,6 +683,10 @@ impl ContextMenu {
         let valid = action
             .as_ref()
             .is_some_and(|(source, link, entry, picture, account)| {
+                if let Some(scope) = source.stop_updates {
+                    return entry.action == Action::ArticleUpdates
+                        && self.updates_stop_scope(&ui) == Some(scope);
+                }
                 self.source(&ui).as_ref() == Some(source)
                     && picture.as_ref().is_none_or(|p| self.picture_current(p))
                     && self
@@ -750,13 +809,17 @@ pub(super) fn label(action: Action) -> String {
     }
 }
 fn press_matches(source: &Source, press: &Press, point: (f32, f32)) -> bool {
-    source.stamp == press.source.stamp
-        && source.policy == press.source.policy
-        && source.geometry == press.source.geometry
-        && source.selected == press.source.selected
-        && source.mouse.modes == press.source.mouse.modes
-        && source.mouse.route == press.source.mouse.route
-        && (point.0 - press.point.0).hypot(point.1 - press.point.1) < 3.
+    let same_source = if source.stop_updates.is_some() || press.source.stop_updates.is_some() {
+        source.stop_updates == press.source.stop_updates
+    } else {
+        source.stamp == press.source.stamp
+            && source.policy == press.source.policy
+            && source.geometry == press.source.geometry
+            && source.selected == press.source.selected
+            && source.mouse.modes == press.source.mouse.modes
+            && source.mouse.route == press.source.mouse.route
+    };
+    same_source && (point.0 - press.point.0).hypot(point.1 - press.point.1) < 3.
 }
 
 fn account_policy(action: Action) -> Option<(pttstella::filters::Policy, bool)> {
@@ -815,14 +878,11 @@ fn publish_entries(ui: &TerminalWindow, entries: &[Entry]) {
         entries
             .iter()
             .map(|entry| MenuEntry {
-                label: if entry.action == A::ArticleUpdates && ui.get_article_updates_enabled() {
-                    pttstella::msg!("article-updates-pause")
-                } else {
-                    label(entry.action)
-                }
-                .into(),
+                label: label(entry.action).into(),
                 enabled: entry.enabled,
                 settings: entry.action == A::Settings,
+                checkable: entry.action == A::ArticleUpdates,
+                checked: entry.action == A::ArticleUpdates && ui.get_article_updates_enabled(),
                 icon: match entry.action {
                     A::AccountMask
                     | A::AccountRemoveMask

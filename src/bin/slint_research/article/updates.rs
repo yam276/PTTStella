@@ -54,6 +54,16 @@ impl ArticleSession {
             }
         });
     }
+    pub(crate) fn updates_stop_scope(&self, view: &View) -> Option<(u64, u64)> {
+        let status = self.core.borrow().updates_status()?;
+        let (generation, article, _) = self.shown.get()?;
+        (!self.closed.get()
+            && view.phase == pttstella::connection::Phase::Connected
+            && status.enabled
+            && (status.generation, status.article) == (generation, article)
+            && view.generation == generation)
+            .then_some((generation, article))
+    }
     fn updates_action(self: &Rc<Self>, action: i32) {
         let Some(ui) = self.ui.upgrade() else { return };
         if self.closed.get() || ui.get_article_updates_blocked() {
@@ -244,14 +254,6 @@ impl ArticleSession {
         ui.set_article_updates_enabled(enabled);
         ui.set_article_updates_recovery(recovery);
         ui.set_article_updates_unread(unread as i32);
-        ui.set_article_updates_toggle_label(
-            if enabled {
-                pttstella::msg!("article-updates-pause")
-            } else {
-                pttstella::msg!("article-updates-start")
-            }
-            .into(),
-        );
         ui.set_article_updates_new_label(
             pttstella::msg!("article-updates-new", count = (unread as i64)).into(),
         );

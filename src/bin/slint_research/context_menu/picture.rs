@@ -44,7 +44,10 @@ impl ContextMenu {
             self.dismiss(true);
             return;
         }
-        let Some(source) = self.source(&ui).filter(|s| s.mouse.route == Route::Local) else {
+        let Some(source) = self
+            .source(&ui)
+            .filter(|s| s.mouse.route == Route::Local && s.stop_updates.is_none())
+        else {
             self.press.take();
             return;
         };
@@ -91,7 +94,7 @@ impl ContextMenu {
         }
         self.output.prepare_context(&ui);
         ui.invoke_reset_keyboard();
-        let Some(source) = self.source(&ui) else {
+        let Some(source) = self.source(&ui).filter(|s| s.stop_updates.is_none()) else {
             return;
         };
         let Some(picture) = self
