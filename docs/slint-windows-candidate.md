@@ -1,5 +1,16 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-12 設定焦點與推文選單的同步候選
+
+Windows x64 ZIP 在 `.local/verification/slint-native-interactions/pair/windows/`，與 Apple Silicon App／DMG 取自同一乾淨提交 `54964e98afa167275b1eb7bccbf12010340d95da`。沿用 Apple Silicon 的 cargo-xwin 與既有 libmpv DLL，CRC、921 項內容雜湊及 PE x64 一般／延遲匯入核對通過。
+
+| 檔案 | SHA-256 |
+| --- | --- |
+| `PTTStella-Slint-Candidate-0.5.0-dev.3-windows-x64.zip` | `cc06a2a2cbbf52173f0aa57ca75b399fd0ccae1224357672c7f57f337eb5d96d` |
+| 包內 `pttstella-slint.exe` | `5b0ae218fd896dff22273748d4737fb4b55e43969c9e8c26f970b0ec4868a923` |
+
+這版修正設定搜尋進入內嵌黑白名單的焦點，保留 `Check-All.cmd`、`Run-Drafts-IME.cmd` 和 `Run-Video.cmd`。Windows 原生結果依實際執行檔雜湊歸檔，原先交付的草稿 IME 包仍可照原步驟驗收。[Apple Silicon 同源結果](slint-evaluation-plan.md#3-推文更新選單與設定s3s4s7)
+
 ## 2026-11-12 含原生影片控制的同步候選
 
 新增音量與靜音的 Windows x64 ZIP 在 `.local/verification/slint-audio-pair/windows/`，與 Apple Silicon App／DMG 同取乾淨 `73fd1afd53e1d3f1a0b83f6c7271c769c7de8c0a`。沿用 macOS arm64 的 cargo-xwin 交叉編譯及既有 libmpv DLL。ZIP SHA-256 為 `e817412a549c55e579307ffd453351d64780ad588040817a1924a9b55c120351`，包內 exe 為 `513d68471155298379bb8191f955d80db5aa6ab432f37fd152c51fbea6359f52`。已核對 CRC、921 項內容雜湊、PE x64 與一般／延遲匯入。

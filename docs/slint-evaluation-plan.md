@@ -88,6 +88,8 @@ Apple Silicon 與 Windows x64 的草稿／文章中途驗收包均固定在乾�
 
 推文探針從文章正文背景右鍵開選單，再點實際繪製的勾選列。開啟後確認兩次追加、未讀、開著選單時暫停與 Esc 回文章焦點。更新中的右鍵取消、失焦及晚到回覆另核對原文、閱讀錨點與站端復原。浮球在本機／站台滑鼠模式的元件探針涵蓋展開動畫、五分類、快捷鍵、動作順序、過期手勢與終端回焦。macOS 的自動推文、設定搜尋和浮球探針採被動啟動，避免取得其他工作的鍵盤輸入。元件案例和實際視窗證據各自記錄於 `.local/verification/slint-native-interactions/`。
 
+固定 `54964e98afa167275b1eb7bccbf12010340d95da` 出 Apple Silicon App／DMG 與 Windows x64 ZIP。Apple Silicon 簽章封裝的元件探針通過 48 個設定搜尋目標、兩種浮球模式、完整主視窗及推文追加／取消／失焦，均收到嚴格 Close。追加首輪碰到原生失焦，第二輪在選單暫停檢查失敗。取消首輪收到額外 CR。保留失敗並以同一簽章執行檔重跑至通過。實體右鍵和選單關閉後的 OS 焦點恢復仍待驗。Windows ZIP 的 CRC、921 項內容雜湊及 PE 匯入已核對，原生結果待驗。[同源 Windows 候選](slint-windows-candidate.md#2026-11-12-設定焦點與推文選單的同步候選)
+
 ### 4. 媒體（S5）
 
 - **保留 Slint 的原生播放與圖片路徑**　沿用現有下載、快取、置中展圖及 GIF 排程。影片保留 libmpv，依 Dioxus 播放控制補上音量與靜音，與播放、暫停及跳轉共用同一播放器狀態。
@@ -98,6 +100,8 @@ Apple Silicon 與 Windows x64 的草稿／文章中途驗收包均固定在乾�
 本輪已清理閱讀計時及影音操作的臨時 App 與提取的 MP4。保留取頁追蹤、六案影音收據、上一輪候選交付與固定 Cargo 快取，實際移除路徑、雜湊及空間前後見影音收據的 `cleanup.json`。
 
 Apple Silicon 與 Windows x64 候選均由乾淨的 `73fd1afd53e1d3f1a0b83f6c7271c769c7de8c0a` 建置，使用既有 worktree 和 Cargo target。Apple Silicon 封裝執行檔重新跑完上述六案，軟體及 OpenGL 路徑各驗 MP4、WebM、OGV，六案均確認音量／靜音回覆、播放器清理及嚴格 Close。App 簽章和 DMG 檢查通過。Windows 的 CRC、921 項內容雜湊及 PE 匯入核對通過，等待實機驗收。原生媒體操作、實際可聽音訊及 S8 的同負載效能仍待驗。[Windows 候選](slint-windows-candidate.md#2026-11-12-含原生影片控制的同步候選)
+
+設定修正版 `54964e9` 的 Apple Silicon App／DMG 簽章及封裝驗證通過。影片元件重跑中，MP4 軟體及 OGV 軟體／OpenGL 共三案完成。MP4 OpenGL 與兩個 WebM 案例在同一執行檔再次跑到恢復播放時，視窗前景及播放許可均為 false，影片已解碼並核對畫面、音量與靜音，三案整體仍未通過。用相同素材重跑 `73fd1af`，兩個 WebM 案例通過，MP4 OpenGL 也曾出現失焦。保留兩版與完整紀錄，尚未確認前景變化來源。收據在 `.local/verification/slint-native-interactions/pair/` 的 `media-retry/`、`media-selected-retry/`、`media-baseline-selected/`。
 
 ### 5. 正式資料與登入接手（S7、S8）
 
@@ -129,7 +133,7 @@ Intel 首輪來源清單漏對應 soxr 的 recipe 名稱，按原有 replay log 
 
 ## 產物保留規則（2026-11-09 使用者要求）
 
-目前 Apple Silicon／Windows x64 候選在 `.local/verification/slint-audio-pair/`，Intel Mac／Linux x64 候選在 `.local/verification/slint-cross-audio-current/`。早期四架構候選的格式、來源、雜湊與驗證範圍見 [2026-11-10 的交付](#2026-11-10-最新候選)。先前 `slint-windows-current/package-current/`、`slint-system-motion/package-current/`、Intel與Linux前份完整包已被取代並清理；保留必要metadata、notices與獨特證據，不要求歷史段落的舊latest路徑繼續存在。
+目前 Apple Silicon／Windows x64 設定與推文候選在 `.local/verification/slint-native-interactions/pair/`，Intel Mac／Linux x64 候選在 `.local/verification/slint-cross-audio-current/`。保留 `slint-audio-pair/` 的 Apple Silicon 六案影片對照和原先交付使用者的 Windows 驗收包。新的 Apple Silicon 重複 ZIP 與兩個臨時視窗探針已移除。App、DMG、Windows ZIP、固定編譯快取及各次不同結果仍保留。實際路徑與空間在同批 `pair/cleanup.json`、`gui-cleanup.json`。早期四架構候選的格式、來源、雜湊與驗證範圍見 [2026-11-10 的交付](#2026-11-10-最新候選)。
 
 Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人工回報屬舊04249364…執行檔；目前新69542cb7…尚待使用者晚點實測。已封裝Mac的shell／通知及網頁account失敗紀錄保留；最新來源修正後的五個Rosetta帳號／推文案例已通過，下載包尚未替換，詳文末。不能將Rosetta稱為Intel硬體驗收。Intel／Linux原生依使用者「先包起來」指示不等待，目前仍未驗。
 
