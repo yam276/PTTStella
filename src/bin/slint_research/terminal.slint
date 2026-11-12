@@ -929,12 +929,14 @@ export component TerminalWindow inherits Window {
     }
     status-panel := Rectangle {
         visible: root.shell-status-visible;
-        x: (root.width - self.width) / 2; y: 20px;
+        x: (root.width - self.width) / 2; y: self.outer-margin;
         width: min(620px, root.width - 32px);
+        private property <length> outer-margin: 20px;
         private property <length> inset: 20px;
         private property <length> mark-size: root.width < 480px ? 34px : 44px;
         private property <length> action-height: root.can-reconnect || root.login-pending ? 40px : 0px;
-        height: min(root.height * 0.45,
+        private property <length> reading-space: reading-panel.visible ? reading-panel.height + 8px : 0px;
+        height: min(root.height - 2 * self.outer-margin - self.reading-space,
             2 * self.inset + max(self.mark-size, status-copy.preferred-height + self.action-height));
         background: @linear-gradient(110deg, #122a43 0%, #0c1c30 72%);
         border-width: 1px; border-color: #b69a59; border-radius: 4px;
@@ -1026,9 +1028,10 @@ export component TerminalWindow inherits Window {
     }
     // Article controls float above the viewport so late capabilities cannot
     // move acknowledged text, hit targets or an in-progress selection.
-    if !root.media-open && !root.find-open && !root.reply-navigation-open
-        && (root.bookmarks-capturing || (root.article-load-available && (root.article-load-active || root.article-load-can-resume))
-            || root.article-updates-available || root.article-updates-visible): Rectangle {
+    reading-panel := Rectangle {
+        visible: !root.media-open && !root.find-open && !root.reply-navigation-open
+            && (root.bookmarks-capturing || (root.article-load-available && (root.article-load-active || root.article-load-can-resume))
+                || root.article-updates-available || root.article-updates-visible);
         x: root.width - self.width - 12px;
         y: root.shell-status-visible ? status-panel.y + status-panel.height + 8px : 12px;
         width: min(430px, root.width - (root.reply-navigation-available ? 216px : 24px));

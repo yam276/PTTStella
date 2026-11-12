@@ -493,12 +493,23 @@ pub fn start(
             )?;
             verification::capture(&ui, &directory, "shell-disconnected.png")?;
             let short_message = ui.get_connection_status();
-            let long_message = "站端已關閉連線 · Synthetic connection detail\n".repeat(40);
+            let detail = "站端已關閉連線 · Synthetic connection detail\n";
+            let medium_lines = (window_height / 38.).floor() as usize;
+            ui.set_connection_status(detail.repeat(medium_lines).into());
+            ui.set_result(ui.get_connection_status());
+            require(
+                !ui.get_shell_toast_message_scrollable()
+                    && ui.get_shell_toast_height() > window_height * 0.45
+                    && ui.get_shell_toast_reconnect_bottom() + 19. <= ui.get_shell_toast_height(),
+                "multiline disconnect toast scrolled before using available height",
+            )?;
+            verification::capture(&ui, &directory, "shell-disconnected-multiline.png")?;
+            let long_message = detail.repeat(80);
             ui.set_connection_status(long_message.into());
             ui.set_result(ui.get_connection_status());
             require(
                 ui.get_shell_toast_message_scrollable()
-                    && ui.get_shell_toast_height() <= window_height * 0.45 + 1.
+                    && ui.get_shell_toast_height() <= window_height - 39.
                     && ui.get_shell_toast_reconnect_bottom() + 19. <= ui.get_shell_toast_height(),
                 "long disconnect toast did not keep reconnect below the scrolling message",
             )?;
