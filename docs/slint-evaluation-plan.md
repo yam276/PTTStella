@@ -94,6 +94,8 @@ Apple Silicon 與 Windows x64 的草稿／文章中途驗收包均固定在乾�
 - **候選版保留隔離，正式替換沿用既有產品身分**　沿用 Rust store、版本、鎖與備份契約。先用副本重跑 Dioxus → Slint → 相容 Dioxus 回退 → Slint，核對設定、站點、名單、收藏、最近看板及草稿可讀寫。用合成憑證另驗正式服務名與簽章下的讀取、拒絕後提示與回退。記錄可用的 Dioxus 回退版本及獨立備份恢復步驟。
 - **驗收交付**　沿用 Slint worktree 和既有編譯快取。Apple Silicon 與 Windows x64 以同一 commit 出包並記錄實測案例和版本。Intel Mac、Linux x64 先打包，原生案例依目前安排維持待驗。正式入口切換依 S9。[Apple Silicon 隔離演練](slint-store-frontends.md#2026-11-11-同一正式-bundle-id-的-apple-silicon-隔離演練)
 
+2026-11-12 由乾淨 `82bc81f` 在固定 Cargo target 重新建置支援小數顯示與自動開圖欄位的 Apple Silicon Dioxus 回退 App／DMG。App 的深層簽章及 DMG 檢查通過。回退包、版本雜湊與八個自製合成原始檔的雜湊在 `.local/verification/slint-rollback-audio-candidate/`。新包的副本往返、正式服務名的 Keychain 授權及憑證回退仍待驗。
+
 ## 執行方式與完成條件
 
 - 實作在指定 Slint worktree 內連續推進。依下列 S0–S8 的相依順序完成程式、回歸和證據。缺 runner 或硬體時登記確切缺項，繼續可獨立驗證的階段。若原生輸入、雙色格線或原生播放器證明不可行，先修正或換成可驗收的技術路徑，再擴大相依功能。階段證據整理完即可接續，日常實作與重跑沿用本計畫。
