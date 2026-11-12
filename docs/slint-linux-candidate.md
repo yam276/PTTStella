@@ -1,8 +1,19 @@
 # Slint Linux x64 候選包
 
+## 2026-11-12 草稿組字修正候選
+
+Linux x64 deb／tar.gz 位於 `.local/verification/slint-cross-ime-edge/linux/`。乾淨 `06487df` 與 Apple Silicon／Windows x64 候選 `4e28e82` 之間只有文件變更。沿用既有 Cargo target、Apple Clang／ELF LLD 及 Debian bookworm amd64 SDK，重新核對 SDK 的 3,419 個檔案與連結。
+
+| 交付 | SHA-256 |
+| --- | --- |
+| Linux x64 deb | `35f4fcb134981c0cae8dab5d68ae4c0b855fc82585a1f8f5328d324a45134a81` |
+| Linux x64 tar.gz | `e998093b491565c511ab4da667f69662dc3b63ee0ad249bbb2953e85f2209fa3` |
+
+AMD64 deb 的 1,110 個檔案及 portable 的 1,123 個檔案已核對，共用主程式 SHA-256 為 `e098b75611f635335c2065bc76c34c41446fbfcc83c0d66541bd201017c55ec0`。從 portable 在 QEMU／Xvfb 的軟體繪圖環境完成草稿、重開並帶回站端、主視窗及 MP4／WebM／OGV 六案，全部正常退出並收到嚴格 Close。影片核對音量、靜音回覆和資源退場。這輪涵蓋 deb metadata 及 portable 執行，實機安裝、Wayland、原生 IME、聲音和效能待驗。
+
 ## 2026-11-12 含原生影片控制的候選
 
-目前的 Linux x64 deb／tar.gz 在 `.local/verification/slint-cross-audio-current/linux/`。以乾淨 `88b52af42b895db85d2848b70c0b516a67823f24` 在 macOS arm64 上交叉編譯，使用 Rust 1.97.0、Apple Clang、Rust 工具鏈的 ELF LLD 與既有 Debian bookworm amd64 sysroot。SDK 的 3,419 個檔案及連結均核對。ELF SHA-256 為 `e801538bb86ebc4fd3211ba196877e26707ea02e49ab906377a25029a9654fe8`。
+這輪 Linux x64 deb／tar.gz 在 `.local/verification/slint-cross-audio-current/linux/`。以乾淨 `88b52af42b895db85d2848b70c0b516a67823f24` 在 macOS arm64 上交叉編譯，使用 Rust 1.97.0、Apple Clang、Rust 工具鏈的 ELF LLD 與既有 Debian bookworm amd64 sysroot。SDK 的 3,419 個檔案及連結均核對。ELF SHA-256 為 `e801538bb86ebc4fd3211ba196877e26707ea02e49ab906377a25029a9654fe8`。
 
 | 交付 | SHA-256 |
 | --- | --- |

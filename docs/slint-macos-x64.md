@@ -1,6 +1,13 @@
 # Slint macOS x64 候選包
 
-2026-11-11 最新候選位於 `.local/verification/slint-input-cross/x64-package/`。乾淨 `c7368b2` 完成 release／all-target Clippy，包含文章在取得前景後補上焦點的修正。App 執行檔 `62ada42e…`、ZIP `4e95c66b…`、DMG `e125ff14…`。Rosetta 下 23 項封裝後合成案例均通過，另以真正的封裝執行檔完成原生長文的 37 次取頁、八次快取操作及正常 Close。ZIP、唯讀 DMG 與 App 的 1,223 個 payload 相符，47 個函式庫復用。Intel 實機、完整 IME 及效能仍待驗。[同步紀錄](slint-evaluation-plan.md#2026-11-11-文章焦點修正的-macos-候選同步)與[來源還原](slint-product-source.md)的 `article-focus-macos-current` 保留完整收據。
+2026-11-12 含草稿靠右組字修正的候選位於 `.local/verification/slint-cross-ime-edge/macos-intel/`。以乾淨 `06487df` 建置，與 Apple Silicon／Windows x64 的 `4e28e82` 之間只有文件變更。沿用 47 個 x64 播放器函式庫和 32 份來源紀錄。App、ZIP 及唯讀 DMG 的 1,216 個一般檔案一致，深層簽章通過。從掛載 DMG 在 Rosetta 完成草稿、重新開啟與帶回站端、主視窗及 MP4／WebM／OGV 六個軟體繪圖案例，全部收到嚴格 Close。影片核對音量、靜音回覆與播放器退場。Intel 實機、原生 IME、實際聲音與效能待驗。
+
+| 交付 | SHA-256 |
+| --- | --- |
+| Intel Mac DMG | `afd2d748a92e1196efaaaa1d846cde1960014a6b98e3d89e7ee370224e35c03f` |
+| Intel Mac ZIP | `0eb56ebe3efd612db3f8624710d3800bc81d28da9f418d92ca3990c1adca0f65` |
+
+2026-11-11 候選位於 `.local/verification/slint-input-cross/x64-package/`。乾淨 `c7368b2` 完成 release／all-target Clippy，包含文章在取得前景後補上焦點的修正。App 執行檔 `62ada42e…`、ZIP `4e95c66b…`、DMG `e125ff14…`。Rosetta 下 23 項封裝後合成案例均通過，另以真正的封裝執行檔完成原生長文的 37 次取頁、八次快取操作及正常 Close。ZIP、唯讀 DMG 與 App 的 1,223 個 payload 相符，47 個函式庫復用。Intel 實機、完整 IME 及效能仍待驗。[同步紀錄](slint-evaluation-plan.md#2026-11-11-文章焦點修正的-macos-候選同步)與[來源還原](slint-product-source.md)的 `article-focus-macos-current` 保留完整收據。
 
 完整 `native-player-probe`／`pttstella-slint` 已封裝為 Intel Mac 候選 App／ZIP／DMG，包含自行從來源建置的 mpv／FFmpeg runtime。此包在 Apple Silicon Mac 的 Rosetta 通過搬移及分立元件檢查；Intel 實機、OS 鍵鼠／IME、可聽音訊、最低 OS、乾淨機器與效能仍未驗收，不替代[總計畫](slint-evaluation-plan.md)的 S8 門檻。
 

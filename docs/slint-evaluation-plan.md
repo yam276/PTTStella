@@ -130,7 +130,9 @@ Apple Silicon App／DMG／ZIP 與 Windows x64 ZIP 固定在乾淨提交 `9c68e60
 
 ### 2026-11-12 Intel Mac 與 Linux x64 封裝
 
-Intel Mac DMG 與 Linux x64 deb／tar.gz 均以乾淨 `88b52af42b895db85d2848b70c0b516a67823f24` 建置。與 Apple Silicon／Windows x64 的 `73fd1af` 相比只有文件及 Keychain 測試變更，產品程式相同。沿用同一 worktree 和 Cargo target。兩個新封裝及收據位於 `.local/verification/slint-cross-audio-current/`。
+Intel Mac App／ZIP／DMG 與 Linux x64 deb／tar.gz 已更新至乾淨 `06487df`。與 Apple Silicon／Windows x64 的 `4e28e82` 相比只有文件變更，產品程式相同。Rosetta 與 QEMU／Xvfb 各通過六項軟體繪圖合成案例，涵蓋草稿靠右組字欄位幾何、保存、重開與帶回站端、主視窗及 MP4／WebM／OGV。全部收到嚴格 Close。原生安裝、實體候選窗、聲音與效能待驗。封裝、來源、逐檔雜湊與探針紀錄位於 `.local/verification/slint-cross-ime-edge/`。兩個驗證器的檔名及語法錯誤修正後核對原包。已卸載磁碟映像並清除臨時 SDK、連結及容器工作資料，保留原有 SDK 封存與 Cargo target。[Intel Mac 候選](slint-macos-x64.md) · [Linux x64 候選](slint-linux-candidate.md#2026-11-12-草稿組字修正候選)
+
+先前 Intel Mac DMG 與 Linux x64 deb／tar.gz 均以乾淨 `88b52af42b895db85d2848b70c0b516a67823f24` 建置。與 Apple Silicon／Windows x64 的 `73fd1af` 相比只有文件及 Keychain 測試變更，產品程式相同。沿用同一 worktree 和 Cargo target。該輪封裝及收據位於 `.local/verification/slint-cross-audio-current/`。
 
 | 交付 | 封裝及探針結果 |
 | --- | --- |
@@ -149,7 +151,7 @@ Intel 首輪來源清單漏對應 soxr 的 recipe 名稱，按原有 replay log 
 
 ## 產物保留規則（2026-11-09 使用者要求）
 
-Apple Silicon 與 Windows x64 便攜候選在 `.local/verification/slint-editor-ime-edge/pair/`，同源的 Windows x64 Setup 在工作樹旁的 `../PTTStella-candidates/windows-4e28e82-offline/`。保留前一個 `100b75f` 離線 Setup 供升級對照。Intel Mac／Linux x64 候選在 `.local/verification/slint-cross-audio-current/`。保留 `slint-audio-pair/` 的正式身分演練對照、Windows 待驗包、固定編譯快取及各次獨特結果。先前量測清理移除兩個量測 App、專用暫存、快取和已取代的 Apple Silicon App／DMG／ZIP，共 593,954,785 regular-file logical bytes。確切路徑及檔案系統空間觀測在 `slint-current-gif-comparison/calibration-cleanup.json`、`slint-current-gif-comparison/prior-mac-cleanup.json`，最新 Setup 的清理收據見 `slint-windows-ime-setup/cleanup.json`。
+Apple Silicon 與 Windows x64 便攜候選在 `.local/verification/slint-editor-ime-edge/pair/`，同源的 Windows x64 Setup 在工作樹旁的 `../PTTStella-candidates/windows-4e28e82-offline/`。保留前一個 `100b75f` 離線 Setup 供升級對照。Intel Mac／Linux x64 最新候選在 `.local/verification/slint-cross-ime-edge/`。保留 `slint-audio-pair/` 的正式身分演練對照、Windows 待驗包、固定編譯快取及各次獨特結果。先前量測清理移除兩個量測 App、專用暫存、快取和已取代的 Apple Silicon App／DMG／ZIP，共 593,954,785 regular-file logical bytes。確切路徑及檔案系統空間觀測在 `slint-current-gif-comparison/calibration-cleanup.json`、`slint-current-gif-comparison/prior-mac-cleanup.json`，最新的封裝清理收據見 `slint-windows-ime-setup/cleanup.json` 與 `slint-cross-ime-edge/cleanup.json`。
 
 Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人工回報屬舊04249364…執行檔；目前新69542cb7…尚待使用者晚點實測。已封裝Mac的shell／通知及網頁account失敗紀錄保留；最新來源修正後的五個Rosetta帳號／推文案例已通過，下載包尚未替換，詳文末。不能將Rosetta稱為Intel硬體驗收。Intel／Linux原生依使用者「先包起來」指示不等待，目前仍未驗。
 
