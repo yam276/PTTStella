@@ -255,6 +255,21 @@ Slint 使用原生 NSOpenPanel 載入原 fixture 的 `display.pttstella.json`，
 
 本輪3份App與原Dioxus專用WebKit／cache／系統暫存已確認退出／無open files後逐筆清除；來源與實際保存資料、兩份必要raw CLI保持hash不變。exact paths、UID／resolved／symlink、du、filesystem free前後及保留例外在 `bookmarks-cleanup/ledger.json`，重複PNG的保留位置／SHA在同目錄 `duplicate-pngs.json`。沒有修改產品程式、重建Rust、切換正式入口或發佈。
 
+## 2026-11-12 現行候選的草稿往返
+
+Apple Silicon 以原封裝 Slint `4e28e82` 與相容回退 Dioxus `82bc81f` 操作同一份標記的合成草稿資料，四個程序之間沒有重播種。Slint 使用 `--probe-store … --store-scene drafts`，Dioxus 使用 `--probe-surface … drafts`。透過 macOS 輔助使用介面選草稿、確認欄位焦點和操作儲存，文字與方向鍵透過原生鍵盤事件送入各自的編輯器。
+
+| 階段 | 讀取與寫入結果 |
+| --- | --- |
+| Slint 首次保存 | 標題保存為「本機草稿測」，正文三行與亮紅 ANSI 保留，revision 7 |
+| Dioxus 回退 | 讀到 Slint 標題與正文，新增「試」，實際選取、上色再復原，保留原 ANSI，revision 10 |
+| Slint 接回 | 讀到 Dioxus 標題，在標題與正文加入「末字」，正文保留尾端兩個換行，revision 12 |
+| Slint 新程序重開 | 視窗顯示完整標題、四行正文與原亮紅行，狀態列顯示六行，主檔與一代備份逐位元不變 |
+
+Dioxus 原有探針通過，記錄一次範本擷取、一次上色、一次恢復、三次保存及零轉回站端。四個程序均 exit 0 並收到 Close 回覆。最新草稿的一代備份逐位元等於 revision 11 的保存檔。其餘兩份草稿、其他五個資料檔與可攜顯示設定完整保留。首輪點擊未切到標題欄的輸入與後續復原均保留，確認實際欄位焦點後完成保存。此輪使用本機站台與原生合成鍵盤事件，實體 IME 與正式資料路徑下的草稿編輯仍各自驗收。
+
+原始 App 雜湊、四段主檔與備份、視窗擷取及退出收據在 `.local/verification/slint-current-draft-roundtrip/`，彙整見 `verification.json`。已移除 145,929 regular-file bytes 的自有暫存及編譯過的控制工具，保留源碼、唯一影像及收據。精確路徑與磁碟觀測見 `cleanup.json`。
+
 ## 草稿原生編輯與保存往返
 
 2026-11-10 在 `.local/verification/slint-draft-roundtrip-current/` 以同一 marked-store 副本完成三輪操作，階段間不重播種。Slint 使用目前 arm64 候選的 native（SHA-256 `6841e17e395878d9a90431028410f8e68a3e9d34f5a00f5b181c6f6f76c1d1c1`）及相同 Frameworks 的 symlink；原 Dioxus 使用乾淨 `5ea9ad6` native（`35c3e27506280f430b364b82355e31f7b101a254fcadccc289ac7063ed6a44e3`）。兩份獨立身份的 host 固定診斷參數，不能回退啟動一般產品或讀使用者 profile。
