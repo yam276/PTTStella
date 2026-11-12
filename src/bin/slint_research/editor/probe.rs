@@ -48,6 +48,31 @@ fn set_body(ui: &TerminalWindow, body: &str) -> Result<(), String> {
         "body edit rejected",
     )
 }
+fn type_text(ui: &TerminalWindow, text: &str) {
+    ui.window()
+        .dispatch_event(Event::KeyPressed { text: text.into() });
+    ui.window()
+        .dispatch_event(Event::KeyReleased { text: text.into() });
+}
+
+fn verify_rejected_input(ui: &TerminalWindow, owner: &Editor) -> Result<(), String> {
+    let capacity = pttstella::drafts::MAX_BODY - 2;
+    let mut body = format!("{}\n", "A".repeat(78)).repeat(capacity / 79);
+    body.push_str(&"A".repeat(capacity % 79));
+    set_body(ui, &body)?;
+    type_text(ui, "中");
+    require(
+        source(owner) == body
+            && ui.global::<EditorState>().get_status() == pttstella::msg!("draft-limit"),
+        "oversize text did not leave the document intact and show the limit",
+    )?;
+    type_text(ui, "X");
+    body.push('X');
+    require(
+        source(owner) == body,
+        "rejected native input was retained and blocked the next valid character",
+    )
+}
 fn verify_language(ui: &TerminalWindow, owner: &Editor, directory: &Path) -> Result<(), String> {
     use pttstella::i18n::{Language, application};
     let snapshot = || {
@@ -213,10 +238,7 @@ async fn verify(ui: &TerminalWindow, owner: &Rc<Editor>, directory: &Path) -> Re
             source(owner) == "看板預設格式\n\x1b[32m請依格式填寫\x1b[m\n",
             "template lost ANSI or trailing empty line",
         )?;
-        ui.window()
-            .dispatch_event(Event::KeyPressed { text: "Z".into() });
-        ui.window()
-            .dispatch_event(Event::KeyReleased { text: "Z".into() });
+        type_text(ui, "Z");
         require(
             source(owner).starts_with("Z看板"),
             "native body field did not commit once",
@@ -226,6 +248,7 @@ async fn verify(ui: &TerminalWindow, owner: &Rc<Editor>, directory: &Path) -> Re
             source(owner).starts_with("看板"),
             "body native commit did not share Rust undo",
         )?;
+        verify_rejected_input(ui, owner)?;
         // Half-colour graphic fixture uses the production grid painter.
         set_body(ui, "\x1b[31;66;34m田▁▂▃▄▅▆▇█\n\x1b[0mA\t中\n")?;
         capture(ui, directory, "dual-graphic.png")?;

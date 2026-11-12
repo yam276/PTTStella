@@ -1,6 +1,6 @@
 //! Real main-window draft owners; filesystem faults and cross-process barriers
 //! are explicit diagnostics, never production storage hooks.
-use super::{BODY, TITLE, set_body, source};
+use super::{BODY, TITLE, set_body, source, type_text};
 use crate::{
     EditorState, TerminalWindow,
     editor::Editor,
@@ -262,7 +262,8 @@ async fn disk(
             .map_err(|e| e.to_string())?;
     }
     let pending = format!("{BODY}\n失敗後仍保留");
-    set_body(ui, &pending)?;
+    set_body(ui, &format!("{BODY}\n失敗後仍保"))?;
+    type_text(ui, "留");
     // Use the editor's Close action: a failed flush must keep it mounted.
     state.invoke_action(3);
     until(
@@ -312,7 +313,8 @@ async fn disk(
         std::fs::write(path, &before).map_err(|e| e.to_string())?;
     }
     let final_body = format!("{pending}\n修復後保存");
-    set_body(ui, &final_body)?;
+    set_body(ui, &format!("{pending}\n修復後保"))?;
+    type_text(ui, "存");
     save(ui, owner).await?;
     let data = Store::at(path.to_path_buf()).load()?;
     require(

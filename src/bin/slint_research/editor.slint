@@ -147,7 +147,12 @@ export component NativeEditor inherits Rectangle {
                         color:#e3e8ee;single-line:true;text-cursor-width:EditorState.caret-visible ? 1px : 0px;
                         enabled:!EditorState.busy && !EditorState.transfer-confirm && !EditorState.palette-open;
                         accessible-label:UiLabels.editor-body;
-                        edited=>{ if EditorState.insert(self.text) {self.text="";} }
+                        // Document owns the text. A rejected commit must not
+                        // be included in the next edit from this input field.
+                        edited=>{
+                            EditorState.insert(self.text);
+                            self.text="";
+                        }
                     }
                 }
                 TouchArea {

@@ -38,14 +38,14 @@ impl Viewport {
         if p.col >= self.left + COLUMNS {
             self.left = p.col + 1 - COLUMNS;
         }
-        self.top = self.top.min(document.rows().len().saturating_sub(1));
+        self.top = self.top.min(document.rows().len().saturating_sub(ROWS));
         Ok(())
     }
     pub fn scroll(&mut self, document: &Document, rows: i32, columns: i32) {
         self.top = self
             .top
             .saturating_add_signed(rows as isize)
-            .min(document.rows().len().saturating_sub(1));
+            .min(document.rows().len().saturating_sub(ROWS));
         let longest = document
             .rows()
             .iter()

@@ -538,6 +538,9 @@ impl Editor {
                         .borrow()
                         .as_ref()
                         .is_some_and(|d| d.version() == version);
+                    self.trace.record("saved", || {
+                        serde_json::json!({"sequence":sequence,"revision":version.revision,"current":current})
+                    });
                     if current {
                         self.edited_at.set(None);
                         self.notice(if *conflicted {
@@ -552,6 +555,7 @@ impl Editor {
                 }
             }
             Reply::Error { message } => {
+                self.trace.record("storage-error", || serde_json::json!({}));
                 state.set_busy(false);
                 self.closing.set(false);
                 self.notice(message.clone());
@@ -586,7 +590,13 @@ impl Editor {
             let before = d.version();
             let before_bytes = d.source().len();
             let result = change(d).map(|()| before != d.version());
-            self.trace.record("edit",|| serde_json::json!({"before_bytes":before_bytes,"after_bytes":d.source().len(),"changed":result.as_ref().ok()}));
+            self.trace.record("edit", || {
+                serde_json::json!({
+                    "before_revision":before.revision,"after_revision":d.version().revision,
+                    "before_bytes":before_bytes,"after_bytes":d.source().len(),
+                    "accepted":result.is_ok()
+                })
+            });
             result
         };
         match result {
@@ -663,6 +673,12 @@ impl Editor {
         let sequence = self.sequence.get().checked_add(1)?;
         self.sequence.set(sequence);
         self.offered.set(Some((sequence, d.version())));
+        self.trace.record("snapshot", || {
+            serde_json::json!({
+                "sequence":sequence,"revision":d.version().revision,
+                "title_bytes":d.title().len(),"body_bytes":d.source().len()
+            })
+        });
         Some(Edit {
             token: d.version().token,
             sequence,
