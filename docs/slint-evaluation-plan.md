@@ -37,7 +37,7 @@ macOS 設定開關在三個程序各跑 12 次，原候選的 footprint 主要�
 | S2 | 共用 Connection、登入／保活、站點表單、嚴格切站／雙編碼 bytes | 同 endpoint 編碼切換、預設站重啟／不登入、完整信任／vault 原生矩陣 |
 | S3 | 選取、輸出、浮球／選單及原生互動的分立證據 | 全部快捷鍵／pointer／modal／可及性操作矩陣 |
 | S4 | 雙閱讀模式、長文取頁、尋找、名單／右鍵／揭露／底色、書籤／離線、快速前往與最近看板、目前／指定列表文章收藏、共用推文索引／原生定位與側標、推文更新／未讀／保留與復原；macOS基本按鈕、列表右鍵指定收藏與新程序斷線讀回補驗 | 跨平台推文控制／定位與完整鍵盤／焦點矩陣、其他平台列表右鍵及新程序離線操作、混合 Live 等效與全功能回歸 |
-| S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、macOS OpenGL [libmpv 中介畫面及主視窗兩處取樣](slint-prototype.md#2026-11-11-macos-opengl-的兩處像素取樣)和三格式錯色負向對照，Apple Silicon 候選三格式的原生跳轉／縮窗與 MP4 最小化恢復 | MP4 GPU 像素偶發失敗仍未重現／解決、多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
+| S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、macOS OpenGL [libmpv 中介畫面及主視窗兩處取樣](slint-prototype.md#2026-11-11-macos-opengl-的兩處像素取樣)和三格式錯色負向對照，Apple Silicon 候選三格式的原生跳轉／縮窗與 MP4 最小化恢復，三格式在軟體及 OpenGL 下各有完整數位音訊通過案例 | MP4 GPU 像素偶發失敗仍未重現／解決、OpenGL WebM 一輪取樣中斷待定因、多圖峰值、GL 恢復、實聽與跨平台音訊、四架構可交付 runtime |
 | S6 | 原生 79×23 編輯器、三種顯示、文字／整行／矩形選取、色票、復原／重做、草稿保存及帶回站端 | 依下方計畫複驗原生輸入、末字保存、焦點／可及性及跨平台操作 |
 | S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔與正常退出；[共用版本檢查／下載入口](slint-release-check.md)、toolkit空白鍵及退出HTTP／listener join；[共用通知政策／原生時序](slint-notifications.md)、hover／Tab焦點暫停及timer退出；[三平台系統動畫偏好來源](slint-system-motion.md)、macOS初讀／本機通知回呼與observer／UI listener退出；三版本store往返28案；[實際前端往返](slint-store-frontends.md)補 macOS v1／v6 設定與站點六輪、名單三輪、可攜設定三輪操作（原儲存位置仍待查）、收藏名稱／離線副本與最近看板清除三輪、同一資料草稿編輯保存三輪 | 實際OS動畫偏好切換／還原及其他平台原生、原生通知／其他管理入口、完整Dock／modal／OS I/O與可及性矩陣、實際前端／平台路徑及vault往返 |
 | S8 | [32套件x64 runtime乾淨重建](slint-native-source-replay.md)、47庫閉包核對（首輪MP4逾時未定因）；[三組產品來源完整還原](slint-product-source.md)、新還原目錄的macOS arm64一般Slint配置106測試通過／1明確原生helper ignored；S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG（含bc380f9導覽修正）及無Homebrew sandbox；[Windows x64完整GUI候選](slint-windows-candidate.md)，目前包與已測舊exe分列，Windows10實機13案回報經修正helper重驗（原版10過／3個格式誤判），嚴格ACK／像素／join；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64 App／ZIP／DMG](slint-macos-x64.md)、自建47項runtime閉包／32份來源、兩開發prefix不可用的Rosetta13案 | Intel與Linux原生、Windows完整人工操作、IME／DPI／音訊、VC runtime／最低OS／完整乾淨安裝、完整第三方來源交付與播放器重播、資料回退及同負載效能；尚未通過 |
@@ -123,9 +123,11 @@ Apple Silicon App／DMG／ZIP 與 Windows x64 ZIP 固定在乾淨提交 `9c68e60
 
 同一 Apple Silicon 簽章執行檔以軟體及 OpenGL 各跑 MP4、WebM、OGV，共六案核對四色畫面、音量與靜音回覆、恢復、失焦暫停與退場。額外走 `CloseRequested` 的影片退出探針保持原生事件路徑，核對退場、worker join 和嚴格 Close。App 深層簽章及 DMG 核對通過。51 個 Mach-O 的 `otool -L` 無 WebKit 直接連結。主視窗 dyld trace 仍有系統 WritingTools 與 WebKit 映射，程序族及 WebView 實例尚待另驗。證據在 `.local/verification/slint-toolkit-input/` 的 `packaged-aux.json`、`pair/media/summary.json` 及 `packaged/toolkit-results-all.json`。
 
-Apple Silicon 封裝候選 `4e28e82` 補驗實際數位音訊。以本機 440 Hz 合成素材和 ScreenCaptureKit 的程序篩選取得音訊統計，再從 macOS 輔助使用介面操作 Slint 的音量、靜音、恢復與關閉預覽。軟體繪圖的 MP4、WebM、OGV 和 OpenGL MP4 四案通過。音量從 80% 降到 25% 時，四案的 RMS 約下降 30.3 dB。靜音及關閉預覽後的穩定取樣峰值皆為零，恢復後回到 25% 時的音訊位準。四案正常退出、媒體工作退場並收到嚴格 Close。只保存音訊統計與事件時間。[Apple ScreenCaptureKit](https://developer.apple.com/documentation/screencapturekit)
+Apple Silicon 封裝候選 `4e28e82` 補驗實際數位音訊。以本機 440 Hz 合成素材和 ScreenCaptureKit 的程序篩選取得音訊統計，再從 macOS 輔助使用介面操作 Slint 的音量、靜音、恢復與關閉預覽。軟體繪圖及 OpenGL 的 MP4、WebM、OGV 各有一輪完整通過。音量從 80% 降到 25% 時，RMS 約下降 30.3 dB。靜音及關閉預覽後的穩定取樣峰值皆為零，恢復後回到 25% 的音訊位準。六案均驗證實際繪圖路徑、正常退出、播放器及 HTTP 工作退場與嚴格 Close。只保存音訊統計與事件時間。[Apple ScreenCaptureKit](https://developer.apple.com/documentation/screencapturekit)
 
-首輪 MP4 的主視窗輔助使用讀取未就緒，改成等待主視窗後通過。OpenGL WebM 的前景觀測中斷，該輪退出正常但音訊結果未納入，後續 OpenGL OGV 尚未執行。實體喇叭／耳機、跨平台音訊及完整 OpenGL 音訊矩陣待驗。候選執行檔雜湊、CC0 素材、逐段觀測、正常退出及暫存清理紀錄在 `.local/verification/slint-audio-output-current/`。
+首輪 MP4 的主視窗輔助使用讀取未就緒，改成等待主視窗後通過。OpenGL WebM、OGV 曾因應用程式失去前景而中止。兩次早期測試被終止，之後調整控制器，讓失焦後也可關閉自己的視窗並核對退場。短區段另測得 80%／25% 的分開啟動樣本，兩格式的音量差分別為 30.30／30.33 dB。
+
+OpenGL WebM 另有一輪在應用程式前景觀測未中斷時，80% 段末已開始無聲，25% 段仍為零，取消靜音後恢復。對同一合成 WebM 離線解碼的 220 個 100 ms 音訊區段均有訊號。後續以同一封裝執行檔和素材重跑，OpenGL 與軟體繪圖的 WebM 都完成整個流程。保留無聲反例及原因待查，實體喇叭／耳機與跨平台音訊仍待驗。候選雜湊、素材、逐段觀測及清理紀錄在 `.local/verification/slint-audio-output-current/`，本次彙整為 `opengl-followup.json`。
 
 ### 5. 正式資料與登入接手（S7、S8）
 
