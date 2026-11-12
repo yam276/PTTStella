@@ -75,6 +75,14 @@ Session另持有有界、無密碼的AccountIdentity，僅供網頁文章標示�
 
 原始 log、測試 binary SHA、資料格式來源差異和清理記錄在 `.local/verification/slint-keychain-current/`。兩份暫存目錄已確認移除，最終改簽副本為 22,590,352 regular-file bytes；固定 Cargo 快取沿用。
 
+### macOS 正式服務名的隔離演練
+
+`cargo --config .local/slint-build.toml test --locked --features native-player-probe --lib login::vault::tests::product_rehearsal::native_product_service_rehearsal -- --ignored --exact --nocapture`
+
+兩份合成 App 使用正式 Bundle ID `io.github.yam276.pttstella` 和不同 ad hoc cdhash，經獨立的暫存鑰匙圈使用 `Scope::Product` 的正式 service。第一份以舊格式保存合成帳密。第二份在測試程序停用系統授權介面時收到存取拒絕，空密碼無法登入，手動提供合成密碼仍可準備單次登入。研究服務在該鑰匙圈沒有舊紀錄。第一份回退時讀回原值，再移除並確認項目不存在。測試結束後暫存鑰匙圈已清理，使用者搜尋清單一致。
+
+這次驗證隔離鑰匙圈和正式名稱下的行為。正式簽章的實際系統授權提示，以及重新授權後由 Slint 前端讀回仍待驗。原始收據在 `.local/verification/slint-rollback-audio-candidate/product-keychain.log`。
+
 Linux 缺服務另明確執行：`DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-pttstella-synthetic-bus cargo test --locked --features credential-store --lib login::vault::tests::native_service_unavailable -- --ignored --exact`，需確認讀取與勾選保存失敗，但不勾選單次登入仍能準備帳密。交叉編譯、記憶體測試與隔離容器不能冒充 Windows 認證庫、Linux 真實桌面解鎖或三平台實站登入。
 
 GitHub 的 Desktop Release 在打包前使用相同測試。Windows runner 直接操作認證管理員。Linux runner 建立獨立的 D-Bus 工作階段和暫存 GNOME Keyring，並另外執行缺服務案例。

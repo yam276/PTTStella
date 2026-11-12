@@ -126,6 +126,16 @@ Python 打包與工具測試 178 項、actionlint 及 docs 檢查通過。驗後
 
 本機證據在 `.local/verification/slint-cutover-rehearsal-b1085ab/`，包含五段收據、主檔與備份雜湊、合成副本、相容的 Dioxus 回退 App 及清理清單。[同輪 Windows x64 測試包](slint-windows-candidate.md#2026-11-11-固定來源的-windows-實機待驗包)
 
+## 2026-11-12 含影片控制的候選與 Dioxus 回退包
+
+Apple Silicon 使用乾淨 `73fd1af` 的 Slint 候選（封裝執行檔 `9dd3d863…`）與 `82bc81f` 的相容 Dioxus 回退包（封裝執行檔 `d5ae4b62…`）。Slint DMG SHA-256 為 `101f3505531a2b807d279482f5959cb583976e686e8407a4fc03907ed6c72659`，Dioxus 回退 DMG 為 `a2409028f49a9436cedf00032d2281cc0df6a351fda2848f5b4a714d6b6fbd39`。測試外殼載入兩個已封裝的執行檔，以明確的探針參數存取同一份標記過的合成資料副本，連至本機測試站。
+
+Slint 外觀頁把字高由 21.5 存成 22.5。Dioxus 讀到 22.5 並改存 23.5，Slint 重開讀到 23.5，圖片與媒體頁仍顯示終端模式、自動開圖和首尾導覽。兩次設定主檔各只改動字高，兩份一代備份逐位元等於該次寫入前的主檔。其他七個檔案雜湊全程一致。最後一次開啟後的九份主檔及備份皆未改動。另以八份獨立原始檔重建空白資料目錄並核對雜湊，該份重建目錄沒有再次啟動 App。
+
+三段本機程序均收到嚴格 Close。Dioxus 的整頁 PNG、listener 釋放與工作結束另有探針收據。實際正式安裝路徑的前次演練見上節，正式服務名的隔離 Keychain 測試與待驗範圍見[登入文件](login.md#macos-正式服務名的隔離演練)。
+
+證據及回退包在 `.local/verification/slint-rollback-audio-candidate/`，含原始檔雜湊、兩次主檔與備份收據，以及 `slint-return/disk-receipt.json`。同提交的 Slint 候選包、已簽章 App 的六份影片收據和產物清理記錄在 `.local/verification/slint-audio-pair/`。[同輪 Windows x64 候選](slint-windows-candidate.md#2026-11-12-含原生影片控制的同步候選)
+
 ## 同一份資料的入口
 
 新增診斷入口：

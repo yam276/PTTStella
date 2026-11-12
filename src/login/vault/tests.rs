@@ -1,6 +1,9 @@
 use super::*;
 use std::cell::RefCell;
 
+#[cfg(all(target_os = "macos", feature = "desktop-services"))]
+mod product_rehearsal;
+
 #[derive(Default)]
 struct MemoryStore {
     bytes: RefCell<Option<Zeroizing<Vec<u8>>>>,

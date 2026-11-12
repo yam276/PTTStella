@@ -1,8 +1,14 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-12 含原生影片控制的同步候選
+
+新增音量與靜音的 Windows x64 ZIP 在 `.local/verification/slint-audio-pair/windows/`，與 Apple Silicon App／DMG 同取乾淨 `73fd1afd53e1d3f1a0b83f6c7271c769c7de8c0a`。沿用 macOS arm64 的 cargo-xwin 交叉編譯及既有 libmpv DLL。ZIP SHA-256 為 `e817412a549c55e579307ffd453351d64780ad588040817a1924a9b55c120351`，包內 exe 為 `513d68471155298379bb8191f955d80db5aa6ab432f37fd152c51fbea6359f52`。已核對 CRC、921 項內容雜湊、PE x64 與一般／延遲匯入。
+
+在 Windows 解壓至新資料夾後，`Run-Video.cmd` 可開本機合成影片，驗收音量、靜音、恢復、進度與關窗後停止。草稿仍可照下一節的 `Run-Drafts-IME.cmd` 步驟驗收。兩個 Windows ZIP 都保留，各自依執行檔雜湊記錄實機結果。本包的原生結果待驗。[Apple Silicon 封裝驗證與回退](slint-store-frontends.md#2026-11-12-含影片控制的候選與-dioxus-回退包)
+
 ## 2026-11-12 草稿 IME 與文章翻頁同步候選
 
-目前 Windows x64 ZIP 位於 `.local/verification/slint-draft-article-pair/windows/`，與同目錄的 Apple Silicon App 均由乾淨 `af4850648a2f99064a9f0c3194be9f292d5ddbe1` 建置。macOS arm64 以 Rust 1.97.0、[cargo-xwin 0.23.1](https://github.com/rust-cross/cargo-xwin/releases/tag/v0.23.1) 及 LLD 交叉編譯 Windows，沿用已核對的 libmpv DLL。ZIP SHA-256 為 `599f94ecce001968848c801b88e1415952b1509d9d9badde1c67d5be81dd594e`，包內 exe 為 `f06b7329dcff8051c3b0de887c57a83273655454cb62e5d7b05fe02366f68f6f`。CRC、921 項內容雜湊、PE x64 與一般／延遲匯入均通過。
+使用者稍後驗收的 Windows x64 ZIP 位於 `.local/verification/slint-draft-article-pair/windows/`，與該輪 Apple Silicon App 同取乾淨 `af4850648a2f99064a9f0c3194be9f292d5ddbe1`。macOS arm64 以 Rust 1.97.0、[cargo-xwin 0.23.1](https://github.com/rust-cross/cargo-xwin/releases/tag/v0.23.1) 及 LLD 交叉編譯 Windows，沿用已核對的 libmpv DLL。ZIP SHA-256 為 `599f94ecce001968848c801b88e1415952b1509d9d9badde1c67d5be81dd594e`，包內 exe 為 `f06b7329dcff8051c3b0de887c57a83273655454cb62e5d7b05fe02366f68f6f`。CRC、921 項內容雜湊、PE x64 與一般／延遲匯入均通過。
 
 解壓至新資料夾，照 README 執行 `Run-Drafts-IME.cmd`。入口開本機合成看板，第一次建立「草稿輸入法驗收」，再執行會保留已存稿。在第三行用 Microsoft 注音組字並 Esc 取消，確認候選窗位置，再提交「中」後立即保存。切日文「**あ**」，輸入 `konnichiha` 提交「こんにちは」後立即關閉草稿。重開 App 再進同一稿，第三行應為「中こんにちは」，上方 ANSI 紅字保持。保留 `evidence/draft-ime/` 主檔、備份及兩次 `evidence/run-*.log`。這輪 Windows 實機留待稍後，前次原生回報仍以原 exe 雜湊歸檔。
 

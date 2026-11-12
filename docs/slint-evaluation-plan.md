@@ -89,12 +89,16 @@ Apple Silicon 與 Windows x64 的草稿／文章中途驗收包均固定在乾�
 
 本輪已清理閱讀計時及影音操作的臨時 App 與提取的 MP4。保留取頁追蹤、六案影音收據、上一輪候選交付與固定 Cargo 快取，實際移除路徑、雜湊及空間前後見影音收據的 `cleanup.json`。
 
+Apple Silicon 與 Windows x64 候選均由乾淨的 `73fd1afd53e1d3f1a0b83f6c7271c769c7de8c0a` 建置，使用既有 worktree 和 Cargo target。Apple Silicon 封裝執行檔重新跑完上述六案，軟體及 OpenGL 路徑各驗 MP4、WebM、OGV，六案均確認音量／靜音回覆、播放器清理及嚴格 Close。App 簽章和 DMG 檢查通過。Windows 的 CRC、921 項內容雜湊及 PE 匯入核對通過，等待實機驗收。原生媒體操作、實際可聽音訊、更新後的 Intel Mac／Linux x64 封裝，以及 S8 的同負載效能仍待驗。[Windows 候選](slint-windows-candidate.md#2026-11-12-含原生影片控制的同步候選)
+
 ### 5. 正式資料與登入接手（S7、S8）
 
 - **候選版保留隔離，正式替換沿用既有產品身分**　沿用 Rust store、版本、鎖與備份契約。先用副本重跑 Dioxus → Slint → 相容 Dioxus 回退 → Slint，核對設定、站點、名單、收藏、最近看板及草稿可讀寫。用合成憑證另驗正式服務名與簽章下的讀取、拒絕後提示與回退。記錄可用的 Dioxus 回退版本及獨立備份恢復步驟。
 - **驗收交付**　沿用 Slint worktree 和既有編譯快取。Apple Silicon 與 Windows x64 以同一 commit 出包並記錄實測案例和版本。Intel Mac、Linux x64 先打包，原生案例依目前安排維持待驗。正式入口切換依 S9。[Apple Silicon 隔離演練](slint-store-frontends.md#2026-11-11-同一正式-bundle-id-的-apple-silicon-隔離演練)
 
-2026-11-12 由乾淨 `82bc81f` 在固定 Cargo target 重新建置支援小數顯示與自動開圖欄位的 Apple Silicon Dioxus 回退 App／DMG。App 的深層簽章及 DMG 檢查通過。回退包、版本雜湊與八個自製合成原始檔的雜湊在 `.local/verification/slint-rollback-audio-candidate/`。新包的副本往返、正式服務名的 Keychain 授權及憑證回退仍待驗。
+2026-11-12 由乾淨 `82bc81f` 在固定 Cargo target 重新建置支援小數顯示與自動開圖欄位的 Apple Silicon Dioxus 回退 App／DMG。App 的深層簽章及 DMG 檢查通過。回退包、版本雜湊與八個自製合成原始檔的雜湊在 `.local/verification/slint-rollback-audio-candidate/`。這份回退包與 `73fd1af` 的 Apple Silicon Slint 候選已完成實際視窗的合成資料往返。字高由 21.5 → 22.5 → 23.5，Slint 重開讀到 23.5。兩次一代備份均逐位元等於前一版主檔，其他七份檔案雜湊一致。[往返與證據](slint-store-frontends.md#2026-11-12-含影片控制的候選與-dioxus-回退包)
+
+隔離的 macOS Keychain 使用正式服務名與正式 Bundle ID 測試舊資料。重簽候選未沿用舊授權，仍可單次手動登入；原簽章回退讀回未變的紀錄。實際發佈簽章的系統授權提示、重新授權後的讀回和 Finder 首開仍待驗，正式入口維持 Dioxus。[正式服務名的隔離演練](login.md#macos-正式服務名的隔離演練)
 
 ## 執行方式與完成條件
 
