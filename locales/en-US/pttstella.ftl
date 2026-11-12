@@ -892,7 +892,6 @@ slint-drag-scroll = Drag to scroll
 slint-terminal-input = Terminal input
 slint-article-input = Station input in article
 slint-preview-image = Open full image preview
-slint-expand-image = Expand this image
 slint-stop-requested = Stopping…
 slint-cancel-job = Cancel task
 slint-draft-color-hint = Select text, then right-click to color

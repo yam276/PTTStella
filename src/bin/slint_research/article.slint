@@ -1,6 +1,6 @@
 import { UiLabels } from "labels.slint";
 import { SelectionRect } from "selection.slint";
-export struct InlineArrow { index:int, stamp:string, x:length, y:length, size:length, opened:bool }
+export struct InlineArrow { index:int, stamp:string, x:length, y:length, size:length, opened:bool, label:string }
 export struct InlinePicture { index:int, key:int, stamp:string, x:length, y:length, width:length, height:length, image-y:length, image-height:length, source-y:int, source-height:int, source-width:int, image:image, status:string }
 export struct ArticleTile { image: image, y: length, height: length }
 export struct ReplySideMark { row:int, y:length, author:bool, mine:bool, first:bool }
@@ -160,7 +160,16 @@ export component ArticleViewport inherits Rectangle {
             TouchArea {
                 enabled:!root.blocked;
                 mouse-cursor:MouseCursor.pointer;
-                accessible-role:button;accessible-label:UiLabels.expand-image;
+                accessible-role:button;
+                accessible-label:arrow.label;
+                accessible-expanded:arrow.opened;
+                accessible-enabled:self.enabled && root.inline-enabled && !arrow.opened;
+                accessible-action-default => {
+                    if self.enabled && root.inline-enabled && !arrow.opened {
+                        root.inline-pointer(0,arrow.index,arrow.stamp);
+                        root.inline-pointer(1,arrow.index,arrow.stamp);
+                    }
+                }
                 private property <length> down-x;
                 private property <length> down-y;
                 private property <bool> tap-dragged;

@@ -697,8 +697,12 @@ fn run(
         && std::env::var_os("PTTSTELLA_VIDEO_FIXTURE").is_some()
         && std::env::var_os("PTTSTELLA_VIDEO_PROBE_EXIT").is_none()
         && std::env::var_os("PTTSTELLA_VIDEO_PROBE_NATIVE_WAIT").is_none();
+    let toolkit_inline = options.verify_media.is_some()
+        && options.probe == Some(Probe::Session(session::Probe::ArticleInline))
+        && std::env::var_os("PTTSTELLA_INLINE_MENU_PROBE").is_none();
     let toolkit_input = options.verify_shell
         || options.verify_tools.is_some()
+        || toolkit_inline
         || verify_media_scene && (toolkit_updates || toolkit_settings || toolkit_video);
     let selector = || {
         let selector = slint::BackendSelector::new();

@@ -71,7 +71,6 @@ pub fn refresh(ui: &TerminalWindow) {
     labels.set_terminal_input(msg!("slint-terminal-input").into());
     labels.set_article_input(msg!("slint-article-input").into());
     labels.set_preview_image(msg!("slint-preview-image").into());
-    labels.set_expand_image(msg!("slint-expand-image").into());
     labels.set_editor_save(msg!("draft-save").into());
     labels.set_editor_transfer(msg!("draft-transfer").into());
     labels.set_editor_stop(msg!("slint-stop-requested").into());

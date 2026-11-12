@@ -11,15 +11,18 @@ use slint::{
 };
 use std::{error::Error, path::PathBuf, rc::Rc, time::Duration};
 pub(super) fn arrow(ui: &TerminalWindow, index: i32) -> Result<slint::LogicalPosition, String> {
-    let model = ui.get_inline_arrows();
-    let a = (0..model.row_count())
-        .filter_map(|n| model.row_data(n))
-        .find(|a| a.index == index)
-        .ok_or("inline arrow not visible")?;
+    let a = arrow_item(ui, index)?;
     Ok(slint::LogicalPosition::new(
         ui.get_terminal_origin_x() + a.x + a.size / 2.,
         ui.get_terminal_origin_y() + a.y + a.size / 2.,
     ))
+}
+fn arrow_item(ui: &TerminalWindow, index: i32) -> Result<crate::InlineArrow, String> {
+    let model = ui.get_inline_arrows();
+    (0..model.row_count())
+        .filter_map(|n| model.row_data(n))
+        .find(|a| a.index == index)
+        .ok_or_else(|| "inline arrow not visible".into())
 }
 pub(super) fn picture(ui: &TerminalWindow, index: i32) -> Result<slint::LogicalPosition, String> {
     let model = ui.get_inline_pictures();
@@ -168,6 +171,13 @@ pub fn start(
             let png = images[0].0 as i32;
             let gif = images[1].0 as i32;
             let once = images[2].0 as i32;
+            let png_url = images[0].2.as_str();
+            let collapsed = arrow_item(&ui, png)?;
+            require(
+                !collapsed.opened
+                    && collapsed.label == pttstella::msg!("inline-image-open-one", url = png_url),
+                "collapsed inline arrow missing its localized URL label",
+            )?;
             verification::capture(&ui, &directory, "before-arrow.png")?;
             let shot = ui.window().take_snapshot().map_err(|e| e.to_string())?;
             let (_, row, start, _) = owner
@@ -222,6 +232,12 @@ pub fn start(
                 "single PNG did not decode and install",
             )
             .await?;
+            let expanded = arrow_item(&ui, png)?;
+            require(
+                expanded.opened
+                    && expanded.label == pttstella::msg!("inline-image-opened", url = png_url),
+                "expanded inline arrow missing its localized state and URL",
+            )?;
             require(
                 owner.state.borrow().entries.len() == 1,
                 "single expansion opened other images",

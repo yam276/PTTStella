@@ -886,7 +886,6 @@ slint-drag-scroll = 拖曳捲動
 slint-terminal-input = 終端輸入
 slint-article-input = 文章中的站端輸入
 slint-preview-image = 開啟完整圖片預覽
-slint-expand-image = 展開這張圖片
 slint-stop-requested = 停止中…
 slint-cancel-job = 取消工作
 slint-draft-color-hint = 選取後按右鍵上色

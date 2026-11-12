@@ -527,6 +527,7 @@ impl ArticleSession {
         self.updates_language_changed();
         if let Some(ui) = self.ui.upgrade() {
             self.refresh_load_label(&ui);
+            ui.invoke_inline_updated();
         }
     }
     fn refresh_load_label(&self, ui: &TerminalWindow) {

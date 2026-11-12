@@ -97,6 +97,8 @@ Apple Silicon 與 Windows x64 的草稿／文章中途驗收包均固定在乾�
 - **保留 Slint 的原生播放與圖片路徑**　沿用現有下載、快取、置中展圖及 GIF 排程。影片保留 libmpv，依 Dioxus 播放控制補上音量與靜音，與播放、暫停及跳轉共用同一播放器狀態。
 - **通過條件**　在候選 App 實際播放可驗格式，核對調整音量、靜音／恢復、跳轉、切換影片及關窗後聲畫停止。兩張可視 GIF 用同一素材重測前景播放、隱藏／恢復與 CPU／記憶體，依量測定位重繪成本。[現有影片控制](../src/bin/slint_research/media.slint) · [GIF 比較基準](slint-macos-measurement.md#2026-11-11-雙-gif-三組交錯比較)
 
+Slint 的文內圖片箭頭共用 Dioxus 的 Fluent 展開／已展開訊息，包含完整圖片網址。尚未展開的按鈕可透過預設無障礙動作執行同一圖片展開流程，已展開項目保留防止指標穿透的行為。Apple Silicon 隔離視窗以無障礙按鈕展開一張 PNG，畫面顯示紅藍圖，按鈕改為「圖片已展開」並停用，另外兩個來源保持可展開。合成站確認一筆 PageDown、嚴格 Close、只有該 PNG 的一次 HTTP 下載及 HTTP join。雙 GIF 的新前景校準已記錄一段 Slint 播放，Dioxus 的配對播放仍待取得可驗前景。[雙 GIF 前景校準](slint-macos-measurement.md#2026-11-12-雙-gif-前景校準)
+
 2026-11-12 原生影片新增 0–100% 音量與獨立靜音。滑桿放開或完成鍵盤調整時送出一筆指令，輔助技術可直接設定音量。控制綁定目前播放工作，靜音時仍可調音量，取消靜音後保留最後音量。Apple Silicon 的 MP4、WebM、OGV 各以軟體與 OpenGL 跑過元件探針。六案都核對 libmpv 的音量／靜音回覆、暫停與跳轉、關閉後播放器退場及 Close ACK。原生視窗操作工具能看到合成畫面，點影片連結時回傳 `noWindowsAvailable`，因此這批原生點擊、聲音實聽與跨平台音訊留待候選實機驗收。收據在 `.local/verification/slint-video-audio-controls/`。
 
 本輪已清理閱讀計時及影音操作的臨時 App 與提取的 MP4。保留取頁追蹤、六案影音收據、上一輪候選交付與固定 Cargo 快取，實際移除路徑、雜湊及空間前後見影音收據的 `cleanup.json`。

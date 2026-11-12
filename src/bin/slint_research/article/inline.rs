@@ -516,6 +516,7 @@ impl Inline {
         self.layout_updates.set(self.layout_updates.get() + 1);
         let mut arrows = Vec::new();
         let whole_rows = native.whole_rows(&flow, layout);
+        let projection = self.projection.borrow();
         for &(index, row, start, end) in self.candidates.borrow().iter() {
             let y = (flow.top(row) as f64 - offset) / f64::from(layout.dpi);
             if whole_rows.as_ref().is_some_and(|rows| !rows.contains(&row))
@@ -527,6 +528,15 @@ impl Inline {
             let cell = layout.logical_width() / 80.;
             let size = (layout.line_height() * 0.8).min((end - start) as f32 * cell);
             let opened = state.entries.iter().any(|e| e.index == index);
+            let Some(link) = projection.as_ref().and_then(|p| p.links().get(index)) else {
+                continue;
+            };
+            let url = link.url.as_str();
+            let label = if opened {
+                pttstella::msg!("inline-image-opened", url = url)
+            } else {
+                pttstella::msg!("inline-image-open-one", url = url)
+            };
             arrows.push(InlineArrow {
                 index: index as i32,
                 stamp: self.tag.borrow().as_str().into(),
@@ -534,8 +544,10 @@ impl Inline {
                 y: y as f32 + (layout.line_height() - size) / 2.,
                 size,
                 opened,
+                label: label.into(),
             });
         }
+        drop(projection);
         ui.set_inline_arrows(ModelRc::new(VecModel::from(arrows)));
         self.validate_enter();
         let _ = scope;
