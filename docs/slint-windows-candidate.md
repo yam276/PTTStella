@@ -1,5 +1,16 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-12 文內圖片無障礙同步候選
+
+Windows x64 ZIP 與 Apple Silicon App／DMG／ZIP 位於 `.local/verification/slint-current-gif-comparison/pair/`，同取乾淨提交 `100b75f67e1fcd34f79c6531865a6eebe1272bb3`。Windows 以既有 cargo-xwin 和 libmpv DLL 建置，CRC、921 項內容雜湊及 PE x64 一般／延遲匯入已核對。
+
+| 檔案 | SHA-256 |
+| --- | --- |
+| `PTTStella-Slint-Candidate-0.5.0-dev.3-windows-x64.zip` | `f551d0f40dc395d7bf2db12fa4a09a908ff4910d445910c2f6f2e4594fe9c69b` |
+| 包內 `pttstella-slint.exe` | `31c60eb3f16a05d08abed4cef47bc83d00b3438fd4f156ce8a99ec70eb926f1f` |
+
+保留草稿 IME、影片與綜合驗收入口。Windows 原生圖片無障礙與草稿 IME 仍待實機驗收。原先交付的 Windows 包仍可照原步驟驗收，收據依包內執行檔雜湊歸檔。
+
 ## 2026-11-12 原生互動與影片同步候選
 
 Windows x64 ZIP 與 Apple Silicon App／DMG／ZIP 位於 `.local/verification/slint-toolkit-input/pair/`，取自同一乾淨提交 `9c68e60005eee9346644dcc1d3572b24ab0ba9dc`。Windows 沿用 Apple Silicon 的 cargo-xwin 與已驗證的 libmpv DLL，CRC、921 項內容雜湊及 PE x64 一般／延遲匯入核對通過。

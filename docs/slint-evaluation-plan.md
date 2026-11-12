@@ -99,6 +99,8 @@ Apple Silicon 與 Windows x64 的草稿／文章中途驗收包均固定在乾�
 
 Slint 的文內圖片箭頭共用 Dioxus 的 Fluent 展開／已展開訊息，包含完整圖片網址。尚未展開的按鈕可透過預設無障礙動作執行同一圖片展開流程，已展開項目保留防止指標穿透的行為。Apple Silicon 隔離視窗以無障礙按鈕展開一張 PNG，畫面顯示紅藍圖，按鈕改為「圖片已展開」並停用，另外兩個來源保持可展開。合成站確認一筆 PageDown、嚴格 Close、只有該 PNG 的一次 HTTP 下載及 HTTP join。雙 GIF 的新前景校準已記錄一段 Slint 播放，Dioxus 的配對播放仍待取得可驗前景。[雙 GIF 前景校準](slint-macos-measurement.md#2026-11-12-雙-gif-前景校準)
 
+同源 `100b75f` 的 Apple Silicon／Windows x64 已出候選包。Apple Silicon 封裝回歸核對文內圖片標籤、PNG 和 GIF 各一次下載、指標防穿透、圖像離屏及合成失焦暫停，另通過完整主視窗、兩種浮球、三種推文更新和 48 個設定搜尋目標。MP4、WebM、OGV 在軟體及 OpenGL 的六案也通過，所有案例收到嚴格 Close。獨立原生無障礙收據及封裝記錄在 `.local/verification/slint-current-gif-comparison/`。[Windows 同源封裝](slint-windows-candidate.md#2026-11-12-文內圖片無障礙同步候選)
+
 2026-11-12 原生影片新增 0–100% 音量與獨立靜音。滑桿放開或完成鍵盤調整時送出一筆指令，輔助技術可直接設定音量。控制綁定目前播放工作，靜音時仍可調音量，取消靜音後保留最後音量。Apple Silicon 的 MP4、WebM、OGV 各以軟體與 OpenGL 跑過元件探針。六案都核對 libmpv 的音量／靜音回覆、暫停與跳轉、關閉後播放器退場及 Close ACK。原生視窗操作工具能看到合成畫面，點影片連結時回傳 `noWindowsAvailable`，因此這批原生點擊、聲音實聽與跨平台音訊留待候選實機驗收。收據在 `.local/verification/slint-video-audio-controls/`。
 
 本輪已清理閱讀計時及影音操作的臨時 App 與提取的 MP4。保留取頁追蹤、六案影音收據、上一輪候選交付與固定 Cargo 快取，實際移除路徑、雜湊及空間前後見影音收據的 `cleanup.json`。
@@ -145,7 +147,7 @@ Intel 首輪來源清單漏對應 soxr 的 recipe 名稱，按原有 replay log 
 
 ## 產物保留規則（2026-11-09 使用者要求）
 
-目前 Apple Silicon／Windows x64 候選在 `.local/verification/slint-toolkit-input/pair/`，Intel Mac／Linux x64 候選在 `.local/verification/slint-cross-audio-current/`。保留 `slint-audio-pair/` 的正式身分演練對照、原先交付的 Windows 驗收包、固定編譯快取及各次獨特結果。清掉兩個手動測試 App、提取的合成影片及六份已取代封裝，合計 894,553,674 regular-file logical bytes。確切路徑、保留例外與檔案系統空間觀測在 `slint-toolkit-input/manual-cleanup.json`、`slint-toolkit-input/package-cleanup.json`。早期四架構候選的格式、來源、雜湊與驗證範圍見 [2026-11-10 的交付](#2026-11-10-最新候選)。
+目前 Apple Silicon／Windows x64 候選在 `.local/verification/slint-current-gif-comparison/pair/`，Intel Mac／Linux x64 候選在 `.local/verification/slint-cross-audio-current/`。保留 `slint-audio-pair/` 的正式身分演練對照、Windows 待驗包、固定編譯快取及各次獨特結果。本輪清掉兩個量測 App、專用暫存、快取和已取代的 Apple Silicon App／DMG／ZIP，共 593,954,785 regular-file logical bytes。確切路徑及檔案系統空間觀測在 `slint-current-gif-comparison/calibration-cleanup.json`、`slint-current-gif-comparison/prior-mac-cleanup.json`。前一輪清理紀錄仍在 `slint-toolkit-input/`。
 
 Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人工回報屬舊04249364…執行檔；目前新69542cb7…尚待使用者晚點實測。已封裝Mac的shell／通知及網頁account失敗紀錄保留；最新來源修正後的五個Rosetta帳號／推文案例已通過，下載包尚未替換，詳文末。不能將Rosetta稱為Intel硬體驗收。Intel／Linux原生依使用者「先包起來」指示不等待，目前仍未驗。
 
