@@ -4,9 +4,11 @@
 
 Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分段接續長文、大型 GIF 與選用的自動開圖。Slint 起點為獨立 worktree 內的 `slint-research`／`pttstella-slint` 原型。原型已在 macOS arm64 實測雙色字、80×24、放大拖曳、全螢幕及獨立輸入欄的威注音。實體 Retina、終端內組字、跨平台原生輸入和與 Dioxus 的同負載效能比較仍待驗。實驗數據及已知差異見 [離線原型紀錄](slint-prototype.md)。
 
-## 目前進度（2026-11-11）
+## 目前進度（2026-11-12）
 
 **尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
+
+四個架構已封裝含草稿靠右組字修正的候選。Apple Silicon 與 Windows x64 以 `4e28e82` 出包，Intel Mac 與 Linux x64 使用只有文件差異的 `06487df`。Apple Silicon 已補影片數位音訊量測。Windows 原生安裝／升級／IME、Intel Mac 與 Linux 原生驗收、完整同負載效能矩陣及正式簽章的憑證接手仍待驗。正式入口維持 Dioxus。[候選位置](#產物保留規則2026-11-09-使用者要求) · [影片音訊結果](#4-媒體s5)
 
 文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個 macOS 固定下載入口現為乾淨 `c7368b2`，包含設定預覽按需繪製及文章延後取得原生焦點的修正。Apple Silicon `793ecb91` 和 Intel `62ada42e` 各通過 23 項封裝後合成回歸，另各完成原生長文的 37 次取頁及八次快取操作。Intel 使用 Rosetta。Linux `68601365` 與另備 Windows `3a8de2a9` 已封裝固定狀態列探針修正。Linux 在 QEMU 下通過 deb 安裝、軟體繪圖的完整視窗檢查及 X11 延後焦點的 37 次取頁，免安裝包的預設繪圖仍卡在通知取樣。Windows 交叉編譯與 ZIP／PE 檢查通過，實機待驗。`69542cb7` 為先前的 Windows 待驗下載。[跨平台封裝與驗收](#2026-11-11-固定狀態列探針的-windows-與-linux-封裝)Intel／Linux 實機依指示暫緩，其餘原生操作、完整資料回退和跨平台效能矩陣仍待驗。
 
@@ -118,6 +120,10 @@ Apple Silicon 與 Windows x64 候選均由乾淨的 `73fd1afd53e1d3f1a0b83f6c727
 Apple Silicon App／DMG／ZIP 與 Windows x64 ZIP 固定在乾淨提交 `9c68e60005eee9346644dcc1d3572b24ab0ba9dc`。Apple Silicon 封裝版通過完整主視窗、48 個設定搜尋目標、兩種浮球及三種推文更新情境。完整主視窗測試在系統送出 `Focused(false)` 和 `Occluded(false)` 時仍依指定的 toolkit 焦點繼續。Windows ZIP 的 CRC、921 項內容雜湊及 PE 匯入核對通過。Windows 實機仍待驗。[同源候選](slint-windows-candidate.md#2026-11-12-原生互動與影片同步候選)
 
 同一 Apple Silicon 簽章執行檔以軟體及 OpenGL 各跑 MP4、WebM、OGV，共六案核對四色畫面、音量與靜音回覆、恢復、失焦暫停與退場。額外走 `CloseRequested` 的影片退出探針保持原生事件路徑，核對退場、worker join 和嚴格 Close。App 深層簽章及 DMG 核對通過。51 個 Mach-O 的 `otool -L` 無 WebKit 直接連結。主視窗 dyld trace 仍有系統 WritingTools 與 WebKit 映射，程序族及 WebView 實例尚待另驗。證據在 `.local/verification/slint-toolkit-input/` 的 `packaged-aux.json`、`pair/media/summary.json` 及 `packaged/toolkit-results-all.json`。
+
+Apple Silicon 封裝候選 `4e28e82` 補驗實際數位音訊。以本機 440 Hz 合成素材和 ScreenCaptureKit 的程序篩選取得音訊統計，再從 macOS 輔助使用介面操作 Slint 的音量、靜音、恢復與關閉預覽。軟體繪圖的 MP4、WebM、OGV 和 OpenGL MP4 四案通過。音量從 80% 降到 25% 時，四案的 RMS 約下降 30.3 dB。靜音及關閉預覽後的穩定取樣峰值皆為零，恢復後回到 25% 時的音訊位準。四案正常退出、媒體工作退場並收到嚴格 Close。只保存音訊統計與事件時間。[Apple ScreenCaptureKit](https://developer.apple.com/documentation/screencapturekit)
+
+首輪 MP4 的主視窗輔助使用讀取未就緒，改成等待主視窗後通過。OpenGL WebM 的前景觀測中斷，該輪退出正常但音訊結果未納入，後續 OpenGL OGV 尚未執行。實體喇叭／耳機、跨平台音訊及完整 OpenGL 音訊矩陣待驗。候選執行檔雜湊、CC0 素材、逐段觀測、正常退出及暫存清理紀錄在 `.local/verification/slint-audio-output-current/`。
 
 ### 5. 正式資料與登入接手（S7、S8）
 
