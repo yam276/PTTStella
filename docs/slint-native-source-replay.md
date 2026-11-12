@@ -1,5 +1,11 @@
 # macOS x64 runtime 來源重建
 
+## 2026-11-12 現行 Intel 候選的 runtime 來源核對
+
+Intel 候選 `06487df` 的封裝清單與包內 32 份建置紀錄，已對照本機來源交付的 32 份封存、原重建紀錄及壓縮 build log 的 SHA-256。47 個封裝 dylib 逐一對上來源套件、重建輸出及封裝後檔案雜湊，涵蓋安裝路徑與簽章調整前後的檔案。這次沿用 11 月 10 日的來源重建。Intel 實機、首輪 MP4 逾時的成因及完整 Rust／Skia 來源閉包仍待驗。
+
+逐庫證據見 `.local/verification/slint-source-current/intel-runtime-provenance.json`。產品來源與四架構候選雜湊見[產品來源還原](slint-product-source.md#2026-11-12-四架構現行候選來源)。
+
 ## 2026-11-10 結果
 
 以既有 32 份已核對來源封存、含 submodule 的 libjxl／libplacebo exports、patch／recipe，在全新 build／install prefix 重建。archive 採 hardlink 重用 bytes；沒有複用舊 install 或已封裝 dylib。兩個 replay override 僅優先採用已驗 hash 的 recursive source export，原配方與歷史收據保留。

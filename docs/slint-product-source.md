@@ -2,6 +2,28 @@
 
 候選交付中的程式、Slint UI、字型、locale、fixture、工具與文件，須能從獨立來源包還原。原始建置的 commit／dirty／patch、產品來源核對與第三方來源閉包是不同證據；不能把其中一項通過填成全部完成。
 
+## 2026-11-12 四架構現行候選來源
+
+既有交付目錄 `/Users/ladesine/Documents/PTTStella-Slint-Deliverables/product-source-20261111-6ad8e39/` 已加入現行候選的兩份來源對應。沿用原 bundle，另加兩份 patch，既有 12 組對應保留。
+
+| 來源選項 | 原建置 commit | 對應平台 | 已還原檔案 |
+| --- | --- | --- | ---: |
+| `ime-edge-macos-windows` | `4e28e82` | Apple Silicon、Windows x64 | 619 |
+| `ime-edge-intel-linux` | `06487df` | Intel Mac、Linux x64 | 619 |
+
+兩組 tree 僅 `docs/slint-evaluation-plan.md` 與 `docs/slint-windows-candidate.md` 不同。還原器在新目錄驗證完整 Git tree 與逐檔 SHA-256，沙盒禁止網路及讀取原 worktree。兩版 macOS App 的簽章、ZIP 內的主程式與 DMG 雜湊均核對。Windows 核對 ZIP 內主程式與 Setup 雜湊，Setup 內檔案對應沿用 926 檔的解包驗證。Linux 直接從 tar.gz 與 deb 串流讀出主程式核對，未展開完整候選。
+
+`sources.json` SHA-256 為 `c957b116e22be575c19454d6fc8ba99e38b2546ac415832786c2faa453660d5f`。從交付目錄執行，輸出目錄須尚不存在。
+
+```sh
+python3 reconstruct_slint_source.py --manifest sources.json \
+  --candidate ime-edge-macos-windows --output /ABS/PATH/new-source
+```
+
+Intel Mac 的 32 份來源封存另與現行包內的建置紀錄逐一核對。47 個播放器 runtime 函式庫皆對上既有重建輸出雜湊及封裝後雜湊。此次未從還原目錄重新編譯 Rust／Skia 或重跑第三方建置，整體第三方來源交付仍待驗。[Intel runtime 來源紀錄](slint-native-source-replay.md#2026-11-12-現行-intel-候選的-runtime-來源核對)
+
+四架構的原始 build record、封裝雜湊、還原結果及清理紀錄位於 `.local/verification/slint-source-current/`。同一暫存路徑依序還原兩組，檢查檔案、所有權及 open files 後已移除；沒有新增 Cargo target。來源交付、先前 manifest 與四個現行候選包保留。
+
 ## 2026-11-11 產品來源包
 
 本機目前交付位於 `/Users/ladesine/Documents/PTTStella-Slint-Deliverables/product-source-20261111-6ad8e39/`，包含單一 23,220,799-byte Git bundle、九份 patch、`sources.json`、獨立還原工具及 README。`filter-current` 從bundle的9a加產品patch還原6ad，`filter-cross-current` 加另一patch還原61d，`cross-current` 加10,009-byte文件patch還原9db，其餘三組直接還原。新cross descriptor擴充既有交付，沒有另建來源包目錄；先前manifest保存在驗收證據。bundle以hardlink沿用前份immutable檔案，沒有重複完整bundle。既有 docs gate 禁止 repo 內的 `.bundle`，因此來源交付保留於 repo 外，不放寬檢查。bundle 含 Git ancestry，不包含 worktree 的 `.local`、編譯 target 或未追蹤使用者資料。還原只讀此交付，不連網、不使用原 checkout 的 Git objects，也不覆寫既有目的地。

@@ -294,6 +294,8 @@ Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人�
 
 2026-11-12 完成 Windows x64 獨立 Setup 與離線便攜 ZIP，已同步至與 Apple Silicon 成對的 `4e28e82` 主程式。PE 匯入閉包內含 Visual C++ runtime，Setup 解包與現有 ZIP 的 926 個檔案逐位元一致。Windows 原生安裝、升級、卸載、IME 與效能仍待驗。[Windows 離線封裝](slint-windows-candidate.md#2026-11-12-草稿組字修正的離線-setup)
 
+現行四架構候選已與兩組獨立還原的產品來源綁定。Apple Silicon／Windows x64 的 `4e28e82` 與 Intel Mac／Linux x64 的 `06487df` 各核對完整 619 檔 Git tree，兩組僅文件不同。Intel 候選另核對 32 份播放器來源封存與 47 個 runtime 的重建及封裝雜湊。完整跨平台第三方來源、獨立重編及原生驗收仍待完成。[現行產品來源](slint-product-source.md#2026-11-12-四架構現行候選來源)
+
 Apple Silicon `100b75f` 一般入口補驗直接連結、dyld 映射及程序族。Slint 的 51 個 Mach-O 均無 WebKit 直接連結，主程序仍映射系統 WebKit 和 WritingToolsUI。相同本機終端負載的 16 筆觀察中，Slint 只有 AppKit helper，Dioxus 可見歸屬於它的 WebKit WebContent、GPU 和 Networking。完整的 WebView 實例檢查與同前景效能仍待驗。現行分支的四 target／兩配置依賴檢查 8 案重跑通過。[一般入口程序對照](slint-macos-measurement.md#2026-11-12-一般入口的-webkit-程序對照)
 
 | 目標 | 發佈格式與原生驗收 |
