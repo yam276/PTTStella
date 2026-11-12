@@ -282,6 +282,8 @@ Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人�
 
 2026-11-12 完成 Windows x64 獨立 Setup 與離線便攜 ZIP。兩包共用已與 Apple Silicon 成對的 `100b75f` 主程式，PE 匯入閉包已含 Visual C++ runtime，Setup 封裝與 ZIP 的 926 個檔案逐位元一致。Windows 原生安裝、升級、卸載、IME 與效能仍待驗。[Windows 離線封裝](slint-windows-candidate.md#2026-11-12-離線-setup-與便攜-zip)
 
+Apple Silicon `100b75f` 一般入口補驗直接連結、dyld 映射及程序族。Slint 的 51 個 Mach-O 均無 WebKit 直接連結，主程序仍映射系統 WebKit 和 WritingToolsUI。相同本機終端負載的 16 筆觀察中，Slint 只有 AppKit helper，Dioxus 可見歸屬於它的 WebKit WebContent、GPU 和 Networking。完整的 WebView 實例檢查與同前景效能仍待驗。現行分支的四 target／兩配置依賴檢查 8 案重跑通過。[一般入口程序對照](slint-macos-measurement.md#2026-11-12-一般入口的-webkit-程序對照)
+
 | 目標 | 發佈格式與原生驗收 |
 | --- | --- |
 | Windows 10／11 x64 | 安裝版與可攜版。既有 Dioxus→Slint 升級、移除、離線安裝、原生 CredMan、注音、細明體、多螢幕 DPI、低階 GPU 及軟體 renderer。乾淨 VM 缺 WebView2 runtime 時仍能安裝和完成終端／媒體案例；記錄模組／子程序及 installer 實際行為，Slint 包不帶 bootstrapper 或 WebView2 prerequisite。 |

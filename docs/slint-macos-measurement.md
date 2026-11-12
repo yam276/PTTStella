@@ -2,6 +2,22 @@
 
 這份文件記錄 S0／S8 的量測工具及目前證據，不是效能通過報告。完整負載、次數與平台門檻仍以[平替計畫](slint-evaluation-plan.md#同負載效能門檻)為準。
 
+## 2026-11-12 一般入口的 WebKit 程序對照
+
+在 Mac15,14、Apple M3 Ultra、macOS 15.7.7 上，用 Apple Silicon Slint 候選 `100b75f` 和 Dioxus 相容回退版 `82bc81f` 的一般入口。兩版使用相同的 v6 合成設定、隔離 HOME 和本機 TLS 1.3 WebSocket 格線。Slint 執行檔雜湊與 DMG 交付相符。Dioxus 副本改用獨立 Bundle ID 和 ad-hoc 簽章，`__TEXT,__text` 雜湊與回退包相同。沙盒封鎖外部 IP 連線及日常產品資料、Keychains 和原 App 的 WebKit 資料路徑。
+
+| 觀察 | Slint 候選 | Dioxus 回退版 |
+| --- | --- | --- |
+| 交付 App 直接連結 WebKit | 51 個 Mach-O 均無 | 主程式直接連結 |
+| 主程序 dyld 映射 | WebKit 與 WritingToolsUI 均有 | WebKit 與 WritingToolsUI 均有 |
+| 連線後各 16 筆程序族觀察 | 主程式、AppKit ThemeWidgetControlViewService | 主程式、WebKit WebContent／GPU／Networking、AudioToolbox SandboxHelper |
+
+程序歸屬依 macOS 的 responsible PID 和父子關係，另記 PID 與程序啟動計數器。兩版同一格線的本機 peer 都未收到站端輸入。Slint 原生視窗在另一輪擷取到第 1、22 行標記，這次 AX 樹讀取不完整，Dioxus 的 AX 觀察不可用。直接連結、OS 框架映射及 WebKit helper 各有獨立證據，這個時間窗沒有涵蓋所有功能或程序內實例。兩個程序族觀察以 SIGTERM 結束本輪專屬程序，未取得 WebSocket Close 回覆，所有取樣到的程序身分其後均已消失。
+
+前景比較因桌面切換且收到非預期輸入而排除，紀錄只保留非預期輸入的長度。可見背景與最小化重試未能穩定取得相同 Dioxus 視窗狀態。兩版的取樣只用來核對載入和程序，閒置 CPU／記憶體比較維持待驗。
+
+本機原始資料在 `.local/verification/slint-native-idle-current/`。以同一目錄的 `setup.py` 準備獨立 Dioxus 副本，編譯 `WindowControl.swift`，在自有系統暫存執行 `measure.py LABEL slint|dioxus TEMP dyld inventory`。保留直接連結、dyld、程序族和校準失敗紀錄。已移除 8 個專用暫存、工具與快取位置，共 44,193,050 regular-file bytes，詳細路徑及空間觀測在 `cleanup.json`。沿用既有候選、回退包及 Cargo target。
+
 ## 2026-11-12 雙 GIF 前景校準
 
 以 Apple Silicon Slint 候選 `9c68e60` 的軟體路徑及同 worktree 的 Dioxus `22bd65d` 對照。重用固定 Cargo target，兩份隔離 App 各使用同一份 512×160、32 幀、100 ms 的 GIF 和同一合成文章，兩個網址各取一次。Slint 和 Dioxus 都顯示兩張完整置中的圖片。取樣以同一視窗的 1040×768 bounds、每約 50 ms 的前景 PID 觀測、10 秒程序族資源及正常退出為條件。
