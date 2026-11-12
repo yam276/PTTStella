@@ -19,6 +19,7 @@ CRT = frozenset('msvcp140.dll msvcp140_1.dll msvcp140_2.dll vcruntime140.dll '
                 'vcruntime140_1.dll concrt140.dll'.split())
 MPV = 'libmpv-2.dll'
 ACCEPTANCE = Path(__file__).parent / 'windows' / 'slint_acceptance.ps1'
+DRAFT_IME_SEED = Path(__file__).parent / 'windows' / 'draft-ime.json'
 
 
 def inspect_payload(executable, runtime_dlls):
@@ -60,7 +61,7 @@ def inspect_payload(executable, runtime_dlls):
     return images, sorted(required_crt)
 
 
-def runner(arguments, *, software=False, video=False, drafts=False):
+def runner(arguments, *, software=False, video=False, drafts=False, draft_ime=False):
     # Everything runs under setlocal; inherited diagnostic switches cannot turn
     # an offline acceptance entry into a different probe or external endpoint.
     return ('@echo off\nsetlocal\ncd /d "%~dp0"\n'
@@ -71,6 +72,13 @@ def runner(arguments, *, software=False, video=False, drafts=False):
             + ('set "PTTSTELLA_VIDEO_FIXTURE=%CD%\\fixtures\\quadrants.mp4"\n' if video else '')
             + ('if not exist evidence\\drafts mkdir evidence\\drafts\n'
                'set "PTTSTELLA_SLINT_DRAFTS_PROBE_DIR=%CD%\\evidence\\drafts"\n' if drafts else '')
+            + ('if not exist evidence\\draft-ime mkdir evidence\\draft-ime\n'
+               'set "PTTSTELLA_SLINT_DRAFTS_PROBE_DIR=%CD%\\evidence\\draft-ime"\n'
+               'set "PTTSTELLA_SLINT_EDITOR_TRACE=1"\n'
+               'set "draft=%PTTSTELLA_SLINT_DRAFTS_PROBE_DIR%\\probe-drafts.json"\n'
+               'if not exist "%draft%" copy /b /-y "fixtures\\draft-ime.json" "%draft%" <nul >nul\n'
+               'if not exist "%draft%" (\n'
+               '  echo Could not seed the isolated draft.\n  pause\n  exit /b 1\n)\n' if draft_ime else '')
             + 'start "" /b /wait "%CD%\\pttstella-slint.exe" '
             + ('--software-renderer ' if software else '') + arguments
             + ' >"%run%.log" 2>&1\n'
@@ -105,6 +113,15 @@ Run-IME.cmd：切 Microsoft 注音，在第22行輸入、選字、Esc取消、�
 底部顯示最後提交內容及 Big5-UAO 結果。log 只記焦點、組字狀態與位元組數，不記輸入文字。
 Run-Reading.cmd：合成文章，可試兩種閱讀模式、尋找及選取。
 Run-Drafts.cmd：合成草稿；請另試注音、末字、儲存、重開與正常退出。
+Run-Drafts-IME.cmd：在看板畫面點「本機撰寫／草稿」，開啟「草稿輸入法驗收」。
+1. 點第三行空白處。用 Microsoft 注音輸入 ㄓㄨㄥ，觀察候選位置，再按 Esc 取消。
+2. 再輸入並提交一個「中」，立即點「立即保存」，確認顯示已保存。
+3. 在「中」後切 Microsoft 日文 IME 的「あ」，輸入 konnichiha 並提交「こんにちは」，
+   立刻點草稿右上角「關閉」。重開同一稿，第三行應為「中こんにちは」，上方紅字保留。
+4. 關閉 App，再跑一次相同入口，開啟同一稿確認能從磁碟讀回。
+此入口第一次執行時建立合成稿，後續沿用 evidence/draft-ime。另開全新解壓目錄可重跑。
+回報候選窗、取消、兩次提交及重開結果。保留 evidence/draft-ime 的合成主檔、備份及兩次 run log。
+日誌只記輸入事件種類、長度、文件 revision 和保存回覆。驗收稿請只輸入上列合成文字。
 Run-Video.cmd／Run-Video-Software.cmd：點開合成四色影片，試播放、暫停、拖曳、關閉。
 Check-Shell.cmd／Check-Shell-Software.cmd：自動工具包案例，正常會自行關窗。
 Check-Motion.cmd／Check-Motion-Software.cmd：讀取真實OS動畫偏好並檢查通知與退出，不改系統設定。
@@ -129,7 +146,8 @@ def bundle(executable, runtime_dlls, skia_license, mpv_license, provenance, buil
     mpv = next(path for path in runtime_dlls if path.name.lower() == MPV)
     if origin.get('files', {}).get(MPV) != digest(mpv):
         raise ValueError('libmpv provenance does not match the DLL')
-    inputs = [executable, *runtime_dlls, skia_license, mpv_license, provenance, build_record, ACCEPTANCE]
+    inputs = [executable, *runtime_dlls, skia_license, mpv_license, provenance, build_record,
+              ACCEPTANCE, DRAFT_IME_SEED]
     for license in [skia_license, mpv_license]:
         if not 0 < license.stat().st_size <= 4 * 1024 * 1024:
             raise ValueError('A bounded nonempty runtime license is required')
@@ -155,12 +173,13 @@ def bundle(executable, runtime_dlls, skia_license, mpv_license, provenance, buil
         shutil.copy2(manifest_path, fixtures / 'manifest.json')
         for path in media.values():
             shutil.copy2(path, fixtures / path.name)
+        shutil.copy2(DRAFT_IME_SEED, fixtures / DRAFT_IME_SEED.name)
         shutil.copy2(ACCEPTANCE, app / 'Check-Native.ps1')
         (app / 'Check-All.cmd').write_text(checks_runner(), encoding='ascii', newline='\r\n')
         for name, args in {
             'Run-Offline': '--probe-benchmark "%run%"', 'Run-Grid': '--probe-grid',
             'Run-IME': '--probe-ime', 'Run-Reading': '--probe-article',
-            'Run-Drafts': '--probe-drafts', 'Run-Video': '--probe-media',
+            'Run-Drafts': '--probe-drafts', 'Run-Drafts-IME': '--probe-drafts', 'Run-Video': '--probe-media',
             'Check-Shell': '--verify-shell "%run%"', 'Check-Motion': '--verify-motion "%run%"',
             'Show-Profile': '--show-profile',
         }.items():
@@ -168,7 +187,8 @@ def bundle(executable, runtime_dlls, skia_license, mpv_license, provenance, buil
             for software in configurations:
                 filename = name + ('-Software' if software else '') + '.cmd'
                 (app / filename).write_text(runner(args, software=software, video=name == 'Run-Video',
-                                                  drafts=name == 'Run-Drafts'),
+                                                  drafts=name == 'Run-Drafts',
+                                                  draft_ime=name == 'Run-Drafts-IME'),
                                             encoding='ascii', newline='\r\n')
         (app / 'READ-ME-zh-TW.txt').write_text(README, encoding='utf-8-sig', newline='\r\n')
         report = {'status': 'bundled', 'target': TARGET, 'features': 'native-player-probe',

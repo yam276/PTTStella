@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "draft-ime",
+      "scope": {
+        "site": { "endpoint": "wss://ws.ptt.cc/bbs", "encoding": "uao" },
+        "account": "StellaTest",
+        "board": "Stella"
+      },
+      "revision": 1,
+      "title": "草稿輸入法驗收",
+      "body": "合成稿第一行\n\u001b[31m保留這行紅字\u001b[m\n",
+      "saved_at": 1,
+      "conflict": false
+    }
+  ]
+}

@@ -57,6 +57,8 @@ Slint 已有主視窗內的 79×23 編輯區、三種色碼顯示、跨行與矩
 
 同輪 Apple Silicon 原生視窗用合成既有稿收到注音 preedit、Esc 取消及兩次各 3 bytes 的「中」提交。一次按立即保存，一次按關閉草稿，重開顯示「中中」。有界診斷逐筆核對 Document revision、保存快照及回覆。獨立讀檔證明主檔僅追加「中中」，上一份備份僅追加「中」。此次用看板列表開已存稿，站端探針沒有進入範本捕捉流程，關窗結果未列入嚴格 peer 通過。視窗工具在關窗時重開了一次一般入口，該視窗已關閉。候選清單位置、組字中切窗、標題組字、Windows 草稿及舊末字異常原因仍待驗。本機紀錄在 `.local/verification/slint-editor-current/`，臨時驗收 App 和重複基準輸出已清除，保留原生事件紀錄、合成主檔與備份、回歸證據及現有 Cargo 快取。
 
+Windows 候選封裝新增 `Run-Drafts-IME.cmd`。從本機合成看板開啟原生草稿，第一次以自製 CC0 合成稿建立隔離資料，後續執行保留已存稿。步驟依序驗證 Microsoft 注音取消與立即保存、日文提交後立即關閉、同一程序及新程序讀回。事件紀錄只包含事件種類、長度、文件 revision 與保存回覆，實機結果獨立於終端機 `Run-IME.cmd` 和自動元件測試。
+
 ### 2. 文章翻頁與取頁（S4）
 
 - **採用 Dioxus 的翻頁規則**　把完整文字列判斷接到 Slint 既有 Flow 和閱讀錨點。PageDown 盡量把最後一個完整文字列接到下一頁頂端，PageUp 使用第一個完整文字列對齊。滾輪保留連續裁切。遇到比視窗高的圖片仍可往前後移動。[Dioxus 翻頁](../assets/inline-images.js) · [Slint 翻頁](../src/bin/slint_research/article/mod.rs)

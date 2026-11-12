@@ -25,7 +25,7 @@ impl Trace {
     pub fn new(role: &'static str) -> Self {
         let enabled = std::env::args_os().any(|a| a == "--probe-drafts")
             && std::env::var("PTTSTELLA_SLINT_EDITOR_TRACE").as_deref() == Ok("1")
-            && case().is_ok_and(|c| c == Some(Case::Backup))
+            && case().is_ok_and(|c| matches!(c, None | Some(Case::Backup)))
             && std::env::var_os("PTTSTELLA_SLINT_DRAFTS_PROBE_DIR").is_some();
         Self {
             role,
