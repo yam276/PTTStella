@@ -34,11 +34,45 @@ macOS 設定開關在三個程序各跑 12 次，原候選的 footprint 主要�
 | S3 | 選取、輸出、浮球／選單及原生互動的分立證據 | 全部快捷鍵／pointer／modal／可及性操作矩陣 |
 | S4 | 雙閱讀模式、長文取頁、尋找、名單／右鍵／揭露／底色、書籤／離線、快速前往與最近看板、目前／指定列表文章收藏、共用推文索引／原生定位與側標、推文更新／未讀／保留與復原；macOS基本按鈕、列表右鍵指定收藏與新程序斷線讀回補驗 | 跨平台推文控制／定位與完整鍵盤／焦點矩陣、其他平台列表右鍵及新程序離線操作、混合 Live 等效與全功能回歸 |
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、macOS OpenGL [libmpv 中介畫面及主視窗兩處取樣](slint-prototype.md#2026-11-11-macos-opengl-的兩處像素取樣)和三格式錯色負向對照，Apple Silicon 候選三格式的原生跳轉／縮窗與 MP4 最小化恢復 | MP4 GPU 像素偶發失敗仍未重現／解決、多圖峰值、GL 恢復、音訊、四架構可交付 runtime |
-| S6 | 原文編輯／色票／站端上色、取消／部分失敗、草稿故障與多開復原 | 原生 IME 候選／完整輸入邊界、跨平台操作；舊末字異常原因仍未定 |
+| S6 | 原生 79×23 編輯器、三種顯示、文字／整行／矩形選取、色票、復原／重做、草稿保存及帶回站端 | 依下方計畫複驗原生輸入、末字保存、焦點／可及性及跨平台操作 |
 | S7 | 原生設定八分類、語言／站點／名單、24項搜尋定位、具名設定檔與正常退出；[共用版本檢查／下載入口](slint-release-check.md)、toolkit空白鍵及退出HTTP／listener join；[共用通知政策／原生時序](slint-notifications.md)、hover／Tab焦點暫停及timer退出；[三平台系統動畫偏好來源](slint-system-motion.md)、macOS初讀／本機通知回呼與observer／UI listener退出；三版本store往返28案；[實際前端往返](slint-store-frontends.md)補 macOS v1／v6 設定與站點六輪、名單三輪、可攜設定三輪操作（原儲存位置仍待查）、收藏名稱／離線副本與最近看板清除三輪、同一資料草稿編輯保存三輪 | 實際OS動畫偏好切換／還原及其他平台原生、原生通知／其他管理入口、完整Dock／modal／OS I/O與可及性矩陣、實際前端／平台路徑及vault往返 |
 | S8 | [32套件x64 runtime乾淨重建](slint-native-source-replay.md)、47庫閉包核對（首輪MP4逾時未定因）；[三組產品來源完整還原](slint-product-source.md)、新還原目錄的macOS arm64一般Slint配置106測試通過／1明確原生helper ignored；S1 Windows 探針；macOS arm64 主程式候選 App／ZIP／DMG（含bc380f9導覽修正）及無Homebrew sandbox；[Windows x64完整GUI候選](slint-windows-candidate.md)，目前包與已測舊exe分列，Windows10實機13案回報經修正helper重驗（原版10過／3個格式誤判），嚴格ACK／像素／join；[Linux x64完整deb／tar.gz](slint-linux-candidate.md)、Ubuntu安裝／software八案；[macOS x64 App／ZIP／DMG](slint-macos-x64.md)、自建47項runtime閉包／32份來源、兩開發prefix不可用的Rosetta13案 | Intel與Linux原生、Windows完整人工操作、IME／DPI／音訊、VC runtime／最低OS／完整乾淨安裝、完整第三方來源交付與播放器重播、資料回退及同負載效能；尚未通過 |
 
 接續完整鍵盤／焦點與其他平台、跨平台列表／重開、混合功能／退出／資料往返案例及完整候選打包。使用者已確認可在 Windows 執行驗收包。缺少 runner 的項目保持 `not_ready`，不將 macOS 或 toolkit 結果換算成跨平台完成度。S0–S8 goal 持續；S9 正式入口與發佈尚未執行。
+
+## 功能對照與收尾順序
+
+以 Dioxus `5ea9ad6` 的使用行為和 Slint `372387a` 的現有實作為起點。下列項目接續 S4–S8 的既有驗收。各項實作、回歸和文件同一批更新。
+
+### 1. 本機草稿編輯器（S6）
+
+Slint 已有主視窗內的 79×23 編輯區、三種色碼顯示、跨行與矩形選取、色票、復原／重做、自動保存、重開及帶回 PTT 編輯器。早期 Apple Silicon 原生 App 已驗過拖曳、上色、復原與威注音取消／提交，當時未能觀察獨立候選窗。另有一輪備份寫入失敗後重試保存時少了末字。第二輪逐字核對通過，第一輪缺少事件紀錄，原因仍未明。Windows 日文 IME 的回報來自 `Run-IME.cmd` 終端探針，草稿視窗須用自己的流程驗證。[原生編輯紀錄](slint-prototype.md#s6-原生編輯主視窗初版2026-11-08) · [草稿儲存紀錄](slint-prototype.md#s6-草稿儲存故障程序終止與多開2026-11-08) · [Windows IME 回報](slint-windows-candidate.md)
+
+- **保留的實作**　Rust 的 `Document` 管原文、ANSI 投影、選區及歷史，`Viewport` 投影可見列，Slint 編輯面板在 caret 放置原生輸入欄。正文輸入欄接收組字和提交，提交後把內容交給 Rust 並清空欄位。以 Dioxus 草稿契約作操作基準。[Document](../src/composer/document.rs) · [Viewport](../src/bin/slint_research/editor/viewport.rs) · [Slint 編輯面板](../src/bin/slint_research/editor.slint) · [草稿契約](drafts.md)
+- **先查提交與保存交界**　用含繁中、ANSI 和尾端空行的合成稿，在標題及正文測鍵入、IME 提交／取消、貼上，接著立即保存、點色票、切模式、切窗或關閉。包含備份寫入失敗後重試的舊案例。核對 UI、Document revision、保存快照與新程序讀回的原文，定位文字在哪一步遺失或重複。只在隔離探針記事件種類、長度、revision 與保存結果。
+- **原生輸入的通過條件**　Apple Silicon 用繁中 IME，Windows 用 Microsoft 注音與日文 IME。在 79 欄附近、視窗下緣及縮放後觀察候選窗與 caret。Esc 只取消組字，選字／Enter 只提交一次，預編輯文字不進檔；確認提交的最後一字在立即保存或關閉後仍讀得到。用鍵盤和輔助工具核對正文焦點、caret 與選區，並實測色票、模式選單與保存後回到正文。
+- **編輯操作的通過條件**　對照 Dioxus 實際操作部分文字／跨行／整行／矩形選取，測雙欄字、Tab、剪貼簿、復原後改字、非整數縮放和長稿捲動。三種顯示來回切換保留原始 bytes、未完成色碼及末空行；矩形上色一次 undo／redo，未選文字保持原樣。用既有 `drafts`／`drafts_restart` 與儲存探針複驗重開、衝突副本和站端範本變更，peer 確認帶回後停在原生編輯器。
+
+### 2. 文章翻頁與取頁（S4）
+
+- **採用 Dioxus 的翻頁規則**　把完整文字列判斷接到 Slint 既有 Flow 和閱讀錨點。PageDown 盡量把最後一個完整文字列接到下一頁頂端，PageUp 使用第一個完整文字列對齊。滾輪保留連續裁切。遇到比視窗高的圖片仍可往前後移動。[Dioxus 翻頁](../assets/inline-images.js) · [Slint 翻頁](../src/bin/slint_research/article/mod.rs)
+- **保留 Slint 的快取呈現與頁尾**　先重測首頁入快取到首筆取頁的時間，定位延遲後對照 Dioxus 何時准入第一筆請求。保留既有前景／焦點准入、站端等待、取消與繼續。使用相同 loopback 設定分別記首筆取頁、全文收完與快取翻頁，慢速 fixture 另核對取消和繼續。
+- **通過條件**　文字文章、非整數縮放、文內插圖、單張高圖及末頁都核對翻頁前後的原文行號。鍵盤翻頁保留接續行，滾輪可看到半行。確認頁尾比例、原始站端 bytes、複製與 PNG 沒有回歸。[長文量測基準](slint-macos-measurement.md#2026-11-11-837-行取頁與快取操作)
+
+### 3. 推文更新、選單與設定（S3、S4、S7）
+
+- **保留 Slint 的推文操作**　文章右鍵選單用固定「更新推文」標籤與勾選，上方保留更新狀態、未讀跳轉和回到站端。驗證啟用、取消、更新中右鍵、切篇與逾時。用同一合成站核對舊回覆不影響新文章。
+- **沿用 Dioxus 的其他操作基準**　浮球與右鍵選單保留分類、動作順序、圖示和快捷鍵。設定保留同一視窗內的分頁、依標籤取寬的按鈕與可操作的下拉選單。用實際滑鼠與鍵盤核對開啟、切換、Esc 關閉與返回原焦點。Windows 設定搜尋重驗結果須核對實際聚焦欄位。[浮球與選單對照](#2026-11-11-浮球動畫與選單對照) · [設定分頁對照](#2026-11-11-站台暫停送鍵與設定選單對照)
+
+### 4. 媒體（S5）
+
+- **保留 Slint 的原生播放與圖片路徑**　沿用現有下載、快取、置中展圖及 GIF 排程。影片保留 libmpv，依 Dioxus 播放控制補上音量與靜音，與播放、暫停及跳轉共用同一播放器狀態。
+- **通過條件**　在候選 App 實際播放可驗格式，核對調整音量、靜音／恢復、跳轉、切換影片及關窗後聲畫停止。兩張可視 GIF 用同一素材重測前景播放、隱藏／恢復與 CPU／記憶體，依量測定位重繪成本。[現有影片控制](../src/bin/slint_research/media.slint) · [GIF 比較基準](slint-macos-measurement.md#2026-11-11-雙-gif-三組交錯比較)
+
+### 5. 正式資料與登入接手（S7、S8）
+
+- **候選版保留隔離，正式替換沿用既有產品身分**　沿用 Rust store、版本、鎖與備份契約。先用副本重跑 Dioxus → Slint → 相容 Dioxus 回退 → Slint，核對設定、站點、名單、收藏、最近看板及草稿可讀寫。用合成憑證另驗正式服務名與簽章下的讀取、拒絕後提示與回退。記錄可用的 Dioxus 回退版本及獨立備份恢復步驟。
+- **驗收交付**　沿用 Slint worktree 和既有編譯快取。Apple Silicon 與 Windows x64 以同一 commit 出包並記錄實測案例和版本。Intel Mac、Linux x64 先打包，原生案例依目前安排維持待驗。正式入口切換依 S9。[Apple Silicon 隔離演練](slint-store-frontends.md#2026-11-11-同一正式-bundle-id-的-apple-silicon-隔離演練)
 
 ## 執行方式與完成條件
 
