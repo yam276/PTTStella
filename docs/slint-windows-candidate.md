@@ -1,5 +1,19 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-12 草稿組字修正的離線 Setup
+
+Setup 位於工作樹旁的 `../PTTStella-candidates/windows-4e28e82-offline/`，便攜 ZIP 仍在 `.local/verification/slint-editor-ime-edge/pair/windows/`。兩者與同層 `pair/macos/` 的 Apple Silicon 候選皆使用乾淨提交 `4e28e8244a3bf6c89d68caccabd26117ee001e0f`，含正文靠右組字的空間修正。
+
+| 檔案 | SHA-256 |
+| --- | --- |
+| Windows Setup | `7c1b49a603f05ea568ba5055bcfa6b19c1ceb8b9e8fefea0279f3aea7f3579dd` |
+| Windows 便攜 ZIP | `8e93341ab06a4dc7b5fe78ac46496955c18999e45ce34c2b1700489c47aaf449` |
+| Windows 包內執行檔 | `08f8de0a39014f33ab75af22123d5bde25c1dc7d8eb72371f2dc48fa96b3dfc0` |
+
+以固定 Inno Setup 7.1.0 直接封裝已核對的 ZIP 內容。解包比對 926 個檔案與原 ZIP 逐位元相同，包含 `candidate.json`。Setup 的 x64 PE 匯入為 Windows 系統 DLL，程式與 app-local CRT 另核對 83 個匯入符號。Setup 保留 `100b75f` 候選的獨立安裝識別和目前使用者安裝路徑。編譯、解包、逐檔雜湊、CRT 核對及清理紀錄在 `.local/verification/slint-windows-ime-setup/`，固定編譯器安裝檔保留在 `target/pttstella-installer-tools/` 供重跑。
+
+原生驗收可在隔離 Windows 帳戶或 VM 先裝 `100b75f`。用安裝目錄的 `Show-Profile.cmd` 確認研究版路徑，在該資料目錄放一個合成檢查檔。再離線執行 `4e28e82` Setup，核對開始選單入口及安裝目錄中 `pttstella-slint.exe` 的 SHA-256。從安裝目錄執行 `Run-Offline.cmd` 與 `Run-Drafts-IME.cmd`，測本機合成連線、草稿保存與重開。卸載後核對候選程式和開始選單入口已移除、研究資料中的合成檢查檔仍在。Windows 原生安裝、升級、卸載及實體候選窗位置均待驗。
+
 ## 2026-11-12 離線 Setup 與便攜 ZIP
 
 兩包位於工作樹旁的 `../PTTStella-candidates/windows-100b75f-offline/`。主程式沿用已與 Apple Silicon 成對的乾淨 `100b75f67e1fcd34f79c6531865a6eebe1272bb3`，SHA-256 仍為 `31c60eb3f16a05d08abed4cef47bc83d00b3438fd4f156ce8a99ec70eb926f1f`。增加三個 app-local DLL（`msvcp140.dll`、`vcruntime140.dll`、`vcruntime140_1.dll`）和其來源清單，其他應用程式檔案逐檔一致。Setup 與 ZIP 核對 926 個檔案逐位元相同，包含 `candidate.json`。PE 匯入核對只需要包內 DLL 和 Windows 系統 DLL，另比對 83 個 Visual C++ 匯入符號。
@@ -19,7 +33,7 @@ Setup 以現有固定 Inno Setup 7.1.0 編譯。獨立安裝識別 `io.github.ya
 
 ## 2026-11-12 文內圖片無障礙同步候選
 
-Windows x64 ZIP 與 Apple Silicon App／DMG／ZIP 位於 `.local/verification/slint-current-gif-comparison/pair/`，同取乾淨提交 `100b75f67e1fcd34f79c6531865a6eebe1272bb3`。Windows 以既有 cargo-xwin 和 libmpv DLL 建置，CRC、921 項內容雜湊及 PE x64 一般／延遲匯入已核對。
+Windows x64 ZIP 與 Apple Silicon App／DMG 位於 `.local/verification/slint-current-gif-comparison/pair/`，同取乾淨提交 `100b75f67e1fcd34f79c6531865a6eebe1272bb3`。Windows 以既有 cargo-xwin 和 libmpv DLL 建置，CRC、921 項內容雜湊及 PE x64 一般／延遲匯入已核對。原 Apple Silicon ZIP 於保留 App／DMG 並核對所有 ZIP 內容後清理。
 
 | 檔案 | SHA-256 |
 | --- | --- |

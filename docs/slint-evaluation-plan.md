@@ -149,7 +149,7 @@ Intel 首輪來源清單漏對應 soxr 的 recipe 名稱，按原有 replay log 
 
 ## 產物保留規則（2026-11-09 使用者要求）
 
-Apple Silicon 候選在 `.local/verification/slint-current-gif-comparison/pair/macos/`，同源的 Windows x64 離線包在工作樹旁的 `../PTTStella-candidates/windows-100b75f-offline/`，Intel Mac／Linux x64 候選在 `.local/verification/slint-cross-audio-current/`。保留 `slint-audio-pair/` 的正式身分演練對照、Windows 待驗包、固定編譯快取及各次獨特結果。先前量測清理移除兩個量測 App、專用暫存、快取和已取代的 Apple Silicon App／DMG／ZIP，共 593,954,785 regular-file logical bytes。確切路徑及檔案系統空間觀測在 `slint-current-gif-comparison/calibration-cleanup.json`、`slint-current-gif-comparison/prior-mac-cleanup.json`，Windows 離線封裝清理見 `slint-windows-setup/cleanup.json`。
+Apple Silicon 與 Windows x64 便攜候選在 `.local/verification/slint-editor-ime-edge/pair/`，同源的 Windows x64 Setup 在工作樹旁的 `../PTTStella-candidates/windows-4e28e82-offline/`。保留前一個 `100b75f` 離線 Setup 供升級對照。Intel Mac／Linux x64 候選在 `.local/verification/slint-cross-audio-current/`。保留 `slint-audio-pair/` 的正式身分演練對照、Windows 待驗包、固定編譯快取及各次獨特結果。先前量測清理移除兩個量測 App、專用暫存、快取和已取代的 Apple Silicon App／DMG／ZIP，共 593,954,785 regular-file logical bytes。確切路徑及檔案系統空間觀測在 `slint-current-gif-comparison/calibration-cleanup.json`、`slint-current-gif-comparison/prior-mac-cleanup.json`，最新 Setup 的清理收據見 `slint-windows-ime-setup/cleanup.json`。
 
 Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人工回報屬舊04249364…執行檔；目前新69542cb7…尚待使用者晚點實測。已封裝Mac的shell／通知及網頁account失敗紀錄保留；最新來源修正後的五個Rosetta帳號／推文案例已通過，下載包尚未替換，詳文末。不能將Rosetta稱為Intel硬體驗收。Intel／Linux原生依使用者「先包起來」指示不等待，目前仍未驗。
 
@@ -282,7 +282,7 @@ Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人�
 
 ### 平台與 WebView 驗收
 
-2026-11-12 完成 Windows x64 獨立 Setup 與離線便攜 ZIP。兩包共用已與 Apple Silicon 成對的 `100b75f` 主程式，PE 匯入閉包已含 Visual C++ runtime，Setup 封裝與 ZIP 的 926 個檔案逐位元一致。Windows 原生安裝、升級、卸載、IME 與效能仍待驗。[Windows 離線封裝](slint-windows-candidate.md#2026-11-12-離線-setup-與便攜-zip)
+2026-11-12 完成 Windows x64 獨立 Setup 與離線便攜 ZIP，已同步至與 Apple Silicon 成對的 `4e28e82` 主程式。PE 匯入閉包內含 Visual C++ runtime，Setup 解包與現有 ZIP 的 926 個檔案逐位元一致。Windows 原生安裝、升級、卸載、IME 與效能仍待驗。[Windows 離線封裝](slint-windows-candidate.md#2026-11-12-草稿組字修正的離線-setup)
 
 Apple Silicon `100b75f` 一般入口補驗直接連結、dyld 映射及程序族。Slint 的 51 個 Mach-O 均無 WebKit 直接連結，主程序仍映射系統 WebKit 和 WritingToolsUI。相同本機終端負載的 16 筆觀察中，Slint 只有 AppKit helper，Dioxus 可見歸屬於它的 WebKit WebContent、GPU 和 Networking。完整的 WebView 實例檢查與同前景效能仍待驗。現行分支的四 target／兩配置依賴檢查 8 案重跑通過。[一般入口程序對照](slint-macos-measurement.md#2026-11-12-一般入口的-webkit-程序對照)
 
