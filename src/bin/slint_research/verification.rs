@@ -3,11 +3,48 @@ use crate::TerminalWindow;
 use slint::{
     ComponentHandle,
     platform::{Key, PointerEventButton as Button, WindowEvent as Event},
+    winit_030::{
+        CustomApplicationHandler, EventResult,
+        winit::{event::WindowEvent, event_loop::ActiveEventLoop, window::WindowId},
+    },
 };
 use std::{
     cell::RefCell, error::Error, fs::OpenOptions, future::Future, path::PathBuf, rc::Rc,
     time::Duration,
 };
+
+/// Installed only for verifiers that drive focus and input via Slint dispatch.
+/// Real redraw, size, and close events still reach the window and normal owners.
+pub struct ToolkitInput;
+
+impl CustomApplicationHandler for ToolkitInput {
+    fn window_event(
+        &mut self,
+        _: &ActiveEventLoop,
+        _: WindowId,
+        _: Option<&slint::winit_030::winit::window::Window>,
+        _: Option<&slint::Window>,
+        event: &WindowEvent,
+    ) -> EventResult {
+        match event {
+            WindowEvent::Focused(_) | WindowEvent::Occluded(_) => {
+                eprintln!("Toolkit verifier ignored native window state: {event:?}");
+                EventResult::PreventDefault
+            }
+            WindowEvent::KeyboardInput { .. }
+            | WindowEvent::ModifiersChanged(_)
+            | WindowEvent::Ime(_)
+            | WindowEvent::CursorMoved { .. }
+            | WindowEvent::CursorEntered { .. }
+            | WindowEvent::CursorLeft { .. }
+            | WindowEvent::MouseInput { .. }
+            | WindowEvent::MouseWheel { .. }
+            | WindowEvent::Touch(_) => EventResult::PreventDefault,
+            _ => EventResult::Propagate,
+        }
+    }
+}
+
 pub struct Verification {
     job: slint::JoinHandle<()>,
     outcome: Rc<RefCell<Option<Result<(), String>>>>,

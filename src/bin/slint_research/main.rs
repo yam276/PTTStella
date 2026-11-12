@@ -683,26 +683,31 @@ fn run(
         .software_video(std::env::var("SLINT_BACKEND").ok().as_deref());
     let long_store_scene = options.store_profile.is_some()
         && options.probe == Some(Probe::Session(session::Probe::ArticleLong));
-    #[cfg(target_os = "macos")]
-    let passive_updates_probe = options.verify_media.is_some()
-        && options.probe == Some(Probe::Session(session::Probe::Media))
-        && std::env::var("PTTSTELLA_SLINT_UPDATES_PROBE").is_ok_and(|case| case != "native")
+    let verify_media_scene = options.verify_media.is_some()
+        && options.probe == Some(Probe::Session(session::Probe::Media));
+    let toolkit_updates = std::env::var("PTTSTELLA_SLINT_UPDATES_PROBE")
+        .is_ok_and(|case| case != "native")
         && !matches!(
             std::env::var("PTTSTELLA_SLINT_UPDATES_NATIVE_CHECK").as_deref(),
             Ok("1" | "2")
         );
-    #[cfg(target_os = "macos")]
-    let passive_settings_probe = options.verify_media.is_some()
-        && options.probe == Some(Probe::Session(session::Probe::Media))
-        && std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").as_deref() == Ok("search");
+    let toolkit_settings =
+        std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").as_deref() == Ok("search");
+    let toolkit_video = cfg!(feature = "native-video")
+        && std::env::var_os("PTTSTELLA_VIDEO_FIXTURE").is_some()
+        && std::env::var_os("PTTSTELLA_VIDEO_PROBE_EXIT").is_none()
+        && std::env::var_os("PTTSTELLA_VIDEO_PROBE_NATIVE_WAIT").is_none();
+    let toolkit_input = options.verify_tools.is_some()
+        || verify_media_scene && (toolkit_updates || toolkit_settings || toolkit_video);
     let selector = || {
         let selector = slint::BackendSelector::new();
+        let selector = if toolkit_input {
+            selector.with_winit_custom_application_handler(verification::ToolkitInput)
+        } else {
+            selector
+        };
         #[cfg(target_os = "macos")]
-        if long_store_scene
-            || passive_updates_probe
-            || passive_settings_probe
-            || options.verify_tools.is_some()
-        {
+        if long_store_scene || toolkit_input {
             use slint::winit_030::{SlintEvent, winit};
             use winit::platform::macos::EventLoopBuilderExtMacOS;
 
