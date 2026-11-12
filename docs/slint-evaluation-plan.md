@@ -89,7 +89,7 @@ Apple Silicon 與 Windows x64 的草稿／文章中途驗收包均固定在乾�
 
 本輪已清理閱讀計時及影音操作的臨時 App 與提取的 MP4。保留取頁追蹤、六案影音收據、上一輪候選交付與固定 Cargo 快取，實際移除路徑、雜湊及空間前後見影音收據的 `cleanup.json`。
 
-Apple Silicon 與 Windows x64 候選均由乾淨的 `73fd1afd53e1d3f1a0b83f6c7271c769c7de8c0a` 建置，使用既有 worktree 和 Cargo target。Apple Silicon 封裝執行檔重新跑完上述六案，軟體及 OpenGL 路徑各驗 MP4、WebM、OGV，六案均確認音量／靜音回覆、播放器清理及嚴格 Close。App 簽章和 DMG 檢查通過。Windows 的 CRC、921 項內容雜湊及 PE 匯入核對通過，等待實機驗收。原生媒體操作、實際可聽音訊、更新後的 Intel Mac／Linux x64 封裝，以及 S8 的同負載效能仍待驗。[Windows 候選](slint-windows-candidate.md#2026-11-12-含原生影片控制的同步候選)
+Apple Silicon 與 Windows x64 候選均由乾淨的 `73fd1afd53e1d3f1a0b83f6c7271c769c7de8c0a` 建置，使用既有 worktree 和 Cargo target。Apple Silicon 封裝執行檔重新跑完上述六案，軟體及 OpenGL 路徑各驗 MP4、WebM、OGV，六案均確認音量／靜音回覆、播放器清理及嚴格 Close。App 簽章和 DMG 檢查通過。Windows 的 CRC、921 項內容雜湊及 PE 匯入核對通過，等待實機驗收。原生媒體操作、實際可聽音訊及 S8 的同負載效能仍待驗。[Windows 候選](slint-windows-candidate.md#2026-11-12-含原生影片控制的同步候選)
 
 ### 5. 正式資料與登入接手（S7、S8）
 
@@ -100,6 +100,19 @@ Apple Silicon 與 Windows x64 候選均由乾淨的 `73fd1afd53e1d3f1a0b83f6c727
 
 隔離的 macOS Keychain 使用正式服務名與正式 Bundle ID 測試舊資料。重簽候選未沿用舊授權，仍可單次手動登入；原簽章回退讀回未變的紀錄。實際發佈簽章的系統授權提示、重新授權後的讀回和 Finder 首開仍待驗，正式入口維持 Dioxus。[正式服務名的隔離演練](login.md#macos-正式服務名的隔離演練)
 
+### 2026-11-12 Intel Mac 與 Linux x64 封裝
+
+Intel Mac DMG 與 Linux x64 deb／tar.gz 均以乾淨 `88b52af42b895db85d2848b70c0b516a67823f24` 建置。與 Apple Silicon／Windows x64 的 `73fd1af` 相比只有文件及 Keychain 測試變更，產品程式相同。沿用同一 worktree 和 Cargo target。兩個新封裝及收據位於 `.local/verification/slint-cross-audio-current/`。
+
+| 交付 | 封裝及探針結果 |
+| --- | --- |
+| Intel Mac DMG | SHA-256 `44920ac85c237ae80036e2c118f82b76e6038a2010082b77765be904f62475af`。47 個 x64 runtime 函式庫沿用來源重建的相同檔案。DMG 內 1,216 個檔案與簽章 App 一致。在 Apple Silicon 用 Rosetta 跑 MP4、WebM、OGV 的軟體及 OpenGL 路徑。六案均核對 libmpv 的音量／靜音回覆、退場和嚴格 Close。 |
+| Linux x64 deb／tar.gz | AMD64 ELF、loader、dpkg metadata 與 1,110／1,123 個封裝檔案已核對。QEMU／Xvfb 以軟體繪圖通過 portable 版三格式影片的音量／靜音、退場與嚴格 Close。 [Linux 候選](slint-linux-candidate.md) |
+
+Intel 與 Linux 實機依目前安排待驗。模擬環境核對的是封裝執行與播放器控制。實體輸入法、音訊、顯示、安裝及效能的驗收結果維持待驗。
+
+Intel 首輪來源清單漏對應 soxr 的 recipe 名稱，按原有 replay log 補上後完成 32 個來源紀錄的核對。Linux 連結首輪誤用 LLD 通用入口，改用同一工具鏈的 `ld.lld` 後完成。Linux 封裝的第一個讀檔驗證器使用容器 Python 不支援的 tar 參數，改為逐筆驗證相對路徑後解包。原失敗保留於收據目錄。清理卸載 Linux SDK 並移除封裝中間檔與重複的 Intel App／ZIP，保留交付、獨特收據、固定 Cargo 快取與既有 SDK 封存。磁碟、hardlink 與容器空間分別記在 `cleanup.json` 和 `linux-container-cleanup.json`。
+
 ## 執行方式與完成條件
 
 - 實作在指定 Slint worktree 內連續推進。依下列 S0–S8 的相依順序完成程式、回歸和證據。缺 runner 或硬體時登記確切缺項，繼續可獨立驗證的階段。若原生輸入、雙色格線或原生播放器證明不可行，先修正或換成可驗收的技術路徑，再擴大相依功能。階段證據整理完即可接續，日常實作與重跑沿用本計畫。
@@ -108,7 +121,7 @@ Apple Silicon 與 Windows x64 候選均由乾淨的 `73fd1afd53e1d3f1a0b83f6c727
 
 ## 產物保留規則（2026-11-09 使用者要求）
 
-目前最新四架構候選均在 `.local/verification/slint-merged-id-spaces/`，格式、來源、執行檔雜湊與驗證範圍見[最新候選](#2026-11-10-最新候選)。先前 `slint-windows-current/package-current/`、`slint-system-motion/package-current/`、Intel與Linux前份完整包已被取代並清理；保留必要metadata、notices與獨特證據，不要求歷史段落的舊latest路徑繼續存在。
+目前 Apple Silicon／Windows x64 候選在 `.local/verification/slint-audio-pair/`，Intel Mac／Linux x64 候選在 `.local/verification/slint-cross-audio-current/`。早期四架構候選的格式、來源、雜湊與驗證範圍見 [2026-11-10 的交付](#2026-11-10-最新候選)。先前 `slint-windows-current/package-current/`、`slint-system-motion/package-current/`、Intel與Linux前份完整包已被取代並清理；保留必要metadata、notices與獨特證據，不要求歷史段落的舊latest路徑繼續存在。
 
 Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人工回報屬舊04249364…執行檔；目前新69542cb7…尚待使用者晚點實測。已封裝Mac的shell／通知及網頁account失敗紀錄保留；最新來源修正後的五個Rosetta帳號／推文案例已通過，下載包尚未替換，詳文末。不能將Rosetta稱為Intel硬體驗收。Intel／Linux原生依使用者「先包起來」指示不等待，目前仍未驗。
 

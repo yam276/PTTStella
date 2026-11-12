@@ -1,6 +1,19 @@
 # Slint Linux x64 候選包
 
-2026-11-11 最新候選位於 `.local/verification/slint-ui-cjk-fallback/linux-package/`。ELF `68601365…` 以乾淨 `ff0ae84` 交叉編譯，含文章焦點與固定狀態列探針修正。release、all-target Clippy、loader／dpkg 及 tar 1,122／deb 1,109 個 payload 均已核對。deb 重裝與免安裝包的軟體繪圖完整視窗檢查通過，預設繪圖在 QEMU 下仍遇到通知時序失敗。安裝執行檔也通過 X11 背景零取頁與取得焦點後 37 次取頁的案例。[本輪封裝驗收](slint-evaluation-plan.md#2026-11-11-固定狀態列探針的-windows-與-linux-封裝)
+## 2026-11-12 含原生影片控制的候選
+
+目前的 Linux x64 deb／tar.gz 在 `.local/verification/slint-cross-audio-current/linux/`。以乾淨 `88b52af42b895db85d2848b70c0b516a67823f24` 在 macOS arm64 上交叉編譯，使用 Rust 1.97.0、Apple Clang、Rust 工具鏈的 ELF LLD 與既有 Debian bookworm amd64 sysroot。SDK 的 3,419 個檔案及連結均核對。ELF SHA-256 為 `e801538bb86ebc4fd3211ba196877e26707ea02e49ab906377a25029a9654fe8`。
+
+| 交付 | SHA-256 |
+| --- | --- |
+| `PTTStella-Slint-Candidate-0.5.0-dev.3-linux-x64.deb` | `88a765e3b3fe96d8e2042c340747587076a29122fed6d13ce8fb4c5bbcd22e15` |
+| `PTTStella-Slint-Candidate-0.5.0-dev.3-linux-x64.tar.gz` | `bd5960a8b00fe6a879502df6308d3c9719eab74e41c9baa1df519a5f10e68c07` |
+
+在既有 ARM Podman 容器以 x64 loader 解析依賴，`dpkg-shlibdeps` 取得 Depends。未發現 WebView／WebKit 的載入依賴。逐檔核對 deb 1,110 項及 tar 1,123 項，兩包共用的執行檔、授權和 README 一致。以 QEMU／Xvfb 的軟體繪圖執行 portable 包的 MP4、WebM、OGV，三案均 exit 0，取得音量／靜音回覆、播放器退場與嚴格 Close。這次驗收涵蓋 deb metadata 和 portable 執行。Linux x64 實機、Wayland、原生 IME、實際聲音、乾淨安裝及效能待驗。
+
+## 2026-11-11 候選
+
+2026-11-11 候選位於 `.local/verification/slint-ui-cjk-fallback/linux-package/`。ELF `68601365…` 以乾淨 `ff0ae84` 交叉編譯，含文章焦點與固定狀態列探針修正。release、all-target Clippy、loader／dpkg 及 tar 1,122／deb 1,109 個 payload 均已核對。deb 重裝與免安裝包的軟體繪圖完整視窗檢查通過，預設繪圖在 QEMU 下仍遇到通知時序失敗。安裝執行檔也通過 X11 背景零取頁與取得焦點後 37 次取頁的案例。[本輪封裝驗收](slint-evaluation-plan.md#2026-11-11-固定狀態列探針的-windows-與-linux-封裝)
 
 較早的 `af476061` ELF 通過 20 項合成案例，包含兩項針對性重測。歷史結果見[文章焦點同步](slint-evaluation-plan.md#2026-11-11-文章焦點修正的-windows-與-linux-候選同步)。QEMU 結果的執行環境為 Xvfb／Openbox，實機、Wayland、原生 IME、音訊和效能待驗。[來源還原](slint-product-source.md)選 `shell-layout-cross-current`。
 
@@ -38,7 +51,7 @@ deb 使用獨立套件、執行檔及桌面 ID；`--show-profile` 只顯示研�
 | `Run-IME.sh` | 實際繁中輸入法候選窗、取消／選字及一次提交；需要人工操作 |
 | `Run-Reading.sh` | 合成文章閱讀、尋找與捲動 |
 | `Run-Drafts.sh` | 草稿輸入與重開；合成草稿明示保存於 `evidence/drafts` |
-| `Run-Video.sh`、`Run-Video-Software.sh` | 自製四色 MP4、播放／暫停／拖曳與關閉 |
+| `Run-Video.sh`、`Run-Video-Software.sh` | 自製四色 MP4、播放／暫停、音量／靜音、拖曳與關閉 |
 | `Check-Shell.sh`、`Check-Shell-Software.sh` | 自動執行 toolkit shell 案例後關窗，不證明原生輸入 |
 | `Show-Profile.sh` | 顯示隔離路徑 |
 
