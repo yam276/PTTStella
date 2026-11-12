@@ -401,6 +401,9 @@ export component TerminalWindow inherits Window {
     changed tools-reduced-motion => {root.notice-interaction();if root.tools-reduced-motion {root.tools-cancel-gesture();}}
     private property <bool> shell-persistent-status: root.connection-attention || root.session-warning != "" || root.login-pending || (root.result != "" && root.result != root.connection-status);
     out property <bool> shell-notice-dismissible: root.input-notice != "" || root.result != root.connection-status;
+    out property <length> shell-toast-height: status-panel.height;
+    out property <length> shell-toast-reconnect-bottom: status-reconnect.absolute-position.y + status-reconnect.height - status-panel.absolute-position.y;
+    out property <bool> shell-toast-message-scrollable: status-scroll.content-height > status-scroll.height;
     out property <bool> shell-status-visible: !root.prototype-chrome && !root.media-open && !root.editor-open
         && (root.connection-attention || root.input-notice != "" || root.session-warning != ""
             || root.result != root.connection-status || root.login-pending);
@@ -928,7 +931,11 @@ export component TerminalWindow inherits Window {
         visible: root.shell-status-visible;
         x: (root.width - self.width) / 2; y: 20px;
         width: min(620px, root.width - 32px);
-        height: min(root.height * 0.45, status-layout.preferred-height);
+        private property <length> inset: 20px;
+        private property <length> mark-size: root.width < 480px ? 34px : 44px;
+        private property <length> action-height: root.can-reconnect || root.login-pending ? 40px : 0px;
+        height: min(root.height * 0.45,
+            2 * self.inset + max(self.mark-size, status-copy.preferred-height + self.action-height));
         background: @linear-gradient(110deg, #122a43 0%, #0c1c30 72%);
         border-width: 1px; border-color: #b69a59; border-radius: 4px;
         drop-shadow-color: #000000aa; drop-shadow-offset-y: 12px; drop-shadow-blur: 32px;
@@ -942,64 +949,75 @@ export component TerminalWindow inherits Window {
                 x: 0; y: 0; width: 4px; height: parent.height;
                 background: root.notice-error || root.connection-phase == 2 ? #e6a08a : #e7c46a;
             }
-            ScrollView {
-                width: parent.width; height: parent.height; content-width: self.width;
-                status-layout := HorizontalLayout {
-                    padding: 20px; spacing: 16px;
-                    Rectangle {
-                        width: root.width < 480px ? 34px : 44px;
-                        height: self.width;
-                        border-radius: self.width / 2;
-                        clip: true;
-                        status-mark := Image {
-                            source: @image-url("../../../assets/icons/pttstella.png");
-                            width: parent.width; height: parent.height; image-fit: cover;
+            HorizontalLayout {
+                width: parent.width; height: parent.height;
+                padding: status-panel.inset; spacing: 16px;
+                Rectangle {
+                    width: status-panel.mark-size;
+                    height: self.width;
+                    border-radius: self.width / 2;
+                    clip: true;
+                    status-mark := Image {
+                        source: @image-url("../../../assets/icons/pttstella.png");
+                        width: parent.width; height: parent.height; image-fit: cover;
+                    }
+                }
+                VerticalLayout {
+                    alignment: start;
+                    status-scroll := ScrollView {
+                        // Long messages can scroll without moving the actions out of view.
+                        height: min(status-copy.preferred-height,
+                            max(0px, status-panel.height - 2 * status-panel.inset - status-panel.action-height));
+                        content-width: self.visible-width;
+                        content-height: status-copy.preferred-height;
+                        status-copy := VerticalLayout {
+                            width: status-scroll.visible-width;
+                            height: self.preferred-height;
+                            spacing: 6px; alignment: start;
+                            Text { text: "PTTSTELLA"; color: #e7c46a; font-size: 11px; font-weight: 700; }
+                            Text {
+                                text: !root.connection-attention ? UiLabels.toast-title :
+                                    root.connection-phase == 1 ? UiLabels.toast-connecting :
+                                    root.connection-phase == 2 ? UiLabels.toast-error : UiLabels.toast-disconnected;
+                                color: #ebe7dc; font-size: 21px; font-weight: 650; wrap: word-wrap;
+                            }
+                            if root.connection-attention: Text { text: root.connection-status; color: #ebe7dc; font-size: 16px; wrap: word-wrap; }
+                            if root.result != "" && root.result != root.connection-status: Text {
+                                text: root.result; color: #ebe7dc; font-size: 16px; wrap: word-wrap;
+                            }
+                            if root.input-notice != "": Text {
+                                text: root.input-notice; color: root.notice-error ? #f4b1a8 : #ebe7dc; font-size: 16px; wrap: word-wrap;
+                                opacity: root.notice-fading && root.shell-persistent-status ? 0 : 1;
+                                animate opacity { duration: root.notice-fading ? root.notice-fade-duration : 0ms; }
+                            }
+                            if root.session-warning != "": Text { text: root.session-warning; color: #e7ca87; font-size: 16px; wrap: word-wrap; }
                         }
                     }
-                    VerticalLayout {
-                        spacing: 6px; alignment: start;
-                        Text { text: "PTTSTELLA"; color: #e7c46a; font-size: 11px; font-weight: 700; }
-                        Text {
-                            text: !root.connection-attention ? UiLabels.toast-title :
-                                root.connection-phase == 1 ? UiLabels.toast-connecting :
-                                root.connection-phase == 2 ? UiLabels.toast-error : UiLabels.toast-disconnected;
-                            color: #ebe7dc; font-size: 21px; font-weight: 650; wrap: word-wrap;
+                    HorizontalLayout {
+                        visible: root.can-reconnect || root.login-pending;
+                        height: status-panel.action-height;
+                        padding-top: self.visible ? 6px : 0px;
+                        alignment: start; spacing: 8px;
+                        status-reconnect := PanelButton {
+                            visible: root.can-reconnect; enabled: self.visible; primary: true;
+                            text: UiLabels.reconnect; clicked => { root.reconnect(); }
                         }
-                        if root.connection-attention: Text { text: root.connection-status; color: #ebe7dc; font-size: 16px; wrap: word-wrap; }
-                        if root.result != "" && root.result != root.connection-status: Text {
-                            text: root.result; color: #ebe7dc; font-size: 16px; wrap: word-wrap;
-                        }
-                        if root.input-notice != "": Text {
-                            text: root.input-notice; color: root.notice-error ? #f4b1a8 : #ebe7dc; font-size: 16px; wrap: word-wrap;
-                            opacity: root.notice-fading && root.shell-persistent-status ? 0 : 1;
-                            animate opacity { duration: root.notice-fading ? root.notice-fade-duration : 0ms; }
-                        }
-                        if root.session-warning != "": Text { text: root.session-warning; color: #e7ca87; font-size: 16px; wrap: word-wrap; }
-                        HorizontalLayout {
-                            visible: root.can-reconnect || root.login-pending;
-                            min-height: 0px; max-height: self.visible ? 48px : 0px;
-                            alignment: start; spacing: 8px;
-                            status-reconnect := PanelButton {
-                                visible: root.can-reconnect; enabled: self.visible; primary: true;
-                                text: UiLabels.reconnect; clicked => { root.reconnect(); }
-                            }
-                            status-cancel := PanelButton {
-                                visible: root.login-pending; enabled: self.visible; primary: true;
-                                text: root.login-cancel-attempt-label; clicked => { root.login-cancel(); }
-                            }
+                        status-cancel := PanelButton {
+                            visible: root.login-pending; enabled: self.visible; primary: true;
+                            text: root.login-cancel-attempt-label; clicked => { root.login-cancel(); }
                         }
                     }
-                    VerticalLayout {
-                        width: root.shell-notice-dismissible ? 32px : 0px;
-                        alignment: start;
-                        status-close := Button {
-                            visible: root.shell-notice-dismissible; enabled: self.visible;
-                            width: 32px; height: 32px; text: "×"; accessible-label: UiLabels.toast-dismiss;
-                            clicked => {
-                                let restore = self.has-focus && root.context-focus-restorable && !root.find-open && !root.app-closing;
-                                root.notice-dismiss();
-                                if restore { root.focus-terminal(); }
-                            }
+                }
+                VerticalLayout {
+                    width: root.shell-notice-dismissible ? 32px : 0px;
+                    alignment: start;
+                    status-close := Button {
+                        visible: root.shell-notice-dismissible; enabled: self.visible;
+                        width: 32px; height: 32px; text: "×"; accessible-label: UiLabels.toast-dismiss;
+                        clicked => {
+                            let restore = self.has-focus && root.context-focus-restorable && !root.find-open && !root.app-closing;
+                            root.notice-dismiss();
+                            if restore { root.focus-terminal(); }
                         }
                     }
                 }

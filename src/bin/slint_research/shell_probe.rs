@@ -483,7 +483,29 @@ pub fn start(
                     && dimensions == (ui.get_view_width(), ui.get_view_height()),
                 "disconnected status lost text or changed geometry",
             )?;
+            // The shell fixture does not reconnect. Expose its real toast action
+            // so the geometry check covers the same controls as a live disconnect.
+            ui.set_can_reconnect(true);
+            require(
+                !ui.get_shell_toast_message_scrollable()
+                    && ui.get_shell_toast_reconnect_bottom() + 19. <= ui.get_shell_toast_height(),
+                "short disconnect toast clipped the reconnect button",
+            )?;
             verification::capture(&ui, &directory, "shell-disconnected.png")?;
+            let short_message = ui.get_connection_status();
+            let long_message = "站端已關閉連線 · Synthetic connection detail\n".repeat(40);
+            ui.set_connection_status(long_message.into());
+            ui.set_result(ui.get_connection_status());
+            require(
+                ui.get_shell_toast_message_scrollable()
+                    && ui.get_shell_toast_height() <= window_height * 0.45 + 1.
+                    && ui.get_shell_toast_reconnect_bottom() + 19. <= ui.get_shell_toast_height(),
+                "long disconnect toast did not keep reconnect below the scrolling message",
+            )?;
+            verification::capture(&ui, &directory, "shell-disconnected-long.png")?;
+            ui.set_connection_status(short_message.clone());
+            ui.set_result(short_message);
+            ui.set_can_reconnect(false);
             crate::notice::copied(&ui, "pending at close");
             require(
                 notices.timer_active(),
@@ -496,7 +518,7 @@ pub fn start(
                 .map_err(|e| e.to_string())?;
             serde_json::to_writer_pretty(file,&serde_json::json!({"status":"passed","viewport_logical":[dimensions.0,dimensions.1],
             "window_logical":[window_width,window_height],"scale_factor":dpi,
-            "prototype_chrome":false,"about_escape":true,"viewport_zoom":true,"invalid_export_visible":true,"disconnected_visible":true,
+            "prototype_chrome":false,"about_escape":true,"viewport_zoom":true,"invalid_export_visible":true,"disconnected_visible":true,"toast_reconnect_contained":true,
             "scope":"production owners with synthetic toolkit callbacks/foreground; OS focus, clipboard and pointer untested"})).map_err(|e|e.to_string())
         },
     )
