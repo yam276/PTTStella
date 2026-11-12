@@ -24,6 +24,7 @@ pub struct ArticleGeometry {
     pub width: f32,
     pub body_height: f32,
     pub offset: f64,
+    pub whole_rows: Option<std::ops::Range<usize>>,
     pub flow: std::rc::Rc<pttstella::article_flow::Flow>,
     pub line_width: u32,
     pub row: u32,
@@ -77,6 +78,12 @@ impl SurfaceGeometry {
                 let y = if point.1 < g.body_height {
                     let document_y = f64::from(point.1) + g.offset;
                     let row = g.flow.hit(document_y)?;
+                    if g.whole_rows
+                        .as_ref()
+                        .is_some_and(|rows| !rows.contains(&row))
+                    {
+                        return None;
+                    }
                     (row as f64 * f64::from(g.row) + document_y - g.flow.top(row) as f64) as f32
                 } else {
                     g.body_rows as f32 * g.row as f32 + point.1 - g.body_height
@@ -126,6 +133,12 @@ impl SurfaceGeometry {
                         g.body_height + g.row as f32,
                     )
                 } else {
+                    if g.whole_rows
+                        .as_ref()
+                        .is_some_and(|rows| !rows.contains(&span.row))
+                    {
+                        return None;
+                    }
                     let top = (g.flow.top(span.row) as f64 - g.offset) as f32;
                     (top, top + g.row as f32, 0., g.body_height)
                 };

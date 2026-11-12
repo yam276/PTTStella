@@ -515,9 +515,13 @@ impl Inline {
         self.last_geometry.replace(native.geometry());
         self.layout_updates.set(self.layout_updates.get() + 1);
         let mut arrows = Vec::new();
+        let whole_rows = native.whole_rows(&flow, layout);
         for &(index, row, start, end) in self.candidates.borrow().iter() {
             let y = (flow.top(row) as f64 - offset) / f64::from(layout.dpi);
-            if y + f64::from(layout.line_height()) < 0. || y >= f64::from(layout.body_height) {
+            if whole_rows.as_ref().is_some_and(|rows| !rows.contains(&row))
+                || y + f64::from(layout.line_height()) <= 0.
+                || y >= f64::from(layout.body_height)
+            {
                 continue;
             }
             let cell = layout.logical_width() / 80.;

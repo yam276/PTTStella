@@ -130,7 +130,8 @@ pub fn start(
             )?;
             verification::key(&ui, Key::Home);
             let layout = owner.layout.get().ok_or("resized initial layout missing")?;
-            let expected = layout.page(0., true);
+            let expected =
+                (f64::from(layout.body_height * layout.dpi) / f64::from(layout.row)).floor() - 1.;
             verification::key(&ui, Key::PageDown);
             wait(
                 || (owner.row_anchor() - expected).abs() < 0.001,
@@ -416,9 +417,52 @@ pub fn start(
                 installed.hit(owner.position(&installed)).is_none(),
                 "image gap became a text cell",
             )?;
+            let gap_position = owner.position(&installed);
+            verification::key(&ui, Key::PageDown);
+            let gap_step =
+                (f64::from(last.body_height * last.dpi) - f64::from(row)).max(f64::from(row));
+            require(
+                (owner.position(&installed) - gap_position - gap_step).abs() < 0.01,
+                "PageDown stalled inside the tall image gap",
+            )?;
             require(
                 owner.set_gaps(vec![(837, 1)]).is_err() && owner.flow() == Some(installed),
                 "invalid gap changed installed geometry",
+            )?;
+            let gap = row * 2 + row / 2;
+            owner.set_gaps(vec![(1, gap)])?;
+            verification::key(&ui, Key::Home);
+            let viewport = f64::from(last.body_height * last.dpi);
+            let overlap_row = ((viewport - f64::from(gap)) / f64::from(row)).floor() as u32 - 1;
+            let expected_top = f64::from(overlap_row * row + gap);
+            verification::key(&ui, Key::PageDown);
+            wait(
+                || owner.geometry().is_some(),
+                "image-aware PageDown did not reach the viewport",
+            )
+            .await?;
+            let flow = owner.flow().ok_or("page flow missing")?;
+            require(
+                (owner.position(&flow) - expected_top).abs() < 0.01
+                    && ui
+                        .get_article_tiles()
+                        .row_data(0)
+                        .is_some_and(|tile| tile.y == 0.),
+                "PageDown missed the last complete text row before the image-aware edge",
+            )?;
+            verification::key(&ui, Key::PageUp);
+            require(owner.row_anchor() == 0., "PageUp lost the overlap row")?;
+            ui.invoke_article_scroll(-0.25 * last.line_height(), false);
+            wait(
+                || owner.geometry().is_some(),
+                "fractional wheel did not update the viewport",
+            )
+            .await?;
+            require(
+                ui.get_article_tiles()
+                    .row_data(0)
+                    .is_some_and(|tile| tile.y < 0.),
+                "wheel scroll hid the partial leading row",
             )?;
             owner.set_gaps(Vec::new())?;
             verification::key(&ui, Key::End);

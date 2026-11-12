@@ -3,6 +3,7 @@
 use std::ops::Range;
 
 pub const MAX_GAPS: usize = 32;
+const EDGE_TOLERANCE: f64 = 0.01;
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize)]
 pub struct Anchor {
     pub row: usize,
@@ -161,6 +162,66 @@ impl Flow {
         let end = (last.row + usize::from(last.within > 0.)).min(self.rows);
         start.saturating_sub(buffer)..end.saturating_add(buffer).min(self.rows)
     }
+    /// Complete text rows in the viewport, excluding the image gaps between them.
+    pub fn whole_rows(&self, y: f64, viewport: f64) -> Range<usize> {
+        if !viewport.is_finite() || viewport <= 0. {
+            return 0..0;
+        }
+        let y = self.clamp(y, viewport);
+        let first = self.anchor(y).row;
+        let start = first + usize::from(self.top(first) as f64 + EDGE_TOLERANCE < y);
+        let bottom = y + viewport + EDGE_TOLERANCE;
+        let last = self.anchor(bottom).row;
+        let end = last
+            + usize::from(
+                last < self.rows && self.top(last) as f64 + f64::from(self.line) <= bottom,
+            );
+        start.min(end)..end
+    }
+    pub fn page(&self, y: f64, viewport: f64, down: bool) -> f64 {
+        let top = self.clamp(y, viewport);
+        let rows = self.whole_rows(top, viewport);
+        let overlap = if rows.is_empty() {
+            None
+        } else if down {
+            Some(self.top(rows.end - 1) as f64)
+        } else {
+            Some(self.top(rows.start) as f64 + f64::from(self.line) - viewport)
+        };
+        // When the viewport is inside a tall image (or too small for an
+        // overlap), move through it in viewport-sized steps.
+        let step = (viewport - f64::from(self.line)).max(f64::from(self.line));
+        let step = if down { step } else { -step };
+        let advances = |next| {
+            if down {
+                next > top + EDGE_TOLERANCE
+            } else {
+                next < top - EDGE_TOLERANCE
+            }
+        };
+        let target = self.clamp(
+            overlap.filter(|next| advances(*next)).unwrap_or(top + step),
+            viewport,
+        );
+        if target > 0.
+            && let Some(row) = self.hit(target)
+        {
+            let start = self.top(row) as f64;
+            if target - start > EDGE_TOLERANCE {
+                let edge = if down {
+                    start
+                } else {
+                    start + f64::from(self.line)
+                };
+                // A snap that cannot advance must not trap the reader before
+                // the exact end or inside a viewport shorter than a text row.
+                if advances(edge) {
+                    return self.clamp(edge, viewport);
+                }
+            }
+        }
+        target
+    }
 }
 
 #[cfg(test)]
@@ -188,6 +249,38 @@ mod tests {
             assert_eq!(f.hit(y), expected, "{y}");
         }
         assert_eq!(f.visible(60., 40., 2), 0..4);
+    }
+    #[test]
+    fn pages_overlap_complete_text_rows_at_fractional_edges_and_with_images() {
+        let flow = Flow::new(12, 20, [(1, 36)]).unwrap();
+        // Text tops are 0, 20, 76, 96, 116. The next line is clipped.
+        assert_eq!(flow.whole_rows(0., 111.5), 0..3);
+        assert_eq!(flow.page(0., 111.5, true), 76.);
+        assert_eq!(flow.whole_rows(76., 111.5), 2..7);
+        assert_eq!(flow.page(76., 111.5, false), 0.);
+        assert_eq!(flow.whole_rows(25.5, 100.), 2..4);
+        assert_eq!(flow.page(25.5, 100., true), 96.);
+        assert_eq!(flow.page(25.5, 100., false), 0.);
+        assert_eq!(flow.page(96., 70.5, false), 45.5);
+        assert_eq!(flow.whole_rows(45.5, 70.5), 2..4);
+    }
+    #[test]
+    fn page_moves_through_a_tall_image_and_keeps_the_exact_document_end() {
+        let flow = Flow::new(8, 20, [(1, 500)]).unwrap();
+        assert_eq!(flow.whole_rows(100., 70.), 2..2);
+        assert_eq!(flow.page(100., 70., true), 150.);
+        assert_eq!(flow.page(100., 70., false), 50.);
+        assert_eq!(flow.page(560., 70.5, true), 580.);
+        assert_eq!(flow.page(580., 70.5, true), 589.5);
+        assert_eq!(flow.whole_rows(589.5, 70.5), 5..8);
+        assert_eq!(flow.page(589.5, 70.5, true), 589.5);
+    }
+    #[test]
+    fn page_up_snaps_a_fractional_text_edge_without_losing_the_overlap() {
+        let flow = Flow::new(30, 20, []).unwrap();
+        assert_eq!(flow.page(200., 70.5, false), 160.);
+        assert_eq!(flow.whole_rows(160., 70.5), 8..11);
+        assert_eq!(flow.page(203., 10., false), 200.);
     }
     #[test]
     fn image_arrival_and_resizing_preserve_text_or_image_anchors() {

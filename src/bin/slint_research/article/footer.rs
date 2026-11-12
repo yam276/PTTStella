@@ -25,6 +25,7 @@ pub(super) fn display(
     row_height: u32,
     top: f64,
     bottom: f64,
+    whole_rows: Option<Range<usize>>,
 ) -> Display {
     let rows = reading
         .last_line
@@ -60,6 +61,15 @@ pub(super) fn display(
         .enumerate()
         .min_by_key(|(_, page)| page.line.abs_diff(first))
         .map(|(index, _)| index);
+    let (first, last) =
+        whole_rows
+            .filter(|range| !range.is_empty())
+            .map_or((first, last), |range| {
+                (
+                    reading.first_line + range.start.min(rows - 1),
+                    reading.first_line + (range.end - 1).min(rows - 1),
+                )
+            });
     Display {
         percent,
         page,

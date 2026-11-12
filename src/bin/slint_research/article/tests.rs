@@ -12,10 +12,10 @@ fn viewport_footer_uses_local_position_and_keeps_station_glyphs_intact() {
     let mut reading = window.paint.article.unwrap();
     let flow = Flow::new(window.body_rows, 20, [(10, 60)]).unwrap();
     let midpoint = flow.height() as f64 / 2.;
-    let position = footer::display(&reading, &flow, 20, 0., midpoint);
+    let position = footer::display(&reading, &flow, 20, 0., midpoint, None);
     assert_eq!(position.percent, Some(footer::Percent::Known(50)));
     assert_eq!(
-        footer::display(&reading, &flow, 20, midpoint, flow.height() as f64).percent,
+        footer::display(&reading, &flow, 20, midpoint, flow.height() as f64, None).percent,
         Some(footer::Percent::Known(100))
     );
     let original = source.frame.clone();
@@ -42,7 +42,7 @@ fn viewport_footer_uses_local_position_and_keeps_station_glyphs_intact() {
     assert_eq!(source.frame, original);
 
     reading.end = false;
-    let pending = footer::display(&reading, &flow, 20, 0., midpoint);
+    let pending = footer::display(&reading, &flow, 20, 0., midpoint, None);
     assert_eq!(pending.percent, Some(footer::Percent::Unknown));
     let rendered = footer::frame(&source.frame, &reading, pending);
     assert_eq!(

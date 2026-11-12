@@ -63,6 +63,7 @@ impl Layout {
     pub fn maximum(self) -> f64 {
         (self.rows as f64 - (f64::from(self.body_height) / f64::from(self.line_height()))).max(0.)
     }
+    #[cfg(test)]
     pub fn clamp(self, anchor: f64) -> f64 {
         if anchor.is_finite() {
             anchor.clamp(0., self.maximum())
@@ -87,21 +88,6 @@ impl Layout {
     pub fn tile_rows(self) -> usize {
         MAX_WINDOW_ROWS.min(8192 / self.row as usize).max(1)
     }
-    pub fn page(self, anchor: f64, down: bool) -> f64 {
-        let anchor = self.clamp(anchor);
-        let height = f64::from(self.body_height) / f64::from(self.line_height());
-        let next = if down {
-            (anchor + height).floor() - 1.
-        } else {
-            anchor.ceil() - height.floor() + 1.
-        };
-        let next = if down && next <= anchor || !down && next >= anchor {
-            anchor + if down { 1. } else { -1. }
-        } else {
-            next
-        };
-        self.clamp(next)
-    }
 }
 
 #[cfg(test)]
@@ -115,10 +101,6 @@ mod tests {
         assert_eq!(l.visible(250.25), 248..276);
         assert_eq!(l.visible(l.maximum()).end, 837);
         assert!((l.maximum() - 813.5).abs() < 1e-6);
-        assert_eq!(l.page(0., true), 22.);
-        assert_eq!(l.page(22., false), 0.);
-        assert_eq!(l.page(0.25, true), 22.);
-        assert_eq!(l.page(22.25, false), 1.);
         assert_eq!(l.clamp(f64::NAN), 0.);
         assert!(l.visible(400.).len() < 30);
     }
@@ -148,9 +130,6 @@ mod tests {
             assert_eq!(extreme.visible(0.), 0..837);
             assert_eq!(extreme.maximum(), 0.);
         }
-        let small = Layout::fit(20., 14., 1., 4., 837).unwrap();
-        assert!(small.page(2., true) > 2.);
-        assert!(small.page(2., false) < 2.);
         let l = Layout::fit(980., 600., 1., 1., 23).unwrap();
         assert_eq!(l.maximum(), 0.);
     }

@@ -194,6 +194,7 @@ fn article_hit_and_visible_spans_share_odd_pixel_columns_and_pinned_footer() {
         width: 700.,
         body_height: 287.5,
         offset: 6256.25,
+        whole_rows: None,
         flow: std::rc::Rc::new(pttstella::article_flow::Flow::new(837, 25, []).unwrap()),
         line_width: 1000,
         row: 25,
@@ -228,6 +229,23 @@ fn article_hit_and_visible_spans_share_odd_pixel_columns_and_pinned_footer() {
     );
     assert!(geometry.span(&span(100), &frame).is_none());
     assert!(geometry.span(&span(262), &frame).is_none());
+    let SurfaceGeometry::Article(mut discrete) = geometry else {
+        unreachable!();
+    };
+    discrete.whole_rows = Some(251..261);
+    let geometry = SurfaceGeometry::Article(discrete);
+    assert!(geometry.cell((53., 0.), &frame).is_none());
+    assert!(geometry.cell((53., 287.49), &frame).is_none());
+    assert!(geometry.span(&span(250), &frame).is_none());
+    assert!(geometry.span(&span(261), &frame).is_none());
+    assert_eq!(
+        geometry.cell((53., 18.75), &frame),
+        Some(Position { col: 5, row: 251 })
+    );
+    assert_eq!(
+        geometry.cell((53., 287.5), &frame),
+        Some(Position { col: 5, row: 837 })
+    );
 }
 
 #[test]
@@ -240,6 +258,7 @@ fn article_image_gaps_reject_cells_and_keep_visible_spans_precise_past_u32_heigh
         width: 960.,
         body_height: 100.,
         offset: flow.top(1) as f64 - 12.,
+        whole_rows: None,
         flow: std::rc::Rc::new(flow),
         line_width: 960,
         row: 24,

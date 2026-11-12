@@ -56,11 +56,12 @@ pub struct ArticleView {
     renderer: RefCell<Renderer>,
     layout: Cell<Option<Layout>>,
     anchor: Cell<Anchor>,
+    free_scroll: Cell<bool>,
     gaps: RefCell<Vec<(usize, u32)>>,
     flow: RefCell<Option<Rc<Flow>>>,
     x: Cell<f32>,
     painted: RefCell<Option<RasterKey>>,
-    painted_anchor: Cell<Option<Anchor>>,
+    painted_anchor: Cell<Option<(Anchor, bool)>>,
     reading: RefCell<Reading>,
     footer_key: Cell<Option<(Size, footer::Display)>>,
     row_size: Cell<Option<Size>>,
@@ -132,6 +133,7 @@ impl ArticleView {
             scope: Cell::new(None),
             layout: Cell::new(None),
             anchor: Cell::new(Anchor::default()),
+            free_scroll: Cell::new(false),
             gaps: RefCell::new(Vec::new()),
             flow: RefCell::new(None),
             x: Cell::new(0.),
@@ -264,22 +266,13 @@ impl ArticleView {
                         -(count as f64) * line
                     }
             }
-            Intent::PreviousPage => {
-                (anchor / line).ceil() * line - (viewport / line).floor() * line + line
-            }
-            Intent::NextPage | Intent::Forward => {
-                ((anchor + viewport) / line).floor() * line - line
-            }
+            Intent::PreviousPage => flow.page(anchor, viewport, false),
+            Intent::NextPage | Intent::Forward => flow.page(anchor, viewport, true),
             Intent::First => 0.,
             Intent::Last => flow.maximum(f64::from(layout.body_height * layout.dpi)),
             _ => return,
         };
-        let target = match intent {
-            Intent::NextPage | Intent::Forward if target <= anchor => anchor + line,
-            Intent::PreviousPage if target >= anchor => anchor - line,
-            _ => target,
-        };
-        self.scroll_pixels(target);
+        self.move_viewport(target, false);
     }
     fn flow(&self) -> Option<Rc<Flow>> {
         self.flow.borrow().clone()
@@ -289,6 +282,11 @@ impl ArticleView {
         self.layout.get().map_or(position, |layout| {
             flow.clamp(position, f64::from(layout.body_height * layout.dpi))
         })
+    }
+    fn whole_rows(&self, flow: &Flow, layout: Layout) -> Option<Range<usize>> {
+        let viewport = f64::from(layout.body_height * layout.dpi);
+        (!self.free_scroll.get() && viewport >= f64::from(layout.row))
+            .then(|| flow.whole_rows(self.position(flow), viewport))
     }
     /// Numeric text anchor for the original uniform-row conformance workload.
     fn row_anchor(&self) -> f64 {
@@ -318,7 +316,7 @@ impl ArticleView {
         let ui = self.ui.upgrade()?;
         if self.closed.get()
             || !ui.get_article_active()
-            || self.painted_anchor.get() != Some(self.anchor.get())
+            || self.painted_anchor.get() != Some((self.anchor.get(), self.free_scroll.get()))
         {
             return None;
         }
@@ -352,6 +350,7 @@ impl ArticleView {
                 width: l.view_width * l.dpi,
                 body_height: l.body_height * l.dpi,
                 offset: self.position(&flow),
+                whole_rows: self.whole_rows(&flow, l),
                 flow,
                 line_width: l.width,
                 row: l.row,
@@ -434,10 +433,14 @@ impl ArticleView {
         }
     }
     fn scroll_pixels(self: &Rc<Self>, position: f64) {
+        self.move_viewport(position, true);
+    }
+    fn move_viewport(self: &Rc<Self>, position: f64, free_scroll: bool) {
         let Some(layout) = self.layout.get() else {
             return;
         };
         let Some(flow) = self.flow() else { return };
+        self.free_scroll.set(free_scroll);
         self.anchor
             .set(flow.anchor(flow.clamp(position, f64::from(layout.body_height * layout.dpi))));
         self.publish();
@@ -560,17 +563,19 @@ impl ArticleView {
             self.raster_count.set(self.raster_count.get() + 1);
         }
         let cached = self.row_cache.borrow();
+        let top = self.position(&flow);
+        let whole_rows = self.whole_rows(&flow, layout);
         let tiles = key
             .rows
             .clone()
+            .filter(|row| whole_rows.as_ref().is_none_or(|rows| rows.contains(row)))
             .map(|row| {
                 let image = cached
                     .get(&row)
                     .ok_or("confirmed article row raster is missing")?;
                 Ok(ArticleTile {
                     image: image.clone(),
-                    y: ((flow.top(row) as f64 - self.position(&flow)) / f64::from(layout.dpi))
-                        as f32,
+                    y: ((flow.top(row) as f64 - top) / f64::from(layout.dpi)) as f32,
                     height: layout.line_height(),
                 })
             })
@@ -582,13 +587,13 @@ impl ArticleView {
             height: layout.row,
         };
         let reading = self.reading.borrow();
-        let top = self.position(&flow);
         let display = footer::display(
             &reading,
             &flow,
             layout.row,
             top,
             top + f64::from(layout.body_height * layout.dpi),
+            whole_rows,
         );
         let footer_key = (size, display);
         if self.footer_key.get() != Some(footer_key) {
@@ -609,7 +614,8 @@ impl ArticleView {
             self.footer_key.set(Some(footer_key));
         }
         drop(reading);
-        self.painted_anchor.set(Some(self.anchor.get()));
+        self.painted_anchor
+            .set(Some((self.anchor.get(), self.free_scroll.get())));
         self.reply_marks();
         ui.invoke_article_rendered();
         Ok(())
@@ -645,6 +651,7 @@ impl ArticleView {
         }
         if self.scope.replace(Some(scope)) != Some(scope) {
             self.anchor.set(Anchor::default());
+            self.free_scroll.set(false);
             self.gaps.borrow_mut().clear();
             self.x.set(0.);
             self.row_cache.borrow_mut().clear();
@@ -681,6 +688,7 @@ impl ArticleView {
         self.flow.replace(None);
         self.gaps.borrow_mut().clear();
         self.anchor.set(Anchor::default());
+        self.free_scroll.set(false);
         if let Some(ui) = self.ui.upgrade() {
             ui.set_article_active(false);
             ui.set_article_tiles(ModelRc::default());
