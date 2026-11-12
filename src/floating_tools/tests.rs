@@ -67,6 +67,33 @@ fn right_click_parking_and_category_back_restore_the_original_point() {
     assert_eq!(state.point, parked);
 }
 #[test]
+fn first_window_size_positions_the_ball_and_later_resizes_preserve_a_drag() {
+    let provisional = Viewport::new(640., 440.).unwrap();
+    let initial = Viewport::new(1000., 690.).unwrap();
+    let resized = Viewport::new(1000., 620.).unwrap();
+    let mut state = State::new(provisional);
+    state.resize(initial);
+    assert_eq!(state.point.x, 928.);
+    assert!((state.point.y - 448.5).abs() < 0.001);
+
+    state.show_at(Point { x: 400., y: 200. });
+    state.resize(resized);
+    state.close();
+    assert_eq!(state.point, resized.dock(resized.initial(), false));
+
+    let now = Instant::now();
+    let start = state.point;
+    state.down(start, now);
+    state.up(
+        Point { x: 20., y: 270. },
+        now + Duration::from_millis(30),
+        true,
+    );
+    state.resize(initial);
+    assert_eq!(state.point.x, 16.);
+    assert!((state.point.y - 270.).abs() < 0.001);
+}
+#[test]
 fn drag_release_includes_endpoint_and_reduced_motion_docks_without_a_timer() {
     let viewport = Viewport::new(1280., 800.).unwrap();
     let now = Instant::now();

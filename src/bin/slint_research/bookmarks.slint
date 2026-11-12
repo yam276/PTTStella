@@ -32,9 +32,26 @@ export global BookmarksState {
     public function focus-reader() { root.focus-reader-sequence += 1; }
 }
 
+component BookmarkButton inherits PanelButton {
+    max-width: self.preferred-width;
+    font-size: 15px;
+    label-color: self.enabled ? #ebe7dc : #808b99;
+}
+
+component BookmarkFieldRow inherits HorizontalLayout {
+    in property <string> caption;
+    spacing: 10px;
+    Text {
+        width: 100px; text: root.caption; color: #ebe7dc; font-size: 14px;
+        vertical-alignment: center; wrap: word-wrap;
+    }
+    @children
+}
+
 export component BookmarksPanel inherits PanelOverlay {
     heading: BookmarksState.labels[0];
-    panel-width: 900px; panel-height: 700px;
+    panel-width: BookmarksState.offline ? 900px : 620px;
+    panel-height: BookmarksState.offline ? 700px : 440px;
     private property <int> focus-target-sequence: BookmarksState.focus-target-sequence;
     changed focus-target-sequence => { target-field.focus(); }
     private property <int> focus-reader-sequence: BookmarksState.focus-reader-sequence;
@@ -47,28 +64,53 @@ export component BookmarksPanel inherits PanelOverlay {
         visible:!BookmarksState.offline;
         key-pressed(event)=>{if event.text==Key.Escape && !BookmarksState.composing {BookmarksState.close-bookmarks();return accept;}return reject;}
         ScrollView {
-            content-width: self.width;
-        VerticalLayout {alignment: start; padding:16px;spacing:10px;
-            Text {text:BookmarksState.labels[1];color:#c7d4e7;wrap:word-wrap;}
-            Text {text:BookmarksState.labels[2];color:#c7d4e7;}
-            PanelCombo {model:BookmarksState.entries;current-index<=>BookmarksState.choice;enabled:root.visible && !BookmarksState.busy && !BookmarksState.composing;selected=>{BookmarksState.choose(self.current-index);}}
-            PanelButton {text:BookmarksState.labels[3];enabled:!BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.new-entry();}}
-            Text {text:BookmarksState.labels[4];color:#c7d4e7;}
-            target-field:=PanelField {text<=>BookmarksState.target;accessible-label:BookmarksState.labels[4];enabled:!BookmarksState.busy;edited=>{self.text=BookmarksState.field-edit(0,self.text);}}
-            Text {text:BookmarksState.labels[5];color:#c7d4e7;}
-            label-field:=PanelField {text<=>BookmarksState.label;accessible-label:BookmarksState.labels[5];enabled:!BookmarksState.busy;edited=>{self.text=BookmarksState.field-edit(1,self.text);}}
-            HorizontalLayout {
-                PanelButton {text:BookmarksState.labels[6];enabled:BookmarksState.writable && !BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.action(0);}}
-                PanelButton {text:BookmarksState.labels[7];enabled:BookmarksState.writable && BookmarksState.selected && !BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.action(1);}}
-                PanelButton {text:BookmarksState.labels[8];enabled:BookmarksState.has-copy && !BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.action(2);}}
-                PanelButton {text:BookmarksState.labels[14];enabled:BookmarksState.go-ready && BookmarksState.selected && !BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.action(4);}}
+            content-width: self.visible-width;
+            VerticalLayout {
+                alignment: start;
+                padding: 20px;
+                spacing: 10px;
+                Text {text:BookmarksState.labels[1];color:#c7d4e7;wrap:word-wrap;}
+                BookmarkFieldRow {
+                    caption: BookmarksState.labels[2];
+                    PanelCombo {
+                        model: BookmarksState.entries; current-index <=> BookmarksState.choice;
+                        enabled: root.visible && !BookmarksState.busy && !BookmarksState.composing;
+                        selected => { BookmarksState.choose(self.current-index); }
+                    }
+                }
+                BookmarkButton {text:BookmarksState.labels[3];enabled:!BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.new-entry();}}
+                BookmarkFieldRow {
+                    caption: BookmarksState.labels[4];
+                    target-field := PanelField {
+                        text <=> BookmarksState.target; accessible-label: BookmarksState.labels[4];
+                        enabled: !BookmarksState.busy;
+                        edited => { self.text = BookmarksState.field-edit(0, self.text); }
+                    }
+                }
+                BookmarkFieldRow {
+                    caption: BookmarksState.labels[5];
+                    PanelField {
+                        text <=> BookmarksState.label; accessible-label: BookmarksState.labels[5];
+                        enabled: !BookmarksState.busy;
+                        edited => { self.text = BookmarksState.field-edit(1, self.text); }
+                    }
+                }
+                Text {text:BookmarksState.message;color:#c7d4e7;wrap:word-wrap;}
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: 10px;
+                    BookmarkButton {text:BookmarksState.labels[7];enabled:BookmarksState.writable && BookmarksState.selected && !BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.action(1);}}
+                    BookmarkButton {text:BookmarksState.labels[6];primary:true;enabled:BookmarksState.writable && !BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.action(0);}}
+                    BookmarkButton {text:BookmarksState.labels[8];enabled:BookmarksState.has-copy && !BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.action(2);}}
+                    BookmarkButton {text:BookmarksState.labels[14];primary:true;enabled:BookmarksState.go-ready && BookmarksState.selected && !BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.action(4);}}
+                }
+                HorizontalLayout {
+                    alignment: start;
+                    spacing: 10px;
+                    BookmarkButton {text:BookmarksState.labels[10];enabled:!BookmarksState.composing;clicked=>{BookmarksState.close-bookmarks();}}
+                    BookmarkButton {text:BookmarksState.labels[9];enabled:!BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.action(3);}}
+                }
             }
-            Text {text:BookmarksState.message;color:#f2cd7d;wrap:word-wrap;vertical-stretch:1;}
-            HorizontalLayout {
-                PanelButton {text:BookmarksState.labels[9];enabled:!BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.action(3);}}
-                PanelButton {text:BookmarksState.labels[10];enabled:!BookmarksState.composing;clicked=>{BookmarksState.close-bookmarks();}}
-            }
-        }
         }
     }
     reader-keys:=FocusScope {

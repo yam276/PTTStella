@@ -27,6 +27,7 @@ pub struct State {
     pub open: bool,
     pub category: Option<usize>,
     pub selected: usize,
+    dragged: bool,
     parked: Option<Point>,
     drag: Option<Drag>,
     coast: Option<Coast>,
@@ -39,6 +40,7 @@ impl State {
             open: false,
             category: None,
             selected: 0,
+            dragged: false,
             parked: None,
             drag: None,
             coast: None,
@@ -94,6 +96,15 @@ impl State {
         self.drag = None;
         self.coast = None;
         self.viewport = viewport;
+        // The first platform resize may replace a provisional startup size.
+        // Keep the default height proportional until the user places the ball.
+        if !self.dragged {
+            if let Some(parked) = &mut self.parked {
+                *parked = viewport.dock(viewport.initial(), false);
+            } else if !self.open {
+                self.point.y = viewport.initial().y;
+            }
+        }
         self.point = if self.open {
             viewport.clamp(self.point)
         } else {
@@ -125,6 +136,7 @@ impl State {
         if !drag.moved {
             return;
         }
+        self.dragged = true;
         let next = self.viewport.clamp(Point {
             x: drag.origin.x + dx,
             y: drag.origin.y + dy,

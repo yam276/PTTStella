@@ -755,7 +755,11 @@ impl Manager {
         self.clear_draft();
         self.closing.set(false);
         if let Some(ui) = self.ui.upgrade() {
+            let was_open = ui.get_bookmarks_open();
             ui.set_bookmarks_open(false);
+            if was_open && !ui.get_app_closing() && ui.get_context_focus_restorable() {
+                ui.invoke_focus_terminal();
+            }
         }
     }
     pub fn prepare_app_close(&self) {
