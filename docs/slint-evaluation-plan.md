@@ -88,7 +88,9 @@ Apple Silicon 與 Windows x64 的草稿／文章中途驗收包均固定在乾�
 
 推文探針從文章正文背景右鍵開選單，再點實際繪製的勾選列。開啟後確認兩次追加、未讀、開著選單時暫停與 Esc 回文章焦點。更新中的右鍵取消、失焦及晚到回覆另核對原文、閱讀錨點與站端復原。浮球在本機／站台滑鼠模式的元件探針涵蓋展開動畫、五分類、快捷鍵、動作順序、過期手勢與終端回焦。macOS 的自動推文、設定搜尋和浮球探針採被動啟動，避免取得其他工作的鍵盤輸入。元件案例和實際視窗證據各自記錄於 `.local/verification/slint-native-interactions/`。
 
-固定 `54964e98afa167275b1eb7bccbf12010340d95da` 出 Apple Silicon App／DMG 與 Windows x64 ZIP。Apple Silicon 簽章封裝的元件探針通過 48 個設定搜尋目標、兩種浮球模式、完整主視窗及推文追加／取消／失焦，均收到嚴格 Close。追加首輪碰到原生失焦，第二輪在選單暫停檢查失敗。取消首輪收到額外 CR。保留失敗並以同一簽章執行檔重跑至通過。實體右鍵和選單關閉後的 OS 焦點恢復仍待驗。Windows ZIP 的 CRC、921 項內容雜湊及 PE 匯入已核對，原生結果待驗。[同源 Windows 候選](slint-windows-candidate.md#2026-11-12-設定焦點與推文選單的同步候選)
+固定 `54964e98afa167275b1eb7bccbf12010340d95da` 出 Apple Silicon App／DMG 與 Windows x64 ZIP。Apple Silicon 簽章封裝的元件探針通過 48 個設定搜尋目標、兩種浮球模式、完整主視窗及推文追加／取消／失焦，均收到嚴格 Close。追加首輪碰到原生失焦，第二輪在選單暫停檢查失敗。取消首輪收到額外 CR。保留失敗並以同一簽章執行檔重跑至通過。該輪未取得實體右鍵與 OS 回焦證據。Windows ZIP 的 CRC、921 項內容雜湊及 PE 匯入已核對，原生結果待驗。[同源 Windows 候選](slint-windows-candidate.md#2026-11-12-設定焦點與推文選單的同步候選)
+
+用 `54964e9` 的 Apple Silicon 隔離 App，實際右鍵文章正文、點選「更新推文」，重開選單可見金色勾選並暫停刷新。按 Esc 恢復文章輸入焦點，查看六則新增推文跳到第 29–51 行並顯示 100%。取消後再次開選單，勾選消失，原閱讀位置保留。合成站核對 19 個取頁／更新步驟、三個無變更週期及嚴格 Close。錄於 `.local/verification/slint-toolkit-input/manual-replies.log`。
 
 ### 4. 媒體（S5）
 
@@ -106,6 +108,10 @@ Apple Silicon 與 Windows x64 候選均由乾淨的 `73fd1afd53e1d3f1a0b83f6c727
 影片、推文更新、設定搜尋、浮球及 `--verify-shell` 的自動元件驗證使用 Slint 送入的事件。這些明確指定的探針在 Winit 入口隔離系統焦點、遮蔽及鍵盤／指標事件，仍處理重繪、尺寸與關窗。正常啟動、手動影片、等待系統前景及影片退出探針維持原生事件路徑。MP4 軟體與 OpenGL 的開發執行檔均記到系統 `Focused(false)`，驗證仍完成恢復、主動失焦暫停、重新取得焦點後保持暫停及資源退場。刻意在 renderer 就緒後失敗的案例仍以失敗結束，peer 收到嚴格 Close。主視窗第一輪未隔離 `--verify-shell`，重開設定時前景變為 false，保留其失敗。完整記錄位於 `.local/verification/slint-toolkit-input/`。
 
 以 `54964e9` 的 Apple Silicon 執行檔另建隔離測試 App，經 macOS 視窗 Raise 後可實際點文章中的 MP4 連結。畫面顯示四色影片，無障礙介面核對音量 28%、靜音與恢復、跳到 1 秒、播放與暫停。關閉影片後回到終端輸入焦點。實際點浮球展開五分類，進入導覽，按 Esc 收合並回到終端焦點。播放期間以標題列關閉 App，三個播放 session 均銷毀 core 並 join，HTTP 結束且收到嚴格 Close。這輪使用合成站，音訊實聽仍待驗。
+
+Apple Silicon App／DMG／ZIP 與 Windows x64 ZIP 固定在乾淨提交 `9c68e60005eee9346644dcc1d3572b24ab0ba9dc`。Apple Silicon 封裝版通過完整主視窗、48 個設定搜尋目標、兩種浮球及三種推文更新情境。完整主視窗測試在系統送出 `Focused(false)` 和 `Occluded(false)` 時仍依指定的 toolkit 焦點繼續。Windows ZIP 的 CRC、921 項內容雜湊及 PE 匯入核對通過。Windows 實機仍待驗。[同源候選](slint-windows-candidate.md#2026-11-12-原生互動與影片同步候選)
+
+同一 Apple Silicon 簽章執行檔以軟體及 OpenGL 各跑 MP4、WebM、OGV，共六案核對四色畫面、音量與靜音回覆、恢復、失焦暫停與退場。額外走 `CloseRequested` 的影片退出探針保持原生事件路徑，核對退場、worker join 和嚴格 Close。App 深層簽章及 DMG 核對通過。51 個 Mach-O 的 `otool -L` 無 WebKit 直接連結。主視窗 dyld trace 仍有系統 WritingTools 與 WebKit 映射，程序族及 WebView 實例尚待另驗。證據在 `.local/verification/slint-toolkit-input/` 的 `packaged-aux.json`、`pair/media/summary.json` 及 `packaged/toolkit-results-all.json`。
 
 ### 5. 正式資料與登入接手（S7、S8）
 
@@ -137,7 +143,7 @@ Intel 首輪來源清單漏對應 soxr 的 recipe 名稱，按原有 replay log 
 
 ## 產物保留規則（2026-11-09 使用者要求）
 
-目前 Apple Silicon／Windows x64 設定與推文候選在 `.local/verification/slint-native-interactions/pair/`，Intel Mac／Linux x64 候選在 `.local/verification/slint-cross-audio-current/`。保留 `slint-audio-pair/` 的 Apple Silicon 六案影片對照和原先交付使用者的 Windows 驗收包。新的 Apple Silicon 重複 ZIP 與兩個臨時視窗探針已移除。App、DMG、Windows ZIP、固定編譯快取及各次不同結果仍保留。實際路徑與空間在同批 `pair/cleanup.json`、`gui-cleanup.json`。早期四架構候選的格式、來源、雜湊與驗證範圍見 [2026-11-10 的交付](#2026-11-10-最新候選)。
+目前 Apple Silicon／Windows x64 候選在 `.local/verification/slint-toolkit-input/pair/`，Intel Mac／Linux x64 候選在 `.local/verification/slint-cross-audio-current/`。保留 `slint-audio-pair/` 的正式身分演練對照、原先交付的 Windows 驗收包、固定編譯快取及各次獨特結果。清掉兩個手動測試 App、提取的合成影片及六份已取代封裝，合計 894,553,674 regular-file logical bytes。確切路徑、保留例外與檔案系統空間觀測在 `slint-toolkit-input/manual-cleanup.json`、`slint-toolkit-input/package-cleanup.json`。早期四架構候選的格式、來源、雜湊與驗證範圍見 [2026-11-10 的交付](#2026-11-10-最新候選)。
 
 Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人工回報屬舊04249364…執行檔；目前新69542cb7…尚待使用者晚點實測。已封裝Mac的shell／通知及網頁account失敗紀錄保留；最新來源修正後的五個Rosetta帳號／推文案例已通過，下載包尚未替換，詳文末。不能將Rosetta稱為Intel硬體驗收。Intel／Linux原生依使用者「先包起來」指示不等待，目前仍未驗。
 
