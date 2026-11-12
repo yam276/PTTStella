@@ -71,6 +71,8 @@ Apple Silicon 的 Slint 視窗探針核對非整數尺寸、有圖間隙的翻�
 
 Apple Silicon 與 Windows x64 的草稿／文章中途驗收包均固定在乾淨 `af48506`。包內 Apple Silicon App 通過 837 行取頁、推文右鍵啟用／取消、設定搜尋和 shell 五案，均收到 Close ACK。release 合成前景下從首頁進快取到首筆請求約 109 ms，從繪製確認到首筆請求約 103 ms。Windows ZIP CRC、921 項內容雜湊及 PE 匯入通過，草稿原生 IME 待使用者稍後驗收。兩包與收據在 `.local/verification/slint-draft-article-pair/`。[Windows 驗收步驟](slint-windows-candidate.md#2026-11-12-草稿-ime-與文章翻頁同步候選)
 
+2026-11-12 加入首筆取頁的選用時間追蹤。五次 release 合成前景探針在首頁入快取後 18.3–20.7 ms 送出首筆請求。另以固定本機參數的 macOS App 實際啟動一次，首頁約在 5.2 ms 繪製完成，首次觀察到原生前景約在 83.7 ms，取頁條件滿足後約 0.17 ms 送出，合計約 94.1 ms。六輪均完成 37 次取頁並收到 Close ACK。這次較長的等待集中在前景與輸入焦點取得，原生啟動僅一輪，尚未在相同前景時點與 Dioxus 作實機速度比較。兩套 UI 都以目前文章及操作就緒為取頁條件，現有准入維持。原始事件及時間差在 `.local/verification/slint-first-request/`。[Dioxus 取頁准入](../assets/surface.js) · [Slint 取頁時間追蹤](../src/bin/slint_research/article/session.rs)
+
 本輪清理了已取代的 Apple Silicon App／DMG、重複的新 ZIP 及中間視窗探針輸出。保留新 App／DMG、Windows ZIP、舊 Windows 待驗包、驗收收據和固定 Cargo 快取。Windows 封裝暫時提取的 DLL／素材已清除，下一次交叉編譯可沿用 `.local/slint-windows-cross/` 的固定 cargo-xwin 與 import library。實際移除路徑與空間前後見交付目錄的 `cleanup.json`。
 
 ### 3. 推文更新、選單與設定（S3、S4、S7）

@@ -75,6 +75,7 @@ pub struct ArticleSession {
     focus_after_paint: Cell<bool>,
     input_trace_left: Cell<u8>,
     timing: RefCell<pttstella::reading_timing::ReadingTiming>,
+    first_request_gate: Cell<Option<&'static str>>,
     find_timer: Timer,
     find_draft: RefCell<Option<String>>,
     find_serial: Cell<u64>,
@@ -159,6 +160,7 @@ impl ArticleSession {
             find_serial: Cell::new(0),
             find_version: Cell::new(0),
             timing: RefCell::new(pttstella::reading_timing::ReadingTiming::new()?),
+            first_request_gate: Cell::new(None),
             requests: Cell::new(0),
         });
         owner.install_find(ui);
@@ -429,6 +431,30 @@ impl ArticleSession {
             self.notice(error);
         }
     }
+    fn trace_first_request_gate(&self, ui: &TerminalWindow, view: &View) {
+        if self.requests.get() != 0
+            || !self.timing.borrow().enabled()
+            || !self.core.borrow().full_load_active()
+        {
+            return;
+        }
+        let gate = if !ui.get_native_foreground() {
+            "waiting-foreground"
+        } else if !ui.get_article_focused() {
+            "waiting-focus"
+        } else if !ui.get_article_reading_ready() {
+            "waiting-interaction"
+        } else if !self.allowed(ui) {
+            "waiting-confirmed-frame"
+        } else if view.phase != Phase::Connected || view.input_pending || view.output_pending {
+            "waiting-station"
+        } else {
+            "eligible"
+        };
+        if self.first_request_gate.replace(Some(gate)) != Some(gate) {
+            self.reading_timing(gate, view);
+        }
+    }
     fn rendered(&self) {
         if self.closed.get() {
             return;
@@ -564,6 +590,7 @@ impl ArticleSession {
                 }),
         );
         self.refresh_load_label(&ui);
+        self.trace_first_request_gate(&ui, view);
         // Match the Dioxus surface: dispatch the next verified station request
         // before projecting/rasterizing the UI. Painting cannot pace the fetch.
         if !self.busy.get() && self.allowed(&ui) && view.phase == Phase::Connected {

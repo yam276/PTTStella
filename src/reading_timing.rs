@@ -13,6 +13,10 @@ pub struct ReadingTiming {
     cached: Option<Progress>,
 }
 impl ReadingTiming {
+    pub fn enabled(&self) -> bool {
+        self.file.is_some()
+    }
+
     pub fn new() -> Result<Self, String> {
         let file = std::env::var_os("PTTSTELLA_READING_TIMING")
             .map(|path| OpenOptions::new().write(true).create_new(true).open(path))
