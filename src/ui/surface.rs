@@ -1388,7 +1388,11 @@ async fn run(
                         }
                     }
                     SurfaceEvent::KeepAliveGate { stamp, ready, reading, article } => {
-                        reading_gate=if reading {article.and_then(|id|screen.authorize_reading(stamp,id))}else{None};
+                        let next_gate=if reading {article.and_then(|id|screen.authorize_reading(stamp,id))}else{None};
+                        if next_gate.is_some() && next_gate!=reading_gate && reading_timing.enabled() {
+                            reading_timing.record("reading-authorized",stamp.generation,stamp.revision,screen.reading_progress())?;
+                        }
+                        reading_gate=next_gate;
                         if !reading {screen.pause_updates();}
                         connection.keep_alive_gate(
                             stamp,
@@ -1813,7 +1817,7 @@ async fn run(
                             checks.copied_selection == Some((generation, revision, request));
                     }
                     SurfaceEvent::InlineExpand {presentation,stamp,key,target,trusted:_} => {
-                        if matches!(surface_probe.as_deref(),Some("inline"|"wide_last_row"|"inline_replies"|"inline_pages"|"full_load"|"long_load"|"short_overlap"|"short_links"|"context_menu"|"picture_menu"|"live_updates"|"live_updates_cancel"|"dual_gifs")) {checks.inline_requests+=1;if checks.inline_targets.len()>=128{return Err("too many inline probe requests".into());}checks.inline_targets.push(target);}
+                        if matches!(surface_probe.as_deref(),Some("inline"|"wide_last_row"|"inline_replies"|"inline_pages"|"full_load"|"long_load"|"long_timing"|"short_overlap"|"short_links"|"context_menu"|"picture_menu"|"live_updates"|"live_updates_cancel"|"dual_gifs")) {checks.inline_requests+=1;if checks.inline_targets.len()>=128{return Err("too many inline probe requests".into());}checks.inline_targets.push(target);}
                         let view=receiver.borrow().clone();
                         if !view.site.ptt_features() || !keyboard_policy.inline_images_key(&key,&view.context())
                             || pending_paste.read().is_some() || commands.busy() || login_open {continue;}
@@ -1822,7 +1826,7 @@ async fn run(
                             if probe.is_some() && paint.image_links.iter().any(|index|media_origin.as_ref().is_none_or(|origin|!paint.links[*index].url.starts_with(&format!("{origin}/")))) {continue;}
                             let old_batch=inline_images.batch();
                             if let Some(open)=inline_images.open(paint,target)? {
-                                if matches!(surface_probe.as_deref(),Some("inline"|"wide_last_row"|"inline_replies"|"inline_pages"|"full_load"|"long_load"|"short_overlap"|"short_links"|"context_menu"|"picture_menu"|"live_updates"|"live_updates_cancel"|"dual_gifs"))  && old_batch!=Some(open.batch) {checks.inline_expands+=1;}
+                                if matches!(surface_probe.as_deref(),Some("inline"|"wide_last_row"|"inline_replies"|"inline_pages"|"full_load"|"long_load"|"long_timing"|"short_overlap"|"short_links"|"context_menu"|"picture_menu"|"live_updates"|"live_updates_cancel"|"dual_gifs"))  && old_batch!=Some(open.batch) {checks.inline_expands+=1;}
                                 eval.send(Packet::InlineOpen(open)).map_err(|e|e.to_string())?;
                             }
                         }
@@ -1965,6 +1969,7 @@ async fn run(
                         if let Some(paint)=screen.inline_page(Identity{presentation,generation,revision},view.stamp(),&view)
                             && (probe.is_none() || paint.image_links.iter().all(|index|media_origin.as_ref().is_some_and(|origin|paint.links[*index].url.starts_with(&format!("{origin}/")))))
                             && let Some(open)=inline_images.follow(paint)? {
+                            if surface_probe.as_deref()==Some("long_timing") {checks.inline_expands+=1;}
                             eval.send(Packet::InlineOpen(open)).map_err(|e|e.to_string())?;
                         }
                     }
@@ -2051,6 +2056,17 @@ async fn run(
                 .and_then(|identity| screen.current(identity, &view))
                 .and_then(|paint| paint.article.clone())
         };
+        let long_timing_passed = case == "long_timing"
+            && checks.navigation_requests == 37
+            && checks.inline_requests == 0
+            && checks.inline_expands == 0
+            && !preferences.app().auto_expand_images
+            && reading.as_ref().is_some_and(|r| {
+                r.first_line == 1
+                    && r.last_line == 837
+                    && r.end
+                    && r.load == Some(super::article_cache::LoadState::Complete)
+            });
         let reply_navigation = {
             let view = receiver.borrow();
             screen
@@ -2107,6 +2123,7 @@ async fn run(
                 || case=="editor_color" && checks.export_checked && checks.editor_colors==1
                 || case=="editor_clipboard" && checks.export_checked && receiver.borrow().frame.glyphs.iter().map(|g|g.text.as_str()).collect::<String>().contains("EDITOR CLIPBOARD 4/4 VERIFIED")
                 || case=="terminal_pages" && checks.export_checked && !screen.full_load_active()
+                || long_timing_passed
                 || case=="long_load" && checks.navigation_requests==37 && checks.export_checked && checks.inline_requests>=2 && checks.inline_expands==1 && reading.as_ref().is_some_and(|r|r.first_line==1 && r.last_line==837 && r.end && r.load==Some(super::article_cache::LoadState::Complete))
                 || case=="full_load" && checks.load_cancels>=1 && checks.load_resumes>=1 && checks.navigation_requests==19 && checks.export_checked && checks.inline_requests>=2 && checks.inline_expands==1
                 || matches!(case.as_str(),"inline"|"wide_last_row"|"inline_replies"|"inline_pages"|"short_links"|"context_menu") && checks.inline_requests>=2 && checks.inline_expands==1 && checks.export_checked && (case!="inline_pages"||checks.navigation_requests==1) && (case!="context_menu"||checks.context_copies>=2)
@@ -2124,7 +2141,7 @@ async fn run(
             "bookmarks_initial":initial_bookmarks,"bookmarks_final":bookmarks.snapshot(),"bookmark_opens":checks.bookmark_opens,"bookmark_saves":checks.bookmark_saves,"bookmark_rejected":checks.bookmark_rejected,
             "article_reached":checks.article_reached,"article_missing":checks.article_missing,"article_rejected":checks.article_rejected,"article_cancelled":checks.article_cancelled,
             "board_reached":checks.board_reached,"board_rejected":checks.board_rejected,"board_cancelled":checks.board_cancelled,
-            "scope":if matches!(case.as_str(),"sites"|"sites_restart") {"synthetic loopback station UI; owned external test peers independently verify Big5/GBK bytes and EOF; explicit TCP shutdown is not a WebSocket acknowledgement"} else if case=="live_updates" {"synthetic two verified refreshes; exact Q/AID/open/tail/PageDown plus bounded unchanged checks, retained article and image batch, pause, PNG and Close"} else if case=="article_switch" {"synthetic A/B/C articles: exact staged Home then Up, direct Down at station end, three complete two-page loads, PNG and Close"} else if case=="long_load" {"synthetic 38-page reading: thirty-seven exact PageDown commands, leading ink reset at page 31, retained 837 rows, explicit images, PNG and Close"} else if case=="full_load" {"synthetic full reading: nineteen exact PageDown commands, cancellation and explicit resume, retained 441 rows, explicit image expansion, PNG and Close"} else if case=="terminal_pages" {"synthetic terminal reading: no automatic load or image requests; one manual PageDown, PNG and Close"} else if case=="inline_pages" {"synthetic cached reading: one exact PageDown, fragmented response, local history without further station bytes, PNG and Close"} else if case=="toast_reconnect" {"synthetic loopback: exactly two sessions, deliberate first disconnect, native reconnect, PNG and no login/replayed station bytes"} else if case=="editor_clipboard" {"synthetic editor: three exact Ctrl+V commands, one confirmed ANSI-to-Ctrl+U Chinese paste, native ANSI clipboard readback preview/cancel, PNG and Close"} else if case=="control_input" {"synthetic editor: peer requires exactly Ctrl+X, Ctrl+Z, Ctrl+A followed by Close; rejects extra or missing input"} else if case=="tools" {"local tools playground: PNG and Close smoke only; gestures are observations, not an A/B acceptance test; peer rejects all station input"} else if matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") {"synthetic native pointer samples: bounded independent exact cells, required final gesture, no local keys or duplicate path, PNG and Close"} else if case=="mouse_boundary" {"synthetic station mouse boundary: one exact press, no release or local keys after leaving the grid; owned cancellation and Close"} else if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
+            "scope":if matches!(case.as_str(),"sites"|"sites_restart") {"synthetic loopback station UI; owned external test peers independently verify Big5/GBK bytes and EOF; explicit TCP shutdown is not a WebSocket acknowledgement"} else if case=="live_updates" {"synthetic two verified refreshes; exact Q/AID/open/tail/PageDown plus bounded unchanged checks, retained article and image batch, pause, PNG and Close"} else if case=="article_switch" {"synthetic A/B/C articles: exact staged Home then Up, direct Down at station end, three complete two-page loads, PNG and Close"} else if case=="long_timing" {"synthetic 38-page timing: thirty-seven exact PageDown commands, 837 cached rows and final render ACK, no image expansion and strict Close"} else if case=="long_load" {"synthetic 38-page reading: thirty-seven exact PageDown commands, leading ink reset at page 31, retained 837 rows, explicit images, PNG and Close"} else if case=="full_load" {"synthetic full reading: nineteen exact PageDown commands, cancellation and explicit resume, retained 441 rows, explicit image expansion, PNG and Close"} else if case=="terminal_pages" {"synthetic terminal reading: no automatic load or image requests; one manual PageDown, PNG and Close"} else if case=="inline_pages" {"synthetic cached reading: one exact PageDown, fragmented response, local history without further station bytes, PNG and Close"} else if case=="toast_reconnect" {"synthetic loopback: exactly two sessions, deliberate first disconnect, native reconnect, PNG and no login/replayed station bytes"} else if case=="editor_clipboard" {"synthetic editor: three exact Ctrl+V commands, one confirmed ANSI-to-Ctrl+U Chinese paste, native ANSI clipboard readback preview/cancel, PNG and Close"} else if case=="control_input" {"synthetic editor: peer requires exactly Ctrl+X, Ctrl+Z, Ctrl+A followed by Close; rejects extra or missing input"} else if case=="tools" {"local tools playground: PNG and Close smoke only; gestures are observations, not an A/B acceptance test; peer rejects all station input"} else if matches!(case.as_str(),"mouse_drag"|"mouse_round_trip"|"mouse_motion"|"mouse_wheel") {"synthetic native pointer samples: bounded independent exact cells, required final gesture, no local keys or duplicate path, PNG and Close"} else if case=="mouse_boundary" {"synthetic station mouse boundary: one exact press, no release or local keys after leaving the grid; owned cancellation and Close"} else if case=="mouse" {"synthetic station mouse: exact three-button edges, unsupported mode, local copy and explicit fallback; middle release cancelled by mode epoch; peer rejects extra bytes"} else if case=="bookmarks" {"synthetic local bookmark CRUD and one verified article open through the existing destination flow; peer rejects extra input"} else if case.starts_with("bookmarks_") {"synthetic bookmark restart, empty or corrupt data; peer rejects all station input"} else if matches!(case.as_str(),"articles"|"articles_close") {"synthetic article UI: two verified opens, missing article with explicit manual recovery, two local rejections, then cancellation or close while query is delayed; peer rejects extra input"} else if matches!(case.as_str(),"boards"|"boards_close") {"synthetic board switch; peer checks two complete workflows and a cancelled third workflow, then Close without extra input"} else if case=="login_2fa" {"synthetic local verification; peer checks one account/password and two explicit codes, then Close without extra input"} else {"synthetic local surface only; peer rejects all station input"},
             "mouse":mouse_report,
             "tools":checks.tools,
             "inline_requests":checks.inline_requests,"inline_expands":checks.inline_expands,

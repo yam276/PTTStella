@@ -75,6 +75,8 @@ Apple Silicon 與 Windows x64 的草稿／文章中途驗收包均固定在乾�
 
 本輪清理了已取代的 Apple Silicon App／DMG、重複的新 ZIP 及中間視窗探針輸出。保留新 App／DMG、Windows ZIP、舊 Windows 待驗包、驗收收據和固定 Cargo 快取。Windows 封裝暫時提取的 DLL／素材已清除，下一次交叉編譯可沿用 `.local/slint-windows-cross/` 的固定 cargo-xwin 與 import library。實際移除路徑與空間前後見交付目錄的 `cleanup.json`。
 
+同日以 Apple Silicon 實際視窗交錯跑兩組各十對 837 行文章。兩版都在背景畫出首頁，取得各自閱讀許可後，首筆取頁皆在 1 ms 內派送。固定相同前景等待時，首筆派送至全文最終 renderer ACK 的中位數為 Slint 274.44 ms、Dioxus 271.68 ms。保留前景／焦點與站端防護，40 輪各驗 37 筆取頁與嚴格 Close。兩版另以 macOS 鍵盤事件和實際擷取確認 PageDown 保留最後完整列，PageUp 回到首頁，快取操作不再送取頁。數據屬合成本機視窗，實站及完整 S8 效能仍待驗。[同負載數據與重跑方式](slint-macos-measurement.md#2026-11-12-長文首筆取頁與前景控制)
+
 ### 3. 推文更新、選單與設定（S3、S4、S7）
 
 - **保留 Slint 的推文操作**　文章右鍵選單用固定「更新推文」標籤與勾選，上方保留更新狀態、未讀跳轉和回到站端。驗證啟用、取消、更新中右鍵、切篇與逾時。用同一合成站核對舊回覆不影響新文章。

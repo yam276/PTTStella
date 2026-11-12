@@ -2,6 +2,31 @@
 
 這份文件記錄 S0／S8 的量測工具及目前證據，不是效能通過報告。完整負載、次數與平台門檻仍以[平替計畫](slint-evaluation-plan.md#同負載效能門檻)為準。
 
+## 2026-11-12 長文首筆取頁與前景控制
+
+Apple Silicon 用同一組字型與外觀設定、同一螢幕的 1040×768 外窗、同一份 38 頁／837 行合成文章及立即回覆的共用本機 peer。Slint 使用 Skia software，Dioxus 使用系統 WKWebView。兩組各以十對新程序交錯測試。兩版各自先在背景完成首頁的 renderer ACK，再由原生 AX 操作取得前景。第一組在首頁擷取和視窗位置確認後取得前景。第二組自控制器觀察到首頁入快取起，固定等待 750 ms 才呼叫原生啟用，以減少準備時間不同對共用連線時鐘的影響。四十次都核對 37 筆精確 PageDown、最終快取與 renderer ACK，以及嚴格 Close。固定等待組的首筆請求皆晚於 750 ms。
+
+| 固定等待組，10 次中位數 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 首頁入快取 → 首頁 renderer ACK | 4.93 ms | 77.45 ms |
+| 各自閱讀許可成立 → 派送第一筆取頁 | 0.18 ms | 0.30 ms |
+| 觀察到原生前景 → 控制器讀到第一筆取頁紀錄 | 57.44 ms | 48.70 ms |
+| 第一筆取頁派送 → 837 行快取完整 | 262.44 ms | 242.07 ms |
+| 完整快取 → 最終 renderer ACK | 12.31 ms | 28.69 ms |
+| 第一筆取頁派送 → 最終 renderer ACK | 274.44 ms | 271.68 ms |
+
+各自閱讀許可指 Slint 的前景、欄位焦點及已確認 article scope，以及 Dioxus 接到 WebView 的閱讀許可後核准該 scope。第一筆「派送」記的是 Rust 交給 connection 前的時點，peer 另確認實收。原生前景到讀到紀錄包含控制器輪詢與 AX 回覆延遲。Renderer ACK 是前端提交畫面的觀測點，實際可見首屏以背景視窗擷取另存，沒有將 ACK 當成螢幕掃描時間。
+
+第一組從派送首筆到快取完整為 432.70／382.53 ms，兩版首次取得前景的準備時間不同。固定等待後差距從 50.17 ms 縮為 20.37 ms。peer 兩組記錄皆可見初段連續快速取頁，後段多數請求相隔約 16 ms，與共用連線 worker 的 frame publish interval 一致。這次保留實際的前景、焦點、站端與取消條件，沒有修改該時鐘。固定等待組從派送到最終 ACK 的兩版中位數相差 2.76 ms；實站負載、無等待的自然啟動、畫面呈現延遲與跨平台效能仍需各自驗收。
+
+這次使用 `166a87e` 加當輪探針變更。Slint 的標記長文探針改為被動啟動，普通候選的啟動流程相同。Dioxus 新增 `long_timing`，沿用原長文 fixture，無須操作媒體或 PNG 才能完成文字時序驗收。原 `long_load` 綜合 gate 仍要求圖片與 PNG。最後強化文字探針確認關閉自動開圖，修正版補跑一案通過，刻意啟用自動開圖的負例有展圖計數並得到 `failed`。兩案都完整取頁及嚴格 Close。
+
+最初 Slint 長文探針自行取得前景；Dioxus 的前景觀察器未運行 AppKit run loop，誤報未取得前景。兩次校準及簽章外部連結、缺少 loader run path 的臨時 App 錯誤均有原始收據。正式樣本使用被動 Slint 探針、可更新前景的 AppKit 觀察器，以及沿用候選 runtime 的簽章診斷 App。既有 837 行快速案例、20 頁慢速取消／繼續各另通過一次。
+
+另用兩個已載完 837 行的前景視窗，從 macOS 鍵盤事件來源送 PageDown 再 PageUp，逐張核對原生視窗擷取。Slint 在第 1–28 行後從第 28 行接讀至第 55 行。Dioxus 在第 1–23 行後從第 23 行接讀至第 45 行。兩版均保留上一頁最後一個完整文字列，且 PageUp 回到首頁。peer 各收到 37 筆取頁和 Close，快取翻頁沒有額外站端輸入。第一次以 PID 指定方式送鍵未看到文章移動，保留該組畫面；同一診斷 App 改用 HID 事件並核對前景後通過。Slint 的非整數尺寸、高圖間隙及末頁另通過 viewport 元件探針。
+
+本機證據在 `.local/verification/slint-native-reading-pair/`。從同一 worktree 的固定 Cargo target 建置兩個 release 診斷執行檔後，在同層新目錄放入 `WindowControl.swift`、`measure.py`、`matrix.py`。使用 `xcrun swiftc -O WindowControl.swift -o window-control`、`measure.py setup`、`measure.py setup-slint`，再執行 `matrix.py staged` 與 `matrix.py fixed`。控制器以 PID 及原生視窗限制操作範圍，需要 macOS 可及性與視窗擷取權限。來源 patch、執行檔雜湊、原始 traces、收據及產物清理位於同目錄。結案移除三個診斷 App、專用 WebKit 快取、暫存工具及 28 張逐位元重複 PNG，共 225,250,673 regular-file bytes。檔案系統可用空間的觀測差為 159,227,904 bytes。保留固定 Cargo 快取、各平台候選、獨特畫面及原始失敗。
+
 ## 2026-11-11 雙 GIF 三組交錯比較
 
 在 Mac15,14、macOS 15.7.7 arm64 上，以當時 Slint arm64 封裝 native `f50ffb46`（乾淨 `7466c31`）對照既有 Dioxus native `4a3035b6`（實際 `3c667eb` 加 R3 patch，產品來源核對 `f48e7e4`）。已核對共用閱讀場景與素材產生器在這兩個來源間相同。六輪採 Slint／Dioxus、Dioxus／Slint、Slint／Dioxus 順序，使用相同設定、23 行文章和兩個獨立的 loopback GIF URL。兩圖都是同一份 512×160、32 幀、100ms 幀延遲的合成 GIF。每輪用新程序，重用兩個測試 App 身分。

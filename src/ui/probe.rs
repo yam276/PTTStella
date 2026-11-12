@@ -549,7 +549,7 @@ pub(super) fn surface_sample(
             encoding::encode(&format!("\x1b[2J\x1b[HReply image controls synthetic page\x1b[3;1H{origin}/colours.png AFTER\x1b[6;1H\x1b[1;37m推 \x1b[33mAlice\x1b[0;33m: {origin}/missing.png\x1b[0m\x1b[6;68H10/22 12:34\x1b[7;1HKeep this row directly below the reply\x1b[24;1H\x1b[7m 瀏覽 第 1/1 頁 (100%) 目前顯示: 第 1~23 行 (y)回應(X)推文(h)說明\x1b[0m\x1b[?25l")).map_err(|e|e.to_string())
         },
         Some("full_load") => full_load_page(1,media_origin),
-        Some("long_load") => long_load_page(1,media_origin),
+        Some("long_load" | "long_timing") => long_load_page(1,media_origin),
         Some("short_overlap") => short_overlap_page(false,media_origin),
         Some("short_links") => {
             let origin = media_origin.ok_or("short links probe requires a loopback media origin")?;

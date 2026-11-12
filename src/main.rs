@@ -133,6 +133,7 @@ fn main() {
                 | "inline_pages"
                 | "full_load"
                 | "long_load"
+                | "long_timing"
                 | "terminal_pages"
                 | "short_overlap"
                 | "short_reading"

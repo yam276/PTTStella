@@ -681,20 +681,39 @@ fn run(
     let software_video = options
         .renderer
         .software_video(std::env::var("SLINT_BACKEND").ok().as_deref());
+    let long_store_scene = options.store_profile.is_some()
+        && options.probe == Some(Probe::Session(session::Probe::ArticleLong));
+    let selector = || {
+        let selector = slint::BackendSelector::new();
+        #[cfg(target_os = "macos")]
+        if long_store_scene {
+            use slint::winit_030::{SlintEvent, winit};
+            use winit::platform::macos::EventLoopBuilderExtMacOS;
+
+            // The comparison deliberately grants native foreground after the
+            // first article frame. Match the Dioxus diagnostic window startup.
+            let mut builder = winit::event_loop::EventLoop::<SlintEvent>::with_user_event();
+            builder.with_activate_ignoring_other_apps(false);
+            return selector
+                .with_winit_event_loop_builder(builder)
+                .with_winit_window_attributes_hook(|attributes| attributes.with_active(false));
+        }
+        selector
+    };
     if options.renderer == RenderBackend::Software {
-        slint::BackendSelector::new()
+        selector()
             .backend_name("winit".into())
             .renderer_name("skia-software".into())
             .select()?;
     } else if options.renderer == RenderBackend::OpenGl {
-        slint::BackendSelector::new()
+        selector()
             .backend_name("winit".into())
             .renderer_name("skia".into())
             .require_opengl_with_version(3, 3)
             .select()?;
     } else if options.renderer == RenderBackend::Metal {
         #[cfg(target_os = "macos")]
-        slint::BackendSelector::new()
+        selector()
             .backend_name("winit".into())
             .renderer_name("skia".into())
             .require_metal()
@@ -704,17 +723,15 @@ fn run(
     } else if std::env::var_os("SLINT_BACKEND").is_some() {
         #[cfg(feature = "native-video")]
         if !software_video {
-            slint::BackendSelector::new()
-                .require_opengl_with_version(3, 3)
-                .select()?;
+            selector().require_opengl_with_version(3, 3).select()?;
         } else {
-            slint::BackendSelector::new().select()?;
+            selector().select()?;
         }
         #[cfg(not(feature = "native-video"))]
-        slint::BackendSelector::new().select()?;
+        selector().select()?;
     } else {
         #[cfg(all(feature = "native-video", not(target_os = "macos")))]
-        slint::BackendSelector::new()
+        selector()
             .backend_name("winit".into())
             .renderer_name("skia".into())
             .require_opengl_with_version(3, 3)
@@ -723,7 +740,7 @@ fn run(
         // macOS. The software compositor keeps the existing CPU video bridge;
         // explicit GL/Metal choices remain available for measured workloads.
         #[cfg(target_os = "macos")]
-        slint::BackendSelector::new()
+        selector()
             .backend_name("winit".into())
             .renderer_name("skia-software".into())
             .select()?;
@@ -1044,8 +1061,6 @@ fn run(
     } else {
         None
     };
-    let long_store_scene = options.store_profile.is_some()
-        && options.probe == Some(Probe::Session(session::Probe::ArticleLong));
     let benchmark_connection = if options.media_origin.is_some() || long_store_scene {
         connection
             .as_ref()

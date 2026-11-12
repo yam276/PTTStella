@@ -126,8 +126,11 @@ pub fn app(props: AppProps) -> Element {
                     Connection::start_toast_reconnect_probe(bytes)
                 } else if boards_probing {
                     Connection::start_board_probe()
-                } else if matches!(sample_case.as_deref(), Some("full_load" | "long_load")) {
-                    let long = sample_case.as_deref() == Some("long_load");
+                } else if matches!(
+                    sample_case.as_deref(),
+                    Some("full_load" | "long_load" | "long_timing")
+                ) {
+                    let long = matches!(sample_case.as_deref(), Some("long_load" | "long_timing"));
                     {
                         let start = if std::env::var_os("PTTSTELLA_READING_PROBE_FAST").as_deref()
                             == Some(std::ffi::OsStr::new("1"))
