@@ -94,7 +94,15 @@ Linux x64 候選 `cb4fbfc` 在隔離 X11 使用出貨執行檔及 Windows 草稿
 
 Esc 清空組字並關閉候選窗，正文、編輯版本與存檔均維持原樣。重新組字按 Enter 後只有一次原生提交、一次正文插入及一次編輯版本變更。立即點關閉後，另一個程序重開讀到稿尾「中」，原稿 Tab、ANSI 色碼及上一代備份均保留。兩個程序都以 0 退出並收到唯一 Close ACK。
 
-初次校準的輸入法切換工具因 SIGTRAP 結束。以原本已啟用的輸入法繼續，校正實體注音鍵位後補跑通過。畫面、座標、原生事件、保存快照及清理收據位於 `.local/verification/slint-article-arrow/draft-mode-focus-pair/arm64-draft-ime/`。本案涵蓋 vChewing 正文、稿尾候選窗、取消、提交與重開。其他 macOS 輸入法、標題與失焦中的組字，以及 Windows 日文各待驗。
+初次校準的輸入法切換工具因 SIGTRAP 結束。以原本已啟用的輸入法繼續，校正實體注音鍵位後補跑通過。畫面、座標、原生事件、保存快照及清理收據位於 `.local/verification/slint-article-arrow/draft-mode-focus-pair/arm64-draft-ime/`。本案涵蓋 vChewing 正文、稿尾候選窗、取消、提交與重開。
+
+#### 1d3e702 Apple Silicon 草稿標題注音與切窗保存
+
+在同一出貨 App 的標題欄用 vChewing 組字，候選窗出現在標題下方。Esc 關閉候選窗並清空組字，沒有改變編輯版本或存檔。重新組字按 Enter 只收到一次 3 bytes 的原生提交，標題只更新一次。立即關閉後由新程序讀回 `TITLE-IME中`，備份保留原標題，正文的 ANSI、Tab 與空行逐位元一致。
+
+正文另驗一筆已提交但尚未存檔的「中」。再次組字並打開候選窗後切到獨立的測試視窗。原生失焦使候選窗消失，草稿在焦點回來前保存第一個「中」，未提交的組字未寫入。回到正文後重新組字只追加一次「中」，立即關閉再開讀到兩個「中」，備份保留失焦時的存檔。標題及切窗各用兩個程序，均正常退出並收到唯一 Close ACK。
+
+兩次切窗校準分別遇到獨立視窗未取得焦點，以及視窗工具拒絕在失焦後讀取候選窗。修正測試工具後用同一出貨檔重跑通過。證據位於上節目錄的 `title-native/` 與 `blur-autosave/`，清理紀錄為 `title-focus-cleanup.json`。其他 macOS 輸入法及 Windows 日文另待驗。
 
 #### cb4fbfc 草稿 XIM 組字與重開
 
