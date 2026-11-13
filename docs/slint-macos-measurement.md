@@ -448,3 +448,18 @@ cold／warm 要記錄定義；macOS WebKit 會在 `Library/WebKit/<task bundle i
 第一次 staging 缺 LC_RPATH，修正後以既有候選的 runtime 啟動。首次圖塊畫面上下位置顛倒，改用 Core Animation 的垂直原點後重跑全組。Cargo 初次離線重解誤動其他依賴，還原後兩次 locked build 均成功。上述原始紀錄均保留，原生工具在 Quit 後的觀察逾時由實際 exit 0、Close 和程序消失獨立核對。
 
 原始資料、兩份實驗補丁、原始 crate SHA-256 及編譯命令在 `.local/verification/slint-macos-damage-current/`。重跑時以該目錄的 `final-source.json` 所列 commit 為基準，從 `softbuffer-source.json` 核對發布的 0.4.8 crate 並按其檔案清單放入 `vendor/softbuffer`，套用 `final-tracked.patch` 和 `softbuffer-0.4.8-macos-tiles.patch`，沿用 `final-build.json` 命令及 `trial.py` 的模式與合成資料。實驗依賴已退出產品來源，保留四架構候選的現有呈現方式。唯一暫存 App、其專用空 cache 和暫用 vendor 副本已清理，固定 Cargo target 保留。確切路徑、檔案大小和磁碟觀測見 `cleanup.json`。
+
+## 2026-11-13 cb4fbfc 出貨連結與被動載入
+
+以已封裝的四架構候選及 Apple Silicon Dioxus 回退 DMG 核對執行檔雜湊。Slint 選用的 Cargo 依賴在四架構、兩配置共八案通過，未包含 Dioxus、Wry 或 WebView。現行 worktree 與產品提交之間只有文件變更，Cargo.toml 與 Cargo.lock 雜湊已核對。
+
+| 交付 | 實際核對 |
+| --- | --- |
+| Apple Silicon 與 Intel Mac App | 分別 51 與 48 個 Mach-O 的架構、直接連結和深層簽章通過 |
+| Windows 便攜 ZIP 與離線 Setup | 五個便攜 PE 與 Setup 的一般、延遲匯入及 AMD64 核對通過，VC runtime 閉包已隨包提供 |
+| Linux deb／tar.gz | AMD64 ELF 的八筆 DT_NEEDED 及 deb 的 20 個 Depends 均無 WebView 相關項目 |
+| Apple Silicon Dioxus 回退 DMG | 確認 `82bc81f` 的出貨主程式直接連結系統 WebKit |
+
+Apple Silicon Slint 出貨檔另以 `--verify-shell` 被動啟動，採合成焦點及本機格線。dyld trace 仍看到系統 WebKit、JavaScriptCore 與 WritingTools，主視窗測試正常退出且收到唯一 Close ACK。此輪涵蓋載入映射，程序內 WebView 實例與一般入口程序族另待驗。這次未測量效能或原生焦點。
+
+雜湊、原始載入紀錄、匯入表、對照及暫存清理保存在 `.local/verification/slint-article-arrow/dependency-audit/`。沿用原交付與編譯快取。短期提取的 PE／ELF、測試 HOME、回退 DMG 掛載點及空的合成資料鎖已清理。

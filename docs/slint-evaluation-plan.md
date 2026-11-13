@@ -382,6 +382,8 @@ Apple Silicon／Windows x64 便攜候選 `d37c7fb` 已核對獨立還原的完�
 
 Apple Silicon `100b75f` 一般入口補驗直接連結、dyld 映射及程序族。Slint 的 51 個 Mach-O 均無 WebKit 直接連結，主程序仍映射系統 WebKit 和 WritingToolsUI。相同本機終端負載的 16 筆觀察中，Slint 只有 AppKit helper，Dioxus 可見歸屬於它的 WebKit WebContent、GPU 和 Networking。完整的 WebView 實例檢查與同前景效能仍待驗。現行分支的四 target／兩配置依賴檢查 8 案重跑通過。[一般入口程序對照](slint-macos-measurement.md#2026-11-12-一般入口的-webkit-程序對照)
 
+2026-11-13 核對 `cb4fbfc` 四架構出貨包的 WebView 相依。四 target、兩功能配置的八棵 Cargo tree 均通過。兩種 macOS App 的 51／48 個 Mach-O、Windows 便攜包的五個 PE 與 Setup、Linux ELF 的直接連結及 deb Depends 均未發現 WebView 相依。以相容 Dioxus `82bc81f` 回退包作對照，主程式直接連結系統 WebKit。Apple Silicon 最新 Slint 封裝的被動主視窗探針仍記錄系統 WebKit、JavaScriptCore 及 WritingTools 映射，探針正常退出並收到 Close ACK。程序內 WebView 實例、一般入口的程序族，以及乾淨 Windows 實機結果仍各自待驗。[最新候選相依與執行期紀錄](slint-macos-measurement.md#2026-11-13-cb4fbfc-出貨連結與被動載入)
+
 | 目標 | 發佈格式與原生驗收 |
 | --- | --- |
 | Windows 10／11 x64 | 安裝版與可攜版。既有 Dioxus→Slint 升級、移除、離線安裝、原生 CredMan、注音、細明體、多螢幕 DPI、低階 GPU 及軟體 renderer。乾淨 VM 缺 WebView2 runtime 時仍能安裝和完成終端／媒體案例；記錄模組／子程序及 installer 實際行為，Slint 包不帶 bootstrapper 或 WebView2 prerequisite。 |
