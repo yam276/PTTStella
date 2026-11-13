@@ -161,6 +161,8 @@ OpenGL WebM 另有一輪在應用程式前景觀測未中斷時，80% 段末已�
 
 ### 5. 正式資料與登入接手（S7、S8）
 
+2026-11-13 用 `b57eae8` 產品來源補跑現行候選、相容 Dioxus `82bc81f` 及公開 `v0.4.1` 的資料矩陣。28 案通過，涵蓋七種資料、設定 v1–v6、備份、衝突與壞檔保護。正式服務名隔離 Keychain 的 ad-hoc 改簽拒絕與原簽章回退通過。Apple Silicon 的正式 Developer ID 重新授權、跨平台前端回退與其他平台 vault 仍待驗。[資料回退矩陣](slint-store-frontends.md#2026-11-13-草稿工具列候選的資料回退矩陣) · [Keychain 演練](login.md#macos-正式服務名的隔離演練)
+
 - **候選版保留隔離，正式替換沿用既有產品身分**　沿用 Rust store、版本、鎖與備份契約。先用副本重跑 Dioxus → Slint → 相容 Dioxus 回退 → Slint，核對設定、站點、名單、收藏、最近看板及草稿可讀寫。用合成憑證另驗正式服務名與簽章下的讀取、拒絕後提示與回退。記錄可用的 Dioxus 回退版本及獨立備份恢復步驟。
 - **驗收交付**　沿用 Slint worktree 和既有編譯快取。Apple Silicon 與 Windows x64 以同一 commit 出包並記錄實測案例和版本。Intel Mac、Linux x64 先打包，原生案例依目前安排維持待驗。正式入口切換依 S9。[Apple Silicon 隔離演練](slint-store-frontends.md#2026-11-11-同一正式-bundle-id-的-apple-silicon-隔離演練)
 
@@ -1100,3 +1102,5 @@ Intel 首輪缺 libmpv 的未帶版本連結，補上同一檔案的連結後完
 Apple Silicon、Windows x64 便攜及 Setup、Intel Mac 和 Linux x64 同取乾淨 `b57eae8`。交付在 `.local/verification/slint-draft-history/`，Windows Setup 在 `../PTTStella-candidates/windows-b57eae8-offline/`。App 簽章、DMG 與 ZIP 核對通過，Setup 解包比對便攜版 926 檔，Intel App 1,221 檔與 Linux deb／tar.gz 1,110／1,123 檔通過。獨立還原 619 份產品檔案及 Git tree。清理 Setup 工具容器、SDK 映像、交叉封裝暫存及被取代的重複 App／壓縮包，保留固定 Cargo target、必要交付和升級對照。精確路徑與空間觀測見 `cleanup.json`。
 
 Slint 程式測試 110 項通過，另有一項既有 ignored，Clippy 與文件檢查通過。Apple Silicon 原始 release 執行檔的草稿保存、重開、帶回及十項儲存檢查全部通過，618 筆觀察未見前景切換。Apple Silicon 封裝執行檔首個草稿功能案例也通過及收到 Close ACK，但 macOS 啟用該程序，監測器依設計停止後續視窗案例。保留 `packaged/results.json` 與原始前景記錄。封裝測試的被動啟動仍須修正及重驗，實體鍵鼠／IME 與 Windows 安裝待驗。
+
+核對鎖定的 Slint 1.18.1／Winit 0.30.13 來源。建立視窗時的 `with_active(false)` 只管初次建立，Slint 顯示已建立的視窗仍呼叫 Winit 的 `set_visible(true)`，macOS 會執行 `makeKeyAndOrderFront`。Winit 的啟動流程也可能為可見視窗設 key 並請求啟用 App。這兩處在 Slint 注入焦點事件之前，忽略原生 `Focused` 事件無法阻止系統切換前景。此輪只核對來源和既有反例，沒有重開封裝驗收視窗。macOS 禁止啟用的 policy 同時限制建立視窗，未用它取代原生驗收。[Apple 啟用政策](https://developer.apple.com/documentation/appkit/nsapplication/activationpolicy-swift.enum/prohibited)
