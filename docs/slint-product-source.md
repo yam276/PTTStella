@@ -2,6 +2,10 @@
 
 候選交付中的程式、Slint UI、字型、locale、fixture、工具與文件，須能從獨立來源包還原。原始建置的 commit／dirty／patch、產品來源核對與第三方來源閉包是不同證據；不能把其中一項通過填成全部完成。
 
+## 2026-11-13 文章逐行對齊候選來源
+
+Apple Silicon 與 Windows x64 便攜候選 `9376627` 的下載及主程式雜湊已加入既有 `product-source-20261111-6ad8e39/sources.json`。用 `--candidate article-arrow-macos-windows` 從原 bundle 和對應 patch 獨立還原，核對 619 份產品檔案及完整 Git tree。證據及暫存清理見 `.local/verification/slint-article-arrow-alignment/source-delivery.json`。
+
 ## 2026-11-13 收藏載入焦點修正的候選來源
 
 Apple Silicon 與 Windows x64 便攜候選 `4d7d174` 的 619 份產品檔案已在禁止網路和原 worktree 讀取的獨立目錄還原，核對逐檔 SHA-256 和 Git tree `87788b45fe5969a9366075797d1e8f3464c9e532`。兩個 ZIP 內的主程式雜湊與各自的封裝收據相符。[Windows Setup](slint-windows-candidate.md#2026-11-13-收藏載入焦點修正的離線-setup) 另經解包逐檔核對與便攜 ZIP 一致。

@@ -1,5 +1,9 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-13 文章逐行對齊候選
+
+便攜 ZIP 在 `.local/verification/slint-article-arrow-alignment/pair/windows/`，和 Apple Silicon DMG 使用同一乾淨提交 `9376627`。ZIP SHA-256 為 `e23dac113c48648b93c8ee383e943327c61e18f7bb416b0e04a421d2a1501f44`。已核對 ZIP CRC、925 份 payload 與 PE 匯入。沿用包內 Visual C++ runtime。Windows 實機測試待驗，離線 Setup 目前對應上一輪 `4d7d174`。
+
 ## 2026-11-13 收藏載入焦點修正的離線 Setup
 
 Windows x64 離線 Setup、便攜 ZIP 與 Apple Silicon 候選均使用 `4d7d174`。Setup 在 `../PTTStella-candidates/windows-4d7d174-offline/`，便攜 ZIP 在 `.local/verification/slint-current-shell/pair-bookmark-load/windows/`。安裝識別與目前使用者安裝位置沿用前版。

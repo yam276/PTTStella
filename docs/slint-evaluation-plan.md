@@ -10,6 +10,8 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 四架構候選都包含 `4d7d174` 的收藏載入焦點修正。Apple Silicon 和 Windows x64 從同一提交出包，Intel Mac 與 Linux x64 使用僅有文件差異的 `ebc1035` 工作樹建置。Apple Silicon 封裝的草稿保存、跨程序重開及三格式影片八案通過。Intel 封裝在 Rosetta 通過三輪收藏及主視窗，Linux 封裝在 QEMU／Xvfb 通過七項元件回歸。Windows 原生安裝／升級／IME、Intel Mac 與 Linux 原生驗收、完整同負載效能矩陣及正式簽章的憑證接手仍待驗。正式入口維持 Dioxus。[候選位置](#產物保留規則2026-11-09-使用者要求) · [影片音訊結果](#4-媒體s5)
 
+Apple Silicon 與 Windows x64 最新一對便攜候選同為 `9376627`，包含滾輪後逐行鍵盤對齊。Windows 離線 Setup、Intel Mac 與 Linux x64 封裝仍對應上一輪來源。[新版 Windows 便攜候選](slint-windows-candidate.md#2026-11-13-文章逐行對齊候選)
+
 文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個 macOS 固定下載入口現為乾淨 `c7368b2`，包含設定預覽按需繪製及文章延後取得原生焦點的修正。Apple Silicon `793ecb91` 和 Intel `62ada42e` 各通過 23 項封裝後合成回歸，另各完成原生長文的 37 次取頁及八次快取操作。Intel 使用 Rosetta。Linux `68601365` 與另備 Windows `3a8de2a9` 已封裝固定狀態列探針修正。Linux 在 QEMU 下通過 deb 安裝、軟體繪圖的完整視窗檢查及 X11 延後焦點的 37 次取頁，免安裝包的預設繪圖仍卡在通知取樣。Windows 交叉編譯與 ZIP／PE 檢查通過，實機待驗。`69542cb7` 為先前的 Windows 待驗下載。[跨平台封裝與驗收](#2026-11-11-固定狀態列探針的-windows-與-linux-封裝)Intel／Linux 實機依指示暫緩，其餘原生操作、完整資料回退和跨平台效能矩陣仍待驗。
 
 macOS arm64 已以最新 Slint 候選及原 Dioxus 完成設定 v1–v6 的 18 輪實際前端往返，核對兩次寫入備份、最後讀回與其他資料檔。兩版 macOS 一般入口已各從隔離 HOME 的系統資料目錄讀到不同的預設站，完成本機 WSS、無自動輸入和伺服器 Close 回覆。macOS Keychain 已用獨立合成 service 驗證舊格式同簽章跨程序讀回、改簽拒絕與清理。[Keychain 驗收](login.md#macos-舊紀錄與重新簽章驗收) 同 worktree 的 Dioxus 設定欄位已修正舊版拒存小數的限制，macOS 已實測 Dioxus 存檔及 Slint 讀回，原 5ea9ad6 執行檔仍有該限制。[小數往返](slint-store-frontends.md#2026-11-11-小數顯示設定回退) macOS 一般入口已用隔離 HOME 完成自動開圖的 Slint → 修正版 Dioxus → Slint 實際保存回讀；原 Dioxus 仍因舊小數設定拒存。Apple Silicon 已用正式 v0.4.1 ZIP 與 Slint DMG 在隔離位置完成共通設定的實際安裝往返。已重現含自動開圖欄位的資料在 v0.4.1 首次儲存被預設值覆寫、第二次儲存輪替原備份。以獨立備份恢復的 Slint 已重開核對。已另交付 Apple Silicon 相容的 Dioxus 回退 DMG，驗證在保留自動開圖與三個小數外觀設定下仍可儲存，並從獨立備份恢復八個資料檔。正式身份原地替換與授權、其他架構回退、Windows／Linux 密碼庫及完整資料操作仍待驗。[相容回退包與獨立備份](slint-store-frontends.md#2026-11-11-相容的-dioxus-回退包與獨立備份)[實際安裝與回退](slint-store-frontends.md#2026-11-11-從-macos-交付包安裝與回退)[一般入口設定回退](slint-store-frontends.md#2026-11-11-macos-一般入口的設定回退)[前端往返紀錄](slint-store-frontends.md#2026-11-11-同一對前端的-v1v6-設定往返)
@@ -202,6 +204,8 @@ Intel 首輪來源清單漏對應 soxr 的 recipe 名稱，按原有 replay log 
 - 候選版須通過所有既有功能、四個目標架構安裝、舊資料讀寫與回退，以及下文效能門檻。S8 交付可審閱的候選包、可逆切換方案與結論。使用者接受後才進入 S9。若 `develop` 推進，切換前以待整合的實際 commit 重跑變更相關項目和整體效能，新增功能納入驗收。
 
 ## 產物保留規則（2026-11-09 使用者要求）
+
+含逐行對齊修正的 Apple Silicon App／DMG／ZIP 與 Windows x64 ZIP 在 `.local/verification/slint-article-arrow-alignment/pair/`。兩包固定乾淨 `9376627`。Apple Silicon 的簽章、DMG、ZIP CRC、包內主程式與原有 50 份 runtime 檔案核對通過。Windows ZIP 的 925 份 payload、CRC 和 PE 匯入核對通過。沿用固定 Cargo 快取。Windows 封裝時提取的 DLL 與素材、獨立來源還原暫存均已移除。驗證和清理收據見 `paired-verification.json`、`windows-verification.json` 及上層 `source-delivery.json`。
 
 Apple Silicon 與 Windows x64 最新便攜候選在 `.local/verification/slint-current-shell/pair-bookmark-load/`，同源 Windows 離線 Setup 在 `../PTTStella-candidates/windows-4d7d174-offline/`。前版 `d37c7fb` 的 Apple Silicon DMG／App 與 Windows ZIP 留在 `pair-focus/` 供對照，對應 Windows Setup 在工作樹旁的 `../PTTStella-candidates/windows-d37c7fb-offline/`。前一對 `4e28e82` 在 `slint-editor-ime-edge/pair/`，其 Setup 與 `100b75f` Setup 保留供升級對照。Intel Mac／Linux x64 最新候選在 `.local/verification/slint-cross-bookmark-load/`，前版 `05fea43` 在 `slint-current-shell/cross/` 供收藏回歸對照。保留 `slint-audio-pair/` 的正式身分演練對照、Windows 待驗包、固定編譯快取及各次獨特結果。已移除 `d37c7fb` 的重複 macOS ZIP，確切路徑和空間觀測見 `bookmark-load-delivery-cleanup.json`。
 
