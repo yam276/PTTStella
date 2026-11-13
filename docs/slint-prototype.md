@@ -1531,6 +1531,18 @@ PTTSTELLA_VIDEO_FIXTURE=<NEW_NEGATIVE_FIXTURE_DIR>/quadrants.mp4 \
 第一次 staging 的絕對 rpath 超過 Mach-O load command 空間，改用同一暫存目錄的相對 rpath 與唯一 Frameworks symlink。首輪 collector 漏列負向 Close 的 `cleanup_error: null`，三個誤判及實際像素留存；最終嚴格核對該欄再重跑。命令、來源補丁、SHA、原始回報和精確清理清單在 `.local/verification/slint-macos-video-buffers/`。已移除唯一暫存執行檔與 symlink，regular-file 68,592,800 bytes，du 66,988 KiB，filesystem free 242151104512→242219700224 bytes。固定 Cargo target、候選 runtime 與素材保留並核對 SHA。
 
 
+### 2026-11-13 cb4fbfc Apple Silicon 出貨檔影片驗收
+
+直接執行已交付的 Apple Silicon App，核對主程式 SHA-256 `9b6e15e8cbf3080f9e073c75efd8312c8b2711845ed8518d7e737f1e6f82efeb` 與深層 ad-hoc 簽章。使用同提交 Windows ZIP 內雜湊相符的三份合成素材。被動視窗只接收 Slint 探針操作和合成焦點，HTTP 僅走本機。
+
+- 軟體繪圖及 OpenGL 各播放 MP4、WebM、OGV，六案通過四象限像素、跳到 1 秒、暫停／繼續、音量與靜音回報、失焦暫停、片尾重播，以及切到 PNG。OpenGL 三案的主 framebuffer 與 libmpv 中介 framebuffer 取樣相同，GL 讀取錯誤碼皆為 0。
+- 兩種繪圖各跑一次 MP4 只送出 HTTP header 的情境。播放器可在緩衝時暫停再繼續，關閉後 HTTP worker 結束，素材 body 維持零傳輸。
+- 兩種繪圖各跑一次刻意將左上角改為綠色的 MP4。探針取到綠色並以預期的像素不符錯誤退出。首輪彙整工具以首欄尋找 Close，漏讀先列出 `cleanup_error` 的負向紀錄。修正彙整工具後重跑四個邊界案例，核對實際 Close ACK 與空的清理錯誤欄。
+
+十案均確認 libmpv control worker、core、串流與 HTTP 退出，軟體繪圖 worker 也已 join。這輪涵蓋元件控制與像素，最新包的 OS 鍵鼠、數位音訊輸出、聲音裝置及前景效能仍待驗。
+
+命令、逐案收據及首輪彙整反例位於 `.local/verification/slint-article-arrow/arm64-media/`。各輪 `summary.json` 記錄已移除的精確暫存路徑及當時的可用空間。測試 HOME、暫時解出的影片及改色素材已清理，沿用交付 App 與固定 Cargo 快取。
+
 ### 2026-11-11 Apple Silicon 候選的原生影片操作
 
 從目前簽章 App 的封裝執行檔 `793ecb91` 啟動，在拒讀 Homebrew 與限制出站為本機的 sandbox 中重用三份自製影片。明確探針只準備播放器並核對起始像素，之後由 macOS 視窗的實際滑鼠操作跳到時間軸約 1 秒，以 Accessibility 改變視窗尺寸並關閉。WindowServer 的單一視窗 PNG 證明送到合成器的畫面。PNG 解碼核對 CRC，依影片預覽區與 16:9 fit 推導四處像素，另定位素材的移動白塊驗證跳轉。
