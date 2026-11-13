@@ -1198,3 +1198,5 @@ Linux 便攜包在 QEMU／Xvfb 重跑 14 項元件回歸全數通過，每案各
 同一 `2ef65ce` 便攜包的三格式 OpenGL 測試未通過。Mesa softpipe 擷取未見預期四色，像素探針只確認到片尾。加入虛擬音訊後仍未取得播放中像素。Mesa llvmpipe 的 MP4 則在 QEMU 內由 LLVM 中止。保留 OpenGL 負向收據，實體 GPU 路徑待驗。[Linux OpenGL 驗收](slint-linux-candidate.md#opengl-在-linux-模擬環境的結果)
 
 沿用同一 Linux 交付執行檔與 Mesa softpipe／PulseAudio，改用由包內素材重複至 30 秒的版本。MP4、WebM、OGV 的元件探針均通過。兩處 OpenGL framebuffer 各核對四色與零 GL 錯誤，並驗證播放、暫停、跳轉、音量、靜音、失焦及正常退出。短片失敗、原生滑鼠操作與實體 GPU 仍留待追查。[30 秒 OpenGL 重驗](slint-linux-candidate.md#opengl-的-30-秒素材重驗)
+
+原始 3 秒素材也完成隔離 X11 的滑鼠開啟與視窗像素取樣，三格式均收到完整下載、四色畫面與正常 Close。首次取得四色時，播放器時間仍顯示 0／0 秒。短片狀態更新和完整控制驗收仍待查。[原始短片取樣](slint-linux-candidate.md#opengl-的原始短片視窗取樣)

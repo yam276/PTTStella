@@ -48,6 +48,12 @@ X11 驗收涵蓋三種格式的軟體繪圖和視窗控制。實機聲音與 GPU
 
 3 秒素材的失敗仍保留。正式包內的素材版本與程式碼維持原提交。重驗使用合成 toolkit 事件，Linux 實體 GPU、OpenGL 的 X11 滑鼠操作及短片呈現時序待驗。素材來源、雜湊、逐案收據及清理記錄在 `.local/verification/slint-x11-video/opengl/long-fixture/`。
 
+### OpenGL 的原始短片視窗取樣
+
+在相同候選包、Mesa softpipe 與虛擬音訊下，用 X11 點開原始 3 秒 MP4、WebM、OGV。單次早點播放的校準輪沒有開始下載，已排除。後續以隔開的滑鼠點擊與連續視窗取樣，各格式都下載一次完整素材，四個視窗取樣點符合預期四色，最早取到四色約在開啟預覽後 10.9–11.0 秒。各案正常關窗、收到唯一 Close ACK，HTTP 工作均結束。這段時間包含多次點擊和模擬環境的取樣間隔。
+
+首張四色截圖仍顯示 0／0 秒，短片的播放狀態與畫面更新時序仍待釐清。原始素材的完整 OpenGL 控制驗收及實體 GPU 待驗。逐案收據、有效畫面及重複截圖清理在 `.local/verification/slint-x11-video/opengl/short-timing/`。
+
 ## 2026-11-13 d047e55 候選
 
 Linux deb／tar.gz 在 `.local/verification/slint-windows-refresh-rate/linux/`。已核對 AMD64 套件、共用檔案及兩包主程式，deb 共 1,111 檔，tar.gz 共 1,124 檔。deb SHA-256 為 `0ca717e1a31791f2b7bdf7084a6c71184f07b994b2a6adfb2691f3c0bdc83251`，tar.gz 為 `40398732e4622784a7b480bab76406a30a347211ba85d3af78c43ea7cbc305c4`。Linux 實機待驗。
