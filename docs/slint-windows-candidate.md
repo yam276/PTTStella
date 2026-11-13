@@ -1,5 +1,17 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-13 收藏載入焦點修正的離線 Setup
+
+Windows x64 離線 Setup、便攜 ZIP 與 Apple Silicon 候選均使用 `4d7d174`。Setup 在 `../PTTStella-candidates/windows-4d7d174-offline/`，便攜 ZIP 在 `.local/verification/slint-current-shell/pair-bookmark-load/windows/`。安裝識別與目前使用者安裝位置沿用前版。
+
+| 檔案 | SHA-256 |
+| --- | --- |
+| Windows Setup | `3be68a3376404a2a9ff191206032ac4a551e9609691802ca144aad6e4a581db9` |
+| Windows 便攜 ZIP | `ed392e4d15360bcc90ea32a89a3ed8dc5de4dbb7e64d0a3059c5ec2cee2d9189` |
+| Windows 包內執行檔 | `a9cac3cc47f729db470bb241cd031d5669e6d500144b2f6708a329bf4971803b` |
+
+以固定 Inno Setup 7.1.0 編譯。Setup 解包後與便攜 ZIP 的 926 個檔案逐位元一致，包含 `candidate.json`。Setup 的 AMD64 PE 一般與延遲匯入均為 Windows 系統 DLL。原生離線安裝、升級、卸載與 IME 待驗，保留 `d37c7fb` Setup 供升級對照。封裝與核對收據在 `.local/verification/slint-current-shell/windows-setup-bookmark-load/`。
+
 ## 2026-11-13 浮球與收藏修正的離線 Setup
 
 Windows x64 Setup、便攜 ZIP 與 Apple Silicon 候選均對應 `d37c7fb`。Setup 位於 `../PTTStella-candidates/windows-d37c7fb-offline/`，便攜 ZIP 在 `.local/verification/slint-current-shell/pair-focus/windows/`。安裝程式沿用前版的獨立安裝識別與目前使用者安裝位置。

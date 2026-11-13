@@ -2,6 +2,19 @@
 
 候選交付中的程式、Slint UI、字型、locale、fixture、工具與文件，須能從獨立來源包還原。原始建置的 commit／dirty／patch、產品來源核對與第三方來源閉包是不同證據；不能把其中一項通過填成全部完成。
 
+## 2026-11-13 收藏載入焦點修正的候選來源
+
+Apple Silicon 與 Windows x64 便攜候選 `4d7d174` 的 619 份產品檔案已在禁止網路和原 worktree 讀取的獨立目錄還原，核對逐檔 SHA-256 和 Git tree `87788b45fe5969a9366075797d1e8f3464c9e532`。兩個 ZIP 內的主程式雜湊與各自的封裝收據相符。[Windows Setup](slint-windows-candidate.md#2026-11-13-收藏載入焦點修正的離線-setup) 另經解包逐檔核對與便攜 ZIP 一致。
+
+既有交付 `product-source-20261111-6ad8e39/` 的 `sources.json` 新增此組對應，SHA-256 為 `d3962849c18614981116891fe1ed3bc30ac3252bfb8ba377718fd4af6b93cb7b`。從該交付目錄執行下列指令，輸出目錄須尚不存在。
+
+```sh
+python3 reconstruct_slint_source.py --manifest sources.json \
+  --candidate bookmark-load-macos-windows --output /ABS/PATH/new-source
+```
+
+還原暫存已移除，核對和清理紀錄在 `.local/verification/slint-current-shell/bookmark-load-source-delivery.json`。還原來源的重新編譯與完整第三方來源閉包仍待驗。
+
 ## 2026-11-13 浮球與收藏修正候選來源
 
 Apple Silicon 與 Windows x64 便攜候選使用 `d37c7fb`。既有交付的 `sources.json` 新增 `bookmark-focus-macos-windows`，沿用原 Git bundle，並保留舊候選對應。還原時禁止網路及讀取原 worktree，619 份產品檔案和完整 Git tree `a98a8dd349e7202d54c3c33a6ad3919250552401` 核對通過。兩個 ZIP 內的執行檔雜湊均對上各自的封裝收據。
