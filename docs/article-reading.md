@@ -85,6 +85,14 @@ JS 只為可見文字行及上下兩行建立 Canvas，另由共同雙色 render
 
 Slint 的網頁與終端機模式共用上述站端操作。網頁模式用原生閱讀區的實際捲動邊界判定，快取尚有後續區段時可接續取頁。換篇後捲動位置和媒體作用域隨新文章重建。合成站 `--probe-article-switch` 與 `--probe-terminal-switch` 檢查 A → B → C、關閉設定、按鍵重複與精確指令順序。
 
+### cb4fbfc Apple Silicon 原生鍵盤驗收
+
+用 `cb4fbfc` 簽章 App 的原始執行檔在隔離 HOME 重跑三個本機探針。網頁模式從 A 首頁以 Home、PageUp 保持當篇，按 ↑ 後先由站端回到 A 首頁再切 B。B 文末按 End、PageDown 保持當篇，按 ↓ 後切 C。終端機模式先點第 24 行聚焦，再以 PageDown、Home、↑、PageDown、↓、PageDown 操作。兩案的站端回覆順序都是 A2 → A1 → B1 → B2 → C1 → C2。截圖核對新文章首行與第 45 行，兩個程序均 exit 0 並收到唯一 Close ACK。
+
+同包 `--probe-segmented-load` 使用 4,181 行資料。第一段載入 184 頁後按 End，畫面末行為 4,049，站端仍維持 184 筆 PageDown。再按 PageDown 後，畫面從第 4,049 行接讀。第二段載完共 189 筆精確取頁，再按 End 可見第 4,181 行。程序 exit 0 並收到唯一 Close ACK。
+
+終端機診斷視窗單靠啟用後直接送鍵的輪次未通過，點頁尾聚焦後重跑通過。網頁校準時目前輸入法將實體 `k` 當作組字，另有 OCR 誤讀小字行號而中止的輪次。通過輪用原生特殊鍵、獨立擷取及目視核對行號。原始畫面、站端紀錄與清理在 `.local/verification/slint-article-arrow/arm64-reading/`。已移除七個隔離暫存根、視窗工具及九張逐位元相同的重複截圖，原候選及獨特失敗證據保留。
+
 站端鍵位依 [PTT pmore 命令表](https://github.com/ptt/pttbbs/blob/90f07d655b8d7e85298ef26bdb63f40646fd9d17/mbbsd/pmore.c) 核對；部署版本與實站上下篇邊界仍需人工驗證。
 
 診斷兩前端時，合成 `full_load`／`long_load` 預設刻意每頁等待 500 ms，分段間隔另有 150 ms。明確設 `PTTSTELLA_READING_PROBE_FAST=1` 可讓同一精確 PageDown peer 立即回覆，供本機比較；不影響正常連站或其他探針，原慢速案例仍須通過。`PTTSTELLA_READING_TIMING` 兩入口共用同一有界時鐘，painted 事件描述實際 ACK 的 packet，不能以更新的 cache complete 代替舊畫面內容。這只量到 renderer 安裝／ACK，螢幕呈現與完整 S8 效能另驗。
