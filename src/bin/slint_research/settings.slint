@@ -19,15 +19,18 @@ component EditField inherits PanelField {
         if self.has-focus {SettingsInput.focused=self.field-id; SettingsInput.active-target=self.field-id;}
         else {if SettingsInput.focused==self.field-id {SettingsInput.focused=-1;} if SettingsInput.active-target==self.field-id {SettingsInput.active-target=-1;}}
     }
-    changed focus-sequence => {
+    function apply-requested-focus() {
         if SettingsInput.focus-field == self.field-id {
             self.focus();
             if self.has-focus {
+                SettingsInput.focus-field = -1;
                 SettingsInput.focused = self.field-id;
                 SettingsInput.active-target = self.field-id;
             }
         }
     }
+    init => { self.apply-requested-focus(); }
+    changed focus-sequence => { self.apply-requested-focus(); }
     changed command-sequence=>{
         if self.has-focus {
             if SettingsInput.command==0 {self.select-all();}
@@ -47,14 +50,28 @@ component SettingsAction inherits PanelButton {
 component FocusButton inherits SettingsAction {
     in property <int> field-id;
     private property <int> focus-sequence:SettingsInput.focus-sequence;
-    changed focus-sequence=>{if SettingsInput.focus-field==self.field-id {self.focus();}}
+    function apply-requested-focus() {
+        if self.enabled && SettingsInput.focus-field == self.field-id {
+            self.focus();
+            if self.has-focus { SettingsInput.focus-field = -1; SettingsInput.active-target = self.field-id; }
+        }
+    }
+    init => { self.apply-requested-focus(); }
+    changed focus-sequence => { self.apply-requested-focus(); }
     changed has-focus=>{if self.has-focus {SettingsInput.active-target=self.field-id;} else if SettingsInput.active-target==self.field-id {SettingsInput.active-target=-1;}}
 }
 component FocusCombo inherits PanelCombo {
     in property <int> field-id;
     enabled: SettingsState.active && !SettingsState.composing;
     private property <int> focus-sequence:SettingsInput.focus-sequence;
-    changed focus-sequence=>{if SettingsInput.focus-field==self.field-id {self.focus();}}
+    function apply-requested-focus() {
+        if self.enabled && SettingsInput.focus-field == self.field-id {
+            self.focus();
+            if self.has-focus { SettingsInput.focus-field = -1; SettingsInput.active-target = self.field-id; }
+        }
+    }
+    init => { self.apply-requested-focus(); }
+    changed focus-sequence => { self.apply-requested-focus(); }
     changed has-focus=>{if self.has-focus {SettingsInput.active-target=self.field-id;} else if SettingsInput.active-target==self.field-id {SettingsInput.active-target=-1;}}
 }
 component SettingsCaption inherits HorizontalLayout {
@@ -97,7 +114,14 @@ component FocusCheck inherits PanelCheck {
     font-size: 14px;
     flat: true;
     private property <int> focus-sequence:SettingsInput.focus-sequence;
-    changed focus-sequence=>{if SettingsInput.focus-field==self.field-id {self.focus();}}
+    function apply-requested-focus() {
+        if self.enabled && SettingsInput.focus-field == self.field-id {
+            self.focus();
+            if self.has-focus { SettingsInput.focus-field = -1; SettingsInput.active-target = self.field-id; }
+        }
+    }
+    init => { self.apply-requested-focus(); }
+    changed focus-sequence => { self.apply-requested-focus(); }
     changed has-focus=>{if self.has-focus {SettingsInput.active-target=self.field-id;} else if SettingsInput.active-target==self.field-id {SettingsInput.active-target=-1;}}
 }
 component OpacitySlider inherits Rectangle {
@@ -105,7 +129,14 @@ component OpacitySlider inherits Rectangle {
     min-height: 24px;
     horizontal-stretch: 1;
     forward-focus: slider;
-    changed focus-sequence => { if SettingsInput.focus-field == 6 { slider.focus(); } }
+    function apply-requested-focus() {
+        if SettingsInput.focus-field == 6 {
+            slider.focus();
+            if slider.has-focus { SettingsInput.focus-field = -1; SettingsInput.active-target = 6; }
+        }
+    }
+    init => { self.apply-requested-focus(); }
+    changed focus-sequence => { self.apply-requested-focus(); }
     Rectangle {
         x: 8px; width: parent.width - 16px; height: 4px;
         y: (parent.height - self.height) / 2;
@@ -143,6 +174,7 @@ export global SettingsState {
             if SettingsInput.active-target != 0 { root.focus-search(); }
         }
         else {
+            root.clear-field-focus();
             SettingsInput.focused = -1;
             SettingsInput.active-target = -1;
         }
@@ -221,6 +253,7 @@ export global SettingsState {
     callback show-page(int);
     show-page(index) => {
         root.cancel-result-focus();
+        root.clear-field-focus();
         if root.page != index {
             if SettingsInput.focused > 0 { SettingsInput.focused = -1; }
             if SettingsInput.active-target > 0 { SettingsInput.active-target = -1; }
@@ -238,6 +271,8 @@ export global SettingsState {
     }
     callback cancel-result-focus;
     callback focus-result(int);
+    callback clear-field-focus;
+    clear-field-focus => { SettingsInput.focus-field = -1; }
     callback focus-field(int);
     focus-field(field)=>{SettingsInput.focus-field=field;SettingsInput.focus-sequence+=1;}
     callback focus-search;
@@ -324,6 +359,7 @@ export component SettingsPanel inherits PanelOverlay {
                             changed focus-sequence => {
                                 if self.enabled && SettingsInput.focus-field == self.field-id {
                                     self.focus();
+                                    if self.has-focus { SettingsInput.focus-field = -1; }
                                     self.update-focus();
                                 }
                             }

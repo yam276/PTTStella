@@ -149,6 +149,8 @@ impl Preferences {
             move |query| {
                 if let (Some(owner), Some(w)) = (owner.upgrade(), w.upgrade()) {
                     owner.search_focus.stop();
+                    w.global::<crate::SettingsState>()
+                        .invoke_clear_field_focus();
                     let bounded = pttstella::settings::catalog::bounded_query(&query);
                     if bounded != w.global::<crate::SettingsState>().get_query().as_str() {
                         w.global::<crate::SettingsState>()

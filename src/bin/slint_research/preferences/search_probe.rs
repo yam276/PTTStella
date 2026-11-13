@@ -25,6 +25,25 @@ impl Preferences {
             .as_ref()
             .and_then(|w| w.as_weak().upgrade())
             .ok_or("search window missing")?;
+        let state = window.global::<crate::SettingsState>();
+        crate::verification::foreground(ui, true);
+        // Search results replace the current page. Deliver the queued focus
+        // before the next paint, while the destination is still unmounted.
+        state.set_query("keepalive".into());
+        state.invoke_search(state.get_query());
+        wait(
+            || state.get_matches().row_count() > 0,
+            "keepalive result was unavailable",
+        )
+        .await?;
+        window.window().take_snapshot().map_err(|e| e.to_string())?;
+        state.invoke_show_page(4);
+        state.invoke_focus_field(23);
+        wait(
+            || state.get_focused_target() == 23,
+            "focus requested before the settings page mounted was lost",
+        )
+        .await?;
         let mut checked = Vec::new();
         // Independently specified widget destinations, not generated from the index.
         const CASES: [(&str, i32, i32); 24] = [

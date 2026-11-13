@@ -1122,3 +1122,9 @@ Apple Silicon App／DMG／ZIP、Windows x64 便攜 ZIP 與離線 Setup、Intel M
 Linux x64 便攜包 `57e000c` 在 ARM Podman／QEMU x64／Xvfb 軟體繪圖共跑 14 項元件案例。草稿保存、跨程序重開並帶回、主視窗、兩種閱讀模式搜尋、837 行／37 次取頁、441 行／19 次取消續跑、複製和 PNG、推文追加、收藏及 MP4／WebM／OGV 均通過。設定搜尋首輪繁中「防閒置」未聚焦欄位 23，同一執行檔獨立重跑後完成中英文全部 48 個定位。保留首輪反例，原因待查。各案例都有唯一 Close ACK。此輪未操作 macOS 桌面，Linux 實機維持待驗。[Linux 封裝證據](slint-linux-candidate.md#2026-11-13-57e000c-候選)
 
 Apple Silicon 在禁止網路及原 checkout 來源讀取的環境從交付來源重編 Slint 與播放器測試。沿用固定 Cargo 快取，執行階段開放合成測試所需的 loopback，111 項通過，既有原生 helper 一項仍忽略。已清理三輪暫存來源目錄、模擬器的兩輪正式案例及一輪斷線時留下的半成品，保留原始收據和既有快取。[來源重編證據](slint-product-source.md#2026-11-13-57e000c-候選來源)
+
+#### 設定搜尋切頁焦點
+
+用實際 Slint 設定元件重現焦點請求早於目標分頁掛載的情況。搜尋結果畫面已繪製，切到站點頁後立即派送欄位 23 的焦點請求。舊程式失敗並正常關閉本機連線。修正後，動態建立的設定控制項會在掛載及收到新請求時處理焦點，取得焦點後消耗請求。重新搜尋、切頁或關閉設定會清除未消耗的請求。
+
+Linux x64／QEMU／Xvfb 以同一測試重跑六輪。每輪都通過掛載前焦點、原有 48 個中英文定位及舊請求取消，並收到唯一 Close ACK。Apple Silicon 的 Slint 與播放器 release 測試共 111 項通過，原生 helper 一項維持忽略。收據在 `.local/verification/slint-settings-focus-mount/`。測試過程未開 macOS 視窗。先前 `57e000c` 交付包仍是原版本，待以修正提交重打同源候選。
