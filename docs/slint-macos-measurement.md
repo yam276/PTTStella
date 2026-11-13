@@ -2,6 +2,29 @@
 
 這份文件記錄 S0／S8 的量測工具及目前證據，不是效能通過報告。完整負載、次數與平台門檻仍以[平替計畫](slint-evaluation-plan.md#同負載效能門檻)為準。
 
+## 2026-11-14 1d3e702 同負載複測
+
+Apple M3 Ultra／macOS 15.7.7，以 Slint `1d3e702` 出貨 App 的 Skia software 對照同開發線的 release Dioxus。Dioxus 從固定 Cargo target 核對建置，執行檔雜湊仍與 `cd64435` 一致，使用系統 WKWebView 20621.3.11.11.3。兩版採相同的 1040×768 外窗、bundled 字型 23／20／100、隔離資料及本機素材，每輪使用新程序。視窗位置由系統決定。
+
+| 指標 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 首頁入快取至 renderer ACK，中位數 | 5.69 ms | 56.83 ms |
+| 首筆取頁至 837 行完整快取，中位數 | 525.28 ms | 524.89 ms |
+| 首筆取頁至全文 renderer ACK，中位數 | 537.96 ms | 553.43 ms |
+| 快取 PageDown，p50／p95 | 36.62／39.31 ms | 81.66／86.60 ms |
+| 快取 PageUp，p50／p95 | 36.65／38.81 ms | 39.82／87.18 ms |
+| 雙 GIF，10 秒程序族 CPU 中位數 | 1.118 秒 | 1.421 秒 |
+| 雙 GIF，程序族 physical footprint 取樣峰值中位數 | 118.32 MiB | 712.98 MiB |
+| 雙 GIF，程序族 RSS 取樣峰值中位數 | 309.00 MiB | 518.95 MiB |
+
+長文每版兩輪，各核對 37 次取頁。每版各執行 100 次原生 PageDown 和 100 次 PageUp，逐次核對畫面指紋，截圖辨識結果分別為第 1 → 28 → 1 行與第 1 → 23 → 1 行。翻頁計時包含按鍵、視窗擷取及輪詢。兩版完整快取中位數差不到 1 ms，快取翻頁 p95 則低約 55%。Renderer ACK 是各前端自己的提交觀測點，差值不代表螢幕掃描時間。
+
+雙 GIF 每版三輪，兩個網址各下載一次。兩張圖皆為 512×160、32 幀、每幀 100 ms。暖機 1 秒後取樣 10 秒，每輪 101 筆程序族資源與 201 筆前景觀察，首尾皆確認兩圖換幀。Slint footprint 峰值中位數低約 83%，CPU 中位數本輪低約 21%。Slint 個別 CPU 樣本為 1.103–1.232 秒，Dioxus 為 1.410–1.482 秒。先前複測有重疊區間。Dioxus 的綜合探針因自動展圖劇本未執行手動展圖及 PNG 匯出而維持 `failed`，雙 GIF 效能樣本依實際雙圖、網路、前景、資源與退出收據獨立驗證。
+
+一輪 Slint 長文在首頁後失焦，未派出下一頁。一輪 Dioxus 在雙 GIF 取樣中失去前景。兩輪排除並補跑，原始證據保留。十個有效樣本正常退出、收到唯一 Close ACK，HTTP worker 均已結束。全部樣本中取樣到的程序身分均已退出。本輪使用本機合成負載，實站及其他平台效能仍待驗。
+
+數據與重跑工具在 `.local/verification/slint-article-arrow/arm64-reading/current-1d3e702/`。摘要為 `goal-retest-comparison.json`。四個隔離暫存目錄與視窗控制器均已移除，路徑及磁碟觀測在 `goal-retest-cleanup.json`。
+
 ## 2026-11-14 1d3e702 長文、翻頁與雙 GIF 重測
 
 Apple M3 Ultra／macOS 15.7.7 使用 Slint `1d3e702` 出貨 App 的 Skia software 與同一開發線的 release Dioxus／系統 WKWebView。Dioxus 在 `97c6b36` 以固定 Cargo target 重新核對建置，沿用 `cd64435` 的同一個 Mach-O。期間的產品來源差異限於 Slint 草稿元件。每輪各開新程序，使用隔離資料、1040×768 外窗、bundled 字型 23／20／100 及同一個立即回覆的本機合成 peer。視窗位置由系統決定。
