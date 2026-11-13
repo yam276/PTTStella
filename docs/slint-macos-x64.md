@@ -1,5 +1,16 @@
 # Slint macOS x64 候選包
 
+## 2026-11-13 收藏載入焦點修正候選
+
+Intel Mac App／ZIP／DMG 在 `.local/verification/slint-cross-bookmark-load/macos-intel/`。從與 `4d7d174` 只差三份文件的乾淨 `ebc1035` 工作樹交叉建置，沿用前版 47 個播放器函式庫。已核對 App／ZIP／DMG 的 1,218 個檔案、ZIP CRC 及深層簽章。
+
+| 交付 | SHA-256 |
+| --- | --- |
+| Intel Mac DMG | `4b6cf34d25d4e091e26fe909043bb53d34c2e7aad5e339d259e293e73ab35e72` |
+| Intel Mac ZIP | `d29f0f3bd589132ed0787483490afe3d3a8464a7b09a1b08fbe52c06dca47a1a` |
+
+掛載 DMG 後以 Rosetta 執行主視窗和三輪收藏探針，四案均正常退出並收到嚴格 Close。收藏探針核對首次開啟、保存和檔案 worker 退出。最初以不存在的旗標呼叫收藏，程式在參數檢查退出，改用既有媒體探針入口才取得驗收結果。原始收據與清理路徑在 `slint-cross-bookmark-load/`。Intel 實機、IME、實際聲音及效能待驗。
+
 2026-11-12 含草稿靠右組字修正的候選位於 `.local/verification/slint-cross-ime-edge/macos-intel/`。以乾淨 `06487df` 建置，與 Apple Silicon／Windows x64 的 `4e28e82` 之間只有文件變更。沿用 47 個 x64 播放器函式庫和 32 份來源紀錄。App、ZIP 及唯讀 DMG 的 1,216 個一般檔案一致，深層簽章通過。從掛載 DMG 在 Rosetta 完成草稿、重新開啟與帶回站端、主視窗及 MP4／WebM／OGV 六個軟體繪圖案例，全部收到嚴格 Close。影片核對音量、靜音回覆與播放器退場。Intel 實機、原生 IME、實際聲音與效能待驗。
 
 | 交付 | SHA-256 |

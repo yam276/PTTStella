@@ -1,5 +1,16 @@
 # Slint Linux x64 候選包
 
+## 2026-11-13 收藏載入焦點修正候選
+
+Linux x64 deb／tar.gz 在 `.local/verification/slint-cross-bookmark-load/linux/`。與 `4d7d174` 只差三份文件的乾淨 `ebc1035` 工作樹用固定 Cargo target 及既有 Debian bookworm amd64 SDK 建置，逐一核對 3,419 個 SDK 檔案與連結。AMD64 deb 的 1,110 個檔案與便攜包的 1,123 個檔案已核對。兩包主程式、共用授權與說明一致。
+
+| 交付 | SHA-256 |
+| --- | --- |
+| Linux x64 deb | `bb267c421c3b86ad3d0792a20cbf9ec9a581efbff44436b6fccab315ff8d5f25` |
+| Linux x64 tar.gz | `32a905a7ee823abd0ea497be51038803c8f2e5484722469eb823822a9e13e315` |
+
+QEMU／Xvfb 軟體繪圖執行草稿保存、草稿重開、主視窗、收藏和 MP4／WebM／OGV，共七案通過及收到嚴格 Close。收藏的首次呼叫在參數檢查退出，改用既有媒體探針入口後驗證保存與 worker 退出。這輪收據與清理路徑在 `slint-cross-bookmark-load/`。實機安裝、Wayland、原生 IME、聲音和效能待驗。
+
 ## 2026-11-12 草稿組字修正候選
 
 Linux x64 deb／tar.gz 位於 `.local/verification/slint-cross-ime-edge/linux/`。乾淨 `06487df` 與 Apple Silicon／Windows x64 候選 `4e28e82` 之間只有文件變更。沿用既有 Cargo target、Apple Clang／ELF LLD 及 Debian bookworm amd64 SDK，重新核對 SDK 的 3,419 個檔案與連結。

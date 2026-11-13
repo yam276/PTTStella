@@ -2,6 +2,12 @@
 
 這份文件記錄 S0／S8 的量測工具及目前證據，不是效能通過報告。完整負載、次數與平台門檻仍以[平替計畫](slint-evaluation-plan.md#同負載效能門檻)為準。
 
+## 2026-11-13 現行候選前景閒置試跑
+
+從 Apple Silicon 候選 `4d7d174` 建立專用測試身分，核對主程式機器碼區段，再以一般入口及相同本機 TLS WebSocket 合成格線啟動。1040×768 視窗擷取核對第一與第 22 行標記，關窗收到唯一 Close 回覆。10 秒資源取樣區間的 182 筆視窗觀察均由其他程序占用前景，因此該輪標為 `not_ready`，前景比較仍待驗。
+
+結果、視窗擷取、前景記錄與清理清單位於 `.local/verification/slint-s8-foreground-bookmark-load/`。已移除隔離 App 副本與專用快取，保留候選及基準。
+
 ## 2026-11-12 最小化背景閒置對照
 
 Apple M3 Ultra／macOS 15.7.7 的 Slint `4e28e82` 與相容回退 Dioxus `82bc81f` 各跑三輪。兩份 App 取自現有交付，隔離副本各有專用 Bundle ID 與 ad-hoc 簽章，主程式的 `__TEXT,__text` 各與原交付相同。由 LaunchServices 啟動後在同 PID 進入一般入口，Slint 用預設軟體繪圖，Dioxus 用系統 WebKit `20621.3.11.11.3`。兩版使用相同的合成 v6 設定、bundled 字型和本機 TLS WebSocket 格線，沙盒限制對外連線及一般產品資料。

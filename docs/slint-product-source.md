@@ -6,14 +6,14 @@
 
 Apple Silicon 與 Windows x64 便攜候選 `4d7d174` 的 619 份產品檔案已在禁止網路和原 worktree 讀取的獨立目錄還原，核對逐檔 SHA-256 和 Git tree `87788b45fe5969a9366075797d1e8f3464c9e532`。兩個 ZIP 內的主程式雜湊與各自的封裝收據相符。[Windows Setup](slint-windows-candidate.md#2026-11-13-收藏載入焦點修正的離線-setup) 另經解包逐檔核對與便攜 ZIP 一致。
 
-既有交付 `product-source-20261111-6ad8e39/` 的 `sources.json` 新增此組對應，SHA-256 為 `d3962849c18614981116891fe1ed3bc30ac3252bfb8ba377718fd4af6b93cb7b`。從該交付目錄執行下列指令，輸出目錄須尚不存在。
+既有交付 `product-source-20261111-6ad8e39/` 的 `sources.json` 已在同一組對應補入 Windows Setup、Intel Mac 和 Linux x64 的下載與主程式雜湊。Intel Mac 與 Linux x64 的建置提交為僅多三份文件變更的 `ebc1035`，產品程式與封裝流程相同。新版 manifest SHA-256 為 `ccbf252e579a139bb3a62aa3f0778d15ae0ca9099d89dedc23a2b5bab1a405fd`。從該交付目錄執行下列指令，輸出目錄須尚不存在。
 
 ```sh
 python3 reconstruct_slint_source.py --manifest sources.json \
   --candidate bookmark-load-macos-windows --output /ABS/PATH/new-source
 ```
 
-還原暫存已移除，核對和清理紀錄在 `.local/verification/slint-current-shell/bookmark-load-source-delivery.json`。還原來源的重新編譯與完整第三方來源閉包仍待驗。
+更新四平台對應後再還原一次，619 檔與完整 Git tree 核對通過。原始封裝對應、還原與暫存清理收據在 `.local/verification/slint-cross-bookmark-load/`。還原來源的重新編譯與完整第三方來源閉包仍待驗。
 
 ## 2026-11-13 浮球與收藏修正候選來源
 
