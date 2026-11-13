@@ -130,6 +130,8 @@ Apple Silicon 原生對照使用 Slint `4e28e82` 與相容回退 Dioxus `82bc81f
 
 以 `d37c7fb` 封裝的一般入口連線至隔離 WSS，macOS 擷取顯示浮球初始位置符合目前視窗高度的 65%。座標拖曳回傳 `noWindowsAvailable`，後續視窗快照失去終端焦點且浮球停用，故拖曳與關閉收藏後的原生焦點仍待驗。測試 App exit 0，伺服器只收到 Close ACK，隔離設定前後逐位元相同。操作工具隨後重新打開 App，該視窗已關閉。測試暫存已清理，保留 `.local/verification/slint-current-shell/` 的 `slint-layout-package-focus/` 和 `layout-native-cleanup.json`。
 
+以 `cb4fbfc` Linux x64 出貨檔補驗實際 X11 鍵鼠。浮球左右停靠、五分類、導覽返回、縮窗與收合通過。設定搜尋可由 `privacy` 定位帳號與隱私，文章模式下拉可由 Esc 收起，切至終端機後重開及關窗讀回一致。推文右鍵完成勾選、暫停、Esc 後恢復更新、跳到新增六則與取消。取消前後正文取樣區一致，兩個通過的程序各收到唯一 Close ACK。刷新中途重開選單的兩輪中止記錄保留，實機驗收另列。[X11 操作與證據](slint-linux-candidate.md#cb4fbfc-推文浮球與設定的-x11-驗收)
+
 ### 4. 媒體（S5）
 
 - **保留 Slint 的原生播放與圖片路徑**　沿用現有下載、快取、置中展圖及 GIF 排程。影片保留 libmpv，依 Dioxus 播放控制補上音量與靜音，與播放、暫停及跳轉共用同一播放器狀態。
