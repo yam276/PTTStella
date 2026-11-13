@@ -1,8 +1,12 @@
 # Slint macOS x64 候選包
 
+## 2026-11-13 cbe9426 候選
+
+Intel App／ZIP／DMG 在 `.local/verification/slint-segment-navigation/macos-intel/`。核對乾淨 `cbe9426`、x86_64、深層簽章和三種封裝的 1,229 個檔案。DMG SHA-256 為 `68e0c175ce97807bbceb789c702abb65aaf2f110e355110b497da1d3294a0569`。Intel 實機依指示暫緩。
+
 ## 2026-11-13 299a0b3 候選
 
-Intel App／ZIP／DMG 在 `.local/verification/slint-login-panel-candidate/macos-intel/`。核對乾淨 `299a0b3`、x86_64、深層簽章與三種封裝共 1,228 個相同檔案。DMG SHA-256 為 `4380fcc8662b2b4615a771d0435e30a172c475a97d8f47b4b65477a88b13504c`。Intel 實機依指示暫緩。
+上一版 Intel DMG 保留在 `.local/verification/slint-login-panel-candidate/macos-intel/`，同內容 App／ZIP 已清理。核對乾淨 `299a0b3`、x86_64、深層簽章與三種封裝共 1,228 個相同檔案。DMG SHA-256 為 `4380fcc8662b2b4615a771d0435e30a172c475a97d8f47b4b65477a88b13504c`。Intel 實機依指示暫緩。
 
 ## 2026-11-13 3277ac1 候選
 

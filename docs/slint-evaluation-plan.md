@@ -6,7 +6,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 目前進度（2026-11-13）
 
-最新四架構候選均取自乾淨提交 `299a0b3`，修正獨立登入面板及設定內嵌帳密表單的裁切。四架構封裝已核對，Linux 交付執行檔通過隔離 X11 的登入面板驗收。切換前仍待驗 macOS 封裝的原生焦點、Windows 實機安裝及注音／日文 IME、正式簽章的憑證接手及完整效能矩陣。Intel Mac 與 Linux x64 實機依指示暫緩。正式入口維持 Dioxus。[最新候選](#299a0b3-四架構候選)
+最新四架構候選均取自乾淨提交 `cbe9426`，加入長文段尾接續及先前的登入面板裁切修正。四架構封裝已核對，Linux 交付執行檔通過隔離 X11 的實際 End、滾輪接續與 Close。切換前仍待驗 macOS 封裝的原生焦點、Windows 實機安裝及注音／日文 IME、正式簽章的憑證接手及完整效能矩陣。Intel Mac 與 Linux x64 實機依指示暫緩。正式入口維持 Dioxus。[最新候選](#cbe9426-四架構候選)
 
 四架構候選都包含 `4d7d174` 的收藏載入焦點修正。Apple Silicon 和 Windows x64 從同一提交出包，Intel Mac 與 Linux x64 使用僅有文件差異的 `ebc1035` 工作樹建置。Apple Silicon 封裝的草稿保存、跨程序重開及三格式影片八案通過。Intel 封裝在 Rosetta 通過三輪收藏及主視窗，Linux 封裝在 QEMU／Xvfb 通過七項元件回歸。Windows 原生安裝／升級／IME、Intel Mac 與 Linux 原生驗收、完整同負載效能矩陣及正式簽章的憑證接手仍待驗。正式入口維持 Dioxus。[候選位置](#產物保留規則2026-11-09-使用者要求) · [影片音訊結果](#4-媒體s5)
 
@@ -97,7 +97,7 @@ Apple Silicon 與 Windows x64 的草稿／文章中途驗收包均固定在乾�
 
 2026-11-13 對齊滾輪後的逐行鍵盤操作。若上緣停在半行，向下會從該文字列開頭算下一行，向上則從該列底端算上一行。落點在圖片間隙時保留像素位置，文末可抵達精確邊界。沿用現有 Flow 及快取導覽，與 Dioxus 既有 43 px 捲動案例同驗向下 48 px、向上 24 px，並核對跨多行、圖片間隙與文末。Slint 本機文章測試與 Dioxus 展圖／閱讀測試通過，原生操作待桌面可供測試時補驗。
 
-2026-11-13 補齊 Slint 的長文分段導覽。Page Down、End、向下逐行或繼續往下捲動在已達段尾時會走既有「載入下一段」的接頁流程。首次抵達段尾只移動本機視窗，接段仍核對前景、閱讀焦點、目前文章及已驗證的站端重疊頁。隔離 QEMU／Xvfb 使用 4,181 行的合成站及 Slint 閱讀意圖，第一段保留至第 4,049 行，前進至段尾時維持 184 筆請求。再按 Page Down 後，下一段從第 4,049 行接到第 4,181 行，全程共 189 筆精確 PageDown 及一次 Close ACK。收據在 `.local/verification/slint-segment-navigation/`。原生鍵鼠和新封裝待驗。[分段閱讀操作](article-reading.md#操作與取頁)
+2026-11-13 補齊 Slint 的長文分段導覽。Page Down、End、向下逐行或繼續往下捲動在已達段尾時會走既有「載入下一段」的接頁流程。首次抵達段尾只移動本機視窗，接段仍核對前景、閱讀焦點、目前文章及已驗證的站端重疊頁。隔離 QEMU／Xvfb 使用 4,181 行的合成站及 Slint 閱讀意圖，第一段保留至第 4,049 行，前進至段尾時維持 184 筆請求。再按 Page Down 後，下一段從第 4,049 行接到第 4,181 行，全程共 189 筆精確 PageDown 及一次 Close ACK。收據在 `.local/verification/slint-segment-navigation/`。同一 Linux 交付執行檔另以隔離 X11 的實際 End 及一次向下滾輪核對同樣的 184 → 189 筆取頁及正常關閉，畫面從第 4,049 行接續。收據在同目錄的 `native-x11/`。[分段閱讀操作](article-reading.md#操作與取頁)
 
 ### 3. 推文更新、選單與設定（S3、S4、S7）
 
@@ -1232,3 +1232,11 @@ Linux 交付執行檔與兩個隔離 X11 登入案例逐位元相同。獨立面
 Windows `299a0b3` 原始離線 Setup 從 `3277ac1` 升級及回退，在斷開外部網路的 Wine／QEMU 通過 10 案，草稿升退後逐位元一致並可帶回編輯器。兩個載入器和隔離 Wine prefix 隨容器移除，Guest free block discard 與主機可用空間各自記錄。原生 Windows 安裝、憑證與 IME 仍待驗。[Windows 升退演練](slint-windows-candidate.md#2026-11-13-299a0b3-候選)
 
 候選留在 `.local/verification/slint-login-panel-candidate/`，Windows Setup 在 `../PTTStella-candidates/windows-299a0b3-offline/`。已清理封裝暫存、兩個 Setup 容器、Linux SDK 磁碟影像及掛載點、還原目錄、上一版重複的兩組 macOS App／ZIP。保留上一版 DMG、Windows 與 Linux 的回退包、固定 Cargo 快取和獨特收據。確切路徑及可用空間觀測見 `delivery-cleanup.json`、`superseded-macos-cleanup.json`、`linux-clean/linux-sdk-cleanup.json`、`linux-components-cleanup.json`、`linux-components-host-cleanup.json` 和 `source-build-result.json`。
+
+### cbe9426 四架構候選
+
+Apple Silicon App／ZIP／DMG、Intel Mac App／ZIP／DMG、Windows x64 便攜 ZIP／離線 Setup 與 Linux x64 deb／tar.gz 均由乾淨 `cbe9426` 建置。兩個 macOS 架構的 App、ZIP、DMG 逐檔一致並通過深層簽章。Windows 離線 Setup 解包 927 檔逐一比對，Linux 兩包的共用執行檔與分段、長文和取消續跑三案逐位元相同。Linux 同包另通過隔離 X11 實際按 End 與向下滾輪的接續。[Linux 驗收](slint-linux-candidate.md#2026-11-13-cbe9426-候選) · [Windows 封裝](slint-windows-candidate.md#2026-11-13-cbe9426-候選) · [產品來源](slint-product-source.md#2026-11-13-cbe9426-候選來源)
+
+Apple Silicon 候選的 `--show-profile` 回報研究資料路徑，確認查詢未讀取資料檔或打開密碼庫。正式服務名的合成鑰匙圈演練驗證舊格式、拒絕不同 ad-hoc 簽章、原簽章回退與清理。正式 Developer ID 的接手與原生 macOS 焦點、Windows 實機安裝與 IME、完整效能矩陣仍待驗。[鑰匙圈演練](login.md#macos-正式服務名的隔離演練)
+
+候選與收據留在 `.local/verification/slint-segment-navigation/`，Setup 在 `../PTTStella-candidates/windows-cbe9426-offline/`。已清理前版兩組可由 DMG 還原的 App／ZIP、暫存 Linux SDK、交付與驗收暫存、Setup 容器。沿用固定 Cargo 與 SDK 快取，保留前版 DMG、Windows 及 Linux 回退包和唯一證據。確切路徑及可用空間見 `delivery-cleanup.json`、`superseded-macos-cleanup.json`、`native-x11/cleanup.json` 及 `windows-setup/sparse-cleanup.json`。

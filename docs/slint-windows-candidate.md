@@ -1,5 +1,9 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-13 cbe9426 候選
+
+便攜 ZIP 在 `.local/verification/slint-segment-navigation/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-cbe9426-offline/`。與其他三架構同取乾淨 `cbe9426`，加入分段長文的段尾接續。ZIP CRC、926 份 payload、AMD64 PE 匯入與 Setup 解包的 927 個檔案核對通過。Windows 實機安裝、升級、Microsoft 注音及日文 IME 待驗。
+
 ## 2026-11-13 299a0b3 候選
 
 便攜 ZIP 在 `.local/verification/slint-login-panel-candidate/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-299a0b3-offline/`。與其他三架構同取乾淨 `299a0b3`，含登入面板裁切修正。ZIP CRC、926 份 payload 與 AMD64 PE 匯入通過。Setup 解包 927 檔逐一相符。Windows 原生安裝、升級、Microsoft 注音及日文 IME 待驗。

@@ -1,5 +1,9 @@
 # Slint Linux x64 候選包
 
+## 2026-11-13 cbe9426 候選
+
+deb／tar.gz 在 `.local/verification/slint-segment-navigation/linux/`。兩包共用的 AMD64 主程式 SHA-256 為 `0cbe6deccbcf5729dc56c38318194e1d260617d56f25bac3db1803003c487e1a`，與分段、837 行長文、取消／繼續三案以及實際 X11 End／滾輪案例逐位元相同。4,181 行的分段案例核對第 4,049 行重疊、189 筆取頁與唯一 Close ACK。實機、Wayland 與硬體 GPU 依安排待驗。
+
 ## 2026-11-13 299a0b3 候選
 
 deb／tar.gz 在 `.local/verification/slint-login-panel-candidate/linux/`。兩包共用的 AMD64 主程式 SHA-256 為 `a99dabc96effb1dcfd069b2ef24c10193d3120d924294ae84cb14fe8e5152fff`，和隔離 X11 的登入驗收執行檔逐位元相同。獨立面板通過合成站的帳密、錯誤驗證碼與救援碼。設定內嵌表單在非登入畫面正確拒送，縮窗後仍可操作。實機、Wayland 與硬體 GPU 待驗。[登入紀錄](login.md#操作)

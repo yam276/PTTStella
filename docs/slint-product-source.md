@@ -2,6 +2,10 @@
 
 候選交付中的程式、Slint UI、字型、locale、fixture、工具與文件，須能從獨立來源包還原。原始建置的 commit／dirty／patch、產品來源核對與第三方來源閉包是不同證據；不能把其中一項通過填成全部完成。
 
+## 2026-11-13 cbe9426 候選來源
+
+四架構與 Windows Setup 同取乾淨 `cbe9426`。既有 `sources.json` 新增 `segment-navigation-candidate`，隔離還原並核對 837 份產品檔及 Git tree `069e219a663652d9e6be045f3c2f6c559f9d6677`。manifest SHA-256 為 `99727d4235c57f51b3fa7e7ec7be7bfa6a8257e06b3e38b9e7be6a4d07d19e44`。Apple Silicon 由還原來源離線重編，Slint 110 項及播放器 1 項通過，既有原生 helper 一項忽略。編譯和測試皆禁止讀取原 worktree 的來源，測試使用 loopback。暫存已清理，沿用固定 Cargo 快取。收據在 `.local/verification/slint-segment-navigation/source-build-result.json`。完整第三方來源閉包及其餘架構的還原重編待驗。
+
 ## 2026-11-13 299a0b3 候選來源
 
 四架構及 Windows Setup 同取乾淨 `299a0b3`。既有 `sources.json` 新增 `login-panel-candidate`，在禁止網路與原 worktree 讀取的獨立目錄還原 837 份產品檔並核對 Git tree `8e929ef4327da05eb54da0efb4937b86145f0539`。manifest SHA-256 為 `483c1cf51c103500b15f6537229388ebf03bd5d13933013405bed3c28120425d`。Apple Silicon 以還原來源離線編譯，Slint 110 項及播放器 1 項通過，既有原生 helper 一項忽略。編譯和測試禁止讀取原 worktree 的來源，執行測試時允許 loopback。暫存還原目錄已移除，沿用固定 Cargo 快取。收據在 `.local/verification/slint-login-panel-candidate/source-build-result.json`。完整第三方來源閉包及其餘架構的還原重編待驗。
