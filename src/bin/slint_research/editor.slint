@@ -1,6 +1,7 @@
 import { UiLabels } from "labels.slint";
 import { Button, ComboBox, ScrollView } from "std-widgets.slint";
 import { ColorPalette } from "color-palette.slint";
+import { PanelCombo } from "panel.slint";
 import { SelectionRect } from "selection.slint";
 export struct DraftItem { id:string, title:string, conflict:bool }
 export global EditorState {
@@ -119,7 +120,17 @@ export component NativeEditor inherits Rectangle {
                     edited=>{EditorState.title-edit(self.text);}
                 }
             }
-            ComboBox {preferred-width:120px;max-width:150px; model:UiLabels.editor-modes;current-index:EditorState.mode;enabled:!EditorState.composing && !EditorState.busy;selected(value)=>{EditorState.mode-edit(self.current-index);} }
+            PanelCombo {
+                preferred-width: 140px;
+                max-width: 150px;
+                model: UiLabels.editor-modes;
+                displayed-index: EditorState.mode;
+                enabled: !EditorState.composing && !EditorState.busy && !EditorState.transfer-confirm && !EditorState.palette-open;
+                selected => {
+                    EditorState.mode-edit(self.current-index);
+                    root.focus-body();
+                }
+            }
             Button {text:UiLabels.editor-undo;enabled:EditorState.can-undo && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(4);} }
             Button {text:UiLabels.editor-redo;enabled:EditorState.can-redo && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(5);} }
         }

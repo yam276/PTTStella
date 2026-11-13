@@ -22,6 +22,8 @@ Slint 的復原與重做按鈕和鍵盤快捷鍵共用標題與正文的編輯�
 
 不完整色碼保持可見可改、可以保存；不會因切換顯示而剝除或重建原文。SGR 由 Rust 安全 grammar 和生產 Screen 解析，JS 不重解 ANSI，不將文章放入 HTML。圖形 widget 的格線選取不切開 Unicode 中文字元。
 
+Slint 草稿可用方向鍵在色碼顯示選單移動，Enter 確認或 Esc 取消。選定後焦點回到正文，可從目前插入位置接著輸入或保存。
+
 預設「文字選取」可選一行中的部分文字或跨行選取；「整行選取」另供拖曳按首末行完整選取，單擊仍可定位插入點；「ANSI 圖：矩形」依滑鼠位置跨行選取字格。框選後右鍵直接顯示浮動16色前景／8色背景色票，點一色立即套用，選單不占編輯排版空間。多行各自上色、空行略過，保留未選區的樣式；矩形各行只上選中區。上色為一次可復原的編輯。色彩請求使用記憶體中的完整原文和 revision，不等磁碟保存；舊結果不能覆寫新編輯。矩形上色共用單次詞法掃描，不逐行重掃整篇文件。
 
 Runtime bundle、MIT授權及來源清單在 `assets/vendor/composer/`。一般 Cargo 建置不需 npm；維護來源、鎖定套件及 DOM 測試在 `tooling/composer/`，用 `npm ci --ignore-scripts --prefix tooling/composer`、`npm run build --prefix tooling/composer`、`npm test --prefix tooling/composer` 重建／驗證。套件來源為官方 npm registry。發佈包的 licenses 與 Windows 內嵌 notices 包含編輯元件授權。
