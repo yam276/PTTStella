@@ -1,5 +1,9 @@
 # Slint Linux x64 候選包
 
+## 2026-11-13 118a1d9 候選
+
+deb／tar.gz 在 `.local/verification/slint-edge-fetch/linux/`。兩包共用 AMD64 主程式 SHA-256 為 `386bad851a60548763ae4c66ff15f1db638bc3f60f15c76dad15fd2d0e8530bd`。同一出貨執行檔在隔離 QEMU／Xvfb 通過取消後的手動翻頁、837 行全文、4,181 行分段及逾時四案，每案一次 Close ACK。 另以 XTest 實際點取消、按 End、連按兩次 Page Down 和點繼續。暫停後由 67 行增至 89 行，畫面自動捲到新內容，仍顯示已取消全文載入，重開預載後精確收完 19 筆取頁。實機、Wayland 與硬體 GPU 依指示待驗。
+
 ## 2026-11-13 cbe9426 候選
 
 deb／tar.gz 在 `.local/verification/slint-segment-navigation/linux/`。兩包共用的 AMD64 主程式 SHA-256 為 `0cbe6deccbcf5729dc56c38318194e1d260617d56f25bac3db1803003c487e1a`，與分段、837 行長文、取消／繼續三案以及實際 X11 End／滾輪案例逐位元相同。4,181 行的分段案例核對第 4,049 行重疊、189 筆取頁與唯一 Close ACK。實機、Wayland 與硬體 GPU 依安排待驗。
