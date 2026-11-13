@@ -8,6 +8,10 @@ Linux deb／tar.gz 在 `.local/verification/slint-sites-panel-candidate/linux/`�
 
 同包在 QEMU／Xvfb 完整重跑 14 項軟體繪圖元件測試，每案各一次 Close ACK。涵蓋草稿保存與重開、主視窗、文章及終端搜尋、長文與取消續跑、文章輸出、設定搜尋、推文更新、收藏及 MP4／WebM／OGV。首輪在 11 案後遇到 Podman EOF，保留 `linux-components-first.log`，重跑收據在 `linux-components/summary.json`。兩輪客體暫存已清理，容器及虛擬機已停止。
 
+以同一便攜包執行檔在隔離 X11 用滑鼠右鍵開啟文章選單，點「更新推文」啟用，完成兩輪追加後顯示新增 6 則。重開選單可見勾選，保持開啟 5.4 秒沒有下一輪站端請求。再點同一列取消，勾選消失。按 Esc 回到文章，後續 5.4 秒沒有再送請求。站端核對全部 19 個取頁及刷新步驟並收到唯一 Close ACK，程序 exit 0。
+
+首輪校準只開啟選單，關閉時站端仍等待啟用指令。另一次在首次刷新進行中嘗試重開選單，未取得有效的已勾選畫面，該輪停止於站端第 8 步。保留校準和中斷日誌。有效結果、前後截圖及客體暫存清理位於 `.local/verification/slint-x11-interactions/`。本輪使用 QEMU／Xvfb／Openbox 與軟體繪圖，Linux 實機與 Wayland 待驗。
+
 ## 2026-11-13 d047e55 候選
 
 Linux deb／tar.gz 在 `.local/verification/slint-windows-refresh-rate/linux/`。已核對 AMD64 套件、共用檔案及兩包主程式，deb 共 1,111 檔，tar.gz 共 1,124 檔。deb SHA-256 為 `0ca717e1a31791f2b7bdf7084a6c71184f07b994b2a6adfb2691f3c0bdc83251`，tar.gz 為 `40398732e4622784a7b480bab76406a30a347211ba85d3af78c43ea7cbc305c4`。Linux 實機待驗。

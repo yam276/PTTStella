@@ -1176,3 +1176,7 @@ Linux 便攜包在 QEMU／Xvfb 重跑 14 項元件回歸全數通過，每案各
 #### Windows 離線安裝與草稿升退
 
 在隔離 Wine 用實際候選 ZIP 完成 `d047e55` → `2ef65ce` → `d047e55` 三次執行。舊版保存一份繁中 ANSI 草稿，新版與退回版各重開並帶回本機站端編輯器。三案均收到唯一 Close ACK，草稿檔雜湊不變。雙架構 Wine 另完成兩版原始 Setup 的離線安裝、升級、回退、重裝與卸載，合計 10 案通過。每次換版核對 926 個安裝檔，草稿升退讀回及原始檔案保留皆通過。正式 Windows 原生驗收、IME 及 Dioxus 資料移轉仍待驗。[Windows 驗收](slint-windows-candidate.md#便攜版草稿升退與-setup-的-wine-對照)
+
+#### Linux 交付包的推文右鍵
+
+用 `2ef65ce` Linux x64 便攜包在隔離 X11 以滑鼠啟用和取消「更新推文」。畫面核對勾選、新增六則及取消後勾選消失。開選單與取消後各觀察 5.4 秒，站端未收到新刷新。兩輪追加共 19 個站端步驟，關窗收到唯一 Close ACK。保留首次更新中操作的中斷紀錄，Linux 實機與 Wayland 待驗。[Linux 候選驗收](slint-linux-candidate.md#2026-11-13-2ef65ce-候選)
