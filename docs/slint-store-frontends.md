@@ -2,6 +2,14 @@
 
 2026-11-11 已用同一對 macOS arm64 前端完成設定 v1–v6 的 Slint → 原 Dioxus → Slint 往返。各版本以獨立合成資料驗證兩次實際儲存、前一代備份與重開讀取。黑白名單、可攜設定、收藏名稱／離線讀取、最近看板清除及草稿編輯保存的先前證據見後節。完整新增／編輯／刪除、最近看板新增與排序、macOS 一般入口的自動開圖設定往返也已通過，完整平台資料回退、密碼庫與產品切換仍待驗。
 
+## 2026-11-14 1d3e702 正式識別的隔離升級與回退
+
+Apple Silicon 以 Slint `1d3e702` 候選和 Dioxus `82bc81f` 回退 DMG 重跑五階段。兩版依序安裝在同一隔離 `Applications/PTTStella.app`，以正式 Bundle ID `io.github.yam276.pttstella` 走一般入口。Slint 副本改用該 Bundle ID 後以 ad-hoc 重簽，機器碼段和交付檔相符。Dioxus 執行檔與回退 DMG 的雜湊相同，兩份 App 均通過深層嚴格簽章驗證。沙盒限制連線至本機，且封鎖日常資料與鑰匙圈路徑。
+
+Dioxus 基準畫面的自動開圖為開啟。Slint 升級後讀到並關閉，Dioxus 回退讀到關閉後重新開啟，Slint 重開讀到開啟。最後一段在全新隔離 HOME 從獨立備份恢復，Slint 顯示原本的自動開圖狀態，八份檔案逐位元吻合。每段核取方塊皆以實際畫面像素驗證。兩次存檔的一代備份各等於前一份主檔，其他六份檔案全程一致。五個程序均正常退出，本機 TLS 1.3 測試站只收到 Close 並回覆。
+
+前兩輪分別在恢復和基準階段遇到其他視窗擋住點擊。補入點擊前的目標視窗檢查後完整重跑。原始失敗、雜湊、畫面和 `cleanup.json` 位於 `.local/verification/slint-article-arrow/draft-mode-focus-pair/arm64-rollback/`。隔離 App、資料副本及臨時磁碟掛載均已清除，保留原候選、回退 DMG 和固定 Cargo target。Finder 首開與正式 Developer ID 鑰匙圈重新授權仍待驗。
+
 ## 2026-11-14 cb4fbfc 正式識別的隔離升級與回退
 
 用已封裝的 Apple Silicon Slint `cb4fbfc` 與相容 Dioxus 回退 DMG `82bc81f`，依序放入同一隔離 `Applications/PTTStella.app` 並從一般入口啟動。兩個副本使用正式 Bundle ID `io.github.yam276.pttstella` 並通過深層嚴格簽章檢查。Slint 副本重簽後機器碼段雜湊與交付一致，Dioxus 主程式雜湊與回退包一致。沙盒限制網路至本機，阻擋日常產品資料及鑰匙圈路徑。隔離 HOME 以目錄連結讓研究版讀寫同一資料副本。

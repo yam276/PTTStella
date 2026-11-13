@@ -10,7 +10,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 Apple Silicon 用 `1d3e702` 出貨 App 與同一開發線的 Dioxus release 重測。837 行全文 renderer ACK 中位數為 530／558 ms，每版各 100 次的快取 PageDown p95 為 38.8／87.2 ms，PageUp p95 為 38.3／86.4 ms。雙 GIF 每版三輪有效樣本的程序族 footprint 峰值中位數為 122／743 MiB，10 秒累積 CPU 為 0.946／1.080 秒。CPU 樣本區間重疊。一輪 Slint 啟動時失去前景，排除後補跑通過。Windows 日文 IME 由使用者驗收。[重測結果](slint-macos-measurement.md#2026-11-14-1d3e702-長文翻頁與雙-gif-重測)
 
-同一 Slint 候選與相容 Dioxus `82bc81f` 用正式 Bundle ID 在隔離資料副本完成五階段升級、回退及恢復。兩版均從一般入口讀寫自動開圖設定，核對兩次保存的一代備份及八份復原檔。正式 Developer ID 的鑰匙圈重新授權與 Finder 首開仍待驗，正式入口維持 Dioxus。[最新回退演練](slint-store-frontends.md#2026-11-14-cb4fbfc-正式識別的隔離升級與回退)
+`1d3e702` Apple Silicon 候選與相容 Dioxus `82bc81f` 用正式 Bundle ID 在隔離資料副本完成五階段升級、回退及恢復。兩版均從一般入口讀寫自動開圖設定，核對畫面、兩次保存的一代備份及八份復原檔。正式 Developer ID 的鑰匙圈重新授權與 Finder 首開仍待驗，正式入口維持 Dioxus。[最新回退演練](slint-store-frontends.md#2026-11-14-1d3e702-正式識別的隔離升級與回退)
 
 Apple Silicon `cb4fbfc` 一般入口已驗 `⌃⌘F` 進出全螢幕、第 24 行完整顯示，以及退出全螢幕與 Esc 離開設定後的終端回焦。Dioxus 回退版在此劇本退出全螢幕後需點終端一次才恢復方向鍵。[原生焦點對照](slint-prototype.md#2026-11-14-cb4fbfc-全螢幕與終端回焦)
 
@@ -202,6 +202,8 @@ Apple Silicon 出貨檔 `1d3e702` 重跑六個格式／繪圖案例及四個停�
 同一 Apple Silicon 候選與 Dioxus 已各兩輪以原生快捷鍵開關同窗設定。兩張 GIF 回到文章均恢復換幀，每個網址全程只下載一次。設定期間兩版 CPU 均下降，關閉後的 10 秒累積 CPU 中位數為 Slint 0.484 秒、Dioxus 0.242 秒。另各兩輪連續開關 12 次，四輪皆能恢復兩張 GIF，兩版 RSS 都上升，Slint 的 physical footprint 變化方向未重現。更長時間與記憶體歸因待驗。[設定遮蔽與恢復](slint-macos-measurement.md#cb4fbfc-雙-gif-設定開關與恢復) · [12 次開關](slint-macos-measurement.md#cb4fbfc-雙-gif-連續-12-次設定開關)
 
 ### 5. 正式資料與登入接手（S7、S8）
+
+`1d3e702` 已驗證正式 Bundle ID 下的五階段隔離升退、獨立備份恢復、正式服務名隔離 Keychain，以及出貨檔的本機兩階段登入與錯碼恢復。正式簽章的系統授權、Finder 首開、實站及其他平台的憑證接手仍待驗。[原地升退](slint-store-frontends.md#2026-11-14-1d3e702-正式識別的隔離升級與回退) · [登入與鑰匙圈](login.md#macos-正式服務名的隔離演練)
 
 Apple Silicon 出貨檔 `cb4fbfc` 用隔離本機站完成兩輪登入。Enter 與登入按鈕都能送出，錯碼提示後手動輸入救援碼回到主選單，兩輪各有唯一 Close ACK。正式 Keychain 接手、實體輸入與實站驗收仍待完成。[Apple Silicon 兩階段登入](login.md#cb4fbfc-apple-silicon-兩階段登入)
 

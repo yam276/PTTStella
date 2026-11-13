@@ -109,6 +109,8 @@ Session另持有有界、無密碼的AccountIdentity，僅供網頁文章標示�
 
 以 `cb4fbfc` 的產品程式重跑正式服務名的隔離鑰匙圈演練。舊格式寫入、不同 ad-hoc 簽章接手拒絕、單次手動登入準備、原簽章回退讀回及刪除均通過。測試關閉系統授權介面，獨立鑰匙圈已刪除，使用者搜尋清單逐位元相同。Apple Silicon 候選的封裝執行檔另確認 `--show-profile` 使用 `SlintResearch`，未讀取資料檔或開啟 vault。這台 Mac 未找到可用的 Developer ID Application 簽章身分。正式簽章的系統授權及前端接手保留待驗。收據在 `.local/verification/slint-article-arrow/store-rehearsal/`。
 
+`1d3e702` 的產品來源再通過正式服務名的隔離鑰匙圈案例，包含舊格式、不同 ad-hoc 簽章拒絕、手動登入準備、回退讀回及清除。另以出貨 App 的本機兩階段登入探針，使用原生滑鼠登入，送出錯誤驗證碼，再手動送合成救援碼回到主功能表，收到唯一 Close ACK 並以 0 退出。候選的 `--show-profile` 確認使用 `SlintResearch`，查詢時未開啟 vault。測試收據位於 `.local/verification/slint-article-arrow/draft-mode-focus-pair/arm64-rollback/`。此機未找到 Developer ID Application 簽章身分，實際系統授權視窗及重新授權後的前端讀回仍待驗。
+
 Linux 缺服務另明確執行：`DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-pttstella-synthetic-bus cargo test --locked --features credential-store --lib login::vault::tests::native_service_unavailable -- --ignored --exact`，需確認讀取與勾選保存失敗，但不勾選單次登入仍能準備帳密。交叉編譯、記憶體測試與隔離容器不能冒充 Windows 認證庫、Linux 真實桌面解鎖或三平台實站登入。
 
 GitHub 的 Desktop Release 在打包前使用相同測試。Windows runner 直接操作認證管理員。Linux runner 建立獨立的 D-Bus 工作階段和暫存 GNOME Keyring，並另外執行缺服務案例。
