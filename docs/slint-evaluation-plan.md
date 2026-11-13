@@ -6,7 +6,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 目前進度（2026-11-13）
 
-Apple Silicon 已用 `cb4fbfc` 出貨 App 與同源 Dioxus 重測。837 行從首筆取頁到最後畫面確認的中位數為 523／564 ms，快取 PageDown 為 21.9／71.0 ms。雙 GIF 前景播放的程序族 footprint 峰值中位數為 131／742 MiB，10 秒累積 CPU 為 1.092／1.193 秒，三組 CPU 差距有波動。使用者將驗 Windows 日文 IME。[量測結果及範圍](slint-macos-measurement.md#2026-11-13-cb4fbfc-長文快取翻頁與雙-gif)
+Apple Silicon 已用 `cb4fbfc` 出貨 App 與同源 Dioxus 重測。擴大至每版各 100 次 PageDown 及 PageUp 後，兩版的 837 行全文畫面確認中位數為 521／514 ms。Slint 的 PageDown p95 為 39.4 ms，Dioxus 為 87.7 ms，PageUp p95 為 39.6／86.2 ms。雙 GIF 前景播放的程序族 footprint 峰值中位數為 131／742 MiB，10 秒累積 CPU 為 1.092／1.193 秒，三組 CPU 差距有波動。使用者將驗 Windows 日文 IME。[長文量測](slint-macos-measurement.md#cb4fbfc-每方向-100-次快取翻頁) · [雙 GIF 量測](slint-macos-measurement.md#2026-11-13-cb4fbfc-長文快取翻頁與雙-gif)
 
 四架構候選已同步至 `cb4fbfc` 的產品來源，包含 Apple Silicon／Intel Mac App、Windows x64 便攜 ZIP／離線 Setup 與 Linux x64 deb／tar.gz。這版新增文章首尾方向鍵切篇。切換前仍待驗 macOS 封裝的原生焦點、Windows 實機安裝及注音／日文 IME、正式簽章的憑證接手及完整效能矩陣。Intel Mac 與 Linux x64 實機依指示暫緩。正式入口維持 Dioxus。[最新候選](#cb4fbfc-四架構候選)
 

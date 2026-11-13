@@ -118,6 +118,21 @@ Apple Silicon 使用 Slint `cb4fbfc` 出貨 App 的 Skia software 路徑，對�
 
 原始資料、重跑工具、排除紀錄及清理清單在 `.local/verification/slint-article-arrow/arm64-reading/`。清理了測試 App、暫存素材、測試資料和已退出的取樣工具，保留候選包、原始收據及 Cargo 快取。
 
+### cb4fbfc 每方向 100 次快取翻頁
+
+沿用同一對執行檔與 837 行合成站。四個新程序依 Slint／Dioxus／Dioxus／Slint 執行。每個程序在全文完成後跑 50 組原生 PageDown／PageUp，每版共 100 次 PageDown、100 次 PageUp。每筆 PageDown 的文字區像素指紋都與該輪首次翻頁相同，每筆 PageUp 都與首頁相同。再從截圖核對 Slint 接到第 28 行，Dioxus 接到第 23 行。四輪各維持 37 筆站端取頁，均正常退出並收到 Close ACK。
+
+| 指標 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 閱讀許可到首筆取頁，中位數 | 0.18 ms | 0.51 ms |
+| 首筆取頁到全文 renderer ACK，中位數 | 521.07 ms | 514.49 ms |
+| 快取 PageDown，p50／p95 | 36.82／39.38 ms | 81.30／87.68 ms |
+| 快取 PageUp，p50／p95 | 36.98／39.62 ms | 39.50／86.23 ms |
+
+兩版首筆取頁都在閱讀許可成立後 1 ms 內送出。兩次長文比較的全文完成差距方向不同。這輪兩個翻頁方向的 p95 都低約 55%。數據包含擷取、輪詢，以及兩版相同的 12 ms 按鍵按住時間，與上一輪 30 筆的絕對時間分開解讀。
+
+首輪控制器有前景 PID 但按鍵未使畫面翻頁，直接指定 PID 與調整視窗位置也未改善。改用獨立的事件來源、明確清除修飾鍵並保留 12 ms 按鍵時間後，兩版校準及四輪正式測試均通過。原始收據、畫面核對、排除原因及清理清單位於 `.local/verification/slint-article-arrow/arm64-reading/` 的 `comparison-100.json`、`matched-reading-100/` 和 `cleanup-100.json`。
+
 ### cb4fbfc 雙 GIF 設定開關與恢復
 
 同一對執行檔、同一 GIF 與 1040×768 外窗。用 macOS ⌘, 開啟同窗設定的「General」，再按 Esc 回到文章。初始播放、設定覆蓋雙圖、恢復播放各暖機 1 秒、取樣 10 秒。四個有效程序每階段均有 101 筆資源樣本與 201 筆前景 PID 觀察。設定階段首尾影像均有 General 和 Close，且雙圖不可見。開啟前和返回後，兩圖各觀測到紅藍換幀。每輪兩個網址各 GET 一次，四輪正常關窗、收到 Close ACK，HTTP 及取樣到的程序均結束。
