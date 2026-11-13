@@ -2,6 +2,10 @@
 
 候選交付中的程式、Slint UI、字型、locale、fixture、工具與文件，須能從獨立來源包還原。原始建置的 commit／dirty／patch、產品來源核對與第三方來源閉包是不同證據；不能把其中一項通過填成全部完成。
 
+## 2026-11-13 草稿與文章被動驗收候選來源
+
+Apple Silicon 與 Windows x64 便攜候選取自 `675b150`。既有 `product-source-20261111-6ad8e39/sources.json` 已加入兩包下載及主程式雜湊。以 `--candidate passive-drafts-reading-macos-windows` 在禁止網路與原 worktree 讀取的目錄還原，核對 619 份產品檔案和 Git tree `2df7c8e8db5e5c3d607fd192d57567921f4021fa`。manifest SHA-256 為 `926e95c5f6edcc4886ef4f3da1409e717659544cc6b775c7efbfbfd6201f91d0`。收據在 `.local/verification/slint-passive-drafts-reading/source-delivery.json`。
+
 ## 2026-11-13 文章逐行對齊候選來源
 
 四架構候選 `9376627` 的下載及主程式雜湊已加入既有 `product-source-20261111-6ad8e39/sources.json`，包含 Windows 離線 Setup。Intel Mac 與 Linux x64 的實際建置提交 `04191e1` 僅多三份文件變更。用 `--candidate article-arrow-macos-windows` 從原 bundle 和對應 patch 獨立還原，核對 619 份產品檔案及完整 Git tree。新版 manifest SHA-256 為 `34b23e472cea254c05fbacff33eb5dd36e19eeb64543b424b49d4ea3ccb12e26`。證據及暫存清理見 `.local/verification/slint-article-arrow-alignment/all-source-delivery.json`。

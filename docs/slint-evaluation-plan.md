@@ -12,7 +12,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 滾輪後逐行鍵盤對齊已同步到四架構候選。Apple Silicon、Windows x64 便攜版與離線 Setup 都對應 `9376627`。Intel Mac 與 Linux x64 從僅多三份文件變更的 `04191e1` 建置。這一輪已核對四架構封裝，原生操作仍待補驗。[Windows 候選](slint-windows-candidate.md#2026-11-13-文章逐行對齊候選)
 
-草稿及文章的自動驗收已改用被動視窗。Apple Silicon 補驗草稿跨程序重開與帶回、文章逐行對齊、慢速取頁、取消／繼續及輸出。實體鍵鼠、IME 和前景效能各自待驗。[被動視窗驗收](#2026-11-13-草稿與文章被動視窗驗收)
+草稿及文章的自動驗收已改用被動視窗。Apple Silicon DMG 與 Windows x64 便攜 ZIP 使用同一提交 `675b150`。Apple Silicon 補驗草稿跨程序重開與帶回、文章逐行對齊、慢速取頁、取消／繼續及輸出。Windows 離線 Setup 仍為 `9376627`。實體鍵鼠、IME 和前景效能各自待驗。[被動視窗驗收](#2026-11-13-草稿與文章被動視窗驗收)
 
 文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個 macOS 固定下載入口現為乾淨 `c7368b2`，包含設定預覽按需繪製及文章延後取得原生焦點的修正。Apple Silicon `793ecb91` 和 Intel `62ada42e` 各通過 23 項封裝後合成回歸，另各完成原生長文的 37 次取頁及八次快取操作。Intel 使用 Rosetta。Linux `68601365` 與另備 Windows `3a8de2a9` 已封裝固定狀態列探針修正。Linux 在 QEMU 下通過 deb 安裝、軟體繪圖的完整視窗檢查及 X11 延後焦點的 37 次取頁，免安裝包的預設繪圖仍卡在通知取樣。Windows 交叉編譯與 ZIP／PE 檢查通過，實機待驗。`69542cb7` 為先前的 Windows 待驗下載。[跨平台封裝與驗收](#2026-11-11-固定狀態列探針的-windows-與-linux-封裝)Intel／Linux 實機依指示暫緩，其餘原生操作、完整資料回退和跨平台效能矩陣仍待驗。
 
@@ -207,7 +207,7 @@ Intel 首輪來源清單漏對應 soxr 的 recipe 名稱，按原有 replay log 
 
 ## 產物保留規則（2026-11-09 使用者要求）
 
-含逐行對齊修正的 Apple Silicon App／DMG／ZIP 與 Windows x64 ZIP 在 `.local/verification/slint-article-arrow-alignment/pair/`。兩包固定乾淨 `9376627`。Apple Silicon 的簽章、DMG、ZIP CRC、包內主程式與原有 50 份 runtime 檔案核對通過。Windows ZIP 的 925 份 payload、CRC 和 PE 匯入核對通過。沿用固定 Cargo 快取。Windows 封裝時提取的 DLL 與素材、獨立來源還原暫存均已移除。驗證和清理收據見 `paired-verification.json`、`windows-verification.json` 及上層 `source-delivery.json`。
+含逐行對齊修正的 Apple Silicon DMG 與 Windows x64 ZIP 在 `.local/verification/slint-article-arrow-alignment/pair/`。兩包固定乾淨 `9376627`，保留作版本對照。Apple Silicon 的簽章、DMG、ZIP CRC、包內主程式與原有 50 份 runtime 檔案核對通過。Windows ZIP 的 925 份 payload、CRC 和 PE 匯入核對通過。沿用固定 Cargo 快取。Windows 封裝時提取的 DLL 與素材、獨立來源還原暫存均已移除。驗證和清理收據見 `paired-verification.json`、`windows-verification.json` 及上層 `source-delivery.json`。
 
 同一版 Windows 離線 Setup 在 `../PTTStella-candidates/windows-9376627-offline/`，Intel Mac 與 Linux x64 位於 `slint-article-arrow-alignment/` 的 `macos-intel/`、`linux/`。Setup 解包與便攜 ZIP 的 926 檔逐位元一致。Intel 核對簽章、DMG、ZIP 與 1,219 份 App 檔案。Linux 核對 AMD64 deb 與 tar.gz 的執行檔、共用授權與說明。來源清單已補入新下載雜湊。封裝暫存、工具容器、SDK 映像及連結清理紀錄與封裝收據在同一驗證目錄。
 
@@ -1084,3 +1084,5 @@ Slint 通知高度納入訊息、操作列及上下留白。卡片先隨文字�
 Apple Silicon release 測試執行檔 SHA-256 為 `7795002886b1975aa6acf6760af1d14fd40161b6d5bc1d095830baef4d89f962`。兩輪共 3,983 筆 macOS 前景觀察，涵蓋啟動、操作及退出，沒有觀測到測試程序取得前景。草稿新建、另起程序重開、帶回本機合成站後停在編輯器及十項儲存／衝突檢查通過。文章案例通過方向鍵逐行對齊、837 行／37 次取頁、441 行／19 次取消與繼續、逾時停止、複製／PNG、直接輸入、貼上、保活、兩種閱讀模式尋找與終端翻頁。各正常連線收到唯一 Close ACK。
 
 文章版面首輪通過方向鍵落點，但舊斷言要求每次向下必定光柵化一列。對齊後可視區底端有時仍落在同一列。修正探針核對實際新增列數、保留列的快取重用及上下鍵的精確落點，重跑通過。Slint 程式測試 109 項通過，既有原生 helper 維持忽略，release all-target Clippy 通過。收據與首輪反例在 `.local/verification/slint-passive-drafts-reading/`，重複圖像和臨時觀測程式已清理，固定 Cargo 快取及現行候選包保留。最新版套件的實體鍵鼠、IME 與前景效能待補驗。
+
+Apple Silicon App／DMG／ZIP 與 Windows x64 便攜 ZIP 同取乾淨提交 `675b150`，放在同一證據根目錄的 `pair/`。Apple Silicon 封裝執行檔重跑草稿保存、跨程序重開及帶回、文章版面與取消／繼續。四案通過，963 筆前景觀察都未見驗收程序取得前景，三個連線案例各收到唯一 Close ACK。App 簽章、DMG、ZIP CRC、Windows ZIP 的 925 份內容與 PE 匯入及 619 份產品來源檔均已核對。已移除被取代的 Apple Silicon App 和重複 ZIP，保留原 DMG 連結、Windows 版本對照及 Intel／Linux 封裝。詳細路徑與空間觀測見 `delivery-cleanup.json`。[Windows 同源候選](slint-windows-candidate.md#2026-11-13-草稿與文章被動驗收候選) · [產品來源](slint-product-source.md)

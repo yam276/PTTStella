@@ -1,5 +1,11 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-13 草稿與文章被動驗收候選
+
+便攜 ZIP 位於 `.local/verification/slint-passive-drafts-reading/pair/windows/`，與同層 Apple Silicon DMG 都使用乾淨提交 `675b150`。ZIP SHA-256 為 `dad3410a6ac28d4116144b6245c68eff737f0ab223beac9a3a88a10ea58f0915`，包內主程式為 `cd56f91dddd2347e14c58fdf43a12a9b1cdee2c18cacc9c0a6f9662805db0001`。已核對 CRC、925 份內容與 PE 匯入。
+
+自動草稿及文章驗收以 toolkit 事件操作測試視窗。手動 `Run-Drafts-IME.cmd` 仍用原生輸入，可照既有方式測注音和日文。Windows 原生驗收待補，離線 Setup 仍用下節 `9376627`。[Apple Silicon 驗收](slint-evaluation-plan.md#2026-11-13-草稿與文章被動視窗驗收)
+
 ## 2026-11-13 文章逐行對齊候選
 
 便攜 ZIP 在 `.local/verification/slint-article-arrow-alignment/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-9376627-offline/`。兩包和 Apple Silicon DMG 都使用同一乾淨提交 `9376627`。ZIP SHA-256 為 `e23dac113c48648b93c8ee383e943327c61e18f7bb416b0e04a421d2a1501f44`，Setup 為 `21900bdf0261e94d3b05445d2cedbdf8f90b39de3c7e047fa6cc5ccafbd0f9b5`。
