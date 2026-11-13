@@ -118,6 +118,21 @@ Apple Silicon 使用 Slint `cb4fbfc` 出貨 App 的 Skia software 路徑，對�
 
 原始資料、重跑工具、排除紀錄及清理清單在 `.local/verification/slint-article-arrow/arm64-reading/`。清理了測試 App、暫存素材、測試資料和已退出的取樣工具，保留候選包、原始收據及 Cargo 快取。
 
+### cb4fbfc 雙 GIF 設定開關與恢復
+
+同一對執行檔、同一 GIF 與 1040×768 外窗。用 macOS ⌘, 開啟同窗設定的「General」，再按 Esc 回到文章。初始播放、設定覆蓋雙圖、恢復播放各暖機 1 秒、取樣 10 秒。四個有效程序每階段均有 101 筆資源樣本與 201 筆前景 PID 觀察。設定階段首尾影像均有 General 和 Close，且雙圖不可見。開啟前和返回後，兩圖各觀測到紅藍換幀。每輪兩個網址各 GET 一次，四輪正常關窗、收到 Close ACK，HTTP 及取樣到的程序均結束。
+
+| 程序／輪次 | CPU 秒，播放／設定／恢復 | 程序族 physical footprint 峰值 MiB，播放／設定／恢復 |
+| --- | --- | --- |
+| Slint 1 | 0.793／0.066／0.484 | 116.6／130.5／123.6 |
+| Dioxus 1 | 0.868／0.181／0.264 | 733.9／744.5／740.1 |
+| Slint 2 | 0.733／0.064／0.485 | 123.7／100.7／105.2 |
+| Dioxus 2 | 0.740／0.136／0.221 | 748.7／753.4／765.2 |
+
+兩版進設定時 CPU 均下降，恢復後兩次 Slint 的 CPU 都比本輪的 Dioxus 樣本高。恢復段中位數為 0.484／0.242 秒，與上一組單純前景播放的結果方向不同。每輪只開關一次設定，尚無多次切換的長期資源趨勢。畫面驗證涵蓋面板遮蔽及回到文章。Slint 舊有的動畫引擎測試另核對阻擋時播放器集合與下一幀計時清空，Dioxus 54 個 GIF 和文內圖片測試通過。
+
+一輪 Dioxus 未取得可見視窗，已排除並在下一輪延後啟用補跑。Dioxus 手動展圖與 PNG 探針在這個自動展圖場景的整體報告維持 failed。兩版效能收據各自核對實際雙圖、網路、資源與正常退出。個別階段及暫存清理在 `.local/verification/slint-article-arrow/arm64-reading/settings-comparison.json` 與 `settings-cleanup.json`。
+
 ## 2026-11-11 雙 GIF 三組交錯比較
 
 在 Mac15,14、macOS 15.7.7 arm64 上，以當時 Slint arm64 封裝 native `f50ffb46`（乾淨 `7466c31`）對照既有 Dioxus native `4a3035b6`（實際 `3c667eb` 加 R3 patch，產品來源核對 `f48e7e4`）。已核對共用閱讀場景與素材產生器在這兩個來源間相同。六輪採 Slint／Dioxus、Dioxus／Slint、Slint／Dioxus 順序，使用相同設定、23 行文章和兩個獨立的 loopback GIF URL。兩圖都是同一份 512×160、32 幀、100ms 幀延遲的合成 GIF。每輪用新程序，重用兩個測試 App 身分。
