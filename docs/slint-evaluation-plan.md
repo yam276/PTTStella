@@ -1172,3 +1172,7 @@ Apple Silicon App／DMG／ZIP、Windows x64 便攜 ZIP 與離線 Setup、Intel M
 Linux 便攜包在 QEMU／Xvfb 重跑 14 項元件回歸全數通過，每案各一次 Close ACK，包含三種影片格式。首輪 Podman 連線中斷及兩輪客體暫存清理另有收據。
 
 已清理前版重複的兩個 macOS App／ZIP、Linux tar.gz、本輪 Setup 暫存及 Linux 傳輸目錄。移除路徑的檔案邏輯大小共 921,113,688 bytes，檔案系統可用空間同期增加 742,973,440 bytes。保留現行交付、前版供升退驗證的單份套件、固定編譯快取及唯一收據。精確路徑見 `cleanup.json`。
+
+#### Windows 離線安裝與草稿升退
+
+在隔離 Wine 用實際候選 ZIP 完成 `d047e55` → `2ef65ce` → `d047e55` 三次執行。舊版保存一份繁中 ANSI 草稿，新版與退回版各重開並帶回本機站端編輯器。三案均收到唯一 Close ACK，草稿檔雜湊不變。雙架構 Wine 另完成兩版原始 Setup 的離線安裝、升級、回退、重裝與卸載，合計 10 案通過。每次換版核對 926 個安裝檔，草稿升退讀回及原始檔案保留皆通過。正式 Windows 原生驗收、IME 及 Dioxus 資料移轉仍待驗。[Windows 驗收](slint-windows-candidate.md#便攜版草稿升退與-setup-的-wine-對照)

@@ -10,6 +10,16 @@
 | Windows 離線 Setup | `a69a9797a648a460aeb44a5bb650ded62d0fd2c65383e708537b0eaa30164537` |
 | 包內執行檔 | `5d23e5adcc18744f87bad0241b9b2ac415dd55277396c9f626a2cf5ee8c46f88` |
 
+### 便攜版草稿升退與 Setup 的 Wine 對照
+
+在隔離且無對外網路的 Debian Wine 10.0／QEMU／Xvfb，從 `d047e55` 便攜版保存合成繁中 ANSI 草稿，改用 `2ef65ce` 讀回並帶回本機站端編輯器，再切回 `d047e55` 重做讀回與帶回。兩版候選資料位置一致，三個程序各收到唯一 Close ACK，保存檔案的 SHA-256 在升退前後相同。收據在 `.local/verification/slint-windows-installer-lifecycle/current/guest/`。這輪使用合成 Slint 事件，Windows 原生 IME 待驗。
+
+只有 x64 載入器的 Wine 前綴回報 Windows 10.0.19043，Inno 日誌列出的可執行架構只有 x64。兩版原始 Setup 都在啟動檢查退出，未安裝程式、捷徑或解除安裝項目。Inno 7.1.0 的 64 位元 Setup 啟動也檢查 x86 支援。[Inno 7.1.0 啟動程式](https://github.com/jrsoftware/issrc/blob/is-7_1_0/Projects/Src/Setup.MainFunc.pas#L3581-L3606)
+
+加入 i386 載入器後，Wine 在同一 Windows 版本回報支援 x86 與 x64。以未修改的原始 Setup 完成 10 案。初裝 `d047e55`、升至 `2ef65ce`、退回前版、再裝新版，每次均核對 926 個安裝檔雜湊、使用者解除安裝登錄及開始選單捷徑。新版安裝後主視窗探針通過，草稿升級和回退均可讀回並帶回本機站端編輯器，存檔雜湊不變。指定到既有 Dioxus 合成目錄時 Setup 以代碼 7 拒絕，原目錄與當前版本均保留。卸載移除執行檔、捷徑與登錄，保留草稿、資料標記和該合成目錄。
+
+從本機證據根目錄執行 `python3 run.py wow64` 可重現雙架構案例。保留原證據目錄後再使用同名輸出。原始日誌、逐案收據與清理路徑見 `wow64/guest/`、`wow64/result.json` 和 `cleanup.json`。本輪專用容器、Wine 前綴、套件副本與新取用的基底映像已清理，沿用既有 Podman 機器與 Cargo 快取。Windows 實機安裝／IME、正式 Dioxus 資料移轉及 Credential Manager 待驗。
+
 ## 2026-11-13 d047e55 候選
 
 便攜 ZIP 在 `.local/verification/slint-windows-refresh-rate/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-d047e55-offline/`。四架構同取乾淨 `d047e55`，納入軟體繪圖更新率修補。便攜包核對 926 份 payload、CRC 及 AMD64 PE 匯入，Setup 解包的 927 檔與便攜版一致。
