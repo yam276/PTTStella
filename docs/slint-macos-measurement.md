@@ -2,6 +2,28 @@
 
 這份文件記錄 S0／S8 的量測工具及目前證據，不是效能通過報告。完整負載、次數與平台門檻仍以[平替計畫](slint-evaluation-plan.md#同負載效能門檻)為準。
 
+## 2026-11-14 最新候選長文、翻頁與雙 GIF 重測
+
+Apple M3 Ultra／macOS 15.7.7 沿用 Slint `cb4fbfc` 出貨 App 的 Skia software，以及同產品來源 `cd64435` 編譯的 release Dioxus／系統 WKWebView。兩份執行檔雜湊與上一輪一致，與當前 worktree 的差異只有文件。沿用 1040×768 外窗、bundled 字型 23／20／100、各輪新程序與隔離資料。視窗座標由系統決定。
+
+| 指標 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 首頁入快取至 renderer ACK，中位數 | 5.77 ms | 59.09 ms |
+| 閱讀許可至首筆取頁派送，中位數 | 0.20 ms | 0.41 ms |
+| 首筆取頁至 837 行完整快取，中位數 | 530.95 ms | 524.77 ms |
+| 首筆取頁至全文 renderer ACK，中位數 | 541.04 ms | 555.49 ms |
+| 快取 PageDown，p50／p95 | 37.73／41.30 ms | 82.54／87.48 ms |
+| 快取 PageUp，p50／p95 | 37.32／39.54 ms | 39.96／87.99 ms |
+| 雙 GIF，10 秒 CPU 中位數 | 0.479 秒 | 0.663 秒 |
+| 雙 GIF，程序族 physical footprint 取樣峰值中位數 | 130.65 MiB | 730.46 MiB |
+| 雙 GIF，程序族 RSS 取樣峰值中位數 | 395.03 MiB | 521.55 MiB |
+
+長文依 Slint／Dioxus／Dioxus／Slint 跑四輪，每輪 37 筆取頁，各版每方向 100 次快取翻頁。截圖核對兩版首頁均從第 1 行開始，PageDown 各由第 28／23 行接讀，PageUp 回第 1 行。原生翻頁時間包含 12 ms 按鍵、視窗擷取及輪詢。首次取得前景的等待未固定，首頁 ACK 與全文 ACK 都是各自前端的提交觀測點。完整快取僅相差約 6 ms，全文 ACK 的差距方向與上輪 100 次測試相反。翻頁兩方向 p95 分別低 53% 和 55%。
+
+雙 GIF 沿用兩個 URL 各一次 GET、512×160、32 幀、每幀 100 ms 的本機素材。每版三個有效樣本，暖機 1 秒後各取 101 筆程序族及 201 筆前景觀察，首尾都確認兩圖換幀。一輪 Dioxus 未取得可量測主視窗，逾時後終止，已排除並單獨補跑。舊 Dioxus 探針包含手動展圖與 PNG 條件，此劇本以雙圖實際呈現、HTTP、資源與退出收據為準。有效十輪均正常退出並收到 Close ACK，雙 GIF 六輪所有取樣到的程序身分均退出。Slint footprint 峰值中位數低 82%，CPU 中位數低 28%。CPU 絕對值低於前次，與前次比較時仍有輪次及負載波動。
+
+本輪覆蓋 Apple Silicon 的本機合成資料、快取原生翻頁及雙 GIF 穩定前景播放。冷暖啟動、固定視窗位置、實站與其他平台仍需各自驗收。原始收據與重跑工具在 `.local/verification/slint-article-arrow/arm64-reading/`，比較及清理清單為 `retest-20261114-comparison.json`、`retest-20261114-cleanup.json`。已移除三個隔離暫存根及本輪的 `window-control`，保留收據、候選包與固定 Cargo 快取。
+
 ## 2026-11-13 兩個最小化連線視窗的資源對照
 
 在同一台 Apple M3 Ultra／macOS 15.7.7 上，比較 Apple Silicon Slint `4d7d174` 和相容回退 Dioxus `82bc81f`。Slint 使用預設軟體繪圖，Dioxus 使用系統 WKWebView。每輪開兩個新程序，使用獨立測試 Bundle ID 與隔離設定副本。兩個程序連到不同的本機 TLS WebSocket peer，收到同一份合成 80×24 格線。先核對每個 1040×768 視窗中的第 1 與第 22 行，再透過 macOS 輔助使用介面最小化，讀回最小化狀態。

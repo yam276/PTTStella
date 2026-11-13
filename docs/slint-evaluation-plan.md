@@ -4,9 +4,11 @@
 
 Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分段接續長文、大型 GIF 與選用的自動開圖。Slint 起點為獨立 worktree 內的 `slint-research`／`pttstella-slint` 原型。原型已在 macOS arm64 實測雙色字、80×24、放大拖曳、全螢幕及獨立輸入欄的威注音。實體 Retina、終端內組字、跨平台原生輸入和與 Dioxus 的同負載效能比較仍待驗。實驗數據及已知差異見 [離線原型紀錄](slint-prototype.md)。
 
-## 目前進度（2026-11-13）
+## 目前進度（2026-11-14）
 
-Apple Silicon 已用 `cb4fbfc` 出貨 App 與同源 Dioxus 重測。擴大至每版各 100 次 PageDown 及 PageUp 後，兩版的 837 行全文畫面確認中位數為 521／514 ms。Slint 的 PageDown p95 為 39.4 ms，Dioxus 為 87.7 ms，PageUp p95 為 39.6／86.2 ms。雙 GIF 前景播放的程序族 footprint 峰值中位數為 131／742 MiB，10 秒累積 CPU 為 1.092／1.193 秒，三組 CPU 差距有波動。使用者將驗 Windows 日文 IME。[長文量測](slint-macos-measurement.md#cb4fbfc-每方向-100-次快取翻頁) · [雙 GIF 量測](slint-macos-measurement.md#2026-11-13-cb4fbfc-長文快取翻頁與雙-gif)
+Apple Silicon 用 `cb4fbfc` 出貨 App 與同源 Dioxus 再次重測。837 行全文 renderer ACK 中位數為 541／555 ms，每版各 100 次的快取 PageDown p95 為 41.3／87.5 ms，PageUp p95 為 39.5／88.0 ms。雙 GIF 每版三輪有效樣本的程序族 footprint 峰值中位數為 131／730 MiB，10 秒累積 CPU 為 0.479／0.663 秒。全文差距方向及 CPU 絕對值在不同輪次有波動。使用者將驗 Windows 日文 IME。[重測結果](slint-macos-measurement.md#2026-11-14-最新候選長文翻頁與雙-gif-重測)
+
+同一 Slint 候選與相容 Dioxus `82bc81f` 用正式 Bundle ID 在隔離資料副本完成五階段升級、回退及恢復。兩版均從一般入口讀寫自動開圖設定，核對兩次保存的一代備份及八份復原檔。正式 Developer ID 的鑰匙圈重新授權與 Finder 首開仍待驗，正式入口維持 Dioxus。[最新回退演練](slint-store-frontends.md#2026-11-14-cb4fbfc-正式識別的隔離升級與回退)
 
 四架構候選已同步至 `cb4fbfc` 的產品來源，包含 Apple Silicon／Intel Mac App、Windows x64 便攜 ZIP／離線 Setup 與 Linux x64 deb／tar.gz。這版新增文章首尾方向鍵切篇。切換前仍待驗 macOS 封裝的原生焦點、Windows 實機安裝及注音／日文 IME、正式簽章的憑證接手及完整效能矩陣。Intel Mac 與 Linux x64 實機依指示暫緩。正式入口維持 Dioxus。[最新候選](#cb4fbfc-四架構候選)
 
