@@ -578,6 +578,7 @@ fn mount_window(
                 let composing = ui.get_editor_composing();
                 let body = ui.get_editor_body_focused();
                 let shift = input.modifiers.shift_key();
+                let modifiers = input.modifiers;
                 let command = if cfg!(target_os = "macos") {
                     input.modifiers.super_key() && !input.modifiers.control_key()
                 } else {
@@ -616,7 +617,7 @@ fn mount_window(
                         return PreventDefault;
                     }
                     if ui.get_editor_focused()
-                        && let Some(code) = text_edit_shortcut(event.physical_key, input.modifiers)
+                        && let Some(code) = editor_edit_shortcut(event.physical_key, modifiers)
                     {
                         let pressed = event.state == ElementState::Pressed && !event.repeat;
                         drop(input);
@@ -630,33 +631,14 @@ fn mount_window(
                         return PreventDefault;
                     }
                     if body
-                        && !input.modifiers.alt_key()
-                        && !input.modifiers.control_key()
-                        && !input.modifiers.super_key()
+                        && let Some(code) = editor_body_key(event.logical_key.as_ref(), modifiers)
                     {
-                        let code = match event.logical_key {
-                            Key::Named(NamedKey::ArrowLeft) => Some(0),
-                            Key::Named(NamedKey::ArrowRight) => Some(1),
-                            Key::Named(NamedKey::ArrowUp) => Some(2),
-                            Key::Named(NamedKey::ArrowDown) => Some(3),
-                            Key::Named(NamedKey::Home) => Some(4),
-                            Key::Named(NamedKey::End) => Some(5),
-                            Key::Named(NamedKey::PageUp) => Some(6),
-                            Key::Named(NamedKey::PageDown) => Some(7),
-                            Key::Named(NamedKey::Backspace) => Some(10),
-                            Key::Named(NamedKey::Delete) => Some(11),
-                            Key::Named(NamedKey::Enter) => Some(12),
-                            Key::Named(NamedKey::Tab) if !shift => Some(13),
-                            _ => None,
-                        };
-                        if let Some(code) = code {
-                            let pressed = event.state == ElementState::Pressed;
-                            drop(input);
-                            if pressed {
-                                ui.invoke_editor_key(code, shift);
-                            }
-                            return PreventDefault;
+                        let pressed = event.state == ElementState::Pressed;
+                        drop(input);
+                        if pressed {
+                            ui.invoke_editor_key(code, shift);
                         }
+                        return PreventDefault;
                     }
                 }
                 drop(input);
@@ -1151,6 +1133,58 @@ pub(crate) fn text_edit_shortcut(physical: PhysicalKey, modifiers: ModifiersStat
     }
 }
 
+fn editor_edit_shortcut(physical: PhysicalKey, modifiers: ModifiersState) -> Option<i32> {
+    if !cfg!(target_os = "macos")
+        && physical == PhysicalKey::Code(KeyCode::KeyY)
+        && modifiers == ModifiersState::CONTROL
+    {
+        return Some(5);
+    }
+    text_edit_shortcut(physical, modifiers)
+}
+
+fn editor_body_key(logical: Key<&str>, modifiers: ModifiersState) -> Option<i32> {
+    let Key::Named(key) = logical else {
+        return None;
+    };
+    let shift = modifiers.shift_key();
+    let chord = modifiers - ModifiersState::SHIFT;
+    let primary = if cfg!(target_os = "macos") {
+        ModifiersState::SUPER
+    } else {
+        ModifiersState::CONTROL
+    };
+    if chord == primary {
+        return match key {
+            NamedKey::Home => Some(8),
+            NamedKey::End => Some(9),
+            NamedKey::ArrowLeft if cfg!(target_os = "macos") => Some(4),
+            NamedKey::ArrowRight if cfg!(target_os = "macos") => Some(5),
+            NamedKey::ArrowUp if cfg!(target_os = "macos") => Some(8),
+            NamedKey::ArrowDown if cfg!(target_os = "macos") => Some(9),
+            _ => None,
+        };
+    }
+    if !chord.is_empty() {
+        return None;
+    }
+    match key {
+        NamedKey::ArrowLeft => Some(0),
+        NamedKey::ArrowRight => Some(1),
+        NamedKey::ArrowUp => Some(2),
+        NamedKey::ArrowDown => Some(3),
+        NamedKey::Home => Some(4),
+        NamedKey::End => Some(5),
+        NamedKey::PageUp => Some(6),
+        NamedKey::PageDown => Some(7),
+        NamedKey::Backspace => Some(10),
+        NamedKey::Delete => Some(11),
+        NamedKey::Enter => Some(12),
+        NamedKey::Tab if !shift => Some(13),
+        _ => None,
+    }
+}
+
 fn clipboard_shortcut(
     letter: Key<&str>,
     physical_key: PhysicalKey,
@@ -1266,6 +1300,48 @@ fn physical_code(code: KeyCode) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn draft_shortcuts_use_the_document_and_keep_other_modifier_chords_available() {
+        let primary = if cfg!(target_os = "macos") {
+            ModifiersState::SUPER
+        } else {
+            ModifiersState::CONTROL
+        };
+        for (key, normal, document) in [(NamedKey::Home, 4, 8), (NamedKey::End, 5, 9)] {
+            assert_eq!(
+                editor_body_key(Key::Named(key), ModifiersState::SHIFT),
+                Some(normal)
+            );
+            assert_eq!(
+                editor_body_key(Key::Named(key), primary | ModifiersState::SHIFT),
+                Some(document)
+            );
+            assert_eq!(
+                editor_body_key(Key::Named(key), primary | ModifiersState::ALT),
+                None
+            );
+        }
+        for (key, mac) in [
+            (NamedKey::ArrowLeft, 4),
+            (NamedKey::ArrowRight, 5),
+            (NamedKey::ArrowUp, 8),
+            (NamedKey::ArrowDown, 9),
+        ] {
+            assert_eq!(
+                editor_body_key(Key::Named(key), primary),
+                cfg!(target_os = "macos").then_some(mac)
+            );
+        }
+        assert_eq!(
+            editor_body_key(Key::Named(NamedKey::Tab), ModifiersState::SHIFT),
+            None
+        );
+        assert_eq!(
+            editor_edit_shortcut(PhysicalKey::Code(KeyCode::KeyY), primary),
+            (!cfg!(target_os = "macos")).then_some(5)
+        );
+    }
 
     #[test]
     fn fullscreen_uses_physical_keys_before_ime_and_keeps_search_modifiers_distinct() {

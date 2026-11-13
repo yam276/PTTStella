@@ -314,16 +314,49 @@ async fn verify(ui: &TerminalWindow, owner: &Rc<Editor>, directory: &Path) -> Re
                 .is_some_and(|d| d.title() == TITLE),
             "title does not share Document",
         )?;
-        ui.invoke_editor_edit_key(4);
+        // The toolbar actions share the same Document history as the keys.
+        ui.global::<EditorState>().invoke_action(4);
         require(
             owner
                 .document
                 .borrow()
                 .as_ref()
-                .is_some_and(|d| d.title() != TITLE),
-            "title not in shared undo",
+                .is_some_and(|d| d.title() != TITLE && d.source() == BODY),
+            "toolbar undo did not restore the previous title",
         )?;
-        ui.invoke_editor_edit_key(5);
+        ui.global::<EditorState>().invoke_action(5);
+        require(
+            owner
+                .document
+                .borrow()
+                .as_ref()
+                .is_some_and(|d| d.title() == TITLE && d.source() == BODY),
+            "toolbar redo did not restore the edited title",
+        )?;
+        ui.invoke_editor_key(9, false);
+        ui.invoke_editor_key(8, true);
+        require(
+            owner
+                .document
+                .borrow()
+                .as_ref()
+                .is_some_and(|d| d.selection().anchor == BODY.len() && d.selection().head == 0),
+            "document-start selection lost the document-end anchor",
+        )?;
+        type_text(ui, "替");
+        require(source(owner) == "替", "document selection was not replaced")?;
+        ui.global::<EditorState>().invoke_action(4);
+        require(
+            source(owner) == BODY,
+            "toolbar undo changed the ANSI source",
+        )?;
+        ui.global::<EditorState>().invoke_action(5);
+        require(
+            source(owner) == "替",
+            "toolbar redo did not restore the replacement",
+        )?;
+        ui.global::<EditorState>().invoke_action(4);
+        ui.invoke_editor_key(8, false);
         verify_language(ui, owner, directory)?;
         // The real body TouchArea resolves either half of a Chinese character.
         let before_selection_image = ui.global::<EditorState>().get_pixels();

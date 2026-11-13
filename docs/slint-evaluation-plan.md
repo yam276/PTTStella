@@ -54,6 +54,8 @@ macOS 設定開關在三個程序各跑 12 次，原候選的 footprint 主要�
 
 ### 1. 本機草稿編輯器（S6）
 
+2026-11-13 修正草稿工具列「復原／重做」原先觸發複製／貼上的接線。按鈕與快捷鍵共用 Document 歷史。另接上 macOS ⌘方向鍵、Windows／Linux Ctrl+Home／Ctrl+End 與 Ctrl+Y，移動時可加 Shift 延伸選區。Apple Silicon 背景探針核對工具列動作可往返還原標題和整份 ANSI 正文，並重跑保存、跨程序重開、帶回合成站及十項儲存案例。實體按鍵與 IME 待驗。[草稿操作](drafts.md#編輯顯示與選取)
+
 Slint 已有主視窗內的 79×23 編輯區、三種色碼顯示、跨行與矩形選取、色票、復原／重做、自動保存、重開及帶回 PTT 編輯器。早期 Apple Silicon 原生 App 已驗過拖曳、上色、復原與威注音取消／提交，當時未能觀察獨立候選窗。另有一輪備份寫入失敗後重試保存時少了末字。第二輪逐字核對通過，第一輪缺少事件紀錄，原因仍未明。Windows 日文 IME 的回報來自 `Run-IME.cmd` 終端探針，草稿視窗須用自己的流程驗證。[原生編輯紀錄](slint-prototype.md#s6-原生編輯主視窗初版2026-11-08) · [草稿儲存紀錄](slint-prototype.md#s6-草稿儲存故障程序終止與多開2026-11-08) · [Windows IME 回報](slint-windows-candidate.md)
 
 - **保留的實作**　Rust 的 `Document` 管原文、ANSI 投影、選區及歷史，`Viewport` 投影可見列，Slint 編輯面板在 caret 放置原生輸入欄。正文輸入欄接收組字和提交，提交後把內容交給 Rust 並清空欄位。以 Dioxus 草稿契約作操作基準。[Document](../src/composer/document.rs) · [Viewport](../src/bin/slint_research/editor/viewport.rs) · [Slint 編輯面板](../src/bin/slint_research/editor.slint) · [草稿契約](drafts.md)

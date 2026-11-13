@@ -924,13 +924,31 @@ impl Editor {
                 Err(e) => self.notice(e),
             },
             4 => {
-                self.edit(|d| d.undo(d.version()).map(|_| ()));
+                self.history(false);
             }
             5 => {
-                self.edit(|d| d.redo(d.version()).map(|_| ()));
+                self.history(true);
             }
             _ => {}
         }
+    }
+    fn history(self: &Rc<Self>, redo: bool) {
+        if self
+            .ui
+            .upgrade()
+            .is_some_and(|ui| ui.get_editor_composing())
+        {
+            return;
+        }
+        self.edit(|document| {
+            let version = document.version();
+            if redo {
+                document.redo(version)
+            } else {
+                document.undo(version)
+            }
+            .map(|_| ())
+        });
     }
     fn pointer(&self, kind: i32, x: f32, y: f32, extend: bool, rectangular: bool) {
         if !x.is_finite() || !y.is_finite() {
@@ -1117,7 +1135,7 @@ impl Editor {
                     }
                 }
             }
-            4 | 5 => self.clipboard_key(code),
+            4 | 5 => self.history(code == 5),
             6 => self.transfer(),
             7 => {
                 if let Some(ui) = self.ui.upgrade() {
