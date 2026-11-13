@@ -4,7 +4,9 @@
 
 ## 2026-11-13 57e000c 候選來源
 
-四架構及 Windows Setup 同取乾淨 `57e000c`。既有來源包的 `sources.json` 新增 `passive-window-candidate`，保留其他版本對應。用新目錄隔離網路及原 worktree 讀取，核對 837 份產品檔案與 Git tree `4027c438c508555285ae8e7ed3c2458f4c8b5eee`，包含 Winit 上游來源及本機修補。manifest SHA-256 為 `97f519773b3ad2fdf6b7ee24495f93fa3d5bf6ce4abd725c0e00b10d5cb8a9a4`。收據在 `.local/verification/slint-passive-window-candidate/all-source-delivery.json`。整體第三方來源閉包及從還原來源重編仍待驗。
+四架構及 Windows Setup 同取乾淨 `57e000c`。既有來源包的 `sources.json` 新增 `passive-window-candidate`，保留其他版本對應。用新目錄隔離網路及原 worktree 讀取，核對 837 份產品檔案與 Git tree `4027c438c508555285ae8e7ed3c2458f4c8b5eee`，包含 Winit 上游來源及本機修補。manifest SHA-256 為 `97f519773b3ad2fdf6b7ee24495f93fa3d5bf6ce4abd725c0e00b10d5cb8a9a4`。收據在 `.local/verification/slint-passive-window-candidate/all-source-delivery.json`。
+
+Apple Silicon 用還原來源及既有 Cargo 快取重編 Slint 與播放器的 release 測試。還原與編譯隔離網路，測試執行保留 loopback，原 worktree 來源在各階段均禁止讀取。Slint 110 項與播放器 1 項通過，一項既有原生 helper 忽略。首輪沙盒規則擋到快取 dep-info，第二輪完成編譯但阻擋測試的 loopback。兩輪記錄與最終通過結果保留在同目錄的 `source-build-*.log` 和 `source-build-result.json`，三個還原暫存目錄已清理。第三方來源閉包、四架構從還原來源重編及封裝二進位的逐位元重現仍待驗。
 
 ## 2026-11-13 草稿工具列候選來源
 

@@ -1116,3 +1116,9 @@ Slint 程式測試 110 項通過，另有一項既有 ignored，Clippy 與文件
 Apple Silicon App／DMG／ZIP、Windows x64 便攜 ZIP 與離線 Setup、Intel Mac App／DMG／ZIP 和 Linux x64 deb／tar.gz 同取乾淨 `57e000c`。重用原 worktree、Cargo target、SDK 和已核對的播放器 runtime。交付與收據在 `.local/verification/slint-passive-window-candidate/`，Windows Setup 在 `../PTTStella-candidates/windows-57e000c-offline/`。核對兩個 macOS App 的深層簽章、DMG、ZIP CRC 及 1,247／1,223 個檔案。Apple Silicon 包內 51 個 Mach-O 均無 WebKit 直接連結。Windows ZIP 核對 AMD64 PE 匯入與 926 份 payload，Setup 解包的 927 檔與便攜版一致。Linux 兩包核對 AMD64、主程式、共用內容及 1,111／1,124 個檔案。另從隔離位置還原 837 份來源檔與完整 Git tree。
 
 此輪未開 macOS 驗收視窗。背景焦點實測及最新包的原生鍵鼠、IME、音訊與效能維持待驗。Windows 可沿用 `Check-All.cmd`、`Run-IME.cmd` 與 `Run-Drafts-IME.cmd`。Intel 和 Linux 依目前安排先交付封裝。已清理上一版重複的 macOS App／ZIP、Linux tar.gz 和本輪打包暫存，保留舊 DMG、deb、Windows 便攜版和 Setup 作升級對照，以及焦點反例與共用快取。這次交付清理的檔案邏輯大小為 920,173,032 bytes，檔案系統可用空間同期增加 753,381,376 bytes。精確路徑及各階段量測見 `cleanup.json`、`intel-cleanup.json`、`linux-sdk-cleanup.json` 與來源收據。[Windows 候選](slint-windows-candidate.md#2026-11-13-57e000c-候選) · [Intel Mac 候選](slint-macos-x64.md#2026-11-13-57e000c-候選) · [Linux 候選](slint-linux-candidate.md#2026-11-13-57e000c-候選) · [來源還原](slint-product-source.md#2026-11-13-57e000c-候選來源)
+
+#### 封裝元件補驗與來源重編
+
+Linux x64 便攜包 `57e000c` 在 ARM Podman／QEMU x64／Xvfb 軟體繪圖共跑 14 項元件案例。草稿保存、跨程序重開並帶回、主視窗、兩種閱讀模式搜尋、837 行／37 次取頁、441 行／19 次取消續跑、複製和 PNG、推文追加、收藏及 MP4／WebM／OGV 均通過。設定搜尋首輪繁中「防閒置」未聚焦欄位 23，同一執行檔獨立重跑後完成中英文全部 48 個定位。保留首輪反例，原因待查。各案例都有唯一 Close ACK。此輪未操作 macOS 桌面，Linux 實機維持待驗。[Linux 封裝證據](slint-linux-candidate.md#2026-11-13-57e000c-候選)
+
+Apple Silicon 在禁止網路及原 checkout 來源讀取的環境從交付來源重編 Slint 與播放器測試。沿用固定 Cargo 快取，執行階段開放合成測試所需的 loopback，111 項通過，既有原生 helper 一項仍忽略。已清理三輪暫存來源目錄、模擬器的兩輪正式案例及一輪斷線時留下的半成品，保留原始收據和既有快取。[來源重編證據](slint-product-source.md#2026-11-13-57e000c-候選來源)

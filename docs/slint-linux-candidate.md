@@ -4,6 +4,8 @@
 
 Linux deb／tar.gz 位於 `.local/verification/slint-passive-window-candidate/linux/`，與其他三架構同取乾淨 `57e000c`。沿用 Debian bookworm amd64 SDK，核對 3,419 份 SDK 檔案及連結。已核對 AMD64 套件資料、兩包主程式、共用內容與 1,111／1,124 個檔案。deb SHA-256 為 `f8a4764500de5f97b27430b68cf78923928c8757367409978d477052a3bdc045`，tar.gz 為 `e36ff35e186c1f5a6a18eb4158aab3d9d83c039575bf0df1fe0a22d8192010ab`。Linux 實機待驗。
 
+在 ARM Podman 的 QEMU x64、Xvfb 與軟體繪圖執行原便攜包，ELF SHA-256 為 `0baa77bbfcf59d05c4a42267a459faeb66f636244a3059008d714107cf95d86b`。草稿保存／跨程序重開、主視窗、兩種閱讀模式搜尋、長文／取消續跑、文章輸出、推文追加、收藏及三格式影片共 13 項首輪成立。收藏的初步彙整誤要求通用 `status` 欄位，後續依實際格式核對 45 列、雙色樣式、儲存／恢復、關閉與 worker join。設定搜尋首輪未能聚焦繁中防閒置欄位，重跑同一 ELF 後通過中英文 48 項。曾有一次 Podman 斷線中止重測，未取得該輪結果，已清理部分提取檔。14 項有效結果皆有唯一 Close ACK。首輪資料、重測及彙整在 `.local/verification/slint-passive-window-candidate/` 下的 `linux-components/`、`linux-settings-followup/` 與 `linux-components-validated.json`。原生 X11／Wayland、IME、音訊裝置及效能待實機驗收。
+
 ## 2026-11-13 草稿工具列候選
 
 保留 `.local/verification/slint-draft-history/linux/` 的 deb 作版本對照。與其餘架構同取乾淨 `b57eae8`。當時通過 AMD64 套件資料、主程式、共用內容與 1,110／1,123 個檔案核對。deb SHA-256 為 `5f637bfdc7c92d7c86d3a446818f36e95a89526c84fe27ce9337d200918cee53`，後續候選備妥後移除本版 tar.gz。
