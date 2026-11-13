@@ -693,6 +693,8 @@ fn run(
         );
     let toolkit_settings =
         std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").as_deref() == Ok("search");
+    let toolkit_bookmarks =
+        std::env::var("PTTSTELLA_SLINT_BOOKMARKS_PROBE").is_ok_and(|case| case != "native");
     let toolkit_video = cfg!(feature = "native-video")
         && std::env::var_os("PTTSTELLA_VIDEO_FIXTURE").is_some()
         && std::env::var_os("PTTSTELLA_VIDEO_PROBE_EXIT").is_none()
@@ -703,7 +705,8 @@ fn run(
     let toolkit_input = options.verify_shell
         || options.verify_tools.is_some()
         || toolkit_inline
-        || verify_media_scene && (toolkit_updates || toolkit_settings || toolkit_video);
+        || verify_media_scene
+            && (toolkit_updates || toolkit_settings || toolkit_bookmarks || toolkit_video);
     let selector = || {
         let selector = slint::BackendSelector::new();
         let selector = if toolkit_input {

@@ -164,6 +164,8 @@ Rosetta 通過主視窗與浮球本機模式。新版收藏探針三輪有一過
 
 交付與證據位於 `.local/verification/slint-current-shell/cross/`。卸載 Linux SDK 並移除本輪映像、傳輸資料及 guest 暫存，Intel 臨時連結已清理。保留原始輸出、下載、原始 runtime／SDK、固定 Cargo target 與 Rosetta 收藏的舊版對照。清理路徑及空間觀測見該目錄的 `linux-sdk-cleanup.json`、`linux-transfer-cleanup.json`、`intel-input-cleanup.json` 與 `linux-guest-cleanup.log`。
 
+收藏首次開啟時會暫時停用欄位以載入資料。焦點請求現等到面板可見、目標欄可編輯才執行，關閉面板會取消尚未執行的請求。探針確認首次載入確實開始、焦點落在目標欄、首鍵進欄且站端輸入版本不變。第一輪修正的 Rosetta 六案有五案通過，一案在已確認焦點後仍漏鍵，並記錄到 macOS 輸入法服務訊息。自動收藏探針接上共用的合成事件隔離，手動原生模式維持系統事件路徑。原始結果位於 `.local/verification/slint-current-shell/` 的 `bookmark-load-focus-arm/`、`bookmark-load-focus-intel/` 與 `bookmark-toolkit-arm/`。
+
 ### 2026-11-12 Intel Mac 與 Linux x64 封裝
 
 Intel Mac App／ZIP／DMG 與 Linux x64 deb／tar.gz 已更新至乾淨 `06487df`。與 Apple Silicon／Windows x64 的 `4e28e82` 相比只有文件變更，產品程式相同。Rosetta 與 QEMU／Xvfb 各通過六項軟體繪圖合成案例，涵蓋草稿靠右組字欄位幾何、保存、重開與帶回站端、主視窗及 MP4／WebM／OGV。全部收到嚴格 Close。原生安裝、實體候選窗、聲音與效能待驗。封裝、來源、逐檔雜湊與探針紀錄位於 `.local/verification/slint-cross-ime-edge/`。兩個驗證器的檔名及語法錯誤修正後核對原包。已卸載磁碟映像並清除臨時 SDK、連結及容器工作資料，保留原有 SDK 封存與 Cargo target。[Intel Mac 候選](slint-macos-x64.md) · [Linux x64 候選](slint-linux-candidate.md#2026-11-12-草稿組字修正候選)

@@ -226,6 +226,13 @@ pub fn start(
                 !ui.get_tools_open() && ui.get_tools_category() == -1,
                 "bookmark petal did not dismiss the fan for the dialog",
             )?;
+            require(
+                o.result
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|flight| flight.operation == Operation::Load),
+                "bookmark probe did not exercise the initial load",
+            )?;
 
             idle(&o).await?;
             require(
@@ -239,8 +246,8 @@ pub fn start(
                 .dispatch_event(slint::platform::WindowEvent::WindowActiveChanged(true));
             let epoch = connection.updates.borrow().input_epoch;
             wait(
-                || !ui.get_terminal_input_focused(),
-                "bookmark form did not take keyboard focus",
+                || ui.get_bookmarks_target_focused() && !ui.get_terminal_input_focused(),
+                "bookmark target did not receive focus after loading",
             )
             .await?;
             ui.window()
@@ -248,9 +255,12 @@ pub fn start(
             ui.window()
                 .dispatch_event(slint::platform::WindowEvent::KeyReleased { text: "x".into() });
             require(
-                connection.updates.borrow().input_epoch == epoch
-                    && w.global::<crate::BookmarksState>().get_target() == "x",
-                "bookmark input did not stay in the local field",
+                connection.updates.borrow().input_epoch == epoch,
+                "bookmark input reached the station",
+            )?;
+            require(
+                w.global::<crate::BookmarksState>().get_target() == "x",
+                "bookmark target did not receive the first key",
             )?;
             w.global::<crate::BookmarksState>().set_target(
                 w.global::<crate::BookmarksState>()

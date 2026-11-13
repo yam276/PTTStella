@@ -50,8 +50,24 @@ export component BookmarksPanel inherits PanelOverlay {
     heading: BookmarksState.labels[0];
     panel-width: BookmarksState.offline ? 900px : 620px;
     panel-height: BookmarksState.offline ? 700px : 440px;
+    out property <bool> target-focused: root.visible && !BookmarksState.offline && target-field.has-focus;
+    private property <bool> target-ready: root.visible && !BookmarksState.offline && !BookmarksState.busy;
+    private property <bool> target-focus-pending;
     private property <int> focus-target-sequence: BookmarksState.focus-target-sequence;
-    changed focus-target-sequence => { target-field.focus(); }
+    function apply-target-focus() {
+        if root.target-focus-pending && root.target-ready {
+            root.target-focus-pending = false;
+            target-field.focus();
+        }
+    }
+    changed focus-target-sequence => {
+        root.target-focus-pending = root.visible;
+        root.apply-target-focus();
+    }
+    changed target-ready => { root.apply-target-focus(); }
+    changed visible => {
+        if !root.visible { root.target-focus-pending = false; }
+    }
     private property <int> focus-reader-sequence: BookmarksState.focus-reader-sequence;
     changed focus-reader-sequence => { reader-keys.focus(); }
     private property <float> reader-width: reader.width / 1px;

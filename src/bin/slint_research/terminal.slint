@@ -111,6 +111,7 @@ export component TerminalWindow inherits Window {
     callback filters-updated;
     in property <bool> bookmarks-available;
     in property <bool> bookmarks-open;
+    out property <bool> bookmarks-target-focused: bookmarks-panel.target-focused;
     in property <string> bookmarks-label;
     callback bookmarks-show;
     callback bookmarks-updated;
@@ -1329,6 +1330,6 @@ export component TerminalWindow inherits Window {
     }
     SitesPanel { visible: root.sites-open && !root.sites-embedded; width: parent.width; height: parent.height; }
     FiltersPanel { visible: root.filters-open && !root.filters-embedded; width: parent.width; height: parent.height; }
-    BookmarksPanel { visible: root.bookmarks-open; width: parent.width; height: parent.height; }
+    bookmarks-panel := BookmarksPanel { visible: root.bookmarks-open; width: parent.width; height: parent.height; }
     DestinationPanel { visible: root.destination-open; width: parent.width; height: parent.height; }
 }

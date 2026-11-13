@@ -354,11 +354,13 @@ impl Manager {
                     .unwrap_or_else(|| msg!("bookmarks-hint")),
             );
         }
-        if let Some(w) = self.window() {
-            w.global::<BookmarksState>().invoke_focus_target();
-        }
         if self.state.borrow().is_none() {
             self.reload();
+        }
+        // The first load disables the form. The panel applies this request
+        // when the target becomes editable.
+        if let Some(w) = self.window() {
+            w.global::<BookmarksState>().invoke_focus_target();
         }
     }
     fn create_window(self: &Rc<Self>, _ui: &TerminalWindow) -> Result<TerminalWindow, String> {
