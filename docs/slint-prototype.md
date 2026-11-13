@@ -1541,6 +1541,16 @@ PTTSTELLA_VIDEO_FIXTURE=<NEW_NEGATIVE_FIXTURE_DIR>/quadrants.mp4 \
 第一次 staging 的絕對 rpath 超過 Mach-O load command 空間，改用同一暫存目錄的相對 rpath 與唯一 Frameworks symlink。首輪 collector 漏列負向 Close 的 `cleanup_error: null`，三個誤判及實際像素留存；最終嚴格核對該欄再重跑。命令、來源補丁、SHA、原始回報和精確清理清單在 `.local/verification/slint-macos-video-buffers/`。已移除唯一暫存執行檔與 symlink，regular-file 68,592,800 bytes，du 66,988 KiB，filesystem free 242151104512→242219700224 bytes。固定 Cargo target、候選 runtime 與素材保留並核對 SHA。
 
 
+### 2026-11-14 1d3e702 Apple Silicon 影片控制與關窗
+
+直接執行 Apple Silicon 交付 App 的簽章執行檔，SHA-256 為 `7ad9d336e57652d3fb22f69a07f8863faaeb67c167674c356fc5015fddfdd496`。三份合成素材來自同提交 Windows x64 ZIP 並核對雜湊。
+
+- 被動視窗以軟體繪圖及 OpenGL 各跑 MP4、WebM、OGV。六案核對四色像素、跳轉、暫停／繼續、音量／靜音回報、失焦、重播及替換成 PNG。另在兩種繪圖各跑 HTTP 停滯與刻意錯色。停滯時可暫停及繼續，下載 body 為零。刻意錯色的兩案均偵測到綠色並以預期錯誤結束。十案皆有 Close ACK，libmpv core、控制、串流及 HTTP 均退場。
+- 一般原生關窗路徑另跑四案。軟體繪圖與 OpenGL 分別在 MP4 播放中及只收到 HTTP header 時，透過 macOS 輔助使用的關窗按鈕退出。四案皆 exit 0、唯一 Close ACK，關窗後核對 renderer、session、待播放請求及所有媒體 worker 均已清空。
+- 兩種繪圖另以原生滑鼠操作 3 秒 MP4。等片尾穩定後調至 25%、靜音、取消靜音，再跳到約 1 秒。視窗擷取確認音量數字、按鈕標籤、時間與白塊位置都變更，關窗正常。首輪未固定片尾時機，另一輪 OpenGL 的 OCR 誤讀靜音標籤。後續以片尾穩定條件及畫面核對補驗。音量與靜音以畫面和元件回報核對，這輪未取得數位音訊或實體裝置輸出的測量。
+
+結果在 `.local/verification/slint-article-arrow/draft-mode-focus-pair/arm64-media/`。六個隔離暫存根、影片素材與視窗工具已清理，保留獨特畫面、原始收據與候選包。清理清單在同目錄 `cleanup.json`。
+
 ### 2026-11-13 cb4fbfc Apple Silicon 出貨檔影片驗收
 
 直接執行已交付的 Apple Silicon App，核對主程式 SHA-256 `9b6e15e8cbf3080f9e073c75efd8312c8b2711845ed8518d7e737f1e6f82efeb` 與深層 ad-hoc 簽章。使用同提交 Windows ZIP 內雜湊相符的三份合成素材。被動視窗只接收 Slint 探針操作和合成焦點，HTTP 僅走本機。
