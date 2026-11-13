@@ -10,6 +10,8 @@ Apple Silicon 用 `cb4fbfc` 出貨 App 與同源 Dioxus 再次重測。837 行�
 
 同一 Slint 候選與相容 Dioxus `82bc81f` 用正式 Bundle ID 在隔離資料副本完成五階段升級、回退及恢復。兩版均從一般入口讀寫自動開圖設定，核對兩次保存的一代備份及八份復原檔。正式 Developer ID 的鑰匙圈重新授權與 Finder 首開仍待驗，正式入口維持 Dioxus。[最新回退演練](slint-store-frontends.md#2026-11-14-cb4fbfc-正式識別的隔離升級與回退)
 
+Apple Silicon `cb4fbfc` 一般入口已驗 `⌃⌘F` 進出全螢幕、第 24 行完整顯示，以及退出全螢幕與 Esc 離開設定後的終端回焦。Dioxus 回退版在此劇本退出全螢幕後需點終端一次才恢復方向鍵。[原生焦點對照](slint-prototype.md#2026-11-14-cb4fbfc-全螢幕與終端回焦)
+
 四架構候選已同步至 `cb4fbfc` 的產品來源，包含 Apple Silicon／Intel Mac App、Windows x64 便攜 ZIP／離線 Setup 與 Linux x64 deb／tar.gz。這版新增文章首尾方向鍵切篇。切換前仍待驗 macOS 封裝的原生焦點、Windows 實機安裝及注音／日文 IME、正式簽章的憑證接手及完整效能矩陣。Intel Mac 與 Linux x64 實機依指示暫緩。正式入口維持 Dioxus。[最新候選](#cb4fbfc-四架構候選)
 
 四架構候選都包含 `4d7d174` 的收藏載入焦點修正。Apple Silicon 和 Windows x64 從同一提交出包，Intel Mac 與 Linux x64 使用僅有文件差異的 `ebc1035` 工作樹建置。Apple Silicon 封裝的草稿保存、跨程序重開及三格式影片八案通過。Intel 封裝在 Rosetta 通過三輪收藏及主視窗，Linux 封裝在 QEMU／Xvfb 通過七項元件回歸。Windows 原生安裝／升級／IME、Intel Mac 與 Linux 原生驗收、完整同負載效能矩陣及正式簽章的憑證接手仍待驗。正式入口維持 Dioxus。[候選位置](#產物保留規則2026-11-09-使用者要求) · [影片音訊結果](#4-媒體s5)
@@ -368,6 +370,8 @@ Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人�
 **通過條件**　原生 IME 和真實選取／拖曳，中文、ANSI、一般與矩形上色、undo／redo、三種模式原文等同。跑 `drafts`／`drafts_restart`／`editor_color` 等效探針，合成 peer 核對 79 欄／byte 限制、範本變動拒絕、分段等待、取消與部分寫入錯誤、重開恢復和零發表命令。兩程序同稿／不同稿、磁碟失敗及強制終止後恢復分開驗證。 [草稿契約](drafts.md) · [站端上色](context-menu.md)
 
 ## S7 設定、資料相容與系統整合
+
+Apple Silicon 已用現行封裝的一般入口核對全螢幕、原生設定快捷鍵及終端回焦。輔助使用介面在轉場完成及設定關閉後可讀到 `AXTextField`，方向鍵也由本機 peer 確認。[原生焦點對照](slint-prototype.md#2026-11-14-cb4fbfc-全螢幕與終端回焦)
 
 1. 接上現有設定分類、中文／英文搜尋與 Fluent。完整移植站點、字型清單／官方來源、傳統字型組合、預覽和重設、可攜 profile、語言、文章模式與首尾、hover／自動開圖、浮球透明度／可見／右鍵工具、保活／Vim／站端滑鼠對應入口。依各設定現有保存範圍處理。保留保存成功後生效、錯誤保留草稿、最新草稿在關窗時 drain。通知沿用成功淡出、錯誤及斷線保持可見。
 2. 沿用現有 store 的型別、路徑決策、版本、備份、原子寫入和 OS 鎖。研究版使用明確的隔離 namespace。正式候選用複本測 `settings.json`／`sites.json`／`filters.json`、`bookmarks.json` 含離線資料、`recent-boards.json`、`drafts.json` 和原有 display profile；設定涵蓋 v1–v6，驗收現行公開版及最後一個受支援 Dioxus 基準的資料。讀舊資料先在記憶體解析，驗證重開和一次 Slint 寫入後再由指定回退版 Dioxus 讀寫。文件毀損、鎖逾時、容量、不同欄位合併、同欄拒絕、清空屏障及草稿衝突副本皆有回歸。

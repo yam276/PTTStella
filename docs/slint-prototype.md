@@ -77,6 +77,16 @@ target/release/pttstella --probe-surface NEW-PROBE-DIRECTORY parity_grid
 
 macOS arm64 兩版皆收到合成格線並確認正常 Close。Dioxus 由原生 AX 點選匯出，Slint 同時取得實際視窗和來源格線。獨立 PNG 解碼核對兩版的 960×576、16 色、雙色「中」的左右筆畫／背景與最後一格。字形反鋸齒各有差異，本輪未測同負載效能。證據與本機 runner 保存在 `.local/verification/slint-s0/`。
 
+## 2026-11-14 cb4fbfc 全螢幕與終端回焦
+
+Apple Silicon／macOS 15.7.7 使用 Slint `cb4fbfc` 出貨 App 和相容 Dioxus 回退 DMG `82bc81f` 的一般入口。沿用隔離升退的同路徑 App、正式 Bundle ID、隔離 HOME 與本機 TLS 1.3 站。Dioxus 主程式雜湊與 DMG 相符，重簽的 Slint 副本機器碼區段與出貨檔一致。
+
+兩版都用原生 `⌃⌘F` 進入 1920×1080 全螢幕並回復原尺寸，截圖核對第 24 行。Slint 兩輪在轉場穩定後，原生終端欄均取得 `AXTextField` 焦點。依序送出進入前的上鍵、全螢幕的下鍵、回復視窗後的右鍵與 Esc 關閉設定後的左鍵。每次核對 peer 的單筆方向鍵序列及畫面回覆；設定開啟時按上鍵不會傳給站端。第一輪在視窗尺寸已達全螢幕、轉場尚未穩定時送下鍵，站端未收到。後兩輪待尺寸穩定後再驗，該輪保留。
+
+Dioxus 全螢幕時可送鍵，回復視窗後兩次只讀到 `AXWindow`，右鍵未送出。補驗點一下終端後再按右鍵即恢復，Esc 關閉設定後可直接送左鍵。五次程序均正常 exit 0 並收到 Close ACK，資料副本雜湊維持一致。這輪驗證穩定後的原生終端焦點、設定關閉與第 24 行，其他視窗、IME 候選位置及跨螢幕 DPI 各自待驗。
+
+原始畫面、無障礙讀值、方向鍵與清理收據位於 `.local/verification/slint-article-arrow/store-rehearsal/current-live/`。三個隔離暫存根與本輪編譯的 `window-control` 已移除，既有候選、回退 DMG 與固定 Cargo 快取保留。
+
 ## S1 終端游標的原生輸入法探針
 
 ```sh
