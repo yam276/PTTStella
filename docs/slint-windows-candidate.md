@@ -1,5 +1,15 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-13 2ef65ce 候選
+
+便攜 ZIP 在 `.local/verification/slint-sites-panel-candidate/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-2ef65ce-offline/`。與其他三架構同取乾淨 `2ef65ce`，包含站點表單裁切修正。便攜包核對 926 份 payload、CRC 及 AMD64 PE 匯入，Setup 解包的 927 檔與便攜版逐檔一致。Windows 實機的安裝、升級、草稿注音及日文 IME 待驗。
+
+| 檔案 | SHA-256 |
+| --- | --- |
+| Windows 便攜 ZIP | `0f6bdef2acd618b8d052566e8b2569dbfa6ec38087d91da61a3aaccca0632a63` |
+| Windows 離線 Setup | `a69a9797a648a460aeb44a5bb650ded62d0fd2c65383e708537b0eaa30164537` |
+| 包內執行檔 | `5d23e5adcc18744f87bad0241b9b2ac415dd55277396c9f626a2cf5ee8c46f88` |
+
 ## 2026-11-13 d047e55 候選
 
 便攜 ZIP 在 `.local/verification/slint-windows-refresh-rate/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-d047e55-offline/`。四架構同取乾淨 `d047e55`，納入軟體繪圖更新率修補。便攜包核對 926 份 payload、CRC 及 AMD64 PE 匯入，Setup 解包的 927 檔與便攜版一致。

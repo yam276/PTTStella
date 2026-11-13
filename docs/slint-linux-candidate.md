@@ -1,5 +1,13 @@
 # Slint Linux x64 候選包
 
+## 2026-11-13 2ef65ce 候選
+
+Linux deb／tar.gz 在 `.local/verification/slint-sites-panel-candidate/linux/`。已核對 AMD64 套件、共用檔案及兩包主程式，deb 共 1,111 檔，tar.gz 共 1,124 檔。deb SHA-256 為 `33f36d0562188f10fd266deb12fa11d0ebdfc0e440cd8e3a2ee4e83bccfec1c4`，tar.gz 為 `7f0bd6909b5b1b0cae9fb1779e97b67dfaf72cd9dbd7e3558046279f36fcb215`。
+
+用便攜包內 ELF 在 QEMU／X11 下以 XTest 操作 1,000×690 視窗，選取 GBK 與 Big5-UAO 並各點擊一次「連線切換」。同一 TCP 位址的三次連線均依序關閉，站端收到零輸入 bytes，程序 exit 0。收據在 `native-x11-result.json`。Linux x64 實機待驗。
+
+同包在 QEMU／Xvfb 完整重跑 14 項軟體繪圖元件測試，每案各一次 Close ACK。涵蓋草稿保存與重開、主視窗、文章及終端搜尋、長文與取消續跑、文章輸出、設定搜尋、推文更新、收藏及 MP4／WebM／OGV。首輪在 11 案後遇到 Podman EOF，保留 `linux-components-first.log`，重跑收據在 `linux-components/summary.json`。兩輪客體暫存已清理，容器及虛擬機已停止。
+
 ## 2026-11-13 d047e55 候選
 
 Linux deb／tar.gz 在 `.local/verification/slint-windows-refresh-rate/linux/`。已核對 AMD64 套件、共用檔案及兩包主程式，deb 共 1,111 檔，tar.gz 共 1,124 檔。deb SHA-256 為 `0ca717e1a31791f2b7bdf7084a6c71184f07b994b2a6adfb2691f3c0bdc83251`，tar.gz 為 `40398732e4622784a7b480bab76406a30a347211ba85d3af78c43ea7cbc305c4`。Linux 實機待驗。

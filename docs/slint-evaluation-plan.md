@@ -6,7 +6,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 目前進度（2026-11-13）
 
-**尚未達到可平替 Dioxus 的驗收條件。** 最新四架構候選皆取自乾淨提交 `d047e55`，包含設定搜尋切頁焦點與 Windows 軟體繪圖更新率修正。四架構封裝均已核對，Intel Mac 與 Linux 依目前安排先交付封裝。macOS 新版封裝的背景視窗、Windows 原生安裝與 IME、正式簽章的憑證接手和完整效能矩陣仍待驗。正式入口維持 Dioxus。[最新候選](#d047e55-四架構候選)
+**尚未達到可平替 Dioxus 的驗收條件。** 最新四架構候選皆取自乾淨提交 `2ef65ce`，包含站點表單裁切修正。四架構封裝均已核對，Linux 交付包已通過隔離 X11 站點切換。Intel Mac 與 Linux x64 實機依指示暫緩。macOS 封裝的原生焦點、Windows 原生安裝與 IME、正式簽章的憑證接手和完整效能矩陣待驗。正式入口維持 Dioxus。[最新候選](#2ef65ce-四架構候選)
 
 四架構候選都包含 `4d7d174` 的收藏載入焦點修正。Apple Silicon 和 Windows x64 從同一提交出包，Intel Mac 與 Linux x64 使用僅有文件差異的 `ebc1035` 工作樹建置。Apple Silicon 封裝的草稿保存、跨程序重開及三格式影片八案通過。Intel 封裝在 Rosetta 通過三輪收藏及主視窗，Linux 封裝在 QEMU／Xvfb 通過七項元件回歸。Windows 原生安裝／升級／IME、Intel Mac 與 Linux 原生驗收、完整同負載效能矩陣及正式簽章的憑證接手仍待驗。正式入口維持 Dioxus。[候選位置](#產物保留規則2026-11-09-使用者要求) · [影片音訊結果](#4-媒體s5)
 
@@ -1162,3 +1162,13 @@ Slint 站點表單新增同位址探針。Linux x64 在 QEMU／Xvfb 下，以合
 隔離 X11 補驗在 1,000×690 的實際視窗重現站點表單左右裁切，「連線切換」只露出一角。單獨調整捲動區尺寸仍重現。將表單尺寸綁定面板內層內容區後，X11 鍵鼠事件能選取 GBK、按下連線切換，再用 Tab／Enter 選回 Big5-UAO 並點擊同一按鈕。同一 TCP 位址完成三次連線，各次 Close 順序正確，沒有額外站端輸入，視窗正常關閉且程序 exit 0。早期兩次中止、畫面和最終收據保留於同一目錄的 `native-x11-*`。本輪未開 macOS 前景視窗，修正尚未進入 `d047e55` 候選包。[重跑命令](sites.md)
 
 清理前一版重複的 macOS App／ZIP、Linux tar.gz，以及本輪封裝暫存與兩個 Setup 工具容器。保留 `96e5159` 的 DMG、deb、Windows ZIP 及 Setup 供比對，沿用固定 Cargo target、SDK 與獨特驗收證據。此次移除檔案的邏輯大小為 920,756,528 bytes，檔案系統可用空間同期增加 784,216,064 bytes，精確路徑見 `cleanup.json`。最新 Windows 實機安裝及兩種 IME、Apple Silicon 原生焦點／正式 Keychain 及完整效能對照待驗。正式入口維持 Dioxus。
+
+### 2ef65ce 四架構候選
+
+Apple Silicon App／DMG／ZIP、Windows x64 便攜 ZIP 與離線 Setup、Intel Mac App／DMG／ZIP、Linux x64 deb／tar.gz 同取乾淨 `2ef65ce`。候選與收據在 `.local/verification/slint-sites-panel-candidate/`，Setup 在 `../PTTStella-candidates/windows-2ef65ce-offline/`。Apple Silicon DMG SHA-256 為 `740f3bccda893376cff36a5d5b31fdedaf883bac14b67e5d6b0bd4aca853e45f`。兩個 macOS App 的深層簽章及 App／ZIP／DMG 逐檔核對通過。Windows Setup 解包的 927 檔與便攜版逐檔一致。[Windows](slint-windows-candidate.md#2026-11-13-2ef65ce-候選) · [Intel Mac](slint-macos-x64.md#2026-11-13-2ef65ce-候選) · [Linux](slint-linux-candidate.md#2026-11-13-2ef65ce-候選)
+
+以 Linux 交付包在 QEMU／X11 操作實際編碼下拉選單與「連線切換」，同一 TCP 位址完成 Big5-UAO → GBK → Big5-UAO，三次依序 Close，零額外輸入。Apple Silicon 從隔離還原來源離線重編後通過 Slint／播放器 111 項，既有原生 helper 一項忽略。工具測試 183 項通過。本輪未開 macOS 前景視窗。[來源還原](slint-product-source.md#2026-11-13-2ef65ce-候選來源)
+
+Linux 便攜包在 QEMU／Xvfb 重跑 14 項元件回歸全數通過，每案各一次 Close ACK，包含三種影片格式。首輪 Podman 連線中斷及兩輪客體暫存清理另有收據。
+
+已清理前版重複的兩個 macOS App／ZIP、Linux tar.gz、本輪 Setup 暫存及 Linux 傳輸目錄。移除路徑的檔案邏輯大小共 921,113,688 bytes，檔案系統可用空間同期增加 742,973,440 bytes。保留現行交付、前版供升退驗證的單份套件、固定編譯快取及唯一收據。精確路徑見 `cleanup.json`。
