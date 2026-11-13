@@ -14,6 +14,8 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 草稿及文章的自動驗收已改用被動視窗。Apple Silicon DMG、Windows x64 便攜 ZIP 與離線 Setup 使用同一提交 `675b150`，Intel Mac 與 Linux x64 也已同步封裝。Apple Silicon 補驗草稿跨程序重開與帶回、文章逐行對齊、慢速取頁、取消／繼續及輸出。實體鍵鼠、IME 和前景效能各自待驗。[被動視窗驗收](#2026-11-13-草稿與文章被動視窗驗收)
 
+最新四架構候選同取 `b57eae8`，包含草稿復原／重做和正文快捷鍵修正。Apple Silicon 原始 release 執行檔的背景案例通過，封裝探針首輪仍發生一次 macOS 前景切換，該輪保留為焦點反例。Windows Setup 與同提交便攜 ZIP 解包逐檔一致，原生仍待驗。[草稿工具列候選](#2026-11-13-草稿工具列候選)
+
 文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個 macOS 固定下載入口現為乾淨 `c7368b2`，包含設定預覽按需繪製及文章延後取得原生焦點的修正。Apple Silicon `793ecb91` 和 Intel `62ada42e` 各通過 23 項封裝後合成回歸，另各完成原生長文的 37 次取頁及八次快取操作。Intel 使用 Rosetta。Linux `68601365` 與另備 Windows `3a8de2a9` 已封裝固定狀態列探針修正。Linux 在 QEMU 下通過 deb 安裝、軟體繪圖的完整視窗檢查及 X11 延後焦點的 37 次取頁，免安裝包的預設繪圖仍卡在通知取樣。Windows 交叉編譯與 ZIP／PE 檢查通過，實機待驗。`69542cb7` 為先前的 Windows 待驗下載。[跨平台封裝與驗收](#2026-11-11-固定狀態列探針的-windows-與-linux-封裝)Intel／Linux 實機依指示暫緩，其餘原生操作、完整資料回退和跨平台效能矩陣仍待驗。
 
 macOS arm64 已以最新 Slint 候選及原 Dioxus 完成設定 v1–v6 的 18 輪實際前端往返，核對兩次寫入備份、最後讀回與其他資料檔。兩版 macOS 一般入口已各從隔離 HOME 的系統資料目錄讀到不同的預設站，完成本機 WSS、無自動輸入和伺服器 Close 回覆。macOS Keychain 已用獨立合成 service 驗證舊格式同簽章跨程序讀回、改簽拒絕與清理。[Keychain 驗收](login.md#macos-舊紀錄與重新簽章驗收) 同 worktree 的 Dioxus 設定欄位已修正舊版拒存小數的限制，macOS 已實測 Dioxus 存檔及 Slint 讀回，原 5ea9ad6 執行檔仍有該限制。[小數往返](slint-store-frontends.md#2026-11-11-小數顯示設定回退) macOS 一般入口已用隔離 HOME 完成自動開圖的 Slint → 修正版 Dioxus → Slint 實際保存回讀；原 Dioxus 仍因舊小數設定拒存。Apple Silicon 已用正式 v0.4.1 ZIP 與 Slint DMG 在隔離位置完成共通設定的實際安裝往返。已重現含自動開圖欄位的資料在 v0.4.1 首次儲存被預設值覆寫、第二次儲存輪替原備份。以獨立備份恢復的 Slint 已重開核對。已另交付 Apple Silicon 相容的 Dioxus 回退 DMG，驗證在保留自動開圖與三個小數外觀設定下仍可儲存，並從獨立備份恢復八個資料檔。正式身份原地替換與授權、其他架構回退、Windows／Linux 密碼庫及完整資料操作仍待驗。[相容回退包與獨立備份](slint-store-frontends.md#2026-11-11-相容的-dioxus-回退包與獨立備份)[實際安裝與回退](slint-store-frontends.md#2026-11-11-從-macos-交付包安裝與回退)[一般入口設定回退](slint-store-frontends.md#2026-11-11-macos-一般入口的設定回退)[前端往返紀錄](slint-store-frontends.md#2026-11-11-同一對前端的-v1v6-設定往返)
@@ -1092,3 +1094,9 @@ Apple Silicon App／DMG／ZIP 與 Windows x64 便攜 ZIP 同取乾淨提交 `675
 同提交 Windows x64 離線 Setup 位於 `../PTTStella-candidates/windows-675b150-offline/`。解包後 926 個檔案與便攜版逐位元一致。Intel Mac 與 Linux x64 使用僅多三份文件的乾淨 `4f95094` 建置，出包在 `slint-passive-drafts-reading/` 的 `macos-intel/` 和 `linux/`。Intel App 簽章、DMG 與 ZIP 的 1,220 個 App 檔案通過。Linux deb／tar.gz 的 1,110／1,123 個檔案及共用內容核對通過。來源清單已納入四架構及 Setup，另從獨立來源還原完整 Git tree 和 619 份產品檔案。Windows 實機安裝及 IME 待驗，Intel 與 Linux 依目前安排先交付封裝。
 
 Intel 首輪缺 libmpv 的未帶版本連結，補上同一檔案的連結後完成。Linux 封裝首輪補齊既有 Python 匯入，下一輪 Podman 在壓縮期間斷線。重連後核對 ELF 雜湊，使用單執行緒壓縮在同一 runner 完成。已移除封裝暫存、SDK 映像、兩個 Setup 工具容器，以及被取代的 Intel App／ZIP 和 Linux tar.gz。最新候選、前次升級對照、固定 Cargo 快取及獨特收據保留。確切路徑及可用空間觀測在 `cross-delivery-cleanup.json`、`windows-setup/cleanup.json` 及兩份交叉建置清理紀錄。
+
+## 2026-11-13 草稿工具列候選
+
+Apple Silicon、Windows x64 便攜及 Setup、Intel Mac 和 Linux x64 同取乾淨 `b57eae8`。交付在 `.local/verification/slint-draft-history/`，Windows Setup 在 `../PTTStella-candidates/windows-b57eae8-offline/`。App 簽章、DMG 與 ZIP 核對通過，Setup 解包比對便攜版 926 檔，Intel App 1,221 檔與 Linux deb／tar.gz 1,110／1,123 檔通過。獨立還原 619 份產品檔案及 Git tree。清理 Setup 工具容器、SDK 映像、交叉封裝暫存及被取代的重複 App／壓縮包，保留固定 Cargo target、必要交付和升級對照。精確路徑與空間觀測見 `cleanup.json`。
+
+Slint 程式測試 110 項通過，另有一項既有 ignored，Clippy 與文件檢查通過。Apple Silicon 原始 release 執行檔的草稿保存、重開、帶回及十項儲存檢查全部通過，618 筆觀察未見前景切換。Apple Silicon 封裝執行檔首個草稿功能案例也通過及收到 Close ACK，但 macOS 啟用該程序，監測器依設計停止後續視窗案例。保留 `packaged/results.json` 與原始前景記錄。封裝測試的被動啟動仍須修正及重驗，實體鍵鼠／IME 與 Windows 安裝待驗。

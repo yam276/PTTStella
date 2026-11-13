@@ -1,5 +1,9 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-13 草稿工具列候選
+
+便攜 ZIP 位於 `.local/verification/slint-draft-history/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-b57eae8-offline/`。與兩個 Mac 和 Linux 候選同取 `b57eae8`。ZIP SHA-256 為 `c305cf67e43880444acb86fd315551f529a6d6e70ef9af00cab5613c61791cc2`，Setup 為 `4bef56bc362b244af8c3742739051de1b9ccdadc91b82bedf7f3709ba9328998`。核對 PE 匯入、ZIP CRC、925 項便攜內容及 Setup 解包的 926 項逐位元一致。原生安裝、升級、卸載及草稿 IME 待驗。
+
 ## 2026-11-13 草稿與文章被動驗收候選
 
 便攜 ZIP 位於 `.local/verification/slint-passive-drafts-reading/pair/windows/`，與同層 Apple Silicon DMG 都使用乾淨提交 `675b150`。ZIP SHA-256 為 `dad3410a6ac28d4116144b6245c68eff737f0ab223beac9a3a88a10ea58f0915`，包內主程式為 `cd56f91dddd2347e14c58fdf43a12a9b1cdee2c18cacc9c0a6f9662805db0001`。已核對 CRC、925 份內容與 PE 匯入。

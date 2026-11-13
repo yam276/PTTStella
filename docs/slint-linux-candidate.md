@@ -1,5 +1,9 @@
 # Slint Linux x64 候選包
 
+## 2026-11-13 草稿工具列候選
+
+Linux deb／tar.gz 位於 `.local/verification/slint-draft-history/linux/`，與其餘架構同取乾淨 `b57eae8`。已核對 AMD64 套件資料、主程式、共用內容與 1,110／1,123 個檔案。deb SHA-256 為 `5f637bfdc7c92d7c86d3a446818f36e95a89526c84fe27ce9337d200918cee53`，tar.gz 為 `759239a026ccc425a5337418d4f34f08f4531788d5b4ec5b44a38903347d6740`。Linux 實機待驗。
+
 ## 2026-11-13 草稿與文章被動驗收候選
 
 Linux deb／tar.gz 位於 `.local/verification/slint-passive-drafts-reading/linux/`。從僅比 `675b150` 多三份文件變更的乾淨 `4f95094` 交叉建置，沿用既有 Debian bookworm amd64 SDK 並核對 3,419 份檔案與連結。核對 AMD64 套件資料、deb 的 1,110 份檔案、tar.gz 的 1,123 份檔案，以及兩包的主程式與共用內容。deb SHA-256 為 `e5d398e97c590957ea5b00847ab971d7bfa81836b252b1f0bcd60db20ef2eb2a`，tar.gz 為 `05027cff204c0a090d0f880c51e54faf92a9684db792fd30ecc9e6f6d770f168`。Linux 實機驗收待補。

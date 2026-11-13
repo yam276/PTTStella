@@ -2,6 +2,10 @@
 
 候選交付中的程式、Slint UI、字型、locale、fixture、工具與文件，須能從獨立來源包還原。原始建置的 commit／dirty／patch、產品來源核對與第三方來源閉包是不同證據；不能把其中一項通過填成全部完成。
 
+## 2026-11-13 草稿工具列候選來源
+
+四架構及 Windows Setup 同取乾淨 `b57eae8`。既有產品來源清單加入下載與執行檔雜湊，使用 `--candidate draft-history-macos-windows` 在禁止網路及 worktree 讀取的目錄還原 619 份檔案，核對 Git tree `23b3649fa85be0d2945152df68e19cdee3af6b76`。manifest SHA-256 為 `05213380bd4139ff70bf0ea38ef91b9c8d3655190cb21d77dad952e63c7f727e`。收據在 `.local/verification/slint-draft-history/all-source-delivery.json`。
+
 ## 2026-11-13 草稿與文章被動驗收候選來源
 
 Apple Silicon、Windows x64 便攜及離線 Setup 取自 `675b150`，Intel Mac 與 Linux x64 使用只多三份文件變更的 `4f95094`。既有 `product-source-20261111-6ad8e39/sources.json` 已加入四架構的下載及主程式雜湊。以 `--candidate passive-drafts-reading-macos-windows` 在禁止網路與原 worktree 讀取的目錄還原，核對 619 份產品檔案和 Git tree `2df7c8e8db5e5c3d607fd192d57567921f4021fa`。manifest SHA-256 為 `2ddcca1ee9e5a053fb8917c8e73ed37429374f0a307edbb1f08c20fa2f162365`。收據在 `.local/verification/slint-passive-drafts-reading/all-source-delivery.json`。
