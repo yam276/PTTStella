@@ -6,7 +6,9 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 目前進度（2026-11-13）
 
-最新四架構候選均取自乾淨提交 `118a1d9`，補上取消預載後的手動文章取頁。四架構封裝已核對，Linux 出貨執行檔通過手動翻頁、長文、分段和逾時四案。切換前仍待驗 macOS 封裝的原生焦點、Windows 實機安裝及注音／日文 IME、正式簽章的憑證接手及完整效能矩陣。Intel Mac 與 Linux x64 實機依指示暫緩。正式入口維持 Dioxus。[最新候選](#118a1d9-四架構候選)
+Apple Silicon App／DMG 與 Windows x64 便攜 ZIP 已同步至 `cb4fbfc`，新增文章首尾方向鍵切篇。[同提交候選](#cb4fbfc-apple-silicon-與-windows-x64-候選)
+
+最近一組四架構候選取自乾淨提交 `118a1d9`，補上取消預載後的手動文章取頁。四架構封裝已核對，Linux 出貨執行檔通過手動翻頁、長文、分段和逾時四案。切換前仍待驗 macOS 封裝的原生焦點、Windows 實機安裝及注音／日文 IME、正式簽章的憑證接手及完整效能矩陣。Intel Mac 與 Linux x64 實機依指示暫緩。正式入口維持 Dioxus。[四架構候選](#118a1d9-四架構候選)
 
 四架構候選都包含 `4d7d174` 的收藏載入焦點修正。Apple Silicon 和 Windows x64 從同一提交出包，Intel Mac 與 Linux x64 使用僅有文件差異的 `ebc1035` 工作樹建置。Apple Silicon 封裝的草稿保存、跨程序重開及三格式影片八案通過。Intel 封裝在 Rosetta 通過三輪收藏及主視窗，Linux 封裝在 QEMU／Xvfb 通過七項元件回歸。Windows 原生安裝／升級／IME、Intel Mac 與 Linux 原生驗收、完整同負載效能矩陣及正式簽章的憑證接手仍待驗。正式入口維持 Dioxus。[候選位置](#產物保留規則2026-11-09-使用者要求) · [影片音訊結果](#4-媒體s5)
 
@@ -1250,3 +1252,10 @@ Apple Silicon 候選的 `--show-profile` 回報研究資料路徑，確認查詢
 Apple Silicon App／ZIP／DMG、Intel Mac App／ZIP／DMG、Windows x64 便攜 ZIP／離線 Setup 及 Linux x64 deb／tar.gz 均由乾淨 `118a1d9` 建置。macOS 兩個架構通過深層簽章和封裝逐檔比對。Windows Setup 解包核對 927 檔。Linux 出貨執行檔通過手動翻頁、長文、分段和逾時四案，最初使用的開發執行檔與出貨檔雜湊不同，因此以出貨檔重跑驗收。X11 實際鍵鼠另核對取消後的 67 → 89 行、一次手動取頁、畫面接續和正常關閉。首輪人工驅動啟動過晚，預載已跑完，保留該輪紀錄。獨立還原的 837 份產品檔在 Apple Silicon 離線重編，Slint／播放器 111 項測試通過，既有原生 helper 一項忽略。[Windows 封裝](slint-windows-candidate.md#2026-11-13-118a1d9-候選) · [Linux 驗收](slint-linux-candidate.md#2026-11-13-118a1d9-候選) · [產品來源](slint-product-source.md#2026-11-13-118a1d9-候選來源)
 
 已清理前版兩組可由 DMG 還原的 App／ZIP、暫存 Linux SDK、交付暫存與 Setup 容器。保留固定 Cargo 快取、上一版 DMG、Windows 及 Linux 回退包與驗收證據。清理紀錄在 `.local/verification/slint-edge-fetch/` 的 `delivery-cleanup.json`、`superseded-macos-cleanup.json`、`packaged-x11-results.json` 和 `windows-setup/sparse-cleanup.json`。
+
+
+### cb4fbfc Apple Silicon 與 Windows x64 候選
+
+Apple Silicon App／ZIP／DMG 與 Windows x64 便攜 ZIP 同取乾淨提交 `cb4fbfc`。Apple Silicon 三種包逐檔核對相符，共 1,255 檔，通過 arm64、ad-hoc 深層簽章與 DMG checksum 驗證。Windows ZIP 校驗 payload、PE runtime 閉包及 VC runtime。此輪未操作 macOS 封裝視窗或 Windows 實機。Intel Mac、Linux x64 出貨包和 Windows 離線 Setup 沿用 `118a1d9`。Linux 隔離 X11 使用與 `cb4fbfc` 完全相同的產品程式差異核對實際鍵盤與 Close 回覆。實站切篇、Windows 安裝與 IME、macOS 封裝焦點仍待驗。
+
+`.local/verification/slint-article-arrow/` 保留打包、各案與來源收據。已清理上一版 Apple Silicon 的 App／ZIP 與本次 Linux SDK 暫存、X11 guest 資料。保留上一版 DMG、其他架構的有效交付及固定 Cargo 快取，確切路徑與空間觀測見各清理收據。
