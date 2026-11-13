@@ -1,10 +1,22 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-13 d047e55 候選
+
+便攜 ZIP 在 `.local/verification/slint-windows-refresh-rate/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-d047e55-offline/`。四架構同取乾淨 `d047e55`，納入軟體繪圖更新率修補。便攜包核對 926 份 payload、CRC 及 AMD64 PE 匯入，Setup 解包的 927 檔與便攜版一致。
+
+| 檔案 | SHA-256 |
+| --- | --- |
+| Windows 便攜 ZIP | `c710ef08b6df3183799da7689c977b80addc20004ab51f47f272233578e72afb` |
+| Windows 離線 Setup | `f845d52d6b04c0be424a6c1a5d4b72e20a4bb4420add078e08bcfc518985e86e` |
+| 包內執行檔 | `de30a0c5240b8194d4b47707efc88193ff1becd2ac4adcc38c16e66dac5518b1` |
+
+包內執行檔在隔離 Wine 10.0／QEMU x64／Xvfb 通過軟體繪圖主視窗探針，正常退出並收到唯一 Close ACK。收據在同一驗收目錄的 `packaged-wine-result.json`。Windows 實機仍待執行 `Check-All.cmd`、`Run-IME.cmd`、`Run-Drafts-IME.cmd`，並驗收安裝、升級及卸載。上一版 `96e5159` 的 ZIP 與 Setup 保留作對照。
+
 ## 2026-11-13 軟體繪圖的螢幕更新率
 
 Win32 `DEVMODE` 用 `0` 或 `1` 表示硬體預設更新率。Winit 原先把 `0` 交給 Slint 的重畫計時器，該計時器以更新率作除數。修補後兩種預設值皆回報更新率未知，讓 Slint 沿用 60 Hz fallback。可表示的實際更新率仍換算成毫赫茲。[Microsoft DEVMODE 文件](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-devmodea)
 
-Windows x64 release 交叉編譯及更新率換算單元測試通過，涵蓋 `0`、`1`、`60`、`144` 和溢位。現行四架構候選仍為 `96e5159`。
+Windows x64 release 交叉編譯及更新率換算單元測試通過，涵蓋 `0`、`1`、`60`、`144` 和溢位。
 
 在隔離的 Debian Wine 10.0／QEMU x64／Xvfb，`96e5159` 與修補版的軟體繪圖主視窗皆通過同一探針，各有一次 Close ACK。該環境未重現舊版除以零。Wine 8.0 的兩次測試均在載入階段退出，Debian sid 嘗試缺安裝相依。原始收據與暫存清理紀錄在 `.local/verification/slint-windows-refresh-rate/`。Windows 實機結果待驗。
 

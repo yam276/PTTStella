@@ -6,7 +6,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 目前進度（2026-11-13）
 
-**尚未達到可平替 Dioxus 的驗收條件。** 最新四架構候選皆取自乾淨提交 `96e5159`，含設定搜尋切頁焦點修正。Apple Silicon 和 Windows 已核對交付包，Intel Mac 與 Linux 依目前安排先交付封裝。macOS 新版封裝的背景視窗、Windows 原生安裝與 IME、正式簽章的憑證接手和完整效能矩陣仍待驗。正式入口維持 Dioxus。[最新候選](#96e5159-四架構候選)
+**尚未達到可平替 Dioxus 的驗收條件。** 最新四架構候選皆取自乾淨提交 `d047e55`，包含設定搜尋切頁焦點與 Windows 軟體繪圖更新率修正。四架構封裝均已核對，Intel Mac 與 Linux 依目前安排先交付封裝。macOS 新版封裝的背景視窗、Windows 原生安裝與 IME、正式簽章的憑證接手和完整效能矩陣仍待驗。正式入口維持 Dioxus。[最新候選](#d047e55-四架構候選)
 
 四架構候選都包含 `4d7d174` 的收藏載入焦點修正。Apple Silicon 和 Windows x64 從同一提交出包，Intel Mac 與 Linux x64 使用僅有文件差異的 `ebc1035` 工作樹建置。Apple Silicon 封裝的草稿保存、跨程序重開及三格式影片八案通過。Intel 封裝在 Rosetta 通過三輪收藏及主視窗，Linux 封裝在 QEMU／Xvfb 通過七項元件回歸。Windows 原生安裝／升級／IME、Intel Mac 與 Linux 原生驗收、完整同負載效能矩陣及正式簽章的憑證接手仍待驗。正式入口維持 Dioxus。[候選位置](#產物保留規則2026-11-09-使用者要求) · [影片音訊結果](#4-媒體s5)
 
@@ -1143,4 +1143,14 @@ Apple Silicon 從交付來源重編並通過 Slint／播放器 111 項測試，�
 
 使用者回報工作時多次失去前景。舊 `b57eae8` 封裝的草稿驗收收據記錄測試 PID 32894 收到 macOS 啟用通知並取得前景，監測器停止後續案例。此事件與回報相符，其他焦點切換仍無法歸因。後續自動驗收使用無視窗測試或隔離顯示；需 macOS 原生焦點的現行候選驗收待在隔離桌面執行。原始收據在 `.local/verification/slint-draft-history/packaged/`。
 
-Windows 軟體繪圖修補處理 Win32 回報的預設更新率，避免將零交給 Slint 的重畫計時器。交叉編譯、換算測試及隔離 Wine 10.0 主視窗探針通過。未在本輪重現歷史崩潰，四架構仍交付 `96e5159`。[Windows 更新率與驗收結果](slint-windows-candidate.md#2026-11-13-軟體繪圖的螢幕更新率)
+Windows 軟體繪圖修補處理 Win32 回報的預設更新率，避免將零交給 Slint 的重畫計時器。交叉編譯、換算測試及隔離 Wine 10.0 主視窗探針通過，該次對照未重現歷史崩潰。Wine 測試使用提交前的修補版，新交付另以乾淨提交建置。[Windows 更新率與驗收結果](slint-windows-candidate.md#2026-11-13-軟體繪圖的螢幕更新率)
+
+### d047e55 四架構候選
+
+Apple Silicon App／DMG／ZIP、Windows x64 便攜 ZIP 與離線 Setup、Intel Mac App／DMG／ZIP、Linux x64 deb／tar.gz 同取乾淨 `d047e55`。兩個 macOS App 的深層簽章、唯讀 DMG 與 ZIP 逐檔核對通過。Apple Silicon 核對 1,249 個 App 檔案及 51 個 Mach-O 的直接連結，皆未直接連結 WebKit。Windows 核對 926 份 payload 與 PE 匯入，Setup 解包 927 檔與便攜版逐位元一致。Linux 的 AMD64 套件、共用檔案與兩包主程式核對通過。四架構及來源收據在 `.local/verification/slint-windows-refresh-rate/`，Setup 在 `../PTTStella-candidates/windows-d047e55-offline/`。[Windows 候選](slint-windows-candidate.md#2026-11-13-d047e55-候選) · [Intel Mac 候選](slint-macos-x64.md#2026-11-13-d047e55-候選) · [Linux 候選](slint-linux-candidate.md#2026-11-13-d047e55-候選) · [來源還原](slint-product-source.md#2026-11-13-d047e55-候選來源)
+
+從還原來源重編的 Apple Silicon Slint／播放器共 111 項通過，既有原生 helper 一項忽略。工具測試 183 項、四架構兩配置依賴檢查、文件及兩份 workflow 的 actionlint 通過。Apple Silicon 封裝首輪引用已清理的舊播放器套件，改用 `96e5159` 的播放器 runtime 後，以同一 Rust 執行檔完成打包。Linux 首輪在虛擬機中斷時停在壓縮，重新核對原 ELF 與建置收據後重跑封裝。Windows 便攜包的 Wine 補測首輪未能在虛擬機斷線後啟動。重新連線後同包執行檔在隔離 Wine 10.0／Xvfb 通過軟體繪圖主視窗探針並收到唯一 Close ACK。
+
+同一 Linux 便攜包在 QEMU x64／Xvfb 的 14 項軟體繪圖元件案例全部通過，每案各一次 Close ACK。包含草稿保存及跨程序讀回、837 行／37 次取頁、441 行／19 次取消續跑、設定搜尋 48 個定位、推文追加、收藏及 MP4／WebM／OGV。此次測試未開 macOS 前景視窗。
+
+清理前一版重複的 macOS App／ZIP、Linux tar.gz，以及本輪封裝暫存與兩個 Setup 工具容器。保留 `96e5159` 的 DMG、deb、Windows ZIP 及 Setup 供比對，沿用固定 Cargo target、SDK 與獨特驗收證據。此次移除檔案的邏輯大小為 920,756,528 bytes，檔案系統可用空間同期增加 784,216,064 bytes，精確路徑見 `cleanup.json`。最新 Windows 實機安裝及兩種 IME、Apple Silicon 原生焦點／正式 Keychain 及完整效能對照待驗。正式入口維持 Dioxus。

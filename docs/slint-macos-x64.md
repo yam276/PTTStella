@@ -1,5 +1,9 @@
 # Slint macOS x64 候選包
 
+## 2026-11-13 d047e55 候選
+
+Intel App／ZIP／DMG 在 `.local/verification/slint-windows-refresh-rate/macos-intel/`。已核對 x86_64、47 個播放器函式庫、App 深層簽章、DMG、ZIP CRC 和 1,225 個檔案。DMG SHA-256 為 `8365e05667d708ccbbe4d89b7ffe371748af66229dbba6019342a3c1e4734291`。Intel 實機待驗。
+
 ## 2026-11-13 96e5159 候選
 
 Intel App／ZIP／DMG 在 `.local/verification/slint-settings-focus-mount/macos-intel/`，與其他三架構同取乾淨 `96e5159`。已核對 x86_64、47 個播放器函式庫、App 深層簽章、DMG、ZIP CRC 及 1,224 個檔案。DMG SHA-256 為 `988793baf22e2e1f37ae3044237a22134dc8ed446f0a051b22012c8f583f4061`。Intel 實機待驗。

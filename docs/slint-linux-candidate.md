@@ -1,5 +1,11 @@
 # Slint Linux x64 候選包
 
+## 2026-11-13 d047e55 候選
+
+Linux deb／tar.gz 在 `.local/verification/slint-windows-refresh-rate/linux/`。已核對 AMD64 套件、共用檔案及兩包主程式，deb 共 1,111 檔，tar.gz 共 1,124 檔。deb SHA-256 為 `0ca717e1a31791f2b7bdf7084a6c71184f07b994b2a6adfb2691f3c0bdc83251`，tar.gz 為 `40398732e4622784a7b480bab76406a30a347211ba85d3af78c43ea7cbc305c4`。Linux 實機待驗。
+
+便攜包的 ELF 在 ARM Podman／QEMU x64／Xvfb 跑完 14 項軟體繪圖元件案例，全數正常退出且各收到一次 Close ACK。涵蓋草稿保存與跨程序重開、主視窗、兩種搜尋、長文與取消續跑、複製／PNG、設定 48 個定位、推文更新、收藏及三種影片格式。收據位於同一驗收目錄的 `linux-components/summary.json`。
+
 ## 2026-11-13 96e5159 候選
 
 Linux deb／tar.gz 在 `.local/verification/slint-settings-focus-mount/linux/`，與其他三架構同取乾淨 `96e5159`。核對 AMD64 套件資料、主程式、共用內容及 1,111／1,124 檔。deb SHA-256 為 `58fa4c83a242e3c3ef539424b75c80294b91739dcf4b03f2fc4924dea45705af`，tar.gz 為 `2c8c0a17cfbf83853c637d4a587234c6dd20fd72e208256796c13437ed66abd2`。同一修正程式在交付前的 QEMU／Xvfb 設定搜尋回歸通過六輪。此包 Linux 實機待驗。

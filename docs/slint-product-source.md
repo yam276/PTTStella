@@ -2,6 +2,10 @@
 
 候選交付中的程式、Slint UI、字型、locale、fixture、工具與文件，須能從獨立來源包還原。原始建置的 commit／dirty／patch、產品來源核對與第三方來源閉包是不同證據；不能把其中一項通過填成全部完成。
 
+## 2026-11-13 d047e55 候選來源
+
+四架構與 Windows Setup 同取乾淨 `d047e55`。在既有 `sources.json` 加入 `windows-refresh-rate`，獨立還原 837 份來源並核對 Git tree `6fd5a9fcd72c2b9d1061a833b55b52e1e81809d9`。四架構 manifest SHA-256 為 `71a54673a1bb98a78161ae18543ecf76aef26d3e2ab1293cf0c42095069d0cc7`。以 Apple Silicon 從還原來源重編測試時，編譯禁用網路和原 worktree 來源讀取，執行測試開放本機 loopback。Slint 110 項及播放器 1 項通過，既有原生 helper 一項忽略。收據在 `.local/verification/slint-windows-refresh-rate/`。第三方來源閉包和其他架構的還原重編待驗。
+
 ## 2026-11-13 96e5159 候選來源
 
 四架構及 Windows Setup 同取乾淨 `96e5159`。既有 `sources.json` 新增 `settings-focus-mount` 對應。從隔離位置核對 837 份來源與 Git tree `bae1c6eeae5734c72e6de4ad1fc86a3e22c12e5b`，manifest SHA-256 為 `e4fecea77c199d1166c505ed57542bd59acf7b8b0c1c40aad35990b40ed5b2ed`。驗證後清理暫存還原目錄，收據在 `.local/verification/slint-settings-focus-mount/all-source-delivery.json`。
