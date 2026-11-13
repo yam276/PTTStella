@@ -1215,6 +1215,8 @@ Apple Silicon App／ZIP／DMG、Windows x64 ZIP／離線 Setup、Intel Mac App�
 
 Linux 交付包完成 14 案回歸，每案一次 Close ACK，包含草稿重開帶回、長文 37 次取頁及取消續跑、設定搜尋 48 個定位、推文、收藏、輸出與影片。Apple Silicon 從獨立還原來源離線重編後通過 Slint／播放器 111 項測試，既有原生 helper 一項忽略。[Linux 封裝回歸](slint-linux-candidate.md#2026-11-13-3277ac1-候選) · [來源重編](slint-product-source.md#2026-11-13-3277ac1-候選來源)
 
-同提交通過隔離 Keychain 的舊紀錄、改簽接手拒絕及原簽章回退。已核對七種共用 store 及資料矩陣 driver 自 `b57eae8` 的 28 案後沒有來源變更。28 案的實際驗收版本仍為 `b57eae8`。正式簽章重新授權及前端接手待驗。[正式服務名演練](login.md#macos-正式服務名的隔離演練)
+同提交通過隔離 Keychain 的舊紀錄、改簽接手拒絕及原簽章回退。Apple Silicon 也用 `3277ac1`、相容 Dioxus `82bc81f` 與公開 `v0.4.1` 重跑無視窗資料矩陣，28 案及 155 次程序呼叫通過。涵蓋設定 v1–v6、七種資料、備份、並行與壞檔保護。正式簽章重新授權及前端接手待驗。[資料往返](slint-store-frontends.md#2026-11-13-3277ac1-資料回退矩陣) · [正式服務名演練](login.md#macos-正式服務名的隔離演練)
 
 Windows 離線 Setup 在隔離 Wine／QEMU 通過 10 項安裝、升級、回退、重裝及卸載案例。`2ef65ce` 建立的草稿在 `3277ac1` 與回退版均可重開並帶回合成站，檔案雜湊一致。卸載後保留草稿及資料標記。Windows 實機安裝與原生 IME 仍待驗。[Setup 升退演練](slint-windows-candidate.md#2026-11-13-3277ac1-候選)
+
+以交付的 `3277ac1` 在隔離 X11 開啟登入面板，重現帳密欄和按鈕被裁切。修正內容尺寸並加入垂直捲動後，以實際 X11 鍵鼠完成帳密輸入、錯誤驗證碼及手動救援碼，回到合成站主選單並正常 Close。密碼庫不可用且未勾保存的路徑也在此輪覆蓋。Apple Silicon 的 Slint／播放器無視窗回歸 111 項通過，既有 helper 一項忽略。修正尚未進入 `3277ac1` 封裝。[登入操作與收據](login.md#操作)

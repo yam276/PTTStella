@@ -2,6 +2,12 @@
 
 2026-11-11 已用同一對 macOS arm64 前端完成設定 v1–v6 的 Slint → 原 Dioxus → Slint 往返。各版本以獨立合成資料驗證兩次實際儲存、前一代備份與重開讀取。黑白名單、可攜設定、收藏名稱／離線讀取、最近看板清除及草稿編輯保存的先前證據見後節。完整新增／編輯／刪除、最近看板新增與排序、macOS 一般入口的自動開圖設定往返也已通過，完整平台資料回退、密碼庫與產品切換仍待驗。
 
+## 2026-11-13 3277ac1 資料回退矩陣
+
+在 Apple Silicon 重新建置候選 `3277ac1`、相容回退 `82bc81f` 及公開版 `v0.4.1` 的無視窗資料驅動程式。28 案與 155 次程序呼叫通過，涵蓋設定 v1–v6、七種資料的往返、備份、並行寫入與衝突副本，以及壞檔和未來版本的寫入保護。帶自動開圖欄位的設定仍以 `82bc81f` 為相容回退版。公開 `v0.4.1` 通過其支援的舊設定範圍。
+
+各驅動程式使用各自版本的生產 Store 和 Cargo.lock，資料全部由測試建立。沿用固定 Cargo target，兩個基準依序使用同一暫存 checkout。驅動程式連結、暫存 checkout 和 78 個空的合成資料鎖已清理。證據在 `.local/verification/slint-video-toggle/store-matrix/` 的 `inputs.json`、`matrix/report.json`、`cleanup.json` 與 `fixture-cleanup.json`。實際前端的原地升退與正式簽章重新授權仍沿用各自的驗收項目。
+
 ## 2026-11-13 草稿工具列候選的資料回退矩陣
 
 在 Apple Silicon 沿用固定 Cargo target，分別編譯對應 Slint 候選 `b57eae8`、相容 Dioxus 回退版 `82bc81f` 與公開 `v0.4.1`（`e304be2`）的無視窗資料驅動程式。Slint 從只多封裝文件的 `b581ae1` 建置，已核對產品及 driver 來源相同。相容回退版使用既有 driver，公開版在暫存 checkout 加入同一份 example。三個版本各用自己的生產 Store 和 Cargo.lock。
