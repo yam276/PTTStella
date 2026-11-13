@@ -44,7 +44,7 @@ impl ArticleSession {
                 .is_some()
             && let Some(view) = self.view.borrow().as_ref()
         {
-            view.navigate(intent);
+            view.navigate_from_input(intent);
         }
         true
     }

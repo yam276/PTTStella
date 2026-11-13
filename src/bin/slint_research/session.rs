@@ -58,6 +58,7 @@ pub enum Probe {
     ArticleFind,
     ArticleFindTerminal,
     ArticleLong,
+    ArticleSegmented,
     ArticleStall,
     ArticleTerminal,
     Input,
@@ -247,6 +248,7 @@ pub fn with_probe(
         Probe::ArticlePaste => "slint_article_paste",
         Probe::ArticleFind | Probe::ArticleFindTerminal => "slint_article_find",
         Probe::ArticleLong => "slint_long_load",
+        Probe::ArticleSegmented => "slint_segmented_load",
         Probe::ArticleStall => "slint_stalled_article",
         Probe::ArticleTerminal => "slint_terminal_pages",
         Probe::Input => "slint_input",
@@ -382,6 +384,12 @@ pub fn with_probe(
                     .article_page(2)?,
             ),
             Probe::Reconnect => Connection::start_toast_reconnect_probe(bytes),
+            Probe::ArticleSegmented => Connection::start_fast_article_load_probe(
+                pttstella::replay::segmented_load_page(1)?,
+                (2..=190)
+                    .map(pttstella::replay::segmented_load_page)
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
             Probe::ArticleFull | Probe::ArticleLong => {
                 let long = probe == Probe::ArticleLong;
                 let page = |n| {

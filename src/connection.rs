@@ -569,7 +569,8 @@ impl Connection {
         delay_ms: u64,
         fragment_ms: u64,
     ) -> Result<Self, String> {
-        if pages.is_empty() || pages.len() > 64 || pages.iter().any(|p| p.len() > 64 * 1024) {
+        // Allow the synthetic 190-page article to cross the 4,096-row cache boundary.
+        if pages.is_empty() || pages.len() > 192 || pages.iter().any(|p| p.len() > 64 * 1024) {
             return Err("invalid article load probe pages".into());
         }
         let connection = Self::start_owned_probe(

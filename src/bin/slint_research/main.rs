@@ -182,7 +182,7 @@ fn options() -> Result<Options, Box<dyn Error>> {
 fn options_from(
     mut args: impl Iterator<Item = std::ffi::OsString>,
 ) -> Result<Options, Box<dyn Error>> {
-    const USAGE: &str = "usage: pttstella-slint [--probe-store NEW_DIR MARKED_STORE_ROOT|--verify-motion NEW_DIR|--verify-shell NEW_DIR|--probe-benchmark NEW_DIR|--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--store-scene grid|drafts|gifs|long] [--media-origin LOOPBACK_HTTP_ORIGIN] [--software-renderer|--opengl-renderer|--metal-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
+    const USAGE: &str = "usage: pttstella-slint [--probe-store NEW_DIR MARKED_STORE_ROOT|--verify-motion NEW_DIR|--verify-shell NEW_DIR|--probe-benchmark NEW_DIR|--probe-editor-color|--connect|--show-profile|--probe-grid|--probe-drafts|--probe-media|--probe-inline|--probe-article|--probe-full-load|--probe-article-input|--probe-article-output|--probe-article-keepalive|--probe-article-paste|--probe-article-find|--probe-terminal-find|--probe-long-load|--probe-segmented-load|--probe-stalled-article|--probe-terminal-pages|--probe-ime|--probe-session|--probe-input|--probe-clipboard|--probe-keepalive|--probe-login|--probe-login-2fa|--probe-selection|--probe-vim|--probe-pointer|--probe-tools|--probe-tools-station|--probe-context-menu|--probe-context-menu-station|--probe-station-mouse|--probe-station-mouse-drag|--probe-station-mouse-motion|--probe-station-mouse-wheel|--probe-station-mouse-round-trip] [--store-scene grid|drafts|gifs|long] [--media-origin LOOPBACK_HTTP_ORIGIN] [--software-renderer|--opengl-renderer|--metal-renderer] [--zoom 100|125|150] [--capture NEW.png] [--source-png NEW.png] [--verify-editor-color NEW_DIR] [--verify-drafts NEW_DIR] [--verify-media NEW_DIR] [--verify-context-menu NEW_DIR] [--verify-tools NEW_DIR] [--verify-article NEW_DIR] [--verify-article-session NEW_DIR]";
     let mut zoom = None;
     let mut benchmark = None;
     let mut store_root = None;
@@ -293,6 +293,9 @@ fn options_from(
             }
             Some("--probe-long-load") if probe.is_none() => {
                 probe = Some(Probe::Session(session::Probe::ArticleLong))
+            }
+            Some("--probe-segmented-load") if probe.is_none() => {
+                probe = Some(Probe::Session(session::Probe::ArticleSegmented))
             }
             Some("--probe-stalled-article") if probe.is_none() => {
                 probe = Some(Probe::Session(session::Probe::ArticleStall))
@@ -435,6 +438,7 @@ fn options_from(
                     | session::Probe::ArticleFind
                     | session::Probe::ArticleFindTerminal
                     | session::Probe::ArticleLong
+                    | session::Probe::ArticleSegmented
                     | session::Probe::ArticleStall
                     | session::Probe::ArticleTerminal
             ))
@@ -1144,6 +1148,7 @@ fn run(
                             | session::Probe::ArticleFind
                             | session::Probe::ArticleFindTerminal
                             | session::Probe::ArticleLong
+                            | session::Probe::ArticleSegmented
                             | session::Probe::ArticleStall
                             | session::Probe::ArticleTerminal
                     )
@@ -1222,6 +1227,7 @@ fn run(
                             | session::Probe::ArticleFind
                             | session::Probe::ArticleFindTerminal
                             | session::Probe::ArticleLong
+                            | session::Probe::ArticleSegmented
                             | session::Probe::ArticleStall
                     )
                 )
@@ -1327,6 +1333,7 @@ fn run(
                             | session::Probe::ArticleFind
                             | session::Probe::ArticleFindTerminal
                             | session::Probe::ArticleLong
+                            | session::Probe::ArticleSegmented
                             | session::Probe::ArticleStall
                             | session::Probe::Selection
                             | session::Probe::ArticleTerminal

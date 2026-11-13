@@ -168,7 +168,16 @@ impl ArticleView {
                         owner.publish();
                     }
                 } else if let (Some(layout), Some(flow)) = (owner.layout.get(), owner.flow()) {
-                    owner.scroll_pixels(owner.position(&flow) - f64::from(delta * layout.dpi));
+                    let top = owner.position(&flow);
+                    let target = top - f64::from(delta * layout.dpi);
+                    let maximum = flow.maximum(f64::from(layout.body_height * layout.dpi));
+                    owner.scroll_pixels(target);
+                    if delta < 0.
+                        && top == maximum
+                        && let Some(ui) = owner.ui.upgrade()
+                    {
+                        ui.invoke_article_continue_segment();
+                    }
                 }
             }
         });
@@ -176,7 +185,7 @@ impl ArticleView {
             let owner = owner.clone();
             move |code| {
                 use pttstella::navigation::Intent;
-                owner.navigate(match code {
+                owner.navigate_from_input(match code {
                     0 => Intent::Lines {
                         down: false,
                         count: 1,
@@ -245,15 +254,26 @@ impl ArticleView {
                 .is_some_and(|ui| ui.get_article_active() && !ui.get_article_blocked())
     }
     /// Both toolkit and native keyboard routes use the same row geometry.
-    pub fn navigate(self: &Rc<Self>, intent: pttstella::navigation::Intent) {
+    fn navigate_from_input(self: &Rc<Self>, intent: pttstella::navigation::Intent) {
+        if self.navigate(intent)
+            && let Some(ui) = self.ui.upgrade()
+        {
+            ui.invoke_article_continue_segment();
+        }
+    }
+
+    /// Returns whether a forward move was already at the end of the viewport.
+    pub fn navigate(self: &Rc<Self>, intent: pttstella::navigation::Intent) -> bool {
         use pttstella::navigation::Intent;
         if !self.allowed() {
-            return;
+            return false;
         }
         let Some(layout) = self.layout.get() else {
-            return;
+            return false;
         };
-        let Some(flow) = self.flow() else { return };
+        let Some(flow) = self.flow() else {
+            return false;
+        };
         let anchor = self.position(&flow);
         let viewport = f64::from(layout.body_height * layout.dpi);
         let target = match intent {
@@ -261,10 +281,14 @@ impl ArticleView {
             Intent::PreviousPage => flow.page(anchor, viewport, false),
             Intent::NextPage | Intent::Forward => flow.page(anchor, viewport, true),
             Intent::First => 0.,
-            Intent::Last => flow.maximum(f64::from(layout.body_height * layout.dpi)),
-            _ => return,
+            Intent::Last => flow.maximum(viewport),
+            _ => return false,
         };
         self.move_viewport(target, false);
+        matches!(
+            intent,
+            Intent::Lines { down: true, .. } | Intent::NextPage | Intent::Forward | Intent::Last
+        ) && anchor == flow.maximum(viewport)
     }
     fn flow(&self) -> Option<Rc<Flow>> {
         self.flow.borrow().clone()

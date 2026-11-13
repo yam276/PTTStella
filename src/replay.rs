@@ -93,6 +93,9 @@ pub fn full_load_page(page: usize, origin: Option<&str>) -> Result<Vec<u8>, Stri
 pub fn long_load_page(page: usize, origin: Option<&str>) -> Result<Vec<u8>, String> {
     reading_load_page(page, 38, true, origin)
 }
+pub fn segmented_load_page(page: usize) -> Result<Vec<u8>, String> {
+    reading_load_page(page, 190, false, Some("http://127.0.0.1:9"))
+}
 pub fn native_article_input_page(page: usize) -> Result<Vec<u8>, String> {
     reading_load_page(page, 2, false, Some("http://127.0.0.1:9"))
 }

@@ -97,6 +97,8 @@ Apple Silicon 與 Windows x64 的草稿／文章中途驗收包均固定在乾�
 
 2026-11-13 對齊滾輪後的逐行鍵盤操作。若上緣停在半行，向下會從該文字列開頭算下一行，向上則從該列底端算上一行。落點在圖片間隙時保留像素位置，文末可抵達精確邊界。沿用現有 Flow 及快取導覽，與 Dioxus 既有 43 px 捲動案例同驗向下 48 px、向上 24 px，並核對跨多行、圖片間隙與文末。Slint 本機文章測試與 Dioxus 展圖／閱讀測試通過，原生操作待桌面可供測試時補驗。
 
+2026-11-13 補齊 Slint 的長文分段導覽。Page Down、End、向下逐行或繼續往下捲動在已達段尾時會走既有「載入下一段」的接頁流程。首次抵達段尾只移動本機視窗，接段仍核對前景、閱讀焦點、目前文章及已驗證的站端重疊頁。隔離 QEMU／Xvfb 使用 4,181 行的合成站及 Slint 閱讀意圖，第一段保留至第 4,049 行，前進至段尾時維持 184 筆請求。再按 Page Down 後，下一段從第 4,049 行接到第 4,181 行，全程共 189 筆精確 PageDown 及一次 Close ACK。收據在 `.local/verification/slint-segment-navigation/`。原生鍵鼠和新封裝待驗。[分段閱讀操作](article-reading.md#操作與取頁)
+
 ### 3. 推文更新、選單與設定（S3、S4、S7）
 
 - **保留 Slint 的推文操作**　文章右鍵選單用固定「更新推文」標籤與勾選，上方保留更新狀態、未讀跳轉和回到站端。驗證啟用、取消、更新中右鍵、切篇與逾時。用同一合成站核對舊回覆不影響新文章。
@@ -1226,5 +1228,7 @@ Windows 離線 Setup 在隔離 Wine／QEMU 通過 10 項安裝、升級、回退
 Apple Silicon App／ZIP／DMG、Windows x64 ZIP／離線 Setup、Intel Mac App／ZIP／DMG 與 Linux x64 deb／tar.gz 均由乾淨 `299a0b3` 打包。兩個 macOS 封裝通過深層簽章與 App、ZIP、DMG 逐檔核對。Windows Setup 解包核對 927 檔。Apple Silicon 由獨立還原的 837 份產品檔離線重編，Slint／播放器共 111 項測試通過，既有原生 helper 一項忽略。[Windows 封裝](slint-windows-candidate.md#2026-11-13-299a0b3-候選) · [Intel 封裝](slint-macos-x64.md#2026-11-13-299a0b3-候選) · [來源重編](slint-product-source.md#2026-11-13-299a0b3-候選來源)
 
 Linux 交付執行檔與兩個隔離 X11 登入案例逐位元相同。獨立面板通過合成兩階段登入，設定內嵌表單通過縮窗後輸入及非登入畫面拒送。交付包另通過草稿、終端、文章、推文、收藏、設定與三種影片共 14 案，每案一次 Close ACK。內嵌面板成功登入及各平台實機操作待驗。[登入操作](login.md#操作) · [Linux 回歸](slint-linux-candidate.md#2026-11-13-299a0b3-候選)
+
+Windows `299a0b3` 原始離線 Setup 從 `3277ac1` 升級及回退，在斷開外部網路的 Wine／QEMU 通過 10 案，草稿升退後逐位元一致並可帶回編輯器。兩個載入器和隔離 Wine prefix 隨容器移除，Guest free block discard 與主機可用空間各自記錄。原生 Windows 安裝、憑證與 IME 仍待驗。[Windows 升退演練](slint-windows-candidate.md#2026-11-13-299a0b3-候選)
 
 候選留在 `.local/verification/slint-login-panel-candidate/`，Windows Setup 在 `../PTTStella-candidates/windows-299a0b3-offline/`。已清理封裝暫存、兩個 Setup 容器、Linux SDK 磁碟影像及掛載點、還原目錄、上一版重複的兩組 macOS App／ZIP。保留上一版 DMG、Windows 與 Linux 的回退包、固定 Cargo 快取和獨特收據。確切路徑及可用空間觀測見 `delivery-cleanup.json`、`superseded-macos-cleanup.json`、`linux-clean/linux-sdk-cleanup.json`、`linux-components-cleanup.json`、`linux-components-host-cleanup.json` 和 `source-build-result.json`。

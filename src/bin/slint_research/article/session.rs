@@ -190,28 +190,18 @@ impl ArticleSession {
         });
         ui.on_article_load_action({
             let owner = owner.clone();
-            move |resume| {
-                if owner.closed.get() {
-                    return;
-                }
-                let Some(scope) = owner.shown.get() else {
-                    return;
-                };
-                let view = owner.connection.updates.borrow().clone();
-                if owner.core.borrow().reading_scope() != Some(scope) {
-                    return;
-                }
-                if owner
-                    .core
-                    .borrow_mut()
-                    .full_load_action(scope.0, scope.1, resume, &view)
+            move |resume| owner.load_action(resume)
+        });
+        ui.on_article_continue_segment({
+            let owner = owner.clone();
+            let weak = ui.as_weak();
+            move || {
+                if let Some(ui) = weak.upgrade()
+                    && !owner.busy.get()
+                    && owner.allowed(&ui)
+                    && owner.next_segment_available()
                 {
-                    if !resume {
-                        owner.cancel_command();
-                    }
-                    owner.focus_after_paint.set(true);
-                    owner.next_paint.set(Instant::now());
-                    owner.notify.notify_one();
+                    owner.load_action(true);
                 }
             }
         });
@@ -255,6 +245,41 @@ impl ArticleSession {
         }).map_err(|e|e.to_string())?;
         owner.job.replace(Some(job));
         Ok(owner)
+    }
+    fn load_action(&self, resume: bool) {
+        if self.closed.get() {
+            return;
+        }
+        let Some(scope) = self.shown.get() else {
+            return;
+        };
+        let view = self.connection.updates.borrow().clone();
+        if self.core.borrow().reading_scope() != Some(scope) {
+            return;
+        }
+        if self
+            .core
+            .borrow_mut()
+            .full_load_action(scope.0, scope.1, resume, &view)
+        {
+            if !resume {
+                self.cancel_command();
+            }
+            self.focus_after_paint.set(true);
+            self.next_paint.set(Instant::now());
+            self.notify.notify_one();
+        }
+    }
+    fn next_segment_available(&self) -> bool {
+        let core = self.core.borrow();
+        core.reading_progress().is_some_and(|(id, _, _, state)| {
+            state == Some(pttstella::article_cache::LoadState::Limit)
+                && core.last_displayed().is_some_and(|p| {
+                    p.article
+                        .as_ref()
+                        .is_some_and(|a| a.id == id && a.next_segment)
+                })
+        })
     }
     fn allowed(&self, ui: &TerminalWindow) -> bool {
         ui.get_article_reading_ready()
@@ -569,14 +594,7 @@ impl ArticleSession {
         let progress = self.core.borrow().reading_progress();
         ui.set_article_load_available(progress.is_some());
         ui.set_article_load_active(self.core.borrow().full_load_active());
-        let next_segment = progress.is_some_and(|(id, _, _, state)| {
-            state == Some(pttstella::article_cache::LoadState::Limit)
-                && self.core.borrow().last_displayed().is_some_and(|p| {
-                    p.article
-                        .as_ref()
-                        .is_some_and(|a| a.id == id && a.next_segment)
-                })
-        });
+        let next_segment = self.next_segment_available();
         ui.set_article_load_next_segment(next_segment);
         ui.set_article_load_can_resume(
             next_segment

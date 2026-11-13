@@ -69,6 +69,11 @@ pub fn start(
             directory,
         );
     }
+    if case == crate::session::Probe::ArticleSegmented {
+        return Verification::start(ui, directory, "segmented-load", move |ui, directory| {
+            verify_segment(ui, directory, owner)
+        });
+    }
     let terminal = case == crate::session::Probe::ArticleTerminal;
     let long = case == crate::session::Probe::ArticleLong;
     let stall = case == crate::session::Probe::ArticleStall;
@@ -472,4 +477,116 @@ pub fn start(
             Ok(())
         },
     )
+}
+
+async fn verify_segment(
+    ui: TerminalWindow,
+    directory: PathBuf,
+    owner: Rc<ArticleSession>,
+) -> Result<(), String> {
+    let final_line = 4181;
+    let ready = || {
+        verification::foreground(&ui, true);
+        ui.invoke_focus_article();
+        ui.get_article_reading_ready() && !owner.core.borrow().has_in_flight()
+    };
+    until(
+        || {
+            ready()
+                && ui.get_article_load_next_segment()
+                && owner.progress().is_some_and(|(_, first, last, state)| {
+                    first == 1 && (4000..=4096).contains(&last) && state == Some(LoadState::Limit)
+                })
+        },
+        "the first article segment did not reach its rendered cache boundary",
+    )
+    .await
+    .map_err(|error| format!("{error}; state={}", owner.diagnostics()))?;
+    let (old_id, _, first_segment_end, _) = owner.progress().ok_or("first segment missing")?;
+    let boundary_requests = owner.requests.get();
+    require(
+        first_segment_end == 1 + 22 * boundary_requests,
+        "first segment requested unexpected pages",
+    )?;
+    let initial_y = ui.get_article_offset_y();
+    require(
+        owner.local_intent(pttstella::navigation::Intent::NextPage),
+        "article input did not consume PageDown",
+    )?;
+    require(
+        ui.get_article_offset_y() > initial_y,
+        "PageDown did not advance within the cached segment",
+    )?;
+    ui.invoke_article_navigate(5);
+    let end_y = ui.get_article_offset_y();
+    require(
+        (end_y - (ui.get_article_document_height() - ui.get_article_body_height())).abs() < 0.01,
+        "End did not reach the cached segment boundary",
+    )?;
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    require(
+        owner.requests.get() == boundary_requests
+            && owner.progress().is_some_and(|(id, _, _, _)| id == old_id),
+        "navigation fetched before the reader reached the segment boundary",
+    )?;
+    require(ready(), "end-of-segment viewport was not ready for input")?;
+    require(
+        owner.local_intent(pttstella::navigation::Intent::NextPage),
+        "article input did not consume PageDown",
+    )?;
+    until(
+        || {
+            ready()
+                && owner.progress().is_some_and(|(id, first, last, state)| {
+                    id != old_id
+                        && first == first_segment_end
+                        && last == final_line
+                        && state == Some(LoadState::Complete)
+                })
+                && !owner.core.borrow().dirty()
+        },
+        "PageDown at the cached segment boundary did not finish the next segment",
+    )
+    .await
+    .map_err(|error| format!("{error}; state={}", owner.diagnostics()))?;
+    let rows = {
+        let core = owner.core.borrow();
+        let packet = core.last_displayed().ok_or("final segment paint missing")?;
+        [0, final_line - first_segment_end]
+            .into_iter()
+            .map(|row| {
+                selection::extract(&packet.frame, &Selection::Line { row })
+                    .map(|copy| copy.text.trim_end().to_owned())
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    require(
+        rows == [
+            format!("Full article synthetic line {first_segment_end:04}"),
+            format!("Full article synthetic line {final_line:04}"),
+        ],
+        "the next segment lost the overlap row or the final row",
+    )?;
+    require(
+        owner.requests.get() == 189,
+        "segment boundary duplicated a station request",
+    )?;
+    verification::capture(&ui, &directory, "continued-segment.png")?;
+    owner.shutdown().await;
+    require(owner.stopped(), "segmented article event loop did not stop")?;
+    std::fs::write(
+        directory.join("result.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "status": "passed",
+            "scope": "synthetic loopback peer and article keyboard intents",
+            "first_segment_end": first_segment_end,
+            "second_segment_first": first_segment_end,
+            "final_line": final_line,
+            "requests_before_continuation": boundary_requests,
+            "requests": owner.requests.get(),
+            "article_loop_joined": true,
+        }))
+        .map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())
 }
