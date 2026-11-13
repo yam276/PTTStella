@@ -169,6 +169,8 @@ OpenGL WebM 另有一輪在應用程式前景觀測未中斷時，80% 段末已�
 
 2026-11-13 用 `b57eae8` 產品來源補跑現行候選、相容 Dioxus `82bc81f` 及公開 `v0.4.1` 的資料矩陣。28 案通過，涵蓋七種資料、設定 v1–v6、備份、衝突與壞檔保護。正式服務名隔離 Keychain 的 ad-hoc 改簽拒絕與原簽章回退通過。Apple Silicon 的正式 Developer ID 重新授權、跨平台前端回退與其他平台 vault 仍待驗。[資料回退矩陣](slint-store-frontends.md#2026-11-13-草稿工具列候選的資料回退矩陣) · [Keychain 演練](login.md#macos-正式服務名的隔離演練)
 
+2026-11-13 用 `cb4fbfc` 的產品程式補驗 28 案無視窗資料往返與正式服務名的隔離鑰匙圈。另重新封裝 `82bc81f` 的 Apple Silicon Dioxus 回退 DMG，保留自動展圖欄位與三個小數顯示設定。正式簽章重新授權及最新候選的原生視窗回退仍待驗。[新版資料回退證據](slint-store-frontends.md#2026-11-13-cb4fbfc-資料回退與-dioxus-回退包) · [Keychain 驗收](login.md#macos-正式服務名的隔離演練)
+
 - **候選版保留隔離，正式替換沿用既有產品身分**　沿用 Rust store、版本、鎖與備份契約。先用副本重跑 Dioxus → Slint → 相容 Dioxus 回退 → Slint，核對設定、站點、名單、收藏、最近看板及草稿可讀寫。用合成憑證另驗正式服務名與簽章下的讀取、拒絕後提示與回退。記錄可用的 Dioxus 回退版本及獨立備份恢復步驟。
 - **驗收交付**　沿用 Slint worktree 和既有編譯快取。Apple Silicon 與 Windows x64 以同一 commit 出包並記錄實測案例和版本。Intel Mac、Linux x64 先打包，原生案例依目前安排維持待驗。正式入口切換依 S9。[Apple Silicon 隔離演練](slint-store-frontends.md#2026-11-11-同一正式-bundle-id-的-apple-silicon-隔離演練)
 

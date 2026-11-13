@@ -101,6 +101,8 @@ Session另持有有界、無密碼的AccountIdentity，僅供網頁文章標示�
 
 `3277ac1` 再次通過正式服務名稱的隔離鑰匙圈演練。寫入舊格式、拒絕不同 ad-hoc 簽章接手、單次手動登入準備，以及原簽章回退讀回並移除均通過。測試關閉系統授權介面，清理後使用者搜尋清單逐位元相同。交付 App 的 `--show-profile` 確認使用 `SlintResearch`，查詢期間沒有讀寫 store 或開啟 vault。正式 Developer ID 的重新授權仍待驗。收據在 `.local/verification/slint-video-toggle/product-keychain.json` 和 `product-keychain.log`。
 
+以 `cb4fbfc` 的產品程式重跑正式服務名的隔離鑰匙圈演練。舊格式寫入、不同 ad-hoc 簽章接手拒絕、單次手動登入準備、原簽章回退讀回及刪除均通過。測試關閉系統授權介面，獨立鑰匙圈已刪除，使用者搜尋清單逐位元相同。Apple Silicon 候選的封裝執行檔另確認 `--show-profile` 使用 `SlintResearch`，未讀取資料檔或開啟 vault。這台 Mac 未找到可用的 Developer ID Application 簽章身分。正式簽章的系統授權及前端接手保留待驗。收據在 `.local/verification/slint-article-arrow/store-rehearsal/`。
+
 Linux 缺服務另明確執行：`DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-pttstella-synthetic-bus cargo test --locked --features credential-store --lib login::vault::tests::native_service_unavailable -- --ignored --exact`，需確認讀取與勾選保存失敗，但不勾選單次登入仍能準備帳密。交叉編譯、記憶體測試與隔離容器不能冒充 Windows 認證庫、Linux 真實桌面解鎖或三平台實站登入。
 
 GitHub 的 Desktop Release 在打包前使用相同測試。Windows runner 直接操作認證管理員。Linux runner 建立獨立的 D-Bus 工作階段和暫存 GNOME Keyring，並另外執行缺服務案例。
