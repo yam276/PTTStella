@@ -6,13 +6,15 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 目前進度（2026-11-14）
 
+目前四架構便攜候選取同一乾淨提交 `1d3e702`，包含草稿色碼選單確認後回焦。Apple Silicon 出貨檔已驗三種顯示、鍵盤回焦、保存、重開及帶回合成站端。Windows x64 ZIP、Intel Mac App／ZIP／DMG 及 Linux x64 deb／tar.gz 已核對封裝，原生驗收依各平台紀錄。Windows 離線 Setup 的已驗版本仍是 `cb4fbfc`。正式入口維持 Dioxus。[草稿操作](drafts.md#1d3e702-色碼選單回焦) · [四架構交付](#1d3e702-草稿回焦候選)
+
 Apple Silicon 用 `cb4fbfc` 出貨 App 與同源 Dioxus 再次重測。837 行全文 renderer ACK 中位數為 541／555 ms，每版各 100 次的快取 PageDown p95 為 41.3／87.5 ms，PageUp p95 為 39.5／88.0 ms。雙 GIF 每版三輪有效樣本的程序族 footprint 峰值中位數為 131／730 MiB，10 秒累積 CPU 為 0.479／0.663 秒。全文差距方向及 CPU 絕對值在不同輪次有波動。使用者將驗 Windows 日文 IME。[重測結果](slint-macos-measurement.md#2026-11-14-最新候選長文翻頁與雙-gif-重測)
 
 同一 Slint 候選與相容 Dioxus `82bc81f` 用正式 Bundle ID 在隔離資料副本完成五階段升級、回退及恢復。兩版均從一般入口讀寫自動開圖設定，核對兩次保存的一代備份及八份復原檔。正式 Developer ID 的鑰匙圈重新授權與 Finder 首開仍待驗，正式入口維持 Dioxus。[最新回退演練](slint-store-frontends.md#2026-11-14-cb4fbfc-正式識別的隔離升級與回退)
 
 Apple Silicon `cb4fbfc` 一般入口已驗 `⌃⌘F` 進出全螢幕、第 24 行完整顯示，以及退出全螢幕與 Esc 離開設定後的終端回焦。Dioxus 回退版在此劇本退出全螢幕後需點終端一次才恢復方向鍵。[原生焦點對照](slint-prototype.md#2026-11-14-cb4fbfc-全螢幕與終端回焦)
 
-四架構候選已同步至 `cb4fbfc` 的產品來源，包含 Apple Silicon／Intel Mac App、Windows x64 便攜 ZIP／離線 Setup 與 Linux x64 deb／tar.gz。這版新增文章首尾方向鍵切篇。切換前仍待驗 macOS 封裝的原生焦點、Windows 實機安裝及注音／日文 IME、正式簽章的憑證接手及完整效能矩陣。Intel Mac 與 Linux x64 實機依指示暫緩。正式入口維持 Dioxus。[最新候選](#cb4fbfc-四架構候選)
+`cb4fbfc` 四架構候選保留文章首尾方向鍵切篇與已驗的 Windows 離線 Setup 升退。切換前仍待驗 Windows 實機安裝及注音／日文 IME、正式簽章的憑證接手及完整效能矩陣。Intel Mac 與 Linux x64 實機依指示暫緩。[切篇候選](#cb4fbfc-四架構候選)
 
 四架構候選都包含 `4d7d174` 的收藏載入焦點修正。Apple Silicon 和 Windows x64 從同一提交出包，Intel Mac 與 Linux x64 使用僅有文件差異的 `ebc1035` 工作樹建置。Apple Silicon 封裝的草稿保存、跨程序重開及三格式影片八案通過。Intel 封裝在 Rosetta 通過三輪收藏及主視窗，Linux 封裝在 QEMU／Xvfb 通過七項元件回歸。Windows 原生安裝／升級／IME、Intel Mac 與 Linux 原生驗收、完整同負載效能矩陣及正式簽章的憑證接手仍待驗。正式入口維持 Dioxus。[候選位置](#產物保留規則2026-11-09-使用者要求) · [影片音訊結果](#4-媒體s5)
 
@@ -1281,6 +1283,12 @@ Apple Silicon App／ZIP／DMG、Intel Mac App／ZIP／DMG、Windows x64 便攜 Z
 
 已清理前版兩組可由 DMG 還原的 App／ZIP、暫存 Linux SDK、交付暫存與 Setup 容器。保留固定 Cargo 快取、上一版 DMG、Windows 及 Linux 回退包與驗收證據。清理紀錄在 `.local/verification/slint-edge-fetch/` 的 `delivery-cleanup.json`、`superseded-macos-cleanup.json`、`packaged-x11-results.json` 和 `windows-setup/sparse-cleanup.json`。
 
+
+### 1d3e702 草稿回焦候選
+
+Apple Silicon 與 Intel Mac App／ZIP／DMG、Windows x64 便攜 ZIP 及 Linux x64 deb／tar.gz 皆從乾淨 `1d3e702` 建置。兩版 macOS App 與 ZIP、DMG 分別核對 1,256／1,232 個檔案逐位元相同，深層簽章與映像檢查通過。Windows ZIP 926 項 payload 與 manifest、AMD64 PE 及匯入通過。Linux 兩包共用執行檔及說明逐位元相符，deb 為 amd64。Intel、Linux 實機保留待驗。Windows 日文 IME 由使用者驗收，最新版離線 Setup 尚未重打。
+
+收據與交付在 `.local/verification/slint-article-arrow/draft-mode-focus-pair/`。產品來源已離線核對完整 Git tree。已移除本輪 Linux SDK、傳輸與視窗暫存，以及被取代的兩份 macOS ZIP，保留舊 App／DMG 作對照和回退、已交付的 Windows 待驗包及固定編譯快取。實際清理見同目錄的 `package-cleanup.json`、`draft-mode-focus-cleanup.json`、`intel-cleanup.json` 及 `linux-clean/linux-sdk-cleanup.json`。
 
 ### cb4fbfc 四架構候選
 

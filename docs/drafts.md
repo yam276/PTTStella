@@ -58,6 +58,12 @@ Runtime bundle、MIT授權及來源清單在 `assets/vendor/composer/`。一般 
 
 原始畫面、去文字事件、保存快照與清理在 `.local/verification/slint-article-arrow/arm64-reading/drafts-native-focus-20261114/` 和同層 `drafts-native-cleanup-20261114.json`。已移除六個隔離暫存根、視窗工具及 18 張逐位元重複的截圖。
 
+#### 1d3e702 色碼選單回焦
+
+用 Apple Silicon 出貨 App 依序選色碼原文、隱藏色碼與彩色編輯。每次用方向鍵移到選項並按 Enter，未再點正文便可輸入和保存，依序追加 `X`、`Y`、`Z`。再輸入「中」和 Enter 後立即關閉。另一程序由保存的副本重開，讀回 `A1Z9XYZ中`、尾端換行和原 ANSI 紅字，上一代備份逐位元吻合最後一次手動保存。兩次程序 exit 0、唯一 Close ACK。同包另通過草稿及跨程序帶回合成站端編輯器的元件探針。
+
+未封裝執行檔的初輪已存下正確正文，接續程序未取得可操作的視窗。正式封裝的兩段獨立啟動均通過。原生截圖及快照在 `.local/verification/slint-article-arrow/arm64-reading/drafts-mode-focus-package-20261114/` 與 `drafts-mode-focus-reopen-20261114/`。本輪 Unicode 輸入證明回焦與保存，繁中及日文 IME 候選窗另驗。
+
 Linux x64 候選 `cb4fbfc` 在隔離 X11 使用出貨執行檔及 Windows 草稿驗收包內的同一份合成稿。以實際按鍵移至文件末端、用 Shift 方向鍵選取兩字、替換後點工具列復原／重做。三種 ANSI 顯示切換後，原來的紅字區段仍在。Ctrl+S 保存後立即補末字及換行並關閉編輯器，新程序讀回完整內容，主檔的上一代備份逐位元等於 Ctrl+S 的快照。兩個程序正常退出，各收到唯一站端 Close。首輪 VM 中斷前已有存檔，退出收據不完整，保留另列。畫面與事件、存檔及清理收據在 `.local/verification/slint-article-arrow/x11-drafts/`。本案涵蓋實際鍵鼠，注音／日文候選與提交仍待各平台驗收。
 
 #### cb4fbfc 草稿 XIM 組字與重開
