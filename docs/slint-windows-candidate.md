@@ -4,6 +4,8 @@
 
 便攜 ZIP 在 `.local/verification/slint-login-panel-candidate/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-299a0b3-offline/`。與其他三架構同取乾淨 `299a0b3`，含登入面板裁切修正。ZIP CRC、926 份 payload 與 AMD64 PE 匯入通過。Setup 解包 927 檔逐一相符。Windows 原生安裝、升級、Microsoft 注音及日文 IME 待驗。
 
+離線 Setup 在 Wine 10.0／QEMU／Xvfb 完成 10 案。由 `3277ac1` 安裝並保存合成草稿，升到 `299a0b3`，再回退、重裝及卸載。各次安裝核對 926 檔、登錄與捷徑。升級與回退皆從新程序重開同一草稿，逐位元保留原稿並帶回合成站編輯器。安裝到既有的合成 Dioxus 目錄時以代碼 7 拒絕，卸載保留合成草稿和資料目錄。收據及容器清理紀錄在 `.local/verification/slint-login-panel-candidate/windows-lifecycle/wow64/`。原生 Windows 安裝與 IME 待驗。
+
 ## 2026-11-13 3277ac1 候選
 
 便攜 ZIP 在 `.local/verification/slint-video-toggle/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-3277ac1-offline/`。與其他三架構同取乾淨 `3277ac1`，含影片緩衝暫停與片尾重播修正。ZIP CRC、926 份 payload 與 AMD64 PE 匯入通過。Setup 解包 927 檔逐一相符。Windows 原生安裝、升級及兩種 IME 待驗。
