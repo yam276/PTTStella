@@ -26,6 +26,7 @@ pub fn start(
             )
             .await?;
             require(owner.rows.get() == 837, "article fixture lost rows")?;
+            verification::foreground(&ui, true);
             ui.invoke_focus_article();
             tokio::time::sleep(Duration::from_millis(30)).await;
             verification::capture(&ui, &directory, "top.png")?;
@@ -154,6 +155,13 @@ pub fn start(
             .await?;
             tokio::time::sleep(Duration::from_millis(30)).await;
             verification::capture(&ui, &directory, "historical-ink.png")?;
+            let prior_rows = owner
+                .painted
+                .borrow()
+                .as_ref()
+                .ok_or("historical raster missing")?
+                .rows
+                .clone();
             let rows_before = owner.row_raster_count.get();
             verification::key(&ui, Key::DownArrow);
             wait(
@@ -168,7 +176,23 @@ pub fn start(
             )
             .await?;
             require(
-                owner.row_raster_count.get() == rows_before + 1,
+                (owner.row_anchor() - 651.).abs() < 0.001,
+                "Down after a fractional scroll did not align to the next row",
+            )?;
+            let new_rows = owner
+                .painted
+                .borrow()
+                .as_ref()
+                .ok_or("row-down raster missing")?
+                .rows
+                .clone();
+            // Snapping forward by less than one full row can leave the
+            // buffered bottom edge in the same row.
+            require(
+                new_rows.end >= prior_rows.end
+                    && new_rows.end - prior_rows.end <= 1
+                    && owner.row_raster_count.get()
+                        == rows_before + (new_rows.end - prior_rows.end),
                 "one-row scroll rerasterized retained rows",
             )?;
             verification::key(&ui, Key::UpArrow);
@@ -183,6 +207,10 @@ pub fn start(
                 "row-up raster did not return",
             )
             .await?;
+            require(
+                (owner.row_anchor() - 650.).abs() < 0.001,
+                "Up did not return to the preceding aligned row",
+            )?;
             let anchor = owner.row_anchor();
             let count = owner.raster_count.get();
             ui.invoke_article_scroll(-0.1 * layout.line_height(), false);

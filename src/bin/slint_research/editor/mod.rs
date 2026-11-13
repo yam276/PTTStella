@@ -71,6 +71,7 @@ pub struct Editor {
     source_cancel: RefCell<Option<tokio::sync::oneshot::Sender<()>>>,
     palette: RefCell<Option<palette::Lease>>,
     trace: probe::Trace,
+    activate_host: bool,
 }
 impl Editor {
     pub fn mount(
@@ -80,6 +81,7 @@ impl Editor {
         clipboard: Clipboard,
         renderer: &Renderer,
         store: Result<Store, String>,
+        activate_host: bool,
     ) -> Result<Rc<Self>, String> {
         let owner = Rc::new(Self {
             ui: ui.as_weak(),
@@ -107,6 +109,7 @@ impl Editor {
             source_cancel: RefCell::new(None),
             palette: RefCell::new(None),
             trace: probe::Trace::new("document"),
+            activate_host,
         });
         ui.set_editor_mounted(true);
         ui.global::<EditorState>().on_action({
@@ -410,11 +413,12 @@ impl Editor {
         state.set_can_create(false);
         state.set_transfer_confirm(false);
         state.set_status(pttstella::msg!("draft-loading").into());
-        // This is an explicit Open action, including accessibility activation
-        // from a background window. Match settings: activate the host as well
-        // as its widget, while startup itself continues without taking focus.
-        ui.window()
-            .with_winit_window(|window| window.focus_window());
+        // An explicit user or accessibility action may activate the host.
+        // Toolkit verification only needs to focus the widget.
+        if self.activate_host {
+            ui.window()
+                .with_winit_window(|window| window.focus_window());
+        }
         ui.invoke_focus_editor_dialog();
         if view.draft_post_scope.is_some() && pttstella::navigation::article_editor(&view.frame) {
             if !self.shown() {

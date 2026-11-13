@@ -704,6 +704,9 @@ fn run(
         && std::env::var_os("PTTSTELLA_INLINE_MENU_PROBE").is_none();
     let toolkit_input = options.verify_shell
         || options.verify_tools.is_some()
+        || options.verify_drafts.is_some()
+        || options.verify_article.is_some()
+        || options.verify_article_session.is_some()
         || toolkit_inline
         || verify_media_scene
             && (toolkit_updates || toolkit_settings || toolkit_bookmarks || toolkit_video);
@@ -1589,6 +1592,7 @@ fn run(
                     clipboard.clone(),
                     &renderer.borrow(),
                     store,
+                    !toolkit_input,
                 )?);
             }
             if let Some(media) = &media_owner {
