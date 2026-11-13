@@ -2,6 +2,19 @@
 
 候選交付中的程式、Slint UI、字型、locale、fixture、工具與文件，須能從獨立來源包還原。原始建置的 commit／dirty／patch、產品來源核對與第三方來源閉包是不同證據；不能把其中一項通過填成全部完成。
 
+## 2026-11-13 浮球與收藏修正候選來源
+
+Apple Silicon 與 Windows x64 便攜候選使用 `d37c7fb`。既有交付的 `sources.json` 新增 `bookmark-focus-macos-windows`，沿用原 Git bundle，並保留舊候選對應。還原時禁止網路及讀取原 worktree，619 份產品檔案和完整 Git tree `a98a8dd349e7202d54c3c33a6ad3919250552401` 核對通過。兩個 ZIP 內的執行檔雜湊均對上各自的封裝收據。
+
+新 manifest SHA-256 為 `e88e662ad6cbb1b0ab609efab4d5cf55f494d529855156402fe1a10286594c11`。從既有來源交付目錄執行下列指令，輸出目錄須尚不存在。
+
+```sh
+python3 reconstruct_slint_source.py --manifest sources.json \
+  --candidate bookmark-focus-macos-windows --output /ABS/PATH/new-source
+```
+
+首輪核對誤把還原工具留下的暫存區變更當成工作目錄異動。重跑分別核對 index tree、工作目錄及未追蹤檔案後完成交付。還原目錄已移除。收據位於 `.local/verification/slint-current-shell/layout-source-delivery.json`。本輪未重編還原來源，完整第三方來源閉包仍待驗。
+
 ## 2026-11-12 四架構現行候選來源
 
 既有交付目錄 `/Users/ladesine/Documents/PTTStella-Slint-Deliverables/product-source-20261111-6ad8e39/` 已加入現行候選的兩份來源對應。沿用原 bundle，另加兩份 patch，既有 12 組對應保留。

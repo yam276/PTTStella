@@ -110,6 +110,8 @@ Apple Silicon 原生對照使用 Slint `4e28e82` 與相容回退 Dioxus `82bc81f
 
 同源 `d37c7fb` 的 Apple Silicon 封裝通過兩種浮球模式、收藏、收藏跨程序重開、主視窗，共五個元件案例，每案均收到嚴格 Close。App 簽章、ZIP CRC、下載雜湊與 DMG 核對通過。Windows x64 ZIP 核對 925 份內容、CRC 與 PE 匯入，未檢出需另外安裝的 VC runtime DLL。上一輪 Apple Silicon 原生視窗的隔離連線與退出有收據，前景取得失敗，修正後版面的實際拖曳和焦點仍待驗。Windows 原生亦待驗。封裝及探針位於 `.local/verification/slint-current-shell/` 的 `pair-focus/` 和 `packaged-focus/`。
 
+以 `d37c7fb` 封裝的一般入口連線至隔離 WSS，macOS 擷取顯示浮球初始位置符合目前視窗高度的 65%。座標拖曳回傳 `noWindowsAvailable`，後續視窗快照失去終端焦點且浮球停用，故拖曳與關閉收藏後的原生焦點仍待驗。測試 App exit 0，伺服器只收到 Close ACK，隔離設定前後逐位元相同。操作工具隨後重新打開 App，該視窗已關閉。測試暫存已清理，保留 `.local/verification/slint-current-shell/` 的 `slint-layout-package-focus/` 和 `layout-native-cleanup.json`。
+
 ### 4. 媒體（S5）
 
 - **保留 Slint 的原生播放與圖片路徑**　沿用現有下載、快取、置中展圖及 GIF 排程。影片保留 libmpv，依 Dioxus 播放控制補上音量與靜音，與播放、暫停及跳轉共用同一播放器狀態。
@@ -314,7 +316,7 @@ Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人�
 
 2026-11-12 完成 Windows x64 獨立 Setup 與離線便攜 ZIP，已同步至與 Apple Silicon 成對的 `4e28e82` 主程式。PE 匯入閉包內含 Visual C++ runtime，Setup 解包與現有 ZIP 的 926 個檔案逐位元一致。Windows 原生安裝、升級、卸載、IME 與效能仍待驗。[Windows 離線封裝](slint-windows-candidate.md#2026-11-12-草稿組字修正的離線-setup)
 
-現行四架構候選已與兩組獨立還原的產品來源綁定。Apple Silicon／Windows x64 的 `4e28e82` 與 Intel Mac／Linux x64 的 `06487df` 各核對完整 619 檔 Git tree，兩組僅文件不同。Intel 候選另核對 32 份播放器來源封存與 47 個 runtime 的重建及封裝雜湊。完整跨平台第三方來源、獨立重編及原生驗收仍待完成。[現行產品來源](slint-product-source.md#2026-11-12-四架構現行候選來源)
+Apple Silicon／Windows x64 便攜候選 `d37c7fb` 已核對獨立還原的完整 619 檔 Git tree，並綁定兩包的執行檔與下載雜湊。前一對 `4e28e82` 與 Intel Mac／Linux x64 的 `06487df` 來源對應也保留。Intel 候選另核對 32 份播放器來源封存與 47 個 runtime 的重建及封裝雜湊。完整跨平台第三方來源、獨立重編及原生驗收仍待完成。[現行產品來源](slint-product-source.md#2026-11-13-浮球與收藏修正候選來源)
 
 Apple Silicon `100b75f` 一般入口補驗直接連結、dyld 映射及程序族。Slint 的 51 個 Mach-O 均無 WebKit 直接連結，主程序仍映射系統 WebKit 和 WritingToolsUI。相同本機終端負載的 16 筆觀察中，Slint 只有 AppKit helper，Dioxus 可見歸屬於它的 WebKit WebContent、GPU 和 Networking。完整的 WebView 實例檢查與同前景效能仍待驗。現行分支的四 target／兩配置依賴檢查 8 案重跑通過。[一般入口程序對照](slint-macos-measurement.md#2026-11-12-一般入口的-webkit-程序對照)
 
