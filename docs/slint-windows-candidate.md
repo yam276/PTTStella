@@ -1,5 +1,11 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-13 57e000c 候選
+
+Windows x64 便攜 ZIP 在 `.local/verification/slint-passive-window-candidate/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-57e000c-offline/`。與 Apple Silicon、Intel Mac 和 Linux x64 同取乾淨 `57e000c`。ZIP SHA-256 為 `2fdf9bf912da13951d4f7ea55dcd520717d2a78dcebe978bbd2bdcc546cde380`，Setup 為 `1fee0d0c0d37a1c4b85be9f95ef3434a10d000d43d89da83162dd01089154579`。便攜版核對 926 項內容、CRC 與 PE 匯入。Setup 由 Inno Setup 7.1.0 編譯，解包後 927 項與便攜版逐位元一致。
+
+與 `b57eae8` 比較，便攜包更新主程式及 Rust 依賴清單，新增 Winit 修補來源說明。其餘 payload 雜湊一致。Windows 原生安裝、升級、卸載、終端日文 IME 和草稿注音／日文 IME 仍待驗。保留 `b57eae8` 的 Setup 和 ZIP 作版本對照。[草稿 IME 步驟](#2026-11-12-草稿-ime-與文章翻頁同步候選)
+
 ## 2026-11-13 草稿工具列候選
 
 便攜 ZIP 位於 `.local/verification/slint-draft-history/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-b57eae8-offline/`。與兩個 Mac 和 Linux 候選同取 `b57eae8`。ZIP SHA-256 為 `c305cf67e43880444acb86fd315551f529a6d6e70ef9af00cab5613c61791cc2`，Setup 為 `4bef56bc362b244af8c3742739051de1b9ccdadc91b82bedf7f3709ba9328998`。核對 PE 匯入、ZIP CRC、925 項便攜內容及 Setup 解包的 926 項逐位元一致。原生安裝、升級、卸載及草稿 IME 待驗。

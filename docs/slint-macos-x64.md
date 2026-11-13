@@ -1,8 +1,12 @@
 # Slint macOS x64 候選包
 
+## 2026-11-13 57e000c 候選
+
+Intel App／ZIP／DMG 位於 `.local/verification/slint-passive-window-candidate/macos-intel/`，與另外三架構同取乾淨 `57e000c`。已核對 x86_64、47 個播放器函式庫、App 深層簽章、DMG、ZIP CRC 及 1,223 個檔案。DMG SHA-256 為 `12ac7b5c88a9d66fc2a9fad81ab562b7b80edefeb6553b18d1a82b2de8a4b4e4`。Intel 實機待驗。
+
 ## 2026-11-13 草稿工具列候選
 
-Intel App／ZIP／DMG 位於 `.local/verification/slint-draft-history/macos-intel/`。與其餘架構同取乾淨 `b57eae8`。App 深層簽章、47 個播放器函式庫、DMG、ZIP CRC 及 1,221 個 App 檔案逐檔核對通過。DMG SHA-256 為 `ce47125e27bf40b1bdc2a34ec90b08125de64abce33ba4174afae4814084fb75`。Intel 實機待驗。
+保留 `.local/verification/slint-draft-history/macos-intel/` 的 DMG 作版本對照。與其餘架構同取乾淨 `b57eae8`。當時通過 App 深層簽章、47 個播放器函式庫、DMG、ZIP CRC 及 1,221 個 App 檔案逐檔核對。DMG SHA-256 為 `ce47125e27bf40b1bdc2a34ec90b08125de64abce33ba4174afae4814084fb75`。後續候選備妥後移除本版重複 App 與 ZIP。
 
 ## 2026-11-13 草稿與文章被動驗收候選
 

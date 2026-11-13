@@ -6,7 +6,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 目前進度（2026-11-13）
 
-**尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
+**尚未達到可平替 Dioxus 的驗收條件。** 最新四架構候選皆取自乾淨提交 `57e000c`。Apple Silicon 和 Windows 已核對交付包，Intel Mac 與 Linux 依目前安排先交付封裝。macOS 新版封裝的背景視窗、Windows 原生安裝與 IME、正式簽章的憑證接手和完整效能矩陣仍待驗。正式入口維持 Dioxus。[最新候選](#57e000c-四架構候選)
 
 四架構候選都包含 `4d7d174` 的收藏載入焦點修正。Apple Silicon 和 Windows x64 從同一提交出包，Intel Mac 與 Linux x64 使用僅有文件差異的 `ebc1035` 工作樹建置。Apple Silicon 封裝的草稿保存、跨程序重開及三格式影片八案通過。Intel 封裝在 Rosetta 通過三輪收藏及主視窗，Linux 封裝在 QEMU／Xvfb 通過七項元件回歸。Windows 原生安裝／升級／IME、Intel Mac 與 Linux 原生驗收、完整同負載效能矩陣及正式簽章的憑證接手仍待驗。正式入口維持 Dioxus。[候選位置](#產物保留規則2026-11-09-使用者要求) · [影片音訊結果](#4-媒體s5)
 
@@ -14,7 +14,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 草稿及文章的自動驗收已改用被動視窗。Apple Silicon DMG、Windows x64 便攜 ZIP 與離線 Setup 使用同一提交 `675b150`，Intel Mac 與 Linux x64 也已同步封裝。Apple Silicon 補驗草稿跨程序重開與帶回、文章逐行對齊、慢速取頁、取消／繼續及輸出。實體鍵鼠、IME 和前景效能各自待驗。[被動視窗驗收](#2026-11-13-草稿與文章被動視窗驗收)
 
-最新四架構候選同取 `b57eae8`，包含草稿復原／重做和正文快捷鍵修正。Apple Silicon 原始 release 執行檔的背景案例通過，封裝探針首輪仍發生一次 macOS 前景切換，該輪保留為焦點反例。Windows Setup 與同提交便攜 ZIP 解包逐檔一致，原生仍待驗。[草稿工具列候選](#2026-11-13-草稿工具列候選)
+上一輪四架構候選同取 `b57eae8`，包含草稿復原／重做和正文快捷鍵修正。Apple Silicon 原始 release 執行檔的背景案例通過，封裝探針首輪仍發生一次 macOS 前景切換，該輪保留為焦點反例。Windows Setup 與同提交便攜 ZIP 解包逐檔一致。[草稿工具列候選](#2026-11-13-草稿工具列候選)
 
 文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個 macOS 固定下載入口現為乾淨 `c7368b2`，包含設定預覽按需繪製及文章延後取得原生焦點的修正。Apple Silicon `793ecb91` 和 Intel `62ada42e` 各通過 23 項封裝後合成回歸，另各完成原生長文的 37 次取頁及八次快取操作。Intel 使用 Rosetta。Linux `68601365` 與另備 Windows `3a8de2a9` 已封裝固定狀態列探針修正。Linux 在 QEMU 下通過 deb 安裝、軟體繪圖的完整視窗檢查及 X11 延後焦點的 37 次取頁，免安裝包的預設繪圖仍卡在通知取樣。Windows 交叉編譯與 ZIP／PE 檢查通過，實機待驗。`69542cb7` 為先前的 Windows 待驗下載。[跨平台封裝與驗收](#2026-11-11-固定狀態列探針的-windows-與-linux-封裝)Intel／Linux 實機依指示暫緩，其餘原生操作、完整資料回退和跨平台效能矩陣仍待驗。
 
@@ -1110,3 +1110,9 @@ Slint 程式測試 110 項通過，另有一項既有 ignored，Clippy 與文件
 自動 toolkit 驗收採 Winit 0.30.13 的本機修補。啟動時跳過 App 啟用，原生視窗依 AppKit 規則禁止成為 key／main，顯示時放在同層視窗後方並忽略滑鼠事件。合成按鍵仍走 Slint 元件。一般 App、人工 IME 探針與需明確取得前景的長文效能比較維持原入口。修補內容與上游封存來源一併保留。[Winit 修補](../vendor/winit/PTTSTELLA-PATCH.md) · [AppKit 視窗排序](https://developer.apple.com/documentation/appkit/nswindow/orderback(_:))
 
 此輪只執行無視窗檢查。macOS arm64 的 Slint 與播放器測試通過，既有原生 helper 維持忽略。兩種 Slint feature 在四個 target 的依賴檢查均通過，收據在 `.local/verification/slint-passive-window-dependencies/`。仍需在隔離桌面重跑封裝探針並監測前景，才可關閉焦點反例。
+
+### 57e000c 四架構候選
+
+Apple Silicon App／DMG／ZIP、Windows x64 便攜 ZIP 與離線 Setup、Intel Mac App／DMG／ZIP 和 Linux x64 deb／tar.gz 同取乾淨 `57e000c`。重用原 worktree、Cargo target、SDK 和已核對的播放器 runtime。交付與收據在 `.local/verification/slint-passive-window-candidate/`，Windows Setup 在 `../PTTStella-candidates/windows-57e000c-offline/`。核對兩個 macOS App 的深層簽章、DMG、ZIP CRC 及 1,247／1,223 個檔案。Apple Silicon 包內 51 個 Mach-O 均無 WebKit 直接連結。Windows ZIP 核對 AMD64 PE 匯入與 926 份 payload，Setup 解包的 927 檔與便攜版一致。Linux 兩包核對 AMD64、主程式、共用內容及 1,111／1,124 個檔案。另從隔離位置還原 837 份來源檔與完整 Git tree。
+
+此輪未開 macOS 驗收視窗。背景焦點實測及最新包的原生鍵鼠、IME、音訊與效能維持待驗。Windows 可沿用 `Check-All.cmd`、`Run-IME.cmd` 與 `Run-Drafts-IME.cmd`。Intel 和 Linux 依目前安排先交付封裝。已清理上一版重複的 macOS App／ZIP、Linux tar.gz 和本輪打包暫存，保留舊 DMG、deb、Windows 便攜版和 Setup 作升級對照，以及焦點反例與共用快取。這次交付清理的檔案邏輯大小為 920,173,032 bytes，檔案系統可用空間同期增加 753,381,376 bytes。精確路徑及各階段量測見 `cleanup.json`、`intel-cleanup.json`、`linux-sdk-cleanup.json` 與來源收據。[Windows 候選](slint-windows-candidate.md#2026-11-13-57e000c-候選) · [Intel Mac 候選](slint-macos-x64.md#2026-11-13-57e000c-候選) · [Linux 候選](slint-linux-candidate.md#2026-11-13-57e000c-候選) · [來源還原](slint-product-source.md#2026-11-13-57e000c-候選來源)
