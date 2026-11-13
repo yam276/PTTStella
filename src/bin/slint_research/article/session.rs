@@ -1,5 +1,5 @@
 //! One native article owner: shared reducer, one command lease, one loop deadline.
-use super::ArticleView;
+use super::{ArticleView, ReadingMove};
 use crate::{
     TerminalWindow,
     renderer::{Renderer, Size},
@@ -8,6 +8,7 @@ use crate::{
 use pttstella::{
     connection::{Connection, NavigationCancellation, Phase, Reply, View},
     filters,
+    navigation::{self, Context, Intent},
     settings::{AppSettings, DisplaySettings},
     surface_state::{Identity, SurfaceState},
 };
@@ -24,6 +25,25 @@ use tokio::{sync::Notify, time::Instant};
 struct DestinationWait {
     stamp: pttstella::navigation::Stamp,
     complete: Box<dyn FnOnce(Result<(), String>)>,
+}
+struct EdgeFetch {
+    scope: (u64, u64, u64),
+    first: usize,
+    last: usize,
+    movement: ReadingMove,
+    motion_revision: u64,
+    station_range: (usize, usize),
+    deadline: Instant,
+}
+fn station_range(view: &View) -> Option<(usize, usize)> {
+    match view.context() {
+        Context::ArticleReading {
+            first_line,
+            last_line,
+            ..
+        } => Some((first_line, last_line)),
+        _ => None,
+    }
 }
 type ReplyWait = Pin<Box<dyn Future<Output = Result<(), String>>>>;
 #[path = "accounts.rs"]
@@ -64,6 +84,7 @@ pub struct ArticleSession {
     destination_wait: RefCell<Option<DestinationWait>>,
     cancellation: RefCell<Option<NavigationCancellation>>,
     busy: Cell<bool>,
+    edge_fetch: RefCell<Option<EdgeFetch>>,
     serial: Cell<u64>,
     next_paint: Cell<Instant>,
     closed: Cell<bool>,
@@ -139,6 +160,7 @@ impl ArticleSession {
             destination_wait: RefCell::new(None),
             cancellation: RefCell::new(None),
             busy: Cell::new(false),
+            edge_fetch: RefCell::new(None),
             serial: Cell::new(0),
             next_paint: Cell::new(Instant::now()),
             closed: Cell::new(false),
@@ -192,19 +214,6 @@ impl ArticleSession {
             let owner = owner.clone();
             move |resume| owner.load_action(resume)
         });
-        ui.on_article_continue_segment({
-            let owner = owner.clone();
-            let weak = ui.as_weak();
-            move || {
-                if let Some(ui) = weak.upgrade()
-                    && !owner.busy.get()
-                    && owner.allowed(&ui)
-                    && owner.next_segment_available()
-                {
-                    owner.load_action(true);
-                }
-            }
-        });
         let weak = Rc::downgrade(&owner);
         let notify = owner.notify.clone();
         let mut updates = owner.connection.updates.clone();
@@ -231,7 +240,7 @@ impl ArticleSession {
                             if let Some(cancel)=owner.cancellation.take() && result.1.is_err(){cancel.cancel();}
                             let destination=owner.destination_wait.borrow_mut().take();
                             if let Some(destination)=destination {(destination.complete)(result.1);}
-                            else if let Err(error)=result.1 {owner.core.borrow_mut().stop_full_load();owner.notice(error);}
+                            else if let Err(error)=result.1 {owner.page_failed(error);}
                         }
                         notify.notify_one();
                     }
@@ -264,12 +273,175 @@ impl ArticleSession {
         {
             if !resume {
                 self.cancel_command();
+            } else {
+                self.clear_edge_fetch();
             }
             self.focus_after_paint.set(true);
             self.next_paint.set(Instant::now());
             self.notify.notify_one();
         }
     }
+    pub(super) fn at_reading_edge(&self, movement: ReadingMove, motion_revision: u64) {
+        let Some(ui) = self.ui.upgrade() else { return };
+        if self.closed.get()
+            || !self.allowed(&ui)
+            || self.busy.get()
+            || self.edge_fetch.borrow().is_some()
+        {
+            return;
+        }
+        let view = self.connection.updates.borrow().clone();
+        let Some(station_range) = station_range(&view) else {
+            return;
+        };
+        let (scope, first, last, state, end) = {
+            let core = self.core.borrow();
+            let Some(scope) = core.reading_scope() else {
+                return;
+            };
+            let Some((_, first, last, state)) = core.reading_progress() else {
+                return;
+            };
+            let Some(article) = core
+                .last_displayed()
+                .and_then(|packet| packet.article.as_ref())
+            else {
+                return;
+            };
+            if core.dirty() || core.has_in_flight() || !core.cached_reading(view.stamp(), &view) {
+                return;
+            }
+            (scope, first, last, state, article.end)
+        };
+        let intent = movement.station_intent();
+        use pttstella::article_cache::LoadState;
+        match (state, intent) {
+            (Some(LoadState::Loading | LoadState::Changed), _) => return,
+            (Some(LoadState::Limit), Intent::NextPage | Intent::Last) => {
+                if self.next_segment_available() {
+                    self.load_action(true);
+                }
+                return;
+            }
+            (Some(LoadState::Limit), Intent::PreviousPage) => return,
+            (_, Intent::First | Intent::PreviousPage) if first == 1 => return,
+            (_, Intent::NextPage | Intent::Last) if end => return,
+            _ => {}
+        }
+        if let Err(error) = self.request_page(&view, intent) {
+            self.notice(error);
+            return;
+        }
+        self.core.borrow_mut().article_navigation(intent, &view);
+        self.edge_fetch.replace(Some(EdgeFetch {
+            scope,
+            first,
+            last,
+            movement,
+            motion_revision,
+            station_range,
+            deadline: Instant::now() + Duration::from_secs(6),
+        }));
+        self.notify.notify_one();
+    }
+
+    fn request_page(&self, view: &View, intent: Intent) -> Result<(), String> {
+        let (reply, cancellation) = self.connection.request_cancellable_navigate(
+            view.stamp(),
+            intent,
+            navigation::Source::Button,
+        )?;
+        self.busy.set(true);
+        self.cancellation.replace(Some(cancellation));
+        self.requests.set(self.requests.get() + 1);
+        self.serial.set(self.serial.get().wrapping_add(1));
+        self.reply.replace(Some(reply));
+        Ok(())
+    }
+
+    fn clear_edge_fetch(&self) {
+        if self.edge_fetch.take().is_some() {
+            self.core.borrow_mut().cancel_article_fetch();
+        }
+    }
+
+    fn page_failed(&self, error: String) {
+        self.clear_edge_fetch();
+        self.core.borrow_mut().stop_full_load();
+        self.notice(error);
+    }
+
+    fn step_edge_fetch(&self, ui: &TerminalWindow, view: &View, now: Instant) {
+        let Some(mut fetch) = self.edge_fetch.take() else {
+            return;
+        };
+        let progress = self.core.borrow().reading_progress();
+        if self.core.borrow().reading_scope() != Some(fetch.scope)
+            || progress.is_some_and(|(_, _, _, state)| {
+                matches!(
+                    state,
+                    Some(
+                        pttstella::article_cache::LoadState::Changed
+                            | pttstella::article_cache::LoadState::Limit
+                    )
+                )
+            })
+        {
+            self.core.borrow_mut().cancel_article_fetch();
+            return;
+        }
+        if !self.busy.get() && self.allowed(ui) {
+            let current = {
+                let core = self.core.borrow();
+                !core.dirty() && !core.has_in_flight() && core.cached_reading(view.stamp(), view)
+            };
+            // An intermediate redraw can have a new revision with the old
+            // footer range. Wait for a verified page change or the deadline.
+            if current
+                && let Some(range) = station_range(view)
+                && range != fetch.station_range
+            {
+                let Some(native) = self.view.borrow().clone() else {
+                    return;
+                };
+                if native.motion_revision.get() == fetch.motion_revision {
+                    if progress
+                        .is_some_and(|(_, first, last, _)| first < fetch.first || last > fetch.last)
+                    {
+                        self.core.borrow_mut().cancel_article_fetch();
+                        native.move_reading(fetch.movement);
+                        return;
+                    }
+                    let intent = self.core.borrow_mut().continue_article_fetch(view);
+                    if let Some(intent) = intent {
+                        match self.request_page(view, intent) {
+                            Ok(()) => {
+                                if let Ok(bytes) = navigation::plan(&view.context(), intent) {
+                                    self.core.borrow_mut().article_input(view, &bytes);
+                                }
+                                fetch.station_range = range;
+                                fetch.deadline = now + Duration::from_secs(6);
+                                self.edge_fetch.replace(Some(fetch));
+                            }
+                            Err(error) => {
+                                self.core.borrow_mut().cancel_article_fetch();
+                                self.notice(error);
+                            }
+                        }
+                        return;
+                    }
+                }
+                self.core.borrow_mut().cancel_article_fetch();
+                return;
+            }
+        }
+        if now >= fetch.deadline {
+            self.core.borrow_mut().cancel_article_fetch();
+        } else {
+            self.edge_fetch.replace(Some(fetch));
+        }
+    }
+
     fn next_segment_available(&self) -> bool {
         let core = self.core.borrow();
         core.reading_progress().is_some_and(|(id, _, _, state)| {
@@ -616,25 +788,13 @@ impl ArticleSession {
             let intent = self.core.borrow_mut().next_full_page(view);
             if let Some(intent) = intent {
                 self.reading_timing("request", view);
-                match self.connection.request_cancellable_navigate(
-                    view.stamp(),
-                    intent,
-                    pttstella::navigation::Source::Button,
-                ) {
-                    Ok((reply, cancellation)) => {
-                        if let Ok(bytes) = pttstella::navigation::plan(&view.context(), intent) {
+                match self.request_page(view, intent) {
+                    Ok(()) => {
+                        if let Ok(bytes) = navigation::plan(&view.context(), intent) {
                             self.core.borrow_mut().article_input(view, &bytes);
                         }
-                        self.busy.set(true);
-                        self.cancellation.replace(Some(cancellation));
-                        self.requests.set(self.requests.get() + 1);
-                        self.serial.set(self.serial.get().wrapping_add(1));
-                        self.reply.replace(Some(reply));
                     }
-                    Err(error) => {
-                        self.core.borrow_mut().stop_full_load();
-                        self.notice(error);
-                    }
+                    Err(error) => self.page_failed(error),
                 }
             }
         }
@@ -690,6 +850,7 @@ impl ArticleSession {
                                 rows,
                                 article,
                                 renderer,
+                                Rc::downgrade(self),
                             ) {
                                 Ok(native) => {
                                     native
@@ -751,6 +912,7 @@ impl ArticleSession {
             self.next_paint.set(now);
             self.notify.notify_one();
         }
+        self.step_edge_fetch(&ui, view, now);
         // Observe after ACK/projection work and outside all reducer borrows.
         ui.invoke_bookmarks_capture_updated();
         self.reply_sync_ui();
@@ -759,6 +921,11 @@ impl ArticleSession {
     fn deadline(&self) -> Option<Instant> {
         let core = self.core.borrow();
         let load = core.full_load_deadline();
+        let edge = self
+            .edge_fetch
+            .borrow()
+            .as_ref()
+            .map(|fetch| fetch.deadline);
         let updates = core.updates_deadline(
             self.ui.upgrade().is_some_and(|ui| self.allowed(&ui))
                 && !core.dirty()
@@ -767,17 +934,10 @@ impl ArticleSession {
                 && !self.busy.get()
                 && core.update_ready(&self.connection.updates.borrow()),
         );
-        let load = match (load, updates) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        };
         let paint = (core.dirty() && !core.has_in_flight())
             .then_some(self.next_paint.get())
             .filter(|at| *at > Instant::now());
-        match (load, paint) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        }
+        [load, edge, updates, paint].into_iter().flatten().min()
     }
     /// Synchronously enqueue through the same Session and native receipt slot.
     /// A successful receipt means started, not reached.
@@ -816,6 +976,7 @@ impl ArticleSession {
         result
     }
     fn cancel_command(&self) {
+        self.clear_edge_fetch();
         if let Some(cancel) = self.cancellation.take() {
             cancel.cancel();
         }
@@ -918,6 +1079,8 @@ impl ArticleSession {
             "article_boundary_navigation":core.last_displayed().map(|p|p.article_boundary_navigation),
             "dirty": core.dirty(), "progress": format!("{:?}", self.progress()),
             "busy": self.busy.get(), "requests": self.requests.get(),
+            "edge_fetch": self.edge_fetch.borrow().as_ref().map(|f| (f.station_range, f.motion_revision)),
+            "article_motion": self.view.borrow().as_ref().map(|v| v.motion_revision.get()),
             "raw_generation": self.raw_generation.get(), "vim_handoff": self.vim_handoff.get(),
             "find": {"timer_running":self.find_timer.running(),"draft_retained":self.find_draft.borrow().is_some(),
                 "hits":core.find().reply(0).total,"version":core.find().version()},

@@ -19,6 +19,7 @@ use layout::Layout;
 use pttstella::{
     article_cache::{ArticleCache, LoadState, Reading},
     article_flow::{Anchor, Flow},
+    navigation::Intent,
     presentation::{self, Paint},
     screen::Screen,
     settings::DisplaySettings,
@@ -47,9 +48,30 @@ type ReplyIndex = Option<(
     Rc<pttstella::reply_navigation::Index>,
 )>;
 
+#[derive(Clone, Copy)]
+enum ReadingMove {
+    Key(Intent),
+    Scroll(f64),
+}
+
+impl ReadingMove {
+    fn station_intent(self) -> Intent {
+        match self {
+            Self::Key(intent @ (Intent::First | Intent::Last)) => intent,
+            Self::Key(Intent::PreviousPage | Intent::Lines { down: false, .. }) => {
+                Intent::PreviousPage
+            }
+            Self::Scroll(delta) if delta < 0. => Intent::PreviousPage,
+            _ => Intent::NextPage,
+        }
+    }
+}
+
 pub struct ArticleView {
     ui: slint::Weak<TerminalWindow>,
     project: RowProjection,
+    session: std::rc::Weak<session::ArticleSession>,
+    motion_revision: Cell<u64>,
     source: RefCell<Paint>,
     rows: Cell<usize>,
     scope: Cell<Option<(u64, u64, u64, usize)>>,
@@ -92,6 +114,7 @@ impl ArticleView {
                 .ok_or("article reading status unavailable")?,
             renderer,
             Box::new(move |source, rows| cache.window(source, rows)),
+            std::rc::Weak::new(),
         )
     }
     pub fn mount_shared(
@@ -101,6 +124,7 @@ impl ArticleView {
         rows: usize,
         reading: Reading,
         renderer: Renderer,
+        session: std::rc::Weak<session::ArticleSession>,
     ) -> Result<Rc<Self>, String> {
         Self::mount_projected(
             ui,
@@ -114,6 +138,7 @@ impl ArticleView {
                 core.find_decorate(source, &mut window.paint.frame, rows.start);
                 Some(window)
             }),
+            session,
         )
     }
     fn mount_projected(
@@ -123,11 +148,14 @@ impl ArticleView {
         reading: Reading,
         renderer: Renderer,
         project: RowProjection,
+        session: std::rc::Weak<session::ArticleSession>,
     ) -> Result<Rc<Self>, String> {
         let owner = Rc::new(Self {
             ui: ui.as_weak(),
             renderer: RefCell::new(renderer),
             project,
+            session,
+            motion_revision: Cell::new(0),
             source: RefCell::new(source),
             rows: Cell::new(rows),
             scope: Cell::new(None),
@@ -167,24 +195,14 @@ impl ArticleView {
                         );
                         owner.publish();
                     }
-                } else if let (Some(layout), Some(flow)) = (owner.layout.get(), owner.flow()) {
-                    let top = owner.position(&flow);
-                    let target = top - f64::from(delta * layout.dpi);
-                    let maximum = flow.maximum(f64::from(layout.body_height * layout.dpi));
-                    owner.scroll_pixels(target);
-                    if delta < 0.
-                        && top == maximum
-                        && let Some(ui) = owner.ui.upgrade()
-                    {
-                        ui.invoke_article_continue_segment();
-                    }
+                } else if delta != 0. {
+                    owner.move_from_input(ReadingMove::Scroll(-f64::from(delta)));
                 }
             }
         });
         ui.on_article_navigate({
             let owner = owner.clone();
             move |code| {
-                use pttstella::navigation::Intent;
                 owner.navigate_from_input(match code {
                     0 => Intent::Lines {
                         down: false,
@@ -254,41 +272,49 @@ impl ArticleView {
                 .is_some_and(|ui| ui.get_article_active() && !ui.get_article_blocked())
     }
     /// Both toolkit and native keyboard routes use the same row geometry.
-    fn navigate_from_input(self: &Rc<Self>, intent: pttstella::navigation::Intent) {
-        if self.navigate(intent)
-            && let Some(ui) = self.ui.upgrade()
+    fn navigate_from_input(self: &Rc<Self>, intent: Intent) {
+        self.move_from_input(ReadingMove::Key(intent));
+    }
+
+    fn move_from_input(self: &Rc<Self>, movement: ReadingMove) {
+        if self.move_reading(movement)
+            && let Some(session) = self.session.upgrade()
         {
-            ui.invoke_article_continue_segment();
+            session.at_reading_edge(movement, self.motion_revision.get());
         }
     }
 
-    /// Returns whether a forward move was already at the end of the viewport.
-    pub fn navigate(self: &Rc<Self>, intent: pttstella::navigation::Intent) -> bool {
-        use pttstella::navigation::Intent;
+    pub fn navigate(self: &Rc<Self>, intent: Intent) {
+        self.move_reading(ReadingMove::Key(intent));
+    }
+
+    /// Reports a move that was already at the requested edge.
+    fn move_reading(self: &Rc<Self>, movement: ReadingMove) -> bool {
         if !self.allowed() {
             return false;
         }
-        let Some(layout) = self.layout.get() else {
-            return false;
-        };
-        let Some(flow) = self.flow() else {
+        let (Some(layout), Some(flow)) = (self.layout.get(), self.flow()) else {
             return false;
         };
         let anchor = self.position(&flow);
         let viewport = f64::from(layout.body_height * layout.dpi);
-        let target = match intent {
-            Intent::Lines { down, count } => flow.move_lines(anchor, viewport, down, count),
-            Intent::PreviousPage => flow.page(anchor, viewport, false),
-            Intent::NextPage | Intent::Forward => flow.page(anchor, viewport, true),
-            Intent::First => 0.,
-            Intent::Last => flow.maximum(viewport),
-            _ => return false,
+        let maximum = flow.maximum(viewport);
+        let target = match movement {
+            ReadingMove::Scroll(delta) => anchor + delta * f64::from(layout.dpi),
+            ReadingMove::Key(intent) => match intent {
+                Intent::Lines { down, count } => flow.move_lines(anchor, viewport, down, count),
+                Intent::PreviousPage => flow.page(anchor, viewport, false),
+                Intent::NextPage | Intent::Forward => flow.page(anchor, viewport, true),
+                Intent::First => 0.,
+                Intent::Last => maximum,
+                _ => return false,
+            },
         };
-        self.move_viewport(target, false);
-        matches!(
-            intent,
-            Intent::Lines { down: true, .. } | Intent::NextPage | Intent::Forward | Intent::Last
-        ) && anchor == flow.maximum(viewport)
+        self.move_viewport(target, matches!(movement, ReadingMove::Scroll(_)));
+        match movement.station_intent() {
+            Intent::First | Intent::PreviousPage => anchor <= 0.01,
+            _ => maximum - anchor <= 0.01,
+        }
     }
     fn flow(&self) -> Option<Rc<Flow>> {
         self.flow.borrow().clone()
@@ -457,8 +483,11 @@ impl ArticleView {
         };
         let Some(flow) = self.flow() else { return };
         self.free_scroll.set(free_scroll);
-        self.anchor
-            .set(flow.anchor(flow.clamp(position, f64::from(layout.body_height * layout.dpi))));
+        let anchor = flow.anchor(flow.clamp(position, f64::from(layout.body_height * layout.dpi)));
+        if self.anchor.replace(anchor) != anchor {
+            self.motion_revision
+                .set(self.motion_revision.get().wrapping_add(1));
+        }
         self.publish();
         self.schedule();
     }
@@ -665,8 +694,23 @@ impl ArticleView {
             }
             return !footer_changed;
         }
-        if self.scope.replace(Some(scope)) != Some(scope) {
-            self.anchor.set(Anchor::default());
+        let previous_scope = self.scope.replace(Some(scope));
+        if previous_scope != Some(scope) {
+            self.anchor.set(
+                if let Some(previous) = previous_scope
+                    && (previous.0, previous.1, previous.2) == (scope.0, scope.1, scope.2)
+                    && scope.3 < previous.3
+                {
+                    // Keep the same source row when a verified page is prepended.
+                    let anchor = self.anchor.get();
+                    Anchor {
+                        row: anchor.row + previous.3 - scope.3,
+                        within: anchor.within,
+                    }
+                } else {
+                    Anchor::default()
+                },
+            );
             self.free_scroll.set(false);
             self.gaps.borrow_mut().clear();
             self.x.set(0.);

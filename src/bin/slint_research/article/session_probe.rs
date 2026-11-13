@@ -346,12 +346,59 @@ pub fn start(
                         owner.requests.get() == 1,
                         "foreground resumed cancelled loading",
                     )?;
+                    wait(
+                        || {
+                            verification::foreground(&ui, true);
+                            ui.invoke_focus_article();
+                            let view = connection.updates.borrow();
+                            owner.core.borrow().cached_reading(view.stamp(), &view)
+                                && !owner.core.borrow().dirty()
+                                && !owner.core.borrow().has_in_flight()
+                        },
+                        "cancelled article's last page was not rendered",
+                    )
+                    .await?;
+                    ui.invoke_article_navigate(5);
+                    let cached_edge = ui.get_article_offset_y();
+                    require(cached_edge > 0., "could not reach cached article edge")?;
+                    require(
+                        owner.requests.get() == 1,
+                        "first End requested station input",
+                    )?;
+                    owner.local_intent(pttstella::navigation::Intent::NextPage);
+                    owner.local_intent(pttstella::navigation::Intent::NextPage);
+                    require(
+                        owner.requests.get() == 2,
+                        "edge did not request exactly one page",
+                    )?;
+                    wait(
+                        || {
+                            owner.progress().is_some_and(|(_, _, last, state)| {
+                                last == 67 && state == Some(LoadState::Cancelled)
+                            }) && ui.get_article_offset_y() > cached_edge
+                        },
+                        "manual page did not advance the viewport after paint",
+                    )
+                    .await
+                    .map_err(|error| {
+                        format!(
+                            "{error}; previous offset={cached_edge}, current offset={}, state={}",
+                            ui.get_article_offset_y(),
+                            owner.diagnostics()
+                        )
+                    })?;
+                    tokio::time::sleep(Duration::from_millis(150)).await;
+                    require(
+                        owner.requests.get() == 2,
+                        "manual paging restarted preloading",
+                    )?;
+
                     ui.invoke_article_load_action(true);
                     wait(
                         || {
                             verification::foreground(&ui, true);
                             ui.invoke_focus_article();
-                            owner.requests.get() >= 2
+                            owner.requests.get() >= 3
                         },
                         "explicit resume did not fetch",
                     )
@@ -359,12 +406,12 @@ pub fn start(
                     .map_err(|error| format!("{error}; state={}", owner.diagnostics()))?;
                     verification::foreground(&ui, false);
                     wait(
-                        || owner.progress().is_some_and(|(_, _, last, _)| last >= 67),
+                        || owner.progress().is_some_and(|(_, _, last, _)| last >= 89),
                         "paused response was not ingested",
                     )
                     .await?;
                     tokio::time::sleep(Duration::from_millis(300)).await;
-                    require(owner.requests.get() == 2, "paused UI sent a following page")?;
+                    require(owner.requests.get() == 3, "paused UI sent a following page")?;
                     verification::foreground(&ui, true);
                 }
                 until(
@@ -431,6 +478,11 @@ pub fn start(
                 )?;
             }
             let mut record = serde_json::json!({"scope":"synthetic local peer plus native toolkit; no trusted OS input or real PTT","terminal":terminal,"long":long,"stall":stall,"requests":owner.requests.get(),"progress":owner.progress().map(|(id,first,last,state)|serde_json::json!({"id":id,"first":first,"last":last,"state":state})),"notice":ui.get_input_notice().as_str(),"article_loop_joined":true});
+            if case == crate::session::Probe::ArticleFull {
+                record["cancelled_edge_fetch"] = serde_json::json!({
+                    "manual_requests": 1, "applied_after_paint": true, "preload_remained_cancelled": true
+                });
+            }
             if input {
                 record["native_input_route"] = serde_json::json!({"rapid_resume_requests":1,"raw_q":1,"uao_chinese_commits":1,"cancelled_preedit_bytes":0,"trusted_os_ime":false});
             }
