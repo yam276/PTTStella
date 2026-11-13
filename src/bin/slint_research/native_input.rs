@@ -765,6 +765,22 @@ fn mount_window(
                     }
                     return PreventDefault;
                 }
+                if article_focused
+                    && ui.get_article_load_active()
+                    && !ui.get_article_blocked()
+                    && !ui.get_selection_dragging()
+                    && !input.modifiers.intersects(
+                        ModifiersState::ALT | ModifiersState::CONTROL | ModifiersState::SUPER,
+                    )
+                    && event.logical_key == Key::Named(NamedKey::Escape)
+                {
+                    if event.state == ElementState::Pressed && !event.repeat {
+                        input.modal_edge(event.physical_key, true, false, true);
+                        drop(input);
+                        ui.invoke_article_load_action(false);
+                    }
+                    return PreventDefault;
+                }
                 let copy_key = matches!(event.logical_key.as_ref(), Key::Character("c" | "C"))
                     || event.physical_key == PhysicalKey::Code(KeyCode::KeyC);
                 if ui.get_selection_active()
