@@ -73,6 +73,8 @@ Windows 候選封裝新增 `Run-Drafts-IME.cmd`。從本機合成看板開啟原
 
 2026-11-12 在第 29 行末、可視區最底列重現正文組字欄只剩一格。修正後，正文靠右開始組字時會移動橫向可視範圍，為原生輸入欄保留至少 16 格。後續 preedit 更新沿用第一次定位的格線和選區。Apple Silicon 元件回歸核對最底列焦點與可視空間、取消時原文和 revision、後續繁中輸入的原文位置。草稿新建、同程序及新程序重開、帶回站端與 8 個儲存情境通過。實體候選窗與原生組字重驗仍待驗。證據位於 `.local/verification/slint-editor-ime-edge/`。[草稿編輯契約](drafts.md#編輯顯示與選取)
 
+以 `cb4fbfc` Linux x64 出貨檔在隔離 X11 補驗草稿的實際鍵鼠。Shift 方向鍵選取、替換、工具列復原／重做、三種 ANSI 顯示和 Ctrl+S 均通過。立即關閉後另起程序讀回最後一字、尾端換行及原紅字 ANSI，上一代備份逐位元相同。兩個程序各收到唯一 Close ACK，原生 IME 仍另驗。[草稿驗收](drafts.md#驗收範圍)
+
 ### 2. 文章翻頁與取頁（S4）
 
 - **採用 Dioxus 的翻頁規則**　把完整文字列判斷接到 Slint 既有 Flow 和閱讀錨點。PageDown 盡量把最後一個完整文字列接到下一頁頂端，PageUp 使用第一個完整文字列對齊。滾輪保留連續裁切。遇到比視窗高的圖片仍可往前後移動。[Dioxus 翻頁](../assets/inline-images.js) · [Slint 翻頁](../src/bin/slint_research/article/mod.rs)

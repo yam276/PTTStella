@@ -48,4 +48,6 @@ Runtime bundle、MIT授權及來源清單在 `assets/vendor/composer/`。一般 
 
 一般測試只用自製中文／SGR與loopback，不接PTT、不發表。Rust核對畫面外31行、末空行、標題／樣式、真正來源變更拒絕、過長行／假選單拒絕、排隊取消、原生scope、保存關閉／重開／衝突。兩程序測同稿衝突與不同稿保存。JS clock測2秒／5秒、組字、內部焦點不保存、錯誤分類、晚到結果、浮動色票立即套用、兩次確認及清理；實際CodeMirror DOM測顯示切換、原文相等、復原重做、跨稿歷史隔離及共同圖形widget。
 
+Linux x64 候選 `cb4fbfc` 在隔離 X11 使用出貨執行檔及 Windows 草稿驗收包內的同一份合成稿。以實際按鍵移至文件末端、用 Shift 方向鍵選取兩字、替換後點工具列復原／重做。三種 ANSI 顯示切換後，原來的紅字區段仍在。Ctrl+S 保存後立即補末字及換行並關閉編輯器，新程序讀回完整內容，主檔的上一代備份逐位元等於 Ctrl+S 的快照。兩個程序正常退出，各收到唯一站端 Close。首輪 VM 中斷前已有存檔，退出收據不完整，保留另列。畫面與事件、存檔及清理收據在 `.local/verification/slint-article-arrow/x11-drafts/`。本案涵蓋實際鍵鼠，注音／日文候選與提交仍待各平台驗收。
+
 macOS 用 `drafts`／`drafts_restart` 原生探針核對範本、中文、色碼切換、右鍵色票、保存與重開帶回。peer只有標題 T/E、正文操作與Close，拒絕發表。原生拖曳／真實注音IME與跨平台GUI不能由DOM doubles或單一平台結果取代，實測／缺口見唯一 active plan。
