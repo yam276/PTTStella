@@ -54,6 +54,8 @@ X11 驗收涵蓋三種格式的軟體繪圖和視窗控制。實機聲音與 GPU
 
 首張四色截圖仍顯示 0／0 秒，短片的播放狀態與畫面更新時序仍待釐清。原始素材的完整 OpenGL 控制驗收及實體 GPU 待驗。逐案收據、有效畫面及重複截圖清理在 `.local/verification/slint-x11-video/opengl/short-timing/`。
 
+單次點擊重跑在隔離 X11 開啟預覽約 9.6 秒後按播放。MP4、WebM、OGV 分別在點擊後 5.32、5.52、5.52 秒首次取到四色。每案最後一次取樣約在點擊後 7.6–7.7 秒，四色仍在。點擊前、首次四色及最後一張的控制列皆顯示「播放影片」與 0／0 秒。各案完整下載一次並正常 Close。資料在同一目錄的 `single-click/`，含逐案收據、控制列截圖及重複截圖清理記錄。此輪只在 Linux 虛擬顯示器操作鍵鼠。
+
 ## 2026-11-13 d047e55 候選
 
 Linux deb／tar.gz 在 `.local/verification/slint-windows-refresh-rate/linux/`。已核對 AMD64 套件、共用檔案及兩包主程式，deb 共 1,111 檔，tar.gz 共 1,124 檔。deb SHA-256 為 `0ca717e1a31791f2b7bdf7084a6c71184f07b994b2a6adfb2691f3c0bdc83251`，tar.gz 為 `40398732e4622784a7b480bab76406a30a347211ba85d3af78c43ea7cbc305c4`。Linux 實機待驗。

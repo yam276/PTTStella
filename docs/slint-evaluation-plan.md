@@ -1200,3 +1200,5 @@ Linux 便攜包在 QEMU／Xvfb 重跑 14 項元件回歸全數通過，每案各
 沿用同一 Linux 交付執行檔與 Mesa softpipe／PulseAudio，改用由包內素材重複至 30 秒的版本。MP4、WebM、OGV 的元件探針均通過。兩處 OpenGL framebuffer 各核對四色與零 GL 錯誤，並驗證播放、暫停、跳轉、音量、靜音、失焦及正常退出。短片失敗、原生滑鼠操作與實體 GPU 仍留待追查。[30 秒 OpenGL 重驗](slint-linux-candidate.md#opengl-的-30-秒素材重驗)
 
 原始 3 秒素材也完成隔離 X11 的滑鼠開啟與視窗像素取樣，三格式均收到完整下載、四色畫面與正常 Close。首次取得四色時，播放器時間仍顯示 0／0 秒。短片狀態更新和完整控制驗收仍待查。[原始短片取樣](slint-linux-candidate.md#opengl-的原始短片視窗取樣)
+
+單次點擊重跑在隔離 X11 確認三種短片都有完整下載、四色畫面與正常 Close。首次取到四色約在點擊後 5.3–5.5 秒，約 7.7 秒的最後取樣仍顯示「播放影片」與 0／0 秒。macOS 原生焦點留待隔離桌面驗收，其餘自動檢查沿用無視窗或隔離顯示。[短片單次點擊收據](slint-linux-candidate.md#opengl-的原始短片視窗取樣)
