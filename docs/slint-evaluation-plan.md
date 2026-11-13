@@ -12,7 +12,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 滾輪後逐行鍵盤對齊已同步到四架構候選。Apple Silicon、Windows x64 便攜版與離線 Setup 都對應 `9376627`。Intel Mac 與 Linux x64 從僅多三份文件變更的 `04191e1` 建置。這一輪已核對四架構封裝，原生操作仍待補驗。[Windows 候選](slint-windows-candidate.md#2026-11-13-文章逐行對齊候選)
 
-草稿及文章的自動驗收已改用被動視窗。Apple Silicon DMG 與 Windows x64 便攜 ZIP 使用同一提交 `675b150`。Apple Silicon 補驗草稿跨程序重開與帶回、文章逐行對齊、慢速取頁、取消／繼續及輸出。Windows 離線 Setup 仍為 `9376627`。實體鍵鼠、IME 和前景效能各自待驗。[被動視窗驗收](#2026-11-13-草稿與文章被動視窗驗收)
+草稿及文章的自動驗收已改用被動視窗。Apple Silicon DMG、Windows x64 便攜 ZIP 與離線 Setup 使用同一提交 `675b150`，Intel Mac 與 Linux x64 也已同步封裝。Apple Silicon 補驗草稿跨程序重開與帶回、文章逐行對齊、慢速取頁、取消／繼續及輸出。實體鍵鼠、IME 和前景效能各自待驗。[被動視窗驗收](#2026-11-13-草稿與文章被動視窗驗收)
 
 文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個 macOS 固定下載入口現為乾淨 `c7368b2`，包含設定預覽按需繪製及文章延後取得原生焦點的修正。Apple Silicon `793ecb91` 和 Intel `62ada42e` 各通過 23 項封裝後合成回歸，另各完成原生長文的 37 次取頁及八次快取操作。Intel 使用 Rosetta。Linux `68601365` 與另備 Windows `3a8de2a9` 已封裝固定狀態列探針修正。Linux 在 QEMU 下通過 deb 安裝、軟體繪圖的完整視窗檢查及 X11 延後焦點的 37 次取頁，免安裝包的預設繪圖仍卡在通知取樣。Windows 交叉編譯與 ZIP／PE 檢查通過，實機待驗。`69542cb7` 為先前的 Windows 待驗下載。[跨平台封裝與驗收](#2026-11-11-固定狀態列探針的-windows-與-linux-封裝)Intel／Linux 實機依指示暫緩，其餘原生操作、完整資料回退和跨平台效能矩陣仍待驗。
 
@@ -1086,3 +1086,7 @@ Apple Silicon release 測試執行檔 SHA-256 為 `7795002886b1975aa6acf6760af1d
 文章版面首輪通過方向鍵落點，但舊斷言要求每次向下必定光柵化一列。對齊後可視區底端有時仍落在同一列。修正探針核對實際新增列數、保留列的快取重用及上下鍵的精確落點，重跑通過。Slint 程式測試 109 項通過，既有原生 helper 維持忽略，release all-target Clippy 通過。收據與首輪反例在 `.local/verification/slint-passive-drafts-reading/`，重複圖像和臨時觀測程式已清理，固定 Cargo 快取及現行候選包保留。最新版套件的實體鍵鼠、IME 與前景效能待補驗。
 
 Apple Silicon App／DMG／ZIP 與 Windows x64 便攜 ZIP 同取乾淨提交 `675b150`，放在同一證據根目錄的 `pair/`。Apple Silicon 封裝執行檔重跑草稿保存、跨程序重開及帶回、文章版面與取消／繼續。四案通過，963 筆前景觀察都未見驗收程序取得前景，三個連線案例各收到唯一 Close ACK。App 簽章、DMG、ZIP CRC、Windows ZIP 的 925 份內容與 PE 匯入及 619 份產品來源檔均已核對。已移除被取代的 Apple Silicon App 和重複 ZIP，保留原 DMG 連結、Windows 版本對照及 Intel／Linux 封裝。詳細路徑與空間觀測見 `delivery-cleanup.json`。[Windows 同源候選](slint-windows-candidate.md#2026-11-13-草稿與文章被動驗收候選) · [產品來源](slint-product-source.md)
+
+同提交 Windows x64 離線 Setup 位於 `../PTTStella-candidates/windows-675b150-offline/`。解包後 926 個檔案與便攜版逐位元一致。Intel Mac 與 Linux x64 使用僅多三份文件的乾淨 `4f95094` 建置，出包在 `slint-passive-drafts-reading/` 的 `macos-intel/` 和 `linux/`。Intel App 簽章、DMG 與 ZIP 的 1,220 個 App 檔案通過。Linux deb／tar.gz 的 1,110／1,123 個檔案及共用內容核對通過。來源清單已納入四架構及 Setup，另從獨立來源還原完整 Git tree 和 619 份產品檔案。Windows 實機安裝及 IME 待驗，Intel 與 Linux 依目前安排先交付封裝。
+
+Intel 首輪缺 libmpv 的未帶版本連結，補上同一檔案的連結後完成。Linux 封裝首輪補齊既有 Python 匯入，下一輪 Podman 在壓縮期間斷線。重連後核對 ELF 雜湊，使用單執行緒壓縮在同一 runner 完成。已移除封裝暫存、SDK 映像、兩個 Setup 工具容器，以及被取代的 Intel App／ZIP 和 Linux tar.gz。最新候選、前次升級對照、固定 Cargo 快取及獨特收據保留。確切路徑及可用空間觀測在 `cross-delivery-cleanup.json`、`windows-setup/cleanup.json` 及兩份交叉建置清理紀錄。

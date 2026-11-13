@@ -4,7 +4,7 @@
 
 ## 2026-11-13 草稿與文章被動驗收候選來源
 
-Apple Silicon 與 Windows x64 便攜候選取自 `675b150`。既有 `product-source-20261111-6ad8e39/sources.json` 已加入兩包下載及主程式雜湊。以 `--candidate passive-drafts-reading-macos-windows` 在禁止網路與原 worktree 讀取的目錄還原，核對 619 份產品檔案和 Git tree `2df7c8e8db5e5c3d607fd192d57567921f4021fa`。manifest SHA-256 為 `926e95c5f6edcc4886ef4f3da1409e717659544cc6b775c7efbfbfd6201f91d0`。收據在 `.local/verification/slint-passive-drafts-reading/source-delivery.json`。
+Apple Silicon、Windows x64 便攜及離線 Setup 取自 `675b150`，Intel Mac 與 Linux x64 使用只多三份文件變更的 `4f95094`。既有 `product-source-20261111-6ad8e39/sources.json` 已加入四架構的下載及主程式雜湊。以 `--candidate passive-drafts-reading-macos-windows` 在禁止網路與原 worktree 讀取的目錄還原，核對 619 份產品檔案和 Git tree `2df7c8e8db5e5c3d607fd192d57567921f4021fa`。manifest SHA-256 為 `2ddcca1ee9e5a053fb8917c8e73ed37429374f0a307edbb1f08c20fa2f162365`。收據在 `.local/verification/slint-passive-drafts-reading/all-source-delivery.json`。
 
 ## 2026-11-13 文章逐行對齊候選來源
 

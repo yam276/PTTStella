@@ -4,7 +4,9 @@
 
 便攜 ZIP 位於 `.local/verification/slint-passive-drafts-reading/pair/windows/`，與同層 Apple Silicon DMG 都使用乾淨提交 `675b150`。ZIP SHA-256 為 `dad3410a6ac28d4116144b6245c68eff737f0ab223beac9a3a88a10ea58f0915`，包內主程式為 `cd56f91dddd2347e14c58fdf43a12a9b1cdee2c18cacc9c0a6f9662805db0001`。已核對 CRC、925 份內容與 PE 匯入。
 
-自動草稿及文章驗收以 toolkit 事件操作測試視窗。手動 `Run-Drafts-IME.cmd` 仍用原生輸入，可照既有方式測注音和日文。Windows 原生驗收待補，離線 Setup 仍用下節 `9376627`。[Apple Silicon 驗收](slint-evaluation-plan.md#2026-11-13-草稿與文章被動視窗驗收)
+同提交的離線 Setup 位於 `../PTTStella-candidates/windows-675b150-offline/`，SHA-256 為 `d613195a93a52bfa17ee689ccd5050c58fcf3a2e265915eb91ead165819d586c`。沿用 Inno Setup 7.1.0 和獨立的目前使用者安裝識別，解包後 926 個檔案與便攜版逐位元一致，另核對 Setup 的 AMD64 PE 和系統 DLL 匯入。
+
+自動草稿及文章驗收以 toolkit 事件操作測試視窗。手動 `Run-Drafts-IME.cmd` 仍用原生輸入，可照既有方式測注音和日文。Windows 原生離線安裝、升級、卸載與 IME 待驗。保留 `9376627` 的 Setup 供升級對照。[Apple Silicon 驗收](slint-evaluation-plan.md#2026-11-13-草稿與文章被動視窗驗收)
 
 ## 2026-11-13 文章逐行對齊候選
 
