@@ -4,6 +4,8 @@
 
 便攜 ZIP 在 `.local/verification/slint-video-toggle/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-3277ac1-offline/`。與其他三架構同取乾淨 `3277ac1`，含影片緩衝暫停與片尾重播修正。ZIP CRC、926 份 payload 與 AMD64 PE 匯入通過。Setup 解包 927 檔逐一相符。Windows 原生安裝、升級及兩種 IME 待驗。
 
+在斷開外部網路的 Wine 10.0／QEMU／Xvfb，以 x64 和 i386 載入器完成 10 案。先安裝 `2ef65ce` 並保存合成草稿，再升到 `3277ac1`、回退、重裝最新版及卸載。各次安裝核對 926 檔、登錄及捷徑。升級及回退都能重開草稿並帶回本機站端編輯器，草稿檔雜湊一致。新版主視窗探針正常退出。指定到既有的合成 Dioxus 目錄時，Setup 以代碼 7 拒絕並保留原檔。卸載移除程式、捷徑與解除安裝登錄，保留草稿及資料標記。首輪在相依下載時中斷，恢復後沿用同一容器，驗完移除容器與 Wine prefix。收據在 `.local/verification/slint-video-toggle/windows-lifecycle/wow64-resume/`。實機安裝、原生 IME 與 Credential Manager 仍待驗。
+
 ## 2026-11-13 2ef65ce 候選
 
 便攜 ZIP 在 `.local/verification/slint-sites-panel-candidate/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-2ef65ce-offline/`。與其他三架構同取乾淨 `2ef65ce`，包含站點表單裁切修正。便攜包核對 926 份 payload、CRC 及 AMD64 PE 匯入，Setup 解包的 927 檔與便攜版逐檔一致。Windows 實機的安裝、升級、草稿注音及日文 IME 待驗。

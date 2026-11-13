@@ -4,7 +4,7 @@
 
 ## 2026-11-13 3277ac1 候選來源
 
-四架構及 Windows Setup 同取乾淨 `3277ac1`。既有 `sources.json` 新增 `video-toggle-candidate`，在禁止網路與原 worktree 讀取的獨立目錄還原 837 份產品檔並核對 Git tree `40aeceaceaea8ba512a58430363436490340b47e`。manifest SHA-256 為 `fdf2fd95bcb5dcf141917f6572f6cbd9a8a1e7426b4932366439cb715a0325b6`。本機收據在 `.local/verification/slint-video-toggle/`。此提交從還原目錄重編與完整第三方來源閉包待驗。
+四架構及 Windows Setup 同取乾淨 `3277ac1`。既有 `sources.json` 新增 `video-toggle-candidate`，在禁止網路與原 worktree 讀取的獨立目錄還原 837 份產品檔並核對 Git tree `40aeceaceaea8ba512a58430363436490340b47e`。manifest SHA-256 為 `fdf2fd95bcb5dcf141917f6572f6cbd9a8a1e7426b4932366439cb715a0325b6`。Apple Silicon 由還原目錄離線編譯，Slint 110 項及播放器 1 項通過，既有原生 helper 一項忽略。編譯與測試皆禁止讀取原 worktree 來源，執行測試時允許本機連線。還原暫存已清理，沿用固定 Cargo 快取。收據在 `.local/verification/slint-video-toggle/source-build-result.json`。完整第三方來源閉包及其餘架構的還原重編待驗。
 
 ## 2026-11-13 2ef65ce 候選來源
 

@@ -4,6 +4,8 @@
 
 deb／tar.gz 在 `.local/verification/slint-video-toggle/linux/`。兩包共用的 AMD64 主程式 SHA-256 為 `27e4e76b91e4354ef6ed970eb1139e781eadfb2b87eb409d668b16d11dea6dcc`。從乾淨 `3277ac1` 重建的 ELF 與元件測試的 ELF 逐位元相同。隔離 X11 通過 MP4 緩衝中暫停與繼續，三種影片各通過片尾重播和播放器退場，均收到一次 Close ACK。實機、Wayland 與硬體 GPU 待驗。
 
+從交付 tar.gz 解出的執行檔再跑 14 項元件回歸，全部正常退出且各收到唯一 Close ACK。核對草稿保存、跨程序讀回及帶回站端，837 行長文的 37 次取頁、441 行的 19 次取消續跑、文章與終端搜尋、45 行輸出、設定 48 個中英文定位、推文追加、收藏、主視窗及三種影片。驗收採 QEMU x64／Xvfb／軟體繪圖，收據在同一目錄的 `linux-components/summary.json`。
+
 ## 2026-11-13 2ef65ce 候選
 
 Linux deb／tar.gz 在 `.local/verification/slint-sites-panel-candidate/linux/`。已核對 AMD64 套件、共用檔案及兩包主程式，deb 共 1,111 檔，tar.gz 共 1,124 檔。deb SHA-256 為 `33f36d0562188f10fd266deb12fa11d0ebdfc0e440cd8e3a2ee4e83bccfec1c4`，tar.gz 為 `7f0bd6909b5b1b0cae9fb1779e97b67dfaf72cd9dbd7e3558046279f36fcb215`。

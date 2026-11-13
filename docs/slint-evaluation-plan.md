@@ -1212,3 +1212,9 @@ Linux 便攜包在 QEMU／Xvfb 重跑 14 項元件回歸全數通過，每案各
 Slint 播放按鈕由 libmpv 控制工作決定播放或暫停。已送出播放但仍在緩衝時可暫停，片尾顯示播放並可從頭重播。主視窗與播放器探針共用同一狀態。Apple Silicon 無視窗測試 510 項通過，9 項既有忽略，release Clippy 通過。Linux QEMU／Xvfb 軟體繪圖通過 MP4 載入中暫停與繼續，以及 MP4、WebM、OGV 的跳轉、音量、靜音、失焦暫停及片尾重播。每案一次下載請求和一次 Close ACK。測試使用 Slint 元件事件，收據在 `.local/verification/slint-video-toggle/`。
 
 Apple Silicon App／ZIP／DMG、Windows x64 ZIP／離線 Setup、Intel Mac App／ZIP／DMG 與 Linux x64 deb／tar.gz 同取乾淨 `3277ac1`。兩個 macOS 包通過深層簽章及逐檔核對。Windows Setup 解包 927 檔逐一相符，Linux deb 和 tar 共用主程式及說明已核對。獨立還原 837 份產品檔。已清理兩個 Setup 工具容器、Linux 暫存、SDK 和還原目錄。保留上一版候選作升退及重跑對照，沿用固定 Cargo 快取。macOS 原生操作、Windows 實機與兩種 IME、Intel／Linux 實機、正式簽章憑證接手及效能矩陣待驗。[來源還原](slint-product-source.md#2026-11-13-3277ac1-候選來源)
+
+Linux 交付包完成 14 案回歸，每案一次 Close ACK，包含草稿重開帶回、長文 37 次取頁及取消續跑、設定搜尋 48 個定位、推文、收藏、輸出與影片。Apple Silicon 從獨立還原來源離線重編後通過 Slint／播放器 111 項測試，既有原生 helper 一項忽略。[Linux 封裝回歸](slint-linux-candidate.md#2026-11-13-3277ac1-候選) · [來源重編](slint-product-source.md#2026-11-13-3277ac1-候選來源)
+
+同提交通過隔離 Keychain 的舊紀錄、改簽接手拒絕及原簽章回退。已核對七種共用 store 及資料矩陣 driver 自 `b57eae8` 的 28 案後沒有來源變更。28 案的實際驗收版本仍為 `b57eae8`。正式簽章重新授權及前端接手待驗。[正式服務名演練](login.md#macos-正式服務名的隔離演練)
+
+Windows 離線 Setup 在隔離 Wine／QEMU 通過 10 項安裝、升級、回退、重裝及卸載案例。`2ef65ce` 建立的草稿在 `3277ac1` 與回退版均可重開並帶回合成站，檔案雜湊一致。卸載後保留草稿及資料標記。Windows 實機安裝與原生 IME 仍待驗。[Setup 升退演練](slint-windows-candidate.md#2026-11-13-3277ac1-候選)
