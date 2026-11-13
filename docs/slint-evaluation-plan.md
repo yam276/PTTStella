@@ -1192,3 +1192,7 @@ Linux 便攜包在 QEMU／Xvfb 重跑 14 項元件回歸全數通過，每案各
 #### Linux 交付包的數位音訊
 
 用 `2ef65ce` Linux x64 便攜包，從終端以滑鼠開啟三種影片，在獨立 PulseAudio 虛擬輸出量到 440 Hz。三案均核對調高音量、靜音時訊號為零、解除後恢復及關閉播放器後串流消失。每案獨立核對播放器退場、HTTP 完成及站端 Close。實機聲音與其他平台的原生音訊待驗。[Linux 數位音訊驗收](slint-linux-candidate.md#三種影片的-linux-數位音訊輸出)
+
+#### Linux 交付包的 OpenGL 模擬驗收
+
+同一 `2ef65ce` 便攜包的三格式 OpenGL 測試未通過。Mesa softpipe 擷取未見預期四色，像素探針只確認到片尾。加入虛擬音訊後仍未取得播放中像素。Mesa llvmpipe 的 MP4 則在 QEMU 內由 LLVM 中止。保留 OpenGL 負向收據，實體 GPU 路徑待驗。[Linux OpenGL 驗收](slint-linux-candidate.md#opengl-在-linux-模擬環境的結果)

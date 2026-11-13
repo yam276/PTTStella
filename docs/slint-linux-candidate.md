@@ -36,6 +36,12 @@ X11 驗收涵蓋三種格式的軟體繪圖和視窗控制。實機聲音與 GPU
 
 關閉播放器後，每案的 PulseAudio 輸入串流都消失。關窗時播放器、renderer 與 HTTP 工作正常退出，站端各收到一次 Close ACK，每部影片下載一次。校準時修正了虛擬伺服器的模組路徑。早期以 16 位元輸出測預設 10% 時，素材的低振幅量化為零。正式量測使用浮點輸出並選用 35% 和 69%，早期收據保留。結果、原始取樣與清理記錄在 `.local/verification/slint-x11-video/audio/`。實體喇叭及其他平台的原生音訊待驗。
 
+### OpenGL 在 Linux 模擬環境的結果
+
+同一 `2ef65ce` 便攜包以 OpenGL、QEMU x64 與 Mesa softpipe 開啟三種影片。視窗擷取未見預期四色畫面。各格式的下載、播放器退場及 Close ACK 通過。另以既有像素探針重跑，三案都解碼到約第 3 秒並到達片尾，探針未取得播放中的像素。接上專用 PulseAudio 虛擬輸出後，三案皆回報一個音訊聲道，仍在同一播放檢查失敗。固定視窗的另一次 MP4 點擊未開始下載，該輪只保留作控制校準。
+
+改用 Mesa llvmpipe 執行 MP4 時，預設 QEMU CPU 與 `QEMU_CPU=max` 都在 LLVM 產生程式碼時中止，未收到 Close ACK。此組 OpenGL 模擬驗收仍失敗，實體 GPU 待驗。收據、畫面和各輪暫存清理在 `.local/verification/slint-x11-video/opengl/`，以 `acceptance.json` 彙整逐案結果。
+
 ## 2026-11-13 d047e55 候選
 
 Linux deb／tar.gz 在 `.local/verification/slint-windows-refresh-rate/linux/`。已核對 AMD64 套件、共用檔案及兩包主程式，deb 共 1,111 檔，tar.gz 共 1,124 檔。deb SHA-256 為 `0ca717e1a31791f2b7bdf7084a6c71184f07b994b2a6adfb2691f3c0bdc83251`，tar.gz 為 `40398732e4622784a7b480bab76406a30a347211ba85d3af78c43ea7cbc305c4`。Linux 實機待驗。
