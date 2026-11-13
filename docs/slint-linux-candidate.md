@@ -20,6 +20,14 @@ Linux deb／tar.gz 在 `.local/verification/slint-sites-panel-candidate/linux/`�
 
 校準輪在導覽子選單按 Esc 時已收合整個浮球，再按一次 Esc 後合成站回報收到額外輸入。當輪未記錄該筆內容。正式重跑以左方向鍵返回扇形，Esc 關閉。QEMU 下的畫面和鍵鼠結果保留為 X11 證據，Linux 實機、Wayland、無障礙焦點與動畫時序待驗。
 
+### MP4 控制與關窗的 X11 操作
+
+用 `2ef65ce` Linux x64 便攜包在 QEMU／Xvfb／Openbox 的軟體繪圖環境測試。第一輪由既有探針準備尚未播放的 MP4，再用 XTest 點擊播放、暫停、調整音量與切換靜音。畫面從 10% 調到 32%，解除靜音後維持 32%。暫停時點時間軸跳到顯示的第 2 秒，四色畫面中的白色標記隨之移動。縮窗至 840×650 後仍能播放。
+
+第二輪從終端畫面以滑鼠點本機 MP4 連結，播放器等待手動開始。第一次播放完成後用「關閉」返回終端，同一連結可再次開啟及播放。第二次播放中以視窗管理器關閉主視窗。兩次播放器都銷毀 core、收回 renderer 並等待控制及資料流工作結束，每次各下載一次完整 18,236 bytes。兩輪程式均正常退出並收到唯一站端 Close ACK。畫面、關窗收據與清理路徑在 `.local/verification/slint-x11-video/` 和其 `link/` 子目錄。
+
+此環境沒有可用的音訊裝置。上述畫面核對涵蓋 MP4 操作與退場，WebM／OGV 的 X11 滑鼠操作、實機聲音及 GPU 路徑待驗。
+
 ## 2026-11-13 d047e55 候選
 
 Linux deb／tar.gz 在 `.local/verification/slint-windows-refresh-rate/linux/`。已核對 AMD64 套件、共用檔案及兩包主程式，deb 共 1,111 檔，tar.gz 共 1,124 檔。deb SHA-256 為 `0ca717e1a31791f2b7bdf7084a6c71184f07b994b2a6adfb2691f3c0bdc83251`，tar.gz 為 `40398732e4622784a7b480bab76406a30a347211ba85d3af78c43ea7cbc305c4`。Linux 實機待驗。
