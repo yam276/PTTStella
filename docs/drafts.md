@@ -64,6 +64,14 @@ Runtime bundle、MIT授權及來源清單在 `assets/vendor/composer/`。一般 
 
 未封裝執行檔的初輪已存下正確正文，接續程序未取得可操作的視窗。正式封裝的兩段獨立啟動均通過。原生截圖及快照在 `.local/verification/slint-article-arrow/arm64-reading/drafts-mode-focus-package-20261114/` 與 `drafts-mode-focus-reopen-20261114/`。本輪 Unicode 輸入證明回焦與保存，繁中及日文 IME 候選窗另驗。
 
+#### 1d3e702 Apple Silicon 矩形與跨行選取
+
+出貨 App 使用 34 行合成稿，含雙欄中文字、既有 ANSI 紅字及尾端空行。從選取下拉切換到「ANSI 圖：矩形」，以原生滑鼠跨兩行拖曳，再用右鍵色票將「中」與「文」改成綠色。存檔比對完整原文，兩側的英文字和既有紅字未改。工具列一次復原回原稿，再一次重做得到相同 ANSI 原文。
+
+切到整行選取後拖過前兩行，替換文字和另按 Enter 分別形成一筆編輯，兩次復原恢復上色結果。文字選取模式再跨行拖曳並替換，獨立快照核對兩側保留的文字與色碼邊界。最後用 ⌘↓ 捲到 34 行稿尾，提交 `LAST中` 後關閉。新程序重開可見第 32 行標記及末字，原文保留末字前的空行，上一代備份仍是最後一次手動保存。兩次程序均正常退出並收到唯一 Close ACK。
+
+校準輪保留 OCR、選取方式和 ANSI 邊界的測試差異。只帶 Option 修飾的合成拖曳曾呈現一般跨行選取，本輪矩形成功證據來自明確選取模式。原生剪貼簿、Tab、非整數視窗縮放及 IME 候選窗仍需各自驗收。畫面、存檔和清理收據在 `.local/verification/slint-article-arrow/draft-mode-focus-pair/arm64-draft-selection/`，已清理六個隔離暫存目錄、視窗控制器及 24 張逐位元相同的畫面。
+
 Linux x64 候選 `cb4fbfc` 在隔離 X11 使用出貨執行檔及 Windows 草稿驗收包內的同一份合成稿。以實際按鍵移至文件末端、用 Shift 方向鍵選取兩字、替換後點工具列復原／重做。三種 ANSI 顯示切換後，原來的紅字區段仍在。Ctrl+S 保存後立即補末字及換行並關閉編輯器，新程序讀回完整內容，主檔的上一代備份逐位元等於 Ctrl+S 的快照。兩個程序正常退出，各收到唯一站端 Close。首輪 VM 中斷前已有存檔，退出收據不完整，保留另列。畫面與事件、存檔及清理收據在 `.local/verification/slint-article-arrow/x11-drafts/`。本案涵蓋實際鍵鼠，注音／日文候選與提交仍待各平台驗收。
 
 #### cb4fbfc 草稿 XIM 組字與重開

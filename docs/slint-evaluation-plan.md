@@ -87,6 +87,8 @@ Windows 候選封裝新增 `Run-Drafts-IME.cmd`。從本機合成看板開啟原
 
 2026-11-14 用 `cb4fbfc` Apple Silicon 出貨檔驗證 `⌘↓`、Shift 方向鍵選取、替換、工具列復原／重做、三種顯示及 `⌘S`。從模式選單點回正文，送入「中」與換行後立即關閉，新程序讀回末字、末空行及原 ANSI，上一代備份逐位元等於 `⌘S` 快照。兩次 Close ACK。此輪使用原生 Unicode 事件，IME 候選窗另待驗。[Apple Silicon 草稿驗收](drafts.md#cb4fbfc-apple-silicon-草稿選取保存與重開)
 
+`1d3e702` Apple Silicon 出貨 App 補驗矩形雙欄字上色與一次復原／重做、整行和跨行替換，以及 34 行草稿末字保存與新程序重開。兩次嚴格 Close ACK，原始 ANSI 和一代備份逐位元核對。Windows 日文 IME 仍由使用者驗收。[原生選取驗收](drafts.md#1d3e702-apple-silicon-矩形與跨行選取)
+
 ### 2. 文章翻頁與取頁（S4）
 
 - **採用 Dioxus 的翻頁規則**　把完整文字列判斷接到 Slint 既有 Flow 和閱讀錨點。PageDown 盡量把最後一個完整文字列接到下一頁頂端，PageUp 使用第一個完整文字列對齊。滾輪保留連續裁切。遇到比視窗高的圖片仍可往前後移動。[Dioxus 翻頁](../assets/inline-images.js) · [Slint 翻頁](../src/bin/slint_research/article/mod.rs)
