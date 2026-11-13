@@ -65,6 +65,10 @@ Session另持有有界、無密碼的AccountIdentity，僅供網頁文章標示�
 
 明確執行 `cargo test --locked --features credential-store --lib login::vault::tests::native_roundtrip -- --ignored --exact` 才測真正 OS 後端：獨立唯一 synthetic service、固定合成帳密、不勾選零保存、勾選寫入、另一個程序讀回、錯帳號拒絕、兩次移除與確認不存在。可能需要使用者處理 OS 解鎖提示；不使用正式 service，不連 PTT。Linux 可在獨立容器的 D-Bus／GNOME Keyring 中驗證，不改使用者桌面密碼庫。`native_read_child` 僅由父程序啟動。
 
+### Linux Secret Service 隔離驗收
+
+`96e5159` 的 Linux x64 測試執行檔在 ARM Debian Podman／QEMU 中連至獨立的 D-Bus 及 GNOME Keyring 42.1。容器在執行測試前斷開外部網路。實際 `native_roundtrip` 通過，核對未勾選無保存、明確保存、跨程序讀回及移除。測試使用唯一合成 service。容器與其中的臨時 Keyring 已移除，收據位於 `.local/verification/slint-settings-focus-mount/linux-vault/`。實機登入 UI、OS 解鎖及 Windows Credential Manager 待驗。
+
 ### macOS 舊紀錄與重新簽章驗收
 
 `cargo --config .local/slint-build.toml test --locked --offline --release --features native-player-probe --lib login::vault::tests::native_keychain_legacy_and_signing -- --ignored --exact --nocapture`

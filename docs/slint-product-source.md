@@ -4,7 +4,9 @@
 
 ## 2026-11-13 96e5159 候選來源
 
-四架構及 Windows Setup 同取乾淨 `96e5159`。既有 `sources.json` 新增 `settings-focus-mount` 對應。從隔離位置核對 837 份來源與 Git tree `bae1c6eeae5734c72e6de4ad1fc86a3e22c12e5b`，manifest SHA-256 為 `e4fecea77c199d1166c505ed57542bd59acf7b8b0c1c40aad35990b40ed5b2ed`。驗證後清理暫存還原目錄，收據在 `.local/verification/slint-settings-focus-mount/all-source-delivery.json`。此提交的還原來源重編與第三方來源閉包仍待驗。
+四架構及 Windows Setup 同取乾淨 `96e5159`。既有 `sources.json` 新增 `settings-focus-mount` 對應。從隔離位置核對 837 份來源與 Git tree `bae1c6eeae5734c72e6de4ad1fc86a3e22c12e5b`，manifest SHA-256 為 `e4fecea77c199d1166c505ed57542bd59acf7b8b0c1c40aad35990b40ed5b2ed`。驗證後清理暫存還原目錄，收據在 `.local/verification/slint-settings-focus-mount/all-source-delivery.json`。
+
+Apple Silicon 使用還原來源與固定 Cargo 快取重編 release 測試。編譯階段禁止網路及原 checkout 來源讀取，測試保留本機合成連線。Slint 110 項與播放器 1 項通過，既有原生 helper 一項忽略。暫存來源已清理，完整結果在同目錄的 `source-build-result.json`。第三方來源閉包及其他架構的還原重編仍待驗。
 
 ## 2026-11-13 57e000c 候選來源
 
