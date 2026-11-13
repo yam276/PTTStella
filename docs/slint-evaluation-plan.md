@@ -8,7 +8,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 **尚未達到可平替 Dioxus 的驗收條件。** 現有 Slint 來源及計畫已提交，正常影片退出以 `1b2bb96` 修正。下表區分已接線與尚須完成的驗收；歷次結果及確切 scope 見 [原型紀錄](slint-prototype.md)。
 
-Apple Silicon 與 Windows x64 便攜候選已更新到 `d37c7fb`，包含浮球、收藏版面及收藏初始焦點修正。Windows 安裝包仍為 `4e28e82`，Intel Mac 與 Linux x64 仍為含草稿靠右組字修正的 `06487df`。Apple Silicon 已補影片數位音訊量測。Windows 原生安裝／升級／IME、Intel Mac 與 Linux 原生驗收、完整同負載效能矩陣及正式簽章的憑證接手仍待驗。正式入口維持 Dioxus。[候選位置](#產物保留規則2026-11-09-使用者要求) · [影片音訊結果](#4-媒體s5)
+Apple Silicon、Windows x64 便攜候選及離線 Setup 已更新到 `d37c7fb`，包含浮球、收藏版面及收藏初始焦點修正。Intel Mac 與 Linux x64 封裝為含草稿靠右組字修正的 `06487df`。Apple Silicon 已補影片數位音訊量測。Windows 原生安裝／升級／IME、Intel Mac 與 Linux 原生驗收、完整同負載效能矩陣及正式簽章的憑證接手仍待驗。正式入口維持 Dioxus。[候選位置](#產物保留規則2026-11-09-使用者要求) · [影片音訊結果](#4-媒體s5)
 
 文章直接輸入抖動與 macOS `⌃⌘F` 修正已在四架構候選保留。兩個 macOS 固定下載入口現為乾淨 `c7368b2`，包含設定預覽按需繪製及文章延後取得原生焦點的修正。Apple Silicon `793ecb91` 和 Intel `62ada42e` 各通過 23 項封裝後合成回歸，另各完成原生長文的 37 次取頁及八次快取操作。Intel 使用 Rosetta。Linux `68601365` 與另備 Windows `3a8de2a9` 已封裝固定狀態列探針修正。Linux 在 QEMU 下通過 deb 安裝、軟體繪圖的完整視窗檢查及 X11 延後焦點的 37 次取頁，免安裝包的預設繪圖仍卡在通知取樣。Windows 交叉編譯與 ZIP／PE 檢查通過，實機待驗。`69542cb7` 為先前的 Windows 待驗下載。[跨平台封裝與驗收](#2026-11-11-固定狀態列探針的-windows-與-linux-封裝)Intel／Linux 實機依指示暫緩，其餘原生操作、完整資料回退和跨平台效能矩陣仍待驗。
 
@@ -179,7 +179,9 @@ Intel 首輪來源清單漏對應 soxr 的 recipe 名稱，按原有 replay log 
 
 ## 產物保留規則（2026-11-09 使用者要求）
 
-Apple Silicon 與 Windows x64 最新便攜候選在 `.local/verification/slint-current-shell/pair-focus/`。前一對 `4e28e82` 保留在 `slint-editor-ime-edge/pair/` 供對照，Windows x64 Setup 在工作樹旁的 `../PTTStella-candidates/windows-4e28e82-offline/`。保留前一個 `100b75f` 離線 Setup 供升級對照。Intel Mac／Linux x64 最新候選在 `.local/verification/slint-cross-ime-edge/`。保留 `slint-audio-pair/` 的正式身分演練對照、Windows 待驗包、固定編譯快取及各次獨特結果。
+Apple Silicon 與 Windows x64 最新便攜候選在 `.local/verification/slint-current-shell/pair-focus/`，同源 Windows x64 Setup 在工作樹旁的 `../PTTStella-candidates/windows-d37c7fb-offline/`。前一對 `4e28e82` 在 `slint-editor-ime-edge/pair/`，其 Setup 與 `100b75f` Setup 保留供升級對照。Intel Mac／Linux x64 最新候選在 `.local/verification/slint-cross-ime-edge/`。保留 `slint-audio-pair/` 的正式身分演練對照、Windows 待驗包、固定編譯快取及各次獨特結果。
+
+Windows Setup 編譯及解包完成後，已移除兩個專用容器與 `slint-current-shell/windows-setup/work/`。清理時的 regular-file logical bytes 為 338,090,591，其中 253,961,570 bytes 無其他 hardlink。保留編譯器下載快取、共用 Debian 映像與候選。路徑、容器 ID 與可用空間觀測見 `slint-current-shell/windows-setup/cleanup.json`。
 
 2026-11-13 移除已被取代的 `3e9e9fe` App／DMG／兩個 ZIP，以及已退出的原生測試暫存，合計 380,412,284 regular-file logical bytes。保留失敗紀錄、封裝雜湊與另一個仍在執行的候選。確切路徑、`du` 與可用空間觀測見 `slint-current-shell/superseded-layout-cleanup.json` 和 `slint-current-shell/shell-runtime-cleanup.json`。先前量測與跨平台清理收據見 `slint-current-gif-comparison/calibration-cleanup.json`、`slint-current-gif-comparison/prior-mac-cleanup.json`、`slint-windows-ime-setup/cleanup.json` 和 `slint-cross-ime-edge/cleanup.json`。
 
@@ -315,6 +317,8 @@ Windows 10 build19045／PowerShell5.1的13案receipt及Microsoft注音三項人�
 ### 平台與 WebView 驗收
 
 2026-11-12 完成 Windows x64 獨立 Setup 與離線便攜 ZIP，已同步至與 Apple Silicon 成對的 `4e28e82` 主程式。PE 匯入閉包內含 Visual C++ runtime，Setup 解包與現有 ZIP 的 926 個檔案逐位元一致。Windows 原生安裝、升級、卸載、IME 與效能仍待驗。[Windows 離線封裝](slint-windows-candidate.md#2026-11-12-草稿組字修正的離線-setup)
+
+2026-11-13 的 `d37c7fb` 離線 Setup 已用同源便攜 ZIP 封裝並解包。926 個檔案逐位元一致，PE 匯入核對通過。Windows 實機驗收待補。[新版 Windows 離線封裝](slint-windows-candidate.md#2026-11-13-浮球與收藏修正的離線-setup)
 
 Apple Silicon／Windows x64 便攜候選 `d37c7fb` 已核對獨立還原的完整 619 檔 Git tree，並綁定兩包的執行檔與下載雜湊。前一對 `4e28e82` 與 Intel Mac／Linux x64 的 `06487df` 來源對應也保留。Intel 候選另核對 32 份播放器來源封存與 47 個 runtime 的重建及封裝雜湊。完整跨平台第三方來源、獨立重編及原生驗收仍待完成。[現行產品來源](slint-product-source.md#2026-11-13-浮球與收藏修正候選來源)
 

@@ -1,5 +1,17 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-13 浮球與收藏修正的離線 Setup
+
+Windows x64 Setup、便攜 ZIP 與 Apple Silicon 候選均對應 `d37c7fb`。Setup 位於 `../PTTStella-candidates/windows-d37c7fb-offline/`，便攜 ZIP 在 `.local/verification/slint-current-shell/pair-focus/windows/`。安裝程式沿用前版的獨立安裝識別與目前使用者安裝位置。
+
+| 檔案 | SHA-256 |
+| --- | --- |
+| Windows Setup | `b8c969c1fab3e795e2e0e53a360c9d3773af15e0a3df62187c8eac97672a4138` |
+| Windows 便攜 ZIP | `1c8dea0687d7d8e3a707b16f65f6ed938d53cfa219e8cb8310ab411f75d968bf` |
+| Windows 包內執行檔 | `4c9abc18a632e80958934de3c2c65b08113e1ed9380b1474b8940bde9c8de425` |
+
+使用固定 Inno Setup 7.1.0 編譯，解包逐檔核對 926 個檔案，包含 `candidate.json`。Setup 的 AMD64 PE 一般與延遲匯入均為 Windows 系統 DLL。原生安裝、升級、卸載與 IME 待驗。保留 `4e28e82` Setup 供升級對照。編譯、解包與清理收據在 `.local/verification/slint-current-shell/windows-setup/`。
+
 ## 2026-11-12 草稿組字修正的離線 Setup
 
 Setup 位於工作樹旁的 `../PTTStella-candidates/windows-4e28e82-offline/`，便攜 ZIP 仍在 `.local/verification/slint-editor-ime-edge/pair/windows/`。兩者與同層 `pair/macos/` 的 Apple Silicon 候選皆使用乾淨提交 `4e28e8244a3bf6c89d68caccabd26117ee001e0f`，含正文靠右組字的空間修正。
