@@ -255,17 +255,9 @@ impl ArticleView {
         };
         let Some(flow) = self.flow() else { return };
         let anchor = self.position(&flow);
-        let line = f64::from(layout.row);
         let viewport = f64::from(layout.body_height * layout.dpi);
         let target = match intent {
-            Intent::Lines { down, count } => {
-                anchor
-                    + if down {
-                        count as f64 * line
-                    } else {
-                        -(count as f64) * line
-                    }
-            }
+            Intent::Lines { down, count } => flow.move_lines(anchor, viewport, down, count),
             Intent::PreviousPage => flow.page(anchor, viewport, false),
             Intent::NextPage | Intent::Forward => flow.page(anchor, viewport, true),
             Intent::First => 0.,

@@ -178,6 +178,40 @@ impl Flow {
             );
         start.min(end)..end
     }
+    /// Align a clipped text edge before moving by keyboard. Image gaps keep
+    /// their pixel offset, and the document end can retain a clipped top row.
+    pub fn move_lines(&self, y: f64, viewport: f64, down: bool, count: usize) -> f64 {
+        let top = self.clamp(y, viewport);
+        let line = f64::from(self.line);
+        let aligned = match self.hit(top) {
+            Some(row) if top < self.maximum(viewport) || down => {
+                let start = self.top(row) as f64;
+                if down || top - start <= EDGE_TOLERANCE {
+                    start
+                } else {
+                    start + line
+                }
+            }
+            _ => top,
+        };
+        let delta = line * count as f64;
+        let target = self.clamp(aligned + if down { delta } else { -delta }, viewport);
+        if target >= self.maximum(viewport) {
+            return target;
+        }
+        let Some(row) = self.hit(target) else {
+            return target;
+        };
+        let start = self.top(row) as f64;
+        self.clamp(
+            if target - start <= line / 2. {
+                start
+            } else {
+                start + line
+            },
+            viewport,
+        )
+    }
     pub fn page(&self, y: f64, viewport: f64, down: bool) -> f64 {
         let top = self.clamp(y, viewport);
         let rows = self.whole_rows(top, viewport);
@@ -263,6 +297,18 @@ mod tests {
         assert_eq!(flow.page(25.5, 100., false), 0.);
         assert_eq!(flow.page(96., 70.5, false), 45.5);
         assert_eq!(flow.whole_rows(45.5, 70.5), 2..4);
+    }
+    #[test]
+    fn discrete_lines_from_a_fractional_scroll_match_the_web_viewport() {
+        let flow = Flow::new(40, 24, []).unwrap();
+        assert_eq!(flow.move_lines(43., 70., true, 1), 48.);
+        assert_eq!(flow.move_lines(43., 70., false, 1), 24.);
+        assert_eq!(flow.move_lines(24., 70., true, 3), 96.);
+        assert_eq!(flow.move_lines(888., 70., true, 1), 890.);
+
+        let flow = Flow::new(40, 24, [(1, 201)]).unwrap();
+        assert_eq!(flow.move_lines(70.5, 70., true, 1), 94.5);
+        assert_eq!(flow.move_lines(228.5, 70., true, 1), 249.);
     }
     #[test]
     fn page_moves_through_a_tall_image_and_keeps_the_exact_document_end() {
