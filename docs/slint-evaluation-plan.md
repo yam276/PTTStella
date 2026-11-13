@@ -197,7 +197,9 @@ OpenGL WebM 另有一輪在應用程式前景觀測未中斷時，80% 段末已�
 
 Apple Silicon 出貨候選 `cb4fbfc` 用被動視窗重跑 MP4、WebM、OGV 的軟體繪圖與 OpenGL，共六案通過。另有兩案驗證下載中暫停與恢復，兩個錯色負向案例按預期失敗。十案均核對播放器、串流及本機 HTTP 的清理。最新版影片的系統音訊取樣及原生操作仍待驗。[出貨檔影片驗收](slint-prototype.md#2026-11-13-cb4fbfc-apple-silicon-出貨檔影片驗收)
 
-Apple Silicon 出貨檔 `1d3e702` 重跑六個格式／繪圖案例及四個停滯／錯色案例，皆符合預期。軟體繪圖與 OpenGL 各在播放中和 HTTP 停滯時執行 macOS 關窗，四案均退出並核對媒體工作清空。兩種繪圖另以原生滑鼠驗 MP4 音量 25%、靜音、恢復和跳到約 1 秒。此版的數位音訊、實體裝置及跨平台操作待驗。[最新影片驗收](slint-prototype.md#2026-11-14-1d3e702-apple-silicon-影片控制與關窗)
+Apple Silicon 出貨檔 `1d3e702` 重跑六個格式／繪圖案例及四個停滯／錯色案例，皆符合預期。軟體繪圖與 OpenGL 各在播放中和 HTTP 停滯時執行 macOS 關窗，四案均退出並核對媒體工作清空。兩種繪圖另以原生滑鼠驗 MP4 音量 25%、靜音、恢復和跳到約 1 秒。[最新影片驗收](slint-prototype.md#2026-11-14-1d3e702-apple-silicon-影片控制與關窗)
+
+同一 Apple Silicon 出貨 App 的數位音訊以三格式、兩種繪圖共六案通過。80% → 25% 時 RMS 下降 30.30–30.32 dB，解除靜音及繼續播放回到 25% 的位準，靜音、暫停及關閉預覽的穩定區段皆為零。六案均正常退出、HTTP join 並收到嚴格 Close。實體裝置與 Windows 原生音訊仍待驗。[本輪數位音訊](slint-prototype.md#1d3e702-apple-silicon-數位音訊)
 
 同一 Apple Silicon 候選與 Dioxus 已各兩輪以原生快捷鍵開關同窗設定。兩張 GIF 回到文章均恢復換幀，每個網址全程只下載一次。設定期間兩版 CPU 均下降，關閉後的 10 秒累積 CPU 中位數為 Slint 0.484 秒、Dioxus 0.242 秒。另各兩輪連續開關 12 次，四輪皆能恢復兩張 GIF，兩版 RSS 都上升，Slint 的 physical footprint 變化方向未重現。更長時間與記憶體歸因待驗。[設定遮蔽與恢復](slint-macos-measurement.md#cb4fbfc-雙-gif-設定開關與恢復) · [12 次開關](slint-macos-measurement.md#cb4fbfc-雙-gif-連續-12-次設定開關)
 

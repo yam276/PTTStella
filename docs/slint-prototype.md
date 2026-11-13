@@ -1551,6 +1551,16 @@ PTTSTELLA_VIDEO_FIXTURE=<NEW_NEGATIVE_FIXTURE_DIR>/quadrants.mp4 \
 
 結果在 `.local/verification/slint-article-arrow/draft-mode-focus-pair/arm64-media/`。六個隔離暫存根、影片素材與視窗工具已清理，保留獨特畫面、原始收據與候選包。清理清單在同目錄 `cleanup.json`。
 
+#### 1d3e702 Apple Silicon 數位音訊
+
+同一出貨 App 播放本機 32 秒、440 Hz 的合成 MP4、WebM、OGV。每種格式以軟體繪圖及 OpenGL 各驗一輪，用原生滑鼠調整音量、靜音、解除靜音、暫停、繼續及關閉預覽。ScreenCaptureKit 只取該候選程序的 48 kHz 音訊，保存每段統計及前景時間，未保存音訊波形。
+
+六案從畫面確認 80% 和 25% 後取樣。RMS 降幅為 30.30–30.32 dB，解除靜音及繼續播放後均回到 25% 的位準，靜音、暫停及關閉預覽後的穩定樣本峰值均為零。兩個 OGV 案例另核對解碼器的第二段 HTTP Range 和實際傳輸量。每案的播放器、串流與本機 HTTP 均已結束，App 以 0 退出並收到唯一 Close ACK。
+
+校準時曾遇到視窗未就緒及取樣串流尚在運行時無法正常關窗，保留原始失敗。先完成關閉預覽後的零訊號取樣，再停止擷取並關窗，補跑成功。最初 OGV 驗證器誤要求與 MP4 相同的單次 HTTP 請求，改驗兩個實際 Range 後重跑。舊版 OpenGL WebM 播放途中無聲的反例本輪未重現。實體輸出裝置與 Windows 原生音訊仍待驗。
+
+證據在 `.local/verification/slint-article-arrow/draft-mode-focus-pair/arm64-media/digital-audio/` 的 `comparison.json`、個案報告及 `cleanup.json`。本輪產生的合成影片、隔離暫存、兩個測試控制器及逐位元重複畫面已清理，保留唯一證據、候選及固定 Cargo target。
+
 ### 2026-11-13 cb4fbfc Apple Silicon 出貨檔影片驗收
 
 直接執行已交付的 Apple Silicon App，核對主程式 SHA-256 `9b6e15e8cbf3080f9e073c75efd8312c8b2711845ed8518d7e737f1e6f82efeb` 與深層 ad-hoc 簽章。使用同提交 Windows ZIP 內雜湊相符的三份合成素材。被動視窗只接收 Slint 探針操作和合成焦點，HTTP 僅走本機。
