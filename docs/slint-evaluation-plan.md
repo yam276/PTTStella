@@ -6,7 +6,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 目前進度（2026-11-14）
 
-目前四架構便攜候選取同一乾淨提交 `1d3e702`，包含草稿色碼選單確認後回焦。Apple Silicon 出貨檔已驗三種顯示、鍵盤回焦、保存、重開及帶回合成站端。Windows x64 ZIP、Intel Mac App／ZIP／DMG 及 Linux x64 deb／tar.gz 已核對封裝，原生驗收依各平台紀錄。Windows 離線 Setup 的已驗版本仍是 `cb4fbfc`。正式入口維持 Dioxus。[草稿操作](drafts.md#1d3e702-色碼選單回焦) · [四架構交付](#1d3e702-草稿回焦候選)
+目前四架構候選與 Windows 離線 Setup 取同一乾淨提交 `1d3e702`，包含草稿色碼選單確認後回焦。Apple Silicon 出貨檔已驗三種顯示、鍵盤回焦、保存、重開及帶回合成站端。Windows 離線 Setup 解包與便攜版 927 檔逐位元一致，並在隔離 Wine 完成升級、回退與卸載。Windows、Intel Mac 與 Linux 的實機結果依各平台紀錄。正式入口維持 Dioxus。[草稿操作](drafts.md#1d3e702-色碼選單回焦) · [四架構交付](#1d3e702-草稿回焦候選) · [Windows 安裝驗收](slint-windows-candidate.md#2026-11-14-1d3e702-離線-setup-與升退)
 
 Apple Silicon 用 `cb4fbfc` 出貨 App 與同源 Dioxus 再次重測。837 行全文 renderer ACK 中位數為 541／555 ms，每版各 100 次的快取 PageDown p95 為 41.3／87.5 ms，PageUp p95 為 39.5／88.0 ms。雙 GIF 每版三輪有效樣本的程序族 footprint 峰值中位數為 131／730 MiB，10 秒累積 CPU 為 0.479／0.663 秒。全文差距方向及 CPU 絕對值在不同輪次有波動。使用者將驗 Windows 日文 IME。[重測結果](slint-macos-measurement.md#2026-11-14-最新候選長文翻頁與雙-gif-重測)
 
@@ -1286,7 +1286,9 @@ Apple Silicon App／ZIP／DMG、Intel Mac App／ZIP／DMG、Windows x64 便攜 Z
 
 ### 1d3e702 草稿回焦候選
 
-Apple Silicon 與 Intel Mac App／ZIP／DMG、Windows x64 便攜 ZIP 及 Linux x64 deb／tar.gz 皆從乾淨 `1d3e702` 建置。兩版 macOS App 與 ZIP、DMG 分別核對 1,256／1,232 個檔案逐位元相同，深層簽章與映像檢查通過。Windows ZIP 926 項 payload 與 manifest、AMD64 PE 及匯入通過。Linux 兩包共用執行檔及說明逐位元相符，deb 為 amd64。Intel、Linux 實機保留待驗。Windows 日文 IME 由使用者驗收，最新版離線 Setup 尚未重打。
+Apple Silicon 與 Intel Mac App／ZIP／DMG、Windows x64 便攜 ZIP／離線 Setup 及 Linux x64 deb／tar.gz 皆取自乾淨 `1d3e702`。兩版 macOS App 與 ZIP、DMG 分別核對 1,256／1,232 個檔案逐位元相同，深層簽章與映像檢查通過。Windows ZIP 的 926 項 payload 加 manifest 與 Setup 解包逐一相符。Linux 兩包共用執行檔及說明逐位元相符，deb 為 amd64。Intel、Linux 實機保留待驗，Windows 日文 IME 由使用者驗收。
+
+四架構、兩種功能配置共八棵鎖定 Cargo tree 及出貨檔直接連結核對通過。檢查含 macOS 的 51／48 個 Mach-O、Windows 的五個便攜 PE 及 Setup、Linux ELF 的八項 `DT_NEEDED` 與 deb 的 20 項 Depends，均未發現 WebView 相關相依。收據為同目錄 `dependency-audit/report.json`。這輪驗證連結和封裝，macOS 系統間接載入沿用前一候選的執行期證據。
 
 收據與交付在 `.local/verification/slint-article-arrow/draft-mode-focus-pair/`。產品來源已離線核對完整 Git tree。已移除本輪 Linux SDK、傳輸與視窗暫存，以及被取代的兩份 macOS ZIP，保留舊 App／DMG 作對照和回退、已交付的 Windows 待驗包及固定編譯快取。實際清理見同目錄的 `package-cleanup.json`、`draft-mode-focus-cleanup.json`、`intel-cleanup.json` 及 `linux-clean/linux-sdk-cleanup.json`。
 

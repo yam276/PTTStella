@@ -1,5 +1,21 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-14 1d3e702 離線 Setup 與升退
+
+Windows x64 便攜 ZIP 和離線 Setup 都使用乾淨 `1d3e702` 的出貨執行檔，與 Apple Silicon、Intel Mac 及 Linux 候選同源。固定 Inno Setup 7.1.0 編譯成功，解包後 927 個檔案與 ZIP 逐位元相符，AMD64、一般與延遲匯入核對通過。便攜包位於 `.local/verification/slint-article-arrow/draft-mode-focus-pair/windows/`，離線 Setup 位於 `../PTTStella-candidates/windows-1d3e702-offline/`。
+
+| 交付 | SHA-256 |
+| --- | --- |
+| 離線 Setup | `ea0552e20ca6139ddce89c74699e20c39048c713e36ee07bee682f02c4fa6f90` |
+| 便攜 ZIP | `c078b5accf1d3f5bc8efc3217db2079a102f6bd98dc5789c89c27c8ada5ea0cc` |
+| 包內執行檔 | `9332392dd19c2bc8135f0fe04f4be2559b0812307a7eda6e144d7b76cc1419ad` |
+
+Wine 10.0／QEMU／Xvfb 在僅有 loopback 的環境通過九案。先安裝 `cb4fbfc` 並保存合成 ANSI 草稿，再升至 `1d3e702`、回退、重裝及卸載。每次安裝核對 927 個檔案、主程式雜湊、解除安裝登錄與開始選單捷徑。兩版均可跨程序重開同一草稿並帶回合成站端，三次 Close ACK，草稿逐位元一致。指定合成 Dioxus 目錄時以代碼 7 拒絕，卸載移除候選程式、捷徑與登錄，保留研究資料及合成 Dioxus 目錄。
+
+兩個專用容器與 host 封裝暫存已移除。清理前確認 macOS Virtualization 仍持有唯讀檔案描述符，兩個容器已消失且 guest 無使用該路徑的程序。保留前版 Setup 作回退、最新交付與固定編譯快取。完整收據、容器識別、暫存路徑與磁碟量測在 `.local/verification/slint-article-arrow/draft-mode-focus-pair/windows-setup/`。
+
+Windows 實機仍待安裝、升級、卸載、Credential Manager 與注音／日文 IME。日文以同提交便攜 ZIP 的 `Run-IME.cmd` 和 `Run-Drafts-IME.cmd` 驗收。
+
 ## 2026-11-13 118a1d9 候選
 
 便攜 ZIP 在 `.local/verification/slint-edge-fetch/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-118a1d9-offline/`。與其他三架構同取乾淨 `118a1d9`，加入取消預載後的手動文章取頁。便攜 ZIP 的 CRC、926 份 payload、AMD64 PE 匯入及 Setup 解包的 927 檔逐一相符。Windows 實機安裝、升級、Microsoft 注音與日文 IME 待驗。
