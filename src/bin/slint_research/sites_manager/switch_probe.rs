@@ -1,11 +1,12 @@
 //! Full native component station transitions. Toolkit intents are explicit;
 //! native bytes and handshake order are independently checked by site_probe.
 use super::*;
-use crate::verification::{Verification, foreground, require, wait};
+use crate::verification::{Verification, foreground, key, require, wait};
 use pttstella::connection::{
     Phase,
     site_probe::{Case, Peers},
 };
+use slint::platform::Key;
 use std::{error::Error, path::PathBuf};
 async fn ready(ui: &TerminalWindow, owner: &Manager, target: &Target) -> Result<(), String> {
     wait(
@@ -54,6 +55,58 @@ fn go(ui: &TerminalWindow, owner: &Rc<Manager>, target: &Target) -> Result<(), S
         "valid connection intent was not enqueued/closed",
     )
 }
+
+async fn change_encoding(
+    ui: &TerminalWindow,
+    current: &Target,
+    target: &Target,
+) -> Result<(), String> {
+    require(
+        current.endpoint == target.endpoint,
+        "station address changed",
+    )?;
+    foreground(ui, true);
+    ui.invoke_sites_show();
+    let state = ui.global::<crate::SitesState>();
+    require(
+        ui.get_sites_open()
+            && state.get_address().as_str() == current.endpoint.as_str()
+            && state.get_encoding() == index(current.encoding),
+        "site form did not load the current address and encoding",
+    )?;
+    state.set_encoding_focused(false);
+    state.invoke_focus_address();
+    wait(
+        || {
+            if !state.get_encoding_focused() {
+                key(ui, Key::Tab);
+            }
+            state.get_encoding_focused()
+        },
+        "Tab did not reach the encoding dropdown",
+    )
+    .await?;
+    key(ui, Key::Return);
+    key(
+        ui,
+        if target.encoding == TextEncoding::Gbk {
+            Key::End
+        } else {
+            Key::Home
+        },
+    );
+    key(ui, Key::Return);
+    require(
+        state.get_encoding() == index(target.encoding)
+            && state.get_address().as_str() == current.endpoint.as_str(),
+        "encoding dropdown did not apply the selected value at the same address",
+    )?;
+    state.invoke_action(3);
+    require(
+        !ui.get_sites_open(),
+        "Connect action did not enqueue the switch",
+    )
+}
 pub fn start(
     ui: &TerminalWindow,
     owner: Rc<Manager>,
@@ -98,7 +151,11 @@ pub fn start(
             )?;
             sequence.push(serde_json::json!({"stage":"held_dial","generation":owner.connection.updates.borrow().generation}));
         }
-        go(&ui, &owner, &peers.gbk)?;
+        if peers.case == Case::SameEndpoint {
+            change_encoding(&ui, &peers.first, &peers.gbk).await?;
+        } else {
+            go(&ui, &owner, &peers.gbk)?;
+        }
         owner.connection.input(first, b"STALE-FIRST".to_vec())?;
         ready(&ui, &owner, &peers.gbk).await?;
         let gbk = owner.connection.updates.borrow().generation;
@@ -109,7 +166,11 @@ pub fn start(
             "GBK target kept old generation/PTT automation",
         )?;
         sequence.push(serde_json::json!({"stage":"gbk","generation":gbk,"site":peers.gbk}));
-        go(&ui, &owner, &peers.uao)?;
+        if peers.case == Case::SameEndpoint {
+            change_encoding(&ui, &peers.gbk, &peers.uao).await?;
+        } else {
+            go(&ui, &owner, &peers.uao)?;
+        }
         owner.connection.input(gbk, b"STALE-SECOND".to_vec())?;
         ready(&ui, &owner, &peers.uao).await?;
         let last = owner.connection.updates.borrow().generation;

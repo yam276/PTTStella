@@ -16,6 +16,7 @@ export global SitesState {
     in-out property <string> name;
     in-out property <string> address;
     in-out property <int> encoding;
+    in-out property <bool> encoding-focused;
     callback choose(int);
     callback preset(bool);
     callback action(int);
@@ -52,7 +53,7 @@ export component SitesPanel inherits PanelOverlay {
         Text {text:SitesState.labels[4];color:#c7d4e7;}
         address-field:=PanelField {text<=>SitesState.address;accessible-label:SitesState.labels[4];enabled:!SitesState.busy;edited=>{self.text=SitesState.field-edit(1,self.text);} }
         Text {text:SitesState.labels[5];color:#c7d4e7;}
-        PanelCombo {model:["Big5-UAO","Big5","GBK"];current-index<=>SitesState.encoding;enabled:root.visible && !SitesState.busy && !SitesState.composing;}
+        encoding-choice := PanelCombo {model:["Big5-UAO","Big5","GBK"];current-index<=>SitesState.encoding;enabled:root.visible && !SitesState.busy && !SitesState.composing;}
         Text {text:SitesState.security;color:#9ab5ce;wrap:word-wrap;}
         HorizontalLayout {
             alignment: start; spacing: 8px;
@@ -70,4 +71,6 @@ export component SitesPanel inherits PanelOverlay {
       }
       }
     }
+    private property <bool> encoding-focused: root.visible && encoding-choice.has-focus;
+    changed encoding-focused => { if root.visible { SitesState.encoding-focused = self.encoding-focused; } }
 }

@@ -133,6 +133,7 @@ pub fn with_probe(
                     "connected" => Case::Connected,
                     "disconnected" => Case::Disconnected,
                     "cancel" => Case::CancelDial,
+                    "same-endpoint" => Case::SameEndpoint,
                     "native" => Case::Native,
                     _ => return Err("unknown site-switch case".to_string()),
                 };

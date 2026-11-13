@@ -20,6 +20,7 @@ pub enum Case {
     Connected,
     Disconnected,
     CancelDial,
+    SameEndpoint,
     Native,
 }
 #[derive(Clone, Debug, Serialize)]
@@ -75,8 +76,14 @@ impl Peers {
                 Ok(l)
             })
             .collect::<Result<Vec<_>, String>>()?;
-        let targets = listeners
-            .iter()
+        let indices = if case == Case::SameEndpoint {
+            [0, 0, 0, 3]
+        } else {
+            [0, 1, 2, 3]
+        };
+        let targets = indices
+            .into_iter()
+            .map(|index| &listeners[index])
             .zip([
                 TextEncoding::Uao,
                 TextEncoding::Gbk,
@@ -186,6 +193,13 @@ async fn guarded(
     tokio::select! {biased;result=station(listener,state,index,native)=>result,result=early(later)=>result}
 }
 async fn serve(listeners: &[TcpListener], state: &Shared, case: Case) -> Result<(), String> {
+    if case == Case::SameEndpoint {
+        let listener = &listeners[0];
+        for index in 0..2 {
+            guarded(listener, &[listener], state, index, false).await?;
+        }
+        return station(listener, state, 2, false).await;
+    }
     guarded(
         &listeners[0],
         &[&listeners[1], &listeners[2], &listeners[3]],

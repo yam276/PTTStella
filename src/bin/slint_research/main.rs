@@ -708,6 +708,9 @@ fn run(
         || options.verify_article.is_some()
         || options.verify_article_session.is_some()
         || toolkit_inline
+        || site_peers
+            .as_ref()
+            .is_some_and(|peers| peers.case != pttstella::connection::site_probe::Case::Native)
         || verify_media_scene
             && (toolkit_updates || toolkit_settings || toolkit_bookmarks || toolkit_video);
     let selector = || {
@@ -853,6 +856,9 @@ fn run(
                 ("UAO peer", &peers.uao),
                 ("Held dial peer", &peers.hanging),
             ] {
+                if seed.favourites.iter().any(|item| item.target == *target) {
+                    continue;
+                }
                 seed.favourites.push(pttstella::sites::Favourite {
                     name: name.into(),
                     target: target.clone(),

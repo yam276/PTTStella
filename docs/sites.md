@@ -22,4 +22,6 @@ PTT 專用的按鈕登入／鑰匙圈、自動導覽、最近看板、內容名�
 
 同一 WebSocket 位址切換 Big5-UAO → GBK 的回歸，從第一筆連線起明確選用本機目標。探針扣住舊連線的 Close 回覆，確認新連線等到回覆後才建立，接著核對新世代、格線／色彩／殘留半字清除、舊按鍵拒絕及精確 GBK 收送。這項測試涵蓋兩個前端共用的 Connection，站點表單和實站維持各自驗收。
 
+Slint 合成站點表單可用 `PTTSTELLA_SLINT_SITE_SWITCH=same-endpoint pttstella-slint --software-renderer --probe-media --verify-media NEW_DIR` 重跑。以 Slint 鍵盤事件選取下拉選單，再執行表單的連線回呼，核對同一位址的 Big5-UAO → GBK → Big5-UAO、三次 Close、雙色中文字和零多餘輸入。實體按鍵與按鈕點擊另行驗收。
+
 SSH 離線測試使用本機合成主機金鑰，核對金鑰不符時零驗證、80×24 終端請求、原始雙向資料、正常關閉與中途取消。實站探針只到登入提示並關閉。
