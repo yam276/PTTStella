@@ -84,7 +84,9 @@ Linux x64 候選 `cb4fbfc` 在隔離 X11 使用出貨執行檔及 Windows 草稿
 
 出貨 App 的草稿正文使用原生 ⌘A、⌘C、⌘X 和 ⌘V。獨立核對 macOS 剪貼簿確實收到完整合成正文，含雙欄字、Tab、ANSI 紅字和末端空行。複製後正文不變，剪下後保存為空，貼回後與原稿逐位元一致。再貼入同時含 CRLF、單獨 CR、Tab 及繁中字的合成內容，核對換行統一為 LF，Tab 及末字保留。貼上後立即關閉，新程序讀回完整原文，備份等於上一份手動存檔。兩個程序皆以 0 退出並收到唯一 Close ACK。
 
-測試結束後逐項核對原剪貼簿資料已恢復，未輸出原剪貼簿內容。合成存檔、去文字事件和清理收據在 `.local/verification/slint-article-arrow/draft-mode-focus-pair/arm64-draft-clipboard/`。暫存資料目錄及視窗工具已移除。標題剪貼簿、跨平台剪貼簿及 IME 候選窗另驗。
+同包另在標題欄驗證原生 ⌘A、⌘C、⌘X、⌘V。系統剪貼簿讀到完整合成標題，剪下後標題為空，貼回後可用 ⌘Z 與 ⇧⌘Z 往返。再貼入另一個含繁中末字的標題並立即關閉，新程序讀回新標題，上一代備份保留前一個標題。八份快照皆核對正文的 Tab、ANSI 及末空行逐位元相同。兩次程序以 0 退出並收到唯一 Close ACK。
+
+兩輪測試結束後逐項核對原剪貼簿資料已恢復。合成存檔、去文字事件和清理收據位於 `.local/verification/slint-article-arrow/draft-mode-focus-pair/` 的 `arm64-draft-clipboard/` 與 `arm64-draft-title/`。暫存資料目錄及視窗工具已移除。跨平台剪貼簿及 IME 候選窗另驗。
 
 #### cb4fbfc 草稿 XIM 組字與重開
 
