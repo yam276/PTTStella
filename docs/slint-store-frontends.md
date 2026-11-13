@@ -2,6 +2,14 @@
 
 2026-11-11 已用同一對 macOS arm64 前端完成設定 v1–v6 的 Slint → 原 Dioxus → Slint 往返。各版本以獨立合成資料驗證兩次實際儲存、前一代備份與重開讀取。黑白名單、可攜設定、收藏名稱／離線讀取、最近看板清除及草稿編輯保存的先前證據見後節。完整新增／編輯／刪除、最近看板新增與排序、macOS 一般入口的自動開圖設定往返也已通過，完整平台資料回退、密碼庫與產品切換仍待驗。
 
+## 2026-11-13 現行候選與自動開圖回退
+
+以封裝的 Apple Silicon Slint `4d7d174` 與相容回退 Dioxus `82bc81f`，在同一暫存 `Applications/PTTStella.app` 路徑及正式 Bundle ID 跑兩組五階段演練。沿用一般入口、隔離 HOME、現有設定控制與本機 TLS 1.3 測試站。Slint 副本重簽後的機器碼區段與原包一致。每組先開 Dioxus 基準，再由 Slint 保存、Dioxus 回退保存、Slint 重開核對，最後從獨立備份在新 HOME 恢復。
+
+第一組由 Slint 關閉文章首尾切篇，Dioxus 讀到關閉並開啟右鍵工具，Slint 重開讀到右鍵工具已開。第二組由 Slint 關閉自動開圖，Dioxus 讀到關閉後重新開啟，Slint 重開顯示已開。首輪自動開圖驗證器誤要求 JSON 明寫 `false`。產品格式在關閉時省略欄位，讀取缺欄位預設為關閉。修正驗證器後用新副本重跑，核對了兩版實際控制值、每次保存與重開。
+
+四次保存的一代備份逐位元等於前一次主檔。每組其他六個主檔始終相同，兩組各有八個檔案從獨立備份逐位元恢復。納入兩組的十次啟動皆 exit 0，站端只收到 Close 並回覆。保留核對收據、合成備份、首輪驗證器誤判及清理清單，位於 `.local/verification/slint-rollback-bookmark-load/`。已移除共 191,879,179 regular-file bytes 的隔離 App 與資料副本。正式 Developer ID 的 Keychain 重新授權與 Finder 首開仍待驗。[隔離 Keychain 演練](login.md#macos-正式服務名的隔離演練)
+
 ## 2026-11-12 現行 Apple Silicon 候選的原地回退
 
 以現行 Slint `4e28e82` 和相容回退 Dioxus `82bc81f` 的已簽章 App 建立隔離副本。兩個 App 依序佔用同一個暫存 `Applications/PTTStella.app` 路徑，皆使用正式 Bundle ID `io.github.yam276.pttstella`。Dioxus 主程式雜湊和回退包相同。Slint 副本改 Bundle ID 後重新 ad-hoc 簽章，主程式 `__TEXT,__text` 雜湊與候選包相同。兩份副本均通過深層嚴格簽章檢查。

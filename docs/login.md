@@ -83,6 +83,8 @@ Session另持有有界、無密碼的AccountIdentity，僅供網頁文章標示�
 
 這次驗證隔離鑰匙圈和正式名稱下的行為。正式簽章的實際系統授權提示，以及重新授權後由 Slint 前端讀回仍待驗。原始收據在 `.local/verification/slint-rollback-audio-candidate/product-keychain.log`。
 
+2026-11-13 配合 `4d7d174` 檔案回退演練，以既有 Rust 測試執行檔重跑上述案例。舊格式寫入、不同 ad-hoc 簽章接手拒絕、單次手動登入準備、原簽章回退讀回及刪除皆通過。獨立鑰匙圈已刪除，使用者搜尋清單逐位元相同。測試執行檔雜湊與收據位於 `.local/verification/slint-rollback-bookmark-load/isolated-keychain.json`。
+
 Linux 缺服務另明確執行：`DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-pttstella-synthetic-bus cargo test --locked --features credential-store --lib login::vault::tests::native_service_unavailable -- --ignored --exact`，需確認讀取與勾選保存失敗，但不勾選單次登入仍能準備帳密。交叉編譯、記憶體測試與隔離容器不能冒充 Windows 認證庫、Linux 真實桌面解鎖或三平台實站登入。
 
 GitHub 的 Desktop Release 在打包前使用相同測試。Windows runner 直接操作認證管理員。Linux runner 建立獨立的 D-Bus 工作階段和暫存 GNOME Keyring，並另外執行缺服務案例。
