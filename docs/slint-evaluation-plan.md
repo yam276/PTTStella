@@ -179,6 +179,8 @@ Apple Silicon 出貨候選 `cb4fbfc` 用被動視窗重跑 MP4、WebM、OGV 的�
 
 ### 5. 正式資料與登入接手（S7、S8）
 
+Apple Silicon 出貨檔 `cb4fbfc` 用隔離本機站完成兩輪登入。Enter 與登入按鈕都能送出，錯碼提示後手動輸入救援碼回到主選單，兩輪各有唯一 Close ACK。正式 Keychain 接手、實體輸入與實站驗收仍待完成。[Apple Silicon 兩階段登入](login.md#cb4fbfc-apple-silicon-兩階段登入)
+
 2026-11-13 用 `b57eae8` 產品來源補跑現行候選、相容 Dioxus `82bc81f` 及公開 `v0.4.1` 的資料矩陣。28 案通過，涵蓋七種資料、設定 v1–v6、備份、衝突與壞檔保護。正式服務名隔離 Keychain 的 ad-hoc 改簽拒絕與原簽章回退通過。Apple Silicon 的正式 Developer ID 重新授權、跨平台前端回退與其他平台 vault 仍待驗。[資料回退矩陣](slint-store-frontends.md#2026-11-13-草稿工具列候選的資料回退矩陣) · [Keychain 演練](login.md#macos-正式服務名的隔離演練)
 
 2026-11-13 用 `cb4fbfc` 的產品程式補驗 28 案無視窗資料往返與正式服務名的隔離鑰匙圈。另重新封裝 `82bc81f` 的 Apple Silicon Dioxus 回退 DMG，保留自動展圖欄位與三個小數顯示設定。正式簽章重新授權及最新候選的原生視窗回退仍待驗。[新版資料回退證據](slint-store-frontends.md#2026-11-13-cb4fbfc-資料回退與-dioxus-回退包) · [Keychain 驗收](login.md#macos-正式服務名的隔離演練)
