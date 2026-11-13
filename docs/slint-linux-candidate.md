@@ -12,6 +12,14 @@ Linux deb／tar.gz 在 `.local/verification/slint-sites-panel-candidate/linux/`�
 
 首輪校準只開啟選單，關閉時站端仍等待啟用指令。另一次在首次刷新進行中嘗試重開選單，未取得有效的已勾選畫面，該輪停止於站端第 8 步。保留校準和中斷日誌。有效結果、前後截圖及客體暫存清理位於 `.local/verification/slint-x11-interactions/`。本輪使用 QEMU／Xvfb／Openbox 與軟體繪圖，Linux 實機與 Wayland 待驗。
 
+### 浮球與設定的 X11 操作
+
+同一便攜包以 XTest 點開右側浮球，看到五個分類，再用 End／Enter 開啟主視窗內的設定。輸入 `privacy` 並點搜尋結果可開啟帳號與隱私。圖片與媒體的文章模式下拉選單可用 Esc 先收合，重新展開後選取「終端機」。關閉再開啟設定，畫面讀回「終端機」，關窗收據也讀回存檔中的 `article_mode: terminal`。
+
+把浮球拖到左側後，扇形改向視窗內展開。進入導覽後用左方向鍵回扇形，再按 Esc 收合。視窗縮成 840×560 後，浮球保持左側停靠，仍可展開及收合。站端只收到 Close 並回覆，程式正常退出，設定儲存沒有留下待處理工作或子視窗。畫面、日誌與清理收據在 `.local/verification/slint-x11-tools-settings/`。
+
+校準輪在導覽子選單按 Esc 時已收合整個浮球，再按一次 Esc 後合成站回報收到額外輸入。當輪未記錄該筆內容。正式重跑以左方向鍵返回扇形，Esc 關閉。QEMU 下的畫面和鍵鼠結果保留為 X11 證據，Linux 實機、Wayland、無障礙焦點與動畫時序待驗。
+
 ## 2026-11-13 d047e55 候選
 
 Linux deb／tar.gz 在 `.local/verification/slint-windows-refresh-rate/linux/`。已核對 AMD64 套件、共用檔案及兩包主程式，deb 共 1,111 檔，tar.gz 共 1,124 檔。deb SHA-256 為 `0ca717e1a31791f2b7bdf7084a6c71184f07b994b2a6adfb2691f3c0bdc83251`，tar.gz 為 `40398732e4622784a7b480bab76406a30a347211ba85d3af78c43ea7cbc305c4`。Linux 實機待驗。
