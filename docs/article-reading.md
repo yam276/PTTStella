@@ -93,6 +93,14 @@ Slint 的網頁與終端機模式共用上述站端操作。網頁模式用原�
 
 終端機診斷視窗單靠啟用後直接送鍵的輪次未通過，點頁尾聚焦後重跑通過。網頁校準時目前輸入法將實體 `k` 當作組字，另有 OCR 誤讀小字行號而中止的輪次。通過輪用原生特殊鍵、獨立擷取及目視核對行號。原始畫面、站端紀錄與清理在 `.local/verification/slint-article-arrow/arm64-reading/`。已移除七個隔離暫存根、視窗工具及九張逐位元相同的重複截圖，原候選及獨特失敗證據保留。
 
+### cb4fbfc Apple Silicon 一般入口首次終端送鍵
+
+同一候選以正式 Bundle ID 的隔離副本，從無診斷參數的一般入口連到本機 TLS 1.3 WebSocket。每次以新程序啟動，確認視窗成為前景並畫出第 1 頁後，不點終端即送 PageDown、Home、↑。三輪開啟文章首尾切換、三輪使用缺該欄位的預設設定，六輪都送出精確的原始按鍵。開啟組接著驗 B 第 2 頁的 PageDown。合成站回覆的 A／B 頁面經獨立擷取核對，每輪皆 exit 0、收到唯一 Close ACK，八份隔離資料不變。
+
+一般入口的本機端點屬非 PTT 站點，↑ 兩組皆原樣送達。開啟組的合成站腳本回 B，缺欄位組腳本回 A。設定的 PTT 切篇准入另用同一出貨執行檔的 `--probe-terminal-switch --verify-article-session` 核對。該元件測試確認關閉設定與 repeat 不會送切篇請求，開啟後的兩次相鄰切篇及 Close 均通過。首次一般入口校準有 OCR 誤讀和把非 PTT 端點誤當 PTT 的失敗紀錄，均保留。
+
+證據在 `.local/verification/slint-article-arrow/store-rehearsal/current-live/` 的 `startup-focus-*`。已移除五個隔離暫存根、視窗工具和 45 張逐位元重複的截圖，保留唯一畫面、收據及原候選。
+
 站端鍵位依 [PTT pmore 命令表](https://github.com/ptt/pttbbs/blob/90f07d655b8d7e85298ef26bdb63f40646fd9d17/mbbsd/pmore.c) 核對；部署版本與實站上下篇邊界仍需人工驗證。
 
 診斷兩前端時，合成 `full_load`／`long_load` 預設刻意每頁等待 500 ms，分段間隔另有 150 ms。明確設 `PTTSTELLA_READING_PROBE_FAST=1` 可讓同一精確 PageDown peer 立即回覆，供本機比較；不影響正常連站或其他探針，原慢速案例仍須通過。`PTTSTELLA_READING_TIMING` 兩入口共用同一有界時鐘，painted 事件描述實際 ACK 的 packet，不能以更新的 cache complete 代替舊畫面內容。這只量到 renderer 安裝／ACK，螢幕呈現與完整 S8 效能另驗。
