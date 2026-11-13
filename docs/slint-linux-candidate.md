@@ -60,6 +60,10 @@ X11 驗收涵蓋三種格式的軟體繪圖和視窗控制。實機聲音與 GPU
 
 用同一份有暫時計時的診斷執行檔各跑 OpenGL／軟體繪圖。OpenGL 下，播放器背景工作回報已載入後，Slint 主執行緒分別晚 3.503 秒才套用 MP4 狀態、晚 3.313 秒才套用 WebM 狀態。軟體繪圖兩案同一間隔皆約 1 ms。每個格式及路徑各取一輪，執行環境為 QEMU x64／Xvfb。這組資料定位到主執行緒狀態套用的延遲。OpenGL 呼叫、事件排程與各自耗時仍待量測，實體 GPU 也待驗。診斷 patch、畫面、對照表及清理在 `short-timing/` 的 `trace/`、`trace-software/` 和 `trace-comparison.json`。
 
+同環境加入逐幀計時。1000×690 的 MP4 和 WebM 都在一幀仍在繪製時收到已載入狀態。該幀耗時 3.38／3.36 秒，其中 Slint 與 Skia 繪製約 1.72／1.69 秒，libmpv 約 1.12／1.15 秒，影片 blit 約 0.54／0.53 秒，緩衝區交換約 1.4／1.3 ms。兩案均在該幀交換後約 1 ms 套用狀態。
+
+同一診斷執行檔和 MP4 將視窗縮為 640×430，取樣期間的繪製中位數由 3.35 秒降為 1.03 秒，播放器已載入到 UI 套用的間隔由 3.26 秒降為 0.95 秒。縮窗畫面核對四色及「播放中」與 1／3 秒。三輪各完成一次素材下載、播放器清理及 Close ACK。這是 Mesa softpipe 在 QEMU 的逐幀結果，實體 GPU 成本待量測。現行候選在這類環境可用 `--software-renderer` 啟動，或以 `Run-Video-Software.sh` 重跑離線影片。診斷與清理位於 `short-timing/frame-cost/`、`frame-cost-small/` 和 `frame-cost-comparison.json`。
+
 ## 2026-11-13 d047e55 候選
 
 Linux deb／tar.gz 在 `.local/verification/slint-windows-refresh-rate/linux/`。已核對 AMD64 套件、共用檔案及兩包主程式，deb 共 1,111 檔，tar.gz 共 1,124 檔。deb SHA-256 為 `0ca717e1a31791f2b7bdf7084a6c71184f07b994b2a6adfb2691f3c0bdc83251`，tar.gz 為 `40398732e4622784a7b480bab76406a30a347211ba85d3af78c43ea7cbc305c4`。Linux 實機待驗。
