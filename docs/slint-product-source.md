@@ -4,7 +4,7 @@
 
 ## 2026-11-13 文章逐行對齊候選來源
 
-Apple Silicon 與 Windows x64 便攜候選 `9376627` 的下載及主程式雜湊已加入既有 `product-source-20261111-6ad8e39/sources.json`。用 `--candidate article-arrow-macos-windows` 從原 bundle 和對應 patch 獨立還原，核對 619 份產品檔案及完整 Git tree。證據及暫存清理見 `.local/verification/slint-article-arrow-alignment/source-delivery.json`。
+四架構候選 `9376627` 的下載及主程式雜湊已加入既有 `product-source-20261111-6ad8e39/sources.json`，包含 Windows 離線 Setup。Intel Mac 與 Linux x64 的實際建置提交 `04191e1` 僅多三份文件變更。用 `--candidate article-arrow-macos-windows` 從原 bundle 和對應 patch 獨立還原，核對 619 份產品檔案及完整 Git tree。新版 manifest SHA-256 為 `34b23e472cea254c05fbacff33eb5dd36e19eeb64543b424b49d4ea3ccb12e26`。證據及暫存清理見 `.local/verification/slint-article-arrow-alignment/all-source-delivery.json`。
 
 ## 2026-11-13 收藏載入焦點修正的候選來源
 

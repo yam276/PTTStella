@@ -2,7 +2,9 @@
 
 ## 2026-11-13 文章逐行對齊候選
 
-便攜 ZIP 在 `.local/verification/slint-article-arrow-alignment/pair/windows/`，和 Apple Silicon DMG 使用同一乾淨提交 `9376627`。ZIP SHA-256 為 `e23dac113c48648b93c8ee383e943327c61e18f7bb416b0e04a421d2a1501f44`。已核對 ZIP CRC、925 份 payload 與 PE 匯入。沿用包內 Visual C++ runtime。Windows 實機測試待驗，離線 Setup 目前對應上一輪 `4d7d174`。
+便攜 ZIP 在 `.local/verification/slint-article-arrow-alignment/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-9376627-offline/`。兩包和 Apple Silicon DMG 都使用同一乾淨提交 `9376627`。ZIP SHA-256 為 `e23dac113c48648b93c8ee383e943327c61e18f7bb416b0e04a421d2a1501f44`，Setup 為 `21900bdf0261e94d3b05445d2cedbdf8f90b39de3c7e047fa6cc5ccafbd0f9b5`。
+
+已核對 ZIP CRC、925 份 payload 與 PE 匯入。以固定 Inno Setup 7.1.0 編譯並解包核對，包括 `candidate.json` 在內的 926 個檔案與 ZIP 逐位元一致。沿用包內 Visual C++ runtime 和獨立安裝識別。保留 `4d7d174` Setup 供升級對照，原生離線安裝、升級、卸載與 IME 待驗。
 
 ## 2026-11-13 收藏載入焦點修正的離線 Setup
 

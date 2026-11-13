@@ -1,5 +1,9 @@
 # Slint Linux x64 候選包
 
+## 2026-11-13 文章逐行對齊候選
+
+Linux x64 deb／tar.gz 在 `.local/verification/slint-article-arrow-alignment/linux/`。從僅有文件差異的 `04191e1` 交叉建置，產品程式對應 `9376627`。AMD64 deb 的 1,110 份檔案及 tar.gz 的 1,123 份檔案已核對，兩包主程式、共用授權與說明一致。deb SHA-256 為 `eea7c26230cc73654daff43cb717dd0fd66e6273efebb7ae72227323ed4e4314`，tar.gz 為 `59bfad2fdacebfeb5c780a17a7ccbfd7dac3fb150ec52a3ac8a24f9ab4aec47b`。此版原生驗收待補。
+
 ## 2026-11-13 收藏載入焦點修正候選
 
 Linux x64 deb／tar.gz 在 `.local/verification/slint-cross-bookmark-load/linux/`。與 `4d7d174` 只差三份文件的乾淨 `ebc1035` 工作樹用固定 Cargo target 及既有 Debian bookworm amd64 SDK 建置，逐一核對 3,419 個 SDK 檔案與連結。AMD64 deb 的 1,110 個檔案與便攜包的 1,123 個檔案已核對。兩包主程式、共用授權與說明一致。

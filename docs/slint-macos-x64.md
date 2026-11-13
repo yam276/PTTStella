@@ -1,5 +1,9 @@
 # Slint macOS x64 候選包
 
+## 2026-11-13 文章逐行對齊候選
+
+Intel Mac App／ZIP／DMG 在 `.local/verification/slint-article-arrow-alignment/macos-intel/`。從僅有文件差異的 `04191e1` 建置，產品程式對應 `9376627`。已核對 47 個播放器函式庫、1,219 份 App 檔案、ZIP CRC、DMG 及深層簽章。DMG SHA-256 為 `ebd18f1b20c9a01883f1ecfa0a7d8ce8c94c499b117ab379696b7ceeeba2faed`。此版原生驗收待補。
+
 ## 2026-11-13 收藏載入焦點修正候選
 
 Intel Mac App／ZIP／DMG 在 `.local/verification/slint-cross-bookmark-load/macos-intel/`。從與 `4d7d174` 只差三份文件的乾淨 `ebc1035` 工作樹交叉建置，沿用前版 47 個播放器函式庫。已核對 App／ZIP／DMG 的 1,218 個檔案、ZIP CRC 及深層簽章。
