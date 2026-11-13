@@ -72,6 +72,12 @@ Runtime bundle、MIT授權及來源清單在 `assets/vendor/composer/`。一般 
 
 校準輪保留 OCR、選取方式和 ANSI 邊界的測試差異。只帶 Option 修飾的合成拖曳曾呈現一般跨行選取，本輪矩形成功證據來自明確選取模式。原生剪貼簿、Tab、非整數視窗縮放及 IME 候選窗仍需各自驗收。畫面、存檔和清理收據在 `.local/verification/slint-article-arrow/draft-mode-focus-pair/arm64-draft-selection/`，已清理六個隔離暫存目錄、視窗控制器及 24 張逐位元相同的畫面。
 
+#### 1d3e702 Apple Silicon 草稿 Tab 與縮窗
+
+同一出貨 App 從 1000×718 縮至 877×653，正文每格寬由約 11.22 變為 9.80 邏輯點。以原生滑鼠從 `A<Tab>中B` 的雙欄「中」左半拖至右半，再輸入「替」。畫面與存檔均核對只替換一個完整字元，保留 Tab、兩側文字、其餘行及 ANSI 色碼。⌘Z 恢復原文。
+
+恢復原視窗尺寸後，用 ⌘↓ 到稿尾，輸入 `LAST`、按一次實際 Tab 並輸入「末」後立即關閉。事件紀錄只出現一次 Tab 編輯指令，主檔包含實際的 Tab 字元及末字，上一代備份等於最後一次手動存檔。新程序重開可見末行，兩次程序均正常退出並收到唯一 Close ACK。畫面、完整快照及清理紀錄在 `.local/verification/slint-article-arrow/draft-mode-focus-pair/arm64-draft-resize/`，本輪暫存及視窗控制器已移除。原生剪貼簿和 IME 候選窗另待驗。
+
 Linux x64 候選 `cb4fbfc` 在隔離 X11 使用出貨執行檔及 Windows 草稿驗收包內的同一份合成稿。以實際按鍵移至文件末端、用 Shift 方向鍵選取兩字、替換後點工具列復原／重做。三種 ANSI 顯示切換後，原來的紅字區段仍在。Ctrl+S 保存後立即補末字及換行並關閉編輯器，新程序讀回完整內容，主檔的上一代備份逐位元等於 Ctrl+S 的快照。兩個程序正常退出，各收到唯一站端 Close。首輪 VM 中斷前已有存檔，退出收據不完整，保留另列。畫面與事件、存檔及清理收據在 `.local/verification/slint-article-arrow/x11-drafts/`。本案涵蓋實際鍵鼠，注音／日文候選與提交仍待各平台驗收。
 
 #### cb4fbfc 草稿 XIM 組字與重開
