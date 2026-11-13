@@ -1,5 +1,11 @@
 # Slint Linux x64 候選包
 
+## 2026-11-13 299a0b3 候選
+
+deb／tar.gz 在 `.local/verification/slint-login-panel-candidate/linux/`。兩包共用的 AMD64 主程式 SHA-256 為 `a99dabc96effb1dcfd069b2ef24c10193d3120d924294ae84cb14fe8e5152fff`，和隔離 X11 的登入驗收執行檔逐位元相同。獨立面板通過合成站的帳密、錯誤驗證碼與救援碼。設定內嵌表單在非登入畫面正確拒送，縮窗後仍可操作。實機、Wayland 與硬體 GPU 待驗。[登入紀錄](login.md#操作)
+
+從交付 tar.gz 解出的程式在隔離 QEMU／Xvfb 跑完 14 案，每案一次 Close ACK。涵蓋草稿保存重開與帶回、文章及終端搜尋、長文 37 次取頁、取消續跑、文章輸出、設定搜尋 48 個定位、推文、收藏，以及 MP4／WebM／OGV 的軟體繪圖和播放器回收。收據在同目錄下的 `linux-components/summary.json`。
+
 ## 2026-11-13 3277ac1 候選
 
 deb／tar.gz 在 `.local/verification/slint-video-toggle/linux/`。兩包共用的 AMD64 主程式 SHA-256 為 `27e4e76b91e4354ef6ed970eb1139e781eadfb2b87eb409d668b16d11dea6dcc`。從乾淨 `3277ac1` 重建的 ELF 與元件測試的 ELF 逐位元相同。隔離 X11 通過 MP4 緩衝中暫停與繼續，三種影片各通過片尾重播和播放器退場，均收到一次 Close ACK。實機、Wayland 與硬體 GPU 待驗。

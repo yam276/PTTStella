@@ -6,7 +6,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 目前進度（2026-11-13）
 
-**尚未達到可平替 Dioxus 的驗收條件。** 最新四架構候選皆取自乾淨提交 `3277ac1`，包含載入中暫停與播完重播修正。四架構封裝均已核對，Linux 執行檔通過隔離 X11 的播放器元件回歸。Intel Mac 與 Linux x64 實機依指示暫緩。macOS 封裝的原生焦點、Windows 原生安裝與 IME、正式簽章的憑證接手和完整效能矩陣待驗。正式入口維持 Dioxus。[最新候選](#3277ac1-四架構候選)
+最新四架構候選均取自乾淨提交 `299a0b3`，修正獨立登入面板及設定內嵌帳密表單的裁切。四架構封裝已核對，Linux 交付執行檔通過隔離 X11 的登入面板驗收。切換前仍待驗 macOS 封裝的原生焦點、Windows 實機安裝及注音／日文 IME、正式簽章的憑證接手及完整效能矩陣。Intel Mac 與 Linux x64 實機依指示暫緩。正式入口維持 Dioxus。[最新候選](#299a0b3-四架構候選)
 
 四架構候選都包含 `4d7d174` 的收藏載入焦點修正。Apple Silicon 和 Windows x64 從同一提交出包，Intel Mac 與 Linux x64 使用僅有文件差異的 `ebc1035` 工作樹建置。Apple Silicon 封裝的草稿保存、跨程序重開及三格式影片八案通過。Intel 封裝在 Rosetta 通過三輪收藏及主視窗，Linux 封裝在 QEMU／Xvfb 通過七項元件回歸。Windows 原生安裝／升級／IME、Intel Mac 與 Linux 原生驗收、完整同負載效能矩陣及正式簽章的憑證接手仍待驗。正式入口維持 Dioxus。[候選位置](#產物保留規則2026-11-09-使用者要求) · [影片音訊結果](#4-媒體s5)
 
@@ -1220,3 +1220,11 @@ Linux 交付包完成 14 案回歸，每案一次 Close ACK，包含草稿重開
 Windows 離線 Setup 在隔離 Wine／QEMU 通過 10 項安裝、升級、回退、重裝及卸載案例。`2ef65ce` 建立的草稿在 `3277ac1` 與回退版均可重開並帶回合成站，檔案雜湊一致。卸載後保留草稿及資料標記。Windows 實機安裝與原生 IME 仍待驗。[Setup 升退演練](slint-windows-candidate.md#2026-11-13-3277ac1-候選)
 
 以交付的 `3277ac1` 在隔離 X11 開啟登入面板，重現帳密欄和按鈕被裁切。修正內容尺寸並加入垂直捲動後，以實際 X11 鍵鼠完成帳密輸入、錯誤驗證碼及手動救援碼，回到合成站主選單並正常 Close。密碼庫不可用且未勾保存的路徑也在此輪覆蓋。Apple Silicon 的 Slint／播放器無視窗回歸 111 項通過，既有 helper 一項忽略。修正尚未進入 `3277ac1` 封裝。[登入操作與收據](login.md#操作)
+
+### 299a0b3 四架構候選
+
+Apple Silicon App／ZIP／DMG、Windows x64 ZIP／離線 Setup、Intel Mac App／ZIP／DMG 與 Linux x64 deb／tar.gz 均由乾淨 `299a0b3` 打包。兩個 macOS 封裝通過深層簽章與 App、ZIP、DMG 逐檔核對。Windows Setup 解包核對 927 檔。Apple Silicon 由獨立還原的 837 份產品檔離線重編，Slint／播放器共 111 項測試通過，既有原生 helper 一項忽略。[Windows 封裝](slint-windows-candidate.md#2026-11-13-299a0b3-候選) · [Intel 封裝](slint-macos-x64.md#2026-11-13-299a0b3-候選) · [來源重編](slint-product-source.md#2026-11-13-299a0b3-候選來源)
+
+Linux 交付執行檔與兩個隔離 X11 登入案例逐位元相同。獨立面板通過合成兩階段登入，設定內嵌表單通過縮窗後輸入及非登入畫面拒送。交付包另通過草稿、終端、文章、推文、收藏、設定與三種影片共 14 案，每案一次 Close ACK。內嵌面板成功登入及各平台實機操作待驗。[登入操作](login.md#操作) · [Linux 回歸](slint-linux-candidate.md#2026-11-13-299a0b3-候選)
+
+候選留在 `.local/verification/slint-login-panel-candidate/`，Windows Setup 在 `../PTTStella-candidates/windows-299a0b3-offline/`。已清理封裝暫存、兩個 Setup 容器、Linux SDK 磁碟影像及掛載點、還原目錄、上一版重複的兩組 macOS App／ZIP。保留上一版 DMG、Windows 與 Linux 的回退包、固定 Cargo 快取和獨特收據。確切路徑及可用空間觀測見 `delivery-cleanup.json`、`superseded-macos-cleanup.json`、`linux-clean/linux-sdk-cleanup.json`、`linux-components-cleanup.json`、`linux-components-host-cleanup.json` 和 `source-build-result.json`。
