@@ -75,6 +75,8 @@ Windows 候選封裝新增 `Run-Drafts-IME.cmd`。從本機合成看板開啟原
 
 以 `cb4fbfc` Linux x64 出貨檔在隔離 X11 補驗草稿的實際鍵鼠。Shift 方向鍵選取、替換、工具列復原／重做、三種 ANSI 顯示和 Ctrl+S 均通過。立即關閉後另起程序讀回最後一字、尾端換行及原紅字 ANSI，上一代備份逐位元相同。兩個程序各收到唯一 Close ACK，原生 IME 仍另驗。[草稿驗收](drafts.md#驗收範圍)
 
+以 `cb4fbfc` Linux x64 出貨檔與同提交 Windows ZIP 內的合成草稿補驗 XIM。Esc 取消不寫入，提交「中」立即保存，接著提交「こんにちは」立即關閉。新程序讀回完整末字及 ANSI 紅字。Windows Microsoft 注音與日文的候選窗、提交和重開流程仍需實機驗收。[XIM 組字與重開](drafts.md#cb4fbfc-草稿-xim-組字與重開)
+
 ### 2. 文章翻頁與取頁（S4）
 
 - **採用 Dioxus 的翻頁規則**　把完整文字列判斷接到 Slint 既有 Flow 和閱讀錨點。PageDown 盡量把最後一個完整文字列接到下一頁頂端，PageUp 使用第一個完整文字列對齊。滾輪保留連續裁切。遇到比視窗高的圖片仍可往前後移動。[Dioxus 翻頁](../assets/inline-images.js) · [Slint 翻頁](../src/bin/slint_research/article/mod.rs)

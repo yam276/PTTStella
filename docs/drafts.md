@@ -50,4 +50,14 @@ Runtime bundle、MIT授權及來源清單在 `assets/vendor/composer/`。一般 
 
 Linux x64 候選 `cb4fbfc` 在隔離 X11 使用出貨執行檔及 Windows 草稿驗收包內的同一份合成稿。以實際按鍵移至文件末端、用 Shift 方向鍵選取兩字、替換後點工具列復原／重做。三種 ANSI 顯示切換後，原來的紅字區段仍在。Ctrl+S 保存後立即補末字及換行並關閉編輯器，新程序讀回完整內容，主檔的上一代備份逐位元等於 Ctrl+S 的快照。兩個程序正常退出，各收到唯一站端 Close。首輪 VM 中斷前已有存檔，退出收據不完整，保留另列。畫面與事件、存檔及清理收據在 `.local/verification/slint-article-arrow/x11-drafts/`。本案涵蓋實際鍵鼠，注音／日文候選與提交仍待各平台驗收。
 
+#### cb4fbfc 草稿 XIM 組字與重開
+
+Linux x64 便攜包的出貨執行檔與 Windows ZIP 的草稿種子均核對 SHA-256。隔離 Xvfb／QEMU 使用本機 XIM 測試服務，以 Xlib／Winit 的組字與提交回呼走到草稿的原生輸入欄。[xcb-imdkit 測試服務 API](https://github.com/fcitx/xcb-imdkit/blob/master/test/test_server.c)
+
+用 Esc 取消第一次「中」的組字，草稿內容與存檔未變。再組字並按 Enter 提交一次「中」，Ctrl+S 保存。接著提交一次「こんにちは」後立即點關閉。另起程序讀回第三行「中こんにちは」，ANSI 紅字保留，備份逐位元等於 Ctrl+S 的存檔。原生回呼與 Rust 正文各只收到兩筆提交，UTF-8 長度分別為 3 與 15 bytes。兩次 App 退出均收到唯一站端 Close ACK。
+
+第一次封裝定位用了開發檔名，修正為交付檔名後核對雜湊才執行。兩次 App 均正常退出。外層 openbox 在清理等待時未退出，確認程序歸屬後停止該輪 Xvfb，使 openbox 和其他測試程序一併結束。已清理 guest 暫存 95,316 KiB 及主機解出的執行檔，保留收據與原交付。測試來源、重開畫面及可用空間紀錄在 `.local/verification/slint-article-arrow/x11-ime/`。
+
+XIM 服務供應固定合成字串。Microsoft 注音／日文、真實候選窗定位、Wayland 與 Linux 實機仍各自待驗。
+
 macOS 用 `drafts`／`drafts_restart` 原生探針核對範本、中文、色碼切換、右鍵色票、保存與重開帶回。peer只有標題 T/E、正文操作與Close，拒絕發表。原生拖曳／真實注音IME與跨平台GUI不能由DOM doubles或單一平台結果取代，實測／缺口見唯一 active plan。

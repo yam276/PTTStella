@@ -300,6 +300,8 @@ Windows release build／all-target Clippy通過；Python166項包含PowerShell h
 
 Windows x64 便攜 ZIP 由乾淨 `cb4fbfc` 建置。固定的 Inno Setup 7.1.0 以現有 Wine 工具流程產生離線 Setup，測試解包後核對全部 927 個檔案及 x64 PE。可用便攜包內既有 `Check-All.cmd`、`Run-IME.cmd` 和 `Run-Drafts-IME.cmd` 驗收。Windows 實機安裝、升級、卸載及兩種 IME 仍待驗。封裝收據在 `.local/verification/slint-article-arrow/windows-setup/`，Setup 交付在 `../PTTStella-candidates/windows-cb4fbfc-offline/`。
 
+本版 `pttstella-slint.exe` SHA-256 為 `aa7333fb1f72e5c5f23b9fe19b698cac4a82bf2b898c25e6750b8e7109951782`。先前 `Downloads/evidence(1)` 對應 `b1085ab`。要重驗日文故障，先在 `Run-IME.cmd` 選「あ」、點第 22 行、輸入 `konnichiha` 並按 Enter，核對一次提交及 10 個 Big5-UAO bytes。再由 `Run-Drafts-IME.cmd` 核對草稿第三行的取消、保存與重開。兩個入口各保留執行後列出的 `evidence/run-*.log` 路徑。同一草稿種子已在 Linux 出貨檔用合成 XIM 驗過編輯、保存與重開。[XIM 組字與重開](drafts.md#cb4fbfc-草稿-xim-組字與重開)
+
 ### cb4fbfc 離線安裝、升級與回退
 
 在斷開外部網路的 Wine 10.0／QEMU／Xvfb，以原始 Setup 完成九案。初裝 `118a1d9`、升至 `cb4fbfc`、回退及重裝，每次核對 927 個檔案、執行檔雜湊、解除安裝登錄及開始選單捷徑。前版保存的合成 ANSI 草稿可由升級版與回退版各自重開並帶回合成站編輯器，三個程序均收到唯一 Close ACK，草稿存檔逐位元相同。
