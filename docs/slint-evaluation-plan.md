@@ -1264,4 +1264,6 @@ Apple Silicon App／ZIP／DMG 與 Windows x64 便攜 ZIP 同取乾淨提交 `cb4
 
 Linux deb 與 tar.gz 共用執行檔，與上一輪隔離 X11 實際鍵盤驗收的執行檔逐位元一致。以出貨檔在隔離 QEMU／Xvfb 重跑九項元件驗收，包含兩種文章模式切篇、草稿儲存與重開、48 項設定搜尋、推文更新及 MP4／WebM／OGV 的軟體繪圖與音量控制。每案正常退出並收到 Close ACK。實站切篇、Windows 原生安裝與 IME、macOS 封裝原生焦點及 Intel／Linux 實機保留待驗。[Linux 驗收](slint-linux-candidate.md#2026-11-13-cb4fbfc-候選)
 
+Windows 離線 Setup 在隔離 Wine／QEMU 從 `118a1d9` 升至 `cb4fbfc`，再回退、重裝及卸載，共九案通過。每次核對 927 個安裝檔案、登錄和捷徑。升退後合成草稿逐位元保留，並可帶回站端編輯器。卸載保留研究資料。Windows 實機與 IME 待驗。[離線 Setup 升退](slint-windows-candidate.md#cb4fbfc-離線安裝升級與回退)
+
 來源包離線還原 `cb4fbfc` 的 837 個檔案與完整 Git tree。交付和收據位於 `.local/verification/slint-article-arrow/`，Windows Setup 位於 `../PTTStella-candidates/windows-cb4fbfc-offline/`。已清理本批 Linux SDK、傳輸和封裝暫存、隔離 guest 路徑及 Windows Setup 工具容器。固定 Cargo 快取和有效交付保留。較早的 `slint-edge-fetch` 目錄於本批清理前已不在原處，未計入本批移除。[產品來源](slint-product-source.md#2026-11-13-cb4fbfc-候選來源)

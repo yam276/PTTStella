@@ -299,3 +299,11 @@ Windows release build／all-target Clippy通過；Python166項包含PowerShell h
 ## 2026-11-13 cb4fbfc 候選
 
 Windows x64 便攜 ZIP 由乾淨 `cb4fbfc` 建置。固定的 Inno Setup 7.1.0 以現有 Wine 工具流程產生離線 Setup，測試解包後核對全部 927 個檔案及 x64 PE。可用便攜包內既有 `Check-All.cmd`、`Run-IME.cmd` 和 `Run-Drafts-IME.cmd` 驗收。Windows 實機安裝、升級、卸載及兩種 IME 仍待驗。封裝收據在 `.local/verification/slint-article-arrow/windows-setup/`，Setup 交付在 `../PTTStella-candidates/windows-cb4fbfc-offline/`。
+
+### cb4fbfc 離線安裝、升級與回退
+
+在斷開外部網路的 Wine 10.0／QEMU／Xvfb，以原始 Setup 完成九案。初裝 `118a1d9`、升至 `cb4fbfc`、回退及重裝，每次核對 927 個檔案、執行檔雜湊、解除安裝登錄及開始選單捷徑。前版保存的合成 ANSI 草稿可由升級版與回退版各自重開並帶回合成站編輯器，三個程序均收到唯一 Close ACK，草稿存檔逐位元相同。
+
+指定合成 Dioxus 安裝目錄時，Setup 以代碼 7 拒絕並保留原目錄和現行候選。卸載移除候選程式、捷徑和登錄，保留研究版資料目錄、其中的合成草稿與標記，以及合成 Dioxus 目錄。草稿帶回使用 Slint 元件事件。Windows 原生安裝、IME 和 Credential Manager 仍待驗。
+
+首輪的 innoextract 1.9 無法解析 Inno Setup 7.1，改用既有 Debian sid 工具版本獨立解包並核對兩個輸入。原始日誌、逐案收據、雜湊及自有容器清理記錄在 `.local/verification/slint-article-arrow/windows-lifecycle/`。
