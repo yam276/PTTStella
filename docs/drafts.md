@@ -80,6 +80,12 @@ Runtime bundle、MIT授權及來源清單在 `assets/vendor/composer/`。一般 
 
 Linux x64 候選 `cb4fbfc` 在隔離 X11 使用出貨執行檔及 Windows 草稿驗收包內的同一份合成稿。以實際按鍵移至文件末端、用 Shift 方向鍵選取兩字、替換後點工具列復原／重做。三種 ANSI 顯示切換後，原來的紅字區段仍在。Ctrl+S 保存後立即補末字及換行並關閉編輯器，新程序讀回完整內容，主檔的上一代備份逐位元等於 Ctrl+S 的快照。兩個程序正常退出，各收到唯一站端 Close。首輪 VM 中斷前已有存檔，退出收據不完整，保留另列。畫面與事件、存檔及清理收據在 `.local/verification/slint-article-arrow/x11-drafts/`。本案涵蓋實際鍵鼠，注音／日文候選與提交仍待各平台驗收。
 
+#### 1d3e702 Apple Silicon 草稿剪貼簿
+
+出貨 App 的草稿正文使用原生 ⌘A、⌘C、⌘X 和 ⌘V。獨立核對 macOS 剪貼簿確實收到完整合成正文，含雙欄字、Tab、ANSI 紅字和末端空行。複製後正文不變，剪下後保存為空，貼回後與原稿逐位元一致。再貼入同時含 CRLF、單獨 CR、Tab 及繁中字的合成內容，核對換行統一為 LF，Tab 及末字保留。貼上後立即關閉，新程序讀回完整原文，備份等於上一份手動存檔。兩個程序皆以 0 退出並收到唯一 Close ACK。
+
+測試結束後逐項核對原剪貼簿資料已恢復，未輸出原剪貼簿內容。合成存檔、去文字事件和清理收據在 `.local/verification/slint-article-arrow/draft-mode-focus-pair/arm64-draft-clipboard/`。暫存資料目錄及視窗工具已移除。標題剪貼簿、跨平台剪貼簿及 IME 候選窗另驗。
+
 #### cb4fbfc 草稿 XIM 組字與重開
 
 Linux x64 便攜包的出貨執行檔與 Windows ZIP 的草稿種子均核對 SHA-256。隔離 Xvfb／QEMU 使用本機 XIM 測試服務，以 Xlib／Winit 的組字與提交回呼走到草稿的原生輸入欄。[xcb-imdkit 測試服務 API](https://github.com/fcitx/xcb-imdkit/blob/master/test/test_server.c)

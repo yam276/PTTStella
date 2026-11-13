@@ -91,6 +91,8 @@ Windows 候選封裝新增 `Run-Drafts-IME.cmd`。從本機合成看板開啟原
 
 同一出貨檔縮窗後可選取 Tab 後的雙欄字，替換及復原的存檔核對通過。恢復原尺寸後在稿尾輸入 Tab 與末字並立即關閉，新程序重開保留原文和備份。兩次均有嚴格 Close ACK。[Tab 與縮窗](drafts.md#1d3e702-apple-silicon-草稿-tab-與縮窗)
 
+同包的 macOS 草稿正文通過原生複製、剪下、貼回及含 CRLF／CR 的外部文字貼上。已核對剪貼簿、原始 ANSI／Tab、換行正規化、立即關閉保存、備份與新程序重開。[草稿剪貼簿](drafts.md#1d3e702-apple-silicon-草稿剪貼簿)
+
 ### 2. 文章翻頁與取頁（S4）
 
 - **採用 Dioxus 的翻頁規則**　把完整文字列判斷接到 Slint 既有 Flow 和閱讀錨點。PageDown 盡量把最後一個完整文字列接到下一頁頂端，PageUp 使用第一個完整文字列對齊。滾輪保留連續裁切。遇到比視窗高的圖片仍可往前後移動。[Dioxus 翻頁](../assets/inline-images.js) · [Slint 翻頁](../src/bin/slint_research/article/mod.rs)
