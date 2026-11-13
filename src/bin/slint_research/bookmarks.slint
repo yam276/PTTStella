@@ -38,14 +38,12 @@ component BookmarkButton inherits PanelButton {
     label-color: self.enabled ? #ebe7dc : #808b99;
 }
 
-component BookmarkFieldRow inherits HorizontalLayout {
-    in property <string> caption;
-    spacing: 10px;
-    Text {
-        width: 100px; text: root.caption; color: #ebe7dc; font-size: 14px;
-        vertical-alignment: center; wrap: word-wrap;
-    }
-    @children
+component BookmarkCaption inherits Text {
+    width: 100px;
+    color: #ebe7dc;
+    font-size: 14px;
+    vertical-alignment: center;
+    wrap: word-wrap;
 }
 
 export component BookmarksPanel inherits PanelOverlay {
@@ -70,8 +68,9 @@ export component BookmarksPanel inherits PanelOverlay {
                 padding: 20px;
                 spacing: 10px;
                 Text {text:BookmarksState.labels[1];color:#c7d4e7;wrap:word-wrap;}
-                BookmarkFieldRow {
-                    caption: BookmarksState.labels[2];
+                HorizontalLayout {
+                    spacing: 10px;
+                    BookmarkCaption { text: BookmarksState.labels[2]; }
                     PanelCombo {
                         model: BookmarksState.entries; current-index <=> BookmarksState.choice;
                         enabled: root.visible && !BookmarksState.busy && !BookmarksState.composing;
@@ -79,16 +78,18 @@ export component BookmarksPanel inherits PanelOverlay {
                     }
                 }
                 BookmarkButton {text:BookmarksState.labels[3];enabled:!BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.new-entry();}}
-                BookmarkFieldRow {
-                    caption: BookmarksState.labels[4];
+                HorizontalLayout {
+                    spacing: 10px;
+                    BookmarkCaption { text: BookmarksState.labels[4]; }
                     target-field := PanelField {
                         text <=> BookmarksState.target; accessible-label: BookmarksState.labels[4];
                         enabled: !BookmarksState.busy;
                         edited => { self.text = BookmarksState.field-edit(0, self.text); }
                     }
                 }
-                BookmarkFieldRow {
-                    caption: BookmarksState.labels[5];
+                HorizontalLayout {
+                    spacing: 10px;
+                    BookmarkCaption { text: BookmarksState.labels[5]; }
                     PanelField {
                         text <=> BookmarksState.label; accessible-label: BookmarksState.labels[5];
                         enabled: !BookmarksState.busy;
