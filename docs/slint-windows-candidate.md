@@ -295,3 +295,7 @@ Windows release build／all-target Clippy通過；Python166項包含PowerShell h
 較早的docs gate與尚在產生的打包staging並行，正確攔到暫存DLL；保留失敗，待producer完成及清理後重跑，不放寬隔離規則。第一次actionlint只有PATH缺少工具，改用canonical checkout已安裝的精確工具路徑；不將未執行算passed。
 
 已移除本批target（Cargo原生clean8237檔／2.8GiB，du2992204KiB）、重複DLL輸入、本批第一版包與被取代的舊Windows完整包；最終包從`package-final`正常rename為`package-current`。兩版必要metadata／授權封存1822項，沒有保留舊完整exe／DLL；2878份來源、asset、fixture、各平台最新包及必要來源hash不變。獨立無影片S1配置與自有mpv import archive仍有用途，另列保留。沒有新Rust重建，所有target都已移除；worktree du1377536KiB。filesystem available 211087757312→214248906752 bytes僅為並行觀測。exact paths、owner／resolved path／symlink／lsof、Cargo／du與保留理由見 `.local/verification/slint-windows-current/cleanup/ledger.json`。
+
+## 2026-11-13 cb4fbfc 候選
+
+Windows x64 便攜 ZIP 由乾淨 `cb4fbfc` 建置。固定的 Inno Setup 7.1.0 以現有 Wine 工具流程產生離線 Setup，測試解包後核對全部 927 個檔案及 x64 PE。可用便攜包內既有 `Check-All.cmd`、`Run-IME.cmd` 和 `Run-Drafts-IME.cmd` 驗收。Windows 實機安裝、升級、卸載及兩種 IME 仍待驗。封裝收據在 `.local/verification/slint-article-arrow/windows-setup/`，Setup 交付在 `../PTTStella-candidates/windows-cb4fbfc-offline/`。

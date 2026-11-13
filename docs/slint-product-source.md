@@ -166,3 +166,7 @@ bundle SHA-256 為 `44cff20e28bf51c85bb1c2533705df67a9a1d5fe1ff96db0500f405b8cf8
 產品來源包已還原，不代表完整第三方對應來源已交付。播放器與其靜態／動態依賴、Skia、各平台工具與可重跑 recipe／來源閉包仍須逐項綁定；候選原 `source_delivery: not_ready` 維持不變。詳細來源、實際命令、工具鏈、還原結果、獨立建置與本批清理紀錄在 `slint-renderer-api-current/`；前輪兩組紀錄在 `slint-source-reconstruction/`。整體 S0–S8 及 S9 邊界依 [主計畫](slint-evaluation-plan.md)。
 
 後續已完成 [macOS x64 的 32 套件乾淨來源重建](slint-native-source-replay.md)，並核對 47 個 runtime library；首輪 MP4 fixture 逾時仍未定因，解碼重複性與完整跨平台來源交付維持 `not_ready`。
+
+## 2026-11-13 cb4fbfc 候選來源
+
+`article-arrow-candidate` 已加入既有來源交付的 `sources.json`，綁定四架構主程式及下載包 SHA-256。用原 bundle 和對應 patch，在禁止網路與原 worktree 讀取的環境獨立還原 837 個檔案，驗證完整 Git tree `c290918d200677eaa3f4591c4ccf4708e3b1f2fd`。來源及暫存清理收據在 `.local/verification/slint-article-arrow/source-delivery.json`。這次驗證涵蓋產品樹，第三方 runtime 來源與乾淨環境重建分列。

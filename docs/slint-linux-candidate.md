@@ -208,3 +208,7 @@ deb 使用獨立套件、執行檔及桌面 ID；`--show-profile` 只顯示研�
 封裝以 `tooling/bundle_slint_linux.py` 消費已建 ELF、匹配的 build record、Skia 授權及三格式 CC0 fixture，不自行編譯或啟動 GUI。沿用 `tooling/bundle_release.py` 的 Linux layout／相依處理，既有 Dioxus 預設名稱及流程保留。Windows／Linux 共用 build-record 與 fixture admission。全150個Python測試（包含7個Linux打包案例）、文件、fmt、actionlint及diff gate通過；本輪Linux target release/all-target Clippy亦通過。完整 S8 仍依[總計畫](slint-evaluation-plan.md)驗收。
 
 候選包的 `native_acceptance: not_run`、`source_delivery: not_ready` 與 unsigned 標示保留。建置 target、暫存 sysroot／磁碟映像、解包副本與驗收容器按批次清理；只保留最新包與最小來源／結果／獨特失敗證據，清理不等於產品驗收完成。
+
+## 2026-11-13 cb4fbfc 候選
+
+Linux x64 deb 與 tar.gz 使用 `cb4fbfc` 的產品及封裝程式，在只多文件提交的乾淨 `12c02d8` 建置。核對 amd64、1,111 個 deb 檔案、1,124 個便攜檔案、共用文件與出貨主程式雜湊。主程式與前輪隔離 X11 鍵盤驗收逐位元相同。用 tar.gz 內的執行檔在 QEMU／Xvfb 重跑九案，包括兩種切篇、草稿和重開、設定搜尋、推文更新及三格式影片。九案均正常退出且收到 Close ACK。實機、Wayland、IME、實聽及原生效能仍待驗。交付與收據在 `.local/verification/slint-article-arrow/`。

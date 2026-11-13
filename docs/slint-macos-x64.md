@@ -116,3 +116,7 @@ ZIP 與唯讀掛載 DMG 的1159個regular payload逐檔hash與App相同；48個M
 本批驗收後清理與保留例外記在 `slint-macos-x64-source/cleanup/ledger.json`。 移除11個已無使用者的精確路徑，du合計499156KiB；11382份保留檔案先核對一致，再移除24張byte-identical generated PNG（allocated1544192bytes），每張保留位置及SHA另列，16張獨特圖片保留。最終11358份受保護檔案及32份來源archive再驗hash一致。filesystem available 219832209408→220345688064bytes僅為刪除區間觀測，不全歸因於本批；最終worktree du1495272KiB、來源交付292272KiB、x64候選297812KiB，Cargo target16KiB。清完後從最終候選重跑OpenGL MP4，四色像素／render退休／session join／Close ACK通過，證明不依賴已刪CLI／runtime／target。保留最新完整候選、必要原始來源archive／recipes／patch、授權與獨特失敗；不留完整舊CLI／runtime、臨時App、native objects或bootstrap安裝。未整合Slint worktree、已安裝Rust targets、共用SDK／registry、其他聊天及正式版使用者資料保留。
 
 後續仍須Intel實機／最低OS、原生輸入法／DPI／鍵鼠／檔案與密碼庫、完整功能與資料往返、來源乾淨重播、同負載效能、四平台總驗收及回退證據。S0–S8持續，S9入口切換／發佈未執行。
+
+## 2026-11-13 cb4fbfc 候選
+
+Intel Mac App、ZIP、DMG 使用 `cb4fbfc` 的產品及封裝程式，在只多文件提交的乾淨 `12c02d8` 建置。共 1,231 個檔案逐一相符，通過 x86_64、ad-hoc 深層簽章、DMG checksum 及無視窗 profile 檢查。沿用已驗證的 47 個播放器 runtime。Intel 實機、輸入法與原生焦點仍待驗。交付在 `.local/verification/slint-article-arrow/macos-intel/`。
