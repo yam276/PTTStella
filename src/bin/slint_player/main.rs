@@ -148,7 +148,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                     .and_then(|s| s.as_ref().and_then(|s| s.lock().ok().map(|s| s.clone())));
                 if let Some(value) = value {
                     ui.set_loaded(value.loaded);
-                    ui.set_playing(value.loaded && !value.paused);
+                    ui.set_playing(value.playing());
                     ui.set_status(
                         value
                             .error
@@ -212,11 +212,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                 return;
             };
             let result = match action {
-                0 => control.borrow().command(if ui.get_playing() {
-                    Command::Pause
-                } else {
-                    Command::Play
-                }),
+                0 => control.borrow().command(Command::Toggle),
                 1 => control.borrow().command(Command::Seek(1.)),
                 2 => control.borrow().command(Command::Seek(0.)),
                 3 => {

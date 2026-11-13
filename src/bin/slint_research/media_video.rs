@@ -160,14 +160,7 @@ impl Video {
         self.bridge.wake.notify_one();
     }
     pub fn toggle(&self) {
-        let Some(ui) = self.ui.upgrade() else {
-            return;
-        };
-        self.command(if ui.get_media_playing() {
-            Command::Pause
-        } else {
-            Command::Play
-        });
+        self.command(Command::Toggle);
     }
     fn capture(&self) {
         self.bridge.capture.set(true);
@@ -286,9 +279,10 @@ impl Video {
                         && state.error.is_none()
                         && self.bridge.error.borrow().is_none(),
                 );
-                ui.set_media_playing(state.status.loaded && !state.status.paused);
+                let playing = state.status.playing();
+                ui.set_media_playing(playing);
                 ui.set_media_motion_label(
-                    if state.status.loaded && !state.status.paused {
+                    if playing {
                         msg!("video-pause")
                     } else {
                         msg!("video-play")
@@ -309,7 +303,7 @@ impl Video {
                         msg!("video-buffering")
                     } else if !state.status.loaded {
                         msg!("video-ready")
-                    } else if state.status.paused {
+                    } else if !playing {
                         msg!("media-paused")
                     } else {
                         msg!("media-playing")

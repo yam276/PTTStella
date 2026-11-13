@@ -23,8 +23,15 @@ pub struct Status {
     pub error: Option<String>,
     pub events: u64,
 }
+impl Status {
+    /// A playback request can be paused before libmpv finishes loading it.
+    pub fn playing(&self) -> bool {
+        (self.loaded || self.loading) && !self.paused && !self.eof
+    }
+}
 pub enum Command {
     Play,
+    Toggle,
     Pause,
     Seek(f64),
     Volume(u8),
@@ -90,17 +97,25 @@ impl Control {
                     let action = match command {
                         Command::Stop => break,
                         Command::Wake => Ok(()),
-                        Command::Play => {
+                        Command::Toggle
+                            if started
+                                && last_error.is_none()
+                                && core.get_flag(c"pause") == Some(false)
+                                && core.get_flag(c"eof-reached") != Some(true) =>
+                        {
+                            core.flag(c"pause", true)
+                        }
+                        Command::Play | Command::Toggle => {
                             if !started || last_error.is_some() {
                                 last_error = None;
                                 started = true;
                                 loaded = false;
                                 core.command(&["loadfile", &url, "replace"])
                                     .and_then(|_| core.flag(c"pause", false))
+                            } else if core.get_flag(c"eof-reached") == Some(true) {
+                                core.command(&["seek", "0", "absolute+exact"])
+                                    .and_then(|_| core.flag(c"pause", false))
                             } else {
-                                if core.get_flag(c"eof-reached") == Some(true) {
-                                    core.command(&["seek", "0", "absolute+exact"])?;
-                                }
                                 core.flag(c"pause", false)
                             }
                         }

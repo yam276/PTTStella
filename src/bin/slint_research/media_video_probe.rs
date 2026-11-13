@@ -182,17 +182,23 @@ pub fn start(
             play(&ui).await?;
             if std::env::var_os("PTTSTELLA_VIDEO_STALL").is_some() {
                 wait(
-                    || {
-                        video
-                            .current
-                            .borrow()
-                            .as_ref()
-                            .is_some_and(|v| v.session.status.lock().is_ok_and(|s| s.loading))
-                    },
-                    "stalled video never started",
-                )
-                .await?;
-                tokio::time::sleep(Duration::from_millis(120)).await;
+                    || ui.get_media_playing() && ui.get_media_status() == msg!("video-buffering"),
+                    "stalled video never became pausable",
+                ).await?;
+                require(ui.get_media_motion_label() == msg!("video-pause"), "loading control does not say pause")?;
+                ui.invoke_media_action(2);
+                wait(
+                    || !ui.get_media_playing() && video.current.borrow().as_ref().is_some_and(|live| {
+                        live.session.status.lock().is_ok_and(|state| state.loading && state.paused)
+                    }),
+                    "pause while loading was not acknowledged",
+                ).await?;
+                require(ui.get_media_motion_label() == msg!("video-play"), "paused loading control does not say play")?;
+                ui.invoke_media_action(2);
+                wait(
+                    || ui.get_media_playing(),
+                    "resume while loading was not acknowledged",
+                ).await?;
             } else if std::env::var_os("PTTSTELLA_VIDEO_REJECT").is_some() {
                 wait(
                     || ui.get_media_status() == msg!("video-unsupported"),
@@ -202,7 +208,10 @@ pub fn start(
                 require(!ui.get_media_playing(), "rejected payload is playing")?;
             } else {
                 wait(
-                    || ui.get_media_playing() && ui.get_media_duration() > 2.9,
+                    || ui.get_media_playing() && ui.get_media_duration() > 2.9
+                        && video.current.borrow().as_ref().is_some_and(|live| {
+                            live.session.status.lock().is_ok_and(|state| state.loaded)
+                        }),
                     "video did not load/play",
                 )
                 .await?;
@@ -260,6 +269,20 @@ pub fn start(
                     !ui.get_media_playing(),
                     "focus regain resumed without permission",
                 )?;
+                ui.invoke_media_seek(ui.get_media_duration() - 0.3);
+                ui.invoke_media_action(2);
+                wait(
+                    || !ui.get_media_playing() && video.current.borrow().as_ref().is_some_and(|live| {
+                        live.session.status.lock().is_ok_and(|state| state.eof)
+                    }),
+                    "playing to the end did not restore the play control",
+                ).await?;
+                require(ui.get_media_motion_label() == msg!("video-play"), "end of video control does not say play")?;
+                ui.invoke_media_action(2);
+                wait(
+                    || ui.get_media_playing() && ui.get_media_position() < 0.8,
+                    "replay did not restart at the beginning",
+                ).await?;
             }
             media.close(true);
             wait(

@@ -176,7 +176,7 @@ impl Session {
         if self.gate.closed.load(Ordering::Acquire) {
             return Err("native session closed".into());
         }
-        if matches!(command, Command::Play)
+        if matches!(command, Command::Play | Command::Toggle)
             && (!self.gate.render.load(Ordering::Acquire)
                 || !self.gate.permit.load(Ordering::Acquire))
         {
@@ -293,7 +293,7 @@ async fn run(
             _=gate.wake.notified()=>{},
             value=receive.recv()=>{
                 let Some(command)=value else{break;};
-                if (!matches!(command,Command::Play)||gate.render.load(Ordering::Acquire)&&gate.permit.load(Ordering::Acquire))
+                if (!matches!(command,Command::Play|Command::Toggle)||gate.render.load(Ordering::Acquire)&&gate.permit.load(Ordering::Acquire))
                     && let Err(e)=control.command(command){error=Some(e);}
             },
             _=dirty.notified()=>{
@@ -348,6 +348,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(session.command(Command::Play).is_err());
+        assert!(session.command(Command::Toggle).is_err());
         assert_eq!(source.requests.load(Ordering::Acquire), 0);
         drop(core);
         session.stop();
