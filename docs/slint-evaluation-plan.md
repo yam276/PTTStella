@@ -175,7 +175,7 @@ OpenGL WebM 另有一輪在應用程式前景觀測未中斷時，80% 段末已�
 
 Apple Silicon 出貨候選 `cb4fbfc` 用被動視窗重跑 MP4、WebM、OGV 的軟體繪圖與 OpenGL，共六案通過。另有兩案驗證下載中暫停與恢復，兩個錯色負向案例按預期失敗。十案均核對播放器、串流及本機 HTTP 的清理。最新版影片的系統音訊取樣及原生操作仍待驗。[出貨檔影片驗收](slint-prototype.md#2026-11-13-cb4fbfc-apple-silicon-出貨檔影片驗收)
 
-同一 Apple Silicon 候選與 Dioxus 已各兩輪以原生快捷鍵開關同窗設定。兩張 GIF 回到文章均恢復換幀，每個網址全程只下載一次。設定期間兩版 CPU 均下降，關閉後的 10 秒累積 CPU 中位數為 Slint 0.484 秒、Dioxus 0.242 秒。多次切換的長期資源趨勢仍待驗。[設定遮蔽與恢復](slint-macos-measurement.md#cb4fbfc-雙-gif-設定開關與恢復)
+同一 Apple Silicon 候選與 Dioxus 已各兩輪以原生快捷鍵開關同窗設定。兩張 GIF 回到文章均恢復換幀，每個網址全程只下載一次。設定期間兩版 CPU 均下降，關閉後的 10 秒累積 CPU 中位數為 Slint 0.484 秒、Dioxus 0.242 秒。另各兩輪連續開關 12 次，四輪皆能恢復兩張 GIF，兩版 RSS 都上升，Slint 的 physical footprint 變化方向未重現。更長時間與記憶體歸因待驗。[設定遮蔽與恢復](slint-macos-measurement.md#cb4fbfc-雙-gif-設定開關與恢復) · [12 次開關](slint-macos-measurement.md#cb4fbfc-雙-gif-連續-12-次設定開關)
 
 ### 5. 正式資料與登入接手（S7、S8）
 

@@ -148,6 +148,21 @@ Apple Silicon 使用 Slint `cb4fbfc` 出貨 App 的 Skia software 路徑，對�
 
 一輪 Dioxus 未取得可見視窗，已排除並在下一輪延後啟用補跑。Dioxus 手動展圖與 PNG 探針在這個自動展圖場景的整體報告維持 failed。兩版效能收據各自核對實際雙圖、網路、資源與正常退出。個別階段及暫存清理在 `.local/verification/slint-article-arrow/arm64-reading/settings-comparison.json` 與 `settings-cleanup.json`。
 
+### cb4fbfc 雙 GIF 連續 12 次設定開關
+
+同一對 Apple Silicon 執行檔、1040×768 外窗及兩份自動展開的本機 GIF。Slint／Dioxus／Dioxus／Slint 四個新程序各做 12 次 ⌘, 開設定、Esc 返回。每次都確認設定覆蓋兩圖，回文章後再從兩張圖各觀測到紅藍換幀。設定開啟與恢復後各等待 350 ms，再取樣 1 秒，含 11 筆程序族資料和 21 筆前景 PID 觀察。
+
+| 程序 | 恢復後 footprint 峰值中位數，第 1–4 次 → 第 9–12 次 | 恢復後 RSS 峰值中位數，第 1–4 次 → 第 9–12 次 |
+| --- | ---: | ---: |
+| Slint 1 | 119.3 → 122.0 MiB | 349.8 → 483.6 MiB |
+| Dioxus 1 | 762.2 → 814.3 MiB | 607.5 → 732.4 MiB |
+| Dioxus 2 | 778.7 → 827.0 MiB | 605.8 → 743.1 MiB |
+| Slint 2 | 122.5 → 103.3 MiB | 408.1 → 481.4 MiB |
+
+兩版的 RSS 都隨開關增加。Slint 兩輪的 footprint 變化方向不同，恢復階段所有峰值介於 101.1 至 131.2 MiB。Dioxus 兩輪的 footprint 中位數皆增加約 50 MiB。RSS 會計入共用頁面，且這輪只量連續 12 次短間隔開關，尚不能定位增加的配置或判定長時間使用的趨勢。
+
+四輪合計 48 次開關均恢復播放。每輪兩個 URL 各只下載一次，正常退出並收到 Close ACK，HTTP worker 和取樣到的 PID／啟動識別均結束。Dioxus 既有報告仍包含這個自動展圖劇本未做的手動展圖和 PNG 要求。這輪獨立核對設定畫面、兩圖、下載與退出。原始取樣和清理清單保存在 `.local/verification/slint-article-arrow/arm64-reading/` 的 `repeat-settings-comparison.json` 與 `repeat-settings-cleanup.json`。
+
 ## 2026-11-11 雙 GIF 三組交錯比較
 
 在 Mac15,14、macOS 15.7.7 arm64 上，以當時 Slint arm64 封裝 native `f50ffb46`（乾淨 `7466c31`）對照既有 Dioxus native `4a3035b6`（實際 `3c667eb` 加 R3 patch，產品來源核對 `f48e7e4`）。已核對共用閱讀場景與素材產生器在這兩個來源間相同。六輪採 Slint／Dioxus、Dioxus／Slint、Slint／Dioxus 順序，使用相同設定、23 行文章和兩個獨立的 loopback GIF URL。兩圖都是同一份 512×160、32 幀、100ms 幀延遲的合成 GIF。每輪用新程序，重用兩個測試 App 身分。
