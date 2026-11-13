@@ -42,6 +42,12 @@ X11 驗收涵蓋三種格式的軟體繪圖和視窗控制。實機聲音與 GPU
 
 改用 Mesa llvmpipe 執行 MP4 時，預設 QEMU CPU 與 `QEMU_CPU=max` 都在 LLVM 產生程式碼時中止，未收到 Close ACK。此組 OpenGL 模擬驗收仍失敗，實體 GPU 待驗。收據、畫面和各輪暫存清理在 `.local/verification/slint-x11-video/opengl/`，以 `acceptance.json` 彙整逐案結果。
 
+### OpenGL 的 30 秒素材重驗
+
+將候選內自製 MP4、WebM、OGV 的 3 秒影音各重複至約 30 秒，沿用原編碼資料與四色預期。在相同 `2ef65ce` 執行檔、QEMU x64、Mesa softpipe 與專用 PulseAudio 環境重跑元件探針，三案皆通過。暫停跳轉後，播放器中介 framebuffer 與視窗 framebuffer 各讀到預期四色，OpenGL 錯誤碼皆為零。音量、靜音、繼續播放與失焦暫停的回覆也通過。各案正常退出，關閉播放器與 HTTP 工作，收到唯一站端 Close ACK。
+
+3 秒素材的失敗仍保留。正式包內的素材版本與程式碼維持原提交。重驗使用合成 toolkit 事件，Linux 實體 GPU、OpenGL 的 X11 滑鼠操作及短片呈現時序待驗。素材來源、雜湊、逐案收據及清理記錄在 `.local/verification/slint-x11-video/opengl/long-fixture/`。
+
 ## 2026-11-13 d047e55 候選
 
 Linux deb／tar.gz 在 `.local/verification/slint-windows-refresh-rate/linux/`。已核對 AMD64 套件、共用檔案及兩包主程式，deb 共 1,111 檔，tar.gz 共 1,124 檔。deb SHA-256 為 `0ca717e1a31791f2b7bdf7084a6c71184f07b994b2a6adfb2691f3c0bdc83251`，tar.gz 為 `40398732e4622784a7b480bab76406a30a347211ba85d3af78c43ea7cbc305c4`。Linux 實機待驗。
