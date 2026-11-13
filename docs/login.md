@@ -69,6 +69,10 @@ Session另持有有界、無密碼的AccountIdentity，僅供網頁文章標示�
 
 `96e5159` 的 Linux x64 測試執行檔在 ARM Debian Podman／QEMU 中連至獨立的 D-Bus 及 GNOME Keyring 42.1。容器在執行測試前斷開外部網路。實際 `native_roundtrip` 通過，核對未勾選無保存、明確保存、跨程序讀回及移除。測試使用唯一合成 service。容器與其中的臨時 Keyring 已移除，收據位於 `.local/verification/slint-settings-focus-mount/linux-vault/`。實機登入 UI、OS 解鎖及 Windows Credential Manager 待驗。
 
+### Windows Win32 憑證 API 隔離驗收
+
+以 `d7cc6e1` 交叉編譯 Windows x64 的 production vault 測試，與候選 `d047e55` 間只有文件變更。在斷開外部網路的 Debian ARM／QEMU x64／Wine 10.0，以獨立 Wine prefix 執行 `native_roundtrip`。未勾選零保存、明確保存、另一程序讀回、錯帳號拒絕、兩次移除及重讀確認不存在均通過。測試使用唯一合成 service，收據在 `.local/verification/slint-windows-refresh-rate/windows-vault/result.json`。這是 Wine 提供的 Win32 API，Microsoft Credential Manager、Windows 實機登入 UI 與正式服務接手待驗。
+
 ### macOS 舊紀錄與重新簽章驗收
 
 `cargo --config .local/slint-build.toml test --locked --offline --release --features native-player-probe --lib login::vault::tests::native_keychain_legacy_and_signing -- --ignored --exact --nocapture`

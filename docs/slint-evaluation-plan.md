@@ -40,7 +40,7 @@ macOS 設定開關在三個程序各跑 12 次，原候選的 footprint 主要�
 | --- | --- | --- |
 | S0 | 共用 Rust 服務、獨立 Slint 入口及可編譯提交序列；四 target 的一般／播放器兩配置 Cargo 依賴 gate | 完整功能案例對照、各平台連結／runtime 依賴與最終基準重跑 |
 | S1 | 格線／雙色字／縮放、無系統CJK字型的控制項fallback及macOS 原生輸入的分立證據；Windows Microsoft注音候選位置／Esc取消／單次提交的使用者人工回報 | 完整候選窗／組字／失焦矩陣、跨螢幕 DPI、可及性與其他平台原生 |
-| S2 | 共用 Connection、登入／保活、站點表單、嚴格切站／雙編碼 bytes | 同 endpoint 編碼切換、預設站重啟／不登入、完整信任／vault 原生矩陣 |
+| S2 | 共用 Connection、登入／保活、站點表單、嚴格切站／雙編碼 bytes、同一 WebSocket 位址切換 Big5-UAO／GBK 的核心回歸 | 原生站點表單的同位址換編碼、預設站重啟／不登入、完整信任／vault 原生矩陣 |
 | S3 | 選取、輸出、浮球／選單及原生互動的分立證據 | 全部快捷鍵／pointer／modal／可及性操作矩陣 |
 | S4 | 雙閱讀模式、長文取頁、尋找、名單／右鍵／揭露／底色、書籤／離線、快速前往與最近看板、目前／指定列表文章收藏、共用推文索引／原生定位與側標、推文更新／未讀／保留與復原；macOS基本按鈕、列表右鍵指定收藏與新程序斷線讀回補驗 | 跨平台推文控制／定位與完整鍵盤／焦點矩陣、其他平台列表右鍵及新程序離線操作、混合 Live 等效與全功能回歸 |
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、macOS OpenGL [libmpv 中介畫面及主視窗兩處取樣](slint-prototype.md#2026-11-11-macos-opengl-的兩處像素取樣)和三格式錯色負向對照，Apple Silicon 候選三格式的原生跳轉／縮窗與 MP4 最小化恢復，三格式在軟體及 OpenGL 下各有完整數位音訊通過案例 | MP4 GPU 像素偶發失敗仍未重現／解決、OpenGL WebM 一輪取樣中斷待定因、多圖峰值、GL 恢復、實聽與跨平台音訊、四架構可交付 runtime |
@@ -1152,5 +1152,9 @@ Apple Silicon App／DMG／ZIP、Windows x64 便攜 ZIP 與離線 Setup、Intel M
 從還原來源重編的 Apple Silicon Slint／播放器共 111 項通過，既有原生 helper 一項忽略。工具測試 183 項、四架構兩配置依賴檢查、文件及兩份 workflow 的 actionlint 通過。Apple Silicon 封裝首輪引用已清理的舊播放器套件，改用 `96e5159` 的播放器 runtime 後，以同一 Rust 執行檔完成打包。Linux 首輪在虛擬機中斷時停在壓縮，重新核對原 ELF 與建置收據後重跑封裝。Windows 便攜包的 Wine 補測首輪未能在虛擬機斷線後啟動。重新連線後同包執行檔在隔離 Wine 10.0／Xvfb 通過軟體繪圖主視窗探針並收到唯一 Close ACK。
 
 同一 Linux 便攜包在 QEMU x64／Xvfb 的 14 項軟體繪圖元件案例全部通過，每案各一次 Close ACK。包含草稿保存及跨程序讀回、837 行／37 次取頁、441 行／19 次取消續跑、設定搜尋 48 個定位、推文追加、收藏及 MP4／WebM／OGV。此次測試未開 macOS 前景視窗。
+
+同一 Windows 便攜包另在隔離 Wine 完成草稿保存與另起程序讀回並帶回、837 行／37 次取頁與 45 行文章輸出四案，每案各一次 Close ACK。同源 Windows x64 測試程式驗證 Wine 的 Win32 憑證保存、另一程序讀回及移除。Windows 實機的 Microsoft Credential Manager、原生 IME 與安裝保持待驗。測試容器、Wine prefix 及暫存 payload 已清理，保留收據與固定 Cargo 快取。[Windows 候選](slint-windows-candidate.md#2026-11-13-d047e55-候選) · [憑證驗收](login.md#windows-win32-憑證-api-隔離驗收)
+
+補上同一 WebSocket 位址切換 Big5-UAO → GBK 的共用 Connection 回歸。首輪錯用通用 probe 回報的預設站位址，等不到本機第二筆連線。修正測試從第一筆就明確選用本機目標後，核對 Close 順序、新世代與解碼狀態重設、舊輸入拒絕及精確 GBK bytes。Connection 測試 86 項通過，原生站點表單待驗。[站點與編碼](sites.md)
 
 清理前一版重複的 macOS App／ZIP、Linux tar.gz，以及本輪封裝暫存與兩個 Setup 工具容器。保留 `96e5159` 的 DMG、deb、Windows ZIP 及 Setup 供比對，沿用固定 Cargo target、SDK 與獨特驗收證據。此次移除檔案的邏輯大小為 920,756,528 bytes，檔案系統可用空間同期增加 784,216,064 bytes，精確路徑見 `cleanup.json`。最新 Windows 實機安裝及兩種 IME、Apple Silicon 原生焦點／正式 Keychain 及完整效能對照待驗。正式入口維持 Dioxus。

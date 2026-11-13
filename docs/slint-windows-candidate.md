@@ -12,6 +12,8 @@
 
 包內執行檔在隔離 Wine 10.0／QEMU x64／Xvfb 通過軟體繪圖主視窗探針，正常退出並收到唯一 Close ACK。收據在同一驗收目錄的 `packaged-wine-result.json`。Windows 實機仍待執行 `Check-All.cmd`、`Run-IME.cmd`、`Run-Drafts-IME.cmd`，並驗收安裝、升級及卸載。上一版 `96e5159` 的 ZIP 與 Setup 保留作對照。
 
+用同一便攜包執行檔在隔離 Wine 10.0 補跑草稿保存、另起程序讀回與帶回、長文 37 次取頁及 45 行文章輸出四案。每案正常退出並收到唯一 Close ACK。另有同源 Windows x64 測試程式通過 Wine 的 Win32 憑證往返，Microsoft Credential Manager 和原生 IME 仍待實機驗收。證據在 `windows-vault/result.json`。[憑證驗收範圍](login.md#windows-win32-憑證-api-隔離驗收)
+
 ## 2026-11-13 軟體繪圖的螢幕更新率
 
 Win32 `DEVMODE` 用 `0` 或 `1` 表示硬體預設更新率。Winit 原先把 `0` 交給 Slint 的重畫計時器，該計時器以更新率作除數。修補後兩種預設值皆回報更新率未知，讓 Slint 沿用 60 Hz fallback。可表示的實際更新率仍換算成毫赫茲。[Microsoft DEVMODE 文件](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-devmodea)

@@ -2605,6 +2605,90 @@ async fn telnet_gbk_switch_closes_websocket_before_new_input_and_disables_ptt_co
 }
 
 #[tokio::test]
+async fn switching_encoding_at_the_same_endpoint_reconnects_and_discards_old_state() {
+    use crate::{encoding::TextEncoding, sites::Target};
+
+    let (listener, connection) = local().await;
+    let endpoint = format!("ws://{}/bbs", listener.local_addr().unwrap());
+    let original = Target::new(endpoint.clone(), TextEncoding::Uao).unwrap();
+    let target = Target::new(endpoint, TextEncoding::Gbk).unwrap();
+    connection.connect_to(original.clone()).unwrap();
+    let (stream, _) = listener.accept().await.unwrap();
+    let mut old = tokio_tungstenite::accept_async(stream).await.unwrap();
+    old.send(Message::Binary(
+        b"\x1b[31m\xa4\xa4\x1b[2;1Hold session\x1b[1;3H\xa4"
+            .to_vec()
+            .into(),
+    ))
+    .await
+    .unwrap();
+    let initial = wait(&connection, |view| {
+        view.phase == Phase::Connected
+            && view.frame.glyphs.first().is_some_and(|g| g.text == "中")
+            && view
+                .frame
+                .glyphs
+                .iter()
+                .any(|g| g.row == 1 && g.text == "o")
+    })
+    .await;
+    assert_eq!(initial.site, original);
+    assert_eq!(initial.frame.glyphs[0].left.fg, 1);
+    connection.connect_to(target.clone()).unwrap();
+    assert!(matches!(
+        timeout(Duration::from_secs(4), old.next()).await.unwrap(),
+        Some(Ok(Message::Close(_)))
+    ));
+    assert!(
+        timeout(Duration::from_millis(80), listener.accept())
+            .await
+            .is_err()
+    );
+    old.flush().await.unwrap();
+
+    let (stream, _) = timeout(Duration::from_secs(4), listener.accept())
+        .await
+        .unwrap()
+        .unwrap();
+    let mut new = tokio_tungstenite::accept_async(stream).await.unwrap();
+    new.send(Message::Binary(b"\xd6\xd0\xce\xc4".to_vec().into()))
+        .await
+        .unwrap();
+    let current = wait(&connection, |view| {
+        view.site == target
+            && view.phase == Phase::Connected
+            && !view.output_pending
+            && view.frame.glyphs.get(1).is_some_and(|g| g.text == "文")
+    })
+    .await;
+    assert!(current.generation > initial.generation);
+    assert_eq!(current.frame.glyphs[0].text, "中");
+    assert_ne!(current.frame.glyphs[0].left.fg, 1);
+    assert!(
+        current
+            .frame
+            .glyphs
+            .iter()
+            .filter(|g| g.row == 1)
+            .all(|g| g.text == " ")
+    );
+    connection
+        .input(initial.generation, b"STALE".to_vec())
+        .unwrap();
+    connection
+        .input(
+            current.generation,
+            crate::input::encode_with("中文", current.site.encoding).unwrap(),
+        )
+        .unwrap();
+    assert!(matches!(
+        timeout(Duration::from_secs(4), new.next()).await.unwrap(),
+        Some(Ok(Message::Binary(bytes))) if bytes.as_ref() == b"\xd6\xd0\xce\xc4"
+    ));
+    finish_board_peer(&connection, new).await;
+}
+
+#[tokio::test]
 async fn station_banner_probe_uses_the_selected_decoder_and_closes_without_input() {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
