@@ -1,5 +1,9 @@
 # Slint Linux x64 候選包
 
+## 2026-11-13 3277ac1 候選
+
+deb／tar.gz 在 `.local/verification/slint-video-toggle/linux/`。兩包共用的 AMD64 主程式 SHA-256 為 `27e4e76b91e4354ef6ed970eb1139e781eadfb2b87eb409d668b16d11dea6dcc`。從乾淨 `3277ac1` 重建的 ELF 與元件測試的 ELF 逐位元相同。隔離 X11 通過 MP4 緩衝中暫停與繼續，三種影片各通過片尾重播和播放器退場，均收到一次 Close ACK。實機、Wayland 與硬體 GPU 待驗。
+
 ## 2026-11-13 2ef65ce 候選
 
 Linux deb／tar.gz 在 `.local/verification/slint-sites-panel-candidate/linux/`。已核對 AMD64 套件、共用檔案及兩包主程式，deb 共 1,111 檔，tar.gz 共 1,124 檔。deb SHA-256 為 `33f36d0562188f10fd266deb12fa11d0ebdfc0e440cd8e3a2ee4e83bccfec1c4`，tar.gz 為 `7f0bd6909b5b1b0cae9fb1779e97b67dfaf72cd9dbd7e3558046279f36fcb215`。

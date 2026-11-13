@@ -2,6 +2,10 @@
 
 候選交付中的程式、Slint UI、字型、locale、fixture、工具與文件，須能從獨立來源包還原。原始建置的 commit／dirty／patch、產品來源核對與第三方來源閉包是不同證據；不能把其中一項通過填成全部完成。
 
+## 2026-11-13 3277ac1 候選來源
+
+四架構及 Windows Setup 同取乾淨 `3277ac1`。既有 `sources.json` 新增 `video-toggle-candidate`，在禁止網路與原 worktree 讀取的獨立目錄還原 837 份產品檔並核對 Git tree `40aeceaceaea8ba512a58430363436490340b47e`。manifest SHA-256 為 `fdf2fd95bcb5dcf141917f6572f6cbd9a8a1e7426b4932366439cb715a0325b6`。本機收據在 `.local/verification/slint-video-toggle/`。此提交從還原目錄重編與完整第三方來源閉包待驗。
+
 ## 2026-11-13 2ef65ce 候選來源
 
 四架構與 Windows Setup 同取乾淨 `2ef65ce`。既有 `sources.json` 新增 `sites-panel-candidate`，獨立還原 837 份來源並核對 Git tree `7bf903c80c3f9c4660f70d22ae0eb60b3fd8b043`。四架構 manifest SHA-256 為 `6306ae948aea3a7adb07867e9bd49021183c3fcc9ef2190a644791945da5db26`。Apple Silicon 由還原來源離線重編，禁止讀取原 worktree 來源，測試使用本機 loopback。Slint 110 項及播放器 1 項通過，既有原生 helper 一項忽略。收據在 `.local/verification/slint-sites-panel-candidate/`。第三方來源閉包與其餘架構的還原重編待驗。

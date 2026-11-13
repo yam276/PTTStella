@@ -6,7 +6,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 目前進度（2026-11-13）
 
-**尚未達到可平替 Dioxus 的驗收條件。** 最新四架構候選皆取自乾淨提交 `2ef65ce`，包含站點表單裁切修正。四架構封裝均已核對，Linux 交付包已通過隔離 X11 站點切換。Intel Mac 與 Linux x64 實機依指示暫緩。macOS 封裝的原生焦點、Windows 原生安裝與 IME、正式簽章的憑證接手和完整效能矩陣待驗。正式入口維持 Dioxus。[最新候選](#2ef65ce-四架構候選)
+**尚未達到可平替 Dioxus 的驗收條件。** 最新四架構候選皆取自乾淨提交 `3277ac1`，包含載入中暫停與播完重播修正。四架構封裝均已核對，Linux 執行檔通過隔離 X11 的播放器元件回歸。Intel Mac 與 Linux x64 實機依指示暫緩。macOS 封裝的原生焦點、Windows 原生安裝與 IME、正式簽章的憑證接手和完整效能矩陣待驗。正式入口維持 Dioxus。[最新候選](#3277ac1-四架構候選)
 
 四架構候選都包含 `4d7d174` 的收藏載入焦點修正。Apple Silicon 和 Windows x64 從同一提交出包，Intel Mac 與 Linux x64 使用僅有文件差異的 `ebc1035` 工作樹建置。Apple Silicon 封裝的草稿保存、跨程序重開及三格式影片八案通過。Intel 封裝在 Rosetta 通過三輪收藏及主視窗，Linux 封裝在 QEMU／Xvfb 通過七項元件回歸。Windows 原生安裝／升級／IME、Intel Mac 與 Linux 原生驗收、完整同負載效能矩陣及正式簽章的憑證接手仍待驗。正式入口維持 Dioxus。[候選位置](#產物保留規則2026-11-09-使用者要求) · [影片音訊結果](#4-媒體s5)
 
@@ -1206,3 +1206,9 @@ Linux 便攜包在 QEMU／Xvfb 重跑 14 項元件回歸全數通過，每案各
 延長隔離 X11 取樣後，3 秒 MP4 與 30 秒 WebM 對照片的控制列都曾更新。以同一診斷執行檔比對播放器已載入與 UI 套用的時間，OpenGL 的兩案相隔 3.503／3.313 秒，軟體繪圖的兩案約 1 ms。四次均以原生 X11 滑鼠操作、只下載一次並正常關窗。延遲原因、低階 GPU 與 OpenGL 短片操作仍待驗。診斷 patch 留在本機證據目錄，候選二進位維持 `2ef65ce`。[狀態時序對照](slint-linux-candidate.md#opengl-的原始短片視窗取樣)
 
 逐幀計時確認 OpenGL 的主執行緒在同一幀內繪製約 3.4 秒，交換緩衝區後約 1 ms 即套用已載入狀態。同一 MP4 縮窗後，每幀繪製中位數由 3.35 秒降為 1.03 秒，畫面仍核對四色及播放進度。這組延遲來自 QEMU／Mesa softpipe 的繪製成本。實體 GPU 的效能及原生媒體操作維持待驗。[逐幀與尺寸對照](slint-linux-candidate.md#opengl-的原始短片視窗取樣)
+
+### 3277ac1 四架構候選
+
+Slint 播放按鈕由 libmpv 控制工作決定播放或暫停。已送出播放但仍在緩衝時可暫停，片尾顯示播放並可從頭重播。主視窗與播放器探針共用同一狀態。Apple Silicon 無視窗測試 510 項通過，9 項既有忽略，release Clippy 通過。Linux QEMU／Xvfb 軟體繪圖通過 MP4 載入中暫停與繼續，以及 MP4、WebM、OGV 的跳轉、音量、靜音、失焦暫停及片尾重播。每案一次下載請求和一次 Close ACK。測試使用 Slint 元件事件，收據在 `.local/verification/slint-video-toggle/`。
+
+Apple Silicon App／ZIP／DMG、Windows x64 ZIP／離線 Setup、Intel Mac App／ZIP／DMG 與 Linux x64 deb／tar.gz 同取乾淨 `3277ac1`。兩個 macOS 包通過深層簽章及逐檔核對。Windows Setup 解包 927 檔逐一相符，Linux deb 和 tar 共用主程式及說明已核對。獨立還原 837 份產品檔。已清理兩個 Setup 工具容器、Linux 暫存、SDK 和還原目錄。保留上一版候選作升退及重跑對照，沿用固定 Cargo 快取。macOS 原生操作、Windows 實機與兩種 IME、Intel／Linux 實機、正式簽章憑證接手及效能矩陣待驗。[來源還原](slint-product-source.md#2026-11-13-3277ac1-候選來源)
