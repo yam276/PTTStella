@@ -125,3 +125,5 @@ required-features = ["slint-renderer-audit"]
 # Preserve snapshot/window damage and retain macOS software backing pixels.
 [patch.crates-io]
 i-slint-renderer-skia = { path = "vendor/i-slint-renderer-skia" }
+# Keep macOS toolkit verification windows from requesting keyboard focus.
+winit = { path = "vendor/winit" }

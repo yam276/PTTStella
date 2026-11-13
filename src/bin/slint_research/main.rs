@@ -720,12 +720,18 @@ fn run(
         #[cfg(target_os = "macos")]
         if long_store_scene || toolkit_input {
             use slint::winit_030::{SlintEvent, winit};
-            use winit::platform::macos::EventLoopBuilderExtMacOS;
+            use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
 
             // Long-reading comparisons grant foreground explicitly. The
             // automated verifiers drive only toolkit focus and input.
             let mut builder = winit::event_loop::EventLoop::<SlintEvent>::with_user_event();
             builder.with_activate_ignoring_other_apps(false);
+            if toolkit_input {
+                builder
+                    .with_activation_policy(ActivationPolicy::Accessory)
+                    .with_default_menu(false)
+                    .with_passive_windows(true);
+            }
             return selector
                 .with_winit_event_loop_builder(builder)
                 .with_winit_window_attributes_hook(|attributes| attributes.with_active(false));

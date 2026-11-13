@@ -1104,3 +1104,9 @@ Apple Silicon、Windows x64 便攜及 Setup、Intel Mac 和 Linux x64 同取乾�
 Slint 程式測試 110 項通過，另有一項既有 ignored，Clippy 與文件檢查通過。Apple Silicon 原始 release 執行檔的草稿保存、重開、帶回及十項儲存檢查全部通過，618 筆觀察未見前景切換。Apple Silicon 封裝執行檔首個草稿功能案例也通過及收到 Close ACK，但 macOS 啟用該程序，監測器依設計停止後續視窗案例。保留 `packaged/results.json` 與原始前景記錄。封裝測試的被動啟動仍須修正及重驗，實體鍵鼠／IME 與 Windows 安裝待驗。
 
 核對鎖定的 Slint 1.18.1／Winit 0.30.13 來源。建立視窗時的 `with_active(false)` 只管初次建立，Slint 顯示已建立的視窗仍呼叫 Winit 的 `set_visible(true)`，macOS 會執行 `makeKeyAndOrderFront`。Winit 的啟動流程也可能為可見視窗設 key 並請求啟用 App。這兩處在 Slint 注入焦點事件之前，忽略原生 `Focused` 事件無法阻止系統切換前景。此輪只核對來源和既有反例，沒有重開封裝驗收視窗。macOS 禁止啟用的 policy 同時限制建立視窗，未用它取代原生驗收。[Apple 啟用政策](https://developer.apple.com/documentation/appkit/nsapplication/activationpolicy-swift.enum/prohibited)
+
+### macOS 自動驗收的視窗焦點
+
+自動 toolkit 驗收採 Winit 0.30.13 的本機修補。啟動時跳過 App 啟用，原生視窗依 AppKit 規則禁止成為 key／main，顯示時放在同層視窗後方並忽略滑鼠事件。合成按鍵仍走 Slint 元件。一般 App、人工 IME 探針與需明確取得前景的長文效能比較維持原入口。修補內容與上游封存來源一併保留。[Winit 修補](../vendor/winit/PTTSTELLA-PATCH.md) · [AppKit 視窗排序](https://developer.apple.com/documentation/appkit/nswindow/orderback(_:))
+
+此輪只執行無視窗檢查。macOS arm64 的 Slint 與播放器測試通過，既有原生 helper 維持忽略。兩種 Slint feature 在四個 target 的依賴檢查均通過，收據在 `.local/verification/slint-passive-window-dependencies/`。仍需在隔離桌面重跑封裝探針並監測前景，才可關閉焦點反例。
