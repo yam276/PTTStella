@@ -8,7 +8,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 目前四架構候選與 Windows 離線 Setup 取同一乾淨提交 `1d3e702`，包含草稿色碼選單確認後回焦。Apple Silicon 出貨檔已驗三種顯示、鍵盤回焦、保存、重開及帶回合成站端。Windows 離線 Setup 解包與便攜版 927 檔逐位元一致，並在隔離 Wine 完成升級、回退與卸載。Windows、Intel Mac 與 Linux 的實機結果依各平台紀錄。正式入口維持 Dioxus。[草稿操作](drafts.md#1d3e702-色碼選單回焦) · [四架構交付](#1d3e702-草稿回焦候選) · [Windows 安裝驗收](slint-windows-candidate.md#2026-11-14-1d3e702-離線-setup-與升退)
 
-Apple Silicon 用 `cb4fbfc` 出貨 App 與同源 Dioxus 再次重測。837 行全文 renderer ACK 中位數為 541／555 ms，每版各 100 次的快取 PageDown p95 為 41.3／87.5 ms，PageUp p95 為 39.5／88.0 ms。雙 GIF 每版三輪有效樣本的程序族 footprint 峰值中位數為 131／730 MiB，10 秒累積 CPU 為 0.479／0.663 秒。全文差距方向及 CPU 絕對值在不同輪次有波動。使用者將驗 Windows 日文 IME。[重測結果](slint-macos-measurement.md#2026-11-14-最新候選長文翻頁與雙-gif-重測)
+Apple Silicon 用 `1d3e702` 出貨 App 與同一開發線的 Dioxus release 重測。837 行全文 renderer ACK 中位數為 530／558 ms，每版各 100 次的快取 PageDown p95 為 38.8／87.2 ms，PageUp p95 為 38.3／86.4 ms。雙 GIF 每版三輪有效樣本的程序族 footprint 峰值中位數為 122／743 MiB，10 秒累積 CPU 為 0.946／1.080 秒。CPU 樣本區間重疊。一輪 Slint 啟動時失去前景，排除後補跑通過。Windows 日文 IME 由使用者驗收。[重測結果](slint-macos-measurement.md#2026-11-14-1d3e702-長文翻頁與雙-gif-重測)
 
 同一 Slint 候選與相容 Dioxus `82bc81f` 用正式 Bundle ID 在隔離資料副本完成五階段升級、回退及恢復。兩版均從一般入口讀寫自動開圖設定，核對兩次保存的一代備份及八份復原檔。正式 Developer ID 的鑰匙圈重新授權與 Finder 首開仍待驗，正式入口維持 Dioxus。[最新回退演練](slint-store-frontends.md#2026-11-14-cb4fbfc-正式識別的隔離升級與回退)
 
