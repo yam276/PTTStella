@@ -187,7 +187,9 @@ impl MonitorHandle {
             {
                 None
             } else {
-                Some(mode.dmDisplayFrequency * 1000)
+                // DEVMODE reports 0 or 1 when the hardware uses its default
+                // refresh rate. Callers need an unknown rate in either case.
+                current_refresh_rate_millihertz(mode.dmDisplayFrequency)
             }
         }
     }
@@ -252,5 +254,26 @@ impl MonitorHandle {
         }
 
         modes.into_iter().map(mod_map)
+    }
+}
+
+fn current_refresh_rate_millihertz(frequency_hz: u32) -> Option<u32> {
+    if frequency_hz <= 1 {
+        return None;
+    }
+    frequency_hz.checked_mul(1000)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::current_refresh_rate_millihertz;
+
+    #[test]
+    fn current_refresh_rate_ignores_windows_default_values() {
+        assert_eq!(current_refresh_rate_millihertz(0), None);
+        assert_eq!(current_refresh_rate_millihertz(1), None);
+        assert_eq!(current_refresh_rate_millihertz(60), Some(60_000));
+        assert_eq!(current_refresh_rate_millihertz(144), Some(144_000));
+        assert_eq!(current_refresh_rate_millihertz(u32::MAX), None);
     }
 }

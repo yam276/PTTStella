@@ -1140,3 +1140,7 @@ Apple Silicon App／DMG／ZIP、Windows x64 便攜 ZIP 與離線 Setup、Intel M
 Linux x64 便攜包在 QEMU／Xvfb 一輪完成 14 項元件案例。草稿保存與新程序重開帶回、主視窗、兩種閱讀模式搜尋、837 行／37 筆取頁、441 行／19 筆取消續跑、複製／PNG、設定 48 個定位、推文追加、收藏及 MP4／WebM／OGV 均通過，每案均收到唯一 Close ACK。此輪設定搜尋首輪通過。另在隔離的 D-Bus／GNOME Keyring 執行同源 Linux x64 的密碼庫測試，驗證明確保存、另一程序讀回及移除，過程使用唯一的合成服務名稱。[Linux 候選](slint-linux-candidate.md#2026-11-13-96e5159-候選) · [憑證驗收](login.md#linux-secret-service-隔離驗收)
 
 Apple Silicon 從交付來源重編並通過 Slint／播放器 111 項測試，既有一項原生 helper 忽略。比對七種 Store、登入編碼與候選 Profile，確認自 `b57eae8` 的 28 案往返矩陣後，共用資料與憑證實作沒有變更。該矩陣的驗收版本仍記為 `b57eae8`。此輪沒有開啟 macOS 視窗。現行封裝的原生背景焦點、Windows 原生安裝與 IME、正式簽章的授權接手與完整效能矩陣仍待驗。[來源重編](slint-product-source.md#2026-11-13-96e5159-候選來源)
+
+使用者回報工作時多次失去前景。舊 `b57eae8` 封裝的草稿驗收收據記錄測試 PID 32894 收到 macOS 啟用通知並取得前景，監測器停止後續案例。此事件與回報相符，其他焦點切換仍無法歸因。後續自動驗收使用無視窗測試或隔離顯示；需 macOS 原生焦點的現行候選驗收待在隔離桌面執行。原始收據在 `.local/verification/slint-draft-history/packaged/`。
+
+Windows 軟體繪圖修補處理 Win32 回報的預設更新率，避免將零交給 Slint 的重畫計時器。交叉編譯、換算測試及隔離 Wine 10.0 主視窗探針通過。未在本輪重現歷史崩潰，四架構仍交付 `96e5159`。[Windows 更新率與驗收結果](slint-windows-candidate.md#2026-11-13-軟體繪圖的螢幕更新率)
