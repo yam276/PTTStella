@@ -88,6 +88,14 @@ Linux x64 候選 `cb4fbfc` 在隔離 X11 使用出貨執行檔及 Windows 草稿
 
 兩輪測試結束後逐項核對原剪貼簿資料已恢復。合成存檔、去文字事件和清理收據位於 `.local/verification/slint-article-arrow/draft-mode-focus-pair/` 的 `arm64-draft-clipboard/` 與 `arm64-draft-title/`。暫存資料目錄及視窗工具已移除。跨平台剪貼簿及 IME 候選窗另驗。
 
+#### 1d3e702 Apple Silicon 草稿正文注音與候選定位
+
+在同一出貨 App 把視窗縮至 877×653，以 ⌘↓ 把插入點移到 32 行合成草稿末尾、第 78 欄。使用這台 Mac 已啟用的 vChewing 注音，以原生鍵組出「中」並用方向鍵打開候選窗。組字時正文先水平捲動，空出組字所需的空間。macOS 回報的候選窗左上角相對捲動後插入點的左下角偏移約 0.1、1.0 邏輯點。
+
+Esc 清空組字並關閉候選窗，正文、編輯版本與存檔均維持原樣。重新組字按 Enter 後只有一次原生提交、一次正文插入及一次編輯版本變更。立即點關閉後，另一個程序重開讀到稿尾「中」，原稿 Tab、ANSI 色碼及上一代備份均保留。兩個程序都以 0 退出並收到唯一 Close ACK。
+
+初次校準的輸入法切換工具因 SIGTRAP 結束。以原本已啟用的輸入法繼續，校正實體注音鍵位後補跑通過。畫面、座標、原生事件、保存快照及清理收據位於 `.local/verification/slint-article-arrow/draft-mode-focus-pair/arm64-draft-ime/`。本案涵蓋 vChewing 正文、稿尾候選窗、取消、提交與重開。其他 macOS 輸入法、標題與失焦中的組字，以及 Windows 日文各待驗。
+
 #### cb4fbfc 草稿 XIM 組字與重開
 
 Linux x64 便攜包的出貨執行檔與 Windows ZIP 的草稿種子均核對 SHA-256。隔離 Xvfb／QEMU 使用本機 XIM 測試服務，以 Xlib／Winit 的組字與提交回呼走到草稿的原生輸入欄。[xcb-imdkit 測試服務 API](https://github.com/fcitx/xcb-imdkit/blob/master/test/test_server.c)

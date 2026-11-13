@@ -93,6 +93,8 @@ Windows 候選封裝新增 `Run-Drafts-IME.cmd`。從本機合成看板開啟原
 
 同包的 macOS 草稿正文與標題均通過原生複製、剪下及貼回。正文另驗 CRLF／CR 正規化與 ANSI／Tab 保留，標題另驗貼上後復原、重做與正文逐位元一致。兩輪均核對立即關閉保存、上一代備份與新程序重開。[草稿剪貼簿](drafts.md#1d3e702-apple-silicon-草稿剪貼簿)
 
+同一出貨檔以 macOS 的 vChewing 實際組字，驗證縮窗後的草稿正文第 78 欄候選定位、Esc 取消、單次提交與立即關閉後重開。Windows 日文 IME 由使用者驗收。[Apple Silicon 注音驗收](drafts.md#1d3e702-apple-silicon-草稿正文注音與候選定位)
+
 ### 2. 文章翻頁與取頁（S4）
 
 - **採用 Dioxus 的翻頁規則**　把完整文字列判斷接到 Slint 既有 Flow 和閱讀錨點。PageDown 盡量把最後一個完整文字列接到下一頁頂端，PageUp 使用第一個完整文字列對齊。滾輪保留連續裁切。遇到比視窗高的圖片仍可往前後移動。[Dioxus 翻頁](../assets/inline-images.js) · [Slint 翻頁](../src/bin/slint_research/article/mod.rs)
