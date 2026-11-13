@@ -1,5 +1,9 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-13 96e5159 候選
+
+便攜 ZIP 在 `.local/verification/slint-settings-focus-mount/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-96e5159-offline/`。與 Apple Silicon、Intel Mac 和 Linux x64 同取乾淨 `96e5159`。ZIP SHA-256 為 `17781da24169f797a535117da8af03a9189fba98517ec6b4025546dfddf4f8a5`，Setup 為 `9b813e7f44d03678d05d8a98fe4fbf00329e479e76a5dfacf87dac07e23b4ef3`。核對 ZIP 的 926 個 payload、AMD64 PE 匯入及 Setup 解包後 927 個檔案與便攜版一致。請用 `Check-All.cmd` 重驗設定搜尋，終端日文及草稿注音／日文分別用 `Run-IME.cmd` 和 `Run-Drafts-IME.cmd`。原生安裝、升級、卸載及 IME 待驗。
+
 ## 2026-11-13 57e000c 候選
 
 Windows x64 便攜 ZIP 在 `.local/verification/slint-passive-window-candidate/pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-57e000c-offline/`。與 Apple Silicon、Intel Mac 和 Linux x64 同取乾淨 `57e000c`。ZIP SHA-256 為 `2fdf9bf912da13951d4f7ea55dcd520717d2a78dcebe978bbd2bdcc546cde380`，Setup 為 `1fee0d0c0d37a1c4b85be9f95ef3434a10d000d43d89da83162dd01089154579`。便攜版核對 926 項內容、CRC 與 PE 匯入。Setup 由 Inno Setup 7.1.0 編譯，解包後 927 項與便攜版逐位元一致。

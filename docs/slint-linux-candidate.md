@@ -1,5 +1,9 @@
 # Slint Linux x64 候選包
 
+## 2026-11-13 96e5159 候選
+
+Linux deb／tar.gz 在 `.local/verification/slint-settings-focus-mount/linux/`，與其他三架構同取乾淨 `96e5159`。核對 AMD64 套件資料、主程式、共用內容及 1,111／1,124 檔。deb SHA-256 為 `58fa4c83a242e3c3ef539424b75c80294b91739dcf4b03f2fc4924dea45705af`，tar.gz 為 `2c8c0a17cfbf83853c637d4a587234c6dd20fd72e208256796c13437ed66abd2`。同一修正程式在交付前的 QEMU／Xvfb 設定搜尋回歸通過六輪。此包 Linux 實機待驗。
+
 ## 2026-11-13 57e000c 候選
 
 Linux deb／tar.gz 位於 `.local/verification/slint-passive-window-candidate/linux/`，與其他三架構同取乾淨 `57e000c`。沿用 Debian bookworm amd64 SDK，核對 3,419 份 SDK 檔案及連結。已核對 AMD64 套件資料、兩包主程式、共用內容與 1,111／1,124 個檔案。deb SHA-256 為 `f8a4764500de5f97b27430b68cf78923928c8757367409978d477052a3bdc045`，tar.gz 為 `e36ff35e186c1f5a6a18eb4158aab3d9d83c039575bf0df1fe0a22d8192010ab`。Linux 實機待驗。

@@ -6,7 +6,7 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 目前進度（2026-11-13）
 
-**尚未達到可平替 Dioxus 的驗收條件。** 最新四架構候選皆取自乾淨提交 `57e000c`。Apple Silicon 和 Windows 已核對交付包，Intel Mac 與 Linux 依目前安排先交付封裝。macOS 新版封裝的背景視窗、Windows 原生安裝與 IME、正式簽章的憑證接手和完整效能矩陣仍待驗。正式入口維持 Dioxus。[最新候選](#57e000c-四架構候選)
+**尚未達到可平替 Dioxus 的驗收條件。** 最新四架構候選皆取自乾淨提交 `96e5159`，含設定搜尋切頁焦點修正。Apple Silicon 和 Windows 已核對交付包，Intel Mac 與 Linux 依目前安排先交付封裝。macOS 新版封裝的背景視窗、Windows 原生安裝與 IME、正式簽章的憑證接手和完整效能矩陣仍待驗。正式入口維持 Dioxus。[最新候選](#96e5159-四架構候選)
 
 四架構候選都包含 `4d7d174` 的收藏載入焦點修正。Apple Silicon 和 Windows x64 從同一提交出包，Intel Mac 與 Linux x64 使用僅有文件差異的 `ebc1035` 工作樹建置。Apple Silicon 封裝的草稿保存、跨程序重開及三格式影片八案通過。Intel 封裝在 Rosetta 通過三輪收藏及主視窗，Linux 封裝在 QEMU／Xvfb 通過七項元件回歸。Windows 原生安裝／升級／IME、Intel Mac 與 Linux 原生驗收、完整同負載效能矩陣及正式簽章的憑證接手仍待驗。正式入口維持 Dioxus。[候選位置](#產物保留規則2026-11-09-使用者要求) · [影片音訊結果](#4-媒體s5)
 
@@ -1127,4 +1127,10 @@ Apple Silicon 在禁止網路及原 checkout 來源讀取的環境從交付來�
 
 用實際 Slint 設定元件重現焦點請求早於目標分頁掛載的情況。搜尋結果畫面已繪製，切到站點頁後立即派送欄位 23 的焦點請求。舊程式失敗並正常關閉本機連線。修正後，動態建立的設定控制項會在掛載及收到新請求時處理焦點，取得焦點後消耗請求。重新搜尋、切頁或關閉設定會清除未消耗的請求。
 
-Linux x64／QEMU／Xvfb 以同一測試重跑六輪。每輪都通過掛載前焦點、原有 48 個中英文定位及舊請求取消，並收到唯一 Close ACK。Apple Silicon 的 Slint 與播放器 release 測試共 111 項通過，原生 helper 一項維持忽略。收據在 `.local/verification/slint-settings-focus-mount/`。測試過程未開 macOS 視窗。先前 `57e000c` 交付包仍是原版本，待以修正提交重打同源候選。
+Linux x64／QEMU／Xvfb 以同一測試重跑六輪。每輪都通過掛載前焦點、原有 48 個中英文定位及舊請求取消，並收到唯一 Close ACK。Apple Silicon 的 Slint 與播放器 release 測試共 111 項通過，原生 helper 一項維持忽略。release Clippy、格式和文件檢查通過。收據在 `.local/verification/slint-settings-focus-mount/`。測試過程未開 macOS 視窗。
+
+### 96e5159 四架構候選
+
+Apple Silicon App／DMG／ZIP、Windows x64 便攜 ZIP 與離線 Setup、Intel Mac App／DMG／ZIP、Linux x64 deb／tar.gz 同取乾淨提交 `96e5159`。兩個 macOS 簽章、DMG、ZIP CRC 和 1,248／1,224 檔逐檔核對通過。Windows 核對 AMD64 PE 匯入與 926 份 payload，Setup 解包 927 檔與便攜版逐位元相同。Linux 兩包核對 AMD64、共用內容與 1,111／1,124 檔。獨立還原 837 份來源與完整 Git tree。套件在 `.local/verification/slint-settings-focus-mount/`，Windows Setup 在 `../PTTStella-candidates/windows-96e5159-offline/`。原生驗收範圍仍按平台分列。
+
+沿用原 worktree 和固定 Cargo target。首輪編譯期間 target 目錄消失，已從同一路徑重建。清理上一版的重複 App／ZIP、Linux tar.gz 與本輪打包暫存。這次交付清理的邏輯檔案大小為 920,467,648 bytes，可用空間同期增加 760,537,088 bytes。保留兩版升級對照、焦點反例及固定快取，精確路徑見 `cleanup.json`。[Windows 候選](slint-windows-candidate.md#2026-11-13-96e5159-候選) · [來源還原](slint-product-source.md#2026-11-13-96e5159-候選來源)

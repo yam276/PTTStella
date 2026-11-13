@@ -2,6 +2,10 @@
 
 候選交付中的程式、Slint UI、字型、locale、fixture、工具與文件，須能從獨立來源包還原。原始建置的 commit／dirty／patch、產品來源核對與第三方來源閉包是不同證據；不能把其中一項通過填成全部完成。
 
+## 2026-11-13 96e5159 候選來源
+
+四架構及 Windows Setup 同取乾淨 `96e5159`。既有 `sources.json` 新增 `settings-focus-mount` 對應。從隔離位置核對 837 份來源與 Git tree `bae1c6eeae5734c72e6de4ad1fc86a3e22c12e5b`，manifest SHA-256 為 `e4fecea77c199d1166c505ed57542bd59acf7b8b0c1c40aad35990b40ed5b2ed`。驗證後清理暫存還原目錄，收據在 `.local/verification/slint-settings-focus-mount/all-source-delivery.json`。此提交的還原來源重編與第三方來源閉包仍待驗。
+
 ## 2026-11-13 57e000c 候選來源
 
 四架構及 Windows Setup 同取乾淨 `57e000c`。既有來源包的 `sources.json` 新增 `passive-window-candidate`，保留其他版本對應。用新目錄隔離網路及原 worktree 讀取，核對 837 份產品檔案與 Git tree `4027c438c508555285ae8e7ed3c2458f4c8b5eee`，包含 Winit 上游來源及本機修補。manifest SHA-256 為 `97f519773b3ad2fdf6b7ee24495f93fa3d5bf6ce4abd725c0e00b10d5cb8a9a4`。收據在 `.local/verification/slint-passive-window-candidate/all-source-delivery.json`。
