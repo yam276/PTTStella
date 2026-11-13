@@ -24,4 +24,6 @@ PTT 專用的按鈕登入／鑰匙圈、自動導覽、最近看板、內容名�
 
 Slint 合成站點表單可用 `PTTSTELLA_SLINT_SITE_SWITCH=same-endpoint pttstella-slint --software-renderer --probe-media --verify-media NEW_DIR` 重跑。以 Slint 鍵盤事件選取下拉選單，再執行表單的連線回呼，核對同一位址的 Big5-UAO → GBK → Big5-UAO、三次 Close、雙色中文字和零多餘輸入。實體按鍵與按鈕點擊另行驗收。
 
+站點表單依面板內容區域配置，避免視窗較寬時裁掉表單兩側及「連線切換」。X11 重跑可設定 `PTTSTELLA_SLINT_SITE_SWITCH=native-same-endpoint` 和 `PTTSTELLA_SLINT_SETTINGS_PROBE=native-quit`，沿用同一組啟動參數。在站點表單保留位址，先選 GBK 並點「連線切換」，再選 Big5-UAO 並點同一按鈕，最後正常關窗。探針期待三次同位址連線、三次 Close 及零站端輸入。驗證使用本機合成站。
+
 SSH 離線測試使用本機合成主機金鑰，核對金鑰不符時零驗證、80×24 終端請求、原始雙向資料、正常關閉與中途取消。實站探針只到登入提示並關閉。

@@ -115,7 +115,7 @@ pub fn start(
 ) -> Result<Verification, Box<dyn Error>> {
     Verification::start(ui, directory, "site-switch", move |ui, dir| async move {
         require(
-            peers.case != Case::Native,
+            !peers.case.uses_native_input(),
             "native switch must use passive UI mode",
         )?;
         ready(&ui, &owner, &peers.first).await?;

@@ -33,11 +33,13 @@ export component SitesPanel inherits PanelOverlay {
     private property <int> focus-address-sequence: SitesState.focus-address-sequence;
     changed focus-address-sequence => { if root.visible { address-field.focus(); } }
     keys:=FocusScope {
-      width:parent.width;height:parent.height;
+      width: root.content-width; height: root.content-height;
       key-pressed(event)=>{if !root.embedded && event.text==Key.Escape && !SitesState.composing {SitesState.close-sites();return accept;}return reject;}
       ScrollView {
+          width: keys.width;
+          height: keys.height;
           content-width: self.width;
-      VerticalLayout {alignment: start; padding:root.embedded ? 0px : 16px;spacing:10px;
+      VerticalLayout {width: keys.width; alignment: start; padding:root.embedded ? 0px : 16px;spacing:10px;
         Text {text:SitesState.labels[14];color:#c7d4e7;wrap:word-wrap;}
         Text {text:SitesState.current-note;color:#c7d4e7;wrap:word-wrap;}
         Text {text:SitesState.default-note;color:#f2cd7d;wrap:word-wrap;}

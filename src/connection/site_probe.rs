@@ -22,6 +22,16 @@ pub enum Case {
     CancelDial,
     SameEndpoint,
     Native,
+    NativeSameEndpoint,
+}
+impl Case {
+    pub fn uses_native_input(self) -> bool {
+        matches!(self, Self::Native | Self::NativeSameEndpoint)
+    }
+
+    fn same_endpoint(self) -> bool {
+        matches!(self, Self::SameEndpoint | Self::NativeSameEndpoint)
+    }
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct Audit {
@@ -76,7 +86,7 @@ impl Peers {
                 Ok(l)
             })
             .collect::<Result<Vec<_>, String>>()?;
-        let indices = if case == Case::SameEndpoint {
+        let indices = if case.same_endpoint() {
             [0, 0, 0, 3]
         } else {
             [0, 1, 2, 3]
@@ -112,7 +122,20 @@ impl Peers {
             path: directory.join("site-peer-live.json"),
         });
         shared.record("listening", |_| {})?;
-        std::fs::write(directory.join("site-peer-targets.json"),serde_json::to_vec_pretty(&serde_json::json!({"first":targets[0],"gbk":targets[1],"uao":targets[2],"hanging":targets[3],"case":format!("{case:?}"),"expected_native_input_hex":["","6bd6d0cec4","a4a4a4e5"]})).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
+        let expected_native_input_hex = if case == Case::Native {
+            ["", "6bd6d0cec4", "a4a4a4e5"]
+        } else {
+            ["", "", ""]
+        };
+        std::fs::write(
+            directory.join("site-peer-targets.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "first": targets[0], "gbk": targets[1], "uao": targets[2], "hanging": targets[3],
+                "case": format!("{case:?}"), "expected_native_input_hex": expected_native_input_hex,
+            }))
+            .map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?;
         let state = shared.clone();
         let worker=std::thread::Builder::new().name("pttstella-site-peers".into()).spawn(move||{
             let runtime=tokio::runtime::Builder::new_current_thread().enable_all().build().map_err(|e|e.to_string())?;
@@ -193,7 +216,7 @@ async fn guarded(
     tokio::select! {biased;result=station(listener,state,index,native)=>result,result=early(later)=>result}
 }
 async fn serve(listeners: &[TcpListener], state: &Shared, case: Case) -> Result<(), String> {
-    if case == Case::SameEndpoint {
+    if case.same_endpoint() {
         let listener = &listeners[0];
         for index in 0..2 {
             guarded(listener, &[listener], state, index, false).await?;

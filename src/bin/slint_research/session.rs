@@ -135,9 +135,10 @@ pub fn with_probe(
                     "cancel" => Case::CancelDial,
                     "same-endpoint" => Case::SameEndpoint,
                     "native" => Case::Native,
+                    "native-same-endpoint" => Case::NativeSameEndpoint,
                     _ => return Err("unknown site-switch case".to_string()),
                 };
-                if case == Case::Native
+                if case.uses_native_input()
                     && std::env::var("PTTSTELLA_SLINT_SETTINGS_PROBE").as_deref()
                         != Ok("native-quit")
                 {

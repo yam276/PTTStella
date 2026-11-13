@@ -284,6 +284,8 @@ export component PanelOverlay inherits Rectangle {
     in property <length> panel-width: 900px;
     in property <length> panel-height: 700px;
     in property <length> header-height: 52px;
+    out property <length> content-width: body.width;
+    out property <length> content-height: body.height;
     in property <image> brand-mark: @image-url("../../../assets/icons/pttstella.png");
     in property <image> heading-icon;
     background: root.embedded ? transparent : #00000088;
@@ -325,7 +327,7 @@ export component PanelOverlay inherits Rectangle {
                 }
                 Rectangle { y: parent.height - 1px; width: parent.width; height: 1px; background: #34475b; }
             }
-            Rectangle { vertical-stretch: 1; clip: true; @children }
+            body := Rectangle { vertical-stretch: 1; clip: true; @children }
         }
     }
 }

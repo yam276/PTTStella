@@ -40,7 +40,7 @@ macOS 設定開關在三個程序各跑 12 次，原候選的 footprint 主要�
 | --- | --- | --- |
 | S0 | 共用 Rust 服務、獨立 Slint 入口及可編譯提交序列；四 target 的一般／播放器兩配置 Cargo 依賴 gate | 完整功能案例對照、各平台連結／runtime 依賴與最終基準重跑 |
 | S1 | 格線／雙色字／縮放、無系統CJK字型的控制項fallback及macOS 原生輸入的分立證據；Windows Microsoft注音候選位置／Esc取消／單次提交的使用者人工回報 | 完整候選窗／組字／失焦矩陣、跨螢幕 DPI、可及性與其他平台原生 |
-| S2 | 共用 Connection、登入／保活、站點表單、嚴格切站／雙編碼 bytes、同一 WebSocket 位址切換 Big5-UAO／GBK 的核心與 Slint 表單回歸 | 實體鍵鼠操作同位址換編碼、預設站重啟／不登入、完整信任／vault 原生矩陣 |
+| S2 | 共用 Connection、登入／保活、站點表單、嚴格切站／雙編碼 bytes、同一 WebSocket 位址切換 Big5-UAO／GBK 的核心、Slint 表單與隔離 X11 操作回歸 | macOS／Windows 同位址切換、預設站重啟／不登入、完整信任／vault 原生矩陣 |
 | S3 | 選取、輸出、浮球／選單及原生互動的分立證據 | 全部快捷鍵／pointer／modal／可及性操作矩陣 |
 | S4 | 雙閱讀模式、長文取頁、尋找、名單／右鍵／揭露／底色、書籤／離線、快速前往與最近看板、目前／指定列表文章收藏、共用推文索引／原生定位與側標、推文更新／未讀／保留與復原；macOS基本按鈕、列表右鍵指定收藏與新程序斷線讀回補驗 | 跨平台推文控制／定位與完整鍵盤／焦點矩陣、其他平台列表右鍵及新程序離線操作、混合 Live 等效與全功能回歸 |
 | S5 | 圖片／GIF／文內展圖、主視窗影片；正常關窗／Quit 的 GL 清理；原生時間軸修正；失敗像素／播放狀態與Close audit、macOS OpenGL [libmpv 中介畫面及主視窗兩處取樣](slint-prototype.md#2026-11-11-macos-opengl-的兩處像素取樣)和三格式錯色負向對照，Apple Silicon 候選三格式的原生跳轉／縮窗與 MP4 最小化恢復，三格式在軟體及 OpenGL 下各有完整數位音訊通過案例 | MP4 GPU 像素偶發失敗仍未重現／解決、OpenGL WebM 一輪取樣中斷待定因、多圖峰值、GL 恢復、實聽與跨平台音訊、四架構可交付 runtime |
@@ -1158,5 +1158,7 @@ Apple Silicon App／DMG／ZIP、Windows x64 便攜 ZIP 與離線 Setup、Intel M
 補上同一 WebSocket 位址切換 Big5-UAO → GBK 的共用 Connection 回歸。首輪錯用通用 probe 回報的預設站位址，等不到本機第二筆連線。修正測試從第一筆就明確選用本機目標後，核對 Close 順序、新世代與解碼狀態重設、舊輸入拒絕及精確 GBK bytes。Connection 測試 86 項通過，原生站點表單待驗。[站點與編碼](sites.md)
 
 Slint 站點表單新增同位址探針。Linux x64 在 QEMU／Xvfb 下，以合成鍵盤事件操作實際編碼下拉選單，再走表單連線回呼。Big5-UAO → GBK → Big5-UAO 使用同一個 TCP listener，畫面確認各次雙色中文字，世代 2 → 4 → 6。站端逐次等待舊 Close 後才接受新連線，三次都收到 Close，刻意送入的舊世代按鍵皆未到站端。原有切站、斷線後切站、取消待連線及三項 peer 單元測試通過。按鈕的合成 Tab／點擊嘗試未通過，保留原始收據；實體鍵鼠與按鈕端到端操作待驗。驗收程式、來源 patch、結果及暫存清理見 `.local/verification/slint-site-same-endpoint/`。本輪保留 `d047e55` 四架構候選，未開 macOS 前景視窗。[重跑命令](sites.md)
+
+隔離 X11 補驗在 1,000×690 的實際視窗重現站點表單左右裁切，「連線切換」只露出一角。單獨調整捲動區尺寸仍重現。將表單尺寸綁定面板內層內容區後，X11 鍵鼠事件能選取 GBK、按下連線切換，再用 Tab／Enter 選回 Big5-UAO 並點擊同一按鈕。同一 TCP 位址完成三次連線，各次 Close 順序正確，沒有額外站端輸入，視窗正常關閉且程序 exit 0。早期兩次中止、畫面和最終收據保留於同一目錄的 `native-x11-*`。本輪未開 macOS 前景視窗，修正尚未進入 `d047e55` 候選包。[重跑命令](sites.md)
 
 清理前一版重複的 macOS App／ZIP、Linux tar.gz，以及本輪封裝暫存與兩個 Setup 工具容器。保留 `96e5159` 的 DMG、deb、Windows ZIP 及 Setup 供比對，沿用固定 Cargo target、SDK 與獨特驗收證據。此次移除檔案的邏輯大小為 920,756,528 bytes，檔案系統可用空間同期增加 784,216,064 bytes，精確路徑見 `cleanup.json`。最新 Windows 實機安裝及兩種 IME、Apple Silicon 原生焦點／正式 Keychain 及完整效能對照待驗。正式入口維持 Dioxus。

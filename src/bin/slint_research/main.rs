@@ -710,7 +710,7 @@ fn run(
         || toolkit_inline
         || site_peers
             .as_ref()
-            .is_some_and(|peers| peers.case != pttstella::connection::site_probe::Case::Native)
+            .is_some_and(|peers| !peers.case.uses_native_input())
         || verify_media_scene
             && (toolkit_updates || toolkit_settings || toolkit_bookmarks || toolkit_video);
     let selector = || {
