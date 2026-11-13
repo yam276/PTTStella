@@ -2,6 +2,22 @@
 
 這份文件記錄 S0／S8 的量測工具及目前證據，不是效能通過報告。完整負載、次數與平台門檻仍以[平替計畫](slint-evaluation-plan.md#同負載效能門檻)為準。
 
+## 2026-11-13 兩個最小化連線視窗的資源對照
+
+在同一台 Apple M3 Ultra／macOS 15.7.7 上，比較 Apple Silicon Slint `4d7d174` 和相容回退 Dioxus `82bc81f`。Slint 使用預設軟體繪圖，Dioxus 使用系統 WKWebView。每輪開兩個新程序，使用獨立測試 Bundle ID 與隔離設定副本。兩個程序連到不同的本機 TLS WebSocket peer，收到同一份合成 80×24 格線。先核對每個 1040×768 視窗中的第 1 與第 22 行，再透過 macOS 輔助使用介面最小化，讀回最小化狀態。
+
+按 Slint、Dioxus、Dioxus、Slint、Slint、Dioxus 交錯執行六輪。每輪兩組程序族各有 101 筆穩定樣本，共同取樣區間至少 10 秒，同序號的兩筆樣本最多相差 7.5 ms。每個程序另有 186–188 筆視窗狀態觀察，取樣期間均在背景且未重新顯示。兩組程序族的 PID 和啟動計數器均無重疊。Dioxus 每個程序族包含主程序、WebKit 的 WebContent／GPU／Networking 及 AudioToolbox helper。Slint 每組只觀察到主程序。
+
+| 同時最小化兩個連線視窗，三輪中位數 | Slint | Dioxus |
+| --- | ---: | ---: |
+| 兩組程序族合計 physical footprint 峰值 | 201.1 MiB | 932.4 MiB |
+| 兩組程序族合計 RSS 峰值 | 421.4 MiB | 897.6 MiB |
+| 兩組程序族合計 CPU 時間 | 8.31 ms | 95.78 ms |
+
+此負載下 Slint 的 footprint 峰值中位數低 78.4%。六輪的 12 個連線都收到唯一 Close 回覆，所有取樣到的程序均已退出，隔離設定及站點資料保持原樣。LaunchServices 未提供可觀察的數字退出碼。這組證據涵蓋同時最小化的已連線視窗，前景操作、雙開切篇、播放器與完整 S8 效能矩陣仍待驗。
+
+證據在 `.local/verification/slint-s8-multiwindow-current/`。可在同層新證據目錄沿用 `compare.py`、`WindowControl.swift` 與 `finish.py`，先執行 `compare.py setup`，再依上述順序傳入 `min01-slint:slint` 等唯一案名，最後執行 `finish.py`。本輪以既有候選與回退 App 複製並重簽，兩版主程式機器碼段均與原包相符。已清理隔離 App、設定副本與專用快取，共 384,802,954 regular-file bytes。實際路徑、磁碟觀測與保留項目在 `cleanup.json`。
+
 ## 2026-11-13 現行候選前景閒置試跑
 
 從 Apple Silicon 候選 `4d7d174` 建立專用測試身分，核對主程式機器碼區段，再以一般入口及相同本機 TLS WebSocket 合成格線啟動。1040×768 視窗擷取核對第一與第 22 行標記，關窗收到唯一 Close 回覆。10 秒資源取樣區間的 182 筆視窗觀察均由其他程序占用前景，因此該輪標為 `not_ready`，前景比較仍待驗。

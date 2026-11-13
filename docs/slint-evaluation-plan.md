@@ -356,6 +356,8 @@ Apple Silicon `100b75f` 一般入口補驗直接連結、dyld 映射及程序族
 
 ### 同負載效能門檻
 
+Apple Silicon 現行候選 `4d7d174` 已與 Dioxus `82bc81f` 各完成三輪同時最小化兩個連線視窗的資源對照。兩組程序族合計的 physical footprint 峰值中位數為 201.1／932.4 MiB，六輪共 12 個連線均正常 Close。前景雙開及其他同負載效能案例仍待驗。[雙開量測](slint-macos-measurement.md#2026-11-13-兩個最小化連線視窗的資源對照)
+
 現行 Apple Silicon 候選的前景閒置試跑已取得合成格線和正常 Close。資源取樣區間的 182 筆視窗觀察都顯示其他程序在前景，該輪標為 `not_ready`。[試跑收據](slint-macos-measurement.md#2026-11-13-現行候選前景閒置試跑)
 
 - **固定條件**　同一台機器、相同 release 設定與等效功能、視窗大小、DPI、字型、焦點狀態、loopback replay／HTTP 資料和 driver；記錄 Slint renderer 與基準 WebView 版本。先在低階 Windows 登記機型，再測其餘目標。冷／暖分開，各至少 10 次啟動、每組至少 100 次輸入或翻頁；交錯兩版順序，記錄冷啟動定義、原始數據、誤差和離群原因。
