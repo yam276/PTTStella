@@ -6,6 +6,8 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 目前進度（2026-11-13）
 
+Apple Silicon 已用 `cb4fbfc` 出貨 App 與同源 Dioxus 重測。837 行從首筆取頁到最後畫面確認的中位數為 523／564 ms，快取 PageDown 為 21.9／71.0 ms。雙 GIF 前景播放的程序族 footprint 峰值中位數為 131／742 MiB，10 秒累積 CPU 為 1.092／1.193 秒，三組 CPU 差距有波動。使用者將驗 Windows 日文 IME。[量測結果及範圍](slint-macos-measurement.md#2026-11-13-cb4fbfc-長文快取翻頁與雙-gif)
+
 四架構候選已同步至 `cb4fbfc` 的產品來源，包含 Apple Silicon／Intel Mac App、Windows x64 便攜 ZIP／離線 Setup 與 Linux x64 deb／tar.gz。這版新增文章首尾方向鍵切篇。切換前仍待驗 macOS 封裝的原生焦點、Windows 實機安裝及注音／日文 IME、正式簽章的憑證接手及完整效能矩陣。Intel Mac 與 Linux x64 實機依指示暫緩。正式入口維持 Dioxus。[最新候選](#cb4fbfc-四架構候選)
 
 四架構候選都包含 `4d7d174` 的收藏載入焦點修正。Apple Silicon 和 Windows x64 從同一提交出包，Intel Mac 與 Linux x64 使用僅有文件差異的 `ebc1035` 工作樹建置。Apple Silicon 封裝的草稿保存、跨程序重開及三格式影片八案通過。Intel 封裝在 Rosetta 通過三輪收藏及主視窗，Linux 封裝在 QEMU／Xvfb 通過七項元件回歸。Windows 原生安裝／升級／IME、Intel Mac 與 Linux 原生驗收、完整同負載效能矩陣及正式簽章的憑證接手仍待驗。正式入口維持 Dioxus。[候選位置](#產物保留規則2026-11-09-使用者要求) · [影片音訊結果](#4-媒體s5)
