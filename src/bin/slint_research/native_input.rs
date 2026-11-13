@@ -404,8 +404,9 @@ fn mount_window(
                 return PreventDefault;
             }
         }
+        let input_state = &input;
         let result = (|| {
-            let mut input = input.borrow_mut();
+            let mut input = input_state.borrow_mut();
             if matches!(
                 event,
                 WindowEvent::KeyboardInput { .. } | WindowEvent::Ime(_)
@@ -898,6 +899,20 @@ fn mount_window(
                     }
                     ui.invoke_clear_selection();
                     ui.invoke_station_mouse_cancel();
+                    let status = input.keyboard.status(&context);
+                    if (!article_focused || !status.enabled || status.mode == "normal")
+                        && pttstella::article_cache::article_arrow(&key).is_some()
+                        && let Some(article) = &article
+                    {
+                        drop(input);
+                        if article.article_arrow(&key) {
+                            if article_focused && status.mode == "normal" {
+                                input_state.borrow_mut().keyboard.reset();
+                            }
+                            return PreventDefault;
+                        }
+                        input = input_state.borrow_mut();
+                    }
                     match input.keyboard.key(&key, &context) {
                         Effect::Native(bytes) => {
                             drop(input);

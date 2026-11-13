@@ -69,6 +69,18 @@ pub fn start(
             directory,
         );
     }
+    use crate::session::Probe::{ArticleSwitch, ArticleSwitchTerminal};
+    if matches!(case, ArticleSwitch | ArticleSwitchTerminal) {
+        return Verification::start(ui, directory, "article-switch", move |ui, directory| {
+            verify_switch(
+                ui,
+                directory,
+                owner,
+                connection,
+                case == ArticleSwitchTerminal,
+            )
+        });
+    }
     if case == crate::session::Probe::ArticleSegmented {
         return Verification::start(ui, directory, "segmented-load", move |ui, directory| {
             verify_segment(ui, directory, owner)
@@ -637,6 +649,177 @@ async fn verify_segment(
             "requests_before_continuation": boundary_requests,
             "requests": owner.requests.get(),
             "article_loop_joined": true,
+        }))
+        .map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())
+}
+
+async fn verify_switch(
+    ui: TerminalWindow,
+    directory: PathBuf,
+    owner: Rc<ArticleSession>,
+    connection: Rc<Connection>,
+    terminal: bool,
+) -> Result<(), String> {
+    use pttstella::{navigation::Intent, vim::Key};
+
+    let settled = |article: char, station_line: usize| {
+        verification::foreground(&ui, true);
+        let view = connection.updates.borrow().clone();
+        let expected = format!("ARTICLE {article} line {station_line:03}");
+        let core = owner.core.borrow();
+        let visible_line = if terminal { station_line } else { 1 };
+        let visible = format!("ARTICLE {article} line {visible_line:03}");
+        view.phase == Phase::Connected
+            && !view.input_pending
+            && !view.output_pending
+            && selection::extract(&view.frame, &Selection::Line { row: 0 })
+                .is_ok_and(|line| line.text.trim_end() == expected)
+            && !core.dirty()
+            && !core.has_in_flight()
+            && core.navigation_shown(view.stamp())
+            && core.last_displayed().is_some_and(|p| {
+                selection::extract(&p.frame, &Selection::Line { row: 0 })
+                    .is_ok_and(|line| line.text.trim_end() == visible)
+            })
+            && if terminal {
+                !ui.get_article_active() && core.reading_progress().is_none()
+            } else {
+                ui.get_article_reading_ready()
+                    && core
+                        .reading_progress()
+                        .is_some_and(|(_, first, last, state)| {
+                            first == 1 && last == 45 && state == Some(LoadState::Complete)
+                        })
+            }
+    };
+    let ready = |article, line| {
+        let owner = owner.clone();
+        async move {
+            until(
+                || settled(article, line),
+                "adjacent article page did not settle",
+            )
+            .await
+            .map_err(|error| {
+                format!(
+                    "{error}: article={article} line={line} {}",
+                    owner.diagnostics()
+                )
+            })
+        }
+    };
+    let send = |bytes: &[u8]| {
+        let generation = connection.updates.borrow().generation;
+        owner.route_input(generation, bytes.to_vec())
+    };
+    let arrow = |down: bool, repeat| {
+        let name = if down { "ArrowDown" } else { "ArrowUp" };
+        require(
+            owner.article_arrow(&Key {
+                key: name.into(),
+                code: name.into(),
+                ctrl: false,
+                alt: false,
+                shift: false,
+                repeat,
+            }),
+            "article direction key bypassed the edge policy",
+        )
+    };
+
+    if terminal {
+        ready('A', 1).await?;
+        send(b"\x1b[6~")?;
+        ready('A', 23).await?;
+        send(b"\x1b[H")?;
+        ready('A', 1).await?;
+    } else {
+        ready('A', 23).await?;
+        ui.invoke_article_navigate(4);
+        require(
+            ui.get_article_offset_y() == 0.,
+            "Home did not reach the cached head",
+        )?;
+        require(
+            owner.local_intent(Intent::Lines {
+                down: false,
+                count: 1,
+            }),
+            "Vim line movement bypassed the cache",
+        )?;
+    }
+    let first_scope = owner.progress().map(|(id, ..)| id);
+    let first_line = if terminal { 1 } else { 23 };
+    let before = owner.requests.get();
+    arrow(false, true)?;
+    owner
+        .core
+        .borrow_mut()
+        .set_article_boundary_navigation(false);
+    ui.invoke_article_session_updated();
+    ready('A', first_line).await?;
+    arrow(false, false)?;
+    require(
+        owner.requests.get() == before,
+        "repeat or disabled option switched article",
+    )?;
+    owner
+        .core
+        .borrow_mut()
+        .set_article_boundary_navigation(true);
+    ui.invoke_article_session_updated();
+    ready('A', first_line).await?;
+    arrow(false, false)?;
+    if terminal {
+        ready('B', 1).await?;
+        send(b"\x1b[6~")?;
+    }
+    ready('B', 23).await?;
+    let second_scope = owner.progress().map(|(id, ..)| id);
+    require(
+        terminal || first_scope < second_scope,
+        "previous article reused the old cache",
+    )?;
+    if !terminal {
+        ui.invoke_article_navigate(5);
+        require(
+            ui.get_article_offset_y() > 0.,
+            "End did not reach the cached tail",
+        )?;
+        require(
+            owner.local_intent(Intent::NextPage),
+            "Page Down bypassed the cache",
+        )?;
+    }
+    let before_next = owner.requests.get();
+    arrow(true, true)?;
+    require(
+        owner.requests.get() == before_next,
+        "held Down switched article",
+    )?;
+    arrow(true, false)?;
+    if terminal {
+        ready('C', 1).await?;
+        send(b"\x1b[6~")?;
+    }
+    ready('C', 23).await?;
+    require(
+        terminal || second_scope < owner.progress().map(|(id, ..)| id),
+        "next article reused the old cache",
+    )?;
+    require(
+        owner.requests.get() == if terminal { 2 } else { 5 },
+        "duplicate article switch or preload",
+    )?;
+    verification::capture(&ui, &directory, "article-c.png")?;
+    std::fs::write(
+        directory.join("article-switch.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "terminal": terminal, "requests": owner.requests.get(),
+            "scopes": [first_scope, second_scope, owner.progress().map(|(id, ..)| id)],
+            "final": owner.diagnostics()
         }))
         .map_err(|error| error.to_string())?,
     )

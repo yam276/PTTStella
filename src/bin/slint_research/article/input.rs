@@ -28,6 +28,59 @@ impl ArticleSession {
         self.core.borrow().reading_context(view)
     }
 
+    pub fn article_arrow(&self, key: &pttstella::vim::Key) -> bool {
+        let Some(down) = article_cache::article_arrow(key) else {
+            return false;
+        };
+        let Some(ui) = self.ui.upgrade() else {
+            return false;
+        };
+        let station = self.connection.updates.borrow().clone();
+        if ui.get_article_active() {
+            let native = self.view.borrow().clone();
+            if self.input_context(&station).is_some()
+                && let Some(native) = native
+            {
+                let movement = super::ReadingMove::Key(Intent::Lines { down, count: 1 });
+                if native.move_reading(movement) {
+                    let can_switch = !key.repeat
+                        && self.core.borrow().adjacent_article_allowed(
+                            station.stamp(),
+                            down,
+                            &station,
+                        );
+                    if can_switch {
+                        self.switch_article(&station, down);
+                    } else {
+                        self.at_reading_edge(movement, native.motion_revision.get());
+                    }
+                }
+            }
+            return true;
+        }
+        let context = station.context();
+        let core = self.core.borrow();
+        let terminal_boundary = article_cache::terminal_arrow_boundary(
+            key,
+            &context,
+            core.article_boundary_navigation(),
+        );
+        if let Some(bytes) = terminal_boundary {
+            let allowed = !bytes.is_empty()
+                && core.navigation_shown(station.stamp())
+                && station.mouse.route == pttstella::mouse::input::Route::Local
+                && !station.input_pending
+                && !station.output_pending
+                && !station.login_pending;
+            drop(core);
+            if allowed {
+                self.switch_article(&station, down);
+            }
+            return true;
+        }
+        false
+    }
+
     pub fn local_intent(&self, intent: Intent) -> bool {
         let Some(ui) = self.ui.upgrade() else {
             return false;

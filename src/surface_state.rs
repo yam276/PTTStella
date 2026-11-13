@@ -657,6 +657,15 @@ impl SurfaceState {
                         }
                 })
     }
+    pub fn article_boundary_navigation(&self) -> bool {
+        self.article_boundary_navigation
+    }
+    pub fn restore_rejected_article_switch(&mut self, stamp: Stamp, view: &View) {
+        if self.reading_reset == Some(stamp) && stamp == view.stamp() {
+            self.reading_reset = None;
+            self.update(view);
+        }
+    }
     pub fn set_article_mode(&mut self, mode: ArticleMode) -> bool {
         if self.article_mode == mode {
             return false;

@@ -59,6 +59,8 @@ pub enum Probe {
     ArticleFindTerminal,
     ArticleLong,
     ArticleSegmented,
+    ArticleSwitch,
+    ArticleSwitchTerminal,
     ArticleStall,
     ArticleTerminal,
     Input,
@@ -249,6 +251,8 @@ pub fn with_probe(
         Probe::ArticleFind | Probe::ArticleFindTerminal => "slint_article_find",
         Probe::ArticleLong => "slint_long_load",
         Probe::ArticleSegmented => "slint_segmented_load",
+        Probe::ArticleSwitch => "slint_article_switch",
+        Probe::ArticleSwitchTerminal => "slint_terminal_switch",
         Probe::ArticleStall => "slint_stalled_article",
         Probe::ArticleTerminal => "slint_terminal_pages",
         Probe::Input => "slint_input",
@@ -384,6 +388,9 @@ pub fn with_probe(
                     .article_page(2)?,
             ),
             Probe::Reconnect => Connection::start_toast_reconnect_probe(bytes),
+            Probe::ArticleSwitch | Probe::ArticleSwitchTerminal => {
+                Connection::start_article_switch_probe()
+            }
             Probe::ArticleSegmented => Connection::start_fast_article_load_probe(
                 pttstella::replay::segmented_load_page(1)?,
                 (2..=190)

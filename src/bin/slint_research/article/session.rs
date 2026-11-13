@@ -85,6 +85,7 @@ pub struct ArticleSession {
     cancellation: RefCell<Option<NavigationCancellation>>,
     busy: Cell<bool>,
     edge_fetch: RefCell<Option<EdgeFetch>>,
+    adjacent_request: Cell<Option<navigation::Stamp>>,
     serial: Cell<u64>,
     next_paint: Cell<Instant>,
     closed: Cell<bool>,
@@ -161,6 +162,7 @@ impl ArticleSession {
             cancellation: RefCell::new(None),
             busy: Cell::new(false),
             edge_fetch: RefCell::new(None),
+            adjacent_request: Cell::new(None),
             serial: Cell::new(0),
             next_paint: Cell::new(Instant::now()),
             closed: Cell::new(false),
@@ -240,7 +242,14 @@ impl ArticleSession {
                             if let Some(cancel)=owner.cancellation.take() && result.1.is_err(){cancel.cancel();}
                             let destination=owner.destination_wait.borrow_mut().take();
                             if let Some(destination)=destination {(destination.complete)(result.1);}
-                            else if let Err(error)=result.1 {owner.page_failed(error);}
+                            else if let Err(error)=result.1 {
+                                if let Some(stamp)=owner.adjacent_request.get() {
+                                    let view=owner.connection.updates.borrow().clone();
+                                    owner.core.borrow_mut().restore_rejected_article_switch(stamp, &view);
+                                }
+                                owner.page_failed(error);
+                            }
+                            owner.adjacent_request.set(None);
                         }
                         notify.notify_one();
                     }
@@ -346,17 +355,46 @@ impl ArticleSession {
     }
 
     fn request_page(&self, view: &View, intent: Intent) -> Result<(), String> {
-        let (reply, cancellation) = self.connection.request_cancellable_navigate(
-            view.stamp(),
-            intent,
-            navigation::Source::Button,
-        )?;
+        self.request_navigation(view, intent, navigation::Source::Button)
+    }
+
+    fn request_navigation(
+        &self,
+        view: &View,
+        intent: Intent,
+        source: navigation::Source,
+    ) -> Result<(), String> {
+        let (reply, cancellation) =
+            self.connection
+                .request_cancellable_navigate(view.stamp(), intent, source)?;
         self.busy.set(true);
         self.cancellation.replace(Some(cancellation));
         self.requests.set(self.requests.get() + 1);
         self.serial.set(self.serial.get().wrapping_add(1));
         self.reply.replace(Some(reply));
         Ok(())
+    }
+
+    pub(super) fn switch_article(&self, view: &View, down: bool) {
+        let Some(ui) = self.ui.upgrade() else { return };
+        if self.closed.get()
+            || self.busy.get()
+            || self.edge_fetch.borrow().is_some()
+            || ui.get_article_blocked()
+            || ui.get_article_active() && !self.allowed(&ui)
+        {
+            return;
+        }
+        let intent = Intent::AdjacentArticle { down };
+        match self.request_navigation(view, intent, navigation::Source::Keyboard) {
+            Ok(()) => {
+                self.adjacent_request.set(Some(view.stamp()));
+                self.focus_after_paint.set(ui.get_article_focused());
+                self.core.borrow_mut().article_navigation(intent, view);
+                self.notify.notify_one();
+            }
+            Err(error) => self.notice(error),
+        }
     }
 
     fn clear_edge_fetch(&self) {
@@ -491,6 +529,8 @@ impl ArticleSession {
         }
         if self.destination_wait.borrow().as_ref().is_some_and(|d| {
             d.stamp.generation != view.generation || view.phase != Phase::Connected
+        }) || self.adjacent_request.get().is_some_and(|stamp| {
+            stamp.generation != view.generation || view.phase != Phase::Connected
         }) {
             self.cancel_command();
         }
@@ -521,9 +561,9 @@ impl ArticleSession {
         if no_article || scope_changed {
             self.permit.set(None);
             self.shown.set(None);
-            // Destination receipts share this slot but are valid on menu/list
-            // screens with no article. Only a reading request depends on scope.
-            if self.destination_wait.borrow().is_none() {
+            // A destination or article switch can clear the current reading
+            // scope before the station acknowledges the command.
+            if self.destination_wait.borrow().is_none() && self.adjacent_request.get().is_none() {
                 self.cancel_command();
             }
             if let Some(view) = self.view.borrow().as_ref() {
@@ -803,6 +843,7 @@ impl ArticleSession {
             && !self.core.borrow().has_in_flight()
             && !view.input_pending
             && !view.output_pending
+            && self.adjacent_request.get().is_none()
             && now >= self.next_paint.get()
         {
             let packet = {
@@ -977,6 +1018,7 @@ impl ArticleSession {
     }
     fn cancel_command(&self) {
         self.clear_edge_fetch();
+        self.adjacent_request.set(None);
         if let Some(cancel) = self.cancellation.take() {
             cancel.cancel();
         }

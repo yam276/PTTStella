@@ -195,20 +195,24 @@ pub fn local_intent(intent: crate::navigation::Intent) -> bool {
     )
 }
 
-/// Only unmodified physical arrows can cross an article edge; paging and Vim letters cannot.
+/// Only unmodified arrows can cross an article edge.
+pub fn article_arrow(key: &crate::vim::Key) -> Option<bool> {
+    if key.ctrl || key.alt || key.shift {
+        return None;
+    }
+    match key.key.as_str() {
+        "ArrowDown" => Some(true),
+        "ArrowUp" => Some(false),
+        _ => None,
+    }
+}
+
 pub fn terminal_arrow_boundary(
     key: &crate::vim::Key,
     context: &Context,
     enabled: bool,
 ) -> Option<Vec<u8>> {
-    if key.ctrl || key.alt || key.shift {
-        return None;
-    }
-    let down = match key.key.as_str() {
-        "ArrowDown" => true,
-        "ArrowUp" => false,
-        _ => return None,
-    };
+    let down = article_arrow(key)?;
     let Context::ArticleReading {
         first_line,
         percent,

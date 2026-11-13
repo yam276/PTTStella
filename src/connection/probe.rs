@@ -986,6 +986,7 @@ pub(super) async fn serve(
                 socket.send(Message::Binary(page[..split].to_vec().into())).await.map_err(|e|e.to_string())?;
                 tokio::time::sleep(Duration::from_millis(80)).await;
                 socket.send(Message::Binary(page[split..].to_vec().into())).await.map_err(|e|e.to_string())?;
+                eprintln!("synthetic article switch {article} {}", if second { 2 } else { 1 });
             }
             return match socket.next().await {
                 Some(Ok(Message::Close(_))) => socket.flush().await.map_err(|e|e.to_string()),
