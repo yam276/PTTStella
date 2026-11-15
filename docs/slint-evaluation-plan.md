@@ -4,9 +4,19 @@
 
 Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分段接續長文、大型 GIF 與選用的自動開圖。Slint 起點為獨立 worktree 內的 `slint-research`／`pttstella-slint` 原型。原型已在 macOS arm64 實測雙色字、80×24、放大拖曳、全螢幕及獨立輸入欄的威注音。實體 Retina、終端內組字、跨平台原生輸入和與 Dioxus 的同負載效能比較仍待驗。實驗數據及已知差異見 [離線原型紀錄](slint-prototype.md)。
 
-## 目前進度（2026-11-14）
+## 目前進度
 
-目前四架構候選與 Windows 離線 Setup 取同一乾淨提交 `1d3e702`，包含草稿色碼選單確認後回焦。Apple Silicon 出貨檔已驗三種顯示、鍵盤回焦、保存、重開及帶回合成站端。Windows 離線 Setup 解包與便攜版 927 檔逐位元一致，並在隔離 Wine 完成升級、回退與卸載。Windows、Intel Mac 與 Linux 的實機結果依各平台紀錄。正式入口維持 Dioxus。[草稿操作](drafts.md#1d3e702-色碼選單回焦) · [四架構交付](#1d3e702-草稿回焦候選) · [Windows 安裝驗收](slint-windows-candidate.md#2026-11-14-1d3e702-離線-setup-與升退)
+### 2026-11-15 固定候選驗收
+
+先固定 `6006024` 供 Apple Silicon 與 Windows x64 驗收。Apple Silicon、Windows x64、Intel Mac 與 Linux x64 已有同提交候選，Windows 離線 Setup 與便攜 ZIP 的 927 檔逐一核對，隔離 Wine 的九項安裝、升退和卸載案例通過。Apple Silicon 出貨檔通過 Esc 取消長文載入、手動取一頁、繼續載入，以及草稿保存和跨程序重開。Intel Mac 與 Linux x64 依既有安排先留封裝。正式入口維持 Dioxus。[文章驗收](#2-文章翻頁與取頁s4) · [Windows 驗收](slint-windows-candidate.md#2026-11-15-6006024-固定候選)
+
+候選決策優先補兩項。Windows 以現有便攜包重試終端及草稿日文 IME。實站用候選 App 由使用者手動登入，確認進板、開一篇長文、翻頁、斷線重連及停在登入提示。記錄站點協定、候選版本和遇到異常的操作，實站紀錄不附帳密或驗證碼。這兩項的結果用來決定是否以 Slint 作後續開發基礎，正式切換仍依 S9。
+
+日常修正沿用現有 worktree、Cargo target 和驗收包。依受影響的功能和平台增量編譯、執行相應回歸；同一提交已有可用包就直接使用。四架構整批封裝和安裝升退集中到候選定版或發佈驗收。
+
+### 1d3e702 驗收紀錄
+
+四架構候選與 Windows 離線 Setup 取同一乾淨提交 `1d3e702`，包含草稿色碼選單確認後回焦。Apple Silicon 出貨檔已驗三種顯示、鍵盤回焦、保存、重開及帶回合成站端。Windows 離線 Setup 解包與便攜版 927 檔逐位元一致，並在隔離 Wine 完成升級、回退與卸載。Windows、Intel Mac 與 Linux 的實機結果依各平台紀錄。[草稿操作](drafts.md#1d3e702-色碼選單回焦) · [四架構交付](#1d3e702-草稿回焦候選) · [Windows 安裝驗收](slint-windows-candidate.md#2026-11-14-1d3e702-離線-setup-與升退)
 
 Apple Silicon 用 `1d3e702` 出貨 App 與同開發線的 Dioxus release 複測。837 行完整快取均約 525 ms，全文 renderer ACK 為 538／553 ms。每版每方向各 100 次，快取 PageDown p95 為 39.3／86.6 ms，PageUp p95 為 38.8／87.2 ms。雙 GIF 每版三輪，程序族 footprint 峰值中位數為 118／713 MiB，10 秒 CPU 為 1.118／1.421 秒。兩輪失焦已排除並補跑。Windows 日文 IME 由使用者驗收。[複測結果](slint-macos-measurement.md#2026-11-14-1d3e702-同負載複測)
 

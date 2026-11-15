@@ -1,5 +1,11 @@
 # Slint Windows x64 完整候選
 
+## 2026-11-15 6006024 固定候選
+
+便攜 ZIP 與離線 Setup 均取自乾淨 `6006024`。便攜包在 `.local/verification/slint-article-arrow/article-escape-pair/windows/`，離線 Setup 在 `../PTTStella-candidates/windows-6006024-offline/`。Setup 解包核對與便攜版 927 檔逐位元相同。隔離 Wine／QEMU 的九案全數通過，包括由 `1d3e702` 升級、回退、重裝、草稿重開及卸載。卸載保留合成草稿及模擬的 Dioxus 目錄。驗收與清理收據在同組的 `windows-setup/`，本輪安裝測試暫存已移除。
+
+Windows 日文實機驗收用現有便攜 ZIP。解壓到新資料夾，執行 `Run-IME.cmd`，切到 Microsoft 日文輸入法的「あ」，點第 22 行，輸入 `konnichiha`，按 Enter 確認「こんにちは」只提交一次且編碼結果為 10 bytes。再執行 `Run-Drafts-IME.cmd`，在草稿第三行提交「こんにちは」後立即關閉，完全關閉 App 後重跑入口並讀回同一稿。回報組字、提交及重開結果，異常可附該次 `evidence/run-*.log`。
+
 ## 2026-11-14 1d3e702 離線 Setup 與升退
 
 Windows x64 便攜 ZIP 和離線 Setup 都使用乾淨 `1d3e702` 的出貨執行檔，與 Apple Silicon、Intel Mac 及 Linux 候選同源。固定 Inno Setup 7.1.0 編譯成功，解包後 927 個檔案與 ZIP 逐位元相符，AMD64、一般與延遲匯入核對通過。便攜包位於 `.local/verification/slint-article-arrow/draft-mode-focus-pair/windows/`，離線 Setup 位於 `../PTTStella-candidates/windows-1d3e702-offline/`。
