@@ -398,6 +398,10 @@ impl Output {
 
     pub fn current(&self, ui: &TerminalWindow) -> Option<Stamp> {
         let view = self.connection.updates.borrow();
+        self.current_for_view(ui, &view)
+    }
+
+    fn current_for_view(&self, ui: &TerminalWindow, view: &View) -> Option<Stamp> {
         if self.closed.get()
             || ui.get_frame_paint_pending()
             || ui.get_switching_station()
@@ -413,7 +417,7 @@ impl Output {
             return self
                 .article
                 .as_ref()?
-                .output_identity(&view)
+                .output_identity(view)
                 .map(|_| view.stamp());
         }
         (!ui.get_frame_paint_pending()
@@ -448,14 +452,16 @@ impl Output {
         }
     }
     pub fn with_frame<R>(&self, ui: &TerminalWindow, read: impl FnOnce(&Frame) -> R) -> Option<R> {
-        self.current(ui)?;
-        if self.article.is_some() {
-            self.article
-                .as_ref()?
-                .with_output(&self.connection.updates.borrow(), |paint| {
-                    read(&paint.frame)
-                })
+        let view = self.connection.updates.borrow();
+        self.current_for_view(ui, &view)?;
+        if let Some(article) = &self.article {
+            let paint = article.borrow_output(&view)?;
+            // The callback may read connection state too. A queued publisher
+            // can block that read until the original watch guard is dropped.
+            drop(view);
+            Some(read(&paint.frame))
         } else {
+            drop(view);
             Some(read(self.renderer.borrow().frame()))
         }
     }

@@ -175,6 +175,35 @@ pub fn start(
                 matches!(output.geometry(&ui), Some(SurfaceGeometry::Article(_))),
                 "output consumed terminal geometry",
             )?;
+            // Force a publication during the article frame callback. This is
+            // the window where a queued writer can block a nested watch read.
+            let mut updates = connection.updates.clone();
+            let keep_alive = updates.borrow().keep_alive;
+            let (published, publication) = std::sync::mpsc::sync_channel(1);
+            let observer = tokio::spawn(async move {
+                let changed = updates.wait_for(|view| view.keep_alive != keep_alive).await;
+                let _ = published.send(changed.is_ok());
+            });
+            let during_read = output.with_frame(&ui, |_| {
+                connection.keep_alive(!keep_alive)?;
+                publication
+                    .recv_timeout(Duration::from_secs(2))
+                    .map_err(|_| {
+                        "connection could not publish during article frame callback".to_owned()
+                    })
+            });
+            observer.abort();
+            let _ = observer.await;
+            require(
+                during_read.ok_or("article frame callback was not admitted")??,
+                "connection closed before publishing during article frame callback",
+            )?;
+            connection.keep_alive(keep_alive)?;
+            wait(
+                || connection.updates.borrow().keep_alive == keep_alive,
+                "connection did not restore its keep-alive setting",
+            )
+            .await?;
             // An actual generated component drag selects the reversed halves of a
             // historical Big5 glyph, not the current 23..45 station page.
             let a = point(&ui, &output, 5, 7)?;

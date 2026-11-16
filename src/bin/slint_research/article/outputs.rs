@@ -7,6 +7,7 @@ use pttstella::{
     selection::{SelectedText, Selection},
     surface_state::{CopyTarget, Identity, OutputLease},
 };
+use std::cell::Ref;
 
 impl ArticleSession {
     pub fn lease_media_output(&self, view: &View) -> Option<OutputLease> {
@@ -87,10 +88,13 @@ impl ArticleSession {
         let paint = core.current(id, view)?;
         (paint.input_epoch == view.input_epoch && !view.input_pending).then_some(id)
     }
-    pub fn with_output<R>(&self, view: &View, read: impl FnOnce(&Paint) -> R) -> Option<R> {
+    pub fn borrow_output(&self, view: &View) -> Option<Ref<'_, Paint>> {
         let id = self.output_identity(view)?;
-        let core = self.core.borrow();
-        Some(read(core.current(id, view)?))
+        Ref::filter_map(self.core.borrow(), |core| core.current(id, view)).ok()
+    }
+    pub fn with_output<R>(&self, view: &View, read: impl FnOnce(&Paint) -> R) -> Option<R> {
+        let paint = self.borrow_output(view)?;
+        Some(read(&paint))
     }
     pub fn output_geometry(&self) -> Option<crate::pointer::SurfaceGeometry> {
         self.view.borrow().as_ref()?.geometry()

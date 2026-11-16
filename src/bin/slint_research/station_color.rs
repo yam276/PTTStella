@@ -112,8 +112,10 @@ impl StationColor {
         {
             return None;
         }
+        let expected = view.stamp();
+        drop(view);
         let stamp = self.output.current(ui)?;
-        if view.stamp() != stamp {
+        if expected != stamp {
             return None;
         }
         let key = self.output.selection_key()?;
