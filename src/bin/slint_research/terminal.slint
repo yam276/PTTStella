@@ -1,6 +1,7 @@
 export { PanelEdit } from "panel.slint";
 export { LucideIcons } from "lucide-icons.slint";
 import { PanelButton } from "panel.slint";
+import { CompositionInput } from "composition-input.slint";
 import { SettingsPanel, SettingsState } from "settings.slint";
 import { SitesPanel, SitesState } from "sites.slint";
 import { FiltersPanel, FiltersState } from "filters.slint";
@@ -146,6 +147,11 @@ export component TerminalWindow inherits Window {
     in property <bool> editor-mounted;
     out property <bool> editor-available: EditorState.available;
     changed editor-available => {root.tools-updated();}
+    out property <SelectionRect> station-draft-entry-bounds: {
+        x: station-draft-entry.x, y: station-draft-entry.y,
+        width: station-draft-entry.visible ? station-draft-entry.width : 0px,
+        height: station-draft-entry.height
+    };
     out property <bool> editor-focused: EditorState.body-focused || EditorState.title-focused;
     out property <bool> editor-body-focused: EditorState.body-focused;
     out property <bool> editor-composing: EditorState.composing;
@@ -691,18 +697,18 @@ export component TerminalWindow inherits Window {
                         Rectangle { x: 0px; width: 3px; height: parent.height; background: #d9ae5b; }
                         Rectangle { x: parent.width - 3px; width: 3px; height: parent.height; background: #d9ae5b; }
                     }
-                    grid-input := TextInput {
+                    grid-input := CompositionInput {
                         enabled: !root.editor-open && !root.station-color-open && !root.settings-open && !root.manager-open && !root.login-open;
                         visible: root.terminal-input;
-                        accessible-label: UiLabels.terminal-input;
-                        x: raster.x + root.caret-left;
-                        y: raster.y + root.caret-top;
-                        width: min(220px, viewport.content-width - self.x);
-                        height: root.caret-height;
-                        font-size: max(8px, root.caret-height * 0.85);
-                        color: #e3e8ee;
+                        label: UiLabels.terminal-input;
+                        anchor-x: raster.x + root.caret-left;
+                        anchor-y: raster.y + root.caret-top;
+                        area-left: -viewport.content-x;
+                        area-top: -viewport.content-y;
+                        area-width: viewport.width;
+                        area-height: viewport.height;
+                        row-height: root.caret-height;
                         text-cursor-width: root.prototype-chrome ? 1px : 0px;
-                        single-line: true;
                         read-only: root.keyboard-read-only;
                     }
                     if root.terminal-input && !root.live-session && !root.terminal-input-focused: Rectangle {
@@ -747,7 +753,7 @@ export component TerminalWindow inherits Window {
                             }
                         }
                         double-clicked => { root.grid-pointer(6, self.mouse-x, self.mouse-y, root.pointer-shift); }
-                        clicked => { grid-input.focus(); }
+                        clicked => { grid-input.focus-input(); }
                         scroll-event(event) => {
                             if (root.terminal-pointer-blocked) { return reject; }
                             if (event.delta-y != 0px && !event.modifiers.meta && !event.modifiers.shift) {
@@ -775,7 +781,6 @@ export component TerminalWindow inherits Window {
                     offset-y: root.article-offset-y; offset-x: root.article-offset-x;
                     blocked: root.article-blocked;
                     native-input: root.terminal-input;
-                    composing: root.native-composing;
                     read-only: root.keyboard-read-only;
                     selection: root.selection-rects;
                     pointer-cursor: root.pointer-cursor;
@@ -1090,6 +1095,18 @@ export component TerminalWindow inherits Window {
             }
         }
     }
+    station-draft-entry := PanelButton {
+        visible: EditorState.station-editor && !root.article-active && !root.editor-open
+            && !root.manager-open && !root.settings-open && !root.media-open && !root.login-open;
+        x: root.width - self.width - 12px;
+        y: root.shell-status-visible ? status-panel.y + status-panel.height + 8px : 12px;
+        width: min(self.preferred-width, root.width - 24px);
+        height: self.preferred-height;
+        text: UiLabels.local-drafts;
+        enabled: !root.tools-source-blocked && !root.tools-busy && !root.context-open && !root.context-pending
+            && !root.switching-station && !root.frame-paint-pending;
+        clicked => { EditorState.action(0); }
+    }
     tools-area := FloatingTools {
         visible: root.tools-available;
         width: root.width; height: root.height;
@@ -1233,7 +1250,7 @@ export component TerminalWindow inherits Window {
     }
 
     show-paste-preview => { paste-dialog.show(); }
-    focus-terminal => { if root.editor-open { root.focus-editor(); } else if root.article-active { root.focus-article(); } else if (root.terminal-input) { grid-input.focus(); } }
+    focus-terminal => { if root.editor-open { root.focus-editor(); } else if root.article-active { root.focus-article(); } else if (root.terminal-input) { grid-input.focus-input(); } }
     hide-paste-preview(restore-focus) => {
         paste-dialog.close();
         if (restore-focus) { root.focus-terminal(); }

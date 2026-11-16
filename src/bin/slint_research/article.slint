@@ -1,5 +1,6 @@
 import { UiLabels } from "labels.slint";
 import { SelectionRect } from "selection.slint";
+import { CompositionInput } from "composition-input.slint";
 export struct InlineArrow { index:int, stamp:string, x:length, y:length, size:length, opened:bool, label:string }
 export struct InlinePicture { index:int, key:int, stamp:string, x:length, y:length, width:length, height:length, image-y:length, image-height:length, source-y:int, source-height:int, source-width:int, image:image, status:string }
 export struct ArticleTile { image: image, y: length, height: length }
@@ -47,7 +48,6 @@ export component ArticleViewport inherits Rectangle {
     in property <length> offset-x;
     in property <bool> blocked;
     in property <bool> native-input;
-    in property <bool> composing;
     in property <bool> read-only;
     in property <[SelectionRect]> selection;
     in property <int> pointer-cursor;
@@ -70,7 +70,7 @@ export component ArticleViewport inherits Rectangle {
     callback focus-article;
     changed width => { root.vertical-drag = false; root.horizontal-drag = false; root.layout-changed(); }
     changed height => { root.vertical-drag = false; root.horizontal-drag = false; root.layout-changed(); }
-    focus-article => { if root.visible { if root.native-input { article-input.focus(); } else { keys.focus(); } } }
+    focus-article => { if root.visible { if root.native-input { article-input.focus-input(); } else { keys.focus(); } } }
     private property <bool> vertical-drag;
     private property <bool> horizontal-drag;
     private property <length> vertical-grab;
@@ -285,21 +285,13 @@ export component ArticleViewport inherits Rectangle {
         x: span.x; y: span.y; width: span.width; height: span.height;
         background: #4387d655;
     }
-    Rectangle {
-        visible: root.composing;
-        x: max(0px, root.text-left); y: 0px;
-        width: root.composing ? min(220px, root.body-width) : 1px; height: root.line-height;
-        background: #1e2733;
-    }
-    article-input := TextInput {
+    article-input := CompositionInput {
         visible: root.native-input;
-        x: max(0px, root.text-left); y: 0px;
-        width: root.composing ? min(220px, root.body-width) : 1px; height: root.line-height;
-        accessible-label: UiLabels.article-input;
-        color: #e3e8ee;
-        font-size: max(8px, root.line-height * 0.85);
-        text-cursor-width: 0px;
-        single-line: true;
+        anchor-x: max(0px, root.text-left);
+        area-width: root.body-width;
+        area-height: root.body-height;
+        row-height: root.line-height;
+        label: UiLabels.article-input;
         read-only: root.read-only;
     }
 }

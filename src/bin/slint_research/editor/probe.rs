@@ -170,6 +170,10 @@ async fn verify(ui: &TerminalWindow, owner: &Rc<Editor>, directory: &Path) -> Re
         "strict draft peer did not present its synthetic board",
     )
     .await?;
+    require(
+        ui.get_station_draft_entry_bounds().width == 0.,
+        "station editor shortcut appeared on the board list",
+    )?;
     let generation = owner.connection.updates.borrow().generation;
     owner.connection.input(generation, vec![16])?;
     wait(
@@ -192,7 +196,20 @@ async fn verify(ui: &TerminalWindow, owner: &Rc<Editor>, directory: &Path) -> Re
         return Err("unknown drafts cancellation case".into());
     }
     let before_capture = owner.connection.updates.borrow().frame.revision;
-    ui.global::<EditorState>().invoke_action(0);
+    let entry = ui.get_station_draft_entry_bounds();
+    require(
+        entry.width > 0. && entry.x > ui.get_view_width() / 2.,
+        "station editor shortcut was not in the upper right",
+    )?;
+    click(
+        ui,
+        slint::LogicalPosition::new(entry.x + entry.width / 2., entry.y + entry.height / 2.),
+        Button::Left,
+    );
+    require(
+        ui.get_editor_open() && ui.get_station_draft_entry_bounds().width == 0.,
+        "station editor shortcut did not open the draft panel",
+    )?;
     let failure_case = crate::session::draft_failure()?;
     if failure_case == Some(pttstella::connection::DraftFailure::CloseCapture) {
         return failure::close_busy(ui, owner, directory, before_capture, "capture").await;

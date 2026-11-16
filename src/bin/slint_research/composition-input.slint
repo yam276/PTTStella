@@ -1,0 +1,60 @@
+// The native TextInput owns preedit, selection, and candidate placement.
+export component CompositionInput inherits Rectangle {
+    in property <length> anchor-x;
+    in property <length> anchor-y;
+    in property <length> area-left;
+    in property <length> area-top;
+    in property <length> area-width;
+    in property <length> area-height;
+    in property <length> row-height;
+    in property <color> preedit-background: #1e2733;
+    in property <bool> enabled: true;
+    in property <bool> read-only;
+    in property <length> text-cursor-width;
+    in property <string> label;
+    in-out property <string> text <=> field.text;
+    out property <bool> has-focus: field.has-focus;
+    callback edited;
+    public function focus-input() { field.focus(); }
+    forward-focus: field;
+
+    private property <bool> composing: field.preedit-text != "";
+    private property <length> content-height: root.composing
+        ? max(root.row-height, measurement.preferred-height) : root.row-height;
+    x: root.composing
+        ? clamp(root.anchor-x, root.area-left, root.area-left + root.area-width - self.width)
+        : root.anchor-x;
+    y: root.composing
+        ? clamp(root.anchor-y, root.area-top, root.area-top + root.area-height - self.height)
+        : root.anchor-y;
+    width: root.composing ? min(root.area-width, measurement.preferred-width + 2px) : 1px;
+    height: root.composing ? min(root.area-height, root.content-height) : root.row-height;
+    background: root.composing ? root.preedit-background : transparent;
+    clip: true;
+
+    // Measure with the same font and wrap width as the real field. This text
+    // never paints or takes focus, and the terminal grid never reflows.
+    measurement := Text {
+        visible: false;
+        text: field.preedit-text;
+        width: root.width;
+        wrap: word-wrap;
+        font-size: field.font-size;
+    }
+    field := TextInput {
+        x: 0px;
+        y: root.height - self.height;
+        width: root.width;
+        height: root.content-height;
+        font-size: max(8px, root.row-height * 0.85);
+        color: #e3e8ee;
+        text-cursor-width: root.text-cursor-width;
+        accessible-label: root.label;
+        enabled: root.enabled;
+        read-only: root.read-only;
+        single-line: !root.composing;
+        wrap: word-wrap;
+        vertical-alignment: top;
+        edited => { root.edited(); }
+    }
+}

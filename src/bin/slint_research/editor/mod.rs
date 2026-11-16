@@ -355,24 +355,24 @@ impl Editor {
     fn availability(&self) {
         if let Some(ui) = self.ui.upgrade() {
             let state = ui.global::<EditorState>();
+            let view = self.connection.updates.borrow();
+            state.set_station_editor(
+                view.phase == pttstella::connection::Phase::Connected
+                    && view.draft_post_scope.is_some()
+                    && pttstella::navigation::article_editor(&view.frame),
+            );
             state.set_available(
-                self.connection.updates.borrow().draft_post_scope.is_some()
-                    || pttstella::drafts::scope(&self.connection.updates.borrow()).is_some()
+                view.draft_post_scope.is_some()
+                    || pttstella::drafts::scope(&view).is_some()
                     || self.scope.borrow().is_some(),
             );
             let valid_template = self.template.get()
-                && self
-                    .connection
-                    .updates
-                    .borrow()
-                    .draft_post_scope
-                    .as_ref()
-                    .is_some_and(|s| {
-                        self.scope
-                            .borrow()
-                            .as_ref()
-                            .is_some_and(|current| s.same(current))
-                    });
+                && view.draft_post_scope.as_ref().is_some_and(|s| {
+                    self.scope
+                        .borrow()
+                        .as_ref()
+                        .is_some_and(|current| s.same(current))
+                });
             state.set_can_transfer(
                 valid_template
                     && self

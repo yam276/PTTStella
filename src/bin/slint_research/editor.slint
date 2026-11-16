@@ -3,9 +3,11 @@ import { Button, ComboBox, ScrollView } from "std-widgets.slint";
 import { ColorPalette } from "color-palette.slint";
 import { PanelCombo } from "panel.slint";
 import { SelectionRect } from "selection.slint";
+import { CompositionInput } from "composition-input.slint";
 export struct DraftItem { id:string, title:string, conflict:bool }
 export global EditorState {
     in-out property <bool> available;
+    in-out property <bool> station-editor;
     in-out property <bool> open;
     in-out property <bool> composing;
     in-out property <bool> body-focused;
@@ -77,7 +79,7 @@ export component NativeEditor inherits Rectangle {
     public function focus-dialog() {dialog-keys.focus();}
     public function focus-palette() {palette.focus-palette();}
     public function clear-input() { body-field.text=""; }
-    public function focus-body() { body-field.focus(); }
+    public function focus-body() { body-field.focus-input(); }
     dialog-keys := FocusScope {
       width:parent.width;height:parent.height;
       key-pressed(event)=>{if event.text==Key.Escape && !EditorState.composing {EditorState.action(EditorState.source-busy ? 9 : 3);return accept;}return reject;}
@@ -149,21 +151,20 @@ export component NativeEditor inherits Rectangle {
                 changed height=>{EditorState.view-height=self.height;EditorState.layout();}
                 Image {width:parent.width;height:parent.height;source:EditorState.pixels;image-fit:fill;}
                 for span in EditorState.spans: Rectangle {x:span.x;y:span.y;width:span.width;height:span.height;background:#4387d666;}
-                Rectangle {
-                    x:clamp(EditorState.caret-column,0,78)*area.unit;y:clamp(EditorState.caret-row,0,22)*2*area.unit;
-                    width:max(1px,grid.width - self.x);height:2*area.unit;
-                    background:EditorState.composing ? black : transparent;
-                    body-field := TextInput {
-                        width:parent.width;height:parent.height;font-size:max(8px,area.unit*1.7);
-                        color:#e3e8ee;single-line:true;text-cursor-width:EditorState.caret-visible ? 1px : 0px;
-                        enabled:!EditorState.busy && !EditorState.transfer-confirm && !EditorState.palette-open;
-                        accessible-label:UiLabels.editor-body;
-                        // Document owns the text. A rejected commit must not
-                        // be included in the next edit from this input field.
-                        edited=>{
-                            EditorState.insert(self.text);
-                            self.text="";
-                        }
+                body-field := CompositionInput {
+                    anchor-x: clamp(EditorState.caret-column, 0, 78) * area.unit;
+                    anchor-y: clamp(EditorState.caret-row, 0, 22) * 2 * area.unit;
+                    area-width: grid.width;
+                    area-height: grid.height;
+                    row-height: 2 * area.unit;
+                    preedit-background: black;
+                    text-cursor-width: EditorState.caret-visible ? 1px : 0px;
+                    enabled: !EditorState.busy && !EditorState.transfer-confirm && !EditorState.palette-open;
+                    label: UiLabels.editor-body;
+                    // Document owns the text, including rejected commit handling.
+                    edited => {
+                        EditorState.insert(self.text);
+                        self.text = "";
                     }
                 }
                 TouchArea {
@@ -179,7 +180,7 @@ export component NativeEditor inherits Rectangle {
                             self.left-held=false;self.right-held=false;EditorState.pointer(3,self.mouse-x/1px,self.mouse-y/1px,false,false);
                         } else if event.kind==PointerEventKind.down {
                             self.press-x=self.mouse-x;self.press-y=self.mouse-y;
-                            if event.button==PointerEventButton.left {self.left-held=true;EditorState.pointer(0,self.mouse-x/1px,self.mouse-y/1px,event.modifiers.shift,event.modifiers.alt);body-field.focus();}
+                            if event.button==PointerEventButton.left {self.left-held=true;EditorState.pointer(0,self.mouse-x/1px,self.mouse-y/1px,event.modifiers.shift,event.modifiers.alt);root.focus-body();}
                             else if event.button==PointerEventButton.right {self.right-held=true;}
                         } else if event.kind==PointerEventKind.move {
                             if self.right-held && self.drag-distance {self.right-held=false;}
