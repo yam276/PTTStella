@@ -1,5 +1,15 @@
-import {Button, Slider} from "std-widgets.slint";
+import {Slider} from "std-widgets.slint";
 import {ContextMenuOverlay} from "context-menu.slint";
+import {PanelButton} from "panel.slint";
+import {LucideIcons} from "lucide-icons.slint";
+
+struct MediaTool {
+    label: string,
+    icon: image,
+    action: int,
+    enabled: bool,
+}
+
 export component MediaPreview inherits Rectangle {
     in property <image> pixels;
     in property <string> source-key;
@@ -42,6 +52,8 @@ export component MediaPreview inherits Rectangle {
     in property <string> external-label;
     in property <string> fit-label;
     in property <string> original-label;
+    in property <string> zoom-in-label;
+    in property <string> zoom-out-label;
     callback action(int);
     callback focus-preview;
     focus-preview => { keys.focus(); }
@@ -56,6 +68,37 @@ export component MediaPreview inherits Rectangle {
     property <int> menu-index;
     property <length> menu-x;
     property <length> menu-y;
+    out property <string> toolbar-tooltip: root.hint-action == 2 ? root.motion-label : root.hint;
+    private property <int> hint-action: -1;
+    private property <string> hint;
+    private property <length> hint-x;
+    private property <length> hint-y;
+    function tool-hover(active: bool, action: int, label: string, x: length, y: length) {
+        if active {
+            root.hint-action = action;
+            root.hint = label;
+            root.hint-x = x;
+            root.hint-y = y;
+        } else if root.hint-action == action {
+            root.hint-action = -1;
+            root.hint = "";
+        }
+    }
+    function toolbar-action(code: int) {
+        if code == 7 || code == 8 {
+            root.zoom-by(code == 7 ? 1 / 1.25 : 1.25, view.width / 2, view.height / 2);
+        } else if code == 9 || code == 10 {
+            root.fit = code == 9;
+            root.scale = 1;
+            root.pan-x = 0px;
+            root.pan-y = 0px;
+        } else {
+            root.action(code);
+        }
+    }
+    private property <[MediaTool]> image-tools: root.animated ? [
+        {label: root.motion-label, icon: root.playing ? LucideIcons.pause : LucideIcons.play, action: 2, enabled: root.ready}
+    ] : [];
     function open-menu(x:length,y:length) {
         if !root.video && !root.busy && root.foreground {
             root.dragging=false;root.menu-x=x;root.menu-y=y;
@@ -68,7 +111,7 @@ export component MediaPreview inherits Rectangle {
         root.dismiss-menu();root.action(index < 3 ? index + 4 : 3);
     }
     property <float> actual: root.fit ? max(0.01, min(1, min(view.width / max(1px, root.pixels.width * 1px), view.height / max(1px, root.pixels.height * 1px)))) : root.scale;
-    changed source-key => { root.fit=true; root.scale=1;root.pan-x=0px;root.pan-y=0px;root.dragging=false;root.menu-open=false; }
+    changed source-key => { root.fit=true; root.scale=1;root.pan-x=0px;root.pan-y=0px;root.dragging=false;root.menu-open=false;root.hint-action=-1;root.hint=""; }
     changed foreground => { if !root.foreground {root.dragging=false;root.menu-open=false;} }
     changed width => {root.dragging=false;root.menu-open=false;}
     changed height => {root.dragging=false;root.menu-open=false;}
@@ -89,11 +132,68 @@ export component MediaPreview inherits Rectangle {
             if event.text == Key.F10 && event.modifiers.shift {root.open-menu(root.width/2,root.height/2);return accept;}
             return reject;
         }
-        Rectangle {x:12px;y:12px;width:parent.width - 24px;height:parent.height - 24px;background:#202733;border-radius:8px;
-            VerticalLayout {padding:12px;spacing:8px;
-                Text {text:root.url;color:#cdd9e8;overflow:elide;}
-                Text {text:root.status;color:#e9edf4;wrap:word-wrap;}
-                view := Rectangle {vertical-stretch:1;min-height:100px;clip:true;background:#080a0e;
+        Rectangle {
+            x: 12px; y: 12px; width: parent.width - 24px; height: parent.height - 24px;
+            background: #0c1c30; border-color: #786640; border-width: 1px; border-radius: 8px;
+            VerticalLayout { padding: 12px; spacing: 8px;
+                HorizontalLayout {
+                    spacing: 8px;
+                    Rectangle {
+                        height: 34px; horizontal-stretch: 1; clip: true;
+                        background: #091727; border-width: 1px; border-color: #34475b; border-radius: 4px;
+                        Image {
+                            x: 10px; y: 8px; width: 18px; height: 18px;
+                            source: LucideIcons.link; colorize: #e7c46a;
+                        }
+                        Text {
+                            x: 38px; width: parent.width - 48px;
+                            text: root.url; color: #ebe7dc; font-size: 13px;
+                            vertical-alignment: center; overflow: elide;
+                        }
+                    }
+                    for tool in [
+                        {label: root.copy-url-label, icon: LucideIcons.copy, action: 6, enabled: !root.busy},
+                        {label: root.external-label, icon: LucideIcons.external-link, action: 3, enabled: true},
+                        {label: root.close-label, icon: LucideIcons.x, action: 0, enabled: true}
+                    ]: PanelButton {
+                        text: tool.label; icon: tool.icon; icon-only: true; enabled: tool.enabled; hover-when-disabled: true;
+                        changed hovered => { root.tool-hover(self.hovered, tool.action, tool.label, self.absolute-position.x, self.absolute-position.y + self.height); }
+                        clicked => { root.toolbar-action(tool.action); }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 6px;
+                    if !root.video: HorizontalLayout {
+                        spacing: 6px;
+                        for tool in [
+                            {label: root.zoom-out-label, icon: LucideIcons.zoom-out, action: 7, enabled: root.ready},
+                            {label: root.zoom-in-label, icon: LucideIcons.zoom-in, action: 8, enabled: root.ready},
+                            {label: root.fit-label, icon: LucideIcons.scan, action: 9, enabled: root.ready},
+                            {label: root.original-label, icon: LucideIcons.square, action: 10, enabled: root.ready},
+                            {label: root.copy-label, icon: LucideIcons.copy, action: 4, enabled: root.ready && !root.busy},
+                            {label: root.save-label, icon: LucideIcons.file-down, action: 5, enabled: root.ready && !root.busy}
+                        ]: PanelButton {
+                            text: tool.label; icon: tool.icon; icon-only: true; enabled: tool.enabled; hover-when-disabled: true;
+                            changed hovered => { root.tool-hover(self.hovered, tool.action, tool.label, self.absolute-position.x, self.absolute-position.y + self.height); }
+                            clicked => { root.toolbar-action(tool.action); }
+                        }
+                        for tool in root.image-tools: PanelButton {
+                            text: tool.label; icon: tool.icon; icon-only: true; enabled: tool.enabled; hover-when-disabled: true;
+                            changed hovered => { root.tool-hover(self.hovered, tool.action, tool.label, self.absolute-position.x, self.absolute-position.y + self.height); }
+                            clicked => { root.toolbar-action(tool.action); }
+                        }
+                    }
+                    retry-button := PanelButton {
+                        text: root.retry-label; icon: LucideIcons.refresh-cw; icon-only: true; enabled: !root.busy; hover-when-disabled: true;
+                        changed hovered => { root.tool-hover(self.hovered, 1, root.retry-label, self.absolute-position.x, self.absolute-position.y + self.height); }
+                        clicked => { root.toolbar-action(1); }
+                    }
+                    Text {
+                        text: root.status; color: #cdd9e8; horizontal-stretch: 1;
+                        min-width: 0px; vertical-alignment: center; overflow: elide;
+                    }
+                }
+                view := Rectangle {vertical-stretch:1;min-height:100px;clip:true;background:#070e18;
                     if root.video && root.software-video: Image {source:root.pixels;width:parent.width;height:parent.height;image-fit:contain;}
                     if !root.video: Image {source:root.pixels;width:root.pixels.width * root.actual * 1px;height:root.pixels.height * root.actual * 1px;
                         x:(parent.width - self.width)/2 + root.pan-x;y:(parent.height - self.height)/2 + root.pan-y;image-fit:fill;}
@@ -111,15 +211,8 @@ export component MediaPreview inherits Rectangle {
                         scroll-event(event) => {root.zoom-by(event.delta-y > 0px ? 1.1 : 1/1.1,self.mouse-x,self.mouse-y);return accept;}
                     }
                 }
-                if !root.video: HorizontalLayout {spacing:6px;
-                    Button {text:"−";enabled:root.ready;clicked=>{root.zoom-by(1/1.25,view.width/2,view.height/2);}}
-                    Button {text:"+";enabled:root.ready;clicked=>{root.zoom-by(1.25,view.width/2,view.height/2);}}
-                    Button {text:root.fit-label;enabled:root.ready;clicked=>{root.fit=true;root.pan-x=0px;root.pan-y=0px;}}
-                    Button {text:root.original-label;enabled:root.ready;clicked=>{root.fit=false;root.scale=1;root.pan-x=0px;root.pan-y=0px;}}
-                    if root.animated: Button {text:root.motion-label;enabled:root.ready;clicked=>{root.action(2);}}
-                }
                 if root.video: HorizontalLayout {spacing:6px;
-                    Button {text:root.motion-label;enabled:root.ready && root.foreground && !root.busy;clicked=>{root.action(2);}}
+                    PanelButton {text:root.motion-label;enabled:root.ready && root.foreground && !root.busy;clicked=>{root.action(2);}}
                     // Keep the shared position binding after a user changes the slider.
                     Slider {minimum:0;maximum:max(1,root.duration);value <=> root.position;enabled:root.duration > 0 && root.foreground && !root.busy;
                         changed(value)=>{root.seek(value);} }
@@ -127,7 +220,7 @@ export component MediaPreview inherits Rectangle {
                 }
                 if root.video: HorizontalLayout {
                     spacing: 8px;
-                    Button {
+                    PanelButton {
                         text: root.muted ? root.unmute-label : root.mute-label;
                         enabled: root.audio-controls-enabled;
                         clicked => { root.set-muted(!root.muted); }
@@ -157,17 +250,18 @@ export component MediaPreview inherits Rectangle {
                         color: #cdd9e8;
                     }
                 }
-                HorizontalLayout {spacing:6px;
-                    if !root.video: Button {text:root.copy-label;enabled:root.ready && !root.busy;clicked=>{root.action(4);}}
-                    if !root.video: Button {text:root.save-label;enabled:root.ready && !root.busy;clicked=>{root.action(5);}}
-                    Button {text:root.copy-url-label;enabled:!root.busy;clicked=>{root.action(6);}}
-                }
-                HorizontalLayout {spacing:6px;
-                    Button {text:root.retry-label;enabled:!root.busy;clicked=>{root.action(1);}}
-                    Button {text:root.external-label;clicked=>{root.action(3);}}
-                    Button {text:root.close-label;clicked=>{root.action(0);}}
-                }
             }
+        }
+    }
+    Rectangle {
+        visible: root.toolbar-tooltip != "" && !root.menu-open && root.foreground;
+        x: clamp(root.hint-x, 12px, root.width - self.width - 12px);
+        y: root.hint-y + 4px;
+        width: min(root.width - 24px, hint-label.preferred-width + 20px); height: 26px;
+        background: #132c45; border-color: #e7c46a; border-width: 1px; border-radius: 4px;
+        hint-label := Text {
+            x: 10px; width: parent.width - 20px; text: root.toolbar-tooltip;
+            color: #ebe7dc; font-size: 13px; vertical-alignment: center; overflow: elide;
         }
     }
     menu := ContextMenuOverlay {

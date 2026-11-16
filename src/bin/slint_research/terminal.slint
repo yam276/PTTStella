@@ -222,6 +222,9 @@ export component TerminalWindow inherits Window {
     in property <string> media-external-label;
     in property <string> media-fit-label;
     in property <string> media-original-label;
+    in property <string> media-zoom-in-label;
+    in property <string> media-zoom-out-label;
+    out property <string> media-toolbar-tooltip: media-preview.toolbar-tooltip;
     out property <bool> media-play-allowed: !root.app-closing && !root.manager-open && !root.settings-open && !root.editor-open && !root.station-color-open && root.media-open && root.native-foreground && !root.output-busy && !root.show-about && !root.login-open && !root.paste-open;
     changed media-play-allowed => {root.media-updated();}
     callback media-request(int);
@@ -1197,6 +1200,7 @@ export component TerminalWindow inherits Window {
     focus-media => {media-preview.focus-preview();}
     media-preview := MediaPreview {
         x:0px;y:0px;width:root.width;height:root.height;visible:root.media-open;
+        zoom-in-label: root.media-zoom-in-label; zoom-out-label: root.media-zoom-out-label;
         busy:root.output-busy;copy-label:root.media-copy-label;save-label:root.media-save-label;copy-url-label:root.media-copy-url-label;
         video:root.media-video;software-video:root.media-video-software;position <=> root.media-position;duration:root.media-duration;seek(value)=>{root.media-seek(value);}
         volume <=> root.media-volume;

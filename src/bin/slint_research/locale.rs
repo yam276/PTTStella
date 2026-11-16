@@ -116,6 +116,8 @@ pub fn refresh(ui: &TerminalWindow) {
     ui.set_media_external_label(msg!("media-external").into());
     ui.set_media_fit_label(msg!("media-fit").into());
     ui.set_media_original_label(msg!("media-original").into());
+    ui.set_media_zoom_in_label(msg!("media-zoom-in").into());
+    ui.set_media_zoom_out_label(msg!("media-zoom-out").into());
     ui.set_media_copy_label(msg!("context-copy-picture").into());
     ui.set_media_save_label(msg!("context-save-picture").into());
     ui.set_media_copy_url_label(msg!("context-copy-link").into());

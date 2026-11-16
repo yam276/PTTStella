@@ -176,13 +176,46 @@ pub fn start(
                 "promotion replaced original/request",
             )?;
             verification::capture(&ui, &directory, "promoted.png")?;
+
+            // The address row ends with 34px buttons and an 8px gap, inside
+            // the preview panel's 12px margin and 12px padding.
+            let width = ui
+                .window()
+                .size()
+                .to_logical(ui.window().scale_factor())
+                .width;
+            let close = slint::LogicalPosition::new(width - 41., 41.);
+            moved(&ui, close);
+            slint::platform::update_timers_and_animations();
+            require(
+                ui.get_media_toolbar_tooltip() == ui.get_media_close_label(),
+                "Close tooltip did not appear on the pointer event",
+            )?;
+            verification::capture(&ui, &directory, "toolbar-hover.png")?;
+            moved(&ui, slint::LogicalPosition::new(close.x - 42., close.y));
+            slint::platform::update_timers_and_animations();
+            require(
+                ui.get_media_toolbar_tooltip() == ui.get_media_external_label(),
+                "Browser tooltip did not replace Close immediately",
+            )?;
+            moved(&ui, slint::LogicalPosition::new(2., 2.));
+            slint::platform::update_timers_and_animations();
+            require(
+                ui.get_media_toolbar_tooltip().is_empty(),
+                "Toolbar tooltip persisted after pointer exit",
+            )?;
             ui.invoke_media_action(4);
             wait(
                 || !ui.get_output_busy() && ui.get_media_status() == msg!("export-copied"),
                 "shared preview PNG copy failed",
             )
             .await?;
-            ui.invoke_media_action(0);
+            verification::click(&ui, close, Button::Left);
+            wait(
+                || !ui.get_media_open(),
+                "Close tool did not dismiss preview",
+            )
+            .await?;
             moved(&ui, slint::LogicalPosition::new(2., 2.));
             let gif = point(&ui, &output, 4, 20.)?;
             moved(&ui, gif);

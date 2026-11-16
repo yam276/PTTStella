@@ -10,6 +10,8 @@ export component PanelButton inherits Rectangle {
     in property <string> text;
     in property <image> icon;
     in property <length> icon-size: 18px;
+    in property <bool> icon-only;
+    in property <bool> hover-when-disabled;
     in property <length> font-size: 13px;
     in property <color> label-color: !root.enabled ? #808b99 : root.flat ? #ebe7dc : root.navigation && !root.checked ? #b5bcc7 : #e7c46a;
     in property <color> icon-color: !root.enabled ? #808b99 : #e7c46a;
@@ -20,6 +22,7 @@ export component PanelButton inherits Rectangle {
     in property <bool> flat;
     in property <bool> primary;
     out property <bool> has-focus: keys.has-focus;
+    out property <bool> hovered: touch.has-hover;
     callback clicked;
     forward-focus: keys;
     min-height: 34px;
@@ -31,7 +34,7 @@ export component PanelButton inherits Rectangle {
     private property <length> inset: root.flat ? 2px : root.navigation ? 16px : 10px;
     private property <length> checkbox-width: root.checkbox ? 20px : 0px;
     private property <length> icon-width: root.icon.width > 0 ? root.icon-size + 8px : 0px;
-    preferred-width: label.preferred-width + root.checkbox-width + root.icon-width + 22px;
+    preferred-width: root.icon-only ? 34px : label.preferred-width + root.checkbox-width + root.icon-width + 22px;
     background: root.flat ? (root.enabled && touch.has-hover ? #203b55 : transparent)
         : root.checked ? #203b55 : root.navigation && !touch.has-hover ? transparent
         : root.enabled && touch.has-hover ? #203b55 : #132c45;
@@ -56,7 +59,7 @@ export component PanelButton inherits Rectangle {
         }
     }
     if root.icon-width > 0px: Image {
-        x: root.inset + root.checkbox-width;
+        x: root.icon-only ? (parent.width - self.width) / 2 : root.inset + root.checkbox-width;
         y: (parent.height - self.height) / 2;
         width: root.icon-size; height: root.icon-size;
         source: root.icon;
@@ -64,6 +67,7 @@ export component PanelButton inherits Rectangle {
         accessible-role: none;
     }
     label := Text {
+        visible: !root.icon-only;
         x: root.inset + root.checkbox-width + root.icon-width;
         width: parent.width - self.x - 10px;
         text: root.text; font-size: root.font-size;
@@ -74,8 +78,8 @@ export component PanelButton inherits Rectangle {
     }
     touch := TouchArea {
         x: 0; y: 0; width: parent.width; height: parent.height;
-        enabled: root.enabled;
-        clicked => { keys.focus(); root.clicked(); }
+        enabled: root.enabled || root.hover-when-disabled;
+        clicked => { if root.enabled { keys.focus(); root.clicked(); } }
     }
     keys := FocusScope {
         enabled: root.enabled;
