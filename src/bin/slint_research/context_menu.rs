@@ -818,7 +818,7 @@ pub(super) fn label(action: Action) -> String {
         A::ArticleUpdates => pttstella::msg!("article-updates-start"),
         A::CopyAnsi => pttstella::msg!("context-copy-ansi"),
         A::CopyLink => pttstella::msg!("context-copy-link"),
-        A::OpenLink => pttstella::msg!("context-open-link-external"),
+        A::OpenLink => pttstella::msg!("context-open-link"),
         A::SelectLink => pttstella::msg!("context-select-link"),
         A::SelectAll => pttstella::msg!("context-select-all"),
         A::ExportRows => pttstella::msg!("context-export-rows"),

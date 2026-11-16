@@ -107,7 +107,7 @@ pub(super) async fn run(
         pttstella::msg!("context-copy-picture"),
         pttstella::msg!("context-save-picture"),
         pttstella::msg!("context-copy-link"),
-        pttstella::msg!("context-open-link-external"),
+        pttstella::msg!("context-open-link"),
     ];
     let entries = menu(ui);
     require(
@@ -216,10 +216,28 @@ pub(super) async fn run(
         opened(ui).await?;
         verification::key(ui, Key::End);
         verification::key(ui, Key::Return);
+        wait(
+            || {
+                ui.get_media_open()
+                    && ui.get_media_ready()
+                    && ui.get_media_url().as_str() == images[0].2
+            },
+            "picture Open Link did not open the original in the preview",
+        )
+        .await?;
+        ui.invoke_media_action(3);
         require(
             ui.get_input_notice().as_str() == images[0].2,
-            "picture Open Link changed URL or did not reach probe sink",
+            "explicit browser action changed the original URL",
         )?;
+        ui.invoke_media_action(0);
+        crate::notice::clear(ui);
+        // Let the retained article resume before the next unrelated right-click.
+        wait(
+            || !ui.get_media_open() && owner.menu_ready(),
+            "article did not resume its inline actions after closing the preview",
+        )
+        .await?;
         // Shift+background bypasses floating tools under the original policy.
         ready(ui, owner, article).await?;
         let crate::pointer::SurfaceGeometry::Article(g) =
@@ -228,7 +246,7 @@ pub(super) async fn run(
             return Err("expected article geometry".into());
         };
         let point = slint::LogicalPosition::new(
-            ui.get_terminal_origin_x() + g.left / g.dpi + 2. * g.line_width as f32 / 80. / g.dpi,
+            ui.get_terminal_origin_x() + g.left / g.dpi + 0.95 * g.line_width as f32 / g.dpi,
             ui.get_terminal_origin_y()
                 + ((g.flow.top(0) as f64 - g.offset) / f64::from(g.dpi)) as f32
                 + g.row as f32 / 2. / g.dpi,
@@ -245,7 +263,7 @@ pub(super) async fn run(
         let all = entries
             .iter()
             .position(|e| e.0 == pttstella::msg!("context-inline") && e.1)
-            .ok_or("content menu All unavailable")?;
+            .ok_or_else(|| format!("content menu All unavailable: {entries:?}"))?;
         ui.invoke_context_choose(all as i32);
         wait(
             || owner.state.borrow().resources.len() == 3 && ui.get_inline_enabled(),

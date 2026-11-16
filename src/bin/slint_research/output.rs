@@ -1067,7 +1067,17 @@ impl Output {
                     self.overlay(&ui);
                 }
             }
-            A::CopyLink | A::OpenLink => {
+            A::OpenLink => {
+                let local = self.connection.updates.borrow().mouse.route
+                    == pttstella::mouse::input::Route::Local;
+                if let Some(index) = link.and_then(|index| i32::try_from(index).ok())
+                    && local
+                    && self.current(&ui).is_some()
+                {
+                    ui.invoke_media_request(index);
+                }
+            }
+            A::CopyLink => {
                 if let (Some(stamp), Some(index)) = (self.current(&ui), link) {
                     if !self.project(&ui, stamp) {
                         return;
@@ -1079,12 +1089,7 @@ impl Output {
                         .and_then(|p| p.links.get(index))
                         .map(|l| l.url.clone());
                     if let Some(url) = url {
-                        if action == A::OpenLink
-                            && self.connection.updates.borrow().mouse.route
-                                == pttstella::mouse::input::Route::Local
-                        {
-                            ui.invoke_link_activated(url.into());
-                        } else if action == A::CopyLink && !self.busy() {
+                        if !self.busy() {
                             let phase = self.phase.get();
                             let Some(lease) = self.new_lease(&ui, stamp, false) else {
                                 return;
