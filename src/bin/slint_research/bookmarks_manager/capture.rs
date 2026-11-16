@@ -1,7 +1,6 @@
 //! Online acquisition ends at ArchiveWrite; the existing joined local worker
 //! owns persistence. An offline reader never receives a station route.
 use super::*;
-use crate::article::session::bookmarks::Source;
 use pttstella::{
     bookmarks::session::{Acquisition, FromList},
     navigation::Stamp,
@@ -45,12 +44,16 @@ impl Manager {
             }})
         );
     }
-    fn capture_environment(&self, ui: &TerminalWindow) -> bool {
+    fn capture_environment(&self, ui: &TerminalWindow, from_panel: bool) -> bool {
         !self.stopped.get()
             && !ui.get_app_closing()
             && ui.get_native_foreground()
             && !ui.get_article_station()
-            && !ui.get_manager_open()
+            && (from_panel || !ui.get_bookmarks_open())
+            && !ui.get_sites_open()
+            && !ui.get_filters_open()
+            && !ui.get_destination_open()
+            && !ui.get_about_open()
             && !ui.get_settings_open()
             && !ui.get_editor_open()
             && !ui.get_station_color_open()
@@ -71,6 +74,49 @@ impl Manager {
         }
         self.notice(text);
     }
+    fn acquisition_ready(&self, ui: &TerminalWindow, from_panel: bool) -> bool {
+        self.capture_environment(ui, from_panel)
+            && self.capture.borrow().is_none()
+            && !self.output.busy()
+            && self.result.borrow().is_none()
+    }
+    pub(super) fn panel_source(&self) -> Option<Source> {
+        let ui = self.ui.upgrade()?;
+        if !self.admit() || !self.acquisition_ready(&ui, true) {
+            return None;
+        }
+        let view = self.connection.updates.borrow();
+        match self.panel_target.get() {
+            PanelTarget::Title(source) => {
+                let source = source?;
+                (self.article.bookmark_source(&view, source.cell) == Some(source)).then_some(source)
+            }
+            PanelTarget::Selected => {
+                let cell = match view.context() {
+                    pttstella::navigation::Context::ArticleList {
+                        articles,
+                        cursor_row,
+                        ..
+                    } => {
+                        let row = articles
+                            .iter()
+                            .find(|row| row.row == cursor_row && row.bookmark)?;
+                        Some((row.row, row.title_start))
+                    }
+                    _ => None,
+                };
+                self.article.bookmark_source(&view, cell)
+            }
+        }
+    }
+    pub(super) fn sync_capture_button(&self) {
+        if let Some(w) = self.window() {
+            let source = self.panel_source();
+            let panel = w.global::<BookmarksState>();
+            panel.set_capture_available(source.is_some());
+            panel.set_capture_from_list(source.is_some_and(|source| source.cell.is_some()));
+        }
+    }
     pub fn list_source(
         &self,
         identity: pttstella::surface_state::Identity,
@@ -78,11 +124,7 @@ impl Manager {
         cell: (usize, usize),
     ) -> Option<Source> {
         let ui = self.ui.upgrade()?;
-        if !self.capture_environment(&ui)
-            || self.capture.borrow().is_some()
-            || self.output.busy()
-            || self.result.borrow().is_some()
-        {
+        if !self.acquisition_ready(&ui, false) {
             return None;
         }
         let source = self
@@ -93,10 +135,7 @@ impl Manager {
     pub fn current_available(&self) -> bool {
         self.ui
             .upgrade()
-            .is_some_and(|ui| self.capture_environment(&ui))
-            && self.capture.borrow().is_none()
-            && !self.output.busy()
-            && self.result.borrow().is_none()
+            .is_some_and(|ui| self.acquisition_ready(&ui, false))
             && self
                 .article
                 .bookmark_source(&self.connection.updates.borrow(), None)
@@ -116,11 +155,7 @@ impl Manager {
     pub fn capture_source(self: &Rc<Self>, source: Source) {
         self.capture_trace("source", Some(source));
         let Some(ui) = self.ui.upgrade() else { return };
-        if !self.capture_environment(&ui)
-            || self.output.busy()
-            || self.result.borrow().is_some()
-            || self.capture.borrow().is_some()
-        {
+        if !self.acquisition_ready(&ui, false) {
             return;
         }
         if self
@@ -205,6 +240,7 @@ impl Manager {
         }
         self.capture_tick_inner();
         self.capture_observing.set(false);
+        self.sync_capture_button();
         if let Some(ui) = self.ui.upgrade() {
             let active = self.capture.borrow().is_some();
             let available = self.current_available();
@@ -222,7 +258,7 @@ impl Manager {
         if self.capture.borrow().is_none() {
             return;
         }
-        if !self.capture_environment(&ui) {
+        if !self.capture_environment(&ui, false) {
             self.cancel_capture_with(msg!("bookmarks-capture-cancelled"));
             return;
         }

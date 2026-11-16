@@ -1,6 +1,10 @@
 //! Native tool chrome; terminal, output, keyboard and session owners admit actions.
 pub mod probe;
-use crate::{EditorState, SelectionRect, TerminalWindow, ToolItem, output::Output};
+use crate::{
+    EditorState, SelectionRect, TerminalWindow, ToolItem,
+    bookmarks_manager::{Manager as Bookmarks, PanelTarget},
+    output::Output,
+};
 use pttstella::floating_tools::{
     State,
     geometry::{Point, Rect, Viewport},
@@ -15,7 +19,7 @@ use pttstella::{
 use slint::{ComponentHandle, ModelRc, Timer, TimerMode, VecModel};
 use std::{
     cell::{Cell, RefCell},
-    rc::Rc,
+    rc::{Rc, Weak},
     time::{Duration, Instant},
 };
 #[derive(Clone, Copy, PartialEq)]
@@ -46,6 +50,8 @@ pub struct Tools {
     output: Rc<Output>,
     state: RefCell<State>,
     pressed_action: RefCell<Option<PressedAction>>,
+    bookmarks: RefCell<Weak<Bookmarks>>,
+    bookmark_target: Cell<PanelTarget>,
     timer: Timer,
     generation: Cell<u64>,
     closed: Cell<bool>,
@@ -73,6 +79,8 @@ impl Tools {
             output,
             state: RefCell::new(State::new(viewport)),
             pressed_action: RefCell::new(None),
+            bookmarks: RefCell::new(Weak::new()),
+            bookmark_target: Cell::new(PanelTarget::default()),
             timer: Timer::default(),
             generation: Cell::new(generation),
             closed: Cell::new(false),
@@ -126,32 +134,34 @@ impl Tools {
             let owner = owner.clone();
             move || owner.resize()
         });
-        ui.on_tools_show_at({
-            let owner = owner.clone();
-            move |x, y| {
-                let Some(ui) = owner.ui.upgrade() else {
-                    return false;
-                };
-                if owner.closed.get()
-                    || ui.get_tools_source_blocked()
-                    || owner.state.borrow().dragging()
-                    || !x.is_finite()
-                    || !y.is_finite()
-                {
-                    return false;
-                }
-                owner.prepare(&ui);
-                owner.timer.stop();
-                owner.state.borrow_mut().show_at(Point { x, y });
-                owner.publish();
-                ui.invoke_focus_tools();
-                true
-            }
-        });
         owner.publish();
         owner
     }
+    pub fn attach_bookmarks(&self, bookmarks: &Rc<Bookmarks>) {
+        self.bookmarks.replace(Rc::downgrade(bookmarks));
+    }
+    pub fn show_at(&self, point: Point, bookmark_target: PanelTarget) -> bool {
+        let Some(ui) = self.ui.upgrade() else {
+            return false;
+        };
+        if self.closed.get()
+            || ui.get_tools_source_blocked()
+            || self.state.borrow().dragging()
+            || !point.x.is_finite()
+            || !point.y.is_finite()
+        {
+            return false;
+        }
+        self.prepare(&ui);
+        self.timer.stop();
+        self.bookmark_target.set(bookmark_target);
+        self.state.borrow_mut().show_at(point);
+        self.publish();
+        ui.invoke_focus_tools();
+        true
+    }
     fn prepare(&self, ui: &TerminalWindow) {
+        self.bookmark_target.set(PanelTarget::default());
         ui.invoke_context_dismiss(false);
         self.output.prepare_context(ui);
         ui.invoke_reset_keyboard();
@@ -560,9 +570,12 @@ impl Tools {
         }
         // These petals are dialog shortcuts in Dioxus.
         if matches!(index, 1 | 4) {
+            let target = self.bookmark_target.get();
             self.dismiss(true);
             if index == 1 {
-                ui.invoke_bookmarks_show();
+                if let Some(owner) = self.bookmarks.borrow().upgrade() {
+                    owner.open(target);
+                }
             } else {
                 ui.invoke_settings_show();
             }
@@ -737,6 +750,7 @@ impl Tools {
         }
     }
     fn dismiss(&self, focus: bool) {
+        self.bookmark_target.set(PanelTarget::default());
         self.timer.stop();
         self.pressed_action.borrow_mut().take();
         self.state.borrow_mut().cancel();

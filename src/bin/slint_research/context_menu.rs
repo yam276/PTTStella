@@ -3,6 +3,7 @@ mod picture;
 pub mod probe;
 use crate::{
     LucideIcons, MenuEntry, TerminalWindow,
+    bookmarks_manager::PanelTarget,
     output::{AccountContext, Output},
     pointer::SurfaceGeometry,
     renderer::Renderer,
@@ -11,6 +12,7 @@ pub use picture::Picture;
 use pttstella::{
     connection::{Connection, Phase},
     context_menu::{self, Action, Capabilities, Entry, Flag},
+    floating_tools::geometry::Point,
     mouse::input::{Route, Snapshot},
     navigation::{self, Context, Stamp},
     selection::Span,
@@ -59,6 +61,7 @@ pub struct ContextMenu {
     media: RefCell<Weak<crate::media::Media>>,
     filters: RefCell<Weak<crate::filters_manager::Manager>>,
     bookmarks: RefCell<Weak<crate::bookmarks_manager::Manager>>,
+    tools: RefCell<Weak<crate::tools::Tools>>,
     trace_left: Cell<u8>,
 }
 impl ContextMenu {
@@ -81,6 +84,7 @@ impl ContextMenu {
             media: RefCell::new(Weak::new()),
             filters: RefCell::new(Weak::new()),
             bookmarks: RefCell::new(Weak::new()),
+            tools: RefCell::new(Weak::new()),
             trace_left: Cell::new(if std::env::var_os("PTTSTELLA_INLINE_TRACE").is_some() {
                 8
             } else {
@@ -118,6 +122,9 @@ impl ContextMenu {
     }
     pub fn attach_bookmarks(&self, bookmarks: &Rc<crate::bookmarks_manager::Manager>) {
         self.bookmarks.replace(Rc::downgrade(bookmarks));
+    }
+    pub fn attach_tools(&self, tools: &Rc<crate::tools::Tools>) {
+        self.tools.replace(Rc::downgrade(tools));
     }
     fn list_bookmark(
         &self,
@@ -246,28 +253,45 @@ impl ContextMenu {
         let editor = self.connection.updates.borrow().site.ptt_features()
             && navigation::article_editor(self.renderer.borrow().frame());
         let account = self.account_at(&ui, point);
-        let reading = matches!(
-            self.connection.updates.borrow().context(),
-            Context::ArticleReading { .. }
-        );
+        let context = self.connection.updates.borrow().context();
+        let title = match &context {
+            Context::ArticleList { articles, .. } => account
+                .as_ref()
+                .and_then(|a| a.cell)
+                .is_some_and(|(row, col)| {
+                    articles
+                        .iter()
+                        .any(|article| article.row == row && col >= article.title_start)
+                }),
+            _ => false,
+        };
         if !press.shift
-            && !reading
-            && self.list_bookmark(account.as_ref()).is_none()
+            && !matches!(context, Context::ArticleReading { .. })
             && account
                 .as_ref()
-                .is_none_or(|a| a.word.is_none() && !a.focused)
+                .is_none_or(|a| a.word.is_none() && (title || !a.focused))
             && ui.get_tools_available()
             && ui.get_tools_right_click()
             && source.selected.is_none()
             && source.mouse.route == Route::Local
             && !editor
             && self.link_at(&ui, &source, point).is_none()
-            && ui.invoke_tools_show_at(
-                ui.get_terminal_origin_x() + point.0,
-                ui.get_terminal_origin_y() + point.1,
-            )
+            && let Some(tools) = self.tools.borrow().upgrade()
         {
-            return;
+            let target = if title {
+                PanelTarget::Title(self.list_bookmark(account.as_ref()))
+            } else {
+                PanelTarget::default()
+            };
+            if tools.show_at(
+                Point {
+                    x: ui.get_terminal_origin_x() + point.0,
+                    y: ui.get_terminal_origin_y() + point.1,
+                },
+                target,
+            ) {
+                return;
+            }
         }
         self.output.prepare_context(&ui);
         ui.invoke_reset_keyboard();
@@ -787,7 +811,7 @@ pub(super) fn label(action: Action) -> String {
         A::CopyPicture => pttstella::msg!("context-copy-picture"),
         A::SavePicture => pttstella::msg!("context-save-picture"),
         A::Inline => pttstella::msg!("context-inline"),
-        A::Bookmarks => pttstella::msg!("bookmarks-title"),
+        A::Bookmarks => pttstella::msg!("context-bookmarks"),
         A::BookmarkCurrent => pttstella::msg!("bookmarks-current"),
         A::BookmarkList => pttstella::msg!("bookmarks-list-current"),
         A::ReplyNavigation => pttstella::msg!("reply-navigation-title"),

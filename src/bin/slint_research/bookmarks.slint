@@ -1,4 +1,5 @@
 import { PanelButton, PanelCombo, PanelField, PanelOverlay, PanelScrollView } from "panel.slint";
+import { LucideIcons } from "lucide-icons.slint";
 
 export global BookmarksState {
     in-out property <[string]> labels;
@@ -11,6 +12,8 @@ export global BookmarksState {
     in-out property <bool> has-copy;
     in-out property <bool> go-ready;
     in-out property <bool> offline;
+    in-out property <bool> capture-available;
+    in-out property <bool> capture-from-list;
     in-out property <image> page;
     in-out property <string> progress;
     in-out property <int> choice:0;
@@ -27,6 +30,8 @@ export global BookmarksState {
     callback field-edit(int,string)->string;
     in-out property <int> focus-target-sequence;
     public function focus-target() { root.focus-target-sequence += 1; }
+    in-out property <int> focus-list-sequence;
+    public function focus-list() { root.focus-list-sequence += 1; }
     in-out property <int> focus-reader-sequence;
     public function focus-reader() { root.focus-reader-sequence += 1; }
 }
@@ -50,22 +55,29 @@ export component BookmarksPanel inherits PanelOverlay {
     panel-width: BookmarksState.offline ? 900px : 620px;
     panel-height: BookmarksState.offline ? 700px : 440px;
     out property <bool> target-focused: root.visible && !BookmarksState.offline && target-field.has-focus;
+    out property <bool> list-focused: root.visible && !BookmarksState.offline && saved-list.has-focus;
     private property <bool> target-ready: root.visible && !BookmarksState.offline && !BookmarksState.busy;
-    private property <bool> target-focus-pending;
+    private property <int> pending-focus;
     private property <int> focus-target-sequence: BookmarksState.focus-target-sequence;
-    function apply-target-focus() {
-        if root.target-focus-pending && root.target-ready {
-            root.target-focus-pending = false;
-            target-field.focus();
+    private property <int> focus-list-sequence: BookmarksState.focus-list-sequence;
+    function apply-focus() {
+        if root.target-ready && root.pending-focus != 0 {
+            if root.pending-focus == 1 { saved-list.focus(); }
+            else { target-field.focus(); }
+            root.pending-focus = 0;
         }
     }
-    changed focus-target-sequence => {
-        root.target-focus-pending = root.visible;
-        root.apply-target-focus();
+    changed focus-list-sequence => {
+        root.pending-focus = root.visible ? 1 : 0;
+        root.apply-focus();
     }
-    changed target-ready => { root.apply-target-focus(); }
+    changed focus-target-sequence => {
+        root.pending-focus = root.visible ? 2 : 0;
+        root.apply-focus();
+    }
+    changed target-ready => { root.apply-focus(); }
     changed visible => {
-        if !root.visible { root.target-focus-pending = false; }
+        if !root.visible { root.pending-focus = 0; }
     }
     private property <int> focus-reader-sequence: BookmarksState.focus-reader-sequence;
     changed focus-reader-sequence => { reader-keys.focus(); }
@@ -86,13 +98,29 @@ export component BookmarksPanel inherits PanelOverlay {
                 HorizontalLayout {
                     spacing: 10px;
                     BookmarkCaption { text: BookmarksState.labels[2]; }
-                    PanelCombo {
+                    saved-list := PanelCombo {
+                        accessible-label: BookmarksState.labels[2];
                         model: BookmarksState.entries; current-index <=> BookmarksState.choice;
                         enabled: root.visible && !BookmarksState.busy && !BookmarksState.composing;
                         selected => { BookmarksState.choose(self.current-index); }
                     }
                 }
-                BookmarkButton {text:BookmarksState.labels[3];enabled:!BookmarksState.busy && !BookmarksState.composing;clicked=>{BookmarksState.new-entry();}}
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: start;
+                    if BookmarksState.capture-available: BookmarkButton {
+                        text: BookmarksState.labels[BookmarksState.capture-from-list ? 16 : 15];
+                        icon: LucideIcons.star;
+                        primary: true;
+                        enabled: !BookmarksState.busy && !BookmarksState.composing;
+                        clicked => { BookmarksState.action(5); }
+                    }
+                    BookmarkButton {
+                        text: BookmarksState.labels[3];
+                        enabled: !BookmarksState.busy && !BookmarksState.composing;
+                        clicked => { BookmarksState.new-entry(); }
+                    }
+                }
                 HorizontalLayout {
                     spacing: 10px;
                     BookmarkCaption { text: BookmarksState.labels[4]; }

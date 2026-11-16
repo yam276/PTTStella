@@ -718,6 +718,7 @@ fn run(
         && options.probe == Some(Probe::Session(session::Probe::ArticleInline))
         && std::env::var_os("PTTSTELLA_INLINE_MENU_PROBE").is_none();
     let toolkit_input = options.verify_shell
+        || options.verify_context.is_some()
         || options.verify_tools.is_some()
         || options.verify_drafts.is_some()
         || options.verify_article.is_some()
@@ -1397,6 +1398,9 @@ fn run(
                     settings.tools_opacity,
                     settings.tools_access,
                 ));
+                if let (Some(context), Some(tools)) = (&context_owner, &tools_owner) {
+                    context.attach_tools(tools);
+                }
                 ui.on_media_request({
                     let weak = ui.as_weak();
                     let output = output.clone();
@@ -1565,8 +1569,13 @@ fn run(
                         store,
                     ));
                 }
-                if let (Some(context), Some(bookmarks)) = (&context_owner, &bookmarks_owner) {
-                    context.attach_bookmarks(bookmarks);
+                if let Some(bookmarks) = &bookmarks_owner {
+                    if let Some(context) = &context_owner {
+                        context.attach_bookmarks(bookmarks);
+                    }
+                    if let Some(tools) = &tools_owner {
+                        tools.attach_bookmarks(bookmarks);
+                    }
                 }
                 let recent_store = if let Some(directory) = &options.benchmark {
                     Some(Ok(options.store_profile.as_ref().map_or_else(

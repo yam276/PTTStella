@@ -246,8 +246,14 @@ pub fn start(
                 .dispatch_event(slint::platform::WindowEvent::WindowActiveChanged(true));
             let epoch = connection.updates.borrow().input_epoch;
             wait(
+                || ui.get_bookmarks_list_focused() && !ui.get_terminal_input_focused(),
+                "saved list did not receive focus after loading",
+            )
+            .await?;
+            w.global::<crate::BookmarksState>().invoke_new_entry();
+            wait(
                 || ui.get_bookmarks_target_focused() && !ui.get_terminal_input_focused(),
-                "bookmark target did not receive focus after loading",
+                "explicit new bookmark did not focus the manual target field",
             )
             .await?;
             ui.window()

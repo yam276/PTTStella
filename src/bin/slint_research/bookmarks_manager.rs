@@ -5,7 +5,7 @@ pub mod capture_probe;
 pub mod probe;
 use crate::{
     TerminalWindow,
-    article::session::ArticleSession,
+    article::session::{ArticleSession, bookmarks::Source},
     file_job::ResultSlot,
     output::Output,
     renderer::{Renderer, Size},
@@ -26,6 +26,14 @@ use std::{
 };
 
 use crate::BookmarksState;
+
+#[derive(Clone, Copy, Default)]
+pub enum PanelTarget {
+    #[default]
+    Selected,
+    // A rejected title remains tied to that click for the lifetime of the panel.
+    Title(Option<Source>),
+}
 enum Value {
     Loaded(State),
     Saved(Bookmarks),
@@ -55,6 +63,7 @@ pub struct Manager {
     article: Rc<ArticleSession>,
     connection: Rc<pttstella::connection::Connection>,
     capture: RefCell<Option<capture::Capture>>,
+    panel_target: Cell<PanelTarget>,
     capture_timer: slint::Timer,
     capture_serial: Cell<u64>,
     capture_observing: Cell<bool>,
@@ -97,6 +106,7 @@ impl Manager {
             article,
             connection,
             capture: RefCell::new(None),
+            panel_target: Cell::new(PanelTarget::default()),
             capture_timer: slint::Timer::default(),
             capture_serial: Cell::new(0),
             capture_observing: Cell::new(false),
@@ -127,7 +137,7 @@ impl Manager {
             let o = Rc::downgrade(&owner);
             move || {
                 if let Some(o) = o.upgrade() {
-                    o.open();
+                    o.open(PanelTarget::default());
                 }
             }
         });
@@ -197,6 +207,8 @@ impl Manager {
                 "context-previous",
                 "context-next",
                 "bookmarks-go",
+                "bookmarks-current",
+                "bookmarks-list-current",
             ]
             .map(|key| loader.get(key)),
         ));
@@ -306,7 +318,7 @@ impl Manager {
         drop(rows);
         self.sync();
     }
-    fn open(self: &Rc<Self>) {
+    pub fn open(self: &Rc<Self>, target: PanelTarget) {
         let Some(ui) = self.ui.upgrade() else { return };
         if self.stopped.get()
             || self.capture.borrow().is_some()
@@ -338,6 +350,7 @@ impl Manager {
             }
         }
         if !ui.get_bookmarks_open() {
+            self.panel_target.set(target);
             self.clear_draft();
         }
         self.closing.set(false);
@@ -346,6 +359,7 @@ impl Manager {
         ui.invoke_reset_keyboard();
         ui.set_bookmarks_open(true);
         self.refresh_labels();
+        self.sync_capture_button();
         if let Some(state) = self.state.borrow().as_ref() {
             self.notice(
                 state
@@ -357,10 +371,8 @@ impl Manager {
         if self.state.borrow().is_none() {
             self.reload();
         }
-        // The first load disables the form. The panel applies this request
-        // when the target becomes editable.
         if let Some(w) = self.window() {
-            w.global::<BookmarksState>().invoke_focus_target();
+            w.global::<BookmarksState>().invoke_focus_list();
         }
     }
     fn create_window(self: &Rc<Self>, _ui: &TerminalWindow) -> Result<TerminalWindow, String> {
@@ -382,6 +394,9 @@ impl Manager {
                     && o.admit()
                 {
                     o.clear_draft();
+                    if let Some(w) = o.window() {
+                        w.global::<BookmarksState>().invoke_focus_target();
+                    }
                 }
             }
         });
@@ -481,6 +496,13 @@ impl Manager {
         );
     }
     fn action(self: &Rc<Self>, code: i32) {
+        if code == 5 {
+            if let Some(source) = self.panel_source() {
+                self.hide();
+                self.capture_source(source);
+            }
+            return;
+        }
         if code == 4 {
             if let Some(ui) = self.ui.upgrade()
                 && ui.get_destination_available()
@@ -651,7 +673,7 @@ impl Manager {
             if let Some(w) = self.window() {
                 w.global::<BookmarksState>().set_offline(false);
                 w.global::<BookmarksState>().set_page(Image::default());
-                w.global::<BookmarksState>().invoke_focus_target();
+                w.global::<BookmarksState>().invoke_focus_list();
             }
             return;
         }
@@ -748,6 +770,7 @@ impl Manager {
         }
     }
     fn hide(&self) {
+        self.panel_target.set(PanelTarget::default());
         if let Some(w) = self.window() {
             w.global::<BookmarksState>().set_offline(false);
             w.global::<BookmarksState>().set_page(Image::default());

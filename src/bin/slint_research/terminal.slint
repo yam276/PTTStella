@@ -116,6 +116,7 @@ export component TerminalWindow inherits Window {
     in property <bool> bookmarks-available;
     in property <bool> bookmarks-open;
     out property <bool> bookmarks-target-focused: bookmarks-panel.target-focused;
+    out property <bool> bookmarks-list-focused: bookmarks-panel.list-focused;
     in property <string> bookmarks-label;
     callback bookmarks-show;
     callback bookmarks-updated;
@@ -367,7 +368,6 @@ export component TerminalWindow inherits Window {
     callback tools-updated;
     callback tools-resized;
     callback tools-cancel-gesture;
-    callback tools-show-at(length,length) -> bool;
     callback focus-tools;
     changed width => { root.tools-resized(); }
     changed height => { root.tools-resized(); }
