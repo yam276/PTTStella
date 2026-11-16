@@ -383,7 +383,7 @@ fn full_and_partial_terminal_views_match_during_inline_and_layout_changes() {
         view.set_article_body_height(610.);
         view.set_article_load_available(true);
         view.set_article_load_status("Article loaded · synthetic 23 lines".into());
-        view.set_article_updates_toggle_label("Update replies".into());
+        view.set_article_updates_new_label("Read new replies".into());
     }
     check("loaded before reply capability");
     let before_reply_controls = views.each_ref().map(geometry);

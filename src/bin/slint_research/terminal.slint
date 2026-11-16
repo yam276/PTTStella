@@ -1,7 +1,9 @@
+import { PanelButton, PanelField, PanelReadOnlyText, PanelScrollView, PanelTheme } from "panel.slint";
 export { PanelEdit } from "panel.slint";
 export { LucideIcons } from "lucide-icons.slint";
-import { PanelButton } from "panel.slint";
+import { LucideIcons } from "lucide-icons.slint";
 import { CompositionInput } from "composition-input.slint";
+import { Button, CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
 import { SettingsPanel, SettingsState } from "settings.slint";
 import { SitesPanel, SitesState } from "sites.slint";
 import { FiltersPanel, FiltersState } from "filters.slint";
@@ -14,7 +16,6 @@ export { SitesState } from "sites.slint";
 export { UiLabels } from "labels.slint";
 import { UiLabels } from "labels.slint";
 export { SettingsState, SettingsMatch, FontSource } from "settings.slint";
-import { Button, CheckBox, ComboBox, LineEdit, ScrollView, TextEdit } from "std-widgets.slint";
 import { LoginPanel } from "login.slint";
 import { AboutPanel } from "about.slint";
 export { AboutState, LicenseDocument } from "about.slint";
@@ -199,6 +200,7 @@ export component TerminalWindow inherits Window {
     in-out property <float> media-volume;
     in property <bool> media-muted;
     in property <string> media-volume-label;
+    in property <string> media-position-label;
     in property <string> media-mute-label;
     in property <string> media-unmute-label;
     callback media-set-volume(float);
@@ -557,7 +559,7 @@ export component TerminalWindow inherits Window {
         if !root.app-closing && !root.manager-open && !root.settings-open && !root.editor-open
             && !root.station-color-open && !root.media-open && !root.login-open && !root.paste-open {
             root.show-about = true;
-            about-layer.focus();
+            about-layer.focus-panel();
         }
     }
     about-close => {
@@ -799,7 +801,7 @@ export component TerminalWindow inherits Window {
                     y: parent.height - 26px;
                     width: parent.width;
                     height: 26px;
-                    background: #20252bee;
+                    background: PanelTheme.surface;
                     Text { text: root.pointer-url; color: #e3e8ee; overflow: elide; vertical-alignment: center; }
                 }
                 hover-card := MediaHover {
@@ -915,7 +917,7 @@ export component TerminalWindow inherits Window {
     }
     // Navigation controls float above the article. A newly focused author can
     // make navigation available; that must not resize the reading grid.
-    Button {
+    PanelButton {
         visible:root.reply-navigation-available && !root.reply-navigation-open;
         x:12px;y:12px;width:min(180px,root.width - 24px);height:32px;
         text:UiLabels.reply-title;
@@ -926,7 +928,7 @@ export component TerminalWindow inherits Window {
         visible:root.reply-navigation-open;
         x:12px;y:12px;width:min(760px,root.width - 24px);
         height:reply-nav.preferred-height + 16px;
-        background:#252d38;border-width:1px;border-color:#67768b;border-radius:6px;
+        background:PanelTheme.surface;border-width:1px;border-color:PanelTheme.border;border-radius:6px;
         TouchArea {width:parent.width;height:parent.height;clicked=>{}}
         reply-nav := ReplyNavigationBar {
             x:8px;y:8px;width:parent.width - 16px;height:parent.height - 16px;
@@ -936,11 +938,11 @@ export component TerminalWindow inherits Window {
             action(code)=>{root.reply-navigation-action(code);}
         }
     }
-    Button {
+    PanelButton {
         visible:root.article-station;
         x:12px;y:root.height - self.height - 12px;
         width:min(240px,root.width - 24px);height:32px;
-        text:UiLabels.resume-reading;
+        text:UiLabels.resume-reading; icon:LucideIcons.arrow-left;
         clicked=>{root.article-resume-reading();}
     }
     status-panel := Rectangle {
@@ -982,7 +984,7 @@ export component TerminalWindow inherits Window {
                 }
                 VerticalLayout {
                     alignment: start;
-                    status-scroll := ScrollView {
+                    status-scroll := PanelScrollView {
                         // Long messages can scroll without moving the actions out of view.
                         height: min(status-copy.preferred-height,
                             max(0px, status-panel.height - 2 * status-panel.inset - status-panel.action-height));
@@ -1029,13 +1031,24 @@ export component TerminalWindow inherits Window {
                 VerticalLayout {
                     width: root.shell-notice-dismissible ? 32px : 0px;
                     alignment: start;
-                    status-close := Button {
-                        visible: root.shell-notice-dismissible; enabled: self.visible;
-                        width: 32px; height: 32px; text: "×"; accessible-label: UiLabels.toast-dismiss;
-                        clicked => {
-                            let restore = self.has-focus && root.context-focus-restorable && !root.find-open && !root.app-closing;
-                            root.notice-dismiss();
-                            if restore { root.focus-terminal(); }
+                    close-control := TouchArea {
+                        visible: root.shell-notice-dismissible;
+                        width: 32px; height: 32px;
+                        Rectangle {
+                            background: close-control.has-hover ? PanelTheme.hover : PanelTheme.control;
+                            border-color: status-close.has-focus || close-control.has-hover ? PanelTheme.gold : PanelTheme.border;
+                            border-width: 1px; border-radius: 3px;
+                            Image { width: 16px; height: 16px; source: LucideIcons.x; colorize: PanelTheme.gold; }
+                        }
+                        status-close := Button {
+                            enabled: close-control.visible;
+                            width: parent.width; height: parent.height; opacity: 0;
+                            accessible-label: UiLabels.toast-dismiss;
+                            clicked => {
+                                let restore = self.has-focus && root.context-focus-restorable && !root.find-open && !root.app-closing;
+                                root.notice-dismiss();
+                                if restore { root.focus-terminal(); }
+                            }
                         }
                     }
                 }
@@ -1066,7 +1079,7 @@ export component TerminalWindow inherits Window {
                     text: UiLabels.bookmark-capture; color: #ebe7dc; vertical-alignment: center;
                     horizontal-stretch: 1; min-width: 0px; overflow: elide;
                 }
-                Button { text: UiLabels.cancel; clicked => { root.bookmarks-capture-cancel(); } }
+                PanelButton { text: UiLabels.cancel; clicked => { root.bookmarks-capture-cancel(); } }
             }
             if root.article-load-available && (root.article-load-active || root.article-load-can-resume): HorizontalLayout {
                 spacing: 8px;
@@ -1074,7 +1087,7 @@ export component TerminalWindow inherits Window {
                     text: root.article-load-status; color: #ebe7dc; vertical-alignment: center;
                     horizontal-stretch: 1; min-width: 0px; overflow: elide;
                 }
-                Button {
+                PanelButton {
                     text: root.article-load-active ? UiLabels.cancel-load : root.article-load-next-segment ? UiLabels.next-section : UiLabels.resume-load;
                     clicked => { root.article-load-action(!root.article-load-active); }
                 }
@@ -1086,11 +1099,11 @@ export component TerminalWindow inherits Window {
                 }
                 if root.article-updates-unread > 0 || root.article-updates-recovery: HorizontalLayout {
                     spacing: 6px;
-                    if root.article-updates-unread > 0: Button {
+                    if root.article-updates-unread > 0: PanelButton {
                         text: root.article-updates-new-label; enabled: !root.article-updates-blocked;
                         min-width: 0px; clicked => { root.article-updates-action(1); }
                     }
-                    if root.article-updates-recovery: Button {
+                    if root.article-updates-recovery: PanelButton {
                         text: UiLabels.updates-station; enabled: !root.article-updates-blocked;
                         min-width: 0px; clicked => { root.article-updates-action(2); }
                     }
@@ -1164,17 +1177,17 @@ export component TerminalWindow inherits Window {
         x: root.width - self.width - 12px;
         y: 44px;
         width: min(560px, root.width - 24px);
-        height: 108px;
-        background: #252d38;
+        height: find-controls.preferred-height;
+        background: PanelTheme.surface;
         border-width: 1px;
-        border-color: #67768b;
+        border-color: PanelTheme.border;
         border-radius: 6px;
-        VerticalLayout {
+        find-controls := VerticalLayout {
             padding: 10px;
             spacing: 6px;
             HorizontalLayout {
                 spacing: 6px;
-                find-input := LineEdit {
+                find-input := PanelField {
                     text <=> root.find-query;
                     placeholder-text: root.find-placeholder;
                     accessible-label: root.find-title;
@@ -1188,9 +1201,9 @@ export component TerminalWindow inherits Window {
                         return reject;
                     }
                 }
-                Button { text: "↑"; accessible-label: root.find-previous-label; enabled: root.find-has-matches; clicked => { root.find-action(1); } }
-                Button { text: "↓"; accessible-label: root.find-next-label; enabled: root.find-has-matches; clicked => { root.find-action(2); } }
-                Button { text: "×"; accessible-label: root.find-close-label; clicked => { root.find-action(3); } }
+                PanelButton { text: root.find-previous-label; icon: LucideIcons.arrow-up; icon-only: true; enabled: root.find-has-matches; clicked => { root.find-action(1); } }
+                PanelButton { text: root.find-next-label; icon: LucideIcons.arrow-down; icon-only: true; enabled: root.find-has-matches; clicked => { root.find-action(2); } }
+                PanelButton { text: root.find-close-label; icon: LucideIcons.x; icon-only: true; clicked => { root.find-action(3); } }
             }
             Text { text: root.find-status; color: #e3e8ee; }
             Text { text: root.find-hint; color: #b6c4d5; font-size: 11px; wrap: word-wrap; }
@@ -1206,6 +1219,7 @@ export component TerminalWindow inherits Window {
         volume <=> root.media-volume;
         muted: root.media-muted;
         volume-label: root.media-volume-label;
+        position-label: root.media-position-label;
         mute-label: root.media-mute-label;
         unmute-label: root.media-unmute-label;
         audio-controls-enabled: root.media-ready && root.media-play-allowed;
@@ -1221,7 +1235,7 @@ export component TerminalWindow inherits Window {
     show-login-popup => {
         root.login-password = "";
         root.login-remember = false;
-        if !root.login-embedded { login-popup.focus(); }
+        if !root.login-embedded { login-popup.focus-panel(); }
     }
     hide-login-popup(restore-focus) => {
         root.login-password = "";
@@ -1281,10 +1295,10 @@ export component TerminalWindow inherits Window {
             Rectangle {
                 width: parent.width;
                 height: parent.height;
-                background: #20252b;
+                background: PanelTheme.surface;
                 border-radius: 6px;
                 border-width: 1px;
-                border-color: #6d7b87;
+                border-color: PanelTheme.gold-border;
                 VerticalLayout {
                     padding: 16px;
                     spacing: 12px;
@@ -1293,21 +1307,19 @@ export component TerminalWindow inherits Window {
                         color: #e3e8ee;
                         font-weight: 700;
                     }
-                    TextEdit {
+                    PanelReadOnlyText {
                         text: root.paste-preview;
-                        accessible-label: root.paste-title;
-                        read-only: true;
-                        vertical-stretch: 1;
+                        label: root.paste-title;
                     }
                     HorizontalLayout {
                         alignment: end;
                         spacing: 8px;
-                        cancel-paste := Button {
+                        cancel-paste := PanelButton {
                             text: root.paste-cancel-label;
                             clicked => { root.paste-cancel(); }
                         }
-                        Button {
-                            text: root.paste-send-label;
+                        PanelButton {
+                            text: root.paste-send-label; primary: true;
                             clicked => { root.paste-confirm(); }
                         }
                     }

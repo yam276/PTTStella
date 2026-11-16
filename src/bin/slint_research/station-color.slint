@@ -1,4 +1,4 @@
-import { Button, ScrollView } from "std-widgets.slint";
+import { PanelButton, PanelScrollView, PanelTheme } from "panel.slint";
 import { ColorPalette } from "color-palette.slint";
 export global StationColorState {
     in-out property <bool> open;
@@ -31,11 +31,11 @@ export component StationColor inherits Rectangle {
     panel := Rectangle {
         width:min(420px,root.width - 24px);height:min(450px,root.height - 24px);
         x:(root.width - self.width)/2;y:(root.height - self.height)/2;
-        background:#141d30;border-color:#d9ae5b;border-width:1px;border-radius:6px;
+        background:PanelTheme.surface;border-color:PanelTheme.gold-border;border-width:1px;border-radius:6px;
         TouchArea { }
-        ScrollView {
+        PanelScrollView {
             width:parent.width;height:parent.height;
-            content-width:self.width;content-height:430px;
+            content-width:self.visible-width;content-height:430px;
             VerticalLayout {
                 padding:12px;spacing:6px;
                 Text {text:StationColorState.title;color:#f2cd7d;font-size:18px;}
@@ -66,14 +66,14 @@ export component StationColor inherits Rectangle {
                     }
                     key-released(event)=>{return accept;}
                     HorizontalLayout {spacing:8px;
-                        Rectangle {horizontal-stretch:1;border-width:actions.has-focus && root.selected-action==0 ? 2px : 0px;border-color:#68b7ff;
-                            Button {x:2px;y:2px;width:parent.width - 4px;height:parent.height - 4px;text:StationColorState.reset-label;enabled:!StationColorState.busy;clicked=>{StationColorState.action(3);} }
+                        Rectangle {horizontal-stretch:1;border-width:actions.has-focus && root.selected-action==0 ? 2px : 0px;border-color:PanelTheme.gold;
+                            PanelButton {x:2px;y:2px;width:parent.width - 4px;height:parent.height - 4px;text:StationColorState.reset-label;enabled:!StationColorState.busy;clicked=>{StationColorState.action(3);} }
                         }
-                        Rectangle {horizontal-stretch:1;border-width:actions.has-focus && root.selected-action==1 ? 2px : 0px;border-color:#68b7ff;
-                            Button {x:2px;y:2px;width:parent.width - 4px;height:parent.height - 4px;text:StationColorState.cancel-label;enabled:!StationColorState.cancelling;clicked=>{StationColorState.action(2);} }
+                        Rectangle {horizontal-stretch:1;border-width:actions.has-focus && root.selected-action==1 ? 2px : 0px;border-color:PanelTheme.gold;
+                            PanelButton {x:2px;y:2px;width:parent.width - 4px;height:parent.height - 4px;text:StationColorState.cancel-label;enabled:!StationColorState.cancelling;clicked=>{StationColorState.action(2);} }
                         }
-                        Rectangle {horizontal-stretch:1;border-width:actions.has-focus && root.selected-action==2 ? 2px : 0px;border-color:#68b7ff;
-                            Button {x:2px;y:2px;width:parent.width - 4px;height:parent.height - 4px;text:StationColorState.apply-label;enabled:!StationColorState.busy;clicked=>{StationColorState.action(1);} }
+                        Rectangle {horizontal-stretch:1;border-width:actions.has-focus && root.selected-action==2 ? 2px : 0px;border-color:PanelTheme.gold;
+                            PanelButton {x:2px;y:2px;width:parent.width - 4px;height:parent.height - 4px;text:StationColorState.apply-label;enabled:!StationColorState.busy;clicked=>{StationColorState.action(1);} }
                         }
                     }
                 }

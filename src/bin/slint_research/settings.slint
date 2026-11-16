@@ -1,5 +1,4 @@
-import { ScrollView, Slider } from "std-widgets.slint";
-import { PanelButton, PanelField, PanelCheck, PanelCombo, PanelOverlay } from "panel.slint";
+import { PanelButton, PanelCheck, PanelCombo, PanelField, PanelOverlay, PanelScrollView, PanelSlider } from "panel.slint";
 import { LucideIcons } from "lucide-icons.slint";
 import { AboutBlock, AboutState, LicenseSections } from "about.slint";
 global SettingsInput {
@@ -124,44 +123,23 @@ component FocusCheck inherits PanelCheck {
     changed focus-sequence => { self.apply-requested-focus(); }
     changed has-focus=>{if self.has-focus {SettingsInput.active-target=self.field-id;} else if SettingsInput.active-target==self.field-id {SettingsInput.active-target=-1;}}
 }
-component OpacitySlider inherits Rectangle {
+component OpacitySlider inherits PanelSlider {
     private property <int> focus-sequence: SettingsInput.focus-sequence;
-    min-height: 24px;
-    horizontal-stretch: 1;
-    forward-focus: slider;
+    minimum: 20; maximum: 100; step: 1;
+    value: SettingsState.tool-opacity;
+    label: SettingsState.labels[19];
+    changed(value) => { SettingsState.tool-opacity = round(value); SettingsState.edit(); }
     function apply-requested-focus() {
         if SettingsInput.focus-field == 6 {
-            slider.focus();
-            if slider.has-focus { SettingsInput.focus-field = -1; SettingsInput.active-target = 6; }
+            self.focus();
+            if self.has-focus { SettingsInput.focus-field = -1; SettingsInput.active-target = 6; }
         }
     }
     init => { self.apply-requested-focus(); }
     changed focus-sequence => { self.apply-requested-focus(); }
-    Rectangle {
-        x: 8px; width: parent.width - 16px; height: 4px;
-        y: (parent.height - self.height) / 2;
-        border-radius: 2px; background: #080f19;
-        border-width: 1px; border-color: #091421;
-    }
-    Rectangle {
-        width: 16px; height: 16px; border-radius: 8px;
-        x: (parent.width - self.width) * (slider.value - slider.minimum) / (slider.maximum - slider.minimum);
-        y: (parent.height - self.height) / 2;
-        background: #999999; border-width: 1px;
-        border-color: slider.has-focus ? #e7c46a : #8a8a8a;
-    }
-    // Use the standard control for pointer, keyboard and accessibility input.
-    slider := Slider {
-        width: parent.width; height: parent.height;
-        opacity: 0;
-        minimum: 20; maximum: 100; step: 1;
-        value: SettingsState.tool-opacity;
-        accessible-label: SettingsState.labels[19];
-        changed(value) => { SettingsState.tool-opacity = round(value); SettingsState.edit(); }
-        changed has-focus => {
-            if self.has-focus { SettingsInput.active-target = 6; }
-            else if SettingsInput.active-target == 6 { SettingsInput.active-target = -1; }
-        }
+    changed has-focus => {
+        if self.has-focus { SettingsInput.active-target = 6; }
+        else if SettingsInput.active-target == 6 { SettingsInput.active-target = -1; }
     }
 }
 export struct FontSource { id:string,title:string }
@@ -309,7 +287,7 @@ export component SettingsPanel inherits PanelOverlay {
             spacing: 0;
             HorizontalLayout {
                 spacing: 0;
-                ScrollView {
+                PanelScrollView {
                     width: root.sidebar-width;
                     content-width: self.visible-width;
                     VerticalLayout {
@@ -329,7 +307,7 @@ export component SettingsPanel inherits PanelOverlay {
                     }
                 }
                 Rectangle { width: 1px; background: #34475b; }
-                ScrollView { content-width:self.visible-width;
+                PanelScrollView { content-width:self.visible-width;
                     VerticalLayout {
                         alignment: start; padding-top: 24px; padding-bottom: 24px;
                         padding-left: root.content-inset; padding-right: root.content-inset; spacing: 12px;

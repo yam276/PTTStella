@@ -268,6 +268,7 @@ image-title = Image preview
 video-player = Video player
 video-pause = Pause video
 video-volume = Volume
+video-position = Playback position
 video-mute = Mute
 video-unmute = Unmute
 media-playing = Playing

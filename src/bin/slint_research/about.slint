@@ -1,5 +1,5 @@
-import { AboutSlint, ScrollView } from "std-widgets.slint";
-import { PanelButton, PanelOverlay } from "panel.slint";
+import { PanelButton, PanelOverlay, PanelScrollView } from "panel.slint";
+import { AboutSlint } from "std-widgets.slint";
 import { LucideIcons } from "lucide-icons.slint";
 import { UiLabels } from "labels.slint";
 
@@ -114,7 +114,7 @@ export component AboutPanel inherits PanelOverlay {
     brand-mark: @image-url("../../../assets/icons/constellation-flat.svg");
     callback close;
     backdrop-clicked => { root.close(); }
-    forward-focus: close-button;
+    public function focus-panel() { close-button.focus(); }
 
     FocusScope {
         key-pressed(event) => {
@@ -123,7 +123,7 @@ export component AboutPanel inherits PanelOverlay {
         }
         VerticalLayout {
             spacing: 0;
-            ScrollView {
+            PanelScrollView {
                 vertical-stretch: 1;
                 content-width: self.visible-width;
                 VerticalLayout {

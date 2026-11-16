@@ -1,5 +1,4 @@
-import { ScrollView } from "std-widgets.slint";
-import { PanelButton, PanelCheck, PanelField, PanelOverlay } from "panel.slint";
+import { PanelButton, PanelCheck, PanelField, PanelOverlay, PanelScrollView } from "panel.slint";
 
 export component LoginPanel inherits PanelOverlay {
     panel-width: 550px;
@@ -23,7 +22,7 @@ export component LoginPanel inherits PanelOverlay {
     callback cancel;
     callback forget;
     callback limit-text(string, int) -> string;
-    forward-focus: account-field;
+    public function focus-panel() { account-field.focus(); }
 
     keys := FocusScope {
         width: root.content-width;
@@ -35,12 +34,11 @@ export component LoginPanel inherits PanelOverlay {
             }
             return reject;
         }
-        ScrollView {
+        PanelScrollView {
             width: keys.width;
             height: keys.height;
-            content-width: self.width;
+            content-width: self.visible-width;
             VerticalLayout {
-                width: keys.width;
                 min-height: keys.height;
                 padding: root.embedded ? 0px : 16px;
                 spacing: 12px;

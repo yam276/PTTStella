@@ -1,6 +1,6 @@
-import { PanelButton, PanelField, PanelCombo, PanelOverlay } from "panel.slint";
+import { ListView } from "std-widgets.slint";
+import { PanelButton, PanelCombo, PanelField, PanelScrollBar, PanelOverlay, PanelScrollView } from "panel.slint";
 import { LucideIcons } from "lucide-icons.slint";
-import { ScrollView, ListView } from "std-widgets.slint";
 
 export global FiltersState {
     in-out property <[string]> labels;
@@ -41,8 +41,8 @@ export component FiltersPanel inherits PanelOverlay {
     keys:=FocusScope {
         width:parent.width;height:parent.height;
         key-pressed(event)=>{if !root.embedded && event.text==Key.Escape && !FiltersState.composing {FiltersState.close-filters();return accept;}return reject;}
-        ScrollView {
-            content-width: self.width;
+        PanelScrollView {
+            content-width: self.visible-width;
         VerticalLayout {alignment: start; padding:root.embedded ? 0px : 16px;spacing:10px;
             HorizontalLayout {
                 alignment: start; spacing: 8px;
@@ -51,12 +51,19 @@ export component FiltersPanel inherits PanelOverlay {
                 PanelButton {text:FiltersState.category-sort?FiltersState.labels[5]:FiltersState.labels[4];icon:LucideIcons.list-filter;icon-size:16px;enabled:!FiltersState.composing;clicked=>{FiltersState.sort();}}
                 PanelButton {text:FiltersState.labels[3];enabled:FiltersState.writable && !FiltersState.busy && !FiltersState.importing && !FiltersState.composing;clicked=>{FiltersState.new-entry();}}
             }
-            ScrollView {height:156px;content-width:self.width;
-                ListView {
+            Rectangle {
+                height: 156px;
+                entries := ListView {
+                    x: 0px; width: parent.width - entries-scrollbar.width; height: parent.height;
+                    vertical-scrollbar-policy: always-off;
                     for entry[index] in FiltersState.entries: PanelButton {
                         text:entry;checked:FiltersState.choice==index;enabled:!FiltersState.busy && !FiltersState.composing;
                         clicked=>{FiltersState.choose(index);}
                     }
+                }
+                entries-scrollbar := PanelScrollBar {
+                    x: parent.width - self.width;
+                    content-height: entries.content-height; content-y <=> entries.content-y;
                 }
             }
             if FiltersState.entries.length==0: Text {text:FiltersState.empty-message;color:#c7d4e7;}

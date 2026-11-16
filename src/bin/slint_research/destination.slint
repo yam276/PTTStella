@@ -1,5 +1,4 @@
-import { ScrollView } from "std-widgets.slint";
-import { PanelButton, PanelField, PanelCombo, PanelOverlay } from "panel.slint";
+import { PanelButton, PanelCombo, PanelField, PanelOverlay, PanelScrollView } from "panel.slint";
 
 export global DestinationState {
     in-out property <[string]> labels;
@@ -30,8 +29,8 @@ export component DestinationPanel inherits PanelOverlay {
             if event.text==Key.Return && !DestinationState.composing && !event.repeat && !DestinationState.busy {DestinationState.action(0);return accept;}
             return reject;
         }
-        ScrollView {
-            content-width: self.width;
+        PanelScrollView {
+            content-width: self.visible-width;
         VerticalLayout {alignment: start; padding:16px;spacing:10px;
             Text {text:DestinationState.labels[1];color:#c7d4e7;}
             input:=PanelField {text<=>DestinationState.draft;accessible-label:DestinationState.labels[1];enabled:!DestinationState.busy;edited=>{self.text=DestinationState.field-edit(self.text);}accepted=>{if !DestinationState.composing && !DestinationState.busy {DestinationState.action(0);}}}

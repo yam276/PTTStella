@@ -1,3 +1,4 @@
+import { PanelTheme } from "panel.slint";
 import { UiLabels } from "labels.slint";
 import { SelectionRect } from "selection.slint";
 import { CompositionInput } from "composition-input.slint";
@@ -229,12 +230,12 @@ export component ArticleViewport inherits Rectangle {
     }
     Rectangle {
         x: root.body-width; y: 0px; width: 12px; height: root.body-height;
-        background: #101318;
+        background: PanelTheme.input;
         if root.maximum-y > 0px: Rectangle {
             x: 2px; width: 8px;
             y: (root.body-height - root.thumb-height) * root.offset-y / max(1px,root.maximum-y);
             height: root.thumb-height;
-            background: vertical.has-hover ? #9cabbc : #586576;
+            background: vertical.has-hover || root.vertical-drag ? PanelTheme.gold : PanelTheme.gold-border;
             border-radius: 4px;
         }
         vertical := TouchArea {
@@ -256,12 +257,12 @@ export component ArticleViewport inherits Rectangle {
     }
     Rectangle {
         x: 0px; y: root.height - 12px; width: root.body-width; height: 12px;
-        background: #101318;
+        background: PanelTheme.input;
         if root.maximum-x > 0px: Rectangle {
             y: 2px; height: 8px;
             x: (root.body-width - root.thumb-width)*root.offset-x/max(1px,root.maximum-x);
             width: root.thumb-width;
-            background: horizontal.has-hover ? #9cabbc : #586576;
+            background: horizontal.has-hover || root.horizontal-drag ? PanelTheme.gold : PanelTheme.gold-border;
             border-radius: 4px;
         }
         horizontal := TouchArea {

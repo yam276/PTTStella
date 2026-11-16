@@ -1,6 +1,5 @@
-import {Slider} from "std-widgets.slint";
 import {ContextMenuOverlay} from "context-menu.slint";
-import {PanelButton} from "panel.slint";
+import {PanelButton, PanelSlider, PanelTheme} from "panel.slint";
 import {LucideIcons} from "lucide-icons.slint";
 
 struct MediaTool {
@@ -23,6 +22,7 @@ export component MediaPreview inherits Rectangle {
     in-out property <float> volume;
     in property <bool> muted;
     in property <string> volume-label;
+    in property <string> position-label;
     in property <string> mute-label;
     in property <string> unmute-label;
     in property <bool> audio-controls-enabled;
@@ -68,7 +68,9 @@ export component MediaPreview inherits Rectangle {
     property <int> menu-index;
     property <length> menu-x;
     property <length> menu-y;
-    out property <string> toolbar-tooltip: root.hint-action == 2 ? root.motion-label : root.hint;
+    private property <string> audio-action-label: root.muted ? root.unmute-label : root.mute-label;
+    out property <string> toolbar-tooltip: root.hint-action == 2 ? root.motion-label
+        : root.hint-action == 11 ? root.audio-action-label : root.hint;
     private property <int> hint-action: -1;
     private property <string> hint;
     private property <length> hint-x;
@@ -134,20 +136,20 @@ export component MediaPreview inherits Rectangle {
         }
         Rectangle {
             x: 12px; y: 12px; width: parent.width - 24px; height: parent.height - 24px;
-            background: #0c1c30; border-color: #786640; border-width: 1px; border-radius: 8px;
+            background: PanelTheme.surface; border-color: PanelTheme.gold-border; border-width: 1px; border-radius: 8px;
             VerticalLayout { padding: 12px; spacing: 8px;
                 HorizontalLayout {
                     spacing: 8px;
                     Rectangle {
                         height: 34px; horizontal-stretch: 1; clip: true;
-                        background: #091727; border-width: 1px; border-color: #34475b; border-radius: 4px;
+                        background: PanelTheme.input; border-width: 1px; border-color: PanelTheme.border; border-radius: 4px;
                         Image {
                             x: 10px; y: 8px; width: 18px; height: 18px;
-                            source: LucideIcons.link; colorize: #e7c46a;
+                            source: LucideIcons.link; colorize: PanelTheme.gold;
                         }
                         Text {
                             x: 38px; width: parent.width - 48px;
-                            text: root.url; color: #ebe7dc; font-size: 13px;
+                            text: root.url; color: PanelTheme.text; font-size: 13px;
                             vertical-alignment: center; overflow: elide;
                         }
                     }
@@ -193,6 +195,43 @@ export component MediaPreview inherits Rectangle {
                         min-width: 0px; vertical-alignment: center; overflow: elide;
                     }
                 }
+                if root.video: HorizontalLayout {
+                    spacing: 8px;
+                    PanelButton {
+                        text: root.motion-label;
+                        icon: root.playing ? LucideIcons.pause : LucideIcons.play;
+                        icon-only: true; hover-when-disabled: true;
+                        enabled: root.ready && root.foreground && !root.busy;
+                        changed hovered => { root.tool-hover(self.hovered, 2, root.motion-label, self.absolute-position.x, self.absolute-position.y + self.height); }
+                        clicked => { root.action(2); }
+                    }
+                    PanelSlider {
+                        label: root.position-label;
+                        minimum: 0; maximum: max(1, root.duration);
+                        value <=> root.position;
+                        enabled: root.duration > 0 && root.foreground && !root.busy;
+                        changed(value) => { root.seek(value); }
+                    }
+                    Text { text: round(root.position) + " / " + round(root.duration) + " s"; color: PanelTheme.muted; vertical-alignment: center; }
+                    PanelButton {
+                        text: root.audio-action-label;
+                        icon: root.muted ? LucideIcons.volume-x : LucideIcons.volume-2;
+                        icon-only: true; hover-when-disabled: true;
+                        enabled: root.audio-controls-enabled;
+                        changed hovered => { root.tool-hover(self.hovered, 11, root.audio-action-label, self.absolute-position.x, self.absolute-position.y + self.height); }
+                        clicked => { root.set-muted(!root.muted); }
+                    }
+                    PanelSlider {
+                        label: root.volume-label;
+                        minimum: 0; maximum: 100; step: 1;
+                        value <=> root.volume;
+                        enabled: root.audio-controls-enabled;
+                        horizontal-stretch: 0; preferred-width: 92px; max-width: 120px;
+                        // Keep one command per drag or key press for the bounded player queue.
+                        released(value) => { root.adjust-volume(value); }
+                    }
+                    Text { text: round(root.volume) + "%"; min-width: 36px; horizontal-alignment: right; vertical-alignment: center; color: PanelTheme.muted; }
+                }
                 view := Rectangle {vertical-stretch:1;min-height:100px;clip:true;background:#070e18;
                     if root.video && root.software-video: Image {source:root.pixels;width:parent.width;height:parent.height;image-fit:contain;}
                     if !root.video: Image {source:root.pixels;width:root.pixels.width * root.actual * 1px;height:root.pixels.height * root.actual * 1px;
@@ -211,45 +250,6 @@ export component MediaPreview inherits Rectangle {
                         scroll-event(event) => {root.zoom-by(event.delta-y > 0px ? 1.1 : 1/1.1,self.mouse-x,self.mouse-y);return accept;}
                     }
                 }
-                if root.video: HorizontalLayout {spacing:6px;
-                    PanelButton {text:root.motion-label;enabled:root.ready && root.foreground && !root.busy;clicked=>{root.action(2);}}
-                    // Keep the shared position binding after a user changes the slider.
-                    Slider {minimum:0;maximum:max(1,root.duration);value <=> root.position;enabled:root.duration > 0 && root.foreground && !root.busy;
-                        changed(value)=>{root.seek(value);} }
-                    Text {text:round(root.position) + " / " + round(root.duration) + " s";color:#cdd9e8;vertical-alignment:center;}
-                }
-                if root.video: HorizontalLayout {
-                    spacing: 8px;
-                    PanelButton {
-                        text: root.muted ? root.unmute-label : root.mute-label;
-                        enabled: root.audio-controls-enabled;
-                        clicked => { root.set-muted(!root.muted); }
-                    }
-                    Text { text: root.volume-label; color: #cdd9e8; vertical-alignment: center; }
-                    Slider {
-                        minimum: 0;
-                        maximum: 100;
-                        step: 1;
-                        value <=> root.volume;
-                        enabled: root.audio-controls-enabled;
-                        accessible-label: root.volume-label;
-                        // Commit one value per drag or key press, so the
-                        // bounded player queue also has room for pause/close.
-                        released(value) => { root.adjust-volume(value); }
-                        accessible-action-set-value(value) => {
-                            if value.is-float() { root.adjust-volume(value.to-float()); }
-                        }
-                        accessible-action-increment => { root.adjust-volume(root.volume + 1); }
-                        accessible-action-decrement => { root.adjust-volume(root.volume - 1); }
-                    }
-                    Text {
-                        text: round(root.volume) + "%";
-                        min-width: 42px;
-                        horizontal-alignment: right;
-                        vertical-alignment: center;
-                        color: #cdd9e8;
-                    }
-                }
             }
         }
     }
@@ -258,10 +258,10 @@ export component MediaPreview inherits Rectangle {
         x: clamp(root.hint-x, 12px, root.width - self.width - 12px);
         y: root.hint-y + 4px;
         width: min(root.width - 24px, hint-label.preferred-width + 20px); height: 26px;
-        background: #132c45; border-color: #e7c46a; border-width: 1px; border-radius: 4px;
+        background: PanelTheme.control; border-color: PanelTheme.gold; border-width: 1px; border-radius: 4px;
         hint-label := Text {
             x: 10px; width: parent.width - 20px; text: root.toolbar-tooltip;
-            color: #ebe7dc; font-size: 13px; vertical-alignment: center; overflow: elide;
+            color: PanelTheme.text; font-size: 13px; vertical-alignment: center; overflow: elide;
         }
     }
     menu := ContextMenuOverlay {

@@ -216,7 +216,11 @@ pub fn start(
                 )
                 .await?;
                 ui.invoke_media_seek(1.);
-                ui.invoke_media_action(2);
+                let view = ui.get_media_video_bounds();
+                // The playback button starts the 34px row, separated from the
+                // video by the same 8px inset as the rest of the toolbar.
+                let play_button = slint::LogicalPosition::new(view.x + 17., view.y - 25.);
+                verification::click(&ui, play_button, slint::platform::PointerEventButton::Left);
                 wait(
                     || !ui.get_media_playing() && (ui.get_media_position() - 1.).abs() < 0.1,
                     "video seek/pause not acknowledged",
@@ -240,6 +244,9 @@ pub fn start(
                     .await?;
                 }
                 audio_controls_verified = true;
+                if video.bridge.software.get() {
+                    verification::capture(&ui, &directory, "video-toolbar.png")?;
+                }
                 video.capture();
                 wait(
                     || !video.bridge.samples.borrow().is_empty(),

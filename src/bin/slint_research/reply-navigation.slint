@@ -1,4 +1,5 @@
-import { Button } from "std-widgets.slint";
+import { PanelButton, PanelTheme } from "panel.slint";
+import { LucideIcons } from "lucide-icons.slint";
 import { UiLabels } from "labels.slint";
 
 export component ReplyNavigationBar inherits FocusScope {
@@ -11,8 +12,6 @@ export component ReplyNavigationBar inherits FocusScope {
     in property <string> count;
     callback action(int);
     callback focus-navigation;
-    function refresh-group() {author.checked=root.group==0;mine.checked=root.group==1;focused-id.checked=root.group==2;}
-    changed group=>{root.refresh-group();}
     out property <bool> focused: self.has-focus || author.has-focus || mine.has-focus || focused-id.has-focus || previous.has-focus || next.has-focus || close.has-focus;
     focus-navigation => { if root.groups[0] {author.focus();} else if root.groups[1] {mine.focus();} else {focused-id.focus();} }
     key-pressed(event) => {
@@ -24,12 +23,12 @@ export component ReplyNavigationBar inherits FocusScope {
     }
     controls := HorizontalLayout {
         spacing:6px;
-        author := Button { text:UiLabels.reply-author; checkable:true; checked:root.group==0; enabled:!root.blocked && root.groups[0];clicked=>{root.action(4);root.refresh-group();} }
-        mine := Button { text:UiLabels.reply-mine;accessible-label:root.groups[3] ? UiLabels.reply-mine : UiLabels.reply-unconfirmed;checkable:true;checked:root.group==1;enabled:!root.blocked && root.groups[1];clicked=>{root.action(5);root.refresh-group();} }
-        focused-id := Button { text:UiLabels.reply-focused;checkable:true;checked:root.group==2;enabled:!root.blocked && root.groups[2];clicked=>{root.action(6);root.refresh-group();} }
-        Text {text:root.count;horizontal-stretch:1;vertical-alignment:center;}
-        previous := Button {text:UiLabels.reply-previous;enabled:!root.blocked && root.groups[root.group];clicked=>{root.action(2);} }
-        next := Button {text:UiLabels.reply-next;enabled:!root.blocked && root.groups[root.group];clicked=>{root.action(3);} }
-        close := Button {text:UiLabels.editor-close;clicked=>{root.action(1);} }
+        author := PanelButton { text:UiLabels.reply-author; selectable:true; checked:root.group==0; enabled:!root.blocked && root.groups[0];clicked=>{root.action(4);} }
+        mine := PanelButton { text:UiLabels.reply-mine;accessible-label:root.groups[3] ? UiLabels.reply-mine : UiLabels.reply-unconfirmed;selectable:true;checked:root.group==1;enabled:!root.blocked && root.groups[1];clicked=>{root.action(5);} }
+        focused-id := PanelButton { text:UiLabels.reply-focused;selectable:true;checked:root.group==2;enabled:!root.blocked && root.groups[2];clicked=>{root.action(6);} }
+        Text {text:root.count;color:PanelTheme.muted;min-width:0px;overflow:elide;horizontal-stretch:1;vertical-alignment:center;}
+        previous := PanelButton {text:UiLabels.reply-previous;enabled:!root.blocked && root.groups[root.group];clicked=>{root.action(2);} }
+        next := PanelButton {text:UiLabels.reply-next;enabled:!root.blocked && root.groups[root.group];clicked=>{root.action(3);} }
+        close := PanelButton {text:UiLabels.editor-close;icon:LucideIcons.x;icon-only:true;clicked=>{root.action(1);} }
     }
 }

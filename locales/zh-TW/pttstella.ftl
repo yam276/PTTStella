@@ -268,6 +268,7 @@ image-title = 圖片預覽
 video-player = 影片播放器
 video-pause = 暫停影片
 video-volume = 音量
+video-position = 播放進度
 video-mute = 靜音
 video-unmute = 取消靜音
 media-playing = 播放中

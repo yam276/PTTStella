@@ -1,7 +1,6 @@
+import { PanelButton, PanelCombo, PanelField, PanelScrollView, PanelTheme } from "panel.slint";
 import { UiLabels } from "labels.slint";
-import { Button, ComboBox, ScrollView } from "std-widgets.slint";
 import { ColorPalette } from "color-palette.slint";
-import { PanelCombo } from "panel.slint";
 import { SelectionRect } from "selection.slint";
 import { CompositionInput } from "composition-input.slint";
 export struct DraftItem { id:string, title:string, conflict:bool }
@@ -61,7 +60,7 @@ export global EditorState {
     callback focus-changed;
 }
 export component NativeEditor inherits Rectangle {
-    background:#131923;
+    background: PanelTheme.surface;
     out property <length> grid-left:content.x + area.x + grid.x;
     out property <length> grid-top:content.y + area.y + grid.y;
     out property <length> grid-width:grid.width;
@@ -87,21 +86,22 @@ export component NativeEditor inherits Rectangle {
     VerticalLayout {
         padding:12px;spacing:8px;
         HorizontalLayout {
+            spacing: 8px;
             Text { text:UiLabels.local-drafts + " · " + EditorState.scope; color:#c7d4e7;vertical-alignment:center;horizontal-stretch:1;overflow:elide; }
-            Button {text:UiLabels.editor-save;enabled:EditorState.selected && !EditorState.composing;clicked=>{EditorState.action(1);} }
-            Button {text:UiLabels.editor-transfer;enabled:EditorState.can-transfer && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(2);} }
-            if EditorState.source-busy: Button {text:EditorState.source-cancelling ? UiLabels.editor-stop : UiLabels.editor-cancel-job;enabled:!EditorState.source-cancelling;clicked=>{EditorState.action(9);} }
-            Button {text:UiLabels.editor-close;enabled:!EditorState.busy && !EditorState.composing;clicked=>{EditorState.action(3);} }
+            PanelButton {text:UiLabels.editor-save;enabled:EditorState.selected && !EditorState.composing;clicked=>{EditorState.action(1);} }
+            PanelButton {text:UiLabels.editor-transfer;primary:true;enabled:EditorState.can-transfer && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(2);} }
+            if EditorState.source-busy: PanelButton {text:EditorState.source-cancelling ? UiLabels.editor-stop : UiLabels.editor-cancel-job;enabled:!EditorState.source-cancelling;clicked=>{EditorState.action(9);} }
+            PanelButton {text:UiLabels.editor-close;enabled:!EditorState.busy && !EditorState.composing;clicked=>{EditorState.action(3);} }
         }
         Rectangle {
             visible:!EditorState.selected;min-height:0px;max-height:EditorState.selected ? 0px : 100000px;vertical-stretch:1;
             VerticalLayout {
-            Button { text:UiLabels.editor-new;enabled:EditorState.can-create && !EditorState.busy;clicked=>{EditorState.choose("");} }
-            ScrollView {
+            PanelButton { text:UiLabels.editor-new;enabled:EditorState.can-create && !EditorState.busy;clicked=>{EditorState.choose("");} }
+            PanelScrollView {
                 VerticalLayout {
-                    for item in EditorState.drafts: HorizontalLayout {min-height:38px;max-height:38px;
-                        Button { text:item.title + (item.conflict ? " · " + UiLabels.editor-conflict : "");horizontal-stretch:1;enabled:!EditorState.busy;clicked=>{EditorState.choose(item.id);} }
-                        Button { text:UiLabels.editor-delete;enabled:!EditorState.busy;clicked=>{EditorState.delete(item.id);} }
+                    for item in EditorState.drafts: HorizontalLayout {min-height:38px;max-height:38px;spacing:8px;
+                        PanelButton { text:item.title + (item.conflict ? " · " + UiLabels.editor-conflict : "");horizontal-stretch:1;flat:true;enabled:!EditorState.busy;clicked=>{EditorState.choose(item.id);} }
+                        PanelButton { text:UiLabels.editor-delete;enabled:!EditorState.busy;clicked=>{EditorState.delete(item.id);} }
                     }
                 }
             }
@@ -111,16 +111,14 @@ export component NativeEditor inherits Rectangle {
           visible:EditorState.selected;min-height:0px;max-height:EditorState.selected ? 100000px : 0px;vertical-stretch:1;
           VerticalLayout { spacing:8px;
         HorizontalLayout {
+            spacing: 8px;
             Text {horizontal-stretch:0;text:UiLabels.editor-title;color:#cad5e5;vertical-alignment:center;}
-            Rectangle {
-                background:#080c12;min-height:30px;horizontal-stretch:1;
-                title-field := TextInput {
-                    x:8px;y:3px;width:parent.width - 16px;height:parent.height - 6px;
-                    text <=> EditorState.title;single-line:true;color:#e3e8ee;
-                    enabled:!EditorState.busy && !EditorState.transfer-confirm && !EditorState.palette-open;
-                    accessible-label:UiLabels.editor-title;
-                    edited=>{EditorState.title-edit(self.text);}
-                }
+            title-field := PanelField {
+                horizontal-stretch: 1;
+                text <=> EditorState.title;
+                enabled: !EditorState.busy && !EditorState.transfer-confirm && !EditorState.palette-open;
+                accessible-label: UiLabels.editor-title;
+                edited(text) => { EditorState.title-edit(text); }
             }
             PanelCombo {
                 preferred-width: 140px;
@@ -133,12 +131,13 @@ export component NativeEditor inherits Rectangle {
                     root.focus-body();
                 }
             }
-            Button {text:UiLabels.editor-undo;enabled:EditorState.can-undo && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(4);} }
-            Button {text:UiLabels.editor-redo;enabled:EditorState.can-redo && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(5);} }
+            PanelButton {text:UiLabels.editor-undo;enabled:EditorState.can-undo && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(4);} }
+            PanelButton {text:UiLabels.editor-redo;enabled:EditorState.can-redo && !EditorState.composing && !EditorState.busy;clicked=>{EditorState.action(5);} }
         }
         HorizontalLayout {
-            ComboBox {accessible-label:UiLabels.editor-selection;preferred-width:180px;max-width:220px;model:EditorState.selection-labels;current-index:EditorState.selection-mode;enabled:!EditorState.composing && !EditorState.busy && !EditorState.palette-open;selected(value)=>{EditorState.selection-edit(self.current-index);} }
-            Button {text:UiLabels.editor-palette;enabled:!EditorState.composing && !EditorState.busy;clicked=>{EditorState.palette-request(-1,-1);} }
+            spacing: 8px;
+            PanelCombo {accessible-label:UiLabels.editor-selection;preferred-width:180px;max-width:220px;model:EditorState.selection-labels;displayed-index:EditorState.selection-mode;enabled:!EditorState.composing && !EditorState.busy && !EditorState.palette-open;selected => { EditorState.selection-edit(self.current-index); root.focus-body(); } }
+            PanelButton {text:UiLabels.editor-palette;enabled:!EditorState.composing && !EditorState.busy;clicked=>{EditorState.palette-request(-1,-1);} }
             Text {text:UiLabels.editor-color-hint;color:#9ab0ca;vertical-alignment:center;horizontal-stretch:1;}
         }
         area := Rectangle {
@@ -206,10 +205,11 @@ export component NativeEditor inherits Rectangle {
         }
         if EditorState.transfer-confirm: HorizontalLayout {
             Text {text:UiLabels.editor-confirm;color:#ffcf77;wrap:word-wrap;horizontal-stretch:1;}
-            Button {text:UiLabels.editor-confirm-transfer;enabled:!EditorState.busy;clicked=>{EditorState.action(6);} }
-            Button {text:UiLabels.editor-cancel;enabled:!EditorState.busy;clicked=>{EditorState.action(7);} }
+            PanelButton {text:UiLabels.editor-confirm-transfer;primary:true;enabled:!EditorState.busy;clicked=>{EditorState.action(6);} }
+            PanelButton {text:UiLabels.editor-cancel;enabled:!EditorState.busy;clicked=>{EditorState.action(7);} }
         }
         HorizontalLayout {
+            spacing: 8px;
             Text {text:EditorState.status;color:#c7d4e7;horizontal-stretch:1;overflow:elide;}
             Text {text:EditorState.position;color:#9ab0ca;}
         }

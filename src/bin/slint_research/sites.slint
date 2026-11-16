@@ -1,5 +1,4 @@
-import { ScrollView } from "std-widgets.slint";
-import { PanelButton, PanelField, PanelCombo, PanelOverlay } from "panel.slint";
+import { PanelButton, PanelCombo, PanelField, PanelOverlay, PanelScrollView } from "panel.slint";
 import { LucideIcons } from "lucide-icons.slint";
 
 export global SitesState {
@@ -35,11 +34,11 @@ export component SitesPanel inherits PanelOverlay {
     keys:=FocusScope {
       width: root.content-width; height: root.content-height;
       key-pressed(event)=>{if !root.embedded && event.text==Key.Escape && !SitesState.composing {SitesState.close-sites();return accept;}return reject;}
-      ScrollView {
+      PanelScrollView {
           width: keys.width;
           height: keys.height;
-          content-width: self.width;
-      VerticalLayout {width: keys.width; alignment: start; padding:root.embedded ? 0px : 16px;spacing:10px;
+          content-width: self.visible-width;
+      VerticalLayout {alignment: start; padding:root.embedded ? 0px : 16px;spacing:10px;
         Text {text:SitesState.labels[14];color:#c7d4e7;wrap:word-wrap;}
         Text {text:SitesState.current-note;color:#c7d4e7;wrap:word-wrap;}
         Text {text:SitesState.default-note;color:#f2cd7d;wrap:word-wrap;}
