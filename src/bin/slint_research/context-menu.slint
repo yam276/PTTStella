@@ -101,7 +101,7 @@ export component ContextMenuOverlay inherits Rectangle {
                         colorize: #e7c46a;
                         accessible-role: none;
                     }
-                    touch := TouchArea { clicked => { if (entry.enabled) { root.choose(index); } } }
+                    touch := TouchArea { mouse-cursor: entry.enabled ? MouseCursor.pointer : MouseCursor.default; clicked => { if (entry.enabled) { root.choose(index); } } }
                 }
             }
         }

@@ -112,6 +112,8 @@ export component MediaPreview inherits Rectangle {
         if root.busy || index < 0 || index > 3 || (index < 2 && !root.ready) {return;}
         root.dismiss-menu();root.action(index < 3 ? index + 4 : 3);
     }
+    private property <bool> pannable: root.pixels.width * root.actual * 1px > view.width
+        || root.pixels.height * root.actual * 1px > view.height;
     property <float> actual: root.fit ? max(0.01, min(1, min(view.width / max(1px, root.pixels.width * 1px), view.height / max(1px, root.pixels.height * 1px)))) : root.scale;
     changed source-key => { root.fit=true; root.scale=1;root.pan-x=0px;root.pan-y=0px;root.dragging=false;root.menu-open=false;root.hint-action=-1;root.hint=""; }
     changed foreground => { if !root.foreground {root.dragging=false;root.menu-open=false;} }
@@ -236,13 +238,16 @@ export component MediaPreview inherits Rectangle {
                     if root.video && root.software-video: Image {source:root.pixels;width:parent.width;height:parent.height;image-fit:contain;}
                     if !root.video: Image {source:root.pixels;width:root.pixels.width * root.actual * 1px;height:root.pixels.height * root.actual * 1px;
                         x:(parent.width - self.width)/2 + root.pan-x;y:(parent.height - self.height)/2 + root.pan-y;image-fit:fill;}
-                    pointer := TouchArea {enabled:!root.video && root.ready && root.foreground;
+                    pointer := TouchArea {
+                        enabled: !root.video && root.ready && root.foreground;
+                        mouse-cursor: root.dragging ? MouseCursor.grabbing
+                            : root.pannable ? MouseCursor.grab : MouseCursor.default;
                         pointer-event(event) => {
                             if event.button == PointerEventButton.right && event.kind == PointerEventKind.down {
                                 root.open-menu(view.x + 12px + self.mouse-x,view.y + 12px + self.mouse-y);
                             }
                             if event.button == PointerEventButton.left {
-                                if event.kind == PointerEventKind.down {root.grab-x=self.mouse-x - root.pan-x;root.grab-y=self.mouse-y - root.pan-y;root.dragging=true;}
+                                if event.kind == PointerEventKind.down && root.pannable {root.grab-x=self.mouse-x - root.pan-x;root.grab-y=self.mouse-y - root.pan-y;root.dragging=true;}
                                 else if event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel {root.dragging=false;}
                             }
                         }

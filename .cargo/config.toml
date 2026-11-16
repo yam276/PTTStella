@@ -1,0 +1,3 @@
+[env]
+# Slint 1.18.1 exposes SVG cursors via this compiler setting.
+SLINT_ENABLE_EXPERIMENTAL_FEATURES = "1"

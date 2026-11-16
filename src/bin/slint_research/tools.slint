@@ -65,6 +65,7 @@ component ToolTile inherits Rectangle {
         }
     }
     touch := TouchArea {
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
         clicked => { if (root.enabled && !root.owned-pointer) { root.choose(); } }
         pointer-event(event) => { if (root.owned-pointer && root.enabled && event.button == PointerEventButton.left) {
             if (event.kind == PointerEventKind.down) { root.pointer(0); }

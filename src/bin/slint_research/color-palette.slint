@@ -56,7 +56,7 @@ export component ColorPalette inherits Rectangle {
                 accessible-role:button;accessible-label:root.labels[index];
                 accessible-action-default=>{if root.interactive {root.choose(index);}}
                 Text {width:parent.width;height:parent.height;text:index>=8 ? "1;"+(30+Math.mod(index,8)) : ""+(30+index);color:Math.mod(index,8)==0 || Math.mod(index,8)==1 || Math.mod(index,8)==4 || Math.mod(index,8)==5 ? white : black;horizontal-alignment:center;vertical-alignment:center;}
-                TouchArea {enabled:root.interactive;clicked=>{root.choose(index);}}
+                TouchArea {enabled:root.interactive;mouse-cursor:MouseCursor.pointer;clicked=>{root.choose(index);}}
             }
             Text {x:12px;y:112px;height:24px;text:root.background-label;color:#e8dfc7;}
             for color[index] in [#000000,#800000,#008000,#808000,#000080,#800080,#008080,#c0c0c0]: Rectangle {
@@ -67,7 +67,7 @@ export component ColorPalette inherits Rectangle {
                 accessible-role:button;accessible-label:root.labels[index+16];
                 accessible-action-default=>{if root.interactive {root.choose(index+16);}}
                 Text {width:parent.width;height:parent.height;text:""+(40+index);color:index==0 || index==1 || index==4 || index==5 ? white : black;horizontal-alignment:center;vertical-alignment:center;}
-                TouchArea {enabled:root.interactive;clicked=>{root.choose(index+16);}}
+                TouchArea {enabled:root.interactive;mouse-cursor:MouseCursor.pointer;clicked=>{root.choose(index+16);}}
             }
             Text {x:12px;y:188px;width:parent.width - 24px;height:24px;text:root.hint;color:#a7b6c8;overflow:elide;}
         }

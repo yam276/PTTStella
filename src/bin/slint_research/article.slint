@@ -1,3 +1,4 @@
+import { PointerKind, PointerStyle } from "pointer-cursor.slint";
 import { PanelTheme } from "panel.slint";
 import { UiLabels } from "labels.slint";
 import { SelectionRect } from "selection.slint";
@@ -51,7 +52,8 @@ export component ArticleViewport inherits Rectangle {
     in property <bool> native-input;
     in property <bool> read-only;
     in property <[SelectionRect]> selection;
-    in property <int> pointer-cursor;
+    in property <PointerKind> pointer-cursor;
+    in property <bool> selecting;
     callback pointer(int,length,length,bool);
     callback context-pointer(int,length,length,bool);
     callback layout-changed;
@@ -113,7 +115,7 @@ export component ArticleViewport inherits Rectangle {
         ArticlePointer {
             enabled: !root.blocked;
             width: parent.width; height: parent.height;
-            mouse-cursor: root.pointer-cursor == 1 ? MouseCursor.pointer : root.pointer-cursor == 2 ? MouseCursor.w-resize : MouseCursor.text;
+            mouse-cursor: PointerStyle.navigation(root.pointer-cursor, root.selecting);
             pointer(kind,x,y,shift) => { root.pointer(kind,x,y,shift); }
             context-pointer(kind,x,y,shift) => { root.context-pointer(kind,x,y,shift); }
             focus-requested => { root.focus-article(); }
@@ -223,6 +225,7 @@ export component ArticleViewport inherits Rectangle {
             enabled: !root.blocked;
             width: parent.width; height: parent.height;
             offset-y: root.body-height;
+            mouse-cursor: PointerStyle.navigation(root.pointer-cursor, root.selecting);
             pointer(kind,x,y,shift) => { root.pointer(kind,x,y,shift); }
             context-pointer(kind,x,y,shift) => { root.context-pointer(kind,x,y,shift); }
             focus-requested => { root.focus-article(); }

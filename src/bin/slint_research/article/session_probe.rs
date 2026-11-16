@@ -10,6 +10,7 @@ use pttstella::{
     navigation::Context,
     selection::{self, Selection},
 };
+use slint::ComponentHandle;
 use std::{error::Error, path::PathBuf, rc::Rc, time::Duration};
 async fn until(mut condition: impl FnMut() -> bool, message: &str) -> Result<(), String> {
     for _ in 0..2250 {
@@ -140,6 +141,30 @@ pub fn start(
                     "terminal mode started article loading",
                 )?;
                 verification::foreground(&ui, true);
+                let left = ui.get_terminal_origin_x() + ui.get_raster_left();
+                let top = ui.get_terminal_origin_y() + ui.get_raster_top();
+                for (col, row, expected) in [
+                    (2., 10., crate::PointerKind::Back),
+                    (60., 0.25, crate::PointerKind::First),
+                    (60., 5., crate::PointerKind::PreviousPage),
+                    (60., 16., crate::PointerKind::NextPage),
+                    (60., 22.75, crate::PointerKind::Last),
+                ] {
+                    ui.window()
+                        .dispatch_event(slint::platform::WindowEvent::PointerMoved {
+                            position: slint::LogicalPosition::new(
+                                left + col * ui.get_raster_width() / 80.,
+                                top + row * ui.get_raster_height() / 24.,
+                            ),
+                        });
+                    require(
+                        ui.get_pointer_cursor() == expected,
+                        &format!(
+                            "terminal hover chose {:?} instead of {expected:?}",
+                            ui.get_pointer_cursor()
+                        ),
+                    )?;
+                }
                 require(
                     ui.invoke_grid_wheel(-40.),
                     "terminal manual page-down was rejected",

@@ -95,6 +95,7 @@ export component PanelButton inherits Rectangle {
     touch := TouchArea {
         x: 0; y: 0; width: parent.width; height: parent.height;
         enabled: root.enabled || root.hover-when-disabled;
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
         clicked => { if root.enabled { keys.focus(); root.clicked(); } }
     }
     keys := FocusScope {
@@ -400,6 +401,7 @@ export component PanelCombo inherits Rectangle {
     }
     pointer := TouchArea {
         enabled: root.available;
+        mouse-cursor: MouseCursor.pointer;
         clicked => { root.toggle-menu(); }
     }
 

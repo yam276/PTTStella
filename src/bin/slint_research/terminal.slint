@@ -2,6 +2,8 @@ import { PanelButton, PanelField, PanelReadOnlyText, PanelScrollView, PanelTheme
 export { PanelEdit } from "panel.slint";
 export { LucideIcons } from "lucide-icons.slint";
 import { LucideIcons } from "lucide-icons.slint";
+import { PointerKind, PointerStyle } from "pointer-cursor.slint";
+export { PointerKind } from "pointer-cursor.slint";
 import { CompositionInput } from "composition-input.slint";
 import { Button, CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
 import { SettingsPanel, SettingsState } from "settings.slint";
@@ -503,7 +505,7 @@ export component TerminalWindow inherits Window {
     callback output-idle;
     in property <bool> navigation-busy;
     in property <[SelectionRect]> navigation-rects;
-    in property <int> pointer-cursor;
+    in property <PointerKind> pointer-cursor;
     in property <string> pointer-url;
     out property <bool> context-interaction-blocked: root.app-closing || root.manager-open || root.settings-open || root.editor-open || root.station-color-open || root.media-open || root.find-open || !root.native-foreground || root.native-composing
         || root.show-about || root.switching-station
@@ -728,11 +730,7 @@ export component TerminalWindow inherits Window {
                         width: viewport.width;
                         height: viewport.height;
                         enabled: root.terminal-input && !root.pan-mode && !root.article-active;
-                        mouse-cursor: root.selection-dragging ? MouseCursor.text :
-                            root.pointer-cursor == 1 ? MouseCursor.pointer :
-                            root.pointer-cursor == 2 ? MouseCursor.w-resize :
-                            root.pointer-cursor == 3 ? MouseCursor.n-resize :
-                            root.pointer-cursor == 4 ? MouseCursor.s-resize : MouseCursor.text;
+                        mouse-cursor: PointerStyle.navigation(root.pointer-cursor, root.selection-dragging);
                         changed has-hover => { if (!self.has-hover) { root.grid-pointer(5, self.mouse-x, self.mouse-y, false); } }
                         pointer-event(event) => {
                             root.pointer-shift = event.modifiers.shift;
@@ -789,6 +787,7 @@ export component TerminalWindow inherits Window {
                     read-only: root.keyboard-read-only;
                     selection: root.selection-rects;
                     pointer-cursor: root.pointer-cursor;
+                    selecting: root.selection-dragging;
                     pointer(kind,x,y,shift) => { root.pointer-shift = shift; root.grid-pointer(kind,x,y,shift); }
                     context-pointer(kind,x,y,shift) => { root.pointer-shift = shift; root.context-pointer(kind,x,y); }
                     layout-changed => { root.article-layout-changed(); }
@@ -1032,6 +1031,7 @@ export component TerminalWindow inherits Window {
                     width: root.shell-notice-dismissible ? 32px : 0px;
                     alignment: start;
                     close-control := TouchArea {
+                        mouse-cursor: MouseCursor.pointer;
                         visible: root.shell-notice-dismissible;
                         width: 32px; height: 32px;
                         Rectangle {

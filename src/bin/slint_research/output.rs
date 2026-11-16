@@ -762,12 +762,14 @@ impl Output {
         }
         let mut rectangles = Vec::new();
         ui.set_pointer_cursor(match hit {
-            Some(Hit::Link(_) | Hit::Reply { .. }) => 1,
-            Some(Hit::Navigate(Intent::Back)) => 2,
-            Some(Hit::Navigate(Intent::First | Intent::PreviousPage)) => 3,
-            Some(Hit::Navigate(Intent::Last | Intent::NextPage)) => 4,
-            Some(Hit::Navigate(_)) => 1,
-            None => 0,
+            Some(Hit::Navigate(Intent::Back)) => crate::PointerKind::Back,
+            Some(Hit::Navigate(Intent::Forward)) => crate::PointerKind::Forward,
+            Some(Hit::Navigate(Intent::PreviousPage)) => crate::PointerKind::PreviousPage,
+            Some(Hit::Navigate(Intent::NextPage)) => crate::PointerKind::NextPage,
+            Some(Hit::Navigate(Intent::First)) => crate::PointerKind::First,
+            Some(Hit::Navigate(Intent::Last)) => crate::PointerKind::Last,
+            Some(_) => crate::PointerKind::Action,
+            None => crate::PointerKind::Rest,
         });
         ui.set_pointer_url(match hit {
             Some(Hit::Link(index)) => self
