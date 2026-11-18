@@ -1,5 +1,9 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-18 Slint 發佈流程與 GPL 授權
+
+使用者決定 PTTStella 改以 GPL-3.0-or-later 授權，並把 `Desktop Release` 改為打包 Slint 版：macOS 內附 Homebrew libmpv 閉包，Windows 使用固定雜湊的 mpv 官方 LGPL DLL 與 app-local Visual C++ runtime、Setup 沿用原 AppId 且不需 WebView2，Linux 依賴系統 libmpv2；各平台另發佈 `-sources.tar`。verify run 44310874774 在四架構通過並產出完整下載集；安裝、升級、回退與實際啟動仍待各平台驗收，細節見[發佈流程](../releases.md#2026-11-18-slint-入口切換與發佈封鎖)。
+
 ## 2026-11-18 Slint 成為桌面入口
 
 依使用者決定，`dioxus` 分支保存最後的 Dioxus 開發線，`develop` 改以 Slint 版為主：`pttstella` 啟動 Slint，資料與密碼庫沿用正式 PTTStella，Dioxus 暫留為 `pttstella-dioxus`。`main` 維持 `0.4.1`，正式發佈須先完成 Slint 打包與 libmpv 原始碼交付，見[發佈流程](../releases.md#2026-11-18-slint-入口切換與發佈封鎖)與 [Slint 計畫](../slint-evaluation-plan.md#2026-11-18-s9-入口切換)。

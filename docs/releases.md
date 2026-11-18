@@ -12,7 +12,9 @@ PTTStella 改以 GPL-3.0-or-later 授權，讓 macOS 版可內附 Homebrew 的 G
 - macOS 以 Homebrew 安裝 libmpv，收集實際 Mach-O 閉包放入 App；Windows 使用固定 SHA-256 的 mpv v0.42.0 官方 LGPL x64 DLL 與 app-local Visual C++ runtime，Setup 沿用原 AppId 原地升級、不再安裝 WebView2；Linux 依賴系統 `libmpv2`，不另行散布。
 - 每個平台另發佈 `-sources.tar`：`SOURCES.json` 列出 PTTStella commit、所有 crates.io 套件的下載網址與校驗碼、Skia 來源標籤，以及該平台內附 runtime 的原始碼。macOS 內含每個 Homebrew 套件依 SBOM（舊 bottle 沒有 SBOM 時改用已安裝 formula 固定的網址與 SHA-256）核對的原始碼壓縮檔、formula 與安裝紀錄；Windows 內含 mpv v0.42.0 原始碼及其簽章。官方 Windows DLL 靜態連結的 FFmpeg 等相依、Homebrew formula 以網址引用的補丁仍只有指引，`SOURCES.json` 標為 `partial`。
 
-發佈前仍需：以 GitHub Actions `verify` 模式核對四架構產物、各平台安裝／升級／回退與實際啟動、README 與安裝說明更新，以及使用者指定版本。
+2026-11-18 [verify run 44310874774](https://github.com/yam276/PTTStella/actions/runs/44310874774) 從乾淨 `c0851b1` 在四個 runner 通過工具／文件／核心檢查、`native-player-probe` 的 Clippy、Slint／lib／multi-instance 測試與 Windows／Linux 原生密碼庫案例，並各產出 3 個下載檔與 manifest：Windows Setup／portable ZIP／sources、兩個 macOS 的 DMG／ZIP／sources、Linux DEB／tar.gz／sources（artifact 約 159／356／361／72 MiB）。前四輪依序修正了 Windows 上的工具測試可攜性、媒體測試伺服器的自連喚醒、Visual C++ runtime 閉包、Intel runner 上沒有 SBOM 的舊 bottle，以及 ZIP 的 1980 年前時間戳。
+
+發佈前仍需：各平台安裝／升級／回退與實際啟動（含 Windows 在沒有 WebView2 的環境）、README 與安裝說明更新，以及使用者指定版本。
 
 ## 何時執行發佈
 
