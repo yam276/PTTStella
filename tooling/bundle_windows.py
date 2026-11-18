@@ -143,7 +143,7 @@ def verify_icon(executable):
 
 
 def build():
-    return bundle_common.build(TARGET)
+    return bundle_common.build(TARGET, features='desktop', binary='pttstella-dioxus')
 
 
 def find_crt(names, explicit=None):

@@ -199,25 +199,16 @@ def bundle(output):
     dirty = bool(run('git', 'status', '--porcelain', '--untracked-files=normal'))
     with tempfile.TemporaryDirectory(prefix='.release-', dir=output) as temporary:
         staging = Path(temporary)
+        # The release entry is the Slint frontend; Dioxus packagers remain for rollback builds.
+        import bundle_slint_release
         if target == 'windows-x64':
-            result = bundle_windows.bundle(staging/'windows', with_installer=True, with_portable=True)
-            # ZIP remains a local verification artifact; users choose Setup or
-            # the standalone App EXE, both from the same static-CRT build.
-            assets = []
-            for source in (Path(result['installer']), Path(result['portable'])):
-                archive = staging/source.name
-                shutil.copy2(source, archive)
-                assets.append(archive)
-            details = {'authenticode_signed': False,
-                       'runtime': 'Microsoft Edge WebView2 Evergreen Runtime',
-                       'installer': result['installer_details'],
-                       'portable': result['portable_details']}
+            assets, details = bundle_slint_release.windows(staging, stem, version, revision)
         elif target.startswith('macos-'):
-            assets, details = macos_package(staging, stem, target)
+            assets, details = bundle_slint_release.macos(staging, stem, target, revision)
         else:
-            assets, details = linux_package(staging, stem, version)
+            assets, details = bundle_slint_release.linux(staging, stem, version, revision)
         manifest = {'version': version, 'platform': target, 'target': TARGETS[target],
-                    'profile': 'release', 'source_commit': revision, 'source_dirty': dirty,
+                    'frontend': 'slint', 'features': bundle_slint_release.FEATURES, 'profile': 'release', 'source_commit': revision, 'source_dirty': dirty,
                     'gui_acceptance': 'not_run', **details,
                     'files': {p.name: digest(p) for p in assets}}
         report = staging/(stem+'.json')

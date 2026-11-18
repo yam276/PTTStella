@@ -22,7 +22,7 @@ ACCEPTANCE = Path(__file__).parent / 'windows' / 'slint_acceptance.ps1'
 DRAFT_IME_SEED = Path(__file__).parent / 'windows' / 'draft-ime.json'
 
 
-def inspect_payload(executable, runtime_dlls):
+def inspect_payload(executable, runtime_dlls, main='pttstella-slint.exe'):
     """Use the same normal/delay import reader as the existing Windows packager."""
     runtime = {}
     for path in runtime_dlls:
@@ -32,12 +32,12 @@ def inspect_payload(executable, runtime_dlls):
         runtime[name] = path
     if MPV not in runtime:
         raise ValueError('The full candidate requires libmpv-2.dll')
-    images = {'pttstella-slint.exe': inspect_pe(executable)}
+    images = {main: inspect_pe(executable)}
     images.update((name, inspect_pe(path, require_gui=False)) for name, path in runtime.items())
-    if MPV not in images['pttstella-slint.exe']['imports']:
+    if MPV not in images[main]['imports']:
         raise ValueError('Expected a main executable linked to libmpv-2.dll')
     used, required_crt, visited = set(), set(), set()
-    pending = ['pttstella-slint.exe']
+    pending = [main]
     while pending:
         image_name = pending.pop()
         if image_name in visited:

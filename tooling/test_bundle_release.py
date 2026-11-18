@@ -63,23 +63,15 @@ class PackageTests(unittest.TestCase):
         runner.assert_called_with('hdiutil', 'detach', str(self.root/'mounted-dmg'))
 
     def test_macos_dmg_failure_preserves_atomic_zip_delivery(self):
-        def fake_app(output):
-            app = output/'PTTStella.app'
-            (app/'Contents'/'Resources').mkdir(parents=True)
-            return {'app': str(app), 'architecture': 'arm64'}
+        import bundle_slint_release
 
-        def command(*args):
-            if args[:2] == ('git', 'rev-parse'):
-                return 'a'*40
-            if args[0] == 'ditto':
-                Path(args[-1]).write_bytes(b'synthetic ZIP')
-            return ''
+        def macos(staging, stem, target, commit):
+            (staging/(stem+'.zip')).write_bytes(b'synthetic ZIP')
+            raise RuntimeError('image failed')
 
         with patch.object(bundle, 'native_platform', return_value='macos-arm64'), \
-                patch.object(bundle.bundle_macos, 'bundle', side_effect=fake_app), \
-                patch.object(bundle.bundle_common, 'copy_licenses'), \
-                patch.object(bundle, 'run', side_effect=command), \
-                patch.object(bundle, 'macos_disk_image', side_effect=RuntimeError('image failed')):
+                patch.object(bundle, 'run', side_effect=['a'*40, '']), \
+                patch.object(bundle_slint_release, 'macos', side_effect=macos):
             with self.assertRaisesRegex(RuntimeError, 'image failed'):
                 bundle.bundle(self.root)
         self.assertEqual(list(self.root.iterdir()), [])
@@ -92,51 +84,46 @@ class PackageTests(unittest.TestCase):
                 bundle.bundle(self.root)
         self.assertEqual(list(self.root.iterdir()), [])
 
-    def test_existing_portable_exe_is_preserved_before_any_build(self):
+    def test_existing_portable_zip_is_preserved_before_any_build(self):
         version = tomllib.loads((bundle.ROOT/'Cargo.toml').read_text())['package']['version']
-        path = self.root/f'PTTStella-{version}-windows-x64-portable.exe'
-        path.write_bytes(b'retained standalone delivery')
+        path = self.root/f'PTTStella-{version}-windows-x64-portable.zip'
+        path.write_bytes(b'retained portable delivery')
+        import bundle_slint_release
         with patch.object(bundle, 'native_platform', return_value='windows-x64'), \
-                patch.object(bundle.bundle_windows, 'bundle') as build:
+                patch.object(bundle_slint_release, 'windows') as build:
             with self.assertRaises(FileExistsError):
                 bundle.bundle(self.root)
         build.assert_not_called()
-        self.assertEqual(path.read_bytes(), b'retained standalone delivery')
+        self.assertEqual(path.read_bytes(), b'retained portable delivery')
 
-    def test_windows_release_delivers_setup_and_standalone_exe_without_loose_payloads(self):
+    def test_windows_release_delivers_slint_setup_portable_zip_and_sources(self):
+        import bundle_slint_release
         version = tomllib.loads((bundle.ROOT/'Cargo.toml').read_text(encoding='utf-8'))['package']['version']
         stem = f'PTTStella-{version}-windows-x64'
-        def windows(output, with_installer=False, with_portable=False):
-            self.assertTrue(with_installer)
-            self.assertTrue(with_portable)
-            output.mkdir()
-            archive, setup = output/(stem+'.zip'), output/(stem+'-setup.exe')
-            archive.write_bytes(b'synthetic portable download')
-            setup.write_bytes(b'synthetic setup download')
-            portable = output/(stem+'-portable.exe')
-            portable.write_bytes(b'synthetic standalone App')
-            (output/'vcruntime140.dll').write_bytes(b'synthetic CRT')
-            (output/'assets').mkdir()
-            (output/'assets/font.ttf').write_bytes(b'synthetic embedded asset')
-            return {'zip': str(archive), 'installer': str(setup), 'portable': str(portable),
-                    'installer_details': {'webview2': {'install_only_if_missing': True}},
-                    'portable_details': {'crt_linkage': 'static'}}
+        def windows(staging, name, package_version, commit):
+            self.assertEqual((name, package_version, commit), (stem, version, 'a'*40))
+            files = []
+            for suffix, data in (('-setup.exe', b'synthetic setup'), ('-portable.zip', b'synthetic portable'),
+                                 ('-sources.tar', b'synthetic sources')):
+                files.append(staging/(stem+suffix))
+                files[-1].write_bytes(data)
+            # Loose payloads in staging are never delivered.
+            (staging/'libmpv-2.dll').write_bytes(b'synthetic runtime')
+            return files, {'installer': {'webview2': 'not_required'}, 'sources': {'status': 'partial'}}
         output = self.root/'release'
         with patch.object(bundle, 'native_platform', return_value='windows-x64'), \
                 patch.object(bundle, 'run', side_effect=['a'*40, '']), \
-                patch.object(bundle.bundle_windows, 'bundle', side_effect=windows) as packaged:
+                patch.object(bundle_slint_release, 'windows', side_effect=windows) as packaged:
             bundle.bundle(output)
         self.assertEqual(packaged.call_count, 1)
         report = json.loads((output/(stem+'.json')).read_text())
-        self.assertEqual(set(report['files']), {stem+'-setup.exe', stem+'-portable.exe'})
+        names = {stem+'-setup.exe', stem+'-portable.zip', stem+'-sources.tar'}
+        self.assertEqual(set(report['files']), names)
+        self.assertEqual(report['frontend'], 'slint')
         self.assertEqual({p.name for p in output.iterdir()},
-                         {stem+suffix for suffix in ('-setup.exe', '-setup.exe.sha256',
-                                                     '-portable.exe', '-portable.exe.sha256',
-                                                     '.json', '.json.sha256')})
-        self.assertEqual((output/(stem+'-setup.exe')).read_bytes(), b'synthetic setup download')
-        self.assertEqual((output/(stem+'-portable.exe')).read_bytes(), b'synthetic standalone App')
+                         names | {n+'.sha256' for n in names} | {stem+'.json', stem+'.json.sha256'})
         self.assertFalse(report['source_dirty'])
-        self.assertTrue(report['installer']['webview2']['install_only_if_missing'])
+        self.assertEqual(report['installer']['webview2'], 'not_required')
 
 
 if __name__ == '__main__':

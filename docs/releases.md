@@ -6,7 +6,13 @@
 
 `develop` 自 `ca09cd7` 起包含 Slint 版，`pttstella` 入口改為 Slint，Dioxus 版改名 `pttstella-dioxus`；切換前最後的 Dioxus 開發線保存在 `dioxus` 分支（`5ea9ad6`），正式版 `0.4.1` 由 `v0.4.1` tag 保存。`main` 維持 `0.4.1`。
 
-既有 `Desktop Release` 與 `bundle_common` 仍以 `desktop` feature 建置並打包 `pttstella`，入口切換後會在建置階段失敗，不會把 Dioxus 當成 Slint 版發佈。下一次正式發佈前須先完成：四架構改用 Slint 打包並內含 libmpv runtime、libmpv 對應原始碼交付（目前為 `not_ready`）、正式 App ID／安裝路徑的升級與回退，以及 README、安裝說明和 Release PR policy 的更新。發佈仍需使用者指定版本。
+PTTStella 改以 GPL-3.0-or-later 授權，讓 macOS 版可內附 Homebrew 的 GPL 版 mpv／FFmpeg。`Desktop Release` 已改為建置並打包 Slint：
+
+- 各 runner 以 `native-player-probe` 跑 Clippy、Slint／lib／multi-instance 測試及原生密碼庫案例，再由 `bundle_slint_release` 以正式名稱、App ID 與安裝路徑打包。
+- macOS 以 Homebrew 安裝 libmpv，收集實際 Mach-O 閉包放入 App；Windows 使用固定 SHA-256 的 mpv v0.42.0 官方 LGPL x64 DLL 與 app-local Visual C++ runtime，Setup 沿用原 AppId 原地升級、不再安裝 WebView2；Linux 依賴系統 `libmpv2`，不另行散布。
+- 每個平台另發佈 `-sources.tar`：`SOURCES.json` 列出 PTTStella commit、所有 crates.io 套件的下載網址與校驗碼、Skia 來源標籤，以及該平台內附 runtime 的原始碼。macOS 內含每個 Homebrew 套件依 SBOM 核對的原始碼壓縮檔、formula 與安裝紀錄；Windows 內含 mpv v0.42.0 原始碼及其簽章。官方 Windows DLL 靜態連結的 FFmpeg 等相依、Homebrew formula 以網址引用的補丁仍只有指引，`SOURCES.json` 標為 `partial`。
+
+發佈前仍需：以 GitHub Actions `verify` 模式核對四架構產物、各平台安裝／升級／回退與實際啟動、README 與安裝說明更新，以及使用者指定版本。
 
 ## 何時執行發佈
 
@@ -36,10 +42,12 @@
 
 | 平台 | Runner | 下載 |
 | --- | --- | --- |
-| Windows x64 | `windows-2025` | Setup `.exe` 與免安裝 `-portable.exe`；兩者內嵌 CRT／資產／授權，Setup 可補裝 WebView2 |
-| macOS Apple Silicon | `macos-15` | 拖曳安裝 DMG、包含 `.app` 的 ZIP |
-| macOS Intel | `macos-15-intel` | 拖曳安裝 DMG、包含 `.app` 的 ZIP |
-| Linux x64 | `ubuntu-24.04` | `.deb` 與 `.tar.gz` |
+| Windows x64 | `windows-2025` | Setup `.exe` 與免安裝 `-portable.zip`；內含 libmpv、Visual C++ runtime 與授權，不需 WebView2 |
+| macOS Apple Silicon | `macos-15` | 拖曳安裝 DMG、包含 `.app` 的 ZIP；App 內含 libmpv 閉包 |
+| macOS Intel | `macos-15-intel` | 拖曳安裝 DMG、包含 `.app` 的 ZIP；App 內含 libmpv 閉包 |
+| Linux x64 | `ubuntu-24.04` | `.deb` 與 `.tar.gz`；依賴系統 `libmpv2` |
+
+每個平台另有 `-sources.tar` 對應原始碼集，見上方 2026-11-18 說明。以下段落中 WebView2、static CRT 等描述屬 Dioxus 版。
 
 每個架構有來源 manifest，列出 commit、profile、相依環境及下載檔 SHA-256；公開 Release 的 `SHA256SUMS` 涵蓋八個平台下載。Manifest 及其逐檔校驗保留在 Actions artifacts。下載採完整白名單核對，任何缺檔、混入額外檔案、來源不符、dirty checkout 或雜湊不符均禁止發佈。授權資料從同一 locked Cargo dependency graph 收集。Linux `.deb` 以 `dpkg-shlibdeps` 讀取實際 ELF 依賴，使用方式見 [Linux 套件說明](linux-package.txt)。
 

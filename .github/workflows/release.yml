@@ -80,7 +80,8 @@ jobs:
   build:
     name: Package ${{ matrix.platform }}
     needs: admission
-    timeout-minutes: 60
+    # Homebrew libmpv, Skia and two Slint builds (tests and release) per runner.
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -105,14 +106,27 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
-      - name: Install Linux desktop build dependencies
+      - name: Install Linux Slint and libmpv build dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential pkg-config libwebkit2gtk-4.1-dev libxdo-dev \
-            libssl-dev libayatana-appindicator3-dev librsvg2-dev \
-            libfontconfig1-dev libfreetype6-dev dpkg-dev dbus-daemon gnome-keyring
+            build-essential pkg-config clang libmpv-dev \
+            libfontconfig1-dev libfreetype6-dev libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev libx11-dev libx11-xcb-dev libxcursor-dev libxi-dev \
+            libegl1-mesa-dev libgl1-mesa-dev dpkg-dev dbus-daemon gnome-keyring
+          pkg-config --modversion mpv
+      - name: Install macOS libmpv from Homebrew
+        if: runner.os == 'macOS'
+        run: |
+          brew install mpv pkgconf
+          pkg-config --modversion mpv
+      - name: Prepare pinned Windows libmpv
+        if: runner.os == 'Windows'
+        run: |
+          mpv_dir=$(python tooling/bundle_slint_release.py windows-mpv target/release-mpv)
+          echo "MPV_LIB_DIR=$mpv_dir" >> "$GITHUB_ENV"
+          echo "$mpv_dir" >> "$GITHUB_PATH"
       - name: Activate the repository Rust toolchain
         run: |
           rustup show
@@ -121,9 +135,6 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: tooling/windows/install_inno.ps1
-      - name: Verify native installer prerequisite policy
-        if: runner.os == 'Windows'
-        run: python tooling/check_windows_installer.py --output target/verification/windows-installer
       - name: Test release tooling and documentation
         run: |
           python -m unittest discover -s tooling -p 'test_*.py'
@@ -132,14 +143,14 @@ jobs:
         run: node --test tooling/test_*.mjs
       - name: Verify core
         run: python tooling/check.py core
-      - name: Verify desktop compilation and unit tests
+      - name: Verify Slint compilation and unit tests
         run: |
-          cargo clippy --locked --features desktop --all-targets -- -D warnings
-          cargo test --locked --features desktop --lib --bin pttstella --test multi_instance
+          cargo clippy --locked --features native-player-probe --all-targets -- -D warnings
+          cargo test --locked --features native-player-probe --lib --bin pttstella --test multi_instance
       - name: Verify Windows Credential Manager persistence
         if: runner.os == 'Windows'
         timeout-minutes: 5
-        run: cargo test --locked --features desktop --lib login::vault::tests::native_roundtrip -- --ignored --exact
+        run: cargo test --locked --features native-player-probe --lib login::vault::tests::native_roundtrip -- --ignored --exact
       - name: Verify Linux Secret Service persistence and unavailable service
         if: runner.os == 'Linux'
         timeout-minutes: 5
@@ -152,20 +163,12 @@ jobs:
           unset GNOME_KEYRING_CONTROL
           dbus-run-session -- bash -euo pipefail -c '
             printf "%s" "synthetic-keyring-password" | gnome-keyring-daemon --unlock --components=secrets
-            cargo test --locked --features desktop --lib login::vault::tests::native_roundtrip -- --ignored --exact
+            cargo test --locked --features native-player-probe --lib login::vault::tests::native_roundtrip -- --ignored --exact
           '
           DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent-pttstella-synthetic-bus \
-            cargo test --locked --features desktop --lib login::vault::tests::native_service_unavailable -- --ignored --exact
+            cargo test --locked --features native-player-probe --lib login::vault::tests::native_service_unavailable -- --ignored --exact
       - name: Build and verify native release downloads
         run: python tooling/bundle_release.py --out-dir dist/release
-      - name: Retain Windows installer policy evidence
-        if: always() && runner.os == 'Windows'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: installer-policy-${{ matrix.platform }}
-          path: target/verification/windows-installer
-          if-no-files-found: warn
-          retention-days: 14
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-${{ matrix.platform }}

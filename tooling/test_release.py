@@ -298,7 +298,9 @@ class PublicationTests(unittest.TestCase):
 
     def test_complete_four_architecture_set_and_hashes_are_required(self):
         files = release.validate_assets(self.root, '0.1.0', COMMIT)
-        self.assertEqual(len(files), 8)
+        # Two downloads plus one corresponding-source set per platform.
+        self.assertEqual(len(files), 12)
+        self.assertEqual(sum(path.name.endswith('-sources.tar') for path in files), 4)
         self.assertEqual({path.name for path in files if path.suffix == '.dmg'}, {
             'PTTStella-0.1.0-macos-arm64.dmg', 'PTTStella-0.1.0-macos-x64.dmg',
         })
@@ -346,8 +348,14 @@ class PublicationTests(unittest.TestCase):
             path.unlink()
             path.with_name(name+'.sha256').unlink()
 
-    def test_missing_portable_exe_prevents_publication_even_when_setup_exists(self):
-        (self.root/'PTTStella-0.1.0-windows-x64-portable.exe').unlink()
+    def test_missing_portable_zip_prevents_publication_even_when_setup_exists(self):
+        (self.root/'PTTStella-0.1.0-windows-x64-portable.zip').unlink()
+        with self.assertRaises(FileNotFoundError):
+            release.publish(self.context, self.root, self.github)
+        self.assertEqual(self.github.calls, [])
+
+    def test_missing_sources_prevent_publication_even_when_downloads_exist(self):
+        (self.root/'PTTStella-0.1.0-linux-x64-sources.tar').unlink()
         with self.assertRaises(FileNotFoundError):
             release.publish(self.context, self.root, self.github)
         self.assertEqual(self.github.calls, [])
@@ -385,15 +393,15 @@ class PublicationTests(unittest.TestCase):
                 uploaded.append(path.name)
                 if path.name == 'SHA256SUMS':
                     lines = path.read_text().splitlines()
-                    self.assertEqual(len(lines), 8)
+                    self.assertEqual(len(lines), 12)
                     self.assertEqual(sum(line.endswith('.dmg') for line in lines), 2)
                     self.assertFalse(any('.json' in line for line in lines))
             return ''
         with patch.object(release, 'command', side_effect=command):
             result = release.publish(self.context, self.root, self.github)
-        self.assertEqual(result['assets'], 9)
+        self.assertEqual(result['assets'], 13)
         self.assertEqual(self.github.tag, COMMIT)
-        self.assertEqual(len(uploaded), 9)
+        self.assertEqual(len(uploaded), 13)
         self.assertFalse(any(name.endswith('.json') for name in uploaded))
         self.assertEqual(calls[-1][:3], ('gh', 'release', 'edit'))
         self.assertIn('--latest=true', calls[-1])
@@ -418,7 +426,7 @@ class PublicationTests(unittest.TestCase):
                 path.rename(assets/path.name)
         with patch.object(release, 'ROOT', source), patch.object(release, 'command', side_effect=command):
             result = release.publish(self.context, assets, self.github)
-        self.assertEqual(result['assets'], 9)
+        self.assertEqual(result['assets'], 13)
         self.assertEqual(observed[0][0], text)
         self.assertNotIn('--generate-notes', observed[0][1])
 

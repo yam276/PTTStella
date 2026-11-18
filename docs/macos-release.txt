@@ -32,6 +32,13 @@ Apple 官方說明：https://support.apple.com/zh-tw/102445
 啟動只會連線至預設站點，不會自動登入；下載檔不含使用者帳號或密碼。
 下載頁提供 SHA256SUMS 供核對。打包成功不代表所有 Mac 與登入情境皆已驗收。
 
+授權與原始碼
+
+PTTStella 以 GPL-3.0-or-later 授權，全文在 App 內 Contents/Resources/
+PTTStella-GPL-3.0-or-later.txt。影片播放使用 App 內附的 libmpv、FFmpeg 等
+Homebrew 函式庫，授權與來源清單在 Contents/Resources/NativeRuntimeNotices。
+對應原始碼在同一版本 Release 的 macOS -sources.tar。
+
 English
 
 Download arm64 for Apple Silicon or x64 for Intel. Open the DMG and drag
@@ -46,3 +53,8 @@ and confirm Open. No Terminal or xattr command is required for this GUI flow.
 If Open Anyway is unavailable or macOS reports damage or malware, stop and
 report the message; managed Macs may restrict this option.
 Apple guidance: https://support.apple.com/102445
+
+PTTStella is licensed under GPL-3.0-or-later; see Contents/Resources/
+PTTStella-GPL-3.0-or-later.txt. Bundled libmpv/FFmpeg and other Homebrew
+libraries keep their own licenses (Contents/Resources/NativeRuntimeNotices).
+Corresponding source is the macOS -sources.tar of the same Release.

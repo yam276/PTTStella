@@ -97,7 +97,7 @@ def build(package, staging, version):
             or signature.get('sha256') != actual):
         raise RuntimeError('WebView2 bootstrapper signature/hash verification failed')
     name = f'PTTStella-{version}-windows-x64-setup'
-    setup, pe = compile_setup(iscc, package, staging, version, name, 'pttstella.iss',
+    setup, pe = compile_setup(iscc, package, staging, version, name, 'pttstella-dioxus.iss',
                               '/DBootstrapperPath='+str(bootstrapper), '/DBootstrapperSHA256='+actual)
     return setup, {'compiler': compiler_name,
                    'pe': pe,
@@ -105,6 +105,20 @@ def build(package, staging, version):
                                'bootstrapper': signature, 'install_only_if_missing': True,
                                'internet_required_when_missing': True},
                    'scope': 'current_user', 'runtime_installation_acceptance': 'not_run'}
+
+
+def build_slint(package, staging, version):
+    """Product Setup for the Slint entry: same AppId and folder, no WebView2 prerequisite."""
+    from release import parse_version
+    parse_version(version)
+    iscc, compiler_name = pinned_compiler()
+    name = f'PTTStella-{version}-windows-x64-setup'
+    setup, pe = compile_setup(iscc, package, staging, version, name, 'pttstella.iss')
+    if any(any(part in dll for part in ('webview', 'webkit', 'wry')) for dll in pe['imports']):
+        raise ValueError('Unexpected WebView dependency in Setup')
+    return setup, {'compiler': compiler_name, 'pe': pe, 'app_id': 'io.github.yam276.pttstella',
+                   'scope': 'current_user', 'webview2': 'not_required',
+                   'runtime_installation_acceptance': 'not_run'}
 
 
 def build_slint_candidate(package, staging, version):

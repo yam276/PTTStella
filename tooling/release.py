@@ -15,8 +15,11 @@ import tomllib
 ROOT = Path(__file__).resolve().parent.parent
 VERSION = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?')
 SHA = re.compile(r'[0-9a-f]{40}')
-PLATFORMS = {'windows-x64': ('-setup.exe', '-portable.exe'), 'macos-arm64': ('.dmg', '.zip'),
-             'macos-x64': ('.dmg', '.zip'), 'linux-x64': ('.deb', '.tar.gz')}
+# Each platform also publishes the corresponding-source set for its bundled runtime.
+PLATFORMS = {'windows-x64': ('-setup.exe', '-portable.zip', '-sources.tar'),
+             'macos-arm64': ('.dmg', '.zip', '-sources.tar'),
+             'macos-x64': ('.dmg', '.zip', '-sources.tar'),
+             'linux-x64': ('.deb', '.tar.gz', '-sources.tar')}
 
 
 @total_ordering
@@ -297,14 +300,15 @@ def publish(context, directory, github):
         if release is None:
             notes = temporary/'notes.md'
             notes.write_text(
-                'Windows x64 Setup / portable EXE · macOS Apple Silicon / Intel DMG / ZIP · Linux x64 DEB / tar.gz\n\n'
+                'Windows x64 Setup / portable ZIP · macOS Apple Silicon / Intel DMG / ZIP · Linux x64 DEB / tar.gz\n\n'
                 'SHA-256 checksums: `SHA256SUMS`. Source: `'+context['commit']+'`.\n\n'
+                'PTTStella is licensed under GPL-3.0-or-later. Each `-sources.tar` holds the '
+                'corresponding-source manifest and bundled runtime sources for that platform; '
+                'Rust crates are listed with their crates.io archives and checksums.\n\n'
                 'macOS builds are ad-hoc signed and not notarized; Windows builds are not '
-                'Authenticode signed. Windows Setup installs Evergreen WebView2 only if missing '
-                '(internet required). The portable EXE requires an existing WebView2 Runtime and '
-                'does not install it. Both include static CRT, embedded assets and third-party notices; '
-                'export notices with `--export-licenses OUTPUT_FILE`. '
-                'Linux packages require a compatible '
+                'Authenticode signed. The Slint desktop app needs no WebView. Windows packages '
+                'include libmpv and the Visual C++ runtime; macOS apps include libmpv and its '
+                'Homebrew runtime; Linux packages use the system libmpv2 and require a compatible '
                 'Ubuntu 24.04 graphical environment. Packaging and automated tests do not replace '
                 'platform GUI or live-login acceptance.\n', encoding='utf-8')
             custom_notes = ROOT/'docs'/'release-notes'/(tag+'.md')

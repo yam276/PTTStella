@@ -1,5 +1,7 @@
 # Windows 安裝版、免安裝版與 WebView2
 
+2026-11-18 起 `develop` 的 Windows Release 改為 Slint 版：Setup 沿用 AppId `io.github.yam276.pttstella` 與 `%LOCALAPPDATA%\Programs\PTTStella` 原地升級，不再偵測或安裝 WebView2；免安裝版改為 `-portable.zip`，解壓後執行 `pttstella.exe`，旁邊需保留 `libmpv-2.dll` 與 Visual C++ runtime DLL。以下 WebView2 與單一 EXE 的說明適用 0.4.1 及更早的 Dioxus 版。
+
 Windows x64 Release 提供兩種產品下載，擇一使用：
 
 - `PTTStella-<version>-windows-x64-setup.exe`：安裝、捷徑與解除安裝，偵測／補裝缺少的 Microsoft Edge WebView2 Evergreen Runtime。

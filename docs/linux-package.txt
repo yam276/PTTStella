@@ -1,15 +1,17 @@
 PTTStella for Linux x64
 
 Built on Ubuntu 24.04. Other distributions and GUI behavior require separate
-verification. This is a native GTK/WebKitGTK application, not a static binary.
+verification. This is a native Slint application (X11 or Wayland), not a static
+binary, and needs no WebView. Video playback uses the system libmpv2.
 
 Ubuntu 24.04: install the .deb with sudo apt install ./PTTStella-*.deb so apt
 resolves the actual shared-library dependencies and desktop portal providers.
 The application then appears in the desktop application launcher.
 
 The .tar.gz contains the same executable and license inventory for manual use.
-It requires compatible GTK 3, WebKitGTK 4.1, libxdo, fontconfig/freetype,
-CA certificates, a graphical session and an XDG desktop portal provider.
+It requires compatible libmpv2, fontconfig/freetype, xkbcommon, X11 or
+Wayland client libraries with EGL/OpenGL, CA certificates, a graphical session
+and an XDG desktop portal provider.
 Run ./pttstella from the extracted directory. No Rust or Python is needed.
 
 Downloads are not distribution-signed. Verify the adjacent SHA-256 checksum.
@@ -20,3 +22,7 @@ Keyring), a session D-Bus and an unlocked default keyring. A missing/locked
 service never falls back to a file. Uncheck saving and enter credentials for
 a single login, or use the BBS directly. Packaging success is not GUI or
 live-login acceptance.
+
+PTTStella is licensed under GPL-3.0-or-later (licenses/PTTStella-GPL-3.0-or-later.txt).
+libmpv is an Ubuntu system package and is not redistributed here. The source
+manifest for this build is the linux -sources.tar of the same Release.

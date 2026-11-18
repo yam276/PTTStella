@@ -23,9 +23,15 @@ def publish_files(paths, output):
     return created
 
 
-def build(target=None, env=None):
-    command = ['cargo', 'build', '--locked', '--release', '--features', 'desktop',
-               '--bin', 'pttstella', '--message-format=json-render-diagnostics']
+# The release entry is the Slint frontend with native video. The Dioxus
+# rollback packagers pass features='desktop', binary='pttstella-dioxus'.
+SLINT_FEATURES = 'native-player-probe'
+
+
+def build(target=None, env=None, *, features=SLINT_FEATURES, binary='pttstella', build_outputs=None):
+    """Build one release binary; optionally record each build script's OUT_DIR by package name."""
+    command = ['cargo', 'build', '--locked', '--release', '--features', features,
+               '--bin', binary, '--message-format=json-render-diagnostics']
     if target:
         command += ['--target', target]
     executable = None
@@ -34,8 +40,15 @@ def build(target=None, env=None):
         try:
             for line in child.stdout:
                 message = json.loads(line)
+                if (build_outputs is not None and message.get('reason') == 'build-script-executed'
+                        and message.get('out_dir')):
+                    package_id = message.get('package_id', '')
+                    # `registry+...#name@version`, or the older `name version (source)`.
+                    name = (package_id.split(' ', 1)[0] if ' ' in package_id
+                            else package_id.split('#')[-1].split('@')[0].rsplit('/', 1)[-1])
+                    build_outputs.setdefault(name, []).append(Path(message['out_dir']))
                 if (message.get('reason') == 'compiler-artifact'
-                        and message.get('target', {}).get('name') == 'pttstella'
+                        and message.get('target', {}).get('name') == binary
                         and 'bin' in message.get('target', {}).get('kind', [])
                         and message.get('executable')):
                     executable = Path(message['executable'])
@@ -47,7 +60,7 @@ def build(target=None, env=None):
                 child.wait()
             raise
     if executable is None or not executable.is_file():
-        raise RuntimeError('Cargo did not report the pttstella executable')
+        raise RuntimeError('Cargo did not report the '+binary+' executable')
     return executable
 
 
