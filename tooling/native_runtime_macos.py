@@ -242,6 +242,28 @@ def external_sources(records, executable, manifest):
     return accepted, covered
 
 
+def keg_source(keg):
+    """The keg's upstream source record: its SBOM, or the installed formula's stable url/sha256.
+
+    Older bottles carry no sbom.spdx.json; the formula copied into .brew pins the same source.
+    """
+    sbom = keg / 'sbom.spdx.json'
+    if sbom.is_file():
+        data = json.loads(sbom.read_text())
+        return next(p for p in data['packages'] if p['SPDXID'].endswith('-src'))
+    formulae = sorted((keg / '.brew').glob('*.rb'))
+    if len(formulae) != 1:
+        raise ValueError(f'{keg} has neither an SBOM nor one installed formula')
+    stable = formulae[0].read_text().split('\n  head ', 1)[0].split('\n  bottle do', 1)[0]
+    url = re.search(r'^  url "([^"]+)"', stable, re.M)
+    sha = re.search(r'^  sha256 "([0-9a-f]{64})"', stable, re.M)
+    if not url:
+        raise ValueError(f'{keg} formula declares no stable source URL')
+    return {'SPDXID': 'formula-src', 'name': keg.parent.name, 'versionInfo': keg.name,
+            'downloadLocation': url.group(1), 'licenseDeclared': 'NOASSERTION',
+            'checksums': [{'algorithm': 'SHA256', 'checksumValue': sha.group(1) if sha else ''}]}
+
+
 def copy_notices(records, destination, source_archives=None, *, executable=None,
                  source_manifest=None):
     """Keep the installed formula, source hashes, receipt, SBOM and actual notices.
@@ -264,8 +286,7 @@ def copy_notices(records, destination, source_archives=None, *, executable=None,
         keg = Path(*path.parts[:at + 3])
         if keg in packages:
             continue
-        sbom = json.loads((keg / 'sbom.spdx.json').read_text())
-        source = next(p for p in sbom['packages'] if p['SPDXID'].endswith('-src'))
+        source = keg_source(keg)
         label = keg.parent.name + '-' + keg.name
         target = destination / label
         target.mkdir()
@@ -273,7 +294,7 @@ def copy_notices(records, destination, source_archives=None, *, executable=None,
                     and p.name.casefold().startswith(('license', 'licence', 'copying', 'copyright', 'notice'))}
         selected.update(p for folder in ('LICENSES', 'licenses')
                         for p in (keg / folder).rglob('*') if p.is_file())
-        selected.update((keg / 'INSTALL_RECEIPT.json', keg / 'sbom.spdx.json'))
+        selected.update(p for p in (keg / 'INSTALL_RECEIPT.json', keg / 'sbom.spdx.json') if p.is_file())
         selected.update((keg / '.brew').glob('*.rb'))
         notices = []
         for file in sorted(selected):

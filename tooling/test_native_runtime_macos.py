@@ -171,5 +171,38 @@ Load command 3
             self.assertEqual(len(list((root / 'notices').iterdir())), 2)  # One notice and provenance.
 
 
+
+class KegSourceTests(unittest.TestCase):
+    """Bottles without an SBOM fall back to the pinned stable source of their formula."""
+
+    def keg(self, root, formula):
+        keg = root / 'Cellar' / 'sample' / '1.0'
+        (keg / '.brew').mkdir(parents=True)
+        (keg / '.brew' / 'sample.rb').write_text(formula)
+        return keg
+
+    def test_formula_stable_url_and_sha_replace_a_missing_sbom(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            keg = self.keg(Path(temporary), 'class Sample < Formula\n'
+                           '  url "https://example.org/sample-1.0.tar.xz"\n'
+                           '  sha256 "' + 'a' * 64 + '"\n'
+                           '  head "https://example.org/sample.git", branch: "main"\n\n'
+                           '  bottle do\n    sha256 cellar: :any, sonoma: "' + 'b' * 64 + '"\n  end\nend\n')
+            source = runtime.keg_source(keg)
+            self.assertEqual(source['downloadLocation'], 'https://example.org/sample-1.0.tar.xz')
+            self.assertEqual(source['checksums'], [{'algorithm': 'SHA256', 'checksumValue': 'a' * 64}])
+
+    def test_sbom_source_wins_and_missing_formula_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            keg = self.keg(Path(temporary), 'class Sample < Formula\n  url "https://wrong.example/x.tar.gz"\nend\n')
+            (keg / 'sbom.spdx.json').write_text(json.dumps({'packages': [
+                {'SPDXID': 'SPDXRef-Archive-sample-src', 'downloadLocation': 'https://example.org/right.tar.gz',
+                 'checksums': [{'algorithm': 'SHA256', 'checksumValue': 'c' * 64}]}]}))
+            self.assertEqual(runtime.keg_source(keg)['downloadLocation'], 'https://example.org/right.tar.gz')
+            (keg / 'sbom.spdx.json').unlink()
+            (keg / '.brew' / 'sample.rb').unlink()
+            with self.assertRaisesRegex(ValueError, 'neither an SBOM'):
+                runtime.keg_source(keg)
+
 if __name__ == '__main__':
     unittest.main()

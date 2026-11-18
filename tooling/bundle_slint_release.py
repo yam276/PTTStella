@@ -181,10 +181,7 @@ def homebrew_sources(executable, prefix, archives):
             kegs.setdefault(Path(*path.parts[:at+3]), None)
     for keg in kegs:
         label = keg.parent.name+'-'+keg.name
-        if not (keg/'sbom.spdx.json').is_file():
-            raise ValueError(f'{label} has no Homebrew SBOM; reinstall it so its source can be verified')
-        sbom = json.loads((keg/'sbom.spdx.json').read_text(encoding='utf-8'))
-        source = next(p for p in sbom['packages'] if p['SPDXID'].endswith('-src'))
+        source = runtime.keg_source(keg)
         url = source.get('downloadLocation', '')
         expected = next((c['checksumValue'] for c in source.get('checksums', [])
                          if c.get('algorithm') == 'SHA256'), None)
@@ -296,18 +293,20 @@ def windows(staging, stem, version, commit):
     package.mkdir()
     shutil.copy2(executable, package/'pttstella.exe')
     shutil.copy2(mpv/'libmpv-2.dll', package/'libmpv-2.dll')
-    _, required_crt = bundle_slint_windows.inspect_payload(
-        package/'pttstella.exe', [package/'libmpv-2.dll'], main='pttstella.exe')
-    crt_folder = visual_cpp_runtime() if required_crt else None
-    crt = {}
-    for name in required_crt:
-        shutil.copy2(crt_folder/name, package/name)
-        crt[name] = digest(package/name)
-    # Re-check the final payload including the app-local CRT closure.
-    runtime = [package/'libmpv-2.dll', *(package/name for name in crt)]
-    _, still_missing = bundle_slint_windows.inspect_payload(package/'pttstella.exe', runtime, main='pttstella.exe')
-    if set(still_missing) - set(crt):
-        raise RuntimeError('Unbundled Visual C++ runtime DLLs: '+', '.join(sorted(still_missing)))
+    # CRT DLLs import each other (msvcp140 needs vcruntime140_1); bundle the closure.
+    crt, crt_folder = {}, None
+    for _ in range(8):
+        runtime = [package/'libmpv-2.dll', *(package/name for name in crt)]
+        _, required = bundle_slint_windows.inspect_payload(package/'pttstella.exe', runtime, main='pttstella.exe')
+        missing = sorted(set(required) - set(crt))
+        if not missing:
+            break
+        crt_folder = crt_folder or visual_cpp_runtime()
+        for name in missing:
+            shutil.copy2(crt_folder/name, package/name)
+            crt[name] = digest(package/name)
+    else:
+        raise RuntimeError('Visual C++ runtime closure did not converge')
     shutil.copy2(ROOT/'assets/icons/pttstella.ico', package/'PTTStella.ico')
     licenses = package/'licenses'
     bundle_common.copy_licenses(licenses, 'x86_64-pc-windows-msvc', feature=FEATURES)
