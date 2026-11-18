@@ -1088,28 +1088,28 @@ impl Output {
                         .as_ref()
                         .and_then(|p| p.links.get(index))
                         .map(|l| l.url.clone());
-                    if let Some(url) = url {
-                        if !self.busy() {
-                            let phase = self.phase.get();
-                            let Some(lease) = self.new_lease(&ui, stamp, false) else {
-                                return;
-                            };
-                            let source = self.connection.updates.clone();
-                            let clipboard = self.clipboard.clone();
-                            self.work(
-                                &ui,
-                                move || {
-                                    check_output(&lease, &source.borrow(), phase)?;
-                                    clipboard.write_text(url, || {
-                                        check_output(&lease, &source.borrow(), phase)
-                                    })
-                                },
-                                |_, ui, result| match result {
-                                    Ok(()) => crate::notice::copied(ui, msg!("context-copied")),
-                                    Err(e) => crate::notice::error(ui, e),
-                                },
-                            );
-                        }
+                    if let Some(url) = url
+                        && !self.busy()
+                    {
+                        let phase = self.phase.get();
+                        let Some(lease) = self.new_lease(&ui, stamp, false) else {
+                            return;
+                        };
+                        let source = self.connection.updates.clone();
+                        let clipboard = self.clipboard.clone();
+                        self.work(
+                            &ui,
+                            move || {
+                                check_output(&lease, &source.borrow(), phase)?;
+                                clipboard.write_text(url, || {
+                                    check_output(&lease, &source.borrow(), phase)
+                                })
+                            },
+                            |_, ui, result| match result {
+                                Ok(()) => crate::notice::copied(ui, msg!("context-copied")),
+                                Err(e) => crate::notice::error(ui, e),
+                            },
+                        );
                     }
                 }
             }
