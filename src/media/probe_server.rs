@@ -91,8 +91,18 @@ impl Server {
         );
         let join=std::thread::Builder::new().name("native-player-fixture".into()).spawn(move||{
             let mut report=Report{stalled:stall_body,..Default::default()};
+            // Poll accept instead of waking it with a loopback connect: Windows
+            // retries a refused loopback connect for seconds after the worker exits.
+            listener.set_nonblocking(true).map_err(|e|e.to_string())?;
             while !closed.load(Ordering::Acquire){
-                let(mut stream,_)=listener.accept().map_err(|e|e.to_string())?;if closed.load(Ordering::Acquire){break;}
+                let mut stream=match listener.accept(){
+                    Ok((stream,_))=>stream,
+                    Err(e)if e.kind()==std::io::ErrorKind::WouldBlock=>{std::thread::sleep(Duration::from_millis(5));continue}
+                    Err(e)=>return Err(e.to_string()),
+                };
+                if closed.load(Ordering::Acquire){break;}
+                // Windows sockets inherit the listener's non-blocking mode.
+                stream.set_nonblocking(false).map_err(|e|e.to_string())?;
                 stream.set_read_timeout(Some(Duration::from_secs(2))).map_err(|e|e.to_string())?;
                 stream.set_write_timeout(Some(Duration::from_secs(2))).map_err(|e|e.to_string())?;
                 *socket.lock().map_err(|_|"fixture socket state poisoned")?=Some(stream.try_clone().map_err(|e|e.to_string())?);
@@ -156,22 +166,6 @@ impl Server {
             .as_ref()
         {
             let _ = socket.shutdown(Shutdown::Both);
-        }
-        if self.join.as_ref().is_some_and(|join| !join.is_finished()) {
-            match TcpStream::connect_timeout(&self.address, Duration::from_secs(1)) {
-                Ok(_) => {}
-                // The worker can exit before connect, or accept this wake and
-                // close it while connect is finishing. These are all terminal
-                // outcomes of our wake socket, not errors from a media request.
-                Err(e)
-                    if matches!(
-                        e.kind(),
-                        std::io::ErrorKind::ConnectionRefused
-                            | std::io::ErrorKind::ConnectionReset
-                            | std::io::ErrorKind::ConnectionAborted
-                    ) => {}
-                Err(e) => return Err(e.to_string()),
-            }
         }
         Ok(())
     }

@@ -586,7 +586,9 @@ mod tests {
         rx: &mut watch::Receiver<inline_engine::State>,
         test: impl Fn(&inline_engine::State) -> bool,
     ) -> inline_engine::State {
-        timeout(Duration::from_secs(5), rx.wait_for(test))
+        // A liveness bound, not a performance target: debug decoding on the
+        // Intel macOS runner takes several seconds.
+        timeout(Duration::from_secs(20), rx.wait_for(test))
             .await
             .unwrap()
             .unwrap()
