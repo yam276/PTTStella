@@ -14,3 +14,14 @@ export global PointerStyle {
         return MouseCursor.default;
     }
 }
+
+// Slint reads mouse-cursor before pointer-event updates the Rust hit, and only
+// applies it while dispatching a pointer event. Surfaces record the last real
+// window position here so Rust can replay one ignored move after a cursor-only
+// change, including when the screen changes under a stationary pointer.
+export global PointerRefresh {
+    in-out property <bool> replaying;
+    in-out property <bool> inside;
+    in-out property <length> x;
+    in-out property <length> y;
+}

@@ -201,6 +201,7 @@ pub struct Output {
     projection: RefCell<Option<Projection>>,
     hover: Cell<Option<(f32, f32)>>,
     hover_state: RefCell<Option<Hover>>,
+    cursor_refresh: Rc<Cell<bool>>,
     navigation: RefCell<Option<slint::JoinHandle<()>>>,
     navigation_cancel: RefCell<Option<NavigationCancellation>>,
     pending_navigation: Cell<Option<Stamp>>,
@@ -233,6 +234,7 @@ impl Output {
             projection: RefCell::new(None),
             hover: Cell::new(None),
             hover_state: RefCell::new(None),
+            cursor_refresh: Rc::new(Cell::new(false)),
             navigation: RefCell::new(None),
             navigation_cancel: RefCell::new(None),
             pending_navigation: Cell::new(None),
@@ -741,6 +743,31 @@ impl Output {
         }
         self.hover_overlay(&ui);
     }
+    /// Slint reads `mouse-cursor` before `pointer-event` reaches this hit test
+    /// and applies it only while dispatching pointer input. Replay the latest
+    /// real window position once after the hit changed; both surfaces ignore
+    /// the replay, so no hover, station or selection state changes.
+    fn refresh_pointer_cursor(&self, ui: &TerminalWindow) {
+        if !ui.global::<crate::PointerRefresh>().get_inside() || self.cursor_refresh.replace(true) {
+            return;
+        }
+        let (weak, pending) = (self.ui.clone(), self.cursor_refresh.clone());
+        slint::Timer::single_shot(std::time::Duration::ZERO, move || {
+            pending.set(false);
+            let Some(ui) = weak.upgrade() else { return };
+            let refresh = ui.global::<crate::PointerRefresh>();
+            // Coalesced changes read the current kind; a pointer that left the
+            // surface already received the cursor of the item now under it.
+            if !refresh.get_inside() || refresh.get_replaying() {
+                return;
+            }
+            let position = slint::LogicalPosition::new(refresh.get_x(), refresh.get_y());
+            refresh.set_replaying(true);
+            ui.window()
+                .dispatch_event(slint::platform::WindowEvent::PointerMoved { position });
+            refresh.set_replaying(false);
+        });
+    }
     fn hover_overlay(&self, ui: &TerminalWindow) {
         ui.invoke_media_hover_changed();
         let (stamp, geometry) = (self.current(ui), self.geometry(ui));
@@ -767,7 +794,7 @@ impl Output {
             return;
         }
         let mut rectangles = Vec::new();
-        ui.set_pointer_cursor(match hit {
+        let cursor = match hit {
             Some(Hit::Navigate(Intent::Back)) => crate::PointerKind::Back,
             Some(Hit::Navigate(Intent::Forward)) => crate::PointerKind::Forward,
             Some(Hit::Navigate(Intent::PreviousPage)) => crate::PointerKind::PreviousPage,
@@ -776,7 +803,11 @@ impl Output {
             Some(Hit::Navigate(Intent::Last)) => crate::PointerKind::Last,
             Some(_) => crate::PointerKind::Action,
             None => crate::PointerKind::Rest,
-        });
+        };
+        if ui.get_pointer_cursor() != cursor {
+            ui.set_pointer_cursor(cursor);
+            self.refresh_pointer_cursor(ui);
+        }
         ui.set_pointer_url(match hit {
             Some(Hit::Link(index)) => self
                 .projection

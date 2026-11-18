@@ -2,8 +2,8 @@ import { PanelButton, PanelField, PanelReadOnlyText, PanelScrollView, PanelTheme
 export { PanelEdit } from "panel.slint";
 export { LucideIcons } from "lucide-icons.slint";
 import { LucideIcons } from "lucide-icons.slint";
-import { PointerKind, PointerStyle } from "pointer-cursor.slint";
-export { PointerKind } from "pointer-cursor.slint";
+import { PointerKind, PointerRefresh, PointerStyle } from "pointer-cursor.slint";
+export { PointerKind, PointerRefresh } from "pointer-cursor.slint";
 import { CompositionInput } from "composition-input.slint";
 import { Button, CheckBox, ComboBox, LineEdit } from "std-widgets.slint";
 import { SettingsPanel, SettingsState } from "settings.slint";
@@ -731,8 +731,12 @@ export component TerminalWindow inherits Window {
                         height: viewport.height;
                         enabled: root.terminal-input && !root.pan-mode && !root.article-active;
                         mouse-cursor: PointerStyle.navigation(root.pointer-cursor, root.selection-dragging);
-                        changed has-hover => { if (!self.has-hover) { root.grid-pointer(5, self.mouse-x, self.mouse-y, false); } }
+                        changed has-hover => { if (!self.has-hover) { PointerRefresh.inside = false; root.grid-pointer(5, self.mouse-x, self.mouse-y, false); } }
                         pointer-event(event) => {
+                            if (PointerRefresh.replaying) { return; }
+                            PointerRefresh.x = self.absolute-position.x + self.mouse-x;
+                            PointerRefresh.y = self.absolute-position.y + self.mouse-y;
+                            PointerRefresh.inside = event.kind != PointerEventKind.cancel;
                             root.pointer-shift = event.modifiers.shift;
                             let button = event.button == PointerEventButton.left ? 1 : event.button == PointerEventButton.middle ? 2 : event.button == PointerEventButton.right ? 3 : 0;
                             if (event.kind == PointerEventKind.cancel) {

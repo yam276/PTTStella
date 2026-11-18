@@ -1,4 +1,4 @@
-import { PointerKind, PointerStyle } from "pointer-cursor.slint";
+import { PointerKind, PointerRefresh, PointerStyle } from "pointer-cursor.slint";
 import { PanelTheme } from "panel.slint";
 import { UiLabels } from "labels.slint";
 import { SelectionRect } from "selection.slint";
@@ -13,8 +13,12 @@ component ArticlePointer inherits TouchArea {
     callback pointer(int,length,length,bool);
     callback context-pointer(int,length,length,bool);
     callback focus-requested;
-    changed has-hover => { if !self.has-hover { root.pointer(5,self.mouse-x,self.mouse-y+root.offset-y,false); } }
+    changed has-hover => { if !self.has-hover { PointerRefresh.inside = false; root.pointer(5,self.mouse-x,self.mouse-y+root.offset-y,false); } }
     pointer-event(event) => {
+        if PointerRefresh.replaying { return; }
+        PointerRefresh.x = self.absolute-position.x + self.mouse-x;
+        PointerRefresh.y = self.absolute-position.y + self.mouse-y;
+        PointerRefresh.inside = event.kind != PointerEventKind.cancel;
         let kind = event.kind == PointerEventKind.down ? 0 : event.kind == PointerEventKind.up ? 2 : event.kind == PointerEventKind.cancel ? 3 : 1;
         let y = self.mouse-y + root.offset-y;
         if event.kind == PointerEventKind.cancel {

@@ -150,19 +150,32 @@ pub fn start(
                     (60., 16., crate::PointerKind::NextPage),
                     (60., 22.75, crate::PointerKind::Last),
                 ] {
+                    let position = slint::LogicalPosition::new(
+                        left + col * ui.get_raster_width() / 80.,
+                        top + row * ui.get_raster_height() / 24.,
+                    );
                     ui.window()
-                        .dispatch_event(slint::platform::WindowEvent::PointerMoved {
-                            position: slint::LogicalPosition::new(
-                                left + col * ui.get_raster_width() / 80.,
-                                top + row * ui.get_raster_height() / 24.,
-                            ),
-                        });
+                        .dispatch_event(slint::platform::WindowEvent::PointerMoved { position });
                     require(
                         ui.get_pointer_cursor() == expected,
                         &format!(
                             "terminal hover chose {:?} instead of {expected:?}",
                             ui.get_pointer_cursor()
                         ),
+                    )?;
+                    // The cursor-only replay must target this window position
+                    // and leave the hover result unchanged.
+                    let refresh = ui.global::<crate::PointerRefresh>();
+                    require(
+                        refresh.get_inside()
+                            && (refresh.get_x() - position.x).abs() < 0.5
+                            && (refresh.get_y() - position.y).abs() < 0.5,
+                        "terminal hover did not record its cursor refresh position",
+                    )?;
+                    tokio::time::sleep(Duration::from_millis(40)).await;
+                    require(
+                        !refresh.get_replaying() && ui.get_pointer_cursor() == expected,
+                        "terminal cursor refresh changed the hover result",
                     )?;
                 }
                 require(
