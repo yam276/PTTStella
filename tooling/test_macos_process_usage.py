@@ -13,6 +13,11 @@ from macos_process_usage import (
 )
 
 
+# The sampler measures macOS process families with POSIX process and mode APIs.
+POSIX_ONLY = unittest.skipIf(os.name == 'nt', 'macOS process sampler requires POSIX APIs')
+
+
+@POSIX_ONLY
 class FamilyAttributionTests(unittest.TestCase):
     def test_group_and_all_process_pid_values_cannot_be_owned_identities(self):
         for pid, start in [(0, 1), (-1, 1), (2 ** 31, 1), (10, 0), (10, -1), (True, 1)]:
@@ -61,6 +66,7 @@ class FamilyAttributionTests(unittest.TestCase):
             kill.assert_not_called()
 
 
+@POSIX_ONLY
 class PhaseAccountingTests(unittest.TestCase):
     @staticmethod
     def sample(at, cpu, start=100):
@@ -124,6 +130,7 @@ class PhaseAccountingTests(unittest.TestCase):
 
 
 @unittest.skipUnless(sys.platform == 'darwin', 'native macOS diagnostic APIs required')
+@POSIX_ONLY
 class NativeAccountingTests(unittest.TestCase):
     def test_real_cli_collects_owned_phase_without_stopping_the_target(self):
         api = MacProcesses()

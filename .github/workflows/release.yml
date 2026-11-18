@@ -120,6 +120,11 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install mpv pkgconf
+          # Preinstalled kegs can predate Homebrew SBOMs, which the source set verifies against.
+          for formula in mpv $(brew deps --installed mpv); do
+            keg=$(cd "$(brew --prefix "$formula")" && pwd -P)
+            [[ -f "$keg/sbom.spdx.json" ]] || brew reinstall "$formula"
+          done
           pkg-config --modversion mpv
       - name: Prepare pinned Windows libmpv
         if: runner.os == 'Windows'

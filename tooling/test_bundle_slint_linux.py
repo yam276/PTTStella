@@ -12,6 +12,8 @@ from unittest.mock import patch
 import bundle_slint_linux as bundle
 
 
+# Linux packages use POSIX loader paths; they are built on Linux runners only.
+@unittest.skipIf(os.name == 'nt', 'Linux packaging uses POSIX loader and package paths')
 class LinuxCandidateTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix='pttstella-linux-bundle-')

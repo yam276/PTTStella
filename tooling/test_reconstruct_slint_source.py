@@ -65,7 +65,8 @@ class ReconstructionTests(unittest.TestCase):
 
     def test_complete_tree_is_restored_without_the_original_checkout(self):
         expected = self.inventory()
-        shutil.rmtree(self.repo)
+        # Git marks object files read-only; Windows refuses to unlink them as is.
+        shutil.rmtree(self.repo, onexc=lambda remove, path, _: (os.chmod(path, 0o700), remove(path)))
         result = self.run_source()
         self.assertEqual(result['status'], 'product_source_reconstructed')
         self.assertEqual(result['files_verified'], 6)

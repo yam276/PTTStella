@@ -181,6 +181,8 @@ def homebrew_sources(executable, prefix, archives):
             kegs.setdefault(Path(*path.parts[:at+3]), None)
     for keg in kegs:
         label = keg.parent.name+'-'+keg.name
+        if not (keg/'sbom.spdx.json').is_file():
+            raise ValueError(f'{label} has no Homebrew SBOM; reinstall it so its source can be verified')
         sbom = json.loads((keg/'sbom.spdx.json').read_text(encoding='utf-8'))
         source = next(p for p in sbom['packages'] if p['SPDXID'].endswith('-src'))
         url = source.get('downloadLocation', '')

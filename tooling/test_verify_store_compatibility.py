@@ -37,7 +37,7 @@ class CompatibilityRunnerTests(unittest.TestCase):
             with mock.patch.object(runner, 'invoke', return_value=wrong):
                 with self.assertRaisesRegex(AssertionError, 'Independent expectation mismatch'):
                     runner.inspect('candidate', root, expected, 'semantic')
-            failure = json.loads((runner.output / 'failure-semantic.json').read_text())
+            failure = json.loads((runner.output / 'failure-semantic.json').read_text(encoding='utf-8'))
             self.assertEqual(failure['expected'], expected)
             self.assertNotEqual(failure['actual'], expected)
 
