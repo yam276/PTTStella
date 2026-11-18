@@ -74,3 +74,12 @@
   <a href="assets/readme/ansi-article-dialogue.png"><img src="assets/readme/ansi-article-dialogue.png" width="32%" alt="ANSI 人物與右側的直排對白"></a>
   <a href="assets/readme/ansi-article.png"><img src="assets/readme/ansi-article.png" width="32%" alt="Mejiro McQueen 的 ANSI 圖文"></a>
 </p>
+
+## 授權
+
+Copyright © 2026 yam276
+
+PTTStella 是自由軟體，以 [GNU General Public License](LICENSE) 第 3 版或（由你選擇）任何更新版本授權（`GPL-3.0-or-later`）。本程式不提供任何擔保，詳見授權全文。
+
+App 內附的字型、圖示、Rust 套件與影片播放所需的 libmpv／FFmpeg 等第三方元件各自依原授權散布，授權文字隨安裝包附在 licenses 資料夾。
+
