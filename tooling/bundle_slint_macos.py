@@ -1,6 +1,6 @@
 """Package the full Slint main app with libmpv for internal macOS acceptance.
 
-Accepts an already built native-player-probe / pttstella-slint executable.
+Accepts an already built native-player-probe / pttstella executable.
 Never builds, launches a GUI, contacts a BBS, changes the product identity,
 or publishes a release. Corresponding-source and native acceptance remain
 separate requirements; this package is explicitly a candidate.
@@ -61,18 +61,18 @@ def stage_runtime(executable, contents, skia_license, allowed, source_archives=N
 
 
 def inspect_profile(binary):
-    # The production --show-profile branch only describes the research paths.
+    # The production --show-profile branch only describes the product paths.
     # Do not let developer loader overrides hide an unbundled dependency.
     environment = {key: value for key, value in os.environ.items()
                    if not key.startswith(('DYLD_', 'LD_', 'PTTSTELLA_'))}
     process = subprocess.run([str(binary), '--show-profile'], env=environment,
                              capture_output=True, text=True, check=True, timeout=30)
     profile = json.loads(process.stdout)
-    if not (profile.get('application') == 'PTTStellaSlintResearch'
-            and profile.get('credential_scope') == 'SlintResearch'
+    if not (profile.get('application') == 'PTTStella'
+            and profile.get('credential_scope') == 'Product'
             and profile.get('probe_credential_scope') == 'SlintSyntheticProbe'
             and profile.get('stores_read') is False and profile.get('vault_opened') is False):
-        raise ValueError('Expected the isolated Slint main-app profile descriptor')
+        raise ValueError('Expected the Slint main-app product profile descriptor')
     return profile
 
 
@@ -121,9 +121,9 @@ def bundle(executable, skia_license, output, allowed, source_archives=None, *, s
         (contents / 'Info.plist').write_bytes(plistlib.dumps(info))
         (resources / 'READ-ME-zh-TW.txt').write_text(
             'PTTStella Slint 主程式候選；供內部驗收，尚非正式發佈。\n'
-            '正常啟動會連至獨立研究設定的預設站，初始為 PTT WSS；不自動登入。\n'
-            '設定與資料使用 PTTStellaSlintResearch，密碼庫使用 SlintResearch。\n'
-            '不自動讀取、搬移或覆寫原 PTTStella 資料；舊資料只以副本驗收。\n'
+            '正常啟動會連至 PTTStella 設定的預設站，初始為 PTT WSS；不自動登入。\n'
+            '設定、資料與密碼庫和正式 PTTStella 共用，格式與 Dioxus 版相同。\n'
+            '候選 App 使用不同 Bundle ID；系統可能要求重新允許讀取已存密碼。\n'
             '無需 Homebrew 或外部 WebView runtime；libmpv 閉包包含於 Frameworks。\n'
             '離線格線可執行 Contents/MacOS/native --probe-grid；輸入法用 --probe-ime。\n'
             'macOS 預設軟體繪製與原生CPU影片，依視窗尺寸呈現；超過資源預算才等比縮小。\n'

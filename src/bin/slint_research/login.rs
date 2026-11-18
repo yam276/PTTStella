@@ -161,7 +161,7 @@ impl Login {
         let scope = if self.probe {
             Scope::SlintSyntheticProbe
         } else {
-            Scope::SlintResearch
+            Scope::Product
         };
         match Job::start(Vault::for_scope(scope), action) {
             Ok(job) => self.job.replace(Some(job)),

@@ -1,5 +1,9 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-18 Slint 成為桌面入口
+
+依使用者決定，`dioxus` 分支保存最後的 Dioxus 開發線，`develop` 改以 Slint 版為主：`pttstella` 啟動 Slint，資料與密碼庫沿用正式 PTTStella，Dioxus 暫留為 `pttstella-dioxus`。`main` 維持 `0.4.1`，正式發佈須先完成 Slint 打包與 libmpv 原始碼交付，見[發佈流程](../releases.md#2026-11-18-slint-入口切換與發佈封鎖)與 [Slint 計畫](../slint-evaluation-plan.md#2026-11-18-s9-入口切換)。
+
 ## 2026-11-18 Slint 游標即時更新
 
 Slint 在派送滑鼠事件時先讀游標、後執行 Rust 命中，導致手形與導覽游標慢一個移動。命中種類改變後，終端與文章畫面在原位置補一次被忽略的移動，只用來套用游標。macOS arm64 封裝版經使用者實測：首次滑入連結／文章列、靜止時鍵盤換頁與開文章後移動，游標都立即正確。其他平台尚待重新封裝驗證。

@@ -103,8 +103,8 @@ Exit 0只代表component案例通過，原生IME／DPI／可聽音訊等人工�
 本入口使用Windows內建PowerShell，不變更系統設定或執行原則；若無法執行可保留log並用下列入口。
 
 手動操作可執行 Run-Offline.cmd：只連本機合成服務，可試浮球、縮放、設定、關於與關窗。
-正常雙擊 pttstella-slint.exe 會連至研究設定的預設站，初始為 PTT WSS，不自動登入。
-資料使用 PTTStellaSlintResearch、密碼庫使用 SlintResearch；不自動搬移正式版資料。
+正常雙擊 pttstella-slint.exe 會連至 PTTStella 設定的預設站，初始為 PTT WSS，不自動登入。
+設定、資料與密碼庫和正式 PTTStella 共用，格式與 Dioxus 版相同。
 
 Run-Grid.cmd／Run-Grid-Software.cmd：80×24、雙色字、框線、縮放、末行及全螢幕。
 Run-IME.cmd：切 Microsoft 注音，在第22行輸入、選字、Esc取消、再Enter提交「中」。

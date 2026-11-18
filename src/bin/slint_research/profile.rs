@@ -1,8 +1,8 @@
-//! Candidate stores use the existing formats and locks under a separate identity.
+//! The desktop entry uses the product stores, formats and locks shared with Dioxus.
 use pttstella::{settings::store::Store as SettingsStore, sites::store::Store as SiteStore};
 use std::path::PathBuf;
 
-pub const APPLICATION: &str = "PTTStellaSlintResearch";
+pub const APPLICATION: &str = "PTTStella";
 pub struct Profile {
     config: PathBuf,
     data: PathBuf,
@@ -87,7 +87,8 @@ impl Profile {
             "bookmarks": path(self.data_file("bookmarks"))?,
             "sites": path(self.config_file("sites"))?,
             "filters": path(self.config_file("filters"))?,
-            "credential_scope": if self.prefix.is_empty() { "SlintResearch" } else { "SlintSyntheticProbe" },
+            "drafts": path(self.data_file("drafts"))?,
+            "credential_scope": if self.prefix.is_empty() { "Product" } else { "SlintSyntheticProbe" },
             "probe_credential_scope": "SlintSyntheticProbe",
             "stores_read": false,
             "vault_opened": false,
@@ -105,7 +106,8 @@ impl Profile {
         SiteStore::at(self.config_file("sites"))
     }
     pub fn drafts(&self) -> pttstella::drafts::store::Store {
-        pttstella::drafts::store::Store::at(self.config_file("drafts"))
+        // Dioxus keeps drafts beside bookmarks in the local data directory.
+        pttstella::drafts::store::Store::at(self.data_file("drafts"))
     }
     pub fn recent(&self) -> pttstella::recent_boards::store::Store {
         pttstella::recent_boards::store::Store::at(self.data_file("recent-boards"))
@@ -226,13 +228,30 @@ mod tests {
     }
 
     #[test]
-    fn research_namespace_is_distinct_from_the_product_without_opening_either() {
+    fn system_profile_uses_the_dioxus_product_paths_without_opening_them() {
         let product = directories::ProjectDirs::from("", "", "PTTStella").unwrap();
-        let research = Profile::system().unwrap();
-        assert_ne!(research.config, product.config_dir());
-        assert!(!research.config.starts_with(product.config_dir()));
-        assert!(!product.config_dir().starts_with(&research.config));
-        assert_ne!(research.data, product.data_local_dir());
+        let system = Profile::system().unwrap();
+        assert_eq!(system.config, product.config_dir());
+        assert_eq!(system.data, product.data_local_dir());
+        // Same locations as each shared store's own system() constructor.
+        for (name, path) in [
+            ("settings", system.config_file("settings")),
+            ("sites", system.config_file("sites")),
+            ("filters", system.config_file("filters")),
+        ] {
+            assert_eq!(path, product.config_dir().join(format!("{name}.json")));
+        }
+        for (name, path) in [
+            ("drafts", system.data_file("drafts")),
+            ("bookmarks", system.data_file("bookmarks")),
+            ("recent-boards", system.data_file("recent-boards")),
+        ] {
+            assert_eq!(path, product.data_local_dir().join(format!("{name}.json")));
+        }
+        let description = system.describe().unwrap();
+        assert_eq!(description["application"], "PTTStella");
+        assert_eq!(description["credential_scope"], "Product");
+        assert_eq!(description["stores_read"], false);
     }
 
     #[test]

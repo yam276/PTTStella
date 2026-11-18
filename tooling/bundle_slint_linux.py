@@ -40,8 +40,8 @@ run=$(mktemp -d "$base/evidence/run.XXXXXX")
 
 README = '''PTTStella Slint Linux x64 完整主程式候選（內部驗收）
 
-此包不替換正式PTTStella；資料使用PTTStellaSlintResearch、密碼庫SlintResearch。
-一般執行檔／桌面入口會連研究設定的預設站，初始PTT WSS，不自動登入。
+此包以獨立套件名安裝，設定、資料與密碼庫和正式PTTStella共用，格式與Dioxus版相同。
+一般執行檔／桌面入口會連PTTStella設定的預設站，初始PTT WSS，不自動登入。
 先用可寫目錄解壓tar.gz；其中Run-Offline.sh只連本機合成服務，可試浮球與設定。
 Run-Grid.sh／Run-Grid-Software.sh驗格線、雙色字、末行、縮放與全螢幕。
 Run-IME.sh須實際使用繁中輸入法，核對候選窗、取消、選字及一次「中」提交。

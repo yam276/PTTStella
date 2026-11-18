@@ -81,19 +81,21 @@ keyring = { version = "=3.6.3", default-features = false, features = ["windows-n
 zbus = { version = "=5.19.0", optional = true, default-features = false, features = ["tokio"] }
 keyring = { version = "=3.6.3", default-features = false, features = ["async-secret-service", "crypto-rust", "tokio"], optional = true }
 
+# Slint is the desktop entry. The Dioxus frontend stays buildable for rollback
+# until the separate removal commit; the `dioxus` branch keeps its last release line.
 [[bin]]
 name = "pttstella"
+path = "src/bin/slint_research/main.rs"
+required-features = ["slint-research"]
+
+[[bin]]
+name = "pttstella-dioxus"
 path = "src/main.rs"
 required-features = ["desktop"]
 
 [[bin]]
 name = "replay"
 path = "src/bin/replay.rs"
-
-[[bin]]
-name = "pttstella-slint"
-path = "src/bin/slint_research/main.rs"
-required-features = ["slint-research"]
 
 [dev-dependencies]
 fluent-syntax = "=0.12.0"

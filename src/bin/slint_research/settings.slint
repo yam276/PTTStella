@@ -546,7 +546,7 @@ export component SettingsPanel inherits PanelOverlay {
                         if SettingsState.query=="" && SettingsState.page==7: VerticalLayout {
                             alignment: start; spacing: 10px;
                             AboutBlock {
-                                title: "PTTStella Slint";
+                                title: "PTTStella";
                                 Text { text: AboutState.app-version; color: #d7dce5; wrap: word-wrap; }
                                 Text { text: AboutState.app-author; color: #d7dce5; wrap: word-wrap; }
                                 FocusButton {field-id:29;text:SettingsState.release-labels[3];icon:LucideIcons.external-link;clicked=>{SettingsState.repository-open();}}

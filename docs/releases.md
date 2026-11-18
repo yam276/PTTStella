@@ -2,6 +2,12 @@
 
 `develop` 是日常開發與一般 PR 的預設分支；`main`／`master` 只保留正式版號。此 repo 的正式分支是 `main`；若存在 `master`，適用相同規則，不需另建或改名。不要直接把功能分支合併或推送到 `main`，也不要在 GitHub 手動建立缺少下載檔的 Release。
 
+## 2026-11-18 Slint 入口切換與發佈封鎖
+
+`develop` 自 `ca09cd7` 起包含 Slint 版，`pttstella` 入口改為 Slint，Dioxus 版改名 `pttstella-dioxus`；切換前最後的 Dioxus 開發線保存在 `dioxus` 分支（`5ea9ad6`），正式版 `0.4.1` 由 `v0.4.1` tag 保存。`main` 維持 `0.4.1`。
+
+既有 `Desktop Release` 與 `bundle_common` 仍以 `desktop` feature 建置並打包 `pttstella`，入口切換後會在建置階段失敗，不會把 Dioxus 當成 Slint 版發佈。下一次正式發佈前須先完成：四架構改用 Slint 打包並內含 libmpv runtime、libmpv 對應原始碼交付（目前為 `not_ready`）、正式 App ID／安裝路徑的升級與回退，以及 README、安裝說明和 Release PR policy 的更新。發佈仍需使用者指定版本。
+
 ## 何時執行發佈
 
 只有使用者明確要求發佈該版本，才進入下列發佈流程。平常的開發、修正、Critic、測試、提交與一般推送都保持在 `develop`；不自行切換或推進 `main`／`master`、建立其他工作／發佈分支、改用正式版號，或建立／合併 Release PR、Tag、GitHub Release。使用者另有明確分支指示時依其指示。

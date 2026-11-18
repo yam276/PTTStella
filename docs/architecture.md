@@ -1,6 +1,6 @@
 # 最簡 terminal 架構
 
-Rust／Dioxus。先做單一桌面視窗與一條傳輸；第一個實測平台為 Windows，核心保持無 GUI／網路即可執行。工作順序見 [active plan](active/minimal-browser.md)。
+Rust；桌面入口 `pttstella` 自 2026-11-18 起為 Slint（`src/bin/slint_research`），以下 Dioxus 描述適用回退用的 `pttstella-dioxus`，至移除提交為止。先做單一桌面視窗與一條傳輸；第一個實測平台為 Windows，核心保持無 GUI／網路即可執行。工作順序見 [active plan](active/minimal-browser.md)。
 
 ```text
 connection framing → raw terminal bytes → Rust terminal state

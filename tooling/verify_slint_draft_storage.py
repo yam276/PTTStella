@@ -1,6 +1,6 @@
 """Verify native draft persistence with own loopback child processes.
 
-Requires a built pttstella-slint executable and a NEW output directory.
+Requires a built Slint pttstella executable and a NEW output directory.
 Only Python's standard library is needed. Widget gestures are synthetic;
 this does not verify OS input/IME or arbitrary power-loss boundaries.
 The ANSI text and synthetic StellaTest scope below are self-authored CC0.

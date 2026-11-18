@@ -76,7 +76,7 @@ impl Menu {
         let entry = NSMenuItem::new(mtm);
         let submenu = NSMenu::new(mtm);
         submenu.setAutoenablesItems(false);
-        submenu.setTitle(ns_string!("PTTStella Slint"));
+        submenu.setTitle(ns_string!("PTTStella"));
         entry.setSubmenu(Some(&submenu));
         bar.addItem(&entry);
         let target = MenuTarget::new(mtm, ui);

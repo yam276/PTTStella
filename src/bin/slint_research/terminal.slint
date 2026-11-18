@@ -236,7 +236,7 @@ export component TerminalWindow inherits Window {
     callback media-action(int);
     callback media-updated;
     callback focus-media;
-    title: root.live-session ? "PTTStella Slint" : (root.session-active ? "PTTStella Slint · 本機連線探針" : "PTTStella Slint · 離線原型");
+    title: root.live-session ? "PTTStella" : (root.session-active ? "PTTStella · 本機連線探針" : "PTTStella · 離線原型");
     background: #101318;
     in property <bool> prototype-chrome: true;
     preferred-width: 1000px;

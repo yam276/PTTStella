@@ -6,6 +6,10 @@ Dioxus 初始基準為 `5ea9ad6a498331d0cbebc7d9803e0a51df46e5c3`，已包含分
 
 ## 目前進度
 
+### 2026-11-18 S9 入口切換
+
+使用者決定以 Slint 版為主。`dioxus` 分支保存 `5ea9ad6`，`develop` 快轉到 `ca09cd7` 後，`pttstella` 指向 Slint，Dioxus 改名 `pttstella-dioxus`；移除 Dioxus 另開提交。正式連線使用 PTTStella 的設定、站點、名單、草稿、收藏、最近看板與正式密碼庫服務；草稿改到與 Dioxus 相同的本機資料目錄。合成探針仍只用明確的隔離資料與合成密碼庫，雙 GIF 等完整服務探針不再開啟系統草稿。舊 `PTTStellaSlintResearch` 資料與 `SlintResearch` 密碼保留原處，不自動搬移。`main` 維持 `0.4.1`；發佈封鎖項見[發佈流程](releases.md#2026-11-18-slint-入口切換與發佈封鎖)。候選打包工具仍用候選 App ID，但改與正式版共用資料。
+
 ### 2026-11-15 固定候選驗收
 
 先固定 `6006024` 供 Apple Silicon 與 Windows x64 驗收。Apple Silicon、Windows x64、Intel Mac 與 Linux x64 已有同提交候選，Windows 離線 Setup 與便攜 ZIP 的 927 檔逐一核對，隔離 Wine 的九項安裝、升退和卸載案例通過。Apple Silicon 出貨檔通過 Esc 取消長文載入、手動取一頁、繼續載入，以及草稿保存和跨程序重開。Intel Mac 與 Linux x64 依既有安排先留封裝。正式入口維持 Dioxus。[文章驗收](#2-文章翻頁與取頁s4) · [Windows 驗收](slint-windows-candidate.md#2026-11-15-6006024-固定候選)

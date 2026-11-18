@@ -10,8 +10,10 @@
 
 Rust 版本由 `rust-toolchain.toml` 固定。文件與打包檢查使用 Python 3.11+，介面測試使用 Node.js 24。各平台的系統相依可參考 CI。[建置流程](.github/workflows/release.yml)
 
+桌面入口 `pttstella` 是 Slint 版，影片播放需要 libmpv；Dioxus 版改名 `pttstella-dioxus`，保留到移除提交前供回退對照，最後一條 Dioxus 開發線在 `dioxus` 分支。
+
 ```sh
-cargo run --locked --features desktop --bin pttstella
+cargo run --locked --features native-player-probe --bin pttstella
 ```
 
 ## 驗證
@@ -25,7 +27,8 @@ cargo run --locked --features desktop --bin pttstella
 | Slint 依賴／feature | `python tooling/verify_slint_dependencies.py --output <新證據目錄>`、`python -m unittest discover -s tooling -p test_verify_slint_dependencies.py`；檢查四 target／兩配置的選用依賴，不代表編譯或原生驗收 |
 | Slint 繪圖／版面失效 | `cargo test --locked --release --features slint-renderer-audit --test slint_rendering`，再以 `slint-renderer-audit,native-player-probe` 重跑；獨立完整／局部 Skia 畫面逐像素比較，不代表 OS 呈現、IME 或原生視窗驗收。Slint worktree 沿用 `.local/slint-build.toml` 的固定快取。 |
 | Slint 產品來源還原 | `python -m unittest discover -s tooling -p test_reconstruct_slint_source.py`；實際交付另依[來源還原](docs/slint-product-source.md)從新目錄核對完整 tree／檔案與建置 |
-| 桌面介面 | `cargo test --locked --features desktop --lib --bin pttstella --test multi_instance`、`cargo clippy --locked --features desktop --all-targets -- -D warnings`、`node --test tooling/test_*.mjs` |
+| 桌面介面（Slint） | `cargo test --locked --features native-player-probe --bin pttstella`、`cargo clippy --locked --features native-player-probe --all-targets -- -D warnings`；畫面、滑鼠與鍵盤另以 `--probe-* --verify-*` 合成探針及實際 App 驗證 |
+| 桌面介面（Dioxus 回退） | `cargo test --locked --features desktop --lib --bin pttstella-dioxus --test multi_instance`、`cargo clippy --locked --features desktop --all-targets -- -D warnings`、`node --test tooling/test_*.mjs` |
 | Windows 原生視窗 | `python tooling/check.py desktop` |
 | 打包或發佈 | `python -m unittest discover -s tooling -p 'test_*.py'`、文件檢查、`actionlint .github/workflows/*.yml`，再以 GitHub Actions 的 `verify` 模式核對各平台產物。 |
 

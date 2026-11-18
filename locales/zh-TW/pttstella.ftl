@@ -877,7 +877,7 @@ editor-color-stop-requested = 已要求停止；已送出的色碼可能保留�
 
 slint-font-face-status = 已選用：英數 { $requested_ascii }／中文 { $requested_cjk }。繪圖 face：{ $ascii }／{ $cjk }；個別缺字仍可能使用替代字型。
 
-slint-menu-about = 關於 PTTStella Slint
+slint-menu-about = 關於 PTTStella
 slint-menu-services = 服務
 
 slint-article-heading = PTTStella  /  文章閱讀

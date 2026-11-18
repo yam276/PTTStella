@@ -55,16 +55,17 @@ class SlintCandidateBundleTests(unittest.TestCase):
             self.assertEqual(sentinel.read_bytes(), b'previous delivery')
 
     def test_wrong_main_app_profile_is_rejected_even_when_process_succeeds(self):
-        wrong = {'application': 'PTTStella', 'credential_scope': 'Product',
+        # The retired research identity must not be packaged as the main app.
+        wrong = {'application': 'PTTStellaSlintResearch', 'credential_scope': 'SlintResearch',
                  'probe_credential_scope': 'SlintSyntheticProbe', 'stores_read': False,
                  'vault_opened': False}
         process = subprocess.CompletedProcess([], 0, stdout=json.dumps(wrong), stderr='')
         with mock.patch.object(bundle.subprocess, 'run', return_value=process):
-            with self.assertRaisesRegex(ValueError, 'isolated Slint main-app'):
+            with self.assertRaisesRegex(ValueError, 'Slint main-app product profile'):
                 bundle.inspect_profile(Path('synthetic-native'))
 
     def test_loader_and_probe_overrides_are_not_used_for_profile_check(self):
-        profile = {'application': 'PTTStellaSlintResearch', 'credential_scope': 'SlintResearch',
+        profile = {'application': 'PTTStella', 'credential_scope': 'Product',
                    'probe_credential_scope': 'SlintSyntheticProbe', 'stores_read': False,
                    'vault_opened': False}
         process = subprocess.CompletedProcess([], 0, stdout=json.dumps(profile), stderr='')

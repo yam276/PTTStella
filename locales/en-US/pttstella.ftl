@@ -883,7 +883,7 @@ editor-color-stop-requested = Stop requested; sent colour codes may remain. Chec
 
 slint-font-face-status = Requested: Latin { $requested_ascii } / CJK { $requested_cjk }. Drawing faces: { $ascii } / { $cjk }; missing glyphs may still use fallback faces.
 
-slint-menu-about = About PTTStella Slint
+slint-menu-about = About PTTStella
 slint-menu-services = Services
 
 slint-article-heading = PTTStella  /  Article reading
