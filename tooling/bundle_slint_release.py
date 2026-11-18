@@ -321,7 +321,9 @@ def windows(staging, stem, version, commit):
             indent=2)+'\n')
     setup, setup_details = windows_installer.build_slint(package, staging, version)
     portable = staging/(stem+'-portable.zip')
-    with zipfile.ZipFile(portable, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as stream:
+    # crates.io notices carry 1970 timestamps; ZIP clamps them to 1980.
+    with zipfile.ZipFile(portable, 'w', zipfile.ZIP_DEFLATED, compresslevel=9,
+                         strict_timestamps=False) as stream:
         for path in sorted(package.rglob('*')):
             if path.is_file():
                 stream.write(path, (stem+'/'+path.relative_to(package).as_posix()))
