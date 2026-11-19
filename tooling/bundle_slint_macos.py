@@ -30,14 +30,19 @@ TARGETS = {'arm64': 'aarch64-apple-darwin', 'x86_64': 'x86_64-apple-darwin'}
 
 
 def stage_runtime(executable, contents, skia_license, allowed, source_archives=None, *,
-                  source_manifest=None, reuse_runtime=None):
+                  source_manifest=None, reuse_runtime=None, executable_name='native'):
     """Shared native Slint/libmpv payload for the main app and player probe."""
+    # Research candidates keep `native`; the released product uses its Cargo bin name.
+    if executable_name not in ('native', 'pttstella'):
+        raise ValueError('Unexpected macOS executable name')
+    if reuse_runtime is not None and executable_name != 'native':
+        raise ValueError('Reused candidate runtimes are recorded as MacOS/native')
     if not skia_license.is_file() or not 0 < skia_license.stat().st_size <= 4 * 1024 * 1024:
         raise ValueError('The built Skia license is required and must be bounded')
     arch = runtime.run('lipo', '-archs', str(executable)).strip()
     if arch not in TARGETS:
         raise ValueError('Expected one supported macOS executable architecture')
-    binary = contents / 'MacOS' / 'native'
+    binary = contents / 'MacOS' / executable_name
     binary.parent.mkdir(parents=True)
     resources = contents / 'Resources'
     resources.mkdir(exist_ok=True)

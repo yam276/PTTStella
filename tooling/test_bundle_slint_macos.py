@@ -42,6 +42,38 @@ class SlintCandidateBundleTests(unittest.TestCase):
                                      source_manifest=source_manifest)
             self.assertEqual(install.call_args.kwargs['source_manifest'], source_manifest)
 
+    def test_released_product_executable_keeps_its_cargo_bin_name(self):
+        for name in ('native', 'pttstella'):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                license = root / 'LICENSE_SKIA'
+                license.write_text('synthetic license')
+                manifest = {'files': [{'file': 'MacOS/' + name}, {'file': 'Frameworks/libmpv.2.dylib'}]}
+                with mock.patch.object(bundle.runtime, 'run', return_value='arm64\n'), \
+                        mock.patch.object(bundle.runtime, 'install', return_value=manifest) as install, \
+                        mock.patch.object(bundle.bundle_common, 'copy_licenses',
+                                          side_effect=lambda dest, *args, **kwargs: dest.mkdir()):
+                    options = {} if name == 'native' else {'executable_name': name}
+                    binary, _, _ = bundle.stage_runtime(root / 'pttstella', root / 'Contents',
+                                                        license, [], **options)
+                self.assertEqual(binary, root / 'Contents' / 'MacOS' / name)
+                self.assertEqual(install.call_args.args[1], binary)
+
+    def test_unknown_or_reused_product_executable_name_is_rejected_before_staging(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            license = root / 'LICENSE_SKIA'
+            license.write_text('synthetic license')
+            with mock.patch.object(bundle.runtime, 'run') as run:
+                with self.assertRaisesRegex(ValueError, 'Unexpected macOS executable name'):
+                    bundle.stage_runtime(root / 'x', root / 'Contents', license, [],
+                                         executable_name='../pttstella')
+                with self.assertRaisesRegex(ValueError, 'recorded as MacOS/native'):
+                    bundle.stage_runtime(root / 'x', root / 'Contents', license, [],
+                                         reuse_runtime=root / 'old', executable_name='pttstella')
+                run.assert_not_called()
+            self.assertFalse((root / 'Contents').exists())
+
     def test_existing_candidate_and_evidence_are_preserved_before_tools_run(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

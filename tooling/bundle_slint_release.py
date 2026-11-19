@@ -224,7 +224,8 @@ def macos(staging, stem, target, commit):
     contents.mkdir(parents=True)
     # Kegs without notice files take them from the same verified source archives.
     binary, arch, manifest = bundle_slint_macos.stage_runtime(executable, contents, skia_license,
-                                                              [prefix], archives)
+                                                              [prefix], archives,
+                                                              executable_name=executable.name)
     expected = 'arm64' if target == 'macos-arm64' else 'x86_64'
     if arch != expected:
         raise RuntimeError('macOS bundle architecture does not match the download name')
