@@ -171,7 +171,7 @@ pub fn start(
                 "single-line paste did not make exactly one raw handoff",
             )
             .await?;
-            ui.invoke_article_resume_reading();
+            owner.resume_reading();
             wait(|| ui.get_article_active(), "paste article did not resume").await?;
             focus(&ui, &output).await?;
             let before = connection.updates.borrow().stamp();

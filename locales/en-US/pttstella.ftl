@@ -896,7 +896,6 @@ slint-preview-image = Open full image preview
 slint-stop-requested = Stopping…
 slint-cancel-job = Cancel task
 slint-draft-color-hint = Select text, then right-click to color
-slint-resume-reading = Return to article reading
 slint-clear-selection = Clear selection
 slint-draft-position = { $row }:{ $column } · { $lines } lines
 slint-draft-busy = Draft storage is busy; try again shortly

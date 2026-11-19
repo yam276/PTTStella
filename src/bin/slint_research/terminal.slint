@@ -288,7 +288,6 @@ export component TerminalWindow inherits Window {
 
     in property <bool> article-active;
     in property <bool> article-station;
-    callback article-resume-reading;
     callback article-keyboard-mode(bool);
     in property <[ArticleTile]> article-tiles;
     in property <[InlineArrow]> inline-arrows;
@@ -918,15 +917,8 @@ export component TerminalWindow inherits Window {
             }
         }
     }
-    // Navigation controls float above the article. A newly focused author can
-    // make navigation available; that must not resize the reading grid.
-    PanelButton {
-        visible:root.reply-navigation-available && !root.reply-navigation-open;
-        x:12px;y:12px;width:min(180px,root.width - 24px);height:32px;
-        text:UiLabels.reply-title;
-        enabled:!root.reply-navigation-opening-blocked && root.reply-navigation-ready;
-        clicked=>{root.reply-navigation-action(0);}
-    }
+    // Reply navigation opens from the context menu or floating tools and
+    // floats above the article, so it never resizes the reading grid.
     Rectangle {
         visible:root.reply-navigation-open;
         x:12px;y:12px;width:min(760px,root.width - 24px);
@@ -940,13 +932,6 @@ export component TerminalWindow inherits Window {
             groups:root.reply-navigation-groups;group:root.reply-navigation-group;count:root.reply-navigation-count;
             action(code)=>{root.reply-navigation-action(code);}
         }
-    }
-    PanelButton {
-        visible:root.article-station;
-        x:12px;y:root.height - self.height - 12px;
-        width:min(240px,root.width - 24px);height:32px;
-        text:UiLabels.resume-reading; icon:LucideIcons.arrow-left;
-        clicked=>{root.article-resume-reading();}
     }
     status-panel := Rectangle {
         visible: root.shell-status-visible;
@@ -1067,7 +1052,7 @@ export component TerminalWindow inherits Window {
                 || root.article-updates-visible);
         x: root.width - self.width - 12px;
         y: root.shell-status-visible ? status-panel.y + status-panel.height + 8px : 12px;
-        width: min(430px, root.width - (root.reply-navigation-available ? 216px : 24px));
+        width: min(430px, root.width - 24px);
         height: reading-controls.preferred-height;
         background: #0c1c30;
         border-color: #786640;

@@ -890,7 +890,6 @@ slint-preview-image = 開啟完整圖片預覽
 slint-stop-requested = 停止中…
 slint-cancel-job = 取消工作
 slint-draft-color-hint = 選取後按右鍵上色
-slint-resume-reading = 返回網頁閱讀
 slint-clear-selection = 清除選取
 slint-draft-position = { $row }:{ $column } · { $lines } 行
 slint-draft-busy = 草稿工作忙碌，請稍後再試

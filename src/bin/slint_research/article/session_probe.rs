@@ -335,7 +335,7 @@ pub fn start(
                     "hidden article emitted a stale raster error",
                 )?;
                 verification::capture(&ui, &directory, "raw-station.png")?;
-                ui.invoke_article_resume_reading();
+                owner.resume_reading();
                 require(
                     !ui.get_article_station(),
                     "explicit reading restore stayed in raw mode",

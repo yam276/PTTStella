@@ -198,10 +198,6 @@ impl ArticleSession {
             let owner = owner.clone();
             move || owner.notify.notify_one()
         });
-        ui.on_article_resume_reading({
-            let owner = owner.clone();
-            move || owner.resume_reading()
-        });
         ui.on_article_keyboard_mode({
             let owner = owner.clone();
             move |raw| {

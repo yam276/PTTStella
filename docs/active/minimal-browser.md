@@ -1,5 +1,9 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-19 移除文章浮動按鈕
+
+依使用者回報礙眼，Slint 文章畫面移除左上「推文定位」與左下「返回網頁閱讀」兩個浮動按鈕。推文定位仍由文章空白右鍵與浮球開啟，展開後的定位列不變；原始輸入切到站端畫面後不再提供浮動返回，需離開文章再進入，Vim `i` 進入的原始輸入仍以 Escape 返回。對應的 UI callback、標籤與 `slint-resume-reading` 字串一併移除，探針改呼叫同一 `ArticleSession::resume_reading`。Clippy、509 個 lib／Slint 測試及 article input、paste、reply navigation、product shell 探針通過；未在實站與已安裝 App 上操作。
+
 ## 2026-11-18 Slint 發佈流程與 GPL 授權
 
 使用者決定 PTTStella 改以 GPL-3.0-or-later 授權，並把 `Desktop Release` 改為打包 Slint 版：macOS 內附 Homebrew libmpv 閉包，Windows 使用固定雜湊的 mpv 官方 LGPL DLL 與 app-local Visual C++ runtime、Setup 沿用原 AppId 且不需 WebView2，Linux 依賴系統 libmpv2；各平台另發佈 `-sources.tar`。verify run 44310874774 在四架構通過並產出完整下載集；安裝、升級、回退與實際啟動仍待各平台驗收，細節見[發佈流程](../releases.md#2026-11-18-slint-入口切換與發佈封鎖)。

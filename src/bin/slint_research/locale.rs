@@ -34,7 +34,6 @@ pub fn refresh(ui: &TerminalWindow) {
     ui.set_sites_label(msg!("sites-title").into());
     let labels = ui.global::<UiLabels>();
     labels.set_updates_station(msg!("article-updates-station").into());
-    labels.set_reply_title(msg!("reply-navigation-title").into());
     labels.set_reply_author(msg!("reply-navigation-author").into());
     labels.set_reply_mine(msg!("reply-navigation-mine").into());
     labels.set_reply_both(msg!("reply-navigation-both").into());
@@ -62,7 +61,6 @@ pub fn refresh(ui: &TerminalWindow) {
     labels.set_bookmark_capture(msg!("bookmarks-list-loading").into());
     labels.set_next_section(msg!("article-load-next-segment").into());
     labels.set_resume_load(msg!("article-load-resume").into());
-    labels.set_resume_reading(msg!("slint-resume-reading").into());
     labels.set_connect(msg!("connect").into());
     labels.set_reconnect(msg!("toast-reconnect").into());
     labels.set_execute(msg!("slint-execute").into());
