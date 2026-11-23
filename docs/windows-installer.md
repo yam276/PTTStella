@@ -1,8 +1,15 @@
-# Windows 安裝版、免安裝版與 WebView2
+# Windows 安裝版與免安裝版
 
-2026-11-18 起 `develop` 的 Windows Release 改為 Slint 版：Setup 沿用 AppId `io.github.yam276.pttstella` 與 `%LOCALAPPDATA%\Programs\PTTStella` 原地升級，不再偵測或安裝 WebView2；免安裝版改為 `-portable.zip`，解壓後執行 `pttstella.exe`，旁邊需保留 `libmpv-2.dll` 與 Visual C++ runtime DLL。以下 WebView2 與單一 EXE 的說明適用 0.4.1 及更早的 Dioxus 版。
+自 0.5.0 起 Windows 版改用 Slint 介面，不需要 WebView2。Windows x64 Release 提供兩種產品下載，擇一使用：
 
-Windows x64 Release 提供兩種產品下載，擇一使用：
+- `PTTStella-<version>-windows-x64-setup.exe`：安裝、捷徑與解除安裝。沿用 AppId `io.github.yam276.pttstella` 與 `%LOCALAPPDATA%\Programs\PTTStella`，可直接覆蓋 0.4.x 原地升級；不再偵測或安裝 WebView2。
+- `PTTStella-<version>-windows-x64-portable.zip`：解壓縮後執行 `pttstella.exe`，旁邊需保留 `libmpv-2.dll` 與 Visual C++ runtime DLL。
+
+另附校驗碼、來源 manifest 與 `-sources.tar` 供驗證。影片播放使用內附的 mpv v0.42.0 官方 LGPL DLL。Windows 10／11 x64 為目標，ARM 與其他 Windows 版本未納入此交付。
+
+## 0.4.2 及更早（Dioxus 版）
+
+以下 WebView2 與單一 EXE 的說明適用 0.4.2 及更早的 Dioxus 版。Windows x64 Release 提供兩種產品下載，擇一使用：
 
 - `PTTStella-<version>-windows-x64-setup.exe`：安裝、捷徑與解除安裝，偵測／補裝缺少的 Microsoft Edge WebView2 Evergreen Runtime。
 - `PTTStella-<version>-windows-x64-portable.exe`：免安裝直接開啟，無需外帶 CRT DLL 或 Assets 目錄；電腦須已有 WebView2，不會自行安裝 Runtime。
