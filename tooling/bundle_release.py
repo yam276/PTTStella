@@ -124,6 +124,26 @@ def linux_package(staging, stem, version):
                             'depends': depends, 'libraries': libraries, 'signed': False}
 
 
+def macos_disk_image(app, image):
+    applications = Path('/Applications')
+    (app.parent/'Applications').symlink_to(applications)
+    run('hdiutil', 'create', '-volname', 'PTTStella', '-fs', 'HFS+', '-format', 'UDZO',
+        '-srcfolder', str(app.parent), str(image))
+    run('hdiutil', 'verify', str(image))
+
+    mount = image.parent/'mounted-dmg'
+    mount.mkdir()
+    run('hdiutil', 'attach', '-readonly', '-nobrowse', '-noautoopen',
+        '-mountpoint', str(mount), str(image))
+    try:
+        shortcut = mount/'Applications'
+        if not shortcut.is_symlink() or shortcut.readlink() != applications:
+            raise RuntimeError('macOS disk image is missing the /Applications shortcut')
+        run('codesign', '--verify', '--deep', '--strict', str(mount/app.name))
+    finally:
+        run('hdiutil', 'detach', str(mount))
+
+
 def macos_package(staging, stem, target):
     result = bundle_macos.bundle(staging/'app')
     expected = 'arm64' if target == 'macos-arm64' else 'x86_64'
@@ -137,8 +157,10 @@ def macos_package(staging, stem, target):
     run('codesign', '--verify', '--deep', '--strict', str(app))
     archive = staging/(stem+'.zip')
     run('ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(app), str(archive))
-    return [archive], {'signing': 'ad_hoc', 'notarized': False,
-                        'runtime': 'macOS on '+expected}
+    image = staging/(stem+'.dmg')
+    macos_disk_image(app, image)
+    return [archive, image], {'signing': 'ad_hoc', 'notarized': False,
+                              'runtime': 'macOS on '+expected}
 
 
 def bundle(output):

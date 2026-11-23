@@ -53,6 +53,14 @@ async fn retained_wait<T>(
     }
 }
 
+/// Switch Dioxus's NativeInterpreter out of requestAnimationFrame mode and
+/// acknowledge any pending edit batch before/while the native window hides.
+pub(super) const FLUSH_INTERPRETER_EDITS: &str = "if (window.interpreter) { window.interpreter.headless = true; if (Array.isArray(window.interpreter.queuedBytes) && window.interpreter.queuedBytes.length > 0) { window.interpreter.flushQueuedBytes(); window.interpreter.markEditsFinished(); } }";
+
+pub(super) fn flush_hidden_window_edits(window: &dioxus::desktop::DesktopContext) {
+    let _ = window.webview.evaluate_script(FLUSH_INTERPRETER_EDITS);
+}
+
 /// A static WebView control command with explicit execution acknowledgement.
 /// Unlike another short-lived document::eval, it cannot lose its own result to GC.
 async fn control(script: &'static str) -> Result<(), String> {
@@ -78,7 +86,9 @@ async fn control(script: &'static str) -> Result<(), String> {
 async fn renderer(mut eval: document::Eval) -> Result<RendererFinished, String> {
     let _ = eval.send(Packet::Stop);
     // Native callbacks have no Eval/FinalizationRegistry lifetime of their own.
-    let interrupt = control("window.dispatchEvent(new Event('pttstella:stop')); true;");
+    let interrupt = control(
+        "if (window.interpreter) { window.interpreter.headless = true; if (Array.isArray(window.interpreter.queuedBytes) && window.interpreter.queuedBytes.length > 0) { window.interpreter.flushQueuedBytes(); window.interpreter.markEditsFinished(); } } window.dispatchEvent(new Event('pttstella:stop')); true;",
+    );
     let (interrupted, finished) = tokio::join!(interrupt, async {
         let joined = eval.join::<RendererFinished>();
         tokio::pin!(joined);
@@ -190,7 +200,10 @@ impl Resources {
         let drafts = self.drafts.finish(draft).await;
         let settings = retained_wait(
             self.settings.finish(snapshot),
-            || message.set(pttstella::msg!("cleanup-wait")),
+            || {
+                message.set(pttstella::msg!("cleanup-wait"));
+                dioxus::desktop::window().set_visible(true);
+            },
             Duration::from_secs(5),
         )
         .await;

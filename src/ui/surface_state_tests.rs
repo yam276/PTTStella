@@ -132,6 +132,42 @@ fn cached_history_is_an_acknowledged_filtered_projection_with_its_own_link_indic
 }
 
 #[test]
+fn automatic_inline_images_follow_the_acknowledged_article_and_cancel_when_disabled() {
+    use super::super::inline_images::{InlineImages, Target};
+    let origin = Some("http://127.0.0.1:1234");
+    let mut state = SurfaceState::new(filters::Rules::default());
+    let mut view = view();
+    let mut screen = Screen::new(80, 24).unwrap();
+    screen.feed(&super::super::probe::surface_sample(Some("inline_pages"), true, origin).unwrap());
+    view.frame = screen.frame();
+    let first = displayed(&mut state, &view);
+    let mut images = InlineImages::default();
+    let paint = state.inline_page(first, view.stamp(), &view).unwrap();
+    assert!(images.follow(paint).unwrap().is_none());
+    assert!(!images.set_auto_expand(true));
+    let opened = images.follow(paint).unwrap().unwrap();
+    assert_eq!(opened.entries.len(), 2);
+    assert!(images.follow(paint).unwrap().is_none());
+
+    state.article_input(&view, b"\x1b[6~");
+    screen.feed(&super::super::probe::inline_second_page(origin).unwrap());
+    view.frame = screen.frame();
+    state.update(&view);
+    assert!(state.inline_page(first, view.stamp(), &view).is_none());
+    let fresh = displayed(&mut state, &view);
+    let paint = state.inline_page(fresh, view.stamp(), &view).unwrap();
+    let followed = images.follow(paint).unwrap().unwrap();
+    assert_eq!(followed.batch, opened.batch);
+    assert_eq!(followed.entries.len(), 3);
+    assert_eq!(followed.entries[0].key, opened.entries[0].key);
+    assert!(images.set_auto_expand(false));
+    assert!(images.batch().is_none());
+    assert!(images.follow(paint).unwrap().is_none());
+    assert!(images.open(paint, Target::All).unwrap().is_some());
+    assert!(!images.set_auto_expand(false));
+}
+
+#[test]
 fn retained_frame_cannot_authorize_interactions_during_an_output_batch() {
     let mut state = SurfaceState::new(filters::Rules::default());
     let mut view = view();

@@ -19,6 +19,10 @@ test('article loading controls expose progress, cancel and resume only for the m
     for(const state of ['limit','changed']){
         c.latest.article.load=state;c.refreshArticleLoad();assert.equal(c.articleLoad.hidden,false);assert.equal(c.articleLoadResume.hidden,true);
     }
+    c.latest.article.load='limit';c.latest.article.next_segment=true;c.refreshArticleLoad();
+    assert.equal(c.articleLoadResume.hidden,false);
+    assert.equal(c.articleLoadResume.textContent,'article-load-next-segment:');
+    c.latest.article.next_segment=false;
     c.latest.article.load='complete';c.refreshArticleLoad();assert.equal(c.articleLoad.hidden,true);
     c.latest.article=null;c.refreshArticleLoad();assert.equal(c.articleLoad.hidden,true);
 });
@@ -116,6 +120,16 @@ test("one boundary PageDown completes locally after response and navigation resu
         c.resumeReadingMove();assert.equal(c.viewport.scrollTop,976);assert.equal(sent.length,1,"no repeated station fetch");
         assert.equal(c.pendingReadingMove,null);
     }
+});
+test("PageDown at a full reading segment continues the web view through the existing load control",()=>{
+    const {c,sent}=continuationEnvironment();
+    c.latest.article.load="limit";c.latest.article.next_segment=true;
+    c.changeArticleLoad=(event,resume)=>sent.push([event.isTrusted,resume]);
+    c.viewport.scrollTop=100;c.readingMove({action:"next_page"},{isTrusted:true});
+    assert.equal(sent.length,0,"finish the current segment before requesting the next one");
+    c.viewport.scrollTop=600;c.readingMove({action:"next_page"},{isTrusted:true});
+    assert.deepEqual(sent,[[true,true]]);
+    assert.equal(c.pendingReadingMove,null,"the segment handoff never queues station navigation");
 });
 test("a delayed page never scrolls another article, a revoked load or an intervening user position",()=>{
     for(const reason of ["generation","article","disconnect","changed","limit","scroll","opposite"]){

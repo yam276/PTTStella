@@ -670,6 +670,27 @@ impl SurfaceState {
         {
             return false;
         }
+        if resume
+            && !view.input_pending
+            && !view.output_pending
+            && !view.login_pending
+            && view.frame.control_complete
+            && !matches!(
+                view.destination,
+                pttstella::navigation_job::Progress::Active { .. }
+            )
+            && self.article.advance_segment(
+                id,
+                view.generation,
+                &view.context(),
+                view.frame.revision,
+            )
+        {
+            self.focus_changed();
+            self.captured = None;
+            self.capture_reading(view);
+            return true;
+        }
         let changed = self.article.load_action(id, resume);
         self.dirty |= changed;
         changed

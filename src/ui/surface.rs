@@ -124,7 +124,9 @@ pub(super) async fn surface(
         diagnostics,
     )
     .await;
-    pending_paste.set(None);
+    if pending_paste.peek().is_some() {
+        pending_paste.set(None);
+    }
     // Every exit, including preflight, decoding and send errors, joins the same
     // owners. No branch can bypass renderer or credential cleanup.
     let cleanup = resources.finish(&connection, message).await;
@@ -440,6 +442,10 @@ async fn run(
             }
         }
         screen.set_article_boundary_navigation(preferences.app().article_boundary_navigation);
+        if inline_images.set_auto_expand(preferences.app().auto_expand_images) {
+            eval.send(Packet::InlineReset(true))
+                .map_err(|e| e.to_string())?;
+        }
         if screen.set_article_mode(if window_probe || filters_probe {
             pttstella::settings::ArticleMode::Terminal
         } else {
@@ -1697,7 +1703,9 @@ async fn run(
                                 .read()
                                 .as_ref()
                                 .is_some_and(|p| p.prepared.text == "A\nB");
-                        pending_paste.set(None);
+                        if pending_paste.peek().is_some() {
+                            pending_paste.set(None);
+                        }
                         eval.send(Packet::PasteResult(Feedback::quiet(PasteStatus::Cancelled)))
                             .map_err(|e| e.to_string())?;
                     }
@@ -2002,10 +2010,18 @@ async fn run(
                     media_preview.close();
                     eval.send(Packet::MediaReset).map_err(|e| e.to_string())?;
                 }
-                if view.phase != Phase::Connected || pending_paste.read().as_ref().is_some_and(|p| p.generation != view.generation) {
+                if (view.phase != Phase::Connected
+                    || pending_paste
+                        .peek()
+                        .as_ref()
+                        .is_some_and(|p| p.generation != view.generation))
+                    && pending_paste.peek().is_some()
+                {
                     pending_paste.set(None);
                 }
-                phase.set(view.phase);
+                if *phase.peek() != view.phase {
+                    phase.set(view.phase);
+                }
                 if last_status != view.message {
                     last_status = view.message.clone(); message.set(view.message);
                 }

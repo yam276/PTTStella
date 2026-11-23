@@ -8,7 +8,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub const MAX_BYTES: usize = 8 * 1024 * 1024;
+const MAX_BYTES: usize = 8 * 1024 * 1024;
+const MAX_GIF_BYTES: usize = 24 * 1024 * 1024;
 const CACHE_BYTES: usize = 24 * 1024 * 1024;
 const CACHE_ENTRIES: usize = 8;
 const CACHE_TTL: Duration = Duration::from_secs(300);
@@ -147,10 +148,8 @@ impl Loader {
             if !response.status().is_success() {
                 return Err(Error::Http(response.status().as_u16()));
             }
-            if response
-                .content_length()
-                .is_some_and(|length| length > MAX_BYTES as u64)
-            {
+            let content_length = response.content_length();
+            if content_length.is_some_and(|length| length > MAX_GIF_BYTES as u64) {
                 return Err(Error::TooLarge);
             }
             let ttl = cache_ttl(response.headers());
@@ -158,10 +157,17 @@ impl Loader {
             let mut bytes = Vec::new();
             while let Some(chunk) = stream.next().await {
                 let chunk = chunk.map_err(network_error)?;
-                if chunk.len() > MAX_BYTES - bytes.len() {
+                if chunk.len() > MAX_GIF_BYTES - bytes.len() {
                     return Err(Error::TooLarge);
                 }
                 bytes.extend_from_slice(&chunk);
+                if bytes.len() >= 6
+                    && !gif_signature(&bytes)
+                    && (bytes.len() > MAX_BYTES
+                        || content_length.is_some_and(|length| length > MAX_BYTES as u64))
+                {
+                    return Err(Error::TooLarge);
+                }
             }
             let image = Arc::new(inspect(bytes)?);
             Ok(Loaded {
@@ -236,20 +242,40 @@ fn cache_ttl(headers: &header::HeaderMap) -> Duration {
         .and_then(|value| value.parse::<u64>().ok());
     ttl.saturating_sub(Duration::from_secs(age.unwrap_or(0)))
 }
+fn gif_signature(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a")
+}
+
+pub fn max_image_bytes(mime: &str) -> usize {
+    if mime == "image/gif" {
+        MAX_GIF_BYTES
+    } else {
+        MAX_BYTES
+    }
+}
+
 fn inspect(bytes: Vec<u8>) -> Result<Image, Error> {
     let mime = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
         "image/png"
     } else if bytes.starts_with(b"\xff\xd8\xff") {
         "image/jpeg"
-    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+    } else if gif_signature(&bytes) {
         "image/gif"
     } else if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") {
         "image/webp"
     } else {
         return Err(Error::Format);
     };
+    if bytes.len() > max_image_bytes(mime) {
+        return Err(Error::TooLarge);
+    }
     let dimensions = imagesize::blob_size(&bytes).map_err(|_| Error::Format)?;
     let frames = frame_count(&bytes, mime)?;
+    let animation_limit = if mime == "image/gif" {
+        134_217_728
+    } else {
+        67_108_864
+    };
     if dimensions.width == 0
         || dimensions.height == 0
         || dimensions.width > 8192
@@ -259,7 +285,7 @@ fn inspect(bytes: Vec<u8>) -> Result<Image, Error> {
             .width
             .saturating_mul(dimensions.height)
             .saturating_mul(frames)
-            > 67_108_864
+            > animation_limit
     {
         return Err(Error::Dimensions);
     }
@@ -297,7 +323,7 @@ fn frame_count(bytes: &[u8], mime: &str) -> Result<usize, Error> {
                 Some(0x21) => at += 2,
                 Some(0x2c) => {
                     frames += 1;
-                    if frames > 256 {
+                    if frames > 512 {
                         return Err(Error::Dimensions);
                     }
                     let packed = *bytes.get(at + 9).ok_or(Error::Format)?;

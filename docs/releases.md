@@ -31,11 +31,13 @@
 | 平台 | Runner | 下載 |
 | --- | --- | --- |
 | Windows x64 | `windows-2025` | Setup `.exe` 與免安裝 `-portable.exe`；兩者內嵌 CRT／資產／授權，Setup 可補裝 WebView2 |
-| macOS Apple Silicon | `macos-15` | 包含 `.app` 的 ZIP |
-| macOS Intel | `macos-15-intel` | 包含 `.app` 的 ZIP |
+| macOS Apple Silicon | `macos-15` | 拖曳安裝 DMG、包含 `.app` 的 ZIP |
+| macOS Intel | `macos-15-intel` | 拖曳安裝 DMG、包含 `.app` 的 ZIP |
 | Linux x64 | `ubuntu-24.04` | `.deb` 與 `.tar.gz` |
 
-每個架構有來源 manifest，列出 commit、profile、相依環境及下載檔 SHA-256；公開 Release 的 `SHA256SUMS` 只涵蓋六個平台下載；manifest 及其逐檔校驗保留在 Actions artifacts，不公開附加。下載採完整白名單核對，任何缺檔、混入額外檔案、來源不符、dirty checkout 或雜湊不符均禁止發佈。授權資料從同一 locked Cargo dependency graph 收集。Linux `.deb` 以 `dpkg-shlibdeps` 讀取實際 ELF 依賴；不是通用靜態 Linux 程式，使用方式見 [Linux 套件說明](linux-package.txt)。
+每個架構有來源 manifest，列出 commit、profile、相依環境及下載檔 SHA-256；公開 Release 的 `SHA256SUMS` 涵蓋八個平台下載。Manifest 及其逐檔校驗保留在 Actions artifacts。下載採完整白名單核對，任何缺檔、混入額外檔案、來源不符、dirty checkout 或雜湊不符均禁止發佈。授權資料從同一 locked Cargo dependency graph 收集。Linux `.deb` 以 `dpkg-shlibdeps` 讀取實際 ELF 依賴，使用方式見 [Linux 套件說明](linux-package.txt)。
+
+macOS DMG 和 ZIP 使用同一個已簽章的 App。打包器會驗證磁碟映像，唯讀掛載後確認「應用程式」捷徑指向 `/Applications` 並驗證 App 簽章，卸載成功後才交付兩種檔案。安裝步驟見 [macOS 發佈說明](macos-release.txt)。
 
 所有 runner 執行 Python 打包／政策測試、docs、JS、core、desktop lib／bin、多程序保存整合測試與 desktop Clippy，再以 release profile 編譯。Windows／macOS 沿用原生打包驗證，Linux 核對 ELF／系統 shared libraries／Debian metadata。CI 不啟動產品連線，不把無 GUI 的單元與打包測試當成原生輸入、像素、IME 或實站登入驗收。
 
@@ -131,3 +133,11 @@ main保持正式 `0.4.0`，develop整合main後同步版本、README與徽章為
 ## 暫停 0.4.1（2026-11-05）
 
 Release PR #8 及四架構驗證 [41978240650](https://github.com/yam276/PTTStella/actions/runs/41978240650) 通過。Windows 認證管理員和 Linux Secret Service 原生測試各自成功，六個驗證下載的來源與 SHA-256 均已核對。PR 合併後收到暫停要求，正式 [41980332119](https://github.com/yam276/PTTStella/actions/runs/41980332119) 已取消。main 指向 `4866476843c45dfedb08067381eb42f52c654633`，未建立 0.4.1 的 tag 或 Release，公開最新版本是 0.4.0。SSH／WSS 開發留在 develop。
+
+## 0.4.1 發佈結果（2026-11-05）
+
+使用者明確要求恢復 0.4.1 並納入 SSH／WSS 與系統密碼庫。前一版候選已合併但未公開，使用原 main 提交與已取消工作 41980332119 的紀錄執行同版號恢復。PR 檢查確認沒有既有標籤或 Release，正式工作再次核對取消紀錄。新增兩項政策測試，包含錯誤來源、錯誤執行狀態、既有發佈與同一草稿重試。Python 84 項、actionlint 1.7.12、fmt 及 docs 通過。
+
+Release PR [#9](https://github.com/yam276/PTTStella/pull/9) 與四架構驗證 [41987004705](https://github.com/yam276/PTTStella/actions/runs/41987004705) 通過。合併提交 `e304be283a4ad12772145c22da4cfc9eca4277b5` 與候選的 Git tree 一致。正式 [41989683683](https://github.com/yam276/PTTStella/actions/runs/41989683683) 的 SSH、原生密碼庫、各架構測試與打包、publisher 均成功。公開 [v0.4.1](https://github.com/yam276/PTTStella/releases/tag/v0.4.1) 是 Latest 正式版，tag 指向該合併提交。
+
+驗證與正式工作各自使用原始產物核對版本、來源、四份 manifest 和逐檔 SHA-256。公開六個套件與 `SHA256SUMS` 的檔案大小、GitHub digest 和校驗清單與正式產物一致，公開說明使用該版中英文件。Manifest 留在 Actions。驗證下載副本已刪除，記錄位於 `.local/verification/release-041-resumed-20261105/verify-artifacts-audit.json`。正式下載和唯一證據保留。main 保持 0.4.1，develop 整合 main 後恢復 0.5.0-dev.3。

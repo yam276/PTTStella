@@ -254,6 +254,7 @@ pub fn app(props: AppProps) -> Element {
             }
         );
         if close_requested {
+            super::lifecycle::flush_hidden_window_edits(&dioxus::desktop::window());
             close_sender.send_replace(true);
         }
     });
@@ -305,6 +306,9 @@ pub fn app(props: AppProps) -> Element {
                         window.close();
                     }
                 } else {
+                    if let Some(window) = main_window.upgrade() {
+                        super::lifecycle::flush_hidden_window_edits(&window);
+                    }
                     close_sender.send_replace(true);
                 }
             }
@@ -1052,6 +1056,11 @@ pub(super) fn SettingsForm(filters_probe: bool) -> Element {
                             }
                         }
                         p {class:"settings-help",{pttstella::msg!("article-mode-help")}}
+                        label { class:"settings-check",
+                            input { id:"auto-expand-images", r#type:"checkbox", "aria-describedby":"auto-expand-images-help" }
+                            span { {pttstella::msg!("auto-expand-images")} }
+                        }
+                        p {id:"auto-expand-images-help",class:"settings-help",{pttstella::msg!("auto-expand-images-help")}}
                         label { class:"settings-check",
                             input { id:"article-boundary-navigation", r#type:"checkbox" }
                             span { {pttstella::msg!("article-boundary-navigation")} }

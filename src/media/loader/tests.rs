@@ -27,7 +27,14 @@ fn inspect_and_cache_have_independent_resource_limits() {
         .position(|bytes| bytes == b"\x21\xf9\x04\x04")
         .unwrap();
     let mut many = GIF[..first].to_vec();
-    for _ in 0..129 {
+    for _ in 0..256 {
+        many.extend_from_slice(&GIF[first..GIF.len() - 1]);
+    }
+    many.push(0x3b);
+    assert_eq!(frame_count(&many, "image/gif"), Ok(512));
+    assert!(inspect(many).unwrap().animated_format);
+    let mut many = GIF[..first].to_vec();
+    for _ in 0..257 {
         many.extend_from_slice(&GIF[first..GIF.len() - 1]);
     }
     many.push(0x3b);
@@ -131,7 +138,13 @@ async fn production_http_loader_cache_redirect_format_and_stream_capacity() {
                 "/image.png" => (format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nCache-Control: max-age=60\r\nConnection: close\r\n\r\n", PNG.len()), PNG.to_vec()),
                 "/no.png" => (format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n", PNG.len()), PNG.to_vec()),
                 "/bad.png" => ("HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\n".to_owned(), b"html".to_vec()),
-                "/huge.png" => (format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", MAX_BYTES+1), Vec::new()),
+                "/huge.png" => (format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", MAX_BYTES+1), PNG[..8].to_vec()),
+                "/huge.gif" => (format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", MAX_GIF_BYTES+1), Vec::new()),
+                "/large.png" => {
+                    let mut body = GIF.to_vec();
+                    body.resize(MAX_BYTES+1, 0);
+                    (format!("HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()), body)
+                },
                 "/redirect.png" => ("HTTP/1.1 302 Found\r\nLocation: /image.png\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_owned(), Vec::new()),
                 "/loop.png" => ("HTTP/1.1 302 Found\r\nLocation: /loop.png\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_owned(), Vec::new()),
                 "/chunk.png" => {
@@ -169,6 +182,7 @@ async fn production_http_loader_cache_redirect_format_and_stream_capacity() {
     for (path, expected) in [
         ("bad.png", Error::Format),
         ("huge.png", Error::TooLarge),
+        ("huge.gif", Error::TooLarge),
         ("chunk.png", Error::TooLarge),
         ("missing.png", Error::Http(404)),
     ] {
@@ -187,6 +201,9 @@ async fn production_http_loader_cache_redirect_format_and_stream_capacity() {
         PNG
     );
     assert!(loader.load(&format!("{origin}/loop.png")).await.is_err());
+    let large = loader.load(&format!("{origin}/large.png")).await.unwrap();
+    assert_eq!(large.image.mime, "image/gif");
+    assert_eq!(large.image.bytes.len(), MAX_BYTES + 1);
     server.abort();
     assert!(server.await.unwrap_err().is_cancelled());
 }

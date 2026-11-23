@@ -11,10 +11,13 @@ test('both UI languages find independently expected Chinese, English, case and m
    assert.ok(searchSettings(index,query).some(entry=>entry.id===id),language+' '+query);
   }
   assert.equal(searchSettings(index,'').length,0);assert.equal(searchSettings(index,'PTTStellaPassword123').length,0);
+  for(const query of ['自動開圖','auto expand images']){
+   assert.ok(searchSettings(index,query).some(entry=>entry.id==='auto-expand-images'&&entry.page==='media'));
+  }
  }
 });
 test('settings search contains only the fixed product index and closed navigation targets',()=>{
- const entries=settingsCatalog(translator('en-US'));assert.equal(entries.length,23);
+ const entries=settingsCatalog(translator('en-US'));assert.equal(entries.length,24);
  assert.ok(entries.every(entry=>['general','appearance','input','media','sites','filters','account','about'].includes(entry.page)));
  assert.equal(searchSettings(entries,'<img src=x onerror=alert(1)>').length,0);
  assert.equal(searchSettings(entries,'x'.repeat(10000)).length,0);
