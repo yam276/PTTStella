@@ -268,6 +268,7 @@ pub fn app(props: AppProps) -> Element {
             }
         );
         if close_requested {
+            super::lifecycle::flush_hidden_window_edits(&dioxus::desktop::window());
             close_sender.send_replace(true);
         }
     });
@@ -319,6 +320,9 @@ pub fn app(props: AppProps) -> Element {
                         window.close();
                     }
                 } else {
+                    if let Some(window) = main_window.upgrade() {
+                        super::lifecycle::flush_hidden_window_edits(&window);
+                    }
                     close_sender.send_replace(true);
                 }
             }
