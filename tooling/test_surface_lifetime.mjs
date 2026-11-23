@@ -103,6 +103,110 @@ test("twenty thousand packets do not accumulate reactions on an unresolved stop 
     lifetime.release();assert.equal(target.count,0);
 });
 
+test("hidden or stopping windows flush Dioxus NativeInterpreter edits without waiting for suspended requestAnimationFrame",async()=>{
+    class FakeInterpreter {
+        headless=false;
+        queuedBytes=[];
+        applied=[];
+        acks=0;
+        enqueueBytes(bytes){this.queuedBytes.push(bytes);}
+        flushQueuedBytes(){
+            const batch=this.queuedBytes;
+            this.queuedBytes=[];
+            for(const bytes of batch)this.run_from_bytes(bytes);
+        }
+        run_from_bytes(bytes){this.applied.push(bytes);}
+        markEditsFinished(){this.acks++;}
+        rafEdits(bytes){
+            if(this.headless){
+                this.run_from_bytes(bytes);
+                this.markEditsFinished();
+            } else {
+                this.enqueueBytes(bytes);
+                throw new Error("unpatched rafEdits would wait for requestAnimationFrame");
+            }
+        }
+    }
+    const doc=new Target();
+    doc.hidden=false;
+    doc.visibilityState="visible";
+    const target=new Target();
+    const rafQueue=[];
+    const timers=new Map();
+    let nextTimer=1;
+    target.document=doc;
+    target.requestAnimationFrame=callback=>{rafQueue.push(callback);return rafQueue.length;};
+    target.setTimeout=(callback,ms)=>{const id=nextTimer++;timers.set(id,{callback,ms});return id;};
+    target.clearTimeout=id=>{timers.delete(id);};
+    target.interpreter=new FakeInterpreter();
+
+    const lifetime=create({recv(){return new Promise(()=>{});}},target);
+
+    // 1. Visible edit schedules rAF + fallback timer; if Wayland suspends rAF when
+    // WindowHides unmaps the window before visibilityState flips, fallback flushes once.
+    target.interpreter.rafEdits("edit-before-hide");
+    assert.deepEqual(target.interpreter.applied,[]);
+    assert.equal(target.interpreter.acks,0);
+    assert.equal(timers.size,1);
+    const [,fallback]=timers.entries().next().value;
+    fallback.callback();
+    assert.deepEqual(target.interpreter.applied,["edit-before-hide"]);
+    assert.equal(target.interpreter.acks,1);
+    assert.equal(timers.size,0);
+    // A late rAF after fallback must not send a duplicate 0-byte WebSocket ack.
+    rafQueue.shift()();
+    assert.equal(target.interpreter.acks,1);
+
+    // 2. Edit in-flight when visibilitychange reports hidden flushes immediately.
+    target.interpreter.rafEdits("edit-on-hide");
+    assert.equal(target.interpreter.acks,1);
+    doc.hidden=true;
+    doc.visibilityState="hidden";
+    doc.dispatchEvent(new Event("visibilitychange"));
+    assert.deepEqual(target.interpreter.applied,["edit-before-hide","edit-on-hide"]);
+    assert.equal(target.interpreter.acks,2);
+    assert.equal(timers.size,0);
+
+    // 3. Rust CloseRequested / renderer stop pre-flush switches headless=true and
+    // acknowledges once; a subsequent pttstella:stop must not double-acknowledge.
+    const lifecycleRust=readFileSync(new URL("../src/ui/lifecycle.rs",import.meta.url),"utf8");
+    const rustFlushMatch=lifecycleRust.match(/FLUSH_INTERPRETER_EDITS:\s*&str\s*=\s*"([^"]+)"/);
+    assert.ok(rustFlushMatch,"Rust lifecycle must define FLUSH_INTERPRETER_EDITS");
+    doc.hidden=false;
+    doc.visibilityState="visible";
+    target.interpreter.rafEdits("in-flight-at-close-requested");
+    assert.equal(target.interpreter.acks,2);
+    vm.runInNewContext(rustFlushMatch[1],{window:target});
+    assert.equal(target.interpreter.headless,true);
+    assert.deepEqual(target.interpreter.applied,["edit-before-hide","edit-on-hide","in-flight-at-close-requested"]);
+    assert.equal(target.interpreter.acks,3);
+    // Re-running the Rust flush when queuedBytes is empty is a no-op.
+    vm.runInNewContext(rustFlushMatch[1],{window:target});
+    assert.equal(target.interpreter.acks,3);
+
+    // 4. Edits sent while hidden or after headless=true / pttstella:stop flush synchronously (0ms).
+    target.interpreter.rafEdits("closing-signal-edit");
+    assert.deepEqual(target.interpreter.applied,["edit-before-hide","edit-on-hide","in-flight-at-close-requested","closing-signal-edit"]);
+    assert.equal(target.interpreter.acks,4);
+
+    target.interpreter.headless=false;
+    target.interpreter.rafEdits("in-flight-at-stop");
+    assert.equal(target.interpreter.acks,4);
+    target.dispatchEvent(new Event("pttstella:stop"));
+    assert.equal(target.interpreter.headless,true);
+    assert.deepEqual(target.interpreter.applied,["edit-before-hide","edit-on-hide","in-flight-at-close-requested","closing-signal-edit","in-flight-at-stop"]);
+    assert.equal(target.interpreter.acks,5);
+
+    lifetime.release();
+    assert.equal(target.count,0);
+    assert.equal(doc.count,0);
+    assert.equal(timers.size,0);
+    // Post-release edits (e.g. overdue cleanup toast or fatal reopen) still use headless synchronous flush.
+    target.interpreter.rafEdits("post-release-edit");
+    assert.deepEqual(target.interpreter.applied,["edit-before-hide","edit-on-hide","in-flight-at-close-requested","closing-signal-edit","in-flight-at-stop","post-release-edit"]);
+    assert.equal(target.interpreter.acks,6);
+});
+
 test("the final Eval channel survives GC through join and is released afterwards",()=>{
     const result=spawnSync(process.execPath,["--expose-gc",fileURLToPath(new URL("./probe_surface_result_gc.mjs",import.meta.url))],{encoding:"utf8",timeout:10000});
     assert.equal(result.status,0,result.stderr||String(result.error));
