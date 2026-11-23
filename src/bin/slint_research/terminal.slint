@@ -498,6 +498,8 @@ export component TerminalWindow inherits Window {
     in property <bool> selection-active;
     in property <bool> selection-rows-ready;
     in property <bool> selection-dragging;
+    // Only a real drag or Shift selection switches the pointer to text.
+    in property <bool> selection-cursor;
     in property <bool> output-available;
     in property <bool> output-busy;
     changed output-busy=>{root.sites-updated();root.filters-updated();root.bookmarks-updated();}
@@ -524,6 +526,9 @@ export component TerminalWindow inherits Window {
     callback context-dismiss(bool);
     out property <length> terminal-origin-x: terminal-box.x;
     out property <length> terminal-origin-y: terminal-box.y;
+    // Window position of the web-reading body, for synthetic pointer probes.
+    out property <length> article-origin-x: article-view.absolute-position.x;
+    out property <length> article-origin-y: article-view.absolute-position.y;
     callback context-updated;
     callback context-key(int,bool);
     callback context-choose(int);
@@ -729,7 +734,7 @@ export component TerminalWindow inherits Window {
                         width: viewport.width;
                         height: viewport.height;
                         enabled: root.terminal-input && !root.pan-mode && !root.article-active;
-                        mouse-cursor: PointerStyle.navigation(root.pointer-cursor, root.selection-dragging);
+                        mouse-cursor: PointerStyle.navigation(root.pointer-cursor, root.selection-cursor);
                         changed has-hover => { if (!self.has-hover) { PointerRefresh.inside = false; root.grid-pointer(5, self.mouse-x, self.mouse-y, false); } }
                         pointer-event(event) => {
                             if (PointerRefresh.replaying) { return; }
@@ -790,7 +795,7 @@ export component TerminalWindow inherits Window {
                     read-only: root.keyboard-read-only;
                     selection: root.selection-rects;
                     pointer-cursor: root.pointer-cursor;
-                    selecting: root.selection-dragging;
+                    selecting: root.selection-cursor;
                     pointer(kind,x,y,shift) => { root.pointer-shift = shift; root.grid-pointer(kind,x,y,shift); }
                     context-pointer(kind,x,y,shift) => { root.pointer-shift = shift; root.context-pointer(kind,x,y); }
                     layout-changed => { root.article-layout-changed(); }

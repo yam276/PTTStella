@@ -249,6 +249,53 @@ fn article_hit_and_visible_spans_share_odd_pixel_columns_and_pinned_footer() {
 }
 
 #[test]
+fn web_reading_has_the_terminal_home_and_end_bands_after_links_and_back() {
+    let mut frame = Screen::new(80, 24).unwrap().frame();
+    frame.rows = 838;
+    let mut article = ArticleGeometry {
+        left: -10.,
+        width: 700.,
+        body_height: 287.5,
+        offset: 6256.25,
+        whole_rows: None,
+        flow: std::rc::Rc::new(pttstella::article_flow::Flow::new(837, 25, []).unwrap()),
+        line_width: 1000,
+        row: 25,
+        body_rows: 837,
+        dpi: 1.25,
+    };
+    let at = |article: &ArticleGeometry, point: (f32, f32)| {
+        let cell = SurfaceGeometry::Article(article.clone()).cell(point, &frame);
+        crate::pointer::article_navigation(article, point, cell)
+    };
+    // One 25 px row at each edge of the 287.5 px body, as in the terminal.
+    for (y, expected) in [
+        (0., Some(Intent::First)),
+        (24.9, Some(Intent::First)),
+        (25., Some(Intent::PreviousPage)),
+        (143., Some(Intent::PreviousPage)),
+        (144., Some(Intent::NextPage)),
+        (262.4, Some(Intent::NextPage)),
+        (262.5, Some(Intent::Last)),
+        (287.4, Some(Intent::Last)),
+        (287.5, None),
+    ] {
+        assert_eq!(at(&article, (300., y)), expected, "y={y}");
+    }
+    // The left 17 columns keep Back priority inside the edge bands.
+    assert_eq!(at(&article, (53., 0.)), Some(Intent::Back));
+    assert_eq!(at(&article, (53., 287.4)), Some(Intent::Back));
+    // A short body caps each band at a quarter of its height.
+    article.body_height = 60.;
+    assert_eq!(at(&article, (300., 14.9)), Some(Intent::First));
+    assert_eq!(at(&article, (300., 15.)), Some(Intent::PreviousPage));
+    assert_eq!(at(&article, (300., 45.)), Some(Intent::Last));
+    // A centred raster's left margin still goes Back.
+    article.left = 40.;
+    assert_eq!(at(&article, (20., 0.)), Some(Intent::Back));
+}
+
+#[test]
 fn article_image_gaps_reject_cells_and_keep_visible_spans_precise_past_u32_height() {
     let mut frame = Screen::new(80, 24).unwrap().frame();
     frame.rows = 5;

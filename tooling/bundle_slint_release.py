@@ -357,9 +357,11 @@ def linux(staging, stem, version, commit):
         desktop_id=IDENTIFIER, feature=FEATURES,
         resources={'licenses/LICENSE_SKIA': skia_license, 'licenses/'+GPL_NOTICE: ROOT/'LICENSE'},
         forbidden_libraries=('webkit', 'javascriptcore', 'webview', 'libwry'),
-        extra_depends=bundle_slint_linux.WINIT_RUNTIME)
-    if 'libmpv' not in details['depends']:
-        raise RuntimeError('Linux package must depend on the system libmpv')
+        extra_depends=bundle_slint_linux.WINIT_RUNTIME, recommends=('libmpv2',))
+    # Video loads the system libmpv2 on first use. A direct link would stop the
+    # whole app from starting when that recommended package is absent.
+    if 'libmpv' in details['libraries'] or 'libmpv' in details['depends']:
+        raise RuntimeError('Linux package must load libmpv at runtime, not link it')
     details['late_loaded_dependencies'] = list(bundle_slint_linux.WINIT_RUNTIME)
     sources, source_details = source_set(staging, stem, commit, [], [
         'libmpv and its dependencies are Ubuntu system packages (libmpv2) and are not redistributed.'])

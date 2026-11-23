@@ -69,7 +69,7 @@ def inspect_elf(executable, *, loader=None):
 def linux_package(staging, stem, version, executable=None, *, program='pttstella',
                   display_name='PTTStella', desktop_id='io.github.yam276.pttstella',
                   feature='desktop', readme=None, resources=None, loader=None,
-                  forbidden_libraries=(), extra_depends=()):
+                  forbidden_libraries=(), extra_depends=(), recommends=()):
     """One archive/deb layout for the established app and isolated Slint candidate."""
     if not re.fullmatch(r'[a-z0-9][a-z0-9+-]*', program):
         raise ValueError('Invalid Linux package/program name')
@@ -109,6 +109,10 @@ def linux_package(staging, stem, version, executable=None, *, program='pttstella
         if any(not item or '\n' in item or '\r' in item for item in extra_depends):
             raise ValueError('Invalid additional Linux runtime dependency')
         depends += ', ' + ', '.join(extra_depends)
+    if any(not item or '\n' in item or '\r' in item or ',' in item for item in recommends):
+        raise ValueError('Invalid recommended Linux package')
+    # apt installs Recommends by default; a missing one must only disable a feature.
+    recommended = f'Recommends: {", ".join(recommends)}\n' if recommends else ''
     debroot = staging/'debroot'
     binary = debroot/'usr/bin'/program
     binary.parent.mkdir(parents=True)
@@ -132,7 +136,7 @@ def linux_package(staging, stem, version, executable=None, *, program='pttstella
     (metadata/'control').write_text(
         f'Package: {program}\nVersion: {deb_version}\nArchitecture: amd64\n'
         'Maintainer: yam276 <59956724+yam276@users.noreply.github.com>\n'
-        f'Depends: {depends}\nInstalled-Size: {size}\nSection: net\nPriority: optional\n'
+        f'Depends: {depends}\n{recommended}Installed-Size: {size}\nSection: net\nPriority: optional\n'
         'Description: Terminal-style BBS desktop client\n', encoding='utf-8')
     deb = staging/(stem+'.deb')
     run('dpkg-deb', '--build', '--root-owner-group', str(debroot), str(deb))
@@ -142,7 +146,8 @@ def linux_package(staging, stem, version, executable=None, *, program='pttstella
     with tarfile.open(archive, 'w:gz', compresslevel=9) as stream:
         stream.add(package, arcname=stem)
     return [archive, deb], {'runtime': 'Ubuntu 24.04 x64 or compatible; see package dependencies',
-                            'depends': depends, 'libraries': libraries, 'signed': False}
+                            'depends': depends, 'recommends': list(recommends),
+                            'libraries': libraries, 'signed': False}
 
 
 def macos_disk_image(app, image, volume_name='PTTStella'):

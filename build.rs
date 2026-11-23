@@ -36,6 +36,11 @@ fn main() -> std::io::Result<()> {
             ));
         }
         println!("cargo:rustc-link-search=native={}", directory.display());
+        // Lets the loader test open the same libmpv the build linked against.
+        println!(
+            "cargo:rustc-env=PTTSTELLA_MPV_LIB_DIR={}",
+            directory.display()
+        );
     }
 
     #[cfg(feature = "slint-research")]

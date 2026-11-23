@@ -65,6 +65,13 @@ struct PointerResult {
     selection: SelectionUpdate,
 }
 impl Selected {
+    /// A press keeps the navigation cursor until it really starts selecting:
+    /// a drag past the click threshold or a Shift selection.
+    fn text_cursor(&self) -> bool {
+        self.gesture
+            .as_ref()
+            .is_some_and(|gesture| gesture.moved || gesture.shift)
+    }
     fn track(
         &mut self,
         position: Option<Position>,
@@ -596,35 +603,18 @@ impl Output {
                     return None;
                 }
                 let cell = geometry.cell(point, frame);
-                if let Some(cell) = cell {
-                    if let Some(index) = projection
+                if let Some(cell) = cell
+                    && let Some(index) = projection
                         .links
                         .iter()
                         .position(|l| l.row == cell.row && l.start <= cell.col && cell.col < l.end)
-                    {
-                        return Some(Hit::Link(index));
-                    }
-                    if !self.can_navigate(ui) || cell.row >= g.body_rows {
-                        return None;
-                    }
-                    if cell.col < 17 {
-                        return Some(Hit::Navigate(Intent::Back));
-                    }
+                {
+                    return Some(Hit::Link(index));
                 }
                 if !self.can_navigate(ui) {
                     return None;
                 }
-                if point.0 < g.left.max(0.) {
-                    Some(Hit::Navigate(Intent::Back))
-                } else if point.1 < g.body_height {
-                    Some(Hit::Navigate(if point.1 < g.body_height / 2. {
-                        Intent::PreviousPage
-                    } else {
-                        Intent::NextPage
-                    }))
-                } else {
-                    None
-                }
+                pointer::article_navigation(g, point, cell).map(Hit::Navigate)
             }
         })
         .flatten()
@@ -771,9 +761,11 @@ impl Output {
     fn hover_overlay(&self, ui: &TerminalWindow) {
         ui.invoke_media_hover_changed();
         let (stamp, geometry) = (self.current(ui), self.geometry(ui));
+        // An unmoved press is still a click: keep its hit, cursor and hover
+        // bar. Only a real drag or Shift selection hides navigation.
         let hit = if !ui.get_terminal_pointer_blocked()
             && !ui.get_selection_active()
-            && !ui.get_selection_dragging()
+            && !ui.get_selection_cursor()
             && (!ui.get_pan_mode() || ui.get_article_active())
             && self.connection.updates.borrow().mouse.route == pttstella::mouse::input::Route::Local
         {
@@ -990,6 +982,7 @@ impl Output {
                 .is_some_and(|(_, text)| text.rows.len() <= export::ROWS),
         );
         ui.set_selection_dragging(selected.gesture.is_some());
+        ui.set_selection_cursor(selected.text_cursor());
         drop(selected);
         ui.invoke_context_updated();
         ui.invoke_station_color_updated();

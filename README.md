@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="Cargo.toml"><img src="assets/readme/version.svg" width="146" height="24" alt="正式版本 0.4.2"></a>
+  <a href="Cargo.toml"><img src="assets/readme/version.svg" width="146" height="24" alt="正式版本 0.5.0"></a>
   <a href="https://github.com/yam276/PTTStella/releases/latest"><img src="assets/readme/status.svg" width="150" height="24" alt="狀態：正式版"></a>
   <a href="#下載與安裝"><img src="assets/readme/platforms.svg" width="241" height="24" alt="目標平台：Windows、macOS、Linux"></a>
 </p>
@@ -22,13 +22,13 @@
 
 ## 下載與安裝
 
-目前正式版為 `0.4.2`。請選擇對應的下載檔。[前往下載](https://github.com/yam276/PTTStella/releases/latest)
+目前正式版為 `0.5.0`。請選擇對應的下載檔。[前往下載](https://github.com/yam276/PTTStella/releases/latest)
 
 | 平台 | 安裝方式 |
 | --- | --- |
-| Windows 10／11 x64 | 執行 `-setup.exe` 安裝，或使用 `-portable.exe`。需要 WebView2，安裝版可協助補裝。[安裝說明](docs/windows-installer.md) |
+| Windows 10／11 x64 | 執行 `-setup.exe` 安裝，可直接覆蓋舊版；或解壓縮 `-portable.zip` 後執行 `pttstella.exe`。不需要 WebView2。[安裝說明](docs/windows-installer.md) |
 | macOS | Apple Silicon 選 `arm64`，Intel 選 `x64`。打開 DMG 或解壓縮 ZIP 後，把 `PTTStella.app` 拖進「應用程式」。[安裝說明](docs/macos-release.txt) |
-| Linux x64 | 提供 `.deb` 和 `.tar.gz`，以 Ubuntu 24.04 為目標。[安裝說明](docs/linux-package.txt) |
+| Linux x64 | 提供 `.deb` 和 `.tar.gz`，以 Ubuntu 24.04 為目標。播放影片需要系統的 `libmpv2`，用 apt 安裝 `.deb` 時預設會一併安裝。[安裝說明](docs/linux-package.txt) |
 
 **macOS 首次開啟若出現開發者驗證提示**，先按「完成」關閉提示，再到「系統設定 → 隱私權與安全性 → 安全性」找到 PTTStella，按「強制打開」並依提示確認。[Apple 說明](https://support.apple.com/zh-tw/102445)
 

@@ -16,7 +16,7 @@ PTTStella 改以 GPL-3.0-or-later 授權，讓 macOS 版可內附 Homebrew 的 G
 
 2026-11-19 macOS 15.7.7 arm64 實機下載同一 run 的 `release-macos-arm64`：四個 SHA256 相符、DMG checksum 有效，App 為 `io.github.yam276.pttstella` `0.5.0`、ad-hoc 簽章且 `codesign --deep --strict` 通過，`spctl` 拒絕（與 `0.4.1` 相同，依說明以「強制打開」放行）。主程式與 50 個 Frameworks 只連系統路徑或 App 內；從 DMG 複製到空的 `/Applications` 後，`--show-profile` 指向正式資料目錄與 Product 密碼範圍且未讀資料。已安裝 App 的隔離探針通過 product shell、終端翻頁、全文載入、草稿、內嵌圖片，以及以自製 320×180 四色 MP4 的 `--verify-media`（軟體渲染四點相符，`DYLD_PRINT_LIBRARIES` 顯示 libmpv／libavcodec 來自 App 內、零 Homebrew 路徑）。一般媒體探針第一次因視窗未在前景失敗、第二次通過，與先前的間歇結果相同。前後正式資料檔 SHA-256 不變。該 artifact 的可執行檔名仍是 `native`（`0.4.1` 為 `pttstella`），只影響程序／當機報告名稱；`4a2f1f6` 改由正式流程使用 Cargo bin 名稱，研究候選維持 `native`。同機從乾淨 `4a2f1f6` 以 `bundle_release.py` 打包的 DMG 內為 `Contents/MacOS/pttstella`，Info.plist、runtime manifest 首項與程序名一致，簽章、零外部連結、`--show-profile`、product shell 與四色影片探針通過，正式資料仍不變。[verify run 44450621456](https://github.com/yam276/PTTStella/actions/runs/44450621456) 從乾淨 `81ec655` 四平台通過；其 macOS arm64 artifact 的 SHA256 相符、sources `complete`，DMG 內為 `Contents/MacOS/pttstella`，簽章、`--show-profile` 與零外部連結通過。實際以正式資料開啟、從 `0.4.1` 升級後的設定與密碼庫存取、回退及 Gatekeeper 隔離下載流程尚待人工操作。
 
-發佈前仍需：各平台安裝／升級／回退與實際啟動（含 Windows 在沒有 WebView2 的環境）、README 與安裝說明更新，以及使用者指定版本。
+發佈前仍需：各平台安裝／升級／回退與實際啟動（含 Windows 在沒有 WebView2 的環境）、README 與安裝說明更新，以及使用者指定版本。後兩項已於 2026-11-23 的 0.5.0 準備完成，其餘狀態見文末〈0.5.0 發佈準備〉。
 
 ## 何時執行發佈
 
@@ -49,7 +49,7 @@ PTTStella 改以 GPL-3.0-or-later 授權，讓 macOS 版可內附 Homebrew 的 G
 | Windows x64 | `windows-2025` | Setup `.exe` 與免安裝 `-portable.zip`；內含 libmpv、Visual C++ runtime 與授權，不需 WebView2 |
 | macOS Apple Silicon | `macos-15` | 拖曳安裝 DMG、包含 `.app` 的 ZIP；App 內含 libmpv 閉包 |
 | macOS Intel | `macos-15-intel` | 拖曳安裝 DMG、包含 `.app` 的 ZIP；App 內含 libmpv 閉包 |
-| Linux x64 | `ubuntu-24.04` | `.deb` 與 `.tar.gz`；依賴系統 `libmpv2` |
+| Linux x64 | `ubuntu-24.04` | `.deb` 與 `.tar.gz`；影片使用系統 `libmpv2`（`.deb` 列為 Recommends，執行時才載入；未安裝時程式照常啟動，只停用影片並提示） |
 
 每個平台另有 `-sources.tar` 對應原始碼集，見上方 2026-11-18 說明。以下段落中 WebView2、static CRT 等描述屬 Dioxus 版。
 
@@ -159,3 +159,13 @@ Release PR #8 及四架構驗證 [41978240650](https://github.com/yam276/PTTStel
 Release PR [#9](https://github.com/yam276/PTTStella/pull/9) 與四架構驗證 [41987004705](https://github.com/yam276/PTTStella/actions/runs/41987004705) 通過。合併提交 `e304be283a4ad12772145c22da4cfc9eca4277b5` 與候選的 Git tree 一致。正式 [41989683683](https://github.com/yam276/PTTStella/actions/runs/41989683683) 的 SSH、原生密碼庫、各架構測試與打包、publisher 均成功。公開 [v0.4.1](https://github.com/yam276/PTTStella/releases/tag/v0.4.1) 是 Latest 正式版，tag 指向該合併提交。
 
 驗證與正式工作各自使用原始產物核對版本、來源、四份 manifest 和逐檔 SHA-256。公開六個套件與 `SHA256SUMS` 的檔案大小、GitHub digest 和校驗清單與正式產物一致，公開說明使用該版中英文件。Manifest 留在 Actions。驗證下載副本已刪除，記錄位於 `.local/verification/release-041-resumed-20261105/verify-artifacts-audit.json`。正式下載和唯一證據保留。main 保持 0.4.1，develop 整合 main 後恢復 0.5.0-dev.3。
+
+## 0.4.2 與 main 狀態（2026-11-23）
+
+0.4.2 由 `dioxus` 分支的 Release PR #11 發佈：合併提交 `f5d0e81` 即 `v0.4.2` tag，正式 [45108430904](https://github.com/yam276/PTTStella/actions/runs/45108430904) 成功，內容為 Dioxus 版。隨後 `d316f7f` 把 `develop`（`bca7bc8`，Slint）直接合併進 `main` 並推送，`main` 的程式碼因此變成標記為 `0.4.2` 的 Slint 版。這次推送改到 `Cargo.toml`，觸發的 [45111110574](https://github.com/yam276/PTTStella/actions/runs/45111110574) 在來源驗證以「Release commit must be the merge commit of one release PR」停止，沒有打包或發佈任何檔案，`v0.4.2` 的 tag 與 Release 不受影響。使用者決定保留 `main`，由 0.5.0 的 Release PR 接續。
+
+## 0.5.0 發佈準備（2026-11-23）
+
+使用者要求準備 0.5.0。先把 `main` 合併回 `develop`（`53f499d`），帶入 v0.4.2 release notes，以及 `release.py` 允許 `dioxus` 分支開 Release PR 與手動驗證的修改；`develop` 保留 `0.5.0-dev.3`，避免 Release PR 把版號帶回 `0.4.2`。接著把 `Cargo.toml`／`Cargo.lock`、README、版本與狀態徽章改為正式版 `0.5.0`，README 的 Windows 列改為免裝 WebView2 的 Setup／portable ZIP，Linux 列註明影片需要 `libmpv2`，[Windows 安裝說明](windows-installer.md) 改以 0.5.0 為主、0.4.2 及更早的 Dioxus 說明移到獨立段落，並新增 [v0.5.0 release notes](release-notes/v0.5.0.md)。
+
+截至準備時仍未人工驗收：Windows 實機覆蓋 0.4.2 Setup 安裝、沒有 WebView2 時啟動、輸入法與認證管理員密碼沿用；macOS 以正式資料從 0.4.x 升級、退回 0.4.2 與 Gatekeeper 隔離下載；Intel Mac 與 Linux 實機啟動及影片。Release PR 合併前由使用者決定是否先補這些驗收。

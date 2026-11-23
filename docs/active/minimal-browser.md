@@ -1,5 +1,17 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-23 0.5.0 發佈準備
+
+使用者決定保留已合併 Slint 的 `main`（`d316f7f`，其 Desktop Release 被來源驗證擋下、未發佈），改由 0.5.0 接續，並要求準備發佈。`main` 先合併回 `develop`（`53f499d`），再把版號、README、徽章與 Windows 安裝說明改為 0.5.0，新增 v0.5.0 release notes；詳細內容與尚缺的實機驗收記在 [自動發佈](../releases.md#050-發佈準備2026-11-23)。Release PR 開好後停在合併前，由使用者決定是否先補 Windows／macOS 升級與 Intel Mac／Linux 實機驗收。
+
+## 2026-11-23 網頁閱讀首尾與按住游標
+
+使用者回報 Slint 網頁閱讀沒有 Home／End，且按下滑鼠時游標會離開導覽箭頭。網頁閱讀的命中原本只有左緣返回與上下半翻頁，現與終端閱讀共用 `reading_zone`：可視正文最頂／最底各一列高（16–32 px，最多四分之一高度）為 Home／End，連結與左側 17 欄返回優先，固定頁尾不導覽。按下時原本立即建立選字手勢，`selection-dragging` 使游標換成文字游標並清空 hover 命中；改由只管游標的 `selection-cursor` 決定，拖曳超過點擊門檻或按 Shift 才換成文字游標，其他依 `selection-dragging` 的保護不變。新增命中與游標單元測試；文章輸入探針在實際 Slint 視窗核對兩端游標、按住不變、點擊捲到首尾且未多要站端頁，終端翻頁、全文載入、貼上、主介面、媒體、影片與推文導覽探針通過，gate 同上一節。探針為工具包事件，未以 OS 原生滑鼠或實站操作。
+
+## 2026-11-23 Linux libmpv 改為選用
+
+依使用者要求，Linux 沒有 libmpv2 時只停用影片並提示。播放器原本經 libmpv2-sys 直接連結 libmpv，缺少時整個程式無法啟動。現在 18 個 libmpv 函式改由同一張函式表呼叫：macOS／Windows 照舊連結 App 內附的 libmpv，Linux 在第一次開影片時以 libloading 載入系統 `libmpv.so.2`。載入失敗時點影片只顯示安裝 libmpv2 後重開的提示，不開播放器，右鍵仍可開啟或複製連結。正式 Linux 包把 `libmpv2` 由 Depends 改為 Recommends，若主程式的 ldd 或 Depends 仍出現 libmpv 即拒絕打包。macOS 以建置用的 Homebrew libmpv 實際走執行時載入並建立／釋放播放器，四色 MP4 影片探針（軟體路徑）通過；core、Slint lib 401／bin 113／multi_instance 10、Dioxus lib 386／bin 121／multi_instance 10、兩組 clippy、Slint 依賴檢查、189 個 tooling 與 385 個 JS 測試通過。[verify run 45121644726](https://github.com/yam276/PTTStella/actions/runs/45121644726) 從 `85f4a0b` 四平台通過；下載的 Linux 包校驗碼相符，`.deb` control 為 `Recommends: libmpv2` 且 Depends 不含 libmpv，主程式 ELF NEEDED 只有 freetype／fontconfig／libstdc++／libgcc／libm／libc 與 loader，含執行時載入的 `libmpv.so.2` 名稱。Linux 實機安裝、播放與沒有 libmpv2 時的提示尚未操作。
+
 ## 2026-11-23 頁尾 100% 配色
 
 使用者回報網頁閱讀顯示 100% 時，頁尾有時仍是中間頁的配色而非結尾的藍色。原因是頁尾配色及頁數取可視起點最接近的來源頁，百分比卻依可視下緣計算；可視範圍比一頁高時，捲到底仍可能最接近較前面的頁。Rust 改為標記站端回報 100% 的結尾來源頁，Slint 與 Dioxus 在本機 100% 時都改用該頁的頁數與配色，未到 100% 時不借用結尾頁配色，只有結尾頁可用時才沿用。新增 Slint 頁尾與 Dioxus JS 回歸測試，確認舊邏輯會失敗；core、Slint 111 個與 Dioxus lib 386／bin 121／multi_instance 10 個測試、兩組 clippy 及 385 個 JS 測試通過。未在實站與已安裝 App 上操作。
