@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="Cargo.toml"><img src="assets/readme/version.svg" width="146" height="24" alt="正式版本 0.5.0"></a>
-  <a href="https://github.com/yam276/PTTStella/releases/latest"><img src="assets/readme/status.svg" width="150" height="24" alt="狀態：正式版"></a>
+  <a href="Cargo.toml"><img src="assets/readme/version.svg" width="146" height="24" alt="開發版本 0.6.0-dev.1"></a>
+  <a href="https://github.com/yam276/PTTStella/releases/latest"><img src="assets/readme/status.svg" width="150" height="24" alt="狀態：開發中"></a>
   <a href="#下載與安裝"><img src="assets/readme/platforms.svg" width="241" height="24" alt="目標平台：Windows、macOS、Linux"></a>
 </p>
 
@@ -22,7 +22,7 @@
 
 ## 下載與安裝
 
-目前正式版為 `0.5.0`。請選擇對應的下載檔。[前往下載](https://github.com/yam276/PTTStella/releases/latest)
+目前分支為開發版 `0.6.0-dev.1`，最新正式版為 `0.5.0`。請選擇對應的下載檔。[前往下載](https://github.com/yam276/PTTStella/releases/latest)
 
 | 平台 | 安裝方式 |
 | --- | --- |

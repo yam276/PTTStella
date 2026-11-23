@@ -1,5 +1,9 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-23 0.5.0 已發佈
+
+使用者要求在實機驗收前合併 Release PR #12，正式工作 45172233180 已建立 `v0.5.0` tag（`df6f083`）與 Latest Release，下載檔校驗一致；發佈後依使用者要求在 Release 說明補上 Apple Silicon Mac 的效能比較。`develop` 改為 `0.6.0-dev.1`。Windows、macOS 升級／回退、Intel Mac 與 Linux 的實機驗收仍未執行，詳見 [自動發佈](../releases.md#050-發佈結果2026-11-23)。
+
 ## 2026-11-23 0.5.0 發佈準備
 
 使用者決定保留已合併 Slint 的 `main`（`d316f7f`，其 Desktop Release 被來源驗證擋下、未發佈），改由 0.5.0 接續，並要求準備發佈。`main` 先合併回 `develop`（`53f499d`），再把版號、README、徽章與 Windows 安裝說明改為 0.5.0，新增 v0.5.0 release notes；詳細內容與尚缺的實機驗收記在 [自動發佈](../releases.md#050-發佈準備2026-11-23)。Release PR 開好後停在合併前，由使用者決定是否先補 Windows／macOS 升級與 Intel Mac／Linux 實機驗收。
