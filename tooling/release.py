@@ -97,13 +97,13 @@ def replacement_at(sha, previous_sha, version):
 
 
 def validate_pr(pr, repository, version, previous, replacement=None):
-    head = 'develop'
+    heads = ('develop', 'dioxus')
     if replacement is not None and 'cancelled_run' not in replacement:
-        head = 'codex/reissue-v'+version
-    if (pr['base']['ref'] != 'main' or pr['head']['ref'] != head
+        heads = ('codex/reissue-v'+version,)
+    if (pr['base']['ref'] != 'main' or pr['head']['ref'] not in heads
             or pr['base']['repo']['full_name'] != repository
             or (pr['head'].get('repo') or {}).get('full_name') != repository):
-        raise ValueError('Only a develop → main release PR from this repository is allowed')
+        raise ValueError('Only a develop or dioxus → main release PR from this repository is allowed')
     if pr.get('draft'):
         raise ValueError('A draft PR is not ready for release')
     if pr['title'] != 'release: v'+version:
@@ -238,8 +238,8 @@ def prepare(repository, sha, ref, github):
 def inspect(sha, ref):
     """Explicit manual build verification has no publishing authority."""
     check_sha(sha)
-    if ref not in ('refs/heads/develop', 'refs/heads/main'):
-        raise ValueError('Manual package verification is limited to develop or main')
+    if ref not in ('refs/heads/develop', 'refs/heads/dioxus', 'refs/heads/main'):
+        raise ValueError('Manual package verification is limited to develop, dioxus or main')
     if command('git', 'rev-parse', 'HEAD') != sha or command('git', 'status', '--porcelain'):
         raise ValueError('Verification requires a clean checkout of the triggering commit')
     return {'version': version_at(sha), 'commit': sha}

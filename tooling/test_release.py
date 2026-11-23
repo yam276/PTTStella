@@ -158,7 +158,7 @@ class AdmissionTests(unittest.TestCase):
         record = {'version': '0.1.0', 'previous_commit': pr['base']['sha'],
                   'reason': 'Owner requested replacement after an editor regression.'}
         release.validate_pr(pr, REPOSITORY, '0.1.0', '0.1.0', record)
-        for branch in ('develop', 'feature', 'codex/reissue-v0.2.0'):
+        for branch in ('develop', 'dioxus', 'feature', 'codex/reissue-v0.2.0'):
             bad = copy.deepcopy(pr)
             bad['head']['ref'] = branch
             with self.assertRaises(ValueError):
@@ -209,6 +209,9 @@ class AdmissionTests(unittest.TestCase):
     def test_release_pr_requires_local_develop_and_an_increased_version(self):
         good = pull_request()
         release.validate_pr(good, REPOSITORY, '0.1.0', '0.1.0-dev.1')
+        dioxus_pr = copy.deepcopy(good)
+        dioxus_pr['head']['ref'] = 'dioxus'
+        release.validate_pr(dioxus_pr, REPOSITORY, '0.1.0', '0.1.0-dev.1')
         for field, value in [('title', 'feature'), ('draft', True),
                              ('head.ref', 'feature'), ('head.repo.full_name', 'fork/stella'),
                              ('base.ref', 'develop')]:
