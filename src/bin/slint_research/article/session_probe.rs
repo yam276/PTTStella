@@ -252,6 +252,65 @@ pub fn start(
                         && ui.get_article_active(),
                     "stale input changed the current surface",
                 )?;
+                // Web reading shares the terminal's Home/End bands, and an
+                // unmoved press keeps the navigation cursor until release.
+                owner.route_input(generation, b"\x1b[H".to_vec())?;
+                verification::foreground(&ui, true);
+                let x = ui.get_article_origin_x() + ui.get_article_line_width() * 0.6;
+                let edge = |bottom: bool| {
+                    let top = ui.get_article_origin_y();
+                    slint::LogicalPosition::new(
+                        x,
+                        if bottom {
+                            top + ui.get_article_body_height() - 2.
+                        } else {
+                            top + 2.
+                        },
+                    )
+                };
+                for (bottom, expected) in [
+                    (true, crate::PointerKind::Last),
+                    (false, crate::PointerKind::First),
+                ] {
+                    let position = edge(bottom);
+                    let button = slint::platform::PointerEventButton::Left;
+                    // A scroll repaints before its geometry accepts hover again.
+                    wait(
+                        || {
+                            ui.window().dispatch_event(
+                                slint::platform::WindowEvent::PointerMoved { position },
+                            );
+                            ui.get_pointer_cursor() == expected
+                        },
+                        "web reading hover did not choose its edge cursor",
+                    )
+                    .await?;
+                    ui.window()
+                        .dispatch_event(slint::platform::WindowEvent::PointerPressed {
+                            position,
+                            button,
+                        });
+                    require(
+                        ui.get_selection_dragging()
+                            && !ui.get_selection_cursor()
+                            && ui.get_pointer_cursor() == expected,
+                        "pressing a web reading edge left its navigation cursor",
+                    )?;
+                    ui.window()
+                        .dispatch_event(slint::platform::WindowEvent::PointerReleased {
+                            position,
+                            button,
+                        });
+                    wait(
+                        || (ui.get_article_offset_y() > 0.) == bottom,
+                        "web reading edge click did not reach its end",
+                    )
+                    .await?;
+                }
+                require(
+                    owner.requests.get() == 1 && ui.get_article_active(),
+                    "web reading edge clicks requested a station page",
+                )?;
                 // The typed route above is not an OS focus event. Complete
                 // native layout and explicitly activate the synthetic field
                 // before simulating a preedit delivered to that field.

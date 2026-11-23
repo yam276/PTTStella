@@ -112,6 +112,52 @@ fn click_lease_rejects_shift_drag_double_click_geometry_and_source_changes() {
 }
 
 #[test]
+fn pressing_keeps_the_navigation_cursor_until_a_real_selection_starts() {
+    let frame = fixture();
+    let geometry = Geometry {
+        size: Size {
+            width: 960,
+            height: 576,
+        },
+        left: 70.,
+        top: 30.,
+        width: 1100.,
+        height: 680.,
+        dpi: 1.,
+    };
+    let stamp = Stamp {
+        generation: 1,
+        revision: frame.revision,
+        input_epoch: 0,
+    };
+    let mut selected = Selected::default();
+    selected
+        .pointer(&frame, stamp, geometry, 0, (550., 180.), false)
+        .unwrap();
+    assert!(selected.gesture.is_some());
+    assert!(!selected.text_cursor(), "a press alone is still a click");
+    selected
+        .pointer(&frame, stamp, geometry, 1, (551., 181.), false)
+        .unwrap();
+    assert!(!selected.text_cursor(), "movement under the drag threshold");
+    selected
+        .pointer(&frame, stamp, geometry, 1, (560., 180.), false)
+        .unwrap();
+    assert!(selected.text_cursor(), "a real drag selects text");
+    selected
+        .pointer(&frame, stamp, geometry, 2, (560., 180.), false)
+        .unwrap();
+    assert!(!selected.text_cursor());
+    selected
+        .pointer(&frame, stamp, geometry, 0, (550., 180.), true)
+        .unwrap();
+    assert!(
+        selected.text_cursor(),
+        "Shift selects instead of navigating"
+    );
+}
+
+#[test]
 fn fractional_pixel_hit_and_reverse_drag_expand_the_split_glyph_once() {
     let frame = fixture();
     let size = Size {

@@ -184,25 +184,72 @@ impl Geometry {
             .flatten()
     }
     fn page(self, y: f32, top: f32, bottom: f32, halves: bool) -> Option<Intent> {
-        let (top, bottom) = (top.max(0.), bottom.min(self.height));
-        if y < top || y >= bottom {
+        reading_zone(
+            y,
+            top.max(0.),
+            bottom.min(self.height),
+            self.size.height as f32 / 24.,
+            self.dpi,
+            halves,
+        )
+    }
+}
+
+/// Web-reading navigation after links: the left 17 columns and margin go
+/// Back, then the same First/Last edge bands and halves as the terminal.
+/// The pinned source footer below the body has no navigation.
+pub fn article_navigation(
+    geometry: &ArticleGeometry,
+    point: (f32, f32),
+    cell: Option<Position>,
+) -> Option<Intent> {
+    if let Some(cell) = cell {
+        if cell.row >= geometry.body_rows {
             return None;
         }
-        let edge = ((self.size.height as f32 / 24.).clamp(16. * self.dpi, 32. * self.dpi))
-            .min((bottom - top) / 4.);
-        if y < top + edge {
-            Some(Intent::First)
-        } else if y >= bottom - edge {
-            Some(Intent::Last)
-        } else if halves {
-            Some(if y < (top + bottom) / 2. {
-                Intent::PreviousPage
-            } else {
-                Intent::NextPage
-            })
-        } else {
-            None
+        if cell.col < 17 {
+            return Some(Intent::Back);
         }
+    }
+    if point.0 < geometry.left.max(0.) {
+        return Some(Intent::Back);
+    }
+    reading_zone(
+        point.1,
+        0.,
+        geometry.body_height,
+        geometry.row as f32,
+        geometry.dpi,
+        true,
+    )
+}
+
+/// Shared vertical bands for terminal and web reading: one row (16-32 px,
+/// at most a quarter of the span) at each edge for First/Last, then halves.
+pub fn reading_zone(
+    y: f32,
+    top: f32,
+    bottom: f32,
+    row: f32,
+    dpi: f32,
+    halves: bool,
+) -> Option<Intent> {
+    if y < top || y >= bottom {
+        return None;
+    }
+    let edge = row.clamp(16. * dpi, 32. * dpi).min((bottom - top) / 4.);
+    if y < top + edge {
+        Some(Intent::First)
+    } else if y >= bottom - edge {
+        Some(Intent::Last)
+    } else if halves {
+        Some(if y < (top + bottom) / 2. {
+            Intent::PreviousPage
+        } else {
+            Intent::NextPage
+        })
+    } else {
+        None
     }
 }
 
