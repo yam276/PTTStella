@@ -16,6 +16,7 @@ pub(super) enum Percent {
 pub(super) struct Display {
     pub percent: Option<Percent>,
     page: Option<usize>,
+    styles: Option<usize>,
     lines: Option<(usize, usize)>,
 }
 
@@ -55,12 +56,33 @@ pub(super) fn display(
             .row
             .min(rows - 1),
     );
-    let page = reading
-        .pages
-        .iter()
-        .enumerate()
-        .min_by_key(|(_, page)| page.line.abs_diff(first))
-        .map(|(index, _)| index);
+    let nearest = |skip_end: bool| {
+        reading
+            .pages
+            .iter()
+            .enumerate()
+            .filter(|(_, page)| !(skip_end && page.end))
+            .min_by_key(|(_, page)| page.line.abs_diff(first))
+            .map(|(index, _)| index)
+    };
+    // The station colours its footer by end state, while the local viewport
+    // can be taller or shorter than one station page. At 100 percent show the
+    // page it reported at the end; before that, never borrow its end colours.
+    let page = match percent {
+        Some(Percent::Known(100)) => reading
+            .pages
+            .iter()
+            .position(|page| page.end)
+            .or_else(|| nearest(false)),
+        _ => nearest(false),
+    };
+    let at_end_page = page
+        .and_then(|index| reading.pages.get(index))
+        .is_some_and(|page| page.end);
+    let styles = match percent {
+        Some(Percent::Known(0..=99)) if at_end_page => nearest(true).or(page),
+        _ => page,
+    };
     let (first, last) =
         whole_rows
             .filter(|range| !range.is_empty())
@@ -73,6 +95,7 @@ pub(super) fn display(
     Display {
         percent,
         page,
+        styles,
         lines: reading
             .range_cells
             .as_ref()
@@ -120,7 +143,9 @@ pub(super) fn frame(source: &Frame, reading: &Reading, display: Display) -> Fram
         fields.push(field(&cells.first, &first.to_string()));
         fields.push(field(&cells.last, &last.to_string()));
     }
-    let styles: Option<&[Style]> = page
+    let styles: Option<&[Style]> = display
+        .styles
+        .and_then(|index| reading.pages.get(index))
         .map(|page| page.styles.as_slice())
         .filter(|styles| styles.len() == source.cols);
     let glyphs = source

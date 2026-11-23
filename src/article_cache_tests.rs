@@ -827,9 +827,9 @@ fn source_page_numbers_keep_their_physical_starts_across_a_clamped_tail_and_revi
         reading
             .pages
             .iter()
-            .map(|p| (p.line, p.number))
+            .map(|p| (p.line, p.number, p.end))
             .collect::<Vec<_>>(),
-        vec![(1, 1), (10, 2)]
+        vec![(1, 1, false), (10, 2, true)]
     );
     assert_eq!(reading.pages[0].styles.len(), 80);
     assert_eq!(
@@ -872,9 +872,9 @@ fn source_page_numbers_keep_their_physical_starts_across_a_clamped_tail_and_revi
             .unwrap()
             .pages
             .iter()
-            .map(|p| (p.line, p.number))
+            .map(|p| (p.line, p.number, p.end))
             .collect::<Vec<_>>(),
-        vec![(1, 1), (10, 2)]
+        vec![(1, 1, false), (10, 2, true)]
     );
     assert_eq!(revisit.article.as_ref().unwrap().last_line, 32);
 }

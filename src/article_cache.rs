@@ -61,6 +61,9 @@ pub struct ReadingPage {
     pub line: usize,
     pub number: usize,
     pub styles: Vec<Style>,
+    /// The station showed this page at the confirmed article end, so its
+    /// footer colours are the ones it uses for 100 percent.
+    pub end: bool,
 }
 struct CachedPage {
     start: usize,
@@ -1067,6 +1070,9 @@ impl ArticleCache {
                         line: page.start,
                         number,
                         styles: page.styles.clone(),
+                        end: self
+                            .end
+                            .is_some_and(|end| page.start + page.count == end + 1),
                     })
                 })
                 .collect(),

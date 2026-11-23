@@ -1,5 +1,9 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-23 頁尾 100% 配色
+
+使用者回報網頁閱讀顯示 100% 時，頁尾有時仍是中間頁的配色而非結尾的藍色。原因是頁尾配色及頁數取可視起點最接近的來源頁，百分比卻依可視下緣計算；可視範圍比一頁高時，捲到底仍可能最接近較前面的頁。Rust 改為標記站端回報 100% 的結尾來源頁，Slint 與 Dioxus 在本機 100% 時都改用該頁的頁數與配色，未到 100% 時不借用結尾頁配色，只有結尾頁可用時才沿用。新增 Slint 頁尾與 Dioxus JS 回歸測試，確認舊邏輯會失敗；core、Slint 111 個與 Dioxus lib 386／bin 121／multi_instance 10 個測試、兩組 clippy 及 385 個 JS 測試通過。未在實站與已安裝 App 上操作。
+
 ## 2026-11-19 移除文章浮動按鈕
 
 依使用者回報礙眼，Slint 文章畫面移除左上「推文定位」與左下「返回網頁閱讀」兩個浮動按鈕。推文定位仍由文章空白右鍵與浮球開啟，展開後的定位列不變；原始輸入切到站端畫面後不再提供浮動返回，需離開文章再進入，Vim `i` 進入的原始輸入仍以 Escape 返回。對應的 UI callback、標籤與 `slint-resume-reading` 字串一併移除，探針改呼叫同一 `ArticleSession::resume_reading`。Clippy、509 個 lib／Slint 測試及 article input、paste、reply navigation、product shell 探針通過；未在實站與已安裝 App 上操作。
