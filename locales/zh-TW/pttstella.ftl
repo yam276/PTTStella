@@ -275,6 +275,7 @@ media-playing = 播放中
 video-play = 播放影片
 media-paused = 已暫停
 video-unsupported = 此影片無法播放或格式不受支援，請重試或在瀏覽器開啟
+video-library-missing = 影片播放需要系統的 libmpv2，目前已停用。安裝後（Ubuntu：sudo apt install libmpv2）重新開啟 PTTStella 即可播放；連結仍可用右鍵開啟或複製
 video-stalled = 影片載入停滯，可重試或在瀏覽器開啟
 video-buffering = 影片緩衝中…
 video-ready = 按播放器播放；格式支援依系統而異

@@ -51,8 +51,9 @@ Check-Shell.sh／Check-Shell-Software.sh是會自行關窗的工具包案例，�
 Show-Profile.sh只列路徑，不讀寫資料或密碼庫。各次log與輸出保存在evidence，不覆寫。
 
 .deb使用獨立名稱pttstella-slint-candidate，安裝時由套件管理器處理Depends。
-tar.gz不內附系統函式庫；需安裝package-report.json的Depends所列套件，包含libmpv2
-及X11／Wayland runtime（例如libxkbcommon-x11-0），不需要安裝完整開發SDK。
+tar.gz不內附系統函式庫；需安裝package-report.json的Depends所列套件，包含
+X11／Wayland runtime（例如libxkbcommon-x11-0），不需要安裝完整開發SDK。
+影片另需Recommends的libmpv2；未安裝時程式照常啟動，只停用影片。
 第三方授權在licenses；自製三格式影片為CC0，詳fixtures/manifest.json。
 原生X11／Wayland、IME、DPI、聲音、乾淨安裝、資料回退、來源與效能仍待完整驗收。
 '''
@@ -95,7 +96,7 @@ def bundle(executable, skia_license, build_record, fixtures, output, *, loader=N
             desktop_id='io.github.yam276.pttstella.slint.candidate', feature='native-player-probe',
             readme=readme, resources=resources, loader=loader,
             forbidden_libraries=('webkit', 'javascriptcore', 'webview', 'libwry'),
-            extra_depends=WINIT_RUNTIME)
+            extra_depends=WINIT_RUNTIME, recommends=('libmpv2',))
         runtime['runtime'] = 'Linux x64; see actual dpkg Depends and recorded build environment'
         runtime['late_loaded_dependencies'] = list(WINIT_RUNTIME)
         report = {'status': 'bundled', 'target': TARGET, 'features': 'native-player-probe',

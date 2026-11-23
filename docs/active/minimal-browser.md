@@ -1,5 +1,9 @@
 # PTTStella 最簡 terminal 計畫
 
+## 2026-11-23 Linux libmpv 改為選用
+
+依使用者要求，Linux 沒有 libmpv2 時只停用影片並提示。播放器原本經 libmpv2-sys 直接連結 libmpv，缺少時整個程式無法啟動。現在 18 個 libmpv 函式改由同一張函式表呼叫：macOS／Windows 照舊連結 App 內附的 libmpv，Linux 在第一次開影片時以 libloading 載入系統 `libmpv.so.2`。載入失敗時點影片只顯示安裝 libmpv2 後重開的提示，不開播放器，右鍵仍可開啟或複製連結。正式 Linux 包把 `libmpv2` 由 Depends 改為 Recommends，若主程式的 ldd 或 Depends 仍出現 libmpv 即拒絕打包。macOS 以建置用的 Homebrew libmpv 實際走執行時載入並建立／釋放播放器，四色 MP4 影片探針（軟體路徑）通過；core、Slint lib 401／bin 113／multi_instance 10、Dioxus lib 386／bin 121／multi_instance 10、兩組 clippy、Slint 依賴檢查、189 個 tooling 與 385 個 JS 測試通過。Linux 主程式不連結 libmpv 依賴 rustc 預設的 `--as-needed`，要由 CI 的 Linux 打包檢查確認，尚未在 Linux CI 或實機執行；沒有 libmpv2 時的提示也未在 Linux 上操作。
+
 ## 2026-11-23 頁尾 100% 配色
 
 使用者回報網頁閱讀顯示 100% 時，頁尾有時仍是中間頁的配色而非結尾的藍色。原因是頁尾配色及頁數取可視起點最接近的來源頁，百分比卻依可視下緣計算；可視範圍比一頁高時，捲到底仍可能最接近較前面的頁。Rust 改為標記站端回報 100% 的結尾來源頁，Slint 與 Dioxus 在本機 100% 時都改用該頁的頁數與配色，未到 100% 時不借用結尾頁配色，只有結尾頁可用時才沿用。新增 Slint 頁尾與 Dioxus JS 回歸測試，確認舊邏輯會失敗；core、Slint 111 個與 Dioxus lib 386／bin 121／multi_instance 10 個測試、兩組 clippy 及 385 個 JS 測試通過。未在實站與已安裝 App 上操作。

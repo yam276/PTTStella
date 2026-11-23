@@ -272,6 +272,14 @@ impl Media {
                     .and_then(|i| i.original(&scope));
                 self.begin_original(&ui, scope, Presentation::Inspect, original)
             }
+            // Linux loads the system libmpv2 on first use. Without it the
+            // rest of the app keeps working and video links explain why.
+            #[cfg(feature = "native-video")]
+            Ok(Some(target))
+                if target.kind == Kind::Video && pttstella::native_video::available().is_err() =>
+            {
+                crate::notice::error(&ui, msg!("video-library-missing"));
+            }
             #[cfg(feature = "native-video")]
             Ok(Some(target)) if target.kind == Kind::Video && self.video.borrow().is_some() => {
                 self.begin_video(&ui, scope);

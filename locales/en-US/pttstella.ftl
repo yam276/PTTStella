@@ -275,6 +275,7 @@ media-playing = Playing
 video-play = Play video
 media-paused = Paused
 video-unsupported = Cannot play this video or format; retry or open in a browser
+video-library-missing = Video playback needs the system libmpv2 and is disabled. Install it (Ubuntu: sudo apt install libmpv2) and restart PTTStella to play videos; right-click still opens or copies the link
 video-stalled = Video loading stalled; retry or open in a browser
 video-buffering = Buffering video…
 video-ready = Press Play in the player; format support depends on the system

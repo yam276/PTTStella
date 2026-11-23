@@ -2,16 +2,19 @@ PTTStella for Linux x64
 
 Built on Ubuntu 24.04. Other distributions and GUI behavior require separate
 verification. This is a native Slint application (X11 or Wayland), not a static
-binary, and needs no WebView. Video playback uses the system libmpv2.
+binary, and needs no WebView. Video playback uses the system libmpv2, loaded
+when a video is first opened. Without it PTTStella still starts; video links
+show a notice to install libmpv2 and restart.
 
 Ubuntu 24.04: install the .deb with sudo apt install ./PTTStella-*.deb so apt
 resolves the actual shared-library dependencies and desktop portal providers.
+apt also installs the recommended libmpv2 unless recommends are turned off.
 The application then appears in the desktop application launcher.
 
 The .tar.gz contains the same executable and license inventory for manual use.
-It requires compatible libmpv2, fontconfig/freetype, xkbcommon, X11 or
-Wayland client libraries with EGL/OpenGL, CA certificates, a graphical session
-and an XDG desktop portal provider.
+It requires compatible fontconfig/freetype, xkbcommon, X11 or Wayland client
+libraries with EGL/OpenGL, CA certificates, a graphical session and an XDG
+desktop portal provider. Install libmpv2 as well to play videos.
 Run ./pttstella from the extracted directory. No Rust or Python is needed.
 
 Downloads are not distribution-signed. Verify the adjacent SHA-256 checksum.

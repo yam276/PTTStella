@@ -1,6 +1,7 @@
 //! Narrow libmpv ABI boundary shared by the native preview and playback probe.
 //! Client commands/events run on one worker; render calls run only inside
 //! Slint's current-OpenGL rendering notifier. No WebView or child player.
+use super::library::Api;
 use mpv_sys as ffi;
 use std::{
     ffi::{CStr, CString, c_void},
@@ -15,7 +16,11 @@ pub enum Layout {
     VideoOnly,
     ProbeChrome,
 }
-pub struct Client(NonNull<ffi::mpv_handle>, Mutex<Option<Box<RenderWake>>>);
+pub struct Client(
+    NonNull<ffi::mpv_handle>,
+    Mutex<Option<Box<RenderWake>>>,
+    &'static Api,
+);
 // SAFETY: libmpv's client API is thread-safe. This module serializes event reads
 // on the control worker. The UI only uses the independent mpv_render_* API.
 unsafe impl Send for Client {}
@@ -33,10 +38,10 @@ impl Client {
             Layout::VideoOnly => ("0", "0"),
             Layout::ProbeChrome => ("0.10", "0.20"),
         };
+        let api = super::library::api()?;
         // SAFETY: creates a fresh opaque handle, checked before any dereference.
-        let handle =
-            NonNull::new(unsafe { ffi::mpv_create() }).ok_or("libmpv allocation failed")?;
-        let client = Self(handle, Mutex::new(None));
+        let handle = NonNull::new(unsafe { (api.create)() }).ok_or("libmpv allocation failed")?;
+        let client = Self(handle, Mutex::new(None), api);
         let initial_volume = super::DEFAULT_VOLUME.to_string();
         for (name, value) in [
             ("config", "no"),
@@ -73,11 +78,11 @@ impl Client {
             let v = CString::new(value).map_err(|e| e.to_string())?;
             // SAFETY: both C strings remain alive through the synchronous call.
             result(unsafe {
-                ffi::mpv_set_option_string(client.0.as_ptr(), n.as_ptr(), v.as_ptr())
+                (client.2.set_option_string)(client.0.as_ptr(), n.as_ptr(), v.as_ptr())
             })?;
         }
         // SAFETY: fresh configured handle; no render context or concurrent use yet.
-        result(unsafe { ffi::mpv_initialize(client.0.as_ptr()) })?;
+        result(unsafe { (client.2.initialize)(client.0.as_ptr()) })?;
         Ok(Arc::new(client))
     }
     pub(super) fn command(&self, args: &[&str]) -> Result<(), String> {
@@ -88,13 +93,13 @@ impl Client {
         let mut pointers = values.iter().map(|s| s.as_ptr()).collect::<Vec<_>>();
         pointers.push(ptr::null());
         // SAFETY: null-terminated pointer array and all strings outlive the call.
-        result(unsafe { ffi::mpv_command(self.0.as_ptr(), pointers.as_mut_ptr()) })
+        result(unsafe { (self.2.command)(self.0.as_ptr(), pointers.as_mut_ptr()) })
     }
     pub(super) fn flag(&self, name: &CStr, value: bool) -> Result<(), String> {
         let mut flag = i32::from(value);
         // SAFETY: MPV_FORMAT_FLAG is C int, not Rust bool. libmpv copies it.
         result(unsafe {
-            ffi::mpv_set_property(
+            (self.2.set_property)(
                 self.0.as_ptr(),
                 name.as_ptr(),
                 ffi::mpv_format_MPV_FORMAT_FLAG,
@@ -106,7 +111,7 @@ impl Client {
         let mut value = 0f64;
         // SAFETY: DOUBLE writes exactly f64 into this initialized aligned slot.
         let code = unsafe {
-            ffi::mpv_get_property(
+            (self.2.get_property)(
                 self.0.as_ptr(),
                 name.as_ptr(),
                 ffi::mpv_format_MPV_FORMAT_DOUBLE,
@@ -117,7 +122,7 @@ impl Client {
     }
     pub(super) fn text(&self, name: &CStr) -> Option<String> {
         // SAFETY: owned property string is valid until mpv_free; never retained.
-        let value = unsafe { ffi::mpv_get_property_string(self.0.as_ptr(), name.as_ptr()) };
+        let value = unsafe { (self.2.get_property_string)(self.0.as_ptr(), name.as_ptr()) };
         if value.is_null() {
             return None;
         }
@@ -128,14 +133,14 @@ impl Client {
             .take(128)
             .collect();
         // SAFETY: value came from mpv's property allocator and is freed once.
-        unsafe { ffi::mpv_free(value.cast()) };
+        unsafe { (self.2.free)(value.cast()) };
         Some(text)
     }
     pub(super) fn observe(&self, name: &CStr) -> Result<(), String> {
         // NONE only wakes the worker; typed getters above read current state.
         // SAFETY: name is valid for the synchronous copy, handle remains alive.
         result(unsafe {
-            ffi::mpv_observe_property(
+            (self.2.observe_property)(
                 self.0.as_ptr(),
                 0,
                 name.as_ptr(),
@@ -146,7 +151,7 @@ impl Client {
     pub(super) fn event(&self) -> Option<(u32, i32)> {
         // SAFETY: only the worker calls wait_event. Read scalar fields before the
         // next call invalidates the event. No event data pointers escape.
-        let event = unsafe { ffi::mpv_wait_event(self.0.as_ptr(), 0.) };
+        let event = unsafe { (self.2.wait_event)(self.0.as_ptr(), 0.) };
         let event = unsafe { event.as_ref() }?;
         let mut error = event.error;
         if event.event_id == ffi::mpv_event_id_MPV_EVENT_END_FILE && !event.data.is_null() {
@@ -167,7 +172,7 @@ impl Client {
         let mut wake = Box::new(RenderWake(callback));
         // SAFETY: stable Box is retained until unregister AND core termination.
         unsafe {
-            ffi::mpv_set_wakeup_callback(
+            (self.2.set_wakeup_callback)(
                 self.0.as_ptr(),
                 Some(render_wakeup),
                 (&mut *wake as *mut RenderWake).cast(),
@@ -180,7 +185,7 @@ impl Client {
         let mut value = 0i32;
         // SAFETY: FLAG writes a C int into this aligned i32, not a Rust bool.
         let code = unsafe {
-            ffi::mpv_get_property(
+            (self.2.get_property)(
                 self.0.as_ptr(),
                 name.as_ptr(),
                 ffi::mpv_format_MPV_FORMAT_FLAG,
@@ -195,8 +200,8 @@ impl Drop for Client {
         // SAFETY: the final Arc outlives the render context and control worker.
         // terminate_destroy joins libmpv's internal work before releasing the core.
         unsafe {
-            ffi::mpv_set_wakeup_callback(self.0.as_ptr(), None, ptr::null_mut());
-            ffi::mpv_terminate_destroy(self.0.as_ptr())
+            (self.2.set_wakeup_callback)(self.0.as_ptr(), None, ptr::null_mut());
+            (self.2.terminate_destroy)(self.0.as_ptr())
         }
     }
 }
@@ -275,7 +280,7 @@ impl Render {
         // SAFETY: exact repr(C) bindings; sentinel-terminated stack params and
         // loader remain valid for synchronous create. Core is retained by Arc.
         result(unsafe {
-            ffi::mpv_render_context_create(&mut context, core.0.as_ptr(), params.as_mut_ptr())
+            (core.2.render_context_create)(&mut context, core.0.as_ptr(), params.as_mut_ptr())
         })?;
         let context = NonNull::new(context).ok_or("libmpv returned null render context")?;
         let mut owner = Self {
@@ -289,7 +294,7 @@ impl Render {
         };
         // SAFETY: Box allocation is stable, callback has no client/render calls.
         unsafe {
-            ffi::mpv_render_context_set_update_callback(
+            (owner.core.2.render_context_set_update_callback)(
                 owner.context.as_ptr(),
                 Some(render_wakeup),
                 (&mut *owner.wake as *mut RenderWake).cast(),
@@ -318,7 +323,7 @@ impl Render {
             return Err("software update on a GL renderer".into());
         }
         // SAFETY: same owner thread as software creation; no GL state accessed.
-        let flags = unsafe { ffi::mpv_render_context_update(self.context.as_ptr()) };
+        let flags = unsafe { (self.core.2.render_context_update)(self.context.as_ptr()) };
         self.software_dirty |=
             flags & u64::from(ffi::mpv_render_update_flag_MPV_RENDER_UPDATE_FRAME) != 0;
         Ok(())
@@ -339,7 +344,7 @@ impl Render {
         // SAFETY: the documented repr(C) frame-info object is initialized and
         // writable for this synchronous render-API call on its owner thread.
         result(unsafe {
-            ffi::mpv_render_context_get_info(
+            (self.core.2.render_context_get_info)(
                 self.context.as_ptr(),
                 ffi::mpv_render_param {
                     type_: ffi::mpv_render_param_type_MPV_RENDER_PARAM_NEXT_FRAME_INFO,
@@ -386,7 +391,7 @@ impl Render {
         // bytes including final padding. All parameter pointers remain valid
         // until this synchronous software render returns; mpv retains none.
         result(unsafe {
-            ffi::mpv_render_context_render(self.context.as_ptr(), params.as_mut_ptr())
+            (self.core.2.render_context_render)(self.context.as_ptr(), params.as_mut_ptr())
         })?;
         self.software_dirty = false;
         self.software_has_frame = true;
@@ -437,10 +442,10 @@ impl Render {
         // SAFETY: same GL context/thread as create; stack data survives render.
         // No target-time blocking and no advanced-control wait on the UI thread.
         unsafe {
-            ffi::mpv_render_context_update(self.context.as_ptr());
+            (self.core.2.render_context_update)(self.context.as_ptr());
         }
         result(unsafe {
-            ffi::mpv_render_context_render(self.context.as_ptr(), params.as_mut_ptr())
+            (self.core.2.render_context_render)(self.context.as_ptr(), params.as_mut_ptr())
         })
     }
 }
@@ -450,12 +455,12 @@ impl Drop for Render {
         // software contexts retire on their original worker without GL. Context
         // destruction synchronizes libmpv work before callback Box/Core drop.
         unsafe {
-            ffi::mpv_render_context_set_update_callback(
+            (self.core.2.render_context_set_update_callback)(
                 self.context.as_ptr(),
                 None,
                 ptr::null_mut(),
             );
-            ffi::mpv_render_context_free(self.context.as_ptr());
+            (self.core.2.render_context_free)(self.context.as_ptr());
         }
         let _ = &self.core;
     }

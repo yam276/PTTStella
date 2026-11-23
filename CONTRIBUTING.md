@@ -10,7 +10,7 @@
 
 Rust 版本由 `rust-toolchain.toml` 固定。文件與打包檢查使用 Python 3.11+，介面測試使用 Node.js 24。各平台的系統相依可參考 CI。[建置流程](.github/workflows/release.yml)
 
-桌面入口 `pttstella` 是 Slint 版，影片播放需要 libmpv；Dioxus 版改名 `pttstella-dioxus`，保留到移除提交前供回退對照，最後一條 Dioxus 開發線在 `dioxus` 分支。
+桌面入口 `pttstella` 是 Slint 版，建置需要 libmpv（Linux 執行時才載入系統 libmpv2，未安裝時只停用影片）；Dioxus 版改名 `pttstella-dioxus`，保留到移除提交前供回退對照，最後一條 Dioxus 開發線在 `dioxus` 分支。
 
 ```sh
 cargo run --locked --features native-player-probe --bin pttstella

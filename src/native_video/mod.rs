@@ -1,9 +1,11 @@
 //! Native video backend shared by the preview and its portable probe.
 mod control;
 pub mod gl_state;
+mod library;
 pub mod mpv;
 pub mod session;
 pub use control::{Command, Status};
+pub use library::available;
 pub const DEFAULT_VOLUME: u8 = 10;
 
 pub mod software;

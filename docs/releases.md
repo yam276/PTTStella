@@ -49,7 +49,7 @@ PTTStella 改以 GPL-3.0-or-later 授權，讓 macOS 版可內附 Homebrew 的 G
 | Windows x64 | `windows-2025` | Setup `.exe` 與免安裝 `-portable.zip`；內含 libmpv、Visual C++ runtime 與授權，不需 WebView2 |
 | macOS Apple Silicon | `macos-15` | 拖曳安裝 DMG、包含 `.app` 的 ZIP；App 內含 libmpv 閉包 |
 | macOS Intel | `macos-15-intel` | 拖曳安裝 DMG、包含 `.app` 的 ZIP；App 內含 libmpv 閉包 |
-| Linux x64 | `ubuntu-24.04` | `.deb` 與 `.tar.gz`；依賴系統 `libmpv2` |
+| Linux x64 | `ubuntu-24.04` | `.deb` 與 `.tar.gz`；影片使用系統 `libmpv2`（`.deb` 列為 Recommends，執行時才載入；未安裝時程式照常啟動，只停用影片並提示） |
 
 每個平台另有 `-sources.tar` 對應原始碼集，見上方 2026-11-18 說明。以下段落中 WebView2、static CRT 等描述屬 Dioxus 版。
 

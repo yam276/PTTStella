@@ -99,6 +99,36 @@ class LinuxCandidateTests(unittest.TestCase):
         self.assertNotIn(b'-dev', layout['DEBIAN/control'].split(b'Depends: ', 1)[1].splitlines()[0])
         self.assertEqual(report['runtime']['late_loaded_dependencies'], list(bundle.WINIT_RUNTIME))
 
+    def test_release_package_recommends_libmpv_and_rejects_a_direct_link(self):
+        import bundle_slint_release as release
+        stem = 'PTTStella-0.5.0-dev.3-linux-x64'
+
+        def runtime_loaded(*command, cwd=None):
+            if command[0] == 'ldd':
+                return 'libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x1)'
+            if command[0] == 'dpkg-shlibdeps':
+                return 'shlibs:Depends=libc6 (>= 2.36)'
+            return self.run_tool(*command, cwd=cwd)
+        stage = self.root / 'release-stage'
+        stage.mkdir()
+        with patch.object(release, 'build', return_value=(self.exe, self.license)), \
+                patch.object(release, 'source_set', return_value=(self.root / 'sources.tar', {})), \
+                patch.object(bundle.bundle_release, 'run', side_effect=runtime_loaded):
+            _, details = release.linux(stage, stem, '0.5.0-dev.3', 'a' * 40)
+        control = self.layouts[-1]['DEBIAN/control'].decode()
+        self.assertIn('Recommends: libmpv2\n', control)
+        self.assertNotIn('libmpv', control.split('Depends: ', 1)[1].splitlines()[0])
+        self.assertEqual(details['recommends'], ['libmpv2'])
+
+        # The default fixture links libmpv directly, which would stop startup without it.
+        linked = self.root / 'linked-stage'
+        linked.mkdir()
+        with patch.object(release, 'build', return_value=(self.exe, self.license)), \
+                patch.object(release, 'source_set') as sources:
+            with self.assertRaisesRegex(RuntimeError, 'load libmpv at runtime'):
+                release.linux(linked, stem, '0.5.0-dev.3', 'a' * 40)
+            sources.assert_not_called()
+
     def test_established_package_defaults_still_use_original_identity(self):
         stage = self.root / 'stage'
         stage.mkdir()
